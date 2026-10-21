@@ -1,7 +1,7 @@
 use cedro::{append_log, config_dir, kind_of, mode_from_vk, perform, read_quality, slices, Kind, Mode, Slice};
 use std::cell::RefCell;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicI32, AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU32, Ordering};
 use windows::{
     core::*,
     Win32::Foundation::*,
@@ -13,6 +13,7 @@ use windows::{
     Win32::System::Ole::*,
     Win32::System::SystemServices::MODIFIERKEYS_FLAGS,
     Win32::System::Threading::CreateMutexW,
+    Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomationValuePattern, UIA_ValuePatternId},
     Win32::UI::HiDpi::*,
     Win32::UI::Input::KeyboardAndMouse::*,
     Win32::UI::Shell::*,
@@ -22,10 +23,14 @@ use windows::{
 const WM_TRAY: u32 = WM_APP + 1;
 const WM_APP_INPUT: u32 = WM_APP + 2;
 const WM_APP_DROP: u32 = WM_APP + 3;
+const WM_APP_RCLICK: u32 = WM_APP + 4;
 const WHEEL: i32 = 440;
 const R0: f32 = 58.0;
 const R1: f32 = 168.0;
 
+static RDOWN: AtomicBool = AtomicBool::new(false);
+static EAT_RIGHT: AtomicBool = AtomicBool::new(false);
+static RMODE: AtomicU32 = AtomicU32::new(1);
 static HMSG: AtomicIsize = AtomicIsize::new(0);
 static CUR_X: AtomicI32 = AtomicI32::new(0);
 static CUR_Y: AtomicI32 = AtomicI32::new(0);
@@ -42,6 +47,11 @@ struct Session {
     down_x: i32,
     down_y: i32,
     dragging: bool,
+    rdown: bool,
+    rx: i32,
+    ry: i32,
+    rmoved: bool,
+    chord: bool,
     armed: bool,
     quality: u8,
     icon: HICON,
@@ -61,6 +71,11 @@ thread_local! {
         down_x: 0,
         down_y: 0,
         dragging: false,
+        rdown: false,
+        rx: 0,
+        ry: 0,
+        rmoved: false,
+        chord: false,
         armed: false,
         quality: 82,
         icon: HICON::default(),
@@ -133,6 +148,17 @@ unsafe extern "system" fn kb_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> 
         let down = wparam.0 as u32 == WM_KEYDOWN || wparam.0 as u32 == WM_SYSKEYDOWN;
         let hwnd = HWND(HMSG.load(Ordering::Relaxed) as *mut _);
         if down {
+            if let Some(mode) = mode_from_vk(info.vkCode) {
+                if RDOWN.load(Ordering::Relaxed) && !EAT_RIGHT.load(Ordering::Relaxed) {
+                    let x = CUR_X.load(Ordering::Relaxed);
+                    let y = CUR_Y.load(Ordering::Relaxed);
+                    if over_shell(x, y) {
+                        EAT_RIGHT.store(true, Ordering::Relaxed);
+                        RMODE.store(mode_code(mode), Ordering::Relaxed);
+                        let _ = PostMessageW(Some(hwnd), WM_APP_RCLICK, WPARAM(0), LPARAM(0));
+                    }
+                }
+            }
             let _ = PostMessageW(Some(hwnd), WM_APP_INPUT, WPARAM(1), LPARAM(info.vkCode as isize));
         } else {
             let _ = PostMessageW(Some(hwnd), WM_APP_INPUT, WPARAM(2), LPARAM(info.vkCode as isize));
@@ -148,6 +174,25 @@ unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) 
         CUR_Y.store(info.pt.y, Ordering::Relaxed);
         let kind = wparam.0 as u32;
         let hwnd = HWND(HMSG.load(Ordering::Relaxed) as *mut _);
+        if kind == WM_RBUTTONDOWN {
+            RDOWN.store(true, Ordering::Relaxed);
+            if let Some(mode) = held_mode() {
+                if over_shell(info.pt.x, info.pt.y) {
+                    EAT_RIGHT.store(true, Ordering::Relaxed);
+                    RMODE.store(mode_code(mode), Ordering::Relaxed);
+                    let _ = PostMessageW(Some(hwnd), WM_APP_RCLICK, WPARAM(0), LPARAM(0));
+                    return LRESULT(1);
+                }
+            }
+        }
+        if kind == WM_RBUTTONUP {
+            let eat = EAT_RIGHT.swap(false, Ordering::Relaxed);
+            RDOWN.store(false, Ordering::Relaxed);
+            let _ = PostMessageW(Some(hwnd), WM_APP_INPUT, WPARAM(3), LPARAM(kind as isize));
+            if eat {
+                return LRESULT(1);
+            }
+        }
         if kind == WM_LBUTTONDOWN || kind == WM_LBUTTONUP || kind == WM_MOUSEMOVE {
             let _ = PostMessageW(Some(hwnd), WM_APP_INPUT, WPARAM(3), LPARAM(kind as isize));
         }
@@ -179,6 +224,10 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         }
         WM_APP_DROP => {
             on_drop();
+            LRESULT(0)
+        }
+        WM_APP_RCLICK => {
+            on_rclick();
             LRESULT(0)
         }
         WM_TIMER => {
@@ -216,12 +265,12 @@ fn on_input(kind: usize, extra: isize) {
             if down {
                 if let Some(mode) = mode_from_vk(vk) {
                     g.mode = mode;
-                    if g.dragging {
+                    let have = !g.wheel.0.is_null();
+                    if g.dragging || have {
                         g.armed = true;
-                        let have = !g.wheel.0.is_null();
                         drop(g);
                         if !have {
-                            open_wheel(x, y, mode);
+                            open_wheel(x, y, mode, Vec::new(), false);
                         } else {
                             refresh_wheel();
                         }
@@ -235,33 +284,51 @@ fn on_input(kind: usize, extra: isize) {
         return;
     }
     let flag = extra as u32;
+    let mut act = 0;
     SESSION.with(|s| {
         let mut g = s.borrow_mut();
         match flag {
+            WM_LBUTTONDOWN if g.chord && !g.wheel.0.is_null() => {
+                act = if g.hover >= 0 { 1 } else { 2 };
+            }
             WM_LBUTTONDOWN => {
                 g.down = true;
                 g.dragging = false;
                 g.down_x = x;
                 g.down_y = y;
             }
-            WM_MOUSEMOVE if g.down => {
-                let dist = ((x - g.down_x) as i64).pow(2) + ((y - g.down_y) as i64).pow(2);
-                if dist > 64 {
-                    g.dragging = true;
-                    if !g.armed {
-                        if let Some(mode) = held_mode() {
-                            g.mode = mode;
-                            g.armed = true;
-                            drop(g);
-                            open_wheel(x, y, mode);
+            WM_MOUSEMOVE => {
+                if g.rdown {
+                    let dist = ((x - g.rx) as i64).pow(2) + ((y - g.ry) as i64).pow(2);
+                    if dist > 64 {
+                        g.rmoved = true;
+                    }
+                }
+                if g.down {
+                    let dist = ((x - g.down_x) as i64).pow(2) + ((y - g.down_y) as i64).pow(2);
+                    if dist > 64 {
+                        g.dragging = true;
+                        if !g.armed {
+                            if let Some(mode) = held_mode() {
+                                g.mode = mode;
+                                g.armed = true;
+                                drop(g);
+                                open_wheel(x, y, mode, Vec::new(), false);
+                                return;
+                            }
                         }
                     }
                 }
+                if !g.wheel.0.is_null() {
+                    drop(g);
+                    set_hover(x, y);
+                }
             }
             WM_LBUTTONUP => {
+                let chord = g.chord;
                 g.down = false;
                 g.dragging = false;
-                let armed = g.armed;
+                let armed = g.armed && !chord;
                 drop(g);
                 if armed {
                     unsafe {
@@ -270,9 +337,22 @@ fn on_input(kind: usize, extra: isize) {
                     }
                 }
             }
+            WM_RBUTTONUP => {
+                let commit = g.chord && g.rmoved && g.hover >= 0;
+                g.rdown = false;
+                g.rmoved = false;
+                if commit {
+                    act = 1;
+                }
+            }
             _ => {}
         }
     });
+    if act == 1 {
+        on_drop();
+    } else if act == 2 {
+        close_wheel();
+    }
 }
 
 fn held_mode() -> Option<Mode> {
@@ -290,7 +370,197 @@ fn held_mode() -> Option<Mode> {
     None
 }
 
-fn open_wheel(x: i32, y: i32, mode: Mode) {
+fn mode_code(mode: Mode) -> u32 {
+    match mode {
+        Mode::Convert => 1,
+        Mode::Tools => 2,
+        Mode::Actions => 3,
+    }
+}
+
+fn mode_from_code(n: u32) -> Mode {
+    match n {
+        2 => Mode::Tools,
+        3 => Mode::Actions,
+        _ => Mode::Convert,
+    }
+}
+
+fn on_rclick() {
+    let x = CUR_X.load(Ordering::Relaxed);
+    let y = CUR_Y.load(Ordering::Relaxed);
+    let mode = held_mode().unwrap_or_else(|| mode_from_code(RMODE.load(Ordering::Relaxed)));
+    let Some(path) = file_at(x, y) else {
+        balloon("Nessun file sotto il cursore");
+        return;
+    };
+    SESSION.with(|s| {
+        let mut g = s.borrow_mut();
+        g.rdown = true;
+        g.rx = x;
+        g.ry = y;
+        g.rmoved = false;
+        g.mode = mode;
+    });
+    open_wheel(x, y, mode, vec![path], true);
+}
+
+fn over_shell(x: i32, y: i32) -> bool {
+    unsafe {
+        let hwnd = WindowFromPoint(POINT { x, y });
+        if hwnd.0.is_null() {
+            return false;
+        }
+        let mut h = hwnd;
+        for _ in 0..10 {
+            let class = window_class(h);
+            if matches!(class.as_str(), "Progman" | "WorkerW" | "CabinetWClass" | "ExploreWClass") {
+                return true;
+            }
+            let Ok(parent) = GetParent(h) else { break };
+            if parent == h || parent.0.is_null() {
+                break;
+            }
+            h = parent;
+        }
+        false
+    }
+}
+
+fn window_class(hwnd: HWND) -> String {
+    unsafe {
+        let mut buf = [0u16; 64];
+        let n = GetClassNameW(hwnd, &mut buf);
+        if n <= 0 {
+            return String::new();
+        }
+        String::from_utf16_lossy(&buf[..n as usize])
+    }
+}
+
+fn file_at(x: i32, y: i32) -> Option<PathBuf> {
+    unsafe {
+        let auto: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).ok()?;
+        let walker = auto.ControlViewWalker().ok()?;
+        let mut el = auto.ElementFromPoint(POINT { x, y }).ok()?;
+        let mut names = Vec::new();
+        for _ in 0..12 {
+            if let Ok(name) = el.CurrentName() {
+                let text = name.to_string();
+                if !text.is_empty() {
+                    names.push(text);
+                }
+            }
+            if let Ok(value) = el.GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId) {
+                if let Ok(current) = value.CurrentValue() {
+                    let text = current.to_string();
+                    if !text.is_empty() {
+                        names.push(text);
+                    }
+                }
+            }
+            match walker.GetParentElement(&el) {
+                Ok(parent) => el = parent,
+                Err(_) => break,
+            }
+        }
+        resolve_names(&names)
+    }
+}
+
+fn resolve_names(names: &[String]) -> Option<PathBuf> {
+    for name in names {
+        let text = name.trim().trim_matches('"');
+        let path = PathBuf::from(text);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    let mut dirs = Vec::new();
+    for name in names {
+        if let Some(dir) = address_dir(name) {
+            dirs.push(dir);
+        }
+    }
+    if let Some(found) = first_match(&dirs, names) {
+        return Some(found);
+    }
+    let mut desks = Vec::new();
+    if let Some(dir) = known_folder(&FOLDERID_Desktop) {
+        desks.push(dir);
+    }
+    if let Some(dir) = known_folder(&FOLDERID_PublicDesktop) {
+        desks.push(dir);
+    }
+    first_match(&desks, names)
+}
+
+fn address_dir(name: &str) -> Option<PathBuf> {
+    let text = name.trim();
+    if let Some((_, rest)) = text.split_once(": ") {
+        let path = PathBuf::from(rest.trim());
+        if path.is_dir() {
+            return Some(path);
+        }
+    }
+    let path = PathBuf::from(text);
+    if text.contains('\\') && path.is_dir() {
+        return Some(path);
+    }
+    None
+}
+
+fn first_match(dirs: &[PathBuf], names: &[String]) -> Option<PathBuf> {
+    if dirs.is_empty() {
+        return None;
+    }
+    for name in names {
+        let label = name.trim();
+        if label.is_empty() || label.len() > 240 || label.contains('\\') || label.contains('/') || label.contains(':') {
+            continue;
+        }
+        for dir in dirs {
+            if let Some(path) = match_in_dir(dir, label) {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+fn match_in_dir(dir: &std::path::Path, label: &str) -> Option<PathBuf> {
+    let want = label.to_lowercase();
+    let mut stem_hit = None;
+    let mut stems = 0u32;
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let fname = path.file_name()?.to_str()?.to_lowercase();
+        if fname == want {
+            return Some(path);
+        }
+        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+            if stem.to_lowercase() == want {
+                stems += 1;
+                stem_hit = Some(path);
+            }
+        }
+    }
+    if stems == 1 { stem_hit } else { None }
+}
+
+fn known_folder(id: &windows_core::GUID) -> Option<PathBuf> {
+    unsafe {
+        let p = SHGetKnownFolderPath(id, KNOWN_FOLDER_FLAG(0), None).ok()?;
+        let text = p.to_string().ok()?;
+        CoTaskMemFree(Some(p.0 as *const _));
+        Some(PathBuf::from(text))
+    }
+}
+
+fn open_wheel(x: i32, y: i32, mode: Mode, paths: Vec<PathBuf>, chord: bool) {
     unsafe {
         let instance = GetModuleHandleW(None).unwrap_or_default();
         let class = w!("CedroWheel");
@@ -333,7 +603,8 @@ fn open_wheel(x: i32, y: i32, mode: Mode) {
             g.anchor_y = top + WHEEL / 2;
             g.mode = mode;
             g.hover = -1;
-            g.paths.clear();
+            g.paths = paths;
+            g.chord = chord;
             g.armed = true;
             g.target = Some(target.clone());
         });
@@ -375,6 +646,9 @@ fn close_wheel() {
         let hwnd = g.wheel;
         g.wheel = HWND::default();
         g.armed = false;
+        g.chord = false;
+        g.rdown = false;
+        g.rmoved = false;
         g.paths.clear();
         g.hover = -1;
         g.target = None;

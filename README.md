@@ -7,14 +7,19 @@ Licenza: MIT. Vedi [LICENSE](LICENSE).
 ## Gesto
 
 1. Avvia `cedro.exe`. Resta nella tray, senza una finestra di lavoro.
-2. In Esplora file trascina un file.
-3. Premi **Shift** per la conversione, **Ctrl** per gli strumenti, **Alt** per le azioni.
-4. Rilascia il tasto: la ruota resta aperta. Sposta il cursore su una fetta e molla.
-5. Esc, oppure mollare al centro o fuori dalla ruota, annulla.
+2. Sul desktop o in Esplora file, tieni premuto un tasto e fai clic destro sul file.
+   - **Shift**: conversione
+   - **Ctrl**: strumenti
+   - **Alt**: azioni
+3. La ruota si apre sul cursore e resta aperta. Il tasto destro normale di Windows, in quel caso, non compare.
+4. Sposta il cursore su una fetta e fai clic sinistro. In alternativa tieni premuto il destro, vai sulla fetta e rilascia.
+5. Esc, un clic al centro o fuori dalla ruota annulla.
+
+Si può anche trascinare il file con il tasto sinistro e premere Shift, Ctrl o Alt: la ruota si apre allo stesso modo. Su Windows, se Shift resta premuto mentre si rilascia un trascinamento, Esplora file può spostare il file. Con il clic destro questo non succede.
 
 La copia viene scritta nella stessa cartella dell’originale. L’originale non viene sovrascritto. Se il nome esiste già, Cedro aggiunge `-2`, `-3`, e così via.
 
-Tieni premuto Shift solo per aprire la ruota, poi rilascialo prima di mollare il file. Su Windows Shift durante un rilascio può essere interpretato da Esplora file come “sposta”.
+Il file viene riconosciuto dal nome sull’icona del desktop, oppure dalla cartella aperta in Esplora file. Se sotto il cursore non c’è un file, Cedro lo dice e non fa nulla.
 
 ## Cosa fa
 
@@ -56,7 +61,7 @@ cedro zip nota.txt
 ## Antivirus
 
 - Codice aperto, licenza MIT, niente packer, niente UPX, niente offuscamento.
-- Gli hook sono `WH_MOUSE_LL` e `WH_KEYBOARD_LL`. Restano nel processo di Cedro e non iniettano una DLL in Esplora file o in altri programmi. Servono a vedere il tasto e il movimento; il file arriva con il drop OLE normale, come quando si molla un file su una finestra.
+- Gli hook sono `WH_MOUSE_LL` e `WH_KEYBOARD_LL`. Restano nel processo di Cedro e non iniettano una DLL in Esplora file o in altri programmi. Il clic destro con Shift, Ctrl o Alt viene intercettato solo sul desktop e sulle finestre di Esplora file. Il nome del file si legge con UI Automation, senza scrivere nella memoria di un altro processo. Il trascinamento, se lo usi, consegna il file con il drop OLE normale.
 - Nessuna rete, nessuna telemetria, nessun download all’avvio.
 - L’exe di una build locale non è firmato Authenticode. SmartScreen può dire «Windows ha protetto il PC» la prima volta: è la mancanza di firma, non un rilevamento di malware. «Esegui comunque» vale per quella copia. Una firma Authenticode da autorità pubblica costa e non è inclusa.
 - Compilare sul proprio PC evita l’hash di un exe scaricato da un posto sconosciuto, che è la causa più comune di falsi positivi.
