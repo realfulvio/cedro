@@ -273,17 +273,23 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
     }
     if action == "mp4" {
         let out = unique_output(&dir, &stem(path), "mp4");
-        #[cfg(windows)]
-        {
-            if let Err(e) = crate::video::to_mp4(path, &out) {
-                let _ = fs::remove_file(&out);
-                return Err(err(e));
+        let result = {
+            #[cfg(windows)]
+            {
+                crate::video::to_mp4(path, &out)
             }
-        }
-        #[cfg(not(windows))]
-        {
+            #[cfg(target_os = "linux")]
+            {
+                crate::linux_video::to_mp4(path, &out)
+            }
+            #[cfg(not(any(windows, target_os = "linux")))]
+            {
+                Err::<(), String>("il video MP4 si converte su Windows e su Linux".into())
+            }
+        };
+        if let Err(e) = result {
             let _ = fs::remove_file(&out);
-            return Err(err("il video MP4 si converte su Windows"));
+            return Err(err(e));
         }
         let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
         return Ok(Output { path: out, message: size_message(before, after) });
@@ -480,6 +486,7 @@ pub fn append_log(line: &str) {
 mod tests {
     use super::*;
     use image::{Rgb, RgbImage};
+    use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn scratch() -> PathBuf {
@@ -626,6 +633,90 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn video_to_mp4_on_linux() {
+        let dir = std::env::temp_dir().join(format!("cedro-linux-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        for (name, bytes, want_audio) in [
+            ("nv12.avi", tiny_avi(), false),
+            ("colori.avi", rgb_avi(), false),
+            ("vp8.webm", include_bytes!("../tests/fixtures/vp8.webm").to_vec(), true),
+            ("vp9.webm", include_bytes!("../tests/fixtures/vp9.webm").to_vec(), true),
+        ] {
+            let src = dir.join(name);
+            fs::write(&src, bytes).unwrap();
+            let mp4 = perform(&src, "mp4", 80).unwrap_or_else(|err| panic!("{name}: {err}"));
+            let out = fs::read(&mp4.path).unwrap();
+            assert!(out.windows(4).any(|w| w == b"ftyp"), "{name} senza ftyp");
+            assert!(mp4_box_len(&out, b"mdat") > 32, "{name} mdat vuoto");
+            if want_audio {
+                assert!(out.windows(4).any(|w| w == b"mp4a"), "{name} senza audio");
+            }
+            if let Some(codecs) = probe_codecs(&mp4.path) {
+                assert!(codecs.contains("h264"), "{name} ffprobe: {codecs}");
+                if want_audio {
+                    assert!(codecs.contains("aac"), "{name} ffprobe: {codecs}");
+                }
+            }
+        }
+        let made = ffmpeg_clip(&dir.join("h264.mp4"), &["-f", "lavfi", "-i", "testsrc=size=64x64:rate=30:duration=0.1", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an"]);
+        if made {
+            let mp4 = perform(&dir.join("h264.mp4"), "mp4", 80).expect("mp4 h264");
+            let out = fs::read(&mp4.path).unwrap();
+            assert!(mp4_box_len(&out, b"mdat") > 32);
+        }
+        let with_audio = [
+            "-f", "lavfi", "-i", "testsrc=size=64x64:rate=30:duration=0.2",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=0.2",
+            "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+        ];
+        for name in ["audio.mp4", "audio.mkv"] {
+            let dest = dir.join(name);
+            if !ffmpeg_clip(&dest, &with_audio) {
+                continue;
+            }
+            let mp4 = perform(&dest, "mp4", 80).unwrap_or_else(|err| panic!("{name}: {err}"));
+            let out = fs::read(&mp4.path).unwrap();
+            assert!(mp4_box_len(&out, b"mdat") > 32, "{name} mdat vuoto");
+            assert!(out.windows(4).any(|w| w == b"mp4a"), "{name} senza audio");
+            if let Some(codecs) = probe_codecs(&mp4.path) {
+                assert!(codecs.contains("h264"), "{name} ffprobe: {codecs}");
+                assert!(codecs.contains("aac"), "{name} ffprobe: {codecs}");
+            }
+        }
+        let mjpeg = ffmpeg_clip(
+            &dir.join("mjpeg.avi"),
+            &["-f", "lavfi", "-i", "testsrc=size=64x64:rate=30:duration=0.1", "-c:v", "mjpeg", "-an"],
+        );
+        if mjpeg {
+            let mp4 = perform(&dir.join("mjpeg.avi"), "mp4", 80).expect("avi mjpeg");
+            assert!(mp4_box_len(&fs::read(&mp4.path).unwrap(), b"mdat") > 32);
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(target_os = "linux")]
+    fn probe_codecs(path: &Path) -> Option<String> {
+        let out = std::process::Command::new("ffprobe")
+            .args(["-v", "error", "-show_entries", "stream=codec_name", "-of", "csv=p=0"])
+            .arg(path)
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        Some(String::from_utf8_lossy(&out.stdout).to_string())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn ffmpeg_clip(dest: &Path, args: &[&str]) -> bool {
+        let mut cmd = std::process::Command::new("ffmpeg");
+        cmd.arg("-y").args(args).arg(dest);
+        cmd.status().map(|status| status.success() && dest.exists()).unwrap_or(false)
+    }
+
     #[test]
     fn audio_without_ffmpeg() {
         let dir = std::env::temp_dir().join(format!("cedro-wav-{}", std::process::id()));
@@ -703,7 +794,7 @@ fn spec_doc_streams(text: &str) -> (Vec<u8>, Vec<u8>) {
     (fib, clx)
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
 fn tiny_avi() -> Vec<u8> {
     fn u32(v: u32) -> [u8; 4] {
         v.to_le_bytes()
@@ -785,7 +876,7 @@ fn tiny_avi() -> Vec<u8> {
     file
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
 fn rgb_avi() -> Vec<u8> {
     fn u32(v: u32) -> [u8; 4] {
         v.to_le_bytes()
@@ -872,7 +963,7 @@ fn rgb_avi() -> Vec<u8> {
     file
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
 fn mp4_box_len(bytes: &[u8], name: &[u8; 4]) -> usize {
     let mut i = 0;
     while i + 8 <= bytes.len() {

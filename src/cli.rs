@@ -70,9 +70,17 @@ Cedro — conversione locale, senza upload.
   cedro zip <file>
   cedro --quality 80 convert foto.png jpeg
 
-Senza argomenti, su Windows parte la ruota nella tray.
+Senza argomenti, su Windows e su Linux, Cedro resta nella tray.
+Su Linux la ruota si apre dal menu del file, oppure così:
+  cedro show --conversione <file>
+  cedro show --strumenti <file>
+  cedro show --azioni <file>
+La prima volta scrive i menu di Dolphin e di Nautilus.
+Su Linux la configurazione sta in ~/.config/cedro/config.txt.
+
 Le conversioni sono nel programma: non servono LibreOffice, ffmpeg, Tesseract né Poppler.
-Il video MP4 usa i codificatori di Windows (H.264 e AAC).
+Il video MP4, su Windows, usa i codificatori di Windows (H.264 e AAC).
+Su Linux usa OpenH264 e FDK AAC, compilati dentro il programma.
 L'MP3 usa LAME, compilato dentro l'eseguibile.
 L'originale non viene mai sovrascritto."
     );
