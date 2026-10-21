@@ -736,6 +736,151 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    fn png_crc(data: &[u8]) -> u32 {
+        let mut crc = 0xFFFF_FFFFu32;
+        for &byte in data {
+            crc ^= u32::from(byte);
+            for _ in 0..8 {
+                if crc & 1 == 1 {
+                    crc = (crc >> 1) ^ 0xEDB8_8320;
+                } else {
+                    crc >>= 1;
+                }
+            }
+        }
+        !crc
+    }
+
+    fn insert_png_text(bytes: &mut Vec<u8>, key: &str, value: &str) {
+        assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"), "non è un png");
+        let mut at = 8usize;
+        let iend = loop {
+            assert!(at + 12 <= bytes.len(), "png senza IEND");
+            let len = u32::from_be_bytes(bytes[at..at + 4].try_into().unwrap()) as usize;
+            let next = at + 12 + len;
+            assert!(next <= bytes.len(), "chunk png troncato");
+            if &bytes[at + 4..at + 8] == b"IEND" {
+                break at;
+            }
+            at = next;
+        };
+        let mut payload = Vec::with_capacity(key.len() + value.len() + 1);
+        payload.extend_from_slice(key.as_bytes());
+        payload.push(0);
+        payload.extend_from_slice(value.as_bytes());
+        let mut chunk = Vec::with_capacity(12 + payload.len());
+        chunk.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+        chunk.extend_from_slice(b"tEXt");
+        chunk.extend_from_slice(&payload);
+        chunk.extend_from_slice(&png_crc(&chunk[4..]).to_be_bytes());
+        bytes.splice(iend..iend, chunk);
+    }
+
+    #[test]
+    fn image_tools_and_formats() {
+        let dir = scratch();
+        let mut raw = RgbImage::new(8, 6);
+        for (x, y, pixel) in raw.enumerate_pixels_mut() {
+            *pixel = if x == 1 && y == 2 { Rgb([200, 10, 10]) } else { Rgb([20, 180, 40]) };
+        }
+        let src = dir.join("foto.png");
+        raw.save(&src).unwrap();
+        let mut marked = fs::read(&src).unwrap();
+        insert_png_text(&mut marked, "Comment", "SECRET");
+        fs::write(&src, &marked).unwrap();
+
+        let clean = perform(&src, "strip", 80).unwrap();
+        let clean_bytes = fs::read(&clean.path).unwrap();
+        assert!(clean_bytes.starts_with(b"\x89PNG"), "strip non è png");
+        assert!(!clean_bytes.windows(6).any(|w| w == b"SECRET"), "i metadati sono rimasti");
+        let cleaned = image::open(&clean.path).unwrap();
+        assert_eq!((cleaned.width(), cleaned.height()), (8, 6));
+
+        let gray = perform(&src, "gray", 80).unwrap();
+        let gray_img = image::open(&gray.path).unwrap().to_rgb8();
+        assert_eq!(gray_img.dimensions(), (8, 6));
+        let px = gray_img.get_pixel(1, 2);
+        assert_eq!(px[0], px[1]);
+        assert_eq!(px[1], px[2]);
+        assert_ne!(*px, Rgb([200, 10, 10]));
+
+        let turned = perform(&src, "rot90", 80).unwrap();
+        let turned_img = image::open(&turned.path).unwrap().to_rgb8();
+        assert_eq!(turned_img.dimensions(), (6, 8));
+        assert_eq!(*turned_img.get_pixel(3, 1), Rgb([200, 10, 10]));
+
+        for action in ["webp", "gif", "bmp", "tiff"] {
+            let made = perform(&src, action, 80).unwrap_or_else(|err| panic!("{action}: {err}"));
+            let bytes = fs::read(&made.path).unwrap();
+            match action {
+                "webp" => assert!(bytes.starts_with(b"RIFF") && bytes.windows(4).any(|w| w == b"WEBP"), "{action}"),
+                "gif" => assert!(bytes.starts_with(b"GIF8"), "{action}"),
+                "bmp" => assert!(bytes.starts_with(b"BM"), "{action}"),
+                "tiff" => assert!(bytes.starts_with(b"II") || bytes.starts_with(b"MM"), "{action}"),
+                _ => {}
+            }
+            let back = perform(&made.path, "png", 80).unwrap_or_else(|err| panic!("{action} png: {err}"));
+            let round = image::open(&back.path).unwrap();
+            assert_eq!((round.width(), round.height()), (8, 6), "{action}");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn other_audio_to_wav_and_mp3() {
+        let dir = scratch();
+        for (name, bytes) in [
+            ("nota.ogg", include_bytes!("../tests/fixtures/nota.ogg").as_slice()),
+            ("nota.flac", include_bytes!("../tests/fixtures/nota.flac").as_slice()),
+            ("nota.m4a", include_bytes!("../tests/fixtures/nota.m4a").as_slice()),
+            ("nota.aac", include_bytes!("../tests/fixtures/nota.aac").as_slice()),
+        ] {
+            let src = dir.join(name);
+            fs::write(&src, bytes).unwrap();
+            let wav = perform(&src, "wav", 80).unwrap_or_else(|err| panic!("{name}: {err}"));
+            assert!(fs::read(&wav.path).unwrap().starts_with(b"RIFF"), "{name} non è wav");
+            let mp3 = perform(&src, "mp3", 80).unwrap_or_else(|err| panic!("{name} mp3: {err}"));
+            assert!(fs::metadata(&mp3.path).unwrap().len() > 64, "{name} mp3 vuoto");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn video_with_aac_keeps_audio() {
+        let dir = scratch();
+        for (name, bytes) in [
+            ("audio.mp4", include_bytes!("../tests/fixtures/audio.mp4").as_slice()),
+            ("audio.mov", include_bytes!("../tests/fixtures/audio.mov").as_slice()),
+            ("audio.mkv", include_bytes!("../tests/fixtures/audio.mkv").as_slice()),
+        ] {
+            let src = dir.join(name);
+            fs::write(&src, bytes).unwrap();
+            let mp4 = perform(&src, "mp4", 80).unwrap_or_else(|err| panic!("{name}: {err}"));
+            let out = fs::read(&mp4.path).unwrap();
+            assert!(out.windows(4).any(|w| w == b"ftyp"), "{name} senza ftyp");
+            assert!(mp4_box_len(&out, b"mdat") > 32, "{name} mdat vuoto");
+            assert!(out.windows(4).any(|w| w == b"mp4a"), "{name} senza audio");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mov_and_mkv_to_mp4() {
+        let dir = scratch();
+        for (name, bytes) in [
+            ("clip.mov", include_bytes!("../tests/fixtures/clip.mov").as_slice()),
+            ("clip.mkv", include_bytes!("../tests/fixtures/clip.mkv").as_slice()),
+        ] {
+            let src = dir.join(name);
+            fs::write(&src, bytes).unwrap();
+            let mp4 = perform(&src, "mp4", 80).unwrap_or_else(|err| panic!("{name}: {err}"));
+            let out = fs::read(&mp4.path).unwrap();
+            assert!(out.windows(4).any(|w| w == b"ftyp"), "{name} senza ftyp");
+            assert!(mp4_box_len(&out, b"mdat") > 32, "{name} mdat vuoto");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn doc_and_pdf_slices() {
         assert!(kind_of(Path::new("lettera.docx")) == Kind::Doc);
