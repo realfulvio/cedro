@@ -409,7 +409,7 @@ fn xml_decode(text: &str) -> String {
     out
 }
 
-fn cp1252(b: u8) -> char {
+pub(crate) fn cp1252(b: u8) -> char {
     match b {
         0x80 => '\u{20AC}',
         0x82 => '\u{201A}',
