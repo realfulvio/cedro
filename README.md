@@ -6,7 +6,7 @@
 
 Tasto destro su un file, più un tasto. Si apre una ruota sul cursore. Si molla sulla fetta e il file viene convertito lì, sul PC. Nessun caricamento.
 
-Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE).
+Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE). La prima release è [0.1.0](https://github.com/realfulvio/cedro/releases/tag/v0.1.0): solo sorgenti, da compilare sul proprio PC.
 
 <p align="center">
   <img src="docs/desktop.jpg" alt="Desktop: la ruota di Cedro è aperta su foto.png, la fetta JPEG è accesa">
