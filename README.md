@@ -16,6 +16,7 @@ Cedro gira anche su Linux, su GNOME e su KDE Plasma.
 
 - La ruota si apre dal menu del file. In Dolphin sta sotto **Cedro**. In Nautilus sta sotto **Script**. Su Wayland il clic destro di un altro programma non si può prendere.
 - Il video diventa MP4 dentro il programma. Su Linux scrivono OpenH264 e FDK AAC, anche per un MKV già in H.264. Su Windows restano i codificatori di Windows.
+- Un MP4, un MOV o un MKV che ha già l’audio AAC lo tiene nel file nuovo. Su Linux un MOV di QuickTime viene convertito lo stesso: Cedro legge i fotogrammi H.264 e l’audio AAC.
 - Senza argomenti, `cedro` resta nella tray. `cedro show` apre la ruota e, a lavoro finito, esce.
 
 Le conversioni che la ruota offre vanno a buon fine.
@@ -33,7 +34,7 @@ Le conversioni che la ruota offre vanno a buon fine.
 
 ## Dopo aver scaricato
 
-Lo zip della [release 0.6.0](https://github.com/realfulvio/cedro/releases/tag/v0.6.0) non è il programma. Dentro c’è il codice. Su Windows si fa così. Non serve Git.
+Lo zip della [release 0.6.0](https://github.com/realfulvio/cedro/releases/tag/v0.6.0) non è il programma. Dentro c’è il codice della 0.6.0. La lettura dei MOV QuickTime con audio sta nel codice di questa pagina, il ramo `main`. Su Windows si fa così. Non serve Git.
 
 1. Installa Rust da [rustup.rs](https://rustup.rs): scarica `rustup-init.exe` e lancialo. Se chiede gli strumenti di compilazione Microsoft C++, installali e scegli il carico di lavoro «Sviluppo di applicazioni desktop con C++». Senza quelli il comando del punto 4 fallisce. A installazione finita, chiudi e riapri il terminale.
 2. Nella release, sotto Assets, scarica **Source code (zip)**. Non c’è un file `.exe`.
@@ -134,7 +135,7 @@ Audio (WAV, MP3, OGG, M4A, AAC, FLAC): WAV e MP3. L’MP3 è LAME, compilato den
   <img src="docs/video.png" alt="Desktop scuro: cursore su clip.webm e ruota con la fetta MP4 accesa">
 </p>
 
-Video (MP4, WebM, MOV, MKV, AVI): MP4 con H.264 e AAC. Su Windows, H.264, MJPEG e i video non compressi passano dai codificatori di Windows. Su Linux li scrivono OpenH264 e FDK AAC, compilati nel programma. Vale anche per un MKV già in H.264: Cedro lo legge e lo riscrive. WebM VP8 e VP9 li legge Cedro e li riscrive in H.264, con l’audio messo in AAC. Non è un ffmpeg a parte. Su Windows, se manca il codificatore H.264 (capita su alcune edizioni N), la ruota lo dice e non scrive un file a metà.
+Video (MP4, WebM, MOV, MKV, AVI): MP4 con H.264 e AAC. Su Windows, H.264, MJPEG e i video non compressi passano dai codificatori di Windows. Su Linux li scrivono OpenH264 e FDK AAC, compilati nel programma. Vale anche per un MKV già in H.264: Cedro lo legge e lo riscrive. Un MP4, un MOV o un MKV con audio AAC tiene il sonoro. Su Linux, se il MOV usa la descrizione audio di QuickTime, Cedro legge i fotogrammi H.264 e l’audio AAC. WebM VP8 e VP9 li legge Cedro e li riscrive in H.264, con l’audio messo in AAC. Non è un ffmpeg a parte. Su Windows, se manca il codificatore H.264 (capita su alcune edizioni N), la ruota lo dice e non scrive un file a metà.
 
 Azioni su qualsiasi file: duplica, copia il percorso, ZIP non compresso (metodo store).
 
