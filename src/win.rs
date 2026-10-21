@@ -1,4 +1,7 @@
-use cedro::{append_log, config_dir, kind_of, mode_from_vk, perform, read_quality, slices, Kind, Mode, Slice};
+use cedro::{
+    append_log, config_dir, kind_of, mode_from_vk, perform, read_quality, same_kind_paths, slices, Kind, Mode,
+    Slice,
+};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU32, Ordering};
@@ -773,12 +776,12 @@ fn on_drop() {
         let g = s.borrow();
         (g.paths.clone(), g.hover, g.mode, g.quality)
     });
-    let (paths, hover, mode, quality) = job;
+    let (all, hover, mode, quality) = job;
     close_wheel();
-    if paths.is_empty() || hover < 0 {
+    if all.is_empty() || hover < 0 {
         return;
     }
-    let kind = kind_of(&paths[0]);
+    let kind = kind_of(&all[0]);
     let list = slices(kind, mode);
     let Some(slice) = list.get(hover as usize) else {
         return;
@@ -788,17 +791,22 @@ fn on_drop() {
         return;
     }
     if slice.id == "path" {
-        let text = paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("\r\n");
+        let text = all.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("\r\n");
         copy_text(&text);
         balloon(&text);
         return;
     }
+    let paths = if matches!(slice.id, "dup" | "zip") { all.clone() } else { same_kind_paths(&all) };
+    let skipped = all.len().saturating_sub(paths.len());
     let mut notes = Vec::new();
     for path in &paths {
         match perform(path, slice.id, quality) {
             Ok(out) => notes.push(format!("{} · {}", out.path.file_name().and_then(|s| s.to_str()).unwrap_or("file"), out.message)),
             Err(e) => notes.push(e.0),
         }
+    }
+    if skipped > 0 {
+        notes.push(format!("{skipped} file di altro tipo lasciati stare"));
     }
     let summary = if notes.len() == 1 {
         notes.remove(0)

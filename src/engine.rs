@@ -121,7 +121,7 @@ pub fn kind_of(path: &Path) -> Kind {
         "doc" | "docx" | "odt" | "rtf" => Kind::Doc,
         "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "ico" => Kind::Image,
         "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" => Kind::Text,
-        "wav" | "mp3" | "ogg" | "m4a" | "aac" | "flac" | "opus" => Kind::Audio,
+        "wav" | "mp3" | "ogg" | "m4a" | "aac" | "flac" => Kind::Audio,
         "mp4" | "webm" | "mov" | "mkv" | "avi" => Kind::Video,
         _ => Kind::Other,
     }
@@ -254,6 +254,9 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         });
     }
 
+    if extension(path) == "opus" && matches!(action, "wav" | "mp3") {
+        return Err(err("Opus non è ancora letto"));
+    }
     if action == "wav" || action == "mp3" {
         let out = unique_output(&dir, &stem(path), action);
         let result = if action == "wav" {
@@ -287,7 +290,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
     }
 
     if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "pdf" | "upper" | "lower") {
-        let text = fs::read_to_string(path).map_err(|e| err(format!("testo non letto: {e}")))?;
+        let text = read_text(path)?;
         if action == "pdf" {
             let bytes = pdf_from_text(&text);
             let out = unique_output(&dir, &stem(path), "pdf");
@@ -411,6 +414,43 @@ pub fn config_dir() -> PathBuf {
     PathBuf::from(".").join("cedro-config")
 }
 
+pub fn same_kind_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
+    let Some(first) = paths.first() else {
+        return Vec::new();
+    };
+    let kind = kind_of(first);
+    paths.iter().filter(|path| kind_of(path) == kind).cloned().collect()
+}
+
+fn read_text(path: &Path) -> CedroResult<String> {
+    let bytes = fs::read(path).map_err(|e| err(format!("testo non letto: {e}")))?;
+    Ok(decode_text(&bytes))
+}
+
+fn decode_text(bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        return String::from_utf8_lossy(&bytes[3..]).into_owned();
+    }
+    if bytes.starts_with(&[0xFF, 0xFE]) {
+        return decode_utf16(&bytes[2..], true);
+    }
+    if bytes.starts_with(&[0xFE, 0xFF]) {
+        return decode_utf16(&bytes[2..], false);
+    }
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        return text.to_string();
+    }
+    bytes.iter().copied().map(crate::doctext::cp1252).collect()
+}
+
+fn decode_utf16(bytes: &[u8], little: bool) -> String {
+    let units: Vec<u16> = bytes
+        .chunks_exact(2)
+        .map(|pair| if little { u16::from_le_bytes([pair[0], pair[1]]) } else { u16::from_be_bytes([pair[0], pair[1]]) })
+        .collect();
+    String::from_utf16_lossy(&units)
+}
+
 pub fn read_quality() -> u8 {
     let path = config_dir().join("config.txt");
     let Ok(text) = fs::read_to_string(path) else {
@@ -500,7 +540,89 @@ mod tests {
         let rtf = dir.join("nota.rtf");
         fs::write(&rtf, b"{\rtf1 Cedro rtf}").unwrap();
         let rtf_pdf = perform(&rtf, "pdf", 80).unwrap();
-        assert!(fs::read(&rtf_pdf.path).unwrap().windows(3).any(|w| w == b"rtf") || fs::read(&rtf_pdf.path).unwrap().starts_with(b"%PDF"));
+        assert!(fs::read(&rtf_pdf.path).unwrap().windows(5).any(|w| w == b"Cedro"));
+        let legacy = dir.join("vecchio.doc");
+        write_spec_doc(&legacy);
+        let legacy_pdf = perform(&legacy, "pdf", 80).expect("DOC");
+        assert!(fs::read(&legacy_pdf.path).unwrap().windows(5).any(|w| w == b"Cedro"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn windows_text_and_opus() {
+        let dir = std::env::temp_dir().join(format!("cedro-ansi-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let ansi = dir.join("citta.txt");
+        fs::write(&ansi, b"citt\xe0").unwrap();
+        let upper = perform(&ansi, "upper", 80).unwrap();
+        assert!(fs::read_to_string(&upper.path).unwrap().contains("CITT\u{00C0}"));
+        let utf16 = dir.join("nota.txt");
+        let mut wide = vec![0xFF, 0xFE];
+        for unit in "Cedro".encode_utf16() {
+            wide.extend_from_slice(&unit.to_le_bytes());
+        }
+        fs::write(&utf16, wide).unwrap();
+        let pdf = perform(&utf16, "pdf", 80).unwrap();
+        assert!(fs::read(&pdf.path).unwrap().windows(5).any(|w| w == b"Cedro"));
+        assert!(kind_of(Path::new("nota.opus")) == Kind::Other);
+        assert_eq!(slices(Kind::Other, Mode::Convert)[0].id, "none");
+        let opus = dir.join("nota.opus");
+        fs::write(&opus, b"OpusHead").unwrap();
+        match perform(&opus, "wav", 80) {
+            Ok(_) => panic!("Opus non deve diventare WAV"),
+            Err(e) => assert!(e.to_string().contains("Opus"), "{e}"),
+        }
+        let photo = dir.join("foto.png");
+        let other = dir.join("lettera.docx");
+        fs::write(&photo, b"png").unwrap();
+        fs::write(&other, b"docx").unwrap();
+        let kept = same_kind_paths(&[photo.clone(), other, dir.join("altra.png")]);
+        assert_eq!(kept, vec![photo, dir.join("altra.png")]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn avi_to_mp4_on_windows() {
+        let dir = std::env::temp_dir().join(format!("cedro-avi-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let avi = dir.join("clip.avi");
+        fs::write(&avi, tiny_avi()).unwrap();
+        let mp4 = dir.join("clip.mp4");
+        crate::video::to_mp4(&avi, &mp4).expect("MP4");
+        let bytes = fs::read(&mp4).unwrap();
+        assert!(bytes.windows(4).any(|w| w == b"ftyp"), "manca ftyp");
+        assert!(mp4_box_len(&bytes, b"mdat") > 32, "mdat vuoto");
+        let rgb = dir.join("colori.avi");
+        fs::write(&rgb, rgb_avi()).unwrap();
+        let rgb_mp4 = dir.join("colori.mp4");
+        crate::video::to_mp4(&rgb, &rgb_mp4).expect("MP4 da RGB");
+        let rgb_bytes = fs::read(&rgb_mp4).unwrap();
+        assert!(mp4_box_len(&rgb_bytes, b"mdat") > 32, "mdat RGB vuoto");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn webm_to_mp4_on_windows() {
+        let dir = std::env::temp_dir().join(format!("cedro-webm-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        for (name, bytes) in [
+            ("vp8.webm", include_bytes!("../tests/fixtures/vp8.webm").as_slice()),
+            ("vp9.webm", include_bytes!("../tests/fixtures/vp9.webm").as_slice()),
+        ] {
+            let src = dir.join(name);
+            fs::write(&src, bytes).unwrap();
+            let mp4 = src.with_extension("mp4");
+            crate::video::to_mp4(&src, &mp4).unwrap_or_else(|err| panic!("{name}: {err}"));
+            let out = fs::read(&mp4).unwrap();
+            assert!(out.windows(4).any(|w| w == b"ftyp"), "{name} senza ftyp");
+            assert!(mp4_box_len(&out, b"mdat") > 32, "{name} mdat vuoto");
+            assert!(out.windows(4).any(|w| w == b"mp4a"), "{name} senza audio");
+        }
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -531,4 +653,237 @@ mod tests {
         assert_eq!(slices(Kind::Pdf, Mode::Tools)[0].id, "ocr");
         assert!(slices(Kind::Image, Mode::Tools).iter().any(|s| s.id == "ocr"));
     }
+}
+
+#[cfg(test)]
+fn write_spec_doc(path: &Path) {
+    let (word, table) = spec_doc_streams("Cedro");
+    let file = fs::OpenOptions::new().read(true).write(true).create(true).truncate(true).open(path).unwrap();
+    let mut comp = cfb::CompoundFile::create(file).unwrap();
+    {
+        use std::io::Write;
+        let mut stream = comp.create_stream("/WordDocument").unwrap();
+        stream.write_all(&word).unwrap();
+    }
+    {
+        use std::io::Write;
+        let mut stream = comp.create_stream("/0Table").unwrap();
+        stream.write_all(&table).unwrap();
+    }
+    comp.flush().unwrap();
+}
+
+#[cfg(test)]
+fn spec_doc_streams(text: &str) -> (Vec<u8>, Vec<u8>) {
+    let mut body: Vec<u8> = text.bytes().collect();
+    body.push(0x0D);
+    let mut fib = Vec::new();
+    fib.extend_from_slice(&0xA5ECu16.to_le_bytes());
+    fib.extend_from_slice(&0x00C1u16.to_le_bytes());
+    fib.extend(std::iter::repeat(0).take(28));
+    fib.extend_from_slice(&14u16.to_le_bytes());
+    fib.extend(std::iter::repeat(0).take(28));
+    fib.extend_from_slice(&22u16.to_le_bytes());
+    fib.extend(std::iter::repeat(0).take(88));
+    fib.extend_from_slice(&93u16.to_le_bytes());
+    let pairs_at = fib.len();
+    fib.extend(std::iter::repeat(0).take(93 * 8));
+    let text_at = fib.len() as u32;
+    fib.extend_from_slice(&body);
+    let mut clx = vec![0x02];
+    clx.extend_from_slice(&16u32.to_le_bytes());
+    clx.extend_from_slice(&0u32.to_le_bytes());
+    clx.extend_from_slice(&(body.len() as u32).to_le_bytes());
+    clx.extend_from_slice(&0u16.to_le_bytes());
+    let fc = (text_at * 2) | (1 << 30);
+    clx.extend_from_slice(&fc.to_le_bytes());
+    clx.extend_from_slice(&0u16.to_le_bytes());
+    fib[pairs_at + 264..pairs_at + 268].copy_from_slice(&0u32.to_le_bytes());
+    fib[pairs_at + 268..pairs_at + 272].copy_from_slice(&(clx.len() as u32).to_le_bytes());
+    (fib, clx)
+}
+
+#[cfg(all(test, windows))]
+fn tiny_avi() -> Vec<u8> {
+    fn u32(v: u32) -> [u8; 4] {
+        v.to_le_bytes()
+    }
+    fn chunk(id: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+        let mut out = id.to_vec();
+        out.extend_from_slice(&u32(payload.len() as u32));
+        out.extend_from_slice(payload);
+        if payload.len() % 2 == 1 {
+            out.push(0);
+        }
+        out
+    }
+    fn list(kind: &[u8; 4], inner: &[u8]) -> Vec<u8> {
+        let mut out = b"LIST".to_vec();
+        out.extend_from_slice(&u32(4 + inner.len() as u32));
+        out.extend_from_slice(kind);
+        out.extend_from_slice(inner);
+        out
+    }
+    let width = 64u32;
+    let height = 64u32;
+    let frame_size = width * height * 3 / 2;
+    let mut frame = vec![16u8; frame_size as usize];
+    for uv in frame.iter_mut().skip((width * height) as usize) {
+        *uv = 128;
+    }
+    let mut avih = vec![0u8; 56];
+    avih[0..4].copy_from_slice(&u32(33_333));
+    avih[4..8].copy_from_slice(&u32(frame_size * 30));
+    avih[12..16].copy_from_slice(&u32(0x10));
+    avih[16..20].copy_from_slice(&u32(2));
+    avih[24..28].copy_from_slice(&u32(1));
+    avih[28..32].copy_from_slice(&u32(frame_size));
+    avih[32..36].copy_from_slice(&u32(width));
+    avih[36..40].copy_from_slice(&u32(height));
+    let mut strh = vec![0u8; 64];
+    strh[0..4].copy_from_slice(b"vids");
+    strh[4..8].copy_from_slice(b"NV12");
+    strh[20..24].copy_from_slice(&u32(1));
+    strh[24..28].copy_from_slice(&u32(30));
+    strh[32..36].copy_from_slice(&u32(2));
+    strh[36..40].copy_from_slice(&u32(frame_size));
+    strh[44..48].copy_from_slice(&u32(frame_size));
+    strh[56..60].copy_from_slice(&u32(width));
+    strh[60..64].copy_from_slice(&u32(height));
+    let mut strf = vec![0u8; 40];
+    strf[0..4].copy_from_slice(&u32(40));
+    strf[4..8].copy_from_slice(&u32(width));
+    strf[8..12].copy_from_slice(&u32(height));
+    strf[12..14].copy_from_slice(&1u16.to_le_bytes());
+    strf[14..16].copy_from_slice(&12u16.to_le_bytes());
+    strf[16..20].copy_from_slice(b"NV12");
+    strf[20..24].copy_from_slice(&u32(frame_size));
+    let mut hdr = chunk(b"avih", &avih);
+    let mut strl = chunk(b"strh", &strh);
+    strl.extend(chunk(b"strf", &strf));
+    hdr.extend(list(b"strl", &strl));
+    let db = chunk(b"00dc", &frame);
+    let mut movi_inner = b"movi".to_vec();
+    let first = 4u32;
+    let second = 4 + db.len() as u32;
+    movi_inner.extend_from_slice(&db);
+    movi_inner.extend_from_slice(&db);
+    let mut idx = Vec::new();
+    for offset in [first, second] {
+        idx.extend_from_slice(b"00dc");
+        idx.extend_from_slice(&u32(0x10));
+        idx.extend_from_slice(&u32(offset));
+        idx.extend_from_slice(&u32(frame_size));
+    }
+    let mut body = list(b"hdrl", &hdr);
+    body.extend(list(b"movi", &movi_inner[4..]));
+    body.extend(chunk(b"idx1", &idx));
+    let mut file = b"RIFF".to_vec();
+    file.extend_from_slice(&u32(4 + body.len() as u32));
+    file.extend_from_slice(b"AVI ");
+    file.extend(body);
+    file
+}
+
+#[cfg(all(test, windows))]
+fn rgb_avi() -> Vec<u8> {
+    fn u32(v: u32) -> [u8; 4] {
+        v.to_le_bytes()
+    }
+    fn chunk(id: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+        let mut out = id.to_vec();
+        out.extend_from_slice(&u32(payload.len() as u32));
+        out.extend_from_slice(payload);
+        if payload.len() % 2 == 1 {
+            out.push(0);
+        }
+        out
+    }
+    fn list(kind: &[u8; 4], inner: &[u8]) -> Vec<u8> {
+        let mut out = b"LIST".to_vec();
+        out.extend_from_slice(&u32(4 + inner.len() as u32));
+        out.extend_from_slice(kind);
+        out.extend_from_slice(inner);
+        out
+    }
+    let width = 64u32;
+    let height = 64u32;
+    let stride = width * 3;
+    let frame_size = stride * height;
+    let mut frame = vec![0u8; frame_size as usize];
+    for y in 0..height {
+        for x in 0..width {
+            let at = ((height - 1 - y) * stride + x * 3) as usize;
+            frame[at] = 40;
+            frame[at + 1] = 180;
+            frame[at + 2] = 20;
+        }
+    }
+    let mut avih = vec![0u8; 56];
+    avih[0..4].copy_from_slice(&u32(33_333));
+    avih[4..8].copy_from_slice(&u32(frame_size * 30));
+    avih[12..16].copy_from_slice(&u32(0x10));
+    avih[16..20].copy_from_slice(&u32(2));
+    avih[24..28].copy_from_slice(&u32(1));
+    avih[28..32].copy_from_slice(&u32(frame_size));
+    avih[32..36].copy_from_slice(&u32(width));
+    avih[36..40].copy_from_slice(&u32(height));
+    let mut strh = vec![0u8; 64];
+    strh[0..4].copy_from_slice(b"vids");
+    strh[4..8].copy_from_slice(b"DIB ");
+    strh[20..24].copy_from_slice(&u32(1));
+    strh[24..28].copy_from_slice(&u32(30));
+    strh[32..36].copy_from_slice(&u32(2));
+    strh[36..40].copy_from_slice(&u32(frame_size));
+    strh[44..48].copy_from_slice(&u32(frame_size));
+    strh[56..60].copy_from_slice(&u32(width));
+    strh[60..64].copy_from_slice(&u32(height));
+    let mut strf = vec![0u8; 40];
+    strf[0..4].copy_from_slice(&u32(40));
+    strf[4..8].copy_from_slice(&u32(width));
+    strf[8..12].copy_from_slice(&u32(height));
+    strf[12..14].copy_from_slice(&1u16.to_le_bytes());
+    strf[14..16].copy_from_slice(&24u16.to_le_bytes());
+    strf[20..24].copy_from_slice(&u32(frame_size));
+    let mut hdr = chunk(b"avih", &avih);
+    let mut strl = chunk(b"strh", &strh);
+    strl.extend(chunk(b"strf", &strf));
+    hdr.extend(list(b"strl", &strl));
+    let db = chunk(b"00db", &frame);
+    let mut movi_inner = b"movi".to_vec();
+    let first = 4u32;
+    let second = 4 + db.len() as u32;
+    movi_inner.extend_from_slice(&db);
+    movi_inner.extend_from_slice(&db);
+    let mut idx = Vec::new();
+    for offset in [first, second] {
+        idx.extend_from_slice(b"00db");
+        idx.extend_from_slice(&u32(0x10));
+        idx.extend_from_slice(&u32(offset));
+        idx.extend_from_slice(&u32(frame_size));
+    }
+    let mut body = list(b"hdrl", &hdr);
+    body.extend(list(b"movi", &movi_inner[4..]));
+    body.extend(chunk(b"idx1", &idx));
+    let mut file = b"RIFF".to_vec();
+    file.extend_from_slice(&u32(4 + body.len() as u32));
+    file.extend_from_slice(b"AVI ");
+    file.extend(body);
+    file
+}
+
+#[cfg(all(test, windows))]
+fn mp4_box_len(bytes: &[u8], name: &[u8; 4]) -> usize {
+    let mut i = 0;
+    while i + 8 <= bytes.len() {
+        let size = u32::from_be_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]) as usize;
+        if size < 8 || i + size > bytes.len() {
+            return 0;
+        }
+        if &bytes[i + 4..i + 8] == name {
+            return size;
+        }
+        i += size;
+    }
+    0
 }

@@ -6,24 +6,39 @@
 
 Tasto destro su un file, più un tasto. Si apre una ruota sul cursore. Si molla sulla fetta e il file viene convertito lì, sul PC. Nessun caricamento.
 
-Cedro 0.4 fa le conversioni da solo. Non serve installare LibreOffice, ffmpeg, Tesseract o Poppler.
+Cedro 0.5 fa le conversioni da solo. Non serve installare LibreOffice, ffmpeg, Tesseract o Poppler.
 
 Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE).
 
+## Novità della 0.5
+
+Le conversioni che la ruota offre vanno a buon fine.
+
+- Un WebM VP8 o VP9 diventa MP4. Cedro legge il video, Windows scrive H.264 e AAC. L’audio del file resta.
+- Un AVI non compresso, o in MJPEG, diventa MP4 anche se Windows non ha il convertitore di colore.
+- Il vecchio DOC viene letto, e anche i testi in Windows-1252 e UTF-16.
+- Un file Opus non viene offerto: il programma non lo sa ancora leggere.
+- Se i file selezionati sono di tipi diversi, Cedro converte quelli del primo e lascia stare gli altri.
+- Da Word o da PDF esce il testo. L’impaginazione originale no.
+
+<p align="center">
+  <img src="docs/formati.png" alt="Quattro ruote: foto.png con JPEG acceso, clip.webm con MP4, nota.ogg con MP3, lettera.docx con PDF">
+</p>
+
 ## Dopo aver scaricato
 
-Lo zip della [release 0.4.0](https://github.com/realfulvio/cedro/releases/tag/v0.4.0) non è il programma. Dentro c’è il codice. Su Windows si fa così. Non serve Git.
+Lo zip della [release 0.5.0](https://github.com/realfulvio/cedro/releases/tag/v0.5.0) non è il programma. Dentro c’è il codice. Su Windows si fa così. Non serve Git.
 
 1. Installa Rust da [rustup.rs](https://rustup.rs): scarica `rustup-init.exe` e lancialo. Se chiede gli strumenti di compilazione Microsoft C++, installali e scegli il carico di lavoro «Sviluppo di applicazioni desktop con C++». Senza quelli il comando del punto 4 fallisce. A installazione finita, chiudi e riapri il terminale.
 2. Nella release, sotto Assets, scarica **Source code (zip)**. Non c’è un file `.exe`.
-3. Estrai lo zip. Apri la cartella che c’è dentro: si chiama `cedro-0.4.0`.
+3. Estrai lo zip. Apri la cartella che c’è dentro: si chiama `cedro-0.5.0`.
 4. Clicca la barra dell’indirizzo di quella cartella, scrivi `powershell` e premi Invio. Poi:
 
 ```
 cargo build --release
 ```
 
-La prima volta scarica le librerie, compila il codificatore MP3 e collega i modelli che leggono il testo. Può durare parecchio. Non chiudere la finestra. Finisce senza errori quando torna il cursore del terminale.
+La prima volta scarica le librerie, compila il codificatore MP3, i lettori VP8 e VP9 e collega i modelli che leggono il testo. Può durare parecchio. Non chiudere la finestra. Finisce senza errori quando torna il cursore del terminale.
 
 5. Il programma è questo file:
 
@@ -85,9 +100,13 @@ Word (DOC, DOCX, ODT, RTF): PDF di testo. Restano paragrafi e parole. Impaginazi
 
 PDF: con Shift, Word di testo oppure un file di testo. La pagina non viene ricostruita. Con Ctrl, OCR: se il PDF ha già del testo, Cedro lo copia; se non ne ha, disegna al massimo 20 pagine e le legge.
 
-Audio (WAV, MP3, OGG, M4A, AAC, FLAC): WAV e MP3. L’MP3 è LAME, compilato dentro l’eseguibile, licenza LGPL. Un file Opus apre la ruota, ma questo motore non lo decodifica.
+Audio (WAV, MP3, OGG, M4A, AAC, FLAC): WAV e MP3. L’MP3 è LAME, compilato dentro l’eseguibile, licenza LGPL. Un file Opus non viene convertito.
 
-Video (MP4, WebM, MOV, MKV, AVI): MP4 con H.264 e AAC, tramite i codificatori già presenti in Windows. Non è un ffmpeg a parte. Se Windows non sa aprire quel file, o manca il codificatore (capita su alcune edizioni N), la ruota lo dice e non scrive un file a metà.
+<p align="center">
+  <img src="docs/video.png" alt="Desktop scuro: cursore su clip.webm e ruota con la fetta MP4 accesa">
+</p>
+
+Video (MP4, WebM, MOV, MKV, AVI): MP4 con H.264 e AAC. H.264, MJPEG e i video non compressi passano dai codificatori di Windows. WebM VP8 e VP9 li legge Cedro e li riscrive in H.264, con l’audio messo in AAC. Non è un ffmpeg a parte. Se manca il codificatore H.264 (capita su alcune edizioni N), la ruota lo dice e non scrive un file a metà.
 
 Azioni su qualsiasi file: duplica, copia il percorso, ZIP non compresso (metodo store).
 
@@ -122,7 +141,13 @@ Senza argomenti, `cedro.exe` apre la ruota nella tray.
 
 ## Licenze nel programma
 
-Il codice di Cedro è MIT. Due pezzi portano la propria licenza e restano separati: LAME, per l’MP3, è LGPL; i pesi del modello OCR sono CC BY-SA 4.0 (Robert Knight, ocrs). I nomi e i link stanno in `models/FONTI.txt`.
+Il codice di Cedro è MIT. Alcuni pezzi portano la propria licenza e restano separati.
+
+- LAME, per l’MP3, è LGPL.
+- I pesi del modello OCR sono CC BY-SA 4.0 (Robert Knight, ocrs). I link stanno in `models/FONTI.txt`.
+- I lettori WebM sono [oxideav-vp8](https://github.com/OxideAV/oxideav-vp8) e [oxideav-vp9](https://github.com/OxideAV/oxideav-vp9), di Mark Karpelès, licenza MIT.
+
+[VERT](https://github.com/VERT-sh/VERT) è un convertitore nel browser, licenza AGPL-3.0. Cedro non ne include il codice: nessun suo file è stato copiato. L’MP4 usa la stessa coppia, H.264 e AAC, con i codificatori di Windows e, per il WebM, i lettori oxideav.
 
 ## Indipendenza
 
