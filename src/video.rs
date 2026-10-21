@@ -17,17 +17,14 @@ use windows::core::GUID;
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED};
 use windows::core::PCWSTR;
 
-#[path = "softvideo.rs"]
-mod softvideo;
-
 pub fn to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let mf = to_mp4_mf(input, output);
     if mf.is_ok() {
         return mf;
     }
-    match softvideo::try_to_mp4(input, output) {
+    match crate::softvideo::transcode::<EncodedVideo>(input, output) {
         Ok(()) => Ok(()),
-        Err(err) if err == softvideo::FOREIGN => mf,
+        Err(err) if err == crate::softvideo::FOREIGN => mf,
         Err(err) => Err(err),
     }
 }
@@ -706,6 +703,42 @@ impl EncodedVideo {
         Ok(())
     }
 
+}
+
+impl crate::sink::VideoSink for EncodedVideo {
+    fn open(
+        output: &Path,
+        width: u32,
+        height: u32,
+        frame_duration: i64,
+        audio: Option<(u32, u16)>,
+    ) -> Result<Self, String> {
+        EncodedVideo::open(output, width, height, frame_duration, audio)
+    }
+
+    fn write_yuv(
+        &mut self,
+        y: &[u8],
+        u: &[u8],
+        v: &[u8],
+        width: u32,
+        height: u32,
+        time: i64,
+        duration: i64,
+    ) -> Result<(), String> {
+        EncodedVideo::write_yuv(self, y, u, v, width, height, time, duration)
+    }
+
+    fn write_pcm(&mut self, samples: &[i16], channels: u16, rate: u32) -> Result<(), String> {
+        EncodedVideo::write_pcm(self, samples, channels, rate)
+    }
+
+    fn finish(self) -> Result<(), String> {
+        EncodedVideo::finish(self)
+    }
+}
+
+impl EncodedVideo {
     fn attach_audio(&mut self, rate: u32, channels: u16) -> Result<(), String> {
         let out_channels = if channels > 2 { 2 } else { channels.max(1) };
         let (out_rate, resample) = if matches!(rate, 44100 | 48000) {

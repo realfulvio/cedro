@@ -5,24 +5,37 @@ mod cli;
 #[cfg(windows)]
 mod win;
 
+#[cfg(target_os = "linux")]
+mod linux_ui;
+
 fn main() {
-    if std::env::args().len() > 1 {
-        #[cfg(windows)]
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    #[cfg(windows)]
+    {
+        if args.is_empty() {
+            if let Err(err) = win::start() {
+                cedro::append_log(&err);
+            }
+            return;
+        }
         unsafe {
             let _ = windows::Win32::System::Console::AllocConsole();
         }
         std::process::exit(cli::run());
     }
-    #[cfg(windows)]
+    #[cfg(target_os = "linux")]
     {
-        if let Err(err) = win::start() {
-            cedro::append_log(&err);
+        let show = args.first().is_some_and(|arg| arg == "show");
+        if args.is_empty() || show {
+            std::process::exit(linux_ui::start());
         }
-        return;
+        std::process::exit(cli::run());
     }
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
-        eprintln!("Senza argomenti la ruota parte solo su Windows.");
-        cli::run();
+        if args.is_empty() {
+            eprintln!("Senza argomenti la ruota parte su Windows e su Linux.");
+        }
+        std::process::exit(cli::run());
     }
 }

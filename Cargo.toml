@@ -1,9 +1,9 @@
 [package]
 name = "cedro"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 license = "MIT"
-description = "Converti e modifica file in locale, con una ruota al cursore. Windows."
+description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
 publish = false
 
 [dependencies]
@@ -14,13 +14,20 @@ hayro = "0.8"
 lopdf = "0.36"
 mp3lame-encoder = "0.2"
 ocrs = "0.13"
+oxideav-vp8 = { version = "0.2.7", default-features = false }
+oxideav-vp9 = "0.0.13"
 rten = "0.26"
 symphonia = { version = "0.5", default-features = false, features = ["mp3", "wav", "flac", "vorbis", "pcm", "aac", "isomp4", "ogg", "mkv"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+fdk-aac = "0.8"
+gtk4 = { version = "0.10", features = ["v4_12"] }
+ksni = "0.2"
+mp4 = "0.14"
+openh264 = { version = "0.9", default-features = false, features = ["source"] }
+
 [target.'cfg(windows)'.dependencies]
-oxideav-vp8 = { version = "0.2.7", default-features = false }
-oxideav-vp9 = "0.0.13"
 windows-core = "0.61"
 windows = { version = "0.61", features = [
     "Win32_Foundation",

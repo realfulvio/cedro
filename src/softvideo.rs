@@ -14,9 +14,9 @@ use symphonia::core::units::TimeBase;
 use oxideav_vp8::state::Vp8DecoderState;
 use oxideav_vp9::{split_superframe, Vp9SequenceDecoder};
 
-use super::EncodedVideo;
+use crate::sink::VideoSink;
 
-pub(super) const FOREIGN: &str = "non è un webm vp8 o vp9";
+pub(crate) const FOREIGN: &str = "non è un webm vp8 o vp9";
 
 enum Codec {
     Vp8,
@@ -43,11 +43,11 @@ enum VideoDec {
     Vp9(Vp9SequenceDecoder),
 }
 
-pub(super) fn try_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
+pub(crate) fn transcode<S: VideoSink>(input: &Path, output: &Path) -> Result<(), String> {
     let codec = codec_of(input)?;
     let geometry = first_frame(input, &codec)?;
     let mut opened = open_media(input)?;
-    let mut encoder = EncodedVideo::open(
+    let mut encoder = S::open(
         output,
         geometry.width,
         geometry.height,

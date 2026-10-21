@@ -6,15 +6,21 @@
 
 Tasto destro su un file, più un tasto. Si apre una ruota sul cursore. Si molla sulla fetta e il file viene convertito lì, sul PC. Nessun caricamento.
 
-Cedro 0.5 fa le conversioni da solo. Non serve installare LibreOffice, ffmpeg, Tesseract o Poppler.
+Cedro 0.6 fa le conversioni da solo. Non serve installare LibreOffice, ffmpeg, Tesseract o Poppler. Gira su Windows e su Linux.
 
 Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE).
 
-## Novità della 0.5
+## Novità della 0.6
+
+Cedro gira anche su Linux, su GNOME e su KDE Plasma.
+
+- La ruota si apre dal menu del file. In Dolphin sta sotto **Cedro**. In Nautilus sta sotto **Script**. Su Wayland il clic destro di un altro programma non si può prendere.
+- Il video diventa MP4 dentro il programma. Su Linux scrivono OpenH264 e FDK AAC, anche per un MKV già in H.264. Su Windows restano i codificatori di Windows.
+- Senza argomenti, `cedro` resta nella tray. `cedro show` apre la ruota e, a lavoro finito, esce.
 
 Le conversioni che la ruota offre vanno a buon fine.
 
-- Un WebM VP8 o VP9 diventa MP4. Cedro legge il video, Windows scrive H.264 e AAC. L’audio del file resta.
+- Un WebM VP8 o VP9 diventa MP4. Cedro legge il video e scrive H.264 e AAC. Su Windows usa i codificatori di Windows. Su Linux usa OpenH264 e FDK AAC, compilati nel programma. L’audio del file resta.
 - Un AVI non compresso, o in MJPEG, diventa MP4 anche se Windows non ha il convertitore di colore.
 - Il vecchio DOC viene letto, e anche i testi in Windows-1252 e UTF-16.
 - Un file Opus non viene offerto: il programma non lo sa ancora leggere.
@@ -27,11 +33,11 @@ Le conversioni che la ruota offre vanno a buon fine.
 
 ## Dopo aver scaricato
 
-Lo zip della [release 0.5.0](https://github.com/realfulvio/cedro/releases/tag/v0.5.0) non è il programma. Dentro c’è il codice. Su Windows si fa così. Non serve Git.
+Lo zip della [release 0.6.0](https://github.com/realfulvio/cedro/releases/tag/v0.6.0) non è il programma. Dentro c’è il codice. Su Windows si fa così. Non serve Git.
 
 1. Installa Rust da [rustup.rs](https://rustup.rs): scarica `rustup-init.exe` e lancialo. Se chiede gli strumenti di compilazione Microsoft C++, installali e scegli il carico di lavoro «Sviluppo di applicazioni desktop con C++». Senza quelli il comando del punto 4 fallisce. A installazione finita, chiudi e riapri il terminale.
 2. Nella release, sotto Assets, scarica **Source code (zip)**. Non c’è un file `.exe`.
-3. Estrai lo zip. Apri la cartella che c’è dentro: si chiama `cedro-0.5.0`.
+3. Estrai lo zip. Apri la cartella che c’è dentro: si chiama `cedro-0.6.0`.
 4. Clicca la barra dell’indirizzo di quella cartella, scrivi `powershell` e premi Invio. Poi:
 
 ```
@@ -50,6 +56,28 @@ target\release\cedro.exe
 7. La prima volta Windows può dire «Windows ha protetto il PC». L’exe non è firmato. Clicca «Ulteriori informazioni», poi «Esegui comunque».
 8. In una cartella qualsiasi, sul desktop o in una finestra Apri/Salva, tieni premuto **Shift** e fai clic destro su un file. Si apre la ruota. Clic sinistro sulla fetta. La copia compare nella stessa cartella. L’originale resta dov’è.
 9. Per chiudere: clic sull’icona vicino all’orologio, poi **Esci**.
+
+## Su Linux
+
+Wayland non lascia a Cedro il clic destro di un altro programma. La ruota si apre dal menu del file, in GNOME e in Plasma. Le conversioni sono le stesse, video compreso.
+
+1. Installa Rust da [rustup.rs](https://rustup.rs), più gli strumenti per compilare C e i pacchetti di sviluppo di GTK 4 (`gtk4`, `pkgconf` e un compilatore C).
+2. Nella cartella del codice:
+
+```
+cargo build --release
+```
+
+La prima volta compila anche OpenH264, FDK AAC, LAME e i lettori VP8 e VP9. Può durare parecchio.
+
+3. Il programma è `target/release/cedro`.
+4. Avvialo una volta senza argomenti. Resta nella tray e scrive i menu. Su Plasma l’icona compare. Su GNOME serve l’estensione AppIndicator: senza quella il menu del file funziona lo stesso.
+5. In Dolphin, tasto destro sul file, poi **Cedro** e **Conversione**, **Strumenti** o **Azioni**. Se il menu non compare, chiudi Dolphin e riaprilo.
+6. In Nautilus, tasto destro, **Script** e la cartella **Cedro**. Con `python-nautilus` compare anche la voce **Cedro**.
+7. La ruota si apre a schermo. Mentre è aperta, **Shift**, **Ctrl** e **Alt** cambiano le fette. Clic sinistro sulla fetta. Esc, il centro o un punto fuori annulla.
+8. Finito il lavoro, questa finestra si chiude. L’icona nella tray è quella dell’avvio senza argomenti. Per chiuderla: clic sull’icona, poi **Esci**. Cedro non si avvia da solo all’ingresso.
+
+La configurazione sta in `~/.config/cedro/config.txt`.
 
 ## Come si usa
 
@@ -106,7 +134,7 @@ Audio (WAV, MP3, OGG, M4A, AAC, FLAC): WAV e MP3. L’MP3 è LAME, compilato den
   <img src="docs/video.png" alt="Desktop scuro: cursore su clip.webm e ruota con la fetta MP4 accesa">
 </p>
 
-Video (MP4, WebM, MOV, MKV, AVI): MP4 con H.264 e AAC. H.264, MJPEG e i video non compressi passano dai codificatori di Windows. WebM VP8 e VP9 li legge Cedro e li riscrive in H.264, con l’audio messo in AAC. Non è un ffmpeg a parte. Se manca il codificatore H.264 (capita su alcune edizioni N), la ruota lo dice e non scrive un file a metà.
+Video (MP4, WebM, MOV, MKV, AVI): MP4 con H.264 e AAC. Su Windows, H.264, MJPEG e i video non compressi passano dai codificatori di Windows. Su Linux li scrivono OpenH264 e FDK AAC, compilati nel programma. Vale anche per un MKV già in H.264: Cedro lo legge e lo riscrive. WebM VP8 e VP9 li legge Cedro e li riscrive in H.264, con l’audio messo in AAC. Non è un ffmpeg a parte. Su Windows, se manca il codificatore H.264 (capita su alcune edizioni N), la ruota lo dice e non scrive un file a metà.
 
 Azioni su qualsiasi file: duplica, copia il percorso, ZIP non compresso (metodo store).
 
@@ -114,7 +142,7 @@ HEIC non è nel motore. Il PDF scritto da Cedro per un’immagine o per un testo
 
 ## Riga di comando
 
-La qualità JPEG, da 40 a 95, sta in `%APPDATA%\Cedro\config.txt`:
+La qualità JPEG, da 40 a 95, sta in `%APPDATA%\Cedro\config.txt` su Windows e in `~/.config/cedro/config.txt` su Linux:
 
 ```
 quality=82
@@ -131,6 +159,15 @@ target\release\cedro.exe zip nota.txt
 
 Senza argomenti, `cedro.exe` apre la ruota nella tray.
 
+Su Linux i percorsi usano la barra normale:
+
+```
+target/release/cedro convert foto.png webp
+target/release/cedro show --conversione foto.png
+```
+
+Senza argomenti, `cedro` resta nella tray. `cedro show` apre la ruota e, a lavoro finito, esce.
+
 ## Antivirus
 
 - Codice aperto, licenza MIT, niente packer, niente UPX, niente offuscamento.
@@ -146,8 +183,10 @@ Il codice di Cedro è MIT. Alcuni pezzi portano la propria licenza e restano sep
 - LAME, per l’MP3, è LGPL.
 - I pesi del modello OCR sono CC BY-SA 4.0 (Robert Knight, ocrs). I link stanno in `models/FONTI.txt`.
 - I lettori WebM sono [oxideav-vp8](https://github.com/OxideAV/oxideav-vp8) e [oxideav-vp9](https://github.com/OxideAV/oxideav-vp9), di Mark Karpelès, licenza MIT.
+- OpenH264, di Cisco, è BSD-2. Su Linux Cedro compila i sorgenti e non scarica un binario.
+- FDK AAC, di Fraunhofer, ha la licenza Fraunhofer. Il collegamento Rust è MIT. Cedro resta MIT.
 
-[VERT](https://github.com/VERT-sh/VERT) è un convertitore nel browser, licenza AGPL-3.0. Cedro non ne include il codice: nessun suo file è stato copiato. L’MP4 usa la stessa coppia, H.264 e AAC, con i codificatori di Windows e, per il WebM, i lettori oxideav.
+[VERT](https://github.com/VERT-sh/VERT) è un convertitore nel browser, licenza AGPL-3.0. Cedro non ne include il codice: nessun suo file è stato copiato. L’MP4 usa la stessa coppia, H.264 e AAC: su Windows i codificatori di Windows, su Linux OpenH264 e FDK AAC. Per il WebM, i lettori oxideav.
 
 ## Indipendenza
 
