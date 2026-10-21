@@ -1,25 +1,49 @@
+<p align="center">
+  <img src="docs/mark.jpg" width="120" alt="Segno di Cedro, una ruota color cedro">
+</p>
+
 # Cedro
 
-Cedro converte e modifica file sul PC, senza caricarli da nessuna parte. Il gesto è quello di una ruota al cursore: si trascina un file, si preme un tasto, si molla sulla fetta. Il programma non è Tangerine e non ne usa codice, icone o testi.
+Tasto destro su un file, più un tasto. Si apre una ruota sul cursore. Si molla sulla fetta e il file viene convertito lì, sul PC. Nessun caricamento.
 
-Licenza: MIT. Vedi [LICENSE](LICENSE).
+Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE).
 
-## Gesto
+<p align="center">
+  <img src="docs/desktop.jpg" alt="Desktop: la ruota di Cedro è aperta su foto.png, la fetta JPEG è accesa">
+</p>
+
+## Come si usa
+
+<p align="center">
+  <img src="docs/passi.jpg" alt="Tre passi: tasto Shift, scelta della fetta JPEG, file nuovo accanto">
+</p>
 
 1. Avvia `cedro.exe`. Resta nella tray, senza una finestra di lavoro.
-2. Sul desktop o in Esplora file, tieni premuto un tasto e fai clic destro sul file.
-   - **Shift**: conversione
-   - **Ctrl**: strumenti
-   - **Alt**: azioni
-3. La ruota si apre sul cursore e resta aperta. Il tasto destro normale di Windows, in quel caso, non compare.
-4. Sposta il cursore su una fetta e fai clic sinistro. In alternativa tieni premuto il destro, vai sulla fetta e rilascia.
-5. Esc, un clic al centro o fuori dalla ruota annulla.
+2. Sul desktop o in Esplora file tieni premuto un tasto e fai clic destro sul file.
+3. La ruota resta aperta anche se molli il tasto. Vai su una fetta e fai clic sinistro. Oppure tieni premuto il destro, spostati sulla fetta e rilascia.
+4. Esc, un clic al centro o fuori dalla ruota annulla.
 
-Si può anche trascinare il file con il tasto sinistro e premere Shift, Ctrl o Alt: la ruota si apre allo stesso modo. Su Windows, se Shift resta premuto mentre si rilascia un trascinamento, Esplora file può spostare il file. Con il clic destro questo non succede.
+<p align="center">
+  <img src="docs/gesto.jpg" alt="Mouse con il tasto destro acceso, tasti Shift, Ctrl e Alt, ruota con una fetta accesa">
+</p>
 
-La copia viene scritta nella stessa cartella dell’originale. L’originale non viene sovrascritto. Se il nome esiste già, Cedro aggiunge `-2`, `-3`, e così via.
+| Tasto | Ruota | A cosa serve |
+| --- | --- | --- |
+| **Shift** | Conversione | PNG, JPEG, WebP, BMP, GIF, TIFF, PDF |
+| **Ctrl** | Strumenti | Comprimi, scala, bianco e nero, ruota, metadati |
+| **Alt** | Azioni | Duplica, copia il percorso, ZIP |
+
+<img src="docs/tre-tasti.png" alt="Tre schede: Shift conversione, Ctrl strumenti, Alt azioni">
+
+Si può anche trascinare il file con il tasto sinistro e premere Shift, Ctrl o Alt. Su Windows, se Shift resta premuto mentre si rilascia un trascinamento, Esplora file può spostare il file. Con il clic destro questo non succede.
 
 Il file viene riconosciuto dal nome sull’icona del desktop, oppure dalla cartella aperta in Esplora file. Se sotto il cursore non c’è un file, Cedro lo dice e non fa nulla.
+
+## Dove finisce il file
+
+<img src="docs/sul-pc.png" alt="La copia foto-2.jpg nasce accanto a foto.png. L’originale non viene toccato.">
+
+La copia viene scritta nella stessa cartella dell’originale. L’originale non viene sovrascritto. Se il nome esiste già, Cedro aggiunge `-2`, `-3`, e così via.
 
 ## Cosa fa
 
@@ -68,4 +92,4 @@ cedro zip nota.txt
 
 ## Indipendenza
 
-L’interazione (trascinare, tasto, ruota, rilasciare) è un’idea di interfaccia. Cedro è una implementazione separata, scritta da zero.
+L’interazione (tasto, clic destro, ruota, rilasciare) è un’idea di interfaccia. Cedro è una implementazione separata, scritta da zero.
