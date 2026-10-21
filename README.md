@@ -10,11 +10,11 @@ Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE
 
 ## Dopo aver scaricato
 
-Lo zip della [release 0.2.0](https://github.com/realfulvio/cedro/releases/tag/v0.2.0) non è il programma. Dentro c’è il codice. Su Windows si fa così. Non serve Git.
+Lo zip della [release 0.3.0](https://github.com/realfulvio/cedro/releases/tag/v0.3.0) non è il programma. Dentro c’è il codice. Su Windows si fa così. Non serve Git.
 
 1. Installa Rust da [rustup.rs](https://rustup.rs): scarica `rustup-init.exe` e lancialo. Se chiede gli strumenti di compilazione Microsoft C++, installali e scegli il carico di lavoro «Sviluppo di applicazioni desktop con C++». Senza quelli il comando del punto 4 fallisce. A installazione finita, chiudi e riapri il terminale.
 2. Nella release, sotto Assets, scarica **Source code (zip)**. Non c’è un file `.exe`.
-3. Estrai lo zip. Apri la cartella che c’è dentro: si chiama `cedro-0.2.0`.
+3. Estrai lo zip. Apri la cartella che c’è dentro: si chiama `cedro-0.3.0`.
 4. Clicca la barra dell’indirizzo di quella cartella, scrivi `powershell` e premi Invio. Poi:
 
 ```
@@ -75,15 +75,19 @@ La copia viene scritta nella stessa cartella dell’originale. L’originale non
 
 ## Cosa fa
 
-Immagini (PNG, JPEG, WebP, BMP, GIF, TIFF): conversione, PDF, compressione JPEG, scala 50%, bianco e nero, rotazione 90°, riscrittura senza metadati.
+Immagini (PNG, JPEG, WebP, BMP, GIF, TIFF): conversione, PDF, compressione JPEG, scala 50%, bianco e nero, rotazione 90°, riscrittura senza metadati. Con Ctrl, la fetta OCR legge il testo se Tesseract è installato.
 
 Testo (TXT, MD, CSV e affini): altro testo, PDF, maiuscolo, minuscolo.
 
+Word (DOC, DOCX, ODT, RTF): PDF, se LibreOffice è installato.
+
+PDF: Word e testo con LibreOffice. L'impaginazione del DOCX può cambiare: il PDF non è un documento modificabile, LibreOffice ricostruisce quello che riesce. L'OCR del PDF, con Ctrl, usa Tesseract e Poppler (`pdftoppm`), al massimo 20 pagine.
+
 Azioni su qualsiasi file: duplica, copia il percorso, ZIP non compresso (metodo store).
 
-Audio e video solo se `ffmpeg` è già nel PATH. Cedro non lo include: un binario ffmpeg da decine di megabyte è pesante e finisce spesso nelle euristiche degli antivirus. WAV, MP3 e MP4 usano il ffmpeg di sistema e, se manca, la ruota lo dice.
+Audio e video solo se `ffmpeg` è già nel PATH. Cedro non include ffmpeg, LibreOffice, Tesseract né Poppler: sono programmi grossi e un binario scaricato finisce spesso nelle euristiche degli antivirus. Se mancano, la ruota lo dice.
 
-HEIC e i documenti Office non sono nel motore. Il PDF in uscita è testo semplice oppure una pagina con l’immagine, non un PDF/A.
+HEIC non è nel motore. Il PDF scritto da Cedro per un'immagine o per un testo semplice non è un PDF/A.
 
 ## Riga di comando
 
