@@ -6,13 +6,41 @@
 
 Tasto destro su un file, più un tasto. Si apre una ruota sul cursore. Si molla sulla fetta e il file viene convertito lì, sul PC. Nessun caricamento.
 
-Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE). La prima release è [0.1.0](https://github.com/realfulvio/cedro/releases/tag/v0.1.0): solo sorgenti, da compilare sul proprio PC.
+Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE).
+
+## Dopo aver scaricato
+
+Lo zip della [release 0.1.0](https://github.com/realfulvio/cedro/releases/tag/v0.1.0) non è il programma. Dentro c’è il codice. Su Windows si fa così. Non serve Git.
+
+1. Installa Rust da [rustup.rs](https://rustup.rs): scarica `rustup-init.exe` e lancialo. Se chiede gli strumenti di compilazione Microsoft C++, installali e scegli il carico di lavoro «Sviluppo di applicazioni desktop con C++». Senza quelli il comando del punto 4 fallisce. A installazione finita, chiudi e riapri il terminale.
+2. Nella release, sotto Assets, scarica **Source code (zip)**. Non c’è un file `.exe`.
+3. Estrai lo zip. Apri la cartella che c’è dentro: si chiama `cedro-0.1.0`.
+4. Clicca la barra dell’indirizzo di quella cartella, scrivi `powershell` e premi Invio. Poi:
+
+```
+cargo build --release
+```
+
+La prima volta scarica le librerie. Può durare qualche minuto. Non chiudere la finestra. Finisce senza errori quando torna il cursore del terminale.
+
+5. Il programma è questo file:
+
+```
+target\release\cedro.exe
+```
+
+6. Doppio clic su `cedro.exe`. Non si apre una finestra. Vicino all’orologio compare l’icona di Cedro. Se non la vedi, apri la freccia delle icone nascoste.
+7. La prima volta Windows può dire «Windows ha protetto il PC». L’exe non è firmato. Clicca «Ulteriori informazioni», poi «Esegui comunque».
+8. Sul desktop tieni premuto **Shift** e fai clic destro su un file, per esempio un PNG. Si apre la ruota. Clic sinistro sulla fetta. La copia compare nella stessa cartella. L’originale resta dov’è.
+9. Per chiudere: clic sull’icona vicino all’orologio, poi **Esci**.
+
+Audio e video funzionano solo se `ffmpeg` è già installato e visibile nel PATH. Per immagini, testo, PDF e ZIP non serve.
+
+## Come si usa
 
 <p align="center">
   <img src="docs/desktop.jpg" alt="Desktop: la ruota di Cedro è aperta su foto.png, la fetta JPEG è accesa">
 </p>
-
-## Come si usa
 
 <p align="center">
   <img src="docs/passi.jpg" alt="Tre passi: tasto Shift, scelta della fetta JPEG, file nuovo accanto">
@@ -57,29 +85,21 @@ Audio e video solo se `ffmpeg` è già nel PATH. Cedro non lo include: un binari
 
 HEIC e i documenti Office non sono nel motore. Il PDF in uscita è testo semplice oppure una pagina con l’immagine, non un PDF/A.
 
-## Compilare
+## Riga di comando
 
-Su Windows, con [rustup](https://rustup.rs):
-
-```
-cargo build --release
-```
-
-L’eseguibile è `target\release\cedro.exe`. Si può copiare dove si vuole: non ha installer e non scrive nel registro, a parte la tray del processo in esecuzione. Configurazione e log stanno in `%APPDATA%\Cedro\`.
+La qualità JPEG, da 40 a 95, sta in `%APPDATA%\Cedro\config.txt`:
 
 ```
 quality=82
 ```
 
-in `%APPDATA%\Cedro\config.txt` è la qualità JPEG, da 40 a 95.
-
-Da riga di comando, anche su Linux per il motore:
+Si può anche convertire senza la ruota. Su Windows, dalla cartella del programma:
 
 ```
-cedro convert foto.png webp
-cedro tool foto.png compress --quality 70
-cedro tool nota.txt upper
-cedro zip nota.txt
+target\release\cedro.exe convert foto.png webp
+target\release\cedro.exe tool foto.png compress --quality 70
+target\release\cedro.exe tool nota.txt upper
+target\release\cedro.exe zip nota.txt
 ```
 
 ## Antivirus
