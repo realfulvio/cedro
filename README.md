@@ -10,11 +10,11 @@ Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE
 
 ## Dopo aver scaricato
 
-Lo zip della [release 0.1.0](https://github.com/realfulvio/cedro/releases/tag/v0.1.0) non è il programma. Dentro c’è il codice. Su Windows si fa così. Non serve Git.
+Lo zip della [release 0.2.0](https://github.com/realfulvio/cedro/releases/tag/v0.2.0) non è il programma. Dentro c’è il codice. Su Windows si fa così. Non serve Git.
 
 1. Installa Rust da [rustup.rs](https://rustup.rs): scarica `rustup-init.exe` e lancialo. Se chiede gli strumenti di compilazione Microsoft C++, installali e scegli il carico di lavoro «Sviluppo di applicazioni desktop con C++». Senza quelli il comando del punto 4 fallisce. A installazione finita, chiudi e riapri il terminale.
 2. Nella release, sotto Assets, scarica **Source code (zip)**. Non c’è un file `.exe`.
-3. Estrai lo zip. Apri la cartella che c’è dentro: si chiama `cedro-0.1.0`.
+3. Estrai lo zip. Apri la cartella che c’è dentro: si chiama `cedro-0.2.0`.
 4. Clicca la barra dell’indirizzo di quella cartella, scrivi `powershell` e premi Invio. Poi:
 
 ```
@@ -31,7 +31,7 @@ target\release\cedro.exe
 
 6. Doppio clic su `cedro.exe`. Non si apre una finestra. Vicino all’orologio compare l’icona di Cedro. Se non la vedi, apri la freccia delle icone nascoste.
 7. La prima volta Windows può dire «Windows ha protetto il PC». L’exe non è firmato. Clicca «Ulteriori informazioni», poi «Esegui comunque».
-8. Sul desktop tieni premuto **Shift** e fai clic destro su un file, per esempio un PNG. Si apre la ruota. Clic sinistro sulla fetta. La copia compare nella stessa cartella. L’originale resta dov’è.
+8. In una cartella qualsiasi, sul desktop o in una finestra Apri/Salva, tieni premuto **Shift** e fai clic destro su un file. Si apre la ruota. Clic sinistro sulla fetta. La copia compare nella stessa cartella. L’originale resta dov’è.
 9. Per chiudere: clic sull’icona vicino all’orologio, poi **Esci**.
 
 Audio e video funzionano solo se `ffmpeg` è già installato e visibile nel PATH. Per immagini, testo, PDF e ZIP non serve.
@@ -47,7 +47,7 @@ Audio e video funzionano solo se `ffmpeg` è già installato e visibile nel PATH
 </p>
 
 1. Avvia `cedro.exe`. Resta nella tray, senza una finestra di lavoro.
-2. Sul desktop o in Esplora file tieni premuto un tasto e fai clic destro sul file.
+2. In Esplora file, sul desktop o in una finestra Apri/Salva, tieni premuto un tasto e fai clic destro sul file. Vale per qualsiasi cartella, non solo per il desktop.
 3. La ruota resta aperta anche se molli il tasto. Vai su una fetta e fai clic sinistro. Oppure tieni premuto il destro, spostati sulla fetta e rilascia.
 4. Esc, un clic al centro o fuori dalla ruota annulla.
 
@@ -65,7 +65,7 @@ Audio e video funzionano solo se `ffmpeg` è già installato e visibile nel PATH
 
 Si può anche trascinare il file con il tasto sinistro e premere Shift, Ctrl o Alt. Su Windows, se Shift resta premuto mentre si rilascia un trascinamento, Esplora file può spostare il file. Con il clic destro questo non succede.
 
-Il file viene riconosciuto dal nome sull’icona del desktop, oppure dalla cartella aperta in Esplora file. Se sotto il cursore non c’è un file, Cedro lo dice e non fa nulla.
+Il file viene letto dalla cartella aperta in quel momento: desktop, un disco, una chiavetta, Documenti, Download, una finestra di dialogo. Se sotto il cursore non c’è un file, Cedro lo dice e non fa nulla. Non entra negli altri programmi: in un browser o in un editor il clic destro resta quello di Windows.
 
 ## Dove finisce il file
 
@@ -105,7 +105,7 @@ target\release\cedro.exe zip nota.txt
 ## Antivirus
 
 - Codice aperto, licenza MIT, niente packer, niente UPX, niente offuscamento.
-- Gli hook sono `WH_MOUSE_LL` e `WH_KEYBOARD_LL`. Restano nel processo di Cedro e non iniettano una DLL in Esplora file o in altri programmi. Il clic destro con Shift, Ctrl o Alt viene intercettato solo sul desktop e sulle finestre di Esplora file. Il nome del file si legge con UI Automation, senza scrivere nella memoria di un altro processo. Il trascinamento, se lo usi, consegna il file con il drop OLE normale.
+- Gli hook sono `WH_MOUSE_LL` e `WH_KEYBOARD_LL`. Restano nel processo di Cedro e non iniettano una DLL in Esplora file o in altri programmi. Il clic destro con Shift, Ctrl o Alt viene intercettato sul desktop, in ogni finestra di Esplora file e nelle finestre Apri/Salva. Il nome del file si legge dalla cartella di quella finestra, senza scrivere nella memoria di un altro processo. Il trascinamento, se lo usi, consegna il file con il drop OLE normale.
 - Nessuna rete, nessuna telemetria, nessun download all’avvio.
 - L’exe di una build locale non è firmato Authenticode. SmartScreen può dire «Windows ha protetto il PC» la prima volta: è la mancanza di firma, non un rilevamento di malware. «Esegui comunque» vale per quella copia. Una firma Authenticode da autorità pubblica costa e non è inclusa.
 - Compilare sul proprio PC evita l’hash di un exe scaricato da un posto sconosciuto, che è la causa più comune di falsi positivi.

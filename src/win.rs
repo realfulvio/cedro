@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU32, Ordering};
 use windows::{
-    core::*,
+    core::{Interface, *},
     Win32::Foundation::*,
     Win32::Graphics::Gdi::*,
     Win32::System::Com::*,
@@ -152,7 +152,7 @@ unsafe extern "system" fn kb_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> 
                 if RDOWN.load(Ordering::Relaxed) && !EAT_RIGHT.load(Ordering::Relaxed) {
                     let x = CUR_X.load(Ordering::Relaxed);
                     let y = CUR_Y.load(Ordering::Relaxed);
-                    if over_shell(x, y) {
+                    if file_surface(x, y) {
                         EAT_RIGHT.store(true, Ordering::Relaxed);
                         RMODE.store(mode_code(mode), Ordering::Relaxed);
                         let _ = PostMessageW(Some(hwnd), WM_APP_RCLICK, WPARAM(0), LPARAM(0));
@@ -177,7 +177,7 @@ unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) 
         if kind == WM_RBUTTONDOWN {
             RDOWN.store(true, Ordering::Relaxed);
             if let Some(mode) = held_mode() {
-                if over_shell(info.pt.x, info.pt.y) {
+                if file_surface(info.pt.x, info.pt.y) {
                     EAT_RIGHT.store(true, Ordering::Relaxed);
                     RMODE.store(mode_code(mode), Ordering::Relaxed);
                     let _ = PostMessageW(Some(hwnd), WM_APP_RCLICK, WPARAM(0), LPARAM(0));
@@ -405,25 +405,47 @@ fn on_rclick() {
     open_wheel(x, y, mode, vec![path], true);
 }
 
-fn over_shell(x: i32, y: i32) -> bool {
+fn file_surface(x: i32, y: i32) -> bool {
     unsafe {
         let hwnd = WindowFromPoint(POINT { x, y });
         if hwnd.0.is_null() {
             return false;
         }
+        let root = GetAncestor(hwnd, GA_ROOT);
+        let root_class = window_class(if root.0.is_null() { hwnd } else { root });
+        if matches!(root_class.as_str(), "Progman" | "WorkerW" | "CabinetWClass" | "ExploreWClass") {
+            return true;
+        }
         let mut h = hwnd;
-        for _ in 0..10 {
+        for _ in 0..16 {
             let class = window_class(h);
-            if matches!(class.as_str(), "Progman" | "WorkerW" | "CabinetWClass" | "ExploreWClass") {
+            if class == "SHELLDLL_DefView" || class == "SysListView32" {
                 return true;
             }
-            let Ok(parent) = GetParent(h) else { break };
-            if parent == h || parent.0.is_null() {
+            if (class == "DirectUIHWND" || class == "DUIViewWndClassName" || class == "Microsoft.UI.Content.DesktopChildSiteBridge")
+                && (root_class == "#32770" || root_class == "CabinetWClass" || root_class == "ExploreWClass")
+            {
+                return true;
+            }
+            let parent = GetAncestor(h, GA_PARENT);
+            if parent.0.is_null() || parent == h {
                 break;
             }
             h = parent;
         }
         false
+    }
+}
+
+fn on_desktop(x: i32, y: i32) -> bool {
+    unsafe {
+        let hwnd = WindowFromPoint(POINT { x, y });
+        if hwnd.0.is_null() {
+            return false;
+        }
+        let root = GetAncestor(hwnd, GA_ROOT);
+        let class = window_class(if root.0.is_null() { hwnd } else { root });
+        matches!(class.as_str(), "Progman" | "WorkerW")
     }
 }
 
@@ -464,11 +486,11 @@ fn file_at(x: i32, y: i32) -> Option<PathBuf> {
                 Err(_) => break,
             }
         }
-        resolve_names(&names)
+        resolve_names(x, y, &names)
     }
 }
 
-fn resolve_names(names: &[String]) -> Option<PathBuf> {
+fn resolve_names(x: i32, y: i32, names: &[String]) -> Option<PathBuf> {
     for name in names {
         let text = name.trim().trim_matches('"');
         let path = PathBuf::from(text);
@@ -477,6 +499,9 @@ fn resolve_names(names: &[String]) -> Option<PathBuf> {
         }
     }
     let mut dirs = Vec::new();
+    if let Some(dir) = shell_dir(x, y) {
+        dirs.push(dir);
+    }
     for name in names {
         if let Some(dir) = address_dir(name) {
             dirs.push(dir);
@@ -484,6 +509,9 @@ fn resolve_names(names: &[String]) -> Option<PathBuf> {
     }
     if let Some(found) = first_match(&dirs, names) {
         return Some(found);
+    }
+    if !on_desktop(x, y) {
+        return None;
     }
     let mut desks = Vec::new();
     if let Some(dir) = known_folder(&FOLDERID_Desktop) {
@@ -493,6 +521,81 @@ fn resolve_names(names: &[String]) -> Option<PathBuf> {
         desks.push(dir);
     }
     first_match(&desks, names)
+}
+
+fn shell_dir(x: i32, y: i32) -> Option<PathBuf> {
+    unsafe {
+        let hwnd = WindowFromPoint(POINT { x, y });
+        if hwnd.0.is_null() {
+            return None;
+        }
+        let mut hosts = Vec::new();
+        let mut h = hwnd;
+        for _ in 0..16 {
+            let class = window_class(h);
+            if class == "SHELLDLL_DefView" {
+                if let Ok(parent) = GetParent(h) {
+                    if !parent.0.is_null() {
+                        hosts.push(parent);
+                    }
+                }
+            }
+            if matches!(class.as_str(), "CabinetWClass" | "ExploreWClass" | "#32770") {
+                hosts.push(h);
+            }
+            let parent = GetAncestor(h, GA_PARENT);
+            if parent.0.is_null() || parent == h {
+                break;
+            }
+            h = parent;
+        }
+        let root = GetAncestor(hwnd, GA_ROOT);
+        if !root.0.is_null() {
+            let class = window_class(root);
+            if matches!(class.as_str(), "CabinetWClass" | "ExploreWClass" | "#32770") {
+                hosts.push(root);
+            }
+        }
+        for host in hosts {
+            if let Some(dir) = folder_from_browser(host) {
+                return Some(dir);
+            }
+        }
+        None
+    }
+}
+
+fn folder_from_browser(host: HWND) -> Option<PathBuf> {
+    unsafe {
+        let raw = SendMessageW(host, WM_USER + 7, Some(WPARAM(0)), Some(LPARAM(0)));
+        if raw.0 == 0 {
+            return None;
+        }
+        let ptr = raw.0 as *mut core::ffi::c_void;
+        let browser = IShellBrowser::from_raw_borrowed(&ptr)?;
+        let view = browser.QueryActiveShellView().ok()?;
+        let persist: IPersistFolder2 = view.cast().ok()?;
+        let pidl = persist.GetCurFolder().ok()?;
+        pidl_to_path(pidl)
+    }
+}
+
+fn pidl_to_path(pidl: *mut windows::Win32::UI::Shell::Common::ITEMIDLIST) -> Option<PathBuf> {
+    unsafe {
+        if pidl.is_null() {
+            return None;
+        }
+        let mut buf = [0u16; 260];
+        let ok = SHGetPathFromIDListW(pidl, &mut buf).as_bool();
+        CoTaskMemFree(Some(pidl.cast()));
+        if !ok {
+            return None;
+        }
+        let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        let text = String::from_utf16_lossy(&buf[..end]);
+        let path = PathBuf::from(text);
+        if path.is_dir() { Some(path) } else { None }
+    }
 }
 
 fn address_dir(name: &str) -> Option<PathBuf> {
@@ -737,53 +840,121 @@ fn paint_wheel(hwnd: HWND) {
     unsafe {
         let mut ps = PAINTSTRUCT::default();
         let hdc = BeginPaint(hwnd, &mut ps);
+        let mem = CreateCompatibleDC(Some(hdc));
+        let bmp = CreateCompatibleBitmap(hdc, WHEEL, WHEEL);
+        let old_bmp = SelectObject(mem, bmp.into());
         let rect = RECT { left: 0, top: 0, right: WHEEL, bottom: WHEEL };
         let back = CreateSolidBrush(COLORREF(0x00FF00FF));
-        FillRect(hdc, &rect, back);
+        FillRect(mem, &rect, back);
         let _ = DeleteObject(back.into());
         let cx = WHEEL / 2;
         let cy = WHEEL / 2;
         let n = list.len().max(1);
+        let slice_px = if n > 6 { -15 } else if n > 4 { -16 } else { -18 };
+        let old_font = select_font(mem, slice_px, 600);
         for (i, slice) in list.iter().enumerate() {
             let sweep = std::f32::consts::TAU / n as f32;
-            let a0 = -std::f32::consts::FRAC_PI_2 + i as f32 * sweep + 0.03;
-            let a1 = a0 + sweep - 0.06;
-            let color = if i as i32 == hover { COLORREF(0x005AE1D5) } else { COLORREF(0x001C2823) };
+            let gap = if n > 1 { 0.05 } else { 0.0 };
+            let a0 = -std::f32::consts::FRAC_PI_2 + i as f32 * sweep + gap / 2.0;
+            let a1 = a0 + sweep - gap;
+            let on = i as i32 == hover;
+            let color = if on { COLORREF(0x005AE1D5) } else { COLORREF(0x001C2823) };
             let brush = CreateSolidBrush(color);
-            let pen = CreatePen(PS_SOLID, 1, COLORREF(0x000F1614));
-            let old_b = SelectObject(hdc, brush.into());
-            let old_p = SelectObject(hdc, pen.into());
+            let pen = CreatePen(PS_SOLID, 1, color);
+            let old_b = SelectObject(mem, brush.into());
+            let old_p = SelectObject(mem, pen.into());
             let pts = slice_poly(cx, cy, a0, a1);
-            let _ = Polygon(hdc, &pts);
-            SelectObject(hdc, old_b);
-            SelectObject(hdc, old_p);
+            let _ = Polygon(mem, &pts);
+            SelectObject(mem, old_b);
+            SelectObject(mem, old_p);
             let _ = DeleteObject(brush.into());
             let _ = DeleteObject(pen.into());
             let mid = (a0 + a1) / 2.0;
             let rr = (R0 + R1) / 2.0;
             let tx = cx as f32 + rr * mid.cos();
             let ty = cy as f32 + rr * mid.sin();
-            SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, if i as i32 == hover { COLORREF(0x000F1614) } else { COLORREF(0x00DCEAE7) });
-            text_at(hdc, tx as i32 - 28, ty as i32 - 8, slice.label);
+            SetBkMode(mem, TRANSPARENT);
+            SetTextColor(mem, if on { COLORREF(0x000F1614) } else { COLORREF(0x00DCEAE7) });
+            text_centered(mem, tx as i32, ty as i32, slice.label);
         }
+        restore_font(mem, old_font);
         let hole = CreateSolidBrush(COLORREF(0x000F1614));
-        let old = SelectObject(hdc, hole.into());
-        let _ = Ellipse(hdc, cx - R0 as i32 + 6, cy - R0 as i32 + 6, cx + R0 as i32 - 6, cy + R0 as i32 - 6);
-        SelectObject(hdc, old);
+        let old_h = SelectObject(mem, hole.into());
+        let r = R0 as i32 - 2;
+        let _ = Ellipse(mem, cx - r, cy - r, cx + r, cy + r);
+        SelectObject(mem, old_h);
         let _ = DeleteObject(hole.into());
-        SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, COLORREF(0x00DCEAE7));
+        let ring = CreatePen(PS_SOLID, if hover >= 0 { 2 } else { 1 }, COLORREF(0x005AE1D5));
+        let hollow = GetStockObject(HOLLOW_BRUSH);
+        let old_b = SelectObject(mem, hollow);
+        let old_p = SelectObject(mem, ring.into());
+        let _ = Ellipse(mem, cx - r, cy - r, cx + r, cy + r);
+        SelectObject(mem, old_b);
+        let ring_obj = SelectObject(mem, old_p);
+        let _ = DeleteObject(ring_obj);
         let title = match mode {
             Mode::Convert => "CONVERSIONE",
             Mode::Tools => "STRUMENTI",
             Mode::Actions => "AZIONI",
         };
-        text_at(hdc, cx - 42, cy - 18, title);
-        let center = if hover >= 0 { list.get(hover as usize).map(|s| s.label).unwrap_or("Annulla") } else { "Annulla" };
-        text_at(hdc, cx - 36, cy + 2, center);
-        text_at(hdc, cx - 50, cy + 20, &clip_name(&name));
+        let center = if hover >= 0 {
+            list.get(hover as usize).map(|s| s.label).unwrap_or("Annulla")
+        } else {
+            "Annulla"
+        };
+        SetBkMode(mem, TRANSPARENT);
+        let old_font = select_font(mem, -12, 600);
+        SetTextColor(mem, COLORREF(0x00889D96));
+        text_centered(mem, cx, cy - 20, title);
+        restore_font(mem, old_font);
+        let old_font = select_font(mem, -16, 600);
+        SetTextColor(mem, COLORREF(0x00DCEAE7));
+        text_centered(mem, cx, cy + 2, center);
+        restore_font(mem, old_font);
+        let old_font = select_font(mem, -12, 400);
+        SetTextColor(mem, COLORREF(0x00889D96));
+        text_centered(mem, cx, cy + 24, &clip_name(&name));
+        restore_font(mem, old_font);
+        let _ = BitBlt(hdc, 0, 0, WHEEL, WHEEL, Some(mem), 0, 0, SRCCOPY);
+        let bmp_back = SelectObject(mem, old_bmp);
+        let _ = DeleteObject(bmp_back);
+        let _ = DeleteDC(mem);
         let _ = EndPaint(hwnd, &ps);
+    }
+}
+
+fn ui_font(height: i32, weight: i32) -> HFONT {
+    unsafe {
+        CreateFontW(
+            height,
+            0,
+            0,
+            0,
+            weight,
+            0,
+            0,
+            0,
+            DEFAULT_CHARSET,
+            OUT_DEFAULT_PRECIS,
+            CLIP_DEFAULT_PRECIS,
+            CLEARTYPE_QUALITY,
+            DEFAULT_PITCH.0 as u32 | FF_SWISS.0 as u32,
+            w!("Segoe UI"),
+        )
+    }
+}
+
+fn select_font(hdc: HDC, height: i32, weight: i32) -> HGDIOBJ {
+    unsafe {
+        let font = ui_font(height, weight);
+        SelectObject(hdc, font.into())
+    }
+}
+
+fn restore_font(hdc: HDC, previous: HGDIOBJ) {
+    unsafe {
+        let current = SelectObject(hdc, previous);
+        let _ = DeleteObject(current);
     }
 }
 
@@ -797,7 +968,7 @@ fn clip_name(name: &str) -> String {
 
 fn slice_poly(cx: i32, cy: i32, a0: f32, a1: f32) -> Vec<POINT> {
     let mut pts = Vec::new();
-    let steps = 10;
+    let steps = 24;
     for i in 0..=steps {
         let t = a0 + (a1 - a0) * (i as f32 / steps as f32);
         pts.push(POINT {
@@ -819,6 +990,18 @@ fn text_at(hdc: HDC, x: i32, y: i32, text: &str) {
     let wide: Vec<u16> = text.encode_utf16().collect();
     unsafe {
         let _ = TextOutW(hdc, x, y, &wide);
+    }
+}
+
+fn text_centered(hdc: HDC, cx: i32, cy: i32, text: &str) {
+    let wide: Vec<u16> = text.encode_utf16().collect();
+    if wide.is_empty() {
+        return;
+    }
+    unsafe {
+        let mut size = SIZE::default();
+        let _ = GetTextExtentPoint32W(hdc, &wide, &mut size);
+        text_at(hdc, cx - size.cx / 2, cy - size.cy / 2, text);
     }
 }
 
