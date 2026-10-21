@@ -2,7 +2,7 @@
 //! OpenH264 (BSD-2, Cisco, dal sorgente) e FDK AAC (Fraunhofer).
 
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 use fdk_aac::enc::{AudioObjectType, BitRate, ChannelMode, Encoder as AacEncoder, EncoderParams, Transport};
@@ -498,8 +498,19 @@ struct EarlyPcm {
 fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let file = File::open(input).map_err(|err| format!("il video non è stato letto: {err}"))?;
     let size = file.metadata().map_err(|err| format!("il video non è stato letto: {err}"))?.len();
-    let mut reader = mp4::Mp4Reader::read_header(std::io::BufReader::new(file), size)
-        .map_err(|err| format!("il video non è stato letto: {err}"))?;
+    let mut reader = match mp4::Mp4Reader::read_header(std::io::BufReader::new(file), size) {
+        Ok(reader) => reader,
+        // Il crate mp4 scambia i campi della descrizione audio QuickTime v1 per una scatola.
+        Err(err) => {
+            return iso_lenient(input, output).map_err(|fallback| {
+                if fallback == "il video non è stato letto" {
+                    format!("il video non è stato letto: {err}")
+                } else {
+                    fallback
+                }
+            });
+        }
+    };
     let (track_id, timescale, count, sps, pps, wants_audio) = {
         let tracks = reader.tracks();
         let mut video_info = None;
@@ -566,6 +577,411 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         write_symphonia_audio(input, &mut sink)?;
     }
     sink.finish()
+}
+
+struct IsoSpan {
+    kind: [u8; 4],
+    payload: u64,
+    end: u64,
+}
+
+struct IsoSample {
+    offset: u64,
+    size: u32,
+    duration: u32,
+    start: u64,
+}
+
+struct IsoTrack {
+    handler: [u8; 4],
+    timescale: u32,
+    sps: Vec<u8>,
+    pps: Vec<u8>,
+    samples: Vec<IsoSample>,
+}
+
+fn iso_lenient(input: &Path, output: &Path) -> Result<(), String> {
+    let mut file = File::open(input).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    let len = file.metadata().map_err(|err| format!("il video non è stato letto: {err}"))?.len();
+    let mut video = None;
+    let mut wants_audio = false;
+    while let Some(span) = read_span(&mut file, len)? {
+        if span.kind == *b"moov" {
+            file.seek(SeekFrom::Start(span.payload)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+            while let Some(child) = read_span(&mut file, span.end)? {
+                if child.kind == *b"trak" {
+                    let trak = parse_trak(&mut file, &child)?;
+                    if &trak.handler == b"vide" && video.is_none() {
+                        video = Some(trak);
+                    } else if &trak.handler == b"soun" {
+                        wants_audio = true;
+                    }
+                }
+                file.seek(SeekFrom::Start(child.end)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+            }
+        }
+        file.seek(SeekFrom::Start(span.end)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    }
+    let video = video.ok_or("il video non è stato letto")?;
+    let mut header = Vec::new();
+    for nal in [&video.sps, &video.pps] {
+        if !nal.is_empty() {
+            header.extend_from_slice(&[0, 0, 0, 1]);
+            header.extend_from_slice(nal);
+        }
+    }
+    let mut decoder = Decoder::new().map_err(|err| format!("H.264 non letto: {err}"))?;
+    if !header.is_empty() {
+        let _ = decoder.decode(&header);
+    }
+    let mut sink = None;
+    let mut queued = Vec::new();
+    let mut shown = 0u32;
+    let mut sample_bytes = Vec::new();
+    for sample in &video.samples {
+        sample_bytes.resize(sample.size as usize, 0);
+        file.seek(SeekFrom::Start(sample.offset)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+        file.read_exact(&mut sample_bytes).map_err(|err| format!("il video non è stato letto: {err}"))?;
+        let annex = annex_sample(&sample_bytes);
+        if annex.is_empty() {
+            continue;
+        }
+        let duration = ticks(u64::from(sample.duration), 1, video.timescale).max(1);
+        let time = ticks(sample.start, 1, video.timescale);
+        if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
+            let owned = owned_frame(&frame)?;
+            feed_frame(&mut sink, &mut queued, output, &owned, duration, time, false, 0, 0)?;
+            shown += 1;
+        }
+    }
+    if let Ok(rest) = decoder.flush_remaining() {
+        for frame in &rest {
+            let owned = owned_frame(frame)?;
+            feed_frame(&mut sink, &mut queued, output, &owned, 333_333, 0, false, 0, 0)?;
+            shown += 1;
+        }
+    }
+    if shown == 0 {
+        return Err("il video non ha fotogrammi".into());
+    }
+    let mut sink = sink.ok_or_else(|| "il video non ha fotogrammi".to_string())?;
+    if wants_audio {
+        write_symphonia_audio(input, &mut sink)?;
+    }
+    sink.finish()
+}
+
+fn parse_trak(file: &mut File, trak: &IsoSpan) -> Result<IsoTrack, String> {
+    let mut found = None;
+    file.seek(SeekFrom::Start(trak.payload)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    while let Some(child) = read_span(file, trak.end)? {
+        if child.kind == *b"mdia" {
+            found = Some(parse_mdia(file, &child)?);
+        }
+        file.seek(SeekFrom::Start(child.end)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    }
+    found.ok_or_else(|| "il video non è stato letto".to_string())
+}
+
+fn parse_mdia(file: &mut File, mdia: &IsoSpan) -> Result<IsoTrack, String> {
+    let mut timescale = 1u32;
+    let mut handler = [0u8; 4];
+    let mut stbl = None;
+    file.seek(SeekFrom::Start(mdia.payload)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    while let Some(child) = read_span(file, mdia.end)? {
+        match &child.kind {
+            b"mdhd" => timescale = timescale_of(&read_payload(file, &child)?),
+            b"hdlr" => handler = handler_of(&read_payload(file, &child)?),
+            b"minf" => stbl = find_stbl(file, &child)?,
+            _ => {}
+        }
+        file.seek(SeekFrom::Start(child.end)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    }
+    if &handler != b"vide" {
+        return Ok(IsoTrack { handler, timescale, sps: Vec::new(), pps: Vec::new(), samples: Vec::new() });
+    }
+    let stbl = stbl.ok_or("il video non è stato letto")?;
+    let (sps, pps) = avc_from_stsd(file, &stbl)?;
+    let samples = sample_index(file, &stbl)?;
+    Ok(IsoTrack { handler, timescale, sps, pps, samples })
+}
+
+fn find_stbl(file: &mut File, minf: &IsoSpan) -> Result<Option<IsoSpan>, String> {
+    let mut stbl = None;
+    file.seek(SeekFrom::Start(minf.payload)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    while let Some(child) = read_span(file, minf.end)? {
+        if child.kind == *b"stbl" {
+            stbl = Some(child);
+            break;
+        }
+        file.seek(SeekFrom::Start(child.end)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    }
+    Ok(stbl)
+}
+
+fn avc_from_stsd(file: &mut File, stbl: &IsoSpan) -> Result<(Vec<u8>, Vec<u8>), String> {
+    file.seek(SeekFrom::Start(stbl.payload)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    while let Some(child) = read_span(file, stbl.end)? {
+        if child.kind == *b"stsd" {
+            file.seek(SeekFrom::Start(child.payload + 8)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+            let Some(entry) = read_span(file, child.end)? else {
+                return Err("il video non è stato letto".into());
+            };
+            if &entry.kind != b"avc1" && &entry.kind != b"avc3" {
+                return Err("il video non è stato letto".into());
+            }
+            let visual = 78u64;
+            if entry.payload + visual > entry.end {
+                return Err("il video non è stato letto".into());
+            }
+            file.seek(SeekFrom::Start(entry.payload + visual)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+            while let Some(inner) = read_span(file, entry.end)? {
+                if inner.kind == *b"avcC" {
+                    return split_avcc(&read_payload(file, &inner)?);
+                }
+                file.seek(SeekFrom::Start(inner.end)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+            }
+            return Err("il video non è stato letto".into());
+        }
+        file.seek(SeekFrom::Start(child.end)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    }
+    Err("il video non è stato letto".into())
+}
+
+fn split_avcc(raw: &[u8]) -> Result<(Vec<u8>, Vec<u8>), String> {
+    if raw.len() < 7 {
+        return Err("H.264 senza parametri".into());
+    }
+    let mut i = 5usize;
+    let sps_count = (raw[i] & 0x1f) as usize;
+    i += 1;
+    let mut sps = Vec::new();
+    for n in 0..sps_count {
+        let nal = take_be_nal(raw, &mut i)?;
+        if n == 0 {
+            sps = nal;
+        }
+    }
+    if i >= raw.len() {
+        return Err("H.264 senza parametri".into());
+    }
+    let pps_count = raw[i] as usize;
+    i += 1;
+    let mut pps = Vec::new();
+    for n in 0..pps_count {
+        let nal = take_be_nal(raw, &mut i)?;
+        if n == 0 {
+            pps = nal;
+        }
+    }
+    if sps.is_empty() || pps.is_empty() {
+        return Err("H.264 senza parametri".into());
+    }
+    Ok((sps, pps))
+}
+
+fn take_be_nal(raw: &[u8], i: &mut usize) -> Result<Vec<u8>, String> {
+    if *i + 2 > raw.len() {
+        return Err("H.264 senza parametri".into());
+    }
+    let len = u16::from_be_bytes([raw[*i], raw[*i + 1]]) as usize;
+    *i += 2;
+    if *i + len > raw.len() {
+        return Err("H.264 senza parametri".into());
+    }
+    let nal = raw[*i..*i + len].to_vec();
+    *i += len;
+    Ok(nal)
+}
+
+fn sample_index(file: &mut File, stbl: &IsoSpan) -> Result<Vec<IsoSample>, String> {
+    let mut stts = None;
+    let mut stsc = None;
+    let mut stsz = None;
+    let mut stco = None;
+    let mut co64 = None;
+    file.seek(SeekFrom::Start(stbl.payload)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    while let Some(child) = read_span(file, stbl.end)? {
+        let raw = read_payload(file, &child)?;
+        match &child.kind {
+            b"stts" => stts = Some(raw),
+            b"stsc" => stsc = Some(raw),
+            b"stsz" => stsz = Some(raw),
+            b"stco" => stco = Some(raw),
+            b"co64" => co64 = Some(raw),
+            _ => {}
+        }
+        file.seek(SeekFrom::Start(child.end)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    }
+    let sizes = sample_sizes(&stsz.ok_or("il video non è stato letto")?)?;
+    let chunks = chunk_offsets(stco.as_deref(), co64.as_deref())?;
+    let per_chunk = samples_per_chunk(&stsc.ok_or("il video non è stato letto")?, chunks.len())?;
+    let runs = time_runs(&stts.ok_or("il video non è stato letto")?)?;
+    let mut samples = Vec::with_capacity(sizes.len());
+    let mut index = 0usize;
+    for (chunk, base) in chunks.iter().enumerate() {
+        let mut offset = *base;
+        let count = per_chunk.get(chunk).copied().unwrap_or(0) as usize;
+        for _ in 0..count {
+            if index >= sizes.len() {
+                break;
+            }
+            samples.push(IsoSample { offset, size: sizes[index], duration: 0, start: 0 });
+            offset = offset.saturating_add(u64::from(sizes[index]));
+            index += 1;
+        }
+    }
+    if samples.len() != sizes.len() {
+        return Err("il video non è stato letto".into());
+    }
+    let mut start = 0u64;
+    let mut run_at = 0usize;
+    let mut left = 0u32;
+    let mut delta = 1u32;
+    for sample in &mut samples {
+        if left == 0 {
+            if run_at < runs.len() {
+                left = runs[run_at].0;
+                delta = runs[run_at].1.max(1);
+                run_at += 1;
+            } else {
+                left = u32::MAX;
+            }
+        }
+        sample.duration = delta;
+        sample.start = start;
+        start = start.saturating_add(u64::from(delta));
+        left = left.saturating_sub(1);
+    }
+    Ok(samples)
+}
+
+fn sample_sizes(raw: &[u8]) -> Result<Vec<u32>, String> {
+    let sample_size = be_u32(raw, 4).ok_or("il video non è stato letto")?;
+    let count = be_u32(raw, 8).ok_or("il video non è stato letto")? as usize;
+    if sample_size != 0 {
+        return Ok(vec![sample_size; count]);
+    }
+    let mut sizes = Vec::with_capacity(count);
+    for n in 0..count {
+        sizes.push(be_u32(raw, 12 + n * 4).ok_or("il video non è stato letto")?);
+    }
+    Ok(sizes)
+}
+
+fn chunk_offsets(stco: Option<&[u8]>, co64: Option<&[u8]>) -> Result<Vec<u64>, String> {
+    if let Some(raw) = co64 {
+        let count = be_u32(raw, 4).ok_or("il video non è stato letto")? as usize;
+        let mut offsets = Vec::with_capacity(count);
+        for n in 0..count {
+            let at = 8 + n * 8;
+            if at + 8 > raw.len() {
+                return Err("il video non è stato letto".into());
+            }
+            offsets.push(u64::from_be_bytes(raw[at..at + 8].try_into().unwrap()));
+        }
+        return Ok(offsets);
+    }
+    let raw = stco.ok_or("il video non è stato letto")?;
+    let count = be_u32(raw, 4).ok_or("il video non è stato letto")? as usize;
+    let mut offsets = Vec::with_capacity(count);
+    for n in 0..count {
+        offsets.push(u64::from(be_u32(raw, 8 + n * 4).ok_or("il video non è stato letto")?));
+    }
+    Ok(offsets)
+}
+
+fn samples_per_chunk(raw: &[u8], chunks: usize) -> Result<Vec<u32>, String> {
+    let count = be_u32(raw, 4).ok_or("il video non è stato letto")? as usize;
+    let mut entries = Vec::with_capacity(count);
+    for n in 0..count {
+        let at = 8 + n * 12;
+        let first = be_u32(raw, at).ok_or("il video non è stato letto")?;
+        let samples = be_u32(raw, at + 4).ok_or("il video non è stato letto")?;
+        entries.push((first, samples));
+    }
+    let mut per_chunk = vec![0u32; chunks];
+    for (n, (first, samples)) in entries.iter().enumerate() {
+        let from = first.saturating_sub(1) as usize;
+        let to = entries.get(n + 1).map(|(next, _)| next.saturating_sub(1) as usize).unwrap_or(chunks);
+        for slot in per_chunk.iter_mut().take(to.min(chunks)).skip(from.min(chunks)) {
+            *slot = *samples;
+        }
+    }
+    Ok(per_chunk)
+}
+
+fn time_runs(raw: &[u8]) -> Result<Vec<(u32, u32)>, String> {
+    let count = be_u32(raw, 4).ok_or("il video non è stato letto")? as usize;
+    let mut runs = Vec::with_capacity(count);
+    for n in 0..count {
+        let at = 8 + n * 8;
+        runs.push((
+            be_u32(raw, at).ok_or("il video non è stato letto")?,
+            be_u32(raw, at + 4).ok_or("il video non è stato letto")?,
+        ));
+    }
+    Ok(runs)
+}
+
+fn timescale_of(raw: &[u8]) -> u32 {
+    let at = if raw.first() == Some(&1) { 20 } else { 12 };
+    be_u32(raw, at).unwrap_or(1).max(1)
+}
+
+fn handler_of(raw: &[u8]) -> [u8; 4] {
+    if raw.len() < 12 {
+        return [0; 4];
+    }
+    raw[8..12].try_into().unwrap()
+}
+
+fn be_u32(raw: &[u8], at: usize) -> Option<u32> {
+    Some(u32::from_be_bytes(raw.get(at..at + 4)?.try_into().ok()?))
+}
+
+fn read_payload(file: &mut File, span: &IsoSpan) -> Result<Vec<u8>, String> {
+    let len = span.end.saturating_sub(span.payload);
+    if len > 32 * 1024 * 1024 {
+        return Err("il video non è stato letto".into());
+    }
+    let mut buf = vec![0u8; len as usize];
+    file.seek(SeekFrom::Start(span.payload)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    file.read_exact(&mut buf).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    Ok(buf)
+}
+
+fn read_span(file: &mut File, limit: u64) -> Result<Option<IsoSpan>, String> {
+    let pos = file.stream_position().map_err(|err| format!("il video non è stato letto: {err}"))?;
+    if pos.saturating_add(8) > limit {
+        return Ok(None);
+    }
+    let mut head = [0u8; 8];
+    file.read_exact(&mut head).map_err(|err| format!("il video non è stato letto: {err}"))?;
+    let mut size = u32::from_be_bytes([head[0], head[1], head[2], head[3]]) as u64;
+    let kind = [head[4], head[5], head[6], head[7]];
+    let header = if size == 1 {
+        let mut wide = [0u8; 8];
+        file.read_exact(&mut wide).map_err(|err| format!("il video non è stato letto: {err}"))?;
+        size = u64::from_be_bytes(wide);
+        if size < 16 {
+            return Err("il video non è stato letto".into());
+        }
+        16u64
+    } else {
+        if size == 0 {
+            size = limit.saturating_sub(pos);
+        }
+        if size < 8 {
+            return Err("il video non è stato letto".into());
+        }
+        8u64
+    };
+    let end = pos.saturating_add(size);
+    if end > limit {
+        return Err("il video non è stato letto".into());
+    }
+    Ok(Some(IsoSpan { kind, payload: pos + header, end }))
 }
 
 fn annex_sample(sample: &[u8]) -> Vec<u8> {
