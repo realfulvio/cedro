@@ -65,13 +65,15 @@ fn print_help() {
         "\
 Cedro — conversione locale, senza upload.
 
-  cedro convert <file> <png|jpeg|webp|bmp|gif|tiff|pdf|txt|md|csv|wav|mp3|mp4>
-  cedro tool <file> <compress|half|gray|rot90|strip|upper|lower|dup|path|zip>
+  cedro convert <file> <png|jpeg|webp|bmp|gif|tiff|pdf|txt|md|csv|wav|mp3|mp4|docx>
+  cedro tool <file> <compress|half|gray|rot90|strip|upper|lower|ocr|dup|path|zip>
   cedro zip <file>
   cedro --quality 80 convert foto.png jpeg
 
 Senza argomenti, su Windows parte la ruota nella tray.
-Audio e video richiedono ffmpeg già presente nel PATH.
+Audio e video richiedono ffmpeg già presente.
+Word e PDF passano da LibreOffice, se è installato. L'OCR passa da Tesseract; per un PDF serve anche Poppler (pdftoppm).
+Cedro non include questi programmi.
 L'originale non viene mai sovrascritto."
     );
 }

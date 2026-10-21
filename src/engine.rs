@@ -30,6 +30,7 @@ pub enum Kind {
     Audio,
     Video,
     Pdf,
+    Doc,
     Other,
 }
 
@@ -66,6 +67,7 @@ const IMAGE_TOOLS: &[Slice] = &[
     Slice { id: "gray", label: "B/N" },
     Slice { id: "rot90", label: "Ruota" },
     Slice { id: "strip", label: "Metadati" },
+    Slice { id: "ocr", label: "OCR" },
 ];
 const TEXT_CONVERT: &[Slice] = &[
     Slice { id: "txt", label: "TXT" },
@@ -82,6 +84,12 @@ const AUDIO_CONVERT: &[Slice] = &[
     Slice { id: "mp3", label: "MP3" },
 ];
 const VIDEO_CONVERT: &[Slice] = &[Slice { id: "mp4", label: "MP4" }];
+const DOC_CONVERT: &[Slice] = &[Slice { id: "pdf", label: "PDF" }];
+const PDF_CONVERT: &[Slice] = &[
+    Slice { id: "docx", label: "Word" },
+    Slice { id: "txt", label: "Testo" },
+];
+const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }];
 const EMPTY: &[Slice] = &[Slice { id: "none", label: "Niente qui" }];
 
 pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
@@ -93,6 +101,9 @@ pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
         (Kind::Text, Mode::Tools) => TEXT_TOOLS,
         (Kind::Audio, Mode::Convert) => AUDIO_CONVERT,
         (Kind::Video, Mode::Convert) => VIDEO_CONVERT,
+        (Kind::Doc, Mode::Convert) => DOC_CONVERT,
+        (Kind::Pdf, Mode::Convert) => PDF_CONVERT,
+        (Kind::Pdf, Mode::Tools) => PDF_TOOLS,
         _ => EMPTY,
     }
 }
@@ -107,6 +118,7 @@ pub fn extension(path: &Path) -> String {
 pub fn kind_of(path: &Path) -> Kind {
     match extension(path).as_str() {
         "pdf" => Kind::Pdf,
+        "doc" | "docx" | "odt" | "rtf" => Kind::Doc,
         "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "ico" => Kind::Image,
         "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" => Kind::Text,
         "wav" | "mp3" | "ogg" | "m4a" | "aac" | "flac" | "opus" => Kind::Audio,
@@ -226,6 +238,246 @@ fn ffmpeg(input: &Path, output: &Path, args: &[&str]) -> CedroResult<()> {
     }
 }
 
+fn program_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    for key in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(value) = std::env::var_os(key) {
+            dirs.push(PathBuf::from(value));
+        }
+    }
+    dirs
+}
+
+fn on_path(names: &[&str]) -> Option<PathBuf> {
+    let path_var = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path_var) {
+        for name in names {
+            let direct = dir.join(name);
+            if direct.is_file() {
+                return Some(direct);
+            }
+            #[cfg(windows)]
+            {
+                for ext in [".com", ".exe"] {
+                    let with = dir.join(format!("{name}{ext}"));
+                    if with.is_file() {
+                        return Some(with);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn find_tool(names: &[&str], relative: &[&str]) -> Option<PathBuf> {
+    if let Some(found) = on_path(names) {
+        return Some(found);
+    }
+    for root in program_dirs() {
+        for rel in relative {
+            let path = root.join(rel);
+            if path.is_file() {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+fn office_bin() -> Option<PathBuf> {
+    find_tool(
+        &["soffice.com", "soffice", "libreoffice"],
+        &["LibreOffice/program/soffice.com", "LibreOffice/program/soffice.exe"],
+    )
+}
+
+fn tesseract_bin() -> Option<PathBuf> {
+    find_tool(&["tesseract"], &["Tesseract-OCR/tesseract.exe"])
+}
+
+fn pdftoppm_bin() -> Option<PathBuf> {
+    find_tool(
+        &["pdftoppm"],
+        &["poppler/Library/bin/pdftoppm.exe", "poppler/bin/pdftoppm.exe"],
+    )
+}
+
+fn file_url(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('\\', "/");
+    if text.starts_with('/') {
+        format!("file://{text}")
+    } else {
+        format!("file:///{text}")
+    }
+}
+
+fn hidden(cmd: &mut std::process::Command) -> &mut std::process::Command {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
+fn scratch_dir() -> PathBuf {
+    let tick = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let dir = std::env::temp_dir().join(format!("cedro-{}-{tick}", std::process::id()));
+    let _ = fs::create_dir_all(&dir);
+    dir
+}
+
+fn office_convert(input: &Path, dir: &Path, filter: &str, ext: &str, message: &str) -> CedroResult<Output> {
+    let Some(bin) = office_bin() else {
+        return Err(err("LibreOffice non trovato. Cedro non lo include: installalo e riprova."));
+    };
+    let scratch = scratch_dir();
+    let profile = scratch.join("profilo");
+    let outdir = scratch.join("uscita");
+    fs::create_dir_all(&profile).map_err(|e| err(e.to_string()))?;
+    fs::create_dir_all(&outdir).map_err(|e| err(e.to_string()))?;
+    let mut cmd = std::process::Command::new(&bin);
+    hidden(&mut cmd)
+        .arg(format!("-env:UserInstallation={}", file_url(&profile)))
+        .arg("--headless")
+        .arg("--nologo")
+        .arg("--nofirststartwizard")
+        .arg("--norestore")
+        .arg("--convert-to")
+        .arg(filter)
+        .arg("--outdir")
+        .arg(&outdir)
+        .arg(input);
+    let result = cmd.output();
+    let produced = fs::read_dir(&outdir).ok().and_then(|entries| {
+        entries.filter_map(|e| e.ok()).map(|e| e.path()).find(|p| p.is_file())
+    });
+    let output = match (result, produced) {
+        (Ok(out), Some(produced)) if out.status.success() => {
+            let dest = unique_output(dir, &stem(input), ext);
+            match fs::copy(&produced, &dest) {
+                Ok(_) => Ok(Output { path: dest, message: message.into() }),
+                Err(e) => Err(err(e.to_string())),
+            }
+        }
+        (Ok(out), _) => {
+            let detail = String::from_utf8_lossy(&out.stderr);
+            append_log(detail.trim());
+            Err(err("LibreOffice non ha completato la conversione"))
+        }
+        (Err(e), _) => Err(err(e.to_string())),
+    };
+    let _ = fs::remove_dir_all(&scratch);
+    output
+}
+
+fn tesseract_text(bin: &Path, input: &Path) -> CedroResult<String> {
+    let run = |lang: Option<&str>| {
+        let mut cmd = std::process::Command::new(bin);
+        hidden(&mut cmd).arg(input).arg("stdout");
+        if let Some(lang) = lang {
+            cmd.arg("-l").arg(lang);
+        }
+        cmd.output()
+    };
+    let output = run(Some("ita+eng"))
+        .ok()
+        .filter(|o| o.status.success())
+        .or_else(|| run(None).ok().filter(|o| o.status.success()))
+        .ok_or_else(|| err("Tesseract non ha completato la lettura"))?;
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if text.is_empty() {
+        return Err(err("Nessun testo riconosciuto"));
+    }
+    Ok(text)
+}
+
+fn ocr_image(input: &Path, dir: &Path) -> CedroResult<Output> {
+    let Some(bin) = tesseract_bin() else {
+        return Err(err("Tesseract non trovato. Cedro non lo include: installalo e riprova."));
+    };
+    let text = tesseract_text(&bin, input)?;
+    let dest = unique_output(dir, &stem(input), "txt");
+    write_bytes(&dest, text.as_bytes())?;
+    Ok(Output { path: dest, message: "Testo letto con Tesseract".into() })
+}
+
+fn ocr_pdf(input: &Path, dir: &Path) -> CedroResult<Output> {
+    let Some(ocr) = tesseract_bin() else {
+        return Err(err("Tesseract non trovato. Cedro non lo include: installalo e riprova."));
+    };
+    let Some(ppm) = pdftoppm_bin() else {
+        return Err(err("Per l'OCR di un PDF serve anche Poppler (pdftoppm), oltre a Tesseract."));
+    };
+    let scratch = scratch_dir();
+    let prefix = scratch.join("pagina");
+    let mut render = std::process::Command::new(&ppm);
+    hidden(&mut render)
+        .arg("-png")
+        .arg("-f")
+        .arg("1")
+        .arg("-l")
+        .arg("20")
+        .arg(input)
+        .arg(&prefix);
+    let rendered = render.status();
+    if rendered.map(|s| !s.success()).unwrap_or(true) {
+        let _ = fs::remove_dir_all(&scratch);
+        return Err(err("Poppler non ha reso le pagine del PDF"));
+    }
+    let mut pages: Vec<PathBuf> = fs::read_dir(&scratch)
+        .map_err(|e| err(e.to_string()))?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("png"))
+        .collect();
+    pages.sort_by_key(|p| {
+        p.file_stem()
+            .and_then(|s| s.to_str())
+            .and_then(|s| s.rsplit('-').next())
+            .and_then(|n| n.parse::<u32>().ok())
+            .unwrap_or(0)
+    });
+    if pages.is_empty() {
+        let _ = fs::remove_dir_all(&scratch);
+        return Err(err("Il PDF non ha pagine leggibili"));
+    }
+    let mut body = String::new();
+    let mut any = false;
+    let mut first_err: Option<String> = None;
+    for (i, page) in pages.iter().enumerate() {
+        if i > 0 {
+            body.push_str("\n\n");
+        }
+        body.push_str(&format!("--- pagina {} ---\n", i + 1));
+        match tesseract_text(&ocr, page) {
+            Ok(text) => {
+                any = true;
+                body.push_str(&text);
+            }
+            Err(e) => {
+                if first_err.is_none() {
+                    first_err = Some(e.0);
+                }
+            }
+        }
+    }
+    let _ = fs::remove_dir_all(&scratch);
+    if !any {
+        return Err(err(first_err.unwrap_or_else(|| "Nessun testo riconosciuto".into())));
+    }
+    let dest = unique_output(dir, &stem(input), "txt");
+    write_bytes(&dest, body.as_bytes())?;
+    Ok(Output {
+        path: dest,
+        message: "Testo OCR con Tesseract. Al massimo 20 pagine.".into(),
+    })
+}
+
 pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
     if !path.exists() {
         return Err(err("file non trovato"));
@@ -299,6 +551,22 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         let out = unique_output(&dir, &file_stem, if ext.is_empty() { "txt" } else { &ext });
         write_bytes(&out, body.as_bytes())?;
         return Ok(Output { path: out, message: "Testo scritto".into() });
+    }
+
+    if kind == Kind::Doc && action == "pdf" {
+        return office_convert(path, &dir, "pdf", "pdf", "PDF con LibreOffice");
+    }
+    if kind == Kind::Pdf && action == "docx" {
+        return office_convert(path, &dir, "docx", "docx", "Word con LibreOffice. L'impaginazione può cambiare.");
+    }
+    if kind == Kind::Pdf && action == "txt" {
+        return office_convert(path, &dir, "txt:Text", "txt", "Testo estratto con LibreOffice, senza OCR.");
+    }
+    if action == "ocr" && kind == Kind::Image {
+        return ocr_image(path, &dir);
+    }
+    if action == "ocr" && kind == Kind::Pdf {
+        return ocr_pdf(path, &dir);
     }
 
     if kind != Kind::Image {
@@ -437,5 +705,14 @@ mod tests {
         let small = image::open(&half.path).unwrap();
         assert_eq!(small.width(), 4);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn doc_and_pdf_slices() {
+        assert!(kind_of(Path::new("lettera.docx")) == Kind::Doc);
+        assert_eq!(slices(Kind::Doc, Mode::Convert)[0].id, "pdf");
+        assert_eq!(slices(Kind::Pdf, Mode::Convert)[0].id, "docx");
+        assert_eq!(slices(Kind::Pdf, Mode::Tools)[0].id, "ocr");
+        assert!(slices(Kind::Image, Mode::Tools).iter().any(|s| s.id == "ocr"));
     }
 }
