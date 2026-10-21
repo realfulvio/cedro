@@ -71,9 +71,9 @@ Cedro — conversione locale, senza upload.
   cedro --quality 80 convert foto.png jpeg
 
 Senza argomenti, su Windows parte la ruota nella tray.
-Audio e video richiedono ffmpeg già presente.
-Word e PDF passano da LibreOffice, se è installato. L'OCR passa da Tesseract; per un PDF serve anche Poppler (pdftoppm).
-Cedro non include questi programmi.
+Le conversioni sono nel programma: non servono LibreOffice, ffmpeg, Tesseract né Poppler.
+Il video MP4 usa i codificatori di Windows (H.264 e AAC).
+L'MP3 usa LAME, compilato dentro l'eseguibile.
 L'originale non viene mai sovrascritto."
     );
 }

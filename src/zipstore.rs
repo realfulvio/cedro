@@ -31,12 +31,20 @@ fn u32(n: u32) -> [u8; 4] {
 }
 
 pub fn zip_store(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    zip_entries(entries, true)
+}
+
+pub fn zip_archive(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    zip_entries(entries, false)
+}
+
+fn zip_entries(entries: &[(&str, &[u8])], base_only: bool) -> Vec<u8> {
     let mut locals = Vec::new();
     let mut centrals = Vec::new();
     let mut offset = 0u32;
     for (name, data) in entries {
-        let base = name.rsplit(['/', '\\']).next().unwrap_or("file");
-        let name_b = base.as_bytes();
+        let kept = if base_only { name.rsplit(['/', '\\']).next().unwrap_or("file") } else { name };
+        let name_b = kept.as_bytes();
         let crc = crc32(data);
         let size = data.len() as u32;
         let mut local = Vec::new();
