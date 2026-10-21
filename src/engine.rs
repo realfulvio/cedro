@@ -48,7 +48,7 @@ pub struct Slice {
 
 const ACTIONS: &[Slice] = &[
     Slice { id: "dup", label: "Duplica" },
-    Slice { id: "path", label: "Copia percorso" },
+    Slice { id: "path", label: "Percorso" },
     Slice { id: "zip", label: "ZIP" },
 ];
 const IMAGE_CONVERT: &[Slice] = &[
@@ -64,12 +64,12 @@ const IMAGE_TOOLS: &[Slice] = &[
     Slice { id: "compress", label: "Comprimi" },
     Slice { id: "half", label: "50%" },
     Slice { id: "gray", label: "B/N" },
-    Slice { id: "rot90", label: "90 gradi" },
+    Slice { id: "rot90", label: "Ruota" },
     Slice { id: "strip", label: "Metadati" },
 ];
 const TEXT_CONVERT: &[Slice] = &[
     Slice { id: "txt", label: "TXT" },
-    Slice { id: "md", label: "Markdown" },
+    Slice { id: "md", label: "MD" },
     Slice { id: "csv", label: "CSV" },
     Slice { id: "pdf", label: "PDF" },
 ];
