@@ -1,0 +1,8 @@
+I modelli OCR sono quelli di ocrs, di Robert Knight.
+
+https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.onnx
+https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.onnx
+
+Licenza dei pesi: CC BY-SA 4.0.
+Il codice di Cedro che li carica resta MIT.
+Il riconoscimento è latino. Non è il vocabolario italiano di Tesseract.

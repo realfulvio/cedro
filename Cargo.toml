@@ -1,19 +1,29 @@
 [package]
 name = "cedro"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows."
 publish = false
 
 [dependencies]
+cfb = "0.7"
+hound = "3.5"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff"] }
+hayro = "0.8"
+lopdf = "0.36"
+mp3lame-encoder = "0.2"
+ocrs = "0.13"
+rten = "0.26"
+symphonia = { version = "0.5", default-features = false, features = ["mp3", "wav", "flac", "vorbis", "pcm", "aac", "isomp4", "ogg", "mkv"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-core = "0.61"
 windows = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
+    "Win32_Media_MediaFoundation",
     "Win32_Security",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
