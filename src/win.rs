@@ -4,7 +4,7 @@ use cedro::{
 };
 use std::cell::RefCell;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU32, AtomicUsize, Ordering};
 use windows::{
     core::{Interface, *},
     Win32::Foundation::*,
@@ -30,6 +30,7 @@ const WM_TRAY: u32 = WM_APP + 1;
 const WM_APP_INPUT: u32 = WM_APP + 2;
 const WM_APP_DROP: u32 = WM_APP + 3;
 const WM_APP_RCLICK: u32 = WM_APP + 4;
+const WM_APP_DONE: u32 = WM_APP + 5;
 const WHEEL: i32 = 440;
 const R0: f32 = 58.0;
 const R1: f32 = 168.0;
@@ -40,6 +41,7 @@ static RMODE: AtomicU32 = AtomicU32::new(1);
 static HMSG: AtomicIsize = AtomicIsize::new(0);
 static CUR_X: AtomicI32 = AtomicI32::new(0);
 static CUR_Y: AtomicI32 = AtomicI32::new(0);
+static JOBS: AtomicUsize = AtomicUsize::new(0);
 
 struct Session {
     msg: HWND,
@@ -61,6 +63,7 @@ struct Session {
     armed: bool,
     quality: u8,
     icon: HICON,
+    busy_icon: HICON,
     target: Option<IDropTarget>,
 }
 
@@ -85,6 +88,7 @@ thread_local! {
         armed: false,
         quality: 82,
         icon: HICON::default(),
+        busy_icon: HICON::default(),
         target: None,
     });
 }
@@ -131,7 +135,8 @@ pub fn start() -> std::result::Result<(), String> {
             let mut g = s.borrow_mut();
             g.msg = hwnd;
             g.quality = read_quality();
-            g.icon = make_icon().unwrap_or(HICON::default());
+            g.icon = make_icon(false).unwrap_or(HICON::default());
+            g.busy_icon = make_icon(true).unwrap_or(g.icon);
         });
         add_tray(hwnd)?;
         let kb = SetWindowsHookExW(WH_KEYBOARD_LL, Some(kb_proc), None, 0).map_err(|e| e.to_string())?;
@@ -234,6 +239,10 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         }
         WM_APP_RCLICK => {
             on_rclick();
+            LRESULT(0)
+        }
+        WM_APP_DONE => {
+            on_job_done(lparam);
             LRESULT(0)
         }
         WM_TIMER => {
@@ -818,24 +827,57 @@ fn on_drop() {
         balloon(&text);
         return;
     }
-    let paths = if matches!(slice.id, "dup" | "zip") { all.clone() } else { same_kind_paths(&all) };
+    let id = slice.id.to_string();
+    let label = slice.label.to_string();
+    let paths = if matches!(id.as_str(), "dup" | "zip") { all.clone() } else { same_kind_paths(&all) };
     let skipped = all.len().saturating_sub(paths.len());
+    if JOBS.fetch_add(1, Ordering::SeqCst) == 0 {
+        set_tray_busy(true);
+        balloon("Conversione in corso…");
+    }
+    std::thread::spawn(move || {
+        let summary = run_slices(&paths, &id, &label, quality, skipped);
+        append_log(&summary);
+        let boxed = Box::into_raw(Box::new(summary));
+        let hwnd = HWND(HMSG.load(Ordering::Relaxed) as *mut _);
+        unsafe {
+            if PostMessageW(Some(hwnd), WM_APP_DONE, WPARAM(0), LPARAM(boxed as isize)).is_err() {
+                drop(Box::from_raw(boxed));
+                let _ = JOBS.fetch_sub(1, Ordering::SeqCst);
+            }
+        }
+    });
+}
+
+fn run_slices(paths: &[PathBuf], id: &str, label: &str, quality: u8, skipped: usize) -> String {
     let mut notes = Vec::new();
-    for path in &paths {
-        match perform(path, slice.id, quality) {
-            Ok(out) => notes.push(format!("{} · {}", out.path.file_name().and_then(|s| s.to_str()).unwrap_or("file"), out.message)),
+    for path in paths {
+        match perform(path, id, quality) {
+            Ok(out) => notes.push(format!(
+                "{} · {}",
+                out.path.file_name().and_then(|s| s.to_str()).unwrap_or("file"),
+                out.message
+            )),
             Err(e) => notes.push(e.0),
         }
     }
     if skipped > 0 {
         notes.push(format!("{skipped} file di altro tipo lasciati stare"));
     }
-    let summary = if notes.len() == 1 {
+    if notes.is_empty() {
+        label.to_string()
+    } else if notes.len() == 1 {
         notes.remove(0)
     } else {
         format!("{} file\n{}", notes.len(), notes.join("\n"))
-    };
-    append_log(&summary);
+    }
+}
+
+fn on_job_done(lparam: LPARAM) {
+    let summary = unsafe { *Box::from_raw(lparam.0 as *mut String) };
+    if JOBS.fetch_sub(1, Ordering::SeqCst) == 1 {
+        set_tray_busy(false);
+    }
     balloon(&summary);
 }
 
@@ -1209,6 +1251,27 @@ fn balloon(text: &str) {
     }
 }
 
+fn set_tray_busy(busy: bool) {
+    unsafe {
+        let (icon, tip) = SESSION.with(|s| {
+            let g = s.borrow();
+            if busy {
+                (g.busy_icon, "Cedro · in corso…")
+            } else {
+                (g.icon, "Cedro")
+            }
+        });
+        let mut nid = NOTIFYICONDATAW::default();
+        nid.cbSize = std::mem::size_of::<NOTIFYICONDATAW>() as u32;
+        nid.hWnd = HWND(HMSG.load(Ordering::Relaxed) as *mut _);
+        nid.uID = 1;
+        nid.uFlags = NIF_ICON | NIF_TIP;
+        nid.hIcon = icon;
+        copy_wide(&mut nid.szTip, tip);
+        let _ = Shell_NotifyIconW(NIM_MODIFY, &nid);
+    }
+}
+
 fn add_tray(hwnd: HWND) -> std::result::Result<(), String> {
     unsafe {
         let icon = SESSION.with(|s| s.borrow().icon);
@@ -1264,7 +1327,7 @@ fn copy_wide(dest: &mut [u16], text: &str) {
     }
 }
 
-fn make_icon() -> windows::core::Result<HICON> {
+fn make_icon(busy: bool) -> windows::core::Result<HICON> {
     unsafe {
         let mut bits = vec![0u8; 32 * 32 * 4];
         for y in 0..32 {
@@ -1274,7 +1337,11 @@ fn make_icon() -> windows::core::Result<HICON> {
                 let d = (dx * dx + dy * dy).sqrt();
                 let i = (y * 32 + x) * 4;
                 let (b, g, r) = if (7.0..11.5).contains(&d) {
-                    (0x5A, 0xE1, 0xD5)
+                    if busy {
+                        (0x2A, 0xB8, 0xF0)
+                    } else {
+                        (0x5A, 0xE1, 0xD5)
+                    }
                 } else {
                     (0x0F, 0x16, 0x14)
                 };
