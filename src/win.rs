@@ -17,7 +17,9 @@ use windows::{
     Win32::System::SystemServices::MODIFIERKEYS_FLAGS,
     Win32::System::Threading::CreateMutexW,
     Win32::System::Variant::VARIANT,
-    Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomationValuePattern, UIA_ValuePatternId},
+    Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationValuePattern, TreeScope_Descendants, UIA_ValuePatternId,
+    },
     Win32::UI::HiDpi::*,
     Win32::UI::Input::KeyboardAndMouse::*,
     Win32::UI::Shell::*,
@@ -490,7 +492,46 @@ fn file_at(x: i32, y: i32) -> Option<PathBuf> {
                 Err(_) => break,
             }
         }
-        resolve_names(x, y, &names)
+        if let Some(found) = resolve_names(x, y, &names) {
+            return Some(found);
+        }
+        // Overlay trasparenti a schermo intero (NVIDIA, Xbox Game Bar...) rubano ElementFromPoint:
+        // si ricomincia dalla finestra che Windows indica sotto il cursore, che li salta.
+        let mut inner = Vec::new();
+        names_from_window(&auto, WindowFromPoint(POINT { x, y }), x, y, &mut inner);
+        resolve_names(x, y, &inner)
+    }
+}
+
+// L'elemento più piccolo della finestra che contiene il punto: la voce del file sotto il cursore.
+fn names_from_window(auto: &IUIAutomation, hwnd: HWND, x: i32, y: i32, names: &mut Vec<String>) {
+    unsafe {
+        if hwnd.0.is_null() {
+            return;
+        }
+        let Ok(root) = auto.ElementFromHandle(hwnd) else { return };
+        let Ok(cond) = auto.CreateTrueCondition() else { return };
+        let Ok(all) = root.FindAll(TreeScope_Descendants, &cond) else { return };
+        let mut best: Option<(i64, IUIAutomationElement)> = None;
+        for i in 0..all.Length().unwrap_or(0).min(5000) {
+            let Ok(el) = all.GetElement(i) else { continue };
+            let Ok(r) = el.CurrentBoundingRectangle() else { continue };
+            if x < r.left || x >= r.right || y < r.top || y >= r.bottom {
+                continue;
+            }
+            let area = (r.right - r.left) as i64 * (r.bottom - r.top) as i64;
+            if best.as_ref().map_or(true, |(a, _)| area < *a) {
+                best = Some((area, el));
+            }
+        }
+        if let Some((_, el)) = best {
+            if let Ok(name) = el.CurrentName() {
+                let text = name.to_string();
+                if !text.is_empty() {
+                    names.push(text);
+                }
+            }
+        }
     }
 }
 
