@@ -10,9 +10,13 @@ Cedro fa le conversioni da solo. Non serve installare LibreOffice, ffmpeg, Tesse
 
 Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE).
 
+## Novità della 0.7.1
+
+- La ruota si apre di nuovo dal desktop anche con un overlay trasparente a schermo intero, come quello di NVIDIA (GeForce Overlay). Prima quell'overlay "copriva" le icone e Cedro non trovava il file.
+
 ## Novità della 0.7
 
-- Su Windows c'è un installatore: `Cedro-Setup-0.7.0.exe`, nella pagina della release. Non serve più compilare.
+- Su Windows c'è un installatore: `Cedro-Setup-0.7.1.exe`, nella pagina della release. Non serve più compilare.
 - Il programma ha la sua icona, nell'exe, nel menu Start e sul desktop.
 - La ruota torna ad aprirsi dalle finestre di Esplora file di Windows 11 recenti, schede comprese. Cedro leggeva la cartella aperta con un metodo che lì non funzionava più e, in certi casi, si chiudeva da solo.
 
@@ -40,7 +44,7 @@ Le conversioni che la ruota offre vanno a buon fine.
 
 ## Su Windows
 
-1. Dalla [pagina delle release](https://github.com/realfulvio/cedro/releases/latest) scarica **Cedro-Setup-0.7.0.exe**.
+1. Dalla [pagina delle release](https://github.com/realfulvio/cedro/releases/latest) scarica **Cedro-Setup-0.7.1.exe**.
 2. Doppio clic. L'installazione è per il tuo utente, senza diritti di amministratore, in `%LOCALAPPDATA%\Programs\Cedro`. Crea il collegamento nel menu Start. Il collegamento sul desktop e l'avvio con Windows sono opzioni da spuntare.
 3. La prima volta Windows può dire «Windows ha protetto il PC»: l'installatore non è firmato. Clicca «Ulteriori informazioni», poi «Esegui comunque».
 4. Alla fine lascia spuntato **Avvia Cedro**. Non si apre una finestra: vicino all'orologio compare l'icona. Se non la vedi, apri la freccia delle icone nascoste.
