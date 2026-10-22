@@ -6,9 +6,15 @@
 
 Tasto destro su un file, più un tasto. Si apre una ruota sul cursore. Si molla sulla fetta e il file viene convertito lì, sul PC. Nessun caricamento.
 
-Cedro 0.6 fa le conversioni da solo. Non serve installare LibreOffice, ffmpeg, Tesseract o Poppler. Gira su Windows e su Linux.
+Cedro fa le conversioni da solo. Non serve installare LibreOffice, ffmpeg, Tesseract o Poppler. Gira su Windows e su Linux.
 
 Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE).
+
+## Novità della 0.7
+
+- Su Windows c'è un installatore: `Cedro-Setup-0.7.0.exe`, nella pagina della release. Non serve più compilare.
+- Il programma ha la sua icona, nell'exe, nel menu Start e sul desktop.
+- La ruota torna ad aprirsi dalle finestre di Esplora file di Windows 11 recenti, schede comprese. Cedro leggeva la cartella aperta con un metodo che lì non funzionava più e, in certi casi, si chiudeva da solo.
 
 ## Novità della 0.6
 
@@ -32,31 +38,32 @@ Le conversioni che la ruota offre vanno a buon fine.
   <img src="docs/formati.png" alt="Quattro ruote: foto.png con JPEG acceso, clip.webm con MP4, nota.ogg con MP3, lettera.docx con PDF">
 </p>
 
-## Dopo aver scaricato
+## Su Windows
 
-Lo zip della [release 0.6.0](https://github.com/realfulvio/cedro/releases/tag/v0.6.0) non è il programma. Dentro c’è il codice della 0.6.0. La lettura dei MOV QuickTime con audio sta nel codice di questa pagina, il ramo `main`. Su Windows si fa così. Non serve Git.
+1. Dalla [pagina delle release](https://github.com/realfulvio/cedro/releases/latest) scarica **Cedro-Setup-0.7.0.exe**.
+2. Doppio clic. L'installazione è per il tuo utente, senza diritti di amministratore, in `%LOCALAPPDATA%\Programs\Cedro`. Crea il collegamento nel menu Start. Il collegamento sul desktop e l'avvio con Windows sono opzioni da spuntare.
+3. La prima volta Windows può dire «Windows ha protetto il PC»: l'installatore non è firmato. Clicca «Ulteriori informazioni», poi «Esegui comunque».
+4. Alla fine lascia spuntato **Avvia Cedro**. Non si apre una finestra: vicino all'orologio compare l'icona. Se non la vedi, apri la freccia delle icone nascoste.
+5. In una cartella qualsiasi, sul desktop o in una finestra Apri/Salva, tieni premuto **Shift** e fai clic destro su un file. Si apre la ruota. Clic sinistro sulla fetta. La copia compare nella stessa cartella. L'originale resta dov'è.
+6. Per chiudere: clic sull'icona vicino all'orologio, poi **Esci**. Per disinstallare: Impostazioni, App, Cedro.
 
-1. Installa Rust da [rustup.rs](https://rustup.rs): scarica `rustup-init.exe` e lancialo. Se chiede gli strumenti di compilazione Microsoft C++, installali e scegli il carico di lavoro «Sviluppo di applicazioni desktop con C++». Senza quelli il comando del punto 4 fallisce. A installazione finita, chiudi e riapri il terminale.
-2. Nella release, sotto Assets, scarica **Source code (zip)**. Non c’è un file `.exe`.
-3. Estrai lo zip. Apri la cartella che c’è dentro: si chiama `cedro-0.6.0`.
-4. Clicca la barra dell’indirizzo di quella cartella, scrivi `powershell` e premi Invio. Poi:
+Senza argomenti, `cedro` resta nella tray. `cedro show` apre la ruota e, a lavoro finito, esce.
+
+### Compilare da soli
+
+Serve [Rust](https://rustup.rs) con gli strumenti di compilazione Microsoft C++ («Sviluppo di applicazioni desktop con C++»). Dalla cartella del codice:
 
 ```
 cargo build --release
 ```
 
-La prima volta scarica le librerie, compila il codificatore MP3, i lettori VP8 e VP9 e collega i modelli che leggono il testo. Può durare parecchio. Non chiudere la finestra. Finisce senza errori quando torna il cursore del terminale.
-
-5. Il programma è questo file:
+Il programma è `targetelease\cedro.exe`. Per rifare anche l'installatore serve [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 
 ```
-target\release\cedro.exe
+pwsh installeruild.ps1
 ```
 
-6. Doppio clic su `cedro.exe`. Non si apre una finestra. Vicino all’orologio compare l’icona di Cedro. Se non la vedi, apri la freccia delle icone nascoste.
-7. La prima volta Windows può dire «Windows ha protetto il PC». L’exe non è firmato. Clicca «Ulteriori informazioni», poi «Esegui comunque».
-8. In una cartella qualsiasi, sul desktop o in una finestra Apri/Salva, tieni premuto **Shift** e fai clic destro su un file. Si apre la ruota. Clic sinistro sulla fetta. La copia compare nella stessa cartella. L’originale resta dov’è.
-9. Per chiudere: clic sull’icona vicino all’orologio, poi **Esci**.
+Il risultato è `dist\Cedro-Setup-<versione>.exe`.
 
 ## Su Linux
 
@@ -174,7 +181,7 @@ Senza argomenti, `cedro` resta nella tray. `cedro show` apre la ruota e, a lavor
 - Codice aperto, licenza MIT, niente packer, niente UPX, niente offuscamento.
 - Gli hook sono `WH_MOUSE_LL` e `WH_KEYBOARD_LL`. Restano nel processo di Cedro e non iniettano una DLL in Esplora file o in altri programmi. Il clic destro con Shift, Ctrl o Alt viene intercettato sul desktop, in ogni finestra di Esplora file e nelle finestre Apri/Salva. Il nome del file si legge dalla cartella di quella finestra, senza scrivere nella memoria di un altro processo. Il trascinamento, se lo usi, consegna il file con il drop OLE normale.
 - Nessuna rete, nessuna telemetria, nessun download all’avvio. I modelli di lettura sono già nel programma.
-- L’exe di una build locale non è firmato Authenticode. SmartScreen può dire «Windows ha protetto il PC» la prima volta: è la mancanza di firma, non un rilevamento di malware. «Esegui comunque» vale per quella copia. Una firma Authenticode da autorità pubblica costa e non è inclusa.
+- L’exe e l’installatore non sono firmati Authenticode. SmartScreen può dire «Windows ha protetto il PC» la prima volta: è la mancanza di firma, non un rilevamento di malware. «Esegui comunque» vale per quella copia. Una firma Authenticode da autorità pubblica costa e non è inclusa.
 - Compilare sul proprio PC evita l’hash di un exe scaricato da un posto sconosciuto, che è la causa più comune di falsi positivi.
 
 ## Licenze nel programma
