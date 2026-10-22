@@ -16,6 +16,7 @@ use windows::{
     Win32::System::Ole::*,
     Win32::System::SystemServices::MODIFIERKEYS_FLAGS,
     Win32::System::Threading::CreateMutexW,
+    Win32::System::Variant::VARIANT,
     Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomationValuePattern, UIA_ValuePatternId},
     Win32::UI::HiDpi::*,
     Win32::UI::Input::KeyboardAndMouse::*,
@@ -502,9 +503,7 @@ fn resolve_names(x: i32, y: i32, names: &[String]) -> Option<PathBuf> {
         }
     }
     let mut dirs = Vec::new();
-    if let Some(dir) = shell_dir(x, y) {
-        dirs.push(dir);
-    }
+    dirs.extend(shell_dir(x, y));
     for name in names {
         if let Some(dir) = address_dir(name) {
             dirs.push(dir);
@@ -526,79 +525,61 @@ fn resolve_names(x: i32, y: i32, names: &[String]) -> Option<PathBuf> {
     first_match(&desks, names)
 }
 
-fn shell_dir(x: i32, y: i32) -> Option<PathBuf> {
+// Le cartelle aperte nelle finestre di Esplora file sotto il cursore, schede comprese.
+// IShellWindows funziona tra processi: Esplora file non gira dentro Cedro.
+fn shell_dir(x: i32, y: i32) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
     unsafe {
         let hwnd = WindowFromPoint(POINT { x, y });
         if hwnd.0.is_null() {
-            return None;
+            return dirs;
         }
-        let mut hosts = Vec::new();
-        let mut h = hwnd;
-        for _ in 0..16 {
-            let class = window_class(h);
-            if class == "SHELLDLL_DefView" {
-                if let Ok(parent) = GetParent(h) {
-                    if !parent.0.is_null() {
-                        hosts.push(parent);
+        let root = GetAncestor(hwnd, GA_ROOT);
+        let root = if root.0.is_null() { hwnd } else { root };
+        let Ok(windows): windows::core::Result<IShellWindows> = CoCreateInstance(&ShellWindows, None, CLSCTX_ALL) else {
+            return dirs;
+        };
+        let count = windows.Count().unwrap_or(0);
+        for i in 0..count {
+            let Ok(item) = windows.Item(&VARIANT::from(i)) else { continue };
+            let Ok(browser) = item.cast::<IWebBrowser2>() else { continue };
+            if browser.HWND().map(|h| h.0 as isize).unwrap_or(0) != root.0 as isize {
+                continue;
+            }
+            if let Ok(url) = browser.LocationURL() {
+                if let Some(dir) = path_from_file_url(&url.to_string()) {
+                    if dir.is_dir() && !dirs.contains(&dir) {
+                        dirs.push(dir);
                     }
                 }
             }
-            if matches!(class.as_str(), "CabinetWClass" | "ExploreWClass" | "#32770") {
-                hosts.push(h);
-            }
-            let parent = GetAncestor(h, GA_PARENT);
-            if parent.0.is_null() || parent == h {
-                break;
-            }
-            h = parent;
         }
-        let root = GetAncestor(hwnd, GA_ROOT);
-        if !root.0.is_null() {
-            let class = window_class(root);
-            if matches!(class.as_str(), "CabinetWClass" | "ExploreWClass" | "#32770") {
-                hosts.push(root);
-            }
-        }
-        for host in hosts {
-            if let Some(dir) = folder_from_browser(host) {
-                return Some(dir);
-            }
-        }
-        None
     }
+    dirs
 }
 
-fn folder_from_browser(host: HWND) -> Option<PathBuf> {
-    unsafe {
-        let raw = SendMessageW(host, WM_USER + 7, Some(WPARAM(0)), Some(LPARAM(0)));
-        if raw.0 == 0 {
-            return None;
+fn path_from_file_url(url: &str) -> Option<PathBuf> {
+    let rest = url.strip_prefix("file://")?;
+    let (host, path) = match rest.strip_prefix('/') {
+        Some(local) => ("", local),
+        None => rest.split_once('/').unwrap_or((rest, "")),
+    };
+    let mut bytes = Vec::with_capacity(path.len());
+    let raw = path.as_bytes();
+    let mut i = 0;
+    while i < raw.len() {
+        if raw[i] == b'%' && i + 2 < raw.len() {
+            if let Some(v) = std::str::from_utf8(&raw[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                bytes.push(v);
+                i += 3;
+                continue;
+            }
         }
-        let ptr = raw.0 as *mut core::ffi::c_void;
-        let browser = IShellBrowser::from_raw_borrowed(&ptr)?;
-        let view = browser.QueryActiveShellView().ok()?;
-        let persist: IPersistFolder2 = view.cast().ok()?;
-        let pidl = persist.GetCurFolder().ok()?;
-        pidl_to_path(pidl)
+        bytes.push(if raw[i] == b'/' { b'\\' } else { raw[i] });
+        i += 1;
     }
-}
-
-fn pidl_to_path(pidl: *mut windows::Win32::UI::Shell::Common::ITEMIDLIST) -> Option<PathBuf> {
-    unsafe {
-        if pidl.is_null() {
-            return None;
-        }
-        let mut buf = [0u16; 260];
-        let ok = SHGetPathFromIDListW(pidl, &mut buf).as_bool();
-        CoTaskMemFree(Some(pidl.cast()));
-        if !ok {
-            return None;
-        }
-        let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
-        let text = String::from_utf16_lossy(&buf[..end]);
-        let path = PathBuf::from(text);
-        if path.is_dir() { Some(path) } else { None }
-    }
+    let text = String::from_utf8(bytes).ok()?;
+    Some(PathBuf::from(if host.is_empty() { text } else { format!(r"\\{host}\{text}") }))
 }
 
 fn address_dir(name: &str) -> Option<PathBuf> {
