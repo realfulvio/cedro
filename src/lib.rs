@@ -9,6 +9,7 @@ mod sink;
 mod softvideo;
 pub mod update;
 pub mod wheelgeom;
+pub mod wheelgfx;
 mod zipstore;
 #[cfg(windows)]
 mod video;

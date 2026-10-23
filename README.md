@@ -10,9 +10,21 @@ Cedro fa le conversioni da solo. Non serve installare LibreOffice, ffmpeg, Tesse
 
 Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE).
 
-## Prossima versione
+## Novità della 0.9
 
-- Il menu dell'icona ha una quarta voce, **Impostazioni** (anche con il doppio clic sull'icona). Si sceglie: avvio con Windows, avviso a fine conversione, ricerca automatica degli aggiornamenti (all'avvio e ogni giorno), quali tasti aprono la ruota e la qualità di JPEG, WebP, MP3 e PDF in JPG. Le modifiche valgono subito e stanno in `config.txt`.
+<p align="center">
+  <img src="docs/ruota-nuova.png" alt="La nuova ruota di Cedro: fette arrotondate e chiare, JPEG acceso in blu, al centro il nome del file">
+</p>
+
+- **Ruota nuova.** Fette arrotondate con lo stesso spazio tra l'una e l'altra, ombra leggera e bordi lisci (prima erano seghettati). I colori e il carattere, Titillium Web, sono quelli del sito del Comune di Bondeno. Il carattere è dentro il programma: non va installato.
+- **Impostazioni.** Il menu dell'icona ha una quarta voce, **Impostazioni** (anche con il doppio clic sull'icona). Si sceglie: avvio con Windows, avviso a fine conversione, ricerca automatica degli aggiornamenti (all'avvio e ogni giorno), quali tasti aprono la ruota e la qualità di JPEG, WebP, MP3 e PDF in JPG. Le modifiche valgono subito e stanno in `config.txt`.
+- **PDF in Word fedele.** Un PDF con testo vero diventa un Word con lo stesso carattere, corpo, colore e posizione. Le pagine scansionate si leggono con l'OCR in italiano.
+
+<p align="center">
+  <img src="docs/ruota-tre-tasti.png" alt="Tre ruote: Shift per convertire, Ctrl per modificare, Alt per le azioni sul file">
+</p>
+
+Su Linux la ruota ha le stesse forme e gli stessi colori. Il carattere è quello di sistema, a meno che Titillium Web non sia installato.
 
 ## Novità della 0.8
 
@@ -56,7 +68,7 @@ Le conversioni che la ruota offre vanno a buon fine.
 
 ## Su Windows
 
-1. Dalla [pagina delle release](https://github.com/realfulvio/cedro/releases/latest) scarica **Cedro-Setup-0.8.0.exe**.
+1. Dalla [pagina delle release](https://github.com/realfulvio/cedro/releases/latest) scarica **Cedro-Setup-0.9.0.exe**.
 2. Doppio clic. L'installazione è per il tuo utente, senza diritti di amministratore, in `%LOCALAPPDATA%\Programs\Cedro`. Crea il collegamento nel menu Start. Il collegamento sul desktop e l'avvio con Windows sono opzioni da spuntare.
 3. La prima volta Windows può dire «Windows ha protetto il PC»: l'installatore non è firmato. Clicca «Ulteriori informazioni», poi «Esegui comunque».
 4. Alla fine lascia spuntato **Avvia Cedro**. Non si apre una finestra: vicino all'orologio compare l'icona. Se non la vedi, apri la freccia delle icone nascoste.
