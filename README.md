@@ -63,11 +63,11 @@ Le fette cambiano con il tipo di file. Su Linux la ruota si apre dal menu del fi
 | Immagini | PNG, JPEG, WebP, BMP, GIF, TIFF | altro formato, PDF con testo cercabile |
 | Documenti | DOCX, DOC, ODT, RTF | PDF |
 | Testo | TXT, MD, CSV, JSON, HTML, XML | altro testo, PDF |
-| PDF | PDF | JPG, **Word fedele all'originale** |
+| PDF | PDF | JPG, **Word modificabile** |
 | Audio | WAV, MP3, OGG, M4A, AAC, FLAC | WAV, MP3 |
 | Video | MP4, WebM, MOV, MKV, AVI | MP4 (H.264 + AAC) |
 
-- **PDF in Word fedele:** stesso carattere, corpo, colore e posizione del testo. Le scansioni vengono lette con l'OCR in italiano.
+- **PDF in Word modificabile:** titoli, paragrafi, tabelle vere (celle, sfondi, bordi), elenchi e grafici al loro posto, come un editor professionale. Le scansioni vengono lette con l'OCR in italiano.
 - **OCR in italiano** su Windows (OCR di sistema) e su Linux (Tesseract, se installato).
 - Foto del telefono raddrizzate in automatico.
 
