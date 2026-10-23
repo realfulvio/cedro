@@ -374,15 +374,7 @@ fn draw_wheel(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize
     let cx = ox + 220.0;
     let cy = oy + 220.0;
     let n = list.len().max(1);
-    let shapes = cedro::wheelgfx::render(n, wheel.hover);
-    let stride = 440 * 4;
-    if let Ok(surface) = gtk4::cairo::ImageSurface::create_for_data(
-        shapes,
-        gtk4::cairo::Format::ARgb32,
-        440,
-        440,
-        stride,
-    ) {
+    if let Some(surface) = wheel_surface(cr, n, wheel.hover) {
         let _ = cr.set_source_surface(&surface, ox, oy);
         let _ = cr.paint();
     }
@@ -422,6 +414,35 @@ fn draw_wheel(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize
     let _ = cr.select_font_face("Titillium Web", FontSlant::Normal, FontWeight::Normal);
     cr.set_font_size(12.0);
     show_centered(cr, cx, cy + 24.0, &name);
+}
+
+thread_local! {
+    static SHAPES: RefCell<Option<((usize, i32, u32), gtk4::cairo::ImageSurface)>> = const { RefCell::new(None) };
+}
+
+/// Le forme della ruota cambiano solo con il numero di fette, la fetta sotto il mouse e la scala dello schermo.
+fn wheel_surface(cr: &gtk4::cairo::Context, n: usize, hover: i32) -> Option<gtk4::cairo::ImageSurface> {
+    let scale = cr.target().device_scale().0.round().max(1.0) as u32;
+    let key = (n, hover, scale);
+    SHAPES.with(|cache| {
+        if let Some((k, surface)) = cache.borrow().as_ref() {
+            if *k == key {
+                return Some(surface.clone());
+            }
+        }
+        let side = 440 * scale as i32;
+        let surface = gtk4::cairo::ImageSurface::create_for_data(
+            cedro::wheelgfx::render_scaled(n, hover, scale),
+            gtk4::cairo::Format::ARgb32,
+            side,
+            side,
+            side * 4,
+        )
+        .ok()?;
+        surface.set_device_scale(scale as f64, scale as f64);
+        *cache.borrow_mut() = Some((key, surface.clone()));
+        Some(surface)
+    })
 }
 
 fn show_centered(cr: &gtk4::cairo::Context, x: f64, y: f64, text: &str) {

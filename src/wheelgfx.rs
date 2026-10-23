@@ -49,14 +49,21 @@ fn over(dst: &mut [f32; 4], color: (u8, u8, u8), alpha: f32) {
 
 /// Forme della ruota (fette, centro, ombra) in BGRA premoltiplicato, `WHEEL x WHEEL` pixel.
 pub fn render(n: usize, hover: i32) -> Vec<u8> {
-    let size = WHEEL as usize;
+    render_scaled(n, hover, 1)
+}
+
+/// Come `render`, ma con `scale` pixel per unità logica (schermi ad alta densità).
+pub fn render_scaled(n: usize, hover: i32, scale: u32) -> Vec<u8> {
+    let scale = scale.max(1);
+    let k = scale as f32;
+    let size = WHEEL as usize * scale as usize;
     let c = WHEEL / 2.0;
     let n = n.max(1);
     let mut out = vec![0u8; size * size * 4];
     for y in 0..size {
         for x in 0..size {
-            let dx = x as f32 + 0.5 - c;
-            let dy = y as f32 + 0.5 - c;
+            let dx = (x as f32 + 0.5) / k - c;
+            let dy = (y as f32 + 0.5) / k - c;
             let r = (dx * dx + dy * dy).sqrt();
             let mut px = [0.0f32; 4];
             if r > R0 + 2.0 && r < R1 + 14.0 {
@@ -64,14 +71,14 @@ pub fn render(n: usize, hover: i32) -> Vec<u8> {
                 let a = (1.0 - shadow / 9.0).clamp(0.0, 1.0);
                 over(&mut px, (0, 0x10, 0x30), 0.28 * a * a);
                 let (index, d) = slice_dist(n, dx, dy);
-                let cover = (0.5 - d).clamp(0.0, 1.0);
+                let cover = (0.5 - d * k).clamp(0.0, 1.0);
                 let color = if index as i32 == hover { HOVER } else { SLICE };
                 over(&mut px, color, cover);
             }
             if r < R0 + 1.0 {
                 let ring = if hover >= 0 { HOVER } else { PRIMARY };
-                over(&mut px, ring, (R0 - r + 1.0).clamp(0.0, 1.0));
-                over(&mut px, HOLE, (R0 - 2.0 - r + 0.5).clamp(0.0, 1.0));
+                over(&mut px, ring, ((R0 - r) * k + 1.0).clamp(0.0, 1.0));
+                over(&mut px, HOLE, ((R0 - 2.0 - r) * k + 0.5).clamp(0.0, 1.0));
             }
             let i = (y * size + x) * 4;
             for k in 0..4 {
