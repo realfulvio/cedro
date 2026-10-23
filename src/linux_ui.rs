@@ -97,9 +97,7 @@ pub fn start() -> i32 {
     let quit = Arc::new(AtomicBool::new(false));
     if launch.stay {
         spawn_tray(quit.clone());
-        if cfg().update_check {
-            check_updates(false);
-        }
+        daily_updates();
     }
     let state = Rc::new(RefCell::new(Wheel {
         launch,
@@ -644,26 +642,38 @@ impl ksni::Tray for CedroTray {
     }
 }
 
-/// All'avvio aspetta qualche secondo e tace se non c'è niente. Dal menu risponde sempre.
-fn check_updates(manual: bool) {
-    std::thread::spawn(move || {
-        if !manual {
-            std::thread::sleep(Duration::from_secs(8));
-        }
-        let news = match update::check() {
-            Ok(Some(release)) if manual || !update::skipped(&release.version) => UpdateNews::Found { release, manual },
-            Ok(_) if manual => UpdateNews::Note(format!("Hai già l'ultima versione ({}).", update::CURRENT)),
-            Err(e) if manual => UpdateNews::Note(e),
-            Err(e) => {
-                append_log(&format!("aggiornamenti: {e}"));
-                return;
+/// Dopo qualche secondo e poi ogni giorno, finché Cedro resta aperto. Rilegge la scelta a ogni giro.
+fn daily_updates() {
+    std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_secs(8));
+        loop {
+            if cfg().update_check {
+                check_updates_now(false);
             }
-            Ok(_) => return,
-        };
-        if let Ok(mut slot) = UPDATE.lock() {
-            *slot = Some(news);
+            std::thread::sleep(Duration::from_secs(24 * 60 * 60));
         }
     });
+}
+
+/// Dal menu risponde sempre, anche quando non c'è niente di nuovo.
+fn check_updates(manual: bool) {
+    std::thread::spawn(move || check_updates_now(manual));
+}
+
+fn check_updates_now(manual: bool) {
+    let news = match update::check() {
+        Ok(Some(release)) if manual || !update::skipped(&release.version) => UpdateNews::Found { release, manual },
+        Ok(_) if manual => UpdateNews::Note(format!("Hai già l'ultima versione ({}).", update::CURRENT)),
+        Err(e) if manual => UpdateNews::Note(e),
+        Err(e) => {
+            append_log(&format!("aggiornamenti: {e}"));
+            return;
+        }
+        Ok(_) => return,
+    };
+    if let Ok(mut slot) = UPDATE.lock() {
+        *slot = Some(news);
+    }
 }
 
 fn on_update(app: &Application, news: UpdateNews) {
