@@ -2,7 +2,7 @@
 ; Installa per l'utente corrente: non servono i diritti di amministratore.
 #define AppName "Cedro"
 #ifndef AppVersion
-  #define AppVersion "0.9.0"
+  #define AppVersion "0.10.0"
 #endif
 
 [Setup]
@@ -51,6 +51,7 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\cedro.exe"; Description: "Avvia Cedro"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\cedro.exe"; Parameters: "guida"; Description: "Guarda come funziona (guida animata)"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{userappdata}\Cedro"
