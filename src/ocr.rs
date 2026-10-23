@@ -211,19 +211,6 @@ fn ocrs_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
         .collect())
 }
 
-/// Vero se c'è un OCR che conosce l'italiano, accenti compresi:
-/// quello di Windows, oppure Tesseract con la lingua `ita` su Linux.
-pub fn italian_ocr() -> bool {
-    #[cfg(windows)]
-    {
-        windows_italian()
-    }
-    #[cfg(not(windows))]
-    {
-        tesseract_italian()
-    }
-}
-
 #[cfg(not(windows))]
 fn tesseract_italian() -> bool {
     static ITALIAN: OnceLock<bool> = OnceLock::new();
@@ -284,18 +271,6 @@ fn parse_tsv(tsv: &str) -> Vec<Line> {
         }
     }
     lines.into_iter().map(|(_, l)| l).filter(|l| !l.text.is_empty()).collect()
-}
-
-/// Vero solo se l'OCR di Windows ha proprio l'italiano, non un'altra lingua dell'utente.
-#[cfg(windows)]
-fn windows_italian() -> bool {
-    use windows::core::HSTRING;
-    use windows::Globalization::Language;
-    use windows::Media::Ocr::OcrEngine as WinOcr;
-    let _ = windows_engine();
-    Language::CreateLanguage(&HSTRING::from("it"))
-        .and_then(|it| WinOcr::IsLanguageSupported(&it))
-        .unwrap_or(false)
 }
 
 /// L'OCR di Windows in italiano. Se manca la lingua, quello delle lingue dell'utente.
