@@ -147,9 +147,9 @@ Testo (TXT, MD, CSV, TSV, JSON, LOG, XML, HTML): altro testo, PDF, maiuscolo, mi
 
 Word (DOC, DOCX, ODT, RTF): PDF di testo. Restano paragrafi e parole. Impaginazione, font incorporati e caselle di testo no. Il vecchio DOC viene letto dall’indice pubblico del formato Word.
 
-PDF: con Shift, JPG (un'immagine per pagina) oppure Word OCR. Per il Word, Cedro legge ogni pagina con l'OCR in italiano e rimette insieme i paragrafi: righe spezzate e parole divise dal trattino tornano intere. Il Word è in Calibri 11, con la lingua italiana per il correttore. La pagina non viene ricostruita: niente colonne, tabelle o immagini. Al massimo 100 pagine. Con Ctrl, OCR in un file di testo.
+PDF: con Shift, JPG (un'immagine per pagina) oppure Word OCR. Un PDF con testo vero diventa un Word fedele all'originale: il testo viene copiato dal PDF, senza rileggerlo, con il suo carattere, corpo, grassetto, corsivo, colore e posizione; immagini, riquadri, linee e tabelle restano come sfondo della pagina. Le pagine senza testo (scansioni) vengono lette con l'OCR in italiano e diventano paragrafi normali, da ricontrollare. Il testo è modificabile, ma è in riquadri posizionati, come nei convertitori PDF di Word. Se manca un carattere sul PC, Word ne usa uno simile. Al massimo 100 pagine lette con l'OCR. Con Ctrl, OCR in un file di testo.
 
-OCR in italiano. Su Windows Cedro usa l'OCR di Windows, che con Windows in italiano conosce già la lingua. Se manca, si aggiunge da Impostazioni, Ora e lingua, Lingua, Italiano, Riconoscimento ottico dei caratteri. Su Linux usa Tesseract, se c'è con l'italiano (`tesseract-ocr-ita` su Debian e Ubuntu, `tesseract-langpack-ita` su Fedora). Senza, resta il modello latino incluso: legge le lettere ma non gli accenti, e per il Word di un PDF con testo copia quello già presente.
+OCR in italiano. Su Windows Cedro usa l'OCR di Windows, che con Windows in italiano conosce già la lingua. Se manca, si aggiunge da Impostazioni, Ora e lingua, Lingua, Italiano, Riconoscimento ottico dei caratteri. Su Linux usa Tesseract, se c'è con l'italiano (`tesseract-ocr-ita` su Debian e Ubuntu, `tesseract-langpack-ita` su Fedora). Senza, resta il modello latino incluso: legge le lettere ma non gli accenti.
 
 Audio (WAV, MP3, OGG, M4A, AAC, FLAC): WAV e MP3. L’MP3 è LAME, compilato dentro l’eseguibile, licenza LGPL. Un file Opus non viene convertito.
 
