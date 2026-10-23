@@ -1,4 +1,5 @@
 use cedro::{
+    wheelgeom_bounds, wheelgfx,
     append_log, kind_of, mode_from_vk, perform, read_quality, same_kind_paths, slices, update, Kind, Mode,
     Slice,
 };
@@ -100,6 +101,7 @@ thread_local! {
 }
 
 pub fn start() -> std::result::Result<(), String> {
+    crate::winfont::load();
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         OleInitialize(None).map_err(|e| e.to_string())?;
@@ -743,7 +745,6 @@ fn open_wheel(x: i32, y: i32, mode: Mode, paths: Vec<PathBuf>, chord: bool) {
                 return;
             }
         };
-        let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0x00FF00FF), 0, LWA_COLORKEY);
         let target: IDropTarget = CedroDrop { hwnd: hwnd.0 as isize }.into();
         SESSION.with(|s| {
             let mut g = s.borrow_mut();
@@ -762,6 +763,7 @@ fn open_wheel(x: i32, y: i32, mode: Mode, paths: Vec<PathBuf>, chord: bool) {
         }
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        paint_wheel(hwnd);
     }
 }
 
@@ -783,9 +785,7 @@ fn refresh_wheel() {
         if hwnd.0.is_null() {
             return;
         }
-        unsafe {
-            let _ = InvalidateRect(Some(hwnd), None, false);
-        }
+        paint_wheel(hwnd);
     });
 }
 
@@ -878,6 +878,7 @@ fn current_slices() -> (Vec<Slice>, i32, Mode, String) {
 unsafe extern "system" fn wheel_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if msg == WM_PAINT {
         paint_wheel(hwnd);
+        let _ = ValidateRect(Some(hwnd), None);
         return LRESULT(0);
     }
     if msg == WM_ERASEBKGND {
@@ -886,63 +887,73 @@ unsafe extern "system" fn wheel_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpara
     DefWindowProcW(hwnd, msg, wparam, lparam)
 }
 
+unsafe fn dib(dc: HDC) -> Option<(HBITMAP, *mut u8)> {
+    let mut info = BITMAPINFO::default();
+    info.bmiHeader = BITMAPINFOHEADER {
+        biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+        biWidth: WHEEL,
+        biHeight: -WHEEL,
+        biPlanes: 1,
+        biBitCount: 32,
+        biCompression: BI_RGB.0,
+        ..Default::default()
+    };
+    let mut bits = std::ptr::null_mut();
+    let bmp = CreateDIBSection(Some(dc), &info, DIB_RGB_COLORS, &mut bits, None, 0).ok()?;
+    Some((bmp, bits as *mut u8))
+}
+
+/// Il testo si disegna in bianco su nero con GDI; la luminosità diventa l'alfa del colore voluto.
+unsafe fn text_layer(mem: HDC, mask: *mut u8, px: &mut [u8], color: (u8, u8, u8), draw: impl FnOnce()) {
+    let len = px.len();
+    std::ptr::write_bytes(mask, 0, len);
+    SetBkMode(mem, TRANSPARENT);
+    SetTextColor(mem, COLORREF(0x00FFFFFF));
+    draw();
+    let mask = std::slice::from_raw_parts(mask, len);
+    for (dst, src) in px.chunks_exact_mut(4).zip(mask.chunks_exact(4)) {
+        let a = src[1] as u32;
+        if a == 0 {
+            continue;
+        }
+        let k = 255 - a;
+        dst[0] = ((color.2 as u32 * a + dst[0] as u32 * k) / 255) as u8;
+        dst[1] = ((color.1 as u32 * a + dst[1] as u32 * k) / 255) as u8;
+        dst[2] = ((color.0 as u32 * a + dst[2] as u32 * k) / 255) as u8;
+        dst[3] = (a + dst[3] as u32 * k / 255) as u8;
+    }
+}
+
 fn paint_wheel(hwnd: HWND) {
     let (list, hover, mode, name) = current_slices();
+    let mut px = wheelgfx::render(list.len(), hover);
     unsafe {
-        let mut ps = PAINTSTRUCT::default();
-        let hdc = BeginPaint(hwnd, &mut ps);
-        let mem = CreateCompatibleDC(Some(hdc));
-        let bmp = CreateCompatibleBitmap(hdc, WHEEL, WHEEL);
-        let old_bmp = SelectObject(mem, bmp.into());
-        let rect = RECT { left: 0, top: 0, right: WHEEL, bottom: WHEEL };
-        let back = CreateSolidBrush(COLORREF(0x00FF00FF));
-        FillRect(mem, &rect, back);
-        let _ = DeleteObject(back.into());
-        let cx = WHEEL / 2;
-        let cy = WHEEL / 2;
+        let screen = GetDC(None);
+        let mem = CreateCompatibleDC(Some(screen));
+        let (Some((mask_bmp, mask)), Some((out_bmp, out))) = (dib(screen), dib(screen)) else {
+            let _ = DeleteDC(mem);
+            ReleaseDC(None, screen);
+            return;
+        };
+        let old = SelectObject(mem, mask_bmp.into());
+        let c = WHEEL as f32 / 2.0;
         let n = list.len().max(1);
-        let slice_px = if n > 6 { -15 } else if n > 4 { -16 } else { -18 };
-        let old_font = select_font(mem, slice_px, 600);
-        for (i, slice) in list.iter().enumerate() {
-            let sweep = std::f32::consts::TAU / n as f32;
-            let gap = if n > 1 { 0.05 } else { 0.0 };
-            let a0 = -std::f32::consts::FRAC_PI_2 + i as f32 * sweep + gap / 2.0;
-            let a1 = a0 + sweep - gap;
-            let on = i as i32 == hover;
-            let color = if on { COLORREF(0x005AE1D5) } else { COLORREF(0x001C2823) };
-            let brush = CreateSolidBrush(color);
-            let pen = CreatePen(PS_SOLID, 1, color);
-            let old_b = SelectObject(mem, brush.into());
-            let old_p = SelectObject(mem, pen.into());
-            let pts = slice_poly(cx, cy, a0, a1);
-            let _ = Polygon(mem, &pts);
-            SelectObject(mem, old_b);
-            SelectObject(mem, old_p);
-            let _ = DeleteObject(brush.into());
-            let _ = DeleteObject(pen.into());
-            let mid = (a0 + a1) / 2.0;
-            let rr = (R0 + R1) / 2.0;
-            let tx = cx as f32 + rr * mid.cos();
-            let ty = cy as f32 + rr * mid.sin();
-            SetBkMode(mem, TRANSPARENT);
-            SetTextColor(mem, if on { COLORREF(0x000F1614) } else { COLORREF(0x00DCEAE7) });
-            text_centered(mem, tx as i32, ty as i32, slice.label);
-        }
-        restore_font(mem, old_font);
-        let hole = CreateSolidBrush(COLORREF(0x000F1614));
-        let old_h = SelectObject(mem, hole.into());
-        let r = R0 as i32 - 2;
-        let _ = Ellipse(mem, cx - r, cy - r, cx + r, cy + r);
-        SelectObject(mem, old_h);
-        let _ = DeleteObject(hole.into());
-        let ring = CreatePen(PS_SOLID, if hover >= 0 { 2 } else { 1 }, COLORREF(0x005AE1D5));
-        let hollow = GetStockObject(HOLLOW_BRUSH);
-        let old_b = SelectObject(mem, hollow);
-        let old_p = SelectObject(mem, ring.into());
-        let _ = Ellipse(mem, cx - r, cy - r, cx + r, cy + r);
-        SelectObject(mem, old_b);
-        let ring_obj = SelectObject(mem, old_p);
-        let _ = DeleteObject(ring_obj);
+        let slice_px = if n > 6 { -16 } else if n > 4 { -17 } else { -19 };
+        let radius = (R0 + R1) / 2.0;
+        let labels = |on: bool| {
+            let font = select_font(mem, slice_px, 700);
+            for (i, slice) in list.iter().enumerate() {
+                if (i as i32 == hover) != on {
+                    continue;
+                }
+                let (a0, a1) = wheelgeom_bounds(i, n);
+                let mid = (a0 + a1) / 2.0;
+                text_centered(mem, (c + radius * mid.cos()) as i32, (c + radius * mid.sin()) as i32, slice.label);
+            }
+            restore_font(mem, font);
+        };
+        text_layer(mem, mask, &mut px, wheelgfx::TEXT, || labels(false));
+        text_layer(mem, mask, &mut px, wheelgfx::TEXT_ON_HOVER, || labels(true));
         let title = match mode {
             Mode::Convert => "CONVERSIONE",
             Mode::Tools => "STRUMENTI",
@@ -953,24 +964,26 @@ fn paint_wheel(hwnd: HWND) {
         } else {
             "Annulla"
         };
-        SetBkMode(mem, TRANSPARENT);
-        let old_font = select_font(mem, -12, 600);
-        SetTextColor(mem, COLORREF(0x00889D96));
-        text_centered(mem, cx, cy - 20, title);
-        restore_font(mem, old_font);
-        let old_font = select_font(mem, -16, 600);
-        SetTextColor(mem, COLORREF(0x00DCEAE7));
-        text_centered(mem, cx, cy + 2, center);
-        restore_font(mem, old_font);
-        let old_font = select_font(mem, -12, 400);
-        SetTextColor(mem, COLORREF(0x00889D96));
-        text_centered(mem, cx, cy + 24, &clip_name(&name));
-        restore_font(mem, old_font);
-        let _ = BitBlt(hdc, 0, 0, WHEEL, WHEEL, Some(mem), 0, 0, SRCCOPY);
-        let bmp_back = SelectObject(mem, old_bmp);
-        let _ = DeleteObject(bmp_back);
+        let (cx, cy) = (WHEEL / 2, WHEEL / 2);
+        let line = |dy: i32, size: i32, weight: i32, text: &str| {
+            let font = select_font(mem, size, weight);
+            text_centered(mem, cx, cy + dy, text);
+            restore_font(mem, font);
+        };
+        text_layer(mem, mask, &mut px, wheelgfx::MUTED, || line(-20, -12, 700, title));
+        text_layer(mem, mask, &mut px, wheelgfx::NAVY, || line(2, -18, 700, center));
+        text_layer(mem, mask, &mut px, wheelgfx::MUTED, || line(24, -12, 400, &clip_name(&name)));
+        std::ptr::copy_nonoverlapping(px.as_ptr(), out, px.len());
+        SelectObject(mem, out_bmp.into());
+        let size = SIZE { cx: WHEEL, cy: WHEEL };
+        let origin = POINT { x: 0, y: 0 };
+        let blend = BLENDFUNCTION { BlendOp: 0, BlendFlags: 0, SourceConstantAlpha: 255, AlphaFormat: 1 };
+        let _ = UpdateLayeredWindow(hwnd, Some(screen), None, Some(&size), Some(mem), Some(&origin), COLORREF(0), Some(&blend), ULW_ALPHA);
+        SelectObject(mem, old);
+        let _ = DeleteObject(mask_bmp.into());
+        let _ = DeleteObject(out_bmp.into());
         let _ = DeleteDC(mem);
-        let _ = EndPaint(hwnd, &ps);
+        ReleaseDC(None, screen);
     }
 }
 
@@ -988,9 +1001,9 @@ fn ui_font(height: i32, weight: i32) -> HFONT {
             DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS,
             CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY,
+            ANTIALIASED_QUALITY,
             DEFAULT_PITCH.0 as u32 | FF_SWISS.0 as u32,
-            w!("Segoe UI"),
+            crate::winfont::face(),
         )
     }
 }
@@ -1015,26 +1028,6 @@ fn clip_name(name: &str) -> String {
     } else {
         name.to_string()
     }
-}
-
-fn slice_poly(cx: i32, cy: i32, a0: f32, a1: f32) -> Vec<POINT> {
-    let mut pts = Vec::new();
-    let steps = 24;
-    for i in 0..=steps {
-        let t = a0 + (a1 - a0) * (i as f32 / steps as f32);
-        pts.push(POINT {
-            x: cx + (R1 * t.cos()) as i32,
-            y: cy + (R1 * t.sin()) as i32,
-        });
-    }
-    for i in (0..=steps).rev() {
-        let t = a0 + (a1 - a0) * (i as f32 / steps as f32);
-        pts.push(POINT {
-            x: cx + (R0 * t.cos()) as i32,
-            y: cy + (R0 * t.sin()) as i32,
-        });
-    }
-    pts
 }
 
 fn text_at(hdc: HDC, x: i32, y: i32, text: &str) {
@@ -1089,9 +1082,7 @@ fn set_hover(x: i32, y: i32) {
             g.hover = hover;
             let hwnd = g.wheel;
             drop(g);
-            unsafe {
-                let _ = InvalidateRect(Some(hwnd), None, false);
-            }
+            paint_wheel(hwnd);
         }
     });
 }
@@ -1106,9 +1097,7 @@ fn remember_paths(paths: Vec<PathBuf>) {
             g.paths = paths;
             let hwnd = g.wheel;
             drop(g);
-            unsafe {
-                let _ = InvalidateRect(Some(hwnd), None, false);
-            }
+            paint_wheel(hwnd);
         }
     });
 }

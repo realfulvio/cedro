@@ -374,34 +374,34 @@ fn draw_wheel(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize
     let cx = ox + 220.0;
     let cy = oy + 220.0;
     let n = list.len().max(1);
-    let _ = cr.select_font_face("DejaVu Sans", FontSlant::Normal, FontWeight::Bold);
+    let shapes = cedro::wheelgfx::render(n, wheel.hover);
+    let stride = 440 * 4;
+    if let Ok(surface) = gtk4::cairo::ImageSurface::create_for_data(
+        shapes,
+        gtk4::cairo::Format::ARgb32,
+        440,
+        440,
+        stride,
+    ) {
+        let _ = cr.set_source_surface(&surface, ox, oy);
+        let _ = cr.paint();
+    }
+    let rgb = |c: (u8, u8, u8)| cr.set_source_rgb(c.0 as f64 / 255.0, c.1 as f64 / 255.0, c.2 as f64 / 255.0);
+    let _ = cr.select_font_face("Titillium Web", FontSlant::Normal, FontWeight::Bold);
     for (index, slice) in list.iter().enumerate() {
         let (a0, a1) = cedro::wheelgeom_bounds(index, n);
-        cr.new_path();
-        cr.arc(cx, cy, cedro::wheelgeom::R1 as f64, a0 as f64, a1 as f64);
-        cr.arc_negative(cx, cy, cedro::wheelgeom::R0 as f64, a1 as f64, a0 as f64);
-        cr.close_path();
-        if index as i32 == wheel.hover {
-            cr.set_source_rgb(213.0 / 255.0, 225.0 / 255.0, 90.0 / 255.0);
-        } else {
-            cr.set_source_rgb(35.0 / 255.0, 40.0 / 255.0, 28.0 / 255.0);
-        }
-        let _ = cr.fill();
         let mid = (a0 + a1) / 2.0;
         let radius = (cedro::wheelgeom::R0 + cedro::wheelgeom::R1) / 2.0;
         let tx = cx as f32 + radius * mid.cos();
         let ty = cy as f32 + radius * mid.sin();
         if index as i32 == wheel.hover {
-            cr.set_source_rgb(20.0 / 255.0, 22.0 / 255.0, 15.0 / 255.0);
+            rgb(cedro::wheelgfx::TEXT_ON_HOVER);
         } else {
-            cr.set_source_rgb(231.0 / 255.0, 234.0 / 255.0, 220.0 / 255.0);
+            rgb(cedro::wheelgfx::TEXT);
         }
-        cr.set_font_size(if n > 6 { 13.0 } else { 16.0 });
+        cr.set_font_size(if n > 6 { 15.0 } else { 18.0 });
         show_centered(cr, tx as f64, ty as f64, slice.label);
     }
-    cr.arc(cx, cy, (cedro::wheelgeom::R0 - 2.0) as f64, 0.0, std::f64::consts::TAU);
-    cr.set_source_rgb(20.0 / 255.0, 22.0 / 255.0, 15.0 / 255.0);
-    let _ = cr.fill();
     let title = match wheel.launch.mode {
         Mode::Convert => "CONVERSIONE",
         Mode::Tools => "STRUMENTI",
@@ -412,13 +412,14 @@ fn draw_wheel(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize
     } else {
         "Annulla"
     };
-    cr.set_source_rgb(150.0 / 255.0, 157.0 / 255.0, 136.0 / 255.0);
+    rgb(cedro::wheelgfx::MUTED);
     cr.set_font_size(12.0);
     show_centered(cr, cx, cy - 20.0, title);
-    cr.set_source_rgb(231.0 / 255.0, 234.0 / 255.0, 220.0 / 255.0);
-    cr.set_font_size(16.0);
+    rgb(cedro::wheelgfx::NAVY);
+    cr.set_font_size(17.0);
     show_centered(cr, cx, cy + 2.0, center);
-    cr.set_source_rgb(150.0 / 255.0, 157.0 / 255.0, 136.0 / 255.0);
+    rgb(cedro::wheelgfx::MUTED);
+    let _ = cr.select_font_face("Titillium Web", FontSlant::Normal, FontWeight::Normal);
     cr.set_font_size(12.0);
     show_centered(cr, cx, cy + 24.0, &name);
 }
