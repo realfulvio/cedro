@@ -13,14 +13,16 @@ pub fn image_text(path: &Path) -> Result<String, String> {
     recognize(&image)
 }
 
+pub const MAX_OCR_PAGES: usize = 20;
+
 pub fn pdf_pages_text(pdf: &[u8]) -> Result<String, String> {
-    let rendered = render_pdf(pdf)?;
+    let rendered = render_pdf(pdf, |_| true)?;
     if rendered.is_empty() {
         return Err("il PDF non ha pagine".into());
     }
     let mut body = String::new();
     let mut any = false;
-    for (i, png) in rendered.iter().enumerate() {
+    for (i, (_, png)) in rendered.iter().enumerate() {
         if i > 0 {
             body.push_str("\n\n");
         }
@@ -38,6 +40,28 @@ pub fn pdf_pages_text(pdf: &[u8]) -> Result<String, String> {
         return Err("nessun testo letto nelle pagine".into());
     }
     Ok(body)
+}
+
+/// Legge con l'OCR solo le pagine (da 0) per cui `wanted` è vero, fino a `MAX_OCR_PAGES`.
+/// Ritorna il testo per pagina (vuoto se non letto) e quante pagine volute sono rimaste fuori.
+pub fn pdf_pages_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<(Vec<String>, usize), String> {
+    let total = pdf_page_count(pdf)?;
+    let wanted_count = (0..total).filter(|i| wanted(*i)).count();
+    let rendered = render_pdf(pdf, &wanted)?;
+    let mut texts = vec![String::new(); total];
+    for (i, png) in &rendered {
+        let image = image::load_from_memory(png).map_err(|e| e.to_string())?;
+        if let Ok(text) = recognize(&image) {
+            texts[*i] = text;
+        }
+    }
+    Ok((texts, wanted_count - rendered.len()))
+}
+
+fn pdf_page_count(bytes: &[u8]) -> Result<usize, String> {
+    use hayro::hayro_syntax::Pdf;
+    let pdf = Pdf::new(bytes.to_vec()).map_err(|e| format!("PDF non disegnato: {e:?}"))?;
+    Ok(pdf.pages().len())
 }
 
 fn recognize(image: &DynamicImage) -> Result<String, String> {
@@ -71,7 +95,7 @@ fn engine() -> Result<&'static OcrEngine, String> {
         .map_err(|e| e.clone())
 }
 
-fn render_pdf(bytes: &[u8]) -> Result<Vec<Vec<u8>>, String> {
+fn render_pdf(bytes: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec<(usize, Vec<u8>)>, String> {
     use hayro::hayro_interpret::InterpreterSettings;
     use hayro::hayro_syntax::Pdf;
     use hayro::vello_cpu::color::palette::css::WHITE;
@@ -83,9 +107,9 @@ fn render_pdf(bytes: &[u8]) -> Result<Vec<Vec<u8>>, String> {
     let settings = RenderSettings::default();
     let pixmap = PixmapSettings { x_scale: 1.5, y_scale: 1.5, bg_color: WHITE };
     let mut pages = Vec::new();
-    for page in pdf.pages().iter().take(20) {
+    for (i, page) in pdf.pages().iter().enumerate().filter(|(i, _)| wanted(*i)).take(MAX_OCR_PAGES) {
         let rendered = render(page, &cache, &interpreter, &settings, &pixmap);
-        pages.push(rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?);
+        pages.push((i, rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?));
     }
     Ok(pages)
 }
