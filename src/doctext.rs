@@ -99,6 +99,11 @@ fn odt_text(path: &Path) -> Result<String, String> {
     Ok(odt_plain(&xml))
 }
 
+#[cfg(test)]
+pub fn zip_entry_for_test(path: &Path, name: &str) -> String {
+    zip_entry(path, name).unwrap()
+}
+
 fn zip_entry(path: &Path, name: &str) -> Result<String, String> {
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("archivio non letto: {e}"))?;

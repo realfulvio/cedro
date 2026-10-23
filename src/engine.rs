@@ -108,15 +108,12 @@ pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
     }
 }
 
-/// Testo di un PDF. Con un OCR italiano rilegge tutte le pagine; senza, usa il testo
-/// incorporato e l'OCR solo per le pagine che ne sono prive.
+/// Testo di un PDF: quello incorporato, e l'OCR solo per le pagine che ne sono prive.
 /// Ritorna il testo, le pagine lette via OCR e quelle da leggere rimaste fuori dal limite.
 fn pdf_text_with_ocr(path: &Path) -> Result<(String, usize, usize), String> {
     let mut pages: Vec<String> =
         crate::doctext::pdf_page_texts(path)?.iter().map(|p| crate::ocr::paragraphs_from_text(p)).collect();
-    // Con un OCR italiano si rilegge ogni pagina: il testo incorporato perde i paragrafi.
-    let italian = crate::ocr::italian_ocr();
-    let blank: Vec<bool> = pages.iter().map(|p| italian || p.is_empty()).collect();
+    let blank: Vec<bool> = pages.iter().map(|p| p.is_empty()).collect();
     let mut ocr_pages = 0;
     let mut skipped = 0;
     let mut ocr_error = None;
@@ -379,7 +376,40 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         let message = if total == 1 { "JPG".to_string() } else { format!("{total} JPG, uno per pagina") };
         return Ok(Output { path: first.unwrap(), message });
     }
-    if kind == Kind::Pdf && matches!(action, "docx" | "txt") {
+    if kind == Kind::Pdf && action == "docx" {
+        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let pages = crate::pdflayout::read_pages(&bytes).map_err(err)?;
+        let empty: Vec<bool> = pages.iter().map(|p| matches!(p, crate::pdflayout::Page::Empty)).collect();
+        let scanned = empty.iter().filter(|e| **e).count();
+        let mut ocr: Vec<Option<String>> = vec![None; pages.len()];
+        let mut ocr_error = None;
+        if scanned > 0 {
+            match crate::ocr::pdf_pages_where(&bytes, |i| empty.get(i).copied().unwrap_or(false)) {
+                Ok(read) => ocr = read,
+                Err(e) => ocr_error = Some(e),
+            }
+        }
+        let read_scanned = ocr.iter().flatten().filter(|t| !t.is_empty()).count();
+        if scanned == pages.len() && read_scanned == 0 {
+            return Err(err(match ocr_error {
+                Some(e) => format!("questo PDF non ha testo da copiare; OCR: {e}"),
+                None => "questo PDF non ha testo da copiare né da leggere con l'OCR".into(),
+            }));
+        }
+        let docx = crate::pdflayout::docx(&pages, |i| ocr.get(i).cloned().flatten().unwrap_or_default());
+        let out = unique_output(&dir, &stem(path), "docx");
+        write_bytes(&out, &docx)?;
+        let message = if scanned == 0 {
+            "Word con testo, font e posizioni del PDF".to_string()
+        } else {
+            format!(
+                "Word. {} pagine come il PDF, {read_scanned} lette via OCR in italiano (da ricontrollare) su {scanned} senza testo.",
+                pages.len() - scanned
+            )
+        };
+        return Ok(Output { path: out, message });
+    }
+    if kind == Kind::Pdf && action == "txt" {
         let (text, ocr_pages, skipped) = pdf_text_with_ocr(path).map_err(err)?;
         let (bytes, ext) = if action == "docx" {
             (crate::doctext::docx_bytes(&text), "docx")
@@ -549,6 +579,18 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("cedro-test-{n}"));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn digital_pdf_to_word_keeps_layout() {
+        let dir = scratch();
+        let pdf = dir.join("lettera.pdf");
+        fs::write(&pdf, pdf_from_text("Perché è già così\nSecondo rigo")).unwrap();
+        let docx = perform(&pdf, "docx", 80).expect("Word");
+        let xml = crate::doctext::zip_entry_for_test(&docx.path, "word/document.xml");
+        assert!(xml.contains("w:framePr"), "righe non posizionate");
+        assert!(xml.contains("Perché è già così"), "{xml}");
+        assert!(xml.contains("Helvetica") || xml.contains("Arial"), "{xml}");
     }
 
     #[test]

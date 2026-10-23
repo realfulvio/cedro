@@ -3,6 +3,7 @@ mod doctext;
 mod engine;
 mod ocr;
 mod pdf;
+mod pdflayout;
 pub mod settings;
 mod sink;
 mod softvideo;
