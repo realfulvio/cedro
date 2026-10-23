@@ -10,6 +10,8 @@ mod winfont;
 
 #[cfg(windows)]
 mod settings_win;
+#[cfg(windows)]
+mod guida_win;
 
 #[cfg(target_os = "linux")]
 mod linux_ui;
@@ -18,6 +20,10 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     #[cfg(windows)]
     {
+        if args.first().is_some_and(|a| a == "guida") {
+            guida_win::run_standalone();
+            return;
+        }
         if args.is_empty() {
             if let Err(err) = win::start() {
                 cedro::append_log(&err);

@@ -17,6 +17,7 @@ Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE
 </p>
 
 - **Ruota nuova.** Fette arrotondate con lo stesso spazio tra l'una e l'altra, ombra leggera e bordi lisci (prima erano seghettati). I colori e il carattere, Titillium Web, sono quelli del sito del Comune di Bondeno. Il carattere è dentro il programma: non va installato.
+- **Guida.** Dal menu dell'icona, **Guida** apre una finestra con un'animazione: mostra cosa fanno le ruote tenendo premuto Shift, Ctrl o Alt. L'installatore la propone anche a fine installazione (`cedro.exe guida`).
 - **Impostazioni.** Il menu dell'icona ha una quarta voce, **Impostazioni** (anche con il doppio clic sull'icona). Si sceglie: avvio con Windows, avviso a fine conversione, ricerca automatica degli aggiornamenti (all'avvio e ogni giorno), quali tasti aprono la ruota e la qualità di JPEG, WebP, MP3 e PDF in JPG. Le modifiche valgono subito e stanno in `config.txt`.
 - **PDF in Word fedele.** Un PDF con testo vero diventa un Word con lo stesso carattere, corpo, colore e posizione. Le pagine scansionate si leggono con l'OCR in italiano.
 
