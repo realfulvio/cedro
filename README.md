@@ -10,6 +10,10 @@ Cedro fa le conversioni da solo. Non serve installare LibreOffice, ffmpeg, Tesse
 
 Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE).
 
+## Prossima versione
+
+- Il menu dell'icona ha una quarta voce, **Impostazioni** (anche con il doppio clic sull'icona). Si sceglie: avvio con Windows, avviso a fine conversione, ricerca automatica degli aggiornamenti (all'avvio e ogni giorno), quali tasti aprono la ruota e la qualità di JPEG, WebP, MP3 e PDF in JPG. Le modifiche valgono subito e stanno in `config.txt`.
+
 ## Novità della 0.8
 
 - Cedro controlla da solo se su GitHub c'è una versione nuova e chiede se aggiornare. Su Windows scarica l'installatore, ne verifica lo SHA-256 e lo avvia.
