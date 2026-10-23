@@ -1298,6 +1298,9 @@ fn remove_tray(hwnd: HWND) {
 fn show_menu(hwnd: HWND) {
     unsafe {
         let Ok(menu) = CreatePopupMenu() else { return };
+        let version = HSTRING::from(format!("Cedro {}", update::CURRENT));
+        let _ = AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, &version);
+        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
         let _ = AppendMenuW(menu, MF_STRING, 5, w!("Impostazioni…"));
         let _ = AppendMenuW(menu, MF_STRING, 3, w!("Controlla aggiornamenti"));
         let check = if autostart_enabled() { MF_CHECKED } else { MF_UNCHECKED };
