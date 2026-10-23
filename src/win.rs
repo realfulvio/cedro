@@ -248,6 +248,7 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 }
                 3 => check_updates(true),
                 5 => crate::settings_win::open(),
+                6 => crate::guida_win::open(),
                 4 => {
                     let on = !autostart_enabled();
                     if let Err(e) = set_autostart(on) {
@@ -1291,6 +1292,7 @@ fn show_menu(hwnd: HWND) {
         let _ = AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, &version);
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
         let _ = AppendMenuW(menu, MF_STRING, 5, w!("Impostazioni…"));
+        let _ = AppendMenuW(menu, MF_STRING, 6, w!("Guida…"));
         let _ = AppendMenuW(menu, MF_STRING, 3, w!("Controlla aggiornamenti"));
         let check = if autostart_enabled() { MF_CHECKED } else { MF_UNCHECKED };
         let _ = AppendMenuW(menu, MF_STRING | check, 4, w!("Avvio automatico"));
