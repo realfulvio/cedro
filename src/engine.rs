@@ -359,23 +359,24 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         return Ok(Output { path: out, message: "PDF di testo".into() });
     }
     if kind == Kind::Pdf && action == "jpg" {
-        let pages = crate::ocr::pdf_page_pngs(&fs::read(path).map_err(|e| err(e.to_string()))?).map_err(err)?;
-        if pages.is_empty() {
+        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let total = crate::ocr::pdf_page_count(&bytes).map_err(err)?;
+        if total == 0 {
             return Err(err("il PDF non ha pagine"));
         }
         let mut first = None;
-        for (i, png) in pages.iter().enumerate() {
-            let rgb = image::load_from_memory(png).map_err(|e| err(e.to_string()))?.to_rgb8();
+        crate::ocr::pdf_page_pngs(&bytes, |i, png| {
+            let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
             let mut jpeg = Vec::new();
-            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, quality)
-                .encode_image(&rgb)
-                .map_err(|e| err(e.to_string()))?;
-            let name = if pages.len() == 1 { stem(path) } else { format!("{}-{}", stem(path), i + 1) };
+            JpegEncoder::new_with_quality(&mut jpeg, quality).encode_image(&rgb).map_err(|e| e.to_string())?;
+            let name = if total == 1 { stem(path) } else { format!("{}-{}", stem(path), i + 1) };
             let out = unique_output(&dir, &name, "jpg");
-            write_bytes(&out, &jpeg)?;
+            write_bytes(&out, &jpeg).map_err(|e| e.to_string())?;
             first.get_or_insert(out);
-        }
-        let message = if pages.len() == 1 { "JPG".to_string() } else { format!("{} JPG, uno per pagina", pages.len()) };
+            Ok(())
+        })
+        .map_err(err)?;
+        let message = if total == 1 { "JPG".to_string() } else { format!("{total} JPG, uno per pagina") };
         return Ok(Output { path: first.unwrap(), message });
     }
     if kind == Kind::Pdf && matches!(action, "docx" | "txt") {

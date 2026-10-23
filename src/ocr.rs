@@ -32,18 +32,14 @@ pub fn open_upright(path: &Path) -> Result<DynamicImage, String> {
 pub const MAX_OCR_PAGES: usize = 100;
 
 pub fn pdf_pages_text(pdf: &[u8]) -> Result<String, String> {
-    let rendered = render_pdf(pdf, |_| true, OCR_SCALE, MAX_OCR_PAGES)?;
-    if rendered.is_empty() {
-        return Err("il PDF non ha pagine".into());
-    }
     let mut body = String::new();
     let mut any = false;
-    for (i, (_, png)) in rendered.iter().enumerate() {
+    let pages = render_pdf(pdf, |_| true, OCR_SCALE, MAX_OCR_PAGES, |i, png| {
         if i > 0 {
             body.push_str("\n\n");
         }
         body.push_str(&format!("--- pagina {} ---\n", i + 1));
-        let image = image::load_from_memory(png).map_err(|e| e.to_string())?;
+        let image = image::load_from_memory(&png).map_err(|e| e.to_string())?;
         match recognize(&image) {
             Ok(text) => {
                 any = true;
@@ -51,6 +47,10 @@ pub fn pdf_pages_text(pdf: &[u8]) -> Result<String, String> {
             }
             Err(_) => body.push_str("(nessun testo)"),
         }
+        Ok(())
+    })?;
+    if pages == 0 {
+        return Err("il PDF non ha pagine".into());
     }
     if !any {
         return Err("nessun testo letto nelle pagine".into());
@@ -61,17 +61,16 @@ pub fn pdf_pages_text(pdf: &[u8]) -> Result<String, String> {
 /// Legge con l'OCR solo le pagine (da 0) per cui `wanted` è vero, fino a `MAX_OCR_PAGES`.
 /// Per ogni pagina: `None` se non è stata letta, altrimenti il testo (vuoto se non trovato).
 pub fn pdf_pages_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec<Option<String>>, String> {
-    let total = pdf_page_count(pdf)?;
-    let rendered = render_pdf(pdf, &wanted, OCR_SCALE, MAX_OCR_PAGES)?;
-    let mut texts = vec![None; total];
-    for (i, png) in &rendered {
-        let image = image::load_from_memory(png).map_err(|e| e.to_string())?;
-        texts[*i] = Some(recognize(&image).unwrap_or_default());
-    }
+    let mut texts = vec![None; pdf_page_count(pdf)?];
+    render_pdf(pdf, &wanted, OCR_SCALE, MAX_OCR_PAGES, |i, png| {
+        let image = image::load_from_memory(&png).map_err(|e| e.to_string())?;
+        texts[i] = Some(recognize(&image).unwrap_or_default());
+        Ok(())
+    })?;
     Ok(texts)
 }
 
-fn pdf_page_count(bytes: &[u8]) -> Result<usize, String> {
+pub fn pdf_page_count(bytes: &[u8]) -> Result<usize, String> {
     use hayro::hayro_syntax::Pdf;
     let pdf = Pdf::new(bytes.to_vec()).map_err(|e| format!("PDF non disegnato: {e:?}"))?;
     Ok(pdf.pages().len())
@@ -217,7 +216,7 @@ fn ocrs_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
 pub fn italian_ocr() -> bool {
     #[cfg(windows)]
     {
-        windows_engine().is_ok()
+        windows_italian()
     }
     #[cfg(not(windows))]
     {
@@ -285,6 +284,18 @@ fn parse_tsv(tsv: &str) -> Vec<Line> {
         }
     }
     lines.into_iter().map(|(_, l)| l).filter(|l| !l.text.is_empty()).collect()
+}
+
+/// Vero solo se l'OCR di Windows ha proprio l'italiano, non un'altra lingua dell'utente.
+#[cfg(windows)]
+fn windows_italian() -> bool {
+    use windows::core::HSTRING;
+    use windows::Globalization::Language;
+    use windows::Media::Ocr::OcrEngine as WinOcr;
+    let _ = windows_engine();
+    Language::CreateLanguage(&HSTRING::from("it"))
+        .and_then(|it| WinOcr::IsLanguageSupported(&it))
+        .unwrap_or(false)
 }
 
 /// L'OCR di Windows in italiano. Se manca la lingua, quello delle lingue dell'utente.
@@ -379,17 +390,20 @@ fn engine() -> Result<&'static OcrEngine, String> {
 /// Circa 300 dpi: la risoluzione con cui l'OCR legge meglio una pagina.
 const OCR_SCALE: f32 = 300.0 / 72.0;
 
-/// Tutte le pagine del PDF disegnate in PNG (scala 2, circa 144 dpi).
-pub fn pdf_page_pngs(bytes: &[u8]) -> Result<Vec<Vec<u8>>, String> {
-    Ok(render_pdf(bytes, |_| true, 2.0, usize::MAX)?.into_iter().map(|(_, png)| png).collect())
+/// Tutte le pagine del PDF disegnate in PNG (scala 2, circa 144 dpi), una alla volta.
+pub fn pdf_page_pngs(bytes: &[u8], each: impl FnMut(usize, Vec<u8>) -> Result<(), String>) -> Result<usize, String> {
+    render_pdf(bytes, |_| true, 2.0, usize::MAX, each)
 }
 
+/// Disegna le pagine volute, una alla volta, e le passa a `each` come PNG:
+/// in memoria resta una pagina sola. Ritorna quante pagine ha disegnato.
 fn render_pdf(
     bytes: &[u8],
     wanted: impl Fn(usize) -> bool,
     scale: f32,
     max: usize,
-) -> Result<Vec<(usize, Vec<u8>)>, String> {
+    mut each: impl FnMut(usize, Vec<u8>) -> Result<(), String>,
+) -> Result<usize, String> {
     use hayro::hayro_interpret::InterpreterSettings;
     use hayro::hayro_syntax::Pdf;
     use hayro::vello_cpu::color::palette::css::WHITE;
@@ -399,14 +413,15 @@ fn render_pdf(
     let cache = RenderCache::new();
     let interpreter = InterpreterSettings::default();
     let settings = RenderSettings::default();
-    let mut pages = Vec::new();
+    let mut done = 0;
     for (i, page) in pdf.pages().iter().enumerate().filter(|(i, _)| wanted(*i)).take(max) {
         // Una pagina enorme (una scansione salvata a 72 dpi) non supera un A4 a 300 dpi.
         let (w, h) = page.render_dimensions();
         let scale = scale.min(3508.0 / w.max(h).max(1.0));
         let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
         let rendered = render(page, &cache, &interpreter, &settings, &pixmap);
-        pages.push((i, rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?));
+        each(i, rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?)?;
+        done += 1;
     }
-    Ok(pages)
+    Ok(done)
 }
