@@ -1,10 +1,11 @@
 use cedro::{
-    append_log, kind_of, mode_from_vk, perform, read_quality, same_kind_paths, slices, update, Kind, Mode,
+    append_log, kind_of, mode_from_vk, perform, read_quality, read_settings, same_kind_paths, slices, update, Kind, Mode,
+    Settings,
     Slice,
 };
 use std::cell::RefCell;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU32, AtomicU8, Ordering};
 use std::sync::Mutex;
 use windows::{
     core::{Interface, *},
@@ -44,6 +45,8 @@ static RMODE: AtomicU32 = AtomicU32::new(1);
 static HMSG: AtomicIsize = AtomicIsize::new(0);
 static CUR_X: AtomicI32 = AtomicI32::new(0);
 static CUR_Y: AtomicI32 = AtomicI32::new(0);
+// Bit 0 Shift, bit 1 Ctrl, bit 2 Alt: i tasti che aprono la ruota.
+static KEYS: AtomicU8 = AtomicU8::new(0b111);
 static UPDATE: Mutex<Option<UpdateNews>> = Mutex::new(None);
 
 enum UpdateNews {
@@ -144,11 +147,20 @@ pub fn start() -> std::result::Result<(), String> {
             g.icon = make_icon().unwrap_or(HICON::default());
         });
         add_tray(hwnd)?;
-        check_updates(false);
+        let settings = read_settings();
+        apply_settings(&settings);
+        if settings.update_check {
+            check_updates(false);
+        }
+        // Cedro resta aperto per giorni: ricontrolla ogni 24 ore se l'opzione è accesa.
+        let _ = SetTimer(Some(hwnd), 10, 24 * 60 * 60 * 1000, None);
         let kb = SetWindowsHookExW(WH_KEYBOARD_LL, Some(kb_proc), None, 0).map_err(|e| e.to_string())?;
         let mouse = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_proc), None, 0).map_err(|e| e.to_string())?;
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+            if crate::settings_win::handle_message(&msg) {
+                continue;
+            }
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
@@ -165,7 +177,7 @@ unsafe extern "system" fn kb_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> 
         let down = wparam.0 as u32 == WM_KEYDOWN || wparam.0 as u32 == WM_SYSKEYDOWN;
         let hwnd = HWND(HMSG.load(Ordering::Relaxed) as *mut _);
         if down {
-            if let Some(mode) = mode_from_vk(info.vkCode) {
+            if let Some(mode) = mode_from_vk(info.vkCode).filter(|m| mode_enabled(*m)) {
                 if RDOWN.load(Ordering::Relaxed) && !EAT_RIGHT.load(Ordering::Relaxed) {
                     let x = CUR_X.load(Ordering::Relaxed);
                     let y = CUR_Y.load(Ordering::Relaxed);
@@ -222,6 +234,8 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         WM_TRAY => {
             if lparam.0 as u32 == WM_RBUTTONUP || lparam.0 as u32 == WM_CONTEXTMENU {
                 show_menu(hwnd);
+            } else if lparam.0 as u32 == WM_LBUTTONDBLCLK {
+                crate::settings_win::open();
             }
             LRESULT(0)
         }
@@ -231,6 +245,7 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                     let _ = DestroyWindow(hwnd);
                 }
                 3 => check_updates(true),
+                5 => crate::settings_win::open(),
                 4 => {
                     let on = !autostart_enabled();
                     if let Err(e) = set_autostart(on) {
@@ -258,6 +273,12 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
             LRESULT(0)
         }
         WM_TIMER => {
+            if wparam.0 == 10 {
+                if read_settings().update_check {
+                    check_updates(false);
+                }
+                return LRESULT(0);
+            }
             let pending = SESSION.with(|s| {
                 let g = s.borrow();
                 g.paths.is_empty() || !g.armed
@@ -290,7 +311,7 @@ fn on_input(kind: usize, extra: isize) {
                 return;
             }
             if down {
-                if let Some(mode) = mode_from_vk(vk) {
+                if let Some(mode) = mode_from_vk(vk).filter(|m| mode_enabled(*m)) {
                     g.mode = mode;
                     let have = !g.wheel.0.is_null();
                     if g.dragging || have {
@@ -384,17 +405,33 @@ fn on_input(kind: usize, extra: isize) {
 
 fn held_mode() -> Option<Mode> {
     unsafe {
-        if GetAsyncKeyState(VK_SHIFT.0 as i32) < 0 {
+        if GetAsyncKeyState(VK_SHIFT.0 as i32) < 0 && mode_enabled(Mode::Convert) {
             return Some(Mode::Convert);
         }
-        if GetAsyncKeyState(VK_CONTROL.0 as i32) < 0 {
+        if GetAsyncKeyState(VK_CONTROL.0 as i32) < 0 && mode_enabled(Mode::Tools) {
             return Some(Mode::Tools);
         }
-        if GetAsyncKeyState(VK_MENU.0 as i32) < 0 {
+        if GetAsyncKeyState(VK_MENU.0 as i32) < 0 && mode_enabled(Mode::Actions) {
             return Some(Mode::Actions);
         }
     }
     None
+}
+
+fn mode_enabled(mode: Mode) -> bool {
+    let bit = match mode {
+        Mode::Convert => 0b001,
+        Mode::Tools => 0b010,
+        Mode::Actions => 0b100,
+    };
+    KEYS.load(Ordering::Relaxed) & bit != 0
+}
+
+/// Le impostazioni salvate valgono subito, senza riavviare Cedro.
+pub(crate) fn apply_settings(s: &Settings) {
+    let mask = (s.key_shift as u8) | (s.key_ctrl as u8) << 1 | (s.key_alt as u8) << 2;
+    KEYS.store(mask, Ordering::Relaxed);
+    SESSION.with(|session| session.borrow_mut().quality = s.quality);
 }
 
 fn mode_code(mode: Mode) -> u32 {
@@ -857,7 +894,9 @@ fn on_drop() {
         format!("{} file\n{}", notes.len(), notes.join("\n"))
     };
     append_log(&summary);
-    balloon(&summary);
+    if read_settings().notify {
+        balloon(&summary);
+    }
 }
 
 fn current_slices() -> (Vec<Slice>, i32, Mode, String) {
@@ -1259,9 +1298,14 @@ fn remove_tray(hwnd: HWND) {
 fn show_menu(hwnd: HWND) {
     unsafe {
         let Ok(menu) = CreatePopupMenu() else { return };
+        let version = HSTRING::from(format!("Cedro {}", update::CURRENT));
+        let _ = AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, &version);
+        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
+        let _ = AppendMenuW(menu, MF_STRING, 5, w!("Impostazioni…"));
         let _ = AppendMenuW(menu, MF_STRING, 3, w!("Controlla aggiornamenti"));
         let check = if autostart_enabled() { MF_CHECKED } else { MF_UNCHECKED };
         let _ = AppendMenuW(menu, MF_STRING | check, 4, w!("Avvio automatico"));
+        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
         let _ = AppendMenuW(menu, MF_STRING, 1, w!("Esci"));
         let mut pt = POINT::default();
         let _ = GetCursorPos(&mut pt);
@@ -1333,12 +1377,12 @@ fn on_update(hwnd: HWND) {
     });
 }
 
-fn autostart_enabled() -> bool {
+pub(crate) fn autostart_enabled() -> bool {
     unsafe { RegGetValueW(HKEY_CURRENT_USER, RUN_KEY, w!("Cedro"), RRF_RT_REG_SZ, None, None, None).is_ok() }
 }
 
 /// La stessa voce che scrive l'installatore quando si spunta l'avvio con Windows.
-fn set_autostart(on: bool) -> std::result::Result<(), String> {
+pub(crate) fn set_autostart(on: bool) -> std::result::Result<(), String> {
     unsafe {
         let result = if on {
             let exe = std::env::current_exe().map_err(|e| e.to_string())?;
