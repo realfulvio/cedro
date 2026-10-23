@@ -131,19 +131,40 @@ pub fn pdf_from_text(text: &str) -> Vec<u8> {
         stream.extend_from_slice(b"\nendstream");
         objects.push(stream);
     }
-    objects.push(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_vec());
+    objects.push(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_vec());
     finish(&objects)
 }
 
-pub fn pdf_from_jpeg(jpeg: &[u8], px_w: u32, px_h: u32) -> Vec<u8> {
-    let page_w = 595.0;
-    let page_h = 842.0;
+/// Una pagina con la foto, dritta o in orizzontale come la foto. Le righe dell'OCR,
+/// se ci sono, diventano testo invisibile sopra l'immagine: si seleziona e si cerca.
+pub fn pdf_from_jpeg(jpeg: &[u8], px_w: u32, px_h: u32, lines: &[crate::ocr::Line]) -> Vec<u8> {
+    let (page_w, page_h) = if px_w > px_h { (842.0, 595.0) } else { (595.0, 842.0) };
     let scale = ((page_w - 72.0) / px_w as f64).min((page_h - 72.0) / px_h as f64);
     let dw = px_w as f64 * scale;
     let dh = px_h as f64 * scale;
     let x = (page_w - dw) / 2.0;
     let y = (page_h - dh) / 2.0;
-    let content = format!("q {dw:.2} 0 0 {dh:.2} {x:.2} {y:.2} cm /Im Do Q\n");
+    let mut content = format!("q {dw:.2} 0 0 {dh:.2} {x:.2} {y:.2} cm /Im Do Q\n");
+    if !lines.is_empty() {
+        content.push_str("BT 3 Tr\n");
+        for line in lines {
+            let text = win_ansi(line.text.trim());
+            if text.is_empty() {
+                continue;
+            }
+            let size = (line.h as f64 * scale * 0.85).max(1.0);
+            let lx = x + line.x as f64 * scale;
+            let ly = y + dh - (line.y + line.h) as f64 * scale + line.h as f64 * scale * 0.2;
+            // Helvetica è larga in media mezzo corpo: Tz allarga la riga fino al riquadro letto.
+            let natural = 0.5 * size * text.len() as f64;
+            let stretch = (line.w as f64 * scale / natural * 100.0).clamp(10.0, 1000.0);
+            content.push_str(&format!(
+                "/F1 {size:.2} Tf {stretch:.1} Tz 1 0 0 1 {lx:.2} {ly:.2} Tm {} Tj\n",
+                literal(&text)
+            ));
+        }
+        content.push_str("ET\n");
+    }
     let mut content_obj = format!("<< /Length {} >>\nstream\n", content.len()).into_bytes();
     content_obj.extend_from_slice(content.as_bytes());
     content_obj.extend_from_slice(b"endstream");
@@ -157,9 +178,10 @@ pub fn pdf_from_jpeg(jpeg: &[u8], px_w: u32, px_h: u32) -> Vec<u8> {
     let objects = vec![
         b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /XObject << /Im 5 0 R >> >> >>".to_vec(),
+        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_w} {page_h}] /Contents 4 0 R /Resources << /XObject << /Im 5 0 R >> /Font << /F1 6 0 R >> >> >>").into_bytes(),
         content_obj,
         image_obj,
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_vec(),
     ];
     finish(&objects)
 }

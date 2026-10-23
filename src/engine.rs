@@ -1,7 +1,7 @@
 use crate::pdf::{pdf_from_jpeg, pdf_from_text};
 use crate::zipstore::zip_store;
 use image::codecs::jpeg::JpegEncoder;
-use image::{DynamicImage, ExtendedColorType, ImageFormat, ImageReader};
+use image::{DynamicImage, ExtendedColorType, ImageFormat};
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -86,8 +86,8 @@ const AUDIO_CONVERT: &[Slice] = &[
 const VIDEO_CONVERT: &[Slice] = &[Slice { id: "mp4", label: "MP4" }];
 const DOC_CONVERT: &[Slice] = &[Slice { id: "pdf", label: "PDF" }];
 const PDF_CONVERT: &[Slice] = &[
-    Slice { id: "docx", label: "Word" },
-    Slice { id: "txt", label: "Testo" },
+    Slice { id: "jpg", label: "JPG" },
+    Slice { id: "docx", label: "Word OCR" },
 ];
 const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }];
 const EMPTY: &[Slice] = &[Slice { id: "none", label: "Niente qui" }];
@@ -108,23 +108,30 @@ pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
     }
 }
 
-/// Testo di un PDF: quello incorporato, e l'OCR per le pagine che ne sono prive.
+/// Testo di un PDF. Con un OCR italiano rilegge tutte le pagine; senza, usa il testo
+/// incorporato e l'OCR solo per le pagine che ne sono prive.
 /// Ritorna il testo, le pagine lette via OCR e quelle da leggere rimaste fuori dal limite.
 fn pdf_text_with_ocr(path: &Path) -> Result<(String, usize, usize), String> {
-    let mut pages = crate::doctext::pdf_page_texts(path)?;
-    let blank: Vec<bool> = pages.iter().map(|p| p.is_empty()).collect();
+    let mut pages: Vec<String> =
+        crate::doctext::pdf_page_texts(path)?.iter().map(|p| crate::ocr::paragraphs_from_text(p)).collect();
+    // Con un OCR italiano si rilegge ogni pagina: il testo incorporato perde i paragrafi.
+    let italian = crate::ocr::italian_ocr();
+    let blank: Vec<bool> = pages.iter().map(|p| italian || p.is_empty()).collect();
     let mut ocr_pages = 0;
     let mut skipped = 0;
     let mut ocr_error = None;
     if blank.iter().any(|b| *b) {
         let bytes = fs::read(path).map_err(|e| e.to_string())?;
         match crate::ocr::pdf_pages_where(&bytes, |i| blank.get(i).copied().unwrap_or(false)) {
-            Ok((read, left)) => {
-                skipped = left;
+            Ok(read) => {
                 for (page, text) in pages.iter_mut().zip(read) {
-                    if page.is_empty() && !text.is_empty() {
-                        *page = text;
-                        ocr_pages += 1;
+                    match text {
+                        Some(text) if !text.is_empty() => {
+                            *page = text;
+                            ocr_pages += 1;
+                        }
+                        None if page.is_empty() => skipped += 1,
+                        _ => {}
                     }
                 }
             }
@@ -205,12 +212,7 @@ fn save_image(img: &DynamicImage, path: &Path, format: ImageFormat, quality: u8)
 }
 
 fn load_image(path: &Path) -> CedroResult<DynamicImage> {
-    ImageReader::open(path)
-        .map_err(|e| err(e.to_string()))?
-        .with_guessed_format()
-        .map_err(|e| err(e.to_string()))?
-        .decode()
-        .map_err(|e| err(format!("immagine non letta: {e}")))
+    crate::ocr::open_upright(path).map_err(err)
 }
 
 fn jpeg_bytes(img: &DynamicImage, quality: u8) -> CedroResult<(Vec<u8>, u32, u32)> {
@@ -356,6 +358,26 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         write_bytes(&out, &bytes)?;
         return Ok(Output { path: out, message: "PDF di testo".into() });
     }
+    if kind == Kind::Pdf && action == "jpg" {
+        let pages = crate::ocr::pdf_page_pngs(&fs::read(path).map_err(|e| err(e.to_string()))?).map_err(err)?;
+        if pages.is_empty() {
+            return Err(err("il PDF non ha pagine"));
+        }
+        let mut first = None;
+        for (i, png) in pages.iter().enumerate() {
+            let rgb = image::load_from_memory(png).map_err(|e| err(e.to_string()))?.to_rgb8();
+            let mut jpeg = Vec::new();
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, quality)
+                .encode_image(&rgb)
+                .map_err(|e| err(e.to_string()))?;
+            let name = if pages.len() == 1 { stem(path) } else { format!("{}-{}", stem(path), i + 1) };
+            let out = unique_output(&dir, &name, "jpg");
+            write_bytes(&out, &jpeg)?;
+            first.get_or_insert(out);
+        }
+        let message = if pages.len() == 1 { "JPG".to_string() } else { format!("{} JPG, uno per pagina", pages.len()) };
+        return Ok(Output { path: first.unwrap(), message });
+    }
     if kind == Kind::Pdf && matches!(action, "docx" | "txt") {
         let (text, ocr_pages, skipped) = pdf_text_with_ocr(path).map_err(err)?;
         let (bytes, ext) = if action == "docx" {
@@ -387,7 +409,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         let text = crate::doctext::pdf_text(path).or_else(|_| crate::ocr::pdf_pages_text(&bytes)).map_err(err)?;
         let out = unique_output(&dir, &stem(path), "txt");
         write_bytes(&out, text.as_bytes())?;
-        return Ok(Output { path: out, message: "Testo del PDF. Al massimo 20 pagine disegnate.".into() });
+        return Ok(Output { path: out, message: "Testo del PDF. Al massimo 100 pagine disegnate.".into() });
     }
 
     if kind != Kind::Image {
@@ -408,10 +430,16 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
 
     if action == "pdf" {
         let (jpeg, w, h) = jpeg_bytes(&img, 90)?;
-        let bytes = pdf_from_jpeg(&jpeg, w, h);
+        let lines = crate::ocr::image_lines(&img).unwrap_or_default();
+        let bytes = pdf_from_jpeg(&jpeg, w, h, &lines);
         let out = unique_output(&dir, &stem(path), "pdf");
         write_bytes(&out, &bytes)?;
-        return Ok(Output { path: out, message: format!("PDF {w}×{h}") });
+        let message = if lines.is_empty() {
+            format!("PDF {w}×{h}")
+        } else {
+            format!("PDF {w}×{h}, con il testo OCR selezionabile e ricercabile")
+        };
+        return Ok(Output { path: out, message });
     }
 
     let (format, ext, label_stem) = match action {
@@ -534,11 +562,46 @@ mod tests {
     }
 
     #[test]
+    fn photo_to_searchable_pdf() {
+        let dir = scratch();
+        let src = dir.join("foglio.jpg");
+        fs::write(&src, include_bytes!("../tests/fixtures/scan.jpg")).unwrap();
+        let pdf = perform(&src, "pdf", 80).unwrap();
+        let bytes = fs::read(&pdf.path).unwrap();
+        assert!(bytes.windows(4).any(|w| w == b"3 Tr"), "manca il testo invisibile");
+        let text = crate::doctext::pdf_text(&pdf.path).unwrap();
+        assert!(text.contains("Cedro"), "{text}");
+    }
+
+    #[test]
+    fn lines_become_paragraphs() {
+        use crate::ocr::{paragraphs_from_lines, paragraphs_from_text, Line};
+        let line = |text: &str, y: f32, w: f32| Line { text: text.into(), x: 10.0, y, w, h: 20.0 };
+        let lines = [
+            line("Gentile signore,", 0.0, 150.0),
+            line("la riunione è spo-", 30.0, 500.0),
+            line("stata a giovedì.", 60.0, 140.0),
+            line("Saluti", 120.0, 60.0),
+        ];
+        assert_eq!(
+            paragraphs_from_lines(&lines),
+            "Gentile signore,\nla riunione è spostata a giovedì.\nSaluti"
+        );
+        let text = "Gentile signore,\nla riunione del condominio è stata spostata\na giovedì.\n\nSaluti";
+        assert_eq!(
+            paragraphs_from_text(text),
+            "Gentile signore,\nla riunione del condominio è stata spostata a giovedì.\nSaluti"
+        );
+    }
+
+    #[test]
     fn scanned_pdf_to_word_uses_ocr() {
         let dir = scratch();
         let jpeg = include_bytes!("../tests/fixtures/scan.jpg");
         let pdf = dir.join("scansione.pdf");
-        fs::write(&pdf, crate::pdf::pdf_from_jpeg(jpeg, 900, 200)).unwrap();
+        fs::write(&pdf, crate::pdf::pdf_from_jpeg(jpeg, 900, 200, &[])).unwrap();
+        let jpg = perform(&pdf, "jpg", 80).expect("JPG");
+        assert!(fs::read(&jpg.path).unwrap().starts_with(&[0xff, 0xd8]));
         let docx = perform(&pdf, "docx", 80).expect("OCR");
         let text = crate::doctext::document_text(&docx.path).unwrap();
         assert!(text.contains("Cedro"), "{text}");
@@ -933,7 +996,9 @@ mod tests {
     fn doc_and_pdf_slices() {
         assert!(kind_of(Path::new("lettera.docx")) == Kind::Doc);
         assert_eq!(slices(Kind::Doc, Mode::Convert)[0].id, "pdf");
-        assert_eq!(slices(Kind::Pdf, Mode::Convert)[0].id, "docx");
+        assert_eq!(slices(Kind::Pdf, Mode::Convert)[0].id, "jpg");
+        assert_eq!(slices(Kind::Pdf, Mode::Convert)[1].id, "docx");
+        assert_eq!(slices(Kind::Pdf, Mode::Convert).len(), 2);
         assert_eq!(slices(Kind::Pdf, Mode::Tools)[0].id, "ocr");
         assert!(slices(Kind::Image, Mode::Tools).iter().any(|s| s.id == "ocr"));
     }
