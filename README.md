@@ -10,6 +10,14 @@ Cedro fa le conversioni da solo. Non serve installare LibreOffice, ffmpeg, Tesse
 
 Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE).
 
+## Novità della 0.8
+
+- Cedro controlla da solo se su GitHub c'è una versione nuova e chiede se aggiornare. Su Windows scarica l'installatore, ne verifica lo SHA-256 e lo avvia.
+- Il menu dell'icona vicino all'orologio ha tre voci: **Controlla aggiornamenti**, **Avvio automatico** (con la spunta) ed **Esci**.
+- Nuovo comando: `cedro update`.
+
+Dalla 0.7 la 0.8 va installata a mano, una volta. Poi gli aggiornamenti li propone Cedro.
+
 ## Novità della 0.7.1
 
 - La ruota si apre di nuovo dal desktop anche con un overlay trasparente a schermo intero, come quello di NVIDIA (GeForce Overlay). Prima quell'overlay "copriva" le icone e Cedro non trovava il file.
@@ -44,7 +52,7 @@ Le conversioni che la ruota offre vanno a buon fine.
 
 ## Su Windows
 
-1. Dalla [pagina delle release](https://github.com/realfulvio/cedro/releases/latest) scarica **Cedro-Setup-0.7.1.exe**.
+1. Dalla [pagina delle release](https://github.com/realfulvio/cedro/releases/latest) scarica **Cedro-Setup-0.8.0.exe**.
 2. Doppio clic. L'installazione è per il tuo utente, senza diritti di amministratore, in `%LOCALAPPDATA%\Programs\Cedro`. Crea il collegamento nel menu Start. Il collegamento sul desktop e l'avvio con Windows sono opzioni da spuntare.
 3. La prima volta Windows può dire «Windows ha protetto il PC»: l'installatore non è firmato. Clicca «Ulteriori informazioni», poi «Esegui comunque».
 4. Alla fine lascia spuntato **Avvia Cedro**. Non si apre una finestra: vicino all'orologio compare l'icona. Se non la vedi, apri la freccia delle icone nascoste.
