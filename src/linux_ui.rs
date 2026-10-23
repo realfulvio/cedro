@@ -549,7 +549,7 @@ fn on_update(app: &Application, news: UpdateNews) {
         .detail(format!("Hai la {}. Vuoi aggiornare? Si apre la pagina della release.", update::CURRENT))
         .buttons(["Non ora", "Aggiorna"])
         .cancel_button(0)
-        .default_button(1)
+        .default_button(0)
         .build();
     let app = app.clone();
     dialog.choose(None::<&gtk4::Window>, None::<&gtk4::gio::Cancellable>, move |answer| {

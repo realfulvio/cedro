@@ -1315,7 +1315,7 @@ fn on_update(hwnd: HWND) {
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     let answer = unsafe {
         let _ = SetForegroundWindow(hwnd);
-        MessageBoxW(Some(hwnd), PCWSTR(wide.as_ptr()), w!("Cedro"), MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND)
+        MessageBoxW(Some(hwnd), PCWSTR(wide.as_ptr()), w!("Cedro"), MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2 | MB_SETFOREGROUND)
     };
     if answer != IDYES {
         if !manual {
