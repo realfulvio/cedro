@@ -1,10 +1,11 @@
 use cedro::{
-    append_log, config_dir, kind_of, mode_from_vk, perform, read_quality, same_kind_paths, slices, Kind, Mode,
+    append_log, config_dir, kind_of, mode_from_vk, perform, read_quality, same_kind_paths, slices, update, Kind, Mode,
     Slice,
 };
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU32, Ordering};
+use std::sync::Mutex;
 use windows::{
     core::{Interface, *},
     Win32::Foundation::*,
@@ -14,6 +15,7 @@ use windows::{
     Win32::System::LibraryLoader::GetModuleHandleW,
     Win32::System::Memory::*,
     Win32::System::Ole::*,
+    Win32::System::Registry::*,
     Win32::System::SystemServices::MODIFIERKEYS_FLAGS,
     Win32::System::Threading::CreateMutexW,
     Win32::System::Variant::VARIANT,
@@ -30,6 +32,8 @@ const WM_TRAY: u32 = WM_APP + 1;
 const WM_APP_INPUT: u32 = WM_APP + 2;
 const WM_APP_DROP: u32 = WM_APP + 3;
 const WM_APP_RCLICK: u32 = WM_APP + 4;
+const WM_APP_UPDATE: u32 = WM_APP + 5;
+const RUN_KEY: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
 const WHEEL: i32 = 440;
 const R0: f32 = 58.0;
 const R1: f32 = 168.0;
@@ -40,6 +44,12 @@ static RMODE: AtomicU32 = AtomicU32::new(1);
 static HMSG: AtomicIsize = AtomicIsize::new(0);
 static CUR_X: AtomicI32 = AtomicI32::new(0);
 static CUR_Y: AtomicI32 = AtomicI32::new(0);
+static UPDATE: Mutex<Option<UpdateNews>> = Mutex::new(None);
+
+enum UpdateNews {
+    Found { release: update::Release, manual: bool },
+    Note(String),
+}
 
 struct Session {
     msg: HWND,
@@ -134,6 +144,7 @@ pub fn start() -> std::result::Result<(), String> {
             g.icon = make_icon().unwrap_or(HICON::default());
         });
         add_tray(hwnd)?;
+        check_updates(false);
         let kb = SetWindowsHookExW(WH_KEYBOARD_LL, Some(kb_proc), None, 0).map_err(|e| e.to_string())?;
         let mouse = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_proc), None, 0).map_err(|e| e.to_string())?;
         let mut msg = MSG::default();
@@ -220,6 +231,13 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                     let _ = DestroyWindow(hwnd);
                 }
                 2 => open_config_dir(),
+                3 => check_updates(true),
+                4 => {
+                    let on = !autostart_enabled();
+                    if let Err(e) = set_autostart(on) {
+                        balloon(&format!("Avvio con Windows non cambiato: {e}"));
+                    }
+                }
                 _ => {}
             }
             LRESULT(0)
@@ -234,6 +252,10 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         }
         WM_APP_RCLICK => {
             on_rclick();
+            LRESULT(0)
+        }
+        WM_APP_UPDATE => {
+            on_update(hwnd);
             LRESULT(0)
         }
         WM_TIMER => {
@@ -1239,12 +1261,104 @@ fn show_menu(hwnd: HWND) {
     unsafe {
         let Ok(menu) = CreatePopupMenu() else { return };
         let _ = AppendMenuW(menu, MF_STRING, 2, w!("Apri cartella di Cedro"));
+        let _ = AppendMenuW(menu, MF_STRING, 3, w!("Controlla aggiornamenti"));
+        let check = if autostart_enabled() { MF_CHECKED } else { MF_UNCHECKED };
+        let _ = AppendMenuW(menu, MF_STRING | check, 4, w!("Avvia con Windows"));
+        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
         let _ = AppendMenuW(menu, MF_STRING, 1, w!("Esci"));
         let mut pt = POINT::default();
         let _ = GetCursorPos(&mut pt);
         let _ = SetForegroundWindow(hwnd);
         let _ = TrackPopupMenu(menu, TPM_RIGHTBUTTON, pt.x, pt.y, Some(0), hwnd, None);
         let _ = DestroyMenu(menu);
+    }
+}
+
+/// All'avvio aspetta qualche secondo e tace se non c'è niente. Dal menu risponde sempre.
+fn check_updates(manual: bool) {
+    std::thread::spawn(move || {
+        if !manual {
+            std::thread::sleep(std::time::Duration::from_secs(8));
+        }
+        let news = match update::check() {
+            Ok(Some(release)) if manual || !update::skipped(&release.version) => UpdateNews::Found { release, manual },
+            Ok(_) if manual => UpdateNews::Note(format!("Hai già l'ultima versione ({}).", update::CURRENT)),
+            Err(e) if manual => UpdateNews::Note(e),
+            Err(e) => {
+                append_log(&format!("aggiornamenti: {e}"));
+                return;
+            }
+            Ok(_) => return,
+        };
+        post_update(news);
+    });
+}
+
+fn post_update(news: UpdateNews) {
+    if let Ok(mut slot) = UPDATE.lock() {
+        *slot = Some(news);
+    }
+    unsafe {
+        let hwnd = HWND(HMSG.load(Ordering::Relaxed) as *mut _);
+        let _ = PostMessageW(Some(hwnd), WM_APP_UPDATE, WPARAM(0), LPARAM(0));
+    }
+}
+
+fn on_update(hwnd: HWND) {
+    let Some(news) = UPDATE.lock().ok().and_then(|mut slot| slot.take()) else { return };
+    let (release, manual) = match news {
+        UpdateNews::Note(text) => return balloon(&text),
+        UpdateNews::Found { release, manual } => (release, manual),
+    };
+    let text = format!(
+        "È disponibile Cedro {}. Hai la {}.\n\nVuoi aggiornare adesso?",
+        release.version,
+        update::CURRENT
+    );
+    let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+    let answer = unsafe {
+        let _ = SetForegroundWindow(hwnd);
+        MessageBoxW(Some(hwnd), PCWSTR(wide.as_ptr()), w!("Cedro"), MB_YESNO | MB_ICONQUESTION | MB_SETFOREGROUND)
+    };
+    if answer != IDYES {
+        if !manual {
+            update::skip(&release.version);
+        }
+        return;
+    }
+    balloon(&format!("Scarico Cedro {}…", release.version));
+    std::thread::spawn(move || {
+        // L'installatore chiude Cedro da solo prima di copiare i file.
+        if let Err(e) = crate::cli::install(&release) {
+            append_log(&format!("aggiornamento: {e}"));
+            post_update(UpdateNews::Note(format!("Aggiornamento non riuscito: {e}")));
+        }
+    });
+}
+
+fn autostart_enabled() -> bool {
+    unsafe { RegGetValueW(HKEY_CURRENT_USER, RUN_KEY, w!("Cedro"), RRF_RT_REG_SZ, None, None, None).is_ok() }
+}
+
+/// La stessa voce che scrive l'installatore quando si spunta l'avvio con Windows.
+fn set_autostart(on: bool) -> std::result::Result<(), String> {
+    unsafe {
+        let result = if on {
+            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+            let value: Vec<u16> =
+                format!("\"{}\"", exe.display()).encode_utf16().chain(std::iter::once(0)).collect();
+            RegSetKeyValueW(
+                HKEY_CURRENT_USER,
+                RUN_KEY,
+                w!("Cedro"),
+                REG_SZ.0,
+                Some(value.as_ptr() as *const _),
+                (value.len() * 2) as u32,
+            )
+        } else {
+            RegDeleteKeyValueW(HKEY_CURRENT_USER, RUN_KEY, w!("Cedro"))
+        };
+        result.ok().map_err(|e| e.to_string())
     }
 }
 

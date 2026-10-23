@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use cedro::{append_log, config_dir, kind_of, perform, read_quality, same_kind_paths, slices, Mode};
+use cedro::{append_log, config_dir, kind_of, perform, read_quality, same_kind_paths, slices, update, Mode};
 use gtk4::cairo::{FontSlant, FontWeight};
 use gtk4::gdk::Key;
 use gtk4::gio::prelude::*;
@@ -20,6 +20,13 @@ use gtk4::{
 };
 
 const MARK: &[u8] = include_bytes!("../docs/mark.png");
+
+static UPDATE: Mutex<Option<UpdateNews>> = Mutex::new(None);
+
+enum UpdateNews {
+    Found { release: update::Release, manual: bool },
+    Note(String),
+}
 
 struct Launch {
     mode: Mode,
@@ -60,6 +67,7 @@ pub fn start() -> i32 {
     let quit = Arc::new(AtomicBool::new(false));
     if launch.stay {
         spawn_tray(quit.clone());
+        check_updates(false);
     }
     let state = Rc::new(RefCell::new(Wheel {
         launch,
@@ -89,6 +97,9 @@ pub fn start() -> i32 {
             if flag.load(Ordering::Relaxed) {
                 app.quit();
                 return glib::ControlFlow::Break;
+            }
+            if let Some(news) = UPDATE.lock().ok().and_then(|mut slot| slot.take()) {
+                on_update(&app, news);
             }
             let slot = opened.borrow().finished.clone();
             if let Some(note) = slot.lock().ok().and_then(|mut done| done.take()) {
@@ -476,12 +487,30 @@ impl ksni::Tray for CedroTray {
         vec![ksni::Icon { width: 32, height: 32, data: self.pixmap.clone() }]
     }
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
-        use ksni::menu::StandardItem;
+        use ksni::menu::{CheckmarkItem, StandardItem};
         vec![
             StandardItem {
                 label: "Configurazione".into(),
                 activate: Box::new(|_| {
                     let _ = std::process::Command::new("xdg-open").arg(config_dir()).spawn();
+                }),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Controlla aggiornamenti".into(),
+                activate: Box::new(|_| check_updates(true)),
+                ..Default::default()
+            }
+            .into(),
+            CheckmarkItem {
+                label: "Avvia con il sistema".into(),
+                checked: autostart_file().is_some_and(|path| path.exists()),
+                activate: Box::new(|_| {
+                    let on = !autostart_file().is_some_and(|path| path.exists());
+                    if let Err(e) = set_autostart(on) {
+                        append_log(&format!("avvio con il sistema: {e}"));
+                    }
                 }),
                 ..Default::default()
             }
@@ -494,6 +523,73 @@ impl ksni::Tray for CedroTray {
             .into(),
         ]
     }
+}
+
+/// All'avvio aspetta qualche secondo e tace se non c'è niente. Dal menu risponde sempre.
+fn check_updates(manual: bool) {
+    std::thread::spawn(move || {
+        if !manual {
+            std::thread::sleep(Duration::from_secs(8));
+        }
+        let news = match update::check() {
+            Ok(Some(release)) if manual || !update::skipped(&release.version) => UpdateNews::Found { release, manual },
+            Ok(_) if manual => UpdateNews::Note(format!("Hai già l'ultima versione ({}).", update::CURRENT)),
+            Err(e) if manual => UpdateNews::Note(e),
+            Err(e) => {
+                append_log(&format!("aggiornamenti: {e}"));
+                return;
+            }
+            Ok(_) => return,
+        };
+        if let Ok(mut slot) = UPDATE.lock() {
+            *slot = Some(news);
+        }
+    });
+}
+
+fn on_update(app: &Application, news: UpdateNews) {
+    let (release, manual) = match news {
+        UpdateNews::Note(text) => return notify(app, &text),
+        UpdateNews::Found { release, manual } => (release, manual),
+    };
+    let dialog = gtk4::AlertDialog::builder()
+        .message(format!("È disponibile Cedro {}", release.version))
+        .detail(format!("Hai la {}. Vuoi aggiornare? Si apre la pagina della release.", update::CURRENT))
+        .buttons(["Non ora", "Aggiorna"])
+        .cancel_button(0)
+        .default_button(1)
+        .build();
+    let app = app.clone();
+    dialog.choose(None::<&gtk4::Window>, None::<&gtk4::gio::Cancellable>, move |answer| {
+        if answer == Ok(1) {
+            if let Err(e) = crate::cli::install(&release) {
+                notify(&app, &format!("Aggiornamento non riuscito: {e}"));
+            }
+        } else if !manual {
+            update::skip(&release.version);
+        }
+    });
+}
+
+fn autostart_file() -> Option<PathBuf> {
+    let base = match std::env::var_os("XDG_CONFIG_HOME") {
+        Some(dir) if !dir.is_empty() => PathBuf::from(dir),
+        _ => PathBuf::from(std::env::var_os("HOME")?).join(".config"),
+    };
+    Some(base.join("autostart/dev.cedro.Cedro.desktop"))
+}
+
+fn set_autostart(on: bool) -> std::io::Result<()> {
+    let path = autostart_file().ok_or_else(|| std::io::Error::other("HOME non impostata"))?;
+    if !on {
+        return match std::fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        };
+    }
+    let exe = std::env::current_exe()?;
+    let exe = exe.to_str().ok_or_else(|| std::io::Error::other("percorso non UTF-8"))?;
+    write_text(&path, &desktop_file(exe), false)
 }
 
 fn tray_pixels() -> Vec<u8> {
