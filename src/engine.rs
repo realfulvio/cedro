@@ -324,17 +324,33 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         return Ok(Output { path: out, message: "PDF di testo".into() });
     }
     if kind == Kind::Pdf && action == "docx" {
-        let text = crate::doctext::pdf_text(path).map_err(err)?;
+        let (text, scanned) = match crate::doctext::pdf_text(path) {
+            Ok(t) => (t, false),
+            Err(first) => {
+                let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+                let t = crate::ocr::pdf_pages_plain(&bytes)
+                    .map_err(|e| err(format!("{first}; OCR: {e}")))?;
+                (t, true)
+            }
+        };
         let bytes = crate::doctext::docx_bytes(&text);
         let out = unique_output(&dir, &stem(path), "docx");
         write_bytes(&out, &bytes)?;
-        return Ok(Output {
-            path: out,
-            message: "Word di testo. L'impaginazione del PDF non viene ricostruita.".into(),
-        });
+        let message = if scanned {
+            "Word col testo letto via OCR (al massimo 20 pagine). Controlla il testo: l'impaginazione non viene ricostruita."
+        } else {
+            "Word di testo. L'impaginazione del PDF non viene ricostruita."
+        };
+        return Ok(Output { path: out, message: message.into() });
     }
     if kind == Kind::Pdf && action == "txt" {
-        let text = crate::doctext::pdf_text(path).map_err(err)?;
+        let text = match crate::doctext::pdf_text(path) {
+            Ok(t) => t,
+            Err(first) => {
+                let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+                crate::ocr::pdf_pages_plain(&bytes).map_err(|e| err(format!("{first}; OCR: {e}")))?
+            }
+        };
         let out = unique_output(&dir, &stem(path), "txt");
         write_bytes(&out, text.as_bytes())?;
         return Ok(Output { path: out, message: "Testo estratto dal PDF".into() });
@@ -494,6 +510,17 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("cedro-test-{n}"));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn scanned_pdf_to_word_uses_ocr() {
+        let dir = scratch();
+        let jpeg = include_bytes!("../tests/fixtures/scan.jpg");
+        let pdf = dir.join("scansione.pdf");
+        fs::write(&pdf, crate::pdf::pdf_from_jpeg(jpeg, 900, 200)).unwrap();
+        let docx = perform(&pdf, "docx", 80).expect("OCR");
+        let text = crate::doctext::document_text(&docx.path).unwrap();
+        assert!(text.contains("Cedro"), "{text}");
     }
 
     #[test]

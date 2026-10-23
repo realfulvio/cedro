@@ -14,6 +14,15 @@ pub fn image_text(path: &Path) -> Result<String, String> {
 }
 
 pub fn pdf_pages_text(pdf: &[u8]) -> Result<String, String> {
+    pdf_pages(pdf, true)
+}
+
+/// Come `pdf_pages_text`, ma senza le righe «--- pagina N ---»: per il Word.
+pub fn pdf_pages_plain(pdf: &[u8]) -> Result<String, String> {
+    pdf_pages(pdf, false)
+}
+
+fn pdf_pages(pdf: &[u8], markers: bool) -> Result<String, String> {
     let rendered = render_pdf(pdf)?;
     if rendered.is_empty() {
         return Err("il PDF non ha pagine".into());
@@ -24,14 +33,17 @@ pub fn pdf_pages_text(pdf: &[u8]) -> Result<String, String> {
         if i > 0 {
             body.push_str("\n\n");
         }
-        body.push_str(&format!("--- pagina {} ---\n", i + 1));
+        if markers {
+            body.push_str(&format!("--- pagina {} ---\n", i + 1));
+        }
         let image = image::load_from_memory(png).map_err(|e| e.to_string())?;
         match recognize(&image) {
             Ok(text) => {
                 any = true;
                 body.push_str(&text);
             }
-            Err(_) => body.push_str("(nessun testo)"),
+            Err(_) if markers => body.push_str("(nessun testo)"),
+            Err(_) => {}
         }
     }
     if !any {
