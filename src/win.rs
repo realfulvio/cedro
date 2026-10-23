@@ -152,6 +152,8 @@ pub fn start() -> std::result::Result<(), String> {
         if settings.update_check {
             check_updates(false);
         }
+        // Cedro resta aperto per giorni: ricontrolla ogni 24 ore se l'opzione è accesa.
+        let _ = SetTimer(Some(hwnd), 10, 24 * 60 * 60 * 1000, None);
         let kb = SetWindowsHookExW(WH_KEYBOARD_LL, Some(kb_proc), None, 0).map_err(|e| e.to_string())?;
         let mouse = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_proc), None, 0).map_err(|e| e.to_string())?;
         let mut msg = MSG::default();
@@ -271,6 +273,12 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
             LRESULT(0)
         }
         WM_TIMER => {
+            if wparam.0 == 10 {
+                if read_settings().update_check {
+                    check_updates(false);
+                }
+                return LRESULT(0);
+            }
             let pending = SESSION.with(|s| {
                 let g = s.borrow();
                 g.paths.is_empty() || !g.armed

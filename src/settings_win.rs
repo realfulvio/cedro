@@ -124,7 +124,7 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE, dpi: u32) {
     child(hwnd, instance, b, "Generale", group, 0, (12, 8, 396, 102), dpi, font);
     child(hwnd, instance, b, "Avvia Cedro con Windows", check, ID_AUTO, (28, 30, 360, 22), dpi, font);
     child(hwnd, instance, b, "Avviso a fine conversione", check, ID_NOTIFY, (28, 54, 360, 22), dpi, font);
-    child(hwnd, instance, b, "Controlla gli aggiornamenti all'avvio", check, ID_UPDATE, (28, 78, 360, 22), dpi, font);
+    child(hwnd, instance, b, "Cerca gli aggiornamenti da solo (all'avvio e ogni giorno)", check, ID_UPDATE, (28, 78, 360, 22), dpi, font);
     child(hwnd, instance, b, "Tasti che aprono la ruota", group, 0, (12, 118, 396, 102), dpi, font);
     child(hwnd, instance, b, "Shift: conversioni", check, ID_SHIFT, (28, 140, 360, 22), dpi, font);
     child(hwnd, instance, b, "Ctrl: strumenti", check, ID_CTRL, (28, 164, 360, 22), dpi, font);
