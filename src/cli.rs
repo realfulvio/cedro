@@ -29,6 +29,7 @@ pub fn run() -> i32 {
         "convert" | "tool" if positional.len() >= 3 => {
             perform(std::path::Path::new(&positional[1]), &positional[2], quality)
         }
+        "update" => return update(),
         "zip" if positional.len() >= 2 => perform(std::path::Path::new(&positional[1]), "zip", quality),
         "slices" if positional.len() >= 2 => {
             let path = std::path::Path::new(&positional[1]);
@@ -60,6 +61,55 @@ pub fn run() -> i32 {
     }
 }
 
+fn update() -> i32 {
+    use cedro::update;
+    let release = match update::check() {
+        Ok(Some(release)) => release,
+        Ok(None) => {
+            println!("Cedro {} è già l'ultima versione.", update::CURRENT);
+            return 0;
+        }
+        Err(e) => {
+            eprintln!("{e}");
+            return 1;
+        }
+    };
+    println!("C'è Cedro {} (hai la {}).\n{}", release.version, update::CURRENT, release.page);
+    print!("Vuoi aggiornare? [s/N] ");
+    let _ = std::io::Write::flush(&mut std::io::stdout());
+    let mut answer = String::new();
+    let _ = std::io::stdin().read_line(&mut answer);
+    if !matches!(answer.trim().to_lowercase().as_str(), "s" | "si" | "sì" | "y" | "yes") {
+        return 0;
+    }
+    match install(&release) {
+        Ok(note) => {
+            println!("{note}");
+            0
+        }
+        Err(e) => {
+            eprintln!("{e}");
+            1
+        }
+    }
+}
+
+/// Su Windows scarica e avvia l'installatore. Altrove apre la pagina della release.
+pub fn install(release: &cedro::update::Release) -> Result<String, String> {
+    #[cfg(windows)]
+    if let Some(asset) = &release.installer {
+        let path = cedro::update::download(asset)?;
+        std::process::Command::new(&path).spawn().map_err(|e| e.to_string())?;
+        return Ok(format!("Avviato {}.", asset.name));
+    }
+    #[cfg(windows)]
+    let opener = "explorer";
+    #[cfg(not(windows))]
+    let opener = "xdg-open";
+    std::process::Command::new(opener).arg(&release.page).spawn().map_err(|e| e.to_string())?;
+    Ok(format!("Aperta la pagina della release: {}", release.page))
+}
+
 fn print_help() {
     eprintln!(
         "\
@@ -69,6 +119,7 @@ Cedro — conversione locale, senza upload.
   cedro tool <file> <compress|half|gray|rot90|strip|upper|lower|ocr|dup|path|zip>
   cedro zip <file>
   cedro --quality 80 convert foto.png jpeg
+  cedro update     controlla se su GitHub c'è una versione nuova
 
 Senza argomenti, su Windows e su Linux, Cedro resta nella tray.
 Su Linux la ruota si apre dal menu del file, oppure così:

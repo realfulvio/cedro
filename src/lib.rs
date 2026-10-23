@@ -5,6 +5,7 @@ mod ocr;
 mod pdf;
 mod sink;
 mod softvideo;
+pub mod update;
 pub mod wheelgeom;
 mod zipstore;
 #[cfg(windows)]
