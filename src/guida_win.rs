@@ -79,6 +79,10 @@ pub fn run_standalone() {
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
+            // Chiusa la finestra non arriva WM_QUIT: senza questo il processo resterebbe nascosto.
+            if WINDOW.load(Ordering::Relaxed) == 0 {
+                break;
+            }
         }
     }
 }
