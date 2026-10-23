@@ -98,7 +98,7 @@ Clic destro sull'icona (o doppio clic per le Impostazioni):
 **Cambia il file originale?** No, crea sempre una copia nella stessa cartella.
 **Serve internet?** Solo per cercare gli aggiornamenti.
 **Perché Windows mi avvisa?** L'installatore non ha la firma a pagamento. Il codice è aperto e lo puoi controllare qui.
-**E su Linux?** Funziona su GNOME e KDE Plasma. La ruota si apre dal menu del file (in Dolphin sotto *Cedro*, in Nautilus sotto *Script*), perché Wayland non lascia intercettare il clic destro. Vedi [Compilare](#per-chi-sviluppa).
+**E su Linux?** Funziona su GNOME e KDE Plasma. La ruota si apre dal menu del file (in Dolphin sotto *Cedro*, in Nautilus sotto *Script*), perché Wayland non lascia intercettare il clic destro. Avvia `cedro` una volta: si apre la finestra delle Impostazioni (con la Guida) e resta nel vassoio, con il menu per impostazioni, guida, aggiornamenti e avvio automatico. Vedi [Compilare](#per-chi-sviluppa).
 
 ---
 
