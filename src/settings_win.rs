@@ -115,7 +115,7 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE, dpi: u32) {
     let font = CreateFontW(
         -px(15, dpi), 0, 0, 0, 400, 0, 0, 0,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-        0, w!("Segoe UI"),
+        0, crate::winfont::face(),
     );
     let tab = WS_TABSTOP.0;
     let check = tab | BS_AUTOCHECKBOX as u32;
