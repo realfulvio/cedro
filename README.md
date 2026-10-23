@@ -18,6 +18,13 @@
   <img src="docs/ruota-nuova.png" width="520" alt="La ruota di Cedro: fette arrotondate, JPEG acceso, al centro il nome del file">
 </p>
 
+<p align="center">
+  <img src="docs/vivo-ruota.png" width="300" alt="Screenshot vero su Windows 11: ruota con la fetta JPEG sotto il mouse">
+  &nbsp;&nbsp;
+  <img src="docs/vivo-impostazioni.png" width="300" alt="Screenshot vero su Windows 11: finestra Impostazioni di Cedro">
+  <br><sub>Screenshot veri su Windows 11: la ruota e le Impostazioni.</sub>
+</p>
+
 ## Cosa fa
 
 Tieni premuto un tasto, fai clic destro su un file e si apre una ruota sul cursore. Clicca una fetta e la copia convertita compare nella stessa cartella. L'originale non si tocca.
