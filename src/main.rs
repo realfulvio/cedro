@@ -8,6 +8,9 @@ mod win;
 #[cfg(windows)]
 mod winfont;
 
+#[cfg(windows)]
+mod settings_win;
+
 #[cfg(target_os = "linux")]
 mod linux_ui;
 

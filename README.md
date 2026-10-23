@@ -10,6 +10,22 @@ Cedro fa le conversioni da solo. Non serve installare LibreOffice, ffmpeg, Tesse
 
 Cedro non è Tangerine e non ne usa codice, icone o testi. Licenza [MIT](LICENSE).
 
+## Novità della 0.9
+
+<p align="center">
+  <img src="docs/ruota-nuova.png" alt="La nuova ruota di Cedro: fette arrotondate e chiare, JPEG acceso in blu, al centro il nome del file">
+</p>
+
+- **Ruota nuova.** Fette arrotondate con lo stesso spazio tra l'una e l'altra, ombra leggera e bordi lisci (prima erano seghettati). I colori e il carattere, Titillium Web, sono quelli del sito del Comune di Bondeno. Il carattere è dentro il programma: non va installato.
+- **Impostazioni.** Il menu dell'icona ha una quarta voce, **Impostazioni** (anche con il doppio clic sull'icona). Si sceglie: avvio con Windows, avviso a fine conversione, ricerca automatica degli aggiornamenti (all'avvio e ogni giorno), quali tasti aprono la ruota e la qualità di JPEG, WebP, MP3 e PDF in JPG. Le modifiche valgono subito e stanno in `config.txt`.
+- **PDF in Word fedele.** Un PDF con testo vero diventa un Word con lo stesso carattere, corpo, colore e posizione. Le pagine scansionate si leggono con l'OCR in italiano.
+
+<p align="center">
+  <img src="docs/ruota-tre-tasti.png" alt="Tre ruote: Shift per convertire, Ctrl per modificare, Alt per le azioni sul file">
+</p>
+
+Su Linux la ruota ha le stesse forme e gli stessi colori. Il carattere è quello di sistema, a meno che Titillium Web non sia installato.
+
 ## Novità della 0.8
 
 - Cedro controlla da solo se su GitHub c'è una versione nuova e chiede se aggiornare. Su Windows scarica l'installatore, ne verifica lo SHA-256 e lo avvia.
@@ -52,7 +68,7 @@ Le conversioni che la ruota offre vanno a buon fine.
 
 ## Su Windows
 
-1. Dalla [pagina delle release](https://github.com/realfulvio/cedro/releases/latest) scarica **Cedro-Setup-0.8.0.exe**.
+1. Dalla [pagina delle release](https://github.com/realfulvio/cedro/releases/latest) scarica **Cedro-Setup-0.9.0.exe**.
 2. Doppio clic. L'installazione è per il tuo utente, senza diritti di amministratore, in `%LOCALAPPDATA%\Programs\Cedro`. Crea il collegamento nel menu Start. Il collegamento sul desktop e l'avvio con Windows sono opzioni da spuntare.
 3. La prima volta Windows può dire «Windows ha protetto il PC»: l'installatore non è firmato. Clicca «Ulteriori informazioni», poi «Esegui comunque».
 4. Alla fine lascia spuntato **Avvia Cedro**. Non si apre una finestra: vicino all'orologio compare l'icona. Se non la vedi, apri la freccia delle icone nascoste.
@@ -147,9 +163,9 @@ Testo (TXT, MD, CSV, TSV, JSON, LOG, XML, HTML): altro testo, PDF, maiuscolo, mi
 
 Word (DOC, DOCX, ODT, RTF): PDF di testo. Restano paragrafi e parole. Impaginazione, font incorporati e caselle di testo no. Il vecchio DOC viene letto dall’indice pubblico del formato Word.
 
-PDF: con Shift, JPG (un'immagine per pagina) oppure Word OCR. Per il Word, Cedro legge ogni pagina con l'OCR in italiano e rimette insieme i paragrafi: righe spezzate e parole divise dal trattino tornano intere. Il Word è in Calibri 11, con la lingua italiana per il correttore. La pagina non viene ricostruita: niente colonne, tabelle o immagini. Al massimo 100 pagine. Con Ctrl, OCR in un file di testo.
+PDF: con Shift, JPG (un'immagine per pagina) oppure Word OCR. Un PDF con testo vero diventa un Word fedele all'originale: il testo viene copiato dal PDF, senza rileggerlo, con il suo carattere, corpo, grassetto, corsivo, colore e posizione; immagini, riquadri, linee e tabelle restano come sfondo della pagina. Le pagine senza testo (scansioni) vengono lette con l'OCR in italiano e diventano paragrafi normali, da ricontrollare. Il testo è modificabile, ma è in riquadri posizionati, come nei convertitori PDF di Word. Se manca un carattere sul PC, Word ne usa uno simile. Al massimo 100 pagine lette con l'OCR. Con Ctrl, OCR in un file di testo.
 
-OCR in italiano. Su Windows Cedro usa l'OCR di Windows, che con Windows in italiano conosce già la lingua. Se manca, si aggiunge da Impostazioni, Ora e lingua, Lingua, Italiano, Riconoscimento ottico dei caratteri. Su Linux usa Tesseract, se c'è con l'italiano (`tesseract-ocr-ita` su Debian e Ubuntu, `tesseract-langpack-ita` su Fedora). Senza, resta il modello latino incluso: legge le lettere ma non gli accenti, e per il Word di un PDF con testo copia quello già presente.
+OCR in italiano. Su Windows Cedro usa l'OCR di Windows, che con Windows in italiano conosce già la lingua. Se manca, si aggiunge da Impostazioni, Ora e lingua, Lingua, Italiano, Riconoscimento ottico dei caratteri. Su Linux usa Tesseract, se c'è con l'italiano (`tesseract-ocr-ita` su Debian e Ubuntu, `tesseract-langpack-ita` su Fedora). Senza, resta il modello latino incluso: legge le lettere ma non gli accenti.
 
 Audio (WAV, MP3, OGG, M4A, AAC, FLAC): WAV e MP3. L’MP3 è LAME, compilato dentro l’eseguibile, licenza LGPL. Un file Opus non viene convertito.
 
