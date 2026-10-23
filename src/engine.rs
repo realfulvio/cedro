@@ -524,18 +524,7 @@ fn decode_utf16(bytes: &[u8], little: bool) -> String {
 }
 
 pub fn read_quality() -> u8 {
-    let path = config_dir().join("config.txt");
-    let Ok(text) = fs::read_to_string(path) else {
-        return 82;
-    };
-    for line in text.lines() {
-        if let Some(v) = line.trim().strip_prefix("quality=") {
-            if let Ok(n) = v.trim().parse::<u8>() {
-                return n.clamp(40, 95);
-            }
-        }
-    }
-    82
+    crate::settings::read_settings().quality
 }
 
 pub fn append_log(line: &str) {
