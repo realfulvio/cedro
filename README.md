@@ -73,7 +73,7 @@ Le fette cambiano con il tipo di file. Su Linux la ruota si apre dal menu del fi
 
 ## Impostazioni e aggiornamenti
 
-Menu dell'icona (o doppio clic): **Impostazioni**, **Controlla aggiornamenti**, **Avvio automatico**, **Esci**.
+Menu dell'icona (o doppio clic): **Impostazioni**, **Guida** (animazione che mostra cosa fanno Shift, Ctrl e Alt; l'installatore la propone anche a fine installazione), **Controlla aggiornamenti**, **Avvio automatico**, **Esci**.
 
 - Tasti che aprono la ruota, avvio con Windows, avviso a fine conversione.
 - Qualità di JPEG, WebP, MP3 e PDF in JPG.
