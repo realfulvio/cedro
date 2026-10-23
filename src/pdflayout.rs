@@ -126,7 +126,7 @@ fn group_lines(mut glyphs: Vec<Glyph>) -> Vec<Line> {
         }
         let line = lines.last_mut().unwrap();
         // Un vuoto largo come una parola, senza spazio nel PDF, diventa uno spazio.
-        if !new_line && g.x - last_x > 0.9 * g.size && !g.text.starts_with(' ') {
+        if !new_line && g.x - last_x > 1.25 * g.size && !g.text.starts_with(' ') {
             if let Some(run) = line.runs.last_mut() {
                 if !run.text.ends_with(' ') {
                     run.text.push(' ');
@@ -179,7 +179,7 @@ fn family(postscript: &str) -> String {
         // «OpenSans» diventa «Open Sans».
         let mut out = String::new();
         for (i, c) in base.chars().enumerate() {
-            if i > 0 && c.is_uppercase() && !out.ends_with(' ') {
+            if i > 0 && c.is_uppercase() && out.chars().last().is_some_and(char::is_lowercase) {
                 out.push(' ');
             }
             out.push(c);
