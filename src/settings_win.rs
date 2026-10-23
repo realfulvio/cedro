@@ -18,9 +18,28 @@ const ID_CTRL: i32 = 112;
 const ID_ALT: i32 = 113;
 const ID_QUALITY: i32 = 121;
 const ID_QUALITY_VALUE: i32 = 122;
+const ID_HEADER: i32 = 130;
+const ID_POWERED: i32 = 131;
+
+// Colori del sito del Comune di Bondeno (COLORREF = 0x00BBGGRR).
+const PRIMARY: COLORREF = COLORREF(0x008E5E00); // #005E8E
+const TEXT: COLORREF = COLORREF(0x00191919); // #191919
+const GREY: COLORREF = COLORREF(0x00645A45); // #455A64
+const WHITE: COLORREF = COLORREF(0x00FFFFFF);
 const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
 
 static WINDOW: AtomicIsize = AtomicIsize::new(0);
+static BRUSH_PRIMARY: AtomicIsize = AtomicIsize::new(0);
+static BRUSH_WHITE: AtomicIsize = AtomicIsize::new(0);
+
+fn brush(slot: &AtomicIsize, color: COLORREF) -> HBRUSH {
+    let mut raw = slot.load(Ordering::Relaxed);
+    if raw == 0 {
+        raw = unsafe { CreateSolidBrush(color) }.0 as isize;
+        slot.store(raw, Ordering::Relaxed);
+    }
+    HBRUSH(raw as *mut _)
+}
 
 fn px(value: i32, dpi: u32) -> i32 {
     value * dpi as i32 / 96
@@ -57,14 +76,14 @@ unsafe fn create() -> Result<()> {
         lpfnWndProc: Some(proc),
         hInstance: instance,
         hCursor: LoadCursorW(None, IDC_ARROW)?,
-        hbrBackground: HBRUSH((COLOR_BTNFACE.0 + 1) as isize as *mut _),
+        hbrBackground: brush(&BRUSH_WHITE, WHITE),
         lpszClassName: class,
         ..Default::default()
     };
     RegisterClassExW(&wc);
     let dpi = GetDpiForSystem();
     let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    let mut rect = RECT { left: 0, top: 0, right: px(420, dpi), bottom: px(384, dpi) };
+    let mut rect = RECT { left: 0, top: 0, right: px(420, dpi), bottom: px(424, dpi) };
     let _ = AdjustWindowRect(&mut rect, style, false);
     let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
     let x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
@@ -117,28 +136,35 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE, dpi: u32) {
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
         0, crate::winfont::face(),
     );
+    let font_bold = CreateFontW(
+        -px(17, dpi), 0, 0, 0, 700, 0, 0, 0,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+        0, crate::winfont::face(),
+    );
+    let s = w!("STATIC");
+    // SS_CENTERIMAGE: il titolo sta al centro della barra, in altezza.
+    child(hwnd, instance, s, "   Impostazioni di Cedro", 0x200, ID_HEADER, (0, 0, 420, 40), dpi, font_bold);
     let tab = WS_TABSTOP.0;
     let check = tab | BS_AUTOCHECKBOX as u32;
     let group = BS_GROUPBOX as u32;
     let b = w!("BUTTON");
-    child(hwnd, instance, b, "Generale", group, 0, (12, 8, 396, 102), dpi, font);
-    child(hwnd, instance, b, "Avvia Cedro con Windows", check, ID_AUTO, (28, 30, 360, 22), dpi, font);
-    child(hwnd, instance, b, "Avviso a fine conversione", check, ID_NOTIFY, (28, 54, 360, 22), dpi, font);
-    child(hwnd, instance, b, "Cerca aggiornamenti (all'avvio e ogni giorno)", check, ID_UPDATE, (28, 78, 360, 22), dpi, font);
-    child(hwnd, instance, b, "Tasti che aprono la ruota", group, 0, (12, 118, 396, 102), dpi, font);
-    child(hwnd, instance, b, "Shift: conversioni", check, ID_SHIFT, (28, 140, 360, 22), dpi, font);
-    child(hwnd, instance, b, "Ctrl: strumenti", check, ID_CTRL, (28, 164, 360, 22), dpi, font);
-    child(hwnd, instance, b, "Alt: azioni (duplica, percorso, ZIP)", check, ID_ALT, (28, 188, 360, 22), dpi, font);
-    child(hwnd, instance, b, "Qualità", group, 0, (12, 228, 396, 90), dpi, font);
-    let s = w!("STATIC");
-    child(hwnd, instance, s, "JPEG, WebP, MP3 e PDF in JPG. Più alta, file più grandi.", 0, 0, (28, 248, 370, 20), dpi, font);
-    let bar = child(hwnd, instance, TRACKBAR_CLASSW, "", tab | TBS_HORZ as u32 | TBS_AUTOTICKS as u32, ID_QUALITY, (24, 270, 320, 36), dpi, font);
+    child(hwnd, instance, b, "Generale", group, 0, (12, 48, 396, 102), dpi, font);
+    child(hwnd, instance, b, "Avvia Cedro con Windows", check, ID_AUTO, (28, 70, 360, 22), dpi, font);
+    child(hwnd, instance, b, "Avviso a fine conversione", check, ID_NOTIFY, (28, 94, 360, 22), dpi, font);
+    child(hwnd, instance, b, "Cerca aggiornamenti (all'avvio e ogni giorno)", check, ID_UPDATE, (28, 118, 360, 22), dpi, font);
+    child(hwnd, instance, b, "Tasti che aprono la ruota", group, 0, (12, 158, 396, 102), dpi, font);
+    child(hwnd, instance, b, "Shift: conversioni", check, ID_SHIFT, (28, 180, 360, 22), dpi, font);
+    child(hwnd, instance, b, "Ctrl: strumenti", check, ID_CTRL, (28, 204, 360, 22), dpi, font);
+    child(hwnd, instance, b, "Alt: azioni (duplica, percorso, ZIP)", check, ID_ALT, (28, 228, 360, 22), dpi, font);
+    child(hwnd, instance, b, "Qualità", group, 0, (12, 268, 396, 90), dpi, font);
+    child(hwnd, instance, s, "JPEG, WebP, MP3 e PDF in JPG. Più alta, file più grandi.", 0, 0, (28, 288, 370, 20), dpi, font);
+    let bar = child(hwnd, instance, TRACKBAR_CLASSW, "", tab | TBS_HORZ as u32 | TBS_AUTOTICKS as u32, ID_QUALITY, (24, 310, 320, 36), dpi, font);
     SendMessageW(bar, TBM_SETRANGE, Some(WPARAM(1)), Some(LPARAM((40 | (95 << 16)) as isize)));
     SendMessageW(bar, TBM_SETTICFREQ, Some(WPARAM(11)), Some(LPARAM(0)));
-    child(hwnd, instance, s, "82", 1 /* SS_CENTER */, ID_QUALITY_VALUE, (350, 278, 48, 20), dpi, font);
-    child(hwnd, instance, s, POWERED_BY, 0, 0, (14, 354, 220, 20), dpi, font);
-    child(hwnd, instance, b, "Salva", tab | BS_DEFPUSHBUTTON as u32, IDOK.0, (244, 348, 78, 28), dpi, font);
-    child(hwnd, instance, b, "Annulla", tab, IDCANCEL.0, (330, 348, 78, 28), dpi, font);
+    child(hwnd, instance, s, "82", 1 /* SS_CENTER */, ID_QUALITY_VALUE, (350, 318, 48, 20), dpi, font);
+    child(hwnd, instance, s, POWERED_BY, 0, ID_POWERED, (14, 394, 220, 20), dpi, font);
+    child(hwnd, instance, b, "Salva", tab | BS_DEFPUSHBUTTON as u32, IDOK.0, (244, 388, 78, 28), dpi, font);
+    child(hwnd, instance, b, "Annulla", tab, IDCANCEL.0, (330, 388, 78, 28), dpi, font);
 }
 
 unsafe fn item(hwnd: HWND, id: i32) -> HWND {
@@ -209,6 +235,19 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 _ => {}
             }
             LRESULT(0)
+        }
+        WM_CTLCOLORSTATIC => {
+            let ctl = HWND(lparam.0 as *mut _);
+            let hdc = HDC(wparam.0 as *mut _);
+            let id = GetDlgCtrlID(ctl);
+            let (fg, bg, slot) = match id {
+                ID_HEADER => (WHITE, PRIMARY, &BRUSH_PRIMARY),
+                ID_POWERED => (GREY, WHITE, &BRUSH_WHITE),
+                _ => (TEXT, WHITE, &BRUSH_WHITE),
+            };
+            SetTextColor(hdc, fg);
+            SetBkColor(hdc, bg);
+            LRESULT(brush(slot, bg).0 as isize)
         }
         WM_HSCROLL => {
             show_quality(hwnd);
