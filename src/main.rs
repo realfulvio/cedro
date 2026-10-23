@@ -5,6 +5,9 @@ mod cli;
 #[cfg(windows)]
 mod win;
 
+#[cfg(windows)]
+mod winfont;
+
 #[cfg(target_os = "linux")]
 mod linux_ui;
 
