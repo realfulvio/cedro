@@ -81,7 +81,13 @@ pub fn start() -> i32 {
         resident: None,
         job: None,
     }));
-    let app = Application::builder().application_id("dev.cedro.Cedro").build();
+    // Ogni apertura dal menu del file è un processo a sé: se condividesse l'id con quello
+    // residente nella tray, D-Bus lo girerebbe a lui, che non ha file e non mostra nulla.
+    let mut flags = gtk4::gio::ApplicationFlags::empty();
+    if !state.borrow().launch.stay {
+        flags |= gtk4::gio::ApplicationFlags::NON_UNIQUE;
+    }
+    let app = Application::builder().application_id("dev.cedro.Cedro").flags(flags).build();
     let opened = state.clone();
     let flag = quit.clone();
     app.connect_activate(move |app| {
@@ -640,7 +646,7 @@ fn install_integrations() {
         &root.join("icons/hicolor/256x256/apps/dev.cedro.Cedro.png"),
         MARK,
     );
-    let _ = write_text(&root.join("kio/servicemenus/cedro.desktop"), &dolphin_menu(exe), false);
+    let _ = write_text(&root.join("kio/servicemenus/cedro.desktop"), &dolphin_menu(exe), true);
     let _ = write_text(
         &root.join("nautilus-python/extensions/cedro.py"),
         &nautilus_python(exe),
