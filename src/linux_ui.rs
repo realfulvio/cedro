@@ -49,6 +49,8 @@ struct Wheel {
     launch: Launch,
     hover: i32,
     anchor: Option<Anchor>,
+    // Il centro dello schermo vale finché non arriva il primo vero movimento del puntatore.
+    provisional: bool,
     screens: Vec<Screen>,
     areas: Vec<DrawingArea>,
     windows: Vec<ApplicationWindow>,
@@ -73,6 +75,7 @@ pub fn start() -> i32 {
         launch,
         hover: -1,
         anchor: None,
+        provisional: false,
         screens: Vec::new(),
         areas: Vec::new(),
         windows: Vec::new(),
@@ -228,6 +231,7 @@ fn present_wheel(app: &Application, state: Rc<RefCell<Wheel>>) {
         if wheel.anchor.is_none() {
             if let Some(screen) = wheel.screens.first() {
                 wheel.anchor = Some(Anchor { x: screen.width / 2.0, y: screen.height / 2.0, monitor: 0 });
+                wheel.provisional = true;
             }
         }
         let areas = wheel.areas.clone();
@@ -240,7 +244,12 @@ fn present_wheel(app: &Application, state: Rc<RefCell<Wheel>>) {
 
 fn point_at(state: &Rc<RefCell<Wheel>>, monitor: usize, x: f64, y: f64) {
     let mut wheel = state.borrow_mut();
-    wheel.anchor = Some(Anchor { x, y, monitor });
+    // L'ancora si fissa al primo ingresso del puntatore: se seguisse il mouse, il centro
+    // starebbe sempre sotto il cursore e nessuna fetta potrebbe essere scelta.
+    if wheel.anchor.is_none() || wheel.provisional {
+        wheel.anchor = Some(Anchor { x, y, monitor });
+        wheel.provisional = false;
+    }
     wheel.hover = hover_of(&wheel, monitor, x, y);
 }
 
@@ -347,6 +356,7 @@ fn close_wheel(state: &Rc<RefCell<Wheel>>) {
     }
     wheel.areas.clear();
     wheel.anchor = None;
+    wheel.provisional = false;
     wheel.hover = -1;
 }
 
