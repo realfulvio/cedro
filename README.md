@@ -61,7 +61,8 @@ Serve [Rust](https://rustup.rs) con gli strumenti di compilazione Microsoft C++ 
 cargo build --release
 ```
 
-Il programma è `targetelease\cedro.exe`. Per rifare anche l'installatore serve [Inno Setup 6](https://jrsoftware.org/isinfo.php):
+Il programma è `target
+elease\cedro.exe`. Per rifare anche l'installatore serve [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 
 ```
 pwsh installeruild.ps1
@@ -118,7 +119,7 @@ La configurazione sta in `~/.config/cedro/config.txt`.
 
 <img src="docs/tre-tasti.png" alt="Tre ruote: Shift con JPEG acceso, Ctrl con OCR acceso, Alt con ZIP acceso">
 
-Le fette cambiano con il file. Su una foto, Shift mostra PNG, JPEG, WebP, BMP, GIF, TIFF e PDF. Su un audio mostra WAV e MP3. Su un video mostra MP4. Su un Word mostra PDF. Su un PDF mostra Word e Testo.
+Le fette cambiano con il file. Su una foto, Shift mostra PNG, JPEG, WebP, BMP, GIF, TIFF e PDF. Su un audio mostra WAV e MP3. Su un video mostra MP4. Su un Word mostra PDF. Su un PDF mostra JPG e Word OCR.
 
 Si può anche trascinare il file con il tasto sinistro e premere Shift, Ctrl o Alt. Su Windows, se Shift resta premuto mentre si rilascia un trascinamento, Esplora file può spostare il file. Con il clic destro questo non succede.
 
@@ -132,13 +133,15 @@ La copia viene scritta nella stessa cartella dell’originale. L’originale non
 
 ## Cosa fa
 
-Immagini (PNG, JPEG, WebP, BMP, GIF, TIFF): conversione, PDF, compressione JPEG, scala 50%, bianco e nero, rotazione 90°, riscrittura senza metadati. Con Ctrl, la fetta OCR legge il testo. Il modello è latino: legge le lettere, non un vocabolario italiano.
+Immagini (PNG, JPEG, WebP, BMP, GIF, TIFF): conversione, PDF, compressione JPEG, scala 50%, bianco e nero, rotazione 90°, riscrittura senza metadati. Le foto del telefono vengono raddrizzate. Il PDF di una foto ha il testo letto dall'OCR, invisibile sopra l'immagine: si seleziona e si cerca. Con Ctrl, la fetta OCR legge il testo.
 
 Testo (TXT, MD, CSV, TSV, JSON, LOG, XML, HTML): altro testo, PDF, maiuscolo, minuscolo.
 
 Word (DOC, DOCX, ODT, RTF): PDF di testo. Restano paragrafi e parole. Impaginazione, font incorporati e caselle di testo no. Il vecchio DOC viene letto dall’indice pubblico del formato Word.
 
-PDF: con Shift, Word di testo oppure un file di testo. La pagina non viene ricostruita. Con Ctrl, OCR: se il PDF ha già del testo, Cedro lo copia; se non ne ha, disegna al massimo 20 pagine e le legge.
+PDF: con Shift, JPG (un'immagine per pagina) oppure Word OCR. Per il Word, Cedro legge ogni pagina con l'OCR in italiano e rimette insieme i paragrafi: righe spezzate e parole divise dal trattino tornano intere. Il Word è in Calibri 11, con la lingua italiana per il correttore. La pagina non viene ricostruita: niente colonne, tabelle o immagini. Al massimo 100 pagine. Con Ctrl, OCR in un file di testo.
+
+OCR in italiano. Su Windows Cedro usa l'OCR di Windows, che con Windows in italiano conosce già la lingua. Se manca, si aggiunge da Impostazioni, Ora e lingua, Lingua, Italiano, Riconoscimento ottico dei caratteri. Su Linux usa Tesseract, se c'è con l'italiano (`tesseract-ocr-ita` su Debian e Ubuntu, `tesseract-langpack-ita` su Fedora). Senza, resta il modello latino incluso: legge le lettere ma non gli accenti, e per il Word di un PDF con testo copia quello già presente.
 
 Audio (WAV, MP3, OGG, M4A, AAC, FLAC): WAV e MP3. L’MP3 è LAME, compilato dentro l’eseguibile, licenza LGPL. Un file Opus non viene convertito.
 

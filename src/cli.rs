@@ -65,7 +65,7 @@ fn print_help() {
         "\
 Cedro — conversione locale, senza upload.
 
-  cedro convert <file> <png|jpeg|webp|bmp|gif|tiff|pdf|txt|md|csv|wav|mp3|mp4|docx>
+  cedro convert <file> <png|jpeg|webp|bmp|gif|tiff|pdf|txt|md|csv|wav|mp3|mp4|docx|jpg>
   cedro tool <file> <compress|half|gray|rot90|strip|upper|lower|ocr|dup|path|zip>
   cedro zip <file>
   cedro --quality 80 convert foto.png jpeg
