@@ -72,6 +72,8 @@ end;
 function InitializeUninstall: Boolean;
 begin
   CloseCedro;
+  { La voce si può accendere anche dal menu di Cedro, non solo dall'installatore. }
+  RegDeleteValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'Cedro');
   Result := True;
 end;
 

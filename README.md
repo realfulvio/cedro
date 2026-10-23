@@ -61,7 +61,8 @@ Serve [Rust](https://rustup.rs) con gli strumenti di compilazione Microsoft C++ 
 cargo build --release
 ```
 
-Il programma è `targetelease\cedro.exe`. Per rifare anche l'installatore serve [Inno Setup 6](https://jrsoftware.org/isinfo.php):
+Il programma è `target
+elease\cedro.exe`. Per rifare anche l'installatore serve [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 
 ```
 pwsh installeruild.ps1
@@ -151,6 +152,17 @@ Video (MP4, WebM, MOV, MKV, AVI): MP4 con H.264 e AAC. Su Windows, H.264, MJPEG 
 Azioni su qualsiasi file: duplica, copia il percorso, ZIP non compresso (metodo store).
 
 HEIC non è nel motore. Il PDF scritto da Cedro per un’immagine o per un testo semplice non è un PDF/A.
+
+## Aggiornamenti e avvio
+
+Qualche secondo dopo l'avvio Cedro guarda l'ultima release su GitHub. Se è più nuova, chiede se aggiornare. Su Windows scarica l'installatore, ne controlla lo SHA-256 e lo avvia. Su Linux apre la pagina della release. Se rispondi no, per quella versione non chiede più all'avvio.
+
+Nel menu dell'icona vicino all'orologio:
+
+- **Controlla aggiornamenti** guarda subito e risponde anche se sei già all'ultima versione.
+- **Avvia con Windows** (su Linux **Avvia con il sistema**) accende o spegne l'avvio all'accesso. Il segno di spunta dice com'è adesso.
+
+Da terminale: `cedro update`.
 
 ## Riga di comando
 
