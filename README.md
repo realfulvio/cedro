@@ -5,7 +5,15 @@
 <h1 align="center">Cedro</h1>
 
 <p align="center">
-  <strong>Converti qualsiasi file con un clic destro. Sul tuo PC, senza caricare nulla.</strong>
+  <strong>Cambia formato a un file con un clic destro.<br>Sul tuo PC, senza caricare nulla.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/realfulvio/cedro/releases/latest"><b>⬇ Scarica per Windows</b></a>
+  &nbsp;·&nbsp;
+  <a href="#come-si-usa">Come si usa</a>
+  &nbsp;·&nbsp;
+  <a href="#cosa-converte">Formati</a>
 </p>
 
 <p align="center">
@@ -15,46 +23,47 @@
 </p>
 
 <p align="center">
-  <img src="docs/ruota-nuova.png" width="520" alt="La ruota di Cedro: fette arrotondate, JPEG acceso, al centro il nome del file">
+  <img src="docs/vivo-ruota.png" width="320" alt="La ruota di Cedro su Windows 11, con la fetta JPEG sotto il mouse">
 </p>
 
-<p align="center">
-  <img src="docs/vivo-ruota.png" width="300" alt="Screenshot vero su Windows 11: ruota con la fetta JPEG sotto il mouse">
-  &nbsp;&nbsp;
-  <img src="docs/vivo-impostazioni.png" width="300" alt="Screenshot vero su Windows 11: finestra Impostazioni di Cedro">
-  <br><sub>Screenshot veri su Windows 11: la ruota e le Impostazioni.</sub>
-</p>
+## Cos'è
 
-## Cosa fa
+Cedro è un piccolo programma che vive vicino all'orologio. Tieni premuto **Shift**, fai **clic destro** su un file e si apre una ruota: scegli il formato e la copia nuova compare accanto all'originale. Fine.
 
-Tieni premuto un tasto, fai clic destro su un file e si apre una ruota sul cursore. Clicca una fetta e la copia convertita compare nella stessa cartella. L'originale non si tocca.
+- **Tutto sul tuo PC.** Nessun sito, nessun caricamento, nessuna telemetria.
+- **Niente da installare in più.** Non servono LibreOffice, ffmpeg o altri programmi.
+- **L'originale non si tocca.** Se il nome esiste già, Cedro aggiunge `-2`, `-3`…
+- **In italiano**, anche l'OCR.
 
-Immagini, documenti, PDF, audio e video: tutto dentro il programma. Niente LibreOffice, ffmpeg, Tesseract o Poppler da installare. Nessun caricamento, nessuna telemetria.
 
-## Scarica
+## Scarica e installa
 
-**[Scarica l'ultima versione](https://github.com/realfulvio/cedro/releases/latest)**
+1. Vai alla **[pagina delle versioni](https://github.com/realfulvio/cedro/releases/latest)** e scarica `Cedro-Setup-….exe`.
+2. Doppio clic. Si installa solo per il tuo utente, **senza diritti di amministratore**.
+3. La prima volta Windows può dire «Windows ha protetto il PC», perché l'installatore non è firmato. Clicca *Ulteriori informazioni*, poi *Esegui comunque*.
+4. A fine installazione lascia spuntato **Avvia Cedro**. Non si apre una finestra: compare l'icona vicino all'orologio (se non la vedi, apri la freccia delle icone nascoste).
 
-- **Windows:** `Cedro-Setup-x.y.z.exe`. Si installa per il tuo utente, senza diritti di amministratore. La prima volta Windows può dire «Windows ha protetto il PC» (l'installatore non è firmato): *Ulteriori informazioni*, poi *Esegui comunque*.
-- **Linux:** si compila da sorgente, vedi [Compilare](#compilare).
 
-Cedro resta vicino all'orologio, senza finestre. Si aggiorna da solo.
+Per togliere Cedro: *Impostazioni di Windows, App, Cedro*. Dopo la prima installazione si aggiorna da solo.
 
 ## Come si usa
 
 <p align="center">
-  <img src="docs/tre-tasti.png" width="720" alt="Tre ruote: Shift con JPEG acceso, Ctrl con OCR acceso, Alt con ZIP acceso">
+  <img src="docs/tre-tasti.png" width="720" alt="Le tre ruote: Shift, Ctrl e Alt">
 </p>
 
-Tieni premuto un tasto e fai **clic destro** su un file, in Esplora file, sul desktop o in una finestra Apri/Salva. Poi clic sinistro sulla fetta. Esc o un clic fuori annulla.
+1. Tieni premuto un tasto.
+2. Fai **clic destro** su un file: in Esplora file, sul desktop o in una finestra Apri/Salva.
+3. Clic sinistro sulla fetta che vuoi. Esc, o un clic fuori dalla ruota, annulla.
 
-| Tasto | Ruota | Serve a |
+| Tasto | Ruota | Cosa fa |
 | --- | --- | --- |
-| **Shift** | Conversione | Cambiare formato |
-| **Ctrl** | Strumenti | Comprimere, scalare, bianco e nero, ruotare, togliere i metadati, OCR |
-| **Alt** | Azioni | Duplicare, copiare il percorso, creare uno ZIP |
+| **Shift** | Conversione | Cambia formato: foto, documenti, PDF, audio, video |
+| **Ctrl** | Strumenti | Comprime, scala, bianco e nero, ruota, toglie i metadati, legge il testo (OCR) |
+| **Alt** | Azioni | Duplica, copia il percorso, crea uno ZIP |
 
-Le fette cambiano con il tipo di file. Su Linux la ruota si apre dal menu del file (Dolphin, Nautilus), perché Wayland non lascia intercettare il clic destro.
+Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Guida** dall'icona: una breve animazione mostra cosa fanno Shift, Ctrl e Alt.
+
 
 ## Cosa converte
 
@@ -65,32 +74,40 @@ Le fette cambiano con il tipo di file. Su Linux la ruota si apre dal menu del fi
 | Testo | TXT, MD, CSV, JSON, HTML, XML | altro testo, PDF |
 | PDF | PDF | JPG, **Word fedele all'originale** |
 | Audio | WAV, MP3, OGG, M4A, AAC, FLAC | WAV, MP3 |
-| Video | MP4, WebM, MOV, MKV, AVI | MP4 (H.264 + AAC) |
+| Video | MP4, WebM, MOV, MKV, AVI | MP4 |
 
-- **PDF in Word fedele:** stesso carattere, corpo, colore e posizione del testo. Le scansioni vengono lette con l'OCR in italiano.
-- **OCR in italiano** su Windows (OCR di sistema) e su Linux (Tesseract, se installato).
-- Foto del telefono raddrizzate in automatico.
+**PDF in Word:** il testo mantiene carattere, corpo, colore e posizione. Le pagine scansionate vengono lette con l'OCR in italiano.
+**Foto dal telefono:** vengono raddrizzate in automatico.
 
-## Impostazioni e aggiornamenti
+## L'icona e le impostazioni
 
-Menu dell'icona (o doppio clic): **Impostazioni**, **Guida** (animazione che mostra cosa fanno Shift, Ctrl e Alt; l'installatore la propone anche a fine installazione), **Controlla aggiornamenti**, **Avvio automatico**, **Esci**.
+<p align="center">
+  <img src="docs/vivo-impostazioni.png" width="300" alt="La finestra Impostazioni di Cedro">
+</p>
 
-- Tasti che aprono la ruota, avvio con Windows, avviso a fine conversione.
-- Qualità di JPEG, WebP, MP3 e PDF in JPG.
-- Cedro cerca da solo le nuove versioni su GitHub, verifica l'installatore con SHA-256 e chiede prima di aggiornare.
+Clic destro sull'icona (o doppio clic per le Impostazioni):
 
-Le impostazioni stanno in `%APPDATA%\Cedro\config.txt` (Windows) e `~/.config/cedro/config.txt` (Linux). Il registro delle novità è nelle [release](https://github.com/realfulvio/cedro/releases).
+- **Impostazioni:** avvio con Windows, avviso a fine conversione, quali tasti aprono la ruota, qualità di JPEG, WebP, MP3 e PDF in JPG.
+- **Guida:** l'animazione che spiega i tre tasti.
+- **Controlla aggiornamenti:** Cedro lo fa anche da solo, verifica l'installatore e chiede prima di aggiornare.
+- **Avvio automatico** ed **Esci**.
 
-## Da riga di comando
 
-```
-cedro convert foto.png webp
-cedro tool foto.png compress --quality 70
-cedro zip nota.txt
-cedro update
-```
+## Domande
 
-## Compilare
+**Cambia il file originale?** No, crea sempre una copia nella stessa cartella.
+**Serve internet?** Solo per cercare gli aggiornamenti.
+**Perché Windows mi avvisa?** L'installatore non ha la firma a pagamento. Il codice è aperto e lo puoi controllare qui.
+**E su Linux?** Funziona su GNOME e KDE Plasma. La ruota si apre dal menu del file (in Dolphin sotto *Cedro*, in Nautilus sotto *Script*), perché Wayland non lascia intercettare il clic destro. Vedi [Compilare](#per-chi-sviluppa).
+
+---
+
+## Per chi sviluppa
+
+<details>
+<summary><b>Compilare, riga di comando, sicurezza, licenze</b></summary>
+
+### Compilare
 
 Serve [Rust](https://rustup.rs).
 
@@ -99,15 +116,29 @@ cargo build --release
 ```
 
 - **Windows:** strumenti di compilazione Microsoft C++. Per l'installatore serve [Inno Setup 6](https://jrsoftware.org/isinfo.php) e `pwsh installer\build.ps1`.
-- **Linux:** compilatore C, `pkgconf` e i pacchetti di sviluppo di GTK 4. La prima volta compila anche OpenH264, FDK AAC e LAME.
+- **Linux:** compilatore C, `pkgconf` e i pacchetti di sviluppo di GTK 4. La prima volta compila anche OpenH264, FDK AAC e LAME. Avvia `cedro` una volta: resta nella tray e scrive i menu del file. Su GNOME serve l'estensione AppIndicator per l'icona.
 
-## Sicurezza
+Le impostazioni stanno in `%APPDATA%\Cedro\config.txt` (Windows) e `~/.config/cedro/config.txt` (Linux).
+
+### Riga di comando
+
+```
+cedro convert foto.png webp
+cedro tool foto.png compress --quality 70
+cedro zip nota.txt
+cedro update
+cedro show --conversione foto.png   # Linux: apre la ruota
+```
+
+### Sicurezza
 
 Codice aperto (MIT), nessun packer né offuscamento, nessuna rete oltre al controllo aggiornamenti. Gli hook del mouse e della tastiera restano nel processo di Cedro e non iniettano DLL in altri programmi. L'exe non è firmato Authenticode: SmartScreen avvisa la prima volta, ma non è un rilevamento di malware.
 
-## Licenze
+### Licenze
 
 Cedro è MIT. Alcune parti hanno la propria licenza: LAME (LGPL, MP3), modello OCR ocrs (CC BY-SA 4.0, fonti in `models/FONTI.txt`), [oxideav-vp8](https://github.com/OxideAV/oxideav-vp8) e [oxideav-vp9](https://github.com/OxideAV/oxideav-vp9) (MIT), OpenH264 (BSD-2) e FDK AAC (licenza Fraunhofer). Cedro è un'implementazione scritta da zero e non usa codice, icone o testi di altri convertitori.
+
+</details>
 
 ---
 
