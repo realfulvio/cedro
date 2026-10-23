@@ -72,11 +72,11 @@ Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Gui
 | Immagini | PNG, JPEG, WebP, BMP, GIF, TIFF | altro formato, PDF con testo cercabile |
 | Documenti | DOCX, DOC, ODT, RTF | PDF |
 | Testo | TXT, MD, CSV, JSON, HTML, XML | altro testo, PDF |
-| PDF | PDF | JPG, **Word fedele all'originale** |
+| PDF | PDF | JPG, **Word modificabile** |
 | Audio | WAV, MP3, OGG, M4A, AAC, FLAC | WAV, MP3 |
 | Video | MP4, WebM, MOV, MKV, AVI | MP4 |
 
-**PDF in Word:** il testo mantiene carattere, corpo, colore e posizione. Le pagine scansionate vengono lette con l'OCR in italiano.
+**PDF in Word:** titoli, paragrafi, tabelle vere (celle, sfondi, bordi), elenchi e grafici al loro posto, modificabili come in un editor professionale. Le scansioni vengono lette con l'OCR in italiano.
 **Foto dal telefono:** vengono raddrizzate in automatico.
 
 ## L'icona e le impostazioni
