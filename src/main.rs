@@ -14,6 +14,8 @@ mod settings_win;
 mod guida_win;
 
 #[cfg(target_os = "linux")]
+mod linux_settings;
+#[cfg(target_os = "linux")]
 mod linux_ui;
 
 fn main() {
@@ -37,8 +39,10 @@ fn main() {
     }
     #[cfg(target_os = "linux")]
     {
-        let show = args.first().is_some_and(|arg| arg == "show");
-        if args.is_empty() || show {
+        let ui = args
+            .first()
+            .is_some_and(|arg| matches!(arg.as_str(), "show" | "settings" | "impostazioni" | "guida" | "--background"));
+        if args.is_empty() || ui {
             std::process::exit(linux_ui::start());
         }
         std::process::exit(cli::run());
