@@ -157,10 +157,11 @@ HEIC non è nel motore. Il PDF scritto da Cedro per un’immagine o per un testo
 
 Qualche secondo dopo l'avvio Cedro guarda l'ultima release su GitHub. Se è più nuova, chiede se aggiornare. Su Windows scarica l'installatore, ne controlla lo SHA-256 e lo avvia. Su Linux apre la pagina della release. Se rispondi no, per quella versione non chiede più all'avvio.
 
-Nel menu dell'icona vicino all'orologio:
+Il menu dell'icona vicino all'orologio ha tre voci:
 
 - **Controlla aggiornamenti** guarda subito e risponde anche se sei già all'ultima versione.
-- **Avvia con Windows** (su Linux **Avvia con il sistema**) accende o spegne l'avvio all'accesso. Il segno di spunta dice com'è adesso.
+- **Avvio automatico** accende o spegne l'avvio all'accesso. Il segno di spunta dice com'è adesso.
+- **Esci**.
 
 Da terminale: `cedro update`.
 

@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use cedro::{append_log, config_dir, kind_of, perform, read_quality, same_kind_paths, slices, update, Mode};
+use cedro::{append_log, kind_of, perform, read_quality, same_kind_paths, slices, update, Mode};
 use gtk4::cairo::{FontSlant, FontWeight};
 use gtk4::gdk::Key;
 use gtk4::gio::prelude::*;
@@ -490,26 +490,18 @@ impl ksni::Tray for CedroTray {
         use ksni::menu::{CheckmarkItem, StandardItem};
         vec![
             StandardItem {
-                label: "Configurazione".into(),
-                activate: Box::new(|_| {
-                    let _ = std::process::Command::new("xdg-open").arg(config_dir()).spawn();
-                }),
-                ..Default::default()
-            }
-            .into(),
-            StandardItem {
                 label: "Controlla aggiornamenti".into(),
                 activate: Box::new(|_| check_updates(true)),
                 ..Default::default()
             }
             .into(),
             CheckmarkItem {
-                label: "Avvia con il sistema".into(),
+                label: "Avvio automatico".into(),
                 checked: autostart_file().is_some_and(|path| path.exists()),
                 activate: Box::new(|_| {
                     let on = !autostart_file().is_some_and(|path| path.exists());
                     if let Err(e) = set_autostart(on) {
-                        append_log(&format!("avvio con il sistema: {e}"));
+                        append_log(&format!("avvio automatico: {e}"));
                     }
                 }),
                 ..Default::default()

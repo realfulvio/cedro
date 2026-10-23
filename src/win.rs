@@ -1,5 +1,5 @@
 use cedro::{
-    append_log, config_dir, kind_of, mode_from_vk, perform, read_quality, same_kind_paths, slices, update, Kind, Mode,
+    append_log, kind_of, mode_from_vk, perform, read_quality, same_kind_paths, slices, update, Kind, Mode,
     Slice,
 };
 use std::cell::RefCell;
@@ -230,12 +230,11 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 1 => {
                     let _ = DestroyWindow(hwnd);
                 }
-                2 => open_config_dir(),
                 3 => check_updates(true),
                 4 => {
                     let on = !autostart_enabled();
                     if let Err(e) = set_autostart(on) {
-                        balloon(&format!("Avvio con Windows non cambiato: {e}"));
+                        balloon(&format!("Avvio automatico non cambiato: {e}"));
                     }
                 }
                 _ => {}
@@ -1260,11 +1259,9 @@ fn remove_tray(hwnd: HWND) {
 fn show_menu(hwnd: HWND) {
     unsafe {
         let Ok(menu) = CreatePopupMenu() else { return };
-        let _ = AppendMenuW(menu, MF_STRING, 2, w!("Apri cartella di Cedro"));
         let _ = AppendMenuW(menu, MF_STRING, 3, w!("Controlla aggiornamenti"));
         let check = if autostart_enabled() { MF_CHECKED } else { MF_UNCHECKED };
-        let _ = AppendMenuW(menu, MF_STRING | check, 4, w!("Avvia con Windows"));
-        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
+        let _ = AppendMenuW(menu, MF_STRING | check, 4, w!("Avvio automatico"));
         let _ = AppendMenuW(menu, MF_STRING, 1, w!("Esci"));
         let mut pt = POINT::default();
         let _ = GetCursorPos(&mut pt);
@@ -1359,15 +1356,6 @@ fn set_autostart(on: bool) -> std::result::Result<(), String> {
             RegDeleteKeyValueW(HKEY_CURRENT_USER, RUN_KEY, w!("Cedro"))
         };
         result.ok().map_err(|e| e.to_string())
-    }
-}
-
-fn open_config_dir() {
-    let dir = config_dir();
-    let _ = std::fs::create_dir_all(&dir);
-    unsafe {
-        let wide: Vec<u16> = dir.display().to_string().encode_utf16().chain(std::iter::once(0)).collect();
-        let _ = ShellExecuteW(None, w!("open"), PCWSTR(wide.as_ptr()), None, None, SW_SHOWNORMAL);
     }
 }
 
