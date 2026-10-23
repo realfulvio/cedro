@@ -108,6 +108,39 @@ pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
     }
 }
 
+/// Testo di un PDF: quello incorporato, e l'OCR per le pagine che ne sono prive.
+/// Ritorna il testo, le pagine lette via OCR e quelle da leggere rimaste fuori dal limite.
+fn pdf_text_with_ocr(path: &Path) -> Result<(String, usize, usize), String> {
+    let mut pages = crate::doctext::pdf_page_texts(path)?;
+    let blank: Vec<bool> = pages.iter().map(|p| p.is_empty()).collect();
+    let mut ocr_pages = 0;
+    let mut skipped = 0;
+    let mut ocr_error = None;
+    if blank.iter().any(|b| *b) {
+        let bytes = fs::read(path).map_err(|e| e.to_string())?;
+        match crate::ocr::pdf_pages_where(&bytes, |i| blank.get(i).copied().unwrap_or(false)) {
+            Ok((read, left)) => {
+                skipped = left;
+                for (page, text) in pages.iter_mut().zip(read) {
+                    if page.is_empty() && !text.is_empty() {
+                        *page = text;
+                        ocr_pages += 1;
+                    }
+                }
+            }
+            Err(e) => ocr_error = Some(e),
+        }
+    }
+    let text = pages.into_iter().filter(|p| !p.is_empty()).collect::<Vec<_>>().join("\n\n");
+    if text.is_empty() {
+        return Err(match ocr_error {
+            Some(e) => format!("questo PDF non ha testo da copiare; OCR: {e}"),
+            None => "questo PDF non ha testo da copiare né da leggere con l'OCR".into(),
+        });
+    }
+    Ok((text, ocr_pages, skipped))
+}
+
 pub fn extension(path: &Path) -> String {
     path.extension()
         .and_then(|e| e.to_str())
@@ -323,37 +356,25 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         write_bytes(&out, &bytes)?;
         return Ok(Output { path: out, message: "PDF di testo".into() });
     }
-    if kind == Kind::Pdf && action == "docx" {
-        let (text, scanned) = match crate::doctext::pdf_text(path) {
-            Ok(t) => (t, false),
-            Err(first) => {
-                let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-                let t = crate::ocr::pdf_pages_plain(&bytes)
-                    .map_err(|e| err(format!("{first}; OCR: {e}")))?;
-                (t, true)
-            }
-        };
-        let bytes = crate::doctext::docx_bytes(&text);
-        let out = unique_output(&dir, &stem(path), "docx");
-        write_bytes(&out, &bytes)?;
-        let message = if scanned {
-            "Word col testo letto via OCR (al massimo 20 pagine). Controlla il testo: l'impaginazione non viene ricostruita."
+    if kind == Kind::Pdf && matches!(action, "docx" | "txt") {
+        let (text, ocr_pages, skipped) = pdf_text_with_ocr(path).map_err(err)?;
+        let (bytes, ext) = if action == "docx" {
+            (crate::doctext::docx_bytes(&text), "docx")
         } else {
-            "Word di testo. L'impaginazione del PDF non viene ricostruita."
+            (text.into_bytes(), "txt")
         };
-        return Ok(Output { path: out, message: message.into() });
-    }
-    if kind == Kind::Pdf && action == "txt" {
-        let text = match crate::doctext::pdf_text(path) {
-            Ok(t) => t,
-            Err(first) => {
-                let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-                crate::ocr::pdf_pages_plain(&bytes).map_err(|e| err(format!("{first}; OCR: {e}")))?
-            }
+        let out = unique_output(&dir, &stem(path), ext);
+        write_bytes(&out, &bytes)?;
+        let mut message = match (action, ocr_pages) {
+            ("docx", 0) => "Word di testo. L'impaginazione del PDF non viene ricostruita.".to_string(),
+            ("docx", n) => format!("Word di testo, con {n} pagine lette via OCR: controllalo. L'impaginazione non viene ricostruita."),
+            (_, 0) => "Testo estratto dal PDF".to_string(),
+            (_, n) => format!("Testo estratto dal PDF, con {n} pagine lette via OCR: controllalo."),
         };
-        let out = unique_output(&dir, &stem(path), "txt");
-        write_bytes(&out, text.as_bytes())?;
-        return Ok(Output { path: out, message: "Testo estratto dal PDF".into() });
+        if skipped > 0 {
+            message.push_str(&format!(" Mancano {skipped} pagine scansionate: l'OCR ne legge al massimo {}.", crate::ocr::MAX_OCR_PAGES));
+        }
+        return Ok(Output { path: out, message });
     }
     if action == "ocr" && kind == Kind::Image {
         let text = crate::ocr::image_text(path).map_err(err)?;

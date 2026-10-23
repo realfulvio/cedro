@@ -25,24 +25,24 @@ pub fn document_text(path: &Path) -> Result<String, String> {
 }
 
 pub fn pdf_text(path: &Path) -> Result<String, String> {
+    let pages = pdf_page_texts(path)?;
+    let text = pages.iter().filter(|p| !p.is_empty()).cloned().collect::<Vec<_>>().join("\n\n");
+    if text.is_empty() {
+        Err("questo PDF non ha testo da copiare".into())
+    } else {
+        Ok(text)
+    }
+}
+
+/// Il testo incorporato di ogni pagina, in ordine. Vuoto se la pagina non ne ha.
+pub fn pdf_page_texts(path: &Path) -> Result<Vec<String>, String> {
     let doc = lopdf::Document::load(path).map_err(|e| format!("PDF non letto: {e}"))?;
     let mut pages: Vec<u32> = doc.get_pages().keys().copied().collect();
     pages.sort_unstable();
-    let mut text = String::new();
-    for page in pages {
-        if let Ok(part) = doc.extract_text(&[page]) {
-            if !text.is_empty() && !part.is_empty() {
-                text.push_str("\n\n");
-            }
-            text.push_str(part.trim());
-        }
-    }
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        Err("questo PDF non ha testo da copiare".into())
-    } else {
-        Ok(trimmed.to_string())
-    }
+    Ok(pages
+        .into_iter()
+        .map(|page| doc.extract_text(&[page]).map(|t| t.trim().to_string()).unwrap_or_default())
+        .collect())
 }
 
 pub fn docx_bytes(text: &str) -> Vec<u8> {
