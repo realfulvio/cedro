@@ -2,7 +2,7 @@
 ; Installa per l'utente corrente: non servono i diritti di amministratore.
 #define AppName "Cedro"
 #ifndef AppVersion
-  #define AppVersion "0.11.2"
+  #define AppVersion "0.12.0"
 #endif
 
 [Setup]

@@ -8,8 +8,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use cedro::{append_log, kind_of, perform, read_quality, same_kind_paths, slices, update, Mode};
+use cedro::{append_log, kind_of, perform, read_quality, read_settings, same_kind_paths, slices, update, Mode, Settings};
 use gtk4::cairo::{FontSlant, FontWeight};
+use crate::linux_settings;
 use gtk4::gdk::Key;
 use gtk4::gio::prelude::*;
 use gtk4::glib;
@@ -22,6 +23,31 @@ use gtk4::{
 const MARK: &[u8] = include_bytes!("../docs/mark.png");
 
 static UPDATE: Mutex<Option<UpdateNews>> = Mutex::new(None);
+static SETTINGS: Mutex<Option<Settings>> = Mutex::new(None);
+/// Cosa ha chiesto la tray: la legge il ciclo principale, perché le finestre vanno aperte da lì.
+static ASKED: Mutex<Option<Asked>> = Mutex::new(None);
+
+#[derive(Clone, Copy, PartialEq)]
+enum Asked {
+    Settings,
+    Guide,
+}
+
+fn cfg() -> Settings {
+    let mut slot = SETTINGS.lock().unwrap_or_else(|e| e.into_inner());
+    slot.get_or_insert_with(read_settings).clone()
+}
+
+fn remember(settings: &Settings) {
+    *SETTINGS.lock().unwrap_or_else(|e| e.into_inner()) = Some(settings.clone());
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Open {
+    Nothing,
+    Settings,
+    Guide,
+}
 
 enum UpdateNews {
     Found { release: update::Release, manual: bool },
@@ -32,6 +58,8 @@ struct Launch {
     mode: Mode,
     paths: Vec<PathBuf>,
     stay: bool,
+    open: Open,
+    background: bool,
 }
 
 struct Anchor {
@@ -69,7 +97,7 @@ pub fn start() -> i32 {
     let quit = Arc::new(AtomicBool::new(false));
     if launch.stay {
         spawn_tray(quit.clone());
-        check_updates(false);
+        daily_updates();
     }
     let state = Rc::new(RefCell::new(Wheel {
         launch,
@@ -87,18 +115,35 @@ pub fn start() -> i32 {
     // Ogni apertura dal menu del file è un processo a sé: se condividesse l'id con quello
     // residente nella tray, D-Bus lo girerebbe a lui, che non ha file e non mostra nulla.
     let mut flags = gtk4::gio::ApplicationFlags::empty();
-    if !state.borrow().launch.stay {
+    if !state.borrow().launch.stay || state.borrow().launch.open != Open::Nothing {
         flags |= gtk4::gio::ApplicationFlags::NON_UNIQUE;
     }
     let app = Application::builder().application_id("dev.cedro.Cedro").flags(flags).build();
     let opened = state.clone();
     let flag = quit.clone();
+    let started = std::cell::Cell::new(false);
     app.connect_activate(move |app| {
+        let launch_open = opened.borrow().launch.open;
+        let background = opened.borrow().launch.background;
+        if started.replace(true) {
+            // Un secondo `cedro` senza file, mentre quello residente è già attivo: mostra le Impostazioni.
+            if opened.borrow().launch.paths.is_empty() {
+                open_settings_window(app);
+            }
+            return;
+        }
         if opened.borrow().launch.stay {
             let guard = app.hold();
             opened.borrow_mut().resident = Some(guard);
         }
         present_wheel(app, opened.clone());
+        match launch_open {
+            Open::Settings => open_settings_window(app),
+            Open::Guide => linux_settings::open_guide(app),
+            // Avviato a mano, senza file: si vede subito che c'è, anche senza vassoio.
+            Open::Nothing if opened.borrow().launch.stay && !background => open_settings_window(app),
+            Open::Nothing => {}
+        }
         let app = app.clone();
         let flag = flag.clone();
         let opened = opened.clone();
@@ -110,17 +155,24 @@ pub fn start() -> i32 {
             if let Some(news) = UPDATE.lock().ok().and_then(|mut slot| slot.take()) {
                 on_update(&app, news);
             }
+            match ASKED.lock().ok().and_then(|mut slot| slot.take()) {
+                Some(Asked::Settings) => open_settings_window(&app),
+                Some(Asked::Guide) => linux_settings::open_guide(&app),
+                None => {}
+            }
             let slot = opened.borrow().finished.clone();
             if let Some(note) = slot.lock().ok().and_then(|mut done| done.take()) {
-                notify(&app, &note);
+                if cfg().notify {
+                    notify(&app, &note);
+                }
                 opened.borrow_mut().busy = false;
                 opened.borrow_mut().job.take();
-                if !opened.borrow().launch.stay {
+                if !opened.borrow().launch.stay && app.windows().is_empty() {
                     app.quit();
                     return glib::ControlFlow::Break;
                 }
             }
-            if opened.borrow().windows.is_empty() && !opened.borrow().launch.stay && !opened.borrow().busy {
+            if app.windows().is_empty() && !opened.borrow().launch.stay && !opened.borrow().busy {
                 app.quit();
                 return glib::ControlFlow::Break;
             }
@@ -130,11 +182,20 @@ pub fn start() -> i32 {
     app.run_with_args(&["cedro"]).get() as i32
 }
 
+fn open_settings_window(app: &Application) {
+    linux_settings::open_settings(app, |settings| remember(settings));
+}
+
 fn parse_launch(args: &[String]) -> Launch {
     let mut mode = Mode::Convert;
     let mut paths = Vec::new();
+    let mut open = Open::Nothing;
+    let mut background = false;
     for arg in args.iter().filter(|arg| arg.as_str() != "show") {
         match arg.as_str() {
+            "settings" | "impostazioni" => open = Open::Settings,
+            "guida" => open = Open::Guide,
+            "--background" => background = true,
             "--conversione" => mode = Mode::Convert,
             "--strumenti" => mode = Mode::Tools,
             "--azioni" => mode = Mode::Actions,
@@ -147,7 +208,7 @@ fn parse_launch(args: &[String]) -> Launch {
             _ => {}
         }
     }
-    Launch { stay: paths.is_empty(), mode, paths }
+    Launch { stay: paths.is_empty() && open == Open::Nothing, mode, paths, open, background }
 }
 
 fn present_wheel(app: &Application, state: Rc<RefCell<Wheel>>) {
@@ -476,10 +537,11 @@ fn origin(x: f64, y: f64, width: f64, height: f64) -> (f64, f64) {
 }
 
 fn mode_of(key: Key) -> Option<Mode> {
+    let on = cfg();
     match key {
-        Key::Shift_L | Key::Shift_R => Some(Mode::Convert),
-        Key::Control_L | Key::Control_R => Some(Mode::Tools),
-        Key::Alt_L | Key::Alt_R => Some(Mode::Actions),
+        Key::Shift_L | Key::Shift_R if on.key_shift => Some(Mode::Convert),
+        Key::Control_L | Key::Control_R if on.key_ctrl => Some(Mode::Tools),
+        Key::Alt_L | Key::Alt_R if on.key_alt => Some(Mode::Actions),
         _ => None,
     }
 }
@@ -504,6 +566,12 @@ fn copy_text(text: &str) {
     }
 }
 
+fn ask(what: Asked) {
+    if let Ok(mut slot) = ASKED.lock() {
+        *slot = Some(what);
+    }
+}
+
 fn spawn_tray(quit: Arc<AtomicBool>) {
     let service = ksni::TrayService::new(CedroTray { quit, pixmap: tray_pixels() });
     service.spawn();
@@ -525,8 +593,27 @@ impl ksni::Tray for CedroTray {
         vec![ksni::Icon { width: 32, height: 32, data: self.pixmap.clone() }]
     }
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
-        use ksni::menu::{CheckmarkItem, StandardItem};
+        use ksni::menu::{CheckmarkItem, MenuItem, StandardItem};
         vec![
+            StandardItem {
+                label: format!("Cedro {}", update::CURRENT),
+                enabled: false,
+                ..Default::default()
+            }
+            .into(),
+            MenuItem::Separator,
+            StandardItem {
+                label: "Impostazioni…".into(),
+                activate: Box::new(|_| ask(Asked::Settings)),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Guida…".into(),
+                activate: Box::new(|_| ask(Asked::Guide)),
+                ..Default::default()
+            }
+            .into(),
             StandardItem {
                 label: "Controlla aggiornamenti".into(),
                 activate: Box::new(|_| check_updates(true)),
@@ -555,26 +642,38 @@ impl ksni::Tray for CedroTray {
     }
 }
 
-/// All'avvio aspetta qualche secondo e tace se non c'è niente. Dal menu risponde sempre.
-fn check_updates(manual: bool) {
-    std::thread::spawn(move || {
-        if !manual {
-            std::thread::sleep(Duration::from_secs(8));
-        }
-        let news = match update::check() {
-            Ok(Some(release)) if manual || !update::skipped(&release.version) => UpdateNews::Found { release, manual },
-            Ok(_) if manual => UpdateNews::Note(format!("Hai già l'ultima versione ({}).", update::CURRENT)),
-            Err(e) if manual => UpdateNews::Note(e),
-            Err(e) => {
-                append_log(&format!("aggiornamenti: {e}"));
-                return;
+/// Dopo qualche secondo e poi ogni giorno, finché Cedro resta aperto. Rilegge la scelta a ogni giro.
+fn daily_updates() {
+    std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_secs(8));
+        loop {
+            if cfg().update_check {
+                check_updates_now(false);
             }
-            Ok(_) => return,
-        };
-        if let Ok(mut slot) = UPDATE.lock() {
-            *slot = Some(news);
+            std::thread::sleep(Duration::from_secs(24 * 60 * 60));
         }
     });
+}
+
+/// Dal menu risponde sempre, anche quando non c'è niente di nuovo.
+fn check_updates(manual: bool) {
+    std::thread::spawn(move || check_updates_now(manual));
+}
+
+fn check_updates_now(manual: bool) {
+    let news = match update::check() {
+        Ok(Some(release)) if manual || !update::skipped(&release.version) => UpdateNews::Found { release, manual },
+        Ok(_) if manual => UpdateNews::Note(format!("Hai già l'ultima versione ({}).", update::CURRENT)),
+        Err(e) if manual => UpdateNews::Note(e),
+        Err(e) => {
+            append_log(&format!("aggiornamenti: {e}"));
+            return;
+        }
+        Ok(_) => return,
+    };
+    if let Ok(mut slot) = UPDATE.lock() {
+        *slot = Some(news);
+    }
 }
 
 fn on_update(app: &Application, news: UpdateNews) {
@@ -609,7 +708,11 @@ fn autostart_file() -> Option<PathBuf> {
     Some(base.join("autostart/dev.cedro.Cedro.desktop"))
 }
 
-fn set_autostart(on: bool) -> std::io::Result<()> {
+pub fn autostart_enabled() -> bool {
+    autostart_file().is_some_and(|path| path.exists())
+}
+
+pub fn set_autostart(on: bool) -> std::io::Result<()> {
     let path = autostart_file().ok_or_else(|| std::io::Error::other("HOME non impostata"))?;
     if !on {
         return match std::fs::remove_file(&path) {
@@ -619,7 +722,7 @@ fn set_autostart(on: bool) -> std::io::Result<()> {
     }
     let exe = std::env::current_exe()?;
     let exe = exe.to_str().ok_or_else(|| std::io::Error::other("percorso non UTF-8"))?;
-    write_text(&path, &desktop_file(exe), false)
+    write_text(&path, &desktop_file(exe, " --background"), false)
 }
 
 fn tray_pixels() -> Vec<u8> {
@@ -651,11 +754,15 @@ fn install_integrations() {
     let Some(root) = data_home() else {
         return;
     };
-    let _ = write_text(&root.join("applications/dev.cedro.Cedro.desktop"), &desktop_file(exe), false);
+    let _ = write_text(&root.join("applications/dev.cedro.Cedro.desktop"), &desktop_file(exe, ""), false);
     let _ = write_bytes(
         &root.join("icons/hicolor/256x256/apps/dev.cedro.Cedro.png"),
         MARK,
     );
+    // Chi ha l'avvio automatico dalla 0.11 lo riceve senza finestra all'accesso.
+    if autostart_enabled() {
+        let _ = set_autostart(true);
+    }
     let _ = write_text(&root.join("kio/servicemenus/cedro.desktop"), &dolphin_menu(exe), true);
     let _ = write_text(
         &root.join("nautilus-python/extensions/cedro.py"),
@@ -703,9 +810,11 @@ fn quote_exec(exe: &str) -> String {
     }
 }
 
-fn desktop_file(exe: &str) -> String {
+fn desktop_file(exe: &str, args: &str) -> String {
     format!(
-        "[Desktop Entry]\nType=Application\nName=Cedro\nComment=Conversione locale\nExec={}\nIcon=dev.cedro.Cedro\nTerminal=false\nCategories=Utility;\nStartupNotify=false\n",
+        "[Desktop Entry]\nType=Application\nName=Cedro\nComment=Conversione locale\nExec={}{args}\nIcon=dev.cedro.Cedro\nTerminal=false\nCategories=Utility;\nStartupNotify=false\nActions=settings;guida;\n\n[Desktop Action settings]\nName=Impostazioni\nExec={} settings\n\n[Desktop Action guida]\nName=Guida\nExec={} guida\n",
+        quote_exec(exe),
+        quote_exec(exe),
         quote_exec(exe)
     )
 }
