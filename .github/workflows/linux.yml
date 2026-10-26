@@ -1,0 +1,133 @@
+name: Linux
+
+# Compila e prova Cedro per Linux (x86-64) e crea il pacchetto tar.gz e i motori di trascrizione.
+# Pubblicare: parte da solo alla fine del workflow «Windows ARM64» quando pubblica una release, oppure
+# Actions → Linux → Run workflow con il tag (per esempio v0.18.1): il tar.gz va nella release v<versione>,
+# i motori nella pre-release «motori-v<versione>», e nelle note compare la riga per Linux.
+
+on:
+  push:
+    branches: ["claude/**"]
+    paths: ["Cargo.*", "src/**", "vendor/**", "trascrivi/**", "installer/**", "examples/**", "build.rs", ".github/workflows/linux.yml"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag della release a cui aggiungere Linux (vuoto = solo prova)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  app:
+    name: Cedro (build, prove, tar.gz)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Librerie di sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libdbus-1-dev pkg-config cmake clang
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Prove
+        run: cargo test --release --lib
+
+      - name: Pacchetto tar.gz
+        run: installer/build-linux.sh -o dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-tar
+          path: dist/cedro-*-linux-x64.tar.gz
+
+  motori:
+    name: Motori di trascrizione (processore e Vulkan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Librerie di sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake clang libclang-dev libopus-dev pkg-config \
+            libvulkan-dev glslc espeak-ng
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: trascrivi
+          cache-targets: false
+
+      - name: Motori base, avx2, avxvnni, avx512, avx512vnni, vulkan
+        run: trascrivi/build.sh -o "$GITHUB_WORKSPACE/dist-motori" -t "$RUNNER_TEMP/ctv"
+
+      - name: Prova di trascrizione (voce sintetica)
+        run: |
+          ls -l dist-motori
+          version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' trascrivi/Cargo.toml | head -1)
+          test -x "dist-motori/cedro-trascrivi-$version-linux-x64-vulkan"
+          # La prova di Cedro vuole i motori col nome corto «cedro-trascrivi-<variante>».
+          mkdir -p prova
+          for f in dist-motori/cedro-trascrivi-*; do cp "$f" "prova/cedro-trascrivi-${f##*-linux-x64-}"; done
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libdbus-1-dev
+          CEDRO_TRASCRIVI_DIR="$PWD/prova" cargo test --release --lib transcribes_a_spoken_sentence -- --nocapture
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-motori
+          path: dist-motori/cedro-trascrivi-*
+
+  pubblica:
+    name: Aggiunge Linux alla release
+    if: ${{ inputs.tag != '' }}
+    needs: [app, motori]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: file
+          merge-multiple: true
+
+      - name: Release ${{ inputs.tag }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          find file -type f | sort
+          version=${TAG#v}
+          MOTORI="motori-$TAG"
+          gh release view "$TAG" >/dev/null
+          if ! gh release view "$MOTORI" >/dev/null 2>&1; then
+            gh release create "$MOTORI" --target "$GITHUB_SHA" --prerelease --title "Motori di trascrizione $version (non servono: li scarica Cedro)" \
+              --notes "Questi file non vanno scaricati a mano: Cedro li prende da qui la prima volta che trascrivi. Per installare Cedro vai su https://github.com/${GITHUB_REPOSITORY}/releases/latest"
+          fi
+          # Il nome dei motori deve avere la versione della release (Cedro cerca cedro-trascrivi-<versione>-...).
+          for f in file/cedro-trascrivi-*-linux-x64-*; do
+            new="file/cedro-trascrivi-$version-linux-x64-${f##*-linux-x64-}"
+            [ "$f" = "$new" ] || mv "$f" "$new"
+          done
+          gh release upload "$MOTORI" file/cedro-trascrivi-*-linux-x64-* --clobber
+          gh release upload "$TAG" file/cedro-*-linux-x64.tar.gz --clobber
+          # La riga per Linux nella tabella «Scarica questo», se manca.
+          gh release view "$TAG" --json body --jq .body > note.md
+          if ! grep -q 'linux-x64.tar.gz' note.md; then
+            row="| **Linux** (Wayland con KDE Plasma o GNOME) | [**cedro-$version-linux-x64.tar.gz**](https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG/cedro-$version-linux-x64.tar.gz) |"
+            awk -v row="$row" '{print} /Cedro-ARM64-Setup-.*\.exe/ && !done {print row; done=1}' note.md > nuove.md
+            grep -q 'linux-x64.tar.gz' nuove.md || { printf '%s\n\n' "$row" | cat - note.md > nuove.md; }
+            sed -i 's/Linux è in pausa fino alla 0\.20\.\?//' nuove.md
+            gh release edit "$TAG" --notes-file nuove.md
+          fi
+          for t in "$TAG" "$MOTORI"; do echo "== $t"; gh release view "$t" --json assets --jq '.assets[] | "\(.name)  \(.digest)"'; done
