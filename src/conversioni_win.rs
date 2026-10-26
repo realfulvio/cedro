@@ -530,6 +530,8 @@ unsafe fn render_category(hwnd: HWND) {
     chips(hwnd, instance, formats, ID_FORMAT0, 274 + shift);
     chips(hwnd, instance, tools, ID_TOOL0, 328 + shift);
     // Audio ha le due schede in alto: la coda e i formati scendono per far loro posto.
+    place(hwnd, ID_TITLE, (210, 44, 670, 32));
+    place(hwnd, ID_HINT, (210, 78, 670, 34));
     place(hwnd, ID_DROP, (210, 114 + shift, 670, 40));
     place(hwnd, ID_COUNT, (210, 160 + shift, 670, 16));
     place(hwnd, ID_QUEUE, (210, 178 + shift, 670, 72));
@@ -751,6 +753,16 @@ unsafe fn select_mode(hwnd: HWND, mode: usize) {
             }
         }
         trascrizione::set_active(mode == 2);
+        if mode == 0 {
+            // Tornando da Trascrivi (che sta su Audio) si riprende la categoria dei file in coda.
+            let mut st = state();
+            let kind = CATEGORIES[st.category].kind;
+            if !st.files.iter().any(|e| kind_of(&e.path) == kind) {
+                if let Some(i) = st.files.first().and_then(|e| CATEGORIES.iter().position(|c| c.kind == kind_of(&e.path))) {
+                    st.category = i;
+                }
+            }
+        }
         render_category(hwnd);
     }
     for i in 0..3 {
@@ -799,7 +811,8 @@ unsafe fn apply_view(hwnd: HWND) {
             SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(at)), Some(LPARAM(0)));
             youtube_win::layout(hwnd);
         } else {
-            SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(state().category)), Some(LPARAM(0)));
+            let category = state().category;
+            SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(category)), Some(LPARAM(0)));
             render_category(hwnd);
         }
         let _ = InvalidateRect(Some(item(hwnd, ID_SIDE)), None, true);
@@ -1393,7 +1406,8 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                         trascrizione::hide_all(hwnd);
                         if !youtube_win::enter(hwnd, sel as usize > CATEGORIES.len()) {
                             // Si resta sulla scheda che sta scaricando.
-                            let back = youtube_win::shown_mode().map(|w| CATEGORIES.len() + w as usize).unwrap_or(state().category);
+                            let category = state().category;
+                            let back = youtube_win::shown_mode().map(|w| CATEGORIES.len() + w as usize).unwrap_or(category);
                             SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(back)), Some(LPARAM(0)));
                         }
                     } else if sel >= 0 {
@@ -1492,7 +1506,8 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             DragFinish(hdrop);
             if youtube_win::active() {
                 youtube_win::leave(hwnd);
-                SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(state().category)), Some(LPARAM(0)));
+                let category = state().category;
+            SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(category)), Some(LPARAM(0)));
                 render_category(hwnd);
             }
             add_files(hwnd, paths);
