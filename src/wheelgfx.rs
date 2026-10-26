@@ -1,26 +1,18 @@
 //! Disegno della ruota senza dipendenze grafiche: un buffer BGRA con alfa premoltiplicato,
 //! con bordi ammorbiditi. Lo usano Windows (UpdateLayeredWindow) e Linux (cairo).
-//! Colori e forma sono quelli della versione "Bondeno": fette arrotondate, spazio uniforme.
+//! Colori e forma vengono dal tema dell'edizione (`tema::attivo`): fette bianche con un filo e
+//! centro scuro nella standard, fette arrotondate e staccate in quella del Comune di Bondeno.
 
+use crate::tema::{self, Rgb, Tema};
 use crate::wheelgeom::{R0, R1, WHEEL};
 
-/// Colori come (r, g, b).
-pub const SLICE: (u8, u8, u8) = (0xEB, 0xEE, 0xF0);
-pub const HOVER: (u8, u8, u8) = (0x00, 0x66, 0xCC);
-pub const PRIMARY: (u8, u8, u8) = (0x00, 0x5E, 0x8E);
-pub const HOLE: (u8, u8, u8) = (0xFF, 0xFF, 0xFF);
-pub const TEXT: (u8, u8, u8) = (0x19, 0x19, 0x19);
-pub const TEXT_ON_HOVER: (u8, u8, u8) = (0xFF, 0xFF, 0xFF);
-pub const MUTED: (u8, u8, u8) = (0x45, 0x5A, 0x64);
-pub const NAVY: (u8, u8, u8) = (0x00, 0x1A, 0x4D);
-
-const CORNER: f32 = 7.0;
-const HALF_GAP: f32 = 3.0;
+/// Spessore del filo attorno alle fette, in unità logiche.
+const EDGE: f32 = 1.5;
 const INNER: f32 = R0 + 6.0;
 const SHADOW_DY: f32 = 3.0;
 
 /// Distanza (negativa dentro) dal bordo della fetta `n` che contiene il punto, già arrotondata.
-fn slice_dist(n: usize, dx: f32, dy: f32) -> (usize, f32) {
+fn slice_dist(t: &Tema, n: usize, dx: f32, dy: f32) -> (usize, f32) {
     let tau = std::f32::consts::TAU;
     let start = -std::f32::consts::FRAC_PI_2;
     let r = (dx * dx + dy * dy).sqrt();
@@ -28,15 +20,16 @@ fn slice_dist(n: usize, dx: f32, dy: f32) -> (usize, f32) {
     angle = angle.rem_euclid(tau);
     let sweep = tau / n as f32;
     let index = ((angle / sweep) as usize).min(n - 1);
-    let t = angle - index as f32 * sweep;
-    let inset = HALF_GAP + CORNER;
-    let radial = (INNER + CORNER - r).max(r - (R1 - CORNER));
-    let side = if n > 1 { (inset - r * t.sin()).max(inset - r * (sweep - t).sin()) } else { f32::MIN / 4.0 };
+    let local = angle - index as f32 * sweep;
+    let corner = t.corner;
+    let inset = t.half_gap + corner;
+    let radial = (INNER + corner - r).max(r - (R1 - corner));
+    let side = if n > 1 { (inset - r * local.sin()).max(inset - r * (sweep - local).sin()) } else { f32::MIN / 4.0 };
     let outside = (radial.max(0.0).powi(2) + side.max(0.0).powi(2)).sqrt();
-    (index, outside + radial.max(side).min(0.0) - CORNER)
+    (index, outside + radial.max(side).min(0.0) - corner)
 }
 
-fn over(dst: &mut [f32; 4], color: (u8, u8, u8), alpha: f32) {
+fn over(dst: &mut [f32; 4], color: Rgb, alpha: f32) {
     if alpha <= 0.0 {
         return;
     }
@@ -54,6 +47,10 @@ pub fn render(n: usize, hover: i32) -> Vec<u8> {
 
 /// Come `render`, ma con `scale` pixel per unità logica (schermi ad alta densità).
 pub fn render_scaled(n: usize, hover: i32, scale: u32) -> Vec<u8> {
+    render_tema(tema::attivo(), n, hover, scale)
+}
+
+fn render_tema(t: &Tema, n: usize, hover: i32, scale: u32) -> Vec<u8> {
     let scale = scale.max(1);
     let k = scale as f32;
     let size = WHEEL as usize * scale as usize;
@@ -67,18 +64,23 @@ pub fn render_scaled(n: usize, hover: i32, scale: u32) -> Vec<u8> {
             let r = (dx * dx + dy * dy).sqrt();
             let mut px = [0.0f32; 4];
             if r > R0 + 2.0 && r < R1 + 14.0 {
-                let (_, shadow) = slice_dist(n, dx, dy - SHADOW_DY);
+                let (_, shadow) = slice_dist(t, n, dx, dy - SHADOW_DY);
                 let a = (1.0 - shadow / 9.0).clamp(0.0, 1.0);
                 over(&mut px, (0, 0x10, 0x30), 0.28 * a * a);
-                let (index, d) = slice_dist(n, dx, dy);
+                let (index, d) = slice_dist(t, n, dx, dy);
                 let cover = (0.5 - d * k).clamp(0.0, 1.0);
-                let color = if index as i32 == hover { HOVER } else { SLICE };
+                let color = if index as i32 == hover { t.hover } else { t.slice };
                 over(&mut px, color, cover);
+                if t.edge_alpha > 0.0 {
+                    // il filo sta dentro il bordo della fetta, largo EDGE
+                    let band = (0.5 - ((d + EDGE / 2.0).abs() - EDGE / 2.0) * k).clamp(0.0, 1.0);
+                    over(&mut px, t.edge, band * t.edge_alpha);
+                }
             }
             if r < R0 + 1.0 {
-                let ring = if hover >= 0 { HOVER } else { PRIMARY };
+                let ring = if hover >= 0 { t.hover } else { t.hole_ring };
                 over(&mut px, ring, ((R0 - r) * k + 1.0).clamp(0.0, 1.0));
-                over(&mut px, HOLE, ((R0 - 2.0 - r) * k + 0.5).clamp(0.0, 1.0));
+                over(&mut px, t.hole, ((R0 - 2.0 - r) * k + 0.5).clamp(0.0, 1.0));
             }
             let i = (y * size + x) * 4;
             for k in 0..4 {
@@ -98,19 +100,35 @@ mod tests {
         [buf[i], buf[i + 1], buf[i + 2], buf[i + 3]]
     }
 
-    #[test]
-    fn slice_hole_and_outside() {
-        let buf = render(4, 0);
+    fn bgra(c: Rgb) -> [u8; 4] {
+        [c.2, c.1, c.0, 0xFF]
+    }
+
+    fn check(t: &Tema) {
+        let buf = render_tema(t, 4, 0, 1);
         let c = WHEEL / 2.0;
         let radius = (R0 + R1) / 2.0;
         let a = -std::f32::consts::FRAC_PI_4;
         let hovered = at(&buf, c + radius * a.cos(), c + radius * a.sin());
-        assert_eq!(hovered, [0xCC, 0x66, 0x00, 0xFF]);
+        assert_eq!(hovered, bgra(t.hover));
         let idle = at(&buf, c - radius * a.cos(), c + radius * a.sin());
-        assert_eq!(idle, [0xF0, 0xEE, 0xEB, 0xFF]);
-        assert_eq!(at(&buf, c, c), [0xFF, 0xFF, 0xFF, 0xFF]);
+        assert_eq!(idle, bgra(t.slice));
+        assert_eq!(at(&buf, c, c), bgra(t.hole));
         assert_eq!(at(&buf, 2.0, 2.0)[3], 0);
-        // lo spazio tra due fette (a mezzogiorno) lascia passare lo sfondo
-        assert!(at(&buf, c, c - radius)[3] < 0x80);
+        if t.half_gap > 0.0 {
+            // lo spazio tra due fette (a mezzogiorno) lascia passare lo sfondo
+            assert!(at(&buf, c, c - radius)[3] < 0x80);
+        } else {
+            // fette attaccate: a mezzogiorno c'è il filo, più scuro della fetta
+            let seam = at(&buf, c, c - radius);
+            assert_eq!(seam[3], 0xFF);
+            assert!(seam[0] < bgra(t.slice)[0]);
+        }
+    }
+
+    #[test]
+    fn slice_hole_and_outside() {
+        check(&tema::LIMONE);
+        check(&tema::BONDENO);
     }
 }

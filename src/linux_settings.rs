@@ -842,7 +842,7 @@ struct CairoCanvas<'a> {
 }
 
 fn set_font(cr: &Context, size: f64, bold: bool) {
-    cr.select_font_face("Titillium Web", FontSlant::Normal, if bold { FontWeight::Bold } else { FontWeight::Normal });
+    cr.select_font_face(cedro::tema::attivo().font, FontSlant::Normal, if bold { FontWeight::Bold } else { FontWeight::Normal });
     cr.set_font_size(size);
 }
 
