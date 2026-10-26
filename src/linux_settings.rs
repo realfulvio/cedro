@@ -729,6 +729,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 notify: notify.is_active(),
                 progress: progress.is_active(),
                 simple: simple.is_active(),
+                view_asked: base.view_asked,
                 reveal: reveal.is_active(),
                 update_check: updates.is_active(),
                 key_shift: shift.is_active(),
@@ -1005,6 +1006,63 @@ pub fn open_guide(app: &Application) {
             glib::ControlFlow::Continue
         }
         Some(_) => glib::ControlFlow::Continue,
+        None => glib::ControlFlow::Break,
+    });
+    window.present();
+}
+
+/// «Come vuoi usare Cedro?»: le due anteprime animate; si apre al primo avvio.
+pub fn open_view_choice(app: &Application) {
+    use cedro::vista::{self, Hit};
+    let window = titled(app, "Cedro: scegli la vista", vista::W as i32, vista::H as i32);
+    let area = DrawingArea::new();
+    area.set_content_width(vista::W as i32);
+    area.set_content_height(vista::H as i32);
+    let started = Instant::now();
+    let now = move || started.elapsed().as_millis() as u64;
+    let chosen = Rc::new(Cell::new(vista::initial()));
+    let cache: Rc<RefCell<Vec<((usize, i32), ImageSurface)>>> = Rc::new(RefCell::new(Vec::new()));
+    {
+        let chosen = chosen.clone();
+        area.set_draw_func(move |_, cr, _, _| {
+            let mut cache = cache.borrow_mut();
+            let mut canvas = CairoCanvas { cr, cache: &mut cache };
+            vista::draw(&mut canvas, chosen.get(), now());
+        });
+    }
+    let done = Rc::new(Cell::new(false));
+    let click = gtk4::GestureClick::new();
+    {
+        let chosen = chosen.clone();
+        let window = window.clone();
+        let done = done.clone();
+        click.connect_released(move |_, _, x, y| match vista::hit(x as f32, y as f32) {
+            Some(Hit::Card(c)) => chosen.set(c),
+            Some(Hit::Done) => {
+                vista::save(chosen.get());
+                done.set(true);
+                window.close();
+            }
+            None => {}
+        });
+    }
+    area.add_controller(click);
+    // Chiusa senza scegliere: non lo richiediamo a ogni avvio.
+    window.connect_close_request(move |_| {
+        if !done.get() {
+            vista::mark_asked();
+        }
+        glib::Propagation::Proceed
+    });
+    window.set_child(Some(&area));
+    let weak = area.downgrade();
+    glib::timeout_add_local(std::time::Duration::from_millis(33), move || match weak.upgrade() {
+        Some(area) => {
+            if area.is_mapped() {
+                area.queue_draw();
+            }
+            glib::ControlFlow::Continue
+        }
         None => glib::ControlFlow::Break,
     });
     window.present();

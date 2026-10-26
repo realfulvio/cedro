@@ -29,6 +29,8 @@ pub struct Settings {
     pub progress: bool,
     /// Modalità Semplice: i pannelli mostrano solo l'essenziale, le altre opzioni restano a un clic.
     pub simple: bool,
+    /// La scelta tra vista Semplice e Completa è già stata proposta (installatore / primo avvio).
+    pub view_asked: bool,
     /// Codifica i video con la scheda video, se il PC ne ha una adatta (vedi `accel`).
     pub gpu: bool,
     /// Calcoli con le istruzioni avanzate (AVX-512 su x86, i8mm su ARM), se il processore le ha (vedi `accel`).
@@ -60,6 +62,7 @@ impl Default for Settings {
             reveal: false,
             progress: true,
             simple: false,
+            view_asked: false,
             gpu: true,
             avx512: true,
             dest: Dest::Same,
@@ -127,6 +130,7 @@ impl Settings {
                 "reveal" => s.reveal = flag(value).unwrap_or(s.reveal),
                 "progress" => s.progress = flag(value).unwrap_or(s.progress),
                 "simple" => s.simple = flag(value).unwrap_or(s.simple),
+                "view_asked" => s.view_asked = flag(value).unwrap_or(s.view_asked),
                 "gpu" => s.gpu = flag(value).unwrap_or(s.gpu),
                 "avx512" => s.avx512 = flag(value).unwrap_or(s.avx512),
                 "replace" => s.replace = flag(value).unwrap_or(s.replace),
@@ -180,6 +184,7 @@ impl Settings {
             ("reveal", b(self.reveal).into()),
             ("progress", b(self.progress).into()),
             ("simple", b(self.simple).into()),
+            ("view_asked", b(self.view_asked).into()),
             ("gpu", b(self.gpu).into()),
             ("avx512", b(self.avx512).into()),
             ("replace", b(self.replace).into()),
@@ -271,6 +276,9 @@ mod tests {
         let mut s = Settings::default();
         s.simple = true;
         assert!(Settings::parse(&s.merge_into("")).simple);
+        assert!(!Settings::default().view_asked);
+        s.view_asked = true;
+        assert!(Settings::parse(&s.merge_into("")).view_asked);
     }
 
     #[test]
