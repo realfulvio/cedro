@@ -72,6 +72,8 @@ const AUDIO_FORMATS: &[&str] = &["mp3", "m4a", "opus", "wav", "flac"];
 const SUBTITLES: &[(&str, u32)] = &[("Nessuno", 0), ("Italiano", 1), ("Italiano e inglese", 2), ("Tutti", 3)];
 
 const BASE_HEIGHT: i32 = 636;
+/// L'altezza della nota sotto i riquadri: due righe di testo.
+const NOTE_H: i32 = 46;
 const LEFT: i32 = 210;
 const WIDTH: i32 = 670;
 
@@ -101,8 +103,6 @@ struct Page {
     note: String,
     log: String,
     cancel: Arc<AtomicBool>,
-    /// L'altezza del pannello prima di aprire YouTube, da rimettere quando si esce.
-    saved_height: i32,
     /// Posizioni scelte negli elenchi di Video e di Solo audio.
     quality_sel: [usize; 2],
     format_sel: [usize; 2],
@@ -189,7 +189,6 @@ pub unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
         note: String::new(),
         log: String::new(),
         cancel: Arc::new(AtomicBool::new(false)),
-        saved_height: BASE_HEIGHT,
         quality_sel: [1, 1],
         format_sel: [0, 0],
     });
@@ -263,29 +262,54 @@ unsafe fn refresh_choices(hwnd: HWND) {
     }
 }
 
-/// Mette ogni controllo al suo posto e adatta l'altezza della finestra a ciò che è aperto.
+/// Le misure verticali della scheda: (inizio della coda, spazio sotto la coda, altezza di «Altre opzioni», altezza del registro).
+fn metrics(audio: bool, more: bool, log_open: bool) -> (i32, i32, i32, i32) {
+    let count = OPTION_IDS.iter().filter(|(_, v, a)| if audio { *a } else { *v }).count() as i32;
+    // Le opzioni stanno su due colonne, per non allungare troppo la finestra.
+    let options_h = if more { (count + 1) / 2 * 28 + 8 } else { 0 };
+    let log_h = if log_open { 104 } else { 0 };
+    let top = 164;
+    // Sotto la coda: titolo, due scelte, i due riquadri, nota (due righe), destinazione, firma e un po' d'aria.
+    let below = 6 + 18 + 58 + 10 + 28 + options_h + 28 + log_h + 6 + NOTE_H + 8 + 18 + 46 + 18 + 12;
+    (top, below, options_h, log_h)
+}
+
+/// L'altezza minima dell'area interna con i riquadri aperti di ora (px di progetto).
+pub fn min_height() -> i32 {
+    let (audio, more, log_open) = with(|p| (p.audio, p.more, p.log_open)).unwrap_or((false, false, false));
+    let (top, below, _, _) = metrics(audio, more, log_open);
+    BASE_HEIGHT.max(top + 44 + below)
+}
+
+/// Mette ogni controllo al suo posto e adatta la finestra a ciò che è aperto e alla misura scelta dall'utente.
 pub unsafe fn layout(hwnd: HWND) {
     let Some((audio, more, log_open, shown)) = with(|p| (p.audio, p.more, p.log_open, p.shown)) else { return };
     if !shown {
         return;
     }
     let visible_options: Vec<i32> = OPTION_IDS.iter().filter(|(_, v, a)| if audio { *a } else { *v }).map(|o| o.0).collect();
-    // Le opzioni stanno su due colonne, per non allungare troppo la finestra.
-    let options_h = if more { (visible_options.len() as i32 + 1) / 2 * 28 + 8 } else { 0 };
-    let log_h = if log_open { 104 } else { 0 };
-    let top = 164;
-    // Sotto la coda: titolo, due scelte, i due riquadri, nota, destinazione, firma.
-    let below = 6 + 18 + 58 + 10 + 28 + options_h + 28 + log_h + 6 + 36 + 6 + 18 + 36 + 8 + 18 + 8;
-    let client_h = BASE_HEIGHT.max(top + 44 + below);
+    let (top, below, options_h, log_h) = metrics(audio, more, log_open);
+    // La larghezza in più data dall'utente va al contenuto; l'altezza in più alla coda.
+    let (user_w, user_h) = user_size();
+    let dx = (user_w - BASE_W).max(0);
+    set_extra(hwnd, dx, extra().1);
+    let w = WIDTH + dx;
+    let client_h = BASE_HEIGHT.max(top + 44 + below).max(user_h);
     let queue_h = client_h - top - below;
-    put(hwnd, Y_QUEUE, LEFT, top, WIDTH, queue_h);
+    put(hwnd, Y_TITLE, LEFT, 44, w, 32);
+    put(hwnd, Y_HINT, LEFT, 78, w, 22);
+    put(hwnd, Y_EDIT, LEFT, 104, w - 110, 32);
+    put(hwnd, Y_ADD, LEFT + w - 102, 104, 102, 32);
+    put(hwnd, Y_COUNT, LEFT, 146, w, 16);
+    put(hwnd, Y_QUEUE, LEFT, top, w, queue_h);
     let mut y = top + queue_h + 6;
-    put(hwnd, Y_CAP_WHAT, LEFT, y, WIDTH, 16);
+    put(hwnd, Y_CAP_WHAT, LEFT, y, w, 16);
     y += 18;
-    put(hwnd, Y_VIDEO, LEFT, y, 330, 58);
-    put(hwnd, Y_AUDIO, LEFT + 340, y, 330, 58);
+    let half = (w - 10) / 2;
+    put(hwnd, Y_VIDEO, LEFT, y, half, 58);
+    put(hwnd, Y_AUDIO, LEFT + w - half, y, half, 58);
     y += 58 + 10;
-    put(hwnd, Y_MORE, LEFT, y, WIDTH, 28);
+    put(hwnd, Y_MORE, LEFT, y, w, 28);
     y += 28;
     for (id, v, a) in OPTION_IDS {
         let on = more && (if audio { *a } else { *v });
@@ -296,48 +320,44 @@ pub unsafe fn layout(hwnd: HWND) {
     }
     if more {
         y += 4;
+        let col = w / 2;
         for (i, id) in visible_options.iter().enumerate() {
-            let x = LEFT + 6 + (i as i32 % 2) * 336;
+            let x = LEFT + 6 + (i as i32 % 2) * col;
             let row_y = y + (i as i32 / 2) * 28;
             if matches!(*id, Y_QUALITY | Y_FORMAT | Y_SUBS) {
                 let label = OPTION_LABELS.iter().find(|(_, c)| c == id).map(|(l, _)| *l).unwrap_or(0);
                 put(hwnd, label, x, row_y, 108, 26);
-                put(hwnd, *id, x + 110, row_y, 214, 220);
+                put(hwnd, *id, x + 110, row_y, col - 122, 220);
             } else {
-                put(hwnd, *id, x, row_y, 326, 26);
+                put(hwnd, *id, x, row_y, col - 10, 26);
             }
         }
         y += (visible_options.len() as i32 + 1) / 2 * 28;
         y += 4;
     }
-    put(hwnd, Y_LOGT, LEFT, y, WIDTH, 28);
+    let _ = options_h;
+    put(hwnd, Y_LOGT, LEFT, y, w, 28);
     y += 28;
     show_id(hwnd, Y_LOG, log_open);
     if log_open {
-        put(hwnd, Y_LOG, LEFT, y + 2, WIDTH, 96);
+        put(hwnd, Y_LOG, LEFT, y + 2, w, 96);
         y += log_h;
     }
     y += 6;
-    put(hwnd, Y_NOTE, LEFT, y, WIDTH, 36);
-    y += 42;
+    put(hwnd, Y_NOTE, LEFT, y, w, NOTE_H);
+    y += NOTE_H + 8;
     put(hwnd, Y_CAP_DEST, LEFT, y, 300, 16);
     y += 18;
-    put(hwnd, Y_DEST, LEFT, y, 330, 36);
-    put(hwnd, Y_CHANGE, LEFT + 340, y + 1, 80, 34);
-    put(hwnd, Y_GO, LEFT + 430, y, 240, 38);
+    put(hwnd, Y_DEST, LEFT, y, w - 340, 36);
+    put(hwnd, Y_CHANGE, LEFT + w - 330, y + 1, 80, 34);
+    put(hwnd, Y_GO, LEFT + w - 240, y, 240, 38);
     y += 46;
     put(hwnd, Y_POWERED, LEFT, y, 420, 18);
-    put(hwnd, Y_BAR, LEFT, client_h - 3, WIDTH, 3);
+    put(hwnd, Y_BAR, LEFT, client_h - 3, w, 3);
     put(hwnd, ID_SIDE, 0, 40, 190, client_h - 40);
-    resize(hwnd, client_h);
+    put(hwnd, ID_HEADER, 0, 0, BASE_W + dx, 40);
+    resize_client(hwnd, client_h);
     let _ = InvalidateRect(Some(hwnd), None, true);
-}
-
-unsafe fn resize(hwnd: HWND, client_h: i32) {
-    let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    let mut rect = RECT { left: 0, top: 0, right: px(900), bottom: px(client_h) };
-    let _ = AdjustWindowRect(&mut rect, style, false);
-    let _ = SetWindowPos(hwnd, None, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 /// Si apre la scheda: nasconde i controlli dei file e mostra quelli di YouTube.
@@ -345,13 +365,7 @@ pub unsafe fn enter(hwnd: HWND) {
     if active() {
         return;
     }
-    let mut rc = RECT::default();
-    let _ = GetClientRect(hwnd, &mut rc);
-    let height = ((rc.bottom - rc.top) as i64 * 96 / dpi() as i64) as i32;
-    with(|p| {
-        p.shown = true;
-        p.saved_height = height.max(BASE_HEIGHT);
-    });
+    with(|p| p.shown = true);
     for id in LEGACY_IDS {
         show_id(hwnd, *id, false);
     }
@@ -373,19 +387,13 @@ pub unsafe fn enter(hwnd: HWND) {
 
 /// Si torna a una categoria di file: i controlli dei file si ricreano con `render_category`.
 pub unsafe fn leave(hwnd: HWND) {
-    let height = with(|p| {
-        p.shown = false;
-        p.saved_height
-    })
-    .unwrap_or(BASE_HEIGHT);
+    with(|p| p.shown = false);
     for id in FIXED_IDS.iter().chain([Y_LOG, Y_BAR].iter()).copied().chain(OPTION_IDS.iter().map(|o| o.0)).chain(OPTION_LABELS.iter().map(|o| o.0)) {
         show_id(hwnd, id, false);
     }
     for id in LEGACY_IDS {
         show_id(hwnd, *id, true);
     }
-    put(hwnd, ID_SIDE, 0, 40, 190, 600);
-    resize(hwnd, height);
 }
 
 unsafe fn refresh_texts(hwnd: HWND) {
