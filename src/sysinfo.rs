@@ -48,7 +48,12 @@ fn isa() -> Vec<(&'static str, bool)> {
             ("AVX-512", crate::accel::hardware().avx512),
         ]
     }
-    #[cfg(not(target_arch = "x86_64"))]
+    #[cfg(target_arch = "aarch64")]
+    {
+        let hw = crate::accel::hardware();
+        vec![("NEON", true), ("dotprod", hw.dotprod), ("i8mm", hw.avx512)]
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     {
         Vec::new()
     }
@@ -78,8 +83,9 @@ pub fn report() -> String {
     out += &format!("Istruzioni: {}\n", chips.join(", "));
     let s = crate::read_settings();
     out += &format!(
-        "Accelerazione GPU: {}\nAccelerazione AVX-512: {}\n",
+        "Accelerazione GPU: {}\nAccelerazione {}: {}\n",
         state(s.gpu, hw.gpu.is_some()),
+        crate::accel::BOOST_NAME,
         state(s.avx512, hw.avx512)
     );
     out
@@ -363,9 +369,10 @@ mod tests {
     #[test]
     fn the_report_names_everything() {
         let text = report();
-        for word in ["Processore:", "Memoria:", "Scheda video:", "Sistema:", "Accelerazione GPU:", "Accelerazione AVX-512:"] {
+        for word in ["Processore:", "Memoria:", "Scheda video:", "Sistema:", "Accelerazione GPU:"] {
             assert!(text.contains(word), "{word} manca in:\n{text}");
         }
+        assert!(text.contains(&format!("Accelerazione {}:", crate::accel::BOOST_NAME)));
     }
 
     #[cfg(target_os = "linux")]
