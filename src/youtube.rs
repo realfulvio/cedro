@@ -867,7 +867,7 @@ mod tests {
         assert!(j.contains("-f bv*[height<=1080]+ba/b[height<=1080]"), "{j}");
         assert!(j.contains("--merge-output-format mp4"));
         assert!(j.contains("-S ext:mp4:m4a,vcodec:h264"));
-        assert!(j.contains("--ffmpeg-location /x/ffmpeg") && j.contains("--js-runtimes deno:/x/deno") && j.contains("-P temp:/tmp/d/.cedro-temp"), "{j}");
+        assert!(j.contains("--ffmpeg-location /x/ffmpeg") && j.contains("--js-runtimes deno:/x/deno") && j.contains(&format!("-P temp:{}", Path::new("/tmp/d").join(".cedro-temp").display())), "{j}");
         assert!(j.contains("--embed-thumbnail") && j.contains("--embed-chapters") && j.contains("--yes-playlist") && j.contains("--no-overwrites"));
         assert!(!j.contains("--write-subs") && !j.contains("-x "));
     }
