@@ -26,6 +26,8 @@ mod wingfx;
 #[cfg(target_os = "linux")]
 mod linux_conversioni;
 #[cfg(target_os = "linux")]
+mod linux_youtube;
+#[cfg(target_os = "linux")]
 mod linux_progress;
 #[cfg(target_os = "linux")]
 mod linux_settings;

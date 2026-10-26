@@ -133,6 +133,12 @@ Opus (libopus, per i vocali .opus di WhatsApp e Telegram) e la crate opus
   Broadcom Corporation:
   https://datatracker.ietf.org/ipr/1526/
 
-IN ARRIVO (funzioni in lavorazione)
-  yt-dlp - yt-dlp contributors - Unlicense - https://github.com/yt-dlp/yt-dlp
-  Si scarica al primo uso e non fa parte dell'installatore.
+SCHEDA YOUTUBE (programmi scaricati al primo uso, eseguiti come programmi a parte)
+  yt-dlp - yt-dlp contributors - Unlicense (pubblico dominio) - https://github.com/yt-dlp/yt-dlp
+    Scarica video e audio da YouTube; si aggiorna da solo (al massimo ogni 12 ore).
+  FFmpeg - gli sviluppatori di FFmpeg - GNU LGPL 2.1 o successiva - https://ffmpeg.org
+    Compilazioni "lgpl" di BtbN: https://github.com/BtbN/FFmpeg-Builds (su Linux si usa quello del sistema, se c'è).
+    Unisce video e audio e scrive MP3, M4A, Opus, WAV e FLAC. Il codice sorgente è ai siti indicati.
+  Deno - Deno Land Inc. e collaboratori - MIT - https://github.com/denoland/deno
+    Serve a yt-dlp per le verifiche di YouTube che danno i video in alta qualità.
+
