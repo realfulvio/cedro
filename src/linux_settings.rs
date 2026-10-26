@@ -495,6 +495,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let notify = switch(current.notify);
     let reveal = switch(current.reveal);
     let progress = switch(current.progress);
+    let simple = switch(current.simple);
     let log = Button::with_label("Apri cartella");
     log.add_css_class("cedro-sec");
     log.connect_clicked(|_| {
@@ -505,6 +506,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let general = page(
         "Generale",
         &[
+            &setting("Modalità Semplice", "Mostra solo l'essenziale. Le altre opzioni restano a un clic, in «Altre opzioni». Vale dalla prossima apertura del pannello.", &simple),
             &setting("Avvia Cedro con il computer", "La stessa voce del menu dell'icona.", &autostart),
             &setting("Avviso a fine conversione", "Una notifica con il nome del file creato.", &notify),
             &setting("Mostra il file nuovo", "A lavoro finito apre la cartella e seleziona la copia.", &reveal),
@@ -726,6 +728,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 quality: scale.value().round().clamp(40.0, 95.0) as u8,
                 notify: notify.is_active(),
                 progress: progress.is_active(),
+                simple: simple.is_active(),
                 reveal: reveal.is_active(),
                 update_check: updates.is_active(),
                 key_shift: shift.is_active(),

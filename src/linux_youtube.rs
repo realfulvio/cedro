@@ -398,7 +398,7 @@ fn handle(page: &Rc<Page>, event: Event) -> bool {
 }
 
 /// La scheda YouTube (`web` falso) o Video dal web.
-pub fn build(window: &Window, web: bool) -> YoutubePage {
+pub fn build(window: &Window, web: bool, simple: bool) -> YoutubePage {
     let entry = TextEntry::new();
     entry.set_placeholder_text(Some(if web { "Incolla qui il link della pagina con il video" } else { "Incolla qui il link di YouTube" }));
     entry.set_hexpand(true);
@@ -410,7 +410,7 @@ pub fn build(window: &Window, web: bool) -> YoutubePage {
 
     let queue = ListBox::new();
     queue.set_selection_mode(SelectionMode::None);
-    let queue_scroll = ScrolledWindow::builder().child(&queue).min_content_height(90).vexpand(true).has_frame(true).build();
+    let queue_scroll = ScrolledWindow::builder().child(&queue).min_content_height(90).vexpand(!simple).has_frame(true).build();
     let count = caption("CODA · nessun link");
 
     let video_btn = big("Video", if web { "Immagini e suono" } else { "Immagini e suono, come su YouTube" });
@@ -495,11 +495,23 @@ pub fn build(window: &Window, web: bool) -> YoutubePage {
     let dest_row = HBox::new(Orientation::Horizontal, 8);
     dest_row.append(&dest_label);
     dest_row.append(&change);
-    dest_row.append(&go);
+    if !simple {
+        dest_row.append(&go);
+    }
 
     let bar = ProgressBar::new();
     bar.add_css_class("cedro-thin");
     bar.set_visible(false);
+
+    // Modalità Semplice: cartella di salvataggio e registro stanno dentro «Altre opzioni», non in primo piano.
+    let dest_caption = caption("DOVE SALVARE");
+    if simple {
+        more.append(&dest_caption);
+        more.append(&dest_row);
+        more.append(&log_box);
+        go.set_hexpand(true);
+        go.add_css_class("cedro-biggo");
+    }
 
     let top = HBox::new(Orientation::Vertical, 10);
     top.set_margin_top(16);
@@ -524,15 +536,20 @@ pub fn build(window: &Window, web: bool) -> YoutubePage {
         caption("COSA VUOI SCARICARE").upcast_ref(),
         choose.upcast_ref(),
         more_box.upcast_ref(),
-        log_box.upcast_ref(),
-        note.upcast_ref(),
-        caption("DOVE SALVARE").upcast_ref(),
-        dest_row.upcast_ref(),
-        bar.upcast_ref(),
-        signature.upcast_ref(),
     ] {
         top.append(w);
     }
+    if simple {
+        top.append(&go);
+        top.append(&note);
+    } else {
+        top.append(&log_box);
+        top.append(&note);
+        top.append(&dest_caption);
+        top.append(&dest_row);
+    }
+    top.append(&bar);
+    top.append(&signature);
 
     let page = Rc::new(Page {
         web,
