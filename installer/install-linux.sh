@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Installa Cedro per l'utente corrente: nessun permesso di amministratore.
 #   ./install.sh              copia Cedro in ~/.local/opt/cedro e lo collega in ~/.local/bin
+#   ./install.sh --no-start   come sopra, senza avviare Cedro (lo usa l'aggiornamento da dentro)
 #   ./install.sh --uninstall  toglie Cedro e i menu che ha scritto (le impostazioni restano)
 # Serve GTK 4 (su Arch gtk4, su Debian/Ubuntu libgtk-4-1, su Fedora gtk4).
 set -euo pipefail
@@ -44,5 +45,7 @@ case ":$PATH:" in
   *) echo "Aggiungi $bindir al PATH per avviarlo con «cedro»." ;;
 esac
 # La prima volta Cedro scrive da solo i menu dei file (Dolphin, Nautilus) e l'icona.
-nohup "$dest/cedro" --background >/dev/null 2>&1 &
-echo "Avviato: l'icona di Cedro è vicino all'orologio. Su GNOME serve l'estensione AppIndicator."
+if [ "${1:-}" != "--no-start" ]; then
+  nohup "$dest/cedro" --background >/dev/null 2>&1 &
+  echo "Avviato: l'icona di Cedro è vicino all'orologio. Su GNOME serve l'estensione AppIndicator."
+fi

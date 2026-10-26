@@ -95,13 +95,19 @@ fn update() -> i32 {
     }
 }
 
-/// Su Windows scarica e avvia l'installatore. Altrove apre la pagina della release.
+/// Su Windows scarica e avvia l'installatore; su Linux installa il pacchetto se può. Altrimenti apre la pagina della release.
 pub fn install(release: &cedro::update::Release) -> Result<String, String> {
     #[cfg(windows)]
     if let Some(asset) = &release.installer {
         let path = cedro::update::download(asset)?;
         std::process::Command::new(&path).spawn().map_err(|e| e.to_string())?;
         return Ok(format!("Avviato {}.", asset.name));
+    }
+    // Su Linux, se Cedro sta dove lo mette install.sh, il pacchetto si scarica e si installa da solo.
+    #[cfg(unix)]
+    if let (Some(asset), true) = (&release.package, cedro::update::self_updatable()) {
+        cedro::update::install_package(asset)?;
+        return Ok(format!("Installata la versione {}.", release.version));
     }
     #[cfg(windows)]
     let opener = "explorer";
