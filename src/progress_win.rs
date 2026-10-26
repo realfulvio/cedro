@@ -92,6 +92,14 @@ pub fn finish(ok: bool, label: &str) {
     wake();
 }
 
+/// Il lavoro è stato annullato dall'utente: non è un errore né un successo, la linea sparisce.
+pub fn dismiss() {
+    if let Some(j) = job().as_mut() {
+        j.finished = Some((Instant::now().checked_sub(LINGER * 2).unwrap_or_else(Instant::now), true));
+    }
+    wake();
+}
+
 fn wake() {
     let raw = WINDOW.load(Ordering::Relaxed);
     if raw != 0 {
