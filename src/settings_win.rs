@@ -625,8 +625,8 @@ unsafe fn build_about(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, smal
     STATE.with(|st| st.borrow_mut().lines[SEC].push(px(92, dpi)));
     // Edizione Bondeno: il riquadro con lo stemma, e tutto il resto scende di `e` (la lista si accorcia).
     let e = if cedro::edizione::BONDENO {
-        child(hwnd, s, "", SS_OWNERDRAW, ID_ENTE_ABOUT, (x, 104, cw, 72), dpi, small, Some(SEC));
-        84
+        child(hwnd, s, "", SS_OWNERDRAW, ID_ENTE_ABOUT, (x, 104, cw, 80), dpi, small, Some(SEC));
+        92
     } else {
         0
     };
