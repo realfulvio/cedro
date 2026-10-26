@@ -10,14 +10,21 @@ Scarica il file e fai doppio clic: si installa sopra la versione che hai (su Lin
 Non sai quale ti serve? *Impostazioni di Windows → Sistema → Informazioni*: se in «Tipo di sistema» c'è «basato su ARM», prendi quello ARM; altrimenti l'altro.
 I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo la prima volta che trascrivi.
 
+### Edizione Comune di Bondeno
+
+Per i PC del Comune di Bondeno: stesse funzioni, con lo stemma del Comune. Installata sopra Cedro lo sostituisce, e da lì in poi si aggiorna solo con i pacchetti di questa edizione.
+
+| Il tuo computer | File da scaricare |
+| --- | --- |
+| **Windows** | [**Cedro-Bondeno-Setup-{versione}.exe**](https://github.com/{repo}/releases/download/v{versione}/Cedro-Bondeno-Setup-{versione}.exe) |
+| **Windows on ARM** | [**Cedro-Bondeno-ARM64-Setup-{versione}.exe**](https://github.com/{repo}/releases/download/v{versione}/Cedro-Bondeno-ARM64-Setup-{versione}.exe) |
+| **Linux** | [**cedro-bondeno-{versione}-linux-x64.tar.gz**](https://github.com/{repo}/releases/download/v{versione}/cedro-bondeno-{versione}-linux-x64.tar.gz) |
+
 ## Novità della {versione}
 
-**Modalità Semplice**: un'interfaccia essenziale, da attivare quando vuoi.
+- **Edizione Comune di Bondeno**: una versione a parte di Cedro con lo stemma ufficiale del Comune nelle Impostazioni, nella scheda Informazioni, nella guida, nel menu dell'icona e nell'installatore. Ognuna delle due edizioni si aggiorna solo con i suoi pacchetti.
 
-- Nel pannello Conversioni restano solo trascinare i file, scegliere il formato e premere «Converti». Video dal web è il link più «Video» o «Solo audio»; Trascrivi usa le impostazioni automatiche.
-- Le altre opzioni non spariscono: sono a un clic, in «Altre opzioni».
-- Si cambia in Impostazioni → Generale → «Modalità Semplice».
-- Alla fine dell'installazione (su Linux al primo avvio) una finestra con due anteprime animate ti fa scegliere tra Semplice e Completa. Negli aggiornamenti non ti viene richiesto.
+Dalla 0.19.0: Modalità Semplice, un'interfaccia essenziale da attivare in Impostazioni → Generale (le altre opzioni restano a un clic in «Altre opzioni»), scelta anche alla fine dell'installazione.
 
 Dalla 0.18.5: versione di manutenzione con correzioni di robustezza e sicurezza trovate rileggendo il codice.
 

@@ -45,6 +45,12 @@ jobs:
       - name: Pacchetto tar.gz
         run: installer/build-linux.sh -o dist
 
+      - name: Prove dell'edizione Comune di Bondeno
+        run: cargo test --release --lib --features bondeno -- update edizione
+
+      - name: Pacchetto tar.gz, edizione Comune di Bondeno
+        run: installer/build-linux.sh -o dist -b
+
       - uses: actions/upload-artifact@v4
         with:
           name: linux-tar

@@ -792,7 +792,7 @@ pub unsafe fn draw(di: &DRAWITEMSTRUCT) {
     let disabled = di.itemState.0 & ODS_DISABLED.0 != 0;
     SetBkMode(hdc, TRANSPARENT);
     match id {
-        Y_POWERED => crate::firma_win::draw(di, WHITE, GREY, PRIMARY, true, ""),
+        Y_POWERED => crate::firma_win::draw(di, WHITE, GREY, PRIMARY, true, "", true),
         Y_ADD | Y_GO => {
             fill(hdc, &rc, if disabled { LINE } else if selected { HOVER } else { PRIMARY });
             SelectObject(hdc, HGDIOBJ(font(&FONT_BOLD).0));

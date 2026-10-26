@@ -60,6 +60,9 @@ const ID_FULL: i32 = 189;
 const ID_LOGO: i32 = 197;
 const ID_LOCKED: i32 = 198;
 const ID_ABOUT_POWERED: i32 = 199;
+/// Edizione Bondeno: stemma e «Comune di Bondeno» in cima alle sezioni, e il riquadro nella scheda Informazioni.
+const ID_ENTE: i32 = 195;
+const ID_ENTE_ABOUT: i32 = 196;
 const ID_NAV: i32 = 200;
 const ID_LIST: i32 = 220;
 /// Le istruzioni del processore, una pillola ciascuna: da ID_CHIP in su.
@@ -86,6 +89,8 @@ const OFF_SOFT: COLORREF = COLORREF(0x00F3F1EE); // #EEF1F3
 const WHITE: COLORREF = COLORREF(0x00FFFFFF);
 const SIDE: COLORREF = COLORREF(0x00F7F5F3); // #F3F5F7
 const LINE: COLORREF = COLORREF(0x00E5E5E5); // #E5E5E5
+const ENTE_SOFT: COLORREF = COLORREF(0x00FBF7F2); // #F2F7FB, il fondo del riquadro dell'edizione Bondeno
+const ENTE_LINE: COLORREF = COLORREF(0x00EEE3D4); // #D4E3EE
 
 const SECTIONS: [&str; 8] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni"];
 const DPI: [u32; 4] = [100, 144, 200, 300];
@@ -350,8 +355,15 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     let combo_style = tab | CBS_DROPDOWNLIST as u32 | WS_VSCROLL.0;
     const SS_NOPREFIX: u32 = 0x80;
 
+    // Nell'edizione Bondeno le sezioni scendono per lasciare posto allo stemma.
+    let nav_top = if cedro::edizione::BONDENO {
+        child(hwnd, s, "", crate::firma_win::SS_OWNERDRAW, ID_ENTE, (8, 10, SIDE_W - 16, 52), dpi, bold, None);
+        72
+    } else {
+        12
+    };
     for (i, name) in SECTIONS.iter().enumerate() {
-        child(hwnd, b, name, owner, ID_NAV + i as i32, (8, 12 + 38 * i as i32, SIDE_W - 16, 36), dpi, normal, None);
+        child(hwnd, b, name, owner, ID_NAV + i as i32, (8, nav_top + 38 * i as i32, SIDE_W - 16, 36), dpi, normal, None);
     }
 
     let x = SIDE_W + MARGIN; // sinistra del contenuto
@@ -485,7 +497,8 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
 
     // Il piede: firma a sinistra, Annulla e Salva a destra.
     let foot = HEIGHT - FOOT_H;
-    child(hwnd, s, "", crate::firma_win::SS_OWNERDRAW, ID_POWERED, (18, foot + 18, 300, 20), dpi, small, None);
+    let powered_w = if cedro::edizione::BONDENO { 440 } else { 300 };
+    child(hwnd, s, "", crate::firma_win::SS_OWNERDRAW, ID_POWERED, (18, foot + 16, powered_w, 24), dpi, small, None);
     child(hwnd, b, "Annulla", owner, IDCANCEL.0, (WIDTH - 18 - 88 - 8 - 88, foot + 12, 88, 32), dpi, normal, None);
     child(hwnd, b, "Salva", owner, IDOK.0, (WIDTH - 18 - 88, foot + 12, 88, 32), dpi, bold, None);
 }
@@ -614,19 +627,26 @@ unsafe fn build_about(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, smal
     child(hwnd, s, "Convertitore di file, con una ruota al cursore · Licenza MIT", SS_NOPREFIX, ID_DESC, (x + 72, 47, cw - 72, 18), dpi, small, Some(SEC));
     child(hwnd, s, "", SS_OWNERDRAW, ID_ABOUT_POWERED, (x + 72, 65, cw - 72, 18), dpi, small, Some(SEC));
     STATE.with(|st| st.borrow_mut().lines[SEC].push(px(92, dpi)));
+    // Edizione Bondeno: il riquadro con lo stemma, e tutto il resto scende di `e` (la lista si accorcia).
+    let e = if cedro::edizione::BONDENO {
+        child(hwnd, s, "", SS_OWNERDRAW, ID_ENTE_ABOUT, (x, 104, cw, 80), dpi, small, Some(SEC));
+        92
+    } else {
+        0
+    };
 
-    child(hwnd, s, "CODICE APERTO USATO DA CEDRO", SS_NOPREFIX, ID_DESC, (x, 104, cw, 18), dpi, caption, Some(SEC));
-    child(hwnd, s, "Cedro esiste grazie a queste persone e ai loro progetti. Grazie.", SS_NOPREFIX, ID_DESC, (x, 124, cw, 20), dpi, small, Some(SEC));
+    child(hwnd, s, "CODICE APERTO USATO DA CEDRO", SS_NOPREFIX, ID_DESC, (x, 104 + e, cw, 18), dpi, caption, Some(SEC));
+    child(hwnd, s, "Cedro esiste grazie a queste persone e ai loro progetti. Grazie.", SS_NOPREFIX, ID_DESC, (x, 124 + e, cw, 20), dpi, small, Some(SEC));
 
     // La ricerca: il campo sta dentro un riquadro con l'angolo morbido.
-    let frame = RECT { left: px(x, dpi), top: px(152, dpi), right: px(x + cw - 130, dpi), bottom: px(152 + 30, dpi) };
+    let frame = RECT { left: px(x, dpi), top: px(152 + e, dpi), right: px(x + cw - 130, dpi), bottom: px(152 + e + 30, dpi) };
     STATE.with(|st| st.borrow_mut().frames[SEC].push(frame));
-    let edit = child(hwnd, w!("EDIT"), "", WS_TABSTOP.0 | 0x80 /* ES_AUTOHSCROLL */, ID_SEARCH, (x + 10, 158, cw - 130 - 20, 20), dpi, normal, Some(SEC));
+    let edit = child(hwnd, w!("EDIT"), "", WS_TABSTOP.0 | 0x80 /* ES_AUTOHSCROLL */, ID_SEARCH, (x + 10, 158 + e, cw - 130 - 20, 20), dpi, normal, Some(SEC));
     let hint = HSTRING::from("Cerca un componente o una licenza");
     SendMessageW(edit, 0x1501 /* EM_SETCUEBANNER */, Some(WPARAM(1)), Some(LPARAM(hint.as_ptr() as isize)));
-    child(hwnd, s, "", SS_NOPREFIX | 2 /* SS_RIGHT */, ID_COUNT, (x + cw - 120, 158, 120, 20), dpi, small, Some(SEC));
+    child(hwnd, s, "", SS_NOPREFIX | 2 /* SS_RIGHT */, ID_COUNT, (x + cw - 120, 158 + e, 120, 20), dpi, small, Some(SEC));
 
-    let list = crate::winlist::create(hwnd, ID_LIST, (px(x, dpi), px(194, dpi), px(cw, dpi), px(284, dpi)));
+    let list = crate::winlist::create(hwnd, ID_LIST, (px(x, dpi), px(194 + e, dpi), px(cw, dpi), px(284 - e, dpi)));
     STATE.with(|st| st.borrow_mut().sections[SEC].push(list));
     show_count(hwnd, crate::winlist::filter(list, ""));
 
@@ -929,6 +949,47 @@ unsafe fn draw_logo(dis: &DRAWITEMSTRUCT) {
     }
 }
 
+/// Edizione Bondeno, in cima alle sezioni: lo stemma e «Comune di / Bondeno», con una riga sotto.
+unsafe fn draw_ente(dis: &DRAWITEMSTRUCT) {
+    clear(dis, SIDE);
+    let r = dis.rcItem;
+    let dpi = STATE.with(|st| st.borrow().dpi);
+    let side = px(38, dpi) as f32;
+    let top = r.top as f32 + ((r.bottom - r.top - px(6, dpi)) as f32 - side) / 2.0;
+    crate::wingfx::draw_stemma(dis.hDC, cedro::edizione::Stemma::Solo, (r.left + px(6, dpi)) as f32, top, side, side);
+    let font = STATE.with(|st| st.borrow().bold);
+    let text_left = r.left + px(52, dpi);
+    let mid = (r.top + r.bottom - px(6, dpi)) / 2;
+    put_text(dis.hDC, "Comune di", &RECT { left: text_left, top: mid - px(18, dpi), right: r.right, bottom: mid }, font, PRIMARY, DT_LEFT);
+    put_text(dis.hDC, "Bondeno", &RECT { left: text_left, top: mid, right: r.right, bottom: mid + px(18, dpi) }, font, PRIMARY, DT_LEFT);
+    let line = RECT { left: r.left + px(6, dpi), top: r.bottom - 1, right: r.right - px(6, dpi), bottom: r.bottom };
+    FillRect(dis.hDC, &line, brush(&BRUSH_LINE, LINE));
+}
+
+/// Il riquadro della scheda Informazioni: stemma con la scritta e due righe sull'edizione.
+unsafe fn draw_ente_about(dis: &DRAWITEMSTRUCT) {
+    clear(dis, WHITE);
+    let r = dis.rcItem;
+    let dpi = STATE.with(|st| st.borrow().dpi);
+    crate::wingfx::round_rect(dis.hDC, &r, px(6, dpi) as f32, Some(ENTE_SOFT), Some((ENTE_LINE, 1.0)));
+    let side = (r.bottom - r.top - px(10, dpi)) as f32;
+    crate::wingfx::draw_stemma(dis.hDC, cedro::edizione::Stemma::Scritta, (r.left + px(12, dpi)) as f32, (r.top + px(5, dpi)) as f32, side, side);
+    let (bold, small) = STATE.with(|st| (st.borrow().bold, st.borrow().font));
+    let left = r.left + px(12, dpi) + side as i32 + px(14, dpi);
+    let right = r.right - px(12, dpi);
+    let mid = (r.top + r.bottom) / 2;
+    put_text(dis.hDC, "Edizione per il Comune di Bondeno", &RECT { left, top: mid - px(28, dpi), right, bottom: mid - px(6, dpi) }, bold, PRIMARY, DT_LEFT);
+    let mut note = RECT { left, top: mid - px(4, dpi), right, bottom: r.bottom - px(2, dpi) };
+    let old = SelectObject(dis.hDC, small.into());
+    SetTextColor(dis.hDC, GREY);
+    SetBkMode(dis.hDC, TRANSPARENT);
+    let mut wide: Vec<u16> = "Stesse funzioni di Cedro, con lo stemma del Comune. Si aggiorna solo con i pacchetti di questa edizione."
+        .encode_utf16()
+        .collect();
+    DrawTextW(dis.hDC, &mut wide, &mut note, DT_LEFT | DT_WORDBREAK | DT_NOPREFIX);
+    SelectObject(dis.hDC, old);
+}
+
 /// L'interruttore a levetta: pillola blu con il pallino a destra se acceso, contorno grigio se spento.
 unsafe fn draw_toggle(dis: &DRAWITEMSTRUCT) {
     let id = dis.CtlID as i32;
@@ -1071,10 +1132,14 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 draw_tag(dis);
             } else if id == ID_LOGO {
                 draw_logo(dis);
+            } else if id == ID_ENTE {
+                draw_ente(dis);
+            } else if id == ID_ENTE_ABOUT {
+                draw_ente_about(dis);
             } else if id == ID_POWERED {
-                crate::firma_win::draw(dis, SIDE, GREY, PRIMARY, false, "");
+                crate::firma_win::draw(dis, SIDE, GREY, PRIMARY, false, "", true);
             } else if id == ID_ABOUT_POWERED {
-                crate::firma_win::draw(dis, WHITE, GREY, PRIMARY, false, "  ·  github.com/realfulvio/cedro");
+                crate::firma_win::draw(dis, WHITE, GREY, PRIMARY, false, "  ·  github.com/realfulvio/cedro", false);
             } else if (ID_NAV..ID_NAV + SECTIONS.len() as i32).contains(&id) {
                 draw_nav(dis);
             } else if is_toggle(id) {

@@ -237,6 +237,10 @@ impl Canvas for Gdi {
     fn logo(&mut self, left: f32, baseline: f32, scale: f32, ink: Rgb, accent: Rgb, real: Rgb) {
         crate::wingfx::draw_logo(self.dc, left * self.d, baseline * self.d, scale * self.d, true, colorref(ink), colorref(accent), colorref(real));
     }
+
+    fn stemma(&mut self, stemma: cedro::edizione::Stemma, x: f32, y: f32, w: f32, h: f32) {
+        crate::wingfx::draw_stemma(self.dc, stemma, x * self.d, y * self.d, w * self.d, h * self.d);
+    }
 }
 
 unsafe fn paint(hwnd: HWND) {
