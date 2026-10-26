@@ -7,7 +7,7 @@
   #define BuildDir "..\target\release"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.19.0"
+  #define AppVersion "0.19.1"
 #endif
 
 [Setup]
@@ -82,6 +82,7 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\cedro.exe"; IconFilename: "{a
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Cedro"; ValueData: """{app}\cedro.exe"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
+Filename: "{app}\cedro.exe"; Parameters: "vista"; Description: "Scegli come usare Cedro (Semplice o Completa)"; Flags: nowait postinstall skipifsilent; Check: ViewNotAsked
 Filename: "{app}\cedro.exe"; Description: "Avvia Cedro"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\cedro.exe"; Parameters: "guida"; Description: "Guarda come funziona (guida animata)"; Flags: nowait postinstall skipifsilent
 
@@ -89,6 +90,16 @@ Filename: "{app}\cedro.exe"; Parameters: "guida"; Description: "Guarda come funz
 Type: filesandordirs; Name: "{userappdata}\Cedro"
 
 [Code]
+// Chiede la vista (Semplice/Completa) solo la prima volta: negli aggiornamenti la scelta c'è già.
+function ViewNotAsked: Boolean;
+var
+  text: AnsiString;
+begin
+  Result := True;
+  if LoadStringFromFile(ExpandConstant('{userappdata}\Cedro\config.txt'), text) then
+    Result := Pos('view_asked=1', text) = 0;
+end;
+
 procedure CloseCedro;
 var
   code: Integer;
