@@ -22,7 +22,7 @@ mod mkv;
 mod mp4mux;
 
 pub use engine::{
-    append_log, config_dir, unique_output, extension, kind_of, mode_from_vk, perform, read_quality, same_kind_paths, slices, Kind,
+    append_log, config_dir, unique_output, extension, kind_of, mode_from_vk, perform, perform_into, read_quality, same_kind_paths, slices, Kind,
     Mode, Output, Slice,
 };
 pub use settings::{read_settings, write_settings, Settings};

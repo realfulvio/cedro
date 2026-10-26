@@ -1,6 +1,5 @@
 //! Il pannello Conversioni: categorie, formati e conversione di una coda di file.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::engine::{self, Kind, Mode, Slice};
@@ -42,28 +41,16 @@ pub fn belonging(kind: Kind, paths: &[PathBuf]) -> Vec<PathBuf> {
     paths.iter().filter(|p| engine::kind_of(p) == kind).cloned().collect()
 }
 
-/// Esegue `action` su un file. Con `dest` la copia nuova finisce in quella cartella
+/// Esegue `action` su un file. Con `dest` le copie nuove finiscono in quella cartella
 /// invece che accanto all'originale; il nome non ne sovrascrive mai un altro.
 pub fn convert_one(path: &Path, action: &str, quality: u8, dest: Option<&Path>) -> Result<String, String> {
-    let out = engine::perform(path, action, quality).map_err(|e| e.0)?;
-    let Some(dest) = dest else { return Ok(out.message) };
-    if out.path == path || out.path.parent() == Some(dest) || !out.path.is_file() {
-        return Ok(out.message);
-    }
-    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
-    let stem = out.path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
-    let ext = engine::extension(&out.path);
-    let target = engine::unique_output(dest, stem, &ext);
-    if fs::rename(&out.path, &target).is_err() {
-        fs::copy(&out.path, &target).map_err(|e| e.to_string())?;
-        let _ = fs::remove_file(&out.path);
-    }
-    Ok(out.message)
+    engine::perform_into(path, action, quality, dest).map(|out| out.message).map_err(|e| e.0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn every_category_has_formats() {
@@ -96,6 +83,9 @@ mod tests {
         assert!(dest.join("nota.md").is_file());
         assert!(!base.join("nota.md").exists());
         assert!(src.is_file());
+        // Una seconda conversione non sovrascrive: il nome prende il -2.
+        convert_one(&src, "md", 82, Some(&dest)).unwrap();
+        assert!(dest.join("nota-2.md").is_file());
         let _ = fs::remove_dir_all(&base);
     }
 }
