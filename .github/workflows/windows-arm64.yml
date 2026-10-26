@@ -164,7 +164,11 @@ jobs:
       - name: Vulkan SDK per ARM64
         shell: pwsh
         run: |
-          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/warm/vulkan-sdk.exe -OutFile vulkan-sdk.exe
+          # Il server di LunarG a volte chiude la connessione: riprovo qualche volta.
+          foreach ($i in 1..5) {
+            try { Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/warm/vulkan-sdk.exe -OutFile vulkan-sdk.exe; break }
+            catch { "tentativo ${i}: $_"; if ($i -eq 5) { throw }; Start-Sleep -Seconds (10 * $i) }
+          }
           Start-Process .\vulkan-sdk.exe -ArgumentList '--accept-licenses', '--default-answer', '--confirm-command', 'install' -Wait
           $sdk = (Get-ChildItem C:\VulkanSDK -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName
           "VULKAN_SDK=$sdk" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
