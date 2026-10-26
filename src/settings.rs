@@ -27,9 +27,9 @@ pub struct Settings {
     pub reveal: bool,
     /// Mostra la sottile barra di avanzamento in basso a destra mentre converte.
     pub progress: bool,
-    /// Usa la scheda video dove serve (trascrizione, video), se c'è.
+    /// Codifica i video con la scheda video, se il PC ne ha una adatta (vedi `accel`).
     pub gpu: bool,
-    /// Usa le istruzioni AVX-512 se il processore le ha.
+    /// Calcoli con AVX-512, se il processore lo ha (vedi `accel`).
     pub avx512: bool,
     pub dest: Dest,
     pub dest_dir: String,
@@ -104,6 +104,8 @@ impl Settings {
 
     pub fn parse(text: &str) -> Settings {
         let mut s = Settings::default();
+        // Il Blocco note salva con il BOM: senza toglierlo la prima chiave non verrebbe riconosciuta.
+        let text = text.strip_prefix('\u{feff}').unwrap_or(text);
         for line in text.lines() {
             let Some((key, value)) = line.trim().split_once('=') else { continue };
             let value = value.trim();
@@ -227,6 +229,11 @@ mod tests {
         let s = Settings::parse("quality=99\nnotify=0\nkey_alt = off\nupdate_check=1\n");
         assert_eq!(s.quality, 95);
         assert!(!s.notify && !s.key_alt && s.update_check && s.key_shift);
+    }
+
+    #[test]
+    fn a_file_saved_with_bom_still_reads_its_first_key() {
+        assert!(!Settings::parse("\u{feff}progress=0\nnotify=0\n").progress);
     }
 
     #[test]

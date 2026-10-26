@@ -30,10 +30,6 @@ fn main() {
     unsafe {
         libc::nice(10);
     }
-    // I messaggi di whisper.cpp passano di qui: si tiene solo quale scheda video usa.
-    let _ = log::set_logger(&DEVICE_LOG);
-    log::set_max_level(log::LevelFilter::Info);
-    whisper_rs::install_logging_hooks();
     let start = Instant::now();
     let mut params = WhisperContextParameters::default();
     params.use_gpu(cfg!(feature = "vulkan") && !cpu_only);
@@ -41,7 +37,7 @@ fn main() {
         Ok(ctx) => ctx,
         Err(e) => fail(&format!("il modello non si apre ({e}): forse il file è rovinato")),
     };
-    let gpu = DEVICE_LOG.gpu.lock().map(|g| g.clone()).unwrap_or_default();
+    let gpu = if cfg!(feature = "vulkan") && !cpu_only { video_card() } else { None };
     emit(json!({"e": "ready", "ms": start.elapsed().as_millis() as u64, "threads": threads, "gpu": gpu}));
     for line in std::io::stdin().lock().lines() {
         let Ok(line) = line else { break };
@@ -116,35 +112,23 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize) -> Result<S
     Ok(lang)
 }
 
-/// Ricava dai messaggi di whisper.cpp il nome della scheda video in uso (vuoto: processore).
-struct DeviceLog {
-    gpu: std::sync::Mutex<Option<String>>,
-}
-
-static DEVICE_LOG: DeviceLog = DeviceLog { gpu: std::sync::Mutex::new(None) };
-
-impl log::Log for DeviceLog {
-    fn enabled(&self, _: &log::Metadata) -> bool {
-        true
-    }
-
-    fn log(&self, record: &log::Record) {
-        let text = record.args().to_string();
-        // «ggml_vulkan: 0 = Intel(R) Iris(R) Xe Graphics (Intel open-source Mesa driver) | uma: 1 | …»
-        if let Some(rest) = text.split("ggml_vulkan: 0 = ").nth(1) {
-            let name = rest.split(" | ").next().unwrap_or(rest).trim().to_string();
-            if let Ok(mut gpu) = self.gpu.lock() {
-                gpu.get_or_insert(name);
+/// Il nome della scheda video che whisper.cpp ha acceso (Vulkan), se ce n'è una. Lo chiede a ggml, che
+/// elenca i dispositivi trovati: «Vulkan0» è il primo, la descrizione ha il nome commerciale.
+fn video_card() -> Option<String> {
+    use std::ffi::CStr;
+    unsafe {
+        for i in 0..whisper_rs_sys::ggml_backend_dev_count() {
+            let dev = whisper_rs_sys::ggml_backend_dev_get(i);
+            let name = whisper_rs_sys::ggml_backend_dev_name(dev);
+            if name.is_null() || !CStr::from_ptr(name).to_string_lossy().starts_with("Vulkan") {
+                continue;
             }
-        }
-        if text.contains("no GPU found") {
-            if let Ok(mut gpu) = self.gpu.lock() {
-                *gpu = None;
-            }
+            let desc = whisper_rs_sys::ggml_backend_dev_description(dev);
+            let text = if desc.is_null() { String::new() } else { CStr::from_ptr(desc).to_string_lossy().trim().to_string() };
+            return Some(if text.is_empty() { "scheda video".to_string() } else { text });
         }
     }
-
-    fn flush(&self) {}
+    None
 }
 
 fn emit(v: Value) {

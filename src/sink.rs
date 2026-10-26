@@ -35,16 +35,29 @@ pub(crate) struct VideoShape {
     pub mute: bool,
     /// 40-95, come il cursore della qualità.
     pub quality: u8,
+    /// Codifica con la scheda video, se c'è (vedi `accel::use_gpu`).
+    pub gpu: bool,
 }
 
 impl Default for VideoShape {
     fn default() -> Self {
-        VideoShape { height: None, fps: None, mute: false, quality: 82 }
+        VideoShape { height: None, fps: None, mute: false, quality: 82, gpu: false }
     }
 }
 
 thread_local! {
     static SHAPE: std::cell::Cell<VideoShape> = std::cell::Cell::new(VideoShape::default());
+    static GPU_USED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Il video appena fatto su questo thread è passato dalla scheda video.
+pub(crate) fn gpu_used() -> bool {
+    GPU_USED.with(|g| g.get())
+}
+
+/// Lo dice il codificatore quando la scheda video ha preso il lavoro.
+pub(crate) fn note_gpu() {
+    GPU_USED.with(|g| g.set(true));
 }
 
 /// Le opzioni video in vigore su questo thread.
@@ -55,6 +68,7 @@ pub(crate) fn shape() -> VideoShape {
 /// Esegue `f` con le opzioni video date e poi ripristina quelle di prima.
 pub(crate) fn with_shape<T>(shape: VideoShape, f: impl FnOnce() -> T) -> T {
     let before = SHAPE.with(|s| s.replace(shape));
+    GPU_USED.with(|g| g.set(false));
     let out = f();
     SHAPE.with(|s| s.set(before));
     out

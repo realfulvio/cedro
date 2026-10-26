@@ -235,6 +235,8 @@ unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) 
 
 unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
+        WM_MEASUREITEM if crate::winmenu::measure(lparam) => LRESULT(1),
+        WM_DRAWITEM if crate::winmenu::draw(lparam) => LRESULT(1),
         WM_TRAY => {
             if lparam.0 as u32 == WM_RBUTTONUP || lparam.0 as u32 == WM_CONTEXTMENU {
                 show_menu(hwnd);
@@ -930,6 +932,10 @@ fn on_drop() {
     append_log(&summary);
     let settings = read_settings();
     if settings.notify {
+        // Il fumetto sta nello stesso angolo della linea verde e la coprirebbe: prima la linea, poi il fumetto.
+        if settings.progress && failed.is_none() {
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+        }
         balloon(&summary);
     }
     if let (true, Some(out)) = (settings.reveal, last_out) {
@@ -1269,7 +1275,7 @@ fn paths_from(data: &IDataObject) -> std::result::Result<Vec<PathBuf>, windows::
     }
 }
 
-fn copy_text(text: &str) {
+pub(crate) fn copy_text(text: &str) {
     unsafe {
         if OpenClipboard(None).is_err() {
             return;
@@ -1332,23 +1338,20 @@ fn remove_tray(hwnd: HWND) {
 
 fn show_menu(hwnd: HWND) {
     unsafe {
-        let Ok(menu) = CreatePopupMenu() else { return };
-        let version = HSTRING::from(format!("Cedro {}", update::CURRENT));
-        let _ = AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, &version);
-        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
-        let _ = AppendMenuW(menu, MF_STRING, 7, w!("Conversioni…"));
-        let _ = AppendMenuW(menu, MF_STRING, 5, w!("Impostazioni…"));
-        let _ = AppendMenuW(menu, MF_STRING, 6, w!("Guida…"));
-        let _ = AppendMenuW(menu, MF_STRING, 3, w!("Controlla aggiornamenti"));
-        let check = if autostart_enabled() { MF_CHECKED } else { MF_UNCHECKED };
-        let _ = AppendMenuW(menu, MF_STRING | check, 4, w!("Avvio automatico"));
-        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
-        let _ = AppendMenuW(menu, MF_STRING, 1, w!("Esci"));
+        let Some(mut menu) = crate::winmenu::Menu::new() else { return };
+        menu.header(&format!("Cedro {}", update::CURRENT));
+        menu.separator();
+        menu.item(7, "Conversioni…", false);
+        menu.item(5, "Impostazioni…", false);
+        menu.item(6, "Guida…", false);
+        menu.item(3, "Controlla aggiornamenti", false);
+        menu.item(4, "Avvio automatico", autostart_enabled());
+        menu.separator();
+        menu.item(1, "Esci", false);
         let mut pt = POINT::default();
         let _ = GetCursorPos(&mut pt);
         let _ = SetForegroundWindow(hwnd);
-        let _ = TrackPopupMenu(menu, TPM_RIGHTBUTTON, pt.x, pt.y, Some(0), hwnd, None);
-        let _ = DestroyMenu(menu);
+        menu.show(hwnd, pt.x, pt.y);
     }
 }
 
