@@ -271,12 +271,12 @@ pub unsafe fn layout(hwnd: HWND) {
     }
     let visible_options: Vec<i32> = OPTION_IDS.iter().filter(|(_, v, a)| if audio { *a } else { *v }).map(|o| o.0).collect();
     // Le opzioni stanno su due colonne, per non allungare troppo la finestra.
-    let options_h = if more { (visible_options.len() as i32 + 1) / 2 * 30 + 8 } else { 0 };
+    let options_h = if more { (visible_options.len() as i32 + 1) / 2 * 28 + 8 } else { 0 };
     let log_h = if log_open { 104 } else { 0 };
     let top = 164;
     // Sotto la coda: titolo, due scelte, i due riquadri, nota, destinazione, firma.
     let below = 6 + 18 + 58 + 10 + 28 + options_h + 28 + log_h + 6 + 36 + 6 + 18 + 36 + 8 + 18 + 8;
-    let client_h = BASE_HEIGHT.max(top + 60 + below);
+    let client_h = BASE_HEIGHT.max(top + 44 + below);
     let queue_h = client_h - top - below;
     put(hwnd, Y_QUEUE, LEFT, top, WIDTH, queue_h);
     let mut y = top + queue_h + 6;
@@ -298,7 +298,7 @@ pub unsafe fn layout(hwnd: HWND) {
         y += 4;
         for (i, id) in visible_options.iter().enumerate() {
             let x = LEFT + 6 + (i as i32 % 2) * 336;
-            let row_y = y + (i as i32 / 2) * 30;
+            let row_y = y + (i as i32 / 2) * 28;
             if matches!(*id, Y_QUALITY | Y_FORMAT | Y_SUBS) {
                 let label = OPTION_LABELS.iter().find(|(_, c)| c == id).map(|(l, _)| *l).unwrap_or(0);
                 put(hwnd, label, x, row_y, 108, 26);
@@ -307,7 +307,7 @@ pub unsafe fn layout(hwnd: HWND) {
                 put(hwnd, *id, x, row_y, 326, 26);
             }
         }
-        y += (visible_options.len() as i32 + 1) / 2 * 30;
+        y += (visible_options.len() as i32 + 1) / 2 * 28;
         y += 4;
     }
     put(hwnd, Y_LOGT, LEFT, y, WIDTH, 28);
