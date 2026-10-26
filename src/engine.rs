@@ -182,9 +182,11 @@ fn stem(path: &Path) -> String {
     path.file_stem().and_then(|s| s.to_str()).unwrap_or("file").to_string()
 }
 
-pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
+/// Il nome libero per la copia. Con «sostituisci» riusa il nome già presente, ma mai quello del file
+/// di partenza: una conversione verso lo stesso formato non deve riscrivere l'originale.
+pub fn unique_output(source: &Path, dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
     let mut name = format!("{file_stem}.{ext}");
-    if crate::settings::read_settings().replace {
+    if crate::settings::read_settings().replace && !same_file(&dir.join(&name), source) {
         return dir.join(name);
     }
     let mut i = 2u32;
@@ -193,6 +195,13 @@ pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
         i += 1;
     }
     dir.join(name)
+}
+
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (fs::canonicalize(a), fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
 }
 
 /// La cartella dove va la copia: accanto al file, in «Cedro» accanto al file, o quella fissa.
@@ -285,9 +294,9 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
     if action == "dup" {
         let ext = extension(path);
         let out = if ext.is_empty() {
-            unique_output(&dir, &format!("{}-copia", stem(path)), "copia")
+            unique_output(path, &dir, &format!("{}-copia", stem(path)), "copia")
         } else {
-            unique_output(&dir, &format!("{}-copia", stem(path)), &ext)
+            unique_output(path, &dir, &format!("{}-copia", stem(path)), &ext)
         };
         fs::copy(path, &out).map_err(|e| err(e.to_string()))?;
         return Ok(Output { path: out, message: "Copia creata".into() });
@@ -296,7 +305,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
         let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
         let zipped = zip_store(&[(name, bytes.as_slice())]);
-        let out = unique_output(&dir, &stem(path), "zip");
+        let out = unique_output(path, &dir, &stem(path), "zip");
         write_bytes(&out, &zipped)?;
         return Ok(Output {
             path: out,
@@ -308,7 +317,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         return Err(err("Opus non è ancora letto"));
     }
     if action == "wav" || action == "mp3" {
-        let out = unique_output(&dir, &stem(path), action);
+        let out = unique_output(path, &dir, &stem(path), action);
         let result = if action == "wav" {
             crate::audio::to_wav(path, &out)
         } else {
@@ -322,7 +331,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         return Ok(Output { path: out, message: size_message(before, after) });
     }
     if action == "mp4" {
-        let out = unique_output(&dir, &stem(path), "mp4");
+        let out = unique_output(path, &dir, &stem(path), "mp4");
         let result = {
             #[cfg(windows)]
             {
@@ -349,7 +358,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         let text = read_text(path)?;
         if action == "pdf" {
             let bytes = pdf_from_text(&text);
-            let out = unique_output(&dir, &stem(path), "pdf");
+            let out = unique_output(path, &dir, &stem(path), "pdf");
             write_bytes(&out, &bytes)?;
             return Ok(Output { path: out, message: "PDF di testo".into() });
         }
@@ -361,7 +370,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
             _ => (text, "txt".into(), ""),
         };
         let file_stem = if suffix.is_empty() { stem(path) } else { format!("{}{suffix}", stem(path)) };
-        let out = unique_output(&dir, &file_stem, if ext.is_empty() { "txt" } else { &ext });
+        let out = unique_output(path, &dir, &file_stem, if ext.is_empty() { "txt" } else { &ext });
         write_bytes(&out, body.as_bytes())?;
         return Ok(Output { path: out, message: "Testo scritto".into() });
     }
@@ -369,7 +378,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
     if kind == Kind::Doc && action == "pdf" {
         let text = crate::doctext::document_text(path).map_err(err)?;
         let bytes = pdf_from_text(&text);
-        let out = unique_output(&dir, &stem(path), "pdf");
+        let out = unique_output(path, &dir, &stem(path), "pdf");
         write_bytes(&out, &bytes)?;
         return Ok(Output { path: out, message: "PDF di testo".into() });
     }
@@ -385,7 +394,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
             let mut jpeg = Vec::new();
             JpegEncoder::new_with_quality(&mut jpeg, quality).encode_image(&rgb).map_err(|e| e.to_string())?;
             let name = if total == 1 { stem(path) } else { format!("{}-{}", stem(path), i + 1) };
-            let out = unique_output(&dir, &name, "jpg");
+            let out = unique_output(path, &dir, &name, "jpg");
             write_bytes(&out, &jpeg).map_err(|e| e.to_string())?;
             first.get_or_insert(out);
             Ok(())
@@ -415,7 +424,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
             }));
         }
         let docx = crate::pdflayout::docx(&pages, |i| ocr.get(i).cloned().flatten().unwrap_or_default());
-        let out = unique_output(&dir, &stem(path), "docx");
+        let out = unique_output(path, &dir, &stem(path), "docx");
         write_bytes(&out, &docx)?;
         let message = if scanned == 0 {
             "Word modificabile: titoli, paragrafi e tabelle del PDF".to_string()
@@ -434,7 +443,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         } else {
             (text.into_bytes(), "txt")
         };
-        let out = unique_output(&dir, &stem(path), ext);
+        let out = unique_output(path, &dir, &stem(path), ext);
         write_bytes(&out, &bytes)?;
         let mut message = match (action, ocr_pages) {
             ("docx", 0) => "Word di testo. L'impaginazione del PDF non viene ricostruita.".to_string(),
@@ -449,16 +458,26 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
     }
     if action == "ocr" && kind == Kind::Image {
         let text = crate::ocr::image_text(path).map_err(err)?;
-        let out = unique_output(&dir, &stem(path), "txt");
+        let out = unique_output(path, &dir, &stem(path), "txt");
         write_bytes(&out, text.as_bytes())?;
         return Ok(Output { path: out, message: "Testo letto".into() });
     }
     if action == "ocr" && kind == Kind::Pdf {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-        let text = crate::doctext::pdf_text(path).or_else(|_| crate::ocr::pdf_pages_text(&bytes)).map_err(err)?;
-        let out = unique_output(&dir, &stem(path), "txt");
+        let (text, read_by_ocr) = match crate::doctext::pdf_text(path) {
+            Ok(text) => (text, false),
+            Err(_) => (crate::ocr::pdf_pages_text(&bytes).map_err(err)?, true),
+        };
+        let out = unique_output(path, &dir, &stem(path), "txt");
         write_bytes(&out, text.as_bytes())?;
-        return Ok(Output { path: out, message: "Testo del PDF.".into() });
+        let mut message = "Testo del PDF.".to_string();
+        if read_by_ocr {
+            let total = crate::ocr::pdf_page_count(&bytes).unwrap_or(0);
+            if total > settings.ocr_pages() {
+                message.push_str(&format!(" L'OCR ha letto {} pagine su {total}: le altre mancano.", settings.ocr_pages()));
+            }
+        }
+        return Ok(Output { path: out, message });
     }
 
     if kind != Kind::Image {
@@ -481,7 +500,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         let (jpeg, w, h) = jpeg_bytes(&img, 90)?;
         let lines = crate::ocr::image_lines(&img).unwrap_or_default();
         let bytes = pdf_from_jpeg(&jpeg, w, h, &lines);
-        let out = unique_output(&dir, &stem(path), "pdf");
+        let out = unique_output(path, &dir, &stem(path), "pdf");
         write_bytes(&out, &bytes)?;
         let message = if lines.is_empty() {
             format!("PDF {w}×{h}")
@@ -509,7 +528,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
     } else {
         format!("{}-{label_stem}", stem(path))
     };
-    let out = unique_output(&dir, &file_stem, ext);
+    let out = unique_output(path, &dir, &file_stem, ext);
     let q = if action == "compress" { quality.min(settings.compress_quality()) } else { quality };
     save_image(&img, &out, format, q)?;
     let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
