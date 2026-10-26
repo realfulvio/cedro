@@ -63,7 +63,6 @@ const WM_APP_ASK: u32 = WM_APP + 12;
 mod youtube_win;
 
 const TITLE: &str = "Conversioni di Cedro";
-const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
 /// La voce del menu dopo le categorie: la scheda YouTube, che non lavora su file ma su link.
 const YOUTUBE: &str = "YouTube";
 const NEXT_TO_ORIGINAL: &str = "Accanto all'originale";
@@ -119,12 +118,12 @@ fn user_size() -> (i32, i32) {
 
 /// Controlli che si allargano con la finestra.
 fn grows_wide(id: i32) -> bool {
-    matches!(id, ID_HEADER | ID_TITLE | ID_HINT | ID_DROP | ID_COUNT | ID_QUEUE | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_OPTIONS | ID_QUALITY)
+    matches!(id, ID_HEADER | ID_TITLE | ID_HINT | ID_DROP | ID_COUNT | ID_QUEUE | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_OPTIONS | ID_QUALITY | trascrizione::ID_LOG)
 }
 
 /// Controlli che restano attaccati al bordo destro.
 fn sticks_right(id: i32) -> bool {
-    matches!(id, ID_GO | ID_QUALITY_VALUE)
+    matches!(id, ID_GO | ID_QUALITY_VALUE | trascrizione::ID_COPY)
 }
 
 /// Dove va un controllo creato o messo al suo posto con le misure di progetto, tenuto conto dell'ingrandimento della finestra.
@@ -435,7 +434,7 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     }
     SendMessageW(exists, CB_SETCURSEL, Some(WPARAM(0)), Some(LPARAM(0)));
     child(hwnd, instance, s, "Tutto sul tuo PC. L'originale non si tocca.", 0, ID_FOOT, (210, 600, 420, 18), f);
-    child(hwnd, instance, s, POWERED_BY, 0, ID_POWERED, (210, 616, 420, 18), f);
+    child(hwnd, instance, s, "", crate::firma_win::SS_OWNERDRAW, ID_POWERED, (210, 616, 420, 18), f);
     child(hwnd, instance, b, "Converti", tab | BS_OWNERDRAW as u32, ID_GO, (640, 590, 240, 38), fb);
     show_quality(hwnd);
     youtube_win::build(hwnd, instance);
@@ -1125,6 +1124,8 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             let di = &*(lparam.0 as *const DRAWITEMSTRUCT);
             if youtube_win::owns(di.CtlID as i32) {
                 youtube_win::draw(di);
+            } else if di.CtlID as i32 == ID_POWERED {
+                crate::firma_win::draw(di, WHITE, GREY, PRIMARY, true, "");
             } else {
                 draw_item(hwnd, di);
             }

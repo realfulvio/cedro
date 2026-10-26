@@ -448,6 +448,63 @@ pub fn update_ytdlp_if_due(ytdlp: &Path, emit: &mut dyn FnMut(Event)) {
     }
 }
 
+/// Il programma di aiuto (yt-dlp, ffmpeg, deno) se è già sul PC.
+fn tool_file(name: &str) -> Option<PathBuf> {
+    let path = match name {
+        "yt-dlp" => ytdlp_path(),
+        "ffmpeg" => ffmpeg_path()?,
+        "deno" => deno_path(),
+        _ => return None,
+    };
+    path.is_file().then_some(path)
+}
+
+pub fn tool_installed(name: &str) -> bool {
+    tool_file(name).is_some()
+}
+
+fn tool_version_now(name: &str, path: &Path) -> Option<String> {
+    if name == "yt-dlp" {
+        return ytdlp_version(path);
+    }
+    let out = command(path).arg(if name == "ffmpeg" { "-version" } else { "--version" }).stdin(Stdio::null()).output().ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let first = text.lines().next()?;
+    let mut words = first.split_whitespace();
+    let version = if name == "ffmpeg" { words.nth(2)? } else { words.nth(1)? };
+    out.status.success().then(|| version.to_string())
+}
+
+/// La versione del programma scaricato, per la scheda Informazioni. Ricordata in un file accanto al programma:
+/// se manca (o il programma è stato aggiornato) la cerca in disparte e la mostra la volta dopo.
+pub fn installed_version(name: &str) -> Option<String> {
+    static BUSY: AtomicBool = AtomicBool::new(false);
+    let path = tool_file(name)?;
+    let cache = tools_dir().join(format!("{name}.versione"));
+    let fresh = match (std::fs::metadata(&cache).and_then(|m| m.modified()), std::fs::metadata(&path).and_then(|m| m.modified())) {
+        (Ok(c), Ok(p)) => c >= p,
+        _ => false,
+    };
+    if fresh {
+        if let Ok(text) = std::fs::read_to_string(&cache) {
+            let text = text.trim();
+            if !text.is_empty() {
+                return Some(text.to_string());
+            }
+        }
+    }
+    if !BUSY.swap(true, Ordering::SeqCst) {
+        let name = name.to_string();
+        std::thread::spawn(move || {
+            if let Some(v) = tool_version_now(&name, &path) {
+                let _ = std::fs::write(tools_dir().join(format!("{name}.versione")), v);
+            }
+            BUSY.store(false, Ordering::SeqCst);
+        });
+    }
+    None
+}
+
 pub fn ytdlp_version(ytdlp: &Path) -> Option<String> {
     let out = command(ytdlp).arg("--version").output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())

@@ -144,6 +144,28 @@ pub fn model_ready(index: usize) -> bool {
     })
 }
 
+/// Il nome del modello di whisper, come si legge sul sito («small», «large-v3-turbo»), con il tipo di compressione.
+pub fn model_names(index: usize) -> String {
+    let file = MODELS.get(index).map(|m| m.file).unwrap_or("");
+    let core = file.trim_start_matches("ggml-").trim_end_matches(".bin");
+    match core.rsplit_once('-') {
+        Some((name, quant)) => format!("{name} {quant}"),
+        None => core.to_string(),
+    }
+}
+
+/// I modelli già sul PC, per nome («base q8_0», «small q8_0»).
+pub fn installed_models() -> Vec<String> {
+    (0..MODELS.len()).filter(|i| model_ready(*i)).map(model_names).collect()
+}
+
+/// Vero se il motore (cedro-trascrivi) è già sul PC.
+pub fn engine_installed() -> bool {
+    std::fs::read_dir(data_dir())
+        .map(|d| d.flatten().any(|e| e.file_name().to_string_lossy().starts_with("cedro-trascrivi-") && e.path().extension().is_some_and(|x| x == "exe" || x.is_empty())))
+        .unwrap_or(false)
+}
+
 /// Il peso del modello scritto come lo legge una persona: «490 MB», «1,6 GB».
 pub fn size_text(megabytes: u32) -> String {
     if megabytes >= 1000 {
@@ -1054,5 +1076,41 @@ mod tests {
         zip.by_name("word/styles.xml").unwrap().read_to_string(&mut styles).unwrap();
         assert!(styles.contains("it-IT"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Prova sul PC: con `CEDRO_TRASCRIVI_DIR` (i motori già compilati, nomi `cedro-trascrivi-<variante>`) e
+    /// `espeak-ng` trascrive una frase vera, scaricando il modello «Veloce» se manca. Altrove non fa niente.
+    /// Con `CEDRO_TRASCRIVI_GPU=1` prova la variante per scheda video.
+    #[test]
+    fn transcribes_a_spoken_sentence() {
+        if std::env::var_os("CEDRO_TRASCRIVI_DIR").is_none() {
+            return;
+        }
+        let work = std::env::temp_dir().join(format!("cedro-voce-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&work);
+        std::fs::create_dir_all(&work).unwrap();
+        let wav = work.join("voce.wav");
+        let spoke = Command::new("espeak-ng").args(["-v", "it", "-s", "130", "-w"]).arg(&wav).arg("Buongiorno a tutti. Oggi parliamo del bilancio comunale.").status();
+        if !spoke.is_ok_and(|s| s.success()) {
+            eprintln!("espeak-ng non c'è: prova saltata");
+            return;
+        }
+        let request = Request { format: Format::Text, model: 0, gpu: std::env::var_os("CEDRO_TRASCRIVI_GPU").is_some(), avx512: false };
+        let lines = std::sync::Mutex::new(Vec::new());
+        let finished = std::sync::Mutex::new(None);
+        run(&[wav.clone()], &request, Some(&work), &Options::default(), &|event| match event {
+            Event::Log(line) => lines.lock().unwrap().push(format!("{} {}", line.key, line.text)),
+            Event::Finished { result, .. } => *finished.lock().unwrap() = Some(result),
+            Event::Percent { .. } => {}
+        });
+        for line in lines.lock().unwrap().iter() {
+            eprintln!("{line}");
+        }
+        let result = finished.lock().unwrap().take().expect("nessun risultato");
+        let (out, _) = result.expect("trascrizione");
+        let text = std::fs::read_to_string(out).unwrap().to_lowercase();
+        // La voce di espeak è robotica e il modello «Veloce» sbaglia le parole difficili: bastano queste.
+        assert!(text.contains("oggi parliamo"), "testo: {text}");
+        let _ = std::fs::remove_dir_all(&work);
     }
 }
