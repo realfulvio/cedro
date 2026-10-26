@@ -408,8 +408,11 @@ pub(super) unsafe fn start(hwnd: HWND, files: Vec<PathBuf>, dest: Option<PathBuf
                     crate::progress_win::produced(&out);
                     message
                 });
+                // Un file saltato perché esiste già non fa diventare rossa la barra.
                 if let Err(e) = &result {
-                    failed.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(|| e.clone());
+                    if !e.contains("saltato") {
+                        failed.lock().unwrap_or_else(|x| x.into_inner()).get_or_insert_with(|| e.clone());
+                    }
                 }
                 RESULTS.lock().unwrap_or_else(|e| e.into_inner()).push((path, result));
                 post(WM_APP_RESULT);

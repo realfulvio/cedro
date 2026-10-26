@@ -540,10 +540,15 @@ pub fn clock(centis: i64) -> String {
     format!("{:02}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60)
 }
 
+/// Il tempo che manca, senza spazi (il riquadro del registro andrebbe a capo tra il numero e l'unità).
+fn left_text(secs: f64) -> String {
+    minutes_text(secs).replace(' ', "")
+}
+
 fn minutes_text(secs: f64) -> String {
     let mins = (secs / 60.0).round() as u64;
     match mins {
-        0 => format!("{}\u{a0}s", secs.round() as u64),
+        0 => format!("{} s", secs.round() as u64),
         1..=59 => format!("{mins} min"),
         _ => format!("{} h {:02} min", mins / 60, mins % 60),
     }
@@ -793,7 +798,7 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, sink: &dyn Fn(Event
                     shown = p / 10;
                     let elapsed = started.elapsed().as_secs_f64();
                     let left = elapsed * (100.0 - p as f64) / (p as f64).max(1.0);
-                    log(sink, Tone::Note, "Avanzamento", format!("{p}% · restano circa {}", minutes_text(left.max(1.0))));
+                    log(sink, Tone::Note, "Avanzamento", format!("{p}% · restano circa {}", left_text(left.max(1.0))));
                 }
             }
             "end" => return Outcome::Done { lang: event["lang"].as_str().unwrap_or("it").to_string(), secs, segments },
@@ -818,6 +823,7 @@ fn power_on(request: &Request, model: &Path, sink: &dyn Fn(Event)) -> Result<Run
     }
     tries.push(cpu);
     let mut last = String::new();
+    let mut told = false;
     for (n, variant) in tries.iter().copied().enumerate() {
         let fallback_left = n + 1 < tries.len();
         let exe = match ensure_engine(variant, sink) {
@@ -828,7 +834,9 @@ fn power_on(request: &Request, model: &Path, sink: &dyn Fn(Event)) -> Result<Run
             }
             Err(e) => return Err(e),
         };
-        log(sink, Tone::Step, "Motore", "lo accendo e carico il modello in memoria…");
+        if !std::mem::replace(&mut told, true) {
+            log(sink, Tone::Step, "Motore", "lo accendo e carico il modello in memoria…");
+        }
         let running = Running::start(&exe, model, false)?;
         let ready = running.next();
         match ready {
