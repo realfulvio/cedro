@@ -83,6 +83,65 @@ pub const GROUPS: &[Group] = &[
     },
 ];
 
+/// La versione di whisper.cpp dentro il motore: quella di whisper-rs-sys 0.15 (il test `whisper_version_matches_the_engine` avverte se cambia).
+const WHISPER_CPP: &str = "1.8.3";
+/// Le versioni dei programmi fissati dentro le librerie (LAME in mp3lame-sys, libopus in audiopus_sys).
+const LAME: &str = "3.100";
+const LIBOPUS: &str = "1.3.1";
+
+/// Le versioni delle librerie Rust di Cedro e del suo motore, decise alla compilazione.
+fn crate_version(name: &str) -> Option<&'static str> {
+    env!("CEDRO_CRATES").split(';').find_map(|e| e.split_once('=').filter(|(n, _)| *n == name).map(|(_, v)| v))
+}
+
+fn crates_text(names: &[&str]) -> Option<String> {
+    let found: Vec<(&str, &str)> = names.iter().filter_map(|n| crate_version(n).map(|v| (*n, v))).collect();
+    match found.as_slice() {
+        [] => None,
+        [(_, v)] => Some((*v).to_string()),
+        many => Some(many.iter().map(|(n, v)| format!("{n} {v}")).collect::<Vec<_>>().join(" · ")),
+    }
+}
+
+/// La versione da mostrare in piccolo accanto a un componente. Per quelli scaricati al primo uso è quella
+/// davvero sul PC; se non sono ancora arrivati, quella prevista.
+pub fn version_text(item: &Component) -> Option<String> {
+    use crate::{trascrizione, youtube};
+    let tool = |name: &str, soon: &str| match youtube::installed_version(name) {
+        Some(v) => Some(v),
+        None if youtube::tool_installed(name) => None,
+        None => Some(soon.to_string()),
+    };
+    match item.name {
+        "whisper.cpp" => Some(if trascrizione::engine_installed() { WHISPER_CPP.to_string() } else { format!("{WHISPER_CPP} · da scaricare") }),
+        "Modelli Whisper" => {
+            let have = trascrizione::installed_models();
+            Some(if have.is_empty() { format!("{} · da scaricare", trascrizione::model_names(trascrizione::DEFAULT_MODEL)) } else { have.join(", ") })
+        }
+        "yt-dlp" => tool("yt-dlp", "ultima versione · da scaricare"),
+        "FFmpeg" => tool("ffmpeg", "ultima versione · da scaricare"),
+        "Deno" => tool("deno", "ultima versione · da scaricare"),
+        "LAME" => Some(LAME.to_string()),
+        "Opus" => Some(LIBOPUS.to_string()),
+        "whisper-rs" => crates_text(&["whisper-rs"]),
+        "hayro" => crates_text(&["hayro"]),
+        "lopdf" => crates_text(&["lopdf"]),
+        "skrifa" => crates_text(&["skrifa"]),
+        "cfb" => crates_text(&["cfb"]),
+        "zip" => crates_text(&["zip"]),
+        "image, png" => crates_text(&["image", "png"]),
+        "ocrs, rten" => crates_text(&["ocrs", "rten"]),
+        "Symphonia" => crates_text(&["symphonia"]),
+        "oxideav VP8 e VP9" => crates_text(&["oxideav-vp8", "oxideav-vp9"]),
+        "hound" => crates_text(&["hound"]),
+        "windows-rs" => crates_text(&["windows"]),
+        "gtk4-rs" => crates_text(&["gtk4"]),
+        "ksni" => crates_text(&["ksni"]),
+        "ureq, serde_json, sha2" => crates_text(&["ureq", "serde_json", "sha2"]),
+        _ => None,
+    }
+}
+
 /// Il testo (o l'avviso breve) della licenza, per chi apre una voce. Il testo completo sta nel file «Licenze di terze parti».
 pub fn license_text(license: &str) -> &'static str {
     let key = license.split(" o ").next().unwrap_or(license).trim();
@@ -153,6 +212,37 @@ mod tests {
         let head = "LICENZE DI TERZE PARTI - Cedro 0.17.0\r\nCedro è software libero.\r\nLe librerie sono 251; i testi uguali compaiono una volta sola.\r\n";
         assert_eq!(count_in(head), Some(251));
         assert_eq!(count_in("niente"), None);
+    }
+
+    #[test]
+    fn whisper_version_matches_the_engine() {
+        // whisper.cpp arriva dentro whisper-rs-sys: se cambia la versione, controllare WHISPER_CPP, LAME e LIBOPUS.
+        let lock = include_str!("../trascrivi/Cargo.lock");
+        let at = lock.find("name = \"whisper-rs-sys\"").expect("whisper-rs-sys");
+        assert!(lock[at..].lines().nth(1).unwrap().contains("\"0.15."), "whisper-rs-sys è cambiata: aggiorna WHISPER_CPP");
+        assert_eq!(WHISPER_CPP, "1.8.3");
+    }
+
+    #[test]
+    fn engine_version_follows_cedro() {
+        // Cedro scarica il motore dalla release con il proprio numero di versione: build.ps1 lo prende da qui.
+        let toml = include_str!("../trascrivi/Cargo.toml");
+        let line = toml.lines().find(|l| l.starts_with("version = ")).expect("version");
+        assert_eq!(line, format!("version = \"{}\"", env!("CARGO_PKG_VERSION")));
+    }
+
+    #[test]
+    fn library_versions_are_found() {
+        assert!(crate_version("hound").is_some());
+        assert!(crate_version("whisper-rs").is_some());
+        assert_eq!(crate_version("windows").map(|v| v.starts_with("0.61")), Some(true));
+        let all: Vec<_> = GROUPS.iter().flat_map(|g| g.items.iter()).filter(|i| !i.linux_only).collect();
+        for item in all {
+            if ["Modelli OCR di ocrs", "Titillium Web"].contains(&item.name) {
+                continue;
+            }
+            assert!(version_text(item).is_some() || ["yt-dlp", "FFmpeg", "Deno"].contains(&item.name), "{} senza versione", item.name);
+        }
     }
 
     #[test]
