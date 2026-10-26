@@ -213,11 +213,20 @@ thread_local! {
     static NAMING: std::cell::RefCell<Naming> = std::cell::RefCell::new(Naming::default());
 }
 
+/// «nome.ext», o solo «nome» per i file senza estensione.
+fn file_name(file_stem: &str, ext: &str) -> String {
+    if ext.is_empty() {
+        file_stem.to_string()
+    } else {
+        format!("{file_stem}.{ext}")
+    }
+}
+
 fn numbered(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
-    let mut name = format!("{file_stem}.{ext}");
+    let mut name = file_name(file_stem, ext);
     let mut i = 2u32;
     while dir.join(&name).exists() {
-        name = format!("{file_stem}-{i}.{ext}");
+        name = file_name(&format!("{file_stem}-{i}"), ext);
         i += 1;
     }
     dir.join(name)
@@ -234,7 +243,7 @@ fn same_file(a: &Path, b: &Path) -> bool {
 /// nome già presente, ma mai quello del file di partenza: una conversione verso lo stesso formato non
 /// deve riscrivere l'originale.
 pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
-    let candidate = dir.join(format!("{file_stem}.{ext}"));
+    let candidate = dir.join(file_name(file_stem, ext));
     if !candidate.exists() {
         return candidate;
     }
@@ -655,12 +664,8 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         });
     }
     if action == "dup" {
-        let ext = extension(path);
-        let out = if ext.is_empty() {
-            unique_output(&dir, &format!("{}-copia", stem(path)), "copia")
-        } else {
-            unique_output(&dir, &format!("{}-copia", stem(path)), &ext)
-        };
+        // Senza estensione la copia non ne prende una (prima diventava «nome-copia.copia»).
+        let out = unique_output(&dir, &format!("{}-copia", stem(path)), &extension(path));
         fs::copy(path, &out).map_err(|e| err(e.to_string()))?;
         return Ok(Output { path: out, message: "Copia creata".into() });
     }
@@ -839,7 +844,8 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             return Ok(Output { path: out, message: format!("{label} unico, {total} pagine una sotto l'altra") });
         }
         let message = if total == 1 { label } else { format!("{total} {label}, uno per pagina") };
-        return Ok(Output { path: first.unwrap(), message });
+        let path = first.ok_or_else(|| err("nessuna pagina convertita"))?;
+        return Ok(Output { path, message });
     }
     if kind == Kind::Pdf && action == "docx" {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
@@ -1037,10 +1043,38 @@ pub fn read_quality() -> u8 {
     crate::settings::read_settings().quality
 }
 
+/// Una cartella nuova nella cartella temporanea, che solo questo utente può leggere e scrivere.
+/// Su Linux /tmp è di tutti: con un nome fisso un altro utente potrebbe preparare lui la cartella
+/// (o un collegamento) e cambiare quello che Cedro ci scrive.
+pub fn private_temp_dir(prefix: &str) -> Result<PathBuf, String> {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let base = std::env::temp_dir();
+    for _ in 0..100 {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
+        let dir = base.join(format!("{prefix}-{}-{}-{nanos}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        #[allow(unused_mut)]
+        let mut builder = fs::DirBuilder::new();
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+        // `create`, non `create_all`: se esiste già (anche fatta da altri) si prova un altro nome.
+        match builder.create(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("cartella temporanea non creata: {e}")),
+        }
+    }
+    Err("cartella temporanea non creata".into())
+}
+
 pub fn append_log(line: &str) {
     let dir = config_dir();
     let _ = fs::create_dir_all(&dir);
     let path = dir.join("log.txt");
+    // Il registro non cresce per sempre: oltre 1 MB il vecchio diventa log-precedente.txt.
+    if fs::metadata(&path).is_ok_and(|m| m.len() > 1024 * 1024) {
+        let _ = fs::rename(&path, dir.join("log-precedente.txt"));
+    }
     if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
         use std::io::Write;
         let _ = writeln!(file, "{line}");
@@ -1060,6 +1094,35 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("cedro-test-{n}"));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// Ogni cartella temporanea è nuova, mai una che c'era già, e su Linux solo nostra.
+    #[test]
+    fn private_temp_dirs_are_new_and_only_ours() {
+        let a = private_temp_dir("cedro-prova-privata").unwrap();
+        let b = private_temp_dir("cedro-prova-privata").unwrap();
+        assert_ne!(a, b);
+        assert_eq!(fs::read_dir(&a).unwrap().count(), 0);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(&a).unwrap().permissions().mode() & 0o777, 0o700);
+        }
+        let _ = fs::remove_dir_all(a);
+        let _ = fs::remove_dir_all(b);
+    }
+
+    #[test]
+    fn duplicate_without_extension_stays_without() {
+        let dir = scratch();
+        let src = dir.join("LEGGIMI");
+        fs::write(&src, b"testo").unwrap();
+        let first = perform_into(&src, "dup", 80, Some(&dir)).unwrap();
+        assert_eq!(first.path, dir.join("LEGGIMI-copia"));
+        let second = perform_into(&src, "dup", 80, Some(&dir)).unwrap();
+        assert_eq!(second.path, dir.join("LEGGIMI-copia-2"));
+        assert_eq!(fs::read(&second.path).unwrap(), b"testo");
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
