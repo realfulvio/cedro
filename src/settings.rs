@@ -203,7 +203,12 @@ impl Settings {
             fs::create_dir_all(dir)?;
         }
         let old = fs::read_to_string(path).unwrap_or_default();
-        fs::write(path, self.merge_into(&old))
+        // Prima un file a parte, poi lo scambio: se il PC si spegne a metà, le impostazioni non vanno perse.
+        let temp = path.with_extension("txt.tmp");
+        fs::write(&temp, self.merge_into(&old))?;
+        fs::rename(&temp, path).inspect_err(|_| {
+            let _ = fs::remove_file(&temp);
+        })
     }
 }
 
