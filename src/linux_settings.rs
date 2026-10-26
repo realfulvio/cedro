@@ -36,7 +36,7 @@ fn style() {
     gtk4::style_context_add_provider_for_display(&display, &provider, STYLE_PROVIDER_PRIORITY_APPLICATION);
 }
 
-fn titled(app: &Application, title: &str, width: i32, height: i32) -> Window {
+pub(crate) fn titled(app: &Application, title: &str, width: i32, height: i32) -> Window {
     style();
     let window = Window::builder()
         .application(app)
