@@ -31,6 +31,7 @@ static ASKED: Mutex<Option<Asked>> = Mutex::new(None);
 enum Asked {
     Settings,
     Guide,
+    Conversions,
 }
 
 fn cfg() -> Settings {
@@ -47,6 +48,7 @@ enum Open {
     Nothing,
     Settings,
     Guide,
+    Conversions,
 }
 
 enum UpdateNews {
@@ -140,6 +142,7 @@ pub fn start() -> i32 {
         match launch_open {
             Open::Settings => open_settings_window(app),
             Open::Guide => linux_settings::open_guide(app),
+            Open::Conversions => crate::linux_conversioni::open_conversions(app),
             // Avviato a mano, senza file: si vede subito che c'è, anche senza vassoio.
             Open::Nothing if opened.borrow().launch.stay && !background => open_settings_window(app),
             Open::Nothing => {}
@@ -158,6 +161,7 @@ pub fn start() -> i32 {
             match ASKED.lock().ok().and_then(|mut slot| slot.take()) {
                 Some(Asked::Settings) => open_settings_window(&app),
                 Some(Asked::Guide) => linux_settings::open_guide(&app),
+                Some(Asked::Conversions) => crate::linux_conversioni::open_conversions(&app),
                 None => {}
             }
             let slot = opened.borrow().finished.clone();
@@ -195,6 +199,7 @@ fn parse_launch(args: &[String]) -> Launch {
         match arg.as_str() {
             "settings" | "impostazioni" => open = Open::Settings,
             "guida" => open = Open::Guide,
+            "conversioni" => open = Open::Conversions,
             "--background" => background = true,
             "--conversione" => mode = Mode::Convert,
             "--strumenti" => mode = Mode::Tools,
@@ -605,6 +610,12 @@ impl ksni::Tray for CedroTray {
             StandardItem {
                 label: "Impostazioni…".into(),
                 activate: Box::new(|_| ask(Asked::Settings)),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
+                label: "Conversioni…".into(),
+                activate: Box::new(|_| ask(Asked::Conversions)),
                 ..Default::default()
             }
             .into(),

@@ -14,6 +14,8 @@ mod settings_win;
 mod guida_win;
 
 #[cfg(target_os = "linux")]
+mod linux_conversioni;
+#[cfg(target_os = "linux")]
 mod linux_settings;
 #[cfg(target_os = "linux")]
 mod linux_ui;
