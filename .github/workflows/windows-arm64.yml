@@ -204,6 +204,11 @@ jobs:
         shell: pwsh
         run: cargo test --release
 
+      - name: "Prova su siti veri (Video dal web: Vimeo, Internet Archive)"
+        shell: pwsh
+        continue-on-error: true
+        run: cargo test --release --lib real_sites -- --ignored --nocapture
+
       - name: Inno Setup
         shell: pwsh
         run: |
