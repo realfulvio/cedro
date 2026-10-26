@@ -85,6 +85,7 @@ const MAX_PAGES: [u32; 4] = [50, 100, 300, 0];
 const LANGS: [&str; 3] = ["auto", "it", "en"];
 const SECTIONS: [&str; 8] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni"];
 const MARK: &[u8] = include_bytes!("../docs/mark.png");
+const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
 
 /// Una riga di impostazione: titolo e descrizione a sinistra, il controllo a destra.
 fn setting(title: &str, desc: &str, control: &impl IsA<gtk4::Widget>) -> HBox {
@@ -515,14 +516,16 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let shift = switch(current.key_shift);
     let ctrl = switch(current.key_ctrl);
     let alt = switch(current.key_alt);
-    let dialogs = switch(current.dialogs);
+    // Wayland non lascia a un programma agganciarsi alle finestre Apri/Salva di un altro: l'interruttore resta spento e bloccato.
+    let dialogs = switch(false);
+    dialogs.set_sensitive(false);
     let wheel = page(
         "Ruota",
         &[
             &setting("Shift apre le conversioni", "Tieni premuto Shift e fai clic destro sul file.", &shift),
             &setting("Ctrl apre gli strumenti", "Comprimi, ruota, OCR e le altre fette di Ctrl.", &ctrl),
             &setting("Alt apre le azioni", "Duplica, percorso e ZIP. Spegnilo se Alt dà fastidio ad altri programmi.", &alt),
-            &setting("Apri nelle finestre Apri/Salva", "Usa la ruota anche scegliendo un file in un programma.", &dialogs),
+            &setting("Apri nelle finestre Apri/Salva", "Non disponibile su Wayland: il desktop non lascia a Cedro intervenire nelle finestre degli altri programmi. Usa il menu del file.", &dialogs),
         ],
     );
 
@@ -727,7 +730,6 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 key_shift: shift.is_active(),
                 key_ctrl: ctrl.is_active(),
                 key_alt: alt.is_active(),
-                dialogs: dialogs.is_active(),
                 dest,
                 dest_dir: dest_dir.borrow().clone(),
                 replace: exists.selected() == 1,

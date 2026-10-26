@@ -36,7 +36,7 @@ window.cedro-panel button.cedro-chip:hover { border-color: #0066CC; }\
 window.cedro-panel button.cedro-chip:checked { background: #005E8E; background-image: none; border-color: #005E8E; }\
 window.cedro-panel button.cedro-chip:checked label { color: #ffffff; }\
 window.cedro-panel label.cedro-ok { color: #1d7a46; font-weight: bold; }\
-window.cedro-panel label.cedro-fail { color: #b3261e; font-weight: bold; }\
+window.cedro-panel label.cedro-fail { color: #b3261e; font-weight: bold; }\nwindow.cedro-panel label.cedro-skip { color: #8A5A00; font-weight: bold; }\
 window.cedro-panel progressbar.cedro-progress trough { min-height: 3px; background: #d0dde8; border: none; border-radius: 2px; }\
 window.cedro-panel progressbar.cedro-progress progress { min-height: 3px; background: #005E8E; border: none; border-radius: 2px; }\
 window.cedro-panel progressbar.cedro-progress.cedro-done progress { background: #1d7a46; }\
@@ -502,12 +502,14 @@ fn start(ui: &Rc<Ui>) {
                     Ok(Msg::Done(path, result)) => {
                         let (total, done) = ui.job.get();
                         ui.job.set((total, done + 1));
-                        if result.is_err() {
+                        if result.as_ref().is_err_and(|e| !e.contains("saltato")) {
                             ui.bar.add_css_class("cedro-error");
                         }
                         if let Some(e) = ui.files.borrow_mut().iter_mut().find(|e| e.path == path) {
                             match result {
                                 Ok(msg) => (e.status, e.class) = (format!("Fatto · {msg}"), "cedro-ok"),
+                                // Un file saltato perché esiste già è una scelta, non un errore.
+                                Err(msg) if msg.contains("saltato") => (e.status, e.class) = (format!("Saltato · {msg}"), "cedro-skip"),
                                 Err(msg) => (e.status, e.class) = (format!("Errore · {msg}"), "cedro-fail"),
                             }
                         }
@@ -789,8 +791,9 @@ pub fn open_conversions(app: &Application) {
     {
         // Finché la coda lavora la finestra resta aperta: chiuderla fermerebbe il processo a metà scrittura.
         let ui = ui.clone();
-        window.connect_close_request(move |_| {
+        window.connect_close_request(move |w| {
             if ui.running.borrow().is_some() || youtube_busy() {
+                AlertDialog::builder().message("Una conversione è ancora in corso: aspetta che finisca.").modal(true).build().show(Some(w));
                 glib::Propagation::Stop
             } else {
                 glib::Propagation::Proceed
