@@ -565,9 +565,9 @@ unsafe fn build_system(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, sma
         (
             ID_AVX,
             ID_TAG_AVX,
-            "Accelerazione AVX-512",
+            format!("Accelerazione {}", cedro::accel::BOOST_NAME).as_str(),
             "Calcoli più veloci per OCR e trascrizione dell'audio.",
-            if hw.avx512 { "Trovato: AVX-512 F, VL, BW, DQ".to_string() } else { "Il processore non ha AVX-512".to_string() },
+            if hw.avx512 { format!("Trovato: {}", cedro::accel::BOOST_FOUND) } else { format!("Il processore non ha {}", cedro::accel::BOOST_NAME) },
         ),
     ] {
         STATE.with(|st| st.borrow_mut().lines[SEC].push(px(top, dpi)));

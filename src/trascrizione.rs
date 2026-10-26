@@ -154,7 +154,9 @@ pub fn size_text(megabytes: u32) -> String {
 }
 
 /// Le versioni del motore: una per tipo di processore, più quella per la scheda video.
+/// Quelle x86 e quelle ARM esistono tutte nel codice, ma ogni architettura ne sceglie solo le sue.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[allow(dead_code)]
 enum Variant {
     Base,
     Avx2,
@@ -163,6 +165,10 @@ enum Variant {
     Avx512,
     /// AVX-512 con VNNI e VBMI: AMD Ryzen 7000 e successivi, Intel Ice Lake e successivi.
     Avx512Vnni,
+    /// ARM con dotprod (Snapdragon X, Apple, Neoverse e quasi tutti gli ARM degli ultimi anni).
+    Dotprod,
+    /// ARM con dotprod e i8mm (Snapdragon X Elite, Cobalt 100 e più recenti).
+    I8mm,
     Vulkan,
 }
 
@@ -174,6 +180,8 @@ impl Variant {
             Variant::AvxVnni => "avxvnni",
             Variant::Avx512 => "avx512",
             Variant::Avx512Vnni => "avx512vnni",
+            Variant::Dotprod => "dotprod",
+            Variant::I8mm => "i8mm",
             Variant::Vulkan => "vulkan",
         }
     }
@@ -185,12 +193,14 @@ impl Variant {
             Variant::AvxVnni => "per processore, con AVX-VNNI",
             Variant::Avx512 => "per processore, con AVX-512",
             Variant::Avx512Vnni => "per processore, con AVX-512 VNNI",
+            Variant::Dotprod => "per processore, con dotprod",
+            Variant::I8mm => "per processore, con i8mm",
             Variant::Vulkan => "per scheda video",
         }
     }
 }
 
-/// La versione per processore più veloce che questo PC sa eseguire. AVX-512 solo se le Impostazioni lo permettono.
+/// La versione per processore più veloce che questo PC sa eseguire. AVX-512 (x86) e i8mm (ARM) solo se le Impostazioni lo permettono.
 fn cpu_variant(avx512: bool) -> Variant {
     #[cfg(target_arch = "x86_64")]
     {
@@ -202,6 +212,17 @@ fn cpu_variant(avx512: bool) -> Variant {
         }
         if avx2 {
             return if has!("avxvnni") { Variant::AvxVnni } else { Variant::Avx2 };
+        }
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        let hw = crate::accel::hardware();
+        // i8mm solo se le Impostazioni lo permettono (come AVX-512); dotprod c'è su quasi tutti.
+        if avx512 && hw.avx512 && hw.dotprod {
+            return Variant::I8mm;
+        }
+        if hw.dotprod {
+            return Variant::Dotprod;
         }
     }
     let _ = avx512;
@@ -296,7 +317,7 @@ fn vulkan_loader_present() -> bool {
     }
     #[cfg(not(windows))]
     {
-        let dirs = ["/usr/lib", "/usr/lib64", "/usr/lib/x86_64-linux-gnu", "/lib/x86_64-linux-gnu", "/lib64", "/usr/local/lib", "/run/opengl-driver/lib"];
+        let dirs = ["/usr/lib", "/usr/lib64", "/usr/lib/x86_64-linux-gnu", "/lib/x86_64-linux-gnu", "/usr/lib/aarch64-linux-gnu", "/lib/aarch64-linux-gnu", "/lib64", "/usr/local/lib", "/run/opengl-driver/lib"];
         dirs.iter().any(|d| Path::new(d).join("libvulkan.so.1").exists())
     }
 }
@@ -309,7 +330,8 @@ fn exe_name(variant: Variant) -> String {
 fn asset_name(variant: Variant) -> String {
     let os = if cfg!(windows) { "windows" } else { "linux" };
     let suffix = if cfg!(windows) { ".exe" } else { "" };
-    format!("cedro-trascrivi-{}-{os}-x64-{}{suffix}", crate::update::CURRENT, variant.tag())
+    let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
+    format!("cedro-trascrivi-{}-{os}-{arch}-{}{suffix}", crate::update::CURRENT, variant.tag())
 }
 
 fn http() -> ureq::Agent {

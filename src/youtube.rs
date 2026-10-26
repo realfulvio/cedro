@@ -251,7 +251,9 @@ fn sum_for(list: &str, file: &str) -> Option<String> {
 }
 
 fn ytdlp_asset() -> &'static str {
-    if cfg!(windows) {
+    if cfg!(all(windows, target_arch = "aarch64")) {
+        "yt-dlp_arm64.exe"
+    } else if cfg!(windows) {
         "yt-dlp.exe"
     } else if cfg!(target_arch = "aarch64") {
         "yt-dlp_linux_aarch64"
@@ -261,7 +263,9 @@ fn ytdlp_asset() -> &'static str {
 }
 
 fn ffmpeg_asset() -> &'static str {
-    if cfg!(windows) {
+    if cfg!(all(windows, target_arch = "aarch64")) {
+        "ffmpeg-master-latest-winarm64-lgpl.zip"
+    } else if cfg!(windows) {
         "ffmpeg-master-latest-win64-lgpl.zip"
     } else if cfg!(target_arch = "aarch64") {
         "ffmpeg-master-latest-linuxarm64-lgpl.tar.xz"
@@ -271,7 +275,9 @@ fn ffmpeg_asset() -> &'static str {
 }
 
 fn deno_asset() -> &'static str {
-    if cfg!(windows) {
+    if cfg!(all(windows, target_arch = "aarch64")) {
+        "deno-aarch64-pc-windows-msvc.zip"
+    } else if cfg!(windows) {
         "deno-x86_64-pc-windows-msvc.zip"
     } else if cfg!(target_arch = "aarch64") {
         "deno-aarch64-unknown-linux-gnu.zip"

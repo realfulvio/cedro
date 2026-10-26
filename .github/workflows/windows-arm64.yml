@@ -1,0 +1,189 @@
+name: Windows ARM64
+
+# Compila e prova Cedro su un vero Windows on ARM (runner windows-11-arm) e, su richiesta, crea
+# l'installatore ARM64 e i motori di trascrizione e li allega alla release indicata.
+# Pubblicare: Actions → Windows ARM64 → Run workflow, con il tag (per esempio v0.18.0).
+
+on:
+  push:
+    branches: ["claude/**"]
+    paths: ["Cargo.*", "src/**", "vendor/**", "trascrivi/**", "installer/**", "examples/**", "build.rs", ".github/workflows/windows-arm64.yml"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag della release a cui allegare i file ARM64 (vuoto = solo prova)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  app:
+    name: Cedro (build, prove, installatore)
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest https://win.rustup.rs/aarch64 -OutFile rustup-init.exe
+            .\rustup-init.exe -y --default-toolchain stable --default-host aarch64-pc-windows-msvc
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+          rustc -vV
+
+      - name: LLVM (clang)
+        shell: pwsh
+        run: |
+          Get-Command clang -ErrorAction SilentlyContinue | Format-List Source, Version
+          Get-Command cmake, ninja -ErrorAction SilentlyContinue | Format-List Source
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Prove
+        shell: pwsh
+        run: cargo test --release
+
+      - name: Che processore è (scheda Sistema)
+        shell: pwsh
+        run: cargo run --release --example sistema
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://jrsoftware.org/download.php/is.exe -OutFile is.exe
+          Start-Process .\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
+          Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+
+      - name: Installatore ARM64
+        shell: pwsh
+        run: powershell -File installer\build.ps1 -Arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installatore-arm64
+          path: dist/Cedro-Setup-*-arm64.exe
+
+      - name: Allega alla release
+        if: ${{ inputs.tag != '' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" (Get-ChildItem dist\Cedro-Setup-*-arm64.exe).FullName --clobber
+
+  motori:
+    name: Motore di trascrizione (processore)
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest https://win.rustup.rs/aarch64 -OutFile rustup-init.exe
+            .\rustup-init.exe -y --default-toolchain stable --default-host aarch64-pc-windows-msvc
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+
+      - name: LLVM (clang e libclang)
+        shell: pwsh
+        run: |
+          $clang = Get-Command clang -ErrorAction SilentlyContinue
+          if (-not $clang) {
+            Invoke-WebRequest https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-woa64.exe -OutFile llvm.exe
+            Start-Process .\llvm.exe -ArgumentList '/S' -Wait
+            $bin = "C:\Program Files\LLVM\bin"
+          } else {
+            $bin = Split-Path $clang.Source
+          }
+          $bin | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          "LIBCLANG_PATH=$bin" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          Get-ChildItem $bin -Filter libclang.dll
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: trascrivi
+          cache-targets: false
+
+      - name: Motori base, dotprod, i8mm
+        shell: pwsh
+        run: powershell -File trascrivi\build.ps1 -SoloCpu -Out ${{ github.workspace }}\dist-motori
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: motori-arm64
+          path: dist-motori/*.exe
+
+      - name: Allega alla release
+        if: ${{ inputs.tag != '' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" (Get-ChildItem dist-motori\*.exe).FullName --clobber
+
+  vulkan:
+    name: Motore di trascrizione (scheda video Vulkan, Adreno)
+    runs-on: windows-11-arm
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest https://win.rustup.rs/aarch64 -OutFile rustup-init.exe
+            .\rustup-init.exe -y --default-toolchain stable --default-host aarch64-pc-windows-msvc
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+
+      - name: LLVM (clang e libclang)
+        shell: pwsh
+        run: |
+          $clang = Get-Command clang -ErrorAction SilentlyContinue
+          if (-not $clang) {
+            Invoke-WebRequest https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-woa64.exe -OutFile llvm.exe
+            Start-Process .\llvm.exe -ArgumentList '/S' -Wait
+            $bin = "C:\Program Files\LLVM\bin"
+          } else {
+            $bin = Split-Path $clang.Source
+          }
+          $bin | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          "LIBCLANG_PATH=$bin" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Vulkan SDK per ARM64
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/warm/vulkan-sdk.exe -OutFile vulkan-sdk.exe
+          Start-Process .\vulkan-sdk.exe -ArgumentList '--accept-licenses', '--default-answer', '--confirm-command', 'install' -Wait
+          $sdk = (Get-ChildItem C:\VulkanSDK -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName
+          "VULKAN_SDK=$sdk" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          Get-ChildItem $sdk\Lib, $sdk\Bin | Select-Object -First 40 Name
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: trascrivi
+          cache-targets: false
+
+      - name: Motore Vulkan
+        shell: pwsh
+        run: powershell -File trascrivi\build.ps1 -SoloVulkan -Out ${{ github.workspace }}\dist-motori
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: motore-vulkan-arm64
+          path: dist-motori/*.exe
+
+      - name: Allega alla release
+        if: ${{ inputs.tag != '' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" (Get-ChildItem dist-motori\*.exe).FullName --clobber
