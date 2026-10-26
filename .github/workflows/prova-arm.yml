@@ -91,21 +91,21 @@ jobs:
           if ($machine -ne 0xAA64) { throw 'cedro.exe non è ARM64' }
 
       - name: "Aggiornamento vero: «cedro update» dalla release precedente"
+        timeout-minutes: 8
         if: ${{ env.VECCHIA != '' }}
         shell: pwsh
         run: |
           $vecchiaVer = $env:VECCHIA.TrimStart('v')
           if ((Get-ItemProperty $env:UNINSTALL_KEY).DisplayVersion -ne $vecchiaVer) { throw "non è la $vecchiaVer" }
-          $psi = New-Object Diagnostics.ProcessStartInfo $env:CEDRO, 'update'
-          $psi.UseShellExecute = $false
-          $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
-          $p = [Diagnostics.Process]::Start($psi)
-          $stdout = $p.StandardOutput.ReadToEndAsync(); $stderr = $p.StandardError.ReadToEndAsync()
-          $p.StandardInput.WriteLine('s'); $p.StandardInput.Close()
-          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw 'cedro update non finisce' }
-          $null = $stdout.Wait(30000); $null = $stderr.Wait(30000)
-          $out = $stdout.Result + $stderr.Result
+          # Uscita e risposta su file: l'installatore avviato da Cedro eredita le maniglie e non deve tenere appeso il passo.
+          Set-Content -Path risposta.txt -Value 's' -Encoding ascii
+          $p = Start-Process $env:CEDRO -ArgumentList 'update' -RedirectStandardInput risposta.txt -RedirectStandardOutput update-out.txt -RedirectStandardError update-err.txt -PassThru -WindowStyle Hidden
+          $fine = $p.WaitForExit(120000)
+          "cedro update finito: $fine"
+          Start-Sleep -Seconds 2
+          $out = (Get-Content update-out.txt -Raw) + (Get-Content update-err.txt -Raw)
           $out
+          if (-not $fine) { Get-Process | Sort-Object CPU -Descending | Select-Object -First 8 Name, Id, CPU | Format-Table; throw 'cedro update non finisce' }
           if ($out -notmatch [regex]::Escape("Avviato Cedro-ARM64-Setup-$env:VERSIONE.exe")) { throw "l'aggiornamento non ha preso l'installatore ARM64 $env:VERSIONE" }
           # L'installatore avviato da Cedro è interattivo: lo si lascia lavorare qualche secondo e poi si ripete in silenzio
           # lo stesso file, che è quello che l'utente cliccherebbe.
