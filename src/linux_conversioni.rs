@@ -52,6 +52,9 @@ struct Ui {
     formats: FlowBox,
     tools: FlowBox,
     tools_caption: Label,
+    extras: FlowBox,
+    extra_caption: Label,
+    extra: Cell<u32>,
     quality: Scale,
     dest_label: Label,
     go: Button,
@@ -96,12 +99,51 @@ fn chips(flow: &FlowBox, ui: &Rc<Ui>, items: &[cedro::Slice], first: Option<&Tog
         chip.connect_toggled(move |b| {
             if b.is_active() {
                 *ui.action.borrow_mut() = id.clone();
+                refresh_extra(&ui);
                 label_go(&ui);
             }
         });
         flow.insert(&chip, -1);
     }
     lead
+}
+
+/// Mostra l'opzione extra che vale per la voce scelta (risoluzione, dimensione) o la nasconde.
+fn refresh_extra(ui: &Rc<Ui>) {
+    clear_flow(&ui.extras);
+    let kind = CATEGORIES[ui.category.get()].kind;
+    let action = ui.action.borrow().clone();
+    let extra = conversioni::extra(kind, &action);
+    ui.extras.set_visible(extra.is_some());
+    ui.extra_caption.set_visible(extra.is_some());
+    let Some(extra) = extra else {
+        ui.extra.set(0);
+        return;
+    };
+    // Il valore scelto resta se la nuova voce lo offre ancora, altrimenti si riparte dal primo.
+    let kept = ui.extra.get();
+    let value = if extra.choices.iter().any(|c| c.value == kept) { kept } else { extra.choices[0].value };
+    ui.extra.set(value);
+    ui.extra_caption.set_text(&format!("{} · {}", extra.title, extra.note));
+    let mut lead: Option<ToggleButton> = None;
+    for choice in extra.choices {
+        let chip = ToggleButton::with_label(choice.label);
+        chip.add_css_class("cedro-chip");
+        if let Some(l) = &lead {
+            chip.set_group(Some(l));
+        } else {
+            lead = Some(chip.clone());
+        }
+        chip.set_active(choice.value == value);
+        let owner = ui.clone();
+        let picked = choice.value;
+        chip.connect_toggled(move |b| {
+            if b.is_active() {
+                owner.extra.set(picked);
+            }
+        });
+        ui.extras.insert(&chip, -1);
+    }
 }
 
 fn current_files(ui: &Ui) -> Vec<Entry> {
@@ -188,10 +230,9 @@ fn add_files(ui: &Rc<Ui>, paths: Vec<PathBuf>) {
         first.get_or_insert(kind_of(&path));
         ui.files.borrow_mut().push(Entry { path, status: "In attesa".into(), class: "" });
     }
-    // Se la categoria aperta non ha niente di nuovo, si passa a quella dei file appena aggiunti.
+    // Se i file appena aggiunti sono di un'altra categoria, si passa a quella: altrimenti restano invisibili.
     if let Some(kind) = first {
-        let here = CATEGORIES[ui.category.get()].kind;
-        if current_files(ui).is_empty() || here != kind && !ui.files.borrow().iter().any(|e| kind_of(&e.path) == here) {
+        if CATEGORIES[ui.category.get()].kind != kind {
             if let Some(i) = CATEGORIES.iter().position(|c| c.kind == kind) {
                 ui.side.select_row(ui.side.row_at_index(i as i32).as_ref());
                 return;
@@ -220,11 +261,13 @@ fn start(ui: &Rc<Ui>) {
     let action = ui.action.borrow().clone();
     let quality = ui.quality.value().round().clamp(40.0, 95.0) as u8;
     let dest = ui.dest.borrow().clone();
+    let kind = CATEGORIES[ui.category.get()].kind;
+    let opts = conversioni::options_for(conversioni::extra(kind, &action), ui.extra.get());
     let (tx, rx) = channel();
     *ui.running.borrow_mut() = Some(rx);
     std::thread::spawn(move || {
         for path in files {
-            let result = conversioni::convert_one(&path, &action, quality, dest.as_deref());
+            let result = conversioni::convert_one(&path, &action, quality, dest.as_deref(), &opts);
             if tx.send((path, result)).is_err() {
                 break;
             }
@@ -318,6 +361,10 @@ pub fn open_conversions(app: &Application) {
     tools.set_selection_mode(SelectionMode::None);
     tools.set_max_children_per_line(12);
     let tools_caption = caption("STRUMENTI");
+    let extras = FlowBox::new();
+    extras.set_selection_mode(SelectionMode::None);
+    extras.set_max_children_per_line(12);
+    let extra_caption = caption("");
 
     let quality = Scale::with_range(Orientation::Horizontal, 40.0, 95.0, 1.0);
     quality.set_value(read_settings().quality as f64);
@@ -370,6 +417,8 @@ pub fn open_conversions(app: &Application) {
         formats.upcast_ref(),
         tools_caption.upcast_ref(),
         tools.upcast_ref(),
+        extra_caption.upcast_ref(),
+        extras.upcast_ref(),
         caption("QUALITÀ").upcast_ref(),
         quality.upcast_ref(),
         quality_note.upcast_ref(),
@@ -395,6 +444,9 @@ pub fn open_conversions(app: &Application) {
         formats,
         tools,
         tools_caption,
+        extras,
+        extra_caption,
+        extra: Cell::new(0),
         quality,
         dest_label,
         go: go.clone(),

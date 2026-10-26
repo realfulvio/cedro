@@ -41,8 +41,10 @@ const ID_CHANGE: i32 = 214;
 const ID_RESET: i32 = 215;
 const ID_GO: i32 = 216;
 const ID_FOOT: i32 = 217;
+const ID_CAP_EXTRA: i32 = 218;
 const ID_FORMAT0: i32 = 1000;
 const ID_TOOL0: i32 = 2000;
+const ID_EXTRA0: i32 = 3000;
 
 const WM_APP_RESULT: u32 = WM_APP + 10;
 const WM_APP_DONE: u32 = WM_APP + 11;
@@ -87,9 +89,11 @@ struct State {
     action: String,
     dest: Option<PathBuf>,
     running: bool,
+    /// Valore scelto dell'opzione extra (vedi `conversioni::extra`).
+    extra: u32,
 }
 
-static STATE: Mutex<State> = Mutex::new(State { files: Vec::new(), category: 0, action: String::new(), dest: None, running: false });
+static STATE: Mutex<State> = Mutex::new(State { files: Vec::new(), category: 0, action: String::new(), dest: None, running: false, extra: 0 });
 /// Risultati che il thread di conversione lascia alla finestra.
 static RESULTS: Mutex<Vec<(PathBuf, std::result::Result<String, String>)>> = Mutex::new(Vec::new());
 
@@ -173,7 +177,7 @@ unsafe fn create() -> Result<()> {
     FONT_SMALL.store(make_font(13, 700), Ordering::Relaxed);
 
     let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    let mut rect = RECT { left: 0, top: 0, right: px(900), bottom: px(612) };
+    let mut rect = RECT { left: 0, top: 0, right: px(900), bottom: px(640) };
     let _ = AdjustWindowRect(&mut rect, style, false);
     let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
     let x = ((GetSystemMetrics(SM_CXSCREEN) - width) / 2).max(0);
@@ -240,7 +244,7 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     let side = child(
         hwnd, instance, lb, "",
         tab | LBS_NOTIFY as u32 | LBS_OWNERDRAWFIXED as u32 | LBS_NOINTEGRALHEIGHT as u32,
-        ID_SIDE, (0, 40, 190, 572), f,
+        ID_SIDE, (0, 40, 190, 600), f,
     );
     for cat in CATEGORIES {
         SendMessageW(side, LB_ADDSTRING, Some(WPARAM(0)), Some(LPARAM(HSTRING::from(cat.name).as_ptr() as isize)));
@@ -254,25 +258,26 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     child(
         hwnd, instance, lb, "",
         tab | LBS_OWNERDRAWFIXED as u32 | LBS_NOINTEGRALHEIGHT as u32 | WS_VSCROLL.0 | WS_BORDER.0,
-        ID_QUEUE, (210, 190, 670, 110), f,
+        ID_QUEUE, (210, 190, 670, 84), f,
     );
     SendMessageW(item(hwnd, ID_QUEUE), LB_SETITEMHEIGHT, Some(WPARAM(0)), Some(LPARAM(px(28) as isize)));
-    child(hwnd, instance, s, "CONVERTI IN", 0, ID_CAP_FORMATS, (210, 308, 670, 16), fs);
-    child(hwnd, instance, s, "STRUMENTI", 0, ID_CAP_TOOLS, (210, 366, 670, 16), fs);
-    child(hwnd, instance, s, "QUALITÀ", 0, ID_CAP_QUALITY, (210, 424, 670, 16), fs);
-    let bar = child(hwnd, instance, TRACKBAR_CLASSW, "", tab | TBS_HORZ as u32 | TBS_AUTOTICKS as u32, ID_QUALITY, (206, 440, 560, 30), f);
+    child(hwnd, instance, s, "CONVERTI IN", 0, ID_CAP_FORMATS, (210, 282, 670, 16), fs);
+    child(hwnd, instance, s, "STRUMENTI", 0, ID_CAP_TOOLS, (210, 340, 670, 16), fs);
+    child(hwnd, instance, s, "", 0, ID_CAP_EXTRA, (210, 398, 670, 16), fs);
+    child(hwnd, instance, s, "QUALITÀ", 0, ID_CAP_QUALITY, (210, 456, 670, 16), fs);
+    let bar = child(hwnd, instance, TRACKBAR_CLASSW, "", tab | TBS_HORZ as u32 | TBS_AUTOTICKS as u32, ID_QUALITY, (206, 472, 560, 30), f);
     SendMessageW(bar, TBM_SETRANGE, Some(WPARAM(1)), Some(LPARAM((40 | (95 << 16)) as isize)));
     SendMessageW(bar, TBM_SETTICFREQ, Some(WPARAM(11)), Some(LPARAM(0)));
     SendMessageW(bar, TBM_SETPOS, Some(WPARAM(1)), Some(LPARAM(read_settings().quality as isize)));
-    child(hwnd, instance, s, "", 1 /* SS_CENTER */, ID_QUALITY_VALUE, (776, 446, 60, 20), f);
-    child(hwnd, instance, s, "JPEG, WebP, MP3 e PDF in JPG. Più alta, file più grandi.", 0, ID_QUALITY_NOTE, (210, 470, 670, 18), f);
-    child(hwnd, instance, s, "DOVE SALVARE", 0, ID_CAP_DEST, (210, 496, 300, 16), fs);
-    child(hwnd, instance, s, NEXT_TO_ORIGINAL, 0x200 | 0x8000 /* SS_CENTERIMAGE | SS_PATHELLIPSIS */, ID_DEST, (210, 514, 330, 28), f);
-    child(hwnd, instance, b, "Cambia…", tab, ID_CHANGE, (548, 514, 80, 28), f);
-    child(hwnd, instance, b, "Accanto all'originale", tab, ID_RESET, (634, 514, 150, 28), f);
-    child(hwnd, instance, s, "Tutto sul tuo PC. L'originale non si tocca.", 0, ID_FOOT, (210, 562, 400, 18), f);
-    child(hwnd, instance, s, POWERED_BY, 0, ID_POWERED, (210, 582, 400, 20), f);
-    child(hwnd, instance, b, "Converti", tab | BS_OWNERDRAW as u32, ID_GO, (640, 562, 240, 36), fb);
+    child(hwnd, instance, s, "", 1 /* SS_CENTER */, ID_QUALITY_VALUE, (776, 478, 60, 20), f);
+    child(hwnd, instance, s, "JPEG, WebP, MP3 e PDF in JPG. Più alta, file più grandi.", 0, ID_QUALITY_NOTE, (210, 502, 670, 18), f);
+    child(hwnd, instance, s, "DOVE SALVARE", 0, ID_CAP_DEST, (210, 528, 300, 16), fs);
+    child(hwnd, instance, s, NEXT_TO_ORIGINAL, 0x200 | 0x8000 /* SS_CENTERIMAGE | SS_PATHELLIPSIS */, ID_DEST, (210, 546, 330, 28), f);
+    child(hwnd, instance, b, "Cambia…", tab, ID_CHANGE, (548, 546, 80, 28), f);
+    child(hwnd, instance, b, "Accanto all'originale", tab, ID_RESET, (634, 546, 150, 28), f);
+    child(hwnd, instance, s, "Tutto sul tuo PC. L'originale non si tocca.", 0, ID_FOOT, (210, 594, 400, 18), f);
+    child(hwnd, instance, s, POWERED_BY, 0, ID_POWERED, (210, 614, 400, 20), f);
+    child(hwnd, instance, b, "Converti", tab | BS_OWNERDRAW as u32, ID_GO, (640, 594, 240, 36), fb);
     show_quality(hwnd);
 }
 
@@ -307,13 +312,44 @@ unsafe fn render_category(hwnd: HWND) {
     }
     let formats = conversioni::formats(cat.kind);
     let tools = conversioni::tools(cat.kind);
-    chips(hwnd, instance, formats, ID_FORMAT0, 326);
-    chips(hwnd, instance, tools, ID_TOOL0, 384);
+    chips(hwnd, instance, formats, ID_FORMAT0, 300);
+    chips(hwnd, instance, tools, ID_TOOL0, 358);
     for id in [ID_CAP_TOOLS] {
         let _ = ShowWindow(item(hwnd, id), if tools.is_empty() { SW_HIDE } else { SW_SHOW });
     }
     state().action = formats.first().map(|s| s.id.to_string()).unwrap_or_default();
+    refresh_extra(hwnd);
     render_queue(hwnd);
+}
+
+/// Mostra l'opzione extra che vale per la voce scelta (risoluzione, dimensione) o la nasconde.
+unsafe fn refresh_extra(hwnd: HWND) {
+    let instance: HINSTANCE = GetModuleHandleW(None).unwrap_or_default().into();
+    for i in 0..24 {
+        if let Ok(old) = GetDlgItem(Some(hwnd), ID_EXTRA0 + i) {
+            let _ = DestroyWindow(old);
+        }
+    }
+    let (kind, action) = {
+        let s = state();
+        (CATEGORIES[s.category].kind, s.action.clone())
+    };
+    let extra = conversioni::extra(kind, &action);
+    // Il valore scelto resta se la nuova voce lo offre ancora, altrimenti si riparte dal primo.
+    let kept = state().extra;
+    state().extra = extra
+        .map(|e| if e.choices.iter().any(|c| c.value == kept) { kept } else { e.choices[0].value })
+        .unwrap_or(0);
+    let _ = ShowWindow(item(hwnd, ID_CAP_EXTRA), if extra.is_some() { SW_SHOW } else { SW_HIDE });
+    if let Some(e) = extra {
+        set_text(hwnd, ID_CAP_EXTRA, &format!("{} · {}", e.title, e.note));
+        let mut x = 210;
+        for (i, c) in e.choices.iter().enumerate() {
+            let width = 28 + 9 * c.label.chars().count() as i32;
+            child(hwnd, instance, w!("BUTTON"), c.label, WS_TABSTOP.0 | BS_OWNERDRAW as u32, ID_EXTRA0 + i as i32, (x, 416, width, 32), font(&FONT));
+            x += width + 8;
+        }
+    }
 }
 
 unsafe fn chips(hwnd: HWND, instance: HINSTANCE, items: &[cedro::Slice], base: i32, y: i32) {
@@ -365,7 +401,7 @@ unsafe fn render_queue(hwnd: HWND) {
 }
 
 unsafe fn redraw_chips(hwnd: HWND) {
-    for base in [ID_FORMAT0, ID_TOOL0] {
+    for base in [ID_FORMAT0, ID_TOOL0, ID_EXTRA0] {
         for i in 0..24 {
             if let Ok(c) = GetDlgItem(Some(hwnd), base + i) {
                 let _ = InvalidateRect(Some(c), None, false);
@@ -386,18 +422,14 @@ unsafe fn add_files(hwnd: HWND, paths: Vec<PathBuf>) {
             s.files.push(Entry { path, status: "In attesa".into(), state: 0 });
         }
     }
-    // Se la categoria aperta non ha niente di nuovo, si passa a quella dei file appena aggiunti.
+    // Se i file appena aggiunti sono di un'altra categoria, si passa a quella: altrimenti restano invisibili.
     if let Some(kind) = first {
-        let (here, empty, none_here) = {
-            let s = state();
-            let here = CATEGORIES[s.category].kind;
-            (here, current_files(&s).is_empty(), !s.files.iter().any(|e| kind_of(&e.path) == here))
-        };
-        if empty || here != kind && none_here {
+        if CATEGORIES[state().category].kind != kind {
             if let Some(i) = CATEGORIES.iter().position(|c| c.kind == kind) {
                 state().category = i;
                 SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(i)), Some(LPARAM(0)));
                 render_category(hwnd);
+                let _ = InvalidateRect(Some(item(hwnd, ID_SIDE)), None, true);
                 return;
             }
         }
@@ -427,7 +459,7 @@ unsafe fn pick(hwnd: HWND, folder: bool) -> Vec<PathBuf> {
 }
 
 unsafe fn start(hwnd: HWND) {
-    let (files, action, dest) = {
+    let (files, action, dest, opts) = {
         let mut s = state();
         if s.running {
             return;
@@ -441,14 +473,16 @@ unsafe fn start(hwnd: HWND) {
             e.state = 0;
         }
         s.running = true;
-        (files, s.action.clone(), s.dest.clone())
+        let kind = CATEGORIES[s.category].kind;
+        let opts = conversioni::options_for(conversioni::extra(kind, &s.action), s.extra);
+        (files, s.action.clone(), s.dest.clone(), opts)
     };
     let q = quality(hwnd);
     render_queue(hwnd);
     let raw = hwnd.0 as isize;
     std::thread::spawn(move || {
         for path in files {
-            let result = conversioni::convert_one(&path, &action, q, dest.as_deref());
+            let result = conversioni::convert_one(&path, &action, q, dest.as_deref(), &opts);
             RESULTS.lock().unwrap_or_else(|e| e.into_inner()).push((path, result));
             unsafe {
                 let _ = PostMessageW(Some(HWND(raw as *mut _)), WM_APP_RESULT, WPARAM(0), LPARAM(0));
@@ -550,9 +584,15 @@ unsafe fn draw_item(hwnd: HWND, di: &DRAWITEMSTRUCT) {
         _ => {
             let action = state().action.clone();
             let kind = CATEGORIES[state().category].kind;
-            let (list, index) = if id >= ID_TOOL0 { (conversioni::tools(kind), (id - ID_TOOL0) as usize) } else { (conversioni::formats(kind), (id - ID_FORMAT0) as usize) };
-            let Some(slice) = list.get(index) else { return };
-            let on = slice.id == action;
+            let extra_value = state().extra;
+            let (label, on) = if id >= ID_EXTRA0 {
+                let Some(c) = conversioni::extra(kind, &action).and_then(|e| e.choices.get((id - ID_EXTRA0) as usize)) else { return };
+                (c.label, c.value == extra_value)
+            } else {
+                let (list, index) = if id >= ID_TOOL0 { (conversioni::tools(kind), (id - ID_TOOL0) as usize) } else { (conversioni::formats(kind), (id - ID_FORMAT0) as usize) };
+                let Some(slice) = list.get(index) else { return };
+                (slice.label, slice.id == action)
+            };
             let (bg, fg) = if on { (PRIMARY, WHITE) } else { (WHITE, TEXT) };
             FillRect(hdc, &rc, brush(if on { &BRUSH_PRIMARY } else { &BRUSH_WHITE }, bg));
             let edge = CreateSolidBrush(if on { PRIMARY } else if selected { HOVER } else { LINE });
@@ -560,7 +600,7 @@ unsafe fn draw_item(hwnd: HWND, di: &DRAWITEMSTRUCT) {
             let _ = DeleteObject(HGDIOBJ(edge.0));
             SelectObject(hdc, HGDIOBJ(font(&FONT).0));
             SetTextColor(hdc, fg);
-            draw_text(hdc, slice.label, &mut rc, DT_SINGLELINE | DT_VCENTER | DT_CENTER);
+            draw_text(hdc, label, &mut rc, DT_SINGLELINE | DT_VCENTER | DT_CENTER);
         }
     }
     let _ = hwnd;
@@ -595,11 +635,22 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                     state().dest = None;
                 }
                 ID_GO => start(hwnd),
+                x if (ID_EXTRA0..ID_EXTRA0 + 24).contains(&x) => {
+                    let (kind, action) = {
+                        let s = state();
+                        (CATEGORIES[s.category].kind, s.action.clone())
+                    };
+                    if let Some(c) = conversioni::extra(kind, &action).and_then(|e| e.choices.get((x - ID_EXTRA0) as usize)) {
+                        state().extra = c.value;
+                        redraw_chips(hwnd);
+                    }
+                }
                 x if (ID_FORMAT0..ID_FORMAT0 + 24).contains(&x) || (ID_TOOL0..ID_TOOL0 + 24).contains(&x) => {
                     let kind = CATEGORIES[state().category].kind;
                     let (list, index) = if x >= ID_TOOL0 { (conversioni::tools(kind), (x - ID_TOOL0) as usize) } else { (conversioni::formats(kind), (x - ID_FORMAT0) as usize) };
                     if let Some(slice) = list.get(index) {
                         state().action = slice.id.to_string();
+                        refresh_extra(hwnd);
                         redraw_chips(hwnd);
                         render_queue(hwnd);
                     }
@@ -632,7 +683,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             let (fg, bg, slot) = match GetDlgCtrlID(ctl) {
                 ID_HEADER => (WHITE, PRIMARY, &BRUSH_PRIMARY),
                 ID_TITLE => (PRIMARY, WHITE, &BRUSH_WHITE),
-                ID_POWERED | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_QUALITY | ID_CAP_DEST | ID_COUNT | ID_FOOT | ID_QUALITY_NOTE => (GREY, WHITE, &BRUSH_WHITE),
+                ID_POWERED | ID_CAP_EXTRA | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_QUALITY | ID_CAP_DEST | ID_COUNT | ID_FOOT | ID_QUALITY_NOTE => (GREY, WHITE, &BRUSH_WHITE),
                 _ => (TEXT, WHITE, &BRUSH_WHITE),
             };
             SetTextColor(hdc, fg);

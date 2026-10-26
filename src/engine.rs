@@ -252,6 +252,20 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
 
 /// Come `perform`, ma con `out_dir` le copie nuove vengono scritte in quella cartella.
 pub fn perform_into(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>) -> CedroResult<Output> {
+    perform_with(path, action, quality, out_dir, &Options::default())
+}
+
+/// Opzioni extra del pannello Conversioni. Vuote = comportamento di sempre.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub struct Options {
+    /// PDF in JPG: risoluzione delle pagine in dpi (di norma 144).
+    pub dpi: Option<u32>,
+    /// Immagini: lato più lungo massimo in pixel; le immagini più piccole restano come sono.
+    pub max_side: Option<u32>,
+}
+
+/// Come `perform_into`, con le opzioni extra.
+pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
     if !path.exists() {
         return Err(err("file non trovato"));
     }
@@ -373,7 +387,8 @@ pub fn perform_into(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
             return Err(err("il PDF non ha pagine"));
         }
         let mut first = None;
-        crate::ocr::pdf_page_pngs(&bytes, |i, png| {
+        let scale = opts.dpi.unwrap_or(144).clamp(36, 600) as f32 / 72.0;
+        crate::ocr::pdf_page_pngs_scaled(&bytes, scale, |i, png| {
             let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
             let mut jpeg = Vec::new();
             JpegEncoder::new_with_quality(&mut jpeg, quality).encode_image(&rgb).map_err(|e| e.to_string())?;
@@ -459,6 +474,9 @@ pub fn perform_into(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
     }
 
     let mut img = load_image(path)?;
+    if let Some(side) = opts.max_side.filter(|s| *s > 0 && img.width().max(img.height()) > *s) {
+        img = img.resize(side, side, image::imageops::FilterType::Lanczos3);
+    }
     match action {
         "half" => {
             let w = (img.width() / 2).max(1);
@@ -691,6 +709,35 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
         let docx = perform(&pdf, "docx", 80).expect("OCR");
         let text = crate::doctext::document_text(&docx.path).unwrap();
         assert!(text.contains("Cedro"), "{text}");
+    }
+
+    #[test]
+    fn pdf_to_jpg_follows_the_dpi_option() {
+        let dir = scratch();
+        let jpeg = include_bytes!("../tests/fixtures/scan.jpg");
+        let pdf = dir.join("scansione.pdf");
+        fs::write(&pdf, crate::pdf::pdf_from_jpeg(jpeg, 900, 200, &[])).unwrap();
+        let low = perform_with(&pdf, "jpg", 80, None, &Options { dpi: Some(72), ..Default::default() }).unwrap();
+        let low_w = image::open(&low.path).unwrap().width();
+        let high = perform_with(&pdf, "jpg", 80, None, &Options { dpi: Some(144), ..Default::default() }).unwrap();
+        let high_w = image::open(&high.path).unwrap().width();
+        assert!(high_w >= low_w * 2 - 2 && high_w <= low_w * 2 + 2, "{low_w} {high_w}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn images_shrink_to_the_longest_side_only_when_larger() {
+        let dir = scratch();
+        let src = dir.join("grande.png");
+        DynamicImage::ImageRgb8(RgbImage::from_pixel(400, 200, Rgb([10, 90, 140]))).save(&src).unwrap();
+        let small = Options { max_side: Some(100), ..Default::default() };
+        let out = perform_with(&src, "jpeg", 80, None, &small).unwrap();
+        let img = image::open(&out.path).unwrap();
+        assert_eq!((img.width(), img.height()), (100, 50));
+        let keep = Options { max_side: Some(800), ..Default::default() };
+        let out = perform_with(&src, "webp", 80, None, &keep).unwrap();
+        assert_eq!(image::open(&out.path).unwrap().width(), 400);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
