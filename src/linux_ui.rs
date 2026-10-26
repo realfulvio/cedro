@@ -788,17 +788,35 @@ fn on_update(app: &Application, news: UpdateNews) {
     let app = app.clone();
     dialog.choose(None::<&gtk4::Window>, None::<&gtk4::gio::Cancellable>, move |answer| {
         if answer == Ok(1) {
-            match crate::cli::install(&release) {
-                Err(e) => notify(&app, &format!("Aggiornamento non riuscito: {e}")),
-                Ok(done) => {
+            // Scaricare e installare porta via secondi: si fa fuori dal thread delle finestre, che intanto
+            // resta libero, e l'esito torna qui da un canale.
+            notify(&app, &format!("Scarico Cedro {}…", release.version));
+            let (tx, rx) = std::sync::mpsc::channel();
+            let release = release.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(crate::cli::install(&release));
+            });
+            let app = app.clone();
+            glib::timeout_add_local(std::time::Duration::from_millis(300), move || match rx.try_recv() {
+                Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+                Err(_) => {
+                    notify(&app, "Aggiornamento non riuscito: il lavoro si è interrotto.");
+                    glib::ControlFlow::Break
+                }
+                Ok(Err(e)) => {
+                    notify(&app, &format!("Aggiornamento non riuscito: {e}"));
+                    glib::ControlFlow::Break
+                }
+                Ok(Ok(done)) => {
                     // Il programma nuovo è già al suo posto: questo si chiude e il nuovo parte da lì.
                     notify(&app, &format!("{done} Cedro si riapre."));
                     if let Ok(exe) = update::installed_binary() {
                         let _ = std::process::Command::new("sh").arg("-c").arg("sleep 2; exec \"$0\" --background").arg(exe).spawn();
                     }
                     glib::timeout_add_local_once(std::time::Duration::from_millis(800), || std::process::exit(0));
+                    glib::ControlFlow::Break
                 }
-            }
+            });
         } else if !manual {
             update::skip(&release.version);
         }
