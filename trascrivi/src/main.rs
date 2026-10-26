@@ -41,10 +41,12 @@ fn main() {
     emit(json!({"e": "ready", "ms": start.elapsed().as_millis() as u64, "threads": threads, "gpu": gpu}));
     for line in std::io::stdin().lock().lines() {
         let Ok(line) = line else { break };
+        // Alcuni programmi (PowerShell, .NET) mettono un BOM UTF-8 in testa a stdin.
+        let line = line.trim_start_matches('\u{feff}');
         if line.trim().is_empty() {
             continue;
         }
-        let request: Value = match serde_json::from_str(&line) {
+        let request: Value = match serde_json::from_str(line) {
             Ok(v) => v,
             Err(e) => {
                 emit(json!({"e": "error", "msg": format!("richiesta non valida: {e}")}));
