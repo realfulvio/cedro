@@ -106,6 +106,8 @@ fn px(v: i32) -> i32 {
 }
 
 unsafe fn run() {
+    // ShellExecuteW (il clic che mostra il file) vuole COM in questo thread: senza, Esplora file si apre su Documenti.
+    let _ = windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_APARTMENTTHREADED);
     let Ok(module) = GetModuleHandleW(None) else { return };
     let instance: HINSTANCE = module.into();
     let class = w!("CedroProgress");
