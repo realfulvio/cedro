@@ -1,0 +1,211 @@
+name: Prova ARM
+
+# Prova la release pubblicata di Cedro su un vero Windows on ARM (runner windows-11-arm):
+# installazione silenziosa, controllo ARM64 nativo, aggiornamento da una release precedente,
+# schermate delle finestre (artifact «schermate-arm»), conversioni, trascrizione, siti web e yt-dlp,
+# disinstallazione. Parte da sola dopo ogni «Windows ARM64» riuscito; a mano: Run workflow (tag vuoto = ultima).
+
+on:
+  workflow_run:
+    workflows: ["Windows ARM64"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release da provare (vuoto = l'ultima)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  UNINSTALL_KEY: 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{5C1CAEBF-024C-4A9F-BEC8-1FB3C9FEA4CE}_is1'
+
+jobs:
+  installato:
+    name: Cedro installato (ARM64)
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: windows-11-arm
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Quale release
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.tag }}"
+          if (-not $tag) { $tag = gh release view --repo $env:GITHUB_REPOSITORY --json tagName --jq .tagName }
+          "TAG=$tag" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "VERSIONE=$($tag.TrimStart('v'))" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "Provo $tag"
+          "Sistema: $((Get-CimInstance Win32_Processor).Name) · $env:PROCESSOR_ARCHITECTURE · $((Get-CimInstance Win32_OperatingSystem).Caption)"
+
+      - name: Scarico l'installatore ARM64 (e una release precedente per l'aggiornamento)
+        shell: pwsh
+        run: |
+          gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --pattern "Cedro-ARM64-Setup-*.exe" --dir nuovo
+          Get-ChildItem nuovo
+          $ultima = gh release view --repo $env:GITHUB_REPOSITORY --json tagName --jq .tagName
+          $vecchia = ""
+          if ($ultima -eq $env:TAG) {
+            foreach ($t in (gh release list --repo $env:GITHUB_REPOSITORY --limit 30 --json tagName --jq '.[].tagName')) {
+              if ($t -eq $env:TAG -or $t -like 'motori-*') { continue }
+              $assets = gh release view $t --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name'
+              if ($assets -match '^Cedro-ARM64-Setup-') { $vecchia = $t; break }
+            }
+          }
+          "VECCHIA=$vecchia" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          if ($vecchia) {
+            gh release download $vecchia --repo $env:GITHUB_REPOSITORY --pattern "Cedro-ARM64-Setup-*.exe" --dir vecchio
+            "Per l'aggiornamento parto da $vecchia"
+          } else { "Nessuna release ARM64 precedente (o provo una release non ultima): installo direttamente." }
+
+      - name: Installazione silenziosa
+        shell: pwsh
+        run: |
+          $setup = if ($env:VECCHIA) { (Get-Item vecchio\Cedro-ARM64-Setup-*.exe).FullName } else { (Get-Item nuovo\Cedro-ARM64-Setup-*.exe).FullName }
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART', "/LOG=$PWD\installazione.log" -Wait -PassThru
+          "Codice di uscita: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { Get-Content installazione.log -Tail 40; throw 'installazione fallita' }
+          $k = Get-ItemProperty $env:UNINSTALL_KEY
+          $dir = $k.InstallLocation
+          "Installata la $($k.DisplayVersion) in $dir"
+          "CEDRO=$(Join-Path $dir 'cedro.exe')" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          if (-not (Test-Path (Join-Path $dir 'cedro.exe'))) { throw 'cedro.exe manca' }
+
+      - name: Cedro è davvero ARM64 nativo
+        shell: pwsh
+        run: |
+          $bytes = [IO.File]::ReadAllBytes($env:CEDRO)
+          $pe = [BitConverter]::ToInt32($bytes, 0x3C)
+          $machine = [BitConverter]::ToUInt16($bytes, $pe + 4)
+          "Machine PE: 0x{0:X4}" -f $machine
+          if ($machine -ne 0xAA64) { throw 'cedro.exe non è ARM64' }
+
+      - name: "Aggiornamento vero: «cedro update» dalla release precedente"
+        if: ${{ env.VECCHIA != '' }}
+        shell: pwsh
+        run: |
+          $vecchiaVer = $env:VECCHIA.TrimStart('v')
+          if ((Get-ItemProperty $env:UNINSTALL_KEY).DisplayVersion -ne $vecchiaVer) { throw "non è la $vecchiaVer" }
+          $psi = New-Object Diagnostics.ProcessStartInfo $env:CEDRO, 'update'
+          $psi.UseShellExecute = $false
+          $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+          $p = [Diagnostics.Process]::Start($psi)
+          $stdout = $p.StandardOutput.ReadToEndAsync(); $stderr = $p.StandardError.ReadToEndAsync()
+          $p.StandardInput.WriteLine('s'); $p.StandardInput.Close()
+          if (-not $p.WaitForExit(240000)) { $p.Kill(); throw 'cedro update non finisce' }
+          $null = $stdout.Wait(30000); $null = $stderr.Wait(30000)
+          $out = $stdout.Result + $stderr.Result
+          $out
+          if ($out -notmatch [regex]::Escape("Avviato Cedro-ARM64-Setup-$env:VERSIONE.exe")) { throw "l'aggiornamento non ha preso l'installatore ARM64 $env:VERSIONE" }
+          # L'installatore avviato da Cedro è interattivo: lo si lascia lavorare qualche secondo e poi si ripete in silenzio
+          # lo stesso file, che è quello che l'utente cliccherebbe.
+          Start-Sleep -Seconds 5
+          Get-Process | Where-Object { $_.ProcessName -like 'Cedro-*Setup*' -or $_.ProcessName -like 'is-*' } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force
+          $scaricato = Get-ChildItem $env:TEMP -Recurse -Filter "Cedro-ARM64-Setup-$env:VERSIONE.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $scaricato) { $scaricato = Get-Item nuovo\Cedro-ARM64-Setup-*.exe }
+          "Installatore scaricato da Cedro: $($scaricato.FullName) ($($scaricato.Length) byte)"
+          $sha = (Get-FileHash $scaricato.FullName).Hash; $att = (Get-FileHash (Get-Item nuovo\Cedro-ARM64-Setup-*.exe).FullName).Hash
+          if ($sha -ne $att) { throw 'l''installatore scaricato da «cedro update» è diverso da quello della release' }
+          Start-Process (Get-Item nuovo\Cedro-ARM64-Setup-*.exe).FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
+          Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force
+          "Dopo l'aggiornamento: $((Get-ItemProperty $env:UNINSTALL_KEY).DisplayVersion)"
+          if ((Get-ItemProperty $env:UNINSTALL_KEY).DisplayVersion -ne $env:VERSIONE) { throw 'versione dopo l''aggiornamento sbagliata' }
+
+      - name: Versione installata
+        shell: pwsh
+        run: |
+          $v = (Get-ItemProperty $env:UNINSTALL_KEY).DisplayVersion
+          "Installata: $v, attesa: $env:VERSIONE"
+          if ($v -ne $env:VERSIONE) { throw 'versione diversa dalla release' }
+
+      - name: Schermate delle finestre
+        shell: pwsh
+        run: powershell -File prova-arm\schermate.ps1 -Exe $env:CEDRO -Out schermate -File "$PWD\tests\fixtures\scan.jpg"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: schermate-arm
+          path: schermate/*.png
+          if-no-files-found: warn
+
+      - name: Conversioni di base
+        shell: pwsh
+        run: powershell -File prova-arm\conversioni.ps1 -Exe $env:CEDRO
+
+      - name: Trascrizione (motore ARM64 scaricato da Cedro, voce sintetica)
+        shell: pwsh
+        run: |
+          $wav = Join-Path $env:RUNNER_TEMP 'frase.wav'
+          Add-Type -AssemblyName System.Speech
+          $v = New-Object System.Speech.Synthesis.SpeechSynthesizer
+          $v.SetOutputToWaveFile($wav); $v.Speak('Good morning. The weather today is sunny and warm.'); $v.Dispose()
+          $psi = New-Object Diagnostics.ProcessStartInfo $env:CEDRO, "trascrivi `"$wav`" --testo --precisione veloce"
+          $psi.UseShellExecute = $false; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+          $p = [Diagnostics.Process]::Start($psi)
+          $err = $p.StandardError.ReadToEndAsync(); $out = $p.StandardOutput.ReadToEndAsync()
+          if (-not $p.WaitForExit(900000)) { $p.Kill(); throw 'la trascrizione non finisce' }
+          $out.Result; $err.Result
+          if ($p.ExitCode -ne 0) { throw "trascrizione: codice $($p.ExitCode)" }
+          $txt = Get-ChildItem $env:RUNNER_TEMP -Recurse -Filter 'frase*.txt' | Select-Object -First 1
+          if (-not $txt) { throw 'nessun testo prodotto' }
+          Get-Content $txt.FullName
+          if ((Get-Content $txt.FullName -Raw) -notmatch 'weather') { throw 'trascrizione sbagliata' }
+          Get-ChildItem "$env:LOCALAPPDATA\Cedro" -Recurse -Filter 'cedro-trascrivi-*' -ErrorAction SilentlyContinue | ForEach-Object { "motore: $($_.FullName)" }
+
+      - name: Disinstallazione silenziosa
+        shell: pwsh
+        run: |
+          $k = Get-ItemProperty $env:UNINSTALL_KEY
+          $dir = $k.InstallLocation
+          Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force
+          $un = Join-Path $dir 'unins000.exe'
+          if (-not (Test-Path $un)) { throw 'unins000.exe manca' }
+          $p = Start-Process $un -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          "Codice di uscita: $($p.ExitCode)"
+          Start-Sleep -Seconds 3
+          if (Test-Path $env:UNINSTALL_KEY) { throw 'la voce di disinstallazione è rimasta' }
+          if (Test-Path (Join-Path $dir 'cedro.exe')) { throw 'cedro.exe è rimasto' }
+          "Disinstallata."
+
+  siti:
+    name: Video dal web e yt-dlp (ARM64 nativo)
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: windows-11-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || '' }}
+
+      - name: Rust
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest https://win.rustup.rs/aarch64 -OutFile rustup-init.exe
+            .\rustup-init.exe -y --default-toolchain stable --default-host aarch64-pc-windows-msvc
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: "Siti veri: Vimeo e Internet Archive (scarica yt-dlp e ffmpeg ARM64 come al primo uso)"
+        shell: pwsh
+        run: cargo test --release --lib real_sites -- --ignored --nocapture
+
+      - name: YouTube (può essere bloccato dagli IP dei server: non fa fallire la prova)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $y = Join-Path $env:LOCALAPPDATA 'Cedro\strumenti\yt-dlp.exe'
+          $y = (Get-ChildItem "$env:LOCALAPPDATA\Cedro" -Recurse -Filter 'yt-dlp*.exe' | Select-Object -First 1).FullName
+          "yt-dlp: $y"; & $y --version
+          & $y --simulate --no-warnings 'https://www.youtube.com/watch?v=jNQXAC9IVRw' 2>&1 | Select-Object -Last 8
