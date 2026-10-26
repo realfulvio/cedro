@@ -33,6 +33,7 @@ function Snap($name, $proc) {
   $bmp.Save((Join-Path $Out "$name-schermo.png"), [Drawing.Imaging.ImageFormat]::Png)
   $g.Dispose(); $bmp.Dispose()
   Say ("  schermo: " + (Describe (Join-Path $Out "$name-schermo.png")))
+  if ($proc.HasExited) { Say "  (nessuna finestra: il processo è già uscito)"; return $false }
   $proc.Refresh()
   $h = $proc.MainWindowHandle
   if ($h -eq [IntPtr]::Zero) { Say "  nessuna finestra principale"; return $false }
