@@ -65,7 +65,7 @@ Per togliere Cedro: *Impostazioni di Windows, App, Cedro*. Dopo la prima install
 | **Ctrl** | Strumenti | Comprime, scala, bianco e nero, ruota, toglie i metadati, legge il testo (OCR) |
 | **Alt** | Azioni | Duplica, copia il percorso, crea uno ZIP |
 
-Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Guida** dall'icona: una breve animazione mostra cosa fanno Shift, Ctrl e Alt.
+Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Guida** dall'icona: sei passi animati mostrano la ruota, il pannello Conversioni, YouTube e Video dal web, la trascrizione audio, Sistema e aggiornamenti, e dove gira Cedro.
 
 
 ## Cosa converte
@@ -102,12 +102,12 @@ Clic destro sull'icona (o doppio clic per le Impostazioni):
 
 - **Impostazioni** (su Windows, sei sezioni a sinistra): avvio con Windows, avviso e cartella aperta a fine conversione; quali tasti aprono la ruota e se vale nelle finestre Apri/Salva; dove mettere la copia (stessa cartella, sottocartella «Cedro» o una cartella fissa) e se sostituire i file che esistono già; qualità di JPEG, WebP, MP3, risoluzione di PDF in JPG e forza di «Comprimi»; lingua e pagine al massimo dell'OCR; ricerca automatica degli aggiornamenti.
 - **Conversioni:** un pannello con tutte le conversioni, la coda dei file (trascini i file o li scegli), la qualità e la cartella di destinazione. Ogni categoria ha le sue opzioni: foto (dimensioni, raddrizza, sfondo bianco), documenti (formato pagina, caratteri incorporati, segnalibri dai titoli, PDF/A-1b per l'archivio, password), PDF (OCR, tabelle, colonne, pagine come `1-3,5`, risoluzione, una immagine per pagina), testo (codifica, separatore CSV, JSON leggibile, titoli, PDF con caratteri incorporati o PDF/A), audio (kbps, canali, volume, taglio dell'inizio e del silenzio iniziale, tag) e video (risoluzione, fps, senza audio, ottimizzato per il web). Se il nome di uscita esiste già si sceglie: aggiungi `-2`, sostituisci, salta o chiedi ogni volta. I PDF/A di Cedro passano la validazione di veraPDF (profilo PDF/A-1b).
-- **Guida:** l'animazione che spiega i tre tasti.
+- **Guida:** il percorso animato in sei passi (si apre anche alla fine dell'installazione). Frecce o pallini per spostarsi.
 - **Controlla aggiornamenti:** Cedro lo fa anche da solo, verifica l'installatore e chiede prima di aggiornare.
 - **Avvio automatico** ed **Esci**.
 
 <p align="center">
-  <img src="docs/shots/guida.png" width="560" alt="La Guida di Cedro: un'animazione mostra cosa fanno Shift, Ctrl e Alt">
+  <img src="docs/shots/guida.png" width="560" alt="La Guida di Cedro: la ruota Ctrl con la fetta OCR accesa, primo di sei passi">
 </p>
 
 
