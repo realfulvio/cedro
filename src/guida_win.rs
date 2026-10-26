@@ -138,6 +138,10 @@ impl Canvas for Gdi {
     }
 
     fn text(&mut self, s: &str, x: f32, y: f32, w: f32, h: f32, size: f32, bold: bool, c: Rgb, align: Align, wrap: bool) {
+        // DrawTextW con un testo vuoto va in crash dentro user32.
+        if s.is_empty() {
+            return;
+        }
         unsafe {
             let font = self.font(size, bold);
             let old = SelectObject(self.dc, font.into());
@@ -158,6 +162,9 @@ impl Canvas for Gdi {
     }
 
     fn text_width(&mut self, s: &str, size: f32, bold: bool) -> f32 {
+        if s.is_empty() {
+            return 0.0;
+        }
         unsafe {
             let font = self.font(size, bold);
             let old = SelectObject(self.dc, font.into());
