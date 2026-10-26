@@ -4,9 +4,11 @@
 
 **Scheda Sistema**: sui PC ARM le Impostazioni mostrano le istruzioni del processore (NEON, dotprod, i8mm). L'interruttore «Accelerazione i8mm» prende il posto di «Accelerazione AVX-512».
 
+**Nuova firma**: Conversioni e Impostazioni mostrano la nuova firma col logo hcok e la versione di Cedro.
+
 **YouTube su ARM**: yt-dlp, FFmpeg e Deno vengono scaricati nelle versioni native ARM64.
 
-Questa versione è solo per Windows. Linux è in pausa fino alla 0.20.
+Questa versione è solo per Windows.
 
 Si aggiorna da solo: all'avvio Cedro vede questa versione e chiede se installarla, e su un PC ARM prende l'installatore ARM64. Oppure scarica il file qui sotto (**Cedro-Setup-0.18.0.exe** per i PC normali, **Cedro-Setup-0.18.0-arm64.exe** per Windows on ARM) e fai doppio clic: si installa sopra la versione precedente. I file `cedro-trascrivi-…` sono i motori della trascrizione: non serve scaricarli a mano, li prende Cedro la prima volta che trascrivi.
 
