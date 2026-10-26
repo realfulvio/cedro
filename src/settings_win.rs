@@ -58,6 +58,7 @@ const ID_COUNT: i32 = 188;
 const ID_FULL: i32 = 189;
 const ID_LOGO: i32 = 197;
 const ID_LOCKED: i32 = 198;
+const ID_ABOUT_POWERED: i32 = 199;
 const ID_NAV: i32 = 200;
 const ID_LIST: i32 = 220;
 /// Le istruzioni del processore, una pillola ciascuna: da ID_CHIP in su.
@@ -84,7 +85,6 @@ const OFF_SOFT: COLORREF = COLORREF(0x00F3F1EE); // #EEF1F3
 const WHITE: COLORREF = COLORREF(0x00FFFFFF);
 const SIDE: COLORREF = COLORREF(0x00F7F5F3); // #F3F5F7
 const LINE: COLORREF = COLORREF(0x00E5E5E5); // #E5E5E5
-const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
 
 const SECTIONS: [&str; 8] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni"];
 const DPI: [u32; 4] = [100, 144, 200, 300];
@@ -481,7 +481,7 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
 
     // Il piede: firma a sinistra, Annulla e Salva a destra.
     let foot = HEIGHT - FOOT_H;
-    child(hwnd, s, POWERED_BY, SS_NOPREFIX, ID_POWERED, (18, foot + 18, 300, 20), dpi, small, None);
+    child(hwnd, s, "", crate::firma_win::SS_OWNERDRAW, ID_POWERED, (18, foot + 18, 300, 20), dpi, small, None);
     child(hwnd, b, "Annulla", owner, IDCANCEL.0, (WIDTH - 18 - 88 - 8 - 88, foot + 12, 88, 32), dpi, normal, None);
     child(hwnd, b, "Salva", owner, IDOK.0, (WIDTH - 18 - 88, foot + 12, 88, 32), dpi, bold, None);
 }
@@ -608,7 +608,7 @@ unsafe fn build_about(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, smal
     child(hwnd, s, "", SS_OWNERDRAW, ID_LOGO, (x, 20, 56, 56), dpi, normal, Some(SEC));
     child(hwnd, s, &format!("Cedro {}", update::CURRENT), SS_NOPREFIX, ID_TITLE, (x + 72, 20, cw - 72, 26), dpi, big, Some(SEC));
     child(hwnd, s, "Convertitore di file, con una ruota al cursore · Licenza MIT", SS_NOPREFIX, ID_DESC, (x + 72, 47, cw - 72, 18), dpi, small, Some(SEC));
-    child(hwnd, s, &format!("{POWERED_BY} · github.com/realfulvio/cedro"), SS_NOPREFIX, ID_DESC, (x + 72, 65, cw - 72, 18), dpi, small, Some(SEC));
+    child(hwnd, s, "", SS_OWNERDRAW, ID_ABOUT_POWERED, (x + 72, 65, cw - 72, 18), dpi, small, Some(SEC));
     STATE.with(|st| st.borrow_mut().lines[SEC].push(px(92, dpi)));
 
     child(hwnd, s, "CODICE APERTO USATO DA CEDRO", SS_NOPREFIX, ID_DESC, (x, 104, cw, 18), dpi, caption, Some(SEC));
@@ -1064,6 +1064,10 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 draw_tag(dis);
             } else if id == ID_LOGO {
                 draw_logo(dis);
+            } else if id == ID_POWERED {
+                crate::firma_win::draw(dis, SIDE, GREY, PRIMARY, false, "");
+            } else if id == ID_ABOUT_POWERED {
+                crate::firma_win::draw(dis, WHITE, GREY, PRIMARY, false, "  ·  github.com/realfulvio/cedro");
             } else if (ID_NAV..ID_NAV + SECTIONS.len() as i32).contains(&id) {
                 draw_nav(dis);
             } else if is_toggle(id) {

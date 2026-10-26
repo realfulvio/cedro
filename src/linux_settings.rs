@@ -15,7 +15,6 @@ use gtk4::{
     Scale, Window, STYLE_PROVIDER_PRIORITY_APPLICATION,
 };
 
-const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
 
 const CSS: &str = "\
 headerbar.cedro-head { background: #005E8E; color: #ffffff; box-shadow: none; }\
@@ -671,10 +670,9 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     middle.append(&nav);
     middle.append(&stack);
 
-    let credit = Label::new(Some(POWERED_BY));
-    credit.set_xalign(0.0);
+    let credit = crate::linux_firma::firma(false, "");
+    credit.set_halign(gtk4::Align::Start);
     credit.set_hexpand(true);
-    credit.add_css_class("cedro-muted");
     let guide = Button::with_label("Guida");
     guide.add_css_class("cedro-sec");
     let cancel = Button::with_label("Annulla");

@@ -85,3 +85,61 @@ pub fn circle(hdc: HDC, cx: f32, cy: f32, radius: f32, color: COLORREF) {
         GdipDeleteGraphics(g);
     }
 }
+
+/// Il logo di «hcok» (vedi `cedro::logo`) con GDI+. `left` e `baseline` sono in pixel: il bordo sinistro del disegno e la
+/// linea di base delle lettere. Con `with_real` la scritta «real» sta attaccata davanti.
+pub fn draw_logo(hdc: HDC, left: f32, baseline: f32, scale: f32, with_real: bool, ink: COLORREF, accent: COLORREF, real: COLORREF) {
+    use cedro::logo::{items, span, Shape, Tone, BASELINE};
+    startup();
+    unsafe {
+        let mut g: *mut GpGraphics = std::ptr::null_mut();
+        if GdipCreateFromHDC(hdc, &mut g) != Status(0) || g.is_null() {
+            return;
+        }
+        GdipSetSmoothingMode(g, SmoothingModeAntiAlias);
+        GdipSetPixelOffsetMode(g, PixelOffsetModeHalf);
+        let (l, _) = span(with_real);
+        let ox = left - l * scale;
+        let oy = baseline - BASELINE * scale;
+        for (item, dx) in items(with_real) {
+            let color = match item.tone {
+                Tone::Ink => ink,
+                Tone::Accent => accent,
+                Tone::Real => real,
+            };
+            let px = |x: f32| ox + (x + dx) * scale;
+            let py = |y: f32| oy + y * scale;
+            if let Shape::Rect(x, y, w, h) = item.shape {
+                let mut brush: *mut GpSolidFill = std::ptr::null_mut();
+                GdipCreateSolidFill(argb(color, 255), &mut brush);
+                GdipFillRectangle(g, brush as *mut GpBrush, px(x), py(y), w * scale, h * scale);
+                GdipDeleteBrush(brush as *mut GpBrush);
+                continue;
+            }
+            let mut pen: *mut GpPen = std::ptr::null_mut();
+            GdipCreatePen1(argb(color, 255), item.width * scale, UnitPixel, &mut pen);
+            GdipSetPenLineJoin(pen, LineJoinMiter);
+            match item.shape {
+                Shape::Line(x1, y1, x2, y2) => {
+                    GdipDrawLine(g, pen, px(x1), py(y1), px(x2), py(y2));
+                }
+                Shape::Arc(cx, cy, r, start, sweep) => {
+                    GdipDrawArc(g, pen, px(cx - r), py(cy - r), 2.0 * r * scale, 2.0 * r * scale, start, sweep);
+                }
+                Shape::Circle(cx, cy, r) => {
+                    GdipDrawEllipse(g, pen, px(cx - r), py(cy - r), 2.0 * r * scale, 2.0 * r * scale);
+                }
+                Shape::Curve(p) => {
+                    GdipDrawBezier(g, pen, px(p[0].0), py(p[0].1), px(p[1].0), py(p[1].1), px(p[2].0), py(p[2].1), px(p[3].0), py(p[3].1));
+                }
+                Shape::Poly(p) => {
+                    let pts = [PointF { X: px(p[0].0), Y: py(p[0].1) }, PointF { X: px(p[1].0), Y: py(p[1].1) }, PointF { X: px(p[2].0), Y: py(p[2].1) }];
+                    GdipDrawLines(g, pen, pts.as_ptr(), 3);
+                }
+                Shape::Rect(..) => {}
+            }
+            GdipDeletePen(pen);
+        }
+        GdipDeleteGraphics(g);
+    }
+}

@@ -21,7 +21,6 @@ use gtk4::{
 };
 
 const TITLE: &str = "Conversioni di Cedro";
-const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
 
 const CSS: &str = "\
 window.cedro-panel list.cedro-side { background: #f3f6f9; }\
@@ -673,12 +672,11 @@ pub fn open_conversions(app: &Application) {
     let credit = Label::new(Some("Tutto sul tuo PC. L'originale non si tocca.   ·   "));
     credit.set_xalign(0.0);
     credit.add_css_class("cedro-muted");
-    let signature = Label::new(Some(POWERED_BY));
-    signature.add_css_class("cedro-muted");
+    let signature = crate::linux_firma::firma(true, "");
     let foot = HBox::new(Orientation::Horizontal, 0);
     foot.append(&credit);
     signature.set_hexpand(true);
-    signature.set_xalign(1.0);
+    signature.set_halign(gtk4::Align::End);
     foot.append(&signature);
 
     let bar = gtk4::ProgressBar::new();
