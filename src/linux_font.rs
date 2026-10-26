@@ -52,3 +52,12 @@ pub fn apply() {
         settings.set_gtk_font_name(Some(&format!("{FACE} 11")));
     }
 }
+
+/// Le finestre di Cedro sono chiare come su Windows, anche con il tema scuro di KDE o GNOME:
+/// Adwaita chiaro sotto il CSS di Cedro, così elenchi, menu a tendina e pulsanti non diventano neri.
+pub fn light_theme() {
+    if let Some(settings) = gtk4::Settings::default() {
+        settings.set_gtk_theme_name(Some("Adwaita"));
+        settings.set_gtk_application_prefer_dark_theme(false);
+    }
+}
