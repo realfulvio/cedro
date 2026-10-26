@@ -778,6 +778,8 @@ unsafe fn take_results(hwnd: HWND) {
             if let Some(e) = s.files.iter_mut().find(|e| e.path == path) {
                 match result {
                     Ok(msg) => (e.status, e.state) = (format!("Fatto · {msg}"), 1),
+                    // Un file saltato perché esiste già è una scelta, non un errore.
+                    Err(msg) if msg.contains("saltato") => (e.status, e.state) = (format!("Saltato · {msg}"), 3),
                     Err(msg) => (e.status, e.state) = (format!("Errore · {msg}"), 2),
                 }
             }
