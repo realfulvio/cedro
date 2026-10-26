@@ -37,6 +37,13 @@ window.cedro-panel button.cedro-chip:checked { background: #005E8E; background-i
 window.cedro-panel button.cedro-chip:checked label { color: #ffffff; }\
 window.cedro-panel label.cedro-ok { color: #1d7a46; font-weight: bold; }\
 window.cedro-panel label.cedro-fail { color: #b3261e; font-weight: bold; }\nwindow.cedro-panel label.cedro-skip { color: #8A5A00; font-weight: bold; }\
+window.cedro-panel button.cedro-chip.cedro-sbig { padding: 12px 22px; }\
+window.cedro-panel button.cedro-chip.cedro-sbig label.cedro-sbt { font-size: 130%; font-weight: bold; }\
+window.cedro-panel button.cedro-chip.cedro-sbig label.cedro-sbn { font-size: 90%; color: #5b6b78; }\
+window.cedro-panel button.cedro-chip.cedro-sbig:checked label.cedro-sbn { color: #d6ebf6; }\
+window.cedro-panel button.cedro-biggo { padding: 14px; font-size: 130%; font-weight: bold; }\
+window.cedro-panel button.cedro-link label { color: #005E8E; text-decoration: underline; }\
+window.cedro-panel button.cedro-link { background: none; background-image: none; border: none; box-shadow: none; color: #005E8E; text-decoration: underline; padding: 2px 4px; }\
 window.cedro-panel progressbar.cedro-progress trough { min-height: 3px; background: #d0dde8; border: none; border-radius: 2px; }\
 window.cedro-panel progressbar.cedro-progress progress { min-height: 3px; background: #005E8E; border: none; border-radius: 2px; }\
 window.cedro-panel progressbar.cedro-progress.cedro-done progress { background: #1d7a46; }\
@@ -89,6 +96,21 @@ struct Ui {
     action: RefCell<String>,
     dest: RefCell<Option<PathBuf>>,
     running: RefCell<Option<Receiver<Msg>>>,
+    /// Modalità Semplice: stesso motore, meno cose in vista (vedi `apply_simple`).
+    simple: bool,
+    advanced: Cell<bool>,
+    queue_scroll: ScrolledWindow,
+    formats_caption: Label,
+    /// Qualità: titolo, cursore e nota.
+    quality_widgets: Vec<gtk4::Widget>,
+    save_widgets: Vec<gtk4::Widget>,
+    more: Button,
+    stack: gtk4::Stack,
+    /// Le tre schede della modalità Semplice: Converti file, Video dal web, Trascrivi.
+    pick: Vec<ToggleButton>,
+    /// Vero mentre una scheda Semplice sta cambiando pannello: la sincronizzazione aspetta.
+    switching: Cell<bool>,
+    syncing: Cell<bool>,
 }
 
 fn caption(text: &str) -> Label {
@@ -219,6 +241,89 @@ fn refresh_options(ui: &Rc<Ui>) {
             }
         }
     }
+    apply_simple(ui);
+}
+
+/// I formati della modalità Semplice: bottoni grandi con una riga di spiegazione.
+fn simple_chips(flow: &FlowBox, ui: &Rc<Ui>, kind: Kind) -> Option<ToggleButton> {
+    let mut lead: Option<ToggleButton> = None;
+    for item in conversioni::simple_formats(kind) {
+        let chip = ToggleButton::new();
+        chip.add_css_class("cedro-chip");
+        chip.add_css_class("cedro-sbig");
+        let (title, note) = (Label::new(Some(item.title)), Label::new(Some(item.note)));
+        title.add_css_class("cedro-sbt");
+        note.add_css_class("cedro-sbn");
+        title.set_xalign(0.0);
+        note.set_xalign(0.0);
+        let inner = HBox::new(Orientation::Vertical, 0);
+        inner.append(&title);
+        inner.append(&note);
+        chip.set_child(Some(&inner));
+        if let Some(l) = &lead {
+            chip.set_group(Some(l));
+        } else {
+            lead = Some(chip.clone());
+        }
+        let ui = ui.clone();
+        let id = item.id.to_string();
+        chip.connect_toggled(move |b| {
+            if b.is_active() {
+                *ui.action.borrow_mut() = id.clone();
+                refresh_options(&ui);
+                label_go(&ui);
+            }
+        });
+        flow.insert(&chip, -1);
+    }
+    lead
+}
+
+/// Modalità Semplice: mostra solo l'essenziale e tiene il resto a un clic («Altre opzioni»).
+/// Non cambia nulla del motore: i valori consigliati restano quelli impostati.
+fn apply_simple(ui: &Ui) {
+    if !ui.simple {
+        return;
+    }
+    let voice = transcribing(ui);
+    let files = !current_files(ui).is_empty();
+    let adv = ui.advanced.get();
+    let kind = CATEGORIES[ui.category.get()].kind;
+    if voice {
+        ui.title.set_text("Cosa vuoi trascrivere?");
+        ui.hint.set_text("Trascina una registrazione, un vocale o un video: Cedro scrive il testo.");
+    } else {
+        ui.title.set_text("Cosa vuoi convertire?");
+        ui.hint.set_text("Trascina qui foto, documenti, PDF, audio o video.");
+    }
+    ui.tr.tabs.set_visible(false);
+    ui.tr.options.set_visible(adv);
+    ui.queue_scroll.set_visible(files);
+    ui.count.set_visible(files);
+    let show_formats = !voice && files;
+    ui.formats_caption.set_label("IN CHE COSA LI TRASFORMO?");
+    ui.formats_caption.set_visible(show_formats);
+    ui.formats.set_visible(show_formats);
+    let has_tools = !conversioni::tools(kind).is_empty();
+    ui.tools.set_visible(adv && has_tools);
+    ui.tools_caption.set_visible(adv && has_tools);
+    let has_options = ui.options.first_child().is_some();
+    ui.options.set_visible(adv && has_options);
+    ui.options_caption.set_visible(adv && has_options);
+    for w in &ui.quality_widgets {
+        w.set_visible(adv && !voice);
+    }
+    for w in &ui.save_widgets {
+        w.set_visible(adv);
+    }
+    ui.go.set_visible(files);
+    ui.more.set_label(if adv { "Meno opzioni" } else { "Altre opzioni" });
+    // La scheda in alto segue ciò che si vede (un vocale .opus apre la trascrizione da solo).
+    if !ui.switching.get() && ui.stack.visible_child_name().is_some_and(|n| n == "files") {
+        ui.syncing.set(true);
+        ui.pick[if voice { 2 } else { 0 }].set_active(true);
+        ui.syncing.set(false);
+    }
 }
 
 /// Vero se si vede la scheda Trascrizione (solo con la categoria Audio).
@@ -308,6 +413,7 @@ fn render_queue(ui: &Ui) {
         ui.queue.append(&row);
     }
     label_go(ui);
+    apply_simple(ui);
 }
 
 fn render_category(ui: &Rc<Ui>) {
@@ -315,7 +421,7 @@ fn render_category(ui: &Rc<Ui>) {
     ui.title.set_text(cat.name);
     clear_flow(&ui.formats);
     clear_flow(&ui.tools);
-    let first = chips(&ui.formats, ui, conversioni::formats(cat.kind), None);
+    let first = if ui.simple { simple_chips(&ui.formats, ui, cat.kind) } else { chips(&ui.formats, ui, conversioni::formats(cat.kind), None) };
     let tools = conversioni::tools(cat.kind);
     ui.tools.set_visible(!tools.is_empty());
     ui.tools_caption.set_visible(!tools.is_empty());
@@ -584,6 +690,7 @@ pub fn open_conversions(app: &Application) {
             return;
         }
     }
+    let simple = read_settings().simple;
     let window = crate::linux_settings::titled(app, TITLE, 940, 780);
     window.set_resizable(true);
     // Dopo i colori di `titled`: GTK fa vincere il gestore di stile aggiunto per ultimo, a parità di priorità.
@@ -627,7 +734,7 @@ pub fn open_conversions(app: &Application) {
     drop.add_css_class("cedro-drop");
     let queue = ListBox::new();
     queue.set_selection_mode(SelectionMode::None);
-    let queue_scroll = ScrolledWindow::builder().child(&queue).min_content_height(130).vexpand(true).has_frame(true).build();
+    let queue_scroll = ScrolledWindow::builder().child(&queue).min_content_height(if simple { 90 } else { 130 }).vexpand(!simple).has_frame(true).build();
     let count = caption("");
 
     let formats = FlowBox::new();
@@ -672,7 +779,9 @@ pub fn open_conversions(app: &Application) {
     dest_row.append(&dest_label);
     dest_row.append(&change);
     dest_row.append(&reset);
-    dest_row.append(&go);
+    if !simple {
+        dest_row.append(&go);
+    }
 
     let credit = Label::new(Some("Tutto sul tuo PC. L'originale non si tocca.   ·   "));
     credit.set_xalign(0.0);
@@ -700,16 +809,18 @@ pub fn open_conversions(app: &Application) {
         }
     });
     let convert_box = HBox::new(Orientation::Vertical, 10);
+    let formats_caption = caption("CONVERTI IN");
+    let (quality_caption, dest_caption) = (caption("QUALITÀ"), caption("DOVE SALVARE"));
     for w in [
-        caption("CONVERTI IN").upcast::<gtk4::Widget>(),
+        formats_caption.clone().upcast::<gtk4::Widget>(),
         formats.clone().upcast(),
         tools_caption.clone().upcast(),
         tools.clone().upcast(),
         options_caption.clone().upcast(),
         options.clone().upcast(),
-        caption("QUALITÀ").upcast(),
+        quality_caption.clone().upcast(),
         quality.clone().upcast(),
-        quality_note.upcast(),
+        quality_note.clone().upcast(),
     ] {
         convert_box.append(&w);
     }
@@ -729,17 +840,36 @@ pub fn open_conversions(app: &Application) {
         tr.tabs.upcast_ref(),
         convert_box.upcast_ref(),
         tr.body.upcast_ref(),
-        caption("DOVE SALVARE").upcast_ref(),
+        dest_caption.upcast_ref(),
         dest_row.upcast_ref(),
         overwrite_row.upcast_ref(),
-        bar.upcast_ref(),
+    ] {
+        main.append(w);
+    }
+    // Modalità Semplice: un solo bottone grande, e sotto i due link.
+    let more = Button::with_label("Altre opzioni");
+    more.add_css_class("cedro-link");
+    let full = Button::with_label("Modalità completa");
+    full.add_css_class("cedro-link");
+    let links = HBox::new(Orientation::Horizontal, 12);
+    links.append(&more);
+    full.set_hexpand(true);
+    full.set_halign(gtk4::Align::End);
+    links.append(&full);
+    if simple {
+        go.add_css_class("cedro-biggo");
+        main.append(&go);
+        main.append(&links);
+    }
+    for w in [
+        bar.upcast_ref::<gtk4::Widget>(),
         foot.upcast_ref(),
     ] {
         main.append(w);
     }
 
-    let youtube = crate::linux_youtube::build(&window, false);
-    let web_video = crate::linux_youtube::build(&window, true);
+    let youtube = crate::linux_youtube::build(&window, false, simple);
+    let web_video = crate::linux_youtube::build(&window, true, simple);
     let stack = gtk4::Stack::new();
     stack.set_hexpand(true);
     stack.add_named(&main, Some("files"));
@@ -750,8 +880,32 @@ pub fn open_conversions(app: &Application) {
         move || a() || b()
     };
     let root = HBox::new(Orientation::Horizontal, 0);
-    root.append(&side_scroll);
-    root.append(&stack);
+    // Semplice: al posto dell'elenco a sinistra, tre schede in alto.
+    let pick: Vec<ToggleButton> = if simple { ["Converti file", "Video dal web", "Trascrivi"].iter().map(|l| ToggleButton::with_label(l)).collect() } else { Vec::new() };
+    if simple {
+        side_scroll.set_visible(false);
+        let tabs = HBox::new(Orientation::Horizontal, 6);
+        tabs.set_margin_top(12);
+        tabs.set_margin_start(20);
+        tabs.set_margin_end(20);
+        for (i, t) in pick.iter().enumerate() {
+            t.add_css_class("cedro-tab");
+            if i > 0 {
+                t.set_group(Some(&pick[0]));
+            }
+            tabs.append(t);
+        }
+        pick[0].set_active(true);
+        let right = HBox::new(Orientation::Vertical, 0);
+        right.set_hexpand(true);
+        right.append(&tabs);
+        right.append(&stack);
+        root.append(&side_scroll);
+        root.append(&right);
+    } else {
+        root.append(&side_scroll);
+        root.append(&stack);
+    }
     window.set_child(Some(&root));
 
     let ui = Rc::new(Ui {
@@ -769,7 +923,7 @@ pub fn open_conversions(app: &Application) {
         options,
         options_caption,
         values: RefCell::new(Values::new()),
-        quality,
+        quality: quality.clone(),
         dest_label,
         go: go.clone(),
         bar,
@@ -779,6 +933,17 @@ pub fn open_conversions(app: &Application) {
         action: RefCell::new(String::new()),
         dest: RefCell::new(None),
         running: RefCell::new(None),
+        simple,
+        advanced: Cell::new(false),
+        queue_scroll: queue_scroll.clone(),
+        formats_caption,
+        quality_widgets: vec![quality_caption.upcast(), quality.upcast(), quality_note.upcast()],
+        save_widgets: vec![dest_caption.clone().upcast(), dest_row.clone().upcast(), overwrite_row.clone().upcast()],
+        more: more.clone(),
+        stack: stack.clone(),
+        pick: pick.clone(),
+        switching: Cell::new(false),
+        syncing: Cell::new(false),
     });
 
     {
@@ -880,6 +1045,51 @@ pub fn open_conversions(app: &Application) {
         let ui = ui.clone();
         go.connect_clicked(move |_| start(&ui));
     }
+    if simple {
+        for (i, tab) in pick.iter().enumerate() {
+            let ui = ui.clone();
+            tab.connect_toggled(move |t| {
+                if !t.is_active() || ui.syncing.get() {
+                    return;
+                }
+                ui.switching.set(true);
+                match i {
+                    1 => ui.stack.set_visible_child_name("web"),
+                    _ => {
+                        ui.stack.set_visible_child_name("files");
+                        let audio = CATEGORIES.iter().position(|c| c.kind == Kind::Audio).unwrap_or(0);
+                        if i == 2 && ui.category.get() != audio {
+                            ui.side.select_row(ui.side.row_at_index(audio as i32).as_ref());
+                        }
+                        ui.tr.select(i == 2);
+                        apply_mode(&ui);
+                    }
+                }
+                ui.switching.set(false);
+            });
+        }
+        {
+            let ui = ui.clone();
+            more.connect_clicked(move |_| {
+                ui.advanced.set(!ui.advanced.get());
+                apply_simple(&ui);
+            });
+        }
+        {
+            // Torna alla vista completa: spegne l'impostazione e riapre il pannello.
+            let window = window.clone();
+            full.connect_clicked(move |_| {
+                let mut s = read_settings();
+                s.simple = false;
+                let _ = cedro::write_settings(&s);
+                let app = window.application();
+                window.close();
+                if let Some(app) = app {
+                    open_conversions(&app);
+                }
+            });
+        }
+    }
 
     side.select_row(side.row_at_index(0).as_ref());
     window.present();
@@ -894,6 +1104,9 @@ pub fn open_conversions(app: &Application) {
 #[cfg(debug_assertions)]
 fn shots(ui: &Rc<Ui>, dir: std::path::PathBuf) {
     let _ = std::fs::create_dir_all(&dir);
+    if ui.simple {
+        return shots_simple(ui, dir);
+    }
     if let Ok(list) = std::env::var("CEDRO_SHOT_FILES") {
         add_files(ui, list.split(';').filter(|p| !p.is_empty()).map(PathBuf::from).collect());
     }
@@ -981,4 +1194,39 @@ pub(crate) fn save_png(window: &gtk4::Window, path: &std::path::Path) -> Result<
     let renderer = window.native().and_then(|n| n.renderer()).ok_or("nessun renderer")?;
     let texture = renderer.render_texture(&node, None);
     texture.save_to_png(path).map_err(|e| e.to_string())
+}
+
+/// Le immagini della modalità Semplice: vuoto, con file, con «Altre opzioni», Video dal web, Trascrivi.
+#[cfg(debug_assertions)]
+fn shots_simple(ui: &Rc<Ui>, dir: std::path::PathBuf) {
+    type Action = Box<dyn Fn(&Rc<Ui>)>;
+    let files: Vec<PathBuf> = std::env::var("CEDRO_SHOT_FILES").unwrap_or_default().split(';').filter(|p| !p.is_empty()).map(PathBuf::from).collect();
+    let steps: Vec<(&'static str, Action)> = vec![
+        ("00-vuoto", Box::new(|_| {})),
+        ("01-con-file", Box::new(move |ui| add_files(ui, files.clone()))),
+        ("02-altre-opzioni", Box::new(|ui| ui.more.emit_clicked())),
+        ("03-video-dal-web", Box::new(|ui| ui.pick[1].set_active(true))),
+        ("04-trascrivi", Box::new(|ui| ui.pick[2].set_active(true))),
+        ("05-trascrivi-altre", Box::new(|ui| { ui.pick[0].set_active(true); ui.pick[2].set_active(true); })),
+    ];
+    fn step(ui: Rc<Ui>, dir: std::path::PathBuf, steps: Rc<Vec<(&'static str, Action)>>, at: usize) {
+        let Some((name, action)) = steps.get(at) else {
+            let app = ui.window.application();
+            glib::timeout_add_local_once(Duration::from_millis(300), move || {
+                if let Some(app) = app {
+                    app.quit();
+                }
+            });
+            return;
+        };
+        action(&ui);
+        let path = dir.join(format!("{name}.png"));
+        glib::timeout_add_local_once(Duration::from_millis(900), move || {
+            if let Err(e) = save_png(&ui.window, &path) {
+                eprintln!("screenshot: {e}");
+            }
+            step(ui.clone(), dir.clone(), steps.clone(), at + 1);
+        });
+    }
+    step(ui.clone(), dir, Rc::new(steps), 0);
 }
