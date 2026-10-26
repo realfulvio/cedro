@@ -33,8 +33,12 @@ fn agent() -> ureq::Agent {
 
 /// L'ultima release pubblicata, senza bozze né pre-release.
 pub fn latest() -> Result<Release, String> {
+    #[cfg(debug_assertions)]
+    let latest = std::env::var("CEDRO_UPDATE_URL").unwrap_or_else(|_| LATEST.to_string());
+    #[cfg(not(debug_assertions))]
+    let latest = LATEST.to_string();
     let body = agent()
-        .get(LATEST)
+        .get(&latest)
         .set("Accept", "application/vnd.github+json")
         .call()
         .map_err(|e| format!("GitHub non risponde: {e}"))?
@@ -72,7 +76,8 @@ fn parse_release(body: &str) -> Result<Release, String> {
         })
     };
     let installer = find(&|name| is_installer_for_this_arch(name));
-    let package = find(&|name| name.starts_with("cedro-") && name.ends_with("-linux-x64.tar.gz"));
+    let suffix = format!("-linux-{}.tar.gz", package_arch());
+    let package = find(&|name| name.starts_with("cedro-") && name.ends_with(&suffix));
     Ok(Release { version, page, installer, package })
 }
 
@@ -135,39 +140,120 @@ pub fn download(asset: &Asset) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// Su Linux: vero se questo Cedro sta nella cartella dove lo mette `install.sh` (`~/.local/opt/cedro`),
-/// l'unico caso in cui può aggiornarsi da solo.
-#[cfg(unix)]
-pub fn self_updatable() -> bool {
-    let Some(home) = std::env::var_os("HOME") else { return false };
-    let Ok(exe) = std::env::current_exe().and_then(|e| e.canonicalize()) else { return false };
-    exe == std::path::Path::new(&home).join(".local/opt/cedro/cedro").canonicalize().unwrap_or_default()
+/// Come il pacchetto per Linux chiama questa architettura (`cedro-<versione>-linux-<arch>.tar.gz`).
+pub fn package_arch() -> &'static str {
+    match std::env::consts::ARCH {
+        "aarch64" => "arm64",
+        "x86_64" => "x64",
+        other => other,
+    }
 }
 
-/// Su Linux: scarica il pacchetto (con lo SHA-256 controllato), lo apre e lancia il suo `install.sh --no-start`.
+/// Dove `install.sh` mette Cedro: sempre nella cartella dell'utente, da dove Cedro parte anche
+/// se prima girava da `target/`, da `/usr/local` o da una cartella a scelta.
 #[cfg(unix)]
-pub fn install_package(asset: &Asset) -> Result<(), String> {
-    let archive = download(asset)?;
-    let dir = std::env::temp_dir().join(format!("cedro-aggiornamento-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let result = (|| {
-        let unpacked = std::process::Command::new("tar").arg("-xzf").arg(&archive).arg("-C").arg(&dir).status().map_err(|e| format!("tar non parte: {e}"))?;
-        if !unpacked.success() {
-            return Err("il pacchetto non si apre".to_string());
+pub fn installed_binary() -> Result<PathBuf, String> {
+    let home = std::env::var_os("HOME").filter(|h| !h.is_empty()).ok_or("la cartella dell'utente (HOME) non è nota")?;
+    Ok(PathBuf::from(home).join(".local/opt/cedro/cedro"))
+}
+
+/// Una cartella nuova, solo dell'utente (0700), per scaricare e aprire il pacchetto: nessun altro processo
+/// può sostituire l'archivio o `install.sh` tra il controllo dello SHA-256 e l'installazione.
+/// Sta in `XDG_RUNTIME_DIR` (già privata) o, se manca, nella cartella di Cedro; mai in `/tmp` con un nome prevedibile.
+#[cfg(unix)]
+fn private_dir() -> Result<PathBuf, String> {
+    use std::os::unix::fs::DirBuilderExt;
+    static CALLS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let base = match std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|d| d.is_dir()) {
+        Some(dir) => dir,
+        None => {
+            let dir = crate::config_dir().join("tmp");
+            std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir).map_err(|e| format!("cartella provvisoria non creata: {e}"))?;
+            dir
         }
-        let script = std::fs::read_dir(&dir)
-            .map_err(|e| e.to_string())?
-            .flatten()
-            .map(|d| d.path().join("install.sh"))
-            .find(|p| p.is_file())
-            .ok_or("il pacchetto non ha install.sh")?;
-        let done = std::process::Command::new("bash").arg(&script).arg("--no-start").status().map_err(|e| e.to_string())?;
-        if done.success() { Ok(()) } else { Err("install.sh non è riuscito".to_string()) }
+    };
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    for _ in 0..8 {
+        let name = format!("cedro-aggiornamento-{}-{nanos:x}-{}", std::process::id(), CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+        let dir = base.join(name);
+        // `create` non riesce se esiste già (anche come link): una cartella preparata da altri non viene mai usata.
+        match std::fs::DirBuilder::new().mode(0o700).create(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("cartella provvisoria non creata: {e}")),
+        }
+    }
+    Err("cartella provvisoria non creata".to_string())
+}
+
+/// Scarica il pacchetto in una cartella privata, ne controlla lo SHA-256 sulla copia che poi installa.
+#[cfg(unix)]
+fn download_private(asset: &Asset, dir: &std::path::Path) -> Result<PathBuf, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let response = agent().get(&asset.url).call().map_err(|e| format!("download non riuscito: {e}"))?;
+    let mut bytes = Vec::new();
+    response.into_reader().take(512 * 1024 * 1024).read_to_end(&mut bytes).map_err(|e| format!("download interrotto: {e}"))?;
+    let expected = asset.sha256.as_deref().ok_or("la release non indica lo SHA-256 del pacchetto")?;
+    let actual: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+    if !actual.eq_ignore_ascii_case(expected) {
+        return Err("lo SHA-256 del pacchetto non corrisponde: file scartato".into());
+    }
+    let name = std::path::Path::new(&asset.name).file_name().ok_or("nome del pacchetto non valido")?;
+    let path = dir.join(name);
+    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&path).map_err(|e| e.to_string())?;
+    file.write_all(&bytes).map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
+/// Su Linux: scarica il pacchetto (con lo SHA-256 controllato) e lo installa. Ritorna il Cedro nuovo.
+/// Lavora tutto in una cartella privata; da chiamare fuori dal thread delle finestre (scarica e copia file).
+#[cfg(unix)]
+pub fn install_package(asset: &Asset) -> Result<PathBuf, String> {
+    let dir = private_dir()?;
+    let result = download_private(asset, &dir).and_then(|archive| install_archive_in(&archive, &dir));
+    let _ = std::fs::remove_dir_all(&dir);
+    result
+}
+
+/// Apre un pacchetto già scaricato e lancia il suo `install.sh --no-start`. La copia del pacchetto passa
+/// prima in una cartella privata, così quel che si apre è quel che si è ricevuto.
+#[cfg(unix)]
+pub fn install_archive(archive: &std::path::Path) -> Result<PathBuf, String> {
+    let dir = private_dir()?;
+    let result = (|| {
+        let copy = dir.join("pacchetto.tar.gz");
+        std::fs::copy(archive, &copy).map_err(|e| e.to_string())?;
+        install_archive_in(&copy, &dir)
     })();
     let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_file(&archive);
     result
+}
+
+/// Apre `archive` (dentro `dir`, privata) in `dir/aperto` e lancia il suo `install.sh --no-start`: copia il
+/// programma in `~/.local/opt/cedro` e lascia a Cedro, al primo avvio, il compito di riscrivere menu, icona e avvio automatico.
+#[cfg(unix)]
+fn install_archive_in(archive: &std::path::Path, dir: &std::path::Path) -> Result<PathBuf, String> {
+    use std::os::unix::fs::DirBuilderExt;
+    let target = installed_binary()?;
+    let open = dir.join("aperto");
+    std::fs::DirBuilder::new().mode(0o700).create(&open).map_err(|e| e.to_string())?;
+    let unpacked = std::process::Command::new("tar").arg("-xzf").arg(archive).arg("-C").arg(&open).status().map_err(|e| format!("tar non parte: {e}"))?;
+    if !unpacked.success() {
+        return Err("il pacchetto non si apre".to_string());
+    }
+    let script = std::fs::read_dir(&open)
+        .map_err(|e| e.to_string())?
+        .flatten()
+        .map(|d| d.path().join("install.sh"))
+        .find(|p| p.is_file())
+        .ok_or("il pacchetto non ha install.sh")?;
+    let done = std::process::Command::new("bash").arg(&script).arg("--no-start").output().map_err(|e| e.to_string())?;
+    if !done.status.success() {
+        return Err(format!("install.sh non è riuscito: {}", String::from_utf8_lossy(&done.stderr).trim()));
+    }
+    if target.is_file() { Ok(target) } else { Err("il programma nuovo non è al suo posto".to_string()) }
 }
 
 fn skip_file() -> PathBuf {
@@ -340,6 +426,21 @@ Connection: close
         assert!(download(&none).is_err());
     }
 
+    /// La cartella dove si apre il pacchetto è nuova, solo dell'utente e mai la stessa due volte.
+    #[cfg(unix)]
+    #[test]
+    fn the_update_folder_is_private_and_unique() {
+        use std::os::unix::fs::PermissionsExt;
+        let a = private_dir().unwrap();
+        let b = private_dir().unwrap();
+        assert_ne!(a, b);
+        for dir in [&a, &b] {
+            assert_eq!(std::fs::metadata(dir).unwrap().permissions().mode() & 0o777, 0o700, "{}", dir.display());
+            assert!(dir.starts_with(std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|d| d.is_dir()).unwrap_or_else(|| crate::config_dir().join("tmp"))));
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn installs_a_package_with_its_install_script() {
@@ -350,13 +451,14 @@ Connection: close
         let marker = work.join("fatto.txt");
         std::fs::write(pkg.join("install.sh"), format!("#!/bin/sh
 echo \"$1\" > {}
+mkdir -p \"$HOME/.local/opt/cedro\" && : > \"$HOME/.local/opt/cedro/cedro\"
 ", marker.display())).unwrap();
         let archive = work.join("pacchetto.tar.gz");
         let made = std::process::Command::new("tar").arg("-czf").arg(&archive).arg("-C").arg(&work).arg("cedro-9.9.9-linux-x64").status().unwrap();
         assert!(made.success());
         let bytes = std::fs::read(&archive).unwrap();
         let asset = Asset { name: format!("cedro-prova-{}-linux-x64.tar.gz", std::process::id()), url: serve_once(bytes.clone()), sha256: Some(sha_of(&bytes)) };
-        install_package(&asset).unwrap();
+        with_fake_home(&work.join("home"), || install_package(&asset)).unwrap();
         assert_eq!(std::fs::read_to_string(&marker).unwrap().trim(), "--no-start");
         // Un pacchetto con lo SHA-256 sbagliato non viene nemmeno aperto.
         std::fs::remove_file(&marker).unwrap();
@@ -364,6 +466,56 @@ echo \"$1\" > {}
         assert!(install_package(&bad).is_err());
         assert!(!marker.exists());
         let _ = std::fs::remove_dir_all(&work);
+    }
+
+    /// Esegue `f` con un HOME finto: i test dell'installazione non devono toccare quello di chi li lancia.
+    #[cfg(unix)]
+    fn with_fake_home<T>(home: &std::path::Path, f: impl FnOnce() -> T) -> T {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        std::fs::create_dir_all(home).unwrap();
+        let previous = std::env::var_os("HOME");
+        std::env::set_var("HOME", home);
+        let out = f();
+        match previous {
+            Some(p) => std::env::set_var("HOME", p),
+            None => std::env::remove_var("HOME"),
+        }
+        out
+    }
+
+    #[test]
+    fn package_follows_the_architecture() {
+        let body = format!(r#"{{"tag_name": "0.9.0", "assets": [
+            {{"name": "cedro-0.9.0-linux-other.tar.gz", "browser_download_url": "https://x/o"}},
+            {{"name": "cedro-0.9.0-linux-{}.tar.gz", "browser_download_url": "https://x/mine"}}]}}"#, package_arch());
+        assert_eq!(parse_release(&body).unwrap().package.unwrap().url, "https://x/mine");
+        let none = r#"{"tag_name": "0.9.0", "assets": [{"name": "Cedro-Setup-0.9.0.exe", "browser_download_url": "https://x/a"}]}"#;
+        assert!(parse_release(none).unwrap().package.is_none());
+    }
+
+    /// Il pacchetto vero (il suo install.sh) messo in una cartella dell'utente finta.
+    #[cfg(unix)]
+    #[test]
+    fn installs_a_package_into_the_user_folder() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("cedro-upd-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let pack = root.join("pack/cedro-9.9.9-linux-x64");
+        std::fs::create_dir_all(&pack).unwrap();
+        std::fs::write(pack.join("cedro"), "#!/bin/sh\necho nuovo\n").unwrap();
+        std::fs::set_permissions(pack.join("cedro"), std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(pack.join("install.sh"), include_str!("../installer/install-linux.sh")).unwrap();
+        let archive = root.join("cedro-9.9.9-linux-x64.tar.gz");
+        let made = std::process::Command::new("tar").arg("-czf").arg(&archive).arg("-C").arg(root.join("pack")).arg("cedro-9.9.9-linux-x64").status().unwrap();
+        assert!(made.success());
+        let home = root.join("home");
+        let result = with_fake_home(&home, || install_archive(&archive));
+        let installed = result.unwrap();
+        assert_eq!(installed, home.join(".local/opt/cedro/cedro"));
+        assert_eq!(std::fs::read_to_string(&installed).unwrap(), "#!/bin/sh\necho nuovo\n");
+        assert!(home.join(".local/bin/cedro").exists());
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
