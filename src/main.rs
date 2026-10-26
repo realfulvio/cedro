@@ -22,9 +22,17 @@ mod winlist;
 mod winmenu;
 #[cfg(windows)]
 mod wingfx;
+#[cfg(windows)]
+mod firma_win;
 
 #[cfg(target_os = "linux")]
+mod linux_firma;
+#[cfg(target_os = "linux")]
+mod linux_font;
+#[cfg(target_os = "linux")]
 mod linux_conversioni;
+#[cfg(target_os = "linux")]
+mod linux_trascrizione;
 #[cfg(target_os = "linux")]
 mod linux_youtube;
 #[cfg(target_os = "linux")]

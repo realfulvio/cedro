@@ -1,8 +1,8 @@
 name: Windows ARM64
 
-# Compila e prova Cedro su un vero Windows on ARM (runner windows-11-arm) e, su richiesta, crea
-# l'installatore ARM64 e i motori di trascrizione e li allega alla release indicata.
-# Pubblicare: Actions → Windows ARM64 → Run workflow, con il tag (per esempio v0.18.0).
+# Compila e prova Cedro su un vero Windows on ARM (runner windows-11-arm) e anche su x64.
+# Pubblicare: Actions → Windows ARM64 → Run workflow su main, con il tag (per esempio v0.18.0):
+# crea la release (se non c'è) con gli installatori x64 e ARM64 e tutti i motori di trascrizione.
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag della release a cui allegare i file ARM64 (vuoto = solo prova)"
+        description: "Tag della release da pubblicare (vuoto = solo prova)"
         required: false
         default: ""
 
@@ -81,12 +81,6 @@ jobs:
           name: installatore-arm64
           path: dist/Cedro-Setup-*-arm64.exe
 
-      - name: Allega alla release
-        if: ${{ inputs.tag != '' }}
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ inputs.tag }}" (Get-ChildItem dist\Cedro-Setup-*-arm64.exe).FullName --clobber
 
   motori:
     name: Motore di trascrizione (processore)
@@ -136,12 +130,6 @@ jobs:
           name: motori-arm64
           path: dist-motori/*.exe
 
-      - name: Allega alla release
-        if: ${{ inputs.tag != '' }}
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ inputs.tag }}" (Get-ChildItem dist-motori\*.exe).FullName --clobber
 
   vulkan:
     name: Motore di trascrizione (scheda video Vulkan, Adreno)
@@ -200,9 +188,77 @@ jobs:
           name: motore-vulkan-arm64
           path: dist-motori/*.exe
 
-      - name: Allega alla release
-        if: ${{ inputs.tag != '' }}
+  x64:
+    name: Cedro x64 (prove, installatore, motori)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Prove
+        shell: pwsh
+        run: cargo test --release
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe -OutFile is.exe
+          $p = Start-Process .\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait -PassThru
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")) { throw "Inno Setup non installato ($($p.ExitCode))" }
+
+      - name: Installatore x64
+        shell: pwsh
+        run: powershell -File installer\build.ps1
+
+      - name: Motori x64 della release precedente con il nome nuovo
+        # trascrivi/ per x64 non cambia: i motori già pubblicati si riusano col numero di versione nuovo.
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ inputs.tag }}" (Get-ChildItem dist-motori\*.exe).FullName --clobber
+        run: |
+          $version = (Select-String -Path trascrivi\Cargo.toml -Pattern '^version\s*=\s*"(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
+          New-Item -ItemType Directory -Force motori-x64 | Out-Null
+          $tags = gh release list --limit 20 --json tagName --jq '.[].tagName'
+          foreach ($tag in $tags) {
+            gh release download $tag --pattern 'cedro-trascrivi-*-windows-x64-*.exe' --dir motori-x64 --clobber 2>$null
+            if (Get-ChildItem motori-x64 -Filter *.exe -ErrorAction SilentlyContinue) { "Motori presi da $tag"; break }
+          }
+          foreach ($f in Get-ChildItem motori-x64 -Filter *.exe) {
+            $new = $f.Name -replace '^cedro-trascrivi-[^-]+-windows', "cedro-trascrivi-$version-windows"
+            if ($new -ne $f.Name) { Move-Item $f.FullName (Join-Path motori-x64 $new) -Force }
+          }
+          Get-ChildItem motori-x64
+          if (-not (Get-ChildItem motori-x64 -Filter "*-$version-windows-x64-avx2.exe")) { throw 'motori x64 non trovati' }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: x64
+          path: |
+            dist/Cedro-Setup-*.exe
+            motori-x64/*.exe
+
+  pubblica:
+    name: Pubblica la release
+    if: ${{ always() && inputs.tag != '' && needs.app.result == 'success' && needs.motori.result == 'success' && needs.x64.result == 'success' }}
+    needs: [app, motori, vulkan, x64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: file
+          merge-multiple: true
+
+      - name: Release ${{ inputs.tag }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          find file -type f -name '*.exe' | sort
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Cedro ${TAG#v}" --notes-file .github/note-release.md
+          fi
+          gh release upload "$TAG" $(find file -type f -name '*.exe') --clobber
+          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name)  \(.digest)"'
