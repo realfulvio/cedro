@@ -52,6 +52,11 @@ struct Shape2 {
     order: usize,
     /// Il disegno di una lettera ruotata.
     text: bool,
+    /// Tratteggio: lunghezze di tratti e vuoti, in punti.
+    dash: Vec<f64>,
+    /// Non si ridisegna come forma (sfumatura, motivo, ritaglio non rettangolare): nel Word
+    /// va il pezzo di pagina disegnato.
+    raster: bool,
 }
 
 struct Pic {
@@ -70,14 +75,14 @@ struct Collector {
     /// Spessore medio dei tratti per font senza nome (per riconoscere il grassetto).
     stems: HashMap<u128, (f64, u32)>,
     seen: HashSet<(u128, char)>,
-    /// Le aree di ritaglio aperte: quel che sta fuori non si vede.
-    clips: Vec<Rect>,
+    /// Le aree di ritaglio aperte, e se sono rettangoli: quel che sta fuori non si vede.
+    clips: Vec<(Rect, bool)>,
     drawn: usize,
 }
 
 impl Collector {
     fn visible(&self, b: &Rect) -> bool {
-        self.clips.last().is_none_or(|c| b.x1 >= c.x0 - 0.5 && b.x0 <= c.x1 + 0.5 && b.y1 >= c.y0 - 0.5 && b.y0 <= c.y1 + 0.5)
+        self.clips.last().is_none_or(|(c, _)| b.x1 >= c.x0 - 0.5 && b.x0 <= c.x1 + 0.5 && b.y1 >= c.y0 - 0.5 && b.y0 <= c.y1 + 0.5)
     }
 }
 
@@ -92,10 +97,10 @@ fn rgb(c: &hayro::hayro_interpret::color::Color) -> Option<[u8; 3]> {
 impl<'a> Device<'a> for Collector {
     fn draw_path(&mut self, p: &BezPath, props: DrawProps<'a>, mode: &DrawMode) {
         let scale = props.transform.determinant().abs().sqrt();
-        let (filled, width) = match mode {
-            DrawMode::Fill(_) => (true, None),
-            DrawMode::Stroke(s) => (false, Some(s.line_width as f64 * scale)),
-            DrawMode::FillAndStroke(_, s) => (true, Some(s.line_width as f64 * scale)),
+        let (filled, width, dash) = match mode {
+            DrawMode::Fill(_) => (true, None, Vec::new()),
+            DrawMode::Stroke(s) => (false, Some(s.line_width as f64 * scale), s.dash_array.iter().map(|d| *d as f64 * scale).collect()),
+            DrawMode::FillAndStroke(_, s) => (true, Some(s.line_width as f64 * scale), s.dash_array.iter().map(|d| *d as f64 * scale).collect()),
             DrawMode::Invisible => return,
         };
         let color = match &props.paint {
@@ -120,6 +125,20 @@ impl<'a> Device<'a> for Collector {
             && (4..=5).contains(&pts.len())
             && pts.iter().all(|p| (near(p.x, b.x0) || near(p.x, b.x1)) && (near(p.y, b.y0) || near(p.y, b.y1)));
         let line = simple && pts.len() == 2 && (near(b.x0, b.x1) || near(b.y0, b.y1));
+        // Quel che esce dal ritaglio: un rettangolo si accorcia, il resto si prende disegnato.
+        let mut raster = !matches!(props.paint, Paint::Color(_));
+        let (mut q, mut b) = (q, b);
+        if let Some((c, clip_rect)) = self.clips.last() {
+            let inside = b.x0 >= c.x0 - 0.5 && b.x1 <= c.x1 + 0.5 && b.y0 >= c.y0 - 0.5 && b.y1 <= c.y1 + 0.5;
+            if !inside {
+                if *clip_rect && rect {
+                    b = b.intersect(*c);
+                    q = b.to_path(0.1);
+                } else {
+                    raster = true;
+                }
+            }
+        }
         self.shapes.push(Shape2 {
             x0: b.x0,
             y0: b.y0,
@@ -132,14 +151,27 @@ impl<'a> Device<'a> for Collector {
             path: q,
             order: self.drawn,
             text: false,
+            dash,
+            raster,
         });
         self.drawn += 1;
     }
     fn push_clip_path(&mut self, clip: &ClipPath) {
         let b = clip.path.bounding_box();
+        let near = |a: f64, v: f64| (a - v).abs() < 0.05;
+        let mut pts = Vec::new();
+        let mut simple = true;
+        for el in clip.path.elements() {
+            match el {
+                PathEl::MoveTo(p) | PathEl::LineTo(p) => pts.push(*p),
+                PathEl::ClosePath => {}
+                _ => simple = false,
+            }
+        }
+        let rect = simple && (4..=5).contains(&pts.len()) && pts.iter().all(|p| (near(p.x, b.x0) || near(p.x, b.x1)) && (near(p.y, b.y0) || near(p.y, b.y1)));
         let top = match self.clips.last() {
-            Some(c) => c.intersect(b),
-            None => b,
+            Some((c, r)) => (c.intersect(b), *r && rect),
+            None => (b, rect),
         };
         self.clips.push(top);
     }
@@ -155,7 +187,7 @@ impl<'a> Device<'a> for Collector {
         if !self.visible(&b) {
             return;
         }
-        let c = self.clips.last().copied().unwrap_or(b);
+        let c = self.clips.last().map_or(b, |c| c.0);
         let v = b.intersect(c);
         self.pics.push(Pic { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, order: self.drawn });
         self.drawn += 1;
@@ -199,6 +231,8 @@ impl<'a> Device<'a> for Collector {
                             path: q,
                             order: self.drawn,
                             text: true,
+                            dash: Vec::new(),
+                            raster: false,
                         });
                         self.drawn += 1;
                     }
@@ -1431,6 +1465,11 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
         }
         let lines = group_lines(glyphs.clone(), 2.0);
         if form_doc || is_form(&lines, &shapes) {
+            let mut pics = pics;
+            for s in shapes.iter().filter(|s| s.raster) {
+                pics.push(Pic { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, order: s.order });
+            }
+            shapes.retain(|s| !s.raster);
             // Nel modulo ogni scritta sta al suo posto: le scritte vicine restano separate.
             let mut lines = group_lines(glyphs.clone(), 0.45);
             // Ogni scritta tiene in Word la larghezza del PDF: Word arrotonda il corpo ai mezzi
@@ -2174,7 +2213,24 @@ fn shapes_graphic(group: &[&Shape2], w: f64, h: f64) -> String {
         None => "<a:noFill/>".to_string(),
     };
     let line = match first.stroke {
-        Some((c, width)) => format!("<a:ln w=\"{}\"><a:solidFill><a:srgbClr val=\"{}\"/></a:solidFill></a:ln>", emu(width.max(0.25)), hex(c)),
+        Some((c, width)) => {
+            let width = width.max(0.25);
+            // Il tratteggio in Word si misura in centomillesimi dello spessore.
+            let mut dash = String::new();
+            if first.dash.iter().any(|d| *d > 0.0) {
+                let mut ds = first.dash.clone();
+                if ds.len() % 2 == 1 {
+                    ds.extend(first.dash.clone());
+                }
+                dash.push_str("<a:custDash>");
+                for pair in ds.chunks(2) {
+                    let pct = |v: f64| ((v / width) * 100000.0).round().max(1.0) as i64;
+                    let _ = write!(dash, "<a:ds d=\"{}\" sp=\"{}\"/>", pct(pair[0]), pct(pair[1]));
+                }
+                dash.push_str("</a:custDash>");
+            }
+            format!("<a:ln w=\"{}\"><a:solidFill><a:srgbClr val=\"{}\"/></a:solidFill>{dash}</a:ln>", emu(width), hex(c))
+        }
         None => "<a:ln><a:noFill/></a:ln>".to_string(),
     };
     format!(
@@ -2373,7 +2429,9 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                 items.sort_by_key(|(o, _)| *o);
                 let mut runs = String::new();
                 let mut group: Vec<&Shape2> = Vec::new();
-                let same = |a: &Shape2, b: &Shape2| a.fill == b.fill && a.stroke.map(|s| (s.0, (s.1 * 20.0).round() as i64)) == b.stroke.map(|s| (s.0, (s.1 * 20.0).round() as i64));
+                let same = |a: &Shape2, b: &Shape2| {
+                    a.fill == b.fill && a.dash == b.dash && a.stroke.map(|s| (s.0, (s.1 * 20.0).round() as i64)) == b.stroke.map(|s| (s.0, (s.1 * 20.0).round() as i64))
+                };
                 let flush = |group: &mut Vec<&Shape2>, runs: &mut String, next_id: &mut usize| {
                     if group.is_empty() {
                         return;
