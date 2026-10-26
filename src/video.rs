@@ -14,7 +14,7 @@ use windows::Win32::Media::MediaFoundation::{
     MFVideoInterlace_Progressive,
 };
 use windows::core::GUID;
-use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_MULTITHREADED};
+use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
 use windows::core::PCWSTR;
 
 pub fn to_mp4(input: &Path, output: &Path) -> Result<(), String> {
@@ -1145,15 +1145,26 @@ fn resample_pcm(samples: &[i16], channels: u16, from: u32, to: u32) -> Vec<i16> 
     out
 }
 
+/// Media Foundation pronta e COM acceso su questo thread. Ogni lavoro gira in un thread nuovo:
+/// COM va acceso su ciascuno (prima lo si faceva solo sul primo, e quando quel thread finiva i
+/// lavori dopo restavano senza). Si spegne da solo quando il thread finisce.
 fn ensure_runtime() -> Result<(), String> {
+    struct Com(bool);
+    impl Drop for Com {
+        fn drop(&mut self) {
+            if self.0 {
+                unsafe { windows::Win32::System::Com::CoUninitialize() };
+            }
+        }
+    }
+    thread_local! {
+        // Un thread già in STA (le finestre) resta com'è: CoInitializeEx fallisce e non si spegne nulla.
+        static COM: Com = Com(unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok());
+    }
+    COM.with(|_| {});
     static READY: OnceLock<Result<(), String>> = OnceLock::new();
     READY
-        .get_or_init(|| unsafe {
-            if CoInitializeEx(None, COINIT_MULTITHREADED).is_err() {
-                let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
-            }
-            MFStartup(MF_VERSION, MFSTARTUP_NOSOCKET).map_err(|e| format!("video di Windows non pronto: {e}"))
-        })
+        .get_or_init(|| unsafe { MFStartup(MF_VERSION, MFSTARTUP_NOSOCKET).map_err(|e| format!("video di Windows non pronto: {e}")) })
         .clone()
 }
 
@@ -1171,17 +1182,6 @@ pub(crate) fn audio_to_wav(input: &Path, output: &Path) -> Result<(), String> {
         MF_SOURCE_READER_ALL_STREAMS,
     };
     ensure_runtime()?;
-    // Ogni lavoro gira in un thread nuovo e il Source Reader vuole COM acceso su quel thread:
-    // `ensure_runtime` lo accende una volta sola, per il primo thread.
-    struct Com(bool);
-    impl Drop for Com {
-        fn drop(&mut self) {
-            if self.0 {
-                unsafe { windows::Win32::System::Com::CoUninitialize() };
-            }
-        }
-    }
-    let _com = Com(unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok());
     let wide_in = wide(input);
     unsafe {
         let reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), None).map_err(|_| "Windows non sa leggere questo file".to_string())?;

@@ -133,10 +133,13 @@ fn video_card() -> Option<String> {
     None
 }
 
+/// Scrive un evento per Cedro. Se Cedro non c'è più (chiuso o caduto) nessuno legge: il motore esce
+/// subito invece di finire da solo un file lungo, col processore al massimo e il modello in memoria.
 fn emit(v: Value) {
     let mut out = std::io::stdout().lock();
-    let _ = writeln!(out, "{v}");
-    let _ = out.flush();
+    if writeln!(out, "{v}").and_then(|_| out.flush()).is_err() {
+        std::process::exit(0);
+    }
 }
 
 fn fail(msg: &str) -> ! {

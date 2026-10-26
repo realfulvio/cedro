@@ -234,11 +234,21 @@ fn download(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut
             let _ = std::fs::remove_file(&part);
             return Err("Annullato".into());
         }
-        let n = reader.read(&mut buf).map_err(|e| format!("Scaricamento di {what} interrotto: {e}"))?;
-        if n == 0 {
-            break;
+        // Un download a metà non resta sul disco (ffmpeg pesa 140 MB).
+        let n = match reader.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) => {
+                drop(file);
+                let _ = std::fs::remove_file(&part);
+                return Err(format!("Scaricamento di {what} interrotto: {e}"));
+            }
+        };
+        if let Err(e) = file.write_all(&buf[..n]) {
+            drop(file);
+            let _ = std::fs::remove_file(&part);
+            return Err(format!("Scrittura di {what} non riuscita (disco pieno?): {e}"));
         }
-        file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
         hasher.update(&buf[..n]);
         done += n as u64;
         if total > 0 {

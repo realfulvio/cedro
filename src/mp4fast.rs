@@ -53,7 +53,7 @@ fn shift_in(moov: &mut [u8], at: usize, size: usize, shift: u64) -> Result<(), S
     let kind: [u8; 4] = moov[at + 4..at + 8].try_into().unwrap();
     match &kind {
         b"stco" => {
-            let count = u32::from_be_bytes(moov[at + 12..at + 16].try_into().unwrap()) as usize;
+            let count = table_len(moov, at, size, 4)?;
             for i in 0..count {
                 let p = at + 16 + i * 4;
                 let value = u32::from_be_bytes(moov[p..p + 4].try_into().unwrap()) as u64 + shift;
@@ -62,10 +62,10 @@ fn shift_in(moov: &mut [u8], at: usize, size: usize, shift: u64) -> Result<(), S
             }
         }
         b"co64" => {
-            let count = u32::from_be_bytes(moov[at + 12..at + 16].try_into().unwrap()) as usize;
+            let count = table_len(moov, at, size, 8)?;
             for i in 0..count {
                 let p = at + 16 + i * 8;
-                let value = u64::from_be_bytes(moov[p..p + 8].try_into().unwrap()) + shift;
+                let value = u64::from_be_bytes(moov[p..p + 8].try_into().unwrap()).checked_add(shift).ok_or("MP4 con un offset fuori misura")?;
                 moov[p..p + 8].copy_from_slice(&value.to_be_bytes());
             }
         }
@@ -84,6 +84,19 @@ fn shift_in(moov: &mut [u8], at: usize, size: usize, shift: u64) -> Result<(), S
         _ => {}
     }
     Ok(())
+}
+
+/// Quante voci ha la tabella `stco`/`co64` che parte in `at`, solo se stanno tutte dentro il suo blocco:
+/// un file rovinato non deve far leggere (o riscrivere) i blocchi accanto.
+fn table_len(moov: &[u8], at: usize, size: usize, entry: usize) -> Result<usize, String> {
+    if size < 16 {
+        return Err("MP4 con una tabella troppo corta".into());
+    }
+    let count = u32::from_be_bytes(moov[at + 12..at + 16].try_into().unwrap()) as usize;
+    if count.checked_mul(entry).is_none_or(|bytes| bytes > size - 16) {
+        return Err("MP4 con una tabella fuori misura".into());
+    }
+    Ok(count)
 }
 
 /// Il file MP4 con il `moov` davanti ai dati. Se c'è già, non lo tocca.
@@ -159,5 +172,22 @@ mod tests {
         make_faststart(&path).unwrap();
         assert_eq!(fs::read(&path).unwrap(), out);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Una tabella che dice di avere più voci di quante ne stanno nel suo blocco: errore, non un crash
+    /// e non una scrittura sui blocchi accanto.
+    #[test]
+    fn a_damaged_offset_table_is_refused() {
+        for (kind, count) in [(b"stco", 1000u32), (b"co64", 1000), (b"stco", u32::MAX), (b"co64", u32::MAX)] {
+            let mut body = vec![0, 0, 0, 0];
+            body.extend_from_slice(&count.to_be_bytes());
+            body.extend_from_slice(&[0; 8]);
+            let table = make(kind, &body);
+            let mut copy = make(b"moov", &make(b"trak", &make(b"mdia", &make(b"minf", &make(b"stbl", &table)))));
+            assert!(shift_offsets(&mut copy, 100).is_err(), "{}", String::from_utf8_lossy(kind));
+        }
+        // Una tabella più corta della sua intestazione.
+        let mut copy = make(b"moov", &make(b"stco", &[0, 0, 0, 0]));
+        assert!(shift_offsets(&mut copy, 100).is_err());
     }
 }
