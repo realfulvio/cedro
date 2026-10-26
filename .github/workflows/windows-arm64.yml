@@ -79,7 +79,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: installatore-arm64
-          path: dist/Cedro-Setup-*-arm64.exe
+          path: dist/Cedro-ARM64-Setup-*.exe
 
 
   motori:
@@ -215,6 +215,29 @@ jobs:
         shell: pwsh
         run: powershell -File installer\build.ps1
 
+      - name: "Aggiornamento vero: una 0.17 installata prende e installa l'installatore x64 nuovo"
+        # Fino alla 0.17 Cedro prende il primo file «Cedro-Setup….exe» della release (GitHub li elenca in ordine
+        # alfabetico): qui si rifà la stessa scelta sui nomi della release nuova e si installa sopra la 0.17.1.
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{5C1CAEBF-024C-4A9F-BEC8-1FB3C9FEA4CE}_is1'
+          gh release download v0.17.1 --pattern 'Cedro-Setup-*.exe' --dir vecchio
+          Start-Process (Get-Item vecchio\Cedro-Setup-*.exe).FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
+          "Installata: $((Get-ItemProperty $key).DisplayVersion)"
+          if ((Get-ItemProperty $key).DisplayVersion -ne '0.17.1') { throw '0.17.1 non installata' }
+          [string[]]$names = @("Cedro-ARM64-Setup-$version.exe", "Cedro-Setup-$version.exe", "cedro-$version-linux-x64.tar.gz")
+          [Array]::Sort($names, [StringComparer]::Ordinal)
+          $picked = $names | Where-Object { $_.StartsWith('Cedro-Setup') -and $_.EndsWith('.exe') } | Select-Object -First 1
+          "La 0.17 sceglie: $picked"
+          if ($picked -ne "Cedro-Setup-$version.exe") { throw "la 0.17 sceglierebbe $picked" }
+          Start-Process (Get-Item "dist\$picked").FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
+          Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force
+          "Dopo l'aggiornamento: $((Get-ItemProperty $key).DisplayVersion)"
+          if ((Get-ItemProperty $key).DisplayVersion -ne $version) { throw "aggiornamento a $version non riuscito" }
+
       - name: Motori x64 della release precedente con il nome nuovo
         # trascrivi/ per x64 non cambia: i motori già pubblicati si riusano col numero di versione nuovo.
         shell: pwsh
@@ -255,14 +278,82 @@ jobs:
           path: file
           merge-multiple: true
 
+      # La release della versione ha solo i pacchetti da scaricare; i motori di trascrizione vanno in una
+      # pre-release a parte («motori-v<versione>»), che Cedro legge da solo e che non diventa mai «latest».
       - name: Release ${{ inputs.tag }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
         run: |
-          find file -type f -name '*.exe' | sort
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" --title "Cedro ${TAG#v}" --notes-file .github/note-release.md
+          find file -type f | sort
+          MOTORI="motori-$TAG"
+          if ! gh release view "$MOTORI" >/dev/null 2>&1; then
+            gh release create "$MOTORI" --target "$GITHUB_SHA" --prerelease --title "Motori di trascrizione ${TAG#v} (non servono: li scarica Cedro)" \
+              --notes "Questi file non vanno scaricati a mano: Cedro li prende da qui la prima volta che trascrivi. Per installare Cedro vai su https://github.com/${GITHUB_REPOSITORY}/releases/latest"
           fi
-          gh release upload "$TAG" $(find file -type f -name '*.exe') --clobber
-          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name)  \(.digest)"'
+          gh release upload "$MOTORI" $(find file -type f -name 'cedro-trascrivi-*') --clobber
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            sed "s/{versione}/${TAG#v}/g; s#{repo}#${GITHUB_REPOSITORY}#g" .github/note-release.md > note.md
+            gh release create "$TAG" --target "$GITHUB_SHA" --latest --title "Cedro ${TAG#v}" --notes-file note.md
+          fi
+          gh release upload "$TAG" $(find file -type f -name 'Cedro-*Setup-*.exe') --clobber
+          for t in "$TAG" "$MOTORI"; do echo "== $t"; gh release view "$t" --json assets --jq '.assets[] | "\(.name)  \(.digest)"'; done
+
+  verifica:
+    name: "Dopo la pubblicazione: una 0.17 vera si aggiorna da GitHub, la nuova trascrive"
+    needs: pubblica
+    runs-on: windows-latest
+    steps:
+      - name: Controlla aggiornamenti dalla 0.17.1
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          $version = $env:TAG.TrimStart('v')
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{5C1CAEBF-024C-4A9F-BEC8-1FB3C9FEA4CE}_is1'
+          gh release download v0.17.1 --repo $env:GITHUB_REPOSITORY --pattern 'Cedro-Setup-*.exe' --dir vecchio
+          Start-Process (Get-Item vecchio\Cedro-Setup-*.exe).FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
+          Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force
+          $exe = Join-Path (Get-ItemProperty $key).InstallLocation 'cedro.exe'
+          # «cedro update» della 0.17 vera: chiede conferma, scarica l'installatore scelto, controlla lo SHA-256 e lo avvia.
+          $psi = New-Object Diagnostics.ProcessStartInfo $exe, 'update'
+          $psi.UseShellExecute = $false
+          $psi.RedirectStandardInput = $true
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $p = [Diagnostics.Process]::Start($psi)
+          $p.StandardInput.WriteLine('s'); $p.StandardInput.Close()
+          if (-not $p.WaitForExit(180000)) { $p.Kill(); throw 'cedro update non finisce' }
+          $out = $p.StandardOutput.ReadToEnd() + $p.StandardError.ReadToEnd()
+          $out
+          Get-Process | Where-Object { $_.ProcessName -like 'Cedro-*Setup*' } | Stop-Process -Force
+          if ($out -notmatch [regex]::Escape("Avviato Cedro-Setup-$version.exe")) { throw "la 0.17 non ha preso Cedro-Setup-$version.exe" }
+
+      - name: La nuova trascrive con il motore della release dei motori
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{5C1CAEBF-024C-4A9F-BEC8-1FB3C9FEA4CE}_is1'
+          gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --pattern 'Cedro-Setup-*.exe' --dir nuovo
+          Start-Process (Get-Item nuovo\Cedro-Setup-*.exe).FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
+          Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force
+          "Installata: $((Get-ItemProperty $key).DisplayVersion)"
+          $exe = Join-Path (Get-ItemProperty $key).InstallLocation 'cedro.exe'
+          $wav = Join-Path $env:RUNNER_TEMP 'frase.wav'
+          powershell -Command "Add-Type -AssemblyName System.Speech; `$v = New-Object System.Speech.Synthesis.SpeechSynthesizer; `$v.SetOutputToWaveFile('$wav'); `$v.Speak('Good morning. The weather today is sunny and warm.'); `$v.Dispose()"
+          $psi = New-Object Diagnostics.ProcessStartInfo $exe, "trascrivi `"$wav`" --testo --precisione veloce"
+          $psi.UseShellExecute = $false
+          $psi.RedirectStandardOutput = $true
+          $psi.RedirectStandardError = $true
+          $p = [Diagnostics.Process]::Start($psi)
+          $err = $p.StandardError.ReadToEndAsync()
+          $out = $p.StandardOutput.ReadToEnd()
+          if (-not $p.WaitForExit(600000)) { $p.Kill(); throw 'la trascrizione non finisce' }
+          $out; $err.Result
+          $txt = Get-ChildItem $env:RUNNER_TEMP -Recurse -Filter 'frase*.txt' | Select-Object -First 1
+          if (-not $txt) { throw 'nessun testo' }
+          Get-Content $txt.FullName
+          if ((Get-Content $txt.FullName -Raw) -notmatch 'weather') { throw 'trascrizione sbagliata' }

@@ -1,5 +1,5 @@
 # Compila cedro.exe e crea dist\Cedro-Setup-<versione>.exe (serve Inno Setup 6).
-# Con -Arm64 crea dist\Cedro-Setup-<versione>-arm64.exe per Windows on ARM: su un PC ARM compila in nativo,
+# Con -Arm64 crea dist\Cedro-ARM64-Setup-<versione>.exe per Windows on ARM: su un PC ARM compila in nativo,
 # su un PC x64 con il target aarch64-pc-windows-msvc (servono gli strumenti ARM64 di Visual Studio e LLVM).
 param([switch]$Arm64)
 $ErrorActionPreference = 'Stop'
@@ -26,4 +26,4 @@ $flags = @("/DAppVersion=$version", "/DBuildDir=$buildDir")
 if ($Arm64) { $flags += '/DArm64' }
 & $iscc @flags installer\cedro.iss
 if ($LASTEXITCODE -ne 0) { throw 'ISCC fallito' }
-Get-Item ("dist\Cedro-Setup-$version" + $(if ($Arm64) { '-arm64' } else { '' }) + '.exe')
+Get-Item ("dist\" + $(if ($Arm64) { 'Cedro-ARM64-Setup-' } else { 'Cedro-Setup-' }) + "$version.exe")
