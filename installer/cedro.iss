@@ -1,4 +1,5 @@
-; Installer di Cedro per Windows (x64 e, con /DArm64, ARM64). Compilazione: installer\build.ps1 [-Arm64]
+; Installer di Cedro per Windows (x64 e, con /DArm64, ARM64). Compilazione: installer\build.ps1 [-Arm64] [-Bondeno]
+; Con /DBondeno è l'edizione per il Comune di Bondeno: stesso AppId, quindi installata sopra la standard la sostituisce.
 ; Installa per l'utente corrente: non servono i diritti di amministratore.
 #define AppName "Cedro"
 ; Per Windows on ARM: /DArm64 (e /DBuildDir=... se l'exe non sta in target\release).
@@ -6,7 +7,7 @@
   #define BuildDir "..\target\release"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.18.5"
+  #define AppVersion "0.19.0"
 #endif
 
 [Setup]
@@ -22,10 +23,19 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\dist
-#ifdef Arm64
-  #define Prefix "Cedro-ARM64-Setup-"
+; I nomi devono restare quelli di src/edizione.rs: Cedro li cerca nella release per aggiornarsi.
+#ifdef Bondeno
+  #ifdef Arm64
+    #define Prefix "Cedro-Bondeno-ARM64-Setup-"
+  #else
+    #define Prefix "Cedro-Bondeno-Setup-"
+  #endif
 #else
-  #define Prefix "Cedro-Setup-"
+  #ifdef Arm64
+    #define Prefix "Cedro-ARM64-Setup-"
+  #else
+    #define Prefix "Cedro-Setup-"
+  #endif
 #endif
 OutputBaseFilename={#Prefix}{#AppVersion}
 SetupIconFile=..\assets\cedro.ico
@@ -34,6 +44,13 @@ UninstallDisplayName={#AppName}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+#ifdef Bondeno
+AppVerName={#AppName} {#AppVersion}, edizione Comune di Bondeno
+; Lo stemma del Comune al posto della scatola col CD (1x e 2x per gli schermi ad alta densità).
+WizardImageFile=..\assets\bondeno\installatore-lato-1x.bmp,..\assets\bondeno\installatore-lato-2x.bmp
+WizardSmallImageFile=..\assets\bondeno\installatore-piccola-1x.bmp,..\assets\bondeno\installatore-piccola-2x.bmp
+WizardImageStretch=no
+#endif
 #ifdef Arm64
 ArchitecturesAllowed=arm64
 ArchitecturesInstallIn64BitMode=arm64

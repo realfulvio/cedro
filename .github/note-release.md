@@ -10,18 +10,21 @@ Scarica il file e fai doppio clic: si installa sopra la versione che hai (su Lin
 Non sai quale ti serve? *Impostazioni di Windows → Sistema → Informazioni*: se in «Tipo di sistema» c'è «basato su ARM», prendi quello ARM; altrimenti l'altro.
 I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo la prima volta che trascrivi.
 
+### Edizione Comune di Bondeno
+
+Per i PC del Comune di Bondeno: stesse funzioni, con lo stemma del Comune. Installata sopra Cedro lo sostituisce, e da lì in poi si aggiorna solo con i pacchetti di questa edizione.
+
+| Il tuo computer | File da scaricare |
+| --- | --- |
+| **Windows** | [**Cedro-Bondeno-Setup-{versione}.exe**](https://github.com/{repo}/releases/download/v{versione}/Cedro-Bondeno-Setup-{versione}.exe) |
+| **Windows on ARM** | [**Cedro-Bondeno-ARM64-Setup-{versione}.exe**](https://github.com/{repo}/releases/download/v{versione}/Cedro-Bondeno-ARM64-Setup-{versione}.exe) |
+| **Linux** | [**cedro-bondeno-{versione}-linux-x64.tar.gz**](https://github.com/{repo}/releases/download/v{versione}/cedro-bondeno-{versione}-linux-x64.tar.gz) |
+
 ## Novità della {versione}
 
-**Versione di manutenzione**: nessuna funzione nuova, solo errori trovati rileggendo tutto il codice di Windows, Windows on ARM e Linux.
+- **Edizione Comune di Bondeno**: una versione a parte di Cedro con lo stemma ufficiale del Comune nelle Impostazioni, nella scheda Informazioni, nella guida, nel menu dell'icona e nell'installatore. Ognuna delle due edizioni si aggiorna solo con i suoi pacchetti.
 
-- «Ottimizza per il web» non manda più in crash Cedro con un MP4 rovinato.
-- Un download interrotto (modelli della trascrizione, motori, yt-dlp, ffmpeg, deno) non lascia più sul disco file a metà da centinaia di MB.
-- Se chiudi Cedro mentre trascrive, il motore si ferma subito invece di tenere il processore al massimo fino alla fine del file.
-- Su Linux i file provvisori della trascrizione e dell'aggiornamento stanno in una cartella che solo tu puoi leggere.
-- Un documento Word costruito apposta per gonfiarsi a GB non riempie più la memoria.
-- «Duplica» su un file senza estensione crea «nome-copia» (prima «nome-copia.copia»).
-- Le impostazioni non si perdono se il PC si spegne mentre le salva; il registro attività non cresce più all'infinito.
-- Su Windows le conversioni video una dopo l'altra sono più affidabili.
+Dalla 0.18.5: revisione di tutto il codice, con correzioni di robustezza e sicurezza su Windows, Windows on ARM e Linux.
 
 Dalla 0.18.4: guida iniziale rifatta in sei passi, Linux che si aggiorna da solo, riga rossa degli errori che sparisce da sola.
 
