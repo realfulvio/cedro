@@ -223,6 +223,16 @@ fn numbered(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
     dir.join(name)
 }
 
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (fs::canonicalize(a), fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
+/// Il nome per la copia, secondo la scelta per i nomi che esistono già. Con «sostituisci» riusa il
+/// nome già presente, ma mai quello del file di partenza: una conversione verso lo stesso formato non
+/// deve riscrivere l'originale.
 pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
     let candidate = dir.join(format!("{file_stem}.{ext}"));
     if !candidate.exists() {
@@ -243,7 +253,7 @@ pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
         }),
     };
     match choice {
-        ExistsChoice::Replace if source.as_deref() != Some(candidate.as_path()) => candidate,
+        ExistsChoice::Replace if !source.as_deref().is_some_and(|s| same_file(&candidate, s)) => candidate,
         ExistsChoice::Replace | ExistsChoice::KeepBoth => numbered(dir, file_stem, ext),
         ExistsChoice::Skip => {
             let path = numbered(dir, file_stem, ext);
@@ -289,6 +299,20 @@ fn write_text_pdf(path: &Path, dir: &Path, blocks: &[crate::pdfdoc::DocBlock], o
     let out = unique_output(dir, &stem(path), "pdf");
     write_bytes(&out, &bytes)?;
     Ok(Output { path: out, message })
+}
+
+/// La cartella dove va la copia: accanto al file, in «Cedro» accanto al file, o quella fissa.
+fn output_dir(path: &Path, settings: &crate::settings::Settings) -> CedroResult<PathBuf> {
+    use crate::settings::Dest;
+    let beside = parent_dir(path)?.to_path_buf();
+    let dir = match settings.dest {
+        Dest::Same => return Ok(beside),
+        Dest::Sub => beside.join("Cedro"),
+        Dest::Fixed if settings.dest_dir.trim().is_empty() => return Ok(beside),
+        Dest::Fixed => PathBuf::from(settings.dest_dir.trim()),
+    };
+    fs::create_dir_all(&dir).map_err(|e| err(format!("cartella di destinazione non creata ({}): {e}", dir.display())))?;
+    Ok(dir)
 }
 
 fn parent_dir(path: &Path) -> CedroResult<&Path> {
@@ -369,8 +393,10 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
 }
 
 /// Come `perform`, ma con `out_dir` le copie nuove vengono scritte in quella cartella.
+/// Per i nomi che esistono già vale la scelta delle impostazioni (aggiungi -2 o sostituisci).
 pub fn perform_into(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>) -> CedroResult<Output> {
-    perform_with(path, action, quality, out_dir, &Options::default())
+    let exists = if crate::settings::read_settings().replace { Exists::Replace } else { Exists::Number };
+    perform_with(path, action, quality, out_dir, &Options { exists, ..Options::default() })
 }
 
 /// Cosa fare quando il file di uscita esiste già.
@@ -596,12 +622,14 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Err(err("file non trovato"));
     }
     let quality = quality.clamp(40, 95);
+    let settings = crate::settings::read_settings();
     let dir = match out_dir {
         Some(d) => {
             fs::create_dir_all(d).map_err(|e| err(e.to_string()))?;
             d.to_path_buf()
         }
-        None => parent_dir(path)?.to_path_buf(),
+        // Senza una cartella scelta vale quella delle impostazioni: accanto, in «Cedro» o fissa.
+        None => output_dir(path, &settings)?,
     };
     let before = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let kind = kind_of(path);
@@ -751,7 +779,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         if total == 0 {
             return Err(err("nessuna pagina in questo intervallo"));
         }
-        let scale = opts.dpi.unwrap_or(144).clamp(36, 600) as f32 / 72.0;
+        let scale = opts.dpi.map_or(settings.pdf_scale(), |d| d.clamp(36, 600) as f32 / 72.0);
         let encode = |rgb: &image::RgbImage| -> Result<Vec<u8>, String> {
             let mut out = Vec::new();
             if action == "jpg" {
@@ -799,42 +827,36 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
     if kind == Kind::Pdf && action == "docx" {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-        let every = crate::pdflayout::read_pages(&bytes, opts.tables, opts.columns, |i| opts.pages.as_ref().map_or(true, |s| s.contains(i))).map_err(err)?;
+        let want = |i: usize| opts.pages.as_ref().map_or(true, |s| s.contains(i));
+        let read = crate::pdflayout::ReadOptions { tables: opts.tables, columns: opts.columns };
+        let every = crate::pdflayout::read_pages(&bytes, &read, want).map_err(err)?;
         let selected = pages_of(&opts.pages, every.len());
         if selected.is_empty() {
             return Err(err("nessuna pagina in questo intervallo"));
         }
-        let empty_all: Vec<bool> = every.iter().map(|p| matches!(p, crate::pdflayout::Page::Empty)).collect();
+        let scan_at: Vec<bool> = every.iter().map(|p| p.is_scan()).collect();
         let pages: Vec<crate::pdflayout::Page> =
             every.into_iter().enumerate().filter(|(i, _)| selected.contains(i)).map(|(_, p)| p).collect();
-        let empty: Vec<bool> = selected.iter().map(|i| empty_all[*i]).collect();
-        let scanned = empty.iter().filter(|e| **e).count();
+        let scanned = selected.iter().filter(|i| scan_at[**i]).count();
         let mut ocr: Vec<Option<String>> = vec![None; pages.len()];
-        let mut ocr_error = None;
+        // Le scansioni vanno nel Word come immagini della pagina; con l'OCR acceso il testo letto
+        // resta nel testo alternativo, per cercarlo e copiarlo.
         if scanned > 0 && opts.ocr {
-            match crate::ocr::pdf_pages_where(&bytes, |i| selected.contains(&i) && empty_all.get(i).copied().unwrap_or(false)) {
-                Ok(read) => ocr = selected.iter().map(|i| read.get(*i).cloned().flatten()).collect(),
-                Err(e) => ocr_error = Some(e),
+            if let Ok(read) = crate::ocr::pdf_pages_where(&bytes, |i| scan_at.get(i).copied().unwrap_or(false)) {
+                ocr = selected.iter().map(|i| read.get(*i).cloned().flatten()).collect();
             }
-        }
-        let read_scanned = ocr.iter().flatten().filter(|t| !t.is_empty()).count();
-        if scanned == pages.len() && read_scanned == 0 {
-            return Err(err(match ocr_error {
-                Some(e) => format!("questo PDF non ha testo da copiare; OCR: {e}"),
-                None if !opts.ocr => "questo PDF non ha testo da copiare e l'OCR è spento".into(),
-                None => "questo PDF non ha testo da copiare né da leggere con l'OCR".into(),
-            }));
         }
         let docx = crate::pdflayout::docx(&pages, |i| ocr.get(i).cloned().flatten().unwrap_or_default());
         let out = unique_output(&dir, &stem(path), "docx");
         write_bytes(&out, &docx)?;
         let message = if scanned == 0 {
             "Word modificabile: titoli, paragrafi e tabelle del PDF".to_string()
+        } else if scanned == pages.len() && opts.ocr {
+            "Word con le pagine scansionate come immagini; il testo letto con l'OCR è nel testo alternativo".to_string()
+        } else if scanned == pages.len() {
+            "Word con le pagine scansionate come immagini".to_string()
         } else {
-            format!(
-                "Word. {} pagine ricostruite dal PDF, {read_scanned} lette via OCR in italiano (da ricontrollare) su {scanned} senza testo.",
-                pages.len() - scanned
-            )
+            format!("Word modificabile; {scanned} pagine scansionate messe come immagini")
         };
         return Ok(Output { path: out, message });
     }
@@ -854,7 +876,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             (_, n) => format!("Testo estratto dal PDF, con {n} pagine lette via OCR: controllalo."),
         };
         if skipped > 0 {
-            message.push_str(&format!(" Mancano {skipped} pagine scansionate: l'OCR ne legge al massimo {}.", crate::ocr::MAX_OCR_PAGES));
+            message.push_str(&format!(" Mancano {skipped} pagine scansionate: l'OCR ne legge al massimo {}.", settings.ocr_pages()));
         }
         return Ok(Output { path: out, message });
     }
@@ -866,10 +888,20 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
     if action == "ocr" && kind == Kind::Pdf {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-        let text = crate::doctext::pdf_text(path).or_else(|_| crate::ocr::pdf_pages_text(&bytes)).map_err(err)?;
+        let (text, read_by_ocr) = match crate::doctext::pdf_text(path) {
+            Ok(text) => (text, false),
+            Err(_) => (crate::ocr::pdf_pages_text(&bytes).map_err(err)?, true),
+        };
         let out = unique_output(&dir, &stem(path), "txt");
         write_bytes(&out, text.as_bytes())?;
-        return Ok(Output { path: out, message: "Testo del PDF. Al massimo 100 pagine disegnate.".into() });
+        let mut message = "Testo del PDF.".to_string();
+        if read_by_ocr {
+            let total = crate::ocr::pdf_page_count(&bytes).unwrap_or(0);
+            if total > settings.ocr_pages() {
+                message.push_str(&format!(" L'OCR ha letto {} pagine su {total}: le altre mancano.", settings.ocr_pages()));
+            }
+        }
+        return Ok(Output { path: out, message });
     }
 
     if kind != Kind::Image {
@@ -924,7 +956,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         format!("{}-{label_stem}", stem(path))
     };
     let out = unique_output(&dir, &file_stem, ext);
-    let q = if action == "compress" { quality.min(62) } else { quality };
+    let q = if action == "compress" { quality.min(settings.compress_quality()) } else { quality };
     save_image(&img, &out, format, q, opts.white_background)?;
     let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
     let message = match action {
@@ -1024,24 +1056,21 @@ mod tests {
         assert!(!xml.contains("w:framePr"), "testo bloccato in riquadri");
         assert!(xml.contains("BodyText"), "{xml}");
         assert!(xml.contains("Perché è già così"), "{xml}");
-        assert!(xml.contains("Helvetica") || xml.contains("Arial"), "{xml}");
+        let styles = crate::doctext::zip_entry_for_test(&docx.path, "word/styles.xml");
+        assert!(styles.contains("Helvetica") || styles.contains("Arial"), "{styles}");
+        // Il Word è compresso: il testo pesa poco.
+        let entry = zip::ZipArchive::new(fs::File::open(&docx.path).unwrap()).unwrap().by_name("word/document.xml").unwrap().compression();
+        assert_eq!(entry, zip::CompressionMethod::Deflated);
     }
 
-    #[test]
-    fn pdf_table_becomes_word_table() {
-        let content = "0.12 0.23 0.37 rg 50 700 300 20 re f 0.95 0.96 0.98 rg 50 680 300 20 re f \
-0.8 G 0.5 w 50 720 m 350 720 l S 50 700 m 350 700 l S 50 680 m 350 680 l S 50 660 m 350 660 l S \
-50 720 m 50 660 l S 250 720 m 250 660 l S 350 720 m 350 660 l S \
-BT /F2 12 Tf 1 1 1 rg 56 706 Td (Nome) Tj ET BT /F2 12 Tf 1 1 1 rg 256 706 Td (Voto) Tj ET \
-BT /F1 12 Tf 0 g 56 686 Td (Luca) Tj ET BT /F1 12 Tf 0 g 256 686 Td (10) Tj ET \
-BT /F1 12 Tf 0 g 56 666 Td (Anna) Tj ET BT /F1 12 Tf 0 g 256 666 Td (9) Tj ET \
-BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sotto la tabella.) Tj ET";
+    /// Un PDF di una pagina con Helvetica (F1) e Helvetica-Bold (F2).
+    fn pdf_page(content: &str, w: u32, h: u32) -> Vec<u8> {
         let mut pdf = b"%PDF-1.4\n".to_vec();
         let mut offsets = Vec::new();
         let objects = [
             "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
             "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 800] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>".to_string(),
+            format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {w} {h}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>"),
             format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
             "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
             "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>".to_string(),
@@ -1056,6 +1085,109 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
             pdf.extend(format!("{off:010} 00000 n \n").as_bytes());
         }
         pdf.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+        pdf
+    }
+
+    fn word_xml(name: &str, pdf: Vec<u8>) -> String {
+        let dir = scratch();
+        let path = dir.join(name);
+        fs::write(&path, pdf).unwrap();
+        let out = perform(&path, "docx", 80).expect("Word");
+        crate::doctext::zip_entry_for_test(&out.path, "word/document.xml")
+    }
+
+    #[test]
+    fn pdf_columns_become_word_columns() {
+        // Due colonne di testo pieno: a sinistra «Sinistra N», a destra «Destra N».
+        let mut content = String::from("BT /F2 18 Tf 50 760 Td (Notiziario) Tj ET ");
+        let words = "lorem ipsum dolor sit amet consectetur";
+        for i in 0..12 {
+            let y = 720 - i * 14;
+            content.push_str(&format!("BT /F1 10 Tf 50 {y} Td (Sinistra {i} {words}) Tj ET BT /F1 10 Tf 320 {y} Td (Destra {i} {words}) Tj ET "));
+        }
+        let xml = word_xml("colonne.pdf", pdf_page(&content, 595, 842));
+        assert!(xml.contains("<w:cols w:num=\"2\""), "{xml}");
+        assert!(xml.contains("w:type=\"column\""), "{xml}");
+        // Si legge prima tutta la colonna di sinistra, poi quella di destra.
+        let last_left = xml.find("Sinistra 11").unwrap();
+        let first_right = xml.find("Destra 0").unwrap();
+        assert!(last_left < first_right, "{xml}");
+    }
+
+    #[test]
+    fn pdf_form_keeps_boxes_and_places_text() {
+        // Un modulo: 10x12 caselle, ognuna con l'etichetta piccola e il valore; più una scritta
+        // fuori dal foglio, che non si vede e non deve finire nel Word.
+        let mut content = String::from("0.5 w ");
+        for r in 0..12 {
+            for c in 0..10 {
+                let (x, y) = (40 + c * 52, 760 - r * 50);
+                content.push_str(&format!(
+                    "{x} {y} 50 40 re S BT /F1 5 Tf {} {} Td (Casella {r}{c}) Tj ET BT /F2 6 Tf {} {} Td ({c}) Tj ET ",
+                    x + 2,
+                    y + 33,
+                    x + 4,
+                    y + 10
+                ));
+            }
+        }
+        content.push_str("BT /F1 8 Tf 900 800 Td (NASCOSTO) Tj ET ");
+        // Una riga tratteggiata e un riquadro grigio ritagliato a metà.
+        content.push_str("[3 2] 0 d 40 150 m 560 150 l S [] 0 d q 40 100 100 20 re W n 0.8 g 40 100 200 20 re f Q");
+        let xml = word_xml("modulo.pdf", pdf_page(&content, 595, 842));
+        assert!(xml.contains("<w:framePr"), "{xml}");
+        // Righe e caselle restano forme di Word, dietro al testo, con il loro tratteggio.
+        assert!(xml.contains("<wps:wsp>") && xml.contains("behindDoc=\"1\""), "{xml}");
+        assert!(xml.contains("<a:custDash>"), "{xml}");
+        // Il riquadro grigio si ferma al ritaglio: 140 pt, non 240.
+        assert!(xml.contains(&format!("<a:pt x=\"{}\"", 140 * 12700)), "{xml}");
+        assert!(!xml.contains(&format!("<a:pt x=\"{}\"", 240 * 12700)), "{xml}");
+        assert!(xml.contains("Casella 75"), "{xml}");
+        assert!(!xml.contains("NASCOSTO"), "{xml}");
+    }
+
+    #[test]
+    fn pdf_lists_become_word_lists() {
+        let mut content = String::new();
+        let items = [(700, "1. Accendere il PC"), (686, "2. Aprire il portale"), (672, "3. Inviare la richiesta")];
+        for (y, t) in items {
+            content.push_str(&format!("BT /F1 10 Tf 50 {y} Td ({t}) Tj ET "));
+        }
+        for (i, t) in ["Monitor", "Stampanti"].iter().enumerate() {
+            let y = 640 - i as i32 * 14;
+            content.push_str(&format!("BT /F1 10 Tf 50 {y} Td (\\225) Tj ET BT /F1 10 Tf 64 {y} Td ({t}) Tj ET "));
+        }
+        content.push_str("BT /F1 10 Tf 50 600 Td (Fine del documento con un paragrafo normale.) Tj ET");
+        let xml = word_xml("elenchi.pdf", pdf_page(&content, 400, 800));
+        assert_eq!(xml.matches("<w:numPr>").count(), 5, "{xml}");
+        assert!(xml.contains(">Accendere il PC<") && !xml.contains("1. Accendere"), "{xml}");
+        assert!(xml.contains(">Monitor<"), "{xml}");
+    }
+
+    #[test]
+    fn word_made_pdf_keeps_lists_and_columns() {
+        // Esportato da Writer: elenchi puntati su due livelli, elenco numerato, due colonne.
+        let pdf = include_bytes!("../tests/fixtures/circolare.pdf").to_vec();
+        let xml = word_xml("circolare.pdf", pdf);
+        assert!(xml.contains("<w:ilvl w:val=\"1\"/>"), "manca il secondo livello");
+        assert!(xml.contains(">Aprire un ticket sul portale.<"), "numero non tolto");
+        assert!(xml.contains("<w:cols w:num=\"2\""), "mancano le colonne");
+        let xml = word_xml("colonne.pdf", include_bytes!("../tests/fixtures/colonne.pdf").to_vec());
+        assert!(xml.contains("<w:cols w:num=\"2\""), "mancano le colonne");
+        assert!(xml.contains("<w:drawing>"), "manca il grafico");
+        assert!(!xml.contains(">Gen<"), "etichette del grafico fuori dall'immagine");
+    }
+
+    #[test]
+    fn pdf_table_becomes_word_table() {
+        let content = "0.12 0.23 0.37 rg 50 700 300 20 re f 0.95 0.96 0.98 rg 50 680 300 20 re f \
+0.8 G 0.5 w 50 720 m 350 720 l S 50 700 m 350 700 l S 50 680 m 350 680 l S 50 660 m 350 660 l S \
+50 720 m 50 660 l S 250 720 m 250 660 l S 350 720 m 350 660 l S \
+BT /F2 12 Tf 1 1 1 rg 56 706 Td (Nome) Tj ET BT /F2 12 Tf 1 1 1 rg 256 706 Td (Voto) Tj ET \
+BT /F1 12 Tf 0 g 56 686 Td (Luca) Tj ET BT /F1 12 Tf 0 g 256 686 Td (10) Tj ET \
+BT /F1 12 Tf 0 g 56 666 Td (Anna) Tj ET BT /F1 12 Tf 0 g 256 666 Td (9) Tj ET \
+BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sotto la tabella.) Tj ET";
+        let pdf = pdf_page(content, 400, 800);
         let dir = scratch();
         let path = dir.join("tabella.pdf");
         fs::write(&path, pdf).unwrap();
@@ -1114,9 +1246,12 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
         fs::write(&pdf, crate::pdf::pdf_from_jpeg(jpeg, 900, 200, &[])).unwrap();
         let jpg = perform(&pdf, "jpg", 80).expect("JPG");
         assert!(fs::read(&jpg.path).unwrap().starts_with(&[0xff, 0xd8]));
+        // La scansione resta un'immagine della pagina, il testo OCR va nel testo alternativo.
         let docx = perform(&pdf, "docx", 80).expect("OCR");
-        let text = crate::doctext::document_text(&docx.path).unwrap();
-        assert!(text.contains("Cedro"), "{text}");
+        let xml = crate::doctext::zip_entry_for_test(&docx.path, "word/document.xml");
+        assert!(xml.contains("behindDoc=\"1\""), "{xml}");
+        let descr = xml.split("descr=\"").nth(1).unwrap_or_default();
+        assert!(descr.contains("Cedro"), "{xml}");
     }
 
     #[test]
@@ -1486,16 +1621,18 @@ Luca,Bondeno
     }
 
     #[test]
-    fn scanned_pdf_needs_the_ocr_option() {
+    fn scanned_pdf_text_comes_only_with_the_ocr_option() {
         let dir = scratch();
         let jpeg = include_bytes!("../tests/fixtures/scan.jpg");
         let pdf = dir.join("scansione.pdf");
         fs::write(&pdf, crate::pdf::pdf_from_jpeg(jpeg, 900, 200, &[])).unwrap();
-        let off = Options { ocr: false, ..Default::default() };
-        let e = perform_with(&pdf, "docx", 80, None, &off).err().unwrap();
-        assert!(e.0.contains("OCR è spento"), "{}", e.0);
+        let off = Options { ocr: false, exists: Exists::Replace, ..Default::default() };
+        // In Word la scansione va comunque come immagine; senza OCR non c'è il testo alternativo.
+        let word = perform_with(&pdf, "docx", 80, None, &off).unwrap();
+        assert!(word.message.contains("come immagini") && !word.message.contains("OCR"), "{}", word.message);
         assert!(perform_with(&pdf, "txt", 80, None, &off).is_err());
-        assert!(perform_with(&pdf, "docx", 80, None, &Options::default()).is_ok());
+        let on = perform_with(&pdf, "docx", 80, None, &Options { exists: Exists::Replace, ..Default::default() }).unwrap();
+        assert!(on.message.contains("testo alternativo"), "{}", on.message);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -1548,6 +1685,30 @@ Luca,Bondeno
         }
         pdf.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
         pdf
+    }
+
+    #[test]
+    fn single_column_joins_the_paragraph_split_by_the_column() {
+        let dir = scratch();
+        let mut content = String::new();
+        for n in 0..14 {
+            let y = 700 - n * 14;
+            let left = if n == 13 { "fine della colonna sinistra, la frase prosegue".to_string() } else { format!("testo lungo della colonna sinistra, riga {n:02} qui") };
+            let right = if n == 0 { "nella colonna destra e finisce col punto.".to_string() } else { format!("testo lungo della colonna destra, riga {n:02} qui") };
+            content.push_str(&format!("BT /F1 10 Tf 50 {y} Td ({left}) Tj ET\nBT /F1 10 Tf 320 {y} Td ({right}) Tj ET\n"));
+        }
+        let path = dir.join("articolo.pdf");
+        fs::write(&path, one_page_pdf(&content)).unwrap();
+        let xml_of = |columns: bool| {
+            let out = perform_with(&path, "docx", 80, None, &Options { columns, exists: Exists::Replace, ..Default::default() }).unwrap();
+            crate::doctext::zip_entry_for_test(&out.path, "word/document.xml")
+        };
+        let kept = xml_of(true);
+        assert!(kept.contains("<w:cols ") && !kept.contains("prosegue nella"), "{kept}");
+        let flat = xml_of(false);
+        assert!(!flat.contains("<w:cols "), "{flat}");
+        assert!(flat.contains("la frase prosegue nella colonna destra"), "{flat}");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

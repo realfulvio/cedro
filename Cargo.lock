@@ -252,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "cedro"
-version = "0.12.0"
+version = "0.13.1"
 dependencies = [
  "cfb",
  "fdk-aac",
@@ -269,6 +269,7 @@ dependencies = [
  "openh264",
  "oxideav-vp8",
  "oxideav-vp9",
+ "png",
  "rten",
  "serde_json",
  "sha2",
@@ -1111,8 +1112,6 @@ dependencies = [
 [[package]]
 name = "hayro"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4675ff5acd7ca41c0c34ccd2a3a154f5c86d8b5ec92bef0a114bfb194969e2af"
 dependencies = [
  "bytemuck",
  "fearless_simd 1.1.0",

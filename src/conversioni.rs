@@ -353,7 +353,9 @@ pub fn options_from(values: &Values) -> engine::Options {
 /// Esegue `action` su un file. Con `dest` le copie nuove finiscono in quella cartella
 /// invece che accanto all'originale; il nome non ne sovrascrive mai un altro.
 pub fn convert_one(path: &Path, action: &str, quality: u8, dest: Option<&Path>, opts: &engine::Options) -> Result<String, String> {
-    engine::perform_with(path, action, quality, dest, opts).map(|out| out.message).map_err(|e| e.0)
+    // «Accanto all'originale» nel pannello vuol dire proprio accanto, qualunque cartella usi la ruota.
+    let beside = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    engine::perform_with(path, action, quality, Some(dest.unwrap_or(beside)), opts).map(|out| out.message).map_err(|e| e.0)
 }
 
 #[cfg(test)]
