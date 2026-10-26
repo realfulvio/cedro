@@ -24,5 +24,7 @@ pub use engine::{
     append_log, config_dir, extension, kind_of, mode_from_vk, perform, read_quality, same_kind_paths, slices, Kind,
     Mode, Output, Slice,
 };
-pub use settings::{read_settings, write_settings, Settings};
+#[cfg(windows)]
+pub use ocr::windows_italian_installed;
+pub use settings::{read_settings, write_settings, Dest, Settings};
 pub use wheelgeom::{hover_at as wheelgeom_hover, slice_bounds as wheelgeom_bounds};

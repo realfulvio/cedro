@@ -48,6 +48,8 @@ static CUR_X: AtomicI32 = AtomicI32::new(0);
 static CUR_Y: AtomicI32 = AtomicI32::new(0);
 // Bit 0 Shift, bit 1 Ctrl, bit 2 Alt: i tasti che aprono la ruota.
 static KEYS: AtomicU8 = AtomicU8::new(0b111);
+// Apre la ruota anche nelle finestre Apri/Salva (classe #32770).
+static DIALOGS: AtomicBool = AtomicBool::new(true);
 static UPDATE: Mutex<Option<UpdateNews>> = Mutex::new(None);
 
 enum UpdateNews {
@@ -434,6 +436,7 @@ fn mode_enabled(mode: Mode) -> bool {
 pub(crate) fn apply_settings(s: &Settings) {
     let mask = (s.key_shift as u8) | (s.key_ctrl as u8) << 1 | (s.key_alt as u8) << 2;
     KEYS.store(mask, Ordering::Relaxed);
+    DIALOGS.store(s.dialogs, Ordering::Relaxed);
     SESSION.with(|session| session.borrow_mut().quality = s.quality);
 }
 
@@ -480,6 +483,9 @@ fn file_surface(x: i32, y: i32) -> bool {
         }
         let root = GetAncestor(hwnd, GA_ROOT);
         let root_class = window_class(if root.0.is_null() { hwnd } else { root });
+        if root_class == "#32770" && !DIALOGS.load(Ordering::Relaxed) {
+            return false;
+        }
         if matches!(root_class.as_str(), "Progman" | "WorkerW" | "CabinetWClass" | "ExploreWClass") {
             return true;
         }
@@ -880,9 +886,13 @@ fn on_drop() {
     let paths = if matches!(slice.id, "dup" | "zip") { all.clone() } else { same_kind_paths(&all) };
     let skipped = all.len().saturating_sub(paths.len());
     let mut notes = Vec::new();
+    let mut last_out = None;
     for path in &paths {
         match perform(path, slice.id, quality) {
-            Ok(out) => notes.push(format!("{} · {}", out.path.file_name().and_then(|s| s.to_str()).unwrap_or("file"), out.message)),
+            Ok(out) => {
+                notes.push(format!("{} · {}", out.path.file_name().and_then(|s| s.to_str()).unwrap_or("file"), out.message));
+                last_out = Some(out.path);
+            }
             Err(e) => notes.push(e.0),
         }
     }
@@ -895,8 +905,20 @@ fn on_drop() {
         format!("{} file\n{}", notes.len(), notes.join("\n"))
     };
     append_log(&summary);
-    if read_settings().notify {
+    let settings = read_settings();
+    if settings.notify {
         balloon(&summary);
+    }
+    if let (true, Some(out)) = (settings.reveal, last_out) {
+        reveal_in_explorer(&out);
+    }
+}
+
+/// Apre Esplora file sulla cartella del file nuovo, con il file selezionato.
+fn reveal_in_explorer(path: &std::path::Path) {
+    let args = HSTRING::from(format!("/select,\"{}\"", path.display()));
+    unsafe {
+        ShellExecuteW(None, w!("open"), w!("explorer.exe"), &args, None, SW_SHOWNORMAL);
     }
 }
 
@@ -1307,7 +1329,7 @@ fn show_menu(hwnd: HWND) {
 }
 
 /// All'avvio aspetta qualche secondo e tace se non c'è niente. Dal menu risponde sempre.
-fn check_updates(manual: bool) {
+pub(crate) fn check_updates(manual: bool) {
     std::thread::spawn(move || {
         if !manual {
             std::thread::sleep(std::time::Duration::from_secs(8));
