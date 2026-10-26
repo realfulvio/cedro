@@ -31,6 +31,8 @@ const WIDTH: i32 = 250;
 const HEIGHT: i32 = 32;
 /// Quanto resta la linea verde dopo la fine.
 const LINGER: Duration = Duration::from_millis(1200);
+/// Quanto resta la linea rossa di un errore: il tempo di leggerlo, poi sparisce (o prima, con un clic).
+const ERROR_LINGER: Duration = Duration::from_secs(8);
 const TIMER: usize = 1;
 
 struct Job {
@@ -81,8 +83,8 @@ pub fn produced(path: &Path) {
     }
 }
 
-/// Fine del lavoro. Se è andato bene la linea diventa verde e sparisce da sola,
-/// altrimenti diventa rossa e resta finché non la clicchi.
+/// Fine del lavoro. Se è andato bene la linea diventa verde e sparisce subito da sola,
+/// altrimenti diventa rossa e sparisce dopo qualche secondo, o prima se la clicchi.
 pub fn finish(ok: bool, label: &str) {
     if let Some(j) = job().as_mut() {
         j.done = j.total;
@@ -96,6 +98,18 @@ pub fn finish(ok: bool, label: &str) {
 pub fn dismiss() {
     if let Some(j) = job().as_mut() {
         j.finished = Some((Instant::now().checked_sub(LINGER * 2).unwrap_or_else(Instant::now), true));
+    }
+    wake();
+}
+
+/// Toglie la linea di un lavoro già finito (per esempio un errore rimasto): l'utente è passato ad altro.
+/// Un lavoro in corso resta.
+pub fn forget_finished() {
+    {
+        let mut slot = job();
+        if slot.as_ref().is_some_and(|j| j.finished.is_some()) {
+            *slot = None;
+        }
     }
     wake();
 }
@@ -173,7 +187,7 @@ fn frame() -> Option<Frame> {
     let mut slot = job();
     let j = slot.as_ref()?;
     if let Some((at, ok)) = j.finished {
-        if ok && at.elapsed() > LINGER {
+        if at.elapsed() > if ok { LINGER } else { ERROR_LINGER } {
             *slot = None;
             return None;
         }
