@@ -131,7 +131,7 @@ jobs:
 
       - name: Schermate delle finestre
         shell: pwsh
-        run: powershell -File prova-arm\schermate.ps1 -Exe $env:CEDRO -Out schermate -File "$PWD\tests\fixtures\scan.jpg"
+        run: powershell -File prova-arm\schermate.ps1 -Exe $env:CEDRO -Out schermate
 
       - uses: actions/upload-artifact@v4
         if: always()
