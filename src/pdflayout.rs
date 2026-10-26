@@ -46,6 +46,17 @@ struct Shape2 {
     rect: bool,
     /// Il tracciato è un segmento.
     line: bool,
+    /// Il tracciato in punti della pagina, per ridisegnarlo in Word.
+    path: BezPath,
+    /// Posizione nell'ordine di disegno (anche rispetto alle immagini).
+    order: usize,
+    /// Il disegno di una lettera ruotata.
+    text: bool,
+    /// Tratteggio: lunghezze di tratti e vuoti, in punti.
+    dash: Vec<f64>,
+    /// Non si ridisegna come forma (sfumatura, motivo, ritaglio non rettangolare): nel Word
+    /// va il pezzo di pagina disegnato.
+    raster: bool,
 }
 
 struct Pic {
@@ -53,6 +64,7 @@ struct Pic {
     y0: f64,
     x1: f64,
     y1: f64,
+    order: usize,
 }
 
 #[derive(Default)]
@@ -63,6 +75,15 @@ struct Collector {
     /// Spessore medio dei tratti per font senza nome (per riconoscere il grassetto).
     stems: HashMap<u128, (f64, u32)>,
     seen: HashSet<(u128, char)>,
+    /// Le aree di ritaglio aperte, e se sono rettangoli: quel che sta fuori non si vede.
+    clips: Vec<(Rect, bool)>,
+    drawn: usize,
+}
+
+impl Collector {
+    fn visible(&self, b: &Rect) -> bool {
+        self.clips.last().is_none_or(|(c, _)| b.x1 >= c.x0 - 0.5 && b.x0 <= c.x1 + 0.5 && b.y1 >= c.y0 - 0.5 && b.y0 <= c.y1 + 0.5)
+    }
 }
 
 fn rgb(c: &hayro::hayro_interpret::color::Color) -> Option<[u8; 3]> {
@@ -76,10 +97,10 @@ fn rgb(c: &hayro::hayro_interpret::color::Color) -> Option<[u8; 3]> {
 impl<'a> Device<'a> for Collector {
     fn draw_path(&mut self, p: &BezPath, props: DrawProps<'a>, mode: &DrawMode) {
         let scale = props.transform.determinant().abs().sqrt();
-        let (filled, width) = match mode {
-            DrawMode::Fill(_) => (true, None),
-            DrawMode::Stroke(s) => (false, Some(s.line_width as f64 * scale)),
-            DrawMode::FillAndStroke(_, s) => (true, Some(s.line_width as f64 * scale)),
+        let (filled, width, dash) = match mode {
+            DrawMode::Fill(_) => (true, None, Vec::new()),
+            DrawMode::Stroke(s) => (false, Some(s.line_width as f64 * scale), s.dash_array.iter().map(|d| *d as f64 * scale).collect()),
+            DrawMode::FillAndStroke(_, s) => (true, Some(s.line_width as f64 * scale), s.dash_array.iter().map(|d| *d as f64 * scale).collect()),
             DrawMode::Invisible => return,
         };
         let color = match &props.paint {
@@ -88,6 +109,9 @@ impl<'a> Device<'a> for Collector {
         };
         let q = props.transform * p.clone();
         let b = q.bounding_box();
+        if !self.visible(&b) {
+            return;
+        }
         let near = |a: f64, b: f64| (a - b).abs() < 0.05;
         let (mut pts, mut simple) = (Vec::new(), true);
         for el in q.elements() {
@@ -101,6 +125,20 @@ impl<'a> Device<'a> for Collector {
             && (4..=5).contains(&pts.len())
             && pts.iter().all(|p| (near(p.x, b.x0) || near(p.x, b.x1)) && (near(p.y, b.y0) || near(p.y, b.y1)));
         let line = simple && pts.len() == 2 && (near(b.x0, b.x1) || near(b.y0, b.y1));
+        // Quel che esce dal ritaglio: un rettangolo si accorcia, il resto si prende disegnato.
+        let mut raster = !matches!(props.paint, Paint::Color(_));
+        let (mut q, mut b) = (q, b);
+        if let Some((c, clip_rect)) = self.clips.last() {
+            let inside = b.x0 >= c.x0 - 0.5 && b.x1 <= c.x1 + 0.5 && b.y0 >= c.y0 - 0.5 && b.y1 <= c.y1 + 0.5;
+            if !inside {
+                if *clip_rect && rect {
+                    b = b.intersect(*c);
+                    q = b.to_path(0.1);
+                } else {
+                    raster = true;
+                }
+            }
+        }
         self.shapes.push(Shape2 {
             x0: b.x0,
             y0: b.y0,
@@ -110,17 +148,49 @@ impl<'a> Device<'a> for Collector {
             stroke: width.map(|w| (color.unwrap_or([0, 0, 0]), w)),
             rect,
             line,
+            path: q,
+            order: self.drawn,
+            text: false,
+            dash,
+            raster,
         });
+        self.drawn += 1;
     }
-    fn push_clip_path(&mut self, _: &ClipPath) {}
+    fn push_clip_path(&mut self, clip: &ClipPath) {
+        let b = clip.path.bounding_box();
+        let near = |a: f64, v: f64| (a - v).abs() < 0.05;
+        let mut pts = Vec::new();
+        let mut simple = true;
+        for el in clip.path.elements() {
+            match el {
+                PathEl::MoveTo(p) | PathEl::LineTo(p) => pts.push(*p),
+                PathEl::ClosePath => {}
+                _ => simple = false,
+            }
+        }
+        let rect = simple && (4..=5).contains(&pts.len()) && pts.iter().all(|p| (near(p.x, b.x0) || near(p.x, b.x1)) && (near(p.y, b.y0) || near(p.y, b.y1)));
+        let top = match self.clips.last() {
+            Some((c, r)) => (c.intersect(b), *r && rect),
+            None => (b, rect),
+        };
+        self.clips.push(top);
+    }
     fn push_transparency_group(&mut self, _: f32, _: Option<SoftMask<'a>>, _: BlendMode) {}
-    fn pop_clip(&mut self) {}
+    fn pop_clip(&mut self) {
+        self.clips.pop();
+    }
     fn pop_transparency_group(&mut self) {}
 
     fn draw_image(&mut self, image: Image<'a, '_>, props: ImageDrawProps<'a>) {
         let r = Rect::new(0.0, 0.0, image.width() as f64, image.height() as f64);
         let b = (props.transform * r.to_path(0.1)).bounding_box();
-        self.pics.push(Pic { x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1 });
+        if !self.visible(&b) {
+            return;
+        }
+        let c = self.clips.last().map_or(b, |c| c.0);
+        let v = b.intersect(c);
+        self.pics.push(Pic { x0: v.x0, y0: v.y0, x1: v.x1, y1: v.y1, order: self.drawn });
+        self.drawn += 1;
     }
 
     fn draw_glyph_run(&mut self, run: &GlyphRun<'_, 'a>, props: DrawProps<'a>, mode: &DrawMode) {
@@ -144,7 +214,30 @@ impl<'a> Device<'a> for Collector {
             let t = props.transform * glyph.transform();
             let [a, b, c, d, e, f] = t.as_coeffs();
             if b.abs() > 0.01 * a.abs() || c.abs() > 0.01 * d.abs() {
-                continue; // testo ruotato: raro, non si ricostruisce
+                // Testo ruotato (le scritte a margine dei moduli): resta un disegno, come si vede.
+                if let hayro::hayro_interpret::font::Glyph::Outline(o) = &**glyph {
+                    let q = t * o.outline();
+                    let bb = q.bounding_box();
+                    if self.visible(&bb) && bb.area() > 0.0 {
+                        self.shapes.push(Shape2 {
+                            x0: bb.x0,
+                            y0: bb.y0,
+                            x1: bb.x1,
+                            y1: bb.y1,
+                            fill: Some(color),
+                            stroke: None,
+                            rect: false,
+                            line: false,
+                            path: q,
+                            order: self.drawn,
+                            text: true,
+                            dash: Vec::new(),
+                            raster: false,
+                        });
+                        self.drawn += 1;
+                    }
+                }
+                continue;
             }
             // Il corpo è l'altezza; il testo stretto o largo ha la sua percentuale di larghezza.
             let size = d.abs() * 1000.0;
@@ -198,6 +291,8 @@ struct Line {
     word2_x: Option<f64>,
     /// Pezzi staccati sulla stessa riga (colonne senza bordi): dove comincia ciascuno.
     tabs: Vec<f64>,
+    /// Larghezza che avrebbe la riga con le larghezze normali dei caratteri.
+    natural: f64,
 }
 
 #[derive(Clone)]
@@ -206,6 +301,8 @@ struct Run {
     font: String,
     size: f64,
     stretch: u16,
+    /// Spazio in più dopo ogni carattere, in punti (testo spaziato nel PDF).
+    tracking: f64,
     color: [u8; 3],
     bold: bool,
     italic: bool,
@@ -249,7 +346,8 @@ fn split_rows(mut glyphs: Vec<Glyph>) -> Vec<Vec<Glyph>> {
 }
 
 /// Raggruppa i caratteri in righe, da sinistra a destra e dall'alto in basso.
-fn group_lines(glyphs: Vec<Glyph>) -> Vec<Line> {
+/// `gap`: il vuoto, in corpi, oltre il quale una riga si spezza in due pezzi.
+fn group_lines(glyphs: Vec<Glyph>, gap: f64) -> Vec<Line> {
     let mut lines: Vec<Line> = Vec::new();
     for mut row in split_rows(glyphs) {
         row.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
@@ -263,12 +361,17 @@ fn group_lines(glyphs: Vec<Glyph>) -> Vec<Line> {
             // Nel testo a passo fisso gli spazi tengono le colonne: si rimettono tutti.
             let cell = 0.6 * g.size * g.stretch as f64 / 100.0;
             let mono = g.font == "Courier" && cur.as_ref().and_then(|l| l.runs.last()).is_some_and(|r| r.font == "Courier");
-            let split = cur.as_ref().is_some_and(|l| (!mono && g.x - last_end > 2.0 * g.size.max(l.size)) || g.x < last_end - 0.6 * g.size);
+            // Nei moduli conta la scritta più piccola: un valore grande accanto a un'etichetta
+            // piccola resta separato.
+            let split = cur.as_ref().is_some_and(|l| {
+                let size = if gap < 1.0 { g.size.min(l.size) } else { g.size.max(l.size) };
+                (!mono && g.x - last_end > gap * size) || g.x < last_end - 0.6 * g.size
+            });
             if split {
                 lines.extend(cur.take());
                 after_space = false;
             }
-            let line = cur.get_or_insert_with(|| Line { x: g.x, end: g.x, baseline: g.y, size: g.size, runs: Vec::new(), word2_x: None, tabs: Vec::new() });
+            let line = cur.get_or_insert_with(|| Line { x: g.x, end: g.x, baseline: g.y, size: g.size, runs: Vec::new(), word2_x: None, tabs: Vec::new(), natural: 0.0 });
             let blank = g.text.trim().is_empty();
             let has_text = line.runs.iter().any(|r| !r.text.trim().is_empty());
             // Un vuoto largo come una parola, senza spazio nel PDF, diventa uno spazio.
@@ -278,8 +381,10 @@ fn group_lines(glyphs: Vec<Glyph>) -> Vec<Line> {
                     if mono {
                         let n = ((g.x - last_end) / cell).round().max(1.0) as usize;
                         run.text.push_str(&" ".repeat(n));
+                        line.natural += n as f64 * cell;
                     } else if !run.text.ends_with(' ') {
                         run.text.push(' ');
+                        line.natural += 0.278 * g.size;
                     }
                 }
             }
@@ -289,12 +394,13 @@ fn group_lines(glyphs: Vec<Glyph>) -> Vec<Line> {
             if !blank || has_text {
                 after_space = blank;
             }
-            let run = Run { text: g.text.clone(), font: g.font.clone(), size: g.size, stretch: g.stretch, color: g.color, bold: g.bold, italic: g.italic };
+            let run = Run { text: g.text.clone(), font: g.font.clone(), size: g.size, stretch: g.stretch, tracking: 0.0, color: g.color, bold: g.bold, italic: g.italic };
             match line.runs.last_mut() {
                 Some(r) if r.same_style(&run) => r.text.push_str(&g.text),
                 _ => line.runs.push(run),
             }
             line.size = line.size.max(g.size);
+            line.natural += g.adv;
             last_end = g.x + g.adv;
             line.end = last_end;
         }
@@ -535,7 +641,7 @@ fn build_table(ys: &[f64], cols: &[f64], hs: &[Seg], verticals: &[&Seg], fills: 
                     text.push(g.clone());
                 }
             }
-            let lines = group_lines(text);
+            let lines = group_lines(text, 2.0);
             if let Some(l) = lines.first() {
                 pads.push(l.x - cx0);
             }
@@ -893,7 +999,7 @@ fn absorb_labels(figs: &mut [Figure], glyphs: &[Glyph], body: f64) {
     if figs.is_empty() {
         return;
     }
-    let lines = group_lines(glyphs.to_vec());
+    let lines = group_lines(glyphs.to_vec(), 2.0);
     let mut taken = vec![false; lines.len()];
     loop {
         let mut changed = false;
@@ -1227,8 +1333,10 @@ pub enum Page {
 pub struct FormPage {
     width: f64,
     height: f64,
-    background: Vec<u8>,
-    ext: &'static str,
+    /// Righe, riquadri e loghi, ridisegnati in Word come forme.
+    shapes: Vec<Shape2>,
+    /// Le immagini vere della pagina, con la loro posizione.
+    pics: Vec<(Pic, Vec<u8>, &'static str)>,
     lines: Vec<Line>,
 }
 
@@ -1273,6 +1381,53 @@ struct RawPage {
     others: Vec<Block>,
 }
 
+/// Quel che si raccoglie da una pagina: testo, disegni, immagini.
+struct Gathered {
+    w: f64,
+    h: f64,
+    glyphs: Vec<Glyph>,
+    shapes: Vec<Shape2>,
+    pics: Vec<Pic>,
+}
+
+fn gather<'a>(page: &'a hayro::hayro_syntax::page::Page<'a>, interp_cache: &InterpreterCache<'a>, settings: &InterpreterSettings) -> Gathered {
+    let (w, h) = page.render_dimensions();
+    let (w, h) = (w as f64, h as f64);
+    let ctm = page.initial_transform(true).to_kurbo();
+    let mut ctx = Context::new(ctm, Rect::new(0.0, 0.0, w, h), interp_cache, page.xref(), settings.clone());
+    let mut collector = Collector::default();
+    interpret_page(page, &mut ctx, &mut collector);
+    let Collector { mut glyphs, shapes, pics, stems, .. } = collector;
+    // Il testo scritto fuori dal foglio non si vede: non va nel Word.
+    glyphs.retain(|g| g.x >= -1.0 && g.x < w && g.y > 0.0 && g.y - g.size < h);
+    for g in &mut glyphs {
+        if let (Some(key), true) = (g.font_key, g.font.is_empty()) {
+            if let Some((sum, n)) = stems.get(&key) {
+                g.bold = *n > 0 && sum / *n as f64 >= 96.0;
+            }
+        }
+    }
+    // Un font senza nome a passo fisso (il Courier dei moduli): ogni carattere largo 0,6 em.
+    let mut mono: HashMap<u128, (usize, usize)> = HashMap::new();
+    for g in glyphs.iter().filter(|g| g.font.is_empty()) {
+        if let Some(key) = g.font_key {
+            let e = mono.entry(key).or_default();
+            e.1 += 1;
+            if (g.adv / (g.size * g.stretch as f64 / 100.0) - 0.6).abs() < 0.02 {
+                e.0 += 1;
+            }
+        }
+    }
+    for g in glyphs.iter_mut().filter(|g| g.font.is_empty()) {
+        if let Some((m, n)) = g.font_key.and_then(|k| mono.get(&k)) {
+            if *n >= 5 && m * 10 >= n * 9 {
+                g.font = "Courier".into();
+            }
+        }
+    }
+    Gathered { w, h, glyphs, shapes, pics }
+}
+
 /// Legge le pagine del PDF. `Page::Scan` per quelle senza testo incorporato.
 pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
     let original = Pdf::new(bytes.to_vec()).map_err(|e| format!("PDF non letto: {e:?}"))?;
@@ -1282,16 +1437,13 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
     let mut raw: Vec<Option<RawPage>> = Vec::new();
     let mut special: Vec<Option<Page>> = Vec::new();
     let mut size_chars: HashMap<i64, usize> = HashMap::new();
-    for page in original.pages().iter() {
-        let (w, h) = page.render_dimensions();
-        let (w, h) = (w as f64, h as f64);
-        let ctm = page.initial_transform(true).to_kurbo();
-        let mut ctx = Context::new(ctm, Rect::new(0.0, 0.0, w, h), &interp_cache, page.xref(), settings.clone());
-        let mut collector = Collector::default();
-        interpret_page(page, &mut ctx, &mut collector);
-        let Collector { mut glyphs, shapes, pics, stems, .. } = collector;
-        // Il testo scritto fuori dal foglio non si vede: non va nel Word.
-        glyphs.retain(|g| g.x >= -1.0 && g.x < w && g.y > 0.0 && g.y - g.size < h);
+    // Prima tutte le pagine: se il documento è un modulo, lo sono anche le sue pagine più semplici.
+    let gathered: Vec<Gathered> = original.pages().iter().map(|page| gather(page, &interp_cache, &settings)).collect();
+    let text_pages = gathered.iter().filter(|g| !g.glyphs.is_empty()).count();
+    let form_pages = gathered.iter().filter(|g| is_form(&group_lines(g.glyphs.clone(), 2.0), &g.shapes)).count();
+    let form_doc = form_pages > 0 && form_pages * 2 > text_pages;
+    for (page, g) in original.pages().iter().zip(gathered) {
+        let Gathered { w, h, mut glyphs, mut shapes, pics } = g;
         if glyphs.is_empty() {
             // Una scansione: la pagina intera diventa un'immagine, come la vede chi legge.
             let scale = (2000.0 / w.max(h).max(1.0)) as f32;
@@ -1311,45 +1463,56 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
             special.push(Some(Page::Scan(ScanPage { width: w, height: h, jpeg })));
             continue;
         }
-        for g in &mut glyphs {
-            if let (Some(key), true) = (g.font_key, g.font.is_empty()) {
-                if let Some((sum, n)) = stems.get(&key) {
-                    g.bold = *n > 0 && sum / *n as f64 >= 96.0;
+        let lines = group_lines(glyphs.clone(), 2.0);
+        if form_doc || is_form(&lines, &shapes) {
+            let mut pics = pics;
+            for s in shapes.iter().filter(|s| s.raster) {
+                pics.push(Pic { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, order: s.order });
+            }
+            shapes.retain(|s| !s.raster);
+            // Nel modulo ogni scritta sta al suo posto: le scritte vicine restano separate.
+            let mut lines = group_lines(glyphs.clone(), 0.45);
+            // Ogni scritta tiene in Word la larghezza del PDF: Word arrotonda il corpo ai mezzi
+            // punti e non conosce la spaziatura del PDF, la differenza va tra i caratteri.
+            for l in &mut lines {
+                let chars = l.text().chars().count() as f64;
+                let actual = l.end - l.x;
+                let word_size = (l.size * 2.0).round().max(2.0) / 2.0;
+                let expected = l.natural * word_size / l.size;
+                if chars > 1.0 && l.runs.iter().all(|r| r.font != "Courier") && (actual - expected).abs() > 0.5 {
+                    let t = (actual - expected) / chars;
+                    for r in &mut l.runs {
+                        r.tracking = t;
+                    }
                 }
             }
-        }
-        // Un font senza nome a passo fisso (il Courier dei moduli): ogni carattere largo 0,6 em.
-        let mut mono: HashMap<u128, (usize, usize)> = HashMap::new();
-        for g in glyphs.iter().filter(|g| g.font.is_empty()) {
-            if let Some(key) = g.font_key {
-                let e = mono.entry(key).or_default();
-                e.1 += 1;
-                if (g.adv / (g.size * g.stretch as f64 / 100.0) - 0.6).abs() < 0.02 {
-                    e.0 += 1;
+            // Le immagini vere si ritagliano dalla pagina disegnata senza testo.
+            let mut cut = Vec::new();
+            if !pics.is_empty() {
+                let scale = 200.0 / 72.0;
+                let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
+                let no_text = RenderSettings { skip_text: true, ..Default::default() };
+                let rendered = render(page, &cache, &settings, &no_text, &pixmap);
+                let png = rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?;
+                let full = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
+                for pic in pics {
+                    let s = scale as f64;
+                    let (x, y) = (((pic.x0.max(0.0)) * s) as u32, ((pic.y0.max(0.0)) * s) as u32);
+                    if x >= full.width() || y >= full.height() {
+                        continue;
+                    }
+                    let cw = (((pic.x1 - pic.x0) * s) as u32).min(full.width() - x).max(1);
+                    let ch = (((pic.y1 - pic.y0) * s) as u32).min(full.height() - y).max(1);
+                    let crop = image::imageops::crop_imm(&full, x, y, cw, ch).to_image();
+                    let (data, ext) = encode_figure(&crop)?;
+                    cut.push((pic, data, ext));
                 }
             }
-        }
-        for g in glyphs.iter_mut().filter(|g| g.font.is_empty()) {
-            if let Some((m, n)) = g.font_key.and_then(|k| mono.get(&k)) {
-                if *n >= 5 && m * 10 >= n * 9 {
-                    g.font = "Courier".into();
-                }
-            }
-        }
-        let lines = group_lines(glyphs.clone());
-        if is_form(&lines, &shapes) {
-            // Sfondo senza il testo dritto (quello ruotato, come le scritte a margine, resta lì).
-            let scale = 150.0 / 72.0;
-            let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
-            let no_text = RenderSettings { skip_text: true, ..Default::default() };
-            let rendered = render(page, &cache, &settings, &no_text, &pixmap);
-            let png = rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?;
-            let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
-            let (background, ext) = encode_figure(&rgb)?;
             raw.push(None);
-            special.push(Some(Page::Form(FormPage { width: w, height: h, background, ext, lines })));
+            special.push(Some(Page::Form(FormPage { width: w, height: h, shapes, pics: cut, lines })));
             continue;
         }
+        shapes.retain(|s| !s.text);
         special.push(None);
         let tables = find_tables(&shapes, (w, h), &mut glyphs);
         let mut figures = find_figures(&shapes, &pics, &tables, (w, h));
@@ -1381,7 +1544,7 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
         let regions = regions(glyphs, carry.as_deref())
             .into_iter()
             .map(|r| {
-                let lines = r.glyphs.iter().map(|g| group_lines(g.clone())).collect();
+                let lines = r.glyphs.iter().map(|g| group_lines(g.clone(), 2.0)).collect();
                 (r, lines)
             })
             .collect();
@@ -1606,6 +1769,8 @@ struct Look {
     font: String,
     half: i64,
     stretch: u16,
+    /// Spazio in più tra i caratteri, in ventesimi di punto.
+    spacing: i64,
     color: [u8; 3],
     bold: bool,
     italic: bool,
@@ -1613,7 +1778,12 @@ struct Look {
 
 impl Look {
     fn of(r: &Run) -> Look {
-        Look { font: family(&r.font), half: (r.size * 2.0).round().max(2.0) as i64, stretch: r.stretch, color: r.color, bold: r.bold, italic: r.italic }
+        let half = (r.size * 2.0).round().max(2.0) as i64;
+        // Word ha solo i mezzi punti: nel passo fisso la differenza si recupera tra i caratteri,
+        // altrimenti le colonne scritte a spazi scivolano.
+        let mono = if r.font == "Courier" { 0.6 * (r.size - half as f64 / 2.0) * r.stretch as f64 / 100.0 } else { 0.0 };
+        let spacing = ((mono + r.tracking) * 20.0).round() as i64;
+        Look { font: family(&r.font), half, stretch: r.stretch, spacing, color: r.color, bold: r.bold, italic: r.italic }
     }
 
     /// Le proprietà di `run` diverse da quelle dello stile.
@@ -1636,6 +1806,9 @@ impl Look {
         if run.color != self.color {
             let _ = write!(out, "<w:color w:val=\"{}\"/>", hex(run.color));
         }
+        if run.spacing != self.spacing {
+            let _ = write!(out, "<w:spacing w:val=\"{}\"/>", run.spacing);
+        }
         if run.stretch != self.stretch {
             let _ = write!(out, "<w:w w:val=\"{}\"/>", run.stretch);
         }
@@ -1657,6 +1830,9 @@ impl Look {
         }
         if self.color != [0, 0, 0] {
             let _ = write!(out, "<w:color w:val=\"{}\"/>", hex(self.color));
+        }
+        if self.spacing != 0 {
+            let _ = write!(out, "<w:spacing w:val=\"{}\"/>", self.spacing);
         }
         if self.stretch != 100 {
             let _ = write!(out, "<w:w w:val=\"{}\"/>", self.stretch);
@@ -1687,7 +1863,7 @@ impl Styles {
         let blocks = || pages.iter().filter_map(|p| if let Page::Flow(f) = p { Some(f) } else { None }).flat_map(|f| f.blocks());
         let paras = || blocks().filter_map(|b| if let Block::Para(p) = b { Some(p) } else { None });
         let body = dominant(paras().filter(|p| p.heading == 0).flat_map(|p| &p.runs))
-            .unwrap_or(Look { font: "Arial".into(), half: 22, stretch: 100, color: [0, 0, 0], bold: false, italic: false });
+            .unwrap_or(Look { font: "Arial".into(), half: 22, stretch: 100, spacing: 0, color: [0, 0, 0], bold: false, italic: false });
         let heading = |n: usize| {
             dominant(paras().filter(|p| p.heading == n).flat_map(|p| &p.runs))
                 .unwrap_or(Look { half: body.half + 4 * (4 - n as i64), bold: true, ..body.clone() })
@@ -1970,18 +2146,97 @@ fn numbering_xml(lists: &[ListRef]) -> String {
 /// `fallback` dà il testo letto con l'OCR, in paragrafi, su una pagina normale.
 /// La pagina intera come immagine dietro al testo.
 fn page_picture(id: usize, ext: &str, width: f64, height: f64, number: usize, descr: &str) -> String {
-    let (cx, cy) = ((width * EMU_PER_PT) as i64, (height * EMU_PER_PT) as i64);
     format!(
-        "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/></w:pPr><w:r><w:drawing>\
-<wp:anchor distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\" simplePos=\"0\" relativeHeight=\"{id}\" behindDoc=\"1\" locked=\"0\" layoutInCell=\"1\" allowOverlap=\"1\">\
-<wp:simplePos x=\"0\" y=\"0\"/><wp:positionH relativeFrom=\"page\"><wp:posOffset>0</wp:posOffset></wp:positionH>\
-<wp:positionV relativeFrom=\"page\"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx=\"{cx}\" cy=\"{cy}\"/>\
-<wp:effectExtent l=\"0\" t=\"0\" r=\"0\" b=\"0\"/><wp:wrapNone/><wp:docPr id=\"{id}\" name=\"Pagina {number}\" descr=\"{descr}\"/><wp:cNvGraphicFramePr/>\
-<a:graphic xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">\
+        "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/></w:pPr>{}</w:p>",
+        anchored(id, (0.0, 0.0, width, height), &format!("Pagina {number}"), descr, &picture_graphic(id, ext, width, height))
+    )
+}
+
+/// Un oggetto dietro al testo, nel punto `(x, y)` della pagina, largo `w` e alto `h`.
+fn anchored(id: usize, (x, y, w, h): (f64, f64, f64, f64), name: &str, descr: &str, graphic: &str) -> String {
+    let emu = |v: f64| (v * EMU_PER_PT).round() as i64;
+    let (cx, cy) = (emu(w).max(1), emu(h).max(1));
+    format!(
+        "<w:r><w:drawing><wp:anchor distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\" simplePos=\"0\" relativeHeight=\"{id}\" behindDoc=\"1\" locked=\"0\" layoutInCell=\"1\" allowOverlap=\"1\">\
+<wp:simplePos x=\"0\" y=\"0\"/><wp:positionH relativeFrom=\"page\"><wp:posOffset>{}</wp:posOffset></wp:positionH>\
+<wp:positionV relativeFrom=\"page\"><wp:posOffset>{}</wp:posOffset></wp:positionV><wp:extent cx=\"{cx}\" cy=\"{cy}\"/>\
+<wp:effectExtent l=\"0\" t=\"0\" r=\"0\" b=\"0\"/><wp:wrapNone/><wp:docPr id=\"{id}\" name=\"{name}\" descr=\"{descr}\"/><wp:cNvGraphicFramePr/>\
+<a:graphic xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\">{graphic}</a:graphic></wp:anchor></w:drawing></w:r>",
+        emu(x),
+        emu(y)
+    )
+}
+
+fn picture_graphic(id: usize, ext: &str, w: f64, h: f64) -> String {
+    let (cx, cy) = (((w * EMU_PER_PT) as i64).max(1), ((h * EMU_PER_PT) as i64).max(1));
+    format!(
+        "<a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">\
 <pic:pic xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:nvPicPr><pic:cNvPr id=\"{id}\" name=\"immagine{id}.{ext}\"/><pic:cNvPicPr/></pic:nvPicPr>\
 <pic:blipFill><a:blip r:embed=\"rIdImg{id}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>\
-<pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>\
-</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>"
+<pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData>"
+    )
+}
+
+/// Disegni consecutivi con lo stesso aspetto, come una sola forma di Word grande quanto la pagina:
+/// righe e riquadri restano vettoriali e modificabili.
+fn shapes_graphic(group: &[&Shape2], w: f64, h: f64) -> String {
+    let emu = |v: f64| (v * EMU_PER_PT).round() as i64;
+    let (cx, cy) = (emu(w), emu(h));
+    let first = group[0];
+    let mut paths = String::new();
+    for s in group {
+        let fill = if s.fill.is_some() { "" } else { " fill=\"none\"" };
+        let stroke = if s.stroke.is_some() { "" } else { " stroke=\"0\"" };
+        let _ = write!(paths, "<a:path w=\"{cx}\" h=\"{cy}\"{fill}{stroke}>");
+        let pt = |p: &hayro::kurbo::Point| format!("<a:pt x=\"{}\" y=\"{}\"/>", emu(p.x), emu(p.y));
+        for el in s.path.elements() {
+            match el {
+                PathEl::MoveTo(p) => {
+                    let _ = write!(paths, "<a:moveTo>{}</a:moveTo>", pt(p));
+                }
+                PathEl::LineTo(p) => {
+                    let _ = write!(paths, "<a:lnTo>{}</a:lnTo>", pt(p));
+                }
+                PathEl::QuadTo(a, b) => {
+                    let _ = write!(paths, "<a:quadBezTo>{}{}</a:quadBezTo>", pt(a), pt(b));
+                }
+                PathEl::CurveTo(a, b, c) => {
+                    let _ = write!(paths, "<a:cubicBezTo>{}{}{}</a:cubicBezTo>", pt(a), pt(b), pt(c));
+                }
+                PathEl::ClosePath => paths.push_str("<a:close/>"),
+            }
+        }
+        paths.push_str("</a:path>");
+    }
+    let fill = match first.fill {
+        Some(c) => format!("<a:solidFill><a:srgbClr val=\"{}\"/></a:solidFill>", hex(c)),
+        None => "<a:noFill/>".to_string(),
+    };
+    let line = match first.stroke {
+        Some((c, width)) => {
+            let width = width.max(0.25);
+            // Il tratteggio in Word si misura in centomillesimi dello spessore.
+            let mut dash = String::new();
+            if first.dash.iter().any(|d| *d > 0.0) {
+                let mut ds = first.dash.clone();
+                if ds.len() % 2 == 1 {
+                    ds.extend(first.dash.clone());
+                }
+                dash.push_str("<a:custDash>");
+                for pair in ds.chunks(2) {
+                    let pct = |v: f64| ((v / width) * 100000.0).round().max(1.0) as i64;
+                    let _ = write!(dash, "<a:ds d=\"{}\" sp=\"{}\"/>", pct(pair[0]), pct(pair[1]));
+                }
+                dash.push_str("</a:custDash>");
+            }
+            format!("<a:ln w=\"{}\"><a:solidFill><a:srgbClr val=\"{}\"/></a:solidFill>{dash}</a:ln>", emu(width), hex(c))
+        }
+        None => "<a:ln><a:noFill/></a:ln>".to_string(),
+    };
+    format!(
+        "<a:graphicData uri=\"http://schemas.microsoft.com/office/word/2010/wordprocessingShape\"><wps:wsp><wps:cNvSpPr/><wps:spPr>\
+<a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/>\
+<a:rect l=\"0\" t=\"0\" r=\"r\" b=\"b\"/><a:pathLst>{paths}</a:pathLst></a:custGeom>{fill}{line}</wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData>"
     )
 }
 
@@ -2164,15 +2419,52 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                 }
             }
             Page::Form(form) => {
-                let id = next_id;
-                next_id += 1;
-                let ext = form.ext;
-                media.push((format!("word/media/immagine{id}.{ext}"), form.background.clone()));
-                let _ = write!(
-                    rels,
-                    "<Relationship Id=\"rIdImg{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/immagine{id}.{ext}\"/>"
-                );
-                body.push_str(&page_picture(id, ext, form.width, form.height, i + 1, ""));
+                // Disegni e immagini nell'ordine del PDF, dietro al testo.
+                enum Item<'a> {
+                    Shape(&'a Shape2),
+                    Pic(&'a (Pic, Vec<u8>, &'static str)),
+                }
+                let mut items: Vec<(usize, Item)> = form.shapes.iter().map(|s| (s.order, Item::Shape(s))).collect();
+                items.extend(form.pics.iter().map(|p| (p.0.order, Item::Pic(p))));
+                items.sort_by_key(|(o, _)| *o);
+                let mut runs = String::new();
+                let mut group: Vec<&Shape2> = Vec::new();
+                let same = |a: &Shape2, b: &Shape2| {
+                    a.fill == b.fill && a.dash == b.dash && a.stroke.map(|s| (s.0, (s.1 * 20.0).round() as i64)) == b.stroke.map(|s| (s.0, (s.1 * 20.0).round() as i64))
+                };
+                let flush = |group: &mut Vec<&Shape2>, runs: &mut String, next_id: &mut usize| {
+                    if group.is_empty() {
+                        return;
+                    }
+                    let id = *next_id;
+                    *next_id += 1;
+                    runs.push_str(&anchored(id, (0.0, 0.0, form.width, form.height), &format!("Disegno {id}"), "", &shapes_graphic(group, form.width, form.height)));
+                    group.clear();
+                };
+                for (_, item) in items {
+                    match item {
+                        Item::Shape(s) => {
+                            if group.last().is_some_and(|g| !same(g, s)) || group.len() >= 400 {
+                                flush(&mut group, &mut runs, &mut next_id);
+                            }
+                            group.push(s);
+                        }
+                        Item::Pic((pic, data, ext)) => {
+                            flush(&mut group, &mut runs, &mut next_id);
+                            let id = next_id;
+                            next_id += 1;
+                            media.push((format!("word/media/immagine{id}.{ext}"), data.clone()));
+                            let _ = write!(
+                                rels,
+                                "<Relationship Id=\"rIdImg{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/immagine{id}.{ext}\"/>"
+                            );
+                            let (w, h) = (pic.x1 - pic.x0, pic.y1 - pic.y0);
+                            runs.push_str(&anchored(id, (pic.x0, pic.y0, w, h), &format!("Immagine {id}"), "", &picture_graphic(id, ext, w, h)));
+                        }
+                    }
+                }
+                flush(&mut group, &mut runs, &mut next_id);
+                let _ = write!(body, "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/></w:pPr>{runs}</w:p>");
                 // Ogni scritta è un riquadro di testo nel punto esatto della pagina.
                 for l in &form.lines {
                     let line_h = l.size * 1.2;
@@ -2205,7 +2497,8 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
 <w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" \
 xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" \
-xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\"><w:body>{body}</w:body></w:document>"
+xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\" \
+xmlns:wps=\"http://schemas.microsoft.com/office/word/2010/wordprocessingShape\"><w:body>{body}</w:body></w:document>"
     );
     let types = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
 <Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
