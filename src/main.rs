@@ -17,6 +17,8 @@ mod guida_win;
 #[cfg(windows)]
 mod progress_win;
 #[cfg(windows)]
+mod winlist;
+#[cfg(windows)]
 mod winmenu;
 #[cfg(windows)]
 mod wingfx;
