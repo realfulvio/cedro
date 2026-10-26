@@ -1,40 +1,32 @@
 <p align="center">
-  <img src="docs/mark.png" width="96" alt="Cedro">
-</p>
-
-<h1 align="center">Cedro</h1>
-
-<p align="center">
-  <strong>Cambia formato a un file con un clic destro.<br>Sul tuo PC, senza caricare nulla.</strong>
+  <img src="docs/hero.png" alt="Cedro: cambia formato a un file con un clic destro">
 </p>
 
 <p align="center">
-  <a href="https://github.com/realfulvio/cedro/releases/latest"><b>⬇ Scarica per Windows</b></a>
-  &nbsp;·&nbsp;
-  <a href="#come-si-usa">Come si usa</a>
-  &nbsp;·&nbsp;
-  <a href="#cosa-converte">Formati</a>
+  <a href="https://github.com/realfulvio/cedro/releases/latest"><img alt="Ultima versione" src="https://img.shields.io/github/v/release/realfulvio/cedro?color=005E8E&label=versione&style=for-the-badge"></a>
+  <img alt="Windows 10 e 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-005E8E?style=for-the-badge">
+  <img alt="Linux in arrivo" src="https://img.shields.io/badge/Linux-in%20arrivo-8A99A8?style=for-the-badge">
+  <a href="LICENSE"><img alt="Licenza MIT" src="https://img.shields.io/badge/licenza-MIT-005E8E?style=for-the-badge"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/realfulvio/cedro/releases/latest"><img alt="Ultima versione" src="https://img.shields.io/github/v/release/realfulvio/cedro?color=005E8E&label=versione"></a>
-  <img alt="Windows e Linux" src="https://img.shields.io/badge/Windows%20%7C%20Linux-005E8E">
-  <a href="LICENSE"><img alt="Licenza MIT" src="https://img.shields.io/badge/licenza-MIT-005E8E"></a>
+  <a href="https://github.com/realfulvio/cedro/releases/latest"><b>⬇ Scarica</b></a>
+  &nbsp;·&nbsp; <a href="#come-si-usa">Come si usa</a>
+  &nbsp;·&nbsp; <a href="#cosa-converte">Formati</a>
+  &nbsp;·&nbsp; <a href="#domande">Domande</a>
 </p>
 
 <p align="center">
-  <img src="docs/vivo-ruota.png" width="320" alt="La ruota di Cedro su Windows 11, con la fetta JPEG sotto il mouse">
+  <img src="docs/feature.png" alt="Tutto sul tuo PC, niente da installare in più, l'originale al sicuro, in italiano">
 </p>
 
 ## Cos'è
 
 Cedro è un piccolo programma che vive vicino all'orologio. Tieni premuto **Shift**, fai **clic destro** su un file e si apre una ruota: scegli il formato e la copia nuova compare accanto all'originale. Fine.
 
-- **Tutto sul tuo PC.** Nessun sito, nessun caricamento, nessuna telemetria.
-- **Niente da installare in più.** Non servono LibreOffice, ffmpeg o altri programmi.
-- **L'originale non si tocca.** Se il nome esiste già, Cedro aggiunge `-2`, `-3`…
-- **In italiano**, anche l'OCR.
-
+<p align="center">
+  <img src="docs/vivo-ruota.png" width="320" alt="La ruota di Cedro su Windows 11, con la fetta JPEG sotto il mouse">
+</p>
 
 ## Scarica e installa
 
@@ -49,7 +41,7 @@ Per togliere Cedro: *Impostazioni di Windows, App, Cedro*. Dopo la prima install
 ## Come si usa
 
 <p align="center">
-  <img src="docs/tre-tasti.png" width="720" alt="Le tre ruote: Shift, Ctrl e Alt">
+  <img src="docs/tre-tasti-guida.png" alt="Le tre ruote: Shift converte, Ctrl per gli strumenti, Alt per le azioni">
 </p>
 
 1. Tieni premuto un tasto.
@@ -99,7 +91,7 @@ Clic destro sull'icona (o doppio clic per le Impostazioni):
 **Cambia il file originale?** No, crea sempre una copia nella stessa cartella.
 **Serve internet?** Solo per cercare gli aggiornamenti.
 **Perché Windows mi avvisa?** L'installatore non ha la firma a pagamento. Il codice è aperto e lo puoi controllare qui.
-**E su Linux?** Funziona su GNOME e KDE Plasma. La ruota si apre dal menu del file (in Dolphin sotto *Cedro*, in Nautilus sotto *Script*), perché Wayland non lascia intercettare il clic destro. Avvia `cedro` una volta: si apre la finestra delle Impostazioni (con la Guida) e resta nel vassoio, con il menu per impostazioni, guida, aggiornamenti e avvio automatico. Vedi [Compilare](#per-chi-sviluppa).
+**E su Linux?** Per ora Cedro è un programma Windows. Linux è in pausa e torna in una prossima versione; chi vuole può già compilarlo (vedi sotto).
 
 ---
 
