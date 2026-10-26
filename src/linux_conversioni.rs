@@ -7,7 +7,9 @@ use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 
 use cedro::conversioni::{self, Control, Values, CATEGORIES, EXISTS_CHOICES};
+use cedro::trascrizione::{self, Event, Line, Request};
 use cedro::{Exists, ExistsAsk, ExistsChoice};
+use crate::linux_trascrizione::{self as tr, Change, Panel};
 use cedro::{extension, kind_of, read_settings, Kind};
 use gtk4::gio;
 use gtk4::glib;
@@ -30,10 +32,10 @@ window.cedro-panel label.cedro-title { color: #005E8E; font-weight: bold; font-s
 window.cedro-panel label.cedro-cap { color: #455A64; font-weight: bold; font-size: 85%; }\
 window.cedro-panel button.cedro-drop { background: #e3f0f8; color: #005E8E; border: 2px dashed #005E8E; padding: 14px; }\
 window.cedro-panel button.cedro-drop label { color: #005E8E; font-weight: bold; }\
-window.cedro-panel togglebutton.cedro-chip { background: #ffffff; border: 1px solid #d6dee5; padding: 6px 14px; }\
-window.cedro-panel togglebutton.cedro-chip:hover { border-color: #0066CC; }\
-window.cedro-panel togglebutton.cedro-chip:checked { background: #005E8E; border-color: #005E8E; }\
-window.cedro-panel togglebutton.cedro-chip:checked label { color: #ffffff; }\
+window.cedro-panel button.cedro-chip { background: #ffffff; background-image: none; border: 1px solid #d6dee5; padding: 6px 14px; }\
+window.cedro-panel button.cedro-chip:hover { border-color: #0066CC; }\
+window.cedro-panel button.cedro-chip:checked { background: #005E8E; background-image: none; border-color: #005E8E; }\
+window.cedro-panel button.cedro-chip:checked label { color: #ffffff; }\
 window.cedro-panel label.cedro-ok { color: #1d7a46; font-weight: bold; }\
 window.cedro-panel label.cedro-fail { color: #b3261e; font-weight: bold; }\
 window.cedro-panel progressbar.cedro-progress trough { min-height: 3px; background: #d0dde8; border: none; border-radius: 2px; }\
@@ -49,6 +51,8 @@ enum Msg {
     Done(PathBuf, Result<String, String>),
     /// Il file di uscita esiste già: la finestra chiede e risponde su questo canale.
     Ask(PathBuf, std::sync::mpsc::Sender<ExistsChoice>),
+    /// Una riga per la finestra «Cosa sta succedendo» della trascrizione.
+    Log(Line),
 }
 
 #[derive(Clone)]
@@ -63,6 +67,9 @@ struct Ui {
     side: ListBox,
     title: Label,
     hint: Label,
+    /// «Cambia formato»: formati, strumenti, opzioni e qualità. Si nasconde con la scheda Trascrizione.
+    convert_box: HBox,
+    tr: Rc<Panel>,
     queue: ListBox,
     count: Label,
     formats: FlowBox,
@@ -215,9 +222,30 @@ fn refresh_options(ui: &Rc<Ui>) {
     }
 }
 
+/// Vero se si vede la scheda Trascrizione (solo con la categoria Audio).
+fn transcribing(ui: &Ui) -> bool {
+    CATEGORIES[ui.category.get()].kind == Kind::Audio && ui.tr.selected()
+}
+
 fn current_files(ui: &Ui) -> Vec<Entry> {
     let kind = CATEGORIES[ui.category.get()].kind;
-    ui.files.borrow().iter().filter(|e| kind_of(&e.path) == kind).cloned().collect()
+    // La trascrizione prende anche l'audio dei video e i vocali (.opus, .amr…) che le altre voci non leggono.
+    let voice = transcribing(ui);
+    ui.files.borrow().iter().filter(|e| if voice { trascrizione::transcribable(&e.path) } else { kind_of(&e.path) == kind }).cloned().collect()
+}
+
+/// Mostra le due schede di Audio e, con «Trascrizione», i suoi controlli al posto di quelli del formato.
+fn apply_mode(ui: &Ui) {
+    let cat = &CATEGORIES[ui.category.get()];
+    let on = transcribing(ui);
+    ui.tr.tabs.set_visible(cat.kind == Kind::Audio);
+    ui.convert_box.set_visible(!on);
+    ui.tr.body.set_visible(on);
+    ui.hint.set_text(&if on { tr::HINT.to_string() } else { format!("{} Accetta: {}.", cat.hint, cat.accepts) });
+    if on && ui.running.borrow().is_none() {
+        ui.tr.idle_text();
+    }
+    render_queue(ui);
 }
 
 fn label_go(ui: &Ui) {
@@ -231,6 +259,16 @@ fn label_go(ui: &Ui) {
         .map(|s| s.label)
         .unwrap_or("");
     let busy = ui.running.borrow().is_some();
+    ui.tr.tabs.set_sensitive(!busy);
+    if transcribing(ui) {
+        ui.go.set_sensitive(n > 0 && !busy);
+        ui.go.set_label(&match (busy, n) {
+            (true, _) => "Trascrizione in corso…".to_string(),
+            (_, 0) => "Trascrivi".to_string(),
+            _ => format!("Trascrivi {n} file in {}", ui.tr.format().label()),
+        });
+        return;
+    }
     ui.go.set_sensitive(n > 0 && !busy && !action.is_empty());
     ui.go.set_label(&match (busy, n) {
         (true, _) => "Conversione in corso…".to_string(),
@@ -276,7 +314,6 @@ fn render_queue(ui: &Ui) {
 fn render_category(ui: &Rc<Ui>) {
     let cat = &CATEGORIES[ui.category.get()];
     ui.title.set_text(cat.name);
-    ui.hint.set_text(&format!("{} Accetta: {}.", cat.hint, cat.accepts));
     clear_flow(&ui.formats);
     clear_flow(&ui.tools);
     let first = chips(&ui.formats, ui, conversioni::formats(cat.kind), None);
@@ -287,17 +324,37 @@ fn render_category(ui: &Rc<Ui>) {
     if let Some(first) = first {
         first.set_active(true);
     }
-    render_queue(ui);
+    apply_mode(ui);
 }
 
 fn add_files(ui: &Rc<Ui>, paths: Vec<PathBuf>) {
     let mut first = None;
+    let mut voice = false;
+    let transcribing = transcribing(ui);
     for path in paths.into_iter().filter(|p| p.is_file()) {
-        if kind_of(&path) == Kind::Other || ui.files.borrow().iter().any(|e| e.path == path) {
+        let only = trascrizione::only_transcribable(&path);
+        if (kind_of(&path) == Kind::Other && !only) || ui.files.borrow().iter().any(|e| e.path == path) {
             continue;
         }
-        first.get_or_insert(kind_of(&path));
+        // Un vocale .opus o .amr va solo nella trascrizione; un video, con la trascrizione aperta, resta lì.
+        if first.is_none() {
+            voice = only || (transcribing && trascrizione::transcribable(&path));
+        }
+        first.get_or_insert(if only { Kind::Audio } else { kind_of(&path) });
         ui.files.borrow_mut().push(Entry { path, status: "In attesa".into(), class: "" });
+    }
+    if voice {
+        ui.tr.select(true);
+        if !transcribing {
+            if let Some(i) = CATEGORIES.iter().position(|c| c.kind == Kind::Audio) {
+                if ui.category.get() != i {
+                    ui.side.select_row(ui.side.row_at_index(i as i32).as_ref());
+                    return;
+                }
+            }
+        }
+        apply_mode(ui);
+        return;
     }
     // Se i file appena aggiunti sono di un'altra categoria, si passa a quella: altrimenti restano invisibili.
     if let Some(kind) = first {
@@ -318,15 +375,88 @@ fn paths_of(list: &gio::ListModel) -> Vec<PathBuf> {
         .collect()
 }
 
+/// La conversione della coda in un thread, un file dopo l'altro.
+fn spawn_conversion(files: Vec<PathBuf>, action: String, quality: u8, dest: Option<PathBuf>, opts: cedro::Options, label: String, tx: std::sync::mpsc::Sender<Msg>) {
+std::thread::spawn(move || {
+    let total = files.len();
+    let name = |p: &std::path::Path| p.file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
+    let step_label = |i: usize, p: &std::path::Path| {
+        if total == 1 { format!("{} → {label}", name(p)) } else { format!("{} di {total} · {}", i + 1, name(p)) }
+    };
+    if let Some(first) = files.first() {
+        crate::linux_progress::start(total, &step_label(0, first));
+    }
+    let mut failed = None;
+    for (i, path) in files.into_iter().enumerate() {
+        crate::linux_progress::step(i, &step_label(i, &path));
+        let result = conversioni::convert_one(&path, &action, quality, dest.as_deref(), &opts);
+        if let Err(e) = &result {
+            failed.get_or_insert_with(|| e.clone());
+        }
+        if tx.send(Msg::Done(path, result)).is_err() {
+            break;
+        }
+    }
+    match failed {
+        Some(e) => crate::linux_progress::finish(false, &format!("Errore · {e}")),
+        None => crate::linux_progress::finish(true, &format!("Fatto · {total} file in {label}")),
+    }
+});
+}
+
+/// La trascrizione della coda in un thread: il motore si accende ora e si spegne a fine coda.
+fn spawn_transcription(files: Vec<PathBuf>, request: Request, dest: Option<PathBuf>, opts: cedro::Options, tx: std::sync::mpsc::Sender<Msg>) {
+    std::thread::spawn(move || {
+        let total = files.len();
+        let format = request.format;
+        let name = |p: &std::path::Path| p.file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
+        let label = |i: usize, p: &std::path::Path, pct: u8| {
+            let head = if total == 1 { name(p) } else { format!("{} di {total} · {}", i + 1, name(p)) };
+            if pct > 0 { format!("{head} · {pct}%") } else { format!("Trascrivo {head}") }
+        };
+        if let Some(first) = files.first() {
+            crate::linux_progress::start(total, &label(0, first, 0));
+        }
+        let failed = std::sync::Mutex::new(None::<String>);
+        trascrizione::run(&files, &request, dest.as_deref(), &opts, &|event| match event {
+            Event::Log(line) => {
+                let _ = tx.send(Msg::Log(line));
+            }
+            Event::Percent { index, percent } => {
+                if let Some(p) = files.get(index) {
+                    crate::linux_progress::step(index, &label(index, p, percent));
+                }
+            }
+            Event::Finished { path, result } => {
+                let result = result.map(|(_, message)| message);
+                // Un file saltato perché esiste già non fa diventare rossa la barra.
+                if let Err(e) = &result {
+                    if !e.contains("saltato") {
+                        failed.lock().unwrap_or_else(|x| x.into_inner()).get_or_insert_with(|| e.clone());
+                    }
+                }
+                let _ = tx.send(Msg::Done(path, result));
+            }
+        });
+        match failed.into_inner().unwrap_or_else(|e| e.into_inner()) {
+            Some(e) => crate::linux_progress::finish(false, &format!("Errore · {e}")),
+            None => crate::linux_progress::finish(true, &format!("Fatto · {total} file in {}", format.label())),
+        }
+    });
+}
+
 fn start(ui: &Rc<Ui>) {
     let files: Vec<PathBuf> = current_files(ui).into_iter().map(|e| e.path).collect();
     if files.is_empty() || ui.running.borrow().is_some() {
         return;
     }
     let kind = CATEGORIES[ui.category.get()].kind;
-    if let Err(e) = conversioni::validate(&ui.values.borrow(), kind, &ui.action.borrow()) {
-        AlertDialog::builder().message("Controlla le pagine").detail(e).modal(true).build().show(Some(&ui.window));
-        return;
+    let voice = transcribing(ui);
+    if !voice {
+        if let Err(e) = conversioni::validate(&ui.values.borrow(), kind, &ui.action.borrow()) {
+            AlertDialog::builder().message("Controlla le pagine").detail(e).modal(true).build().show(Some(&ui.window));
+            return;
+        }
     }
     for e in ui.files.borrow_mut().iter_mut().filter(|e| files.contains(&e.path)) {
         e.status = "In attesa".into();
@@ -354,31 +484,14 @@ fn start(ui: &Rc<Ui>) {
     ui.bar.remove_css_class("cedro-error");
     ui.bar.set_fraction(0.0);
     ui.bar.set_visible(read_settings().progress);
-    std::thread::spawn(move || {
-        let total = files.len();
-        let name = |p: &std::path::Path| p.file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
-        let step_label = |i: usize, p: &std::path::Path| {
-            if total == 1 { format!("{} → {label}", name(p)) } else { format!("{} di {total} · {}", i + 1, name(p)) }
-        };
-        if let Some(first) = files.first() {
-            crate::linux_progress::start(total, &step_label(0, first));
-        }
-        let mut failed = None;
-        for (i, path) in files.into_iter().enumerate() {
-            crate::linux_progress::step(i, &step_label(i, &path));
-            let result = conversioni::convert_one(&path, &action, quality, dest.as_deref(), &opts);
-            if let Err(e) = &result {
-                failed.get_or_insert_with(|| e.clone());
-            }
-            if tx.send(Msg::Done(path, result)).is_err() {
-                break;
-            }
-        }
-        match failed {
-            Some(e) => crate::linux_progress::finish(false, &format!("Errore · {e}")),
-            None => crate::linux_progress::finish(true, &format!("Fatto · {total} file in {label}")),
-        }
-    });
+    if voice {
+        let settings = read_settings();
+        let request = Request { format: ui.tr.format(), model: ui.tr.model(), gpu: settings.gpu, avx512: settings.avx512 };
+        ui.tr.clear();
+        spawn_transcription(files, request, dest, opts, tx);
+    } else {
+        spawn_conversion(files, action, quality, dest, opts, label, tx);
+    }
     render_queue(ui);
     let ui = ui.clone();
     glib::timeout_add_local(Duration::from_millis(150), move || {
@@ -401,6 +514,7 @@ fn start(ui: &Rc<Ui>) {
                         }
                         changed = true;
                     }
+                    Ok(Msg::Log(line)) => ui.tr.append(&line, true),
                     Ok(Msg::Ask(path, answer)) => {
                         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("il file").to_string();
                         let dialog = AlertDialog::builder()
@@ -430,6 +544,8 @@ fn start(ui: &Rc<Ui>) {
         let (total, done) = ui.job.get();
         if finished {
             ui.running.borrow_mut().take();
+            // Il modello è sul PC dopo la prima trascrizione.
+            ui.tr.refresh_models();
             ui.bar.set_fraction(1.0);
             if !ui.bar.has_css_class("cedro-error") {
                 // A lavoro finito la linea resta verde un secondo, poi sparisce.
@@ -467,13 +583,14 @@ pub fn open_conversions(app: &Application) {
             return;
         }
     }
-    if let Some(display) = gtk4::gdk::Display::default() {
-        let provider = CssProvider::new();
-        provider.load_from_string(&format!("{CSS}{}", crate::linux_youtube::CSS));
-        gtk4::style_context_add_provider_for_display(&display, &provider, STYLE_PROVIDER_PRIORITY_APPLICATION);
-    }
     let window = crate::linux_settings::titled(app, TITLE, 940, 780);
     window.set_resizable(true);
+    // Dopo i colori di `titled`: GTK fa vincere il gestore di stile aggiunto per ultimo, a parità di priorità.
+    if let Some(display) = gtk4::gdk::Display::default() {
+        let provider = CssProvider::new();
+        provider.load_from_string(&format!("{CSS}{}{}", crate::linux_youtube::CSS, tr::CSS));
+        gtk4::style_context_add_provider_for_display(&display, &provider, STYLE_PROVIDER_PRIORITY_APPLICATION);
+    }
 
     let side = ListBox::new();
     side.add_css_class("cedro-side");
@@ -569,6 +686,31 @@ pub fn open_conversions(app: &Application) {
     bar.set_pulse_step(0.08);
     bar.set_visible(false);
 
+    // Il pannello della trascrizione chiama `hook` quando cambia qualcosa; la finestra lo collega dopo, a costruzione finita.
+    let hook: Rc<RefCell<Option<Box<dyn Fn(Change)>>>> = Rc::new(RefCell::new(None));
+    let tr = Panel::build({
+        let hook = hook.clone();
+        move |change| {
+            if let Some(f) = hook.borrow().as_ref() {
+                f(change);
+            }
+        }
+    });
+    let convert_box = HBox::new(Orientation::Vertical, 10);
+    for w in [
+        caption("CONVERTI IN").upcast::<gtk4::Widget>(),
+        formats.clone().upcast(),
+        tools_caption.clone().upcast(),
+        tools.clone().upcast(),
+        options_caption.clone().upcast(),
+        options.clone().upcast(),
+        caption("QUALITÀ").upcast(),
+        quality.clone().upcast(),
+        quality_note.upcast(),
+    ] {
+        convert_box.append(&w);
+    }
+
     let main = HBox::new(Orientation::Vertical, 10);
     main.set_margin_top(16);
     main.set_margin_bottom(12);
@@ -581,15 +723,9 @@ pub fn open_conversions(app: &Application) {
         drop.upcast_ref(),
         count.upcast_ref(),
         queue_scroll.upcast_ref(),
-        caption("CONVERTI IN").upcast_ref(),
-        formats.upcast_ref(),
-        tools_caption.upcast_ref(),
-        tools.upcast_ref(),
-        options_caption.upcast_ref(),
-        options.upcast_ref(),
-        caption("QUALITÀ").upcast_ref(),
-        quality.upcast_ref(),
-        quality_note.upcast_ref(),
+        tr.tabs.upcast_ref(),
+        convert_box.upcast_ref(),
+        tr.body.upcast_ref(),
         caption("DOVE SALVARE").upcast_ref(),
         dest_row.upcast_ref(),
         overwrite_row.upcast_ref(),
@@ -615,6 +751,8 @@ pub fn open_conversions(app: &Application) {
         side: side.clone(),
         title,
         hint,
+        convert_box: convert_box.clone(),
+        tr: tr.clone(),
         queue,
         count,
         formats,
@@ -635,6 +773,21 @@ pub fn open_conversions(app: &Application) {
         running: RefCell::new(None),
     });
 
+    {
+        let ui = Rc::downgrade(&ui);
+        *hook.borrow_mut() = Some(Box::new(move |change| {
+            let Some(ui) = ui.upgrade() else { return };
+            match change {
+                Change::Tab => apply_mode(&ui),
+                Change::Format => label_go(&ui),
+                Change::Model => {
+                    if ui.running.borrow().is_none() {
+                        ui.tr.idle_text();
+                    }
+                }
+            }
+        }));
+    }
     {
         // Finché la coda lavora la finestra resta aperta: chiuderla fermerebbe il processo a metà scrittura.
         let ui = ui.clone();
@@ -746,6 +899,7 @@ fn shots(ui: &Rc<Ui>, dir: std::path::PathBuf) {
         (3, Some("JSON")),
         (4, None),
         (4, Some("MP3")),
+        (4, Some("Trascrizione")),
         (5, None),
         (5, Some("Solo audio (MP3)")),
         (6, None),
@@ -760,8 +914,9 @@ fn shots(ui: &Rc<Ui>, dir: std::path::PathBuf) {
             });
             return;
         };
+        ui.tr.select(label == Some("Trascrizione"));
         ui.side.select_row(ui.side.row_at_index(cat as i32).as_ref());
-        if let Some(label) = label {
+        if let Some(label) = label.filter(|l| *l != "Trascrizione") {
             for flow in [&ui.formats, &ui.tools] {
                 let mut child = flow.first_child();
                 while let Some(c) = child {
@@ -774,6 +929,11 @@ fn shots(ui: &Rc<Ui>, dir: std::path::PathBuf) {
                 }
             }
         }
+        // Con CEDRO_SHOT_TRANSCRIBE=1 la scheda Trascrizione parte davvero e la foto si fa a lavoro finito.
+        let wait = label == Some("Trascrizione") && std::env::var_os("CEDRO_SHOT_TRANSCRIBE").is_some();
+        if wait {
+            start(&ui);
+        }
         let next = ui.clone();
         glib::timeout_add_local_once(Duration::from_millis(700), move || {
             let name = format!("{at:02}-{}{}.png", CATEGORIES.get(cat).map(|c| c.name).unwrap_or(YOUTUBE), label.map(|l| format!("-{}", l.replace(' ', "_"))).unwrap_or_default());
@@ -781,6 +941,9 @@ fn shots(ui: &Rc<Ui>, dir: std::path::PathBuf) {
             // Appena cambiata la voce il disegno può non essere pronto: si riprova qualche volta.
             let mut tries = 0;
             glib::timeout_add_local(Duration::from_millis(300), move || {
+                if wait && next.running.borrow().is_some() {
+                    return glib::ControlFlow::Continue;
+                }
                 tries += 1;
                 match save_png(&next.window, &path) {
                     Ok(()) => {}
