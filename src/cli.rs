@@ -155,7 +155,8 @@ fn transcribe(files: &[String], args: &[String]) -> i32 {
     let model = match args.iter().position(|a| a == "--precisione").and_then(|i| args.get(i + 1)).map(String::as_str) {
         Some("veloce") => 0,
         Some("massima") => 2,
-        _ => trascrizione::DEFAULT_MODEL,
+        Some("buona") => 1,
+        _ => trascrizione::default_model(),
     };
     let settings = cedro::read_settings();
     let request = Request {
