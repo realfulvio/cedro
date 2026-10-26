@@ -27,6 +27,10 @@ pub struct Settings {
     pub reveal: bool,
     /// Mostra la sottile barra di avanzamento in basso a destra mentre converte.
     pub progress: bool,
+    /// Codifica i video con la scheda video, se il PC ne ha una adatta (vedi `accel`).
+    pub gpu: bool,
+    /// Calcoli con AVX-512, se il processore lo ha (vedi `accel`).
+    pub avx512: bool,
     pub dest: Dest,
     pub dest_dir: String,
     /// Se il file esiste già lo sostituisce, invece di aggiungere un numero.
@@ -53,6 +57,8 @@ impl Default for Settings {
             dialogs: true,
             reveal: false,
             progress: true,
+            gpu: true,
+            avx512: true,
             dest: Dest::Same,
             dest_dir: String::new(),
             replace: false,
@@ -115,6 +121,8 @@ impl Settings {
                 "dialogs" => s.dialogs = flag(value).unwrap_or(s.dialogs),
                 "reveal" => s.reveal = flag(value).unwrap_or(s.reveal),
                 "progress" => s.progress = flag(value).unwrap_or(s.progress),
+                "gpu" => s.gpu = flag(value).unwrap_or(s.gpu),
+                "avx512" => s.avx512 = flag(value).unwrap_or(s.avx512),
                 "replace" => s.replace = flag(value).unwrap_or(s.replace),
                 "dest" => {
                     s.dest = match value {
@@ -165,6 +173,8 @@ impl Settings {
             ("dialogs", b(self.dialogs).into()),
             ("reveal", b(self.reveal).into()),
             ("progress", b(self.progress).into()),
+            ("gpu", b(self.gpu).into()),
+            ("avx512", b(self.avx512).into()),
             ("replace", b(self.replace).into()),
             ("dest", dest.into()),
             ("dest_dir", self.dest_dir.clone()),
