@@ -668,6 +668,20 @@ mod tests {
     }
 
     #[test]
+    fn word_made_pdf_keeps_lists_and_columns() {
+        // Esportato da Writer: elenchi puntati su due livelli, elenco numerato, due colonne.
+        let pdf = include_bytes!("../tests/fixtures/circolare.pdf").to_vec();
+        let xml = word_xml("circolare.pdf", pdf);
+        assert!(xml.contains("<w:ilvl w:val=\"1\"/>"), "manca il secondo livello");
+        assert!(xml.contains(">Aprire un ticket sul portale.<"), "numero non tolto");
+        assert!(xml.contains("<w:cols w:num=\"2\""), "mancano le colonne");
+        let xml = word_xml("colonne.pdf", include_bytes!("../tests/fixtures/colonne.pdf").to_vec());
+        assert!(xml.contains("<w:cols w:num=\"2\""), "mancano le colonne");
+        assert!(xml.contains("<w:drawing>"), "manca il grafico");
+        assert!(!xml.contains(">Gen<"), "etichette del grafico fuori dall'immagine");
+    }
+
+    #[test]
     fn pdf_table_becomes_word_table() {
         let content = "0.12 0.23 0.37 rg 50 700 300 20 re f 0.95 0.96 0.98 rg 50 680 300 20 re f \
 0.8 G 0.5 w 50 720 m 350 720 l S 50 700 m 350 700 l S 50 680 m 350 680 l S 50 660 m 350 660 l S \
