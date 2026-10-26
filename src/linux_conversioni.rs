@@ -78,6 +78,8 @@ struct Ui {
     tr: Rc<Panel>,
     queue: ListBox,
     count: Label,
+    /// Modalità Semplice: porta alla categoria dei file in coda che quella corrente non mostra.
+    other: Button,
     formats: FlowBox,
     tools: FlowBox,
     tools_caption: Label,
@@ -300,6 +302,13 @@ fn apply_simple(ui: &Ui) {
     ui.tr.options.set_visible(adv);
     ui.queue_scroll.set_visible(files);
     ui.count.set_visible(files);
+    // File in coda di un'altra categoria: senza la barra laterale restano raggiungibili da qui.
+    let shown = current_files(ui);
+    let hidden = ui.files.borrow().iter().filter(|e| !shown.iter().any(|s| s.path == e.path)).count();
+    ui.other.set_visible(hidden > 0);
+    if hidden > 0 {
+        ui.other.set_label(&if hidden == 1 { "C'è un altro file in coda di un altro tipo: mostralo".to_string() } else { format!("Ci sono altri {hidden} file in coda di un altro tipo: mostrali") });
+    }
     let show_formats = !voice && files;
     ui.formats_caption.set_label("IN CHE COSA LI TRASFORMO?");
     ui.formats_caption.set_visible(show_formats);
@@ -741,6 +750,10 @@ fn open_with(app: &Application, carry: Vec<PathBuf>, carry_dest: Option<PathBuf>
     queue.set_selection_mode(SelectionMode::None);
     let queue_scroll = ScrolledWindow::builder().child(&queue).min_content_height(if simple { 90 } else { 130 }).vexpand(!simple).has_frame(true).build();
     let count = caption("");
+    let other = Button::with_label("");
+    other.add_css_class("cedro-link");
+    other.set_halign(gtk4::Align::Start);
+    other.set_visible(false);
 
     let formats = FlowBox::new();
     formats.set_selection_mode(SelectionMode::None);
@@ -841,6 +854,7 @@ fn open_with(app: &Application, carry: Vec<PathBuf>, carry_dest: Option<PathBuf>
         hint.upcast_ref(),
         drop.upcast_ref(),
         count.upcast_ref(),
+        other.upcast_ref(),
         queue_scroll.upcast_ref(),
         tr.tabs.upcast_ref(),
         convert_box.upcast_ref(),
@@ -922,6 +936,7 @@ fn open_with(app: &Application, carry: Vec<PathBuf>, carry_dest: Option<PathBuf>
         tr: tr.clone(),
         queue,
         count,
+        other: other.clone(),
         formats,
         tools,
         tools_caption,
@@ -1067,10 +1082,36 @@ fn open_with(app: &Application, carry: Vec<PathBuf>, carry_dest: Option<PathBuf>
                             ui.side.select_row(ui.side.row_at_index(audio as i32).as_ref());
                         }
                         ui.tr.select(i == 2);
+                        if i == 0 {
+                            // Si riprende la categoria dei file in coda (dopo Trascrivi si era su Audio).
+                            let queued: Vec<PathBuf> = ui.files.borrow().iter().map(|e| e.path.clone()).collect();
+                            let kind = conversioni::kind_of_files(&queued);
+                            if let Some(k) = kind.filter(|k| *k != CATEGORIES[ui.category.get()].kind) {
+                                if let Some(c) = CATEGORIES.iter().position(|c| c.kind == k) {
+                                    ui.side.select_row(ui.side.row_at_index(c as i32).as_ref());
+                                }
+                            }
+                        }
                         apply_mode(&ui);
                     }
                 }
                 ui.switching.set(false);
+            });
+        }
+        {
+            let ui = ui.clone();
+            other.connect_clicked(move |_| {
+                let shown = current_files(&ui);
+                let next = ui.files.borrow().iter().find(|e| !shown.iter().any(|s| s.path == e.path)).map(|e| e.path.clone());
+                let kind = next.as_ref().map(|p| kind_of(p)).filter(|k| *k != Kind::Other);
+                // Un vocale (.opus, .amr…) si legge solo con la trascrizione.
+                let voice = kind.is_none() && next.is_some();
+                let kind = if voice { Some(Kind::Audio) } else { kind };
+                ui.tr.select(voice);
+                if let Some(c) = kind.and_then(|k| CATEGORIES.iter().position(|c| c.kind == k)) {
+                    ui.side.select_row(ui.side.row_at_index(c as i32).as_ref());
+                }
+                apply_mode(&ui);
             });
         }
         {
@@ -1224,6 +1265,8 @@ fn shots_simple(ui: &Rc<Ui>, dir: std::path::PathBuf) {
         ("03-video-dal-web", Box::new(|ui| ui.pick[1].set_active(true))),
         ("04-trascrivi", Box::new(|ui| ui.pick[2].set_active(true))),
         ("05-trascrivi-altre", Box::new(|ui| { ui.pick[0].set_active(true); ui.pick[2].set_active(true); })),
+        ("06-ritorno-converti", Box::new(|ui| ui.pick[0].set_active(true))),
+        ("07-altro-tipo", Box::new(|ui| ui.other.emit_clicked())),
     ];
     fn step(ui: Rc<Ui>, dir: std::path::PathBuf, steps: Rc<Vec<(&'static str, Action)>>, at: usize) {
         let Some((name, action)) = steps.get(at) else {
