@@ -63,7 +63,6 @@ const WM_APP_ASK: u32 = WM_APP + 12;
 mod youtube_win;
 
 const TITLE: &str = "Conversioni di Cedro";
-const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
 /// La voce del menu dopo le categorie: la scheda YouTube, che non lavora su file ma su link.
 const YOUTUBE: &str = "YouTube";
 const NEXT_TO_ORIGINAL: &str = "Accanto all'originale";
@@ -435,7 +434,7 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     }
     SendMessageW(exists, CB_SETCURSEL, Some(WPARAM(0)), Some(LPARAM(0)));
     child(hwnd, instance, s, "Tutto sul tuo PC. L'originale non si tocca.", 0, ID_FOOT, (210, 600, 420, 18), f);
-    child(hwnd, instance, s, POWERED_BY, 0, ID_POWERED, (210, 616, 420, 18), f);
+    child(hwnd, instance, s, "", crate::firma_win::SS_OWNERDRAW, ID_POWERED, (210, 616, 420, 18), f);
     child(hwnd, instance, b, "Converti", tab | BS_OWNERDRAW as u32, ID_GO, (640, 590, 240, 38), fb);
     show_quality(hwnd);
     youtube_win::build(hwnd, instance);
@@ -1125,6 +1124,8 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             let di = &*(lparam.0 as *const DRAWITEMSTRUCT);
             if youtube_win::owns(di.CtlID as i32) {
                 youtube_win::draw(di);
+            } else if di.CtlID as i32 == ID_POWERED {
+                crate::firma_win::draw(di, WHITE, GREY, PRIMARY, true, "");
             } else {
                 draw_item(hwnd, di);
             }

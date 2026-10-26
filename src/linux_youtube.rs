@@ -453,9 +453,8 @@ pub fn build(window: &Window) -> YoutubePage {
     let hint = Label::new(Some("Incolla un link e scarica il video oppure solo l'audio."));
     hint.set_xalign(0.0);
     hint.add_css_class("cedro-muted");
-    let signature = Label::new(Some("Powered by Luca \"Realhcok\" A."));
-    signature.set_xalign(1.0);
-    signature.add_css_class("cedro-muted");
+    let signature = crate::linux_firma::firma(true, "");
+    signature.set_halign(gtk4::Align::End);
     for w in [
         title.upcast_ref::<gtk4::Widget>(),
         hint.upcast_ref(),
