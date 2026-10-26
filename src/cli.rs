@@ -30,6 +30,7 @@ pub fn run() -> i32 {
             perform(std::path::Path::new(&positional[1]), &positional[2], quality)
         }
         "update" => return update(),
+        "trascrivi" if positional.len() >= 2 => return transcribe(&positional[1..], &args),
         "zip" if positional.len() >= 2 => perform(std::path::Path::new(&positional[1]), "zip", quality),
         "slices" if positional.len() >= 2 => {
             let path = std::path::Path::new(&positional[1]);
@@ -120,6 +121,8 @@ Cedro — conversione locale, senza upload.
   cedro zip <file>
   cedro --quality 80 convert foto.png jpeg
   cedro update     controlla se su GitHub c'è una versione nuova
+  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--cpu]
+                   dalla voce a un Word (o a un testo), con il motore scaricato alla prima volta
 
 Senza argomenti, su Windows e su Linux, Cedro resta nella tray.
 Su Linux la ruota si apre dal menu del file, oppure così:
@@ -135,4 +138,35 @@ Su Linux usa OpenH264 e FDK AAC, compilati dentro il programma.
 L'MP3 usa LAME, compilato dentro l'eseguibile.
 L'originale non viene mai sovrascritto."
     );
+}
+
+/// `cedro trascrivi`: la stessa trascrizione della scheda, con i passi stampati man mano.
+fn transcribe(files: &[String], args: &[String]) -> i32 {
+    use cedro::trascrizione::{self, Event, Format, Request};
+    let model = match args.iter().position(|a| a == "--precisione").and_then(|i| args.get(i + 1)).map(String::as_str) {
+        Some("veloce") => 0,
+        Some("massima") => 2,
+        _ => trascrizione::DEFAULT_MODEL,
+    };
+    let settings = cedro::read_settings();
+    let request = Request {
+        format: if args.iter().any(|a| a == "--testo") { Format::Text } else { Format::Word },
+        model,
+        gpu: settings.gpu && !args.iter().any(|a| a == "--cpu"),
+        avx512: settings.avx512,
+    };
+    let paths: Vec<std::path::PathBuf> = files.iter().filter(|f| !f.starts_with("--") && !matches!(f.as_str(), "veloce" | "buona" | "massima")).map(std::path::PathBuf::from).collect();
+    let failed = std::sync::atomic::AtomicBool::new(false);
+    trascrizione::run(&paths, &request, None, &cedro::Options::default(), &|event| match event {
+        Event::Log(line) => println!("{} {}", line.key, line.text),
+        Event::Percent { .. } => {}
+        Event::Finished { path, result } => match result {
+            Ok((out, msg)) => println!("OK {} -> {} ({msg})", path.display(), out.display()),
+            Err(e) => {
+                failed.store(true, std::sync::atomic::Ordering::Relaxed);
+                eprintln!("ERRORE {}: {e}", path.display());
+            }
+        },
+    });
+    i32::from(failed.load(std::sync::atomic::Ordering::Relaxed))
 }
