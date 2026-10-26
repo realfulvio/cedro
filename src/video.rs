@@ -1161,3 +1161,59 @@ fn wide(path: &Path) -> Vec<u16> {
     use std::os::windows::ffi::OsStrExt;
     path.as_os_str().encode_wide().chain(std::iter::once(0)).collect()
 }
+
+/// Solo per le prove: un MP4 `width`×`height` di `frames` fotogrammi a 30 al secondo, con un La in stereo,
+/// passato dal codificatore di Cedro; con `gpu` dalla scheda video se Windows la dà. Dice se l'ha fatto la scheda.
+#[cfg(test)]
+pub(crate) fn synthetic_mp4(output: &Path, width: u32, height: u32, frames: u32, gpu: bool) -> Result<bool, String> {
+    let shape = crate::sink::VideoShape { gpu, ..Default::default() };
+    crate::sink::with_shape(shape, || {
+        let mut sink = EncodedVideo::open(output, width, height, 333_333, Some((48_000, 2)))?;
+        let (w, h) = (width as usize, height as usize);
+        let mut y = vec![0u8; w * h];
+        let mut u = vec![0u8; w * h / 4];
+        let v = vec![160u8; w * h / 4];
+        for n in 0..frames as usize {
+            for (i, px) in y.iter_mut().enumerate() {
+                *px = ((i % w + i / w + n * 4) % 256) as u8;
+            }
+            u.iter_mut().for_each(|px| *px = (n * 2 % 256) as u8);
+            sink.write_yuv(&y, &u, &v, width, height, n as i64 * 333_333, 333_333)?;
+            let pcm: Vec<i16> = (0..1600 * 2)
+                .map(|i| ((((n * 1600 + i / 2) as f32) * 440.0 * std::f32::consts::TAU / 48_000.0).sin() * 8000.0) as i16)
+                .collect();
+            sink.write_pcm(&pcm, 2, 48_000)?;
+        }
+        sink.finish()?;
+        Ok(crate::sink::gpu_used())
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    /// Lo stesso video 1280×720 di 10 secondi, col processore e con la scheda: tempi e grandezze.
+    /// Gira solo con CEDRO_GPU_TEST=1 (dura qualche secondo) e lì la scheda deve averlo fatto.
+    #[test]
+    fn gpu_and_cpu_times() {
+        if std::env::var_os("CEDRO_GPU_TEST").is_none() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("cedro-tempi-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        for gpu in [false, true] {
+            let out = dir.join(if gpu { "gpu.mp4" } else { "cpu.mp4" });
+            let start = std::time::Instant::now();
+            let used = super::synthetic_mp4(&out, 1280, 720, 300, gpu).expect("video");
+            let size = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
+            eprintln!("{}: {:.2} s, {} KB, scheda video usata: {used}", if gpu { "GPU" } else { "CPU" }, start.elapsed().as_secs_f32(), size / 1024);
+            assert_eq!(used, gpu, "con gpu={gpu}");
+            // Il video si rilegge (Media Foundation lo decodifica di nuovo) e ha la traccia audio.
+            let bytes = std::fs::read(&out).unwrap();
+            assert!(bytes.windows(4).any(|w| w == b"soun") && bytes.windows(4).any(|w| w == b"avc1"), "audio o H.264 mancanti");
+            let back = dir.join(if gpu { "gpu-riletto.mp4" } else { "cpu-riletto.mp4" });
+            let shape = crate::sink::VideoShape { gpu: false, ..Default::default() };
+            crate::sink::with_shape(shape, || super::to_mp4(&out, &back)).expect("riletto");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
