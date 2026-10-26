@@ -380,9 +380,10 @@ pub fn parse_info(json: &str) -> Result<Info, String> {
 }
 
 /// Titolo, autore e durata di un link, senza scaricarlo.
-pub fn probe(ytdlp: &Path, url: &str) -> Result<Info, String> {
+pub fn probe(ytdlp: &Path, url: &str, playlist: bool) -> Result<Info, String> {
     let out = command(ytdlp)
         .args(["--dump-single-json", "--flat-playlist", "--no-warnings", "--skip-download"])
+        .arg(if playlist { "--yes-playlist" } else { "--no-playlist" })
         .arg(url)
         .stdin(Stdio::null())
         .output()
@@ -429,7 +430,8 @@ fn quality_audio(q: u32) -> &'static str {
 }
 
 /// Gli argomenti di yt-dlp per un link. Non include il link.
-pub fn build_args(r: &Request, ffmpeg: Option<&Path>) -> Vec<String> {
+/// `in_playlist`: il link è una playlist, i file vanno in una cartella con il suo nome.
+pub fn build_args(r: &Request, ffmpeg: Option<&Path>, in_playlist: bool) -> Vec<String> {
     let mut a: Vec<String> = Vec::new();
     let mut push = |items: &[&str]| a.extend(items.iter().map(|s| s.to_string()));
     push(&["--newline", "--no-quiet", "--no-colors", "--ignore-config", "--no-mtime", "--embed-metadata"]);
@@ -449,7 +451,7 @@ pub fn build_args(r: &Request, ffmpeg: Option<&Path>) -> Vec<String> {
     } else {
         push(&["--force-overwrites"]);
     }
-    push(&["-o", "%(playlist_title&{}/|)s%(title).150B.%(ext)s"]);
+    push(&["-o", if in_playlist { "%(playlist_title).100B/%(playlist_index)02d - %(title).150B.%(ext)s" } else { "%(title).150B.%(ext)s" }]);
     if r.skip_sponsors {
         push(&["--sponsorblock-remove", "sponsor,selfpromo"]);
     }
@@ -570,7 +572,6 @@ pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Res
     if let Some(v) = ytdlp_version(&ytdlp) {
         emit(Event::Log(format!("yt-dlp versione {v}")));
     }
-    let args = build_args(r, Some(&ffmpeg));
     let mut files = Vec::new();
     let mut failures: Vec<String> = Vec::new();
     for (index, url) in r.urls.iter().enumerate() {
@@ -579,8 +580,9 @@ pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Res
         }
         emit(Event::Log(format!("Link {} di {}: {url}", index + 1, r.urls.len())));
         emit(Event::Progress { index, total: r.urls.len(), percent: 0.0, label: "Preparo il download".into() });
-        let outcome = match probe(&ytdlp, url) {
+        let outcome = match probe(&ytdlp, url, r.playlist) {
             Ok(info) => {
+                let args = build_args(r, Some(&ffmpeg), info.entries.is_some());
                 emit(Event::Log(match info.entries {
                     Some(n) => format!("Playlist «{}»: {n} video", info.title),
                     None => format!("«{}» · {}", info.title, clock(info.seconds)),
@@ -712,7 +714,7 @@ mod tests {
 
     #[test]
     fn video_arguments() {
-        let a = build_args(&req(false), Some(Path::new("/x/ffmpeg")));
+        let a = build_args(&req(false), Some(Path::new("/x/ffmpeg")), false);
         let j = a.join(" ");
         assert!(j.contains("-f bv*[height<=1080]+ba/b[height<=1080]"), "{j}");
         assert!(j.contains("--merge-output-format mp4"));
@@ -727,20 +729,28 @@ mod tests {
         let mut r = req(false);
         r.quality = 0;
         r.format = "mkv".into();
-        let j = build_args(&r, None).join(" ");
+        let j = build_args(&r, None, false).join(" ");
         assert!(j.contains("-f bv*+ba/b") && !j.contains("height"));
         assert!(!j.contains("-S ") && j.contains("--merge-output-format mkv"));
+    }
+
+    #[test]
+    fn playlist_files_go_in_a_folder() {
+        let one = build_args(&req(false), None, false).join(" ");
+        let many = build_args(&req(false), None, true).join(" ");
+        assert!(one.contains("-o %(title).150B.%(ext)s"));
+        assert!(many.contains("-o %(playlist_title).100B/%(playlist_index)02d - %(title).150B.%(ext)s"));
     }
 
     #[test]
     fn subtitle_choices() {
         let mut r = req(false);
         r.subtitles = 1;
-        assert!(build_args(&r, None).join(" ").contains("--sub-langs it,it-orig --embed-subs"));
+        assert!(build_args(&r, None, false).join(" ").contains("--sub-langs it,it-orig --embed-subs"));
         r.subtitles = 2;
-        assert!(build_args(&r, None).join(" ").contains("it,it-orig,en,en-orig"));
+        assert!(build_args(&r, None, false).join(" ").contains("it,it-orig,en,en-orig"));
         r.subtitles = 3;
-        assert!(build_args(&r, None).join(" ").contains("all,-live_chat"));
+        assert!(build_args(&r, None, false).join(" ").contains("all,-live_chat"));
     }
 
     #[test]
@@ -751,13 +761,13 @@ mod tests {
         r.split_chapters = true;
         r.playlist = false;
         r.skip_existing = false;
-        let j = build_args(&r, None).join(" ");
+        let j = build_args(&r, None, false).join(" ");
         assert!(j.contains("-x --audio-format mp3 --audio-quality 5"), "{j}");
         assert!(j.contains("loudnorm") && j.contains("--sponsorblock-remove") && j.contains("--split-chapters"));
         assert!(j.contains("--no-playlist") && j.contains("--force-overwrites"));
         assert!(!j.contains("--merge-output-format"));
         r.format = "wav".into();
-        assert!(!build_args(&r, None).join(" ").contains("--embed-thumbnail"));
+        assert!(!build_args(&r, None, false).join(" ").contains("--embed-thumbnail"));
     }
 
     #[test]
@@ -826,7 +836,7 @@ mod tests {
         std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
         let cancel = AtomicBool::new(false);
         let mut events = Vec::new();
-        let args = build_args(&req(false), None);
+        let args = build_args(&req(false), None, false);
         let files = run_one(&fake, &args, "good", &dir, 0, 1, &mut |e| events.push(e), &cancel).unwrap();
         assert_eq!(files, vec![dir.join("good-out.mp4")]);
         assert!(dir.join("good-out.mp4").exists());
