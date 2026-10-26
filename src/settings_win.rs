@@ -439,6 +439,8 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         dialogs: is_checked(hwnd, ID_DIALOGS),
         reveal: is_checked(hwnd, ID_REVEAL),
         progress: is_checked(hwnd, ID_PROGRESS),
+        gpu: base.gpu,
+        avx512: base.avx512,
         dest,
         dest_dir: STATE.with(|st| st.borrow().dest_dir.clone()),
         replace: sel(hwnd, ID_EXISTS) == 1,

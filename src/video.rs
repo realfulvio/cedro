@@ -18,6 +18,16 @@ use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED, COIN
 use windows::core::PCWSTR;
 
 pub fn to_mp4(input: &Path, output: &Path) -> Result<(), String> {
+    let first = to_mp4_with(input, output);
+    // La scheda video ha rifiutato il lavoro: si rifà tutto col processore.
+    let shape = crate::sink::shape();
+    if first.is_err() && shape.gpu {
+        return crate::sink::with_shape(crate::sink::VideoShape { gpu: false, ..shape }, || to_mp4_with(input, output));
+    }
+    first
+}
+
+fn to_mp4_with(input: &Path, output: &Path) -> Result<(), String> {
     let mf = to_mp4_mf(input, output);
     if mf.is_ok() {
         return mf;
@@ -30,7 +40,99 @@ pub fn to_mp4(input: &Path, output: &Path) -> Result<(), String> {
 }
 
 fn create_writer(wide_out: &[u16]) -> Result<windows::Win32::Media::MediaFoundation::IMFSinkWriter, String> {
-    unsafe { MFCreateSinkWriterFromURL(PCWSTR(wide_out.as_ptr()), None, None).map_err(|e| format!("MP4 non creato: {e}")) }
+    use windows::Win32::Media::MediaFoundation::{MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, MF_SINK_WRITER_DISABLE_THROTTLING};
+    unsafe {
+        let mut attrs = None;
+        MFCreateAttributes(&mut attrs, 2).map_err(|e| format!("MP4 non creato: {e}"))?;
+        let attrs = attrs.ok_or("MP4 non creato")?;
+        // Con l'accelerazione permessa Windows sceglie il codificatore della scheda video
+        // (NVIDIA NVENC, Intel Quick Sync, AMD AMF, grafiche integrate comprese) se c'è.
+        if crate::sink::shape().gpu {
+            let _ = attrs.SetUINT32(&MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, 1);
+        }
+        let _ = attrs.SetUINT32(&MF_SINK_WRITER_DISABLE_THROTTLING, 1);
+        MFCreateSinkWriterFromURL(PCWSTR(wide_out.as_ptr()), None, &attrs).map_err(|e| format!("MP4 non creato: {e}"))
+    }
+}
+
+/// Dopo `BeginWriting`: se il codificatore del video è quello della scheda, lo segna.
+fn note_hardware(writer: &windows::Win32::Media::MediaFoundation::IMFSinkWriter, stream: u32) {
+    use windows::core::Interface;
+    use windows::Win32::Media::MediaFoundation::{IMFSinkWriterEx, IMFTransform, MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_HARDWARE_URL_Attribute};
+    if !crate::sink::shape().gpu {
+        return;
+    }
+    unsafe {
+        let Ok(ex) = writer.cast::<IMFSinkWriterEx>() else { return };
+        for index in 0..8 {
+            let mut category = GUID::zeroed();
+            let mut transform: Option<IMFTransform> = None;
+            if ex.GetTransformForStream(stream, index, Some(&mut category), &mut transform).is_err() {
+                return;
+            }
+            if category != MFT_CATEGORY_VIDEO_ENCODER {
+                continue;
+            }
+            let hardware = transform
+                .and_then(|t| t.GetAttributes().ok())
+                .is_some_and(|attrs| attrs.GetStringLength(&MFT_ENUM_HARDWARE_URL_Attribute).is_ok());
+            if hardware {
+                crate::sink::note_gpu();
+            }
+            return;
+        }
+    }
+}
+
+/// Il codificatore H.264 della scheda video, per nome (per esempio «NVIDIA H.264 Encoder MFT»); `None` se non c'è.
+pub(crate) fn hardware_encoder() -> Option<String> {
+    use windows::Win32::Media::MediaFoundation::{
+        IMFActivate, MFTEnumEx, MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG_HARDWARE, MFT_ENUM_FLAG_SORTANDFILTER,
+        MFT_FRIENDLY_NAME_Attribute, MFT_REGISTER_TYPE_INFO,
+    };
+    use windows::Win32::System::Com::CoTaskMemFree;
+    ensure_runtime().ok()?;
+    unsafe {
+        let output = MFT_REGISTER_TYPE_INFO { guidMajorType: MFMediaType_Video, guidSubtype: MFVideoFormat_H264 };
+        let mut list: *mut Option<IMFActivate> = std::ptr::null_mut();
+        let mut count = 0u32;
+        MFTEnumEx(
+            MFT_CATEGORY_VIDEO_ENCODER,
+            MFT_ENUM_FLAG_HARDWARE | MFT_ENUM_FLAG_SORTANDFILTER,
+            None,
+            Some(&output),
+            &mut list,
+            &mut count,
+        )
+        .ok()?;
+        if list.is_null() {
+            return None;
+        }
+        let found: Vec<Option<IMFActivate>> = (0..count as usize).map(|i| std::ptr::read(list.add(i))).collect();
+        CoTaskMemFree(Some(list as *const _));
+        found.into_iter().flatten().find_map(|activate| {
+            let mut name = windows::core::PWSTR::null();
+            let mut len = 0u32;
+            activate.GetAllocatedString(&MFT_FRIENDLY_NAME_Attribute, &mut name, &mut len).ok()?;
+            let text = name.to_string().ok();
+            CoTaskMemFree(Some(name.0 as *const _));
+            text.map(|t| encoder_label(&t))
+        })
+    }
+}
+
+/// «Intel® Quick Sync Video H.264 Encoder MFT» → «Intel Quick Sync»; «NVIDIA H.264 Encoder MFT» → «NVIDIA NVENC».
+fn encoder_label(name: &str) -> String {
+    let lower = name.to_lowercase();
+    if lower.contains("nvidia") {
+        "NVIDIA NVENC".into()
+    } else if lower.contains("quick sync") || lower.contains("intel") {
+        "Intel Quick Sync".into()
+    } else if lower.contains("amd") {
+        "AMD AMF".into()
+    } else {
+        name.trim_end_matches(" MFT").to_string()
+    }
 }
 
 /// Dice all'encoder H.264 di seguire il bitrate (VBR con picco limitato) invece della sua qualità fissa.
@@ -180,6 +282,7 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         }
 
         writer.BeginWriting().map_err(|e| format!("scrittura MP4 non partita: {e}"))?;
+        note_hardware(&writer, video_index);
         let num = rate >> 32;
         let den = (rate as u32).max(1) as u64;
         let frame_ticks = 10_000_000u64.saturating_mul(den) / num.max(1);
@@ -720,6 +823,7 @@ impl EncodedVideo {
                 .writer
                 .BeginWriting()
                 .map_err(|e| format!("scrittura MP4 non partita: {e}"))?;
+            note_hardware(&encoded.writer, encoded.video_index);
             Ok(encoded)
         }
     }
