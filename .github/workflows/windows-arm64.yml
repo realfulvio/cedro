@@ -350,9 +350,9 @@ jobs:
           $psi.RedirectStandardError = $true
           $p = [Diagnostics.Process]::Start($psi)
           $err = $p.StandardError.ReadToEndAsync()
-          $out = $p.StandardOutput.ReadToEnd()
+          $out = $p.StandardOutput.ReadToEndAsync()
           if (-not $p.WaitForExit(600000)) { $p.Kill(); throw 'la trascrizione non finisce' }
-          $out; $err.Result
+          $out.Result; $err.Result
           $txt = Get-ChildItem $env:RUNNER_TEMP -Recurse -Filter 'frase*.txt' | Select-Object -First 1
           if (-not $txt) { throw 'nessun testo' }
           Get-Content $txt.FullName
