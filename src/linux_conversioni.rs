@@ -684,6 +684,11 @@ fn start(ui: &Rc<Ui>) {
 
 /// Apre il pannello Conversioni, o porta avanti quello già aperto.
 pub fn open_conversions(app: &Application) {
+    open_with(app, Vec::new(), None);
+}
+
+/// Apre il pannello con dei file già in coda e, se serve, la cartella di destinazione scelta (passaggio da Semplice a completa).
+fn open_with(app: &Application, carry: Vec<PathBuf>, carry_dest: Option<PathBuf>) {
     for window in app.windows() {
         if window.title().is_some_and(|t| t == TITLE) {
             window.present();
@@ -1078,20 +1083,31 @@ pub fn open_conversions(app: &Application) {
         {
             // Torna alla vista completa: spegne l'impostazione e riapre il pannello.
             let window = window.clone();
+            let ui = ui.clone();
             full.connect_clicked(move |_| {
                 let mut s = read_settings();
                 s.simple = false;
                 let _ = cedro::write_settings(&s);
                 let app = window.application();
+                // La coda e la cartella scelta passano al pannello completo.
+                let files: Vec<PathBuf> = ui.files.borrow().iter().map(|e| e.path.clone()).collect();
+                let dest = ui.dest.borrow().clone();
                 window.close();
                 if let Some(app) = app {
-                    open_conversions(&app);
+                    open_with(&app, files, dest);
                 }
             });
         }
     }
 
     side.select_row(side.row_at_index(0).as_ref());
+    if let Some(path) = carry_dest {
+        ui.dest_label.set_text(&path.display().to_string());
+        *ui.dest.borrow_mut() = Some(path);
+    }
+    if !carry.is_empty() {
+        add_files(&ui, carry);
+    }
     window.present();
     #[cfg(debug_assertions)]
     if let Ok(dir) = std::env::var("CEDRO_SHOTS") {
