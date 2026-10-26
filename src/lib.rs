@@ -10,6 +10,7 @@ mod pdflayout;
 pub mod settings;
 mod sink;
 mod textconv;
+pub mod trascrizione;
 mod softvideo;
 pub mod update;
 pub mod wheelgeom;
