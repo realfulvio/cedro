@@ -37,6 +37,9 @@ window.cedro-panel togglebutton.cedro-chip:checked label { color: #ffffff; }\
 window.cedro-panel label.cedro-ok { color: #1d7a46; font-weight: bold; }\
 window.cedro-panel label.cedro-fail { color: #b3261e; font-weight: bold; }";
 
+/// La voce del menu dopo le categorie: la scheda YouTube, che non lavora su file ma su link.
+const YOUTUBE: &str = "YouTube";
+
 /// Cosa il thread della conversione dice alla finestra.
 enum Msg {
     Done(PathBuf, Result<String, String>),
@@ -412,7 +415,7 @@ pub fn open_conversions(app: &Application) {
     }
     if let Some(display) = gtk4::gdk::Display::default() {
         let provider = CssProvider::new();
-        provider.load_from_string(CSS);
+        provider.load_from_string(&format!("{CSS}{}", crate::linux_youtube::CSS));
         gtk4::style_context_add_provider_for_display(&display, &provider, STYLE_PROVIDER_PRIORITY_APPLICATION);
     }
     let window = crate::linux_settings::titled(app, TITLE, 940, 780);
@@ -426,6 +429,9 @@ pub fn open_conversions(app: &Application) {
         l.set_xalign(0.0);
         side.append(&l);
     }
+    let youtube_label = Label::new(Some(YOUTUBE));
+    youtube_label.set_xalign(0.0);
+    side.append(&youtube_label);
     // Niente scorrimento orizzontale: la colonna si allarga quanto la voce più lunga (in grassetto quando è scelta).
     let side_scroll = ScrolledWindow::builder()
         .child(&side)
@@ -533,9 +539,15 @@ pub fn open_conversions(app: &Application) {
         main.append(w);
     }
 
+    let youtube = crate::linux_youtube::build(&window);
+    let stack = gtk4::Stack::new();
+    stack.set_hexpand(true);
+    stack.add_named(&main, Some("files"));
+    stack.add_named(&youtube.widget, Some("youtube"));
+    let youtube_busy = youtube.busy.clone();
     let root = HBox::new(Orientation::Horizontal, 0);
     root.append(&side_scroll);
-    root.append(&main);
+    root.append(&stack);
     window.set_child(Some(&root));
 
     let ui = Rc::new(Ui {
@@ -565,7 +577,7 @@ pub fn open_conversions(app: &Application) {
         // Finché la coda lavora la finestra resta aperta: chiuderla fermerebbe il processo a metà scrittura.
         let ui = ui.clone();
         window.connect_close_request(move |_| {
-            if ui.running.borrow().is_some() {
+            if ui.running.borrow().is_some() || youtube_busy() {
                 glib::Propagation::Stop
             } else {
                 glib::Propagation::Proceed
@@ -574,9 +586,16 @@ pub fn open_conversions(app: &Application) {
     }
     {
         let ui = ui.clone();
+        let stack = stack.clone();
         side.connect_row_selected(move |_, row| {
             if let Some(row) = row {
-                ui.category.set(row.index() as usize);
+                let i = row.index() as usize;
+                if i >= CATEGORIES.len() {
+                    stack.set_visible_child_name("youtube");
+                    return;
+                }
+                stack.set_visible_child_name("files");
+                ui.category.set(i);
                 render_category(&ui);
             }
         });
@@ -667,6 +686,7 @@ fn shots(ui: &Rc<Ui>, dir: std::path::PathBuf) {
         (4, Some("MP3")),
         (5, None),
         (5, Some("Solo audio (MP3)")),
+        (6, None),
     ];
     fn step(ui: Rc<Ui>, dir: std::path::PathBuf, steps: Vec<(usize, Option<&'static str>)>, at: usize) {
         let Some((cat, label)) = steps.get(at).copied() else {
@@ -694,7 +714,7 @@ fn shots(ui: &Rc<Ui>, dir: std::path::PathBuf) {
         }
         let next = ui.clone();
         glib::timeout_add_local_once(Duration::from_millis(700), move || {
-            let name = format!("{at:02}-{}{}.png", CATEGORIES[cat].name, label.map(|l| format!("-{}", l.replace(' ', "_"))).unwrap_or_default());
+            let name = format!("{at:02}-{}{}.png", CATEGORIES.get(cat).map(|c| c.name).unwrap_or(YOUTUBE), label.map(|l| format!("-{}", l.replace(' ', "_"))).unwrap_or_default());
             let path = dir.join(name);
             // Appena cambiata la voce il disegno può non essere pronto: si riprova qualche volta.
             let mut tries = 0;
