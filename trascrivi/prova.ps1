@@ -21,6 +21,8 @@ $voice.Speak("Good morning. The weather today is sunny and warm. This is a test 
 $voice.Dispose()
 "Audio: $((Get-Item $wav).Length) byte"
 
+# .NET apre stdin del motore con la codifica della console: senza BOM, come Cedro.
+try { [Console]::InputEncoding = New-Object Text.UTF8Encoding $false } catch { "InputEncoding: $_" }
 $fail = @()
 foreach ($exe in Get-ChildItem $Dir -Filter "cedro-trascrivi-*.exe") {
   Write-Host "== $($exe.Name)"
