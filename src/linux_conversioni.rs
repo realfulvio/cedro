@@ -804,7 +804,7 @@ fn open_with(app: &Application, carry: Vec<PathBuf>, carry_dest: Option<PathBuf>
     let credit = Label::new(Some("Tutto sul tuo PC. L'originale non si tocca.   ·   "));
     credit.set_xalign(0.0);
     credit.add_css_class("cedro-muted");
-    let signature = crate::linux_firma::firma(true, "");
+    let signature = crate::linux_firma::firma(true, "", true);
     let foot = HBox::new(Orientation::Horizontal, 0);
     foot.append(&credit);
     signature.set_hexpand(true);

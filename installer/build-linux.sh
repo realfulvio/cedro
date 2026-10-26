@@ -1,28 +1,32 @@
 #!/usr/bin/env bash
 # Compila cedro e crea dist/cedro-<versione>-linux-x64.tar.gz (con il file delle licenze e install.sh).
-# Uso:  installer/build-linux.sh [-o dist]
+# Uso:  installer/build-linux.sh [-o dist] [-b]
+# Con -b crea l'edizione per il Comune di Bondeno: dist/cedro-bondeno-<versione>-linux-x64.tar.gz.
 # Il motore di trascrizione si compila a parte con trascrivi/build.sh: i suoi file vanno nella stessa
 # release, perché Cedro li scarica alla prima trascrizione.
 # Per provare lo script senza compilare in release: CEDRO_BIN=target/debug/cedro installer/build-linux.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 out=dist
-while getopts "o:" opt; do
+features=()
+prefix=cedro
+while getopts "o:b" opt; do
   case $opt in
     o) out=$OPTARG ;;
+    b) features=(--features bondeno); prefix=cedro-bondeno ;;
     *) exit 2 ;;
   esac
 done
 version=$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)
 bin=${CEDRO_BIN:-target/release/cedro}
 if [ -z "${CEDRO_BIN:-}" ]; then
-  cargo build --release
+  cargo build --release "${features[@]}"
 fi
 mkdir -p "$out"
 licenses="$out/Licenze di terze parti.txt"
 # Il file con tutte le licenze (autori e testi) lo fa lo stesso Cedro dai sorgenti usati.
 cargo run --release --example licenze -- "$licenses"
-name="cedro-$version-linux-x64"
+name="$prefix-$version-linux-x64"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/$name"
