@@ -434,6 +434,22 @@ unsafe fn layout_bottom(hwnd: HWND, top: i32) {
     let mut rect = RECT { left: 0, top: 0, right: px(900), bottom: px(height) };
     let _ = AdjustWindowRect(&mut rect, style, false);
     let _ = SetWindowPos(hwnd, None, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    keep_on_screen(hwnd);
+}
+
+/// Se la finestra, cresciuta, esce in fondo dall'area di lavoro (sotto la barra delle applicazioni), sale quanto basta.
+unsafe fn keep_on_screen(hwnd: HWND) {
+    let mut win = RECT::default();
+    let _ = GetWindowRect(hwnd, &mut win);
+    let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+    if !GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mut info).as_bool() {
+        return;
+    }
+    let work = info.rcWork;
+    if win.bottom > work.bottom {
+        let top = (win.top - (win.bottom - work.bottom)).max(work.top);
+        let _ = SetWindowPos(hwnd, None, win.left, top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
 }
 
 /// Un controllo delle opzioni è stato toccato: il suo valore passa ai valori scelti.
