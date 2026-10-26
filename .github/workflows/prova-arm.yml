@@ -204,7 +204,7 @@ jobs:
         shell: pwsh
         run: cargo test --release --lib real_sites -- --ignored --nocapture
 
-      - name: YouTube (può essere bloccato dagli IP dei server: non fa fallire la prova)
+      - name: "YouTube (può essere bloccato dagli IP dei server: non fa fallire la prova)"
         shell: pwsh
         continue-on-error: true
         run: |
