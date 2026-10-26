@@ -13,6 +13,7 @@ pub mod settings;
 pub mod sysinfo;
 mod sink;
 mod textconv;
+pub mod trascrizione;
 mod softvideo;
 pub mod update;
 pub mod wheelgeom;

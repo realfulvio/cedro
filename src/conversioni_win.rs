@@ -9,12 +9,15 @@ use cedro::{extension, kind_of, read_settings, Kind};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::Mutex;
+#[path = "trascrizione_win.rs"]
+mod trascrizione;
+
 use windows::{
     core::*,
     Win32::Foundation::*,
     Win32::Graphics::Gdi::*,
     Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_INPROC_SERVER},
-    Win32::System::LibraryLoader::GetModuleHandleW,
+    Win32::System::LibraryLoader::{GetModuleHandleW, LoadLibraryW},
     Win32::UI::Controls::*,
     Win32::UI::HiDpi::GetDpiForSystem,
     Win32::UI::Input::KeyboardAndMouse::EnableWindow,
@@ -184,6 +187,10 @@ unsafe fn set_extra(hwnd: HWND, nx: i32, ny: i32) {
 
 /// L'altezza minima (area interna, px di progetto) della scheda dei file con le opzioni di ora.
 fn design_height() -> i32 {
+    if trascrizione::active() {
+        // Qualità tolta: la destinazione sale al suo posto.
+        return trascrizione::end() - 42 + 196;
+    }
     let defs = defs_now();
     let rows = (defs.len().min(OPT_MAX as usize) as i32 + 1) / 2;
     let end = if defs.is_empty() { options_caption_y() } else { options_caption_y() + 18 + rows * 32 };
@@ -240,7 +247,9 @@ fn state() -> std::sync::MutexGuard<'static, State> {
 
 fn current_files(s: &State) -> Vec<Entry> {
     let kind = CATEGORIES[s.category].kind;
-    s.files.iter().filter(|e| kind_of(&e.path) == kind).cloned().collect()
+    // La trascrizione prende anche l'audio dei video e i vocali (.opus, .amr…) che le altre voci non leggono.
+    let transcribing = kind == Kind::Audio && trascrizione::CHOICES.lock().map(|c| c.on).unwrap_or(false);
+    s.files.iter().filter(|e| if transcribing { trascrizione::takes(&e.path) } else { kind_of(&e.path) == kind }).cloned().collect()
 }
 
 fn brush(slot: &AtomicIsize, color: COLORREF) -> HBRUSH {
@@ -430,6 +439,7 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     child(hwnd, instance, b, "Converti", tab | BS_OWNERDRAW as u32, ID_GO, (640, 590, 240, 38), fb);
     show_quality(hwnd);
     youtube_win::build(hwnd, instance);
+    trascrizione::build(hwnd, instance);
 }
 
 unsafe fn item(hwnd: HWND, id: i32) -> HWND {
@@ -453,7 +463,6 @@ unsafe fn render_category(hwnd: HWND) {
     let instance: HINSTANCE = GetModuleHandleW(None).unwrap_or_default().into();
     let cat = &CATEGORIES[state().category];
     set_text(hwnd, ID_TITLE, cat.name);
-    set_text(hwnd, ID_HINT, &format!("{} Accetta: {}.", cat.hint, cat.accepts));
     for base in [ID_FORMAT0, ID_TOOL0] {
         for i in 0..24 {
             if let Ok(old) = GetDlgItem(Some(hwnd), base + i) {
@@ -465,9 +474,15 @@ unsafe fn render_category(hwnd: HWND) {
     let tools = conversioni::tools(cat.kind);
     state().action = formats.first().map(|s| s.id.to_string()).unwrap_or_default();
     fit_extra(hwnd);
-    chips(hwnd, instance, formats, ID_FORMAT0, 274);
-    chips(hwnd, instance, tools, ID_TOOL0, 328);
-    let _ = ShowWindow(item(hwnd, ID_CAP_TOOLS), if tools.is_empty() { SW_HIDE } else { SW_SHOW });
+    let shift = trascrizione::shift();
+    chips(hwnd, instance, formats, ID_FORMAT0, 274 + shift);
+    chips(hwnd, instance, tools, ID_TOOL0, 328 + shift);
+    // Audio ha le due schede in alto: la coda e i formati scendono per far loro posto.
+    place(hwnd, ID_DROP, (210, 114 + shift, 670, 40));
+    place(hwnd, ID_COUNT, (210, 160 + shift, 670, 16));
+    place(hwnd, ID_QUEUE, (210, 178 + shift, 670, 72));
+    place(hwnd, ID_CAP_FORMATS, (210, 256 + shift, 670, 16));
+    place(hwnd, ID_CAP_TOOLS, (210, 310 + shift, 670, 16));
     // Senza strumenti le opzioni salgono al loro posto, senza lasciare un buco.
     place(hwnd, ID_CAP_OPTIONS, (210, options_caption_y(), 670, 16));
     refresh_options(hwnd);
@@ -491,6 +506,12 @@ unsafe fn refresh_options(hwnd: HWND) {
         }
     }
     fit_extra(hwnd);
+    show_convert(hwnd);
+    if let Some(end) = trascrizione::layout(hwnd) {
+        layout_bottom(hwnd, end);
+        let _ = InvalidateRect(Some(hwnd), None, true);
+        return;
+    }
     let defs = defs_now();
     let _ = ShowWindow(item(hwnd, ID_CAP_OPTIONS), if defs.is_empty() { SW_HIDE } else { SW_SHOW });
     let (f, values) = (font(&FONT), state().values.clone());
@@ -543,7 +564,35 @@ unsafe fn refresh_options(hwnd: HWND) {
 
 fn options_caption_y() -> i32 {
     let s = state();
-    if conversioni::tools(CATEGORIES[s.category].kind).is_empty() { 314 } else { 368 }
+    let y = if conversioni::tools(CATEGORIES[s.category].kind).is_empty() { 314 } else { 368 };
+    drop(s);
+    y + trascrizione::shift()
+}
+
+/// Mostra i pezzi di «Cambia formato» (formati, strumenti, qualità) o li nasconde se si vede la trascrizione,
+/// e mette la descrizione giusta sotto il titolo.
+unsafe fn show_convert(hwnd: HWND) {
+    let on = !trascrizione::active();
+    let kind = CATEGORIES[state().category].kind;
+    let cmd = |show: bool| if show { SW_SHOW } else { SW_HIDE };
+    let _ = ShowWindow(item(hwnd, ID_CAP_FORMATS), cmd(on));
+    let _ = ShowWindow(item(hwnd, ID_CAP_TOOLS), cmd(on && !conversioni::tools(kind).is_empty()));
+    if !on {
+        let _ = ShowWindow(item(hwnd, ID_CAP_OPTIONS), SW_HIDE);
+    }
+    for base in [ID_FORMAT0, ID_TOOL0] {
+        for i in 0..24 {
+            if let Ok(c) = GetDlgItem(Some(hwnd), base + i) {
+                let _ = ShowWindow(c, cmd(on));
+            }
+        }
+    }
+    for id in [ID_CAP_QUALITY, ID_QUALITY, ID_QUALITY_VALUE] {
+        let _ = ShowWindow(item(hwnd, id), cmd(on));
+    }
+    let cat = &CATEGORIES[state().category];
+    let hint = if on { format!("{} Accetta: {}.", cat.hint, cat.accepts) } else { trascrizione::HINT.to_string() };
+    set_text(hwnd, ID_HINT, &hint);
 }
 
 unsafe fn place(hwnd: HWND, id: i32, r: (i32, i32, i32, i32)) {
@@ -557,6 +606,8 @@ unsafe fn layout_bottom(hwnd: HWND, top: i32) {
     place(hwnd, ID_CAP_QUALITY, (210, top + 8, 70, 18));
     place(hwnd, ID_QUALITY, (280, top, 520, 30));
     place(hwnd, ID_QUALITY_VALUE, (810, top + 8, 50, 18));
+    // La trascrizione non ha la qualità: la destinazione sale al suo posto.
+    let top = if trascrizione::active() { top - 42 } else { top };
     place(hwnd, ID_CAP_DEST, (210, top + 42, 300, 16));
     place(hwnd, ID_DEST, (210, top + 60, 330, 28));
     place(hwnd, ID_CHANGE, (548, top + 60, 80, 28));
@@ -654,14 +705,16 @@ unsafe fn render_queue(hwnd: HWND) {
         .map(|s| s.label)
         .unwrap_or("");
     let n = files.len();
+    let transcribing = trascrizione::active();
     let label = match (running, n) {
+        _ if transcribing => trascrizione::go_label(running, n),
         (true, _) => "Conversione in corso…".to_string(),
         (_, 0) => "Converti".to_string(),
         (_, 1) => format!("Converti 1 file · {name}"),
         _ => format!("Converti {n} file · {name}"),
     };
     set_text(hwnd, ID_GO, &label);
-    let _ = EnableWindow(item(hwnd, ID_GO), n > 0 && !running && !action.is_empty());
+    let _ = EnableWindow(item(hwnd, ID_GO), n > 0 && !running && (transcribing || !action.is_empty()));
     let _ = InvalidateRect(Some(hwnd), None, true);
 }
 
@@ -677,15 +730,36 @@ unsafe fn redraw_chips(hwnd: HWND) {
 
 unsafe fn add_files(hwnd: HWND, paths: Vec<PathBuf>) {
     let mut first: Option<Kind> = None;
+    let mut voice = false;
+    let transcribing = trascrizione::active();
     {
         let mut s = state();
         for path in paths.into_iter().filter(|p| p.is_file()) {
-            if kind_of(&path) == Kind::Other || s.files.iter().any(|e| e.path == path) {
+            let only = cedro::trascrizione::only_transcribable(&path);
+            if (kind_of(&path) == Kind::Other && !only) || s.files.iter().any(|e| e.path == path) {
                 continue;
             }
-            first.get_or_insert(kind_of(&path));
+            // Un vocale .opus o .amr va solo nella trascrizione; un video, con la trascrizione aperta, resta lì.
+            if first.is_none() {
+                voice = only || (transcribing && trascrizione::takes(&path));
+            }
+            first.get_or_insert(if only { Kind::Audio } else { kind_of(&path) });
             s.files.push(Entry { path, status: "In attesa".into(), state: 0 });
         }
+    }
+    if voice {
+        trascrizione::set_active(true);
+        if !transcribing {
+            if let Some(i) = CATEGORIES.iter().position(|c| c.kind == Kind::Audio) {
+                state().category = i;
+                SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(i)), Some(LPARAM(0)));
+                render_category(hwnd);
+                let _ = InvalidateRect(Some(item(hwnd, ID_SIDE)), None, true);
+                return;
+            }
+        }
+        render_queue(hwnd);
+        return;
     }
     // Se i file appena aggiunti sono di un'altra categoria, si passa a quella: altrimenti restano invisibili.
     if let Some(kind) = first {
@@ -724,6 +798,27 @@ unsafe fn pick(hwnd: HWND, folder: bool) -> Vec<PathBuf> {
 }
 
 unsafe fn start(hwnd: HWND) {
+    if trascrizione::active() {
+        let (files, dest, opts) = {
+            let mut s = state();
+            if s.running {
+                return;
+            }
+            let files: Vec<PathBuf> = current_files(&s).into_iter().map(|e| e.path).collect();
+            if files.is_empty() {
+                return;
+            }
+            for e in s.files.iter_mut().filter(|e| files.contains(&e.path)) {
+                e.status = "In attesa".into();
+                e.state = 0;
+            }
+            s.running = true;
+            (files, s.dest.clone(), conversioni::options_from(&s.values))
+        };
+        render_queue(hwnd);
+        trascrizione::start(hwnd, files, dest, ask_exists(hwnd, opts));
+        return;
+    }
     let checked = {
         let s = state();
         conversioni::validate(&s.values, CATEGORIES[s.category].kind, &s.action)
@@ -732,7 +827,7 @@ unsafe fn start(hwnd: HWND) {
         MessageBoxW(Some(hwnd), &HSTRING::from(e), w!("Cedro"), MB_OK | MB_ICONWARNING);
         return;
     }
-    let (files, action, dest, mut opts) = {
+    let (files, action, dest, opts) = {
         let mut s = state();
         if s.running {
             return;
@@ -751,17 +846,7 @@ unsafe fn start(hwnd: HWND) {
     let q = quality(hwnd);
     render_queue(hwnd);
     let raw = hwnd.0 as isize;
-    if opts.exists == Exists::Ask {
-        // Il thread della conversione chiede alla finestra e aspetta la risposta.
-        opts.on_exists = Some(ExistsAsk::new(move |path| {
-            let (tx, rx) = std::sync::mpsc::channel();
-            *ASK.lock().unwrap_or_else(|e| e.into_inner()) = Some((path.to_path_buf(), tx));
-            unsafe {
-                let _ = PostMessageW(Some(HWND(raw as *mut _)), WM_APP_ASK, WPARAM(0), LPARAM(0));
-            }
-            rx.recv().unwrap_or(ExistsChoice::KeepBoth)
-        }));
-    }
+    let opts = ask_exists(hwnd, opts);
     let label = conversioni::action_label(CATEGORIES[state().category].kind, &action).to_string();
     std::thread::spawn(move || {
         let total = files.len();
@@ -797,6 +882,22 @@ unsafe fn start(hwnd: HWND) {
     });
 }
 
+/// Con «Chiedi» il thread di lavoro domanda alla finestra cosa fare di un file che esiste già, e aspetta.
+fn ask_exists(hwnd: HWND, mut opts: cedro::Options) -> cedro::Options {
+    let raw = hwnd.0 as isize;
+    if opts.exists == Exists::Ask {
+        opts.on_exists = Some(ExistsAsk::new(move |path| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            *ASK.lock().unwrap_or_else(|e| e.into_inner()) = Some((path.to_path_buf(), tx));
+            unsafe {
+                let _ = PostMessageW(Some(HWND(raw as *mut _)), WM_APP_ASK, WPARAM(0), LPARAM(0));
+            }
+            rx.recv().unwrap_or(ExistsChoice::KeepBoth)
+        }));
+    }
+    opts
+}
+
 unsafe fn take_results(hwnd: HWND) {
     let results: Vec<_> = std::mem::take(&mut *RESULTS.lock().unwrap_or_else(|e| e.into_inner()));
     if results.is_empty() {
@@ -808,6 +909,8 @@ unsafe fn take_results(hwnd: HWND) {
             if let Some(e) = s.files.iter_mut().find(|e| e.path == path) {
                 match result {
                     Ok(msg) => (e.status, e.state) = (format!("Fatto · {msg}"), 1),
+                    // Un file saltato perché esiste già è una scelta, non un errore.
+                    Err(msg) if msg.contains("saltato") => (e.status, e.state) = (format!("Saltato · {msg}"), 3),
                     Err(msg) => (e.status, e.state) = (format!("Errore · {msg}"), 2),
                 }
             }
@@ -827,6 +930,9 @@ unsafe fn draw_item(hwnd: HWND, di: &DRAWITEMSTRUCT) {
     let id = di.CtlID as i32;
     let selected = di.itemState.0 & ODS_SELECTED.0 != 0;
     SetBkMode(hdc, TRANSPARENT);
+    if trascrizione::draw(di) {
+        return;
+    }
     match id {
         ID_SIDE => {
             if di.itemID == u32::MAX {
@@ -908,10 +1014,14 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         WM_COMMAND => {
             let id = (wparam.0 & 0xffff) as i32;
             let code = ((wparam.0 >> 16) & 0xffff) as u32;
+            if trascrizione::command(hwnd, id) {
+                return LRESULT(0);
+            }
             match id {
                 ID_SIDE if code == LBN_SELCHANGE => {
                     let sel = SendMessageW(item(hwnd, ID_SIDE), LB_GETCURSEL, Some(WPARAM(0)), Some(LPARAM(0))).0;
                     if sel >= 0 && sel as usize == CATEGORIES.len() {
+                        trascrizione::hide_all(hwnd);
                         youtube_win::enter(hwnd);
                     } else if sel >= 0 {
                         let from_youtube = youtube_win::active();
@@ -1032,7 +1142,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             let (fg, bg, slot) = match GetDlgCtrlID(ctl) {
                 ID_HEADER => (WHITE, PRIMARY, &BRUSH_PRIMARY),
                 ID_TITLE => (PRIMARY, WHITE, &BRUSH_WHITE),
-                ID_POWERED | ID_CAP_EXISTS | ID_CAP_OPTIONS | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_QUALITY | ID_CAP_DEST | ID_COUNT | ID_FOOT => (GREY, WHITE, &BRUSH_WHITE),
+                trascrizione::ID_CAP_SAVEAS | trascrizione::ID_CAP_MODEL | trascrizione::ID_CAP_LOG | ID_POWERED | ID_CAP_EXISTS | ID_CAP_OPTIONS | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_QUALITY | ID_CAP_DEST | ID_COUNT | ID_FOOT => (GREY, WHITE, &BRUSH_WHITE),
                 _ => (TEXT, WHITE, &BRUSH_WHITE),
             };
             SetTextColor(hdc, fg);
@@ -1047,6 +1157,10 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             } else {
                 show_quality(hwnd);
             }
+            LRESULT(0)
+        }
+        trascrizione::WM_APP_LOG => {
+            trascrizione::take_log(hwnd);
             LRESULT(0)
         }
         youtube_win::WM_APP_YT => {

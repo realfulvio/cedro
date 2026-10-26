@@ -1162,6 +1162,76 @@ fn wide(path: &Path) -> Vec<u16> {
     path.as_os_str().encode_wide().chain(std::iter::once(0)).collect()
 }
 
+/// Qualunque audio che Windows sa aprire (WMA, AMR, AC3, la traccia audio di un video…) in un WAV a
+/// 16 bit, con la frequenza e i canali dell'originale: serve alla trascrizione quando il motore non
+/// legge il formato da solo.
+pub(crate) fn audio_to_wav(input: &Path, output: &Path) -> Result<(), String> {
+    use windows::Win32::Media::MediaFoundation::{
+        IMFMediaType, MF_MT_AUDIO_BITS_PER_SAMPLE, MF_MT_AUDIO_NUM_CHANNELS, MF_MT_AUDIO_SAMPLES_PER_SECOND,
+        MF_SOURCE_READER_ALL_STREAMS,
+    };
+    ensure_runtime()?;
+    // Ogni lavoro gira in un thread nuovo e il Source Reader vuole COM acceso su quel thread:
+    // `ensure_runtime` lo accende una volta sola, per il primo thread.
+    struct Com(bool);
+    impl Drop for Com {
+        fn drop(&mut self) {
+            if self.0 {
+                unsafe { windows::Win32::System::Com::CoUninitialize() };
+            }
+        }
+    }
+    let _com = Com(unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok());
+    let wide_in = wide(input);
+    unsafe {
+        let reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), None).map_err(|_| "Windows non sa leggere questo file".to_string())?;
+        let audio = MF_SOURCE_READER_FIRST_AUDIO_STREAM.0 as u32;
+        let _ = reader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false);
+        reader.SetStreamSelection(audio, true).map_err(|_| "nel file non c'è una traccia audio".to_string())?;
+        let wanted: IMFMediaType = MFCreateMediaType().map_err(|e| e.to_string())?;
+        wanted.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Audio).map_err(|e| e.to_string())?;
+        wanted.SetGUID(&MF_MT_SUBTYPE, &MFAudioFormat_PCM).map_err(|e| e.to_string())?;
+        wanted.SetUINT32(&MF_MT_AUDIO_BITS_PER_SAMPLE, 16).map_err(|e| e.to_string())?;
+        reader
+            .SetCurrentMediaType(audio, None, &wanted)
+            .map_err(|_| "Windows non ha il decodificatore per questo audio".to_string())?;
+        let current = reader.GetCurrentMediaType(audio).map_err(|e| e.to_string())?;
+        let channels = current.GetUINT32(&MF_MT_AUDIO_NUM_CHANNELS).unwrap_or(1).max(1) as u16;
+        let rate = current.GetUINT32(&MF_MT_AUDIO_SAMPLES_PER_SECOND).unwrap_or(16_000).max(1);
+        let spec = hound::WavSpec { channels, sample_rate: rate, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+        let mut wav = hound::WavWriter::create(output, spec).map_err(|e| format!("WAV temporaneo non scritto: {e}"))?;
+        loop {
+            let mut flags: u32 = 0;
+            let mut sample = None;
+            reader
+                .ReadSample(audio, 0, None, Some(&mut flags), None, Some(&mut sample))
+                .map_err(|e| format!("lettura audio: {e}"))?;
+            if let Some(sample) = sample {
+                let buffer = sample.ConvertToContiguousBuffer().map_err(|e| e.to_string())?;
+                let mut data = std::ptr::null_mut();
+                let mut len = 0u32;
+                buffer.Lock(&mut data, None, Some(&mut len)).map_err(|e| e.to_string())?;
+                let bytes = std::slice::from_raw_parts(data, len as usize);
+                let mut failed = None;
+                for pair in bytes.chunks_exact(2) {
+                    if let Err(e) = wav.write_sample(i16::from_le_bytes([pair[0], pair[1]])) {
+                        failed = Some(e);
+                        break;
+                    }
+                }
+                let _ = buffer.Unlock();
+                if let Some(e) = failed {
+                    return Err(format!("WAV temporaneo non scritto: {e}"));
+                }
+            }
+            if flags & (MF_SOURCE_READERF_ENDOFSTREAM.0 as u32) != 0 {
+                break;
+            }
+        }
+        wav.finalize().map_err(|e| format!("WAV temporaneo non scritto: {e}"))
+    }
+}
+
 /// Solo per le prove: un MP4 `width`×`height` di `frames` fotogrammi a 30 al secondo, con un La in stereo,
 /// passato dal codificatore di Cedro; con `gpu` dalla scheda video se Windows la dà. Dice se l'ha fatto la scheda.
 #[cfg(test)]
