@@ -19,10 +19,10 @@ use gtk4::{
 };
 
 pub const CSS: &str = "\
-window.cedro-panel togglebutton.cedro-big { background: #ffffff; border: 2px solid #d6dee5; padding: 14px 18px; }\
-window.cedro-panel togglebutton.cedro-big:hover { border-color: #0066CC; }\
-window.cedro-panel togglebutton.cedro-big:checked { background: #e3f0f8; border-color: #005E8E; }\
-window.cedro-panel togglebutton.cedro-big:checked label { color: #005E8E; }\
+window.cedro-panel button.cedro-big { background: #ffffff; border: 2px solid #d6dee5; padding: 14px 18px; }\
+window.cedro-panel button.cedro-big:hover { border-color: #0066CC; }\
+window.cedro-panel button.cedro-big:checked { background: #e3f0f8; border-color: #005E8E; }\
+window.cedro-panel button.cedro-big:checked label { color: #005E8E; }\
 window.cedro-panel progressbar.cedro-thin trough, window.cedro-panel progressbar.cedro-thin progress { min-height: 3px; }\
 window.cedro-panel progressbar.cedro-thin progress { background: #005E8E; }\
 window.cedro-panel textview.cedro-log { font-family: monospace; }";
