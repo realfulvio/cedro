@@ -545,7 +545,8 @@ fn draw_wheel(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize
         let _ = cr.paint();
     }
     let rgb = |c: (u8, u8, u8)| cr.set_source_rgb(c.0 as f64 / 255.0, c.1 as f64 / 255.0, c.2 as f64 / 255.0);
-    let _ = cr.select_font_face("Titillium Web", FontSlant::Normal, FontWeight::Bold);
+    let tema = cedro::tema::attivo();
+    let _ = cr.select_font_face(tema.font, FontSlant::Normal, FontWeight::Bold);
     for (index, slice) in list.iter().enumerate() {
         let (a0, a1) = cedro::wheelgeom_bounds(index, n);
         let mid = (a0 + a1) / 2.0;
@@ -553,31 +554,31 @@ fn draw_wheel(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize
         let tx = cx as f32 + radius * mid.cos();
         let ty = cy as f32 + radius * mid.sin();
         if index as i32 == wheel.hover {
-            rgb(cedro::wheelgfx::TEXT_ON_HOVER);
+            rgb(tema.hover_fg);
         } else {
-            rgb(cedro::wheelgfx::TEXT);
+            rgb(tema.slice_fg);
         }
         cr.set_font_size(if n > 6 { 15.0 } else { 18.0 });
         show_centered(cr, tx as f64, ty as f64, slice.label);
     }
-    let title = match wheel.launch.mode {
-        Mode::Convert => "CONVERSIONE",
-        Mode::Tools => "STRUMENTI",
-        Mode::Actions => "AZIONI",
-    };
+    let title = tema.titolo(match wheel.launch.mode {
+        Mode::Convert => "Conversione",
+        Mode::Tools => "Strumenti",
+        Mode::Actions => "Azioni",
+    });
     let center = if wheel.hover >= 0 {
         list.get(wheel.hover as usize).map(|slice| slice.label).unwrap_or("Annulla")
     } else {
         "Annulla"
     };
-    rgb(cedro::wheelgfx::MUTED);
+    rgb(tema.hole_title);
     cr.set_font_size(12.0);
-    show_centered(cr, cx, cy - 20.0, title);
-    rgb(cedro::wheelgfx::NAVY);
+    show_centered(cr, cx, cy - 20.0, &title);
+    rgb(tema.hole_main);
     cr.set_font_size(17.0);
     show_centered(cr, cx, cy + 2.0, center);
-    rgb(cedro::wheelgfx::MUTED);
-    let _ = cr.select_font_face("Titillium Web", FontSlant::Normal, FontWeight::Normal);
+    rgb(tema.hole_sub);
+    let _ = cr.select_font_face(tema.font, FontSlant::Normal, FontWeight::Normal);
     cr.set_font_size(12.0);
     show_centered(cr, cx, cy + 24.0, &name);
 }
