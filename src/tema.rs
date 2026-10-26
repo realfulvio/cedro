@@ -146,7 +146,7 @@ pub const BONDENO: Tema = Tema {
 
 /// Il tema dell'edizione compilata.
 pub const fn attivo() -> &'static Tema {
-    if cfg!(feature = "bondeno") {
+    if crate::edizione::BONDENO {
         &BONDENO
     } else {
         &LIMONE
