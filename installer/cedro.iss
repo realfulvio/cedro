@@ -6,7 +6,7 @@
   #define BuildDir "..\target\release"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.18.0"
+  #define AppVersion "0.18.1"
 #endif
 
 [Setup]
@@ -23,11 +23,11 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\dist
 #ifdef Arm64
-  #define Suffix "-arm64"
+  #define Prefix "Cedro-ARM64-Setup-"
 #else
-  #define Suffix ""
+  #define Prefix "Cedro-Setup-"
 #endif
-OutputBaseFilename=Cedro-Setup-{#AppVersion}{#Suffix}
+OutputBaseFilename={#Prefix}{#AppVersion}
 SetupIconFile=..\assets\cedro.ico
 UninstallDisplayIcon={app}\cedro.exe
 UninstallDisplayName={#AppName}

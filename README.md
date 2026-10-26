@@ -30,7 +30,7 @@ Cedro è un piccolo programma che vive vicino all'orologio. Tieni premuto **Shif
 
 ## Scarica e installa
 
-1. Vai alla **[pagina delle versioni](https://github.com/realfulvio/cedro/releases/latest)** e scarica `Cedro-Setup-….exe`. Se il tuo PC è un Windows on ARM (Snapdragon X e simili), scarica invece `Cedro-Setup-…-arm64.exe`: è la versione nativa, più veloce nella trascrizione.
+1. Vai alla **[pagina delle versioni](https://github.com/realfulvio/cedro/releases/latest)** e scarica `Cedro-Setup-….exe`. Se il tuo PC è un Windows on ARM (Snapdragon X e simili), scarica invece `Cedro-ARM64-Setup-….exe`: è la versione nativa, più veloce nella trascrizione.
 2. Doppio clic. Si installa solo per il tuo utente, **senza diritti di amministratore**.
 3. La prima volta Windows può dire «Windows ha protetto il PC», perché l'installatore non è firmato. Clicca *Ulteriori informazioni*, poi *Esegui comunque*.
 4. A fine installazione lascia spuntato **Avvia Cedro**. Non si apre una finestra: compare l'icona vicino all'orologio (se non la vedi, apri la freccia delle icone nascoste).

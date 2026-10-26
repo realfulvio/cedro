@@ -71,11 +71,25 @@ fn parse_release(body: &str) -> Result<Release, String> {
             })
         })
     };
-    // Su Windows on ARM l'installatore nativo ha il suffisso «-arm64»; su x64 si prende l'altro.
-    let installer = find(&|name| name.starts_with("Cedro-Setup") && name.ends_with(".exe") && name.ends_with("-arm64.exe") == cfg!(target_arch = "aarch64"));
+    let installer = find(&|name| is_installer_for_this_arch(name));
     let package = find(&|name| name.starts_with("cedro-") && name.ends_with("-linux-x64.tar.gz"));
     Ok(Release { version, page, installer, package })
 }
+
+/// L'installatore x64 è `Cedro-Setup-<v>.exe`, quello per Windows on ARM `Cedro-ARM64-Setup-<v>.exe`.
+/// Il nome ARM non comincia con «Cedro-Setup» apposta: fino alla 0.17 Cedro prendeva il primo file
+/// «Cedro-Setup….exe» della release, e deve continuare a trovare quello x64.
+/// Su ARM vale anche il nome della 0.18.0 (`Cedro-Setup-0.18.0-arm64.exe`).
+fn is_installer_for_this_arch(name: &str) -> bool {
+    if !name.ends_with(".exe") {
+        return false;
+    }
+    let arm = name.starts_with(ARM_INSTALLER) || (name.starts_with("Cedro-Setup") && name.ends_with("-arm64.exe"));
+    let x64 = name.starts_with("Cedro-Setup") && !name.ends_with("-arm64.exe");
+    if cfg!(target_arch = "aarch64") { arm } else { x64 }
+}
+
+const ARM_INSTALLER: &str = "Cedro-ARM64-Setup";
 
 /// Le note delle release scrivono «SHA-256 di <file>: `<hex>`».
 fn sha_in_notes(notes: &str, name: &str) -> Option<String> {
@@ -197,10 +211,10 @@ mod tests {
         assert!(!newer("0.7.1", "nonsense"));
     }
 
-    /// Su ARM64 l'installatore ha il suffisso «-arm64»: i file di prova lo prendono come quelli veri.
+    /// Su ARM64 l'installatore si chiama «Cedro-ARM64-Setup-…»: i file di prova lo prendono come quelli veri.
     fn for_this_arch(text: &str) -> String {
         if cfg!(target_arch = "aarch64") {
-            text.replace(".exe", "-arm64.exe")
+            text.replace("Cedro-Setup-", "Cedro-ARM64-Setup-")
         } else {
             text.to_string()
         }
@@ -208,13 +222,52 @@ mod tests {
 
     #[test]
     fn picks_the_installer_of_this_architecture() {
-        let body = r#"{"tag_name": "0.18.0", "assets": [
-            {"name": "Cedro-Setup-0.18.0-arm64.exe", "browser_download_url": "https://x/arm.exe", "digest": "sha256:aa"},
-            {"name": "Cedro-Setup-0.18.0.exe", "browser_download_url": "https://x/x64.exe", "digest": "sha256:bb"}
-        ]}"#;
-        let asset = parse_release(body).unwrap().installer.unwrap();
-        let (url, sha) = if cfg!(target_arch = "aarch64") { ("https://x/arm.exe", "aa") } else { ("https://x/x64.exe", "bb") };
-        assert_eq!((asset.url.as_str(), asset.sha256.as_deref()), (url, Some(sha)));
+        // GitHub elenca i file in ordine alfabetico: quello ARM viene prima.
+        for arm_name in ["Cedro-ARM64-Setup-0.18.1.exe", "Cedro-Setup-0.18.0-arm64.exe"] {
+            let body = format!(
+                r#"{{"tag_name": "0.18.1", "assets": [
+                {{"name": "{arm_name}", "browser_download_url": "https://x/arm.exe", "digest": "sha256:aa"}},
+                {{"name": "Cedro-Setup-0.18.1.exe", "browser_download_url": "https://x/x64.exe", "digest": "sha256:bb"}}
+            ]}}"#
+            );
+            let asset = parse_release(&body).unwrap().installer.unwrap();
+            let (url, sha) = if cfg!(target_arch = "aarch64") { ("https://x/arm.exe", "aa") } else { ("https://x/x64.exe", "bb") };
+            assert_eq!((asset.url.as_str(), asset.sha256.as_deref()), (url, Some(sha)), "{arm_name}");
+        }
+    }
+
+    /// Una release completa come le vere (ordine alfabetico di GitHub): ogni sistema prende il suo file.
+    #[test]
+    fn every_system_finds_its_file_in_a_full_release() {
+        let names = [
+            "Cedro-ARM64-Setup-0.18.1.exe",
+            "Cedro-Setup-0.18.1.exe",
+            "cedro-0.18.1-linux-x64.tar.gz",
+            "cedro-trascrivi-0.18.1-linux-x64-avx2",
+            "cedro-trascrivi-0.18.1-windows-arm64-i8mm.exe",
+            "cedro-trascrivi-0.18.1-windows-x64-avx2.exe",
+        ];
+        let assets: Vec<String> = names
+            .iter()
+            .map(|n| format!(r#"{{"name": "{n}", "browser_download_url": "https://x/{n}", "digest": "sha256:00"}}"#))
+            .collect();
+        let body = format!(r#"{{"tag_name": "v0.18.1", "assets": [{}]}}"#, assets.join(","));
+        let release = parse_release(&body).unwrap();
+        let installer = release.installer.unwrap().name;
+        if cfg!(target_arch = "aarch64") {
+            assert_eq!(installer, "Cedro-ARM64-Setup-0.18.1.exe");
+        } else {
+            assert_eq!(installer, "Cedro-Setup-0.18.1.exe");
+        }
+        assert_eq!(release.package.unwrap().name, "cedro-0.18.1-linux-x64.tar.gz");
+    }
+
+    /// Fino alla 0.17 Cedro prendeva il primo «Cedro-Setup….exe»: l'installatore ARM non deve somigliargli.
+    #[test]
+    fn old_versions_do_not_pick_the_arm_installer() {
+        let old_rule = |name: &str| name.starts_with("Cedro-Setup") && name.ends_with(".exe");
+        assert!(!old_rule("Cedro-ARM64-Setup-0.18.1.exe"));
+        assert!(old_rule("Cedro-Setup-0.18.1.exe"));
     }
 
     #[test]
