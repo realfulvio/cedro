@@ -86,9 +86,21 @@ fn finish(objects: &[Vec<u8>]) -> Vec<u8> {
     out
 }
 
+#[cfg(test)]
 pub fn pdf_from_text(text: &str) -> Vec<u8> {
-    let lines = wrap_lines(text, 88);
-    let per_page = 46usize;
+    pdf_from_text_sized(text, crate::engine::PageSize::A4)
+}
+
+/// PDF di testo con la pagina scelta (A4, A3 o Lettera): le righe si adattano alla larghezza.
+pub fn pdf_from_text_sized(text: &str, size: crate::engine::PageSize) -> Vec<u8> {
+    use crate::engine::PageSize;
+    let (width, height) = match size {
+        PageSize::A4 => (595, 842),
+        PageSize::A3 => (842, 1191),
+        PageSize::Letter => (612, 792),
+    };
+    let lines = wrap_lines(text, ((width - 96) as f32 / 5.65) as usize);
+    let per_page = ((height - 70) / 14) as usize;
     let mut pages: Vec<&[String]> = Vec::new();
     if lines.is_empty() {
         pages.push(&[]);
@@ -113,7 +125,7 @@ pub fn pdf_from_text(text: &str) -> Vec<u8> {
         let content_id = page_id + 1;
         objects.push(
             format!(
-                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents {content_id} 0 R /Resources << /Font << /F1 {font_id} 0 R >> >> >>"
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] /Contents {content_id} 0 R /Resources << /Font << /F1 {font_id} 0 R >> >> >>"
             )
             .into_bytes(),
         );
@@ -184,4 +196,42 @@ pub fn pdf_from_jpeg(jpeg: &[u8], px_w: u32, px_h: u32, lines: &[crate::ocr::Lin
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_vec(),
     ];
     finish(&objects)
+}
+
+/// Il PDF protetto con una password (AES a 128 bit): chiede la password per aprirlo.
+pub fn protect(pdf: &[u8], password: &str) -> Result<Vec<u8>, String> {
+    use lopdf::encryption::crypt_filters::{Aes128CryptFilter, CryptFilter};
+    use lopdf::encryption::{EncryptionState, EncryptionVersion, Permissions};
+    use lopdf::{Document, Object};
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+
+    let mut doc = Document::load_mem(pdf).map_err(|e| format!("PDF non letto: {e}"))?;
+    let id = {
+        let mut seed = pdf.len() as u64 ^ 0x9E37_79B9_7F4A_7C15;
+        (0..16)
+            .map(|i| {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407 + i);
+                (seed >> 33) as u8
+            })
+            .collect::<Vec<u8>>()
+    };
+    doc.trailer.set("ID", Object::Array(vec![Object::string_literal(id.clone()), Object::string_literal(id)]));
+    let mut filters: BTreeMap<Vec<u8>, Arc<dyn CryptFilter>> = BTreeMap::new();
+    filters.insert(b"StdCF".to_vec(), Arc::new(Aes128CryptFilter));
+    let state = EncryptionState::try_from(EncryptionVersion::V4 {
+        document: &doc,
+        encrypt_metadata: true,
+        crypt_filters: filters,
+        stream_filter: b"StdCF".to_vec(),
+        string_filter: b"StdCF".to_vec(),
+        owner_password: password,
+        user_password: password,
+        permissions: Permissions::all(),
+    })
+    .map_err(|e| format!("password non applicata: {e}"))?;
+    doc.encrypt(&state).map_err(|e| format!("PDF non protetto: {e}"))?;
+    let mut out = Vec::new();
+    doc.save_to(&mut out).map_err(|e| e.to_string())?;
+    Ok(out)
 }

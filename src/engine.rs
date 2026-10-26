@@ -1,4 +1,4 @@
-use crate::pdf::{pdf_from_jpeg, pdf_from_text};
+use crate::pdf::pdf_from_jpeg;
 use crate::zipstore::zip_store;
 use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, ExtendedColorType, ImageFormat};
@@ -71,8 +71,10 @@ const IMAGE_TOOLS: &[Slice] = &[
 ];
 const TEXT_CONVERT: &[Slice] = &[
     Slice { id: "txt", label: "TXT" },
+    Slice { id: "html", label: "HTML" },
     Slice { id: "md", label: "MD" },
     Slice { id: "csv", label: "CSV" },
+    Slice { id: "json", label: "JSON" },
     Slice { id: "pdf", label: "PDF" },
 ];
 const TEXT_TOOLS: &[Slice] = &[
@@ -83,11 +85,16 @@ const AUDIO_CONVERT: &[Slice] = &[
     Slice { id: "wav", label: "WAV" },
     Slice { id: "mp3", label: "MP3" },
 ];
-const VIDEO_CONVERT: &[Slice] = &[Slice { id: "mp4", label: "MP4" }];
+const VIDEO_CONVERT: &[Slice] = &[
+    Slice { id: "mp4", label: "MP4" },
+    Slice { id: "mp3", label: "Solo audio (MP3)" },
+];
 const DOC_CONVERT: &[Slice] = &[Slice { id: "pdf", label: "PDF" }];
 const PDF_CONVERT: &[Slice] = &[
     Slice { id: "jpg", label: "JPG" },
     Slice { id: "docx", label: "Word OCR" },
+    Slice { id: "png", label: "PNG" },
+    Slice { id: "txt", label: "Testo" },
 ];
 const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }];
 const EMPTY: &[Slice] = &[Slice { id: "none", label: "Niente qui" }];
@@ -110,14 +117,15 @@ pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
 
 /// Testo di un PDF: quello incorporato, e l'OCR solo per le pagine che ne sono prive.
 /// Ritorna il testo, le pagine lette via OCR e quelle da leggere rimaste fuori dal limite.
-fn pdf_text_with_ocr(path: &Path) -> Result<(String, usize, usize), String> {
+fn pdf_text_with_ocr(path: &Path, opts: &Options) -> Result<(String, usize, usize), String> {
     let mut pages: Vec<String> =
         crate::doctext::pdf_page_texts(path)?.iter().map(|p| crate::ocr::paragraphs_from_text(p)).collect();
+    pages.truncate(opts.first_pages.unwrap_or(usize::MAX));
     let blank: Vec<bool> = pages.iter().map(|p| p.is_empty()).collect();
     let mut ocr_pages = 0;
     let mut skipped = 0;
     let mut ocr_error = None;
-    if blank.iter().any(|b| *b) {
+    if opts.ocr && blank.iter().any(|b| *b) {
         let bytes = fs::read(path).map_err(|e| e.to_string())?;
         match crate::ocr::pdf_pages_where(&bytes, |i| blank.get(i).copied().unwrap_or(false)) {
             Ok(read) => {
@@ -184,6 +192,9 @@ fn stem(path: &Path) -> String {
 
 pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
     let mut name = format!("{file_stem}.{ext}");
+    if OVERWRITE.with(|o| o.get()) && SOURCE.with(|s| s.borrow().as_deref() != Some(dir.join(&name).as_path())) {
+        return dir.join(name);
+    }
     let mut i = 2u32;
     while dir.join(&name).exists() {
         name = format!("{file_stem}-{i}.{ext}");
@@ -196,9 +207,24 @@ fn parent_dir(path: &Path) -> CedroResult<&Path> {
     path.parent().filter(|p| !p.as_os_str().is_empty()).or(Some(Path::new("."))).ok_or_else(|| err("cartella mancante"))
 }
 
-fn save_image(img: &DynamicImage, path: &Path, format: ImageFormat, quality: u8) -> CedroResult<()> {
+/// L'immagine senza trasparenza: con `white` i pixel trasparenti diventano bianchi, altrimenti si scarta l'alfa.
+fn flatten(img: &DynamicImage, white: bool) -> image::RgbImage {
+    if !white || !img.color().has_alpha() {
+        return img.to_rgb8();
+    }
+    let rgba = img.to_rgba8();
+    let mut out = image::RgbImage::new(rgba.width(), rgba.height());
+    for (x, y, p) in rgba.enumerate_pixels() {
+        let a = p[3] as u32;
+        let mix = |c: u8| ((c as u32 * a + 255 * (255 - a) + 127) / 255) as u8;
+        out.put_pixel(x, y, image::Rgb([mix(p[0]), mix(p[1]), mix(p[2])]));
+    }
+    out
+}
+
+fn save_image(img: &DynamicImage, path: &Path, format: ImageFormat, quality: u8, white: bool) -> CedroResult<()> {
     if format == ImageFormat::Jpeg {
-        let rgb = img.to_rgb8();
+        let rgb = flatten(img, white);
         let mut file = fs::File::create(path).map_err(|e| err(e.to_string()))?;
         let mut enc = JpegEncoder::new_with_quality(&mut file, quality);
         enc.encode(rgb.as_raw(), rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
@@ -208,12 +234,16 @@ fn save_image(img: &DynamicImage, path: &Path, format: ImageFormat, quality: u8)
     img.save_with_format(path, format).map_err(|e| err(e.to_string()))
 }
 
-fn load_image(path: &Path) -> CedroResult<DynamicImage> {
-    crate::ocr::open_upright(path).map_err(err)
+fn load_image(path: &Path, straighten: bool) -> CedroResult<DynamicImage> {
+    if straighten {
+        crate::ocr::open_upright(path).map_err(err)
+    } else {
+        image::open(path).map_err(|e| err(format!("immagine non letta: {e}")))
+    }
 }
 
-fn jpeg_bytes(img: &DynamicImage, quality: u8) -> CedroResult<(Vec<u8>, u32, u32)> {
-    let rgb = img.to_rgb8();
+fn jpeg_bytes(img: &DynamicImage, quality: u8, white: bool) -> CedroResult<(Vec<u8>, u32, u32)> {
+    let rgb = flatten(img, white);
     let mut buf = Cursor::new(Vec::new());
     let mut enc = JpegEncoder::new_with_quality(&mut buf, quality);
     enc.encode(rgb.as_raw(), rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
@@ -255,17 +285,126 @@ pub fn perform_into(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
     perform_with(path, action, quality, out_dir, &Options::default())
 }
 
-/// Opzioni extra del pannello Conversioni. Vuote = comportamento di sempre.
-#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+/// Formato della pagina per i documenti convertiti in PDF.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PageSize {
+    A4,
+    A3,
+    Letter,
+}
+
+/// Codifica dei file di testo scritti.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Encoding {
+    Utf8,
+    Windows1252,
+    Latin1,
+}
+
+/// Opzioni extra del pannello Conversioni. `Default` = il comportamento di sempre.
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Options {
-    /// PDF in JPG: risoluzione delle pagine in dpi (di norma 144).
+    /// PDF in immagini: risoluzione delle pagine in dpi (di norma 144).
     pub dpi: Option<u32>,
     /// Immagini: lato più lungo massimo in pixel; le immagini più piccole restano come sono.
     pub max_side: Option<u32>,
+    /// Immagini: applica la rotazione dei dati EXIF (foto del telefono).
+    pub straighten: bool,
+    /// Immagini: nel JPEG la trasparenza diventa bianca invece che nera.
+    pub white_background: bool,
+    /// Se il nome di uscita esiste già lo sostituisce invece di aggiungere -2, -3…
+    pub overwrite: bool,
+    /// Documenti in PDF: formato della pagina.
+    pub page_size: PageSize,
+    /// PDF: legge con l'OCR le pagine senza testo.
+    pub ocr: bool,
+    /// PDF in Word: ricostruisce le tabelle.
+    pub tables: bool,
+    /// PDF: solo le prime N pagine.
+    pub first_pages: Option<usize>,
+    /// PDF in immagini: una immagine per pagina (altrimenti una sola, lunga).
+    pub one_image_per_page: bool,
+    /// Testo: codifica del file scritto.
+    pub encoding: Encoding,
+    /// Testo: separatore del CSV scritto (e letto, se non è quello giusto si indovina).
+    pub csv_separator: Option<char>,
+    /// Testo: JSON con rientri (altrimenti su una riga).
+    pub pretty_json: bool,
+    /// Testo: la prima riga del CSV contiene i titoli.
+    pub header_row: bool,
+    /// Audio: bitrate dell'MP3 in kbps.
+    pub mp3_kbps: Option<u32>,
+    /// Audio: 1 mono, 2 stereo, None come l'originale.
+    pub channels: Option<u8>,
+    /// Audio: porta il picco al massimo.
+    pub normalize: bool,
+    /// Audio: salta i primi N secondi.
+    pub trim_start_secs: u32,
+    /// Audio: titolo, artista e album passano all'MP3.
+    pub keep_tags: bool,
+    /// Video: altezza massima in pixel.
+    pub video_height: Option<u32>,
+    /// Video: qualità 40-95 (più alta, file più grande).
+    pub video_quality: Option<u8>,
+    /// Video: fotogrammi al secondo massimi.
+    pub fps: Option<u32>,
+    /// Video: senza traccia audio.
+    pub mute: bool,
+    /// Video: l'MP4 parte subito sul web (moov davanti ai dati).
+    pub faststart: bool,
+    /// Documenti in PDF: password per aprire il file.
+    pub password: Option<String>,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Options {
+            dpi: None,
+            max_side: None,
+            straighten: true,
+            white_background: true,
+            overwrite: false,
+            page_size: PageSize::A4,
+            ocr: true,
+            tables: true,
+            first_pages: None,
+            one_image_per_page: true,
+            encoding: Encoding::Utf8,
+            csv_separator: None,
+            pretty_json: true,
+            header_row: true,
+            mp3_kbps: None,
+            channels: None,
+            normalize: false,
+            trim_start_secs: 0,
+            keep_tags: true,
+            video_height: None,
+            video_quality: None,
+            fps: None,
+            mute: false,
+            faststart: false,
+            password: None,
+        }
+    }
+}
+
+thread_local! {
+    static OVERWRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Il file di partenza: con `overwrite` non si sostituisce mai.
+    static SOURCE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Come `perform_into`, con le opzioni extra.
 pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    let before = OVERWRITE.with(|o| o.replace(opts.overwrite));
+    let source = SOURCE.with(|s| s.replace(Some(path.to_path_buf())));
+    let result = perform_inner(path, action, quality, out_dir, opts);
+    OVERWRITE.with(|o| o.set(before));
+    SOURCE.with(|s| *s.borrow_mut() = source);
+    result
+}
+
+fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
     if !path.exists() {
         return Err(err("file non trovato"));
     }
@@ -317,9 +456,9 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
     if action == "wav" || action == "mp3" {
         let out = unique_output(&dir, &stem(path), action);
         let result = if action == "wav" {
-            crate::audio::to_wav(path, &out)
+            crate::audio::to_wav(path, &out, opts)
         } else {
-            crate::audio::to_mp3(path, &out, quality)
+            crate::audio::to_mp3(path, &out, quality, opts)
         };
         if let Err(e) = result {
             let _ = fs::remove_file(&out);
@@ -330,7 +469,13 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
     }
     if action == "mp4" {
         let out = unique_output(&dir, &stem(path), "mp4");
-        let result = {
+        let shape = crate::sink::VideoShape {
+            height: opts.video_height,
+            fps: opts.fps,
+            mute: opts.mute,
+            quality,
+        };
+        let result = crate::sink::with_shape(shape, || {
             #[cfg(windows)]
             {
                 crate::video::to_mp4(path, &out)
@@ -343,7 +488,8 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
             {
                 Err::<(), String>("il video MP4 si converte su Windows e su Linux".into())
             }
-        };
+        });
+        let result = result.and_then(|()| if opts.faststart { crate::mp4fast::make_faststart(&out) } else { Ok(()) });
         if let Err(e) = result {
             let _ = fs::remove_file(&out);
             return Err(err(e));
@@ -352,64 +498,129 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
         return Ok(Output { path: out, message: size_message(before, after) });
     }
 
-    if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "pdf" | "upper" | "lower") {
+    if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "html" | "json" | "pdf" | "upper" | "lower") {
         let text = read_text(path)?;
         if action == "pdf" {
-            let bytes = pdf_from_text(&text);
+            let bytes = crate::pdf::pdf_from_text_sized(&text, opts.page_size);
             let out = unique_output(&dir, &stem(path), "pdf");
             write_bytes(&out, &bytes)?;
             return Ok(Output { path: out, message: "PDF di testo".into() });
         }
-        let (body, ext, suffix) = match action {
-            "upper" => (text.to_uppercase(), extension(path), "-maiuscolo"),
-            "lower" => (text.to_lowercase(), extension(path), "-minuscolo"),
-            "md" => (text, "md".into(), ""),
-            "csv" => (text, "csv".into(), ""),
-            _ => (text, "txt".into(), ""),
+        let from = extension(path);
+        let table = |text: &str| {
+            let sep = crate::textconv::detect_separator(text);
+            crate::textconv::parse_csv(text, sep)
         };
+        let (body, ext, suffix, message) = match action {
+            "upper" => (text.to_uppercase(), from.clone(), "-maiuscolo", "Testo scritto"),
+            "lower" => (text.to_lowercase(), from.clone(), "-minuscolo", "Testo scritto"),
+            "md" if from == "csv" => (crate::textconv::markdown_table(&table(&text), opts.header_row), "md".into(), "", "Tabella Markdown"),
+            "md" => (text, "md".into(), "", "Testo scritto"),
+            "csv" if from == "csv" => {
+                let sep = opts.csv_separator.unwrap_or_else(|| crate::textconv::detect_separator(&text));
+                (crate::textconv::write_csv(&table(&text), sep), "csv".into(), "", "CSV riscritto")
+            }
+            "csv" => (text, "csv".into(), "", "Testo scritto"),
+            "html" => {
+                let body = if from == "csv" {
+                    crate::textconv::html_table(&table(&text), opts.header_row)
+                } else {
+                    crate::textconv::html_paragraphs(&text)
+                };
+                let mut page = crate::textconv::html_page(&stem(path), &body);
+                match opts.encoding {
+                    Encoding::Utf8 => {}
+                    Encoding::Windows1252 => page = page.replacen("charset=\"utf-8\"", "charset=\"windows-1252\"", 1),
+                    Encoding::Latin1 => page = page.replacen("charset=\"utf-8\"", "charset=\"iso-8859-1\"", 1),
+                }
+                (page, "html".into(), "", "Pagina HTML")
+            }
+            "json" if from == "json" => (crate::textconv::json_format(&text, opts.pretty_json).map_err(err)?, "json".into(), "-leggibile", "JSON riscritto"),
+            "json" if from == "csv" => (crate::textconv::csv_to_json(&table(&text), opts.header_row, opts.pretty_json), "json".into(), "", "JSON dal CSV"),
+            "json" => return Err(err("il JSON si ottiene da un file JSON o CSV")),
+            _ => (text, "txt".into(), "", "Testo scritto"),
+        };
+        let suffix = if action == "json" && from == "csv" { "" } else { suffix };
         let file_stem = if suffix.is_empty() { stem(path) } else { format!("{}{suffix}", stem(path)) };
         let out = unique_output(&dir, &file_stem, if ext.is_empty() { "txt" } else { &ext });
-        write_bytes(&out, body.as_bytes())?;
-        return Ok(Output { path: out, message: "Testo scritto".into() });
+        write_bytes(&out, &crate::textconv::encode(&body, opts.encoding))?;
+        return Ok(Output { path: out, message: message.into() });
     }
 
     if kind == Kind::Doc && action == "pdf" {
         let text = crate::doctext::document_text(path).map_err(err)?;
-        let bytes = pdf_from_text(&text);
+        let mut bytes = crate::pdf::pdf_from_text_sized(&text, opts.page_size);
+        let mut message = "PDF di testo".to_string();
+        if let Some(password) = opts.password.as_deref().filter(|p| !p.is_empty()) {
+            bytes = crate::pdf::protect(&bytes, password).map_err(err)?;
+            message.push_str(", protetto con password");
+        }
         let out = unique_output(&dir, &stem(path), "pdf");
         write_bytes(&out, &bytes)?;
-        return Ok(Output { path: out, message: "PDF di testo".into() });
+        return Ok(Output { path: out, message });
     }
-    if kind == Kind::Pdf && action == "jpg" {
+    if kind == Kind::Pdf && matches!(action, "jpg" | "png") {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-        let total = crate::ocr::pdf_page_count(&bytes).map_err(err)?;
+        let all = crate::ocr::pdf_page_count(&bytes).map_err(err)?;
+        let total = all.min(opts.first_pages.unwrap_or(usize::MAX));
         if total == 0 {
             return Err(err("il PDF non ha pagine"));
         }
-        let mut first = None;
         let scale = opts.dpi.unwrap_or(144).clamp(36, 600) as f32 / 72.0;
-        crate::ocr::pdf_page_pngs_scaled(&bytes, scale, |i, png| {
+        let encode = |rgb: &image::RgbImage| -> Result<Vec<u8>, String> {
+            let mut out = Vec::new();
+            if action == "jpg" {
+                JpegEncoder::new_with_quality(&mut out, quality).encode_image(rgb).map_err(|e| e.to_string())?;
+            } else {
+                rgb.write_to(&mut Cursor::new(&mut out), ImageFormat::Png).map_err(|e| e.to_string())?;
+            }
+            Ok(out)
+        };
+        let mut first = None;
+        let mut strip: Vec<image::RgbImage> = Vec::new();
+        let mut strip_height = 0u32;
+        crate::ocr::pdf_page_pngs_scaled(&bytes, scale, total, |i, png| {
             let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
-            let mut jpeg = Vec::new();
-            JpegEncoder::new_with_quality(&mut jpeg, quality).encode_image(&rgb).map_err(|e| e.to_string())?;
+            if !opts.one_image_per_page {
+                strip_height += rgb.height();
+                if strip_height > 60000 {
+                    return Err("troppe pagine per un'immagine sola: scegli «Una immagine per pagina» o meno dpi".into());
+                }
+                strip.push(rgb);
+                return Ok(());
+            }
             let name = if total == 1 { stem(path) } else { format!("{}-{}", stem(path), i + 1) };
-            let out = unique_output(&dir, &name, "jpg");
-            write_bytes(&out, &jpeg).map_err(|e| e.to_string())?;
+            let out = unique_output(&dir, &name, action);
+            write_bytes(&out, &encode(&rgb)?).map_err(|e| e.to_string())?;
             first.get_or_insert(out);
             Ok(())
         })
         .map_err(err)?;
-        let message = if total == 1 { "JPG".to_string() } else { format!("{total} JPG, uno per pagina") };
+        let label = action.to_uppercase();
+        if !opts.one_image_per_page {
+            let width = strip.iter().map(|p| p.width()).max().unwrap_or(1);
+            let mut long = image::RgbImage::from_pixel(width, strip_height.max(1), image::Rgb([255, 255, 255]));
+            let mut y = 0;
+            for page in &strip {
+                image::imageops::replace(&mut long, page, 0, y as i64);
+                y += page.height();
+            }
+            let out = unique_output(&dir, &stem(path), action);
+            write_bytes(&out, &encode(&long).map_err(err)?)?;
+            return Ok(Output { path: out, message: format!("{label} unico, {total} pagine una sotto l'altra") });
+        }
+        let message = if total == 1 { label } else { format!("{total} {label}, uno per pagina") };
         return Ok(Output { path: first.unwrap(), message });
     }
     if kind == Kind::Pdf && action == "docx" {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-        let pages = crate::pdflayout::read_pages(&bytes).map_err(err)?;
+        let mut pages = crate::pdflayout::read_pages(&bytes, opts.tables).map_err(err)?;
+        pages.truncate(opts.first_pages.unwrap_or(usize::MAX));
         let empty: Vec<bool> = pages.iter().map(|p| matches!(p, crate::pdflayout::Page::Empty)).collect();
         let scanned = empty.iter().filter(|e| **e).count();
         let mut ocr: Vec<Option<String>> = vec![None; pages.len()];
         let mut ocr_error = None;
-        if scanned > 0 {
+        if scanned > 0 && opts.ocr {
             match crate::ocr::pdf_pages_where(&bytes, |i| empty.get(i).copied().unwrap_or(false)) {
                 Ok(read) => ocr = read,
                 Err(e) => ocr_error = Some(e),
@@ -419,6 +630,7 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
         if scanned == pages.len() && read_scanned == 0 {
             return Err(err(match ocr_error {
                 Some(e) => format!("questo PDF non ha testo da copiare; OCR: {e}"),
+                None if !opts.ocr => "questo PDF non ha testo da copiare e l'OCR è spento".into(),
                 None => "questo PDF non ha testo da copiare né da leggere con l'OCR".into(),
             }));
         }
@@ -436,7 +648,7 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
         return Ok(Output { path: out, message });
     }
     if kind == Kind::Pdf && action == "txt" {
-        let (text, ocr_pages, skipped) = pdf_text_with_ocr(path).map_err(err)?;
+        let (text, ocr_pages, skipped) = pdf_text_with_ocr(path, opts).map_err(err)?;
         let (bytes, ext) = if action == "docx" {
             (crate::doctext::docx_bytes(&text), "docx")
         } else {
@@ -473,7 +685,7 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
         return Err(err("questa voce non si applica a questo file"));
     }
 
-    let mut img = load_image(path)?;
+    let mut img = load_image(path, opts.straighten)?;
     if let Some(side) = opts.max_side.filter(|s| *s > 0 && img.width().max(img.height()) > *s) {
         img = img.resize(side, side, image::imageops::FilterType::Lanczos3);
     }
@@ -489,7 +701,7 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
     }
 
     if action == "pdf" {
-        let (jpeg, w, h) = jpeg_bytes(&img, 90)?;
+        let (jpeg, w, h) = jpeg_bytes(&img, 90, opts.white_background)?;
         let lines = crate::ocr::image_lines(&img).unwrap_or_default();
         let bytes = pdf_from_jpeg(&jpeg, w, h, &lines);
         let out = unique_output(&dir, &stem(path), "pdf");
@@ -522,7 +734,7 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
     };
     let out = unique_output(&dir, &file_stem, ext);
     let q = if action == "compress" { quality.min(62) } else { quality };
-    save_image(&img, &out, format, q)?;
+    save_image(&img, &out, format, q, opts.white_background)?;
     let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
     let message = match action {
         "strip" => "Riscritto in PNG, senza metadati".into(),
@@ -599,6 +811,7 @@ pub fn append_log(line: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pdf::pdf_from_text;
     use image::{Rgb, RgbImage};
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -663,6 +876,10 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
         assert!(xml.contains("Heading1") && xml.contains("Titolo"), "{xml}");
         assert!(xml.contains("<w:b/>"), "grassetto perso");
         assert!(xml.contains("Testo sotto la tabella."), "{xml}");
+        let flat = perform_with(&path, "docx", 80, None, &Options { tables: false, overwrite: true, ..Default::default() }).expect("Word");
+        let xml = crate::doctext::zip_entry_for_test(&flat.path, "word/document.xml");
+        assert_eq!(xml.matches("<w:tr>").count(), 0, "senza tabelle");
+        assert!(xml.contains("Luca") && xml.contains("Voto"), "il testo della tabella resta");
     }
 
     #[test]
@@ -737,6 +954,282 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
         let keep = Options { max_side: Some(800), ..Default::default() };
         let out = perform_with(&src, "webp", 80, None, &keep).unwrap();
         assert_eq!(image::open(&out.path).unwrap().width(), 400);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Un JPEG 40×20 con l'orientamento EXIF 6 (da ruotare di 90° per metterlo dritto).
+    fn rotated_jpeg(path: &Path) {
+        let img = DynamicImage::ImageRgb8(RgbImage::from_pixel(40, 20, Rgb([200, 30, 30])));
+        let mut plain = Vec::new();
+        img.write_to(&mut Cursor::new(&mut plain), ImageFormat::Jpeg).unwrap();
+        let tiff: Vec<u8> = [
+            &b"Exif\0\0"[..],
+            &[b'I', b'I', 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 0x01, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0][..],
+        ]
+        .concat();
+        let mut with = plain[..2].to_vec();
+        with.extend_from_slice(&[0xFF, 0xE1]);
+        with.extend_from_slice(&((tiff.len() + 2) as u16).to_be_bytes());
+        with.extend_from_slice(&tiff);
+        with.extend_from_slice(&plain[2..]);
+        fs::write(path, with).unwrap();
+    }
+
+    #[test]
+    fn straighten_follows_the_exif_rotation_only_when_asked() {
+        let dir = scratch();
+        let src = dir.join("telefono.jpg");
+        rotated_jpeg(&src);
+        let on = perform_with(&src, "png", 80, None, &Options::default()).unwrap();
+        let on = image::open(&on.path).unwrap();
+        assert_eq!((on.width(), on.height()), (20, 40));
+        let off = perform_with(&src, "webp", 80, None, &Options { straighten: false, ..Default::default() }).unwrap();
+        let off = image::open(&off.path).unwrap();
+        assert_eq!((off.width(), off.height()), (40, 20));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn jpeg_flattens_transparency_to_white_or_black() {
+        let dir = scratch();
+        let src = dir.join("vuoto.png");
+        DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(16, 16, image::Rgba([0, 0, 0, 0]))).save(&src).unwrap();
+        let white = perform_with(&src, "jpeg", 90, None, &Options::default()).unwrap();
+        let px = image::open(&white.path).unwrap().to_rgb8().get_pixel(8, 8).0;
+        assert!(px.iter().all(|c| *c > 240), "{px:?}");
+        let black = perform_with(&src, "jpeg", 90, None, &Options { white_background: false, ..Default::default() }).unwrap();
+        let px = image::open(&black.path).unwrap().to_rgb8().get_pixel(8, 8).0;
+        assert!(px.iter().all(|c| *c < 20), "{px:?}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn existing_names_get_a_suffix_or_are_replaced() {
+        let dir = scratch();
+        let src = dir.join("foto.png");
+        DynamicImage::ImageRgb8(RgbImage::from_pixel(8, 8, Rgb([1, 2, 3]))).save(&src).unwrap();
+        perform_with(&src, "jpeg", 80, None, &Options::default()).unwrap();
+        let second = perform_with(&src, "jpeg", 80, None, &Options::default()).unwrap();
+        assert!(second.path.ends_with("foto-2.jpg"));
+        let replaced = perform_with(&src, "jpeg", 80, None, &Options { overwrite: true, ..Default::default() }).unwrap();
+        assert!(replaced.path.ends_with("foto.jpg"));
+        assert!(!dir.join("foto-3.jpg").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn text_options_reach_the_written_files() {
+        let dir = scratch();
+        let csv = dir.join("presenze.csv");
+        fs::write(&csv, "nome;città
+Luca;Bondeno
+").unwrap();
+        let comma = perform_with(&csv, "csv", 80, None, &Options { csv_separator: Some(','), ..Default::default() }).unwrap();
+        assert_eq!(fs::read_to_string(&comma.path).unwrap(), "nome,città
+Luca,Bondeno
+");
+        let latin = perform_with(&csv, "md", 80, None, &Options { encoding: Encoding::Latin1, ..Default::default() }).unwrap();
+        let bytes = fs::read(&latin.path).unwrap();
+        assert!(bytes.contains(&0xE0), "città in Latin-1: {bytes:?}");
+        assert!(String::from_utf8(bytes).is_err());
+        let md = perform_with(&csv, "md", 80, None, &Options { header_row: false, ..Default::default() }).unwrap();
+        assert!(fs::read_to_string(&md.path).unwrap().starts_with("|  |  |
+| --- | --- |
+| nome | città |"));
+        let html = perform_with(&csv, "html", 80, None, &Options::default()).unwrap();
+        assert!(fs::read_to_string(&html.path).unwrap().contains("<th>nome</th>"));
+        let json = perform_with(&csv, "json", 80, None, &Options { pretty_json: false, ..Default::default() }).unwrap();
+        assert_eq!(fs::read_to_string(&json.path).unwrap(), "[{\"nome\":\"Luca\",\"città\":\"Bondeno\"}]");
+
+        let raw = dir.join("config.json");
+        fs::write(&raw, "{\"a\":[1,2],\"b\":{\"c\":true}}").unwrap();
+        let pretty = perform_with(&raw, "json", 80, None, &Options::default()).unwrap();
+        assert!(fs::read_to_string(&pretty.path).unwrap().contains("{
+  \"a\": [
+    1,"));
+        assert!(perform_with(&raw, "html", 80, None, &Options::default()).is_ok());
+        assert!(perform_with(&dir.join("presenze.csv"), "txt", 80, None, &Options::default()).is_ok());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Un WAV a 16 bit; con `title` e `artist` aggiunge anche il blocco LIST/INFO.
+    fn wav_file(path: &Path, channels: u16, seconds: u32, amplitude: f32, tags: Option<(&str, &str)>) {
+        let rate = 44100u32;
+        let mut data = Vec::new();
+        let mut seed = 12345u32;
+        for i in 0..rate * seconds {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            let noise = ((seed >> 16) as f32 / 65535.0 - 0.5) * 0.5;
+            let v = ((i as f32 * 0.05).sin() * 0.5 + noise) * amplitude;
+            for _ in 0..channels {
+                data.extend_from_slice(&((v * 32767.0) as i16).to_le_bytes());
+            }
+        }
+        let mut riff = Vec::new();
+        riff.extend_from_slice(b"WAVEfmt ");
+        riff.extend_from_slice(&16u32.to_le_bytes());
+        for v in [1u16, channels] {
+            riff.extend_from_slice(&v.to_le_bytes());
+        }
+        riff.extend_from_slice(&rate.to_le_bytes());
+        riff.extend_from_slice(&(rate * 2 * channels as u32).to_le_bytes());
+        riff.extend_from_slice(&(2 * channels).to_le_bytes());
+        riff.extend_from_slice(&16u16.to_le_bytes());
+        if let Some((title, artist)) = tags {
+            let item = |id: &[u8], text: &str| {
+                let mut v = id.to_vec();
+                let mut t = text.as_bytes().to_vec();
+                t.push(0);
+                if t.len() % 2 == 1 {
+                    t.push(0);
+                }
+                v.extend_from_slice(&(t.len() as u32).to_le_bytes());
+                v.extend_from_slice(&t);
+                v
+            };
+            let mut info = b"INFO".to_vec();
+            info.extend(item(b"INAM", title));
+            info.extend(item(b"IART", artist));
+            riff.extend_from_slice(b"LIST");
+            riff.extend_from_slice(&(info.len() as u32).to_le_bytes());
+            riff.extend_from_slice(&info);
+        }
+        riff.extend_from_slice(b"data");
+        riff.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        riff.extend_from_slice(&data);
+        let mut file = b"RIFF".to_vec();
+        file.extend_from_slice(&(riff.len() as u32).to_le_bytes());
+        file.extend_from_slice(&riff);
+        fs::write(path, file).unwrap();
+    }
+
+    #[test]
+    fn audio_options_shape_the_output() {
+        let dir = scratch();
+        let src = dir.join("voce.wav");
+        wav_file(&src, 2, 2, 0.1, None);
+        let read = |p: &Path| {
+            let mut r = hound::WavReader::open(p).unwrap();
+            let spec = r.spec();
+            let peak = r.samples::<i16>().map(|s| s.unwrap().unsigned_abs()).max().unwrap_or(0);
+            (spec.channels, r.duration(), peak)
+        };
+        let plain = perform_with(&src, "wav", 80, None, &Options { overwrite: true, ..Default::default() }).unwrap();
+        let (ch, frames, peak) = read(&plain.path);
+        assert_eq!((ch, frames), (2, 88200));
+        assert!(peak < 6000, "{peak}");
+        let shaped = Options { channels: Some(1), normalize: true, trim_start_secs: 1, overwrite: true, ..Default::default() };
+        let out = perform_with(&src, "wav", 80, None, &shaped).unwrap();
+        let (ch, frames, peak) = read(&out.path);
+        assert_eq!((ch, frames), (1, 44100));
+        assert!((31000..=32100).contains(&peak), "{peak}");
+        let stereo = dir.join("mono.wav");
+        wav_file(&stereo, 1, 1, 0.3, None);
+        let up = perform_with(&stereo, "wav", 80, None, &Options { channels: Some(2), overwrite: true, ..Default::default() }).unwrap();
+        assert_eq!(read(&up.path).0, 2);
+        assert!(perform_with(&src, "wav", 80, None, &Options { trim_start_secs: 9, ..Default::default() }).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn mp3_bitrate_and_tags() {
+        let dir = scratch();
+        let src = dir.join("delibera.wav");
+        wav_file(&src, 2, 3, 0.9, Some(("Delibera 12", "Comune di Bondeno")));
+        let small = perform_with(&src, "mp3", 80, None, &Options { mp3_kbps: Some(96), ..Default::default() }).unwrap();
+        let big = perform_with(&src, "mp3", 80, None, &Options { mp3_kbps: Some(320), ..Default::default() }).unwrap();
+        let (small_len, big_len) = (fs::metadata(&small.path).unwrap().len(), fs::metadata(&big.path).unwrap().len());
+        assert!(big_len > small_len * 2, "{small_len} {big_len}");
+        let has = |p: &Path, needle: &[u8]| fs::read(p).unwrap().windows(needle.len()).any(|w| w == needle);
+        assert!(has(&small.path, b"Delibera 12"));
+        assert!(has(&small.path, b"Comune di Bondeno"));
+        let bare = perform_with(&src, "mp3", 80, None, &Options { keep_tags: false, overwrite: true, ..Default::default() }).unwrap();
+        assert!(!has(&bare.path, b"Delibera 12"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    fn long_pdf(dir: &Path) -> PathBuf {
+        let text: Vec<String> = (1..=100).map(|n| format!("riga numero {n}")).collect();
+        let pdf = dir.join("lungo.pdf");
+        fs::write(&pdf, pdf_from_text(&text.join("
+"))).unwrap();
+        pdf
+    }
+
+    #[test]
+    fn pdf_pages_option_limits_every_output() {
+        let dir = scratch();
+        let pdf = long_pdf(&dir);
+        let first = Options { first_pages: Some(1), ..Default::default() };
+        let one = perform_with(&pdf, "jpg", 80, None, &first).unwrap();
+        assert_eq!(one.message, "JPG");
+        let all = perform_with(&pdf, "png", 80, None, &Options { dpi: Some(36), ..Default::default() }).unwrap();
+        assert!(all.message.starts_with("2 PNG"), "{}", all.message);
+        let text = perform_with(&pdf, "txt", 80, None, &first).unwrap();
+        let body = fs::read_to_string(&text.path).unwrap();
+        assert!(body.contains("riga numero 1"));
+        assert!(!body.contains("riga numero 100"), "solo la prima pagina");
+        let full = perform_with(&pdf, "txt", 80, None, &Options { overwrite: true, ..Default::default() }).unwrap();
+        assert!(fs::read_to_string(&full.path).unwrap().contains("riga numero 100"));
+        let docx = perform_with(&pdf, "docx", 80, None, &first).unwrap();
+        let xml = crate::doctext::zip_entry_for_test(&docx.path, "word/document.xml");
+        assert!(xml.contains("riga numero 1") && !xml.contains("riga numero 100"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pdf_pages_can_become_one_long_image() {
+        let dir = scratch();
+        let pdf = long_pdf(&dir);
+        let each = Options { dpi: Some(36), first_pages: Some(2), ..Default::default() };
+        let single = Options { one_image_per_page: false, ..each.clone() };
+        let one_page = perform_with(&pdf, "png", 80, None, &Options { first_pages: Some(1), dpi: Some(36), ..Default::default() }).unwrap();
+        let page = image::open(&one_page.path).unwrap();
+        let long = perform_with(&pdf, "png", 80, None, &single).unwrap();
+        let long_img = image::open(&long.path).unwrap();
+        assert_eq!(long_img.width(), page.width());
+        assert_eq!(long_img.height(), page.height() * 2);
+        assert!(long.message.contains("una sotto l'altra"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scanned_pdf_needs_the_ocr_option() {
+        let dir = scratch();
+        let jpeg = include_bytes!("../tests/fixtures/scan.jpg");
+        let pdf = dir.join("scansione.pdf");
+        fs::write(&pdf, crate::pdf::pdf_from_jpeg(jpeg, 900, 200, &[])).unwrap();
+        let off = Options { ocr: false, ..Default::default() };
+        let e = perform_with(&pdf, "docx", 80, None, &off).err().unwrap();
+        assert!(e.0.contains("OCR è spento"), "{}", e.0);
+        assert!(perform_with(&pdf, "txt", 80, None, &off).is_err());
+        assert!(perform_with(&pdf, "docx", 80, None, &Options::default()).is_ok());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn document_pdf_follows_page_size_and_password() {
+        let dir = scratch();
+        let src = dir.join("delibera.rtf");
+        fs::write(&src, br"{\rtf1\ansi Delibera segreta del comune}").unwrap();
+        let a3 = perform_with(&src, "pdf", 80, None, &Options { page_size: PageSize::A3, ..Default::default() }).unwrap();
+        let bytes = fs::read(&a3.path).unwrap();
+        assert!(bytes.windows(20).any(|w| w == b"/MediaBox [0 0 842 1".as_slice()));
+        let letter = perform_with(&src, "pdf", 80, None, &Options { page_size: PageSize::Letter, ..Default::default() }).unwrap();
+        assert!(fs::read(&letter.path).unwrap().windows(18).any(|w| w == b"[0 0 612 792] /Con".as_slice()));
+
+        let locked = Options { password: Some("bondeno".into()), ..Default::default() };
+        let out = perform_with(&src, "pdf", 80, None, &locked).unwrap();
+        assert!(out.message.contains("password"));
+        let bytes = fs::read(&out.path).unwrap();
+        assert!(bytes.windows(8).any(|w| w == b"/Encrypt"));
+        assert!(!bytes.windows(8).any(|w| w == b"segreta "), "il testo non deve essere in chiaro");
+        let mut wrong = lopdf::Document::load_mem(&bytes).unwrap();
+        assert!(wrong.decrypt("sbagliata").is_err());
+        let mut right = lopdf::Document::load_mem(&bytes).unwrap();
+        right.decrypt("bondeno").unwrap();
+        let text = right.extract_text(&[1]).unwrap();
+        assert!(text.contains("Delibera"), "{text}");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -1125,13 +1618,155 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
         let _ = fs::remove_dir_all(&dir);
     }
 
+    /// Le figlie di un box MP4: (tipo, contenuto).
+    fn mp4_children(data: &[u8]) -> Vec<([u8; 4], &[u8])> {
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i + 8 <= data.len() {
+            let size = u32::from_be_bytes([data[i], data[i + 1], data[i + 2], data[i + 3]]) as usize;
+            if size < 8 || i + size > data.len() {
+                break;
+            }
+            out.push(([data[i + 4], data[i + 5], data[i + 6], data[i + 7]], &data[i + 8..i + size]));
+            i += size;
+        }
+        out
+    }
+
+    fn mp4_find<'a>(data: &'a [u8], path: &[&[u8; 4]]) -> Option<&'a [u8]> {
+        let (first, rest) = path.split_first()?;
+        let child = mp4_children(data).into_iter().find(|(t, _)| t == *first)?.1;
+        if rest.is_empty() {
+            Some(child)
+        } else {
+            mp4_find(child, rest)
+        }
+    }
+
+    struct Mp4Info {
+        width: u32,
+        height: u32,
+        frames: u32,
+        seconds: f64,
+        has_audio: bool,
+        moov_first: bool,
+    }
+
+    fn mp4_info(bytes: &[u8]) -> Mp4Info {
+        let top: Vec<[u8; 4]> = mp4_children(bytes).into_iter().map(|(t, _)| t).collect();
+        let moov_first = top.iter().position(|t| t == b"moov") < top.iter().position(|t| t == b"mdat");
+        let moov = mp4_children(bytes).into_iter().find(|(t, _)| t == b"moov").expect("moov").1;
+        let mut info = Mp4Info { width: 0, height: 0, frames: 0, seconds: 0.0, has_audio: false, moov_first };
+        for (kind, trak) in mp4_children(moov) {
+            if &kind != b"trak" {
+                continue;
+            }
+            let hdlr = mp4_find(trak, &[b"mdia", b"hdlr"]).expect("hdlr");
+            let handler = &hdlr[8..12];
+            if handler == b"soun" {
+                info.has_audio = true;
+            }
+            if handler != b"vide" {
+                continue;
+            }
+            let tkhd = mp4_find(trak, &[b"tkhd"]).expect("tkhd");
+            let at = if tkhd[0] == 1 { 88 } else { 76 };
+            info.width = u32::from_be_bytes(tkhd[at..at + 4].try_into().unwrap()) >> 16;
+            info.height = u32::from_be_bytes(tkhd[at + 4..at + 8].try_into().unwrap()) >> 16;
+            let stsz = mp4_find(trak, &[b"mdia", b"minf", b"stbl", b"stsz"]).expect("stsz");
+            info.frames = u32::from_be_bytes(stsz[8..12].try_into().unwrap());
+            let mdhd = mp4_find(trak, &[b"mdia", b"mdhd"]).expect("mdhd");
+            let (scale, duration) = if mdhd[0] == 1 {
+                (
+                    u32::from_be_bytes(mdhd[20..24].try_into().unwrap()) as f64,
+                    u64::from_be_bytes(mdhd[24..32].try_into().unwrap()) as f64,
+                )
+            } else {
+                (
+                    u32::from_be_bytes(mdhd[12..16].try_into().unwrap()) as f64,
+                    u32::from_be_bytes(mdhd[16..20].try_into().unwrap()) as f64,
+                )
+            };
+            info.seconds = duration / scale;
+        }
+        info
+    }
+
+    #[test]
+    fn video_options_shape_every_pipeline() {
+        let dir = scratch();
+        let fixtures: [(&str, &[u8]); 4] = [
+            ("audio.mp4", include_bytes!("../tests/fixtures/audio.mp4")),
+            ("audio.mov", include_bytes!("../tests/fixtures/audio.mov")),
+            ("audio.mkv", include_bytes!("../tests/fixtures/audio.mkv")),
+            ("vp8.webm", include_bytes!("../tests/fixtures/vp8.webm")),
+        ];
+        for (name, bytes) in fixtures {
+            let src = dir.join(name);
+            fs::write(&src, bytes).unwrap();
+            let plain = perform_with(&src, "mp4", 80, None, &Options::default()).unwrap_or_else(|e| panic!("{name}: {}", e.0));
+            let base = mp4_info(&fs::read(&plain.path).unwrap());
+            assert!(base.frames >= 4 && base.width >= 32, "{name}: {}x{} {} frame", base.width, base.height, base.frames);
+            assert!(base.has_audio, "{name}: manca l'audio");
+            assert!(!base.moov_first, "{name}: di norma il moov sta in fondo");
+
+            let target = (base.height * 3 / 4) & !1;
+            let small = Options { video_height: Some(target), overwrite: true, ..Default::default() };
+            let out = perform_with(&src, "mp4", 80, None, &small).unwrap_or_else(|e| panic!("{name} ridotto: {}", e.0));
+            let info = mp4_info(&fs::read(&out.path).unwrap());
+            assert_eq!(info.height, target, "{name}: altezza");
+            assert!((info.width as i64 - (base.width * 3 / 4) as i64).abs() <= 2, "{name}: larghezza {} su {}", info.width, base.width);
+            assert!(info.frames >= base.frames - 1, "{name}: fotogrammi persi");
+
+            let fps = ((base.frames as f64 / base.seconds) / 2.0).round().max(1.0) as u32;
+            let slow = Options { fps: Some(fps), overwrite: true, ..Default::default() };
+            let out = perform_with(&src, "mp4", 80, None, &slow).unwrap_or_else(|e| panic!("{name} fps: {}", e.0));
+            let info = mp4_info(&fs::read(&out.path).unwrap());
+            assert!(info.frames < base.frames, "{name}: {} fotogrammi con il limite, {} senza", info.frames, base.frames);
+            assert!(info.frames as f64 <= info.seconds * fps as f64 + 3.0, "{name}: {} fotogrammi in {} s a {fps} fps", info.frames, info.seconds);
+
+            let mute = Options { mute: true, faststart: true, ..Default::default() };
+            let out = perform_with(&src, "mp4", 80, None, &mute).unwrap_or_else(|e| panic!("{name} muto: {}", e.0));
+            let info = mp4_info(&fs::read(&out.path).unwrap());
+            assert!(!info.has_audio, "{name}: l'audio c'è ancora");
+            assert!(info.moov_first, "{name}: il moov deve stare davanti");
+            assert_eq!(info.frames, base.frames, "{name}");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn video_quality_sets_the_bitrate() {
+        let dir = scratch();
+        let src = dir.join("rumore.avi");
+        fs::write(&src, rgb_avi_with(320, 240, 120, true)).unwrap();
+        let low = perform_with(&src, "mp4", 40, None, &Options::default()).unwrap();
+        let high = perform_with(&src, "mp4", 95, None, &Options::default()).unwrap();
+        let (low_len, high_len) = (fs::metadata(&low.path).unwrap().len(), fs::metadata(&high.path).unwrap().len());
+        let (li, hi) = (mp4_info(&fs::read(&low.path).unwrap()), mp4_info(&fs::read(&high.path).unwrap()));
+        assert!(high_len as f64 > low_len as f64 * 1.05, "qualità alta {high_len} B ({} fotogrammi, {} s), bassa {low_len} B ({} fotogrammi, {} s)", hi.frames, hi.seconds, li.frames, li.seconds);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn audio_can_be_extracted_from_a_video() {
+        let dir = scratch();
+        let src = dir.join("audio.mp4");
+        fs::write(&src, include_bytes!("../tests/fixtures/audio.mp4")).unwrap();
+        let mp3 = perform_with(&src, "mp3", 80, None, &Options::default()).unwrap();
+        let bytes = fs::read(&mp3.path).unwrap();
+        assert!(bytes.len() > 1000 && (bytes.starts_with(b"ID3") || bytes[0] == 0xFF), "non è un MP3");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn doc_and_pdf_slices() {
         assert!(kind_of(Path::new("lettera.docx")) == Kind::Doc);
         assert_eq!(slices(Kind::Doc, Mode::Convert)[0].id, "pdf");
         assert_eq!(slices(Kind::Pdf, Mode::Convert)[0].id, "jpg");
         assert_eq!(slices(Kind::Pdf, Mode::Convert)[1].id, "docx");
-        assert_eq!(slices(Kind::Pdf, Mode::Convert).len(), 2);
+        assert_eq!(slices(Kind::Pdf, Mode::Convert).len(), 4);
         assert_eq!(slices(Kind::Pdf, Mode::Tools)[0].id, "ocr");
         assert!(slices(Kind::Image, Mode::Tools).iter().any(|s| s.id == "ocr"));
     }
@@ -1269,6 +1904,12 @@ fn tiny_avi() -> Vec<u8> {
 
 #[cfg(test)]
 fn rgb_avi() -> Vec<u8> {
+    rgb_avi_with(64, 64, 2, false)
+}
+
+/// Un AVI RGB non compresso: `noisy` riempie i fotogrammi di rumore, per provare la qualità dell'encoder.
+#[cfg(test)]
+fn rgb_avi_with(width: u32, height: u32, frames: u32, noisy: bool) -> Vec<u8> {
     fn u32(v: u32) -> [u8; 4] {
         v.to_le_bytes()
     }
@@ -1288,24 +1929,37 @@ fn rgb_avi() -> Vec<u8> {
         out.extend_from_slice(inner);
         out
     }
-    let width = 64u32;
-    let height = 64u32;
     let stride = width * 3;
     let frame_size = stride * height;
-    let mut frame = vec![0u8; frame_size as usize];
-    for y in 0..height {
-        for x in 0..width {
-            let at = ((height - 1 - y) * stride + x * 3) as usize;
-            frame[at] = 40;
-            frame[at + 1] = 180;
-            frame[at + 2] = 20;
+    let mut seed = 7u32;
+    let mut moved = 0u32;
+    let mut make_frame = || {
+        moved += 1;
+        let mut frame = vec![0u8; frame_size as usize];
+        for y in 0..height {
+            for x in 0..width {
+                let at = ((height - 1 - y) * stride + x * 3) as usize;
+                if noisy {
+                    seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                    let n = (seed >> 27) as u8;
+                    let base = ((x * 2 + y + moved * 5) & 255) as u8;
+                    frame[at] = base.wrapping_add(n);
+                    frame[at + 1] = base.wrapping_mul(3).wrapping_add(n);
+                    frame[at + 2] = (x * 255 / width) as u8 ^ n;
+                } else {
+                    frame[at] = 40;
+                    frame[at + 1] = 180;
+                    frame[at + 2] = 20;
+                }
+            }
         }
-    }
+        frame
+    };
     let mut avih = vec![0u8; 56];
     avih[0..4].copy_from_slice(&u32(33_333));
     avih[4..8].copy_from_slice(&u32(frame_size * 30));
     avih[12..16].copy_from_slice(&u32(0x10));
-    avih[16..20].copy_from_slice(&u32(2));
+    avih[16..20].copy_from_slice(&u32(frames));
     avih[24..28].copy_from_slice(&u32(1));
     avih[28..32].copy_from_slice(&u32(frame_size));
     avih[32..36].copy_from_slice(&u32(width));
@@ -1331,14 +1985,15 @@ fn rgb_avi() -> Vec<u8> {
     let mut strl = chunk(b"strh", &strh);
     strl.extend(chunk(b"strf", &strf));
     hdr.extend(list(b"strl", &strl));
-    let db = chunk(b"00db", &frame);
     let mut movi_inner = b"movi".to_vec();
-    let first = 4u32;
-    let second = 4 + db.len() as u32;
-    movi_inner.extend_from_slice(&db);
-    movi_inner.extend_from_slice(&db);
+    let mut offsets = Vec::new();
+    for _ in 0..frames {
+        let db = chunk(b"00db", &make_frame());
+        offsets.push(movi_inner.len() as u32);
+        movi_inner.extend_from_slice(&db);
+    }
     let mut idx = Vec::new();
-    for offset in [first, second] {
+    for offset in offsets {
         idx.extend_from_slice(b"00db");
         idx.extend_from_slice(&u32(0x10));
         idx.extend_from_slice(&u32(offset));

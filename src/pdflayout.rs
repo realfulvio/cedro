@@ -742,7 +742,8 @@ pub struct FlowPage {
 }
 
 /// Legge le pagine del PDF. `Page::Empty` per quelle senza testo incorporato.
-pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
+/// Con `tables` falso le tabelle non si riconoscono: il loro testo resta in paragrafi.
+pub fn read_pages(bytes: &[u8], with_tables: bool) -> Result<Vec<Page>, String> {
     let original = Pdf::new(bytes.to_vec()).map_err(|e| format!("PDF non letto: {e:?}"))?;
     let cache = RenderCache::new();
     let interp_cache = InterpreterCache::new();
@@ -767,8 +768,9 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
                 }
             }
         }
-        let tables = find_tables(&shapes, (w, h), &mut glyphs);
-        let figures = find_figures(&shapes, &pics, &tables, (w, h));
+        let tables = if with_tables { find_tables(&shapes, (w, h), &mut glyphs) } else { Vec::new() };
+        // Senza tabelle anche i riquadri colorati non diventano figure: il testo resta testo.
+        let figures = find_figures(if with_tables { &shapes[..] } else { &[] }, &pics, &tables, (w, h));
         // Il testo dentro una figura fa parte dell'immagine.
         glyphs.retain(|g| !figures.iter().any(|f| g.x >= f.x0 && g.x <= f.x1 && g.y >= f.y0 && g.y <= f.y1));
 
