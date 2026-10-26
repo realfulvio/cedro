@@ -1,11 +1,15 @@
 mod audio;
+pub mod conversioni;
 mod doctext;
 mod engine;
+mod mp4fast;
 mod ocr;
 mod pdf;
+mod pdfdoc;
 mod pdflayout;
 pub mod settings;
 mod sink;
+mod textconv;
 mod softvideo;
 pub mod update;
 pub mod wheelgeom;
@@ -21,7 +25,7 @@ mod mkv;
 mod mp4mux;
 
 pub use engine::{
-    append_log, config_dir, extension, kind_of, mode_from_vk, perform, read_quality, same_kind_paths, slices, Kind,
+    append_log, config_dir, perform_with, Exists, ExistsAsk, ExistsChoice, Options, PageSel, unique_output, extension, kind_of, mode_from_vk, perform, perform_into, read_quality, same_kind_paths, slices, Kind,
     Mode, Output, Slice,
 };
 #[cfg(windows)]
