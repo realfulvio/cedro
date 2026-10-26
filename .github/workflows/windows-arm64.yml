@@ -57,9 +57,19 @@ jobs:
       - name: Inno Setup
         shell: pwsh
         run: |
-          Invoke-WebRequest https://jrsoftware.org/download.php/is.exe -OutFile is.exe
-          Start-Process .\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
-          Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+          # Provo più indirizzi finché il file scaricato è davvero un eseguibile (inizia con «MZ»).
+          $urls = @('https://files.jrsoftware.org/is/6/innosetup-6.5.4.exe', 'https://jrsoftware.org/download.php/is.exe?site=1', 'https://jrsoftware.org/download.php/is.exe')
+          foreach ($u in $urls) {
+            try {
+              Invoke-WebRequest $u -OutFile is.exe -UserAgent 'Mozilla/5.0'
+              $head = [System.IO.File]::ReadAllBytes("$PWD\is.exe")[0..1]
+              "{0}: {1} byte, inizio {2}" -f $u, (Get-Item is.exe).Length, [char[]]$head -join ''
+              if ((Get-Item is.exe).Length -gt 1MB -and [char[]]$head -join '' -eq 'MZ') { break }
+            } catch { "$u: $_" }
+          }
+          $p = Start-Process .\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait -PassThru
+          "uscita dell'installatore: $($p.ExitCode)"
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")) { throw 'Inno Setup non installato' }
 
       - name: Installatore ARM64
         shell: pwsh

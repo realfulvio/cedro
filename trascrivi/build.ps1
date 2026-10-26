@@ -44,8 +44,11 @@ if ($arm) {
     dotprod = @{ GGML_CPU_ARM_ARCH = "armv8.2-a+dotprod+fp16" }
     i8mm    = @{ GGML_CPU_ARM_ARCH = "armv8.2-a+dotprod+fp16+i8mm" }
   }
-  $env:CMAKE_C_COMPILER = "clang"
-  $env:CMAKE_CXX_COMPILER = "clang++"
+  # clang-cl (il clang con le opzioni di cl): è quello che il crate cmake si aspetta su msvc e ggml accetta come Clang.
+  $env:CC = "clang-cl"
+  $env:CXX = "clang-cl"
+  $env:CMAKE_C_COMPILER = "clang-cl"
+  $env:CMAKE_CXX_COMPILER = "clang-cl"
 }
 $variants = @($cpu.Keys)
 if (-not $SoloCpu -and $env:VULKAN_SDK) { $variants += "vulkan" }
