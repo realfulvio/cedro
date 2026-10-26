@@ -61,6 +61,8 @@ struct Page {
     playlist: Switch,
     skip: Switch,
     log: TextView,
+    log_box: Expander,
+    more_box: Expander,
     note: Label,
     dest_label: Label,
     dest: RefCell<PathBuf>,
@@ -190,7 +192,7 @@ fn render_queue(page: &Page) {
         page.queue.append(&line);
     }
     let n = page.rows.borrow().len();
-    page.count.set_text(&if n == 0 { "CODA · nessun link".to_string() } else { format!("CODA · {n} link") });
+    page.count.set_text(&match n { 0 => "CODA · nessun link".to_string(), 1 => "CODA · 1 link".to_string(), n => format!("CODA · {n} link") });
     label_go(page);
 }
 
@@ -260,9 +262,33 @@ fn start(page: &Rc<Page>) {
     *page.running.borrow_mut() = Some(rx);
     page.bar.set_visible(true);
     page.bar.set_fraction(0.0);
+    // Come nella trascrizione, mentre lavora si vede cosa sta succedendo.
+    page.log_box.set_expanded(true);
+    page.more_box.set_expanded(false);
     let tx2 = tx.clone();
     std::thread::spawn(move || {
-        let result = youtube::run(&req, &mut |e| drop(tx2.send(Msg::Event(e))), &cancel);
+        let total = req.urls.len();
+        crate::linux_progress::start(total, &format!("YouTube · {total} link"));
+        let mut last = usize::MAX;
+        let result = youtube::run(
+            &req,
+            &mut |e| {
+                if let Event::Progress { index, label, .. } = &e {
+                    if *index != last {
+                        last = *index;
+                        crate::linux_progress::step(*index, &format!("{} di {total} · {label}", index + 1));
+                    }
+                }
+                drop(tx2.send(Msg::Event(e)));
+            },
+            &cancel,
+        );
+        match &result {
+            Ok(files) => crate::linux_progress::finish(true, &format!("Fatto · {} file da YouTube", files.len())),
+            // Annullare è una scelta: la barra sparisce, non diventa un errore.
+            Err(e) if cancel.load(Ordering::Relaxed) && e == "Annullato" => crate::linux_progress::dismiss(),
+            Err(e) => crate::linux_progress::finish(false, &format!("Errore · {e}")),
+        }
         let _ = tx.send(Msg::Finished(result));
     });
     render_queue(page);
@@ -418,7 +444,21 @@ pub fn build(window: &Window) -> YoutubePage {
     log_view.add_css_class("cedro-log");
     let log_scroll = ScrolledWindow::builder().child(&log_view).min_content_height(140).has_frame(true).build();
     let log_box = Expander::new(Some("Cosa sta succedendo"));
-    log_box.set_child(Some(&log_scroll));
+    // Come su Windows: «Copia» mette tutto il registro del download negli appunti, per una segnalazione.
+    let copy_log = Button::with_label("Copia");
+    copy_log.set_halign(gtk4::Align::End);
+    {
+        let view = log_view.clone();
+        copy_log.connect_clicked(move |button| {
+            let buffer = view.buffer();
+            let text = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
+            button.clipboard().set_text(text.as_str());
+        });
+    }
+    let log_inner = HBox::new(Orientation::Vertical, 6);
+    log_inner.append(&copy_log);
+    log_inner.append(&log_scroll);
+    log_box.set_child(Some(&log_inner));
 
     let note = Label::new(youtube::first_use_note().as_deref());
     note.set_xalign(0.0);
@@ -494,6 +534,8 @@ pub fn build(window: &Window) -> YoutubePage {
         playlist,
         skip,
         log: log_view,
+        log_box: log_box.clone(),
+        more_box: more_box.clone(),
         note,
         dest_label: dest_label.clone(),
         dest: RefCell::new(downloads_dir()),
