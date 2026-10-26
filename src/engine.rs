@@ -695,10 +695,17 @@ mod tests {
                 ));
             }
         }
-        content.push_str("BT /F1 8 Tf 900 800 Td (NASCOSTO) Tj ET");
+        content.push_str("BT /F1 8 Tf 900 800 Td (NASCOSTO) Tj ET ");
+        // Una riga tratteggiata e un riquadro grigio ritagliato a metà.
+        content.push_str("[3 2] 0 d 40 150 m 560 150 l S [] 0 d q 40 100 100 20 re W n 0.8 g 40 100 200 20 re f Q");
         let xml = word_xml("modulo.pdf", pdf_page(&content, 595, 842));
         assert!(xml.contains("<w:framePr"), "{xml}");
-        assert!(xml.contains("behindDoc=\"1\""), "{xml}");
+        // Righe e caselle restano forme di Word, dietro al testo, con il loro tratteggio.
+        assert!(xml.contains("<wps:wsp>") && xml.contains("behindDoc=\"1\""), "{xml}");
+        assert!(xml.contains("<a:custDash>"), "{xml}");
+        // Il riquadro grigio si ferma al ritaglio: 140 pt, non 240.
+        assert!(xml.contains(&format!("<a:pt x=\"{}\"", 140 * 12700)), "{xml}");
+        assert!(!xml.contains(&format!("<a:pt x=\"{}\"", 240 * 12700)), "{xml}");
         assert!(xml.contains("Casella 75"), "{xml}");
         assert!(!xml.contains("NASCOSTO"), "{xml}");
     }
