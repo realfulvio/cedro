@@ -427,7 +427,9 @@ unsafe fn refresh_texts(hwnd: HWND) {
     let default_note = youtube::first_use_note().unwrap_or_default();
     set_text(hwnd, Y_NOTE, if note.is_empty() { &default_note } else { &note });
     set_text(hwnd, Y_DEST, &dest.display().to_string());
-    if !log.is_empty() {
+    if log.is_empty() {
+        trascrizione::set_log_hint(ctl(hwnd, Y_LOG), "Qui vedrai i passi del download man mano che Cedro li fa.");
+    } else {
         let crlf = log.replace('\n', "\r\n");
         trascrizione::set_log_text(ctl(hwnd, Y_LOG), &crlf);
     }
