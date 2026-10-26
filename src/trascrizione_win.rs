@@ -237,6 +237,11 @@ pub(super) unsafe fn layout(hwnd: HWND) -> Option<i32> {
     Some(end + 10)
 }
 
+/// Dove finisce la scheda (px di progetto), quando è attiva: serve a calcolare l'altezza della finestra.
+pub(super) fn end() -> i32 {
+    256 + shift() + 80 + MODELS.len() as i32 * 54 - 6 + 10
+}
+
 pub(super) const HINT: &str = "Voce in testo, sul tuo PC. Accetta: MP3, WAV, M4A, OGG, OPUS, FLAC, WMA, AMR e video.";
 
 /// L'etichetta del pulsante in fondo.
