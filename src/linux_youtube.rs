@@ -248,7 +248,7 @@ fn start(page: &Rc<Page>) {
         page.entry.set_text("");
     }
     if page.rows.borrow().is_empty() {
-        page.note.set_text("Incolla prima un link di YouTube.");
+        page.note.set_text("Incolla prima il link di un video.");
         return;
     }
     let req = request(page);
@@ -268,7 +268,7 @@ fn start(page: &Rc<Page>) {
     let tx2 = tx.clone();
     std::thread::spawn(move || {
         let total = req.urls.len();
-        crate::linux_progress::start(total, &format!("YouTube · {total} link"));
+        crate::linux_progress::start(total, &format!("Video dal web · {total} link"));
         let mut last = usize::MAX;
         let result = youtube::run(
             &req,
@@ -284,7 +284,7 @@ fn start(page: &Rc<Page>) {
             &cancel,
         );
         match &result {
-            Ok(files) => crate::linux_progress::finish(true, &format!("Fatto · {} file da YouTube", files.len())),
+            Ok(files) => crate::linux_progress::finish(true, &format!("Fatto · {} file dal web", files.len())),
             // Annullare è una scelta: la barra sparisce, non diventa un errore.
             Err(e) if cancel.load(Ordering::Relaxed) && e == "Annullato" => crate::linux_progress::dismiss(),
             Err(e) => crate::linux_progress::finish(false, &format!("Errore · {e}")),
@@ -383,7 +383,7 @@ fn handle(page: &Rc<Page>, event: Event) -> bool {
 
 pub fn build(window: &Window) -> YoutubePage {
     let entry = TextEntry::new();
-    entry.set_placeholder_text(Some("Incolla qui il link di YouTube"));
+    entry.set_placeholder_text(Some("Incolla qui il link del video"));
     entry.set_hexpand(true);
     let add = Button::with_label("Aggiungi");
     add.add_css_class("suggested-action");
@@ -396,7 +396,7 @@ pub fn build(window: &Window) -> YoutubePage {
     let queue_scroll = ScrolledWindow::builder().child(&queue).min_content_height(90).vexpand(true).has_frame(true).build();
     let count = caption("CODA · nessun link");
 
-    let video_btn = big("Video", "Immagini e suono, come su YouTube");
+    let video_btn = big("Video", "Immagini e suono");
     let audio_btn = big("Solo audio", "Per ascoltare, senza immagini");
     audio_btn.set_group(Some(&video_btn));
     video_btn.set_active(true);
@@ -563,7 +563,7 @@ pub fn build(window: &Window) -> YoutubePage {
                 page.entry.set_text("");
                 page.note.set_text("");
             } else {
-                page.note.set_text("Questo non sembra un link di YouTube.");
+                page.note.set_text("Questo non sembra un link web (deve iniziare con https://).");
             }
         });
     }

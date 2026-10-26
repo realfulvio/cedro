@@ -83,6 +83,17 @@ pub enum Event {
     LinkDone { index: usize, result: Result<usize, String> },
 }
 
+/// Un link web qualsiasi (http/https): quale sito sia supportato lo decide yt-dlp.
+pub fn is_video_url(text: &str) -> bool {
+    let t = text.trim();
+    let Some(rest) = t.strip_prefix("https://").or_else(|| t.strip_prefix("http://")) else {
+        return false;
+    };
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = host.rsplit('@').next().unwrap_or("").split(':').next().unwrap_or("");
+    host.contains('.') && !host.starts_with('.') && !host.ends_with('.') && !t.contains(char::is_whitespace)
+}
+
 pub fn is_youtube_url(text: &str) -> bool {
     let t = text.trim();
     let Some(rest) = t.strip_prefix("https://").or_else(|| t.strip_prefix("http://")) else {
@@ -99,7 +110,7 @@ pub fn urls_in(text: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for word in text.split_whitespace() {
         let word = word.trim_matches(|c: char| matches!(c, '<' | '>' | '"' | '\'' | ',' | ';'));
-        if is_youtube_url(word) && !out.iter().any(|u| u == word) {
+        if is_video_url(word) && !out.iter().any(|u| u == word) {
             out.push(word.to_string());
         }
     }
@@ -590,7 +601,15 @@ pub fn first_error(stderr: &str) -> String {
     let line = stderr.lines().rev().find(|l| l.contains("ERROR")).unwrap_or(stderr.lines().last().unwrap_or("")).trim();
     let line = line.trim_start_matches("ERROR:").trim();
     let low = line.to_lowercase();
-    if low.contains("private video") {
+    if low.contains("unsupported url") {
+        "Questo sito non è supportato (o il link non porta a un video)".into()
+    } else if low.contains("drm") {
+        "Il video è protetto da DRM e non si può scaricare".into()
+    } else if low.contains("geo restrict") || low.contains("not available in your country") {
+        "Il video non è disponibile nel tuo Paese".into()
+    } else if low.contains("login required") || low.contains("requires authentication") {
+        "Il video richiede un accesso: non posso scaricarlo".into()
+    } else if low.contains("private video") {
         "Il video è privato".into()
     } else if low.contains("sign in to confirm your age") || low.contains("age-restricted") {
         "Il video è per maggiorenni: serve l'accesso a YouTube".into()
@@ -601,7 +620,7 @@ pub fn first_error(stderr: &str) -> String {
     } else if low.contains("not a bot") || low.contains("sign in to confirm") {
         "YouTube chiede di confermare che non sei un robot: riprova più tardi".into()
     } else if low.contains("unable to download") || low.contains("getaddrinfo") || low.contains("timed out") {
-        "Non riesco a raggiungere YouTube: controlla la connessione".into()
+        "Non riesco a raggiungere il sito: controlla la connessione".into()
     } else if line.is_empty() {
         "yt-dlp non ha dato risposta".into()
     } else {
@@ -1043,6 +1062,18 @@ mod tests {
         assert_eq!(sum_for(list, "yt-dlp").as_deref(), Some("aaa"));
         assert_eq!(sum_for(list, "ffmpeg-master-latest-win64-lgpl.zip").as_deref(), Some("ccc"));
         assert!(sum_for(list, "altro").is_none());
+    }
+
+    #[test]
+    fn any_site_link_is_accepted() {
+        assert!(is_video_url("https://vimeo.com/76979871"));
+        assert!(is_video_url("https://archive.org/details/x"));
+        assert!(is_video_url("https://www.youtube.com/watch?v=abc"));
+        assert!(!is_video_url("vimeo.com/1"));
+        assert!(!is_video_url("https://localhost/x"));
+        assert!(!is_video_url("https://a.b/x y"));
+        assert_eq!(urls_in("ciao https://vimeo.com/1 e https://archive.org/details/y"), vec!["https://vimeo.com/1", "https://archive.org/details/y"]);
+        assert_eq!(first_error("ERROR: Unsupported URL: https://x.it/"), "Questo sito non è supportato (o il link non porta a un video)");
     }
 
     #[test]
