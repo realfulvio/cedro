@@ -7,6 +7,8 @@
 # Servono: Rust, cmake, un compilatore C++, libclang (per bindgen) e libopus con i suoi header.
 # Per la variante «vulkan» anche gli header di Vulkan, `glslc` e il caricatore (libvulkan.so):
 #   Arch: vulkan-headers vulkan-icd-loader shaderc   Debian/Ubuntu: libvulkan-dev glslc
+# Senza i pacchetti di sistema: VULKAN_SDK=<cartella con include/, lib/libvulkan.so e Bin/glslc> e Bin nel PATH.
+# Provato sul mini PC (Radeon integrata, RADV): «scheda video: AMD Radeon Graphics (RADV RENOIR)».
 # Il nome dei file è quello che Cedro cerca nella release: cedro-trascrivi-<versione>-linux-x64-<variante>.
 set -euo pipefail
 cd "$(dirname "$0")"
