@@ -54,6 +54,16 @@ const OPT_CTL0: i32 = 4000;
 const OPT_LABEL0: i32 = 4100;
 const OPT_VALUE0: i32 = 4200;
 const OPT_MAX: i32 = 12;
+/// Modalità Semplice: le tre schede in alto, i due link in fondo e quello per tornarci dalla vista completa.
+const ID_MORE: i32 = 231;
+const ID_LESS: i32 = 232;
+const ID_BACK: i32 = 233;
+/// Modalità Semplice: porta ai file in coda di un'altra categoria, che la vista non mostra.
+const ID_OTHER: i32 = 234;
+const ID_MODE0: i32 = 235;
+const MODES: [&str; 3] = ["Converti file", "Video dal web", "Trascrivi"];
+/// L'altezza della barra delle tre schede (px di progetto): tutto il resto scende di tanto.
+const TAB_H: i32 = 48;
 
 const WM_APP_RESULT: u32 = WM_APP + 10;
 const WM_APP_DONE: u32 = WM_APP + 11;
@@ -91,6 +101,16 @@ static FONT_BOLD: AtomicIsize = AtomicIsize::new(0);
 static FONT_TITLE: AtomicIsize = AtomicIsize::new(0);
 static FONT_SMALL: AtomicIsize = AtomicIsize::new(0);
 static DPI: AtomicIsize = AtomicIsize::new(96);
+/// La vista di ora è la Semplice (resta spenta finché la finestra è aperta se si preme «Altre opzioni»).
+static SIMPLE: AtomicBool = AtomicBool::new(false);
+/// L'impostazione «Modalità Semplice» com'era all'apertura del pannello.
+static SIMPLE_SETTING: AtomicBool = AtomicBool::new(false);
+/// Altezza (px di progetto) della vista Semplice con ciò che mostra ora.
+static SIMPLE_H: AtomicIsize = AtomicIsize::new(560);
+
+fn simple_view() -> bool {
+    SIMPLE.load(Ordering::Relaxed)
+}
 
 /// Larghezza di progetto dell'area interna: la finestra non va sotto questa misura.
 const BASE_W: i32 = 900;
@@ -188,6 +208,9 @@ unsafe fn set_extra(hwnd: HWND, nx: i32, ny: i32) {
 
 /// L'altezza minima (area interna, px di progetto) della scheda dei file con le opzioni di ora.
 fn design_height() -> i32 {
+    if simple_view() {
+        return SIMPLE_H.load(Ordering::Relaxed) as i32;
+    }
     if trascrizione::active() {
         // Qualità tolta: la destinazione sale al suo posto.
         return trascrizione::end() - 42 + 196;
@@ -200,6 +223,9 @@ fn design_height() -> i32 {
 
 /// Adatta l'ingrandimento alla misura scelta dall'utente e alle opzioni di ora.
 unsafe fn fit_extra(hwnd: HWND) {
+    if simple_view() {
+        return;
+    }
     let (uw, uh) = user_size();
     set_extra(hwnd, (uw - BASE_W).max(0), (uh - design_height()).max(0));
 }
@@ -358,7 +384,14 @@ unsafe fn create() -> Result<()> {
     DragAcceptFiles(hwnd, true);
     build(hwnd, instance);
     SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(0)), Some(LPARAM(0)));
-    render_category(hwnd);
+    let simple = read_settings().simple;
+    SIMPLE_SETTING.store(simple, Ordering::Relaxed);
+    SIMPLE.store(simple, Ordering::Relaxed);
+    if simple {
+        apply_view(hwnd);
+    } else {
+        render_category(hwnd);
+    }
     READY.store(true, Ordering::Relaxed);
     let _ = SetForegroundWindow(hwnd);
     Ok(())
@@ -440,6 +473,16 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     child(hwnd, instance, s, "", crate::firma_win::SS_OWNERDRAW, ID_POWERED, (210, 616, 420, 18), f);
     child(hwnd, instance, b, "Converti", tab | BS_OWNERDRAW as u32, ID_GO, (640, 590, 240, 38), fb);
     show_quality(hwnd);
+    for (i, label) in MODES.iter().enumerate() {
+        child(hwnd, instance, b, label, tab | BS_OWNERDRAW as u32, ID_MODE0 + i as i32, (0, 40, 300, TAB_H), fb);
+    }
+    child(hwnd, instance, b, "Altre opzioni", tab | BS_OWNERDRAW as u32, ID_MORE, (40, 0, 160, 28), f);
+    child(hwnd, instance, b, "Modalità completa", tab | BS_OWNERDRAW as u32, ID_LESS, (700, 0, 180, 28), f);
+    child(hwnd, instance, b, "Torna a Semplice", tab | BS_OWNERDRAW as u32, ID_BACK, (10, 0, 170, 30), f);
+    child(hwnd, instance, b, "", tab | BS_OWNERDRAW as u32, ID_OTHER, (40, 0, 400, 22), f);
+    for id in [ID_MODE0, ID_MODE0 + 1, ID_MODE0 + 2, ID_MORE, ID_LESS, ID_BACK, ID_OTHER] {
+        let _ = ShowWindow(item(hwnd, id), SW_HIDE);
+    }
     youtube_win::build(hwnd, instance);
     trascrizione::build(hwnd, instance);
 }
@@ -474,12 +517,24 @@ unsafe fn render_category(hwnd: HWND) {
     }
     let formats = conversioni::formats(cat.kind);
     let tools = conversioni::tools(cat.kind);
-    state().action = formats.first().map(|s| s.id.to_string()).unwrap_or_default();
+    let simple = simple_view();
+    state().action = if simple { conversioni::simple_formats(cat.kind).first().map(|f| f.id) } else { formats.first().map(|s| s.id) }.map(str::to_string).unwrap_or_default();
     fit_extra(hwnd);
     let shift = trascrizione::shift();
+    if simple {
+        // Formati essenziali, a riquadri grandi: li dispone `layout_simple`.
+        for (i, f) in conversioni::simple_formats(cat.kind).iter().enumerate() {
+            child(hwnd, instance, w!("BUTTON"), f.title, WS_TABSTOP.0 | BS_OWNERDRAW as u32, ID_FORMAT0 + i as i32, (0, 0, 10, 10), font(&FONT));
+        }
+        refresh_options(hwnd);
+        render_queue(hwnd);
+        return;
+    }
     chips(hwnd, instance, formats, ID_FORMAT0, 274 + shift);
     chips(hwnd, instance, tools, ID_TOOL0, 328 + shift);
     // Audio ha le due schede in alto: la coda e i formati scendono per far loro posto.
+    place(hwnd, ID_TITLE, (210, 44, 670, 32));
+    place(hwnd, ID_HINT, (210, 78, 670, 34));
     place(hwnd, ID_DROP, (210, 114 + shift, 670, 40));
     place(hwnd, ID_COUNT, (210, 160 + shift, 670, 16));
     place(hwnd, ID_QUEUE, (210, 178 + shift, 670, 72));
@@ -506,6 +561,10 @@ unsafe fn refresh_options(hwnd: HWND) {
                 let _ = DestroyWindow(old);
             }
         }
+    }
+    if simple_view() {
+        layout_simple(hwnd, true);
+        return;
     }
     fit_extra(hwnd);
     show_convert(hwnd);
@@ -621,7 +680,266 @@ unsafe fn layout_bottom(hwnd: HWND, top: i32) {
     place(hwnd, ID_POWERED, (210, top + 160, 420, 20));
     let height = top + 196;
     place(hwnd, ID_SIDE, (0, 40, 190, height - 40));
+    place_back(hwnd, height + extra().1);
     resize_client(hwnd, height + extra().1);
+}
+
+// ---- Modalità Semplice ----------------------------------------------------------------------------------
+
+/// La scheda in alto che sta aperta: 0 Converti file, 1 Video dal web, 2 Trascrivi.
+fn mode_now() -> usize {
+    if youtube_win::active() {
+        1
+    } else if trascrizione::active() {
+        2
+    } else {
+        0
+    }
+}
+
+unsafe fn show(hwnd: HWND, id: i32, on: bool) {
+    let _ = ShowWindow(item(hwnd, id), if on { SW_SHOW } else { SW_HIDE });
+}
+
+/// Mette un controllo dove dico io (px di progetto), senza gli spostamenti della vista completa.
+unsafe fn place_abs(hwnd: HWND, id: i32, x: i32, y: i32, w: i32, h: i32) {
+    let _ = SetWindowPos(item(hwnd, id), None, px(x), px(y), px(w), px(h), SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+/// Larghezza dell'area interna, in px di progetto (mai sotto la misura base).
+unsafe fn client_width(hwnd: HWND) -> i32 {
+    let mut rc = RECT::default();
+    let _ = GetClientRect(hwnd, &mut rc);
+    (rc.right * 96 / dpi() as i32).max(BASE_W)
+}
+
+/// Le tre schede, a tutta larghezza sotto il titolo.
+unsafe fn place_tabs(hwnd: HWND) {
+    let w = client_width(hwnd);
+    for i in 0..3 {
+        place_abs(hwnd, ID_MODE0 + i, i * w / 3, 40, (i + 1) * w / 3 - i * w / 3, TAB_H);
+        show(hwnd, ID_MODE0 + i, true);
+        let _ = InvalidateRect(Some(item(hwnd, ID_MODE0 + i)), None, true);
+    }
+    place_abs(hwnd, ID_HEADER, 0, 0, w, 40);
+}
+
+/// «Torna a Semplice»: in basso a sinistra nella vista completa, se l'impostazione è accesa.
+unsafe fn place_back(hwnd: HWND, client_h: i32) {
+    let on = !simple_view() && SIMPLE_SETTING.load(Ordering::Relaxed);
+    show(hwnd, ID_BACK, on);
+    if on {
+        place_abs(hwnd, ID_BACK, 10, client_h - 44, 170, 30);
+    }
+}
+
+/// Cambia scheda in alto nella vista Semplice.
+unsafe fn select_mode(hwnd: HWND, mode: usize) {
+    if mode == 1 {
+        trascrizione::hide_all(hwnd);
+        for id in [ID_MORE, ID_LESS] {
+            show(hwnd, id, false);
+        }
+        if youtube_win::enter(hwnd, true) {
+            place_tabs(hwnd);
+        }
+    } else {
+        if state().running || youtube_win::busy() {
+            return;
+        }
+        if youtube_win::active() {
+            youtube_win::leave(hwnd);
+        }
+        if mode == 2 {
+            if let Some(i) = CATEGORIES.iter().position(|c| c.kind == Kind::Audio) {
+                state().category = i;
+            }
+        }
+        trascrizione::set_active(mode == 2);
+        if mode == 0 {
+            // Tornando da Trascrivi (che sta su Audio) si riprende la categoria dei file in coda.
+            let mut st = state();
+            let kind = CATEGORIES[st.category].kind;
+            if !st.files.iter().any(|e| kind_of(&e.path) == kind) {
+                if let Some(i) = st.files.first().and_then(|e| CATEGORIES.iter().position(|c| c.kind == kind_of(&e.path))) {
+                    st.category = i;
+                }
+            }
+        }
+        render_category(hwnd);
+    }
+    for i in 0..3 {
+        let _ = InvalidateRect(Some(item(hwnd, ID_MODE0 + i)), None, true);
+    }
+}
+
+/// Passa dalla vista Semplice alla completa (o al contrario) senza chiudere la finestra: file e scelte restano.
+unsafe fn apply_view(hwnd: HWND) {
+    let simple = simple_view();
+    for i in 0..3 {
+        show(hwnd, ID_MODE0 + i, simple);
+    }
+    for id in [ID_MORE, ID_LESS] {
+        show(hwnd, id, simple);
+    }
+    if !simple {
+        show(hwnd, ID_OTHER, false);
+    }
+    show(hwnd, ID_SIDE, !simple);
+    let prev = state().action.clone();
+    if !simple {
+        // La vista Semplice ne ha nascosti parecchi: tornano tutti, poi `render_category` li dispone.
+        for id in [
+            ID_TITLE, ID_HINT, ID_DROP, ID_COUNT, ID_QUEUE, ID_CAP_FORMATS, ID_CAP_TOOLS, ID_CAP_QUALITY, ID_QUALITY, ID_QUALITY_VALUE, ID_CAP_DEST, ID_DEST, ID_CHANGE,
+            ID_RESET, ID_GO, ID_FOOT, ID_POWERED, ID_CAP_OPTIONS, ID_EXISTS, ID_CAP_EXISTS,
+        ] {
+            show(hwnd, id, true);
+        }
+    }
+    if simple {
+        set_extra(hwnd, 0, 0);
+        let on_web = youtube_win::active();
+        if on_web {
+            if youtube_win::shown_mode() != Some(true) {
+                // YouTube non c'è nella vista Semplice: resta solo «Video dal web».
+                youtube_win::leave(hwnd);
+                select_mode(hwnd, 1);
+            } else {
+                youtube_win::layout(hwnd);
+            }
+        } else {
+            render_category(hwnd);
+        }
+        place_tabs(hwnd);
+    } else {
+        if youtube_win::active() {
+            let at = CATEGORIES.len() + youtube_win::shown_mode().unwrap_or(false) as usize;
+            SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(at)), Some(LPARAM(0)));
+            youtube_win::layout(hwnd);
+        } else {
+            let category = state().category;
+            SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(category)), Some(LPARAM(0)));
+            render_category(hwnd);
+        }
+        let _ = InvalidateRect(Some(item(hwnd, ID_SIDE)), None, true);
+    }
+    if !youtube_win::active() {
+        // Il formato scelto resta, se la vista di arrivo lo offre.
+        let kind = CATEGORIES[state().category].kind;
+        let valid = if simple {
+            conversioni::simple_formats(kind).iter().any(|f| f.id == prev)
+        } else {
+            conversioni::formats(kind).iter().chain(conversioni::tools(kind).iter()).any(|s| s.id == prev)
+        };
+        if valid {
+            state().action = prev;
+            refresh_options(hwnd);
+            redraw_chips(hwnd);
+            render_queue(hwnd);
+        }
+    }
+    let _ = InvalidateRect(Some(hwnd), None, true);
+}
+
+/// Dispone la vista Semplice dei file: titolo, rilascio, coda e riquadri dei formati solo quando servono,
+/// un solo pulsante grande, i due link e il piede. Tutto il resto (strumenti, opzioni, qualità, dove salvare) resta nascosto.
+unsafe fn layout_simple(hwnd: HWND, fit: bool) {
+    if youtube_win::active() {
+        show(hwnd, ID_OTHER, false);
+        place_tabs(hwnd);
+        return;
+    }
+    let (files, kind, hidden) = {
+        let s = state();
+        let shown = current_files(&s);
+        let hidden = s.files.iter().filter(|e| !shown.iter().any(|f| f.path == e.path)).count() as i32;
+        (shown.len() as i32, CATEGORIES[s.category].kind, hidden)
+    };
+    let voice = trascrizione::active();
+    let width = client_width(hwnd);
+    let (l, w) = (40, width - 80);
+    for id in [ID_CAP_TOOLS, ID_CAP_OPTIONS, ID_CAP_QUALITY, ID_QUALITY, ID_QUALITY_VALUE, ID_CAP_DEST, ID_DEST, ID_CHANGE, ID_RESET, ID_CAP_EXISTS, ID_EXISTS, ID_SIDE, ID_BACK] {
+        show(hwnd, id, false);
+    }
+    for (base, n) in [(ID_TOOL0, 24), (OPT_CTL0, OPT_MAX), (OPT_LABEL0, OPT_MAX), (OPT_VALUE0, OPT_MAX)] {
+        for i in 0..n {
+            if let Ok(c) = GetDlgItem(Some(hwnd), base + i) {
+                let _ = ShowWindow(c, SW_HIDE);
+            }
+        }
+    }
+    trascrizione::hide_all(hwnd);
+    set_text(hwnd, ID_TITLE, if voice { "Cosa vuoi trascrivere?" } else { "Cosa vuoi convertire?" });
+    set_text(
+        hwnd,
+        ID_HINT,
+        if voice { "Trascina una registrazione, un vocale o un video: Cedro scrive il testo." } else { "Trascina qui foto, documenti, PDF, audio o video." },
+    );
+    set_text(hwnd, ID_CAP_FORMATS, "IN CHE COSA LI TRASFORMO?");
+    for id in [ID_TITLE, ID_HINT, ID_DROP, ID_MORE, ID_LESS, ID_FOOT, ID_POWERED] {
+        show(hwnd, id, true);
+    }
+    place_tabs(hwnd);
+    let mut y = 40 + TAB_H + 22;
+    place_abs(hwnd, ID_TITLE, l, y, w, 36);
+    y += 40;
+    place_abs(hwnd, ID_HINT, l, y, w, 24);
+    y += 32;
+    let drop_h = if files > 0 { 60 } else { 110 };
+    place_abs(hwnd, ID_DROP, l, y, w, drop_h);
+    y += drop_h + 14;
+    show(hwnd, ID_OTHER, hidden > 0);
+    if hidden > 0 {
+        let text = if hidden == 1 { "Un altro file in coda è di un altro tipo: mostralo".to_string() } else { format!("Altri {hidden} file in coda sono di un altro tipo: mostrali") };
+        set_text(hwnd, ID_OTHER, &text);
+        place_abs(hwnd, ID_OTHER, l, y, w, 22);
+        let _ = InvalidateRect(Some(item(hwnd, ID_OTHER)), None, true);
+        y += 28;
+    }
+    show(hwnd, ID_COUNT, files > 0);
+    show(hwnd, ID_QUEUE, files > 0);
+    if files > 0 {
+        place_abs(hwnd, ID_COUNT, l, y, w, 16);
+        y += 18;
+        let queue_h = files.min(4) * 24 + 4;
+        place_abs(hwnd, ID_QUEUE, l, y, w, queue_h);
+        y += queue_h + 14;
+    }
+    let cards = conversioni::simple_formats(kind);
+    let show_cards = files > 0 && !voice;
+    show(hwnd, ID_CAP_FORMATS, show_cards);
+    for i in 0..24 {
+        if let Ok(c) = GetDlgItem(Some(hwnd), ID_FORMAT0 + i) {
+            let _ = ShowWindow(c, if show_cards && (i as usize) < cards.len() { SW_SHOW } else { SW_HIDE });
+        }
+    }
+    if show_cards {
+        place_abs(hwnd, ID_CAP_FORMATS, l, y, w, 16);
+        y += 20;
+        let n = cards.len() as i32;
+        let cw = ((w - 10 * (n - 1)) / n).min(210);
+        for i in 0..n {
+            place_abs(hwnd, ID_FORMAT0 + i, l + i * (cw + 10), y, cw, 62);
+            let _ = InvalidateRect(Some(item(hwnd, ID_FORMAT0 + i)), None, true);
+        }
+        y += 62 + 16;
+    }
+    show(hwnd, ID_GO, files > 0);
+    if files > 0 {
+        place_abs(hwnd, ID_GO, l, y, w, 54);
+        y += 54 + 12;
+    }
+    place_abs(hwnd, ID_MORE, l, y, 160, 28);
+    place_abs(hwnd, ID_LESS, l + w - 180, y, 180, 28);
+    y += 36;
+    place_abs(hwnd, ID_FOOT, l, y, 420, 20);
+    place_abs(hwnd, ID_POWERED, l, y + 20, 420, 18);
+    y += 52;
+    SIMPLE_H.store(y as isize, Ordering::Relaxed);
+    if fit {
+        resize_client(hwnd, y);
+    }
+    let _ = InvalidateRect(Some(hwnd), None, true);
 }
 
 /// Se la finestra, cresciuta, esce in fondo dall'area di lavoro (sotto la barra delle applicazioni), sale quanto basta.
@@ -717,6 +1035,9 @@ unsafe fn render_queue(hwnd: HWND) {
     };
     set_text(hwnd, ID_GO, &label);
     let _ = EnableWindow(item(hwnd, ID_GO), n > 0 && !running && (transcribing || !action.is_empty()));
+    if simple_view() {
+        layout_simple(hwnd, true);
+    }
     let _ = InvalidateRect(Some(hwnd), None, true);
 }
 
@@ -991,11 +1312,64 @@ unsafe fn draw_item(hwnd: HWND, di: &DRAWITEMSTRUCT) {
             let fill = CreateSolidBrush(bg);
             FillRect(hdc, &rc, fill);
             let _ = DeleteObject(HGDIOBJ(fill.0));
-            SelectObject(hdc, HGDIOBJ(font(&FONT_BOLD).0));
+            SelectObject(hdc, HGDIOBJ(font(if simple_view() { &FONT_TITLE } else { &FONT_BOLD }).0));
             SetTextColor(hdc, if disabled { GREY } else { WHITE });
             let mut text = [0u16; 128];
             let n = GetWindowTextW(di.hwndItem, &mut text) as usize;
             draw_text(hdc, &String::from_utf16_lossy(&text[..n]), &mut rc, DT_SINGLELINE | DT_VCENTER | DT_CENTER | DT_END_ELLIPSIS);
+        }
+        x if (ID_MODE0..ID_MODE0 + 3).contains(&x) => {
+            let on = mode_now() == (x - ID_MODE0) as usize;
+            FillRect(hdc, &rc, brush(if on { &BRUSH_WHITE } else { &BRUSH_SIDE }, if on { WHITE } else { SIDE }));
+            let line = CreateSolidBrush(if on { PRIMARY } else { LINE });
+            let bar = RECT { top: rc.bottom - px(if on { 4 } else { 1 }), ..rc };
+            FillRect(hdc, &bar, line);
+            let _ = DeleteObject(HGDIOBJ(line.0));
+            SelectObject(hdc, HGDIOBJ(font(&FONT_BOLD).0));
+            SetTextColor(hdc, if on { PRIMARY } else { TEXT });
+            let mut text = rc;
+            text.bottom -= px(4);
+            draw_text(hdc, MODES[(x - ID_MODE0) as usize], &mut text, DT_SINGLELINE | DT_VCENTER | DT_CENTER);
+        }
+        ID_MORE | ID_LESS | ID_BACK | ID_OTHER => {
+            FillRect(hdc, &rc, brush(if id == ID_BACK { &BRUSH_SIDE } else { &BRUSH_WHITE }, if id == ID_BACK { SIDE } else { WHITE }));
+            SelectObject(hdc, HGDIOBJ(font(&FONT).0));
+            SetTextColor(hdc, if selected { HOVER } else { PRIMARY });
+            let mut buf = [0u16; 64];
+            let n = GetWindowTextW(di.hwndItem, &mut buf) as usize;
+            let label = String::from_utf16_lossy(&buf[..n]);
+            let right = id == ID_LESS;
+            let mut text = rc;
+            draw_text(hdc, &label, &mut text, DT_SINGLELINE | DT_VCENTER | if right { DT_RIGHT } else { DT_LEFT });
+            // Sottolineato, come un link: la larghezza del testo dice dove finisce la riga.
+            let mut size = SIZE::default();
+            let wide_label = wide(&label);
+            let _ = GetTextExtentPoint32W(hdc, &wide_label, &mut size);
+            let x0 = if right { rc.right - size.cx } else { rc.left };
+            let y0 = (rc.top + rc.bottom) / 2 + size.cy / 2;
+            let under = RECT { left: x0, right: x0 + size.cx, top: y0, bottom: y0 + px(1).max(1) };
+            let line = CreateSolidBrush(if selected { HOVER } else { PRIMARY });
+            FillRect(hdc, &under, line);
+            let _ = DeleteObject(HGDIOBJ(line.0));
+        }
+        x if simple_view() && (ID_FORMAT0..ID_FORMAT0 + 24).contains(&x) => {
+            let kind = CATEGORIES[state().category].kind;
+            let Some(card) = conversioni::simple_formats(kind).get((x - ID_FORMAT0) as usize) else { return };
+            let on = card.id == state().action;
+            FillRect(hdc, &rc, brush(if on { &BRUSH_PRIMARY } else { &BRUSH_WHITE }, if on { PRIMARY } else { WHITE }));
+            let edge = CreateSolidBrush(if on { PRIMARY } else if selected { HOVER } else { LINE });
+            FrameRect(hdc, &rc, edge);
+            let inner = RECT { left: rc.left + 1, top: rc.top + 1, right: rc.right - 1, bottom: rc.bottom - 1 };
+            FrameRect(hdc, &inner, edge);
+            let _ = DeleteObject(HGDIOBJ(edge.0));
+            SelectObject(hdc, HGDIOBJ(font(&FONT_BOLD).0));
+            SetTextColor(hdc, if on { WHITE } else { TEXT });
+            let mut title = RECT { left: rc.left + px(14), top: rc.top + px(8), right: rc.right - px(8), bottom: rc.top + px(34) };
+            draw_text(hdc, card.title, &mut title, DT_SINGLELINE | DT_LEFT | DT_VCENTER);
+            SelectObject(hdc, HGDIOBJ(font(&FONT).0));
+            SetTextColor(hdc, if on { COLORREF(0x00F6EBD6) } else { GREY });
+            let mut note = RECT { left: rc.left + px(14), top: rc.top + px(34), right: rc.right - px(8), bottom: rc.bottom - px(6) };
+            draw_text(hdc, card.note, &mut note, DT_SINGLELINE | DT_LEFT | DT_VCENTER | DT_END_ELLIPSIS);
         }
         _ => {
             let action = state().action.clone();
@@ -1025,13 +1399,52 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 return LRESULT(0);
             }
             match id {
+                x if (ID_MODE0..ID_MODE0 + 3).contains(&x) => select_mode(hwnd, (x - ID_MODE0) as usize),
+                ID_MORE => {
+                    // Il pannello completo, con i file e le scelte già fatte; l'impostazione resta com'è.
+                    SIMPLE.store(false, Ordering::Relaxed);
+                    apply_view(hwnd);
+                }
+                ID_LESS => {
+                    let mut st = read_settings();
+                    st.simple = false;
+                    let _ = cedro::write_settings(&st);
+                    SIMPLE_SETTING.store(false, Ordering::Relaxed);
+                    SIMPLE.store(false, Ordering::Relaxed);
+                    apply_view(hwnd);
+                }
+                ID_OTHER => {
+                    if state().running {
+                        return LRESULT(0);
+                    }
+                    {
+                        let mut st = state();
+                        let shown = current_files(&st);
+                        let next = st.files.iter().find(|e| !shown.iter().any(|f| f.path == e.path)).map(|e| e.path.clone());
+                        let kind = next.as_ref().map(|p| kind_of(p)).filter(|k| *k != Kind::Other);
+                        // Un vocale (.opus, .amr…) si legge solo con la trascrizione.
+                        let voice = kind.is_none() && next.is_some();
+                        let kind = if voice { Some(Kind::Audio) } else { kind };
+                        if let Some(i) = kind.and_then(|k| CATEGORIES.iter().position(|c| c.kind == k)) {
+                            st.category = i;
+                        }
+                        drop(st);
+                        trascrizione::set_active(voice);
+                    }
+                    render_category(hwnd);
+                }
+                ID_BACK => {
+                    SIMPLE.store(true, Ordering::Relaxed);
+                    apply_view(hwnd);
+                }
                 ID_SIDE if code == LBN_SELCHANGE => {
                     let sel = SendMessageW(item(hwnd, ID_SIDE), LB_GETCURSEL, Some(WPARAM(0)), Some(LPARAM(0))).0;
                     if sel >= 0 && sel as usize >= CATEGORIES.len() {
                         trascrizione::hide_all(hwnd);
                         if !youtube_win::enter(hwnd, sel as usize > CATEGORIES.len()) {
                             // Si resta sulla scheda che sta scaricando.
-                            let back = youtube_win::shown_mode().map(|w| CATEGORIES.len() + w as usize).unwrap_or(state().category);
+                            let category = state().category;
+                            let back = youtube_win::shown_mode().map(|w| CATEGORIES.len() + w as usize).unwrap_or(category);
                             SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(back)), Some(LPARAM(0)));
                         }
                     } else if sel >= 0 {
@@ -1076,8 +1489,10 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 x if (ID_FORMAT0..ID_FORMAT0 + 24).contains(&x) || (ID_TOOL0..ID_TOOL0 + 24).contains(&x) => {
                     let kind = CATEGORIES[state().category].kind;
                     let (list, index) = if x >= ID_TOOL0 { (conversioni::tools(kind), (x - ID_TOOL0) as usize) } else { (conversioni::formats(kind), (x - ID_FORMAT0) as usize) };
-                    if let Some(slice) = list.get(index) {
-                        state().action = slice.id.to_string();
+                    let simple_id = conversioni::simple_formats(kind).get((x - ID_FORMAT0) as usize).map(|f| f.id);
+                    let chosen = if simple_view() && x < ID_TOOL0 { simple_id } else { list.get(index).map(|s| s.id) };
+                    if let Some(id) = chosen {
+                        state().action = id.to_string();
                         refresh_options(hwnd);
                         redraw_chips(hwnd);
                         render_queue(hwnd);
@@ -1105,6 +1520,8 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 USER_H.store((h * 96 / dpi() as i32) as isize, Ordering::Relaxed);
                 if youtube_win::active() {
                     youtube_win::layout(hwnd);
+                } else if simple_view() {
+                    layout_simple(hwnd, false);
                 } else {
                     fit_extra(hwnd);
                     place(hwnd, ID_SIDE, (0, 40, 190, design_height() - 40));
@@ -1126,7 +1543,8 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             DragFinish(hdrop);
             if youtube_win::active() {
                 youtube_win::leave(hwnd);
-                SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(state().category)), Some(LPARAM(0)));
+                let category = state().category;
+            SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(category)), Some(LPARAM(0)));
                 render_category(hwnd);
             }
             add_files(hwnd, paths);

@@ -24,7 +24,9 @@ Per i PC del Comune di Bondeno: stesse funzioni, con lo stemma del Comune. Insta
 
 - **Edizione Comune di Bondeno**: una versione a parte di Cedro con lo stemma ufficiale del Comune nelle Impostazioni, nella scheda Informazioni, nella guida, nel menu dell'icona e nell'installatore. Ognuna delle due edizioni si aggiorna solo con i suoi pacchetti.
 
-Dalla 0.18.5: revisione di tutto il codice, con correzioni di robustezza e sicurezza su Windows, Windows on ARM e Linux.
+Dalla 0.19.0: Modalità Semplice, un'interfaccia essenziale da attivare in Impostazioni → Generale (le altre opzioni restano a un clic in «Altre opzioni»), scelta anche alla fine dell'installazione.
+
+Dalla 0.18.5: versione di manutenzione con correzioni di robustezza e sicurezza trovate rileggendo il codice.
 
 Dalla 0.18.4: guida iniziale rifatta in sei passi, Linux che si aggiorna da solo, riga rossa degli errori che sparisce da sola.
 

@@ -151,7 +151,13 @@ pub fn start() -> i32 {
             Open::Guide => linux_settings::open_guide(app),
             Open::Conversions => crate::linux_conversioni::open_conversions(app),
             // Avviato a mano, senza file: si vede subito che c'è, anche senza vassoio.
-            Open::Nothing if opened.borrow().launch.stay && !background => open_settings_window(app),
+            Open::Nothing if opened.borrow().launch.stay && !background => {
+                if cedro::read_settings().view_asked {
+                    open_settings_window(app)
+                } else {
+                    linux_settings::open_view_choice(app)
+                }
+            }
             Open::Nothing => {}
         }
         let app = app.clone();

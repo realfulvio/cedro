@@ -107,9 +107,9 @@ fn colorref(c: Rgb) -> COLORREF {
 }
 
 /// Le primitive di `guida::Canvas` su un contesto GDI; `d` converte i pixel logici in pixel dello schermo.
-struct Gdi {
-    dc: HDC,
-    d: f32,
+pub(crate) struct Gdi {
+    pub(crate) dc: HDC,
+    pub(crate) d: f32,
 }
 
 impl Gdi {

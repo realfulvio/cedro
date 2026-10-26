@@ -38,6 +38,56 @@ pub fn tools(kind: Kind) -> &'static [Slice] {
     }
 }
 
+/// Un formato proposto dalla modalità Semplice: nome e una riga in parole comuni.
+pub struct SimpleFormat {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub note: &'static str,
+}
+
+/// I formati che la modalità Semplice mette in primo piano per una categoria (sempre formati del motore).
+pub fn simple_formats(kind: Kind) -> &'static [SimpleFormat] {
+    const IMAGE: &[SimpleFormat] = &[
+        SimpleFormat { id: "webp", title: "WebP", note: "leggera, per il web" },
+        SimpleFormat { id: "jpeg", title: "JPEG", note: "va bene dappertutto" },
+        SimpleFormat { id: "png", title: "PNG", note: "nitida, senza perdite" },
+        SimpleFormat { id: "pdf", title: "PDF", note: "un documento" },
+    ];
+    const DOC: &[SimpleFormat] = &[SimpleFormat { id: "pdf", title: "PDF", note: "si apre ovunque" }];
+    const PDF: &[SimpleFormat] = &[
+        SimpleFormat { id: "docx", title: "Word", note: "da modificare" },
+        SimpleFormat { id: "jpg", title: "Immagini", note: "una per pagina" },
+        SimpleFormat { id: "txt", title: "Testo", note: "solo le parole" },
+    ];
+    const TEXT: &[SimpleFormat] = &[
+        SimpleFormat { id: "pdf", title: "PDF", note: "si apre ovunque" },
+        SimpleFormat { id: "txt", title: "TXT", note: "testo semplice" },
+        SimpleFormat { id: "html", title: "HTML", note: "pagina web" },
+    ];
+    const AUDIO: &[SimpleFormat] = &[
+        SimpleFormat { id: "mp3", title: "MP3", note: "leggero, va ovunque" },
+        SimpleFormat { id: "wav", title: "WAV", note: "qualità piena" },
+    ];
+    const VIDEO: &[SimpleFormat] = &[
+        SimpleFormat { id: "mp4", title: "MP4", note: "va ovunque" },
+        SimpleFormat { id: "mp3", title: "Solo audio", note: "senza immagini" },
+    ];
+    match kind {
+        Kind::Image => IMAGE,
+        Kind::Doc => DOC,
+        Kind::Pdf => PDF,
+        Kind::Text => TEXT,
+        Kind::Audio => AUDIO,
+        Kind::Video => VIDEO,
+        Kind::Other => &[],
+    }
+}
+
+/// La categoria dei file lasciati nel pannello Semplice: quella del primo file riconosciuto.
+pub fn kind_of_files(paths: &[PathBuf]) -> Option<Kind> {
+    paths.iter().map(|p| engine::kind_of(p)).find(|k| *k != Kind::Other)
+}
+
 /// Il nome che il pannello mostra per un formato o uno strumento, per esempio «WebP».
 pub fn action_label(kind: Kind, action: &str) -> &'static str {
     formats(kind).iter().chain(tools(kind).iter()).find(|s| s.id == action).map(|s| s.label).unwrap_or("")
@@ -494,5 +544,27 @@ mod tests {
         convert_one(&src, "md", 82, Some(&dest), &replace).unwrap();
         assert!(!dest.join("nota-3.md").exists());
         let _ = fs::remove_dir_all(&base);
+    }
+}
+
+#[cfg(test)]
+mod simple_tests {
+    use super::*;
+
+    #[test]
+    fn simple_formats_are_real_engine_formats() {
+        for cat in CATEGORIES {
+            let simple = simple_formats(cat.kind);
+            assert!(!simple.is_empty());
+            for f in simple {
+                assert!(formats(cat.kind).iter().any(|s| s.id == f.id), "{} manca in {}", f.id, cat.name);
+            }
+        }
+    }
+
+    #[test]
+    fn kind_of_files_skips_unknown() {
+        let list = vec![PathBuf::from("a.xyz"), PathBuf::from("b.png")];
+        assert!(kind_of_files(&list) == Some(Kind::Image));
     }
 }
