@@ -1299,6 +1299,12 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
             let rendered = render(page, &cache, &settings, &RenderSettings::default(), &pixmap);
             let png = rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?;
             let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
+            if rgb.pixels().all(|p| p.0.iter().all(|&c| c >= 250)) {
+                // Pagina bianca: resta una pagina vuota, non un'immagine.
+                special.push(None);
+                raw.push(Some(RawPage { width: w, height: h, regions: Vec::new(), others: Vec::new() }));
+                continue;
+            }
             let mut jpeg = Vec::new();
             image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 80).encode_image(&rgb).map_err(|e| e.to_string())?;
             raw.push(None);
