@@ -133,7 +133,7 @@ impl Panel {
             card.append(&note);
             button.set_child(Some(&card));
             models.append(&button);
-            if i == trascrizione::DEFAULT_MODEL {
+            if i == trascrizione::default_model() {
                 button.set_active(true);
             }
             cards.push((status, button));
@@ -184,7 +184,7 @@ impl Panel {
             transcribe_tab: transcribe_tab.clone(),
             body,
             format: Cell::new(Format::Word),
-            model: Cell::new(trascrizione::DEFAULT_MODEL),
+            model: Cell::new(trascrizione::default_model()),
             log: buffer,
             view,
             cards,
