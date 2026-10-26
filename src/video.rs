@@ -29,6 +29,36 @@ pub fn to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     }
 }
 
+fn create_writer(wide_out: &[u16]) -> Result<windows::Win32::Media::MediaFoundation::IMFSinkWriter, String> {
+    unsafe { MFCreateSinkWriterFromURL(PCWSTR(wide_out.as_ptr()), None, None).map_err(|e| format!("MP4 non creato: {e}")) }
+}
+
+/// Dice all'encoder H.264 di seguire il bitrate (VBR con picco limitato) invece della sua qualità fissa.
+/// Va chiamata dopo `AddStream` e prima di `SetInputMediaType`.
+fn set_encoder_bitrate(
+    writer: &windows::Win32::Media::MediaFoundation::IMFSinkWriter,
+    stream: u32,
+    target: &windows::Win32::Media::MediaFoundation::IMFMediaType,
+    bitrate: u32,
+) {
+    use windows::core::Interface;
+    use windows::Win32::Media::MediaFoundation::{
+        IMFSinkWriterEncoderConfig, CODECAPI_AVEncCommonMeanBitRate, CODECAPI_AVEncCommonRateControlMode,
+    };
+    unsafe {
+        let Ok(config) = writer.cast::<IMFSinkWriterEncoderConfig>() else { return };
+        let mut attrs = None;
+        if MFCreateAttributes(&mut attrs, 2).is_err() {
+            return;
+        }
+        let Some(attrs) = attrs else { return };
+        // 0 = eAVEncCommonRateControlMode_CBR
+        let _ = attrs.SetUINT32(&CODECAPI_AVEncCommonRateControlMode, 0);
+        let _ = attrs.SetUINT32(&CODECAPI_AVEncCommonMeanBitRate, bitrate);
+        let _ = config.SetTargetMediaType(stream, target, &attrs);
+    }
+}
+
 fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
     ensure_runtime()?;
     let wide_in = wide(input);
@@ -48,12 +78,13 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
             .GetNativeMediaType(video_stream, 0)
             .map_err(|_| "il file non ha un video".to_string())?;
         let frame = native.GetUINT64(&MF_MT_FRAME_SIZE).unwrap_or(0);
-        let width = (frame >> 32) as u32;
-        let height = frame as u32;
+        let (width, height) = ((frame >> 32) as u32, frame as u32);
         if width < 2 || height < 2 {
             return Err("il video non ha una dimensione".into());
         }
-        if width % 2 == 1 || height % 2 == 1 {
+        // Con una risoluzione scelta più bassa i fotogrammi si rimpiccioliscono qui, prima dell'encoder.
+        let shrinking = crate::sink::shape().height.is_some_and(|h| h >= 2 && h < height);
+        if !shrinking && (width % 2 == 1 || height % 2 == 1) {
             return Err(format!("il video è {width}×{height}: H.264 vuole misure pari"));
         }
         let raw_rate = native.GetUINT64(&MF_MT_FRAME_RATE).unwrap_or(0);
@@ -63,14 +94,34 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
             raw_rate
         };
         let frame = ((width as u64) << 32) | (height as u64);
+        let out_rate = match crate::sink::shape().fps {
+            Some(cap) if cap > 0 && (rate >> 32) / (rate as u32).max(1) as u64 > cap as u64 => ((cap as u64) << 32) | 1,
+            _ => rate,
+        };
 
-        let opened = uncompressed_type(&reader, video_stream, &native, frame, rate)?;
-        let enc_w = opened.convert.as_ref().map(|f| f.enc_w).unwrap_or(width);
-        let enc_h = opened.convert.as_ref().map(|f| f.enc_h).unwrap_or(height);
+        let mut opened = uncompressed_type(&reader, video_stream, &native, frame, rate)?;
+        if shrinking {
+            let (out_w, out_h) = crate::sink::target_size(width, height);
+            let mut info = opened.convert.take().unwrap_or(FrameInfo {
+                kind: Pix::Nv12,
+                width,
+                height,
+                stride: 0,
+                enc_w: width,
+                enc_h: height,
+                scale: None,
+            });
+            info.scale = Some((out_w, out_h));
+            opened.convert = Some(info);
+        }
+        let (enc_w, enc_h) = match opened.convert.as_ref() {
+            Some(f) => f.scale.unwrap_or((f.enc_w, f.enc_h)),
+            None => (width, height),
+        };
         let frame = ((enc_w as u64) << 32) | (enc_h as u64);
 
         let mut audio_in = None;
-        let has_audio = reader.GetNativeMediaType(audio_stream, 0).is_ok();
+        let has_audio = !crate::sink::shape().mute && reader.GetNativeMediaType(audio_stream, 0).is_ok();
         if has_audio {
             let pcm = MFCreateMediaType().map_err(|e| e.to_string())?;
             pcm.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Audio).map_err(|e| e.to_string())?;
@@ -80,13 +131,12 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
             }
         }
 
-        let writer = MFCreateSinkWriterFromURL(PCWSTR(wide_out.as_ptr()), None, None)
-            .map_err(|e| format!("MP4 non creato: {e}"))?;
+        let writer = create_writer(&wide_out)?;
         let video_out = MFCreateMediaType().map_err(|e| e.to_string())?;
         video_out.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video).map_err(|e| e.to_string())?;
         video_out.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_H264).map_err(|e| e.to_string())?;
         video_out.SetUINT64(&MF_MT_FRAME_SIZE, frame).map_err(|e| e.to_string())?;
-        video_out.SetUINT64(&MF_MT_FRAME_RATE, rate).map_err(|e| e.to_string())?;
+        video_out.SetUINT64(&MF_MT_FRAME_RATE, out_rate).map_err(|e| e.to_string())?;
         video_out.SetUINT64(&MF_MT_PIXEL_ASPECT_RATIO, (1u64 << 32) | 1).map_err(|e| e.to_string())?;
         video_out
             .SetUINT32(&MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive.0 as u32)
@@ -94,13 +144,12 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         video_out
             .SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Base.0 as u32)
             .map_err(|e| e.to_string())?;
-        let pixels = (width as u64).saturating_mul(height as u64).max(1);
-        let bitrate = (pixels.saturating_mul(4)).clamp(400_000, 8_000_000) as u32;
-        video_out.SetUINT32(&MF_MT_AVG_BITRATE, bitrate).map_err(|e| e.to_string())?;
+        video_out.SetUINT32(&MF_MT_AVG_BITRATE, crate::sink::bitrate(enc_w, enc_h)).map_err(|e| e.to_string())?;
         let video_index = writer
             .AddStream(&video_out)
             .map_err(|e| format!("H.264 non disponibile: {e}"))?;
-        let nv12 = nv12_type(frame, rate)?;
+        set_encoder_bitrate(&writer, video_index, &video_out, crate::sink::bitrate(enc_w, enc_h));
+        let nv12 = nv12_type(frame, out_rate)?;
         if let Err(clean_err) = writer.SetInputMediaType(video_index, &nv12, None) {
             writer.SetInputMediaType(video_index, &opened.media, None).map_err(|e| {
                 format!("ingresso video ({enc_w}×{enc_h}): {clean_err} / {e}")
@@ -134,12 +183,13 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         let num = rate >> 32;
         let den = (rate as u32).max(1) as u64;
         let frame_ticks = 10_000_000u64.saturating_mul(den) / num.max(1);
-        let frames = pump(&reader, &writer, video_stream, video_index, Some(frame_ticks), opened.convert.as_ref())?;
+        let mut gate = crate::sink::FrameGate::new();
+        let frames = pump(&reader, &writer, video_stream, video_index, Some(frame_ticks), opened.convert.as_ref(), Some(&mut gate))?;
         if frames == 0 {
             return Err("il video non ha fotogrammi".into());
         }
         if let Some(index) = audio_index {
-            pump(&reader, &writer, audio_stream, index, None, None)?;
+            pump(&reader, &writer, audio_stream, index, None, None, None)?;
         }
         writer.Finalize().map_err(|e| format!("MP4 non chiuso: {e}"))?;
     }
@@ -158,6 +208,8 @@ struct FrameInfo {
     stride: i32,
     enc_w: u32,
     enc_h: u32,
+    /// Dimensioni di uscita quando il video si rimpicciolisce.
+    scale: Option<(u32, u32)>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -255,7 +307,7 @@ fn frame_plan(
         if packed {
             return Ok(None);
         }
-        Ok(Some(FrameInfo { kind, width, height, stride, enc_w, enc_h }))
+        Ok(Some(FrameInfo { kind, width, height, stride, enc_w, enc_h, scale: None }))
     }
 }
 
@@ -307,6 +359,7 @@ fn pump(
     dest: u32,
     frame_ticks: Option<u64>,
     convert: Option<&FrameInfo>,
+    mut gate: Option<&mut crate::sink::FrameGate>,
 ) -> Result<u32, String> {
     let mut written = 0u32;
     let mut ticks = 0u64;
@@ -326,6 +379,20 @@ fn pump(
                             .SetSampleDuration(step as i64)
                             .map_err(|e| format!("tempo del fotogramma: {e}"))?;
                         ticks = ticks.saturating_add(step);
+                    }
+                }
+                if let Some(g) = gate.as_deref_mut() {
+                    if let Ok(time) = sample.GetSampleTime() {
+                        if !g.pass(time) {
+                            if eos {
+                                break;
+                            }
+                            continue;
+                        }
+                        if g.gap() > 0 {
+                            let kept = sample.GetSampleDuration().unwrap_or(0);
+                            let _ = sample.SetSampleDuration(kept.max(g.gap()));
+                        }
                     }
                 }
                 if let Some(info) = convert {
@@ -368,7 +435,10 @@ fn repack(
         }
         let bytes = std::slice::from_raw_parts(ptr, cur as usize).to_vec();
         src.Unlock().map_err(|e| format!("fotogramma non letto: {e}"))?;
-        let nv12 = to_nv12(&bytes, info)?;
+        let mut nv12 = to_nv12(&bytes, info)?;
+        if let Some((out_w, out_h)) = info.scale {
+            nv12 = scale_nv12(&nv12, info.enc_w, info.enc_h, out_w, out_h);
+        }
         let buffer = MFCreateMemoryBuffer(nv12.len() as u32).map_err(|e| e.to_string())?;
         let mut dst = std::ptr::null_mut();
         buffer.Lock(&mut dst, None, None).map_err(|e| e.to_string())?;
@@ -389,6 +459,25 @@ fn repack(
         }
         Ok(out)
     }
+}
+
+/// Un fotogramma NV12 senza padding riportato a `dw`×`dh`.
+fn scale_nv12(nv12: &[u8], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<u8> {
+    let luma = (sw * sh) as usize;
+    let (cw, ch) = ((sw / 2) as usize, (sh / 2) as usize);
+    let mut u = Vec::with_capacity(cw * ch);
+    let mut v = Vec::with_capacity(cw * ch);
+    for pair in nv12[luma..luma + cw * ch * 2].chunks_exact(2) {
+        u.push(pair[0]);
+        v.push(pair[1]);
+    }
+    let (y2, u2, v2) = crate::sink::resize_i420(&nv12[..luma], &u, &v, sw, sh, dw, dh);
+    let mut out = y2;
+    for (a, b) in u2.iter().zip(v2.iter()) {
+        out.push(*a);
+        out.push(*b);
+    }
+    out
 }
 
 fn to_nv12(src: &[u8], info: &FrameInfo) -> Result<Vec<u8>, String> {
@@ -556,7 +645,11 @@ pub(super) struct EncodedVideo {
     resample_to: Option<u32>,
     src_w: u32,
     src_h: u32,
+    out_w: u32,
+    out_h: u32,
     last_time: i64,
+    gate: crate::sink::FrameGate,
+    muted: bool,
 }
 
 impl EncodedVideo {
@@ -568,18 +661,19 @@ impl EncodedVideo {
         audio: Option<(u32, u16)>,
     ) -> Result<Self, String> {
         ensure_runtime()?;
-        let enc_w = width + (width & 1);
-        let enc_h = height + (height & 1);
+        let (enc_w, enc_h) = crate::sink::target_size(width, height);
         if enc_w < 2 || enc_h < 2 {
             return Err("il video non ha una dimensione".into());
         }
-        let duration = if frame_duration > 0 { frame_duration } else { 333_333 };
+        let gate = crate::sink::FrameGate::new();
+        let muted = crate::sink::shape().mute;
+        let audio = if muted { None } else { audio };
+        let duration = if frame_duration > 0 { frame_duration } else { 333_333 }.max(gate.gap());
         let rate = rate_from_ticks(duration as u64);
         let frame = ((enc_w as u64) << 32) | (enc_h as u64);
         let wide_out = wide(output);
         unsafe {
-            let writer = MFCreateSinkWriterFromURL(PCWSTR(wide_out.as_ptr()), None, None)
-                .map_err(|e| format!("MP4 non creato: {e}"))?;
+            let writer = create_writer(&wide_out)?;
             let video_out = MFCreateMediaType().map_err(|e| e.to_string())?;
             video_out.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video).map_err(|e| e.to_string())?;
             video_out.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_H264).map_err(|e| e.to_string())?;
@@ -594,12 +688,11 @@ impl EncodedVideo {
             video_out
                 .SetUINT32(&MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Base.0 as u32)
                 .map_err(|e| e.to_string())?;
-            let pixels = (enc_w as u64).saturating_mul(enc_h as u64).max(1);
-            let bitrate = pixels.saturating_mul(4).clamp(400_000, 8_000_000) as u32;
-            video_out.SetUINT32(&MF_MT_AVG_BITRATE, bitrate).map_err(|e| e.to_string())?;
+            video_out.SetUINT32(&MF_MT_AVG_BITRATE, crate::sink::bitrate(enc_w, enc_h)).map_err(|e| e.to_string())?;
             let video_index = writer
                 .AddStream(&video_out)
                 .map_err(|e| format!("H.264 non disponibile: {e}"))?;
+            set_encoder_bitrate(&writer, video_index, &video_out, crate::sink::bitrate(enc_w, enc_h));
             let nv12 = nv12_type(frame, rate)?;
             writer
                 .SetInputMediaType(video_index, &nv12, None)
@@ -614,7 +707,11 @@ impl EncodedVideo {
                 resample_to: None,
                 src_w: width,
                 src_h: height,
+                out_w: enc_w,
+                out_h: enc_h,
                 last_time: -1,
+                gate,
+                muted,
             };
             if let Some((rate, channels)) = audio {
                 encoded.attach_audio(rate, channels)?;
@@ -640,8 +737,18 @@ impl EncodedVideo {
         if width != self.src_w || height != self.src_h {
             return Err("il video cambia dimensione".into());
         }
+        if !self.gate.pass(time) {
+            return Ok(());
+        }
+        let resized;
+        let (y, u, v, width, height) = if (width + (width & 1), height + (height & 1)) != (self.out_w, self.out_h) {
+            resized = crate::sink::resize_i420(y, u, v, width, height, self.out_w, self.out_h);
+            (&resized.0[..], &resized.1[..], &resized.2[..], self.out_w, self.out_h)
+        } else {
+            (y, u, v, width, height)
+        };
         let (nv12, _, _) = yuv_to_nv12(y, u, v, width, height)?;
-        let duration = duration.max(1);
+        let duration = duration.max(self.gate.gap()).max(1);
         let time = if time <= self.last_time {
             self.last_time.saturating_add(duration)
         } else {
@@ -658,6 +765,9 @@ impl EncodedVideo {
     }
 
     pub(super) fn write_pcm(&mut self, samples: &[i16], channels: u16, rate: u32) -> Result<(), String> {
+        if self.muted {
+            return Ok(());
+        }
         let index = self.audio_index.ok_or("audio senza traccia")?;
         if samples.is_empty() || channels == 0 || rate == 0 {
             return Ok(());

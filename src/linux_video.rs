@@ -55,8 +55,13 @@ struct AacTrack {
 
 struct H264Aac {
     path: std::path::PathBuf,
+    /// Dimensioni di uscita; quelle dei fotogrammi in ingresso sono `src_w` e `src_h`.
     width: u32,
     height: u32,
+    src_w: u32,
+    src_h: u32,
+    gate: crate::sink::FrameGate,
+    muted: bool,
     frame_duration: i64,
     encoder: Option<Encoder>,
     sps: Vec<u8>,
@@ -75,9 +80,14 @@ impl VideoSink for H264Aac {
         frame_duration: i64,
         audio: Option<(u32, u16)>,
     ) -> Result<Self, String> {
-        if width < 2 || height < 2 || width % 2 == 1 || height % 2 == 1 {
+        let (out_w, out_h) = crate::sink::target_size(width, height);
+        let shrinking = (out_w, out_h) != (width, height);
+        if width < 2 || height < 2 || (!shrinking && (width % 2 == 1 || height % 2 == 1)) {
             return Err(format!("il video è {width}×{height}: H.264 vuole misure pari"));
         }
+        let shape = crate::sink::shape();
+        let gate = crate::sink::FrameGate::new();
+        let audio = if shape.mute { None } else { audio };
         let audio = match audio {
             Some((rate, channels)) => Some(open_aac(rate, channels)?),
             None => None,
@@ -88,9 +98,13 @@ impl VideoSink for H264Aac {
             .unwrap_or((0, 0));
         Ok(Self {
             path: output.to_path_buf(),
-            width,
-            height,
-            frame_duration: frame_duration.max(1),
+            width: out_w,
+            height: out_h,
+            src_w: width,
+            src_h: height,
+            muted: shape.mute,
+            frame_duration: frame_duration.max(gate.gap()).max(1),
+            gate,
             encoder: None,
             sps: Vec::new(),
             pps: Vec::new(),
@@ -108,16 +122,25 @@ impl VideoSink for H264Aac {
         v: &[u8],
         width: u32,
         height: u32,
-        _time: i64,
+        time: i64,
         duration: i64,
     ) -> Result<(), String> {
-        if width != self.width || height != self.height {
+        if width != self.src_w || height != self.src_h {
             return Err("il video cambia dimensione".into());
         }
+        if !self.gate.pass(time) {
+            return Ok(());
+        }
+        let duration = duration.max(self.gate.gap());
         if self.encoder.is_none() {
             self.encoder = Some(open_h264(self.width, self.height, self.frame_duration)?);
         }
-        let packed = pack_i420(y, u, v, self.width as usize, self.height as usize)?;
+        let packed = if (width, height) != (self.width, self.height) {
+            let (ry, ru, rv) = crate::sink::resize_i420(y, u, v, width, height, self.width, self.height);
+            pack_i420(&ry, &ru, &rv, self.width as usize, self.height as usize)?
+        } else {
+            pack_i420(y, u, v, self.width as usize, self.height as usize)?
+        };
         let picture = YUVBuffer::from_vec(packed, self.width as usize, self.height as usize);
         let encoder = self.encoder.as_mut().expect("encoder");
         let encoded = encoder.encode(&picture).map_err(|err| format!("H.264 non scritto: {err}"))?;
@@ -131,7 +154,7 @@ impl VideoSink for H264Aac {
     }
 
     fn write_pcm(&mut self, samples: &[i16], channels: u16, rate: u32) -> Result<(), String> {
-        if samples.is_empty() {
+        if samples.is_empty() || self.muted {
             return Ok(());
         }
         if self.audio.is_none() {
@@ -227,8 +250,7 @@ fn open_h264(width: u32, height: u32, frame_duration: i64) -> Result<Encoder, St
     } else {
         30.0
     };
-    let pixels = (width as u64).saturating_mul(height as u64);
-    let bitrate = pixels.saturating_mul(4).clamp(400_000, 8_000_000) as u32;
+    let bitrate = crate::sink::bitrate(width, height);
     let config = EncoderConfig::new()
         .bitrate(H264Rate::from_bps(bitrate))
         .max_frame_rate(FrameRate::from_hz(fps))

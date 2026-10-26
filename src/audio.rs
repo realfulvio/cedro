@@ -15,15 +15,74 @@ struct Pcm {
     rate: u32,
     channels: u16,
     samples: Vec<i16>,
+    tags: Tags,
 }
 
-pub fn to_wav(input: &Path, output: &Path) -> Result<(), String> {
-    let pcm = decode(input)?;
+/// Titolo, artista e album letti dal file di partenza.
+#[derive(Default, Clone)]
+struct Tags {
+    title: String,
+    artist: String,
+    album: String,
+}
+
+/// Le opzioni audio del pannello Conversioni: taglio dell'inizio, canali, volume.
+fn shape(mut pcm: Pcm, opts: &crate::engine::Options) -> Result<Pcm, String> {
+    let channels = pcm.channels.max(1) as usize;
+    if opts.trim_start_secs > 0 {
+        let skip = (opts.trim_start_secs as u64 * pcm.rate as u64) as usize * channels;
+        if skip >= pcm.samples.len() {
+            return Err("il taglio dell'inizio è più lungo dell'audio".into());
+        }
+        pcm.samples.drain(..skip);
+    }
+    if let Some(db) = opts.trim_silence_db {
+        let threshold = (32768.0 * 10f32.powf(-(db as f32) / 20.0)) as i32;
+        let frames = pcm.samples.len() / channels;
+        let loud = (0..frames).find(|f| pcm.samples[f * channels..(f + 1) * channels].iter().any(|s| (*s as i32).abs() > threshold));
+        let Some(first) = loud else {
+            return Err(format!("l'audio è tutto sotto -{db} dB: niente da tenere"));
+        };
+        // Si tengono 50 ms prima del primo suono, perché l'attacco non suoni tagliato.
+        let start = first.saturating_sub(pcm.rate as usize / 20);
+        pcm.samples.drain(..start * channels);
+    }
+    match (opts.channels, pcm.channels) {
+        (Some(1), c) if c > 1 => {
+            let c = c as usize;
+            pcm.samples = pcm
+                .samples
+                .chunks_exact(c)
+                .map(|f| (f.iter().map(|s| *s as i32).sum::<i32>() / c as i32) as i16)
+                .collect();
+            pcm.channels = 1;
+        }
+        (Some(2), 1) => {
+            pcm.samples = pcm.samples.iter().flat_map(|s| [*s, *s]).collect();
+            pcm.channels = 2;
+        }
+        (Some(2), c) if c > 2 => pcm = fold_stereo(pcm),
+        _ => {}
+    }
+    if opts.normalize {
+        let peak = pcm.samples.iter().map(|s| (*s as i32).abs()).max().unwrap_or(0);
+        if peak > 0 {
+            let gain = 32000.0 / peak as f32;
+            for s in &mut pcm.samples {
+                *s = (*s as f32 * gain).round().clamp(-32768.0, 32767.0) as i16;
+            }
+        }
+    }
+    Ok(pcm)
+}
+
+pub fn to_wav(input: &Path, output: &Path, opts: &crate::engine::Options) -> Result<(), String> {
+    let pcm = shape(decode(input)?, opts)?;
     write_wav(output, &pcm)
 }
 
-pub fn to_mp3(input: &Path, output: &Path, quality: u8) -> Result<(), String> {
-    let mut pcm = decode(input)?;
+pub fn to_mp3(input: &Path, output: &Path, quality: u8, opts: &crate::engine::Options) -> Result<(), String> {
+    let mut pcm = shape(decode(input)?, opts)?;
     if !matches!(pcm.rate, 8000 | 11025 | 12000 | 16000 | 22050 | 24000 | 32000 | 44100 | 48000) {
         pcm = resample(pcm, 44100);
     }
@@ -31,12 +90,16 @@ pub fn to_mp3(input: &Path, output: &Path, quality: u8) -> Result<(), String> {
         pcm = fold_stereo(pcm);
     }
     let channels = pcm.channels.max(1) as u8;
-    let bitrate = if quality < 60 {
-        Bitrate::Kbps96
-    } else if quality < 85 {
-        Bitrate::Kbps128
-    } else {
-        Bitrate::Kbps192
+    let bitrate = match opts.mp3_kbps {
+        Some(96) => Bitrate::Kbps96,
+        Some(128) => Bitrate::Kbps128,
+        Some(160) => Bitrate::Kbps160,
+        Some(192) => Bitrate::Kbps192,
+        Some(256) => Bitrate::Kbps256,
+        Some(320) => Bitrate::Kbps320,
+        _ if quality < 60 => Bitrate::Kbps96,
+        _ if quality < 85 => Bitrate::Kbps128,
+        _ => Bitrate::Kbps192,
     };
     let mut builder = Builder::new().ok_or("il codificatore MP3 non parte")?;
     builder.set_num_channels(channels).map_err(|e| e.to_string())?;
@@ -72,7 +135,35 @@ pub fn to_mp3(input: &Path, output: &Path, quality: u8) -> Result<(), String> {
     append_mp3(&mut mp3, mp3lame_encoder::max_required_buffer_size(chunk), |buf| {
         encoder.flush::<FlushNoGap>(buf)
     })?;
-    std::fs::write(output, mp3).map_err(|e| e.to_string())
+    let mut file = if opts.keep_tags { id3v2(&pcm.tags) } else { Vec::new() };
+    file.extend_from_slice(&mp3);
+    std::fs::write(output, file).map_err(|e| e.to_string())
+}
+
+/// Il blocco ID3v2.4 (testo UTF-8) con titolo, artista e album; vuoto se non c'è niente da scrivere.
+fn id3v2(tags: &Tags) -> Vec<u8> {
+    let mut frames = Vec::new();
+    for (id, text) in [(b"TIT2", &tags.title), (b"TPE1", &tags.artist), (b"TALB", &tags.album)] {
+        if text.is_empty() {
+            continue;
+        }
+        let body_len = 1 + text.len();
+        frames.extend_from_slice(id);
+        frames.extend_from_slice(&synchsafe(body_len as u32));
+        frames.extend_from_slice(&[0, 0, 3]);
+        frames.extend_from_slice(text.as_bytes());
+    }
+    if frames.is_empty() {
+        return frames;
+    }
+    let mut out = b"ID3\x04\x00\x00".to_vec();
+    out.extend_from_slice(&synchsafe(frames.len() as u32));
+    out.extend_from_slice(&frames);
+    out
+}
+
+fn synchsafe(n: u32) -> [u8; 4] {
+    [((n >> 21) & 0x7F) as u8, ((n >> 14) & 0x7F) as u8, ((n >> 7) & 0x7F) as u8, (n & 0x7F) as u8]
 }
 
 fn encode_block(
@@ -107,11 +198,41 @@ fn decode(path: &Path) -> Result<Pcm, String> {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         hint.with_extension(ext);
     }
-    let probed = symphonia::default::get_probe()
+    let mut probed = symphonia::default::get_probe()
         .format(&hint, source, &FormatOptions::default(), &MetadataOptions::default())
         .map_err(|e| format!("audio non letto: {e}"))?;
+    let mut tags = Tags::default();
+    let mut collect = |rev: &symphonia::core::meta::MetadataRevision| {
+        use symphonia::core::meta::StandardTagKey::*;
+        for tag in rev.tags() {
+            let slot = match tag.std_key {
+                Some(TrackTitle) => &mut tags.title,
+                Some(Artist) => &mut tags.artist,
+                Some(Album) => &mut tags.album,
+                _ => continue,
+            };
+            if slot.is_empty() {
+                *slot = tag.value.to_string();
+            }
+        }
+    };
+    if let Some(mut log) = probed.metadata.get() {
+        if let Some(rev) = log.skip_to_latest() {
+            collect(rev);
+        }
+    }
+    if let Some(rev) = probed.format.metadata().skip_to_latest() {
+        collect(rev);
+    }
     let mut format = probed.format;
-    let track = format.default_track().ok_or("l'audio non ha una traccia")?.clone();
+    // Nei video la traccia predefinita può essere quella delle immagini: si prende la prima con un audio.
+    let track = format
+        .default_track()
+        .filter(|t| t.codec_params.sample_rate.is_some())
+        .or_else(|| format.tracks().iter().find(|t| t.codec_params.sample_rate.is_some()))
+        .or_else(|| format.default_track())
+        .ok_or("l'audio non ha una traccia")?
+        .clone();
     let track_id = track.id;
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
@@ -146,7 +267,7 @@ fn decode(path: &Path) -> Result<Pcm, String> {
     if samples.is_empty() || channels == 0 {
         return Err("l'audio non ha campioni".into());
     }
-    Ok(Pcm { rate, channels, samples })
+    Ok(Pcm { rate, channels, samples, tags })
 }
 
 fn write_wav(path: &Path, pcm: &Pcm) -> Result<(), String> {
@@ -178,7 +299,7 @@ fn resample(pcm: Pcm, to: u32) -> Pcm {
             samples.push(pcm.samples[src * channels + ch]);
         }
     }
-    Pcm { rate: to, channels: pcm.channels, samples }
+    Pcm { rate: to, channels: pcm.channels, samples, tags: pcm.tags }
 }
 
 fn fold_stereo(pcm: Pcm) -> Pcm {
@@ -190,5 +311,5 @@ fn fold_stereo(pcm: Pcm) -> Pcm {
         samples.push(pcm.samples[base]);
         samples.push(pcm.samples[base + 1]);
     }
-    Pcm { rate: pcm.rate, channels: 2, samples }
+    Pcm { rate: pcm.rate, channels: 2, samples, tags: pcm.tags }
 }
