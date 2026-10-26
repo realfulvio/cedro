@@ -58,6 +58,8 @@ const OPT_MAX: i32 = 12;
 const ID_MORE: i32 = 231;
 const ID_LESS: i32 = 232;
 const ID_BACK: i32 = 233;
+/// Modalità Semplice: porta ai file in coda di un'altra categoria, che la vista non mostra.
+const ID_OTHER: i32 = 234;
 const ID_MODE0: i32 = 235;
 const MODES: [&str; 3] = ["Converti file", "Video dal web", "Trascrivi"];
 /// L'altezza della barra delle tre schede (px di progetto): tutto il resto scende di tanto.
@@ -477,7 +479,8 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     child(hwnd, instance, b, "Altre opzioni", tab | BS_OWNERDRAW as u32, ID_MORE, (40, 0, 160, 28), f);
     child(hwnd, instance, b, "Modalità completa", tab | BS_OWNERDRAW as u32, ID_LESS, (700, 0, 180, 28), f);
     child(hwnd, instance, b, "Torna a Semplice", tab | BS_OWNERDRAW as u32, ID_BACK, (10, 0, 170, 30), f);
-    for id in [ID_MODE0, ID_MODE0 + 1, ID_MODE0 + 2, ID_MORE, ID_LESS, ID_BACK] {
+    child(hwnd, instance, b, "", tab | BS_OWNERDRAW as u32, ID_OTHER, (40, 0, 400, 22), f);
+    for id in [ID_MODE0, ID_MODE0 + 1, ID_MODE0 + 2, ID_MORE, ID_LESS, ID_BACK, ID_OTHER] {
         let _ = ShowWindow(item(hwnd, id), SW_HIDE);
     }
     youtube_win::build(hwnd, instance);
@@ -779,6 +782,9 @@ unsafe fn apply_view(hwnd: HWND) {
     for id in [ID_MORE, ID_LESS] {
         show(hwnd, id, simple);
     }
+    if !simple {
+        show(hwnd, ID_OTHER, false);
+    }
     show(hwnd, ID_SIDE, !simple);
     let prev = state().action.clone();
     if !simple {
@@ -839,12 +845,15 @@ unsafe fn apply_view(hwnd: HWND) {
 /// un solo pulsante grande, i due link e il piede. Tutto il resto (strumenti, opzioni, qualità, dove salvare) resta nascosto.
 unsafe fn layout_simple(hwnd: HWND, fit: bool) {
     if youtube_win::active() {
+        show(hwnd, ID_OTHER, false);
         place_tabs(hwnd);
         return;
     }
-    let (files, kind) = {
+    let (files, kind, hidden) = {
         let s = state();
-        (current_files(&s).len() as i32, CATEGORIES[s.category].kind)
+        let shown = current_files(&s);
+        let hidden = s.files.iter().filter(|e| !shown.iter().any(|f| f.path == e.path)).count() as i32;
+        (shown.len() as i32, CATEGORIES[s.category].kind, hidden)
     };
     let voice = trascrizione::active();
     let width = client_width(hwnd);
@@ -879,6 +888,14 @@ unsafe fn layout_simple(hwnd: HWND, fit: bool) {
     let drop_h = if files > 0 { 60 } else { 110 };
     place_abs(hwnd, ID_DROP, l, y, w, drop_h);
     y += drop_h + 14;
+    show(hwnd, ID_OTHER, hidden > 0);
+    if hidden > 0 {
+        let text = if hidden == 1 { "Un altro file in coda è di un altro tipo: mostralo".to_string() } else { format!("Altri {hidden} file in coda sono di un altro tipo: mostrali") };
+        set_text(hwnd, ID_OTHER, &text);
+        place_abs(hwnd, ID_OTHER, l, y, w, 22);
+        let _ = InvalidateRect(Some(item(hwnd, ID_OTHER)), None, true);
+        y += 28;
+    }
     show(hwnd, ID_COUNT, files > 0);
     show(hwnd, ID_QUEUE, files > 0);
     if files > 0 {
@@ -1314,7 +1331,7 @@ unsafe fn draw_item(hwnd: HWND, di: &DRAWITEMSTRUCT) {
             text.bottom -= px(4);
             draw_text(hdc, MODES[(x - ID_MODE0) as usize], &mut text, DT_SINGLELINE | DT_VCENTER | DT_CENTER);
         }
-        ID_MORE | ID_LESS | ID_BACK => {
+        ID_MORE | ID_LESS | ID_BACK | ID_OTHER => {
             FillRect(hdc, &rc, brush(if id == ID_BACK { &BRUSH_SIDE } else { &BRUSH_WHITE }, if id == ID_BACK { SIDE } else { WHITE }));
             SelectObject(hdc, HGDIOBJ(font(&FONT).0));
             SetTextColor(hdc, if selected { HOVER } else { PRIMARY });
@@ -1395,6 +1412,26 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                     SIMPLE_SETTING.store(false, Ordering::Relaxed);
                     SIMPLE.store(false, Ordering::Relaxed);
                     apply_view(hwnd);
+                }
+                ID_OTHER => {
+                    if state().running {
+                        return LRESULT(0);
+                    }
+                    {
+                        let mut st = state();
+                        let shown = current_files(&st);
+                        let next = st.files.iter().find(|e| !shown.iter().any(|f| f.path == e.path)).map(|e| e.path.clone());
+                        let kind = next.as_ref().map(|p| kind_of(p)).filter(|k| *k != Kind::Other);
+                        // Un vocale (.opus, .amr…) si legge solo con la trascrizione.
+                        let voice = kind.is_none() && next.is_some();
+                        let kind = if voice { Some(Kind::Audio) } else { kind };
+                        if let Some(i) = kind.and_then(|k| CATEGORIES.iter().position(|c| c.kind == k)) {
+                            st.category = i;
+                        }
+                        drop(st);
+                        trascrizione::set_active(voice);
+                    }
+                    render_category(hwnd);
                 }
                 ID_BACK => {
                     SIMPLE.store(true, Ordering::Relaxed);
