@@ -80,6 +80,8 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     autostart.set_active(crate::linux_ui::autostart_enabled());
     let notify = CheckButton::with_label("Avviso a fine conversione");
     notify.set_active(current.notify);
+    let progress = CheckButton::with_label("Avanzamento mentre converte");
+    progress.set_active(current.progress);
     let updates = CheckButton::with_label("Cerca aggiornamenti (all'avvio e ogni giorno)");
     updates.set_active(current.update_check);
     let shift = CheckButton::with_label("Shift: conversioni");
@@ -103,7 +105,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     body.set_margin_bottom(14);
     body.set_margin_start(14);
     body.set_margin_end(14);
-    body.append(&section("Generale", &[autostart.upcast_ref(), notify.upcast_ref(), updates.upcast_ref()]));
+    body.append(&section("Generale", &[autostart.upcast_ref(), notify.upcast_ref(), progress.upcast_ref(), updates.upcast_ref()]));
     body.append(&section("Tasti che aprono la ruota", &[shift.upcast_ref(), ctrl.upcast_ref(), alt.upcast_ref()]));
     body.append(&section("Qualità", &[hint.upcast_ref(), scale.upcast_ref()]));
 
@@ -138,6 +140,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
             let settings = Settings {
                 quality: scale.value().round().clamp(40.0, 95.0) as u8,
                 notify: notify.is_active(),
+                progress: progress.is_active(),
                 update_check: updates.is_active(),
                 key_shift: shift.is_active(),
                 key_ctrl: ctrl.is_active(),

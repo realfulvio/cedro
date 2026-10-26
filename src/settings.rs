@@ -25,6 +25,8 @@ pub struct Settings {
     pub dialogs: bool,
     /// A lavoro finito mostra il file nuovo in Esplora file.
     pub reveal: bool,
+    /// Mostra la sottile barra di avanzamento in basso a destra mentre converte.
+    pub progress: bool,
     pub dest: Dest,
     pub dest_dir: String,
     /// Se il file esiste già lo sostituisce, invece di aggiungere un numero.
@@ -50,6 +52,7 @@ impl Default for Settings {
             key_alt: true,
             dialogs: true,
             reveal: false,
+            progress: true,
             dest: Dest::Same,
             dest_dir: String::new(),
             replace: false,
@@ -111,6 +114,7 @@ impl Settings {
                 "key_alt" => s.key_alt = flag(value).unwrap_or(s.key_alt),
                 "dialogs" => s.dialogs = flag(value).unwrap_or(s.dialogs),
                 "reveal" => s.reveal = flag(value).unwrap_or(s.reveal),
+                "progress" => s.progress = flag(value).unwrap_or(s.progress),
                 "replace" => s.replace = flag(value).unwrap_or(s.replace),
                 "dest" => {
                     s.dest = match value {
@@ -160,6 +164,7 @@ impl Settings {
             ("key_alt", b(self.key_alt).into()),
             ("dialogs", b(self.dialogs).into()),
             ("reveal", b(self.reveal).into()),
+            ("progress", b(self.progress).into()),
             ("replace", b(self.replace).into()),
             ("dest", dest.into()),
             ("dest_dir", self.dest_dir.clone()),
