@@ -1,5 +1,7 @@
+pub mod accel;
 mod audio;
 pub mod conversioni;
+pub mod credits;
 mod doctext;
 mod engine;
 mod mp4fast;
@@ -8,6 +10,7 @@ mod pdf;
 mod pdfdoc;
 mod pdflayout;
 pub mod settings;
+pub mod sysinfo;
 mod sink;
 mod textconv;
 mod softvideo;
@@ -23,6 +26,8 @@ mod linux_video;
 mod mkv;
 #[cfg(target_os = "linux")]
 mod mp4mux;
+#[cfg(target_os = "linux")]
+mod vaapi;
 
 pub use engine::{
     append_log, config_dir, perform_with, Exists, ExistsAsk, ExistsChoice, Options, PageSel, unique_output, extension, kind_of, mode_from_vk, perform, perform_into, read_quality, same_kind_paths, slices, Kind,

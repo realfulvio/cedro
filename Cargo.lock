@@ -252,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "cedro"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "cfb",
  "fdk-aac",
@@ -262,6 +262,7 @@ dependencies = [
  "hound",
  "image",
  "ksni",
+ "libc",
  "lopdf",
  "mp3lame-encoder",
  "mp4",
@@ -271,6 +272,7 @@ dependencies = [
  "oxideav-vp9",
  "png",
  "rten",
+ "rten-simd",
  "serde_json",
  "sha2",
  "skrifa 0.46.2",
@@ -2226,8 +2228,6 @@ dependencies = [
 [[package]]
 name = "rten-simd"
 version = "0.26.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f0c01294eb782adca256aa130b48a04006d03763073a68f45a9c33b982ea556"
 
 [[package]]
 name = "rten-tensor"

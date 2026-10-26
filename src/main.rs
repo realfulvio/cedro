@@ -14,9 +14,19 @@ mod settings_win;
 mod conversioni_win;
 #[cfg(windows)]
 mod guida_win;
+#[cfg(windows)]
+mod progress_win;
+#[cfg(windows)]
+mod winlist;
+#[cfg(windows)]
+mod winmenu;
+#[cfg(windows)]
+mod wingfx;
 
 #[cfg(target_os = "linux")]
 mod linux_conversioni;
+#[cfg(target_os = "linux")]
+mod linux_progress;
 #[cfg(target_os = "linux")]
 mod linux_settings;
 #[cfg(target_os = "linux")]
@@ -32,6 +42,10 @@ fn main() {
         }
         if args.first().is_some_and(|a| a == "guida") {
             guida_win::run_standalone();
+            return;
+        }
+        if args.first().is_some_and(|a| a == "impostazioni" || a == "settings") {
+            settings_win::run_standalone();
             return;
         }
         if args.is_empty() {
