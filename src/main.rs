@@ -28,6 +28,8 @@ mod firma_win;
 #[cfg(target_os = "linux")]
 mod linux_firma;
 #[cfg(target_os = "linux")]
+mod linux_font;
+#[cfg(target_os = "linux")]
 mod linux_conversioni;
 #[cfg(target_os = "linux")]
 mod linux_trascrizione;
