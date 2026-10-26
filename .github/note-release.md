@@ -12,7 +12,13 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Linux sempre chiaro**: con il tema scuro di KDE o GNOME alcune parti delle finestre (menu laterale, coda, menu a tendina e pulsanti) diventavano nere e illeggibili. Ora Cedro usa sempre i suoi colori chiari, come su Windows.
+**Guida iniziale rifatta**: la presentazione animata che parte al primo avvio ora mostra in sei passi quello che Cedro sa fare: la ruota col tasto destro, le conversioni, YouTube, la trascrizione, la scheda Sistema e le versioni per Windows, Windows on ARM e Linux.
+
+**Linux si aggiorna da solo**: «Controlla aggiornamenti» scarica il pacchetto giusto, controlla che sia integro e lo installa da qualunque cartella giri Cedro, senza permessi di amministratore.
+
+**Errore in basso a destra**: la riga rossa nella barra dei progressi di «Video dal web» e delle conversioni ora sparisce da sola dopo qualche secondo.
+
+Dalla 0.18.3: su Linux le finestre restano chiare e leggibili anche col tema scuro di KDE o GNOME.
 
 Dalla 0.18.2: trascrizione italiana molto più precisa e nuova scheda «Video dal web».
 
