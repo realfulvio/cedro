@@ -25,7 +25,7 @@
 Cedro è un piccolo programma che vive vicino all'orologio. Tieni premuto **Shift**, fai **clic destro** su un file e si apre una ruota: scegli il formato e la copia nuova compare accanto all'originale. Fine.
 
 <p align="center">
-  <img src="docs/vivo-ruota.png" width="320" alt="La ruota di Cedro su Windows 11, con la fetta JPEG sotto il mouse">
+  <img src="docs/shots/ruota-shift-foto.png" width="340" alt="La ruota di Cedro su una foto, con la fetta JPEG sotto il mouse">
 </p>
 
 ## Scarica e installa
@@ -36,12 +36,23 @@ Cedro è un piccolo programma che vive vicino all'orologio. Tieni premuto **Shif
 4. A fine installazione lascia spuntato **Avvia Cedro**. Non si apre una finestra: compare l'icona vicino all'orologio (se non la vedi, apri la freccia delle icone nascoste).
 
 
+<p align="center">
+  <img src="docs/shots/installatore-fine.png" width="460" alt="Ultima pagina dell'installatore: Avvia Cedro e Guarda come funziona">
+</p>
+
 Per togliere Cedro: *Impostazioni di Windows, App, Cedro*. Dopo la prima installazione si aggiorna da solo.
 
 ## Come si usa
 
 <p align="center">
   <img src="docs/tre-tasti-guida.png" alt="Le tre ruote: Shift converte, Ctrl per gli strumenti, Alt per le azioni">
+</p>
+
+<p align="center">
+  <img src="docs/shots/ruota-shift-pdf.png" width="250" alt="Ruota Shift su un PDF">
+  <img src="docs/shots/ruota-ctrl-foto-ocr.png" width="250" alt="Ruota Ctrl su una foto, con OCR acceso">
+  <img src="docs/shots/ruota-alt-zip.png" width="250" alt="Ruota Alt, con ZIP acceso">
+  <br><sub>Screenshot veri su Windows 11: Shift su un PDF, Ctrl su una foto, Alt su un file.</sub>
 </p>
 
 1. Tieni premuto un tasto.
@@ -71,10 +82,20 @@ Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Gui
 **PDF in Word:** titoli con stili veri, paragrafi, tabelle vere (celle, sfondi, bordi, intestazione ripetuta tra le pagine), elenchi puntati e numerati di Word, testo su più colonne e grafici al loro posto, modificabili come in un editor professionale. File leggeri. Le scansioni vengono lette con l'OCR in italiano.
 **Foto dal telefono:** vengono raddrizzate in automatico.
 
+## Il pannello Conversioni
+
+<p align="center">
+  <img src="docs/shots/pannello-conversioni.png" width="720" alt="Il pannello Conversioni di Cedro: coda di file, formato, strumenti, qualità e cartella di destinazione">
+</p>
+
+Dal menu dell'icona apri **Conversioni**: trascini i file (anche di tipi diversi), scegli formato, strumenti, qualità e dove salvare, e premi il pulsante in basso. Ogni categoria (immagini, documenti, PDF, testo, audio, video) ha le sue opzioni.
+
 ## L'icona e le impostazioni
 
 <p align="center">
-  <img src="docs/vivo-impostazioni.png" width="300" alt="La finestra Impostazioni di Cedro">
+  <img src="docs/shots/menu-icona-tray.png" width="200" alt="Il menu dell'icona di Cedro">
+  &nbsp;&nbsp;
+  <img src="docs/shots/impostazioni-generale.png" width="440" alt="La finestra Impostazioni di Cedro">
 </p>
 
 Clic destro sull'icona (o doppio clic per le Impostazioni):
@@ -84,6 +105,10 @@ Clic destro sull'icona (o doppio clic per le Impostazioni):
 - **Guida:** l'animazione che spiega i tre tasti.
 - **Controlla aggiornamenti:** Cedro lo fa anche da solo, verifica l'installatore e chiede prima di aggiornare.
 - **Avvio automatico** ed **Esci**.
+
+<p align="center">
+  <img src="docs/shots/guida.png" width="560" alt="La Guida di Cedro: un'animazione mostra cosa fanno Shift, Ctrl e Alt">
+</p>
 
 
 ## Domande
