@@ -75,6 +75,9 @@ fn main() {
             .first()
             .is_some_and(|arg| matches!(arg.as_str(), "show" | "settings" | "impostazioni" | "guida" | "conversioni" | "--background"));
         if args.is_empty() || ui {
+            // Cedro ha i suoi colori chiari: un tema scuro imposto da fuori (GTK_THEME=Breeze:dark,
+            // Adwaita:dark…) dipingerebbe di nero le parti che il suo CSS non copre.
+            std::env::remove_var("GTK_THEME");
             std::process::exit(linux_ui::start());
         }
         std::process::exit(cli::run());
