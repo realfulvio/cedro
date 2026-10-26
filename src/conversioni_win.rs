@@ -56,8 +56,13 @@ const WM_APP_RESULT: u32 = WM_APP + 10;
 const WM_APP_DONE: u32 = WM_APP + 11;
 const WM_APP_ASK: u32 = WM_APP + 12;
 
+#[path = "youtube_win.rs"]
+mod youtube_win;
+
 const TITLE: &str = "Conversioni di Cedro";
 const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
+/// La voce del menu dopo le categorie: la scheda YouTube, che non lavora su file ma su link.
+const YOUTUBE: &str = "YouTube";
 const NEXT_TO_ORIGINAL: &str = "Accanto all'originale";
 
 // Colori del sito del Comune di Bondeno (COLORREF = 0x00BBGGRR).
@@ -260,6 +265,7 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     for cat in CATEGORIES {
         SendMessageW(side, LB_ADDSTRING, Some(WPARAM(0)), Some(LPARAM(HSTRING::from(cat.name).as_ptr() as isize)));
     }
+    SendMessageW(side, LB_ADDSTRING, Some(WPARAM(0)), Some(LPARAM(HSTRING::from(YOUTUBE).as_ptr() as isize)));
     SendMessageW(side, LB_SETITEMHEIGHT, Some(WPARAM(0)), Some(LPARAM(px(42) as isize)));
 
     child(hwnd, instance, s, "", 0, ID_TITLE, (210, 44, 670, 32), ft);
@@ -295,6 +301,7 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     child(hwnd, instance, s, POWERED_BY, 0, ID_POWERED, (210, 616, 420, 18), f);
     child(hwnd, instance, b, "Converti", tab | BS_OWNERDRAW as u32, ID_GO, (640, 590, 240, 38), fb);
     show_quality(hwnd);
+    youtube_win::build(hwnd, instance);
 }
 
 unsafe fn item(hwnd: HWND, id: i32) -> HWND {
@@ -698,12 +705,12 @@ unsafe fn draw_item(hwnd: HWND, di: &DRAWITEMSTRUCT) {
             if di.itemID == u32::MAX {
                 return;
             }
-            let on = state().category == di.itemID as usize;
+            let on = if di.itemID as usize == CATEGORIES.len() { youtube_win::active() } else { !youtube_win::active() && state().category == di.itemID as usize };
             FillRect(hdc, &rc, brush(if on { &BRUSH_PRIMARY } else { &BRUSH_SIDE }, if on { PRIMARY } else { SIDE }));
             SelectObject(hdc, HGDIOBJ(font(if on { &FONT_BOLD } else { &FONT }).0));
             SetTextColor(hdc, if on { WHITE } else { TEXT });
             rc.left += px(16);
-            draw_text(hdc, CATEGORIES[di.itemID as usize].name, &mut rc, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
+            draw_text(hdc, CATEGORIES.get(di.itemID as usize).map(|c| c.name).unwrap_or(YOUTUBE), &mut rc, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
         }
         ID_QUEUE => {
             if di.itemID == u32::MAX {
@@ -777,12 +784,19 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             match id {
                 ID_SIDE if code == LBN_SELCHANGE => {
                     let sel = SendMessageW(item(hwnd, ID_SIDE), LB_GETCURSEL, Some(WPARAM(0)), Some(LPARAM(0))).0;
-                    if sel >= 0 {
+                    if sel >= 0 && sel as usize == CATEGORIES.len() {
+                        youtube_win::enter(hwnd);
+                    } else if sel >= 0 {
+                        let from_youtube = youtube_win::active();
+                        if from_youtube {
+                            youtube_win::leave(hwnd);
+                        }
                         state().category = sel as usize;
                         render_category(hwnd);
                         let _ = InvalidateRect(Some(item(hwnd, ID_SIDE)), None, true);
                     }
                 }
+                x if youtube_win::owns(x) => youtube_win::command(hwnd, x, code),
                 ID_DROP => {
                     let paths = pick(hwnd, false);
                     add_files(hwnd, paths);
@@ -836,17 +850,32 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 paths.push(PathBuf::from(String::from_utf16_lossy(&buf[..got])));
             }
             DragFinish(hdrop);
+            if youtube_win::active() {
+                youtube_win::leave(hwnd);
+                SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(state().category)), Some(LPARAM(0)));
+                render_category(hwnd);
+            }
             add_files(hwnd, paths);
             LRESULT(0)
         }
         WM_DRAWITEM => {
-            draw_item(hwnd, &*(lparam.0 as *const DRAWITEMSTRUCT));
+            let di = &*(lparam.0 as *const DRAWITEMSTRUCT);
+            if youtube_win::owns(di.CtlID as i32) {
+                youtube_win::draw(di);
+            } else {
+                draw_item(hwnd, di);
+            }
             LRESULT(1)
         }
         WM_CTLCOLORLISTBOX if GetDlgCtrlID(HWND(lparam.0 as *mut _)) == ID_SIDE => LRESULT(brush(&BRUSH_SIDE, SIDE).0 as isize),
         WM_CTLCOLORSTATIC => {
             let ctl = HWND(lparam.0 as *mut _);
             let hdc = HDC(wparam.0 as *mut _);
+            if let Some(fg) = youtube_win::color(GetDlgCtrlID(ctl)) {
+                SetTextColor(hdc, fg);
+                SetBkColor(hdc, WHITE);
+                return LRESULT(brush(&BRUSH_WHITE, WHITE).0 as isize);
+            }
             let (fg, bg, slot) = match GetDlgCtrlID(ctl) {
                 ID_HEADER => (WHITE, PRIMARY, &BRUSH_PRIMARY),
                 ID_TITLE => (PRIMARY, WHITE, &BRUSH_WHITE),
@@ -865,6 +894,10 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             } else {
                 show_quality(hwnd);
             }
+            LRESULT(0)
+        }
+        youtube_win::WM_APP_YT => {
+            youtube_win::pump(hwnd);
             LRESULT(0)
         }
         WM_APP_RESULT => {
@@ -892,7 +925,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             LRESULT(0)
         }
         WM_CLOSE => {
-            if state().running {
+            if state().running || youtube_win::busy() {
                 MessageBoxW(Some(hwnd), w!("Una conversione è ancora in corso: aspetta che finisca."), w!("Cedro"), MB_OK | MB_ICONINFORMATION);
             } else {
                 let _ = DestroyWindow(hwnd);
