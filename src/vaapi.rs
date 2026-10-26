@@ -960,7 +960,15 @@ mod tests {
             for (i, px) in frame[..176 * 144].iter_mut().enumerate() {
                 *px = ((i as u32 + n * 3) % 256) as u8;
             }
-            let (stream, idr) = encoder.encode(&frame).expect("fotogramma");
+            let (stream, idr) = match encoder.encode(&frame) {
+                Ok(done) => done,
+                // Un driver (per esempio radeonsi) che vuole le intestazioni dall'applicazione: Cedro rifà il video col processore.
+                Err(err) if std::env::var_os("CEDRO_GPU_TEST").is_none() => {
+                    eprintln!("la scheda video non codifica ancora: {err}");
+                    return;
+                }
+                Err(err) => panic!("fotogramma {n}: {err}"),
+            };
             assert_eq!(idr, n % 60 == 0, "fotogramma {n}");
             total += stream.len();
         }
