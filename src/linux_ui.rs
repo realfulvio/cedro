@@ -723,8 +723,17 @@ fn on_update(app: &Application, news: UpdateNews) {
     let app = app.clone();
     dialog.choose(None::<&gtk4::Window>, None::<&gtk4::gio::Cancellable>, move |answer| {
         if answer == Ok(1) {
-            if let Err(e) = crate::cli::install(&release) {
-                notify(&app, &format!("Aggiornamento non riuscito: {e}"));
+            match crate::cli::install(&release) {
+                Err(e) => notify(&app, &format!("Aggiornamento non riuscito: {e}")),
+                Ok(done) if release.package.is_some() && update::self_updatable() => {
+                    // Il programma nuovo è già al suo posto: questo si chiude e un altro lo riapre.
+                    notify(&app, &format!("{done} Cedro si riapre."));
+                    if let Ok(exe) = std::env::current_exe() {
+                        let _ = std::process::Command::new("sh").arg("-c").arg("sleep 2; exec \"$0\" --background").arg(exe).spawn();
+                    }
+                    glib::timeout_add_local_once(std::time::Duration::from_millis(800), || std::process::exit(0));
+                }
+                Ok(_) => {}
             }
         } else if !manual {
             update::skip(&release.version);
