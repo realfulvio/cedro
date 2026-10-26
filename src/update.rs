@@ -56,7 +56,7 @@ fn parse_release(body: &str) -> Result<Release, String> {
     let installer = json["assets"].as_array().and_then(|assets| {
         assets.iter().find_map(|asset| {
             let name = asset["name"].as_str()?;
-            if !(name.starts_with("Cedro-Setup") && name.ends_with(".exe")) {
+            if !(name.starts_with("Cedro-Setup") && name.ends_with(".exe")) || name.ends_with("-arm64.exe") != cfg!(target_arch = "aarch64") {
                 return None;
             }
             let sha256 = asset["digest"]
@@ -175,6 +175,17 @@ mod tests {
         let asset = release.installer.unwrap();
         assert_eq!(asset.url, "https://x/Cedro-Setup-0.8.0.exe");
         assert_eq!(asset.sha256.as_deref(), Some("410cf4149103e3c6bf74a241ec6ea87e9cdff471f02d8242f858c73f2b0dced0"));
+    }
+
+    #[test]
+    fn picks_the_installer_of_this_architecture() {
+        let body = r#"{"tag_name": "0.18.0", "assets": [
+            {"name": "Cedro-Setup-0.18.0-arm64.exe", "browser_download_url": "https://x/arm.exe", "digest": "sha256:aa"},
+            {"name": "Cedro-Setup-0.18.0.exe", "browser_download_url": "https://x/x64.exe", "digest": "sha256:bb"}
+        ]}"#;
+        let asset = parse_release(body).unwrap().installer.unwrap();
+        let (url, sha) = if cfg!(target_arch = "aarch64") { ("https://x/arm.exe", "aa") } else { ("https://x/x64.exe", "bb") };
+        assert_eq!((asset.url.as_str(), asset.sha256.as_deref()), (url, Some(sha)));
     }
 
     #[test]

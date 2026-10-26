@@ -1,6 +1,10 @@
-; Installer di Cedro per Windows. Compilazione: installer\build.ps1
+; Installer di Cedro per Windows (x64 e, con /DArm64, ARM64). Compilazione: installer\build.ps1 [-Arm64]
 ; Installa per l'utente corrente: non servono i diritti di amministratore.
 #define AppName "Cedro"
+; Per Windows on ARM: /DArm64 (e /DBuildDir=... se l'exe non sta in target\release).
+#ifndef BuildDir
+  #define BuildDir "..\target\release"
+#endif
 #ifndef AppVersion
   #define AppVersion "0.17.0"
 #endif
@@ -18,15 +22,25 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\dist
-OutputBaseFilename=Cedro-Setup-{#AppVersion}
+#ifdef Arm64
+  #define Suffix "-arm64"
+#else
+  #define Suffix ""
+#endif
+OutputBaseFilename=Cedro-Setup-{#AppVersion}{#Suffix}
 SetupIconFile=..\assets\cedro.ico
 UninstallDisplayIcon={app}\cedro.exe
 UninstallDisplayName={#AppName}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+#ifdef Arm64
+ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
+#else
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+#endif
 LicenseFile=..\LICENSE
 ShowLanguageDialog=no
 
@@ -38,7 +52,7 @@ Name: "desktopicon"; Description: "Crea un collegamento sul desktop"; GroupDescr
 Name: "autostart"; Description: "Avvia Cedro all'accesso a Windows"; GroupDescription: "Avvio:"
 
 [Files]
-Source: "..\target\release\cedro.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\cedro.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\Licenze di terze parti.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\cedro.ico"; DestDir: "{app}"; Flags: ignoreversion

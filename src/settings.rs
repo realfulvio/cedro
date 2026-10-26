@@ -29,7 +29,7 @@ pub struct Settings {
     pub progress: bool,
     /// Codifica i video con la scheda video, se il PC ne ha una adatta (vedi `accel`).
     pub gpu: bool,
-    /// Calcoli con AVX-512, se il processore lo ha (vedi `accel`).
+    /// Calcoli con le istruzioni avanzate (AVX-512 su x86, i8mm su ARM), se il processore le ha (vedi `accel`).
     pub avx512: bool,
     pub dest: Dest,
     pub dest_dir: String,
