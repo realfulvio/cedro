@@ -11,6 +11,8 @@ mod winfont;
 #[cfg(windows)]
 mod settings_win;
 #[cfg(windows)]
+mod conversioni_win;
+#[cfg(windows)]
 mod guida_win;
 
 #[cfg(target_os = "linux")]
@@ -24,6 +26,10 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     #[cfg(windows)]
     {
+        if args.first().is_some_and(|a| a == "conversioni") {
+            conversioni_win::run_standalone();
+            return;
+        }
         if args.first().is_some_and(|a| a == "guida") {
             guida_win::run_standalone();
             return;
