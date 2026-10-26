@@ -406,6 +406,17 @@ pub fn open_conversions(app: &Application) {
     });
 
     {
+        // Finché la coda lavora la finestra resta aperta: chiuderla fermerebbe il processo a metà scrittura.
+        let ui = ui.clone();
+        window.connect_close_request(move |_| {
+            if ui.running.borrow().is_some() {
+                glib::Propagation::Stop
+            } else {
+                glib::Propagation::Proceed
+            }
+        });
+    }
+    {
         let ui = ui.clone();
         side.connect_row_selected(move |_, row| {
             if let Some(row) = row {

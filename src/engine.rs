@@ -247,11 +247,22 @@ fn size_message(before: u64, after: u64) -> String {
 }
 
 pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
+    perform_into(path, action, quality, None)
+}
+
+/// Come `perform`, ma con `out_dir` le copie nuove vengono scritte in quella cartella.
+pub fn perform_into(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>) -> CedroResult<Output> {
     if !path.exists() {
         return Err(err("file non trovato"));
     }
     let quality = quality.clamp(40, 95);
-    let dir = parent_dir(path)?.to_path_buf();
+    let dir = match out_dir {
+        Some(d) => {
+            fs::create_dir_all(d).map_err(|e| err(e.to_string()))?;
+            d.to_path_buf()
+        }
+        None => parent_dir(path)?.to_path_buf(),
+    };
     let before = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let kind = kind_of(path);
 
