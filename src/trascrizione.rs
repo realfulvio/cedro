@@ -282,7 +282,8 @@ fn vulkan_loader_present() -> bool {
     #[cfg(windows)]
     {
         use windows::core::w;
-        use windows::Win32::System::LibraryLoader::{FreeLibrary, LoadLibraryW};
+        use windows::Win32::Foundation::FreeLibrary;
+        use windows::Win32::System::LibraryLoader::LoadLibraryW;
         unsafe {
             match LoadLibraryW(w!("vulkan-1.dll")) {
                 Ok(module) => {

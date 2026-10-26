@@ -446,6 +446,8 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         compress: sel(hwnd, ID_COMPRESS).min(2) as u8,
         ocr_lang: LANGS.get(sel(hwnd, ID_LANG)).unwrap_or(&"auto").to_string(),
         ocr_max: *MAX_PAGES.get(sel(hwnd, ID_MAXPAGES)).unwrap_or(&base.ocr_max),
+        gpu: base.gpu,
+        avx512: base.avx512,
     }
 }
 
