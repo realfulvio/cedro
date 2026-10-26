@@ -1,8 +1,10 @@
-//! Il pannello Conversioni: categorie, formati e conversione di una coda di file.
+//! Il pannello Conversioni: categorie, formati, opzioni e conversione di una coda di file.
+//! Il modello è uguale su Windows e su Linux: i due pannelli disegnano le stesse opzioni e passano
+//! i valori scelti al motore con `options_from`.
 
 use std::path::{Path, PathBuf};
 
-use crate::engine::{self, Kind, Mode, Slice};
+use crate::engine::{self, Encoding, Kind, Mode, PageSize, Slice};
 
 /// Una voce del menu a sinistra del pannello.
 pub struct Category {
@@ -13,10 +15,10 @@ pub struct Category {
 }
 
 pub const CATEGORIES: &[Category] = &[
-    Category { kind: Kind::Image, name: "Immagini", hint: "Cambia formato, comprimi e ruota le foto.", accepts: "PNG, JPEG, WebP, BMP, GIF, TIFF" },
+    Category { kind: Kind::Image, name: "Immagini", hint: "Cambia formato, ridimensiona e raddrizza le foto.", accepts: "PNG, JPEG, WebP, BMP, GIF, TIFF" },
     Category { kind: Kind::Doc, name: "Documenti", hint: "Da Word, ODT e RTF a PDF.", accepts: "DOCX, DOC, ODT, RTF" },
-    Category { kind: Kind::Pdf, name: "PDF", hint: "Da PDF a Word modificabile o a immagini.", accepts: "PDF" },
-    Category { kind: Kind::Text, name: "Testo", hint: "TXT, Markdown, CSV, JSON, HTML e XML.", accepts: "TXT, MD, CSV, JSON, HTML, XML" },
+    Category { kind: Kind::Pdf, name: "PDF", hint: "Da PDF a Word modificabile, a immagini o a testo.", accepts: "PDF" },
+    Category { kind: Kind::Text, name: "Testo", hint: "TXT, Markdown, CSV, JSON e HTML.", accepts: "TXT, MD, CSV, JSON, HTML, XML" },
     Category { kind: Kind::Audio, name: "Audio", hint: "WAV, MP3, OGG, M4A, AAC e FLAC.", accepts: "WAV, MP3, OGG, M4A, AAC, FLAC" },
     Category { kind: Kind::Video, name: "Video", hint: "MP4, WebM, MOV, MKV e AVI.", accepts: "MP4, WebM, MOV, MKV, AVI" },
 ];
@@ -41,72 +43,249 @@ pub fn belonging(kind: Kind, paths: &[PathBuf]) -> Vec<PathBuf> {
     paths.iter().filter(|p| engine::kind_of(p) == kind).cloned().collect()
 }
 
-/// Una scelta di un'opzione extra (per esempio "150 dpi").
+/// Una scelta di un'opzione (per esempio "150 dpi").
 pub struct Choice {
     pub label: &'static str,
     pub value: u32,
 }
 
-/// Un'opzione extra del pannello: un titolo e una lista di valori, il primo è quello di partenza.
-pub struct Extra {
-    pub key: ExtraKey,
+/// Come si sceglie il valore di un'opzione.
+pub enum Control {
+    /// Acceso (1) o spento (0).
+    Switch,
+    /// Una voce di un elenco.
+    Choice(&'static [Choice]),
+    /// Un numero in un intervallo, con l'unità di misura.
+    Range { min: u32, max: u32, unit: &'static str },
+    /// Un testo da non mostrare mentre si scrive.
+    Password,
+}
+
+/// Tutte le opzioni che il motore capisce.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Opt {
+    Straighten,
+    WhiteBackground,
+    MaxSide,
+    PageSize,
+    Password,
+    Dpi,
+    Pages,
+    OnePerPage,
+    Ocr,
+    Tables,
+    Encoding,
+    CsvSeparator,
+    PrettyJson,
+    HeaderRow,
+    Mp3Kbps,
+    Channels,
+    Normalize,
+    TrimStart,
+    KeepTags,
+    VideoHeight,
+    Fps,
+    Mute,
+    FastStart,
+}
+
+/// Una riga della zona Opzioni del pannello.
+pub struct OptionDef {
+    pub opt: Opt,
     pub title: &'static str,
     pub note: &'static str,
-    pub choices: &'static [Choice],
+    pub control: Control,
+    /// Il valore di partenza (per `Password` non conta).
+    pub default: u32,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum ExtraKey {
-    /// PDF in JPG: risoluzione delle pagine.
-    Dpi,
-    /// Immagini: lato più lungo massimo.
-    MaxSide,
+const fn sw(opt: Opt, title: &'static str, note: &'static str, on: bool) -> OptionDef {
+    OptionDef { opt, title, note, control: Control::Switch, default: on as u32 }
 }
 
-const DPI: Extra = Extra {
-    key: ExtraKey::Dpi,
-    title: "RISOLUZIONE PAGINE",
-    note: "Più dpi, immagini più nitide e più pesanti.",
-    choices: &[
-        Choice { label: "144 dpi", value: 144 },
-        Choice { label: "72 dpi", value: 72 },
-        Choice { label: "200 dpi", value: 200 },
-        Choice { label: "300 dpi", value: 300 },
-    ],
-};
+const fn pick(opt: Opt, title: &'static str, note: &'static str, choices: &'static [Choice], default: u32) -> OptionDef {
+    OptionDef { opt, title, note, control: Control::Choice(choices), default }
+}
 
-const MAX_SIDE: Extra = Extra {
-    key: ExtraKey::MaxSide,
-    title: "DIMENSIONE",
-    note: "Rimpicciolisce solo le immagini più grandi, senza deformarle.",
-    choices: &[
-        Choice { label: "Originale", value: 0 },
-        Choice { label: "3840 px", value: 3840 },
-        Choice { label: "1920 px", value: 1920 },
-        Choice { label: "1280 px", value: 1280 },
-        Choice { label: "800 px", value: 800 },
-    ],
-};
+const MAX_SIDE: &[Choice] = &[
+    Choice { label: "Originali", value: 0 },
+    Choice { label: "3840 px", value: 3840 },
+    Choice { label: "1920 px", value: 1920 },
+    Choice { label: "1280 px", value: 1280 },
+    Choice { label: "800 px", value: 800 },
+];
+const PAGE_SIZE: &[Choice] = &[
+    Choice { label: "A4", value: 0 },
+    Choice { label: "A3", value: 1 },
+    Choice { label: "Lettera", value: 2 },
+];
+const DPI: &[Choice] = &[
+    Choice { label: "72 dpi", value: 72 },
+    Choice { label: "144 dpi", value: 144 },
+    Choice { label: "200 dpi", value: 200 },
+    Choice { label: "300 dpi", value: 300 },
+];
+const PAGES: &[Choice] = &[
+    Choice { label: "Tutte", value: 0 },
+    Choice { label: "Solo la prima", value: 1 },
+    Choice { label: "Prime 5", value: 5 },
+    Choice { label: "Prime 10", value: 10 },
+];
+const ENCODING: &[Choice] = &[
+    Choice { label: "UTF-8", value: 0 },
+    Choice { label: "Windows-1252", value: 1 },
+    Choice { label: "ISO-8859-1", value: 2 },
+];
+const SEPARATOR: &[Choice] = &[
+    Choice { label: "Come l'originale", value: 0 },
+    Choice { label: "Punto e virgola ;", value: 1 },
+    Choice { label: "Virgola ,", value: 2 },
+    Choice { label: "Tabulazione", value: 3 },
+];
+const KBPS: &[Choice] = &[
+    Choice { label: "96 kbps", value: 96 },
+    Choice { label: "128 kbps", value: 128 },
+    Choice { label: "160 kbps", value: 160 },
+    Choice { label: "192 kbps", value: 192 },
+    Choice { label: "256 kbps", value: 256 },
+    Choice { label: "320 kbps", value: 320 },
+];
+const CHANNELS: &[Choice] = &[
+    Choice { label: "Come l'originale", value: 0 },
+    Choice { label: "Stereo", value: 2 },
+    Choice { label: "Mono", value: 1 },
+];
+const VIDEO_HEIGHT: &[Choice] = &[
+    Choice { label: "Come l'originale", value: 0 },
+    Choice { label: "1080p", value: 1080 },
+    Choice { label: "720p", value: 720 },
+    Choice { label: "480p", value: 480 },
+];
+const FPS: &[Choice] = &[
+    Choice { label: "Come l'originale", value: 0 },
+    Choice { label: "30", value: 30 },
+    Choice { label: "25", value: 25 },
+    Choice { label: "24", value: 24 },
+];
 
-/// L'opzione extra che vale per questa categoria e questa voce, se c'è.
-pub fn extra(kind: Kind, action: &str) -> Option<&'static Extra> {
+const STRAIGHTEN: OptionDef = sw(Opt::Straighten, "Raddrizza le foto", "Corregge la rotazione dei file del telefono", true);
+const WHITE_BG: OptionDef = sw(Opt::WhiteBackground, "Sfondo bianco", "Al posto della trasparenza, nel JPEG", true);
+const IMAGE_SIZE: OptionDef = pick(Opt::MaxSide, "Dimensioni", "Lato lungo massimo; le più piccole restano come sono", MAX_SIDE, 0);
+const PAGE: OptionDef = pick(Opt::PageSize, "Formato pagina", "", PAGE_SIZE, 0);
+const PASSWORD: OptionDef = OptionDef { opt: Opt::Password, title: "Password del PDF", note: "Vuota = nessuna protezione", control: Control::Password, default: 0 };
+const PDF_DPI: OptionDef = pick(Opt::Dpi, "Risoluzione immagini", "Più dpi, più nitide e più pesanti", DPI, 144);
+const PDF_PAGES: OptionDef = pick(Opt::Pages, "Pagine", "", PAGES, 0);
+const ONE_PER_PAGE: OptionDef = sw(Opt::OnePerPage, "Una immagine per pagina", "Spenta: una sola immagine lunga", true);
+const OCR: OptionDef = sw(Opt::Ocr, "Leggi le scansioni (OCR)", "Solo dove manca il testo", true);
+const TABLES: OptionDef = sw(Opt::Tables, "Ricostruisci le tabelle", "Celle, sfondi e bordi", true);
+const TEXT_ENCODING: OptionDef = pick(Opt::Encoding, "Codifica", "Del file scritto", ENCODING, 0);
+const CSV_SEPARATOR: OptionDef = pick(Opt::CsvSeparator, "Separatore CSV", "", SEPARATOR, 0);
+const PRETTY_JSON: OptionDef = sw(Opt::PrettyJson, "Rendi leggibile il JSON", "Rientri e a capo", true);
+const HEADER_ROW: OptionDef = sw(Opt::HeaderRow, "Prima riga come titoli", "Per le tabelle e il JSON dal CSV", true);
+const MP3_KBPS: OptionDef = pick(Opt::Mp3Kbps, "Qualità MP3", "", KBPS, 128);
+const AUDIO_CHANNELS: OptionDef = pick(Opt::Channels, "Canali", "", CHANNELS, 0);
+const NORMALIZE: OptionDef = sw(Opt::Normalize, "Normalizza il volume", "Porta il picco al massimo", false);
+const TRIM_START: OptionDef = OptionDef { opt: Opt::TrimStart, title: "Taglia l'inizio", note: "Secondi saltati all'inizio", control: Control::Range { min: 0, max: 30, unit: " s" }, default: 0 };
+const KEEP_TAGS: OptionDef = sw(Opt::KeepTags, "Mantieni titolo e artista", "Tag del file", true);
+const HEIGHT: OptionDef = pick(Opt::VideoHeight, "Risoluzione", "Si rimpicciolisce, non si ingrandisce", VIDEO_HEIGHT, 0);
+const VIDEO_FPS: OptionDef = pick(Opt::Fps, "Fotogrammi al secondo", "Massimo", FPS, 0);
+const MUTE: OptionDef = sw(Opt::Mute, "Togli l'audio", "", false);
+const FAST_START: OptionDef = sw(Opt::FastStart, "Ottimizza per il web", "L'avvio parte subito", false);
+
+/// Le opzioni che valgono per questa categoria e questa voce; il motore le usa tutte.
+pub fn option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     match (kind, action) {
-        (Kind::Pdf, "jpg") => Some(&DPI),
-        (Kind::Image, "ocr") => None,
-        (Kind::Image, _) => Some(&MAX_SIDE),
-        _ => None,
+        (Kind::Image, "ocr") => vec![],
+        (Kind::Image, "jpeg" | "compress" | "pdf") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
+        (Kind::Image, _) => vec![&IMAGE_SIZE, &STRAIGHTEN],
+        (Kind::Doc, "pdf") => vec![&PAGE, &PASSWORD],
+        (Kind::Pdf, "jpg" | "png") => vec![&PDF_DPI, &PDF_PAGES, &ONE_PER_PAGE],
+        (Kind::Pdf, "docx") => vec![&OCR, &TABLES, &PDF_PAGES],
+        (Kind::Pdf, "txt") => vec![&OCR, &PDF_PAGES],
+        (Kind::Text, "pdf") => vec![&PAGE],
+        (Kind::Text, "csv") => vec![&TEXT_ENCODING, &CSV_SEPARATOR],
+        (Kind::Text, "json") => vec![&TEXT_ENCODING, &PRETTY_JSON, &HEADER_ROW],
+        (Kind::Text, "md" | "html") => vec![&TEXT_ENCODING, &HEADER_ROW],
+        (Kind::Text, _) => vec![&TEXT_ENCODING],
+        (Kind::Audio | Kind::Video, "mp3") => vec![&MP3_KBPS, &AUDIO_CHANNELS, &NORMALIZE, &TRIM_START, &KEEP_TAGS],
+        (Kind::Audio, "wav") => vec![&AUDIO_CHANNELS, &NORMALIZE, &TRIM_START],
+        (Kind::Video, "mp4") => vec![&HEIGHT, &VIDEO_FPS, &MUTE, &FAST_START],
+        _ => vec![],
     }
 }
 
-/// Le opzioni del motore per il valore scelto di `extra` (0 = nessuna modifica).
-pub fn options_for(extra: Option<&Extra>, value: u32) -> engine::Options {
-    let mut opts = engine::Options::default();
-    match extra.map(|e| e.key) {
-        Some(ExtraKey::Dpi) => opts.dpi = Some(value),
-        Some(ExtraKey::MaxSide) if value > 0 => opts.max_side = Some(value),
-        _ => {}
+/// I valori scelti nel pannello.
+#[derive(Clone, Default, Debug)]
+pub struct Values {
+    nums: Vec<(Opt, u32)>,
+    pub password: String,
+    /// Se il nome esiste già, sostituisce il file invece di aggiungere -2, -3…
+    pub overwrite: bool,
+}
+
+impl Values {
+    pub const fn new() -> Self {
+        Values { nums: Vec::new(), password: String::new(), overwrite: false }
     }
-    opts
+
+    pub fn get(&self, def: &OptionDef) -> u32 {
+        self.nums.iter().find(|(o, _)| *o == def.opt).map(|(_, v)| *v).unwrap_or(def.default)
+    }
+
+    pub fn set(&mut self, def: &OptionDef, value: u32) {
+        match self.nums.iter_mut().find(|(o, _)| *o == def.opt) {
+            Some(slot) => slot.1 = value,
+            None => self.nums.push((def.opt, value)),
+        }
+    }
+
+    fn num(&self, opt: Opt, default: u32) -> u32 {
+        self.nums.iter().find(|(o, _)| *o == opt).map(|(_, v)| *v).unwrap_or(default)
+    }
+}
+
+/// Le opzioni del motore per i valori scelti; le opzioni non scelte restano com'erano.
+pub fn options_from(values: &Values) -> engine::Options {
+    let mut o = engine::Options::default();
+    let on = |opt: Opt, default: bool| values.num(opt, default as u32) != 0;
+    o.overwrite = values.overwrite;
+    o.straighten = on(Opt::Straighten, true);
+    o.white_background = on(Opt::WhiteBackground, true);
+    o.max_side = Some(values.num(Opt::MaxSide, 0)).filter(|v| *v > 0);
+    o.page_size = match values.num(Opt::PageSize, 0) {
+        1 => PageSize::A3,
+        2 => PageSize::Letter,
+        _ => PageSize::A4,
+    };
+    o.password = Some(values.password.clone()).filter(|p| !p.is_empty());
+    o.dpi = Some(values.num(Opt::Dpi, 144));
+    o.first_pages = Some(values.num(Opt::Pages, 0) as usize).filter(|v| *v > 0);
+    o.one_image_per_page = on(Opt::OnePerPage, true);
+    o.ocr = on(Opt::Ocr, true);
+    o.tables = on(Opt::Tables, true);
+    o.encoding = match values.num(Opt::Encoding, 0) {
+        1 => Encoding::Windows1252,
+        2 => Encoding::Latin1,
+        _ => Encoding::Utf8,
+    };
+    o.csv_separator = match values.num(Opt::CsvSeparator, 0) {
+        1 => Some(';'),
+        2 => Some(','),
+        3 => Some('\t'),
+        _ => None,
+    };
+    o.pretty_json = on(Opt::PrettyJson, true);
+    o.header_row = on(Opt::HeaderRow, true);
+    o.mp3_kbps = Some(values.num(Opt::Mp3Kbps, 128));
+    o.channels = Some(values.num(Opt::Channels, 0) as u8).filter(|v| *v > 0);
+    o.normalize = on(Opt::Normalize, false);
+    o.trim_start_secs = values.num(Opt::TrimStart, 0);
+    o.keep_tags = on(Opt::KeepTags, true);
+    o.video_height = Some(values.num(Opt::VideoHeight, 0)).filter(|v| *v > 0);
+    o.fps = Some(values.num(Opt::Fps, 0)).filter(|v| *v > 0);
+    o.mute = on(Opt::Mute, false);
+    o.faststart = on(Opt::FastStart, false);
+    o
 }
 
 /// Esegue `action` su un file. Con `dest` le copie nuove finiscono in quella cartella
@@ -120,23 +299,25 @@ mod tests {
     use super::*;
     use std::fs;
 
+    fn every_def() -> Vec<&'static OptionDef> {
+        let mut all: Vec<&'static OptionDef> = Vec::new();
+        for c in CATEGORIES {
+            for s in formats(c.kind).iter().chain(tools(c.kind).iter()) {
+                for d in option_defs(c.kind, s.id) {
+                    if !all.iter().any(|x| x.opt == d.opt) {
+                        all.push(d);
+                    }
+                }
+            }
+        }
+        all
+    }
+
     #[test]
     fn every_category_has_formats() {
         for c in CATEGORIES {
             assert!(!formats(c.kind).is_empty(), "{}", c.name);
         }
-    }
-
-    #[test]
-    fn extras_exist_only_where_the_engine_uses_them() {
-        assert_eq!(extra(Kind::Pdf, "jpg").map(|e| e.key), Some(ExtraKey::Dpi));
-        assert!(extra(Kind::Pdf, "docx").is_none());
-        assert!(extra(Kind::Image, "ocr").is_none());
-        assert_eq!(extra(Kind::Image, "jpeg").map(|e| e.key), Some(ExtraKey::MaxSide));
-        assert!(extra(Kind::Video, "mp4").is_none());
-        assert_eq!(options_for(extra(Kind::Image, "png"), 0), engine::Options::default());
-        assert_eq!(options_for(extra(Kind::Image, "png"), 800).max_side, Some(800));
-        assert_eq!(options_for(extra(Kind::Pdf, "jpg"), 300).dpi, Some(300));
     }
 
     #[test]
@@ -153,19 +334,84 @@ mod tests {
     }
 
     #[test]
+    fn defaults_leave_the_engine_as_it_was() {
+        let opts = options_from(&Values::default());
+        // I valori di partenza del pannello coincidono con quelli di sempre del motore.
+        let expected = engine::Options { dpi: Some(144), mp3_kbps: Some(128), ..Default::default() };
+        assert_eq!(opts, expected);
+    }
+
+    #[test]
+    fn every_option_has_a_working_default_and_reaches_the_engine() {
+        let defs = every_def();
+        let wanted = [
+            Opt::Straighten, Opt::WhiteBackground, Opt::MaxSide, Opt::PageSize, Opt::Password, Opt::Dpi, Opt::Pages,
+            Opt::OnePerPage, Opt::Ocr, Opt::Tables, Opt::Encoding, Opt::CsvSeparator, Opt::PrettyJson, Opt::HeaderRow,
+            Opt::Mp3Kbps, Opt::Channels, Opt::Normalize, Opt::TrimStart, Opt::KeepTags, Opt::VideoHeight, Opt::Fps,
+            Opt::Mute, Opt::FastStart,
+        ];
+        for opt in wanted {
+            assert!(defs.iter().any(|d| d.opt == opt), "{opt:?} non compare in nessun pannello");
+        }
+        let base = options_from(&Values::default());
+        for def in defs {
+            let mut values = Values::default();
+            match &def.control {
+                Control::Switch => {
+                    assert!(def.default <= 1);
+                    values.set(def, 1 - def.default);
+                }
+                Control::Choice(choices) => {
+                    assert!(choices.iter().any(|c| c.value == def.default), "{:?}: il valore di partenza non è tra le scelte", def.opt);
+                    let other = choices.iter().find(|c| c.value != def.default).expect("almeno due scelte");
+                    values.set(def, other.value);
+                }
+                Control::Range { min, max, .. } => {
+                    assert!(def.default >= *min && def.default <= *max);
+                    values.set(def, *max);
+                }
+                Control::Password => values.password = "segreto".into(),
+            }
+            assert_ne!(options_from(&values), base, "{:?} non arriva al motore", def.opt);
+        }
+        let mut values = Values::default();
+        values.overwrite = true;
+        assert!(options_from(&values).overwrite);
+    }
+
+    #[test]
+    fn options_depend_on_the_chosen_format() {
+        let keys = |k, a| option_defs(k, a).iter().map(|d| d.opt).collect::<Vec<_>>();
+        assert!(keys(Kind::Pdf, "jpg").contains(&Opt::Dpi));
+        assert!(!keys(Kind::Pdf, "docx").contains(&Opt::Dpi));
+        assert!(keys(Kind::Pdf, "docx").contains(&Opt::Tables));
+        assert!(keys(Kind::Image, "jpeg").contains(&Opt::WhiteBackground));
+        assert!(!keys(Kind::Image, "png").contains(&Opt::WhiteBackground));
+        assert!(keys(Kind::Image, "ocr").is_empty());
+        assert!(keys(Kind::Text, "csv").contains(&Opt::CsvSeparator));
+        assert!(keys(Kind::Video, "mp3").contains(&Opt::Mp3Kbps));
+        assert!(keys(Kind::Audio, "wav").contains(&Opt::Channels) && !keys(Kind::Audio, "wav").contains(&Opt::Mp3Kbps));
+    }
+
+    #[test]
     fn output_goes_to_the_chosen_folder() {
         let base = std::env::temp_dir().join(format!("cedro-conv-{}", std::process::id()));
         let dest = base.join("fuori");
         fs::create_dir_all(&base).unwrap();
         let src = base.join("nota.txt");
         fs::write(&src, "ciao\nmondo\n").unwrap();
-        convert_one(&src, "md", 82, Some(&dest), &Default::default()).unwrap();
+        let opts = engine::Options::default();
+        convert_one(&src, "md", 82, Some(&dest), &opts).unwrap();
         assert!(dest.join("nota.md").is_file());
         assert!(!base.join("nota.md").exists());
         assert!(src.is_file());
         // Una seconda conversione non sovrascrive: il nome prende il -2.
-        convert_one(&src, "md", 82, Some(&dest), &Default::default()).unwrap();
+        convert_one(&src, "md", 82, Some(&dest), &opts).unwrap();
         assert!(dest.join("nota-2.md").is_file());
+        // Con «sostituisci» il file esistente viene rimpiazzato.
+        let replace = engine::Options { overwrite: true, ..opts };
+        convert_one(&src, "md", 82, Some(&dest), &replace).unwrap();
+        assert!(!dest.join("nota-3.md").exists());
         let _ = fs::remove_dir_all(&base);
     }
 }

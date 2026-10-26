@@ -1740,7 +1740,7 @@ Luca,Bondeno
     fn video_quality_sets_the_bitrate() {
         let dir = scratch();
         let src = dir.join("rumore.avi");
-        fs::write(&src, rgb_avi_with(320, 240, 120, true)).unwrap();
+        fs::write(&src, rgb_avi_with(640, 360, 90, true)).unwrap();
         let low = perform_with(&src, "mp4", 40, None, &Options::default()).unwrap();
         let high = perform_with(&src, "mp4", 95, None, &Options::default()).unwrap();
         let (low_len, high_len) = (fs::metadata(&low.path).unwrap().len(), fs::metadata(&high.path).unwrap().len());
@@ -1941,8 +1941,8 @@ fn rgb_avi_with(width: u32, height: u32, frames: u32, noisy: bool) -> Vec<u8> {
                 let at = ((height - 1 - y) * stride + x * 3) as usize;
                 if noisy {
                     seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
-                    let n = (seed >> 27) as u8;
-                    let base = ((x * 2 + y + moved * 5) & 255) as u8;
+                    let n = (seed >> 30) as u8;
+                    let base = ((((x + moved * 2) / 16 + y / 16) % 16) * 16) as u8;
                     frame[at] = base.wrapping_add(n);
                     frame[at + 1] = base.wrapping_mul(3).wrapping_add(n);
                     frame[at + 2] = (x * 255 / width) as u8 ^ n;
