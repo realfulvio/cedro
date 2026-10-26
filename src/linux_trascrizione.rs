@@ -58,6 +58,8 @@ pub struct Panel {
     pub transcribe_tab: ToggleButton,
     /// Salva come, Precisione e il registro.
     pub body: HBox,
+    /// Salva come e Precisione (la colonna di sinistra del corpo): la modalità Semplice la nasconde.
+    pub options: HBox,
     format: Cell<Format>,
     model: Cell<usize>,
     log: TextBuffer,
@@ -183,6 +185,7 @@ impl Panel {
             convert_tab: convert_tab.clone(),
             transcribe_tab: transcribe_tab.clone(),
             body,
+            options: left,
             format: Cell::new(Format::Word),
             model: Cell::new(trascrizione::default_model()),
             log: buffer,
