@@ -30,7 +30,7 @@ const FIRST_GROUP_H: i32 = 26;
 
 enum Row {
     Group(&'static str),
-    Item(&'static Component),
+    Item(&'static Component, Option<String>),
 }
 
 struct State {
@@ -128,7 +128,7 @@ pub fn filter(list: HWND, query: &str) -> usize {
             let mut rows = Vec::new();
             if !found.is_empty() {
                 rows.push(Row::Group(title));
-                rows.extend(found.into_iter().map(Row::Item));
+                rows.extend(found.into_iter().map(|i| Row::Item(i, credits::version_text(i))));
             }
             rows
         })
@@ -151,7 +151,7 @@ pub fn filter(list: HWND, query: &str) -> usize {
 fn height_of(st: &State, index: usize, hdc: HDC) -> i32 {
     match st.rows.get(index) {
         Some(Row::Group(_)) => px(if index == 0 { FIRST_GROUP_H } else { GROUP_H }, st.dpi),
-        Some(Row::Item(item)) if st.open.contains(item.name) => {
+        Some(Row::Item(item, _)) if st.open.contains(item.name) => {
             let old = unsafe { SelectObject(hdc, st.mono.into()) };
             let mut text: Vec<u16> = credits::license_text(item.license).encode_utf16().collect();
             let mut rc = RECT { left: 0, top: 0, right: st.wrap, bottom: 0 };
@@ -231,7 +231,7 @@ pub fn draw(lparam: LPARAM) -> bool {
                     let area = RECT { left: r.left + px(2, d), top: r.top, right: r.right, bottom: r.bottom - px(4, d) };
                     text(hdc, &title.to_uppercase(), &area, st.bold, GREY, DT_LEFT | DT_BOTTOM | DT_SINGLELINE);
                 }
-                Row::Item(item) => {
+                Row::Item(item, version) => {
                     if selected {
                         let rc = RECT { left: r.left, top: r.top + 1, right: r.right, bottom: r.top + px(ITEM_H, d) };
                         FillRect(hdc, &rc, brush(SIDE));
@@ -251,10 +251,16 @@ pub fn draw(lparam: LPARAM) -> bool {
                     // Nome, e «in arrivo» se la funzione è ancora in lavorazione.
                     let name_rc = RECT { left: r.left + px(4, d), top: r.top + px(5, d), right: pill.left - px(10, d), bottom: r.top + px(25, d) };
                     text(hdc, item.name, &name_rc, st.bold, TEXT, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+                    let mut at = name_rc.left + text_width(hdc, item.name, st.bold) + px(8, d);
                     if item.soon {
-                        let at = name_rc.left + text_width(hdc, item.name, st.bold) + px(8, d);
                         let tag = RECT { left: at, ..name_rc };
                         text(hdc, "IN ARRIVO", &tag, st.tiny, PRIMARY, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+                        at += text_width(hdc, "IN ARRIVO", st.tiny) + px(8, d);
+                    }
+                    // La versione, in piccolo accanto al nome.
+                    if let Some(v) = version {
+                        let tag = RECT { left: at, ..name_rc };
+                        text(hdc, v, &tag, st.small, GREY, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
                     }
                     let sub = RECT { top: r.top + px(24, d), bottom: head - px(3, d), ..name_rc };
                     let line = format!("{} · {}", item.author, item.what);
@@ -311,7 +317,7 @@ fn toggle(list: HWND, index: usize) {
     let height = STATE.with(|s| {
         let mut s = s.borrow_mut();
         let st = s.as_mut()?;
-        let Some(Row::Item(item)) = st.rows.get(index) else { return None };
+        let Some(Row::Item(item, _)) = st.rows.get(index) else { return None };
         if !st.open.remove(item.name) {
             st.open.insert(item.name);
         }
