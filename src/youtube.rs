@@ -621,7 +621,7 @@ pub fn first_error(stderr: &str) -> String {
         "Il video è protetto da DRM e non si può scaricare".into()
     } else if low.contains("geo restrict") || low.contains("not available in your country") {
         "Il video non è disponibile nel tuo Paese".into()
-    } else if low.contains("login required") || low.contains("requires authentication") {
+    } else if low.contains("login required") || low.contains("requires authentication") || low.contains("logged-in") || low.contains("--cookies") {
         "Il video richiede un accesso: non posso scaricarlo".into()
     } else if low.contains("private video") {
         "Il video è privato".into()
@@ -1092,6 +1092,7 @@ mod tests {
         let info = parse_info(r#"{"title":"Film","duration":60,"webpage_url_domain":"archive.org"}"#).unwrap();
         assert_eq!(info.author, "archive.org");
         assert_eq!(first_error("ERROR: Unsupported URL: https://x.it/"), "Questo sito non è supportato (o il link non porta a un video)");
+        assert_eq!(first_error("ERROR: [vimeo] 1: The web client only works when logged-in. Use --cookies"), "Il video richiede un accesso: non posso scaricarlo");
     }
 
     /// Prova vera, in rete, su siti leciti: `cargo test --release real_sites -- --ignored --nocapture`.
