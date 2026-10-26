@@ -543,7 +543,7 @@ pub fn clock(centis: i64) -> String {
 fn minutes_text(secs: f64) -> String {
     let mins = (secs / 60.0).round() as u64;
     match mins {
-        0 => format!("{} s", secs.round() as u64),
+        0 => format!("{}\u{a0}s", secs.round() as u64),
         1..=59 => format!("{mins} min"),
         _ => format!("{} h {:02} min", mins / 60, mins % 60),
     }
@@ -870,20 +870,10 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
             sink(Event::Finished { path: path.clone(), result: Err(e.to_string()) });
         }
     };
-    let model = match ensure_model(request.model, sink) {
-        Ok(m) => m,
-        Err(e) => {
-            log(sink, Tone::Error, "Errore", e.clone());
-            return fail_all(&e, 0);
-        }
-    };
-    let mut engine = match power_on(request, &model, sink) {
-        Ok(r) => r,
-        Err(e) => {
-            log(sink, Tone::Error, "Errore", e.clone());
-            return fail_all(&e, 0);
-        }
-    };
+    // Modello e motore si accendono solo al primo file che va davvero trascritto: se i nomi esistono già
+    // e vanno saltati, non si scarica né si carica nulla.
+    let mut model: Option<PathBuf> = None;
+    let mut engine: Option<Running> = None;
     for (index, path) in files.iter().enumerate() {
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
         log(sink, Tone::Step, "File", format!("{} di {}: {name}", index + 1, files.len()));
@@ -895,13 +885,31 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
             sink(Event::Finished { path: path.clone(), result: Err("il file esiste già: saltato".into()) });
             continue;
         };
-        let mut outcome = one_file(&mut engine, path, index, sink);
+        if engine.is_none() {
+            let started = match &model {
+                Some(m) => power_on(request, m, sink),
+                None => ensure_model(request.model, sink).and_then(|m| {
+                    let r = power_on(request, &m, sink);
+                    model = Some(m);
+                    r
+                }),
+            };
+            match started {
+                Ok(r) => engine = Some(r),
+                Err(e) => {
+                    log(sink, Tone::Error, "Errore", e.clone());
+                    return fail_all(&e, index);
+                }
+            }
+        }
+        let running = engine.as_mut().expect("motore acceso");
+        let mut outcome = one_file(running, path, index, sink);
         let mut temp = None;
         if let Outcome::Unsupported(why) = &outcome {
             log(sink, Tone::Muted, "", format!("Il motore non legge questo formato ({why}): lo apro con il sistema"));
             match system_decode(path) {
                 Ok(wav) => {
-                    outcome = one_file(&mut engine, &wav, index, sink);
+                    outcome = one_file(running, &wav, index, sink);
                     temp = Some(wav);
                 }
                 Err(e) => outcome = Outcome::Failed(e),
@@ -939,18 +947,24 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
         sink(Event::Finished { path: path.clone(), result });
         if engine_gone && index + 1 < files.len() {
             // Il motore è caduto: lo si riaccende per i file che restano.
-            engine.stop();
-            engine = match power_on(request, &model, sink) {
-                Ok(r) => r,
-                Err(e) => {
-                    log(sink, Tone::Error, "Errore", e.clone());
-                    return fail_all(&e, index + 1);
+            if let Some(dead) = engine.take() {
+                dead.stop();
+            }
+            if let Some(m) = &model {
+                match power_on(request, m, sink) {
+                    Ok(r) => engine = Some(r),
+                    Err(e) => {
+                        log(sink, Tone::Error, "Errore", e.clone());
+                        return fail_all(&e, index + 1);
+                    }
                 }
-            };
+            }
         }
     }
-    engine.stop();
-    log(sink, Tone::Muted, "", "Motore spento: memoria liberata, processore libero.");
+    if let Some(running) = engine {
+        running.stop();
+        log(sink, Tone::Muted, "", "Motore spento: memoria liberata, processore libero.");
+    }
 }
 
 #[cfg(test)]
