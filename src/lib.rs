@@ -1,6 +1,7 @@
 pub mod accel;
 mod audio;
 pub mod conversioni;
+pub mod credits;
 mod doctext;
 mod engine;
 mod mp4fast;
@@ -9,6 +10,7 @@ mod pdf;
 mod pdfdoc;
 mod pdflayout;
 pub mod settings;
+pub mod sysinfo;
 mod sink;
 mod textconv;
 mod softvideo;

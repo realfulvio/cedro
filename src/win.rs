@@ -1271,7 +1271,7 @@ fn paths_from(data: &IDataObject) -> std::result::Result<Vec<PathBuf>, windows::
     }
 }
 
-fn copy_text(text: &str) {
+pub(crate) fn copy_text(text: &str) {
     unsafe {
         if OpenClipboard(None).is_err() {
             return;

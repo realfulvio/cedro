@@ -14,7 +14,7 @@ use windows::{
     Win32::System::LibraryLoader::GetModuleHandleW,
     Win32::UI::Controls::*,
     Win32::UI::HiDpi::GetDpiForSystem,
-    Win32::UI::Input::KeyboardAndMouse::EnableWindow,
+    Win32::UI::Input::KeyboardAndMouse::{EnableWindow, GetFocus},
     Win32::UI::Shell::*,
     Win32::UI::WindowsAndMessaging::*,
 };
@@ -47,12 +47,26 @@ const ID_POWERED: i32 = 161;
 const ID_DESC: i32 = 170;
 const ID_TITLE: i32 = 171;
 const ID_STATUS: i32 = 172;
+const ID_GPU: i32 = 181;
+const ID_AVX: i32 = 182;
+const ID_COPY: i32 = 183;
+const ID_COPIED: i32 = 184;
+const ID_TAG_GPU: i32 = 185;
+const ID_TAG_AVX: i32 = 186;
+const ID_SEARCH: i32 = 187;
+const ID_COUNT: i32 = 188;
+const ID_FULL: i32 = 189;
+const ID_LOGO: i32 = 197;
+const ID_LOCKED: i32 = 198;
 const ID_NAV: i32 = 200;
+const ID_LIST: i32 = 220;
+/// Le istruzioni del processore, una pillola ciascuna: da ID_CHIP in su.
+const ID_CHIP: i32 = 230;
 
 /// Gli interruttori a levetta: disegnati da Cedro, con lo stato tenuto qui.
-const TOGGLES: [i32; 10] = [ID_AUTO, ID_NOTIFY, ID_REVEAL, ID_PROGRESS, ID_SHIFT, ID_CTRL, ID_ALT, ID_DIALOGS, ID_UPDATE, 0];
+const TOGGLES: [i32; 11] = [ID_AUTO, ID_NOTIFY, ID_REVEAL, ID_PROGRESS, ID_SHIFT, ID_CTRL, ID_ALT, ID_DIALOGS, ID_UPDATE, ID_GPU, ID_AVX];
 /// I pulsanti disegnati da Cedro (Salva è quello blu).
-const PUSHES: [i32; 6] = [ID_LOG, ID_BROWSE, ID_CHECK_NOW, ID_UNSKIP, 1 /* IDOK */, 2 /* IDCANCEL */];
+const PUSHES: [i32; 8] = [ID_LOG, ID_BROWSE, ID_CHECK_NOW, ID_UNSKIP, ID_COPY, ID_FULL, 1 /* IDOK */, 2 /* IDCANCEL */];
 
 fn is_toggle(id: i32) -> bool {
     id != 0 && TOGGLES.contains(&id)
@@ -63,12 +77,16 @@ const PRIMARY: COLORREF = COLORREF(0x008E5E00); // #005E8E
 const HOVER: COLORREF = COLORREF(0x00CC6600); // #0066CC
 const TEXT: COLORREF = COLORREF(0x00191919); // #191919
 const GREY: COLORREF = COLORREF(0x00645A45); // #455A64
+const OK: COLORREF = COLORREF(0x00467A1D); // #1d7a46
+const OK_SOFT: COLORREF = COLORREF(0x00EAF3E3); // #E3F3EA
+const OFF: COLORREF = COLORREF(0x00A3998A); // #8A99A3
+const OFF_SOFT: COLORREF = COLORREF(0x00F3F1EE); // #EEF1F3
 const WHITE: COLORREF = COLORREF(0x00FFFFFF);
 const SIDE: COLORREF = COLORREF(0x00F7F5F3); // #F3F5F7
 const LINE: COLORREF = COLORREF(0x00E5E5E5); // #E5E5E5
 const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
 
-const SECTIONS: [&str; 6] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti"];
+const SECTIONS: [&str; 8] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni"];
 const DPI: [u32; 4] = [100, 144, 200, 300];
 const MAX_PAGES: [u32; 4] = [50, 100, 300, 0];
 const LANGS: [&str; 3] = ["auto", "it", "en"];
@@ -94,6 +112,9 @@ struct State {
     bold: HFONT,
     dest_dir: String,
     dpi: u32,
+    /// I riquadri (pixel) disegnati dietro i campi di ogni sezione.
+    frames: Vec<Vec<RECT>>,
+    caption: HFONT,
 }
 
 thread_local! {
@@ -106,6 +127,8 @@ thread_local! {
         bold: HFONT::default(),
         dest_dir: String::new(),
         dpi: 96,
+        frames: Vec::new(),
+        caption: HFONT::default(),
     });
 }
 
@@ -140,7 +163,19 @@ pub fn open() {
 /// Dà alla finestra delle impostazioni i messaggi di tastiera (Tab, Invio, Esc).
 pub fn handle_message(msg: &MSG) -> bool {
     let hwnd = HWND(WINDOW.load(Ordering::Relaxed) as *mut _);
-    !hwnd.0.is_null() && unsafe { IsDialogMessageW(hwnd, msg).as_bool() }
+    if hwnd.0.is_null() {
+        return false;
+    }
+    unsafe {
+        // Invio nella ricerca o nell'elenco dei crediti non vale «Salva»: va al campo.
+        if msg.message == WM_KEYDOWN && msg.wParam.0 == 0x0D {
+            let id = GetDlgCtrlID(GetFocus());
+            if id == ID_SEARCH || id == ID_LIST {
+                return false;
+            }
+        }
+        IsDialogMessageW(hwnd, msg).as_bool()
+    }
 }
 
 unsafe fn create() -> Result<()> {
@@ -197,11 +232,15 @@ unsafe fn create() -> Result<()> {
 }
 
 fn font(height: i32, weight: i32, dpi: u32) -> HFONT {
+    font_named(height, weight, dpi, crate::winfont::face())
+}
+
+fn font_named(height: i32, weight: i32, dpi: u32, face: PCWSTR) -> HFONT {
     unsafe {
         CreateFontW(
             -px(height, dpi), 0, 0, 0, weight, 0, 0, 0,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            0, crate::winfont::face(),
+            0, face,
         )
     }
 }
@@ -277,6 +316,7 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
         let mut st = st.borrow_mut();
         st.sections = vec![Vec::new(); SECTIONS.len()];
         st.lines = vec![Vec::new(); SECTIONS.len()];
+        st.frames = vec![Vec::new(); SECTIONS.len()];
         st.font = normal;
         st.bold = bold;
         st.dpi = dpi;
@@ -415,11 +455,177 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     let r = row(5, y, "Versione saltata", &skipped, 170, 0);
     button(5, ID_UNSKIP, &r, "Proponila di nuovo", 170);
 
+    build_system(hwnd, dpi, x, cw, normal, small, bold);
+    build_about(hwnd, dpi, x, cw, normal, small, bold);
+
     // Il piede: firma a sinistra, Annulla e Salva a destra.
     let foot = HEIGHT - FOOT_H;
     child(hwnd, s, POWERED_BY, SS_NOPREFIX, ID_POWERED, (18, foot + 18, 300, 20), dpi, small, None);
     child(hwnd, b, "Annulla", owner, IDCANCEL.0, (WIDTH - 18 - 88 - 8 - 88, foot + 12, 88, 32), dpi, normal, None);
     child(hwnd, b, "Salva", owner, IDOK.0, (WIDTH - 18 - 88, foot + 12, 88, 32), dpi, bold, None);
+}
+
+/// Larghezza in pixel del dispositivo di `text` col carattere dato.
+unsafe fn text_px(text: &str, font: HFONT) -> i32 {
+    let dc = GetDC(None);
+    let old = SelectObject(dc, font.into());
+    let wide: Vec<u16> = text.encode_utf16().collect();
+    let mut size = SIZE::default();
+    let _ = GetTextExtentPoint32W(dc, &wide, &mut size);
+    SelectObject(dc, old);
+    ReleaseDC(None, dc);
+    size.cx
+}
+
+/// Scheda «Sistema»: com'è fatto il PC, le istruzioni del processore e le due accelerazioni.
+unsafe fn build_system(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, small: HFONT, bold: HFONT) {
+    const SEC: usize = 6;
+    let s = w!("STATIC");
+    let b = w!("BUTTON");
+    let owner = WS_TABSTOP.0 | BS_OWNERDRAW as u32;
+    const SS_NOPREFIX: u32 = 0x80;
+    const SS_OWNERDRAW: u32 = 0xD;
+    const SS_ENDELLIPSIS: u32 = 0x4000;
+    let caption = font(12, 700, dpi);
+    let heading = font(22, 700, dpi);
+    STATE.with(|st| st.borrow_mut().caption = caption);
+    let info = cedro::sysinfo::info();
+    let hw = cedro::accel::hardware();
+
+    child(hwnd, s, "Sistema", SS_NOPREFIX, ID_TITLE, (x, 20, cw, 34), dpi, heading, Some(SEC));
+    let cap = |y: i32, text: &str| {
+        child(hwnd, s, text, SS_NOPREFIX, ID_DESC, (x, y, cw, 18), dpi, caption, Some(SEC));
+    };
+
+    cap(62, "QUESTO PC");
+    let mut y = 84;
+    for (label, value, detail) in [
+        ("Processore", info.cpu.as_str(), info.cpu_detail.as_str()),
+        ("Memoria", info.ram.as_str(), ""),
+        ("Scheda video", info.gpu.as_str(), info.gpu_detail.as_str()),
+        ("Sistema", info.os.as_str(), ""),
+    ] {
+        child(hwnd, s, label, SS_NOPREFIX, ID_DESC, (x, y, 110, 20), dpi, normal, Some(SEC));
+        child(hwnd, s, value, SS_NOPREFIX | SS_ENDELLIPSIS, ID_TITLE, (x + 126, y, cw - 126, 20), dpi, normal, Some(SEC));
+        y += 20;
+        if !detail.is_empty() {
+            child(hwnd, s, detail, SS_NOPREFIX | SS_ENDELLIPSIS, ID_DESC, (x + 126, y - 1, cw - 126, 18), dpi, small, Some(SEC));
+            y += 17;
+        }
+        y += 5;
+    }
+
+    cap(226, "ISTRUZIONI DEL PROCESSORE");
+    let mono = font_named(12, 700, dpi, w!("Consolas"));
+    let mut cx = 0;
+    for (i, (name, _)) in info.isa.iter().enumerate() {
+        let width = text_px(name, mono) * 96 / dpi as i32 + 36;
+        if cx + width > cw {
+            break;
+        }
+        child(hwnd, s, name, SS_OWNERDRAW | SS_NOPREFIX, ID_CHIP + i as i32, (x + cx, 248, width, 24), dpi, mono, Some(SEC));
+        cx += width + 6;
+    }
+
+    cap(286, "ACCELERAZIONI");
+    let tag_w = |text: &str| text_px(text, bold) * 96 / dpi as i32 + 18;
+    let mut top = 308;
+    for (id, tag_id, title, desc, tag) in [
+        (
+            ID_GPU,
+            ID_TAG_GPU,
+            "Accelerazione GPU",
+            "Video in MP4 con la scheda video o la grafica integrata. Se la scheda rifiuta un video, Cedro lo rifà col processore.",
+            match &hw.gpu {
+                Some(found) => format!("Trovata: {found}"),
+                None => "Non disponibile su questo PC".to_string(),
+            },
+        ),
+        (
+            ID_AVX,
+            ID_TAG_AVX,
+            "Accelerazione AVX-512",
+            "Calcoli più veloci per OCR e trascrizione dell'audio.",
+            if hw.avx512 { "Trovato: AVX-512 F, VL, BW, DQ".to_string() } else { "Il processore non ha AVX-512".to_string() },
+        ),
+    ] {
+        STATE.with(|st| st.borrow_mut().lines[SEC].push(px(top, dpi)));
+        let text_w = cw - 40 - 24;
+        let (lines, line_h) = measure(desc, small, text_w, dpi);
+        let line_h = line_h.max(17);
+        let available = if id == ID_GPU { hw.gpu.is_some() } else { hw.avx512 };
+        let title_font = if available { bold } else { normal };
+        child(hwnd, s, title, SS_NOPREFIX, if available { ID_TITLE } else { ID_LOCKED }, (x, top + 10, text_w, 21), dpi, title_font, Some(SEC));
+        child(hwnd, s, desc, SS_NOPREFIX, ID_DESC, (x, top + 32, text_w, lines * line_h + 2), dpi, small, Some(SEC));
+        let tag_y = top + 32 + lines * line_h + 4;
+        child(hwnd, s, &tag, SS_OWNERDRAW | SS_NOPREFIX, tag_id, (x, tag_y, tag_w(&tag), 20), dpi, bold, Some(SEC));
+        let height = 10 + 21 + 1 + lines * line_h + 4 + 20 + 8;
+        let t = child(hwnd, b, "", owner, id, (x + cw - 40, top + height / 2 - 10, 40, 20), dpi, normal, Some(SEC));
+        if !available {
+            let _ = EnableWindow(t, false);
+        }
+        top += height;
+    }
+    STATE.with(|st| st.borrow_mut().lines[SEC].push(px(top, dpi)));
+
+    child(hwnd, b, "Copia informazioni", owner, ID_COPY, (x, top + 12, 170, 30), dpi, normal, Some(SEC));
+    child(hwnd, s, "", SS_NOPREFIX, ID_COPIED, (x + 182, top + 17, cw - 182, 20), dpi, small, Some(SEC));
+    let _ = ID_COUNT;
+}
+
+/// Scheda «Informazioni»: chi siamo e, sotto, tutto il codice aperto che Cedro usa.
+unsafe fn build_about(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, small: HFONT, bold: HFONT) {
+    const SEC: usize = 7;
+    let s = w!("STATIC");
+    let b = w!("BUTTON");
+    let owner = WS_TABSTOP.0 | BS_OWNERDRAW as u32;
+    const SS_NOPREFIX: u32 = 0x80;
+    const SS_OWNERDRAW: u32 = 0xD;
+    let big = font(18, 700, dpi);
+    let caption = STATE.with(|st| st.borrow().caption);
+
+    child(hwnd, s, "", SS_OWNERDRAW, ID_LOGO, (x, 20, 56, 56), dpi, normal, Some(SEC));
+    child(hwnd, s, &format!("Cedro {}", update::CURRENT), SS_NOPREFIX, ID_TITLE, (x + 72, 20, cw - 72, 26), dpi, big, Some(SEC));
+    child(hwnd, s, "Convertitore di file, con una ruota al cursore · Licenza MIT", SS_NOPREFIX, ID_DESC, (x + 72, 47, cw - 72, 18), dpi, small, Some(SEC));
+    child(hwnd, s, &format!("{POWERED_BY} · github.com/realfulvio/cedro"), SS_NOPREFIX, ID_DESC, (x + 72, 65, cw - 72, 18), dpi, small, Some(SEC));
+    STATE.with(|st| st.borrow_mut().lines[SEC].push(px(92, dpi)));
+
+    child(hwnd, s, "CODICE APERTO USATO DA CEDRO", SS_NOPREFIX, ID_DESC, (x, 104, cw, 18), dpi, caption, Some(SEC));
+    child(hwnd, s, "Cedro esiste grazie a queste persone e ai loro progetti. Grazie.", SS_NOPREFIX, ID_DESC, (x, 124, cw, 20), dpi, small, Some(SEC));
+
+    // La ricerca: il campo sta dentro un riquadro con l'angolo morbido.
+    let frame = RECT { left: px(x, dpi), top: px(152, dpi), right: px(x + cw - 130, dpi), bottom: px(152 + 30, dpi) };
+    STATE.with(|st| st.borrow_mut().frames[SEC].push(frame));
+    let edit = child(hwnd, w!("EDIT"), "", WS_TABSTOP.0 | 0x80 /* ES_AUTOHSCROLL */, ID_SEARCH, (x + 10, 158, cw - 130 - 20, 20), dpi, normal, Some(SEC));
+    let hint = HSTRING::from("Cerca un componente o una licenza");
+    SendMessageW(edit, 0x1501 /* EM_SETCUEBANNER */, Some(WPARAM(1)), Some(LPARAM(hint.as_ptr() as isize)));
+    child(hwnd, s, "", SS_NOPREFIX | 2 /* SS_RIGHT */, ID_COUNT, (x + cw - 120, 158, 120, 20), dpi, small, Some(SEC));
+
+    let list = crate::winlist::create(hwnd, ID_LIST, (px(x, dpi), px(194, dpi), px(cw, dpi), px(296, dpi)));
+    STATE.with(|st| st.borrow_mut().sections[SEC].push(list));
+    show_count(hwnd, crate::winlist::filter(list, ""));
+
+    child(hwnd, b, "Apri le licenze complete", owner, ID_FULL, (x, 500, 190, 30), dpi, normal, Some(SEC));
+    let note = format!("Tutti i {} componenti, anche quelli minori, nel file «Licenze di terze parti».", cedro::credits::full_count());
+    child(hwnd, s, &note, SS_NOPREFIX, ID_DESC, (x + 202, 499, cw - 202, 34), dpi, small, Some(SEC));
+    let _ = bold;
+}
+
+unsafe fn show_count(hwnd: HWND, n: usize) {
+    let text = format!("{n} {}", if n == 1 { "componente" } else { "componenti" });
+    let _ = SetWindowTextW(item(hwnd, ID_COUNT), &HSTRING::from(text));
+}
+
+/// Il file con tutte le licenze sta accanto a cedro.exe; se manca si apre la pagina del progetto.
+fn open_full_licenses() {
+    let beside = std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.join(cedro::credits::FULL_FILE)));
+    let target = match beside {
+        Some(path) if path.exists() => path.display().to_string(),
+        _ => "https://github.com/realfulvio/cedro".to_string(),
+    };
+    unsafe {
+        ShellExecuteW(None, w!("open"), &HSTRING::from(target), None, None, SW_SHOWNORMAL);
+    }
 }
 
 unsafe fn item(hwnd: HWND, id: i32) -> HWND {
@@ -469,6 +675,9 @@ unsafe fn fill(hwnd: HWND, s: &Settings, autostart: bool) {
     set_check(hwnd, ID_ALT, s.key_alt);
     set_check(hwnd, ID_DIALOGS, s.dialogs);
     set_check(hwnd, ID_UPDATE, s.update_check);
+    let hw = cedro::accel::hardware();
+    set_check(hwnd, ID_GPU, s.gpu && hw.gpu.is_some());
+    set_check(hwnd, ID_AVX, s.avx512 && hw.avx512);
     set_check(
         hwnd,
         match s.dest {
@@ -532,8 +741,9 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         dialogs: is_checked(hwnd, ID_DIALOGS),
         reveal: is_checked(hwnd, ID_REVEAL),
         progress: is_checked(hwnd, ID_PROGRESS),
-        gpu: base.gpu,
-        avx512: base.avx512,
+        // Dove il PC non ha l'accelerazione l'interruttore è bloccato: resta la scelta di prima.
+        gpu: if cedro::accel::hardware().gpu.is_some() { is_checked(hwnd, ID_GPU) } else { base.gpu },
+        avx512: if cedro::accel::hardware().avx512 { is_checked(hwnd, ID_AVX) } else { base.avx512 },
         dest,
         dest_dir: STATE.with(|st| st.borrow().dest_dir.clone()),
         replace: sel(hwnd, ID_EXISTS) == 1,
@@ -628,6 +838,63 @@ unsafe fn draw_nav(dis: &DRAWITEMSTRUCT) {
     let font = STATE.with(|st| if selected { st.borrow().bold } else { st.borrow().font });
     let text = RECT { left: r.left + px(14, dpi), ..r };
     put_text(hdc, SECTIONS[index], &text, font, TEXT, DT_LEFT);
+    // Le due schede nuove della 0.15 portano l'etichetta «NUOVO» finché la versione non cambia.
+    if index >= 6 && update::CURRENT.starts_with("0.15.") {
+        let tag = STATE.with(|st| st.borrow().caption);
+        let at = text.left + text_px(SECTIONS[index], font) + px(8, dpi);
+        let area = RECT { left: at, ..text };
+        put_text(hdc, "NUOVO", &area, tag, PRIMARY, DT_LEFT);
+    }
+}
+
+/// Una pillola delle istruzioni del processore: verde se c'è, grigia e barrata se manca.
+unsafe fn draw_chip(dis: &DRAWITEMSTRUCT) {
+    let index = (dis.CtlID as i32 - ID_CHIP) as usize;
+    let Some((name, yes)) = cedro::sysinfo::info().isa.get(index).copied() else { return };
+    let hdc = dis.hDC;
+    let r = dis.rcItem;
+    let dpi = STATE.with(|st| st.borrow().dpi);
+    clear(dis, WHITE);
+    let (fill, fg) = if yes { (OK_SOFT, OK) } else { (OFF_SOFT, OFF) };
+    crate::wingfx::round_rect(hdc, &r, (r.bottom - r.top) as f32 / 2.0, Some(fill), None);
+    crate::wingfx::circle(hdc, (r.left + px(15, dpi)) as f32, ((r.top + r.bottom) / 2) as f32, px(4, dpi) as f32 - 0.5, fg);
+    let face = HSTRING::from("Consolas");
+    let f = CreateFontW(
+        -px(12, dpi), 0, 0, 0, 700, 0, 0, if yes { 0 } else { 1 },
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, 0, PCWSTR(face.as_ptr()),
+    );
+    let area = RECT { left: r.left + px(26, dpi), ..r };
+    put_text(hdc, name, &area, f, fg, DT_LEFT);
+    let _ = DeleteObject(f.into());
+}
+
+/// Il cartellino «Trovata: …» sotto un'accelerazione: verde se il PC la ha, grigio se no.
+unsafe fn draw_tag(dis: &DRAWITEMSTRUCT) {
+    let hw = cedro::accel::hardware();
+    let yes = if dis.CtlID as i32 == ID_TAG_GPU { hw.gpu.is_some() } else { hw.avx512 };
+    let hdc = dis.hDC;
+    let r = dis.rcItem;
+    let dpi = STATE.with(|st| st.borrow().dpi);
+    clear(dis, WHITE);
+    crate::wingfx::round_rect(hdc, &r, px(4, dpi) as f32, Some(if yes { OK_SOFT } else { OFF_SOFT }), None);
+    let mut buf = [0u16; 120];
+    let len = GetWindowTextW(dis.hwndItem, &mut buf) as usize;
+    let label = String::from_utf16_lossy(&buf[..len]);
+    let font = STATE.with(|st| st.borrow().bold);
+    put_text(hdc, &label, &r, font, if yes { OK } else { OFF }, DT_CENTER);
+}
+
+/// L'icona di Cedro, grande, in cima alla scheda «Informazioni».
+unsafe fn draw_logo(dis: &DRAWITEMSTRUCT) {
+    clear(dis, WHITE);
+    let r = dis.rcItem;
+    let (w, h) = (r.right - r.left, r.bottom - r.top);
+    let instance: HINSTANCE = GetModuleHandleW(None).unwrap_or_default().into();
+    if let Ok(icon) = LoadImageW(Some(instance), PCWSTR(1usize as *const u16), IMAGE_ICON, w, h, LR_DEFAULTCOLOR) {
+        let icon = HICON(icon.0);
+        let _ = DrawIconEx(dis.hDC, r.left, r.top, icon, w, h, 0, None, DI_NORMAL);
+        let _ = DestroyIcon(icon);
+    }
 }
 
 /// L'interruttore a levetta: pillola blu con il pallino a destra se acceso, contorno grigio se spento.
@@ -638,6 +905,13 @@ unsafe fn draw_toggle(dis: &DRAWITEMSTRUCT) {
     let r = dis.rcItem;
     let scale = (r.bottom - r.top) as f32 / 20.0;
     clear(dis, WHITE);
+    if dis.itemState.0 & ODS_DISABLED.0 != 0 {
+        // Bloccato: il PC non ha questa accelerazione. Contorno chiaro, pallino a sinistra.
+        let pale = COLORREF(0x00C9C2B8);
+        crate::wingfx::round_rect(hdc, &r, 10.0 * scale, None, Some((pale, scale.max(1.0))));
+        crate::wingfx::circle(hdc, r.left as f32 + 9.0 * scale, r.top as f32 + 10.0 * scale, 6.0 * scale, pale);
+        return;
+    }
     if on {
         crate::wingfx::round_rect(hdc, &r, 10.0 * scale, Some(PRIMARY), None);
         crate::wingfx::circle(hdc, r.left as f32 + 29.0 * scale, r.top as f32 + 10.0 * scale, 6.0 * scale, WHITE);
@@ -700,6 +974,13 @@ unsafe fn paint(hwnd: HWND) {
         let st = st.borrow();
         st.lines.get(st.current).cloned().unwrap_or_default()
     });
+    let frames = STATE.with(|st| {
+        let st = st.borrow();
+        st.frames.get(st.current).cloned().unwrap_or_default()
+    });
+    for f in frames {
+        crate::wingfx::round_rect(hdc, &f, px(5, dpi) as f32, Some(WHITE), Some((LINE, 1.0)));
+    }
     for y in lines {
         let line = RECT { left: px(SIDE_W + MARGIN, dpi), top: y, right: px(WIDTH - MARGIN, dpi), bottom: y + 1 };
         FillRect(hdc, &line, brush(&BRUSH_LINE, LINE));
@@ -721,6 +1002,18 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                     let on = !is_checked(hwnd, x);
                     set_check(hwnd, x, on);
                 }
+                ID_SEARCH if (wparam.0 >> 16) as u32 == 0x0300 /* EN_CHANGE */ => {
+                    let mut buf = [0u16; 120];
+                    let len = GetWindowTextW(item(hwnd, ID_SEARCH), &mut buf) as usize;
+                    let query = String::from_utf16_lossy(&buf[..len]);
+                    let n = crate::winlist::filter(item(hwnd, ID_LIST), &query);
+                    show_count(hwnd, n);
+                }
+                ID_COPY => {
+                    crate::win::copy_text(&cedro::sysinfo::report());
+                    let _ = SetWindowTextW(item(hwnd, ID_COPIED), &HSTRING::from("Copiate: incollale in una segnalazione"));
+                }
+                ID_FULL => open_full_licenses(),
                 ID_BROWSE => browse(hwnd),
                 ID_LOG => open_config_dir(),
                 ID_CHECK_NOW => crate::win::check_updates(true),
@@ -732,10 +1025,20 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             }
             LRESULT(0)
         }
+        WM_MEASUREITEM => LRESULT(crate::winlist::measure(lparam) as isize),
         WM_DRAWITEM => {
+            if crate::winlist::draw(lparam) {
+                return LRESULT(1);
+            }
             let dis = &*(lparam.0 as *const DRAWITEMSTRUCT);
             let id = dis.CtlID as i32;
-            if (ID_NAV..ID_NAV + SECTIONS.len() as i32).contains(&id) {
+            if (ID_CHIP..ID_CHIP + 10).contains(&id) {
+                draw_chip(dis);
+            } else if id == ID_TAG_GPU || id == ID_TAG_AVX {
+                draw_tag(dis);
+            } else if id == ID_LOGO {
+                draw_logo(dis);
+            } else if (ID_NAV..ID_NAV + SECTIONS.len() as i32).contains(&id) {
                 draw_nav(dis);
             } else if is_toggle(id) {
                 draw_toggle(dis);
@@ -749,13 +1052,21 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             paint(hwnd);
             LRESULT(0)
         }
+        WM_CTLCOLOREDIT => {
+            let hdc = HDC(wparam.0 as *mut _);
+            SetTextColor(hdc, TEXT);
+            SetBkColor(hdc, WHITE);
+            LRESULT(brush(&BRUSH_WHITE, WHITE).0 as isize)
+        }
         WM_CTLCOLORSTATIC | WM_CTLCOLORBTN => {
             let ctl = HWND(lparam.0 as *mut _);
             let hdc = HDC(wparam.0 as *mut _);
             let id = GetDlgCtrlID(ctl);
             let (fg, bg, slot) = match id {
                 ID_POWERED => (GREY, SIDE, &BRUSH_SIDE),
-                ID_DESC | ID_DEST_PATH => (GREY, WHITE, &BRUSH_WHITE),
+                ID_DESC | ID_DEST_PATH | ID_COUNT => (GREY, WHITE, &BRUSH_WHITE),
+                ID_LOCKED => (OFF, WHITE, &BRUSH_WHITE),
+                ID_COPIED => (OK, WHITE, &BRUSH_WHITE),
                 _ => (TEXT, WHITE, &BRUSH_WHITE),
             };
             SetTextColor(hdc, fg);
