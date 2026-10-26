@@ -21,6 +21,7 @@ const ID_AUTO: i32 = 101;
 const ID_NOTIFY: i32 = 102;
 const ID_REVEAL: i32 = 103;
 const ID_LOG: i32 = 104;
+const ID_PROGRESS: i32 = 105;
 const ID_SHIFT: i32 = 111;
 const ID_CTRL: i32 = 112;
 const ID_ALT: i32 = 113;
@@ -268,6 +269,8 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     y = row(0, y, "Avviso a fine conversione", "Il fumetto vicino all'orologio con il nome del file creato.");
     toggle(0, ID_REVEAL, y, "");
     y = row(0, y, "Mostra il file nuovo", "A lavoro finito apre la cartella in Esplora file e seleziona la copia.");
+    toggle(0, ID_PROGRESS, y, "");
+    y = row(0, y, "Barra di avanzamento", "Una linea sottile in basso a destra mentre converte, verde a lavoro finito.");
     button(0, ID_LOG, y, "Apri cartella");
     row(0, y, "Registro attività", "Il file log.txt e config.txt stanno in %APPDATA%\\Cedro.");
 
@@ -368,6 +371,7 @@ unsafe fn fill(hwnd: HWND, s: &Settings, autostart: bool) {
     set_check(hwnd, ID_AUTO, autostart);
     set_check(hwnd, ID_NOTIFY, s.notify);
     set_check(hwnd, ID_REVEAL, s.reveal);
+    set_check(hwnd, ID_PROGRESS, s.progress);
     set_check(hwnd, ID_SHIFT, s.key_shift);
     set_check(hwnd, ID_CTRL, s.key_ctrl);
     set_check(hwnd, ID_ALT, s.key_alt);
@@ -434,6 +438,7 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         key_alt: is_checked(hwnd, ID_ALT),
         dialogs: is_checked(hwnd, ID_DIALOGS),
         reveal: is_checked(hwnd, ID_REVEAL),
+        progress: is_checked(hwnd, ID_PROGRESS),
         dest,
         dest_dir: STATE.with(|st| st.borrow().dest_dir.clone()),
         replace: sel(hwnd, ID_EXISTS) == 1,

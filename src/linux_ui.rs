@@ -392,14 +392,27 @@ fn run_slices(all: &[PathBuf], id: &str, label: &str) -> String {
     let skipped = all.len().saturating_sub(paths.len());
     let quality = read_quality();
     let mut notes = Vec::new();
-    for path in &paths {
+    let mut failed = None;
+    let name = |p: &std::path::Path| p.file_name().and_then(|s| s.to_str()).unwrap_or("file").to_string();
+    let step_label = |i: usize, p: &std::path::Path| {
+        if paths.len() == 1 { format!("{} → {label}", name(p)) } else { format!("{} di {} · {}", i + 1, paths.len(), name(p)) }
+    };
+    if let Some(first) = paths.first() {
+        crate::linux_progress::start(paths.len(), &step_label(0, first));
+    }
+    for (i, path) in paths.iter().enumerate() {
+        crate::linux_progress::step(i, &step_label(i, path));
         match perform(path, id, quality) {
-            Ok(out) => {
-                let name = out.path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
-                notes.push(format!("{name} · {}", out.message));
+            Ok(out) => notes.push(format!("{} · {}", name(&out.path), out.message)),
+            Err(err) => {
+                failed.get_or_insert_with(|| err.0.clone());
+                notes.push(err.0);
             }
-            Err(err) => notes.push(err.0),
         }
+    }
+    match &failed {
+        Some(e) => crate::linux_progress::finish(false, &format!("Errore · {e}")),
+        None => crate::linux_progress::finish(true, &format!("Fatto · {} file in {label}", paths.len())),
     }
     if skipped > 0 {
         notes.push(format!("{skipped} file di altro tipo lasciati stare"));

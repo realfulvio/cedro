@@ -14,9 +14,13 @@ mod settings_win;
 mod conversioni_win;
 #[cfg(windows)]
 mod guida_win;
+#[cfg(windows)]
+mod progress_win;
 
 #[cfg(target_os = "linux")]
 mod linux_conversioni;
+#[cfg(target_os = "linux")]
+mod linux_progress;
 #[cfg(target_os = "linux")]
 mod linux_settings;
 #[cfg(target_os = "linux")]
