@@ -2,7 +2,7 @@
 ; Installa per l'utente corrente: non servono i diritti di amministratore.
 #define AppName "Cedro"
 #ifndef AppVersion
-  #define AppVersion "0.14.0"
+  #define AppVersion "0.15.0"
 #endif
 
 [Setup]
@@ -40,6 +40,7 @@ Name: "autostart"; Description: "Avvia Cedro all'accesso a Windows"; GroupDescri
 [Files]
 Source: "..\target\release\cedro.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\Licenze di terze parti.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\cedro.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]

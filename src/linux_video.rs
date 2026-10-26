@@ -22,6 +22,16 @@ use crate::mp4mux::{write_mp4, Movie, Sample};
 use crate::sink::VideoSink;
 
 pub(crate) fn to_mp4(input: &Path, output: &Path) -> Result<(), String> {
+    let first = to_mp4_with(input, output);
+    // Se la scheda video ha sbagliato a metà video, si rifà tutto col processore.
+    let shape = crate::sink::shape();
+    if first.is_err() && shape.gpu && crate::sink::gpu_used() {
+        return crate::sink::with_shape(crate::sink::VideoShape { gpu: false, ..shape }, || to_mp4_with(input, output));
+    }
+    first
+}
+
+fn to_mp4_with(input: &Path, output: &Path) -> Result<(), String> {
     match crate::softvideo::transcode::<H264Aac>(input, output) {
         Ok(()) => Ok(()),
         Err(err) if err == crate::softvideo::FOREIGN => {
@@ -63,7 +73,7 @@ struct H264Aac {
     gate: crate::sink::FrameGate,
     muted: bool,
     frame_duration: i64,
-    encoder: Option<Encoder>,
+    encoder: Option<H264>,
     sps: Vec<u8>,
     pps: Vec<u8>,
     video: Vec<Sample>,
@@ -141,8 +151,21 @@ impl VideoSink for H264Aac {
         } else {
             pack_i420(y, u, v, self.width as usize, self.height as usize)?
         };
+        if let Some(H264::Gpu(gpu)) = self.encoder.as_mut() {
+            match gpu.encode(&packed) {
+                Ok((bytes, sync)) => {
+                    crate::sink::note_gpu();
+                    return self.push_annex(&bytes, duration, sync);
+                }
+                // Al primo fotogramma si passa al processore senza perdere niente.
+                Err(_) if self.video.is_empty() => {
+                    self.encoder = Some(H264::Soft(open_soft_h264(self.width, self.height, self.frame_duration)?));
+                }
+                Err(err) => return Err(err),
+            }
+        }
+        let Some(H264::Soft(encoder)) = self.encoder.as_mut() else { unreachable!("codificatore") };
         let picture = YUVBuffer::from_vec(packed, self.width as usize, self.height as usize);
-        let encoder = self.encoder.as_mut().expect("encoder");
         let encoded = encoder.encode(&picture).map_err(|err| format!("H.264 non scritto: {err}"))?;
         if matches!(encoded.frame_type(), FrameType::Skip | FrameType::Invalid) && encoded.to_vec().is_empty() {
             return Ok(());
@@ -244,12 +267,33 @@ impl H264Aac {
     }
 }
 
-fn open_h264(width: u32, height: u32, frame_duration: i64) -> Result<Encoder, String> {
-    let fps = if frame_duration > 0 {
+/// Il codificatore H.264: la scheda video (VA-API) se c'è ed è permessa, altrimenti OpenH264.
+enum H264 {
+    Gpu(crate::vaapi::H264Encoder),
+    Soft(Encoder),
+}
+
+fn fps_of(frame_duration: i64) -> f32 {
+    if frame_duration > 0 {
         (10_000_000.0 / frame_duration as f32).clamp(1.0, 240.0)
     } else {
         30.0
-    };
+    }
+}
+
+fn open_h264(width: u32, height: u32, frame_duration: i64) -> Result<H264, String> {
+    let shape = crate::sink::shape();
+    if shape.gpu {
+        let bitrate = crate::sink::bitrate(width, height);
+        if let Ok(gpu) = crate::vaapi::H264Encoder::new(width, height, fps_of(frame_duration), bitrate, shape.quality) {
+            return Ok(H264::Gpu(gpu));
+        }
+    }
+    open_soft_h264(width, height, frame_duration).map(H264::Soft)
+}
+
+fn open_soft_h264(width: u32, height: u32, frame_duration: i64) -> Result<Encoder, String> {
+    let fps = fps_of(frame_duration);
     let bitrate = crate::sink::bitrate(width, height);
     let config = EncoderConfig::new()
         .bitrate(H264Rate::from_bps(bitrate))
