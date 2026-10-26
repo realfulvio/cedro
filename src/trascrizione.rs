@@ -1033,4 +1033,40 @@ mod tests {
         assert!(styles.contains("it-IT"));
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    /// Prova sul PC: con `CEDRO_TRASCRIVI_DIR` (i motori già compilati, nomi `cedro-trascrivi-<variante>`) e
+    /// `espeak-ng` trascrive una frase vera, scaricando il modello «Veloce» se manca. Altrove non fa niente.
+    /// Con `CEDRO_TRASCRIVI_GPU=1` prova la variante per scheda video.
+    #[test]
+    fn transcribes_a_spoken_sentence() {
+        if std::env::var_os("CEDRO_TRASCRIVI_DIR").is_none() {
+            return;
+        }
+        let work = std::env::temp_dir().join(format!("cedro-voce-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&work);
+        std::fs::create_dir_all(&work).unwrap();
+        let wav = work.join("voce.wav");
+        let spoke = Command::new("espeak-ng").args(["-v", "it", "-s", "130", "-w"]).arg(&wav).arg("Buongiorno a tutti. Oggi parliamo del bilancio comunale.").status();
+        if !spoke.is_ok_and(|s| s.success()) {
+            eprintln!("espeak-ng non c'è: prova saltata");
+            return;
+        }
+        let request = Request { format: Format::Text, model: 0, gpu: std::env::var_os("CEDRO_TRASCRIVI_GPU").is_some(), avx512: false };
+        let lines = std::sync::Mutex::new(Vec::new());
+        let finished = std::sync::Mutex::new(None);
+        run(&[wav.clone()], &request, Some(&work), &Options::default(), &|event| match event {
+            Event::Log(line) => lines.lock().unwrap().push(format!("{} {}", line.key, line.text)),
+            Event::Finished { result, .. } => *finished.lock().unwrap() = Some(result),
+            Event::Percent { .. } => {}
+        });
+        for line in lines.lock().unwrap().iter() {
+            eprintln!("{line}");
+        }
+        let result = finished.lock().unwrap().take().expect("nessun risultato");
+        let (out, _) = result.expect("trascrizione");
+        let text = std::fs::read_to_string(out).unwrap().to_lowercase();
+        // La voce di espeak è robotica e il modello «Veloce» sbaglia le parole difficili: bastano queste.
+        assert!(text.contains("oggi parliamo"), "testo: {text}");
+        let _ = std::fs::remove_dir_all(&work);
+    }
 }
