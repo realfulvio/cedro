@@ -263,6 +263,17 @@ pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
     }
 }
 
+/// Il nome per un file scritto fuori da `perform_with` (per esempio una trascrizione), con la stessa
+/// regola per i nomi che esistono già. `None` se il file esiste e si è scelto di saltarlo.
+pub fn choose_output(source: &Path, dir: &Path, file_stem: &str, ext: &str, opts: &Options) -> Option<PathBuf> {
+    let before = NAMING.with(|n| {
+        n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(source.to_path_buf()), ..Default::default() })
+    });
+    let out = unique_output(dir, file_stem, ext);
+    let used = NAMING.with(|n| n.replace(before));
+    used.skipped.is_empty().then_some(out)
+}
+
 /// Il nome di uscita è da saltare (esiste già e si è scelto di non toccarlo): le conversioni lunghe non partono neppure.
 fn skipping(out: &Path) -> bool {
     NAMING.with(|n| n.borrow().skipped.iter().any(|p| p == out))
