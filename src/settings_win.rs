@@ -228,7 +228,7 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     let combo_style = tab | CBS_DROPDOWNLIST as u32 | WS_VSCROLL.0;
 
     child(hwnd, s, "   Impostazioni di Cedro", 0x200 /* SS_CENTERIMAGE */, ID_HEADER, (0, 0, WIDTH, 40), dpi, title, None);
-    child(hwnd, s, "", 0, ID_NAVBG, (0, 40, SIDE_W, HEIGHT - 40), dpi, normal, None);
+    child(hwnd, s, "", 0, ID_NAVBG, (0, 40, SIDE_W, HEIGHT - 86), dpi, normal, None);
     for (i, name) in SECTIONS.iter().enumerate() {
         child(
             hwnd, b, name, tab | BS_OWNERDRAW as u32, ID_NAV + i as i32,
@@ -242,7 +242,7 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     // Titolo e descrizione di una riga; ritorna la y della riga dopo.
     let row = |sec: usize, y: i32, title_text: &str, desc: &str| -> i32 {
         child(hwnd, s, title_text, 0, 0, (x, y, cx - x - 8, 20), dpi, bold, Some(sec));
-        child(hwnd, s, desc, 0, ID_DESC, (x, y + 20, cx - x - 8, 34), dpi, normal, Some(sec));
+        child(hwnd, s, desc, 0, ID_DESC, (x, y + 20, cx - x - 8, 42), dpi, normal, Some(sec));
         y + 62
     };
     let combo = |sec: usize, id: i32, y: i32, items: &[&str]| {
