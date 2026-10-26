@@ -536,7 +536,11 @@ unsafe fn pick(hwnd: HWND, folder: bool) -> Vec<PathBuf> {
 }
 
 unsafe fn start(hwnd: HWND) {
-    if let Err(e) = conversioni::validate(&state().values) {
+    let checked = {
+        let s = state();
+        conversioni::validate(&s.values, CATEGORIES[s.category].kind, &s.action)
+    };
+    if let Err(e) = checked {
         MessageBoxW(Some(hwnd), &HSTRING::from(e), w!("Cedro"), MB_OK | MB_ICONWARNING);
         return;
     }

@@ -315,7 +315,9 @@ pub fn build(blocks: &[DocBlock], o: &PdfOptions) -> Result<Vec<u8>, String> {
         };
         let leading = size * 1.3;
         let face = if is_bold { &bold } else { &regular };
-        let wrapped = if block.text.is_empty() { vec![String::new()] } else { wrap(face, &block.text, size, scale, max) };
+        // Le tabulazioni diventano spazi e gli altri caratteri di controllo spariscono: nel font non hanno un glifo (sarebbero quadratini).
+        let text: String = block.text.replace('\t', "    ").chars().filter(|c| !c.is_control()).collect();
+        let wrapped = if text.is_empty() { vec![String::new()] } else { wrap(face, &text, size, scale, max) };
         // Un titolo non resta solo in fondo alla pagina.
         let need = leading * if block.heading > 0 { 2.5 } else { 1.0 } + before;
         if y - need < margin && !pages.last().map_or(true, |p| p.lines.is_empty()) {
@@ -324,8 +326,8 @@ pub fn build(blocks: &[DocBlock], o: &PdfOptions) -> Result<Vec<u8>, String> {
         } else if !pages.last().map_or(true, |p| p.lines.is_empty()) {
             y -= before;
         }
-        if block.heading > 0 && !block.text.trim().is_empty() {
-            marks.push(Mark { level: block.heading, title: block.text.trim().to_string(), page: pages.len() - 1, y: y.min(height - 10.0) });
+        if block.heading > 0 && !text.trim().is_empty() {
+            marks.push(Mark { level: block.heading, title: text.trim().to_string(), page: pages.len() - 1, y: y.min(height - 10.0) });
         }
         for line in wrapped {
             if y - leading < margin && !pages.last().map_or(true, |p| p.lines.is_empty()) {
@@ -594,6 +596,16 @@ mod tests {
         assert!(first.get(b"First").is_ok() && first.get(b"Next").is_ok());
         let title = first.get(b"Title").unwrap().as_str().unwrap();
         assert_eq!(&title[..2], &[0xFE, 0xFF]);
+    }
+
+    #[test]
+    fn tabs_become_spaces_not_missing_glyphs() {
+        let mut o = options(true, false);
+        o.bookmarks = false;
+        let pdf = build(&[DocBlock { text: "nome\tcittà\u{1}".into(), heading: 0 }], &o).unwrap();
+        let text = lopdf::Document::load_mem(&pdf).unwrap().extract_text(&[1]).unwrap();
+        assert!(text.contains("nome    città"), "{text:?}");
+        assert!(!text.contains('\t') && !text.contains('\u{1}'));
     }
 
     #[test]

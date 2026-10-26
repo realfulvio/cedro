@@ -312,7 +312,8 @@ fn start(ui: &Rc<Ui>) {
     if files.is_empty() || ui.running.borrow().is_some() {
         return;
     }
-    if let Err(e) = conversioni::validate(&ui.values.borrow()) {
+    let kind = CATEGORIES[ui.category.get()].kind;
+    if let Err(e) = conversioni::validate(&ui.values.borrow(), kind, &ui.action.borrow()) {
         AlertDialog::builder().message("Controlla le pagine").detail(e).modal(true).build().show(Some(&ui.window));
         return;
     }
@@ -425,7 +426,13 @@ pub fn open_conversions(app: &Application) {
         l.set_xalign(0.0);
         side.append(&l);
     }
-    let side_scroll = ScrolledWindow::builder().child(&side).min_content_width(180).vexpand(true).build();
+    // Niente scorrimento orizzontale: la colonna si allarga quanto la voce più lunga (in grassetto quando è scelta).
+    let side_scroll = ScrolledWindow::builder()
+        .child(&side)
+        .min_content_width(180)
+        .hscrollbar_policy(gtk4::PolicyType::Never)
+        .vexpand(true)
+        .build();
 
     let title = Label::new(None);
     title.set_xalign(0.0);

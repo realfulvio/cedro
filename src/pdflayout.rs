@@ -626,7 +626,9 @@ fn paragraphs(lines: &[Line], body: f64) -> Vec<Para> {
         let continues = group.last().is_some_and(|prev| {
             let dy = line.baseline - prev.baseline;
             let short_prev = prev.end < right - 0.15 * width;
-            let same_x = (line.x - prev.x).abs() <= 0.8 * line.size || (group.len() == 1 && line.x < prev.x);
+            // La prima riga può rientrare di poco, non stare in un'altra colonna.
+            let indented = group.len() == 1 && line.x < prev.x && prev.x - line.x <= 4.0 * line.size;
+            let same_x = (line.x - prev.x).abs() <= 0.8 * line.size || indented;
             dy > 0.6 * line.size
                 && dy < 1.7 * line.size.max(prev.size)
                 && (line.size - prev.size).abs() < 0.6
@@ -755,6 +757,8 @@ struct Cols {
     header: usize,
     /// Da qui in poi i blocchi sono della colonna destra.
     split: usize,
+    /// Da qui in poi i blocchi sono a tutta larghezza, sotto le colonne (il piede).
+    footer: usize,
 }
 
 /// Dove passa lo spazio tra due colonne di testo, se la pagina ne ha due.
@@ -815,9 +819,10 @@ fn detect_gutter(lines: &[Line], page_w: f64) -> Option<f64> {
     if overlap < 0.6 * (lb - lt).min(rb - rt) {
         return None;
     }
-    // I titoli a tutta larghezza sono solo sopra le colonne.
+    // Le righe a tutta larghezza stanno sopra le colonne (il titolo) o sotto (il piede), mai in mezzo.
     let first_col = left.iter().chain(right.iter()).map(|l| l.baseline).fold(f64::MAX, f64::min);
-    if lines.iter().any(|l| l.x < g - 1.0 && l.end > g + 1.0 && l.baseline > first_col) {
+    let last_col = left.iter().chain(right.iter()).map(|l| l.baseline).fold(0.0, f64::max);
+    if lines.iter().any(|l| l.x < g - 1.0 && l.end > g + 1.0 && l.baseline > first_col && l.baseline < last_col) {
         return None;
     }
     Some(g)
@@ -846,22 +851,24 @@ fn arrange(blocks: Vec<Block>, gutter: Option<f64>, keep_columns: bool) -> (Vec<
         blocks.sort_by(by_top);
         return (blocks, None);
     };
-    let (mut header, mut left, mut right) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut wide, mut left, mut right) = (Vec::new(), Vec::new(), Vec::new());
     for b in blocks {
         match block_col(&b, g) {
-            0 => header.push(b),
+            0 => wide.push(b),
             1 => left.push(b),
             _ => right.push(b),
         }
     }
-    // Un blocco a tutta larghezza sotto l'inizio delle colonne non si può mettere in testa: si torna a una pagina sola.
+    // I blocchi a tutta larghezza vanno in testa o in fondo; uno in mezzo alle colonne non ha posto: si torna a una pagina sola.
     let first_col = left.iter().chain(right.iter()).map(|b| b.top()).fold(f64::MAX, f64::min);
-    if header.iter().any(|b| b.top() > first_col) {
-        let mut all: Vec<Block> = header.into_iter().chain(left).chain(right).collect();
+    let last_col = left.iter().chain(right.iter()).map(|b| b.bottom()).fold(0.0, f64::max);
+    let (mut header, mut footer): (Vec<Block>, Vec<Block>) = wide.into_iter().partition(|b| b.top() <= first_col);
+    if footer.iter().any(|b| b.top() < last_col - 1.0) {
+        let mut all: Vec<Block> = header.into_iter().chain(left).chain(right).chain(footer).collect();
         all.sort_by(by_top);
         return (all, None);
     }
-    for v in [&mut header, &mut left, &mut right] {
+    for v in [&mut header, &mut left, &mut right, &mut footer] {
         v.sort_by(by_top);
     }
     let extent = |v: &[Block]| {
@@ -875,19 +882,25 @@ fn arrange(blocks: Vec<Block>, gutter: Option<f64>, keep_columns: bool) -> (Vec<
         })
     };
     let ((l0, l1), (r0, r1)) = (extent(&left), extent(&right));
-    let cols = (keep_columns && !left.is_empty() && !right.is_empty()).then(|| Cols { l0, l1, r0, r1, header: header.len(), split: header.len() + left.len() });
-    (header.into_iter().chain(left).chain(right).collect(), cols)
+    let split = header.len() + left.len();
+    let cols = (keep_columns && !left.is_empty() && !right.is_empty()).then(|| Cols { l0, l1, r0, r1, header: header.len(), split, footer: split + right.len() });
+    (header.into_iter().chain(left).chain(right).chain(footer).collect(), cols)
 }
 
 /// Legge le pagine del PDF. `Page::Empty` per quelle senza testo incorporato.
 /// Con `tables` falso le tabelle non si riconoscono: il loro testo resta in paragrafi.
-pub fn read_pages(bytes: &[u8], with_tables: bool, keep_columns: bool) -> Result<Vec<Page>, String> {
+/// Le pagine per cui `want` (da 0) è falso non si leggono: restano `Page::Empty`.
+pub fn read_pages(bytes: &[u8], with_tables: bool, keep_columns: bool, want: impl Fn(usize) -> bool) -> Result<Vec<Page>, String> {
     let original = Pdf::new(bytes.to_vec()).map_err(|e| format!("PDF non letto: {e:?}"))?;
     let cache = RenderCache::new();
     let interp_cache = InterpreterCache::new();
     let settings = InterpreterSettings::default();
     let mut pages = Vec::new();
-    for page in original.pages().iter() {
+    for (index, page) in original.pages().iter().enumerate() {
+        if !want(index) {
+            pages.push(Page::Empty);
+            continue;
+        }
         let (w, h) = page.render_dimensions();
         let (w, h) = (w as f64, h as f64);
         let ctm = page.initial_transform(true).to_kurbo();
@@ -1113,9 +1126,18 @@ fn sect_xml(w: f64, h: f64, top: f64, bottom: f64, left: f64, right: f64) -> Str
     )
 }
 
-/// I blocchi di una pagina (o di una sua colonna) come XML di Word.
+/// Chiude la sezione nell'ultimo paragrafo (o in uno vuoto, se l'ultimo è una tabella o un'immagine).
+fn end_section(parts: &mut Vec<String>, sect: &str) {
+    match parts.last_mut().filter(|l| l.starts_with("<w:p>") && !l.contains("<w:drawing>")) {
+        Some(last) => *last = last.replacen("</w:pPr>", &format!("{sect}</w:pPr>"), 1),
+        None => parts.push(format!("<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/>{sect}</w:pPr></w:p>")),
+    }
+}
+
+/// I blocchi di una pagina (o di una sua colonna) come XML di Word. `above` è dove finisce quello che sta sopra.
 fn blocks_xml(
     blocks: &[Block],
+    above: Option<f64>,
     geo: &Geometry,
     page_width: f64,
     media: &mut Vec<(String, Vec<u8>)>,
@@ -1123,7 +1145,7 @@ fn blocks_xml(
     next_id: &mut usize,
 ) -> Vec<String> {
     let mut parts: Vec<String> = Vec::new();
-    let mut prev_bottom: Option<f64> = None;
+    let mut prev_bottom = above;
     for block in blocks {
         let gap = prev_bottom.map_or(0.0, |b| (block.top() - b).max(0.0));
         match block {
@@ -1195,27 +1217,33 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                     let left_m = c.l0.min(left).max(0.0);
                     let right_m = (p.width - c.r1.max(right)).max(20.0);
                     let edge = p.width - right_m;
-                    let mut parts = blocks_xml(&p.blocks[..c.header], &Geometry { left: left_m, right: edge }, p.width, &mut media, &mut rels, &mut next_id);
+                    let head = &p.blocks[..c.header];
+                    let mut parts = blocks_xml(head, None, &Geometry { left: left_m, right: edge }, p.width, &mut media, &mut rels, &mut next_id);
                     if !parts.is_empty() {
-                        let head_sect = sect_xml(p.width, p.height, top, 36.0, left_m, right_m);
-                        match parts.last_mut().filter(|l| l.starts_with("<w:p>") && !l.contains("<w:drawing>")) {
-                            Some(last) => *last = last.replacen("</w:pPr>", &format!("{head_sect}</w:pPr>"), 1),
-                            None => parts.push(format!(
-                                "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/>{head_sect}</w:pPr></w:p>"
-                            )),
+                        end_section(&mut parts, &sect_xml(p.width, p.height, top, 36.0, left_m, right_m));
+                        // Le due colonne partono sotto il titolo, alla distanza che hanno nel PDF: lo spazio va dopo il titolo,
+                        // perché lo spazio prima del primo paragrafo della colonna destra verrebbe contato anche lì.
+                        let head_bottom = head.iter().map(Block::bottom).fold(0.0, f64::max);
+                        let cols_top = p.blocks[c.header..c.footer].iter().map(Block::top).fold(f64::MAX, f64::min);
+                        let gap = (cols_top - head_bottom).max(0.0);
+                        if let Some(last) = parts.last_mut() {
+                            *last = last.replacen("w:after=\"0\"", &format!("w:after=\"{}\"", twips(gap)), 1);
                         }
                     }
-                    parts.extend(blocks_xml(&p.blocks[c.header..c.split], &Geometry { left: left_m, right: c.l1 }, p.width, &mut media, &mut rels, &mut next_id));
-                    let mut right_parts = blocks_xml(&p.blocks[c.split..], &Geometry { left: c.r0, right: edge }, p.width, &mut media, &mut rels, &mut next_id);
+                    // Un po' di margine alla colonna sinistra, perché le righe più lunghe non vadano a capo con un carattere un po' più largo.
+                    let slack = ((c.r0 - c.l1) / 3.0).min(6.0);
+                    let l1 = c.l1 + slack;
+                    let left_geo = Geometry { left: left_m, right: l1 };
+                    parts.extend(blocks_xml(&p.blocks[c.header..c.split], None, &left_geo, p.width, &mut media, &mut rels, &mut next_id));
+                    let right_geo = Geometry { left: c.r0, right: edge };
+                    let mut right_parts = blocks_xml(&p.blocks[c.split..c.footer], None, &right_geo, p.width, &mut media, &mut rels, &mut next_id);
                     let column_break = "<w:r><w:br w:type=\"column\"/></w:r>";
                     match right_parts.first_mut().filter(|f| f.starts_with("<w:p>") && !f.contains("<w:drawing>")) {
                         Some(first) => *first = first.replacen("</w:pPr>", &format!("</w:pPr>{column_break}"), 1),
                         None => right_parts.insert(0, format!("<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\"/></w:pPr>{column_break}</w:p>")),
                     }
                     parts.extend(right_parts);
-                    let area = p.width - left_m - right_m;
-                    let (w1, gap, w2) = (c.l1 - left_m, c.r0 - c.l1, edge - c.r0);
-                    let _ = area;
+                    let (w1, gap, w2) = (l1 - left_m, c.r0 - l1, edge - c.r0);
                     let cols_xml = format!(
                         "<w:cols w:num=\"2\" w:space=\"{}\" w:equalWidth=\"0\"><w:col w:w=\"{}\" w:space=\"{}\"/><w:col w:w=\"{}\"/></w:cols>",
                         twips(gap),
@@ -1224,12 +1252,20 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                         twips(w2)
                     );
                     let kind = if c.header > 0 { "<w:type w:val=\"continuous\"/>" } else { "" };
-                    let sect = sect_xml(p.width, p.height, top, 36.0, left_m, right_m)
-                        .replacen("<w:pgSz", &format!("{kind}<w:pgSz"), 1)
-                        .replacen("</w:sectPr>", &format!("{cols_xml}</w:sectPr>"), 1);
-                    (parts, sect)
+                    let one_col = sect_xml(p.width, p.height, top, 36.0, left_m, right_m);
+                    let cols_sect = one_col.replacen("<w:pgSz", &format!("{kind}<w:pgSz"), 1).replacen("</w:sectPr>", &format!("{cols_xml}</w:sectPr>"), 1);
+                    let foot = &p.blocks[c.footer..];
+                    if foot.is_empty() {
+                        (parts, cols_sect)
+                    } else {
+                        // Il piede a tutta larghezza: le colonne si chiudono e si torna a una colonna, sulla stessa pagina.
+                        end_section(&mut parts, &cols_sect);
+                        let below = p.blocks[c.header..c.footer].iter().map(Block::bottom).reduce(f64::max);
+                        parts.extend(blocks_xml(foot, below, &Geometry { left: left_m, right: edge }, p.width, &mut media, &mut rels, &mut next_id));
+                        (parts, one_col.replacen("<w:pgSz", "<w:type w:val=\"continuous\"/><w:pgSz", 1))
+                    }
                 } else {
-                    let parts = blocks_xml(&p.blocks, &geo, p.width, &mut media, &mut rels, &mut next_id);
+                    let parts = blocks_xml(&p.blocks, None, &geo, p.width, &mut media, &mut rels, &mut next_id);
                     (parts, sect_xml(p.width, p.height, top, 36.0, geo.left, page_right))
                 }
             }
@@ -1243,12 +1279,7 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
         };
         if !last_page {
             // La fine della sezione sta nell'ultimo paragrafo della pagina.
-            match parts.last_mut().filter(|l| l.starts_with("<w:p>") && !l.contains("<w:drawing>")) {
-                Some(last) => *last = last.replacen("</w:pPr>", &format!("{sect}</w:pPr>"), 1),
-                None => parts.push(format!(
-                    "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/>{sect}</w:pPr></w:p>"
-                )),
-            }
+            end_section(&mut parts, &sect);
         } else if parts.last().is_some_and(|l| l.starts_with("<w:tbl>")) {
             parts.push("<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\"/></w:pPr></w:p>".to_string());
         }
