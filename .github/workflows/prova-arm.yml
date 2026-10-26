@@ -6,6 +6,9 @@ name: Prova ARM
 # disinstallazione. Parte da sola dopo ogni «Windows ARM64» riuscito; a mano: Run workflow (tag vuoto = ultima).
 
 on:
+  push:
+    branches: ["claude/**"]
+    paths: ["prova-arm/**", ".github/workflows/prova-arm.yml"]
   workflow_run:
     workflows: ["Windows ARM64"]
     types: [completed]
