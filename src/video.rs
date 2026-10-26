@@ -1171,6 +1171,17 @@ pub(crate) fn audio_to_wav(input: &Path, output: &Path) -> Result<(), String> {
         MF_SOURCE_READER_ALL_STREAMS,
     };
     ensure_runtime()?;
+    // Ogni lavoro gira in un thread nuovo e il Source Reader vuole COM acceso su quel thread:
+    // `ensure_runtime` lo accende una volta sola, per il primo thread.
+    struct Com(bool);
+    impl Drop for Com {
+        fn drop(&mut self) {
+            if self.0 {
+                unsafe { windows::Win32::System::Com::CoUninitialize() };
+            }
+        }
+    }
+    let _com = Com(unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok());
     let wide_in = wide(input);
     unsafe {
         let reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), None).map_err(|_| "Windows non sa leggere questo file".to_string())?;
