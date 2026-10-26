@@ -6,8 +6,7 @@
 # Serve GTK 4 (su Arch gtk4, su Debian/Ubuntu libgtk-4-1, su Fedora gtk4).
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-dest=${XDG_DATA_HOME:-$HOME/.local/share}/../opt/cedro
-dest=$(realpath -m "$dest")
+dest=$HOME/.local/opt/cedro
 bindir=$HOME/.local/bin
 data=${XDG_DATA_HOME:-$HOME/.local/share}
 config=${XDG_CONFIG_HOME:-$HOME/.config}
@@ -29,7 +28,8 @@ have_gtk() {
   done
   { /sbin/ldconfig -p || ldconfig -p; } 2>/dev/null | grep -q 'libgtk-4\.so'
 }
-if ! have_gtk; then
+# L'aggiornamento da dentro (--no-start) parte da un Cedro già in esecuzione: GTK c'è.
+if [ "${1:-}" != "--no-start" ] && ! have_gtk; then
   echo "Manca GTK 4: installa il pacchetto gtk4 (Arch), libgtk-4-1 (Debian, Ubuntu) o gtk4 (Fedora)." >&2
   exit 1
 fi
