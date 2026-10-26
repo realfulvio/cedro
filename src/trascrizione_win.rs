@@ -68,10 +68,6 @@ pub(super) fn shift() -> i32 {
 /// Crea i controlli della scheda (nascosti: li mostra `layout`).
 pub(super) unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     let (f, fb, fs) = (font(&FONT), font(&FONT_BOLD), font(&FONT_SMALL));
-    FONT_MONO.store(
-        CreateFontW(-px(13), 0, 0, 0, 400, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, 0, w!("Consolas")).0 as isize,
-        Ordering::Relaxed,
-    );
     let b = w!("BUTTON");
     let s = w!("STATIC");
     let tab = WS_TABSTOP.0 | BS_OWNERDRAW as u32;
@@ -87,18 +83,40 @@ pub(super) unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     }
     child(hwnd, instance, s, "COSA STA SUCCEDENDO", 0, ID_CAP_LOG, (550, 296, 240, 16), fs);
     child(hwnd, instance, b, "Copia", WS_TABSTOP.0, ID_COPY, (810, 290, 70, 24), f);
-    // Il RichEdit colora le righe come nell'anteprima; senza la DLL resta una casella semplice.
+    make_log(hwnd, instance, ID_LOG, (550, 314, 330, 228));
+    idle_text(hwnd);
+}
+
+/// Il carattere a spaziatura fissa del registro, creato la prima volta.
+fn mono_font() -> HFONT {
+    if FONT_MONO.load(Ordering::Relaxed) == 0 {
+        let f = unsafe { CreateFontW(-px(13), 0, 0, 0, 400, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, 0, w!("Consolas")) };
+        FONT_MONO.store(f.0 as isize, Ordering::Relaxed);
+    }
+    HFONT(FONT_MONO.load(Ordering::Relaxed) as *mut _)
+}
+
+/// Crea il riquadro scuro del registro (lo stesso per la trascrizione e per YouTube): il RichEdit colora le
+/// righe come nell'anteprima; senza la DLL resta una casella semplice.
+pub(super) unsafe fn make_log(hwnd: HWND, instance: HINSTANCE, id: i32, r: (i32, i32, i32, i32)) -> HWND {
     let rich = LoadLibraryW(w!("Msftedit.dll")).is_ok();
     let class = if rich { w!("RICHEDIT50W") } else { w!("EDIT") };
     let style = WS_TABSTOP.0 | WS_VSCROLL.0 | ES_MULTILINE as u32 | ES_READONLY as u32 | ES_AUTOVSCROLL as u32;
-    let log = child(hwnd, instance, class, "", style, ID_LOG, (550, 314, 330, 228), font(&FONT_MONO));
+    let log = child(hwnd, instance, class, "", style, id, r, mono_font());
     if rich {
         SendMessageW(log, EM_SETBKGNDCOLOR, Some(WPARAM(0)), Some(LPARAM(LOG_BG.0 as isize)));
         set_format(log, LOG_TEXT, SCF_ALL);
         let margin = px(8) as isize;
         SendMessageW(log, EM_SETMARGINS, Some(WPARAM((EC_LEFTMARGIN | EC_RIGHTMARGIN) as usize)), Some(LPARAM(margin | (margin << 16))));
     }
-    idle_text(hwnd);
+    log
+}
+
+/// Mette tutto il testo nel registro, nel colore normale, e scorre in fondo.
+pub(super) unsafe fn set_log_text(log: HWND, text: &str) {
+    let _ = SetWindowTextW(log, &HSTRING::from(text));
+    set_format(log, LOG_TEXT, SCF_ALL);
+    SendMessageW(log, WM_VSCROLL, Some(WPARAM(SB_BOTTOM.0 as usize)), Some(LPARAM(0)));
 }
 
 const SCF_SELECTION: usize = 1;
@@ -277,16 +295,15 @@ pub(super) unsafe fn command(hwnd: HWND, id: i32) -> bool {
                 idle_text(hwnd);
             }
         }
-        ID_COPY => copy_log(hwnd),
+        ID_COPY => copy_log(hwnd, item(hwnd, ID_LOG)),
         _ => return false,
     }
     true
 }
 
-unsafe fn copy_log(hwnd: HWND) {
+pub(super) unsafe fn copy_log(hwnd: HWND, log: HWND) {
     use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
     use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
-    let log = item(hwnd, ID_LOG);
     let len = GetWindowTextLengthW(log) as usize;
     let mut buf = vec![0u16; len + 1];
     let n = GetWindowTextW(log, &mut buf) as usize;
