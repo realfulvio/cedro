@@ -686,8 +686,10 @@ impl ksni::Tray for CedroTray {
         // Stesso ordine del menu di Windows; le icone sono del tema dell'utente (nomi freedesktop).
         vec![
             StandardItem {
-                label: format!("Cedro {}", update::CURRENT),
-                icon_name: "dev.cedro.Cedro".into(),
+                // Nell'edizione Bondeno: «Cedro x.y.z · Edizione Comune di Bondeno» con lo stemma.
+                label: cedro::edizione::titolo(update::CURRENT),
+                icon_name: if cedro::edizione::BONDENO { String::new() } else { "dev.cedro.Cedro".into() },
+                icon_data: cedro::edizione::STEMMA.to_vec(),
                 enabled: false,
                 ..Default::default()
             }
