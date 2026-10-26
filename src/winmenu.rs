@@ -129,6 +129,11 @@ pub fn measure(lparam: LPARAM) -> bool {
                 ReleaseDC(None, dc);
                 mis.itemWidth = (size.cx + px(30 + 28)) as u32;
                 mis.itemHeight = px(if kind == Kind::Header { 30 } else { 34 }) as u32;
+                if kind == Kind::Header && cedro::edizione::BONDENO {
+                    // Stemma a sinistra e due righe: «Cedro x.y.z» e «Edizione Comune di Bondeno».
+                    mis.itemWidth = mis.itemWidth.max(px(30 + 190 + 28) as u32);
+                    mis.itemHeight = px(50) as u32;
+                }
             }
         }
         true
@@ -163,6 +168,10 @@ pub fn draw(lparam: LPARAM) -> bool {
                     crate::wingfx::round_rect(hdc, &inner, px(4) as f32, Some(HOVER), None);
                 }
                 SetBkMode(hdc, TRANSPARENT);
+                if kind == Kind::Header && cedro::edizione::BONDENO {
+                    draw_bondeno_header(hdc, &r, &entry.text);
+                    return true;
+                }
                 let f = font(400, if kind == Kind::Header { 13 } else { 15 });
                 let old = SelectObject(hdc, f.into());
                 SetTextColor(hdc, if kind == Kind::Header { MUTED } else { TEXT });
@@ -180,5 +189,27 @@ pub fn draw(lparam: LPARAM) -> bool {
             }
         }
         true
+    }
+}
+
+/// L'intestazione del menu nell'edizione Bondeno: lo stemma e, accanto, la versione e il nome dell'edizione.
+unsafe fn draw_bondeno_header(hdc: HDC, r: &RECT, title: &[u16]) {
+    let side = px(32);
+    let top = (r.top + r.bottom - side) / 2;
+    crate::wingfx::draw_stemma(hdc, cedro::edizione::Stemma::Solo, (r.left + px(10)) as f32, top as f32, side as f32, side as f32);
+    let left = r.left + px(10) + side + px(10);
+    let mid = (r.top + r.bottom) / 2;
+    for (text, weight, size, color, area) in [
+        (title.to_vec(), 700, 14, TEXT, RECT { left, top: mid - px(19), right: r.right, bottom: mid }),
+        (cedro::edizione::NOME.unwrap_or("").encode_utf16().collect(), 400, 12, MUTED, RECT { left, top: mid, right: r.right, bottom: mid + px(17) }),
+    ] {
+        let f = font(weight, size);
+        let old = SelectObject(hdc, f.into());
+        SetTextColor(hdc, color);
+        let mut text = text;
+        let mut area = area;
+        DrawTextW(hdc, &mut text, &mut area, DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_NOPREFIX);
+        SelectObject(hdc, old);
+        let _ = DeleteObject(f.into());
     }
 }
