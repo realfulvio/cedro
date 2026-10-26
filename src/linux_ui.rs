@@ -612,34 +612,40 @@ impl ksni::Tray for CedroTray {
     }
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::{CheckmarkItem, MenuItem, StandardItem};
+        // Stesso ordine del menu di Windows; le icone sono del tema dell'utente (nomi freedesktop).
         vec![
             StandardItem {
                 label: format!("Cedro {}", update::CURRENT),
+                icon_name: "dev.cedro.Cedro".into(),
                 enabled: false,
                 ..Default::default()
             }
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "Impostazioni…".into(),
-                activate: Box::new(|_| ask(Asked::Settings)),
-                ..Default::default()
-            }
-            .into(),
-            StandardItem {
                 label: "Conversioni…".into(),
+                icon_name: "document-edit".into(),
                 activate: Box::new(|_| ask(Asked::Conversions)),
                 ..Default::default()
             }
             .into(),
             StandardItem {
+                label: "Impostazioni…".into(),
+                icon_name: "preferences-system".into(),
+                activate: Box::new(|_| ask(Asked::Settings)),
+                ..Default::default()
+            }
+            .into(),
+            StandardItem {
                 label: "Guida…".into(),
+                icon_name: "help-contents".into(),
                 activate: Box::new(|_| ask(Asked::Guide)),
                 ..Default::default()
             }
             .into(),
             StandardItem {
                 label: "Controlla aggiornamenti".into(),
+                icon_name: "view-refresh".into(),
                 activate: Box::new(|_| check_updates(true)),
                 ..Default::default()
             }
@@ -656,8 +662,10 @@ impl ksni::Tray for CedroTray {
                 ..Default::default()
             }
             .into(),
+            MenuItem::Separator,
             StandardItem {
                 label: "Esci".into(),
+                icon_name: "application-exit".into(),
                 activate: Box::new(|tray: &mut Self| tray.quit.store(true, Ordering::Relaxed)),
                 ..Default::default()
             }
