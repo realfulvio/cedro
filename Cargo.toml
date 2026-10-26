@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.12.0"
+version = "0.13.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -14,6 +14,7 @@ hayro = "0.8"
 lopdf = "0.36"
 mp3lame-encoder = "0.2"
 ocrs = "0.13"
+png = "0.18"
 oxideav-vp8 = { version = "0.2.7", default-features = false }
 oxideav-vp9 = "0.0.13"
 rten = "0.26"

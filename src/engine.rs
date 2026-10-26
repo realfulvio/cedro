@@ -591,24 +591,21 @@ mod tests {
         assert!(!xml.contains("w:framePr"), "testo bloccato in riquadri");
         assert!(xml.contains("BodyText"), "{xml}");
         assert!(xml.contains("Perché è già così"), "{xml}");
-        assert!(xml.contains("Helvetica") || xml.contains("Arial"), "{xml}");
+        let styles = crate::doctext::zip_entry_for_test(&docx.path, "word/styles.xml");
+        assert!(styles.contains("Helvetica") || styles.contains("Arial"), "{styles}");
+        // Il Word è compresso: il testo pesa poco.
+        let entry = zip::ZipArchive::new(fs::File::open(&docx.path).unwrap()).unwrap().by_name("word/document.xml").unwrap().compression();
+        assert_eq!(entry, zip::CompressionMethod::Deflated);
     }
 
-    #[test]
-    fn pdf_table_becomes_word_table() {
-        let content = "0.12 0.23 0.37 rg 50 700 300 20 re f 0.95 0.96 0.98 rg 50 680 300 20 re f \
-0.8 G 0.5 w 50 720 m 350 720 l S 50 700 m 350 700 l S 50 680 m 350 680 l S 50 660 m 350 660 l S \
-50 720 m 50 660 l S 250 720 m 250 660 l S 350 720 m 350 660 l S \
-BT /F2 12 Tf 1 1 1 rg 56 706 Td (Nome) Tj ET BT /F2 12 Tf 1 1 1 rg 256 706 Td (Voto) Tj ET \
-BT /F1 12 Tf 0 g 56 686 Td (Luca) Tj ET BT /F1 12 Tf 0 g 256 686 Td (10) Tj ET \
-BT /F1 12 Tf 0 g 56 666 Td (Anna) Tj ET BT /F1 12 Tf 0 g 256 666 Td (9) Tj ET \
-BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sotto la tabella.) Tj ET";
+    /// Un PDF di una pagina con Helvetica (F1) e Helvetica-Bold (F2).
+    fn pdf_page(content: &str, w: u32, h: u32) -> Vec<u8> {
         let mut pdf = b"%PDF-1.4\n".to_vec();
         let mut offsets = Vec::new();
         let objects = [
             "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
             "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 800] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>".to_string(),
+            format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {w} {h}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>"),
             format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
             "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
             "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>".to_string(),
@@ -623,6 +620,63 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
             pdf.extend(format!("{off:010} 00000 n \n").as_bytes());
         }
         pdf.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+        pdf
+    }
+
+    fn word_xml(name: &str, pdf: Vec<u8>) -> String {
+        let dir = scratch();
+        let path = dir.join(name);
+        fs::write(&path, pdf).unwrap();
+        let out = perform(&path, "docx", 80).expect("Word");
+        crate::doctext::zip_entry_for_test(&out.path, "word/document.xml")
+    }
+
+    #[test]
+    fn pdf_columns_become_word_columns() {
+        // Due colonne di testo pieno: a sinistra «Sinistra N», a destra «Destra N».
+        let mut content = String::from("BT /F2 18 Tf 50 760 Td (Notiziario) Tj ET ");
+        let words = "lorem ipsum dolor sit amet consectetur";
+        for i in 0..12 {
+            let y = 720 - i * 14;
+            content.push_str(&format!("BT /F1 10 Tf 50 {y} Td (Sinistra {i} {words}) Tj ET BT /F1 10 Tf 320 {y} Td (Destra {i} {words}) Tj ET "));
+        }
+        let xml = word_xml("colonne.pdf", pdf_page(&content, 595, 842));
+        assert!(xml.contains("<w:cols w:num=\"2\""), "{xml}");
+        assert!(xml.contains("w:type=\"column\""), "{xml}");
+        // Si legge prima tutta la colonna di sinistra, poi quella di destra.
+        let last_left = xml.find("Sinistra 11").unwrap();
+        let first_right = xml.find("Destra 0").unwrap();
+        assert!(last_left < first_right, "{xml}");
+    }
+
+    #[test]
+    fn pdf_lists_become_word_lists() {
+        let mut content = String::new();
+        let items = [(700, "1. Accendere il PC"), (686, "2. Aprire il portale"), (672, "3. Inviare la richiesta")];
+        for (y, t) in items {
+            content.push_str(&format!("BT /F1 10 Tf 50 {y} Td ({t}) Tj ET "));
+        }
+        for (i, t) in ["Monitor", "Stampanti"].iter().enumerate() {
+            let y = 640 - i as i32 * 14;
+            content.push_str(&format!("BT /F1 10 Tf 50 {y} Td (\\225) Tj ET BT /F1 10 Tf 64 {y} Td ({t}) Tj ET "));
+        }
+        content.push_str("BT /F1 10 Tf 50 600 Td (Fine del documento con un paragrafo normale.) Tj ET");
+        let xml = word_xml("elenchi.pdf", pdf_page(&content, 400, 800));
+        assert_eq!(xml.matches("<w:numPr>").count(), 5, "{xml}");
+        assert!(xml.contains(">Accendere il PC<") && !xml.contains("1. Accendere"), "{xml}");
+        assert!(xml.contains(">Monitor<"), "{xml}");
+    }
+
+    #[test]
+    fn pdf_table_becomes_word_table() {
+        let content = "0.12 0.23 0.37 rg 50 700 300 20 re f 0.95 0.96 0.98 rg 50 680 300 20 re f \
+0.8 G 0.5 w 50 720 m 350 720 l S 50 700 m 350 700 l S 50 680 m 350 680 l S 50 660 m 350 660 l S \
+50 720 m 50 660 l S 250 720 m 250 660 l S 350 720 m 350 660 l S \
+BT /F2 12 Tf 1 1 1 rg 56 706 Td (Nome) Tj ET BT /F2 12 Tf 1 1 1 rg 256 706 Td (Voto) Tj ET \
+BT /F1 12 Tf 0 g 56 686 Td (Luca) Tj ET BT /F1 12 Tf 0 g 256 686 Td (10) Tj ET \
+BT /F1 12 Tf 0 g 56 666 Td (Anna) Tj ET BT /F1 12 Tf 0 g 256 666 Td (9) Tj ET \
+BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sotto la tabella.) Tj ET";
+        let pdf = pdf_page(content, 400, 800);
         let dir = scratch();
         let path = dir.join("tabella.pdf");
         fs::write(&path, pdf).unwrap();
