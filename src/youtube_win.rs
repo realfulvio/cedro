@@ -231,13 +231,13 @@ pub unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
         child(hwnd, instance, w!("COMBOBOX"), "", tab | CBS_DROPDOWNLIST as u32, *combo_id, (LEFT + 330, 0, 300, 220), f);
     }
     let checks: &[(i32, &str, bool)] = &[
-        (Y_THUMB, "Copertina (miniatura) nel file", true),
+        (Y_THUMB, "Copertina nel file", true),
         (Y_CHAP, "Capitoli e descrizione nel file", true),
-        (Y_SPLIT, "Dividi per capitoli (un file ciascuno)", false),
+        (Y_SPLIT, "Dividi per capitoli", false),
         (Y_SPON, "Salta le parti sponsorizzate", false),
         (Y_NORM, "Livella il volume", false),
         (Y_PLAY, "Playlist: scarica tutta", true),
-        (Y_SKIP, "Salta i file già scaricati", true),
+        (Y_SKIP, "Salta i già scaricati", true),
     ];
     for (id, text, on) in checks {
         child(hwnd, instance, b, text, tab | BS_AUTOCHECKBOX as u32, *id, (LEFT, 0, WIDTH, 26), f);
@@ -270,12 +270,13 @@ pub unsafe fn layout(hwnd: HWND) {
         return;
     }
     let visible_options: Vec<i32> = OPTION_IDS.iter().filter(|(_, v, a)| if audio { *a } else { *v }).map(|o| o.0).collect();
-    let options_h = if more { visible_options.len() as i32 * 30 + 8 } else { 0 };
-    let log_h = if log_open { 128 } else { 0 };
+    // Le opzioni stanno su due colonne, per non allungare troppo la finestra.
+    let options_h = if more { (visible_options.len() as i32 + 1) / 2 * 30 + 8 } else { 0 };
+    let log_h = if log_open { 104 } else { 0 };
     let top = 164;
     // Sotto la coda: titolo, due scelte, i due riquadri, nota, destinazione, firma.
     let below = 6 + 18 + 58 + 10 + 28 + options_h + 28 + log_h + 6 + 36 + 6 + 18 + 36 + 8 + 18 + 8;
-    let client_h = BASE_HEIGHT.max(top + 96 + below);
+    let client_h = BASE_HEIGHT.max(top + 60 + below);
     let queue_h = client_h - top - below;
     put(hwnd, Y_QUEUE, LEFT, top, WIDTH, queue_h);
     let mut y = top + queue_h + 6;
@@ -295,24 +296,25 @@ pub unsafe fn layout(hwnd: HWND) {
     }
     if more {
         y += 4;
-        for id in &visible_options {
-            let is_combo = matches!(*id, Y_QUALITY | Y_FORMAT | Y_SUBS);
-            if is_combo {
+        for (i, id) in visible_options.iter().enumerate() {
+            let x = LEFT + 6 + (i as i32 % 2) * 336;
+            let row_y = y + (i as i32 / 2) * 30;
+            if matches!(*id, Y_QUALITY | Y_FORMAT | Y_SUBS) {
                 let label = OPTION_LABELS.iter().find(|(_, c)| c == id).map(|(l, _)| *l).unwrap_or(0);
-                put(hwnd, label, LEFT + 6, y, 320, 26);
-                put(hwnd, *id, LEFT + 330, y, 300, 220);
+                put(hwnd, label, x, row_y, 108, 26);
+                put(hwnd, *id, x + 110, row_y, 214, 220);
             } else {
-                put(hwnd, *id, LEFT + 6, y, WIDTH - 6, 26);
+                put(hwnd, *id, x, row_y, 326, 26);
             }
-            y += 30;
         }
+        y += (visible_options.len() as i32 + 1) / 2 * 30;
         y += 4;
     }
     put(hwnd, Y_LOGT, LEFT, y, WIDTH, 28);
     y += 28;
     show_id(hwnd, Y_LOG, log_open);
     if log_open {
-        put(hwnd, Y_LOG, LEFT, y + 2, WIDTH, 120);
+        put(hwnd, Y_LOG, LEFT, y + 2, WIDTH, 96);
         y += log_h;
     }
     y += 6;
@@ -603,11 +605,22 @@ pub unsafe fn command(hwnd: HWND, id: i32, code: u32) {
             }
         }
         Y_MORE => {
-            with(|p| p.more = !p.more);
+            // Un riquadro alla volta: due aperti insieme non starebbero nello schermo.
+            with(|p| {
+                p.more = !p.more;
+                if p.more {
+                    p.log_open = false;
+                }
+            });
             layout(hwnd);
         }
         Y_LOGT => {
-            with(|p| p.log_open = !p.log_open);
+            with(|p| {
+                p.log_open = !p.log_open;
+                if p.log_open {
+                    p.more = false;
+                }
+            });
             layout(hwnd);
         }
         Y_QUALITY | Y_FORMAT if code == CBN_SELCHANGE => {
