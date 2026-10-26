@@ -52,8 +52,8 @@ fn set_encoder_bitrate(
             return;
         }
         let Some(attrs) = attrs else { return };
-        // 1 = eAVEncCommonRateControlMode_PeakConstrainedVBR
-        let _ = attrs.SetUINT32(&CODECAPI_AVEncCommonRateControlMode, 1);
+        // 0 = eAVEncCommonRateControlMode_CBR
+        let _ = attrs.SetUINT32(&CODECAPI_AVEncCommonRateControlMode, 0);
         let _ = attrs.SetUINT32(&CODECAPI_AVEncCommonMeanBitRate, bitrate);
         let _ = config.SetTargetMediaType(stream, target, &attrs);
     }

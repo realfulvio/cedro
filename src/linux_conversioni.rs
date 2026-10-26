@@ -6,14 +6,15 @@ use std::rc::Rc;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 
-use cedro::conversioni::{self, CATEGORIES};
+use cedro::conversioni::{self, Control, Values, CATEGORIES};
 use cedro::{extension, kind_of, read_settings, Kind};
 use gtk4::gio;
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
-    Application, Box as HBox, Button, CssProvider, DropTarget, FileDialog, FlowBox, Label, ListBox, Orientation, Scale,
-    ScrolledWindow, SelectionMode, ToggleButton, STYLE_PROVIDER_PRIORITY_APPLICATION,
+    Application, Box as HBox, Button, CheckButton, CssProvider, DropDown, DropTarget, FileDialog, FlowBox, Grid, Label,
+    ListBox, Orientation, PasswordEntry, Scale, ScrolledWindow, SelectionMode, StringList, ToggleButton,
+    STYLE_PROVIDER_PRIORITY_APPLICATION,
 };
 
 const TITLE: &str = "Conversioni di Cedro";
@@ -52,9 +53,9 @@ struct Ui {
     formats: FlowBox,
     tools: FlowBox,
     tools_caption: Label,
-    extras: FlowBox,
-    extra_caption: Label,
-    extra: Cell<u32>,
+    options: Grid,
+    options_caption: Label,
+    values: RefCell<Values>,
     quality: Scale,
     dest_label: Label,
     go: Button,
@@ -99,7 +100,7 @@ fn chips(flow: &FlowBox, ui: &Rc<Ui>, items: &[cedro::Slice], first: Option<&Tog
         chip.connect_toggled(move |b| {
             if b.is_active() {
                 *ui.action.borrow_mut() = id.clone();
-                refresh_extra(&ui);
+                refresh_options(&ui);
                 label_go(&ui);
             }
         });
@@ -108,41 +109,76 @@ fn chips(flow: &FlowBox, ui: &Rc<Ui>, items: &[cedro::Slice], first: Option<&Tog
     lead
 }
 
-/// Mostra l'opzione extra che vale per la voce scelta (risoluzione, dimensione) o la nasconde.
-fn refresh_extra(ui: &Rc<Ui>) {
-    clear_flow(&ui.extras);
+/// Ridisegna la zona Opzioni per la voce scelta: interruttori, elenchi, cursori, password.
+/// I valori già scelti restano se la nuova voce li offre ancora.
+fn refresh_options(ui: &Rc<Ui>) {
+    while let Some(child) = ui.options.first_child() {
+        ui.options.remove(&child);
+    }
     let kind = CATEGORIES[ui.category.get()].kind;
     let action = ui.action.borrow().clone();
-    let extra = conversioni::extra(kind, &action);
-    ui.extras.set_visible(extra.is_some());
-    ui.extra_caption.set_visible(extra.is_some());
-    let Some(extra) = extra else {
-        ui.extra.set(0);
-        return;
-    };
-    // Il valore scelto resta se la nuova voce lo offre ancora, altrimenti si riparte dal primo.
-    let kept = ui.extra.get();
-    let value = if extra.choices.iter().any(|c| c.value == kept) { kept } else { extra.choices[0].value };
-    ui.extra.set(value);
-    ui.extra_caption.set_text(&format!("{} · {}", extra.title, extra.note));
-    let mut lead: Option<ToggleButton> = None;
-    for choice in extra.choices {
-        let chip = ToggleButton::with_label(choice.label);
-        chip.add_css_class("cedro-chip");
-        if let Some(l) = &lead {
-            chip.set_group(Some(l));
-        } else {
-            lead = Some(chip.clone());
-        }
-        chip.set_active(choice.value == value);
-        let owner = ui.clone();
-        let picked = choice.value;
-        chip.connect_toggled(move |b| {
-            if b.is_active() {
-                owner.extra.set(picked);
+    let defs = conversioni::option_defs(kind, &action);
+    ui.options.set_visible(!defs.is_empty());
+    ui.options_caption.set_visible(!defs.is_empty());
+    for (i, def) in defs.iter().copied().enumerate() {
+        let (col, row) = ((i % 2) as i32 * 2, (i / 2) as i32);
+        let value = ui.values.borrow().get(def);
+        match &def.control {
+            Control::Switch => {
+                let check = CheckButton::with_label(def.title);
+                check.set_active(value != 0);
+                check.set_tooltip_text(Some(def.note).filter(|n| !n.is_empty()));
+                let owner = ui.clone();
+                check.connect_toggled(move |c| owner.values.borrow_mut().set(def, c.is_active() as u32));
+                ui.options.attach(&check, col, row, 2, 1);
             }
-        });
-        ui.extras.insert(&chip, -1);
+            Control::Choice(choices) => {
+                let label = Label::new(Some(def.title));
+                label.set_xalign(0.0);
+                let names: Vec<&str> = choices.iter().map(|c| c.label).collect();
+                let drop = DropDown::new(Some(StringList::new(&names)), gtk4::Expression::NONE);
+                drop.set_selected(choices.iter().position(|c| c.value == value).unwrap_or(0) as u32);
+                drop.set_hexpand(true);
+                drop.set_tooltip_text(Some(def.note).filter(|n| !n.is_empty()));
+                let owner = ui.clone();
+                drop.connect_selected_notify(move |d| {
+                    if let Some(c) = choices.get(d.selected() as usize) {
+                        owner.values.borrow_mut().set(def, c.value);
+                    }
+                });
+                ui.options.attach(&label, col, row, 1, 1);
+                ui.options.attach(&drop, col + 1, row, 1, 1);
+            }
+            Control::Range { min, max, unit } => {
+                let label = Label::new(Some(def.title));
+                label.set_xalign(0.0);
+                let scale = Scale::with_range(Orientation::Horizontal, *min as f64, *max as f64, 1.0);
+                scale.set_value(value as f64);
+                scale.set_draw_value(true);
+                scale.set_format_value_func({
+                    let unit = unit.to_string();
+                    move |_, v| format!("{}{unit}", v.round() as u32)
+                });
+                scale.set_hexpand(true);
+                scale.set_tooltip_text(Some(def.note).filter(|n| !n.is_empty()));
+                let owner = ui.clone();
+                scale.connect_value_changed(move |sc| owner.values.borrow_mut().set(def, sc.value().round() as u32));
+                ui.options.attach(&label, col, row, 1, 1);
+                ui.options.attach(&scale, col + 1, row, 1, 1);
+            }
+            Control::Password => {
+                let label = Label::new(Some(def.title));
+                label.set_xalign(0.0);
+                let entry = PasswordEntry::new();
+                entry.set_show_peek_icon(true);
+                entry.set_text(&ui.values.borrow().password);
+                entry.set_tooltip_text(Some(def.note).filter(|n| !n.is_empty()));
+                let owner = ui.clone();
+                entry.connect_changed(move |e| owner.values.borrow_mut().password = e.text().to_string());
+                ui.options.attach(&label, col, row, 1, 1);
+                ui.options.attach(&entry, col + 1, row, 1, 1);
+            }
+        }
     }
 }
 
@@ -261,8 +297,7 @@ fn start(ui: &Rc<Ui>) {
     let action = ui.action.borrow().clone();
     let quality = ui.quality.value().round().clamp(40.0, 95.0) as u8;
     let dest = ui.dest.borrow().clone();
-    let kind = CATEGORIES[ui.category.get()].kind;
-    let opts = conversioni::options_for(conversioni::extra(kind, &action), ui.extra.get());
+    let opts = conversioni::options_from(&ui.values.borrow());
     let (tx, rx) = channel();
     *ui.running.borrow_mut() = Some(rx);
     std::thread::spawn(move || {
@@ -325,7 +360,7 @@ pub fn open_conversions(app: &Application) {
         provider.load_from_string(CSS);
         gtk4::style_context_add_provider_for_display(&display, &provider, STYLE_PROVIDER_PRIORITY_APPLICATION);
     }
-    let window = crate::linux_settings::titled(app, TITLE, 940, 660);
+    let window = crate::linux_settings::titled(app, TITLE, 940, 780);
     window.set_resizable(true);
 
     let side = ListBox::new();
@@ -361,17 +396,18 @@ pub fn open_conversions(app: &Application) {
     tools.set_selection_mode(SelectionMode::None);
     tools.set_max_children_per_line(12);
     let tools_caption = caption("STRUMENTI");
-    let extras = FlowBox::new();
-    extras.set_selection_mode(SelectionMode::None);
-    extras.set_max_children_per_line(12);
-    let extra_caption = caption("");
+    let options = Grid::new();
+    options.set_column_spacing(12);
+    options.set_row_spacing(6);
+    options.set_column_homogeneous(false);
+    let options_caption = caption("OPZIONI");
 
     let quality = Scale::with_range(Orientation::Horizontal, 40.0, 95.0, 1.0);
     quality.set_value(read_settings().quality as f64);
     quality.set_hexpand(true);
     quality.set_draw_value(true);
     quality.set_value_pos(gtk4::PositionType::Right);
-    let quality_note = Label::new(Some("JPEG, WebP, MP3 e PDF in JPG. Più alta, file più grandi."));
+    let quality_note = Label::new(Some("JPEG, WebP, PDF in JPG e video. Più alta, file più grandi."));
     quality_note.set_xalign(0.0);
     quality_note.add_css_class("cedro-muted");
 
@@ -384,6 +420,7 @@ pub fn open_conversions(app: &Application) {
     let go = Button::with_label("Converti");
     go.add_css_class("suggested-action");
 
+    let overwrite = CheckButton::with_label("Se il nome esiste già, sostituisci il file");
     let dest_row = HBox::new(Orientation::Horizontal, 8);
     dest_row.append(&dest_label);
     dest_row.append(&change);
@@ -417,13 +454,14 @@ pub fn open_conversions(app: &Application) {
         formats.upcast_ref(),
         tools_caption.upcast_ref(),
         tools.upcast_ref(),
-        extra_caption.upcast_ref(),
-        extras.upcast_ref(),
+        options_caption.upcast_ref(),
+        options.upcast_ref(),
         caption("QUALITÀ").upcast_ref(),
         quality.upcast_ref(),
         quality_note.upcast_ref(),
         caption("DOVE SALVARE").upcast_ref(),
         dest_row.upcast_ref(),
+        overwrite.upcast_ref(),
         foot.upcast_ref(),
     ] {
         main.append(w);
@@ -444,9 +482,9 @@ pub fn open_conversions(app: &Application) {
         formats,
         tools,
         tools_caption,
-        extras,
-        extra_caption,
-        extra: Cell::new(0),
+        options,
+        options_caption,
+        values: RefCell::new(Values::new()),
         quality,
         dest_label,
         go: go.clone(),
@@ -523,9 +561,100 @@ pub fn open_conversions(app: &Application) {
     }
     {
         let ui = ui.clone();
+        overwrite.connect_toggled(move |c| ui.values.borrow_mut().overwrite = c.is_active());
+    }
+    {
+        let ui = ui.clone();
         go.connect_clicked(move |_| start(&ui));
     }
 
     side.select_row(side.row_at_index(0).as_ref());
     window.present();
+    #[cfg(debug_assertions)]
+    if let Ok(dir) = std::env::var("CEDRO_SHOTS") {
+        shots(&ui, std::path::PathBuf::from(dir));
+    }
+}
+
+/// Solo nelle build di prova: con `CEDRO_SHOTS=<cartella>` il pannello salva da solo un'immagine di ogni
+/// categoria (e di qualche voce) e poi si chiude. Con `CEDRO_SHOT_FILES=a;b` aggiunge prima quei file.
+#[cfg(debug_assertions)]
+fn shots(ui: &Rc<Ui>, dir: std::path::PathBuf) {
+    let _ = std::fs::create_dir_all(&dir);
+    if let Ok(list) = std::env::var("CEDRO_SHOT_FILES") {
+        add_files(ui, list.split(';').filter(|p| !p.is_empty()).map(PathBuf::from).collect());
+    }
+    // (categoria, voce da scegliere): None = la prima.
+    let steps: Vec<(usize, Option<&'static str>)> = vec![
+        (0, None),
+        (0, Some("JPEG")),
+        (1, None),
+        (2, None),
+        (2, Some("Word OCR")),
+        (3, None),
+        (3, Some("JSON")),
+        (4, None),
+        (4, Some("MP3")),
+        (5, None),
+        (5, Some("Solo audio (MP3)")),
+    ];
+    fn step(ui: Rc<Ui>, dir: std::path::PathBuf, steps: Vec<(usize, Option<&'static str>)>, at: usize) {
+        let Some((cat, label)) = steps.get(at).copied() else {
+            let app = ui.window.application();
+            glib::timeout_add_local_once(Duration::from_millis(300), move || {
+                if let Some(app) = app {
+                    app.quit();
+                }
+            });
+            return;
+        };
+        ui.side.select_row(ui.side.row_at_index(cat as i32).as_ref());
+        if let Some(label) = label {
+            for flow in [&ui.formats, &ui.tools] {
+                let mut child = flow.first_child();
+                while let Some(c) = child {
+                    if let Some(chip) = c.first_child().and_then(|w| w.downcast::<ToggleButton>().ok()) {
+                        if chip.label().is_some_and(|l| l == label) {
+                            chip.set_active(true);
+                        }
+                    }
+                    child = c.next_sibling();
+                }
+            }
+        }
+        let next = ui.clone();
+        glib::timeout_add_local_once(Duration::from_millis(700), move || {
+            let name = format!("{at:02}-{}{}.png", CATEGORIES[cat].name, label.map(|l| format!("-{}", l.replace(' ', "_"))).unwrap_or_default());
+            let path = dir.join(name);
+            // Appena cambiata la voce il disegno può non essere pronto: si riprova qualche volta.
+            let mut tries = 0;
+            glib::timeout_add_local(Duration::from_millis(300), move || {
+                tries += 1;
+                match save_png(&next.window, &path) {
+                    Ok(()) => {}
+                    Err(e) if tries < 6 => {
+                        let _ = e;
+                        return glib::ControlFlow::Continue;
+                    }
+                    Err(e) => eprintln!("screenshot: {e}"),
+                }
+                step(next.clone(), dir.clone(), steps.clone(), at + 1);
+                glib::ControlFlow::Break
+            });
+        });
+    }
+    step(ui.clone(), dir, steps, 0);
+}
+
+#[cfg(debug_assertions)]
+fn save_png(window: &gtk4::Window, path: &std::path::Path) -> Result<(), String> {
+    use gtk4::gsk::prelude::*;
+    let (w, h) = (window.width(), window.height());
+    let paintable = gtk4::WidgetPaintable::new(Some(window));
+    let snapshot = gtk4::Snapshot::new();
+    paintable.snapshot(&snapshot, w as f64, h as f64);
+    let node = snapshot.to_node().ok_or("niente da disegnare")?;
+    let renderer = window.native().and_then(|n| n.renderer()).ok_or("nessun renderer")?;
+    let texture = renderer.render_texture(&node, None);
+    texture.save_to_png(path).map_err(|e| e.to_string())
 }

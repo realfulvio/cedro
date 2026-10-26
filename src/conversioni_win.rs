@@ -3,7 +3,7 @@
 //! trascinamento, formati e strumenti, qualità, cartella di destinazione. La conversione gira in un
 //! thread a parte e riporta ogni file alla finestra con un messaggio.
 
-use cedro::conversioni::{self, CATEGORIES};
+use cedro::conversioni::{self, Control, OptionDef, Values, CATEGORIES};
 use cedro::{extension, kind_of, read_settings, Kind};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicIsize, Ordering};
@@ -34,17 +34,21 @@ const ID_CAP_TOOLS: i32 = 207;
 const ID_CAP_QUALITY: i32 = 208;
 const ID_QUALITY: i32 = 209;
 const ID_QUALITY_VALUE: i32 = 210;
-const ID_QUALITY_NOTE: i32 = 211;
 const ID_CAP_DEST: i32 = 212;
 const ID_DEST: i32 = 213;
 const ID_CHANGE: i32 = 214;
 const ID_RESET: i32 = 215;
 const ID_GO: i32 = 216;
 const ID_FOOT: i32 = 217;
-const ID_CAP_EXTRA: i32 = 218;
+const ID_CAP_OPTIONS: i32 = 218;
+const ID_OVERWRITE: i32 = 219;
 const ID_FORMAT0: i32 = 1000;
 const ID_TOOL0: i32 = 2000;
-const ID_EXTRA0: i32 = 3000;
+/// Le opzioni della voce scelta: il controllo, la sua etichetta e il valore scritto accanto a un cursore.
+const OPT_CTL0: i32 = 4000;
+const OPT_LABEL0: i32 = 4100;
+const OPT_VALUE0: i32 = 4200;
+const OPT_MAX: i32 = 12;
 
 const WM_APP_RESULT: u32 = WM_APP + 10;
 const WM_APP_DONE: u32 = WM_APP + 11;
@@ -89,11 +93,11 @@ struct State {
     action: String,
     dest: Option<PathBuf>,
     running: bool,
-    /// Valore scelto dell'opzione extra (vedi `conversioni::extra`).
-    extra: u32,
+    /// I valori delle opzioni scelte (vedi `conversioni::option_defs`).
+    values: Values,
 }
 
-static STATE: Mutex<State> = Mutex::new(State { files: Vec::new(), category: 0, action: String::new(), dest: None, running: false, extra: 0 });
+static STATE: Mutex<State> = Mutex::new(State { files: Vec::new(), category: 0, action: String::new(), dest: None, running: false, values: Values::new() });
 /// Risultati che il thread di conversione lascia alla finestra.
 static RESULTS: Mutex<Vec<(PathBuf, std::result::Result<String, String>)>> = Mutex::new(Vec::new());
 
@@ -177,7 +181,7 @@ unsafe fn create() -> Result<()> {
     FONT_SMALL.store(make_font(13, 700), Ordering::Relaxed);
 
     let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    let mut rect = RECT { left: 0, top: 0, right: px(900), bottom: px(640) };
+    let mut rect = RECT { left: 0, top: 0, right: px(900), bottom: px(636) };
     let _ = AdjustWindowRect(&mut rect, style, false);
     let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
     let x = ((GetSystemMetrics(SM_CXSCREEN) - width) / 2).max(0);
@@ -187,6 +191,7 @@ unsafe fn create() -> Result<()> {
         s.running = false;
         s.category = 0;
         s.action.clear();
+        s.values = Values::new();
     }
     let hwnd = CreateWindowExW(
         WS_EX_ACCEPTFILES,
@@ -251,33 +256,33 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     }
     SendMessageW(side, LB_SETITEMHEIGHT, Some(WPARAM(0)), Some(LPARAM(px(42) as isize)));
 
-    child(hwnd, instance, s, "", 0, ID_TITLE, (210, 48, 670, 32), ft);
-    child(hwnd, instance, s, "", 0, ID_HINT, (210, 82, 670, 38), f);
-    child(hwnd, instance, b, "Trascina qui i file o clicca per sceglierli", tab | BS_OWNERDRAW as u32, ID_DROP, (210, 122, 670, 44), fb);
-    child(hwnd, instance, s, "", 0, ID_COUNT, (210, 172, 670, 16), fs);
+    child(hwnd, instance, s, "", 0, ID_TITLE, (210, 44, 670, 32), ft);
+    child(hwnd, instance, s, "", 0, ID_HINT, (210, 78, 670, 34), f);
+    child(hwnd, instance, b, "Trascina qui i file o clicca per sceglierli", tab | BS_OWNERDRAW as u32, ID_DROP, (210, 114, 670, 40), fb);
+    child(hwnd, instance, s, "", 0, ID_COUNT, (210, 160, 670, 16), fs);
     child(
         hwnd, instance, lb, "",
         tab | LBS_OWNERDRAWFIXED as u32 | LBS_NOINTEGRALHEIGHT as u32 | WS_VSCROLL.0 | WS_BORDER.0,
-        ID_QUEUE, (210, 190, 670, 84), f,
+        ID_QUEUE, (210, 178, 670, 72), f,
     );
-    SendMessageW(item(hwnd, ID_QUEUE), LB_SETITEMHEIGHT, Some(WPARAM(0)), Some(LPARAM(px(28) as isize)));
-    child(hwnd, instance, s, "CONVERTI IN", 0, ID_CAP_FORMATS, (210, 282, 670, 16), fs);
-    child(hwnd, instance, s, "STRUMENTI", 0, ID_CAP_TOOLS, (210, 340, 670, 16), fs);
-    child(hwnd, instance, s, "", 0, ID_CAP_EXTRA, (210, 398, 670, 16), fs);
-    child(hwnd, instance, s, "QUALITÀ", 0, ID_CAP_QUALITY, (210, 456, 670, 16), fs);
-    let bar = child(hwnd, instance, TRACKBAR_CLASSW, "", tab | TBS_HORZ as u32 | TBS_AUTOTICKS as u32, ID_QUALITY, (206, 472, 560, 30), f);
+    SendMessageW(item(hwnd, ID_QUEUE), LB_SETITEMHEIGHT, Some(WPARAM(0)), Some(LPARAM(px(24) as isize)));
+    child(hwnd, instance, s, "CONVERTI IN", 0, ID_CAP_FORMATS, (210, 256, 670, 16), fs);
+    child(hwnd, instance, s, "STRUMENTI", 0, ID_CAP_TOOLS, (210, 310, 670, 16), fs);
+    child(hwnd, instance, s, "OPZIONI", 0, ID_CAP_OPTIONS, (210, 366, 670, 16), fs);
+    child(hwnd, instance, s, "QUALITÀ", 0, ID_CAP_QUALITY, (210, 490, 70, 18), fs);
+    let bar = child(hwnd, instance, TRACKBAR_CLASSW, "", tab | TBS_HORZ as u32 | TBS_AUTOTICKS as u32, ID_QUALITY, (280, 482, 520, 30), f);
     SendMessageW(bar, TBM_SETRANGE, Some(WPARAM(1)), Some(LPARAM((40 | (95 << 16)) as isize)));
     SendMessageW(bar, TBM_SETTICFREQ, Some(WPARAM(11)), Some(LPARAM(0)));
     SendMessageW(bar, TBM_SETPOS, Some(WPARAM(1)), Some(LPARAM(read_settings().quality as isize)));
-    child(hwnd, instance, s, "", 1 /* SS_CENTER */, ID_QUALITY_VALUE, (776, 478, 60, 20), f);
-    child(hwnd, instance, s, "JPEG, WebP, MP3 e PDF in JPG. Più alta, file più grandi.", 0, ID_QUALITY_NOTE, (210, 502, 670, 18), f);
-    child(hwnd, instance, s, "DOVE SALVARE", 0, ID_CAP_DEST, (210, 528, 300, 16), fs);
-    child(hwnd, instance, s, NEXT_TO_ORIGINAL, 0x200 | 0x8000 /* SS_CENTERIMAGE | SS_PATHELLIPSIS */, ID_DEST, (210, 546, 330, 28), f);
-    child(hwnd, instance, b, "Cambia…", tab, ID_CHANGE, (548, 546, 80, 28), f);
-    child(hwnd, instance, b, "Accanto all'originale", tab, ID_RESET, (634, 546, 150, 28), f);
-    child(hwnd, instance, s, "Tutto sul tuo PC. L'originale non si tocca.", 0, ID_FOOT, (210, 594, 400, 18), f);
-    child(hwnd, instance, s, POWERED_BY, 0, ID_POWERED, (210, 614, 400, 20), f);
-    child(hwnd, instance, b, "Converti", tab | BS_OWNERDRAW as u32, ID_GO, (640, 594, 240, 36), fb);
+    child(hwnd, instance, s, "", 0, ID_QUALITY_VALUE, (810, 490, 50, 18), f);
+    child(hwnd, instance, s, "DOVE SALVARE", 0, ID_CAP_DEST, (210, 520, 300, 16), fs);
+    child(hwnd, instance, s, NEXT_TO_ORIGINAL, 0x200 | 0x8000 /* SS_CENTERIMAGE | SS_PATHELLIPSIS */, ID_DEST, (210, 538, 330, 28), f);
+    child(hwnd, instance, b, "Cambia…", tab, ID_CHANGE, (548, 538, 80, 28), f);
+    child(hwnd, instance, b, "Accanto all'originale", tab, ID_RESET, (634, 538, 150, 28), f);
+    child(hwnd, instance, b, "Se il nome esiste già, sostituisci il file", tab | BS_AUTOCHECKBOX as u32, ID_OVERWRITE, (210, 574, 420, 22), f);
+    child(hwnd, instance, s, "Tutto sul tuo PC. L'originale non si tocca.", 0, ID_FOOT, (210, 600, 420, 18), f);
+    child(hwnd, instance, s, POWERED_BY, 0, ID_POWERED, (210, 616, 420, 18), f);
+    child(hwnd, instance, b, "Converti", tab | BS_OWNERDRAW as u32, ID_GO, (640, 590, 240, 38), fb);
     show_quality(hwnd);
 }
 
@@ -312,44 +317,99 @@ unsafe fn render_category(hwnd: HWND) {
     }
     let formats = conversioni::formats(cat.kind);
     let tools = conversioni::tools(cat.kind);
-    chips(hwnd, instance, formats, ID_FORMAT0, 300);
-    chips(hwnd, instance, tools, ID_TOOL0, 358);
-    for id in [ID_CAP_TOOLS] {
-        let _ = ShowWindow(item(hwnd, id), if tools.is_empty() { SW_HIDE } else { SW_SHOW });
-    }
+    chips(hwnd, instance, formats, ID_FORMAT0, 274);
+    chips(hwnd, instance, tools, ID_TOOL0, 328);
+    let _ = ShowWindow(item(hwnd, ID_CAP_TOOLS), if tools.is_empty() { SW_HIDE } else { SW_SHOW });
     state().action = formats.first().map(|s| s.id.to_string()).unwrap_or_default();
-    refresh_extra(hwnd);
+    refresh_options(hwnd);
     render_queue(hwnd);
 }
 
-/// Mostra l'opzione extra che vale per la voce scelta (risoluzione, dimensione) o la nasconde.
-unsafe fn refresh_extra(hwnd: HWND) {
+fn defs_now() -> Vec<&'static OptionDef> {
+    let s = state();
+    conversioni::option_defs(CATEGORIES[s.category].kind, &s.action)
+}
+
+/// Ridisegna la zona Opzioni per la voce scelta: interruttori, elenchi, cursori, password.
+/// I valori già scelti restano se la nuova voce li offre ancora.
+unsafe fn refresh_options(hwnd: HWND) {
     let instance: HINSTANCE = GetModuleHandleW(None).unwrap_or_default().into();
-    for i in 0..24 {
-        if let Ok(old) = GetDlgItem(Some(hwnd), ID_EXTRA0 + i) {
-            let _ = DestroyWindow(old);
+    for i in 0..OPT_MAX {
+        for base in [OPT_CTL0, OPT_LABEL0, OPT_VALUE0] {
+            if let Ok(old) = GetDlgItem(Some(hwnd), base + i) {
+                let _ = DestroyWindow(old);
+            }
         }
     }
-    let (kind, action) = {
-        let s = state();
-        (CATEGORIES[s.category].kind, s.action.clone())
-    };
-    let extra = conversioni::extra(kind, &action);
-    // Il valore scelto resta se la nuova voce lo offre ancora, altrimenti si riparte dal primo.
-    let kept = state().extra;
-    state().extra = extra
-        .map(|e| if e.choices.iter().any(|c| c.value == kept) { kept } else { e.choices[0].value })
-        .unwrap_or(0);
-    let _ = ShowWindow(item(hwnd, ID_CAP_EXTRA), if extra.is_some() { SW_SHOW } else { SW_HIDE });
-    if let Some(e) = extra {
-        set_text(hwnd, ID_CAP_EXTRA, &format!("{} · {}", e.title, e.note));
-        let mut x = 210;
-        for (i, c) in e.choices.iter().enumerate() {
-            let width = 28 + 9 * c.label.chars().count() as i32;
-            child(hwnd, instance, w!("BUTTON"), c.label, WS_TABSTOP.0 | BS_OWNERDRAW as u32, ID_EXTRA0 + i as i32, (x, 416, width, 32), font(&FONT));
-            x += width + 8;
+    let defs = defs_now();
+    let _ = ShowWindow(item(hwnd, ID_CAP_OPTIONS), if defs.is_empty() { SW_HIDE } else { SW_SHOW });
+    let (f, values) = (font(&FONT), state().values.clone());
+    for (i, def) in defs.iter().enumerate().take(OPT_MAX as usize) {
+        let (col, row) = ((i % 2) as i32, (i / 2) as i32);
+        let (x, y) = (210 + col * 340, 384 + row * 32);
+        let id = i as i32;
+        let tab = WS_TABSTOP.0;
+        match &def.control {
+            Control::Switch => {
+                let b = child(hwnd, instance, w!("BUTTON"), def.title, tab | BS_AUTOCHECKBOX as u32, OPT_CTL0 + id, (x, y, 330, 26), f);
+                let on = if values.get(def) != 0 { BST_CHECKED } else { BST_UNCHECKED };
+                SendMessageW(b, BM_SETCHECK, Some(WPARAM(on.0 as usize)), Some(LPARAM(0)));
+            }
+            Control::Choice(choices) => {
+                child(hwnd, instance, w!("STATIC"), def.title, 0x200, OPT_LABEL0 + id, (x, y, 150, 26), f);
+                let cb = child(hwnd, instance, w!("COMBOBOX"), "", tab | CBS_DROPDOWNLIST as u32 | WS_VSCROLL.0, OPT_CTL0 + id, (x + 150, y, 180, 220), f);
+                for c in choices.iter() {
+                    SendMessageW(cb, CB_ADDSTRING, Some(WPARAM(0)), Some(LPARAM(HSTRING::from(c.label).as_ptr() as isize)));
+                }
+                let at = choices.iter().position(|c| c.value == values.get(def)).unwrap_or(0);
+                SendMessageW(cb, CB_SETCURSEL, Some(WPARAM(at)), Some(LPARAM(0)));
+            }
+            Control::Range { min, max, unit } => {
+                child(hwnd, instance, w!("STATIC"), def.title, 0x200, OPT_LABEL0 + id, (x, y, 150, 26), f);
+                let bar = child(hwnd, instance, TRACKBAR_CLASSW, "", tab | TBS_HORZ as u32 | TBS_NOTICKS as u32, OPT_CTL0 + id, (x + 146, y, 130, 28), f);
+                SendMessageW(bar, TBM_SETRANGE, Some(WPARAM(1)), Some(LPARAM((*min as isize) | ((*max as isize) << 16))));
+                SendMessageW(bar, TBM_SETPOS, Some(WPARAM(1)), Some(LPARAM(values.get(def) as isize)));
+                child(hwnd, instance, w!("STATIC"), &format!("{}{unit}", values.get(def)), 0x200, OPT_VALUE0 + id, (x + 280, y, 50, 26), f);
+            }
+            Control::Password => {
+                child(hwnd, instance, w!("STATIC"), def.title, 0x200, OPT_LABEL0 + id, (x, y, 150, 26), f);
+                let e = child(hwnd, instance, w!("EDIT"), "", tab | ES_PASSWORD as u32 | ES_AUTOHSCROLL as u32 | WS_BORDER.0, OPT_CTL0 + id, (x + 150, y, 180, 24), f);
+                let _ = SetWindowTextW(e, &HSTRING::from(values.password.as_str()));
+            }
         }
     }
+    let _ = InvalidateRect(Some(hwnd), None, true);
+}
+
+/// Un controllo delle opzioni è stato toccato: il suo valore passa ai valori scelti.
+unsafe fn option_changed(hwnd: HWND, index: usize) {
+    let defs = defs_now();
+    let Some(def) = defs.get(index).copied() else { return };
+    let ctl = item(hwnd, OPT_CTL0 + index as i32);
+    let mut values = state().values.clone();
+    match &def.control {
+        Control::Switch => {
+            let on = SendMessageW(ctl, BM_GETCHECK, Some(WPARAM(0)), Some(LPARAM(0))).0 == BST_CHECKED.0 as isize;
+            values.set(def, on as u32);
+        }
+        Control::Choice(choices) => {
+            let at = SendMessageW(ctl, CB_GETCURSEL, Some(WPARAM(0)), Some(LPARAM(0))).0;
+            if let Some(c) = usize::try_from(at).ok().and_then(|i| choices.get(i)) {
+                values.set(def, c.value);
+            }
+        }
+        Control::Range { unit, .. } => {
+            let at = SendMessageW(ctl, WM_USER, Some(WPARAM(0)), Some(LPARAM(0))).0 as u32;
+            values.set(def, at);
+            set_text(hwnd, OPT_VALUE0 + index as i32, &format!("{at}{unit}"));
+        }
+        Control::Password => {
+            let mut buf = [0u16; 256];
+            let n = GetWindowTextW(ctl, &mut buf) as usize;
+            values.password = String::from_utf16_lossy(&buf[..n]);
+        }
+    }
+    state().values = values;
 }
 
 unsafe fn chips(hwnd: HWND, instance: HINSTANCE, items: &[cedro::Slice], base: i32, y: i32) {
@@ -401,7 +461,7 @@ unsafe fn render_queue(hwnd: HWND) {
 }
 
 unsafe fn redraw_chips(hwnd: HWND) {
-    for base in [ID_FORMAT0, ID_TOOL0, ID_EXTRA0] {
+    for base in [ID_FORMAT0, ID_TOOL0] {
         for i in 0..24 {
             if let Ok(c) = GetDlgItem(Some(hwnd), base + i) {
                 let _ = InvalidateRect(Some(c), None, false);
@@ -473,9 +533,7 @@ unsafe fn start(hwnd: HWND) {
             e.state = 0;
         }
         s.running = true;
-        let kind = CATEGORIES[s.category].kind;
-        let opts = conversioni::options_for(conversioni::extra(kind, &s.action), s.extra);
-        (files, s.action.clone(), s.dest.clone(), opts)
+        (files, s.action.clone(), s.dest.clone(), conversioni::options_from(&s.values))
     };
     let q = quality(hwnd);
     render_queue(hwnd);
@@ -584,15 +642,9 @@ unsafe fn draw_item(hwnd: HWND, di: &DRAWITEMSTRUCT) {
         _ => {
             let action = state().action.clone();
             let kind = CATEGORIES[state().category].kind;
-            let extra_value = state().extra;
-            let (label, on) = if id >= ID_EXTRA0 {
-                let Some(c) = conversioni::extra(kind, &action).and_then(|e| e.choices.get((id - ID_EXTRA0) as usize)) else { return };
-                (c.label, c.value == extra_value)
-            } else {
-                let (list, index) = if id >= ID_TOOL0 { (conversioni::tools(kind), (id - ID_TOOL0) as usize) } else { (conversioni::formats(kind), (id - ID_FORMAT0) as usize) };
-                let Some(slice) = list.get(index) else { return };
-                (slice.label, slice.id == action)
-            };
+            let (list, index) = if id >= ID_TOOL0 { (conversioni::tools(kind), (id - ID_TOOL0) as usize) } else { (conversioni::formats(kind), (id - ID_FORMAT0) as usize) };
+            let Some(slice) = list.get(index) else { return };
+            let (label, on) = (slice.label, slice.id == action);
             let (bg, fg) = if on { (PRIMARY, WHITE) } else { (WHITE, TEXT) };
             FillRect(hdc, &rc, brush(if on { &BRUSH_PRIMARY } else { &BRUSH_WHITE }, bg));
             let edge = CreateSolidBrush(if on { PRIMARY } else if selected { HOVER } else { LINE });
@@ -635,14 +687,15 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                     state().dest = None;
                 }
                 ID_GO => start(hwnd),
-                x if (ID_EXTRA0..ID_EXTRA0 + 24).contains(&x) => {
-                    let (kind, action) = {
-                        let s = state();
-                        (CATEGORIES[s.category].kind, s.action.clone())
-                    };
-                    if let Some(c) = conversioni::extra(kind, &action).and_then(|e| e.choices.get((x - ID_EXTRA0) as usize)) {
-                        state().extra = c.value;
-                        redraw_chips(hwnd);
+                ID_OVERWRITE => {
+                    let on = SendMessageW(item(hwnd, ID_OVERWRITE), BM_GETCHECK, Some(WPARAM(0)), Some(LPARAM(0))).0 == BST_CHECKED.0 as isize;
+                    state().values.overwrite = on;
+                }
+                x if (OPT_CTL0..OPT_CTL0 + OPT_MAX).contains(&x) => {
+                    // Interruttori e password si leggono al clic o a ogni lettera, gli elenchi alla scelta.
+                    let notify_ok = matches!(code, BN_CLICKED | CBN_SELCHANGE | EN_CHANGE);
+                    if notify_ok {
+                        option_changed(hwnd, (x - OPT_CTL0) as usize);
                     }
                 }
                 x if (ID_FORMAT0..ID_FORMAT0 + 24).contains(&x) || (ID_TOOL0..ID_TOOL0 + 24).contains(&x) => {
@@ -650,7 +703,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                     let (list, index) = if x >= ID_TOOL0 { (conversioni::tools(kind), (x - ID_TOOL0) as usize) } else { (conversioni::formats(kind), (x - ID_FORMAT0) as usize) };
                     if let Some(slice) = list.get(index) {
                         state().action = slice.id.to_string();
-                        refresh_extra(hwnd);
+                        refresh_options(hwnd);
                         redraw_chips(hwnd);
                         render_queue(hwnd);
                     }
@@ -683,7 +736,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             let (fg, bg, slot) = match GetDlgCtrlID(ctl) {
                 ID_HEADER => (WHITE, PRIMARY, &BRUSH_PRIMARY),
                 ID_TITLE => (PRIMARY, WHITE, &BRUSH_WHITE),
-                ID_POWERED | ID_CAP_EXTRA | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_QUALITY | ID_CAP_DEST | ID_COUNT | ID_FOOT | ID_QUALITY_NOTE => (GREY, WHITE, &BRUSH_WHITE),
+                ID_POWERED | ID_CAP_OPTIONS | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_QUALITY | ID_CAP_DEST | ID_COUNT | ID_FOOT => (GREY, WHITE, &BRUSH_WHITE),
                 _ => (TEXT, WHITE, &BRUSH_WHITE),
             };
             SetTextColor(hdc, fg);
@@ -691,7 +744,13 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             LRESULT(brush(slot, bg).0 as isize)
         }
         WM_HSCROLL => {
-            show_quality(hwnd);
+            let bar = HWND(lparam.0 as *mut _);
+            let id = GetDlgCtrlID(bar);
+            if (OPT_CTL0..OPT_CTL0 + OPT_MAX).contains(&id) {
+                option_changed(hwnd, (id - OPT_CTL0) as usize);
+            } else {
+                show_quality(hwnd);
+            }
             LRESULT(0)
         }
         WM_APP_RESULT => {

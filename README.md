@@ -88,7 +88,7 @@ Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Gui
 Clic destro sull'icona (o doppio clic per le Impostazioni):
 
 - **Impostazioni:** avvio con Windows, avviso a fine conversione, quali tasti aprono la ruota, qualità di JPEG, WebP, MP3 e PDF in JPG.
-- **Conversioni** (Linux, per ora): un pannello con tutte le conversioni, la coda dei file, la qualità e la cartella di destinazione.
+- **Conversioni:** un pannello con tutte le conversioni, la coda dei file (trascini i file o li scegli), la qualità e la cartella di destinazione. Ogni categoria ha le sue opzioni: foto (dimensioni, raddrizza, sfondo bianco), documenti (formato pagina, password), PDF (OCR, tabelle, pagine, risoluzione, una immagine per pagina), testo (codifica, separatore CSV, JSON leggibile, titoli), audio (kbps, canali, volume, taglio dell'inizio, tag) e video (risoluzione, fps, senza audio, ottimizzato per il web).
 - **Guida:** l'animazione che spiega i tre tasti.
 - **Controlla aggiornamenti:** Cedro lo fa anche da solo, verifica l'installatore e chiede prima di aggiornare.
 - **Avvio automatico** ed **Esci**.
