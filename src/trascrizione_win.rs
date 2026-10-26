@@ -112,6 +112,12 @@ pub(super) unsafe fn make_log(hwnd: HWND, instance: HINSTANCE, id: i32, r: (i32,
     log
 }
 
+/// Il testo che sta nel registro quando non c'è ancora niente da raccontare, in grigio.
+pub(super) unsafe fn set_log_hint(log: HWND, text: &str) {
+    let _ = SetWindowTextW(log, &HSTRING::from(text));
+    set_format(log, LOG_MUTED, SCF_ALL);
+}
+
 /// Mette tutto il testo nel registro, nel colore normale, e scorre in fondo.
 pub(super) unsafe fn set_log_text(log: HWND, text: &str) {
     let _ = SetWindowTextW(log, &HSTRING::from(text));
