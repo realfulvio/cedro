@@ -165,6 +165,16 @@ unsafe fn ctl(hwnd: HWND, id: i32) -> HWND {
 
 unsafe fn put(hwnd: HWND, id: i32, x: i32, y: i32, w: i32, h: i32) {
     let c = ctl(hwnd, id);
+    // Vista Semplice: niente colonna a sinistra, e sotto il titolo ci sono le tre schede.
+    let (mut x, mut y) = (x, y);
+    if simple_view() {
+        if x >= 200 {
+            x -= 170;
+        }
+        if y >= 44 {
+            y += TAB_H;
+        }
+    }
     let _ = MoveWindow(c, px(x), px(y), px(w), px(h), true);
 }
 
@@ -305,7 +315,7 @@ fn metrics(audio: bool, web: bool, more: bool, log_open: bool) -> (i32, i32, i32
 pub fn min_height() -> i32 {
     let (audio, web, more, log_open) = with(|p| (p.audio, p.web, p.more, p.log_open)).unwrap_or((false, false, false, false));
     let (top, below, _, _) = metrics(audio, web, more, log_open);
-    BASE_HEIGHT.max(top + 44 + below)
+    BASE_HEIGHT.max(top + 44 + below) + if simple_view() { TAB_H } else { 0 }
 }
 
 /// Mette ogni controllo al suo posto e adatta la finestra a ciò che è aperto e alla misura scelta dall'utente.
@@ -320,8 +330,8 @@ pub unsafe fn layout(hwnd: HWND) {
     let (user_w, user_h) = user_size();
     let dx = (user_w - BASE_W).max(0);
     set_extra(hwnd, dx, extra().1);
-    let w = WIDTH + dx;
-    let client_h = BASE_HEIGHT.max(top + 44 + below).max(user_h);
+    let w = WIDTH + dx + if simple_view() { 170 } else { 0 };
+    let client_h = BASE_HEIGHT.max(top + 44 + below).max(user_h - if simple_view() { TAB_H } else { 0 });
     let queue_h = client_h - top - below;
     put(hwnd, Y_TITLE, LEFT, 44, w, 32);
     put(hwnd, Y_HINT, LEFT, 78, w, 22);
@@ -385,7 +395,13 @@ pub unsafe fn layout(hwnd: HWND) {
     put(hwnd, Y_BAR, LEFT, client_h - 3, w, 3);
     put(hwnd, ID_SIDE, 0, 40, 190, client_h - 40);
     put(hwnd, ID_HEADER, 0, 0, BASE_W + dx, 40);
-    resize_client(hwnd, client_h);
+    if simple_view() {
+        place_tabs(hwnd);
+        resize_client(hwnd, client_h + TAB_H);
+    } else {
+        place_back(hwnd, client_h);
+        resize_client(hwnd, client_h);
+    }
     let _ = InvalidateRect(Some(hwnd), None, true);
 }
 
