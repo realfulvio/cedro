@@ -20,6 +20,7 @@ const fn c(name: &'static str, author: &'static str, license: &'static str, what
     Component { name, author, license, what, url, soon: false, linux_only: false }
 }
 
+#[allow(dead_code)]
 const fn soon(name: &'static str, author: &'static str, license: &'static str, what: &'static str, url: &'static str) -> Component {
     Component { name, author, license, what, url, soon: true, linux_only: false }
 }
@@ -61,8 +62,10 @@ pub const GROUPS: &[Group] = &[
             c("hound", "Ruud van Asseldonk", "Apache-2.0", "Scrive i file WAV.", "github.com/ruuda/hound"),
             linux("OpenH264", "Cisco Systems", "BSD-2-Clause", "Video H.264 su Linux.", "github.com/cisco/openh264"),
             linux("FDK AAC", "Fraunhofer IIS", "Licenza FDK AAC", "Audio AAC su Linux.", "github.com/mstorsjo/fdk-aac"),
-            soon("whisper.cpp", "Georgi Gerganov e ggml", "MIT", "Trascrizione dell'audio.", "github.com/ggml-org/whisper.cpp"),
-            soon("Modelli Whisper", "OpenAI", "MIT", "I modelli della trascrizione.", "github.com/openai/whisper"),
+            c("whisper.cpp", "Georgi Gerganov e ggml", "MIT", "Trascrive l'audio, sul PC (programma scaricato alla prima trascrizione).", "github.com/ggml-org/whisper.cpp"),
+            c("Modelli Whisper", "OpenAI", "MIT", "I modelli della trascrizione.", "github.com/openai/whisper"),
+            c("whisper-rs", "Tazz4843", "Unlicense", "Collega whisper.cpp a Rust.", "codeberg.org/tazz4843/whisper-rs"),
+            c("Opus", "Xiph.Org e altri", "BSD-3-Clause", "Legge i vocali .opus.", "opus-codec.org"),
             c("yt-dlp", "yt-dlp contributors", "Unlicense", "Scarica video e audio da YouTube (si scarica al primo uso).", "github.com/yt-dlp/yt-dlp"),
             c("FFmpeg", "Gli sviluppatori di FFmpeg", "LGPL-2.1", "Unisce video e audio dei download (si scarica al primo uso).", "ffmpeg.org"),
             c("Deno", "Deno Land Inc. e collaboratori", "MIT", "Serve a yt-dlp per i video ad alta qualità (si scarica al primo uso).", "github.com/denoland/deno"),
@@ -87,6 +90,7 @@ pub fn license_text(license: &str) -> &'static str {
         "MIT" => MIT,
         "Apache-2.0" => APACHE,
         "BSD-2-Clause" => BSD2,
+        "BSD-3-Clause" => BSD3,
         "MPL-2.0" => MPL,
         "LGPL-3.0" => LGPL,
         "LGPL-2.1" => LGPL21,
@@ -129,6 +133,8 @@ pub const FULL_FILE: &str = "Licenze di terze parti.txt";
 
 const MIT: &str = "Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: the above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND.";
 const APACHE: &str = "Licensed under the Apache License, Version 2.0 (the \"License\"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0. Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.";
+const BSD3: &str = "Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer. 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution. 3. Neither the name of the copyright holders nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.";
+
 const BSD2: &str = "Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer. 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.";
 const MPL: &str = "This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.";
 const LGPL: &str = "This library is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free Software Foundation; either version 3 of the License, or (at your option) any later version. This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY.";
@@ -144,7 +150,7 @@ mod tests {
 
     #[test]
     fn the_count_comes_from_the_header() {
-        let head = "LICENZE DI TERZE PARTI - Cedro 0.15.0\r\nCedro è software libero.\r\nLe librerie sono 251; i testi uguali compaiono una volta sola.\r\n";
+        let head = "LICENZE DI TERZE PARTI - Cedro 0.17.0\r\nCedro è software libero.\r\nLe librerie sono 251; i testi uguali compaiono una volta sola.\r\n";
         assert_eq!(count_in(head), Some(251));
         assert_eq!(count_in("niente"), None);
     }
