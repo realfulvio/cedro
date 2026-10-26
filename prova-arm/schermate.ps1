@@ -16,6 +16,7 @@ public static class W {
 [void][W]::SetProcessDPIAware()
 New-Item -ItemType Directory -Force $Out | Out-Null
 
+function Say($t) { Write-Host $t }
 function Describe($path) {
   $b = [Drawing.Bitmap]::FromFile($path)
   $colori = @{}
@@ -31,14 +32,14 @@ function Snap($name, $proc) {
   $g.CopyFromScreen($b.Left, $b.Top, 0, 0, $bmp.Size)
   $bmp.Save((Join-Path $Out "$name-schermo.png"), [Drawing.Imaging.ImageFormat]::Png)
   $g.Dispose(); $bmp.Dispose()
-  "  schermo: " + (Describe (Join-Path $Out "$name-schermo.png"))
+  Say ("  schermo: " + (Describe (Join-Path $Out "$name-schermo.png")))
   $proc.Refresh()
   $h = $proc.MainWindowHandle
-  if ($h -eq [IntPtr]::Zero) { "  nessuna finestra principale"; return $false }
+  if ($h -eq [IntPtr]::Zero) { Say "  nessuna finestra principale"; return $false }
   $r = New-Object W+RECT
   [void][W]::GetWindowRect($h, [ref]$r)
   $w = $r.R - $r.L; $hh = $r.B - $r.T
-  "  finestra: {0}x{1} a ({2},{3})" -f $w, $hh, $r.L, $r.T
+  Say ("  finestra: {0}x{1} a ({2},{3})" -f $w, $hh, $r.L, $r.T)
   if ($w -lt 50 -or $hh -lt 50) { return $false }
   $bmp = New-Object Drawing.Bitmap $w, $hh
   $g = [Drawing.Graphics]::FromImage($bmp)
@@ -47,7 +48,7 @@ function Snap($name, $proc) {
   $g.ReleaseHdc($dc); $g.Dispose()
   $path = Join-Path $Out "$name.png"
   $bmp.Save($path, [Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
-  "  finestra: " + (Describe $path)
+  Say ("  finestra: " + (Describe $path))
   return $true
 }
 
@@ -61,12 +62,13 @@ $finestre = @(
   @{ nome = "icona-vicino-all-orologio"; args = $null; obbl = $true }
 )
 foreach ($f in $finestre) {
-  "== $($f.nome)"
+  Say "== $($f.nome)"
   $p = if ($f.args) { Start-Process $Exe -ArgumentList $f.args -PassThru } else { Start-Process $Exe -PassThru }
   Start-Sleep -Seconds 6
   if ($p.HasExited) {
-    "  il processo è uscito subito (codice $($p.ExitCode))"
-    if ($f.obbl) { $fail += $f.nome }
+    Say "  il processo è uscito subito (codice $($p.ExitCode))"
+    if ($f.obbl -and $f.args) { $fail += $f.nome }
+    else { $null = Snap $f.nome $p }
     continue
   }
   $ok = Snap $f.nome $p
