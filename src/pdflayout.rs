@@ -1192,10 +1192,23 @@ struct Segment {
 pub enum Page {
     /// Pagina ricostruita: titoli, paragrafi, tabelle, immagini.
     Flow(FlowPage),
-    /// Pagina senza testo da copiare: non c'è niente da ricostruire.
-    Empty,
+    /// Pagina senza testo da copiare (una scansione): va nel Word come immagine.
+    Scan(ScanPage),
     /// Pagina finita dentro la precedente (una tabella che continua).
     Merged,
+}
+
+pub struct ScanPage {
+    width: f64,
+    height: f64,
+    jpeg: Vec<u8>,
+}
+
+impl Page {
+    /// La pagina è una scansione, senza testo da copiare.
+    pub fn is_scan(&self) -> bool {
+        matches!(self, Page::Scan(_))
+    }
 }
 
 pub struct FlowPage {
@@ -1218,13 +1231,14 @@ struct RawPage {
     others: Vec<Block>,
 }
 
-/// Legge le pagine del PDF. `Page::Empty` per quelle senza testo incorporato.
+/// Legge le pagine del PDF. `Page::Scan` per quelle senza testo incorporato.
 pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
     let original = Pdf::new(bytes.to_vec()).map_err(|e| format!("PDF non letto: {e:?}"))?;
     let cache = RenderCache::new();
     let interp_cache = InterpreterCache::new();
     let settings = InterpreterSettings::default();
     let mut raw: Vec<Option<RawPage>> = Vec::new();
+    let mut scans: Vec<Option<ScanPage>> = Vec::new();
     let mut size_chars: HashMap<i64, usize> = HashMap::new();
     for page in original.pages().iter() {
         let (w, h) = page.render_dimensions();
@@ -1235,9 +1249,19 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
         interpret_page(page, &mut ctx, &mut collector);
         let Collector { mut glyphs, shapes, pics, stems, .. } = collector;
         if glyphs.is_empty() {
+            // Una scansione: la pagina intera diventa un'immagine, come la vede chi legge.
+            let scale = (2000.0 / w.max(h).max(1.0)) as f32;
+            let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
+            let rendered = render(page, &cache, &settings, &RenderSettings::default(), &pixmap);
+            let png = rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?;
+            let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
+            let mut jpeg = Vec::new();
+            image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 80).encode_image(&rgb).map_err(|e| e.to_string())?;
             raw.push(None);
+            scans.push(Some(ScanPage { width: w, height: h, jpeg }));
             continue;
         }
+        scans.push(None);
         for g in &mut glyphs {
             if let (Some(key), true) = (g.font_key, g.font.is_empty()) {
                 if let Some((sum, n)) = stems.get(&key) {
@@ -1299,9 +1323,9 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
     sizes.headings = heads;
 
     let mut pages = Vec::new();
-    for p in raw {
+    for (p, scan) in raw.into_iter().zip(scans) {
         let Some(p) = p else {
-            pages.push(Page::Empty);
+            pages.push(scan.map_or(Page::Merged, Page::Scan));
             continue;
         };
         pages.push(Page::Flow(layout_page(p, &sizes)));
@@ -1998,16 +2022,38 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                 }
             }
             Page::Merged => {}
-            Page::Empty => {
-                let mut parts: Vec<String> = fallback(i)
-                    .split('\n')
-                    .map(|para| format!("<w:p><w:pPr><w:pStyle w:val=\"BodyText\"/><w:spacing w:before=\"0\" w:after=\"120\"/></w:pPr><w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>", xml(para)))
-                    .collect();
-                let sect = sect_xml(&Sect { w: 595.3, h: 841.9, top: 56.7, bottom: 56.7, left: 56.7, right: 56.7, cols: Vec::new(), continuous: false });
+            Page::Scan(scan) => {
+                // Come Foxit: la scansione occupa la pagina, dietro al testo. Il testo letto
+                // con l'OCR va nel testo alternativo dell'immagine (si legge senza sporcare la pagina).
+                let id = next_id;
+                next_id += 1;
+                media.push((format!("word/media/immagine{id}.jpg"), scan.jpeg.clone()));
+                let _ = write!(
+                    rels,
+                    "<Relationship Id=\"rIdImg{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/immagine{id}.jpg\"/>"
+                );
+                let ocr = fallback(i);
+                let descr = xml(&ocr).replace('\n', "&#10;");
+                let (cx, cy) = ((scan.width * EMU_PER_PT) as i64, (scan.height * EMU_PER_PT) as i64);
+                let picture = format!(
+                    "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/></w:pPr><w:r><w:drawing>\
+<wp:anchor distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\" simplePos=\"0\" relativeHeight=\"{id}\" behindDoc=\"1\" locked=\"0\" layoutInCell=\"1\" allowOverlap=\"1\">\
+<wp:simplePos x=\"0\" y=\"0\"/><wp:positionH relativeFrom=\"page\"><wp:posOffset>0</wp:posOffset></wp:positionH>\
+<wp:positionV relativeFrom=\"page\"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx=\"{cx}\" cy=\"{cy}\"/>\
+<wp:effectExtent l=\"0\" t=\"0\" r=\"0\" b=\"0\"/><wp:wrapNone/><wp:docPr id=\"{id}\" name=\"Pagina {}\" descr=\"{descr}\"/><wp:cNvGraphicFramePr/>\
+<a:graphic xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">\
+<pic:pic xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:nvPicPr><pic:cNvPr id=\"{id}\" name=\"immagine{id}.jpg\"/><pic:cNvPicPr/></pic:nvPicPr>\
+<pic:blipFill><a:blip r:embed=\"rIdImg{id}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>\
+<pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>\
+</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>",
+                    i + 1
+                );
+                let mut parts = vec![picture];
+                let sect = sect_xml(&Sect { w: scan.width, h: scan.height, top: 20.0, bottom: 20.0, left: 20.0, right: 20.0, cols: Vec::new(), continuous: false });
                 if last_page {
                     parts.push(sect);
                 } else {
-                    close_section(&mut parts, &sect);
+                    parts.push(format!("<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/>{sect}</w:pPr></w:p>"));
                 }
                 for part in parts {
                     body.push_str(&part);
