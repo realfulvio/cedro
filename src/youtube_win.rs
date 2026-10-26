@@ -29,6 +29,7 @@ const Y_CHANGE: i32 = 5015;
 const Y_GO: i32 = 5016;
 const Y_BAR: i32 = 5017;
 const Y_POWERED: i32 = 5018;
+const Y_COPY: i32 = 5019;
 const Y_L_QUALITY: i32 = 5020;
 const Y_QUALITY: i32 = 5021;
 const Y_L_FORMAT: i32 = 5022;
@@ -212,7 +213,8 @@ pub unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     child(hwnd, instance, b, "", tab | BS_OWNERDRAW as u32, Y_AUDIO, (LEFT + 340, 308, 330, 58), fb);
     child(hwnd, instance, b, "Altre opzioni", tab | BS_OWNERDRAW as u32, Y_MORE, (LEFT, 374, WIDTH, 28), fb);
     child(hwnd, instance, b, "Cosa sta succedendo", tab | BS_OWNERDRAW as u32, Y_LOGT, (LEFT, 404, WIDTH, 28), fb);
-    child(hwnd, instance, w!("EDIT"), "", tab | WS_BORDER.0 | WS_VSCROLL.0 | 0x4 /* ES_MULTILINE */ | 0x40 /* ES_AUTOVSCROLL */ | 0x800 /* ES_READONLY */, Y_LOG, (LEFT, 434, WIDTH, 120), f);
+    child(hwnd, instance, b, "Copia", tab, Y_COPY, (LEFT + WIDTH - 70, 408, 70, 24), f);
+    trascrizione::make_log(hwnd, instance, Y_LOG, (LEFT, 434, WIDTH, 120));
     child(hwnd, instance, s, "", 0, Y_NOTE, (LEFT, 440, WIDTH, 36), f);
     child(hwnd, instance, s, "DOVE SALVARE", 0, Y_CAP_DEST, (LEFT, 482, 300, 16), fs);
     child(hwnd, instance, s, "", 0x200 | 0x8000 /* SS_CENTERIMAGE | SS_PATHELLIPSIS */, Y_DEST, (LEFT, 500, 330, 34), f);
@@ -242,7 +244,7 @@ pub unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
         child(hwnd, instance, b, text, tab | BS_AUTOCHECKBOX as u32, *id, (LEFT, 0, WIDTH, 26), f);
         set_checked(hwnd, *id, *on);
     }
-    for id in FIXED_IDS.iter().chain([Y_LOG, Y_BAR].iter()).copied().chain(OPTION_IDS.iter().map(|o| o.0)).chain(OPTION_LABELS.iter().map(|o| o.0)) {
+    for id in FIXED_IDS.iter().chain([Y_LOG, Y_COPY, Y_BAR].iter()).copied().chain(OPTION_IDS.iter().map(|o| o.0)).chain(OPTION_LABELS.iter().map(|o| o.0)) {
         hidden(id);
     }
     refresh_choices(hwnd);
@@ -339,7 +341,9 @@ pub unsafe fn layout(hwnd: HWND) {
     put(hwnd, Y_LOGT, LEFT, y, w, 28);
     y += 28;
     show_id(hwnd, Y_LOG, log_open);
+    show_id(hwnd, Y_COPY, log_open);
     if log_open {
+        put(hwnd, Y_COPY, LEFT + w - 70, y - 26, 70, 24);
         put(hwnd, Y_LOG, LEFT, y + 2, w, 96);
         y += log_h;
     }
@@ -388,7 +392,7 @@ pub unsafe fn enter(hwnd: HWND) {
 /// Si torna a una categoria di file: i controlli dei file si ricreano con `render_category`.
 pub unsafe fn leave(hwnd: HWND) {
     with(|p| p.shown = false);
-    for id in FIXED_IDS.iter().chain([Y_LOG, Y_BAR].iter()).copied().chain(OPTION_IDS.iter().map(|o| o.0)).chain(OPTION_LABELS.iter().map(|o| o.0)) {
+    for id in FIXED_IDS.iter().chain([Y_LOG, Y_COPY, Y_BAR].iter()).copied().chain(OPTION_IDS.iter().map(|o| o.0)).chain(OPTION_LABELS.iter().map(|o| o.0)) {
         show_id(hwnd, id, false);
     }
     for id in LEGACY_IDS {
@@ -425,10 +429,7 @@ unsafe fn refresh_texts(hwnd: HWND) {
     set_text(hwnd, Y_DEST, &dest.display().to_string());
     if !log.is_empty() {
         let crlf = log.replace('\n', "\r\n");
-        let _ = SetWindowTextW(ctl(hwnd, Y_LOG), &HSTRING::from(crlf.as_str()));
-        let len = crlf.encode_utf16().count();
-        SendMessageW(ctl(hwnd, Y_LOG), EM_SETSEL, Some(WPARAM(len)), Some(LPARAM(len as isize)));
-        SendMessageW(ctl(hwnd, Y_LOG), EM_SCROLLCARET, Some(WPARAM(0)), Some(LPARAM(0)));
+        trascrizione::set_log_text(ctl(hwnd, Y_LOG), &crlf);
     }
     let list = ctl(hwnd, Y_QUEUE);
     SendMessageW(list, LB_RESETCONTENT, Some(WPARAM(0)), Some(LPARAM(0)));
@@ -510,9 +511,13 @@ unsafe fn start(hwnd: HWND) {
         p.progress = 0.0;
         p.note.clear();
         p.cancel = cancel.clone();
+        // Come nella trascrizione, mentre lavora si vede cosa sta succedendo.
+        p.log_open = true;
+        p.more = false;
     });
     show_id(hwnd, Y_BAR, true);
     refresh_texts(hwnd);
+    layout(hwnd);
     let raw = hwnd.0 as isize;
     std::thread::spawn(move || {
         let post = |m: Msg| {
@@ -644,6 +649,7 @@ pub unsafe fn command(hwnd: HWND, id: i32, code: u32) {
             });
             layout(hwnd);
         }
+        Y_COPY => trascrizione::copy_log(hwnd, ctl(hwnd, Y_LOG)),
         Y_LOGT => {
             with(|p| {
                 p.log_open = !p.log_open;

@@ -119,12 +119,12 @@ fn user_size() -> (i32, i32) {
 
 /// Controlli che si allargano con la finestra.
 fn grows_wide(id: i32) -> bool {
-    matches!(id, ID_HEADER | ID_TITLE | ID_HINT | ID_DROP | ID_COUNT | ID_QUEUE | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_OPTIONS | ID_QUALITY)
+    matches!(id, ID_HEADER | ID_TITLE | ID_HINT | ID_DROP | ID_COUNT | ID_QUEUE | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_OPTIONS | ID_QUALITY | trascrizione::ID_LOG)
 }
 
 /// Controlli che restano attaccati al bordo destro.
 fn sticks_right(id: i32) -> bool {
-    matches!(id, ID_GO | ID_QUALITY_VALUE)
+    matches!(id, ID_GO | ID_QUALITY_VALUE | trascrizione::ID_COPY)
 }
 
 /// Dove va un controllo creato o messo al suo posto con le misure di progetto, tenuto conto dell'ingrandimento della finestra.

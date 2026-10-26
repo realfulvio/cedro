@@ -144,6 +144,28 @@ pub fn model_ready(index: usize) -> bool {
     })
 }
 
+/// Il nome del modello di whisper, come si legge sul sito («small», «large-v3-turbo»), con il tipo di compressione.
+pub fn model_names(index: usize) -> String {
+    let file = MODELS.get(index).map(|m| m.file).unwrap_or("");
+    let core = file.trim_start_matches("ggml-").trim_end_matches(".bin");
+    match core.rsplit_once('-') {
+        Some((name, quant)) => format!("{name} {quant}"),
+        None => core.to_string(),
+    }
+}
+
+/// I modelli già sul PC, per nome («base q8_0», «small q8_0»).
+pub fn installed_models() -> Vec<String> {
+    (0..MODELS.len()).filter(|i| model_ready(*i)).map(model_names).collect()
+}
+
+/// Vero se il motore (cedro-trascrivi) è già sul PC.
+pub fn engine_installed() -> bool {
+    std::fs::read_dir(data_dir())
+        .map(|d| d.flatten().any(|e| e.file_name().to_string_lossy().starts_with("cedro-trascrivi-") && e.path().extension().is_some_and(|x| x == "exe" || x.is_empty())))
+        .unwrap_or(false)
+}
+
 /// Il peso del modello scritto come lo legge una persona: «490 MB», «1,6 GB».
 pub fn size_text(megabytes: u32) -> String {
     if megabytes >= 1000 {
