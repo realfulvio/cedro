@@ -327,7 +327,8 @@ jobs:
           gh release upload "$MOTORI" $(find file -type f -name 'cedro-trascrivi-*') --clobber
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             sed "s/{versione}/${TAG#v}/g; s#{repo}#${GITHUB_REPOSITORY}#g" .github/note-release.md > note.md
-            gh release create "$TAG" --target "$GITHUB_SHA" --latest --title "Cedro ${TAG#v}" --notes-file note.md
+            # In bozza: nessun Cedro la vede finché non ci sono i pacchetti di tutti i sistemi (job «apri»).
+            gh release create "$TAG" --target "$GITHUB_SHA" --draft --title "Cedro ${TAG#v}" --notes-file note.md
           fi
           gh release upload "$TAG" $(find file -type f -name 'Cedro-*Setup-*.exe') --clobber
           for t in "$TAG" "$MOTORI"; do echo "== $t"; gh release view "$t" --json assets --jq '.assets[] | "\(.name)  \(.digest)"'; done
@@ -338,9 +339,36 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: gh workflow run linux.yml --ref "$GITHUB_REF_NAME" -f tag="$TAG"
 
+  # Le versioni già installate non distinguono «manca ancora il mio pacchetto» da «non c'è»: la release
+  # diventa pubblica (e «latest») solo quando ha i sei pacchetti, compresi i tar.gz del workflow «Linux».
+  apri:
+    name: Pubblica la release quando ci sono tutti i pacchetti
+    needs: pubblica
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          V="${TAG#v}"
+          want="Cedro-Setup-$V.exe Cedro-ARM64-Setup-$V.exe Cedro-Bondeno-Setup-$V.exe Cedro-Bondeno-ARM64-Setup-$V.exe cedro-$V-linux-x64.tar.gz cedro-bondeno-$V-linux-x64.tar.gz"
+          for i in $(seq 1 90); do
+            have=$(gh release view "$TAG" --json assets --jq '.assets[].name')
+            missing=""
+            for f in $want; do grep -qxF "$f" <<<"$have" || missing="$missing $f"; done
+            [ -z "$missing" ] && break
+            echo "Mancano ancora:$missing"
+            sleep 60
+          done
+          if [ -n "$missing" ]; then echo "La release resta in bozza: mancano$missing"; exit 1; fi
+          gh release edit "$TAG" --draft=false --latest
+          gh release view "$TAG" --json isDraft,assets --jq '"bozza: \(.isDraft)", (.assets[].name)'
+
   verifica:
     name: "Dopo la pubblicazione: una 0.17 vera si aggiorna da GitHub, la nuova trascrive"
-    needs: pubblica
+    needs: apri
     runs-on: windows-latest
     steps:
       - name: Controlla aggiornamenti dalla 0.17.1
