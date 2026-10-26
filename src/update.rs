@@ -227,6 +227,71 @@ mod tests {
         assert_eq!(release.installer.unwrap().sha256.as_deref(), Some("abc"));
     }
 
+    /// Un server HTTP da prova: risponde con `body` alla prima richiesta e basta.
+    fn serve_once(body: Vec<u8>) -> String {
+        use std::io::Write;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/file", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut request = [0u8; 1024];
+                let _ = std::io::Read::read(&mut stream, &mut request);
+                let _ = write!(stream, "HTTP/1.1 200 OK
+Content-Length: {}
+Connection: close
+
+", body.len());
+                let _ = stream.write_all(&body);
+            }
+        });
+        url
+    }
+
+    fn sha_of(bytes: &[u8]) -> String {
+        use sha2::{Digest, Sha256};
+        Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    #[test]
+    fn download_checks_the_sha256() {
+        let body = b"pacchetto finto".to_vec();
+        let good = Asset { name: "cedro-prova-ok.bin".into(), url: serve_once(body.clone()), sha256: Some(sha_of(&body)) };
+        let path = download(&good).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), body);
+        let _ = std::fs::remove_file(path);
+        let bad = Asset { name: "cedro-prova-ko.bin".into(), url: serve_once(body), sha256: Some("0".repeat(64)) };
+        assert!(download(&bad).unwrap_err().contains("non corrisponde"));
+        assert!(!std::env::temp_dir().join("cedro-prova-ko.bin").exists());
+        let none = Asset { name: "cedro-prova-no.bin".into(), url: "http://127.0.0.1:9/x".into(), sha256: None };
+        assert!(download(&none).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn installs_a_package_with_its_install_script() {
+        let work = std::env::temp_dir().join(format!("cedro-test-pacchetto-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&work);
+        let pkg = work.join("cedro-9.9.9-linux-x64");
+        std::fs::create_dir_all(&pkg).unwrap();
+        let marker = work.join("fatto.txt");
+        std::fs::write(pkg.join("install.sh"), format!("#!/bin/sh
+echo \"$1\" > {}
+", marker.display())).unwrap();
+        let archive = work.join("pacchetto.tar.gz");
+        let made = std::process::Command::new("tar").arg("-czf").arg(&archive).arg("-C").arg(&work).arg("cedro-9.9.9-linux-x64").status().unwrap();
+        assert!(made.success());
+        let bytes = std::fs::read(&archive).unwrap();
+        let asset = Asset { name: format!("cedro-prova-{}-linux-x64.tar.gz", std::process::id()), url: serve_once(bytes.clone()), sha256: Some(sha_of(&bytes)) };
+        install_package(&asset).unwrap();
+        assert_eq!(std::fs::read_to_string(&marker).unwrap().trim(), "--no-start");
+        // Un pacchetto con lo SHA-256 sbagliato non viene nemmeno aperto.
+        std::fs::remove_file(&marker).unwrap();
+        let bad = Asset { name: format!("cedro-prova-ko-{}-linux-x64.tar.gz", std::process::id()), url: serve_once(bytes), sha256: Some("1".repeat(64)) };
+        assert!(install_package(&bad).is_err());
+        assert!(!marker.exists());
+        let _ = std::fs::remove_dir_all(&work);
+    }
+
     #[test]
     fn prefers_asset_digest() {
         let body = r#"{"tag_name": "0.9.0", "assets": [
