@@ -25,14 +25,37 @@ pub struct Model {
 }
 
 pub const MODELS: &[Model] = &[
-    // Modelli a 8 bit: stessa qualità di quelli pieni, metà del peso, e più veloci con le istruzioni VNNI.
-    Model { name: "Veloce", note: "Per appunti e messaggi vocali", file: "ggml-base-q8_0.bin", megabytes: 82 },
-    Model { name: "Buona", note: "Per riunioni e interviste", file: "ggml-small-q8_0.bin", megabytes: 264 },
-    Model { name: "Massima", note: "Per audio difficili, più lenta", file: "ggml-large-v3-turbo-q8_0.bin", megabytes: 874 },
+    // Scelti con la misura su 200 frasi italiane di FLEURS (errori sulle parole, in parlato pulito e in «messaggio vocale»
+    // disturbato): small q8 7,5 % e 17 %, medium q5 4,1 % e 9 %, large-v3-turbo q5 2,6 % e 5,7 %. Il vecchio «Veloce»
+    // (base) sbagliava 1 parola su 6.
+    Model { name: "Veloce", note: "Per appunti e messaggi vocali", file: "ggml-small-q8_0.bin", megabytes: 264 },
+    Model { name: "Buona", note: "Per riunioni e interviste", file: "ggml-medium-q5_0.bin", megabytes: 539 },
+    Model { name: "Massima", note: "Per audio difficili, la più precisa", file: "ggml-large-v3-turbo-q5_0.bin", megabytes: 574 },
 ];
 
-/// Il modello di partenza: «Buona».
+/// Il modello di partenza senza scheda video: «Buona».
 pub const DEFAULT_MODEL: usize = 1;
+
+/// Il livello preselezionato: «Massima» se il motore può usare la scheda video (un'ora di audio in circa due minuti),
+/// altrimenti «Buona».
+pub fn default_model() -> usize {
+    if crate::settings::read_settings().gpu && vulkan_loader_present() {
+        MODELS.len() - 1
+    } else {
+        DEFAULT_MODEL
+    }
+}
+
+/// I modelli delle versioni precedenti (non più usati): si tolgono dal PC appena arriva quello nuovo.
+const OLD_MODELS: &[&str] = &["ggml-base-q8_0.bin", "ggml-large-v3-turbo-q8_0.bin"];
+
+fn forget_old_models() {
+    let dir = data_dir();
+    for file in OLD_MODELS {
+        let _ = std::fs::remove_file(dir.join(file));
+        let _ = std::fs::remove_file(dir.join(format!("{file}.sha256")));
+    }
+}
 
 const MODEL_BASE_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/";
 const RELEASE_TAG_URL: &str = "https://api.github.com/repos/realfulvio/cedro/releases/tags/";
@@ -454,6 +477,7 @@ fn ensure_model(index: usize, sink: &dyn Fn(Event)) -> Result<PathBuf, String> {
     let sha = fetch(&url, &path, expected.as_deref(), model.megabytes, "il modello", sink)?;
     std::fs::write(&sidecar, &sha).map_err(|e| format!("{} non scritto: {e}", sidecar.display()))?;
     log(sink, Tone::Step, "Modello", format!("«{}» scaricato e controllato", model.name));
+    forget_old_models();
     Ok(path)
 }
 
