@@ -123,6 +123,8 @@ fn parts(version: &str) -> Option<Vec<u64>> {
 /// Scarica l'installatore nella cartella temporanea e ne verifica lo SHA-256.
 pub fn download(asset: &Asset) -> Result<PathBuf, String> {
     use sha2::{Digest, Sha256};
+    // Senza codice di controllo non si scarica nemmeno.
+    let expected = asset.sha256.as_deref().ok_or("la release non indica lo SHA-256 dell'installatore")?;
     let response = agent().get(&asset.url).call().map_err(|e| format!("download non riuscito: {e}"))?;
     let mut bytes = Vec::new();
     response
@@ -130,12 +132,13 @@ pub fn download(asset: &Asset) -> Result<PathBuf, String> {
         .take(512 * 1024 * 1024)
         .read_to_end(&mut bytes)
         .map_err(|e| format!("download interrotto: {e}"))?;
-    let expected = asset.sha256.as_deref().ok_or("la release non indica lo SHA-256 dell'installatore")?;
     let actual: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
     if !actual.eq_ignore_ascii_case(expected) {
         return Err("lo SHA-256 dell'installatore non corrisponde: file scartato".into());
     }
-    let path = std::env::temp_dir().join(&asset.name);
+    // Solo il nome del file: un nome con delle cartelle dentro non esce dalla cartella temporanea.
+    let name = std::path::Path::new(&asset.name).file_name().ok_or("nome dell'installatore non valido")?;
+    let path = std::env::temp_dir().join(name);
     std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
     Ok(path)
 }
@@ -423,7 +426,13 @@ Connection: close
         assert!(download(&bad).unwrap_err().contains("non corrisponde"));
         assert!(!std::env::temp_dir().join("cedro-prova-ko.bin").exists());
         let none = Asset { name: "cedro-prova-no.bin".into(), url: "http://127.0.0.1:9/x".into(), sha256: None };
-        assert!(download(&none).is_err());
+        assert!(download(&none).unwrap_err().contains("SHA-256"));
+        // Un nome con delle cartelle resta dentro la cartella temporanea.
+        let body = b"x".to_vec();
+        let sneaky = Asset { name: "../cedro-prova-fuori.bin".into(), url: serve_once(body.clone()), sha256: Some(sha_of(&body)) };
+        let path = download(&sneaky).unwrap();
+        assert_eq!(path, std::env::temp_dir().join("cedro-prova-fuori.bin"));
+        let _ = std::fs::remove_file(path);
     }
 
     /// La cartella dove si apre il pacchetto è nuova, solo dell'utente e mai la stessa due volte.
