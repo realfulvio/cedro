@@ -16,6 +16,10 @@ mod conversioni_win;
 mod guida_win;
 #[cfg(windows)]
 mod progress_win;
+#[cfg(windows)]
+mod winmenu;
+#[cfg(windows)]
+mod wingfx;
 
 #[cfg(target_os = "linux")]
 mod linux_conversioni;
