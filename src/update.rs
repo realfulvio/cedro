@@ -325,10 +325,12 @@ mod tests {
     /// Una release completa come le vere (ordine alfabetico di GitHub): ogni sistema prende il suo file.
     #[test]
     fn every_system_finds_its_file_in_a_full_release() {
+        // Il pacchetto Linux di questa architettura (su ARM64 «linux-arm64»).
+        let package = format!("cedro-0.18.1-linux-{}.tar.gz", package_arch());
         let names = [
             "Cedro-ARM64-Setup-0.18.1.exe",
             "Cedro-Setup-0.18.1.exe",
-            "cedro-0.18.1-linux-x64.tar.gz",
+            &package,
             "cedro-trascrivi-0.18.1-linux-x64-avx2",
             "cedro-trascrivi-0.18.1-windows-arm64-i8mm.exe",
             "cedro-trascrivi-0.18.1-windows-x64-avx2.exe",
@@ -345,7 +347,7 @@ mod tests {
         } else {
             assert_eq!(installer, "Cedro-Setup-0.18.1.exe");
         }
-        assert_eq!(release.package.unwrap().name, "cedro-0.18.1-linux-x64.tar.gz");
+        assert_eq!(release.package.unwrap().name, package);
     }
 
     /// Fino alla 0.17 Cedro prendeva il primo «Cedro-Setup….exe»: l'installatore ARM non deve somigliargli.
@@ -380,7 +382,8 @@ mod tests {
             {"name": "Cedro-Setup-0.9.0.exe", "browser_download_url": "https://x/a.exe", "digest": "sha256:abc"},
             {"name": "cedro-trascrivi-0.9.0-linux-x64-base", "browser_download_url": "https://x/t"},
             {"name": "cedro-0.9.0-linux-x64.tar.gz", "browser_download_url": "https://x/c.tar.gz", "digest": "sha256:def"}]}"#;
-        let release = parse_release(&for_this_arch(body)).unwrap();
+        let body = for_this_arch(body).replace("cedro-0.9.0-linux-x64.tar.gz", &format!("cedro-0.9.0-linux-{}.tar.gz", package_arch()));
+        let release = parse_release(&body).unwrap();
         let package = release.package.unwrap();
         assert_eq!(package.url, "https://x/c.tar.gz");
         assert_eq!(package.sha256.as_deref(), Some("def"));
