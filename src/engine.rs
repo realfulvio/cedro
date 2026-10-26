@@ -184,12 +184,29 @@ fn stem(path: &Path) -> String {
 
 pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
     let mut name = format!("{file_stem}.{ext}");
+    if crate::settings::read_settings().replace {
+        return dir.join(name);
+    }
     let mut i = 2u32;
     while dir.join(&name).exists() {
         name = format!("{file_stem}-{i}.{ext}");
         i += 1;
     }
     dir.join(name)
+}
+
+/// La cartella dove va la copia: accanto al file, in «Cedro» accanto al file, o quella fissa.
+fn output_dir(path: &Path, settings: &crate::settings::Settings) -> CedroResult<PathBuf> {
+    use crate::settings::Dest;
+    let beside = parent_dir(path)?.to_path_buf();
+    let dir = match settings.dest {
+        Dest::Same => return Ok(beside),
+        Dest::Sub => beside.join("Cedro"),
+        Dest::Fixed if settings.dest_dir.trim().is_empty() => return Ok(beside),
+        Dest::Fixed => PathBuf::from(settings.dest_dir.trim()),
+    };
+    fs::create_dir_all(&dir).map_err(|e| err(format!("cartella di destinazione non creata ({}): {e}", dir.display())))?;
+    Ok(dir)
 }
 
 fn parent_dir(path: &Path) -> CedroResult<&Path> {
@@ -251,7 +268,8 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         return Err(err("file non trovato"));
     }
     let quality = quality.clamp(40, 95);
-    let dir = parent_dir(path)?.to_path_buf();
+    let settings = crate::settings::read_settings();
+    let dir = output_dir(path, &settings)?;
     let before = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let kind = kind_of(path);
 
@@ -362,7 +380,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
             return Err(err("il PDF non ha pagine"));
         }
         let mut first = None;
-        crate::ocr::pdf_page_pngs(&bytes, |i, png| {
+        crate::ocr::pdf_page_pngs(&bytes, settings.pdf_scale(), |i, png| {
             let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
             let mut jpeg = Vec::new();
             JpegEncoder::new_with_quality(&mut jpeg, quality).encode_image(&rgb).map_err(|e| e.to_string())?;
@@ -425,7 +443,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
             (_, n) => format!("Testo estratto dal PDF, con {n} pagine lette via OCR: controllalo."),
         };
         if skipped > 0 {
-            message.push_str(&format!(" Mancano {skipped} pagine scansionate: l'OCR ne legge al massimo {}.", crate::ocr::MAX_OCR_PAGES));
+            message.push_str(&format!(" Mancano {skipped} pagine scansionate: l'OCR ne legge al massimo {}.", settings.ocr_pages()));
         }
         return Ok(Output { path: out, message });
     }
@@ -440,7 +458,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         let text = crate::doctext::pdf_text(path).or_else(|_| crate::ocr::pdf_pages_text(&bytes)).map_err(err)?;
         let out = unique_output(&dir, &stem(path), "txt");
         write_bytes(&out, text.as_bytes())?;
-        return Ok(Output { path: out, message: "Testo del PDF. Al massimo 100 pagine disegnate.".into() });
+        return Ok(Output { path: out, message: "Testo del PDF.".into() });
     }
 
     if kind != Kind::Image {
@@ -492,7 +510,7 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
         format!("{}-{label_stem}", stem(path))
     };
     let out = unique_output(&dir, &file_stem, ext);
-    let q = if action == "compress" { quality.min(62) } else { quality };
+    let q = if action == "compress" { quality.min(settings.compress_quality()) } else { quality };
     save_image(&img, &out, format, q)?;
     let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
     let message = match action {

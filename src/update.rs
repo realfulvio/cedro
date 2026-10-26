@@ -127,6 +127,16 @@ pub fn skipped(version: &str) -> bool {
     std::fs::read_to_string(skip_file()).is_ok_and(|text| text.trim() == version)
 }
 
+/// La versione a cui l'utente ha detto di no, se c'è.
+pub fn skipped_version() -> Option<String> {
+    std::fs::read_to_string(skip_file()).ok().map(|t| t.trim().to_string()).filter(|t| !t.is_empty())
+}
+
+/// Torna a proporre anche la versione rifiutata.
+pub fn unskip() {
+    let _ = std::fs::remove_file(skip_file());
+}
+
 /// Non chiedere più per questa versione, all'avvio.
 pub fn skip(version: &str) {
     let _ = std::fs::create_dir_all(crate::config_dir());
