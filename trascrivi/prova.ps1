@@ -21,17 +21,27 @@ $voice.Speak("Good morning. The weather today is sunny and warm. This is a test 
 $voice.Dispose()
 "Audio: $((Get-Item $wav).Length) byte"
 
-# Senza BOM: il motore legge una riga JSON pura (Cedro gli scrive così).
-$OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $fail = @()
 foreach ($exe in Get-ChildItem $Dir -Filter "cedro-trascrivi-*.exe") {
   Write-Host "== $($exe.Name)"
   $request = (@{ file = $wav; lang = "auto" } | ConvertTo-Json -Compress)
+  Write-Host "   richiesta: $request"
   $watch = [Diagnostics.Stopwatch]::StartNew()
-  # whisper.cpp scrive i suoi messaggi su stderr: con «Stop» PowerShell 5 li tratterebbe come errori.
-  $ErrorActionPreference = "Continue"
-  $out = $request | & $exe.FullName --model $model 2>$null
-  $ErrorActionPreference = "Stop"
+  # Processo lanciato a mano: la richiesta arriva come byte UTF-8 puri (senza BOM né codifiche della console),
+  # come la scrive Cedro; i messaggi di whisper.cpp su stderr vengono scartati.
+  $psi = New-Object Diagnostics.ProcessStartInfo $exe.FullName, "--model `"$model`""
+  $psi.UseShellExecute = $false
+  $psi.RedirectStandardInput = $true
+  $psi.RedirectStandardOutput = $true
+  $psi.RedirectStandardError = $true
+  $proc = [Diagnostics.Process]::Start($psi)
+  $errTask = $proc.StandardError.ReadToEndAsync()
+  $bytes = (New-Object Text.UTF8Encoding $false).GetBytes($request + "`n")
+  $proc.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+  $proc.StandardInput.Close()
+  $out = $proc.StandardOutput.ReadToEnd() -split "`r?`n" | Where-Object { $_ }
+  $proc.WaitForExit()
+  $null = $errTask.Result
   $watch.Stop()
   $out | ForEach-Object { Write-Host "   $_" }
   $events = $out | Where-Object { $_ -like '{*' } | ForEach-Object { $_ | ConvertFrom-Json }
