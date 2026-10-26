@@ -12,16 +12,14 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Versione di manutenzione**: nessuna funzione nuova, solo errori trovati rileggendo tutto il codice di Windows, Windows on ARM e Linux.
+**Modalità Semplice**: un'interfaccia essenziale, da attivare quando vuoi.
 
-- «Ottimizza per il web» non manda più in crash Cedro con un MP4 rovinato.
-- Un download interrotto (modelli della trascrizione, motori, yt-dlp, ffmpeg, deno) non lascia più sul disco file a metà da centinaia di MB.
-- Se chiudi Cedro mentre trascrive, il motore si ferma subito invece di tenere il processore al massimo fino alla fine del file.
-- Su Linux i file provvisori della trascrizione e dell'aggiornamento stanno in una cartella che solo tu puoi leggere.
-- Un documento Word costruito apposta per gonfiarsi a GB non riempie più la memoria.
-- «Duplica» su un file senza estensione crea «nome-copia» (prima «nome-copia.copia»).
-- Le impostazioni non si perdono se il PC si spegne mentre le salva; il registro attività non cresce più all'infinito.
-- Su Windows le conversioni video una dopo l'altra sono più affidabili.
+- Nel pannello Conversioni restano solo trascinare i file, scegliere il formato e premere «Converti». Video dal web è il link più «Video» o «Solo audio»; Trascrivi usa le impostazioni automatiche.
+- Le altre opzioni non spariscono: sono a un clic, in «Altre opzioni».
+- Si cambia in Impostazioni → Generale → «Modalità Semplice».
+- Alla fine dell'installazione (su Linux al primo avvio) una finestra con due anteprime animate ti fa scegliere tra Semplice e Completa. Negli aggiornamenti non ti viene richiesto.
+
+Dalla 0.18.5: versione di manutenzione con correzioni di robustezza e sicurezza trovate rileggendo il codice.
 
 Dalla 0.18.4: guida iniziale rifatta in sei passi, Linux che si aggiorna da solo, riga rossa degli errori che sparisce da sola.
 
