@@ -63,7 +63,9 @@ pub const GROUPS: &[Group] = &[
             linux("FDK AAC", "Fraunhofer IIS", "Licenza FDK AAC", "Audio AAC su Linux.", "github.com/mstorsjo/fdk-aac"),
             soon("whisper.cpp", "Georgi Gerganov e ggml", "MIT", "Trascrizione dell'audio.", "github.com/ggml-org/whisper.cpp"),
             soon("Modelli Whisper", "OpenAI", "MIT", "I modelli della trascrizione.", "github.com/openai/whisper"),
-            soon("yt-dlp", "yt-dlp contributors", "Unlicense", "Scarica i video da YouTube.", "github.com/yt-dlp/yt-dlp"),
+            c("yt-dlp", "yt-dlp contributors", "Unlicense", "Scarica video e audio da YouTube (si scarica al primo uso).", "github.com/yt-dlp/yt-dlp"),
+            c("FFmpeg", "Gli sviluppatori di FFmpeg", "LGPL-2.1", "Unisce video e audio dei download (si scarica al primo uso).", "ffmpeg.org"),
+            c("Deno", "Deno Land Inc. e collaboratori", "MIT", "Serve a yt-dlp per i video ad alta qualità (si scarica al primo uso).", "github.com/denoland/deno"),
         ],
     },
     Group {
@@ -87,6 +89,7 @@ pub fn license_text(license: &str) -> &'static str {
         "BSD-2-Clause" => BSD2,
         "MPL-2.0" => MPL,
         "LGPL-3.0" => LGPL,
+        "LGPL-2.1" => LGPL21,
         "SIL OFL 1.1" => OFL,
         "Unlicense" => UNLICENSE,
         "CC BY-SA 4.0" => CC_BY_SA,
@@ -129,6 +132,7 @@ const APACHE: &str = "Licensed under the Apache License, Version 2.0 (the \"Lice
 const BSD2: &str = "Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer. 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.";
 const MPL: &str = "This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.";
 const LGPL: &str = "This library is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free Software Foundation; either version 3 of the License, or (at your option) any later version. This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY.";
+const LGPL21: &str = "This library is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free Software Foundation; either version 2.1 of the License, or (at your option) any later version. This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details. Cedro uses the \"lgpl\" builds of BtbN (github.com/BtbN/FFmpeg-Builds) and runs FFmpeg as a separate program; the source code is available at ffmpeg.org.";
 const OFL: &str = "This Font Software is licensed under the SIL Open Font License, Version 1.1. This license is available with a FAQ at https://openfontlicense.org. The fonts may be used, studied, modified and redistributed freely as long as they are not sold by themselves.";
 const UNLICENSE: &str = "This is free and unencumbered software released into the public domain. Anyone is free to copy, modify, publish, use, compile, sell, or distribute this software, either in source code form or as a compiled binary, for any purpose, commercial or non-commercial, and by any means.";
 const CC_BY_SA: &str = "This work is licensed under the Creative Commons Attribution-ShareAlike 4.0 International License. To view a copy of this license, visit https://creativecommons.org/licenses/by-sa/4.0/. You may share and adapt the material for any purpose, even commercially, giving appropriate credit and distributing your contributions under the same license.";
