@@ -1094,6 +1094,42 @@ mod tests {
         assert_eq!(first_error("ERROR: Unsupported URL: https://x.it/"), "Questo sito non è supportato (o il link non porta a un video)");
     }
 
+    /// Prova vera, in rete, su siti leciti: `cargo test --release real_sites -- --ignored --nocapture`.
+    /// Scarica yt-dlp e FFmpeg come al primo uso; legge Vimeo e Internet Archive, scarica un video
+    /// da almeno uno dei due e verifica il messaggio di un sito non supportato.
+    #[test]
+    #[ignore]
+    fn real_sites() {
+        let cancel = AtomicBool::new(false);
+        let mut log = |e: Event| {
+            if let Event::Log(t) = e {
+                println!("  {t}");
+            }
+        };
+        let ytdlp = ensure_ytdlp(&mut log, &cancel).unwrap();
+        let mut ok = 0;
+        for url in ["https://vimeo.com/76979871", "https://archive.org/details/Popeye_forPresident"] {
+            match probe(&ytdlp, url, false, &cancel) {
+                Ok(info) => {
+                    println!("OK {url}: {} · {} · {}", info.title, info.author, clock(info.seconds));
+                    let dest = std::env::temp_dir().join(format!("cedro-web-{}-{ok}", std::process::id()));
+                    let mut r = Request::new(vec![url.to_string()], false, dest.clone());
+                    r.quality = 480;
+                    match run(&r, &mut |e| if let Event::File(f) = e { println!("  file {}", f.display()) }, &cancel) {
+                        Ok(files) if !files.is_empty() && files.iter().all(|f| f.metadata().map(|m| m.len() > 10_000).unwrap_or(false)) => ok += 1,
+                        other => println!("  download {url}: {other:?}"),
+                    }
+                    let _ = std::fs::remove_dir_all(dest);
+                }
+                Err(e) => println!("ERRORE {url}: {e}"),
+            }
+        }
+        assert!(ok > 0, "nessun sito scaricato");
+        let err = probe(&ytdlp, "https://www.rust-lang.org/", false, &cancel).unwrap_err();
+        println!("non supportato: {err}");
+        assert!(err.starts_with("Questo sito non è supportato"), "{err}");
+    }
+
     #[test]
     fn errors_in_italian() {
         assert_eq!(first_error("WARNING: x\nERROR: [youtube] abc: Private video. Sign in"), "Il video è privato");
