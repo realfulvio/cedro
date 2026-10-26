@@ -253,6 +253,11 @@ pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
     }
 }
 
+/// Il nome di uscita è da saltare (esiste già e si è scelto di non toccarlo): le conversioni lunghe non partono neppure.
+fn skipping(out: &Path) -> bool {
+    NAMING.with(|n| n.borrow().skipped.iter().any(|p| p == out))
+}
+
 /// Scrive il PDF di testo (documenti e testi): font incorporato, segnalibri, PDF/A e password come scelto.
 fn write_text_pdf(path: &Path, dir: &Path, blocks: &[crate::pdfdoc::DocBlock], opts: &Options) -> CedroResult<Output> {
     let password = opts.password.as_deref().filter(|p| !p.is_empty());
@@ -637,6 +642,9 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
     if action == "wav" || action == "mp3" {
         let out = unique_output(&dir, &stem(path), action);
+        if skipping(&out) {
+            return Err(err("il file esiste già: saltato"));
+        }
         let result = if action == "wav" {
             crate::audio::to_wav(path, &out, opts)
         } else {
@@ -651,6 +659,9 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
     if action == "mp4" {
         let out = unique_output(&dir, &stem(path), "mp4");
+        if skipping(&out) {
+            return Err(err("il file esiste già: saltato"));
+        }
         let shape = crate::sink::VideoShape {
             height: opts.video_height,
             fps: opts.fps,
@@ -788,7 +799,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
     if kind == Kind::Pdf && action == "docx" {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-        let every = crate::pdflayout::read_pages(&bytes, opts.tables, opts.columns).map_err(err)?;
+        let every = crate::pdflayout::read_pages(&bytes, opts.tables, opts.columns, |i| opts.pages.as_ref().map_or(true, |s| s.contains(i))).map_err(err)?;
         let selected = pages_of(&opts.pages, every.len());
         if selected.is_empty() {
             return Err(err("nessuna pagina in questo intervallo"));
@@ -1392,6 +1403,14 @@ Luca,Bondeno
         assert_eq!(asked.load(Ordering::SeqCst), 3, "una domanda per conversione");
         assert_eq!(jpgs(), 2);
 
+        // L'audio da saltare non si converte neppure, e non lascia file.
+        let audio = dir.join("nota.flac");
+        fs::write(&audio, include_bytes!("../tests/fixtures/nota.flac")).unwrap();
+        perform_with(&audio, "wav", 80, None, &Options::default()).unwrap();
+        let e = perform_with(&audio, "wav", 80, None, &skip).err().unwrap();
+        assert!(e.0.contains("saltato"), "{}", e.0);
+        assert!(!dir.join("nota-2.wav").exists());
+
         // Un PDF di tre pagine in immagini: la domanda è una sola, non una per pagina.
         let text: Vec<String> = (1..=150).map(|n| format!("riga {n}")).collect();
         let pdf = dir.join("lungo.pdf");
@@ -1561,6 +1580,19 @@ Luca,Bondeno
         assert!(!flat.contains("w:type=\"column\""));
         assert!(at(&flat, "Titolo a tutta") < at(&flat, "Sinistra 1 "));
         assert!(at(&flat, "Sinistra 12") < at(&flat, "Destra 1 "), "in colonna singola ma in ordine di lettura");
+
+        // Con un piede a tutta larghezza sotto le colonne: colonne vere, poi di nuovo una colonna sulla stessa pagina.
+        let footed = dir.join("piede.pdf");
+        let footer = "BT /F1 10 Tf 50 420 Td (Piede a tutta pagina, dopo le colonne: chiude l'articolo del giornale comunale) Tj ET\n";
+        fs::write(&footed, one_page_pdf(&format!("{content}{footer}"))).unwrap();
+        let out = perform_with(&footed, "docx", 80, None, &Options::default()).unwrap();
+        let xml = crate::doctext::zip_entry_for_test(&out.path, "word/document.xml");
+        assert_eq!(xml.matches("<w:cols w:num=\"2\"").count(), 1, "{xml}");
+        assert_eq!(xml.matches("<w:sectPr>").count(), 3, "titolo, colonne, piede");
+        assert!(at(&xml, "Sinistra 12") < at(&xml, "Destra 1 "));
+        assert!(at(&xml, "Destra 12") < at(&xml, "Piede a tutta"));
+        assert!(at(&xml, "<w:cols ") < at(&xml, "Piede a tutta"), "il piede sta dopo la fine delle colonne");
+        assert!(!xml.contains("destra qui Sinistra") && !xml.contains("sinistra qui Destra"), "le righe di colonne diverse non si uniscono");
 
         // Un testo a una colonna sola non cambia.
         let single: String = (1..=14).map(|n| format!("BT /F1 10 Tf 50 {} Td (Riga {n} di un testo lungo a tutta pagina, che occupa la larghezza intera della pagina) Tj ET\n", 700 - n * 16)).collect();

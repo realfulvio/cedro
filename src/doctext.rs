@@ -399,6 +399,8 @@ fn rtf_text(bytes: &[u8]) -> String {
     let bytes = &rtf_without_hidden_groups(bytes)[..];
     let mut out = String::new();
     let mut i = 0;
+    // Quanti caratteri di riserva seguono \uN (\ucN, di norma 1).
+    let mut fallback = 1;
     while i < bytes.len() {
         match bytes[i] {
             b'{' | b'}' | b'\r' | b'\n' => i += 1,
@@ -446,8 +448,14 @@ fn rtf_text(bytes: &[u8]) -> String {
                         }
                         if i < bytes.len() && bytes[i] == b' ' {
                             i += 1;
-                        } else if i < bytes.len() && bytes[i] != b'\\' && bytes[i] != b'{' && bytes[i] != b'}' {
-                            i += 1;
+                        }
+                        // Dopo \uN vengono i caratteri di riserva per chi non legge l'Unicode (di solito uno: `?` o `\'80`).
+                        for _ in 0..fallback {
+                            match bytes.get(i) {
+                                Some(b'\\') if bytes.get(i + 1) == Some(&b'\'') => i += 4,
+                                Some(b'\\' | b'{' | b'}') | None => break,
+                                Some(_) => i += 1,
+                            }
                         }
                     }
                     _ => {
@@ -456,15 +464,18 @@ fn rtf_text(bytes: &[u8]) -> String {
                             i += 1;
                         }
                         let word = std::str::from_utf8(&bytes[start..i]).unwrap_or("");
+                        let param = i;
                         while i < bytes.len() && (bytes[i] == b'-' || bytes[i].is_ascii_digit()) {
                             i += 1;
                         }
+                        let param = std::str::from_utf8(&bytes[param..i]).ok().and_then(|p| p.parse::<usize>().ok());
                         if i < bytes.len() && bytes[i] == b' ' {
                             i += 1;
                         }
                         match word {
                             "par" | "line" | "page" => out.push('\n'),
                             "tab" => out.push('\t'),
+                            "uc" => fallback = param.unwrap_or(1),
                             _ => {}
                         }
                     }
@@ -733,6 +744,14 @@ mod block_tests {
         let rtf = br"{\rtf1\ansi{\stylesheet{\s1 heading 1;}{\s2 heading 2;}{\s3 Normal;}}\pard\s1 Capitolo uno\par\pard\s3 Testo normale\par\pard\s2 Paragrafo\par\pard\outlinelevel0 Altro titolo\par}";
         let blocks = rtf_blocks(rtf);
         assert_eq!(levels(&blocks), vec![(1, "Capitolo uno"), (2, "Paragrafo"), (1, "Altro titolo")], "{blocks:?}");
+    }
+
+    #[test]
+    fn rtf_unicode_skips_the_fallback_characters() {
+        // Come lo scrivono Word e LibreOffice: \uN seguito dal carattere di riserva in cp1252.
+        assert_eq!(rtf_text(br"{\rtf1\ansi Prezzo 10\u8364\'80, citt\u224\'e0\par}").trim(), "Prezzo 10€, città");
+        assert_eq!(rtf_text(br"{\rtf1\ansi \u8364 ? e \u8364?.}").trim(), "€ e €.");
+        assert_eq!(rtf_text(br"{\rtf1\ansi\uc2 \u8364\'80\'80 fine\uc0 \u224 x}").trim(), "€ fineàx");
     }
 
     #[test]

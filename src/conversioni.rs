@@ -292,9 +292,13 @@ impl Values {
     }
 }
 
-/// Se i valori scritti a mano sono usabili: dice cosa non va (per esempio le pagine).
-pub fn validate(values: &Values) -> Result<(), String> {
-    PageSel::parse(values.text_of(Opt::PageRange)).map(|_| ())
+/// Se i valori scritti a mano sono usabili per la voce scelta: dice cosa non va (per esempio le pagine).
+/// Un campo di un'altra voce non conta: lì non si vede e non si può correggere.
+pub fn validate(values: &Values, kind: Kind, action: &str) -> Result<(), String> {
+    if option_defs(kind, action).iter().any(|d| d.opt == Opt::PageRange) {
+        PageSel::parse(values.text_of(Opt::PageRange))?;
+    }
+    Ok(())
 }
 
 /// Le opzioni del motore per i valori scelti; le opzioni non scelte restano com'erano.
@@ -438,9 +442,10 @@ mod tests {
         assert_eq!(options_from(&values).exists, Exists::Ask);
         let mut values = Values::default();
         values.set_text(&PDF_PAGES, "3-1");
-        assert!(validate(&values).is_err());
+        assert!(validate(&values, Kind::Pdf, "docx").is_err());
+        assert!(validate(&values, Kind::Image, "jpeg").is_ok(), "le pagine non contano per le immagini");
         values.set_text(&PDF_PAGES, "1-3,5");
-        assert!(validate(&values).is_ok());
+        assert!(validate(&values, Kind::Pdf, "docx").is_ok());
     }
 
     #[test]
