@@ -14,6 +14,7 @@ mod pdfdoc;
 mod pdflayout;
 pub mod settings;
 pub mod tema;
+pub mod ui;
 pub mod sysinfo;
 mod sink;
 mod textconv;

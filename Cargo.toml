@@ -30,6 +30,7 @@ sha2 = "0.10"
 symphonia = { version = "0.5", default-features = false, features = ["mp3", "wav", "flac", "vorbis", "pcm", "aac", "isomp4", "ogg", "mkv"] }
 ureq = "2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 fdk-aac = "0.8"
@@ -87,7 +88,3 @@ winresource = "0.1"
 hayro = { path = "vendor/hayro" }
 # rten-simd con l'interruttore per spegnere AVX-512 (Impostazioni)
 rten-simd = { path = "vendor/rten-simd" }
-
-[features]
-# Edizione per il Comune di Bondeno (grafica del Comune); spenta = edizione standard.
-bondeno = []

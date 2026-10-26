@@ -1,0 +1,740 @@
+//! Una finestra della nuova interfaccia, senza sistema operativo: tiene lo stato, disegna il
+//! fotogramma e risponde a mouse, tastiera e file trascinati. Windows e Linux la ospitano e le
+//! danno i servizi che solo loro hanno (scegliere file, aprire cartelle, appunti, la finestra).
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Instant;
+
+use super::core::{inside, Act, Field, Fold, Frame, HitKind, LinkFlag, LinkMenu, Menu, Scroll, UiState, R};
+use super::gfx::{Fonts, GlyphCache, Painter};
+use super::model::{Activity, App, Notice, AUDIO_FORMATS, SUBTITLES, VIDEO_FORMATS};
+use super::theme::ThemeId;
+use super::views;
+use crate::conversioni::{self, Control, CATEGORIES, EXISTS_CHOICES};
+use crate::trascrizione;
+
+/// Le cose che solo il sistema sa fare.
+pub trait Platform {
+    fn pick_files(&mut self) -> Vec<PathBuf>;
+    fn pick_folder(&mut self, title: &str) -> Option<PathBuf>;
+    /// Apre un file o una cartella con il programma di sistema.
+    fn open_path(&mut self, path: &Path);
+    fn copy_text(&mut self, text: &str);
+    fn paste_text(&mut self) -> Option<String>;
+    fn open_guide(&mut self);
+    fn open_settings(&mut self);
+    fn minimize(&mut self);
+    fn toggle_maximize(&mut self);
+    fn close(&mut self);
+    /// Dalla finestrella compatta al pannello completo.
+    fn open_full(&mut self);
+}
+
+/// Che finestra è.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Surface {
+    /// La finestra principale del tema.
+    Main,
+    /// La finestrella che si apre dall'icona vicino all'orologio (Cedro compatto).
+    Compact,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Cursor {
+    Arrow,
+    Hand,
+    Text,
+}
+
+/// I tasti che contano.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Key {
+    Tab,
+    ShiftTab,
+    Enter,
+    Space,
+    Escape,
+    Backspace,
+    Delete,
+    Left,
+    Right,
+    Home,
+    End,
+    Up,
+    Down,
+    Paste,
+    Copy,
+    SelectAll,
+}
+
+pub struct Screen {
+    pub app: App,
+    pub ui: UiState,
+    pub theme: ThemeId,
+    pub simple: bool,
+    pub surface: Surface,
+    /// Tema e modalità scelti mentre un lavoro era in corso: si applicano alla fine.
+    pub pending: Option<(ThemeId, bool)>,
+    hits: Vec<super::core::Hit>,
+    captions: Vec<R>,
+    scrolls: Vec<(R, Scroll, f32)>,
+    cache: GlyphCache,
+    started: Instant,
+    animating: bool,
+    focusables: Vec<Act>,
+}
+
+impl Screen {
+    pub fn new(surface: Surface, wake: Arc<dyn Fn() + Send + Sync>) -> Screen {
+        let s = crate::read_settings();
+        let theme = ThemeId::from_key(&s.ui_theme);
+        let mut app = App::new(wake);
+        if s.simple {
+            app.action = app.default_action(true);
+        }
+        Screen {
+            app,
+            ui: UiState::default(),
+            theme,
+            simple: s.simple,
+            surface,
+            pending: None,
+            hits: Vec::new(),
+            captions: Vec::new(),
+            scrolls: Vec::new(),
+            cache: GlyphCache::new(),
+            started: Instant::now(),
+            animating: false,
+            focusables: Vec::new(),
+        }
+    }
+
+    /// La misura con cui il tema si apre (unità logiche).
+    pub fn preferred_size(&self) -> (f32, f32) {
+        views::preferred_size(self.theme, self.simple, self.surface)
+    }
+
+    pub fn min_size(&self) -> (f32, f32) {
+        views::min_size(self.theme, self.surface)
+    }
+
+    /// Disegna il fotogramma in un'immagine di `w`×`h` pixel con `scale` pixel per unità.
+    pub fn render(&mut self, w: u32, h: u32, scale: f32) -> Painter<'_> {
+        let fonts = Fonts::shared();
+        let painter = Painter::new(w, h, scale, fonts, &mut self.cache);
+        let ms = self.started.elapsed().as_millis() as u64;
+        let mut f = Frame {
+            p: painter,
+            hits: Vec::new(),
+            captions: Vec::new(),
+            scrolls: Vec::new(),
+            ui: &self.ui,
+            pal: self.theme.palette(),
+            theme: self.theme,
+            simple: self.simple,
+            w: w as f32 / scale,
+            h: h as f32 / scale,
+            ms,
+            animating: false,
+        };
+        views::draw(&mut f, &self.app, self.surface);
+        views::overlays(&mut f, &self.app);
+        f.menu_overlay();
+        self.animating = f.animating || self.app.busy();
+        self.hits = std::mem::take(&mut f.hits);
+        self.captions = std::mem::take(&mut f.captions);
+        self.scrolls = std::mem::take(&mut f.scrolls);
+        self.focusables = self.hits.iter().filter(|h| !matches!(h.act, Act::Nothing | Act::MenuPick(_) | Act::Minimize | Act::Maximize | Act::Close)).map(|h| h.act.clone()).collect();
+        self.focusables.dedup();
+        f.p
+    }
+
+    /// Vero se la finestra va ridisegnata spesso (rotelline, cursore che lampeggia).
+    pub fn animating(&self) -> bool {
+        self.animating
+    }
+
+    fn hit_at(&self, x: f32, y: f32) -> Option<&super::core::Hit> {
+        self.hits.iter().rev().find(|h| inside(h.r, x, y))
+    }
+
+    /// Vero se lì si trascina la finestra (la barra del titolo disegnata, fuori dai pulsanti).
+    pub fn caption_at(&self, x: f32, y: f32) -> bool {
+        self.hit_at(x, y).is_none() && self.captions.iter().any(|r| inside(*r, x, y))
+    }
+
+    /// Il pulsante di sistema sotto il punto (per gli effetti di Windows 11 sul pulsante ingrandisci).
+    pub fn window_button_at(&self, x: f32, y: f32) -> Option<Act> {
+        match self.hit_at(x, y).map(|h| &h.act) {
+            Some(a @ (Act::Minimize | Act::Maximize | Act::Close)) => Some(a.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn cursor_at(&self, x: f32, y: f32) -> Cursor {
+        match self.hit_at(x, y) {
+            Some(h) if h.kind == HitKind::Text => Cursor::Text,
+            Some(h) if h.act == Act::Nothing => Cursor::Arrow,
+            Some(_) => Cursor::Hand,
+            None => Cursor::Arrow,
+        }
+    }
+
+    /// Il mouse si muove: vero se cambia qualcosa da ridisegnare.
+    pub fn pointer_move(&mut self, x: f32, y: f32) -> bool {
+        if let Some((act, r)) = self.ui.drag.clone() {
+            self.slide(&act, r, x);
+            return true;
+        }
+        let hover = self.hit_at(x, y).map(|h| h.act.clone()).filter(|a| *a != Act::Nothing);
+        if hover != self.ui.hover {
+            self.ui.hover = hover;
+            return true;
+        }
+        false
+    }
+
+    pub fn pointer_leave(&mut self) -> bool {
+        let changed = self.ui.hover.is_some();
+        self.ui.hover = None;
+        changed
+    }
+
+    pub fn pointer_down(&mut self, x: f32, y: f32) {
+        let hit = self.hit_at(x, y).map(|h| (h.act.clone(), h.kind, h.r));
+        self.ui.pressed = hit.as_ref().map(|h| h.0.clone());
+        if let Some((act, HitKind::Slider, r)) = hit {
+            self.ui.drag = Some((act.clone(), r));
+            self.slide(&act, r, x);
+        }
+    }
+
+    pub fn pointer_up(&mut self, x: f32, y: f32, plat: &mut dyn Platform) {
+        if self.ui.drag.take().is_some() {
+            self.ui.pressed = None;
+            return;
+        }
+        let pressed = self.ui.pressed.take();
+        let hit = self.hit_at(x, y).map(|h| (h.act.clone(), h.kind));
+        // Un clic fuori dal menu lo chiude e basta.
+        if self.ui.menu.is_some() {
+            match &hit {
+                Some((Act::MenuPick(i), _)) if pressed == Some(Act::MenuPick(*i)) => {
+                    let act = self.ui.menu.take().and_then(|m| m.items.get(*i).map(|it| it.1.clone()));
+                    if let Some(a) = act {
+                        self.act(a, plat);
+                    }
+                }
+                Some((Act::Nothing, _)) => {}
+                _ => self.ui.menu = None,
+            }
+            return;
+        }
+        match hit {
+            Some((act, kind)) if pressed.as_ref() == Some(&act) => {
+                if kind != HitKind::Text {
+                    self.ui.edit = None;
+                }
+                self.act(act, plat);
+            }
+            None => self.ui.edit = None,
+            _ => {}
+        }
+    }
+
+    pub fn wheel(&mut self, x: f32, y: f32, dy: f32) -> bool {
+        if self.ui.menu.is_some() {
+            return false;
+        }
+        for (r, which, max) in self.scrolls.iter().rev() {
+            if inside(*r, x, y) && *max > 0.0 {
+                let v = (self.ui.scroll(*which) + dy).clamp(0.0, *max);
+                self.ui.scroll.insert(*which, v);
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn drag_over(&mut self, on: bool) -> bool {
+        let changed = self.ui.dropping != on;
+        self.ui.dropping = on;
+        changed
+    }
+
+    pub fn drop_files(&mut self, paths: Vec<PathBuf>) {
+        self.ui.dropping = false;
+        self.add_files(paths);
+    }
+
+    fn add_files(&mut self, paths: Vec<PathBuf>) {
+        let simple = self.simple;
+        self.app.add_files(paths, simple);
+        if self.theme == ThemeId::PercorsoGuidato && !self.app.visible().is_empty() && self.ui.step == 0 {
+            self.ui.step = 1;
+        }
+    }
+
+    /// Applica gli eventi dei lavori; vero se c'è da ridisegnare.
+    pub fn pump(&mut self) -> bool {
+        let was_busy = self.app.busy();
+        let changed = self.app.pump();
+        if was_busy && !self.app.busy() {
+            if let Some((theme, simple)) = self.pending.take() {
+                self.set_appearance(theme, simple);
+            }
+        }
+        changed
+    }
+
+    /// Tema e modalità nuovi (dalle Impostazioni). Durante un lavoro si aspetta che finisca.
+    pub fn request_appearance(&mut self, theme: ThemeId, simple: bool) {
+        if self.app.busy() {
+            self.pending = Some((theme, simple));
+        } else {
+            self.set_appearance(theme, simple);
+        }
+    }
+
+    fn set_appearance(&mut self, theme: ThemeId, simple: bool) {
+        let was_simple = self.simple;
+        self.theme = theme;
+        self.simple = simple;
+        self.ui.menu = None;
+        // In Semplificata la scelta deve stare tra quelle proposte; le opzioni scelte restano.
+        if simple && !was_simple && !conversioni::simple_formats(self.app.kind()).iter().any(|f| f.id == self.app.action) {
+            let keep = conversioni::formats(self.app.kind()).iter().chain(conversioni::tools(self.app.kind())).any(|s| s.id == self.app.action);
+            if !keep {
+                self.app.action = self.app.default_action(true);
+            }
+        }
+    }
+
+    fn slide(&mut self, act: &Act, r: R, x: f32) {
+        let frac = ((x - r.0 - 10.0) / (r.2 - 20.0)).clamp(0.0, 1.0);
+        match act {
+            Act::Quality => self.app.quality = (40.0 + frac * 55.0).round() as u8,
+            Act::OptSlider(opt) => {
+                if let Some(def) = self.app.option_defs().into_iter().find(|d| d.opt == *opt) {
+                    if let Control::Range { min, max, .. } = def.control {
+                        let v = min as f32 + frac * (max - min) as f32;
+                        self.app.values.set(def, v.round() as u32);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn open_menu(&mut self, items: Vec<(String, Act)>, selected: Option<usize>, anchor_act: &Act) {
+        let anchor = self.hits.iter().rev().find(|h| &h.act == anchor_act).map(|h| h.r).unwrap_or((0.0, 0.0, 200.0, 40.0));
+        self.ui.menu = Some(Menu { anchor, items, selected });
+    }
+
+    /// Le voci del menu «Formato»: i formati, poi gli strumenti della categoria.
+    pub fn action_items(&self) -> Vec<(String, Act)> {
+        let kind = self.app.kind();
+        let mut items: Vec<(String, Act)> = Vec::new();
+        if self.simple {
+            for f in conversioni::simple_formats(kind) {
+                items.push((format!("{} · {}", f.title, f.note), Act::Action(f.id)));
+            }
+        } else {
+            for s in conversioni::formats(kind) {
+                items.push((s.label.to_string(), Act::Action(s.id)));
+            }
+            for s in conversioni::tools(kind) {
+                items.push((format!("Strumento · {}", s.label), Act::Action(s.id)));
+            }
+        }
+        items
+    }
+
+    /// Esegue l'azione di un clic.
+    pub fn act(&mut self, act: Act, plat: &mut dyn Platform) {
+        let simple = self.simple;
+        let app = &mut self.app;
+        match act {
+            Act::Nothing | Act::MenuPick(_) => {}
+            Act::Activity(a) => {
+                app.activity = a;
+                if a == Activity::Transcribe || a == Activity::Convert {
+                    app.selected = app.visible().first().copied();
+                }
+            }
+            Act::ActivityMenu => {
+                let items = Activity::ALL.iter().map(|a| (a.name().to_string(), Act::Activity(*a))).collect();
+                let sel = Activity::ALL.iter().position(|a| *a == app.activity);
+                self.open_menu(items, sel, &Act::ActivityMenu);
+            }
+            Act::Category(i) => {
+                app.activity = Activity::Convert;
+                app.set_category(i, simple);
+            }
+            Act::Action(id) => app.set_action(id),
+            Act::FormatMenu => {
+                let items = self.action_items();
+                let sel = items.iter().position(|(_, a)| matches!(a, Act::Action(id) if *id == self.app.action));
+                self.open_menu(items, sel, &Act::FormatMenu);
+            }
+            Act::AddFiles => {
+                let files = plat.pick_files();
+                self.add_files(files);
+            }
+            Act::AddFolder => {
+                if let Some(dir) = plat.pick_folder("Cartella con i file da convertire") {
+                    self.add_files(vec![dir]);
+                }
+            }
+            Act::AddMenu => {
+                let items = vec![("Aggiungi file…".to_string(), Act::AddFiles), ("Aggiungi una cartella…".to_string(), Act::AddFolder)];
+                self.open_menu(items, None, &Act::AddMenu);
+            }
+            Act::Remove(i) => app.remove(i),
+            Act::RemoveChecked => app.remove_checked(),
+            Act::Check(i) => app.toggle_checked(i),
+            Act::CheckAll => app.toggle_all(),
+            Act::Select(i) => {
+                if app.selected != Some(i) {
+                    app.selected = Some(i);
+                    app.preview_page = 0;
+                }
+            }
+            Act::OptSwitch(opt) => {
+                if let Some(def) = app.option_defs().into_iter().find(|d| d.opt == opt) {
+                    let v = app.values.get(def);
+                    app.values.set(def, if v == 0 { 1 } else { 0 });
+                }
+            }
+            Act::OptMenu(opt) => {
+                if let Some(def) = app.option_defs().into_iter().find(|d| d.opt == opt) {
+                    if let Control::Choice(choices) = def.control {
+                        let cur = app.values.get(def);
+                        let items = choices.iter().map(|c| (c.label.to_string(), Act::OptPick(opt, c.value))).collect();
+                        let sel = choices.iter().position(|c| c.value == cur);
+                        self.open_menu(items, sel, &Act::OptMenu(opt));
+                    }
+                }
+            }
+            Act::OptPick(opt, v) => {
+                if let Some(def) = app.option_defs().into_iter().find(|d| d.opt == opt) {
+                    app.values.set(def, v);
+                }
+            }
+            Act::OptSlider(_) | Act::Quality => {}
+            Act::Edit(field) => {
+                self.ui.edit = Some(field);
+                self.ui.caret = self.field_text(field).chars().count();
+            }
+            Act::DestMenu => {
+                let mut items = vec![("Accanto all'originale".to_string(), Act::DestSame), ("Scegli una cartella…".to_string(), Act::DestPick)];
+                if let Some(d) = &app.dest {
+                    items.insert(1, (d.display().to_string(), Act::Nothing));
+                }
+                let sel = Some(if app.dest.is_some() { 1 } else { 0 });
+                self.open_menu(items, sel, &Act::DestMenu);
+            }
+            Act::DestSame => app.dest = None,
+            Act::DestPick => {
+                if let Some(dir) = plat.pick_folder("Cartella di destinazione") {
+                    app.dest = Some(dir);
+                }
+            }
+            Act::ExistsMenu => {
+                let items = EXISTS_CHOICES.iter().enumerate().map(|(i, (l, _))| (l.to_string(), Act::ExistsPick(i))).collect();
+                let sel = EXISTS_CHOICES.iter().position(|(_, e)| *e == app.values.exists);
+                self.open_menu(items, sel, &Act::ExistsMenu);
+            }
+            Act::ExistsPick(i) => {
+                if let Some((_, e)) = EXISTS_CHOICES.get(i) {
+                    app.values.exists = *e;
+                }
+            }
+            Act::Start => {
+                if self.ui.edit.is_some() {
+                    self.ui.edit = None;
+                }
+                app.start();
+            }
+            Act::Cancel => app.cancel(),
+            Act::Fold(fold) => {
+                if !self.ui.open.remove(&fold) {
+                    self.ui.open.insert(fold);
+                }
+            }
+            Act::SetSimple(on) => {
+                let theme = self.theme;
+                self.set_appearance(theme, on);
+                let mut s = crate::read_settings();
+                s.simple = on;
+                let _ = crate::write_settings(&s);
+            }
+            Act::ResetRecommended => app.reset_recommended(),
+            Act::OpenGuide => plat.open_guide(),
+            Act::OpenSettings => plat.open_settings(),
+            Act::OpenPath(p) => plat.open_path(&p),
+            Act::Minimize => plat.minimize(),
+            Act::Maximize => plat.toggle_maximize(),
+            Act::Close => plat.close(),
+            Act::Step(n) => self.ui.step = n.min(2),
+            Act::Next => self.ui.step = (self.ui.step + 1).min(2),
+            Act::Back => self.ui.step = self.ui.step.saturating_sub(1),
+            Act::LinkAdd(web) => app.add_typed_links(web),
+            Act::LinkRemove(web, i) => {
+                if !app.busy() {
+                    let l = app.links_mut(web);
+                    if i < l.items.len() {
+                        l.items.remove(i);
+                    }
+                }
+            }
+            Act::LinkAudio(web, audio) => app.links_mut(web).set_audio(audio),
+            Act::LinkMenu(web, which) => {
+                let l = app.links(web);
+                let (items, sel): (Vec<(String, Act)>, usize) = match which {
+                    LinkMenu::Quality => (l.qualities().iter().enumerate().map(|(i, q)| (q.0.to_string(), Act::LinkPick(web, which, i))).collect(), l.quality),
+                    LinkMenu::Format => (l.formats().iter().enumerate().map(|(i, f)| (f.to_uppercase(), Act::LinkPick(web, which, i))).collect(), l.format),
+                    LinkMenu::Subtitles => (SUBTITLES.iter().enumerate().map(|(i, s)| (s.0.to_string(), Act::LinkPick(web, which, i))).collect(), l.subtitles),
+                };
+                self.open_menu(items, Some(sel), &Act::LinkMenu(web, which));
+            }
+            Act::LinkPick(web, which, i) => {
+                let l = app.links_mut(web);
+                match which {
+                    LinkMenu::Quality => l.quality = i.min(l.qualities().len() - 1),
+                    LinkMenu::Format => l.format = i.min(if l.audio { AUDIO_FORMATS.len() } else { VIDEO_FORMATS.len() } - 1),
+                    LinkMenu::Subtitles => l.subtitles = i.min(SUBTITLES.len() - 1),
+                }
+            }
+            Act::LinkFlag(web, flag) => {
+                let l = app.links_mut(web);
+                let slot = match flag {
+                    LinkFlag::Thumbnail => &mut l.thumbnail,
+                    LinkFlag::Chapters => &mut l.chapters,
+                    LinkFlag::Split => &mut l.split_chapters,
+                    LinkFlag::Sponsors => &mut l.skip_sponsors,
+                    LinkFlag::Normalize => &mut l.normalize,
+                    LinkFlag::Playlist => &mut l.playlist,
+                    LinkFlag::SkipExisting => &mut l.skip_existing,
+                };
+                *slot = !*slot;
+            }
+            Act::LinkDest(web) => {
+                if let Some(dir) = plat.pick_folder("Dove salvare i download") {
+                    app.links_mut(web).dest = dir;
+                }
+            }
+            Act::CopyLog => {
+                let text = match app.activity {
+                    Activity::YouTube => app.youtube.log.clone(),
+                    Activity::Web => app.web.log.clone(),
+                    _ => app.transcribe.log.iter().map(|l| if l.key.is_empty() { l.text.clone() } else { format!("{} {}", l.key, l.text) }).collect::<Vec<_>>().join("\n"),
+                };
+                plat.copy_text(&text);
+            }
+            Act::TrFormat(word) => app.transcribe.format = if word { trascrizione::Format::Word } else { trascrizione::Format::Text },
+            Act::TrModelMenu => {
+                let items = trascrizione::MODELS
+                    .iter()
+                    .enumerate()
+                    .map(|(i, m)| (format!("{} · {} · {}", m.name, m.note, trascrizione::size_text(m.megabytes)), Act::TrModel(i)))
+                    .collect();
+                let sel = Some(app.transcribe.model);
+                self.open_menu(items, sel, &Act::TrModelMenu);
+            }
+            Act::TrModel(i) => app.transcribe.model = i.min(trascrizione::MODELS.len() - 1),
+            Act::PagePrev => app.preview_page = app.preview_page.saturating_sub(1),
+            Act::PageNext => {
+                let max = app.selected.and_then(|i| app.page_count(i)).unwrap_or(1);
+                app.preview_page = (app.preview_page + 1).min(max.saturating_sub(1));
+            }
+            Act::CompactTab(t) => {
+                self.ui.compact_tab = t;
+                app.activity = match t {
+                    1 => Activity::Web,
+                    2 => Activity::Transcribe,
+                    _ => Activity::Convert,
+                };
+            }
+            Act::OpenFull => plat.open_full(),
+            Act::Theme(t) => {
+                let simple = self.simple;
+                self.request_appearance(t, simple);
+            }
+            Act::Answer(choice) => app.answer(choice),
+            Act::DismissNotice => app.notice = None,
+        }
+    }
+
+    fn field_text(&self, field: Field) -> String {
+        match field {
+            Field::Opt(opt) => self.app.option_defs().into_iter().find(|d| d.opt == opt).map(|d| self.app.values.text(d).to_string()).unwrap_or_default(),
+            Field::Link(web) => self.app.links(web).typed.clone(),
+        }
+    }
+
+    fn set_field_text(&mut self, field: Field, text: String) {
+        match field {
+            Field::Opt(opt) => {
+                if let Some(def) = self.app.option_defs().into_iter().find(|d| d.opt == opt) {
+                    self.app.values.set_text(def, &text);
+                }
+            }
+            Field::Link(web) => self.app.links_mut(web).typed = text,
+        }
+    }
+
+    /// Un testo scritto (o incollato) nel campo con il cursore.
+    pub fn text_input(&mut self, s: &str) {
+        let Some(field) = self.ui.edit else { return };
+        let mut chars: Vec<char> = self.field_text(field).chars().collect();
+        let at = self.ui.caret.min(chars.len());
+        let ins: Vec<char> = s.chars().filter(|c| !c.is_control()).collect();
+        let n = ins.len();
+        chars.splice(at..at, ins);
+        self.ui.caret = at + n;
+        self.set_field_text(field, chars.into_iter().collect());
+    }
+
+    /// Un tasto. Vero se è stato usato.
+    pub fn key(&mut self, key: Key, plat: &mut dyn Platform) -> bool {
+        if let Some(field) = self.ui.edit {
+            let mut chars: Vec<char> = self.field_text(field).chars().collect();
+            let at = self.ui.caret.min(chars.len());
+            match key {
+                Key::Backspace if at > 0 => {
+                    chars.remove(at - 1);
+                    self.ui.caret = at - 1;
+                }
+                Key::Delete if at < chars.len() => {
+                    chars.remove(at);
+                }
+                Key::Left => self.ui.caret = at.saturating_sub(1),
+                Key::Right => self.ui.caret = (at + 1).min(chars.len()),
+                Key::Home => self.ui.caret = 0,
+                Key::End => self.ui.caret = chars.len(),
+                Key::Paste => {
+                    if let Some(t) = plat.paste_text() {
+                        let one_line = t.replace(['\r', '\n'], " ");
+                        self.text_input(&one_line);
+                    }
+                    return true;
+                }
+                Key::Copy => {
+                    plat.copy_text(&chars.iter().collect::<String>());
+                    return true;
+                }
+                Key::SelectAll => self.ui.caret = chars.len(),
+                Key::Enter => {
+                    self.ui.edit = None;
+                    if let Field::Link(web) = field {
+                        self.app.add_typed_links(web);
+                    }
+                    return true;
+                }
+                Key::Escape | Key::Tab | Key::ShiftTab => {
+                    self.ui.edit = None;
+                    if key == Key::Escape {
+                        return true;
+                    }
+                }
+                _ => return true,
+            }
+            if !matches!(key, Key::Tab | Key::ShiftTab) {
+                self.set_field_text(field, chars.into_iter().collect());
+                return true;
+            }
+        }
+        match key {
+            Key::Escape => {
+                if self.ui.menu.take().is_some() {
+                    return true;
+                }
+                if self.app.ask.is_some() {
+                    self.app.answer(crate::engine::ExistsChoice::KeepBoth);
+                    return true;
+                }
+                if self.app.notice.take().is_some() {
+                    return true;
+                }
+                false
+            }
+            Key::Tab | Key::ShiftTab => {
+                let n = self.focusables.len();
+                if n == 0 {
+                    return false;
+                }
+                let cur = self.ui.focus_act.as_ref().and_then(|a| self.focusables.iter().position(|b| b == a));
+                let next = match (cur, key) {
+                    (None, Key::Tab) => 0,
+                    (None, _) => n - 1,
+                    (Some(i), Key::Tab) => (i + 1) % n,
+                    (Some(i), _) => (i + n - 1) % n,
+                };
+                self.ui.focus_act = Some(self.focusables[next].clone());
+                true
+            }
+            Key::Enter | Key::Space => {
+                if let Some(a) = self.ui.focus_act.clone() {
+                    self.act(a, plat);
+                    return true;
+                }
+                false
+            }
+            Key::Up | Key::Down => {
+                if let Some(m) = self.ui.menu.as_mut() {
+                    let n = m.items.len();
+                    let cur = m.selected.unwrap_or(0);
+                    m.selected = Some(if key == Key::Down { (cur + 1).min(n.saturating_sub(1)) } else { cur.saturating_sub(1) });
+                    return true;
+                }
+                false
+            }
+            Key::Paste => {
+                // Incollare file (dagli appunti come testo con i percorsi) o link nella scheda giusta.
+                if let Some(t) = plat.paste_text() {
+                    match self.app.activity {
+                        Activity::YouTube | Activity::Web => {
+                            let web = self.app.activity == Activity::Web;
+                            self.app.links_mut(web).add(&t);
+                        }
+                        _ => {
+                            let paths: Vec<PathBuf> = t.lines().map(|l| PathBuf::from(l.trim().trim_matches('"'))).filter(|p| p.exists()).collect();
+                            if !paths.is_empty() {
+                                self.add_files(paths);
+                            }
+                        }
+                    }
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Un menu aperto da tastiera: Invio sceglie la voce evidenziata.
+    pub fn menu_enter(&mut self, plat: &mut dyn Platform) -> bool {
+        if let Some(m) = self.ui.menu.take() {
+            if let Some(a) = m.selected.and_then(|i| m.items.get(i)).map(|it| it.1.clone()) {
+                self.act(a, plat);
+            }
+            return true;
+        }
+        false
+    }
+
+    /// Un avviso da far vedere (per esempio un file che non si apre).
+    pub fn notify(&mut self, text: &str, error: bool) {
+        self.app.notice = Some(Notice { text: text.into(), error });
+    }
+
+    /// Le categorie (per gli host che vogliono sapere dove sono i file).
+    pub fn categories() -> &'static [conversioni::Category] {
+        CATEGORIES
+    }
+
+    pub fn is_open(&self, f: Fold) -> bool {
+        self.ui.is_open(f)
+    }
+}
