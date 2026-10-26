@@ -1935,8 +1935,9 @@ Luca,Bondeno
         };
         #[cfg(target_os = "linux")]
         let src = {
+            // 320×240: sotto una certa misura (circa 160×96) le schede AMD non aprono il codificatore.
             let src = dir.join("vp9.webm");
-            fs::write(&src, include_bytes!("../tests/fixtures/vp9.webm")).unwrap();
+            fs::write(&src, include_bytes!("../tests/fixtures/vp9-320.webm")).unwrap();
             src
         };
         let mp4 = dir.join("convertito.mp4");
