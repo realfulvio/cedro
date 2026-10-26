@@ -14,3 +14,6 @@ Esclusa: `2024/10/logo.png` (118x178), è un altro stemma, non di Bondeno.
 
 ## Indicazioni d'uso
 Cercate nel sito (home, privacy, note legali, ricerca «stemma»/«logo») e nella REST API dei media: nessuna pagina con termini d'uso o manuale d'identità visiva dello stemma. Non verificato il footer di tutte le pagine né «Amministrazione trasparente».
+
+## File derivati
+- `installatore-lato-{1x,2x}.bmp` e `installatore-piccola-{1x,2x}.bmp`: immagini dell'installatore dell'edizione Bondeno. Lo stemma (con scritta, senza il margine trasparente; e solo stemma) è ridimensionato e messo su fondo pieno, senza altre modifiche. Il programma usa i PNG originali (src/edizione.rs).

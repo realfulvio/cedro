@@ -82,10 +82,16 @@ jobs:
         shell: pwsh
         run: powershell -File installer\build.ps1 -Arm64
 
+      - name: Installatore ARM64, edizione Comune di Bondeno
+        shell: pwsh
+        run: powershell -File installer\build.ps1 -Arm64 -Bondeno
+
       - uses: actions/upload-artifact@v4
         with:
           name: installatore-arm64
-          path: dist/Cedro-ARM64-Setup-*.exe
+          path: |
+            dist/Cedro-ARM64-Setup-*.exe
+            dist/Cedro-Bondeno-ARM64-Setup-*.exe
 
 
   motori:
@@ -213,6 +219,10 @@ jobs:
         shell: pwsh
         run: cargo test --release
 
+      - name: Prove dell'edizione Comune di Bondeno
+        shell: pwsh
+        run: cargo test --release --lib --features bondeno -- update edizione
+
       - name: "Prova su siti veri (Video dal web: Vimeo, Internet Archive)"
         shell: pwsh
         continue-on-error: true
@@ -224,6 +234,10 @@ jobs:
           Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe -OutFile is.exe
           $p = Start-Process .\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait -PassThru
           if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")) { throw "Inno Setup non installato ($($p.ExitCode))" }
+
+      - name: Installatore x64, edizione Comune di Bondeno
+        shell: pwsh
+        run: powershell -File installer\build.ps1 -Bondeno
 
       - name: Installatore x64
         shell: pwsh
@@ -242,7 +256,7 @@ jobs:
           Start-Process (Get-Item vecchio\Cedro-Setup-*.exe).FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
           "Installata: $((Get-ItemProperty $key).DisplayVersion)"
           if ((Get-ItemProperty $key).DisplayVersion -ne '0.17.1') { throw '0.17.1 non installata' }
-          [string[]]$names = @("Cedro-ARM64-Setup-$version.exe", "Cedro-Setup-$version.exe", "cedro-$version-linux-x64.tar.gz")
+          [string[]]$names = @("Cedro-ARM64-Setup-$version.exe", "Cedro-Bondeno-ARM64-Setup-$version.exe", "Cedro-Bondeno-Setup-$version.exe", "Cedro-Setup-$version.exe", "cedro-$version-linux-x64.tar.gz", "cedro-bondeno-$version-linux-x64.tar.gz")
           [Array]::Sort($names, [StringComparer]::Ordinal)
           $picked = $names | Where-Object { $_.StartsWith('Cedro-Setup') -and $_.EndsWith('.exe') } | Select-Object -First 1
           "La 0.17 sceglie: $picked"
@@ -277,6 +291,7 @@ jobs:
           name: x64
           path: |
             dist/Cedro-Setup-*.exe
+            dist/Cedro-Bondeno-Setup-*.exe
             motori-x64/*.exe
 
   pubblica:

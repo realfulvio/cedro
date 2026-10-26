@@ -143,3 +143,31 @@ pub fn draw_logo(hdc: HDC, left: f32, baseline: f32, scale: f32, with_real: bool
         GdipDeleteGraphics(g);
     }
 }
+
+/// `PixelFormat32bppPARGB` di GDI+ (Gdipluspixelformats.h): BGRA con l'alfa premoltiplicato.
+const PIXEL_FORMAT_32BPP_PARGB: i32 = 0x000E_200B;
+
+/// Uno stemma dell'edizione (vedi `cedro::edizione`) nel riquadro `x`, `y`, `w`, `h` in pixel, ricampionato bene.
+/// Nell'edizione standard non disegna niente.
+pub fn draw_stemma(hdc: HDC, stemma: cedro::edizione::Stemma, x: f32, y: f32, w: f32, h: f32) {
+    let Some(img) = cedro::edizione::immagine(stemma) else { return };
+    startup();
+    unsafe {
+        let mut g: *mut GpGraphics = std::ptr::null_mut();
+        if GdipCreateFromHDC(hdc, &mut g) != Status(0) || g.is_null() {
+            return;
+        }
+        // GDI+ legge i pixel dove stanno: la bitmap non copia niente e si butta subito dopo.
+        let mut bitmap: *mut GpBitmap = std::ptr::null_mut();
+        let stride = (img.w * 4) as i32;
+        if GdipCreateBitmapFromScan0(img.w as i32, img.h as i32, stride, PIXEL_FORMAT_32BPP_PARGB, Some(img.bgra.as_ptr()), &mut bitmap) == Status(0)
+            && !bitmap.is_null()
+        {
+            GdipSetInterpolationMode(g, InterpolationModeHighQualityBicubic);
+            GdipSetPixelOffsetMode(g, PixelOffsetModeHighQuality);
+            GdipDrawImageRectI(g, bitmap as *mut GpImage, x.round() as i32, y.round() as i32, w.round() as i32, h.round() as i32);
+            GdipDisposeImage(bitmap as *mut GpImage);
+        }
+        GdipDeleteGraphics(g);
+    }
+}

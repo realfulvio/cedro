@@ -33,6 +33,11 @@ window.cedro-panel list.cedro-nav { background: #F3F5F7; border-right: 1px solid
 window.cedro-panel list.cedro-nav row { background: transparent; padding: 9px 14px; margin: 1px 8px; border-radius: 5px; }\
 window.cedro-panel list.cedro-nav row:selected { background: #ffffff; box-shadow: inset 3px 0 0 #005E8E; }\
 window.cedro-panel list.cedro-nav row:selected label { font-weight: bold; }\
+window.cedro-panel box.cedro-side { background: #F3F5F7; border-right: 1px solid #E5E5E5; }\
+window.cedro-panel box.cedro-side list.cedro-nav { border-right: none; padding-top: 4px; }\
+window.cedro-panel box.cedro-ente { margin: 14px 14px 4px; padding-bottom: 12px; border-bottom: 1px solid #E5E5E5; }\
+window.cedro-panel label.cedro-ente-nome { color: #005E8E; font-weight: bold; }\
+window.cedro-panel box.cedro-ente-about { background: #F2F7FB; border: 1px solid #D4E3EE; border-radius: 6px; padding: 8px 12px; margin-top: 14px; }\
 window.cedro-panel box.cedro-foot { background: #F3F5F7; border-top: 1px solid #E5E5E5; padding: 12px 18px; }\
 window.cedro-panel button.cedro-sec { background: #F3F5F7; background-image: none; border: 1px solid #E5E5E5; border-radius: 5px; padding: 5px 14px; box-shadow: none; }\
 window.cedro-panel box.cedro-foot button.cedro-sec { background: #ffffff; }\
@@ -409,6 +414,25 @@ fn about_page() -> HBox {
     who.append(&line2);
     head.append(&who);
     page.append(&head);
+    if cedro::edizione::BONDENO {
+        // Il riquadro dell'edizione, con lo stemma con la scritta.
+        let ente = HBox::new(Orientation::Horizontal, 14);
+        ente.add_css_class("cedro-ente-about");
+        ente.append(&crate::linux_firma::stemma_area(cedro::edizione::Stemma::Scritta, 60));
+        let text = HBox::new(Orientation::Vertical, 2);
+        text.set_valign(gtk4::Align::Center);
+        let nome = Label::new(Some("Edizione per il Comune di Bondeno"));
+        nome.set_xalign(0.0);
+        nome.add_css_class("cedro-ente-nome");
+        let nota = Label::new(Some("Stesse funzioni di Cedro, con lo stemma del Comune. Si aggiorna solo con i pacchetti di questa edizione."));
+        nota.set_xalign(0.0);
+        nota.set_wrap(true);
+        nota.add_css_class("cedro-muted");
+        text.append(&nome);
+        text.append(&nota);
+        ente.append(&text);
+        page.append(&ente);
+    }
 
     page.append(&caption("CODICE APERTO USATO DA CEDRO"));
     let thanks = Label::new(Some("Cedro esiste grazie a queste persone e ai loro progetti. Grazie."));
@@ -671,10 +695,27 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     }
 
     let middle = HBox::new(Orientation::Horizontal, 0);
-    middle.append(&nav);
+    if cedro::edizione::BONDENO {
+        // Edizione Bondeno: stemma e «Comune di Bondeno» in cima alle sezioni.
+        let side = HBox::new(Orientation::Vertical, 0);
+        side.add_css_class("cedro-side");
+        let ente = HBox::new(Orientation::Horizontal, 10);
+        ente.add_css_class("cedro-ente");
+        ente.append(&crate::linux_firma::stemma_area(cedro::edizione::Stemma::Solo, 38));
+        let nome = Label::new(Some("Comune di\nBondeno"));
+        nome.set_xalign(0.0);
+        nome.add_css_class("cedro-ente-nome");
+        ente.append(&nome);
+        side.append(&ente);
+        nav.set_vexpand(true);
+        side.append(&nav);
+        middle.append(&side);
+    } else {
+        middle.append(&nav);
+    }
     middle.append(&stack);
 
-    let credit = crate::linux_firma::firma(false, "");
+    let credit = crate::linux_firma::firma(false, "", true);
     credit.set_halign(gtk4::Align::Start);
     credit.set_hexpand(true);
     let guide = Button::with_label("Guida");
@@ -929,6 +970,17 @@ impl guida::Canvas for CairoCanvas<'_> {
     fn logo(&mut self, left: f32, baseline: f32, scale: f32, ink: guida::Rgb, accent: guida::Rgb, real: guida::Rgb) {
         let f = |c: guida::Rgb| (c.0 as f64 / 255.0, c.1 as f64 / 255.0, c.2 as f64 / 255.0);
         cedro::logo::draw_cairo(self.cr, left as f64, baseline as f64, scale as f64, true, cedro::logo::Colors { ink: f(ink), accent: f(accent), real: f(real) });
+    }
+
+    fn stemma(&mut self, stemma: cedro::edizione::Stemma, x: f32, y: f32, w: f32, h: f32) {
+        let key = (1000 + stemma as usize, -1);
+        if !self.cache.iter().any(|(k, _)| *k == key) {
+            if let Some(img) = crate::linux_firma::stemma_surface(stemma) {
+                self.cache.push((key, img));
+            }
+        }
+        let Some((_, img)) = self.cache.iter().find(|(k, _)| *k == key) else { return };
+        crate::linux_firma::paint_surface(self.cr, img, x as f64, y as f64, w as f64, h as f64);
     }
 }
 

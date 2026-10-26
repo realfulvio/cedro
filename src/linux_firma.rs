@@ -1,7 +1,9 @@
 //! La firma in fondo alle finestre: «Cedro 0.17.1 · Powered by Luca real>hcok_ A.», col logo disegnato
 //! alla misura del testo (vedi `cedro::logo`).
 
+use cedro::edizione::{self, Stemma};
 use cedro::logo::{self, Colors};
+use gtk4::cairo::{Context, Filter, Format, ImageSurface, SurfacePattern};
 use gtk4::prelude::*;
 use gtk4::{DrawingArea, Label, Orientation};
 
@@ -27,10 +29,54 @@ fn logo_area() -> DrawingArea {
     area
 }
 
+/// Uno stemma dell'edizione Bondeno come superficie cairo; `None` nell'edizione standard.
+pub fn stemma_surface(stemma: Stemma) -> Option<ImageSurface> {
+    let img = edizione::immagine(stemma)?;
+    ImageSurface::create_for_data(img.bgra.clone(), Format::ARgb32, img.w as i32, img.h as i32, img.w as i32 * 4).ok()
+}
+
+/// Disegna `img` nel riquadro dato, ricampionata bene.
+pub fn paint_surface(cr: &Context, img: &ImageSurface, x: f64, y: f64, w: f64, h: f64) {
+    let _ = cr.save();
+    cr.translate(x, y);
+    cr.scale(w / img.width() as f64, h / img.height() as f64);
+    let pattern = SurfacePattern::create(img);
+    pattern.set_filter(Filter::Best);
+    let _ = cr.set_source(&pattern);
+    let _ = cr.paint();
+    let _ = cr.restore();
+}
+
+/// Uno stemma dell'edizione Bondeno grande `side` pixel, come elemento dell'interfaccia.
+pub fn stemma_area(stemma: Stemma, side: i32) -> DrawingArea {
+    let area = DrawingArea::new();
+    area.set_content_width(side);
+    area.set_content_height(side);
+    area.set_valign(gtk4::Align::Center);
+    let surface = stemma_surface(stemma);
+    area.set_draw_func(move |_, cr, w, h| {
+        if let Some(img) = &surface {
+            paint_surface(cr, img, 0.0, 0.0, w as f64, h as f64);
+        }
+    });
+    area
+}
+
 /// La firma: `version` aggiunge «Cedro x.y.z ·» davanti, `suffix` va in coda.
-pub fn firma(version: bool, suffix: &str) -> gtk4::Box {
+/// Con `ente`, nell'edizione Bondeno, davanti c'è lo stemma; senza `version` anche «Comune di Bondeno ·».
+pub fn firma(version: bool, suffix: &str, ente: bool) -> gtk4::Box {
     let row = gtk4::Box::new(Orientation::Horizontal, 0);
-    let head = if version { format!("Cedro {}  ·  Powered by Luca ", cedro::update::CURRENT) } else { "Powered by Luca ".to_string() };
+    let ente = ente && edizione::BONDENO;
+    if ente {
+        let stemma = stemma_area(Stemma::Solo, 20);
+        stemma.set_margin_end(6);
+        row.append(&stemma);
+    }
+    let head = match (version, ente) {
+        (true, _) => format!("Cedro {}  ·  Powered by Luca ", cedro::update::CURRENT),
+        (false, true) => "Comune di Bondeno  ·  Powered by Luca ".to_string(),
+        (false, false) => "Powered by Luca ".to_string(),
+    };
     for part in [Some(head), None, Some(format!(" A.{suffix}"))] {
         match part {
             Some(text) => {

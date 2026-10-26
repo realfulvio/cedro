@@ -3,6 +3,7 @@
 //! primitive di disegno tramite `Canvas`, così le due finestre sono identiche.
 //! Le coordinate sono in pixel logici: la finestra è `W` x `H`.
 
+use crate::edizione;
 use crate::logo;
 use crate::wheelgeom::{slice_bounds, R0, R1, WHEEL};
 
@@ -50,6 +51,8 @@ pub trait Canvas {
     /// La ruota con `n` fette (fetta `hover` accesa, -1 nessuna), centrata e larga `size`, con opacità `alpha`.
     fn wheel(&mut self, n: usize, hover: i32, cx: f32, cy: f32, size: f32, alpha: f32);
     fn logo(&mut self, left: f32, baseline: f32, scale: f32, ink: Rgb, accent: Rgb, real: Rgb);
+    /// Uno stemma dell'edizione Bondeno nel riquadro dato (nell'edizione standard non c'è niente da disegnare).
+    fn stemma(&mut self, stemma: crate::edizione::Stemma, x: f32, y: f32, w: f32, h: f32);
 }
 
 /// Cosa c'è sotto un clic.
@@ -218,7 +221,13 @@ pub fn draw(c: &mut dyn Canvas, tour: &Tour, now: u64) {
     let t = tour.elapsed(now);
     c.fill(0.0, 0.0, W, H, WHITE);
     c.fill(0.0, 0.0, W, 44.0, BLUE);
-    c.text("Guida di Cedro", 20.0, 0.0, 400.0, 44.0, 19.0, true, WHITE, Align::Left, false);
+    if edizione::BONDENO {
+        // Lo stemma nel suo cerchio bianco, che sul blu si legge.
+        c.stemma(edizione::Stemma::Cerchio, 14.0, 5.0, 34.0, 34.0);
+        c.text("Guida di Cedro · Comune di Bondeno", 58.0, 0.0, 500.0, 44.0, 19.0, true, WHITE, Align::Left, false);
+    } else {
+        c.text("Guida di Cedro", 20.0, 0.0, 400.0, 44.0, 19.0, true, WHITE, Align::Left, false);
+    }
     c.text(&format!("{} di {}", tour.page + 1, PAGE_COUNT), W - 120.0, 0.0, 100.0, 44.0, 13.0, false, mix(BLUE, WHITE, 0.85), Align::Right, false);
 
     c.text(page.title[0], 24.0, 60.0, 370.0, 30.0, 26.0, true, INK, Align::Left, false);
@@ -273,15 +282,24 @@ fn footer(c: &mut dyn Canvas, tour: &Tour) {
         c.round(x, FOOT_Y + 23.0, w, 10.0, 5.0, Some(if i == tour.page { BLUE } else { LINE }), None);
     }
     // Firma: «Cedro x.y.z · Powered by Luca real>hcok_ A.», centrata nello spazio tra i pallini e i pulsanti.
-    let head = format!("Cedro {}  ·  Powered by Luca ", crate::update::CURRENT);
+    // Nell'edizione Bondeno: stemma, «Cedro x.y.z · Comune di Bondeno · Powered by…».
+    let head = match edizione::BONDENO {
+        true => format!("Cedro {}  ·  Comune di Bondeno  ·  Powered by Luca ", crate::update::CURRENT),
+        false => format!("Cedro {}  ·  Powered by Luca ", crate::update::CURRENT),
+    };
     let size = 12.0;
     let scale = size * 0.82 / logo::HEIGHT;
+    let sw = if edizione::BONDENO { 24.0 } else { 0.0 };
     let hw = c.text_width(&head, size, false);
     let aw = c.text_width(" A.", size, false);
     let lw = logo::width(true) * scale;
-    let total = hw + lw + aw;
-    let left = 150.0 + (PREV_X - 150.0 - 12.0 - total) / 2.0;
+    let total = sw + hw + lw + aw;
     let mid = FOOT_Y + 28.0;
+    let mut left = 150.0 + (PREV_X - 150.0 - 12.0 - total) / 2.0;
+    if edizione::BONDENO {
+        c.stemma(edizione::Stemma::Solo, left, mid - 10.0, 20.0, 20.0);
+        left += sw;
+    }
     c.text(&head, left, mid - 10.0, hw + 4.0, 20.0, size, false, GREY, Align::Left, false);
     c.logo(left + hw, mid + size * 0.36, scale, BLUE, LEMON, GREY);
     c.text(" A.", left + hw + lw, mid - 10.0, aw + 4.0, 20.0, size, false, GREY, Align::Left, false);

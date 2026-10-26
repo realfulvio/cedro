@@ -1137,7 +1137,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             if youtube_win::owns(di.CtlID as i32) {
                 youtube_win::draw(di);
             } else if di.CtlID as i32 == ID_POWERED {
-                crate::firma_win::draw(di, WHITE, GREY, PRIMARY, true, "");
+                crate::firma_win::draw(di, WHITE, GREY, PRIMARY, true, "", true);
             } else {
                 draw_item(hwnd, di);
             }
