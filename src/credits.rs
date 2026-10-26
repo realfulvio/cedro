@@ -106,7 +106,8 @@ pub fn visible() -> Vec<(&'static str, Vec<&'static Component>)> {
 
 /// Quanti componenti ha il file completo delle licenze (le librerie in `Cargo.lock`, meno Cedro).
 pub fn full_count() -> usize {
-    include_str!("../Cargo.lock").matches("\n[[package]]\n").count().saturating_sub(1)
+    // Per righe: su Windows git estrae Cargo.lock con CRLF, e «\n[[package]]\n» non si troverebbe mai.
+    include_str!("../Cargo.lock").lines().filter(|l| l.trim() == "[[package]]").count().saturating_sub(1)
 }
 
 /// Il nome del file con tutte le licenze, accanto all'eseguibile e nel sito.
@@ -125,6 +126,11 @@ const FDK: &str = "Software License for The Fraunhofer FDK AAC Codec Library for
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn full_count_reads_the_lock_file_with_any_line_ending() {
+        assert!(full_count() > 100, "{}", full_count());
+    }
 
     #[test]
     fn every_license_has_a_text() {

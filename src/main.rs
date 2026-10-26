@@ -44,6 +44,10 @@ fn main() {
             guida_win::run_standalone();
             return;
         }
+        if args.first().is_some_and(|a| a == "impostazioni" || a == "settings") {
+            settings_win::run_standalone();
+            return;
+        }
         if args.is_empty() {
             if let Err(err) = win::start() {
                 cedro::append_log(&err);

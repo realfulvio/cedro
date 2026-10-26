@@ -146,6 +146,25 @@ fn px(value: i32, dpi: u32) -> i32 {
 }
 
 /// Apre la finestra, oppure porta davanti quella già aperta.
+/// `cedro impostazioni`: solo la finestra, senza la ruota nel vassoio; il processo finisce quando la chiudi.
+pub fn run_standalone() {
+    crate::winfont::load();
+    let _ = unsafe { windows::Win32::System::Ole::OleInitialize(None) };
+    open();
+    unsafe {
+        let mut msg = MSG::default();
+        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+            if !handle_message(&msg) {
+                let _ = TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+            if WINDOW.load(Ordering::Relaxed) == 0 {
+                break;
+            }
+        }
+    }
+}
+
 pub fn open() {
     unsafe {
         let existing = HWND(WINDOW.load(Ordering::Relaxed) as *mut _);
@@ -601,13 +620,14 @@ unsafe fn build_about(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, smal
     SendMessageW(edit, 0x1501 /* EM_SETCUEBANNER */, Some(WPARAM(1)), Some(LPARAM(hint.as_ptr() as isize)));
     child(hwnd, s, "", SS_NOPREFIX | 2 /* SS_RIGHT */, ID_COUNT, (x + cw - 120, 158, 120, 20), dpi, small, Some(SEC));
 
-    let list = crate::winlist::create(hwnd, ID_LIST, (px(x, dpi), px(194, dpi), px(cw, dpi), px(296, dpi)));
+    let list = crate::winlist::create(hwnd, ID_LIST, (px(x, dpi), px(194, dpi), px(cw, dpi), px(284, dpi)));
     STATE.with(|st| st.borrow_mut().sections[SEC].push(list));
     show_count(hwnd, crate::winlist::filter(list, ""));
 
-    child(hwnd, b, "Apri le licenze complete", owner, ID_FULL, (x, 500, 190, 30), dpi, normal, Some(SEC));
+    // Pulsante e nota sotto la lista, con la nota su due righe che restano dentro il pannello.
+    child(hwnd, b, "Apri le licenze complete", owner, ID_FULL, (x, 488, 190, 30), dpi, normal, Some(SEC));
     let note = format!("Tutti i {} componenti, anche quelli minori, nel file «Licenze di terze parti».", cedro::credits::full_count());
-    child(hwnd, s, &note, SS_NOPREFIX, ID_DESC, (x + 202, 499, cw - 202, 34), dpi, small, Some(SEC));
+    child(hwnd, s, &note, SS_NOPREFIX, ID_DESC, (x + 202, 485, cw - 202, 40), dpi, small, Some(SEC));
     let _ = bold;
 }
 
