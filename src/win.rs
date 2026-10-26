@@ -1017,6 +1017,7 @@ unsafe fn text_layer(mem: HDC, mask: *mut u8, px: &mut [u8], color: (u8, u8, u8)
 
 fn paint_wheel(hwnd: HWND) {
     let (list, hover, mode, name) = current_slices();
+    let tema = cedro::tema::attivo();
     let mut px = wheelgfx::render(list.len(), hover);
     unsafe {
         let screen = GetDC(None);
@@ -1043,13 +1044,13 @@ fn paint_wheel(hwnd: HWND) {
             }
             restore_font(mem, font);
         };
-        text_layer(mem, mask, &mut px, wheelgfx::TEXT, || labels(false));
-        text_layer(mem, mask, &mut px, wheelgfx::TEXT_ON_HOVER, || labels(true));
-        let title = match mode {
-            Mode::Convert => "CONVERSIONE",
-            Mode::Tools => "STRUMENTI",
-            Mode::Actions => "AZIONI",
-        };
+        text_layer(mem, mask, &mut px, tema.slice_fg, || labels(false));
+        text_layer(mem, mask, &mut px, tema.hover_fg, || labels(true));
+        let title = tema.titolo(match mode {
+            Mode::Convert => "Conversione",
+            Mode::Tools => "Strumenti",
+            Mode::Actions => "Azioni",
+        });
         let center = if hover >= 0 {
             list.get(hover as usize).map(|s| s.label).unwrap_or("Annulla")
         } else {
@@ -1061,9 +1062,9 @@ fn paint_wheel(hwnd: HWND) {
             text_centered(mem, cx, cy + dy, text);
             restore_font(mem, font);
         };
-        text_layer(mem, mask, &mut px, wheelgfx::MUTED, || line(-20, -12, 700, title));
-        text_layer(mem, mask, &mut px, wheelgfx::NAVY, || line(2, -18, 700, center));
-        text_layer(mem, mask, &mut px, wheelgfx::MUTED, || line(24, -12, 400, &clip_name(&name)));
+        text_layer(mem, mask, &mut px, tema.hole_title, || line(-20, -12, 700, &title));
+        text_layer(mem, mask, &mut px, tema.hole_main, || line(2, -18, 700, center));
+        text_layer(mem, mask, &mut px, tema.hole_sub, || line(24, -12, 400, &clip_name(&name)));
         std::ptr::copy_nonoverlapping(px.as_ptr(), out, px.len());
         SelectObject(mem, out_bmp.into());
         let size = SIZE { cx: WHEEL, cy: WHEEL };
