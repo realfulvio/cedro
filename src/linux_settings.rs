@@ -142,6 +142,8 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 key_shift: shift.is_active(),
                 key_ctrl: ctrl.is_active(),
                 key_alt: alt.is_active(),
+                // Le opzioni che questa finestra non mostra restano come sono.
+                ..cedro::read_settings()
             };
             if let Err(e) = write_settings(&settings) {
                 append_log(&format!("impostazioni non salvate: {e}"));
