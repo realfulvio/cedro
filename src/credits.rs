@@ -224,6 +224,14 @@ mod tests {
     }
 
     #[test]
+    fn engine_version_follows_cedro() {
+        // Cedro scarica il motore dalla release con il proprio numero di versione: build.ps1 lo prende da qui.
+        let toml = include_str!("../trascrivi/Cargo.toml");
+        let line = toml.lines().find(|l| l.starts_with("version = ")).expect("version");
+        assert_eq!(line, format!("version = \"{}\"", env!("CARGO_PKG_VERSION")));
+    }
+
+    #[test]
     fn library_versions_are_found() {
         assert!(crate_version("hound").is_some());
         assert!(crate_version("whisper-rs").is_some());
