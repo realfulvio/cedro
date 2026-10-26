@@ -66,7 +66,7 @@ pub const GROUPS: &[Group] = &[
             c("Modelli Whisper", "OpenAI", "MIT", "I modelli della trascrizione.", "github.com/openai/whisper"),
             c("whisper-rs", "Tazz4843", "Unlicense", "Collega whisper.cpp a Rust.", "codeberg.org/tazz4843/whisper-rs"),
             c("Opus", "Xiph.Org e altri", "BSD-3-Clause", "Legge i vocali .opus.", "opus-codec.org"),
-            c("yt-dlp", "yt-dlp contributors", "Unlicense", "Scarica video e audio da YouTube (si scarica al primo uso).", "github.com/yt-dlp/yt-dlp"),
+            c("yt-dlp", "yt-dlp contributors", "Unlicense", "Scarica video e audio da YouTube e da molti altri siti (si scarica al primo uso).", "github.com/yt-dlp/yt-dlp"),
             c("FFmpeg", "Gli sviluppatori di FFmpeg", "LGPL-2.1", "Unisce video e audio dei download (si scarica al primo uso).", "ffmpeg.org"),
             c("Deno", "Deno Land Inc. e collaboratori", "MIT", "Serve a yt-dlp per i video ad alta qualità (si scarica al primo uso).", "github.com/denoland/deno"),
         ],
