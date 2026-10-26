@@ -1,0 +1,268 @@
+name: Windows ARM64
+
+# Compila e prova Cedro su un vero Windows on ARM (runner windows-11-arm) e anche su x64.
+# Pubblicare: Actions → Windows ARM64 → Run workflow su main, con il tag (per esempio v0.18.0):
+# crea la release (se non c'è) con gli installatori x64 e ARM64 e tutti i motori di trascrizione.
+
+on:
+  push:
+    branches: ["claude/**"]
+    paths: ["Cargo.*", "src/**", "vendor/**", "trascrivi/**", "installer/**", "examples/**", "build.rs", ".github/workflows/windows-arm64.yml"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag della release da pubblicare (vuoto = solo prova)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  app:
+    name: Cedro (build, prove, installatore)
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest https://win.rustup.rs/aarch64 -OutFile rustup-init.exe
+            .\rustup-init.exe -y --default-toolchain stable --default-host aarch64-pc-windows-msvc
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+          rustc -vV
+
+      - name: LLVM (clang)
+        shell: pwsh
+        run: |
+          Get-Command clang -ErrorAction SilentlyContinue | Format-List Source, Version
+          Get-Command cmake, ninja -ErrorAction SilentlyContinue | Format-List Source
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Prove
+        shell: pwsh
+        run: cargo test --release
+
+      - name: Che processore è (scheda Sistema)
+        shell: pwsh
+        run: cargo run --release --example sistema
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          # Provo più indirizzi finché il file scaricato è davvero un eseguibile (inizia con «MZ»).
+          $urls = @('https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe')
+          foreach ($u in $urls) {
+            try {
+              Invoke-WebRequest $u -OutFile is.exe -UserAgent 'Mozilla/5.0'
+              $head = [System.IO.File]::ReadAllBytes("$PWD\is.exe")[0..1]
+              "{0}: {1} byte, inizio {2}" -f $u, (Get-Item is.exe).Length, (([char[]]$head) -join '')
+              $magic = ([char[]]$head) -join ''
+              if ((Get-Item is.exe).Length -gt 1MB -and $magic -eq 'MZ') { break }
+            } catch { "${u}: $_" }
+          }
+          $p = Start-Process .\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait -PassThru
+          "uscita dell'installatore: $($p.ExitCode)"
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")) { throw 'Inno Setup non installato' }
+
+      - name: Installatore ARM64
+        shell: pwsh
+        run: powershell -File installer\build.ps1 -Arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installatore-arm64
+          path: dist/Cedro-Setup-*-arm64.exe
+
+
+  motori:
+    name: Motore di trascrizione (processore)
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest https://win.rustup.rs/aarch64 -OutFile rustup-init.exe
+            .\rustup-init.exe -y --default-toolchain stable --default-host aarch64-pc-windows-msvc
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+
+      - name: LLVM (clang e libclang)
+        shell: pwsh
+        run: |
+          $clang = Get-Command clang -ErrorAction SilentlyContinue
+          if (-not $clang) {
+            Invoke-WebRequest https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-woa64.exe -OutFile llvm.exe
+            Start-Process .\llvm.exe -ArgumentList '/S' -Wait
+            $bin = "C:\Program Files\LLVM\bin"
+          } else {
+            $bin = Split-Path $clang.Source
+          }
+          $bin | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          "LIBCLANG_PATH=$bin" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          Get-ChildItem $bin -Filter libclang.dll
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: trascrivi
+          cache-targets: false
+
+      - name: Motori base, dotprod, i8mm
+        shell: pwsh
+        run: powershell -File trascrivi\build.ps1 -SoloCpu -Out ${{ github.workspace }}\dist-motori
+
+      - name: Prova di trascrizione (voce sintetica)
+        shell: pwsh
+        run: powershell -File trascrivi\prova.ps1 -Dir ${{ github.workspace }}\dist-motori
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: motori-arm64
+          path: dist-motori/*.exe
+
+
+  vulkan:
+    name: Motore di trascrizione (scheda video Vulkan, Adreno)
+    runs-on: windows-11-arm
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest https://win.rustup.rs/aarch64 -OutFile rustup-init.exe
+            .\rustup-init.exe -y --default-toolchain stable --default-host aarch64-pc-windows-msvc
+            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          }
+
+      - name: LLVM (clang e libclang)
+        shell: pwsh
+        run: |
+          $clang = Get-Command clang -ErrorAction SilentlyContinue
+          if (-not $clang) {
+            Invoke-WebRequest https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-woa64.exe -OutFile llvm.exe
+            Start-Process .\llvm.exe -ArgumentList '/S' -Wait
+            $bin = "C:\Program Files\LLVM\bin"
+          } else {
+            $bin = Split-Path $clang.Source
+          }
+          $bin | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          "LIBCLANG_PATH=$bin" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Vulkan SDK per ARM64
+        shell: pwsh
+        run: |
+          # Il server di LunarG a volte chiude la connessione: riprovo qualche volta.
+          foreach ($i in 1..5) {
+            try { Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/warm/vulkan-sdk.exe -OutFile vulkan-sdk.exe; break }
+            catch { "tentativo ${i}: $_"; if ($i -eq 5) { throw }; Start-Sleep -Seconds (10 * $i) }
+          }
+          Start-Process .\vulkan-sdk.exe -ArgumentList '--accept-licenses', '--default-answer', '--confirm-command', 'install' -Wait
+          $sdk = (Get-ChildItem C:\VulkanSDK -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName
+          "VULKAN_SDK=$sdk" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          Get-ChildItem $sdk\Lib, $sdk\Bin | Select-Object -First 40 Name
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: trascrivi
+          cache-targets: false
+
+      - name: Motore Vulkan
+        shell: pwsh
+        run: powershell -File trascrivi\build.ps1 -SoloVulkan -Out ${{ github.workspace }}\dist-motori
+
+      - name: "Prova di trascrizione (senza scheda video, ripiega sul processore)"
+        shell: pwsh
+        run: powershell -File trascrivi\prova.ps1 -Dir ${{ github.workspace }}\dist-motori
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: motore-vulkan-arm64
+          path: dist-motori/*.exe
+
+  x64:
+    name: Cedro x64 (prove, installatore, motori)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Prove
+        shell: pwsh
+        run: cargo test --release
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe -OutFile is.exe
+          $p = Start-Process .\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait -PassThru
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")) { throw "Inno Setup non installato ($($p.ExitCode))" }
+
+      - name: Installatore x64
+        shell: pwsh
+        run: powershell -File installer\build.ps1
+
+      - name: Motori x64 della release precedente con il nome nuovo
+        # trascrivi/ per x64 non cambia: i motori già pubblicati si riusano col numero di versione nuovo.
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Select-String -Path trascrivi\Cargo.toml -Pattern '^version\s*=\s*"(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
+          New-Item -ItemType Directory -Force motori-x64 | Out-Null
+          $tags = gh release list --limit 20 --json tagName --jq '.[].tagName'
+          foreach ($tag in $tags) {
+            gh release download $tag --pattern 'cedro-trascrivi-*-windows-x64-*.exe' --dir motori-x64 --clobber 2>$null
+            if (Get-ChildItem motori-x64 -Filter *.exe -ErrorAction SilentlyContinue) { "Motori presi da $tag"; break }
+          }
+          foreach ($f in Get-ChildItem motori-x64 -Filter *.exe) {
+            $new = $f.Name -replace '^cedro-trascrivi-[^-]+-windows', "cedro-trascrivi-$version-windows"
+            if ($new -ne $f.Name) { Move-Item $f.FullName (Join-Path motori-x64 $new) -Force }
+          }
+          Get-ChildItem motori-x64
+          if (-not (Get-ChildItem motori-x64 -Filter "*-$version-windows-x64-avx2.exe")) { throw 'motori x64 non trovati' }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: x64
+          path: |
+            dist/Cedro-Setup-*.exe
+            motori-x64/*.exe
+
+  pubblica:
+    name: Pubblica la release
+    if: ${{ always() && inputs.tag != '' && needs.app.result == 'success' && needs.motori.result == 'success' && needs.x64.result == 'success' }}
+    needs: [app, motori, vulkan, x64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: file
+          merge-multiple: true
+
+      - name: Release ${{ inputs.tag }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          find file -type f -name '*.exe' | sort
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Cedro ${TAG#v}" --notes-file .github/note-release.md
+          fi
+          gh release upload "$TAG" $(find file -type f -name '*.exe') --clobber
+          gh release view "$TAG" --json assets --jq '.assets[] | "\(.name)  \(.digest)"'

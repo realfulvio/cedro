@@ -71,7 +71,8 @@ fn parse_release(body: &str) -> Result<Release, String> {
             })
         })
     };
-    let installer = find(&|name| name.starts_with("Cedro-Setup") && name.ends_with(".exe"));
+    // Su Windows on ARM l'installatore nativo ha il suffisso «-arm64»; su x64 si prende l'altro.
+    let installer = find(&|name| name.starts_with("Cedro-Setup") && name.ends_with(".exe") && name.ends_with("-arm64.exe") == cfg!(target_arch = "aarch64"));
     let package = find(&|name| name.starts_with("cedro-") && name.ends_with("-linux-x64.tar.gz"));
     Ok(Release { version, page, installer, package })
 }
@@ -196,6 +197,26 @@ mod tests {
         assert!(!newer("0.7.1", "nonsense"));
     }
 
+    /// Su ARM64 l'installatore ha il suffisso «-arm64»: i file di prova lo prendono come quelli veri.
+    fn for_this_arch(text: &str) -> String {
+        if cfg!(target_arch = "aarch64") {
+            text.replace(".exe", "-arm64.exe")
+        } else {
+            text.to_string()
+        }
+    }
+
+    #[test]
+    fn picks_the_installer_of_this_architecture() {
+        let body = r#"{"tag_name": "0.18.0", "assets": [
+            {"name": "Cedro-Setup-0.18.0-arm64.exe", "browser_download_url": "https://x/arm.exe", "digest": "sha256:aa"},
+            {"name": "Cedro-Setup-0.18.0.exe", "browser_download_url": "https://x/x64.exe", "digest": "sha256:bb"}
+        ]}"#;
+        let asset = parse_release(body).unwrap().installer.unwrap();
+        let (url, sha) = if cfg!(target_arch = "aarch64") { ("https://x/arm.exe", "aa") } else { ("https://x/x64.exe", "bb") };
+        assert_eq!((asset.url.as_str(), asset.sha256.as_deref()), (url, Some(sha)));
+    }
+
     #[test]
     fn reads_release() {
         let body = r#"{
@@ -207,10 +228,10 @@ mod tests {
                 {"name": "Cedro-Setup-0.8.0.exe", "browser_download_url": "https://x/Cedro-Setup-0.8.0.exe"}
             ]
         }"#;
-        let release = parse_release(body).unwrap();
+        let release = parse_release(&for_this_arch(body)).unwrap();
         assert_eq!(release.version, "0.8.0");
         let asset = release.installer.unwrap();
-        assert_eq!(asset.url, "https://x/Cedro-Setup-0.8.0.exe");
+        assert_eq!(asset.url, for_this_arch("https://x/Cedro-Setup-0.8.0.exe"));
         assert_eq!(asset.sha256.as_deref(), Some("410cf4149103e3c6bf74a241ec6ea87e9cdff471f02d8242f858c73f2b0dced0"));
     }
 
@@ -220,7 +241,7 @@ mod tests {
             {"name": "Cedro-Setup-0.9.0.exe", "browser_download_url": "https://x/a.exe", "digest": "sha256:abc"},
             {"name": "cedro-trascrivi-0.9.0-linux-x64-base", "browser_download_url": "https://x/t"},
             {"name": "cedro-0.9.0-linux-x64.tar.gz", "browser_download_url": "https://x/c.tar.gz", "digest": "sha256:def"}]}"#;
-        let release = parse_release(body).unwrap();
+        let release = parse_release(&for_this_arch(body)).unwrap();
         let package = release.package.unwrap();
         assert_eq!(package.url, "https://x/c.tar.gz");
         assert_eq!(package.sha256.as_deref(), Some("def"));
@@ -297,7 +318,7 @@ echo \"$1\" > {}
         let body = r#"{"tag_name": "0.9.0", "assets": [
             {"name": "Cedro-Setup-0.9.0.exe", "browser_download_url": "https://x/a.exe", "digest": "sha256:abc"}
         ]}"#;
-        let asset = parse_release(body).unwrap().installer.unwrap();
+        let asset = parse_release(&for_this_arch(body)).unwrap().installer.unwrap();
         assert_eq!(asset.sha256.as_deref(), Some("abc"));
     }
 }
