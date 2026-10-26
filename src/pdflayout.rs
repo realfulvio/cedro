@@ -25,6 +25,8 @@ struct Glyph {
     y: f64,
     size: f64,
     adv: f64,
+    /// Larghezza dei caratteri in percento (testo stretto o largo, Tz).
+    stretch: u16,
     color: [u8; 3],
     bold: bool,
     italic: bool,
@@ -144,14 +146,17 @@ impl<'a> Device<'a> for Collector {
             if b.abs() > 0.01 * a.abs() || c.abs() > 0.01 * d.abs() {
                 continue; // testo ruotato: raro, non si ricostruisce
             }
-            let size = (a * d - b * c).abs().sqrt() * 1000.0;
+            // Il corpo è l'altezza; il testo stretto o largo ha la sua percentuale di larghezza.
+            let size = d.abs() * 1000.0;
             if size < 1.0 {
                 continue;
             }
+            let stretch = ((a.abs() / d.abs()) * 100.0).round().clamp(1.0, 600.0) as u16;
+            let stretch = if (95..=105).contains(&stretch) { 100 } else { stretch };
             let (mut font, mut bold, mut italic, mut adv, mut font_key) = (String::new(), false, false, 0.0, None);
             if let hayro::hayro_interpret::font::Glyph::Outline(o) = &**glyph {
                 font_key = Some(o.font_cache_key());
-                adv = o.advance_width().map_or(0.0, |w| w as f64) * size / 1000.0;
+                adv = o.advance_width().map_or(0.0, |w| w as f64) * a.abs();
                 if let Some(data) = o.font_data() {
                     font = data.postscript_name.unwrap_or_default();
                     bold = data.weight.is_some_and(|w| w >= 600);
@@ -176,7 +181,7 @@ impl<'a> Device<'a> for Collector {
             let low = font.to_ascii_lowercase();
             bold |= ["bold", "black", "heavy", "semibold", "demi"].iter().any(|k| low.contains(k));
             italic |= low.contains("italic") || low.contains("oblique");
-            self.glyphs.push(Glyph { text, x: e, y: f, size, adv, color, bold, italic, font, font_key });
+            self.glyphs.push(Glyph { text, x: e, y: f, size, adv, stretch, color, bold, italic, font, font_key });
         }
     }
 }
@@ -200,6 +205,7 @@ struct Run {
     text: String,
     font: String,
     size: f64,
+    stretch: u16,
     color: [u8; 3],
     bold: bool,
     italic: bool,
@@ -207,7 +213,12 @@ struct Run {
 
 impl Run {
     fn same_style(&self, o: &Run) -> bool {
-        self.font == o.font && (self.size - o.size).abs() < 0.2 && self.color == o.color && self.bold == o.bold && self.italic == o.italic
+        self.font == o.font
+            && (self.size - o.size).abs() < 0.2
+            && self.stretch == o.stretch
+            && self.color == o.color
+            && self.bold == o.bold
+            && self.italic == o.italic
     }
 }
 
@@ -245,8 +256,14 @@ fn group_lines(glyphs: Vec<Glyph>) -> Vec<Line> {
         let mut cur: Option<Line> = None;
         let mut last_end = 0.0;
         let mut after_space = false;
+        // Gli spazi si rimettono dai vuoti tra le parole: quelli del PDF possono riempire una
+        // casella intera (moduli scritti a spazi) e mescolarsi con le scritte vicine.
+        row.retain(|g| !g.text.trim().is_empty());
         for g in row {
-            let split = cur.as_ref().is_some_and(|l| g.x - last_end > 2.0 * g.size.max(l.size) || g.x < last_end - 0.6 * g.size);
+            // Nel testo a passo fisso gli spazi tengono le colonne: si rimettono tutti.
+            let cell = 0.6 * g.size * g.stretch as f64 / 100.0;
+            let mono = g.font == "Courier" && cur.as_ref().and_then(|l| l.runs.last()).is_some_and(|r| r.font == "Courier");
+            let split = cur.as_ref().is_some_and(|l| (!mono && g.x - last_end > 2.0 * g.size.max(l.size)) || g.x < last_end - 0.6 * g.size);
             if split {
                 lines.extend(cur.take());
                 after_space = false;
@@ -258,7 +275,10 @@ fn group_lines(glyphs: Vec<Glyph>) -> Vec<Line> {
             let gap = g.x - last_end > 0.2 * g.size && line.end > line.x;
             if gap && !g.text.starts_with(' ') {
                 if let Some(run) = line.runs.last_mut() {
-                    if !run.text.ends_with(' ') {
+                    if mono {
+                        let n = ((g.x - last_end) / cell).round().max(1.0) as usize;
+                        run.text.push_str(&" ".repeat(n));
+                    } else if !run.text.ends_with(' ') {
                         run.text.push(' ');
                     }
                 }
@@ -269,7 +289,7 @@ fn group_lines(glyphs: Vec<Glyph>) -> Vec<Line> {
             if !blank || has_text {
                 after_space = blank;
             }
-            let run = Run { text: g.text.clone(), font: g.font.clone(), size: g.size, color: g.color, bold: g.bold, italic: g.italic };
+            let run = Run { text: g.text.clone(), font: g.font.clone(), size: g.size, stretch: g.stretch, color: g.color, bold: g.bold, italic: g.italic };
             match line.runs.last_mut() {
                 Some(r) if r.same_style(&run) => r.text.push_str(&g.text),
                 _ => line.runs.push(run),
@@ -755,6 +775,8 @@ fn paragraphs(lines: &[Line], left: f64, right: f64, sizes: &TextSizes) -> Vec<P
     let lines = join_tabbed(lines);
     let lines = lines.as_slice();
     let width = (right - left).max(1.0);
+    // Il testo a passo fisso è già impaginato a spazi: ogni riga resta com'è.
+    let mono = |l: &Line| l.runs.iter().all(|r| r.font == "Courier");
     let starts_item = |l: &Line| {
         let text = l.text();
         is_bullet(&text).is_some() || number_prefix(&text).is_some()
@@ -771,7 +793,8 @@ fn paragraphs(lines: &[Line], left: f64, right: f64, sizes: &TextSizes) -> Vec<P
         }
         // Elenco puntato: via il simbolo, lo rimette Word.
         let text: String = p.runs.iter().map(|r| r.text.as_str()).collect();
-        if let Some(n) = is_bullet(&text) {
+        if mono(group[0]) {
+        } else if let Some(n) = is_bullet(&text) {
             p.marker = text.chars().next().map(Marker::Bullet);
             strip_front(&mut p.runs, n);
         } else {
@@ -781,7 +804,7 @@ fn paragraphs(lines: &[Line], left: f64, right: f64, sizes: &TextSizes) -> Vec<P
         group.clear();
     };
     for line in lines {
-        let continues = group.last().is_some_and(|prev| {
+        let continues = !mono(line) && group.last().is_some_and(|prev| {
             let dy = line.baseline - prev.baseline;
             let short_prev = prev.end < right - 0.15 * width;
             // Le righe dopo la prima di una voce d'elenco cominciano sotto il testo, non sotto il punto.
@@ -1194,8 +1217,27 @@ pub enum Page {
     Flow(FlowPage),
     /// Pagina senza testo da copiare (una scansione): va nel Word come immagine.
     Scan(ScanPage),
+    /// Modulo fitto di caselle (CU, 730, F24): righe e riquadri come sfondo, il testo sopra
+    /// ciascuno al suo posto.
+    Form(FormPage),
     /// Pagina finita dentro la precedente (una tabella che continua).
     Merged,
+}
+
+pub struct FormPage {
+    width: f64,
+    height: f64,
+    background: Vec<u8>,
+    ext: &'static str,
+    lines: Vec<Line>,
+}
+
+/// Una pagina di modulo: tante scritte brevi e piccole dentro tante caselle.
+fn is_form(lines: &[Line], shapes: &[Shape2]) -> bool {
+    let boxes = shapes.iter().filter(|s| s.rect || s.line).count();
+    let small = lines.iter().filter(|l| l.size < 7.0).count();
+    let chars = median(lines.iter().map(|l| l.text().chars().count() as f64).collect());
+    lines.len() >= 80 && boxes >= 40 && chars <= 10.0 && small * 10 >= lines.len() * 3
 }
 
 pub struct ScanPage {
@@ -1238,7 +1280,7 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
     let interp_cache = InterpreterCache::new();
     let settings = InterpreterSettings::default();
     let mut raw: Vec<Option<RawPage>> = Vec::new();
-    let mut scans: Vec<Option<ScanPage>> = Vec::new();
+    let mut special: Vec<Option<Page>> = Vec::new();
     let mut size_chars: HashMap<i64, usize> = HashMap::new();
     for page in original.pages().iter() {
         let (w, h) = page.render_dimensions();
@@ -1248,6 +1290,8 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
         let mut collector = Collector::default();
         interpret_page(page, &mut ctx, &mut collector);
         let Collector { mut glyphs, shapes, pics, stems, .. } = collector;
+        // Il testo scritto fuori dal foglio non si vede: non va nel Word.
+        glyphs.retain(|g| g.x >= -1.0 && g.x < w && g.y > 0.0 && g.y - g.size < h);
         if glyphs.is_empty() {
             // Una scansione: la pagina intera diventa un'immagine, come la vede chi legge.
             let scale = (2000.0 / w.max(h).max(1.0)) as f32;
@@ -1258,10 +1302,9 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
             let mut jpeg = Vec::new();
             image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 80).encode_image(&rgb).map_err(|e| e.to_string())?;
             raw.push(None);
-            scans.push(Some(ScanPage { width: w, height: h, jpeg }));
+            special.push(Some(Page::Scan(ScanPage { width: w, height: h, jpeg })));
             continue;
         }
-        scans.push(None);
         for g in &mut glyphs {
             if let (Some(key), true) = (g.font_key, g.font.is_empty()) {
                 if let Some((sum, n)) = stems.get(&key) {
@@ -1269,6 +1312,39 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
                 }
             }
         }
+        // Un font senza nome a passo fisso (il Courier dei moduli): ogni carattere largo 0,6 em.
+        let mut mono: HashMap<u128, (usize, usize)> = HashMap::new();
+        for g in glyphs.iter().filter(|g| g.font.is_empty()) {
+            if let Some(key) = g.font_key {
+                let e = mono.entry(key).or_default();
+                e.1 += 1;
+                if (g.adv / (g.size * g.stretch as f64 / 100.0) - 0.6).abs() < 0.02 {
+                    e.0 += 1;
+                }
+            }
+        }
+        for g in glyphs.iter_mut().filter(|g| g.font.is_empty()) {
+            if let Some((m, n)) = g.font_key.and_then(|k| mono.get(&k)) {
+                if *n >= 5 && m * 10 >= n * 9 {
+                    g.font = "Courier".into();
+                }
+            }
+        }
+        let lines = group_lines(glyphs.clone());
+        if is_form(&lines, &shapes) {
+            // Sfondo senza il testo dritto (quello ruotato, come le scritte a margine, resta lì).
+            let scale = 150.0 / 72.0;
+            let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
+            let no_text = RenderSettings { skip_text: true, ..Default::default() };
+            let rendered = render(page, &cache, &settings, &no_text, &pixmap);
+            let png = rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?;
+            let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
+            let (background, ext) = encode_figure(&rgb)?;
+            raw.push(None);
+            special.push(Some(Page::Form(FormPage { width: w, height: h, background, ext, lines })));
+            continue;
+        }
+        special.push(None);
         let tables = find_tables(&shapes, (w, h), &mut glyphs);
         let mut figures = find_figures(&shapes, &pics, &tables, (w, h));
         let page_body = median(glyphs.iter().map(|g| g.size).collect());
@@ -1323,9 +1399,9 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
     sizes.headings = heads;
 
     let mut pages = Vec::new();
-    for (p, scan) in raw.into_iter().zip(scans) {
+    for (p, other) in raw.into_iter().zip(special) {
         let Some(p) = p else {
-            pages.push(scan.map_or(Page::Merged, Page::Scan));
+            pages.push(other.unwrap_or(Page::Merged));
             continue;
         };
         pages.push(Page::Flow(layout_page(p, &sizes)));
@@ -1523,6 +1599,7 @@ fn hex(c: [u8; 3]) -> String {
 struct Look {
     font: String,
     half: i64,
+    stretch: u16,
     color: [u8; 3],
     bold: bool,
     italic: bool,
@@ -1530,7 +1607,7 @@ struct Look {
 
 impl Look {
     fn of(r: &Run) -> Look {
-        Look { font: family(&r.font), half: (r.size * 2.0).round().max(2.0) as i64, color: r.color, bold: r.bold, italic: r.italic }
+        Look { font: family(&r.font), half: (r.size * 2.0).round().max(2.0) as i64, stretch: r.stretch, color: r.color, bold: r.bold, italic: r.italic }
     }
 
     /// Le proprietà di `run` diverse da quelle dello stile.
@@ -1553,6 +1630,9 @@ impl Look {
         if run.color != self.color {
             let _ = write!(out, "<w:color w:val=\"{}\"/>", hex(run.color));
         }
+        if run.stretch != self.stretch {
+            let _ = write!(out, "<w:w w:val=\"{}\"/>", run.stretch);
+        }
         if run.half != self.half {
             let _ = write!(out, "<w:sz w:val=\"{0}\"/><w:szCs w:val=\"{0}\"/>", run.half);
         }
@@ -1571,6 +1651,9 @@ impl Look {
         }
         if self.color != [0, 0, 0] {
             let _ = write!(out, "<w:color w:val=\"{}\"/>", hex(self.color));
+        }
+        if self.stretch != 100 {
+            let _ = write!(out, "<w:w w:val=\"{}\"/>", self.stretch);
         }
         let _ = write!(out, "<w:sz w:val=\"{0}\"/><w:szCs w:val=\"{0}\"/>", self.half);
         out
@@ -1598,7 +1681,7 @@ impl Styles {
         let blocks = || pages.iter().filter_map(|p| if let Page::Flow(f) = p { Some(f) } else { None }).flat_map(|f| f.blocks());
         let paras = || blocks().filter_map(|b| if let Block::Para(p) = b { Some(p) } else { None });
         let body = dominant(paras().filter(|p| p.heading == 0).flat_map(|p| &p.runs))
-            .unwrap_or(Look { font: "Arial".into(), half: 22, color: [0, 0, 0], bold: false, italic: false });
+            .unwrap_or(Look { font: "Arial".into(), half: 22, stretch: 100, color: [0, 0, 0], bold: false, italic: false });
         let heading = |n: usize| {
             dominant(paras().filter(|p| p.heading == n).flat_map(|p| &p.runs))
                 .unwrap_or(Look { half: body.half + 4 * (4 - n as i64), bold: true, ..body.clone() })
@@ -1678,6 +1761,17 @@ fn para_xml(p: &Para, style: &str, before: f64, line_h: Option<f64>, geo: &Geome
                 let _ = write!(ppr, "<w:ind w:left=\"{}\" w:firstLine=\"{}\"/>", twips(indent), twips(first - indent));
             } else {
                 let _ = write!(ppr, "<w:ind w:left=\"{}\"/>", twips(indent));
+            }
+        }
+    }
+    // Il testo a passo fisso è lungo esattamente come nel PDF: un po' di margine a destra
+    // evita che l'ultima parola vada a capo per un arrotondamento.
+    if p.runs.iter().all(|r| r.font == "Courier") {
+        let extra = format!("w:right=\"-{}\"", twips(2.0 * p.size));
+        match ppr.find("<w:ind ") {
+            Some(at) => ppr.insert_str(at + 7, &format!("{extra} ")),
+            None => {
+                let _ = write!(ppr, "<w:ind {extra}/>");
             }
         }
     }
@@ -1868,6 +1962,23 @@ fn numbering_xml(lists: &[ListRef]) -> String {
 
 /// Il file Word. Le pagine con testo diventano titoli, paragrafi e tabelle; per le altre,
 /// `fallback` dà il testo letto con l'OCR, in paragrafi, su una pagina normale.
+/// La pagina intera come immagine dietro al testo.
+fn page_picture(id: usize, ext: &str, width: f64, height: f64, number: usize, descr: &str) -> String {
+    let (cx, cy) = ((width * EMU_PER_PT) as i64, (height * EMU_PER_PT) as i64);
+    format!(
+        "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/></w:pPr><w:r><w:drawing>\
+<wp:anchor distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\" simplePos=\"0\" relativeHeight=\"{id}\" behindDoc=\"1\" locked=\"0\" layoutInCell=\"1\" allowOverlap=\"1\">\
+<wp:simplePos x=\"0\" y=\"0\"/><wp:positionH relativeFrom=\"page\"><wp:posOffset>0</wp:posOffset></wp:positionH>\
+<wp:positionV relativeFrom=\"page\"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx=\"{cx}\" cy=\"{cy}\"/>\
+<wp:effectExtent l=\"0\" t=\"0\" r=\"0\" b=\"0\"/><wp:wrapNone/><wp:docPr id=\"{id}\" name=\"Pagina {number}\" descr=\"{descr}\"/><wp:cNvGraphicFramePr/>\
+<a:graphic xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">\
+<pic:pic xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:nvPicPr><pic:cNvPr id=\"{id}\" name=\"immagine{id}.{ext}\"/><pic:cNvPicPr/></pic:nvPicPr>\
+<pic:blipFill><a:blip r:embed=\"rIdImg{id}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>\
+<pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>\
+</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>"
+    )
+}
+
 pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
     // Margini comuni: dove comincia e finisce il contenuto di tutte le pagine.
     let (mut left, mut right) = (f64::MAX, 0.0f64);
@@ -2034,20 +2145,7 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                 );
                 let ocr = fallback(i);
                 let descr = xml(&ocr).replace('\n', "&#10;");
-                let (cx, cy) = ((scan.width * EMU_PER_PT) as i64, (scan.height * EMU_PER_PT) as i64);
-                let picture = format!(
-                    "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/></w:pPr><w:r><w:drawing>\
-<wp:anchor distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\" simplePos=\"0\" relativeHeight=\"{id}\" behindDoc=\"1\" locked=\"0\" layoutInCell=\"1\" allowOverlap=\"1\">\
-<wp:simplePos x=\"0\" y=\"0\"/><wp:positionH relativeFrom=\"page\"><wp:posOffset>0</wp:posOffset></wp:positionH>\
-<wp:positionV relativeFrom=\"page\"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx=\"{cx}\" cy=\"{cy}\"/>\
-<wp:effectExtent l=\"0\" t=\"0\" r=\"0\" b=\"0\"/><wp:wrapNone/><wp:docPr id=\"{id}\" name=\"Pagina {}\" descr=\"{descr}\"/><wp:cNvGraphicFramePr/>\
-<a:graphic xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">\
-<pic:pic xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:nvPicPr><pic:cNvPr id=\"{id}\" name=\"immagine{id}.jpg\"/><pic:cNvPicPr/></pic:nvPicPr>\
-<pic:blipFill><a:blip r:embed=\"rIdImg{id}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>\
-<pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{cx}\" cy=\"{cy}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>\
-</a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>",
-                    i + 1
-                );
+                let picture = page_picture(id, "jpg", scan.width, scan.height, i + 1, &descr);
                 let mut parts = vec![picture];
                 let sect = sect_xml(&Sect { w: scan.width, h: scan.height, top: 20.0, bottom: 20.0, left: 20.0, right: 20.0, cols: Vec::new(), continuous: false });
                 if last_page {
@@ -2057,6 +2155,42 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                 }
                 for part in parts {
                     body.push_str(&part);
+                }
+            }
+            Page::Form(form) => {
+                let id = next_id;
+                next_id += 1;
+                let ext = form.ext;
+                media.push((format!("word/media/immagine{id}.{ext}"), form.background.clone()));
+                let _ = write!(
+                    rels,
+                    "<Relationship Id=\"rIdImg{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/immagine{id}.{ext}\"/>"
+                );
+                body.push_str(&page_picture(id, ext, form.width, form.height, i + 1, ""));
+                // Ogni scritta è un riquadro di testo nel punto esatto della pagina.
+                for l in &form.lines {
+                    let line_h = l.size * 1.2;
+                    let top = l.baseline - line_h + 0.22 * l.size;
+                    let width = (l.end - l.x) * 1.15 + l.size;
+                    let _ = write!(
+                        body,
+                        "<w:p><w:pPr><w:framePr w:w=\"{}\" w:wrap=\"none\" w:hAnchor=\"page\" w:vAnchor=\"page\" w:x=\"{}\" w:y=\"{}\"/>\
+<w:spacing w:before=\"0\" w:after=\"0\" w:line=\"{}\" w:lineRule=\"exact\"/></w:pPr>",
+                        twips(width),
+                        twips(l.x),
+                        twips(top.max(0.0)),
+                        twips(line_h)
+                    );
+                    for r in &l.runs {
+                        body.push_str(&run_xml(r, &styles.body));
+                    }
+                    body.push_str("</w:p>");
+                }
+                let sect = sect_xml(&Sect { w: form.width, h: form.height, top: 0.0, bottom: 0.0, left: 0.0, right: 0.0, cols: Vec::new(), continuous: false });
+                if last_page {
+                    body.push_str(&sect);
+                } else {
+                    let _ = write!(body, "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/>{sect}</w:pPr></w:p>");
                 }
             }
         }

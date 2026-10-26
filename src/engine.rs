@@ -642,6 +642,31 @@ mod tests {
     }
 
     #[test]
+    fn pdf_form_keeps_boxes_and_places_text() {
+        // Un modulo: 10x12 caselle, ognuna con l'etichetta piccola e il valore; più una scritta
+        // fuori dal foglio, che non si vede e non deve finire nel Word.
+        let mut content = String::from("0.5 w ");
+        for r in 0..12 {
+            for c in 0..10 {
+                let (x, y) = (40 + c * 52, 760 - r * 50);
+                content.push_str(&format!(
+                    "{x} {y} 50 40 re S BT /F1 5 Tf {} {} Td (Casella {r}{c}) Tj ET BT /F2 6 Tf {} {} Td ({c}) Tj ET ",
+                    x + 2,
+                    y + 33,
+                    x + 4,
+                    y + 10
+                ));
+            }
+        }
+        content.push_str("BT /F1 8 Tf 900 800 Td (NASCOSTO) Tj ET");
+        let xml = word_xml("modulo.pdf", pdf_page(&content, 595, 842));
+        assert!(xml.contains("<w:framePr"), "{xml}");
+        assert!(xml.contains("behindDoc=\"1\""), "{xml}");
+        assert!(xml.contains("Casella 75"), "{xml}");
+        assert!(!xml.contains("NASCOSTO"), "{xml}");
+    }
+
+    #[test]
     fn pdf_lists_become_word_lists() {
         let mut content = String::new();
         let items = [(700, "1. Accendere il PC"), (686, "2. Aprire il portale"), (672, "3. Inviare la richiesta")];
