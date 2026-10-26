@@ -26,7 +26,10 @@ foreach ($exe in Get-ChildItem $Dir -Filter "cedro-trascrivi-*.exe") {
   Write-Host "== $($exe.Name)"
   $request = (@{ file = $wav; lang = "auto" } | ConvertTo-Json -Compress)
   $watch = [Diagnostics.Stopwatch]::StartNew()
+  # whisper.cpp scrive i suoi messaggi su stderr: con «Stop» PowerShell 5 li tratterebbe come errori.
+  $ErrorActionPreference = "Continue"
   $out = $request | & $exe.FullName --model $model 2>$null
+  $ErrorActionPreference = "Stop"
   $watch.Stop()
   $out | ForEach-Object { Write-Host "   $_" }
   $events = $out | Where-Object { $_ -like '{*' } | ForEach-Object { $_ | ConvertFrom-Json }
