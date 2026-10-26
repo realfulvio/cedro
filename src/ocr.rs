@@ -174,6 +174,7 @@ fn join_line(out: &mut String, next: &str) {
 
 fn ocrs_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
     use ocrs::TextItem;
+    crate::accel::apply();
     // Il modello latino legge meglio pagine larghe circa 1000 pixel.
     let factor = (1000.0 / image.width().max(1) as f32).min(1.0);
     let small;

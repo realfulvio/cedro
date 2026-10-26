@@ -481,6 +481,22 @@ unsafe fn layout_bottom(hwnd: HWND, top: i32) {
     let mut rect = RECT { left: 0, top: 0, right: px(900), bottom: px(height) };
     let _ = AdjustWindowRect(&mut rect, style, false);
     let _ = SetWindowPos(hwnd, None, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    keep_on_screen(hwnd);
+}
+
+/// Se la finestra, cresciuta, esce in fondo dall'area di lavoro (sotto la barra delle applicazioni), sale quanto basta.
+unsafe fn keep_on_screen(hwnd: HWND) {
+    let mut win = RECT::default();
+    let _ = GetWindowRect(hwnd, &mut win);
+    let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+    if !GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mut info).as_bool() {
+        return;
+    }
+    let work = info.rcWork;
+    if win.bottom > work.bottom {
+        let top = (win.top - (win.bottom - work.bottom)).max(work.top);
+        let _ = SetWindowPos(hwnd, None, win.left, top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
 }
 
 /// Un controllo delle opzioni è stato toccato: il suo valore passa ai valori scelti.
@@ -594,9 +610,8 @@ unsafe fn add_files(hwnd: HWND, paths: Vec<PathBuf>) {
         }
     }
     if voice {
-        let already = transcribing;
         trascrizione::set_active(true);
-        if !already {
+        if !transcribing {
             if let Some(i) = CATEGORIES.iter().position(|c| c.kind == Kind::Audio) {
                 state().category = i;
                 SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(i)), Some(LPARAM(0)));
@@ -938,8 +953,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             let (fg, bg, slot) = match GetDlgCtrlID(ctl) {
                 ID_HEADER => (WHITE, PRIMARY, &BRUSH_PRIMARY),
                 ID_TITLE => (PRIMARY, WHITE, &BRUSH_WHITE),
-                trascrizione::ID_CAP_SAVEAS | trascrizione::ID_CAP_MODEL | trascrizione::ID_CAP_LOG => (GREY, WHITE, &BRUSH_WHITE),
-                ID_POWERED | ID_CAP_EXISTS | ID_CAP_OPTIONS | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_QUALITY | ID_CAP_DEST | ID_COUNT | ID_FOOT => (GREY, WHITE, &BRUSH_WHITE),
+                trascrizione::ID_CAP_SAVEAS | trascrizione::ID_CAP_MODEL | trascrizione::ID_CAP_LOG | ID_POWERED | ID_CAP_EXISTS | ID_CAP_OPTIONS | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_QUALITY | ID_CAP_DEST | ID_COUNT | ID_FOOT => (GREY, WHITE, &BRUSH_WHITE),
                 _ => (TEXT, WHITE, &BRUSH_WHITE),
             };
             SetTextColor(hdc, fg);
@@ -986,7 +1000,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         }
         WM_CLOSE => {
             if state().running {
-                MessageBoxW(Some(hwnd), w!("Un lavoro è ancora in corso: aspetta che finisca."), w!("Cedro"), MB_OK | MB_ICONINFORMATION);
+                MessageBoxW(Some(hwnd), w!("Una conversione è ancora in corso: aspetta che finisca."), w!("Cedro"), MB_OK | MB_ICONINFORMATION);
             } else {
                 let _ = DestroyWindow(hwnd);
             }

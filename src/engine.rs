@@ -706,6 +706,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             fps: opts.fps,
             mute: opts.mute,
             quality,
+            gpu: crate::accel::use_gpu(),
         };
         let result = crate::sink::with_shape(shape, || {
             #[cfg(windows)]
@@ -727,7 +728,11 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             return Err(err(e));
         }
         let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
-        return Ok(Output { path: out, message: size_message(before, after) });
+        let mut message = size_message(before, after);
+        if crate::sink::gpu_used() {
+            message.push_str(" · con la scheda video");
+        }
+        return Ok(Output { path: out, message });
     }
 
     if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "html" | "json" | "pdf" | "upper" | "lower") {
@@ -1912,6 +1917,54 @@ Luca,Bondeno
         let _ = fs::remove_dir_all(&dir);
     }
 
+    /// Con la scheda video permessa il video esce comunque: dalla GPU se c'è, altrimenti dal processore.
+    /// Con CEDRO_GPU_TEST=1 la GPU deve averlo fatto davvero (prove su NVIDIA, Intel e AMD).
+    #[cfg(any(windows, target_os = "linux"))]
+    #[test]
+    fn video_with_gpu_allowed() {
+        let dir = std::env::temp_dir().join(format!("cedro-gpu-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        // Su Windows la sorgente è un MP4 640×360 fatto col processore: i video di prova sono più piccoli
+        // della misura minima della scheda (NVENC parte da circa 145×49) e Windows li darebbe al software.
+        #[cfg(windows)]
+        let src = {
+            let src = dir.join("sorgente.mp4");
+            crate::video::synthetic_mp4(&src, 640, 360, 60, false).expect("sorgente");
+            src
+        };
+        #[cfg(target_os = "linux")]
+        let src = {
+            let src = dir.join("vp9.webm");
+            fs::write(&src, include_bytes!("../tests/fixtures/vp9.webm")).unwrap();
+            src
+        };
+        let mp4 = dir.join("convertito.mp4");
+        let shape = crate::sink::VideoShape { gpu: true, ..Default::default() };
+        let (result, used) = crate::sink::with_shape(shape, || {
+            #[cfg(windows)]
+            let made = crate::video::to_mp4(&src, &mp4);
+            #[cfg(target_os = "linux")]
+            let made = crate::linux_video::to_mp4(&src, &mp4);
+            (made, crate::sink::gpu_used())
+        });
+        result.expect("MP4");
+        eprintln!("video fatto con la scheda video: {used}");
+        if std::env::var_os("CEDRO_GPU_TEST").is_some() {
+            assert!(used, "la scheda video non ha codificato");
+        }
+        let out = fs::read(&mp4).unwrap();
+        assert!(mp4_box_len(&out, b"mdat") > 32, "mdat vuoto");
+        if let Some(codecs) = probe_codecs(&mp4) {
+            assert!(codecs.contains("h264"), "ffprobe: {codecs}");
+        }
+        // Dove c'è ffmpeg, il video si deve leggere tutto senza errori.
+        if let Ok(check) = std::process::Command::new("ffmpeg").args(["-v", "error", "-i"]).arg(&mp4).args(["-f", "null", "-"]).output() {
+            assert!(check.status.success() && check.stderr.is_empty(), "ffmpeg: {}", String::from_utf8_lossy(&check.stderr));
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn video_to_mp4_on_linux() {
@@ -1976,7 +2029,7 @@ Luca,Bondeno
         let _ = fs::remove_dir_all(&dir);
     }
 
-    #[cfg(target_os = "linux")]
+    #[cfg(any(windows, target_os = "linux"))]
     fn probe_codecs(path: &Path) -> Option<String> {
         let out = std::process::Command::new("ffprobe")
             .args(["-v", "error", "-show_entries", "stream=codec_name", "-of", "csv=p=0"])

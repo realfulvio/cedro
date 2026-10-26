@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -20,6 +20,7 @@ png = "0.18"
 oxideav-vp8 = { version = "0.2.7", default-features = false }
 oxideav-vp9 = "0.0.13"
 rten = "0.26"
+rten-simd = "0.26"
 serde_json = "1"
 sha2 = "0.10"
 symphonia = { version = "0.5", default-features = false, features = ["mp3", "wav", "flac", "vorbis", "pcm", "aac", "isomp4", "ogg", "mkv"] }
@@ -28,6 +29,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 fdk-aac = "0.8"
+libc = "0.2"
 gtk4 = { version = "0.10", features = ["v4_12"] }
 ksni = "0.2"
 mp4 = "0.14"
@@ -44,7 +46,9 @@ windows = { version = "0.61", features = [
     "Security_Cryptography",
     "Storage_Streams",
     "Win32_Foundation",
+    "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
+    "Win32_Graphics_GdiPlus",
     "Win32_Media_MediaFoundation",
     "Win32_Security",
     "Win32_System_Com",
@@ -75,3 +79,5 @@ winresource = "0.1"
 # hayro con l'opzione per disegnare la pagina senza testo (sfondo dei moduli in Word)
 [patch.crates-io]
 hayro = { path = "vendor/hayro" }
+# rten-simd con l'interruttore per spegnere AVX-512 (Impostazioni)
+rten-simd = { path = "vendor/rten-simd" }
