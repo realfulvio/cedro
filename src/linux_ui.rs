@@ -127,6 +127,7 @@ pub fn start() -> i32 {
     let started_font = std::cell::Cell::new(false);
     app.connect_activate(move |app| {
         if !started_font.replace(true) {
+            crate::linux_font::light_theme();
             if crate::linux_font::load() {
                 crate::linux_font::apply();
             }
