@@ -84,6 +84,8 @@ pub(super) unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     child(hwnd, instance, s, "COSA STA SUCCEDENDO", 0, ID_CAP_LOG, (550, 296, 240, 16), fs);
     child(hwnd, instance, b, "Copia", WS_TABSTOP.0, ID_COPY, (810, 290, 70, 24), f);
     make_log(hwnd, instance, ID_LOG, (550, 314, 330, 228));
+    // Con una scheda video si parte da «Massima»: è la più precisa e costa pochi minuti.
+    choices().model = trascrizione::default_model();
     idle_text(hwnd);
 }
 
