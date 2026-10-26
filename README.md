@@ -76,7 +76,7 @@ Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Gui
 | Audio | WAV, MP3, OGG, M4A, AAC, FLAC | WAV, MP3 |
 | Video | MP4, WebM, MOV, MKV, AVI | MP4 |
 
-**PDF in Word:** titoli, paragrafi, tabelle vere (celle, sfondi, bordi), elenchi e grafici al loro posto, modificabili come in un editor professionale. Le scansioni vengono lette con l'OCR in italiano.
+**PDF in Word:** titoli con stili veri, paragrafi, tabelle vere (celle, sfondi, bordi, intestazione ripetuta tra le pagine), elenchi puntati e numerati di Word, testo su più colonne e grafici al loro posto, modificabili come in un editor professionale. File leggeri. Le scansioni vengono lette con l'OCR in italiano.
 **Foto dal telefono:** vengono raddrizzate in automatico.
 
 ## L'icona e le impostazioni
