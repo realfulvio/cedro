@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="600" viewBox="0 0 1600 600" font-family="Titillium Web">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#007BB8"/><stop offset="1" stop-color="#003A5C"/></linearGradient>
+<filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#00243a" flood-opacity=".35"/></filter></defs>
+<rect width="1600" height="600" fill="url(#g)"/>
+<circle cx="1260" cy="300" r="330" fill="#fff" opacity=".07"/><circle cx="1260" cy="300" r="260" fill="#fff" opacity=".07"/>
+<circle cx="120" cy="560" r="220" fill="#fff" opacity=".05"/>
+<path d="M1266.0,70.1 A230,230 0 0 1 1436.0,151.9 L1330.4,240.8 A92,92 0 0 0 1262.4,208.0 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="1329.9" y="164.0" text-anchor="middle" font-size="26" font-weight="700" fill="#1A2A3A">PDF</text>
+<path d="M1443.5,161.4 A230,230 0 0 1 1485.5,345.3 L1350.2,318.1 A92,92 0 0 0 1333.4,244.5 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="1417.0" y="273.3" text-anchor="middle" font-size="26" font-weight="700" fill="#1A2A3A">PNG</text>
+<path d="M1482.8,357.0 A230,230 0 0 1 1365.2,504.5 L1302.1,381.8 A92,92 0 0 0 1349.1,322.8 Z" fill="#0066CC" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="1385.9" y="409.5" text-anchor="middle" font-size="26" font-weight="700" fill="#fff">JPEG</text>
+<path d="M1354.3,509.8 A230,230 0 0 1 1165.7,509.8 L1222.3,383.9 A92,92 0 0 0 1297.7,383.9 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="1260.0" y="470.1" text-anchor="middle" font-size="26" font-weight="700" fill="#1A2A3A">WebP</text>
+<path d="M1154.8,504.5 A230,230 0 0 1 1037.2,357.0 L1170.9,322.8 A92,92 0 0 0 1217.9,381.8 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="1134.1" y="409.5" text-anchor="middle" font-size="26" font-weight="700" fill="#1A2A3A">BMP</text>
+<path d="M1034.5,345.3 A230,230 0 0 1 1076.5,161.4 L1186.6,244.5 A92,92 0 0 0 1169.8,318.1 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="1103.0" y="273.3" text-anchor="middle" font-size="26" font-weight="700" fill="#1A2A3A">GIF</text>
+<path d="M1084.0,151.9 A230,230 0 0 1 1254.0,70.1 L1257.6,208.0 A92,92 0 0 0 1189.6,240.8 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="1190.1" y="164.0" text-anchor="middle" font-size="26" font-weight="700" fill="#1A2A3A">TIFF</text>
+<circle cx="1260" cy="300" r="82" fill="#fff" filter="url(#sh)"/>
+<text x="1260" y="292" text-anchor="middle" font-size="15" font-weight="700" fill="#5B6B7B">CONVERSIONE</text>
+<text x="1260" y="324" text-anchor="middle" font-size="30" font-weight="700" fill="#005E8E">JPEG</text>
+<text x="110" y="250" font-size="132" font-weight="700" fill="#fff">Cedro</text>
+<text x="114" y="322" font-size="38" fill="#fff">Cambia formato a un file</text>
+<text x="114" y="368" font-size="38" fill="#fff">con un clic destro.</text>
+<text x="114" y="440" font-size="24" fill="#BFE3F6">Foto, documenti, PDF, audio e video. Tutto sul tuo PC, senza caricare nulla.</text>
+<rect x="114" y="478" width="270" height="62" rx="31" fill="#fff"/>
+<text x="249" y="518" text-anchor="middle" font-size="26" font-weight="700" fill="#005E8E">Scarica per Windows</text>
+</svg>
