@@ -114,27 +114,30 @@ pub const PAGE_COUNT: usize = PAGES.len();
 pub struct Tour {
     pub page: usize,
     start: u64,
+    /// Millisecondi già «passati» nel passo: serve a saltare alla ruota scelta con un clic.
+    skip: u32,
 }
 
 impl Tour {
     pub const fn new(now: u64) -> Self {
-        Tour { page: 0, start: now }
+        Tour { page: 0, start: now, skip: 0 }
     }
 
     pub fn goto(&mut self, page: usize, now: u64) {
         self.page = page % PAGE_COUNT;
         self.start = now;
+        self.skip = 0;
     }
 
     /// Fa andare avanti da solo il passo scaduto; dopo l'ultimo si ricomincia.
     pub fn tick(&mut self, now: u64) {
-        if now.saturating_sub(self.start) >= PAGES[self.page].ms as u64 {
+        if self.elapsed(now) >= PAGES[self.page].ms {
             self.goto(self.page + 1, now);
         }
     }
 
     pub fn elapsed(&self, now: u64) -> u32 {
-        now.saturating_sub(self.start).min(u32::MAX as u64) as u32
+        (now.saturating_sub(self.start).min(u32::MAX as u64) as u32).saturating_add(self.skip)
     }
 
     pub fn is_last(&self) -> bool {
@@ -144,7 +147,8 @@ impl Tour {
     /// Un clic su una riga del primo passo sceglie la ruota da vedere.
     pub fn show_row(&mut self, row: usize, now: u64) {
         if self.page == 0 {
-            self.start = now.saturating_sub((row as u64) * MODE_MS as u64);
+            self.start = now;
+            self.skip = row as u32 * MODE_MS;
         }
     }
 }
@@ -560,6 +564,14 @@ mod tests {
         now += PAGES[t.page].ms as u64;
         t.tick(now);
         assert_eq!(t.page, 0);
+    }
+
+    #[test]
+    fn row_click_works_right_after_opening() {
+        let mut t = Tour::new(0);
+        t.show_row(2, 1000);
+        assert_eq!(lit_row(0, t.elapsed(1000)), 2);
+        assert_eq!(lit_row(0, t.elapsed(2000)), 2);
     }
 
     #[test]
