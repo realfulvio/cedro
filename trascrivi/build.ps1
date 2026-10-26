@@ -49,6 +49,8 @@ if ($arm) {
   $env:CXX = "clang-cl"
   $env:CMAKE_C_COMPILER = "clang-cl"
   $env:CMAKE_CXX_COMPILER = "clang-cl"
+  # Il crate cmake manda solo -nologo -MD...: senza /EHsc clang-cl spegne le eccezioni e ggml (che usa try) non compila.
+  $env:CXXFLAGS = "/EHsc"
 }
 $variants = @($cpu.Keys)
 if (-not $SoloCpu -and $env:VULKAN_SDK) { $variants += "vulkan" }

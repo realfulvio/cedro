@@ -65,7 +65,7 @@ jobs:
               $head = [System.IO.File]::ReadAllBytes("$PWD\is.exe")[0..1]
               "{0}: {1} byte, inizio {2}" -f $u, (Get-Item is.exe).Length, [char[]]$head -join ''
               if ((Get-Item is.exe).Length -gt 1MB -and [char[]]$head -join '' -eq 'MZ') { break }
-            } catch { "$u: $_" }
+            } catch { "${u}: $_" }
           }
           $p = Start-Process .\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait -PassThru
           "uscita dell'installatore: $($p.ExitCode)"
