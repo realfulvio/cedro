@@ -1914,9 +1914,21 @@ Luca,Bondeno
         let dir = std::env::temp_dir().join(format!("cedro-gpu-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        let src = dir.join("vp9.webm");
-        fs::write(&src, include_bytes!("../tests/fixtures/vp9.webm")).unwrap();
-        let mp4 = dir.join("vp9.mp4");
+        // Su Windows la sorgente è un MP4 640×360 fatto col processore: i video di prova sono più piccoli
+        // della misura minima della scheda (NVENC parte da circa 145×49) e Windows li darebbe al software.
+        #[cfg(windows)]
+        let src = {
+            let src = dir.join("sorgente.mp4");
+            crate::video::synthetic_mp4(&src, 640, 360, 60, false).expect("sorgente");
+            src
+        };
+        #[cfg(target_os = "linux")]
+        let src = {
+            let src = dir.join("vp9.webm");
+            fs::write(&src, include_bytes!("../tests/fixtures/vp9.webm")).unwrap();
+            src
+        };
+        let mp4 = dir.join("convertito.mp4");
         let shape = crate::sink::VideoShape { gpu: true, ..Default::default() };
         let (result, used) = crate::sink::with_shape(shape, || {
             #[cfg(windows)]
