@@ -1,4 +1,5 @@
-//! La scheda YouTube del pannello Conversioni su Windows: link, Video o Solo audio, un pulsante.
+//! Le schede YouTube e «Video dal web» del pannello Conversioni su Windows: link, Video o Solo audio,
+//! un pulsante. Le due schede hanno gli stessi controlli: cambiano testi, link accettati e opzioni.
 //! Le altre opzioni e il registro stanno in due riquadri chiusi. Sta dentro la finestra del pannello
 //! (modulo figlio di `conversioni_win`) e ne nasconde i controlli finché è aperta.
 
@@ -72,6 +73,10 @@ const VIDEO_FORMATS: &[&str] = &["mp4", "mkv", "webm"];
 const AUDIO_FORMATS: &[&str] = &["mp3", "m4a", "opus", "wav", "flac"];
 const SUBTITLES: &[(&str, u32)] = &[("Nessuno", 0), ("Italiano", 1), ("Italiano e inglese", 2), ("Tutti", 3)];
 
+const WEB_TITLE: &str = "Video dal web";
+const WEB_HINT: &str = "Incolla il link della pagina che contiene il video (RaiPlay, Vimeo, Internet Archive e oltre mille altri siti).";
+const WEB_NOTE: &str = "Funziona con i siti che yt-dlp riconosce. Se un sito non è supportato, o il video è protetto o chiede un accesso, lo vedi accanto al link.";
+
 const BASE_HEIGHT: i32 = 636;
 /// L'altezza della nota sotto i riquadri: due righe di testo.
 const NOTE_H: i32 = 46;
@@ -94,7 +99,11 @@ enum Msg {
 
 struct Page {
     shown: bool,
+    /// La scheda «Video dal web» (link di qualsiasi sito) invece di YouTube.
+    web: bool,
     rows: Vec<Row>,
+    /// La coda dell'altra scheda, messa da parte finché non si torna lì.
+    parked: Vec<Row>,
     audio: bool,
     more: bool,
     log_open: bool,
@@ -126,6 +135,20 @@ fn downloads_dir() -> PathBuf {
 
 pub fn active() -> bool {
     with(|p| p.shown).unwrap_or(false)
+}
+
+/// La scheda aperta: `Some(false)` YouTube, `Some(true)` Video dal web, `None` nessuna delle due.
+pub fn shown_mode() -> Option<bool> {
+    with(|p| p.shown.then_some(p.web)).flatten()
+}
+
+fn web() -> bool {
+    with(|p| p.web).unwrap_or(false)
+}
+
+/// Un'opzione si vede per Video o per Solo audio; «Salta le parti sponsorizzate» solo su YouTube (SponsorBlock).
+fn option_on(id: i32, video: bool, audio_too: bool, audio: bool, web: bool) -> bool {
+    (if audio { audio_too } else { video }) && !(web && id == Y_SPON)
 }
 
 pub fn busy() -> bool {
@@ -180,7 +203,9 @@ unsafe fn combo_get(hwnd: HWND, id: i32) -> usize {
 pub unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     *page() = Some(Page {
         shown: false,
+        web: false,
         rows: Vec::new(),
+        parked: Vec::new(),
         audio: false,
         more: false,
         log_open: false,
@@ -203,7 +228,7 @@ pub unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     child(hwnd, instance, s, "YouTube", 0, Y_TITLE, (LEFT, 44, WIDTH, 32), ft);
     child(hwnd, instance, s, "Incolla un link e scarica il video oppure solo l'audio.", 0, Y_HINT, (LEFT, 78, WIDTH, 22), f);
     let edit = child(hwnd, instance, w!("EDIT"), "", tab | WS_BORDER.0 | 0x80 /* ES_AUTOHSCROLL */, Y_EDIT, (LEFT, 104, 560, 32), f);
-    SendMessageW(edit, EM_SETCUEBANNER, Some(WPARAM(1)), Some(LPARAM(w!("Incolla qui il link del video").as_ptr() as isize)));
+    SendMessageW(edit, EM_SETCUEBANNER, Some(WPARAM(1)), Some(LPARAM(w!("Incolla qui il link di YouTube").as_ptr() as isize)));
     child(hwnd, instance, b, "Aggiungi", tab | BS_OWNERDRAW as u32, Y_ADD, (LEFT + 568, 104, 102, 32), fb);
     child(hwnd, instance, s, "", 0, Y_COUNT, (LEFT, 146, WIDTH, 16), fs);
     child(hwnd, instance, w!("LISTBOX"), "", tab | LBS_OWNERDRAWFIXED as u32 | LBS_NOINTEGRALHEIGHT as u32 | WS_VSCROLL.0 | WS_BORDER.0, Y_QUEUE, (LEFT, 164, WIDTH, 120), f);
@@ -265,8 +290,8 @@ unsafe fn refresh_choices(hwnd: HWND) {
 }
 
 /// Le misure verticali della scheda: (inizio della coda, spazio sotto la coda, altezza di «Altre opzioni», altezza del registro).
-fn metrics(audio: bool, more: bool, log_open: bool) -> (i32, i32, i32, i32) {
-    let count = OPTION_IDS.iter().filter(|(_, v, a)| if audio { *a } else { *v }).count() as i32;
+fn metrics(audio: bool, web: bool, more: bool, log_open: bool) -> (i32, i32, i32, i32) {
+    let count = OPTION_IDS.iter().filter(|(id, v, a)| option_on(*id, *v, *a, audio, web)).count() as i32;
     // Le opzioni stanno su due colonne, per non allungare troppo la finestra.
     let options_h = if more { (count + 1) / 2 * 28 + 8 } else { 0 };
     let log_h = if log_open { 104 } else { 0 };
@@ -278,19 +303,19 @@ fn metrics(audio: bool, more: bool, log_open: bool) -> (i32, i32, i32, i32) {
 
 /// L'altezza minima dell'area interna con i riquadri aperti di ora (px di progetto).
 pub fn min_height() -> i32 {
-    let (audio, more, log_open) = with(|p| (p.audio, p.more, p.log_open)).unwrap_or((false, false, false));
-    let (top, below, _, _) = metrics(audio, more, log_open);
+    let (audio, web, more, log_open) = with(|p| (p.audio, p.web, p.more, p.log_open)).unwrap_or((false, false, false, false));
+    let (top, below, _, _) = metrics(audio, web, more, log_open);
     BASE_HEIGHT.max(top + 44 + below)
 }
 
 /// Mette ogni controllo al suo posto e adatta la finestra a ciò che è aperto e alla misura scelta dall'utente.
 pub unsafe fn layout(hwnd: HWND) {
-    let Some((audio, more, log_open, shown)) = with(|p| (p.audio, p.more, p.log_open, p.shown)) else { return };
+    let Some((audio, web, more, log_open, shown)) = with(|p| (p.audio, p.web, p.more, p.log_open, p.shown)) else { return };
     if !shown {
         return;
     }
-    let visible_options: Vec<i32> = OPTION_IDS.iter().filter(|(_, v, a)| if audio { *a } else { *v }).map(|o| o.0).collect();
-    let (top, below, options_h, log_h) = metrics(audio, more, log_open);
+    let visible_options: Vec<i32> = OPTION_IDS.iter().filter(|(id, v, a)| option_on(*id, *v, *a, audio, web)).map(|o| o.0).collect();
+    let (top, below, options_h, log_h) = metrics(audio, web, more, log_open);
     // La larghezza in più data dall'utente va al contenuto; l'altezza in più alla coda.
     let (user_w, user_h) = user_size();
     let dx = (user_w - BASE_W).max(0);
@@ -314,7 +339,7 @@ pub unsafe fn layout(hwnd: HWND) {
     put(hwnd, Y_MORE, LEFT, y, w, 28);
     y += 28;
     for (id, v, a) in OPTION_IDS {
-        let on = more && (if audio { *a } else { *v });
+        let on = more && option_on(*id, *v, *a, audio, web);
         show_id(hwnd, *id, on);
         if let Some((label, _)) = OPTION_LABELS.iter().find(|(_, c)| c == id) {
             show_id(hwnd, *label, on);
@@ -364,12 +389,35 @@ pub unsafe fn layout(hwnd: HWND) {
     let _ = InvalidateRect(Some(hwnd), None, true);
 }
 
-/// Si apre la scheda: nasconde i controlli dei file e mostra quelli di YouTube.
-pub unsafe fn enter(hwnd: HWND) {
-    if active() {
-        return;
+/// Si apre la scheda YouTube (`web` falso) o Video dal web: nasconde i controlli dei file e mostra i suoi.
+/// Mentre una scheda scarica non si passa all'altra (la coda in corso è la sua): torna `false`.
+pub unsafe fn enter(hwnd: HWND, web: bool) -> bool {
+    if shown_mode() == Some(web) {
+        return true;
     }
-    with(|p| p.shown = true);
+    if busy() && self::web() != web {
+        with(|p| p.note = "Aspetta che finisca lo scaricamento in corso, oppure annullalo.".into());
+        if active() {
+            refresh_texts(hwnd);
+        }
+        return false;
+    }
+    let was_shown = active();
+    with(|p| {
+        if p.web != web {
+            p.web = web;
+            std::mem::swap(&mut p.rows, &mut p.parked);
+            p.note.clear();
+        }
+        p.shown = true;
+    });
+    if was_shown {
+        set_text(hwnd, Y_EDIT, "");
+        refresh_texts(hwnd);
+        layout(hwnd);
+        let _ = InvalidateRect(Some(ctl(hwnd, ID_SIDE)), None, true);
+        return true;
+    }
     for id in LEGACY_IDS {
         show_id(hwnd, *id, false);
     }
@@ -387,6 +435,7 @@ pub unsafe fn enter(hwnd: HWND) {
     refresh_texts(hwnd);
     layout(hwnd);
     let _ = InvalidateRect(Some(ctl(hwnd, ID_SIDE)), None, true);
+    true
 }
 
 /// Si torna a una categoria di file: i controlli dei file si ricreano con `render_category`.
@@ -401,7 +450,12 @@ pub unsafe fn leave(hwnd: HWND) {
 }
 
 unsafe fn refresh_texts(hwnd: HWND) {
-    let (n, running, audio, note, dest, log) = with(|p| (p.rows.len(), p.running, p.audio, p.note.clone(), p.dest.clone(), p.log.clone())).unwrap_or_default();
+    let (n, running, audio, note, dest, log, web) = with(|p| (p.rows.len(), p.running, p.audio, p.note.clone(), p.dest.clone(), p.log.clone(), p.web)).unwrap_or_default();
+    set_text(hwnd, Y_TITLE, if web { WEB_TITLE } else { "YouTube" });
+    set_text(hwnd, Y_HINT, if web { WEB_HINT } else { "Incolla un link e scarica il video oppure solo l'audio." });
+    let cue = HSTRING::from(if web { "Incolla qui il link della pagina con il video" } else { "Incolla qui il link di YouTube" });
+    SendMessageW(ctl(hwnd, Y_EDIT), EM_SETCUEBANNER, Some(WPARAM(1)), Some(LPARAM(cue.as_ptr() as isize)));
+    set_text(hwnd, Y_PLAY, if web { "Raccolte: scarica tutto" } else { "Playlist: scarica tutta" });
     set_text(
         hwnd,
         Y_COUNT,
@@ -424,7 +478,7 @@ unsafe fn refresh_texts(hwnd: HWND) {
             }
         },
     );
-    let default_note = youtube::first_use_note().unwrap_or_default();
+    let default_note = youtube::first_use_note().unwrap_or_else(|| if web { WEB_NOTE.into() } else { String::new() });
     set_text(hwnd, Y_NOTE, if note.is_empty() { &default_note } else { &note });
     set_text(hwnd, Y_DEST, &dest.display().to_string());
     if log.is_empty() {
@@ -456,7 +510,7 @@ fn log_line(p: &mut Page, text: &str) {
 unsafe fn add_links(hwnd: HWND, text: &str) -> usize {
     let mut added = 0;
     with(|p| {
-        for url in youtube::urls_in(text) {
+        for url in youtube::urls_in(text, p.web) {
             if p.rows.iter().any(|r| r.url == url) {
                 continue;
             }
@@ -479,7 +533,7 @@ unsafe fn request(hwnd: HWND) -> Request {
     r.thumbnail = checked(hwnd, Y_THUMB);
     r.chapters = checked(hwnd, Y_CHAP);
     r.split_chapters = checked(hwnd, Y_SPLIT);
-    r.skip_sponsors = checked(hwnd, Y_SPON);
+    r.skip_sponsors = !web() && checked(hwnd, Y_SPON);
     r.normalize = audio && checked(hwnd, Y_NORM);
     r.playlist = checked(hwnd, Y_PLAY);
     r.skip_existing = checked(hwnd, Y_SKIP);
@@ -498,11 +552,12 @@ unsafe fn start(hwnd: HWND) {
         set_text(hwnd, Y_EDIT, "");
     }
     if with(|p| p.rows.is_empty()).unwrap_or(true) {
-        with(|p| p.note = "Incolla prima il link di un video.".into());
+        with(|p| p.note = if p.web { "Incolla prima il link di una pagina con un video.".into() } else { "Incolla prima un link di YouTube.".into() });
         refresh_texts(hwnd);
         return;
     }
     let req = request(hwnd);
+    let web = web();
     let cancel = Arc::new(AtomicBool::new(false));
     with(|p| {
         for r in p.rows.iter_mut() {
@@ -535,7 +590,8 @@ unsafe fn start(hwnd: HWND) {
             }
         };
         let total = req.urls.len();
-        crate::progress_win::start(total, &format!("Video dal web · {total} link"));
+        let source = if web { "dal web" } else { "da YouTube" };
+        crate::progress_win::start(total, &format!("{} · {total} link", if web { WEB_TITLE } else { "YouTube" }));
         let mut last = usize::MAX;
         let result = youtube::run(
             &req,
@@ -553,7 +609,7 @@ unsafe fn start(hwnd: HWND) {
             &cancel,
         );
         match &result {
-            Ok(files) => crate::progress_win::finish(true, &format!("✓ Fatto · {} file dal web", files.len())),
+            Ok(files) => crate::progress_win::finish(true, &format!("✓ Fatto · {} file {source}", files.len())),
             Err(e) if cancel.load(std::sync::atomic::Ordering::Relaxed) && e == "Annullato" => crate::progress_win::dismiss(),
             Err(e) => crate::progress_win::finish(false, &format!("Errore · {e}")),
         }
@@ -629,7 +685,8 @@ pub unsafe fn command(hwnd: HWND, id: i32, code: u32) {
                 set_text(hwnd, Y_EDIT, "");
                 with(|p| p.note.clear());
             } else {
-                with(|p| p.note = "Questo non sembra un link web (deve iniziare con https://).".into());
+                let note = youtube::link_note(&text, web());
+                with(|p| p.note = note.into());
             }
             refresh_texts(hwnd);
         }
@@ -729,7 +786,7 @@ pub unsafe fn draw(di: &DRAWITEMSTRUCT) {
             let on = (id == Y_AUDIO) == audio;
             fill(hdc, &rc, if on { DROP_BG } else { WHITE });
             frame(hdc, &rc, if on { PRIMARY } else if selected { HOVER } else { LINE }, 2);
-            let (title, note) = if id == Y_AUDIO { ("Solo audio", "Per ascoltare, senza immagini") } else { ("Video", "Immagini e suono") };
+            let (title, note) = if id == Y_AUDIO { ("Solo audio", "Per ascoltare, senza immagini") } else { ("Video", if web() { "Immagini e suono" } else { "Immagini e suono, come su YouTube" }) };
             let mut t = RECT { left: rc.left + px(14), top: rc.top + px(7), right: rc.right - px(8), bottom: rc.top + px(32) };
             SelectObject(hdc, HGDIOBJ(font(&FONT_BOLD).0));
             SetTextColor(hdc, PRIMARY);

@@ -105,16 +105,29 @@ pub fn is_youtube_url(text: &str) -> bool {
         && rest.len() > host.len() + 1
 }
 
-/// I link dentro un testo incollato (uno per riga o separati da spazi).
-pub fn urls_in(text: &str) -> Vec<String> {
+/// I link dentro un testo incollato (uno per riga o separati da spazi): solo YouTube,
+/// oppure (`any`, scheda «Video dal web») di qualsiasi sito.
+pub fn urls_in(text: &str, any: bool) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for word in text.split_whitespace() {
         let word = word.trim_matches(|c: char| matches!(c, '<' | '>' | '"' | '\'' | ',' | ';'));
-        if is_video_url(word) && !out.iter().any(|u| u == word) {
+        let ok = if any { is_video_url(word) } else { is_youtube_url(word) };
+        if ok && !out.iter().any(|u| u == word) {
             out.push(word.to_string());
         }
     }
     out
+}
+
+/// Perché un testo incollato non ha dato link da aggiungere.
+pub fn link_note(text: &str, any: bool) -> &'static str {
+    if !any && !urls_in(text, true).is_empty() {
+        "Questo non è un link di YouTube: per gli altri siti usa «Video dal web»."
+    } else if any {
+        "Questo non sembra un link: deve iniziare con https://"
+    } else {
+        "Questo non sembra un link di YouTube."
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -530,7 +543,8 @@ pub fn parse_info(json: &str) -> Result<Info, String> {
     if title.is_empty() {
         return Err("Il link non ha un titolo".into());
     }
-    let author = v["uploader"].as_str().or_else(|| v["channel"].as_str()).unwrap_or("").to_string();
+    // Fuori da YouTube spesso manca l'autore: allora il nome del sito.
+    let author = ["uploader", "channel", "webpage_url_domain", "extractor_key"].iter().find_map(|k| v[*k].as_str().filter(|s| !s.is_empty())).unwrap_or("").to_string();
     let entries = v["entries"].as_array().map(|e| e.len());
     let seconds = if entries.is_some() {
         v["entries"].as_array().map(|e| e.iter().map(|x| x["duration"].as_f64().unwrap_or(0.0)).sum::<f64>() as u64).unwrap_or(0)
@@ -939,7 +953,7 @@ mod tests {
     #[test]
     fn finds_links_in_pasted_text() {
         let text = "guarda <https://youtu.be/aaa>, poi\nhttps://www.youtube.com/watch?v=bbb e di nuovo https://youtu.be/aaa";
-        assert_eq!(urls_in(text), vec!["https://youtu.be/aaa", "https://www.youtube.com/watch?v=bbb"]);
+        assert_eq!(urls_in(text, false), vec!["https://youtu.be/aaa", "https://www.youtube.com/watch?v=bbb"]);
     }
 
     #[test]
@@ -1072,7 +1086,11 @@ mod tests {
         assert!(!is_video_url("vimeo.com/1"));
         assert!(!is_video_url("https://localhost/x"));
         assert!(!is_video_url("https://a.b/x y"));
-        assert_eq!(urls_in("ciao https://vimeo.com/1 e https://archive.org/details/y"), vec!["https://vimeo.com/1", "https://archive.org/details/y"]);
+        assert_eq!(urls_in("ciao https://vimeo.com/1 e https://archive.org/details/y", true), vec!["https://vimeo.com/1", "https://archive.org/details/y"]);
+        assert!(urls_in("https://vimeo.com/1", false).is_empty());
+        assert_eq!(link_note("https://vimeo.com/1", false), "Questo non è un link di YouTube: per gli altri siti usa «Video dal web».");
+        let info = parse_info(r#"{"title":"Film","duration":60,"webpage_url_domain":"archive.org"}"#).unwrap();
+        assert_eq!(info.author, "archive.org");
         assert_eq!(first_error("ERROR: Unsupported URL: https://x.it/"), "Questo sito non è supportato (o il link non porta a un video)");
     }
 
