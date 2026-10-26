@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="280" viewBox="0 0 1600 280" font-family="Titillium Web">
+<defs><filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#00243a" flood-opacity=".18"/></filter></defs>
+<rect width="1600" height="280" fill="#fff"/>
+<g transform="translate(20,0)"><rect x="0" y="10" width="360" height="250" rx="22" fill="#fff" filter="url(#sh)"/>
+<circle cx="64" cy="76" r="34" fill="#E3F0F9"/><path d="M12 22v-6a12 12 0 0 1 24 0v6M6 22h36v24H6z" transform="translate(40,52) scale(1)" fill="none" stroke="#005E8E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="30" y="156" font-size="29" font-weight="700" fill="#005E8E">Tutto sul tuo PC</text>
+<text x="30" y="192" font-size="20" fill="#3A4A5A">Nessun caricamento,</text><text x="30" y="218" font-size="20" fill="#3A4A5A">nessuna telemetria.</text></g>
+<g transform="translate(410,0)"><rect x="0" y="10" width="360" height="250" rx="22" fill="#fff" filter="url(#sh)"/>
+<circle cx="64" cy="76" r="34" fill="#E3F0F9"/><path d="M24 4l18 10v20L24 44 6 34V14zM6 14l18 10 18-10M24 24v20" transform="translate(40,52) scale(1)" fill="none" stroke="#005E8E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="30" y="156" font-size="29" font-weight="700" fill="#005E8E">Niente in più</text>
+<text x="30" y="192" font-size="20" fill="#3A4A5A">Non servono LibreOffice,</text><text x="30" y="218" font-size="20" fill="#3A4A5A">ffmpeg o altro.</text></g>
+<g transform="translate(800,0)"><rect x="0" y="10" width="360" height="250" rx="22" fill="#fff" filter="url(#sh)"/>
+<circle cx="64" cy="76" r="34" fill="#E3F0F9"/><path d="M14 14h26v30H14zM8 36V6h26" transform="translate(40,52) scale(1)" fill="none" stroke="#005E8E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="30" y="156" font-size="29" font-weight="700" fill="#005E8E">Originale al sicuro</text>
+<text x="30" y="192" font-size="20" fill="#3A4A5A">Crea sempre una copia</text><text x="30" y="218" font-size="20" fill="#3A4A5A">accanto al file.</text></g>
+<g transform="translate(1190,0)"><rect x="0" y="10" width="360" height="250" rx="22" fill="#fff" filter="url(#sh)"/>
+<circle cx="64" cy="76" r="34" fill="#E3F0F9"/><path d="M10 44V6M10 8h28l-6 10 6 10H10" transform="translate(40,52) scale(1)" fill="none" stroke="#005E8E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="30" y="156" font-size="29" font-weight="700" fill="#005E8E">In italiano</text>
+<text x="30" y="192" font-size="20" fill="#3A4A5A">Anche l'OCR e il PDF</text><text x="30" y="218" font-size="20" fill="#3A4A5A">in Word.</text></g>
+</svg>

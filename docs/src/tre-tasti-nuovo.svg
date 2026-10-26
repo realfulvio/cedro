@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="580" viewBox="0 0 1600 580" font-family="Titillium Web">
+<defs><filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#00243a" flood-opacity=".22"/></filter></defs>
+<rect width="1600" height="580" fill="#EAF2F8"/>
+<g transform="translate(100,0)">
+<rect x="0" y="20" width="360" height="520" rx="28" fill="#fff" filter="url(#sh)"/>
+<rect x="0" y="20" width="360" height="12" rx="6" fill="#0066CC"/>
+<rect x="105" y="62" width="150" height="62" rx="12" fill="#F4F7FA" stroke="#C9D3DD" stroke-width="2"/>
+<rect x="105" y="62" width="150" height="54" rx="12" fill="#fff" stroke="#C9D3DD" stroke-width="2"/>
+<text x="180" y="99" text-anchor="middle" font-size="30" font-weight="700" fill="#1A2A3A">Shift</text>
+<text x="180" y="168" text-anchor="middle" font-size="28" font-weight="700" fill="#0066CC">Converti</text>
+<text x="180" y="198" text-anchor="middle" font-size="19" fill="#5B6B7B">cambia formato</text>
+<path d="M183.3,235.0 A125,125 0 0 1 286.6,294.7 L222.6,333.9 A50,50 0 0 0 181.3,310.0 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="223.8" y="289.5" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">PDF</text>
+<path d="M289.9,300.4 A125,125 0 0 1 289.9,419.6 L223.9,383.9 A50,50 0 0 0 223.9,336.1 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="267.5" y="365.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">PNG</text>
+<path d="M286.6,425.3 A125,125 0 0 1 183.3,485.0 L181.3,410.0 A50,50 0 0 0 222.6,386.1 Z" fill="#0066CC" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="223.8" y="441.0" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">JPEG</text>
+<path d="M176.7,485.0 A125,125 0 0 1 73.4,425.3 L137.4,386.1 A50,50 0 0 0 178.7,410.0 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="136.3" y="441.0" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">WebP</text>
+<path d="M70.1,419.6 A125,125 0 0 1 70.1,300.4 L136.1,336.1 A50,50 0 0 0 136.1,383.9 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="92.5" y="365.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">BMP</text>
+<path d="M73.4,294.7 A125,125 0 0 1 176.7,235.0 L178.7,310.0 A50,50 0 0 0 137.4,333.9 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="136.2" y="289.5" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">GIF</text>
+<circle cx="180" cy="360" r="42" fill="#fff" filter="url(#sh)"/>
+</g>
+<g transform="translate(620,0)">
+<rect x="0" y="20" width="360" height="520" rx="28" fill="#fff" filter="url(#sh)"/>
+<rect x="0" y="20" width="360" height="12" rx="6" fill="#005E8E"/>
+<rect x="105" y="62" width="150" height="62" rx="12" fill="#F4F7FA" stroke="#C9D3DD" stroke-width="2"/>
+<rect x="105" y="62" width="150" height="54" rx="12" fill="#fff" stroke="#C9D3DD" stroke-width="2"/>
+<text x="180" y="99" text-anchor="middle" font-size="30" font-weight="700" fill="#1A2A3A">Ctrl</text>
+<text x="180" y="168" text-anchor="middle" font-size="28" font-weight="700" fill="#005E8E">Strumenti</text>
+<text x="180" y="198" text-anchor="middle" font-size="19" fill="#5B6B7B">comprimi, scala, OCR</text>
+<path d="M183.3,235.0 A125,125 0 0 1 286.6,294.7 L222.6,333.9 A50,50 0 0 0 181.3,310.0 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="223.8" y="289.5" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">Comprimi</text>
+<path d="M289.9,300.4 A125,125 0 0 1 289.9,419.6 L223.9,383.9 A50,50 0 0 0 223.9,336.1 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="267.5" y="365.2" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">Scala</text>
+<path d="M286.6,425.3 A125,125 0 0 1 183.3,485.0 L181.3,410.0 A50,50 0 0 0 222.6,386.1 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="223.8" y="441.0" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">B/N</text>
+<path d="M176.7,485.0 A125,125 0 0 1 73.4,425.3 L137.4,386.1 A50,50 0 0 0 178.7,410.0 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="136.3" y="441.0" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">Ruota</text>
+<path d="M70.1,419.6 A125,125 0 0 1 70.1,300.4 L136.1,336.1 A50,50 0 0 0 136.1,383.9 Z" fill="#005E8E" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="92.5" y="365.2" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">OCR</text>
+<path d="M73.4,294.7 A125,125 0 0 1 176.7,235.0 L178.7,310.0 A50,50 0 0 0 137.4,333.9 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="136.2" y="289.5" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">Pulisci</text>
+<circle cx="180" cy="360" r="42" fill="#fff" filter="url(#sh)"/>
+</g>
+<g transform="translate(1140,0)">
+<rect x="0" y="20" width="360" height="520" rx="28" fill="#fff" filter="url(#sh)"/>
+<rect x="0" y="20" width="360" height="12" rx="6" fill="#00805A"/>
+<rect x="105" y="62" width="150" height="62" rx="12" fill="#F4F7FA" stroke="#C9D3DD" stroke-width="2"/>
+<rect x="105" y="62" width="150" height="54" rx="12" fill="#fff" stroke="#C9D3DD" stroke-width="2"/>
+<text x="180" y="99" text-anchor="middle" font-size="30" font-weight="700" fill="#1A2A3A">Alt</text>
+<text x="180" y="168" text-anchor="middle" font-size="28" font-weight="700" fill="#00805A">Azioni</text>
+<text x="180" y="198" text-anchor="middle" font-size="19" fill="#5B6B7B">duplica, percorso, ZIP</text>
+<path d="M183.3,235.0 A125,125 0 0 1 289.9,419.6 L223.9,383.9 A50,50 0 0 0 181.3,310.0 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="255.8" y="321.5" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">Duplica</text>
+<path d="M286.6,425.3 A125,125 0 0 1 73.4,425.3 L137.4,386.1 A50,50 0 0 0 222.6,386.1 Z" fill="#EEF2F6" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="180.0" y="452.8" text-anchor="middle" font-size="15" font-weight="700" fill="#1A2A3A">Percorso</text>
+<path d="M70.1,419.6 A125,125 0 0 1 176.7,235.0 L178.7,310.0 A50,50 0 0 0 136.1,383.9 Z" fill="#00805A" stroke="#fff" stroke-width="5" stroke-linejoin="round" filter="url(#sh)"/>
+<text x="104.2" y="321.5" text-anchor="middle" font-size="15" font-weight="700" fill="#fff">ZIP</text>
+<circle cx="180" cy="360" r="42" fill="#fff" filter="url(#sh)"/>
+</g>
+</svg>
