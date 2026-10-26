@@ -508,6 +508,10 @@ fn log_line(p: &mut Page, text: &str) {
 }
 
 unsafe fn add_links(hwnd: HWND, text: &str) -> usize {
+    // Si ricomincia: la linea rossa di un errore precedente non serve più.
+    if !busy() {
+        crate::progress_win::forget_finished();
+    }
     let mut added = 0;
     with(|p| {
         for url in youtube::urls_in(text, p.web) {

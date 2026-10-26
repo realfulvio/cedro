@@ -731,6 +731,10 @@ unsafe fn redraw_chips(hwnd: HWND) {
 }
 
 unsafe fn add_files(hwnd: HWND, paths: Vec<PathBuf>) {
+    // Nuovi file: la linea rossa di un errore precedente non serve più.
+    if !state().running {
+        crate::progress_win::forget_finished();
+    }
     let mut first: Option<Kind> = None;
     let mut voice = false;
     let transcribing = trascrizione::active();
