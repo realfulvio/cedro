@@ -327,6 +327,8 @@ jobs:
           gh release upload "$MOTORI" $(find file -type f -name 'cedro-trascrivi-*') --clobber
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             sed "s/{versione}/${TAG#v}/g; s#{repo}#${GITHUB_REPOSITORY}#g" .github/note-release.md > note.md
+            # Una bozza non crea il tag, e il workflow «Linux» fa il checkout del tag: lo creo prima.
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "$TAG" >/dev/null
             # In bozza: nessun Cedro la vede finché non ci sono i pacchetti di tutti i sistemi (job «apri»).
             gh release create "$TAG" --target "$GITHUB_SHA" --draft --title "Cedro ${TAG#v}" --notes-file note.md
           fi
