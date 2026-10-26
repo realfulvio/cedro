@@ -420,7 +420,7 @@ pub fn build(window: &Window) -> YoutubePage {
     let log_box = Expander::new(Some("Cosa sta succedendo"));
     log_box.set_child(Some(&log_scroll));
 
-    let note = Label::new(Some("Al primo uso Cedro scarica da solo due piccoli programmi di aiuto (circa 120 MB, una volta sola) e poi li tiene aggiornati."));
+    let note = Label::new(youtube::first_use_note().as_deref());
     note.set_xalign(0.0);
     note.set_wrap(true);
     note.add_css_class("cedro-muted");

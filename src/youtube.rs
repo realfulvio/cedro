@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 
 const YTDLP_BASE: &str = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/";
 const FFMPEG_BASE: &str = "https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/";
+const DENO_BASE: &str = "https://github.com/denoland/deno/releases/latest/download/";
 /// Dopo quante ore si cerca una versione più nuova di yt-dlp (YouTube cambia spesso).
 const UPDATE_EVERY_HOURS: u64 = 12;
 
@@ -134,9 +135,37 @@ pub fn ffmpeg_path() -> Option<PathBuf> {
     None
 }
 
-/// Stato dei programmi di aiuto, per il pannello.
-pub fn helpers_ready() -> (bool, bool) {
-    (ytdlp_path().is_file(), ffmpeg_path().is_some())
+/// deno: YouTube chiede a yt-dlp un runtime JavaScript, senza il quale restano solo i formati piccoli.
+pub fn deno_path() -> PathBuf {
+    tools_dir().join(exe("deno"))
+}
+
+/// Stato dei programmi di aiuto, per il pannello: (yt-dlp, ffmpeg, deno).
+pub fn helpers_ready() -> (bool, bool, bool) {
+    (ytdlp_path().is_file(), ffmpeg_path().is_some(), deno_path().is_file())
+}
+
+/// Quello che Cedro scaricherà al primo uso, per dirlo prima; `None` se c'è già tutto.
+pub fn first_use_note() -> Option<String> {
+    let (y, f, d) = helpers_ready();
+    let mut parts: Vec<&str> = Vec::new();
+    let mut mb = 0;
+    if !y {
+        parts.push("yt-dlp");
+        mb += 20;
+    }
+    if !f {
+        parts.push("ffmpeg");
+        mb += 140;
+    }
+    if !d {
+        parts.push("deno");
+        mb += 45;
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    Some(format!("Al primo uso Cedro scarica da solo {} (circa {mb} MB, una volta sola) e poi li tiene aggiornati.", parts.join(", ")))
 }
 
 fn agent() -> ureq::Agent {
@@ -230,6 +259,21 @@ fn ffmpeg_asset() -> &'static str {
     }
 }
 
+fn deno_asset() -> &'static str {
+    if cfg!(windows) {
+        "deno-x86_64-pc-windows-msvc.zip"
+    } else if cfg!(target_arch = "aarch64") {
+        "deno-aarch64-unknown-linux-gnu.zip"
+    } else {
+        "deno-x86_64-unknown-linux-gnu.zip"
+    }
+}
+
+/// Il primo codice SHA-256 (64 cifre esadecimali) in un testo, in qualunque formato sia scritto.
+fn first_sha256(text: &str) -> Option<String> {
+    text.split(|c: char| !c.is_ascii_hexdigit()).find(|w| w.len() == 64).map(|w| w.to_ascii_lowercase())
+}
+
 fn make_executable(path: &Path) {
     #[cfg(unix)]
     {
@@ -291,18 +335,44 @@ pub fn ensure_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result
     Ok(target)
 }
 
-#[cfg(windows)]
-fn extract_ffmpeg(archive: &Path, target: &Path) -> Result<(), String> {
+/// Estrae da uno zip il file che finisce con `suffix` e lo scrive in `target`.
+fn extract_zip_entry(archive: &Path, suffix: &str, target: &Path) -> Result<(), String> {
     let mut zip = zip::ZipArchive::new(std::fs::File::open(archive).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    let mut entry = (0..zip.len())
-        .find(|&i| zip.by_index(i).map(|f| f.name().ends_with("/bin/ffmpeg.exe")).unwrap_or(false))
-        .ok_or("ffmpeg.exe non è nell'archivio")
-        .and_then(|i| zip.by_index(i).map_err(|_| "archivio rovinato"))?;
+    let index = (0..zip.len())
+        .find(|&i| zip.by_index(i).map(|f| f.name().ends_with(suffix)).unwrap_or(false))
+        .ok_or_else(|| format!("{suffix} non è nell'archivio"))?;
+    let mut entry = zip.by_index(index).map_err(|_| "archivio rovinato".to_string())?;
     let part = target.with_extension("part");
     let mut out = std::fs::File::create(&part).map_err(|e| e.to_string())?;
     std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
     drop(out);
     std::fs::rename(part, target).map_err(|e| e.to_string())
+}
+
+/// Scarica deno se manca.
+pub fn ensure_deno(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<PathBuf, String> {
+    let target = deno_path();
+    if target.is_file() {
+        return Ok(target);
+    }
+    emit(Event::Log("deno non c'è ancora: lo scarico (una volta sola, circa 45 MB)".into()));
+    let sum = get_text(&format!("{DENO_BASE}{}.sha256sum", deno_asset())).ok().as_deref().and_then(first_sha256);
+    if sum.is_none() {
+        return Err("Non trovo il codice di controllo di deno: riprova più tardi".into());
+    }
+    let archive = tools_dir().join(deno_asset());
+    download(&format!("{DENO_BASE}{}", deno_asset()), &archive, sum.as_deref(), "deno", emit, cancel)?;
+    let result = extract_zip_entry(&archive, if cfg!(windows) { "deno.exe" } else { "deno" }, &target);
+    let _ = std::fs::remove_file(&archive);
+    result?;
+    make_executable(&target);
+    emit(Event::Log("deno scaricato".into()));
+    Ok(target)
+}
+
+#[cfg(windows)]
+fn extract_ffmpeg(archive: &Path, target: &Path) -> Result<(), String> {
+    extract_zip_entry(archive, "/bin/ffmpeg.exe", target)
 }
 
 #[cfg(not(windows))]
@@ -403,7 +473,7 @@ pub fn first_error(stderr: &str) -> String {
         "Il video è privato".into()
     } else if low.contains("sign in to confirm your age") || low.contains("age-restricted") {
         "Il video è per maggiorenni: serve l'accesso a YouTube".into()
-    } else if low.contains("video unavailable") || low.contains("this video is not available") {
+    } else if low.contains("unavailable") || low.contains("this video is not available") || low.contains("has been removed") {
         "Il video non è disponibile".into()
     } else if low.contains("members-only") || low.contains("join this channel") {
         "Il video è solo per gli iscritti al canale".into()
@@ -431,7 +501,7 @@ fn quality_audio(q: u32) -> &'static str {
 
 /// Gli argomenti di yt-dlp per un link. Non include il link.
 /// `in_playlist`: il link è una playlist, i file vanno in una cartella con il suo nome.
-pub fn build_args(r: &Request, ffmpeg: Option<&Path>, in_playlist: bool) -> Vec<String> {
+pub fn build_args(r: &Request, ffmpeg: Option<&Path>, deno: Option<&Path>, in_playlist: bool) -> Vec<String> {
     let mut a: Vec<String> = Vec::new();
     let mut push = |items: &[&str]| a.extend(items.iter().map(|s| s.to_string()));
     push(&["--newline", "--no-quiet", "--no-colors", "--ignore-config", "--no-mtime", "--embed-metadata"]);
@@ -444,6 +514,13 @@ pub fn build_args(r: &Request, ffmpeg: Option<&Path>, in_playlist: bool) -> Vec<
         a.push("--ffmpeg-location".into());
         a.push(f.to_string_lossy().into_owned());
     }
+    if let Some(d) = deno {
+        a.push("--js-runtimes".into());
+        a.push(format!("deno:{}", d.display()));
+    }
+    // I file provvisori (parti, copertine) stanno in una cartella a parte, tolta a fine lavoro.
+    a.push("-P".into());
+    a.push(format!("temp:{}", temp_dir(&r.dest).display()));
     let mut push = |items: &[&str]| a.extend(items.iter().map(|s| s.to_string()));
     push(&[if r.playlist { "--yes-playlist" } else { "--no-playlist" }]);
     if r.skip_existing {
@@ -488,6 +565,10 @@ pub fn build_args(r: &Request, ffmpeg: Option<&Path>, in_playlist: bool) -> Vec<
         push(&["--split-chapters", "-o", "chapter:%(title).100B/%(section_number)02d - %(section_title).100B.%(ext)s"]);
     }
     a
+}
+
+fn temp_dir(dest: &Path) -> PathBuf {
+    dest.join(".cedro-temp")
 }
 
 /// Una riga di avanzamento (`CEDRO|scaricati|totale|stimato|velocità|secondi`).
@@ -554,6 +635,11 @@ pub fn parse_item(line: &str) -> Option<(usize, usize)> {
     Some((n, it.next()?.parse().ok()?))
 }
 
+/// Righe di yt-dlp che non dicono nulla a chi guarda (copertine mancanti e simili).
+fn noise(line: &str) -> bool {
+    line.contains("Thumbnail") && line.contains("does not exist")
+}
+
 enum Line {
     Out(String),
     Err(String),
@@ -568,6 +654,7 @@ pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Res
     std::fs::create_dir_all(&r.dest).map_err(|e| format!("La cartella di destinazione non si apre: {e}"))?;
     let ytdlp = ensure_ytdlp(emit, cancel)?;
     let ffmpeg = ensure_ffmpeg(emit, cancel)?;
+    let deno = ensure_deno(emit, cancel)?;
     update_ytdlp_if_due(&ytdlp, emit);
     if let Some(v) = ytdlp_version(&ytdlp) {
         emit(Event::Log(format!("yt-dlp versione {v}")));
@@ -582,7 +669,7 @@ pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Res
         emit(Event::Progress { index, total: r.urls.len(), percent: 0.0, label: "Preparo il download".into() });
         let outcome = match probe(&ytdlp, url, r.playlist) {
             Ok(info) => {
-                let args = build_args(r, Some(&ffmpeg), info.entries.is_some());
+                let args = build_args(r, Some(&ffmpeg), Some(&deno), info.entries.is_some());
                 emit(Event::Log(match info.entries {
                     Some(n) => format!("Playlist «{}»: {n} video", info.title),
                     None => format!("«{}» · {}", info.title, clock(info.seconds)),
@@ -592,6 +679,7 @@ pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Res
             }
             Err(e) => Err(e),
         };
+        let _ = std::fs::remove_dir_all(temp_dir(&r.dest));
         match outcome {
             Ok(mut got) => {
                 emit(Event::LinkDone { index, result: Ok(got.len()) });
@@ -665,14 +753,14 @@ fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, 
                     item = n;
                     items = m.max(1);
                     emit(Event::Log(format!("Video {n} di {m} della playlist")));
-                } else if !line.trim().is_empty() {
+                } else if !line.trim().is_empty() && !noise(&line) {
                     emit(Event::Log(line));
                 }
             }
             Ok(Line::Err(line)) => {
                 errors.push_str(&line);
                 errors.push('\n');
-                if !line.trim().is_empty() {
+                if !line.trim().is_empty() && !noise(&line) {
                     emit(Event::Log(line));
                 }
             }
@@ -714,12 +802,12 @@ mod tests {
 
     #[test]
     fn video_arguments() {
-        let a = build_args(&req(false), Some(Path::new("/x/ffmpeg")), false);
+        let a = build_args(&req(false), Some(Path::new("/x/ffmpeg")), Some(Path::new("/x/deno")), false);
         let j = a.join(" ");
         assert!(j.contains("-f bv*[height<=1080]+ba/b[height<=1080]"), "{j}");
         assert!(j.contains("--merge-output-format mp4"));
         assert!(j.contains("-S ext:mp4:m4a,vcodec:h264"));
-        assert!(j.contains("--ffmpeg-location /x/ffmpeg"));
+        assert!(j.contains("--ffmpeg-location /x/ffmpeg") && j.contains("--js-runtimes deno:/x/deno") && j.contains("-P temp:/tmp/d/.cedro-temp"), "{j}");
         assert!(j.contains("--embed-thumbnail") && j.contains("--embed-chapters") && j.contains("--yes-playlist") && j.contains("--no-overwrites"));
         assert!(!j.contains("--write-subs") && !j.contains("-x "));
     }
@@ -729,15 +817,15 @@ mod tests {
         let mut r = req(false);
         r.quality = 0;
         r.format = "mkv".into();
-        let j = build_args(&r, None, false).join(" ");
+        let j = build_args(&r, None, None, false).join(" ");
         assert!(j.contains("-f bv*+ba/b") && !j.contains("height"));
         assert!(!j.contains("-S ") && j.contains("--merge-output-format mkv"));
     }
 
     #[test]
     fn playlist_files_go_in_a_folder() {
-        let one = build_args(&req(false), None, false).join(" ");
-        let many = build_args(&req(false), None, true).join(" ");
+        let one = build_args(&req(false), None, None, false).join(" ");
+        let many = build_args(&req(false), None, None, true).join(" ");
         assert!(one.contains("-o %(title).150B.%(ext)s"));
         assert!(many.contains("-o %(playlist_title).100B/%(playlist_index)02d - %(title).150B.%(ext)s"));
     }
@@ -746,11 +834,11 @@ mod tests {
     fn subtitle_choices() {
         let mut r = req(false);
         r.subtitles = 1;
-        assert!(build_args(&r, None, false).join(" ").contains("--sub-langs it,it-orig --embed-subs"));
+        assert!(build_args(&r, None, None, false).join(" ").contains("--sub-langs it,it-orig --embed-subs"));
         r.subtitles = 2;
-        assert!(build_args(&r, None, false).join(" ").contains("it,it-orig,en,en-orig"));
+        assert!(build_args(&r, None, None, false).join(" ").contains("it,it-orig,en,en-orig"));
         r.subtitles = 3;
-        assert!(build_args(&r, None, false).join(" ").contains("all,-live_chat"));
+        assert!(build_args(&r, None, None, false).join(" ").contains("all,-live_chat"));
     }
 
     #[test]
@@ -761,13 +849,13 @@ mod tests {
         r.split_chapters = true;
         r.playlist = false;
         r.skip_existing = false;
-        let j = build_args(&r, None, false).join(" ");
+        let j = build_args(&r, None, None, false).join(" ");
         assert!(j.contains("-x --audio-format mp3 --audio-quality 5"), "{j}");
         assert!(j.contains("loudnorm") && j.contains("--sponsorblock-remove") && j.contains("--split-chapters"));
         assert!(j.contains("--no-playlist") && j.contains("--force-overwrites"));
         assert!(!j.contains("--merge-output-format"));
         r.format = "wav".into();
-        assert!(!build_args(&r, None, false).join(" ").contains("--embed-thumbnail"));
+        assert!(!build_args(&r, None, None, false).join(" ").contains("--embed-thumbnail"));
     }
 
     #[test]
@@ -803,6 +891,20 @@ mod tests {
     }
 
     #[test]
+    fn sha256_in_any_format() {
+        let sum = "e890975bc2549807bbcc0b584ffafda72cc7c93349dd99c80483dd784f6c4609";
+        assert_eq!(first_sha256(&format!("{sum}  deno-x86_64-unknown-linux-gnu.zip")).as_deref(), Some(sum));
+        assert_eq!(first_sha256(&format!("Algorithm : SHA256\r\nHash      : {}\r\nPath : x", sum.to_uppercase())).as_deref(), Some(sum));
+        assert!(first_sha256("niente").is_none());
+    }
+
+    #[test]
+    fn quiet_about_missing_thumbnails() {
+        assert!(noise("[info] Video Thumbnail 43..38 does not exist"));
+        assert!(!noise("[download] Destination: a.mp4"));
+    }
+
+    #[test]
     fn checksum_lookup() {
         let list = "aaa  yt-dlp\nbbb *yt-dlp.exe\nccc  ./ffmpeg-master-latest-win64-lgpl.zip\n";
         assert_eq!(sum_for(list, "yt-dlp.exe").as_deref(), Some("bbb"));
@@ -815,6 +917,7 @@ mod tests {
     fn errors_in_italian() {
         assert_eq!(first_error("WARNING: x\nERROR: [youtube] abc: Private video. Sign in"), "Il video è privato");
         assert_eq!(first_error("ERROR: [youtube] abc: Video unavailable"), "Il video non è disponibile");
+        assert_eq!(first_error("ERROR: [youtube] aaaaaaaaaaa: This video is unavailable"), "Il video non è disponibile");
         assert_eq!(first_error("ERROR: qualcosa di nuovo"), "qualcosa di nuovo");
         assert_eq!(first_error(""), "yt-dlp non ha dato risposta");
     }
@@ -836,7 +939,7 @@ mod tests {
         std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
         let cancel = AtomicBool::new(false);
         let mut events = Vec::new();
-        let args = build_args(&req(false), None, false);
+        let args = build_args(&req(false), None, None, false);
         let files = run_one(&fake, &args, "good", &dir, 0, 1, &mut |e| events.push(e), &cancel).unwrap();
         assert_eq!(files, vec![dir.join("good-out.mp4")]);
         assert!(dir.join("good-out.mp4").exists());

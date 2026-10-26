@@ -410,12 +410,7 @@ unsafe fn refresh_texts(hwnd: HWND) {
             }
         },
     );
-    let helpers = youtube::helpers_ready();
-    let default_note = if helpers.0 && helpers.1 {
-        String::new()
-    } else {
-        "Al primo uso Cedro scarica da solo due piccoli programmi di aiuto (circa 120 MB, una volta sola) e poi li tiene aggiornati.".to_string()
-    };
+    let default_note = youtube::first_use_note().unwrap_or_default();
     set_text(hwnd, Y_NOTE, if note.is_empty() { &default_note } else { &note });
     set_text(hwnd, Y_DEST, &dest.display().to_string());
     if !log.is_empty() {
