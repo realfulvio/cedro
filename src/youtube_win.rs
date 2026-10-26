@@ -203,7 +203,7 @@ pub unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     child(hwnd, instance, s, "YouTube", 0, Y_TITLE, (LEFT, 44, WIDTH, 32), ft);
     child(hwnd, instance, s, "Incolla un link e scarica il video oppure solo l'audio.", 0, Y_HINT, (LEFT, 78, WIDTH, 22), f);
     let edit = child(hwnd, instance, w!("EDIT"), "", tab | WS_BORDER.0 | 0x80 /* ES_AUTOHSCROLL */, Y_EDIT, (LEFT, 104, 560, 32), f);
-    SendMessageW(edit, EM_SETCUEBANNER, Some(WPARAM(1)), Some(LPARAM(w!("Incolla qui il link di YouTube").as_ptr() as isize)));
+    SendMessageW(edit, EM_SETCUEBANNER, Some(WPARAM(1)), Some(LPARAM(w!("Incolla qui il link del video").as_ptr() as isize)));
     child(hwnd, instance, b, "Aggiungi", tab | BS_OWNERDRAW as u32, Y_ADD, (LEFT + 568, 104, 102, 32), fb);
     child(hwnd, instance, s, "", 0, Y_COUNT, (LEFT, 146, WIDTH, 16), fs);
     child(hwnd, instance, w!("LISTBOX"), "", tab | LBS_OWNERDRAWFIXED as u32 | LBS_NOINTEGRALHEIGHT as u32 | WS_VSCROLL.0 | WS_BORDER.0, Y_QUEUE, (LEFT, 164, WIDTH, 120), f);
@@ -498,7 +498,7 @@ unsafe fn start(hwnd: HWND) {
         set_text(hwnd, Y_EDIT, "");
     }
     if with(|p| p.rows.is_empty()).unwrap_or(true) {
-        with(|p| p.note = "Incolla prima un link di YouTube.".into());
+        with(|p| p.note = "Incolla prima il link di un video.".into());
         refresh_texts(hwnd);
         return;
     }
@@ -535,7 +535,7 @@ unsafe fn start(hwnd: HWND) {
             }
         };
         let total = req.urls.len();
-        crate::progress_win::start(total, &format!("YouTube · {total} link"));
+        crate::progress_win::start(total, &format!("Video dal web · {total} link"));
         let mut last = usize::MAX;
         let result = youtube::run(
             &req,
@@ -553,7 +553,7 @@ unsafe fn start(hwnd: HWND) {
             &cancel,
         );
         match &result {
-            Ok(files) => crate::progress_win::finish(true, &format!("✓ Fatto · {} file da YouTube", files.len())),
+            Ok(files) => crate::progress_win::finish(true, &format!("✓ Fatto · {} file dal web", files.len())),
             Err(e) if cancel.load(std::sync::atomic::Ordering::Relaxed) && e == "Annullato" => crate::progress_win::dismiss(),
             Err(e) => crate::progress_win::finish(false, &format!("Errore · {e}")),
         }
@@ -629,7 +629,7 @@ pub unsafe fn command(hwnd: HWND, id: i32, code: u32) {
                 set_text(hwnd, Y_EDIT, "");
                 with(|p| p.note.clear());
             } else {
-                with(|p| p.note = "Questo non sembra un link di YouTube.".into());
+                with(|p| p.note = "Questo non sembra un link web (deve iniziare con https://).".into());
             }
             refresh_texts(hwnd);
         }
@@ -729,7 +729,7 @@ pub unsafe fn draw(di: &DRAWITEMSTRUCT) {
             let on = (id == Y_AUDIO) == audio;
             fill(hdc, &rc, if on { DROP_BG } else { WHITE });
             frame(hdc, &rc, if on { PRIMARY } else if selected { HOVER } else { LINE }, 2);
-            let (title, note) = if id == Y_AUDIO { ("Solo audio", "Per ascoltare, senza immagini") } else { ("Video", "Immagini e suono, come su YouTube") };
+            let (title, note) = if id == Y_AUDIO { ("Solo audio", "Per ascoltare, senza immagini") } else { ("Video", "Immagini e suono") };
             let mut t = RECT { left: rc.left + px(14), top: rc.top + px(7), right: rc.right - px(8), bottom: rc.top + px(32) };
             SelectObject(hdc, HGDIOBJ(font(&FONT_BOLD).0));
             SetTextColor(hdc, PRIMARY);
