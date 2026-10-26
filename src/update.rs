@@ -159,6 +159,15 @@ mod tests {
         assert!(!newer("0.7.1", "nonsense"));
     }
 
+    /// Su ARM64 l'installatore ha il suffisso «-arm64»: i file di prova lo prendono come quelli veri.
+    fn for_this_arch(text: &str) -> String {
+        if cfg!(target_arch = "aarch64") {
+            text.replace(".exe", "-arm64.exe")
+        } else {
+            text.to_string()
+        }
+    }
+
     #[test]
     fn reads_release() {
         let body = r#"{
@@ -170,10 +179,10 @@ mod tests {
                 {"name": "Cedro-Setup-0.8.0.exe", "browser_download_url": "https://x/Cedro-Setup-0.8.0.exe"}
             ]
         }"#;
-        let release = parse_release(body).unwrap();
+        let release = parse_release(&for_this_arch(body)).unwrap();
         assert_eq!(release.version, "0.8.0");
         let asset = release.installer.unwrap();
-        assert_eq!(asset.url, "https://x/Cedro-Setup-0.8.0.exe");
+        assert_eq!(asset.url, for_this_arch("https://x/Cedro-Setup-0.8.0.exe"));
         assert_eq!(asset.sha256.as_deref(), Some("410cf4149103e3c6bf74a241ec6ea87e9cdff471f02d8242f858c73f2b0dced0"));
     }
 
@@ -193,7 +202,7 @@ mod tests {
         let body = r#"{"tag_name": "0.9.0", "assets": [
             {"name": "Cedro-Setup-0.9.0.exe", "browser_download_url": "https://x/a.exe", "digest": "sha256:abc"}
         ]}"#;
-        let asset = parse_release(body).unwrap().installer.unwrap();
+        let asset = parse_release(&for_this_arch(body)).unwrap().installer.unwrap();
         assert_eq!(asset.sha256.as_deref(), Some("abc"));
     }
 }
