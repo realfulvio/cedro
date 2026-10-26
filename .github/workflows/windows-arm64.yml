@@ -14,6 +14,10 @@ on:
         description: "Tag della release da pubblicare (vuoto = solo prova)"
         required: false
         default: ""
+      solo_pulizia:
+        description: "Non compila: toglie dalla release del tag (e dai suoi motori) i file di altre versioni"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -24,6 +28,7 @@ env:
 jobs:
   app:
     name: Cedro (build, prove, installatore)
+    if: ${{ !inputs.solo_pulizia }}
     runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
@@ -84,6 +89,7 @@ jobs:
 
   motori:
     name: Motore di trascrizione (processore)
+    if: ${{ !inputs.solo_pulizia }}
     runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
@@ -133,6 +139,7 @@ jobs:
 
   vulkan:
     name: Motore di trascrizione (scheda video Vulkan, Adreno)
+    if: ${{ !inputs.solo_pulizia }}
     runs-on: windows-11-arm
     continue-on-error: true
     steps:
@@ -194,6 +201,7 @@ jobs:
 
   x64:
     name: Cedro x64 (prove, installatore, motori)
+    if: ${{ !inputs.solo_pulizia }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -291,6 +299,10 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           find file -type f | sort
+          V="${TAG#v}"
+          CARGO=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "$CARGO" != "$V" ]; then echo "Il tag $TAG non corrisponde alla versione $CARGO di Cargo.toml"; exit 1; fi
+          if find file -type f -name '*.exe' | grep -v -- "$V" | grep .; then echo "File di un'altra versione"; exit 1; fi
           MOTORI="motori-$TAG"
           if ! gh release view "$MOTORI" >/dev/null 2>&1; then
             gh release create "$MOTORI" --target "$GITHUB_SHA" --prerelease --title "Motori di trascrizione ${TAG#v} (non servono: li scarica Cedro)" \
@@ -328,11 +340,16 @@ jobs:
           $psi.RedirectStandardOutput = $true
           $psi.RedirectStandardError = $true
           $p = [Diagnostics.Process]::Start($psi)
+          # Letture asincrone: l'installatore avviato da Cedro eredita stdout e lo tiene aperto finché non si chiude.
+          $stdout = $p.StandardOutput.ReadToEndAsync()
+          $stderr = $p.StandardError.ReadToEndAsync()
           $p.StandardInput.WriteLine('s'); $p.StandardInput.Close()
           if (-not $p.WaitForExit(180000)) { $p.Kill(); throw 'cedro update non finisce' }
-          $out = $p.StandardOutput.ReadToEnd() + $p.StandardError.ReadToEnd()
+          Start-Sleep -Seconds 3
+          Get-Process | Where-Object { $_.ProcessName -like 'Cedro-*Setup*' } | ForEach-Object { Write-Host "Installatore avviato: $($_.ProcessName)"; $_ } | Stop-Process -Force
+          $null = $stdout.Wait(30000); $null = $stderr.Wait(30000)
+          $out = $stdout.Result + $stderr.Result
           $out
-          Get-Process | Where-Object { $_.ProcessName -like 'Cedro-*Setup*' } | Stop-Process -Force
           if ($out -notmatch [regex]::Escape("Avviato Cedro-Setup-$version.exe")) { throw "la 0.17 non ha preso Cedro-Setup-$version.exe" }
 
       - name: La nuova trascrive con il motore della release dei motori
@@ -362,3 +379,23 @@ jobs:
           if (-not $txt) { throw 'nessun testo' }
           Get-Content $txt.FullName
           if ((Get-Content $txt.FullName -Raw) -notmatch 'weather') { throw 'trascrizione sbagliata' }
+
+  pulizia:
+    name: Toglie i file di altre versioni dalla release
+    if: ${{ inputs.solo_pulizia && inputs.tag != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          V="${TAG#v}"
+          for t in "$TAG" "motori-$TAG"; do
+            gh api "repos/$REPO/releases/tags/$t" --jq '.assets[] | "\(.id) \(.name)"' | while read -r id name; do
+              case "$name" in
+                *"$V"*) echo "tengo $t/$name" ;;
+                *) echo "tolgo $t/$name"; gh api -X DELETE "repos/$REPO/releases/assets/$id" ;;
+              esac
+            done
+          done
