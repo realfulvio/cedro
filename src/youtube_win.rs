@@ -547,6 +547,7 @@ unsafe fn start(hwnd: HWND) {
         );
         match &result {
             Ok(files) => crate::progress_win::finish(true, &format!("✓ Fatto · {} file da YouTube", files.len())),
+            Err(e) if cancel.load(std::sync::atomic::Ordering::Relaxed) && e == "Annullato" => crate::progress_win::dismiss(),
             Err(e) => crate::progress_win::finish(false, &format!("Errore · {e}")),
         }
         post(Msg::Finished(result));
