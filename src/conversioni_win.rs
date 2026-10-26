@@ -768,6 +768,16 @@ unsafe fn apply_view(hwnd: HWND) {
         show(hwnd, id, simple);
     }
     show(hwnd, ID_SIDE, !simple);
+    let prev = state().action.clone();
+    if !simple {
+        // La vista Semplice ne ha nascosti parecchi: tornano tutti, poi `render_category` li dispone.
+        for id in [
+            ID_TITLE, ID_HINT, ID_DROP, ID_COUNT, ID_QUEUE, ID_CAP_FORMATS, ID_CAP_TOOLS, ID_CAP_QUALITY, ID_QUALITY, ID_QUALITY_VALUE, ID_CAP_DEST, ID_DEST, ID_CHANGE,
+            ID_RESET, ID_GO, ID_FOOT, ID_POWERED, ID_CAP_OPTIONS, ID_EXISTS, ID_CAP_EXISTS,
+        ] {
+            show(hwnd, id, true);
+        }
+    }
     if simple {
         set_extra(hwnd, 0, 0);
         let on_web = youtube_win::active();
@@ -793,6 +803,21 @@ unsafe fn apply_view(hwnd: HWND) {
             render_category(hwnd);
         }
         let _ = InvalidateRect(Some(item(hwnd, ID_SIDE)), None, true);
+    }
+    if !youtube_win::active() {
+        // Il formato scelto resta, se la vista di arrivo lo offre.
+        let kind = CATEGORIES[state().category].kind;
+        let valid = if simple {
+            conversioni::simple_formats(kind).iter().any(|f| f.id == prev)
+        } else {
+            conversioni::formats(kind).iter().chain(conversioni::tools(kind).iter()).any(|s| s.id == prev)
+        };
+        if valid {
+            state().action = prev;
+            refresh_options(hwnd);
+            redraw_chips(hwnd);
+            render_queue(hwnd);
+        }
     }
     let _ = InvalidateRect(Some(hwnd), None, true);
 }
