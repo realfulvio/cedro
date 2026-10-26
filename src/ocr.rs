@@ -29,12 +29,11 @@ pub fn open_upright(path: &Path) -> Result<DynamicImage, String> {
     Ok(image)
 }
 
-pub const MAX_OCR_PAGES: usize = 100;
 
 pub fn pdf_pages_text(pdf: &[u8]) -> Result<String, String> {
     let mut body = String::new();
     let mut any = false;
-    let pages = render_pdf(pdf, |_| true, OCR_SCALE, MAX_OCR_PAGES, |i, png| {
+    let pages = render_pdf(pdf, |_| true, OCR_SCALE, crate::settings::read_settings().ocr_pages(), |i, png| {
         if i > 0 {
             body.push_str("\n\n");
         }
@@ -58,11 +57,11 @@ pub fn pdf_pages_text(pdf: &[u8]) -> Result<String, String> {
     Ok(body)
 }
 
-/// Legge con l'OCR solo le pagine (da 0) per cui `wanted` è vero, fino a `MAX_OCR_PAGES`.
+/// Legge con l'OCR solo le pagine (da 0) per cui `wanted` è vero, fino al limite delle impostazioni.
 /// Per ogni pagina: `None` se non è stata letta, altrimenti il testo (vuoto se non trovato).
 pub fn pdf_pages_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec<Option<String>>, String> {
     let mut texts = vec![None; pdf_page_count(pdf)?];
-    render_pdf(pdf, &wanted, OCR_SCALE, MAX_OCR_PAGES, |i, png| {
+    render_pdf(pdf, &wanted, OCR_SCALE, crate::settings::read_settings().ocr_pages(), |i, png| {
         let image = image::load_from_memory(&png).map_err(|e| e.to_string())?;
         texts[i] = Some(recognize(&image).unwrap_or_default());
         Ok(())
@@ -273,6 +272,15 @@ fn parse_tsv(tsv: &str) -> Vec<Line> {
     lines.into_iter().map(|(_, l)| l).filter(|l| !l.text.is_empty()).collect()
 }
 
+/// Vero se Windows ha la lingua italiana per l'OCR.
+#[cfg(windows)]
+pub fn windows_italian_installed() -> bool {
+    use windows::core::HSTRING;
+    use windows::Globalization::Language;
+    use windows::Media::Ocr::OcrEngine as WinOcr;
+    Language::CreateLanguage(&HSTRING::from("it")).and_then(|l| WinOcr::IsLanguageSupported(&l)).unwrap_or(false)
+}
+
 /// L'OCR di Windows in italiano. Se manca la lingua, quello delle lingue dell'utente.
 #[cfg(windows)]
 fn windows_engine() -> Result<windows::Media::Ocr::OcrEngine, String> {
@@ -285,9 +293,11 @@ fn windows_engine() -> Result<windows::Media::Ocr::OcrEngine, String> {
     unsafe {
         let _ = RoInitialize(RO_INIT_MULTITHREADED);
     }
-    let italian = Language::CreateLanguage(&HSTRING::from("it")).map_err(e)?;
-    if WinOcr::IsLanguageSupported(&italian).map_err(e)? {
-        WinOcr::TryCreateFromLanguage(&italian).map_err(e)
+    // «Automatica» e «Italiano» provano l'italiano; «Inglese» l'inglese.
+    let tag = if crate::settings::read_settings().ocr_lang == "en" { "en-US" } else { "it" };
+    let wanted = Language::CreateLanguage(&HSTRING::from(tag)).map_err(e)?;
+    if WinOcr::IsLanguageSupported(&wanted).map_err(e)? {
+        WinOcr::TryCreateFromLanguage(&wanted).map_err(e)
     } else {
         WinOcr::TryCreateFromUserProfileLanguages().map_err(e)
     }

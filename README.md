@@ -76,7 +76,7 @@ Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Gui
 | Audio | WAV, MP3, OGG, M4A, AAC, FLAC | WAV, MP3 |
 | Video | MP4, WebM, MOV, MKV, AVI | MP4 |
 
-**PDF in Word:** titoli, paragrafi, tabelle vere (celle, sfondi, bordi), elenchi e grafici al loro posto, modificabili come in un editor professionale. Le scansioni vengono lette con l'OCR in italiano.
+**PDF in Word:** titoli con stili veri, paragrafi, tabelle vere (celle, sfondi, bordi, intestazione ripetuta tra le pagine), elenchi puntati e numerati di Word, testo su più colonne e grafici al loro posto, modificabili come in un editor professionale. File leggeri. Le scansioni vengono lette con l'OCR in italiano.
 **Foto dal telefono:** vengono raddrizzate in automatico.
 
 ## L'icona e le impostazioni
@@ -87,7 +87,7 @@ Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Gui
 
 Clic destro sull'icona (o doppio clic per le Impostazioni):
 
-- **Impostazioni:** avvio con Windows, avviso a fine conversione, quali tasti aprono la ruota, qualità di JPEG, WebP, MP3 e PDF in JPG.
+- **Impostazioni** (su Windows, sei sezioni a sinistra): avvio con Windows, avviso e cartella aperta a fine conversione; quali tasti aprono la ruota e se vale nelle finestre Apri/Salva; dove mettere la copia (stessa cartella, sottocartella «Cedro» o una cartella fissa) e se sostituire i file che esistono già; qualità di JPEG, WebP, MP3, risoluzione di PDF in JPG e forza di «Comprimi»; lingua e pagine al massimo dell'OCR; ricerca automatica degli aggiornamenti.
 - **Conversioni:** un pannello con tutte le conversioni, la coda dei file (trascini i file o li scegli), la qualità e la cartella di destinazione. Ogni categoria ha le sue opzioni: foto (dimensioni, raddrizza, sfondo bianco), documenti (formato pagina, caratteri incorporati, segnalibri dai titoli, PDF/A-1b per l'archivio, password), PDF (OCR, tabelle, colonne, pagine come `1-3,5`, risoluzione, una immagine per pagina), testo (codifica, separatore CSV, JSON leggibile, titoli, PDF con caratteri incorporati o PDF/A), audio (kbps, canali, volume, taglio dell'inizio e del silenzio iniziale, tag) e video (risoluzione, fps, senza audio, ottimizzato per il web). Se il nome di uscita esiste già si sceglie: aggiungi `-2`, sostituisci, salta o chiedi ogni volta. I PDF/A di Cedro passano la validazione di veraPDF (profilo PDF/A-1b).
 - **Guida:** l'animazione che spiega i tre tasti.
 - **Controlla aggiornamenti:** Cedro lo fa anche da solo, verifica l'installatore e chiede prima di aggiornare.

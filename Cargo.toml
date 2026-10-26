@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.12.0"
+version = "0.13.1"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -16,6 +16,7 @@ lopdf = "0.36"
 skrifa = "0.46"
 mp3lame-encoder = "0.2"
 ocrs = "0.13"
+png = "0.18"
 oxideav-vp8 = { version = "0.2.7", default-features = false }
 oxideav-vp9 = "0.0.13"
 rten = "0.26"
@@ -69,3 +70,7 @@ windows = { version = "0.61", features = [
 
 [target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
+
+# hayro con l'opzione per disegnare la pagina senza testo (sfondo dei moduli in Word)
+[patch.crates-io]
+hayro = { path = "vendor/hayro" }

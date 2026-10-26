@@ -34,8 +34,27 @@ pub fn zip_store(entries: &[(&str, &[u8])]) -> Vec<u8> {
     zip_entries(entries, true)
 }
 
+/// Archivio compresso con i percorsi interi (docx, odt): i file XML pesano un decimo.
 pub fn zip_archive(entries: &[(&str, &[u8])]) -> Vec<u8> {
-    zip_entries(entries, false)
+    use std::io::Write;
+    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for (name, data) in entries {
+        // Le immagini sono già compresse: comprimerle ancora non serve.
+        let (method, level) = if name.ends_with(".png") || name.ends_with(".jpg") || name.ends_with(".jpeg") {
+            (zip::CompressionMethod::Stored, None)
+        } else {
+            (zip::CompressionMethod::Deflated, Some(9))
+        };
+        let options = zip::write::SimpleFileOptions::default().compression_method(method).compression_level(level);
+        let written = writer.start_file(*name, options).and_then(|_| writer.write_all(data).map_err(Into::into));
+        if written.is_err() {
+            return zip_entries(entries, false);
+        }
+    }
+    match writer.finish() {
+        Ok(cursor) => cursor.into_inner(),
+        Err(_) => zip_entries(entries, false),
+    }
 }
 
 fn zip_entries(entries: &[(&str, &[u8])], base_only: bool) -> Vec<u8> {
