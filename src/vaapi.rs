@@ -2,6 +2,8 @@
 //!
 //! libva si apre al momento con dlopen, così Cedro parte anche dove manca. Se la libreria non c'è, se la
 //! scheda non codifica H.264 o se rifiuta un fotogramma, il video si fa con OpenH264 come sempre.
+//! AMD (radeonsi) non scrive le intestazioni da sé: dove il driver le accetta, SPS, PPS e intestazione
+//! della fetta li scrive Cedro in bit (`BitWriter`), come fa ffmpeg con `h264_vaapi`.
 //! Le strutture sono quelle di `va.h` e `va_enc_h264.h` (libva 2.x); i test ne controllano le misure.
 
 use std::ffi::{c_char, c_int, c_uint, c_void, CStr};
@@ -24,6 +26,9 @@ const ENTRY_ENC_SLICE_LP: c_int = 8;
 
 const ATTRIB_RT_FORMAT: c_int = 0;
 const ATTRIB_RATE_CONTROL: c_int = 5;
+const ATTRIB_ENC_PACKED_HEADERS: c_int = 10;
+const PACKED_SEQUENCE: u32 = 1;
+const PACKED_SLICE: u32 = 4;
 const ATTRIB_NOT_SUPPORTED: u32 = 0x8000_0000;
 const RT_FORMAT_YUV420: u32 = 1;
 const RC_CBR: u32 = 2;
@@ -34,6 +39,10 @@ const BUF_CODED: c_int = 21;
 const BUF_SEQUENCE: c_int = 22;
 const BUF_PICTURE: c_int = 23;
 const BUF_SLICE: c_int = 24;
+const BUF_PACKED_HEADER_PARAM: c_int = 25;
+const BUF_PACKED_HEADER_DATA: c_int = 26;
+const HEADER_SEQUENCE: u32 = 1;
+const HEADER_SLICE: u32 = 3;
 const BUF_MISC: c_int = 27;
 const MISC_FRAME_RATE: u32 = 0;
 const MISC_RATE_CONTROL: u32 = 1;
@@ -168,6 +177,15 @@ struct RateControl {
     max_qp: u32,
     quality_factor: u32,
     target_frame_size: u32,
+    reserved: [u32; 4],
+}
+
+/// `VAEncPackedHeaderParameterBuffer`: che intestazione sta per arrivare e quanto è lunga, in bit.
+#[repr(C)]
+struct PackedHeader {
+    kind: u32,
+    bit_length: u32,
+    has_emulation_bytes: u8,
     reserved: [u32; 4],
 }
 
@@ -468,6 +486,8 @@ pub(crate) struct H264Encoder {
     bitrate: u32,
     qp: u8,
     cabac: bool,
+    /// Quali intestazioni scrive Cedro (PACKED_SEQUENCE, PACKED_SLICE): radeonsi non le fa da sé.
+    packed: u32,
     framerate: u32,
     level: u8,
     gop: u64,
@@ -510,6 +530,11 @@ impl H264Encoder {
         let mut attribs = vec![ConfigAttrib { kind: ATTRIB_RT_FORMAT, value: RT_FORMAT_YUV420 }];
         if rate_control != 0 {
             attribs.push(ConfigAttrib { kind: ATTRIB_RATE_CONTROL, value: rate_control });
+        }
+        // Come ffmpeg: dove il driver le accetta, SPS, PPS e intestazione della fetta le scrive il programma.
+        let packed = device.attribute(device.profile, device.entrypoint, ATTRIB_ENC_PACKED_HEADERS) & (PACKED_SEQUENCE | PACKED_SLICE);
+        if packed != 0 {
+            attribs.push(ConfigAttrib { kind: ATTRIB_ENC_PACKED_HEADERS, value: packed });
         }
         let fps = if fps.is_finite() && fps > 0.0 { fps.clamp(1.0, 240.0) } else { 30.0 };
         unsafe {
@@ -561,6 +586,7 @@ impl H264Encoder {
             }
             Ok(H264Encoder {
                 cabac: device.profile != PROFILE_H264_CONSTRAINED_BASELINE,
+                packed,
                 level: level_for(mbw * mbh, fps),
                 device,
                 config,
@@ -644,6 +670,11 @@ impl H264Encoder {
             }
             let rate = FrameRate { framerate: self.framerate, ..zeroed() };
             buffers.push(self.buffer(BUF_MISC, &misc(MISC_FRAME_RATE, bytes_of(&rate)))?);
+            if self.packed & PACKED_SEQUENCE != 0 {
+                let mut headers = sps(self.profile(), self.level, self.mbw, self.mbh, self.width, self.height);
+                headers.extend(pps(self.cabac, self.init_qp()));
+                self.packed_header(HEADER_SEQUENCE, &headers, buffers)?;
+            }
         }
         let current = PictureH264 {
             picture_id: self.surfaces[self.recon],
@@ -669,7 +700,7 @@ impl H264Encoder {
         }
         picture.coded_buf = self.coded;
         picture.frame_num = self.frame_num;
-        picture.pic_init_qp = if self.rate_control == RC_CQP || self.rate_control == 0 { self.qp } else { 26 };
+        picture.pic_init_qp = self.init_qp();
         // idr_pic_flag, reference_pic_flag = 1, entropy_coding_mode_flag, deblocking_filter_control_present_flag
         picture.pic_fields = idr as u32 | 1 << 1 | (self.cabac as u32) << 3 | 1 << 9;
         buffers.push(self.buffer(BUF_PICTURE, bytes_of(&picture))?);
@@ -685,6 +716,17 @@ impl H264Encoder {
         if let (false, Some(reference)) = (idr, reference) {
             slice.ref_pic_list0[0] = reference;
         }
+        if self.packed & PACKED_SLICE != 0 {
+            let header = slice_header(&SliceHeader {
+                idr,
+                cabac: self.cabac,
+                frame_num: self.frame_num,
+                idr_id: self.idr_id,
+                poc_lsb: (poc & 0xff) as u16,
+                qp_delta: 0,
+            });
+            self.packed_header(HEADER_SLICE, &header, buffers)?;
+        }
         buffers.push(self.buffer(BUF_SLICE, bytes_of(slice.as_ref()))?);
 
         unsafe {
@@ -693,6 +735,27 @@ impl H264Encoder {
             check((lib.end_picture)(dpy, self.context), "fine fotogramma")?;
             check((lib.sync_surface)(dpy, self.surfaces[0]), "attesa della scheda")
         }
+    }
+
+    /// Il quantizzatore di partenza di ogni fotogramma, scritto anche nel PPS.
+    fn init_qp(&self) -> u8 {
+        if self.rate_control == RC_CQP || self.rate_control == 0 { self.qp } else { 26 }
+    }
+
+    fn profile(&self) -> Profile {
+        match self.device.profile {
+            PROFILE_H264_CONSTRAINED_BASELINE => Profile::ConstrainedBaseline,
+            PROFILE_H264_MAIN => Profile::Main,
+            _ => Profile::High,
+        }
+    }
+
+    /// Un'intestazione già scritta in bit: prima il parametro con la lunghezza, poi i byte.
+    fn packed_header(&self, kind: u32, data: &PackedBits, buffers: &mut Vec<Id>) -> Result<(), String> {
+        let param = PackedHeader { kind, bit_length: data.bits, has_emulation_bytes: 1, reserved: [0; 4] };
+        buffers.push(self.buffer(BUF_PACKED_HEADER_PARAM, bytes_of(&param))?);
+        buffers.push(self.buffer(BUF_PACKED_HEADER_DATA, &data.bytes)?);
+        Ok(())
     }
 
     fn sequence(&self) -> Box<SequenceParameters> {
@@ -832,6 +895,212 @@ fn write_nv12(dst: &mut [u8], image: &Image, i420: &[u8], w: usize, h: usize, aw
     Ok(())
 }
 
+/// Byte già pronti per libva e quanti bit contano davvero (l'ultimo byte può essere pieno a metà).
+struct PackedBits {
+    bytes: Vec<u8>,
+    bits: u32,
+}
+
+impl PackedBits {
+    /// Unisce un'altra intestazione dopo questa: serve per mettere il PPS dietro l'SPS.
+    fn extend(&mut self, other: PackedBits) {
+        debug_assert!(self.bits % 8 == 0);
+        self.bytes.extend(other.bytes);
+        self.bits += other.bits;
+    }
+}
+
+/// Scrive bit per bit, con gli interi Exp-Golomb dell'H.264.
+#[derive(Default)]
+struct BitWriter {
+    bytes: Vec<u8>,
+    /// Bit già usati nell'ultimo byte (0 vuol dire che è pieno o che non c'è).
+    used: u8,
+}
+
+impl BitWriter {
+    fn bit(&mut self, on: bool) {
+        if self.used == 0 {
+            self.bytes.push(0);
+        }
+        if on {
+            *self.bytes.last_mut().expect("byte appena aggiunto") |= 0x80 >> self.used;
+        }
+        self.used = (self.used + 1) % 8;
+    }
+
+    /// `n` bit (fino a 32), dal più alto.
+    fn bits(&mut self, n: u32, value: u32) {
+        for i in (0..n).rev() {
+            self.bit(value >> i & 1 == 1);
+        }
+    }
+
+    /// ue(v): intero senza segno, `value + 1` in binario preceduto da altrettanti zeri meno uno.
+    fn ue(&mut self, value: u32) {
+        let v = value as u64 + 1;
+        let len = 64 - v.leading_zeros();
+        for _ in 1..len {
+            self.bit(false);
+        }
+        for i in (0..len).rev() {
+            self.bit(v >> i & 1 == 1);
+        }
+    }
+
+    /// se(v): intero con segno, 1 → 1, -1 → 2, 2 → 3, -2 → 4…
+    fn se(&mut self, value: i32) {
+        self.ue(if value > 0 { value as u32 * 2 - 1 } else { value.unsigned_abs() * 2 });
+    }
+
+    /// rbsp_trailing_bits: un bit a uno e poi zeri fino al byte intero.
+    fn trailing(&mut self) {
+        self.bit(true);
+        while self.used != 0 {
+            self.bit(false);
+        }
+    }
+
+    fn bit_count(&self) -> u32 {
+        (self.bytes.len() as u32 * 8) - if self.used == 0 { 0 } else { 8 - self.used as u32 }
+    }
+}
+
+/// Un'unità NAL con il codice d'inizio, l'intestazione e i byte di protezione (00 00 0x → 00 00 03 0x).
+fn nal(ref_idc: u8, kind: u8, body: &BitWriter) -> PackedBits {
+    let mut bytes = vec![0, 0, 0, 1, ref_idc << 5 | kind];
+    let mut zeros = 0;
+    for &byte in &body.bytes {
+        if zeros >= 2 && byte <= 3 {
+            bytes.push(3);
+            zeros = 0;
+        }
+        bytes.push(byte);
+        zeros = if byte == 0 { zeros + 1 } else { 0 };
+    }
+    // L'ultimo byte di un'intestazione di fetta può essere a metà: contano solo i bit scritti.
+    let bits = bytes.len() as u32 * 8 - (body.bytes.len() as u32 * 8 - body.bit_count());
+    PackedBits { bytes, bits }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Profile {
+    ConstrainedBaseline,
+    Main,
+    High,
+}
+
+/// L'SPS: 8 bit per il numero del fotogramma e per il POC (come `sequence()`), un solo riferimento.
+fn sps(profile: Profile, level: u8, mbw: u32, mbh: u32, width: u32, height: u32) -> PackedBits {
+    let mut w = BitWriter::default();
+    let (idc, constraints) = match profile {
+        Profile::ConstrainedBaseline => (66, 0x40),
+        Profile::Main => (77, 0),
+        Profile::High => (100, 0),
+    };
+    w.bits(8, idc);
+    w.bits(8, constraints);
+    w.bits(8, level as u32);
+    w.ue(0); // seq_parameter_set_id
+    if profile == Profile::High {
+        w.ue(1); // chroma_format_idc: 4:2:0
+        w.ue(0); // bit_depth_luma_minus8
+        w.ue(0); // bit_depth_chroma_minus8
+        w.bit(false); // qpprime_y_zero_transform_bypass_flag
+        w.bit(false); // seq_scaling_matrix_present_flag
+    }
+    w.ue(4); // log2_max_frame_num_minus4
+    w.ue(0); // pic_order_cnt_type
+    w.ue(4); // log2_max_pic_order_cnt_lsb_minus4
+    w.ue(1); // max_num_ref_frames
+    w.bit(false); // gaps_in_frame_num_value_allowed_flag
+    w.ue(mbw - 1);
+    w.ue(mbh - 1);
+    w.bit(true); // frame_mbs_only_flag
+    w.bit(true); // direct_8x8_inference_flag
+    let (crop_w, crop_h) = (mbw * 16 - width, mbh * 16 - height);
+    if crop_w > 0 || crop_h > 0 {
+        w.bit(true);
+        w.ue(0);
+        w.ue(crop_w / 2);
+        w.ue(0);
+        w.ue(crop_h / 2);
+    } else {
+        w.bit(false);
+    }
+    w.bit(false); // vui_parameters_present_flag
+    w.trailing();
+    nal(3, 7, &w)
+}
+
+/// Il PPS: una sola fetta per fotogramma, un riferimento, filtro anti-blocchi regolabile dalla fetta.
+fn pps(cabac: bool, init_qp: u8) -> PackedBits {
+    let mut w = BitWriter::default();
+    w.ue(0); // pic_parameter_set_id
+    w.ue(0); // seq_parameter_set_id
+    w.bit(cabac); // entropy_coding_mode_flag
+    w.bit(false); // bottom_field_pic_order_in_frame_present_flag
+    w.ue(0); // num_slice_groups_minus1
+    w.ue(0); // num_ref_idx_l0_default_active_minus1
+    w.ue(0); // num_ref_idx_l1_default_active_minus1
+    w.bit(false); // weighted_pred_flag
+    w.bits(2, 0); // weighted_bipred_idc
+    w.se(init_qp as i32 - 26); // pic_init_qp_minus26
+    w.se(0); // pic_init_qs_minus26
+    w.se(0); // chroma_qp_index_offset
+    w.bit(true); // deblocking_filter_control_present_flag
+    w.bit(false); // constrained_intra_pred_flag
+    w.bit(false); // redundant_pic_cnt_present_flag
+    w.trailing();
+    nal(3, 8, &w)
+}
+
+struct SliceHeader {
+    idr: bool,
+    cabac: bool,
+    frame_num: u16,
+    idr_id: u16,
+    poc_lsb: u16,
+    qp_delta: i32,
+}
+
+/// L'intestazione della fetta (fotogramma intero), senza i dati: quelli li aggiunge la scheda.
+fn slice_header(h: &SliceHeader) -> PackedBits {
+    let mut w = BitWriter::default();
+    w.ue(0); // first_mb_in_slice
+    w.ue(if h.idr { 2 } else { 0 }); // slice_type: I o P
+    w.ue(0); // pic_parameter_set_id
+    w.bits(8, h.frame_num as u32);
+    if h.idr {
+        w.ue(h.idr_id as u32);
+    }
+    w.bits(8, h.poc_lsb as u32);
+    if !h.idr {
+        w.bit(false); // num_ref_idx_active_override_flag
+        w.bit(false); // ref_pic_list_modification_flag_l0
+    }
+    if h.idr {
+        w.bit(false); // no_output_of_prior_pics_flag
+        w.bit(false); // long_term_reference_flag
+    } else {
+        w.bit(false); // adaptive_ref_pic_marking_mode_flag
+    }
+    if h.cabac && !h.idr {
+        w.ue(0); // cabac_init_idc
+    }
+    w.se(h.qp_delta);
+    w.ue(0); // disable_deblocking_filter_idc
+    w.se(0); // slice_alpha_c0_offset_div2
+    w.se(0); // slice_beta_offset_div2
+    if h.cabac {
+        // cabac_alignment_one_bit: i dati della fetta partono da un byte intero.
+        while w.used != 0 {
+            w.bit(true);
+        }
+    }
+    nal(if h.idr { 3 } else { 2 }, if h.idr { 5 } else { 1 }, &w)
+}
+
 /// Un parametro «misc»: il tipo e poi la struttura.
 fn misc(kind: u32, data: &[u8]) -> Vec<u8> {
     let mut out = kind.to_ne_bytes().to_vec();
@@ -898,6 +1167,7 @@ mod tests {
         assert_eq!(std::mem::offset_of!(SliceParameters, cabac_init_idc), 3118);
         assert_eq!(size_of::<RateControl>(), 60);
         assert_eq!(size_of::<FrameRate>(), 24);
+        assert_eq!(size_of::<PackedHeader>(), 28);
         assert_eq!(size_of::<CodedSegment>(), 48);
         assert_eq!(std::mem::offset_of!(CodedSegment, next), 24);
         assert_eq!(size_of::<ImageFormat>(), 48);
@@ -944,6 +1214,62 @@ mod tests {
         assert_eq!(&dst[40..46], &[100, 200, 101, 201, 101, 201]);
     }
 
+    #[test]
+    fn exp_golomb() {
+        let mut w = BitWriter::default();
+        for v in [0, 1, 2, 3, 4] {
+            w.ue(v);
+        }
+        // 1 010 011 00100 00101
+        assert_eq!(w.bit_count(), 1 + 3 + 3 + 5 + 5);
+        assert_eq!(w.bytes, vec![0b1010_0110, 0b0100_0010, 0b1000_0000]);
+        let mut w = BitWriter::default();
+        for v in [0, 1, -1, 2, -2] {
+            w.se(v);
+        }
+        // 1 010 011 00100 00101
+        assert_eq!(w.bytes, vec![0b1010_0110, 0b0100_0010, 0b1000_0000]);
+    }
+
+    #[test]
+    fn emulation_prevention() {
+        let mut w = BitWriter::default();
+        w.bits(8, 0);
+        w.bits(8, 0);
+        w.bits(8, 1);
+        w.bits(8, 0);
+        w.bits(8, 0);
+        w.bits(8, 0x80);
+        let nal = nal(3, 8, &w);
+        assert_eq!(nal.bytes, [0, 0, 0, 1, 0x68, 0, 0, 3, 1, 0, 0, 0x80]);
+        assert_eq!(nal.bits, 12 * 8);
+    }
+
+    /// Legge i campi dell'SPS che Cedro ha scritto: quello che un decodificatore ne ricava.
+    #[test]
+    fn sps_says_what_we_encode() {
+        let found = sps(Profile::ConstrainedBaseline, 31, 11, 9, 176, 144);
+        assert_eq!(&found.bytes[..8], &[0, 0, 0, 1, 0x67, 66, 0x40, 31]);
+        assert_eq!(found.bits as usize, found.bytes.len() * 8);
+        // id 1, frame_num 00101, POC 1, POC lsb 00101, riferimenti 010, vuoti 0, larghezza 0001011, altezza 0001001, 1 1 0 0, chiusura 1
+        assert_eq!(&found.bytes[8..], &[0x96, 0x54, 0x16, 0x27, 0x20]);
+        // Con 4 pixel di ritaglio a destra c'è un campo in più.
+        assert!(sps(Profile::Main, 40, 12, 9, 188, 144).bytes.len() >= found.bytes.len());
+    }
+
+    #[test]
+    fn headers_are_whole_nals() {
+        let p = pps(false, 23);
+        assert_eq!(&p.bytes[..5], &[0, 0, 0, 1, 0x68]);
+        assert_eq!(p.bits as usize, p.bytes.len() * 8);
+        let idr = slice_header(&SliceHeader { idr: true, cabac: false, frame_num: 0, idr_id: 1, poc_lsb: 0, qp_delta: 0 });
+        assert_eq!(idr.bytes[4], 0x65);
+        assert!(idr.bits as usize <= idr.bytes.len() * 8 && idr.bits as usize > idr.bytes.len() * 8 - 8);
+        let cabac = slice_header(&SliceHeader { idr: false, cabac: true, frame_num: 3, idr_id: 0, poc_lsb: 6, qp_delta: -2 });
+        assert_eq!(cabac.bytes[4], 0x41);
+        assert_eq!(cabac.bits as usize, cabac.bytes.len() * 8);
+    }
+
     /// Su un PC con una scheda che codifica H.264 (Intel o AMD) prova un video vero; altrove non fa niente.
     #[test]
     fn encodes_on_real_hardware() {
@@ -956,13 +1282,17 @@ mod tests {
         eprintln!("scheda video: {}", encoder.device.name());
         let mut frame = vec![128u8; 176 * 144 * 3 / 2];
         let mut total = 0;
+        // Con CEDRO_GPU_DUMP=<prefisso> salva flusso (.h264) e fotogrammi originali (.yuv) per confrontarli con ffmpeg.
+        let dump = std::env::var("CEDRO_GPU_DUMP").ok();
+        let mut stream_out = Vec::new();
+        let mut source_out = Vec::new();
         for n in 0..65u32 {
             for (i, px) in frame[..176 * 144].iter_mut().enumerate() {
                 *px = ((i as u32 + n * 3) % 256) as u8;
             }
             let (stream, idr) = match encoder.encode(&frame) {
                 Ok(done) => done,
-                // Un driver (per esempio radeonsi) che vuole le intestazioni dall'applicazione: Cedro rifà il video col processore.
+                // Una scheda che rifiuta il fotogramma: Cedro rifà il video col processore.
                 Err(err) if std::env::var_os("CEDRO_GPU_TEST").is_none() => {
                     eprintln!("la scheda video non codifica ancora: {err}");
                     return;
@@ -971,7 +1301,13 @@ mod tests {
             };
             assert_eq!(idr, n % 60 == 0, "fotogramma {n}");
             total += stream.len();
+            stream_out.extend_from_slice(&stream);
+            source_out.extend_from_slice(&frame);
         }
         assert!(total > 0);
+        if let Some(prefix) = dump {
+            std::fs::write(format!("{prefix}.h264"), &stream_out).unwrap();
+            std::fs::write(format!("{prefix}.yuv"), &source_out).unwrap();
+        }
     }
 }
