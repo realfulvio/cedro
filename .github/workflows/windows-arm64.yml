@@ -334,7 +334,7 @@ jobs:
           $p.StandardInput.WriteLine('s'); $p.StandardInput.Close()
           if (-not $p.WaitForExit(180000)) { $p.Kill(); throw 'cedro update non finisce' }
           Start-Sleep -Seconds 3
-          Get-Process | Where-Object { $_.ProcessName -like 'Cedro-*Setup*' } | ForEach-Object { "Installatore avviato: $($_.ProcessName)"; $_ } | Stop-Process -Force
+          Get-Process | Where-Object { $_.ProcessName -like 'Cedro-*Setup*' } | ForEach-Object { Write-Host "Installatore avviato: $($_.ProcessName)"; $_ } | Stop-Process -Force
           $null = $stdout.Wait(30000); $null = $stderr.Wait(30000)
           $out = $stdout.Result + $stderr.Result
           $out
