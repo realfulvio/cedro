@@ -135,6 +135,17 @@ pub fn ffmpeg_path() -> Option<PathBuf> {
     None
 }
 
+/// ffprobe: lo cerca yt-dlp accanto a ffmpeg (copertine in MKV, informazioni sui file).
+fn own_ffprobe() -> PathBuf {
+    tools_dir().join(exe("ffprobe"))
+}
+
+/// ffmpeg è pronto: quello di Cedro con il suo ffprobe, oppure (Linux) quello del sistema.
+fn ffmpeg_ready() -> bool {
+    let own = tools_dir().join(exe("ffmpeg"));
+    (own.is_file() && own_ffprobe().is_file()) || (!own.is_file() && ffmpeg_path().is_some())
+}
+
 /// deno: YouTube chiede a yt-dlp un runtime JavaScript, senza il quale restano solo i formati piccoli.
 pub fn deno_path() -> PathBuf {
     tools_dir().join(exe("deno"))
@@ -142,7 +153,7 @@ pub fn deno_path() -> PathBuf {
 
 /// Stato dei programmi di aiuto, per il pannello: (yt-dlp, ffmpeg, deno).
 pub fn helpers_ready() -> (bool, bool, bool) {
-    (ytdlp_path().is_file(), ffmpeg_path().is_some(), deno_path().is_file())
+    (ytdlp_path().is_file(), ffmpeg_ready(), deno_path().is_file())
 }
 
 /// Quello che Cedro scaricherà al primo uso, per dirlo prima; `None` se c'è già tutto.
@@ -291,6 +302,11 @@ fn command(program: &Path) -> Command {
         use std::os::windows::process::CommandExt;
         c.creation_flags(0x0800_0000); // niente finestra nera
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        c.process_group(0); // un gruppo suo, per fermare anche i figli
+    }
     c
 }
 
@@ -314,10 +330,11 @@ pub fn ensure_ytdlp(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<
 
 /// Scarica ffmpeg se manca (e non c'è sul sistema).
 pub fn ensure_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<PathBuf, String> {
-    if let Some(path) = ffmpeg_path() {
-        return Ok(path);
+    let own = tools_dir().join(exe("ffmpeg"));
+    if ffmpeg_ready() {
+        return Ok(ffmpeg_path().unwrap_or(own));
     }
-    emit(Event::Log("ffmpeg non c'è ancora: lo scarico (una volta sola, circa 100 MB)".into()));
+    emit(Event::Log("ffmpeg non c'è ancora: lo scarico (una volta sola, circa 140 MB)".into()));
     let dir = tools_dir();
     let archive = dir.join(ffmpeg_asset());
     let sums = get_text(&format!("{FFMPEG_BASE}checksums.sha256")).ok();
@@ -326,13 +343,13 @@ pub fn ensure_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result
         return Err("Non trovo il codice di controllo di ffmpeg: riprova più tardi".into());
     }
     download(&format!("{FFMPEG_BASE}{}", ffmpeg_asset()), &archive, sum.as_deref(), "ffmpeg", emit, cancel)?;
-    let target = dir.join(exe("ffmpeg"));
-    let result = extract_ffmpeg(&archive, &target);
+    let result = extract_bin(&archive, "ffmpeg", &own).and_then(|_| extract_bin(&archive, "ffprobe", &own_ffprobe()));
     let _ = std::fs::remove_file(&archive);
     result?;
-    make_executable(&target);
+    make_executable(&own);
+    make_executable(&own_ffprobe());
     emit(Event::Log("ffmpeg scaricato".into()));
-    Ok(target)
+    Ok(own)
 }
 
 /// Estrae da uno zip il file che finisce con `suffix` e lo scrive in `target`.
@@ -371,18 +388,18 @@ pub fn ensure_deno(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<P
 }
 
 #[cfg(windows)]
-fn extract_ffmpeg(archive: &Path, target: &Path) -> Result<(), String> {
-    extract_zip_entry(archive, "/bin/ffmpeg.exe", target)
+fn extract_bin(archive: &Path, name: &str, target: &Path) -> Result<(), String> {
+    extract_zip_entry(archive, &format!("/bin/{name}.exe"), target)
 }
 
 #[cfg(not(windows))]
-fn extract_ffmpeg(archive: &Path, target: &Path) -> Result<(), String> {
+fn extract_bin(archive: &Path, name: &str, target: &Path) -> Result<(), String> {
     let part = target.with_extension("part");
     let out = std::fs::File::create(&part).map_err(|e| e.to_string())?;
     let status = Command::new("tar")
         .args(["-xJf"])
         .arg(archive)
-        .args(["--wildcards", "*/bin/ffmpeg", "-O"])
+        .args(["--wildcards", &format!("*/bin/{name}"), "-O"])
         .stdout(out)
         .stderr(Stdio::null())
         .status()
@@ -449,19 +466,60 @@ pub fn parse_info(json: &str) -> Result<Info, String> {
     Ok(Info { title, author, seconds, entries })
 }
 
-/// Titolo, autore e durata di un link, senza scaricarlo.
-pub fn probe(ytdlp: &Path, url: &str, playlist: bool) -> Result<Info, String> {
-    let out = command(ytdlp)
-        .args(["--dump-single-json", "--flat-playlist", "--no-warnings", "--skip-download"])
-        .arg(if playlist { "--yes-playlist" } else { "--no-playlist" })
-        .arg(url)
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        return Err(first_error(&String::from_utf8_lossy(&out.stderr)));
+/// Ferma un processo e i suoi figli (yt-dlp lancia ffmpeg), poi lo aspetta.
+fn kill_tree(child: &mut std::process::Child) {
+    #[cfg(windows)]
+    {
+        let _ = command(Path::new("taskkill")).args(["/PID", &child.id().to_string(), "/T", "/F"]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
     }
-    parse_info(&String::from_utf8_lossy(&out.stdout))
+    #[cfg(unix)]
+    {
+        // Il processo guida un gruppo suo (vedi `command`): si ferma tutto il gruppo.
+        let _ = Command::new("kill").args(["-KILL", "--", &format!("-{}", child.id())]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// Esegue `cmd` e ne raccoglie le uscite, fermandolo se `cancel` si accende.
+fn capture(cmd: &mut Command, cancel: &AtomicBool) -> Result<(String, String, bool), String> {
+    let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())?;
+    let mut out = child.stdout.take().ok_or("niente uscita")?;
+    let mut err = child.stderr.take().ok_or("niente uscita")?;
+    let t_out = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = out.read_to_string(&mut text);
+        text
+    });
+    let t_err = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = err.read_to_string(&mut text);
+        text
+    });
+    let status = loop {
+        if cancel.load(Ordering::Relaxed) {
+            kill_tree(&mut child);
+            let _ = (t_out.join(), t_err.join());
+            return Err("Annullato".into());
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            Err(e) => return Err(e.to_string()),
+        }
+    };
+    Ok((t_out.join().unwrap_or_default(), t_err.join().unwrap_or_default(), status.success()))
+}
+
+/// Titolo, autore e durata di un link, senza scaricarlo.
+pub fn probe(ytdlp: &Path, url: &str, playlist: bool, cancel: &AtomicBool) -> Result<Info, String> {
+    let mut cmd = command(ytdlp);
+    cmd.args(["--dump-single-json", "--flat-playlist", "--no-warnings", "--skip-download"]).arg(if playlist { "--yes-playlist" } else { "--no-playlist" }).arg("--").arg(url);
+    let (stdout, stderr, ok) = capture(&mut cmd, cancel)?;
+    if !ok {
+        return Err(first_error(&stderr));
+    }
+    parse_info(&stdout)
 }
 
 /// L'errore di yt-dlp in una riga, in italiano quando lo riconosciamo.
@@ -548,7 +606,8 @@ pub fn build_args(r: &Request, ffmpeg: Option<&Path>, deno: Option<&Path>, in_pl
             push(&["-S", "ext:mp4:m4a,vcodec:h264"]);
         }
         push(&["--merge-output-format", &r.format]);
-        if r.thumbnail {
+        // La copertina si incorpora solo dove yt-dlp sa farlo (non in WebM).
+        if r.thumbnail && matches!(r.format.as_str(), "mp4" | "mkv") {
             push(&["--embed-thumbnail"]);
         }
         match r.subtitles {
@@ -667,7 +726,7 @@ pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Res
         }
         emit(Event::Log(format!("Link {} di {}: {url}", index + 1, r.urls.len())));
         emit(Event::Progress { index, total: r.urls.len(), percent: 0.0, label: "Preparo il download".into() });
-        let outcome = match probe(&ytdlp, url, r.playlist) {
+        let outcome = match probe(&ytdlp, url, r.playlist, cancel) {
             Ok(info) => {
                 let args = build_args(r, Some(&ffmpeg), Some(&deno), info.entries.is_some());
                 emit(Event::Log(match info.entries {
@@ -734,8 +793,7 @@ fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, 
     let (mut item, mut items) = (1usize, 1usize);
     loop {
         if cancel.load(Ordering::Relaxed) {
-            let _ = child.kill();
-            let _ = child.wait();
+            kill_tree(&mut child);
             return Err("Annullato".into());
         }
         match rx.recv_timeout(Duration::from_millis(200)) {
@@ -778,6 +836,8 @@ fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::sync::Arc;
 
     fn req(audio: bool) -> Request {
         Request::new(vec!["https://youtu.be/x".into()], audio, PathBuf::from("/tmp/d"))
@@ -828,6 +888,15 @@ mod tests {
         let many = build_args(&req(false), None, None, true).join(" ");
         assert!(one.contains("-o %(title).150B.%(ext)s"));
         assert!(many.contains("-o %(playlist_title).100B/%(playlist_index)02d - %(title).150B.%(ext)s"));
+    }
+
+    #[test]
+    fn no_thumbnail_embedding_in_webm() {
+        let mut r = req(false);
+        r.format = "webm".into();
+        assert!(!build_args(&r, None, None, false).join(" ").contains("--embed-thumbnail"));
+        r.format = "mkv".into();
+        assert!(build_args(&r, None, None, false).join(" ").contains("--embed-thumbnail"));
     }
 
     #[test]
@@ -949,5 +1018,22 @@ mod tests {
         cancel.store(true, Ordering::Relaxed);
         assert_eq!(run_one(&fake, &args, "good", &dir, 0, 1, &mut |_| {}, &cancel).unwrap_err(), "Annullato");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Annullare ferma subito anche un processo lento e i suoi figli.
+    #[cfg(unix)]
+    #[test]
+    fn cancel_stops_a_slow_child_tree() {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let flag = cancel.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            flag.store(true, Ordering::Relaxed);
+        });
+        let started = std::time::Instant::now();
+        let mut cmd = command(Path::new("sh"));
+        cmd.args(["-c", "sleep 30 & sleep 30"]);
+        assert_eq!(capture(&mut cmd, &cancel).unwrap_err(), "Annullato");
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 }
