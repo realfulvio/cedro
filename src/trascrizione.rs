@@ -440,21 +440,29 @@ fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, wha
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 256 * 1024];
     let (mut done, mut shown) = (0u64, 0u64);
-    loop {
-        let n = reader.read(&mut buf).map_err(|e| format!("download di {what} interrotto: {e}"))?;
-        if n == 0 {
-            break;
-        }
+    let copied = loop {
+        let n = match reader.read(&mut buf) {
+            Ok(0) => break Ok(()),
+            Ok(n) => n,
+            Err(e) => break Err(format!("download di {what} interrotto: {e}")),
+        };
         hasher.update(&buf[..n]);
-        file.write_all(&buf[..n]).map_err(|e| format!("scrittura di {what} non riuscita (disco pieno?): {e}"))?;
+        if let Err(e) = file.write_all(&buf[..n]) {
+            break Err(format!("scrittura di {what} non riuscita (disco pieno?): {e}"));
+        }
         done += n as u64;
         let tenth = done * 10 / total.max(1);
         if tenth > shown && tenth < 10 {
             shown = tenth;
             log(sink, Tone::Muted, "", format!("Scaricati {} di {}", size_text((done / 1_000_000) as u32), size_text((total / 1_000_000) as u32)));
         }
-    }
+    };
     drop(file);
+    // Un download a metà (rete caduta, disco pieno) non resta sul disco: un modello pesa centinaia di MB.
+    if let Err(e) = copied {
+        let _ = std::fs::remove_file(&part);
+        return Err(e);
+    }
     let sha = hex(&hasher.finalize());
     if let Some(expected) = expected_sha {
         if !sha.eq_ignore_ascii_case(expected) {
@@ -843,10 +851,15 @@ pub fn docx_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment]) ->
 /// Un audio che il motore non sa leggere, passato prima dal sistema: Media Foundation su Windows,
 /// ffmpeg o GStreamer su Linux. Ritorna un WAV temporaneo.
 fn system_decode(input: &Path) -> Result<PathBuf, String> {
-    let temp = std::env::temp_dir().join(format!("cedro-trascrivi-{}-{}.wav", std::process::id(), Instant::now().elapsed().as_nanos()));
+    // In una cartella nuova e solo nostra: su Linux /tmp è di tutti e ffmpeg scrive con -y.
+    let dir = crate::engine::private_temp_dir("cedro-trascrivi")?;
+    let temp = dir.join("audio.wav");
     #[cfg(windows)]
     {
-        crate::video::audio_to_wav(input, &temp)?;
+        if let Err(e) = crate::video::audio_to_wav(input, &temp) {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Err(e);
+        }
         Ok(temp)
     }
     #[cfg(not(windows))]
@@ -872,7 +885,7 @@ fn system_decode(input: &Path) -> Result<PathBuf, String> {
         if gst.is_ok_and(|s| s.success()) && temp.metadata().is_ok_and(|m| m.len() > 44) {
             return Ok(temp);
         }
-        let _ = std::fs::remove_file(&temp);
+        let _ = std::fs::remove_dir_all(&dir);
         Err("formato audio non supportato: installa ffmpeg per leggerlo".into())
     }
 }
@@ -1039,8 +1052,8 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
                 Err(e) => outcome = Outcome::Failed(e),
             }
         }
-        if let Some(t) = temp {
-            let _ = std::fs::remove_file(t);
+        if let Some(dir) = temp.as_deref().and_then(Path::parent) {
+            let _ = std::fs::remove_dir_all(dir);
         }
         let result = match outcome {
             Outcome::Done { lang, secs, segments } if segments.is_empty() => {
@@ -1197,5 +1210,28 @@ mod tests {
         // La voce di espeak è robotica e il modello «Veloce» sbaglia le parole difficili: bastano queste.
         assert!(text.contains("oggi parliamo"), "testo: {text}");
         let _ = std::fs::remove_dir_all(&work);
+    }
+
+    /// Un download che si interrompe a metà non lascia il file `.part` sul disco.
+    #[test]
+    fn a_broken_download_leaves_nothing_behind() {
+        use std::io::Write as _;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/modello.bin", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut request = [0u8; 1024];
+                let _ = std::io::Read::read(&mut stream, &mut request);
+                // Promette un MB e ne manda dieci byte, poi chiude.
+                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000000\r\nConnection: close\r\n\r\n0123456789");
+            }
+        });
+        let dir = std::env::temp_dir().join(format!("cedro-fetch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let dest = dir.join("modello.bin");
+        assert!(fetch(&url, &dest, None, 1, "il modello", &|_| {}).is_err());
+        assert!(!dest.exists());
+        assert!(!dir.join("modello.part").exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
