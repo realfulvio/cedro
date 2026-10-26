@@ -221,7 +221,7 @@ pub unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     child(hwnd, instance, b, "Cambia…", tab, Y_CHANGE, (LEFT + 340, 500, 80, 34), f);
     child(hwnd, instance, b, "Scarica video", tab | BS_OWNERDRAW as u32, Y_GO, (LEFT + 430, 500, 240, 38), fb);
     child(hwnd, instance, s, "", 0xD /* SS_OWNERDRAW */, Y_BAR, (LEFT, 633, WIDTH, 3), f);
-    child(hwnd, instance, s, POWERED_BY, 0, Y_POWERED, (LEFT, 560, 420, 18), f);
+    child(hwnd, instance, s, "", crate::firma_win::SS_OWNERDRAW, Y_POWERED, (LEFT, 560, 420, 18), f);
     for (label_id, combo_id) in OPTION_LABELS {
         let text = match *combo_id {
             Y_QUALITY => "Qualità",
@@ -715,6 +715,7 @@ pub unsafe fn draw(di: &DRAWITEMSTRUCT) {
     let disabled = di.itemState.0 & ODS_DISABLED.0 != 0;
     SetBkMode(hdc, TRANSPARENT);
     match id {
+        Y_POWERED => crate::firma_win::draw(di, WHITE, GREY, PRIMARY, true, ""),
         Y_ADD | Y_GO => {
             fill(hdc, &rc, if disabled { LINE } else if selected { HOVER } else { PRIMARY });
             SelectObject(hdc, HGDIOBJ(font(&FONT_BOLD).0));
