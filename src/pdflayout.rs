@@ -1194,6 +1194,8 @@ pub enum Page {
     Flow(FlowPage),
     /// Pagina senza testo da copiare: non c'è niente da ricostruire.
     Empty,
+    /// Pagina finita dentro la precedente (una tabella che continua).
+    Merged,
 }
 
 pub struct FlowPage {
@@ -1372,11 +1374,13 @@ fn layout_page(p: RawPage, sizes: &TextSizes) -> FlowPage {
 }
 
 /// Una tabella che continua sulla pagina dopo diventa una tabella sola, con la riga
-/// d'intestazione ripetuta da Word invece che copiata.
-fn merge_split_tables(pages: &mut Vec<Page>) {
+/// d'intestazione ripetuta da Word invece che copiata. La pagina svuotata resta al suo
+/// posto come `Page::Merged`, così gli indici restano quelli del PDF (per l'OCR).
+fn merge_split_tables(pages: &mut [Page]) {
     let mut i = 0;
-    while i + 1 < pages.len() {
-        let joinable = match (&pages[i], &pages[i + 1]) {
+    let mut j = 1;
+    while j < pages.len() {
+        let joinable = match (&pages[i], &pages[j]) {
             (Page::Flow(a), Page::Flow(b)) => {
                 let last = a.segments.last().filter(|s| s.cols.is_empty()).and_then(|s| s.columns[0].last());
                 let first = b.segments.first().filter(|s| s.cols.is_empty()).and_then(|s| s.columns[0].first());
@@ -1395,10 +1399,12 @@ fn merge_split_tables(pages: &mut Vec<Page>) {
             _ => false,
         };
         if !joinable {
-            i += 1;
+            i = j;
+            j += 1;
             continue;
         }
-        let Page::Flow(mut next) = pages.remove(i + 1) else { unreachable!() };
+        let Page::Flow(mut next) = std::mem::replace(&mut pages[j], Page::Merged) else { unreachable!() };
+        j += 1;
         let Page::Flow(cur) = &mut pages[i] else { unreachable!() };
         let Some(Block::Table(mut u)) = Some(next.segments[0].columns[0].remove(0)) else { unreachable!() };
         let Some(Block::Table(t)) = cur.segments.last_mut().and_then(|s| s.columns[0].last_mut()) else { unreachable!() };
@@ -1869,7 +1875,7 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
     let mut body = String::new();
     let mut next_id = 1;
     for (i, page) in pages.iter().enumerate() {
-        let last_page = i + 1 == pages.len();
+        let last_page = pages.iter().rposition(|p| !matches!(p, Page::Merged)) == Some(i);
         match page {
             Page::Flow(p) => {
                 let page_right = (p.width - right).max(20.0);
@@ -1991,6 +1997,7 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                     }
                 }
             }
+            Page::Merged => {}
             Page::Empty => {
                 let mut parts: Vec<String> = fallback(i)
                     .split('\n')
