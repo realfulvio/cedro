@@ -379,33 +379,25 @@ pub fn perform(path: &Path, action: &str, quality: u8) -> CedroResult<Output> {
     if kind == Kind::Pdf && action == "docx" {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
         let pages = crate::pdflayout::read_pages(&bytes).map_err(err)?;
-        let empty: Vec<bool> = pages.iter().map(|p| matches!(p, crate::pdflayout::Page::Empty)).collect();
+        let empty: Vec<bool> = pages.iter().map(|p| p.is_scan()).collect();
         let scanned = empty.iter().filter(|e| **e).count();
         let mut ocr: Vec<Option<String>> = vec![None; pages.len()];
-        let mut ocr_error = None;
+        // Le scansioni vanno nel Word come immagini della pagina; il testo letto con l'OCR
+        // resta nel testo alternativo, per cercarlo e copiarlo.
         if scanned > 0 {
-            match crate::ocr::pdf_pages_where(&bytes, |i| empty.get(i).copied().unwrap_or(false)) {
-                Ok(read) => ocr = read,
-                Err(e) => ocr_error = Some(e),
+            if let Ok(read) = crate::ocr::pdf_pages_where(&bytes, |i| empty.get(i).copied().unwrap_or(false)) {
+                ocr = read;
             }
-        }
-        let read_scanned = ocr.iter().flatten().filter(|t| !t.is_empty()).count();
-        if scanned == pages.len() && read_scanned == 0 {
-            return Err(err(match ocr_error {
-                Some(e) => format!("questo PDF non ha testo da copiare; OCR: {e}"),
-                None => "questo PDF non ha testo da copiare né da leggere con l'OCR".into(),
-            }));
         }
         let docx = crate::pdflayout::docx(&pages, |i| ocr.get(i).cloned().flatten().unwrap_or_default());
         let out = unique_output(&dir, &stem(path), "docx");
         write_bytes(&out, &docx)?;
         let message = if scanned == 0 {
             "Word modificabile: titoli, paragrafi e tabelle del PDF".to_string()
+        } else if scanned == pages.len() {
+            "Word con le pagine scansionate come immagini; il testo letto con l'OCR è nel testo alternativo".to_string()
         } else {
-            format!(
-                "Word. {} pagine ricostruite dal PDF, {read_scanned} lette via OCR in italiano (da ricontrollare) su {scanned} senza testo.",
-                pages.len() - scanned
-            )
+            format!("Word modificabile; {scanned} pagine scansionate messe come immagini")
         };
         return Ok(Output { path: out, message });
     }
@@ -745,9 +737,12 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
         fs::write(&pdf, crate::pdf::pdf_from_jpeg(jpeg, 900, 200, &[])).unwrap();
         let jpg = perform(&pdf, "jpg", 80).expect("JPG");
         assert!(fs::read(&jpg.path).unwrap().starts_with(&[0xff, 0xd8]));
+        // La scansione resta un'immagine della pagina, il testo OCR va nel testo alternativo.
         let docx = perform(&pdf, "docx", 80).expect("OCR");
-        let text = crate::doctext::document_text(&docx.path).unwrap();
-        assert!(text.contains("Cedro"), "{text}");
+        let xml = crate::doctext::zip_entry_for_test(&docx.path, "word/document.xml");
+        assert!(xml.contains("behindDoc=\"1\""), "{xml}");
+        let descr = xml.split("descr=\"").nth(1).unwrap_or_default();
+        assert!(descr.contains("Cedro"), "{xml}");
     }
 
     #[test]
