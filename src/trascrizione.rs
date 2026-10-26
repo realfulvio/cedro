@@ -39,7 +39,7 @@ pub const DEFAULT_MODEL: usize = 1;
 /// Il livello preselezionato: «Massima» se il motore può usare la scheda video (un'ora di audio in circa due minuti),
 /// altrimenti «Buona».
 pub fn default_model() -> usize {
-    if crate::settings::read_settings().gpu && vulkan_loader_present() {
+    if crate::settings::read_settings().gpu && real_gpu_present() {
         MODELS.len() - 1
     } else {
         DEFAULT_MODEL
@@ -343,6 +343,37 @@ fn cpu_list(text: &str) -> Vec<usize> {
         }
     }
     out
+}
+
+/// Vero se il PC ha davvero una scheda video che il motore può usare: il caricatore Vulkan non basta
+/// (una macchina virtuale o un PC vecchio può averlo senza scheda adatta).
+fn real_gpu_present() -> bool {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE};
+        if !vulkan_loader_present() {
+            return false;
+        }
+        // NVIDIA, AMD, Intel e Qualcomm (Adreno): le schede con driver Vulkan. Il resto (adattatori virtuali, software) no.
+        const VENDORS: [u32; 5] = [0x10DE, 0x1002, 0x8086, 0x5143, 0x4D4F_4351];
+        unsafe {
+            let Ok(factory) = CreateDXGIFactory1::<IDXGIFactory1>() else { return false };
+            let mut index = 0;
+            while let Ok(adapter) = factory.EnumAdapters1(index) {
+                index += 1;
+                if let Ok(desc) = adapter.GetDesc1() {
+                    if desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 == 0 && VENDORS.contains(&desc.VendorId) {
+                        return true;
+                    }
+                }
+            }
+            false
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        vulkan_loader_present() && Path::new("/dev/dri").read_dir().is_ok_and(|d| d.flatten().any(|e| e.file_name().to_string_lossy().starts_with("renderD")))
+    }
 }
 
 /// Vero se il sistema ha il caricatore Vulkan (lo installano i driver della scheda video).
