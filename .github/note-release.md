@@ -1,17 +1,20 @@
-**Versione nativa per Windows on ARM**: per i PC con processore ARM (Snapdragon X e simili) c'è un installatore a parte, **Cedro-Setup-0.18.0-arm64.exe**. Cedro gira senza emulazione, quindi è più veloce e consuma meno batteria.
+## Scarica questo
 
-**Trascrizione ottimizzata per ARM**: il motore di trascrizione ha tre versioni per ARM (base, dotprod e i8mm) e Cedro sceglie da solo la più veloce che il processore sa eseguire. Sui Snapdragon con scheda video Adreno può usare anche la versione Vulkan, come su x64.
+| Il tuo computer | File da scaricare |
+| --- | --- |
+| **Windows** (quasi tutti i PC) | [**Cedro-Setup-{versione}.exe**](https://github.com/{repo}/releases/download/v{versione}/Cedro-Setup-{versione}.exe) |
+| **Windows on ARM** (Snapdragon X e simili) | [**Cedro-ARM64-Setup-{versione}.exe**](https://github.com/{repo}/releases/download/v{versione}/Cedro-ARM64-Setup-{versione}.exe) |
 
-**Scheda Sistema**: sui PC ARM le Impostazioni mostrano le istruzioni del processore (NEON, dotprod, i8mm). L'interruttore «Accelerazione i8mm» prende il posto di «Accelerazione AVX-512».
+Scarica il file e fai doppio clic: si installa sopra la versione che hai. Se hai già Cedro non serve nemmeno questo: si aggiorna da solo («Controlla aggiornamenti» nel menu dell'icona).
+Non sai quale ti serve? *Impostazioni di Windows → Sistema → Informazioni*: se in «Tipo di sistema» c'è «basato su ARM», prendi quello ARM; altrimenti l'altro.
+I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo la prima volta che trascrivi.
 
-**Nuova firma**: Conversioni e Impostazioni mostrano la nuova firma col logo hcok e la versione di Cedro.
+## Novità della {versione}
 
-**YouTube su ARM**: yt-dlp, FFmpeg e Deno vengono scaricati nelle versioni native ARM64.
+**«Controlla aggiornamenti» di nuovo a posto**: con la 0.18.0, aggiornando da una 0.17 su un PC Windows normale, Cedro prendeva l'installatore per ARM e Windows rispondeva «Questo programma non supporta la versione di Windows installata». Ora l'installatore per ARM ha un nome diverso (**Cedro-ARM64-Setup**) e ogni versione prende quello giusto. L'aggiornamento da una 0.17 vera è provato in automatico prima e dopo ogni pubblicazione.
 
-Questa versione è solo per Windows.
+**Pagina più chiara**: qui sopra ci sono solo i file da scaricare. I motori di trascrizione stanno in una pagina a parte.
 
-Si aggiorna da solo: all'avvio Cedro vede questa versione e chiede se installarla, e su un PC ARM prende l'installatore ARM64. Oppure scarica il file qui sotto (**Cedro-Setup-0.18.0.exe** per i PC normali, **Cedro-Setup-0.18.0-arm64.exe** per Windows on ARM) e fai doppio clic: si installa sopra la versione precedente. I file `cedro-trascrivi-…` sono i motori della trascrizione: non serve scaricarli a mano, li prende Cedro la prima volta che trascrivi.
+Dalla 0.18.0: versione nativa per Windows on ARM, con trascrizione ottimizzata (base, dotprod, i8mm e Vulkan per le schede Adreno), scheda Sistema con le istruzioni del processore, YouTube con strumenti ARM64 e la nuova firma col logo hcok.
 
-L'installatore non è firmato: la prima volta Windows può dire «Windows ha protetto il PC» (SmartScreen) o, con Smart App Control acceso, bloccarlo. Clicca «Ulteriori informazioni», poi «Esegui comunque»; con Smart App Control serve spegnerlo dalle impostazioni di Windows.
-
-Gli SHA-256 di ogni file sono accanto al nome, qui sotto.
+L'installatore non è firmato: la prima volta Windows può dire «Windows ha protetto il PC». Clicca «Ulteriori informazioni», poi «Esegui comunque». Con Smart App Control acceso va spento dalle impostazioni di Windows.

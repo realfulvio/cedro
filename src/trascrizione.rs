@@ -35,7 +35,10 @@ pub const MODELS: &[Model] = &[
 pub const DEFAULT_MODEL: usize = 1;
 
 const MODEL_BASE_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/";
-const RELEASE_TAG_URL: &str = "https://api.github.com/repos/realfulvio/cedro/releases/tags/v";
+const RELEASE_TAG_URL: &str = "https://api.github.com/repos/realfulvio/cedro/releases/tags/";
+/// Dalla 0.18.1 i motori stanno in una pre-release a parte («motori-v<versione>»), così la release
+/// della versione mostra solo i tre pacchetti da scaricare. Le versioni prima li cercavano nella release «v<versione>».
+const ENGINE_TAGS: [&str; 2] = ["motori-v", "v"];
 
 /// In cosa si salva la trascrizione.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -486,16 +489,30 @@ fn ensure_engine(variant: Variant, sink: &dyn Fn(Event)) -> Result<PathBuf, Stri
     Ok(path)
 }
 
-/// Indirizzo, SHA-256 e peso di un file della release di questa versione.
+/// Indirizzo, SHA-256 e peso di un motore di questa versione: prima nella release dei motori, poi in quella della versione.
 fn release_asset(name: &str) -> Result<(String, String, u32), String> {
-    let body = http()
-        .get(&format!("{RELEASE_TAG_URL}{}", crate::update::CURRENT))
-        .set("Accept", "application/vnd.github+json")
-        .call()
-        .map_err(|e| format!("GitHub non risponde: {e}"))?
-        .into_string()
-        .map_err(|e| e.to_string())?;
+    let mut last = String::new();
+    for prefix in ENGINE_TAGS {
+        match release_asset_in(&format!("{RELEASE_TAG_URL}{prefix}{}", crate::update::CURRENT), name) {
+            Ok(found) => return Ok(found),
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
+}
+
+fn release_asset_in(url: &str, name: &str) -> Result<(String, String, u32), String> {
+    let response = match http().get(url).set("Accept", "application/vnd.github+json").call() {
+        Ok(response) => response,
+        Err(ureq::Error::Status(404, _)) => return Err(format!("il motore di questa versione ({name}) non è ancora pubblicato: riprova tra qualche minuto")),
+        Err(e) => return Err(format!("GitHub non risponde: {e}")),
+    };
+    let body = response.into_string().map_err(|e| e.to_string())?;
     let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    engine_in_release(&json, name)
+}
+
+fn engine_in_release(json: &serde_json::Value, name: &str) -> Result<(String, String, u32), String> {
     let asset = json["assets"]
         .as_array()
         .and_then(|list| list.iter().find(|a| a["name"].as_str() == Some(name)))
@@ -1025,6 +1042,19 @@ mod tests {
 
     fn seg(t0: i64, t1: i64, text: &str) -> Segment {
         Segment { t0, t1, text: text.into() }
+    }
+
+    #[test]
+    fn finds_the_engine_in_a_release() {
+        let json: serde_json::Value = serde_json::from_str(
+            r#"{"assets": [{"name": "cedro-trascrivi-0.18.1-windows-x64-avx2.exe", "browser_download_url": "https://x/m.exe",
+                "digest": "sha256:ab", "size": 3356160}]}"#,
+        )
+        .unwrap();
+        let found = engine_in_release(&json, "cedro-trascrivi-0.18.1-windows-x64-avx2.exe").unwrap();
+        assert_eq!(found, ("https://x/m.exe".to_string(), "ab".to_string(), 3));
+        assert!(engine_in_release(&json, "cedro-trascrivi-0.18.1-windows-x64-base.exe").is_err());
+        assert_eq!(ENGINE_TAGS[0], "motori-v");
     }
 
     #[test]
