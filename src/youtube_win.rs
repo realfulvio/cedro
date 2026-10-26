@@ -519,7 +519,28 @@ unsafe fn start(hwnd: HWND) {
                 }
             }
         };
-        let result = youtube::run(&req, &mut |e| post(Msg::Event(e)), &cancel);
+        let total = req.urls.len();
+        crate::progress_win::start(total, &format!("YouTube · {total} link"));
+        let mut last = usize::MAX;
+        let result = youtube::run(
+            &req,
+            &mut |e| {
+                match &e {
+                    Event::Progress { index, label, .. } if *index != last => {
+                        last = *index;
+                        crate::progress_win::step(*index, &format!("{} di {total} · {label}", index + 1));
+                    }
+                    Event::File(path) => crate::progress_win::produced(path),
+                    _ => {}
+                }
+                post(Msg::Event(e));
+            },
+            &cancel,
+        );
+        match &result {
+            Ok(files) => crate::progress_win::finish(true, &format!("✓ Fatto · {} file da YouTube", files.len())),
+            Err(e) => crate::progress_win::finish(false, &format!("Errore · {e}")),
+        }
         post(Msg::Finished(result));
     });
 }

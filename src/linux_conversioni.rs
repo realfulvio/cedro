@@ -35,7 +35,11 @@ window.cedro-panel togglebutton.cedro-chip:hover { border-color: #0066CC; }\
 window.cedro-panel togglebutton.cedro-chip:checked { background: #005E8E; border-color: #005E8E; }\
 window.cedro-panel togglebutton.cedro-chip:checked label { color: #ffffff; }\
 window.cedro-panel label.cedro-ok { color: #1d7a46; font-weight: bold; }\
-window.cedro-panel label.cedro-fail { color: #b3261e; font-weight: bold; }";
+window.cedro-panel label.cedro-fail { color: #b3261e; font-weight: bold; }\
+window.cedro-panel progressbar.cedro-progress trough { min-height: 3px; background: #d0dde8; border: none; border-radius: 2px; }\
+window.cedro-panel progressbar.cedro-progress progress { min-height: 3px; background: #005E8E; border: none; border-radius: 2px; }\
+window.cedro-panel progressbar.cedro-progress.cedro-done progress { background: #1d7a46; }\
+window.cedro-panel progressbar.cedro-progress.cedro-error progress { background: #b3261e; }";
 
 /// La voce del menu dopo le categorie: la scheda YouTube, che non lavora su file ma su link.
 const YOUTUBE: &str = "YouTube";
@@ -70,6 +74,10 @@ struct Ui {
     quality: Scale,
     dest_label: Label,
     go: Button,
+    /// La linea sottile sopra il piede, visibile mentre converte.
+    bar: gtk4::ProgressBar,
+    /// File del lavoro in corso: quanti in tutto e quanti finiti.
+    job: Cell<(usize, usize)>,
     files: RefCell<Vec<Entry>>,
     category: Cell<usize>,
     action: RefCell<String>,
@@ -340,12 +348,35 @@ fn start(ui: &Rc<Ui>) {
             answer_rx.recv().unwrap_or(ExistsChoice::KeepBoth)
         }));
     }
+    let label = conversioni::action_label(kind, &action).to_string();
+    ui.job.set((files.len(), 0));
+    ui.bar.remove_css_class("cedro-done");
+    ui.bar.remove_css_class("cedro-error");
+    ui.bar.set_fraction(0.0);
+    ui.bar.set_visible(read_settings().progress);
     std::thread::spawn(move || {
-        for path in files {
+        let total = files.len();
+        let name = |p: &std::path::Path| p.file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
+        let step_label = |i: usize, p: &std::path::Path| {
+            if total == 1 { format!("{} → {label}", name(p)) } else { format!("{} di {total} · {}", i + 1, name(p)) }
+        };
+        if let Some(first) = files.first() {
+            crate::linux_progress::start(total, &step_label(0, first));
+        }
+        let mut failed = None;
+        for (i, path) in files.into_iter().enumerate() {
+            crate::linux_progress::step(i, &step_label(i, &path));
             let result = conversioni::convert_one(&path, &action, quality, dest.as_deref(), &opts);
+            if let Err(e) = &result {
+                failed.get_or_insert_with(|| e.clone());
+            }
             if tx.send(Msg::Done(path, result)).is_err() {
                 break;
             }
+        }
+        match failed {
+            Some(e) => crate::linux_progress::finish(false, &format!("Errore · {e}")),
+            None => crate::linux_progress::finish(true, &format!("Fatto · {total} file in {label}")),
         }
     });
     render_queue(ui);
@@ -357,6 +388,11 @@ fn start(ui: &Rc<Ui>) {
             loop {
                 match rx.try_recv() {
                     Ok(Msg::Done(path, result)) => {
+                        let (total, done) = ui.job.get();
+                        ui.job.set((total, done + 1));
+                        if result.is_err() {
+                            ui.bar.add_css_class("cedro-error");
+                        }
                         if let Some(e) = ui.files.borrow_mut().iter_mut().find(|e| e.path == path) {
                             match result {
                                 Ok(msg) => (e.status, e.class) = (format!("Fatto · {msg}"), "cedro-ok"),
@@ -391,8 +427,26 @@ fn start(ui: &Rc<Ui>) {
                 }
             }
         }
+        let (total, done) = ui.job.get();
         if finished {
             ui.running.borrow_mut().take();
+            ui.bar.set_fraction(1.0);
+            if !ui.bar.has_css_class("cedro-error") {
+                // A lavoro finito la linea resta verde un secondo, poi sparisce.
+                ui.bar.add_css_class("cedro-done");
+                // Se nel frattempo è partito un altro lavoro la linea non è più verde e resta.
+                let bar = ui.bar.clone();
+                glib::timeout_add_local_once(Duration::from_millis(1200), move || {
+                    if bar.has_css_class("cedro-done") {
+                        bar.set_visible(false);
+                    }
+                });
+            }
+        } else if total == 1 {
+            // Un file solo non dice quanto manca: la linea scorre.
+            ui.bar.pulse();
+        } else if total > 0 {
+            ui.bar.set_fraction(done as f64 / total as f64);
         }
         if changed || finished {
             render_queue(&ui);
@@ -510,6 +564,11 @@ pub fn open_conversions(app: &Application) {
     signature.set_xalign(1.0);
     foot.append(&signature);
 
+    let bar = gtk4::ProgressBar::new();
+    bar.add_css_class("cedro-progress");
+    bar.set_pulse_step(0.08);
+    bar.set_visible(false);
+
     let main = HBox::new(Orientation::Vertical, 10);
     main.set_margin_top(16);
     main.set_margin_bottom(12);
@@ -534,6 +593,7 @@ pub fn open_conversions(app: &Application) {
         caption("DOVE SALVARE").upcast_ref(),
         dest_row.upcast_ref(),
         overwrite_row.upcast_ref(),
+        bar.upcast_ref(),
         foot.upcast_ref(),
     ] {
         main.append(w);
@@ -566,6 +626,8 @@ pub fn open_conversions(app: &Application) {
         quality,
         dest_label,
         go: go.clone(),
+        bar,
+        job: Cell::new((0, 0)),
         files: RefCell::new(Vec::new()),
         category: Cell::new(0),
         action: RefCell::new(String::new()),
@@ -737,7 +799,7 @@ fn shots(ui: &Rc<Ui>, dir: std::path::PathBuf) {
 }
 
 #[cfg(debug_assertions)]
-fn save_png(window: &gtk4::Window, path: &std::path::Path) -> Result<(), String> {
+pub(crate) fn save_png(window: &gtk4::Window, path: &std::path::Path) -> Result<(), String> {
     use gtk4::gsk::prelude::*;
     let (w, h) = (window.width(), window.height());
     let paintable = gtk4::WidgetPaintable::new(Some(window));

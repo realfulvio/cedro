@@ -25,6 +25,12 @@ pub struct Settings {
     pub dialogs: bool,
     /// A lavoro finito mostra il file nuovo in Esplora file.
     pub reveal: bool,
+    /// Mostra la sottile barra di avanzamento in basso a destra mentre converte.
+    pub progress: bool,
+    /// Codifica i video con la scheda video, se il PC ne ha una adatta (vedi `accel`).
+    pub gpu: bool,
+    /// Calcoli con AVX-512, se il processore lo ha (vedi `accel`).
+    pub avx512: bool,
     pub dest: Dest,
     pub dest_dir: String,
     /// Se il file esiste già lo sostituisce, invece di aggiungere un numero.
@@ -50,6 +56,9 @@ impl Default for Settings {
             key_alt: true,
             dialogs: true,
             reveal: false,
+            progress: true,
+            gpu: true,
+            avx512: true,
             dest: Dest::Same,
             dest_dir: String::new(),
             replace: false,
@@ -95,6 +104,8 @@ impl Settings {
 
     pub fn parse(text: &str) -> Settings {
         let mut s = Settings::default();
+        // Il Blocco note salva con il BOM: senza toglierlo la prima chiave non verrebbe riconosciuta.
+        let text = text.strip_prefix('\u{feff}').unwrap_or(text);
         for line in text.lines() {
             let Some((key, value)) = line.trim().split_once('=') else { continue };
             let value = value.trim();
@@ -111,6 +122,9 @@ impl Settings {
                 "key_alt" => s.key_alt = flag(value).unwrap_or(s.key_alt),
                 "dialogs" => s.dialogs = flag(value).unwrap_or(s.dialogs),
                 "reveal" => s.reveal = flag(value).unwrap_or(s.reveal),
+                "progress" => s.progress = flag(value).unwrap_or(s.progress),
+                "gpu" => s.gpu = flag(value).unwrap_or(s.gpu),
+                "avx512" => s.avx512 = flag(value).unwrap_or(s.avx512),
                 "replace" => s.replace = flag(value).unwrap_or(s.replace),
                 "dest" => {
                     s.dest = match value {
@@ -160,6 +174,9 @@ impl Settings {
             ("key_alt", b(self.key_alt).into()),
             ("dialogs", b(self.dialogs).into()),
             ("reveal", b(self.reveal).into()),
+            ("progress", b(self.progress).into()),
+            ("gpu", b(self.gpu).into()),
+            ("avx512", b(self.avx512).into()),
             ("replace", b(self.replace).into()),
             ("dest", dest.into()),
             ("dest_dir", self.dest_dir.clone()),
@@ -212,6 +229,11 @@ mod tests {
         let s = Settings::parse("quality=99\nnotify=0\nkey_alt = off\nupdate_check=1\n");
         assert_eq!(s.quality, 95);
         assert!(!s.notify && !s.key_alt && s.update_check && s.key_shift);
+    }
+
+    #[test]
+    fn a_file_saved_with_bom_still_reads_its_first_key() {
+        assert!(!Settings::parse("\u{feff}progress=0\nnotify=0\n").progress);
     }
 
     #[test]

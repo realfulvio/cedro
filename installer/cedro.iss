@@ -40,7 +40,7 @@ Name: "autostart"; Description: "Avvia Cedro all'accesso a Windows"; GroupDescri
 [Files]
 Source: "..\target\release\cedro.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\LICENZE-DI-TERZE-PARTI.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\Licenze di terze parti.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\cedro.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]

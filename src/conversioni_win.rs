@@ -81,6 +81,7 @@ static WINDOW: AtomicIsize = AtomicIsize::new(0);
 static BRUSH_PRIMARY: AtomicIsize = AtomicIsize::new(0);
 static BRUSH_WHITE: AtomicIsize = AtomicIsize::new(0);
 static BRUSH_SIDE: AtomicIsize = AtomicIsize::new(0);
+static BRUSH_DROP: AtomicIsize = AtomicIsize::new(0);
 static FONT: AtomicIsize = AtomicIsize::new(0);
 static FONT_BOLD: AtomicIsize = AtomicIsize::new(0);
 static FONT_TITLE: AtomicIsize = AtomicIsize::new(0);
@@ -337,6 +338,8 @@ unsafe fn render_category(hwnd: HWND) {
     chips(hwnd, instance, formats, ID_FORMAT0, 274);
     chips(hwnd, instance, tools, ID_TOOL0, 328);
     let _ = ShowWindow(item(hwnd, ID_CAP_TOOLS), if tools.is_empty() { SW_HIDE } else { SW_SHOW });
+    // Senza strumenti le opzioni salgono al loro posto, senza lasciare un buco.
+    place(hwnd, ID_CAP_OPTIONS, (210, options_caption_y(), 670, 16));
     state().action = formats.first().map(|s| s.id.to_string()).unwrap_or_default();
     refresh_options(hwnd);
     render_queue(hwnd);
@@ -363,7 +366,7 @@ unsafe fn refresh_options(hwnd: HWND) {
     let (f, values) = (font(&FONT), state().values.clone());
     for (i, def) in defs.iter().enumerate().take(OPT_MAX as usize) {
         let (col, row) = ((i % 2) as i32, (i / 2) as i32);
-        let (x, y) = (210 + col * 340, 384 + row * 32);
+        let (x, y) = (210 + col * 340, options_caption_y() + 18 + row * 32);
         let id = i as i32;
         let tab = WS_TABSTOP.0;
         match &def.control {
@@ -402,7 +405,58 @@ unsafe fn refresh_options(hwnd: HWND) {
             }
         }
     }
+    let rows = (defs.len().min(OPT_MAX as usize) as i32 + 1) / 2;
+    let end = if defs.is_empty() { options_caption_y() } else { options_caption_y() + 18 + rows * 32 };
+    layout_bottom(hwnd, end + 10);
     let _ = InvalidateRect(Some(hwnd), None, true);
+}
+
+fn options_caption_y() -> i32 {
+    let s = state();
+    if conversioni::tools(CATEGORIES[s.category].kind).is_empty() { 314 } else { 368 }
+}
+
+unsafe fn place(hwnd: HWND, id: i32, r: (i32, i32, i32, i32)) {
+    let _ = SetWindowPos(item(hwnd, id), None, px(r.0), px(r.1), px(r.2), px(r.3), SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+/// Mette qualità, destinazione e piede sotto le opzioni e adatta l'altezza della finestra,
+/// così nessuna riga resta schiacciata qualunque sia il numero di opzioni.
+unsafe fn layout_bottom(hwnd: HWND, top: i32) {
+    place(hwnd, ID_CAP_QUALITY, (210, top + 8, 70, 18));
+    place(hwnd, ID_QUALITY, (280, top, 520, 30));
+    place(hwnd, ID_QUALITY_VALUE, (810, top + 8, 50, 18));
+    place(hwnd, ID_CAP_DEST, (210, top + 42, 300, 16));
+    place(hwnd, ID_DEST, (210, top + 60, 330, 28));
+    place(hwnd, ID_CHANGE, (548, top + 60, 80, 28));
+    place(hwnd, ID_RESET, (634, top + 60, 150, 28));
+    place(hwnd, ID_CAP_EXISTS, (210, top + 96, 160, 26));
+    place(hwnd, ID_EXISTS, (372, top + 96, 220, 200));
+    place(hwnd, ID_GO, (640, top + 140, 240, 38));
+    place(hwnd, ID_FOOT, (210, top + 140, 420, 20));
+    place(hwnd, ID_POWERED, (210, top + 160, 420, 20));
+    let height = top + 196;
+    place(hwnd, ID_SIDE, (0, 40, 190, height - 40));
+    let style = WINDOW_STYLE(GetWindowLongW(hwnd, GWL_STYLE) as u32);
+    let mut rect = RECT { left: 0, top: 0, right: px(900), bottom: px(height) };
+    let _ = AdjustWindowRect(&mut rect, style, false);
+    let _ = SetWindowPos(hwnd, None, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    keep_on_screen(hwnd);
+}
+
+/// Se la finestra, cresciuta, esce in fondo dall'area di lavoro (sotto la barra delle applicazioni), sale quanto basta.
+unsafe fn keep_on_screen(hwnd: HWND) {
+    let mut win = RECT::default();
+    let _ = GetWindowRect(hwnd, &mut win);
+    let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+    if !GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mut info).as_bool() {
+        return;
+    }
+    let work = info.rcWork;
+    if win.bottom > work.bottom {
+        let top = (win.top - (win.bottom - work.bottom)).max(work.top);
+        let _ = SetWindowPos(hwnd, None, win.left, top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
 }
 
 /// Un controllo delle opzioni è stato toccato: il suo valore passa ai valori scelti.
@@ -581,13 +635,34 @@ unsafe fn start(hwnd: HWND) {
             rx.recv().unwrap_or(ExistsChoice::KeepBoth)
         }));
     }
+    let label = conversioni::action_label(CATEGORIES[state().category].kind, &action).to_string();
     std::thread::spawn(move || {
-        for path in files {
-            let result = conversioni::convert_one(&path, &action, q, dest.as_deref(), &opts);
+        let total = files.len();
+        let name = |p: &std::path::Path| p.file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
+        let step_label = |i: usize, p: &std::path::Path| {
+            if total == 1 { format!("{} → {label}", name(p)) } else { format!("{} di {total} · {}", i + 1, name(p)) }
+        };
+        if let Some(first) = files.first() {
+            crate::progress_win::start(total, &step_label(0, first));
+        }
+        let mut failed = None;
+        for (i, path) in files.into_iter().enumerate() {
+            crate::progress_win::step(i, &step_label(i, &path));
+            let result = conversioni::convert_one_out(&path, &action, q, dest.as_deref(), &opts).map(|(out, message)| {
+                crate::progress_win::produced(&out);
+                message
+            });
+            if let Err(e) = &result {
+                failed.get_or_insert_with(|| e.clone());
+            }
             RESULTS.lock().unwrap_or_else(|e| e.into_inner()).push((path, result));
             unsafe {
                 let _ = PostMessageW(Some(HWND(raw as *mut _)), WM_APP_RESULT, WPARAM(0), LPARAM(0));
             }
+        }
+        match failed {
+            Some(e) => crate::progress_win::finish(false, &format!("Errore · {e}")),
+            None => crate::progress_win::finish(true, &format!("✓ Fatto · {total} file in {label}")),
         }
         unsafe {
             let _ = PostMessageW(Some(HWND(raw as *mut _)), WM_APP_DONE, WPARAM(0), LPARAM(0));
@@ -658,7 +733,7 @@ unsafe fn draw_item(hwnd: HWND, di: &DRAWITEMSTRUCT) {
             draw_text(hdc, file, &mut name, DT_SINGLELINE | DT_VCENTER | DT_LEFT | DT_PATH_ELLIPSIS);
         }
         ID_DROP => {
-            FillRect(hdc, &rc, brush(&BRUSH_WHITE, DROP_BG));
+            FillRect(hdc, &rc, brush(&BRUSH_DROP, DROP_BG));
             let pen = CreatePen(PS_DASH, 1, PRIMARY);
             let old_pen = SelectObject(hdc, HGDIOBJ(pen.0));
             let old_brush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
@@ -792,6 +867,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             }
             LRESULT(1)
         }
+        WM_CTLCOLORLISTBOX if GetDlgCtrlID(HWND(lparam.0 as *mut _)) == ID_SIDE => LRESULT(brush(&BRUSH_SIDE, SIDE).0 as isize),
         WM_CTLCOLORSTATIC => {
             let ctl = HWND(lparam.0 as *mut _);
             let hdc = HDC(wparam.0 as *mut _);

@@ -1,0 +1,31 @@
+COMPONENTI CHE NON SONO LIBRERIE RUST
+=====================================
+
+Titillium Web (carattere)
+  Autori: Accademia di Belle Arti di Urbino
+  Licenza: SIL Open Font License 1.1 (testo in assets/fonts/OFL.txt)
+  Sito: https://fonts.google.com/specimen/Titillium+Web
+
+Modelli OCR di ocrs (text-detection.onnx, text-recognition.onnx)
+  Autore: Robert Knight
+  Licenza dei pesi: Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0)
+  Sito: https://github.com/robertknight/ocrs-models
+  Il codice di Cedro che li carica resta MIT.
+
+Media Foundation, Windows Imaging, OCR di Windows
+  Fanno parte di Windows (Microsoft); Cedro li usa dal sistema, non li distribuisce.
+
+IN ARRIVO (funzioni in lavorazione)
+  whisper.cpp e ggml - Georgi Gerganov e collaboratori - MIT - https://github.com/ggml-org/whisper.cpp
+  Modelli Whisper - OpenAI - MIT - https://github.com/openai/whisper
+  Questi programmi si scaricano al primo uso e non fanno parte dell'installatore.
+
+SCHEDA YOUTUBE (programmi scaricati al primo uso, eseguiti come programmi a parte)
+  yt-dlp - yt-dlp contributors - Unlicense (pubblico dominio) - https://github.com/yt-dlp/yt-dlp
+    Scarica video e audio da YouTube; si aggiorna da solo (al massimo ogni 12 ore).
+  FFmpeg - gli sviluppatori di FFmpeg - GNU LGPL 2.1 o successiva - https://ffmpeg.org
+    Compilazioni "lgpl" di BtbN: https://github.com/BtbN/FFmpeg-Builds (su Linux si usa quello del sistema, se c'è).
+    Unisce video e audio e scrive MP3, M4A, Opus, WAV e FLAC. Il codice sorgente è ai siti indicati.
+  Deno - Deno Land Inc. e collaboratori - MIT - https://github.com/denoland/deno
+    Serve a yt-dlp per le verifiche di YouTube che danno i video in alta qualità.
+

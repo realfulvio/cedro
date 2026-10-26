@@ -38,6 +38,11 @@ pub fn tools(kind: Kind) -> &'static [Slice] {
     }
 }
 
+/// Il nome che il pannello mostra per un formato o uno strumento, per esempio «WebP».
+pub fn action_label(kind: Kind, action: &str) -> &'static str {
+    formats(kind).iter().chain(tools(kind).iter()).find(|s| s.id == action).map(|s| s.label).unwrap_or("")
+}
+
 /// I file di `paths` che appartengono alla categoria.
 pub fn belonging(kind: Kind, paths: &[PathBuf]) -> Vec<PathBuf> {
     paths.iter().filter(|p| engine::kind_of(p) == kind).cloned().collect()
@@ -353,9 +358,14 @@ pub fn options_from(values: &Values) -> engine::Options {
 /// Esegue `action` su un file. Con `dest` le copie nuove finiscono in quella cartella
 /// invece che accanto all'originale; il nome non ne sovrascrive mai un altro.
 pub fn convert_one(path: &Path, action: &str, quality: u8, dest: Option<&Path>, opts: &engine::Options) -> Result<String, String> {
+    convert_one_out(path, action, quality, dest, opts).map(|(_, message)| message)
+}
+
+/// Come `convert_one`, ma dice anche quale file ha creato.
+pub fn convert_one_out(path: &Path, action: &str, quality: u8, dest: Option<&Path>, opts: &engine::Options) -> Result<(PathBuf, String), String> {
     // «Accanto all'originale» nel pannello vuol dire proprio accanto, qualunque cartella usi la ruota.
     let beside = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    engine::perform_with(path, action, quality, Some(dest.unwrap_or(beside)), opts).map(|out| out.message).map_err(|e| e.0)
+    engine::perform_with(path, action, quality, Some(dest.unwrap_or(beside)), opts).map(|out| (out.path, out.message)).map_err(|e| e.0)
 }
 
 #[cfg(test)]
