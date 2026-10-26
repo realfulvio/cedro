@@ -1,0 +1,23 @@
+Licenze di terze parti
+======================
+
+Cedro è rilasciato con licenza MIT (vedi LICENSE). Questo file elenca i programmi di terzi che
+Cedro può scaricare sul tuo PC quando usi una funzione che li richiede. Non sono inclusi
+nell'installer e Cedro li esegue come programmi a parte.
+
+Scheda YouTube
+--------------
+
+yt-dlp
+  Programma per scaricare video e audio da YouTube.
+  Licenza: Unlicense (pubblico dominio).
+  Sito e codice: https://github.com/yt-dlp/yt-dlp
+  Scaricato alla prima volta che si usa la scheda YouTube, nella cartella "tools" della
+  configurazione di Cedro, e aggiornato da solo (al massimo ogni 12 ore).
+
+FFmpeg
+  Programma per unire immagini e suono e per scrivere MP3, M4A, Opus, WAV e FLAC.
+  Licenza: GNU LGPL 2.1 o successiva (versione "lgpl" delle compilazioni BtbN).
+  Sito: https://ffmpeg.org  ·  Compilazioni: https://github.com/BtbN/FFmpeg-Builds
+  Scaricato alla prima volta che serve (su Linux si usa quello del sistema, se c'è).
+  Il codice sorgente è disponibile ai siti indicati.

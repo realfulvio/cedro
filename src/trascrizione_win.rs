@@ -187,6 +187,16 @@ pub(super) unsafe fn take_log(hwnd: HWND) {
     }
 }
 
+/// Nasconde tutta la scheda (per quando si passa a una pagina senza file, come YouTube).
+pub(super) unsafe fn hide_all(hwnd: HWND) {
+    let mut ids = vec![ID_TAB_CONVERT, ID_TAB_TRANSCRIBE, ID_CAP_SAVEAS, ID_CAP_MODEL, ID_CAP_LOG, ID_COPY, ID_LOG];
+    ids.extend((0..FORMATS.len() as i32).map(|i| ID_TFMT0 + i));
+    ids.extend((0..MODELS.len() as i32).map(|i| ID_MODEL0 + i));
+    for id in ids {
+        let _ = ShowWindow(item(hwnd, id), SW_HIDE);
+    }
+}
+
 /// Mostra o nasconde i pezzi delle due schede e mette al loro posto quelli della trascrizione.
 /// Ritorna dove finisce la scheda (per la parte bassa), se la trascrizione è attiva.
 pub(super) unsafe fn layout(hwnd: HWND) -> Option<i32> {

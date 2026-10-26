@@ -18,6 +18,7 @@ mod softvideo;
 pub mod update;
 pub mod wheelgeom;
 pub mod wheelgfx;
+pub mod youtube;
 mod zipstore;
 #[cfg(windows)]
 mod video;
