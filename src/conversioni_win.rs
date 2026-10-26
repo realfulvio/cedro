@@ -65,6 +65,8 @@ mod youtube_win;
 const TITLE: &str = "Conversioni di Cedro";
 /// La voce del menu dopo le categorie: la scheda YouTube, che non lavora su file ma su link.
 const YOUTUBE: &str = "YouTube";
+/// E sotto, la scheda per i video delle altre pagine web (stesso motore, link di qualsiasi sito).
+const WEB_VIDEO: &str = "Video dal web";
 const NEXT_TO_ORIGINAL: &str = "Accanto all'originale";
 
 // Colori del sito del Comune di Bondeno (COLORREF = 0x00BBGGRR).
@@ -402,6 +404,7 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
         SendMessageW(side, LB_ADDSTRING, Some(WPARAM(0)), Some(LPARAM(HSTRING::from(cat.name).as_ptr() as isize)));
     }
     SendMessageW(side, LB_ADDSTRING, Some(WPARAM(0)), Some(LPARAM(HSTRING::from(YOUTUBE).as_ptr() as isize)));
+    SendMessageW(side, LB_ADDSTRING, Some(WPARAM(0)), Some(LPARAM(HSTRING::from(WEB_VIDEO).as_ptr() as isize)));
     SendMessageW(side, LB_SETITEMHEIGHT, Some(WPARAM(0)), Some(LPARAM(px(42) as isize)));
 
     child(hwnd, instance, s, "", 0, ID_TITLE, (210, 44, 670, 32), ft);
@@ -937,12 +940,13 @@ unsafe fn draw_item(hwnd: HWND, di: &DRAWITEMSTRUCT) {
             if di.itemID == u32::MAX {
                 return;
             }
-            let on = if di.itemID as usize == CATEGORIES.len() { youtube_win::active() } else { !youtube_win::active() && state().category == di.itemID as usize };
+            let item = di.itemID as usize;
+            let on = if item >= CATEGORIES.len() { youtube_win::shown_mode() == Some(item > CATEGORIES.len()) } else { !youtube_win::active() && state().category == item };
             FillRect(hdc, &rc, brush(if on { &BRUSH_PRIMARY } else { &BRUSH_SIDE }, if on { PRIMARY } else { SIDE }));
             SelectObject(hdc, HGDIOBJ(font(if on { &FONT_BOLD } else { &FONT }).0));
             SetTextColor(hdc, if on { WHITE } else { TEXT });
             rc.left += px(16);
-            draw_text(hdc, CATEGORIES.get(di.itemID as usize).map(|c| c.name).unwrap_or(YOUTUBE), &mut rc, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
+            draw_text(hdc, CATEGORIES.get(item).map(|c| c.name).unwrap_or(if item > CATEGORIES.len() { WEB_VIDEO } else { YOUTUBE }), &mut rc, DT_SINGLELINE | DT_VCENTER | DT_LEFT);
         }
         ID_QUEUE => {
             if di.itemID == u32::MAX {
@@ -1019,9 +1023,13 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             match id {
                 ID_SIDE if code == LBN_SELCHANGE => {
                     let sel = SendMessageW(item(hwnd, ID_SIDE), LB_GETCURSEL, Some(WPARAM(0)), Some(LPARAM(0))).0;
-                    if sel >= 0 && sel as usize == CATEGORIES.len() {
+                    if sel >= 0 && sel as usize >= CATEGORIES.len() {
                         trascrizione::hide_all(hwnd);
-                        youtube_win::enter(hwnd);
+                        if !youtube_win::enter(hwnd, sel as usize > CATEGORIES.len()) {
+                            // Si resta sulla scheda che sta scaricando.
+                            let back = youtube_win::shown_mode().map(|w| CATEGORIES.len() + w as usize).unwrap_or(state().category);
+                            SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(back)), Some(LPARAM(0)));
+                        }
                     } else if sel >= 0 {
                         let from_youtube = youtube_win::active();
                         if from_youtube {
