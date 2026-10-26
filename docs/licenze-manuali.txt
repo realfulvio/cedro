@@ -1,0 +1,23 @@
+COMPONENTI CHE NON SONO LIBRERIE RUST
+=====================================
+
+Titillium Web (carattere)
+  Autori: Accademia di Belle Arti di Urbino
+  Licenza: SIL Open Font License 1.1 (testo in assets/fonts/OFL.txt)
+  Sito: https://fonts.google.com/specimen/Titillium+Web
+
+Modelli OCR di ocrs (text-detection.onnx, text-recognition.onnx)
+  Autore: Robert Knight
+  Licenza dei pesi: Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0)
+  Sito: https://github.com/robertknight/ocrs-models
+  Il codice di Cedro che li carica resta MIT.
+
+Media Foundation, Windows Imaging, OCR di Windows
+  Fanno parte di Windows (Microsoft); Cedro li usa dal sistema, non li distribuisce.
+
+IN ARRIVO (funzioni in lavorazione)
+  whisper.cpp e ggml - Georgi Gerganov e collaboratori - MIT - https://github.com/ggml-org/whisper.cpp
+  Modelli Whisper - OpenAI - MIT - https://github.com/openai/whisper
+  yt-dlp - yt-dlp contributors - Unlicense - https://github.com/yt-dlp/yt-dlp
+  Questi programmi si scaricano al primo uso e non fanno parte dell'installatore.
+
