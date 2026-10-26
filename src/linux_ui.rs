@@ -779,11 +779,7 @@ fn on_update(app: &Application, news: UpdateNews) {
     };
     let dialog = gtk4::AlertDialog::builder()
         .message(format!("È disponibile Cedro {}", release.version))
-        .detail(if release.package.is_some() && update::self_updatable() {
-            format!("Hai la {}. Vuoi aggiornare? Cedro scarica il pacchetto, controlla lo SHA-256, lo installa e si riapre.", update::CURRENT)
-        } else {
-            format!("Hai la {}. Vuoi aggiornare? Si apre la pagina della release.", update::CURRENT)
-        })
+        .detail(format!("Hai la {}. Vuoi aggiornare? Cedro scarica il pacchetto, controlla lo SHA-256, lo installa e si riapre.", update::CURRENT))
         .buttons(["Non ora", "Aggiorna"])
         .cancel_button(0)
         .default_button(0)
@@ -793,15 +789,14 @@ fn on_update(app: &Application, news: UpdateNews) {
         if answer == Ok(1) {
             match crate::cli::install(&release) {
                 Err(e) => notify(&app, &format!("Aggiornamento non riuscito: {e}")),
-                Ok(done) if release.package.is_some() && update::self_updatable() => {
-                    // Il programma nuovo è già al suo posto: questo si chiude e un altro lo riapre.
+                Ok(done) => {
+                    // Il programma nuovo è già al suo posto: questo si chiude e il nuovo parte da lì.
                     notify(&app, &format!("{done} Cedro si riapre."));
-                    if let Ok(exe) = std::env::current_exe() {
+                    if let Ok(exe) = update::installed_binary() {
                         let _ = std::process::Command::new("sh").arg("-c").arg("sleep 2; exec \"$0\" --background").arg(exe).spawn();
                     }
                     glib::timeout_add_local_once(std::time::Duration::from_millis(800), || std::process::exit(0));
                 }
-                Ok(_) => {}
             }
         } else if !manual {
             update::skip(&release.version);

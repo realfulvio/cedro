@@ -103,18 +103,21 @@ pub fn install(release: &cedro::update::Release) -> Result<String, String> {
         std::process::Command::new(&path).spawn().map_err(|e| e.to_string())?;
         return Ok(format!("Avviato {}.", asset.name));
     }
-    // Su Linux, se Cedro sta dove lo mette install.sh, il pacchetto si scarica e si installa da solo.
+    // Su Linux il pacchetto si scarica e si installa sempre da solo, da dove gira Cedro (anche da `target/`
+    // o da una cartella a scelta): la copia nuova va in ~/.local/opt/cedro. Senza pacchetto si dice chiaro.
     #[cfg(unix)]
-    if let (Some(asset), true) = (&release.package, cedro::update::self_updatable()) {
-        cedro::update::install_package(asset)?;
-        return Ok(format!("Installata la versione {}.", release.version));
+    {
+        let asset = release.package.as_ref().ok_or_else(|| {
+            format!("la release {} non ha il pacchetto per questo sistema (linux-{}): riprova più tardi", release.version, cedro::update::package_arch())
+        })?;
+        let installed = cedro::update::install_package(asset)?;
+        return Ok(format!("Installata la versione {} in {}.", release.version, installed.display()));
     }
-    #[cfg(windows)]
-    let opener = "explorer";
-    #[cfg(not(windows))]
-    let opener = "xdg-open";
-    std::process::Command::new(opener).arg(&release.page).spawn().map_err(|e| e.to_string())?;
-    Ok(format!("Aperta la pagina della release: {}", release.page))
+    #[cfg(not(unix))]
+    {
+        std::process::Command::new("explorer").arg(&release.page).spawn().map_err(|e| e.to_string())?;
+        Ok(format!("Aperta la pagina della release: {}", release.page))
+    }
 }
 
 fn print_help() {
