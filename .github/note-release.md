@@ -12,9 +12,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Trascrizione italiana molto più precisa**: abbiamo misurato la trascrizione su 200 frasi italiane (parlato pulito e un «messaggio vocale» disturbato) e la vecchia «Buona» sbagliava il 7,5% delle parole (il 17% nel messaggio vocale). Ora i tre livelli sono più bravi: **Veloce** (264 MB) 7,5%, **Buona** (539 MB) 4,1%, **Massima** (574 MB) 2,6% e 5,7% nel messaggio vocale. Se il PC ha una scheda video che Cedro può usare, si parte da «Massima» (circa due minuti per un'ora di audio). I modelli vecchi che non servono più si tolgono da soli dopo il primo scaricamento.
+**Linux sempre chiaro**: con il tema scuro di KDE o GNOME alcune parti delle finestre (menu laterale, coda, menu a tendina e pulsanti) diventavano nere e illeggibili. Ora Cedro usa sempre i suoi colori chiari, come su Windows.
 
-**Nuova scheda «Video dal web»**, sotto YouTube: scarica video e audio dalle pagine di molti altri siti (RaiPlay, Vimeo, Internet Archive e oltre mille altri supportati da yt-dlp), con messaggi chiari se un sito non è supportato o il video è protetto.
+Dalla 0.18.2: trascrizione italiana molto più precisa e nuova scheda «Video dal web».
 
 Dalla 0.18.0: versione nativa per Windows on ARM, con trascrizione ottimizzata (base, dotprod, i8mm e Vulkan per le schede Adreno), scheda Sistema con le istruzioni del processore, YouTube con strumenti ARM64 e la nuova firma col logo hcok.
 
