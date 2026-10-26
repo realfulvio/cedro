@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn the_count_comes_from_the_header() {
-        let head = "LICENZE DI TERZE PARTI - Cedro 0.15.0\r\nCedro è software libero.\r\nLe librerie sono 251; i testi uguali compaiono una volta sola.\r\n";
+        let head = "LICENZE DI TERZE PARTI - Cedro 0.17.0\r\nCedro è software libero.\r\nLe librerie sono 251; i testi uguali compaiono una volta sola.\r\n";
         assert_eq!(count_in(head), Some(251));
         assert_eq!(count_in("niente"), None);
     }
