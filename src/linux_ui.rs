@@ -124,7 +124,13 @@ pub fn start() -> i32 {
     let opened = state.clone();
     let flag = quit.clone();
     let started = std::cell::Cell::new(false);
+    let started_font = std::cell::Cell::new(false);
     app.connect_activate(move |app| {
+        if !started_font.replace(true) {
+            if crate::linux_font::load() {
+                crate::linux_font::apply();
+            }
+        }
         let launch_open = opened.borrow().launch.open;
         let background = opened.borrow().launch.background;
         if started.replace(true) {
@@ -291,6 +297,27 @@ fn present_wheel(app: &Application, state: Rc<RefCell<Wheel>>) {
         state.borrow_mut().areas.push(area);
         state.borrow_mut().windows.push(window);
     }
+    // Solo nelle build di prova: `CEDRO_AUTOCHOOSE=<numero>` sceglie da solo quella fetta, come un clic dell'utente.
+    #[cfg(debug_assertions)]
+    if let Some(index) = std::env::var("CEDRO_AUTOCHOOSE").ok().and_then(|v| v.parse::<usize>().ok()) {
+        let state = state.clone();
+        let app = app.clone();
+        glib::timeout_add_local_once(Duration::from_millis(900), move || {
+            let (width, height, n) = {
+                let wheel = state.borrow();
+                let Some(screen) = wheel.screens.first() else { return };
+                (screen.width, screen.height, current_slices(&wheel).0.len())
+            };
+            point_at(&state, 0, width / 2.0, height / 2.0);
+            let (ox, oy) = origin(width / 2.0, height / 2.0, width, height);
+            let (a0, a1) = cedro::wheelgeom_bounds(index, n);
+            let mid = (a0 + a1) / 2.0;
+            let radius = (cedro::wheelgeom::R0 + cedro::wheelgeom::R1) / 2.0;
+            let x = ox + 220.0 + (radius * mid.cos()) as f64;
+            let y = oy + 220.0 + (radius * mid.sin()) as f64;
+            choose(&app, &state, 0, x, y);
+        });
+    }
     let later = state.clone();
     glib::timeout_add_local_once(Duration::from_millis(50), move || {
         let mut wheel = later.borrow_mut();
@@ -393,6 +420,7 @@ fn run_slices(all: &[PathBuf], id: &str, label: &str) -> String {
     let quality = read_quality();
     let mut notes = Vec::new();
     let mut failed = None;
+    let mut last_out = None;
     let name = |p: &std::path::Path| p.file_name().and_then(|s| s.to_str()).unwrap_or("file").to_string();
     let step_label = |i: usize, p: &std::path::Path| {
         if paths.len() == 1 { format!("{} → {label}", name(p)) } else { format!("{} di {} · {}", i + 1, paths.len(), name(p)) }
@@ -403,7 +431,10 @@ fn run_slices(all: &[PathBuf], id: &str, label: &str) -> String {
     for (i, path) in paths.iter().enumerate() {
         crate::linux_progress::step(i, &step_label(i, path));
         match perform(path, id, quality) {
-            Ok(out) => notes.push(format!("{} · {}", name(&out.path), out.message)),
+            Ok(out) => {
+                notes.push(format!("{} · {}", name(&out.path), out.message));
+                last_out = Some(out.path);
+            }
             Err(err) => {
                 failed.get_or_insert_with(|| err.0.clone());
                 notes.push(err.0);
@@ -425,7 +456,40 @@ fn run_slices(all: &[PathBuf], id: &str, label: &str) -> String {
         format!("{} file\n{}", notes.len(), notes.join("\n"))
     };
     append_log(&summary);
+    if let (true, Some(out)) = (read_settings().reveal, last_out) {
+        reveal_in_file_manager(&out);
+    }
     summary
+}
+
+/// Apre il file manager sulla cartella del file nuovo, con il file selezionato (Dolphin, Nautilus e gli altri
+/// che parlano `org.freedesktop.FileManager1`); senza, apre solo la cartella.
+fn reveal_in_file_manager(path: &std::path::Path) {
+    let uri = gtk4::gio::File::for_path(path).uri().to_string();
+    let shown = gtk4::gio::bus_get_sync(gtk4::gio::BusType::Session, None::<&gtk4::gio::Cancellable>)
+        .ok()
+        .and_then(|bus| {
+            use gtk4::glib::prelude::ToVariant;
+            let args = gtk4::glib::Variant::tuple_from_iter([vec![uri.clone()].to_variant(), "cedro".to_variant()]);
+            bus.call_sync(
+                Some("org.freedesktop.FileManager1"),
+                "/org/freedesktop/FileManager1",
+                "org.freedesktop.FileManager1",
+                "ShowItems",
+                Some(&args),
+                None,
+                gtk4::gio::DBusCallFlags::NONE,
+                3000,
+                None::<&gtk4::gio::Cancellable>,
+            )
+            .ok()
+        })
+        .is_some();
+    if !shown {
+        if let Some(dir) = path.parent() {
+            let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
+        }
+    }
 }
 
 fn close_wheel(state: &Rc<RefCell<Wheel>>) {
@@ -715,7 +779,11 @@ fn on_update(app: &Application, news: UpdateNews) {
     };
     let dialog = gtk4::AlertDialog::builder()
         .message(format!("È disponibile Cedro {}", release.version))
-        .detail(format!("Hai la {}. Vuoi aggiornare? Si apre la pagina della release.", update::CURRENT))
+        .detail(if release.package.is_some() && update::self_updatable() {
+            format!("Hai la {}. Vuoi aggiornare? Cedro scarica il pacchetto, controlla lo SHA-256, lo installa e si riapre.", update::CURRENT)
+        } else {
+            format!("Hai la {}. Vuoi aggiornare? Si apre la pagina della release.", update::CURRENT)
+        })
         .buttons(["Non ora", "Aggiorna"])
         .cancel_button(0)
         .default_button(0)
@@ -723,8 +791,17 @@ fn on_update(app: &Application, news: UpdateNews) {
     let app = app.clone();
     dialog.choose(None::<&gtk4::Window>, None::<&gtk4::gio::Cancellable>, move |answer| {
         if answer == Ok(1) {
-            if let Err(e) = crate::cli::install(&release) {
-                notify(&app, &format!("Aggiornamento non riuscito: {e}"));
+            match crate::cli::install(&release) {
+                Err(e) => notify(&app, &format!("Aggiornamento non riuscito: {e}")),
+                Ok(done) if release.package.is_some() && update::self_updatable() => {
+                    // Il programma nuovo è già al suo posto: questo si chiude e un altro lo riapre.
+                    notify(&app, &format!("{done} Cedro si riapre."));
+                    if let Ok(exe) = std::env::current_exe() {
+                        let _ = std::process::Command::new("sh").arg("-c").arg("sleep 2; exec \"$0\" --background").arg(exe).spawn();
+                    }
+                    glib::timeout_add_local_once(std::time::Duration::from_millis(800), || std::process::exit(0));
+                }
+                Ok(_) => {}
             }
         } else if !manual {
             update::skip(&release.version);
