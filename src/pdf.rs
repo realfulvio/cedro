@@ -1,6 +1,6 @@
 use std::io::Write;
 
-fn win_ansi(text: &str) -> Vec<u8> {
+pub(crate) fn win_ansi(text: &str) -> Vec<u8> {
     let mut out = Vec::with_capacity(text.len());
     for ch in text.chars() {
         let c = ch as u32;
@@ -40,6 +40,7 @@ fn literal(bytes: &[u8]) -> String {
     s
 }
 
+#[cfg(test)]
 fn wrap_lines(text: &str, width: usize) -> Vec<String> {
     let mut lines = Vec::new();
     for raw in text.replace("\r\n", "\n").split('\n') {
@@ -92,6 +93,7 @@ pub fn pdf_from_text(text: &str) -> Vec<u8> {
 }
 
 /// PDF di testo con la pagina scelta (A4, A3 o Lettera): le righe si adattano alla larghezza.
+#[cfg(test)]
 pub fn pdf_from_text_sized(text: &str, size: crate::engine::PageSize) -> Vec<u8> {
     use crate::engine::PageSize;
     let (width, height) = match size {

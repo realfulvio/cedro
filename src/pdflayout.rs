@@ -181,6 +181,7 @@ impl<'a> Device<'a> for Collector {
 }
 
 /// Una riga di testo.
+#[derive(Clone)]
 struct Line {
     x: f64,
     end: f64,
@@ -738,12 +739,149 @@ pub enum Page {
 pub struct FlowPage {
     width: f64,
     height: f64,
+    /// Nell'ordine di lettura: prima i blocchi a tutta larghezza, poi la colonna sinistra, poi la destra.
     blocks: Vec<Block>,
+    /// Le colonne del testo, se la pagina ne ha due e si vogliono tenere.
+    cols: Option<Cols>,
+}
+
+/// Una pagina a due colonne: dove stanno e quanti blocchi sono prima di ognuna.
+struct Cols {
+    l0: f64,
+    l1: f64,
+    r0: f64,
+    r1: f64,
+    /// I blocchi a tutta larghezza in testa (il titolo).
+    header: usize,
+    /// Da qui in poi i blocchi sono della colonna destra.
+    split: usize,
+}
+
+/// Dove passa lo spazio tra due colonne di testo, se la pagina ne ha due.
+fn detect_gutter(lines: &[Line], page_w: f64) -> Option<f64> {
+    if lines.len() < 8 {
+        return None;
+    }
+    let (lo, hi) = (page_w * 0.3, page_w * 0.7);
+    let crossing = |x: f64| lines.iter().filter(|l| l.x < x - 1.0 && l.end > x + 1.0).count();
+    // Le righe che attraversano il centro sono i titoli a tutta larghezza: al più una su dieci.
+    let mut best: Option<(f64, f64)> = None;
+    let mut start: Option<f64> = None;
+    let mut x = lo;
+    while x <= hi + 1.0 {
+        let free = crossing(x) * 10 <= lines.len();
+        match (free, start) {
+            (true, None) => start = Some(x),
+            (false, Some(s0)) => {
+                if best.map_or(true, |(a, b)| x - s0 > b - a) {
+                    best = Some((s0, x));
+                }
+                start = None;
+            }
+            _ => {}
+        }
+        x += 1.0;
+    }
+    if let Some(s0) = start {
+        if best.map_or(true, |(a, b)| x - s0 > b - a) {
+            best = Some((s0, x));
+        }
+    }
+    let (a, b) = best?;
+    if b - a < (page_w * 0.02).max(10.0) {
+        return None;
+    }
+    let g = (a + b) / 2.0;
+    let left: Vec<&Line> = lines.iter().filter(|l| l.end <= g + 1.0).collect();
+    let right: Vec<&Line> = lines.iter().filter(|l| l.x >= g - 1.0).collect();
+    let min_lines = (lines.len() / 4).max(4);
+    if left.len() < min_lines || right.len() < min_lines {
+        return None;
+    }
+    // Colonne di testo vere: righe lunghe (non etichette e valori di un modulo)…
+    let wide = |v: &[&Line]| v.iter().map(|l| l.end - l.x).sum::<f64>() / v.len() as f64 >= page_w * 0.2;
+    if !wide(&left) || !wide(&right) {
+        return None;
+    }
+    // …che stanno alla stessa altezza.
+    let span = |v: &[&Line]| {
+        let top = v.iter().map(|l| l.baseline).fold(f64::MAX, f64::min);
+        let bottom = v.iter().map(|l| l.baseline).fold(0.0, f64::max);
+        (top, bottom)
+    };
+    let (lt, lb) = span(&left);
+    let (rt, rb) = span(&right);
+    let overlap = (lb.min(rb) - lt.max(rt)).max(0.0);
+    if overlap < 0.6 * (lb - lt).min(rb - rt) {
+        return None;
+    }
+    // I titoli a tutta larghezza sono solo sopra le colonne.
+    let first_col = left.iter().chain(right.iter()).map(|l| l.baseline).fold(f64::MAX, f64::min);
+    if lines.iter().any(|l| l.x < g - 1.0 && l.end > g + 1.0 && l.baseline > first_col) {
+        return None;
+    }
+    Some(g)
+}
+
+fn block_col(b: &Block, g: f64) -> u8 {
+    let (x0, x1) = match b {
+        Block::Para(q) => (q.x, q.end),
+        Block::Table(t) => (t.x0, *t.cols.last().unwrap_or(&t.x0)),
+        Block::Image { fig, .. } => (fig.x0, fig.x1),
+    };
+    if x0 < g - 2.0 && x1 > g + 2.0 {
+        0
+    } else if (x0 + x1) / 2.0 < g {
+        1
+    } else {
+        2
+    }
+}
+
+/// Mette i blocchi in ordine di lettura; con due colonne ritorna anche dove stanno.
+fn arrange(blocks: Vec<Block>, gutter: Option<f64>, keep_columns: bool) -> (Vec<Block>, Option<Cols>) {
+    let by_top = |a: &Block, b: &Block| a.top().partial_cmp(&b.top()).unwrap_or(std::cmp::Ordering::Equal);
+    let Some(g) = gutter else {
+        let mut blocks = blocks;
+        blocks.sort_by(by_top);
+        return (blocks, None);
+    };
+    let (mut header, mut left, mut right) = (Vec::new(), Vec::new(), Vec::new());
+    for b in blocks {
+        match block_col(&b, g) {
+            0 => header.push(b),
+            1 => left.push(b),
+            _ => right.push(b),
+        }
+    }
+    // Un blocco a tutta larghezza sotto l'inizio delle colonne non si può mettere in testa: si torna a una pagina sola.
+    let first_col = left.iter().chain(right.iter()).map(|b| b.top()).fold(f64::MAX, f64::min);
+    if header.iter().any(|b| b.top() > first_col) {
+        let mut all: Vec<Block> = header.into_iter().chain(left).chain(right).collect();
+        all.sort_by(by_top);
+        return (all, None);
+    }
+    for v in [&mut header, &mut left, &mut right] {
+        v.sort_by(by_top);
+    }
+    let extent = |v: &[Block]| {
+        v.iter().fold((f64::MAX, 0.0f64), |(a, b), blk| {
+            let (x0, x1) = match blk {
+                Block::Para(q) => (q.x, q.end),
+                Block::Table(t) => (t.x0, *t.cols.last().unwrap_or(&t.x0)),
+                Block::Image { fig, .. } => (fig.x0, fig.x1),
+            };
+            (a.min(x0), b.max(x1))
+        })
+    };
+    let ((l0, l1), (r0, r1)) = (extent(&left), extent(&right));
+    let cols = (keep_columns && !left.is_empty() && !right.is_empty()).then(|| Cols { l0, l1, r0, r1, header: header.len(), split: header.len() + left.len() });
+    (header.into_iter().chain(left).chain(right).collect(), cols)
 }
 
 /// Legge le pagine del PDF. `Page::Empty` per quelle senza testo incorporato.
 /// Con `tables` falso le tabelle non si riconoscono: il loro testo resta in paragrafi.
-pub fn read_pages(bytes: &[u8], with_tables: bool) -> Result<Vec<Page>, String> {
+pub fn read_pages(bytes: &[u8], with_tables: bool, keep_columns: bool) -> Result<Vec<Page>, String> {
     let original = Pdf::new(bytes.to_vec()).map_err(|e| format!("PDF non letto: {e:?}"))?;
     let cache = RenderCache::new();
     let interp_cache = InterpreterCache::new();
@@ -780,7 +918,24 @@ pub fn read_pages(bytes: &[u8], with_tables: bool) -> Result<Vec<Page>, String> 
             *sizes.entry((l.size * 4.0).round() as i64).or_default() += l.text().chars().count();
         }
         let body = sizes.into_iter().max_by_key(|(_, n)| *n).map_or(11.0, |(s, _)| s as f64 / 4.0);
-        let mut blocks: Vec<Block> = paragraphs(&lines, body).into_iter().map(Block::Para).collect();
+        let gutter = detect_gutter(&lines, w);
+        let mut blocks: Vec<Block> = match gutter {
+            // Con due colonne ogni colonna si mette in paragrafi per conto suo: le righe di una non si mescolano con l'altra.
+            Some(g) => {
+                let (mut head, mut left, mut right) = (Vec::new(), Vec::new(), Vec::new());
+                for l in &lines {
+                    if l.x < g - 1.0 && l.end > g + 1.0 {
+                        head.push(l.clone());
+                    } else if l.end <= g + 1.0 {
+                        left.push(l.clone());
+                    } else {
+                        right.push(l.clone());
+                    }
+                }
+                [head, left, right].iter().flat_map(|group| paragraphs(group, body)).map(Block::Para).collect()
+            }
+            None => paragraphs(&lines, body).into_iter().map(Block::Para).collect(),
+        };
         blocks.extend(tables.into_iter().map(Block::Table));
         if !figures.is_empty() {
             let scale = (200.0 / 72.0f32).min(3200.0 / (w.max(h).max(1.0) as f32));
@@ -799,8 +954,8 @@ pub fn read_pages(bytes: &[u8], with_tables: bool) -> Result<Vec<Page>, String> 
                 blocks.push(Block::Image { fig, png: out });
             }
         }
-        blocks.sort_by(|a, b| a.top().partial_cmp(&b.top()).unwrap_or(std::cmp::Ordering::Equal));
-        pages.push(Page::Flow(FlowPage { width: w, height: h, blocks }));
+        let (blocks, cols) = arrange(blocks, gutter, keep_columns);
+        pages.push(Page::Flow(FlowPage { width: w, height: h, blocks, cols }));
     }
     Ok(pages)
 }
@@ -958,6 +1113,54 @@ fn sect_xml(w: f64, h: f64, top: f64, bottom: f64, left: f64, right: f64) -> Str
     )
 }
 
+/// I blocchi di una pagina (o di una sua colonna) come XML di Word.
+fn blocks_xml(
+    blocks: &[Block],
+    geo: &Geometry,
+    page_width: f64,
+    media: &mut Vec<(String, Vec<u8>)>,
+    rels: &mut String,
+    next_id: &mut usize,
+) -> Vec<String> {
+    let mut parts: Vec<String> = Vec::new();
+    let mut prev_bottom: Option<f64> = None;
+    for block in blocks {
+        let gap = prev_bottom.map_or(0.0, |b| (block.top() - b).max(0.0));
+        match block {
+            Block::Para(q) => {
+                let style = match q.heading {
+                    1 => "Heading1",
+                    2 => "Heading2",
+                    3 => "Heading3",
+                    _ => "BodyText",
+                };
+                parts.push(para_xml(q, style, gap, geo, None));
+            }
+            Block::Table(t) => {
+                // Lo spazio sopra la tabella va dopo il paragrafo che la precede.
+                if gap > 0.5 {
+                    if let Some(last) = parts.last_mut().filter(|l| l.starts_with("<w:p>") && !l.contains("<w:drawing>")) {
+                        *last = last.replacen("w:after=\"0\"", &format!("w:after=\"{}\"", twips(gap)), 1);
+                    }
+                }
+                parts.push(table_xml(t, geo));
+            }
+            Block::Image { fig, png } => {
+                let id = *next_id;
+                *next_id += 1;
+                media.push((format!("word/media/immagine{id}.png"), png.clone()));
+                let _ = write!(
+                    rels,
+                    "<Relationship Id=\"rIdImg{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/immagine{id}.png\"/>"
+                );
+                parts.push(image_xml(id, fig, gap, geo, page_width));
+            }
+        }
+        prev_bottom = Some(block.bottom());
+    }
+    parts
+}
+
 /// Il file Word. Le pagine con testo diventano titoli, paragrafi e tabelle; per le altre,
 /// `fallback` dà il testo letto con l'OCR, in paragrafi, su una pagina normale.
 pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
@@ -986,44 +1189,49 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
             Page::Flow(p) => {
                 let page_right = (p.width - right).max(20.0);
                 let geo = Geometry { left: left.max(0.0), right: p.width - page_right };
-                let mut parts: Vec<String> = Vec::new();
-                let mut prev_bottom: Option<f64> = None;
-                for block in &p.blocks {
-                    let gap = prev_bottom.map_or(0.0, |b| (block.top() - b).max(0.0));
-                    match block {
-                        Block::Para(q) => {
-                            let style = match q.heading {
-                                1 => "Heading1",
-                                2 => "Heading2",
-                                3 => "Heading3",
-                                _ => "BodyText",
-                            };
-                            parts.push(para_xml(q, style, gap, &geo, None));
-                        }
-                        Block::Table(t) => {
-                            // Lo spazio sopra la tabella va dopo il paragrafo che la precede.
-                            if gap > 0.5 {
-                                if let Some(last) = parts.last_mut().filter(|l| l.starts_with("<w:p>") && !l.contains("<w:drawing>")) {
-                                    *last = last.replacen("w:after=\"0\"", &format!("w:after=\"{}\"", twips(gap)), 1);
-                                }
-                            }
-                            parts.push(table_xml(t, &geo));
-                        }
-                        Block::Image { fig, png } => {
-                            let id = next_id;
-                            next_id += 1;
-                            media.push((format!("word/media/immagine{id}.png"), png.clone()));
-                            let _ = write!(
-                                rels,
-                                "<Relationship Id=\"rIdImg{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/immagine{id}.png\"/>"
-                            );
-                            parts.push(image_xml(id, fig, gap, &geo, p.width));
+                let top = p.blocks.first().map_or(40.0, |b| b.top()).clamp(20.0, 150.0);
+                if let Some(c) = &p.cols {
+                    // Pagina a due colonne: il titolo a una colonna, poi il testo in due colonne vere.
+                    let left_m = c.l0.min(left).max(0.0);
+                    let right_m = (p.width - c.r1.max(right)).max(20.0);
+                    let edge = p.width - right_m;
+                    let mut parts = blocks_xml(&p.blocks[..c.header], &Geometry { left: left_m, right: edge }, p.width, &mut media, &mut rels, &mut next_id);
+                    if !parts.is_empty() {
+                        let head_sect = sect_xml(p.width, p.height, top, 36.0, left_m, right_m);
+                        match parts.last_mut().filter(|l| l.starts_with("<w:p>") && !l.contains("<w:drawing>")) {
+                            Some(last) => *last = last.replacen("</w:pPr>", &format!("{head_sect}</w:pPr>"), 1),
+                            None => parts.push(format!(
+                                "<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"20\" w:lineRule=\"exact\"/>{head_sect}</w:pPr></w:p>"
+                            )),
                         }
                     }
-                    prev_bottom = Some(block.bottom());
+                    parts.extend(blocks_xml(&p.blocks[c.header..c.split], &Geometry { left: left_m, right: c.l1 }, p.width, &mut media, &mut rels, &mut next_id));
+                    let mut right_parts = blocks_xml(&p.blocks[c.split..], &Geometry { left: c.r0, right: edge }, p.width, &mut media, &mut rels, &mut next_id);
+                    let column_break = "<w:r><w:br w:type=\"column\"/></w:r>";
+                    match right_parts.first_mut().filter(|f| f.starts_with("<w:p>") && !f.contains("<w:drawing>")) {
+                        Some(first) => *first = first.replacen("</w:pPr>", &format!("</w:pPr>{column_break}"), 1),
+                        None => right_parts.insert(0, format!("<w:p><w:pPr><w:spacing w:before=\"0\" w:after=\"0\"/></w:pPr>{column_break}</w:p>")),
+                    }
+                    parts.extend(right_parts);
+                    let area = p.width - left_m - right_m;
+                    let (w1, gap, w2) = (c.l1 - left_m, c.r0 - c.l1, edge - c.r0);
+                    let _ = area;
+                    let cols_xml = format!(
+                        "<w:cols w:num=\"2\" w:space=\"{}\" w:equalWidth=\"0\"><w:col w:w=\"{}\" w:space=\"{}\"/><w:col w:w=\"{}\"/></w:cols>",
+                        twips(gap),
+                        twips(w1),
+                        twips(gap),
+                        twips(w2)
+                    );
+                    let kind = if c.header > 0 { "<w:type w:val=\"continuous\"/>" } else { "" };
+                    let sect = sect_xml(p.width, p.height, top, 36.0, left_m, right_m)
+                        .replacen("<w:pgSz", &format!("{kind}<w:pgSz"), 1)
+                        .replacen("</w:sectPr>", &format!("{cols_xml}</w:sectPr>"), 1);
+                    (parts, sect)
+                } else {
+                    let parts = blocks_xml(&p.blocks, &geo, p.width, &mut media, &mut rels, &mut next_id);
+                    (parts, sect_xml(p.width, p.height, top, 36.0, geo.left, page_right))
                 }
-                let top = p.blocks.first().map_or(40.0, |b| b.top()).clamp(20.0, 150.0);
-                (parts, sect_xml(p.width, p.height, top, 36.0, geo.left, page_right))
             }
             Page::Empty => {
                 let parts = fallback(i)

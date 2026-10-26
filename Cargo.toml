@@ -11,7 +11,9 @@ cfb = "0.7"
 hound = "3.5"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff"] }
 hayro = "0.8"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 lopdf = "0.36"
+skrifa = "0.46"
 mp3lame-encoder = "0.2"
 ocrs = "0.13"
 oxideav-vp8 = { version = "0.2.7", default-features = false }

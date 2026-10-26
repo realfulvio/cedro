@@ -6,13 +6,14 @@ use std::rc::Rc;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 
-use cedro::conversioni::{self, Control, Values, CATEGORIES};
+use cedro::conversioni::{self, Control, Values, CATEGORIES, EXISTS_CHOICES};
+use cedro::{Exists, ExistsAsk, ExistsChoice};
 use cedro::{extension, kind_of, read_settings, Kind};
 use gtk4::gio;
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
-    Application, Box as HBox, Button, CheckButton, CssProvider, DropDown, DropTarget, FileDialog, FlowBox, Grid, Label,
+    AlertDialog, Application, Box as HBox, Button, CheckButton, CssProvider, Entry as TextEntry, DropDown, DropTarget, FileDialog, FlowBox, Grid, Label,
     ListBox, Orientation, PasswordEntry, Scale, ScrolledWindow, SelectionMode, StringList, ToggleButton,
     STYLE_PROVIDER_PRIORITY_APPLICATION,
 };
@@ -35,6 +36,13 @@ window.cedro-panel togglebutton.cedro-chip:checked { background: #005E8E; border
 window.cedro-panel togglebutton.cedro-chip:checked label { color: #ffffff; }\
 window.cedro-panel label.cedro-ok { color: #1d7a46; font-weight: bold; }\
 window.cedro-panel label.cedro-fail { color: #b3261e; font-weight: bold; }";
+
+/// Cosa il thread della conversione dice alla finestra.
+enum Msg {
+    Done(PathBuf, Result<String, String>),
+    /// Il file di uscita esiste già: la finestra chiede e risponde su questo canale.
+    Ask(PathBuf, std::sync::mpsc::Sender<ExistsChoice>),
+}
 
 #[derive(Clone)]
 struct Entry {
@@ -63,7 +71,7 @@ struct Ui {
     category: Cell<usize>,
     action: RefCell<String>,
     dest: RefCell<Option<PathBuf>>,
-    running: RefCell<Option<Receiver<(PathBuf, Result<String, String>)>>>,
+    running: RefCell<Option<Receiver<Msg>>>,
 }
 
 fn caption(text: &str) -> Label {
@@ -166,15 +174,29 @@ fn refresh_options(ui: &Rc<Ui>) {
                 ui.options.attach(&label, col, row, 1, 1);
                 ui.options.attach(&scale, col + 1, row, 1, 1);
             }
+            Control::Text { hint } => {
+                let label = Label::new(Some(def.title));
+                label.set_xalign(0.0);
+                let entry = TextEntry::new();
+                entry.set_placeholder_text(Some(hint));
+                entry.set_hexpand(true);
+                entry.set_text(ui.values.borrow().text(def));
+                entry.set_tooltip_text(Some(def.note).filter(|n| !n.is_empty()));
+                let owner = ui.clone();
+                entry.connect_changed(move |e| owner.values.borrow_mut().set_text(def, &e.text()));
+                ui.options.attach(&label, col, row, 1, 1);
+                ui.options.attach(&entry, col + 1, row, 1, 1);
+            }
             Control::Password => {
                 let label = Label::new(Some(def.title));
                 label.set_xalign(0.0);
                 let entry = PasswordEntry::new();
                 entry.set_show_peek_icon(true);
-                entry.set_text(&ui.values.borrow().password);
+                entry.set_hexpand(true);
+                entry.set_text(ui.values.borrow().text(def));
                 entry.set_tooltip_text(Some(def.note).filter(|n| !n.is_empty()));
                 let owner = ui.clone();
-                entry.connect_changed(move |e| owner.values.borrow_mut().password = e.text().to_string());
+                entry.connect_changed(move |e| owner.values.borrow_mut().set_text(def, &e.text()));
                 ui.options.attach(&label, col, row, 1, 1);
                 ui.options.attach(&entry, col + 1, row, 1, 1);
             }
@@ -290,6 +312,10 @@ fn start(ui: &Rc<Ui>) {
     if files.is_empty() || ui.running.borrow().is_some() {
         return;
     }
+    if let Err(e) = conversioni::validate(&ui.values.borrow()) {
+        AlertDialog::builder().message("Controlla le pagine").detail(e).modal(true).build().show(Some(&ui.window));
+        return;
+    }
     for e in ui.files.borrow_mut().iter_mut().filter(|e| files.contains(&e.path)) {
         e.status = "In attesa".into();
         e.class = "";
@@ -297,13 +323,23 @@ fn start(ui: &Rc<Ui>) {
     let action = ui.action.borrow().clone();
     let quality = ui.quality.value().round().clamp(40.0, 95.0) as u8;
     let dest = ui.dest.borrow().clone();
-    let opts = conversioni::options_from(&ui.values.borrow());
+    let mut opts = conversioni::options_from(&ui.values.borrow());
     let (tx, rx) = channel();
     *ui.running.borrow_mut() = Some(rx);
+    if opts.exists == Exists::Ask {
+        let asker = tx.clone();
+        opts.on_exists = Some(ExistsAsk::new(move |path| {
+            let (answer_tx, answer_rx) = std::sync::mpsc::channel();
+            if asker.send(Msg::Ask(path.to_path_buf(), answer_tx)).is_err() {
+                return ExistsChoice::KeepBoth;
+            }
+            answer_rx.recv().unwrap_or(ExistsChoice::KeepBoth)
+        }));
+    }
     std::thread::spawn(move || {
         for path in files {
             let result = conversioni::convert_one(&path, &action, quality, dest.as_deref(), &opts);
-            if tx.send((path, result)).is_err() {
+            if tx.send(Msg::Done(path, result)).is_err() {
                 break;
             }
         }
@@ -316,7 +352,7 @@ fn start(ui: &Rc<Ui>) {
         if let Some(rx) = ui.running.borrow().as_ref() {
             loop {
                 match rx.try_recv() {
-                    Ok((path, result)) => {
+                    Ok(Msg::Done(path, result)) => {
                         if let Some(e) = ui.files.borrow_mut().iter_mut().find(|e| e.path == path) {
                             match result {
                                 Ok(msg) => (e.status, e.class) = (format!("Fatto · {msg}"), "cedro-ok"),
@@ -324,6 +360,24 @@ fn start(ui: &Rc<Ui>) {
                             }
                         }
                         changed = true;
+                    }
+                    Ok(Msg::Ask(path, answer)) => {
+                        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("il file").to_string();
+                        let dialog = AlertDialog::builder()
+                            .message(format!("«{name}» esiste già"))
+                            .detail("Cosa faccio con il file nuovo?")
+                            .buttons(["Sostituisci", "Tieni entrambi", "Salta"])
+                            .default_button(1)
+                            .cancel_button(2)
+                            .modal(true)
+                            .build();
+                        dialog.choose(Some(&ui.window), gio::Cancellable::NONE, move |res| {
+                            let _ = answer.send(match res {
+                                Ok(0) => ExistsChoice::Replace,
+                                Ok(1) => ExistsChoice::KeepBoth,
+                                _ => ExistsChoice::Skip,
+                            });
+                        });
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => break,
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => {
@@ -420,7 +474,12 @@ pub fn open_conversions(app: &Application) {
     let go = Button::with_label("Converti");
     go.add_css_class("suggested-action");
 
-    let overwrite = CheckButton::with_label("Se il nome esiste già, sostituisci il file");
+    let overwrite_label = Label::new(Some("Se il nome esiste già"));
+    overwrite_label.set_xalign(0.0);
+    let overwrite = DropDown::from_strings(&EXISTS_CHOICES.iter().map(|(l, _)| *l).collect::<Vec<_>>());
+    let overwrite_row = HBox::new(Orientation::Horizontal, 8);
+    overwrite_row.append(&overwrite_label);
+    overwrite_row.append(&overwrite);
     let dest_row = HBox::new(Orientation::Horizontal, 8);
     dest_row.append(&dest_label);
     dest_row.append(&change);
@@ -461,7 +520,7 @@ pub fn open_conversions(app: &Application) {
         quality_note.upcast_ref(),
         caption("DOVE SALVARE").upcast_ref(),
         dest_row.upcast_ref(),
-        overwrite.upcast_ref(),
+        overwrite_row.upcast_ref(),
         foot.upcast_ref(),
     ] {
         main.append(w);
@@ -561,7 +620,11 @@ pub fn open_conversions(app: &Application) {
     }
     {
         let ui = ui.clone();
-        overwrite.connect_toggled(move |c| ui.values.borrow_mut().overwrite = c.is_active());
+        overwrite.connect_selected_notify(move |d| {
+            if let Some((_, choice)) = EXISTS_CHOICES.get(d.selected() as usize) {
+                ui.values.borrow_mut().exists = *choice;
+            }
+        });
     }
     {
         let ui = ui.clone();
