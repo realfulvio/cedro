@@ -1,6 +1,8 @@
 # Compila il motore di trascrizione in tutte le varianti per Windows.
 # Uso:  powershell -File trascrivi\build.ps1 [-Out dist] [-SoloCpu]
-# Servono Rust, CMake e Visual Studio Build Tools; per la variante "vulkan" anche il Vulkan SDK (VULKAN_SDK).
+# Servono Rust, CMake e Visual Studio Build Tools; bindgen vuole libclang (LIBCLANG_PATH: va bene la cartella
+# clang\native di `pip install libclang`); per la variante "vulkan" anche il Vulkan SDK (VULKAN_SDK).
+if (-not $env:LIBCLANG_PATH) { Write-Warning "LIBCLANG_PATH non impostata: se la compilazione dice 'Unable to find libclang', vedi l'intestazione." }
 param([string]$Out = "dist", [switch]$SoloCpu)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
