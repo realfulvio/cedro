@@ -1,4 +1,5 @@
-//! La scheda YouTube del pannello Conversioni (GNOME e Plasma): link, Video o Solo audio, un pulsante.
+//! Le schede YouTube e «Video dal web» del pannello Conversioni (GNOME e Plasma): link, Video o Solo audio,
+//! un pulsante. Stessi controlli: cambiano testi, link accettati e opzioni (SponsorBlock solo su YouTube).
 //! Le altre opzioni e il registro stanno in due riquadri chiusi.
 
 use std::cell::{Cell, RefCell};
@@ -41,7 +42,16 @@ struct Row {
     class: &'static str,
 }
 
+/// Una scheda sta scaricando: l'altra aspetta (la barra in basso a destra è una sola).
+static DOWNLOADING: AtomicBool = AtomicBool::new(false);
+
+const WEB_TITLE: &str = "Video dal web";
+const WEB_HINT: &str = "Incolla il link della pagina che contiene il video (RaiPlay, Vimeo, Internet Archive e oltre mille altri siti).";
+const WEB_NOTE: &str = "Funziona con i siti che yt-dlp riconosce. Se un sito non è supportato, o il video è protetto o chiede un accesso, lo vedi accanto al link.";
+
 struct Page {
+    /// La scheda «Video dal web» (link di qualsiasi sito) invece di YouTube.
+    web: bool,
     window: Window,
     entry: TextEntry,
     queue: ListBox,
@@ -206,7 +216,7 @@ fn log(page: &Page, text: &str) {
 
 fn add_links(page: &Rc<Page>, text: &str) -> usize {
     let mut added = 0;
-    for url in youtube::urls_in(text) {
+    for url in youtube::urls_in(text, page.web) {
         if page.rows.borrow().iter().any(|r| r.url == url) {
             continue;
         }
@@ -228,7 +238,7 @@ fn request(page: &Page) -> Request {
     r.thumbnail = page.thumbnail.is_active();
     r.chapters = page.chapters.is_active();
     r.split_chapters = page.split.is_active();
-    r.skip_sponsors = page.sponsors.is_active();
+    r.skip_sponsors = !page.web && page.sponsors.is_active();
     r.normalize = audio && page.normalize.is_active();
     r.playlist = page.playlist.is_active();
     r.skip_existing = page.skip.is_active();
@@ -248,7 +258,11 @@ fn start(page: &Rc<Page>) {
         page.entry.set_text("");
     }
     if page.rows.borrow().is_empty() {
-        page.note.set_text("Incolla prima un link di YouTube.");
+        page.note.set_text(if page.web { "Incolla prima il link di una pagina con un video." } else { "Incolla prima un link di YouTube." });
+        return;
+    }
+    if DOWNLOADING.swap(true, Ordering::SeqCst) {
+        page.note.set_text(if page.web { "Aspetta che finisca lo scaricamento nella scheda YouTube." } else { "Aspetta che finisca lo scaricamento nella scheda Video dal web." });
         return;
     }
     let req = request(page);
@@ -266,9 +280,10 @@ fn start(page: &Rc<Page>) {
     page.log_box.set_expanded(true);
     page.more_box.set_expanded(false);
     let tx2 = tx.clone();
+    let web = page.web;
     std::thread::spawn(move || {
         let total = req.urls.len();
-        crate::linux_progress::start(total, &format!("YouTube · {total} link"));
+        crate::linux_progress::start(total, &format!("{} · {total} link", if web { WEB_TITLE } else { "YouTube" }));
         let mut last = usize::MAX;
         let result = youtube::run(
             &req,
@@ -284,11 +299,12 @@ fn start(page: &Rc<Page>) {
             &cancel,
         );
         match &result {
-            Ok(files) => crate::linux_progress::finish(true, &format!("Fatto · {} file da YouTube", files.len())),
+            Ok(files) => crate::linux_progress::finish(true, &format!("Fatto · {} file {}", files.len(), if web { "dal web" } else { "da YouTube" })),
             // Annullare è una scelta: la barra sparisce, non diventa un errore.
             Err(e) if cancel.load(Ordering::Relaxed) && e == "Annullato" => crate::linux_progress::dismiss(),
             Err(e) => crate::linux_progress::finish(false, &format!("Errore · {e}")),
         }
+        DOWNLOADING.store(false, Ordering::SeqCst);
         let _ = tx.send(Msg::Finished(result));
     });
     render_queue(page);
@@ -381,9 +397,10 @@ fn handle(page: &Rc<Page>, event: Event) -> bool {
     }
 }
 
-pub fn build(window: &Window) -> YoutubePage {
+/// La scheda YouTube (`web` falso) o Video dal web.
+pub fn build(window: &Window, web: bool) -> YoutubePage {
     let entry = TextEntry::new();
-    entry.set_placeholder_text(Some("Incolla qui il link di YouTube"));
+    entry.set_placeholder_text(Some(if web { "Incolla qui il link della pagina con il video" } else { "Incolla qui il link di YouTube" }));
     entry.set_hexpand(true);
     let add = Button::with_label("Aggiungi");
     add.add_css_class("suggested-action");
@@ -396,7 +413,7 @@ pub fn build(window: &Window) -> YoutubePage {
     let queue_scroll = ScrolledWindow::builder().child(&queue).min_content_height(90).vexpand(true).has_frame(true).build();
     let count = caption("CODA · nessun link");
 
-    let video_btn = big("Video", "Immagini e suono, come su YouTube");
+    let video_btn = big("Video", if web { "Immagini e suono" } else { "Immagini e suono, come su YouTube" });
     let audio_btn = big("Solo audio", "Per ascoltare, senza immagini");
     audio_btn.set_group(Some(&video_btn));
     video_btn.set_active(true);
@@ -420,6 +437,9 @@ pub fn build(window: &Window) -> YoutubePage {
     let more = HBox::new(Orientation::Vertical, 8);
     more.set_margin_top(8);
     more.set_margin_bottom(8);
+    let sponsors_row = option_row("Salta le parti sponsorizzate", &sponsors);
+    // SponsorBlock conosce solo YouTube: altrove l'opzione non farebbe nulla.
+    sponsors_row.set_visible(!web);
     for w in [
         option_row("Qualità", &quality),
         option_row("Salva come", &format),
@@ -427,9 +447,9 @@ pub fn build(window: &Window) -> YoutubePage {
         option_row("Copertina / miniatura nel file", &thumbnail),
         option_row("Capitoli e descrizione nel file", &chapters),
         option_row("Dividi per capitoli (un file ciascuno)", &split),
-        option_row("Salta le parti sponsorizzate", &sponsors),
+        sponsors_row,
         normalize_row.clone(),
-        option_row("Playlist: scarica tutta", &playlist),
+        option_row(if web { "Raccolte: scarica tutto" } else { "Playlist: scarica tutta" }, &playlist),
         option_row("Salta i file già scaricati", &skip),
     ] {
         more.append(&w);
@@ -460,7 +480,7 @@ pub fn build(window: &Window) -> YoutubePage {
     log_inner.append(&log_scroll);
     log_box.set_child(Some(&log_inner));
 
-    let note = Label::new(youtube::first_use_note().as_deref());
+    let note = Label::new(Some(&youtube::first_use_note().unwrap_or_else(|| if web { WEB_NOTE.into() } else { String::new() })));
     note.set_xalign(0.0);
     note.set_wrap(true);
     note.add_css_class("cedro-muted");
@@ -487,10 +507,10 @@ pub fn build(window: &Window) -> YoutubePage {
     top.set_margin_start(20);
     top.set_margin_end(20);
     top.set_hexpand(true);
-    let title = Label::new(Some("YouTube"));
+    let title = Label::new(Some(if web { WEB_TITLE } else { "YouTube" }));
     title.set_xalign(0.0);
     title.add_css_class("cedro-title");
-    let hint = Label::new(Some("Incolla un link e scarica il video oppure solo l'audio."));
+    let hint = Label::new(Some(if web { WEB_HINT } else { "Incolla un link e scarica il video oppure solo l'audio." }));
     hint.set_xalign(0.0);
     hint.add_css_class("cedro-muted");
     let signature = crate::linux_firma::firma(true, "");
@@ -515,6 +535,7 @@ pub fn build(window: &Window) -> YoutubePage {
     }
 
     let page = Rc::new(Page {
+        web,
         window: window.clone(),
         entry: entry.clone(),
         queue,
@@ -563,7 +584,7 @@ pub fn build(window: &Window) -> YoutubePage {
                 page.entry.set_text("");
                 page.note.set_text("");
             } else {
-                page.note.set_text("Questo non sembra un link di YouTube.");
+                page.note.set_text(youtube::link_note(&text, page.web));
             }
         });
     }

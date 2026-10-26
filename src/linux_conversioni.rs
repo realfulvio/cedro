@@ -604,6 +604,9 @@ pub fn open_conversions(app: &Application) {
     let youtube_label = Label::new(Some(YOUTUBE));
     youtube_label.set_xalign(0.0);
     side.append(&youtube_label);
+    let web_label = Label::new(Some("Video dal web"));
+    web_label.set_xalign(0.0);
+    side.append(&web_label);
     // Niente scorrimento orizzontale: la colonna si allarga quanto la voce più lunga (in grassetto quando è scelta).
     let side_scroll = ScrolledWindow::builder()
         .child(&side)
@@ -735,12 +738,17 @@ pub fn open_conversions(app: &Application) {
         main.append(w);
     }
 
-    let youtube = crate::linux_youtube::build(&window);
+    let youtube = crate::linux_youtube::build(&window, false);
+    let web_video = crate::linux_youtube::build(&window, true);
     let stack = gtk4::Stack::new();
     stack.set_hexpand(true);
     stack.add_named(&main, Some("files"));
     stack.add_named(&youtube.widget, Some("youtube"));
-    let youtube_busy = youtube.busy.clone();
+    stack.add_named(&web_video.widget, Some("web"));
+    let youtube_busy = {
+        let (a, b) = (youtube.busy.clone(), web_video.busy.clone());
+        move || a() || b()
+    };
     let root = HBox::new(Orientation::Horizontal, 0);
     root.append(&side_scroll);
     root.append(&stack);
@@ -807,7 +815,7 @@ pub fn open_conversions(app: &Application) {
             if let Some(row) = row {
                 let i = row.index() as usize;
                 if i >= CATEGORIES.len() {
-                    stack.set_visible_child_name("youtube");
+                    stack.set_visible_child_name(if i > CATEGORIES.len() { "web" } else { "youtube" });
                     return;
                 }
                 stack.set_visible_child_name("files");
