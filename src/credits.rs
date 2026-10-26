@@ -104,10 +104,21 @@ pub fn visible() -> Vec<(&'static str, Vec<&'static Component>)> {
         .collect()
 }
 
-/// Quanti componenti ha il file completo delle licenze (le librerie in `Cargo.lock`, meno Cedro).
-pub fn full_count() -> usize {
-    // Per righe: su Windows git estrae Cargo.lock con CRLF, e «\n[[package]]\n» non si troverebbe mai.
-    include_str!("../Cargo.lock").lines().filter(|l| l.trim() == "[[package]]").count().saturating_sub(1)
+/// Quanti componenti elenca il file completo delle licenze, dalla riga «Le librerie sono N» in testa.
+pub fn count_in(text: &str) -> Option<usize> {
+    let rest = text.lines().take(8).find_map(|l| l.strip_prefix("Le librerie sono "))?;
+    rest.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()
+}
+
+/// Il file completo accanto all'eseguibile, se c'è.
+pub fn full_file() -> Option<std::path::PathBuf> {
+    let path = std::env::current_exe().ok()?.parent()?.join(FULL_FILE);
+    path.exists().then_some(path)
+}
+
+/// Quanti componenti ha il file completo accanto all'eseguibile; `None` se il file manca.
+pub fn full_count() -> Option<usize> {
+    count_in(&std::fs::read_to_string(full_file()?).ok()?)
 }
 
 /// Il nome del file con tutte le licenze, accanto all'eseguibile e nel sito.
@@ -128,8 +139,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn full_count_reads_the_lock_file_with_any_line_ending() {
-        assert!(full_count() > 100, "{}", full_count());
+    fn the_count_comes_from_the_header() {
+        let head = "LICENZE DI TERZE PARTI - Cedro 0.15.0\r\nCedro è software libero.\r\nLe librerie sono 251; i testi uguali compaiono una volta sola.\r\n";
+        assert_eq!(count_in(head), Some(251));
+        assert_eq!(count_in("niente"), None);
     }
 
     #[test]
@@ -151,10 +164,5 @@ mod tests {
         } else {
             assert!(shown < all);
         }
-    }
-
-    #[test]
-    fn the_full_file_counts_the_lockfile() {
-        assert!(full_count() > 100, "{}", full_count());
     }
 }

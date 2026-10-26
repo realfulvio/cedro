@@ -98,6 +98,8 @@ const FOOT_H: i32 = 56;
 const MARGIN: i32 = 28;
 
 static WINDOW: AtomicIsize = AtomicIsize::new(0);
+/// «Copia informazioni» è stato premuto: la nota accanto diventa verde.
+static COPIED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static BRUSH_WHITE: AtomicIsize = AtomicIsize::new(0);
 static BRUSH_SIDE: AtomicIsize = AtomicIsize::new(0);
 static BRUSH_LINE: AtomicIsize = AtomicIsize::new(0);
@@ -588,7 +590,7 @@ unsafe fn build_system(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, sma
     STATE.with(|st| st.borrow_mut().lines[SEC].push(px(top, dpi)));
 
     child(hwnd, b, "Copia informazioni", owner, ID_COPY, (x, top + 12, 170, 30), dpi, normal, Some(SEC));
-    child(hwnd, s, "", SS_NOPREFIX, ID_COPIED, (x + 182, top + 17, cw - 182, 20), dpi, small, Some(SEC));
+    child(hwnd, s, "Letto all'avvio di Cedro.", SS_NOPREFIX, ID_COPIED, (x + 182, top + 17, cw - 182, 20), dpi, small, Some(SEC));
     let _ = ID_COUNT;
 }
 
@@ -626,7 +628,10 @@ unsafe fn build_about(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, smal
 
     // Pulsante e nota sotto la lista, con la nota su due righe che restano dentro il pannello.
     child(hwnd, b, "Apri le licenze complete", owner, ID_FULL, (x, 488, 190, 30), dpi, normal, Some(SEC));
-    let note = format!("Tutti i {} componenti, anche quelli minori, nel file «Licenze di terze parti».", cedro::credits::full_count());
+    let note = match cedro::credits::full_count() {
+        Some(n) => format!("Tutti i {n} componenti, anche quelli minori, nel file «Licenze di terze parti»."),
+        None => "Tutti i componenti, anche quelli minori, nel file «Licenze di terze parti».".to_string(),
+    };
     child(hwnd, s, &note, SS_NOPREFIX, ID_DESC, (x + 202, 485, cw - 202, 40), dpi, small, Some(SEC));
     let _ = bold;
 }
@@ -1031,6 +1036,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 }
                 ID_COPY => {
                     crate::win::copy_text(&cedro::sysinfo::report());
+                    COPIED.store(true, Ordering::Relaxed);
                     let _ = SetWindowTextW(item(hwnd, ID_COPIED), &HSTRING::from("Copiate: incollale in una segnalazione"));
                 }
                 ID_FULL => open_full_licenses(),
@@ -1086,7 +1092,8 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 ID_POWERED => (GREY, SIDE, &BRUSH_SIDE),
                 ID_DESC | ID_DEST_PATH | ID_COUNT => (GREY, WHITE, &BRUSH_WHITE),
                 ID_LOCKED => (OFF, WHITE, &BRUSH_WHITE),
-                ID_COPIED => (OK, WHITE, &BRUSH_WHITE),
+                ID_COPIED if COPIED.load(Ordering::Relaxed) => (OK, WHITE, &BRUSH_WHITE),
+                ID_COPIED => (GREY, WHITE, &BRUSH_WHITE),
                 _ => (TEXT, WHITE, &BRUSH_WHITE),
             };
             SetTextColor(hdc, fg);
@@ -1103,6 +1110,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         }
         WM_DESTROY => {
             WINDOW.store(0, Ordering::Relaxed);
+            COPIED.store(false, Ordering::Relaxed);
             LRESULT(0)
         }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
