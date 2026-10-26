@@ -2,6 +2,7 @@ pub mod accel;
 mod audio;
 pub mod conversioni;
 pub mod credits;
+pub mod logo;
 mod doctext;
 mod engine;
 mod mp4fast;
