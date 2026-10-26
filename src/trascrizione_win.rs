@@ -215,9 +215,9 @@ pub(super) unsafe fn layout(hwnd: HWND) -> Option<i32> {
     }
     place(hwnd, ID_CAP_MODEL, (210, top + 62, 320, 16));
     for i in 0..MODELS.len() as i32 {
-        place(hwnd, ID_MODEL0 + i, (210, top + 80 + i * 58, 320, 52));
+        place(hwnd, ID_MODEL0 + i, (210, top + 80 + i * 54, 320, 48));
     }
-    let end = top + 80 + MODELS.len() as i32 * 58 - 6;
+    let end = top + 80 + MODELS.len() as i32 * 54 - 6;
     place(hwnd, ID_CAP_LOG, (550, top, 240, 16));
     place(hwnd, ID_COPY, (810, top - 6, 70, 24));
     place(hwnd, ID_LOG, (550, top + 18, 330, end - top - 18));
@@ -227,7 +227,7 @@ pub(super) unsafe fn layout(hwnd: HWND) -> Option<i32> {
     Some(end + 10)
 }
 
-pub(super) const HINT: &str = "Trasforma la voce in testo. Riconosce la lingua da sola, funziona sul tuo PC. Accetta: MP3, WAV, M4A, OGG, OPUS, FLAC, WMA, AMR e l'audio dei video.";
+pub(super) const HINT: &str = "Voce in testo, sul tuo PC. Accetta: MP3, WAV, M4A, OGG, OPUS, FLAC, WMA, AMR e video.";
 
 /// L'etichetta del pulsante in fondo.
 pub(super) fn go_label(running: bool, n: usize) -> String {
