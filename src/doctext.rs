@@ -295,13 +295,25 @@ pub fn zip_entry_for_test(path: &Path, name: &str) -> String {
 }
 
 fn zip_entry(path: &Path, name: &str) -> Result<String, String> {
+    zip_entry_at_most(path, name, MAX_XML)
+}
+
+fn zip_entry_at_most(path: &Path, name: &str, max: u64) -> Result<String, String> {
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("archivio non letto: {e}"))?;
-    let mut entry = archive.by_name(name).map_err(|_| format!("manca {name}"))?;
+    let entry = archive.by_name(name).map_err(|_| format!("manca {name}"))?;
+    // Un documento vero ha pochi MB di XML: un archivio fatto apposta (una «zip bomb») che si
+    // gonfia a GB non deve riempire la memoria.
     let mut xml = String::new();
-    entry.read_to_string(&mut xml).map_err(|e| e.to_string())?;
+    entry.take(max + 1).read_to_string(&mut xml).map_err(|e| e.to_string())?;
+    if xml.len() as u64 > max {
+        return Err(format!("{name} è troppo grande per un documento (oltre {} MB)", max / 1_000_000));
+    }
     Ok(xml)
 }
+
+/// Il massimo di XML che si legge da una parte del documento.
+const MAX_XML: u64 = 512 * 1_000_000;
 
 fn ooxml_text(xml: &str) -> String {
     let mut out = String::new();
@@ -706,6 +718,18 @@ mod block_tests {
         let d = std::env::temp_dir().join(format!("cedro-blocks-{n}"));
         fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    /// Una parte del documento che si gonfia oltre il limite: errore, non la memoria piena.
+    #[test]
+    fn a_swollen_document_part_is_refused() {
+        let d = dir();
+        let path = d.join("gonfio.docx");
+        let xml = vec![b' '; 3_000_001];
+        fs::write(&path, crate::zipstore::zip_archive(&[("word/document.xml", &xml)])).unwrap();
+        assert!(zip_entry_at_most(&path, "word/document.xml", 3_000_000).unwrap_err().contains("troppo grande"));
+        assert_eq!(zip_entry_at_most(&path, "word/document.xml", 3_000_001).unwrap().len(), 3_000_001);
+        let _ = fs::remove_dir_all(d);
     }
 
     fn levels(blocks: &[DocBlock]) -> Vec<(u8, &str)> {

@@ -263,12 +263,13 @@ fn platform() -> Info {
         let mut len = 0u32;
         let _ = GetLogicalProcessorInformationEx(RelationProcessorCore, None, &mut len);
         if len > 0 {
-            let mut buf = vec![0u8; len as usize];
+            // In u64: le strutture vanno lette allineate (un Vec<u8> non lo garantisce).
+            let mut buf = vec![0u64; (len as usize).div_ceil(8)];
             let first = buf.as_mut_ptr() as *mut SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX;
             if GetLogicalProcessorInformationEx(RelationProcessorCore, Some(first), &mut len).is_ok() {
                 let mut at = 0usize;
                 while at + 8 <= len as usize {
-                    let entry = &*(buf.as_ptr().add(at) as *const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX);
+                    let entry = &*((buf.as_ptr() as *const u8).add(at) as *const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX);
                     let core = &entry.Anonymous.Processor;
                     cores += 1;
                     *classes.entry(core.EfficiencyClass).or_insert(0) += 1;
