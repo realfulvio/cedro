@@ -49,7 +49,7 @@ fn main() {
     {
         let ui = args
             .first()
-            .is_some_and(|arg| matches!(arg.as_str(), "show" | "settings" | "impostazioni" | "guida" | "--background"));
+            .is_some_and(|arg| matches!(arg.as_str(), "show" | "settings" | "impostazioni" | "guida" | "conversioni" | "--background"));
         if args.is_empty() || ui {
             std::process::exit(linux_ui::start());
         }
