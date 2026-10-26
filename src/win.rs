@@ -932,6 +932,10 @@ fn on_drop() {
     append_log(&summary);
     let settings = read_settings();
     if settings.notify {
+        // Il fumetto sta nello stesso angolo della linea verde e la coprirebbe: prima la linea, poi il fumetto.
+        if settings.progress && failed.is_none() {
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+        }
         balloon(&summary);
     }
     if let (true, Some(out)) = (settings.reveal, last_out) {
