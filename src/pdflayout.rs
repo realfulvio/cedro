@@ -1428,8 +1428,23 @@ fn gather<'a>(page: &'a hayro::hayro_syntax::page::Page<'a>, interp_cache: &Inte
     Gathered { w, h, glyphs, shapes, pics }
 }
 
+/// Cosa ricostruire leggendo il PDF (le opzioni di «PDF in Word»).
+pub struct ReadOptions {
+    /// Le tabelle diventano tabelle di Word; spenta, il loro testo resta in paragrafi.
+    pub tables: bool,
+    /// Le colonne restano colonne; spenta, una colonna sola in ordine di lettura.
+    pub columns: bool,
+}
+
+impl Default for ReadOptions {
+    fn default() -> Self {
+        ReadOptions { tables: true, columns: true }
+    }
+}
+
 /// Legge le pagine del PDF. `Page::Scan` per quelle senza testo incorporato.
-pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
+/// Le pagine per cui `want` (da 0) è falso non si leggono neppure: restano `Page::Merged`.
+pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool) -> Result<Vec<Page>, String> {
     let original = Pdf::new(bytes.to_vec()).map_err(|e| format!("PDF non letto: {e:?}"))?;
     let cache = RenderCache::new();
     let interp_cache = InterpreterCache::new();
@@ -1438,12 +1453,17 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
     let mut special: Vec<Option<Page>> = Vec::new();
     let mut size_chars: HashMap<i64, usize> = HashMap::new();
     // Prima tutte le pagine: se il documento è un modulo, lo sono anche le sue pagine più semplici.
-    let gathered: Vec<Gathered> = original.pages().iter().map(|page| gather(page, &interp_cache, &settings)).collect();
-    let text_pages = gathered.iter().filter(|g| !g.glyphs.is_empty()).count();
-    let form_pages = gathered.iter().filter(|g| is_form(&group_lines(g.glyphs.clone(), 2.0), &g.shapes)).count();
+    let gathered: Vec<Option<Gathered>> =
+        original.pages().iter().enumerate().map(|(i, page)| want(i).then(|| gather(page, &interp_cache, &settings))).collect();
+    let text_pages = gathered.iter().flatten().filter(|g| !g.glyphs.is_empty()).count();
+    let form_pages = gathered.iter().flatten().filter(|g| is_form(&group_lines(g.glyphs.clone(), 2.0), &g.shapes)).count();
     let form_doc = form_pages > 0 && form_pages * 2 > text_pages;
     for (page, g) in original.pages().iter().zip(gathered) {
-        let Gathered { w, h, mut glyphs, mut shapes, pics } = g;
+        let Some(Gathered { w, h, mut glyphs, mut shapes, pics }) = g else {
+            raw.push(None);
+            special.push(Some(Page::Merged));
+            continue;
+        };
         if glyphs.is_empty() {
             // Una scansione: la pagina intera diventa un'immagine, come la vede chi legge.
             let scale = (2000.0 / w.max(h).max(1.0)) as f32;
@@ -1514,8 +1534,9 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
         }
         shapes.retain(|s| !s.text);
         special.push(None);
-        let tables = find_tables(&shapes, (w, h), &mut glyphs);
-        let mut figures = find_figures(&shapes, &pics, &tables, (w, h));
+        let tables = if read.tables { find_tables(&shapes, (w, h), &mut glyphs) } else { Vec::new() };
+        // Senza tabelle anche i riquadri e i bordi non diventano figure: il testo resta testo.
+        let mut figures = find_figures(if read.tables { &shapes[..] } else { &[] }, &pics, &tables, (w, h));
         let page_body = median(glyphs.iter().map(|g| g.size).collect());
         absorb_labels(&mut figures, &glyphs, page_body);
         // Il testo dentro una figura fa parte dell'immagine.
@@ -1573,15 +1594,81 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
             pages.push(other.unwrap_or(Page::Merged));
             continue;
         };
-        pages.push(Page::Flow(layout_page(p, &sizes)));
+        pages.push(Page::Flow(layout_page(p, &sizes, read.columns)));
     }
     merge_split_tables(&mut pages);
     number_lists(&mut pages);
     Ok(pages)
 }
 
-/// Mette in ordine di lettura paragrafi, tabelle e immagini di una pagina.
-fn layout_page(p: RawPage, sizes: &TextSizes) -> FlowPage {
+/// `b` continua il paragrafo `a` (in fondo alla colonna prima): `a` non finisce la frase e `b`
+/// comincia in minuscolo, senza essere un titolo o una voce d'elenco.
+fn continues(a: &Para, b: &Para) -> bool {
+    let last = a.runs.iter().rev().flat_map(|r| r.text.chars().rev()).find(|c| !c.is_whitespace());
+    let first = b.runs.iter().flat_map(|r| r.text.chars()).find(|c| !c.is_whitespace());
+    a.heading == 0
+        && b.heading == 0
+        && a.marker.is_none() == b.marker.is_none()
+        && b.marker.is_none()
+        && last.is_some_and(|c| !matches!(c, '.' | ':' | ';' | '!' | '?'))
+        && first.is_some_and(char::is_lowercase)
+}
+
+fn join_para(a: &mut Para, b: Para) {
+    if let Some(last) = a.runs.last_mut() {
+        let mut rev = last.text.chars().rev();
+        let hyphen = rev.next() == Some('-') && rev.next().is_some_and(char::is_alphabetic);
+        if hyphen {
+            last.text.pop();
+        } else if !last.text.ends_with(' ') {
+            last.text.push(' ');
+        }
+    }
+    for r in b.runs {
+        match a.runs.last_mut() {
+            Some(l) if l.same_style(&r) => l.text.push_str(&r.text),
+            _ => a.runs.push(r),
+        }
+    }
+    a.end = a.end.max(b.end);
+    a.bottom = b.bottom;
+}
+
+/// Sposta un blocco in orizzontale di `dx` punti.
+fn shift_para(q: &mut Para, dx: f64) {
+    q.x += dx;
+    q.end += dx;
+    q.first_x += dx;
+    if let Some(t) = &mut q.text_x {
+        *t += dx;
+    }
+    for t in &mut q.tabs {
+        *t += dx;
+    }
+}
+
+fn shift(b: &mut Block, dx: f64) {
+    match b {
+        Block::Para(q) => shift_para(q, dx),
+        Block::Table(t) => {
+            t.x0 += dx;
+            for c in &mut t.cols {
+                *c += dx;
+            }
+            for q in t.rows.iter_mut().flat_map(|r| r.1.iter_mut()).flat_map(|c| c.paras.iter_mut()) {
+                shift_para(q, dx);
+            }
+        }
+        Block::Image { fig, .. } => {
+            fig.x0 += dx;
+            fig.x1 += dx;
+        }
+    }
+}
+
+/// Mette in ordine di lettura paragrafi, tabelle e immagini di una pagina. Con `keep_columns`
+/// spento le colonne diventano una colonna sola: prima tutta la sinistra, poi la destra.
+fn layout_page(p: RawPage, sizes: &TextSizes, keep_columns: bool) -> FlowPage {
     // Larghezza del testo a una colonna: serve per capire quando una riga va a capo.
     let mut left = f64::MAX;
     let mut right = 0.0f64;
@@ -1633,7 +1720,30 @@ fn layout_page(p: RawPage, sizes: &TextSizes) -> FlowPage {
         for c in &mut columns {
             c.sort_by(by_top);
         }
-        segments.push(Segment { cols, columns });
+        if keep_columns {
+            segments.push(Segment { cols, columns });
+            continue;
+        }
+        // Una colonna sola: ogni colonna va sotto la precedente, allineata a sinistra come la prima.
+        let mut flat: Vec<Block> = Vec::new();
+        for (c, col) in cols.iter().zip(columns) {
+            for (i, mut b) in col.into_iter().enumerate() {
+                shift(&mut b, cols[0].0 - c.0);
+                // Il paragrafo spezzato dal cambio di colonna torna intero.
+                if let (0, Some(Block::Para(a)), Block::Para(q)) = (i, flat.last_mut(), &b) {
+                    if continues(a, q) {
+                        let Block::Para(q) = b else { unreachable!() };
+                        join_para(a, q);
+                        continue;
+                    }
+                }
+                flat.push(b);
+            }
+        }
+        match segments.last_mut().filter(|s| s.cols.is_empty()) {
+            Some(prev) => prev.columns[0].extend(flat),
+            None => segments.push(Segment { cols: Vec::new(), columns: vec![flat] }),
+        }
     }
     let after: Vec<Block> = singles.collect();
     if !after.is_empty() || segments.is_empty() {

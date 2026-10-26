@@ -375,9 +375,9 @@ fn engine() -> Result<&'static OcrEngine, String> {
 /// Circa 300 dpi: la risoluzione con cui l'OCR legge meglio una pagina.
 const OCR_SCALE: f32 = 300.0 / 72.0;
 
-/// Tutte le pagine del PDF disegnate in PNG (la scala viene dalle impostazioni), una alla volta.
-pub fn pdf_page_pngs(bytes: &[u8], scale: f32, each: impl FnMut(usize, Vec<u8>) -> Result<(), String>) -> Result<usize, String> {
-    render_pdf(bytes, |_| true, scale, usize::MAX, each)
+/// Tutte le pagine del PDF disegnate in PNG, una alla volta, con la scala scelta (1.0 = 72 dpi, 2.0 = 144 dpi).
+pub fn pdf_page_pngs_scaled(bytes: &[u8], scale: f32, wanted: impl Fn(usize) -> bool, each: impl FnMut(usize, Vec<u8>) -> Result<(), String>) -> Result<usize, String> {
+    render_pdf(bytes, wanted, scale, usize::MAX, each)
 }
 
 /// Disegna le pagine volute, una alla volta, e le passa a `each` come PNG:
