@@ -21,6 +21,8 @@ $voice.Speak("Good morning. The weather today is sunny and warm. This is a test 
 $voice.Dispose()
 "Audio: $((Get-Item $wav).Length) byte"
 
+# Senza BOM: il motore legge una riga JSON pura (Cedro gli scrive così).
+$OutputEncoding = New-Object System.Text.UTF8Encoding $false
 $fail = @()
 foreach ($exe in Get-ChildItem $Dir -Filter "cedro-trascrivi-*.exe") {
   Write-Host "== $($exe.Name)"
