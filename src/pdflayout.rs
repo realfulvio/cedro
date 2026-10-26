@@ -257,6 +257,8 @@ struct Line {
     word2_x: Option<f64>,
     /// Pezzi staccati sulla stessa riga (colonne senza bordi): dove comincia ciascuno.
     tabs: Vec<f64>,
+    /// Larghezza che avrebbe la riga con le larghezze normali dei caratteri.
+    natural: f64,
 }
 
 #[derive(Clone)]
@@ -265,6 +267,8 @@ struct Run {
     font: String,
     size: f64,
     stretch: u16,
+    /// Spazio in più dopo ogni carattere, in punti (testo spaziato nel PDF).
+    tracking: f64,
     color: [u8; 3],
     bold: bool,
     italic: bool,
@@ -323,12 +327,17 @@ fn group_lines(glyphs: Vec<Glyph>, gap: f64) -> Vec<Line> {
             // Nel testo a passo fisso gli spazi tengono le colonne: si rimettono tutti.
             let cell = 0.6 * g.size * g.stretch as f64 / 100.0;
             let mono = g.font == "Courier" && cur.as_ref().and_then(|l| l.runs.last()).is_some_and(|r| r.font == "Courier");
-            let split = cur.as_ref().is_some_and(|l| (!mono && g.x - last_end > gap * g.size.max(l.size)) || g.x < last_end - 0.6 * g.size);
+            // Nei moduli conta la scritta più piccola: un valore grande accanto a un'etichetta
+            // piccola resta separato.
+            let split = cur.as_ref().is_some_and(|l| {
+                let size = if gap < 1.0 { g.size.min(l.size) } else { g.size.max(l.size) };
+                (!mono && g.x - last_end > gap * size) || g.x < last_end - 0.6 * g.size
+            });
             if split {
                 lines.extend(cur.take());
                 after_space = false;
             }
-            let line = cur.get_or_insert_with(|| Line { x: g.x, end: g.x, baseline: g.y, size: g.size, runs: Vec::new(), word2_x: None, tabs: Vec::new() });
+            let line = cur.get_or_insert_with(|| Line { x: g.x, end: g.x, baseline: g.y, size: g.size, runs: Vec::new(), word2_x: None, tabs: Vec::new(), natural: 0.0 });
             let blank = g.text.trim().is_empty();
             let has_text = line.runs.iter().any(|r| !r.text.trim().is_empty());
             // Un vuoto largo come una parola, senza spazio nel PDF, diventa uno spazio.
@@ -338,8 +347,10 @@ fn group_lines(glyphs: Vec<Glyph>, gap: f64) -> Vec<Line> {
                     if mono {
                         let n = ((g.x - last_end) / cell).round().max(1.0) as usize;
                         run.text.push_str(&" ".repeat(n));
+                        line.natural += n as f64 * cell;
                     } else if !run.text.ends_with(' ') {
                         run.text.push(' ');
+                        line.natural += 0.278 * g.size;
                     }
                 }
             }
@@ -349,12 +360,13 @@ fn group_lines(glyphs: Vec<Glyph>, gap: f64) -> Vec<Line> {
             if !blank || has_text {
                 after_space = blank;
             }
-            let run = Run { text: g.text.clone(), font: g.font.clone(), size: g.size, stretch: g.stretch, color: g.color, bold: g.bold, italic: g.italic };
+            let run = Run { text: g.text.clone(), font: g.font.clone(), size: g.size, stretch: g.stretch, tracking: 0.0, color: g.color, bold: g.bold, italic: g.italic };
             match line.runs.last_mut() {
                 Some(r) if r.same_style(&run) => r.text.push_str(&g.text),
                 _ => line.runs.push(run),
             }
             line.size = line.size.max(g.size);
+            line.natural += g.adv;
             last_end = g.x + g.adv;
             line.end = last_end;
         }
@@ -1420,7 +1432,21 @@ pub fn read_pages(bytes: &[u8]) -> Result<Vec<Page>, String> {
         let lines = group_lines(glyphs.clone(), 2.0);
         if form_doc || is_form(&lines, &shapes) {
             // Nel modulo ogni scritta sta al suo posto: le scritte vicine restano separate.
-            let lines = group_lines(glyphs.clone(), 0.8);
+            let mut lines = group_lines(glyphs.clone(), 0.45);
+            // Ogni scritta tiene in Word la larghezza del PDF: Word arrotonda il corpo ai mezzi
+            // punti e non conosce la spaziatura del PDF, la differenza va tra i caratteri.
+            for l in &mut lines {
+                let chars = l.text().chars().count() as f64;
+                let actual = l.end - l.x;
+                let word_size = (l.size * 2.0).round().max(2.0) / 2.0;
+                let expected = l.natural * word_size / l.size;
+                if chars > 1.0 && l.runs.iter().all(|r| r.font != "Courier") && (actual - expected).abs() > 0.5 {
+                    let t = (actual - expected) / chars;
+                    for r in &mut l.runs {
+                        r.tracking = t;
+                    }
+                }
+            }
             // Le immagini vere si ritagliano dalla pagina disegnata senza testo.
             let mut cut = Vec::new();
             if !pics.is_empty() {
@@ -1716,7 +1742,8 @@ impl Look {
         let half = (r.size * 2.0).round().max(2.0) as i64;
         // Word ha solo i mezzi punti: nel passo fisso la differenza si recupera tra i caratteri,
         // altrimenti le colonne scritte a spazi scivolano.
-        let spacing = if r.font == "Courier" { (0.6 * (r.size - half as f64 / 2.0) * r.stretch as f64 / 100.0 * 20.0).round() as i64 } else { 0 };
+        let mono = if r.font == "Courier" { 0.6 * (r.size - half as f64 / 2.0) * r.stretch as f64 / 100.0 } else { 0.0 };
+        let spacing = ((mono + r.tracking) * 20.0).round() as i64;
         Look { font: family(&r.font), half, stretch: r.stretch, spacing, color: r.color, bold: r.bold, italic: r.italic }
     }
 
