@@ -36,6 +36,17 @@ fn shape(mut pcm: Pcm, opts: &crate::engine::Options) -> Result<Pcm, String> {
         }
         pcm.samples.drain(..skip);
     }
+    if let Some(db) = opts.trim_silence_db {
+        let threshold = (32768.0 * 10f32.powf(-(db as f32) / 20.0)) as i32;
+        let frames = pcm.samples.len() / channels;
+        let loud = (0..frames).find(|f| pcm.samples[f * channels..(f + 1) * channels].iter().any(|s| (*s as i32).abs() > threshold));
+        let Some(first) = loud else {
+            return Err(format!("l'audio è tutto sotto -{db} dB: niente da tenere"));
+        };
+        // Si tengono 50 ms prima del primo suono, perché l'attacco non suoni tagliato.
+        let start = first.saturating_sub(pcm.rate as usize / 20);
+        pcm.samples.drain(..start * channels);
+    }
     match (opts.channels, pcm.channels) {
         (Some(1), c) if c > 1 => {
             let c = c as usize;

@@ -3,7 +3,8 @@
 //! trascinamento, formati e strumenti, qualità, cartella di destinazione. La conversione gira in un
 //! thread a parte e riporta ogni file alla finestra con un messaggio.
 
-use cedro::conversioni::{self, Control, OptionDef, Values, CATEGORIES};
+use cedro::conversioni::{self, Control, OptionDef, Values, CATEGORIES, EXISTS_CHOICES};
+use cedro::{Exists, ExistsAsk, ExistsChoice};
 use cedro::{extension, kind_of, read_settings, Kind};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicIsize, Ordering};
@@ -41,7 +42,8 @@ const ID_RESET: i32 = 215;
 const ID_GO: i32 = 216;
 const ID_FOOT: i32 = 217;
 const ID_CAP_OPTIONS: i32 = 218;
-const ID_OVERWRITE: i32 = 219;
+const ID_EXISTS: i32 = 219;
+const ID_CAP_EXISTS: i32 = 220;
 const ID_FORMAT0: i32 = 1000;
 const ID_TOOL0: i32 = 2000;
 /// Le opzioni della voce scelta: il controllo, la sua etichetta e il valore scritto accanto a un cursore.
@@ -52,6 +54,7 @@ const OPT_MAX: i32 = 12;
 
 const WM_APP_RESULT: u32 = WM_APP + 10;
 const WM_APP_DONE: u32 = WM_APP + 11;
+const WM_APP_ASK: u32 = WM_APP + 12;
 
 const TITLE: &str = "Conversioni di Cedro";
 const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
@@ -99,6 +102,8 @@ struct State {
 
 static STATE: Mutex<State> = Mutex::new(State { files: Vec::new(), category: 0, action: String::new(), dest: None, running: false, values: Values::new() });
 /// Risultati che il thread di conversione lascia alla finestra.
+/// La domanda «il file esiste già» che il thread di conversione fa alla finestra, e dove aspetta la risposta.
+static ASK: Mutex<Option<(PathBuf, std::sync::mpsc::Sender<ExistsChoice>)>> = Mutex::new(None);
 static RESULTS: Mutex<Vec<(PathBuf, std::result::Result<String, String>)>> = Mutex::new(Vec::new());
 
 fn state() -> std::sync::MutexGuard<'static, State> {
@@ -279,7 +284,12 @@ unsafe fn build(hwnd: HWND, instance: HINSTANCE) {
     child(hwnd, instance, s, NEXT_TO_ORIGINAL, 0x200 | 0x8000 /* SS_CENTERIMAGE | SS_PATHELLIPSIS */, ID_DEST, (210, 538, 330, 28), f);
     child(hwnd, instance, b, "Cambia…", tab, ID_CHANGE, (548, 538, 80, 28), f);
     child(hwnd, instance, b, "Accanto all'originale", tab, ID_RESET, (634, 538, 150, 28), f);
-    child(hwnd, instance, b, "Se il nome esiste già, sostituisci il file", tab | BS_AUTOCHECKBOX as u32, ID_OVERWRITE, (210, 574, 420, 22), f);
+    child(hwnd, instance, s, "Se il nome esiste già", 0x200, ID_CAP_EXISTS, (210, 572, 160, 26), f);
+    let exists = child(hwnd, instance, w!("COMBOBOX"), "", tab | CBS_DROPDOWNLIST as u32, ID_EXISTS, (372, 572, 220, 200), f);
+    for (label, _) in EXISTS_CHOICES {
+        SendMessageW(exists, CB_ADDSTRING, Some(WPARAM(0)), Some(LPARAM(HSTRING::from(*label).as_ptr() as isize)));
+    }
+    SendMessageW(exists, CB_SETCURSEL, Some(WPARAM(0)), Some(LPARAM(0)));
     child(hwnd, instance, s, "Tutto sul tuo PC. L'originale non si tocca.", 0, ID_FOOT, (210, 600, 420, 18), f);
     child(hwnd, instance, s, POWERED_BY, 0, ID_POWERED, (210, 616, 420, 18), f);
     child(hwnd, instance, b, "Converti", tab | BS_OWNERDRAW as u32, ID_GO, (640, 590, 240, 38), fb);
@@ -371,10 +381,17 @@ unsafe fn refresh_options(hwnd: HWND) {
                 SendMessageW(bar, TBM_SETPOS, Some(WPARAM(1)), Some(LPARAM(values.get(def) as isize)));
                 child(hwnd, instance, w!("STATIC"), &format!("{}{unit}", values.get(def)), 0x200, OPT_VALUE0 + id, (x + 280, y, 50, 26), f);
             }
+            Control::Text { hint } => {
+                child(hwnd, instance, w!("STATIC"), def.title, 0x200, OPT_LABEL0 + id, (x, y, 150, 26), f);
+                let e = child(hwnd, instance, w!("EDIT"), "", tab | ES_AUTOHSCROLL as u32 | WS_BORDER.0, OPT_CTL0 + id, (x + 150, y, 180, 24), f);
+                let _ = SetWindowTextW(e, &HSTRING::from(values.text(def)));
+                // Il suggerimento grigio nel campo vuoto (serve il controllo comune recente: se manca, non si vede e basta).
+                SendMessageW(e, 0x1501 /* EM_SETCUEBANNER */, Some(WPARAM(1)), Some(LPARAM(HSTRING::from(*hint).as_ptr() as isize)));
+            }
             Control::Password => {
                 child(hwnd, instance, w!("STATIC"), def.title, 0x200, OPT_LABEL0 + id, (x, y, 150, 26), f);
                 let e = child(hwnd, instance, w!("EDIT"), "", tab | ES_PASSWORD as u32 | ES_AUTOHSCROLL as u32 | WS_BORDER.0, OPT_CTL0 + id, (x + 150, y, 180, 24), f);
-                let _ = SetWindowTextW(e, &HSTRING::from(values.password.as_str()));
+                let _ = SetWindowTextW(e, &HSTRING::from(values.text(def)));
             }
         }
     }
@@ -403,10 +420,10 @@ unsafe fn option_changed(hwnd: HWND, index: usize) {
             values.set(def, at);
             set_text(hwnd, OPT_VALUE0 + index as i32, &format!("{at}{unit}"));
         }
-        Control::Password => {
+        Control::Text { .. } | Control::Password => {
             let mut buf = [0u16; 256];
             let n = GetWindowTextW(ctl, &mut buf) as usize;
-            values.password = String::from_utf16_lossy(&buf[..n]);
+            values.set_text(def, &String::from_utf16_lossy(&buf[..n]));
         }
     }
     state().values = values;
@@ -519,7 +536,11 @@ unsafe fn pick(hwnd: HWND, folder: bool) -> Vec<PathBuf> {
 }
 
 unsafe fn start(hwnd: HWND) {
-    let (files, action, dest, opts) = {
+    if let Err(e) = conversioni::validate(&state().values) {
+        MessageBoxW(Some(hwnd), &HSTRING::from(e), w!("Cedro"), MB_OK | MB_ICONWARNING);
+        return;
+    }
+    let (files, action, dest, mut opts) = {
         let mut s = state();
         if s.running {
             return;
@@ -538,6 +559,17 @@ unsafe fn start(hwnd: HWND) {
     let q = quality(hwnd);
     render_queue(hwnd);
     let raw = hwnd.0 as isize;
+    if opts.exists == Exists::Ask {
+        // Il thread della conversione chiede alla finestra e aspetta la risposta.
+        opts.on_exists = Some(ExistsAsk::new(move |path| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            *ASK.lock().unwrap_or_else(|e| e.into_inner()) = Some((path.to_path_buf(), tx));
+            unsafe {
+                let _ = PostMessageW(Some(HWND(raw as *mut _)), WM_APP_ASK, WPARAM(0), LPARAM(0));
+            }
+            rx.recv().unwrap_or(ExistsChoice::KeepBoth)
+        }));
+    }
     std::thread::spawn(move || {
         for path in files {
             let result = conversioni::convert_one(&path, &action, q, dest.as_deref(), &opts);
@@ -687,9 +719,11 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                     state().dest = None;
                 }
                 ID_GO => start(hwnd),
-                ID_OVERWRITE => {
-                    let on = SendMessageW(item(hwnd, ID_OVERWRITE), BM_GETCHECK, Some(WPARAM(0)), Some(LPARAM(0))).0 == BST_CHECKED.0 as isize;
-                    state().values.overwrite = on;
+                ID_EXISTS if code == CBN_SELCHANGE => {
+                    let at = SendMessageW(item(hwnd, ID_EXISTS), CB_GETCURSEL, Some(WPARAM(0)), Some(LPARAM(0))).0;
+                    if let Some((_, choice)) = usize::try_from(at).ok().and_then(|i| EXISTS_CHOICES.get(i)) {
+                        state().values.exists = *choice;
+                    }
                 }
                 x if (OPT_CTL0..OPT_CTL0 + OPT_MAX).contains(&x) => {
                     // Interruttori e password si leggono al clic o a ogni lettera, gli elenchi alla scelta.
@@ -736,7 +770,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             let (fg, bg, slot) = match GetDlgCtrlID(ctl) {
                 ID_HEADER => (WHITE, PRIMARY, &BRUSH_PRIMARY),
                 ID_TITLE => (PRIMARY, WHITE, &BRUSH_WHITE),
-                ID_POWERED | ID_CAP_OPTIONS | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_QUALITY | ID_CAP_DEST | ID_COUNT | ID_FOOT => (GREY, WHITE, &BRUSH_WHITE),
+                ID_POWERED | ID_CAP_EXISTS | ID_CAP_OPTIONS | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_QUALITY | ID_CAP_DEST | ID_COUNT | ID_FOOT => (GREY, WHITE, &BRUSH_WHITE),
                 _ => (TEXT, WHITE, &BRUSH_WHITE),
             };
             SetTextColor(hdc, fg);
@@ -755,6 +789,20 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         }
         WM_APP_RESULT => {
             take_results(hwnd);
+            LRESULT(0)
+        }
+        WM_APP_ASK => {
+            let request = ASK.lock().unwrap_or_else(|e| e.into_inner()).take();
+            if let Some((path, tx)) = request {
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("il file");
+                let text = HSTRING::from(format!("«{name}» esiste già in questa cartella.\n\nSì: lo sostituisco\nNo: tengo entrambi (aggiungo -2)\nAnnulla: salto questo file"));
+                let answer = MessageBoxW(Some(hwnd), &text, w!("Cedro"), MB_YESNOCANCEL | MB_ICONQUESTION | MB_SETFOREGROUND);
+                let _ = tx.send(match answer {
+                    IDYES => ExistsChoice::Replace,
+                    IDNO => ExistsChoice::KeepBoth,
+                    _ => ExistsChoice::Skip,
+                });
+            }
             LRESULT(0)
         }
         WM_APP_DONE => {

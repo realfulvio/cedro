@@ -118,24 +118,30 @@ pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
 /// Testo di un PDF: quello incorporato, e l'OCR solo per le pagine che ne sono prive.
 /// Ritorna il testo, le pagine lette via OCR e quelle da leggere rimaste fuori dal limite.
 fn pdf_text_with_ocr(path: &Path, opts: &Options) -> Result<(String, usize, usize), String> {
-    let mut pages: Vec<String> =
-        crate::doctext::pdf_page_texts(path)?.iter().map(|p| crate::ocr::paragraphs_from_text(p)).collect();
-    pages.truncate(opts.first_pages.unwrap_or(usize::MAX));
-    let blank: Vec<bool> = pages.iter().map(|p| p.is_empty()).collect();
+    let all: Vec<String> = crate::doctext::pdf_page_texts(path)?.iter().map(|p| crate::ocr::paragraphs_from_text(p)).collect();
+    let selected = pages_of(&opts.pages, all.len());
+    if selected.is_empty() {
+        return Err("nessuna pagina in questo intervallo".into());
+    }
+    let mut pages: Vec<String> = selected.iter().map(|i| all[*i].clone()).collect();
+    let mut wanted = vec![false; all.len()];
+    for (slot, i) in selected.iter().enumerate() {
+        wanted[*i] = pages[slot].is_empty();
+    }
     let mut ocr_pages = 0;
     let mut skipped = 0;
     let mut ocr_error = None;
-    if opts.ocr && blank.iter().any(|b| *b) {
+    if opts.ocr && wanted.iter().any(|b| *b) {
         let bytes = fs::read(path).map_err(|e| e.to_string())?;
-        match crate::ocr::pdf_pages_where(&bytes, |i| blank.get(i).copied().unwrap_or(false)) {
+        match crate::ocr::pdf_pages_where(&bytes, |i| wanted.get(i).copied().unwrap_or(false)) {
             Ok(read) => {
-                for (page, text) in pages.iter_mut().zip(read) {
-                    match text {
+                for (slot, i) in selected.iter().enumerate() {
+                    match read.get(*i).cloned().flatten() {
                         Some(text) if !text.is_empty() => {
-                            *page = text;
+                            pages[slot] = text;
                             ocr_pages += 1;
                         }
-                        None if page.is_empty() => skipped += 1,
+                        None if pages[slot].is_empty() && wanted[*i] => skipped += 1,
                         _ => {}
                     }
                 }
@@ -190,17 +196,94 @@ fn stem(path: &Path) -> String {
     path.file_stem().and_then(|s| s.to_str()).unwrap_or("file").to_string()
 }
 
-pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
+/// Lo stato dei nomi di uscita per la conversione in corso su questo thread.
+#[derive(Default)]
+struct Naming {
+    exists: Exists,
+    ask: Option<ExistsAsk>,
+    /// Il file di partenza: non si sostituisce mai.
+    source: Option<PathBuf>,
+    /// La risposta già data per questo file: si chiede una volta sola.
+    decided: Option<ExistsChoice>,
+    /// Le copie fatte con un nome nuovo ma da buttare, perché l'utente ha scelto di saltare.
+    skipped: Vec<PathBuf>,
+}
+
+thread_local! {
+    static NAMING: std::cell::RefCell<Naming> = std::cell::RefCell::new(Naming::default());
+}
+
+fn numbered(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
     let mut name = format!("{file_stem}.{ext}");
-    if OVERWRITE.with(|o| o.get()) && SOURCE.with(|s| s.borrow().as_deref() != Some(dir.join(&name).as_path())) {
-        return dir.join(name);
-    }
     let mut i = 2u32;
     while dir.join(&name).exists() {
         name = format!("{file_stem}-{i}.{ext}");
         i += 1;
     }
     dir.join(name)
+}
+
+pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
+    let candidate = dir.join(format!("{file_stem}.{ext}"));
+    if !candidate.exists() {
+        return candidate;
+    }
+    let (exists, ask, source, decided) = NAMING.with(|n| {
+        let n = n.borrow();
+        (n.exists, n.ask.clone(), n.source.clone(), n.decided)
+    });
+    let choice = match exists {
+        Exists::Number => ExistsChoice::KeepBoth,
+        Exists::Replace => ExistsChoice::Replace,
+        Exists::Skip => ExistsChoice::Skip,
+        Exists::Ask => decided.unwrap_or_else(|| {
+            let answer = ask.map_or(ExistsChoice::KeepBoth, |a| (a.0)(&candidate));
+            NAMING.with(|n| n.borrow_mut().decided = Some(answer));
+            answer
+        }),
+    };
+    match choice {
+        ExistsChoice::Replace if source.as_deref() != Some(candidate.as_path()) => candidate,
+        ExistsChoice::Replace | ExistsChoice::KeepBoth => numbered(dir, file_stem, ext),
+        ExistsChoice::Skip => {
+            let path = numbered(dir, file_stem, ext);
+            NAMING.with(|n| n.borrow_mut().skipped.push(path.clone()));
+            path
+        }
+    }
+}
+
+/// Scrive il PDF di testo (documenti e testi): font incorporato, segnalibri, PDF/A e password come scelto.
+fn write_text_pdf(path: &Path, dir: &Path, blocks: &[crate::pdfdoc::DocBlock], opts: &Options) -> CedroResult<Output> {
+    let password = opts.password.as_deref().filter(|p| !p.is_empty());
+    if opts.pdfa && password.is_some() {
+        return Err(err("il PDF/A non ammette la password: togline una delle due"));
+    }
+    let options = crate::pdfdoc::PdfOptions {
+        size: opts.page_size,
+        embed: opts.embed_fonts,
+        bookmarks: opts.bookmarks,
+        pdfa: opts.pdfa,
+        title: stem(path),
+    };
+    let mut bytes = crate::pdfdoc::build(blocks, &options).map_err(err)?;
+    let mut message = String::from("PDF");
+    if opts.embed_fonts || opts.pdfa {
+        message.push_str(" con i caratteri incorporati");
+    }
+    if opts.pdfa {
+        message.push_str(", PDF/A-1b");
+    }
+    if opts.bookmarks && blocks.iter().any(|b| b.heading > 0) {
+        message.push_str(", con i segnalibri");
+    }
+    if let Some(password) = password {
+        bytes = crate::pdf::protect(&bytes, password).map_err(err)?;
+        message.push_str(", protetto con password");
+    }
+    let out = unique_output(dir, &stem(path), "pdf");
+    write_bytes(&out, &bytes)?;
+    Ok(Output { path: out, message })
 }
 
 fn parent_dir(path: &Path) -> CedroResult<&Path> {
@@ -285,6 +368,87 @@ pub fn perform_into(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
     perform_with(path, action, quality, out_dir, &Options::default())
 }
 
+/// Cosa fare quando il file di uscita esiste già.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Exists {
+    /// Aggiunge -2, -3… al nome.
+    #[default]
+    Number,
+    /// Sostituisce il file (mai quello di partenza).
+    Replace,
+    /// Non converte: il file c'è già.
+    Skip,
+    /// Chiede a chi ha lanciato la conversione (vedi `Options::on_exists`).
+    Ask,
+}
+
+/// La risposta alla domanda «il file esiste già: cosa faccio?».
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ExistsChoice {
+    Replace,
+    KeepBoth,
+    Skip,
+}
+
+/// Chi risponde alla domanda quando la scelta è `Exists::Ask`. Gira nel thread della conversione.
+#[derive(Clone)]
+pub struct ExistsAsk(pub std::sync::Arc<dyn Fn(&Path) -> ExistsChoice + Send + Sync>);
+
+impl ExistsAsk {
+    pub fn new(f: impl Fn(&Path) -> ExistsChoice + Send + Sync + 'static) -> Self {
+        ExistsAsk(std::sync::Arc::new(f))
+    }
+}
+
+impl PartialEq for ExistsAsk {
+    fn eq(&self, other: &Self) -> bool {
+        std::sync::Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl Eq for ExistsAsk {}
+impl std::fmt::Debug for ExistsAsk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ExistsAsk")
+    }
+}
+
+/// Le pagine scelte di un PDF, come si scrivono: `1-3,5` o `4-` (dalla 4 alla fine).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct PageSel(Vec<(usize, usize)>);
+
+impl PageSel {
+    /// Il testo vuoto vuol dire tutte le pagine (`None`).
+    pub fn parse(text: &str) -> Result<Option<PageSel>, String> {
+        let text = text.trim();
+        if text.is_empty() || text.eq_ignore_ascii_case("tutte") {
+            return Ok(None);
+        }
+        let mut ranges = Vec::new();
+        for part in text.split([',', ';']).map(str::trim).filter(|p| !p.is_empty()) {
+            let number = |t: &str| t.trim().parse::<usize>().ok().filter(|n| *n >= 1);
+            let range = match part.split_once('-') {
+                Some((a, b)) if b.trim().is_empty() => number(a).map(|a| (a, usize::MAX)),
+                Some((a, b)) if a.trim().is_empty() => number(b).map(|b| (1, b)),
+                Some((a, b)) => number(a).zip(number(b)).filter(|(a, b)| a <= b),
+                None => number(part).map(|n| (n, n)),
+            };
+            ranges.push(range.ok_or_else(|| format!("pagine «{part}» non valide: scrivi per esempio 1-3,5"))?);
+        }
+        Ok(Some(PageSel(ranges)))
+    }
+
+    /// `index` parte da 0 (la prima pagina è 0).
+    pub fn contains(&self, index: usize) -> bool {
+        let page = index + 1;
+        self.0.iter().any(|(a, b)| page >= *a && page <= *b)
+    }
+}
+
+/// Le pagine (da 0) di un documento di `total` pagine che la scelta lascia passare.
+fn pages_of(sel: &Option<PageSel>, total: usize) -> Vec<usize> {
+    (0..total).filter(|i| sel.as_ref().map_or(true, |s| s.contains(*i))).collect()
+}
+
 /// Formato della pagina per i documenti convertiti in PDF.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PageSize {
@@ -312,16 +476,28 @@ pub struct Options {
     pub straighten: bool,
     /// Immagini: nel JPEG la trasparenza diventa bianca invece che nera.
     pub white_background: bool,
-    /// Se il nome di uscita esiste già lo sostituisce invece di aggiungere -2, -3…
-    pub overwrite: bool,
+    /// Cosa fare se il nome di uscita esiste già.
+    pub exists: Exists,
+    /// Chi risponde con `Exists::Ask`.
+    pub on_exists: Option<ExistsAsk>,
     /// Documenti in PDF: formato della pagina.
     pub page_size: PageSize,
     /// PDF: legge con l'OCR le pagine senza testo.
     pub ocr: bool,
     /// PDF in Word: ricostruisce le tabelle.
     pub tables: bool,
-    /// PDF: solo le prime N pagine.
-    pub first_pages: Option<usize>,
+    /// PDF: solo queste pagine (`None` = tutte).
+    pub pages: Option<PageSel>,
+    /// PDF in Word: le colonne del testo restano colonne (spenta: una colonna sola, in ordine di lettura).
+    pub columns: bool,
+    /// Audio: salta il silenzio iniziale, sotto questa soglia in dB sotto il massimo.
+    pub trim_silence_db: Option<u32>,
+    /// Documenti e testo in PDF: font incorporato nel file.
+    pub embed_fonts: bool,
+    /// Documenti in PDF: segnalibri dai titoli.
+    pub bookmarks: bool,
+    /// Documenti e testo in PDF: PDF/A-1b per l'archivio.
+    pub pdfa: bool,
     /// PDF in immagini: una immagine per pagina (altrimenti una sola, lunga).
     pub one_image_per_page: bool,
     /// Testo: codifica del file scritto.
@@ -363,11 +539,17 @@ impl Default for Options {
             max_side: None,
             straighten: true,
             white_background: true,
-            overwrite: false,
+            exists: Exists::Number,
+            on_exists: None,
             page_size: PageSize::A4,
             ocr: true,
             tables: true,
-            first_pages: None,
+            pages: None,
+            columns: true,
+            trim_silence_db: None,
+            embed_fonts: true,
+            bookmarks: true,
+            pdfa: false,
             one_image_per_page: true,
             encoding: Encoding::Utf8,
             csv_separator: None,
@@ -388,19 +570,19 @@ impl Default for Options {
     }
 }
 
-thread_local! {
-    static OVERWRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    /// Il file di partenza: con `overwrite` non si sostituisce mai.
-    static SOURCE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
-}
-
 /// Come `perform_into`, con le opzioni extra.
 pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
-    let before = OVERWRITE.with(|o| o.replace(opts.overwrite));
-    let source = SOURCE.with(|s| s.replace(Some(path.to_path_buf())));
+    let before = NAMING.with(|n| {
+        n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(path.to_path_buf()), ..Default::default() })
+    });
     let result = perform_inner(path, action, quality, out_dir, opts);
-    OVERWRITE.with(|o| o.set(before));
-    SOURCE.with(|s| *s.borrow_mut() = source);
+    let used = NAMING.with(|n| n.replace(before));
+    if !used.skipped.is_empty() {
+        for file in &used.skipped {
+            let _ = fs::remove_file(file);
+        }
+        return Err(err("il file esiste già: saltato"));
+    }
     result
 }
 
@@ -501,10 +683,9 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "html" | "json" | "pdf" | "upper" | "lower") {
         let text = read_text(path)?;
         if action == "pdf" {
-            let bytes = crate::pdf::pdf_from_text_sized(&text, opts.page_size);
-            let out = unique_output(&dir, &stem(path), "pdf");
-            write_bytes(&out, &bytes)?;
-            return Ok(Output { path: out, message: "PDF di testo".into() });
+            let blocks: Vec<crate::pdfdoc::DocBlock> =
+                text.split('\n').map(|l| crate::pdfdoc::DocBlock { text: l.trim_end().to_string(), heading: 0 }).collect();
+            return write_text_pdf(path, &dir, &blocks, opts);
         }
         let from = extension(path);
         let table = |text: &str| {
@@ -548,23 +729,16 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
 
     if kind == Kind::Doc && action == "pdf" {
-        let text = crate::doctext::document_text(path).map_err(err)?;
-        let mut bytes = crate::pdf::pdf_from_text_sized(&text, opts.page_size);
-        let mut message = "PDF di testo".to_string();
-        if let Some(password) = opts.password.as_deref().filter(|p| !p.is_empty()) {
-            bytes = crate::pdf::protect(&bytes, password).map_err(err)?;
-            message.push_str(", protetto con password");
-        }
-        let out = unique_output(&dir, &stem(path), "pdf");
-        write_bytes(&out, &bytes)?;
-        return Ok(Output { path: out, message });
+        let blocks = crate::doctext::document_blocks(path).map_err(err)?;
+        return write_text_pdf(path, &dir, &blocks, opts);
     }
     if kind == Kind::Pdf && matches!(action, "jpg" | "png") {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
         let all = crate::ocr::pdf_page_count(&bytes).map_err(err)?;
-        let total = all.min(opts.first_pages.unwrap_or(usize::MAX));
+        let selected = pages_of(&opts.pages, all);
+        let total = selected.len();
         if total == 0 {
-            return Err(err("il PDF non ha pagine"));
+            return Err(err("nessuna pagina in questo intervallo"));
         }
         let scale = opts.dpi.unwrap_or(144).clamp(36, 600) as f32 / 72.0;
         let encode = |rgb: &image::RgbImage| -> Result<Vec<u8>, String> {
@@ -579,7 +753,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         let mut first = None;
         let mut strip: Vec<image::RgbImage> = Vec::new();
         let mut strip_height = 0u32;
-        crate::ocr::pdf_page_pngs_scaled(&bytes, scale, total, |i, png| {
+        crate::ocr::pdf_page_pngs_scaled(&bytes, scale, |i| selected.contains(&i), |i, png| {
             let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
             if !opts.one_image_per_page {
                 strip_height += rgb.height();
@@ -614,15 +788,21 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
     if kind == Kind::Pdf && action == "docx" {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-        let mut pages = crate::pdflayout::read_pages(&bytes, opts.tables).map_err(err)?;
-        pages.truncate(opts.first_pages.unwrap_or(usize::MAX));
-        let empty: Vec<bool> = pages.iter().map(|p| matches!(p, crate::pdflayout::Page::Empty)).collect();
+        let every = crate::pdflayout::read_pages(&bytes, opts.tables, opts.columns).map_err(err)?;
+        let selected = pages_of(&opts.pages, every.len());
+        if selected.is_empty() {
+            return Err(err("nessuna pagina in questo intervallo"));
+        }
+        let empty_all: Vec<bool> = every.iter().map(|p| matches!(p, crate::pdflayout::Page::Empty)).collect();
+        let pages: Vec<crate::pdflayout::Page> =
+            every.into_iter().enumerate().filter(|(i, _)| selected.contains(i)).map(|(_, p)| p).collect();
+        let empty: Vec<bool> = selected.iter().map(|i| empty_all[*i]).collect();
         let scanned = empty.iter().filter(|e| **e).count();
         let mut ocr: Vec<Option<String>> = vec![None; pages.len()];
         let mut ocr_error = None;
         if scanned > 0 && opts.ocr {
-            match crate::ocr::pdf_pages_where(&bytes, |i| empty.get(i).copied().unwrap_or(false)) {
-                Ok(read) => ocr = read,
+            match crate::ocr::pdf_pages_where(&bytes, |i| selected.contains(&i) && empty_all.get(i).copied().unwrap_or(false)) {
+                Ok(read) => ocr = selected.iter().map(|i| read.get(*i).cloned().flatten()).collect(),
                 Err(e) => ocr_error = Some(e),
             }
         }
@@ -876,7 +1056,7 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
         assert!(xml.contains("Heading1") && xml.contains("Titolo"), "{xml}");
         assert!(xml.contains("<w:b/>"), "grassetto perso");
         assert!(xml.contains("Testo sotto la tabella."), "{xml}");
-        let flat = perform_with(&path, "docx", 80, None, &Options { tables: false, overwrite: true, ..Default::default() }).expect("Word");
+        let flat = perform_with(&path, "docx", 80, None, &Options { tables: false, exists: Exists::Replace, ..Default::default() }).expect("Word");
         let xml = crate::doctext::zip_entry_for_test(&flat.path, "word/document.xml");
         assert_eq!(xml.matches("<w:tr>").count(), 0, "senza tabelle");
         assert!(xml.contains("Luca") && xml.contains("Voto"), "il testo della tabella resta");
@@ -1011,7 +1191,7 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
         perform_with(&src, "jpeg", 80, None, &Options::default()).unwrap();
         let second = perform_with(&src, "jpeg", 80, None, &Options::default()).unwrap();
         assert!(second.path.ends_with("foto-2.jpg"));
-        let replaced = perform_with(&src, "jpeg", 80, None, &Options { overwrite: true, ..Default::default() }).unwrap();
+        let replaced = perform_with(&src, "jpeg", 80, None, &Options { exists: Exists::Replace, ..Default::default() }).unwrap();
         assert!(replaced.path.ends_with("foto.jpg"));
         assert!(!dir.join("foto-3.jpg").exists());
         let _ = fs::remove_dir_all(&dir);
@@ -1114,20 +1294,113 @@ Luca,Bondeno
             let peak = r.samples::<i16>().map(|s| s.unwrap().unsigned_abs()).max().unwrap_or(0);
             (spec.channels, r.duration(), peak)
         };
-        let plain = perform_with(&src, "wav", 80, None, &Options { overwrite: true, ..Default::default() }).unwrap();
+        let plain = perform_with(&src, "wav", 80, None, &Options { exists: Exists::Replace, ..Default::default() }).unwrap();
         let (ch, frames, peak) = read(&plain.path);
         assert_eq!((ch, frames), (2, 88200));
         assert!(peak < 6000, "{peak}");
-        let shaped = Options { channels: Some(1), normalize: true, trim_start_secs: 1, overwrite: true, ..Default::default() };
+        let shaped = Options { channels: Some(1), normalize: true, trim_start_secs: 1, exists: Exists::Replace, ..Default::default() };
         let out = perform_with(&src, "wav", 80, None, &shaped).unwrap();
         let (ch, frames, peak) = read(&out.path);
         assert_eq!((ch, frames), (1, 44100));
         assert!((31000..=32100).contains(&peak), "{peak}");
         let stereo = dir.join("mono.wav");
         wav_file(&stereo, 1, 1, 0.3, None);
-        let up = perform_with(&stereo, "wav", 80, None, &Options { channels: Some(2), overwrite: true, ..Default::default() }).unwrap();
+        let up = perform_with(&stereo, "wav", 80, None, &Options { channels: Some(2), exists: Exists::Replace, ..Default::default() }).unwrap();
         assert_eq!(read(&up.path).0, 2);
         assert!(perform_with(&src, "wav", 80, None, &Options { trim_start_secs: 9, ..Default::default() }).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn leading_silence_is_detected_and_cut() {
+        let dir = scratch();
+        let src = dir.join("parlato.wav");
+        let spec = hound::WavSpec { channels: 1, sample_rate: 8000, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+        let mut w = hound::WavWriter::create(&src, spec).unwrap();
+        for _ in 0..8000 * 2 {
+            w.write_sample(3i16).unwrap();
+        }
+        for i in 0..8000 {
+            w.write_sample(((i as f32 * 0.3).sin() * 12000.0) as i16).unwrap();
+        }
+        w.finalize().unwrap();
+        let frames = |p: &Path| hound::WavReader::open(p).unwrap().duration();
+        let whole = perform_with(&src, "wav", 80, None, &Options::default()).unwrap();
+        assert_eq!(frames(&whole.path), 24000);
+        let cut = Options { trim_silence_db: Some(40), exists: Exists::Replace, ..Default::default() };
+        let out = perform_with(&src, "wav", 80, None, &cut).unwrap();
+        // 1 s di suono e 50 ms di anticipo.
+        assert!((8000 + 396..=8000 + 404).contains(&frames(&out.path)), "{}", frames(&out.path));
+        let quiet = dir.join("muto.wav");
+        let mut w = hound::WavWriter::create(&quiet, spec).unwrap();
+        for _ in 0..8000 {
+            w.write_sample(0i16).unwrap();
+        }
+        w.finalize().unwrap();
+        assert!(perform_with(&quiet, "wav", 80, None, &cut).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn page_ranges_parse_like_they_are_written() {
+        let sel = PageSel::parse("1-3, 5;8-").unwrap().unwrap();
+        let picked: Vec<usize> = (0..10).filter(|i| sel.contains(*i)).collect();
+        assert_eq!(picked, vec![0, 1, 2, 4, 7, 8, 9]);
+        assert!(PageSel::parse("").unwrap().is_none() && PageSel::parse("tutte").unwrap().is_none());
+        assert!(PageSel::parse("3-1").is_err() && PageSel::parse("a").is_err() && PageSel::parse("0").is_err());
+        assert!(PageSel::parse("-2").unwrap().unwrap().contains(1));
+    }
+
+    #[test]
+    fn existing_names_follow_the_chosen_policy_and_ask_once() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        let dir = scratch();
+        let src = dir.join("foto.png");
+        DynamicImage::ImageRgb8(RgbImage::from_pixel(8, 8, Rgb([1, 2, 3]))).save(&src).unwrap();
+        perform_with(&src, "jpeg", 80, None, &Options::default()).unwrap();
+        let jpgs = || fs::read_dir(&dir).unwrap().filter(|e| e.as_ref().unwrap().path().extension().is_some_and(|x| x == "jpg")).count();
+        assert_eq!(jpgs(), 1);
+
+        let skip = Options { exists: Exists::Skip, ..Default::default() };
+        let e = perform_with(&src, "jpeg", 80, None, &skip).err().unwrap();
+        assert!(e.0.contains("saltato"), "{}", e.0);
+        assert_eq!(jpgs(), 1, "il file saltato non deve restare");
+
+        let asked = Arc::new(AtomicUsize::new(0));
+        let answer = |choice: ExistsChoice, asked: &Arc<AtomicUsize>| {
+            let asked = asked.clone();
+            Options {
+                exists: Exists::Ask,
+                on_exists: Some(ExistsAsk::new(move |_| {
+                    asked.fetch_add(1, Ordering::SeqCst);
+                    choice
+                })),
+                ..Default::default()
+            }
+        };
+        let both = perform_with(&src, "jpeg", 80, None, &answer(ExistsChoice::KeepBoth, &asked)).unwrap();
+        assert!(both.path.ends_with("foto-2.jpg"));
+        assert_eq!(jpgs(), 2);
+        let before = fs::metadata(dir.join("foto.jpg")).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        perform_with(&src, "jpeg", 80, None, &answer(ExistsChoice::Replace, &asked)).unwrap();
+        assert_eq!(jpgs(), 2, "sostituire non crea altri file");
+        assert!(fs::metadata(dir.join("foto.jpg")).unwrap().modified().unwrap() > before);
+        let e = perform_with(&src, "jpeg", 80, None, &answer(ExistsChoice::Skip, &asked)).err().unwrap();
+        assert!(e.0.contains("saltato"));
+        assert_eq!(asked.load(Ordering::SeqCst), 3, "una domanda per conversione");
+        assert_eq!(jpgs(), 2);
+
+        // Un PDF di tre pagine in immagini: la domanda è una sola, non una per pagina.
+        let text: Vec<String> = (1..=150).map(|n| format!("riga {n}")).collect();
+        let pdf = dir.join("lungo.pdf");
+        fs::write(&pdf, pdf_from_text(&text.join("\n"))).unwrap();
+        let asked = Arc::new(AtomicUsize::new(0));
+        let opts = Options { dpi: Some(36), ..answer(ExistsChoice::KeepBoth, &asked) };
+        perform_with(&pdf, "png", 80, None, &opts).unwrap();
+        perform_with(&pdf, "png", 80, None, &opts).unwrap();
+        assert!(asked.load(Ordering::SeqCst) <= 2, "una domanda per file, non per pagina: {}", asked.load(Ordering::SeqCst));
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -1143,7 +1416,7 @@ Luca,Bondeno
         let has = |p: &Path, needle: &[u8]| fs::read(p).unwrap().windows(needle.len()).any(|w| w == needle);
         assert!(has(&small.path, b"Delibera 12"));
         assert!(has(&small.path, b"Comune di Bondeno"));
-        let bare = perform_with(&src, "mp3", 80, None, &Options { keep_tags: false, overwrite: true, ..Default::default() }).unwrap();
+        let bare = perform_with(&src, "mp3", 80, None, &Options { keep_tags: false, exists: Exists::Replace, ..Default::default() }).unwrap();
         assert!(!has(&bare.path, b"Delibera 12"));
         let _ = fs::remove_dir_all(&dir);
     }
@@ -1160,7 +1433,7 @@ Luca,Bondeno
     fn pdf_pages_option_limits_every_output() {
         let dir = scratch();
         let pdf = long_pdf(&dir);
-        let first = Options { first_pages: Some(1), ..Default::default() };
+        let first = Options { pages: PageSel::parse("1").unwrap(), ..Default::default() };
         let one = perform_with(&pdf, "jpg", 80, None, &first).unwrap();
         assert_eq!(one.message, "JPG");
         let all = perform_with(&pdf, "png", 80, None, &Options { dpi: Some(36), ..Default::default() }).unwrap();
@@ -1169,7 +1442,7 @@ Luca,Bondeno
         let body = fs::read_to_string(&text.path).unwrap();
         assert!(body.contains("riga numero 1"));
         assert!(!body.contains("riga numero 100"), "solo la prima pagina");
-        let full = perform_with(&pdf, "txt", 80, None, &Options { overwrite: true, ..Default::default() }).unwrap();
+        let full = perform_with(&pdf, "txt", 80, None, &Options { exists: Exists::Replace, ..Default::default() }).unwrap();
         assert!(fs::read_to_string(&full.path).unwrap().contains("riga numero 100"));
         let docx = perform_with(&pdf, "docx", 80, None, &first).unwrap();
         let xml = crate::doctext::zip_entry_for_test(&docx.path, "word/document.xml");
@@ -1181,9 +1454,9 @@ Luca,Bondeno
     fn pdf_pages_can_become_one_long_image() {
         let dir = scratch();
         let pdf = long_pdf(&dir);
-        let each = Options { dpi: Some(36), first_pages: Some(2), ..Default::default() };
+        let each = Options { dpi: Some(36), pages: PageSel::parse("1-2").unwrap(), ..Default::default() };
         let single = Options { one_image_per_page: false, ..each.clone() };
-        let one_page = perform_with(&pdf, "png", 80, None, &Options { first_pages: Some(1), dpi: Some(36), ..Default::default() }).unwrap();
+        let one_page = perform_with(&pdf, "png", 80, None, &Options { pages: PageSel::parse("1").unwrap(), dpi: Some(36), ..Default::default() }).unwrap();
         let page = image::open(&one_page.path).unwrap();
         let long = perform_with(&pdf, "png", 80, None, &single).unwrap();
         let long_img = image::open(&long.path).unwrap();
@@ -1230,6 +1503,71 @@ Luca,Bondeno
         right.decrypt("bondeno").unwrap();
         let text = right.extract_text(&[1]).unwrap();
         assert!(text.contains("Delibera"), "{text}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Un PDF di una pagina 600×800 con il contenuto dato, i font F1 (Helvetica) e F2 (grassetto).
+    fn one_page_pdf(content: &str) -> Vec<u8> {
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>".to_string(),
+            format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>".to_string(),
+        ];
+        for (i, o) in objects.iter().enumerate() {
+            offsets.push(pdf.len());
+            pdf.extend(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+        }
+        let xref = pdf.len();
+        pdf.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+        for off in &offsets {
+            pdf.extend(format!("{off:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+        pdf
+    }
+
+    #[test]
+    fn two_column_pdf_keeps_columns_or_flows_in_one() {
+        let dir = scratch();
+        let mut content = String::from("BT /F2 18 Tf 50 750 Td (Titolo a tutta larghezza della pagina del giornale comunale) Tj ET\n");
+        for n in 1..=12 {
+            let y = 700 - n * 16;
+            content.push_str(&format!("BT /F1 10 Tf 50 {y} Td (Sinistra {n} testo lungo della colonna di sinistra qui) Tj ET\n"));
+            content.push_str(&format!("BT /F1 10 Tf 320 {y} Td (Destra {n} testo lungo della colonna di destra qui) Tj ET\n"));
+        }
+        let path = dir.join("giornale.pdf");
+        fs::write(&path, one_page_pdf(&content)).unwrap();
+        let xml_of = |opts: &Options| {
+            let out = perform_with(&path, "docx", 80, None, opts).unwrap();
+            crate::doctext::zip_entry_for_test(&out.path, "word/document.xml")
+        };
+        let at = |xml: &str, needle: &str| xml.find(needle).unwrap_or_else(|| panic!("manca «{needle}»"));
+
+        let kept = xml_of(&Options::default());
+        assert!(kept.contains("<w:cols w:num=\"2\""), "{kept}");
+        assert!(kept.contains("w:type=\"column\""));
+        assert!(kept.contains("<w:type w:val=\"continuous\"/>"), "il titolo sta in una sezione a una colonna");
+        assert!(at(&kept, "Titolo a tutta") < at(&kept, "Sinistra 1 "));
+        assert!(at(&kept, "Sinistra 12") < at(&kept, "Destra 1 "), "prima tutta la colonna di sinistra");
+        assert_eq!(kept.matches("<w:cols ").count(), 1);
+
+        let flat = xml_of(&Options { columns: false, exists: Exists::Replace, ..Default::default() });
+        assert!(!flat.contains("<w:cols "), "{flat}");
+        assert!(!flat.contains("w:type=\"column\""));
+        assert!(at(&flat, "Titolo a tutta") < at(&flat, "Sinistra 1 "));
+        assert!(at(&flat, "Sinistra 12") < at(&flat, "Destra 1 "), "in colonna singola ma in ordine di lettura");
+
+        // Un testo a una colonna sola non cambia.
+        let single: String = (1..=14).map(|n| format!("BT /F1 10 Tf 50 {} Td (Riga {n} di un testo lungo a tutta pagina, che occupa la larghezza intera della pagina) Tj ET\n", 700 - n * 16)).collect();
+        let one = dir.join("uno.pdf");
+        fs::write(&one, one_page_pdf(&single)).unwrap();
+        let out = perform_with(&one, "docx", 80, None, &Options::default()).unwrap();
+        assert!(!crate::doctext::zip_entry_for_test(&out.path, "word/document.xml").contains("<w:cols "));
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -1711,7 +2049,7 @@ Luca,Bondeno
             assert!(!base.moov_first, "{name}: di norma il moov sta in fondo");
 
             let target = (base.height * 3 / 4) & !1;
-            let small = Options { video_height: Some(target), overwrite: true, ..Default::default() };
+            let small = Options { video_height: Some(target), exists: Exists::Replace, ..Default::default() };
             let out = perform_with(&src, "mp4", 80, None, &small).unwrap_or_else(|e| panic!("{name} ridotto: {}", e.0));
             let info = mp4_info(&fs::read(&out.path).unwrap());
             assert_eq!(info.height, target, "{name}: altezza");
@@ -1719,7 +2057,7 @@ Luca,Bondeno
             assert!(info.frames >= base.frames - 1, "{name}: fotogrammi persi");
 
             let fps = ((base.frames as f64 / base.seconds) / 2.0).round().max(1.0) as u32;
-            let slow = Options { fps: Some(fps), overwrite: true, ..Default::default() };
+            let slow = Options { fps: Some(fps), exists: Exists::Replace, ..Default::default() };
             let out = perform_with(&src, "mp4", 80, None, &slow).unwrap_or_else(|e| panic!("{name} fps: {}", e.0));
             let info = mp4_info(&fs::read(&out.path).unwrap());
             assert!(info.frames < base.frames, "{name}: {} fotogrammi con il limite, {} senza", info.frames, base.frames);

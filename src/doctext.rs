@@ -24,6 +24,196 @@ pub fn document_text(path: &Path) -> Result<String, String> {
     }
 }
 
+/// I paragrafi del documento con il livello dei titoli (1-3): da DOCX (stili Heading/Titolo e struttura),
+/// ODT (`text:h`) e RTF (stili «heading N» e `\\outlinelevel`). Per DOC e per quello che non ha titoli, righe di testo.
+pub fn document_blocks(path: &Path) -> Result<Vec<crate::pdfdoc::DocBlock>, String> {
+    use crate::pdfdoc::DocBlock;
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    let mut blocks = match ext.as_str() {
+        "docx" => docx_blocks(&zip_entry(path, "word/document.xml")?, &zip_entry(path, "word/styles.xml").unwrap_or_default()),
+        "odt" => odt_blocks(&zip_entry(path, "content.xml")?),
+        "rtf" => rtf_blocks(&fs::read(path).map_err(|e| e.to_string())?),
+        _ => Vec::new(),
+    };
+    if blocks.iter().all(|b| b.text.trim().is_empty()) {
+        blocks = document_text(path)?.split('\n').map(|l| DocBlock { text: l.trim_end().to_string(), heading: 0 }).collect();
+    }
+    // Le righe vuote di troppo in fondo non servono.
+    while blocks.last().is_some_and(|b| b.text.trim().is_empty()) {
+        blocks.pop();
+    }
+    Ok(blocks)
+}
+
+/// Il livello (1-3) di un titolo dal nome dello stile: «heading 2», «Titolo 1», «Title».
+fn heading_level_of(name: &str) -> Option<u8> {
+    let n = name.trim().to_lowercase();
+    let rest = n.strip_prefix("heading").or_else(|| n.strip_prefix("titolo"))?;
+    let digits: String = rest.chars().filter(|c| c.is_ascii_digit()).collect();
+    match digits.parse::<u8>() {
+        Ok(d) if d >= 1 => Some(d.min(3)),
+        _ if rest.trim().is_empty() => Some(1),
+        _ => None,
+    }
+}
+
+fn attr_text(tag: &str, name: &str) -> Option<String> {
+    let key = format!("{name}=\"");
+    let start = tag.find(&key)? + key.len();
+    let end = tag[start..].find('"')? + start;
+    Some(tag[start..end].to_string())
+}
+
+/// Le porzioni di `xml` da `<tag` (seguito da `>`, spazio o `/`) fino alla chiusura `</tag>`.
+fn elements<'a>(xml: &'a str, tag: &str) -> Vec<&'a str> {
+    let open = format!("<{tag}");
+    let close = format!("</{tag}>");
+    let mut out = Vec::new();
+    let mut at = 0;
+    while let Some(found) = xml[at..].find(&open) {
+        let start = at + found;
+        let after = xml[start + open.len()..].chars().next();
+        if !matches!(after, Some('>') | Some(' ') | Some('/')) {
+            at = start + open.len();
+            continue;
+        }
+        let tag_end = xml[start..].find('>').map_or(xml.len(), |e| start + e + 1);
+        if xml[start..tag_end].ends_with("/>") {
+            out.push(&xml[start..tag_end]);
+            at = tag_end;
+            continue;
+        }
+        let end = xml[tag_end..].find(&close).map_or(xml.len(), |e| tag_end + e + close.len());
+        out.push(&xml[start..end]);
+        at = end;
+    }
+    out
+}
+
+fn docx_blocks(document: &str, styles: &str) -> Vec<crate::pdfdoc::DocBlock> {
+    // styleId → livello, dai nomi degli stili e dal loro livello di struttura.
+    let mut levels: Vec<(String, u8)> = Vec::new();
+    for style in elements(styles, "w:style") {
+        let Some(id) = attr_text(style, "w:styleId") else { continue };
+        let name = style.find("<w:name ").and_then(|i| attr_text(&style[i..], "w:val"));
+        let outline = style.find("<w:outlineLvl ").and_then(|i| attr_text(&style[i..], "w:val")).and_then(|v| v.parse::<u8>().ok());
+        let level = name.as_deref().and_then(heading_level_of).or(outline.filter(|n| *n < 9).map(|n| (n + 1).min(3)));
+        if let Some(level) = level {
+            levels.push((id, level));
+        }
+    }
+    elements(document, "w:p")
+        .into_iter()
+        .map(|p| {
+            let style = p.find("<w:pStyle ").and_then(|i| attr_text(&p[i..], "w:val")).unwrap_or_default();
+            let outline = p.find("<w:outlineLvl ").and_then(|i| attr_text(&p[i..], "w:val")).and_then(|v| v.parse::<u8>().ok());
+            let heading = levels
+                .iter()
+                .find(|(id, _)| *id == style)
+                .map(|(_, l)| *l)
+                .or_else(|| heading_level_of(&style))
+                .or(outline.filter(|n| *n < 9).map(|n| (n + 1).min(3)))
+                .unwrap_or(0);
+            crate::pdfdoc::DocBlock { text: ooxml_text(p).trim_end_matches('\n').replace('\t', "    "), heading }
+        })
+        .collect()
+}
+
+fn odt_blocks(xml: &str) -> Vec<crate::pdfdoc::DocBlock> {
+    let mut found: Vec<(usize, crate::pdfdoc::DocBlock)> = Vec::new();
+    for (tag, is_heading) in [("text:h", true), ("text:p", false)] {
+        let mut at = 0;
+        for element in elements(xml, tag) {
+            let position = xml[at..].find(element).map_or(at, |i| at + i);
+            at = position;
+            let heading = if is_heading {
+                attr_text(element, "text:outline-level").and_then(|v| v.parse::<u8>().ok()).unwrap_or(1).clamp(1, 3)
+            } else {
+                0
+            };
+            let text = odt_plain(element).trim_end_matches('\n').replace('\t', "    ");
+            found.push((position, crate::pdfdoc::DocBlock { text, heading }));
+        }
+    }
+    found.sort_by_key(|(position, _)| *position);
+    found.into_iter().map(|(_, b)| b).collect()
+}
+
+fn rtf_blocks(bytes: &[u8]) -> Vec<crate::pdfdoc::DocBlock> {
+    let raw: String = bytes.iter().map(|b| *b as char).collect();
+    // Gli stili «heading N» della tavolozza: {\\sN … nome;}
+    let mut styles: Vec<(String, u8)> = Vec::new();
+    if let Some(at) = raw.find("{\\stylesheet") {
+        let sheet = &raw[at..];
+        let mut from = 0;
+        while let Some(found) = sheet[from..].find("{\\s") {
+            let start = from + found + 3;
+            from = start;
+            let id: String = sheet[start..].chars().take_while(|c| c.is_ascii_digit()).collect();
+            if id.is_empty() {
+                continue;
+            }
+            let end = sheet[start..].find('}').map_or(sheet.len(), |e| start + e);
+            let mut name = &sheet[start + id.len()..end];
+            // Via le parole di controllo davanti al nome.
+            loop {
+                name = name.trim_start();
+                if let Some(rest) = name.strip_prefix('\\') {
+                    name = rest.trim_start_matches(|c: char| c.is_ascii_alphanumeric() || c == '-');
+                } else {
+                    break;
+                }
+            }
+            if let Some(level) = heading_level_of(name.trim_end_matches(';')) {
+                styles.push((id, level));
+            }
+        }
+    }
+    // I paragrafi che sono titoli: per stile o per livello di struttura.
+    let mut headings: Vec<(String, u8)> = Vec::new();
+    let mut paragraphs: Vec<&str> = Vec::new();
+    let mut last = 0;
+    let visible: String = rtf_without_hidden_groups(bytes).iter().map(|b| *b as char).collect();
+    let raw = visible;
+    let marks: Vec<usize> = raw
+        .match_indices("\\par")
+        .filter(|(i, _)| !raw[i + 4..].starts_with(|c: char| c.is_ascii_alphabetic()))
+        .map(|(i, _)| i)
+        .collect();
+    for m in marks {
+        paragraphs.push(&raw[last..m]);
+        last = m + 4;
+    }
+    paragraphs.push(&raw[last..]);
+    for segment in paragraphs {
+        let outline = segment
+            .split("\\outlinelevel")
+            .nth(1)
+            .and_then(|r| r.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse::<u8>().ok())
+            .map(|n| (n + 1).min(3));
+        let by_style = styles.iter().find(|(id, _)| {
+            segment.match_indices("\\s").any(|(i, _)| {
+                let digits: String = segment[i + 2..].chars().take_while(|c| c.is_ascii_digit()).collect();
+                digits == *id
+            })
+        });
+        if let Some(level) = outline.or(by_style.map(|(_, l)| *l)) {
+            let plain: Vec<u8> = segment.chars().filter(|c| *c != '{' && *c != '}').map(|c| c as u32 as u8).collect();
+            let text = rtf_text(&plain).trim().to_string();
+            if !text.is_empty() {
+                headings.push((text, level));
+            }
+        }
+    }
+    rtf_text(bytes)
+        .split('\n')
+        .map(|line| {
+            let heading = headings.iter().find(|(t, _)| line.trim() == t).map_or(0, |(_, l)| *l);
+            crate::pdfdoc::DocBlock { text: line.trim_end().to_string(), heading }
+        })
+        .collect()
+}
+
 pub fn pdf_text(path: &Path) -> Result<String, String> {
     let pages = pdf_page_texts(path)?;
     let text = pages.iter().filter(|p| !p.is_empty()).cloned().collect::<Vec<_>>().join("\n\n");
@@ -143,25 +333,25 @@ fn odt_plain(xml: &str) -> String {
         let Some(end) = rest.find('>') else { break };
         let raw = &rest[..end];
         rest = &rest[end + 1..];
-        let tag = raw.split_whitespace().next().unwrap_or(raw);
-        if tag == "text:tab" || tag.starts_with("text:tab ") {
+        let tag = raw.split_whitespace().next().unwrap_or(raw).trim_end_matches('/');
+        if tag == "text:tab" {
             out.push('\t');
-        } else if tag == "text:line-break" || tag.starts_with("text:line-break ") {
+        } else if tag == "text:line-break" {
             out.push('\n');
-        } else if tag == "text:s" || tag.starts_with("text:s ") {
-            let count = attr_u32(raw, "text:c").unwrap_or(1);
-            for _ in 0..count {
+        } else if tag == "text:s" {
+            for _ in 0..attr_u32(raw, "text:c").unwrap_or(1) {
                 out.push(' ');
             }
         } else if tag == "/text:p" || tag == "/text:h" {
             out.push('\n');
-        } else if !tag.starts_with('/') && !tag.starts_with('?') && !tag.starts_with('!') {
-            if let Some(close) = rest.find('<') {
-                let chunk = rest[..close].trim();
-                if !chunk.is_empty() {
-                    out.push_str(&xml_decode(chunk));
-                }
-            }
+        }
+        if tag.starts_with('?') || tag.starts_with('!') {
+            continue;
+        }
+        // Il testo fino al tag dopo: gli spazi contano, l'indentazione dell'XML no.
+        let chunk = &rest[..rest.find('<').unwrap_or(rest.len())];
+        if !chunk.trim().is_empty() || (!chunk.is_empty() && !chunk.contains('\n')) {
+            out.push_str(&xml_decode(&chunk.replace(['\n', '\r'], " ")));
         }
     }
     out
@@ -174,7 +364,39 @@ fn attr_u32(tag: &str, name: &str) -> Option<u32> {
     tag[start..end].parse().ok()
 }
 
+/// L'RTF senza i gruppi che non sono testo del documento (tavolozze dei font, dei colori e degli stili, info, immagini…).
+fn rtf_without_hidden_groups(bytes: &[u8]) -> Vec<u8> {
+    const HIDDEN: [&[u8]; 8] = [b"{\\fonttbl", b"{\\colortbl", b"{\\stylesheet", b"{\\info", b"{\\pict", b"{\\*", b"{\\header", b"{\\footer"];
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'{' && HIDDEN.iter().any(|h| bytes[i..].starts_with(h)) {
+            let mut depth = 0i32;
+            while i < bytes.len() {
+                match bytes[i] {
+                    b'\\' => i += 1,
+                    b'{' => depth += 1,
+                    b'}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            i += 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+            continue;
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    out
+}
+
 fn rtf_text(bytes: &[u8]) -> String {
+    let bytes = &rtf_without_hidden_groups(bytes)[..];
     let mut out = String::new();
     let mut i = 0;
     while i < bytes.len() {
@@ -459,5 +681,79 @@ pub(crate) fn cp1252(b: u8) -> char {
         0x9E => '\u{017E}',
         0x9F => '\u{0178}',
         _ => b as char,
+    }
+}
+
+#[cfg(test)]
+mod block_tests {
+    use super::*;
+    use crate::engine::{perform_with, Options};
+    use crate::pdfdoc::DocBlock;
+
+    fn dir() -> std::path::PathBuf {
+        let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let d = std::env::temp_dir().join(format!("cedro-blocks-{n}"));
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn levels(blocks: &[DocBlock]) -> Vec<(u8, &str)> {
+        blocks.iter().filter(|b| b.heading > 0).map(|b| (b.heading, b.text.as_str())).collect()
+    }
+
+    #[test]
+    fn docx_headings_come_from_style_names_ids_and_outline_levels() {
+        let document = "<w:document><w:body>\
+<w:p><w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr><w:r><w:t>Delibera</w:t></w:r></w:p>\
+<w:p><w:r><w:t>Premessa normale</w:t></w:r></w:p>\
+<w:p><w:pPr><w:pStyle w:val=\"Titolo2\"/></w:pPr><w:r><w:t>Dispositivo</w:t></w:r></w:p>\
+<w:p><w:pPr><w:pStyle w:val=\"Mio\"/></w:pPr><w:r><w:t>Stile mio</w:t></w:r></w:p>\
+<w:p><w:pPr><w:outlineLvl w:val=\"2\"/></w:pPr><w:r><w:t>Livello tre</w:t></w:r></w:p>\
+</w:body></w:document>";
+        let styles = "<w:styles><w:style w:type=\"paragraph\" w:styleId=\"Mio\"><w:name w:val=\"heading 2\"/></w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"Corpo\"><w:name w:val=\"Body\"/></w:style></w:styles>";
+        let blocks = docx_blocks(document, styles);
+        assert_eq!(blocks.len(), 5);
+        assert_eq!(levels(&blocks), vec![(1, "Delibera"), (2, "Dispositivo"), (2, "Stile mio"), (3, "Livello tre")]);
+        assert_eq!(blocks[1], DocBlock { text: "Premessa normale".into(), heading: 0 });
+    }
+
+    #[test]
+    fn odt_headings_come_from_outline_levels() {
+        let xml = "<office:text><text:h text:outline-level=\"1\">Verbale</text:h><text:p>Corpo <text:span>del</text:span> testo</text:p>\
+<text:h text:outline-level=\"2\">Presenti</text:h><text:p text:style-name=\"P1\">Fine</text:p></office:text>";
+        let blocks = odt_blocks(xml);
+        assert_eq!(levels(&blocks), vec![(1, "Verbale"), (2, "Presenti")]);
+        assert_eq!(blocks.len(), 4);
+        assert_eq!(blocks[1].text, "Corpo del testo");
+    }
+
+    #[test]
+    fn rtf_headings_come_from_style_names_and_outline_levels() {
+        let rtf = br"{\rtf1\ansi{\stylesheet{\s1 heading 1;}{\s2 heading 2;}{\s3 Normal;}}\pard\s1 Capitolo uno\par\pard\s3 Testo normale\par\pard\s2 Paragrafo\par\pard\outlinelevel0 Altro titolo\par}";
+        let blocks = rtf_blocks(rtf);
+        assert_eq!(levels(&blocks), vec![(1, "Capitolo uno"), (2, "Paragrafo"), (1, "Altro titolo")], "{blocks:?}");
+    }
+
+    #[test]
+    fn a_document_with_titles_gets_pdf_bookmarks() {
+        let d = dir();
+        let docx = d.join("delibera.docx");
+        let document = "<w:document><w:body>\
+<w:p><w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr><w:r><w:t>Oggetto</w:t></w:r></w:p>\
+<w:p><w:r><w:t>Testo della premessa.</w:t></w:r></w:p>\
+<w:p><w:pPr><w:pStyle w:val=\"Heading2\"/></w:pPr><w:r><w:t>Dispositivo</w:t></w:r></w:p>\
+<w:p><w:r><w:t>Si approva.</w:t></w:r></w:p></w:body></w:document>";
+        let archive = crate::zipstore::zip_archive(&[("word/document.xml", document.as_bytes())]);
+        fs::write(&docx, archive).unwrap();
+        let with = perform_with(&docx, "pdf", 80, None, &Options::default()).unwrap();
+        assert!(with.message.contains("segnalibri") && with.message.contains("incorporati"), "{}", with.message);
+        let pdf = lopdf::Document::load(&with.path).unwrap();
+        let root = pdf.get_dictionary(pdf.catalog().unwrap().get(b"Outlines").unwrap().as_reference().unwrap()).unwrap();
+        assert_eq!(root.get(b"Count").unwrap().as_i64().unwrap(), 2);
+        let without = perform_with(&docx, "pdf", 80, None, &Options { bookmarks: false, exists: crate::engine::Exists::Replace, ..Default::default() }).unwrap();
+        let pdf = lopdf::Document::load(&without.path).unwrap();
+        assert!(pdf.catalog().unwrap().get(b"Outlines").is_err());
+        let _ = fs::remove_dir_all(&d);
     }
 }

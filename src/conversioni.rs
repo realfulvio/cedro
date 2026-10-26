@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::engine::{self, Encoding, Kind, Mode, PageSize, Slice};
+use crate::engine::{self, Encoding, Exists, Kind, Mode, PageSel, PageSize, Slice};
 
 /// Una voce del menu a sinistra del pannello.
 pub struct Category {
@@ -57,6 +57,8 @@ pub enum Control {
     Choice(&'static [Choice]),
     /// Un numero in un intervallo, con l'unità di misura.
     Range { min: u32, max: u32, unit: &'static str },
+    /// Un testo libero (per esempio le pagine: `1-3,5`); `hint` dice cosa scrivere.
+    Text { hint: &'static str },
     /// Un testo da non mostrare mentre si scrive.
     Password,
 }
@@ -70,10 +72,14 @@ pub enum Opt {
     PageSize,
     Password,
     Dpi,
-    Pages,
+    PageRange,
     OnePerPage,
     Ocr,
     Tables,
+    Columns,
+    EmbedFonts,
+    Bookmarks,
+    PdfA,
     Encoding,
     CsvSeparator,
     PrettyJson,
@@ -82,6 +88,7 @@ pub enum Opt {
     Channels,
     Normalize,
     TrimStart,
+    TrimSilence,
     KeepTags,
     VideoHeight,
     Fps,
@@ -125,11 +132,11 @@ const DPI: &[Choice] = &[
     Choice { label: "200 dpi", value: 200 },
     Choice { label: "300 dpi", value: 300 },
 ];
-const PAGES: &[Choice] = &[
-    Choice { label: "Tutte", value: 0 },
-    Choice { label: "Solo la prima", value: 1 },
-    Choice { label: "Prime 5", value: 5 },
-    Choice { label: "Prime 10", value: 10 },
+const SILENCE: &[Choice] = &[
+    Choice { label: "No", value: 0 },
+    Choice { label: "Sotto -30 dB", value: 30 },
+    Choice { label: "Sotto -40 dB", value: 40 },
+    Choice { label: "Sotto -50 dB", value: 50 },
 ];
 const ENCODING: &[Choice] = &[
     Choice { label: "UTF-8", value: 0 },
@@ -174,10 +181,20 @@ const IMAGE_SIZE: OptionDef = pick(Opt::MaxSide, "Dimensioni", "Lato lungo massi
 const PAGE: OptionDef = pick(Opt::PageSize, "Formato pagina", "", PAGE_SIZE, 0);
 const PASSWORD: OptionDef = OptionDef { opt: Opt::Password, title: "Password del PDF", note: "Vuota = nessuna protezione", control: Control::Password, default: 0 };
 const PDF_DPI: OptionDef = pick(Opt::Dpi, "Risoluzione immagini", "Più dpi, più nitide e più pesanti", DPI, 144);
-const PDF_PAGES: OptionDef = pick(Opt::Pages, "Pagine", "", PAGES, 0);
+const PDF_PAGES: OptionDef = OptionDef {
+    opt: Opt::PageRange,
+    title: "Pagine",
+    note: "Vuoto = tutte. Per esempio 1-3,5 oppure 4-",
+    control: Control::Text { hint: "tutte, oppure 1-3,5" },
+    default: 0,
+};
 const ONE_PER_PAGE: OptionDef = sw(Opt::OnePerPage, "Una immagine per pagina", "Spenta: una sola immagine lunga", true);
 const OCR: OptionDef = sw(Opt::Ocr, "Leggi le scansioni (OCR)", "Solo dove manca il testo", true);
 const TABLES: OptionDef = sw(Opt::Tables, "Ricostruisci le tabelle", "Celle, sfondi e bordi", true);
+const COLUMNS: OptionDef = sw(Opt::Columns, "Tieni le colonne", "Il testo a colonne resta a colonne; spento va in colonna singola", true);
+const EMBED_FONTS: OptionDef = sw(Opt::EmbedFonts, "Incorpora i caratteri", "Il PDF si vede uguale ovunque e il testo si copia", true);
+const BOOKMARKS: OptionDef = sw(Opt::Bookmarks, "Conserva i segnalibri", "Dai titoli del documento", true);
+const PDF_A: OptionDef = sw(Opt::PdfA, "PDF/A per l'archivio", "PDF/A-1b: font incorporati, profilo colore, metadati", false);
 const TEXT_ENCODING: OptionDef = pick(Opt::Encoding, "Codifica", "Del file scritto", ENCODING, 0);
 const CSV_SEPARATOR: OptionDef = pick(Opt::CsvSeparator, "Separatore CSV", "", SEPARATOR, 0);
 const PRETTY_JSON: OptionDef = sw(Opt::PrettyJson, "Rendi leggibile il JSON", "Rientri e a capo", true);
@@ -186,6 +203,7 @@ const MP3_KBPS: OptionDef = pick(Opt::Mp3Kbps, "Qualità MP3", "", KBPS, 128);
 const AUDIO_CHANNELS: OptionDef = pick(Opt::Channels, "Canali", "", CHANNELS, 0);
 const NORMALIZE: OptionDef = sw(Opt::Normalize, "Normalizza il volume", "Porta il picco al massimo", false);
 const TRIM_START: OptionDef = OptionDef { opt: Opt::TrimStart, title: "Taglia l'inizio", note: "Secondi saltati all'inizio", control: Control::Range { min: 0, max: 30, unit: " s" }, default: 0 };
+const TRIM_SILENCE: OptionDef = pick(Opt::TrimSilence, "Taglia il silenzio iniziale", "Il resto resta com'è", SILENCE, 0);
 const KEEP_TAGS: OptionDef = sw(Opt::KeepTags, "Mantieni titolo e artista", "Tag del file", true);
 const HEIGHT: OptionDef = pick(Opt::VideoHeight, "Risoluzione", "Si rimpicciolisce, non si ingrandisce", VIDEO_HEIGHT, 0);
 const VIDEO_FPS: OptionDef = pick(Opt::Fps, "Fotogrammi al secondo", "Massimo", FPS, 0);
@@ -198,34 +216,48 @@ pub fn option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
         (Kind::Image, "ocr") => vec![],
         (Kind::Image, "jpeg" | "compress" | "pdf") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
         (Kind::Image, _) => vec![&IMAGE_SIZE, &STRAIGHTEN],
-        (Kind::Doc, "pdf") => vec![&PAGE, &PASSWORD],
+        (Kind::Doc, "pdf") => vec![&PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
         (Kind::Pdf, "jpg" | "png") => vec![&PDF_DPI, &PDF_PAGES, &ONE_PER_PAGE],
-        (Kind::Pdf, "docx") => vec![&OCR, &TABLES, &PDF_PAGES],
+        (Kind::Pdf, "docx") => vec![&OCR, &TABLES, &COLUMNS, &PDF_PAGES],
         (Kind::Pdf, "txt") => vec![&OCR, &PDF_PAGES],
-        (Kind::Text, "pdf") => vec![&PAGE],
+        (Kind::Text, "pdf") => vec![&PAGE, &EMBED_FONTS, &PDF_A],
         (Kind::Text, "csv") => vec![&TEXT_ENCODING, &CSV_SEPARATOR],
         (Kind::Text, "json") => vec![&TEXT_ENCODING, &PRETTY_JSON, &HEADER_ROW],
         (Kind::Text, "md" | "html") => vec![&TEXT_ENCODING, &HEADER_ROW],
         (Kind::Text, _) => vec![&TEXT_ENCODING],
-        (Kind::Audio | Kind::Video, "mp3") => vec![&MP3_KBPS, &AUDIO_CHANNELS, &NORMALIZE, &TRIM_START, &KEEP_TAGS],
-        (Kind::Audio, "wav") => vec![&AUDIO_CHANNELS, &NORMALIZE, &TRIM_START],
+        (Kind::Audio | Kind::Video, "mp3") => vec![&MP3_KBPS, &AUDIO_CHANNELS, &NORMALIZE, &TRIM_START, &TRIM_SILENCE, &KEEP_TAGS],
+        (Kind::Audio, "wav") => vec![&AUDIO_CHANNELS, &NORMALIZE, &TRIM_START, &TRIM_SILENCE],
         (Kind::Video, "mp4") => vec![&HEIGHT, &VIDEO_FPS, &MUTE, &FAST_START],
         _ => vec![],
     }
 }
 
+/// Come rispondere se il nome di uscita esiste già, nell'ordine in cui si mostrano.
+pub const EXISTS_CHOICES: &[(&str, Exists)] = &[
+    ("Aggiungi -2, -3…", Exists::Number),
+    ("Sostituisci il file", Exists::Replace),
+    ("Salta il file", Exists::Skip),
+    ("Chiedi ogni volta", Exists::Ask),
+];
+
 /// I valori scelti nel pannello.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug)]
 pub struct Values {
     nums: Vec<(Opt, u32)>,
-    pub password: String,
-    /// Se il nome esiste già, sostituisce il file invece di aggiungere -2, -3…
-    pub overwrite: bool,
+    texts: Vec<(Opt, String)>,
+    /// Se il nome esiste già.
+    pub exists: Exists,
+}
+
+impl Default for Values {
+    fn default() -> Self {
+        Values::new()
+    }
 }
 
 impl Values {
     pub const fn new() -> Self {
-        Values { nums: Vec::new(), password: String::new(), overwrite: false }
+        Values { nums: Vec::new(), texts: Vec::new(), exists: Exists::Number }
     }
 
     pub fn get(&self, def: &OptionDef) -> u32 {
@@ -239,16 +271,37 @@ impl Values {
         }
     }
 
+    /// Il testo di un'opzione `Text` o `Password` (vuoto se non scritto).
+    pub fn text(&self, def: &OptionDef) -> &str {
+        self.text_of(def.opt)
+    }
+
+    fn text_of(&self, opt: Opt) -> &str {
+        self.texts.iter().find(|(o, _)| *o == opt).map(|(_, t)| t.as_str()).unwrap_or("")
+    }
+
+    pub fn set_text(&mut self, def: &OptionDef, text: &str) {
+        match self.texts.iter_mut().find(|(o, _)| *o == def.opt) {
+            Some(slot) => slot.1 = text.to_string(),
+            None => self.texts.push((def.opt, text.to_string())),
+        }
+    }
+
     fn num(&self, opt: Opt, default: u32) -> u32 {
         self.nums.iter().find(|(o, _)| *o == opt).map(|(_, v)| *v).unwrap_or(default)
     }
+}
+
+/// Se i valori scritti a mano sono usabili: dice cosa non va (per esempio le pagine).
+pub fn validate(values: &Values) -> Result<(), String> {
+    PageSel::parse(values.text_of(Opt::PageRange)).map(|_| ())
 }
 
 /// Le opzioni del motore per i valori scelti; le opzioni non scelte restano com'erano.
 pub fn options_from(values: &Values) -> engine::Options {
     let mut o = engine::Options::default();
     let on = |opt: Opt, default: bool| values.num(opt, default as u32) != 0;
-    o.overwrite = values.overwrite;
+    o.exists = values.exists;
     o.straighten = on(Opt::Straighten, true);
     o.white_background = on(Opt::WhiteBackground, true);
     o.max_side = Some(values.num(Opt::MaxSide, 0)).filter(|v| *v > 0);
@@ -257,9 +310,14 @@ pub fn options_from(values: &Values) -> engine::Options {
         2 => PageSize::Letter,
         _ => PageSize::A4,
     };
-    o.password = Some(values.password.clone()).filter(|p| !p.is_empty());
+    o.password = Some(values.text_of(Opt::Password).to_string()).filter(|p| !p.is_empty());
     o.dpi = Some(values.num(Opt::Dpi, 144));
-    o.first_pages = Some(values.num(Opt::Pages, 0) as usize).filter(|v| *v > 0);
+    o.pages = PageSel::parse(values.text_of(Opt::PageRange)).ok().flatten();
+    o.columns = on(Opt::Columns, true);
+    o.embed_fonts = on(Opt::EmbedFonts, true);
+    o.bookmarks = on(Opt::Bookmarks, true);
+    o.pdfa = on(Opt::PdfA, false);
+    o.trim_silence_db = Some(values.num(Opt::TrimSilence, 0)).filter(|v| *v > 0);
     o.one_image_per_page = on(Opt::OnePerPage, true);
     o.ocr = on(Opt::Ocr, true);
     o.tables = on(Opt::Tables, true);
@@ -345,9 +403,9 @@ mod tests {
     fn every_option_has_a_working_default_and_reaches_the_engine() {
         let defs = every_def();
         let wanted = [
-            Opt::Straighten, Opt::WhiteBackground, Opt::MaxSide, Opt::PageSize, Opt::Password, Opt::Dpi, Opt::Pages,
-            Opt::OnePerPage, Opt::Ocr, Opt::Tables, Opt::Encoding, Opt::CsvSeparator, Opt::PrettyJson, Opt::HeaderRow,
-            Opt::Mp3Kbps, Opt::Channels, Opt::Normalize, Opt::TrimStart, Opt::KeepTags, Opt::VideoHeight, Opt::Fps,
+            Opt::Straighten, Opt::WhiteBackground, Opt::MaxSide, Opt::PageSize, Opt::Password, Opt::Dpi, Opt::PageRange,
+            Opt::OnePerPage, Opt::Ocr, Opt::Tables, Opt::Columns, Opt::EmbedFonts, Opt::Bookmarks, Opt::PdfA, Opt::Encoding, Opt::CsvSeparator, Opt::PrettyJson, Opt::HeaderRow,
+            Opt::Mp3Kbps, Opt::Channels, Opt::Normalize, Opt::TrimStart, Opt::TrimSilence, Opt::KeepTags, Opt::VideoHeight, Opt::Fps,
             Opt::Mute, Opt::FastStart,
         ];
         for opt in wanted {
@@ -370,13 +428,19 @@ mod tests {
                     assert!(def.default >= *min && def.default <= *max);
                     values.set(def, *max);
                 }
-                Control::Password => values.password = "segreto".into(),
+                Control::Text { .. } => values.set_text(def, "2-4"),
+                Control::Password => values.set_text(def, "segreto"),
             }
             assert_ne!(options_from(&values), base, "{:?} non arriva al motore", def.opt);
         }
         let mut values = Values::default();
-        values.overwrite = true;
-        assert!(options_from(&values).overwrite);
+        values.exists = Exists::Ask;
+        assert_eq!(options_from(&values).exists, Exists::Ask);
+        let mut values = Values::default();
+        values.set_text(&PDF_PAGES, "3-1");
+        assert!(validate(&values).is_err());
+        values.set_text(&PDF_PAGES, "1-3,5");
+        assert!(validate(&values).is_ok());
     }
 
     #[test]
@@ -409,7 +473,7 @@ mod tests {
         convert_one(&src, "md", 82, Some(&dest), &opts).unwrap();
         assert!(dest.join("nota-2.md").is_file());
         // Con «sostituisci» il file esistente viene rimpiazzato.
-        let replace = engine::Options { overwrite: true, ..opts };
+        let replace = engine::Options { exists: engine::Exists::Replace, ..opts };
         convert_one(&src, "md", 82, Some(&dest), &replace).unwrap();
         assert!(!dest.join("nota-3.md").exists());
         let _ = fs::remove_dir_all(&base);
