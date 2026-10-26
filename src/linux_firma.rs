@@ -8,7 +8,7 @@ use gtk4::{DrawingArea, Label, Orientation};
 /// Il logo con «real» davanti, alto quanto una riga di testo piccolo.
 fn logo_area() -> DrawingArea {
     const H: i32 = 18;
-    let scale = 0.34;
+    let scale = 0.27;
     let area = DrawingArea::new();
     area.set_content_height(H);
     area.set_content_width((logo::width(true) as f64 * scale).ceil() as i32);

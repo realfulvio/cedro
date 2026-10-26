@@ -34,7 +34,9 @@ pub unsafe fn draw(di: &DRAWITEMSTRUCT, bg: COLORREF, fg: COLORREF, primary: COL
     let top = rc.top + ((rc.bottom - rc.top) - tm.tmHeight) / 2;
     let baseline = (top + tm.tmAscent) as f32;
     let em = (tm.tmHeight - tm.tmInternalLeading) as f32;
-    let scale = em * 1.1 / cedro::logo::HEIGHT;
+    // Il logo alto quanto le lettere del testo: le aste (40 unità) come le maiuscole, i tratti sottili come il carattere.
+    let scale = em * 0.82 / cedro::logo::HEIGHT;
+    let gap = (em * 0.3).round() as i32;
 
     let mut x = rc.left;
     let text = |s: &str, color: COLORREF, x: &mut i32| {
@@ -49,11 +51,12 @@ pub unsafe fn draw(di: &DRAWITEMSTRUCT, bg: COLORREF, fg: COLORREF, primary: COL
         text(&format!("Cedro {}", cedro::update::CURRENT), primary, &mut x);
         text("  ·  ", fg, &mut x);
     }
-    text("Powered by Luca ", fg, &mut x);
+    text("Powered by Luca", fg, &mut x);
+    x += gap;
     let width = cedro::logo::width(true) * scale;
     crate::wingfx::draw_logo(hdc, x as f32, baseline, scale, true, primary, LEMON, REAL_GREY);
-    x += width.ceil() as i32;
-    text(" A.", fg, &mut x);
+    x += width.ceil() as i32 + gap;
+    text("A.", fg, &mut x);
     if !suffix.is_empty() {
         text(suffix, fg, &mut x);
     }
