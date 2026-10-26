@@ -7,7 +7,7 @@ use cedro::conversioni::{self, Control, OptionDef, Values, CATEGORIES, EXISTS_CH
 use cedro::{Exists, ExistsAsk, ExistsChoice};
 use cedro::{extension, kind_of, read_settings, Kind};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::Mutex;
 use windows::{
     core::*,
@@ -87,6 +87,128 @@ static FONT_BOLD: AtomicIsize = AtomicIsize::new(0);
 static FONT_TITLE: AtomicIsize = AtomicIsize::new(0);
 static FONT_SMALL: AtomicIsize = AtomicIsize::new(0);
 static DPI: AtomicIsize = AtomicIsize::new(96);
+
+/// Larghezza di progetto dell'area interna: la finestra non va sotto questa misura.
+const BASE_W: i32 = 900;
+/// Da questa altezza (in px di progetto) in giù, i controlli scendono quando la finestra si allunga.
+const SHIFT_FROM: i32 = 250;
+/// Misura che l'utente ha dato alla finestra trascinandone i bordi (area interna, px di progetto); 0 = mai ridimensionata.
+static USER_W: AtomicIsize = AtomicIsize::new(0);
+static USER_H: AtomicIsize = AtomicIsize::new(0);
+/// Quanto più larga e più alta della misura di progetto è la finestra, e come sono disposti ora i controlli.
+static EXTRA_X: AtomicIsize = AtomicIsize::new(0);
+static EXTRA_Y: AtomicIsize = AtomicIsize::new(0);
+/// Vero mentre è Cedro a ridimensionare la finestra: quel WM_SIZE non è una scelta dell'utente.
+static AUTO_SIZE: AtomicBool = AtomicBool::new(false);
+/// Vero quando la finestra è completa e può reagire al ridimensionamento.
+static READY: AtomicBool = AtomicBool::new(false);
+
+const WINDOW_STYLE_FULL: WINDOW_STYLE = WINDOW_STYLE(WS_OVERLAPPED.0 | WS_CAPTION.0 | WS_SYSMENU.0 | WS_MINIMIZEBOX.0 | WS_MAXIMIZEBOX.0 | WS_THICKFRAME.0);
+
+fn extra() -> (i32, i32) {
+    (EXTRA_X.load(Ordering::Relaxed) as i32, EXTRA_Y.load(Ordering::Relaxed) as i32)
+}
+
+/// La misura scelta dall'utente (larghezza, altezza dell'area interna in px di progetto), 0 se non l'ha mai cambiata.
+fn user_size() -> (i32, i32) {
+    (USER_W.load(Ordering::Relaxed) as i32, USER_H.load(Ordering::Relaxed) as i32)
+}
+
+/// Controlli che si allargano con la finestra.
+fn grows_wide(id: i32) -> bool {
+    matches!(id, ID_HEADER | ID_TITLE | ID_HINT | ID_DROP | ID_COUNT | ID_QUEUE | ID_CAP_FORMATS | ID_CAP_TOOLS | ID_CAP_OPTIONS | ID_QUALITY)
+}
+
+/// Controlli che restano attaccati al bordo destro.
+fn sticks_right(id: i32) -> bool {
+    matches!(id, ID_GO | ID_QUALITY_VALUE)
+}
+
+/// Dove va un controllo creato o messo al suo posto con le misure di progetto, tenuto conto dell'ingrandimento della finestra.
+fn adjust(id: i32, mut r: (i32, i32, i32, i32)) -> (i32, i32, i32, i32) {
+    if youtube_win::owns(id) {
+        return r;
+    }
+    let (dx, dy) = extra();
+    if grows_wide(id) {
+        r.2 += dx;
+    } else if sticks_right(id) {
+        r.0 += dx;
+    }
+    if id == ID_QUEUE || id == ID_SIDE {
+        r.3 += dy;
+    } else if r.1 >= SHIFT_FROM {
+        r.1 += dy;
+    }
+    r
+}
+
+/// Cambia l'ingrandimento della finestra e sposta di conseguenza i controlli già creati.
+unsafe fn set_extra(hwnd: HWND, nx: i32, ny: i32) {
+    let (ox, oy) = extra();
+    if (ox, oy) == (nx, ny) {
+        return;
+    }
+    let (ddx, ddy) = (px(nx) - px(ox), px(ny) - px(oy));
+    let limit = px(SHIFT_FROM + oy);
+    let mut next = GetWindow(hwnd, GW_CHILD).unwrap_or_default();
+    while !next.0.is_null() {
+        let c = next;
+        next = GetWindow(c, GW_HWNDNEXT).unwrap_or_default();
+        let id = GetDlgCtrlID(c);
+        if youtube_win::owns(id) {
+            continue;
+        }
+        let mut rc = RECT::default();
+        if GetWindowRect(c, &mut rc).is_err() {
+            continue;
+        }
+        let mut pt = POINT { x: rc.left, y: rc.top };
+        let _ = ScreenToClient(hwnd, &mut pt);
+        let (mut x, mut y, mut w, mut h) = (pt.x, pt.y, rc.right - rc.left, rc.bottom - rc.top);
+        if grows_wide(id) {
+            w += ddx;
+        } else if sticks_right(id) {
+            x += ddx;
+        }
+        if id == ID_QUEUE || id == ID_SIDE {
+            h += ddy;
+        } else if y >= limit {
+            y += ddy;
+        }
+        let _ = SetWindowPos(c, None, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    EXTRA_X.store(nx as isize, Ordering::Relaxed);
+    EXTRA_Y.store(ny as isize, Ordering::Relaxed);
+}
+
+/// L'altezza minima (area interna, px di progetto) della scheda dei file con le opzioni di ora.
+fn design_height() -> i32 {
+    let defs = defs_now();
+    let rows = (defs.len().min(OPT_MAX as usize) as i32 + 1) / 2;
+    let end = if defs.is_empty() { options_caption_y() } else { options_caption_y() + 18 + rows * 32 };
+    end + 10 + 196
+}
+
+/// Adatta l'ingrandimento alla misura scelta dall'utente e alle opzioni di ora.
+unsafe fn fit_extra(hwnd: HWND) {
+    let (uw, uh) = user_size();
+    set_extra(hwnd, (uw - BASE_W).max(0), (uh - design_height()).max(0));
+}
+
+/// Porta la finestra all'altezza interna `client_h` (px di progetto) e alla larghezza di ora, se non è ingrandita a tutto schermo.
+unsafe fn resize_client(hwnd: HWND, client_h: i32) {
+    if IsZoomed(hwnd).as_bool() {
+        return;
+    }
+    let (dx, _) = extra();
+    let mut rect = RECT { left: 0, top: 0, right: px(BASE_W + dx), bottom: px(client_h) };
+    let _ = AdjustWindowRect(&mut rect, WINDOW_STYLE_FULL, false);
+    AUTO_SIZE.store(true, Ordering::Relaxed);
+    let _ = SetWindowPos(hwnd, None, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    AUTO_SIZE.store(false, Ordering::Relaxed);
+    keep_on_screen(hwnd);
+}
 
 #[derive(Clone)]
 struct Entry {
@@ -191,7 +313,7 @@ unsafe fn create() -> Result<()> {
     FONT_TITLE.store(make_font(24, 700), Ordering::Relaxed);
     FONT_SMALL.store(make_font(13, 700), Ordering::Relaxed);
 
-    let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+    let style = WINDOW_STYLE_FULL;
     let mut rect = RECT { left: 0, top: 0, right: px(900), bottom: px(636) };
     let _ = AdjustWindowRect(&mut rect, style, false);
     let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
@@ -203,6 +325,10 @@ unsafe fn create() -> Result<()> {
         s.category = 0;
         s.action.clear();
         s.values = Values::new();
+    }
+    READY.store(false, Ordering::Relaxed);
+    for a in [&USER_W, &USER_H, &EXTRA_X, &EXTRA_Y] {
+        a.store(0, Ordering::Relaxed);
     }
     let hwnd = CreateWindowExW(
         WS_EX_ACCEPTFILES,
@@ -223,12 +349,14 @@ unsafe fn create() -> Result<()> {
     build(hwnd, instance);
     SendMessageW(item(hwnd, ID_SIDE), LB_SETCURSEL, Some(WPARAM(0)), Some(LPARAM(0)));
     render_category(hwnd);
+    READY.store(true, Ordering::Relaxed);
     let _ = SetForegroundWindow(hwnd);
     Ok(())
 }
 
 unsafe fn child(parent: HWND, instance: HINSTANCE, class: PCWSTR, text: &str, style: u32, id: i32, r: (i32, i32, i32, i32), f: HFONT) -> HWND {
     let text = HSTRING::from(text);
+    let r = adjust(id, r);
     let hwnd = CreateWindowExW(
         WINDOW_EX_STYLE::default(),
         class,
@@ -335,12 +463,13 @@ unsafe fn render_category(hwnd: HWND) {
     }
     let formats = conversioni::formats(cat.kind);
     let tools = conversioni::tools(cat.kind);
+    state().action = formats.first().map(|s| s.id.to_string()).unwrap_or_default();
+    fit_extra(hwnd);
     chips(hwnd, instance, formats, ID_FORMAT0, 274);
     chips(hwnd, instance, tools, ID_TOOL0, 328);
     let _ = ShowWindow(item(hwnd, ID_CAP_TOOLS), if tools.is_empty() { SW_HIDE } else { SW_SHOW });
     // Senza strumenti le opzioni salgono al loro posto, senza lasciare un buco.
     place(hwnd, ID_CAP_OPTIONS, (210, options_caption_y(), 670, 16));
-    state().action = formats.first().map(|s| s.id.to_string()).unwrap_or_default();
     refresh_options(hwnd);
     render_queue(hwnd);
 }
@@ -361,6 +490,7 @@ unsafe fn refresh_options(hwnd: HWND) {
             }
         }
     }
+    fit_extra(hwnd);
     let defs = defs_now();
     let _ = ShowWindow(item(hwnd, ID_CAP_OPTIONS), if defs.is_empty() { SW_HIDE } else { SW_SHOW });
     let (f, values) = (font(&FONT), state().values.clone());
@@ -417,6 +547,7 @@ fn options_caption_y() -> i32 {
 }
 
 unsafe fn place(hwnd: HWND, id: i32, r: (i32, i32, i32, i32)) {
+    let r = adjust(id, r);
     let _ = SetWindowPos(item(hwnd, id), None, px(r.0), px(r.1), px(r.2), px(r.3), SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
@@ -437,11 +568,7 @@ unsafe fn layout_bottom(hwnd: HWND, top: i32) {
     place(hwnd, ID_POWERED, (210, top + 160, 420, 20));
     let height = top + 196;
     place(hwnd, ID_SIDE, (0, 40, 190, height - 40));
-    let style = WINDOW_STYLE(GetWindowLongW(hwnd, GWL_STYLE) as u32);
-    let mut rect = RECT { left: 0, top: 0, right: px(900), bottom: px(height) };
-    let _ = AdjustWindowRect(&mut rect, style, false);
-    let _ = SetWindowPos(hwnd, None, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-    keep_on_screen(hwnd);
+    resize_client(hwnd, height + extra().1);
 }
 
 /// Se la finestra, cresciuta, esce in fondo dall'area di lavoro (sotto la barra delle applicazioni), sale quanto basta.
@@ -836,6 +963,32 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                     }
                 }
                 _ => {}
+            }
+            LRESULT(0)
+        }
+        WM_GETMINMAXINFO => {
+            if READY.load(Ordering::Relaxed) {
+                let design = if youtube_win::active() { youtube_win::min_height() } else { design_height() };
+                let mut rect = RECT { left: 0, top: 0, right: px(BASE_W), bottom: px(design) };
+                let _ = AdjustWindowRect(&mut rect, WINDOW_STYLE_FULL, false);
+                let info = &mut *(lparam.0 as *mut MINMAXINFO);
+                info.ptMinTrackSize = POINT { x: rect.right - rect.left, y: rect.bottom - rect.top };
+            }
+            LRESULT(0)
+        }
+        WM_SIZE => {
+            if READY.load(Ordering::Relaxed) && wparam.0 as u32 != SIZE_MINIMIZED && !AUTO_SIZE.load(Ordering::Relaxed) {
+                // L'utente ha trascinato un bordo (o ingrandito la finestra): i controlli si adattano.
+                let (w, h) = ((lparam.0 & 0xffff) as i32, ((lparam.0 >> 16) & 0xffff) as i32);
+                USER_W.store((w * 96 / dpi() as i32) as isize, Ordering::Relaxed);
+                USER_H.store((h * 96 / dpi() as i32) as isize, Ordering::Relaxed);
+                if youtube_win::active() {
+                    youtube_win::layout(hwnd);
+                } else {
+                    fit_extra(hwnd);
+                    place(hwnd, ID_SIDE, (0, 40, 190, design_height() - 40));
+                }
+                let _ = InvalidateRect(Some(hwnd), None, true);
             }
             LRESULT(0)
         }
