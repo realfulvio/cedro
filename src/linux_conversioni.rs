@@ -350,7 +350,7 @@ fn start(ui: &Rc<Ui>) {
     ui.bar.remove_css_class("cedro-done");
     ui.bar.remove_css_class("cedro-error");
     ui.bar.set_fraction(0.0);
-    ui.bar.set_visible(true);
+    ui.bar.set_visible(read_settings().progress);
     std::thread::spawn(move || {
         let total = files.len();
         let name = |p: &std::path::Path| p.file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string();
@@ -431,8 +431,13 @@ fn start(ui: &Rc<Ui>) {
             if !ui.bar.has_css_class("cedro-error") {
                 // A lavoro finito la linea resta verde un secondo, poi sparisce.
                 ui.bar.add_css_class("cedro-done");
+                // Se nel frattempo è partito un altro lavoro la linea non è più verde e resta.
                 let bar = ui.bar.clone();
-                glib::timeout_add_local_once(Duration::from_millis(1200), move || bar.set_visible(false));
+                glib::timeout_add_local_once(Duration::from_millis(1200), move || {
+                    if bar.has_css_class("cedro-done") {
+                        bar.set_visible(false);
+                    }
+                });
             }
         } else if total == 1 {
             // Un file solo non dice quanto manca: la linea scorre.
