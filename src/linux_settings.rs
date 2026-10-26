@@ -85,6 +85,7 @@ const MAX_PAGES: [u32; 4] = [50, 100, 300, 0];
 const LANGS: [&str; 3] = ["auto", "it", "en"];
 const SECTIONS: [&str; 8] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni"];
 const MARK: &[u8] = include_bytes!("../docs/mark.png");
+const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
 
 /// Una riga di impostazione: titolo e descrizione a sinistra, il controllo a destra.
 fn setting(title: &str, desc: &str, control: &impl IsA<gtk4::Widget>) -> HBox {
