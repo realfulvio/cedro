@@ -1,10 +1,11 @@
 //! Finestre Impostazioni e Guida su GNOME e Plasma, con i colori del Comune di Bondeno.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 
-use cedro::wheelgeom::{slice_bounds, R0, R1, WHEEL};
+use cedro::guida;
+use cedro::wheelgeom::WHEEL;
 use cedro::wheelgfx;
 use cedro::{append_log, read_settings, write_settings, Settings};
 use gtk4::cairo::{Context, FontSlant, FontWeight, ImageSurface};
@@ -789,75 +790,23 @@ fn shots(window: &Window, nav: &gtk4::ListBox, dir: std::path::PathBuf) {
     step(window.clone(), nav.clone(), dir, 0);
 }
 
-struct Demo {
-    key: &'static str,
-    title: &'static str,
-    detail: &'static str,
-    caption: &'static str,
-    pick: usize,
-    labels: &'static [&'static str],
+/// Il disegno della Guida su cairo: le primitive di `cedro::guida`.
+struct CairoCanvas<'a> {
+    cr: &'a Context,
+    cache: &'a mut Vec<((usize, i32), ImageSurface)>,
 }
 
-const DEMOS: [Demo; 3] = [
-    Demo { key: "Shift", title: "Converti", detail: "Cambia formato: JPEG, PDF, MP4…", caption: "CONVERSIONE", pick: 2, labels: &["PDF", "PNG", "JPEG", "WebP", "BMP", "GIF", "TIFF"] },
-    Demo { key: "Ctrl", title: "Modifica", detail: "Comprimi, ruota, OCR, metadati…", caption: "STRUMENTI", pick: 5, labels: &["Comprimi", "Scala", "B/N", "Ruota", "Metadati", "OCR", "MAIUSC."] },
-    Demo { key: "Alt", title: "Azioni sul file", detail: "Duplica, copia il percorso, ZIP", caption: "AZIONI", pick: 1, labels: &["Duplica", "Percorso", "ZIP"] },
-];
-
-const CYCLE_MS: u128 = 4800;
-const SHOWN: f64 = 330.0;
-
-fn ease(t: f64) -> f64 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+fn set_font(cr: &Context, size: f64, bold: bool) {
+    cr.select_font_face("Titillium Web", FontSlant::Normal, if bold { FontWeight::Bold } else { FontWeight::Normal });
+    cr.set_font_size(size);
 }
 
-fn lerp(a: (f64, f64), b: (f64, f64), t: f64) -> (f64, f64) {
-    let t = ease(t);
-    (a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t)
-}
-
-/// Opacità della ruota, fetta accesa e posizione del cursore al millisecondo `t` del ciclo.
-fn scene(mode: usize, t: f64, size: (f64, f64)) -> (f64, bool, (f64, f64)) {
-    let center = (size.0 / 2.0, size.1 / 2.0);
-    let rest = (size.0 - 50.0, size.1 - 40.0);
-    let on_file = (center.0 + 28.0, center.1 + 28.0);
-    let demo = &DEMOS[mode];
-    let k = SHOWN / WHEEL as f64;
-    let (a0, a1) = slice_bounds(demo.pick, demo.labels.len());
-    let mid = ((a0 + a1) / 2.0) as f64;
-    let r = ((R0 + R1) / 2.0) as f64 * k;
-    let target = (center.0 + r * mid.cos(), center.1 + r * mid.sin());
-    let alpha = if t < 1100.0 {
-        0.0
-    } else if t < 1450.0 {
-        (t - 1100.0) / 350.0
-    } else if t < 3800.0 {
-        1.0
-    } else if t < 4150.0 {
-        1.0 - (t - 3800.0) / 350.0
-    } else {
-        0.0
-    };
-    let cursor = if t < 1000.0 {
-        lerp(rest, on_file, t / 1000.0)
-    } else if t < 1900.0 {
-        on_file
-    } else if t < 2500.0 {
-        lerp(on_file, target, (t - 1900.0) / 600.0)
-    } else if t < 3800.0 {
-        target
-    } else {
-        lerp(target, rest, (t - 3800.0) / 700.0)
-    };
-    (alpha, (2500.0..3800.0).contains(&t), cursor)
-}
-
-fn rgb(cr: &Context, c: (u8, u8, u8), alpha: f64) {
-    cr.set_source_rgba(c.0 as f64 / 255.0, c.1 as f64 / 255.0, c.2 as f64 / 255.0, alpha);
+fn rgb(cr: &Context, c: (u8, u8, u8)) {
+    cr.set_source_rgb(c.0 as f64 / 255.0, c.1 as f64 / 255.0, c.2 as f64 / 255.0);
 }
 
 fn rounded(cr: &Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
+    let r = r.min(w / 2.0).min(h / 2.0);
     cr.new_sub_path();
     cr.arc(x + w - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
     cr.arc(x + w - r, y + h - r, r, 0.0, std::f64::consts::FRAC_PI_2);
@@ -866,21 +815,120 @@ fn rounded(cr: &Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
     cr.close_path();
 }
 
-fn text(cr: &Context, size: f64, bold: bool, x: f64, y: f64, s: &str) {
-    let weight = if bold { FontWeight::Bold } else { FontWeight::Normal };
-    cr.select_font_face("Titillium Web", FontSlant::Normal, weight);
-    cr.set_font_size(size);
-    cr.move_to(x, y);
-    let _ = cr.show_text(s);
-}
+impl guida::Canvas for CairoCanvas<'_> {
+    fn fill(&mut self, x: f32, y: f32, w: f32, h: f32, c: guida::Rgb) {
+        rgb(self.cr, c);
+        self.cr.rectangle(x as f64, y as f64, w as f64, h as f64);
+        let _ = self.cr.fill();
+    }
 
-fn text_centered(cr: &Context, size: f64, bold: bool, cx: f64, cy: f64, s: &str) {
-    let weight = if bold { FontWeight::Bold } else { FontWeight::Normal };
-    cr.select_font_face("Titillium Web", FontSlant::Normal, weight);
-    cr.set_font_size(size);
-    if let Ok(e) = cr.text_extents(s) {
-        cr.move_to(cx - e.width() / 2.0 - e.x_bearing(), cy - e.height() / 2.0 - e.y_bearing());
-        let _ = cr.show_text(s);
+    fn round(&mut self, x: f32, y: f32, w: f32, h: f32, radius: f32, fill: Option<guida::Rgb>, line: Option<guida::Rgb>) {
+        let cr = self.cr;
+        // Il bordo sta dentro il riquadro, come su Windows.
+        let (x, y, w, h) = (x as f64 + 0.5, y as f64 + 0.5, w as f64 - 1.0, h as f64 - 1.0);
+        rounded(cr, x, y, w, h, radius as f64);
+        if let Some(c) = fill {
+            rgb(cr, c);
+            let _ = cr.fill_preserve();
+        }
+        if let Some(c) = line {
+            rgb(cr, c);
+            cr.set_line_width(1.0);
+            let _ = cr.stroke_preserve();
+        }
+        cr.new_path();
+    }
+
+    fn text(&mut self, s: &str, x: f32, y: f32, w: f32, h: f32, size: f32, bold: bool, c: guida::Rgb, align: guida::Align, wrap: bool) {
+        let cr = self.cr;
+        set_font(cr, size as f64, bold);
+        rgb(cr, c);
+        let (x, y, w, h) = (x as f64, y as f64, w as f64, h as f64);
+        let line_h = size as f64 * 1.3;
+        let mut lines: Vec<String> = Vec::new();
+        if wrap {
+            let mut cur = String::new();
+            for word in s.split(' ') {
+                let next = if cur.is_empty() { word.to_string() } else { format!("{cur} {word}") };
+                if !cur.is_empty() && cr.text_extents(&next).map(|e| e.x_advance() > w).unwrap_or(false) {
+                    lines.push(std::mem::take(&mut cur));
+                    cur = word.to_string();
+                } else {
+                    cur = next;
+                }
+            }
+            lines.push(cur);
+        } else {
+            lines.push(s.to_string());
+        }
+        let fe = cr.font_extents().ok();
+        let ascent = fe.map(|f| f.ascent()).unwrap_or(size as f64 * 0.8);
+        let descent = fe.map(|f| f.descent()).unwrap_or(size as f64 * 0.2);
+        let top = if wrap { y } else { y + (h - (ascent + descent)) / 2.0 };
+        for (i, line) in lines.iter().enumerate() {
+            let adv = cr.text_extents(line).map(|e| e.x_advance()).unwrap_or(0.0);
+            let lx = match align {
+                guida::Align::Left => x,
+                guida::Align::Center => x + (w - adv) / 2.0,
+                guida::Align::Right => x + w - adv,
+            };
+            cr.move_to(lx, top + ascent + i as f64 * line_h);
+            let _ = cr.show_text(line);
+        }
+    }
+
+    fn text_width(&mut self, s: &str, size: f32, bold: bool) -> f32 {
+        set_font(self.cr, size as f64, bold);
+        self.cr.text_extents(s).map(|e| e.x_advance() as f32).unwrap_or(0.0)
+    }
+
+    fn poly(&mut self, pts: &[(f32, f32)], fill: guida::Rgb, line: guida::Rgb) {
+        let cr = self.cr;
+        for (i, p) in pts.iter().enumerate() {
+            if i == 0 {
+                cr.move_to(p.0 as f64, p.1 as f64);
+            } else {
+                cr.line_to(p.0 as f64, p.1 as f64);
+            }
+        }
+        cr.close_path();
+        rgb(cr, fill);
+        let _ = cr.fill_preserve();
+        rgb(cr, line);
+        cr.set_line_width(1.0);
+        let _ = cr.stroke();
+    }
+
+    fn clip(&mut self, x: f32, y: f32, w: f32, h: f32) {
+        let _ = self.cr.save();
+        self.cr.rectangle(x as f64, y as f64, w as f64, h as f64);
+        self.cr.clip();
+    }
+
+    fn unclip(&mut self) {
+        let _ = self.cr.restore();
+    }
+
+    fn wheel(&mut self, n: usize, hover: i32, cx: f32, cy: f32, size: f32, alpha: f32) {
+        let key = (n, hover);
+        if !self.cache.iter().any(|(k, _)| *k == key) {
+            if let Some(img) = wheel_image(n, hover, 1) {
+                self.cache.push((key, img));
+            }
+        }
+        let Some((_, img)) = self.cache.iter().find(|(k, _)| *k == key) else { return };
+        let k = size as f64 / WHEEL as f64;
+        let _ = self.cr.save();
+        self.cr.translate(cx as f64 - size as f64 / 2.0, cy as f64 - size as f64 / 2.0);
+        self.cr.scale(k, k);
+        let _ = self.cr.set_source_surface(img, 0.0, 0.0);
+        let _ = self.cr.paint_with_alpha(alpha as f64);
+        let _ = self.cr.restore();
+    }
+
+    fn logo(&mut self, left: f32, baseline: f32, scale: f32, ink: guida::Rgb, accent: guida::Rgb, real: guida::Rgb) {
+        let f = |c: guida::Rgb| (c.0 as f64 / 255.0, c.1 as f64 / 255.0, c.2 as f64 / 255.0);
+        cedro::logo::draw_cairo(self.cr, left as f64, baseline as f64, scale as f64, true, cedro::logo::Colors { ink: f(ink), accent: f(accent), real: f(real) });
     }
 }
 
@@ -898,81 +946,6 @@ fn wheel_image(n: usize, hover: i32, scale: u32) -> Option<ImageSurface> {
     Some(surface)
 }
 
-fn draw_guide(cr: &Context, width: f64, height: f64, elapsed: u128, cache: &mut Vec<((usize, i32), ImageSurface)>) {
-    rgb(cr, (0xFF, 0xFF, 0xFF), 1.0);
-    let _ = cr.paint();
-    let mode = (elapsed / CYCLE_MS) as usize % DEMOS.len();
-    let t = (elapsed % CYCLE_MS) as f64;
-    rgb(cr, wheelgfx::PRIMARY, 1.0);
-    text(cr, 22.0, true, 28.0, 44.0, "Cosa fa la ruota di Cedro");
-    rgb(cr, wheelgfx::MUTED, 1.0);
-    text(cr, 14.0, false, 28.0, 68.0, "Clic destro sul file, poi tieni premuto un tasto.");
-    for (i, demo) in DEMOS.iter().enumerate() {
-        let y = 100.0 + i as f64 * 92.0;
-        if i == mode {
-            rgb(cr, (0xEB, 0xEE, 0xF0), 1.0);
-            rounded(cr, 20.0, y, 340.0, 78.0, 10.0);
-            let _ = cr.fill();
-        }
-        rgb(cr, if i == mode { wheelgfx::HOVER } else { wheelgfx::PRIMARY }, 1.0);
-        rounded(cr, 32.0, y + 18.0, 74.0, 42.0, 8.0);
-        let _ = cr.fill();
-        rgb(cr, (0xFF, 0xFF, 0xFF), 1.0);
-        text_centered(cr, 16.0, true, 69.0, y + 39.0, demo.key);
-        rgb(cr, wheelgfx::TEXT, 1.0);
-        text(cr, 18.0, true, 124.0, y + 33.0, demo.title);
-        rgb(cr, wheelgfx::MUTED, 1.0);
-        text(cr, 13.0, false, 124.0, y + 56.0, demo.detail);
-    }
-    // Palco blu scuro dietro la ruota.
-    let (sx, sy, sw, sh) = (width - 384.0, 24.0, 364.0, height - 48.0);
-    rgb(cr, (0x00, 0x22, 0x4A), 1.0);
-    rounded(cr, sx, sy, sw, sh, 14.0);
-    let _ = cr.fill();
-    let (alpha, lit, cursor) = scene(mode, t, (sw, sh));
-    let demo = &DEMOS[mode];
-    if alpha > 0.0 {
-        let hover = if lit { demo.pick as i32 } else { -1 };
-        let key = (mode, hover);
-        if !cache.iter().any(|(k, _)| *k == key) {
-            if let Some(img) = wheel_image(demo.labels.len(), hover, 1) {
-                cache.push((key, img));
-            }
-        }
-        let _ = cr.save();
-        cr.translate(sx + sw / 2.0, sy + sh / 2.0);
-        let k = SHOWN / WHEEL as f64;
-        cr.scale(k, k);
-        if let Some((_, img)) = cache.iter().find(|(kk, _)| *kk == key) {
-            let _ = cr.set_source_surface(img, -(WHEEL as f64) / 2.0, -(WHEEL as f64) / 2.0);
-            let _ = cr.paint_with_alpha(alpha);
-        }
-        let n = demo.labels.len();
-        for (i, label) in demo.labels.iter().enumerate() {
-            let (a0, a1) = slice_bounds(i, n);
-            let mid = ((a0 + a1) / 2.0) as f64;
-            let radius = ((R0 + R1) / 2.0) as f64;
-            let on = lit && i == demo.pick;
-            rgb(cr, if on { wheelgfx::TEXT_ON_HOVER } else { wheelgfx::TEXT }, alpha);
-            text_centered(cr, if n > 6 { 15.0 } else { 18.0 }, true, radius * mid.cos(), radius * mid.sin(), label);
-        }
-        rgb(cr, wheelgfx::MUTED, alpha);
-        text_centered(cr, 12.0, true, 0.0, -20.0, demo.caption);
-        rgb(cr, wheelgfx::NAVY, alpha);
-        text_centered(cr, 17.0, true, 0.0, 2.0, if lit { demo.labels[demo.pick] } else { "Annulla" });
-        let _ = cr.restore();
-    }
-    // Un piccolo cursore.
-    let (cx, cy) = (sx + cursor.0, sy + cursor.1);
-    rgb(cr, (0xFF, 0xFF, 0xFF), 0.95);
-    cr.arc(cx, cy, 7.0, 0.0, std::f64::consts::TAU);
-    let _ = cr.fill();
-    rgb(cr, wheelgfx::PRIMARY, 1.0);
-    cr.arc(cx, cy, 7.0, 0.0, std::f64::consts::TAU);
-    cr.set_line_width(2.0);
-    let _ = cr.stroke();
-}
-
 /// Apre la Guida animata, o porta avanti quella già aperta.
 pub fn open_guide(app: &Application) {
     for window in app.windows() {
@@ -981,19 +954,50 @@ pub fn open_guide(app: &Application) {
             return;
         }
     }
-    let window = titled(app, "Guida di Cedro", 780, 440);
+    let window = titled(app, "Guida di Cedro", guida::W as i32, guida::H as i32);
     let area = DrawingArea::new();
-    area.set_content_width(780);
-    area.set_content_height(440);
+    area.set_content_width(guida::W as i32);
+    area.set_content_height(guida::H as i32);
     let started = Instant::now();
+    let now = move || started.elapsed().as_millis() as u64;
+    let tour = Rc::new(Cell::new(guida::Tour::new(0)));
     let cache: Rc<RefCell<Vec<((usize, i32), ImageSurface)>>> = Rc::new(RefCell::new(Vec::new()));
-    area.set_draw_func(move |_, cr, w, h| {
-        draw_guide(cr, w as f64, h as f64, started.elapsed().as_millis(), &mut cache.borrow_mut());
-    });
+    {
+        let tour = tour.clone();
+        area.set_draw_func(move |_, cr, _, _| {
+            let mut cache = cache.borrow_mut();
+            let mut canvas = CairoCanvas { cr, cache: &mut cache };
+            guida::draw(&mut canvas, &tour.get(), now());
+        });
+    }
+    let click = gtk4::GestureClick::new();
+    {
+        let tour = tour.clone();
+        let window = window.clone();
+        click.connect_released(move |_, _, x, y| {
+            let mut t = tour.get();
+            match guida::hit(x as f32, y as f32, t.page) {
+                Some(guida::Hit::Page(i)) => t.goto(i, now()),
+                Some(guida::Hit::Prev) => t.goto(t.page + guida::PAGE_COUNT - 1, now()),
+                Some(guida::Hit::Next) if t.is_last() => {
+                    window.close();
+                    return;
+                }
+                Some(guida::Hit::Next) => t.goto(t.page + 1, now()),
+                Some(guida::Hit::Row(i)) => t.show_row(i, now()),
+                None => {}
+            }
+            tour.set(t);
+        });
+    }
+    area.add_controller(click);
     window.set_child(Some(&area));
     let weak = area.downgrade();
     glib::timeout_add_local(std::time::Duration::from_millis(33), move || match weak.upgrade() {
         Some(area) if area.is_mapped() => {
+            let mut t = tour.get();
+            t.tick(now());
+            tour.set(t);
             area.queue_draw();
             glib::ControlFlow::Continue
         }
