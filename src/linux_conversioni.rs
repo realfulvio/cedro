@@ -779,7 +779,7 @@ fn shots(ui: &Rc<Ui>, dir: std::path::PathBuf) {
 }
 
 #[cfg(debug_assertions)]
-fn save_png(window: &gtk4::Window, path: &std::path::Path) -> Result<(), String> {
+pub(crate) fn save_png(window: &gtk4::Window, path: &std::path::Path) -> Result<(), String> {
     use gtk4::gsk::prelude::*;
     let (w, h) = (window.width(), window.height());
     let paintable = gtk4::WidgetPaintable::new(Some(window));

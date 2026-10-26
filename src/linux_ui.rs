@@ -680,7 +680,7 @@ fn daily_updates() {
 }
 
 /// Dal menu risponde sempre, anche quando non c'è niente di nuovo.
-fn check_updates(manual: bool) {
+pub(crate) fn check_updates(manual: bool) {
     std::thread::spawn(move || check_updates_now(manual));
 }
 
