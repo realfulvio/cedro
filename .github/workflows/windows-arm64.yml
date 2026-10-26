@@ -127,6 +127,10 @@ jobs:
         shell: pwsh
         run: powershell -File trascrivi\build.ps1 -SoloCpu -Out ${{ github.workspace }}\dist-motori
 
+      - name: Prova di trascrizione (voce sintetica)
+        shell: pwsh
+        run: powershell -File trascrivi\prova.ps1 -Dir ${{ github.workspace }}\dist-motori
+
       - uses: actions/upload-artifact@v4
         with:
           name: motori-arm64
@@ -186,6 +190,10 @@ jobs:
       - name: Motore Vulkan
         shell: pwsh
         run: powershell -File trascrivi\build.ps1 -SoloVulkan -Out ${{ github.workspace }}\dist-motori
+
+      - name: "Prova di trascrizione (senza scheda video, ripiega sul processore)"
+        shell: pwsh
+        run: powershell -File trascrivi\prova.ps1 -Dir ${{ github.workspace }}\dist-motori
 
       - uses: actions/upload-artifact@v4
         with:
