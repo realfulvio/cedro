@@ -1021,7 +1021,7 @@ fn read_text(path: &Path) -> CedroResult<String> {
     Ok(decode_text(&bytes))
 }
 
-fn decode_text(bytes: &[u8]) -> String {
+pub(crate) fn decode_text(bytes: &[u8]) -> String {
     if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
         return String::from_utf8_lossy(&bytes[3..]).into_owned();
     }

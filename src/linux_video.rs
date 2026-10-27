@@ -143,12 +143,12 @@ impl VideoSink for H264Aac {
     ) -> Result<Self, String> {
         let (out_w, out_h) = crate::sink::target_size(width, height);
         let shrinking = (out_w, out_h) != (width, height);
-        if width < 2 || height < 2 || (!shrinking && (width % 2 == 1 || height % 2 == 1)) {
+        if width < 2 || height < 2 || (!grabbing() && !shrinking && (width % 2 == 1 || height % 2 == 1)) {
             return Err(format!("il video è {width}×{height}: H.264 vuole misure pari"));
         }
         let shape = crate::sink::shape();
         let gate = crate::sink::FrameGate::new();
-        let audio = if shape.mute { None } else { audio };
+        let audio = if shape.mute || grabbing() { None } else { audio };
         let audio = match audio {
             Some((rate, channels)) => Some(open_aac(rate, channels)?),
             None => None,
@@ -186,6 +186,9 @@ impl VideoSink for H264Aac {
         time: i64,
         duration: i64,
     ) -> Result<(), String> {
+        if grabbing() {
+            return grab_frame(y, u, v, width, height, time);
+        }
         if width != self.src_w || height != self.src_h {
             return Err("il video cambia dimensione".into());
         }
@@ -228,7 +231,7 @@ impl VideoSink for H264Aac {
     }
 
     fn write_pcm(&mut self, samples: &[i16], channels: u16, rate: u32) -> Result<(), String> {
-        if samples.is_empty() || self.muted {
+        if samples.is_empty() || self.muted || grabbing() {
             return Ok(());
         }
         if self.audio.is_none() {
@@ -244,6 +247,9 @@ impl VideoSink for H264Aac {
     }
 
     fn finish(mut self) -> Result<(), String> {
+        if grabbing() {
+            return Err(GRAB_DONE.into());
+        }
         // Il codificatore della scheda video risponde con qualche fotogramma di ritardo: si svuota.
         #[cfg(target_os = "android")]
         {
@@ -665,13 +671,14 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
             header.extend_from_slice(nal);
         }
     }
-    let mut decoder = Decoder::new().map_err(|err| format!("H.264 non letto: {err}"))?;
+    let mut decoder = h264_decoder()?;
     if !header.is_empty() {
         let _ = decoder.decode(&header);
     }
     let mut sink = None;
     let mut queued = Vec::new();
     let mut shown = 0u32;
+    let mut last = (0i64, 333_333i64);
     for index in 1..=count {
         let Some(sample) = reader
             .read_sample(track_id, index)
@@ -685,16 +692,18 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         }
         let duration = ticks(u64::from(sample.duration), 1, timescale).max(1);
         let time = ticks(sample.start_time, 1, timescale);
+        last = (time, duration);
         if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
             let owned = owned_frame(&frame)?;
             feed_frame(&mut sink, &mut queued, output, &owned, duration, time, false, 0, 0)?;
             shown += 1;
         }
     }
+    // Con i fotogrammi B il decodificatore ne trattiene qualcuno: escono qui, dopo l'ultimo.
     if let Ok(rest) = decoder.flush_remaining() {
-        for frame in &rest {
+        for (k, frame) in rest.iter().enumerate() {
             let owned = owned_frame(frame)?;
-            feed_frame(&mut sink, &mut queued, output, &owned, 333_333, 0, false, 0, 0)?;
+            feed_frame(&mut sink, &mut queued, output, &owned, last.1, last.0 + last.1 * (k as i64 + 1), false, 0, 0)?;
             shown += 1;
         }
     }
@@ -759,13 +768,14 @@ fn iso_lenient(input: &Path, output: &Path) -> Result<(), String> {
             header.extend_from_slice(nal);
         }
     }
-    let mut decoder = Decoder::new().map_err(|err| format!("H.264 non letto: {err}"))?;
+    let mut decoder = h264_decoder()?;
     if !header.is_empty() {
         let _ = decoder.decode(&header);
     }
     let mut sink = None;
     let mut queued = Vec::new();
     let mut shown = 0u32;
+    let mut last = (0i64, 333_333i64);
     let mut sample_bytes = Vec::new();
     for sample in &video.samples {
         sample_bytes.resize(sample.size as usize, 0);
@@ -777,16 +787,18 @@ fn iso_lenient(input: &Path, output: &Path) -> Result<(), String> {
         }
         let duration = ticks(u64::from(sample.duration), 1, video.timescale).max(1);
         let time = ticks(sample.start, 1, video.timescale);
+        last = (time, duration);
         if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
             let owned = owned_frame(&frame)?;
             feed_frame(&mut sink, &mut queued, output, &owned, duration, time, false, 0, 0)?;
             shown += 1;
         }
     }
+    // Con i fotogrammi B il decodificatore ne trattiene qualcuno: escono qui, dopo l'ultimo.
     if let Ok(rest) = decoder.flush_remaining() {
-        for frame in &rest {
+        for (k, frame) in rest.iter().enumerate() {
             let owned = owned_frame(frame)?;
-            feed_frame(&mut sink, &mut queued, output, &owned, 333_333, 0, false, 0, 0)?;
+            feed_frame(&mut sink, &mut queued, output, &owned, last.1, last.0 + last.1 * (k as i64 + 1), false, 0, 0)?;
             shown += 1;
         }
     }
@@ -1194,7 +1206,8 @@ fn mkv_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let (nal_len, header) = h264_private(&src.private_data);
     let wants_audio = src.wants_audio;
     let fallback = if src.default_100ns > 0 { src.default_100ns } else { 333_333 };
-    let mut decoder = Decoder::new().map_err(|err| format!("H.264 non letto: {err}"))?;
+    let fixed = src.default_100ns.max(0);
+    let mut decoder = h264_decoder()?;
     if !header.is_empty() {
         let _ = decoder.decode(&header);
     }
@@ -1210,6 +1223,13 @@ fn mkv_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         }
         if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
             let owned = owned_frame(&frame)?;
+            // Con la durata fissa dei fotogrammi i tempi si contano: con i fotogrammi B quelli dei blocchi
+            // sono nell'ordine di visione, non in quello in cui escono dal decodificatore.
+            if fixed > 0 {
+                feed_frame(&mut sink, &mut queued, output, &owned, fixed, shown as i64 * fixed, false, 0, 0)?;
+                shown += 1;
+                return Ok(());
+            }
             if let Some((prev, prev_time)) = pending.take() {
                 let step = if duration > 0 {
                     duration
@@ -1229,11 +1249,18 @@ fn mkv_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     if let Ok(rest) = decoder.flush_remaining() {
         for frame in &rest {
             let owned = owned_frame(frame)?;
+            if fixed > 0 {
+                feed_frame(&mut sink, &mut queued, output, &owned, fixed, shown as i64 * fixed, false, 0, 0)?;
+                shown += 1;
+                continue;
+            }
+            let mut next = 0;
             if let Some((prev, prev_time)) = pending.take() {
                 feed_frame(&mut sink, &mut queued, output, &prev, last_dur, prev_time, false, 0, 0)?;
                 shown += 1;
+                next = prev_time + last_dur;
             }
-            pending = Some((owned, 0));
+            pending = Some((owned, next));
         }
     }
     if let Some((prev, prev_time)) = pending.take() {
@@ -1316,13 +1343,14 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
             break;
         }
     }
-    let mut decoder = Decoder::new().map_err(|err| format!("H.264 non letto: {err}"))?;
+    let mut decoder = h264_decoder()?;
     if !header.is_empty() {
         let _ = decoder.decode(&header);
     }
     let mut sink: Option<H264Aac> = None;
     let mut queued: Vec<EarlyPcm> = Vec::new();
     let mut shown = 0u32;
+    let mut last = (0i64, 333_333i64);
     let mut audio_packets = 0u32;
     let mut audio_samples = 0usize;
     let audio_asked = audio_dec.is_some();
@@ -1346,6 +1374,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
             let time = ticks(packet.ts(), numer, denom);
             let packet_dur = ticks(packet.dur(), numer, denom);
             let duration = if packet_dur > 0 { packet_dur } else { 333_333 };
+            last = (time, duration);
             if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
                 let owned = owned_frame(&frame)?;
                 feed_frame(&mut sink, &mut queued, output, &owned, duration, time, audio_asked, audio_rate, audio_channels)?;
@@ -1383,9 +1412,9 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         }
     }
     if let Ok(rest) = decoder.flush_remaining() {
-        for frame in &rest {
+        for (k, frame) in rest.iter().enumerate() {
             let owned = owned_frame(frame)?;
-            feed_frame(&mut sink, &mut queued, output, &owned, 333_333, 0, audio_asked, audio_rate, audio_channels)?;
+            feed_frame(&mut sink, &mut queued, output, &owned, last.1, last.0 + last.1 * (k as i64 + 1), audio_asked, audio_rate, audio_channels)?;
             shown += 1;
         }
     }
@@ -1540,9 +1569,24 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let width = video.width as usize;
     let height = video.height as usize;
     let audio_index = streams.iter().position(|stream| !stream.video && stream.pcm);
-    let mut frames: Vec<OwnedFrame> = Vec::new();
+    let audio = audio_index.map(|index| {
+        let stream = &streams[index];
+        (stream.sample_rate, stream.channels.max(1))
+    });
+    // Ogni fotogramma va subito al file (o all'anteprima), senza tenerli tutti in memoria.
+    let mut sink: Option<H264Aac> = None;
+    let mut shown: i64 = 0;
+    let mut emit = |frame: OwnedFrame| -> Result<(), String> {
+        if sink.is_none() {
+            sink = Some(H264Aac::open(output, frame.width, frame.height, duration, audio)?);
+        }
+        let sink = sink.as_mut().expect("sink");
+        push_decoded(sink, &frame, duration, duration.saturating_mul(shown))?;
+        shown += 1;
+        Ok(())
+    };
     let mut decoder = if matches!(pix, Pix::H264) {
-        Some(Decoder::new().map_err(|err| format!("H.264 non letto: {err}"))?)
+        Some(h264_decoder()?)
     } else {
         None
     };
@@ -1550,9 +1594,9 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     for chunk in chunks {
         if chunk.stream == video_index && chunk.video {
             match pix {
-                Pix::Nv12 => frames.push(split_nv12(&chunk.data, width, height)?),
-                Pix::Bgr { bits, bottom_up } => frames.push(bgr_at(&chunk.data, width, height, *bits, *bottom_up)?),
-                Pix::Mjpeg => frames.push(mjpeg_frame(&chunk.data)?),
+                Pix::Nv12 => emit(split_nv12(&chunk.data, width, height)?)?,
+                Pix::Bgr { bits, bottom_up } => emit(bgr_at(&chunk.data, width, height, *bits, *bottom_up)?)?,
+                Pix::Mjpeg => emit(mjpeg_frame(&chunk.data)?)?,
                 Pix::H264 => {
                     let dec = decoder.as_mut().expect("decoder");
                     let annex = if annex_nals(&chunk.data).is_empty() {
@@ -1561,7 +1605,7 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                         chunk.data.clone()
                     };
                     if let Some(frame) = dec.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
-                        frames.push(owned_frame(&frame)?);
+                        emit(owned_frame(&frame)?)?;
                     }
                 }
             }
@@ -1572,21 +1616,14 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     if let Some(dec) = decoder.as_mut() {
         if let Ok(rest) = dec.flush_remaining() {
             for frame in &rest {
-                frames.push(owned_frame(frame)?);
+                emit(owned_frame(frame)?)?;
             }
         }
     }
-    if frames.is_empty() {
+    drop(emit);
+    let Some(mut sink) = sink else {
         return Err("il video non ha fotogrammi".into());
-    }
-    let audio = audio_index.map(|index| {
-        let stream = &streams[index];
-        (stream.sample_rate, stream.channels.max(1))
-    });
-    let mut sink = H264Aac::open(output, frames[0].width, frames[0].height, duration, audio)?;
-    for (index, frame) in frames.iter().enumerate() {
-        push_decoded(&mut sink, frame, duration, duration.saturating_mul(index as i64))?;
-    }
+    };
     if let Some((rate, channels)) = audio {
         if !pcm.is_empty() {
             sink.write_pcm(&pcm, channels, rate)?;
@@ -1819,4 +1856,166 @@ fn pcm16(bytes: &[u8]) -> Vec<i16> {
         .chunks_exact(2)
         .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
         .collect()
+}
+
+// ---- Fotogrammi per l'anteprima ----
+
+use crate::softvideo::{i420_rgba, Peek, PEEK_BUDGET};
+
+const GRAB_DONE: &str = "fotogrammi dell'anteprima presi";
+
+struct Grab {
+    at: Vec<i64>,
+    next: usize,
+    frames: Vec<crate::softvideo::Rgba>,
+    size: (u32, u32),
+    start: std::time::Instant,
+}
+
+thread_local! {
+    /// Con un prelievo in corso i decodificatori di sopra consegnano i fotogrammi qui invece che al codificatore.
+    static GRAB: std::cell::RefCell<Option<Grab>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Chi guarda il video (il tasto Play): riceve ogni fotogramma con il suo tempo; `false` ferma la lettura.
+type Tap = Box<dyn FnMut(&[u8], &[u8], &[u8], u32, u32, i64) -> bool>;
+
+thread_local! {
+    static TAP: std::cell::RefCell<Option<Tap>> = const { std::cell::RefCell::new(None) };
+}
+
+fn grabbing() -> bool {
+    GRAB.with(|g| g.borrow().is_some()) || TAP.with(|t| t.borrow().is_some())
+}
+
+fn grab_frame(y: &[u8], u: &[u8], v: &[u8], width: u32, height: u32, time: i64) -> Result<(), String> {
+    if let Some(mut tap) = TAP.with(|t| t.borrow_mut().take()) {
+        let go = tap(y, u, v, width, height, time);
+        TAP.with(|t| *t.borrow_mut() = Some(tap));
+        return if go { Ok(()) } else { Err(GRAB_DONE.to_string()) };
+    }
+    GRAB.with(|g| {
+        let mut g = g.borrow_mut();
+        let Some(grab) = g.as_mut() else { return Ok(()) };
+        if grab.next < grab.at.len() && time >= grab.at[grab.next] {
+            grab.size = (width, height);
+            if let Some(frame) = i420_rgba(y, u, v, width, height) {
+                grab.frames.push(frame);
+            }
+            while grab.next < grab.at.len() && grab.at[grab.next] <= time {
+                grab.next += 1;
+            }
+        }
+        if grab.next >= grab.at.len() || grab.start.elapsed() > PEEK_BUDGET {
+            return Err(GRAB_DONE.to_string());
+        }
+        Ok(())
+    })
+}
+
+/// I fotogrammi del video ai secondi `at` (in ordine), per l'anteprima. Non scrive niente.
+/// MP4 e MOV saltano da un fotogramma chiave all'altro; gli altri formati si leggono dall'inizio.
+pub(crate) fn peek_frames(input: &Path, at: &[f64]) -> Result<Peek, String> {
+    for quick in [iso_keyframes, crate::softvideo::peek] {
+        if let Ok(peek) = quick(input, at) {
+            if !peek.frames.is_empty() {
+                return Ok(peek);
+            }
+        }
+    }
+    let at = at.iter().map(|s| (s.max(0.0) * 10_000_000.0) as i64).collect();
+    GRAB.with(|g| *g.borrow_mut() = Some(Grab { at, next: 0, frames: Vec::new(), size: (0, 0), start: std::time::Instant::now() }));
+    let out = std::env::temp_dir().join(format!("cedro-anteprima-{}.mp4", std::process::id()));
+    let result = to_mp4_with(input, &out);
+    let grab = GRAB.with(|g| g.borrow_mut().take());
+    let _ = std::fs::remove_file(&out);
+    let (frames, size) = grab.map(|g| (g.frames, g.size)).unwrap_or_default();
+    if frames.is_empty() {
+        return Err(match result {
+            Err(err) if err != GRAB_DONE => err,
+            _ => "il video non ha fotogrammi".into(),
+        });
+    }
+    Ok(Peek { frames, size })
+}
+
+/// Legge il video dall'inizio e passa ogni fotogramma (YUV 4:2:0 e tempo in 100 ns) a `tap`,
+/// finché `tap` non risponde `false`. Per il tasto Play dell'anteprima: non scrive niente.
+pub(crate) fn play_frames(input: &Path, tap: impl FnMut(&[u8], &[u8], &[u8], u32, u32, i64) -> bool + 'static) -> Result<(), String> {
+    TAP.with(|t| *t.borrow_mut() = Some(Box::new(tap)));
+    let out = std::env::temp_dir().join(format!("cedro-play-{}-{:?}.mp4", std::process::id(), std::thread::current().id()));
+    let result = to_mp4_with(input, &out);
+    TAP.with(|t| t.borrow_mut().take());
+    let _ = std::fs::remove_file(&out);
+    match result {
+        Err(err) if err != GRAB_DONE && !err.ends_with(GRAB_DONE) => Err(err),
+        _ => Ok(()),
+    }
+}
+
+fn iso_keyframes(input: &Path, at: &[f64]) -> Result<Peek, String> {
+    let file = File::open(input).map_err(|err| err.to_string())?;
+    let size = file.metadata().map_err(|err| err.to_string())?.len();
+    let mut reader = mp4::Mp4Reader::read_header(std::io::BufReader::new(file), size).map_err(|err| err.to_string())?;
+    let (id, count, fps, sync, header) = {
+        let track = reader
+            .tracks()
+            .values()
+            .find(|t| matches!(t.media_type(), Ok(mp4::MediaType::H264)))
+            .ok_or("niente H.264")?;
+        let mut header = Vec::new();
+        for nal in [track.sequence_parameter_set().map_err(|e| e.to_string())?, track.picture_parameter_set().map_err(|e| e.to_string())?] {
+            header.extend_from_slice(&[0, 0, 0, 1]);
+            header.extend_from_slice(nal);
+        }
+        let count = track.sample_count();
+        let secs = track.duration().as_secs_f64();
+        let fps = if track.frame_rate() > 0.0 { track.frame_rate() } else if secs > 0.0 { count as f64 / secs } else { 30.0 };
+        let sync = track.trak.mdia.minf.stbl.stss.as_ref().map(|s| s.entries.clone()).unwrap_or_default();
+        (track.track_id(), count, fps, sync, header)
+    };
+    let mut out = Peek { frames: Vec::new(), size: (0, 0) };
+    if count == 0 {
+        return Ok(out);
+    }
+    let start = std::time::Instant::now();
+    for t in at {
+        if start.elapsed() > PEEK_BUDGET {
+            break;
+        }
+        let want = ((t.max(0.0) * fps) as u32 + 1).min(count);
+        let key = if sync.is_empty() { want } else { sync.iter().rev().find(|&&k| k <= want).or(sync.first()).copied().unwrap_or(1) };
+        let mut decoder = h264_decoder()?;
+        let _ = decoder.decode(&header);
+        let mut got = None;
+        for index in key..=(key + 30).min(count) {
+            let Some(sample) = reader.read_sample(id, index).map_err(|err| err.to_string())? else { continue };
+            let annex = annex_sample(&sample.bytes);
+            if annex.is_empty() {
+                continue;
+            }
+            if let Ok(Some(frame)) = decoder.decode(&annex) {
+                let o = owned_frame(&frame)?;
+                out.size = (o.width, o.height);
+                got = i420_rgba(&o.y, &o.u, &o.v, o.width, o.height);
+                break;
+            }
+        }
+        if got.is_none() {
+            if let Some(frame) = decoder.flush_remaining().ok().and_then(|r| r.into_iter().next()) {
+                let o = owned_frame(&frame)?;
+                out.size = (o.width, o.height);
+                got = i420_rgba(&o.y, &o.u, &o.v, o.width, o.height);
+            }
+        }
+        out.frames.extend(got);
+    }
+    Ok(out)
+}
+/// Il decodificatore H.264: senza svuotarlo a ogni pacchetto, così i video con i fotogrammi B
+/// (quasi tutti quelli dei telefoni e delle fotocamere) si leggono interi.
+fn h264_decoder() -> Result<Decoder, String> {
+    use openh264::decoder::{DecoderConfig, Flush};
+    Decoder::with_api_config(OpenH264API::from_source(), DecoderConfig::new().flush_after_decode(Flush::NoFlush))
+        .map_err(|err| format!("H.264 non letto: {err}"))
 }
