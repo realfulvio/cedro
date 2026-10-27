@@ -11,10 +11,10 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-struct Pcm {
-    rate: u32,
-    channels: u16,
-    samples: Vec<i16>,
+pub(crate) struct Pcm {
+    pub(crate) rate: u32,
+    pub(crate) channels: u16,
+    pub(crate) samples: Vec<i16>,
     tags: Tags,
 }
 
@@ -216,7 +216,7 @@ pub fn waveform(path: &Path, n: usize) -> Option<Vec<f32>> {
     Some(v)
 }
 
-fn decode(path: &Path) -> Result<Pcm, String> {
+pub(crate) fn decode(path: &Path) -> Result<Pcm, String> {
     let first = decode_symphonia(path);
     // Android: i formati che Cedro non sa leggere (Opus, AMR…) li decodifica il telefono.
     #[cfg(target_os = "android")]

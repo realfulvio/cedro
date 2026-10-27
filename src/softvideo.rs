@@ -346,3 +346,142 @@ fn ticks(ts: u64, numer: u32, denom: u32) -> i64 {
     let value = (ts as u128).saturating_mul(numer as u128).saturating_mul(10_000_000) / denom as u128;
     i64::try_from(value).unwrap_or(i64::MAX)
 }
+
+// ---- Fotogrammi per l'anteprima ----
+
+/// Un fotogramma RGBA (larghezza, altezza, pixel).
+pub(crate) type Rgba = (u32, u32, Vec<u8>);
+
+/// Lato lungo dei fotogrammi dell'anteprima.
+pub(crate) const PEEK_SIDE: u32 = 960;
+/// Oltre questo tempo l'anteprima si accontenta dei fotogrammi che ha.
+pub(crate) const PEEK_BUDGET: std::time::Duration = std::time::Duration::from_secs(12);
+
+/// I fotogrammi presi per l'anteprima e la misura vera del video.
+pub(crate) struct Peek {
+    pub frames: Vec<Rgba>,
+    pub size: (u32, u32),
+}
+
+/// Da YUV 4:2:0 (BT.601) a RGBA, rimpicciolito a `PEEK_SIDE`.
+pub(crate) fn i420_rgba(y: &[u8], u: &[u8], v: &[u8], width: u32, height: u32) -> Option<Rgba> {
+    let (w, h) = (width as usize, height as usize);
+    let cw = w.div_ceil(2);
+    if w == 0 || h == 0 || y.len() < w * h || u.len() < cw * h.div_ceil(2) || v.len() < cw * h.div_ceil(2) {
+        return None;
+    }
+    let mut out = vec![255u8; w * h * 4];
+    for row in 0..h {
+        for col in 0..w {
+            let c = (row / 2) * cw + col / 2;
+            let yy = (y[row * w + col] as i32 - 16).max(0) * 298;
+            let (uu, vv) = (u[c] as i32 - 128, v[c] as i32 - 128);
+            let i = (row * w + col) * 4;
+            out[i] = ((yy + 409 * vv + 128) >> 8).clamp(0, 255) as u8;
+            out[i + 1] = ((yy - 100 * uu - 208 * vv + 128) >> 8).clamp(0, 255) as u8;
+            out[i + 2] = ((yy + 516 * uu + 128) >> 8).clamp(0, 255) as u8;
+        }
+    }
+    shrink(width, height, out)
+}
+
+/// Un fotogramma RGBA portato al massimo a `PEEK_SIDE` di lato lungo.
+pub(crate) fn shrink(width: u32, height: u32, rgba: Vec<u8>) -> Option<Rgba> {
+    let img = image::RgbaImage::from_raw(width, height, rgba)?;
+    let side = width.max(height);
+    let img = if side > PEEK_SIDE { image::imageops::thumbnail(&img, (width * PEEK_SIDE / side).max(1), (height * PEEK_SIDE / side).max(1)) } else { img };
+    Some((img.width(), img.height(), img.into_raw()))
+}
+
+/// WebM VP8 e VP9: per ogni secondo di `at` salta al fotogramma chiave più vicino e lo decodifica.
+pub(crate) fn peek(input: &Path, at: &[f64]) -> Result<Peek, String> {
+    use symphonia::core::formats::{SeekMode, SeekTo};
+    use symphonia::core::units::Time;
+    let codec = codec_of(input)?;
+    let mut opened = open_media(input)?;
+    let start = std::time::Instant::now();
+    let mut out = Peek { frames: Vec::new(), size: (0, 0) };
+    for &t in at {
+        if start.elapsed() > PEEK_BUDGET {
+            break;
+        }
+        let target = (t.max(0.0) * 10_000_000.0) as i64;
+        let jumped = opened
+            .format
+            .seek(SeekMode::Coarse, SeekTo::Time { time: Time::from(t.max(0.0)), track_id: Some(opened.video_id) })
+            .is_ok();
+        let mut video = decoder(&codec);
+        for _ in 0..600 {
+            let Ok(packet) = opened.format.next_packet() else { break };
+            if packet.track_id() != opened.video_id {
+                continue;
+            }
+            let time = ticks(packet.ts(), opened.numer, opened.denom);
+            // Senza salto si decodifica tutto, ma si tiene solo il fotogramma del punto chiesto.
+            let Ok(frames) = shown_frames(&mut video, packet.buf()) else { continue };
+            let Some(frame) = frames.into_iter().next() else { continue };
+            if !jumped && time + 5_000_000 < target {
+                continue;
+            }
+            out.size = (frame.width, frame.height);
+            out.frames.extend(i420_rgba(&frame.y, &frame.u, &frame.v, frame.width, frame.height));
+            break;
+        }
+    }
+    Ok(out)
+}
+
+/// Da YUV 4:2:0 a RGBA già piccolo (al massimo `side` di lato lungo), prendendo un punto ogni tanti:
+/// è svelto, per i fotogrammi del tasto Play.
+pub(crate) fn i420_small(y: &[u8], u: &[u8], v: &[u8], width: u32, height: u32, side: u32) -> Option<Rgba> {
+    let (w, h) = (width as usize, height as usize);
+    let cw = w.div_ceil(2);
+    if w == 0 || h == 0 || y.len() < w * h || u.len() < cw * h.div_ceil(2) || v.len() < cw * h.div_ceil(2) {
+        return None;
+    }
+    let step = (width.max(height).div_ceil(side.max(1))).max(1) as usize;
+    let (ow, oh) = (w.div_ceil(step), h.div_ceil(step));
+    let mut out = vec![255u8; ow * oh * 4];
+    for oy in 0..oh {
+        let row = oy * step;
+        for ox in 0..ow {
+            let col = ox * step;
+            let c = (row / 2) * cw + col / 2;
+            let yy = (y[row * w + col] as i32 - 16).max(0) * 298;
+            let (uu, vv) = (u[c] as i32 - 128, v[c] as i32 - 128);
+            let i = (oy * ow + ox) * 4;
+            out[i] = ((yy + 409 * vv + 128) >> 8).clamp(0, 255) as u8;
+            out[i + 1] = ((yy - 100 * uu - 208 * vv + 128) >> 8).clamp(0, 255) as u8;
+            out[i + 2] = ((yy + 516 * uu + 128) >> 8).clamp(0, 255) as u8;
+        }
+    }
+    Some((ow as u32, oh as u32, out))
+}
+
+/// WebM VP8 e VP9 dal secondo `from`: ogni fotogramma (YUV 4:2:0, tempo in 100 ns) va a `tap`
+/// finché non risponde `false`. Per il tasto Play dell'anteprima.
+#[allow(dead_code)]
+pub(crate) fn play(input: &Path, from: f64, mut tap: impl FnMut(&[u8], &[u8], &[u8], u32, u32, i64) -> bool) -> Result<(), String> {
+    use symphonia::core::formats::{SeekMode, SeekTo};
+    use symphonia::core::units::Time;
+    let codec = codec_of(input)?;
+    let mut opened = open_media(input)?;
+    if from > 0.0 {
+        let _ = opened.format.seek(SeekMode::Coarse, SeekTo::Time { time: Time::from(from), track_id: Some(opened.video_id) });
+    }
+    let mut video = decoder(&codec);
+    loop {
+        let Ok(packet) = opened.format.next_packet() else { break };
+        if packet.track_id() != opened.video_id {
+            continue;
+        }
+        let time = ticks(packet.ts(), opened.numer, opened.denom);
+        let Ok(frames) = shown_frames(&mut video, packet.buf()) else { continue };
+        for frame in frames {
+            if !tap(&frame.y, &frame.u, &frame.v, frame.width, frame.height, time) {
+                return Ok(());
+            }
+        }
+    }
+    Ok(())
+}
