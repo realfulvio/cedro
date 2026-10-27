@@ -40,7 +40,7 @@ const THUMB: u32 = 360;
 /// Lato lungo delle pagine dell'anteprima.
 const PAGE: f32 = 1400.0;
 
-fn image_thumb(path: &Path) -> Option<(Image, (u32, u32))> {
+fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
     use image::ImageDecoder;
     let mut decoder = image::ImageReader::open(path).ok()?.with_guessed_format().ok()?.into_decoder().ok()?;
     let orientation = decoder.orientation().ok();
@@ -49,7 +49,7 @@ fn image_thumb(path: &Path) -> Option<(Image, (u32, u32))> {
         img.apply_orientation(o);
     }
     let size = (img.width(), img.height());
-    let small = img.thumbnail(THUMB, THUMB).to_rgba8();
+    let small = img.thumbnail(side, side).to_rgba8();
     Some((Image::from_rgba(small.width(), small.height(), small.as_raw())?, size))
 }
 
@@ -63,7 +63,7 @@ fn info(path: &Path) -> Loaded {
     let mut out = Loaded { bytes: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0), ..Default::default() };
     match engine::kind_of(path) {
         Kind::Image => {
-            if let Some((thumb, size)) = image_thumb(path) {
+            if let Some((thumb, size)) = image_thumb(path, THUMB) {
                 out.thumb = Some(thumb);
                 out.size = Some(size);
             }
@@ -101,7 +101,7 @@ impl Loader {
                 Some(Job::Preview(path, page)) => {
                     let img = match engine::kind_of(&path) {
                         Kind::Pdf => pdf_page(&path, page, PAGE),
-                        Kind::Image => image_thumb(&path).map(|(i, _)| i),
+                        Kind::Image => image_thumb(&path, PAGE as u32).map(|(i, _)| i),
                         _ => None,
                     };
                     tx.send(Event::Preview(path, page, img))

@@ -78,7 +78,10 @@ fn standard(f: &mut Frame, app: &App) {
     for (i, cat) in conversioni::CATEGORIES.iter().enumerate() {
         let on = i == app.category;
         let tw = f.measure(cat.name, 18.0, SANS);
-        let r = (tx, 150.0, 16.0 + 24.0 + 14.0 + tw + 16.0, 62.0);
+        let count = app.files.iter().filter(|x| !x.voice_only && x.kind == cat.kind).count();
+        let badge = (count > 0 && !on).then(|| count.to_string());
+        let bw = badge.as_ref().map(|b| f.measure(b, 12.0, SEMI) + 12.0).unwrap_or(0.0).max(if badge.is_some() { 20.0 } else { 0.0 });
+        let r = (tx, 150.0, 16.0 + 24.0 + 14.0 + tw + 16.0 + if bw > 0.0 { bw + 6.0 } else { 0.0 }, 62.0);
         if on {
             f.p.rrect(r.0, r.1, r.2, r.3 + 8.0, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
             f.p.fill(r.0 + 1.0, r.1 + r.3 - 2.0, r.2 - 2.0, 12.0, pal.surface);
@@ -89,12 +92,10 @@ fn standard(f: &mut Frame, app: &App) {
         let c = if on { pal.primary } else { pal.text };
         f.icon(icons[i], tx + 16.0, 164.0, 24.0, c);
         f.text(cat.name, tx + 54.0, 150.0, tw + 4.0, 52.0, 18.0, SANS, c);
-        let count = app.files.iter().filter(|x| !x.voice_only && x.kind == cat.kind).count();
-        if count > 0 && !on {
-            let badge = count.to_string();
-            let bw = f.measure(&badge, 12.0, SEMI) + 12.0;
-            f.p.rrect(tx + r.2 - bw - 2.0, 154.0, bw, 18.0, 9.0, Some(pal.primary), None);
-            f.text_c(&badge, (tx + r.2 - bw - 2.0, 154.0, bw, 18.0), 12.0, SEMI, pal.on_primary);
+        if let Some(badge) = badge {
+            let bx = tx + 54.0 + tw + 8.0;
+            f.p.rrect(bx, 167.0, bw, 20.0, 10.0, Some(mix(pal.primary, pal.surface, 0.85)), None);
+            f.text_c(&badge, (bx, 167.0, bw, 20.0), 12.0, SEMI, pal.primary);
         }
         f.hit((r.0, r.1, r.2, 52.0), Act::Category(i));
         tx += r.2 + 6.0;
@@ -109,7 +110,7 @@ fn standard(f: &mut Frame, app: &App) {
     let hot = f.hovered(&Act::AddFiles);
     f.p.rrect(add.0, add.1, add.2, add.3, 6.0, Some(if hot { mix(pal.primary, (0, 0, 0), 0.12) } else { pal.primary }), None);
     f.icon(ic::ADD, add.0 + 14.0, add.1 + 8.0, 24.0, pal.on_primary);
-    f.text("Aggiungi file", add.0 + 48.0, add.1, 110.0, 40.0, 18.0, SEMI, pal.on_primary);
+    f.text("Aggiungi file", add.0 + 46.0, add.1, 112.0, 40.0, 17.0, SEMI, pal.on_primary);
     f.p.fill_a(add.0 + add.2 - 38.0, add.1, 1.0, 40.0, pal.on_primary, 0.35);
     f.icon(ic::CHEVRON_DOWN, add.0 + add.2 - 31.0, add.1 + 8.0, 24.0, pal.on_primary);
     f.hit((add.0, add.1, add.2 - 38.0, add.3), Act::AddFiles);

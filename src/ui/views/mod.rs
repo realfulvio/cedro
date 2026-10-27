@@ -270,10 +270,13 @@ pub fn go_label(app: &App) -> String {
     }
     let n = app.targets().len();
     match app.activity {
+        Activity::Transcribe if n == 0 => "Trascrivi".into(),
         Activity::Transcribe => format!("Trascrivi {n} file"),
         Activity::YouTube | Activity::Web => "Scarica".into(),
         Activity::Convert => {
-            if n == 1 {
+            if n == 0 {
+                "Converti".into()
+            } else if n == 1 {
                 "Converti 1 file".into()
             } else {
                 format!("Converti {n} file")
