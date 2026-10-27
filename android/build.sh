@@ -2,7 +2,7 @@
 # Costruisce android/target/cedro-debug.apk (firmato con la chiave di debug) oppure, con CEDRO_KEYSTORE (+ CEDRO_KS_PASS,
 # CEDRO_KEY_ALIAS, facoltativa CEDRO_KEY_PASS), android/target/cedro-<versione>.apk firmato con la chiave di rilascio.
 # Versione: dal Cargo.toml di Cedro (CEDRO_VERSION_NAME / CEDRO_VERSION_CODE per forzarla). Niente Gradle, niente Java nel codice:
-# serve solo il JDK per apksigner/keytool. Variabili: ANDROID_SDK (default ~/android-sdk).
+# serve solo il JDK per apksigner/keytool. Variabili: ANDROID_SDK (default ~/android-sdk); CEDRO_YOUTUBE=1 per YouTube (vedi sotto).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 SDK="${ANDROID_SDK:-$HOME/android-sdk}"
@@ -23,7 +23,17 @@ export CMAKE_GENERATOR="Unix Makefiles" CMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/
 # libopus (audiopus_sys) ha un CMakeLists vecchio: cmake 4 vuole il minimo dichiarato.
 export CMAKE_POLICY_VERSION_MINIMUM=3.5
 export PATH="$PWD/android/tools:$PATH" WHISPER_ARCH="${WHISPER_ARCH:-armv8.2-a+dotprod+fp16}"
-cargo ndk -t arm64-v8a -P 26 build --release -p cedro-android
+# CEDRO_YOUTUBE=1: YouTube con yt-dlp, con gli eseguibili precompilati di youtubedl-android (vedi youtube-libs.py).
+# Spento per il catalogo F-Droid, che costruisce solo da sorgente.
+LIBS="libcedro_android.so libc++_shared.so"
+FEATURES=""
+rm -f "$OUT/apk/lib/arm64-v8a/"lib{python,qjs,ffmpeg,ffprobe}.so
+if [ "${CEDRO_YOUTUBE:-0}" = 1 ]; then
+  FEATURES="--features youtube"
+  python3 android/youtube-libs.py "$OUT/apk/lib/arm64-v8a"
+  LIBS="$LIBS libpython.so libqjs.so libffmpeg.so libffprobe.so"
+fi
+cargo ndk -t arm64-v8a -P 26 build --release -p cedro-android $FEATURES
 cp target/aarch64-linux-android/release/libcedro_android.so "$OUT/apk/lib/arm64-v8a/"
 cp "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "$OUT/apk/lib/arm64-v8a/"
 # Risorse (icona del launcher, adattiva da Android 8) compilate con aapt2, senza Gradle.
@@ -36,7 +46,12 @@ VNAME="${CEDRO_VERSION_NAME:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | 
 IFS=. read -r V1 V2 V3 <<< "$VNAME"
 VCODE="${CEDRO_VERSION_CODE:-$((V1 * 10000 + V2 * 100 + ${V3%%[!0-9]*}))}"
 "$BT/aapt2" link -o "$OUT/base.apk" -I "$JAR" --manifest android/AndroidManifest.xml --min-sdk-version 26 --target-sdk-version 34 --version-name "$VNAME" --version-code "$VCODE" "$OUT/res.zip"
-python3 -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1],'a'); z.write(sys.argv[2],'lib/arm64-v8a/libcedro_android.so',compress_type=zipfile.ZIP_STORED); z.write(sys.argv[2].replace('libcedro_android.so','libc++_shared.so'),'lib/arm64-v8a/libc++_shared.so',compress_type=zipfile.ZIP_STORED); z.write(sys.argv[3],'classes.dex'); z.close()" "$OUT/base.apk" "$OUT/apk/lib/arm64-v8a/libcedro_android.so" "$OUT/classes/classes.dex"
+python3 -c "
+import zipfile,sys
+z=zipfile.ZipFile(sys.argv[1],'a')
+for n in sys.argv[4].split():
+    z.write(sys.argv[2]+'/'+n,'lib/arm64-v8a/'+n,compress_type=zipfile.ZIP_STORED)
+z.write(sys.argv[3],'classes.dex'); z.close()" "$OUT/base.apk" "$OUT/apk/lib/arm64-v8a" "$OUT/classes/classes.dex" "$LIBS"
 "$BT/zipalign" -f -p 4 "$OUT/base.apk" "$OUT/aligned.apk"
 if [ -n "${CEDRO_UNSIGNED:-}" ]; then
   # Per il buildserver di F-Droid: firma lui.
