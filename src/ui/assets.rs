@@ -17,6 +17,7 @@ pub const FILE: &str = "M6 3h8l4 4v14H6zM14 3v5h4";
 pub const FOLDER: &str = "M3 6h7l2 2h9v12H3z";
 pub const HELP: &str = "M3.0 12.0a9.0 9.0 0 1 0 18.0 0a9.0 9.0 0 1 0 -18.0 0z M9 9a3 3 0 0 1 6 0c0 2-3 2-3 5M12 17v.1";
 pub const IMAGE: &str = "M5.0 3.0h14.0a2.0 2.0 0 0 1 2.0 2.0v14.0a2.0 2.0 0 0 1 -2.0 2.0h-14.0a2.0 2.0 0 0 1 -2.0 -2.0v-14.0a2.0 2.0 0 0 1 2.0 -2.0z M6.5 8.0a1.5 1.5 0 1 0 3.0 0a1.5 1.5 0 1 0 -3.0 0z M4 18l5-6 4 4 3-3 4 5";
+pub const INFO: &str = "M3.0 12.0a9.0 9.0 0 1 0 18.0 0a9.0 9.0 0 1 0 -18.0 0z M12 11v6M12 7v.1";
 pub const LINK: &str = "M10 14l4-4M8 15l-2 2a3 3 0 0 1-4-4l5-5a3 3 0 0 1 4 0M16 9l2-2a3 3 0 0 0-4-4l-5 5a3 3 0 0 0 0 4";
 pub const MENU: &str = "M4 6h16M4 12h16M4 18h16";
 pub const SEARCH: &str = "M4.0 10.0a6.0 6.0 0 1 0 12.0 0a6.0 6.0 0 1 0 -12.0 0z M15 15l6 6";

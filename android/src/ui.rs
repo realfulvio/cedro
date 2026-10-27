@@ -73,6 +73,7 @@ pub enum Scheda {
     Ruota,
     Lavori,
     Aspetto,
+    Info,
 }
 
 /// Cosa far cercare al selettore di file di Android.
@@ -100,6 +101,10 @@ pub enum Azione {
     /// Il modello di trascrizione: 0 Veloce (tiny), 1 Buona (base).
     Modello(usize),
     Tema(usize),
+    /// 0 = lingua del telefono, 1 = italiano, 2 = inglese.
+    Lingua(usize),
+    /// «Copia le informazioni».
+    CopiaInfo,
     IndietroFoglio,
     ApriScelta,
     ChiudiScelta,
@@ -121,8 +126,12 @@ pub enum Effetto {
     Esci,
     /// Il tema è cambiato: va ricordato.
     SalvaTema(ThemeId),
+    /// La lingua è cambiata («auto», «it» o «en»): va ricordata.
+    SalvaLingua(&'static str),
     /// L'elenco dei lavori è cambiato: va ricordato.
     SalvaLavori,
+    /// Mette un testo negli appunti.
+    Copia(String),
     /// Apre il selettore di file di Android.
     Scegli(Sorgente),
     /// Carica un file già noto (da «Ultimi file»).
@@ -301,8 +310,41 @@ fn intersezione(a: R, b: R) -> Option<R> {
     (x1 > x0 && y1 > y0).then_some((x0, y0, x1 - x0, y1 - y0))
 }
 
+/// Le informazioni sul telefono e su ciò che Cedro usa (le legge `glue`, la scheda «Info» le mostra).
+#[derive(Clone, Default)]
+pub struct Info {
+    /// Telefono, Android, processore, core, memoria, scheda video.
+    pub generali: Vec<(String, String)>,
+    /// Istruzioni del processore e se ci sono.
+    pub istruzioni: Vec<(String, bool)>,
+    /// Accelerazioni: nome, a cosa servono, se sono in uso.
+    pub accelerazioni: Vec<(String, String, bool)>,
+}
+
+impl Info {
+    /// Il testo da copiare e mandare in caso di problemi (nella lingua in uso).
+    pub fn testo(&self) -> String {
+        let t = cedro::i18n::tr_string;
+        let mut out = format!("Cedro {}\n", env!("CARGO_PKG_VERSION"));
+        for (k, v) in &self.generali {
+            out += &format!("{}: {v}\n", t(k));
+        }
+        let chips: Vec<String> = self.istruzioni.iter().map(|(n, si)| format!("{n} {}", t(if *si { "sì" } else { "no" }))).collect();
+        out += &format!("{}: {}\n", t("Istruzioni"), chips.join(", "));
+        for (k, v, _) in &self.accelerazioni {
+            out += &format!("{}: {}\n", t(k), t(v));
+        }
+        out
+    }
+}
+
 pub struct App {
+    pub info: Info,
     pub tema: ThemeId,
+    /// «auto», «it» o «en».
+    pub lingua: &'static str,
+    /// La lingua del telefono, per «auto».
+    pub lingua_telefono: cedro::i18n::Lang,
     pub file: Option<Archivio>,
     pub kind: Kind,
     pub miniatura: Option<Image>,
@@ -337,10 +379,25 @@ pub struct App {
     pub margini: (f32, f32, f32, f32),
 }
 
+/// Le lingue tra cui scegliere: chiave nel file, nome (quelli delle lingue non si traducono).
+pub const LINGUE: [(&str, &str); 3] = [("auto", "Lingua del telefono"), ("it", "Italiano"), ("en", "English")];
+
 impl App {
+    /// Mette in uso la lingua scelta (per «auto», quella del telefono).
+    pub fn applica_lingua(&self) {
+        cedro::i18n::set(match self.lingua {
+            "it" => cedro::i18n::Lang::It,
+            "en" => cedro::i18n::Lang::En,
+            _ => self.lingua_telefono,
+        });
+    }
+
     pub fn new(tema: ThemeId) -> App {
         App {
+            info: Info::default(),
             tema,
+            lingua: "auto",
+            lingua_telefono: cedro::i18n::Lang::It,
             file: None,
             kind: Kind::Image,
             miniatura: None,
@@ -508,7 +565,7 @@ impl App {
             return Effetto::Ridisegna;
         }
         if let Some((y0, s0, mosso)) = self.trascina {
-            if (mosso || (y - y0).abs() > 10.0) && self.scheda == Scheda::Lavori && !self.foglio && !self.scelta_file {
+            if (mosso || (y - y0).abs() > 10.0) && matches!(self.scheda, Scheda::Lavori | Scheda::Info | Scheda::Aspetto) && !self.foglio && !self.scelta_file {
                 self.scorri = (s0 - (y - y0)).clamp(0.0, self.scorri_max);
                 self.trascina = Some((y0, s0, true));
                 self.premuto = None;
@@ -634,6 +691,12 @@ impl App {
                 self.tema = TEMI[i];
                 Effetto::SalvaTema(self.tema)
             }
+            Azione::CopiaInfo => Effetto::Copia(self.info.testo()),
+            Azione::Lingua(i) => {
+                self.lingua = LINGUE[i].0;
+                self.applica_lingua();
+                Effetto::SalvaLingua(self.lingua)
+            }
             Azione::IndietroFoglio => {
                 self.indietro();
                 Effetto::Ridisegna
@@ -692,6 +755,7 @@ impl App {
             match self.scheda {
                 Scheda::Ruota => self.ruota(p, w, corpo),
                 Scheda::Lavori => self.pagina_lavori(p, w, corpo),
+                Scheda::Info => self.pagina_info(p, w, corpo),
                 Scheda::Aspetto => self.pagina_aspetto(p, w, corpo),
             }
             self.barra_schede(p, w, h);
@@ -719,8 +783,8 @@ impl App {
         let y = h - NAV;
         p.fill(-ml, y, w + ml + mr, NAV + mb, pal.surface);
         p.fill(-ml, y, w + ml + mr, 1.0, pal.border);
-        let voci = [(Scheda::Ruota, "Ruota", ic::CONVERT), (Scheda::Lavori, "Lavori", ic::CLOCK), (Scheda::Aspetto, "Aspetto", ic::SETTINGS)];
-        let cw = w / 3.0;
+        let voci = [(Scheda::Ruota, if cedro::i18n::english() { "Wheel" } else { "Ruota" }, ic::CONVERT), (Scheda::Lavori, "Lavori", ic::CLOCK), (Scheda::Aspetto, "Aspetto", ic::SETTINGS), (Scheda::Info, "Info", ic::INFO)];
+        let cw = w / 4.0;
         let attivi = self.lavori.iter().filter(|l| l.stato == Stato::InCorso).count();
         for (i, (s, nome, icona)) in voci.into_iter().enumerate() {
             let x = i as f32 * cw;
@@ -733,7 +797,7 @@ impl App {
                 p.rrect_a(x + cw / 2.0 - 30.0, y + 6.0, 60.0, 30.0, 15.0, pal.primary, 0.10);
             }
             p.icon(icona, x + cw / 2.0 - 12.0, y + 9.0, 24.0, col);
-            p.text(nome, x, y + 38.0, cw, 20.0, 13.0, if on { Weight::Semibold } else { Weight::Regular }, col, Align::Center);
+            p.text(&if s == Scheda::Ruota { cedro::i18n::lit(nome) } else { nome.to_string() }, x, y + 38.0, cw, 20.0, 13.0, if on { Weight::Semibold } else { Weight::Regular }, col, Align::Center);
             if s == Scheda::Lavori && attivi > 0 {
                 let (bx, by) = (x + cw / 2.0 + 8.0, y + 5.0);
                 p.circle(bx + 8.0, by + 8.0, 9.0, Some(pal.primary), None);
@@ -1267,6 +1331,60 @@ impl App {
         alt
     }
 
+    // ----- Informazioni -----
+
+    /// Una scheda con righe «nome … valore». Restituisce l'altezza.
+    fn riquadro(&self, p: &mut Painter, (x, y, w): (f32, f32, f32), righe: &[(String, String, Option<bool>)]) -> f32 {
+        let pal = self.pal();
+        let rh = 42.0;
+        let h = righe.len() as f32 * rh + 4.0;
+        p.rrect(x, y, w, h, 16.0, Some(pal.surface), Some((pal.border, 1.0)));
+        for (i, (k, v, si)) in righe.iter().enumerate() {
+            let ry = y + 2.0 + i as f32 * rh;
+            if i > 0 {
+                p.fill(x + 14.0, ry, w - 28.0, 1.0, pal.border);
+            }
+            p.text(k, x + 14.0, ry, w * 0.4, rh, 15.0, Weight::Regular, pal.muted, Align::Left);
+            let col = match si {
+                Some(true) => (0x12, 0x80, 0x5c),
+                Some(false) => pal.muted,
+                None => pal.text,
+            };
+            p.text(v, x + w * 0.4 + 6.0, ry, w * 0.6 - 20.0, rh, 15.0, Weight::Semibold, col, Align::Right);
+        }
+        h
+    }
+
+    fn pagina_info(&mut self, p: &mut Painter, w: f32, h: f32) {
+        let pal = self.pal();
+        self.titolo_barra(p, 16.0, w - 32.0, "Informazioni");
+        let ampio = w > 700.0;
+        let cw = if ampio { 520.0 } else { w - 24.0 };
+        let x = if ampio { (w - cw) / 2.0 } else { 12.0 };
+        let vista = (0.0, BARRA, w, h - BARRA);
+        p.push_clip(vista.0, vista.1, vista.2, vista.3);
+        let mut y = BARRA + 4.0 - self.scorri;
+        let generali: Vec<_> = self.info.generali.iter().map(|(k, v)| (k.clone(), v.clone(), None)).collect();
+        y += self.riquadro(p, (x, y, cw), &generali) + 8.0;
+        p.text("Istruzioni del processore", x + 4.0, y, cw, 26.0, 13.0, Weight::Semibold, pal.muted, Align::Left);
+        y += 28.0;
+        let istr: Vec<_> = self.info.istruzioni.iter().map(|(n, si)| (n.clone(), (if *si { "sì" } else { "no" }).to_string(), Some(*si))).collect();
+        y += self.riquadro(p, (x, y, cw), &istr) + 8.0;
+        p.text("Accelerazioni usate", x + 4.0, y, cw, 26.0, 13.0, Weight::Semibold, pal.muted, Align::Left);
+        y += 28.0;
+        let acc: Vec<_> = self.info.accelerazioni.iter().map(|(n, v, on)| (n.clone(), v.clone(), Some(*on))).collect();
+        y += self.riquadro(p, (x, y, cw), &acc) + 10.0;
+        let rc = (x, y, cw, 48.0);
+        let prem = self.premuto == Some(Azione::CopiaInfo);
+        p.rrect(rc.0, rc.1, rc.2, rc.3, 14.0, Some(if prem { mix(pal.primary, pal.surface, 0.2) } else { pal.primary }), None);
+        p.text("Copia le informazioni", rc.0, rc.1, rc.2, rc.3, 16.0, Weight::Semibold, pal.on_primary, Align::Center);
+        self.colpi.push((Forma::R((rc.0, rc.1, rc.2, rc.3)), Azione::CopiaInfo));
+        y += rc.3 + 14.0;
+        p.pop_clip();
+        self.scorri_max = (y + self.scorri - h).max(0.0);
+        self.scorri = self.scorri.min(self.scorri_max);
+    }
+
     // ----- Aspetto -----
 
     fn pagina_aspetto(&mut self, p: &mut Painter, w: f32, h: f32) {
@@ -1276,8 +1394,10 @@ impl App {
         let ampio = w > 700.0;
         let cw = if ampio { 520.0 } else { w - 24.0 };
         let x = if ampio { (w - cw) / 2.0 } else { 12.0 };
+        p.push_clip(0.0, BARRA, w, h - BARRA);
+        let top = BARRA + 4.0 - self.scorri;
         for (i, tema) in TEMI.into_iter().enumerate() {
-            let rc = (x, BARRA + 4.0 + i as f32 * rh, cw, rh - 8.0);
+            let rc = (x, top + i as f32 * rh, cw, rh - 8.0);
             let attivo = tema == self.tema;
             let prem = self.premuto == Some(Azione::Tema(i));
             let pa = tema.palette();
@@ -1290,8 +1410,24 @@ impl App {
             }
             self.colpi.push((Forma::R((rc.0, rc.1 - 2.0, rc.2, rc.3 + 4.0)), Azione::Tema(i)));
         }
-        let y = BARRA + 4.0 + TEMI.len() as f32 * rh + 6.0;
+        let y0 = top + TEMI.len() as f32 * rh + 10.0;
+        p.text("Lingua", x + 4.0, y0, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
+        for (i, (chiave, nome)) in LINGUE.iter().enumerate() {
+            let rc = (x, y0 + 32.0 + i as f32 * 56.0, cw, 48.0);
+            let attivo = self.lingua == *chiave;
+            let prem = self.premuto == Some(Azione::Lingua(i));
+            p.rrect(rc.0, rc.1, rc.2, rc.3, 14.0, Some(if prem { mix(pal.alt, pal.primary, 0.2) } else { pal.surface }), Some((if attivo { pal.primary } else { pal.border }, if attivo { 2.0 } else { 1.0 })));
+            p.text(&if i == 0 { nome.to_string() } else { cedro::i18n::lit(nome) }, rc.0 + 18.0, rc.1, rc.2 - 70.0, rc.3, 17.0, Weight::Semibold, pal.text, Align::Left);
+            if attivo {
+                p.icon(ic::CHECK, rc.0 + rc.2 - 40.0, rc.1 + (rc.3 - 22.0) / 2.0, 22.0, pal.primary);
+            }
+            self.colpi.push((Forma::R((rc.0, rc.1 - 2.0, rc.2, rc.3 + 4.0)), Azione::Lingua(i)));
+        }
+        let y = y0 + 32.0 + LINGUE.len() as f32 * 56.0 + 6.0;
         p.text_wrap("Le copie vanno nella cartella Documenti. Il tema scelto resta tra un avvio e l'altro.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3);
+        p.pop_clip();
+        self.scorri_max = (y + 62.0 + self.scorri - h).max(0.0);
+        self.scorri = self.scorri.min(self.scorri_max);
     }
 }
 
