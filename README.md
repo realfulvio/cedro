@@ -1,3 +1,5 @@
+<p align="right"><a href="README.en.md">🇬🇧 English</a> · 🇮🇹 Italiano</p>
+
 <p align="center">
   <img src="docs/v2/hero.png" alt="Cedro: cambia formato a un file con un clic destro. Windows, Linux e Android">
 </p>
@@ -169,12 +171,6 @@ Codice aperto (MIT), nessun packer né offuscamento, nessuna rete oltre al contr
 Cedro è MIT. Alcune parti hanno la propria licenza: LAME (LGPL, MP3), modello OCR ocrs (CC BY-SA 4.0, fonti in `models/FONTI.txt`), [oxideav-vp8](https://github.com/OxideAV/oxideav-vp8) e [oxideav-vp9](https://github.com/OxideAV/oxideav-vp9) (MIT), OpenH264 (BSD-2) e FDK AAC (licenza Fraunhofer). Cedro è un'implementazione scritta da zero e non usa codice, icone o testi di altri convertitori.
 
 </details>
-
----
-
-<p align="center">
-  Powered by Luca "Realhcok" A.
-</p>
 
 ---
 
