@@ -16,7 +16,7 @@
             android:name="it.cedro.android.CedroActivity"
             android:label="Cedro"
             android:exported="true"
-            android:noHistory="true"
+            android:launchMode="singleTask"
             android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|uiMode"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
             <meta-data android:name="android.app.lib_name" android:value="cedro_android" />
