@@ -15,22 +15,31 @@ condivisione a app aperta non ricarica l'intento (chiudere e ripetere); solo arm
 
 ## Interfaccia (per il tocco)
 
-- **Foglio dal basso** dopo «Condividi»: il file (miniatura, nome, tipo, peso), le azioni adatte a quel tipo e «Tutte le azioni». Si chiude toccando fuori o col tasto indietro.
-- **Ruota a tutto schermo** con spicchi da pollice (anche aprendo Cedro dall'icona: riapre l'ultimo file); selettore Converti / Strumenti e cursore Qualità dove il motore la usa.
-- **Aspetto**: i cinque temi di Cedro, ricordati tra un avvio e l'altro; icone delle barre di sistema chiare o scure col tema.
-- Bersagli ≥ 48 dp, margini delle barre di stato e dei gesti letti dalla finestra (JNI), orizzontale e verticale. Ogni controllo chiama il motore: niente controlli finti.
-- `cargo run -p cedro-android --example vista -- cartella` disegna le schermate in PNG sul computer, per provare i layout senza il telefono.
+- **Barra in basso**: Ruota / Lavori / Aspetto.
+- **Ruota** a tutta larghezza: il centro è il posto del file (cerchio tratteggiato «+ Scegli un file» se vuoto; foto, prima pagina del PDF o onda audio con tipo e peso se pieno, toccabile per cambiarlo). Sotto: cursore Qualità dove il motore la usa, «Converti in X» e «Ultimi file». Orizzontale e tablet: ruota a sinistra, opzioni a destra.
+- **Cosa ne faccio?**: a tutto schermo dopo «Condividi»: il file in grande, griglia a due colonne con tutte le azioni adatte al tipo (per le immagini JPG, PNG, WebP, PDF, Comprimi, Testo/OCR, Dimezza e «Altro» che apre la ruota), Qualità e «Converti in X» sempre in basso.
+- **Scegli il file**: Foto, Documenti, Audio, Altri file (selettore di Android, `ACTION_OPEN_DOCUMENT`) e i file recenti.
+- **Lavori**: lavori in corso (barra che scorre: il motore non dà una percentuale), risultati con **Apri** e **Condividi**, cronologia (ricordata tra un avvio e l'altro, «Svuota»).
+- **Aspetto**: i cinque temi di Cedro, ricordati; icone delle barre di sistema chiare o scure col tema.
+- Bersagli ≥ 48 dp, margini delle barre letti dalla finestra (JNI). Ogni controllo chiama il motore: niente controlli finti.
+- `cargo run -p cedro-android --example vista -- cartella` disegna le schermate in PNG sul computer.
 
-## Provato su Xiaomi Mi 9T (Android 11, arm64)
+## L'unica eccezione: una classe Java
 
-Foglio, ruota, conversione di un PNG (da `file://` e da un vero `content://` di MediaStore) e di un PDF, cursore qualità, cambio tema, seconda condivisione, tema scuro: schermate in `docs/shots/android-*.png`.
-Memoria dell'app dopo le conversioni: ~34 MB PSS (132 MB RSS); nessun processo figlio.
+Tutto è Rust tranne `java/it/cedro/android/CedroActivity.java` (una ventina di righe): `NativeActivity` non inoltra
+`onActivityResult`, quindi senza questa classe il selettore di file di Android non potrebbe restituire la scelta.
+La classe fa solo da inoltro (`scelto()` restituisce l'ultimo `Uri`); intento, lettura e copia del file sono in Rust (JNI).
+`build.sh` la compila con `javac` + `d8` e la mette nell'APK come `classes.dex`.
+«Apri» e «Condividi» non usano un FileProvider: il risultato si registra in MediaStore (`MediaScannerConnection`) e si usa il suo `content://`.
+
+## Icona
+
+Lo Spicchio del progetto: icona adattiva (primo piano bianco su viola) in `res/mipmap-anydpi-v26`, più le versioni
+mdpi–xxxhdpi quadrata e tonda; `android:icon` e `android:roundIcon` nel manifest; risorse compilate con `aapt2`, senza Gradle.
 
 ## Limiti noti
 
 - Scrive in `/storage/emulated/0/Documents` (target SDK 29 + legacy storage, permesso richiesto a runtime).
 - `noHistory`: Cedro si chiude quando si esce, così ogni «Condividi» parte da zero (NativeActivity non riceve i nuovi intenti).
 - Il lavoro gira finché l'app è in primo piano: manca ancora un servizio con notifica per i lavori lunghi.
-- Aprire il risultato o condividerlo dal foglio richiederebbe un FileProvider (codice Java): non c'è, quindi mancano «Apri» e «Condividi».
-- Orizzontale: provato solo nelle schermate disegnate sul computer (il telefono non è stato ruotato).
-- Solo arm64; PDF → Testo/Word OCR, video, trascrizione e OCR non provati.
+- «Ritaglia» non esiste nel motore, quindi non c'è. Solo arm64; video, trascrizione e OCR non provati su Android.
