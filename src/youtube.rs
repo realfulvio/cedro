@@ -377,6 +377,12 @@ pub fn ensure_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result
         return Ok(ffmpeg_path().unwrap_or(own));
     }
     emit(Event::Log("ffmpeg non c'è ancora: lo scarico (una volta sola, circa 140 MB)".into()));
+    download_ffmpeg(emit, cancel)
+}
+
+/// Scarica ffmpeg di Cedro (anche se sul sistema ce n'è un altro).
+fn download_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<PathBuf, String> {
+    let own = tools_dir().join(exe("ffmpeg"));
     let dir = tools_dir();
     let archive = dir.join(ffmpeg_asset());
     let sums = get_text(&format!("{FFMPEG_BASE}checksums.sha256")).ok();
@@ -504,7 +510,7 @@ pub fn refresh_helpers_if_due(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) 
         }
         let backup_probe = own_ffprobe().with_extension("vecchio");
         let had_probe = name == "ffmpeg" && std::fs::rename(own_ffprobe(), &backup_probe).is_ok();
-        let result = if name == "ffmpeg" { ensure_ffmpeg(emit, cancel) } else { ensure_deno(emit, cancel) };
+        let result = if name == "ffmpeg" { download_ffmpeg(emit, cancel) } else { ensure_deno(emit, cancel) };
         if result.is_ok() {
             let _ = std::fs::remove_file(&backup);
             let _ = std::fs::remove_file(&backup_probe);
@@ -887,10 +893,10 @@ pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Res
     }
     std::fs::create_dir_all(&r.dest).map_err(|e| format!("La cartella di destinazione non si apre: {e}"))?;
     let ytdlp = ensure_ytdlp(emit, cancel)?;
+    refresh_helpers_if_due(emit, cancel);
     let ffmpeg = ensure_ffmpeg(emit, cancel)?;
     let deno = ensure_deno(emit, cancel)?;
     update_ytdlp_if_due(&ytdlp, emit);
-    refresh_helpers_if_due(emit, cancel);
     if let Some(v) = ytdlp_version(&ytdlp) {
         emit(Event::Log(format!("yt-dlp versione {v}")));
     }
