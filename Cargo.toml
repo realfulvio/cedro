@@ -44,6 +44,9 @@ fdk-aac = "0.8"
 libc = "0.2"
 mp4 = "0.14"
 openh264 = { version = "0.9", default-features = false, features = ["source"] }
+# whisper.cpp come libreria nell'APK (src/whisper_android).
+whisper-rs = "0.16"
+whisper-rs-sys = "0.15"
 
 [target.'cfg(windows)'.dependencies]
 windows-core = "0.61"
