@@ -1008,7 +1008,8 @@ fn web(app: &AndroidApp, c: &Consegne, id: u32, link: &Path, out: &Path, azione:
     // Il file scaricato va subito al suo posto se è quello che serve; altrimenti passa da una cartella di lavoro.
     // Per «Testo» la trascrizione legge anche il video: niente conversione.
     let serve_conversione = !testo && ((want == Want::Audio && !media.audio) || (want == Want::Light && media.size.is_none_or(|s| s > 30_000_000) && !media.url.contains("512kb")));
-    let dest = if serve_conversione || testo { out.join(".cedro-web") } else { out.to_path_buf() };
+    // Una cartella per lavoro: due lavori insieme non si cancellano i file a vicenda.
+    let dest = if serve_conversione || testo { out.join(format!(".cedro-web-{id}")) } else { out.to_path_buf() };
     let parte = if serve_conversione || testo { 0.6 } else { 1.0 };
     let niente = std::sync::atomic::AtomicBool::new(false);
     let scaricato = match download(&media, &dest, &|f| prog.store((f * parte * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed), &niente) {
@@ -1044,7 +1045,8 @@ fn youtube(app: &AndroidApp, c: &Consegne, id: u32, url: &str, out: &Path, azion
     use cedro::youtube::{run, Event, Request};
     let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
     let testo = azione == "web-testo";
-    let lavoro = out.join(".cedro-yt");
+    // Una cartella per lavoro: due lavori insieme non si cancellano i file a vicenda.
+    let lavoro = out.join(format!(".cedro-yt-{id}"));
     let _ = std::fs::remove_dir_all(&lavoro);
     let mut r = Request::new(vec![url.to_string()], matches!(azione, "web-audio" | "web-testo"), lavoro.clone());
     r.playlist = false;
@@ -1082,7 +1084,7 @@ fn youtube(app: &AndroidApp, c: &Consegne, id: u32, url: &str, out: &Path, azion
         trascrivi(app, c, id, &file, out, prog, modello);
     } else {
         // Fuori dalla cartella di lavoro, che si cancella: poi in Documenti come gli altri risultati.
-        let posto = out.join(file.file_name().unwrap_or_default());
+        let posto = libero(out, &file);
         let posto = if std::fs::rename(&file, &posto).is_ok() { posto } else { file.clone() };
         let dim = std::fs::metadata(&posto).map(|m| m.len()).unwrap_or(0);
         let titolo = posto.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -1092,6 +1094,20 @@ fn youtube(app: &AndroidApp, c: &Consegne, id: u32, url: &str, out: &Path, azion
         }
     }
     let _ = std::fs::remove_dir_all(&lavoro);
+}
+
+/// Un nome libero in `dir` per `file` («titolo (2).mp4» se «titolo.mp4» c'è già): non si sovrascrive niente.
+#[cfg(feature = "youtube")]
+fn libero(dir: &Path, file: &Path) -> PathBuf {
+    let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = file.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let mut posto = dir.join(format!("{stem}{ext}"));
+    let mut n = 2;
+    while posto.exists() {
+        posto = dir.join(format!("{stem} ({n}){ext}"));
+        n += 1;
+    }
+    posto
 }
 
 /// Voce in testo con whisper.cpp (nell'APK): il modello scelto (Veloce = tiny, Buona = base) si scarica al primo uso. Salva un .txt in Documenti.
