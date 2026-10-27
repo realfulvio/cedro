@@ -12,3 +12,7 @@ Installare: `adb install -r android/target/cedro-debug.apk`. Su Xiaomi/MIUI va p
 
 Limiti noti: scrive in `/storage/emulated/0/Documents` (target SDK 29 + legacy storage); una nuova
 condivisione a app aperta non ricarica l'intento (chiudere e ripetere); solo arm64-v8a.
+
+Provato su Xiaomi Mi 9T (Android 11, arm64): ruota a schermo intero, condivisione di un PNG,
+conversione in JPEG/WebP/BMP/GIF salvata in Documenti (`docs/shots/android-ruota.png`).
+Memoria dell'app dopo le conversioni: ~43 MB PSS (142 MB RSS); nessun processo figlio.
