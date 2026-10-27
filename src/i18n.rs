@@ -30,6 +30,12 @@ impl Lang {
 pub const CHOICES: &[(&str, &str)] = &[("it", "Italiano"), ("en", "English")];
 
 static CURRENT: AtomicU8 = AtomicU8::new(0);
+static FIXED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Per chi sceglie la lingua da sé (Android): da ora le impostazioni lette non la cambiano più.
+pub fn fix() {
+    FIXED.store(true, Ordering::Relaxed);
+}
 
 pub fn lang() -> Lang {
     if CURRENT.load(Ordering::Relaxed) == 1 {
@@ -50,6 +56,9 @@ pub fn english() -> bool {
 
 /// Chiamata da `settings` a ogni lettura o scrittura: `auto` (o vuoto) segue il sistema, `it` e `en` sono fisse.
 pub(crate) fn segui(setting: &str) {
+    if FIXED.load(Ordering::Relaxed) {
+        return;
+    }
     set(from_setting(setting));
 }
 
@@ -69,6 +78,11 @@ pub fn detect() -> Lang {
         return Lang::It;
     }
     from_locale(&system_locale())
+}
+
+/// La lingua per un codice del sistema («it», «it_IT», «en-US»…): per chi la chiede al sistema in un altro modo (Android).
+pub fn from_tag(tag: &str) -> Lang {
+    from_locale(tag)
 }
 
 fn from_locale(tag: &str) -> Lang {

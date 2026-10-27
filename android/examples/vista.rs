@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use cedro::ui::gfx::{Fonts, GlyphCache, Painter};
 use cedro::ui::theme::ThemeId;
-use cedro_android::ui::{App, Archivio, Lavoro, Recente, Scheda, Stato};
+use cedro_android::ui::{App, Archivio, Info, Lavoro, Recente, Scheda, Stato};
 
 fn recenti(app: &mut App) {
     let img = PathBuf::from("docs/hero.png");
@@ -26,6 +26,15 @@ fn lavori(app: &mut App) {
     ];
 }
 
+fn info() -> Info {
+    let r = |k: &str, v: &str| (k.to_string(), v.to_string());
+    Info {
+        generali: vec![r("Telefono", "Xiaomi Mi 9T"), r("Android", "11 (API 30)"), r("Processore", "Snapdragon 730"), r("Core", "8 (2 grandi + 6 piccoli)"), r("Memoria", "6,0 GB (3,1 GB liberi)"), r("Scheda video", "Adreno 618")],
+        istruzioni: vec![("NEON".into(), true), ("dotprod".into(), true), ("i8mm".into(), false)],
+        accelerazioni: vec![("Trascrizione".into(), "processore, dotprod".into(), true), ("Video MP4".into(), "codificatore del telefono".into(), true)],
+    }
+}
+
 fn scena(nome: &str, w: f32, h: f32, out: &PathBuf, f: impl FnOnce(&mut App)) {
     let mut app = App::new(ThemeId::WindowsEssenziale);
     let img = PathBuf::from("docs/hero.png");
@@ -42,6 +51,12 @@ fn scena(nome: &str, w: f32, h: f32, out: &PathBuf, f: impl FnOnce(&mut App)) {
 }
 
 fn main() {
+    // LANG_FOTO=en: le schermate in inglese, e a fine corsa l'elenco dei testi senza traduzione.
+    let inglese = std::env::var("LANG_FOTO").is_ok_and(|v| v == "en");
+    if inglese {
+        cedro::i18n::set(cedro::i18n::Lang::En);
+        cedro::i18n::record_misses(true);
+    }
     let out = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "/tmp/vista".into()));
     std::fs::create_dir_all(&out).unwrap();
     let (pw, ph, lw, lh) = (392.0, 800.0, 800.0, 360.0);
@@ -60,6 +75,10 @@ fn main() {
         lavori(a);
         a.scheda = Scheda::Lavori;
     });
+    scena("info", pw, ph, &out, |a| {
+        a.info = info();
+        a.scheda = Scheda::Info;
+    });
     scena("aspetto", pw, ph, &out, |a| a.scheda = Scheda::Aspetto);
     scena("scuro-ruota", pw, ph, &out, |a| a.tema = ThemeId::BancoDiLavoro);
     scena("orizz-ruota", lw, lh, &out, |_| {});
@@ -68,4 +87,7 @@ fn main() {
         lavori(a);
         a.scheda = Scheda::Lavori;
     });
+    for m in cedro::i18n::misses() {
+        println!("SENZA TRADUZIONE: {m:?}");
+    }
 }
