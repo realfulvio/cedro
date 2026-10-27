@@ -224,12 +224,11 @@ impl Pcm {
 
 pub(crate) fn decode(path: &Path) -> Result<Pcm, String> {
     // Un AVI non è un WAV: l'audio si prende dai pacchetti del contenitore.
-    #[cfg(any(target_os = "linux", target_os = "android"))]
     if let Ok(mut file) = File::open(path) {
         use std::io::Read;
         let mut head = [0u8; 12];
         if file.read_exact(&mut head).is_ok() && &head[0..4] == b"RIFF" && &head[8..12] == b"AVI " {
-            return crate::linux_video::avi_audio(path);
+            return crate::avi::avi_audio(path);
         }
     }
     let first = decode_symphonia(path);
