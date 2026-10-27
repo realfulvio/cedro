@@ -10,6 +10,11 @@ description = "Prototipo Android di Cedro: la ruota a schermo intero e «Condivi
 name = "cedro_android"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# YouTube con yt-dlp: mette nell'APK Python, QuickJS e ffmpeg precompilati da youtubedl-android
+# (android/build.sh con CEDRO_YOUTUBE=1). Spento per il catalogo F-Droid, che costruisce solo da sorgente.
+youtube = []
+
 [dependencies]
 cedro = { path = ".." }
 log = "0.4"
