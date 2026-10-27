@@ -125,6 +125,15 @@ fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) 
         return Ok(None);
     }
     let mime = j!(env.call_method(&intento, "getType", "()Ljava/lang/String;", &[])).l().ok().and_then(|o| stringa(env, o)).unwrap_or_default();
+    if mime.starts_with("text/") {
+        // Un link condiviso da un browser o da un'altra app: «Video dal web».
+        let k = j!(env.new_string("android.intent.extra.TEXT"));
+        let testo = j!(env.call_method(&intento, "getStringExtra", "(Ljava/lang/String;)Ljava/lang/String;", &[JValue::Object(&k)])).l().ok().and_then(|o| stringa(env, o)).unwrap_or_default();
+        return match cedro::webvideo::find_url(&testo) {
+            Some(url) => Ok(Some(Condiviso { nome: url.clone(), path: PathBuf::from(url) })),
+            None => Err("il testo condiviso non contiene un link".into()),
+        };
+    }
     let chiave = j!(env.new_string("android.intent.extra.STREAM"));
     let uri = j!(j!(env.call_method(&intento, "getParcelableExtra", "(Ljava/lang/String;)Landroid/os/Parcelable;", &[JValue::Object(&chiave)])).l());
     if uri.is_null() {
@@ -335,6 +344,26 @@ fn con_attivita<T>(app: &AndroidApp, f: impl FnOnce(&mut JNIEnv, &JObject) -> Re
     r
 }
 
+/// Il testo negli appunti (vuoto se non c'è).
+fn appunti(app: &AndroidApp) -> String {
+    con_attivita(app, |env, att| {
+        let nome = env.new_string("clipboard").map_err(|e| e.to_string())?;
+        let gestore = env.call_method(att, "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;", &[JValue::Object(&nome)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let clip = env.call_method(&gestore, "getPrimaryClip", "()Landroid/content/ClipData;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        if clip.is_null() {
+            return Ok(String::new());
+        }
+        let voce = env.call_method(&clip, "getItemAt", "(I)Landroid/content/ClipData$Item;", &[JValue::Int(0)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let t = env.call_method(&voce, "coerceToText", "(Landroid/content/Context;)Ljava/lang/CharSequence;", &[JValue::Object(att)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        if t.is_null() {
+            return Ok(String::new());
+        }
+        let st = env.call_method(&t, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        Ok(stringa(env, st).unwrap_or_default())
+    })
+    .unwrap_or_default()
+}
+
 /// Apre il selettore di file di Android (ACTION_OPEN_DOCUMENT). Il risultato lo legge `scelto`.
 fn scegli(app: &AndroidApp, sorgente: Sorgente) -> Result<(), String> {
     con_attivita(app, |env, attivita| {
@@ -345,7 +374,7 @@ fn scegli(app: &AndroidApp, sorgente: Sorgente) -> Result<(), String> {
         let (tipo, altri): (&str, &[&str]) = match sorgente {
             Sorgente::Foto => ("image/*", &[]),
             Sorgente::Audio => ("audio/*", &[]),
-            Sorgente::Altri => ("*/*", &[]),
+            Sorgente::Altri | Sorgente::Link => ("*/*", &[]),
             Sorgente::Documenti => (
                 "*/*",
                 &[
@@ -554,6 +583,9 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
         invia(Stato::Errore(format!("Documenti non è scrivibile: {e}")));
         return;
     }
+    if azione.starts_with("web-") {
+        return web(&app, &c, id, &file, &out, azione, &prog);
+    }
     if azione == "trascrivi" {
         return trascrivi(&app, &c, id, &file, &out, &prog, qualita as usize);
     }
@@ -571,6 +603,52 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
             log::error!("{azione}: conversione fallita: {e}");
             invia(Stato::Errore(e.to_string()));
         }
+    }
+}
+
+/// «Video dal web»: capisce il link, scarica il file in Documenti e, per «Solo audio» o «Video leggero», lo converte col motore.
+fn web(app: &AndroidApp, c: &Consegne, id: u32, link: &Path, out: &Path, azione: &str, prog: &Arc<std::sync::atomic::AtomicU32>) {
+    use cedro::webvideo::{download, resolve, Want};
+    let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
+    let url = link.to_string_lossy().into_owned();
+    let want = match azione {
+        "web-audio" => Want::Audio,
+        "web-leggero" => Want::Light,
+        _ => Want::Video,
+    };
+    let finito = |path: PathBuf, msg: String| {
+        let nome = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let _ = con_attivita(app, |env, att| scansiona(env, att, &path, false));
+        invia(Stato::Fatto { path, nome, msg });
+    };
+    let media = match resolve(&url, want) {
+        Ok(m) => m,
+        Err(e) => return invia(Stato::Errore(e)),
+    };
+    log::info!("web: {} → {} ({:?} byte)", url, media.url, media.size);
+    // Il file scaricato va subito al suo posto se è quello che serve; altrimenti passa da una cartella di lavoro.
+    let serve_conversione = (want == Want::Audio && !media.audio) || (want == Want::Light && media.size.is_none_or(|s| s > 30_000_000) && !media.url.contains("512kb"));
+    let dest = if serve_conversione { out.join(".cedro-web") } else { out.to_path_buf() };
+    let parte = if serve_conversione { 0.6 } else { 1.0 };
+    let niente = std::sync::atomic::AtomicBool::new(false);
+    let scaricato = match download(&media, &dest, &|f| prog.store((f * parte * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed), &niente) {
+        Ok(p) => p,
+        Err(e) => return invia(Stato::Errore(e)),
+    };
+    if !serve_conversione {
+        let dim = std::fs::metadata(&scaricato).map(|m| m.len()).unwrap_or(0);
+        return finito(scaricato, format!("{} · {:.1} MB", media.title, dim as f64 / 1e6).replace('.', ","));
+    }
+    let formato = if want == Want::Audio { "mp3" } else { "mp4" };
+    let p2 = prog.clone();
+    let esito = cedro::progress::con(
+        move |f| p2.store(((0.6 + f * 0.4) * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed),
+        || cedro::perform_into(&scaricato, formato, 82, Some(out)),
+    );
+    let _ = std::fs::remove_dir_all(&dest);
+    match esito {
+        Ok(o) => finito(o.path, o.message),
+        Err(e) => invia(Stato::Errore(e.to_string())),
     }
 }
 
@@ -649,6 +727,12 @@ fn ricarica_recenti(cartella: PathBuf, c: &Consegne) {
 
 /// Mette un file nell'interfaccia e prepara, in un thread, l'anteprima (foto, prima pagina o onda).
 fn carica_file(ui: &mut App, c: &Consegne, cartella: &Path, path: PathBuf, nome: String, da_condivisione: bool) {
+    if crate::ui::e_link(&path) {
+        // «Video dal web»: nessuna anteprima, il sito si legge quando si sceglie cosa farne.
+        let host = nome.split_once("://").map(|(_, r)| r).unwrap_or(&nome).split('/').next().unwrap_or("").to_string();
+        ui.imposta_file(Archivio { path, nome: host, dim: 0 }, cedro::Kind::Video, true);
+        return;
+    }
     let kind = tipo_di(&path);
     ui.imposta_file(file_di(&path, nome), kind, da_condivisione);
     let (c2, p2) = (c.clone(), path.clone());
@@ -802,6 +886,13 @@ fn android_main(app: AndroidApp) {
                         }
                         Effetto::SalvaLavori => {
                             let _ = std::fs::write(&file_lavori, ui.serializza());
+                            sporco = true;
+                        }
+                        Effetto::Scegli(Sorgente::Link) => {
+                            match cedro::webvideo::find_url(&appunti(&app)) {
+                                Some(url) => carica_file(&mut ui, &consegne, &cartella, PathBuf::from(&url), url, true),
+                                None => log::info!("negli appunti non c'è un link"),
+                            }
                             sporco = true;
                         }
                         Effetto::Scegli(s) => {

@@ -82,6 +82,8 @@ pub enum Sorgente {
     Documenti,
     Audio,
     Altri,
+    /// Un link (dagli appunti): «Video dal web».
+    Link,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -168,6 +170,22 @@ const fn r(id: &'static str, titolo: &'static str, sotto: &'static str, conv: bo
     Riga { id, titolo, sotto, conv }
 }
 
+/// Un «file» che in realtà è un link (http/https): si scarica, non si converte.
+pub fn e_link(path: &Path) -> bool {
+    let t = path.to_string_lossy();
+    t.starts_with("https://") || t.starts_with("http://")
+}
+
+/// Le azioni di «Video dal web»: ogni tessera chiama `webvideo` (l'azione comincia con «web-»).
+fn righe_link() -> Vec<&'static Riga> {
+    static WEB: [Riga; 3] = [
+        r("web-video", "Video", "Il migliore che c'è", false),
+        r("web-audio", "Solo audio", "MP3 dal video", false),
+        r("web-leggero", "Video leggero", "Meno spazio", false),
+    ];
+    WEB.iter().collect()
+}
+
 /// Le azioni da mettere nelle tessere per un tipo di file: solo quelle che il motore sa fare.
 fn righe(kind: Kind) -> Vec<&'static Riga> {
     static IMG: [Riga; 7] = [
@@ -213,6 +231,8 @@ fn sotto_altro(kind: Kind) -> &'static str {
 
 fn icona_di(id: &str) -> &'static str {
     match id {
+        "web-video" | "web-leggero" => ic::VIDEO,
+        "web-audio" => ic::AUDIO,
         "webp" | "bmp" | "gray" | "jpeg" | "jpg" | "png" | "tiff" | "gif" => ic::IMAGE,
         "mp4" | "webm" | "mov" | "mkv" | "avi" => ic::VIDEO,
         "wav" | "mp3" | "ogg" | "m4a" | "aac" | "flac" => ic::AUDIO,
@@ -354,7 +374,7 @@ impl App {
         self.onda = None;
         self.scelta_file = false;
         self.scheda = Scheda::Ruota;
-        self.foglio = da_condivisione && !righe(kind).is_empty();
+        self.foglio = da_condivisione && (!righe(kind).is_empty() || self.file.as_ref().is_some_and(|f| e_link(&f.path)));
         self.dal_foglio = false;
     }
 
@@ -436,9 +456,18 @@ impl App {
         }
     }
 
+    /// Le tessere del foglio per il file (o il link) di adesso.
+    fn righe_ora(&self) -> Vec<&'static Riga> {
+        if self.file.as_ref().is_some_and(|f| e_link(&f.path)) {
+            righe_link()
+        } else {
+            righe(self.kind)
+        }
+    }
+
     /// L'azione scelta ora è la trascrizione (si sceglie il modello al posto della qualità)?
     fn modello_serve(&self) -> bool {
-        self.file.is_some() && self.foglio && righe(self.kind).get(self.tessera).is_some_and(|r| r.id == "trascrivi")
+        self.file.is_some() && self.foglio && self.righe_ora().get(self.tessera).is_some_and(|r| r.id == "trascrivi")
     }
 
     /// Il cursore Qualità (o la scelta del modello) serve per l'azione scelta ora?
@@ -450,7 +479,7 @@ impl App {
             return true;
         }
         if self.foglio {
-            return righe(self.kind).get(self.tessera).is_some_and(|r| uses_quality(self.kind, r.id));
+            return self.righe_ora().get(self.tessera).is_some_and(|r| uses_quality(self.kind, r.id));
         }
         self.scelta.and_then(|i| self.fette().get(i).copied()).is_some_and(|f| uses_quality(self.kind, f.id))
     }
@@ -577,7 +606,7 @@ impl App {
             }
             Azione::Vai => {
                 if self.foglio {
-                    match righe(self.kind).get(self.tessera).copied() {
+                    match self.righe_ora().get(self.tessera).copied() {
                         Some(riga) => self.avvia(riga.id, riga.titolo, riga.conv),
                         None => Effetto::Niente,
                     }
@@ -916,7 +945,7 @@ impl App {
     fn pulsante_vai(&mut self, p: &mut Painter, bt: R) {
         let pal = self.pal();
         let testo = if self.foglio {
-            righe(self.kind).get(self.tessera).map(|r| if r.conv { format!("Converti in {}", r.titolo) } else { r.titolo.to_string() })
+            self.righe_ora().get(self.tessera).map(|r| if r.conv { format!("Converti in {}", r.titolo) } else { r.titolo.to_string() })
         } else {
             self.scelta.and_then(|i| self.fette().get(i).copied()).map(|f| if self.modo == 1 { format!("Applica: {}", f.label) } else { format!("Converti in {}", f.label) })
         };
@@ -1005,7 +1034,7 @@ impl App {
         let file = self.file.clone().unwrap();
         self.bottone_icona(p, (4.0, 4.0, TOCCO, TOCCO), ic::CLOSE, Azione::Esci);
         self.titolo_barra(p, 60.0, w - 72.0, "Cosa ne faccio?");
-        let tutte = righe(self.kind);
+        let tutte = self.righe_ora();
         let serve_q = self.qualita_serve();
 
         let (bx, by, bw, bh, gx, gy, gw, gh): (f32, f32, f32, f32, f32, f32, f32, f32);
@@ -1032,13 +1061,14 @@ impl App {
         }
         // Il file in grande, con nome, tipo e peso.
         self.anteprima(p, (bx, by, bw, bh), 16.0, false);
-        let et = format!("{} · {}", nome_tipo(self.kind), peso(file.dim));
+        let et = if e_link(&file.path) { "Video dal web".to_string() } else { format!("{} · {}", nome_tipo(self.kind), peso(file.dim)) };
         p.rrect_a(bx + 8.0, by + bh - 54.0, bw - 16.0, 46.0, 12.0, (0, 0, 0), 0.6);
         p.text(&file.nome, bx + 18.0, by + bh - 54.0, bw - 36.0, 26.0, 16.0, Weight::Semibold, BIANCO, Align::Left);
         p.text(&et, bx + 18.0, by + bh - 32.0, bw - 36.0, 20.0, 13.0, Weight::Regular, (235, 235, 240), Align::Left);
 
         // Le azioni, due colonne, tutte a vista.
-        let n = tutte.len() + 1;
+        let con_altro = !e_link(&file.path);
+        let n = tutte.len() + usize::from(con_altro);
         let righe_n = n.div_ceil(2);
         let gap = 8.0;
         let th = ((gh - gap * (righe_n as f32 - 1.0)) / righe_n as f32).clamp(52.0, 96.0);
@@ -1097,7 +1127,7 @@ impl App {
         let orizz = w > h * 1.2;
         self.titolo_barra(p, 16.0, w - 80.0, "Scegli il file");
         self.bottone_icona(p, (w - 52.0, 4.0, TOCCO, TOCCO), ic::CLOSE, Azione::ChiudiScelta);
-        let voci = [(Sorgente::Foto, "Foto", ic::IMAGE), (Sorgente::Documenti, "Documenti", ic::FILE), (Sorgente::Audio, "Audio", ic::AUDIO), (Sorgente::Altri, "Altri file", ic::FOLDER)];
+        let voci = [(Sorgente::Foto, "Foto", ic::IMAGE), (Sorgente::Documenti, "Documenti", ic::FILE), (Sorgente::Audio, "Audio", ic::AUDIO), (Sorgente::Altri, "Altri file", ic::FOLDER), (Sorgente::Link, "Link dagli appunti", ic::VIDEO)];
         let (colonne, th) = if orizz { (4usize, 64.0) } else { (2usize, 72.0) };
         let gap = 10.0;
         let tw = (w - 24.0 - gap * (colonne as f32 - 1.0)) / colonne as f32;
@@ -1111,7 +1141,7 @@ impl App {
             p.text(nome, rc.0 + 62.0, rc.1, rc.2 - 70.0, th, 17.0, Weight::Semibold, pal.text, Align::Left);
             self.colpi.push((Forma::R(rc), az));
         }
-        let righe_voci = 4usize.div_ceil(colonne) as f32;
+        let righe_voci = 5usize.div_ceil(colonne) as f32;
         let y = BARRA + righe_voci * (th + gap) + 8.0;
         p.text("Recenti", 16.0, y, w - 32.0, 24.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
         if self.recenti.is_empty() {
