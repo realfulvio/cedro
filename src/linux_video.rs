@@ -548,6 +548,33 @@ fn duration_90k(ticks_100ns: i64) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX).max(1)
 }
 
+/// True se `data` è davvero Annex B. Un campione con prefisso di lunghezza (MP4/MKV) può iniziare con `00 00 01 xx`
+/// (NAL da 256 a 511 byte) e sembrare un codice di inizio: se i prefissi coprono il campione esatto, è a lunghezze.
+fn is_annex(data: &[u8]) -> bool {
+    if annex_nals(data).is_empty() {
+        return false;
+    }
+    !(1..=4usize).any(|nal_len| length_tiles(data, nal_len))
+}
+
+fn length_tiles(sample: &[u8], nal_len: usize) -> bool {
+    let mut i = 0;
+    let mut count = 0;
+    while i + nal_len <= sample.len() {
+        let mut len = 0usize;
+        for byte in &sample[i..i + nal_len] {
+            len = (len << 8) | *byte as usize;
+        }
+        i += nal_len;
+        if len == 0 || i + len > sample.len() {
+            return false;
+        }
+        i += len;
+        count += 1;
+    }
+    i == sample.len() && count > 0
+}
+
 fn annex_nals(data: &[u8]) -> Vec<&[u8]> {
     let mut marks = Vec::new();
     let mut i = 0;
@@ -1126,7 +1153,7 @@ fn read_span(file: &mut File, limit: u64) -> Result<Option<IsoSpan>, String> {
 }
 
 fn annex_sample(sample: &[u8]) -> Vec<u8> {
-    if !annex_nals(sample).is_empty() {
+    if is_annex(sample) {
         return sample.to_vec();
     }
     for nal_len in [4usize, 3, 2, 1] {
@@ -1288,7 +1315,7 @@ fn h264_private(private: &[u8]) -> (usize, Vec<u8>) {
 }
 
 fn annex_pref(sample: &[u8], nal_len: usize) -> Vec<u8> {
-    if !annex_nals(sample).is_empty() {
+    if is_annex(sample) {
         return sample.to_vec();
     }
     let annex = length_to_annex(sample, nal_len);
@@ -1366,7 +1393,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
             Err(_) => break,
         };
         if packet.track_id() == video_id {
-            let annex = if annex_nals(packet.buf()).is_empty() {
+            let annex = if !is_annex(packet.buf()) {
                 length_to_annex(packet.buf(), nal_len)
             } else {
                 packet.buf().to_vec()
@@ -1599,7 +1626,7 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                 Pix::Mjpeg => emit(mjpeg_frame(&chunk.data)?)?,
                 Pix::H264 => {
                     let dec = decoder.as_mut().expect("decoder");
-                    let annex = if annex_nals(&chunk.data).is_empty() {
+                    let annex = if !is_annex(&chunk.data) {
                         length_to_annex(&chunk.data, 4)
                     } else {
                         chunk.data.clone()
@@ -2018,4 +2045,18 @@ fn h264_decoder() -> Result<Decoder, String> {
     use openh264::decoder::{DecoderConfig, Flush};
     Decoder::with_api_config(OpenH264API::from_source(), DecoderConfig::new().flush_after_decode(Flush::NoFlush))
         .map_err(|err| format!("H.264 non letto: {err}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_annex;
+
+    #[test]
+    fn length_prefixed_sample_starting_like_a_start_code() {
+        // NAL da 256 byte con prefisso a 4 byte: 00 00 01 00 sembra un codice di inizio, ma è una lunghezza.
+        let mut sample = vec![0, 0, 1, 0, 0x65];
+        sample.extend(std::iter::repeat(0x11).take(255));
+        assert!(!is_annex(&sample));
+        assert!(is_annex(&[0, 0, 0, 1, 0x67, 0x42, 0x00, 0x1e]));
+    }
 }
