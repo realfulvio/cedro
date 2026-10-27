@@ -1,23 +1,21 @@
-//! Il carattere dell'edizione (Figtree nella standard, Titillium Web in quella del Comune di Bondeno,
-//! licenza OFL) incorporato nel programma: come su Windows si carica all'avvio per il solo
+//! I caratteri delle finestre (Figtree, e Titillium Web con il tema Bondeno; licenza OFL) incorporati nel programma: come su Windows si carica all'avvio per il solo
 //! processo di Cedro, senza installarlo. Si registra in fontconfig (che Pango e Cairo usano) da file
 //! scritti nella cartella della cache; se qualcosa manca si ripiega sul carattere del desktop.
 
 use std::ffi::{c_char, c_int, c_void, CString};
 use std::path::PathBuf;
 
-#[cfg(feature = "bondeno")]
-const FILES: [(&str, &[u8]); 2] = [
+const FILES: [(&str, &[u8]); 4] = [
+    ("Figtree-Regular.ttf", include_bytes!("../assets/fonts/Figtree-Regular.ttf")),
+    ("Figtree-Bold.ttf", include_bytes!("../assets/fonts/Figtree-Bold.ttf")),
     ("TitilliumWeb-Regular.ttf", include_bytes!("../assets/fonts/TitilliumWeb-Regular.ttf")),
     ("TitilliumWeb-Bold.ttf", include_bytes!("../assets/fonts/TitilliumWeb-Bold.ttf")),
 ];
-#[cfg(not(feature = "bondeno"))]
-const FILES: [(&str, &[u8]); 2] = [
-    ("Figtree-Regular.ttf", include_bytes!("../assets/fonts/Figtree-Regular.ttf")),
-    ("Figtree-Bold.ttf", include_bytes!("../assets/fonts/Figtree-Bold.ttf")),
-];
 
-pub const FACE: &str = cedro::tema::attivo_font();
+/// Il carattere del tema in uso (Titillium Web con il tema Bondeno, Figtree negli altri).
+pub fn face() -> &'static str {
+    cedro::tema::attivo().font
+}
 
 fn cache_dir() -> Option<PathBuf> {
     let base = match std::env::var_os("XDG_CACHE_HOME") {
@@ -27,7 +25,9 @@ fn cache_dir() -> Option<PathBuf> {
     Some(base.join("cedro/fonts"))
 }
 
-/// Registra i due file. Va chiamata prima di aprire qualunque finestra; vale `true` se il carattere è disponibile.
+static LOADED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Registra i quattro file. Va chiamata prima di aprire qualunque finestra; vale `true` se il carattere è disponibile.
 pub fn load() -> bool {
     let Some(dir) = cache_dir() else { return false };
     if std::fs::create_dir_all(&dir).is_err() {
@@ -52,13 +52,17 @@ pub fn load() -> bool {
         let Ok(c_path) = CString::new(path.to_string_lossy().as_bytes()) else { ok = false; continue };
         ok &= unsafe { add(std::ptr::null_mut(), c_path.as_ptr()) } != 0;
     }
+    LOADED.store(ok, std::sync::atomic::Ordering::Relaxed);
     ok
 }
 
-/// Rende il carattere dell'edizione quello di tutte le finestre GTK di Cedro, finestre di dialogo e menu compresi.
+/// Rende il carattere del tema quello di tutte le finestre GTK di Cedro, finestre di dialogo e menu compresi.
 pub fn apply() {
+    if !LOADED.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
     if let Some(settings) = gtk4::Settings::default() {
-        settings.set_gtk_font_name(Some(&format!("{FACE} 11")));
+        settings.set_gtk_font_name(Some(&format!("{} 11", face())));
     }
 }
 

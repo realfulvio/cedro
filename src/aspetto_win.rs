@@ -104,7 +104,7 @@ unsafe fn paint(hwnd: HWND, h: &Host) {
     let (w, hh) = (rc.right.max(1), rc.bottom.max(1));
     let s = scale(h);
     let mut cache = h.cache.borrow_mut();
-    let mut painter = Painter::new(w as u32, hh as u32, s, Fonts::shared(), &mut cache);
+    let mut painter = Painter::new(w as u32, hh as u32, s, Fonts::current(), &mut cache);
     h.page.borrow_mut().draw(&mut painter, w as f32 / s, hh as f32 / s);
     let data = painter.bgra();
     let bmi = BITMAPINFO {

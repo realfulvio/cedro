@@ -634,6 +634,13 @@ impl<'a> Frame<'a> {
 
     /// Il simbolo Spicchio con la scritta «Cedro» accanto (la scritta prende il colore del tema).
     pub fn brand(&mut self, x: f32, y: f32, sym: f32, word_size: f32, gap: f32, word: Option<Rgb>) {
+        let mut x = x;
+        if self.theme == ThemeId::Bondeno {
+            // Il tema del Comune: davanti al logo, lo stemma.
+            let side = (sym * 1.5).round();
+            self.p.stemma(crate::edizione::Stemma::Solo, x, y + sym / 2.0 - side / 2.0, side);
+            x += side + gap;
+        }
         self.p.symbol(x, y, sym);
         if word_size > 0.0 {
             let c = word.unwrap_or(self.pal.text);

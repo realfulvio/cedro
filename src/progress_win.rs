@@ -94,26 +94,6 @@ pub fn finish(ok: bool, label: &str) {
     wake();
 }
 
-/// Il lavoro è stato annullato dall'utente: non è un errore né un successo, la linea sparisce.
-pub fn dismiss() {
-    if let Some(j) = job().as_mut() {
-        j.finished = Some((Instant::now().checked_sub(LINGER * 2).unwrap_or_else(Instant::now), true));
-    }
-    wake();
-}
-
-/// Toglie la linea di un lavoro già finito (per esempio un errore rimasto): l'utente è passato ad altro.
-/// Un lavoro in corso resta.
-pub fn forget_finished() {
-    {
-        let mut slot = job();
-        if slot.as_ref().is_some_and(|j| j.finished.is_some()) {
-            *slot = None;
-        }
-    }
-    wake();
-}
-
 fn wake() {
     let raw = WINDOW.load(Ordering::Relaxed);
     if raw != 0 {
