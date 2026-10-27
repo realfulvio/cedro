@@ -1061,7 +1061,11 @@ fn on_update(app: &Application, news: UpdateNews) {
                     if let Ok(exe) = update::installed_binary() {
                         let _ = std::process::Command::new("sh").arg("-c").arg("sleep 2; exec \"$0\" --background").arg(exe).spawn();
                     }
-                    glib::timeout_add_local_once(std::time::Duration::from_millis(800), || std::process::exit(0));
+                    glib::timeout_add_local_once(std::time::Duration::from_millis(800), || {
+                        // Un download in corso non resta orfano: yt-dlp e ffmpeg si fermano con Cedro.
+                        cedro::youtube::kill_all();
+                        std::process::exit(0)
+                    });
                     glib::ControlFlow::Break
                 }
             });
