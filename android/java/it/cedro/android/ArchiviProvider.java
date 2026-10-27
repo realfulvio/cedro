@@ -11,7 +11,6 @@ import android.webkit.MimeTypeMap;
 
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.IOException;
 
 /**
  * Serve i risultati in Documenti con un indirizzo che finisce col nome del file
@@ -22,13 +21,13 @@ public class ArchiviProvider extends ContentProvider {
     private static final String RADICE = "/storage/emulated/0/Documents/";
 
     private File file(Uri uri) throws FileNotFoundException {
-        try {
-            File f = new File("/storage/emulated/0" + uri.getPath()).getCanonicalFile();
-            if (!f.getPath().startsWith(RADICE) || !f.isFile()) throw new FileNotFoundException(uri.toString());
-            return f;
-        } catch (IOException e) {
-            throw new FileNotFoundException(uri.toString());
-        }
+        // Niente getCanonicalFile(): /storage/emulated/0 è un collegamento e il percorso «vero» non comincia più per
+        // RADICE (il file risultava non trovato e Telegram non inviava niente). Si normalizza e basta (toglie «..»).
+        String voluto = "/storage/emulated/0" + uri.getPath();
+        String pulito = java.nio.file.Paths.get(voluto).normalize().toString();
+        File f = new File(pulito);
+        if (!pulito.startsWith(RADICE) || !f.isFile()) throw new FileNotFoundException(uri.toString());
+        return f;
     }
 
     @Override public boolean onCreate() { return true; }
