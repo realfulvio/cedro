@@ -1,0 +1,60 @@
+name: Firma con SignPath
+description: >
+  Manda a SignPath i file .exe indicati, aspetta che Luca approvi la richiesta e rimette i file firmati
+  al loro posto (stessa cartella, stesso nome). Si usa solo nelle release: vedi CODE_SIGNING_POLICY.md.
+
+inputs:
+  nome:
+    description: Nome dell'artifact da mandare a SignPath
+    required: true
+  file:
+    description: File da firmare (anche più righe); devono stare tutti nella stessa cartella
+    required: true
+  cartella:
+    description: La cartella dei file, dove tornano firmati
+    required: true
+  configurazione:
+    description: Artifact configuration di SignPath (vedi docs/firma)
+    required: true
+  api-token:
+    required: true
+  organization-id:
+    required: true
+  project-slug:
+    required: true
+  signing-policy-slug:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/upload-artifact@v4
+      id: carica
+      with:
+        name: ${{ inputs.nome }}
+        path: ${{ inputs.file }}
+        if-no-files-found: error
+
+    - uses: signpath/github-action-submit-signing-request@v3
+      with:
+        api-token: ${{ inputs.api-token }}
+        organization-id: ${{ inputs.organization-id }}
+        project-slug: ${{ inputs.project-slug }}
+        signing-policy-slug: ${{ inputs.signing-policy-slug }}
+        artifact-configuration-slug: ${{ inputs.configurazione }}
+        github-artifact-id: ${{ steps.carica.outputs.artifact-id }}
+        # Ogni richiesta va approvata a mano su SignPath: c'è un'ora di tempo.
+        wait-for-completion-timeout-in-seconds: 3600
+        output-artifact-directory: firmati-${{ inputs.nome }}
+
+    - name: File firmati al loro posto
+      shell: pwsh
+      run: |
+        $firmati = Get-ChildItem 'firmati-${{ inputs.nome }}' -Recurse -Filter *.exe
+        if (-not $firmati) { throw 'SignPath non ha restituito nessun .exe' }
+        foreach ($f in $firmati) {
+          $sig = Get-AuthenticodeSignature $f.FullName
+          "{0}: {1} ({2})" -f $f.Name, $sig.Status, $sig.SignerCertificate.Subject
+          if ($sig.Status -ne 'Valid') { throw "$($f.Name): firma non valida" }
+          Copy-Item $f.FullName (Join-Path '${{ inputs.cartella }}' $f.Name) -Force
+        }
