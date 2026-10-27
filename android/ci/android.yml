@@ -1,0 +1,78 @@
+name: Android
+
+# Costruisce l'APK di Cedro per Android (arm64), firmato con la chiave di rilascio, e lo allega alla release.
+# Parte a mano (Actions → Android → Run workflow) o con un tag «android-v<versione>». Senza i secret costruisce
+# comunque l'APK con la chiave di debug (solo prova, non si pubblica).
+# Secret richiesti per il rilascio: ANDROID_KEYSTORE_B64 (il keystore in base64), ANDROID_KS_PASS, ANDROID_KEY_ALIAS (facoltativo, default «cedro»).
+# La release (tag android-v<versione>) si crea come bozza: pubblicarla è una scelta a mano.
+
+on:
+  push:
+    tags: ["android-v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag della release a cui allegare l'APK (vuoto = solo prova, l'APK resta tra gli artefatti)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  DEBIAN_FRONTEND: noninteractive
+  ANDROID_SDK: /opt/android-sdk
+  NDK_VERSION: 27.2.12479018
+
+jobs:
+  apk:
+    name: APK (arm64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Strumenti Android (SDK, NDK, build-tools)
+        run: |
+          sudo mkdir -p "$ANDROID_SDK" && sudo chown "$USER" "$ANDROID_SDK"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK" "build-tools;34.0.0" "platforms;android-30" "ndk;$NDK_VERSION" >/dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          echo "ANDROID_BUILD_TOOLS=$ANDROID_SDK/build-tools/34.0.0" >> "$GITHUB_ENV"
+          echo "ANDROID_JAR=$ANDROID_SDK/platforms/android-30/android.jar" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+      - run: cargo install cargo-ndk --locked
+      - name: Costruisci e firma
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ANDROID_KS_PASS }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            export CEDRO_KEYSTORE="$RUNNER_TEMP/release.keystore" CEDRO_KS_PASS="$KS_PASS" CEDRO_KEY_ALIAS="${KEY_ALIAS:-cedro}"
+          fi
+          android/build.sh
+          rm -f "$RUNNER_TEMP/release.keystore"
+          ls -la android/target/*.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: android/target/cedro-*.apk
+      - name: Allega alla release (bozza)
+        if: ${{ startsWith(github.ref, 'refs/tags/android-v') || inputs.tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          ls android/target/cedro-debug.apk >/dev/null 2>&1 && { echo "APK di debug: non si pubblica"; exit 1; }
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --draft --title "Cedro per Android ${TAG#android-v}" --notes "APK per Android (arm64, Android 8 o successivo)."
+          gh release upload "$TAG" android/target/cedro-*.apk --clobber
