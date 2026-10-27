@@ -654,7 +654,8 @@ fn clip(p: &Painter, text: &str, size: f32, weight: Weight, w: f32) -> String {
 /// i lati restano paralleli al raggio. Con gli angoli arrotondati si passa il contorno già rimpicciolito.
 fn sector(cx: f32, cy: f32, r0: f32, r1: f32, a0: f32, a1: f32, gap: f32) -> Vec<(f32, f32)> {
     let mut pts = Vec::new();
-    let steps = 24;
+    // Un punto ogni 2 px circa sull'arco esterno: con pochi punti una fetta grande (una sola azione = tutto il giro) diventa un poligono.
+    let steps = ((a1 - a0).abs() * r1 / 2.0).ceil().clamp(24.0, 1440.0) as usize;
     let (s0, s1) = ((gap / r1.max(gap + 1.0)).asin(), (gap / r0.max(gap + 1.0)).asin());
     for k in 0..=steps {
         let a = a0 + s0 + (a1 - a0 - 2.0 * s0) * k as f32 / steps as f32;

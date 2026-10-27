@@ -575,7 +575,7 @@ mod tests {
         let pages = table_pages(csv);
         assert_eq!(pages.len(), 1);
         assert!(pages[0].iter().any(|o| matches!(o, Op::Text { s, .. } if s == "412")));
-        let blocks: Vec<crate::pdfdoc::DocBlock> = (0..200).map(|i| crate::pdfdoc::DocBlock { text: format!("Paragrafo {i} con un po' di testo per andare a capo."), heading: if i % 20 == 0 { 1 } else { 0 } }).collect();
+        let blocks: Vec<crate::pdfdoc::DocBlock> = (0..200).map(|i| crate::pdfdoc::DocBlock { text: format!("Paragrafo {i} con un po' di testo per andare a capo."), heading: if i % 20 == 0 { 1 } else { 0 }, image: None }).collect();
         assert!(doc_pages(&blocks).len() >= 3);
         assert!(is_number("1.234,50 €") && !is_number("Nord"));
     }

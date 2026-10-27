@@ -750,7 +750,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         let text = read_text(path)?;
         if action == "pdf" {
             let blocks: Vec<crate::pdfdoc::DocBlock> =
-                text.split('\n').map(|l| crate::pdfdoc::DocBlock { text: l.trim_end().to_string(), heading: 0 }).collect();
+                text.split('\n').map(|l| crate::pdfdoc::DocBlock { text: l.trim_end().to_string(), heading: 0, image: None }).collect();
             return write_text_pdf(path, &dir, &blocks, opts);
         }
         let from = extension(path);

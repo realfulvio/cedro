@@ -30,16 +30,35 @@ pub fn document_blocks(path: &Path) -> Result<Vec<crate::pdfdoc::DocBlock>, Stri
     use crate::pdfdoc::DocBlock;
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let mut blocks = match ext.as_str() {
-        "docx" => docx_blocks(&zip_entry(path, "word/document.xml")?, &zip_entry(path, "word/styles.xml").unwrap_or_default()),
-        "odt" => odt_blocks(&zip_entry(path, "content.xml")?),
+        "docx" => {
+            // Le immagini: r:embed → word/_rels/document.xml.rels → word/media/….
+            let rels = zip_entry(path, "word/_rels/document.xml.rels").unwrap_or_default();
+            let media = |id: &str, size: Option<(f32, f32)>, align: u8| {
+                let rel = elements_self(&rels, "Relationship").into_iter().find(|r| attr_text(r, "Id").as_deref() == Some(id))?;
+                if attr_text(rel, "TargetMode").as_deref() == Some("External") {
+                    return None;
+                }
+                let target = attr_text(rel, "Target")?;
+                let name = match target.strip_prefix('/') {
+                    Some(abs) => abs.to_string(),
+                    None => format!("word/{target}"),
+                };
+                crate::pdfdoc::DocImage::from_bytes(&zip_bytes(path, &name).ok()?, size, align)
+            };
+            docx_blocks(&zip_entry(path, "word/document.xml")?, &zip_entry(path, "word/styles.xml").unwrap_or_default(), &media)
+        }
+        "odt" => {
+            let media = |href: &str, size: Option<(f32, f32)>, align: u8| crate::pdfdoc::DocImage::from_bytes(&zip_bytes(path, href.trim_start_matches("./")).ok()?, size, align);
+            odt_blocks(&zip_entry(path, "content.xml")?, &media)
+        }
         "rtf" => rtf_blocks(&fs::read(path).map_err(|e| e.to_string())?),
         _ => Vec::new(),
     };
-    if blocks.iter().all(|b| b.text.trim().is_empty()) {
-        blocks = document_text(path)?.split('\n').map(|l| DocBlock { text: l.trim_end().to_string(), heading: 0 }).collect();
+    if blocks.iter().all(|b| b.text.trim().is_empty() && b.image.is_none()) {
+        blocks = document_text(path)?.split('\n').map(|l| DocBlock { text: l.trim_end().to_string(), heading: 0, image: None }).collect();
     }
     // Le righe vuote di troppo in fondo non servono.
-    while blocks.last().is_some_and(|b| b.text.trim().is_empty()) {
+    while blocks.last().is_some_and(|b| b.text.trim().is_empty() && b.image.is_none()) {
         blocks.pop();
     }
     Ok(blocks)
@@ -90,7 +109,10 @@ fn elements<'a>(xml: &'a str, tag: &str) -> Vec<&'a str> {
     out
 }
 
-fn docx_blocks(document: &str, styles: &str) -> Vec<crate::pdfdoc::DocBlock> {
+/// Un'immagine del documento dal suo riferimento (r:embed o percorso), con la dimensione in punti e l'allineamento.
+type Media<'a> = dyn Fn(&str, Option<(f32, f32)>, u8) -> Option<crate::pdfdoc::DocImage> + 'a;
+
+fn docx_blocks(document: &str, styles: &str, media: &Media) -> Vec<crate::pdfdoc::DocBlock> {
     // styleId → livello, dai nomi degli stili e dal loro livello di struttura.
     let mut levels: Vec<(String, u8)> = Vec::new();
     for style in elements(styles, "w:style") {
@@ -104,7 +126,7 @@ fn docx_blocks(document: &str, styles: &str) -> Vec<crate::pdfdoc::DocBlock> {
     }
     elements(document, "w:p")
         .into_iter()
-        .map(|p| {
+        .flat_map(|p| {
             let style = p.find("<w:pStyle ").and_then(|i| attr_text(&p[i..], "w:val")).unwrap_or_default();
             let outline = p.find("<w:outlineLvl ").and_then(|i| attr_text(&p[i..], "w:val")).and_then(|v| v.parse::<u8>().ok());
             let heading = levels
@@ -114,12 +136,87 @@ fn docx_blocks(document: &str, styles: &str) -> Vec<crate::pdfdoc::DocBlock> {
                 .or_else(|| heading_level_of(&style))
                 .or(outline.filter(|n| *n < 9).map(|n| (n + 1).min(3)))
                 .unwrap_or(0);
-            crate::pdfdoc::DocBlock { text: ooxml_text(p).trim_end_matches('\n').replace('\t', "    "), heading }
+            let text = ooxml_text(p).trim_end_matches('\n').replace('\t', "    ");
+            let align = match p.find("<w:jc ").and_then(|i| attr_text(&p[i..], "w:val")).as_deref() {
+                Some("center") => 1,
+                Some("right" | "end") => 2,
+                _ => 0,
+            };
+            // Di mc:AlternateContent si tiene solo la scelta principale: il ripiego VML è la stessa immagine.
+            let p = &without_fallbacks(p);
+            let mut images = Vec::new();
+            for d in elements(p, "w:drawing") {
+                // wp:extent in EMU (12700 per punto).
+                let size = d.find("<wp:extent ").and_then(|i| {
+                    let t = &d[i..];
+                    Some((attr_text(t, "cx")?.parse::<f32>().ok()? / 12700.0, attr_text(t, "cy")?.parse::<f32>().ok()? / 12700.0))
+                });
+                if let Some(id) = d.find("<a:blip ").and_then(|i| attr_text(&d[i..], "r:embed")) {
+                    images.extend(media(&id, size, align));
+                }
+            }
+            for v in elements(p, "w:pict") {
+                if let Some(id) = v.find("<v:imagedata ").and_then(|i| attr_text(&v[i..], "r:id")) {
+                    images.extend(media(&id, None, align));
+                }
+            }
+            let mut out = Vec::new();
+            if images.is_empty() || !text.trim().is_empty() {
+                out.push(crate::pdfdoc::DocBlock { text, heading, image: None });
+            }
+            out.extend(images.into_iter().map(|i| crate::pdfdoc::DocBlock { text: String::new(), heading: 0, image: Some(i) }));
+            out
         })
         .collect()
 }
 
-fn odt_blocks(xml: &str) -> Vec<crate::pdfdoc::DocBlock> {
+/// Il testo senza i blocchi `<mc:Fallback>…</mc:Fallback>`.
+fn without_fallbacks(xml: &str) -> String {
+    let mut out = String::with_capacity(xml.len());
+    let mut rest = xml;
+    while let Some(start) = rest.find("<mc:Fallback") {
+        out.push_str(&rest[..start]);
+        match rest[start..].find("</mc:Fallback>") {
+            Some(end) => rest = &rest[start + end + "</mc:Fallback>".len()..],
+            None => return out,
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Gli elementi `<tag …/>` o `<tag …>` (solo l'apertura), per i file di relazioni.
+fn elements_self<'a>(xml: &'a str, tag: &str) -> Vec<&'a str> {
+    let open = format!("<{tag} ");
+    let mut out = Vec::new();
+    let mut at = 0;
+    while let Some(found) = xml[at..].find(&open) {
+        let start = at + found;
+        let end = xml[start..].find('>').map_or(xml.len(), |e| start + e + 1);
+        out.push(&xml[start..end]);
+        at = end;
+    }
+    out
+}
+
+/// Una lunghezza ODF («17cm», «2.5in», «120mm», «300pt», «400px») in punti.
+fn odf_length(v: &str) -> Option<f32> {
+    let v = v.trim();
+    let num: String = v.chars().take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-').collect();
+    let n: f32 = num.parse().ok()?;
+    let k = match &v[num.len()..] {
+        "cm" => 72.0 / 2.54,
+        "mm" => 72.0 / 25.4,
+        "in" => 72.0,
+        "pt" => 1.0,
+        "pc" => 12.0,
+        "px" => 0.75,
+        _ => return None,
+    };
+    Some(n * k)
+}
+
+fn odt_blocks(xml: &str, media: &Media) -> Vec<crate::pdfdoc::DocBlock> {
     let mut found: Vec<(usize, crate::pdfdoc::DocBlock)> = Vec::new();
     for (tag, is_heading) in [("text:h", true), ("text:p", false)] {
         let mut at = 0;
@@ -132,7 +229,19 @@ fn odt_blocks(xml: &str) -> Vec<crate::pdfdoc::DocBlock> {
                 0
             };
             let text = odt_plain(element).trim_end_matches('\n').replace('\t', "    ");
-            found.push((position, crate::pdfdoc::DocBlock { text, heading }));
+            let mut images = Vec::new();
+            for frame in elements(element, "draw:frame") {
+                let size = (|| Some((odf_length(&attr_text(frame, "svg:width")?)?, odf_length(&attr_text(frame, "svg:height")?)?)))();
+                if let Some(href) = frame.find("<draw:image ").and_then(|i| attr_text(&frame[i..], "xlink:href")) {
+                    images.extend(media(&href, size, 0));
+                }
+            }
+            if images.is_empty() || !text.trim().is_empty() {
+                found.push((position, crate::pdfdoc::DocBlock { text, heading, image: None }));
+            }
+            for i in images {
+                found.push((position, crate::pdfdoc::DocBlock { text: String::new(), heading: 0, image: Some(i) }));
+            }
         }
     }
     found.sort_by_key(|(position, _)| *position);
@@ -209,7 +318,7 @@ fn rtf_blocks(bytes: &[u8]) -> Vec<crate::pdfdoc::DocBlock> {
         .split('\n')
         .map(|line| {
             let heading = headings.iter().find(|(t, _)| line.trim() == t).map_or(0, |(_, l)| *l);
-            crate::pdfdoc::DocBlock { text: line.trim_end().to_string(), heading }
+            crate::pdfdoc::DocBlock { text: line.trim_end().to_string(), heading, image: None }
         })
         .collect()
 }
@@ -310,6 +419,20 @@ fn zip_entry_at_most(path: &Path, name: &str, max: u64) -> Result<String, String
         return Err(format!("{name} è troppo grande per un documento (oltre {} MB)", max / 1_000_000));
     }
     Ok(xml)
+}
+
+/// Un file binario dell'archivio (le immagini), al massimo 64 MB.
+fn zip_bytes(path: &Path, name: &str) -> Result<Vec<u8>, String> {
+    const MAX: u64 = 64 * 1_000_000;
+    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("archivio non letto: {e}"))?;
+    let entry = archive.by_name(name).map_err(|_| format!("manca {name}"))?;
+    let mut out = Vec::new();
+    entry.take(MAX + 1).read_to_end(&mut out).map_err(|e| e.to_string())?;
+    if out.len() as u64 > MAX {
+        return Err(format!("{name} è troppo grande"));
+    }
+    Ok(out)
 }
 
 /// Il massimo di XML che si legge da una parte del documento.
@@ -732,6 +855,49 @@ mod block_tests {
         let _ = fs::remove_dir_all(d);
     }
 
+    /// Un DOCX fatto solo di immagini (la carta d'identità fotografata) diventa comunque un PDF con le immagini.
+    #[test]
+    fn a_docx_of_only_images_becomes_a_pdf_with_images() {
+        let d = dir();
+        let path = d.join("carta.docx");
+        let img = image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(40, 30, image::Rgb([200, 30, 30])));
+        let mut jpeg = Vec::new();
+        img.write_to(&mut std::io::Cursor::new(&mut jpeg), image::ImageFormat::Jpeg).unwrap();
+        let mut png = Vec::new();
+        img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let document = "<w:document><w:body>\
+<w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr><w:r><w:drawing><wp:inline><wp:extent cx=\"2540000\" cy=\"1905000\"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed=\"rId1\"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>\
+<w:p><w:r><w:drawing><wp:inline><wp:extent cx=\"2540000\" cy=\"1905000\"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed=\"rId2\"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>\
+</w:body></w:document>";
+        let rels = "<Relationships><Relationship Id=\"rId1\" Type=\"image\" Target=\"media/fronte.jpeg\"/><Relationship Id=\"rId2\" Type=\"image\" Target=\"media/retro.png\"/></Relationships>";
+        fs::write(&path, crate::zipstore::zip_archive(&[("word/document.xml", document.as_bytes()), ("word/_rels/document.xml.rels", rels.as_bytes()), ("word/media/fronte.jpeg", &jpeg), ("word/media/retro.png", &png)])).unwrap();
+        assert_eq!(document_text(&path).unwrap_err(), "il documento non contiene testo");
+        let blocks = document_blocks(&path).unwrap();
+        let images: Vec<_> = blocks.iter().filter_map(|b| b.image.as_ref()).collect();
+        assert_eq!(images.len(), 2);
+        assert!(images[0].jpeg && !images[1].jpeg);
+        let pdf = crate::pdfdoc::build(&blocks, &crate::pdfdoc::PdfOptions { size: crate::engine::PageSize::A4, embed: false, bookmarks: false, pdfa: false, title: "carta".into() }).unwrap();
+        let text = String::from_utf8_lossy(&pdf);
+        assert_eq!(text.matches("/Subtype /Image").count(), 2);
+        assert!(text.contains("/DCTDecode"));
+        let _ = fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn a_docx_alternate_image_is_taken_once() {
+        let document = "<w:document><w:body><w:p><w:r><mc:AlternateContent>\
+<mc:Choice Requires=\"wps\"><w:drawing><wp:inline><wp:extent cx=\"127000\" cy=\"127000\"/><a:blip r:embed=\"rId1\"/></wp:inline></w:drawing></mc:Choice>\
+<mc:Fallback><w:pict><v:shape><v:imagedata r:id=\"rId1\"/></v:shape></w:pict></mc:Fallback>\
+</mc:AlternateContent></w:r></w:p></w:body></w:document>";
+        let seen = std::cell::RefCell::new(Vec::new());
+        let blocks = docx_blocks(document, "", &|id, size, _| {
+            seen.borrow_mut().push((id.to_string(), size));
+            None
+        });
+        assert_eq!(*seen.borrow(), vec![("rId1".to_string(), Some((10.0, 10.0)))]);
+        assert_eq!(blocks.len(), 1);
+    }
+
     fn levels(blocks: &[DocBlock]) -> Vec<(u8, &str)> {
         blocks.iter().filter(|b| b.heading > 0).map(|b| (b.heading, b.text.as_str())).collect()
     }
@@ -747,17 +913,17 @@ mod block_tests {
 </w:body></w:document>";
         let styles = "<w:styles><w:style w:type=\"paragraph\" w:styleId=\"Mio\"><w:name w:val=\"heading 2\"/></w:style>\
 <w:style w:type=\"paragraph\" w:styleId=\"Corpo\"><w:name w:val=\"Body\"/></w:style></w:styles>";
-        let blocks = docx_blocks(document, styles);
+        let blocks = docx_blocks(document, styles, &|_, _, _| None);
         assert_eq!(blocks.len(), 5);
         assert_eq!(levels(&blocks), vec![(1, "Delibera"), (2, "Dispositivo"), (2, "Stile mio"), (3, "Livello tre")]);
-        assert_eq!(blocks[1], DocBlock { text: "Premessa normale".into(), heading: 0 });
+        assert_eq!(blocks[1], DocBlock { text: "Premessa normale".into(), heading: 0, image: None });
     }
 
     #[test]
     fn odt_headings_come_from_outline_levels() {
         let xml = "<office:text><text:h text:outline-level=\"1\">Verbale</text:h><text:p>Corpo <text:span>del</text:span> testo</text:p>\
 <text:h text:outline-level=\"2\">Presenti</text:h><text:p text:style-name=\"P1\">Fine</text:p></office:text>";
-        let blocks = odt_blocks(xml);
+        let blocks = odt_blocks(xml, &|_, _, _| None);
         assert_eq!(levels(&blocks), vec![(1, "Verbale"), (2, "Presenti")]);
         assert_eq!(blocks.len(), 4);
         assert_eq!(blocks[1].text, "Corpo del testo");
