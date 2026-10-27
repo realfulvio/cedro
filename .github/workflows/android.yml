@@ -63,7 +63,8 @@ jobs:
           # La versione dell'APK è quella del tag (android-v0.21.4 → 0.21.4), non per forza quella di Cedro per il computer.
           TAG="${{ inputs.tag || github.ref_name }}"
           case "$TAG" in android-v[0-9]*) export CEDRO_VERSION_NAME="${TAG#android-v}";; esac
-          android/build.sh
+          # Il nostro APK (release GitHub e repo F-Droid nostro) scarica anche da YouTube.
+          CEDRO_YOUTUBE=1 android/build.sh
           rm -f "$RUNNER_TEMP/release.keystore"
           ls -la android/target/*.apk
       - uses: actions/upload-artifact@v4

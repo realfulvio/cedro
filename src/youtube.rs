@@ -138,6 +138,9 @@ pub fn link_note(text: &str, any: bool) -> &'static str {
 // Programmi di aiuto
 
 pub fn tools_dir() -> PathBuf {
+    #[cfg(target_os = "android")]
+    return android::home().join("tools");
+    #[cfg(not(target_os = "android"))]
     crate::config_dir().join("tools")
 }
 
@@ -289,7 +292,10 @@ fn sum_for(list: &str, file: &str) -> Option<String> {
 }
 
 fn ytdlp_asset() -> &'static str {
-    if cfg!(all(windows, target_arch = "aarch64")) {
+    if cfg!(target_os = "android") {
+        // La versione in Python: su Android la fa girare il Python di youtubedl-android.
+        "yt-dlp"
+    } else if cfg!(all(windows, target_arch = "aarch64")) {
         "yt-dlp_arm64.exe"
     } else if cfg!(windows) {
         "yt-dlp.exe"
@@ -339,6 +345,10 @@ fn make_executable(path: &Path) {
 }
 
 fn command(program: &Path) -> Command {
+    #[cfg(target_os = "android")]
+    #[allow(unused_mut)]
+    let mut c = android::command(program);
+    #[cfg(not(target_os = "android"))]
     #[allow(unused_mut)]
     let mut c = Command::new(program);
     #[cfg(windows)]
@@ -374,6 +384,9 @@ pub fn ensure_ytdlp(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<
 
 /// Scarica ffmpeg se manca (e non c'è sul sistema).
 pub fn ensure_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<PathBuf, String> {
+    #[cfg(target_os = "android")]
+    return android::ensure_packages(emit, cancel).map(|_| android::ffmpeg());
+    #[allow(unreachable_code)]
     let own = tools_dir().join(exe("ffmpeg"));
     if ffmpeg_ready() {
         return Ok(ffmpeg_path().unwrap_or(own));
@@ -419,6 +432,10 @@ fn extract_zip_entry(archive: &Path, suffix: &str, target: &Path) -> Result<(), 
 
 /// Scarica deno se manca.
 pub fn ensure_deno(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<PathBuf, String> {
+    // Su Android il runtime JavaScript è QuickJS, nell'APK.
+    #[cfg(target_os = "android")]
+    return Ok(android::quickjs());
+    #[allow(unreachable_code)]
     let target = deno_path();
     if target.is_file() {
         return Ok(target);
@@ -485,6 +502,10 @@ fn remote_sum(name: &str) -> Option<String> {
 /// Se ffmpeg o deno scaricati da Cedro hanno una versione più nuova (controllo al massimo ogni
 /// `REFRESH_EVERY_DAYS` giorni), li riscarica. Se qualcosa va storto resta quello vecchio.
 pub fn refresh_helpers_if_due(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) {
+    // Su Android ffmpeg e QuickJS hanno la versione fissata nell'APK.
+    if cfg!(target_os = "android") {
+        return;
+    }
     for name in ["ffmpeg", "deno"] {
         let program = tools_dir().join(exe(name));
         let stamp = tools_dir().join(format!("{name}.controllato"));
@@ -764,7 +785,7 @@ pub fn build_args(r: &Request, ffmpeg: Option<&Path>, deno: Option<&Path>, in_pl
     }
     if let Some(d) = deno {
         a.push("--js-runtimes".into());
-        a.push(format!("deno:{}", d.display()));
+        a.push(format!("{}:{}", if cfg!(target_os = "android") { "quickjs" } else { "deno" }, d.display()));
     }
     // I file provvisori (parti, copertine) stanno in una cartella a parte, tolta a fine lavoro.
     a.push("-P".into());
@@ -1033,6 +1054,250 @@ fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, 
         return Err(first_error(&errors));
     }
     Ok(files)
+}
+
+// ---------------------------------------------------------------------------
+// Android
+
+/// Su Android i programmi non si possono eseguire dalla cartella dell'app: Python (che fa girare
+/// yt-dlp), QuickJS e ffmpeg partono dalla cartella delle librerie dell'APK, dove li mette
+/// `android/build.sh`. Le loro librerie (Python 14 MB, ffmpeg 35 MB) si scaricano al primo uso da
+/// youtubedl-android su Maven Central, leggendo dall'archivio solo le parti per arm64.
+#[cfg(target_os = "android")]
+pub mod android {
+    use super::*;
+    use std::io::{Seek, SeekFrom};
+    use std::sync::OnceLock;
+
+    struct Dirs {
+        libs: PathBuf,
+        home: PathBuf,
+    }
+
+    static DIRS: OnceLock<Dirs> = OnceLock::new();
+
+    /// L'app dice dove sono gli eseguibili (`nativeLibraryDir`) e la sua cartella privata.
+    pub fn set_dirs(libs: PathBuf, home: PathBuf) {
+        let _ = DIRS.set(Dirs { libs, home });
+    }
+
+    pub(super) fn libs() -> PathBuf {
+        DIRS.get().map(|d| d.libs.clone()).unwrap_or_default()
+    }
+
+    pub(super) fn home() -> PathBuf {
+        DIRS.get().map(|d| d.home.clone()).unwrap_or_else(|| PathBuf::from("/data/local/tmp"))
+    }
+
+    const MAVEN: &str = "https://repo1.maven.org/maven2/io/github/junkfood02/youtubedl-android";
+    const VERSION: &str = "0.18.1";
+    /// (archivio su Maven, voce dentro l'archivio, cartella in `tools`, SHA-256 della voce, MB).
+    const PACKAGES: [(&str, &str, &str, &str, u32); 2] = [
+        ("library", "jni/arm64-v8a/libpython.zip.so", "python", "7edecb6c9bd3a94456168d44911d8aea9f917bedef90c320a29500d92ac3eb62", 14),
+        ("ffmpeg", "jni/arm64-v8a/libffmpeg.zip.so", "ffmpeg", "4664a895283f9f31786be39b0c484c1f96631f02c7c7f9c70a4a4a2da324a092", 35),
+    ];
+
+    fn python_home() -> PathBuf {
+        tools_dir().join("python").join("usr")
+    }
+
+    /// yt-dlp passa da Python; ffmpeg e QuickJS partono da soli. Tutti trovano le librerie scaricate.
+    pub(super) fn command(program: &Path) -> Command {
+        let mut c = if program.file_name().is_some_and(|n| n == "yt-dlp") {
+            let mut c = Command::new(libs().join("libpython.so"));
+            c.arg(program);
+            c
+        } else {
+            Command::new(program)
+        };
+        let py = python_home();
+        let ff = tools_dir().join("ffmpeg").join("usr");
+        c.env("LD_LIBRARY_PATH", format!("{}:{}", py.join("lib").display(), ff.join("lib").display()))
+            .env("PYTHONHOME", &py)
+            .env("SSL_CERT_FILE", py.join("etc").join("tls").join("cert.pem"))
+            .env("HOME", home())
+            .env("TMPDIR", tools_dir().join("tmp"));
+        c
+    }
+
+    pub(super) fn ffmpeg() -> PathBuf {
+        libs().join("libffmpeg.so")
+    }
+
+    pub(super) fn quickjs() -> PathBuf {
+        libs().join("libqjs.so")
+    }
+
+    fn ready(dir: &str, sum: &str) -> bool {
+        std::fs::read_to_string(tools_dir().join(dir).join(".pronto")).is_ok_and(|s| s.trim() == sum)
+    }
+
+    /// Scarica ed estrae Python e ffmpeg se mancano (una volta sola, circa 50 MB).
+    pub(super) fn ensure_packages(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<(), String> {
+        std::fs::create_dir_all(tools_dir().join("tmp")).map_err(|e| e.to_string())?;
+        for (aar, entry, dir, sum, mb) in PACKAGES {
+            if ready(dir, sum) {
+                continue;
+            }
+            emit(Event::Log(format!("{dir} non c'è ancora: lo scarico (una volta sola, circa {mb} MB)")));
+            let archive = tools_dir().join(format!("{dir}.zip"));
+            let url = format!("{MAVEN}/{aar}/{VERSION}/{aar}-{VERSION}.aar");
+            let fetched = fetch_entry(&url, entry, &archive, sum, dir, emit, cancel);
+            let result = fetched.and_then(|_| unpack(&archive, &tools_dir().join(dir)));
+            let _ = std::fs::remove_file(&archive);
+            result?;
+            std::fs::write(tools_dir().join(dir).join(".pronto"), sum).map_err(|e| e.to_string())?;
+            emit(Event::Log(format!("{dir} pronto")));
+        }
+        Ok(())
+    }
+
+    /// Copia una voce di uno zip remoto in `dest`, controllando lo SHA-256.
+    fn fetch_entry(url: &str, entry: &str, dest: &Path, sum: &str, what: &str, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<(), String> {
+        let remote = Remote::open(url).map_err(|e| format!("Non riesco a scaricare {what}: {e}"))?;
+        let mut zip = zip::ZipArchive::new(remote).map_err(|e| format!("Non riesco a leggere l'archivio di {what}: {e}"))?;
+        let mut file = zip.by_name(entry).map_err(|e| format!("{entry} non è nell'archivio: {e}"))?;
+        let total = file.size().max(1);
+        let part = dest.with_extension("part");
+        let mut out = std::fs::File::create(&part).map_err(|e| e.to_string())?;
+        let mut hasher = Sha256::new();
+        let mut buf = vec![0u8; 256 * 1024];
+        let (mut done, mut last_pct) = (0u64, -1i32);
+        let fail = |e: String| {
+            let _ = std::fs::remove_file(&part);
+            Err(e)
+        };
+        loop {
+            if cancel.load(Ordering::Relaxed) {
+                return fail("Annullato".into());
+            }
+            let n = match file.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(e) => return fail(format!("Scaricamento di {what} interrotto: {e}")),
+            };
+            if let Err(e) = out.write_all(&buf[..n]) {
+                return fail(format!("Scrittura di {what} non riuscita (memoria piena?): {e}"));
+            }
+            hasher.update(&buf[..n]);
+            done += n as u64;
+            let pct = (done * 100 / total) as i32;
+            if pct != last_pct {
+                last_pct = pct;
+                emit(Event::Progress { index: 0, total: 1, percent: pct as f32, label: format!("Scarico {what}") });
+            }
+        }
+        drop(out);
+        if !hex(&hasher.finalize()).eq_ignore_ascii_case(sum) {
+            return fail(format!("{what}: il file scaricato non corrisponde al codice di controllo"));
+        }
+        std::fs::rename(&part, dest).map_err(|e| e.to_string())
+    }
+
+    /// Estrae uno zip con i suoi collegamenti simbolici (le librerie di Termux ne hanno molti).
+    fn unpack(archive: &Path, dir: &Path) -> Result<(), String> {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::remove_dir_all(dir);
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(archive).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        for i in 0..zip.len() {
+            let mut f = zip.by_index(i).map_err(|e| e.to_string())?;
+            let Some(rel) = f.enclosed_name() else { continue };
+            let path = dir.join(rel);
+            if f.is_dir() {
+                std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+                continue;
+            }
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            if f.is_symlink() {
+                let mut target = String::new();
+                f.read_to_string(&mut target).map_err(|e| e.to_string())?;
+                let _ = std::fs::remove_file(&path);
+                std::os::unix::fs::symlink(target, &path).map_err(|e| e.to_string())?;
+                continue;
+            }
+            let mut out = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+            std::io::copy(&mut f, &mut out).map_err(|e| format!("{}: {e}", path.display()))?;
+            if let Some(mode) = f.unix_mode() {
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode & 0o777));
+            }
+        }
+        Ok(())
+    }
+
+    /// Un file remoto letto a pezzi con le richieste «Range»: dello zip si scarica solo quello che serve.
+    struct Remote {
+        url: String,
+        len: u64,
+        pos: u64,
+        buf: Vec<u8>,
+        buf_at: u64,
+    }
+
+    const CHUNK: u64 = 4 * 1024 * 1024;
+
+    impl Remote {
+        fn open(url: &str) -> Result<Remote, String> {
+            let r = agent().head(url).call().map_err(|e| e.to_string())?;
+            let len = r.header("Content-Length").and_then(|v| v.parse().ok()).ok_or("dimensione sconosciuta")?;
+            Ok(Remote { url: url.to_string(), len, pos: 0, buf: Vec::new(), buf_at: 0 })
+        }
+    }
+
+    impl Read for Remote {
+        fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+            if self.pos >= self.len || out.is_empty() {
+                return Ok(0);
+            }
+            let inside = self.pos >= self.buf_at && self.pos < self.buf_at + self.buf.len() as u64;
+            if !inside {
+                let end = (self.pos + CHUNK.max(out.len() as u64)).min(self.len) - 1;
+                let range = format!("bytes={}-{end}", self.pos);
+                let mut attempt = 0;
+                let r = loop {
+                    match agent().get(&self.url).set("Range", &range).call() {
+                        // Maven Central a volte risponde «troppe richieste»: si riprova con calma.
+                        Err(ureq::Error::Status(429, _)) if attempt < 4 => {
+                            attempt += 1;
+                            std::thread::sleep(Duration::from_secs(5 * attempt));
+                        }
+                        other => break other.map_err(|e| std::io::Error::other(e.to_string()))?,
+                    }
+                };
+                if r.status() != 206 {
+                    return Err(std::io::Error::other("il server non manda pezzi del file"));
+                }
+                let mut buf = Vec::with_capacity((end + 1 - self.pos) as usize);
+                r.into_reader().read_to_end(&mut buf)?;
+                if buf.is_empty() {
+                    return Err(std::io::Error::other("risposta vuota"));
+                }
+                self.buf = buf;
+                self.buf_at = self.pos;
+            }
+            let from = (self.pos - self.buf_at) as usize;
+            let n = out.len().min(self.buf.len() - from);
+            out[..n].copy_from_slice(&self.buf[from..from + n]);
+            self.pos += n as u64;
+            Ok(n)
+        }
+    }
+
+    impl Seek for Remote {
+        fn seek(&mut self, to: SeekFrom) -> std::io::Result<u64> {
+            let next = match to {
+                SeekFrom::Start(n) => n as i64,
+                SeekFrom::End(n) => self.len as i64 + n,
+                SeekFrom::Current(n) => self.pos as i64 + n,
+            };
+            if next < 0 {
+                return Err(std::io::Error::other("posizione prima dell'inizio"));
+            }
+            self.pos = next as u64;
+            Ok(self.pos)
+        }
+    }
 }
 
 #[cfg(test)]

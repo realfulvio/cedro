@@ -187,17 +187,18 @@ pub fn e_link(path: &Path) -> bool {
     t.starts_with("https://") || t.starts_with("http://")
 }
 
-/// Le azioni di «Video dal web»: ogni tessera chiama `webvideo` (l'azione comincia con «web-»).
+/// Le azioni di «Video dal web»: ogni tessera chiama `webvideo`, o yt-dlp per YouTube (l'azione comincia con «web-»).
 fn righe_link(path: &Path) -> Vec<&'static Riga> {
-    // YouTube non si scarica dentro Cedro: si passa il link a un'app che lo fa (NewPipe, YTDLnis…).
-    if cedro::youtube::is_youtube_url(&path.to_string_lossy()) {
+    // Senza yt-dlp nell'APK (la build per il catalogo F-Droid) YouTube passa a un'app che lo scarica (NewPipe, YTDLnis…).
+    if !cfg!(feature = "youtube") && cedro::youtube::is_youtube_url(&path.to_string_lossy()) {
         static YT: [Riga; 1] = [r("web-altra-app", "Apri con un'altra app", "NewPipe, YTDLnis…", false)];
         return YT.iter().collect();
     }
-    static WEB: [Riga; 3] = [
+    static WEB: [Riga; 4] = [
         r("web-video", "Video", "Il migliore che c'è", false),
         r("web-audio", "Solo audio", "MP3 dal video", false),
         r("web-leggero", "Video leggero", "Meno spazio", false),
+        r("web-testo", "Testo", "Dalla voce, offline", false),
     ];
     WEB.iter().collect()
 }
@@ -255,7 +256,7 @@ fn icona_di(id: &str) -> &'static str {
         "compress" | "half" | "strip" => ic::DOWNLOAD,
         "rot90" => ic::CONVERT,
         "ocr" | "txt" => ic::SEARCH,
-        "trascrivi" => ic::TRANSCRIBE,
+        "trascrivi" | "web-testo" => ic::TRANSCRIBE,
         _ => ic::FILE,
     }
 }
@@ -551,7 +552,7 @@ impl App {
     fn modello_serve(&self) -> bool {
         self.file.is_some()
             && if self.foglio {
-                self.righe_ora().get(self.tessera).is_some_and(|r| r.id == "trascrivi")
+                self.righe_ora().get(self.tessera).is_some_and(|r| r.id == "trascrivi" || r.id == "web-testo")
             } else {
                 self.scelta.and_then(|i| self.fette().get(i).copied()).is_some_and(|f| f.id == "trascrivi")
             }
@@ -658,7 +659,7 @@ impl App {
         self.foglio = false;
         self.dal_foglio = false;
         // Per «trascrivi» il campo qualità porta il modello scelto.
-        let qualita = if id == "trascrivi" { self.modello as u8 } else { self.qualita };
+        let qualita = if id == "trascrivi" || id == "web-testo" { self.modello as u8 } else { self.qualita };
         Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita, prog }
     }
 
