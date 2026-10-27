@@ -23,7 +23,7 @@ Things I'd like your opinion on:
 - [ ] I have read the contributing guide
 ```
 
-**Prima di aprirla:** pubblicare il tag `android-v0.22.5` (o successivo) con questa cartella `fastlane/` e aggiornare `Builds` (versionName, versionCode, commit) di conseguenza.
+**Prima di aprirla:** pubblicare il tag `android-v0.22.6` (o successivo) con questa cartella `fastlane/` e aggiornare `Builds` (versionName, versionCode, commit) di conseguenza.
 
 **Come si apre (account GitLab):**
 1. Fork di https://gitlab.com/fdroid/fdroiddata.
