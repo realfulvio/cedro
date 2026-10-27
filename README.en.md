@@ -27,10 +27,15 @@ Cedro changes the format of your files without opening any program. Hold **Shift
 
 Everything happens **on your own device**: your files are never uploaded anywhere. It is written entirely in **Rust**, and the code is open.
 
-> The interface is currently available in Italian only; the screenshots below show the Italian version.
+> The interface is available in English and Italian (it follows your system language; change it in Settings). Most screenshots below show the Italian version.
 
 <p align="center">
   <img src="docs/v2/ruote.png" width="760" alt="The Cedro wheel: on the left, conversions on a photo with JPEG selected; on the right, tools (compress, 50%, black and white, rotate, metadata, OCR)">
+</p>
+
+<p align="center">
+  <img src="docs/en/ruota-conversion.png" width="370" alt="The wheel in English: conversions on a photo, JPEG selected">
+  <img src="docs/en/ruota-tools.png" width="370" alt="The wheel in English: tools, with 50% selected">
 </p>
 
 ## Download and install

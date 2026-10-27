@@ -39,6 +39,7 @@ const ID_BROWSE: i32 = 134;
 const ID_DEST_PATH: i32 = 135;
 const ID_EXISTS: i32 = 136;
 const ID_LANG: i32 = 141;
+const ID_UILANG: i32 = 143;
 const ID_MAXPAGES: i32 = 142;
 const ID_CHECK_NOW: i32 = 151;
 const ID_UPDATE: i32 = 152;
@@ -103,6 +104,8 @@ fn nav_order() -> Vec<usize> {
 const DPI: [u32; 4] = [100, 144, 200, 300];
 const MAX_PAGES: [u32; 4] = [50, 100, 300, 0];
 const LANGS: [&str; 3] = ["auto", "it", "en"];
+/// Le scelte della lingua dell'interfaccia, nell'ordine dell'elenco.
+const UI_LANGS: [&str; 3] = ["auto", "it", "en"];
 
 const WIDTH: i32 = 780;
 const HEIGHT: i32 = 600;
@@ -247,7 +250,7 @@ unsafe fn create() -> Result<()> {
     let hwnd = CreateWindowExW(
         WINDOW_EX_STYLE::default(),
         class,
-        w!("Impostazioni di Cedro"),
+        &HSTRING::from(&*cedro::i18n::tr("Impostazioni di Cedro")),
         style | WS_VISIBLE,
         x,
         y,
@@ -298,7 +301,7 @@ unsafe fn child(
     section: Option<usize>,
 ) -> HWND {
     let instance: HINSTANCE = GetModuleHandleW(None).unwrap_or_default().into();
-    let text = HSTRING::from(text);
+    let text = HSTRING::from(&*cedro::i18n::tr(text));
     let hwnd = CreateWindowExW(
         WINDOW_EX_STYLE::default(),
         class,
@@ -328,7 +331,7 @@ unsafe fn measure(text: &str, font: HFONT, width: i32, dpi: u32) -> (i32, i32) {
     let mut metrics = TEXTMETRICW::default();
     let _ = GetTextMetricsW(dc, &mut metrics);
     let line = metrics.tmHeight.max(1);
-    let mut wide: Vec<u16> = text.encode_utf16().collect();
+    let mut wide: Vec<u16> = cedro::i18n::tr(text).encode_utf16().collect();
     let mut rc = RECT { left: 0, top: 0, right: px(width, dpi), bottom: 0 };
     DrawTextW(dc, &mut wide, &mut rc, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
     SelectObject(dc, old);
@@ -407,7 +410,7 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     let combo = |sec: usize, id: i32, r: &Row, items: &[&str]| {
         let c = child(hwnd, w!("COMBOBOX"), "", combo_style, id, (r.ctl_x, r.mid - 14, 190, 220), dpi, normal, Some(sec));
         for it in items {
-            let h = HSTRING::from(*it);
+            let h = HSTRING::from(&*cedro::i18n::tr(it));
             SendMessageW(c, CB_ADDSTRING, Some(WPARAM(0)), Some(LPARAM(h.as_ptr() as isize)));
         }
     };
@@ -429,6 +432,16 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     y = r.next;
     let r = row(0, y, "Registro attività", "Il file log.txt e config.txt stanno in %APPDATA%\\Cedro.", 130, 0);
     button(0, ID_LOG, &r, "Apri cartella", 130);
+    y = r.next;
+    let r = row(0, y, "Lingua dell'interfaccia", "Automatica segue la lingua di Windows. Vale subito dopo «Salva».", 190, 0);
+    {
+        // I nomi delle lingue restano nella loro lingua: non passano dalla traduzione.
+        let c = child(hwnd, w!("COMBOBOX"), "", combo_style, ID_UILANG, (r.ctl_x, r.mid - 14, 190, 220), dpi, normal, Some(0));
+        for it in [cedro::i18n::tr("Automatica").into_owned(), "Italiano".to_string(), "English".to_string()] {
+            let h = HSTRING::from(it);
+            SendMessageW(c, CB_ADDSTRING, Some(WPARAM(0)), Some(LPARAM(h.as_ptr() as isize)));
+        }
+    }
 
     // Aspetto: modalità e temi, disegnati da `cedro::ui::aspetto`.
     heading_of(ASPETTO);
@@ -612,7 +625,7 @@ unsafe fn relayout(hwnd: HWND) {
 unsafe fn text_px(text: &str, font: HFONT) -> i32 {
     let dc = GetDC(None);
     let old = SelectObject(dc, font.into());
-    let wide: Vec<u16> = text.encode_utf16().collect();
+    let wide: Vec<u16> = cedro::i18n::tr(text).encode_utf16().collect();
     let mut size = SIZE::default();
     let _ = GetTextExtentPoint32W(dc, &wide, &mut size);
     SelectObject(dc, old);
@@ -747,7 +760,7 @@ unsafe fn build_about(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, smal
     let frame = RECT { left: px(x, dpi), top: px(152 + e, dpi), right: px(x + cw - 130, dpi), bottom: px(152 + e + 30, dpi) };
     STATE.with(|st| st.borrow_mut().frames[SEC].push(frame));
     let edit = child(hwnd, w!("EDIT"), "", WS_TABSTOP.0 | 0x80 /* ES_AUTOHSCROLL */, ID_SEARCH, (x + 10, 158 + e, cw - 130 - 20, 20), dpi, normal, Some(SEC));
-    let hint = HSTRING::from("Cerca un componente o una licenza");
+    let hint = HSTRING::from(&*cedro::i18n::tr("Cerca un componente o una licenza"));
     SendMessageW(edit, 0x1501 /* EM_SETCUEBANNER */, Some(WPARAM(1)), Some(LPARAM(hint.as_ptr() as isize)));
     child(hwnd, s, "", SS_NOPREFIX | 2 /* SS_RIGHT */, ID_COUNT, (x + cw - 120, 158 + e, 120, 20), dpi, small, Some(SEC));
 
@@ -767,7 +780,7 @@ unsafe fn build_about(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, smal
 
 unsafe fn show_count(hwnd: HWND, n: usize) {
     let text = format!("{n} {}", if n == 1 { "componente" } else { "componenti" });
-    let _ = SetWindowTextW(item(hwnd, ID_COUNT), &HSTRING::from(text));
+    let _ = SetWindowTextW(item(hwnd, ID_COUNT), &HSTRING::from(&*cedro::i18n::tr(&text)));
 }
 
 /// Il file con tutte le licenze sta accanto a cedro.exe; se manca si apre la pagina del progetto.
@@ -842,13 +855,14 @@ unsafe fn fill(hwnd: HWND, s: &Settings, autostart: bool) {
         true,
     );
     STATE.with(|st| st.borrow_mut().dest_dir = s.dest_dir.clone());
-    let _ = SetWindowTextW(item(hwnd, ID_DEST_PATH), &HSTRING::from(short_path(&s.dest_dir)));
+    let _ = SetWindowTextW(item(hwnd, ID_DEST_PATH), &HSTRING::from(&*cedro::i18n::tr(&short_path(&s.dest_dir))));
     set_sel(hwnd, ID_EXISTS, s.replace as usize);
     SendMessageW(item(hwnd, ID_QUALITY), TBM_SETPOS, Some(WPARAM(1)), Some(LPARAM(s.quality as isize)));
     show_quality(hwnd);
     set_sel(hwnd, ID_DPI, DPI.iter().position(|d| *d == s.pdf_dpi).unwrap_or(1));
     set_sel(hwnd, ID_COMPRESS, s.compress as usize);
     set_sel(hwnd, ID_LANG, LANGS.iter().position(|l| *l == s.ocr_lang).unwrap_or(0));
+    set_sel(hwnd, ID_UILANG, UI_LANGS.iter().position(|l| *l == s.language).unwrap_or(0));
     set_sel(hwnd, ID_MAXPAGES, MAX_PAGES.iter().position(|m| *m == s.ocr_max).unwrap_or(1));
 }
 
@@ -909,6 +923,7 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         pdf_dpi: *DPI.get(sel(hwnd, ID_DPI)).unwrap_or(&base.pdf_dpi),
         compress: sel(hwnd, ID_COMPRESS).min(2) as u8,
         ocr_lang: LANGS.get(sel(hwnd, ID_LANG)).unwrap_or(&"auto").to_string(),
+        language: UI_LANGS.get(sel(hwnd, ID_UILANG)).unwrap_or(&"auto").to_string(),
         ocr_max: *MAX_PAGES.get(sel(hwnd, ID_MAXPAGES)).unwrap_or(&base.ocr_max),
     }
 }
@@ -916,12 +931,12 @@ unsafe fn collect(hwnd: HWND) -> Settings {
 unsafe fn save(hwnd: HWND) {
     let settings = collect(hwnd);
     if settings.dest == Dest::Fixed && settings.dest_dir.trim().is_empty() {
-        MessageBoxW(Some(hwnd), w!("Scegli la cartella di destinazione con «Sfoglia…»."), w!("Cedro"), MB_OK | MB_ICONINFORMATION);
+        MessageBoxW(Some(hwnd), &HSTRING::from(&*cedro::i18n::tr("Scegli la cartella di destinazione con «Sfoglia…».")), w!("Cedro"), MB_OK | MB_ICONINFORMATION);
         show_section(hwnd, 2);
         return;
     }
     if let Err(e) = write_settings(&settings) {
-        let text = HSTRING::from(format!("Impostazioni non salvate: {e}"));
+        let text = HSTRING::from(&*cedro::i18n::tr(&format!("Impostazioni non salvate: {e}")));
         MessageBoxW(Some(hwnd), &text, w!("Cedro"), MB_OK | MB_ICONERROR);
         return;
     }
@@ -929,7 +944,7 @@ unsafe fn save(hwnd: HWND) {
     let want = is_checked(hwnd, ID_AUTO);
     if want != crate::win::autostart_enabled() {
         if let Err(e) = crate::win::set_autostart(want) {
-            let text = HSTRING::from(format!("Avvio automatico non cambiato: {e}"));
+            let text = HSTRING::from(&*cedro::i18n::tr(&format!("Avvio automatico non cambiato: {e}")));
             MessageBoxW(Some(hwnd), &text, w!("Cedro"), MB_OK | MB_ICONERROR);
         }
     }
@@ -937,7 +952,8 @@ unsafe fn save(hwnd: HWND) {
 }
 
 unsafe fn browse(hwnd: HWND) {
-    let title = w!("Cartella dove salvare le copie");
+    let title = HSTRING::from(cedro::i18n::tr("Cartella dove salvare le copie").as_ref());
+    let title = PCWSTR(title.as_ptr());
     let info = BROWSEINFOW { hwndOwner: hwnd, lpszTitle: title, ulFlags: BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE, ..Default::default() };
     let pidl = SHBrowseForFolderW(&info);
     if pidl.is_null() {
@@ -947,7 +963,7 @@ unsafe fn browse(hwnd: HWND) {
     if SHGetPathFromIDListW(pidl, &mut buf).as_bool() {
         let len = buf.iter().position(|c| *c == 0).unwrap_or(buf.len());
         let path = String::from_utf16_lossy(&buf[..len]);
-        let _ = SetWindowTextW(item(hwnd, ID_DEST_PATH), &HSTRING::from(short_path(&path)));
+        let _ = SetWindowTextW(item(hwnd, ID_DEST_PATH), &HSTRING::from(&*cedro::i18n::tr(&short_path(&path))));
         STATE.with(|st| st.borrow_mut().dest_dir = path);
         set_check(hwnd, ID_DEST_SAME, false);
         set_check(hwnd, ID_DEST_SUB, false);
@@ -976,7 +992,7 @@ unsafe fn put_text(hdc: HDC, text: &str, rc: &RECT, font: HFONT, color: COLORREF
     let old = SelectObject(hdc, font.into());
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, color);
-    let mut wide: Vec<u16> = text.encode_utf16().collect();
+    let mut wide: Vec<u16> = cedro::i18n::tr(text).encode_utf16().collect();
     let mut rect = *rc;
     DrawTextW(hdc, &mut wide, &mut rect, format | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
     SelectObject(hdc, old);
@@ -1090,7 +1106,7 @@ unsafe fn draw_ente_about(dis: &DRAWITEMSTRUCT) {
     let old = SelectObject(dis.hDC, small.into());
     SetTextColor(dis.hDC, GREY);
     SetBkMode(dis.hDC, TRANSPARENT);
-    let mut wide: Vec<u16> = "Stesse funzioni di Cedro, con i colori, il carattere e lo stemma del Comune. Si cambia in Aspetto."
+    let mut wide: Vec<u16> = cedro::i18n::tr("Stesse funzioni di Cedro, con i colori, il carattere e lo stemma del Comune. Si cambia in Aspetto.")
         .encode_utf16()
         .collect();
     DrawTextW(dis.hDC, &mut wide, &mut note, DT_LEFT | DT_WORDBREAK | DT_NOPREFIX);
@@ -1212,7 +1228,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 ID_COPY => {
                     crate::win::copy_text(&cedro::sysinfo::report());
                     COPIED.store(true, Ordering::Relaxed);
-                    let _ = SetWindowTextW(item(hwnd, ID_COPIED), &HSTRING::from("Copiate: incollale in una segnalazione"));
+                    let _ = SetWindowTextW(item(hwnd, ID_COPIED), &HSTRING::from(&*cedro::i18n::tr("Copiate: incollale in una segnalazione")));
                 }
                 ID_FULL => open_full_licenses(),
                 ID_BROWSE => browse(hwnd),

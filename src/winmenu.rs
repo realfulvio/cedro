@@ -68,7 +68,7 @@ impl Menu {
     }
 
     fn push(&mut self, id: u32, text: &str, checked: bool, kind: Kind) {
-        let entry = Box::new(Entry { text: text.encode_utf16().collect(), checked, kind });
+        let entry = Box::new(Entry { text: cedro::i18n::tr(text).encode_utf16().collect(), checked, kind });
         let data = &*entry as *const Entry as usize;
         unsafe {
             let _ = AppendMenuW(self.handle, MF_OWNERDRAW, id as usize, PCWSTR(data as *const u16));

@@ -2,6 +2,7 @@ use cedro::{perform, read_quality, Kind, Mode};
 
 pub fn run() -> i32 {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    let _ = cedro::read_settings();
     if args.is_empty() || args.iter().any(|a| a == "-h" || a == "--help") {
         print_help();
         return if args.is_empty() { 2 } else { 0 };
@@ -41,7 +42,7 @@ pub fn run() -> i32 {
             };
             let kind = if path.exists() { cedro::kind_of(path) } else { Kind::Other };
             for slice in cedro::slices(kind, mode) {
-                println!("{}\t{}", slice.id, slice.label);
+                println!("{}\t{}", slice.id, cedro::i18n::tr(&slice.label));
             }
             return 0;
         }
@@ -52,11 +53,11 @@ pub fn run() -> i32 {
     };
     match result {
         Ok(out) => {
-            println!("{}\n{}", out.message, out.path.display());
+            println!("{}\n{}", cedro::i18n::tr(&out.message), out.path.display());
             0
         }
         Err(e) => {
-            eprintln!("{e}");
+            eprintln!("{}", cedro::i18n::tr(&e.to_string()));
             1
         }
     }
@@ -67,16 +68,16 @@ fn update() -> i32 {
     let release = match update::check() {
         Ok(Some(release)) => release,
         Ok(None) => {
-            println!("Cedro {} è già l'ultima versione.", update::CURRENT);
+            println!("{}", cedro::i18n::tr(&format!("Cedro {} è già l'ultima versione.", update::CURRENT)));
             return 0;
         }
         Err(e) => {
-            eprintln!("{e}");
+            eprintln!("{}", cedro::i18n::tr(&e));
             return 1;
         }
     };
-    println!("C'è Cedro {} (hai la {}).\n{}", release.version, update::CURRENT, release.page);
-    print!("Vuoi aggiornare? [s/N] ");
+    println!("{}", cedro::i18n::tr(&format!("C'è Cedro {} (hai la {}).\n{}", release.version, update::CURRENT, release.page)));
+    print!("{}", cedro::i18n::tr("Vuoi aggiornare? [s/N] "));
     let _ = std::io::Write::flush(&mut std::io::stdout());
     let mut answer = String::new();
     let _ = std::io::stdin().read_line(&mut answer);
@@ -85,11 +86,11 @@ fn update() -> i32 {
     }
     match install(&release) {
         Ok(note) => {
-            println!("{note}");
+            println!("{}", cedro::i18n::tr(&note));
             0
         }
         Err(e) => {
-            eprintln!("{e}");
+            eprintln!("{}", cedro::i18n::tr(&e));
             1
         }
     }
@@ -101,28 +102,27 @@ pub fn install(release: &cedro::update::Release) -> Result<String, String> {
     if let Some(asset) = &release.installer {
         let path = cedro::update::download(asset)?;
         std::process::Command::new(&path).spawn().map_err(|e| e.to_string())?;
-        return Ok(format!("Avviato {}.", asset.name));
+        return Ok(cedro::i18n::tr_string(&format!("Avviato {}.", asset.name)));
     }
     // Su Linux il pacchetto si scarica e si installa sempre da solo, da dove gira Cedro (anche da `target/`
     // o da una cartella a scelta): la copia nuova va in ~/.local/opt/cedro. Senza pacchetto si dice chiaro.
     #[cfg(unix)]
     {
         let asset = release.package.as_ref().ok_or_else(|| {
-            format!("la release {} non ha il pacchetto per questo sistema (linux-{}): riprova più tardi", release.version, cedro::update::package_arch())
+            cedro::i18n::tr_string(&format!("la release {} non ha il pacchetto per questo sistema (linux-{}): riprova più tardi", release.version, cedro::update::package_arch()))
         })?;
         let installed = cedro::update::install_package(asset)?;
-        return Ok(format!("Installata la versione {} in {}.", release.version, installed.display()));
+        return Ok(cedro::i18n::tr_string(&format!("Installata la versione {} in {}.", release.version, installed.display())));
     }
     #[cfg(not(unix))]
     {
         std::process::Command::new("explorer").arg(&release.page).spawn().map_err(|e| e.to_string())?;
-        Ok(format!("Aperta la pagina della release: {}", release.page))
+        Ok(cedro::i18n::tr_string(&format!("Aperta la pagina della release: {}", release.page)))
     }
 }
 
 fn print_help() {
-    eprintln!(
-        "\
+    let help = "\
 Cedro — conversione locale, senza upload.
 
   cedro convert <file> <png|jpeg|webp|bmp|gif|tiff|pdf|txt|md|csv|wav|mp3|mp4|docx|jpg>
@@ -145,8 +145,9 @@ Le conversioni sono nel programma: non servono LibreOffice, ffmpeg, Tesseract n�
 Il video MP4, su Windows, usa i codificatori di Windows (H.264 e AAC).
 Su Linux usa OpenH264 e FDK AAC, compilati dentro il programma.
 L'MP3 usa LAME, compilato dentro l'eseguibile.
-L'originale non viene mai sovrascritto."
-    );
+L'originale non viene mai sovrascritto.";
+    let help: Vec<String> = help.lines().map(cedro::i18n::tr_string).collect();
+    eprintln!("{}", help.join("\n"));
 }
 
 /// `cedro trascrivi`: la stessa trascrizione della scheda, con i passi stampati man mano.
@@ -168,13 +169,13 @@ fn transcribe(files: &[String], args: &[String]) -> i32 {
     let paths: Vec<std::path::PathBuf> = files.iter().filter(|f| !f.starts_with("--") && !matches!(f.as_str(), "veloce" | "buona" | "massima")).map(std::path::PathBuf::from).collect();
     let failed = std::sync::atomic::AtomicBool::new(false);
     trascrizione::run(&paths, &request, None, &cedro::Options::default(), &|event| match event {
-        Event::Log(line) => println!("{} {}", line.key, line.text),
+        Event::Log(line) => println!("{} {}", line.key, cedro::i18n::tr(&line.text)),
         Event::Percent { .. } => {}
         Event::Finished { path, result } => match result {
-            Ok((out, msg)) => println!("OK {} -> {} ({msg})", path.display(), out.display()),
+            Ok((out, msg)) => println!("OK {} -> {} ({})", path.display(), out.display(), cedro::i18n::tr(&msg)),
             Err(e) => {
                 failed.store(true, std::sync::atomic::Ordering::Relaxed);
-                eprintln!("ERRORE {}: {e}", path.display());
+                eprintln!("{} {}: {}", cedro::i18n::tr("ERRORE"), path.display(), cedro::i18n::tr(&e));
             }
         },
     });
