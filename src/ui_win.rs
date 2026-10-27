@@ -718,7 +718,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         WM_CLOSE => {
             let busy = host.screen.try_borrow().map(|s| s.app.busy()).unwrap_or(false);
             if busy {
-                MessageBoxW(Some(hwnd), w!("Una conversione è ancora in corso: aspetta che finisca."), w!("Cedro"), MB_OK | MB_ICONINFORMATION);
+                MessageBoxW(Some(hwnd), &HSTRING::from(&*cedro::i18n::tr("Una conversione è ancora in corso: aspetta che finisca.")), w!("Cedro"), MB_OK | MB_ICONINFORMATION);
             } else {
                 let _ = DestroyWindow(hwnd);
             }
