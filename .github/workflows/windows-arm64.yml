@@ -78,7 +78,7 @@ jobs:
           "uscita dell'installatore: $($p.ExitCode)"
           if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")) { throw 'Inno Setup non installato' }
 
-      - name: Installatore ARM64 (e la copia per la vecchia edizione Comune di Bondeno)
+      - name: Installatore ARM64
         shell: pwsh
         run: powershell -File installer\build.ps1 -Arm64
 
@@ -87,7 +87,6 @@ jobs:
           name: installatore-arm64
           path: |
             dist/Cedro-ARM64-Setup-*.exe
-            dist/Cedro-Bondeno-ARM64-Setup-*.exe
 
 
   motori:
@@ -244,7 +243,7 @@ jobs:
           Start-Process (Get-Item vecchio\Cedro-Setup-*.exe).FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
           "Installata: $((Get-ItemProperty $key).DisplayVersion)"
           if ((Get-ItemProperty $key).DisplayVersion -ne '0.17.1') { throw '0.17.1 non installata' }
-          [string[]]$names = @("Cedro-ARM64-Setup-$version.exe", "Cedro-Bondeno-ARM64-Setup-$version.exe", "Cedro-Bondeno-Setup-$version.exe", "Cedro-Setup-$version.exe", "cedro-$version-linux-x64.tar.gz", "cedro-bondeno-$version-linux-x64.tar.gz")
+          [string[]]$names = @("Cedro-ARM64-Setup-$version.exe", "Cedro-Setup-$version.exe", "cedro-$version-linux-x64.tar.gz")
           [Array]::Sort($names, [StringComparer]::Ordinal)
           $picked = $names | Where-Object { $_.StartsWith('Cedro-Setup') -and $_.EndsWith('.exe') } | Select-Object -First 1
           "La 0.17 sceglie: $picked"
@@ -253,31 +252,6 @@ jobs:
           Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force
           "Dopo l'aggiornamento: $((Get-ItemProperty $key).DisplayVersion)"
           if ((Get-ItemProperty $key).DisplayVersion -ne $version) { throw "aggiornamento a $version non riuscito" }
-
-      - name: "Aggiornamento vero: la vecchia edizione Bondeno prende la copia Cedro-Bondeno-Setup e lascia il file da-bondeno"
-        # La 0.20.x Bondeno cerca «Cedro-Bondeno-Setup-<v>.exe»: la copia è lo stesso installatore, che dal nome
-        # capisce di dover lasciare il file con cui Cedro accende da solo il tema Bondeno.
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $version = (Select-String -Path Cargo.toml -Pattern '^version\s*=\s*"(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
-          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{5C1CAEBF-024C-4A9F-BEC8-1FB3C9FEA4CE}_is1'
-          $marker = Join-Path $env:APPDATA 'Cedro\da-bondeno'
-          gh release download v0.20.1 --pattern 'Cedro-Bondeno-Setup-*.exe' --dir bondeno
-          Start-Process (Get-Item bondeno\Cedro-Bondeno-Setup-*.exe).FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
-          Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force
-          if ((Get-ItemProperty $key).DisplayVersion -ne '0.20.1') { throw '0.20.1 Bondeno non installata' }
-          Remove-Item $marker -ErrorAction SilentlyContinue
-          # Come fa la vecchia edizione: solo i nomi che conosce.
-          $copia = Get-Item "dist\Cedro-Bondeno-Setup-$version.exe"
-          if ((Get-FileHash $copia).Hash -ne (Get-FileHash "dist\Cedro-Setup-$version.exe").Hash) { throw 'la copia non è identica' }
-          Start-Process $copia.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
-          Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force
-          if ((Get-ItemProperty $key).DisplayVersion -ne $version) { throw "aggiornamento a $version non riuscito" }
-          if (-not (Test-Path $marker)) { throw 'manca il file da-bondeno: il tema Bondeno non si accenderebbe' }
-          "Il file da-bondeno c'è."
-          Remove-Item $marker
 
       - name: Motori x64 della release precedente con il nome nuovo
         # trascrivi/ per x64 non cambia: i motori già pubblicati si riusano col numero di versione nuovo.
@@ -304,7 +278,6 @@ jobs:
           name: x64
           path: |
             dist/Cedro-Setup-*.exe
-            dist/Cedro-Bondeno-Setup-*.exe
             motori-x64/*.exe
 
   pubblica:
@@ -368,7 +341,7 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           V="${TAG#v}"
-          want="Cedro-Setup-$V.exe Cedro-ARM64-Setup-$V.exe Cedro-Bondeno-Setup-$V.exe Cedro-Bondeno-ARM64-Setup-$V.exe cedro-$V-linux-x64.tar.gz cedro-bondeno-$V-linux-x64.tar.gz"
+          want="Cedro-Setup-$V.exe Cedro-ARM64-Setup-$V.exe cedro-$V-linux-x64.tar.gz"
           for i in $(seq 1 90); do
             have=$(gh release view "$TAG" --json assets --jq '.assets[].name')
             missing=""

@@ -12,13 +12,13 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ### Comune di Bondeno
 
-Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Impostazioni → Aspetto, con i colori, il carattere e lo stemma del Comune. Chi aveva l'edizione per il Comune si aggiorna da sola e si ritrova il tema già acceso. I file `Cedro-Bondeno-…` e `cedro-bondeno-…` di questa release sono copie degli stessi installatori, tenute solo perché la vecchia edizione cerca quei nomi: chi installa da zero prende i file qui sopra.
+Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Impostazioni → Aspetto, con i colori, il carattere e lo stemma del Comune.
 
 ## Novità della {versione}
 
-- **Icona nell'area di notifica**: il doppio clic sull'icona di Windows apre il pannello Conversioni (prima apriva le Impostazioni).
+- **Niente più copie «Bondeno»**: la release non contiene più i file `Cedro-Bondeno-…` e `cedro-bondeno-…`; il tema Comune di Bondeno resta in Impostazioni → Aspetto.
 
-Dalla 0.21.2: video dal web da pagine qualunque (come magnific.com) e messaggio di rete più preciso. Dalla 0.21.1: yt-dlp, deno e ffmpeg si aggiornano da soli.
+Dalla 0.21.3: il doppio clic sull'icona di Windows apre il pannello Conversioni. Dalla 0.21.2: video dal web da pagine qualunque (come magnific.com) e messaggio di rete più preciso. Dalla 0.21.1: yt-dlp, deno e ffmpeg si aggiornano da soli.
 
 Dalla 0.21.0: il Comune di Bondeno è un tema di Cedro (Impostazioni → Aspetto) e la nuova grafica con cinque aspetti a scelta.
 
