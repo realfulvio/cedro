@@ -36,6 +36,20 @@ ksni = "0.2"
 mp4 = "0.14"
 openh264 = { version = "0.9", default-features = false, features = ["source"] }
 
+# Android: stesso video di Linux (OpenH264, fdk-aac, MP4/MKV in Rust); la scheda video è MediaCodec (src/mediacodec.rs).
+[target.'cfg(target_os = "android")'.dependencies]
+ndk = { version = "0.9", features = ["media"] }
+ndk-sys = { version = "0.6", features = ["media"] }
+fdk-aac = "0.8"
+libc = "0.2"
+mp4 = "0.14"
+openh264 = { version = "0.9", default-features = false, features = ["source"] }
+# whisper.cpp come libreria nell'APK (src/whisper_android).
+whisper-rs = "0.16"
+whisper-rs-sys = "0.15"
+# Opus (vocali di WhatsApp e Telegram) per la trascrizione: libopus compilata dentro l'APK.
+audiopus_sys = { version = "0.2", features = ["static"] }
+
 [target.'cfg(windows)'.dependencies]
 windows-core = "0.61"
 windows = { version = "0.61", features = [
@@ -85,3 +99,7 @@ winresource = "0.1"
 hayro = { path = "vendor/hayro" }
 # rten-simd con l'interruttore per spegnere AVX-512 (Impostazioni)
 rten-simd = { path = "vendor/rten-simd" }
+
+# Prototipo Android (NativeActivity, tutto Rust): vedi android/README.md
+[workspace]
+members = ["android"]

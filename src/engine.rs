@@ -724,13 +724,13 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             {
                 crate::video::to_mp4(path, &out)
             }
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "android"))]
             {
                 crate::linux_video::to_mp4(path, &out)
             }
-            #[cfg(not(any(windows, target_os = "linux")))]
+            #[cfg(not(any(windows, target_os = "linux", target_os = "android")))]
             {
-                Err::<(), String>("il video MP4 si converte su Windows e su Linux".into())
+                Err::<(), String>("il video MP4 si converte su Windows, su Linux e su Android".into())
             }
         });
         let result = result.and_then(|()| if opts.faststart { crate::mp4fast::make_faststart(&out) } else { Ok(()) });

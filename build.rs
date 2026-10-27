@@ -22,6 +22,10 @@ fn main() {
             println!("cargo:warning=icona non incorporata: {e}");
         }
     }
+    // whisper.cpp è C++ con la libreria standard dell'NDK: l'APK porta libc++_shared.so (la copia android/build.sh).
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("android") {
+        println!("cargo:rustc-link-lib=c++_shared");
+    }
     println!("cargo:rerun-if-changed=assets/cedro.ico");
     println!("cargo:rerun-if-changed=build.rs");
 }

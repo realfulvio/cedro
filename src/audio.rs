@@ -114,6 +114,7 @@ pub fn to_mp3(input: &Path, output: &Path, quality: u8, opts: &crate::engine::Op
             let end = (at + chunk).min(pcm.samples.len());
             encode_block(&mut encoder, MonoPcm(&pcm.samples[at..end]), &mut mp3)?;
             at = end;
+            crate::progress::report(at as f32 / pcm.samples.len().max(1) as f32);
         }
     } else {
         let frames = pcm.samples.len() / 2;
@@ -130,6 +131,9 @@ pub fn to_mp3(input: &Path, output: &Path, quality: u8, opts: &crate::engine::Op
             }
             encode_block(&mut encoder, DualPcm { left: &left, right: &right }, &mut mp3)?;
             at = end;
+            if (at / chunk) % 64 == 0 {
+                crate::progress::report(at as f32 / frames.max(1) as f32);
+            }
         }
     }
     append_mp3(&mut mp3, mp3lame_encoder::max_required_buffer_size(chunk), |buf| {
@@ -191,7 +195,55 @@ fn append_mp3(
     Ok(())
 }
 
+/// L'onda di un file audio in `n` colonne (0..1), per l'anteprima: un colpo d'occhio su dove c'è suono.
+pub fn waveform(path: &Path, n: usize) -> Option<Vec<f32>> {
+    let pcm = decode(path).ok()?;
+    let ch = pcm.channels.max(1) as usize;
+    let frames = pcm.samples.len() / ch;
+    if frames == 0 || n == 0 {
+        return None;
+    }
+    let mut v: Vec<f32> = (0..n)
+        .map(|i| {
+            let (a, b) = (i * frames / n, ((i + 1) * frames / n).max(i * frames / n + 1).min(frames));
+            let s = &pcm.samples[a * ch..b * ch];
+            let sum: f64 = s.iter().map(|x| (*x as f64).powi(2)).sum();
+            (sum / s.len().max(1) as f64).sqrt() as f32
+        })
+        .collect();
+    let max = v.iter().cloned().fold(0.0f32, f32::max).max(1.0);
+    v.iter_mut().for_each(|x| *x = (*x / max).clamp(0.0, 1.0));
+    Some(v)
+}
+
 fn decode(path: &Path) -> Result<Pcm, String> {
+    let first = decode_symphonia(path);
+    // Android: i formati che Cedro non sa leggere (Opus, AMR…) li decodifica il telefono.
+    #[cfg(target_os = "android")]
+    if first.is_err() {
+        if let Ok(pcm) = decode_telefono(path) {
+            return Ok(pcm);
+        }
+    }
+    first
+}
+
+#[cfg(target_os = "android")]
+fn decode_telefono(path: &Path) -> Result<Pcm, String> {
+    let mut decoder = crate::mediadec::AudioDecoder::open(path)?;
+    let (mut channels, mut rate) = (2u16, 44_100u32);
+    let mut samples = Vec::new();
+    while let Some((chunk, c, r)) = decoder.next()? {
+        (channels, rate) = (c, r);
+        samples.extend(chunk);
+    }
+    if samples.is_empty() {
+        return Err("audio non decodificato".into());
+    }
+    Ok(Pcm { rate, channels, samples, tags: Tags::default() })
+}
+
+fn decode_symphonia(path: &Path) -> Result<Pcm, String> {
     let file = File::open(path).map_err(|e| e.to_string())?;
     let source = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
