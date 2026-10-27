@@ -1459,7 +1459,8 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let video_index = streams.iter().position(|stream| stream.video).ok_or_else(|| "il video non è stato letto".to_string())?;
     let video = &streams[video_index];
     let pix = &avi_pix(video.handler, video.compression, video.bits, video.signed_height)?;
-    let duration = avi_duration(video.scale, video.rate);
+    let (frames, secs) = crate::avi::video_timing(&streams, &chunks, video_index);
+    let duration = ((secs * 10_000_000.0 / frames as f64) as i64).max(1);
     let width = video.width as usize;
     let height = video.height as usize;
     let audio_index = streams.iter().position(|stream| !stream.video && stream.channels > 0);
@@ -1495,6 +1496,9 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let mut mpeg4 = matches!(pix, Pix::Mpeg4).then(oxideav_mpeg4video::decoder::Mpeg4VideoDecoder::new);
     for chunk in chunks {
         if chunk.stream == video_index && chunk.video {
+            if chunk.data.is_empty() {
+                continue; // fotogramma saltato
+            }
             match pix {
                 Pix::Nv12 => emit(split_nv12(&chunk.data, width, height)?)?,
                 Pix::Bgr { bits, bottom_up } => emit(bgr_at(&chunk.data, width, height, *bits, *bottom_up)?)?,
@@ -1567,15 +1571,6 @@ fn mpeg4_frame(frame: &oxideav_mpeg4video::framestore::DecodedFrame, want_w: usi
 }
 
 
-
-
-
-
-fn avi_duration(scale: u32, rate: u32) -> i64 {
-    let rate = rate.max(1) as u128;
-    let value = (scale.max(1) as u128).saturating_mul(10_000_000) / rate;
-    i64::try_from(value).unwrap_or(333_333).max(1)
-}
 
 
 
