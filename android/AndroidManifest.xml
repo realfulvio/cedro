@@ -14,8 +14,9 @@
             android:name="android.app.NativeActivity"
             android:label="Cedro"
             android:exported="true"
+            android:noHistory="true"
             android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|uiMode"
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
             <meta-data android:name="android.app.lib_name" android:value="cedro_android" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
