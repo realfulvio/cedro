@@ -84,6 +84,12 @@ pub enum Act {
     OptPick(Opt, u32),
     OptSlider(Opt),
     Edit(Field),
+    /// Menu del tasto destro in un campo di testo.
+    FieldCut,
+    FieldCopy,
+    FieldPaste,
+    FieldClear,
+    FieldSelectAll,
     Quality,
     DestMenu,
     DestSame,
@@ -161,6 +167,8 @@ pub struct UiState {
     pub edit: Option<Field>,
     /// Posizione del cursore di scrittura, in caratteri.
     pub caret: usize,
+    /// Tutto il testo del campo è selezionato.
+    pub sel_all: bool,
     pub scroll: HashMap<Scroll, f32>,
     pub open: HashSet<Fold>,
     /// Il cursore che si sta trascinando, con il suo riquadro.
@@ -429,6 +437,10 @@ impl<'a> Frame<'a> {
         let shown: String = if masked { "•".repeat(text.chars().count()) } else { text.to_string() };
         let pad = 14.0;
         self.p.push_clip(r.0 + 2.0, r.1, r.2 - 4.0, r.3);
+        if editing && self.ui.sel_all && !shown.is_empty() {
+            let tw = self.measure(&shown, size, SANS).min(r.2 - 2.0 * pad);
+            self.p.rrect_a(r.0 + pad - 2.0, r.1 + r.3 * 0.2, tw + 4.0, r.3 * 0.6, 3.0, pal.primary, 0.35);
+        }
         // Se il testo è più lungo del campo, si vede la parte dove si scrive.
         let caret_text: String = shown.chars().take(self.ui.caret.min(shown.chars().count())).collect();
         let caret_x = self.measure(&caret_text, size, SANS);
