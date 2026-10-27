@@ -1,0 +1,42 @@
+03:47:01 user=cedro-gui screen={X=0,Y=0,Width=1024,Height=768}
+03:47:01 exe True
+03:47:03 main s=0 windows-essenziale title='Cedro' class=CedroUi
+03:47:03 shot main-s0-windows-essenziale 962x676 at 31,14
+03:47:05 main s=0 percorso-guidato title='Cedro' class=CedroUi
+03:47:05 shot main-s0-percorso-guidato 962x676 at 31,14
+03:47:08 main s=0 cedro-compatto title='Cedro' class=CedroUi
+03:47:08 shot main-s0-cedro-compatto 408x676 at 308,14
+03:47:10 main s=0 banco-di-lavoro title='Cedro' class=CedroUi
+03:47:11 shot main-s0-banco-di-lavoro 962x676 at 31,14
+03:47:13 main s=0 documento-al-centro title='Cedro' class=CedroUi
+03:47:13 shot main-s0-documento-al-centro 962x676 at 31,14
+03:47:16 main s=1 windows-essenziale title='Cedro' class=CedroUi
+03:47:16 shot main-s1-windows-essenziale 962x676 at 31,14
+03:47:18 main s=1 percorso-guidato title='Cedro' class=CedroUi
+03:47:18 shot main-s1-percorso-guidato 962x676 at 31,14
+03:47:21 main s=1 cedro-compatto title='Cedro' class=CedroUi
+03:47:21 shot main-s1-cedro-compatto 408x663 at 308,19
+03:47:24 main s=1 banco-di-lavoro title='Cedro' class=CedroUi
+03:47:24 shot main-s1-banco-di-lavoro 962x676 at 31,14
+03:47:26 main s=1 documento-al-centro title='Cedro' class=CedroUi
+03:47:26 shot main-s1-documento-al-centro 962x676 at 31,14
+03:47:29 imp default 796x639 at 114,43 class=CedroSettings
+03:47:29 shot imp-default 796x639 at 114,43
+03:47:30 imp chiesto 500x350 -> ottenuto 796x639
+03:47:30 shot imp-500x350 796x639 at 40,40
+03:47:31 imp chiesto 700x500 -> ottenuto 796x639
+03:47:31 shot imp-700x500 796x639 at 40,40
+03:47:33 imp chiesto 1100x800 -> ottenuto 1044x788
+03:47:33 shot imp-1100x800 1044x788 at 40,40
+03:47:34 imp chiesto 1500x950 -> ottenuto 1044x788
+03:47:34 shot imp-1500x950 1044x788 at 40,40
+03:47:36 shot imp-tab0 1000x720 at 40,40
+03:47:36 shot imp-tab1 1000x720 at 40,40
+03:47:37 shot imp-tab2 1000x720 at 40,40
+03:47:38 shot imp-tab3 1000x720 at 40,40
+03:47:38 shot imp-tab4 1000x720 at 40,40
+03:47:39 shot imp-tab5 1000x720 at 40,40
+03:47:39 shot imp-tab6 1000x720 at 40,40
+03:47:40 shot imp-tab7 1000x720 at 40,40
+03:47:41 shot imp-tab8 1000x720 at 40,40
+03:47:41 FINE A

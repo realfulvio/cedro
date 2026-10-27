@@ -1,0 +1,15 @@
+03:48:08 user=cedro-gui screen={X=0,Y=0,Width=1024,Height=768}
+03:48:08 convert webp -> 13 KB ÔåÆ 11 KB -À 15% in meno
+C:\cedro-lab\prove0200-files\base.webp
+03:48:08 convert bmp -> bmp 900+ù200
+C:\cedro-lab\prove0200-files\base.bmp
+03:48:08 convert gif -> gif 900+ù200
+C:\cedro-lab\prove0200-files\base.gif
+03:48:08 convert tiff -> tiff 900+ù200
+C:\cedro-lab\prove0200-files\base.tiff
+03:48:08 convert png -> png 900+ù200
+C:\cedro-lab\prove0200-files\base.png
+03:48:09 convert pdf -> PDF 900+ù200, con il testo OCR selezionabile e ricercabile
+C:\cedro-lab\prove0200-files\base.pdf
+03:48:09 file: base.bmp, base.gif, base.pdf, base.png, base.tiff, base.webp, foto.jpg
+03:48:53 FINE B
