@@ -51,7 +51,7 @@ pub trait Canvas {
     /// La ruota con `n` fette (fetta `hover` accesa, -1 nessuna), centrata e larga `size`, con opacità `alpha`.
     fn wheel(&mut self, n: usize, hover: i32, cx: f32, cy: f32, size: f32, alpha: f32);
     fn logo(&mut self, left: f32, baseline: f32, scale: f32, ink: Rgb, accent: Rgb, real: Rgb);
-    /// Uno stemma dell'edizione Bondeno nel riquadro dato (nell'edizione standard non c'è niente da disegnare).
+    /// Uno stemma del Comune di Bondeno nel riquadro dato (senza il tema Bondeno non c'è niente da disegnare).
     fn stemma(&mut self, stemma: crate::edizione::Stemma, x: f32, y: f32, w: f32, h: f32);
 }
 
@@ -221,7 +221,7 @@ pub fn draw(c: &mut dyn Canvas, tour: &Tour, now: u64) {
     let t = tour.elapsed(now);
     c.fill(0.0, 0.0, W, H, WHITE);
     c.fill(0.0, 0.0, W, 44.0, BLUE);
-    if edizione::BONDENO {
+    if edizione::bondeno() {
         // Lo stemma nel suo cerchio bianco, che sul blu si legge.
         c.stemma(edizione::Stemma::Cerchio, 14.0, 5.0, 34.0, 34.0);
         c.text("Guida di Cedro · Comune di Bondeno", 58.0, 0.0, 500.0, 44.0, 19.0, true, WHITE, Align::Left, false);
@@ -282,21 +282,21 @@ fn footer(c: &mut dyn Canvas, tour: &Tour) {
         c.round(x, FOOT_Y + 23.0, w, 10.0, 5.0, Some(if i == tour.page { BLUE } else { LINE }), None);
     }
     // Firma: «Cedro x.y.z · Powered by Luca real>hcok_ A.», centrata nello spazio tra i pallini e i pulsanti.
-    // Nell'edizione Bondeno: stemma, «Cedro x.y.z · Comune di Bondeno · Powered by…».
-    let head = match edizione::BONDENO {
+    // Con il tema Bondeno: stemma, «Cedro x.y.z · Comune di Bondeno · Powered by…».
+    let head = match edizione::bondeno() {
         true => format!("Cedro {}  ·  Comune di Bondeno  ·  Powered by Luca ", crate::update::CURRENT),
         false => format!("Cedro {}  ·  Powered by Luca ", crate::update::CURRENT),
     };
     let size = 12.0;
     let scale = size * 0.82 / logo::HEIGHT;
-    let sw = if edizione::BONDENO { 24.0 } else { 0.0 };
+    let sw = if edizione::bondeno() { 24.0 } else { 0.0 };
     let hw = c.text_width(&head, size, false);
     let aw = c.text_width(" A.", size, false);
     let lw = logo::width(true) * scale;
     let total = sw + hw + lw + aw;
     let mid = FOOT_Y + 28.0;
     let mut left = 150.0 + (PREV_X - 150.0 - 12.0 - total) / 2.0;
-    if edizione::BONDENO {
+    if edizione::bondeno() {
         c.stemma(edizione::Stemma::Solo, left, mid - 10.0, 20.0, 20.0);
         left += sw;
     }
@@ -344,23 +344,17 @@ impl Stage<'_> {
 
 // ---------- 1. la ruota ----------
 
+/// Le tre ruote nell'ordine delle fette (quello della tavola «Ruota e dettagli»).
 const MODES: [(&str, &str, usize, &[&str]); 3] = [
-    ("Shift", "CONVERSIONE", 2, &["PDF", "PNG", "JPEG", "WebP", "BMP", "GIF", "TIFF"]),
+    ("Shift", "CONVERSIONE", 0, &["JPEG", "WebP", "BMP", "GIF", "TIFF", "PDF", "PNG"]),
     ("Ctrl", "STRUMENTI", 5, &["Comprimi", "Scala", "B/N", "Ruota", "Metadati", "OCR", "MAIUSC."]),
     ("Alt", "AZIONI", 1, &["Duplica", "Percorso", "ZIP"]),
-];
-
-/// Le stesse tre ruote con l'ordine della versione standard (quello della tavola «Ruota e dettagli»).
-const MODES_STD: [(&str, &str, usize, &[&str]); 3] = [
-    ("Shift", "CONVERSIONE", 0, &["JPEG", "WebP", "BMP", "GIF", "TIFF", "PDF", "PNG"]),
-    MODES[1],
-    MODES[2],
 ];
 
 fn scene_wheel(s: &mut Stage, t: u32) {
     let mode = (t / MODE_MS) as usize % 3;
     let lt = (t % MODE_MS) as f32;
-    let (key, caption, pick, labels) = if crate::edizione::BONDENO { MODES[mode] } else { MODES_STD[mode] };
+    let (key, caption, pick, labels) = MODES[mode];
     let n = labels.len();
     let (cx, cy, size) = (182.0, 158.0, 316.0);
     // il file

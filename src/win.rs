@@ -1,6 +1,5 @@
 use cedro::{
-    wheelgeom_bounds, wheelgfx,
-    append_log, kind_of, mode_from_vk, perform_into, read_quality, read_settings, same_kind_paths, slices, update, Kind, Mode,
+    append_log, kind_of, mode_from_vk, perform_into, read_quality, read_settings, same_kind_paths, update, Kind, Mode,
     Settings,
     Slice,
 };
@@ -38,9 +37,6 @@ const WM_APP_DROP: u32 = WM_APP + 3;
 const WM_APP_RCLICK: u32 = WM_APP + 4;
 const WM_APP_UPDATE: u32 = WM_APP + 5;
 const RUN_KEY: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
-const WHEEL: i32 = 440;
-const R0: f32 = 58.0;
-const R1: f32 = 168.0;
 
 static RDOWN: AtomicBool = AtomicBool::new(false);
 static EAT_RIGHT: AtomicBool = AtomicBool::new(false);
@@ -251,7 +247,7 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         WM_TRAY => {
             if lparam.0 as u32 == WM_RBUTTONUP || lparam.0 as u32 == WM_CONTEXTMENU {
                 show_menu(hwnd);
-            } else if lparam.0 as u32 == WM_LBUTTONUP && !cedro::edizione::BONDENO && cedro::ui::theme::ThemeId::from_key(&read_settings().ui_theme) == cedro::ui::theme::ThemeId::CedroCompatto {
+            } else if lparam.0 as u32 == WM_LBUTTONUP && cedro::ui::theme::ThemeId::from_key(&read_settings().ui_theme) == cedro::ui::theme::ThemeId::CedroCompatto {
                 // Con «Cedro compatto» un clic sull'icona apre la finestrella.
                 crate::ui_win::open_compact();
             } else if lparam.0 as u32 == WM_LBUTTONDBLCLK {
@@ -267,13 +263,7 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 3 => check_updates(true),
                 5 => crate::settings_win::open(),
                 6 => crate::guida_win::open(),
-                7 => {
-                    if cedro::edizione::BONDENO {
-                        crate::conversioni_win::open()
-                    } else {
-                        crate::ui_win::open()
-                    }
-                }
+                7 => crate::ui_win::open(),
                 4 => {
                     let on = !autostart_enabled();
                     if let Err(e) = set_autostart(on) {
@@ -853,11 +843,6 @@ fn known_folder(id: &windows_core::GUID) -> Option<PathBuf> {
     }
 }
 
-/// La ruota nuova c'è solo nella versione standard; quella del Comune di Bondeno ha la sua.
-fn standard() -> bool {
-    !cedro::edizione::BONDENO
-}
-
 /// Pixel per unità della tavola della ruota: densità dello schermo per lo zoom dell'interfaccia.
 fn wheel_scale() -> f32 {
     unsafe { GetDpiForSystem() as f32 / 96.0 * cedro::ui::ZOOM }
@@ -865,11 +850,7 @@ fn wheel_scale() -> f32 {
 
 /// Le fette del file e del modo, nell'ordine in cui si vedono.
 fn wheel_list(kind: Kind, mode: Mode) -> Vec<Slice> {
-    if standard() {
-        cedro::ui::wheel::list(kind, mode)
-    } else {
-        slices(kind, mode).to_vec()
-    }
+    cedro::ui::wheel::list(kind, mode)
 }
 
 thread_local! {
@@ -941,8 +922,8 @@ fn open_wheel(x: i32, y: i32, mode: Mode, paths: Vec<PathBuf>, chord: bool) {
         };
         let _ = RegisterClassExW(&wc);
         let scale = wheel_scale();
-        let look = if standard() { Some(new_look(&paths, mode)) } else { None };
-        let (ww, wh, cxp, cyp) = look.as_ref().map(|u| look_metrics(u, scale)).unwrap_or((WHEEL, WHEEL, WHEEL / 2, WHEEL / 2));
+        let look = new_look(&paths, mode);
+        let (ww, wh, cxp, cyp) = look_metrics(&look, scale);
         let (left, top) = clamp_origin(x - cxp, y - cyp, ww, wh);
         let hwnd = match CreateWindowExW(
             WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED,
@@ -973,7 +954,7 @@ fn open_wheel(x: i32, y: i32, mode: Mode, paths: Vec<PathBuf>, chord: bool) {
             g.org_x = left;
             g.org_y = top;
             g.scale = scale;
-            g.look = look;
+            g.look = Some(look);
             g.mode = mode;
             g.hover = -1;
             g.paths = paths.clone();
@@ -986,9 +967,7 @@ fn open_wheel(x: i32, y: i32, mode: Mode, paths: Vec<PathBuf>, chord: bool) {
         }
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        if standard() {
-            load_thumb(hwnd, &paths);
-        }
+        load_thumb(hwnd, &paths);
         paint_wheel(hwnd);
     }
 }
@@ -1144,21 +1123,6 @@ fn reveal_in_explorer(path: &std::path::Path) {
     }
 }
 
-fn current_slices() -> (Vec<Slice>, i32, Mode, String) {
-    SESSION.with(|s| {
-        let g = s.borrow();
-        let kind = g.paths.first().map(|p| kind_of(p)).unwrap_or(Kind::Other);
-        let label = g
-            .paths
-            .first()
-            .and_then(|p| p.file_name())
-            .and_then(|n| n.to_str())
-            .unwrap_or("in attesa")
-            .to_string();
-        (wheel_list(kind, g.mode), g.hover, g.mode, label)
-    })
-}
-
 unsafe extern "system" fn wheel_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if msg == WM_PAINT {
         paint_wheel(hwnd);
@@ -1186,43 +1150,6 @@ unsafe extern "system" fn wheel_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpara
     DefWindowProcW(hwnd, msg, wparam, lparam)
 }
 
-unsafe fn dib(dc: HDC) -> Option<(HBITMAP, *mut u8)> {
-    let mut info = BITMAPINFO::default();
-    info.bmiHeader = BITMAPINFOHEADER {
-        biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-        biWidth: WHEEL,
-        biHeight: -WHEEL,
-        biPlanes: 1,
-        biBitCount: 32,
-        biCompression: BI_RGB.0,
-        ..Default::default()
-    };
-    let mut bits = std::ptr::null_mut();
-    let bmp = CreateDIBSection(Some(dc), &info, DIB_RGB_COLORS, &mut bits, None, 0).ok()?;
-    Some((bmp, bits as *mut u8))
-}
-
-/// Il testo si disegna in bianco su nero con GDI; la luminosità diventa l'alfa del colore voluto.
-unsafe fn text_layer(mem: HDC, mask: *mut u8, px: &mut [u8], color: (u8, u8, u8), draw: impl FnOnce()) {
-    let len = px.len();
-    std::ptr::write_bytes(mask, 0, len);
-    SetBkMode(mem, TRANSPARENT);
-    SetTextColor(mem, COLORREF(0x00FFFFFF));
-    draw();
-    let mask = std::slice::from_raw_parts(mask, len);
-    for (dst, src) in px.chunks_exact_mut(4).zip(mask.chunks_exact(4)) {
-        let a = src[1] as u32;
-        if a == 0 {
-            continue;
-        }
-        let k = 255 - a;
-        dst[0] = ((color.2 as u32 * a + dst[0] as u32 * k) / 255) as u8;
-        dst[1] = ((color.1 as u32 * a + dst[1] as u32 * k) / 255) as u8;
-        dst[2] = ((color.0 as u32 * a + dst[2] as u32 * k) / 255) as u8;
-        dst[3] = (a + dst[3] as u32 * k / 255) as u8;
-    }
-}
-
 /// Disegna la ruota nuova e la mostra sulla finestra a strati.
 fn paint_wheel_look(hwnd: HWND) {
     let frame = SESSION.with(|s| {
@@ -1231,7 +1158,7 @@ fn paint_wheel_look(hwnd: HWND) {
         let (pw, ph, _, _) = look_metrics(ui, g.scale);
         GLYPHS.with(|cache| {
             let mut cache = cache.borrow_mut();
-            let mut p = cedro::ui::gfx::Painter::new(pw as u32, ph as u32, g.scale, Fonts::shared(), &mut cache);
+            let mut p = cedro::ui::gfx::Painter::new(pw as u32, ph as u32, g.scale, Fonts::current(), &mut cache);
             ui.draw(&mut p);
             Some((p.bgra(), pw, ph))
         })
@@ -1267,151 +1194,7 @@ fn paint_wheel_look(hwnd: HWND) {
 }
 
 fn paint_wheel(hwnd: HWND) {
-    if standard() {
-        paint_wheel_look(hwnd);
-        return;
-    }
-    let (list, hover, mode, name) = current_slices();
-    let tema = cedro::tema::attivo();
-    let mut px = wheelgfx::render(list.len(), hover);
-    unsafe {
-        let screen = GetDC(None);
-        let mem = CreateCompatibleDC(Some(screen));
-        let (Some((mask_bmp, mask)), Some((out_bmp, out))) = (dib(screen), dib(screen)) else {
-            let _ = DeleteDC(mem);
-            ReleaseDC(None, screen);
-            return;
-        };
-        let old = SelectObject(mem, mask_bmp.into());
-        let c = WHEEL as f32 / 2.0;
-        let n = list.len().max(1);
-        let slice_px = if n > 6 { -16 } else if n > 4 { -17 } else { -19 };
-        let radius = (R0 + R1) / 2.0;
-        let labels = |on: bool| {
-            let font = select_font(mem, slice_px, 700);
-            for (i, slice) in list.iter().enumerate() {
-                if (i as i32 == hover) != on {
-                    continue;
-                }
-                let (a0, a1) = wheelgeom_bounds(i, n);
-                let mid = (a0 + a1) / 2.0;
-                text_centered(mem, (c + radius * mid.cos()) as i32, (c + radius * mid.sin()) as i32, slice.label);
-            }
-            restore_font(mem, font);
-        };
-        text_layer(mem, mask, &mut px, tema.slice_fg, || labels(false));
-        text_layer(mem, mask, &mut px, tema.hover_fg, || labels(true));
-        let title = tema.titolo(match mode {
-            Mode::Convert => "Conversione",
-            Mode::Tools => "Strumenti",
-            Mode::Actions => "Azioni",
-        });
-        let center = if hover >= 0 {
-            list.get(hover as usize).map(|s| s.label).unwrap_or("Annulla")
-        } else {
-            "Annulla"
-        };
-        let (cx, cy) = (WHEEL / 2, WHEEL / 2);
-        let line = |dy: i32, size: i32, weight: i32, text: &str| {
-            let font = select_font(mem, size, weight);
-            text_centered(mem, cx, cy + dy, text);
-            restore_font(mem, font);
-        };
-        text_layer(mem, mask, &mut px, tema.hole_title, || line(-20, -12, 700, &title));
-        text_layer(mem, mask, &mut px, tema.hole_main, || line(2, -18, 700, center));
-        text_layer(mem, mask, &mut px, tema.hole_sub, || line(24, -12, 400, &clip_name(&name)));
-        std::ptr::copy_nonoverlapping(px.as_ptr(), out, px.len());
-        SelectObject(mem, out_bmp.into());
-        let size = SIZE { cx: WHEEL, cy: WHEEL };
-        let origin = POINT { x: 0, y: 0 };
-        let blend = BLENDFUNCTION { BlendOp: 0, BlendFlags: 0, SourceConstantAlpha: 255, AlphaFormat: 1 };
-        let _ = UpdateLayeredWindow(hwnd, Some(screen), None, Some(&size), Some(mem), Some(&origin), COLORREF(0), Some(&blend), ULW_ALPHA);
-        SelectObject(mem, old);
-        let _ = DeleteObject(mask_bmp.into());
-        let _ = DeleteObject(out_bmp.into());
-        let _ = DeleteDC(mem);
-        ReleaseDC(None, screen);
-    }
-}
-
-fn ui_font(height: i32, weight: i32) -> HFONT {
-    unsafe {
-        CreateFontW(
-            height,
-            0,
-            0,
-            0,
-            weight,
-            0,
-            0,
-            0,
-            DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS,
-            CLIP_DEFAULT_PRECIS,
-            ANTIALIASED_QUALITY,
-            DEFAULT_PITCH.0 as u32 | FF_SWISS.0 as u32,
-            crate::winfont::face(),
-        )
-    }
-}
-
-fn select_font(hdc: HDC, height: i32, weight: i32) -> HGDIOBJ {
-    unsafe {
-        let font = ui_font(height, weight);
-        SelectObject(hdc, font.into())
-    }
-}
-
-fn restore_font(hdc: HDC, previous: HGDIOBJ) {
-    unsafe {
-        let current = SelectObject(hdc, previous);
-        let _ = DeleteObject(current);
-    }
-}
-
-fn clip_name(name: &str) -> String {
-    if name.chars().count() > 18 {
-        format!("{}…", name.chars().take(16).collect::<String>())
-    } else {
-        name.to_string()
-    }
-}
-
-fn text_at(hdc: HDC, x: i32, y: i32, text: &str) {
-    let wide: Vec<u16> = text.encode_utf16().collect();
-    unsafe {
-        let _ = TextOutW(hdc, x, y, &wide);
-    }
-}
-
-fn text_centered(hdc: HDC, cx: i32, cy: i32, text: &str) {
-    let wide: Vec<u16> = text.encode_utf16().collect();
-    if wide.is_empty() {
-        return;
-    }
-    unsafe {
-        let mut size = SIZE::default();
-        let _ = GetTextExtentPoint32W(hdc, &wide, &mut size);
-        text_at(hdc, cx - size.cx / 2, cy - size.cy / 2, text);
-    }
-}
-
-fn hit(dx: f32, dy: f32, n: i32) -> i32 {
-    if n <= 0 {
-        return -1;
-    }
-    let dist = (dx * dx + dy * dy).sqrt();
-    if dist < R0 || dist > R1 + 28.0 {
-        return -1;
-    }
-    let mut from_top = dy.atan2(dx) + std::f32::consts::FRAC_PI_2;
-    while from_top < 0.0 {
-        from_top += std::f32::consts::TAU;
-    }
-    while from_top >= std::f32::consts::TAU {
-        from_top -= std::f32::consts::TAU;
-    }
-    ((from_top / std::f32::consts::TAU) * n as f32) as i32
+    paint_wheel_look(hwnd);
 }
 
 fn set_hover(x: i32, y: i32) {
@@ -1420,24 +1203,10 @@ fn set_hover(x: i32, y: i32) {
         if g.wheel.0.is_null() {
             return;
         }
-        if g.look.is_some() {
-            let (lx, ly) = ((x - g.org_x) as f32 / g.scale, (y - g.org_y) as f32 / g.scale);
-            let changed = g.look.as_mut().is_some_and(|u| u.pointer_move(lx, ly));
-            g.hover = g.look.as_ref().map_or(-1, |u| u.hover);
-            if changed {
-                let hwnd = g.wheel;
-                drop(g);
-                paint_wheel(hwnd);
-            }
-            return;
-        }
-        let n = {
-            let kind = g.paths.first().map(|p| kind_of(p)).unwrap_or(Kind::Other);
-            wheel_list(kind, g.mode).len() as i32
-        };
-        let hover = hit((x - g.anchor_x) as f32, (y - g.anchor_y) as f32, n.max(1));
-        if hover != g.hover {
-            g.hover = hover;
+        let (lx, ly) = ((x - g.org_x) as f32 / g.scale, (y - g.org_y) as f32 / g.scale);
+        let changed = g.look.as_mut().is_some_and(|u| u.pointer_move(lx, ly));
+        g.hover = g.look.as_ref().map_or(-1, |u| u.hover);
+        if changed {
             let hwnd = g.wheel;
             drop(g);
             paint_wheel(hwnd);
@@ -1455,9 +1224,7 @@ fn remember_paths(paths: Vec<PathBuf>) {
             g.paths = paths.clone();
             let hwnd = g.wheel;
             drop(g);
-            if standard() {
-                load_thumb(hwnd, &paths);
-            }
+            load_thumb(hwnd, &paths);
             refresh_wheel();
         }
     });

@@ -8,7 +8,7 @@ fn main() {
     #[cfg(windows)]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         let mut res = winresource::WindowsResource::new();
-        res.set_icon(if std::env::var_os("CARGO_FEATURE_BONDENO").is_some() { "assets/cedro-bondeno.ico" } else { "assets/cedro.ico" });
+        res.set_icon("assets/cedro.ico");
         res.set("FileDescription", "Cedro");
         res.set("ProductName", "Cedro");
         // Controlli con lo stile attuale di Windows nella finestra delle impostazioni.
@@ -23,7 +23,6 @@ fn main() {
         }
     }
     println!("cargo:rerun-if-changed=assets/cedro.ico");
-    println!("cargo:rerun-if-changed=assets/cedro-bondeno.ico");
     println!("cargo:rerun-if-changed=build.rs");
 }
 

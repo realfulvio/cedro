@@ -1,6 +1,6 @@
 //! La firma in fondo alle finestre: «Cedro 0.17.1 · Powered by Luca real>hcok_ A.», col logo disegnato
 //! alla misura del testo. È una scritta statica a disegno proprio (`SS_OWNERDRAW`): la finestra madre
-//! passa qui il suo `WM_DRAWITEM`. Nell'edizione Bondeno davanti c'è lo stemma del Comune.
+//! passa qui il suo `WM_DRAWITEM`. Con il tema Bondeno davanti c'è lo stemma del Comune.
 
 use windows::Win32::Foundation::{COLORREF, LPARAM, RECT, SIZE, WPARAM};
 use windows::Win32::Graphics::Gdi::*;
@@ -19,7 +19,7 @@ fn wide(s: &str) -> Vec<u16> {
 }
 
 /// Disegna la firma nel controllo `di`. `version` aggiunge «Cedro x.y.z ·» davanti; `suffix` va in coda (grigio).
-/// Con `ente`, nell'edizione Bondeno, davanti a tutto c'è lo stemma; senza `version` anche «Comune di Bondeno ·»
+/// Con `ente`, con il tema Bondeno, davanti a tutto c'è lo stemma; senza `version` anche «Comune di Bondeno ·»
 /// (con la versione la riga non ci starebbe accanto ai pulsanti).
 pub unsafe fn draw(di: &DRAWITEMSTRUCT, bg: COLORREF, fg: COLORREF, primary: COLORREF, version: bool, suffix: &str, ente: bool) {
     let hdc = di.hDC;
@@ -49,7 +49,7 @@ pub unsafe fn draw(di: &DRAWITEMSTRUCT, bg: COLORREF, fg: COLORREF, primary: COL
         let _ = GetTextExtentPoint32W(hdc, &w, &mut size);
         *x += size.cx;
     };
-    if ente && cedro::edizione::BONDENO {
+    if ente && cedro::edizione::bondeno() {
         let side = ((rc.bottom - rc.top) as f32).min(em * 1.7).round();
         let y = rc.top as f32 + ((rc.bottom - rc.top) as f32 - side) / 2.0;
         crate::wingfx::draw_stemma(hdc, cedro::edizione::Stemma::Solo, x as f32, y, side, side);
@@ -59,7 +59,7 @@ pub unsafe fn draw(di: &DRAWITEMSTRUCT, bg: COLORREF, fg: COLORREF, primary: COL
         text(&format!("Cedro {}", cedro::update::CURRENT), primary, &mut x);
         text("  ·  ", fg, &mut x);
     }
-    if ente && !version && cedro::edizione::BONDENO {
+    if ente && !version && cedro::edizione::bondeno() {
         text("Comune di Bondeno", primary, &mut x);
         text("  ·  ", fg, &mut x);
     }

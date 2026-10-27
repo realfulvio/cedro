@@ -11,8 +11,6 @@ mod winfont;
 #[cfg(windows)]
 mod settings_win;
 #[cfg(windows)]
-mod conversioni_win;
-#[cfg(windows)]
 mod guida_win;
 #[cfg(windows)]
 mod vista_win;
@@ -36,12 +34,6 @@ mod linux_firma;
 #[cfg(target_os = "linux")]
 mod linux_font;
 #[cfg(target_os = "linux")]
-mod linux_conversioni;
-#[cfg(target_os = "linux")]
-mod linux_trascrizione;
-#[cfg(target_os = "linux")]
-mod linux_youtube;
-#[cfg(target_os = "linux")]
 mod linux_progress;
 #[cfg(target_os = "linux")]
 mod linux_settings;
@@ -55,11 +47,7 @@ fn main() {
     #[cfg(windows)]
     {
         if args.first().is_some_and(|a| a == "conversioni") {
-            if cedro::edizione::BONDENO {
-                conversioni_win::run_standalone();
-            } else {
-                ui_win::run_standalone();
-            }
+            ui_win::run_standalone();
             return;
         }
         if args.first().is_some_and(|a| a == "vista") {

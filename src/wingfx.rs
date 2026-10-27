@@ -147,8 +147,8 @@ pub fn draw_logo(hdc: HDC, left: f32, baseline: f32, scale: f32, with_real: bool
 /// `PixelFormat32bppPARGB` di GDI+ (Gdipluspixelformats.h): BGRA con l'alfa premoltiplicato.
 const PIXEL_FORMAT_32BPP_PARGB: i32 = 0x000E_200B;
 
-/// Uno stemma dell'edizione (vedi `cedro::edizione`) nel riquadro `x`, `y`, `w`, `h` in pixel, ricampionato bene.
-/// Nell'edizione standard non disegna niente.
+/// Uno stemma del Comune (vedi `cedro::edizione`) nel riquadro `x`, `y`, `w`, `h` in pixel, ricampionato bene.
+/// Senza il tema Bondeno non disegna niente.
 pub fn draw_stemma(hdc: HDC, stemma: cedro::edizione::Stemma, x: f32, y: f32, w: f32, h: f32) {
     let Some(img) = cedro::edizione::immagine(stemma) else { return };
     startup();

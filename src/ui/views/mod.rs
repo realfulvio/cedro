@@ -44,7 +44,7 @@ pub fn draw(f: &mut Frame, app: &App, surface: Surface) {
         return;
     }
     match f.theme {
-        ThemeId::WindowsEssenziale => essenziale::draw(f, app),
+        ThemeId::WindowsEssenziale | ThemeId::Bondeno => essenziale::draw(f, app),
         ThemeId::PercorsoGuidato => guidato::draw(f, app),
         ThemeId::CedroCompatto => compatto::draw_full(f, app),
         ThemeId::BancoDiLavoro => banco::draw(f, app),
