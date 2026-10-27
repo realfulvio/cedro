@@ -321,6 +321,21 @@ fn open_surface(app: &Application, surface: Surface) {
     }
     area.add_controller(click);
 
+    let rclick = gtk4::GestureClick::new();
+    rclick.set_button(gdk::BUTTON_SECONDARY);
+    {
+        let (host, area2) = (h0.clone(), a0.clone());
+        rclick.connect_released(move |_, _, x, y| {
+            area2.grab_focus();
+            let s = scale_of(&host, &area2) / area2.scale_factor().max(1) as f32;
+            if let Ok(mut sc) = host.screen.try_borrow_mut() {
+                sc.context_click(x as f32 / s, y as f32 / s);
+            }
+            area2.queue_draw();
+        });
+    }
+    area.add_controller(rclick);
+
     let scroll = gtk4::EventControllerScroll::new(gtk4::EventControllerScrollFlags::VERTICAL);
     {
         let (host, area2) = (h0.clone(), a0.clone());
