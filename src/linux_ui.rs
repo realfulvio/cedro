@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use cedro::ui::wheel::{Effect, WheelUi};
-use cedro::{append_log, kind_of, perform_into, read_quality, read_settings, same_kind_paths, slices, update, Mode, Settings};
+use cedro::{append_log, kind_of, perform_into, read_quality, read_settings, same_kind_paths, update, Mode, Settings};
 use gtk4::cairo::{FontSlant, FontWeight};
 use crate::linux_settings;
 use gtk4::gdk::Key;
@@ -184,13 +184,7 @@ pub fn start() -> i32 {
                 Some(Asked::Settings) => open_settings_window(&app),
                 Some(Asked::Guide) => linux_settings::open_guide(&app),
                 Some(Asked::Conversions) => open_panel(&app),
-                Some(Asked::Compact) => {
-                    if cedro::edizione::BONDENO {
-                        open_panel(&app)
-                    } else {
-                        crate::linux_ui2::open_compact(&app)
-                    }
-                }
+                Some(Asked::Compact) => crate::linux_ui2::open_compact(&app),
                 None => {}
             }
             let thumb_ready = opened.borrow().thumb.lock().map(|g| g.is_some()).unwrap_or(false);
@@ -219,13 +213,9 @@ pub fn start() -> i32 {
     app.run_with_args(&["cedro"]).get() as i32
 }
 
-/// Il pannello delle conversioni: quello nuovo nell'edizione standard, quello di sempre in quella del Comune.
+/// Il pannello delle conversioni.
 fn open_panel(app: &Application) {
-    if cedro::edizione::BONDENO {
-        crate::linux_conversioni::open_conversions(app);
-    } else {
-        crate::linux_ui2::open(app);
-    }
+    crate::linux_ui2::open(app);
 }
 
 pub(crate) fn open_settings_window(app: &Application) {
@@ -307,17 +297,13 @@ fn present_wheel(app: &Application, state: Rc<RefCell<Wheel>>) {
         click.set_button(1);
         let click_state = state.clone();
         let click_app = app.clone();
-        if cedro::edizione::BONDENO {
-            click.connect_released(move |_, _, x, y| choose(&click_app, &click_state, monitor_index, x, y));
-        } else {
-            click.connect_pressed(move |_, _, x, y| press_look(&click_app, &click_state, monitor_index, x, y));
-            let up_state = state.clone();
-            click.connect_released(move |_, _, _, _| {
-                if let Some(ui) = up_state.borrow_mut().look.as_mut() {
-                    ui.release();
-                }
-            });
-        }
+        click.connect_pressed(move |_, _, x, y| press_look(&click_app, &click_state, monitor_index, x, y));
+        let up_state = state.clone();
+        click.connect_released(move |_, _, _, _| {
+            if let Some(ui) = up_state.borrow_mut().look.as_mut() {
+                ui.release();
+            }
+        });
         area.add_controller(click);
         let key = EventControllerKey::new();
         let key_state = state.clone();
@@ -393,11 +379,7 @@ fn present_wheel(app: &Application, state: Rc<RefCell<Wheel>>) {
 
 /// Le fette del file e del modo, nell'ordine in cui si vedono.
 fn wheel_list(kind: cedro::Kind, mode: Mode) -> Vec<cedro::Slice> {
-    if cedro::edizione::BONDENO {
-        slices(kind, mode).to_vec()
-    } else {
-        cedro::ui::wheel::list(kind, mode)
-    }
+    cedro::ui::wheel::list(kind, mode)
 }
 
 fn mode_code(mode: Mode) -> u8 {
@@ -408,9 +390,9 @@ fn mode_code(mode: Mode) -> u8 {
     }
 }
 
-/// Costruisce la ruota nuova per i file lanciati (solo versione standard) e ne prepara la miniatura.
+/// Costruisce la ruota per i file lanciati e ne prepara la miniatura.
 fn prepare_look(state: &Rc<RefCell<Wheel>>) {
-    if cedro::edizione::BONDENO || state.borrow().launch.paths.is_empty() {
+    if state.borrow().launch.paths.is_empty() {
         return;
     }
     let s = read_settings();
@@ -755,7 +737,7 @@ fn draw_look(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize,
     let (pw, ph) = ((w * sf).ceil() as i32, (h * sf).ceil() as i32);
     let bgra = GLYPHS.with(|cache| {
         let mut cache = cache.borrow_mut();
-        let mut p = cedro::ui::gfx::Painter::new(pw as u32, ph as u32, cedro::ui::ZOOM * sf as f32, cedro::ui::gfx::Fonts::shared(), &mut cache);
+        let mut p = cedro::ui::gfx::Painter::new(pw as u32, ph as u32, cedro::ui::ZOOM * sf as f32, cedro::ui::gfx::Fonts::current(), &mut cache);
         ui.draw(&mut p);
         p.bgra()
     });
@@ -931,7 +913,7 @@ impl ksni::Tray for CedroTray {
     }
     fn activate(&mut self, _x: i32, _y: i32) {
         // Con «Cedro compatto» un clic sull'icona apre la finestrella.
-        if !cedro::edizione::BONDENO && cedro::ui::theme::ThemeId::from_key(&read_settings().ui_theme) == cedro::ui::theme::ThemeId::CedroCompatto {
+        if cedro::ui::theme::ThemeId::from_key(&read_settings().ui_theme) == cedro::ui::theme::ThemeId::CedroCompatto {
             ask(Asked::Compact);
         } else {
             ask(Asked::Conversions);
@@ -942,10 +924,10 @@ impl ksni::Tray for CedroTray {
         // Stesso ordine del menu di Windows; le icone sono del tema dell'utente (nomi freedesktop).
         vec![
             StandardItem {
-                // Nell'edizione Bondeno: «Cedro x.y.z · Edizione Comune di Bondeno» con lo stemma.
+                // Con il tema Bondeno: «Cedro x.y.z · Comune di Bondeno» con lo stemma.
                 label: cedro::edizione::titolo(update::CURRENT),
-                icon_name: if cedro::edizione::BONDENO { String::new() } else { "dev.cedro.Cedro".into() },
-                icon_data: cedro::edizione::STEMMA.to_vec(),
+                icon_name: if cedro::edizione::bondeno() { String::new() } else { "dev.cedro.Cedro".into() },
+                icon_data: if cedro::edizione::bondeno() { cedro::edizione::STEMMA.to_vec() } else { Vec::new() },
                 enabled: false,
                 ..Default::default()
             }
@@ -1142,10 +1124,7 @@ fn install_integrations() {
         return;
     };
     let _ = write_text(&root.join("applications/dev.cedro.Cedro.desktop"), &desktop_file(exe, ""), false);
-    let _ = write_bytes(
-        &root.join("icons/hicolor/256x256/apps/dev.cedro.Cedro.png"),
-        MARK,
-    );
+    refresh_icon(&root, MARK);
     // Chi ha l'avvio automatico dalla 0.11 lo riceve senza finestra all'accesso.
     if autostart_enabled() {
         let _ = set_autostart(true);
@@ -1158,6 +1137,32 @@ fn install_integrations() {
     );
     for (name, flag) in [("Conversione", "conversione"), ("Strumenti", "strumenti"), ("Azioni", "azioni")] {
         let _ = write_text(&root.join("nautilus/scripts/Cedro").join(name), &nautilus_script(exe, flag), true);
+    }
+}
+
+/// Scrive l'icona nel tema dell'utente; se è cambiata (aggiornamento) avvisa KDE, che altrimenti tiene
+/// nella barra delle applicazioni quella vecchia finché non si rilegge la cache delle icone.
+fn refresh_icon(root: &std::path::Path, bytes: &[u8]) {
+    let path = root.join("icons/hicolor/256x256/apps/dev.cedro.Cedro.png");
+    if std::fs::read(&path).is_ok_and(|old| old == bytes) {
+        return;
+    }
+    if write_bytes(&path, bytes).is_err() {
+        return;
+    }
+    if let Ok(dir) = std::fs::File::open(root.join("icons/hicolor")) {
+        let _ = dir.set_modified(std::time::SystemTime::now());
+    }
+    for tool in ["kbuildsycoca6", "kbuildsycoca5"] {
+        if std::process::Command::new(tool)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .is_ok()
+        {
+            break;
+        }
     }
 }
 

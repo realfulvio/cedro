@@ -1,14 +1,10 @@
 [package]
 name = "cedro"
-version = "0.20.2"
+version = "0.21.1"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
 publish = false
-
-[features]
-# Edizione per il Comune di Bondeno: stemma del Comune e pacchetti suoi (vedi src/edizione.rs).
-bondeno = []
 
 [dependencies]
 cfb = "0.7"

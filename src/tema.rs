@@ -1,6 +1,6 @@
-//! I colori e le misure della grafica, uno per edizione: la standard (palette «Limone», dal logo
-//! real>hcok_) e quella del Comune di Bondeno (palette del sito del Comune). Windows e Linux
-//! leggono da qui, così le due edizioni cambiano in un posto solo.
+//! I colori e le misure delle finestre di Cedro (Impostazioni, guida, ruota della guida): due set, quello
+//! «Limone» (dal logo real>hcok_) e quello del Comune di Bondeno (palette del sito del Comune), scelti dal
+//! tema in Impostazioni › Aspetto. Windows e Linux leggono da qui.
 
 /// Un colore come (r, g, b).
 pub type Rgb = (u8, u8, u8);
@@ -68,7 +68,7 @@ impl Tema {
     }
 }
 
-/// Edizione standard: inchiostro blu-nero e giallo limone, come il logo.
+/// Inchiostro blu-nero e giallo limone, come il logo.
 pub const LIMONE: Tema = Tema {
     font: "Figtree",
     radius: 10,
@@ -106,7 +106,7 @@ pub const LIMONE: Tema = Tema {
     maiuscole: false,
 };
 
-/// Edizione Comune di Bondeno: i colori del sito del Comune, fette arrotondate e staccate.
+/// Tema Comune di Bondeno: i colori del sito del Comune, fette arrotondate e staccate.
 pub const BONDENO: Tema = Tema {
     font: "Titillium Web",
     radius: 0,
@@ -144,16 +144,11 @@ pub const BONDENO: Tema = Tema {
     maiuscole: true,
 };
 
-/// Il tema dell'edizione compilata.
-pub const fn attivo() -> &'static Tema {
-    if crate::edizione::BONDENO {
+/// I colori in uso: quelli del Comune con il tema Bondeno, altrimenti i Limone.
+pub fn attivo() -> &'static Tema {
+    if crate::edizione::bondeno() {
         &BONDENO
     } else {
         &LIMONE
     }
-}
-
-/// Il carattere dell'edizione compilata, utilizzabile in una costante.
-pub const fn attivo_font() -> &'static str {
-    attivo().font
 }

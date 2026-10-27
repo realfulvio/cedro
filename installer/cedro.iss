@@ -1,5 +1,7 @@
-; Installer di Cedro per Windows (x64 e, con /DArm64, ARM64). Compilazione: installer\build.ps1 [-Arm64] [-Bondeno]
-; Con /DBondeno è l'edizione per il Comune di Bondeno: stesso AppId, quindi installata sopra la standard la sostituisce.
+; Installer di Cedro per Windows (x64 e, con /DArm64, ARM64). Compilazione: installer\build.ps1 [-Arm64]
+; Il tema «Comune di Bondeno» è dentro Cedro (Impostazioni > Aspetto). Chi aveva la vecchia edizione Bondeno si
+; aggiorna con la copia «Cedro-Bondeno-Setup-<versione>.exe» di questo stesso file: se l'installatore si chiama
+; così, lascia il file «da-bondeno» e Cedro, al primo avvio, accende il tema Bondeno.
 ; Installa per l'utente corrente: non servono i diritti di amministratore.
 #define AppName "Cedro"
 ; Per Windows on ARM: /DArm64 (e /DBuildDir=... se l'exe non sta in target\release).
@@ -7,7 +9,7 @@
   #define BuildDir "..\target\release"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.20.2"
+  #define AppVersion "0.21.1"
 #endif
 
 [Setup]
@@ -23,25 +25,13 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\dist
-; I nomi devono restare quelli di src/edizione.rs: Cedro li cerca nella release per aggiornarsi.
-#ifdef Bondeno
-  #ifdef Arm64
-    #define Prefix "Cedro-Bondeno-ARM64-Setup-"
-  #else
-    #define Prefix "Cedro-Bondeno-Setup-"
-  #endif
+; I nomi devono restare quelli che Cedro cerca nella release per aggiornarsi (src/update.rs).
+#ifdef Arm64
+  #define Prefix "Cedro-ARM64-Setup-"
 #else
-  #ifdef Arm64
-    #define Prefix "Cedro-ARM64-Setup-"
-  #else
-    #define Prefix "Cedro-Setup-"
-  #endif
+  #define Prefix "Cedro-Setup-"
 #endif
-#ifdef Bondeno
-  #define IconFile "..\assets\cedro-bondeno.ico"
-#else
-  #define IconFile "..\assets\cedro.ico"
-#endif
+#define IconFile "..\assets\cedro.ico"
 OutputBaseFilename={#Prefix}{#AppVersion}
 SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\cedro.exe
@@ -49,13 +39,6 @@ UninstallDisplayName={#AppName}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-#ifdef Bondeno
-AppVerName={#AppName} {#AppVersion}, edizione Comune di Bondeno
-; Lo stemma del Comune al posto della scatola col CD (1x e 2x per gli schermi ad alta densità).
-WizardImageFile=..\assets\bondeno\installatore-lato-1x.bmp,..\assets\bondeno\installatore-lato-2x.bmp
-WizardSmallImageFile=..\assets\bondeno\installatore-piccola-1x.bmp,..\assets\bondeno\installatore-piccola-2x.bmp
-WizardImageStretch=no
-#endif
 #ifdef Arm64
 ArchitecturesAllowed=arm64
 ArchitecturesInstallIn64BitMode=arm64
@@ -112,9 +95,21 @@ begin
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM cedro.exe', '', SW_HIDE, ewWaitUntilTerminated, code);
 end;
 
+// Chi ha la vecchia edizione Comune di Bondeno si aggiorna con la copia «Cedro-Bondeno-…»: in quel caso
+// il tema Bondeno resta acceso (Cedro lo sceglie da solo al primo avvio, trovando questo file).
+procedure LeaveBondenoNote;
+begin
+  if Pos('cedro-bondeno', LowerCase(ExtractFileName(ExpandConstant('{srcexe}')))) = 1 then
+  begin
+    ForceDirectories(ExpandConstant('{userappdata}\Cedro'));
+    SaveStringToFile(ExpandConstant('{userappdata}\Cedro\da-bondeno'), '', False);
+  end;
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   CloseCedro;
+  LeaveBondenoNote;
   Result := '';
 end;
 

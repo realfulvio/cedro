@@ -130,7 +130,7 @@ impl Screen {
     /// Disegna il fotogramma in un'immagine di `w`×`h` pixel con `scale` pixel per unità.
     pub fn render(&mut self, w: u32, h: u32, scale: f32) -> Painter<'_> {
         self.want_preview();
-        let fonts = Fonts::shared();
+        let fonts = Fonts::for_theme(self.theme == ThemeId::Bondeno);
         let painter = Painter::new(w, h, scale, fonts, &mut self.cache);
         let ms = self.started.elapsed().as_millis() as u64;
         let mut f = Frame {
