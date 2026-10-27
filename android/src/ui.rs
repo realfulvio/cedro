@@ -783,7 +783,7 @@ impl App {
         let y = h - NAV;
         p.fill(-ml, y, w + ml + mr, NAV + mb, pal.surface);
         p.fill(-ml, y, w + ml + mr, 1.0, pal.border);
-        let voci = [(Scheda::Ruota, "Ruota", ic::CONVERT), (Scheda::Lavori, "Lavori", ic::CLOCK), (Scheda::Aspetto, "Aspetto", ic::SETTINGS), (Scheda::Info, "Info", ic::INFO)];
+        let voci = [(Scheda::Ruota, if cedro::i18n::english() { "Wheel" } else { "Ruota" }, ic::CONVERT), (Scheda::Lavori, "Lavori", ic::CLOCK), (Scheda::Aspetto, "Aspetto", ic::SETTINGS), (Scheda::Info, "Info", ic::INFO)];
         let cw = w / 4.0;
         let attivi = self.lavori.iter().filter(|l| l.stato == Stato::InCorso).count();
         for (i, (s, nome, icona)) in voci.into_iter().enumerate() {
@@ -797,7 +797,7 @@ impl App {
                 p.rrect_a(x + cw / 2.0 - 30.0, y + 6.0, 60.0, 30.0, 15.0, pal.primary, 0.10);
             }
             p.icon(icona, x + cw / 2.0 - 12.0, y + 9.0, 24.0, col);
-            p.text(nome, x, y + 38.0, cw, 20.0, 13.0, if on { Weight::Semibold } else { Weight::Regular }, col, Align::Center);
+            p.text(&if s == Scheda::Ruota { cedro::i18n::lit(nome) } else { nome.to_string() }, x, y + 38.0, cw, 20.0, 13.0, if on { Weight::Semibold } else { Weight::Regular }, col, Align::Center);
             if s == Scheda::Lavori && attivi > 0 {
                 let (bx, by) = (x + cw / 2.0 + 8.0, y + 5.0);
                 p.circle(bx + 8.0, by + 8.0, 9.0, Some(pal.primary), None);

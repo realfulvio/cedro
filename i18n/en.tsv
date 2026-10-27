@@ -1039,21 +1039,13 @@ Un foglio	One sheet
 {}% · circa {} s alla fine	{}% · about {} s left
 Comprimi: {}	Compress: {}
 {} · {}	{} · {}
-Aspetto	Appearance
-Ruota	Wheel
 Converti i tuoi file	Convert your files
-Converti in {}	Convert to {}
-Applica: {}	Apply: {}
-Scegli uno strumento	Choose a tool
 Ancora niente	Nothing yet
 Qui vedi i file in lavorazione, i risultati e la cronologia.	Here you see the files in progress, the results and the history.
 I file che scegli o condividi a Cedro compaiono qui.	The files you choose or share to Cedro appear here.
-In corso	In progress
-Fatto	Done
 Lavoro in corso da {} s	Working for {} s
 Apri con un'altra app	Open with another app
 Il migliore che c'è	The best available
-Solo audio	Audio only
 MP3 dal video	MP3 from the video
 Video leggero	Light video
 Senza compressione	No compression
@@ -1066,8 +1058,6 @@ Testo con segni	Text with markup
 Più leggero	Lighter
 Da documento	From a document
 Tutte le azioni	All actions
-Qualità	Quality
-Modello	Model
 Serve il permesso di scrivere in Documenti.	Permission to write in Documents is needed.
 Documenti non è scrivibile: {}	Documents isn't writable: {}
 Link passato a un'altra app	Link handed to another app
@@ -1075,12 +1065,9 @@ la trascrizione non è partita	the transcription didn't start
 Cedro sta lavorando	Cedro is working
 {} lavori in corso	{} jobs in progress
 Scarica con…	Download with…
-Foto	Photos
-Documenti	Documents
 Android non ha ancora registrato il file	Android hasn't registered the file yet
 # --- Android, scheda Info
 Info	Info
-Informazioni	About
 Copia le informazioni	Copy the information
 Istruzioni del processore	Processor instructions
 Accelerazioni usate	Accelerations in use
@@ -1090,12 +1077,10 @@ Core	Cores
 {} ({} liberi)	{} ({} free)
 {#} ({#} grandi + {#} piccoli)	{} ({} big + {} small)
 Istruzioni	Instructions
-Trascrizione	Transcription
 Video MP4	MP4 video
 processore	processor
 processore, {}	processor, {}
 codificatore del telefono	the phone's encoder
 codificatore del telefono ({})	the phone's encoder ({})
-non disponibile	not available
 non indicata dal telefono	not reported by the phone
 sì	yes
