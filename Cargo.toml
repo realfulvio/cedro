@@ -84,3 +84,7 @@ winresource = "0.1"
 hayro = { path = "vendor/hayro" }
 # rten-simd con l'interruttore per spegnere AVX-512 (Impostazioni)
 rten-simd = { path = "vendor/rten-simd" }
+
+# Prototipo Android (NativeActivity, tutto Rust): vedi android/README.md
+[workspace]
+members = ["android"]
