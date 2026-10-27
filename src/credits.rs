@@ -78,6 +78,8 @@ pub const GROUPS: &[Group] = &[
             linux("gtk4-rs", "The gtk-rs Project", "MIT", "Le finestre su Linux.", "github.com/gtk-rs/gtk4-rs"),
             linux("ksni", "iovxw", "Unlicense", "L'icona vicino all'orologio su Linux.", "github.com/iovxw/ksni"),
             c("ureq, serde_json, sha2", "Martin Algesten, serde-rs, RustCrypto", "MIT o Apache-2.0", "Controllo degli aggiornamenti.", "github.com/algesten/ureq"),
+            c("tiny-skia", "Yevhenii Reizner e collaboratori", "BSD-3-Clause", "Disegna le finestre della versione standard.", "github.com/linebender/tiny-skia"),
+            c("Figtree", "Erik D. Kennedy e collaboratori", "SIL OFL 1.1", "Il carattere della versione standard.", "fonts.google.com/specimen/Figtree"),
             c("Titillium Web", "Accademia di Belle Arti di Urbino", "SIL OFL 1.1", "Il carattere di Cedro.", "fonts.google.com/specimen/Titillium+Web"),
         ],
     },
@@ -127,6 +129,7 @@ pub fn version_text(item: &Component) -> Option<String> {
         "hayro" => crates_text(&["hayro"]),
         "lopdf" => crates_text(&["lopdf"]),
         "skrifa" => crates_text(&["skrifa"]),
+        "tiny-skia" => crates_text(&["tiny-skia"]),
         "cfb" => crates_text(&["cfb"]),
         "zip" => crates_text(&["zip"]),
         "image, png" => crates_text(&["image", "png"]),
@@ -238,7 +241,7 @@ mod tests {
         assert_eq!(crate_version("windows").map(|v| v.starts_with("0.61")), Some(true));
         let all: Vec<_> = GROUPS.iter().flat_map(|g| g.items.iter()).filter(|i| !i.linux_only).collect();
         for item in all {
-            if ["Modelli OCR di ocrs", "Titillium Web"].contains(&item.name) {
+            if ["Modelli OCR di ocrs", "Titillium Web", "Figtree"].contains(&item.name) {
                 continue;
             }
             assert!(version_text(item).is_some() || ["yt-dlp", "FFmpeg", "Deno"].contains(&item.name), "{} senza versione", item.name);
