@@ -135,7 +135,11 @@ fn gpu_encoder() -> Option<String> {
     {
         crate::vaapi::probe()
     }
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(target_os = "android")]
+    {
+        crate::mediacodec::probe()
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "android")))]
     {
         None
     }
