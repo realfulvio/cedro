@@ -125,7 +125,7 @@ pub const SUBTITLES: &[(&str, u32)] = &[("Nessuno", 0), ("Italiano", 1), ("Itali
 
 pub const WEB_HINT: &str = "Incolla il link della pagina che contiene il video (RaiPlay, Vimeo, Internet Archive e oltre mille altri siti).";
 pub const WEB_NOTE: &str = "Funziona con i siti che yt-dlp riconosce. Se un sito non è supportato, o il video è protetto o chiede un accesso, lo vedi accanto al link.";
-pub const YT_HINT: &str = "Incolla il link di un video o di una playlist di YouTube.";
+pub const YT_HINT: &str = "Incolla il link di un video o di una playlist di YouTube (o di un altro sito).";
 
 /// La cartella Download dell'utente.
 pub fn downloads_dir() -> PathBuf {
@@ -196,7 +196,8 @@ impl Links {
     /// Aggiunge i link trovati nel testo; restituisce quanti sono nuovi.
     pub fn add(&mut self, text: &str) -> usize {
         let mut added = 0;
-        for url in youtube::urls_in(text, self.web) {
+        // Anche dalla scheda YouTube si scaricano tutti i siti che yt-dlp conosce (Veoh, Vimeo…).
+        for url in youtube::urls_in(text, true) {
             if self.items.iter().any(|r| r.url == url) {
                 continue;
             }
@@ -776,8 +777,10 @@ impl App {
         if l.add(&typed) > 0 {
             l.note.clear();
         } else {
-            l.note = youtube::link_note(&typed, web).into();
+            let note = if l.items.iter().any(|r| typed.contains(&r.url)) { "Questo link è già in coda.".to_string() } else { youtube::link_note(&typed, true).to_string() };
+            l.note = note.clone();
             l.typed = typed;
+            self.notice = Some(Notice { text: note, error: true });
         }
     }
 

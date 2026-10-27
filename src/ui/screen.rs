@@ -278,6 +278,28 @@ impl Screen {
         }
     }
 
+    /// Tasto destro: sopra un campo di testo si apre il menu classico.
+    pub fn context_click(&mut self, x: f32, y: f32) -> bool {
+        if self.ui.menu.take().is_some() {
+            return true;
+        }
+        let Some(Act::Edit(field)) = self.hit_at(x, y).filter(|h| h.kind == HitKind::Text).map(|h| h.act.clone()) else { return false };
+        if self.ui.edit != Some(field) {
+            self.ui.edit = Some(field);
+            self.ui.sel_all = false;
+            self.ui.caret = self.field_text(field).chars().count();
+        }
+        let items = vec![
+            ("Taglia".to_string(), Act::FieldCut),
+            ("Copia".to_string(), Act::FieldCopy),
+            ("Incolla".to_string(), Act::FieldPaste),
+            ("Elimina".to_string(), Act::FieldClear),
+            ("Seleziona tutto".to_string(), Act::FieldSelectAll),
+        ];
+        self.ui.menu = Some(Menu { anchor: (x, y - 4.0, 0.0, 0.0), items, selected: None });
+        true
+    }
+
     pub fn wheel(&mut self, x: f32, y: f32, dy: f32) -> bool {
         if self.ui.menu.is_some() {
             return false;
@@ -470,7 +492,37 @@ impl Screen {
             Act::MediaPlay => app.media_toggle(),
             Act::Edit(field) => {
                 self.ui.edit = Some(field);
+                self.ui.sel_all = false;
                 self.ui.caret = self.field_text(field).chars().count();
+            }
+            Act::FieldCopy | Act::FieldCut | Act::FieldClear | Act::FieldPaste | Act::FieldSelectAll => {
+                if let Some(field) = self.ui.edit {
+                    let text = self.field_text(field);
+                    match act {
+                        Act::FieldCopy => plat.copy_text(&text),
+                        Act::FieldCut => {
+                            plat.copy_text(&text);
+                            self.set_field_text(field, String::new());
+                            self.ui.caret = 0;
+                        }
+                        Act::FieldClear => {
+                            self.set_field_text(field, String::new());
+                            self.ui.caret = 0;
+                        }
+                        Act::FieldPaste => {
+                            if let Some(t) = plat.paste_text() {
+                                self.text_input(&t.replace(['\r', '\n'], " "));
+                            }
+                        }
+                        _ => {
+                            self.ui.sel_all = true;
+                            self.ui.caret = text.chars().count();
+                        }
+                    }
+                    if !matches!(act, Act::FieldSelectAll) {
+                        self.ui.sel_all = false;
+                    }
+                }
             }
             Act::DestMenu => {
                 let mut items = vec![("Accanto all'originale".to_string(), Act::DestSame), ("Scegli una cartella…".to_string(), Act::DestPick)];
@@ -633,6 +685,10 @@ impl Screen {
     /// Un testo scritto (o incollato) nel campo con il cursore.
     pub fn text_input(&mut self, s: &str) {
         let Some(field) = self.ui.edit else { return };
+        if std::mem::take(&mut self.ui.sel_all) {
+            self.set_field_text(field, String::new());
+            self.ui.caret = 0;
+        }
         let mut chars: Vec<char> = self.field_text(field).chars().collect();
         let at = self.ui.caret.min(chars.len());
         let ins: Vec<char> = s.chars().filter(|c| !c.is_control()).collect();
@@ -645,6 +701,18 @@ impl Screen {
     /// Un tasto. Vero se è stato usato.
     pub fn key(&mut self, key: Key, plat: &mut dyn Platform) -> bool {
         if let Some(field) = self.ui.edit {
+            if self.ui.sel_all {
+                match key {
+                    Key::Backspace | Key::Delete => {
+                        self.ui.sel_all = false;
+                        self.set_field_text(field, String::new());
+                        self.ui.caret = 0;
+                        return true;
+                    }
+                    Key::Left | Key::Right | Key::Home | Key::End => self.ui.sel_all = false,
+                    _ => {}
+                }
+            }
             let mut chars: Vec<char> = self.field_text(field).chars().collect();
             let at = self.ui.caret.min(chars.len());
             match key {
@@ -670,7 +738,11 @@ impl Screen {
                     plat.copy_text(&chars.iter().collect::<String>());
                     return true;
                 }
-                Key::SelectAll => self.ui.caret = chars.len(),
+                Key::SelectAll => {
+                    self.ui.caret = chars.len();
+                    self.ui.sel_all = true;
+                    return true;
+                }
                 Key::Enter => {
                     self.ui.edit = None;
                     if let Field::Link(web) = field {
