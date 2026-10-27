@@ -48,10 +48,18 @@ pub fn latest() -> Result<Release, String> {
     parse_release(&body)
 }
 
-/// La release, solo se è più nuova di questa versione.
+/// La release, solo se è più nuova di questa versione e ha già il file per questo sistema.
+/// Una release a cui manca (ancora) il nostro pacchetto non è un errore: per noi non c'è niente di nuovo.
 pub fn check() -> Result<Option<Release>, String> {
     let release = latest()?;
-    Ok(newer(CURRENT, &release.version).then_some(release))
+    Ok((newer(CURRENT, &release.version) && release.is_ready()).then_some(release))
+}
+
+impl Release {
+    /// Vero se la release ha il file che serve a questo sistema: l'installatore su Windows, il pacchetto su Linux.
+    pub fn is_ready(&self) -> bool {
+        if cfg!(windows) { self.installer.is_some() } else { self.package.is_some() }
+    }
 }
 
 fn parse_release(body: &str) -> Result<Release, String> {
@@ -427,6 +435,27 @@ mod tests {
         let asset = release.installer.unwrap();
         assert_eq!(asset.url, for_this_arch("https://x/Cedro-Setup-0.8.0.exe"));
         assert_eq!(asset.sha256.as_deref(), Some("410cf4149103e3c6bf74a241ec6ea87e9cdff471f02d8242f858c73f2b0dced0"));
+    }
+
+    #[test]
+    fn a_release_without_our_file_is_not_ready() {
+        // Come la 0.19.1 nei primi minuti: gli installatori Windows ci sono, il tar.gz Linux non ancora.
+        let windows_only = parse_release(r#"{"tag_name": "v9.0.0", "assets": [
+            {"name": "Cedro-Setup-9.0.0.exe", "browser_download_url": "https://x/a.exe", "digest": "sha256:abc"},
+            {"name": "Cedro-ARM64-Setup-9.0.0.exe", "browser_download_url": "https://x/b.exe", "digest": "sha256:abc"},
+            {"name": "Cedro-Bondeno-Setup-9.0.0.exe", "browser_download_url": "https://x/c.exe", "digest": "sha256:abc"},
+            {"name": "Cedro-Bondeno-ARM64-Setup-9.0.0.exe", "browser_download_url": "https://x/d.exe", "digest": "sha256:abc"}]}"#)
+        .unwrap();
+        assert_eq!(windows_only.is_ready(), cfg!(windows));
+        let linux_only = parse_release(&format!(
+            r#"{{"tag_name": "v9.0.0", "assets": [
+            {{"name": "cedro-9.0.0-linux-{a}.tar.gz", "browser_download_url": "https://x/a", "digest": "sha256:abc"}},
+            {{"name": "cedro-bondeno-9.0.0-linux-{a}.tar.gz", "browser_download_url": "https://x/b", "digest": "sha256:abc"}}]}}"#,
+            a = package_arch()
+        ))
+        .unwrap();
+        assert_eq!(linux_only.is_ready(), !cfg!(windows));
+        assert!(!parse_release(r#"{"tag_name": "v9.0.0", "assets": []}"#).unwrap().is_ready());
     }
 
     #[test]
