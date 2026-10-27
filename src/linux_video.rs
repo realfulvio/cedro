@@ -1561,6 +1561,8 @@ enum Pix {
     Bgr { bits: u16, bottom_up: bool },
     Mjpeg,
     H264,
+    /// MPEG-4 parte 2 (XVID, DivX, FMP4…).
+    Mpeg4,
 }
 
 struct AviStream {
@@ -1573,6 +1575,10 @@ struct AviStream {
     channels: u16,
     sample_rate: u32,
     pcm: bool,
+    /// Codice del formato audio (WAVEFORMATEX): 1 PCM, 0x55 MP3, 0xFF AAC.
+    format: u16,
+    /// Dati dopo l'intestazione di `strf`: avcC dell'H.264, configurazione dell'AAC.
+    extra: Vec<u8>,
 }
 
 struct AviChunk {
@@ -1595,11 +1601,14 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let duration = avi_duration(video.scale, video.rate);
     let width = video.width as usize;
     let height = video.height as usize;
-    let audio_index = streams.iter().position(|stream| !stream.video && stream.pcm);
-    let audio = audio_index.map(|index| {
-        let stream = &streams[index];
-        (stream.sample_rate, stream.channels.max(1))
-    });
+    let audio_index = streams.iter().position(|stream| !stream.video && stream.channels > 0);
+    // L'audio dell'AVI (PCM, MP3, AAC) si decodifica prima, così il suo formato è noto all'apertura.
+    let avi_audio = match audio_index {
+        Some(index) => avi_audio_pcm(&streams[index], &chunks, index)?,
+        None => None,
+    };
+    let audio = avi_audio.as_ref().map(|(_, rate, channels)| (*rate, *channels));
+    let avc_header = avc_config(&video.extra);
     // Ogni fotogramma va subito al file (o all'anteprima), senza tenerli tutti in memoria.
     let mut sink: Option<H264Aac> = None;
     let mut shown: i64 = 0;
@@ -1613,11 +1622,16 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         Ok(())
     };
     let mut decoder = if matches!(pix, Pix::H264) {
-        Some(h264_decoder()?)
+        let mut dec = h264_decoder()?;
+        // Con avcC nei dati di `strf` i parametri non viaggiano nei fotogrammi.
+        if !avc_header.1.is_empty() {
+            let _ = dec.decode(&avc_header.1);
+        }
+        Some(dec)
     } else {
         None
     };
-    let mut pcm = Vec::new();
+    let mut mpeg4 = matches!(pix, Pix::Mpeg4).then(oxideav_mpeg4video::decoder::Mpeg4VideoDecoder::new);
     for chunk in chunks {
         if chunk.stream == video_index && chunk.video {
             match pix {
@@ -1627,17 +1641,30 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                 Pix::H264 => {
                     let dec = decoder.as_mut().expect("decoder");
                     let annex = if !is_annex(&chunk.data) {
-                        length_to_annex(&chunk.data, 4)
+                        length_to_annex(&chunk.data, avc_header.0)
                     } else {
                         chunk.data.clone()
                     };
+                    if annex.is_empty() {
+                        continue;
+                    }
                     if let Some(frame) = dec.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
                         emit(owned_frame(&frame)?)?;
                     }
                 }
+                Pix::Mpeg4 => {
+                    let dec = mpeg4.as_mut().expect("decoder");
+                    let frames = dec.decode(&chunk.data).map_err(|err| format!("MPEG-4 non letto: {err}"))?;
+                    for frame in &frames {
+                        emit(mpeg4_frame(frame, width, height)?)?;
+                    }
+                }
             }
-        } else if audio_index == Some(chunk.stream) && !chunk.video {
-            pcm.extend(pcm16(&chunk.data));
+        }
+    }
+    if let Some(dec) = mpeg4.as_mut() {
+        for frame in &dec.flush() {
+            emit(mpeg4_frame(frame, width, height)?)?;
         }
     }
     if let Some(dec) = decoder.as_mut() {
@@ -1651,12 +1678,112 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let Some(mut sink) = sink else {
         return Err("il video non ha fotogrammi".into());
     };
-    if let Some((rate, channels)) = audio {
+    if let Some((pcm, rate, channels)) = avi_audio {
         if !pcm.is_empty() {
             sink.write_pcm(&pcm, channels, rate)?;
         }
     }
     sink.finish()
+}
+
+/// I fotogrammi dell'MPEG-4 hanno le misure dei macroblocchi; l'immagine vera può essere più piccola.
+fn mpeg4_frame(frame: &oxideav_mpeg4video::framestore::DecodedFrame, want_w: usize, want_h: usize) -> Result<OwnedFrame, String> {
+    let (fw, fh) = (frame.width(), frame.height());
+    let (w, h) = (want_w.min(fw) & !1, want_h.min(fh) & !1);
+    if w < 2 || h < 2 {
+        return Err("fotogramma troppo corto".into());
+    }
+    let crop = |src: &[u8], stride: usize, cw: usize, ch: usize| -> Vec<u8> {
+        (0..ch).flat_map(|row| src[row * stride..row * stride + cw].iter().copied()).collect()
+    };
+    Ok(OwnedFrame {
+        y: crop(frame.luma_samples(), fw, w, h),
+        u: crop(frame.cb_samples(), fw / 2, w / 2, h / 2),
+        v: crop(frame.cr_samples(), fw / 2, w / 2, h / 2),
+        width: w as u32,
+        height: h as u32,
+    })
+}
+
+/// Lunghezza dei prefissi e parametri (SPS, PPS) dell'avcC dentro `strf`, se c'è.
+fn avc_config(extra: &[u8]) -> (usize, Vec<u8>) {
+    if extra.first() == Some(&1) {
+        avcc_prefix(Some(extra))
+    } else {
+        (4, Vec::new())
+    }
+}
+
+/// L'audio di un AVI come campioni a 16 bit: PCM così com'è, MP3 e AAC passando da un file temporaneo.
+fn avi_audio_pcm(stream: &AviStream, chunks: &[AviChunk], index: usize) -> Result<Option<(Vec<i16>, u32, u16)>, String> {
+    let data: Vec<&[u8]> = chunks.iter().filter(|c| c.stream == index && !c.video).map(|c| c.data.as_slice()).collect();
+    if data.is_empty() {
+        return Ok(None);
+    }
+    match stream.format {
+        1 if stream.pcm => {
+            let pcm: Vec<i16> = data.iter().flat_map(|d| pcm16(d)).collect();
+            Ok(Some((pcm, stream.sample_rate, stream.channels.max(1))))
+        }
+        0x55 | 0x50 => decode_raw_audio(&data.concat(), "mp3"),
+        0xFF | 0x1600 | 0x706D => {
+            // AAC grezzo: ogni pacchetto prende un'intestazione ADTS ricavata dalla configurazione.
+            let asc = stream.extra.as_slice();
+            let (profile, freq, chan) = if asc.len() >= 2 {
+                (((asc[0] >> 3) as u32).saturating_sub(1) & 3, (((asc[0] & 7) << 1) | (asc[1] >> 7)) as u32, ((asc[1] >> 3) & 15) as u32)
+            } else {
+                (1, adts_rate_index(stream.sample_rate), stream.channels as u32)
+            };
+            let mut adts = Vec::new();
+            for packet in &data {
+                let len = packet.len() as u32 + 7;
+                adts.extend_from_slice(&[
+                    0xFF,
+                    0xF1,
+                    ((profile << 6) | (freq << 2) | (chan >> 2)) as u8,
+                    (((chan & 3) << 6) | (len >> 11)) as u8,
+                    ((len >> 3) & 0xFF) as u8,
+                    (((len & 7) << 5) | 0x1F) as u8,
+                    0xFC,
+                ]);
+                adts.extend_from_slice(packet);
+            }
+            decode_raw_audio(&adts, "aac")
+        }
+        _ => Err("l'audio del video ha un formato che Cedro non legge".into()),
+    }
+}
+
+fn adts_rate_index(rate: u32) -> u32 {
+    [96_000, 88_200, 64_000, 48_000, 44_100, 32_000, 24_000, 22_050, 16_000, 12_000, 11_025, 8_000]
+        .iter()
+        .position(|r| *r == rate)
+        .unwrap_or(4) as u32
+}
+
+fn decode_raw_audio(bytes: &[u8], ext: &str) -> Result<Option<(Vec<i16>, u32, u16)>, String> {
+    let dir = crate::engine::private_temp_dir("cedro-avi-audio")?;
+    let file = dir.join(format!("audio.{ext}"));
+    let result = std::fs::write(&file, bytes)
+        .map_err(|err| format!("audio non scritto: {err}"))
+        .and_then(|()| crate::audio::decode(&file));
+    let _ = std::fs::remove_dir_all(&dir);
+    let pcm = result?;
+    Ok(Some((pcm.samples, pcm.rate, pcm.channels)))
+}
+
+/// Solo l'audio di un AVI (per la conversione in MP3 o WAV).
+pub(crate) fn avi_audio(path: &Path) -> Result<crate::audio::Pcm, String> {
+    let bytes = std::fs::read(path).map_err(|err| format!("AVI non letto: {err}"))?;
+    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"AVI " {
+        return Err("AVI non letto".into());
+    }
+    let mut streams = Vec::new();
+    let mut chunks = Vec::new();
+    walk_riff(&bytes[12..], &mut streams, &mut chunks)?;
+    let index = streams.iter().position(|s| !s.video && s.channels > 0).ok_or_else(|| "il video non ha audio".to_string())?;
+    let (samples, rate, channels) = avi_audio_pcm(&streams[index], &chunks, index)?.ok_or_else(|| "il video non ha audio".to_string())?;
+    Ok(crate::audio::Pcm::new(rate, channels, samples))
 }
 
 fn avi_duration(scale: u32, rate: u32) -> i64 {
@@ -1755,6 +1882,8 @@ fn parse_strl(data: &[u8]) -> Result<AviStream, String> {
             channels: 0,
             sample_rate: 0,
             pcm: false,
+            format: 0,
+            extra: strf.get(40..).map(<[u8]>::to_vec).unwrap_or_default(),
         })
     } else {
         let format = if strf.len() >= 2 { u16::from_le_bytes([strf[0], strf[1]]) } else { 0 };
@@ -1772,6 +1901,13 @@ fn parse_strl(data: &[u8]) -> Result<AviStream, String> {
             channels,
             sample_rate,
             pcm,
+            format,
+            extra: if strf.len() >= 18 {
+                let cb = u16::from_le_bytes([strf[16], strf[17]]) as usize;
+                strf.get(18..18 + cb).map(<[u8]>::to_vec).unwrap_or_default()
+            } else {
+                Vec::new()
+            },
         })
     }
 }
@@ -1787,6 +1923,11 @@ fn avi_pix(handler: [u8; 4], compression: [u8; 4], bits: u16, height: i32) -> Re
         || same_cc(handler, b"H264") || same_cc(handler, b"X264") || same_cc(handler, b"AVC1")
     {
         return Ok(Pix::H264);
+    }
+    for cc in [b"FMP4", b"XVID", b"DIVX", b"DX50", b"MP4V", b"M4S2", b"MP4S", b"3IV2", b"RMP4", b"SEDG", b"DIV5"] {
+        if same_cc(compression, cc) || same_cc(handler, cc) {
+            return Ok(Pix::Mpeg4);
+        }
     }
     let uncompressed = compression == [0; 4] || same_cc(compression, b"DIB ") || same_cc(compression, b"RGB ")
         || same_cc(handler, b"DIB ");
