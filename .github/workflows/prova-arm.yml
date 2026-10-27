@@ -106,7 +106,7 @@ jobs:
           $out = (Get-Content update-out.txt -Raw) + (Get-Content update-err.txt -Raw)
           $out
           if (-not $fine) { Get-Process | Sort-Object CPU -Descending | Select-Object -First 8 Name, Id, CPU | Format-Table; throw 'cedro update non finisce' }
-          if ($out -notmatch [regex]::Escape("Avviato Cedro-ARM64-Setup-$env:VERSIONE.exe")) { throw "l'aggiornamento non ha preso l'installatore ARM64 $env:VERSIONE" }
+          if ($out -notmatch ("(Avviato|Started) Cedro-ARM64-Setup-" + [regex]::Escape($env:VERSIONE) + "\.exe")) { throw "l'aggiornamento non ha preso l'installatore ARM64 $env:VERSIONE" }
           # L'installatore avviato da Cedro è interattivo: lo si lascia lavorare qualche secondo e poi si ripete in silenzio
           # lo stesso file, che è quello che l'utente cliccherebbe.
           Start-Sleep -Seconds 5
