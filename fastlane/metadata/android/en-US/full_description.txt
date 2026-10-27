@@ -1,0 +1,12 @@
+Cedro converts images, PDFs, audio and video and turns speech into text, sending nothing anywhere: everything happens on your phone.
+
+• Images: JPG, PNG, WebP, PDF, compression and text from photos (OCR).
+• PDF: to Word, text and images. Word, ODT and RTF documents can be shared.
+• Audio and video: MP3, WAV, MP4, using the phone's hardware acceleration.
+• Speech to text, including WhatsApp and Telegram voice messages, with whisper.cpp and no online service. The first time, it downloads the model (32 or 60 MB).
+• "Share with Cedro" from any app: results are saved in Documents/Cedro.
+• A full-screen wheel to pick the format with one finger, plus themes and colours to choose from.
+
+No ads, no account, no tracking. The source code is open (MIT licence).
+
+Requires Android 8 or later and a 64-bit (arm64) processor.
