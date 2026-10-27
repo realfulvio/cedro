@@ -430,3 +430,58 @@ pub(crate) fn peek(input: &Path, at: &[f64]) -> Result<Peek, String> {
     }
     Ok(out)
 }
+
+/// Da YUV 4:2:0 a RGBA già piccolo (al massimo `side` di lato lungo), prendendo un punto ogni tanti:
+/// è svelto, per i fotogrammi del tasto Play.
+pub(crate) fn i420_small(y: &[u8], u: &[u8], v: &[u8], width: u32, height: u32, side: u32) -> Option<Rgba> {
+    let (w, h) = (width as usize, height as usize);
+    let cw = w.div_ceil(2);
+    if w == 0 || h == 0 || y.len() < w * h || u.len() < cw * h.div_ceil(2) || v.len() < cw * h.div_ceil(2) {
+        return None;
+    }
+    let step = (width.max(height).div_ceil(side.max(1))).max(1) as usize;
+    let (ow, oh) = (w.div_ceil(step), h.div_ceil(step));
+    let mut out = vec![255u8; ow * oh * 4];
+    for oy in 0..oh {
+        let row = oy * step;
+        for ox in 0..ow {
+            let col = ox * step;
+            let c = (row / 2) * cw + col / 2;
+            let yy = (y[row * w + col] as i32 - 16).max(0) * 298;
+            let (uu, vv) = (u[c] as i32 - 128, v[c] as i32 - 128);
+            let i = (oy * ow + ox) * 4;
+            out[i] = ((yy + 409 * vv + 128) >> 8).clamp(0, 255) as u8;
+            out[i + 1] = ((yy - 100 * uu - 208 * vv + 128) >> 8).clamp(0, 255) as u8;
+            out[i + 2] = ((yy + 516 * uu + 128) >> 8).clamp(0, 255) as u8;
+        }
+    }
+    Some((ow as u32, oh as u32, out))
+}
+
+/// WebM VP8 e VP9 dal secondo `from`: ogni fotogramma (YUV 4:2:0, tempo in 100 ns) va a `tap`
+/// finché non risponde `false`. Per il tasto Play dell'anteprima.
+#[allow(dead_code)]
+pub(crate) fn play(input: &Path, from: f64, mut tap: impl FnMut(&[u8], &[u8], &[u8], u32, u32, i64) -> bool) -> Result<(), String> {
+    use symphonia::core::formats::{SeekMode, SeekTo};
+    use symphonia::core::units::Time;
+    let codec = codec_of(input)?;
+    let mut opened = open_media(input)?;
+    if from > 0.0 {
+        let _ = opened.format.seek(SeekMode::Coarse, SeekTo::Time { time: Time::from(from), track_id: Some(opened.video_id) });
+    }
+    let mut video = decoder(&codec);
+    loop {
+        let Ok(packet) = opened.format.next_packet() else { break };
+        if packet.track_id() != opened.video_id {
+            continue;
+        }
+        let time = ticks(packet.ts(), opened.numer, opened.denom);
+        let Ok(frames) = shown_frames(&mut video, packet.buf()) else { continue };
+        for frame in frames {
+            if !tap(&frame.y, &frame.u, &frame.v, frame.width, frame.height, time) {
+                return Ok(());
+            }
+        }
+    }
+    Ok(())
+}

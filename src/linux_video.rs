@@ -148,7 +148,7 @@ impl VideoSink for H264Aac {
         }
         let shape = crate::sink::shape();
         let gate = crate::sink::FrameGate::new();
-        let audio = if shape.mute { None } else { audio };
+        let audio = if shape.mute || grabbing() { None } else { audio };
         let audio = match audio {
             Some((rate, channels)) => Some(open_aac(rate, channels)?),
             None => None,
@@ -231,7 +231,7 @@ impl VideoSink for H264Aac {
     }
 
     fn write_pcm(&mut self, samples: &[i16], channels: u16, rate: u32) -> Result<(), String> {
-        if samples.is_empty() || self.muted {
+        if samples.is_empty() || self.muted || grabbing() {
             return Ok(());
         }
         if self.audio.is_none() {
@@ -1869,11 +1869,23 @@ thread_local! {
     static GRAB: std::cell::RefCell<Option<Grab>> = const { std::cell::RefCell::new(None) };
 }
 
+/// Chi guarda il video (il tasto Play): riceve ogni fotogramma con il suo tempo; `false` ferma la lettura.
+type Tap = Box<dyn FnMut(&[u8], &[u8], &[u8], u32, u32, i64) -> bool>;
+
+thread_local! {
+    static TAP: std::cell::RefCell<Option<Tap>> = const { std::cell::RefCell::new(None) };
+}
+
 fn grabbing() -> bool {
-    GRAB.with(|g| g.borrow().is_some())
+    GRAB.with(|g| g.borrow().is_some()) || TAP.with(|t| t.borrow().is_some())
 }
 
 fn grab_frame(y: &[u8], u: &[u8], v: &[u8], width: u32, height: u32, time: i64) -> Result<(), String> {
+    if let Some(mut tap) = TAP.with(|t| t.borrow_mut().take()) {
+        let go = tap(y, u, v, width, height, time);
+        TAP.with(|t| *t.borrow_mut() = Some(tap));
+        return if go { Ok(()) } else { Err(GRAB_DONE.to_string()) };
+    }
     GRAB.with(|g| {
         let mut g = g.borrow_mut();
         let Some(grab) = g.as_mut() else { return Ok(()) };
@@ -1917,6 +1929,20 @@ pub(crate) fn peek_frames(input: &Path, at: &[f64]) -> Result<Peek, String> {
         });
     }
     Ok(Peek { frames, size })
+}
+
+/// Legge il video dall'inizio e passa ogni fotogramma (YUV 4:2:0 e tempo in 100 ns) a `tap`,
+/// finché `tap` non risponde `false`. Per il tasto Play dell'anteprima: non scrive niente.
+pub(crate) fn play_frames(input: &Path, tap: impl FnMut(&[u8], &[u8], &[u8], u32, u32, i64) -> bool + 'static) -> Result<(), String> {
+    TAP.with(|t| *t.borrow_mut() = Some(Box::new(tap)));
+    let out = std::env::temp_dir().join(format!("cedro-play-{}-{:?}.mp4", std::process::id(), std::thread::current().id()));
+    let result = to_mp4_with(input, &out);
+    TAP.with(|t| t.borrow_mut().take());
+    let _ = std::fs::remove_file(&out);
+    match result {
+        Err(err) if err != GRAB_DONE && !err.ends_with(GRAB_DONE) => Err(err),
+        _ => Ok(()),
+    }
 }
 
 fn iso_keyframes(input: &Path, at: &[f64]) -> Result<Peek, String> {

@@ -35,7 +35,7 @@ jobs:
       - name: Librerie di sistema
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgtk-4-dev libdbus-1-dev pkg-config cmake clang
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libdbus-1-dev libasound2-dev pkg-config cmake clang
 
       - uses: Swatinem/rust-cache@v2
 
@@ -80,7 +80,7 @@ jobs:
           # La prova di Cedro vuole i motori col nome corto «cedro-trascrivi-<variante>».
           mkdir -p prova
           for f in dist-motori/cedro-trascrivi-*; do cp "$f" "prova/cedro-trascrivi-${f##*-linux-x64-}"; done
-          sudo apt-get install -y --no-install-recommends libgtk-4-dev libdbus-1-dev
+          sudo apt-get install -y --no-install-recommends libgtk-4-dev libdbus-1-dev libasound2-dev
           CEDRO_TRASCRIVI_DIR="$PWD/prova" cargo test --release --lib transcribes_a_spoken_sentence -- --nocapture
 
       - uses: actions/upload-artifact@v4

@@ -167,6 +167,51 @@ fn preview(f: &mut Frame, app: &App, r: R) {
     });
 }
 
+/// Altezza della riga con Play, tempo e barra.
+const CONTROLS: f32 = 52.0;
+
+/// Il triangolo del Play o le due stanghette della pausa, centrati in (cx, cy).
+fn play_glyph(f: &mut Frame, cx: f32, cy: f32, r: f32, c: crate::ui::gfx::Rgb, pause: bool) {
+    if pause {
+        f.p.fill(cx - r * 0.7, cy - r * 0.8, r * 0.5, r * 1.6, c);
+        f.p.fill(cx + r * 0.2, cy - r * 0.8, r * 0.5, r * 1.6, c);
+    } else {
+        f.p.poly(&[(cx - r * 0.6, cy - r), (cx + r, cy), (cx - r * 0.6, cy + r)], c, 1.0);
+    }
+}
+
+/// Play/pausa, tempo trascorso, barra da trascinare e durata.
+fn media_controls(f: &mut Frame, r: R, playing: bool, pos: f64, duration: f64, loading: bool) {
+    let pal = f.pal;
+    let cy = r.1 + r.3 / 2.0;
+    let act = Act::MediaPlay;
+    if f.hovered(&act) {
+        f.p.circle(r.0 + 18.0, cy, 21.0, Some(mix(pal.primary, pal.surface, 0.8)), None);
+    }
+    f.p.circle(r.0 + 18.0, cy, 17.0, Some(pal.primary), None);
+    if loading && playing {
+        f.spinner(r.0 + 18.0, cy, 8.0, pal.on_primary);
+    } else {
+        play_glyph(f, r.0 + 18.0, cy, 7.0, pal.on_primary, playing);
+    }
+    f.focus_ring((r.0, cy - 18.0, 36.0, 36.0), 18.0, &act);
+    f.hit((r.0 - 4.0, cy - 22.0, 44.0, 44.0), act);
+    let now = crate::ui::preview::clock(pos);
+    let total = crate::ui::preview::clock(duration);
+    let tw = f.measure(&total, 14.0, SANS) + 4.0;
+    f.p.text(&now, r.0 + 48.0, r.1, tw, r.3, 14.0, SANS, pal.muted, Align::Left);
+    f.p.text(&total, r.0 + r.2 - tw, r.1, tw, r.3, 14.0, SANS, pal.muted, Align::Right);
+    let track = (r.0 + 60.0 + tw, cy - 2.0, r.2 - 2.0 * tw - 76.0, 4.0);
+    let frac = if duration > 0.0 { (pos / duration).clamp(0.0, 1.0) as f32 } else { 0.0 };
+    f.p.rrect(track.0, track.1, track.2, track.3, 2.0, Some(pal.border), None);
+    f.p.rrect(track.0, track.1, track.2 * frac, track.3, 2.0, Some(pal.primary), None);
+    if duration > 0.0 {
+        f.p.circle(track.0 + track.2 * frac, cy, 7.0, Some(pal.primary), None);
+        // Come gli altri cursori: la zona si allarga di 10 ai lati (vedi `Screen::slide`).
+        f.hit_kind((track.0 - 10.0, cy - 14.0, track.2 + 20.0, 28.0), Act::MediaSeek, crate::ui::core::HitKind::Slider);
+    }
+}
+
 /// La scheda di un file audio, video o d'altro tipo, al centro dell'anteprima.
 fn media_card(f: &mut Frame, app: &App, i: usize, area: R) {
     use crate::engine::Kind;
@@ -183,15 +228,26 @@ fn media_card(f: &mut Frame, app: &App, i: usize, area: R) {
     let cx = area.0 + (area.2 - cw) / 2.0;
     let facts_h = about.facts.len() as f32 * 28.0;
     let body_h = match file.kind {
-        Kind::Audio => 62.0 + 130.0 + 16.0 + facts_h,
+        Kind::Audio => 62.0 + 130.0 + 16.0 + CONTROLS + facts_h,
         Kind::Video => {
             let main = if about.frames.is_empty() { 0.0 } else { iw * 9.0 / 16.0 + 14.0 };
-            let strip = if about.frames.len() > 1 { (iw - 4.0 * 8.0) / 5.0 * 9.0 / 16.0 + 18.0 } else { 0.0 };
-            main + strip + 62.0 + facts_h
+            let strip = if about.frames.len() > 1 { (iw - 4.0 * 8.0) / 5.0 * 9.0 / 16.0 + 14.0 } else { 0.0 };
+            main + strip + CONTROLS + 62.0 + facts_h
         }
         _ => 300.0,
     };
     let ch = body_h + 2.0 * pad;
+    let player = app.player.as_ref().filter(|p| p.path == file.path);
+    let playing = player.is_some_and(|p| p.playing());
+    let duration = about.duration.unwrap_or(0.0);
+    let pos = match (app.media_scrub, player) {
+        (Some(s), Some(_)) => s as f64 * duration,
+        (_, Some(p)) => p.position(),
+        _ => 0.0,
+    };
+    if playing {
+        f.animating = true;
+    }
     super::scrolled(f, area, Scroll::Page, |f| {
         let cy = area.1 + 30.0;
         f.p.shadow(cx, cy, cw, ch, 10.0, 14.0, 0.18, 4.0);
@@ -208,20 +264,33 @@ fn media_card(f: &mut Frame, app: &App, i: usize, area: R) {
                     let n = wave.len() as f32;
                     let step = iw / n;
                     let bar = (step * 0.62).max(1.0);
+                    // Mentre suona, la parte già ascoltata resta piena e il resto si schiarisce.
+                    let done = if player.is_some() && duration > 0.0 { (pos / duration) as f32 } else { 1.0 };
                     for (k, a) in wave.iter().enumerate() {
                         let h = (a.max(0.02) * 120.0).max(2.0);
-                        f.p.rrect(x + k as f32 * step, y + 65.0 - h / 2.0, bar, h, bar.min(2.0), Some(pal.primary), None);
+                        let c = if (k as f32 + 0.5) / n <= done { pal.primary } else { mix(pal.primary, pal.surface, 0.72) };
+                        f.p.rrect(x + k as f32 * step, y + 65.0 - h / 2.0, bar, h, bar.min(2.0), Some(c), None);
                     }
                 } else {
                     f.p.fill(x, y + 64.0, iw, 2.0, pal.border);
                 }
                 y += 146.0;
+                media_controls(f, (x, y, iw, CONTROLS), playing, pos, duration, player.is_some_and(|p| p.loading()));
+                y += CONTROLS;
             }
             Kind::Video => {
                 if let Some(main) = about.frames.first() {
                     let h = iw * 9.0 / 16.0;
                     f.p.rrect(x, y, iw, h, 6.0, Some((20, 20, 24)), None);
-                    f.p.image(main, x, y, iw, h, 6.0, Fit::Contain);
+                    let shown = player.and_then(|p| p.frame()).unwrap_or_else(|| main.clone());
+                    f.p.image(&shown, x, y, iw, h, 6.0, Fit::Contain);
+                    // Il tasto grande al centro finché non suona; un clic sull'immagine fa play o pausa.
+                    if !playing {
+                        let (bx, by) = (x + iw / 2.0, y + h / 2.0);
+                        f.p.disc_a(bx, by, 32.0, (0, 0, 0), 0.55);
+                        play_glyph(f, bx, by, 13.0, (255, 255, 255), false);
+                    }
+                    f.hit((x, y, iw, h), Act::MediaPlay);
                     y += h + 14.0;
                     if about.frames.len() > 1 {
                         let tw = (iw - 4.0 * 8.0) / 5.0;
@@ -231,9 +300,11 @@ fn media_card(f: &mut Frame, app: &App, i: usize, area: R) {
                             f.p.rrect(tx, y, tw, th, 4.0, Some((20, 20, 24)), None);
                             f.p.image(img, tx, y, tw, th, 4.0, Fit::Cover);
                         }
-                        y += th + 18.0;
+                        y += th + 14.0;
                     }
                 }
+                media_controls(f, (x, y, iw, CONTROLS), playing, pos, duration, player.is_some_and(|p| p.loading()));
+                y += CONTROLS;
                 f.text(&name, x, y, iw, 30.0, 19.0, SEMI, pal.text);
                 f.text(length.as_deref().unwrap_or(""), x, y + 30.0, iw, 24.0, 15.0, SANS, pal.muted);
                 y += 62.0;

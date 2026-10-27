@@ -317,6 +317,10 @@ pub struct App {
     pub previews: HashMap<(PathBuf, usize), Option<Image>>,
     /// La pagina dell'anteprima del documento.
     pub preview_page: usize,
+    /// Il file audio o video che suona nell'anteprima (tasto Play).
+    pub player: Option<super::player::Player>,
+    /// Dove sta il cursore della barra mentre lo si trascina (0..1).
+    pub media_scrub: Option<f32>,
     tx: Sender<Event>,
     rx: Receiver<Event>,
     wake: Arc<dyn Fn() + Send + Sync>,
@@ -367,6 +371,8 @@ impl App {
             media: HashMap::new(),
             previews: HashMap::new(),
             preview_page: 0,
+            player: None,
+            media_scrub: None,
             tx,
             rx,
             wake,
@@ -986,6 +992,31 @@ impl App {
             Exists::Replace => "Il file con lo stesso nome viene sostituito.".into(),
             Exists::Skip => "Il file con lo stesso nome resta com'è.".into(),
             Exists::Ask => "Cedro te lo chiede file per file.".into(),
+        }
+    }
+
+    /// Play o pausa per il file scelto nell'anteprima.
+    pub fn media_toggle(&mut self) {
+        let Some(i) = self.selected else { return };
+        let Some(file) = self.files.get(i) else { return };
+        if let Some(p) = self.player.as_mut().filter(|p| p.path == file.path) {
+            p.toggle();
+            return;
+        }
+        let duration = self.media.get(&file.path).and_then(|m| m.about.as_ref()).and_then(|a| a.duration);
+        self.player = Some(super::player::Player::start(&file.path, file.kind == Kind::Video, duration, self.wake.clone()));
+    }
+
+    /// Salta al punto `frac` (0..1) del file in anteprima; parte se non suonava ancora.
+    pub fn media_seek(&mut self, frac: f32) {
+        let Some(i) = self.selected else { return };
+        let Some(file) = self.files.get(i) else { return };
+        let Some(d) = self.media.get(&file.path).and_then(|m| m.about.as_ref()).and_then(|a| a.duration) else { return };
+        if self.player.as_ref().is_none_or(|p| p.path != file.path) {
+            self.media_toggle();
+        }
+        if let Some(p) = self.player.as_mut() {
+            p.seek(frac.clamp(0.0, 1.0) as f64 * d);
         }
     }
 
