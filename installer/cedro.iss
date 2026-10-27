@@ -9,7 +9,7 @@
   #define BuildDir "..\target\release"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.21.3"
+  #define AppVersion "0.22.0"
 #endif
 
 [Setup]
@@ -47,14 +47,33 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 #endif
 LicenseFile=..\LICENSE
-ShowLanguageDialog=no
+; Si sceglie la lingua (italiano o inglese); la stessa va in Cedro (vedi CurStepChanged).
+ShowLanguageDialog=yes
+UsePreviousLanguage=no
 
 [Languages]
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[CustomMessages]
+italian.TaskDesktop=Crea un collegamento sul desktop
+italian.GroupLinks=Collegamenti:
+italian.TaskAutostart=Avvia Cedro all'accesso a Windows
+italian.GroupStartup=Avvio:
+italian.RunView=Scegli come usare Cedro (Semplice o Completa)
+italian.RunStart=Avvia Cedro
+italian.RunGuide=Guarda come funziona (guida animata)
+english.TaskDesktop=Create a desktop shortcut
+english.GroupLinks=Shortcuts:
+english.TaskAutostart=Start Cedro when Windows starts
+english.GroupStartup=Startup:
+english.RunView=Choose how to use Cedro (Simple or Full)
+english.RunStart=Start Cedro
+english.RunGuide=See how it works (animated guide)
 
 [Tasks]
-Name: "desktopicon"; Description: "Crea un collegamento sul desktop"; GroupDescription: "Collegamenti:"
-Name: "autostart"; Description: "Avvia Cedro all'accesso a Windows"; GroupDescription: "Avvio:"
+Name: "desktopicon"; Description: "{cm:TaskDesktop}"; GroupDescription: "{cm:GroupLinks}"
+Name: "autostart"; Description: "{cm:TaskAutostart}"; GroupDescription: "{cm:GroupStartup}"
 
 [Files]
 Source: "{#BuildDir}\cedro.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -70,9 +89,9 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\cedro.exe"; IconFilename: "{a
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Cedro"; ValueData: """{app}\cedro.exe"""; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
-Filename: "{app}\cedro.exe"; Parameters: "vista"; Description: "Scegli come usare Cedro (Semplice o Completa)"; Flags: nowait postinstall skipifsilent; Check: ViewNotAsked
-Filename: "{app}\cedro.exe"; Description: "Avvia Cedro"; Flags: nowait postinstall skipifsilent
-Filename: "{app}\cedro.exe"; Parameters: "guida"; Description: "Guarda come funziona (guida animata)"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\cedro.exe"; Parameters: "vista"; Description: "{cm:RunView}"; Flags: nowait postinstall skipifsilent; Check: ViewNotAsked
+Filename: "{app}\cedro.exe"; Description: "{cm:RunStart}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\cedro.exe"; Parameters: "guida"; Description: "{cm:RunGuide}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{userappdata}\Cedro"
@@ -111,6 +130,26 @@ begin
   CloseCedro;
   LeaveBondenoNote;
   Result := '';
+end;
+
+// La lingua scelta nell'installatore diventa quella di Cedro, se non ne ha già una nelle Impostazioni.
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  path: String;
+  text: AnsiString;
+  code: String;
+begin
+  if CurStep <> ssPostInstall then Exit;
+  if ActiveLanguage = 'english' then code := 'en' else code := 'it';
+  path := ExpandConstant('{userappdata}\Cedro\config.txt');
+  text := '';
+  LoadStringFromFile(path, text);
+  if Pos('language=', text) = 0 then
+  begin
+    ForceDirectories(ExpandConstant('{userappdata}\Cedro'));
+    if (Length(text) > 0) and (text[Length(text)] <> #10) then text := text + #13#10;
+    SaveStringToFile(path, 'language=' + code + #13#10, True);
+  end;
 end;
 
 function InitializeUninstall: Boolean;

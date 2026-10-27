@@ -198,8 +198,8 @@ impl WheelUi {
             }
             // Sotto il disco: titolo, frase e la riga con la destinazione e Esc.
             let line_y = disc_bottom + 142.0;
-            let a = fonts.measure(&self.dest_note, 21.0, Weight::Regular) + 40.0;
-            let esc = fonts.measure("Esc", 20.0, Weight::Regular) + 32.0 + 14.0 + fonts.measure("per chiudere", 21.0, Weight::Regular);
+            let a = fonts.measure(&crate::i18n::tr(&self.dest_note), 21.0, Weight::Regular) + 40.0;
+            let esc = fonts.measure("Esc", 20.0, Weight::Regular) + 32.0 + 14.0 + fonts.measure(&crate::i18n::tr("per chiudere"), 21.0, Weight::Regular);
             let full = a + 38.0 + esc;
             let x0 = (w - full) / 2.0;
             zones.push(((x0 + a + 38.0, line_y, esc, 44.0), Zone::Esc));
@@ -434,7 +434,7 @@ impl WheelUi {
             pts.push((cx + r * a.cos(), cy + r * a.sin()));
         }
         p.poly(&pts, (255, 255, 255), 0.96);
-        let name = if self.has_file { clip(p, &self.name, 18.0, Weight::Bold, 168.0) } else { "In attesa…".to_string() };
+        let name = if self.has_file { clip(p, &crate::i18n::lit(&self.name), 18.0, Weight::Bold, 168.0) } else { "In attesa…".to_string() };
         p.text(&name, cx - 90.0, cy + 40.0, 180.0, 26.0, 18.0, Weight::Bold, INK, Align::Center);
         let sub = match (active, self.simple, self.mode) {
             (Some(i), true, _) => self.list[i].label.to_string(),
@@ -643,7 +643,7 @@ fn quality_at(slider: R, x: f32) -> u8 {
 
 fn hint_width(fonts: &Fonts, key: &str, label: &str) -> f32 {
     let kw = fonts.measure(key, 20.0, Weight::Regular) + 32.0;
-    kw + 14.0 + fonts.measure(label, 21.0, Weight::Semibold)
+    kw + 14.0 + fonts.measure(&crate::i18n::tr(label), 21.0, Weight::Semibold)
 }
 
 fn clip(p: &Painter, text: &str, size: f32, weight: Weight, w: f32) -> String {

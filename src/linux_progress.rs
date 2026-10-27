@@ -57,7 +57,7 @@ fn update(view: &View, done: usize, info: &str) {
     let percent = (done * 100 / view.total.max(1)) as u32;
     let args = Variant::tuple_from_iter([props(&[
         ("title", "Cedro".to_variant()),
-        ("infoMessage", info.to_variant()),
+        ("infoMessage", cedro::i18n::tr(info).to_variant()),
         ("percent", percent.to_variant()),
         ("processedAmount", (done as u64).to_variant()),
         ("totalAmount", (view.total as u64).to_variant()),
@@ -77,7 +77,7 @@ pub fn step(index: usize, info: &str) {
 pub fn finish(ok: bool, info: &str) {
     let Some(view) = VIEW.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
     update(&view, view.total, info);
-    let (code, message) = if ok { (0u32, String::new()) } else { (1u32, info.to_string()) };
+    let (code, message) = if ok { (0u32, String::new()) } else { (1u32, cedro::i18n::tr_string(info)) };
     let args = Variant::tuple_from_iter([code.to_variant(), message.to_variant(), props(&[])]);
     call(&view.bus, SERVER, &view.path, "org.kde.JobViewV3", "terminate", args, None);
 }

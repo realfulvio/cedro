@@ -86,7 +86,7 @@ pub(crate) fn titled(app: &Application, title: &str, width: i32, height: i32) ->
     style();
     let window = Window::builder()
         .application(app)
-        .title(title)
+        .title(t(title))
         .default_width(width)
         .default_height(height)
         .resizable(false)
@@ -98,9 +98,16 @@ pub(crate) fn titled(app: &Application, title: &str, width: i32, height: i32) ->
     window
 }
 
+/// Il testo nella lingua dell'interfaccia.
+fn t(s: &str) -> String {
+    cedro::i18n::tr(s).into_owned()
+}
+
 const DPI: [u32; 4] = [100, 144, 200, 300];
 const MAX_PAGES: [u32; 4] = [50, 100, 300, 0];
 const LANGS: [&str; 3] = ["auto", "it", "en"];
+/// Le scelte della lingua dell'interfaccia, nell'ordine dell'elenco.
+const UI_LANGS: [&str; 3] = ["auto", "it", "en"];
 const SECTIONS: [&str; 8] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni"];
 const MARK: &[u8] = cedro::edizione::ICONA;
 const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
@@ -110,14 +117,14 @@ fn setting(title: &str, desc: &str, control: &impl IsA<gtk4::Widget>) -> HBox {
     let text = HBox::new(Orientation::Vertical, 2);
     text.set_hexpand(true);
     text.set_valign(gtk4::Align::Center);
-    let t = Label::new(Some(title));
-    t.set_xalign(0.0);
-    t.add_css_class("cedro-rt");
-    let d = Label::new(Some(desc));
+    let head = Label::new(Some(&t(title)));
+    head.set_xalign(0.0);
+    head.add_css_class("cedro-rt");
+    let d = Label::new(Some(&t(desc)));
     d.set_xalign(0.0);
     d.set_wrap(true);
     d.add_css_class("cedro-muted");
-    text.append(&t);
+    text.append(&head);
     text.append(&d);
     let line = HBox::new(Orientation::Horizontal, 24);
     line.set_margin_top(12);
@@ -135,7 +142,7 @@ fn page(title: &str, rows: &[&HBox]) -> HBox {
     page.set_margin_top(18);
     page.set_margin_start(28);
     page.set_margin_end(28);
-    let heading = Label::new(Some(title));
+    let heading = Label::new(Some(&t(title)));
     heading.set_xalign(0.0);
     heading.set_margin_bottom(8);
     heading.add_css_class("cedro-h");
@@ -157,7 +164,9 @@ fn switch(active: bool) -> gtk4::Switch {
 }
 
 fn dropdown(items: &[&str], selected: usize) -> gtk4::DropDown {
-    let dd = gtk4::DropDown::from_strings(items);
+    let shown: Vec<String> = items.iter().map(|i| t(i)).collect();
+    let shown: Vec<&str> = shown.iter().map(String::as_str).collect();
+    let dd = gtk4::DropDown::from_strings(&shown);
     dd.set_selected(selected as u32);
     dd.set_size_request(190, -1);
     dd
@@ -168,7 +177,7 @@ fn short_path(path: &str) -> String {
 }
 
 fn caption(text: &str) -> Label {
-    let l = Label::new(Some(text));
+    let l = Label::new(Some(&t(text)));
     l.set_xalign(0.0);
     l.set_margin_top(14);
     l.set_margin_bottom(6);
@@ -180,7 +189,7 @@ fn caption(text: &str) -> Label {
 fn setting_tagged(title: &str, desc: &str, found: &str, available: bool, control: &impl IsA<gtk4::Widget>) -> HBox {
     let row = setting(title, desc, control);
     if let Some(text) = row.first_child().and_then(|w| w.downcast::<HBox>().ok()) {
-        let tag = Label::new(Some(found));
+        let tag = Label::new(Some(&t(found)));
         tag.set_halign(gtk4::Align::Start);
         tag.set_margin_top(4);
         tag.add_css_class("cedro-tag");
@@ -200,7 +209,7 @@ fn system_page(current: &Settings, window: &Window) -> (HBox, gtk4::Switch, gtk4
     page.set_margin_top(18);
     page.set_margin_start(28);
     page.set_margin_end(28);
-    let heading = Label::new(Some("Sistema"));
+    let heading = Label::new(Some(&t("Sistema")));
     heading.set_xalign(0.0);
     heading.add_css_class("cedro-h");
     page.append(&heading);
@@ -216,13 +225,13 @@ fn system_page(current: &Settings, window: &Window) -> (HBox, gtk4::Switch, gtk4
         ("Scheda video", info.gpu.as_str(), info.gpu_detail.as_str()),
         ("Sistema", info.os.as_str(), ""),
     ] {
-        let name = Label::new(Some(label));
+        let name = Label::new(Some(&t(label)));
         name.set_xalign(0.0);
         name.set_valign(gtk4::Align::Start);
         name.set_width_chars(13);
         name.add_css_class("cedro-muted");
         let text = HBox::new(Orientation::Vertical, 0);
-        let value = Label::new(Some(value));
+        let value = Label::new(Some(&t(value)));
         value.set_xalign(0.0);
         value.set_wrap(true);
         value.set_max_width_chars(50);
@@ -230,7 +239,7 @@ fn system_page(current: &Settings, window: &Window) -> (HBox, gtk4::Switch, gtk4
         value.add_css_class("cedro-rt");
         text.append(&value);
         if !detail.is_empty() {
-            let d = Label::new(Some(detail));
+            let d = Label::new(Some(&t(detail)));
             d.set_xalign(0.0);
             d.set_wrap(true);
             d.set_max_width_chars(60);
@@ -252,7 +261,7 @@ fn system_page(current: &Settings, window: &Window) -> (HBox, gtk4::Switch, gtk4
     chips.set_row_spacing(6);
     chips.set_homogeneous(false);
     for (name, yes) in &info.isa {
-        let chip = Label::new(Some(&format!("{} {name}", if *yes { "✓" } else { "✗" })));
+        let chip = Label::new(Some(&t(&format!("{} {name}", if *yes { "✓" } else { "✗" }))));
         chip.add_css_class("cedro-isa");
         if !*yes {
             chip.add_css_class("cedro-isa-off");
@@ -261,7 +270,7 @@ fn system_page(current: &Settings, window: &Window) -> (HBox, gtk4::Switch, gtk4
         chips.insert(&chip, -1);
     }
     if info.isa.is_empty() {
-        let none = Label::new(Some("Non rilevate su questo processore."));
+        let none = Label::new(Some(&t("Non rilevate su questo processore.")));
         none.set_xalign(0.0);
         none.add_css_class("cedro-muted");
         page.append(&none);
@@ -295,9 +304,9 @@ fn system_page(current: &Settings, window: &Window) -> (HBox, gtk4::Switch, gtk4
     page.append(&gtk4::Separator::new(Orientation::Horizontal));
     page.append(&avx_row);
 
-    let copy = Button::with_label("Copia informazioni");
+    let copy = Button::with_label(&t("Copia informazioni"));
     copy.add_css_class("cedro-sec");
-    let copied = Label::new(Some("Letto all'avvio di Cedro."));
+    let copied = Label::new(Some(&t("Letto all'avvio di Cedro.")));
     copied.add_css_class("cedro-muted");
     copied.set_xalign(0.0);
     let line = HBox::new(Orientation::Horizontal, 12);
@@ -310,7 +319,7 @@ fn system_page(current: &Settings, window: &Window) -> (HBox, gtk4::Switch, gtk4
         let window = window.clone();
         copy.connect_clicked(move |_| {
             window.clipboard().set_text(&cedro::sysinfo::report());
-            copied.set_text("Copiato: incollalo nella segnalazione.");
+            copied.set_text(&t("Copiato: incollalo nella segnalazione."));
         });
     }
     (page, gpu, avx)
@@ -321,19 +330,19 @@ fn credit_row(item: &cedro::credits::Component) -> gtk4::ListBoxRow {
     let expander = gtk4::Expander::new(None);
     let head = HBox::new(Orientation::Vertical, 1);
     let top = HBox::new(Orientation::Horizontal, 8);
-    let name = Label::new(Some(item.name));
+    let name = Label::new(Some(&t(item.name)));
     name.add_css_class("cedro-rt");
     name.set_xalign(0.0);
     top.append(&name);
     if item.soon {
-        let soon = Label::new(Some("in arrivo"));
+        let soon = Label::new(Some(&t("in arrivo")));
         soon.add_css_class("cedro-soon");
         top.append(&soon);
     }
     let by = Label::new(Some(&format!("{} · {}", item.author, item.license)));
     by.set_xalign(0.0);
     by.add_css_class("cedro-muted");
-    let what = Label::new(Some(item.what));
+    let what = Label::new(Some(&t(item.what)));
     what.set_xalign(0.0);
     what.set_wrap(true);
     what.set_max_width_chars(60);
@@ -379,7 +388,7 @@ fn fill_credits(list: &gtk4::ListBox, query: &str) -> usize {
         if found.is_empty() {
             continue;
         }
-        let group = Label::new(Some(&title.to_uppercase()));
+        let group = Label::new(Some(&t(title).to_uppercase()));
         group.set_xalign(0.0);
         group.set_margin_top(14);
         group.set_margin_bottom(4);
@@ -415,7 +424,7 @@ fn about_page() -> HBox {
     let title = Label::new(Some(&format!("Cedro {}", cedro::update::CURRENT)));
     title.set_xalign(0.0);
     title.add_css_class("cedro-h");
-    let line1 = Label::new(Some("Convertitore di file, con una ruota al cursore · Licenza MIT"));
+    let line1 = Label::new(Some(&t("Convertitore di file, con una ruota al cursore · Licenza MIT")));
     line1.set_xalign(0.0);
     line1.add_css_class("cedro-muted");
     let line2 = Label::new(Some(&format!("{POWERED_BY} · github.com/realfulvio/cedro")));
@@ -433,10 +442,10 @@ fn about_page() -> HBox {
         ente.append(&crate::linux_firma::stemma_area(cedro::edizione::Stemma::Scritta, 60));
         let text = HBox::new(Orientation::Vertical, 2);
         text.set_valign(gtk4::Align::Center);
-        let nome = Label::new(Some("Tema Comune di Bondeno"));
+        let nome = Label::new(Some(&t("Tema Comune di Bondeno")));
         nome.set_xalign(0.0);
         nome.add_css_class("cedro-ente-nome");
-        let nota = Label::new(Some("Stesse funzioni di Cedro, con i colori, il carattere e lo stemma del Comune. Si cambia in Aspetto."));
+        let nota = Label::new(Some(&t("Stesse funzioni di Cedro, con i colori, il carattere e lo stemma del Comune. Si cambia in Aspetto.")));
         nota.set_xalign(0.0);
         nota.set_wrap(true);
         nota.add_css_class("cedro-muted");
@@ -447,7 +456,7 @@ fn about_page() -> HBox {
     }
 
     page.append(&caption("CODICE APERTO USATO DA CEDRO"));
-    let thanks = Label::new(Some("Cedro esiste grazie a queste persone e ai loro progetti. Grazie."));
+    let thanks = Label::new(Some(&t("Cedro esiste grazie a queste persone e ai loro progetti. Grazie.")));
     thanks.set_xalign(0.0);
     thanks.add_css_class("cedro-muted");
     page.append(&thanks);
@@ -456,7 +465,7 @@ fn about_page() -> HBox {
     search_line.set_margin_top(10);
     search_line.set_margin_bottom(8);
     let search = gtk4::SearchEntry::new();
-    search.set_placeholder_text(Some("Cerca un componente o una licenza"));
+    search.set_placeholder_text(Some(&t("Cerca un componente o una licenza")));
     search.set_hexpand(true);
     search.add_css_class("cedro-search");
     let count = Label::new(None);
@@ -473,7 +482,7 @@ fn about_page() -> HBox {
         let count = count.clone();
         move |query: &str| {
             let n = fill_credits(&list, query);
-            count.set_text(&format!("{n} {}", if n == 1 { "componente" } else { "componenti" }));
+            count.set_text(&t(&format!("{n} {}", if n == 1 { "componente" } else { "componenti" })));
         }
     };
     show("");
@@ -485,7 +494,7 @@ fn about_page() -> HBox {
     scroll.set_child(Some(&list));
     page.append(&scroll);
 
-    let full = Button::with_label("Apri le licenze complete");
+    let full = Button::with_label(&t("Apri le licenze complete"));
     full.add_css_class("cedro-sec");
     full.set_halign(gtk4::Align::Start);
     full.set_margin_top(10);
@@ -494,7 +503,7 @@ fn about_page() -> HBox {
         Some(n) => format!("Tutti i {n} componenti, anche quelli minori, nel file «Licenze di terze parti»."),
         None => "Tutti i componenti, anche quelli minori, nel file «Licenze di terze parti».".to_string(),
     };
-    let note = Label::new(Some(&note));
+    let note = Label::new(Some(&t(&note)));
     note.set_wrap(true);
     note.set_max_width_chars(40);
     note.set_xalign(0.0);
@@ -631,7 +640,7 @@ fn aspetto_page(current: &Settings) -> (Rc<RefCell<cedro::ui::aspetto::Aspetto>>
     page.set_margin_top(18);
     page.set_margin_start(28);
     page.set_margin_end(28);
-    let heading = Label::new(Some("Aspetto"));
+    let heading = Label::new(Some(&t("Aspetto")));
     heading.set_xalign(0.0);
     heading.set_margin_bottom(10);
     heading.add_css_class("cedro-h");
@@ -643,7 +652,7 @@ fn aspetto_page(current: &Settings) -> (Rc<RefCell<cedro::ui::aspetto::Aspetto>>
 /// Apre le Impostazioni, o porta avanti quelle già aperte.
 pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) {
     for window in app.windows() {
-        if window.title().is_some_and(|t| t == "Impostazioni di Cedro") {
+        if window.title().is_some_and(|name| name == t("Impostazioni di Cedro")) {
             window.present();
             return;
         }
@@ -658,7 +667,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let reveal = switch(current.reveal);
     let progress = switch(current.progress);
     let (aspetto, aspetto_page) = aspetto_page(&current);
-    let log = Button::with_label("Apri cartella");
+    let log = Button::with_label(&t("Apri cartella"));
     log.add_css_class("cedro-sec");
     log.connect_clicked(|_| {
         let dir = cedro::config_dir();
@@ -670,8 +679,18 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let reveal_row = setting("Mostra il file nuovo", "A lavoro finito apre la cartella e seleziona la copia.", &reveal);
     let progress_row = setting("Avanzamento mentre converte", "Una linea sottile nel pannello e, su KDE, tra le notifiche.", &progress);
     let log_row = setting("Registro attività", "Il file log.txt e config.txt stanno nella cartella di Cedro.", &log);
+    // I nomi delle lingue restano nella loro lingua: non passano dalla traduzione.
+    let ui_lang = {
+        let items = [t("Automatica"), "Italiano".to_string(), "English".to_string()];
+        let shown: Vec<&str> = items.iter().map(String::as_str).collect();
+        let dd = gtk4::DropDown::from_strings(&shown);
+        dd.set_selected(UI_LANGS.iter().position(|l| *l == current.language).unwrap_or(0) as u32);
+        dd.set_size_request(190, -1);
+        dd
+    };
+    let lang_row = setting("Lingua dell'interfaccia", "Automatica segue la lingua del sistema. Vale subito dopo «Salva».", &ui_lang);
     // La modalità Semplice e il tema si scelgono in «Aspetto».
-    let general = page("Generale", &[&autostart_row, &notify_row, &reveal_row, &progress_row, &log_row]);
+    let general = page("Generale", &[&autostart_row, &notify_row, &reveal_row, &progress_row, &log_row, &lang_row]);
 
     // Ruota
     let shift = switch(current.key_shift);
@@ -691,9 +710,9 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     );
 
     // Salvataggio
-    let same = CheckButton::with_label("Nella stessa cartella del file");
-    let sub = CheckButton::with_label("In una sottocartella «Cedro»");
-    let fixed = CheckButton::with_label("Sempre in questa cartella:");
+    let same = CheckButton::with_label(&t("Nella stessa cartella del file"));
+    let sub = CheckButton::with_label(&t("In una sottocartella «Cedro»"));
+    let fixed = CheckButton::with_label(&t("Sempre in questa cartella:"));
     sub.set_group(Some(&same));
     fixed.set_group(Some(&same));
     match current.dest {
@@ -702,13 +721,13 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
         cedro::Dest::Fixed => fixed.set_active(true),
     }
     let dest_dir = Rc::new(RefCell::new(current.dest_dir.clone()));
-    let path = Label::new(Some(&short_path(&current.dest_dir)));
+    let path = Label::new(Some(&t(&short_path(&current.dest_dir))));
     path.set_xalign(0.0);
     path.set_hexpand(true);
     path.set_ellipsize(gtk4::pango::EllipsizeMode::Start);
     path.set_max_width_chars(26);
     path.add_css_class("cedro-muted");
-    let browse = Button::with_label("Sfoglia…");
+    let browse = Button::with_label(&t("Sfoglia…"));
     browse.add_css_class("cedro-sec");
     let place = HBox::new(Orientation::Vertical, 4);
     place.set_size_request(330, -1);
@@ -734,7 +753,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
         let path = path.clone();
         let fixed = fixed.clone();
         browse.connect_clicked(move |_| {
-            let dialog = gtk4::FileDialog::builder().title("Cartella dove salvare le copie").build();
+            let dialog = gtk4::FileDialog::builder().title(t("Cartella dove salvare le copie")).build();
             let (dest_dir, path, fixed) = (dest_dir.clone(), path.clone(), fixed.clone());
             dialog.select_folder(Some(&window), None::<&gtk4::gio::Cancellable>, move |chosen| {
                 if let Some(folder) = chosen.ok().and_then(|f| f.path()) {
@@ -776,11 +795,11 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     );
 
     // Aggiornamenti
-    let check = Button::with_label("Controlla ora");
+    let check = Button::with_label(&t("Controlla ora"));
     check.add_css_class("cedro-sec");
     check.connect_clicked(|_| crate::linux_ui::check_updates(true));
     let updates = switch(current.update_check);
-    let unskip = Button::with_label("Proponila di nuovo");
+    let unskip = Button::with_label(&t("Proponila di nuovo"));
     unskip.add_css_class("cedro-sec");
     let skipped = match cedro::update::skipped_version() {
         Some(v) => format!("Hai detto no alla {v}: all'avvio non la propone più."),
@@ -820,7 +839,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     nav.add_css_class("cedro-nav");
     nav.set_size_request(190, -1);
     for (name, _) in &order {
-        let label = Label::new(Some(name));
+        let label = Label::new(Some(&t(name)));
         label.set_xalign(0.0);
         nav.append(&label);
     }
@@ -847,7 +866,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
         let ente = HBox::new(Orientation::Horizontal, 10);
         ente.add_css_class("cedro-ente");
         ente.append(&crate::linux_firma::stemma_area(cedro::edizione::Stemma::Solo, 38));
-        let nome = Label::new(Some("Comune di\nBondeno"));
+        let nome = Label::new(Some(&t("Comune di\nBondeno")));
         nome.set_xalign(0.0);
         nome.add_css_class("cedro-ente-nome");
         ente.append(&nome);
@@ -870,11 +889,11 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let credit = crate::linux_firma::firma(false, "", true);
     credit.set_halign(gtk4::Align::Start);
     credit.set_hexpand(true);
-    let guide = Button::with_label("Guida");
+    let guide = Button::with_label(&t("Guida"));
     guide.add_css_class("cedro-sec");
-    let cancel = Button::with_label("Annulla");
+    let cancel = Button::with_label(&t("Annulla"));
     cancel.add_css_class("cedro-sec");
-    let save = Button::with_label("Salva");
+    let save = Button::with_label(&t("Salva"));
     save.add_css_class("cedro-pri");
     let foot = HBox::new(Orientation::Horizontal, 8);
     foot.add_css_class("cedro-foot");
@@ -909,7 +928,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 cedro::Dest::Same
             };
             if dest == cedro::Dest::Fixed && dest_dir.borrow().trim().is_empty() {
-                let alert = gtk4::AlertDialog::builder().message("Scegli la cartella di destinazione con «Sfoglia…».").build();
+                let alert = gtk4::AlertDialog::builder().message(t("Scegli la cartella di destinazione con «Sfoglia…».")).build();
                 alert.show(Some(&window));
                 return;
             }
@@ -933,6 +952,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 pdf_dpi: *DPI.get(dpi.selected() as usize).unwrap_or(&base.pdf_dpi),
                 compress: (compress.selected() as u8).min(2),
                 ocr_lang: LANGS.get(lang.selected() as usize).unwrap_or(&"auto").to_string(),
+                language: UI_LANGS.get(ui_lang.selected() as usize).unwrap_or(&"auto").to_string(),
                 ocr_max: *MAX_PAGES.get(max_pages.selected() as usize).unwrap_or(&base.ocr_max),
                 // Dove il PC non ha l'accelerazione l'interruttore è bloccato: resta la scelta di prima.
                 gpu: if hw.gpu.is_some() { gpu_switch.is_active() } else { base.gpu },
@@ -1036,6 +1056,7 @@ impl guida::Canvas for CairoCanvas<'_> {
     }
 
     fn text(&mut self, s: &str, x: f32, y: f32, w: f32, h: f32, size: f32, bold: bool, c: guida::Rgb, align: guida::Align, wrap: bool) {
+        let s = &*cedro::i18n::tr(s);
         let cr = self.cr;
         set_font(cr, size as f64, bold);
         rgb(cr, c);
@@ -1074,6 +1095,7 @@ impl guida::Canvas for CairoCanvas<'_> {
     }
 
     fn text_width(&mut self, s: &str, size: f32, bold: bool) -> f32 {
+        let s = &*cedro::i18n::tr(s);
         set_font(self.cr, size as f64, bold);
         self.cr.text_extents(s).map(|e| e.x_advance() as f32).unwrap_or(0.0)
     }
@@ -1156,7 +1178,7 @@ fn wheel_image(n: usize, hover: i32, scale: u32) -> Option<ImageSurface> {
 /// Apre la Guida animata, o porta avanti quella già aperta.
 pub fn open_guide(app: &Application) {
     for window in app.windows() {
-        if window.title().is_some_and(|t| t == "Guida di Cedro") {
+        if window.title().is_some_and(|name| name == t("Guida di Cedro")) {
             window.present();
             return;
         }

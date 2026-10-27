@@ -69,6 +69,11 @@ fn settle(s: &mut Screen) {
 }
 
 fn main() {
+    // LANG_FOTO=en: le foto in inglese, e a fine corsa l'elenco dei testi senza traduzione.
+    if std::env::var("LANG_FOTO").is_ok_and(|v| v == "en") {
+        cedro::i18n::set(cedro::i18n::Lang::En);
+        cedro::i18n::record_misses(true);
+    }
     let out = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "foto".into()));
     std::fs::create_dir_all(&out).unwrap();
     let only = std::env::args().nth(2);
@@ -112,4 +117,7 @@ fn main() {
         }
     }
     let _ = ThemeId::WindowsEssenziale;
+    for m in cedro::i18n::misses() {
+        println!("SENZA TRADUZIONE: {m:?}");
+    }
 }

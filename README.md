@@ -25,7 +25,7 @@
 
 Cedro cambia formato ai tuoi file senza farti aprire nessun programma. Tieni premuto **Shift**, fai **clic destro** su un file e si apre una ruota: scegli il formato e la copia nuova compare accanto all'originale, che resta com'era. Su telefono basta toccare **Condividi**.
 
-Tutto avviene **sul tuo dispositivo**: i file non vengono caricati da nessuna parte. È scritto interamente in **Rust**, è in italiano e il codice è aperto.
+Tutto avviene **sul tuo dispositivo**: i file non vengono caricati da nessuna parte. È scritto interamente in **Rust**, è in italiano e in inglese (segue la lingua del sistema) e il codice è aperto.
 
 <p align="center">
   <img src="docs/v2/ruote.png" width="760" alt="La ruota di Cedro: a sinistra le conversioni su una foto con JPEG scelto, a destra gli strumenti (comprimi, 50%, bianco e nero, ruota, metadati, OCR)">
