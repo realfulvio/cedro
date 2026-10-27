@@ -29,14 +29,23 @@ pub mod youtube;
 mod zipstore;
 #[cfg(windows)]
 mod video;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 mod linux_video;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 mod mkv;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 mod mp4mux;
 #[cfg(target_os = "linux")]
 mod vaapi;
+#[cfg(target_os = "android")]
+mod mediacodec;
+#[cfg(target_os = "android")]
+mod mediadec;
+/// Il codificatore H.264 della scheda video: VA-API su Linux, MediaCodec su Android.
+#[cfg(target_os = "linux")]
+pub(crate) use vaapi as gpuenc;
+#[cfg(target_os = "android")]
+pub(crate) use mediacodec as gpuenc;
 
 pub use engine::{
     append_log, config_dir, perform_with, Exists, ExistsAsk, ExistsChoice, Options, PageSel, unique_output, extension, kind_of, mode_from_vk, perform, perform_into, read_quality, same_kind_paths, slices, Kind,

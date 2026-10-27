@@ -36,6 +36,15 @@ ksni = "0.2"
 mp4 = "0.14"
 openh264 = { version = "0.9", default-features = false, features = ["source"] }
 
+# Android: stesso video di Linux (OpenH264, fdk-aac, MP4/MKV in Rust); la scheda video è MediaCodec (src/mediacodec.rs).
+[target.'cfg(target_os = "android")'.dependencies]
+ndk = { version = "0.9", features = ["media"] }
+ndk-sys = { version = "0.6", features = ["media"] }
+fdk-aac = "0.8"
+libc = "0.2"
+mp4 = "0.14"
+openh264 = { version = "0.9", default-features = false, features = ["source"] }
+
 [target.'cfg(windows)'.dependencies]
 windows-core = "0.61"
 windows = { version = "0.61", features = [

@@ -7,9 +7,15 @@ SDK="${ANDROID_SDK:-$HOME/android-sdk}"
 export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$SDK/android-ndk-r27c}"
 BT="$SDK/build-tools/android-14"
 JAR="$SDK/platforms/android-11/android.jar"
+# fdk-aac (AAC per il video) include «log/log.h» con ANDROID definito: un'intestazione vuota basta.
+export CFLAGS_aarch64_linux_android="-I$PWD/android/ndk-stubs" CXXFLAGS_aarch64_linux_android="-I$PWD/android/ndk-stubs"
+# openh264 è C++: la libreria standard si lega dentro la .so (c++_static), senza libc++_shared.so nell'APK.
+export CXXSTDLIB_aarch64_linux_android=c++_static
+export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-lc++abi"
 export JAVA_HOME="${JAVA_HOME:-$SDK/jdk}"
 export PATH="$JAVA_HOME/bin:$HOME/.cargo/bin:$PATH"
 OUT=android/target; mkdir -p "$OUT/apk/lib/arm64-v8a"
+export CFLAGS_aarch64_linux_android="-I$PWD/android/ndk-stubs" CXXFLAGS_aarch64_linux_android="-I$PWD/android/ndk-stubs"
 cargo ndk -t arm64-v8a -P 26 build --release -p cedro-android
 cp target/aarch64-linux-android/release/libcedro_android.so "$OUT/apk/lib/arm64-v8a/"
 # Risorse (icona del launcher, adattiva da Android 8) compilate con aapt2, senza Gradle.
