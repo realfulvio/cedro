@@ -26,6 +26,8 @@ mod winmenu;
 mod wingfx;
 #[cfg(windows)]
 mod firma_win;
+#[cfg(windows)]
+mod ui_win;
 
 #[cfg(target_os = "linux")]
 mod linux_firma;
@@ -43,13 +45,19 @@ mod linux_progress;
 mod linux_settings;
 #[cfg(target_os = "linux")]
 mod linux_ui;
+#[cfg(target_os = "linux")]
+mod linux_ui2;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     #[cfg(windows)]
     {
         if args.first().is_some_and(|a| a == "conversioni") {
-            conversioni_win::run_standalone();
+            if cedro::edizione::BONDENO {
+                conversioni_win::run_standalone();
+            } else {
+                ui_win::run_standalone();
+            }
             return;
         }
         if args.first().is_some_and(|a| a == "vista") {

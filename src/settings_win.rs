@@ -793,6 +793,7 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         progress: is_checked(hwnd, ID_PROGRESS),
         simple: is_checked(hwnd, ID_SIMPLE),
         view_asked: base.view_asked,
+        ui_theme: base.ui_theme.clone(),
         // Dove il PC non ha l'accelerazione l'interruttore è bloccato: resta la scelta di prima.
         gpu: if cedro::accel::hardware().gpu.is_some() { is_checked(hwnd, ID_GPU) } else { base.gpu },
         avx512: if cedro::accel::hardware().avx512 { is_checked(hwnd, ID_AVX) } else { base.avx512 },
