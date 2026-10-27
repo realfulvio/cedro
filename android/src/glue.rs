@@ -926,6 +926,8 @@ fn android_main(app: AndroidApp) {
         "en" => "en",
         _ => "auto",
     };
+    // Da qui la lingua la decide solo Cedro per Android: leggere le impostazioni del motore non la cambia.
+    cedro::i18n::fix();
     ui.applica_lingua();
     ui.info = leggi_info(&app);
     if let Ok(t) = std::fs::read_to_string(&file_lavori) {
