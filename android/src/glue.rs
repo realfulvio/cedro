@@ -528,6 +528,9 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
         invia(Stato::Errore(format!("Documenti non è scrivibile: {e}")));
         return;
     }
+    if azione == "trascrivi" {
+        return trascrivi(&app, &c, id, &file, &out, &prog);
+    }
     let p2 = prog.clone();
     let esito = cedro::progress::con(move |f| p2.store((f * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed), || cedro::perform_into(&file, azione, qualita, Some(&out)));
     match esito {
@@ -542,6 +545,28 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
             log::error!("{azione}: conversione fallita: {e}");
             invia(Stato::Errore(e.to_string()));
         }
+    }
+}
+
+/// Voce in testo con whisper.cpp (nell'APK): il modello «Buona» (base) si scarica al primo uso. Salva un .txt in Documenti.
+fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, out: &std::path::Path, prog: &std::sync::atomic::AtomicU32) {
+    use cedro::trascrizione::{run, Event, Format, Request};
+    let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
+    let req = Request { format: Format::Text, model: 1, gpu: false, avx512: false };
+    let esito: std::sync::Mutex<Option<Result<(PathBuf, String), String>>> = std::sync::Mutex::new(None);
+    run(&[file.to_path_buf()], &req, Some(out), &cedro::Options::default(), &|e| match e {
+        Event::Percent { percent, .. } => prog.store(percent as u32 * 10, std::sync::atomic::Ordering::Relaxed),
+        Event::Log(l) => log::info!("trascrivi: {} {}", l.key, l.text),
+        Event::Finished { result, .. } => *esito.lock().unwrap_or_else(|e| e.into_inner()) = Some(result),
+    });
+    match esito.into_inner().unwrap_or_else(|e| e.into_inner()) {
+        Some(Ok((path, msg))) => {
+            let nome = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let _ = con_attivita(app, |env, att| scansiona(env, att, &path, false));
+            invia(Stato::Fatto { path, nome, msg });
+        }
+        Some(Err(e)) => invia(Stato::Errore(e)),
+        None => invia(Stato::Errore("la trascrizione non è partita".into())),
     }
 }
 

@@ -185,8 +185,8 @@ fn righe(kind: Kind) -> Vec<&'static Riga> {
         r("ocr", "Leggi", "Riconosci scritte", false),
     ];
     static TXT: [Riga; 3] = [r("pdf", "PDF", "Da stampare", true), r("html", "HTML", "Per il web", true), r("md", "Markdown", "Testo con segni", true)];
-    static AUD: [Riga; 2] = [r("mp3", "MP3", "Più leggero", true), r("wav", "WAV", "Senza compressione", true)];
-    static VID: [Riga; 2] = [r("mp4", "MP4", "Più leggero", true), r("mp3", "Solo audio", "MP3 dal video", false)];
+    static AUD: [Riga; 3] = [r("mp3", "MP3", "Più leggero", true), r("wav", "WAV", "Senza compressione", true), r("trascrivi", "Testo", "Dalla voce, offline", false)];
+    static VID: [Riga; 3] = [r("mp4", "MP4", "Più leggero", true), r("mp3", "Solo audio", "MP3 dal video", false), r("trascrivi", "Testo", "Dalla voce, offline", false)];
     static DOC: [Riga; 1] = [r("pdf", "PDF", "Da documento", true)];
     let tutte: &'static [Riga] = match kind {
         Kind::Image => &IMG,
@@ -198,7 +198,8 @@ fn righe(kind: Kind) -> Vec<&'static Riga> {
         Kind::Other => &[],
     };
     let ids: Vec<&'static str> = [Mode::Convert, Mode::Tools].into_iter().flat_map(|m| list(kind, m)).map(|s| s.id).collect();
-    tutte.iter().filter(|r| ids.contains(&r.id)).collect()
+    // «trascrivi» non è nel catalogo del motore di conversione: è whisper.cpp dentro l'APK.
+    tutte.iter().filter(|r| ids.contains(&r.id) || r.id == "trascrivi").collect()
 }
 
 fn sotto_altro(kind: Kind) -> &'static str {
