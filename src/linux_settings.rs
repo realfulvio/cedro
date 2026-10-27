@@ -61,12 +61,22 @@ window.cedro-panel list.cedro-credits row { background: transparent; border-bott
 window.cedro-panel label.cedro-license { font-family: monospace; font-size: 80%; background: #F3F5F7; border-radius: 5px; padding: 8px; color: #455A64; }\
 window.cedro-panel label.cedro-soon { font-size: 75%; font-weight: bold; padding: 1px 6px; border-radius: 4px; background: #E6EEFF; color: #005E8E; }";
 
+/// Il foglio di stile nei colori dell'edizione: quelli scritti sono del Comune di Bondeno.
+fn css() -> String {
+    let t = cedro::tema::attivo();
+    if cedro::edizione::BONDENO {
+        return CSS.to_string();
+    }
+    let hex = |c: (u8, u8, u8)| format!("#{:02X}{:02X}{:02X}", c.0, c.1, c.2);
+    CSS.replace("#005E8E", &hex(t.acc)).replace("#455A64", &hex(t.mute)).replace("#F3F5F7", &hex(t.surf)).replace("#E5E5E5", &hex(t.line)).replace("#191919", &hex(t.fg))
+}
+
 fn style() {
     let Some(display) = gtk4::gdk::Display::default() else {
         return;
     };
     let provider = CssProvider::new();
-    provider.load_from_string(CSS);
+    provider.load_from_string(&css());
     gtk4::style_context_add_provider_for_display(&display, &provider, STYLE_PROVIDER_PRIORITY_APPLICATION);
 }
 
@@ -503,6 +513,131 @@ fn about_page() -> HBox {
     page
 }
 
+/// La scheda «Aspetto»: modalità e temi con le anteprime, disegnati da `cedro::ui::aspetto`.
+fn aspetto_page(current: &Settings) -> (Rc<RefCell<cedro::ui::aspetto::Aspetto>>, HBox) {
+    use cedro::ui::aspetto::Aspetto;
+    use cedro::ui::gfx::{Fonts, GlyphCache, Painter};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    let dirty = Arc::new(AtomicBool::new(false));
+    let wake = {
+        let dirty = dirty.clone();
+        Arc::new(move || dirty.store(true, Ordering::Relaxed))
+    };
+    let state = Rc::new(RefCell::new(Aspetto::new(cedro::ui::theme::ThemeId::from_key(&current.ui_theme), current.simple, wake)));
+    let area = DrawingArea::new();
+    area.set_hexpand(true);
+    area.set_vexpand(true);
+    area.set_focusable(true);
+    area.set_content_width(420);
+    area.set_content_height(300);
+    let cache = Rc::new(RefCell::new(GlyphCache::new()));
+    {
+        let (state, cache) = (state.clone(), cache.clone());
+        area.set_draw_func(move |a, cr, w, h| {
+            let sf = a.scale_factor().max(1);
+            let (pw, ph) = (w * sf, h * sf);
+            if pw <= 0 || ph <= 0 {
+                return;
+            }
+            let mut cache = cache.borrow_mut();
+            let mut painter = Painter::new(pw as u32, ph as u32, sf as f32, Fonts::shared(), &mut cache);
+            state.borrow_mut().draw(&mut painter, w as f32, h as f32);
+            let data = painter.bgra();
+            if let Ok(img) = ImageSurface::create_for_data(data, gtk4::cairo::Format::ARgb32, pw, ph, pw * 4) {
+                cr.scale(1.0 / sf as f64, 1.0 / sf as f64);
+                let _ = cr.set_source_surface(&img, 0.0, 0.0);
+                let _ = cr.paint();
+            }
+        });
+    }
+    let motion = gtk4::EventControllerMotion::new();
+    {
+        let (st, ar) = (state.clone(), area.clone());
+        motion.connect_motion(move |_, x, y| {
+            let mut s = st.borrow_mut();
+            if s.pointer_move(x as f32, y as f32) {
+                ar.queue_draw();
+            }
+            ar.set_cursor_from_name(Some(if s.is_hand() { "pointer" } else { "default" }));
+        });
+        let (st, ar) = (state.clone(), area.clone());
+        motion.connect_leave(move |_| {
+            if st.borrow_mut().pointer_leave() {
+                ar.queue_draw();
+            }
+        });
+    }
+    area.add_controller(motion);
+    let click = gtk4::GestureClick::new();
+    {
+        let (state, area2) = (state.clone(), area.clone());
+        click.connect_pressed(move |_, _, x, y| {
+            area2.grab_focus();
+            if state.borrow_mut().pointer_down(x as f32, y as f32) {
+                area2.queue_draw();
+            }
+        });
+    }
+    area.add_controller(click);
+    let scroll = gtk4::EventControllerScroll::new(gtk4::EventControllerScrollFlags::VERTICAL);
+    {
+        let (state, area2) = (state.clone(), area.clone());
+        scroll.connect_scroll(move |_, _, dy| {
+            if state.borrow_mut().wheel(dy as f32 * 60.0) {
+                area2.queue_draw();
+                return glib::Propagation::Stop;
+            }
+            glib::Propagation::Proceed
+        });
+    }
+    area.add_controller(scroll);
+    let keys = gtk4::EventControllerKey::new();
+    {
+        let (state, area2) = (state.clone(), area.clone());
+        keys.connect_key_pressed(move |_, key, _, _| {
+            use cedro::ui::screen::Key;
+            let k = match key {
+                gtk4::gdk::Key::Left => Key::Left,
+                gtk4::gdk::Key::Right => Key::Right,
+                gtk4::gdk::Key::Up => Key::Up,
+                gtk4::gdk::Key::Down => Key::Down,
+                _ => return glib::Propagation::Proceed,
+            };
+            if state.borrow_mut().key(k) {
+                area2.queue_draw();
+            }
+            glib::Propagation::Stop
+        });
+    }
+    area.add_controller(keys);
+    // Quando un'anteprima è pronta (la fa un altro thread) si ridisegna.
+    {
+        let weak = area.downgrade();
+        glib::timeout_add_local(std::time::Duration::from_millis(150), move || match weak.upgrade() {
+            Some(a) => {
+                if dirty.swap(false, Ordering::Relaxed) {
+                    a.queue_draw();
+                }
+                glib::ControlFlow::Continue
+            }
+            None => glib::ControlFlow::Break,
+        });
+    }
+    let page = HBox::new(Orientation::Vertical, 0);
+    page.set_margin_top(18);
+    page.set_margin_start(28);
+    page.set_margin_end(28);
+    let heading = Label::new(Some("Aspetto"));
+    heading.set_xalign(0.0);
+    heading.set_margin_bottom(10);
+    heading.add_css_class("cedro-h");
+    page.append(&heading);
+    page.append(&area);
+    (state, page)
+}
+
 /// Apre le Impostazioni, o porta avanti quelle già aperte.
 pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) {
     for window in app.windows() {
@@ -512,7 +647,8 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
         }
     }
     let current = read_settings();
-    let window = titled(app, "Impostazioni di Cedro", 780, 600);
+    let window = titled(app, "Impostazioni di Cedro", 780, 720);
+    window.set_resizable(true);
 
     // Generale
     let autostart = switch(crate::linux_ui::autostart_enabled());
@@ -520,6 +656,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let reveal = switch(current.reveal);
     let progress = switch(current.progress);
     let simple = switch(current.simple);
+    let (aspetto, aspetto_page) = aspetto_page(&current);
     let log = Button::with_label("Apri cartella");
     log.add_css_class("cedro-sec");
     log.connect_clicked(|_| {
@@ -527,17 +664,19 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
         let _ = std::fs::create_dir_all(&dir);
         let _ = gtk4::gio::AppInfo::launch_default_for_uri(&format!("file://{}", dir.display()), None::<&gtk4::gio::AppLaunchContext>);
     });
-    let general = page(
-        "Generale",
-        &[
-            &setting("Modalità Semplice", "Mostra solo l'essenziale. Le altre opzioni restano a un clic, in «Altre opzioni». Vale dalla prossima apertura del pannello.", &simple),
-            &setting("Avvia Cedro con il computer", "La stessa voce del menu dell'icona.", &autostart),
-            &setting("Avviso a fine conversione", "Una notifica con il nome del file creato.", &notify),
-            &setting("Mostra il file nuovo", "A lavoro finito apre la cartella e seleziona la copia.", &reveal),
-            &setting("Avanzamento mentre converte", "Una linea sottile nel pannello e, su KDE, tra le notifiche.", &progress),
-            &setting("Registro attività", "Il file log.txt e config.txt stanno nella cartella di Cedro.", &log),
-        ],
-    );
+    let mode_row = setting("Modalità Semplice", "Mostra solo l'essenziale. Le altre opzioni restano a un clic, in «Altre opzioni». Vale dalla prossima apertura del pannello.", &simple);
+    let autostart_row = setting("Avvia Cedro con il computer", "La stessa voce del menu dell'icona.", &autostart);
+    let notify_row = setting("Avviso a fine conversione", "Una notifica con il nome del file creato.", &notify);
+    let reveal_row = setting("Mostra il file nuovo", "A lavoro finito apre la cartella e seleziona la copia.", &reveal);
+    let progress_row = setting("Avanzamento mentre converte", "Una linea sottile nel pannello e, su KDE, tra le notifiche.", &progress);
+    let log_row = setting("Registro attività", "Il file log.txt e config.txt stanno nella cartella di Cedro.", &log);
+    // Nella versione standard la modalità si sceglie in «Aspetto».
+    let mut general_rows: Vec<&HBox> = Vec::new();
+    if cedro::edizione::BONDENO {
+        general_rows.push(&mode_row);
+    }
+    general_rows.extend([&autostart_row, &notify_row, &reveal_row, &progress_row, &log_row]);
+    let general = page("Generale", &general_rows);
 
     // Ruota
     let shift = switch(current.key_shift);
@@ -673,22 +812,33 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let stack = gtk4::Stack::new();
     stack.set_hexpand(true);
     stack.set_vexpand(true);
-    for (name, content) in [("0", &general), ("1", &wheel), ("2", &saving), ("3", &quality), ("4", &ocr), ("5", &upd), ("6", &system), ("7", &about)] {
+    for (name, content) in [("0", &general), ("1", &wheel), ("2", &saving), ("3", &quality), ("4", &ocr), ("5", &upd), ("6", &system), ("7", &about), ("8", &aspetto_page)] {
         stack.add_named(content, Some(name));
     }
+    // Le schede nell'ordine in cui si vedono: nome e pagina dello stack. «Aspetto» sta solo nella versione standard.
+    let order: Vec<(&'static str, String)> = {
+        let mut v: Vec<(&'static str, String)> = SECTIONS.iter().enumerate().map(|(i, n)| (*n, i.to_string())).collect();
+        if !cedro::edizione::BONDENO {
+            v.insert(1, ("Aspetto", "8".to_string()));
+        }
+        v
+    };
     let nav = gtk4::ListBox::new();
     nav.add_css_class("cedro-nav");
     nav.set_size_request(190, -1);
-    for name in SECTIONS {
+    for (name, _) in &order {
         let label = Label::new(Some(name));
         label.set_xalign(0.0);
         nav.append(&label);
     }
     {
         let stack = stack.clone();
+        let order = order.clone();
         nav.connect_row_selected(move |_, row| {
             if let Some(row) = row {
-                stack.set_visible_child_name(&row.index().to_string());
+                if let Some((_, page)) = order.get(row.index() as usize) {
+                    stack.set_visible_child_name(page);
+                }
             }
         });
     }
@@ -715,7 +865,14 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     } else {
         middle.append(&nav);
     }
-    middle.append(&stack);
+    // Le pagine si accorciano a piacere: se la finestra è bassa, scorrono.
+    let scrolled = gtk4::ScrolledWindow::new();
+    scrolled.set_hexpand(true);
+    scrolled.set_vexpand(true);
+    scrolled.set_min_content_height(280);
+    scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+    scrolled.set_child(Some(&stack));
+    middle.append(&scrolled);
 
     let credit = crate::linux_firma::firma(false, "", true);
     credit.set_halign(gtk4::Align::Start);
@@ -769,7 +926,8 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 quality: scale.value().round().clamp(40.0, 95.0) as u8,
                 notify: notify.is_active(),
                 progress: progress.is_active(),
-                simple: simple.is_active(),
+                simple: if cedro::edizione::BONDENO { simple.is_active() } else { aspetto.borrow().simple },
+                ui_theme: if cedro::edizione::BONDENO { base.ui_theme.clone() } else { aspetto.borrow().theme.key().to_string() },
                 view_asked: base.view_asked,
                 reveal: reveal.is_active(),
                 update_check: updates.is_active(),
@@ -805,15 +963,15 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     window.present();
     #[cfg(debug_assertions)]
     if let Ok(dir) = std::env::var("CEDRO_SHOTS") {
-        shots(&window, &nav, std::path::PathBuf::from(dir));
+        shots(&window, &nav, order.iter().map(|(n, _)| n.to_string()).collect(), std::path::PathBuf::from(dir));
     }
 }
 
 /// Solo nelle build di prova: con `CEDRO_SHOTS=<cartella>` salva un'immagine di ogni scheda e si chiude.
 #[cfg(debug_assertions)]
-fn shots(window: &Window, nav: &gtk4::ListBox, dir: std::path::PathBuf) {
+fn shots(window: &Window, nav: &gtk4::ListBox, names: Vec<String>, dir: std::path::PathBuf) {
     let _ = std::fs::create_dir_all(&dir);
-    fn step(window: Window, nav: gtk4::ListBox, dir: std::path::PathBuf, at: i32) {
+    fn step(window: Window, nav: gtk4::ListBox, names: Vec<String>, dir: std::path::PathBuf, at: i32) {
         let Some(row) = nav.row_at_index(at) else {
             let app = window.application();
             glib::timeout_add_local_once(std::time::Duration::from_millis(300), move || {
@@ -824,15 +982,15 @@ fn shots(window: &Window, nav: &gtk4::ListBox, dir: std::path::PathBuf) {
             return;
         };
         nav.select_row(Some(&row));
-        glib::timeout_add_local_once(std::time::Duration::from_millis(700), move || {
-            let name = format!("impostazioni-{at}-{}.png", SECTIONS[at as usize]);
+        glib::timeout_add_local_once(std::time::Duration::from_millis(if at == 1 { 9000 } else { 700 }), move || {
+            let name = format!("impostazioni-{at}-{}.png", names[at as usize]);
             if let Err(e) = crate::linux_conversioni::save_png(&window, &dir.join(name)) {
                 eprintln!("screenshot: {e}");
             }
-            step(window.clone(), nav.clone(), dir.clone(), at + 1);
+            step(window.clone(), nav.clone(), names.clone(), dir.clone(), at + 1);
         });
     }
-    step(window.clone(), nav.clone(), dir, 0);
+    step(window.clone(), nav.clone(), names, dir, 0);
 }
 
 /// Il disegno della Guida su cairo: le primitive di `cedro::guida`.
@@ -842,7 +1000,7 @@ struct CairoCanvas<'a> {
 }
 
 fn set_font(cr: &Context, size: f64, bold: bool) {
-    cr.select_font_face("Titillium Web", FontSlant::Normal, if bold { FontWeight::Bold } else { FontWeight::Normal });
+    cr.select_font_face(cedro::tema::attivo().font, FontSlant::Normal, if bold { FontWeight::Bold } else { FontWeight::Normal });
     cr.set_font_size(size);
 }
 

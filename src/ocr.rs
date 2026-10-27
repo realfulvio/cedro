@@ -69,6 +69,25 @@ pub fn pdf_pages_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec
     Ok(texts)
 }
 
+/// Una pagina (da 0) disegnata con il lato lungo di circa `side` pixel, in RGBA: per l'anteprima.
+pub fn render_page_rgba(bytes: &[u8], page: usize, side: f32) -> Result<(u32, u32, Vec<u8>), String> {
+    use hayro::hayro_interpret::InterpreterSettings;
+    use hayro::hayro_syntax::Pdf;
+    use hayro::vello_cpu::color::palette::css::WHITE;
+    use hayro::{render, PixmapSettings, RenderCache, RenderSettings};
+
+    let pdf = Pdf::new(bytes.to_vec()).map_err(|e| format!("PDF non disegnato: {e:?}"))?;
+    let pages = pdf.pages();
+    let p = pages.get(page).ok_or("pagina che non c'è")?;
+    let (w, h) = p.render_dimensions();
+    let scale = side / w.max(h).max(1.0);
+    let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
+    let rendered = render(p, &RenderCache::new(), &InterpreterSettings::default(), &RenderSettings::default(), &pixmap);
+    let png = rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?;
+    let img = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgba8();
+    Ok((img.width(), img.height(), img.into_raw()))
+}
+
 pub fn pdf_page_count(bytes: &[u8]) -> Result<usize, String> {
     use hayro::hayro_syntax::Pdf;
     let pdf = Pdf::new(bytes.to_vec()).map_err(|e| format!("PDF non disegnato: {e:?}"))?;
