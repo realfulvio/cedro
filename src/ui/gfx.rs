@@ -429,6 +429,34 @@ impl<'a> Painter<'a> {
         }
     }
 
+    /// Un cerchio pieno con trasparenza.
+    pub fn disc_a(&mut self, cx: f32, cy: f32, r: f32, c: Rgb, a: f32) {
+        if let Some(p) = PathBuilder::from_circle(cx, cy, r.max(0.1)) {
+            self.fill_path(&p, c, a, false);
+        }
+    }
+
+    /// Un poligono con gli angoli arrotondati di raggio `r` (il poligono va già rimpicciolito di `r`).
+    pub fn round_poly(&mut self, pts: &[(f32, f32)], r: f32, c: Rgb, a: f32) {
+        let mut pb = PathBuilder::new();
+        for (i, p) in pts.iter().enumerate() {
+            if i == 0 {
+                pb.move_to(p.0, p.1);
+            } else {
+                pb.line_to(p.0, p.1);
+            }
+        }
+        pb.close();
+        let Some(path) = pb.finish() else { return };
+        let tf = self.tf();
+        let m = self.clips.last().map(|(_, m)| m);
+        self.pixmap.fill_path(&path, &color(c, a), FillRule::Winding, tf, m);
+        if r > 0.0 {
+            let st = Stroke { width: 2.0 * r, line_join: LineJoin::Round, line_cap: LineCap::Round, ..Default::default() };
+            self.pixmap.stroke_path(&path, &color(c, a), &st, tf, m);
+        }
+    }
+
     /// Un poligono pieno (punti in unità logiche).
     pub fn poly(&mut self, pts: &[(f32, f32)], c: Rgb, a: f32) {
         let mut pb = PathBuilder::new();

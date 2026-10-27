@@ -8,7 +8,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use cedro::{append_log, kind_of, perform, read_quality, read_settings, same_kind_paths, slices, update, Mode, Settings};
+use cedro::ui::wheel::{Effect, WheelUi};
+use cedro::{append_log, kind_of, perform_into, read_quality, read_settings, same_kind_paths, slices, update, Mode, Settings};
 use gtk4::cairo::{FontSlant, FontWeight};
 use crate::linux_settings;
 use gtk4::gdk::Key;
@@ -91,6 +92,10 @@ struct Wheel {
     #[allow(dead_code)]
     resident: Option<gtk4::gio::ApplicationHoldGuard>,
     job: Option<gtk4::gio::ApplicationHoldGuard>,
+    /// La ruota della versione standard (vuota in quella del Comune di Bondeno).
+    look: Option<WheelUi>,
+    /// La miniatura del file, preparata da un altro thread.
+    thumb: Arc<Mutex<Option<cedro::ui::gfx::Image>>>,
 }
 
 pub fn start() -> i32 {
@@ -114,7 +119,10 @@ pub fn start() -> i32 {
         finished: Arc::new(Mutex::new(None)),
         resident: None,
         job: None,
+        look: None,
+        thumb: Arc::new(Mutex::new(None)),
     }));
+    prepare_look(&state);
     // Ogni apertura dal menu del file è un processo a sé: se condividesse l'id con quello
     // residente nella tray, D-Bus lo girerebbe a lui, che non ha file e non mostra nulla.
     let mut flags = gtk4::gio::ApplicationFlags::empty();
@@ -184,6 +192,10 @@ pub fn start() -> i32 {
                     }
                 }
                 None => {}
+            }
+            let thumb_ready = opened.borrow().thumb.lock().map(|g| g.is_some()).unwrap_or(false);
+            if thumb_ready {
+                redraw_all(&opened);
             }
             let slot = opened.borrow().finished.clone();
             if let Some(note) = slot.lock().ok().and_then(|mut done| done.take()) {
@@ -295,7 +307,17 @@ fn present_wheel(app: &Application, state: Rc<RefCell<Wheel>>) {
         click.set_button(1);
         let click_state = state.clone();
         let click_app = app.clone();
-        click.connect_released(move |_, _, x, y| choose(&click_app, &click_state, monitor_index, x, y));
+        if cedro::edizione::BONDENO {
+            click.connect_released(move |_, _, x, y| choose(&click_app, &click_state, monitor_index, x, y));
+        } else {
+            click.connect_pressed(move |_, _, x, y| press_look(&click_app, &click_state, monitor_index, x, y));
+            let up_state = state.clone();
+            click.connect_released(move |_, _, _, _| {
+                if let Some(ui) = up_state.borrow_mut().look.as_mut() {
+                    ui.release();
+                }
+            });
+        }
         area.add_controller(click);
         let key = EventControllerKey::new();
         let key_state = state.clone();
@@ -306,12 +328,17 @@ fn present_wheel(app: &Application, state: Rc<RefCell<Wheel>>) {
                 return glib::Propagation::Stop;
             }
             if let Some(mode) = mode_of(key) {
-                key_state.borrow_mut().launch.mode = mode;
-                for area in &key_state.borrow().areas {
-                    area.queue_draw();
-                }
+                set_mode(&key_state, mode);
             }
-            let _ = key_app;
+            if matches!(key, Key::Return | Key::KP_Enter) && key_state.borrow().look.as_ref().is_some_and(|u| u.current().is_some()) {
+                // Invio esegue la fetta in evidenza, come il pulsante «Converti».
+                let at = key_state.borrow().look.as_ref().and_then(|u| u.current());
+                if let Some(i) = at {
+                    key_state.borrow_mut().hover = i as i32;
+                    choose_hover(&key_app, &key_state);
+                }
+                return glib::Propagation::Stop;
+            }
             glib::Propagation::Proceed
         });
         window.add_controller(key);
@@ -333,6 +360,11 @@ fn present_wheel(app: &Application, state: Rc<RefCell<Wheel>>) {
                 (screen.width, screen.height, current_slices(&wheel).0.len())
             };
             point_at(&state, 0, width / 2.0, height / 2.0);
+            if state.borrow().look.is_some() {
+                state.borrow_mut().hover = index as i32;
+                choose_hover(&app, &state);
+                return;
+            }
             let (ox, oy) = origin(width / 2.0, height / 2.0, width, height);
             let (a0, a1) = cedro::wheelgeom_bounds(index, n);
             let mid = (a0 + a1) / 2.0;
@@ -359,6 +391,70 @@ fn present_wheel(app: &Application, state: Rc<RefCell<Wheel>>) {
     });
 }
 
+/// Le fette del file e del modo, nell'ordine in cui si vedono.
+fn wheel_list(kind: cedro::Kind, mode: Mode) -> Vec<cedro::Slice> {
+    if cedro::edizione::BONDENO {
+        slices(kind, mode).to_vec()
+    } else {
+        cedro::ui::wheel::list(kind, mode)
+    }
+}
+
+fn mode_code(mode: Mode) -> u8 {
+    match mode {
+        Mode::Convert => 0,
+        Mode::Tools => 1,
+        Mode::Actions => 2,
+    }
+}
+
+/// Costruisce la ruota nuova per i file lanciati (solo versione standard) e ne prepara la miniatura.
+fn prepare_look(state: &Rc<RefCell<Wheel>>) {
+    if cedro::edizione::BONDENO || state.borrow().launch.paths.is_empty() {
+        return;
+    }
+    let s = read_settings();
+    let (paths, mode) = {
+        let w = state.borrow();
+        (w.launch.paths.clone(), w.launch.mode)
+    };
+    let kind = kind_of(&paths[0]);
+    let mut ui = WheelUi::new(kind, mode_code(mode), s.simple);
+    ui.modes_on = [s.key_shift, s.key_ctrl, s.key_alt];
+    ui.quality = s.quality;
+    ui.beside = if s.dest == cedro::Dest::Same { cedro::ui::wheel::Beside::Locked } else { cedro::ui::wheel::Beside::Off };
+    ui.dest_note = match s.dest {
+        cedro::Dest::Same => "Copia accanto all'originale".to_string(),
+        cedro::Dest::Sub => "Copia nella cartella «Cedro»".to_string(),
+        cedro::Dest::Fixed => {
+            let name = std::path::Path::new(s.dest_dir.trim()).file_name().and_then(|n| n.to_str()).unwrap_or("la cartella scelta").to_string();
+            format!("Copia in {name}")
+        }
+    };
+    ui.has_file = true;
+    let first = cedro::ui::wheel::file_name_of(&paths[0]);
+    ui.name = if paths.len() > 1 { format!("{first} (+{})", paths.len() - 1) } else { first };
+    let slot = state.borrow().thumb.clone();
+    let first_path = paths[0].clone();
+    std::thread::spawn(move || {
+        if let Some(img) = cedro::ui::media::thumb_of(&first_path, 420) {
+            *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(img);
+        }
+    });
+    state.borrow_mut().look = Some(ui);
+}
+
+/// Dove sta la finestra della ruota nuova nello schermo (in pixel logici) e quanto è grande.
+fn look_frame(ui: &WheelUi, anchor_x: f64, anchor_y: f64, width: f64, height: f64) -> (f64, f64, f64, f64) {
+    let z = cedro::ui::ZOOM as f64;
+    let (w, h) = ui.size();
+    let (cx, cy) = ui.center();
+    let (w, h, cx, cy) = (w as f64 * z, h as f64 * z, cx as f64 * z, cy as f64 * z);
+    let ox = (anchor_x - cx).clamp(0.0, (width - w).max(0.0));
+    let oy = (anchor_y - cy).clamp(0.0, (height - h).max(0.0));
+    (ox, oy, w, h)
+}
+
 fn point_at(state: &Rc<RefCell<Wheel>>, monitor: usize, x: f64, y: f64) {
     let mut wheel = state.borrow_mut();
     // L'ancora si fissa al primo ingresso del puntatore: se seguisse il mouse, il centro
@@ -368,6 +464,15 @@ fn point_at(state: &Rc<RefCell<Wheel>>, monitor: usize, x: f64, y: f64) {
         wheel.provisional = false;
     }
     wheel.hover = hover_of(&wheel, monitor, x, y);
+    if let (Some(anchor), Some(screen)) = (wheel.anchor.as_ref().map(|a| (a.x, a.y, a.monitor)), wheel.screens.get(monitor).map(|s| (s.width, s.height))) {
+        if anchor.2 == monitor {
+            let z = cedro::ui::ZOOM as f64;
+            if let Some(ui) = wheel.look.as_mut() {
+                let (ox, oy, _, _) = look_frame(ui, anchor.0, anchor.1, screen.0, screen.1);
+                ui.pointer_move(((x - ox) / z) as f32, ((y - oy) / z) as f32);
+            }
+        }
+    }
 }
 
 fn hover_of(wheel: &Wheel, monitor: usize, x: f64, y: f64) -> i32 {
@@ -380,6 +485,14 @@ fn hover_of(wheel: &Wheel, monitor: usize, x: f64, y: f64) -> i32 {
     let Some(screen) = wheel.screens.get(monitor) else {
         return -2;
     };
+    if let Some(ui) = wheel.look.as_ref() {
+        let (ox, oy, _, _) = look_frame(ui, anchor.x, anchor.y, screen.width, screen.height);
+        let z = cedro::ui::ZOOM as f64;
+        return match ui.zone_at(((x - ox) / z) as f32, ((y - oy) / z) as f32) {
+            cedro::ui::wheel::Zone::Slice(i) => i as i32,
+            _ => -1,
+        };
+    }
     let (ox, oy) = origin(anchor.x, anchor.y, screen.width, screen.height);
     let n = current_slices(wheel).0.len();
     cedro::wheelgeom_hover(ox as f32 + 220.0, oy as f32 + 220.0, x as f32, y as f32, n)
@@ -387,6 +500,79 @@ fn hover_of(wheel: &Wheel, monitor: usize, x: f64, y: f64) -> i32 {
 
 fn choose(app: &Application, state: &Rc<RefCell<Wheel>>, monitor: usize, x: f64, y: f64) {
     point_at(state, monitor, x, y);
+    choose_hover(app, state);
+}
+
+/// Un clic sulla ruota nuova: lei dice cosa fare (scegliere una fetta, spostare il cursore, un pulsante).
+fn press_look(app: &Application, state: &Rc<RefCell<Wheel>>, monitor: usize, x: f64, y: f64) {
+    point_at(state, monitor, x, y);
+    let effect = {
+        let mut wheel = state.borrow_mut();
+        let Some(anchor) = wheel.anchor.as_ref().map(|a| (a.x, a.y)) else { return };
+        let Some(screen) = wheel.screens.get(monitor).map(|s| (s.width, s.height)) else { return };
+        let z = cedro::ui::ZOOM as f64;
+        let Some(ui) = wheel.look.as_mut() else { return };
+        let (ox, oy, _, _) = look_frame(ui, anchor.0, anchor.1, screen.0, screen.1);
+        ui.press(((x - ox) / z) as f32, ((y - oy) / z) as f32)
+    };
+    match effect {
+        Effect::Commit(i) => {
+            state.borrow_mut().hover = i as i32;
+            choose_hover(app, state);
+        }
+        Effect::Close => close_wheel(state),
+        Effect::Redraw | Effect::None => redraw_all(state),
+        Effect::OpenFull => {
+            let (paths, action) = {
+                let w = state.borrow();
+                let kind = w.launch.paths.first().map(|p| kind_of(p)).unwrap_or(cedro::Kind::Other);
+                let action = w.look.as_ref().and_then(|u| u.current()).and_then(|i| wheel_list(kind, w.launch.mode).get(i).map(|s| s.id));
+                (w.launch.paths.clone(), action.filter(|_| w.launch.mode == Mode::Convert))
+            };
+            close_wheel(state);
+            crate::linux_ui2::open_with(app, paths, action);
+        }
+        Effect::Mode(m) => {
+            set_mode(state, match m {
+                1 => Mode::Tools,
+                2 => Mode::Actions,
+                _ => Mode::Convert,
+            });
+        }
+        Effect::Simple(on) => {
+            let mut saved = read_settings();
+            saved.simple = on;
+            let _ = cedro::write_settings(&saved);
+            remember(&saved);
+            if let Some(ui) = state.borrow_mut().look.as_mut() {
+                ui.set_simple(on);
+            }
+            redraw_all(state);
+        }
+    }
+}
+
+fn redraw_all(state: &Rc<RefCell<Wheel>>) {
+    for area in state.borrow().areas.iter() {
+        area.queue_draw();
+    }
+}
+
+/// Cambia modo (Shift, Ctrl, Alt): la ruota rifà le sue fette.
+fn set_mode(state: &Rc<RefCell<Wheel>>, mode: Mode) {
+    {
+        let mut w = state.borrow_mut();
+        w.launch.mode = mode;
+        w.hover = -1;
+        let kind = w.launch.paths.first().map(|p| kind_of(p)).unwrap_or(cedro::Kind::Other);
+        if let Some(ui) = w.look.as_mut() {
+            ui.set_kind_mode(kind, mode_code(mode));
+        }
+    }
+    redraw_all(state);
+}
+
+fn choose_hover(app: &Application, state: &Rc<RefCell<Wheel>>) {
     let job = {
         let wheel = state.borrow();
         let hover = wheel.hover;
@@ -395,13 +581,18 @@ fn choose(app: &Application, state: &Rc<RefCell<Wheel>>, monitor: usize, x: f64,
         let stay = wheel.launch.stay;
         (hover, mode, paths, stay)
     };
+    let (quality, beside) = {
+        let w = state.borrow();
+        let quality = w.look.as_ref().map_or_else(read_quality, |u| u.quality);
+        (quality, w.look.as_ref().is_some_and(|u| u.beside == cedro::ui::wheel::Beside::On))
+    };
     let (hover, mode, paths, stay) = job;
     if paths.is_empty() || hover < 0 {
         close_wheel(state);
         return;
     }
     let kind = kind_of(&paths[0]);
-    let list = slices(kind, mode);
+    let list = wheel_list(kind, mode);
     let Some(slice) = list.get(hover as usize) else {
         close_wheel(state);
         return;
@@ -431,17 +622,16 @@ fn choose(app: &Application, state: &Rc<RefCell<Wheel>>, monitor: usize, x: f64,
     state.borrow_mut().job = Some(app.hold());
     let slot = state.borrow().finished.clone();
     std::thread::spawn(move || {
-        let note = run_slices(&paths, &id, &label);
+        let note = run_slices(&paths, &id, &label, quality, beside);
         if let Ok(mut done) = slot.lock() {
             *done = Some(note);
         }
     });
 }
 
-fn run_slices(all: &[PathBuf], id: &str, label: &str) -> String {
+fn run_slices(all: &[PathBuf], id: &str, label: &str, quality: u8, beside: bool) -> String {
     let paths = if matches!(id, "dup" | "zip") { all.to_vec() } else { same_kind_paths(all) };
     let skipped = all.len().saturating_sub(paths.len());
-    let quality = read_quality();
     let mut notes = Vec::new();
     let mut failed = None;
     let mut last_out = None;
@@ -454,7 +644,9 @@ fn run_slices(all: &[PathBuf], id: &str, label: &str) -> String {
     }
     for (i, path) in paths.iter().enumerate() {
         crate::linux_progress::step(i, &step_label(i, path));
-        match perform(path, id, quality) {
+        // «Salva accanto all'originale» spuntato nella ruota vale per questo lavoro e basta.
+        let out_dir = if beside { path.parent() } else { None };
+        match perform_into(path, id, quality, out_dir) {
             Ok(out) => {
                 notes.push(format!("{} · {}", name(&out.path), out.message));
                 last_out = Some(out.path);
@@ -537,7 +729,41 @@ fn current_slices(wheel: &Wheel) -> (Vec<cedro::Slice>, String) {
         .and_then(|name| name.to_str())
         .unwrap_or("file")
         .to_string();
-    (slices(kind, wheel.launch.mode).to_vec(), clip_name(&name))
+    (wheel_list(kind, wheel.launch.mode), clip_name(&name))
+}
+
+thread_local! {
+    static GLYPHS: RefCell<cedro::ui::gfx::GlyphCache> = RefCell::new(cedro::ui::gfx::GlyphCache::new());
+}
+
+/// La ruota nuova: la disegna il pittore di `cedro::ui` (come su Windows) e qui si appoggia sul fotogramma.
+fn draw_look(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize, state: &Rc<RefCell<Wheel>>) {
+    {
+        let mut w = state.borrow_mut();
+        let ready = w.thumb.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let (Some(img), Some(ui)) = (ready, w.look.as_mut()) {
+            ui.thumb = Some(img);
+        }
+    }
+    let wheel = state.borrow();
+    let (Some(anchor), Some(ui)) = (wheel.anchor.as_ref(), wheel.look.as_ref()) else { return };
+    if anchor.monitor != monitor {
+        return;
+    }
+    let sf = cr.target().device_scale().0.round().max(1.0);
+    let (ox, oy, w, h) = look_frame(ui, anchor.x, anchor.y, width as f64, height as f64);
+    let (pw, ph) = ((w * sf).ceil() as i32, (h * sf).ceil() as i32);
+    let bgra = GLYPHS.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let mut p = cedro::ui::gfx::Painter::new(pw as u32, ph as u32, cedro::ui::ZOOM * sf as f32, cedro::ui::gfx::Fonts::shared(), &mut cache);
+        ui.draw(&mut p);
+        p.bgra()
+    });
+    if let Ok(surface) = gtk4::cairo::ImageSurface::create_for_data(bgra, gtk4::cairo::Format::ARgb32, pw, ph, pw * 4) {
+        surface.set_device_scale(sf, sf);
+        let _ = cr.set_source_surface(&surface, ox, oy);
+        let _ = cr.paint();
+    }
 }
 
 fn draw_wheel(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize, state: &Rc<RefCell<Wheel>>) {
@@ -545,6 +771,10 @@ fn draw_wheel(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize
     cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
     let _ = cr.paint();
     let _ = cr.set_operator(gtk4::cairo::Operator::Over);
+    if state.borrow().look.is_some() {
+        draw_look(cr, width, height, monitor, state);
+        return;
+    }
     let wheel = state.borrow();
     let Some(anchor) = wheel.anchor.as_ref() else {
         return;

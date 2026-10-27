@@ -40,7 +40,7 @@ const THUMB: u32 = 360;
 /// Lato lungo delle pagine dell'anteprima.
 const PAGE: f32 = 1400.0;
 
-fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
+pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
     use image::ImageDecoder;
     let mut decoder = image::ImageReader::open(path).ok()?.with_guessed_format().ok()?.into_decoder().ok()?;
     let orientation = decoder.orientation().ok();
@@ -129,5 +129,14 @@ impl Loader {
         g.jobs.retain(|j| !matches!(j, Job::Preview(..)));
         g.jobs.push_front(Job::Preview(path.to_path_buf(), page));
         cv.notify_one();
+    }
+}
+
+/// La miniatura di un file (immagine o prima pagina di un PDF) per chi la vuole subito, fuori dal thread dei file.
+pub fn thumb_of(path: &Path, side: u32) -> Option<Image> {
+    match engine::kind_of(path) {
+        Kind::Image => image_thumb(path, side).map(|(i, _)| i),
+        Kind::Pdf => pdf_page(path, 0, side as f32),
+        _ => None,
     }
 }
