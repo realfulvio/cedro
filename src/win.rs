@@ -1343,7 +1343,7 @@ fn balloon(text: &str) {
         nid.uFlags = NIF_INFO;
         nid.dwInfoFlags = NIIF_INFO;
         copy_wide(&mut nid.szInfoTitle, "Cedro");
-        copy_wide(&mut nid.szInfo, &text.chars().take(180).collect::<String>());
+        copy_wide(&mut nid.szInfo, &cedro::i18n::tr(text).chars().take(180).collect::<String>());
         let _ = Shell_NotifyIconW(NIM_MODIFY, &nid);
     }
 }
@@ -1434,7 +1434,7 @@ fn on_update(hwnd: HWND) {
         release.version,
         update::CURRENT
     );
-    let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+    let wide: Vec<u16> = cedro::i18n::tr(&text).encode_utf16().chain(std::iter::once(0)).collect();
     let answer = unsafe {
         let _ = SetForegroundWindow(hwnd);
         MessageBoxW(Some(hwnd), PCWSTR(wide.as_ptr()), w!("Cedro"), MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2 | MB_SETFOREGROUND)

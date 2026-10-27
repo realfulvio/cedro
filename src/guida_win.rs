@@ -89,7 +89,7 @@ unsafe fn create() -> Result<()> {
     let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
     let x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
     let y = (GetSystemMetrics(SM_CYSCREEN) - height) / 3;
-    let hwnd = CreateWindowExW(WINDOW_EX_STYLE::default(), class, w!("Guida di Cedro"), style | WS_VISIBLE, x, y, width, height, None, None, Some(instance), None)?;
+    let hwnd = CreateWindowExW(WINDOW_EX_STYLE::default(), class, &HSTRING::from(cedro::i18n::tr("Guida di Cedro").as_ref()), style | WS_VISIBLE, x, y, width, height, None, None, Some(instance), None)?;
     WINDOW.store(hwnd.0 as isize, Ordering::Relaxed);
     set_tour(Tour::new(now()));
     SetTimer(Some(hwnd), TIMER, FRAME_MS, None);
@@ -138,6 +138,7 @@ impl Canvas for Gdi {
     }
 
     fn text(&mut self, s: &str, x: f32, y: f32, w: f32, h: f32, size: f32, bold: bool, c: Rgb, align: Align, wrap: bool) {
+        let s = &*cedro::i18n::tr(s);
         // DrawTextW con un testo vuoto va in crash dentro user32.
         if s.is_empty() {
             return;
@@ -162,6 +163,7 @@ impl Canvas for Gdi {
     }
 
     fn text_width(&mut self, s: &str, size: f32, bold: bool) -> f32 {
+        let s = &*cedro::i18n::tr(s);
         if s.is_empty() {
             return 0.0;
         }

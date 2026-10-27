@@ -842,6 +842,7 @@ fn wheel_surface(cr: &gtk4::cairo::Context, n: usize, hover: i32) -> Option<gtk4
 }
 
 fn show_centered(cr: &gtk4::cairo::Context, x: f64, y: f64, text: &str) {
+    let text = &*cedro::i18n::tr(text);
     let Ok(ext) = cr.text_extents(text) else {
         return;
     };
@@ -875,7 +876,7 @@ fn clip_name(name: &str) -> String {
 
 fn notify(app: &Application, text: &str) {
     let note = gtk4::gio::Notification::new("Cedro");
-    note.set_body(Some(text));
+    note.set_body(Some(&cedro::i18n::tr(text)));
     app.send_notification(Some("cedro"), &note);
 }
 
@@ -934,35 +935,35 @@ impl ksni::Tray for CedroTray {
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "Conversioni…".into(),
+                label: cedro::i18n::tr("Conversioni…").into_owned(),
                 icon_name: "document-edit".into(),
                 activate: Box::new(|_| ask(Asked::Conversions)),
                 ..Default::default()
             }
             .into(),
             StandardItem {
-                label: "Impostazioni…".into(),
+                label: cedro::i18n::tr("Impostazioni…").into_owned(),
                 icon_name: "preferences-system".into(),
                 activate: Box::new(|_| ask(Asked::Settings)),
                 ..Default::default()
             }
             .into(),
             StandardItem {
-                label: "Guida…".into(),
+                label: cedro::i18n::tr("Guida…").into_owned(),
                 icon_name: "help-contents".into(),
                 activate: Box::new(|_| ask(Asked::Guide)),
                 ..Default::default()
             }
             .into(),
             StandardItem {
-                label: "Controlla aggiornamenti".into(),
+                label: cedro::i18n::tr("Controlla aggiornamenti").into_owned(),
                 icon_name: "view-refresh".into(),
                 activate: Box::new(|_| check_updates(true)),
                 ..Default::default()
             }
             .into(),
             CheckmarkItem {
-                label: "Avvio automatico".into(),
+                label: cedro::i18n::tr("Avvio automatico").into_owned(),
                 checked: autostart_file().is_some_and(|path| path.exists()),
                 activate: Box::new(|_| {
                     let on = !autostart_file().is_some_and(|path| path.exists());
@@ -975,7 +976,7 @@ impl ksni::Tray for CedroTray {
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "Esci".into(),
+                label: cedro::i18n::tr("Esci").into_owned(),
                 icon_name: "application-exit".into(),
                 activate: Box::new(|tray: &mut Self| tray.quit.store(true, Ordering::Relaxed)),
                 ..Default::default()
@@ -1025,9 +1026,9 @@ fn on_update(app: &Application, news: UpdateNews) {
         UpdateNews::Found { release, manual } => (release, manual),
     };
     let dialog = gtk4::AlertDialog::builder()
-        .message(format!("È disponibile Cedro {}", release.version))
-        .detail(format!("Hai la {}. Vuoi aggiornare? Cedro scarica il pacchetto, controlla lo SHA-256, lo installa e si riapre.", update::CURRENT))
-        .buttons(["Non ora", "Aggiorna"])
+        .message(cedro::i18n::tr_string(&format!("È disponibile Cedro {}", release.version)))
+        .detail(cedro::i18n::tr_string(&format!("Hai la {}. Vuoi aggiornare? Cedro scarica il pacchetto, controlla lo SHA-256, lo installa e si riapre.", update::CURRENT)))
+        .buttons([cedro::i18n::tr_string("Non ora"), cedro::i18n::tr_string("Aggiorna")])
         .cancel_button(0)
         .default_button(0)
         .build();
@@ -1204,7 +1205,7 @@ fn quote_exec(exe: &str) -> String {
 
 fn desktop_file(exe: &str, args: &str) -> String {
     format!(
-        "[Desktop Entry]\nType=Application\nName=Cedro\nComment=Conversione locale\nExec={}{args}\nIcon=dev.cedro.Cedro\nTerminal=false\nCategories=Utility;\nStartupNotify=false\nActions=settings;guida;\n\n[Desktop Action settings]\nName=Impostazioni\nExec={} settings\n\n[Desktop Action guida]\nName=Guida\nExec={} guida\n",
+        "[Desktop Entry]\nType=Application\nName=Cedro\nComment=Conversione locale\nComment[en]=Local file conversion\nExec={}{args}\nIcon=dev.cedro.Cedro\nTerminal=false\nCategories=Utility;\nStartupNotify=false\nActions=settings;guida;\n\n[Desktop Action settings]\nName=Impostazioni\nName[en]=Settings\nExec={} settings\n\n[Desktop Action guida]\nName=Guida\nName[en]=Help\nExec={} guida\n",
         quote_exec(exe),
         quote_exec(exe),
         quote_exec(exe)
@@ -1214,7 +1215,7 @@ fn desktop_file(exe: &str, args: &str) -> String {
 fn dolphin_menu(exe: &str) -> String {
     let exe = quote_exec(exe);
     format!(
-        "[Desktop Entry]\nType=Service\nMimeType=all/allfiles;\nActions=conversione;strumenti;azioni;\nX-KDE-Submenu=Cedro\nX-KDE-Priority=TopLevel\n\n[Desktop Action conversione]\nName=Conversione\nExec={exe} show --conversione %F\n\n[Desktop Action strumenti]\nName=Strumenti\nExec={exe} show --strumenti %F\n\n[Desktop Action azioni]\nName=Azioni\nExec={exe} show --azioni %F\n"
+        "[Desktop Entry]\nType=Service\nMimeType=all/allfiles;\nActions=conversione;strumenti;azioni;\nX-KDE-Submenu=Cedro\nX-KDE-Priority=TopLevel\n\n[Desktop Action conversione]\nName=Conversione\nName[en]=Conversion\nExec={exe} show --conversione %F\n\n[Desktop Action strumenti]\nName=Strumenti\nName[en]=Tools\nExec={exe} show --strumenti %F\n\n[Desktop Action azioni]\nName=Azioni\nName[en]=Actions\nExec={exe} show --azioni %F\n"
     )
 }
 

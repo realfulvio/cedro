@@ -5,6 +5,9 @@
 #   ./install.sh --uninstall  toglie Cedro e i menu che ha scritto (le impostazioni restano)
 # Serve GTK 4 (su Arch gtk4, su Debian/Ubuntu libgtk-4-1, su Fedora gtk4).
 set -euo pipefail
+# Messaggi in italiano se il sistema è in italiano, altrimenti in inglese.
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in it*) it=1 ;; *) it=0 ;; esac
+say() { if [ "$it" = 1 ]; then echo "$1"; else echo "$2"; fi; }
 here=$(cd "$(dirname "$0")" && pwd)
 dest=$HOME/.local/opt/cedro
 bindir=$HOME/.local/bin
@@ -18,7 +21,7 @@ if [ "${1:-}" = "--uninstall" ]; then
   rm -f "$data/applications/dev.cedro.Cedro.desktop" "$data/icons/hicolor/256x256/apps/dev.cedro.Cedro.png" \
         "$data/kio/servicemenus/cedro.desktop" "$data/nautilus-python/extensions/cedro.py" "$config/autostart/dev.cedro.Cedro.desktop"
   rm -rf "$data/nautilus/scripts/Cedro"
-  echo "Cedro tolto. Le impostazioni restano in $config/cedro (puoi cancellarle a mano)."
+  say "Cedro tolto. Le impostazioni restano in $config/cedro (puoi cancellarle a mano)." "Cedro removed. Settings remain in $config/cedro (you can delete them by hand)."
   exit 0
 fi
 
@@ -30,7 +33,7 @@ have_gtk() {
 }
 # L'aggiornamento da dentro (--no-start) parte da un Cedro già in esecuzione: GTK c'è.
 if [ "${1:-}" != "--no-start" ] && ! have_gtk; then
-  echo "Manca GTK 4: installa il pacchetto gtk4 (Arch), libgtk-4-1 (Debian, Ubuntu) o gtk4 (Fedora)." >&2
+  say "Manca GTK 4: installa il pacchetto gtk4 (Arch), libgtk-4-1 (Debian, Ubuntu) o gtk4 (Fedora)." "GTK 4 is missing: install the gtk4 (Arch), libgtk-4-1 (Debian, Ubuntu) or gtk4 (Fedora) package." >&2
   exit 1
 fi
 mkdir -p "$dest" "$bindir"
@@ -44,13 +47,13 @@ if [ -f "$here/da-bondeno" ]; then
   mkdir -p "$HOME/.config/cedro"
   : > "$HOME/.config/cedro/da-bondeno"
 fi
-echo "Cedro installato in $dest."
+say "Cedro installato in $dest." "Cedro installed in $dest."
 case ":$PATH:" in
   *":$bindir:"*) ;;
-  *) echo "Aggiungi $bindir al PATH per avviarlo con «cedro»." ;;
+  *) say "Aggiungi $bindir al PATH per avviarlo con «cedro»." "Add $bindir to your PATH to start it with \"cedro\"." ;;
 esac
 # La prima volta Cedro scrive da solo i menu dei file (Dolphin, Nautilus) e l'icona.
 if [ "${1:-}" != "--no-start" ]; then
   nohup "$dest/cedro" --background >/dev/null 2>&1 &
-  echo "Avviato: l'icona di Cedro è vicino all'orologio. Su GNOME serve l'estensione AppIndicator."
+  say "Avviato: l'icona di Cedro è vicino all'orologio. Su GNOME serve l'estensione AppIndicator." "Started: the Cedro icon is next to the clock. On GNOME the AppIndicator extension is needed."
 fi

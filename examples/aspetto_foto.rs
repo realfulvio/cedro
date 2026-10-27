@@ -7,6 +7,9 @@ use cedro::ui::gfx::{Fonts, GlyphCache, Painter};
 use cedro::ui::theme::ThemeId;
 
 fn main() {
+    if std::env::var("LANG_FOTO").is_ok_and(|v| v == "en") {
+        cedro::i18n::set(cedro::i18n::Lang::En);
+    }
     let out = std::path::PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "foto".into()));
     std::fs::create_dir_all(&out).unwrap();
     let mut a = Aspetto::new(ThemeId::PercorsoGuidato, false, Arc::new(|| {}));
