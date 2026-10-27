@@ -26,7 +26,7 @@ Costruire un APK firmato a mano: `set -a; . ~/.cedro-android/release.env; set +a
    printf %s "$FDROID_KS_PASS"                     | gh secret set FDROID_KS_PASS
    ```
 2. **GitHub Pages**: Settings → Pages → Source: «GitHub Actions».
-3. **Release**: tag `android-v0.21.2` (o Actions → Android → Run workflow con quel tag): il workflow `android.yml` costruisce l'APK firmato e lo allega a una release **bozza**. Quando la bozza è pubblicata, `android-fdroid.yml` aggiorna l'indice e lo mette su Pages: `https://realfulvio.github.io/cedro/fdroid/repo`.
+3. **Release**: tag `android-v0.21.3` (o Actions → Android → Run workflow con quel tag): il workflow `android.yml` costruisce l'APK firmato e lo allega a una release **bozza**. Quando la bozza è pubblicata, `android-fdroid.yml` aggiorna l'indice e lo mette su Pages: `https://realfulvio.github.io/cedro/fdroid/repo`.
 4. **Catalogo ufficiale di F-Droid**: serve un account GitLab (merge request su `gitlab.com/fdroid/fdroiddata`) con `fdroiddata/it.cedro.android.yml` (bozza non provata sul buildserver) e `metadata/it.cedro.android/` (testi e icona). Da chiarire coi revisori: fdk-aac (licenza non libera) e il download del modello alla prima volta.
 
 ## Cosa c'è
