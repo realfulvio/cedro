@@ -685,6 +685,8 @@ impl Screen {
     /// Un testo scritto (o incollato) nel campo con il cursore.
     pub fn text_input(&mut self, s: &str) {
         let Some(field) = self.ui.edit else { return };
+        // Scrivere chiude il menu del tasto destro, come nei campi del sistema.
+        self.ui.menu = None;
         if std::mem::take(&mut self.ui.sel_all) {
             self.set_field_text(field, String::new());
             self.ui.caret = 0;
@@ -705,8 +707,11 @@ impl Screen {
             match key {
                 Key::Up | Key::Down => {
                     let n = m.items.len();
-                    let cur = m.selected.unwrap_or(0);
-                    m.selected = Some(if key == Key::Down { (cur + 1).min(n.saturating_sub(1)) } else { cur.saturating_sub(1) });
+                    m.selected = Some(match m.selected {
+                        None => 0,
+                        Some(cur) if key == Key::Down => (cur + 1).min(n.saturating_sub(1)),
+                        Some(cur) => cur.saturating_sub(1),
+                    });
                     return true;
                 }
                 Key::Escape => {
@@ -877,5 +882,107 @@ impl Screen {
 
     pub fn is_open(&self, f: Fold) -> bool {
         self.ui.is_open(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Fake {
+        clip: String,
+    }
+
+    impl Platform for Fake {
+        fn pick_files(&mut self) -> Vec<PathBuf> {
+            Vec::new()
+        }
+        fn pick_folder(&mut self, _: &str) -> Option<PathBuf> {
+            None
+        }
+        fn open_path(&mut self, _: &Path) {}
+        fn copy_text(&mut self, text: &str) {
+            self.clip = text.to_string();
+        }
+        fn paste_text(&mut self) -> Option<String> {
+            Some(self.clip.clone())
+        }
+        fn open_guide(&mut self) {}
+        fn open_settings(&mut self) {}
+        fn minimize(&mut self) {}
+        fn toggle_maximize(&mut self) {}
+        fn close(&mut self) {}
+        fn open_full(&mut self) {}
+    }
+
+    fn centre_of(s: &Screen, act: &Act) -> (f32, f32) {
+        let r = s.hits.iter().rev().find(|h| &h.act == act).map(|h| h.r).expect("controllo disegnato");
+        (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0)
+    }
+
+    fn click(s: &mut Screen, act: &Act, plat: &mut Fake) {
+        let (w, h) = s.preferred_size();
+        let _ = s.render(w as u32, h as u32, 1.0);
+        let (x, y) = centre_of(s, act);
+        s.pointer_down(x, y);
+        s.pointer_up(x, y, plat);
+    }
+
+    fn right(s: &mut Screen, x: f32, y: f32) -> bool {
+        let (w, h) = s.preferred_size();
+        let _ = s.render(w as u32, h as u32, 1.0);
+        s.context_click(x, y)
+    }
+
+    #[test]
+    fn right_click_menu_in_the_link_field() {
+        let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+        s.request_appearance(ThemeId::WindowsEssenziale, false);
+        s.app.activity = Activity::YouTube;
+        let mut plat = Fake { clip: "https://vimeo.com/76979871".into() };
+        let field = Act::Edit(Field::Link(false));
+        let (w, h) = s.preferred_size();
+        let _ = s.render(w as u32, h as u32, 1.0);
+        let (x, y) = centre_of(&s, &field);
+        assert!(right(&mut s, x, y));
+        let labels: Vec<&str> = s.ui.menu.as_ref().unwrap().items.iter().map(|i| i.0.as_str()).collect();
+        assert_eq!(labels, ["Taglia", "Copia", "Incolla", "Elimina", "Seleziona tutto"]);
+        // Incolla: il link di un sito che non è YouTube entra nel campo e poi in coda.
+        click(&mut s, &Act::MenuPick(2), &mut plat);
+        assert!(s.ui.menu.is_none());
+        assert_eq!(s.app.youtube.typed, "https://vimeo.com/76979871");
+        s.app.add_typed_links(false);
+        assert_eq!(s.app.youtube.items.len(), 1);
+        assert!(s.app.youtube.typed.is_empty());
+
+        // Seleziona tutto, poi scrivere sostituisce; Taglia svuota e copia.
+        s.app.youtube.typed = "abc".into();
+        assert!(right(&mut s, x, y));
+        click(&mut s, &Act::MenuPick(4), &mut plat);
+        assert!(s.ui.sel_all);
+        s.text_input("x");
+        assert_eq!(s.app.youtube.typed, "x");
+        assert!(right(&mut s, x, y));
+        click(&mut s, &Act::MenuPick(0), &mut plat);
+        assert_eq!(plat.clip, "x");
+        assert!(s.app.youtube.typed.is_empty());
+
+        // Da tastiera: la freccia sceglie la prima voce, Esc chiude il menu e il campo resta attivo.
+        assert!(right(&mut s, x, y));
+        assert!(s.key(Key::Down, &mut plat));
+        assert_eq!(s.ui.menu.as_ref().unwrap().selected, Some(0));
+        assert!(s.key(Key::Escape, &mut plat));
+        assert!(s.ui.menu.is_none());
+        assert_eq!(s.ui.edit, Some(Field::Link(false)));
+    }
+
+    #[test]
+    fn a_wrong_link_shows_an_error() {
+        let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+        s.app.activity = Activity::YouTube;
+        s.app.youtube.typed = "ciao".into();
+        s.app.add_typed_links(false);
+        assert!(s.app.youtube.items.is_empty());
+        assert!(s.app.notice.as_ref().is_some_and(|n| n.error));
     }
 }

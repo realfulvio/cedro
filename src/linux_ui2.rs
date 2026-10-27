@@ -326,6 +326,7 @@ fn open_surface(app: &Application, surface: Surface) {
     {
         let (host, area2) = (h0.clone(), a0.clone());
         rclick.connect_released(move |_, _, x, y| {
+            area2.grab_focus();
             let s = scale_of(&host, &area2) / area2.scale_factor().max(1) as f32;
             if let Ok(mut sc) = host.screen.try_borrow_mut() {
                 sc.context_click(x as f32 / s, y as f32 / s);
