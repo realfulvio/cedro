@@ -583,11 +583,21 @@ impl App {
     pub fn want_preview(&mut self, path: &Path, page: usize) {
         let key = (path.to_path_buf(), page);
         if !self.previews.contains_key(&key) {
-            self.previews.insert(key, None);
-            // Si tengono poche pagine: l'anteprima non deve riempire la memoria.
+            // Il caricatore tiene in coda solo l'ultima richiesta: le altre ancora vuote sono state annullate.
+            self.previews.retain(|_, v| v.is_some());
+            self.previews.insert(key.clone(), None);
+            // Si tengono poche pagine: l'anteprima non deve riempire la memoria. Via per prime quelle di altri
+            // documenti e le pagine più lontane da quella richiesta.
             if self.previews.len() > 8 {
-                let drop: Vec<_> = self.previews.keys().filter(|k| k.0 != path).take(self.previews.len() - 8).cloned().collect();
-                for k in drop {
+                let mut old: Vec<(bool, usize, (PathBuf, usize))> = self
+                    .previews
+                    .iter()
+                    .filter(|(k, v)| **k != key && v.is_some())
+                    .map(|(k, _)| (k.0 == path, k.1.abs_diff(page), k.clone()))
+                    .collect();
+                old.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
+                let extra = self.previews.len() - 8;
+                for (_, _, k) in old.into_iter().take(extra) {
                     self.previews.remove(&k);
                 }
             }
