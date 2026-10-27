@@ -1,0 +1,10 @@
+#!/bin/bash
+# Il cmake vero è il primo nel PATH senza questa cartella (in locale /usr/bin, su GitHub /usr/local/bin).
+AQUI="$(cd "$(dirname "$0")" && pwd)"
+CMAKE="$(PATH="${PATH//$AQUI:/}" command -v cmake)"
+# Avvolge cmake per la build Android: il file di toolchain dell'NDK vuole ABI e piattaforma come variabili di cache
+# (il crate cmake non le passa). Solo per la configurazione, non per --build/--install.
+if [[ "$*" != *"--build"* && "$*" != *"--install"* && ( "$*" == *"-G"* || "$*" == *"-B"* ) ]]; then
+  exec "$CMAKE" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-26 -DANDROID_STL=c++_shared -DGGML_NATIVE=OFF ${WHISPER_ARCH:+-DGGML_CPU_ARM_ARCH=$WHISPER_ARCH} "$@"
+fi
+exec "$CMAKE" "$@"

@@ -419,6 +419,7 @@ fn render_pdf(
     let interpreter = InterpreterSettings::default();
     let settings = RenderSettings::default();
     let mut done = 0;
+    let totale = pdf.pages().iter().enumerate().filter(|(i, _)| wanted(*i)).take(max).count().max(1);
     for (i, page) in pdf.pages().iter().enumerate().filter(|(i, _)| wanted(*i)).take(max) {
         // Una pagina enorme (una scansione salvata a 72 dpi) non supera un A4 a 300 dpi.
         let (w, h) = page.render_dimensions();
@@ -427,6 +428,7 @@ fn render_pdf(
         let rendered = render(page, &cache, &interpreter, &settings, &pixmap);
         each(i, rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?)?;
         done += 1;
+        crate::progress::report(done as f32 / totale as f32);
     }
     Ok(done)
 }
