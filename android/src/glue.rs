@@ -242,12 +242,20 @@ fn copia_uri(env: &mut JNIEnv, attivita: &JObject, uri: &JObject, mime: &str, ca
     Ok(Condiviso { path, nome: sicuro })
 }
 
-/// Chiede il permesso di scrivere in Documenti (se manca) e aspetta la risposta.
+/// Chiede il permesso di scrivere in Documenti (se manca) e aspetta la risposta. Da Android 11 non serve: i file che
+/// Cedro crea in Documenti sono suoi. Da Android 13 chiede anche il permesso per la notifica di avanzamento (senza aspettare).
 fn assicura_scrittura(app: &AndroidApp) -> bool {
     let Ok(vm) = (unsafe { JavaVM::from_raw(app.vm_as_ptr() as *mut _) }) else { return false };
     let Ok(mut env) = vm.attach_current_thread() else { return false };
     let attivita = unsafe { JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject) };
-    let perm = "android.permission.WRITE_EXTERNAL_STORAGE";
+    let api = env.get_static_field("android/os/Build$VERSION", "SDK_INT", "I").and_then(|v| v.i()).unwrap_or(0);
+    if env.exception_check().unwrap_or(false) {
+        let _ = env.exception_clear();
+    }
+    let perm = match api {
+        30.. => "android.permission.POST_NOTIFICATIONS",
+        _ => "android.permission.WRITE_EXTERNAL_STORAGE",
+    };
     let controlla = |env: &mut JNIEnv| -> bool {
         let Ok(p) = env.new_string(perm) else { return false };
         let r = env.call_method(&attivita, "checkSelfPermission", "(Ljava/lang/String;)I", &[JValue::Object(&p)]).and_then(|v| v.i());
@@ -256,7 +264,7 @@ fn assicura_scrittura(app: &AndroidApp) -> bool {
         }
         r.map(|v| v == 0).unwrap_or(false)
     };
-    if controlla(&mut env) {
+    if controlla(&mut env) || (30..33).contains(&api) {
         return true;
     }
     let ok = (|| -> Result<(), jni::errors::Error> {
@@ -268,6 +276,9 @@ fn assicura_scrittura(app: &AndroidApp) -> bool {
     })();
     if ok.is_err() && env.exception_check().unwrap_or(false) {
         let _ = env.exception_clear();
+    }
+    if api >= 33 {
+        return true;
     }
     for _ in 0..240 {
         if controlla(&mut env) {

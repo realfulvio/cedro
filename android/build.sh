@@ -35,7 +35,7 @@ javac -source 8 -target 8 -Xlint:-options -bootclasspath "$JAR" -d "$OUT/classes
 VNAME="${CEDRO_VERSION_NAME:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)}"
 IFS=. read -r V1 V2 V3 <<< "$VNAME"
 VCODE="${CEDRO_VERSION_CODE:-$((V1 * 10000 + V2 * 100 + ${V3%%[!0-9]*}))}"
-"$BT/aapt2" link -o "$OUT/base.apk" -I "$JAR" --manifest android/AndroidManifest.xml --min-sdk-version 26 --target-sdk-version 29 --version-name "$VNAME" --version-code "$VCODE" "$OUT/res.zip"
+"$BT/aapt2" link -o "$OUT/base.apk" -I "$JAR" --manifest android/AndroidManifest.xml --min-sdk-version 26 --target-sdk-version 34 --version-name "$VNAME" --version-code "$VCODE" "$OUT/res.zip"
 python3 -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1],'a'); z.write(sys.argv[2],'lib/arm64-v8a/libcedro_android.so',compress_type=zipfile.ZIP_STORED); z.write(sys.argv[2].replace('libcedro_android.so','libc++_shared.so'),'lib/arm64-v8a/libc++_shared.so',compress_type=zipfile.ZIP_STORED); z.write(sys.argv[3],'classes.dex'); z.close()" "$OUT/base.apk" "$OUT/apk/lib/arm64-v8a/libcedro_android.so" "$OUT/classes/classes.dex"
 "$BT/zipalign" -f -p 4 "$OUT/base.apk" "$OUT/aligned.apk"
 if [ -n "${CEDRO_UNSIGNED:-}" ]; then
