@@ -82,11 +82,3 @@ pub fn finish(ok: bool, info: &str) {
     call(&view.bus, SERVER, &view.path, "org.kde.JobViewV3", "terminate", args, None);
 }
 
-
-/// Il lavoro è stato annullato dall'utente: KDE toglie la barra senza segnalare un errore.
-pub fn dismiss() {
-    let Some(view) = VIEW.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
-    // Il codice 1 è «annullato dall'utente» (KJob::KilledJobError): il desktop non mostra niente.
-    let args = Variant::tuple_from_iter([1u32.to_variant(), String::new().to_variant(), props(&[])]);
-    call(&view.bus, SERVER, &view.path, "org.kde.JobViewV3", "terminate", args, None);
-}
