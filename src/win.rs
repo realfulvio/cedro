@@ -251,7 +251,8 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 // Con «Cedro compatto» un clic sull'icona apre la finestrella.
                 crate::ui_win::open_compact();
             } else if lparam.0 as u32 == WM_LBUTTONDBLCLK {
-                crate::settings_win::open();
+                // Il doppio clic apre il pannello Conversioni, come la voce del menu.
+                crate::ui_win::open();
             }
             LRESULT(0)
         }
