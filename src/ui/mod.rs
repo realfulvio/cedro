@@ -9,6 +9,7 @@ pub mod gfx;
 pub mod svgpath;
 pub mod theme;
 pub mod media;
+pub mod preview;
 pub mod model;
 pub mod core;
 pub mod screen;

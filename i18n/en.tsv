@@ -1084,3 +1084,18 @@ codificatore del telefono	the phone's encoder
 codificatore del telefono ({})	the phone's encoder ({})
 non indicata dal telefono	not reported by the phone
 sì	yes
+Durata	Duration
+modificato il	modified on
+Frequenza	Sample rate
+Peso	Size
+Immagine	Picture
+{#} canali	{} channels
+Archivio compresso	Compressed archive
+Programma	Program
+Foglio di calcolo	Spreadsheet
+Presentazione	Presentation
+Messaggio di posta	Email message
+Carattere	Font
+File di tipo {}	{} file
+File senza estensione	File without extension
+Cedro non può mostrare il contenuto di questo tipo di file, ma lo tiene in coda con il nome e il peso.	Cedro can't show the content of this kind of file, but keeps it in the queue with its name and size.

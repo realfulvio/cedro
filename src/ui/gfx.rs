@@ -24,6 +24,8 @@ pub enum Weight {
     /// Il carattere con le grazie, solo per il contenuto dei documenti (Georgia su Windows).
     Serif,
     SerifBold,
+    /// A larghezza fissa, per l'anteprima dei file di testo (Consolas su Windows).
+    Mono,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -82,7 +84,7 @@ impl Fonts {
         let mut faces = HashMap::new();
         if let Some(dir) = std::env::var_os("CEDRO_UI_FONTS") {
             let dir = std::path::PathBuf::from(dir);
-            for (w, name) in [(Weight::Regular, "regular.ttf"), (Weight::Semibold, "semibold.ttf"), (Weight::Bold, "bold.ttf"), (Weight::Serif, "serif.ttf"), (Weight::SerifBold, "serif-bold.ttf")] {
+            for (w, name) in [(Weight::Regular, "regular.ttf"), (Weight::Semibold, "semibold.ttf"), (Weight::Bold, "bold.ttf"), (Weight::Serif, "serif.ttf"), (Weight::SerifBold, "serif-bold.ttf"), (Weight::Mono, "mono.ttf")] {
                 if let Some(f) = read_face(&dir.join(name), 0) {
                     faces.insert(w, f);
                 }
@@ -91,7 +93,7 @@ impl Fonts {
         #[cfg(windows)]
         {
             let fonts = std::path::PathBuf::from(std::env::var_os("WINDIR").unwrap_or_else(|| "C:\\Windows".into())).join("Fonts");
-            for (w, name) in [(Weight::Regular, "segoeui.ttf"), (Weight::Semibold, "seguisb.ttf"), (Weight::Bold, "segoeuib.ttf"), (Weight::Serif, "georgia.ttf"), (Weight::SerifBold, "georgiab.ttf")] {
+            for (w, name) in [(Weight::Regular, "segoeui.ttf"), (Weight::Semibold, "seguisb.ttf"), (Weight::Bold, "segoeuib.ttf"), (Weight::Serif, "georgia.ttf"), (Weight::SerifBold, "georgiab.ttf"), (Weight::Mono, "consola.ttf")] {
                 if !faces.contains_key(&w) {
                     if let Some(f) = read_face(&fonts.join(name), 0) {
                         faces.insert(w, f);
@@ -107,6 +109,7 @@ impl Fonts {
                 (Weight::Bold, "sans-serif:weight=200"),
                 (Weight::Serif, "serif:weight=80"),
                 (Weight::SerifBold, "serif:weight=200"),
+                (Weight::Mono, "monospace:weight=80"),
             ] {
                 if !faces.contains_key(&w) {
                     if let Some(f) = fc_match(pattern) {
@@ -129,6 +132,7 @@ impl Fonts {
         faces.entry(Weight::Serif).or_insert_with(|| base.clone());
         let serif = faces[&Weight::Serif].clone();
         faces.entry(Weight::SerifBold).or_insert_with(|| serif.clone());
+        faces.entry(Weight::Mono).or_insert_with(|| base.clone());
         Fonts { faces, fallback: regular }
     }
 
@@ -149,7 +153,7 @@ impl Fonts {
             faces.insert(Weight::Regular, regular);
             faces.insert(Weight::Semibold, bold.clone());
             faces.insert(Weight::Bold, bold);
-            for w in [Weight::Serif, Weight::SerifBold] {
+            for w in [Weight::Serif, Weight::SerifBold, Weight::Mono] {
                 faces.insert(w, system.faces[&w].clone());
             }
             Fonts::with(faces)
@@ -265,6 +269,11 @@ impl Image {
             d[3] = s[3];
         }
         Some(Image { w, h, pixmap: Arc::new(pm) })
+    }
+
+    /// Quello che ha disegnato un pittore, così com'è.
+    pub fn from_painter(p: Painter) -> Image {
+        Image { w: p.pixmap.width(), h: p.pixmap.height(), pixmap: Arc::new(p.pixmap) }
     }
 }
 
