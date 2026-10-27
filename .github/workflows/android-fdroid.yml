@@ -10,6 +10,10 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag Android da cui prendere i metadati (es. android-v0.21.3)"
+        required: true
 
 permissions:
   contents: read
@@ -29,9 +33,16 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # I metadati F-Droid stanno nel ramo/tag Android; il workflow può girare anche da main.
+          ref: ${{ inputs.ref || github.event.release.tag_name }}
       - name: fdroidserver
+        timeout-minutes: 15
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq fdroidserver apksigner >/dev/null
+          export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
+          sudo -E apt-get update -qq && sudo -E apt-get install -y -qq apksigner >/dev/null
+          python3 -m venv "$RUNNER_TEMP/fdroid" && "$RUNNER_TEMP/fdroid/bin/pip" install -q fdroidserver
+          echo "$RUNNER_TEMP/fdroid/bin" >> "$GITHUB_PATH"
       - name: Prepara il repository
         env:
           GH_TOKEN: ${{ github.token }}
@@ -50,7 +61,7 @@ jobs:
           cat > config.yml <<CFG
           repo_url: https://realfulvio.github.io/cedro/fdroid/repo
           repo_name: Cedro
-          repo_description: Cedro per Android: converti file e trascrivi la voce, tutto sul telefono.
+          repo_description: "Cedro per Android, converti file e trascrivi la voce, tutto sul telefono."
           archive_older: 0
           keystore: keystore.p12
           repo_keyalias: cedro-repo
@@ -60,7 +71,7 @@ jobs:
           CFG
           sed -i 's/^          //' config.yml
           chmod 600 config.yml
-          fdroid update --create-metadata=false
+          fdroid update
           rm -f keystore.p12 config.yml
       - run: mkdir -p _site/fdroid && cp -r fdroid/repo _site/fdroid/
       - uses: actions/upload-pages-artifact@v3
