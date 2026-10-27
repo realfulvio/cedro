@@ -179,7 +179,7 @@ impl WheelUi {
     }
 
     fn layout(&self) -> Layout {
-        let fonts = Fonts::shared();
+        let fonts = Fonts::current();
         let cx = if self.simple { PAD + RO + 45.0 } else { PAD + RO };
         let cy = PAD + RO + if self.simple { 62.0 } else { 0.0 };
         let disc_bottom = cy + RO;
