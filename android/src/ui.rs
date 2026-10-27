@@ -980,7 +980,7 @@ impl App {
 
     fn disco(&mut self, p: &mut Painter, (cx, cy): (f32, f32), ro: f32, fette: &[cedro::Slice], attivo: bool) {
         let pal = self.pal();
-        let ri = ro * 0.43;
+        let ri = ro * 0.52;
         let n = fette.len().max(1);
         let tau = std::f32::consts::TAU;
         let sweep = tau / n as f32;
