@@ -16,6 +16,8 @@ const FFMPEG_BASE: &str = "https://github.com/BtbN/FFmpeg-Builds/releases/latest
 const DENO_BASE: &str = "https://github.com/denoland/deno/releases/latest/download/";
 /// Dopo quante ore si cerca una versione più nuova di yt-dlp (YouTube cambia spesso).
 const UPDATE_EVERY_HOURS: u64 = 12;
+/// deno e ffmpeg cambiano poco: li riguardo ogni tanto, non a ogni uso.
+const REFRESH_EVERY_DAYS: u64 = 30;
 
 /// Quello che il pannello mostra e il motore esegue.
 #[derive(Clone, Debug, PartialEq)]
@@ -375,6 +377,12 @@ pub fn ensure_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result
         return Ok(ffmpeg_path().unwrap_or(own));
     }
     emit(Event::Log("ffmpeg non c'è ancora: lo scarico (una volta sola, circa 140 MB)".into()));
+    download_ffmpeg(emit, cancel)
+}
+
+/// Scarica ffmpeg di Cedro (anche se sul sistema ce n'è un altro).
+fn download_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<PathBuf, String> {
+    let own = tools_dir().join(exe("ffmpeg"));
     let dir = tools_dir();
     let archive = dir.join(ffmpeg_asset());
     let sums = get_text(&format!("{FFMPEG_BASE}checksums.sha256")).ok();
@@ -388,6 +396,7 @@ pub fn ensure_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result
     result?;
     make_executable(&own);
     make_executable(&own_ffprobe());
+    remember_sum("ffmpeg", sum.as_deref());
     emit(Event::Log("ffmpeg scaricato".into()));
     Ok(own)
 }
@@ -396,7 +405,7 @@ pub fn ensure_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result
 fn extract_zip_entry(archive: &Path, suffix: &str, target: &Path) -> Result<(), String> {
     let mut zip = zip::ZipArchive::new(std::fs::File::open(archive).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let index = (0..zip.len())
-        .find(|&i| zip.by_index(i).map(|f| f.name().ends_with(suffix)).unwrap_or(false))
+        .find(|&i| zip.by_index(i).ok().and_then(|f| f.name().ok().map(|n| n.ends_with(suffix))).unwrap_or(false))
         .ok_or_else(|| format!("{suffix} non è nell'archivio"))?;
     let mut entry = zip.by_index(index).map_err(|_| "archivio rovinato".to_string())?;
     let part = target.with_extension("part");
@@ -423,6 +432,7 @@ pub fn ensure_deno(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<P
     let _ = std::fs::remove_file(&archive);
     result?;
     make_executable(&target);
+    remember_sum("deno", sum.as_deref());
     emit(Event::Log("deno scaricato".into()));
     Ok(target)
 }
@@ -449,6 +459,71 @@ fn extract_bin(archive: &Path, name: &str, target: &Path) -> Result<(), String> 
         return Err("Non riesco ad aprire l'archivio di ffmpeg (servono tar e xz)".into());
     }
     std::fs::rename(part, target).map_err(|e| e.to_string())
+}
+
+fn sum_path(name: &str) -> PathBuf {
+    tools_dir().join(format!("{name}.sha256"))
+}
+
+fn remember_sum(name: &str, sum: Option<&str>) {
+    if let Some(sum) = sum {
+        let _ = std::fs::write(sum_path(name), sum);
+    }
+}
+
+/// Il codice di controllo della versione più recente di ffmpeg o deno.
+fn remote_sum(name: &str) -> Option<String> {
+    if name == "ffmpeg" {
+        get_text(&format!("{FFMPEG_BASE}checksums.sha256")).ok().as_deref().and_then(|s| sum_for(s, ffmpeg_asset()))
+    } else {
+        get_text(&format!("{DENO_BASE}{}.sha256sum", deno_asset())).ok().as_deref().and_then(first_sha256)
+    }
+}
+
+/// Se ffmpeg o deno scaricati da Cedro hanno una versione più nuova (controllo al massimo ogni
+/// `REFRESH_EVERY_DAYS` giorni), li riscarica. Se qualcosa va storto resta quello vecchio.
+pub fn refresh_helpers_if_due(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) {
+    for name in ["ffmpeg", "deno"] {
+        let program = tools_dir().join(exe(name));
+        let stamp = tools_dir().join(format!("{name}.controllato"));
+        if !program.is_file() {
+            continue;
+        }
+        let due = std::fs::metadata(&stamp)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| SystemTime::now().duration_since(t).ok())
+            .map(|age| age > Duration::from_secs(REFRESH_EVERY_DAYS * 86400))
+            .unwrap_or(true);
+        if !due {
+            continue;
+        }
+        let Some(latest) = remote_sum(name) else { continue };
+        let _ = std::fs::write(&stamp, b"ok");
+        if std::fs::read_to_string(sum_path(name)).map(|s| s.trim() == latest).unwrap_or(false) {
+            continue;
+        }
+        emit(Event::Log(format!("{name} ha una versione più nuova: la scarico")));
+        let backup = program.with_extension("vecchio");
+        if std::fs::rename(&program, &backup).is_err() {
+            continue;
+        }
+        let backup_probe = own_ffprobe().with_extension("vecchio");
+        let had_probe = name == "ffmpeg" && std::fs::rename(own_ffprobe(), &backup_probe).is_ok();
+        let result = if name == "ffmpeg" { download_ffmpeg(emit, cancel) } else { ensure_deno(emit, cancel) };
+        if result.is_ok() {
+            let _ = std::fs::remove_file(&backup);
+            let _ = std::fs::remove_file(&backup_probe);
+            let _ = std::fs::remove_file(tools_dir().join(format!("{name}.versione")));
+        } else {
+            let _ = std::fs::remove_file(&program);
+            let _ = std::fs::rename(&backup, &program);
+            if had_probe {
+                let _ = std::fs::rename(&backup_probe, own_ffprobe());
+            }
+            emit(Event::Log(format!("Non riesco ad aggiornare {name}: resta la versione che c'è")));
+        }
+    }
 }
 
 fn stamp_path() -> PathBuf {
@@ -818,6 +893,7 @@ pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Res
     }
     std::fs::create_dir_all(&r.dest).map_err(|e| format!("La cartella di destinazione non si apre: {e}"))?;
     let ytdlp = ensure_ytdlp(emit, cancel)?;
+    refresh_helpers_if_due(emit, cancel);
     let ffmpeg = ensure_ffmpeg(emit, cancel)?;
     let deno = ensure_deno(emit, cancel)?;
     update_ytdlp_if_due(&ytdlp, emit);
