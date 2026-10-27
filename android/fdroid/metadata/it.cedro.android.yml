@@ -1,0 +1,22 @@
+Categories:
+  - Multimedia
+  - System
+License: MIT
+WebSite: https://github.com/realfulvio/cedro
+SourceCode: https://github.com/realfulvio/cedro
+IssueTracker: https://github.com/realfulvio/cedro/issues
+AutoName: Cedro
+Summary: Converti file e trascrivi la voce, tutto sul telefono
+Description: |-
+  Cedro converte immagini, PDF, audio e video e trascrive la voce in testo, senza mandare nulla in giro:
+  tutto si fa sul telefono.
+
+  • Immagini: JPG, PNG, WebP, PDF, compressione, testo dalle foto (OCR).
+  • PDF: Word, testo, immagini.
+  • Audio e video: MP3, WAV, MP4 con l'accelerazione hardware del telefono.
+  • Voce in testo (anche i vocali di WhatsApp e Telegram) con whisper.cpp, offline; al primo uso si scarica il modello (32 o 60 MB).
+  • «Condividi con Cedro» da qualsiasi app, risultati in Documenti.
+
+  Servono Android 8 o successivo e un processore a 64 bit (arm64).
+CurrentVersion: 0.21.2
+CurrentVersionCode: 2102
