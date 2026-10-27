@@ -583,6 +583,15 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
         invia(Stato::Errore(format!("Documenti non è scrivibile: {e}")));
         return;
     }
+    if azione == "web-altra-app" {
+        // YouTube: il link va a un'app che lo scarica (il selettore di Android propone quelle installate).
+        let url = file.to_string_lossy().into_owned();
+        match apri_link(&app, &url) {
+            Ok(()) => c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, Stato::Fatto { path: PathBuf::new(), nome: String::new(), msg: "Link passato a un'altra app".into() })),
+            Err(e) => c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, Stato::Errore(e))),
+        }
+        return;
+    }
     if azione.starts_with("web-") {
         return web(&app, &c, id, &file, &out, azione, &prog);
     }
@@ -604,6 +613,20 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
             invia(Stato::Errore(e.to_string()));
         }
     }
+}
+
+/// Passa un link al selettore di Android (ACTION_VIEW): ci sono le app che lo sanno scaricare.
+fn apri_link(app: &AndroidApp, url: &str) -> Result<(), String> {
+    con_attivita(app, |env, attivita| {
+        let u = env.new_string(url).map_err(|e| e.to_string())?;
+        let uri = env.call_static_method("android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&u)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let azione = env.new_string("android.intent.action.VIEW").map_err(|e| e.to_string())?;
+        let intento = env.new_object("android/content/Intent", "(Ljava/lang/String;Landroid/net/Uri;)V", &[JValue::Object(&azione), JValue::Object(&uri)]).map_err(|e| jerr(env, e))?;
+        let titolo = env.new_string("Scarica con…").map_err(|e| e.to_string())?;
+        let scelta = env.call_static_method("android/content/Intent", "createChooser", "(Landroid/content/Intent;Ljava/lang/CharSequence;)Landroid/content/Intent;", &[JValue::Object(&intento), JValue::Object(&titolo)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        env.call_method(attivita, "startActivity", "(Landroid/content/Intent;)V", &[JValue::Object(&scelta)]).map_err(|e| jerr(env, e))?;
+        Ok(())
+    })
 }
 
 /// «Video dal web»: capisce il link, scarica il file in Documenti e, per «Solo audio» o «Video leggero», lo converte col motore.

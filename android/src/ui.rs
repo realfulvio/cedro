@@ -177,7 +177,12 @@ pub fn e_link(path: &Path) -> bool {
 }
 
 /// Le azioni di «Video dal web»: ogni tessera chiama `webvideo` (l'azione comincia con «web-»).
-fn righe_link() -> Vec<&'static Riga> {
+fn righe_link(path: &Path) -> Vec<&'static Riga> {
+    // YouTube non si scarica dentro Cedro: si passa il link a un'app che lo fa (NewPipe, YTDLnis…).
+    if cedro::youtube::is_youtube_url(&path.to_string_lossy()) {
+        static YT: [Riga; 1] = [r("web-altra-app", "Apri con un'altra app", "NewPipe, YTDLnis…", false)];
+        return YT.iter().collect();
+    }
     static WEB: [Riga; 3] = [
         r("web-video", "Video", "Il migliore che c'è", false),
         r("web-audio", "Solo audio", "MP3 dal video", false),
@@ -231,7 +236,7 @@ fn sotto_altro(kind: Kind) -> &'static str {
 
 fn icona_di(id: &str) -> &'static str {
     match id {
-        "web-video" | "web-leggero" => ic::VIDEO,
+        "web-video" | "web-leggero" | "web-altra-app" => ic::VIDEO,
         "web-audio" => ic::AUDIO,
         "webp" | "bmp" | "gray" | "jpeg" | "jpg" | "png" | "tiff" | "gif" => ic::IMAGE,
         "mp4" | "webm" | "mov" | "mkv" | "avi" => ic::VIDEO,
@@ -459,7 +464,7 @@ impl App {
     /// Le tessere del foglio per il file (o il link) di adesso.
     fn righe_ora(&self) -> Vec<&'static Riga> {
         if self.file.as_ref().is_some_and(|f| e_link(&f.path)) {
-            righe_link()
+            righe_link(&self.file.as_ref().map(|f| f.path.clone()).unwrap_or_default())
         } else {
             righe(self.kind)
         }
