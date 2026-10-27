@@ -11,9 +11,13 @@ pub enum ThemeId {
     CedroCompatto,
     BancoDiLavoro,
     DocumentoAlCentro,
+    /// Comune di Bondeno: la disposizione di «Windows essenziale» con i colori e il carattere del sito del
+    /// Comune e lo stemma accanto al logo (e in Impostazioni, guida, menu dell'icona).
+    Bondeno,
 }
 
-pub const THEMES: [ThemeId; 5] = [ThemeId::WindowsEssenziale, ThemeId::PercorsoGuidato, ThemeId::CedroCompatto, ThemeId::BancoDiLavoro, ThemeId::DocumentoAlCentro];
+pub const THEMES: [ThemeId; 6] =
+    [ThemeId::WindowsEssenziale, ThemeId::PercorsoGuidato, ThemeId::CedroCompatto, ThemeId::BancoDiLavoro, ThemeId::DocumentoAlCentro, ThemeId::Bondeno];
 
 impl ThemeId {
     /// Il nome scritto in config.txt (`ui_theme=`).
@@ -24,6 +28,7 @@ impl ThemeId {
             ThemeId::CedroCompatto => "cedro-compatto",
             ThemeId::BancoDiLavoro => "banco-di-lavoro",
             ThemeId::DocumentoAlCentro => "documento-al-centro",
+            ThemeId::Bondeno => crate::edizione::CHIAVE_TEMA,
         }
     }
 
@@ -39,6 +44,7 @@ impl ThemeId {
             ThemeId::CedroCompatto => "Cedro compatto",
             ThemeId::BancoDiLavoro => "Banco di lavoro",
             ThemeId::DocumentoAlCentro => "Documento al centro",
+            ThemeId::Bondeno => "Comune di Bondeno",
         }
     }
 
@@ -49,6 +55,7 @@ impl ThemeId {
             ThemeId::CedroCompatto => "Finestrella dall'icona vicino all'orologio.",
             ThemeId::BancoDiLavoro => "Tabella con stati, ispettore a destra.",
             ThemeId::DocumentoAlCentro => "L'originale al centro, opzioni accanto.",
+            ThemeId::Bondeno => "Colori e carattere del Comune, con lo stemma.",
         }
     }
 
@@ -59,6 +66,7 @@ impl ThemeId {
             ThemeId::CedroCompatto => &COMPATTO,
             ThemeId::BancoDiLavoro => &BANCO,
             ThemeId::DocumentoAlCentro => &DOCUMENTO,
+            ThemeId::Bondeno => &BONDENO,
         }
     }
 
@@ -163,6 +171,22 @@ pub const DOCUMENTO: Palette = Palette {
     bad: hex(0xAF2543),
     work: hex(0xEDE9F1),
     nav_sel: hex(0xF0EAF5),
+};
+
+/// I colori del sito del Comune di Bondeno (gli stessi di `tema::BONDENO`, usati da Impostazioni e guida).
+pub const BONDENO: Palette = Palette {
+    bg: hex(0xF3F6F9),
+    surface: hex(0xFFFFFF),
+    alt: hex(0xE3F0F8),
+    text: hex(0x191919),
+    muted: hex(0x455A64),
+    primary: hex(0x005E8E),
+    on_primary: hex(0xFFFFFF),
+    border: hex(0xD6DEE5),
+    ok: hex(0x1D7A46),
+    bad: hex(0xB3261E),
+    work: hex(0xFFFFFF),
+    nav_sel: hex(0xD9E9F4),
 };
 
 /// Colori del marchio (uguali in tutti i temi).

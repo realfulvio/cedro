@@ -29,7 +29,7 @@ fn logo_area() -> DrawingArea {
     area
 }
 
-/// Uno stemma dell'edizione Bondeno come superficie cairo; `None` nell'edizione standard.
+/// Uno stemma del Comune di Bondeno come superficie cairo; `None` se il tema Bondeno non è in uso.
 pub fn stemma_surface(stemma: Stemma) -> Option<ImageSurface> {
     let img = edizione::immagine(stemma)?;
     ImageSurface::create_for_data(img.bgra.clone(), Format::ARgb32, img.w as i32, img.h as i32, img.w as i32 * 4).ok()
@@ -47,7 +47,7 @@ pub fn paint_surface(cr: &Context, img: &ImageSurface, x: f64, y: f64, w: f64, h
     let _ = cr.restore();
 }
 
-/// Uno stemma dell'edizione Bondeno grande `side` pixel, come elemento dell'interfaccia.
+/// Uno stemma del Comune di Bondeno grande `side` pixel, come elemento dell'interfaccia.
 pub fn stemma_area(stemma: Stemma, side: i32) -> DrawingArea {
     let area = DrawingArea::new();
     area.set_content_width(side);
@@ -63,10 +63,10 @@ pub fn stemma_area(stemma: Stemma, side: i32) -> DrawingArea {
 }
 
 /// La firma: `version` aggiunge «Cedro x.y.z ·» davanti, `suffix` va in coda.
-/// Con `ente`, nell'edizione Bondeno, davanti c'è lo stemma; senza `version` anche «Comune di Bondeno ·».
+/// Con `ente`, con il tema Bondeno, davanti c'è lo stemma; senza `version` anche «Comune di Bondeno ·».
 pub fn firma(version: bool, suffix: &str, ente: bool) -> gtk4::Box {
     let row = gtk4::Box::new(Orientation::Horizontal, 0);
-    let ente = ente && edizione::BONDENO;
+    let ente = ente && edizione::bondeno();
     if ente {
         let stemma = stemma_area(Stemma::Solo, 20);
         stemma.set_margin_end(6);
