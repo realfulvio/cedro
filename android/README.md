@@ -56,3 +56,12 @@ Thread: 2 sui core grandi 11,5 s, 7 thread 8,2–9,6 s (per questo ora si usano 
 Dotprod+fp16 contro solo NEON: 9,6 s contro 12,5 s (−23 %).
 Vulkan: l'Adreno 618 del 9T espone solo Vulkan 1.1 e ggml vuole la 1.2 («Vulkan 1.2 required»): ripiego sul processore.
 Non è nell'APK (legarlo richiederebbe anche API 28+).
+
+## Video dal web (senza yt-dlp)
+
+Un link arriva da «Condividi» di un browser (testo con un indirizzo) o dagli appunti («Scegli il file» → «Link dagli appunti»);
+il foglio offre Video, Solo audio e Video leggero (`src/webvideo.rs`, Rust puro, nessun programma esterno né codice scaricato,
+quindi compatibile con F-Droid). Funziona con: link diretti a file audio/video, pagine con `og:video`, `<video>`/`<source>`/JSON-LD,
+Internet Archive (sceglie l'originale, il file più piccolo o l'MP3 già pronto). Provato sul Mi 9T con un oggetto di Internet Archive
+(Video 2,0 MB, Solo audio 56 KB). Limiti: **YouTube non è supportato** (dice chiaramente perché), nessun flusso HLS/DASH né video con DRM,
+nessun campo di testo per scrivere un link (si condivide o si incolla dagli appunti).
