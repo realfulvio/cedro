@@ -1,5 +1,6 @@
-# Bozza per il catalogo ufficiale (merge request su https://gitlab.com/fdroid/fdroiddata, file metadata/it.cedro.android.yml).
-# NON ancora provata sul buildserver di F-Droid: va aperta dall'account GitLab del maintainer e ripulita secondo i log del build.
+# Ricetta per il catalogo ufficiale di F-Droid: va in metadata/it.cedro.android.yml di https://gitlab.com/fdroid/fdroiddata (vedi MR.md).
+# Testi, icona e schermate stanno nel repository di Cedro, in fastlane/metadata/android/ (it-IT e en-US).
+# Prima release da costruire: android-v0.22.5 (la prima che contiene fastlane/); non provata sul buildserver, la prova è la pipeline della MR.
 Categories:
   - Multimedia
   - System
@@ -8,38 +9,40 @@ AuthorName: Cedro contributors
 WebSite: https://github.com/realfulvio/cedro
 SourceCode: https://github.com/realfulvio/cedro
 IssueTracker: https://github.com/realfulvio/cedro/issues
+Changelog: https://github.com/realfulvio/cedro/releases
+
 AutoName: Cedro
 
 RepoType: git
 Repo: https://github.com/realfulvio/cedro.git
 
-# Il modello di trascrizione si scarica al primo uso (rete) e fdk-aac (licenza Fraunhofer, non libera) è nel codice per l'AAC del video:
-# da verificare con i revisori se serve l'anti-feature «NonFreeDep» o togliere fdk-aac dall'APK per F-Droid.
-AntiFeatures:
-  NonFreeNet:
-    it: Scarica al primo uso il modello di trascrizione (Hugging Face) e, per i video da YouTube, yt-dlp.
-
 Builds:
-  - versionName: 0.22.4
-    versionCode: 2204
-    commit: android-v0.22.4
+  - versionName: 0.22.5
+    versionCode: 2205
+    commit: android-v0.22.5
     sudo:
       - apt-get update
-      - apt-get install -y cmake python3
-    output: android/target/cedro-0.21.3-unsigned.apk
-    ndk: r27c
-    rm:
-      - target
-      - android/target
+      - apt-get install -y build-essential cmake curl python3 openjdk-17-jdk-headless
+    output: android/target/cedro-unsigned.apk
     prebuild:
-      - curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --target aarch64-linux-android
-      - export PATH=$HOME/.cargo/bin:$PATH && cargo install cargo-ndk --locked
+      - curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain
+        1.97.0 --target aarch64-linux-android
+      - export PATH=$HOME/.cargo/bin:$PATH && cargo install cargo-ndk --version 3.5.4
+        --locked
+      - export PATH=$HOME/.cargo/bin:$PATH && cargo fetch --locked --target aarch64-linux-android
     build:
       - export PATH=$HOME/.cargo/bin:$PATH
-      - export ANDROID_NDK_HOME=$$NDK$$ ANDROID_SDK=$$SDK$$
+      - export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+      - export ANDROID_SDK=$$SDK$$ ANDROID_NDK_HOME=$$NDK$$
+      - export ANDROID_BUILD_TOOLS=$$SDK$$/build-tools/34.0.0 ANDROID_JAR=$$SDK$$/platforms/android-34/android.jar
+      - export CARGO_NET_OFFLINE=true
+      - export CEDRO_VERSION_NAME=$(git describe --tags --exact-match --match 'android-v*'
+        | sed 's/^android-v//')
       - CEDRO_UNSIGNED=1 android/build.sh
+      - mv android/target/cedro-$CEDRO_VERSION_NAME-unsigned.apk android/target/cedro-unsigned.apk
+    ndk: r27c
 
 AutoUpdateMode: Version android-v%v
 UpdateCheckMode: Tags ^android-v
-CurrentVersion: 0.22.4
-CurrentVersionCode: 2204
+CurrentVersion: 0.22.5
+CurrentVersionCode: 2205
