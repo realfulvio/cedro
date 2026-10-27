@@ -77,7 +77,15 @@ fn dpi_of(hwnd: HWND) -> f32 {
 
 /// Pixel per unità di disegno.
 fn scale_of(hwnd: HWND) -> f32 {
-    dpi_of(hwnd) / 96.0 * ZOOM
+    let base = dpi_of(hwnd) / 96.0 * ZOOM;
+    let mut rc = RECT::default();
+    if unsafe { GetClientRect(hwnd, &mut rc) }.is_err() || rc.right <= rc.left || rc.bottom <= rc.top {
+        return base;
+    }
+    match host(hwnd).and_then(|h| h.screen.try_borrow().ok().map(|s| s.fit_scale(base, (rc.right - rc.left) as f32, (rc.bottom - rc.top) as f32))) {
+        Some(s) => s,
+        None => base,
+    }
 }
 
 struct Plat {
@@ -501,8 +509,9 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         WM_GETMINMAXINFO => {
             let info = &mut *(lparam.0 as *mut MINMAXINFO);
             if let Ok(screen) = host.screen.try_borrow() {
+                // La finestra si può stringere molto: sotto la misura minima il disegno si rimpicciolisce.
                 let (mw, mh) = screen.min_size();
-                let s = scale_of(hwnd);
+                let s = dpi_of(hwnd) / 96.0 * ZOOM * 0.5;
                 info.ptMinTrackSize.x = (mw * s) as i32;
                 info.ptMinTrackSize.y = (mh * s) as i32;
             }

@@ -100,7 +100,10 @@ fn main() {
                     s.ui.step = st;
                 }
                 settle(&mut s);
-                let (w, h) = s.preferred_size();
+                let (mut w, mut h) = s.preferred_size();
+                if let Some((sw, sh)) = std::env::var("SIZE").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse::<f32>().ok()?, b.parse::<f32>().ok()?)))) {
+                    (w, h) = (sw, sh);
+                }
                 let name = format!("{}{}-{}-{}{}.png", theme.key(), if surface == Surface::Compact { "-popup" } else { "" }, if simple { "sempl" } else { "std" }, format!("{act:?}").to_lowercase(), std::env::var("STEP").map(|v| format!("-{v}")).unwrap_or_default());
                 let p = s.render(w as u32, h as u32, 1.0);
                 p.save_png(&out.join(&name)).unwrap();

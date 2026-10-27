@@ -72,7 +72,9 @@ impl Aspetto {
     }
 
     /// Disegna la pagina in un'area di `w`×`h` unità.
-    pub fn draw(&mut self, p: &mut Painter, w: f32, h: f32) {
+    pub fn draw(&mut self, p: &mut Painter, full_w: f32, h: f32) {
+        // A destra resta il posto della barra di scorrimento.
+        let w = full_w - 14.0;
         let t = self.tema;
         p.clear(t.bg);
         self.zones.clear();
@@ -141,7 +143,7 @@ impl Aspetto {
             let track = h - 8.0;
             let bar = (track * h / self.content_h).max(28.0);
             let top = 4.0 + (track - bar) * (self.scroll / max);
-            p.rrect(w - 6.0, top, 4.0, bar, 2.0, Some(t.line), None);
+            p.rrect(full_w - 6.0, top, 4.0, bar, 2.0, Some(t.line), None);
         }
     }
 
