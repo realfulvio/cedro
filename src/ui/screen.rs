@@ -121,6 +121,7 @@ impl Screen {
 
     /// Disegna il fotogramma in un'immagine di `w`×`h` pixel con `scale` pixel per unità.
     pub fn render(&mut self, w: u32, h: u32, scale: f32) -> Painter<'_> {
+        self.want_preview();
         let fonts = Fonts::shared();
         let painter = Painter::new(w, h, scale, fonts, &mut self.cache);
         let ms = self.started.elapsed().as_millis() as u64;
@@ -148,6 +149,21 @@ impl Screen {
         self.focusables = self.hits.iter().filter(|h| !matches!(h.act, Act::Nothing | Act::MenuPick(_) | Act::Minimize | Act::Maximize | Act::Close)).map(|h| h.act.clone()).collect();
         self.focusables.dedup();
         f.p
+    }
+
+    /// Il tema «Documento al centro» mostra il file scelto: lo si fa preparare al thread dei file.
+    fn want_preview(&mut self) {
+        if self.theme != ThemeId::DocumentoAlCentro || self.surface != Surface::Main || self.app.activity != Activity::Convert {
+            return;
+        }
+        let vis = self.app.visible();
+        let sel = self.app.selected.filter(|i| vis.contains(i)).or(vis.first().copied());
+        self.app.selected = sel;
+        if let Some(i) = sel {
+            let path = self.app.files[i].path.clone();
+            let page = self.app.preview_page;
+            self.app.want_preview(&path, page);
+        }
     }
 
     /// Vero se la finestra va ridisegnata spesso (rotelline, cursore che lampeggia).
@@ -249,7 +265,9 @@ impl Screen {
         }
         for (r, which, max) in self.scrolls.iter().rev() {
             if inside(*r, x, y) && *max > 0.0 {
-                let v = (self.ui.scroll(*which) + dy).clamp(0.0, *max);
+                // Il registro conta dal fondo (0 = le righe più nuove): la rotella va al contrario.
+                let d = if *which == Scroll::Log { -dy } else { dy };
+                let v = (self.ui.scroll(*which) + d).clamp(0.0, *max);
                 self.ui.scroll.insert(*which, v);
                 return true;
             }
@@ -271,9 +289,6 @@ impl Screen {
     fn add_files(&mut self, paths: Vec<PathBuf>) {
         let simple = self.simple;
         self.app.add_files(paths, simple);
-        if self.theme == ThemeId::PercorsoGuidato && !self.app.visible().is_empty() && self.ui.step == 0 {
-            self.ui.step = 1;
-        }
     }
 
     /// Applica gli eventi dei lavori; vero se c'è da ridisegnare.
