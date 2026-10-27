@@ -1,0 +1,1 @@
+Prima versione per Android: conversioni, PDF, video con accelerazione hardware, voce in testo (whisper), Condividi con Cedro.
