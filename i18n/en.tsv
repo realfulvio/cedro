@@ -803,6 +803,7 @@ questo video non si può decomprimere: {}	this video can't be decompressed: {}
 formato video intermedio non letto	intermediate video format not read
 lettura video: {}	video reading: {}
 tempo del fotogramma: {}	frame time: {}
+tempo scaduto	timed out
 scrittura video: {}	video writing: {}
 lettura video interrotta	video reading interrupted
 fotogramma non letto: {}	frame not read: {}
