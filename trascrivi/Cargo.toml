@@ -14,7 +14,7 @@ publish = false
 vulkan = ["whisper-rs/vulkan"]
 
 [dependencies]
-opus = "0.3"
+opus = "0.4"
 serde_json = "1"
 symphonia = { version = "0.5", default-features = false, features = ["mp3", "mp1", "mp2", "wav", "flac", "vorbis", "pcm", "adpcm", "aac", "alac", "isomp4", "ogg", "mkv", "aiff", "caf"] }
 whisper-rs-sys = "0.15"
