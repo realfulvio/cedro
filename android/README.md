@@ -27,8 +27,8 @@ condivisione a app aperta non ricarica l'intento (chiudere e ripetere); solo arm
 ## L'unica eccezione: una classe Java
 
 Tutto è Rust tranne `java/it/cedro/android/CedroActivity.java` (una ventina di righe): `NativeActivity` non inoltra
-`onActivityResult`, quindi senza questa classe il selettore di file di Android non potrebbe restituire la scelta.
-La classe fa solo da inoltro (`scelto()` restituisce l'ultimo `Uri`); intento, lettura e copia del file sono in Rust (JNI).
+`onActivityResult`, e `onNewIntent`, quindi senza questa classe il selettore di file di Android non potrebbe restituire la scelta e una nuova condivisione a app aperta andrebbe persa.
+La classe fa solo da inoltro (`scelto()` restituisce l'ultimo `Uri`, `novita()` dice se è arrivato un nuovo intento); intento, lettura e copia del file sono in Rust (JNI).
 `build.sh` la compila con `javac` + `d8` e la mette nell'APK come `classes.dex`.
 «Apri» e «Condividi» non usano un FileProvider: il risultato si registra in MediaStore (`MediaScannerConnection`) e si usa il suo `content://`.
 
@@ -40,6 +40,6 @@ mdpi–xxxhdpi quadrata e tonda; `android:icon` e `android:roundIcon` nel manife
 ## Limiti noti
 
 - Scrive in `/storage/emulated/0/Documents` (target SDK 29 + legacy storage, permesso richiesto a runtime).
-- `noHistory`: Cedro si chiude quando si esce, così ogni «Condividi» parte da zero (NativeActivity non riceve i nuovi intenti).
+- `singleTask`: una nuova condivisione a Cedro già aperto arriva da `onNewIntent` (inoltrato dalla classe Java) e sostituisce il file.
 - Il lavoro gira finché l'app è in primo piano: manca ancora un servizio con notifica per i lavori lunghi.
 - «Ritaglia» non esiste nel motore, quindi non c'è. Solo arm64; video, trascrizione e OCR non provati su Android.
