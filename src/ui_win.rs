@@ -650,6 +650,14 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             redraw(hwnd);
             LRESULT(0)
         }
+        WM_RBUTTONUP => {
+            let (x, y) = xy(lparam, hwnd);
+            if let Ok(mut s) = host.screen.try_borrow_mut() {
+                s.context_click(x, y);
+            }
+            redraw(hwnd);
+            LRESULT(0)
+        }
         WM_MOUSEWHEEL => {
             let mut pt = POINT { x: (lparam.0 & 0xffff) as i16 as i32, y: ((lparam.0 >> 16) & 0xffff) as i16 as i32 };
             let _ = ScreenToClient(hwnd, &mut pt);
