@@ -58,3 +58,11 @@ runs:
           if ($sig.Status -ne 'Valid') { throw "$($f.Name): firma non valida" }
           Copy-Item $f.FullName (Join-Path '${{ inputs.cartella }}' $f.Name) -Force
         }
+
+    # L'artifact mandato a SignPath ha i file non firmati: lo tolgo, così il job «pubblica» (che scarica
+    # tutti gli artifact) non li confonde con quelli firmati.
+    - name: Toglie l'artifact non firmato
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/${{ steps.carica.outputs.artifact-id }}"
