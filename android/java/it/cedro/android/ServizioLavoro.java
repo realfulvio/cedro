@@ -6,6 +6,8 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 
@@ -44,7 +46,7 @@ public class ServizioLavoro extends Service {
         int percento = intento != null ? intento.getIntExtra("percento", -1) : -1;
         Intent apri = new Intent(this, CedroActivity.class);
         apri.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent pi = PendingIntent.getActivity(this, 0, apri, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent pi = PendingIntent.getActivity(this, 0, apri, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder b = new Notification.Builder(this, CANALE)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
                 .setContentTitle(titolo != null ? titolo : "Cedro")
@@ -54,7 +56,9 @@ public class ServizioLavoro extends Service {
                 .setContentIntent(pi)
                 .setProgress(100, Math.max(percento, 0), percento < 0);
         if (!wake.isHeld()) wake.acquire(60 * 60 * 1000L);
-        startForeground(ID, b.build());
+        // Da Android 14 il servizio in primo piano deve dire che tipo di lavoro fa.
+        if (Build.VERSION.SDK_INT >= 29) startForeground(ID, b.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+        else startForeground(ID, b.build());
         return START_NOT_STICKY;
     }
 
