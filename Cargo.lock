@@ -133,6 +133,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "audiopus_sys"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62314a1546a2064e033665d658e88c620a62904be945f8147e6b16c3db9f8651"
+dependencies = [
+ "cmake",
+ "log",
+ "pkg-config",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -322,6 +333,7 @@ dependencies = [
 name = "cedro"
 version = "0.21.2"
 dependencies = [
+ "audiopus_sys",
  "cfb",
  "fdk-aac",
  "flate2",

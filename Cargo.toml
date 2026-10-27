@@ -47,6 +47,8 @@ openh264 = { version = "0.9", default-features = false, features = ["source"] }
 # whisper.cpp come libreria nell'APK (src/whisper_android).
 whisper-rs = "0.16"
 whisper-rs-sys = "0.15"
+# Opus (vocali di WhatsApp e Telegram) per la trascrizione: libopus compilata dentro l'APK.
+audiopus_sys = { version = "0.2", features = ["static"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-core = "0.61"
