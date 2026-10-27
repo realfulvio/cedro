@@ -217,6 +217,33 @@ pub fn waveform(path: &Path, n: usize) -> Option<Vec<f32>> {
 }
 
 fn decode(path: &Path) -> Result<Pcm, String> {
+    let first = decode_symphonia(path);
+    // Android: i formati che Cedro non sa leggere (Opus, AMR…) li decodifica il telefono.
+    #[cfg(target_os = "android")]
+    if first.is_err() {
+        if let Ok(pcm) = decode_telefono(path) {
+            return Ok(pcm);
+        }
+    }
+    first
+}
+
+#[cfg(target_os = "android")]
+fn decode_telefono(path: &Path) -> Result<Pcm, String> {
+    let mut decoder = crate::mediadec::AudioDecoder::open(path)?;
+    let (mut channels, mut rate) = (2u16, 44_100u32);
+    let mut samples = Vec::new();
+    while let Some((chunk, c, r)) = decoder.next()? {
+        (channels, rate) = (c, r);
+        samples.extend(chunk);
+    }
+    if samples.is_empty() {
+        return Err("audio non decodificato".into());
+    }
+    Ok(Pcm { rate, channels, samples, tags: Tags::default() })
+}
+
+fn decode_symphonia(path: &Path) -> Result<Pcm, String> {
     let file = File::open(path).map_err(|e| e.to_string())?;
     let source = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
