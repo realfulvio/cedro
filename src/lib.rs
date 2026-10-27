@@ -25,6 +25,7 @@ pub mod update;
 pub mod vista;
 pub mod wheelgeom;
 pub mod wheelgfx;
+pub mod webvideo;
 pub mod youtube;
 mod zipstore;
 #[cfg(windows)]
