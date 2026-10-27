@@ -47,6 +47,8 @@ pub struct Settings {
     pub ocr_lang: String,
     /// Pagine al massimo per l'OCR di un PDF; 0 vuol dire tutte.
     pub ocr_max: u32,
+    /// Il tema della versione standard (`ui::theme::ThemeId::key`); sconosciuto = Windows essenziale.
+    pub ui_theme: String,
 }
 
 impl Default for Settings {
@@ -72,6 +74,7 @@ impl Default for Settings {
             compress: 1,
             ocr_lang: "auto".into(),
             ocr_max: 100,
+            ui_theme: String::new(),
         }
     }
 }
@@ -153,6 +156,7 @@ impl Settings {
                         s.compress = n.min(2);
                     }
                 }
+                "ui_theme" => s.ui_theme = value.to_string(),
                 "ocr_lang" if matches!(value, "auto" | "it" | "en") => s.ocr_lang = value.to_string(),
                 "ocr_max" => {
                     if let Ok(n) = value.parse::<u32>() {
@@ -194,6 +198,8 @@ impl Settings {
             ("compress", self.compress.to_string()),
             ("ocr_lang", self.ocr_lang.clone()),
             ("ocr_max", self.ocr_max.to_string()),
+            ("ui_theme", self.ui_theme.clone()),
+            ("ui_schema", "1".into()),
         ];
         let mut out: Vec<String> = old
             .lines()
@@ -295,5 +301,26 @@ mod tests {
         assert!(text.contains("futuro=x\n"));
         assert_eq!(text.matches("quality=").count(), 1);
         assert_eq!(Settings::parse(&text), s);
+    }
+}
+
+#[cfg(test)]
+mod theme_tests {
+    use super::*;
+
+    #[test]
+    fn ui_theme_round_trips_and_keeps_other_lines() {
+        let old = "\u{feff}simple=1\nmia_chiave=resta\nui_theme=banco-di-lavoro\n";
+        let mut s = Settings::parse(old);
+        assert!(s.simple);
+        assert_eq!(s.ui_theme, "banco-di-lavoro");
+        s.ui_theme = "percorso-guidato".into();
+        let text = s.merge_into(old);
+        assert!(text.contains("mia_chiave=resta"));
+        assert_eq!(text.matches("ui_theme=").count(), 1);
+        assert!(text.contains("ui_schema=1"));
+        assert_eq!(Settings::parse(&text).ui_theme, "percorso-guidato");
+        // Un file vecchio, senza le chiavi nuove, resta com'era.
+        assert_eq!(Settings::parse("simple=0\n").ui_theme, "");
     }
 }
