@@ -607,6 +607,17 @@ fn gb(kib: f64) -> String {
 }
 
 /// Cosa c'è nel telefono e cosa usa Cedro: modello, Android, processore, memoria, istruzioni, accelerazioni.
+/// La cartella delle librerie dell'APK: l'unico posto da cui Android lascia partire dei programmi (Python, QuickJS, ffmpeg per YouTube).
+fn cartella_librerie(app: &AndroidApp) -> Option<PathBuf> {
+    con_attivita(app, |env, att| {
+        let ai = env.call_method(att, "getApplicationInfo", "()Landroid/content/pm/ApplicationInfo;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let dir = env.get_field(&ai, "nativeLibraryDir", "Ljava/lang/String;").and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let dir: String = env.get_string(&jni::objects::JString::from(dir)).map_err(|e| jerr(env, e))?.into();
+        Ok(PathBuf::from(dir))
+    })
+    .ok()
+}
+
 fn leggi_info(app: &AndroidApp) -> Info {
     let versione = con_attivita(app, |env, att| {
         let pm = env.call_method(att, "getPackageManager", "()Landroid/content/pm/PackageManager;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
@@ -769,7 +780,7 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
         return;
     }
     if azione.starts_with("web-") {
-        return web(&app, &c, id, &file, &out, azione, &prog);
+        return web(&app, &c, id, &file, &out, azione, &prog, qualita as usize);
     }
     if azione == "trascrivi" {
         return trascrivi(&app, &c, id, &file, &out, &prog, qualita as usize);
@@ -969,15 +980,22 @@ fn apri_link(app: &AndroidApp, url: &str) -> Result<(), String> {
 }
 
 /// «Video dal web»: capisce il link, scarica il file in Documenti e, per «Solo audio» o «Video leggero», lo converte col motore.
-fn web(app: &AndroidApp, c: &Consegne, id: u32, link: &Path, out: &Path, azione: &str, prog: &Arc<std::sync::atomic::AtomicU32>) {
+/// «Testo» scarica l'audio e lo trascrive. YouTube passa da yt-dlp, se l'APK lo contiene.
+#[allow(clippy::too_many_arguments)]
+fn web(app: &AndroidApp, c: &Consegne, id: u32, link: &Path, out: &Path, azione: &str, prog: &Arc<std::sync::atomic::AtomicU32>, modello: usize) {
     use cedro::webvideo::{download, resolve, Want};
     let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
     let url = link.to_string_lossy().into_owned();
+    let testo = azione == "web-testo";
     let want = match azione {
-        "web-audio" => Want::Audio,
+        "web-audio" | "web-testo" => Want::Audio,
         "web-leggero" => Want::Light,
         _ => Want::Video,
     };
+    #[cfg(feature = "youtube")]
+    if cedro::youtube::is_youtube_url(&url) {
+        return youtube(app, c, id, &url, out, azione, prog, modello);
+    }
     let finito = |path: PathBuf, msg: String| match consegna(app, path) {
         Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg }),
         Err(e) => invia(Stato::Errore(e)),
@@ -988,14 +1006,21 @@ fn web(app: &AndroidApp, c: &Consegne, id: u32, link: &Path, out: &Path, azione:
     };
     log::info!("web: {} → {} ({:?} byte)", url, media.url, media.size);
     // Il file scaricato va subito al suo posto se è quello che serve; altrimenti passa da una cartella di lavoro.
-    let serve_conversione = (want == Want::Audio && !media.audio) || (want == Want::Light && media.size.is_none_or(|s| s > 30_000_000) && !media.url.contains("512kb"));
-    let dest = if serve_conversione { out.join(".cedro-web") } else { out.to_path_buf() };
-    let parte = if serve_conversione { 0.6 } else { 1.0 };
+    // Per «Testo» la trascrizione legge anche il video: niente conversione.
+    let serve_conversione = !testo && ((want == Want::Audio && !media.audio) || (want == Want::Light && media.size.is_none_or(|s| s > 30_000_000) && !media.url.contains("512kb")));
+    // Una cartella per lavoro: due lavori insieme non si cancellano i file a vicenda.
+    let dest = if serve_conversione || testo { out.join(format!(".cedro-web-{id}")) } else { out.to_path_buf() };
+    let parte = if serve_conversione || testo { 0.6 } else { 1.0 };
     let niente = std::sync::atomic::AtomicBool::new(false);
     let scaricato = match download(&media, &dest, &|f| prog.store((f * parte * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed), &niente) {
         Ok(p) => p,
         Err(e) => return invia(Stato::Errore(e)),
     };
+    if testo {
+        trascrivi(app, c, id, &scaricato, out, prog, modello);
+        let _ = std::fs::remove_dir_all(&dest);
+        return;
+    }
     if !serve_conversione {
         let dim = std::fs::metadata(&scaricato).map(|m| m.len()).unwrap_or(0);
         return finito(scaricato, format!("{} · {:.1} MB", media.title, dim as f64 / 1e6).replace('.', ","));
@@ -1011,6 +1036,78 @@ fn web(app: &AndroidApp, c: &Consegne, id: u32, link: &Path, out: &Path, azione:
         Ok(o) => finito(o.path, o.message),
         Err(e) => invia(Stato::Errore(e.to_string())),
     }
+}
+
+/// YouTube con yt-dlp (Python, QuickJS e ffmpeg dall'APK; le librerie si scaricano al primo uso).
+#[cfg(feature = "youtube")]
+#[allow(clippy::too_many_arguments)]
+fn youtube(app: &AndroidApp, c: &Consegne, id: u32, url: &str, out: &Path, azione: &str, prog: &Arc<std::sync::atomic::AtomicU32>, modello: usize) {
+    use cedro::youtube::{run, Event, Request};
+    let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
+    let testo = azione == "web-testo";
+    // Una cartella per lavoro: due lavori insieme non si cancellano i file a vicenda.
+    let lavoro = out.join(format!(".cedro-yt-{id}"));
+    let _ = std::fs::remove_dir_all(&lavoro);
+    let mut r = Request::new(vec![url.to_string()], matches!(azione, "web-audio" | "web-testo"), lavoro.clone());
+    r.playlist = false;
+    if azione == "web-leggero" {
+        r.quality = 480;
+    }
+    if testo {
+        r.thumbnail = false;
+        r.chapters = false;
+    }
+    // Per «Testo» lo scaricamento è la prima parte del lavoro, la trascrizione la seconda.
+    let parte = if testo { 0.4 } else { 1.0 };
+    let niente = std::sync::atomic::AtomicBool::new(false);
+    let esito = run(
+        &r,
+        &mut |e| match e {
+            Event::Progress { percent, .. } => prog.store((percent * 10.0 * parte) as u32, std::sync::atomic::Ordering::Relaxed),
+            Event::Log(l) => log::info!("youtube: {l}"),
+            _ => {}
+        },
+        &niente,
+    );
+    let file = match esito.map(|f| f.into_iter().next()) {
+        Ok(Some(f)) => f,
+        Ok(None) => {
+            let _ = std::fs::remove_dir_all(&lavoro);
+            return invia(Stato::Errore("yt-dlp non ha scaricato niente".into()));
+        }
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&lavoro);
+            return invia(Stato::Errore(con_dettagli(&e, azione, Path::new(url), out)));
+        }
+    };
+    if testo {
+        trascrivi(app, c, id, &file, out, prog, modello);
+    } else {
+        // Fuori dalla cartella di lavoro, che si cancella: poi in Documenti come gli altri risultati.
+        let posto = libero(out, &file);
+        let posto = if std::fs::rename(&file, &posto).is_ok() { posto } else { file.clone() };
+        let dim = std::fs::metadata(&posto).map(|m| m.len()).unwrap_or(0);
+        let titolo = posto.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        match consegna(app, posto) {
+            Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg: format!("{titolo} · {:.1} MB", dim as f64 / 1e6).replace('.', ",") }),
+            Err(e) => invia(Stato::Errore(e)),
+        }
+    }
+    let _ = std::fs::remove_dir_all(&lavoro);
+}
+
+/// Un nome libero in `dir` per `file` («titolo (2).mp4» se «titolo.mp4» c'è già): non si sovrascrive niente.
+#[cfg(feature = "youtube")]
+fn libero(dir: &Path, file: &Path) -> PathBuf {
+    let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = file.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let mut posto = dir.join(format!("{stem}{ext}"));
+    let mut n = 2;
+    while posto.exists() {
+        posto = dir.join(format!("{stem} ({n}){ext}"));
+        n += 1;
+    }
+    posto
 }
 
 /// Voce in testo con whisper.cpp (nell'APK): il modello scelto (Veloce = tiny, Buona = base) si scarica al primo uso. Salva un .txt in Documenti.
@@ -1131,6 +1228,9 @@ fn android_main(app: AndroidApp) {
     let dati = app.internal_data_path().unwrap_or_else(|| PathBuf::from("/data/local/tmp"));
     // Il motore cerca le sue impostazioni in $HOME/.config/cedro.
     std::env::set_var("HOME", &dati);
+    if let Some(librerie) = cartella_librerie(&app) {
+        cedro::youtube::android::set_dirs(librerie, dati.clone());
+    }
     if std::env::var_os("RTEN_NUM_THREADS").is_none() {
         if let Some(n) = core_grandi() {
             log::info!("core grandi: {n}");
