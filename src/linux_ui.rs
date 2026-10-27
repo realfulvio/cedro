@@ -21,7 +21,7 @@ use gtk4::{
     GestureClick, STYLE_PROVIDER_PRIORITY_APPLICATION,
 };
 
-const MARK: &[u8] = include_bytes!("../docs/mark.png");
+const MARK: &[u8] = cedro::edizione::ICONA;
 
 static UPDATE: Mutex<Option<UpdateNews>> = Mutex::new(None);
 static SETTINGS: Mutex<Option<Settings>> = Mutex::new(None);
