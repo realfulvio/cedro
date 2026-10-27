@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Costruisce android/target/cedro-debug.apk (firmato con la chiave di debug). Niente Gradle, niente Java nel codice:
+# serve solo il JDK per apksigner/keytool. Variabili: ANDROID_SDK (default ~/android-sdk).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+SDK="${ANDROID_SDK:-$HOME/android-sdk}"
+export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$SDK/android-ndk-r27c}"
+BT="$SDK/build-tools/android-14"
+JAR="$SDK/platforms/android-11/android.jar"
+export JAVA_HOME="${JAVA_HOME:-$SDK/jdk}"
+export PATH="$JAVA_HOME/bin:$HOME/.cargo/bin:$PATH"
+OUT=android/target; mkdir -p "$OUT/apk/lib/arm64-v8a"
+cargo ndk -t arm64-v8a -P 26 build --release -p cedro-android
+cp target/aarch64-linux-android/release/libcedro_android.so "$OUT/apk/lib/arm64-v8a/"
+"$BT/aapt2" link -o "$OUT/base.apk" -I "$JAR" --manifest android/AndroidManifest.xml --min-sdk-version 26 --target-sdk-version 29
+python3 -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1],'a'); z.write(sys.argv[2],'lib/arm64-v8a/libcedro_android.so',compress_type=zipfile.ZIP_STORED); z.close()" "$OUT/base.apk" "$OUT/apk/lib/arm64-v8a/libcedro_android.so"
+"$BT/zipalign" -f -p 4 "$OUT/base.apk" "$OUT/aligned.apk"
+KS="$OUT/debug.keystore"
+[ -f "$KS" ] || keytool -genkeypair -keystore "$KS" -storepass android -keypass android -alias cedro -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Cedro debug"
+"$BT/apksigner" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android --out "$OUT/cedro-debug.apk" "$OUT/aligned.apk"
+ls -la "$OUT/cedro-debug.apk"
