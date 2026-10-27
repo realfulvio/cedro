@@ -25,6 +25,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
   UNINSTALL_KEY: 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{5C1CAEBF-024C-4A9F-BEC8-1FB3C9FEA4CE}_is1'
 
 jobs:
