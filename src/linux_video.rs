@@ -19,6 +19,7 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
 use crate::mp4mux::{write_mp4, Movie, Sample};
+use crate::nal::{annex_nals, avcc_prefix, is_annex, length_to_annex};
 use crate::sink::VideoSink;
 
 pub(crate) fn to_mp4(input: &Path, output: &Path) -> Result<(), String> {
@@ -548,31 +549,8 @@ fn duration_90k(ticks_100ns: i64) -> u32 {
     u32::try_from(value).unwrap_or(u32::MAX).max(1)
 }
 
-fn annex_nals(data: &[u8]) -> Vec<&[u8]> {
-    let mut marks = Vec::new();
-    let mut i = 0;
-    while i + 3 <= data.len() {
-        if i + 4 <= data.len() && data[i..i + 4] == [0, 0, 0, 1] {
-            marks.push((i, i + 4));
-            i += 4;
-            continue;
-        }
-        if data[i..i + 3] == [0, 0, 1] {
-            marks.push((i, i + 3));
-            i += 3;
-            continue;
-        }
-        i += 1;
-    }
-    marks
-        .iter()
-        .enumerate()
-        .filter_map(|(index, (_, start))| {
-            let end = marks.get(index + 1).map(|(at, _)| *at).unwrap_or(data.len());
-            if *start < end { Some(&data[*start..end]) } else { None }
-        })
-        .collect()
-}
+
+
 
 fn yuv(r: i32, g: i32, b: i32) -> (u8, u8, u8) {
     let y = (((66 * r + 129 * g + 25 * b + 128) >> 8) + 16).clamp(0, 255) as u8;
@@ -1126,7 +1104,7 @@ fn read_span(file: &mut File, limit: u64) -> Result<Option<IsoSpan>, String> {
 }
 
 fn annex_sample(sample: &[u8]) -> Vec<u8> {
-    if !annex_nals(sample).is_empty() {
+    if is_annex(sample) {
         return sample.to_vec();
     }
     for nal_len in [4usize, 3, 2, 1] {
@@ -1288,7 +1266,7 @@ fn h264_private(private: &[u8]) -> (usize, Vec<u8>) {
 }
 
 fn annex_pref(sample: &[u8], nal_len: usize) -> Vec<u8> {
-    if !annex_nals(sample).is_empty() {
+    if is_annex(sample) {
         return sample.to_vec();
     }
     let annex = length_to_annex(sample, nal_len);
@@ -1366,7 +1344,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
             Err(_) => break,
         };
         if packet.track_id() == video_id {
-            let annex = if annex_nals(packet.buf()).is_empty() {
+            let annex = if !is_annex(packet.buf()) {
                 length_to_annex(packet.buf(), nal_len)
             } else {
                 packet.buf().to_vec()
@@ -1454,72 +1432,8 @@ fn feed_frame(
     push_decoded(sink.as_mut().unwrap(), frame, duration, time)
 }
 
-fn avcc_prefix(extra: Option<&[u8]>) -> (usize, Vec<u8>) {
-    let Some(extra) = extra else {
-        return (4, Vec::new());
-    };
-    if extra.len() < 7 || extra[0] != 1 {
-        return (4, Vec::new());
-    }
-    let nal_len = ((extra[4] & 3) + 1) as usize;
-    let mut annex = Vec::new();
-    let mut i = 5;
-    if i >= extra.len() {
-        return (nal_len, annex);
-    }
-    let sps_count = (extra[i] & 0x1f) as usize;
-    i += 1;
-    for _ in 0..sps_count {
-        if !take_nal(extra, &mut i, &mut annex) {
-            break;
-        }
-    }
-    if i < extra.len() {
-        let pps_count = extra[i] as usize;
-        i += 1;
-        for _ in 0..pps_count {
-            if !take_nal(extra, &mut i, &mut annex) {
-                break;
-            }
-        }
-    }
-    (nal_len.max(1), annex)
-}
 
-fn take_nal(extra: &[u8], i: &mut usize, annex: &mut Vec<u8>) -> bool {
-    if *i + 2 > extra.len() {
-        return false;
-    }
-    let len = u16::from_be_bytes([extra[*i], extra[*i + 1]]) as usize;
-    *i += 2;
-    if *i + len > extra.len() {
-        return false;
-    }
-    annex.extend_from_slice(&[0, 0, 0, 1]);
-    annex.extend_from_slice(&extra[*i..*i + len]);
-    *i += len;
-    true
-}
 
-fn length_to_annex(sample: &[u8], nal_len: usize) -> Vec<u8> {
-    let nal_len = nal_len.clamp(1, 4);
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i + nal_len <= sample.len() {
-        let mut len = 0usize;
-        for byte in &sample[i..i + nal_len] {
-            len = (len << 8) | *byte as usize;
-        }
-        i += nal_len;
-        if len == 0 || i + len > sample.len() {
-            break;
-        }
-        out.extend_from_slice(&[0, 0, 0, 1]);
-        out.extend_from_slice(&sample[i..i + len]);
-        i += len;
-    }
-    out
-}
 
 fn ticks(ts: u64, numer: u32, denom: u32) -> i64 {
     if denom == 0 {
@@ -1534,45 +1448,29 @@ enum Pix {
     Bgr { bits: u16, bottom_up: bool },
     Mjpeg,
     H264,
+    /// MPEG-4 parte 2 (XVID, DivX, FMP4…).
+    Mpeg4,
 }
 
-struct AviStream {
-    video: bool,
-    scale: u32,
-    rate: u32,
-    width: u32,
-    height: u32,
-    pix: Option<Pix>,
-    channels: u16,
-    sample_rate: u32,
-    pcm: bool,
-}
 
-struct AviChunk {
-    stream: usize,
-    video: bool,
-    data: Vec<u8>,
-}
 
 fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
-    let bytes = std::fs::read(input).map_err(|err| format!("AVI non letto: {err}"))?;
-    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"AVI " {
-        return Err("AVI non letto".into());
-    }
-    let mut streams = Vec::new();
-    let mut chunks = Vec::new();
-    walk_riff(&bytes[12..], &mut streams, &mut chunks)?;
+    let (streams, chunks) = crate::avi::read(input)?;
     let video_index = streams.iter().position(|stream| stream.video).ok_or_else(|| "il video non è stato letto".to_string())?;
     let video = &streams[video_index];
-    let pix = video.pix.as_ref().ok_or_else(|| "il video non è stato letto".to_string())?;
-    let duration = avi_duration(video.scale, video.rate);
+    let pix = &avi_pix(video.handler, video.compression, video.bits, video.signed_height)?;
+    let (frames, secs) = crate::avi::video_timing(&streams, &chunks, video_index);
+    let duration = ((secs * 10_000_000.0 / frames as f64) as i64).max(1);
     let width = video.width as usize;
     let height = video.height as usize;
-    let audio_index = streams.iter().position(|stream| !stream.video && stream.pcm);
-    let audio = audio_index.map(|index| {
-        let stream = &streams[index];
-        (stream.sample_rate, stream.channels.max(1))
-    });
+    let audio_index = streams.iter().position(|stream| !stream.video && stream.channels > 0);
+    // L'audio dell'AVI (PCM, MP3, AAC) si decodifica prima, così il suo formato è noto all'apertura.
+    let avi_audio = match audio_index {
+        Some(index) => crate::avi::avi_audio_pcm(&streams[index], &chunks, index)?,
+        None => None,
+    };
+    let audio = avi_audio.as_ref().map(|(_, rate, channels)| (*rate, *channels));
+    let avc_header = crate::avi::avc_config(&video.extra);
     // Ogni fotogramma va subito al file (o all'anteprima), senza tenerli tutti in memoria.
     let mut sink: Option<H264Aac> = None;
     let mut shown: i64 = 0;
@@ -1586,31 +1484,52 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         Ok(())
     };
     let mut decoder = if matches!(pix, Pix::H264) {
-        Some(h264_decoder()?)
+        let mut dec = h264_decoder()?;
+        // Con avcC nei dati di `strf` i parametri non viaggiano nei fotogrammi.
+        if !avc_header.1.is_empty() {
+            let _ = dec.decode(&avc_header.1);
+        }
+        Some(dec)
     } else {
         None
     };
-    let mut pcm = Vec::new();
+    let mut mpeg4 = matches!(pix, Pix::Mpeg4).then(oxideav_mpeg4video::decoder::Mpeg4VideoDecoder::new);
     for chunk in chunks {
         if chunk.stream == video_index && chunk.video {
+            if chunk.data.is_empty() {
+                continue; // fotogramma saltato
+            }
             match pix {
                 Pix::Nv12 => emit(split_nv12(&chunk.data, width, height)?)?,
                 Pix::Bgr { bits, bottom_up } => emit(bgr_at(&chunk.data, width, height, *bits, *bottom_up)?)?,
                 Pix::Mjpeg => emit(mjpeg_frame(&chunk.data)?)?,
                 Pix::H264 => {
                     let dec = decoder.as_mut().expect("decoder");
-                    let annex = if annex_nals(&chunk.data).is_empty() {
-                        length_to_annex(&chunk.data, 4)
+                    let annex = if !is_annex(&chunk.data) {
+                        length_to_annex(&chunk.data, avc_header.0)
                     } else {
                         chunk.data.clone()
                     };
+                    if annex.is_empty() {
+                        continue;
+                    }
                     if let Some(frame) = dec.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
                         emit(owned_frame(&frame)?)?;
                     }
                 }
+                Pix::Mpeg4 => {
+                    let dec = mpeg4.as_mut().expect("decoder");
+                    let frames = dec.decode(&chunk.data).map_err(|err| format!("MPEG-4 non letto: {err}"))?;
+                    for frame in &frames {
+                        emit(mpeg4_frame(frame, width, height)?)?;
+                    }
+                }
             }
-        } else if audio_index == Some(chunk.stream) && !chunk.video {
-            pcm.extend(pcm16(&chunk.data));
+        }
+    }
+    if let Some(dec) = mpeg4.as_mut() {
+        for frame in &dec.flush() {
+            emit(mpeg4_frame(frame, width, height)?)?;
         }
     }
     if let Some(dec) = decoder.as_mut() {
@@ -1624,7 +1543,7 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let Some(mut sink) = sink else {
         return Err("il video non ha fotogrammi".into());
     };
-    if let Some((rate, channels)) = audio {
+    if let Some((pcm, rate, channels)) = avi_audio {
         if !pcm.is_empty() {
             sink.write_pcm(&pcm, channels, rate)?;
         }
@@ -1632,146 +1551,55 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     sink.finish()
 }
 
-fn avi_duration(scale: u32, rate: u32) -> i64 {
-    let rate = rate.max(1) as u128;
-    let value = (scale.max(1) as u128).saturating_mul(10_000_000) / rate;
-    i64::try_from(value).unwrap_or(333_333).max(1)
+/// I fotogrammi dell'MPEG-4 hanno le misure dei macroblocchi; l'immagine vera può essere più piccola.
+fn mpeg4_frame(frame: &oxideav_mpeg4video::framestore::DecodedFrame, want_w: usize, want_h: usize) -> Result<OwnedFrame, String> {
+    let (fw, fh) = (frame.width(), frame.height());
+    let (w, h) = (want_w.min(fw) & !1, want_h.min(fh) & !1);
+    if w < 2 || h < 2 {
+        return Err("fotogramma troppo corto".into());
+    }
+    let crop = |src: &[u8], stride: usize, cw: usize, ch: usize| -> Vec<u8> {
+        (0..ch).flat_map(|row| src[row * stride..row * stride + cw].iter().copied()).collect()
+    };
+    Ok(OwnedFrame {
+        y: crop(frame.luma_samples(), fw, w, h),
+        u: crop(frame.cb_samples(), fw / 2, w / 2, h / 2),
+        v: crop(frame.cr_samples(), fw / 2, w / 2, h / 2),
+        width: w as u32,
+        height: h as u32,
+    })
 }
 
-fn walk_riff(data: &[u8], streams: &mut Vec<AviStream>, chunks: &mut Vec<AviChunk>) -> Result<(), String> {
-    let mut i = 0;
-    while i + 8 <= data.len() {
-        let id = [data[i], data[i + 1], data[i + 2], data[i + 3]];
-        let size = u32::from_le_bytes([data[i + 4], data[i + 5], data[i + 6], data[i + 7]]) as usize;
-        i += 8;
-        if i + size > data.len() {
-            return Err("AVI non letto".into());
-        }
-        let payload = &data[i..i + size];
-        i += size + (size & 1);
-        if &id == b"LIST" {
-            if payload.len() < 4 {
-                return Err("AVI non letto".into());
-            }
-            let kind = &payload[0..4];
-            let inner = &payload[4..];
-            if kind == b"strl" {
-                streams.push(parse_strl(inner)?);
-            } else if kind == b"hdrl" {
-                walk_riff(inner, streams, chunks)?;
-            } else {
-                walk_riff(inner, streams, chunks)?;
-            }
-        } else if let Some(stream) = stream_of(id) {
-            let video = id[2] == b'd' && (id[3] == b'c' || id[3] == b'b');
-            let audio = &id[2..4] == b"wb";
-            if video || audio {
-                chunks.push(AviChunk { stream, video, data: payload.to_vec() });
-            }
-        }
-    }
-    Ok(())
-}
 
-fn stream_of(id: [u8; 4]) -> Option<usize> {
-    if id[0].is_ascii_digit() && id[1].is_ascii_digit() {
-        Some(((id[0] - b'0') * 10 + (id[1] - b'0')) as usize)
-    } else {
-        None
-    }
-}
 
-fn parse_strl(data: &[u8]) -> Result<AviStream, String> {
-    let mut strh = None;
-    let mut strf = None;
-    let mut i = 0;
-    while i + 8 <= data.len() {
-        let id = &data[i..i + 4];
-        let size = u32::from_le_bytes([data[i + 4], data[i + 5], data[i + 6], data[i + 7]]) as usize;
-        i += 8;
-        if i + size > data.len() {
-            break;
-        }
-        let payload = &data[i..i + size];
-        if id == b"strh" {
-            strh = Some(payload.to_vec());
-        } else if id == b"strf" {
-            strf = Some(payload.to_vec());
-        }
-        i += size + (size & 1);
-    }
-    let strh = strh.ok_or_else(|| "AVI non letto".to_string())?;
-    if strh.len() < 28 {
-        return Err("AVI non letto".into());
-    }
-    let video = &strh[0..4] == b"vids";
-    let scale = u32::from_le_bytes([strh[20], strh[21], strh[22], strh[23]]);
-    let rate = u32::from_le_bytes([strh[24], strh[25], strh[26], strh[27]]);
-    let handler = if strh.len() >= 8 { [strh[4], strh[5], strh[6], strh[7]] } else { [0; 4] };
-    let strf = strf.unwrap_or_default();
-    if video {
-        if strf.len() < 16 {
-            return Err("AVI non letto".into());
-        }
-        let width = u32::from_le_bytes([strf[4], strf[5], strf[6], strf[7]]);
-        let height = i32::from_le_bytes([strf[8], strf[9], strf[10], strf[11]]);
-        let bits = u16::from_le_bytes([strf[14], strf[15]]);
-        let compression = if strf.len() >= 20 { [strf[16], strf[17], strf[18], strf[19]] } else { [0; 4] };
-        let pix = avi_pix(handler, compression, bits, height)?;
-        Ok(AviStream {
-            video: true,
-            scale,
-            rate,
-            width,
-            height: height.unsigned_abs(),
-            pix: Some(pix),
-            channels: 0,
-            sample_rate: 0,
-            pcm: false,
-        })
-    } else {
-        let format = if strf.len() >= 2 { u16::from_le_bytes([strf[0], strf[1]]) } else { 0 };
-        let channels = if strf.len() >= 4 { u16::from_le_bytes([strf[2], strf[3]]) } else { 0 };
-        let sample_rate = if strf.len() >= 8 { u32::from_le_bytes([strf[4], strf[5], strf[6], strf[7]]) } else { 0 };
-        let bits = if strf.len() >= 16 { u16::from_le_bytes([strf[14], strf[15]]) } else { 0 };
-        let pcm = format == 1 && bits == 16 && channels > 0;
-        Ok(AviStream {
-            video: false,
-            scale,
-            rate,
-            width: 0,
-            height: 0,
-            pix: None,
-            channels,
-            sample_rate,
-            pcm,
-        })
-    }
-}
+
+
 
 fn avi_pix(handler: [u8; 4], compression: [u8; 4], bits: u16, height: i32) -> Result<Pix, String> {
-    if same_cc(compression, b"NV12") || same_cc(handler, b"NV12") {
+    if crate::avi::same_cc(compression, b"NV12") || crate::avi::same_cc(handler, b"NV12") {
         return Ok(Pix::Nv12);
     }
-    if same_cc(compression, b"MJPG") || same_cc(handler, b"MJPG") {
+    if crate::avi::same_cc(compression, b"MJPG") || crate::avi::same_cc(handler, b"MJPG") {
         return Ok(Pix::Mjpeg);
     }
-    if same_cc(compression, b"H264") || same_cc(compression, b"X264") || same_cc(compression, b"AVC1")
-        || same_cc(handler, b"H264") || same_cc(handler, b"X264") || same_cc(handler, b"AVC1")
+    if crate::avi::same_cc(compression, b"H264") || crate::avi::same_cc(compression, b"X264") || crate::avi::same_cc(compression, b"AVC1")
+        || crate::avi::same_cc(handler, b"H264") || crate::avi::same_cc(handler, b"X264") || crate::avi::same_cc(handler, b"AVC1")
     {
         return Ok(Pix::H264);
     }
-    let uncompressed = compression == [0; 4] || same_cc(compression, b"DIB ") || same_cc(compression, b"RGB ")
-        || same_cc(handler, b"DIB ");
+    for cc in [b"FMP4", b"XVID", b"DIVX", b"DX50", b"MP4V", b"M4S2", b"MP4S", b"3IV2", b"RMP4", b"SEDG", b"DIV5"] {
+        if crate::avi::same_cc(compression, cc) || crate::avi::same_cc(handler, cc) {
+            return Ok(Pix::Mpeg4);
+        }
+    }
+    let uncompressed = compression == [0; 4] || crate::avi::same_cc(compression, b"DIB ") || crate::avi::same_cc(compression, b"RGB ")
+        || crate::avi::same_cc(handler, b"DIB ");
     if uncompressed && (bits == 24 || bits == 32) {
         return Ok(Pix::Bgr { bits, bottom_up: height > 0 });
     }
     Err("il video non è stato letto".into())
 }
 
-fn same_cc(value: [u8; 4], name: &[u8; 4]) -> bool {
-    value.iter().zip(name.iter()).all(|(a, b)| a.to_ascii_uppercase() == b.to_ascii_uppercase())
-}
 
 fn split_nv12(frame: &[u8], w: usize, h: usize) -> Result<OwnedFrame, String> {
     let y_size = w * h;
@@ -1851,12 +1679,6 @@ fn rgb_planes(
     Ok(OwnedFrame { y, u, v, width: w as u32, height: h as u32 })
 }
 
-fn pcm16(bytes: &[u8]) -> Vec<i16> {
-    bytes
-        .chunks_exact(2)
-        .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
-        .collect()
-}
 
 // ---- Fotogrammi per l'anteprima ----
 
@@ -2018,4 +1840,18 @@ fn h264_decoder() -> Result<Decoder, String> {
     use openh264::decoder::{DecoderConfig, Flush};
     Decoder::with_api_config(OpenH264API::from_source(), DecoderConfig::new().flush_after_decode(Flush::NoFlush))
         .map_err(|err| format!("H.264 non letto: {err}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_annex;
+
+    #[test]
+    fn length_prefixed_sample_starting_like_a_start_code() {
+        // NAL da 256 byte con prefisso a 4 byte: 00 00 01 00 sembra un codice di inizio, ma è una lunghezza.
+        let mut sample = vec![0, 0, 1, 0, 0x65];
+        sample.extend(std::iter::repeat(0x11).take(255));
+        assert!(!is_annex(&sample));
+        assert!(is_annex(&[0, 0, 0, 1, 0x67, 0x42, 0x00, 0x1e]));
+    }
 }
