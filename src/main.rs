@@ -44,6 +44,8 @@ mod linux_ui2;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // La lingua si sceglie subito: anche le finestre che partono da sole (guida, vista) la usano.
+    let _ = cedro::read_settings();
     #[cfg(windows)]
     {
         if args.first().is_some_and(|a| a == "conversioni") {
