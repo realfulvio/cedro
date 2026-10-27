@@ -1001,3 +1001,86 @@ tar non parte: {}	tar won't start: {}
 il pacchetto non si apre	the package won't open
 install.sh non è riuscito: {}	install.sh failed: {}
 il programma nuovo non è al suo posto	the new program isn't in place
+# --- Android
+{} min fa	{} min ago
+{} h fa	{} h ago
+{} g fa	{} d ago
+Altri file	Other files
+Altro	Other
+Apri	Open
+BMP, GIF, TIFF…	BMP, GIF, TIFF…
+Condividi	Share
+Cosa ne faccio?	What should I do with it?
+Dimezza	Halve
+Immagine · {}	Image · {}
+Lavori	Jobs
+Le copie vanno nella cartella Documenti. Il tema scelto resta tra un avvio e l'altro.	Copies go to the Documents folder. The chosen theme and language are kept between launches.
+Lingua del telefono	Phone language
+Link dagli appunti	Link from the clipboard
+Meno spazio	Less space
+Metà dimensioni	Half the size
+Non ho potuto leggere il file.	I couldn't read the file.
+Non riuscito	Failed
+Per il web	For the web
+Più leggera	Lighter
+Recenti	Recent
+Riconosci scritte	Read the text
+Salvato in Documenti: {}	Saved in Documents: {}
+Scegli il file	Choose the file
+Scegli un file	Choose a file
+Senza perdita	Lossless
+Svuota	Clear
+Tocca il cerchio per scegliere un file, oppure condividilo a Cedro da un'altra app.	Tap the circle to choose a file, or share one to Cedro from another app.
+Ultimi file	Recent files
+Un foglio	One sheet
+{} · circa {} s alla fine	{} · about {} s left
+ · circa {} s alla fine	 · about {} s left
+{} a {} · {}% in meno	{} to {} · {}% smaller
+{}% · circa {} s alla fine	{}% · about {} s left
+Comprimi: {}	Compress: {}
+{} · {}	{} · {}
+Converti i tuoi file	Convert your files
+Ancora niente	Nothing yet
+Qui vedi i file in lavorazione, i risultati e la cronologia.	Here you see the files in progress, the results and the history.
+I file che scegli o condividi a Cedro compaiono qui.	The files you choose or share to Cedro appear here.
+Lavoro in corso da {} s	Working for {} s
+Apri con un'altra app	Open with another app
+Il migliore che c'è	The best available
+MP3 dal video	MP3 from the video
+Video leggero	Light video
+Senza compressione	No compression
+Dalla voce, offline	From speech, offline
+Con testo	With text
+Estrae le parole	Extracts the words
+Una per pagina	One per page
+Da stampare	For printing
+Testo con segni	Text with markup
+Più leggero	Lighter
+Da documento	From a document
+Tutte le azioni	All actions
+Serve il permesso di scrivere in Documenti.	Permission to write in Documents is needed.
+Documenti non è scrivibile: {}	Documents isn't writable: {}
+Link passato a un'altra app	Link handed to another app
+la trascrizione non è partita	the transcription didn't start
+Cedro sta lavorando	Cedro is working
+{} lavori in corso	{} jobs in progress
+Scarica con…	Download with…
+Android non ha ancora registrato il file	Android hasn't registered the file yet
+# --- Android, scheda Info
+Info	Info
+Copia le informazioni	Copy the information
+Istruzioni del processore	Processor instructions
+Accelerazioni usate	Accelerations in use
+Telefono	Phone
+Core	Cores
+{} (API {})	{} (API {})
+{} ({} liberi)	{} ({} free)
+{#} ({#} grandi + {#} piccoli)	{} ({} big + {} small)
+Istruzioni	Instructions
+Video MP4	MP4 video
+processore	processor
+processore, {}	processor, {}
+codificatore del telefono	the phone's encoder
+codificatore del telefono ({})	the phone's encoder ({})
+non indicata dal telefono	not reported by the phone
+sì	yes
