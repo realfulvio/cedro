@@ -480,7 +480,7 @@ impl App {
         self.lavori
             .iter()
             .filter_map(|l| match &l.stato {
-                Stato::Fatto { path, msg, .. } => Some(format!("{}\t{}\t{}\t{}\t{}\t{}", l.quando, pulisci(&l.origine), pulisci(&l.etichetta), l.conv as u8, path.display(), pulisci(msg))),
+                Stato::Fatto { path, msg, nome } => Some(format!("{}\t{}\t{}\t{}\t{}\t{}\t{}", l.quando, pulisci(&l.origine), pulisci(&l.etichetta), l.conv as u8, path.display(), pulisci(msg), pulisci(nome))),
                 _ => None,
             })
             .take(30)
@@ -495,10 +495,14 @@ impl App {
                 continue;
             }
             let path = PathBuf::from(c[4]);
-            if !path.exists() {
+            let indirizzo = c[4].starts_with("content://");
+            if !indirizzo && !path.exists() {
                 continue;
             }
-            let nome = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let nome = match c.get(6) {
+                Some(n) if !n.is_empty() => n.to_string(),
+                _ => path.strip_prefix("/storage/emulated/0").map(|r| r.to_string_lossy().into_owned()).unwrap_or_else(|_| path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()),
+            };
             self.lavori.push(Lavoro {
                 id: self.prossimo,
                 origine: c[1].into(),
@@ -1347,7 +1351,7 @@ impl App {
                 if path.as_os_str().is_empty() {
                     return alt;
                 }
-                p.text(&format!("Salvato in Documenti: {nome}"), x + 14.0, y + 54.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                p.text(&format!("Salvato in {nome}"), x + 14.0, y + 54.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
                 let bw = (w - 28.0 - 10.0) / 2.0;
                 for (i, (et, az)) in [("Apri", Azione::Apri(l.id)), ("Condividi", Azione::Condividi(l.id))].into_iter().enumerate() {
                     let rc = (x + 14.0 + i as f32 * (bw + 10.0), y + alt - 14.0 - TOCCO, bw, TOCCO);

@@ -24,7 +24,16 @@ struct Condiviso {
 
 fn jerr(env: &mut JNIEnv, e: jni::errors::Error) -> String {
     if env.exception_check().unwrap_or(false) {
+        // Il messaggio dell'eccezione Java dice cosa è successo davvero.
+        let ecc = env.exception_occurred();
         let _ = env.exception_clear();
+        if let Ok(ecc) = ecc {
+            if let Some(m) = env.call_method(&ecc, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).ok().and_then(|o| stringa(env, o)) {
+                let _ = env.exception_clear();
+                return m;
+            }
+            let _ = env.exception_clear();
+        }
     }
     format!("JNI: {e}")
 }
@@ -500,24 +509,39 @@ fn scansiona(env: &mut JNIEnv, attivita: &JObject, path: &Path, attesa: bool) ->
 /// che si ottiene registrando il file in MediaStore, senza FileProvider.
 fn apri_o_condividi(app: &AndroidApp, path: &Path, condividi: bool) -> Result<(), String> {
     con_attivita(app, |env, attivita| {
-        // Un indirizzo che finisce col nome del file (ArchiviProvider), non col numero di MediaStore.
-        let rel = path.strip_prefix("/storage/emulated/0").map_err(|_| "il file non è nella memoria del telefono")?;
-        // Gli spazi e i segni nel nome (es. «Movie Trailers ( Coming Soon ).mp4») vanno codificati: Telegram e altre app non li reggono.
-        let codificato: String = rel.to_string_lossy().bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~/".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
-        let indirizzo = env.new_string(format!("content://it.cedro.android.files{codificato}")).map_err(|e| e.to_string())?;
+        let testo = path.to_string_lossy().into_owned();
+        // Da Android 11 il risultato è già in MediaStore (`content://media/…`); prima, un indirizzo che finisce col nome
+        // del file (ArchiviProvider).
+        let indirizzo = if testo.starts_with("content://") {
+            testo.clone()
+        } else {
+            let rel = path.strip_prefix("/storage/emulated/0").map_err(|_| "il file non è nella memoria del telefono")?;
+            // Gli spazi e i segni nel nome (es. «Movie Trailers ( Coming Soon ).mp4») vanno codificati: Telegram e altre app non li reggono.
+            let codificato: String = rel.to_string_lossy().bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~/".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
+            format!("content://it.cedro.android.files{codificato}")
+        };
+        let indirizzo = env.new_string(indirizzo).map_err(|e| e.to_string())?;
         let uri = env
             .call_static_method("android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&indirizzo)])
             .and_then(|v| v.l())
             .map_err(|e| jerr(env, e))?;
         let uri = env.new_global_ref(uri).map_err(|e| e.to_string())?;
-        let mime = mime_da_percorso(path);
-        let mime_s = env.new_string(mime).map_err(|e| e.to_string())?;
+        let mime = if testo.starts_with("content://") {
+            let resolver = env.call_method(attivita, "getContentResolver", "()Landroid/content/ContentResolver;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+            let t = env.call_method(&resolver, "getType", "(Landroid/net/Uri;)Ljava/lang/String;", &[JValue::Object(uri.as_obj())]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+            stringa(env, t).unwrap_or_else(|| "*/*".into())
+        } else {
+            mime_da_percorso(path).to_string()
+        };
+        let mime_s = env.new_string(&mime).map_err(|e| e.to_string())?;
         let azione = env.new_string(if condividi { "android.intent.action.SEND" } else { "android.intent.action.VIEW" }).map_err(|e| e.to_string())?;
         let intento = env.new_object("android/content/Intent", "(Ljava/lang/String;)V", &[JValue::Object(&azione)]).map_err(|e| jerr(env, e))?;
         if condividi {
-            let nome_f = env.new_string(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).map_err(|e| e.to_string())?;
-            let k = env.new_string("android.intent.extra.TITLE").map_err(|e| e.to_string())?;
-            env.call_method(&intento, "putExtra", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;", &[JValue::Object(&k), JValue::Object(&nome_f)]).map_err(|e| jerr(env, e))?;
+            if !testo.starts_with("content://") {
+                let nome_f = env.new_string(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).map_err(|e| e.to_string())?;
+                let k = env.new_string("android.intent.extra.TITLE").map_err(|e| e.to_string())?;
+                env.call_method(&intento, "putExtra", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;", &[JValue::Object(&k), JValue::Object(&nome_f)]).map_err(|e| jerr(env, e))?;
+            }
             env.call_method(&intento, "setType", "(Ljava/lang/String;)Landroid/content/Intent;", &[JValue::Object(&mime_s)]).map_err(|e| jerr(env, e))?;
             let chiave = env.new_string("android.intent.extra.STREAM").map_err(|e| e.to_string())?;
             env.call_method(&intento, "putExtra", "(Ljava/lang/String;Landroid/os/Parcelable;)Landroid/content/Intent;", &[JValue::Object(&chiave), JValue::Object(uri.as_obj())])
@@ -719,9 +743,14 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
         invia(Stato::Errore("Serve il permesso di scrivere in Documenti.".into()));
         return;
     }
-    let out = PathBuf::from(DOCUMENTI);
+    // Da Android 11 il motore scrive in una cartella di Cedro e il risultato passa a Documenti/Cedro con MediaStore:
+    // alcuni telefoni (Xiaomi 13, Android 16) non lasciano creare file in Documenti col percorso.
+    let out = match uscite(&app) {
+        Some(p) => p,
+        None => PathBuf::from(DOCUMENTI),
+    };
     if let Err(e) = std::fs::create_dir_all(&out) {
-        invia(Stato::Errore(format!("Documenti non è scrivibile: {e}")));
+        invia(Stato::Errore(format!("{} non è scrivibile: {e}", out.display())));
         return;
     }
     if azione == "web-altra-app" {
@@ -760,17 +789,139 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
     let esito = esito.map_err(|e| con_dettagli(&e, azione, &file, &out));
     match esito {
         Ok(o) => {
-            let nome = o.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             log::info!("{azione}: salvato {} ({})", o.path.display(), o.message);
-            // Il file compare subito in Galleria e in File.
-            let _ = con_attivita(&app, |env, att| scansiona(env, att, &o.path, false));
-            invia(Stato::Fatto { path: o.path, nome, msg: o.message });
+            match consegna(&app, o.path) {
+                Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg: o.message }),
+                Err(e) => invia(Stato::Errore(con_dettagli(&e, azione, &file, &out))),
+            }
         }
         Err(e) => {
             log::error!("{azione}: conversione fallita: {e}");
             invia(Stato::Errore(e));
         }
     }
+}
+
+/// La cartella dove il motore scrive da Android 11 in poi (`None` prima: lì si scrive in Documenti col percorso).
+fn uscite(app: &AndroidApp) -> Option<PathBuf> {
+    let api = con_attivita(app, |env, _att| env.get_static_field("android/os/Build$VERSION", "SDK_INT", "I").and_then(|v| v.i()).map_err(|e| jerr(env, e))).unwrap_or(0);
+    (api >= 30).then(|| app.internal_data_path().unwrap_or_else(|| PathBuf::from("/data/local/tmp")).join("uscite"))
+}
+
+/// Mette il risultato dove l'utente lo trova. Un file nella cartella privata passa a Documenti/Cedro (o, se il telefono
+/// non vuole, a Download/Cedro) con MediaStore e se ne restituisce l'indirizzo `content://`; uno già in Documenti si
+/// fa solo vedere a Galleria e File. Insieme al percorso, il nome da mostrare («Documents/Cedro/x.mp3»).
+fn consegna(app: &AndroidApp, path: PathBuf) -> Result<(PathBuf, String), String> {
+    let privata = uscite(app);
+    if privata.as_ref().is_some_and(|p| path.starts_with(p)) {
+        let r = con_attivita(app, |env, att| pubblica(env, att, &path));
+        let _ = std::fs::remove_file(&path);
+        return r.map(|(uri, nome)| (PathBuf::from(uri), nome));
+    }
+    let _ = con_attivita(app, |env, att| scansiona(env, att, &path, false));
+    let nome = path.strip_prefix("/storage/emulated/0").map(|r| r.to_string_lossy().into_owned()).unwrap_or_else(|_| nome_di(&path));
+    Ok((path, nome))
+}
+
+/// Copia un file privato in MediaStore (prima Documents/Cedro, poi Download/Cedro). Dà l'indirizzo e il nome visibile.
+fn pubblica(env: &mut JNIEnv, att: &JObject, privato: &Path) -> Result<(String, String), String> {
+    let nome = nome_di(privato);
+    let mime = mime_da_percorso(privato);
+    let resolver = env.call_method(att, "getContentResolver", "()Landroid/content/ContentResolver;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+    let mut errori = Vec::new();
+    for (raccolta, rel) in [("android/provider/MediaStore$Files", "Documents/Cedro"), ("android/provider/MediaStore$Downloads", "Download/Cedro")] {
+        match pubblica_in(env, &resolver, raccolta, rel, privato, &nome, mime) {
+            Ok((uri, visto)) => {
+                log::info!("pubblicato {} in {rel}/{visto} ({uri})", privato.display());
+                return Ok((uri, format!("{rel}/{visto}")));
+            }
+            Err(e) => {
+                log::warn!("MediaStore {rel}: {e}");
+                errori.push(format!("{rel}: {e}"));
+            }
+        }
+    }
+    Err(format!("il telefono non lascia salvare il file\n---\n{}", errori.join("\n")))
+}
+
+fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, privato: &Path, nome: &str, mime: &str) -> Result<(String, String), String> {
+    use std::os::fd::FromRawFd;
+    let valori = |env: &mut JNIEnv, coppie: &[(&str, Result<&str, i32>)]| -> Result<JObject<'static>, String> {
+        let cv = env.new_object("android/content/ContentValues", "()V", &[]).map_err(|e| jerr(env, e))?;
+        for (k, v) in coppie {
+            let k = env.new_string(k).map_err(|e| e.to_string())?;
+            match v {
+                Ok(s) => {
+                    let s = env.new_string(s).map_err(|e| e.to_string())?;
+                    env.call_method(&cv, "put", "(Ljava/lang/String;Ljava/lang/String;)V", &[JValue::Object(&k), JValue::Object(&s)]).map_err(|e| jerr(env, e))?;
+                }
+                Err(n) => {
+                    let n = env.call_static_method("java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", &[JValue::Int(*n)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+                    env.call_method(&cv, "put", "(Ljava/lang/String;Ljava/lang/Integer;)V", &[JValue::Object(&k), JValue::Object(&n)]).map_err(|e| jerr(env, e))?;
+                }
+            }
+        }
+        // Gli oggetti locali vivono fino al ritorno a Java: qui il thread è di Rust e resta agganciato.
+        Ok(unsafe { JObject::from_raw(cv.into_raw()) })
+    };
+    let esterno = env.new_string("external").map_err(|e| e.to_string())?;
+    let base = env.call_static_method(raccolta, "getContentUri", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&esterno)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+    let cv = valori(env, &[("_display_name", Ok(nome)), ("mime_type", Ok(mime)), ("relative_path", Ok(rel)), ("is_pending", Err(1))])?;
+    let uri = env
+        .call_method(resolver, "insert", "(Landroid/net/Uri;Landroid/content/ContentValues;)Landroid/net/Uri;", &[JValue::Object(&base), JValue::Object(&cv)])
+        .and_then(|v| v.l())
+        .map_err(|e| jerr(env, e))?;
+    if uri.is_null() {
+        return Err("MediaStore non ha creato il file".into());
+    }
+    let nulla = JObject::null();
+    let scrivi = |env: &mut JNIEnv| -> Result<(), String> {
+        let w = env.new_string("w").map_err(|e| e.to_string())?;
+        let pfd = env
+            .call_method(resolver, "openFileDescriptor", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/os/ParcelFileDescriptor;", &[JValue::Object(&uri), JValue::Object(&w)])
+            .and_then(|v| v.l())
+            .map_err(|e| jerr(env, e))?;
+        let fd = env.call_method(&pfd, "detachFd", "()I", &[]).and_then(|v| v.i()).map_err(|e| jerr(env, e))?;
+        let mut dest = unsafe { std::fs::File::from_raw_fd(fd) };
+        let mut src = std::fs::File::open(privato).map_err(|e| e.to_string())?;
+        std::io::copy(&mut src, &mut dest).map_err(|e| e.to_string())?;
+        dest.sync_all().map_err(|e| e.to_string())?;
+        let cv = valori(env, &[("is_pending", Err(0))])?;
+        env.call_method(resolver, "update", "(Landroid/net/Uri;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I", &[JValue::Object(&uri), JValue::Object(&cv), JValue::Object(&nulla), JValue::Object(&nulla)])
+            .map_err(|e| jerr(env, e))?;
+        Ok(())
+    };
+    if let Err(e) = scrivi(env) {
+        let _ = env.call_method(resolver, "delete", "(Landroid/net/Uri;Ljava/lang/String;[Ljava/lang/String;)I", &[JValue::Object(&uri), JValue::Object(&nulla), JValue::Object(&nulla)]);
+        if env.exception_check().unwrap_or(false) {
+            let _ = env.exception_clear();
+        }
+        return Err(e);
+    }
+    // MediaStore può aver cambiato il nome («x (1).mp3») se esisteva già.
+    let classe = env.find_class("java/lang/String").map_err(|e| jerr(env, e))?;
+    let col = env.new_string("_display_name").map_err(|e| e.to_string())?;
+    let proiez = env.new_object_array(1, &classe, &col).map_err(|e| jerr(env, e))?;
+    let mut visto = nome.to_string();
+    if let Ok(cur) = env
+        .call_method(resolver, "query", "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;", &[JValue::Object(&uri), JValue::Object(&proiez), JValue::Object(&nulla), JValue::Object(&nulla), JValue::Object(&nulla)])
+        .and_then(|v| v.l())
+    {
+        if !cur.is_null() {
+            if env.call_method(&cur, "moveToFirst", "()Z", &[]).and_then(|v| v.z()).unwrap_or(false) {
+                if let Some(s) = env.call_method(&cur, "getString", "(I)Ljava/lang/String;", &[JValue::Int(0)]).and_then(|v| v.l()).ok().and_then(|o| stringa(env, o)) {
+                    visto = s;
+                }
+            }
+            let _ = env.call_method(&cur, "close", "()V", &[]);
+        }
+    }
+    if env.exception_check().unwrap_or(false) {
+        let _ = env.exception_clear();
+    }
+    let testo = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+    let testo = stringa(env, testo).ok_or("indirizzo vuoto")?;
+    Ok((testo, visto))
 }
 
 /// Android ha negato l'accesso (EPERM o EACCES).
@@ -821,10 +972,9 @@ fn web(app: &AndroidApp, c: &Consegne, id: u32, link: &Path, out: &Path, azione:
         "web-leggero" => Want::Light,
         _ => Want::Video,
     };
-    let finito = |path: PathBuf, msg: String| {
-        let nome = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let _ = con_attivita(app, |env, att| scansiona(env, att, &path, false));
-        invia(Stato::Fatto { path, nome, msg });
+    let finito = |path: PathBuf, msg: String| match consegna(app, path) {
+        Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg }),
+        Err(e) => invia(Stato::Errore(e)),
     };
     let media = match resolve(&url, want) {
         Ok(m) => m,
@@ -869,11 +1019,10 @@ fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, ou
         Event::Finished { result, .. } => *esito.lock().unwrap_or_else(|e| e.into_inner()) = Some(result),
     });
     match esito.into_inner().unwrap_or_else(|e| e.into_inner()) {
-        Some(Ok((path, msg))) => {
-            let nome = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            let _ = con_attivita(app, |env, att| scansiona(env, att, &path, false));
-            invia(Stato::Fatto { path, nome, msg });
-        }
+        Some(Ok((path, msg))) => match consegna(app, path) {
+            Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg }),
+            Err(e) => invia(Stato::Errore(con_dettagli(&e, "trascrivi", file, out))),
+        },
         Some(Err(e)) => invia(Stato::Errore(con_dettagli(&e, "trascrivi", file, out))),
         None => invia(Stato::Errore("la trascrizione non è partita".into())),
     }
