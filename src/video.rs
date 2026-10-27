@@ -1330,7 +1330,7 @@ fn peek_mf(input: &Path, at: &[f64]) -> Result<crate::softvideo::Peek, String> {
         let mut frames = Vec::new();
         for t in at {
             let target = (t.max(0.0) * 10_000_000.0) as i64;
-            let pos = windows_core::PROPVARIANT::from(target);
+            let pos = windows::Win32::System::Com::StructuredStorage::PROPVARIANT::from(target);
             let _ = reader.SetCurrentPosition(&GUID::zeroed(), &pos);
             // Dopo il salto si arriva al fotogramma chiave prima: si legge fino al punto chiesto.
             for read in 0..240 {
@@ -1416,7 +1416,7 @@ pub(crate) fn play_frames(
             let current = reader.GetCurrentMediaType(stream).map_err(|e| e.to_string())?;
             let stride = current.GetUINT32(&MF_MT_DEFAULT_STRIDE).map(|v| v as i32).unwrap_or((width * 4) as i32);
             if from > 0.0 {
-                let pos = windows_core::PROPVARIANT::from((from * 10_000_000.0) as i64);
+                let pos = windows::Win32::System::Com::StructuredStorage::PROPVARIANT::from((from * 10_000_000.0) as i64);
                 let _ = reader.SetCurrentPosition(&GUID::zeroed(), &pos);
             }
             let step = (width.max(height).div_ceil(side.max(1))).max(1) as usize;

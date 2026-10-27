@@ -1569,7 +1569,22 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let width = video.width as usize;
     let height = video.height as usize;
     let audio_index = streams.iter().position(|stream| !stream.video && stream.pcm);
-    let mut frames: Vec<OwnedFrame> = Vec::new();
+    let audio = audio_index.map(|index| {
+        let stream = &streams[index];
+        (stream.sample_rate, stream.channels.max(1))
+    });
+    // Ogni fotogramma va subito al file (o all'anteprima), senza tenerli tutti in memoria.
+    let mut sink: Option<H264Aac> = None;
+    let mut shown: i64 = 0;
+    let mut emit = |frame: OwnedFrame| -> Result<(), String> {
+        if sink.is_none() {
+            sink = Some(H264Aac::open(output, frame.width, frame.height, duration, audio)?);
+        }
+        let sink = sink.as_mut().expect("sink");
+        push_decoded(sink, &frame, duration, duration.saturating_mul(shown))?;
+        shown += 1;
+        Ok(())
+    };
     let mut decoder = if matches!(pix, Pix::H264) {
         Some(h264_decoder()?)
     } else {
@@ -1579,9 +1594,9 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     for chunk in chunks {
         if chunk.stream == video_index && chunk.video {
             match pix {
-                Pix::Nv12 => frames.push(split_nv12(&chunk.data, width, height)?),
-                Pix::Bgr { bits, bottom_up } => frames.push(bgr_at(&chunk.data, width, height, *bits, *bottom_up)?),
-                Pix::Mjpeg => frames.push(mjpeg_frame(&chunk.data)?),
+                Pix::Nv12 => emit(split_nv12(&chunk.data, width, height)?)?,
+                Pix::Bgr { bits, bottom_up } => emit(bgr_at(&chunk.data, width, height, *bits, *bottom_up)?)?,
+                Pix::Mjpeg => emit(mjpeg_frame(&chunk.data)?)?,
                 Pix::H264 => {
                     let dec = decoder.as_mut().expect("decoder");
                     let annex = if annex_nals(&chunk.data).is_empty() {
@@ -1590,7 +1605,7 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                         chunk.data.clone()
                     };
                     if let Some(frame) = dec.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
-                        frames.push(owned_frame(&frame)?);
+                        emit(owned_frame(&frame)?)?;
                     }
                 }
             }
@@ -1601,21 +1616,14 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     if let Some(dec) = decoder.as_mut() {
         if let Ok(rest) = dec.flush_remaining() {
             for frame in &rest {
-                frames.push(owned_frame(frame)?);
+                emit(owned_frame(frame)?)?;
             }
         }
     }
-    if frames.is_empty() {
+    drop(emit);
+    let Some(mut sink) = sink else {
         return Err("il video non ha fotogrammi".into());
-    }
-    let audio = audio_index.map(|index| {
-        let stream = &streams[index];
-        (stream.sample_rate, stream.channels.max(1))
-    });
-    let mut sink = H264Aac::open(output, frames[0].width, frames[0].height, duration, audio)?;
-    for (index, frame) in frames.iter().enumerate() {
-        push_decoded(&mut sink, frame, duration, duration.saturating_mul(index as i64))?;
-    }
+    };
     if let Some((rate, channels)) = audio {
         if !pcm.is_empty() {
             sink.write_pcm(&pcm, channels, rate)?;
