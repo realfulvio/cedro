@@ -21,6 +21,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  CMAKE_POLICY_VERSION_MINIMUM: "3.5"
   DEBIAN_FRONTEND: noninteractive
   ANDROID_SDK: /opt/android-sdk
   NDK_VERSION: 27.2.12479018
