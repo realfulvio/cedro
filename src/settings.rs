@@ -49,6 +49,8 @@ pub struct Settings {
     pub ocr_max: u32,
     /// Il tema della versione standard (`ui::theme::ThemeId::key`); sconosciuto = Windows essenziale.
     pub ui_theme: String,
+    /// Lingua dell'interfaccia: `auto` (quella del sistema), `it` o `en`.
+    pub language: String,
 }
 
 impl Default for Settings {
@@ -75,6 +77,7 @@ impl Default for Settings {
             ocr_lang: "auto".into(),
             ocr_max: 100,
             ui_theme: String::new(),
+            language: "auto".into(),
         }
     }
 }
@@ -157,6 +160,7 @@ impl Settings {
                     }
                 }
                 "ui_theme" => s.ui_theme = value.to_string(),
+                "language" if matches!(value, "auto" | "it" | "en") => s.language = value.to_string(),
                 "ocr_lang" if matches!(value, "auto" | "it" | "en") => s.ocr_lang = value.to_string(),
                 "ocr_max" => {
                     if let Ok(n) = value.parse::<u32>() {
@@ -199,6 +203,7 @@ impl Settings {
             ("ocr_lang", self.ocr_lang.clone()),
             ("ocr_max", self.ocr_max.to_string()),
             ("ui_theme", self.ui_theme.clone()),
+            ("language", self.language.clone()),
             ("ui_schema", "1".into()),
         ];
         let mut out: Vec<String> = old
@@ -253,11 +258,13 @@ pub fn read_settings() -> Settings {
     AL_PRIMO_AVVIO.call_once(|| passa_a_bondeno(&dir));
     let s = Settings::load_from(&dir.join("config.txt"));
     crate::edizione::segui_tema(&s.ui_theme);
+    crate::i18n::segui(&s.language);
     s
 }
 
 pub fn write_settings(s: &Settings) -> std::io::Result<()> {
     crate::edizione::segui_tema(&s.ui_theme);
+    crate::i18n::segui(&s.language);
     s.save_to(&crate::config_dir().join("config.txt"))
 }
 
