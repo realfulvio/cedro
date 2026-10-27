@@ -33,12 +33,11 @@ pub fn open_upright(path: &Path) -> Result<DynamicImage, String> {
 pub fn pdf_pages_text(pdf: &[u8]) -> Result<String, String> {
     let mut body = String::new();
     let mut any = false;
-    let pages = render_pdf(pdf, |_| true, OCR_SCALE, crate::settings::read_settings().ocr_pages(), |i, png| {
+    let pages = render_pdf_images(pdf, |_| true, OCR_SCALE, crate::settings::read_settings().ocr_pages(), |i, image| {
         if i > 0 {
             body.push_str("\n\n");
         }
         body.push_str(&format!("--- pagina {} ---\n", i + 1));
-        let image = image::load_from_memory(&png).map_err(|e| e.to_string())?;
         match recognize(&image) {
             Ok(text) => {
                 any = true;
@@ -61,8 +60,7 @@ pub fn pdf_pages_text(pdf: &[u8]) -> Result<String, String> {
 /// Per ogni pagina: `None` se non è stata letta, altrimenti il testo (vuoto se non trovato).
 pub fn pdf_pages_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec<Option<String>>, String> {
     let mut texts = vec![None; pdf_page_count(pdf)?];
-    render_pdf(pdf, &wanted, OCR_SCALE, crate::settings::read_settings().ocr_pages(), |i, png| {
-        let image = image::load_from_memory(&png).map_err(|e| e.to_string())?;
+    render_pdf_images(pdf, &wanted, OCR_SCALE, crate::settings::read_settings().ocr_pages(), |i, image| {
         texts[i] = Some(recognize(&image).unwrap_or_default());
         Ok(())
     })?;
@@ -83,9 +81,26 @@ pub fn render_page_rgba(bytes: &[u8], page: usize, side: f32) -> Result<(u32, u3
     let scale = side / w.max(h).max(1.0);
     let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
     let rendered = render(p, &RenderCache::new(), &InterpreterSettings::default(), &RenderSettings::default(), &pixmap);
-    let png = rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?;
-    let img = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgba8();
-    Ok((img.width(), img.height(), img.into_raw()))
+    let (w, h) = (rendered.width() as u32, rendered.height() as u32);
+    if w == 0 || h == 0 {
+        return Err("pagina non disegnata: pagina vuota".into());
+    }
+    // I pixel così come sono, senza passare da un PNG.
+    Ok((w, h, rendered.take_rgba8(hayro::vello_cpu::peniko::ImageAlphaType::Alpha)))
+}
+
+/// I pixel di una pagina disegnata, come li darebbe il suo PNG (RGB, o RGBA se c'è trasparenza), senza codificarla.
+pub(crate) fn pixmap_image(pixmap: hayro::vello_cpu::Pixmap) -> Result<DynamicImage, String> {
+    use hayro::vello_cpu::Pixels;
+    let (w, h) = (pixmap.width() as u32, pixmap.height() as u32);
+    if w == 0 || h == 0 {
+        return Err("pagina non disegnata: pagina vuota".into());
+    }
+    let image = match pixmap.try_take_rgb8(hayro::vello_cpu::peniko::ImageAlphaType::Alpha) {
+        Pixels::Rgb8(data) => image::RgbImage::from_raw(w, h, data).map(DynamicImage::ImageRgb8),
+        Pixels::Rgba8(data) => image::RgbaImage::from_raw(w, h, data).map(DynamicImage::ImageRgba8),
+    };
+    image.ok_or_else(|| "pagina non disegnata".to_string())
 }
 
 pub fn pdf_page_count(bytes: &[u8]) -> Result<usize, String> {
@@ -115,7 +130,7 @@ fn recognize(image: &DynamicImage) -> Result<String, String> {
 }
 
 /// Le righe di testo di un'immagine. Su Windows legge l'OCR di Windows in italiano,
-/// su Linux Tesseract con l'italiano se c'è; altrimenti il modello latino incluso.
+/// su Linux Tesseract nella lingua scelta se c'è; altrimenti il modello latino incluso.
 pub fn image_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
     #[cfg(windows)]
     if let Ok(lines) = windows_lines(image) {
@@ -230,31 +245,45 @@ fn ocrs_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
         .collect())
 }
 
+/// Le lingue che Tesseract ha installate.
 #[cfg(not(windows))]
-fn tesseract_italian() -> bool {
-    static ITALIAN: OnceLock<bool> = OnceLock::new();
-    *ITALIAN.get_or_init(|| {
+fn tesseract_langs() -> &'static [String] {
+    static LANGS: OnceLock<Vec<String>> = OnceLock::new();
+    LANGS.get_or_init(|| {
         std::process::Command::new("tesseract")
             .arg("--list-langs")
             .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).lines().any(|l| l.trim() == "ita"))
-            .unwrap_or(false)
+            .map(|o| String::from_utf8_lossy(&o.stdout).lines().skip(1).map(|l| l.trim().to_string()).collect())
+            .unwrap_or_default()
     })
+}
+
+/// I modelli di Tesseract per la lingua scelta nelle impostazioni; `None` se mancano (si usa il modello latino incluso).
+#[cfg(not(windows))]
+fn tesseract_lang(setting: &str, installed: &[String]) -> Option<&'static str> {
+    let has = |l: &str| installed.iter().any(|x| x == l);
+    match setting {
+        "en" if has("eng") => Some("eng"),
+        "en" => None,
+        // «Automatica» sceglie da sola tra italiano e inglese.
+        "auto" if has("ita") && has("eng") => Some("ita+eng"),
+        _ if has("ita") => Some("ita"),
+        _ => None,
+    }
 }
 
 #[cfg(not(windows))]
 fn tesseract_lines(image: &DynamicImage) -> Option<Vec<Line>> {
     use std::process::Command;
-    if !tesseract_italian() {
-        return None;
-    }
+    let lang = tesseract_lang(&crate::settings::read_settings().ocr_lang, tesseract_langs())?;
     let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
-    let tmp = std::env::temp_dir().join(format!("cedro-ocr-{}-{n}.png", std::process::id()));
+    // BMP: niente compressione da fare e disfare per un file che vive un istante.
+    let tmp = std::env::temp_dir().join(format!("cedro-ocr-{}-{n}.bmp", std::process::id()));
     image.to_rgb8().save(&tmp).ok()?;
     let out = Command::new("tesseract")
         .arg(&tmp)
         .arg("-")
-        .args(["-l", "ita", "--psm", "3", "tsv"])
+        .args(["-l", lang, "--psm", "3", "tsv"])
         .output();
     let _ = std::fs::remove_file(&tmp);
     let out = out.ok().filter(|o| o.status.success())?;
@@ -409,6 +438,27 @@ fn render_pdf(
     max: usize,
     mut each: impl FnMut(usize, Vec<u8>) -> Result<(), String>,
 ) -> Result<usize, String> {
+    render_pdf_pixmaps(bytes, wanted, scale, max, |i, rendered| each(i, rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?))
+}
+
+/// Come `render_pdf`, ma passa a `each` i pixel della pagina: per l'OCR non serve un PNG da decodificare.
+fn render_pdf_images(
+    bytes: &[u8],
+    wanted: impl Fn(usize) -> bool,
+    scale: f32,
+    max: usize,
+    mut each: impl FnMut(usize, DynamicImage) -> Result<(), String>,
+) -> Result<usize, String> {
+    render_pdf_pixmaps(bytes, wanted, scale, max, |i, rendered| each(i, pixmap_image(rendered)?))
+}
+
+fn render_pdf_pixmaps(
+    bytes: &[u8],
+    wanted: impl Fn(usize) -> bool,
+    scale: f32,
+    max: usize,
+    mut each: impl FnMut(usize, hayro::vello_cpu::Pixmap) -> Result<(), String>,
+) -> Result<usize, String> {
     use hayro::hayro_interpret::InterpreterSettings;
     use hayro::hayro_syntax::Pdf;
     use hayro::vello_cpu::color::palette::css::WHITE;
@@ -426,9 +476,50 @@ fn render_pdf(
         let scale = scale.min(3508.0 / w.max(h).max(1.0));
         let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
         let rendered = render(page, &cache, &interpreter, &settings, &pixmap);
-        each(i, rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?)?;
+        each(i, rendered)?;
         done += 1;
         crate::progress::report(done as f32 / totale as f32);
     }
     Ok(done)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(not(windows))]
+    #[test]
+    fn tesseract_reads_the_language_chosen_in_the_settings() {
+        let langs = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let both = langs(&["eng", "ita", "osd"]);
+        assert_eq!(tesseract_lang("auto", &both), Some("ita+eng"));
+        assert_eq!(tesseract_lang("it", &both), Some("ita"));
+        assert_eq!(tesseract_lang("en", &both), Some("eng"));
+        // Senza il modello voluto si usa quello latino incluso.
+        assert_eq!(tesseract_lang("en", &langs(&["ita"])), None);
+        assert_eq!(tesseract_lang("auto", &langs(&["ita"])), Some("ita"));
+        assert_eq!(tesseract_lang("auto", &langs(&["eng"])), None);
+        assert_eq!(tesseract_lang("it", &[]), None);
+    }
+
+    #[test]
+    fn a_rendered_page_gives_the_same_pixels_as_its_png() {
+        use hayro::vello_cpu::color::palette::css::WHITE;
+        use hayro::{render, PixmapSettings, RenderCache, RenderSettings};
+        let pdf = crate::pdf::pdf_from_text("Una riga di prova\nE un'altra, più lunga, per avere dei grigi.");
+        let doc = hayro::hayro_syntax::Pdf::new(pdf).unwrap();
+        let pages = doc.pages();
+        let page = pages.get(0).unwrap();
+        let draw = || {
+            let pixmap = PixmapSettings { x_scale: 1.5, y_scale: 1.5, bg_color: WHITE };
+            render(page, &RenderCache::new(), &hayro::hayro_interpret::InterpreterSettings::default(), &RenderSettings::default(), &pixmap)
+        };
+        let from_png = image::load_from_memory(&draw().into_png().unwrap()).unwrap();
+        let direct = pixmap_image(draw()).unwrap();
+        assert_eq!(from_png.color(), direct.color());
+        assert_eq!(from_png.as_bytes(), direct.as_bytes());
+        let (w, h, rgba) = render_page_rgba(&crate::pdf::pdf_from_text("x"), 0, 100.0).unwrap();
+        assert_eq!(rgba.len(), (w * h * 4) as usize);
+        assert!(rgba.chunks_exact(4).all(|p| p[3] == 255));
+    }
 }
