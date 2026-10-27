@@ -1,0 +1,1003 @@
+# Italiano<TAB>inglese, una riga per testo. \n = a capo, {} = parte variabile ({1},{2}… per riordinarle).
+# Generato a mano: aggiungere qui i testi nuovi. Un testo senza riga resta in italiano.
+Immagini	Images
+Documenti	Documents
+Testo	Text
+Cambia formato, ridimensiona e raddrizza le foto.	Change format, resize and straighten photos.
+Da Word, ODT e RTF a PDF.	From Word, ODT and RTF to PDF.
+Da PDF a Word modificabile, a immagini o a testo.	From PDF to editable Word, images or text.
+TXT, Markdown, CSV, JSON e HTML.	TXT, Markdown, CSV, JSON and HTML.
+WAV, MP3, OGG, M4A, AAC e FLAC.	WAV, MP3, OGG, M4A, AAC and FLAC.
+MP4, WebM, MOV, MKV e AVI.	MP4, WebM, MOV, MKV and AVI.
+leggera, per il web	light, for the web
+va bene dappertutto	works everywhere
+nitida, senza perdite	sharp, lossless
+un documento	a document
+si apre ovunque	opens anywhere
+da modificare	to edit
+una per pagina	one per page
+solo le parole	just the words
+testo semplice	plain text
+pagina web	web page
+leggero, va ovunque	light, plays anywhere
+qualità piena	full quality
+va ovunque	plays anywhere
+Solo audio	Audio only
+senza immagini	no picture
+Originali	Original
+Lettera	Letter
+No	No
+Sotto -30 dB	Below -30 dB
+Sotto -40 dB	Below -40 dB
+Sotto -50 dB	Below -50 dB
+Come l'originale	Same as original
+Punto e virgola ;	Semicolon ;
+Virgola ,	Comma ,
+Tabulazione	Tab
+Stereo	Stereo
+Mono	Mono
+Raddrizza le foto	Straighten photos
+Corregge la rotazione dei file del telefono	Fixes the rotation of phone photos
+Sfondo bianco	White background
+Al posto della trasparenza, nel JPEG	Instead of transparency, in JPEG
+Dimensioni	Size
+Lato lungo massimo; le più piccole restano come sono	Longest side; smaller ones stay as they are
+Formato pagina	Page size
+Password del PDF	PDF password
+Vuota = nessuna protezione	Empty = no protection
+Risoluzione immagini	Image resolution
+Più dpi, più nitide e più pesanti	More dpi: sharper and heavier
+Pagine	Pages
+Vuoto = tutte. Per esempio 1-3,5 oppure 4-	Empty = all. For example 1-3,5 or 4-
+tutte, oppure 1-3,5	all, or 1-3,5
+Una immagine per pagina	One image per page
+Spenta: una sola immagine lunga	Off: a single long image
+Leggi le scansioni (OCR)	Read scans (OCR)
+Solo dove manca il testo	Only where text is missing
+Ricostruisci le tabelle	Rebuild tables
+Celle, sfondi e bordi	Cells, backgrounds and borders
+Tieni le colonne	Keep columns
+Il testo a colonne resta a colonne; spento va in colonna singola	Column text stays in columns; off gives a single column
+Incorpora i caratteri	Embed fonts
+Il PDF si vede uguale ovunque e il testo si copia	The PDF looks the same everywhere and text can be copied
+Conserva i segnalibri	Keep bookmarks
+Dai titoli del documento	From the document headings
+PDF/A per l'archivio	PDF/A for archiving
+PDF/A-1b: font incorporati, profilo colore, metadati	PDF/A-1b: embedded fonts, colour profile, metadata
+Codifica	Encoding
+Del file scritto	Of the written file
+Separatore CSV	CSV separator
+Rendi leggibile il JSON	Make the JSON readable
+Rientri e a capo	Indentation and line breaks
+Prima riga come titoli	First row as headers
+Per le tabelle e il JSON dal CSV	For tables and JSON from CSV
+Qualità MP3	MP3 quality
+Canali	Channels
+Normalizza il volume	Normalize volume
+Porta il picco al massimo	Raises the peak to the maximum
+Taglia l'inizio	Trim the start
+Secondi saltati all'inizio	Seconds skipped at the start
+Taglia il silenzio iniziale	Trim leading silence
+Il resto resta com'è	The rest stays as it is
+Mantieni titolo e artista	Keep title and artist
+Tag del file	File tags
+Risoluzione	Resolution
+Si rimpicciolisce, non si ingrandisce	Can only shrink, never enlarge
+Fotogrammi al secondo	Frames per second
+Massimo	Maximum
+Togli l'audio	Remove the audio
+Ottimizza per il web	Optimize for the web
+L'avvio parte subito	Playback starts right away
+Aggiungi -2, -3…	Add -2, -3…
+Sostituisci il file	Replace the file
+Salta il file	Skip the file
+Chiedi ogni volta	Ask every time
+Conversioni	Conversions
+Trascrizione	Transcription
+Video dal web	Web video
+Migliore	Best
+Fino a 1080p · consigliato	Up to 1080p · recommended
+720p · file leggero	720p · light file
+480p · file piccolo	480p · small file
+Buona · consigliata	Good · recommended
+Leggera	Light
+Nessuno	None
+Italiano	Italian
+Italiano e inglese	Italian and English
+Tutti	All
+Incolla il link della pagina che contiene il video (RaiPlay, Vimeo, Internet Archive e oltre mille altri siti).	Paste the link of the page that contains the video (RaiPlay, Vimeo, Internet Archive and over a thousand other sites).
+Funziona con i siti che yt-dlp riconosce. Se un sito non è supportato, o il video è protetto o chiede un accesso, lo vedi accanto al link.	Works with the sites yt-dlp recognizes. If a site isn't supported, or the video is protected or needs a login, you'll see it next to the link.
+Incolla il link di un video o di una playlist di YouTube.	Paste the link of a YouTube video or playlist.
+Scaricati	Downloads
+In attesa	Waiting
+{} · {} · in {}	{} · {} · in {}
+{#} KB	{} KB
+{#} byte	{} bytes
+Nessun file che Cedro sappia convertire.	No files Cedro can convert.
+{} ha {#} pagine: la pagina {#} non c'è.	{} has {} pages: page {} doesn't exist.
+Aggiungi prima qualche file.	Add some files first.
+Annullato	Cancelled
+Aggiungi prima un audio o un video.	Add an audio or video file first.
+Incolla prima il link di una pagina con un video.	Paste the link of a page with a video first.
+Incolla prima un link di YouTube.	Paste a YouTube link first.
+Fatto · {}	Done · {}
+Saltato · {}	Skipped · {}
+In corso · {#}%	In progress · {}%
+In corso	In progress
+Fatto	Done
+Fatto · 1 file	Done · 1 file
+Fatto · {#} file	Done · {} files
+{} · playlist di {#} video	{} · playlist of {} videos
+Fatto: 1 file in {}	Done: 1 file in {}
+Fatto: {#} file in {}	Done: {} files in {}
+Finito	Finished
+{#} di {#} file non riusciti: il motivo è accanto a ciascuno.	{} of {} files failed: the reason is shown next to each one.
+Fatto: 1 file.	Done: 1 file.
+Fatto: {#} file.	Done: {} files.
+Accanto all'originale	Next to the original
+Esempio: nomefile-2.{}	Example: filename-2.{}
+Il file con lo stesso nome viene sostituito.	The file with the same name is replaced.
+Il file con lo stesso nome resta com'è.	The file with the same name is left as it is.
+Cedro te lo chiede file per file.	Cedro asks you file by file.
+Converti	Convert
+Sostituisci	Replace
+Qualità	Quality
+Annulla	Cancel
+Trascrivi	Transcribe
+Altre opzioni ({#})	More options ({})
+Impostazioni personalizzate	Custom settings
+Impostazioni consigliate	Recommended settings
+Lascia qui i file da aggiungere	Drop the files to add here
+Il file esiste già	The file already exists
+«{}» c'è già nella cartella di destinazione. Cosa vuoi fare?	"{}" is already in the destination folder. What do you want to do?
+Salta	Skip
+Tieni entrambi	Keep both
+Minore dimensione	Smaller size
+Qualità superiore	Higher quality
+Formato	Format
+Questa voce non ha altre opzioni.	This item has no other options.
+I file convertiti verranno salvati nella stessa cartella dei file originali.	Converted files will be saved in the same folder as the originals.
+I file convertiti verranno salvati in {}.	Converted files will be saved in {}.
+I testi verranno salvati nella stessa cartella dei file originali.	Transcripts will be saved in the same folder as the originals.
+I testi verranno salvati in {}.	Transcripts will be saved in {}.
+Aggiungi -2	Add -2
+Chiedi	Ask
+{#} di {#}…	{} of {}…
+Trascrivi {#} file	Transcribe {} files
+Trascrivi 1 file	Transcribe 1 file
+Scarica	Download
+Converti 1 file	Convert 1 file
+Converti {#} file	Convert {} files
+Copie accanto agli originali	Copies next to the originals
+Copie in {}	Copies in {}
+{} · Impostazioni personalizzate.	{} · Custom settings.
+{} · Impostazioni consigliate.	{} · Recommended settings.
+Altri file in coda:	Other files in the queue:
+Trascina qui audio e video	Drop audio and video here
+MP3, WAV, M4A, OGG, OPUS, FLAC, WMA, AMR e video	MP3, WAV, M4A, OGG, OPUS, FLAC, WMA, AMR and video
+Trascina qui i file oppure fai clic	Drop files here or click
+{} · Accetta: {}	{} · Accepts: {}
+{#} pagine	{} pages
+1 pagina	1 page
+Cosa sta succedendo	What's happening
+Copia	Copy
+Qui compaiono i passi del lavoro e gli eventuali errori.	The steps of the job and any errors appear here.
+{} · pronto sul computer	{} · ready on this computer
+{} · al primo uso si scarica ({})	{} · downloaded on first use ({})
+Aggiungi file	Add files
+Risultato:	Result:
+Documento Word	Word document
+Testo semplice	Plain text
+Precisione:	Accuracy:
+Aggiungi cartella	Add folder
+Rimuovi	Remove
+{#} file	{} files
+1 file	1 file
+Impostazioni di trascrizione	Transcription settings
+Risultato	Result
+Word	Word
+Precisione	Accuracy
+Cartella di destinazione	Destination folder
+Aggiungi	Add
+Nessun link in coda	No links in the queue
+Salva come	Save as
+Sottotitoli	Subtitles
+Copertina nel file	Cover image in the file
+Capitoli e descrizione nel file	Chapters and description in the file
+Dividi per capitoli	Split by chapters
+Salta le parti sponsorizzate	Skip sponsored parts
+Livella il volume	Level the volume
+Raccolte: scarica tutto	Collections: download everything
+Playlist: scarica tutta	Playlist: download everything
+Salta i già scaricati	Skip already downloaded
+Scarica:	Download:
+Cambia cartella	Change folder
+Impostazioni del download	Download settings
+File	Files
+Operazione	Operation
+Stato	Status
+Impostazioni immagini	Image settings
+Impostazioni documenti	Document settings
+Impostazioni pdf	PDF settings
+Impostazioni testo	Text settings
+Impostazioni audio	Audio settings
+Impostazioni video	Video settings
+immagini	images
+documenti	documents
+testo	text
+Strumenti	Tools
+(al posto della conversione)	(instead of conversion)
+{#} di {#} completati	{} of {} completed
+{#} file pronti	{} files ready
+Progresso complessivo	Overall progress
+In caso di file già esistente	If the file already exists
+Sfoglia…	Browse…
+Conversione in corso	Conversion in progress
+Converti in	Convert to
+{#} file nella coda	{} files in the queue
+Link	Link
+Altri siti	Other sites
+Scarica da web	Download from the web
+Apri pannello completo	Open full panel
+Guida	Help
+Torna alle consigliate	Back to recommended
+In caso di conflitto	On conflict
+Preparo l'anteprima…	Preparing preview…
+Anteprima non disponibile per questo tipo di file.	Preview not available for this file type.
+Converti il documento	Convert the document
+{} e altri {}	{} and {} more
+Formato di output	Output format
+Anteprima dell'originale	Original preview
+Stai visualizzando il documento originale. Nessuna conversione è ancora stata eseguita.	You're viewing the original document. No conversion has been run yet.
+Se esiste già	If it already exists
+In corso…	In progress…
+Impostazioni	Settings
+Nome file	File name
+Dimensione	Size
+Impostazioni di conversione	Conversion settings
+Se esiste già un file	If a file already exists
+Converti in:	Convert to:
+Semplificata	Simplified
+Standard	Standard
+Indietro	Back
+Salvataggio	Saving
+Cambia file	Change files
+Quali file vuoi convertire?	Which files do you want to convert?
+Trascina i file qui oppure scegli dal computer.	Drop the files here or choose them from your computer.
+Scegli il formato di destinazione.	Choose the destination format.
+Scegli il formato di destinazione e configura le opzioni.	Choose the destination format and set the options.
+Cosa vuoi ottenere?	What do you want to get?
+Opzioni · {}	Options · {}
+Opzioni di conversione · {}	Conversion options · {}
+Altri formati e strumenti	Other formats and tools
+Dove salvo i file?	Where should I save the files?
+Scegli la cartella: l'originale non viene mai toccato.	Choose the folder: the original is never touched.
+Pronto	Ready
+Sto lavorando sui file…	Working on the files…
+L'originale resta al sicuro.	The original stays safe.
+Continua	Continue
+Completato	Completed
+Saltato	Skipped
+Errore	Error
+Windows essenziale	Essential Windows
+Percorso guidato	Guided path
+Cedro compatto	Compact Cedro
+Banco di lavoro	Workbench
+Documento al centro	Document first
+Attività a sinistra, coda con ispettore.	Activities on the left, queue with inspector.
+Tre passi: File, Operazione, Salvataggio.	Three steps: Files, Operation, Saving.
+Finestrella dall'icona vicino all'orologio.	Small window from the icon next to the clock.
+Tabella con stati, ispettore a destra.	Table with statuses, inspector on the right.
+L'originale al centro, opzioni accanto.	The original in the centre, options beside it.
+Colori e carattere del Comune, con lo stemma.	The Comune's colours and typeface, with the coat of arms.
+Modalità	Mode
+Tutte le opzioni a portata di mano.	All options within reach.
+Solo l'essenziale; il resto in «Altre opzioni».	Only the essentials; the rest under "More options".
+Tema	Theme
+Il nuovo aspetto compare nella finestra principale appena ci torni. Se Cedro sta lavorando, al termine del lavoro. I tuoi file e le opzioni scelte restano come sono.	The new look appears in the main window as soon as you go back to it, or when the current job finishes. Your files and chosen options stay as they are.
+Strumento · {}	Tool · {}
+Cartella con i file da convertire	Folder with the files to convert
+Aggiungi file…	Add files…
+Aggiungi una cartella…	Add a folder…
+Scegli una cartella…	Choose a folder…
+Dove salvare i download	Where to save downloads
+{} pronto	{} ready
+{} pronti	{} ready
+Shift	Shift
+Ctrl	Ctrl
+Alt	Alt
+Esc	Esc
+per chiudere	to close
+Conversione	Conversion
+Azioni	Actions
+L'originale resta sempre dov'è.	The original always stays where it is.
+Copia accanto all'originale	Copy next to the original
+In attesa…	Waiting…
+Converti in {}	Convert to {}
+Applica: {}	Apply: {}
+Scegli un formato	Choose a format
+Scegli uno strumento	Choose a tool
+Scegli un'azione	Choose an action
+Scegli	Choose
+Salva accanto all'originale	Save next to the original
+Va dove dicono le Impostazioni.	Goes where Settings say.
+Applica	Apply
+Esegui	Run
+Apri Conversioni	Open Conversions
+Clicca un formato per convertire.	Click a format to convert.
+La conversione usa le impostazioni consigliate.	Conversion uses the recommended settings.
+Clicca uno strumento da applicare.	Click a tool to apply.
+Lo strumento usa le impostazioni consigliate.	The tool uses the recommended settings.
+Clicca un'azione.	Click an action.
+Conversioni di Cedro	Cedro Conversions
+Trascina qui i file	Drop files here
+CONVERTI IN	CONVERT TO
+STRUMENTI · OPZIONI · QUALITÀ	TOOLS · OPTIONS · QUALITY
+Comprimi	Compress
+Dimensioni: Originali	Size: Original
+Qualità 82	Quality 82
+Converti 2 file · WebP	Convert 2 files · WebP
+Converti file	Convert files
+Cosa vuoi convertire?	What do you want to convert?
+senza perdite	lossless
+Completa	Full
+Semplice	Simple
+Tutte le opzioni subito in vista: formati, strumenti, qualità, dove salvare.	All options in view right away: formats, tools, quality, where to save.
+Solo l'essenziale: trascini i file, scegli in che cosa trasformarli, premi il pulsante.	Just the essentials: drop the files, choose what to turn them into, press the button.
+Come vuoi usare Cedro?	How do you want to use Cedro?
+Si può cambiare quando vuoi da Impostazioni > Generale. Le funzioni sono le stesse.	You can change this any time in Settings > General. The features are the same.
+I componenti pesanti (trascrizione, video dal web) si scaricano solo al primo uso.	The heavy components (transcription, web video) are downloaded only on first use.
+Fine	Done
+Tieni premuto un tasto,	Hold down a key,
+poi clic destro sul file	then right-click the file
+Si apre la ruota. Clic sulla fetta: la copia nasce accanto all'originale, che resta dov'è.	The wheel opens. Click a slice: the copy appears next to the original, which stays where it is.
+Cambia formato: JPEG, PDF, MP4…	Change format: JPEG, PDF, MP4…
+Modifica	Edit
+Comprimi, ruota, OCR, metadati…	Compress, rotate, OCR, metadata…
+Azioni sul file	File actions
+Duplica, copia il percorso, ZIP	Duplicate, copy the path, ZIP
+Tutte le conversioni	All the conversions
+in un solo pannello	in a single panel
+Dal menu dell'icona apri Conversioni. Trascini file anche di tipi diversi e scegli formato, strumenti e qualità.	Open Conversions from the icon menu. Drop files, even of different types, and choose format, tools and quality.
+Foto	Photo
+Immagini e documenti	Images and documents
+Formato, dimensioni, raddrizza, PDF/A	Format, size, straighten, PDF/A
+Da PDF a Word	From PDF to Word
+Tabelle, colonne, OCR in italiano	Tables, columns, OCR in Italian
+Audio e video	Audio and video
+Bitrate, taglio, risoluzione, fps	Bitrate, trimming, resolution, fps
+YouTube e video	YouTube and video
+dal web, senza altro	from the web, nothing else needed
+Incolla uno o più link, scegli Video o Solo audio. Gli strumenti si scaricano da soli la prima volta.	Paste one or more links, choose Video or Audio only. The tools download themselves the first time.
+Anche elenchi di link in un colpo	Even lists of links in one go
+Da molti altri siti	From many other sites
+MP3 o M4A, senza immagini	MP3 or M4A, no picture
+Dalla voce al testo,	From voice to text,
+anche con la scheda video	even with the graphics card
+Trascrivi vocali, registrazioni e l'audio dei video. Se c'è una scheda video compatibile, Cedro la usa.	Transcribe voice notes, recordings and the audio of videos. If there is a compatible graphics card, Cedro uses it.
+Trascrizione audio	Audio transcription
+Con i tempi, copiabile con un clic	With timestamps, copyable with one click
+Più veloce	Faster
+Vulkan, oppure il processore giusto	Vulkan, or the right processor
+Locale	Local
+Resta sul PC	Stays on your PC
+Il motore si scarica al primo uso	The engine is downloaded on first use
+Si tiene aggiornato	It keeps itself
+da solo	up to date
+Impostazioni ha una scheda Sistema con le caratteristiche del PC e una Informazioni con crediti e licenze.	Settings has a System tab with your PC's specs and an About tab with credits and licences.
+Aggiornamenti	Updates
+Controlla e chiede prima di installare	Checks and asks before installing
+Sistema	System
+Processore, scheda video, memoria	Processor, graphics card, memory
+Informazioni	About
+Versione e licenze dei componenti	Version and licences of the components
+Su Windows,	On Windows,
+Windows on ARM e Linux	Windows on ARM and Linux
+Stesse funzioni dappertutto. L'installatore giusto lo sceglie Cedro quando si aggiorna.	Same features everywhere. Cedro picks the right installer when it updates.
+Windows 10 e 11	Windows 10 and 11
+Il solito installatore	The usual installer
+Versione nativa, non emulata	Native version, not emulated
+KDE Plasma e GNOME	KDE Plasma and GNOME
+Guida di Cedro · Comune di Bondeno	Cedro Guide · Comune di Bondeno
+Guida di Cedro	Cedro Guide
+{#} di {#}	{} of {}
+Chiudi	Close
+Avanti	Next
+CONVERSIONE	CONVERSION
+STRUMENTI	TOOLS
+AZIONI	ACTIONS
+Scala	Resize
+Ruota	Rotate
+Metadati	Metadata
+MAIUSC.	CAPS
+Duplica	Duplicate
+Percorso	Path
+Trascina qui i file o clicca	Drop files here or click
+OPZIONI	OPTIONS
+Tabelle	Tables
+Colonne	Columns
+Fatto: 3 file Word accanto agli originali	Done: 3 Word files next to the originals
+Sto convertendo…	Converting…
+Converti 3 file · Word	Convert 3 files · Word
+Immagini e suono	Picture and sound
+Per ascoltare	For listening
+Fatto: il video è nella cartella	Done: the video is in the folder
+Scarico dal web…	Downloading from the web…
+Buongiorno a tutti e grazie di essere qui.	Good morning everyone, and thank you for being here.
+Oggi parliamo del bilancio del comune.	Today we're talking about the municipal budget.
+Il primo punto riguarda le manutenzioni…	The first item concerns maintenance…
+Scheda video trovata: trascrizione più veloce	Graphics card found: faster transcription
+Generale	General
+Processore	Processor
+Scheda video	Graphics card
+Memoria	Memory
+Nuova versione pronta · Aggiorna	New version ready · Update
+Snapdragon X e simili	Snapdragon X and similar
+Wayland · KDE Plasma e GNOME	Wayland · KDE Plasma and GNOME
+Avvio automatico non cambiato: {}	Start at login not changed: {}
+Nessun file sotto il cursore	No file under the cursor
+Copia nella cartella «Cedro»	Copy to the "Cedro" folder
+la cartella scelta	the chosen folder
+Copia in {}	Copy to {}
+Niente da fare su questo file	Nothing to do for this file
+{#} di {#} · {}	{} of {} · {}
+Errore · {}	Error · {}
+✓ Fatto · {#} file in {}	✓ Done · {} files in {}
+✓ Fatto · {}	✓ Done · {}
+{#} file di altro tipo lasciati stare	{} files of another type skipped
+{#} file\n{}	{} files\n{}
+Conversioni…	Conversions…
+Impostazioni…	Settings…
+Guida…	Help…
+Controlla aggiornamenti	Check for updates
+Avvio automatico	Start automatically
+Esci	Exit
+Hai già l'ultima versione ({}).	You already have the latest version ({}).
+È disponibile Cedro {}. Hai la {}.\n\nVuoi aggiornare adesso?	Cedro {} is available. You have {}.\n\nDo you want to update now?
+Scarico Cedro {}…	Downloading Cedro {}…
+Aggiornamento non riuscito: {}	Update failed: {}
+Aggiornamento non riuscito: il lavoro si è interrotto.	Update failed: the job was interrupted.
+{} Cedro si riapre.	{} Cedro will reopen.
+Una conversione è ancora in corso: aspetta che finisca.	A conversion is still running: wait for it to finish.
+Scegli i file	Choose files
+Tutti i file	All files
+GitHub non risponde: {}	GitHub is not responding: {}
+release senza tag	release without a tag
+Maiuscolo	Uppercase
+Minuscolo	Lowercase
+Solo audio (MP3)	Audio only (MP3)
+Word OCR	Word OCR
+Niente qui	Nothing here
+nessuna pagina in questo intervallo	no pages in this range
+questo PDF non ha testo da copiare; OCR: {}	this PDF has no copyable text; OCR: {}
+questo PDF non ha testo da copiare né da leggere con l'OCR	this PDF has no copyable text and nothing OCR can read
+il PDF/A non ammette la password: togline una delle due	PDF/A doesn't allow a password: remove one of the two
+~ con i caratteri incorporati	 with embedded fonts
+~, con i segnalibri	, with bookmarks
+~, protetto con password	, password-protected
+cartella di destinazione non creata ({}): {}	destination folder not created ({}): {}
+cartella mancante	missing folder
+immagine non letta: {}	image not read: {}
+{} → {} · {#}% in meno	{} → {} · {}% smaller
+pagine «{}» non valide: scrivi per esempio 1-3,5	invalid pages "{}": write for example 1-3,5
+il file esiste già: saltato	the file already exists: skipped
+file non trovato	file not found
+nessuno strumento per questo file	no tool for this file
+Copia creata	Copy created
+Opus non è ancora letto	Opus can't be read yet
+il video MP4 si converte su Windows e su Linux	MP4 video conversion works on Windows and Linux
+~ · con la scheda video	 · using the graphics card
+Testo scritto	Text written
+Tabella Markdown	Markdown table
+CSV riscritto	CSV rewritten
+Pagina HTML	HTML page
+JSON riscritto	JSON rewritten
+JSON dal CSV	JSON from CSV
+il JSON si ottiene da un file JSON o CSV	JSON comes from a JSON or CSV file
+troppe pagine per un'immagine sola: scegli «Una immagine per pagina» o meno dpi	too many pages for a single image: choose "One image per page" or fewer dpi
+{} unico, {#} pagine una sotto l'altra	single {}, {} pages stacked one below the other
+{#} {}, uno per pagina	{} {}, one per page
+nessuna pagina convertita	no page converted
+Word modificabile: titoli, paragrafi e tabelle del PDF	Editable Word: headings, paragraphs and tables from the PDF
+Word con le pagine scansionate come immagini; il testo letto con l'OCR è nel testo alternativo	Word with the scanned pages as images; the text read with OCR is in the alt text
+Word con le pagine scansionate come immagini	Word with the scanned pages as images
+Word modificabile; {#} pagine scansionate messe come immagini	Editable Word; {} scanned pages placed as images
+Word di testo. L'impaginazione del PDF non viene ricostruita.	Text Word document. The PDF layout is not rebuilt.
+Word di testo, con {#} pagine lette via OCR: controllalo. L'impaginazione non viene ricostruita.	Text Word document, with {} pages read via OCR: please check it. The layout is not rebuilt.
+Testo estratto dal PDF	Text extracted from the PDF
+Testo estratto dal PDF, con {#} pagine lette via OCR: controllalo.	Text extracted from the PDF, with {} pages read via OCR: please check it.
+Mancano {#} pagine scansionate: l'OCR ne legge al massimo {#}.	{} scanned pages are missing: OCR reads {} at most.
+Testo letto	Text read
+Testo del PDF.	PDF text.
+L'OCR ha letto {#} pagine su {#}: le altre mancano.	OCR read {} of {} pages: the others are missing.
+questa voce non si applica a questo file	this item doesn't apply to this file
+PDF {}×{}, con il testo OCR selezionabile e ricercabile	PDF {}×{}, with selectable, searchable OCR text
+azione sconosciuta: {}	unknown action: {}
+Riscritto in PNG, senza metadati	Rewritten as PNG, without metadata
+Ruotato di 90°	Rotated by 90°
+Bianco e nero	Black and white
+testo non letto: {}	text not read: {}
+cartella temporanea non creata: {}	temporary folder not created: {}
+cartella temporanea non creata	temporary folder not created
+Questo non è un link di YouTube: per gli altri siti usa «Video dal web».	This is not a YouTube link: for other sites use "Web video".
+Questo non sembra un link: deve iniziare con https://	This doesn't look like a link: it must start with https://
+Questo non sembra un link di YouTube.	This doesn't look like a YouTube link.
+Al primo uso Cedro scarica da solo {} (circa {#} MB, una volta sola) e poi li tiene aggiornati.	On first use Cedro downloads {} by itself (about {} MB, only once) and then keeps them up to date.
+Non riesco a scaricare {}: {}	I can't download {}: {}
+Scaricamento di {} interrotto: {}	Download of {} interrupted: {}
+Scrittura di {} non riuscita (disco pieno?): {}	Writing {} failed (disk full?): {}
+Scarico {}	Downloading {}
+{}: il file scaricato non corrisponde al codice di controllo	{}: the downloaded file doesn't match the checksum
+yt-dlp non c'è ancora: lo scarico (una volta sola, circa 20 MB)	yt-dlp isn't here yet: downloading it (only once, about 20 MB)
+Non trovo il codice di controllo di yt-dlp: riprova più tardi	Can't find the checksum for yt-dlp: try again later
+yt-dlp scaricato	yt-dlp downloaded
+ffmpeg non c'è ancora: lo scarico (una volta sola, circa 140 MB)	ffmpeg isn't here yet: downloading it (only once, about 140 MB)
+Non trovo il codice di controllo di ffmpeg: riprova più tardi	Can't find the checksum for ffmpeg: try again later
+ffmpeg scaricato	ffmpeg downloaded
+deno non c'è ancora: lo scarico (una volta sola, circa 45 MB)	deno isn't here yet: downloading it (only once, about 45 MB)
+Non trovo il codice di controllo di deno: riprova più tardi	Can't find the checksum for deno: try again later
+deno scaricato	deno downloaded
+{} non è nell'archivio	{} is not in the archive
+archivio rovinato	damaged archive
+Per aprire ffmpeg serve il programma «tar»: {}	Opening ffmpeg needs the "tar" program: {}
+Non riesco ad aprire l'archivio di ffmpeg (servono tar e xz)	I can't open the ffmpeg archive (tar and xz are required)
+{} ha una versione più nuova: la scarico	{} has a newer version: downloading it
+Non riesco ad aggiornare {}: resta la versione che c'è	I can't update {}: the current version stays
+Controllo se yt-dlp ha una versione più nuova	Checking whether yt-dlp has a newer version
+yt-dlp aggiornato	yt-dlp updated
+Non riesco ad aggiornare yt-dlp ({})	I can't update yt-dlp ({})
+nessuna risposta	no reply
+Non riesco ad aggiornare yt-dlp: {}	I can't update yt-dlp: {}
+Il link non ha un titolo	The link has no title
+niente uscita	no output
+Questo sito non è supportato (o il link non porta a un video)	This site isn't supported (or the link doesn't lead to a video)
+Il video è protetto da DRM e non si può scaricare	The video is DRM-protected and can't be downloaded
+Il video non è disponibile nel tuo Paese	The video isn't available in your country
+Il video richiede un accesso: non posso scaricarlo	The video requires a login: I can't download it
+Il video è privato	The video is private
+Il video è per maggiorenni: serve l'accesso a YouTube	The video is age-restricted: you need to sign in to YouTube
+Il video non è disponibile	The video isn't available
+Il video è solo per gli iscritti al canale	The video is for channel members only
+YouTube chiede di confermare che non sei un robot: riprova più tardi	YouTube asks you to confirm you're not a robot: try again later
+Il sito ha limitato le richieste: riprova fra qualche minuto	The site has limited requests: try again in a few minutes
+Il sito ha rifiutato la richiesta: riprova più tardi	The site refused the request: try again later
+Il sito ha risposto con un errore: {}	The site replied with an error: {}
+Non riesco a raggiungere il sito: controlla la connessione	I can't reach the site: check your connection
+yt-dlp non ha dato risposta	yt-dlp gave no reply
+{#}% · {} di {}	{}% · {} of {}
+~ · restano 	 · remaining
+Incolla almeno un link di YouTube	Paste at least one YouTube link
+La cartella di destinazione non si apre: {}	The destination folder can't be opened: {}
+yt-dlp versione {}	yt-dlp version {}
+Link {#} di {#}: {}	Link {} of {}: {}
+Preparo il download	Preparing the download
+Playlist «{}»: {#} video	Playlist "{}": {} videos
+Errore: {}	Error: {}
+Nessun file scaricato	No file downloaded
+yt-dlp non parte: {}	yt-dlp won't start: {}
+yt-dlp senza uscita	yt-dlp has no output
+Pronto: {}	Ready: {}
+Video {#} di {#} della playlist	Video {} of {} in the playlist
+Veloce	Fast
+Buona	Good
+Massima	Maximum
+Per appunti e messaggi vocali	For notes and voice messages
+Per riunioni e interviste	For meetings and interviews
+Per audio difficili, la più precisa	For difficult audio, the most accurate
+per processore	for processor
+per processore, con AVX2	for processor, with AVX2
+per processore, con AVX-VNNI	for processor, with AVX-VNNI
+per processore, con AVX-512	for processor, with AVX-512
+per processore, con AVX-512 VNNI	for processor, with AVX-512 VNNI
+per processore, con dotprod	for processor, with dotprod
+per processore, con i8mm	for processor, with i8mm
+per scheda video	for graphics card
+download di {} non riuscito: {}	download of {} failed: {}
+cartella {} non creata: {}	folder {} not created: {}
+{} non scrivibile: {}	{} not writable: {}
+download di {} interrotto: {}	download of {} interrupted: {}
+scrittura di {} non riuscita (disco pieno?): {}	writing {} failed (disk full?): {}
+Scaricati {} di {}	Downloaded {} of {}
+{} scaricato non corrisponde all'originale (SHA-256 diverso): scartato	the downloaded {} doesn't match the original (different SHA-256): discarded
+{} non salvato: {}	{} not saved: {}
+modello sconosciuto	unknown model
+Modello	Model
+«{}»: è uscita una versione nuova, la scarico ({})…	"{}": a new version is out, downloading it ({})…
+«{}» già sul PC	"{}" already on this PC
+«{}»: lo scarico la prima volta ({})…	"{}": downloading it the first time ({})…
+«{}» scaricato e controllato	"{}" downloaded and verified
+il modello	the model
+il motore	the engine
+{} non c'è	{} is missing
+Motore	Engine
+lo scarico la prima volta ({})…	downloading it the first time ({})…
+lo aggiorno alla versione {} ({})…	updating it to version {} ({})…
+scaricato e controllato	downloaded and verified
+il motore di questa versione ({}) non è ancora pubblicato: riprova tra qualche minuto	the engine for this version ({}) isn't published yet: try again in a few minutes
+indirizzo del motore mancante	engine address missing
+la release non indica lo SHA-256 del motore	the release doesn't give the engine's SHA-256
+il motore non parte: {}	the engine won't start: {}
+il motore non risponde	the engine isn't responding
+il motore si è chiuso	the engine has closed
+italiano	Italian
+inglese	English
+francese	French
+tedesco	German
+spagnolo	Spanish
+portoghese	Portuguese
+rumeno	Romanian
+albanese	Albanian
+arabo	Arabic
+cinese	Chinese
+ucraino	Ukrainian
+russo	Russian
+polacco	Polish
+olandese	Dutch
+turco	Turkish
+greco	Greek
+serbo	Serbian
+croato	Croatian
+sloveno	Slovenian
+giapponese	Japanese
+coreano	Korean
+bengalese	Bengali
+gennaio	January
+febbraio	February
+marzo	March
+aprile	April
+maggio	May
+giugno	June
+luglio	July
+agosto	August
+settembre	September
+ottobre	October
+novembre	November
+dicembre	December
+Trascrizione del {} · {} di audio · lingua: {}	Transcript of {} · {} of audio · language: {}
+formato audio non supportato: installa ffmpeg per leggerlo	audio format not supported: install ffmpeg to read it
+il motore si è chiuso all'improvviso	the engine closed unexpectedly
+Audio	Audio
+{} di parlato da trascrivere	{} of speech to transcribe
+Lingua	Language
+riconosciuta: {}	detected: {}
+Avanzamento	Progress
+{#}% · restano circa {}	{}% · about {} left
+errore del motore	engine error
+Nessun driver Vulkan per la scheda video: uso il processore	No Vulkan driver for the graphics card: using the processor
+non disponibile ({}): uso il processore	not available ({}): using the processor
+lo accendo e carico il modello in memoria…	starting it and loading the model into memory…
+pronto in {} s · scheda video: {}	ready in {} s · graphics card: {}
+nessuna adatta: uso il processore	none suitable: using the processor
+pronto in {} s · processore, {#} thread ({})	ready in {} s · processor, {} threads ({})
+il motore non è partito	the engine didn't start
+il motore si è chiuso subito	the engine closed right away
+non partita ({}): uso il processore	failed to start ({}): using the processor
+{#} di {#}: {}	{} of {}: {}
+{}: il file esiste già, saltato	{}: the file already exists, skipped
+Il motore non legge questo formato ({}): lo apro con il sistema	The engine can't read this format ({}): opening it with the system
+nessun parlato riconosciuto nell'audio	no speech recognized in the audio
+Salvato	Saved
+Motore spento: memoria liberata, processore libero.	Engine stopped: memory freed, processor free.
+Documenti e PDF	Documents and PDF
+Immagini e OCR	Images and OCR
+Interfaccia e sistema	Interface and system
+Disegna le pagine dei PDF.	Draws the pages of PDFs.
+Legge e scrive i file PDF.	Reads and writes PDF files.
+Legge i caratteri dentro i PDF.	Reads the fonts inside PDFs.
+Apre i vecchi file Word .doc.	Opens old Word .doc files.
+Archivi ZIP e file .docx.	ZIP archives and .docx files.
+Apache-2.0 o MIT	Apache-2.0 or MIT
+MIT o Apache-2.0	MIT or Apache-2.0
+Mathijs van de Nes e altri	Mathijs van de Nes and others
+Riconoscimento del testo e i suoi calcoli.	Text recognition and its calculations.
+Modelli OCR di ocrs	ocrs OCR models
+I modelli che leggono il testo nelle immagini.	The models that read text in images.
+Audio MP3.	MP3 audio.
+Legge MP3, FLAC, OGG, AAC, WAV.	Reads MP3, FLAC, OGG, AAC, WAV.
+oxideav VP8 e VP9	oxideav VP8 and VP9
+Legge i video WebM.	Reads WebM videos.
+Scrive i file WAV.	Writes WAV files.
+Video H.264 su Linux.	H.264 video on Linux.
+Licenza FDK AAC	FDK AAC licence
+Audio AAC su Linux.	AAC audio on Linux.
+Georgi Gerganov e ggml	Georgi Gerganov and ggml
+Trascrive l'audio, sul PC (programma scaricato alla prima trascrizione).	Transcribes audio on your PC (program downloaded at the first transcription).
+Modelli Whisper	Whisper models
+I modelli della trascrizione.	The transcription models.
+Collega whisper.cpp a Rust.	Connects whisper.cpp to Rust.
+Xiph.Org e altri	Xiph.Org and others
+Legge i vocali .opus.	Reads .opus voice messages.
+Scarica video e audio da YouTube e da molti altri siti (si scarica al primo uso).	Downloads video and audio from YouTube and many other sites (downloaded on first use).
+Gli sviluppatori di FFmpeg	The FFmpeg developers
+Unisce video e audio dei download (si scarica al primo uso).	Merges video and audio of downloads (downloaded on first use).
+Deno Land Inc. e collaboratori	Deno Land Inc. and contributors
+Serve a yt-dlp per i video ad alta qualità (si scarica al primo uso).	Needed by yt-dlp for high-quality videos (downloaded on first use).
+Le finestre e i servizi di Windows.	Windows windows and services.
+Le finestre su Linux.	Windows on Linux.
+L'icona vicino all'orologio su Linux.	The icon next to the clock on Linux.
+Martin Algesten, serde-rs, RustCrypto	Martin Algesten, serde-rs, RustCrypto
+Controllo degli aggiornamenti.	Update checking.
+Yevhenii Reizner e collaboratori	Yevhenii Reizner and contributors
+Disegna le finestre della versione standard.	Draws the windows of the standard version.
+Erik D. Kennedy e collaboratori	Erik D. Kennedy and contributors
+Il carattere della versione standard.	The typeface of the standard version.
+Accademia di Belle Arti di Urbino	Accademia di Belle Arti di Urbino
+Il carattere di Cedro.	The Cedro typeface.
+{} · da scaricare	{} · to be downloaded
+ultima versione · da scaricare	latest version · to be downloaded
+Licenze di terze parti.txt	Third-party licences.txt
+Codifica H.264 con {}	H.264 encoding with {}
+Nessuna codifica video hardware	No hardware video encoding
+Processore: {}	Processor: {}
+Memoria: {}\nScheda video: {} ({})\nSistema: {}\n	Memory: {}\nGraphics card: {} ({})\nSystem: {}\n
+Istruzioni: {}	Instructions: {}
+{} sì	{} yes
+Accelerazione GPU: {}\nAccelerazione {}: {}\n	GPU acceleration: {}\n{} acceleration: {}\n
+non disponibile	not available
+Processore sconosciuto	Unknown processor
+{#} core ({#} P + {#} E) · {#} thread	{} cores ({} P + {} E) · {} threads
+{#} core · {#} thread	{} cores · {} threads
+{} (integrata)	{} (integrated)
+Scheda video sconosciuta	Unknown graphics card
+{} (scheda video)	{} (graphics card)
+formato di documento non letto	document format not read
+il documento non contiene testo	the document contains no text
+questo PDF non ha testo da copiare	this PDF has no copyable text
+PDF non letto: {}	PDF not read: {}
+JSON non valido: virgolette aperte	invalid JSON: unclosed quotes
+JSON non valido: parentesi che non tornano	invalid JSON: mismatched brackets
+JSON non valido: parentesi aperte	invalid JSON: unclosed brackets
+il taglio dell'inizio è più lungo dell'audio	the start trim is longer than the audio
+l'audio è tutto sotto -{#} dB: niente da tenere	the audio is entirely below -{} dB: nothing to keep
+il codificatore MP3 non parte	the MP3 encoder won't start
+buffer MP3 troppo corto	MP3 buffer too short
+audio non letto: {}	audio not read: {}
+l'audio non ha una traccia	the audio has no track
+audio non decodificato: {}	audio not decoded: {}
+l'audio non ha campioni	the audio has no samples
+(nessun testo)	(no text)
+il PDF non ha pagine	the PDF has no pages
+nessun testo letto nelle pagine	no text read in the pages
+PDF non disegnato: {}	PDF not rendered: {}
+pagina che non c'è	page that doesn't exist
+pagina non disegnata: {}	page not rendered: {}
+nessun testo riconosciuto	no text recognized
+OCR di Windows: {}	Windows OCR: {}
+modello OCR: {}	OCR model: {}
+OCR non pronto: {}	OCR not ready: {}
+MP4 troncato	truncated MP4
+MP4 con un blocco fuori misura	MP4 with an oversized block
+il video è troppo grande per spostare il moov	the video is too large to move the moov
+MP4 con un offset fuori misura	MP4 with an oversized offset
+MP4 con una tabella troppo corta	MP4 with a table that is too short
+MP4 con una tabella fuori misura	MP4 with an oversized table
+MP4 non letto: {}	MP4 not read: {}
+MP4 senza moov	MP4 without moov
+MP4 senza dati	MP4 without data
+MP4 non scritto: {}	MP4 not written: {}
+MP4 non sostituito: {}	MP4 not replaced: {}
+non è un webm vp8 o vp9	not a VP8 or VP9 WebM
+il video non ha fotogrammi	the video has no frames
+l'audio del video non è stato letto	the video's audio was not read
+il video non ha una dimensione	the video has no size
+WebM non letto: {}	WebM not read: {}
+il WebM non ha un video	the WebM has no video
+VP8 non letto: {}	VP8 not read: {}
+VP9 non letto: {}	VP9 not read: {}
+fotogramma troppo corto	frame too short
+MP4 non creato: {}	MP4 not created: {}
+MP4 non creato	MP4 not created
+video non aperto: {}	video not opened: {}
+video non aperto	video not opened
+il file non ha un video	the file has no video
+il video è {#}×{#}: H.264 vuole misure pari	the video is {}×{}: H.264 needs even dimensions
+H.264 non disponibile: {}	H.264 not available: {}
+ingresso video ({#}×{#}): {}	video input ({}×{}): {}
+scrittura MP4 non partita: {}	MP4 writing didn't start: {}
+MP4 non chiuso: {}	MP4 not closed: {}
+questo video non si può decomprimere	this video can't be decompressed
+questo video non si può decomprimere: {}	this video can't be decompressed: {}
+formato video intermedio non letto	intermediate video format not read
+lettura video: {}	video reading: {}
+tempo del fotogramma: {}	frame time: {}
+scrittura video: {}	video writing: {}
+lettura video interrotta	video reading interrupted
+fotogramma non letto: {}	frame not read: {}
+buffer video vuoto	empty video buffer
+il video cambia dimensione	the video changes size
+audio senza traccia	audio without a track
+l'audio del video non coincide col formato previsto	the video's audio doesn't match the expected format
+scrittura audio: {}	audio writing: {}
+AAC non disponibile: {}	AAC not available: {}
+ingresso audio: {}	audio input: {}
+video di Windows non pronto: {}	Windows video not ready: {}
+Windows non sa leggere questo file	Windows can't read this file
+nel file non c'è una traccia audio	there is no audio track in the file
+Windows non ha il decodificatore per questo audio	Windows has no decoder for this audio
+WAV temporaneo non scritto: {}	temporary WAV not written: {}
+lettura audio: {}	audio reading: {}
+il video non è stato letto: {}	the video was not read: {}
+il video non è stato letto	the video was not read
+H.264 non scritto: {}	H.264 not written: {}
+H.264 non pronto: {}	H.264 not ready: {}
+AAC non pronto: {}	AAC not ready: {}
+AAC non scritto: {}	AAC not written: {}
+H.264 senza parametri	H.264 without parameters
+H.264 non letto: {}	H.264 not read: {}
+l'audio del video non è stato letto: {}	the video's audio was not read: {}
+AVI non letto: {}	AVI not read: {}
+AVI non letto	AVI not read
+MJPEG non letto: {}	MJPEG not read: {}
+il video è troppo lungo per questo MP4	the video is too long for this MP4
+scheda video: {} non riuscito ({})	graphics card: {} failed ({})
+scheda video: {#}×{#} non adatto	graphics card: {}×{} not suitable
+nessuna scheda video che codifica H.264	no graphics card that encodes H.264
+scheda video: superfici non create ({})	graphics card: surfaces not created ({})
+scheda video: contesto non creato ({})	graphics card: context not created ({})
+scheda video: memoria per il video non creata ({})	graphics card: video memory not created ({})
+scheda video: fotogramma incompleto	graphics card: incomplete frame
+scheda video: il flusso non ha le intestazioni H.264	graphics card: the stream has no H.264 headers
+scheda video: fotogramma vuoto	graphics card: empty frame
+attesa della scheda	waiting for the card
+scheda video: immagine non scrivibile ({})	graphics card: image not writable ({})
+copia del fotogramma	frame copy
+lettura del video	video reading
+scheda video: immagine troppo piccola	graphics card: image too small
+{#} immagini	{} images
+B/N	B/W
+Veloce · {}	Fast · {}
+Buona · {}	Good · {}
+Massima · {}	Maximum · {}
+Impostazioni consigliate · tutte le pagine	Recommended settings · all pages
+Impostazioni personalizzate · tutte le pagine	Custom settings · all pages
+Fino a 1080p	Up to 1080p
+720p	720p
+{#} componente	{} component
+{#} componenti	{} components
+QUESTO PC	THIS PC
+ISTRUZIONI DEL PROCESSORE	PROCESSOR INSTRUCTIONS
+ACCELERAZIONI	ACCELERATIONS
+CODICE APERTO USATO DA CEDRO	OPEN SOURCE USED BY CEDRO
+Accelerazione GPU	GPU acceleration
+Accelerazione AVX-512	AVX-512 acceleration
+Accelerazione i8mm	i8mm acceleration
+Video in MP4 con la scheda video o la grafica integrata. Se la scheda rifiuta un video, Cedro lo rifà col processore.	MP4 video using the graphics card or integrated graphics. If the card rejects a video, Cedro redoes it with the processor.
+Calcoli più veloci per OCR e trascrizione dell'audio.	Faster calculations for OCR and audio transcription.
+Trovata: {}	Found: {}
+Trovato: {}	Found: {}
+Non disponibile su questo PC	Not available on this PC
+Il processore non ha {}	The processor doesn't have {}
+Non rilevate su questo processore.	None detected on this processor.
+Copia informazioni	Copy information
+Letto all'avvio di Cedro.	Read when Cedro starts.
+Copiato: incollalo nella segnalazione.	Copied: paste it into the report.
+Copiate: incollale in una segnalazione	Copied: paste them into a report
+in arrivo	coming soon
+IN ARRIVO	COMING SOON
+NUOVO	NEW
+Convertitore di file, con una ruota al cursore · Licenza MIT	File converter with a wheel at the cursor · MIT licence
+Tema Comune di Bondeno	Comune di Bondeno theme
+Comune di\nBondeno	Comune di\nBondeno
+Stesse funzioni di Cedro, con i colori, il carattere e lo stemma del Comune. Si cambia in Aspetto.	Same Cedro features, with the Comune's colours, typeface and coat of arms. Change it under Appearance.
+Cedro esiste grazie a queste persone e ai loro progetti. Grazie.	Cedro exists thanks to these people and their projects. Thank you.
+Cerca un componente o una licenza	Search for a component or a licence
+Apri le licenze complete	Open the full licences
+Tutti i {#} componenti, anche quelli minori, nel file «Licenze di terze parti».	All {} components, including the minor ones, in the "Third-party licences" file.
+Tutti i componenti, anche quelli minori, nel file «Licenze di terze parti».	All the components, including the minor ones, in the "Third-party licences" file.
+Aspetto	Appearance
+Impostazioni di Cedro	Cedro Settings
+Cedro: scegli la vista	Cedro: choose the view
+Avvia Cedro con Windows	Start Cedro with Windows
+Avvia Cedro con il computer	Start Cedro with the computer
+La stessa voce del menu dell'icona e dell'installatore.	The same entry as in the icon menu and the installer.
+La stessa voce del menu dell'icona.	The same entry as in the icon menu.
+Avviso a fine conversione	Notification when a conversion ends
+Il fumetto vicino all'orologio con il nome del file creato.	The balloon near the clock with the name of the created file.
+Una notifica con il nome del file creato.	A notification with the name of the created file.
+Mostra il file nuovo	Show the new file
+A lavoro finito apre la cartella in Esplora file e seleziona la copia.	When done, opens the folder in File Explorer and selects the copy.
+A lavoro finito apre la cartella e seleziona la copia.	When done, opens the folder and selects the copy.
+Barra di avanzamento	Progress bar
+Una linea sottile in basso a destra mentre converte, verde a lavoro finito.	A thin line at the bottom right while converting, green when done.
+Avanzamento mentre converte	Progress while converting
+Una linea sottile nel pannello e, su KDE, tra le notifiche.	A thin line in the panel and, on KDE, among the notifications.
+Registro attività	Activity log
+Il file log.txt e config.txt stanno in %APPDATA%\\Cedro.	The log.txt and config.txt files are in %APPDATA%\\Cedro.
+Il file log.txt e config.txt stanno nella cartella di Cedro.	The log.txt and config.txt files are in Cedro's folder.
+Apri cartella	Open folder
+Lingua dell'interfaccia	Interface language
+Automatica segue la lingua di Windows. Vale subito dopo «Salva».	Automatic follows the Windows language. Takes effect right after "Save".
+Automatica segue la lingua del sistema. Vale subito dopo «Salva».	Automatic follows the system language. Takes effect right after "Save".
+Automatica	Automatic
+Shift apre le conversioni	Shift opens conversions
+Tieni premuto Shift e fai clic destro sul file.	Hold Shift and right-click the file.
+Ctrl apre gli strumenti	Ctrl opens the tools
+Comprimi, ruota, OCR e le altre fette di Ctrl.	Compress, rotate, OCR and the other Ctrl slices.
+Alt apre le azioni	Alt opens the actions
+Duplica, percorso e ZIP. Spegnilo se Alt dà fastidio ad altri programmi.	Duplicate, path and ZIP. Turn it off if Alt bothers other programs.
+Apri nelle finestre Apri/Salva	Open in Open/Save dialogs
+Usa la ruota anche scegliendo un file in un programma.	Use the wheel also when choosing a file in a program.
+Non disponibile su Wayland: il desktop non lascia a Cedro intervenire nelle finestre degli altri programmi. Usa il menu del file.	Not available on Wayland: the desktop doesn't let Cedro act on other programs' windows. Use the file menu.
+Dove mettere la copia	Where to put the copy
+Nella stessa cartella del file	In the same folder as the file
+In una sottocartella «Cedro»	In a "Cedro" subfolder
+Sempre in questa cartella:	Always in this folder:
+Se il file esiste già	If the file already exists
+Aggiungi un numero: foto-2.jpg. Sostituisci riscrive il file.	Add a number: photo-2.jpg. Replace overwrites the file.
+Aggiungi un numero	Add a number
+Nessuna cartella scelta	No folder chosen
+Cartella dove salvare le copie	Folder where to save the copies
+Scegli la cartella di destinazione con «Sfoglia…».	Choose the destination folder with "Browse…".
+Qualità JPEG e WebP	JPEG and WebP quality
+Anche per MP3 e PDF in JPG. Più alta, file più grandi.	Also for MP3 and PDF to JPG. Higher means larger files.
+PDF in JPG: risoluzione	PDF to JPG: resolution
+Più dpi, immagini più nitide e più grandi.	More dpi: sharper and larger images.
+Comprimi immagine	Compress image
+Quanto riduce la fetta «Comprimi».	How much the "Compress" slice reduces.
+100 dpi, leggero	100 dpi, light
+144 dpi, normale	144 dpi, normal
+200 dpi	200 dpi
+300 dpi, stampa	300 dpi, print
+Poco	Little
+Medio	Medium
+Molto	A lot
+Lingua del testo	Text language
+Automatica usa l'italiano di Windows. Se la lingua manca, quella dell'utente.	Automatic uses Windows' Italian. If that language is missing, the user's language.
+Automatica sceglie da sola tra italiano e inglese.	Automatic chooses between Italian and English by itself.
+Inglese	English
+Italiano per l'OCR di Windows	Italian for Windows OCR
+Senza, le lettere accentate escono peggio.	Without it, accented letters come out worse.
+Installato	Installed
+Non installato	Not installed
+Pagine al massimo per PDF	Maximum pages per PDF
+Oltre il limite l'OCR salta le pagine e lo dice.	Beyond the limit OCR skips pages and says so.
+Tutte	All
+Versione installata	Installed version
+Controlla ora	Check now
+Cerca gli aggiornamenti da solo	Look for updates by itself
+All'avvio e poi ogni 24 ore, in silenzio se non c'è niente.	At startup and then every 24 hours, silently if there's nothing.
+Hai detto no alla {}: all'avvio non la propone più.	You said no to version {}: it's no longer offered at startup.
+Nessuna versione rifiutata.	No version declined.
+Versione saltata	Skipped version
+Proponila di nuovo	Offer it again
+Salva	Save
+Impostazioni non salvate: {}	Settings not saved: {}
+Cedro — conversione locale, senza upload.	Cedro — local conversion, no uploads.
+  cedro update     controlla se su GitHub c'è una versione nuova	  cedro update     checks GitHub for a newer version
+  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--cpu]	  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--cpu]
+                   dalla voce a un Word (o a un testo), con il motore scaricato alla prima volta	                   speech to a Word file (or text), with the engine downloaded on first use
+Senza argomenti, su Windows e su Linux, Cedro resta nella tray.	With no arguments, on Windows and Linux, Cedro stays in the tray.
+Su Linux la ruota si apre dal menu del file, oppure così:	On Linux the wheel opens from the file menu, or like this:
+La prima volta scrive i menu di Dolphin e di Nautilus.	The first time it writes the Dolphin and Nautilus menus.
+Su Linux la configurazione sta in ~/.config/cedro/config.txt.	On Linux the configuration is in ~/.config/cedro/config.txt.
+Le conversioni sono nel programma: non servono LibreOffice, ffmpeg, Tesseract né Poppler.	Conversions are built in: no LibreOffice, ffmpeg, Tesseract or Poppler needed.
+Il video MP4, su Windows, usa i codificatori di Windows (H.264 e AAC).	MP4 video, on Windows, uses the Windows encoders (H.264 and AAC).
+Su Linux usa OpenH264 e FDK AAC, compilati dentro il programma.	On Linux it uses OpenH264 and FDK AAC, compiled into the program.
+L'MP3 usa LAME, compilato dentro l'eseguibile.	MP3 uses LAME, compiled into the executable.
+L'originale non viene mai sovrascritto.	The original is never overwritten.
+Cedro {} è già l'ultima versione.	Cedro {} is already the latest version.
+C'è Cedro {} (hai la {}).\n{}	Cedro {} is available (you have {}).\n{}
+Vuoi aggiornare? [s/N]	Update now? [y/N]
+Avviato {}.	Started {}.
+Aperta la pagina della release: {}	Opened the release page: {}
+la release {} non ha il pacchetto per questo sistema (linux-{}): riprova più tardi	release {} has no package for this system (linux-{}): try again later
+Installata la versione {} in {}.	Installed version {} in {}.
+ERRORE {}: {}	ERROR {}: {}
+accesa	on
+spenta	off
+no	no
+ERRORE	ERROR
+Memoria: {}	Memory: {}
+Scheda video: {} ({})	Graphics card: {} ({})
+Sistema: {}	System: {}
+Accelerazione GPU: {}	GPU acceleration: {}
+Accelerazione {}: {}	{} acceleration: {}
+download non riuscito: {}	download failed: {}
+download interrotto: {}	download interrupted: {}
+lo SHA-256 dell'installatore non corrisponde: file scartato	the installer's SHA-256 doesn't match: file discarded
+lo SHA-256 del pacchetto non corrisponde: file scartato	the package's SHA-256 doesn't match: file discarded
+cartella provvisoria non creata: {}	temporary folder not created: {}
+tar non parte: {}	tar won't start: {}
+il pacchetto non si apre	the package won't open
+install.sh non è riuscito: {}	install.sh failed: {}
+il programma nuovo non è al suo posto	the new program isn't in place

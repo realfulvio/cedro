@@ -4,6 +4,7 @@ pub mod conversioni;
 pub mod credits;
 pub mod edizione;
 pub mod guida;
+pub mod i18n;
 pub mod logo;
 mod doctext;
 mod engine;

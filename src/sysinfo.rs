@@ -71,23 +71,23 @@ fn ghz(mhz: u32) -> String {
 
 /// Testo da incollare in una segnalazione.
 pub fn report() -> String {
+    use crate::i18n::tr_string as t;
     let i = info();
     let hw = crate::accel::hardware();
     let mut out = format!("Cedro {}\n", crate::update::CURRENT);
-    out += &format!("Processore: {}", i.cpu);
+    out += &t(&format!("Processore: {}", i.cpu));
     if !i.cpu_detail.is_empty() {
         out += &format!(" ({})", i.cpu_detail);
     }
-    out += &format!("\nMemoria: {}\nScheda video: {} ({})\nSistema: {}\n", i.ram, i.gpu, i.gpu_detail, i.os);
-    let chips: Vec<String> = i.isa.iter().map(|(n, y)| format!("{n} {}", if *y { "sì" } else { "no" })).collect();
-    out += &format!("Istruzioni: {}\n", chips.join(", "));
+    out += &format!("\n{}", t(&format!("Memoria: {}", i.ram)));
+    out += &format!("\n{}", t(&format!("Scheda video: {} ({})", i.gpu, i.gpu_detail)));
+    out += &format!("\n{}\n", t(&format!("Sistema: {}", i.os)));
+    let chips: Vec<String> = i.isa.iter().map(|(n, y)| t(&format!("{n} {}", if *y { "sì" } else { "no" }))).collect();
+    out += &t(&format!("Istruzioni: {}", chips.join(", ")));
+    out += "\n";
     let s = crate::read_settings();
-    out += &format!(
-        "Accelerazione GPU: {}\nAccelerazione {}: {}\n",
-        state(s.gpu, hw.gpu.is_some()),
-        crate::accel::BOOST_NAME,
-        state(s.avx512, hw.avx512)
-    );
+    out += &t(&format!("Accelerazione GPU: {}", t(state(s.gpu, hw.gpu.is_some()))));
+    out += &format!("\n{}\n", t(&format!("Accelerazione {}: {}", crate::accel::BOOST_NAME, t(state(s.avx512, hw.avx512)))));
     out
 }
 
