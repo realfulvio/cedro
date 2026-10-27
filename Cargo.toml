@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 cfb = "0.7"
 hound = "3.5"
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff", "ico"] }
 hayro = "0.8"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 lopdf = "0.36"
