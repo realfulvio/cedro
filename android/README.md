@@ -41,5 +41,18 @@ mdpi–xxxhdpi quadrata e tonda; `android:icon` e `android:roundIcon` nel manife
 
 - Scrive in `/storage/emulated/0/Documents` (target SDK 29 + legacy storage, permesso richiesto a runtime).
 - `singleTask`: una nuova condivisione a Cedro già aperto arriva da `onNewIntent` (inoltrato dalla classe Java) e sostituisce il file.
-- Il lavoro gira finché l'app è in primo piano: manca ancora un servizio con notifica per i lavori lunghi.
-- «Ritaglia» non esiste nel motore, quindi non c'è. Solo arm64; video, trascrizione e OCR non provati su Android.
+- I lavori lunghi girano in un servizio in primo piano con notifica e percentuale.
+- «Ritaglia» non esiste nel motore, quindi non c'è. Solo arm64.
+
+## Trascrizione (whisper.cpp nell'APK)
+
+Audio e video hanno «Testo, dalla voce, offline»: whisper.cpp è una libreria dentro l'APK (`src/whisper_android`, thread nel
+processo, niente eseguibile da scaricare); al primo uso si scarica solo il modello «Buona» (base q5_1, 60 MB; serve il permesso INTERNET).
+Compilato con dotprod+fp16 (`WHISPER_ARCH`), con controllo HWCAP a runtime; l'APK porta `libc++_shared.so`.
+
+Misure sul Mi 9T (Snapdragon 730, 2 core grandi + 6 piccoli, 5,7 GB), voce italiana sintetica di 12 s:
+tiny 4,7 s (228 MB di RAM), base 8–9 s (370 MB), small circa 5× più lento del tempo reale (660 MB: sconsigliato).
+Thread: 2 sui core grandi 11,5 s, 7 thread 8,2–9,6 s (per questo ora si usano tutti i core meno uno).
+Dotprod+fp16 contro solo NEON: 9,6 s contro 12,5 s (−23 %).
+Vulkan: l'Adreno 618 del 9T espone solo Vulkan 1.1 e ggml vuole la 1.2 («Vulkan 1.2 required»): ripiego sul processore.
+Non è nell'APK (legarlo richiederebbe anche API 28+).
