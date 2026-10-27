@@ -1,0 +1,372 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/debug/deps/cedro-c6ffc590b7fa6064)
+
+running 162 tests
+test accel::tests::arm_registers_are_decoded ... ok
+test conversioni::simple_tests::simple_formats_are_real_engine_formats ... ok
+test conversioni::simple_tests::kind_of_files_skips_unknown ... ok
+test conversioni::tests::belonging_filters_by_kind ... ok
+test conversioni::tests::defaults_leave_the_engine_as_it_was ... ok
+test conversioni::tests::every_category_has_formats ... ok
+test conversioni::tests::options_depend_on_the_chosen_format ... ok
+test conversioni::tests::tools_hide_the_placeholder ... ok
+test credits::tests::engine_version_follows_cedro ... ok
+test credits::tests::whisper_version_matches_the_engine ... ok
+test conversioni::tests::every_option_has_a_working_default_and_reaches_the_engine ... ok
+test credits::tests::the_count_comes_from_the_header ... ok
+test credits::tests::windows_hides_linux_only_items ... ok
+test conversioni::tests::output_goes_to_the_chosen_folder ... ok
+test doctext::block_tests::rtf_unicode_skips_the_fallback_characters ... ok
+test edizione::tests::i_nomi_dei_pacchetti_non_si_confondono ... ok
+test edizione::tests::la_standard_non_ha_stemmi ... ok
+test credits::tests::every_license_has_a_text ... ok
+test doctext::block_tests::rtf_headings_come_from_style_names_and_outline_levels ... ok
+test doctext::block_tests::docx_headings_come_from_style_names_ids_and_outline_levels ... ok
+test doctext::block_tests::odt_headings_come_from_outline_levels ... ok
+test credits::tests::library_versions_are_found ... ok
+test engine::tests::doc_and_pdf_slices ... ok
+test engine::tests::existing_names_get_a_suffix_or_are_replaced ... ok
+test engine::tests::duplicate_without_extension_stays_without ... ok
+test engine::tests::lines_become_paragraphs ... ok
+test engine::tests::jpeg_flattens_transparency_to_white_or_black ... ok
+test engine::tests::image_tools_and_formats ... ok
+test engine::tests::digital_pdf_to_word_keeps_layout ... ok
+test engine::tests::page_ranges_parse_like_they_are_written ... ok
+test engine::tests::audio_without_ffmpeg ... ok
+test engine::tests::audio_can_be_extracted_from_a_video ... ok
+test engine::tests::leading_silence_is_detected_and_cut ... ok
+test accel::tests::avx512_follows_the_cpu ... ok
+test engine::tests::pdf_lists_become_word_lists ... ok
+test engine::tests::pdf_columns_become_word_columns ... ok
+[OpenH264] this = 0x0x7fe74015a8a0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test engine::tests::pdf_table_becomes_word_table ... ok
+[OpenH264] this = 0x0x7fe740141220, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test engine::tests::mov_and_mkv_to_mp4 ... ok
+test engine::tests::private_temp_dirs_are_new_and_only_ours ... ok
+test engine::tests::pdf_form_keeps_boxes_and_places_text ... ok
+test engine::tests::other_audio_to_wav_and_mp3 ... ok
+test doctext::block_tests::a_document_with_titles_gets_pdf_bookmarks ... ok
+test engine::tests::straighten_follows_the_exif_rotation_only_when_asked ... ok
+test engine::tests::text_options_reach_the_written_files ... ok
+test engine::tests::single_column_joins_the_paragraph_split_by_the_column ... ok
+[OpenH264] this = 0x0x7fe7400664d0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test engine::tests::images_shrink_to_the_longest_side_only_when_larger ... ok
+[OpenH264] this = 0x0x7fe740b1a6e0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe7401768b0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test engine::tests::document_roundtrip_without_office ... ok
+test engine::tests::audio_options_shape_the_output ... ok
+[OpenH264] this = 0x0x7fe740b22140, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test engine::tests::document_pdf_follows_page_size_and_password ... ok
+[OpenH264] this = 0x0x7fe740068350, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test engine::tests::two_column_pdf_keeps_columns_or_flows_in_one ... ok
+[OpenH264] this = 0x0x7fe740ae01b0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe7410dd460, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test engine::tests::windows_text_and_opus ... ok
+test guida::tests::controls_are_hit ... ok
+test guida::tests::row_click_works_right_after_opening ... ok
+test guida::tests::tour_runs_through_all_pages_and_wraps ... ok
+test logo::tests::il_logo_sta_nel_suo_piano ... ok
+test mkv::tests::block_without_lacing ... ok
+test mkv::tests::signed_ebml_lace_delta ... ok
+test mkv::tests::xiph_and_ebml_lacing ... ok
+test mp4fast::tests::a_damaged_offset_table_is_refused ... ok
+test mp4fast::tests::moov_moves_in_front_and_offsets_follow ... ok
+[OpenH264] this = 0x0x7fe7401553e0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe740248c80, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe75401e930, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test engine::tests::video_with_aac_keeps_audio ... ok
+[OpenH264] this = 0x0x7fe74014a6b0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe740249740, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe740180b70, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe7540d7b60, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe7409e45c0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe74060dc00, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe740ae16c0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test engine::tests::mp3_bitrate_and_tags ... ok
+[OpenH264] this = 0x0x7fe740b19680, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test doctext::block_tests::a_swollen_document_part_is_refused ... ok
+[OpenH264] this = 0x0x7fe754014a70, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe7409e5bc0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe740b16a60, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe740b2af50, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+[OpenH264] this = 0x0x7fe7401797e0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test engine::tests::video_options_shape_every_pipeline ... ok
+ffmpeg version n9.0.2 Copyright (c) 2000-2026 the FFmpeg developers
+  built with gcc 16 (GCC)
+  configuration: --prefix=/usr --disable-debug --disable-static --disable-stripping --enable-amf --enable-avisynth --enable-cuda-llvm --enable-lto --enable-fontconfig --enable-frei0r --enable-gmp --enable-gnutls --enable-gpl --enable-ladspa --enable-lcms2 --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libdav1d --enable-libdrm --enable-libdvdnav --enable-libdvdread --enable-libfreetype --enable-libfribidi --enable-libgsm --enable-libharfbuzz --enable-libiec61883 --enable-libjack --enable-libjxl --enable-libmodplug --enable-libmp3lame --enable-libopencore_amrnb --enable-libopencore_amrwb --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libplacebo --enable-libpulse --enable-librav1e --enable-librsvg --enable-librubberband --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libsvtav1 --enable-libtheora --enable-libv4l2 --enable-libvidstab --enable-libvmaf --enable-libvorbis --enable-libvpl --enable-libvpx --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxcb --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-nvdec --enable-nvenc --enable-opencl --enable-opengl --enable-shared --enable-vapoursynth --enable-version3 --enable-vulkan --disable-decoder=magicyuv
+  libavutil      61.  1.102 / 61.  1.102
+  libavcodec     63.  1.102 / 63.  1.102
+  libavformat    63.  1.102 / 63.  1.102
+  libavdevice    63.  1.102 / 63.  1.102
+  libavfilter    12.  1.102 / 12.  1.102
+  libswscale     10.  1.102 / 10.  1.102
+  libswresample   7.  1.102 /  7.  1.102
+Input #0, lavfi, from 'testsrc=size=64x64:rate=30:duration=0.1':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: wrapped_avframe, rgb24, 64x64 [SAR 1:1 DAR 1:1], 30 fps, 30 tbr, 30 tbn
+Stream mapping:
+  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (libx264))
+Press [q] to stop, [?] for help
+[libx264 @ 0x55bcb0854d40] using SAR=1/1
+[libx264 @ 0x55bcb0854d40] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2
+[libx264 @ 0x55bcb0854d40] profile High, level 1.0, 4:2:0, 8-bit
+[libx264 @ 0x55bcb0854d40] 264 - core 165 r3222 b35605a - H.264/MPEG-4 AVC codec - Copyleft 2003-2025 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=2 lookahead_threads=1 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=25 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to '/tmp/cedro-linux-842871/h264.mp4':
+  Metadata:
+    encoder         : Lavf63.1.102
+  Stream #0:0: Video: h264 (avc1 / 0x31637661), yuv420p(tv, progressive), 64x64 [SAR 1:1 DAR 1:1], q=2-31, 30 fps, 15360 tbn
+    Metadata:
+      encoder         : Lavc63.1.102 libx264
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+[out#0/mp4 @ 0x55bcb0854200] video:1KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 69.201521%
+frame=    3 fps=0.0 q=-1.0 Lsize=       2KiB time=00:00:00.03 bitrate= 534.0kbits/s speed=1.42x elapsed=0:00:00.02    
+[libx264 @ 0x55bcb0854d40] frame I:1     Avg QP:32.00  size:   597
+[libx264 @ 0x55bcb0854d40] frame P:1     Avg QP:35.00  size:    17
+[libx264 @ 0x55bcb0854d40] frame B:1     Avg QP:35.00  size:    12
+[libx264 @ 0x55bcb0854d40] consecutive B-frames: 33.3% 66.7%  0.0%  0.0%
+[libx264 @ 0x55bcb0854d40] mb I  I16..4: 25.0%  0.0% 75.0%
+[libx264 @ 0x55bcb0854d40] mb P  I16..4:  0.0%  0.0%  0.0%  P16..4:  0.0% 18.8%  0.0%  0.0%  0.0%    skip:81.2%
+[libx264 @ 0x55bcb0854d40] test pdfdoc::tests::tabs_become_spaces_not_missing_glyphs ... mb B  I16..4:  0.0%  0.0%  0.0%  B16..8:  0.0%  0.0%  0.0%  direct: 0.0%  skip:100.0%
+ok
+[libx264 @ 0x55bcb0854d40] 8x8 transform intra:0.0%
+[libx264 @ 0x55bcb0854d40] coded y,uvDC,uvAC intra: 53.1% 75.0% 68.8% inter: 0.0% 0.0% 0.0%
+[libx264 @ 0x55bcb0854d40] i16 v,h,dc,p: 100%  0%  0%  0%
+[libx264 @ 0x55bcb0854d40] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 51% 15% 21%  4%  1%  3%  2%  3%  2%
+[libx264 @ 0x55bcb0854d40] i8c dc,h,v,p: 56%  0% 44%  0%
+[libx264 @ 0x55bcb0854d40] Weighted P-Frames: Y:0.0% UV:0.0%
+[libx264 @ 0x55bcb0854d40] kb/s:50.08
+test settings::tests::a_file_saved_with_bom_still_reads_its_first_key ... ok
+test settings::tests::defaults_when_empty ... ok
+test settings::tests::ignores_garbage ... ok
+test settings::tests::merge_keeps_unknown_lines_and_replaces_known ... ok
+test settings::tests::ocr_lang_ignores_unknown ... ok
+test settings::tests::reads_new_options ... ok
+test settings::tests::reads_values_and_clamps_quality ... ok
+test settings::tests::simple_mode_is_off_by_default_and_round_trips ... ok
+test settings::theme_tests::ui_theme_round_trips_and_keeps_other_lines ... ok
+test sink::tests::bitrate_grows_with_quality ... ok
+test sink::tests::gate_halves_a_30_fps_stream_at_15 ... ok
+test sink::tests::resize_keeps_the_average_color ... ok
+test sink::tests::target_size_only_shrinks_and_stays_even ... ok
+test sysinfo::tests::frequencies_use_the_italian_comma ... ok
+test sysinfo::tests::gigabytes_round_to_the_label ... ok
+test sysinfo::tests::the_report_names_everything ... ok
+test sysinfo::tests::this_pc_has_a_cpu_and_memory ... ok
+test textconv::tests::csv_becomes_json_objects_or_arrays ... ok
+test textconv::tests::csv_roundtrip_with_quotes_and_other_separators ... ok
+test textconv::tests::encodes_the_chosen_charset ... ok
+test textconv::tests::json_is_pretty_or_compact ... ok
+test textconv::tests::tables_follow_the_header_option ... ok
+[OpenH264] this = 0x0x7fe754054d40, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test trascrizione::tests::a_broken_download_leaves_nothing_behind ... ok
+test trascrizione::tests::clock_and_sizes_read_well ... ok
+test trascrizione::tests::finds_the_engine_in_a_release ... ok
+test trascrizione::tests::outputs_carry_title_times_and_text ... ok
+test trascrizione::tests::pauses_start_new_paragraphs ... ok
+test trascrizione::tests::transcribable_takes_voice_messages_and_videos ... ok
+test trascrizione::tests::transcribes_a_spoken_sentence ... ok
+ffmpeg version n9.0.2 Copyright (c) 2000-2026 the FFmpeg developers
+  built with gcc 16 (GCC)
+  configuration: --prefix=/usr --disable-debug --disable-static --disable-stripping --enable-amf --enable-avisynth --enable-cuda-llvm --enable-lto --enable-fontconfig --enable-frei0r --enable-gmp --enable-gnutls --enable-gpl --enable-ladspa --enable-lcms2 --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libdav1d --enable-libdrm --enable-libdvdnav --enable-libdvdread --enable-libfreetype --enable-libfribidi --enable-libgsm --enable-libharfbuzz --enable-libiec61883 --enable-libjack --enable-libjxl --enable-libmodplug --enable-libmp3lame --enable-libopencore_amrnb --enable-libopencore_amrwb --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libplacebo --enable-libpulse --enable-librav1e --enable-librsvg --enable-librubberband --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libsvtav1 --enable-libtheora --enable-libv4l2 --enable-libvidstab --enable-libvmaf --enable-libvorbis --enable-libvpl --enable-libvpx --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxcb --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-nvdec --enable-nvenc --enable-opencl --enable-opengl --enable-shared --enable-vapoursynth --enable-version3 --enable-vulkan --disable-decoder=magicyuv
+  libavutil      61.  1.102 / 61.  1.102
+  libavcodec     63.  1.102 / 63.  1.102
+  libavformat    63.  1.102 / 63.  1.102
+  libavdevice    63.  1.102 / 63.  1.102
+  libavfilter    12.  1.102 / 12.  1.102
+  libswscale     10.  1.102 / 10.  1.102
+  libswresample   7.  1.102 /  7.  1.102
+Input #0, lavfi, from 'testsrc=size=64x64:rate=30:duration=0.2':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: wrapped_avframe, rgb24, 64x64 [SAR 1:1 DAR 1:1], 30 fps, 30 tbr, 30 tbn
+Input #1, lavfi, from 'sine=frequency=440:sample_rate=44100:duration=0.2':
+  Duration: N/A, start: 0.000000, bitrate: 705 kb/s
+  Stream #1:0: Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s
+Stream mapping:
+  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (libx264))
+  Stream #1:0 -> #0:1 (pcm_s16le (native) -> aac (native))
+Press [q] to stop, [?] for help
+[libx264 @ 0x5642e0d6d980] using SAR=1/1
+[libx264 @ 0x5642e0d6d980] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2
+[libx264 @ 0x5642e0d6d980] profile High, level 1.0, 4:2:0, 8-bit
+[libx264 @ 0x5642e0d6d980] 264 - core 165 r3222 b35605a - H.264/MPEG-4 AVC codec - Copyleft 2003-2025 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=2 lookahead_threads=1 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=25 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to '/tmp/cedro-linux-842871/audio.mp4':
+  Metadata:
+    encoder         : Lavf63.1.102
+  Stream #0:0: Video: h264 (avc1 / 0x31637661), yuv420p(tv, progressive), 64x64 [SAR 1:1 DAR 1:1], q=2-31, 30 fps, 15360 tbn
+    Metadata:
+      encoder         : Lavc63.1.102 libx264
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+  Stream #0:1: Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 69 kb/s
+    Metadata:
+      encoder         : Lavc63.1.102 aac
+[out#0/mp4 @ 0x5642e0d6cf00] video:1KiB audio:2KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 47.164948%
+frame=    6 fps=0.0 q=-1.0 Lsize=       5KiB time=00:00:00.20 bitrate= 205.6kbits/s speed=6.74x elapsed=0:00:00.02    
+[libx264 @ 0x5642e0d6d980] frame I:1     Avg QP:30.00  size:   655
+[libx264 @ 0x5642e0d6d980] frame P:2     Avg QP:34.00  size:    24
+[libx264 @ 0x5642e0d6d980] frame B:3     Avg QP:34.33  size:    12
+[libx264 @ 0x5642e0d6d980] consecutive B-frames: 33.3%  0.0%  0.0% 66.7%
+[libx264 @ 0x5642e0d6d980] mb I  I16..4: 25.0%  0.0% 75.0%
+[libx264 @ 0x5642e0d6d980] mb P  I16..4:  0.0%  0.0%  0.0%  P16..4:  3.1% 12.5%  0.0%  0.0%  0.0%    skip:84.4%
+[libx264 @ 0x5642e0d6d980] mb B  I16..4:  0.0%  0.0%  0.0%  B16..8:  0.0%  0.0%  0.0%  direct: 0.0%  skip:100.0%
+[libx264 @ 0x5642e0d6d980] 8x8 transform intra:0.0% inter:100.0%
+[libx264 @ 0x5642e0d6d980] coded y,uvDC,uvAC intra: 54.7% 68.8% 62.5% inter: 0.6% 5.0% 0.0%
+[libx264 @ 0x5642e0d6d980] i16 v,h,dc,p: 100%  0%  0%  0%
+[libx264 @ 0x5642e0d6d980] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 52% 15% 19%  3%  1%  3%  2%  3%  3%
+[libx264 @ 0x5642e0d6d980] i8c dc,h,v,p: 56%  0% 44%  0%
+[libx264 @ 0x5642e0d6d980] Weighted P-Frames: Y:0.0% UV:0.0%
+[libx264 @ 0x5642e0d6d980] kb/s:29.56
+[aac @ 0x5642e0d71d40] Qavg: 105.649
+[OpenH264] this = 0x0x7fe7540332e0, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test ui::gfx::tests::draws_text_shapes_icons_and_logo ... ok
+test ui::svgpath::tests::circle_arc_closes ... ok
+test ui::svgpath::tests::every_icon_parses ... ok
+test ui::theme::tests::keys_round_trip_and_unknown_falls_back ... ok
+test ui::wheel::tests::hit_test_matches_drawing_order ... ok
+test ui::wheel::tests::image_order_follows_the_board_and_ids_stay_attached ... ok
+test ui::wheel::tests::simple_click_commits_standard_selects ... ok
+test update::tests::compares_versions ... ok
+test update::tests::download_checks_the_sha256 ... ok
+test update::tests::each_edition_picks_its_own_packages ... ok
+test update::tests::every_system_finds_its_file_in_a_full_release ... ok
+test update::tests::finds_the_linux_package ... ok
+test update::tests::installs_a_package_into_the_user_folder ... ok
+test update::tests::installs_a_package_with_its_install_script ... ok
+test update::tests::old_versions_do_not_pick_the_arm_installer ... ok
+test update::tests::package_follows_the_architecture ... ok
+test update::tests::picks_the_installer_of_this_architecture ... ok
+test update::tests::prefers_asset_digest ... ok
+test update::tests::reads_release ... ok
+test update::tests::the_update_folder_is_private_and_unique ... ok
+test vaapi::tests::card_names_are_short ... ok
+test vaapi::tests::emulation_prevention ... ok
+ffmpeg version n9.0.2 Copyright (c) 2000-2026 the FFmpeg developers
+  built with gcc 16 (GCC)
+  configuration: --prefix=/usr --disable-debug --disable-static --disable-stripping --enable-amf --enable-avisynth --enable-cuda-llvm --enable-lto --enable-fontconfig --enable-frei0r --enable-gmp --enable-gnutls --enable-gpl --enable-ladspa --enable-lcms2 --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libdav1d --enable-libdrm --enable-libdvdnav --enable-libdvdread --enable-libfreetype --enable-libfribidi --enable-libgsm --enable-libharfbuzz --enable-libiec61883 --enable-libjack --enable-libjxl --enable-libmodplug --enable-libmp3lame --enable-libopencore_amrnb --enable-libopencore_amrwb --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libplacebo --enable-libpulse --enable-librav1e --enable-librsvg --enable-librubberband --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libsvtav1 --enable-libtheora --enable-libv4l2 --enable-libvidstab --enable-libvmaf --enable-libvorbis --enable-libvpl --enable-libvpx --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxcb --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-nvdec --enable-nvenc --enable-opencl --enable-opengl --enable-shared --enable-vapoursynth --enable-version3 --enable-vulkan --disable-decoder=magicyuv
+  libavutil      61.  1.102 / 61.  1.102
+  libavcodec     63.  1.102 / 63.  1.102
+  libavformat    63.  1.102 / 63.  1.102
+  libavdevice    63.  1.102 / 63.  1.102
+  libavfilter    12.  1.102 / 12.  1.102
+  libswscale     10.  1.102 / 10.  1.102
+  libswresample   7.  1.102 /  7.  1.102
+Input #0, lavfi, from 'testsrc=size=64x64:rate=30:duration=0.2':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: wrapped_avframe, rgb24, 64x64 [SAR 1:1 DAR 1:1], 30 fps, 30 tbr, 30 tbn
+Input #1, lavfi, from 'sine=frequency=440:sample_rate=44100:duration=0.2':
+  Duration: N/A, start: 0.000000, bitrate: 705 kb/s
+  Stream #1:0: Audio: pcm_s16le, 44100 Hz, mono, s16, 705 kb/s
+Stream mapping:
+  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (libx264))
+  Stream #1:0 -> #0:1 (pcm_s16le (native) -> aac (native))
+Press [q] to stop, [?] for help
+test pdfdoc::tests::embedded_font_text_is_copyable_and_bookmarks_work ... ok
+test vaapi::tests::exp_golomb ... ok
+test vaapi::tests::headers_are_whole_nals ... ok
+test vaapi::tests::layouts_match_libva ... ok
+test vaapi::tests::levels_and_rates ... ok
+test vaapi::tests::nv12_repeats_the_edges ... ok
+test vaapi::tests::sps_says_what_we_encode ... ok
+test vista::tests::clicks_land_on_cards_and_button ... ok
+test vista::tests::pointer_stays_inside_the_mock_window ... ok
+test wheelgeom::tests::slice_zero_sits_up_right ... ok
+[libx264 @ 0x555b9da75800] using SAR=1/1
+[libx264 @ 0x555b9da75800] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2
+[libx264 @ 0x555b9da75800] profile High, level 1.0, 4:2:0, 8-bit
+[libx264 @ 0x555b9da75800] 264 - core 165 r3222 b35605a - H.264/MPEG-4 AVC codec - Copyleft 2003-2025 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=2 lookahead_threads=1 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=25 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, matroska, to '/tmp/cedro-linux-842871/audio.mkv':
+  Metadata:
+    encoder         : Lavf63.1.102
+  Stream #0:0: Video: h264 (H264 / 0x34363248), yuv420p(tv, progressive), 64x64 [SAR 1:1 DAR 1:1], q=2-31, 30 fps, 1k tbn
+    Metadata:
+      encoder         : Lavc63.1.102 libx264
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+  Stream #0:1: Audio: aac (LC) ([255][0][0][0] / 0x00FF), 44100 Hz, mono, fltp, 69 kb/s
+    Metadata:
+      encoder         : Lavc63.1.102 aac
+[out#0/matroska @ 0x555b9da74f00] video:1KiB audio:2KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 26.260023%
+frame=    6 fps=0.0 q=-1.0 Lsize=       4KiB time=00:00:00.20 bitrate= 176.4kbits/s speed=5.21x elapsed=0:00:00.03    
+[libx264 @ 0x555b9da75800] frame I:1     Avg QP:30.00  size:   655
+[libx264 @ 0x555b9da75800] frame P:2     Avg QP:34.00  size:    24
+[libx264 @ 0x555b9da75800] frame B:3     Avg QP:34.33  size:    12
+[libx264 @ 0x555b9da75800] consecutive B-frames: 33.3%  0.0%  0.0% 66.7%
+[libx264 @ 0x555b9da75800] mb I  I16..4: 25.0%  0.0% 75.0%
+[libx264 @ 0x555b9da75800] mb P  I16..4:  0.0%  0.0%  0.0%  P16..4:  3.1% 12.5%  0.0%  0.0%  0.0%    skip:84.4%
+[libx264 @ 0x555b9da75800] mb B  I16..4:  0.0%  0.0%  0.0%  B16..8:  0.0%  0.0%  0.0%  direct: 0.0%  skip:100.0%
+[libx264 @ 0x555b9da75800] 8x8 transform intra:0.0% inter:100.0%
+[libx264 @ 0x555b9da75800] coded y,uvDC,uvAC intra: 54.7% 68.8% 62.5% inter: 0.6% 5.0% 0.0%
+[libx264 @ 0x555b9da75800] i16 v,h,dc,p: 100%  0%  0%  0%
+[libx264 @ 0x555b9da75800] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 52% 15% 19%  3%  1%  3%  2%  3%  3%
+[libx264 @ 0x555b9da75800] i8c dc,h,v,p: 56%  0% 44%  0%
+[libx264 @ 0x555b9da75800] Weighted P-Frames: Y:0.0% UV:0.0%
+[libx264 @ 0x555b9da75800] kb/s:29.56
+[aac @ 0x555b9da79dc0] Qavg: 105.649
+[OpenH264] this = 0x0x7fe7540d6670, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test pdfdoc::tests::plain_fonts_and_no_bookmarks_still_make_a_valid_pdf ... ok
+test youtube::tests::any_site_link_is_accepted ... ok
+test youtube::tests::audio_arguments ... ok
+test youtube::tests::best_video_has_no_height_limit_and_mkv_skips_mp4_sort ... ok
+test wheelgfx::tests::slice_hole_and_outside ... ok
+test youtube::tests::checksum_lookup ... ok
+test youtube::tests::clock_text ... ok
+test youtube::tests::errors_in_italian ... ok
+test youtube::tests::finds_links_in_pasted_text ... ok
+test youtube::tests::no_thumbnail_embedding_in_webm ... ok
+test youtube::tests::parses_info_for_a_video_and_a_playlist ... ok
+test youtube::tests::parses_playlist_items ... ok
+test youtube::tests::parses_progress_lines ... ok
+test youtube::tests::playlist_files_go_in_a_folder ... ok
+test youtube::tests::quiet_about_missing_thumbnails ... ok
+test youtube::tests::real_sites ... ignored
+test youtube::tests::recognises_youtube_links ... ok
+test youtube::tests::runs_a_fake_ytdlp ... ok
+test youtube::tests::sha256_in_any_format ... ok
+test youtube::tests::subtitle_choices ... ok
+test youtube::tests::video_arguments ... ok
+ffmpeg version n9.0.2 Copyright (c) 2000-2026 the FFmpeg developers
+  built with gcc 16 (GCC)
+  configuration: --prefix=/usr --disable-debug --disable-static --disable-stripping --enable-amf --enable-avisynth --enable-cuda-llvm --enable-lto --enable-fontconfig --enable-frei0r --enable-gmp --enable-gnutls --enable-gpl --enable-ladspa --enable-lcms2 --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libdav1d --enable-libdrm --enable-libdvdnav --enable-libdvdread --enable-libfreetype --enable-libfribidi --enable-libgsm --enable-libharfbuzz --enable-libiec61883 --enable-libjack --enable-libjxl --enable-libmodplug --enable-libmp3lame --enable-libopencore_amrnb --enable-libopencore_amrwb --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libplacebo --enable-libpulse --enable-librav1e --enable-librsvg --enable-librubberband --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libsrt --enable-libssh --enable-libsvtav1 --enable-libtheora --enable-libv4l2 --enable-libvidstab --enable-libvmaf --enable-libvorbis --enable-libvpl --enable-libvpx --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxcb --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-nvdec --enable-nvenc --enable-opencl --enable-opengl --enable-shared --enable-vapoursynth --enable-version3 --enable-vulkan --disable-decoder=magicyuv
+  libavutil      61.  1.102 / 61.  1.102
+  libavcodec     63.  1.102 / 63.  1.102
+  libavformat    63.  1.102 / 63.  1.102
+  libavdevice    63.  1.102 / 63.  1.102
+  libavfilter    12.  1.102 / 12.  1.102
+  libswscale     10.  1.102 / 10.  1.102
+  libswresample   7.  1.102 /  7.  1.102
+Input #0, lavfi, from 'testsrc=size=64x64:rate=30:duration=0.1':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: wrapped_avframe, rgb24, 64x64 [SAR 1:1 DAR 1:1], 30 fps, 30 tbr, 30 tbn
+Stream mapping:
+  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> mjpeg (native))
+Press [q] to stop, [?] for help
+Output #0, avi, to '/tmp/cedro-linux-842871/mjpeg.avi':
+  Metadata:
+    ISFT            : Lavf63.1.102
+  Stream #0:0: Video: mjpeg (MJPG / 0x47504A4D), yuv444p(pc, progressive), 64x64 [SAR 1:1 DAR 1:1], q=2-31, 200 kb/s, 30 fps, 30 tbn
+    Metadata:
+      encoder         : Lavc63.1.102 mjpeg
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/200000 buffer size: 0 vbv_delay: N/A
+[out#0/avi @ 0x5607b6f851c0] video:7KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 81.920270%
+frame=    3 fps=0.0 q=1.6 Lsize=      13KiB time=00:00:00.10 bitrate=1036.8kbits/s speed=8.17x elapsed=0:00:00.01    
+[OpenH264] this = 0x0x7fe754015a30, Warning:bEnableFrameSkip = 0,bitrate can't be controlled for RC_QUALITY_MODE,RC_BITRATE_MODE and RC_TIMESTAMP_MODE without enabling skip frame.
+test engine::tests::video_to_mp4_on_linux ... ok
+test vaapi::tests::encodes_on_real_hardware ... ok
+test pdfdoc::tests::pdfa_has_metadata_color_profile_and_embedded_fonts ... ok
+test youtube::tests::cancel_stops_a_slow_child_tree ... ok
+test engine::tests::pdf_pages_can_become_one_long_image ... ok
+test pdfdoc::tests::long_words_and_page_sizes_fit ... ok
+test engine::tests::existing_names_follow_the_chosen_policy_and_ask_once ... ok
+test engine::tests::pdf_to_jpg_follows_the_dpi_option ... ok
+test engine::tests::pdf_pages_option_limits_every_output ... ok
+test engine::tests::video_with_gpu_allowed ... ok
+test engine::tests::word_made_pdf_keeps_lists_and_columns ... ok
+test engine::tests::photo_to_searchable_pdf ... ok
+test engine::tests::jpeg_pdf_zip_and_text ... ok
+test engine::tests::scanned_pdf_to_word_uses_ocr ... ok
+test engine::tests::scanned_pdf_text_comes_only_with_the_ocr_option ... ok
+
+test result: ok. 161 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 41.63s
+
