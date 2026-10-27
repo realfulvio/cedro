@@ -16,8 +16,9 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-- **Il Comune di Bondeno è un tema**: Impostazioni → Aspetto → «Comune di Bondeno» (colori e carattere Titillium Web del sito del Comune, stemma accanto al logo, in Impostazioni, nella guida e nel menu dell'icona). Un solo insieme di pacchetti per tutti; la vecchia edizione si aggiorna sola e tiene il tema acceso.
-- **Nuova grafica**: cinque aspetti a scelta in Impostazioni → Aspetto (Windows essenziale, Percorso guidato, Cedro compatto, Banco di lavoro, Documento al centro), ognuno in versione Standard o Semplificata, su Windows e Linux. La ruota è ridisegnata (disco con anteprima del file, pannello con qualità e «Converti», tasti per Strumenti e Azioni) ed è uguale in tutti gli aspetti. Le finestre, comprese le Impostazioni, si ridimensionano e si rimpiccioliscono da sole sugli schermi piccoli.
+- **Programmi di aiuto sempre aggiornati**: yt-dlp si aggiorna già da solo; ora anche deno e ffmpeg, che Cedro scarica per i video dal web, si rinnovano da soli quando ne esce una versione nuova (controllo una volta al mese, e se qualcosa va storto resta quella che c'è). Aggiornate anche alcune librerie interne.
+
+Dalla 0.21.0: il Comune di Bondeno è un tema di Cedro (Impostazioni → Aspetto) e la nuova grafica con cinque aspetti a scelta.
 
 Dalla 0.19.1 alla 0.20.1: edizione Comune di Bondeno, una versione a parte di Cedro con lo stemma ufficiale del Comune; dalla 0.21.0 è un tema della versione standard.
 
