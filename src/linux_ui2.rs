@@ -185,6 +185,19 @@ fn open_surface(app: &Application, surface: Surface) {
     area.set_content_width((mw * z) as i32);
     area.set_content_height((mh * z) as i32);
     window.set_child(Some(&area));
+    {
+        // Non si chiude mentre lavora: il file in scrittura resterebbe a metà.
+        let host = host.clone();
+        window.connect_close_request(move |w| {
+            let busy = host.screen.try_borrow().map(|s| s.app.busy()).unwrap_or(false);
+            if busy {
+                gtk4::AlertDialog::builder().message("Una conversione è ancora in corso: aspetta che finisca.").modal(true).build().show(Some(w));
+                glib::Propagation::Stop
+            } else {
+                glib::Propagation::Proceed
+            }
+        });
+    }
 
     let (h0, a0) = (host.clone(), area.clone());
     let plat = Rc::new(RefCell::new(Plat { window: window.clone(), app: app.clone(), surface }));

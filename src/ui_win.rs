@@ -33,6 +33,11 @@ const WM_WAKE: u32 = WM_APP + 21;
 const WM_DRAG: u32 = WM_APP + 22;
 const WM_DROPPED: u32 = WM_APP + 23;
 const TIMER: usize = 77;
+
+thread_local! {
+    /// Un WM_WAKE è arrivato mentre lo schermo era occupato da una finestra di dialogo.
+    static LATE_WAKE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 const ZOOM: f32 = cedro::ui::ZOOM;
 
 static MAIN: AtomicIsize = AtomicIsize::new(0);
@@ -530,6 +535,15 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             LRESULT(0)
         }
         WM_TIMER if wparam.0 == TIMER => {
+            // Un avviso arrivato mentre un selettore di file teneva occupato lo schermo.
+            if LATE_WAKE.with(|w| w.get()) {
+                if let Ok(mut s) = host.screen.try_borrow_mut() {
+                    LATE_WAKE.with(|w| w.set(false));
+                    s.pump();
+                    drop(s);
+                    redraw(hwnd);
+                }
+            }
             let animating = host.screen.try_borrow().map(|s| s.animating()).unwrap_or(false);
             if animating {
                 redraw(hwnd);
@@ -537,8 +551,12 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             LRESULT(0)
         }
         WM_WAKE => {
-            if let Ok(mut s) = host.screen.try_borrow_mut() {
-                s.pump();
+            match host.screen.try_borrow_mut() {
+                Ok(mut s) => {
+                    s.pump();
+                }
+                // Un selettore di file è aperto: si riprende appena finisce (vedi il timer).
+                Err(_) => LATE_WAKE.with(|w| w.set(true)),
             }
             redraw(hwnd);
             LRESULT(0)
@@ -689,7 +707,12 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             LRESULT(0)
         }
         WM_CLOSE => {
-            let _ = DestroyWindow(hwnd);
+            let busy = host.screen.try_borrow().map(|s| s.app.busy()).unwrap_or(false);
+            if busy {
+                MessageBoxW(Some(hwnd), w!("Una conversione è ancora in corso: aspetta che finisca."), w!("Cedro"), MB_OK | MB_ICONINFORMATION);
+            } else {
+                let _ = DestroyWindow(hwnd);
+            }
             LRESULT(0)
         }
         WM_DESTROY => {
