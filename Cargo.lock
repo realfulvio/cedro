@@ -249,7 +249,7 @@ dependencies = [
 
 [[package]]
 name = "cedro"
-version = "0.21.2"
+version = "0.21.3"
 dependencies = [
  "cfb",
  "fdk-aac",
