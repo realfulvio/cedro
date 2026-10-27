@@ -476,6 +476,8 @@ il PDF/A non ammette la password: togline una delle due	PDF/A doesn't allow a pa
 ~, con i segnalibri	, with bookmarks
 ~, protetto con password	, password-protected
 cartella di destinazione non creata ({}): {}	destination folder not created ({}): {}
+file non sostituito ({}): {}	file not replaced ({}): {}
+pagina non disegnata	page not rendered
 cartella mancante	missing folder
 immagine non letta: {}	image not read: {}
 {} → {} · {#}% in meno	{} → {} · {}% smaller
