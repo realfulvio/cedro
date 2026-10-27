@@ -142,6 +142,8 @@ fn docx_blocks(document: &str, styles: &str, media: &Media) -> Vec<crate::pdfdoc
                 Some("right" | "end") => 2,
                 _ => 0,
             };
+            // Di mc:AlternateContent si tiene solo la scelta principale: il ripiego VML è la stessa immagine.
+            let p = &without_fallbacks(p);
             let mut images = Vec::new();
             for d in elements(p, "w:drawing") {
                 // wp:extent in EMU (12700 per punto).
@@ -166,6 +168,21 @@ fn docx_blocks(document: &str, styles: &str, media: &Media) -> Vec<crate::pdfdoc
             out
         })
         .collect()
+}
+
+/// Il testo senza i blocchi `<mc:Fallback>…</mc:Fallback>`.
+fn without_fallbacks(xml: &str) -> String {
+    let mut out = String::with_capacity(xml.len());
+    let mut rest = xml;
+    while let Some(start) = rest.find("<mc:Fallback") {
+        out.push_str(&rest[..start]);
+        match rest[start..].find("</mc:Fallback>") {
+            Some(end) => rest = &rest[start + end + "</mc:Fallback>".len()..],
+            None => return out,
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Gli elementi `<tag …/>` o `<tag …>` (solo l'apertura), per i file di relazioni.
@@ -864,6 +881,21 @@ mod block_tests {
         assert_eq!(text.matches("/Subtype /Image").count(), 2);
         assert!(text.contains("/DCTDecode"));
         let _ = fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn a_docx_alternate_image_is_taken_once() {
+        let document = "<w:document><w:body><w:p><w:r><mc:AlternateContent>\
+<mc:Choice Requires=\"wps\"><w:drawing><wp:inline><wp:extent cx=\"127000\" cy=\"127000\"/><a:blip r:embed=\"rId1\"/></wp:inline></w:drawing></mc:Choice>\
+<mc:Fallback><w:pict><v:shape><v:imagedata r:id=\"rId1\"/></v:shape></w:pict></mc:Fallback>\
+</mc:AlternateContent></w:r></w:p></w:body></w:document>";
+        let seen = std::cell::RefCell::new(Vec::new());
+        let blocks = docx_blocks(document, "", &|id, size, _| {
+            seen.borrow_mut().push((id.to_string(), size));
+            None
+        });
+        assert_eq!(*seen.borrow(), vec![("rId1".to_string(), Some((10.0, 10.0)))]);
+        assert_eq!(blocks.len(), 1);
     }
 
     fn levels(blocks: &[DocBlock]) -> Vec<(u8, &str)> {
