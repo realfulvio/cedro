@@ -32,6 +32,20 @@ fn to_mp4_with(input: &Path, output: &Path) -> Result<(), String> {
     if mf.is_ok() {
         return mf;
     }
+    // Un AVI con H.264 a lunghezze (avc1) Windows non lo apre: lo si riscrive con i codici di inizio.
+    if input.extension().is_some_and(|e| e.eq_ignore_ascii_case("avi")) {
+        if let Ok(dir) = crate::engine::private_temp_dir("cedro-avi") {
+            let copy = crate::avi::annex_b_copy(input, &dir);
+            let redone = match &copy {
+                Ok(Some(file)) => Some(to_mp4_mf(file, output)),
+                _ => None,
+            };
+            let _ = std::fs::remove_dir_all(&dir);
+            if let Some(Ok(())) = redone {
+                return Ok(());
+            }
+        }
+    }
     match crate::softvideo::transcode::<EncodedVideo>(input, output) {
         Ok(()) => Ok(()),
         Err(err) if err == crate::softvideo::FOREIGN => mf,
