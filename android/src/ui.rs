@@ -565,7 +565,7 @@ impl App {
             return Effetto::Ridisegna;
         }
         if let Some((y0, s0, mosso)) = self.trascina {
-            if (mosso || (y - y0).abs() > 10.0) && matches!(self.scheda, Scheda::Lavori | Scheda::Info) && !self.foglio && !self.scelta_file {
+            if (mosso || (y - y0).abs() > 10.0) && matches!(self.scheda, Scheda::Lavori | Scheda::Info | Scheda::Aspetto) && !self.foglio && !self.scelta_file {
                 self.scorri = (s0 - (y - y0)).clamp(0.0, self.scorri_max);
                 self.trascina = Some((y0, s0, true));
                 self.premuto = None;
@@ -1394,8 +1394,10 @@ impl App {
         let ampio = w > 700.0;
         let cw = if ampio { 520.0 } else { w - 24.0 };
         let x = if ampio { (w - cw) / 2.0 } else { 12.0 };
+        p.push_clip(0.0, BARRA, w, h - BARRA);
+        let top = BARRA + 4.0 - self.scorri;
         for (i, tema) in TEMI.into_iter().enumerate() {
-            let rc = (x, BARRA + 4.0 + i as f32 * rh, cw, rh - 8.0);
+            let rc = (x, top + i as f32 * rh, cw, rh - 8.0);
             let attivo = tema == self.tema;
             let prem = self.premuto == Some(Azione::Tema(i));
             let pa = tema.palette();
@@ -1408,7 +1410,7 @@ impl App {
             }
             self.colpi.push((Forma::R((rc.0, rc.1 - 2.0, rc.2, rc.3 + 4.0)), Azione::Tema(i)));
         }
-        let y0 = BARRA + 4.0 + TEMI.len() as f32 * rh + 10.0;
+        let y0 = top + TEMI.len() as f32 * rh + 10.0;
         p.text("Lingua", x + 4.0, y0, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
         for (i, (chiave, nome)) in LINGUE.iter().enumerate() {
             let rc = (x, y0 + 32.0 + i as f32 * 56.0, cw, 48.0);
@@ -1423,6 +1425,9 @@ impl App {
         }
         let y = y0 + 32.0 + LINGUE.len() as f32 * 56.0 + 6.0;
         p.text_wrap("Le copie vanno nella cartella Documenti. Il tema scelto resta tra un avvio e l'altro.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3);
+        p.pop_clip();
+        self.scorri_max = (y + 62.0 + self.scorri - h).max(0.0);
+        self.scorri = self.scorri.min(self.scorri_max);
     }
 }
 
