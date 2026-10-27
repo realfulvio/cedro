@@ -2,7 +2,7 @@
 <!-- Artifact configuration «installatore»: Cedro-[ARM64-]Setup-<v>.exe e la sua copia Cedro-Bondeno-…, identica. -->
 <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
   <zip-file>
-    <pe-file path="Cedro-*Setup-*.exe" product-name="Cedro" max-occurs="2">
+    <pe-file path="Cedro-*Setup-*.exe" product-name="Cedro" max-matches="2">
       <authenticode-sign />
     </pe-file>
   </zip-file>
