@@ -24,6 +24,15 @@ pub struct Model {
     pub megabytes: u32,
 }
 
+/// Su Android il modello gira nel telefono: tiny e base (quantizzati) per i messaggi e gli appunti, small per l'audio difficile.
+#[cfg(target_os = "android")]
+pub const MODELS: &[Model] = &[
+    Model { name: "Veloce", note: "Tiny: appunti brevi, il più leggero", file: "ggml-tiny-q5_1.bin", megabytes: 32 },
+    Model { name: "Buona", note: "Base: un buon compromesso", file: "ggml-base-q5_1.bin", megabytes: 60 },
+    Model { name: "Massima", note: "Small: la più precisa, lenta e pesante", file: "ggml-small-q5_1.bin", megabytes: 190 },
+];
+
+#[cfg(not(target_os = "android"))]
 pub const MODELS: &[Model] = &[
     // Scelti con la misura su 200 frasi italiane di FLEURS (errori sulle parole, in parlato pulito e in «messaggio vocale»
     // disturbato): small q8 7,5 % e 17 %, medium q5 4,1 % e 9 %, large-v3-turbo q5 2,6 % e 5,7 %. Il vecchio «Veloce»
@@ -281,8 +290,36 @@ fn cpu_variant(avx512: bool) -> Variant {
 /// (gli E-core restano al resto del PC). Al massimo 8: oltre, whisper non va più veloce.
 pub fn engine_threads() -> usize {
     let logical = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
+    #[cfg(target_os = "android")]
+    {
+        if let Some(n) = std::env::var("CEDRO_THREADS").ok().and_then(|n| n.parse::<usize>().ok()) {
+            return n.clamp(1, 8); // per le misure
+        }
+        // Misurato sul Mi 9T (2 grandi + 6 piccoli): whisper va ~30 % più veloce con 7 thread che con i soli 2 core grandi
+        // (ggml divide il lavoro a parti uguali, e i piccoli aiutano comunque); un core resta libero per l'interfaccia.
+        if android_big_cores().is_some() {
+            return logical.saturating_sub(1).clamp(2, 8);
+        }
+    }
     let cores = performance_cores().unwrap_or(logical / 2).max(1);
     cores.clamp(1, 8)
+}
+
+/// Android (big.LITTLE): i core «grandi» sono quelli con la capacità più alta; whisper va meglio solo su quelli.
+#[cfg(target_os = "android")]
+fn android_big_cores() -> Option<usize> {
+    let mut cap = Vec::new();
+    for i in 0..32 {
+        let base = format!("/sys/devices/system/cpu/cpu{i}");
+        let c = std::fs::read_to_string(format!("{base}/cpu_capacity")).or_else(|_| std::fs::read_to_string(format!("{base}/cpufreq/cpuinfo_max_freq")));
+        match c.ok().and_then(|s| s.trim().parse::<u64>().ok()) {
+            Some(v) => cap.push(v),
+            None => break,
+        }
+    }
+    let max = *cap.iter().max()?;
+    let top = cap.iter().filter(|c| **c * 10 >= max * 9).count();
+    (top < cap.len()).then_some(top.max(2))
 }
 
 #[cfg(windows)]
@@ -588,9 +625,12 @@ fn engine_in_release(json: &serde_json::Value, name: &str) -> Result<(String, St
 
 /// Il motore acceso: il processo, dove scrivergli e da dove leggere le sue righe.
 struct Running {
-    child: Child,
+    child: Option<Child>,
     stdin: Option<ChildStdin>,
     lines: Receiver<serde_json::Value>,
+    /// Android: il motore è un thread dell'APK, le richieste vanno per canale.
+    #[cfg(target_os = "android")]
+    requests: Option<std::sync::mpsc::Sender<serde_json::Value>>,
 }
 
 impl Running {
@@ -622,10 +662,27 @@ impl Running {
                 }
             }
         });
-        Ok(Running { child, stdin, lines })
+        Ok(Running {
+            child: Some(child),
+            stdin,
+            lines,
+            #[cfg(target_os = "android")]
+            requests: None,
+        })
+    }
+
+    /// Android: whisper.cpp è dentro l'APK (src/whisper_android), niente eseguibile da scaricare.
+    #[cfg(target_os = "android")]
+    fn embedded(model: &Path, gpu: bool) -> Running {
+        let (requests, lines) = crate::whisper_android::spawn(model, engine_threads(), gpu);
+        Running { child: None, stdin: None, lines, requests: Some(requests) }
     }
 
     fn send(&mut self, value: serde_json::Value) -> Result<(), String> {
+        #[cfg(target_os = "android")]
+        if let Some(requests) = &self.requests {
+            return requests.send(value).map_err(|_| "il motore si è chiuso".to_string());
+        }
         let stdin = self.stdin.as_mut().ok_or("il motore si è chiuso")?;
         writeln!(stdin, "{value}").and_then(|_| stdin.flush()).map_err(|_| "il motore si è chiuso".to_string())
     }
@@ -637,16 +694,19 @@ impl Running {
 
     /// Chiude stdin: il motore finisce e libera la memoria. Se non esce da solo, lo si ferma.
     fn stop(mut self) {
+        #[cfg(target_os = "android")]
+        drop(self.requests.take());
         drop(self.stdin.take());
+        let Some(mut child) = self.child.take() else { return };
         let deadline = Instant::now() + Duration::from_secs(5);
         while Instant::now() < deadline {
-            if let Ok(Some(_)) = self.child.try_wait() {
+            if let Ok(Some(_)) = child.try_wait() {
                 return;
             }
             std::thread::sleep(Duration::from_millis(50));
         }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        let _ = child.kill();
+        let _ = child.wait();
     }
 }
 
@@ -942,6 +1002,45 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, sink: &dyn Fn(Event
 /// Accende il motore scelto e aspetta che il modello sia in memoria. Con la scheda video, se il
 /// motore non ne trova una o non parte, ripiega su quello per processore.
 fn power_on(request: &Request, model: &Path, sink: &dyn Fn(Event)) -> Result<Running, String> {
+    #[cfg(target_os = "android")]
+    {
+        // whisper.cpp è compilato con le istruzioni dotprod+fp16 (ARMv8.2): tutti i telefoni dal 2018 le hanno, ma si controlla
+        // a runtime (HWCAP) invece di lasciar partire un'istruzione illegale.
+        const HWCAP_FPHP: u64 = 1 << 9;
+        const HWCAP_ASIMDDP: u64 = 1 << 20;
+        let caps = unsafe { libc::getauxval(libc::AT_HWCAP) } as u64;
+        if caps & HWCAP_FPHP == 0 || caps & HWCAP_ASIMDDP == 0 {
+            return Err("questo telefono non ha le istruzioni (dotprod, fp16) che la trascrizione usa".into());
+        }
+        log(sink, Tone::Step, "Motore", "carico il modello in memoria…");
+        let gpu = request.gpu && vulkan_loader_present();
+        let mut running = Running::embedded(model, gpu);
+        let mut ready = running.next();
+        if gpu && !matches!(&ready, Some(v) if v["e"] == "ready" && v["gpu"].is_string()) {
+            log(sink, Tone::Note, "Scheda video", "non disponibile: uso il processore");
+            running.stop();
+            running = Running::embedded(model, false);
+            ready = running.next();
+        }
+        return match ready {
+            Some(v) if v["e"] == "ready" => {
+                let secs = v["ms"].as_f64().unwrap_or(0.0) / 1000.0;
+                match v["gpu"].as_str() {
+                    Some(g) => log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · scheda video: {g}")),
+                    None => log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · processore, {} thread", v["threads"].as_u64().unwrap_or(0))),
+                }
+                Ok(running)
+            }
+            Some(v) => Err(v["msg"].as_str().unwrap_or("il motore non è partito").to_string()),
+            None => Err("il motore si è chiuso subito".into()),
+        };
+    }
+    #[cfg(not(target_os = "android"))]
+    power_on_process(request, model, sink)
+}
+
+#[cfg(not(target_os = "android"))]
+fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event)) -> Result<Running, String> {
     let cpu = cpu_variant(request.avx512);
     let mut tries: Vec<Variant> = Vec::new();
     if request.gpu {

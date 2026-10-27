@@ -31,7 +31,58 @@ pub(crate) fn to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     first
 }
 
+/// Android: prima il decodificatore del telefono (hardware, anche HEVC e VP9, con la rotazione dei video verticali);
+/// se non sa leggere il file si passa ai decodificatori software di qui sotto.
+#[cfg(target_os = "android")]
+fn hardware_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
+    let mut decoder = crate::mediadec::Decoder::open(input)?;
+    let (mut sink, mut queued): (Option<H264Aac>, Vec<EarlyPcm>) = (None, Vec::new());
+    let mut last: Option<crate::mediadec::Frame> = None;
+    let mut frames = 0u32;
+    let mut dur = if decoder.fps > 0.0 { (10_000_000.0 / decoder.fps) as i64 } else { 333_333 };
+    while let Some(f) = decoder.next()? {
+        if let Some(prev) = last.take() {
+            let gap = (f.pts_us - prev.pts_us) * 10;
+            if gap > 0 {
+                dur = gap;
+            }
+            let pts = prev.pts_us;
+            let owned = OwnedFrame { y: prev.y, u: prev.u, v: prev.v, width: prev.width, height: prev.height };
+            feed_frame(&mut sink, &mut queued, output, &owned, dur, pts * 10, false, 0, 0)?;
+            frames += 1;
+            if decoder.duration_us > 0 {
+                crate::progress::report(pts as f32 / decoder.duration_us as f32 * 0.95);
+            }
+        }
+        last = Some(f);
+    }
+    if let Some(prev) = last {
+        let owned = OwnedFrame { y: prev.y, u: prev.u, v: prev.v, width: prev.width, height: prev.height };
+        feed_frame(&mut sink, &mut queued, output, &owned, dur, prev.pts_us * 10, false, 0, 0)?;
+        frames += 1;
+    }
+    if frames == 0 {
+        return Err("il video non ha fotogrammi".into());
+    }
+    let mut sink = sink.ok_or_else(|| "il video non ha fotogrammi".to_string())?;
+    if decoder.has_audio {
+        // L'audio: prima i decodificatori di Cedro (AAC, MP3, FLAC, Vorbis…), poi quello del telefono (Opus, AMR…).
+        if write_symphonia_audio(input, &mut sink).is_err() {
+            let mut audio = crate::mediadec::AudioDecoder::open(input)?;
+            while let Some((samples, channels, rate)) = audio.next()? {
+                sink.write_pcm(&samples, channels, rate)?;
+            }
+        }
+    }
+    sink.finish()
+}
+
 fn to_mp4_with(input: &Path, output: &Path) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    match hardware_to_mp4(input, output) {
+        Ok(()) => return Ok(()),
+        Err(err) => eprintln!("decodifica hardware non usata: {err}"),
+    }
     match crate::softvideo::transcode::<H264Aac>(input, output) {
         Ok(()) => Ok(()),
         Err(err) if err == crate::softvideo::FOREIGN => {
@@ -193,6 +244,18 @@ impl VideoSink for H264Aac {
     }
 
     fn finish(mut self) -> Result<(), String> {
+        // Il codificatore della scheda video risponde con qualche fotogramma di ritardo: si svuota.
+        #[cfg(target_os = "android")]
+        {
+            let rest = match self.encoder.as_mut() {
+                Some(H264::Gpu(gpu)) => gpu.finish()?,
+                _ => Vec::new(),
+            };
+            for (bytes, sync) in rest {
+                let duration = self.frame_duration;
+                self.push_annex(&bytes, duration, sync)?;
+            }
+        }
         if let Some(track) = self.audio.as_mut() {
             track.drain(true)?;
         }
@@ -269,7 +332,7 @@ impl H264Aac {
 
 /// Il codificatore H.264: la scheda video (VA-API) se c'è ed è permessa, altrimenti OpenH264.
 enum H264 {
-    Gpu(crate::vaapi::H264Encoder),
+    Gpu(crate::gpuenc::H264Encoder),
     Soft(Encoder),
 }
 
@@ -285,7 +348,7 @@ fn open_h264(width: u32, height: u32, frame_duration: i64) -> Result<H264, Strin
     let shape = crate::sink::shape();
     if shape.gpu {
         let bitrate = crate::sink::bitrate(width, height);
-        if let Ok(gpu) = crate::vaapi::H264Encoder::new(width, height, fps_of(frame_duration), bitrate, shape.quality) {
+        if let Ok(gpu) = crate::gpuenc::H264Encoder::new(width, height, fps_of(frame_duration), bitrate, shape.quality) {
             return Ok(H264::Gpu(gpu));
         }
     }
