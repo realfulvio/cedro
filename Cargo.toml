@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.22.0"
+version = "0.23.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -13,6 +13,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 hayro = "0.8"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 lopdf = "0.36"
+mp4 = "0.14"
 skrifa = "0.49"
 mp3lame-encoder = "0.2"
 ocrs = "0.13"
@@ -27,6 +28,10 @@ symphonia = { version = "0.5", default-features = false, features = ["mp3", "wav
 ureq = "2"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
+
+# Il tasto Play dell'anteprima: l'uscita audio del sistema (ALSA su Linux, WASAPI su Windows).
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
+cpal = "0.15"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 fdk-aac = "0.8"

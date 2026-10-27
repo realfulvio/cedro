@@ -1287,3 +1287,193 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+// ---- Fotogrammi per l'anteprima ----
+
+/// I fotogrammi del video ai secondi `at` (in ordine), per l'anteprima: Media Foundation salta al punto
+/// giusto e li consegna già in RGB. Non scrive niente. I WebM che Windows non legge passano a Cedro.
+pub(crate) fn peek_frames(input: &Path, at: &[f64]) -> Result<crate::softvideo::Peek, String> {
+    match peek_mf(input, at) {
+        Ok(peek) if !peek.frames.is_empty() => Ok(peek),
+        first => match crate::softvideo::peek(input, at) {
+            Ok(peek) if !peek.frames.is_empty() => Ok(peek),
+            _ => first,
+        },
+    }
+}
+
+fn peek_mf(input: &Path, at: &[f64]) -> Result<crate::softvideo::Peek, String> {
+    use windows::Win32::Media::MediaFoundation::MF_SOURCE_READER_ALL_STREAMS;
+    ensure_runtime()?;
+    let wide_in = wide(input);
+    unsafe {
+        let mut attrs = None;
+        MFCreateAttributes(&mut attrs, 1).map_err(|e| format!("video non aperto: {e}"))?;
+        let attrs = attrs.ok_or("video non aperto")?;
+        attrs.SetUINT32(&MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, 1).map_err(|e| format!("video non aperto: {e}"))?;
+        let reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), &attrs).map_err(|e| format!("video non aperto: {e}"))?;
+        let stream = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
+        let native = reader.GetNativeMediaType(stream, 0).map_err(|_| "il file non ha un video".to_string())?;
+        let frame = native.GetUINT64(&MF_MT_FRAME_SIZE).unwrap_or(0);
+        let (width, height) = ((frame >> 32) as u32, frame as u32);
+        if width < 2 || height < 2 {
+            return Err("il video non ha una dimensione".into());
+        }
+        let raw_rate = native.GetUINT64(&MF_MT_FRAME_RATE).unwrap_or(0);
+        let rate = if raw_rate >> 32 == 0 || (raw_rate as u32) == 0 { (30u64 << 32) | 1 } else { raw_rate };
+        let rgb = lean_type(&MFVideoFormat_RGB32, frame, rate)?;
+        reader.SetCurrentMediaType(stream, None, &rgb).map_err(|e| format!("questo video non si può decomprimere: {e}"))?;
+        let _ = reader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false);
+        let _ = reader.SetStreamSelection(stream, true);
+        let current = reader.GetCurrentMediaType(stream).map_err(|e| e.to_string())?;
+        let stride = current.GetUINT32(&MF_MT_DEFAULT_STRIDE).map(|v| v as i32).unwrap_or((width * 4) as i32);
+        let mut frames = Vec::new();
+        for t in at {
+            let target = (t.max(0.0) * 10_000_000.0) as i64;
+            let pos = windows::Win32::System::Com::StructuredStorage::PROPVARIANT::from(target);
+            let _ = reader.SetCurrentPosition(&GUID::zeroed(), &pos);
+            // Dopo il salto si arriva al fotogramma chiave prima: si legge fino al punto chiesto.
+            for read in 0..240 {
+                let mut flags: u32 = 0;
+                let mut time: i64 = 0;
+                let mut sample = None;
+                reader
+                    .ReadSample(stream, 0, None, Some(&mut flags), Some(&mut time), Some(&mut sample))
+                    .map_err(|e| format!("lettura video: {e}"))?;
+                if flags & (MF_SOURCE_READERF_ENDOFSTREAM.0 as u32) != 0 {
+                    break;
+                }
+                let Some(sample) = sample else { continue };
+                if time + 400_000 < target && read < 239 {
+                    continue;
+                }
+                let buffer = sample.ConvertToContiguousBuffer().map_err(|e| e.to_string())?;
+                let mut data = std::ptr::null_mut();
+                let mut len = 0u32;
+                buffer.Lock(&mut data, None, Some(&mut len)).map_err(|e| e.to_string())?;
+                let src = std::slice::from_raw_parts(data, len as usize);
+                let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+                let mut ok = true;
+                for y in 0..height as usize {
+                    match image_row(src, y, height as usize, stride) {
+                        Ok(row) if row.len() >= width as usize * 4 => {
+                            for px in row[..width as usize * 4].chunks_exact(4) {
+                                rgba.extend_from_slice(&[px[2], px[1], px[0], 255]);
+                            }
+                        }
+                        _ => {
+                            ok = false;
+                            break;
+                        }
+                    }
+                }
+                let _ = buffer.Unlock();
+                if ok {
+                    frames.extend(crate::softvideo::shrink(width, height, rgba));
+                }
+                break;
+            }
+        }
+        if frames.is_empty() {
+            return Err("il video non ha fotogrammi".into());
+        }
+        Ok(crate::softvideo::Peek { frames, size: (width, height) })
+    }
+}
+
+/// Il video dal secondo `from` per il tasto Play dell'anteprima: Media Foundation salta lì e consegna
+/// i fotogrammi in RGB; `tap` riceve il tempo (100 ns) e come averli in RGBA piccoli, e risponde `false`
+/// per fermarsi. I WebM che Windows non legge passano a Cedro.
+pub(crate) fn play_frames(
+    input: &Path,
+    from: f64,
+    side: u32,
+    mut tap: impl FnMut(i64, &mut dyn FnMut() -> Option<crate::softvideo::Rgba>) -> bool,
+) -> Result<(), String> {
+    use windows::Win32::Media::MediaFoundation::MF_SOURCE_READER_ALL_STREAMS;
+    let mf = (|| -> Result<bool, String> {
+        ensure_runtime()?;
+        let wide_in = wide(input);
+        unsafe {
+            let mut attrs = None;
+            MFCreateAttributes(&mut attrs, 1).map_err(|e| format!("video non aperto: {e}"))?;
+            let attrs = attrs.ok_or("video non aperto")?;
+            attrs.SetUINT32(&MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, 1).map_err(|e| format!("video non aperto: {e}"))?;
+            let reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), &attrs).map_err(|e| format!("video non aperto: {e}"))?;
+            let stream = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
+            let native = reader.GetNativeMediaType(stream, 0).map_err(|_| "il file non ha un video".to_string())?;
+            let frame = native.GetUINT64(&MF_MT_FRAME_SIZE).unwrap_or(0);
+            let (width, height) = ((frame >> 32) as u32, frame as u32);
+            if width < 2 || height < 2 {
+                return Err("il video non ha una dimensione".into());
+            }
+            let raw_rate = native.GetUINT64(&MF_MT_FRAME_RATE).unwrap_or(0);
+            let rate = if raw_rate >> 32 == 0 || (raw_rate as u32) == 0 { (30u64 << 32) | 1 } else { raw_rate };
+            let rgb = lean_type(&MFVideoFormat_RGB32, frame, rate)?;
+            reader.SetCurrentMediaType(stream, None, &rgb).map_err(|e| format!("questo video non si può decomprimere: {e}"))?;
+            let _ = reader.SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS.0 as u32, false);
+            let _ = reader.SetStreamSelection(stream, true);
+            let current = reader.GetCurrentMediaType(stream).map_err(|e| e.to_string())?;
+            let stride = current.GetUINT32(&MF_MT_DEFAULT_STRIDE).map(|v| v as i32).unwrap_or((width * 4) as i32);
+            if from > 0.0 {
+                let pos = windows::Win32::System::Com::StructuredStorage::PROPVARIANT::from((from * 10_000_000.0) as i64);
+                let _ = reader.SetCurrentPosition(&GUID::zeroed(), &pos);
+            }
+            let step = (width.max(height).div_ceil(side.max(1))).max(1) as usize;
+            let mut shown = false;
+            loop {
+                let mut flags: u32 = 0;
+                let mut time: i64 = 0;
+                let mut sample = None;
+                reader
+                    .ReadSample(stream, 0, None, Some(&mut flags), Some(&mut time), Some(&mut sample))
+                    .map_err(|e| format!("lettura video: {e}"))?;
+                if flags & (MF_SOURCE_READERF_ENDOFSTREAM.0 as u32) != 0 {
+                    return Ok(shown);
+                }
+                let Some(sample) = sample else { continue };
+                let mut make = || -> Option<crate::softvideo::Rgba> {
+                    let buffer = sample.ConvertToContiguousBuffer().ok()?;
+                    let mut data = std::ptr::null_mut();
+                    let mut len = 0u32;
+                    buffer.Lock(&mut data, None, Some(&mut len)).ok()?;
+                    let src = std::slice::from_raw_parts(data, len as usize);
+                    let (ow, oh) = ((width as usize).div_ceil(step), (height as usize).div_ceil(step));
+                    let mut out = Vec::with_capacity(ow * oh * 4);
+                    let mut ok = true;
+                    for oy in 0..oh {
+                        match image_row(src, oy * step, height as usize, stride) {
+                            Ok(row) if row.len() >= width as usize * 4 => {
+                                for ox in 0..ow {
+                                    let px = &row[ox * step * 4..ox * step * 4 + 4];
+                                    out.extend_from_slice(&[px[2], px[1], px[0], 255]);
+                                }
+                            }
+                            _ => {
+                                ok = false;
+                                break;
+                            }
+                        }
+                    }
+                    let _ = buffer.Unlock();
+                    ok.then_some((ow as u32, oh as u32, out))
+                };
+                shown = true;
+                if !tap(time, &mut make) {
+                    return Ok(true);
+                }
+            }
+        }
+    })();
+    match mf {
+        Ok(true) => Ok(()),
+        first => {
+            let soft = crate::softvideo::play(input, from, |y, u, v, w, h, t| tap(t, &mut || crate::softvideo::i420_small(y, u, v, w, h, side)));
+            match (soft, first) {
+                (Ok(()), _) => Ok(()),
+                (Err(_), Err(e)) => Err(e),
+                (Err(e), Ok(_)) => Err(e),
+            }
+        }
+    }
+}

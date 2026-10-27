@@ -17,9 +17,11 @@ pub struct Loaded {
     pub bytes: u64,
     /// Larghezza e altezza delle immagini.
     pub size: Option<(u32, u32)>,
-    /// Pagine dei PDF.
+    /// Pagine dei PDF e dell'anteprima di testi e documenti.
     pub pages: Option<usize>,
     pub thumb: Option<Image>,
+    /// La scheda di audio, video e altri file.
+    pub about: Option<super::preview::About>,
 }
 
 enum Job {
@@ -74,7 +76,14 @@ fn info(path: &Path) -> Loaded {
                 out.thumb = crate::ocr::render_page_rgba(&bytes, 0, THUMB as f32).ok().and_then(|(w, h, rgba)| Image::from_rgba(w, h, &rgba));
             }
         }
-        _ => {}
+        Kind::Text | Kind::Doc => out.pages = super::preview::page_count(path),
+        Kind::Audio => out.about = Some(super::preview::about_audio(path, out.bytes)),
+        Kind::Video => {
+            let about = super::preview::about_video(path, out.bytes);
+            out.thumb = about.frames.first().cloned();
+            out.about = Some(about);
+        }
+        Kind::Other => out.about = Some(super::preview::about_other(path)),
     }
     out
 }
@@ -102,6 +111,7 @@ impl Loader {
                     let img = match engine::kind_of(&path) {
                         Kind::Pdf => pdf_page(&path, page, PAGE),
                         Kind::Image => image_thumb(&path, PAGE as u32).map(|(i, _)| i),
+                        Kind::Text | Kind::Doc => super::preview::render_page(&path, page, PAGE),
                         _ => None,
                     };
                     tx.send(Event::Preview(path, page, img))
@@ -137,6 +147,7 @@ pub fn thumb_of(path: &Path, side: u32) -> Option<Image> {
     match engine::kind_of(path) {
         Kind::Image => image_thumb(path, side).map(|(i, _)| i),
         Kind::Pdf => pdf_page(path, 0, side as f32),
+        Kind::Text | Kind::Doc => super::preview::render_page(path, 0, side as f32),
         _ => None,
     }
 }

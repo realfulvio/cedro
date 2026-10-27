@@ -16,8 +16,10 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-- **Cedro parla inglese**: su Windows e su Linux l'interfaccia segue la lingua del sistema, e si cambia in Impostazioni → Lingua. L'installatore di Windows chiede se vuoi italiano o inglese.
-- **Icona nell'area di notifica** (dalla 0.21.3): il doppio clic sull'icona di Windows apre il pannello Conversioni (prima apriva le Impostazioni).
+- **Anteprime per tutti i file** nel tema «Documento al centro»: testo e Markdown a pagine con i numeri di riga, CSV come tabella, Word, ODT, RTF e DOC con titoli e paragrafi, audio con l'onda e i dati del file, video con un fotogramma, la striscia di scene e i dati (risoluzione, codec, durata). Con il tasto **Play** l'audio si ascolta e il video si guarda lì, con la barra per saltare avanti e indietro. Al posto di «Anteprima non disponibile».
+- **Video su Linux**: si convertono anche gli MP4 e MKV H.264 con fotogrammi B, cioè quelli di quasi tutti i telefoni e le fotocamere (prima si fermavano con «H.264 non letto»).
+
+Dalla 0.22.0: Cedro parla inglese (Impostazioni → Lingua) e l'installatore di Windows chiede la lingua. Dalla 0.21.3: il doppio clic sull'icona di Windows apre il pannello Conversioni.
 
 Dalla 0.21.2: video dal web da pagine qualunque (come magnific.com) e messaggio di rete più preciso. Dalla 0.21.1: yt-dlp, deno e ffmpeg si aggiornano da soli.
 
