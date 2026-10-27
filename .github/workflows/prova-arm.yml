@@ -36,7 +36,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Quale release
         shell: pwsh
@@ -133,7 +133,7 @@ jobs:
         shell: pwsh
         run: powershell -File prova-arm\schermate.ps1 -Exe $env:CEDRO -Out schermate
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: schermate-arm
@@ -185,7 +185,7 @@ jobs:
     runs-on: windows-11-arm
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || '' }}
 
