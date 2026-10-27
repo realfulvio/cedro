@@ -291,13 +291,15 @@ fn cpu_variant(avx512: bool) -> Variant {
 pub fn engine_threads() -> usize {
     let logical = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
     #[cfg(target_os = "android")]
-    if let Some(n) = std::env::var("CEDRO_THREADS").ok().and_then(|n| n.parse::<usize>().ok()) {
-        return n.clamp(1, 8); // per le misure
-    }
-    // Misurato sul Mi 9T (2 grandi + 6 piccoli): whisper va ~30 % più veloce con 7 thread che con i soli 2 core grandi
-    // (ggml divide il lavoro a parti uguali, e i piccoli aiutano comunque); un core resta libero per l'interfaccia.
-    if android_big_cores().is_some() {
-        return logical.saturating_sub(1).clamp(2, 8);
+    {
+        if let Some(n) = std::env::var("CEDRO_THREADS").ok().and_then(|n| n.parse::<usize>().ok()) {
+            return n.clamp(1, 8); // per le misure
+        }
+        // Misurato sul Mi 9T (2 grandi + 6 piccoli): whisper va ~30 % più veloce con 7 thread che con i soli 2 core grandi
+        // (ggml divide il lavoro a parti uguali, e i piccoli aiutano comunque); un core resta libero per l'interfaccia.
+        if android_big_cores().is_some() {
+            return logical.saturating_sub(1).clamp(2, 8);
+        }
     }
     let cores = performance_cores().unwrap_or(logical / 2).max(1);
     cores.clamp(1, 8)
