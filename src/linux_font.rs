@@ -1,14 +1,23 @@
-//! Titillium Web (licenza OFL) incorporato nel programma: come su Windows si carica all'avvio per il solo
+//! Il carattere dell'edizione (Figtree nella standard, Titillium Web in quella del Comune di Bondeno,
+//! licenza OFL) incorporato nel programma: come su Windows si carica all'avvio per il solo
 //! processo di Cedro, senza installarlo. Si registra in fontconfig (che Pango e Cairo usano) da file
 //! scritti nella cartella della cache; se qualcosa manca si ripiega sul carattere del desktop.
 
 use std::ffi::{c_char, c_int, c_void, CString};
 use std::path::PathBuf;
 
-static REGULAR: &[u8] = include_bytes!("../assets/fonts/TitilliumWeb-Regular.ttf");
-static BOLD: &[u8] = include_bytes!("../assets/fonts/TitilliumWeb-Bold.ttf");
+#[cfg(feature = "bondeno")]
+const FILES: [(&str, &[u8]); 2] = [
+    ("TitilliumWeb-Regular.ttf", include_bytes!("../assets/fonts/TitilliumWeb-Regular.ttf")),
+    ("TitilliumWeb-Bold.ttf", include_bytes!("../assets/fonts/TitilliumWeb-Bold.ttf")),
+];
+#[cfg(not(feature = "bondeno"))]
+const FILES: [(&str, &[u8]); 2] = [
+    ("Figtree-Regular.ttf", include_bytes!("../assets/fonts/Figtree-Regular.ttf")),
+    ("Figtree-Bold.ttf", include_bytes!("../assets/fonts/Figtree-Bold.ttf")),
+];
 
-pub const FACE: &str = "Titillium Web";
+pub const FACE: &str = cedro::tema::attivo_font();
 
 fn cache_dir() -> Option<PathBuf> {
     let base = match std::env::var_os("XDG_CACHE_HOME") {
@@ -34,7 +43,7 @@ pub fn load() -> bool {
     }
     let add: unsafe extern "C" fn(*mut c_void, *const c_char) -> c_int = unsafe { std::mem::transmute(add) };
     let mut ok = true;
-    for (name, data) in [("TitilliumWeb-Regular.ttf", REGULAR), ("TitilliumWeb-Bold.ttf", BOLD)] {
+    for (name, data) in FILES {
         let path = dir.join(name);
         if std::fs::metadata(&path).ok().map(|m| m.len() as usize) != Some(data.len()) && std::fs::write(&path, data).is_err() {
             ok = false;
@@ -46,7 +55,7 @@ pub fn load() -> bool {
     ok
 }
 
-/// Rende Titillium Web il carattere di tutte le finestre GTK di Cedro, finestre di dialogo e menu compresi.
+/// Rende il carattere dell'edizione quello di tutte le finestre GTK di Cedro, finestre di dialogo e menu compresi.
 pub fn apply() {
     if let Some(settings) = gtk4::Settings::default() {
         settings.set_gtk_font_name(Some(&format!("{FACE} 11")));
