@@ -290,7 +290,7 @@ fn links_list(f: &mut Frame, app: &App, l: &Links, r: R, big: bool, scroll: bool
     let rh = if big { 88.0 } else { 68.0 };
     let items = l.items.clone();
     let busy = app.busy();
-    let mut body = |f: &mut Frame| {
+    let body = |f: &mut Frame| {
         for (n, it) in items.iter().enumerate() {
             let y = r.1 + n as f32 * rh;
             if n > 0 {

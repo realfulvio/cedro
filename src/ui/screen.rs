@@ -312,6 +312,15 @@ impl Screen {
         }
     }
 
+    /// Rilegge tema e modalità dal file delle impostazioni (le ha cambiate la pagina Aspetto).
+    pub fn reload_appearance(&mut self) {
+        let s = crate::read_settings();
+        let theme = ThemeId::from_key(&s.ui_theme);
+        if theme != self.theme || s.simple != self.simple {
+            self.request_appearance(theme, s.simple);
+        }
+    }
+
     fn set_appearance(&mut self, theme: ThemeId, simple: bool) {
         let was_simple = self.simple;
         self.theme = theme;

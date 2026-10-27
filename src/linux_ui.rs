@@ -32,6 +32,7 @@ enum Asked {
     Settings,
     Guide,
     Conversions,
+    Compact,
 }
 
 fn cfg() -> Settings {
@@ -149,7 +150,7 @@ pub fn start() -> i32 {
         match launch_open {
             Open::Settings => open_settings_window(app),
             Open::Guide => linux_settings::open_guide(app),
-            Open::Conversions => crate::linux_conversioni::open_conversions(app),
+            Open::Conversions => open_panel(app),
             // Avviato a mano, senza file: si vede subito che c'è, anche senza vassoio.
             Open::Nothing if opened.borrow().launch.stay && !background => {
                 if cedro::read_settings().view_asked {
@@ -174,7 +175,14 @@ pub fn start() -> i32 {
             match ASKED.lock().ok().and_then(|mut slot| slot.take()) {
                 Some(Asked::Settings) => open_settings_window(&app),
                 Some(Asked::Guide) => linux_settings::open_guide(&app),
-                Some(Asked::Conversions) => crate::linux_conversioni::open_conversions(&app),
+                Some(Asked::Conversions) => open_panel(&app),
+                Some(Asked::Compact) => {
+                    if cedro::edizione::BONDENO {
+                        open_panel(&app)
+                    } else {
+                        crate::linux_ui2::open_compact(&app)
+                    }
+                }
                 None => {}
             }
             let slot = opened.borrow().finished.clone();
@@ -199,7 +207,16 @@ pub fn start() -> i32 {
     app.run_with_args(&["cedro"]).get() as i32
 }
 
-fn open_settings_window(app: &Application) {
+/// Il pannello delle conversioni: quello nuovo nell'edizione standard, quello di sempre in quella del Comune.
+fn open_panel(app: &Application) {
+    if cedro::edizione::BONDENO {
+        crate::linux_conversioni::open_conversions(app);
+    } else {
+        crate::linux_ui2::open(app);
+    }
+}
+
+pub(crate) fn open_settings_window(app: &Application) {
     linux_settings::open_settings(app, |settings| remember(settings));
 }
 
@@ -681,6 +698,14 @@ impl ksni::Tray for CedroTray {
     }
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
         vec![ksni::Icon { width: 32, height: 32, data: self.pixmap.clone() }]
+    }
+    fn activate(&mut self, _x: i32, _y: i32) {
+        // Con «Cedro compatto» un clic sull'icona apre la finestrella.
+        if !cedro::edizione::BONDENO && cedro::ui::theme::ThemeId::from_key(&read_settings().ui_theme) == cedro::ui::theme::ThemeId::CedroCompatto {
+            ask(Asked::Compact);
+        } else {
+            ask(Asked::Conversions);
+        }
     }
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::{CheckmarkItem, MenuItem, StandardItem};

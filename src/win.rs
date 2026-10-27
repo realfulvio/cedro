@@ -240,6 +240,9 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         WM_TRAY => {
             if lparam.0 as u32 == WM_RBUTTONUP || lparam.0 as u32 == WM_CONTEXTMENU {
                 show_menu(hwnd);
+            } else if lparam.0 as u32 == WM_LBUTTONUP && !cedro::edizione::BONDENO && cedro::ui::theme::ThemeId::from_key(&read_settings().ui_theme) == cedro::ui::theme::ThemeId::CedroCompatto {
+                // Con «Cedro compatto» un clic sull'icona apre la finestrella.
+                crate::ui_win::open_compact();
             } else if lparam.0 as u32 == WM_LBUTTONDBLCLK {
                 crate::settings_win::open();
             }
@@ -253,7 +256,13 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 3 => check_updates(true),
                 5 => crate::settings_win::open(),
                 6 => crate::guida_win::open(),
-                7 => crate::conversioni_win::open(),
+                7 => {
+                    if cedro::edizione::BONDENO {
+                        crate::conversioni_win::open()
+                    } else {
+                        crate::ui_win::open()
+                    }
+                }
                 4 => {
                     let on = !autostart_enabled();
                     if let Err(e) = set_autostart(on) {
