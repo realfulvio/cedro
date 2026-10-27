@@ -71,7 +71,7 @@ jobs:
           CFG
           sed -i 's/^          //' config.yml
           chmod 600 config.yml
-          fdroid update --create-metadata=false
+          fdroid update
           rm -f keystore.p12 config.yml
       - run: mkdir -p _site/fdroid && cp -r fdroid/repo _site/fdroid/
       - uses: actions/upload-pages-artifact@v3
