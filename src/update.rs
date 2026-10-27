@@ -93,8 +93,6 @@ fn parse_release(body: &str) -> Result<Release, String> {
 /// Il nome ARM non comincia con «Cedro-Setup» apposta: fino alla 0.17 Cedro prendeva il primo file
 /// «Cedro-Setup….exe» della release, e deve continuare a trovare quello x64.
 /// Su ARM vale anche il nome della 0.18.0 (`Cedro-Setup-0.18.0-arm64.exe`).
-/// Le release hanno anche `Cedro-Bondeno-…` e `cedro-bondeno-…`: sono copie per chi ha ancora la vecchia edizione
-/// Bondeno (che cerca solo quei nomi) e passa così a questa. Qui non si prendono.
 fn is_installer_for_this_arch(name: &str) -> bool {
     if !name.ends_with(".exe") {
         return false;
@@ -112,8 +110,7 @@ const INSTALLER_ARM64: &str = "Cedro-ARM64-Setup-";
 #[cfg(test)]
 const INSTALLER_X64: &str = "Cedro-Setup-";
 
-/// `cedro-<v>-linux-<arch>.tar.gz`: dopo il prefisso viene subito la versione, così «cedro-» non prende
-/// anche «cedro-bondeno-».
+/// `cedro-<v>-linux-<arch>.tar.gz`: dopo il prefisso viene subito la versione.
 fn is_package_of_this_edition(name: &str, suffix: &str) -> bool {
     name.strip_prefix("cedro-")
         .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()) && rest.ends_with(suffix))
@@ -373,47 +370,6 @@ mod tests {
         assert_eq!(release.package.unwrap().name, package);
     }
 
-    /// Una release con le copie per la vecchia edizione Bondeno: la versione di oggi prende solo i suoi pacchetti.
-    #[test]
-    fn the_bondeno_copies_are_not_picked() {
-        let arch = package_arch();
-        let standard_pkg = format!("cedro-0.21.0-linux-{arch}.tar.gz");
-        let bondeno_pkg = format!("cedro-bondeno-0.21.0-linux-{arch}.tar.gz");
-        // In ordine alfabetico, come li elenca GitHub.
-        let mut names = vec![
-            "Cedro-ARM64-Setup-0.21.0.exe".to_string(),
-            "Cedro-Bondeno-ARM64-Setup-0.21.0.exe".to_string(),
-            "Cedro-Bondeno-Setup-0.21.0.exe".to_string(),
-            "Cedro-Setup-0.21.0.exe".to_string(),
-            standard_pkg.clone(),
-            bondeno_pkg.clone(),
-        ];
-        names.sort();
-        for order in [names.clone(), names.iter().rev().cloned().collect()] {
-            let assets: Vec<String> = order
-                .iter()
-                .map(|n| format!(r#"{{"name": "{n}", "browser_download_url": "https://x/{n}", "digest": "sha256:00"}}"#))
-                .collect();
-            let release = parse_release(&format!(r#"{{"tag_name": "v0.21.0", "assets": [{}]}}"#, assets.join(","))).unwrap();
-            let prefix = if cfg!(target_arch = "aarch64") { INSTALLER_ARM64 } else { INSTALLER_X64 };
-            assert_eq!(release.installer.unwrap().name, format!("{prefix}0.21.0.exe"));
-            assert_eq!(release.package.unwrap().name, standard_pkg);
-        }
-        // Le versioni standard vecchie (fino alla 0.18) non prendono mai una copia Bondeno.
-        let old_x64 = |n: &str| n.starts_with("Cedro-Setup") && n.ends_with(".exe");
-        let old_arm = |n: &str| n.starts_with("Cedro-ARM64-Setup") || (n.starts_with("Cedro-Setup") && n.ends_with("-arm64.exe"));
-        for n in ["Cedro-Bondeno-Setup-0.21.0.exe", "Cedro-Bondeno-ARM64-Setup-0.21.0.exe"] {
-            assert!(!old_x64(n) && !old_arm(n), "{n}");
-        }
-        // Linux fino alla 0.18 prende il primo «cedro-…-linux-<arch>.tar.gz»: quello standard viene prima.
-        assert!(standard_pkg < bondeno_pkg);
-        // E la vecchia edizione Bondeno (0.19.1 – 0.20.x) cerca questi nomi: le copie devono continuare a esserci.
-        let old_bondeno_x64 = |n: &str| n.starts_with("Cedro-Bondeno-Setup-");
-        let old_bondeno_arm = |n: &str| n.starts_with("Cedro-Bondeno-ARM64-Setup-");
-        assert!(names.iter().any(|n| old_bondeno_x64(n)) && names.iter().any(|n| old_bondeno_arm(n)));
-        assert!(bondeno_pkg.strip_prefix("cedro-bondeno-").is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit())));
-    }
-
     /// Fino alla 0.17 Cedro prendeva il primo «Cedro-Setup….exe»: l'installatore ARM non deve somigliargli.
     #[test]
     fn old_versions_do_not_pick_the_arm_installer() {
@@ -445,15 +401,12 @@ mod tests {
         // Come la 0.19.1 nei primi minuti: gli installatori Windows ci sono, il tar.gz Linux non ancora.
         let windows_only = parse_release(r#"{"tag_name": "v9.0.0", "assets": [
             {"name": "Cedro-Setup-9.0.0.exe", "browser_download_url": "https://x/a.exe", "digest": "sha256:abc"},
-            {"name": "Cedro-ARM64-Setup-9.0.0.exe", "browser_download_url": "https://x/b.exe", "digest": "sha256:abc"},
-            {"name": "Cedro-Bondeno-Setup-9.0.0.exe", "browser_download_url": "https://x/c.exe", "digest": "sha256:abc"},
-            {"name": "Cedro-Bondeno-ARM64-Setup-9.0.0.exe", "browser_download_url": "https://x/d.exe", "digest": "sha256:abc"}]}"#)
+            {"name": "Cedro-ARM64-Setup-9.0.0.exe", "browser_download_url": "https://x/b.exe", "digest": "sha256:abc"}]}"#)
         .unwrap();
         assert_eq!(windows_only.is_ready(), cfg!(windows));
         let linux_only = parse_release(&format!(
             r#"{{"tag_name": "v9.0.0", "assets": [
-            {{"name": "cedro-9.0.0-linux-{a}.tar.gz", "browser_download_url": "https://x/a", "digest": "sha256:abc"}},
-            {{"name": "cedro-bondeno-9.0.0-linux-{a}.tar.gz", "browser_download_url": "https://x/b", "digest": "sha256:abc"}}]}}"#,
+            {{"name": "cedro-9.0.0-linux-{a}.tar.gz", "browser_download_url": "https://x/a", "digest": "sha256:abc"}}]}}"#,
             a = package_arch()
         ))
         .unwrap();
