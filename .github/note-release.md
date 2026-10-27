@@ -16,7 +16,8 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-- **Icona nell'area di notifica**: il doppio clic sull'icona di Windows apre il pannello Conversioni (prima apriva le Impostazioni).
+- **Cedro parla inglese**: su Windows e su Linux l'interfaccia segue la lingua del sistema, e si cambia in Impostazioni → Lingua. L'installatore di Windows chiede se vuoi italiano o inglese.
+- **Icona nell'area di notifica** (dalla 0.21.3): il doppio clic sull'icona di Windows apre il pannello Conversioni (prima apriva le Impostazioni).
 
 Dalla 0.21.2: video dal web da pagine qualunque (come magnific.com) e messaggio di rete più preciso. Dalla 0.21.1: yt-dlp, deno e ffmpeg si aggiornano da soli.
 
