@@ -11,7 +11,7 @@ use cedro::ui::theme::ThemeId;
 use jni::objects::{JByteArray, JObject, JString, JValue};
 use jni::{JNIEnv, JavaVM};
 
-use crate::ui::{App, Archivio, Effetto, Recente, Sorgente, Stato};
+use crate::ui::{App, Archivio, Effetto, Info, Recente, Sorgente, Stato};
 
 /// Dove finiscono le copie.
 const DOCUMENTI: &str = "/storage/emulated/0/Documents";
@@ -522,7 +522,7 @@ fn apri_o_condividi(app: &AndroidApp, path: &Path, condividi: bool) -> Result<()
         env.call_method(&intento, "setClipData", "(Landroid/content/ClipData;)V", &[JValue::Object(&clip)]).map_err(|e| jerr(env, e))?;
         env.call_method(&intento, "addFlags", "(I)Landroid/content/Intent;", &[JValue::Int(1)]).map_err(|e| jerr(env, e))?;
         let da_avviare = if condividi {
-            let titolo = env.new_string("Condividi").map_err(|e| e.to_string())?;
+            let titolo = env.new_string(cedro::i18n::tr("Condividi")).map_err(|e| e.to_string())?;
             env.call_static_method("android/content/Intent", "createChooser", "(Landroid/content/Intent;Ljava/lang/CharSequence;)Landroid/content/Intent;", &[JValue::Object(&intento), JValue::Object(&titolo)])
                 .and_then(|v| v.l())
                 .map_err(|e| jerr(env, e))?
@@ -535,6 +535,120 @@ fn apri_o_condividi(app: &AndroidApp, path: &Path, condividi: bool) -> Result<()
 }
 
 /// Il servizio in primo piano con la notifica dell'avanzamento (`percento` < 0: indeterminato). `None` lo ferma.
+fn campo_testo(env: &mut JNIEnv, classe: &str, nome: &str) -> Option<String> {
+    let r = env.get_static_field(classe, nome, "Ljava/lang/String;").and_then(|v| v.l());
+    match r {
+        Ok(o) => stringa(env, o),
+        Err(_) => {
+            if env.exception_check().unwrap_or(false) {
+                let _ = env.exception_clear();
+            }
+            None
+        }
+    }
+}
+
+fn riga_di(testo: &str, chiave: &str) -> Option<String> {
+    testo.lines().find_map(|l| {
+        let (k, v) = l.split_once(':')?;
+        (k.trim() == chiave).then(|| v.trim().to_string())
+    })
+}
+
+fn kb(testo: &str, chiave: &str) -> Option<f64> {
+    riga_di(testo, chiave)?.split_whitespace().next()?.parse::<f64>().ok()
+}
+
+fn gb(kib: f64) -> String {
+    format!("{:.1}", kib / 1024.0 / 1024.0).replace('.', ",")
+}
+
+/// Cosa c'è nel telefono e cosa usa Cedro: modello, Android, processore, memoria, istruzioni, accelerazioni.
+fn leggi_info(app: &AndroidApp) -> Info {
+    let (modello, android, soc) = con_attivita(app, |env, _att| {
+        let marca = campo_testo(env, "android/os/Build", "MANUFACTURER").unwrap_or_default();
+        let nome = campo_testo(env, "android/os/Build", "MODEL").unwrap_or_default();
+        let versione = campo_testo(env, "android/os/Build$VERSION", "RELEASE").unwrap_or_default();
+        let api = env.get_static_field("android/os/Build$VERSION", "SDK_INT", "I").and_then(|v| v.i()).unwrap_or(0);
+        let soc = campo_testo(env, "android/os/Build", "SOC_MODEL").filter(|s| !s.is_empty() && s != "unknown");
+        let modello = if nome.to_lowercase().starts_with(&marca.to_lowercase()) || marca.is_empty() { nome } else { format!("{} {nome}", marca.chars().next().map(|c| c.to_uppercase().collect::<String>() + &marca[c.len_utf8()..]).unwrap_or_default()) };
+        Ok((modello, format!("{versione} (API {api})"), soc))
+    })
+    .unwrap_or_default();
+    let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
+    let processore = soc
+        .or_else(|| riga_di(&cpuinfo, "Hardware").filter(|s| !s.is_empty()))
+        .or_else(|| std::fs::read_to_string("/sys/devices/soc0/machine").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
+        .unwrap_or_else(|| "non indicata dal telefono".into());
+    let core = (0..64).take_while(|i| std::path::Path::new(&format!("/sys/devices/system/cpu/cpu{i}")).exists()).count().max(1);
+    let grandi = core_grandi();
+    let core_testo = match grandi {
+        Some(g) => format!("{core} ({g} grandi + {} piccoli)", core - g.min(core)),
+        None => core.to_string(),
+    };
+    let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+    let memoria = match (kb(&meminfo, "MemTotal"), kb(&meminfo, "MemAvailable")) {
+        (Some(t), Some(l)) => format!("{} GB ({} GB liberi)", gb(t), gb(l)),
+        (Some(t), None) => format!("{} GB", gb(t)),
+        _ => "non indicata dal telefono".into(),
+    };
+    let gpu = ["/sys/class/kgsl/kgsl-3d0/gpu_model", "/sys/kernel/gpu/gpu_model"]
+        .iter()
+        .find_map(|p| std::fs::read_to_string(p).ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "non indicata dal telefono".into());
+    let funzioni = riga_di(&cpuinfo, "Features").unwrap_or_default();
+    let ha = |f: &str| funzioni.split_whitespace().any(|x| x == f);
+    let hw = cedro::accel::hardware();
+    let neon = ha("asimd") || ha("neon");
+    let dotprod = ha("asimddp") || hw.dotprod;
+    let i8mm = ha("i8mm") || hw.avx512;
+    let mut calcolo = "processore".to_string();
+    if dotprod {
+        calcolo += ", dotprod";
+    }
+    if i8mm {
+        calcolo += ", i8mm";
+    }
+    let r = |k: &str, v: String| (k.to_string(), v);
+    Info {
+        generali: vec![r("Telefono", modello), r("Android", android), r("Processore", processore), r("Core", core_testo), r("Memoria", memoria), r("Scheda video", gpu)],
+        istruzioni: vec![("NEON".into(), neon), ("dotprod".into(), dotprod), ("i8mm".into(), i8mm)],
+        accelerazioni: vec![
+            ("Trascrizione".into(), calcolo, true),
+            ("Video MP4".into(), if hw.gpu.is_some() { "codificatore del telefono".into() } else { "non disponibile".into() }, hw.gpu.is_some()),
+        ],
+    }
+}
+
+/// Mette un testo negli appunti.
+fn copia_negli_appunti(app: &AndroidApp, testo: &str) {
+    let _ = con_attivita(app, |env, att| {
+        let nome = env.new_string("clipboard").map_err(|e| e.to_string())?;
+        let gestore = env.call_method(att, "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;", &[JValue::Object(&nome)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let etichetta = env.new_string("Cedro").map_err(|e| e.to_string())?;
+        let contenuto = env.new_string(testo).map_err(|e| e.to_string())?;
+        let clip = env
+            .call_static_method("android/content/ClipData", "newPlainText", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Landroid/content/ClipData;", &[JValue::Object(&etichetta), JValue::Object(&contenuto)])
+            .and_then(|v| v.l())
+            .map_err(|e| jerr(env, e))?;
+        env.call_method(&gestore, "setPrimaryClip", "(Landroid/content/ClipData;)V", &[JValue::Object(&clip)]).map_err(|e| jerr(env, e))?;
+        Ok(())
+    });
+}
+
+/// La lingua del telefono (`Locale.getDefault().getLanguage()`): italiano o, per ogni altra, inglese.
+fn lingua_del_telefono(app: &AndroidApp) -> cedro::i18n::Lang {
+    let r = con_attivita(app, |env, _att| {
+        let locale = env.call_static_method("java/util/Locale", "getDefault", "()Ljava/util/Locale;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let lingua = env.call_method(&locale, "getLanguage", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let lingua: String = env.get_string(&jni::objects::JString::from(lingua)).map_err(|e| jerr(env, e))?.into();
+        Ok(lingua)
+    });
+    cedro::i18n::from_tag(&r.unwrap_or_default())
+}
+
 fn servizio(app: &AndroidApp, stato: Option<(&str, &str, i32)>) {
     let r = con_attivita(app, |env, att| {
         let intento = env.new_object("android/content/Intent", "()V", &[]).map_err(|e| jerr(env, e))?;
@@ -622,7 +736,7 @@ fn apri_link(app: &AndroidApp, url: &str) -> Result<(), String> {
         let uri = env.call_static_method("android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&u)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
         let azione = env.new_string("android.intent.action.VIEW").map_err(|e| e.to_string())?;
         let intento = env.new_object("android/content/Intent", "(Ljava/lang/String;Landroid/net/Uri;)V", &[JValue::Object(&azione), JValue::Object(&uri)]).map_err(|e| jerr(env, e))?;
-        let titolo = env.new_string("Scarica con…").map_err(|e| e.to_string())?;
+        let titolo = env.new_string(cedro::i18n::tr("Scarica con…")).map_err(|e| e.to_string())?;
         let scelta = env.call_static_method("android/content/Intent", "createChooser", "(Landroid/content/Intent;Ljava/lang/CharSequence;)Landroid/content/Intent;", &[JValue::Object(&intento), JValue::Object(&titolo)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
         env.call_method(attivita, "startActivity", "(Landroid/content/Intent;)V", &[JValue::Object(&scelta)]).map_err(|e| jerr(env, e))?;
         Ok(())
@@ -804,6 +918,16 @@ fn android_main(app: AndroidApp) {
     let file_lavori = dati.join("lavori.txt");
     let tema = std::fs::read_to_string(&file_tema).map(|t| ThemeId::from_key(&t)).unwrap_or(ThemeId::WindowsEssenziale);
     let mut ui = App::new(tema);
+    // La lingua: quella scelta nell'Aspetto, o quella del telefono (Android non ha LANG).
+    let file_lingua = dati.join("lingua.txt");
+    ui.lingua_telefono = lingua_del_telefono(&app);
+    ui.lingua = match std::fs::read_to_string(&file_lingua).unwrap_or_default().trim() {
+        "it" => "it",
+        "en" => "en",
+        _ => "auto",
+    };
+    ui.applica_lingua();
+    ui.info = leggi_info(&app);
     if let Ok(t) = std::fs::read_to_string(&file_lavori) {
         ui.carica_lavori(&t);
     }
@@ -902,6 +1026,14 @@ fn android_main(app: AndroidApp) {
                             std::thread::spawn(move || converti(a, c, id, file, azione, qualita, prog));
                         }
                         Effetto::Esci => chiudi(&app),
+                        Effetto::Copia(testo) => {
+                            copia_negli_appunti(&app, &testo);
+                            sporco = true;
+                        }
+                        Effetto::SalvaLingua(l) => {
+                            let _ = std::fs::write(&file_lingua, l);
+                            sporco = true;
+                        }
                         Effetto::SalvaTema(t) => {
                             let _ = std::fs::write(&file_tema, t.key());
                             icone_barre(&app, t.dark());
@@ -1016,8 +1148,8 @@ fn android_main(app: AndroidApp) {
         if ultimo_servizio.elapsed() > Duration::from_millis(700) || (servizio_attivo && ui.in_corso().0 == 0) {
             let (n, medio, nome) = ui.in_corso();
             if n > 0 {
-                let testo = if n > 1 { format!("{n} lavori in corso") } else { nome };
-                servizio(&app, Some(("Cedro sta lavorando", &testo, medio.map(|m| m as i32).unwrap_or(-1))));
+                let testo = if n > 1 { cedro::i18n::tr_string(&format!("{n} lavori in corso")) } else { nome };
+                servizio(&app, Some((cedro::i18n::tr("Cedro sta lavorando").as_ref(), &testo, medio.map(|m| m as i32).unwrap_or(-1))));
                 servizio_attivo = true;
                 ultimo_servizio = std::time::Instant::now();
             } else if servizio_attivo {

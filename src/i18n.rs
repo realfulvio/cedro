@@ -71,6 +71,11 @@ pub fn detect() -> Lang {
     from_locale(&system_locale())
 }
 
+/// La lingua per un codice del sistema («it», «it_IT», «en-US»…): per chi la chiede al sistema in un altro modo (Android).
+pub fn from_tag(tag: &str) -> Lang {
+    from_locale(tag)
+}
+
 fn from_locale(tag: &str) -> Lang {
     let t = tag.trim().to_ascii_lowercase();
     if t.starts_with("it") {
