@@ -651,6 +651,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             LRESULT(0)
         }
         WM_RBUTTONUP => {
+            let _ = SetFocus(Some(hwnd));
             let (x, y) = xy(lparam, hwnd);
             if let Ok(mut s) = host.screen.try_borrow_mut() {
                 s.context_click(x, y);
