@@ -399,7 +399,7 @@ pub fn ensure_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result
 fn extract_zip_entry(archive: &Path, suffix: &str, target: &Path) -> Result<(), String> {
     let mut zip = zip::ZipArchive::new(std::fs::File::open(archive).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let index = (0..zip.len())
-        .find(|&i| zip.by_index(i).map(|f| f.name().ends_with(suffix)).unwrap_or(false))
+        .find(|&i| zip.by_index(i).ok().and_then(|f| f.name().ok().map(|n| n.ends_with(suffix))).unwrap_or(false))
         .ok_or_else(|| format!("{suffix} non è nell'archivio"))?;
     let mut entry = zip.by_index(index).map_err(|_| "archivio rovinato".to_string())?;
     let part = target.with_extension("part");
