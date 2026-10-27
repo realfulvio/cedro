@@ -996,6 +996,14 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, sink: &dyn Fn(Event
 fn power_on(request: &Request, model: &Path, sink: &dyn Fn(Event)) -> Result<Running, String> {
     #[cfg(target_os = "android")]
     {
+        // whisper.cpp è compilato con le istruzioni dotprod+fp16 (ARMv8.2): tutti i telefoni dal 2018 le hanno, ma si controlla
+        // a runtime (HWCAP) invece di lasciar partire un'istruzione illegale.
+        const HWCAP_FPHP: u64 = 1 << 9;
+        const HWCAP_ASIMDDP: u64 = 1 << 20;
+        let caps = unsafe { libc::getauxval(libc::AT_HWCAP) } as u64;
+        if caps & HWCAP_FPHP == 0 || caps & HWCAP_ASIMDDP == 0 {
+            return Err("questo telefono non ha le istruzioni (dotprod, fp16) che la trascrizione usa".into());
+        }
         log(sink, Tone::Step, "Motore", "carico il modello in memoria…");
         let gpu = request.gpu && vulkan_loader_present();
         let mut running = Running::embedded(model, gpu);
