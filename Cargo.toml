@@ -20,6 +20,7 @@ ocrs = "0.13"
 png = "0.18"
 oxideav-vp8 = { version = "0.2.7", default-features = false }
 oxideav-vp9 = "0.0.13"
+oxideav-mpeg4video = "0.1"
 rten = "0.26"
 rten-simd = "0.26"
 serde_json = "1"
