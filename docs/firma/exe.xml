@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Artifact configuration «exe» del progetto SignPath: cedro.exe (x64 o ARM64), prima dell'installatore. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="cedro.exe" product-name="Cedro">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

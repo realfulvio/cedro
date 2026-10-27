@@ -171,7 +171,7 @@ cedro show --conversione foto.png   # Linux: opens the wheel
 
 ### Security
 
-Open source (MIT), no packer or obfuscation, no network use beyond update checks. The mouse and keyboard hooks stay inside Cedro's own process and don't inject DLLs into other programs. The exe is not Authenticode-signed: SmartScreen warns the first time, but that is not a malware detection.
+Open source (MIT), no packer or obfuscation, no network use beyond update checks. The mouse and keyboard hooks stay inside Cedro's own process and don't inject DLLs into other programs. The exe is not Authenticode-signed yet: SmartScreen warns the first time, but that is not a malware detection. Signing (free for open source projects, by SignPath Foundation) is on its way: rules and privacy are in the [Code signing policy](CODE_SIGNING_POLICY.md).
 
 ### Licences
 

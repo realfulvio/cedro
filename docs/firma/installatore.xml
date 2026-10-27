@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Artifact configuration «installatore»: Cedro-[ARM64-]Setup-<v>.exe e la sua copia Cedro-Bondeno-…, identica. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="Cedro-*Setup-*.exe" product-name="Cedro" max-occurs="2">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>
