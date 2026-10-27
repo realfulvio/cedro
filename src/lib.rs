@@ -40,6 +40,8 @@ mod vaapi;
 #[cfg(target_os = "android")]
 mod mediacodec;
 #[cfg(target_os = "android")]
+mod whisper_android;
+#[cfg(target_os = "android")]
 mod mediadec;
 /// Il codificatore H.264 della scheda video: VA-API su Linux, MediaCodec su Android.
 #[cfg(target_os = "linux")]
