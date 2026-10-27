@@ -1,5 +1,4 @@
 use crate::pdf::pdf_from_jpeg;
-use crate::zipstore::zip_store;
 use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, ExtendedColorType, ImageFormat};
 use std::fs;
@@ -193,7 +192,8 @@ pub fn mode_from_vk(vk: u32) -> Option<Mode> {
 }
 
 fn stem(path: &Path) -> String {
-    path.file_stem().and_then(|s| s.to_str()).unwrap_or("file").to_string()
+    // Un nome non UTF-8 (Linux) resta riconoscibile: con «file» per tutti, le copie si sostituirebbero a vicenda.
+    path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into())
 }
 
 /// Lo stato dei nomi di uscita per la conversione in corso su questo thread.
@@ -207,6 +207,13 @@ struct Naming {
     decided: Option<ExistsChoice>,
     /// Le copie fatte con un nome nuovo ma da buttare, perché l'utente ha scelto di saltare.
     skipped: Vec<PathBuf>,
+    /// Dentro `perform_with`: i nomi nuovi si prenotano creando il file, e con «sostituisci» si scrive
+    /// in un file temporaneo che prende il posto di quello vecchio solo a lavoro riuscito.
+    guarded: bool,
+    /// I nomi prenotati (file vuoti appena creati): se la conversione fallisce e restano vuoti, si tolgono.
+    claimed: Vec<PathBuf>,
+    /// Con «sostituisci»: (file temporaneo, file da sostituire).
+    pending: Vec<(PathBuf, PathBuf)>,
 }
 
 thread_local! {
@@ -222,14 +229,35 @@ fn file_name(file_stem: &str, ext: &str) -> String {
     }
 }
 
+/// Prenota il nome creando il file vuoto: `create_new` è atomico, così due conversioni nella stessa
+/// cartella (la ruota e il pannello, o due Cedro) non scrivono sullo stesso file. Fuori da `perform_with`
+/// si guarda solo se il nome è libero: lì il file lo scrive chi ha chiesto il nome.
+fn claim(p: &Path) -> bool {
+    if !NAMING.with(|n| n.borrow().guarded) {
+        return !p.exists();
+    }
+    match fs::OpenOptions::new().write(true).create_new(true).open(p) {
+        Ok(_) => {
+            NAMING.with(|n| n.borrow_mut().claimed.push(p.to_path_buf()));
+            true
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => false,
+        // Cartella in sola lettura o simili: l'errore vero lo darà chi scrive il file.
+        Err(_) => !p.exists(),
+    }
+}
+
 fn numbered(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
     let mut name = file_name(file_stem, ext);
     let mut i = 2u32;
-    while dir.join(&name).exists() {
+    loop {
+        let path = dir.join(&name);
+        if claim(&path) {
+            return path;
+        }
         name = file_name(&format!("{file_stem}-{i}"), ext);
         i += 1;
     }
-    dir.join(name)
 }
 
 fn same_file(a: &Path, b: &Path) -> bool {
@@ -239,30 +267,63 @@ fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
+/// La scelta per un nome che esiste già: quella delle impostazioni, o la risposta alla domanda
+/// (chiesta una volta sola per file).
+fn choice_for(candidate: &Path) -> ExistsChoice {
+    let (exists, ask, decided) = NAMING.with(|n| {
+        let n = n.borrow();
+        (n.exists, n.ask.clone(), n.decided)
+    });
+    match exists {
+        Exists::Number => ExistsChoice::KeepBoth,
+        Exists::Replace => ExistsChoice::Replace,
+        Exists::Skip => ExistsChoice::Skip,
+        Exists::Ask => decided.unwrap_or_else(|| {
+            let answer = ask.map_or(ExistsChoice::KeepBoth, |a| (a.0)(candidate));
+            NAMING.with(|n| n.borrow_mut().decided = Some(answer));
+            answer
+        }),
+    }
+}
+
+/// Con «sostituisci» dentro `perform_with`: un file temporaneo nella stessa cartella, che a lavoro
+/// riuscito prende il posto di `target`. Se la conversione fallisce, il file vecchio resta com'era.
+fn replacement_for(dir: &Path, file_stem: &str, ext: &str, target: PathBuf) -> PathBuf {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    // L'estensione vera resta in fondo: qualche codificatore la guarda.
+    for _ in 0..100 {
+        let tmp_stem = format!(".{file_stem}.cedro-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));
+        let tmp = dir.join(file_name(&tmp_stem, ext));
+        if fs::OpenOptions::new().write(true).create_new(true).open(&tmp).is_ok() {
+            NAMING.with(|n| n.borrow_mut().pending.push((tmp.clone(), target)));
+            return tmp;
+        }
+    }
+    // Nessun temporaneo creabile: si scrive direttamente sul file, come prima.
+    target
+}
+
 /// Il nome per la copia, secondo la scelta per i nomi che esistono già. Con «sostituisci» riusa il
 /// nome già presente, ma mai quello del file di partenza: una conversione verso lo stesso formato non
 /// deve riscrivere l'originale.
 pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
     let candidate = dir.join(file_name(file_stem, ext));
-    if !candidate.exists() {
+    if claim(&candidate) {
         return candidate;
     }
-    let (exists, ask, source, decided) = NAMING.with(|n| {
+    let (source, guarded) = NAMING.with(|n| {
         let n = n.borrow();
-        (n.exists, n.ask.clone(), n.source.clone(), n.decided)
+        (n.source.clone(), n.guarded)
     });
-    let choice = match exists {
-        Exists::Number => ExistsChoice::KeepBoth,
-        Exists::Replace => ExistsChoice::Replace,
-        Exists::Skip => ExistsChoice::Skip,
-        Exists::Ask => decided.unwrap_or_else(|| {
-            let answer = ask.map_or(ExistsChoice::KeepBoth, |a| (a.0)(&candidate));
-            NAMING.with(|n| n.borrow_mut().decided = Some(answer));
-            answer
-        }),
-    };
-    match choice {
-        ExistsChoice::Replace if !source.as_deref().is_some_and(|s| same_file(&candidate, s)) => candidate,
+    match choice_for(&candidate) {
+        ExistsChoice::Replace if !source.as_deref().is_some_and(|s| same_file(&candidate, s)) => {
+            if guarded {
+                replacement_for(dir, file_stem, ext, candidate)
+            } else {
+                candidate
+            }
+        }
         ExistsChoice::Replace | ExistsChoice::KeepBoth => numbered(dir, file_stem, ext),
         ExistsChoice::Skip => {
             let path = numbered(dir, file_stem, ext);
@@ -270,6 +331,16 @@ pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
             path
         }
     }
+}
+
+/// Il nome di uscita scelto prima del lavoro: se il file c'è già e va saltato, ci si ferma subito,
+/// senza leggere né convertire niente (e con «Chiedi» la domanda arriva prima del lavoro).
+fn reserve(dir: &Path, file_stem: &str, ext: &str) -> CedroResult<PathBuf> {
+    let out = unique_output(dir, file_stem, ext);
+    if skipping(&out) {
+        return Err(err("il file esiste già: saltato"));
+    }
+    Ok(out)
 }
 
 /// Il nome per un file scritto fuori da `perform_with` (per esempio una trascrizione), con la stessa
@@ -289,7 +360,8 @@ fn skipping(out: &Path) -> bool {
 }
 
 /// Scrive il PDF di testo (documenti e testi): font incorporato, segnalibri, PDF/A e password come scelto.
-fn write_text_pdf(path: &Path, dir: &Path, blocks: &[crate::pdfdoc::DocBlock], opts: &Options) -> CedroResult<Output> {
+/// `out` è il nome già scelto con `reserve`, prima di leggere il documento.
+fn write_text_pdf(path: &Path, out: PathBuf, blocks: &[crate::pdfdoc::DocBlock], opts: &Options) -> CedroResult<Output> {
     let password = opts.password.as_deref().filter(|p| !p.is_empty());
     if opts.pdfa && password.is_some() {
         return Err(err("il PDF/A non ammette la password: togline una delle due"));
@@ -316,7 +388,6 @@ fn write_text_pdf(path: &Path, dir: &Path, blocks: &[crate::pdfdoc::DocBlock], o
         bytes = crate::pdf::protect(&bytes, password).map_err(err)?;
         message.push_str(", protetto con password");
     }
-    let out = unique_output(dir, &stem(path), "pdf");
     write_bytes(&out, &bytes)?;
     Ok(Output { path: out, message })
 }
@@ -346,10 +417,11 @@ fn flatten(img: &DynamicImage, white: bool) -> image::RgbImage {
     }
     let rgba = img.to_rgba8();
     let mut out = image::RgbImage::new(rgba.width(), rgba.height());
-    for (x, y, p) in rgba.enumerate_pixels() {
+    // Sui byte grezzi: senza il controllo dei bordi a ogni pixel.
+    for (o, p) in out.chunks_exact_mut(3).zip(rgba.as_raw().chunks_exact(4)) {
         let a = p[3] as u32;
         let mix = |c: u8| ((c as u32 * a + 255 * (255 - a) + 127) / 255) as u8;
-        out.put_pixel(x, y, image::Rgb([mix(p[0]), mix(p[1]), mix(p[2])]));
+        o.copy_from_slice(&[mix(p[0]), mix(p[1]), mix(p[2])]);
     }
     out
 }
@@ -370,8 +442,23 @@ fn load_image(path: &Path, straighten: bool) -> CedroResult<DynamicImage> {
     if straighten {
         crate::ocr::open_upright(path).map_err(err)
     } else {
-        image::open(path).map_err(|e| err(format!("immagine non letta: {e}")))
+        // Il formato dal contenuto, come con «Raddrizza»: un JPEG chiamato .png si apre lo stesso.
+        image::ImageReader::open(path)
+            .and_then(|r| r.with_guessed_format())
+            .map_err(|e| err(format!("immagine non letta: {e}")))?
+            .decode()
+            .map_err(|e| err(format!("immagine non letta: {e}")))
     }
+}
+
+/// Larghezza e altezza di un PNG, dall'intestazione (IHDR).
+fn png_size(png: &[u8]) -> Option<(u32, u32)> {
+    if png.len() < 24 || &png[12..16] != b"IHDR" {
+        return None;
+    }
+    let w = u32::from_be_bytes(png[16..20].try_into().ok()?);
+    let h = u32::from_be_bytes(png[20..24].try_into().ok()?);
+    Some((w, h))
 }
 
 fn jpeg_bytes(img: &DynamicImage, quality: u8, white: bool) -> CedroResult<(Vec<u8>, u32, u32)> {
@@ -381,6 +468,28 @@ fn jpeg_bytes(img: &DynamicImage, quality: u8, white: bool) -> CedroResult<(Vec<
     enc.encode(rgb.as_raw(), rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
         .map_err(|e| err(e.to_string()))?;
     Ok((buf.into_inner(), rgb.width(), rgb.height()))
+}
+
+/// L'archivio ZIP di un file, scritto a pezzi: anche un video di molti GB non passa tutto dalla memoria,
+/// e sopra i 4 GB l'archivio è ZIP64.
+fn zip_file(path: &Path, out: &Path, size: u64) -> CedroResult<()> {
+    let name = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into());
+    let written = (|| -> zip::result::ZipResult<()> {
+        let file = fs::File::create(out)?;
+        let mut zw = zip::ZipWriter::new(std::io::BufWriter::new(file));
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored)
+            .large_file(size >= u32::MAX as u64);
+        zw.start_file(name, options)?;
+        std::io::copy(&mut fs::File::open(path)?, &mut zw)?;
+        let mut inner = zw.finish()?;
+        std::io::Write::flush(&mut inner)?;
+        Ok(())
+    })();
+    written.map_err(|e| {
+        let _ = fs::remove_file(out);
+        err(e.to_string())
+    })
 }
 
 fn write_bytes(path: &Path, bytes: &[u8]) -> CedroResult<()> {
@@ -630,17 +739,60 @@ impl Default for Options {
 /// Come `perform_into`, con le opzioni extra.
 pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
     let before = NAMING.with(|n| {
-        n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(path.to_path_buf()), ..Default::default() })
+        n.replace(Naming {
+            exists: opts.exists,
+            ask: opts.on_exists.clone(),
+            source: Some(path.to_path_buf()),
+            guarded: true,
+            ..Default::default()
+        })
     });
     let result = perform_inner(path, action, quality, out_dir, opts);
     let used = NAMING.with(|n| n.replace(before));
+    finish_outputs(result, used)
+}
+
+/// Dopo la conversione: con «sostituisci» i file temporanei prendono il posto di quelli vecchi (solo
+/// se è andata bene), e i nomi prenotati ma rimasti vuoti per un errore si tolgono.
+fn finish_outputs(result: CedroResult<Output>, used: Naming) -> CedroResult<Output> {
+    let discard = || {
+        for (tmp, _) in &used.pending {
+            let _ = fs::remove_file(tmp);
+        }
+        for file in &used.claimed {
+            if fs::metadata(file).is_ok_and(|m| m.is_file() && m.len() == 0) {
+                let _ = fs::remove_file(file);
+            }
+        }
+    };
     if !used.skipped.is_empty() {
+        discard();
         for file in &used.skipped {
             let _ = fs::remove_file(file);
         }
         return Err(err("il file esiste già: saltato"));
     }
-    result
+    let mut out = match result {
+        Ok(out) => out,
+        Err(e) => {
+            discard();
+            return Err(e);
+        }
+    };
+    for (tmp, target) in &used.pending {
+        if !tmp.exists() {
+            continue;
+        }
+        // Su Windows `rename` sostituisce il file che c'è, se nessuno lo tiene aperto.
+        if let Err(e) = fs::rename(tmp, target) {
+            discard();
+            return Err(err(format!("file non sostituito ({}): {e}", target.display())));
+        }
+    }
+    if let Some((_, target)) = used.pending.iter().find(|(tmp, _)| *tmp == out.path) {
+        out.path = target.clone();
+    }
+    Ok(out)
 }
 
 fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
@@ -648,6 +800,16 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Err(err("file non trovato"));
     }
     let quality = quality.clamp(40, 95);
+    // Le voci che non scrivono niente vengono prima della cartella di destinazione: non la creano.
+    if action == "none" {
+        return Err(err("nessuno strumento per questo file"));
+    }
+    if action == "path" {
+        return Ok(Output {
+            path: path.to_path_buf(),
+            message: path.display().to_string(),
+        });
+    }
     let settings = crate::settings::read_settings();
     let dir = match out_dir {
         Some(d) => {
@@ -660,41 +822,24 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     let before = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let kind = kind_of(path);
 
-    if action == "none" {
-        return Err(err("nessuno strumento per questo file"));
-    }
-    if action == "path" {
-        return Ok(Output {
-            path: path.to_path_buf(),
-            message: path.display().to_string(),
-        });
-    }
     if action == "dup" {
         // Senza estensione la copia non ne prende una (prima diventava «nome-copia.copia»).
-        let out = unique_output(&dir, &format!("{}-copia", stem(path)), &extension(path));
+        let out = reserve(&dir, &format!("{}-copia", stem(path)), &extension(path))?;
         fs::copy(path, &out).map_err(|e| err(e.to_string()))?;
         return Ok(Output { path: out, message: "Copia creata".into() });
     }
     if action == "zip" {
-        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("file");
-        let zipped = zip_store(&[(name, bytes.as_slice())]);
-        let out = unique_output(&dir, &stem(path), "zip");
-        write_bytes(&out, &zipped)?;
-        return Ok(Output {
-            path: out,
-            message: size_message(before, zipped.len() as u64),
-        });
+        let out = reserve(&dir, &stem(path), "zip")?;
+        zip_file(path, &out, before)?;
+        let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
+        return Ok(Output { path: out, message: size_message(before, after) });
     }
 
     if extension(path) == "opus" && matches!(action, "wav" | "mp3") {
         return Err(err("Opus non è ancora letto"));
     }
     if action == "wav" || action == "mp3" {
-        let out = unique_output(&dir, &stem(path), action);
-        if skipping(&out) {
-            return Err(err("il file esiste già: saltato"));
-        }
+        let out = reserve(&dir, &stem(path), action)?;
         let result = if action == "wav" {
             crate::audio::to_wav(path, &out, opts)
         } else {
@@ -708,16 +853,13 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Ok(Output { path: out, message: size_message(before, after) });
     }
     if action == "mp4" {
-        let out = unique_output(&dir, &stem(path), "mp4");
-        if skipping(&out) {
-            return Err(err("il file esiste già: saltato"));
-        }
+        let out = reserve(&dir, &stem(path), "mp4")?;
         let shape = crate::sink::VideoShape {
             height: opts.video_height,
             fps: opts.fps,
             mute: opts.mute,
             quality,
-            gpu: crate::accel::use_gpu(),
+            gpu: crate::accel::use_gpu_with(&settings),
         };
         let result = crate::sink::with_shape(shape, || {
             #[cfg(windows)]
@@ -747,12 +889,14 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
 
     if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "html" | "json" | "pdf" | "upper" | "lower") {
-        let text = read_text(path)?;
         if action == "pdf" {
+            let out = reserve(&dir, &stem(path), "pdf")?;
+            let text = read_text(path)?;
             let blocks: Vec<crate::pdfdoc::DocBlock> =
                 text.split('\n').map(|l| crate::pdfdoc::DocBlock { text: l.trim_end().to_string(), heading: 0, image: None }).collect();
-            return write_text_pdf(path, &dir, &blocks, opts);
+            return write_text_pdf(path, out, &blocks, opts);
         }
+        let text = read_text(path)?;
         let from = extension(path);
         let table = |text: &str| {
             let sep = crate::textconv::detect_separator(text);
@@ -795,8 +939,9 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
 
     if kind == Kind::Doc && action == "pdf" {
+        let out = reserve(&dir, &stem(path), "pdf")?;
         let blocks = crate::doctext::document_blocks(path).map_err(err)?;
-        return write_text_pdf(path, &dir, &blocks, opts);
+        return write_text_pdf(path, out, &blocks, opts);
     }
     if kind == Kind::Pdf && matches!(action, "jpg" | "png") {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
@@ -816,36 +961,57 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             }
             Ok(out)
         };
+        let page_name = |i: usize| if total == 1 { stem(path) } else { format!("{}-{}", stem(path), i + 1) };
+        // Prima di disegnare: se una pagina c'è già e va saltata (o lo si deve chiedere), lo si sa subito,
+        // senza lasciare a metà la serie delle pagine.
+        let long_out = if opts.one_image_per_page {
+            if matches!(opts.exists, Exists::Skip | Exists::Ask) {
+                let existing = selected.iter().map(|i| dir.join(file_name(&page_name(*i), action))).find(|p| p.exists());
+                if existing.is_some_and(|p| choice_for(&p) == ExistsChoice::Skip) {
+                    return Err(err("il file esiste già: saltato"));
+                }
+            }
+            None
+        } else {
+            Some(reserve(&dir, &stem(path), action)?)
+        };
         let mut first = None;
-        let mut strip: Vec<image::RgbImage> = Vec::new();
+        // Per l'immagine lunga restano in memoria i PNG compressi, non le pagine intere.
+        let mut strip: Vec<Vec<u8>> = Vec::new();
         let mut strip_height = 0u32;
+        let mut strip_width = 1u32;
         crate::ocr::pdf_page_pngs_scaled(&bytes, scale, |i| selected.contains(&i), |i, png| {
-            let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
             if !opts.one_image_per_page {
-                strip_height += rgb.height();
+                let (w, h) = png_size(&png).ok_or("pagina non disegnata")?;
+                strip_height = strip_height.saturating_add(h);
                 if strip_height > 60000 {
                     return Err("troppe pagine per un'immagine sola: scegli «Una immagine per pagina» o meno dpi".into());
                 }
-                strip.push(rgb);
+                strip_width = strip_width.max(w);
+                strip.push(png);
                 return Ok(());
             }
-            let name = if total == 1 { stem(path) } else { format!("{}-{}", stem(path), i + 1) };
-            let out = unique_output(&dir, &name, action);
-            write_bytes(&out, &encode(&rgb)?).map_err(|e| e.to_string())?;
+            let out = unique_output(&dir, &page_name(i), action);
+            if action == "png" {
+                // Il PNG della pagina è già pronto: non serve decodificarlo e rifarlo.
+                write_bytes(&out, &png).map_err(|e| e.to_string())?;
+            } else {
+                let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
+                write_bytes(&out, &encode(&rgb)?).map_err(|e| e.to_string())?;
+            }
             first.get_or_insert(out);
             Ok(())
         })
         .map_err(err)?;
         let label = action.to_uppercase();
-        if !opts.one_image_per_page {
-            let width = strip.iter().map(|p| p.width()).max().unwrap_or(1);
-            let mut long = image::RgbImage::from_pixel(width, strip_height.max(1), image::Rgb([255, 255, 255]));
+        if let Some(out) = long_out {
+            let mut long = image::RgbImage::from_pixel(strip_width, strip_height.max(1), image::Rgb([255, 255, 255]));
             let mut y = 0;
-            for page in &strip {
-                image::imageops::replace(&mut long, page, 0, y as i64);
+            for png in strip.drain(..) {
+                let page = image::load_from_memory(&png).map_err(|e| err(e.to_string()))?.to_rgb8();
+                image::imageops::replace(&mut long, &page, 0, y as i64);
                 y += page.height();
             }
-            let out = unique_output(&dir, &stem(path), action);
             write_bytes(&out, &encode(&long).map_err(err)?)?;
             return Ok(Output { path: out, message: format!("{label} unico, {total} pagine una sotto l'altra") });
         }
@@ -854,6 +1020,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Ok(Output { path, message });
     }
     if kind == Kind::Pdf && action == "docx" {
+        let out = reserve(&dir, &stem(path), "docx")?;
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
         let want = |i: usize| opts.pages.as_ref().map_or(true, |s| s.contains(i));
         let read = crate::pdflayout::ReadOptions { tables: opts.tables, columns: opts.columns };
@@ -875,7 +1042,6 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             }
         }
         let docx = crate::pdflayout::docx(&pages, |i| ocr.get(i).cloned().flatten().unwrap_or_default());
-        let out = unique_output(&dir, &stem(path), "docx");
         write_bytes(&out, &docx)?;
         let message = if scanned == 0 {
             "Word modificabile: titoli, paragrafi e tabelle del PDF".to_string()
@@ -889,13 +1055,9 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Ok(Output { path: out, message });
     }
     if kind == Kind::Pdf && action == "txt" {
+        let out = reserve(&dir, &stem(path), if action == "docx" { "docx" } else { "txt" })?;
         let (text, ocr_pages, skipped) = pdf_text_with_ocr(path, opts).map_err(err)?;
-        let (bytes, ext) = if action == "docx" {
-            (crate::doctext::docx_bytes(&text), "docx")
-        } else {
-            (text.into_bytes(), "txt")
-        };
-        let out = unique_output(&dir, &stem(path), ext);
+        let bytes = if action == "docx" { crate::doctext::docx_bytes(&text) } else { text.into_bytes() };
         write_bytes(&out, &bytes)?;
         let mut message = match (action, ocr_pages) {
             ("docx", 0) => "Word di testo. L'impaginazione del PDF non viene ricostruita.".to_string(),
@@ -909,32 +1071,56 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Ok(Output { path: out, message });
     }
     if action == "ocr" && kind == Kind::Image {
+        let out = reserve(&dir, &stem(path), "txt")?;
         let text = crate::ocr::image_text(path).map_err(err)?;
-        let out = unique_output(&dir, &stem(path), "txt");
         write_bytes(&out, text.as_bytes())?;
         return Ok(Output { path: out, message: "Testo letto".into() });
     }
     if action == "ocr" && kind == Kind::Pdf {
-        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-        let (text, read_by_ocr) = match crate::doctext::pdf_text(path) {
-            Ok(text) => (text, false),
-            Err(_) => (crate::ocr::pdf_pages_text(&bytes).map_err(err)?, true),
-        };
-        let out = unique_output(&dir, &stem(path), "txt");
-        write_bytes(&out, text.as_bytes())?;
+        let out = reserve(&dir, &stem(path), "txt")?;
         let mut message = "Testo del PDF.".to_string();
-        if read_by_ocr {
-            let total = crate::ocr::pdf_page_count(&bytes).unwrap_or(0);
-            if total > settings.ocr_pages() {
-                message.push_str(&format!(" L'OCR ha letto {} pagine su {total}: le altre mancano.", settings.ocr_pages()));
+        let text = match crate::doctext::pdf_text(path) {
+            Ok(text) => text,
+            Err(_) => {
+                // Il PDF intero si legge solo quando serve l'OCR.
+                let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+                let text = crate::ocr::pdf_pages_text(&bytes).map_err(err)?;
+                let total = crate::ocr::pdf_page_count(&bytes).unwrap_or(0);
+                if total > settings.ocr_pages() {
+                    message.push_str(&format!(" L'OCR ha letto {} pagine su {total}: le altre mancano.", settings.ocr_pages()));
+                }
+                text
             }
-        }
+        };
+        write_bytes(&out, text.as_bytes())?;
         return Ok(Output { path: out, message });
     }
 
     if kind != Kind::Image {
         return Err(err("questa voce non si applica a questo file"));
     }
+
+    // Il formato e il nome prima di aprire l'immagine: un file da saltare non si legge neppure.
+    let (format, ext, label_stem) = match action {
+        "pdf" => (ImageFormat::Jpeg, "pdf", ""),
+        "png" | "strip" => (ImageFormat::Png, "png", if action == "strip" { "pulito" } else { "" }),
+        "jpeg" => (ImageFormat::Jpeg, "jpg", ""),
+        "compress" => (ImageFormat::Jpeg, "jpg", "compresso"),
+        "webp" => (ImageFormat::WebP, "webp", ""),
+        "bmp" => (ImageFormat::Bmp, "bmp", ""),
+        "gif" => (ImageFormat::Gif, "gif", ""),
+        "tiff" => (ImageFormat::Tiff, "tiff", ""),
+        "half" => (ImageFormat::Png, "png", "meta"),
+        "gray" => (ImageFormat::Png, "png", "bn"),
+        "rot90" => (ImageFormat::Png, "png", "ruotato"),
+        other => return Err(err(format!("azione sconosciuta: {other}"))),
+    };
+    let file_stem = if label_stem.is_empty() {
+        stem(path)
+    } else {
+        format!("{}-{label_stem}", stem(path))
+    };
+    let out = reserve(&dir, &file_stem, ext)?;
 
     let mut img = load_image(path, opts.straighten)?;
     if let Some(side) = opts.max_side.filter(|s| *s > 0 && img.width().max(img.height()) > *s) {
@@ -955,7 +1141,6 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         let (jpeg, w, h) = jpeg_bytes(&img, 90, opts.white_background)?;
         let lines = crate::ocr::image_lines(&img).unwrap_or_default();
         let bytes = pdf_from_jpeg(&jpeg, w, h, &lines);
-        let out = unique_output(&dir, &stem(path), "pdf");
         write_bytes(&out, &bytes)?;
         let message = if lines.is_empty() {
             format!("PDF {w}×{h}")
@@ -965,26 +1150,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Ok(Output { path: out, message });
     }
 
-    let (format, ext, label_stem) = match action {
-        "png" | "strip" => (ImageFormat::Png, "png", if action == "strip" { "pulito" } else { "" }),
-        "jpeg" => (ImageFormat::Jpeg, "jpg", ""),
-        "compress" => (ImageFormat::Jpeg, "jpg", "compresso"),
-        "webp" => (ImageFormat::WebP, "webp", ""),
-        "bmp" => (ImageFormat::Bmp, "bmp", ""),
-        "gif" => (ImageFormat::Gif, "gif", ""),
-        "tiff" => (ImageFormat::Tiff, "tiff", ""),
-        "half" => (ImageFormat::Png, "png", "meta"),
-        "gray" => (ImageFormat::Png, "png", "bn"),
-        "rot90" => (ImageFormat::Png, "png", "ruotato"),
-        other => return Err(err(format!("azione sconosciuta: {other}"))),
-    };
-    let file_stem = if label_stem.is_empty() {
-        stem(path)
-    } else {
-        format!("{}-{label_stem}", stem(path))
-    };
-    let out = unique_output(&dir, &file_stem, ext);
-    let q = if action == "compress" { quality.min(settings.compress_quality()) } else { quality };
+    let q =if action == "compress" { quality.min(settings.compress_quality()) } else { quality };
     save_image(&img, &out, format, q, opts.white_background)?;
     let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
     let message = match action {
@@ -1018,6 +1184,13 @@ pub fn same_kind_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
 
 fn read_text(path: &Path) -> CedroResult<String> {
     let bytes = fs::read(path).map_err(|e| err(format!("testo non letto: {e}")))?;
+    // Un UTF-8 senza BOM diventa testo senza copiarlo (un .log di centinaia di MB).
+    if !bytes.starts_with(&[0xEF, 0xBB, 0xBF]) && !bytes.starts_with(&[0xFF, 0xFE]) && !bytes.starts_with(&[0xFE, 0xFF]) {
+        return Ok(match String::from_utf8(bytes) {
+            Ok(text) => text,
+            Err(e) => decode_text(e.as_bytes()),
+        });
+    }
     Ok(decode_text(&bytes))
 }
 
@@ -1426,6 +1599,88 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
         assert!(replaced.path.ends_with("foto.jpg"));
         assert!(!dir.join("foto-3.jpg").exists());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_failed_replace_keeps_the_old_file_and_leaves_nothing() {
+        let dir = scratch();
+        let src = dir.join("clip.png");
+        fs::write(&src, b"non sono un'immagine").unwrap();
+        let old = dir.join("clip.jpg");
+        fs::write(&old, b"la foto buona").unwrap();
+        let names = || {
+            let mut v: Vec<String> = fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+            v.sort();
+            v
+        };
+        let replace = Options { exists: Exists::Replace, ..Default::default() };
+        assert!(perform_with(&src, "jpeg", 80, None, &replace).is_err());
+        assert_eq!(fs::read(&old).unwrap(), b"la foto buona", "con un errore il file vecchio resta com'era");
+        assert_eq!(names(), vec!["clip.jpg", "clip.png"], "nessun file temporaneo rimasto");
+        // Con un nome nuovo, il file prenotato e rimasto vuoto si toglie.
+        assert!(perform_with(&src, "webp", 80, None, &Options::default()).is_err());
+        assert_eq!(names(), vec!["clip.jpg", "clip.png"]);
+        // Un file da saltare non si legge neppure: l'errore è «saltato», non «immagine non letta».
+        let e = perform_with(&src, "jpeg", 80, None, &Options { exists: Exists::Skip, ..Default::default() }).err().unwrap();
+        assert!(e.0.contains("saltato"), "{}", e.0);
+        // E a lavoro riuscito il file viene davvero sostituito, con il suo nome.
+        DynamicImage::ImageRgb8(RgbImage::from_pixel(8, 8, Rgb([1, 2, 3]))).save_with_format(&src, ImageFormat::Png).unwrap();
+        let out = perform_with(&src, "jpeg", 80, None, &replace).unwrap();
+        assert_eq!(out.path, old);
+        assert!(fs::read(&old).unwrap().starts_with(&[0xFF, 0xD8]));
+        assert_eq!(names(), vec!["clip.jpg", "clip.png"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zip_streams_the_file_and_path_creates_no_folder() {
+        let dir = scratch();
+        let src = dir.join("dati.bin");
+        let data: Vec<u8> = (0..300_000u32).map(|i| (i * 7 % 251) as u8).collect();
+        fs::write(&src, &data).unwrap();
+        let out = perform_with(&src, "zip", 80, None, &Options::default()).unwrap();
+        let mut archive = zip::ZipArchive::new(fs::File::open(&out.path).unwrap()).unwrap();
+        let mut inside = Vec::new();
+        std::io::Read::read_to_end(&mut archive.by_name("dati.bin").unwrap(), &mut inside).unwrap();
+        assert_eq!(inside, data);
+        // «Percorso» non scrive niente: la cartella di destinazione non si crea.
+        let target = dir.join("non-creata");
+        perform_with(&src, "path", 80, Some(&target), &Options::default()).unwrap();
+        assert!(!target.exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_image_with_the_wrong_extension_opens_without_straighten() {
+        let dir = scratch();
+        let src = dir.join("scaricata.png");
+        DynamicImage::ImageRgb8(RgbImage::from_pixel(8, 8, Rgb([200, 10, 10]))).save_with_format(&src, ImageFormat::Jpeg).unwrap();
+        let opts = Options { straighten: false, ..Default::default() };
+        let out = perform_with(&src, "bmp", 80, None, &opts).unwrap();
+        assert!(out.path.ends_with("scaricata.bmp"));
+        // Anche un'icona .ico si apre.
+        let ico = dir.join("icona.ico");
+        DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(16, 16, image::Rgba([0, 0, 255, 255]))).save_with_format(&ico, ImageFormat::Ico).unwrap();
+        assert!(perform_with(&ico, "png", 80, None, &Options::default()).is_ok());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn png_size_reads_the_header() {
+        let mut png = Vec::new();
+        RgbImage::from_pixel(7, 3, Rgb([0, 0, 0])).write_to(&mut Cursor::new(&mut png), ImageFormat::Png).unwrap();
+        assert_eq!(png_size(&png), Some((7, 3)));
+        assert_eq!(png_size(b"corto"), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn names_that_are_not_utf8_stay_distinct() {
+        use std::os::unix::ffi::OsStrExt;
+        let a = Path::new(std::ffi::OsStr::from_bytes(b"/tmp/Citt\xe0.png"));
+        let b = Path::new(std::ffi::OsStr::from_bytes(b"/tmp/Per\xf9.png"));
+        assert_ne!(stem(a), stem(b));
+        assert!(stem(a).starts_with("Citt"));
     }
 
     #[test]
