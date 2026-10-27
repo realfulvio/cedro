@@ -60,6 +60,10 @@ fn estensione_da_mime(mime: &str) -> &'static str {
         "text/html" => "html",
         "text/csv" => "csv",
         "application/json" => "json",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => "docx",
+        "application/msword" => "doc",
+        "application/vnd.oasis.opendocument.text" => "odt",
+        "application/rtf" | "text/rtf" => "rtf",
         "video/mp4" => "mp4",
         "video/webm" => "webm",
         "video/quicktime" => "mov",
@@ -100,6 +104,8 @@ fn mime_da_percorso(path: &Path) -> &'static str {
         "aac" => "audio/aac",
         "mp4" => "video/mp4",
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "odt" => "application/vnd.oasis.opendocument.text",
+        "rtf" => "application/rtf",
         _ => "application/octet-stream",
     }
 }
@@ -134,7 +140,12 @@ fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) 
         return Ok(None);
     }
     let mime = j!(env.call_method(&intento, "getType", "()Ljava/lang/String;", &[])).l().ok().and_then(|o| stringa(env, o)).unwrap_or_default();
-    if mime.starts_with("text/") {
+    let chiave = j!(env.new_string("android.intent.extra.STREAM"));
+    let uri = j!(j!(env.call_method(&intento, "getParcelableExtra", "(Ljava/lang/String;)Landroid/os/Parcelable;", &[JValue::Object(&chiave)])).l());
+    if uri.is_null() {
+        if !mime.starts_with("text/") {
+            return Err("la condivisione non contiene un file".into());
+        }
         // Un link condiviso da un browser o da un'altra app: «Video dal web».
         let k = j!(env.new_string("android.intent.extra.TEXT"));
         let testo = j!(env.call_method(&intento, "getStringExtra", "(Ljava/lang/String;)Ljava/lang/String;", &[JValue::Object(&k)])).l().ok().and_then(|o| stringa(env, o)).unwrap_or_default();
@@ -142,11 +153,6 @@ fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) 
             Some(url) => Ok(Some(Condiviso { nome: url.clone(), path: PathBuf::from(url) })),
             None => Err("il testo condiviso non contiene un link".into()),
         };
-    }
-    let chiave = j!(env.new_string("android.intent.extra.STREAM"));
-    let uri = j!(j!(env.call_method(&intento, "getParcelableExtra", "(Ljava/lang/String;)Landroid/os/Parcelable;", &[JValue::Object(&chiave)])).l());
-    if uri.is_null() {
-        return Err("la condivisione non contiene un file".into());
     }
     copia_uri(env, attivita, &uri, &mime, cartella).map(Some)
 }
