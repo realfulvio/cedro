@@ -700,16 +700,40 @@ impl Screen {
 
     /// Un tasto. Vero se è stato usato.
     pub fn key(&mut self, key: Key, plat: &mut dyn Platform) -> bool {
+        // Con un menu aperto (anche quello di un campo) le frecce e Esc vanno al menu.
+        if let Some(m) = self.ui.menu.as_mut() {
+            match key {
+                Key::Up | Key::Down => {
+                    let n = m.items.len();
+                    let cur = m.selected.unwrap_or(0);
+                    m.selected = Some(if key == Key::Down { (cur + 1).min(n.saturating_sub(1)) } else { cur.saturating_sub(1) });
+                    return true;
+                }
+                Key::Escape => {
+                    self.ui.menu = None;
+                    return true;
+                }
+                _ => {}
+            }
+        }
         if let Some(field) = self.ui.edit {
             if self.ui.sel_all {
                 match key {
+                    Key::Left | Key::Home => {
+                        self.ui.sel_all = false;
+                        self.ui.caret = 0;
+                        return true;
+                    }
+                    Key::Right | Key::End => {
+                        self.ui.sel_all = false;
+                        return true;
+                    }
                     Key::Backspace | Key::Delete => {
                         self.ui.sel_all = false;
                         self.set_field_text(field, String::new());
                         self.ui.caret = 0;
                         return true;
                     }
-                    Key::Left | Key::Right | Key::Home | Key::End => self.ui.sel_all = false,
                     _ => {}
                 }
             }
