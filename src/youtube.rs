@@ -68,6 +68,8 @@ pub struct Info {
     pub seconds: u64,
     /// Quanti video ha, se è una playlist.
     pub entries: Option<usize>,
+    /// Pagina letta dall'estrattore generico (nessun estrattore dedicato al sito).
+    pub generic: bool,
 }
 
 /// Cosa succede durante il lavoro.
@@ -636,7 +638,8 @@ pub fn parse_info(json: &str) -> Result<Info, String> {
     } else {
         v["duration"].as_f64().unwrap_or(0.0) as u64
     };
-    Ok(Info { title, author, seconds, entries })
+    let generic = v["extractor_key"].as_str() == Some("Generic");
+    Ok(Info { title, author, seconds, entries, generic })
 }
 
 /// Ferma un processo e i suoi figli (yt-dlp lancia ffmpeg), poi lo aspetta.
@@ -718,7 +721,13 @@ pub fn first_error(stderr: &str) -> String {
         "Il video è solo per gli iscritti al canale".into()
     } else if low.contains("not a bot") || low.contains("sign in to confirm") {
         "YouTube chiede di confermare che non sei un robot: riprova più tardi".into()
-    } else if low.contains("unable to download") || low.contains("getaddrinfo") || low.contains("timed out") {
+    } else if low.contains("http error 429") || low.contains("too many requests") {
+        "Il sito ha limitato le richieste: riprova fra qualche minuto".into()
+    } else if low.contains("http error 403") || low.contains("http error 401") {
+        "Il sito ha rifiutato la richiesta: riprova più tardi".into()
+    } else if low.contains("http error") || low.contains("unable to download") && !low.contains("getaddrinfo") && !low.contains("timed out") && !low.contains("connection") && !low.contains("unreachable") {
+        format!("Il sito ha risposto con un errore: {line}")
+    } else if low.contains("getaddrinfo") || low.contains("timed out") || low.contains("connection") || low.contains("unreachable") || low.contains("name resolution") {
         "Non riesco a raggiungere il sito: controlla la connessione".into()
     } else if line.is_empty() {
         "yt-dlp non ha dato risposta".into()
@@ -781,7 +790,8 @@ pub fn build_args(r: &Request, ffmpeg: Option<&Path>, deno: Option<&Path>, in_pl
         }
     } else {
         let h = if r.quality > 0 { format!("[height<={}]", r.quality) } else { String::new() };
-        let sel = format!("bv*{h}+ba/b{h}");
+        // In fondo `b*`: qualunque formato, per i siti letti dall'estrattore generico (html5).
+        let sel = format!("bv*{h}+ba/b{h}/bv*+ba/b*");
         push(&["-f", &sel]);
         if r.format == "mp4" {
             push(&["-S", "ext:mp4:m4a,vcodec:h264"]);
@@ -910,7 +920,16 @@ pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Res
         emit(Event::Progress { index, total: r.urls.len(), percent: 0.0, label: "Preparo il download".into() });
         let outcome = match probe(&ytdlp, url, r.playlist, cancel) {
             Ok(info) => {
-                let args = build_args(r, Some(&ffmpeg), Some(&deno), info.entries.is_some());
+                // Una pagina qualunque con più video incorporati (anteprime, correlati): solo il primo.
+                let mut info = info;
+                let single = info.generic && info.entries.is_some();
+                if single {
+                    info.entries = None;
+                }
+                let mut args = build_args(r, Some(&ffmpeg), Some(&deno), info.entries.is_some());
+                if single {
+                    args.extend(["--playlist-items".to_string(), "1".to_string()]);
+                }
                 emit(Event::Log(match info.entries {
                     Some(n) => format!("Playlist «{}»: {n} video", info.title),
                     None => format!("«{}» · {}", info.title, clock(info.seconds)),
@@ -1046,7 +1065,7 @@ mod tests {
     fn video_arguments() {
         let a = build_args(&req(false), Some(Path::new("/x/ffmpeg")), Some(Path::new("/x/deno")), false);
         let j = a.join(" ");
-        assert!(j.contains("-f bv*[height<=1080]+ba/b[height<=1080]"), "{j}");
+        assert!(j.contains("-f bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b*"), "{j}");
         assert!(j.contains("--merge-output-format mp4"));
         assert!(j.contains("-S ext:mp4:m4a,vcodec:h264"));
         assert!(j.contains("--ffmpeg-location /x/ffmpeg") && j.contains("--js-runtimes deno:/x/deno") && j.contains(&format!("-P temp:{}", Path::new("/tmp/d").join(".cedro-temp").display())), "{j}");
@@ -1060,7 +1079,7 @@ mod tests {
         r.quality = 0;
         r.format = "mkv".into();
         let j = build_args(&r, None, None, false).join(" ");
-        assert!(j.contains("-f bv*+ba/b") && !j.contains("height"));
+        assert!(j.contains("-f bv*+ba/b/bv*+ba/b*") && !j.contains("height"));
         assert!(!j.contains("-S ") && j.contains("--merge-output-format mkv"));
     }
 
