@@ -768,13 +768,14 @@ fn today_text() -> String {
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = yoe + era * 400 + i64::from(month <= 2);
     const MONTHS: [&str; 12] = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
-    format!("{day} {} {year}", MONTHS[(month - 1) as usize])
+    format!("{day} {} {year}", crate::i18n::tr(MONTHS[(month - 1) as usize]))
 }
 
 /// Intestazione comune: nome del file, data, durata e lingua.
 fn heading(source: &Path, secs: f64, lang: &str) -> (String, String) {
-    let title = source.file_stem().and_then(|s| s.to_str()).unwrap_or("Trascrizione").to_string();
-    let meta = format!("Trascrizione del {} · {} di audio · lingua: {}", today_text(), minutes_text(secs), language_name(lang));
+    let title = source.file_stem().and_then(|s| s.to_str()).map(str::to_string).unwrap_or_else(|| crate::i18n::tr_string("Trascrizione"));
+    // Il documento è nella lingua dell'interfaccia: la data e il nome della lingua sono già tradotti.
+    let meta = crate::i18n::tr_string(&format!("Trascrizione del {} · {} di audio · lingua: {}", today_text(), minutes_text(secs), crate::i18n::tr(&language_name(lang))));
     (title, meta)
 }
 
