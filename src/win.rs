@@ -1063,6 +1063,7 @@ fn on_drop() {
     let mut last_out = None;
     let mut failed = None;
     let name = |p: &std::path::Path| p.file_name().and_then(|s| s.to_str()).unwrap_or("file").to_string();
+    let name = move |p: &std::path::Path| cedro::i18n::lit(&name(p));
     let progress_label = |i: usize, p: &std::path::Path| {
         if paths.len() == 1 {
             format!("{} → {}", name(p), slice.label)

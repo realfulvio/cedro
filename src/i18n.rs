@@ -310,8 +310,43 @@ pub fn misses() -> Vec<String> {
     MISSES.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect()
 }
 
+const LIT_OPEN: char = '\u{E000}';
+const LIT_CLOSE: char = '\u{E001}';
+const LIT_HOLD: char = '\u{E002}';
+
+/// Un testo dell'utente (un nome di file, per esempio) da lasciare com'è: `tr` non lo traduce e toglie i segni.
+pub fn lit(s: &str) -> String {
+    format!("{LIT_OPEN}{s}{LIT_CLOSE}")
+}
+
 /// Il testo nella lingua scelta. In italiano è il testo stesso, senza costo.
 pub fn tr(s: &str) -> Cow<'_, str> {
+    if !s.contains(LIT_OPEN) {
+        return tr_plain(s);
+    }
+    // Le parti dell'utente si mettono da parte, si traduce il resto, poi tornano al loro posto.
+    let mut kept: Vec<&str> = Vec::new();
+    let mut shell = String::new();
+    let mut rest = s;
+    while let Some(i) = rest.find(LIT_OPEN) {
+        shell.push_str(&rest[..i]);
+        let after = &rest[i + LIT_OPEN.len_utf8()..];
+        let end = after.find(LIT_CLOSE).unwrap_or(after.len());
+        shell.push(LIT_HOLD);
+        shell.push_str(&kept.len().to_string());
+        shell.push(LIT_HOLD);
+        kept.push(&after[..end]);
+        rest = after.get(end + LIT_CLOSE.len_utf8()..).unwrap_or("");
+    }
+    shell.push_str(rest);
+    let mut out = tr_plain(&shell).into_owned();
+    for (i, k) in kept.iter().enumerate() {
+        out = out.replace(&format!("{LIT_HOLD}{i}{LIT_HOLD}"), k);
+    }
+    Cow::Owned(out)
+}
+
+fn tr_plain(s: &str) -> Cow<'_, str> {
     if lang() == Lang::It || s.is_empty() {
         return Cow::Borrowed(s);
     }
@@ -348,6 +383,12 @@ pub fn choice_names() -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn user_text_stays_as_it_is() {
+        let t = lit("Foto e altri ricordi.jpg");
+        assert_eq!(tr(&t), "Foto e altri ricordi.jpg");
+    }
 
     #[test]
     fn locale_tags() {

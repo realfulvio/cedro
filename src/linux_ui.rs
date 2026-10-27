@@ -618,6 +618,7 @@ fn run_slices(all: &[PathBuf], id: &str, label: &str, quality: u8, beside: bool)
     let mut failed = None;
     let mut last_out = None;
     let name = |p: &std::path::Path| p.file_name().and_then(|s| s.to_str()).unwrap_or("file").to_string();
+    let name = move |p: &std::path::Path| cedro::i18n::lit(&name(p));
     let step_label = |i: usize, p: &std::path::Path| {
         if paths.len() == 1 { format!("{} → {label}", name(p)) } else { format!("{} di {} · {}", i + 1, paths.len(), name(p)) }
     };

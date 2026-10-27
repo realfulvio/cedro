@@ -434,7 +434,7 @@ impl WheelUi {
             pts.push((cx + r * a.cos(), cy + r * a.sin()));
         }
         p.poly(&pts, (255, 255, 255), 0.96);
-        let name = if self.has_file { clip(p, &self.name, 18.0, Weight::Bold, 168.0) } else { "In attesa…".to_string() };
+        let name = if self.has_file { clip(p, &crate::i18n::lit(&self.name), 18.0, Weight::Bold, 168.0) } else { "In attesa…".to_string() };
         p.text(&name, cx - 90.0, cy + 40.0, 180.0, 26.0, 18.0, Weight::Bold, INK, Align::Center);
         let sub = match (active, self.simple, self.mode) {
             (Some(i), true, _) => self.list[i].label.to_string(),
