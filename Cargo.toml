@@ -29,6 +29,10 @@ ureq = "2"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
 
+# Il tasto Play dell'anteprima: l'uscita audio del sistema (ALSA su Linux, WASAPI su Windows).
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
+cpal = "0.15"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 fdk-aac = "0.8"
 libc = "0.2"

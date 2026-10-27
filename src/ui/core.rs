@@ -117,6 +117,10 @@ pub enum Act {
     TrModel(usize),
     PagePrev,
     PageNext,
+    /// Play o pausa dell'audio o del video in anteprima.
+    MediaPlay,
+    /// La barra della posizione dell'audio o del video (si trascina).
+    MediaSeek,
     CompactTab(u8),
     OpenFull,
     Theme(ThemeId),

@@ -694,6 +694,7 @@ Modelli OCR di ocrs	ocrs OCR models
 I modelli che leggono il testo nelle immagini.	The models that read text in images.
 Audio MP3.	MP3 audio.
 Legge MP3, FLAC, OGG, AAC, WAV.	Reads MP3, FLAC, OGG, AAC, WAV.
+Fa suonare audio e video col tasto Play dell'anteprima.	Plays audio and video with the preview's Play button.
 oxideav VP8 e VP9	oxideav VP8 and VP9
 Legge i video WebM.	Reads WebM videos.
 Scrive i file WAV.	Writes WAV files.
