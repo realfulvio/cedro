@@ -29,10 +29,12 @@ pub fn preferred_size(theme: ThemeId, simple: bool, surface: Surface) -> (f32, f
     }
 }
 
+/// Sotto questa misura le disposizioni si accavallano: la finestra più piccola si disegna rimpicciolita
+/// (vedi `Screen::fit_scale`) invece di stringere i pezzi.
 pub fn min_size(theme: ThemeId, surface: Surface) -> (f32, f32) {
     match (theme, surface) {
         (_, Surface::Compact) | (ThemeId::CedroCompatto, Surface::Main) => (480.0, 560.0),
-        _ => (1000.0, 700.0),
+        _ => (1400.0, 920.0),
     }
 }
 

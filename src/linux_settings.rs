@@ -647,7 +647,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
         }
     }
     let current = read_settings();
-    let window = titled(app, "Impostazioni di Cedro", 780, 600);
+    let window = titled(app, "Impostazioni di Cedro", 780, 720);
     window.set_resizable(true);
 
     // Generale
@@ -865,7 +865,14 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     } else {
         middle.append(&nav);
     }
-    middle.append(&stack);
+    // Le pagine si accorciano a piacere: se la finestra è bassa, scorrono.
+    let scrolled = gtk4::ScrolledWindow::new();
+    scrolled.set_hexpand(true);
+    scrolled.set_vexpand(true);
+    scrolled.set_min_content_height(280);
+    scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+    scrolled.set_child(Some(&stack));
+    middle.append(&scrolled);
 
     let credit = crate::linux_firma::firma(false, "", true);
     credit.set_halign(gtk4::Align::Start);

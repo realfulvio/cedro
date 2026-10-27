@@ -119,6 +119,14 @@ impl Screen {
         views::min_size(self.theme, self.surface)
     }
 
+    /// Pixel per unità in una finestra di `w`×`h` pixel: quello voluto, ma abbastanza piccolo perché
+    /// ci stia almeno la misura minima della disposizione (su schermi piccoli tutto si rimpicciolisce
+    /// invece di sovrapporsi).
+    pub fn fit_scale(&self, base: f32, w: f32, h: f32) -> f32 {
+        let (mw, mh) = self.min_size();
+        base.min(w / mw).min(h / mh).max(0.25)
+    }
+
     /// Disegna il fotogramma in un'immagine di `w`×`h` pixel con `scale` pixel per unità.
     pub fn render(&mut self, w: u32, h: u32, scale: f32) -> Painter<'_> {
         self.want_preview();

@@ -156,8 +156,13 @@ struct Host {
     pointer: Cell<(f32, f32)>,
 }
 
-fn scale_of(area: &DrawingArea) -> f32 {
-    area.scale_factor().max(1) as f32 * cedro::ui::ZOOM
+fn scale_of(host: &Host, area: &DrawingArea) -> f32 {
+    let sf = area.scale_factor().max(1) as f32;
+    let base = sf * cedro::ui::ZOOM;
+    match host.screen.try_borrow() {
+        Ok(s) => s.fit_scale(base, area.width() as f32 * sf, area.height() as f32 * sf),
+        Err(_) => base,
+    }
 }
 
 fn open_surface(app: &Application, surface: Surface) {
@@ -182,8 +187,9 @@ fn open_surface(app: &Application, surface: Surface) {
     area.set_focusable(true);
     area.set_hexpand(true);
     area.set_vexpand(true);
-    area.set_content_width((mw * z) as i32);
-    area.set_content_height((mh * z) as i32);
+    // Si può stringere molto: sotto la misura minima il disegno si rimpicciolisce.
+    area.set_content_width((mw * z * 0.5) as i32);
+    area.set_content_height((mh * z * 0.5) as i32);
     window.set_child(Some(&area));
     {
         // Non si chiude mentre lavora: il file in scrittura resterebbe a metà.
@@ -211,8 +217,9 @@ fn open_surface(app: &Application, surface: Surface) {
             if pw <= 0 || ph <= 0 {
                 return;
             }
+            let fit = scale_of(&host, a);
             if let Ok(mut screen) = host.screen.try_borrow_mut() {
-                let painter = screen.render(pw as u32, ph as u32, scale_of(a));
+                let painter = screen.render(pw as u32, ph as u32, fit);
                 let data = painter.bgra();
                 if let Ok(img) = gtk4::cairo::ImageSurface::create_for_data(data, gtk4::cairo::Format::ARgb32, pw, ph, pw * 4) {
                     *host.frame.borrow_mut() = Some((img, pw, ph));
@@ -233,7 +240,7 @@ fn open_surface(app: &Application, surface: Surface) {
     {
         let (host, area2) = (h0.clone(), a0.clone());
         motion.connect_motion(move |_, x, y| {
-            let s = scale_of(&area2) / area2.scale_factor().max(1) as f32;
+            let s = scale_of(&host, &area2) / area2.scale_factor().max(1) as f32;
             let (lx, ly) = (x as f32 / s, y as f32 / s);
             host.pointer.set((lx, ly));
             if let Ok(mut sc) = host.screen.try_borrow_mut() {
@@ -265,7 +272,7 @@ fn open_surface(app: &Application, surface: Surface) {
         let (host, area2, win, p) = (h0.clone(), a0.clone(), window.clone(), plat.clone());
         click.connect_pressed(move |g, n, x, y| {
             area2.grab_focus();
-            let s = scale_of(&area2) / area2.scale_factor().max(1) as f32;
+            let s = scale_of(&host, &area2) / area2.scale_factor().max(1) as f32;
             let (lx, ly) = (x as f32 / s, y as f32 / s);
             // Bordi per ridimensionare, barra del titolo per spostare: le fa il sistema.
             if !win.is_maximized() {
@@ -299,7 +306,7 @@ fn open_surface(app: &Application, surface: Surface) {
         });
         let (host, area2, p) = (h0.clone(), a0.clone(), plat.clone());
         click.connect_released(move |_, _, x, y| {
-            let s = scale_of(&area2) / area2.scale_factor().max(1) as f32;
+            let s = scale_of(&host, &area2) / area2.scale_factor().max(1) as f32;
             let (lx, ly) = (x as f32 / s, y as f32 / s);
             // Il dialogo dei file gira dentro `pointer_up`: la finestra non deve essere già presa in prestito.
             let mut pl = p.borrow_mut();
