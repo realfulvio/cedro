@@ -1124,10 +1124,7 @@ fn install_integrations() {
         return;
     };
     let _ = write_text(&root.join("applications/dev.cedro.Cedro.desktop"), &desktop_file(exe, ""), false);
-    let _ = write_bytes(
-        &root.join("icons/hicolor/256x256/apps/dev.cedro.Cedro.png"),
-        MARK,
-    );
+    refresh_icon(&root, MARK);
     // Chi ha l'avvio automatico dalla 0.11 lo riceve senza finestra all'accesso.
     if autostart_enabled() {
         let _ = set_autostart(true);
@@ -1140,6 +1137,32 @@ fn install_integrations() {
     );
     for (name, flag) in [("Conversione", "conversione"), ("Strumenti", "strumenti"), ("Azioni", "azioni")] {
         let _ = write_text(&root.join("nautilus/scripts/Cedro").join(name), &nautilus_script(exe, flag), true);
+    }
+}
+
+/// Scrive l'icona nel tema dell'utente; se è cambiata (aggiornamento) avvisa KDE, che altrimenti tiene
+/// nella barra delle applicazioni quella vecchia finché non si rilegge la cache delle icone.
+fn refresh_icon(root: &std::path::Path, bytes: &[u8]) {
+    let path = root.join("icons/hicolor/256x256/apps/dev.cedro.Cedro.png");
+    if std::fs::read(&path).is_ok_and(|old| old == bytes) {
+        return;
+    }
+    if write_bytes(&path, bytes).is_err() {
+        return;
+    }
+    if let Ok(dir) = std::fs::File::open(root.join("icons/hicolor")) {
+        let _ = dir.set_modified(std::time::SystemTime::now());
+    }
+    for tool in ["kbuildsycoca6", "kbuildsycoca5"] {
+        if std::process::Command::new(tool)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .is_ok()
+        {
+            break;
+        }
     }
 }
 
