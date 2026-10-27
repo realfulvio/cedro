@@ -255,6 +255,7 @@ fn icona_di(id: &str) -> &'static str {
         "compress" | "half" | "strip" => ic::DOWNLOAD,
         "rot90" => ic::CONVERT,
         "ocr" | "txt" => ic::SEARCH,
+        "trascrivi" => ic::TRANSCRIBE,
         _ => ic::FILE,
     }
 }
@@ -526,12 +527,15 @@ impl App {
     }
 
     fn fette(&self) -> Vec<cedro::Slice> {
-        let l = list(self.kind, if self.modo == 1 { Mode::Tools } else { Mode::Convert });
+        let mut l = list(self.kind, if self.modo == 1 { Mode::Tools } else { Mode::Convert });
         if l.first().is_some_and(|s| s.id == "none") {
-            Vec::new()
-        } else {
-            l
+            return Vec::new();
         }
+        // La trascrizione (whisper.cpp nell'APK) non è nel catalogo del motore: sulla ruota è lo spicchio «Testo».
+        if self.modo == 0 && matches!(self.kind, Kind::Audio | Kind::Video) && !self.file.as_ref().is_some_and(|f| e_link(&f.path)) {
+            l.push(cedro::Slice { id: "trascrivi", label: "Testo" });
+        }
+        l
     }
 
     /// Le tessere del foglio per il file (o il link) di adesso.
@@ -545,7 +549,12 @@ impl App {
 
     /// L'azione scelta ora è la trascrizione (si sceglie il modello al posto della qualità)?
     fn modello_serve(&self) -> bool {
-        self.file.is_some() && self.foglio && self.righe_ora().get(self.tessera).is_some_and(|r| r.id == "trascrivi")
+        self.file.is_some()
+            && if self.foglio {
+                self.righe_ora().get(self.tessera).is_some_and(|r| r.id == "trascrivi")
+            } else {
+                self.scelta.and_then(|i| self.fette().get(i).copied()).is_some_and(|f| f.id == "trascrivi")
+            }
     }
 
     /// Il cursore Qualità (o la scelta del modello) serve per l'azione scelta ora?
@@ -656,6 +665,18 @@ impl App {
     fn attiva(&mut self, a: Azione) -> Effetto {
         match a {
             Azione::Scheda(s) => {
+                // «Ruota» riporta sempre alla ruota vuota, pronta per un nuovo file.
+                if s == Scheda::Ruota {
+                    self.file = None;
+                    self.scelta = None;
+                    self.miniatura = None;
+                    self.onda = None;
+                    self.modo = 0;
+                    self.tessera = 0;
+                    self.foglio = false;
+                    self.dal_foglio = false;
+                    self.scelta_file = false;
+                }
                 self.scheda = s;
                 self.scorri = 0.0;
                 Effetto::Ridisegna

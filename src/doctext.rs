@@ -838,6 +838,34 @@ mod block_tests {
         let _ = fs::remove_dir_all(d);
     }
 
+    /// Un DOCX fatto solo di immagini (la carta d'identità fotografata) diventa comunque un PDF con le immagini.
+    #[test]
+    fn a_docx_of_only_images_becomes_a_pdf_with_images() {
+        let d = dir();
+        let path = d.join("carta.docx");
+        let img = image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(40, 30, image::Rgb([200, 30, 30])));
+        let mut jpeg = Vec::new();
+        img.write_to(&mut std::io::Cursor::new(&mut jpeg), image::ImageFormat::Jpeg).unwrap();
+        let mut png = Vec::new();
+        img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let document = "<w:document><w:body>\
+<w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr><w:r><w:drawing><wp:inline><wp:extent cx=\"2540000\" cy=\"1905000\"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed=\"rId1\"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>\
+<w:p><w:r><w:drawing><wp:inline><wp:extent cx=\"2540000\" cy=\"1905000\"/><a:graphic><a:graphicData><pic:pic><pic:blipFill><a:blip r:embed=\"rId2\"/></pic:blipFill></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>\
+</w:body></w:document>";
+        let rels = "<Relationships><Relationship Id=\"rId1\" Type=\"image\" Target=\"media/fronte.jpeg\"/><Relationship Id=\"rId2\" Type=\"image\" Target=\"media/retro.png\"/></Relationships>";
+        fs::write(&path, crate::zipstore::zip_archive(&[("word/document.xml", document.as_bytes()), ("word/_rels/document.xml.rels", rels.as_bytes()), ("word/media/fronte.jpeg", &jpeg), ("word/media/retro.png", &png)])).unwrap();
+        assert_eq!(document_text(&path).unwrap_err(), "il documento non contiene testo");
+        let blocks = document_blocks(&path).unwrap();
+        let images: Vec<_> = blocks.iter().filter_map(|b| b.image.as_ref()).collect();
+        assert_eq!(images.len(), 2);
+        assert!(images[0].jpeg && !images[1].jpeg);
+        let pdf = crate::pdfdoc::build(&blocks, &crate::pdfdoc::PdfOptions { size: crate::engine::PageSize::A4, embed: false, bookmarks: false, pdfa: false, title: "carta".into() }).unwrap();
+        let text = String::from_utf8_lossy(&pdf);
+        assert_eq!(text.matches("/Subtype /Image").count(), 2);
+        assert!(text.contains("/DCTDecode"));
+        let _ = fs::remove_dir_all(d);
+    }
+
     fn levels(blocks: &[DocBlock]) -> Vec<(u8, &str)> {
         blocks.iter().filter(|b| b.heading > 0).map(|b| (b.heading, b.text.as_str())).collect()
     }
