@@ -10,21 +10,16 @@ Scarica il file e fai doppio clic: si installa sopra la versione che hai (su Lin
 Non sai quale ti serve? *Impostazioni di Windows → Sistema → Informazioni*: se in «Tipo di sistema» c'è «basato su ARM», prendi quello ARM; altrimenti l'altro.
 I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo la prima volta che trascrivi.
 
-### Edizione Comune di Bondeno
+### Comune di Bondeno
 
-Per i PC del Comune di Bondeno: stesse funzioni, con lo stemma del Comune. Installata sopra Cedro lo sostituisce, e da lì in poi si aggiorna solo con i pacchetti di questa edizione.
-
-| Il tuo computer | File da scaricare |
-| --- | --- |
-| **Windows** | [**Cedro-Bondeno-Setup-{versione}.exe**](https://github.com/{repo}/releases/download/v{versione}/Cedro-Bondeno-Setup-{versione}.exe) |
-| **Windows on ARM** | [**Cedro-Bondeno-ARM64-Setup-{versione}.exe**](https://github.com/{repo}/releases/download/v{versione}/Cedro-Bondeno-ARM64-Setup-{versione}.exe) |
-| **Linux** | [**cedro-bondeno-{versione}-linux-x64.tar.gz**](https://github.com/{repo}/releases/download/v{versione}/cedro-bondeno-{versione}-linux-x64.tar.gz) |
+Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Impostazioni → Aspetto, con i colori, il carattere e lo stemma del Comune. Chi aveva l'edizione per il Comune si aggiorna da sola e si ritrova il tema già acceso. I file `Cedro-Bondeno-…` e `cedro-bondeno-…` di questa release sono copie degli stessi installatori, tenute solo perché la vecchia edizione cerca quei nomi: chi installa da zero prende i file qui sopra.
 
 ## Novità della {versione}
 
+- **Il Comune di Bondeno è un tema**: Impostazioni → Aspetto → «Comune di Bondeno» (colori e carattere Titillium Web del sito del Comune, stemma accanto al logo, in Impostazioni, nella guida e nel menu dell'icona). Un solo insieme di pacchetti per tutti; la vecchia edizione si aggiorna sola e tiene il tema acceso.
 - **Nuova grafica**: cinque aspetti a scelta in Impostazioni → Aspetto (Windows essenziale, Percorso guidato, Cedro compatto, Banco di lavoro, Documento al centro), ognuno in versione Standard o Semplificata, su Windows e Linux. La ruota è ridisegnata (disco con anteprima del file, pannello con qualità e «Converti», tasti per Strumenti e Azioni) ed è uguale in tutti gli aspetti. Le finestre, comprese le Impostazioni, si ridimensionano e si rimpiccioliscono da sole sugli schermi piccoli.
 
-Dalla 0.19.1: edizione Comune di Bondeno, una versione a parte di Cedro con lo stemma ufficiale del Comune (Impostazioni, Informazioni, guida, menu dell'icona, installatore); ognuna delle due edizioni si aggiorna solo con i suoi pacchetti.
+Dalla 0.19.1 alla 0.20.1: edizione Comune di Bondeno, una versione a parte di Cedro con lo stemma ufficiale del Comune; dalla 0.21.0 è un tema della versione standard.
 
 Dalla 0.19.0: Modalità Semplice, un'interfaccia essenziale da attivare in Impostazioni → Generale (le altre opzioni restano a un clic in «Altre opzioni»), scelta anche alla fine dell'installazione.
 
