@@ -10,6 +10,10 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag Android da cui prendere i metadati (es. android-v0.21.3)"
+        required: true
 
 permissions:
   contents: read
@@ -29,9 +33,16 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # I metadati F-Droid stanno nel ramo/tag Android; il workflow può girare anche da main.
+          ref: ${{ inputs.ref || github.event.release.tag_name }}
       - name: fdroidserver
+        timeout-minutes: 15
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq fdroidserver apksigner >/dev/null
+          export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
+          sudo -E apt-get update -qq && sudo -E apt-get install -y -qq apksigner >/dev/null
+          python3 -m venv "$RUNNER_TEMP/fdroid" && "$RUNNER_TEMP/fdroid/bin/pip" install -q fdroidserver
+          echo "$RUNNER_TEMP/fdroid/bin" >> "$GITHUB_PATH"
       - name: Prepara il repository
         env:
           GH_TOKEN: ${{ github.token }}
