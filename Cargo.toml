@@ -33,6 +33,10 @@ tiny-skia = { version = "0.11", default-features = false, features = ["std", "si
 [target.'cfg(any(windows, target_os = "linux"))'.dependencies]
 cpal = "0.15"
 
+# Opus (audio dei WebM, vocali di WhatsApp e Telegram): libopus compilata dentro il programma.
+[target.'cfg(any(windows, target_os = "linux", target_os = "android"))'.dependencies]
+audiopus_sys = { version = "0.2", features = ["static"] }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 fdk-aac = "0.8"
 libc = "0.2"
@@ -52,8 +56,6 @@ openh264 = { version = "0.9", default-features = false, features = ["source"] }
 # whisper.cpp come libreria nell'APK (src/whisper_android).
 whisper-rs = "0.16"
 whisper-rs-sys = "0.15"
-# Opus (vocali di WhatsApp e Telegram) per la trascrizione: libopus compilata dentro l'APK.
-audiopus_sys = { version = "0.2", features = ["static"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-core = "0.61"
