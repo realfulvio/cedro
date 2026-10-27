@@ -12,11 +12,90 @@ use crate::engine::PageSize;
 static REGULAR: &[u8] = include_bytes!("../assets/fonts/TitilliumWeb-Regular.ttf");
 static BOLD: &[u8] = include_bytes!("../assets/fonts/TitilliumWeb-Bold.ttf");
 
-/// Un paragrafo del documento; `heading` 1-3 per i titoli, 0 per il testo.
+/// Un paragrafo del documento; `heading` 1-3 per i titoli, 0 per il testo. Con `image` è un'immagine (il testo è vuoto).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DocBlock {
     pub text: String,
     pub heading: u8,
+    pub image: Option<DocImage>,
+}
+
+/// Un'immagine del documento, pronta per il PDF: un JPEG così com'è oppure i pixel (RGB o grigi) da comprimere.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DocImage {
+    pub data: Vec<u8>,
+    pub jpeg: bool,
+    pub gray: bool,
+    pub px: (u32, u32),
+    /// Dimensione nel documento in centesimi di punto; (0, 0) se non è scritta (vale 96 dpi).
+    pub size_cpt: (u32, u32),
+    /// 0 a sinistra, 1 al centro, 2 a destra.
+    pub align: u8,
+}
+
+impl DocImage {
+    /// Dai byte del file (JPEG, PNG, GIF, BMP, WebP, TIFF). `size_pt`: la dimensione scritta nel documento.
+    pub fn from_bytes(bytes: &[u8], size_pt: Option<(f32, f32)>, align: u8) -> Option<DocImage> {
+        let size_cpt = size_pt.filter(|(w, h)| *w > 0.5 && *h > 0.5).map_or((0, 0), |(w, h)| ((w * 100.0) as u32, (h * 100.0) as u32));
+        // Un JPEG RGB o grigio va nel PDF com'è: niente perdita di qualità e file piccolo.
+        if let Some((w, h, comps)) = jpeg_info(bytes) {
+            if comps == 1 || comps == 3 {
+                return Some(DocImage { data: bytes.to_vec(), jpeg: true, gray: comps == 1, px: (w, h), size_cpt, align });
+            }
+        }
+        let img = image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok()?.decode().ok()?;
+        let rgba = img.to_rgba8();
+        let (w, h) = rgba.dimensions();
+        // La trasparenza va sul bianco della pagina.
+        let mut data = Vec::with_capacity((w * h * 3) as usize);
+        for p in rgba.pixels() {
+            let a = p[3] as u32;
+            for c in 0..3 {
+                data.push(((p[c] as u32 * a + 255 * (255 - a)) / 255) as u8);
+            }
+        }
+        Some(DocImage { data, jpeg: false, gray: false, px: (w, h), size_cpt, align })
+    }
+
+    /// Larghezza e altezza in punti.
+    fn points(&self) -> (f32, f32) {
+        if self.size_cpt.0 > 0 && self.size_cpt.1 > 0 {
+            (self.size_cpt.0 as f32 / 100.0, self.size_cpt.1 as f32 / 100.0)
+        } else {
+            (self.px.0 as f32 * 0.75, self.px.1 as f32 * 0.75)
+        }
+    }
+}
+
+/// Larghezza, altezza e componenti di colore di un JPEG (dal segmento SOF).
+fn jpeg_info(b: &[u8]) -> Option<(u32, u32, u8)> {
+    if b.len() < 4 || b[0] != 0xFF || b[1] != 0xD8 {
+        return None;
+    }
+    let mut i = 2;
+    while i + 9 < b.len() {
+        if b[i] != 0xFF {
+            i += 1;
+            continue;
+        }
+        let m = b[i + 1];
+        if m == 0xFF {
+            i += 1;
+            continue;
+        }
+        if matches!(m, 0xD8 | 0x01 | 0xD0..=0xD7) {
+            i += 2;
+            continue;
+        }
+        let len = u16::from_be_bytes([b[i + 2], b[i + 3]]) as usize;
+        if matches!(m, 0xC0..=0xC3 | 0xC5..=0xC7 | 0xC9..=0xCB | 0xCD..=0xCF) {
+            let h = u16::from_be_bytes([b[i + 5], b[i + 6]]) as u32;
+            let w = u16::from_be_bytes([b[i + 7], b[i + 8]]) as u32;
+            return (w > 0 && h > 0).then_some((w, h, b[i + 9]));
+        }
+        i += 2 + len;
+    }
+    None
 }
 
 pub struct PdfOptions {
@@ -72,6 +151,17 @@ struct Line {
 
 struct Page {
     lines: Vec<Line>,
+    /// Immagini: indice, x, y (in basso), larghezza, altezza.
+    images: Vec<(usize, f32, f32, f32, f32)>,
+}
+
+impl Page {
+    fn new() -> Page {
+        Page { lines: Vec::new(), images: Vec::new() }
+    }
+    fn is_empty(&self) -> bool {
+        self.lines.is_empty() && self.images.is_empty()
+    }
 }
 
 struct Mark {
@@ -303,10 +393,30 @@ pub fn build(blocks: &[DocBlock], o: &PdfOptions) -> Result<Vec<u8>, String> {
     let max = width - 2.0 * margin;
 
     // ---- impaginazione
-    let mut pages: Vec<Page> = vec![Page { lines: Vec::new() }];
+    let mut pages: Vec<Page> = vec![Page::new()];
     let mut marks: Vec<Mark> = Vec::new();
     let mut y = height - margin;
+    let mut imgs: Vec<&DocImage> = Vec::new();
     for block in blocks {
+        if let Some(img) = &block.image {
+            // Grande al massimo quanto lo spazio della pagina, mai ingrandita.
+            let (w0, h0) = img.points();
+            let s = (max / w0).min((height - 2.0 * margin) / h0).min(1.0);
+            let (w, h) = (w0 * s, h0 * s);
+            let gap = 6.0;
+            if y - h - gap < margin && !pages.last().map_or(true, Page::is_empty) {
+                pages.push(Page::new());
+                y = height - margin;
+            } else if !pages.last().map_or(true, Page::is_empty) {
+                y -= gap;
+            }
+            y -= h;
+            let x = margin + (max - w) * img.align.min(2) as f32 / 2.0;
+            pages.last_mut().expect("pagina").images.push((imgs.len(), x, y, w, h));
+            imgs.push(img);
+            y -= gap;
+            continue;
+        }
         let (size, is_bold, before) = match block.heading {
             1 => (20.0f32, true, 12.0f32),
             2 => (16.0, true, 9.0),
@@ -320,18 +430,18 @@ pub fn build(blocks: &[DocBlock], o: &PdfOptions) -> Result<Vec<u8>, String> {
         let wrapped = if text.is_empty() { vec![String::new()] } else { wrap(face, &text, size, scale, max) };
         // Un titolo non resta solo in fondo alla pagina.
         let need = leading * if block.heading > 0 { 2.5 } else { 1.0 } + before;
-        if y - need < margin && !pages.last().map_or(true, |p| p.lines.is_empty()) {
-            pages.push(Page { lines: Vec::new() });
+        if y - need < margin && !pages.last().map_or(true, Page::is_empty) {
+            pages.push(Page::new());
             y = height - margin;
-        } else if !pages.last().map_or(true, |p| p.lines.is_empty()) {
+        } else if !pages.last().map_or(true, Page::is_empty) {
             y -= before;
         }
         if block.heading > 0 && !text.trim().is_empty() {
             marks.push(Mark { level: block.heading, title: text.trim().to_string(), page: pages.len() - 1, y: y.min(height - 10.0) });
         }
         for line in wrapped {
-            if y - leading < margin && !pages.last().map_or(true, |p| p.lines.is_empty()) {
-                pages.push(Page { lines: Vec::new() });
+            if y - leading < margin && !pages.last().map_or(true, Page::is_empty) {
+                pages.push(Page::new());
                 y = height - margin;
             }
             y -= leading;
@@ -345,11 +455,15 @@ pub fn build(blocks: &[DocBlock], o: &PdfOptions) -> Result<Vec<u8>, String> {
     let pages_id = b.reserve();
     let page_ids: Vec<(usize, usize)> = pages.iter().map(|_| (b.reserve(), b.reserve())).collect();
     let (font1, font2) = (b.reserve(), b.reserve());
+    let img_ids: Vec<usize> = imgs.iter().map(|_| b.reserve()).collect();
     let mut resources_fonts = format!("/F1 {font1} 0 R /F2 {font2} 0 R");
 
     // contenuti (e glifi usati)
     for (i, page) in pages.iter().enumerate() {
         let mut ops = String::from("0 g\n");
+        for (k, x, y, w, h) in &page.images {
+            ops.push_str(&format!("q {w:.2} 0 0 {h:.2} {x:.2} {y:.2} cm /Im{k} Do Q\n"));
+        }
         for line in &page.lines {
             if line.text.is_empty() {
                 continue;
@@ -384,13 +498,29 @@ pub fn build(blocks: &[DocBlock], o: &PdfOptions) -> Result<Vec<u8>, String> {
         }
         let (page_id, content_id) = page_ids[i];
         b.set(content_id, stream("", ops.as_bytes(), true));
+        let xobjects = if page.images.is_empty() {
+            String::new()
+        } else {
+            format!(" /XObject << {} >>", page.images.iter().map(|(k, ..)| format!("/Im{k} {} 0 R", img_ids[*k])).collect::<Vec<_>>().join(" "))
+        };
         b.set(
             page_id,
             format!(
-                "<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 {width} {height}] /Contents {content_id} 0 R /Resources << /Font << {resources_fonts} >> >> >>"
+                "<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 {width} {height}] /Contents {content_id} 0 R /Resources << /Font << {resources_fonts} >>{xobjects} >> >>"
             )
             .into_bytes(),
         );
+    }
+
+    // immagini
+    for (img, id) in imgs.iter().zip(&img_ids) {
+        let dict = format!(
+            "/Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace {} /BitsPerComponent 8",
+            img.px.0,
+            img.px.1,
+            if img.gray { "/DeviceGray" } else { "/DeviceRGB" }
+        );
+        b.set(*id, if img.jpeg { stream(&format!("{dict} /Filter /DCTDecode"), &img.data, false) } else { stream(&dict, &img.data, true) });
     }
 
     // font
@@ -560,15 +690,15 @@ mod tests {
 
     fn blocks() -> Vec<DocBlock> {
         let mut v = vec![
-            DocBlock { text: "Delibera di giunta".into(), heading: 1 },
-            DocBlock { text: "Premesse è già così, perché città".into(), heading: 0 },
-            DocBlock { text: "Dispositivo".into(), heading: 2 },
+            DocBlock { text: "Delibera di giunta".into(), heading: 1, image: None },
+            DocBlock { text: "Premesse è già così, perché città".into(), heading: 0, image: None },
+            DocBlock { text: "Dispositivo".into(), heading: 2, image: None },
         ];
         for n in 0..120 {
-            v.push(DocBlock { text: format!("Riga {n}: il Comune di Bondeno approva il documento."), heading: 0 });
+            v.push(DocBlock { text: format!("Riga {n}: il Comune di Bondeno approva il documento."), heading: 0, image: None });
         }
-        v.push(DocBlock { text: "Allegati".into(), heading: 1 });
-        v.push(DocBlock { text: "Fine.".into(), heading: 0 });
+        v.push(DocBlock { text: "Allegati".into(), heading: 1, image: None });
+        v.push(DocBlock { text: "Fine.".into(), heading: 0, image: None });
         v
     }
 
@@ -602,7 +732,7 @@ mod tests {
     fn tabs_become_spaces_not_missing_glyphs() {
         let mut o = options(true, false);
         o.bookmarks = false;
-        let pdf = build(&[DocBlock { text: "nome\tcittà\u{1}".into(), heading: 0 }], &o).unwrap();
+        let pdf = build(&[DocBlock { text: "nome\tcittà\u{1}".into(), heading: 0, image: None }], &o).unwrap();
         let text = lopdf::Document::load_mem(&pdf).unwrap().extract_text(&[1]).unwrap();
         assert!(text.contains("nome    città"), "{text:?}");
         assert!(!text.contains('\t') && !text.contains('\u{1}'));
@@ -639,7 +769,7 @@ mod tests {
 
     #[test]
     fn long_words_and_page_sizes_fit() {
-        let long = DocBlock { text: "x".repeat(400), heading: 0 };
+        let long = DocBlock { text: "x".repeat(400), heading: 0, image: None };
         for size in [PageSize::A4, PageSize::A3, PageSize::Letter] {
             let o = PdfOptions { size, ..options(true, false) };
             let pdf = build(&[long.clone()], &o).unwrap();
