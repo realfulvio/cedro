@@ -46,8 +46,29 @@ pub fn render(n: usize, hover: i32) -> Vec<u8> {
 }
 
 /// Come `render`, ma con `scale` pixel per unità logica (schermi ad alta densità).
+/// Nella versione standard le forme sono quelle della ruota nuova (vedi `ui::wheel`).
 pub fn render_scaled(n: usize, hover: i32, scale: u32) -> Vec<u8> {
-    render_tema(tema::attivo(), n, hover, scale)
+    if crate::edizione::BONDENO {
+        return render_tema(tema::attivo(), n, hover, scale);
+    }
+    render_new(n, hover, scale)
+}
+
+/// Le forme della ruota nuova nello spazio di quella vecchia (stessi raggi, stessa finestra).
+fn render_new(n: usize, hover: i32, scale: u32) -> Vec<u8> {
+    use crate::ui::gfx::{Fonts, GlyphCache, Painter};
+    let scale = scale.max(1);
+    let side = WHEEL as u32 * scale;
+    let mut cache = GlyphCache::new();
+    let mut p = Painter::new(side, side, scale as f32, Fonts::shared(), &mut cache);
+    let c = WHEEL / 2.0;
+    let k = R1 / 230.0;
+    crate::ui::wheel::disc_shapes(&mut p, c, c, R0 + 6.0, R1, k, n.max(1), if hover >= 0 { Some(hover as usize) } else { None });
+    // Il centro è bianco, con un anello azzurro se una fetta è accesa.
+    p.disc_a(c, c + 3.0, R0 + 4.0, (10, 40, 90), 0.10);
+    p.disc_a(c, c, R0 + 2.0, if hover >= 0 { (8, 116, 242) } else { (208, 223, 236) }, 1.0);
+    p.disc_a(c, c, R0 - 1.0, (255, 255, 255), 1.0);
+    p.bgra()
 }
 
 fn render_tema(t: &Tema, n: usize, hover: i32, scale: u32) -> Vec<u8> {

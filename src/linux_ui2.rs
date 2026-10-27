@@ -25,6 +25,19 @@ pub fn open(app: &Application) {
     open_surface(app, Surface::Main);
 }
 
+/// File arrivati dalla ruota e il formato da preselezionare: li prende la finestra principale al suo prossimo giro.
+static PENDING: std::sync::Mutex<(Vec<PathBuf>, Option<&'static str>)> = std::sync::Mutex::new((Vec::new(), None));
+
+/// Apre il pannello con questi file in coda e, se c'è, il formato già scelto (dalla ruota).
+pub fn open_with(app: &Application, paths: Vec<PathBuf>, action: Option<&'static str>) {
+    {
+        let mut slot = PENDING.lock().unwrap_or_else(|e| e.into_inner());
+        slot.0.extend(paths);
+        slot.1 = action;
+    }
+    open_surface(app, Surface::Main);
+}
+
 pub fn open_compact(app: &Application) {
     open_surface(app, Surface::Compact);
 }
@@ -399,6 +412,21 @@ fn open_surface(app: &Application, surface: Surface) {
             }
             let active = win.is_active();
             let mut redraw = false;
+            if surface == Surface::Main {
+                let (paths, action) = {
+                    let mut slot = PENDING.lock().unwrap_or_else(|e| e.into_inner());
+                    (std::mem::take(&mut slot.0), slot.1.take())
+                };
+                if !paths.is_empty() {
+                    if let Ok(mut sc) = host.screen.try_borrow_mut() {
+                        sc.drop_files(paths);
+                        if let Some(id) = action {
+                            sc.app.set_action(id);
+                        }
+                        redraw = true;
+                    }
+                }
+            }
             if let Ok(mut sc) = host.screen.try_borrow_mut() {
                 if woke.swap(false, Ordering::Relaxed) {
                     sc.pump();

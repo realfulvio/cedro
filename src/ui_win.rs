@@ -38,6 +38,8 @@ const ZOOM: f32 = cedro::ui::ZOOM;
 static MAIN: AtomicIsize = AtomicIsize::new(0);
 static POPUP: AtomicIsize = AtomicIsize::new(0);
 static DROPPED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+/// Il formato da preselezionare quando i file arrivano dalla ruota.
+static ACTION: Mutex<Option<&'static str>> = Mutex::new(None);
 
 /// Una finestra: lo schermo comune e l'ultimo fotogramma (per ridisegnare mentre un dialogo è aperto).
 struct Host {
@@ -271,6 +273,19 @@ impl IDropTarget_Impl for Drop_Impl {
 /// Apre il pannello del tema scelto, oppure porta davanti quello già aperto.
 pub fn open() {
     open_surface(Surface::Main);
+}
+
+/// Apre la finestra principale con questi file in coda e, se c'è, il formato già scelto (dalla ruota).
+pub fn open_with(paths: Vec<PathBuf>, action: Option<&'static str>) {
+    DROPPED.lock().unwrap_or_else(|e| e.into_inner()).extend(paths);
+    *ACTION.lock().unwrap_or_else(|e| e.into_inner()) = action;
+    open_surface(Surface::Main);
+    unsafe {
+        let main = HWND(MAIN.load(Ordering::Relaxed) as *mut _);
+        if !main.0.is_null() {
+            let _ = PostMessageW(Some(main), WM_DROPPED, WPARAM(0), LPARAM(0));
+        }
+    }
 }
 
 /// La finestrella compatta (dall'icona vicino all'orologio).
@@ -537,8 +552,12 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         }
         WM_DROPPED => {
             let paths: Vec<PathBuf> = std::mem::take(&mut *DROPPED.lock().unwrap_or_else(|e| e.into_inner()));
+            let action = ACTION.lock().unwrap_or_else(|e| e.into_inner()).take();
             if let Ok(mut s) = host.screen.try_borrow_mut() {
                 s.drop_files(paths);
+                if let Some(id) = action {
+                    s.app.set_action(id);
+                }
             }
             redraw(hwnd);
             LRESULT(0)
