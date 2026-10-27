@@ -61,10 +61,10 @@ window.cedro-panel list.cedro-credits row { background: transparent; border-bott
 window.cedro-panel label.cedro-license { font-family: monospace; font-size: 80%; background: #F3F5F7; border-radius: 5px; padding: 8px; color: #455A64; }\
 window.cedro-panel label.cedro-soon { font-size: 75%; font-weight: bold; padding: 1px 6px; border-radius: 4px; background: #E6EEFF; color: #005E8E; }";
 
-/// Il foglio di stile nei colori dell'edizione: quelli scritti sono del Comune di Bondeno.
+/// Il foglio di stile nei colori del tema: quelli scritti sono del Comune di Bondeno.
 fn css() -> String {
     let t = cedro::tema::attivo();
-    if cedro::edizione::BONDENO {
+    if cedro::edizione::bondeno() {
         return CSS.to_string();
     }
     let hex = |c: (u8, u8, u8)| format!("#{:02X}{:02X}{:02X}", c.0, c.1, c.2);
@@ -78,6 +78,8 @@ fn style() {
     let provider = CssProvider::new();
     provider.load_from_string(&css());
     gtk4::style_context_add_provider_for_display(&display, &provider, STYLE_PROVIDER_PRIORITY_APPLICATION);
+    // Il carattere segue il tema (Titillium Web con quello del Comune).
+    crate::linux_font::apply();
 }
 
 pub(crate) fn titled(app: &Application, title: &str, width: i32, height: i32) -> Window {
@@ -424,17 +426,17 @@ fn about_page() -> HBox {
     who.append(&line2);
     head.append(&who);
     page.append(&head);
-    if cedro::edizione::BONDENO {
-        // Il riquadro dell'edizione, con lo stemma con la scritta.
+    if cedro::edizione::bondeno() {
+        // Il riquadro del tema, con lo stemma con la scritta.
         let ente = HBox::new(Orientation::Horizontal, 14);
         ente.add_css_class("cedro-ente-about");
         ente.append(&crate::linux_firma::stemma_area(cedro::edizione::Stemma::Scritta, 60));
         let text = HBox::new(Orientation::Vertical, 2);
         text.set_valign(gtk4::Align::Center);
-        let nome = Label::new(Some("Edizione per il Comune di Bondeno"));
+        let nome = Label::new(Some("Tema Comune di Bondeno"));
         nome.set_xalign(0.0);
         nome.add_css_class("cedro-ente-nome");
-        let nota = Label::new(Some("Stesse funzioni di Cedro, con lo stemma del Comune. Si aggiorna solo con i pacchetti di questa edizione."));
+        let nota = Label::new(Some("Stesse funzioni di Cedro, con i colori, il carattere e lo stemma del Comune. Si cambia in Aspetto."));
         nota.set_xalign(0.0);
         nota.set_wrap(true);
         nota.add_css_class("cedro-muted");
@@ -542,7 +544,7 @@ fn aspetto_page(current: &Settings) -> (Rc<RefCell<cedro::ui::aspetto::Aspetto>>
                 return;
             }
             let mut cache = cache.borrow_mut();
-            let mut painter = Painter::new(pw as u32, ph as u32, sf as f32, Fonts::shared(), &mut cache);
+            let mut painter = Painter::new(pw as u32, ph as u32, sf as f32, Fonts::current(), &mut cache);
             state.borrow_mut().draw(&mut painter, w as f32, h as f32);
             let data = painter.bgra();
             if let Ok(img) = ImageSurface::create_for_data(data, gtk4::cairo::Format::ARgb32, pw, ph, pw * 4) {
@@ -655,7 +657,6 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let notify = switch(current.notify);
     let reveal = switch(current.reveal);
     let progress = switch(current.progress);
-    let simple = switch(current.simple);
     let (aspetto, aspetto_page) = aspetto_page(&current);
     let log = Button::with_label("Apri cartella");
     log.add_css_class("cedro-sec");
@@ -664,19 +665,13 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
         let _ = std::fs::create_dir_all(&dir);
         let _ = gtk4::gio::AppInfo::launch_default_for_uri(&format!("file://{}", dir.display()), None::<&gtk4::gio::AppLaunchContext>);
     });
-    let mode_row = setting("Modalità Semplice", "Mostra solo l'essenziale. Le altre opzioni restano a un clic, in «Altre opzioni». Vale dalla prossima apertura del pannello.", &simple);
     let autostart_row = setting("Avvia Cedro con il computer", "La stessa voce del menu dell'icona.", &autostart);
     let notify_row = setting("Avviso a fine conversione", "Una notifica con il nome del file creato.", &notify);
     let reveal_row = setting("Mostra il file nuovo", "A lavoro finito apre la cartella e seleziona la copia.", &reveal);
     let progress_row = setting("Avanzamento mentre converte", "Una linea sottile nel pannello e, su KDE, tra le notifiche.", &progress);
     let log_row = setting("Registro attività", "Il file log.txt e config.txt stanno nella cartella di Cedro.", &log);
-    // Nella versione standard la modalità si sceglie in «Aspetto».
-    let mut general_rows: Vec<&HBox> = Vec::new();
-    if cedro::edizione::BONDENO {
-        general_rows.push(&mode_row);
-    }
-    general_rows.extend([&autostart_row, &notify_row, &reveal_row, &progress_row, &log_row]);
-    let general = page("Generale", &general_rows);
+    // La modalità Semplice e il tema si scelgono in «Aspetto».
+    let general = page("Generale", &[&autostart_row, &notify_row, &reveal_row, &progress_row, &log_row]);
 
     // Ruota
     let shift = switch(current.key_shift);
@@ -815,12 +810,10 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     for (name, content) in [("0", &general), ("1", &wheel), ("2", &saving), ("3", &quality), ("4", &ocr), ("5", &upd), ("6", &system), ("7", &about), ("8", &aspetto_page)] {
         stack.add_named(content, Some(name));
     }
-    // Le schede nell'ordine in cui si vedono: nome e pagina dello stack. «Aspetto» sta solo nella versione standard.
+    // Le schede nell'ordine in cui si vedono: nome e pagina dello stack. «Aspetto» è la seconda.
     let order: Vec<(&'static str, String)> = {
         let mut v: Vec<(&'static str, String)> = SECTIONS.iter().enumerate().map(|(i, n)| (*n, i.to_string())).collect();
-        if !cedro::edizione::BONDENO {
-            v.insert(1, ("Aspetto", "8".to_string()));
-        }
+        v.insert(1, ("Aspetto", "8".to_string()));
         v
     };
     let nav = gtk4::ListBox::new();
@@ -847,8 +840,8 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     }
 
     let middle = HBox::new(Orientation::Horizontal, 0);
-    if cedro::edizione::BONDENO {
-        // Edizione Bondeno: stemma e «Comune di Bondeno» in cima alle sezioni.
+    if cedro::edizione::bondeno() {
+        // Tema Bondeno: stemma e «Comune di Bondeno» in cima alle sezioni.
         let side = HBox::new(Orientation::Vertical, 0);
         side.add_css_class("cedro-side");
         let ente = HBox::new(Orientation::Horizontal, 10);
@@ -926,8 +919,8 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 quality: scale.value().round().clamp(40.0, 95.0) as u8,
                 notify: notify.is_active(),
                 progress: progress.is_active(),
-                simple: if cedro::edizione::BONDENO { simple.is_active() } else { aspetto.borrow().simple },
-                ui_theme: if cedro::edizione::BONDENO { base.ui_theme.clone() } else { aspetto.borrow().theme.key().to_string() },
+                simple: aspetto.borrow().simple,
+                ui_theme: aspetto.borrow().theme.key().to_string(),
                 view_asked: base.view_asked,
                 reveal: reveal.is_active(),
                 update_check: updates.is_active(),
@@ -984,7 +977,7 @@ fn shots(window: &Window, nav: &gtk4::ListBox, names: Vec<String>, dir: std::pat
         nav.select_row(Some(&row));
         glib::timeout_add_local_once(std::time::Duration::from_millis(if at == 1 { 9000 } else { 700 }), move || {
             let name = format!("impostazioni-{at}-{}.png", names[at as usize]);
-            if let Err(e) = crate::linux_conversioni::save_png(&window, &dir.join(name)) {
+            if let Err(e) = save_png(&window, &dir.join(name)) {
                 eprintln!("screenshot: {e}");
             }
             step(window.clone(), nav.clone(), names.clone(), dir.clone(), at + 1);
@@ -1276,4 +1269,18 @@ pub fn open_view_choice(app: &Application) {
         None => glib::ControlFlow::Break,
     });
     window.present();
+}
+
+/// Salva la finestra in un PNG (per le fotografie delle prove).
+#[cfg(debug_assertions)]
+fn save_png(window: &gtk4::Window, path: &std::path::Path) -> Result<(), String> {
+    use gtk4::gsk::prelude::*;
+    let (w, h) = (window.width(), window.height());
+    let paintable = gtk4::WidgetPaintable::new(Some(window));
+    let snapshot = gtk4::Snapshot::new();
+    paintable.snapshot(&snapshot, w as f64, h as f64);
+    let node = snapshot.to_node().ok_or("niente da disegnare")?;
+    let renderer = window.native().and_then(|n| n.renderer()).ok_or("nessun renderer")?;
+    let texture = renderer.render_texture(&node, None);
+    texture.save_to_png(path).map_err(|e| e.to_string())
 }

@@ -24,7 +24,6 @@ const ID_NOTIFY: i32 = 102;
 const ID_REVEAL: i32 = 103;
 const ID_LOG: i32 = 104;
 const ID_PROGRESS: i32 = 105;
-const ID_SIMPLE: i32 = 196;
 const ID_SHIFT: i32 = 111;
 const ID_CTRL: i32 = 112;
 const ID_ALT: i32 = 113;
@@ -60,7 +59,7 @@ const ID_FULL: i32 = 189;
 const ID_LOGO: i32 = 197;
 const ID_LOCKED: i32 = 198;
 const ID_ABOUT_POWERED: i32 = 199;
-/// Edizione Bondeno: stemma e «Comune di Bondeno» in cima alle sezioni, e il riquadro nella scheda Informazioni.
+/// Tema Bondeno: stemma e «Comune di Bondeno» in cima alle sezioni, e il riquadro nella scheda Informazioni.
 const ID_ENTE: i32 = 195;
 const ID_ENTE_ABOUT: i32 = 196;
 const ID_NAV: i32 = 200;
@@ -69,7 +68,7 @@ const ID_LIST: i32 = 220;
 const ID_CHIP: i32 = 230;
 
 /// Gli interruttori a levetta: disegnati da Cedro, con lo stato tenuto qui.
-const TOGGLES: [i32; 12] = [ID_SIMPLE, ID_AUTO, ID_NOTIFY, ID_REVEAL, ID_PROGRESS, ID_SHIFT, ID_CTRL, ID_ALT, ID_DIALOGS, ID_UPDATE, ID_GPU, ID_AVX];
+const TOGGLES: [i32; 11] = [ID_AUTO, ID_NOTIFY, ID_REVEAL, ID_PROGRESS, ID_SHIFT, ID_CTRL, ID_ALT, ID_DIALOGS, ID_UPDATE, ID_GPU, ID_AVX];
 /// I pulsanti disegnati da Cedro (Salva è quello blu).
 const PUSHES: [i32; 8] = [ID_LOG, ID_BROWSE, ID_CHECK_NOW, ID_UNSKIP, ID_COPY, ID_FULL, 1 /* IDOK */, 2 /* IDCANCEL */];
 
@@ -89,21 +88,17 @@ const OFF_SOFT: COLORREF = COLORREF(0x00F3F1EE); // #EEF1F3
 const WHITE: COLORREF = COLORREF(0x00FFFFFF);
 const SIDE: COLORREF = COLORREF(0x00F7F5F3); // #F3F5F7
 const LINE: COLORREF = COLORREF(0x00E5E5E5); // #E5E5E5
-const ENTE_SOFT: COLORREF = COLORREF(0x00FBF7F2); // #F2F7FB, il fondo del riquadro dell'edizione Bondeno
+const ENTE_SOFT: COLORREF = COLORREF(0x00FBF7F2); // #F2F7FB, il fondo del riquadro del tema Bondeno
 const ENTE_LINE: COLORREF = COLORREF(0x00EEE3D4); // #D4E3EE
 
 const SECTIONS: [&str; 9] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni", "Aspetto"];
-/// «Aspetto» (la grafica a temi) c'è solo nella versione standard.
+/// «Aspetto»: la grafica a temi (con il tema Comune di Bondeno) e la modalità Semplice.
 const ASPETTO: usize = 8;
 const ID_ASPETTO: i32 = 240;
 
 /// Le schede nell'ordine in cui si vedono nella colonna di sinistra.
 fn nav_order() -> Vec<usize> {
-    if cedro::edizione::BONDENO {
-        (0..ASPETTO).collect()
-    } else {
-        vec![0, ASPETTO, 1, 2, 3, 4, 5, 6, 7]
-    }
+    vec![0, ASPETTO, 1, 2, 3, 4, 5, 6, 7]
 }
 const DPI: [u32; 4] = [100, 144, 200, 300];
 const MAX_PAGES: [u32; 4] = [50, 100, 300, 0];
@@ -373,8 +368,8 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     let combo_style = tab | CBS_DROPDOWNLIST as u32 | WS_VSCROLL.0;
     const SS_NOPREFIX: u32 = 0x80;
 
-    // Nell'edizione Bondeno le sezioni scendono per lasciare posto allo stemma.
-    let nav_top = if cedro::edizione::BONDENO {
+    // Con il tema Bondeno le sezioni scendono per lasciare posto allo stemma.
+    let nav_top = if cedro::edizione::bondeno() {
         child(hwnd, s, "", crate::firma_win::SS_OWNERDRAW, ID_ENTE, (8, 10, SIDE_W - 16, 52), dpi, bold, None);
         72
     } else {
@@ -420,11 +415,6 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     // Generale
     heading_of(0);
     let mut y = top;
-    if cedro::edizione::BONDENO {
-        let r = row(0, y, "Modalità Semplice", "Mostra solo l'essenziale. Le altre opzioni restano a un clic, in «Altre opzioni». Vale dalla prossima apertura del pannello.", 40, 0);
-        toggle(0, ID_SIMPLE, &r);
-        y = r.next;
-    }
     let r = row(0, y, "Avvia Cedro con Windows", "La stessa voce del menu dell'icona e dell'installatore.", 40, 0);
     toggle(0, ID_AUTO, &r);
     y = r.next;
@@ -440,21 +430,19 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     let r = row(0, y, "Registro attività", "Il file log.txt e config.txt stanno in %APPDATA%\\Cedro.", 130, 0);
     button(0, ID_LOG, &r, "Apri cartella", 130);
 
-    // Aspetto (solo versione standard): modalità e temi, disegnati da `cedro::ui::aspetto`.
-    if !cedro::edizione::BONDENO {
-        heading_of(ASPETTO);
-        let now = read_settings();
-        let page_h = HEIGHT - FOOT_H - top - 8;
-        let page = crate::aspetto_win::create(
-            hwnd,
-            ID_ASPETTO,
-            (px(x, dpi), px(top, dpi), px(cw, dpi), px(page_h, dpi)),
-            dpi,
-            cedro::ui::theme::ThemeId::from_key(&now.ui_theme),
-            now.simple,
-        );
-        STATE.with(|st| st.borrow_mut().sections[ASPETTO].push(page));
-    }
+    // Aspetto: modalità e temi, disegnati da `cedro::ui::aspetto`.
+    heading_of(ASPETTO);
+    let now = read_settings();
+    let page_h = HEIGHT - FOOT_H - top - 8;
+    let page = crate::aspetto_win::create(
+        hwnd,
+        ID_ASPETTO,
+        (px(x, dpi), px(top, dpi), px(cw, dpi), px(page_h, dpi)),
+        dpi,
+        cedro::ui::theme::ThemeId::from_key(&now.ui_theme),
+        now.simple,
+    );
+    STATE.with(|st| st.borrow_mut().sections[ASPETTO].push(page));
 
     // Ruota
     heading_of(1);
@@ -533,7 +521,7 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
 
     // Il piede: firma a sinistra, Annulla e Salva a destra.
     let foot = HEIGHT - FOOT_H;
-    let powered_w = if cedro::edizione::BONDENO { 440 } else { 300 };
+    let powered_w = if cedro::edizione::bondeno() { 440 } else { 300 };
     child(hwnd, s, "", crate::firma_win::SS_OWNERDRAW, ID_POWERED, (18, foot + 16, powered_w, 24), dpi, small, None);
     child(hwnd, b, "Annulla", owner, IDCANCEL.0, (WIDTH - 18 - 88 - 8 - 88, foot + 12, 88, 32), dpi, normal, None);
     child(hwnd, b, "Salva", owner, IDOK.0, (WIDTH - 18 - 88, foot + 12, 88, 32), dpi, bold, None);
@@ -744,8 +732,8 @@ unsafe fn build_about(hwnd: HWND, dpi: u32, x: i32, cw: i32, normal: HFONT, smal
     child(hwnd, s, "Convertitore di file, con una ruota al cursore · Licenza MIT", SS_NOPREFIX, ID_DESC, (x + 72, 47, cw - 72, 18), dpi, small, Some(SEC));
     child(hwnd, s, "", SS_OWNERDRAW, ID_ABOUT_POWERED, (x + 72, 65, cw - 72, 18), dpi, small, Some(SEC));
     STATE.with(|st| st.borrow_mut().lines[SEC].push(px(92, dpi)));
-    // Edizione Bondeno: il riquadro con lo stemma, e tutto il resto scende di `e` (la lista si accorcia).
-    let e = if cedro::edizione::BONDENO {
+    // Tema Bondeno: il riquadro con lo stemma, e tutto il resto scende di `e` (la lista si accorcia).
+    let e = if cedro::edizione::bondeno() {
         child(hwnd, s, "", SS_OWNERDRAW, ID_ENTE_ABOUT, (x, 104, cw, 80), dpi, small, Some(SEC));
         92
     } else {
@@ -836,7 +824,6 @@ unsafe fn fill(hwnd: HWND, s: &Settings, autostart: bool) {
     set_check(hwnd, ID_NOTIFY, s.notify);
     set_check(hwnd, ID_REVEAL, s.reveal);
     set_check(hwnd, ID_PROGRESS, s.progress);
-    set_check(hwnd, ID_SIMPLE, s.simple);
     set_check(hwnd, ID_SHIFT, s.key_shift);
     set_check(hwnd, ID_CTRL, s.key_ctrl);
     set_check(hwnd, ID_ALT, s.key_alt);
@@ -898,8 +885,8 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         Dest::Same
     };
     let base = read_settings();
-    // Tema e modalità scelti in «Aspetto» (non c'è nell'edizione Bondeno).
-    let look = if cedro::edizione::BONDENO { None } else { crate::aspetto_win::value(item(hwnd, ID_ASPETTO)) };
+    // Tema e modalità scelti in «Aspetto».
+    let look = crate::aspetto_win::value(item(hwnd, ID_ASPETTO));
     Settings {
         quality: quality(hwnd),
         notify: is_checked(hwnd, ID_NOTIFY),
@@ -910,7 +897,7 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         dialogs: is_checked(hwnd, ID_DIALOGS),
         reveal: is_checked(hwnd, ID_REVEAL),
         progress: is_checked(hwnd, ID_PROGRESS),
-        simple: if cedro::edizione::BONDENO { is_checked(hwnd, ID_SIMPLE) } else { look.map_or(base.simple, |l| l.1) },
+        simple: look.map_or(base.simple, |l| l.1),
         view_asked: base.view_asked,
         ui_theme: look.map_or(base.ui_theme.clone(), |l| l.0.key().to_string()),
         // Dove il PC non ha l'accelerazione l'interruttore è bloccato: resta la scelta di prima.
@@ -1069,7 +1056,7 @@ unsafe fn draw_logo(dis: &DRAWITEMSTRUCT) {
     }
 }
 
-/// Edizione Bondeno, in cima alle sezioni: lo stemma e «Comune di / Bondeno», con una riga sotto.
+/// Tema Bondeno, in cima alle sezioni: lo stemma e «Comune di / Bondeno», con una riga sotto.
 unsafe fn draw_ente(dis: &DRAWITEMSTRUCT) {
     clear(dis, SIDE);
     let r = dis.rcItem;
@@ -1086,7 +1073,7 @@ unsafe fn draw_ente(dis: &DRAWITEMSTRUCT) {
     FillRect(dis.hDC, &line, brush(&BRUSH_LINE, LINE));
 }
 
-/// Il riquadro della scheda Informazioni: stemma con la scritta e due righe sull'edizione.
+/// Il riquadro della scheda Informazioni: stemma con la scritta e due righe sul tema.
 unsafe fn draw_ente_about(dis: &DRAWITEMSTRUCT) {
     clear(dis, WHITE);
     let r = dis.rcItem;
@@ -1098,12 +1085,12 @@ unsafe fn draw_ente_about(dis: &DRAWITEMSTRUCT) {
     let left = r.left + px(12, dpi) + side as i32 + px(14, dpi);
     let right = r.right - px(12, dpi);
     let mid = (r.top + r.bottom) / 2;
-    put_text(dis.hDC, "Edizione per il Comune di Bondeno", &RECT { left, top: mid - px(28, dpi), right, bottom: mid - px(6, dpi) }, bold, PRIMARY, DT_LEFT);
+    put_text(dis.hDC, "Tema Comune di Bondeno", &RECT { left, top: mid - px(28, dpi), right, bottom: mid - px(6, dpi) }, bold, PRIMARY, DT_LEFT);
     let mut note = RECT { left, top: mid - px(4, dpi), right, bottom: r.bottom - px(2, dpi) };
     let old = SelectObject(dis.hDC, small.into());
     SetTextColor(dis.hDC, GREY);
     SetBkMode(dis.hDC, TRANSPARENT);
-    let mut wide: Vec<u16> = "Stesse funzioni di Cedro, con lo stemma del Comune. Si aggiorna solo con i pacchetti di questa edizione."
+    let mut wide: Vec<u16> = "Stesse funzioni di Cedro, con i colori, il carattere e lo stemma del Comune. Si cambia in Aspetto."
         .encode_utf16()
         .collect();
     DrawTextW(dis.hDC, &mut wide, &mut note, DT_LEFT | DT_WORDBREAK | DT_NOPREFIX);

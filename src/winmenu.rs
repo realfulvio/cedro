@@ -129,8 +129,8 @@ pub fn measure(lparam: LPARAM) -> bool {
                 ReleaseDC(None, dc);
                 mis.itemWidth = (size.cx + px(30 + 28)) as u32;
                 mis.itemHeight = px(if kind == Kind::Header { 30 } else { 34 }) as u32;
-                if kind == Kind::Header && cedro::edizione::BONDENO {
-                    // Stemma a sinistra e due righe: «Cedro x.y.z» e «Edizione Comune di Bondeno».
+                if kind == Kind::Header && cedro::edizione::bondeno() {
+                    // Stemma a sinistra e due righe: «Cedro x.y.z» e «Comune di Bondeno».
                     mis.itemWidth = mis.itemWidth.max(px(30 + 190 + 28) as u32);
                     mis.itemHeight = px(50) as u32;
                 }
@@ -168,7 +168,7 @@ pub fn draw(lparam: LPARAM) -> bool {
                     crate::wingfx::round_rect(hdc, &inner, px(4) as f32, Some(HOVER), None);
                 }
                 SetBkMode(hdc, TRANSPARENT);
-                if kind == Kind::Header && cedro::edizione::BONDENO {
+                if kind == Kind::Header && cedro::edizione::bondeno() {
                     draw_bondeno_header(hdc, &r, &entry.text);
                     return true;
                 }
@@ -192,7 +192,7 @@ pub fn draw(lparam: LPARAM) -> bool {
     }
 }
 
-/// L'intestazione del menu nell'edizione Bondeno: lo stemma e, accanto, la versione e il nome dell'edizione.
+/// L'intestazione del menu con il tema Bondeno: lo stemma e, accanto, la versione e il nome del tema.
 unsafe fn draw_bondeno_header(hdc: HDC, r: &RECT, title: &[u16]) {
     let side = px(32);
     let top = (r.top + r.bottom - side) / 2;
@@ -201,7 +201,7 @@ unsafe fn draw_bondeno_header(hdc: HDC, r: &RECT, title: &[u16]) {
     let mid = (r.top + r.bottom) / 2;
     for (text, weight, size, color, area) in [
         (title.to_vec(), 700, 14, TEXT, RECT { left, top: mid - px(19), right: r.right, bottom: mid }),
-        (cedro::edizione::NOME.unwrap_or("").encode_utf16().collect(), 400, 12, MUTED, RECT { left, top: mid, right: r.right, bottom: mid + px(17) }),
+        (cedro::edizione::nome().unwrap_or("").encode_utf16().collect(), 400, 12, MUTED, RECT { left, top: mid, right: r.right, bottom: mid + px(17) }),
     ] {
         let f = font(weight, size);
         let old = SelectObject(hdc, f.into());
