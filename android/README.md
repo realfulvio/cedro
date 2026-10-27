@@ -65,3 +65,15 @@ quindi compatibile con F-Droid). Funziona con: link diretti a file audio/video, 
 Internet Archive (sceglie l'originale, il file più piccolo o l'MP3 già pronto). Provato sul Mi 9T con un oggetto di Internet Archive
 (Video 2,0 MB, Solo audio 56 KB). Limiti: **YouTube non è supportato** (dice chiaramente perché), nessun flusso HLS/DASH né video con DRM,
 nessun campo di testo per scrivere un link (si condivide o si incolla dagli appunti).
+
+## YouTube (con yt-dlp, solo nel nostro APK)
+
+Con `CEDRO_YOUTUBE=1 android/build.sh` (la release su GitHub e il nostro repo F-Droid) i link di YouTube offrono Video, Solo audio,
+Video leggero e Testo (audio scaricato e trascritto). Fa tutto `src/youtube.rs`, come sul computer, con le differenze di Android
+(modulo `youtube::android`): Android lascia partire programmi solo dalla cartella delle librerie dell'APK, quindi l'APK contiene
+quattro eseguibili precompilati di [youtubedl-android](https://github.com/yausername/youtubedl-android) 0.18.1 (pacchetti di
+[Termux](https://github.com/termux/termux-packages)): `libpython.so` (Python), `libqjs.so` (QuickJS, il runtime JavaScript che
+YouTube chiede), `libffmpeg.so` e `libffprobe.so`. `android/youtube-libs.py` li prende da Maven Central, controllando lo SHA-256.
+Al primo uso Cedro scarica da Maven Central solo le librerie di Python (14 MB) e di ffmpeg (35 MB), leggendo dall'archivio la parte
+per arm64; yt-dlp (la versione in Python) arriva da GitHub e si aggiorna da solo come sul computer.
+La build per il catalogo F-Droid (senza `CEDRO_YOUTUBE`) non contiene niente di tutto questo: lì YouTube passa il link a un'altra app.
