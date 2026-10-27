@@ -162,7 +162,13 @@ impl Screen {
     /// Il tema «Documento al centro» mostra il file scelto: lo si fa preparare al thread dei file.
     fn want_preview(&mut self) {
         if self.theme != ThemeId::DocumentoAlCentro || self.surface != Surface::Main || self.app.activity != Activity::Convert {
+            self.app.player = None;
             return;
+        }
+        // Cambiato file (o tolto dalla coda): quello che suonava si ferma.
+        let shown = self.app.selected.filter(|i| self.app.visible().contains(i)).and_then(|i| self.app.files.get(i)).map(|f| f.path.clone());
+        if self.app.player.as_ref().is_some_and(|p| Some(&p.path) != shown.as_ref()) {
+            self.app.player = None;
         }
         let vis = self.app.visible();
         let sel = self.app.selected.filter(|i| vis.contains(i)).or(vis.first().copied());
@@ -235,7 +241,12 @@ impl Screen {
     }
 
     pub fn pointer_up(&mut self, x: f32, y: f32, plat: &mut dyn Platform) {
-        if self.ui.drag.take().is_some() {
+        if let Some((act, _)) = self.ui.drag.take() {
+            if act == Act::MediaSeek {
+                if let Some(frac) = self.app.media_scrub.take() {
+                    self.app.media_seek(frac);
+                }
+            }
             self.ui.pressed = None;
             return;
         }
@@ -347,6 +358,7 @@ impl Screen {
         let frac = ((x - r.0 - 10.0) / (r.2 - 20.0)).clamp(0.0, 1.0);
         match act {
             Act::Quality => self.app.quality = (40.0 + frac * 55.0).round() as u8,
+            Act::MediaSeek => self.app.media_scrub = Some(frac),
             Act::OptSlider(opt) => {
                 if let Some(def) = self.app.option_defs().into_iter().find(|d| d.opt == *opt) {
                     if let Control::Range { min, max, .. } = def.control {
@@ -454,7 +466,8 @@ impl Screen {
                     app.values.set(def, v);
                 }
             }
-            Act::OptSlider(_) | Act::Quality => {}
+            Act::OptSlider(_) | Act::Quality | Act::MediaSeek => {}
+            Act::MediaPlay => app.media_toggle(),
             Act::Edit(field) => {
                 self.ui.edit = Some(field);
                 self.ui.caret = self.field_text(field).chars().count();
