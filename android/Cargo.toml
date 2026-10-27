@@ -1,0 +1,18 @@
+[package]
+name = "cedro-android"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "Prototipo Android di Cedro: la ruota a schermo intero e «Condividi con Cedro»."
+
+[lib]
+name = "cedro_android"
+crate-type = ["cdylib"]
+
+[dependencies]
+cedro = { path = ".." }
+android-activity = { version = "0.6", features = ["native-activity"] }
+jni = "0.21"
+log = "0.4"
+android_logger = "0.14"
