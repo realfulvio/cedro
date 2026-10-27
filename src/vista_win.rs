@@ -65,7 +65,7 @@ unsafe fn create() -> Result<()> {
     let x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
     let y = (GetSystemMetrics(SM_CYSCREEN) - height) / 3;
     *CHOSEN.lock().unwrap() = vista::initial();
-    let hwnd = CreateWindowExW(WINDOW_EX_STYLE::default(), class, w!("Cedro: scegli la vista"), style | WS_VISIBLE, x, y, width, height, None, None, Some(instance), None)?;
+    let hwnd = CreateWindowExW(WINDOW_EX_STYLE::default(), class, &HSTRING::from(cedro::i18n::tr("Cedro: scegli la vista").as_ref()), style | WS_VISIBLE, x, y, width, height, None, None, Some(instance), None)?;
     WINDOW.store(hwnd.0 as isize, Ordering::Relaxed);
     SetTimer(Some(hwnd), TIMER, 33, None);
     let _ = SetForegroundWindow(hwnd);

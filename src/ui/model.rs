@@ -75,8 +75,9 @@ pub struct FileItem {
 }
 
 impl FileItem {
+    /// Il nome da mostrare: segnato come testo dell'utente, che la traduzione lascia com'è (vedi `i18n::lit`).
     pub fn name(&self) -> String {
-        self.path.file_name().and_then(|n| n.to_str()).unwrap_or("file").to_string()
+        crate::i18n::lit(self.path.file_name().and_then(|n| n.to_str()).unwrap_or("file"))
     }
 }
 
