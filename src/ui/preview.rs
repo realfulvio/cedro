@@ -77,8 +77,8 @@ fn pages_of(path: &Path) -> Option<std::rc::Rc<Pages>> {
 fn layout(path: &Path) -> Option<Pages> {
     match engine::kind_of(path) {
         Kind::Text => {
-            let mut bytes = std::fs::read(path).ok()?;
-            bytes.truncate(MAX_TEXT);
+            let mut bytes = Vec::new();
+            std::io::Read::read_to_end(&mut std::io::Read::take(std::fs::File::open(path).ok()?, MAX_TEXT as u64), &mut bytes).ok()?;
             let text = engine::decode_text(&bytes);
             match engine::extension(path).as_str() {
                 "csv" | "tsv" => Some(table_pages(&text)),
