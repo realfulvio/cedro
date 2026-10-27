@@ -1,0 +1,45 @@
+# Bozza per il catalogo ufficiale (merge request su https://gitlab.com/fdroid/fdroiddata, file metadata/it.cedro.android.yml).
+# NON ancora provata sul buildserver di F-Droid: va aperta dall'account GitLab del maintainer e ripulita secondo i log del build.
+Categories:
+  - Multimedia
+  - System
+License: MIT
+AuthorName: Cedro contributors
+WebSite: https://github.com/realfulvio/cedro
+SourceCode: https://github.com/realfulvio/cedro
+IssueTracker: https://github.com/realfulvio/cedro/issues
+AutoName: Cedro
+
+RepoType: git
+Repo: https://github.com/realfulvio/cedro.git
+
+# Il modello di trascrizione si scarica al primo uso (rete) e fdk-aac (licenza Fraunhofer, non libera) è nel codice per l'AAC del video:
+# da verificare con i revisori se serve l'anti-feature «NonFreeDep» o togliere fdk-aac dall'APK per F-Droid.
+AntiFeatures:
+  NonFreeNet:
+    it: Scarica al primo uso il modello di trascrizione (Hugging Face) e, per i video da YouTube, yt-dlp.
+
+Builds:
+  - versionName: 0.21.2
+    versionCode: 2102
+    commit: android-v0.21.2
+    sudo:
+      - apt-get update
+      - apt-get install -y cmake python3
+    output: android/target/cedro-0.21.2-unsigned.apk
+    ndk: r27c
+    rm:
+      - target
+      - android/target
+    prebuild:
+      - curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --target aarch64-linux-android
+      - export PATH=$HOME/.cargo/bin:$PATH && cargo install cargo-ndk --locked
+    build:
+      - export PATH=$HOME/.cargo/bin:$PATH
+      - export ANDROID_NDK_HOME=$$NDK$$ ANDROID_SDK=$$SDK$$
+      - CEDRO_UNSIGNED=1 android/build.sh
+
+AutoUpdateMode: Version android-v%v
+UpdateCheckMode: Tags ^android-v
+CurrentVersion: 0.21.2
+CurrentVersionCode: 2102
