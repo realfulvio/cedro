@@ -1,0 +1,81 @@
+name: Android F-Droid
+
+# Repository F-Droid di Cedro (https://realfulvio.github.io/cedro/fdroid/repo): ogni release «android-v*» pubblicata
+# aggiorna l'indice e lo mette su GitHub Pages. Gli APK sono quelli firmati dalla CI «Android» (la chiave dell'app),
+# l'indice è firmato con una chiave a parte (quella del repository).
+# Secret: FDROID_KEYSTORE_B64 (keystore del repository in base64), FDROID_KS_PASS. Pages va attivato: Settings → Pages → «GitHub Actions».
+# Parte a mano o quando si pubblica una release Android; non pubblica nulla di suo.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag Android da cui prendere i metadati (es. android-v0.21.3)"
+        required: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  repo:
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'android-v') }}
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # I metadati F-Droid stanno nel ramo/tag Android; il workflow può girare anche da main.
+          ref: ${{ inputs.ref || github.event.release.tag_name }}
+      - name: fdroidserver
+        timeout-minutes: 15
+        run: |
+          export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a
+          sudo -E apt-get update -qq && sudo -E apt-get install -y -qq apksigner >/dev/null
+          python3 -m venv "$RUNNER_TEMP/fdroid" && "$RUNNER_TEMP/fdroid/bin/pip" install -q fdroidserver
+          echo "$RUNNER_TEMP/fdroid/bin" >> "$GITHUB_PATH"
+      - name: Prepara il repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEYSTORE_B64: ${{ secrets.FDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.FDROID_KS_PASS }}
+        run: |
+          set -euo pipefail
+          mkdir -p fdroid/repo fdroid/metadata && cd fdroid
+          cp -r ../android/fdroid/metadata/. metadata/
+          # Gli ultimi APK delle release Android pubblicate (non le bozze).
+          for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --limit 10 --exclude-drafts --json tagName --jq '.[].tagName | select(startswith("android-v"))'); do
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern 'cedro-*.apk' --dir repo --clobber || true
+          done
+          ls repo
+          echo "$KEYSTORE_B64" | base64 -d > keystore.p12
+          cat > config.yml <<CFG
+          repo_url: https://realfulvio.github.io/cedro/fdroid/repo
+          repo_name: Cedro
+          repo_description: Cedro per Android: converti file e trascrivi la voce, tutto sul telefono.
+          archive_older: 0
+          keystore: keystore.p12
+          repo_keyalias: cedro-repo
+          keystorepass: $KS_PASS
+          keypass: $KS_PASS
+          keydname: CN=Cedro F-Droid repo, O=Cedro
+          CFG
+          sed -i 's/^          //' config.yml
+          chmod 600 config.yml
+          fdroid update --create-metadata=false
+          rm -f keystore.p12 config.yml
+      - run: mkdir -p _site/fdroid && cp -r fdroid/repo _site/fdroid/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
