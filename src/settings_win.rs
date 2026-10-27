@@ -92,7 +92,19 @@ const LINE: COLORREF = COLORREF(0x00E5E5E5); // #E5E5E5
 const ENTE_SOFT: COLORREF = COLORREF(0x00FBF7F2); // #F2F7FB, il fondo del riquadro dell'edizione Bondeno
 const ENTE_LINE: COLORREF = COLORREF(0x00EEE3D4); // #D4E3EE
 
-const SECTIONS: [&str; 8] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni"];
+const SECTIONS: [&str; 9] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni", "Aspetto"];
+/// «Aspetto» (la grafica a temi) c'è solo nella versione standard.
+const ASPETTO: usize = 8;
+const ID_ASPETTO: i32 = 240;
+
+/// Le schede nell'ordine in cui si vedono nella colonna di sinistra.
+fn nav_order() -> Vec<usize> {
+    if cedro::edizione::BONDENO {
+        (0..ASPETTO).collect()
+    } else {
+        vec![0, ASPETTO, 1, 2, 3, 4, 5, 6, 7]
+    }
+}
 const DPI: [u32; 4] = [100, 144, 200, 300];
 const MAX_PAGES: [u32; 4] = [50, 100, 300, 0];
 const LANGS: [&str; 3] = ["auto", "it", "en"];
@@ -122,6 +134,10 @@ struct State {
     dpi: u32,
     /// I riquadri (pixel) disegnati dietro i campi di ogni sezione.
     frames: Vec<Vec<RECT>>,
+    /// Com'erano all'apertura (per allargarli quando la finestra cresce).
+    frames0: Vec<Vec<RECT>>,
+    /// Ogni controllo figlio com'era all'apertura: finestra, posizione in pixel, sezione.
+    layout: Vec<(HWND, RECT, Option<usize>)>,
     caption: HFONT,
 }
 
@@ -136,6 +152,8 @@ thread_local! {
         dest_dir: String::new(),
         dpi: 96,
         frames: Vec::new(),
+        frames0: Vec::new(),
+        layout: Vec::new(),
         caption: HFONT::default(),
     });
 }
@@ -225,7 +243,7 @@ unsafe fn create() -> Result<()> {
     };
     RegisterClassExW(&wc);
     let dpi = GetDpiForSystem();
-    let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN;
+    let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME | WS_CLIPCHILDREN;
     let mut rect = RECT { left: 0, top: 0, right: px(WIDTH, dpi), bottom: px(HEIGHT, dpi) };
     let _ = AdjustWindowRect(&mut rect, style, false);
     let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
@@ -362,8 +380,8 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     } else {
         12
     };
-    for (i, name) in SECTIONS.iter().enumerate() {
-        child(hwnd, b, name, owner, ID_NAV + i as i32, (8, nav_top + 38 * i as i32, SIDE_W - 16, 36), dpi, normal, None);
+    for (pos, sec) in nav_order().into_iter().enumerate() {
+        child(hwnd, b, SECTIONS[sec], owner, ID_NAV + sec as i32, (8, nav_top + 38 * pos as i32, SIDE_W - 16, 36), dpi, normal, None);
     }
 
     let x = SIDE_W + MARGIN; // sinistra del contenuto
@@ -402,9 +420,11 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     // Generale
     heading_of(0);
     let mut y = top;
-    let r = row(0, y, "Modalità Semplice", "Mostra solo l'essenziale. Le altre opzioni restano a un clic, in «Altre opzioni». Vale dalla prossima apertura del pannello.", 40, 0);
-    toggle(0, ID_SIMPLE, &r);
-    y = r.next;
+    if cedro::edizione::BONDENO {
+        let r = row(0, y, "Modalità Semplice", "Mostra solo l'essenziale. Le altre opzioni restano a un clic, in «Altre opzioni». Vale dalla prossima apertura del pannello.", 40, 0);
+        toggle(0, ID_SIMPLE, &r);
+        y = r.next;
+    }
     let r = row(0, y, "Avvia Cedro con Windows", "La stessa voce del menu dell'icona e dell'installatore.", 40, 0);
     toggle(0, ID_AUTO, &r);
     y = r.next;
@@ -419,6 +439,22 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     y = r.next;
     let r = row(0, y, "Registro attività", "Il file log.txt e config.txt stanno in %APPDATA%\\Cedro.", 130, 0);
     button(0, ID_LOG, &r, "Apri cartella", 130);
+
+    // Aspetto (solo versione standard): modalità e temi, disegnati da `cedro::ui::aspetto`.
+    if !cedro::edizione::BONDENO {
+        heading_of(ASPETTO);
+        let now = read_settings();
+        let page_h = HEIGHT - FOOT_H - top - 8;
+        let page = crate::aspetto_win::create(
+            hwnd,
+            ID_ASPETTO,
+            (px(x, dpi), px(top, dpi), px(cw, dpi), px(page_h, dpi)),
+            dpi,
+            cedro::ui::theme::ThemeId::from_key(&now.ui_theme),
+            now.simple,
+        );
+        STATE.with(|st| st.borrow_mut().sections[ASPETTO].push(page));
+    }
 
     // Ruota
     heading_of(1);
@@ -501,6 +537,87 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     child(hwnd, s, "", crate::firma_win::SS_OWNERDRAW, ID_POWERED, (18, foot + 16, powered_w, 24), dpi, small, None);
     child(hwnd, b, "Annulla", owner, IDCANCEL.0, (WIDTH - 18 - 88 - 8 - 88, foot + 12, 88, 32), dpi, normal, None);
     child(hwnd, b, "Salva", owner, IDOK.0, (WIDTH - 18 - 88, foot + 12, 88, 32), dpi, bold, None);
+    remember_layout(hwnd);
+}
+
+/// Ricorda dove sta ogni controllo: quando la finestra cresce si spostano o si allargano di conseguenza.
+unsafe fn remember_layout(hwnd: HWND) {
+    let mut found = Vec::new();
+    let mut at = GetWindow(hwnd, GW_CHILD).ok();
+    while let Some(c) = at {
+        let mut rc = RECT::default();
+        let _ = GetWindowRect(c, &mut rc);
+        let mut pts = [POINT { x: rc.left, y: rc.top }, POINT { x: rc.right, y: rc.bottom }];
+        MapWindowPoints(None, Some(hwnd), &mut pts);
+        found.push((c, RECT { left: pts[0].x, top: pts[0].y, right: pts[1].x, bottom: pts[1].y }));
+        at = GetWindow(c, GW_HWNDNEXT).ok();
+    }
+    STATE.with(|st| {
+        let mut st = st.borrow_mut();
+        st.layout = found
+            .into_iter()
+            .map(|(c, rc)| {
+                let sec = st.sections.iter().position(|list| list.contains(&c));
+                (c, rc, sec)
+            })
+            .collect();
+        st.frames0 = st.frames.clone();
+    });
+}
+
+/// Dove va un controllo quando la finestra è cresciuta di `dx`×`dy` pixel rispetto all'apertura.
+fn place(id: i32, sec: Option<usize>, rc: RECT, dx: i32, dy: i32, dpi: u32) -> RECT {
+    let (left0, right0) = (px(SIDE_W + MARGIN, dpi), px(WIDTH - MARGIN, dpi));
+    let mid = left0 + (right0 - left0) * 35 / 100;
+    let moved = |x: i32, y: i32| RECT { left: rc.left + x, top: rc.top + y, right: rc.right + x, bottom: rc.bottom + y };
+    let wider = |x: i32, y: i32| RECT { right: rc.right + x, bottom: rc.bottom + y, ..rc };
+    if (ID_NAV..ID_NAV + SECTIONS.len() as i32).contains(&id) || id == ID_ENTE {
+        return rc;
+    }
+    if sec.is_none() {
+        // Il piede: scende con il bordo; Annulla e Salva restano a destra.
+        return moved(if id == IDOK.0 || id == IDCANCEL.0 { dx } else { 0 }, dy);
+    }
+    match id {
+        ID_LIST => return wider(dx, dy),
+        ID_ASPETTO => return wider(dx, dy),
+        ID_SEARCH | ID_ENTE_ABOUT => return wider(dx, 0),
+        ID_COPIED | ID_ABOUT_POWERED | ID_LOGO => return rc,
+        _ => {}
+    }
+    // Sotto la lista dei crediti: il pulsante e la nota.
+    if sec == Some(7) && rc.top >= px(480, dpi) {
+        return if id == ID_DESC { RECT { right: rc.right + dx, ..moved(0, dy) } } else { moved(0, dy) };
+    }
+    if (id == ID_TITLE || id == ID_DESC) && rc.left < mid {
+        return wider(dx, 0);
+    }
+    if rc.right >= right0 - px(60, dpi) || rc.left >= mid {
+        return moved(dx, 0);
+    }
+    rc
+}
+
+/// La finestra è stata ridimensionata: ridispone i controlli.
+unsafe fn relayout(hwnd: HWND) {
+    let mut client = RECT::default();
+    let _ = GetClientRect(hwnd, &mut client);
+    let dpi = STATE.with(|st| st.borrow().dpi);
+    let (dx, dy) = (client.right - px(WIDTH, dpi), client.bottom - px(HEIGHT, dpi));
+    let layout = STATE.with(|st| st.borrow().layout.clone());
+    for (c, rc, sec) in layout {
+        let id = GetDlgCtrlID(c);
+        let to = place(id, sec, rc, dx, dy, dpi);
+        let _ = SetWindowPos(c, None, to.left, to.top, to.right - to.left, to.bottom - to.top, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    STATE.with(|st| {
+        let mut st = st.borrow_mut();
+        let base = st.frames0.clone();
+        for (cur, orig) in st.frames.iter_mut().zip(base) {
+            *cur = orig.into_iter().map(|f| RECT { right: f.right + dx, ..f }).collect();
+        }
+    });
+    let _ = InvalidateRect(Some(hwnd), None, false);
 }
 
 /// Larghezza in pixel del dispositivo di `text` col carattere dato.
@@ -781,6 +898,8 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         Dest::Same
     };
     let base = read_settings();
+    // Tema e modalità scelti in «Aspetto» (non c'è nell'edizione Bondeno).
+    let look = if cedro::edizione::BONDENO { None } else { crate::aspetto_win::value(item(hwnd, ID_ASPETTO)) };
     Settings {
         quality: quality(hwnd),
         notify: is_checked(hwnd, ID_NOTIFY),
@@ -791,8 +910,9 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         dialogs: is_checked(hwnd, ID_DIALOGS),
         reveal: is_checked(hwnd, ID_REVEAL),
         progress: is_checked(hwnd, ID_PROGRESS),
-        simple: is_checked(hwnd, ID_SIMPLE),
+        simple: if cedro::edizione::BONDENO { is_checked(hwnd, ID_SIMPLE) } else { look.map_or(base.simple, |l| l.1) },
         view_asked: base.view_asked,
+        ui_theme: look.map_or(base.ui_theme.clone(), |l| l.0.key().to_string()),
         // Dove il PC non ha l'accelerazione l'interruttore è bloccato: resta la scelta di prima.
         gpu: if cedro::accel::hardware().gpu.is_some() { is_checked(hwnd, ID_GPU) } else { base.gpu },
         avx512: if cedro::accel::hardware().avx512 { is_checked(hwnd, ID_AVX) } else { base.avx512 },
@@ -1054,7 +1174,7 @@ unsafe fn paint(hwnd: HWND) {
     let mut client = RECT::default();
     let _ = GetClientRect(hwnd, &mut client);
     FillRect(hdc, &client, brush(&BRUSH_WHITE, WHITE));
-    let foot_y = px(HEIGHT - FOOT_H, dpi);
+    let foot_y = client.bottom - px(FOOT_H, dpi);
     let side = RECT { left: 0, top: 0, right: px(SIDE_W, dpi), bottom: foot_y };
     FillRect(hdc, &side, brush(&BRUSH_SIDE, SIDE));
     let edge = RECT { left: px(SIDE_W, dpi) - 1, top: 0, right: px(SIDE_W, dpi), bottom: foot_y };
@@ -1075,7 +1195,7 @@ unsafe fn paint(hwnd: HWND) {
         crate::wingfx::round_rect(hdc, &f, px(5, dpi) as f32, Some(WHITE), Some((LINE, 1.0)));
     }
     for y in lines {
-        let line = RECT { left: px(SIDE_W + MARGIN, dpi), top: y, right: px(WIDTH - MARGIN, dpi), bottom: y + 1 };
+        let line = RECT { left: px(SIDE_W + MARGIN, dpi), top: y, right: client.right - px(MARGIN, dpi), bottom: y + 1 };
         FillRect(hdc, &line, brush(&BRUSH_LINE, LINE));
     }
     let _ = EndPaint(hwnd, &ps);
@@ -1150,6 +1270,22 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             LRESULT(1)
         }
         WM_ERASEBKGND => LRESULT(1),
+        WM_GETMINMAXINFO => {
+            // Non si rimpicciolisce sotto la misura di apertura: i controlli non ci starebbero.
+            let dpi = STATE.with(|st| st.borrow().dpi);
+            let style = WINDOW_STYLE(GetWindowLongW(hwnd, GWL_STYLE) as u32);
+            let mut rect = RECT { left: 0, top: 0, right: px(WIDTH, dpi), bottom: px(HEIGHT, dpi) };
+            let _ = AdjustWindowRect(&mut rect, style, false);
+            let info = &mut *(lparam.0 as *mut MINMAXINFO);
+            info.ptMinTrackSize = POINT { x: rect.right - rect.left, y: rect.bottom - rect.top };
+            LRESULT(0)
+        }
+        WM_SIZE => {
+            if wparam.0 as u32 != SIZE_MINIMIZED {
+                relayout(hwnd);
+            }
+            LRESULT(0)
+        }
         WM_PAINT => {
             paint(hwnd);
             LRESULT(0)

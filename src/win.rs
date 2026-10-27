@@ -1,9 +1,11 @@
 use cedro::{
     wheelgeom_bounds, wheelgfx,
-    append_log, kind_of, mode_from_vk, perform, read_quality, read_settings, same_kind_paths, slices, update, Kind, Mode,
+    append_log, kind_of, mode_from_vk, perform_into, read_quality, read_settings, same_kind_paths, slices, update, Kind, Mode,
     Settings,
     Slice,
 };
+use cedro::ui::gfx::{Fonts, GlyphCache};
+use cedro::ui::wheel::{Effect, WheelUi};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU32, AtomicU8, Ordering};
@@ -78,6 +80,11 @@ struct Session {
     quality: u8,
     icon: HICON,
     target: Option<IDropTarget>,
+    /// La ruota della versione standard (vuota in quella del Comune di Bondeno).
+    look: Option<WheelUi>,
+    org_x: i32,
+    org_y: i32,
+    scale: f32,
 }
 
 thread_local! {
@@ -102,6 +109,10 @@ thread_local! {
         quality: 82,
         icon: HICON::default(),
         target: None,
+        look: None,
+        org_x: 0,
+        org_y: 0,
+        scale: 1.0,
     });
 }
 
@@ -240,6 +251,9 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
         WM_TRAY => {
             if lparam.0 as u32 == WM_RBUTTONUP || lparam.0 as u32 == WM_CONTEXTMENU {
                 show_menu(hwnd);
+            } else if lparam.0 as u32 == WM_LBUTTONUP && !cedro::edizione::BONDENO && cedro::ui::theme::ThemeId::from_key(&read_settings().ui_theme) == cedro::ui::theme::ThemeId::CedroCompatto {
+                // Con «Cedro compatto» un clic sull'icona apre la finestrella.
+                crate::ui_win::open_compact();
             } else if lparam.0 as u32 == WM_LBUTTONDBLCLK {
                 crate::settings_win::open();
             }
@@ -253,7 +267,13 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 3 => check_updates(true),
                 5 => crate::settings_win::open(),
                 6 => crate::guida_win::open(),
-                7 => crate::conversioni_win::open(),
+                7 => {
+                    if cedro::edizione::BONDENO {
+                        crate::conversioni_win::open()
+                    } else {
+                        crate::ui_win::open()
+                    }
+                }
                 4 => {
                     let on = !autostart_enabled();
                     if let Err(e) = set_autostart(on) {
@@ -318,6 +338,13 @@ fn on_input(kind: usize, extra: isize) {
                 close_wheel();
                 return;
             }
+            if vk == 0x0D && down && g.chord && g.look.as_ref().is_some_and(|u| u.has_file && u.current().is_some()) {
+                // Invio esegue la fetta in evidenza, come il pulsante «Converti».
+                g.hover = g.look.as_ref().and_then(|u| u.current()).map_or(-1, |i| i as i32);
+                drop(g);
+                on_drop();
+                return;
+            }
             if down {
                 if let Some(mode) = mode_from_vk(vk).filter(|m| mode_enabled(*m)) {
                     g.mode = mode;
@@ -341,9 +368,32 @@ fn on_input(kind: usize, extra: isize) {
     }
     let flag = extra as u32;
     let mut act = 0;
+    let mut arg = 0u8;
     SESSION.with(|s| {
         let mut g = s.borrow_mut();
         match flag {
+            WM_LBUTTONDOWN if g.chord && !g.wheel.0.is_null() && g.look.is_some() => {
+                // La ruota nuova ha anche i dettagli da toccare: la sua pagina dice cosa fare.
+                let (lx, ly) = ((x - g.org_x) as f32 / g.scale, (y - g.org_y) as f32 / g.scale);
+                match g.look.as_mut().map(|u| u.press(lx, ly)).unwrap_or(Effect::Close) {
+                    Effect::Commit(i) => {
+                        g.hover = i as i32;
+                        act = 1;
+                    }
+                    Effect::Close => act = 2,
+                    Effect::Redraw => act = 3,
+                    Effect::OpenFull => act = 4,
+                    Effect::Mode(m) => {
+                        act = 5;
+                        arg = m;
+                    }
+                    Effect::Simple(on) => {
+                        act = 6;
+                        arg = on as u8;
+                    }
+                    Effect::None => {}
+                }
+            }
             WM_LBUTTONDOWN if g.chord && !g.wheel.0.is_null() => {
                 act = if g.hover >= 0 { 1 } else { 2 };
             }
@@ -381,6 +431,9 @@ fn on_input(kind: usize, extra: isize) {
                 }
             }
             WM_LBUTTONUP => {
+                if let Some(ui) = g.look.as_mut() {
+                    ui.release();
+                }
                 let chord = g.chord;
                 g.down = false;
                 g.dragging = false;
@@ -404,10 +457,52 @@ fn on_input(kind: usize, extra: isize) {
             _ => {}
         }
     });
-    if act == 1 {
-        on_drop();
-    } else if act == 2 {
-        close_wheel();
+    match act {
+        1 => on_drop(),
+        2 => close_wheel(),
+        3 => refresh_wheel(),
+        4 => open_conversions_from_wheel(),
+        5 => {
+            SESSION.with(|s| s.borrow_mut().mode = mode_from_code(arg as u32 + 1));
+            refresh_wheel();
+        }
+        6 => set_simple_from_wheel(arg != 0),
+        _ => {}
+    }
+}
+
+/// «Apri Conversioni» nella ruota: chiude la ruota e apre la finestra con i file e il formato scelto.
+fn open_conversions_from_wheel() {
+    let (paths, action) = SESSION.with(|s| {
+        let g = s.borrow();
+        let action = g.look.as_ref().and_then(|u| u.current()).and_then(|i| wheel_list(g.paths.first().map(|p| kind_of(p)).unwrap_or(Kind::Other), g.mode).get(i).map(|sl| sl.id));
+        (g.paths.clone(), action.filter(|_| g.mode == Mode::Convert))
+    });
+    close_wheel();
+    crate::ui_win::open_with(paths, action);
+}
+
+/// Il selettore Semplificata / Standard della ruota vale per tutto Cedro: lo salva e rifà la ruota.
+fn set_simple_from_wheel(on: bool) {
+    let mut saved = read_settings();
+    saved.simple = on;
+    let _ = cedro::write_settings(&saved);
+    let (hwnd, sizes) = SESSION.with(|s| {
+        let mut g = s.borrow_mut();
+        let scale = g.scale;
+        let center = (g.anchor_x, g.anchor_y);
+        let Some(ui) = g.look.as_mut() else { return (HWND::default(), None) };
+        ui.set_simple(on);
+        let (w, h, cx, cy) = look_metrics(ui, scale);
+        g.org_x = center.0 - cx;
+        g.org_y = center.1 - cy;
+        (g.wheel, Some((g.org_x, g.org_y, w, h)))
+    });
+    if let (false, Some((x, y, w, h))) = (hwnd.0.is_null(), sizes) {
+        unsafe {
+            let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), x, y, w, h, SWP_NOACTIVATE);
+        }
+        paint_wheel(hwnd);
     }
 }
 
@@ -758,6 +853,80 @@ fn known_folder(id: &windows_core::GUID) -> Option<PathBuf> {
     }
 }
 
+/// La ruota nuova c'è solo nella versione standard; quella del Comune di Bondeno ha la sua.
+fn standard() -> bool {
+    !cedro::edizione::BONDENO
+}
+
+/// Pixel per unità della tavola della ruota: densità dello schermo per lo zoom dell'interfaccia.
+fn wheel_scale() -> f32 {
+    unsafe { GetDpiForSystem() as f32 / 96.0 * cedro::ui::ZOOM }
+}
+
+/// Le fette del file e del modo, nell'ordine in cui si vedono.
+fn wheel_list(kind: Kind, mode: Mode) -> Vec<Slice> {
+    if standard() {
+        cedro::ui::wheel::list(kind, mode)
+    } else {
+        slices(kind, mode).to_vec()
+    }
+}
+
+thread_local! {
+    static GLYPHS: RefCell<GlyphCache> = RefCell::new(GlyphCache::new());
+}
+
+/// L'anteprima del file, preparata da un altro thread: aspetta qui finché la ruota non la prende.
+static THUMB: Mutex<Option<(PathBuf, cedro::ui::gfx::Image)>> = Mutex::new(None);
+const WM_WHEEL_THUMB: u32 = WM_APP + 40;
+
+/// L'aspetto della ruota per i file e il modo dati, con le impostazioni di ora.
+fn new_look(paths: &[PathBuf], mode: Mode) -> WheelUi {
+    let s = read_settings();
+    let kind = paths.first().map(|p| kind_of(p)).unwrap_or(Kind::Other);
+    let mut ui = WheelUi::new(kind, mode_code(mode) as u8 - 1, s.simple);
+    ui.modes_on = [s.key_shift, s.key_ctrl, s.key_alt];
+    ui.quality = s.quality;
+    ui.beside = if s.dest == cedro::Dest::Same { cedro::ui::wheel::Beside::Locked } else { cedro::ui::wheel::Beside::Off };
+    ui.dest_note = match s.dest {
+        cedro::Dest::Same => "Copia accanto all'originale".to_string(),
+        cedro::Dest::Sub => "Copia nella cartella «Cedro»".to_string(),
+        cedro::Dest::Fixed => {
+            let name = std::path::Path::new(s.dest_dir.trim()).file_name().and_then(|n| n.to_str()).unwrap_or("la cartella scelta").to_string();
+            format!("Copia in {name}")
+        }
+    };
+    set_look_file(&mut ui, paths);
+    ui
+}
+
+fn set_look_file(ui: &mut WheelUi, paths: &[PathBuf]) {
+    let Some(first) = paths.first() else { return };
+    ui.has_file = true;
+    ui.name = if paths.len() > 1 { format!("{} (+{})", cedro::ui::wheel::file_name_of(first), paths.len() - 1) } else { cedro::ui::wheel::file_name_of(first) };
+}
+
+/// Prepara in un thread la miniatura del primo file e avverte la ruota quando è pronta.
+fn load_thumb(wheel: HWND, paths: &[PathBuf]) {
+    let Some(first) = paths.first().cloned() else { return };
+    let raw = wheel.0 as isize;
+    std::thread::spawn(move || {
+        if let Some(img) = cedro::ui::media::thumb_of(&first, 420) {
+            *THUMB.lock().unwrap_or_else(|e| e.into_inner()) = Some((first, img));
+            unsafe {
+                let _ = PostMessageW(Some(HWND(raw as *mut _)), WM_WHEEL_THUMB, WPARAM(0), LPARAM(0));
+            }
+        }
+    });
+}
+
+/// Misure in pixel della ruota nuova: (larghezza, altezza, centro x, centro y).
+fn look_metrics(ui: &WheelUi, scale: f32) -> (i32, i32, i32, i32) {
+    let (w, h) = ui.size();
+    let (cx, cy) = ui.center();
+    ((w * scale).ceil() as i32, (h * scale).ceil() as i32, (cx * scale).round() as i32, (cy * scale).round() as i32)
+}
+
 fn open_wheel(x: i32, y: i32, mode: Mode, paths: Vec<PathBuf>, chord: bool) {
     unsafe {
         let instance = GetModuleHandleW(None).unwrap_or_default();
@@ -771,7 +940,10 @@ fn open_wheel(x: i32, y: i32, mode: Mode, paths: Vec<PathBuf>, chord: bool) {
             ..Default::default()
         };
         let _ = RegisterClassExW(&wc);
-        let (left, top) = clamp_origin(x - WHEEL / 2, y - WHEEL / 2);
+        let scale = wheel_scale();
+        let look = if standard() { Some(new_look(&paths, mode)) } else { None };
+        let (ww, wh, cxp, cyp) = look.as_ref().map(|u| look_metrics(u, scale)).unwrap_or((WHEEL, WHEEL, WHEEL / 2, WHEEL / 2));
+        let (left, top) = clamp_origin(x - cxp, y - cyp, ww, wh);
         let hwnd = match CreateWindowExW(
             WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED,
             class,
@@ -779,8 +951,8 @@ fn open_wheel(x: i32, y: i32, mode: Mode, paths: Vec<PathBuf>, chord: bool) {
             WS_POPUP,
             left,
             top,
-            WHEEL,
-            WHEEL,
+            ww,
+            wh,
             None,
             None,
             Some(instance.into()),
@@ -796,11 +968,15 @@ fn open_wheel(x: i32, y: i32, mode: Mode, paths: Vec<PathBuf>, chord: bool) {
         SESSION.with(|s| {
             let mut g = s.borrow_mut();
             g.wheel = hwnd;
-            g.anchor_x = left + WHEEL / 2;
-            g.anchor_y = top + WHEEL / 2;
+            g.anchor_x = left + cxp;
+            g.anchor_y = top + cyp;
+            g.org_x = left;
+            g.org_y = top;
+            g.scale = scale;
+            g.look = look;
             g.mode = mode;
             g.hover = -1;
-            g.paths = paths;
+            g.paths = paths.clone();
             g.chord = chord;
             g.armed = true;
             g.target = Some(target.clone());
@@ -810,28 +986,40 @@ fn open_wheel(x: i32, y: i32, mode: Mode, paths: Vec<PathBuf>, chord: bool) {
         }
         let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         let _ = SetWindowPos(hwnd, Some(HWND_TOPMOST), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        if standard() {
+            load_thumb(hwnd, &paths);
+        }
         paint_wheel(hwnd);
     }
 }
 
-fn clamp_origin(x: i32, y: i32) -> (i32, i32) {
+fn clamp_origin(x: i32, y: i32, w: i32, h: i32) -> (i32, i32) {
     unsafe {
         let vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
         let vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
         let vw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
         let vh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-        let x = x.clamp(vx, vx + vw - WHEEL);
-        let y = y.clamp(vy, vy + vh - WHEEL);
+        let x = x.clamp(vx, (vx + vw - w).max(vx));
+        let y = y.clamp(vy, (vy + vh - h).max(vy));
         (x, y)
     }
 }
 
 fn refresh_wheel() {
     SESSION.with(|s| {
-        let hwnd = s.borrow().wheel;
+        let mut g = s.borrow_mut();
+        let hwnd = g.wheel;
         if hwnd.0.is_null() {
             return;
         }
+        // Un modo nuovo (Shift, Ctrl, Alt) o i file arrivati dopo: la ruota rifà le sue fette.
+        let kind = g.paths.first().map(|p| kind_of(p)).unwrap_or(Kind::Other);
+        let (code, paths) = (mode_code(g.mode) as u8 - 1, g.paths.clone());
+        if let Some(ui) = g.look.as_mut() {
+            ui.set_kind_mode(kind, code);
+            set_look_file(ui, &paths);
+        }
+        drop(g);
         paint_wheel(hwnd);
     });
 }
@@ -848,6 +1036,7 @@ fn close_wheel() {
         g.paths.clear();
         g.hover = -1;
         g.target = None;
+        g.look = None;
         (hwnd, hwnd)
     });
     if target_hwnd.0.is_null() {
@@ -864,15 +1053,17 @@ fn close_wheel() {
 fn on_drop() {
     let job = SESSION.with(|s| {
         let g = s.borrow();
-        (g.paths.clone(), g.hover, g.mode, g.quality)
+        let quality = g.look.as_ref().map_or(g.quality, |u| u.quality);
+        let beside = g.look.as_ref().is_some_and(|u| u.beside == cedro::ui::wheel::Beside::On);
+        (g.paths.clone(), g.hover, g.mode, quality, beside)
     });
-    let (all, hover, mode, quality) = job;
+    let (all, hover, mode, quality, beside) = job;
     close_wheel();
     if all.is_empty() || hover < 0 {
         return;
     }
     let kind = kind_of(&all[0]);
-    let list = slices(kind, mode);
+    let list = wheel_list(kind, mode);
     let Some(slice) = list.get(hover as usize) else {
         return;
     };
@@ -904,7 +1095,9 @@ fn on_drop() {
     }
     for (i, path) in paths.iter().enumerate() {
         crate::progress_win::step(i, &progress_label(i, path));
-        match perform(path, slice.id, quality) {
+        // «Salva accanto all'originale» spuntato nella ruota vale per questo lavoro e basta.
+        let out_dir = if beside { path.parent() } else { None };
+        match perform_into(path, slice.id, quality, out_dir) {
             Ok(out) => {
                 notes.push(format!("{} · {}", name(&out.path), out.message));
                 crate::progress_win::produced(&out.path);
@@ -962,7 +1155,7 @@ fn current_slices() -> (Vec<Slice>, i32, Mode, String) {
             .and_then(|n| n.to_str())
             .unwrap_or("in attesa")
             .to_string();
-        (slices(kind, g.mode).to_vec(), g.hover, g.mode, label)
+        (wheel_list(kind, g.mode), g.hover, g.mode, label)
     })
 }
 
@@ -974,6 +1167,21 @@ unsafe extern "system" fn wheel_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lpara
     }
     if msg == WM_ERASEBKGND {
         return LRESULT(1);
+    }
+    if msg == WM_WHEEL_THUMB {
+        let ready = THUMB.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some((path, img)) = ready {
+            SESSION.with(|s| {
+                let mut g = s.borrow_mut();
+                if g.paths.first() == Some(&path) {
+                    if let Some(ui) = g.look.as_mut() {
+                        ui.thumb = Some(img);
+                    }
+                }
+            });
+            paint_wheel(hwnd);
+        }
+        return LRESULT(0);
     }
     DefWindowProcW(hwnd, msg, wparam, lparam)
 }
@@ -1015,8 +1223,56 @@ unsafe fn text_layer(mem: HDC, mask: *mut u8, px: &mut [u8], color: (u8, u8, u8)
     }
 }
 
+/// Disegna la ruota nuova e la mostra sulla finestra a strati.
+fn paint_wheel_look(hwnd: HWND) {
+    let frame = SESSION.with(|s| {
+        let g = s.borrow();
+        let ui = g.look.as_ref()?;
+        let (pw, ph, _, _) = look_metrics(ui, g.scale);
+        GLYPHS.with(|cache| {
+            let mut cache = cache.borrow_mut();
+            let mut p = cedro::ui::gfx::Painter::new(pw as u32, ph as u32, g.scale, Fonts::shared(), &mut cache);
+            ui.draw(&mut p);
+            Some((p.bgra(), pw, ph))
+        })
+    });
+    let Some((bgra, pw, ph)) = frame else { return };
+    unsafe {
+        let screen = GetDC(None);
+        let mem = CreateCompatibleDC(Some(screen));
+        let mut info = BITMAPINFO::default();
+        info.bmiHeader = BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: pw,
+            biHeight: -ph,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        };
+        let mut bits = std::ptr::null_mut();
+        if let Ok(bmp) = CreateDIBSection(Some(screen), &info, DIB_RGB_COLORS, &mut bits, None, 0) {
+            std::ptr::copy_nonoverlapping(bgra.as_ptr(), bits as *mut u8, bgra.len());
+            let old = SelectObject(mem, bmp.into());
+            let size = SIZE { cx: pw, cy: ph };
+            let origin = POINT { x: 0, y: 0 };
+            let blend = BLENDFUNCTION { BlendOp: 0, BlendFlags: 0, SourceConstantAlpha: 255, AlphaFormat: 1 };
+            let _ = UpdateLayeredWindow(hwnd, Some(screen), None, Some(&size), Some(mem), Some(&origin), COLORREF(0), Some(&blend), ULW_ALPHA);
+            SelectObject(mem, old);
+            let _ = DeleteObject(bmp.into());
+        }
+        let _ = DeleteDC(mem);
+        ReleaseDC(None, screen);
+    }
+}
+
 fn paint_wheel(hwnd: HWND) {
+    if standard() {
+        paint_wheel_look(hwnd);
+        return;
+    }
     let (list, hover, mode, name) = current_slices();
+    let tema = cedro::tema::attivo();
     let mut px = wheelgfx::render(list.len(), hover);
     unsafe {
         let screen = GetDC(None);
@@ -1043,13 +1299,13 @@ fn paint_wheel(hwnd: HWND) {
             }
             restore_font(mem, font);
         };
-        text_layer(mem, mask, &mut px, wheelgfx::TEXT, || labels(false));
-        text_layer(mem, mask, &mut px, wheelgfx::TEXT_ON_HOVER, || labels(true));
-        let title = match mode {
-            Mode::Convert => "CONVERSIONE",
-            Mode::Tools => "STRUMENTI",
-            Mode::Actions => "AZIONI",
-        };
+        text_layer(mem, mask, &mut px, tema.slice_fg, || labels(false));
+        text_layer(mem, mask, &mut px, tema.hover_fg, || labels(true));
+        let title = tema.titolo(match mode {
+            Mode::Convert => "Conversione",
+            Mode::Tools => "Strumenti",
+            Mode::Actions => "Azioni",
+        });
         let center = if hover >= 0 {
             list.get(hover as usize).map(|s| s.label).unwrap_or("Annulla")
         } else {
@@ -1061,9 +1317,9 @@ fn paint_wheel(hwnd: HWND) {
             text_centered(mem, cx, cy + dy, text);
             restore_font(mem, font);
         };
-        text_layer(mem, mask, &mut px, wheelgfx::MUTED, || line(-20, -12, 700, title));
-        text_layer(mem, mask, &mut px, wheelgfx::NAVY, || line(2, -18, 700, center));
-        text_layer(mem, mask, &mut px, wheelgfx::MUTED, || line(24, -12, 400, &clip_name(&name)));
+        text_layer(mem, mask, &mut px, tema.hole_title, || line(-20, -12, 700, &title));
+        text_layer(mem, mask, &mut px, tema.hole_main, || line(2, -18, 700, center));
+        text_layer(mem, mask, &mut px, tema.hole_sub, || line(24, -12, 400, &clip_name(&name)));
         std::ptr::copy_nonoverlapping(px.as_ptr(), out, px.len());
         SelectObject(mem, out_bmp.into());
         let size = SIZE { cx: WHEEL, cy: WHEEL };
@@ -1164,9 +1420,20 @@ fn set_hover(x: i32, y: i32) {
         if g.wheel.0.is_null() {
             return;
         }
+        if g.look.is_some() {
+            let (lx, ly) = ((x - g.org_x) as f32 / g.scale, (y - g.org_y) as f32 / g.scale);
+            let changed = g.look.as_mut().is_some_and(|u| u.pointer_move(lx, ly));
+            g.hover = g.look.as_ref().map_or(-1, |u| u.hover);
+            if changed {
+                let hwnd = g.wheel;
+                drop(g);
+                paint_wheel(hwnd);
+            }
+            return;
+        }
         let n = {
             let kind = g.paths.first().map(|p| kind_of(p)).unwrap_or(Kind::Other);
-            slices(kind, g.mode).len() as i32
+            wheel_list(kind, g.mode).len() as i32
         };
         let hover = hit((x - g.anchor_x) as f32, (y - g.anchor_y) as f32, n.max(1));
         if hover != g.hover {
@@ -1185,10 +1452,13 @@ fn remember_paths(paths: Vec<PathBuf>) {
     SESSION.with(|s| {
         let mut g = s.borrow_mut();
         if g.paths.is_empty() {
-            g.paths = paths;
+            g.paths = paths.clone();
             let hwnd = g.wheel;
             drop(g);
-            paint_wheel(hwnd);
+            if standard() {
+                load_thumb(hwnd, &paths);
+            }
+            refresh_wheel();
         }
     });
 }

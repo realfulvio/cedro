@@ -488,6 +488,12 @@ impl PageSel {
         Ok(Some(PageSel(ranges)))
     }
 
+    /// L'ultima pagina chiesta espressamente (da 1); `None` se l'ultimo intervallo va fino alla fine.
+    pub fn max_page(&self) -> Option<usize> {
+        let max = self.0.iter().map(|(a, b)| if *b == usize::MAX { *a } else { *b }).max()?;
+        Some(max)
+    }
+
     /// `index` parte da 0 (la prima pagina è 0).
     pub fn contains(&self, index: usize) -> bool {
         let page = index + 1;

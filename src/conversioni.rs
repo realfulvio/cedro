@@ -119,7 +119,7 @@ pub enum Control {
 }
 
 /// Tutte le opzioni che il motore capisce.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Opt {
     Straighten,
     WhiteBackground,

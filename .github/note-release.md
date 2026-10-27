@@ -22,7 +22,9 @@ Per i PC del Comune di Bondeno: stesse funzioni, con lo stemma del Comune. Insta
 
 ## Novità della {versione}
 
-- **Edizione Comune di Bondeno**: una versione a parte di Cedro con lo stemma ufficiale del Comune nelle Impostazioni, nella scheda Informazioni, nella guida, nel menu dell'icona e nell'installatore. Ognuna delle due edizioni si aggiorna solo con i suoi pacchetti.
+- **Nuova grafica**: cinque aspetti a scelta in Impostazioni → Aspetto (Windows essenziale, Percorso guidato, Cedro compatto, Banco di lavoro, Documento al centro), ognuno in versione Standard o Semplificata, su Windows e Linux. La ruota è ridisegnata (disco con anteprima del file, pannello con qualità e «Converti», tasti per Strumenti e Azioni) ed è uguale in tutti gli aspetti. Le finestre, comprese le Impostazioni, si ridimensionano e si rimpiccioliscono da sole sugli schermi piccoli.
+
+Dalla 0.19.1: edizione Comune di Bondeno, una versione a parte di Cedro con lo stemma ufficiale del Comune (Impostazioni, Informazioni, guida, menu dell'icona, installatore); ognuna delle due edizioni si aggiorna solo con i suoi pacchetti.
 
 Dalla 0.19.0: Modalità Semplice, un'interfaccia essenziale da attivare in Impostazioni → Generale (le altre opzioni restano a un clic in «Altre opzioni»), scelta anche alla fine dell'installazione.
 

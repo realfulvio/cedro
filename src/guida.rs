@@ -350,10 +350,17 @@ const MODES: [(&str, &str, usize, &[&str]); 3] = [
     ("Alt", "AZIONI", 1, &["Duplica", "Percorso", "ZIP"]),
 ];
 
+/// Le stesse tre ruote con l'ordine della versione standard (quello della tavola «Ruota e dettagli»).
+const MODES_STD: [(&str, &str, usize, &[&str]); 3] = [
+    ("Shift", "CONVERSIONE", 0, &["JPEG", "WebP", "BMP", "GIF", "TIFF", "PDF", "PNG"]),
+    MODES[1],
+    MODES[2],
+];
+
 fn scene_wheel(s: &mut Stage, t: u32) {
     let mode = (t / MODE_MS) as usize % 3;
     let lt = (t % MODE_MS) as f32;
-    let (key, caption, pick, labels) = MODES[mode];
+    let (key, caption, pick, labels) = if crate::edizione::BONDENO { MODES[mode] } else { MODES_STD[mode] };
     let n = labels.len();
     let (cx, cy, size) = (182.0, 158.0, 316.0);
     // il file
