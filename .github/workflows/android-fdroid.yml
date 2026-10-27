@@ -61,7 +61,7 @@ jobs:
           cat > config.yml <<CFG
           repo_url: https://realfulvio.github.io/cedro/fdroid/repo
           repo_name: Cedro
-          repo_description: Cedro per Android: converti file e trascrivi la voce, tutto sul telefono.
+          repo_description: "Cedro per Android, converti file e trascrivi la voce, tutto sul telefono."
           archive_older: 0
           keystore: keystore.p12
           repo_keyalias: cedro-repo
