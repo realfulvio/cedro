@@ -16,6 +16,7 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
+- **Video dal web, pagine qualunque**: su siti senza un supporto dedicato (come magnific.com) Cedro scarica il video della pagina invece di fallire su dieci elementi a caso, e prova qualunque formato disponibile. Il messaggio «Non riesco a raggiungere il sito» compare ora solo se la rete manca davvero; se il sito rifiuta la richiesta lo dice.
 - **Programmi di aiuto sempre aggiornati**: yt-dlp si aggiorna già da solo; ora anche deno e ffmpeg, che Cedro scarica per i video dal web, si rinnovano da soli quando ne esce una versione nuova (controllo una volta al mese, e se qualcosa va storto resta quella che c'è). Aggiornate anche alcune librerie interne.
 
 Dalla 0.21.0: il Comune di Bondeno è un tema di Cedro (Impostazioni → Aspetto) e la nuova grafica con cinque aspetti a scelta.
