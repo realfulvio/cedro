@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.21.3"
+version = "0.22.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -61,6 +61,7 @@ windows = { version = "0.61", features = [
     "Security_Cryptography",
     "Storage_Streams",
     "Win32_Foundation",
+    "Win32_Globalization",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",

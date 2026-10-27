@@ -73,7 +73,7 @@ fn wait<T: 'static>(start: impl FnOnce(Box<dyn Fn(T)>)) -> Option<T> {
 
 impl Platform for Plat {
     fn pick_files(&mut self) -> Vec<PathBuf> {
-        let dialog = gtk4::FileDialog::builder().title("Scegli i file").modal(true).build();
+        let dialog = gtk4::FileDialog::builder().title(cedro::i18n::tr_string("Scegli i file")).modal(true).build();
         let win = self.window.clone();
         let res = wait(move |done| {
             dialog.open_multiple(Some(&win), gio::Cancellable::NONE, move |r| {
@@ -197,7 +197,7 @@ fn open_surface(app: &Application, surface: Surface) {
         window.connect_close_request(move |w| {
             let busy = host.screen.try_borrow().map(|s| s.app.busy()).unwrap_or(false);
             if busy {
-                gtk4::AlertDialog::builder().message("Una conversione è ancora in corso: aspetta che finisca.").modal(true).build().show(Some(w));
+                gtk4::AlertDialog::builder().message(cedro::i18n::tr_string("Una conversione è ancora in corso: aspetta che finisca.")).modal(true).build().show(Some(w));
                 glib::Propagation::Stop
             } else {
                 glib::Propagation::Proceed

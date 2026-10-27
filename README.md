@@ -8,7 +8,7 @@
   <a href="https://github.com/realfulvio/cedro/releases/latest"><img alt="Ultima versione" src="https://img.shields.io/github/v/release/realfulvio/cedro?color=6B3FC4&label=versione&style=for-the-badge"></a>
   <img alt="Windows 10, 11 e ARM" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20ARM-1C1626?style=for-the-badge">
   <img alt="Linux Wayland" src="https://img.shields.io/badge/Linux-KDE%20%7C%20GNOME-1C1626?style=for-the-badge">
-  <img alt="Android in arrivo" src="https://img.shields.io/badge/Android-F--Droid%20%2F%20APK-1C1626?style=for-the-badge">
+  <img alt="Android: F-Droid / APK" src="https://img.shields.io/badge/Android-F--Droid%20%2F%20APK-1C1626?style=for-the-badge">
   <a href="LICENSE"><img alt="Licenza MIT" src="https://img.shields.io/badge/licenza-MIT-1C1626?style=for-the-badge"></a>
 </p>
 
@@ -25,7 +25,7 @@
 
 Cedro cambia formato ai tuoi file senza farti aprire nessun programma. Tieni premuto **Shift**, fai **clic destro** su un file e si apre una ruota: scegli il formato e la copia nuova compare accanto all'originale, che resta com'era. Su telefono basta toccare **Condividi**.
 
-Tutto avviene **sul tuo dispositivo**: i file non vengono caricati da nessuna parte. È scritto interamente in **Rust**, è in italiano e il codice è aperto.
+Tutto avviene **sul tuo dispositivo**: i file non vengono caricati da nessuna parte. È scritto interamente in **Rust**, è in italiano e in inglese (segue la lingua del sistema) e il codice è aperto.
 
 <p align="center">
   <img src="docs/v2/ruote.png" width="760" alt="La ruota di Cedro: a sinistra le conversioni su una foto con JPEG scelto, a destra gli strumenti (comprimi, 50%, bianco e nero, ruota, metadati, OCR)">
@@ -38,7 +38,7 @@ Tutto avviene **sul tuo dispositivo**: i file non vengono caricati da nessuna pa
 | **Windows 10 e 11** | [`Cedro-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest) |
 | **Windows on ARM** (Snapdragon X e simili) | [`Cedro-ARM64-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest): versione nativa, più veloce nella trascrizione |
 | **Linux** (Wayland con KDE Plasma o GNOME) | [`cedro-….-linux-x64.tar.gz`](https://github.com/realfulvio/cedro/releases/latest): estrai e lancia `./install.sh`, senza permessi di amministratore |
-| **Android** | in arrivo: repository F-Droid nostro e APK direttamente dalle release. Mai su Google Play |
+| **Android** | APK firmato dalle [release](https://github.com/realfulvio/cedro/releases/tag/android-v0.21.3) (dalla 0.21.3) e repository F-Droid nostro: `https://realfulvio.github.io/cedro/fdroid/repo`. Mai su Google Play |
 
 **Windows:** doppio clic sull'installatore (si installa solo per il tuo utente, senza diritti di amministratore). Alla prima esecuzione Windows può dire «Windows ha protetto il PC», perché l'installatore non è ancora firmato: *Ulteriori informazioni*, poi *Esegui comunque*. A fine installazione lascia spuntato **Avvia Cedro**: non si apre una finestra, compare l'icona vicino all'orologio.
 

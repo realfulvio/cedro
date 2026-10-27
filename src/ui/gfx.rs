@@ -634,12 +634,20 @@ impl<'a> Painter<'a> {
     // ---- Testo ----
 
     pub fn measure(&self, s: &str, size: f32, weight: Weight) -> f32 {
+        self.measure_raw(&crate::i18n::tr(s), size, weight)
+    }
+
+    fn measure_raw(&self, s: &str, size: f32, weight: Weight) -> f32 {
         self.fonts.measure(s, size * self.scale, weight) / self.scale
     }
 
     /// Il testo accorciato con «…» perché stia in `w`.
     pub fn ellipsize(&self, s: &str, size: f32, weight: Weight, w: f32) -> String {
-        if self.measure(s, size, weight) <= w {
+        self.ellipsize_raw(&crate::i18n::tr(s), size, weight, w)
+    }
+
+    fn ellipsize_raw(&self, s: &str, size: f32, weight: Weight, w: f32) -> String {
+        if self.measure_raw(s, size, weight) <= w {
             return s.to_string();
         }
         let chars: Vec<char> = s.chars().collect();
@@ -647,7 +655,7 @@ impl<'a> Painter<'a> {
         while lo < hi {
             let mid = (lo + hi).div_ceil(2);
             let t: String = chars[..mid].iter().collect::<String>() + "…";
-            if self.measure(&t, size, weight) <= w {
+            if self.measure_raw(&t, size, weight) <= w {
                 lo = mid;
             } else {
                 hi = mid - 1;
@@ -658,8 +666,8 @@ impl<'a> Painter<'a> {
 
     /// Una riga di testo centrata in verticale nel riquadro; troppo lunga, finisce con «…».
     pub fn text(&mut self, s: &str, x: f32, y: f32, w: f32, h: f32, size: f32, weight: Weight, c: Rgb, align: Align) {
-        let s = self.ellipsize(s, size, weight, w.max(1.0));
-        let tw = self.measure(&s, size, weight);
+        let s = self.ellipsize_raw(&crate::i18n::tr(s), size, weight, w.max(1.0));
+        let tw = self.measure_raw(&s, size, weight);
         let (asc, desc) = self.fonts.extents(size, weight);
         let base = y + (h - (asc + desc)) / 2.0 + asc;
         let lx = match align {
@@ -683,12 +691,13 @@ impl<'a> Painter<'a> {
 
     /// Le righe in cui va a capo un testo (`\n` forza l'a capo).
     pub fn wrap_lines(&self, s: &str, size: f32, weight: Weight, w: f32, max_lines: usize) -> Vec<String> {
+        let s = &*crate::i18n::tr(s);
         let mut lines: Vec<String> = Vec::new();
         for para in s.split('\n') {
             let mut cur = String::new();
             for word in para.split(' ') {
                 let next = if cur.is_empty() { word.to_string() } else { format!("{cur} {word}") };
-                if !cur.is_empty() && self.measure(&next, size, weight) > w {
+                if !cur.is_empty() && self.measure_raw(&next, size, weight) > w {
                     lines.push(std::mem::take(&mut cur));
                     cur = word.to_string();
                 } else {
@@ -700,7 +709,7 @@ impl<'a> Painter<'a> {
         if max_lines > 0 && lines.len() > max_lines {
             let rest = lines[max_lines - 1..].join(" ");
             lines.truncate(max_lines - 1);
-            lines.push(self.ellipsize(&rest, size, weight, w));
+            lines.push(self.ellipsize_raw(&rest, size, weight, w));
         }
         lines
     }
