@@ -276,8 +276,9 @@ pub(crate) fn annex_b_copy(path: &Path, dir: &Path) -> Result<Option<std::path::
     };
     let mut hdrl = Vec::new();
     let mut avih = vec![0u8; 56];
-    avih[0..4].copy_from_slice(&le32(avi_frame_us(&streams[vi])));
-    avih[16..20].copy_from_slice(&le32(chunks.iter().filter(|c| c.stream == vi && c.video).count() as u32));
+    let (frames, secs) = video_timing(&streams, &chunks, vi);
+    avih[0..4].copy_from_slice(&le32((secs * 1_000_000.0 / frames as f64) as u32));
+    avih[16..20].copy_from_slice(&le32(frames as u32));
     avih[24..28].copy_from_slice(&le32(streams.len() as u32));
     avih[32..36].copy_from_slice(&le32(streams[vi].width));
     avih[36..40].copy_from_slice(&le32(streams[vi].height));
@@ -286,6 +287,12 @@ pub(crate) fn annex_b_copy(path: &Path, dir: &Path) -> Result<Option<std::path::
         let (mut strh, mut strf) = (stream.strh.clone(), stream.strf.clone());
         if index == vi {
             strh[4..8].copy_from_slice(b"H264");
+            if strh.len() >= 36 {
+                // Un fotogramma ogni durata/numero: né battiti da 600 al secondo né vuoti in mezzo.
+                strh[20..24].copy_from_slice(&le32((secs * 1000.0).round().max(1.0) as u32));
+                strh[24..28].copy_from_slice(&le32((frames * 1000).min(u32::MAX as u64) as u32));
+                strh[32..36].copy_from_slice(&le32(frames as u32));
+            }
             strf.truncate(40);
             if strf.len() >= 20 {
                 strf[16..20].copy_from_slice(b"H264");
@@ -300,6 +307,9 @@ pub(crate) fn annex_b_copy(path: &Path, dir: &Path) -> Result<Option<std::path::
     let mut index = Vec::new();
     let mut keys = 0u32;
     for c in &chunks {
+        if c.stream == vi && c.video && c.data.is_empty() {
+            continue;
+        }
         let tag = if c.video { b"dc" } else { b"wb" };
         let id = [b'0' + (c.stream / 10) as u8, b'0' + (c.stream % 10) as u8, tag[0], tag[1]];
         let mut data = c.data.clone();
@@ -329,8 +339,19 @@ pub(crate) fn annex_b_copy(path: &Path, dir: &Path) -> Result<Option<std::path::
     Ok(Some(out))
 }
 
-fn avi_frame_us(stream: &AviStream) -> u32 {
-    ((stream.scale.max(1) as u64) * 1_000_000 / stream.rate.max(1) as u64) as u32
+/// Fotogrammi veri del video (i pacchetti vuoti sono «fotogramma saltato») e secondi della sua durata.
+/// Alcuni AVI contano 600 battiti al secondo con un pacchetto ogni tanto: il tempo vale quanto il tempo scritto.
+pub(crate) fn video_timing(streams: &[AviStream], chunks: &[AviChunk], vi: usize) -> (u64, f64) {
+    let stream = &streams[vi];
+    let (mut real, mut all) = (0u64, 0u64);
+    for c in chunks.iter().filter(|c| c.stream == vi && c.video) {
+        all += 1;
+        real += !c.data.is_empty() as u64;
+    }
+    let length = stream.strh.get(32..36).map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as u64);
+    let ticks = length.max(all);
+    let secs = ticks as f64 * stream.scale.max(1) as f64 / stream.rate.max(1) as f64;
+    (real.max(1), secs)
 }
 
 pub(crate) fn pcm16(bytes: &[u8]) -> Vec<i16> {
@@ -348,5 +369,16 @@ mod tests {
     fn aac_config_becomes_adts_header_fields() {
         assert_eq!(adts_rate_index(44_100), 4);
         assert_eq!(adts_rate_index(48_000), 3);
+    }
+}
+
+#[cfg(test)]
+mod remux_probe {
+    /// Prova a mano: `CEDRO_AVI_IN=file.avi CEDRO_AVI_OUT=cartella cargo test remux_probe`.
+    #[test]
+    fn rewrites_when_asked() {
+        let (Ok(input), Ok(out)) = (std::env::var("CEDRO_AVI_IN"), std::env::var("CEDRO_AVI_OUT")) else { return };
+        let file = super::annex_b_copy(std::path::Path::new(&input), std::path::Path::new(&out)).unwrap();
+        assert!(file.is_some());
     }
 }
