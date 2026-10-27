@@ -791,7 +791,8 @@ pub fn build_args(r: &Request, ffmpeg: Option<&Path>, deno: Option<&Path>, in_pl
     } else {
         let h = if r.quality > 0 { format!("[height<={}]", r.quality) } else { String::new() };
         // In fondo `b*`: qualunque formato, per i siti letti dall'estrattore generico (html5).
-        let sel = format!("bv*{h}+ba/b{h}/bv*+ba/b*");
+        let h2 = if r.quality > 0 { format!("[height<=?{}]", r.quality) } else { String::new() };
+        let sel = format!("bv*{h}+ba/b{h}/bv*{h2}+ba/b*{h2}");
         push(&["-f", &sel]);
         if r.format == "mp4" {
             push(&["-S", "ext:mp4:m4a,vcodec:h264"]);
@@ -1065,7 +1066,7 @@ mod tests {
     fn video_arguments() {
         let a = build_args(&req(false), Some(Path::new("/x/ffmpeg")), Some(Path::new("/x/deno")), false);
         let j = a.join(" ");
-        assert!(j.contains("-f bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b*"), "{j}");
+        assert!(j.contains("-f bv*[height<=1080]+ba/b[height<=1080]/bv*[height<=?1080]+ba/b*[height<=?1080]"), "{j}");
         assert!(j.contains("--merge-output-format mp4"));
         assert!(j.contains("-S ext:mp4:m4a,vcodec:h264"));
         assert!(j.contains("--ffmpeg-location /x/ffmpeg") && j.contains("--js-runtimes deno:/x/deno") && j.contains(&format!("-P temp:{}", Path::new("/tmp/d").join(".cedro-temp").display())), "{j}");
