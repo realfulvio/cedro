@@ -720,6 +720,14 @@ fn android_main(app: AndroidApp) {
                 }
             }
         }
+        // Una nuova condivisione mentre Cedro è già aperto.
+        if con_attivita(&app, |env, att| env.call_method(att, "novita", "()Z", &[]).and_then(|v| v.z()).map_err(|e| jerr(env, e))).unwrap_or(false) {
+            if let Ok(Some(c)) = leggi_condivisione(&app, &cartella) {
+                log::info!("ricevuto {} ({})", c.nome, c.path.display());
+                carica_file(&mut ui, &consegne, &cartella, c.path, c.nome, true);
+                sporco = true;
+            }
+        }
         if attesa_scelta {
             match scelto(&app, &cartella) {
                 Some(Ok(c)) => {
