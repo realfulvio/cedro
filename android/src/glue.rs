@@ -491,7 +491,9 @@ fn apri_o_condividi(app: &AndroidApp, path: &Path, condividi: bool) -> Result<()
     con_attivita(app, |env, attivita| {
         // Un indirizzo che finisce col nome del file (ArchiviProvider), non col numero di MediaStore.
         let rel = path.strip_prefix("/storage/emulated/0").map_err(|_| "il file non è nella memoria del telefono")?;
-        let indirizzo = env.new_string(format!("content://it.cedro.android.files{}", rel.to_string_lossy())).map_err(|e| e.to_string())?;
+        // Gli spazi e i segni nel nome (es. «Movie Trailers ( Coming Soon ).mp4») vanno codificati: Telegram e altre app non li reggono.
+        let codificato: String = rel.to_string_lossy().bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~/".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
+        let indirizzo = env.new_string(format!("content://it.cedro.android.files{codificato}")).map_err(|e| e.to_string())?;
         let uri = env
             .call_static_method("android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&indirizzo)])
             .and_then(|v| v.l())
