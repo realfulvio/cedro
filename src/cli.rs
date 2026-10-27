@@ -1,7 +1,9 @@
 use cedro::{perform, read_quality, Kind, Mode};
+use std::ffi::OsString;
 
 pub fn run() -> i32 {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // I percorsi restano `OsString`: un nome di file non UTF-8 (Linux) con `args` farebbe chiudere Cedro.
+    let args: Vec<OsString> = std::env::args_os().skip(1).collect();
     let _ = cedro::read_settings();
     if args.is_empty() || args.iter().any(|a| a == "-h" || a == "--help") {
         print_help();
@@ -13,7 +15,7 @@ pub fn run() -> i32 {
     while i < args.len() {
         if args[i] == "--quality" {
             if let Some(v) = args.get(i + 1) {
-                quality = v.parse::<u8>().unwrap_or(quality).clamp(40, 95);
+                quality = v.to_str().and_then(|v| v.parse::<u8>().ok()).unwrap_or(quality).clamp(40, 95);
                 i += 2;
                 continue;
             }
@@ -25,17 +27,17 @@ pub fn run() -> i32 {
         print_help();
         return 2;
     }
-    let cmd = positional[0].as_str();
-    let result = match cmd {
+    let cmd = positional[0].to_string_lossy();
+    let result = match cmd.as_ref() {
         "convert" | "tool" if positional.len() >= 3 => {
-            perform(std::path::Path::new(&positional[1]), &positional[2], quality)
+            perform(std::path::Path::new(&positional[1]), &positional[2].to_string_lossy(), quality)
         }
         "update" => return update(),
         "trascrivi" if positional.len() >= 2 => return transcribe(&positional[1..], &args),
         "zip" if positional.len() >= 2 => perform(std::path::Path::new(&positional[1]), "zip", quality),
         "slices" if positional.len() >= 2 => {
             let path = std::path::Path::new(&positional[1]);
-            let mode = match positional.get(2).map(String::as_str) {
+            let mode = match positional.get(2).and_then(|m| m.to_str()) {
                 Some("tools") => Mode::Tools,
                 Some("actions") => Mode::Actions,
                 _ => Mode::Convert,
@@ -151,9 +153,9 @@ L'originale non viene mai sovrascritto.";
 }
 
 /// `cedro trascrivi`: la stessa trascrizione della scheda, con i passi stampati man mano.
-fn transcribe(files: &[String], args: &[String]) -> i32 {
+fn transcribe(files: &[OsString], args: &[OsString]) -> i32 {
     use cedro::trascrizione::{self, Event, Format, Request};
-    let model = match args.iter().position(|a| a == "--precisione").and_then(|i| args.get(i + 1)).map(String::as_str) {
+    let model = match args.iter().position(|a| a == "--precisione").and_then(|i| args.get(i + 1)).and_then(|a| a.to_str()) {
         Some("veloce") => 0,
         Some("massima") => 2,
         Some("buona") => 1,
@@ -166,7 +168,11 @@ fn transcribe(files: &[String], args: &[String]) -> i32 {
         gpu: settings.gpu && !args.iter().any(|a| a == "--cpu"),
         avx512: settings.avx512,
     };
-    let paths: Vec<std::path::PathBuf> = files.iter().filter(|f| !f.starts_with("--") && !matches!(f.as_str(), "veloce" | "buona" | "massima")).map(std::path::PathBuf::from).collect();
+    let paths: Vec<std::path::PathBuf> = files
+        .iter()
+        .filter(|f| !f.as_encoded_bytes().starts_with(b"--") && !matches!(f.to_str(), Some("veloce" | "buona" | "massima")))
+        .map(std::path::PathBuf::from)
+        .collect();
     let failed = std::sync::atomic::AtomicBool::new(false);
     trascrizione::run(&paths, &request, None, &cedro::Options::default(), &|event| match event {
         Event::Log(line) => println!("{} {}", line.key, cedro::i18n::tr(&line.text)),
