@@ -1720,36 +1720,12 @@ fn copy_wide(dest: &mut [u16], text: &str) {
     }
 }
 
+/// L'icona dell'area di notifica: la stessa dell'exe (prima risorsa), alla misura che Windows chiede per la barra.
 fn make_icon() -> windows::core::Result<HICON> {
     unsafe {
-        let mut bits = vec![0u8; 32 * 32 * 4];
-        for y in 0..32 {
-            for x in 0..32 {
-                let dx = x as f32 - 15.5;
-                let dy = y as f32 - 15.5;
-                let d = (dx * dx + dy * dy).sqrt();
-                let i = (y * 32 + x) * 4;
-                let (b, g, r) = if (7.0..11.5).contains(&d) {
-                    (0x5A, 0xE1, 0xD5)
-                } else {
-                    (0x0F, 0x16, 0x14)
-                };
-                bits[i] = b;
-                bits[i + 1] = g;
-                bits[i + 2] = r;
-                bits[i + 3] = 255;
-            }
-        }
-        let color = CreateBitmap(32, 32, 1, 32, Some(bits.as_ptr() as _));
-        let mask_bits = vec![0u8; 32 * 4];
-        let mask = CreateBitmap(32, 32, 1, 1, Some(mask_bits.as_ptr() as _));
-        let info = ICONINFO {
-            fIcon: TRUE,
-            xHotspot: 0,
-            yHotspot: 0,
-            hbmMask: mask,
-            hbmColor: color,
-        };
-        CreateIconIndirect(&info)
+        let instance: HINSTANCE = GetModuleHandleW(None)?.into();
+        let (w, h) = (GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON));
+        let icon = LoadImageW(Some(instance), PCWSTR(1usize as *const u16), IMAGE_ICON, w, h, LR_DEFAULTCOLOR)?;
+        Ok(HICON(icon.0))
     }
 }

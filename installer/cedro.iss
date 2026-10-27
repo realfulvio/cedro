@@ -7,7 +7,7 @@
   #define BuildDir "..\target\release"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.20.0"
+  #define AppVersion "0.20.1"
 #endif
 
 [Setup]
@@ -37,8 +37,13 @@ OutputDir=..\dist
     #define Prefix "Cedro-Setup-"
   #endif
 #endif
+#ifdef Bondeno
+  #define IconFile "..\assets\cedro-bondeno.ico"
+#else
+  #define IconFile "..\assets\cedro.ico"
+#endif
 OutputBaseFilename={#Prefix}{#AppVersion}
-SetupIconFile=..\assets\cedro.ico
+SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\cedro.exe
 UninstallDisplayName={#AppName}
 Compression=lzma2/max
@@ -72,7 +77,7 @@ Name: "autostart"; Description: "Avvia Cedro all'accesso a Windows"; GroupDescri
 Source: "{#BuildDir}\cedro.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\Licenze di terze parti.txt"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\assets\cedro.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#IconFile}"; DestDir: "{app}"; DestName: "cedro.ico"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\cedro.exe"; IconFilename: "{app}\cedro.ico"

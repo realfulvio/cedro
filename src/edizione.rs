@@ -16,6 +16,13 @@ pub const INSTALLER_ARM64: &str = if BONDENO { "Cedro-Bondeno-ARM64-Setup-" } el
 /// Il pacchetto per Linux: `<prefisso><versione>-linux-<arch>.tar.gz`.
 pub const PACCHETTO_LINUX: &str = if BONDENO { "cedro-bondeno-" } else { "cedro-" };
 
+/// L'icona dell'app (menu, area di notifica, Informazioni su Linux): lo Spicchio nella standard, la ruota nell'edizione Bondeno.
+/// Su Windows la icona sta nell'exe (build.rs sceglie `assets/cedro.ico` o `assets/cedro-bondeno.ico`).
+#[cfg(feature = "bondeno")]
+pub const ICONA: &[u8] = include_bytes!("../docs/mark.png");
+#[cfg(not(feature = "bondeno"))]
+pub const ICONA: &[u8] = include_bytes!("../assets/icon-256.png");
+
 /// Gli stemmi stanno solo nell'edizione Bondeno; in quella standard sono vuoti.
 ///
 /// Solo lo stemma, a colori, su fondo trasparente (PNG 300×300).
