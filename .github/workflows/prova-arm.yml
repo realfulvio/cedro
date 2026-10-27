@@ -202,9 +202,17 @@ jobs:
 
       - name: "Siti veri: Vimeo e Internet Archive (scarica yt-dlp e ffmpeg ARM64 come al primo uso)"
         shell: pwsh
-        run: cargo test --release --lib real_sites -- --ignored --nocapture
+        run: |
+          # I siti veri a volte non rispondono dai server di GitHub: fino a 3 tentativi.
+          foreach ($i in 1..3) {
+            cargo test --release --lib real_sites -- --ignored --nocapture
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            "tentativo ${i} fallito"; Start-Sleep -Seconds 15
+          }
+          exit 1
 
       - name: "YouTube (può essere bloccato dagli IP dei server: non fa fallire la prova)"
+        if: always()
         shell: pwsh
         continue-on-error: true
         run: |
