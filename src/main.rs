@@ -43,7 +43,8 @@ mod linux_ui;
 mod linux_ui2;
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // `args_os`: un nome di file non UTF-8 (Linux) con `args` farebbe chiudere Cedro prima di aprire la finestra.
+    let args: Vec<String> = std::env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
     // La lingua si sceglie subito: anche le finestre che partono da sole (guida, vista) la usano.
     let _ = cedro::read_settings();
     #[cfg(windows)]
@@ -70,8 +71,12 @@ fn main() {
             }
             return;
         }
+        // Da cmd o PowerShell si scrive nella loro console; una console nuova si chiuderebbe subito, senza farsi leggere.
         unsafe {
-            let _ = windows::Win32::System::Console::AllocConsole();
+            use windows::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
+            if AttachConsole(ATTACH_PARENT_PROCESS).is_err() {
+                let _ = AllocConsole();
+            }
         }
         std::process::exit(cli::run());
     }

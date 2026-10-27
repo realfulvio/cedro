@@ -216,21 +216,32 @@ impl Settings {
     }
 
     pub fn load_from(path: &Path) -> Settings {
-        fs::read_to_string(path).map(|t| Settings::parse(&t)).unwrap_or_default()
+        read_config(path).map(|t| Settings::parse(&t)).unwrap_or_default()
     }
 
     pub fn save_to(&self, path: &Path) -> std::io::Result<()> {
+        use std::io::Write;
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir)?;
         }
-        let old = fs::read_to_string(path).unwrap_or_default();
-        // Prima un file a parte, poi lo scambio: se il PC si spegne a metà, le impostazioni non vanno perse.
+        let old = read_config(path).unwrap_or_default();
+        // Prima un file a parte, scritto davvero sul disco, poi lo scambio: se il PC si spegne a metà,
+        // le impostazioni non vanno perse.
         let temp = path.with_extension("txt.tmp");
-        fs::write(&temp, self.merge_into(&old))?;
-        fs::rename(&temp, path).inspect_err(|_| {
+        let written = fs::File::create(&temp).and_then(|mut file| {
+            file.write_all(self.merge_into(&old).as_bytes())?;
+            file.sync_all()
+        });
+        written.and_then(|()| fs::rename(&temp, path)).inspect_err(|_| {
             let _ = fs::remove_file(&temp);
         })
     }
+}
+
+/// Il config.txt come testo, anche se salvato col Blocco note in ANSI o in UTF-16: con `read_to_string`
+/// un file non UTF-8 riportava tutto ai valori di partenza, e il salvataggio dopo cancellava il resto.
+fn read_config(path: &Path) -> Option<String> {
+    fs::read(path).ok().map(|bytes| crate::engine::decode_text(&bytes))
 }
 
 /// Chi aveva la vecchia edizione Comune di Bondeno e passa a questa: l'installatore (o il pacchetto per Linux)
@@ -287,6 +298,29 @@ mod tests {
     #[test]
     fn a_file_saved_with_bom_still_reads_its_first_key() {
         assert!(!Settings::parse("\u{feff}progress=0\nnotify=0\n").progress);
+    }
+
+    #[test]
+    fn a_file_saved_as_ansi_or_utf16_keeps_its_values() {
+        let dir = std::env::temp_dir().join(format!("cedro-settings-{}-{:?}", std::process::id(), std::thread::current().id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.txt");
+        // ANSI (Windows-1252): «ò» è un byte solo, non UTF-8.
+        let mut ansi = b"quality=60\nfuturo=si\ndest_dir=C:\\Users\\Niccol".to_vec();
+        ansi.extend_from_slice(&[0xF2]);
+        ansi.extend_from_slice(b"\\Convertiti\n");
+        fs::write(&path, &ansi).unwrap();
+        let s = Settings::load_from(&path);
+        assert_eq!((s.quality, s.dest_dir.as_str()), (60, "C:\\Users\\Niccolò\\Convertiti"));
+        s.save_to(&path).unwrap();
+        let saved = fs::read_to_string(&path).unwrap();
+        assert!(saved.contains("futuro=si") && saved.contains("quality=60"), "{saved}");
+        // UTF-16 con BOM («Unicode» nel Blocco note).
+        let mut utf16 = vec![0xFF, 0xFE];
+        utf16.extend("quality=70\r\n".encode_utf16().flat_map(u16::to_le_bytes));
+        fs::write(&path, &utf16).unwrap();
+        assert_eq!(Settings::load_from(&path).quality, 70);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
