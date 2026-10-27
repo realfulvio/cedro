@@ -105,6 +105,8 @@ pub enum Azione {
     Lingua(usize),
     /// «Copia le informazioni».
     CopiaInfo,
+    /// L'icona sulla scheda di un lavoro non riuscito: copia l'errore con tutti i dettagli.
+    CopiaErrore(u32),
     IndietroFoglio,
     ApriScelta,
     ChiudiScelta,
@@ -304,6 +306,11 @@ fn quando(t: u64) -> String {
     }
 }
 
+/// Un errore è «messaggio breve» oppure «messaggio breve\n---\ndettagli»: sulla scheda va solo il messaggio.
+fn dividi_errore(m: &str) -> (&str, &str) {
+    m.split_once("\n---\n").unwrap_or((m, ""))
+}
+
 fn intersezione(a: R, b: R) -> Option<R> {
     let (x0, y0) = (a.0.max(b.0), a.1.max(b.1));
     let (x1, y1) = ((a.0 + a.2).min(b.0 + b.2), (a.1 + a.3).min(b.1 + b.3));
@@ -313,6 +320,8 @@ fn intersezione(a: R, b: R) -> Option<R> {
 /// Le informazioni sul telefono e su ciò che Cedro usa (le legge `glue`, la scheda «Info» le mostra).
 #[derive(Clone, Default)]
 pub struct Info {
+    /// La versione dell'APK (versionName e versionCode).
+    pub versione: String,
     /// Telefono, Android, processore, core, memoria, scheda video.
     pub generali: Vec<(String, String)>,
     /// Istruzioni del processore e se ci sono.
@@ -325,7 +334,7 @@ impl Info {
     /// Il testo da copiare e mandare in caso di problemi (nella lingua in uso).
     pub fn testo(&self) -> String {
         let t = cedro::i18n::tr_string;
-        let mut out = format!("Cedro {}\n", env!("CARGO_PKG_VERSION"));
+        let mut out = format!("Cedro {}\n", self.versione);
         for (k, v) in &self.generali {
             out += &format!("{}: {v}\n", t(k));
         }
@@ -363,6 +372,8 @@ pub struct App {
     /// Modello di trascrizione scelto (indice in `trascrizione::MODELS`: 0 Veloce, 1 Buona).
     pub modello: usize,
     pub lavori: Vec<Lavoro>,
+    /// L'ultimo errore copiato: la sua icona diventa una spunta.
+    copiato: Option<u32>,
     pub recenti: Vec<Recente>,
     /// Si è arrivati alla ruota dal foglio: «indietro» ci torna.
     pub dal_foglio: bool,
@@ -411,6 +422,7 @@ impl App {
             qualita: 82,
             modello: 1,
             lavori: Vec::new(),
+            copiato: None,
             recenti: Vec::new(),
             dal_foglio: false,
             prossimo: 1,
@@ -725,6 +737,14 @@ impl App {
                     _ => Effetto::Niente,
                 }
             }
+            Azione::CopiaErrore(id) => match self.lavori.iter().find(|l| l.id == id) {
+                Some(l) => {
+                    let testo = self.rapporto_errore(l);
+                    self.copiato = Some(id);
+                    Effetto::Copia(testo)
+                }
+                None => Effetto::Niente,
+            },
             Azione::Svuota => {
                 self.lavori.retain(|l| l.stato == Stato::InCorso);
                 self.scorri = 0.0;
@@ -1269,12 +1289,26 @@ impl App {
         self.scorri = self.scorri.min(self.scorri_max);
     }
 
+    /// Il testo da mandare quando un lavoro non riesce: cosa si faceva, l'errore con i dettagli e il telefono.
+    fn rapporto_errore(&self, l: &Lavoro) -> String {
+        let Stato::Errore(m) = &l.stato else { return String::new() };
+        let (breve, dettagli) = dividi_errore(m);
+        let titolo = if l.conv { format!("{} · {}", l.origine, l.etichetta) } else { format!("{}: {}", l.etichetta, l.origine) };
+        let mut out = format!("Errore di Cedro per Android\nLavoro: {titolo}\nQuando: {}\nErrore: {breve}\n", quando(l.quando));
+        if !dettagli.is_empty() {
+            out += &format!("{dettagli}\n");
+        }
+        out + "\n" + &self.info.testo()
+    }
+
     /// Una scheda di lavoro. Restituisce l'altezza.
     fn scheda_lavoro(&mut self, p: &mut Painter, k: usize, x: f32, y: f32, w: f32, vista: R) -> f32 {
         let pal = self.pal();
         let l = self.lavori[k].clone();
         let alt = match &l.stato {
             Stato::InCorso => 92.0,
+            // Un link passato a un'altra app: non c'è un file da aprire o condividere.
+            Stato::Fatto { path, .. } if path.as_os_str().is_empty() => 70.0,
             Stato::Fatto { .. } => 142.0,
             Stato::Errore(_) => 112.0,
         };
@@ -1308,8 +1342,11 @@ impl App {
                     p.text(&format!("Lavoro in corso da {s} s"), x + 14.0, y + 58.0, w - 28.0, 24.0, 13.0, Weight::Regular, pal.muted, Align::Left);
                 }
             }
-            Stato::Fatto { nome, msg, .. } => {
+            Stato::Fatto { nome, msg, path } => {
                 p.text(&format!("{} · {}", msg.replace(" → ", " a "), quando(l.quando)), x + 14.0, y + 34.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                if path.as_os_str().is_empty() {
+                    return alt;
+                }
                 p.text(&format!("Salvato in Documenti: {nome}"), x + 14.0, y + 54.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
                 let bw = (w - 28.0 - 10.0) / 2.0;
                 for (i, (et, az)) in [("Apri", Azione::Apri(l.id)), ("Condividi", Azione::Condividi(l.id))].into_iter().enumerate() {
@@ -1325,7 +1362,18 @@ impl App {
                 }
             }
             Stato::Errore(m) => {
-                p.text_wrap(m, x + 14.0, y + 38.0, w - 28.0, 13.0, Weight::Regular, pal.bad, 18.0, 3);
+                let (breve, _) = dividi_errore(m);
+                p.text_wrap(breve, x + 14.0, y + 38.0, w - 28.0 - 52.0, 13.0, Weight::Regular, pal.bad, 18.0, 3);
+                let az = Azione::CopiaErrore(l.id);
+                let rc = (x + w - 14.0 - 48.0, y + alt - 10.0 - 48.0, 48.0, 48.0);
+                if self.premuto == Some(az) {
+                    p.rrect(rc.0, rc.1, rc.2, rc.3, 24.0, Some(pal.alt), None);
+                }
+                let icona = if self.copiato == Some(l.id) { ic::CHECK } else { ic::COPY };
+                p.icon(icona, rc.0 + 12.0, rc.1 + 12.0, 24.0, pal.primary);
+                if let Some(r) = intersezione(rc, vista) {
+                    self.colpi.push((Forma::R(r), az));
+                }
             }
         }
         alt

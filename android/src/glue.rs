@@ -578,6 +578,19 @@ fn gb(kib: f64) -> String {
 
 /// Cosa c'è nel telefono e cosa usa Cedro: modello, Android, processore, memoria, istruzioni, accelerazioni.
 fn leggi_info(app: &AndroidApp) -> Info {
+    let versione = con_attivita(app, |env, att| {
+        let pm = env.call_method(att, "getPackageManager", "()Landroid/content/pm/PackageManager;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let nome = env.call_method(att, "getPackageName", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let pi = env
+            .call_method(&pm, "getPackageInfo", "(Ljava/lang/String;I)Landroid/content/pm/PackageInfo;", &[JValue::Object(&nome), JValue::Int(0)])
+            .and_then(|v| v.l())
+            .map_err(|e| jerr(env, e))?;
+        let vn = env.get_field(&pi, "versionName", "Ljava/lang/String;").and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let vn: String = env.get_string(&jni::objects::JString::from(vn)).map_err(|e| jerr(env, e))?.into();
+        let vc = env.get_field(&pi, "versionCode", "I").and_then(|v| v.i()).map_err(|e| jerr(env, e))?;
+        Ok(format!("{vn} ({vc})"))
+    })
+    .unwrap_or_else(|_| "?".into());
     let (modello, android, soc) = con_attivita(app, |env, _att| {
         let marca = campo_testo(env, "android/os/Build", "MANUFACTURER").unwrap_or_default();
         let nome = campo_testo(env, "android/os/Build", "MODEL").unwrap_or_default();
@@ -626,6 +639,7 @@ fn leggi_info(app: &AndroidApp) -> Info {
     }
     let r = |k: &str, v: String| (k.to_string(), v);
     Info {
+        versione,
         generali: vec![r("Telefono", modello), r("Android", android), r("Processore", processore), r("Core", core_testo), r("Memoria", memoria), r("Scheda video", gpu)],
         istruzioni: vec![("NEON".into(), neon), ("dotprod".into(), dotprod), ("i8mm".into(), i8mm)],
         accelerazioni: vec![
@@ -725,8 +739,25 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
     if azione == "trascrivi" {
         return trascrivi(&app, &c, id, &file, &out, &prog, qualita as usize);
     }
-    let p2 = prog.clone();
-    let esito = cedro::progress::con(move |f| p2.store((f * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed), || cedro::perform_into(&file, azione, qualita, Some(&out)));
+    let esegui = |dove: &Path| {
+        let p2 = prog.clone();
+        cedro::progress::con(move |f| p2.store((f * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed), || cedro::perform_into(&file, azione, qualita, Some(dove))).map_err(|e| e.to_string())
+    };
+    let mut esito = esegui(&out);
+    if let Err(e) = &esito {
+        if negato(e) {
+            // Android rifiuta il file in Documenti (per esempio c'è già un file con quel nome che Cedro non può vedere):
+            // si riprova nella sottocartella «Cedro».
+            let sotto = out.join("Cedro");
+            log::warn!("{azione}: {e} in {}, riprovo in {}", out.display(), sotto.display());
+            let primo = e.clone();
+            esito = match std::fs::create_dir_all(&sotto) {
+                Ok(()) => esegui(&sotto).map_err(|e2| format!("{primo}\n---\nAnche in Documenti/Cedro: {e2}")),
+                Err(e2) => Err(format!("{primo}\n---\nDocumenti/Cedro non si crea: {e2}")),
+            };
+        }
+    }
+    let esito = esito.map_err(|e| con_dettagli(&e, azione, &file, &out));
     match esito {
         Ok(o) => {
             let nome = o.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -737,9 +768,33 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
         }
         Err(e) => {
             log::error!("{azione}: conversione fallita: {e}");
-            invia(Stato::Errore(e.to_string()));
+            invia(Stato::Errore(e));
         }
     }
+}
+
+/// Android ha negato l'accesso (EPERM o EACCES).
+fn negato(e: &str) -> bool {
+    e.contains("os error 1)") || e.contains("os error 13)")
+}
+
+/// L'errore con quello che serve per capirlo: azione, file di partenza, cartella e se ci si può scrivere.
+fn con_dettagli(e: &str, azione: &str, file: &Path, out: &Path) -> String {
+    let (breve, prima) = e.split_once("\n---\n").unwrap_or((e, ""));
+    let dim = std::fs::metadata(file).map(|m| format!("{} byte", m.len())).unwrap_or_else(|e| format!("non leggibile: {e}"));
+    let prova = out.join(".cedro-prova");
+    let scrivibile = match std::fs::write(&prova, b"cedro") {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&prova);
+            "sì".to_string()
+        }
+        Err(e) => format!("no ({e})"),
+    };
+    let mut d = format!("{breve}\n---\nAzione: {azione}\nFile: {} ({dim})\nCartella: {} (scrivibile: {scrivibile})", file.display(), out.display());
+    if !prima.is_empty() {
+        d += &format!("\n{prima}");
+    }
+    d
 }
 
 /// Passa un link al selettore di Android (ACTION_VIEW): ci sono le app che lo sanno scaricare.
@@ -819,7 +874,7 @@ fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, ou
             let _ = con_attivita(app, |env, att| scansiona(env, att, &path, false));
             invia(Stato::Fatto { path, nome, msg });
         }
-        Some(Err(e)) => invia(Stato::Errore(e)),
+        Some(Err(e)) => invia(Stato::Errore(con_dettagli(&e, "trascrivi", file, out))),
         None => invia(Stato::Errore("la trascrizione non è partita".into())),
     }
 }
