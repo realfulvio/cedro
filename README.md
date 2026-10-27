@@ -1,62 +1,59 @@
+<p align="right"><a href="README.en.md">🇬🇧 English</a> · 🇮🇹 Italiano</p>
+
 <p align="center">
-  <img src="docs/hero.png" alt="Cedro: cambia formato a un file con un clic destro">
+  <img src="docs/v2/hero.png" alt="Cedro: cambia formato a un file con un clic destro. Windows, Linux e Android">
 </p>
 
 <p align="center">
-  <a href="https://github.com/realfulvio/cedro/releases/latest"><img alt="Ultima versione" src="https://img.shields.io/github/v/release/realfulvio/cedro?color=005E8E&label=versione&style=for-the-badge"></a>
-  <img alt="Windows 10 e 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-005E8E?style=for-the-badge">
-  <img alt="Linux in arrivo" src="https://img.shields.io/badge/Linux-in%20arrivo-8A99A8?style=for-the-badge">
-  <a href="LICENSE"><img alt="Licenza MIT" src="https://img.shields.io/badge/licenza-MIT-005E8E?style=for-the-badge"></a>
+  <a href="https://github.com/realfulvio/cedro/releases/latest"><img alt="Ultima versione" src="https://img.shields.io/github/v/release/realfulvio/cedro?color=6B3FC4&label=versione&style=for-the-badge"></a>
+  <img alt="Windows 10, 11 e ARM" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20ARM-1C1626?style=for-the-badge">
+  <img alt="Linux Wayland" src="https://img.shields.io/badge/Linux-KDE%20%7C%20GNOME-1C1626?style=for-the-badge">
+  <img alt="Android in arrivo" src="https://img.shields.io/badge/Android-F--Droid%20%2F%20APK-1C1626?style=for-the-badge">
+  <a href="LICENSE"><img alt="Licenza MIT" src="https://img.shields.io/badge/licenza-MIT-1C1626?style=for-the-badge"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/realfulvio/cedro/releases/latest"><b>⬇ Scarica</b></a>
+  <a href="#scarica-e-installa"><b>⬇ Scarica</b></a>
   &nbsp;·&nbsp; <a href="#come-si-usa">Come si usa</a>
   &nbsp;·&nbsp; <a href="#cosa-converte">Formati</a>
+  &nbsp;·&nbsp; <a href="#più-di-una-conversione">Strumenti</a>
+  &nbsp;·&nbsp; <a href="#cedro-per-android">Android</a>
   &nbsp;·&nbsp; <a href="#domande">Domande</a>
-</p>
-
-<p align="center">
-  <img src="docs/feature.png" alt="Tutto sul tuo PC, niente da installare in più, l'originale al sicuro, in italiano">
 </p>
 
 ## Cos'è
 
-Cedro è un piccolo programma che vive vicino all'orologio. Tieni premuto **Shift**, fai **clic destro** su un file e si apre una ruota: scegli il formato e la copia nuova compare accanto all'originale. Fine.
+Cedro cambia formato ai tuoi file senza farti aprire nessun programma. Tieni premuto **Shift**, fai **clic destro** su un file e si apre una ruota: scegli il formato e la copia nuova compare accanto all'originale, che resta com'era. Su telefono basta toccare **Condividi**.
+
+Tutto avviene **sul tuo dispositivo**: i file non vengono caricati da nessuna parte. È scritto interamente in **Rust**, è in italiano e il codice è aperto.
 
 <p align="center">
-  <img src="docs/shots/ruota-shift-foto.png" width="340" alt="La ruota di Cedro su una foto, con la fetta JPEG sotto il mouse">
+  <img src="docs/v2/ruote.png" width="760" alt="La ruota di Cedro: a sinistra le conversioni su una foto con JPEG scelto, a destra gli strumenti (comprimi, 50%, bianco e nero, ruota, metadati, OCR)">
 </p>
 
 ## Scarica e installa
 
-1. Vai alla **[pagina delle versioni](https://github.com/realfulvio/cedro/releases/latest)** e scarica `Cedro-Setup-….exe`. Se il tuo PC è un Windows on ARM (Snapdragon X e simili), scarica invece `Cedro-ARM64-Setup-….exe`: è la versione nativa, più veloce nella trascrizione.
-2. Doppio clic. Si installa solo per il tuo utente, **senza diritti di amministratore**.
-3. La prima volta Windows può dire «Windows ha protetto il PC», perché l'installatore non è firmato. Clicca *Ulteriori informazioni*, poi *Esegui comunque*.
-4. A fine installazione lascia spuntato **Avvia Cedro**. Non si apre una finestra: compare l'icona vicino all'orologio (se non la vedi, apri la freccia delle icone nascoste).
+| Il tuo dispositivo | Cosa scaricare |
+| --- | --- |
+| **Windows 10 e 11** | [`Cedro-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest) |
+| **Windows on ARM** (Snapdragon X e simili) | [`Cedro-ARM64-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest): versione nativa, più veloce nella trascrizione |
+| **Linux** (Wayland con KDE Plasma o GNOME) | [`cedro-….-linux-x64.tar.gz`](https://github.com/realfulvio/cedro/releases/latest): estrai e lancia `./install.sh`, senza permessi di amministratore |
+| **Android** | in arrivo: repository F-Droid nostro e APK direttamente dalle release. Mai su Google Play |
 
+**Windows:** doppio clic sull'installatore (si installa solo per il tuo utente, senza diritti di amministratore). Alla prima esecuzione Windows può dire «Windows ha protetto il PC», perché l'installatore non è ancora firmato: *Ulteriori informazioni*, poi *Esegui comunque*. A fine installazione lascia spuntato **Avvia Cedro**: non si apre una finestra, compare l'icona vicino all'orologio.
+
+**Linux:** Cedro resta nell'area di notifica e scrive da solo i menu del file manager. Su GNOME serve l'estensione AppIndicator per vedere l'icona.
+
+Dopo la prima installazione si aggiorna da solo. Per toglierlo: *Impostazioni di Windows, App, Cedro* (Linux: `./install.sh --uninstall`).
 
 <p align="center">
-  <img src="docs/shots/installatore-fine.png" width="460" alt="Ultima pagina dell'installatore: Avvia Cedro e Guarda come funziona">
+  <img src="docs/shots/installatore-fine.png" width="440" alt="Ultima pagina dell'installatore di Windows: Avvia Cedro e Guarda come funziona">
 </p>
-
-Per togliere Cedro: *Impostazioni di Windows, App, Cedro*. Dopo la prima installazione si aggiorna da solo.
 
 ## Come si usa
 
-<p align="center">
-  <img src="docs/tre-tasti-guida.png" alt="Le tre ruote: Shift converte, Ctrl per gli strumenti, Alt per le azioni">
-</p>
-
-<p align="center">
-  <img src="docs/shots/ruota-shift-pdf.png" width="250" alt="Ruota Shift su un PDF">
-  <img src="docs/shots/ruota-ctrl-foto-ocr.png" width="250" alt="Ruota Ctrl su una foto, con OCR acceso">
-  <img src="docs/shots/ruota-alt-zip.png" width="250" alt="Ruota Alt, con ZIP acceso">
-  <br><sub>Screenshot veri su Windows 11: Shift su un PDF, Ctrl su una foto, Alt su un file.</sub>
-</p>
-
 1. Tieni premuto un tasto.
-2. Fai **clic destro** su un file: in Esplora file, sul desktop o in una finestra Apri/Salva.
+2. Fai **clic destro** su un file: in Esplora file, sul desktop, nel file manager o in una finestra Apri/Salva.
 3. Clic sinistro sulla fetta che vuoi. Esc, o un clic fuori dalla ruota, annulla.
 
 | Tasto | Ruota | Cosa fa |
@@ -65,8 +62,13 @@ Per togliere Cedro: *Impostazioni di Windows, App, Cedro*. Dopo la prima install
 | **Ctrl** | Strumenti | Comprime, scala, bianco e nero, ruota, toglie i metadati, legge il testo (OCR) |
 | **Alt** | Azioni | Duplica, copia il percorso, crea uno ZIP |
 
-Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Guida** dall'icona: sei passi animati mostrano la ruota, il pannello Conversioni, YouTube e Video dal web, la trascrizione audio, Sistema e aggiornamenti, e dove gira Cedro.
+Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Guida** dall'icona: sei passi animati.
 
+<p align="center">
+  <img src="docs/shots/ruota-shift-pdf.png" width="250" alt="Ruota Shift su un PDF">
+  <img src="docs/shots/ruota-ctrl-foto-ocr.png" width="250" alt="Ruota Ctrl su una foto, con OCR acceso">
+  <img src="docs/shots/ruota-alt-zip.png" width="250" alt="Ruota Alt, con ZIP acceso">
+</p>
 
 ## Cosa converte
 
@@ -79,44 +81,54 @@ Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Gui
 | Audio | WAV, MP3, OGG, M4A, AAC, FLAC | WAV, MP3 |
 | Video | MP4, WebM, MOV, MKV, AVI | MP4 |
 
-**PDF in Word:** titoli con stili veri, paragrafi, tabelle vere (celle, sfondi, bordi, intestazione ripetuta tra le pagine), elenchi puntati e numerati di Word, testo su più colonne e grafici al loro posto, modificabili come in un editor professionale. File leggeri. Le scansioni vengono lette con l'OCR in italiano.
+**PDF in Word:** titoli con stili veri, paragrafi, tabelle vere (celle, sfondi, bordi, intestazione ripetuta tra le pagine), elenchi puntati e numerati, testo su più colonne e grafici al loro posto, modificabili come in un editor professionale. Le scansioni vengono lette con l'OCR in italiano.
 **Foto dal telefono:** vengono raddrizzate in automatico.
 
-## Il pannello Conversioni
+## Più di una conversione
 
 <p align="center">
-  <img src="docs/shots/pannello-conversioni.png" width="720" alt="Il pannello Conversioni di Cedro: coda di file, formato, strumenti, qualità e cartella di destinazione">
+  <img src="docs/v2/conversioni.png" width="780" alt="Il pannello Conversioni: categorie a sinistra, coda di file al centro, opzioni a destra">
 </p>
 
-Dal menu dell'icona apri **Conversioni**: trascini i file (anche di tipi diversi), scegli formato, strumenti, qualità e dove salvare, e premi il pulsante in basso. Ogni categoria (immagini, documenti, PDF, testo, audio, video) ha le sue opzioni.
+**Conversioni.** Dal menu dell'icona apri il pannello: trascini file anche di tipi diversi, scegli formato, strumenti, qualità e cartella, e premi il pulsante in basso. Ogni categoria ha le sue opzioni: foto (dimensioni, raddrizza, sfondo bianco), documenti (formato pagina, caratteri incorporati, segnalibri, PDF/A-1b validato con veraPDF, password), PDF (OCR, tabelle, colonne, pagine come `1-3,5`, risoluzione), testo, audio (kbps, canali, volume, tagli, tag) e video (risoluzione, fps, senza audio, ottimizzato per il web). Se il nome esiste già: aggiungi `-2`, sostituisci, salta o chiedi ogni volta.
 
-## L'icona e le impostazioni
+<table>
+  <tr>
+    <td width="50%"><img src="docs/v2/trascrizione.png" alt="Scheda Trascrizione: trascina audio e video, scegli Word o testo e la precisione"></td>
+    <td width="50%"><img src="docs/v2/youtube.png" alt="Scheda YouTube: incolla i link, scegli video o solo audio, qualità e sottotitoli"></td>
+  </tr>
+  <tr>
+    <td><b>Trascrizione.</b> Da audio e video a un documento Word o a un testo, in italiano e in locale (whisper.cpp). Sceglie da solo la variante giusta per il tuo processore, con Vulkan sulla scheda video.</td>
+    <td><b>YouTube e Video dal web.</b> Scarica video o solo audio con qualità, sottotitoli, copertina e capitoli; la scheda «Video dal web» funziona anche con pagine qualunque.</td>
+  </tr>
+</table>
+
+Componenti esterni come yt-dlp, deno, ffmpeg e il motore di trascrizione si scaricano al primo uso e si **aggiornano da soli**; le licenze sono in *Informazioni*.
+
+## Cinque aspetti, due modalità
+
+La grafica è tutta disegnata a mano in Rust, uguale su Windows e Linux. In **Impostazioni › Aspetto** scegli tra le disposizioni (la ruota resta sempre quella) e tra la modalità **Standard**, con tutte le opzioni a portata di mano, e la **Semplificata**, con solo l'essenziale. Il tema del **Comune di Bondeno** porta colori, carattere e stemma del Comune.
 
 <p align="center">
-  <img src="docs/shots/menu-icona-tray.png" width="200" alt="Il menu dell'icona di Cedro">
-  &nbsp;&nbsp;
-  <img src="docs/shots/impostazioni-generale.png" width="440" alt="La finestra Impostazioni di Cedro">
+  <img src="docs/v2/temi.png" width="900" alt="Le disposizioni di Cedro: Windows essenziale, Percorso guidato, Banco di lavoro, Documento al centro, Comune di Bondeno e la finestrella compatta">
 </p>
 
-Clic destro sull'icona (o doppio clic per le Impostazioni):
+## Cedro per Android
 
-- **Impostazioni** (su Windows, sei sezioni a sinistra): avvio con Windows, avviso e cartella aperta a fine conversione; quali tasti aprono la ruota e se vale nelle finestre Apri/Salva; dove mettere la copia (stessa cartella, sottocartella «Cedro» o una cartella fissa) e se sostituire i file che esistono già; qualità di JPEG, WebP, MP3, risoluzione di PDF in JPG e forza di «Comprimi»; lingua e pagine al massimo dell'OCR; ricerca automatica degli aggiornamenti.
-- **Conversioni:** un pannello con tutte le conversioni, la coda dei file (trascini i file o li scegli), la qualità e la cartella di destinazione. Ogni categoria ha le sue opzioni: foto (dimensioni, raddrizza, sfondo bianco), documenti (formato pagina, caratteri incorporati, segnalibri dai titoli, PDF/A-1b per l'archivio, password), PDF (OCR, tabelle, colonne, pagine come `1-3,5`, risoluzione, una immagine per pagina), testo (codifica, separatore CSV, JSON leggibile, titoli, PDF con caratteri incorporati o PDF/A), audio (kbps, canali, volume, taglio dell'inizio e del silenzio iniziale, tag) e video (risoluzione, fps, senza audio, ottimizzato per il web). Se il nome di uscita esiste già si sceglie: aggiungi `-2`, sostituisci, salta o chiedi ogni volta. I PDF/A di Cedro passano la validazione di veraPDF (profilo PDF/A-1b).
-- **Guida:** il percorso animato in sei passi (si apre anche alla fine dell'installazione). Frecce o pallini per spostarsi.
-- **Controlla aggiornamenti:** Cedro lo fa anche da solo, verifica l'installatore e chiede prima di aggiornare.
-- **Avvio automatico** ed **Esci**.
+Le stesse funzioni del desktop, pensate per il tocco: dalla galleria o dal file manager premi **Condividi → Cedro**, scegli sulla ruota (con il file al centro) e converti. I lavori restano in una lista, con il progresso, e cinque temi a scelta.
 
 <p align="center">
-  <img src="docs/shots/guida.png" width="560" alt="La Guida di Cedro: la ruota Ctrl con la fetta OCR accesa, primo di sei passi">
+  <img src="docs/v2/android.png" width="820" alt="Cedro su Android: la ruota, il foglio Condividi, i lavori e l'aspetto">
 </p>
 
+L'app è in fase di prototipo e **non passa da Google Play**: si installa dal nostro repository F-Droid (ospitato su GitHub Pages) o come APK dalle release. Tutto il codice è Rust, con una sola piccola classe Java per l'integrazione col sistema.
 
 ## Domande
 
-**Cambia il file originale?** No, crea sempre una copia nella stessa cartella.
-**Serve internet?** Solo per cercare gli aggiornamenti.
-**Perché Windows mi avvisa?** L'installatore non ha la firma a pagamento. Il codice è aperto e lo puoi controllare qui.
-**E su Linux?** Per ora Cedro è un programma Windows. Linux è in pausa e torna in una prossima versione; chi vuole può già compilarlo (vedi sotto).
+**Cambia il file originale?** No, crea sempre una copia accanto.
+**Serve internet?** Solo per gli aggiornamenti e per scaricare i componenti la prima volta (e, ovviamente, per YouTube e Video dal web).
+**Perché Windows mi avvisa?** L'installatore non ha ancora la firma digitale a pagamento. Il codice è aperto e lo puoi controllare qui.
+**E su Mac?** Per ora no: Windows, Linux (Wayland) e Android.
 
 ---
 
@@ -161,6 +173,10 @@ Cedro è MIT. Alcune parti hanno la propria licenza: LAME (LGPL, MP3), modello O
 </details>
 
 ---
+
+## Crediti
+
+Cedro è un progetto di **Luca «Realhcok» A.**, scritto in Rust da zero: non usa codice, icone o testi di altri convertitori. Font [Figtree](https://github.com/erikdkennedy/figtree) e Titillium Web (SIL OFL), logo e kit grafico hcok. Un grazie al **Comune di Bondeno** per il tema dedicato. Le licenze delle componenti di terze parti sono in [`LICENZE-DI-TERZE-PARTI.txt`](LICENZE-DI-TERZE-PARTI.txt) e nella scheda *Informazioni* di Cedro.
 
 <p align="center">
   Powered by Luca "Realhcok" A.
