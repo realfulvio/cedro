@@ -3,6 +3,7 @@
 //! risponde ai clic; le finestre di sistema (`ui_win`, `linux_ui2`) copiano l'immagine sullo
 //! schermo e passano mouse, tastiera e file trascinati.
 
+pub mod aspetto;
 pub mod assets;
 pub mod gfx;
 pub mod svgpath;

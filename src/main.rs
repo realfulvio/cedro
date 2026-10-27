@@ -28,6 +28,8 @@ mod wingfx;
 mod firma_win;
 #[cfg(windows)]
 mod ui_win;
+#[cfg(windows)]
+mod aspetto_win;
 
 #[cfg(target_os = "linux")]
 mod linux_firma;
