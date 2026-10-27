@@ -8,6 +8,8 @@
 //! In orizzontale e sui tablet la ruota sta a sinistra e le opzioni a destra.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use cedro::ui::assets as ic;
@@ -62,6 +64,8 @@ pub struct Lavoro {
     /// Secondi dal 1970, per «2 min fa».
     pub quando: u64,
     pub stato: Stato,
+    /// Avanzamento in millesimi (0..=1000); `u32::MAX` finché il motore non lo sa.
+    pub prog: Arc<AtomicU32>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -108,7 +112,7 @@ pub enum Effetto {
     Niente,
     Ridisegna,
     /// Da eseguire col motore.
-    Converti { id: u32, file: PathBuf, azione: &'static str, qualita: u8 },
+    Converti { id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32> },
     /// Chiude Cedro: si torna all'app di prima.
     Esci,
     /// Il tema è cambiato: va ricordato.
@@ -361,6 +365,15 @@ impl App {
         self.lavori.iter().any(|l| l.stato == Stato::InCorso) && !self.scelta_file && (self.scheda == Scheda::Lavori || self.scheda == Scheda::Ruota)
     }
 
+    /// Lavori in corso e avanzamento medio in percentuale (None se ancora ignoto), per la notifica.
+    pub fn in_corso(&self) -> (usize, Option<u32>, String) {
+        let v: Vec<&Lavoro> = self.lavori.iter().filter(|l| l.stato == Stato::InCorso).collect();
+        let note: Vec<u32> = v.iter().map(|l| l.prog.load(Ordering::Relaxed)).filter(|m| *m <= 1000).collect();
+        let medio = if note.len() == v.len() && !note.is_empty() { Some(note.iter().sum::<u32>() / note.len() as u32 / 10) } else { None };
+        let nome = v.first().map(|l| if l.conv { format!("{} · {}", l.origine, l.etichetta) } else { format!("{}: {}", l.etichetta, l.origine) }).unwrap_or_default();
+        (v.len(), medio, nome)
+    }
+
     /// Il cronologico da salvare su disco: i lavori finiti, uno per riga.
     pub fn serializza(&self) -> String {
         let pulisci = |s: &str| s.replace(['\t', '\n'], " ");
@@ -394,6 +407,7 @@ impl App {
                 inizio: Instant::now(),
                 quando: c[0].parse().unwrap_or(0),
                 stato: Stato::Fatto { path, nome, msg: c[5].into() },
+                prog: Arc::new(AtomicU32::new(1000)),
             });
             self.prossimo += 1;
         }
@@ -507,12 +521,13 @@ impl App {
         let Some(file) = self.file.clone() else { return Effetto::Niente };
         let lavoro = self.prossimo;
         self.prossimo += 1;
-        self.lavori.insert(0, Lavoro { id: lavoro, origine: file.nome.clone(), etichetta: etichetta.into(), conv, inizio: Instant::now(), quando: adesso(), stato: Stato::InCorso });
+        let prog = Arc::new(AtomicU32::new(u32::MAX));
+        self.lavori.insert(0, Lavoro { id: lavoro, origine: file.nome.clone(), etichetta: etichetta.into(), conv, inizio: Instant::now(), quando: adesso(), stato: Stato::InCorso, prog: prog.clone() });
         self.scorri = 0.0;
         self.scheda = Scheda::Lavori;
         self.foglio = false;
         self.dal_foglio = false;
-        Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita: self.qualita }
+        Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita: self.qualita, prog }
     }
 
     fn attiva(&mut self, a: Azione) -> Effetto {
@@ -1145,13 +1160,20 @@ impl App {
             Stato::InCorso => {
                 let (bx, by, bw) = (x + 14.0, y + 44.0, w - 28.0);
                 p.rrect(bx, by, bw, 8.0, 4.0, Some(pal.alt), None);
-                p.push_clip(bx, by, bw, 8.0);
-                let t = (self.ora.duration_since(l.inizio).as_secs_f32() * 0.9).fract();
-                let sw = bw * 0.38;
-                p.rrect(bx - sw + (bw + sw) * t, by, sw, 8.0, 4.0, Some(pal.primary), None);
-                p.pop_clip();
+                let m = l.prog.load(Ordering::Relaxed);
                 let s = self.ora.duration_since(l.inizio).as_secs();
-                p.text(&format!("Lavoro in corso da {s} s"), x + 14.0, y + 58.0, w - 28.0, 24.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                if m <= 1000 {
+                    p.rrect(bx, by, (bw * m as f32 / 1000.0).max(8.0), 8.0, 4.0, Some(pal.primary), None);
+                    let resto = if m >= 50 { format!(" · circa {} s alla fine", (s as f32 * (1000 - m) as f32 / m as f32).round() as u64) } else { String::new() };
+                    p.text(&format!("{}%{resto}", m / 10), x + 14.0, y + 58.0, w - 28.0, 24.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                } else {
+                    p.push_clip(bx, by, bw, 8.0);
+                    let t = (self.ora.duration_since(l.inizio).as_secs_f32() * 0.9).fract();
+                    let sw = bw * 0.38;
+                    p.rrect(bx - sw + (bw + sw) * t, by, sw, 8.0, 4.0, Some(pal.primary), None);
+                    p.pop_clip();
+                    p.text(&format!("Lavoro in corso da {s} s"), x + 14.0, y + 58.0, w - 28.0, 24.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                }
             }
             Stato::Fatto { nome, msg, .. } => {
                 p.text(&format!("{} · {}", msg.replace(" → ", " a "), quando(l.quando)), x + 14.0, y + 34.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);

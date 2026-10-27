@@ -4,6 +4,8 @@
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="29" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:label="Cedro"
@@ -45,5 +47,6 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+    <service android:name="it.cedro.android.ServizioLavoro" android:exported="false" />
     </application>
 </manifest>

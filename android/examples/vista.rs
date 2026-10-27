@@ -15,7 +15,7 @@ fn recenti(app: &mut App) {
 }
 
 fn lavori(app: &mut App) {
-    let l = |id, o: &str, e: &str, conv, st| Lavoro { id, origine: o.into(), etichetta: e.into(), conv, inizio: Instant::now(), quando: cedro_android::ui::adesso() - 120 * id as u64, stato: st };
+    let l = |id, o: &str, e: &str, conv, st| Lavoro { id, origine: o.into(), etichetta: e.into(), conv, inizio: Instant::now(), quando: cedro_android::ui::adesso() - 120 * id as u64, stato: st, prog: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(if id == 1 { 430 } else { 1000 })) };
     let fatto = |n: &str, m: &str| Stato::Fatto { path: "x".into(), nome: n.into(), msg: m.into() };
     app.lavori = vec![
         l(1, "Riunione.m4a", "Word", true, Stato::InCorso),

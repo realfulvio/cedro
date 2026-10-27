@@ -114,6 +114,7 @@ pub fn to_mp3(input: &Path, output: &Path, quality: u8, opts: &crate::engine::Op
             let end = (at + chunk).min(pcm.samples.len());
             encode_block(&mut encoder, MonoPcm(&pcm.samples[at..end]), &mut mp3)?;
             at = end;
+            crate::progress::report(at as f32 / pcm.samples.len().max(1) as f32);
         }
     } else {
         let frames = pcm.samples.len() / 2;
@@ -130,6 +131,9 @@ pub fn to_mp3(input: &Path, output: &Path, quality: u8, opts: &crate::engine::Op
             }
             encode_block(&mut encoder, DualPcm { left: &left, right: &right }, &mut mp3)?;
             at = end;
+            if (at / chunk) % 64 == 0 {
+                crate::progress::report(at as f32 / frames.max(1) as f32);
+            }
         }
     }
     append_mp3(&mut mp3, mp3lame_encoder::max_required_buffer_size(chunk), |buf| {

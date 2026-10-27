@@ -390,8 +390,15 @@ fn scansiona(env: &mut JNIEnv, attivita: &JObject, path: &Path, attesa: bool) ->
     }
     let resolver = env.call_method(attivita, "getContentResolver", "()Landroid/content/ContentResolver;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
     let esterno = env.new_string("external").map_err(|e| e.to_string())?;
+    // Per foto, audio e video la raccolta giusta: il foglio di condivisione mostra così anteprima e nome.
+    let raccolta = match mime_da_percorso(path).split('/').next().unwrap_or("") {
+        "image" => "android/provider/MediaStore$Images$Media",
+        "audio" => "android/provider/MediaStore$Audio$Media",
+        "video" => "android/provider/MediaStore$Video$Media",
+        _ => "android/provider/MediaStore$Files",
+    };
     let base = env
-        .call_static_method("android/provider/MediaStore$Files", "getContentUri", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&esterno)])
+        .call_static_method(raccolta, "getContentUri", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&esterno)])
         .and_then(|v| v.l())
         .map_err(|e| jerr(env, e))?;
     let col = env.new_string("_id").map_err(|e| e.to_string())?;
@@ -435,6 +442,9 @@ fn apri_o_condividi(app: &AndroidApp, path: &Path, condividi: bool) -> Result<()
         let azione = env.new_string(if condividi { "android.intent.action.SEND" } else { "android.intent.action.VIEW" }).map_err(|e| e.to_string())?;
         let intento = env.new_object("android/content/Intent", "(Ljava/lang/String;)V", &[JValue::Object(&azione)]).map_err(|e| jerr(env, e))?;
         if condividi {
+            let nome_f = env.new_string(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).map_err(|e| e.to_string())?;
+            let k = env.new_string("android.intent.extra.TITLE").map_err(|e| e.to_string())?;
+            env.call_method(&intento, "putExtra", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;", &[JValue::Object(&k), JValue::Object(&nome_f)]).map_err(|e| jerr(env, e))?;
             env.call_method(&intento, "setType", "(Ljava/lang/String;)Landroid/content/Intent;", &[JValue::Object(&mime_s)]).map_err(|e| jerr(env, e))?;
             let chiave = env.new_string("android.intent.extra.STREAM").map_err(|e| e.to_string())?;
             env.call_method(&intento, "putExtra", "(Ljava/lang/String;Landroid/os/Parcelable;)Landroid/content/Intent;", &[JValue::Object(&chiave), JValue::Object(uri.as_obj())])
@@ -464,6 +474,33 @@ fn apri_o_condividi(app: &AndroidApp, path: &Path, condividi: bool) -> Result<()
     })
 }
 
+/// Il servizio in primo piano con la notifica dell'avanzamento (`percento` < 0: indeterminato). `None` lo ferma.
+fn servizio(app: &AndroidApp, stato: Option<(&str, &str, i32)>) {
+    let r = con_attivita(app, |env, att| {
+        let intento = env.new_object("android/content/Intent", "()V", &[]).map_err(|e| jerr(env, e))?;
+        let nome = env.new_string("it.cedro.android.ServizioLavoro").map_err(|e| e.to_string())?;
+        env.call_method(&intento, "setClassName", "(Landroid/content/Context;Ljava/lang/String;)Landroid/content/Intent;", &[JValue::Object(att), JValue::Object(&nome)]).map_err(|e| jerr(env, e))?;
+        match stato {
+            None => {
+                env.call_method(att, "stopService", "(Landroid/content/Intent;)Z", &[JValue::Object(&intento)]).map_err(|e| jerr(env, e))?;
+            }
+            Some((titolo, testo, percento)) => {
+                for (k, v) in [("titolo", titolo), ("testo", testo)] {
+                    let (k, v) = (env.new_string(k).map_err(|e| e.to_string())?, env.new_string(v).map_err(|e| e.to_string())?);
+                    env.call_method(&intento, "putExtra", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;", &[JValue::Object(&k), JValue::Object(&v)]).map_err(|e| jerr(env, e))?;
+                }
+                let k = env.new_string("percento").map_err(|e| e.to_string())?;
+                env.call_method(&intento, "putExtra", "(Ljava/lang/String;I)Landroid/content/Intent;", &[JValue::Object(&k), JValue::Int(percento)]).map_err(|e| jerr(env, e))?;
+                env.call_method(att, "startForegroundService", "(Landroid/content/Intent;)Landroid/content/ComponentName;", &[JValue::Object(&intento)]).map_err(|e| jerr(env, e))?;
+            }
+        }
+        Ok(())
+    });
+    if let Err(e) = r {
+        log::error!("servizio: {e}");
+    }
+}
+
 type Casella<T> = Arc<Mutex<Option<T>>>;
 
 /// Quello che i thread di lavoro consegnano al ciclo principale.
@@ -475,7 +512,7 @@ struct Consegne {
     esiti: Arc<Mutex<Vec<(u32, Stato)>>>,
 }
 
-fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'static str, qualita: u8) {
+fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<std::sync::atomic::AtomicU32>) {
     let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
     if !assicura_scrittura(&app) {
         invia(Stato::Errore("Serve il permesso di scrivere in Documenti.".into()));
@@ -486,7 +523,9 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
         invia(Stato::Errore(format!("Documenti non è scrivibile: {e}")));
         return;
     }
-    match cedro::perform_into(&file, azione, qualita, Some(&out)) {
+    let p2 = prog.clone();
+    let esito = cedro::progress::con(move |f| p2.store((f * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed), || cedro::perform_into(&file, azione, qualita, Some(&out)));
+    match esito {
         Ok(o) => {
             let nome = o.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             log::info!("{azione}: salvato {} ({})", o.path.display(), o.message);
@@ -569,12 +608,35 @@ fn carica_file(ui: &mut App, c: &Consegne, cartella: &Path, path: PathBuf, nome:
     ricarica_recenti(cartella.to_path_buf(), c);
 }
 
+/// Quanti core sono «grandi» (big.LITTLE): sono quelli con la capacità più alta. Sul Mi 9T due core A76 fanno quanto otto
+/// insieme ai quattro piccoli, con molto meno calore: le reti dell'OCR (rten) girano su questi. None se i core sono tutti uguali.
+fn core_grandi() -> Option<usize> {
+    let mut cap = Vec::new();
+    for i in 0..32 {
+        let base = format!("/sys/devices/system/cpu/cpu{i}");
+        let c = std::fs::read_to_string(format!("{base}/cpu_capacity")).or_else(|_| std::fs::read_to_string(format!("{base}/cpufreq/cpuinfo_max_freq")));
+        match c.ok().and_then(|s| s.trim().parse::<u64>().ok()) {
+            Some(v) => cap.push(v),
+            None => break,
+        }
+    }
+    let max = *cap.iter().max()?;
+    let grandi = cap.iter().filter(|c| **c * 10 >= max * 9).count();
+    (grandi < cap.len() && grandi >= 1).then_some(grandi.max(2).min(cap.len()))
+}
+
 #[no_mangle]
 fn android_main(app: AndroidApp) {
     android_logger::init_once(android_logger::Config::default().with_max_level(log::LevelFilter::Info).with_tag("Cedro"));
     let dati = app.internal_data_path().unwrap_or_else(|| PathBuf::from("/data/local/tmp"));
     // Il motore cerca le sue impostazioni in $HOME/.config/cedro.
     std::env::set_var("HOME", &dati);
+    if std::env::var_os("RTEN_NUM_THREADS").is_none() {
+        if let Some(n) = core_grandi() {
+            log::info!("core grandi: {n}");
+            std::env::set_var("RTEN_NUM_THREADS", n.to_string());
+        }
+    }
     let file_tema = dati.join("tema.txt");
     let file_lavori = dati.join("lavori.txt");
     let tema = std::fs::read_to_string(&file_tema).map(|t| ThemeId::from_key(&t)).unwrap_or(ThemeId::WindowsEssenziale);
@@ -597,7 +659,7 @@ fn android_main(app: AndroidApp) {
         Ok(None) => ricarica_recenti(cartella.clone(), &consegne),
         Err(e) => {
             log::error!("condivisione: {e}");
-            ui.lavori.insert(0, crate::ui::Lavoro { id: 9999, origine: "Condivisione".into(), etichetta: "File".into(), conv: false, inizio: std::time::Instant::now(), quando: crate::ui::adesso(), stato: Stato::Errore(e) });
+            ui.lavori.insert(0, crate::ui::Lavoro { id: 9999, origine: "Condivisione".into(), etichetta: "File".into(), conv: false, inizio: std::time::Instant::now(), quando: crate::ui::adesso(), stato: Stato::Errore(e), prog: Arc::new(std::sync::atomic::AtomicU32::new(1000)) });
             ricarica_recenti(cartella.clone(), &consegne);
         }
     }
@@ -608,9 +670,11 @@ fn android_main(app: AndroidApp) {
     let mut esci = false;
     let mut animando = false;
     let mut attesa_scelta = false;
+    let mut servizio_attivo = false;
+    let mut ultimo_servizio = std::time::Instant::now();
 
     while !esci {
-        let attesa = if animando { 8 } else { 150 };
+        let attesa = if animando { 40 } else { 150 };
         app.poll_events(Some(Duration::from_millis(attesa)), |ev| {
             if let PollEvent::Main(m) = ev {
                 match m {
@@ -669,10 +733,10 @@ fn android_main(app: AndroidApp) {
                     match eff {
                         Effetto::Niente => {}
                         Effetto::Ridisegna => sporco = true,
-                        Effetto::Converti { id, file, azione, qualita } => {
+                        Effetto::Converti { id, file, azione, qualita, prog } => {
                             sporco = true;
                             let (a, c) = (app.clone(), consegne.clone());
-                            std::thread::spawn(move || converti(a, c, id, file, azione, qualita));
+                            std::thread::spawn(move || converti(a, c, id, file, azione, qualita, prog));
                         }
                         Effetto::Esci => chiudi(&app),
                         Effetto::SalvaTema(t) => {
@@ -777,6 +841,19 @@ fn android_main(app: AndroidApp) {
             // Appena aperta la finestra le barre possono non esserci ancora: si riprova per un po'.
             tentativi += 1;
             leggi_insets = m == (0.0, 0.0, 0.0, 0.0) && tentativi < 40;
+        }
+        // Il servizio in primo piano vive finché c'è un lavoro in corso; la notifica segue l'avanzamento.
+        if ultimo_servizio.elapsed() > Duration::from_millis(700) || (servizio_attivo && ui.in_corso().0 == 0) {
+            let (n, medio, nome) = ui.in_corso();
+            if n > 0 {
+                let testo = if n > 1 { format!("{n} lavori in corso") } else { nome };
+                servizio(&app, Some(("Cedro sta lavorando", &testo, medio.map(|m| m as i32).unwrap_or(-1))));
+                servizio_attivo = true;
+                ultimo_servizio = std::time::Instant::now();
+            } else if servizio_attivo {
+                servizio(&app, None);
+                servizio_attivo = false;
+            }
         }
         animando = ui.animando();
         if sporco || animando {
