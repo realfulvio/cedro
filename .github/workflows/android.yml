@@ -60,6 +60,9 @@ jobs:
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
             export CEDRO_KEYSTORE="$RUNNER_TEMP/release.keystore" CEDRO_KS_PASS="$KS_PASS" CEDRO_KEY_ALIAS="${KEY_ALIAS:-cedro}"
           fi
+          # La versione dell'APK è quella del tag (android-v0.21.4 → 0.21.4), non per forza quella di Cedro per il computer.
+          TAG="${{ inputs.tag || github.ref_name }}"
+          case "$TAG" in android-v[0-9]*) export CEDRO_VERSION_NAME="${TAG#android-v}";; esac
           android/build.sh
           rm -f "$RUNNER_TEMP/release.keystore"
           ls -la android/target/*.apk
