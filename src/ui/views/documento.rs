@@ -125,6 +125,14 @@ fn preview(f: &mut Frame, app: &App, r: R) {
     f.p.rrect(tab.0, tab.1, tab.2, tab.3 + 8.0, 8.0, Some(pal.surface), None);
     f.kind_icon(file.kind, tab.0 + 14.0, tab.1 + 8.0, 30.0);
     f.text(&file.name(), tab.0 + 54.0, tab.1, tab.2 - 60.0, tab.3, 17.0, SEMI, pal.text);
+    let area = (r.0, r.1 + 100.0, r.2, r.3 - 100.0);
+    use crate::engine::Kind;
+    if matches!(file.kind, Kind::Audio | Kind::Video | Kind::Other) {
+        // Niente pagine: una scheda con l'onda o i fotogrammi e i dati del file.
+        f.p.fill(area.0, area.1, area.2, area.3, mix(pal.border, pal.bg, 0.45));
+        media_card(f, app, i, area);
+        return;
+    }
     let pages = app.page_count(i).unwrap_or(1).max(1);
     let page = app.preview_page.min(pages - 1);
     let by = r.1 + 62.0;
@@ -132,14 +140,10 @@ fn preview(f: &mut Frame, app: &App, r: R) {
     nav_button(f, r.0 + 62.0, by, false, Act::PageNext, page + 1 < pages);
     f.numbox((r.0 + 112.0, by - 2.0, 56.0, 34.0), &(page + 1).to_string(), 16.0);
     f.text(&format!("/ {pages}"), r.0 + 180.0, by - 2.0, 80.0, 34.0, 16.0, SANS, pal.muted);
-    let area = (r.0, r.1 + 100.0, r.2, r.3 - 100.0);
     f.p.fill(area.0, area.1, area.2, area.3, mix(pal.border, pal.bg, 0.45));
     let img = app.previews.get(&(file.path.clone(), page)).and_then(|o| o.clone()).or_else(|| app.media_of(&file.path).and_then(|m| m.thumb.clone()));
     let Some(img) = img else {
-        let msg = match file.kind {
-            crate::engine::Kind::Pdf | crate::engine::Kind::Image => "Preparo l'anteprima…",
-            _ => "Anteprima non disponibile per questo tipo di file.",
-        };
+        let msg = "Preparo l'anteprima…";
         f.kind_icon(file.kind, area.0 + area.2 / 2.0 - 40.0, area.1 + area.3 / 2.0 - 80.0, 80.0);
         f.text_c(msg, (area.0, area.1 + area.3 / 2.0 + 20.0, area.2, 34.0), 17.0, SANS, pal.muted);
         return;
@@ -160,6 +164,103 @@ fn preview(f: &mut Frame, app: &App, r: R) {
         f.p.rrect(px, py, pw, ph, 2.0, Some((255, 255, 255)), None);
         f.p.image(&img, px, py, pw, ph, 2.0, Fit::Contain);
         ph + 60.0
+    });
+}
+
+/// La scheda di un file audio, video o d'altro tipo, al centro dell'anteprima.
+fn media_card(f: &mut Frame, app: &App, i: usize, area: R) {
+    use crate::engine::Kind;
+    let pal = f.pal;
+    let file = &app.files[i];
+    let Some(about) = app.media_of(&file.path).and_then(|m| m.about.clone()) else {
+        f.kind_icon(file.kind, area.0 + area.2 / 2.0 - 40.0, area.1 + area.3 / 2.0 - 80.0, 80.0);
+        f.text_c("Preparo l'anteprima…", (area.0, area.1 + area.3 / 2.0 + 20.0, area.2, 34.0), 17.0, SANS, pal.muted);
+        return;
+    };
+    let cw = (area.2 - 80.0).clamp(240.0, if file.kind == Kind::Video { 640.0 } else { 560.0 });
+    let pad = 26.0;
+    let iw = cw - 2.0 * pad;
+    let cx = area.0 + (area.2 - cw) / 2.0;
+    let facts_h = about.facts.len() as f32 * 28.0;
+    let body_h = match file.kind {
+        Kind::Audio => 62.0 + 130.0 + 16.0 + facts_h,
+        Kind::Video => {
+            let main = if about.frames.is_empty() { 0.0 } else { iw * 9.0 / 16.0 + 14.0 };
+            let strip = if about.frames.len() > 1 { (iw - 4.0 * 8.0) / 5.0 * 9.0 / 16.0 + 18.0 } else { 0.0 };
+            main + strip + 62.0 + facts_h
+        }
+        _ => 300.0,
+    };
+    let ch = body_h + 2.0 * pad;
+    super::scrolled(f, area, Scroll::Page, |f| {
+        let cy = area.1 + 30.0;
+        f.p.shadow(cx, cy, cw, ch, 10.0, 14.0, 0.18, 4.0);
+        f.p.rrect(cx, cy, cw, ch, 10.0, Some(pal.surface), None);
+        let (x, mut y) = (cx + pad, cy + pad);
+        let name = file.name();
+        let length = about.duration.map(|d| format!("{} {}", crate::i18n::tr("Durata"), crate::ui::preview::clock(d)));
+        match file.kind {
+            Kind::Audio => {
+                f.text(&name, x, y, iw, 30.0, 19.0, SEMI, pal.text);
+                f.text(length.as_deref().unwrap_or(""), x, y + 30.0, iw, 24.0, 15.0, SANS, pal.muted);
+                y += 62.0;
+                if let Some(wave) = about.wave.as_ref().filter(|w| !w.is_empty()) {
+                    let n = wave.len() as f32;
+                    let step = iw / n;
+                    let bar = (step * 0.62).max(1.0);
+                    for (k, a) in wave.iter().enumerate() {
+                        let h = (a.max(0.02) * 120.0).max(2.0);
+                        f.p.rrect(x + k as f32 * step, y + 65.0 - h / 2.0, bar, h, bar.min(2.0), Some(pal.primary), None);
+                    }
+                } else {
+                    f.p.fill(x, y + 64.0, iw, 2.0, pal.border);
+                }
+                y += 146.0;
+            }
+            Kind::Video => {
+                if let Some(main) = about.frames.first() {
+                    let h = iw * 9.0 / 16.0;
+                    f.p.rrect(x, y, iw, h, 6.0, Some((20, 20, 24)), None);
+                    f.p.image(main, x, y, iw, h, 6.0, Fit::Contain);
+                    y += h + 14.0;
+                    if about.frames.len() > 1 {
+                        let tw = (iw - 4.0 * 8.0) / 5.0;
+                        let th = tw * 9.0 / 16.0;
+                        for (k, img) in about.frames.iter().take(5).enumerate() {
+                            let tx = x + k as f32 * (tw + 8.0);
+                            f.p.rrect(tx, y, tw, th, 4.0, Some((20, 20, 24)), None);
+                            f.p.image(img, tx, y, tw, th, 4.0, Fit::Cover);
+                        }
+                        y += th + 18.0;
+                    }
+                }
+                f.text(&name, x, y, iw, 30.0, 19.0, SEMI, pal.text);
+                f.text(length.as_deref().unwrap_or(""), x, y + 30.0, iw, 24.0, 15.0, SANS, pal.muted);
+                y += 62.0;
+            }
+            _ => {
+                f.kind_icon(file.kind, cx + cw / 2.0 - 40.0, y + 10.0, 80.0);
+                f.text_c(&name, (cx, y + 110.0, cw, 30.0), 19.0, SEMI, pal.text);
+                let size = crate::ui::model::human_size(app.media_of(&file.path).map(|m| m.bytes).unwrap_or(0));
+                let mut line = vec![about.kind_label.clone(), size];
+                if let Some(d) = &about.modified {
+                    line.push(format!("{} {d}", crate::i18n::tr("modificato il")));
+                }
+                f.text_c(&line.join("  ·  "), (cx, y + 142.0, cw, 26.0), 15.0, SANS, pal.muted);
+                let msg = "Cedro non può mostrare il contenuto di questo tipo di file, ma lo tiene in coda con il nome e il peso.";
+                let lines = f.p.wrap_lines(msg, 15.0, SANS, iw - 40.0, 3);
+                for (k, l) in lines.iter().enumerate() {
+                    f.p.text(l, cx, y + 186.0 + k as f32 * 22.0, cw, 22.0, 15.0, SANS, pal.muted, Align::Center);
+                }
+            }
+        }
+        let lw = about.facts.iter().map(|(l, _)| f.measure(l, 15.0, SANS)).fold(0.0f32, f32::max) + 18.0;
+        for (k, (label, value)) in about.facts.iter().enumerate() {
+            let fy = y + k as f32 * 28.0;
+            f.text(label, x, fy, lw, 28.0, 15.0, SANS, pal.muted);
+            f.p.text(value, x + lw, fy, iw - lw, 28.0, 15.0, SANS, pal.text, Align::Left);
+        }
+        ch + 60.0
     });
 }
 
