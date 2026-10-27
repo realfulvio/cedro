@@ -258,7 +258,7 @@ fn disegna(ui: &WheelUi, stato: &Stato, finestra: &android_activity::ndk::native
     } else {
         "Dal menu Condividi scegli «Cedro»".to_string()
     };
-    let colore = if stato.ok { pal.text } else { pal.bad };
+    let colore = if stato.ok || stato.messaggio.is_empty() { pal.text } else { pal.bad };
     let lw = w as f32 / scala;
     let lh = h as f32 / scala;
     p.rrect(24.0, lh - riserva_basso / scala + 6.0, lw - 48.0, 74.0, 14.0, Some(pal.surface), Some((pal.border, 1.0)));
