@@ -48,7 +48,7 @@ pub fn render(n: usize, hover: i32) -> Vec<u8> {
 /// Come `render`, ma con `scale` pixel per unità logica (schermi ad alta densità).
 /// Nella versione standard le forme sono quelle della ruota nuova (vedi `ui::wheel`).
 pub fn render_scaled(n: usize, hover: i32, scale: u32) -> Vec<u8> {
-    if crate::edizione::BONDENO {
+    if crate::edizione::bondeno() {
         return render_tema(tema::attivo(), n, hover, scale);
     }
     render_new(n, hover, scale)
@@ -60,7 +60,7 @@ fn render_new(n: usize, hover: i32, scale: u32) -> Vec<u8> {
     let scale = scale.max(1);
     let side = WHEEL as u32 * scale;
     let mut cache = GlyphCache::new();
-    let mut p = Painter::new(side, side, scale as f32, Fonts::shared(), &mut cache);
+    let mut p = Painter::new(side, side, scale as f32, Fonts::current(), &mut cache);
     let c = WHEEL / 2.0;
     let k = R1 / 230.0;
     crate::ui::wheel::disc_shapes(&mut p, c, c, R0 + 6.0, R1, k, n.max(1), if hover >= 0 { Some(hover as usize) } else { None });

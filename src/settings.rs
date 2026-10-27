@@ -228,11 +228,36 @@ impl Settings {
     }
 }
 
+/// Chi aveva la vecchia edizione Comune di Bondeno e passa a questa: l'installatore (o il pacchetto per Linux)
+/// lascia questo file nella cartella delle impostazioni, e al primo avvio il tema Bondeno si accende da solo.
+pub const DA_BONDENO: &str = "da-bondeno";
+
+/// Se c'è il file `da-bondeno` in `dir`: sceglie il tema Bondeno nelle impostazioni e toglie il file.
+fn passa_a_bondeno(dir: &Path) {
+    let marker = dir.join(DA_BONDENO);
+    if !marker.is_file() {
+        return;
+    }
+    let path = dir.join("config.txt");
+    let mut s = Settings::load_from(&path);
+    s.ui_theme = crate::edizione::CHIAVE_TEMA.to_string();
+    // Il file si toglie solo se la scelta è stata scritta: altrimenti ci si riprova al prossimo avvio.
+    if s.save_to(&path).is_ok() {
+        let _ = fs::remove_file(&marker);
+    }
+}
+
 pub fn read_settings() -> Settings {
-    Settings::load_from(&crate::config_dir().join("config.txt"))
+    static AL_PRIMO_AVVIO: std::sync::Once = std::sync::Once::new();
+    let dir = crate::config_dir();
+    AL_PRIMO_AVVIO.call_once(|| passa_a_bondeno(&dir));
+    let s = Settings::load_from(&dir.join("config.txt"));
+    crate::edizione::segui_tema(&s.ui_theme);
+    s
 }
 
 pub fn write_settings(s: &Settings) -> std::io::Result<()> {
+    crate::edizione::segui_tema(&s.ui_theme);
     s.save_to(&crate::config_dir().join("config.txt"))
 }
 
@@ -322,5 +347,34 @@ mod theme_tests {
         assert_eq!(Settings::parse(&text).ui_theme, "percorso-guidato");
         // Un file vecchio, senza le chiavi nuove, resta com'era.
         assert_eq!(Settings::parse("simple=0\n").ui_theme, "");
+    }
+}
+
+#[cfg(test)]
+mod bondeno_tests {
+    use super::*;
+
+    #[test]
+    fn chi_arriva_dalla_vecchia_edizione_bondeno_trova_il_tema_acceso() {
+        let dir = std::env::temp_dir().join(format!("cedro-da-bondeno-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("config.txt"), "quality=70\nui_theme=banco-di-lavoro\n").unwrap();
+        // Senza il file, niente cambia.
+        passa_a_bondeno(&dir);
+        assert_eq!(Settings::load_from(&dir.join("config.txt")).ui_theme, "banco-di-lavoro");
+        // Con il file: il tema è Bondeno, il resto resta, e il file sparisce (una volta sola).
+        fs::write(dir.join(DA_BONDENO), "").unwrap();
+        passa_a_bondeno(&dir);
+        let s = Settings::load_from(&dir.join("config.txt"));
+        assert_eq!((s.ui_theme.as_str(), s.quality), ("bondeno", 70));
+        assert!(!dir.join(DA_BONDENO).exists());
+        // Senza impostazioni ancora scritte vale lo stesso.
+        let nuova = dir.join("nuova");
+        fs::create_dir_all(&nuova).unwrap();
+        fs::write(nuova.join(DA_BONDENO), "").unwrap();
+        passa_a_bondeno(&nuova);
+        assert_eq!(Settings::load_from(&nuova.join("config.txt")).ui_theme, "bondeno");
+        let _ = fs::remove_dir_all(&dir);
     }
 }

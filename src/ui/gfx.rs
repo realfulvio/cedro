@@ -138,6 +138,34 @@ impl Fonts {
         FONTS.get_or_init(Fonts::system)
     }
 
+    /// I caratteri del tema Bondeno: Titillium Web (come il sito del Comune), con serif di sistema per le pagine.
+    pub fn bondeno() -> &'static Fonts {
+        static FONTS: OnceLock<Fonts> = OnceLock::new();
+        FONTS.get_or_init(|| {
+            let system = Fonts::shared();
+            let regular = Face::new(TITILLIUM.to_vec(), 0).expect("Titillium incorporato");
+            let bold = Face::new(TITILLIUM_BOLD.to_vec(), 0).expect("Titillium incorporato");
+            let mut faces = HashMap::new();
+            faces.insert(Weight::Regular, regular);
+            faces.insert(Weight::Semibold, bold.clone());
+            faces.insert(Weight::Bold, bold);
+            for w in [Weight::Serif, Weight::SerifBold] {
+                faces.insert(w, system.faces[&w].clone());
+            }
+            Fonts::with(faces)
+        })
+    }
+
+    /// I caratteri da usare con o senza il tema Bondeno.
+    pub fn for_theme(bondeno: bool) -> &'static Fonts {
+        if bondeno { Fonts::bondeno() } else { Fonts::shared() }
+    }
+
+    /// I caratteri del tema in uso adesso (`edizione::bondeno`).
+    pub fn current() -> &'static Fonts {
+        Fonts::for_theme(crate::edizione::bondeno())
+    }
+
     /// Il carattere che disegna `ch` con quel peso, e il suo glifo.
     fn glyph(&self, weight: Weight, ch: char) -> (&Face, GlyphId) {
         let face = &self.faces[&weight];
@@ -238,6 +266,29 @@ impl Image {
         }
         Some(Image { w, h, pixmap: Arc::new(pm) })
     }
+}
+
+/// Uno stemma del Comune di Bondeno pronto da disegnare (decodificato una volta sola), qualunque sia il tema:
+/// chi disegna decide se mostrarlo.
+pub fn stemma(quale: crate::edizione::Stemma) -> Option<&'static Image> {
+    use crate::edizione::{Stemma, CERCHIO, SCRITTA, SCRITTA_RITAGLIO, STEMMA};
+    static SOLO: OnceLock<Option<Image>> = OnceLock::new();
+    static SCRITTA_: OnceLock<Option<Image>> = OnceLock::new();
+    static CERCHIO_: OnceLock<Option<Image>> = OnceLock::new();
+    let (cell, png, ritaglio) = match quale {
+        Stemma::Solo => (&SOLO, STEMMA, None),
+        Stemma::Scritta => (&SCRITTA_, SCRITTA, Some(SCRITTA_RITAGLIO)),
+        Stemma::Cerchio => (&CERCHIO_, CERCHIO, None),
+    };
+    cell.get_or_init(|| {
+        let mut rgba = image::load_from_memory_with_format(png, image::ImageFormat::Png).ok()?.to_rgba8();
+        if let Some((x, y, lato)) = ritaglio {
+            rgba = image::imageops::crop_imm(&rgba, x, y, lato, lato).to_image();
+        }
+        let (w, h) = rgba.dimensions();
+        Image::from_rgba(w, h, rgba.as_raw())
+    })
+    .as_ref()
 }
 
 /// Come un'immagine riempie il suo riquadro.
@@ -502,6 +553,13 @@ impl<'a> Painter<'a> {
     /// Il simbolo Spicchio, quadrato di lato `size`.
     pub fn symbol(&mut self, x: f32, y: f32, size: f32) {
         self.brand(x, y, size / 512.0, 2, None);
+    }
+
+    /// Lo stemma del Comune, quadrato di lato `size`.
+    pub fn stemma(&mut self, quale: crate::edizione::Stemma, x: f32, y: f32, size: f32) {
+        if let Some(img) = stemma(quale) {
+            self.image(img, x, y, size, size, 0.0, Fit::Contain);
+        }
     }
 
     /// Il simbolo tutto di un colore (per i fondi scuri o le icone piccole).
