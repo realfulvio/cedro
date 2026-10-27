@@ -286,6 +286,12 @@ fn decode_symphonia(path: &Path) -> Result<Pcm, String> {
         .ok_or("l'audio non ha una traccia")?
         .clone();
     let track_id = track.id;
+    #[cfg(any(windows, target_os = "linux", target_os = "android"))]
+    if track.codec_params.codec == symphonia::core::codecs::CODEC_TYPE_OPUS {
+        let head = track.codec_params.extra_data.clone().unwrap_or_default();
+        let (samples, channels) = decode_opus(format.as_mut(), track_id, &head)?;
+        return Ok(Pcm { rate: 48_000, channels, samples, tags });
+    }
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
         .map_err(|e| format!("audio non decodificato: {e}"))?;
@@ -320,6 +326,46 @@ fn decode_symphonia(path: &Path) -> Result<Pcm, String> {
         return Err("l'audio non ha campioni".into());
     }
     Ok(Pcm { rate, channels, samples, tags })
+}
+
+/// Opus (Ogg, WebM, MKV): i pacchetti li dà symphonia, la decodifica è libopus. Esce a 48 kHz.
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
+fn decode_opus(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32, head: &[u8]) -> Result<(Vec<i16>, u16), String> {
+    use audiopus_sys as sys;
+    // OpusHead: 8 byte di firma, versione, canali, pre-skip (u16), …
+    let channels = match head.get(9) {
+        Some(c) if matches!(*c, 1 | 2) => *c as usize,
+        _ => return Err("Opus con più di due canali non letto".into()),
+    };
+    let preskip = if head.len() >= 12 { u16::from_le_bytes([head[10], head[11]]) as usize } else { 0 };
+    let mut err = 0;
+    let dec = unsafe { sys::opus_decoder_create(48_000, channels as i32, &mut err) };
+    if dec.is_null() || err != 0 {
+        return Err(format!("decodificatore Opus non creato ({err})"));
+    }
+    let mut samples: Vec<i16> = Vec::new();
+    let mut pcm = vec![0i16; 5760 * channels];
+    loop {
+        let packet = match f.next_packet() {
+            Ok(p) => p,
+            Err(_) => break,
+        };
+        if packet.track_id() != track_id {
+            continue;
+        }
+        let data = packet.buf();
+        let n = unsafe { sys::opus_decode(dec, data.as_ptr(), data.len() as i32, pcm.as_mut_ptr(), 5760, 0) };
+        if n > 0 {
+            samples.extend_from_slice(&pcm[..n as usize * channels]);
+        }
+    }
+    unsafe { sys::opus_decoder_destroy(dec) };
+    let skip = (preskip * channels).min(samples.len());
+    samples.drain(..skip);
+    if samples.is_empty() {
+        return Err("l'audio non ha campioni".into());
+    }
+    Ok((samples, channels as u16))
 }
 
 fn write_wav(path: &Path, pcm: &Pcm) -> Result<(), String> {
