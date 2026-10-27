@@ -41,7 +41,8 @@ fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), Failure> {
         .ok_or_else(|| Failure::Unsupported("nel file non c'è una traccia audio".into()))?
         .clone();
     if track.codec_params.codec == CODEC_TYPE_OPUS {
-        return opus_mono(format.as_mut(), track.id, track.codec_params.delay.unwrap_or(0) as usize);
+        let head = track.codec_params.extra_data.clone().unwrap_or_default();
+        return opus_mono(format.as_mut(), track.id, track.codec_params.delay.unwrap_or(0) as usize, &head);
     }
     let rate = track.codec_params.sample_rate.unwrap_or(RATE);
     let mut decoder = symphonia::default::get_codecs()
@@ -77,8 +78,48 @@ fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), Failure> {
     Ok((mono, rate))
 }
 
-fn opus_mono(_f: &mut dyn symphonia::core::formats::FormatReader, _t: u32, _s: usize) -> Result<(Vec<f32>, u32), Failure> {
-    Err(Failure::Unsupported("Opus non è nell'APK".into()))
+/// Opus (Ogg): i pacchetti li dà symphonia, la decodifica è libopus (statica, dentro l'APK). Esce a 48 kHz mono.
+fn opus_mono(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32, skip: usize, head: &[u8]) -> Result<(Vec<f32>, u32), Failure> {
+    use audiopus_sys as sys;
+    // OpusHead: 8 byte di firma, versione, canali, pre-skip (u16), …
+    let channels = match head.get(9) {
+        Some(c) if matches!(*c, 1 | 2) => *c as i32,
+        _ => return Err(Failure::Unsupported("Opus con più di due canali".into())),
+    };
+    let preskip = if head.len() >= 12 { u16::from_le_bytes([head[10], head[11]]) as usize } else { skip };
+    let mut err = 0;
+    let dec = unsafe { sys::opus_decoder_create(48_000, channels, &mut err) };
+    if dec.is_null() || err != 0 {
+        return Err(Failure::Other(format!("decodificatore Opus non creato ({err})")));
+    }
+    let mut mono: Vec<f32> = Vec::new();
+    let mut pcm = vec![0f32; 5760 * channels as usize];
+    loop {
+        let packet = match f.next_packet() {
+            Ok(p) => p,
+            Err(SymError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            Err(SymError::ResetRequired) => break,
+            Err(e) => {
+                unsafe { sys::opus_decoder_destroy(dec) };
+                return Err(Failure::Other(format!("lettura interrotta: {e}")));
+            }
+        };
+        if packet.track_id() != track_id {
+            continue;
+        }
+        let data = packet.buf();
+        let n = unsafe { sys::opus_decode_float(dec, data.as_ptr(), data.len() as i32, pcm.as_mut_ptr(), 5760, 0) };
+        if n <= 0 {
+            continue; // un pacchetto rovinato si salta
+        }
+        let ch = channels as usize;
+        mono.extend(pcm[..n as usize * ch].chunks_exact(ch).map(|fr| fr.iter().sum::<f32>() / ch as f32));
+    }
+    unsafe { sys::opus_decoder_destroy(dec) };
+    if mono.len() > preskip {
+        mono.drain(..preskip);
+    }
+    Ok((mono, 48_000))
 }
 
 /// Ricampionamento con un filtro sinc a finestra di Hann, a tabella: il passa-basso toglie quello che

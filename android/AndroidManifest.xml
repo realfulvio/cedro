@@ -54,5 +54,6 @@
             </intent-filter>
         </activity>
     <service android:name="it.cedro.android.ServizioLavoro" android:exported="false" />
+    <provider android:name="it.cedro.android.ArchiviProvider" android:authorities="it.cedro.android.files" android:exported="false" android:grantUriPermissions="true" />
     </application>
 </manifest>
