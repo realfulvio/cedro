@@ -95,6 +95,8 @@ pub enum Azione {
     Modo(u8),
     Vai,
     Cursore,
+    /// Il modello di trascrizione: 0 Veloce (tiny), 1 Buona (base).
+    Modello(usize),
     Tema(usize),
     IndietroFoglio,
     ApriScelta,
@@ -291,6 +293,8 @@ pub struct App {
     /// La tessera scelta in «Cosa ne faccio?».
     pub tessera: usize,
     pub qualita: u8,
+    /// Modello di trascrizione scelto (indice in `trascrizione::MODELS`: 0 Veloce, 1 Buona).
+    pub modello: usize,
     pub lavori: Vec<Lavoro>,
     pub recenti: Vec<Recente>,
     /// Si è arrivati alla ruota dal foglio: «indietro» ci torna.
@@ -323,6 +327,7 @@ impl App {
             scelta: None,
             tessera: 0,
             qualita: 82,
+            modello: 1,
             lavori: Vec::new(),
             recenti: Vec::new(),
             dal_foglio: false,
@@ -431,10 +436,18 @@ impl App {
         }
     }
 
-    /// Il cursore Qualità serve per l'azione scelta ora?
+    /// L'azione scelta ora è la trascrizione (si sceglie il modello al posto della qualità)?
+    fn modello_serve(&self) -> bool {
+        self.file.is_some() && self.foglio && righe(self.kind).get(self.tessera).is_some_and(|r| r.id == "trascrivi")
+    }
+
+    /// Il cursore Qualità (o la scelta del modello) serve per l'azione scelta ora?
     fn qualita_serve(&self) -> bool {
         if self.file.is_none() {
             return false;
+        }
+        if self.modello_serve() {
+            return true;
         }
         if self.foglio {
             return righe(self.kind).get(self.tessera).is_some_and(|r| uses_quality(self.kind, r.id));
@@ -528,7 +541,9 @@ impl App {
         self.scheda = Scheda::Lavori;
         self.foglio = false;
         self.dal_foglio = false;
-        Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita: self.qualita, prog }
+        // Per «trascrivi» il campo qualità porta il modello scelto.
+        let qualita = if id == "trascrivi" { self.modello as u8 } else { self.qualita };
+        Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita, prog }
     }
 
     fn attiva(&mut self, a: Azione) -> Effetto {
@@ -577,6 +592,10 @@ impl App {
                 }
             }
             Azione::Cursore => Effetto::Ridisegna,
+            Azione::Modello(m) => {
+                self.modello = m;
+                Effetto::Ridisegna
+            }
             Azione::Tema(i) => {
                 self.tema = TEMI[i];
                 Effetto::SalvaTema(self.tema)
@@ -919,6 +938,20 @@ impl App {
     /// Il cursore della qualità (solo dove il motore la usa).
     fn slider(&mut self, p: &mut Painter, rc: R) {
         let pal = self.pal();
+        if self.modello_serve() {
+            // Trascrizione: due scelte al posto del cursore.
+            p.text("Modello", rc.0, rc.1, 90.0, rc.3, 16.0, Weight::Regular, pal.text, Align::Left);
+            let (x0, w) = (rc.0 + 92.0, rc.2 - 92.0);
+            let cw = (w - 8.0) / 2.0;
+            for (i, nome) in ["Veloce", "Buona"].into_iter().enumerate() {
+                let cx = x0 + i as f32 * (cw + 8.0);
+                let on = self.modello == i;
+                p.rrect(cx, rc.1 + 4.0, cw, rc.3 - 8.0, (rc.3 - 8.0) / 2.0, Some(if on { pal.primary } else { pal.surface }), Some((if on { pal.primary } else { pal.border }, 1.0)));
+                p.text(nome, cx, rc.1 + 4.0, cw, rc.3 - 8.0, 15.0, Weight::Semibold, if on { pal.on_primary } else { pal.text }, Align::Center);
+                self.colpi.push((Forma::R((cx, rc.1, cw, rc.3)), Azione::Modello(i)));
+            }
+            return;
+        }
         p.text("Qualità", rc.0, rc.1, 90.0, rc.3, 16.0, Weight::Regular, pal.text, Align::Left);
         p.text(&self.qualita.to_string(), rc.0 + rc.2 - 40.0, rc.1, 40.0, rc.3, 16.0, Weight::Semibold, pal.text, Align::Right);
         let (tx, tw) = (rc.0 + 92.0, rc.2 - 92.0 - 52.0);

@@ -18,6 +18,8 @@ OUT=android/target; mkdir -p "$OUT/apk/lib/arm64-v8a"
 export CFLAGS_aarch64_linux_android="-I$PWD/android/ndk-stubs" CXXFLAGS_aarch64_linux_android="-I$PWD/android/ndk-stubs"
 # whisper.cpp con dotprod+fp16 (guardia HWCAP in trascrizione.rs); cmake dell'NDK: serve il file di toolchain e un generatore.
 export CMAKE_GENERATOR="Unix Makefiles" CMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" ANDROID_NDK="$ANDROID_NDK_HOME"
+# libopus (audiopus_sys) ha un CMakeLists vecchio: cmake 4 vuole il minimo dichiarato.
+export CMAKE_POLICY_VERSION_MINIMUM=3.5
 export PATH="$PWD/android/tools:$PATH" WHISPER_ARCH="${WHISPER_ARCH:-armv8.2-a+dotprod+fp16}"
 cargo ndk -t arm64-v8a -P 26 build --release -p cedro-android
 cp target/aarch64-linux-android/release/libcedro_android.so "$OUT/apk/lib/arm64-v8a/"

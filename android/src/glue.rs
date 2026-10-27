@@ -133,6 +133,15 @@ fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) 
     copia_uri(env, attivita, &uri, &mime, cartella).map(Some)
 }
 
+/// Il tipo del file per l'interfaccia: un vocale .opus (WhatsApp, Telegram) si trascrive, quindi conta come audio.
+fn tipo_di(path: &Path) -> cedro::Kind {
+    if cedro::trascrizione::only_transcribable(path) {
+        cedro::Kind::Audio
+    } else {
+        cedro::kind_of(path)
+    }
+}
+
 /// Copia il contenuto di un `content://` in un file privato di Cedro e ne dà nome e percorso.
 fn copia_uri(env: &mut JNIEnv, attivita: &JObject, uri: &JObject, mime: &str, cartella: &Path) -> Result<Condiviso, String> {
     macro_rules! j {
@@ -181,6 +190,16 @@ fn copia_uri(env: &mut JNIEnv, attivita: &JObject, uri: &JObject, mime: &str, ca
     }
     if env.exception_check().unwrap_or(false) {
         let _ = env.exception_clear();
+    }
+
+    // Un file:// non ha colonne: il nome è l'ultimo pezzo del percorso.
+    if nome.is_empty() {
+        if let Ok(v) = env.call_method(uri, "getLastPathSegment", "()Ljava/lang/String;", &[]) {
+            nome = v.l().ok().and_then(|o| stringa(env, o)).unwrap_or_default();
+        }
+        if env.exception_check().unwrap_or(false) {
+            let _ = env.exception_clear();
+        }
     }
 
     // Il contenuto: openInputStream + read(byte[]).
@@ -441,7 +460,14 @@ fn scansiona(env: &mut JNIEnv, attivita: &JObject, path: &Path, attesa: bool) ->
 /// che si ottiene registrando il file in MediaStore, senza FileProvider.
 fn apri_o_condividi(app: &AndroidApp, path: &Path, condividi: bool) -> Result<(), String> {
     con_attivita(app, |env, attivita| {
-        let uri = scansiona(env, attivita, path, true)?.ok_or("nessun indirizzo per il file")?;
+        // Un indirizzo che finisce col nome del file (ArchiviProvider), non col numero di MediaStore.
+        let rel = path.strip_prefix("/storage/emulated/0").map_err(|_| "il file non è nella memoria del telefono")?;
+        let indirizzo = env.new_string(format!("content://it.cedro.android.files{}", rel.to_string_lossy())).map_err(|e| e.to_string())?;
+        let uri = env
+            .call_static_method("android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&indirizzo)])
+            .and_then(|v| v.l())
+            .map_err(|e| jerr(env, e))?;
+        let uri = env.new_global_ref(uri).map_err(|e| e.to_string())?;
         let mime = mime_da_percorso(path);
         let mime_s = env.new_string(mime).map_err(|e| e.to_string())?;
         let azione = env.new_string(if condividi { "android.intent.action.SEND" } else { "android.intent.action.VIEW" }).map_err(|e| e.to_string())?;
@@ -529,7 +555,7 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
         return;
     }
     if azione == "trascrivi" {
-        return trascrivi(&app, &c, id, &file, &out, &prog);
+        return trascrivi(&app, &c, id, &file, &out, &prog, qualita as usize);
     }
     let p2 = prog.clone();
     let esito = cedro::progress::con(move |f| p2.store((f * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed), || cedro::perform_into(&file, azione, qualita, Some(&out)));
@@ -548,11 +574,11 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
     }
 }
 
-/// Voce in testo con whisper.cpp (nell'APK): il modello «Buona» (base) si scarica al primo uso. Salva un .txt in Documenti.
-fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, out: &std::path::Path, prog: &std::sync::atomic::AtomicU32) {
+/// Voce in testo con whisper.cpp (nell'APK): il modello scelto (Veloce = tiny, Buona = base) si scarica al primo uso. Salva un .txt in Documenti.
+fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, out: &std::path::Path, prog: &std::sync::atomic::AtomicU32, modello: usize) {
     use cedro::trascrizione::{run, Event, Format, Request};
     let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
-    let req = Request { format: Format::Text, model: 1, gpu: false, avx512: false };
+    let req = Request { format: Format::Text, model: modello.min(1), gpu: false, avx512: false };
     let esito: std::sync::Mutex<Option<Result<(PathBuf, String), String>>> = std::sync::Mutex::new(None);
     run(&[file.to_path_buf()], &req, Some(out), &cedro::Options::default(), &|e| match e {
         Event::Percent { percent, .. } => prog.store(percent as u32 * 10, std::sync::atomic::Ordering::Relaxed),
@@ -615,7 +641,7 @@ fn ricarica_recenti(cartella: PathBuf, c: &Consegne) {
         let recenti: Vec<Recente> = v
             .into_iter()
             .take(12)
-            .map(|(_, path)| Recente { nome: nome_di(&path), kind: cedro::kind_of(&path), thumb: cedro::ui::media::thumb_of(&path, 160), path })
+            .map(|(_, path)| Recente { nome: nome_di(&path), kind: tipo_di(&path), thumb: cedro::ui::media::thumb_of(&path, 160), path })
             .collect();
         *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(recenti);
     });
@@ -623,7 +649,7 @@ fn ricarica_recenti(cartella: PathBuf, c: &Consegne) {
 
 /// Mette un file nell'interfaccia e prepara, in un thread, l'anteprima (foto, prima pagina o onda).
 fn carica_file(ui: &mut App, c: &Consegne, cartella: &Path, path: PathBuf, nome: String, da_condivisione: bool) {
-    let kind = cedro::kind_of(&path);
+    let kind = tipo_di(&path);
     ui.imposta_file(file_di(&path, nome), kind, da_condivisione);
     let (c2, p2) = (c.clone(), path.clone());
     std::thread::spawn(move || {
