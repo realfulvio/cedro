@@ -6,6 +6,11 @@ Titillium Web (carattere)
   Licenza: SIL Open Font License 1.1 (testo in assets/fonts/OFL.txt)
   Sito: https://fonts.google.com/specimen/Titillium+Web
 
+Figtree (carattere, versione standard)
+  Autori: Erik D. Kennedy e collaboratori
+  Licenza: SIL Open Font License 1.1 (testo in assets/fonts/OFL-Figtree.txt)
+  Sito: https://fonts.google.com/specimen/Figtree
+
 Modelli OCR di ocrs (text-detection.onnx, text-recognition.onnx)
   Autore: Robert Knight
   Licenza dei pesi: Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0)
