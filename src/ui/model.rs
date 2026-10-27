@@ -729,7 +729,7 @@ impl App {
             return;
         }
         let paths: Vec<PathBuf> = targets.iter().map(|&i| self.files[i].path.clone()).collect();
-        self.begin(&targets, JobKind::Transcribe);
+        let cancel = self.begin(&targets, JobKind::Transcribe);
         self.transcribe.log.clear();
         self.transcribe.percent = 0;
         let settings = crate::read_settings();
@@ -742,7 +742,7 @@ impl App {
                 let _ = tx.send(e);
                 wake();
             };
-            trascrizione::run(&paths, &request, dest.as_deref(), &opts, &|event| match event {
+            trascrizione::run_cancellable(&paths, &request, dest.as_deref(), &opts, &cancel, &|event| match event {
                 trascrizione::Event::Log(line) => send(Event::TranscribeLog(line)),
                 trascrizione::Event::Percent { index, percent } => send(Event::TranscribePercent(index, percent)),
                 trascrizione::Event::Finished { path, result } => send(Event::Finished(path, result)),

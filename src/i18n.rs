@@ -366,7 +366,15 @@ fn tr_plain(s: &str) -> Cow<'_, str> {
     }
     let t = table();
     if let Some(en) = t.exact.get(s) {
-        return Cow::Owned(en.clone());
+        // La tabella vive quanto il programma: nessuna copia.
+        return Cow::Borrowed(en.as_str());
+    }
+    // Un testo con numeri (percentuali, pesi, tempi) cambia a ogni avanzamento: ricordarlo riempirebbe
+    // la memoria e farebbe dimenticare i testi fissi.
+    if s.bytes().any(|b| b.is_ascii_digit()) {
+        let v = translate(s, 0);
+        note_miss(s, &v);
+        return Cow::Owned(v);
     }
     // I modelli costano di più: il risultato (anche «nessuna traduzione») si ricorda.
     let mut c = cache().lock().unwrap_or_else(|e| e.into_inner());
@@ -374,14 +382,19 @@ fn tr_plain(s: &str) -> Cow<'_, str> {
         return Cow::Owned(v.clone());
     }
     let v = translate(s, 0);
-    if v == s && RECORD.load(Ordering::Relaxed) && s.chars().any(|ch| ch.is_alphabetic()) {
-        MISSES.lock().unwrap_or_else(|e| e.into_inner()).insert(s.to_string());
-    }
+    note_miss(s, &v);
     if c.len() > 4000 {
         c.clear();
     }
     c.insert(s.to_string(), v.clone());
     Cow::Owned(v)
+}
+
+/// Per i controlli: un testo rimasto in italiano.
+fn note_miss(s: &str, v: &str) {
+    if v == s && RECORD.load(Ordering::Relaxed) && s.chars().any(|ch| ch.is_alphabetic()) {
+        MISSES.lock().unwrap_or_else(|e| e.into_inner()).insert(s.to_string());
+    }
 }
 
 /// Come `tr`, ma restituisce un `String`.
