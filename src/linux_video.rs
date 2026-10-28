@@ -8,7 +8,7 @@ use std::path::Path;
 use fdk_aac::enc::{AudioObjectType, BitRate, ChannelMode, Encoder as AacEncoder, EncoderParams, Transport};
 use openh264::decoder::Decoder;
 use openh264::encoder::{BitRate as H264Rate, Encoder, EncoderConfig, FrameRate, FrameType, Profile, VuiConfig};
-use openh264::formats::{YUVBuffer, YUVSource};
+use openh264::formats::{YUVSlices, YUVSource};
 use openh264::OpenH264API;
 use symphonia::core::audio::SampleBuffer;
 use symphonia::core::codecs::{decl_codec_type, DecoderOptions};
@@ -18,7 +18,7 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-use crate::mp4mux::{write_mp4, Movie, Sample};
+use crate::mp4mux::{Movie, Mp4Writer, Sample};
 use crate::nal::{annex_nals, avcc_prefix, is_annex, length_to_annex};
 use crate::sink::VideoSink;
 
@@ -112,6 +112,8 @@ struct AacTrack {
     pending: Vec<i16>,
     packets: Vec<Vec<u8>>,
     asc: Vec<u8>,
+    /// Campioni d'avvio del codificatore in testa all'audio.
+    delay: u32,
     out: Vec<u8>,
 }
 
@@ -128,10 +130,19 @@ struct H264Aac {
     encoder: Option<H264>,
     sps: Vec<u8>,
     pps: Vec<u8>,
+    /// Il file, aperto al primo fotogramma codificato: i fotogrammi ci vanno subito.
+    mp4: Option<Mp4Writer>,
+    /// Le misure dei fotogrammi già scritti.
     video: Vec<Sample>,
+    /// Il tempo scritto finora, in 100 ns e in 1/90000 s: le durate si arrotondano sul totale,
+    /// così l'errore non si somma fotogramma dopo fotogramma.
+    elapsed_100ns: i64,
+    elapsed_90k: u64,
+    payload: Vec<u8>,
     audio: Option<AacTrack>,
     source_rate: u32,
     source_channels: u16,
+    resampler: crate::sink::Resampler,
 }
 
 impl VideoSink for H264Aac {
@@ -170,10 +181,15 @@ impl VideoSink for H264Aac {
             encoder: None,
             sps: Vec::new(),
             pps: Vec::new(),
+            mp4: None,
             video: Vec::new(),
+            elapsed_100ns: 0,
+            elapsed_90k: 0,
+            payload: Vec::new(),
             audio,
             source_rate,
             source_channels,
+            resampler: crate::sink::Resampler::default(),
         })
     }
 
@@ -200,13 +216,15 @@ impl VideoSink for H264Aac {
         if self.encoder.is_none() {
             self.encoder = Some(open_h264(self.width, self.height, self.frame_duration)?);
         }
-        let packed = if (width, height) != (self.width, self.height) {
-            let (ry, ru, rv) = crate::sink::resize_i420(y, u, v, width, height, self.width, self.height);
-            pack_i420(&ry, &ru, &rv, self.width as usize, self.height as usize)?
-        } else {
-            pack_i420(y, u, v, self.width as usize, self.height as usize)?
+        let resized = ((width, height) != (self.width, self.height))
+            .then(|| crate::sink::resize_i420(y, u, v, width, height, self.width, self.height));
+        let (y, u, v) = match &resized {
+            Some((ry, ru, rv)) => (ry.as_slice(), ru.as_slice(), rv.as_slice()),
+            None => (y, u, v),
         };
+        let (w, h) = (self.width as usize, self.height as usize);
         if let Some(H264::Gpu(gpu)) = self.encoder.as_mut() {
+            let packed = pack_i420(y, u, v, w, h)?;
             match gpu.encode(&packed) {
                 Ok((bytes, sync)) => {
                     crate::sink::note_gpu();
@@ -220,7 +238,12 @@ impl VideoSink for H264Aac {
             }
         }
         let Some(H264::Soft(encoder)) = self.encoder.as_mut() else { unreachable!("codificatore") };
-        let picture = YUVBuffer::from_vec(packed, self.width as usize, self.height as usize);
+        // I piani vanno al codificatore come sono, senza copiarli in un fotogramma unico.
+        let (cw, ch) = (w / 2, h / 2);
+        if y.len() < w * h || u.len() < cw * ch || v.len() < cw * ch {
+            return Err("fotogramma troppo corto".into());
+        }
+        let picture = YUVSlices::new((&y[..w * h], &u[..cw * ch], &v[..cw * ch]), (w, h), (w, cw, cw));
         let encoded = encoder.encode(&picture).map_err(|err| format!("H.264 non scritto: {err}"))?;
         if matches!(encoded.frame_type(), FrameType::Skip | FrameType::Invalid) && encoded.to_vec().is_empty() {
             return Ok(());
@@ -241,9 +264,8 @@ impl VideoSink for H264Aac {
             self.source_channels = track.channels as u16;
             self.audio = Some(track);
         }
-        let prepared = shape_pcm(samples, channels, rate, self.source_channels, self.source_rate);
         let track = self.audio.as_mut().expect("audio");
-        track.pending.extend(prepared);
+        shape_pcm(&mut self.resampler, samples, channels, rate, self.source_channels, self.source_rate, &mut track.pending);
         track.drain(false)
     }
 
@@ -270,19 +292,19 @@ impl VideoSink for H264Aac {
             return Err("il video non ha fotogrammi".into());
         }
         let audio = self.audio.take();
-        let (audio_rate, audio_channels, audio_asc, audio_samples) = match audio {
+        let (audio_rate, audio_channels, audio_asc, audio_samples, packets, audio_delay) = match audio {
             Some(track) if !track.packets.is_empty() => {
                 let samples = track
                     .packets
-                    .into_iter()
-                    .map(|data| Sample { data, duration: track.frame_len as u32, sync: true })
+                    .iter()
+                    .map(|data| Sample { size: data.len() as u32, duration: track.frame_len as u32, sync: true })
                     .collect();
-                (track.rate, track.channels as u16, track.asc, samples)
+                (track.rate, track.channels as u16, track.asc, samples, track.packets, track.delay)
             }
-            _ => (0, 0, Vec::new(), Vec::new()),
+            _ => (0, 0, Vec::new(), Vec::new(), Vec::new(), 0),
         };
-        write_mp4(
-            &self.path,
+        let mp4 = self.mp4.take().ok_or("il video non ha fotogrammi")?;
+        mp4.finish(
             &Movie {
                 width: self.width,
                 height: self.height,
@@ -292,15 +314,18 @@ impl VideoSink for H264Aac {
                 audio_rate,
                 audio_channels,
                 audio_asc,
+                audio_delay,
                 audio: audio_samples,
             },
+            &packets,
         )
     }
 }
 
 impl H264Aac {
     fn push_annex(&mut self, bytes: &[u8], duration: i64, mut sync: bool) -> Result<(), String> {
-        let mut payload = Vec::new();
+        let mut payload = std::mem::take(&mut self.payload);
+        payload.clear();
         let mut vcl = false;
         for nal in annex_nals(bytes) {
             if nal.is_empty() {
@@ -325,15 +350,29 @@ impl H264Aac {
             payload.extend_from_slice(nal);
         }
         if !vcl || payload.is_empty() {
+            self.payload = payload;
             return Ok(());
         }
         let ticks = if duration > 0 { duration } else { self.frame_duration };
-        self.video.push(Sample {
-            data: payload,
-            duration: duration_90k(ticks),
-            sync,
-        });
+        let size = u32::try_from(payload.len()).map_err(|_| "fotogramma troppo grande".to_string())?;
+        if self.mp4.is_none() {
+            self.mp4 = Some(Mp4Writer::create(&self.path)?);
+        }
+        self.mp4.as_mut().expect("mp4").write_video(&payload)?;
+        self.payload = payload;
+        let duration = self.push_duration(ticks);
+        self.video.push(Sample { size, duration, sync });
         Ok(())
+    }
+
+    /// La durata in 1/90000 s del prossimo fotogramma, da quella in 100 ns: si arrotonda il tempo
+    /// totale, non la singola durata (troncando, a 30 fps si perdeva 1,2 s di video all'ora).
+    fn push_duration(&mut self, ticks_100ns: i64) -> u32 {
+        self.elapsed_100ns = self.elapsed_100ns.saturating_add(ticks_100ns.max(1));
+        let end = ((self.elapsed_100ns as i128 * 9 + 500) / 1000) as u64;
+        let d = end.saturating_sub(self.elapsed_90k).max(1);
+        self.elapsed_90k += d;
+        u32::try_from(d).unwrap_or(u32::MAX)
     }
 }
 
@@ -402,6 +441,7 @@ fn open_aac(rate: u32, channels: u16) -> Result<AacTrack, String> {
         pending: Vec::new(),
         packets: Vec::new(),
         asc,
+        delay: info.nDelay,
         out: vec![0; out_len],
     })
 }
@@ -409,9 +449,15 @@ fn open_aac(rate: u32, channels: u16) -> Result<AacTrack, String> {
 impl AacTrack {
     fn drain(&mut self, finish: bool) -> Result<(), String> {
         let frame = self.frame_len * self.channels;
-        while self.pending.len() >= frame {
-            let chunk: Vec<i16> = self.pending.drain(..frame).collect();
-            self.encode_frame(&chunk)?;
+        // Un pezzo alla volta dall'inizio e il resto spostato una volta sola: togliendo ogni volta il
+        // primo pezzo dal vettore, un audio lungo passato tutto insieme costava ore.
+        if self.pending.len() >= frame {
+            let pending = std::mem::take(&mut self.pending);
+            let mut chunks = pending.chunks_exact(frame);
+            for chunk in &mut chunks {
+                self.encode_frame(chunk)?;
+            }
+            self.pending = chunks.remainder().to_vec();
         }
         if finish && !self.pending.is_empty() {
             self.pending.resize(frame, 0);
@@ -459,17 +505,27 @@ fn aac_asc(rate: u32, channels: u16) -> Vec<u8> {
     vec![(2 << 3) | (freq >> 1), ((freq & 1) << 7) | (channels << 3)]
 }
 
-fn shape_pcm(samples: &[i16], channels: u16, rate: u32, target_channels: u16, target_rate: u32) -> Vec<i16> {
+/// L'audio portato ai canali e alla frequenza della traccia AAC, aggiunto in fondo a `out`.
+fn shape_pcm(
+    resampler: &mut crate::sink::Resampler,
+    samples: &[i16],
+    channels: u16,
+    rate: u32,
+    target_channels: u16,
+    target_rate: u32,
+    out: &mut Vec<i16>,
+) {
+    use std::borrow::Cow;
     let channels = channels.max(1);
-    let folded = if channels > 2 { fold_stereo(samples, channels) } else { samples.to_vec() };
-    let folded_channels = if channels > 2 { 2 } else { channels };
+    let folded: Cow<[i16]> = if channels > 2 { Cow::Owned(crate::sink::fold_stereo(samples, channels)) } else { Cow::Borrowed(samples) };
+    let folded_channels = channels.min(2);
     let fitted = if folded_channels != target_channels && target_channels > 0 {
-        refit_channels(&folded, folded_channels, target_channels)
+        Cow::Owned(refit_channels(&folded, folded_channels, target_channels))
     } else {
         folded
     };
     let used = if target_channels > 0 { target_channels } else { folded_channels };
-    resample_pcm(&fitted, used, rate, target_rate)
+    resampler.push(&fitted, used, rate, target_rate, out);
 }
 
 fn refit_channels(samples: &[i16], from: u16, to: u16) -> Vec<i16> {
@@ -493,37 +549,6 @@ fn refit_channels(samples: &[i16], from: u16, to: u16) -> Vec<i16> {
     out
 }
 
-fn fold_stereo(samples: &[i16], channels: u16) -> Vec<i16> {
-    let channels = channels as usize;
-    let frames = samples.len() / channels;
-    let mut out = Vec::with_capacity(frames * 2);
-    for frame in 0..frames {
-        let base = frame * channels;
-        out.push(samples[base]);
-        out.push(samples[base + 1]);
-    }
-    out
-}
-
-fn resample_pcm(samples: &[i16], channels: u16, from: u32, to: u32) -> Vec<i16> {
-    if from == 0 || to == 0 || from == to {
-        return samples.to_vec();
-    }
-    let ch = channels as usize;
-    let frames = samples.len() / ch.max(1);
-    if frames == 0 {
-        return Vec::new();
-    }
-    let out_frames = ((frames as u64 * to as u64) / from as u64).max(1) as usize;
-    let mut out = Vec::with_capacity(out_frames * ch);
-    for frame in 0..out_frames {
-        let src = ((frame as u64 * from as u64) / to as u64) as usize;
-        let src = src.min(frames - 1);
-        out.extend_from_slice(&samples[src * ch..(src + 1) * ch]);
-    }
-    out
-}
-
 fn pack_i420(y: &[u8], u: &[u8], v: &[u8], w: usize, h: usize) -> Result<Vec<u8>, String> {
     let cw = w / 2;
     let ch = h / 2;
@@ -542,15 +567,6 @@ fn pack_i420(y: &[u8], u: &[u8], v: &[u8], w: usize, h: usize) -> Result<Vec<u8>
     }
     Ok(out)
 }
-
-fn duration_90k(ticks_100ns: i64) -> u32 {
-    let ticks = ticks_100ns.max(1) as u64;
-    let value = ticks.saturating_mul(9) / 1000;
-    u32::try_from(value).unwrap_or(u32::MAX).max(1)
-}
-
-
-
 
 fn yuv(r: i32, g: i32, b: i32) -> (u8, u8, u8) {
     let y = (((66 * r + 129 * g + 25 * b + 128) >> 8) + 16).clamp(0, 255) as u8;
@@ -608,6 +624,55 @@ struct EarlyPcm {
     rate: u32,
 }
 
+/// Quello che il thread di decodifica passa al codificatore.
+enum Decoded {
+    /// Fotogramma, durata e tempo (100 ns).
+    Frame(OwnedFrame, i64, i64),
+    Pcm(EarlyPcm),
+}
+
+/// Fotogrammi decodificati in attesa del codificatore.
+const DECODED_QUEUE: usize = 4;
+/// Chi codifica si è fermato (errore o anteprima finita): chi legge smette.
+const STOPPED: &str = "lettura fermata";
+
+/// Decodifica su un altro thread mentre questo codifica: i due lavori vanno insieme invece che a turno.
+/// `read` passa ogni fotogramma a `emit` (che risponde `false` se chi codifica si è fermato), `take` li
+/// riceve qui nell'ordine. Il codificatore, le opzioni e l'anteprima restano su questo thread.
+fn pipelined<R>(read: R, mut take: impl FnMut(Decoded) -> Result<(), String>) -> Result<(), String>
+where
+    R: FnOnce(&mut dyn FnMut(Decoded) -> bool) -> Result<(), String> + Send,
+{
+    std::thread::scope(|scope| {
+        let (send, receive) = std::sync::mpsc::sync_channel::<Decoded>(DECODED_QUEUE);
+        let reader = std::thread::Builder::new()
+            .name("cedro-decodifica".into())
+            .spawn_scoped(scope, move || read(&mut |item| send.send(item).is_ok()))
+            .map_err(|err| format!("il video non è stato letto: {err}"))?;
+        let mut taken = Ok(());
+        for item in receive.iter() {
+            if let Err(err) = take(item) {
+                taken = Err(err);
+                break;
+            }
+        }
+        // Il canale chiuso ferma chi legge al prossimo fotogramma.
+        drop(receive);
+        let read = reader.join().unwrap_or_else(|_| Err("il video non è stato letto".into()));
+        taken?;
+        read
+    })
+}
+
+/// Per `read` di `pipelined`: `false` da `emit` diventa l'errore che ferma la lettura.
+fn sent(ok: bool) -> Result<(), String> {
+    if ok {
+        Ok(())
+    } else {
+        Err(STOPPED.into())
+    }
+}
+
 fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let file = File::open(input).map_err(|err| format!("il video non è stato letto: {err}"))?;
     let size = file.metadata().map_err(|err| format!("il video non è stato letto: {err}"))?.len();
@@ -649,42 +714,50 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
             header.extend_from_slice(nal);
         }
     }
-    let mut decoder = h264_decoder()?;
-    if !header.is_empty() {
-        let _ = decoder.decode(&header);
-    }
     let mut sink = None;
     let mut queued = Vec::new();
     let mut shown = 0u32;
-    let mut last = (0i64, 333_333i64);
-    for index in 1..=count {
-        let Some(sample) = reader
-            .read_sample(track_id, index)
-            .map_err(|err| format!("il video non è stato letto: {err}"))?
-        else {
-            continue;
-        };
-        let annex = annex_sample(&sample.bytes);
-        if annex.is_empty() {
-            continue;
-        }
-        let duration = ticks(u64::from(sample.duration), 1, timescale).max(1);
-        let time = ticks(sample.start_time, 1, timescale);
-        last = (time, duration);
-        if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
-            let owned = owned_frame(&frame)?;
-            feed_frame(&mut sink, &mut queued, output, &owned, duration, time, false, 0, 0)?;
-            shown += 1;
-        }
-    }
-    // Con i fotogrammi B il decodificatore ne trattiene qualcuno: escono qui, dopo l'ultimo.
-    if let Ok(rest) = decoder.flush_remaining() {
-        for (k, frame) in rest.iter().enumerate() {
-            let owned = owned_frame(frame)?;
-            feed_frame(&mut sink, &mut queued, output, &owned, last.1, last.0 + last.1 * (k as i64 + 1), false, 0, 0)?;
-            shown += 1;
-        }
-    }
+    pipelined(
+        |emit| {
+            let mut decoder = h264_decoder()?;
+            if !header.is_empty() {
+                let _ = decoder.decode(&header);
+            }
+            let mut last = (0i64, 333_333i64);
+            for index in 1..=count {
+                let Some(sample) = reader
+                    .read_sample(track_id, index)
+                    .map_err(|err| format!("il video non è stato letto: {err}"))?
+                else {
+                    continue;
+                };
+                let annex = annex_sample(&sample.bytes);
+                if annex.is_empty() {
+                    continue;
+                }
+                let duration = ticks(u64::from(sample.duration), 1, timescale).max(1);
+                let time = ticks(sample.start_time, 1, timescale);
+                last = (time, duration);
+                if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
+                    sent(emit(Decoded::Frame(owned_frame(&frame)?, duration, time)))?;
+                }
+            }
+            // Con i fotogrammi B il decodificatore ne trattiene qualcuno: escono qui, dopo l'ultimo.
+            if let Ok(rest) = decoder.flush_remaining() {
+                for (k, frame) in rest.iter().enumerate() {
+                    sent(emit(Decoded::Frame(owned_frame(frame)?, last.1, last.0 + last.1 * (k as i64 + 1))))?;
+                }
+            }
+            Ok(())
+        },
+        |item| {
+            if let Decoded::Frame(owned, duration, time) = item {
+                feed_frame(&mut sink, &mut queued, output, &owned, duration, time, false, 0, 0)?;
+                shown += 1;
+            }
+            Ok(())
+        },
+    )?;
     if shown == 0 {
         return Err("il video non ha fotogrammi".into());
     }
@@ -746,40 +819,52 @@ fn iso_lenient(input: &Path, output: &Path) -> Result<(), String> {
             header.extend_from_slice(nal);
         }
     }
-    let mut decoder = h264_decoder()?;
-    if !header.is_empty() {
-        let _ = decoder.decode(&header);
-    }
     let mut sink = None;
     let mut queued = Vec::new();
     let mut shown = 0u32;
-    let mut last = (0i64, 333_333i64);
-    let mut sample_bytes = Vec::new();
-    for sample in &video.samples {
-        sample_bytes.resize(sample.size as usize, 0);
-        file.seek(SeekFrom::Start(sample.offset)).map_err(|err| format!("il video non è stato letto: {err}"))?;
-        file.read_exact(&mut sample_bytes).map_err(|err| format!("il video non è stato letto: {err}"))?;
-        let annex = annex_sample(&sample_bytes);
-        if annex.is_empty() {
-            continue;
-        }
-        let duration = ticks(u64::from(sample.duration), 1, video.timescale).max(1);
-        let time = ticks(sample.start, 1, video.timescale);
-        last = (time, duration);
-        if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
-            let owned = owned_frame(&frame)?;
-            feed_frame(&mut sink, &mut queued, output, &owned, duration, time, false, 0, 0)?;
-            shown += 1;
-        }
-    }
-    // Con i fotogrammi B il decodificatore ne trattiene qualcuno: escono qui, dopo l'ultimo.
-    if let Ok(rest) = decoder.flush_remaining() {
-        for (k, frame) in rest.iter().enumerate() {
-            let owned = owned_frame(frame)?;
-            feed_frame(&mut sink, &mut queued, output, &owned, last.1, last.0 + last.1 * (k as i64 + 1), false, 0, 0)?;
-            shown += 1;
-        }
-    }
+    pipelined(
+        |emit| {
+            let mut decoder = h264_decoder()?;
+            if !header.is_empty() {
+                let _ = decoder.decode(&header);
+            }
+            let mut last = (0i64, 333_333i64);
+            let mut sample_bytes = Vec::new();
+            for sample in &video.samples {
+                // Un campione che esce dal file è un indice rovinato: niente memoria chiesta per niente.
+                if sample.offset.saturating_add(u64::from(sample.size)) > len {
+                    return Err("il video non è stato letto".into());
+                }
+                sample_bytes.resize(sample.size as usize, 0);
+                file.seek(SeekFrom::Start(sample.offset)).map_err(|err| format!("il video non è stato letto: {err}"))?;
+                file.read_exact(&mut sample_bytes).map_err(|err| format!("il video non è stato letto: {err}"))?;
+                let annex = annex_sample(&sample_bytes);
+                if annex.is_empty() {
+                    continue;
+                }
+                let duration = ticks(u64::from(sample.duration), 1, video.timescale).max(1);
+                let time = ticks(sample.start, 1, video.timescale);
+                last = (time, duration);
+                if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
+                    sent(emit(Decoded::Frame(owned_frame(&frame)?, duration, time)))?;
+                }
+            }
+            // Con i fotogrammi B il decodificatore ne trattiene qualcuno: escono qui, dopo l'ultimo.
+            if let Ok(rest) = decoder.flush_remaining() {
+                for (k, frame) in rest.iter().enumerate() {
+                    sent(emit(Decoded::Frame(owned_frame(frame)?, last.1, last.0 + last.1 * (k as i64 + 1))))?;
+                }
+            }
+            Ok(())
+        },
+        |item| {
+            if let Decoded::Frame(owned, duration, time) = item {
+                feed_frame(&mut sink, &mut queued, output, &owned, duration, time, false, 0, 0)?;
+                shown += 1;
+            }
+            Ok(())
+        },
+    )?;
     if shown == 0 {
         return Err("il video non ha fotogrammi".into());
     }
@@ -975,12 +1060,26 @@ fn sample_index(file: &mut File, stbl: &IsoSpan) -> Result<Vec<IsoSample>, Strin
     Ok(samples)
 }
 
+/// Quante voci da `entry` byte stanno davvero nella tabella dopo `head` byte: i contatori vengono dal
+/// file e un file rovinato non deve far chiedere gigabyte di memoria.
+fn table_count(raw: &[u8], count: usize, head: usize, entry: usize) -> Result<usize, String> {
+    if count > raw.len().saturating_sub(head) / entry {
+        return Err("il video non è stato letto".into());
+    }
+    Ok(count)
+}
+
 fn sample_sizes(raw: &[u8]) -> Result<Vec<u32>, String> {
     let sample_size = be_u32(raw, 4).ok_or("il video non è stato letto")?;
     let count = be_u32(raw, 8).ok_or("il video non è stato letto")? as usize;
     if sample_size != 0 {
+        // Misura fissa: la tabella è vuota; 50 milioni di campioni sono 46 ore a 300 fps.
+        if count > 50_000_000 {
+            return Err("il video non è stato letto".into());
+        }
         return Ok(vec![sample_size; count]);
     }
+    let count = table_count(raw, count, 12, 4)?;
     let mut sizes = Vec::with_capacity(count);
     for n in 0..count {
         sizes.push(be_u32(raw, 12 + n * 4).ok_or("il video non è stato letto")?);
@@ -990,7 +1089,7 @@ fn sample_sizes(raw: &[u8]) -> Result<Vec<u32>, String> {
 
 fn chunk_offsets(stco: Option<&[u8]>, co64: Option<&[u8]>) -> Result<Vec<u64>, String> {
     if let Some(raw) = co64 {
-        let count = be_u32(raw, 4).ok_or("il video non è stato letto")? as usize;
+        let count = table_count(raw, be_u32(raw, 4).ok_or("il video non è stato letto")? as usize, 8, 8)?;
         let mut offsets = Vec::with_capacity(count);
         for n in 0..count {
             let at = 8 + n * 8;
@@ -1002,7 +1101,7 @@ fn chunk_offsets(stco: Option<&[u8]>, co64: Option<&[u8]>) -> Result<Vec<u64>, S
         return Ok(offsets);
     }
     let raw = stco.ok_or("il video non è stato letto")?;
-    let count = be_u32(raw, 4).ok_or("il video non è stato letto")? as usize;
+    let count = table_count(raw, be_u32(raw, 4).ok_or("il video non è stato letto")? as usize, 8, 4)?;
     let mut offsets = Vec::with_capacity(count);
     for n in 0..count {
         offsets.push(u64::from(be_u32(raw, 8 + n * 4).ok_or("il video non è stato letto")?));
@@ -1011,7 +1110,7 @@ fn chunk_offsets(stco: Option<&[u8]>, co64: Option<&[u8]>) -> Result<Vec<u64>, S
 }
 
 fn samples_per_chunk(raw: &[u8], chunks: usize) -> Result<Vec<u32>, String> {
-    let count = be_u32(raw, 4).ok_or("il video non è stato letto")? as usize;
+    let count = table_count(raw, be_u32(raw, 4).ok_or("il video non è stato letto")? as usize, 8, 12)?;
     let mut entries = Vec::with_capacity(count);
     for n in 0..count {
         let at = 8 + n * 12;
@@ -1021,17 +1120,16 @@ fn samples_per_chunk(raw: &[u8], chunks: usize) -> Result<Vec<u32>, String> {
     }
     let mut per_chunk = vec![0u32; chunks];
     for (n, (first, samples)) in entries.iter().enumerate() {
-        let from = first.saturating_sub(1) as usize;
-        let to = entries.get(n + 1).map(|(next, _)| next.saturating_sub(1) as usize).unwrap_or(chunks);
-        for slot in per_chunk.iter_mut().take(to.min(chunks)).skip(from.min(chunks)) {
-            *slot = *samples;
-        }
+        let from = (first.saturating_sub(1) as usize).min(chunks);
+        let to = entries.get(n + 1).map(|(next, _)| next.saturating_sub(1) as usize).unwrap_or(chunks).clamp(from, chunks);
+        // Solo l'intervallo della voce: con voci fuori ordine il conto restava voci × blocchi.
+        per_chunk[from..to].fill(*samples);
     }
     Ok(per_chunk)
 }
 
 fn time_runs(raw: &[u8]) -> Result<Vec<(u32, u32)>, String> {
-    let count = be_u32(raw, 4).ok_or("il video non è stato letto")? as usize;
+    let count = table_count(raw, be_u32(raw, 4).ok_or("il video non è stato letto")? as usize, 8, 8)?;
     let mut runs = Vec::with_capacity(count);
     for n in 0..count {
         let at = 8 + n * 8;
@@ -1185,66 +1283,76 @@ fn mkv_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let wants_audio = src.wants_audio;
     let fallback = if src.default_100ns > 0 { src.default_100ns } else { 333_333 };
     let fixed = src.default_100ns.max(0);
-    let mut decoder = h264_decoder()?;
-    if !header.is_empty() {
-        let _ = decoder.decode(&header);
-    }
     let mut sink = None;
     let mut queued = Vec::new();
     let mut shown = 0u32;
-    let mut pending: Option<(OwnedFrame, i64)> = None;
-    let mut last_dur = fallback;
-    src.each(&mut |sample, time, duration| {
-        let annex = annex_pref(sample, nal_len);
-        if annex.is_empty() {
-            return Ok(());
-        }
-        if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
-            let owned = owned_frame(&frame)?;
-            // Con la durata fissa dei fotogrammi i tempi si contano: con i fotogrammi B quelli dei blocchi
-            // sono nell'ordine di visione, non in quello in cui escono dal decodificatore.
-            if fixed > 0 {
-                feed_frame(&mut sink, &mut queued, output, &owned, fixed, shown as i64 * fixed, false, 0, 0)?;
-                shown += 1;
-                return Ok(());
+    pipelined(
+        |emit| {
+            let mut decoder = h264_decoder()?;
+            if !header.is_empty() {
+                let _ = decoder.decode(&header);
+            }
+            let mut emitted = 0i64;
+            let mut pending: Option<(OwnedFrame, i64)> = None;
+            let mut last_dur = fallback;
+            src.each(&mut |sample, time, duration| {
+                let annex = annex_pref(sample, nal_len);
+                if annex.is_empty() {
+                    return Ok(());
+                }
+                if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
+                    let owned = owned_frame(&frame)?;
+                    // Con la durata fissa dei fotogrammi i tempi si contano: con i fotogrammi B quelli dei blocchi
+                    // sono nell'ordine di visione, non in quello in cui escono dal decodificatore.
+                    if fixed > 0 {
+                        sent(emit(Decoded::Frame(owned, fixed, emitted * fixed)))?;
+                        emitted += 1;
+                        return Ok(());
+                    }
+                    if let Some((prev, prev_time)) = pending.take() {
+                        let step = if duration > 0 {
+                            duration
+                        } else if time > prev_time {
+                            time - prev_time
+                        } else {
+                            last_dur
+                        };
+                        last_dur = step;
+                        sent(emit(Decoded::Frame(prev, step, prev_time)))?;
+                    }
+                    pending = Some((owned, time));
+                }
+                Ok(())
+            })?;
+            if let Ok(rest) = decoder.flush_remaining() {
+                for frame in &rest {
+                    let owned = owned_frame(frame)?;
+                    if fixed > 0 {
+                        sent(emit(Decoded::Frame(owned, fixed, emitted * fixed)))?;
+                        emitted += 1;
+                        continue;
+                    }
+                    let mut next = 0;
+                    if let Some((prev, prev_time)) = pending.take() {
+                        sent(emit(Decoded::Frame(prev, last_dur, prev_time)))?;
+                        next = prev_time + last_dur;
+                    }
+                    pending = Some((owned, next));
+                }
             }
             if let Some((prev, prev_time)) = pending.take() {
-                let step = if duration > 0 {
-                    duration
-                } else if time > prev_time {
-                    time - prev_time
-                } else {
-                    last_dur
-                };
-                last_dur = step;
-                feed_frame(&mut sink, &mut queued, output, &prev, step, prev_time, false, 0, 0)?;
+                sent(emit(Decoded::Frame(prev, last_dur, prev_time)))?;
+            }
+            Ok(())
+        },
+        |item| {
+            if let Decoded::Frame(owned, duration, time) = item {
+                feed_frame(&mut sink, &mut queued, output, &owned, duration, time, false, 0, 0)?;
                 shown += 1;
             }
-            pending = Some((owned, time));
-        }
-        Ok(())
-    })?;
-    if let Ok(rest) = decoder.flush_remaining() {
-        for frame in &rest {
-            let owned = owned_frame(frame)?;
-            if fixed > 0 {
-                feed_frame(&mut sink, &mut queued, output, &owned, fixed, shown as i64 * fixed, false, 0, 0)?;
-                shown += 1;
-                continue;
-            }
-            let mut next = 0;
-            if let Some((prev, prev_time)) = pending.take() {
-                feed_frame(&mut sink, &mut queued, output, &prev, last_dur, prev_time, false, 0, 0)?;
-                shown += 1;
-                next = prev_time + last_dur;
-            }
-            pending = Some((owned, next));
-        }
-    }
-    if let Some((prev, prev_time)) = pending.take() {
-        feed_frame(&mut sink, &mut queued, output, &prev, last_dur, prev_time, false, 0, 0)?;
-        shown += 1;
-    }
+            Ok(())
+        },
+    )?;
     if shown == 0 {
         return Err("il video non ha fotogrammi".into());
     }
@@ -1321,81 +1429,91 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
             break;
         }
     }
-    let mut decoder = h264_decoder()?;
-    if !header.is_empty() {
-        let _ = decoder.decode(&header);
-    }
     let mut sink: Option<H264Aac> = None;
     let mut queued: Vec<EarlyPcm> = Vec::new();
     let mut shown = 0u32;
-    let mut last = (0i64, 333_333i64);
     let mut audio_packets = 0u32;
     let mut audio_samples = 0usize;
     let audio_asked = audio_dec.is_some();
-    loop {
-        let packet = match format.next_packet() {
-            Ok(packet) => packet,
-            Err(SymError::ResetRequired) => {
-                if let Some(dec) = audio_dec.as_mut() {
-                    dec.reset();
+    pipelined(
+        |emit| {
+            let mut decoder = h264_decoder()?;
+            if !header.is_empty() {
+                let _ = decoder.decode(&header);
+            }
+            let mut last = (0i64, 333_333i64);
+            loop {
+                let packet = match format.next_packet() {
+                    Ok(packet) => packet,
+                    Err(SymError::ResetRequired) => {
+                        if let Some(dec) = audio_dec.as_mut() {
+                            dec.reset();
+                        }
+                        continue;
+                    }
+                    Err(_) => break,
+                };
+                if packet.track_id() == video_id {
+                    let annex = if !is_annex(packet.buf()) {
+                        length_to_annex(packet.buf(), nal_len)
+                    } else {
+                        packet.buf().to_vec()
+                    };
+                    let time = ticks(packet.ts(), numer, denom);
+                    let packet_dur = ticks(packet.dur(), numer, denom);
+                    let duration = if packet_dur > 0 { packet_dur } else { 333_333 };
+                    last = (time, duration);
+                    if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
+                        sent(emit(Decoded::Frame(owned_frame(&frame)?, duration, time)))?;
+                    }
+                } else if audio_id == Some(packet.track_id()) {
+                    audio_packets += 1;
+                    let Some(dec) = audio_dec.as_mut() else { continue };
+                    let decoded = match dec.decode(&packet) {
+                        Ok(decoded) => decoded,
+                        Err(SymError::DecodeError(_)) => continue,
+                        Err(SymError::ResetRequired) => {
+                            dec.reset();
+                            continue;
+                        }
+                        Err(err) => return Err(format!("audio non decodificato: {err}")),
+                    };
+                    let spec = *decoded.spec();
+                    let mut buf = SampleBuffer::<i16>::new(decoded.capacity() as u64, spec);
+                    buf.copy_interleaved_ref(decoded);
+                    if buf.samples().is_empty() {
+                        continue;
+                    }
+                    audio_samples += buf.samples().len();
+                    let pcm = EarlyPcm {
+                        samples: buf.samples().to_vec(),
+                        channels: spec.channels.count() as u16,
+                        rate: spec.rate,
+                    };
+                    sent(emit(Decoded::Pcm(pcm)))?;
                 }
-                continue;
             }
-            Err(_) => break,
-        };
-        if packet.track_id() == video_id {
-            let annex = if !is_annex(packet.buf()) {
-                length_to_annex(packet.buf(), nal_len)
-            } else {
-                packet.buf().to_vec()
-            };
-            let time = ticks(packet.ts(), numer, denom);
-            let packet_dur = ticks(packet.dur(), numer, denom);
-            let duration = if packet_dur > 0 { packet_dur } else { 333_333 };
-            last = (time, duration);
-            if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
-                let owned = owned_frame(&frame)?;
-                feed_frame(&mut sink, &mut queued, output, &owned, duration, time, audio_asked, audio_rate, audio_channels)?;
-                shown += 1;
-            }
-        } else if audio_id == Some(packet.track_id()) {
-            audio_packets += 1;
-            let Some(dec) = audio_dec.as_mut() else { continue };
-            let decoded = match dec.decode(&packet) {
-                Ok(decoded) => decoded,
-                Err(SymError::DecodeError(_)) => continue,
-                Err(SymError::ResetRequired) => {
-                    dec.reset();
-                    continue;
+            if let Ok(rest) = decoder.flush_remaining() {
+                for (k, frame) in rest.iter().enumerate() {
+                    sent(emit(Decoded::Frame(owned_frame(frame)?, last.1, last.0 + last.1 * (k as i64 + 1))))?;
                 }
-                Err(err) => return Err(format!("audio non decodificato: {err}")),
-            };
-            let spec = *decoded.spec();
-            let mut buf = SampleBuffer::<i16>::new(decoded.capacity() as u64, spec);
-            buf.copy_interleaved_ref(decoded);
-            if buf.samples().is_empty() {
-                continue;
             }
-            audio_samples += buf.samples().len();
-            let pcm = EarlyPcm {
-                samples: buf.samples().to_vec(),
-                channels: spec.channels.count() as u16,
-                rate: spec.rate,
-            };
-            if let Some(sink) = sink.as_mut() {
-                sink.write_pcm(&pcm.samples, pcm.channels, pcm.rate)?;
-            } else {
-                queued.push(pcm);
+            Ok(())
+        },
+        |item| {
+            match item {
+                Decoded::Frame(owned, duration, time) => {
+                    feed_frame(&mut sink, &mut queued, output, &owned, duration, time, audio_asked, audio_rate, audio_channels)?;
+                    shown += 1;
+                }
+                Decoded::Pcm(pcm) => match sink.as_mut() {
+                    Some(sink) => sink.write_pcm(&pcm.samples, pcm.channels, pcm.rate)?,
+                    None => queued.push(pcm),
+                },
             }
-        }
-    }
-    if let Ok(rest) = decoder.flush_remaining() {
-        for (k, frame) in rest.iter().enumerate() {
-            let owned = owned_frame(frame)?;
-            feed_frame(&mut sink, &mut queued, output, &owned, last.1, last.0 + last.1 * (k as i64 + 1), audio_asked, audio_rate, audio_channels)?;
-            shown += 1;
-        }
-    }
+            Ok(())
+        },
+    )?;
     if shown == 0 {
         return Err("il video non ha fotogrammi".into());
     }
@@ -1439,7 +1557,8 @@ fn ticks(ts: u64, numer: u32, denom: u32) -> i64 {
     if denom == 0 {
         return 0;
     }
-    let value = (ts as u128).saturating_mul(numer as u128).saturating_mul(10_000_000) / denom as u128;
+    // Arrotondato, non troncato: ogni troncamento accorcia un poco il video.
+    let value = ((ts as u128).saturating_mul(numer as u128).saturating_mul(10_000_000) + denom as u128 / 2) / denom as u128;
     i64::try_from(value).unwrap_or(i64::MAX)
 }
 
@@ -1474,15 +1593,41 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     // Ogni fotogramma va subito al file (o all'anteprima), senza tenerli tutti in memoria.
     let mut sink: Option<H264Aac> = None;
     let mut shown: i64 = 0;
-    let mut emit = |frame: OwnedFrame| -> Result<(), String> {
-        if sink.is_none() {
-            sink = Some(H264Aac::open(output, frame.width, frame.height, duration, audio)?);
-        }
-        let sink = sink.as_mut().expect("sink");
-        push_decoded(sink, &frame, duration, duration.saturating_mul(shown))?;
-        shown += 1;
-        Ok(())
+    pipelined(
+        |emit| avi_frames(pix, &chunks, video_index, width, height, &avc_header, &mut |frame| sent(emit(Decoded::Frame(frame, 0, 0)))),
+        |item| {
+            let Decoded::Frame(frame, _, _) = item else { return Ok(()) };
+            if sink.is_none() {
+                sink = Some(H264Aac::open(output, frame.width, frame.height, duration, audio)?);
+            }
+            let sink = sink.as_mut().expect("sink");
+            push_decoded(sink, &frame, duration, duration.saturating_mul(shown))?;
+            shown += 1;
+            Ok(())
+        },
+    )?;
+    let Some(mut sink) = sink else {
+        return Err("il video non ha fotogrammi".into());
     };
+    if let Some((pcm, rate, channels)) = avi_audio {
+        // A pezzi: l'audio intero in una volta passava tutto per le copie di `shape_pcm`.
+        for part in pcm.chunks(channels.max(1) as usize * 4096) {
+            sink.write_pcm(part, channels, rate)?;
+        }
+    }
+    sink.finish()
+}
+
+/// I fotogrammi del video di un AVI, decodificati e passati a `emit` nell'ordine.
+fn avi_frames(
+    pix: &Pix,
+    chunks: &[crate::avi::AviChunk],
+    video_index: usize,
+    width: usize,
+    height: usize,
+    avc_header: &(usize, Vec<u8>),
+    emit: &mut dyn FnMut(OwnedFrame) -> Result<(), String>,
+) -> Result<(), String> {
     let mut decoder = if matches!(pix, Pix::H264) {
         let mut dec = h264_decoder()?;
         // Con avcC nei dati di `strf` i parametri non viaggiano nei fotogrammi.
@@ -1508,7 +1653,7 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                     let annex = if !is_annex(&chunk.data) {
                         length_to_annex(&chunk.data, avc_header.0)
                     } else {
-                        chunk.data.clone()
+                        chunk.data.to_vec()
                     };
                     if annex.is_empty() {
                         continue;
@@ -1539,16 +1684,7 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
             }
         }
     }
-    drop(emit);
-    let Some(mut sink) = sink else {
-        return Err("il video non ha fotogrammi".into());
-    };
-    if let Some((pcm, rate, channels)) = avi_audio {
-        if !pcm.is_empty() {
-            sink.write_pcm(&pcm, channels, rate)?;
-        }
-    }
-    sink.finish()
+    Ok(())
 }
 
 /// I fotogrammi dell'MPEG-4 hanno le misure dei macroblocchi; l'immagine vera può essere più piccola.
@@ -1853,5 +1989,125 @@ mod tests {
         sample.extend(std::iter::repeat(0x11).take(255));
         assert!(!is_annex(&sample));
         assert!(is_annex(&[0, 0, 0, 1, 0x67, 0x42, 0x00, 0x1e]));
+    }
+
+    /// Contatori enormi in tabelle piccole (file rovinato): errore, non gigabyte chiesti alla memoria.
+    #[test]
+    fn damaged_tables_do_not_ask_for_gigabytes() {
+        let table = |head: &[u32]| head.iter().flat_map(|v| v.to_be_bytes()).collect::<Vec<u8>>();
+        assert!(super::sample_sizes(&table(&[0, 0, u32::MAX, 0])).is_err());
+        assert!(super::sample_sizes(&table(&[0, 100, u32::MAX])).is_err());
+        assert_eq!(super::sample_sizes(&table(&[0, 0, 2, 7, 9])).unwrap(), vec![7, 9]);
+        let huge = table(&[0, u32::MAX, 0, 0]);
+        assert!(super::chunk_offsets(None, Some(&huge)).is_err());
+        assert!(super::chunk_offsets(Some(&huge), None).is_err());
+        assert!(super::samples_per_chunk(&huge, 10).is_err());
+        assert!(super::time_runs(&huge).is_err());
+        // Voci di `stsc` sovrapposte: vale l'ultima che copre il blocco.
+        let stsc = table(&[0, 3, 1, 5, 1, 1, 7, 1, 3, 9, 1]);
+        assert_eq!(super::samples_per_chunk(&stsc, 4).unwrap(), vec![7, 7, 9, 9]);
+    }
+
+    fn test_path(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("cedro-mux-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join(name)
+    }
+
+    /// Un fotogramma H.264 vero (SPS, PPS e IDR) di un'immagine grigia.
+    fn gray_frame(w: usize, h: usize) -> Vec<u8> {
+        let mut encoder = super::open_soft_h264(w as u32, h as u32, 333_333).unwrap();
+        let (y, c) = (vec![120u8; w * h], vec![128u8; w * h / 4]);
+        let picture = super::YUVSlices::new((&y, &c, &c), (w, h), (w, w / 2, w / 2));
+        encoder.encode(&picture).unwrap().to_vec()
+    }
+
+    /// A 30 fps (333.333 × 100 ns) un'ora di video dura quanto la somma delle durate: a 1/90000 non si
+    /// troncano (2999 per fotogramma perdevano più di un secondo l'ora).
+    #[test]
+    fn durations_do_not_drift() {
+        let mut sink = <super::H264Aac as super::VideoSink>::open(&test_path("deriva.mp4"), 64, 64, 333_333, None).unwrap();
+        let frames = 30 * 3600;
+        let total: u64 = (0..frames).map(|_| sink.push_duration(333_333) as u64).sum();
+        assert_eq!(total, (frames as u64 * 333_333 * 9 + 500) / 1000);
+        assert!(total.abs_diff(3600 * 90_000) < 90_000 / 100, "{total}");
+    }
+
+    /// L'MP4 scritto mentre si codifica si rilegge: fotogrammi, durate, audio e «Ottimizza per il web».
+    #[test]
+    fn streamed_mp4_reads_back() {
+        // Anche con `mdat` a 64 bit e `co64`, come oltre i 4 GiB (qui forzati su un file piccolo).
+        // Con `CEDRO_MP4_PROVA=cartella` i file restano lì, per guardarli con ffprobe.
+        for wide in [false, true] {
+            streamed_mp4(wide);
+        }
+    }
+
+    fn streamed_mp4(wide: bool) {
+        let name = if wide { "flusso-64.mp4" } else { "flusso.mp4" };
+        let path = test_path(name);
+        let frame = gray_frame(64, 64);
+        let mut sink = <super::H264Aac as super::VideoSink>::open(&path, 64, 64, 333_333, Some((44_100, 2))).unwrap();
+        for _ in 0..30 {
+            sink.push_annex(&frame, 333_333, true).unwrap();
+            if wide {
+                sink.mp4.as_mut().unwrap().wide_from = 0;
+            }
+        }
+        let tone: Vec<i16> = (0..44_100 * 2).map(|i| ((i as f32 * 0.05).sin() * 8000.0) as i16).collect();
+        for part in tone.chunks(2048) {
+            super::VideoSink::write_pcm(&mut sink, part, 2, 44_100).unwrap();
+        }
+        super::VideoSink::finish(sink).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let has = |kind: &[u8]| bytes.windows(4).any(|w| w == kind);
+        assert_eq!((has(b"co64"), has(b"stco"), has(b"free")), (wide, !wide, !wide));
+        if let Ok(dir) = std::env::var("CEDRO_MP4_PROVA") {
+            std::fs::copy(&path, std::path::Path::new(&dir).join(name)).unwrap();
+        }
+        for pass in 0..2 {
+            let file = std::fs::File::open(&path).unwrap();
+            let size = file.metadata().unwrap().len();
+            let mut reader = mp4::Mp4Reader::read_header(std::io::BufReader::new(file), size).unwrap();
+            let (video, audio) = {
+                let tracks = reader.tracks();
+                let id = |kind| tracks.values().find(|t| t.media_type().ok() == Some(kind)).map(|t| (t.track_id(), t.sample_count())).unwrap();
+                (id(mp4::MediaType::H264), id(mp4::MediaType::AAC))
+            };
+            assert_eq!(video.1, 30, "passata {pass}");
+            assert!(audio.1 >= 43, "{}", audio.1);
+            let first = reader.read_sample(video.0, 1).unwrap().unwrap();
+            assert_eq!(first.duration, 3000);
+            let last = reader.read_sample(video.0, 30).unwrap().unwrap();
+            assert_eq!(last.start_time, 29 * 3000);
+            assert!(super::annex_nals(&super::annex_sample(&last.bytes)).iter().any(|nal| nal.first().is_some_and(|b| b & 0x1f == 5)));
+            assert!(reader.read_sample(audio.0, audio.1).unwrap().is_some());
+            crate::mp4fast::make_faststart(&path).unwrap();
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Prova a mano di un MP4 oltre i 4 GiB (`mdat` a 64 bit, `co64`), da guardare con ffprobe:
+    /// `CEDRO_MP4_GRANDE=/percorso/grande.mp4 cargo test --lib oltre_4_gib -- --ignored`.
+    #[test]
+    #[ignore]
+    fn oltre_4_gib() {
+        let Ok(path) = std::env::var("CEDRO_MP4_GRANDE") else { return };
+        let mut frame = gray_frame(64, 64);
+        // Un NAL di riempimento (tipo 12) da 1 MiB per fotogramma: i decodificatori lo saltano.
+        frame.extend_from_slice(&[0, 0, 0, 1, 0x0C]);
+        frame.extend(std::iter::repeat(0xFF).take(1 << 20));
+        frame.push(0x80);
+        let frames = 4400;
+        let mut sink = <super::H264Aac as super::VideoSink>::open(std::path::Path::new(&path), 64, 64, 333_333, Some((44_100, 1))).unwrap();
+        for _ in 0..frames {
+            sink.push_annex(&frame, 333_333, true).unwrap();
+        }
+        let second: Vec<i16> = (0..44_100).map(|i| ((i as f32 * 0.06).sin() * 8000.0) as i16).collect();
+        for _ in 0..frames / 30 {
+            super::VideoSink::write_pcm(&mut sink, &second, 1, 44_100).unwrap();
+        }
+        super::VideoSink::finish(sink).unwrap();
+        assert!(std::fs::metadata(&path).unwrap().len() > u32::MAX as u64);
     }
 }

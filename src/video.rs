@@ -683,9 +683,10 @@ fn planar_into(src: &[u8], info: &FrameInfo, swap_uv: bool, nv12: &mut [u8]) -> 
     let dst_w = info.enc_w as usize;
     let dst_h = info.enc_h as usize;
     let y_stride = if info.stride > 0 { info.stride as usize } else { src_w };
-    let c_stride = (y_stride / 2).max(1);
+    // Con una misura dispari i piani del colore hanno una colonna e una riga in più (arrotondati in alto).
+    let c_stride = if info.stride > 0 { y_stride.div_ceil(2) } else { src_w.div_ceil(2) }.max(1);
     let y_plane = y_stride * src_h;
-    let c_plane = c_stride * (src_h / 2);
+    let c_plane = c_stride * src_h.div_ceil(2);
     if src.len() < y_plane + c_plane * 2 {
         return Err("fotogramma troppo corto".into());
     }
@@ -717,14 +718,16 @@ fn nv12_into(src: &[u8], info: &FrameInfo, nv12: &mut [u8]) -> Result<(), String
     let stride = if info.stride > 0 { info.stride as usize } else { src_w };
     let y_bytes = stride * src_h;
     let uv_bytes = stride * (src_h / 2);
-    if src.len() < y_bytes + uv_bytes {
+    if src.len() < y_bytes + uv_bytes || stride < src_w {
         return Err("fotogramma troppo corto".into());
     }
+    // Con un'altezza dispari l'ultima riga del colore può mancare (buffer della misura minima): si ripete la precedente.
+    let uv_rows = ((src.len() - y_bytes) / stride).max(1);
     for y in 0..dst_h.min(src_h) {
         let copy = dst_w.min(src_w);
         nv12[y * dst_w..y * dst_w + copy].copy_from_slice(&src[y * stride..y * stride + copy]);
         if y % 2 == 0 {
-            let from = y_bytes + (y / 2) * stride;
+            let from = y_bytes + (y / 2).min(uv_rows - 1) * stride;
             let to = dst_w * dst_h + (y / 2) * dst_w;
             nv12[to..to + copy].copy_from_slice(&src[from..from + copy]);
         }
@@ -758,8 +761,10 @@ pub(super) struct EncodedVideo {
     audio_index: Option<u32>,
     audio_channels: u16,
     audio_rate: u32,
-    audio_ticks: u64,
+    /// Campioni audio (per canale) già scritti: il tempo si ricava da qui, senza sommare durate troncate.
+    audio_frames: u64,
     resample_to: Option<u32>,
+    resampler: crate::sink::Resampler,
     src_w: u32,
     src_h: u32,
     out_w: u32,
@@ -820,8 +825,9 @@ impl EncodedVideo {
                 audio_index: None,
                 audio_channels: 0,
                 audio_rate: 0,
-                audio_ticks: 0,
+                audio_frames: 0,
                 resample_to: None,
+                resampler: crate::sink::Resampler::default(),
                 src_w: width,
                 src_h: height,
                 out_w: enc_w,
@@ -892,13 +898,15 @@ impl EncodedVideo {
         }
         let channels = channels.max(1);
         let folded = if channels > 2 {
-            fold_stereo(samples, channels)
+            crate::sink::fold_stereo(samples, channels)
         } else {
             samples.to_vec()
         };
         let channels = channels.min(2);
         let (folded, rate) = if self.resample_to.is_some() && rate != self.audio_rate {
-            (resample_pcm(&folded, channels, rate, self.audio_rate), self.audio_rate)
+            let mut out = Vec::new();
+            self.resampler.push(&folded, channels, rate, self.audio_rate, &mut out);
+            (out, self.audio_rate)
         } else {
             (folded, rate)
         };
@@ -913,14 +921,16 @@ impl EncodedVideo {
         for sample in &folded {
             bytes.extend_from_slice(&sample.to_le_bytes());
         }
-        let duration = (10_000_000u64 * frames as u64 / rate as u64).max(1);
-        let sample = memory_sample(&bytes, self.audio_ticks as i64, duration as i64)?;
+        let start = (self.audio_frames as u128 * 10_000_000 / rate as u128) as u64;
+        let end = ((self.audio_frames + frames as u64) as u128 * 10_000_000 / rate as u128) as u64;
+        let duration = end.saturating_sub(start).max(1);
+        let sample = memory_sample(&bytes, start as i64, duration as i64)?;
         unsafe {
             self.writer
                 .WriteSample(index, &sample)
                 .map_err(|e| format!("scrittura audio: {e}"))?;
         }
-        self.audio_ticks = self.audio_ticks.saturating_add(duration);
+        self.audio_frames += frames as u64;
         Ok(())
     }
 
@@ -1126,37 +1136,6 @@ fn gcd(mut a: u64, mut b: u64) -> u64 {
         b = next;
     }
     a.max(1)
-}
-
-fn fold_stereo(samples: &[i16], channels: u16) -> Vec<i16> {
-    let channels = channels as usize;
-    let frames = samples.len() / channels;
-    let mut out = Vec::with_capacity(frames * 2);
-    for frame in 0..frames {
-        let base = frame * channels;
-        out.push(samples[base]);
-        out.push(samples[base + 1]);
-    }
-    out
-}
-
-fn resample_pcm(samples: &[i16], channels: u16, from: u32, to: u32) -> Vec<i16> {
-    if from == 0 || from == to {
-        return samples.to_vec();
-    }
-    let ch = channels as usize;
-    let frames = samples.len() / ch.max(1);
-    if frames == 0 {
-        return Vec::new();
-    }
-    let out_frames = ((frames as u64 * to as u64) / from as u64).max(1) as usize;
-    let mut out = Vec::with_capacity(out_frames * ch);
-    for frame in 0..out_frames {
-        let src = ((frame as u64 * from as u64) / to as u64) as usize;
-        let src = src.min(frames - 1);
-        out.extend_from_slice(&samples[src * ch..(src + 1) * ch]);
-    }
-    out
 }
 
 /// Media Foundation pronta e COM acceso su questo thread. Ogni lavoro gira in un thread nuovo:

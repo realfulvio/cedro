@@ -2,11 +2,12 @@
 //! I tempi del video sono in 1/90000, quelli del filmato in millisecondi.
 
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::path::Path;
 
+/// Un campione già scritto nel file: i suoi dati stanno in `mdat`, qui restano solo le misure.
 pub(crate) struct Sample {
-    pub data: Vec<u8>,
+    pub size: u32,
     pub duration: u32,
     pub sync: bool,
 }
@@ -21,39 +22,87 @@ pub(crate) struct Movie {
     pub audio_channels: u16,
     pub audio_asc: Vec<u8>,
     pub audio: Vec<Sample>,
+    /// Campioni di avvio del codificatore AAC in testa all'audio: si saltano con `elst`.
+    pub audio_delay: u32,
 }
 
-pub(crate) fn write_mp4(path: &Path, movie: &Movie) -> Result<(), String> {
-    if movie.video.is_empty() {
-        return Err("il video non ha fotogrammi".into());
+const MP4_ERR: &str = "MP4 non scritto";
+
+/// L'MP4 scritto mentre si codifica: i fotogrammi vanno subito nel file (in memoria restano solo le
+/// misure); l'audio AAC, piccolo, si accoda alla fine e poi viene il `moov`. Oltre i 4 GiB `mdat`
+/// prende la misura a 64 bit e gli offset passano a `co64`.
+pub(crate) struct Mp4Writer {
+    out: BufWriter<File>,
+    /// Dove comincia l'intestazione di `mdat` (16 byte riservati: `free` + `mdat`, o `mdat` a 64 bit).
+    mdat_at: u64,
+    video_bytes: u64,
+    /// Oltre questa misura si passa a 64 bit: 4 GiB (più bassa solo nelle prove).
+    pub(crate) wide_from: u64,
+}
+
+impl Mp4Writer {
+    pub(crate) fn create(path: &Path) -> Result<Self, String> {
+        let file = File::create(path).map_err(|err| format!("{MP4_ERR}: {err}"))?;
+        let mut out = BufWriter::with_capacity(1 << 20, file);
+        let ftyp = ftyp_box();
+        out.write_all(&ftyp).map_err(|err| format!("{MP4_ERR}: {err}"))?;
+        // Posto per l'intestazione di `mdat`, riscritta in `finish` quando la misura è nota.
+        out.write_all(&[0u8; 16]).map_err(|err| format!("{MP4_ERR}: {err}"))?;
+        Ok(Mp4Writer { out, mdat_at: ftyp.len() as u64, video_bytes: 0, wide_from: u32::MAX as u64 })
     }
-    if movie.sps.len() < 4 || movie.pps.is_empty() {
-        return Err("H.264 senza parametri".into());
+
+    pub(crate) fn write_video(&mut self, data: &[u8]) -> Result<(), String> {
+        self.out.write_all(data).map_err(|err| format!("{MP4_ERR}: {err}"))?;
+        self.video_bytes += data.len() as u64;
+        Ok(())
     }
-    let video_bytes = movie.video.iter().map(|sample| sample.data.len()).sum::<usize>();
-    let audio_bytes = movie.audio.iter().map(|sample| sample.data.len()).sum::<usize>();
-    let mdat_payload = video_bytes + audio_bytes;
-    let ftyp = ftyp_box();
-    let mdat_header = 8u64;
-    let video_offset = ftyp.len() as u64 + mdat_header;
-    let audio_offset = video_offset + video_bytes as u64;
-    let moov = moov_box(movie, video_offset, audio_offset);
-    let mut file = File::create(path).map_err(|err| format!("MP4 non scritto: {err}"))?;
-    file.write_all(&ftyp).map_err(|err| format!("MP4 non scritto: {err}"))?;
-    let mdat_size = mdat_header + mdat_payload as u64;
-    if mdat_size > u32::MAX as u64 {
-        return Err("il video è troppo lungo per questo MP4".into());
+
+    /// Chiude il file: l'audio dopo i fotogrammi, il `moov` in fondo, la misura di `mdat`.
+    pub(crate) fn finish(mut self, movie: &Movie, audio: &[Vec<u8>]) -> Result<(), String> {
+        if movie.video.is_empty() {
+            return Err("il video non ha fotogrammi".into());
+        }
+        if movie.sps.len() < 4 || movie.pps.is_empty() {
+            return Err("H.264 senza parametri".into());
+        }
+        let mut audio_bytes = 0u64;
+        for packet in audio {
+            self.out.write_all(packet).map_err(|err| format!("{MP4_ERR}: {err}"))?;
+            audio_bytes += packet.len() as u64;
+        }
+        let video_offset = self.mdat_at + 16;
+        let audio_offset = video_offset + self.video_bytes;
+        let mdat_end = audio_offset + audio_bytes;
+        // Con `stco` gli offset devono stare in 32 bit anche dopo «Ottimizza per il web», che mette
+        // il `moov` davanti e li sposta della sua misura.
+        let mut moov = moov_box(movie, video_offset, audio_offset, false);
+        if audio_offset.saturating_add(moov.len() as u64) > self.wide_from {
+            moov = moov_box(movie, video_offset, audio_offset, true);
+        }
+        self.out.write_all(&moov).map_err(|err| format!("{MP4_ERR}: {err}"))?;
+        self.out.seek(SeekFrom::Start(self.mdat_at)).map_err(|err| format!("{MP4_ERR}: {err}"))?;
+        self.out.write_all(&mdat_header(mdat_end - self.mdat_at, self.wide_from)).map_err(|err| format!("{MP4_ERR}: {err}"))?;
+        self.out.flush().map_err(|err| format!("{MP4_ERR}: {err}"))?;
+        Ok(())
     }
-    file.write_all(&(mdat_size as u32).to_be_bytes()).map_err(|err| format!("MP4 non scritto: {err}"))?;
-    file.write_all(b"mdat").map_err(|err| format!("MP4 non scritto: {err}"))?;
-    for sample in &movie.video {
-        file.write_all(&sample.data).map_err(|err| format!("MP4 non scritto: {err}"))?;
+}
+
+/// I 16 byte davanti ai dati, per un `mdat` di `span` byte (intestazione compresa) che parte da lì:
+/// `free` vuoto e `mdat` a 32 bit se ci sta, altrimenti `mdat` con la misura a 64 bit.
+fn mdat_header(span: u64, wide_from: u64) -> [u8; 16] {
+    let mut head = [0u8; 16];
+    let inner = span - 8;
+    if inner <= wide_from.min(u32::MAX as u64) {
+        head[0..4].copy_from_slice(&8u32.to_be_bytes());
+        head[4..8].copy_from_slice(b"free");
+        head[8..12].copy_from_slice(&(inner as u32).to_be_bytes());
+        head[12..16].copy_from_slice(b"mdat");
+    } else {
+        head[0..4].copy_from_slice(&1u32.to_be_bytes());
+        head[4..8].copy_from_slice(b"mdat");
+        head[8..16].copy_from_slice(&span.to_be_bytes());
     }
-    for sample in &movie.audio {
-        file.write_all(&sample.data).map_err(|err| format!("MP4 non scritto: {err}"))?;
-    }
-    file.write_all(&moov).map_err(|err| format!("MP4 non scritto: {err}"))?;
-    Ok(())
+    head
 }
 
 fn ftyp_box() -> Vec<u8> {
@@ -67,80 +116,95 @@ fn ftyp_box() -> Vec<u8> {
     box_of(b"ftyp", &body)
 }
 
-fn moov_box(movie: &Movie, video_offset: u64, audio_offset: u64) -> Vec<u8> {
+fn moov_box(movie: &Movie, video_offset: u64, audio_offset: u64, wide: bool) -> Vec<u8> {
     let video_media = sum_duration(&movie.video);
     let audio_media = sum_duration(&movie.audio);
     let video_movie = scale_duration(video_media, 90_000, 1000);
     let audio_movie = if movie.audio.is_empty() {
         0
     } else {
-        scale_duration(audio_media, movie.audio_rate, 1000)
+        scale_duration(audio_media.saturating_sub(audio_skip(movie)), movie.audio_rate, 1000)
     };
     let movie_duration = video_movie.max(audio_movie).max(1);
     let tracks = if movie.audio.is_empty() { 2 } else { 3 };
     let mut body = mvhd(movie_duration, tracks);
-    body.extend(video_trak(movie, video_movie, video_offset));
+    body.extend(video_trak(movie, video_movie, video_offset, wide));
     if !movie.audio.is_empty() {
-        body.extend(audio_trak(movie, audio_movie, audio_offset));
+        body.extend(audio_trak(movie, audio_movie, audio_offset, wide));
     }
     box_of(b"moov", &body)
 }
 
-fn video_trak(movie: &Movie, movie_duration: u32, offset: u64) -> Vec<u8> {
+fn video_trak(movie: &Movie, movie_duration: u32, offset: u64, wide: bool) -> Vec<u8> {
     let media = sum_duration(&movie.video).max(1);
     let mut body = tkhd(1, movie_duration, movie.width, movie.height, false);
-    body.extend(mdia(b"vide", b"VideoHandler", 90_000, media, video_minf(movie, offset)));
+    body.extend(mdia(b"vide", b"VideoHandler", 90_000, media, video_minf(movie, offset, wide)));
     box_of(b"trak", &body)
 }
 
-fn audio_trak(movie: &Movie, movie_duration: u32, offset: u64) -> Vec<u8> {
+/// I campioni d'avvio da saltare, se l'audio è più lungo di loro.
+fn audio_skip(movie: &Movie) -> u32 {
+    if movie.audio_delay < sum_duration(&movie.audio) { movie.audio_delay } else { 0 }
+}
+
+fn audio_trak(movie: &Movie, movie_duration: u32, offset: u64, wide: bool) -> Vec<u8> {
     let media = sum_duration(&movie.audio).max(1);
     let mut body = tkhd(2, movie_duration, 0, 0, true);
+    let skip = audio_skip(movie);
+    if skip > 0 {
+        // L'audio comincia dopo i campioni d'avvio del codificatore (circa 45 ms): così resta a tempo col video.
+        let mut elst = full_box(0, 0);
+        elst.extend_from_slice(&1u32.to_be_bytes());
+        elst.extend_from_slice(&movie_duration.to_be_bytes());
+        elst.extend_from_slice(&skip.to_be_bytes());
+        elst.extend_from_slice(&0x0001_0000u32.to_be_bytes());
+        body.extend(box_of(b"edts", &box_of(b"elst", &elst)));
+    }
     body.extend(mdia(
         b"soun",
         b"SoundHandler",
         movie.audio_rate,
         media,
-        audio_minf(movie, offset),
+        audio_minf(movie, offset, wide),
     ));
     box_of(b"trak", &body)
 }
 
-fn video_minf(movie: &Movie, offset: u64) -> Vec<u8> {
+fn video_minf(movie: &Movie, offset: u64, wide: bool) -> Vec<u8> {
     let mut vmhd = full_box(0, 1);
     vmhd.extend_from_slice(&[0, 0, 0, 0, 0, 0, 0, 0]);
     let mut body = box_of(b"vmhd", &vmhd);
     body.extend(dinf());
-    body.extend(stbl_video(movie, offset));
+    body.extend(stbl_video(movie, offset, wide));
     box_of(b"minf", &body)
 }
 
-fn audio_minf(movie: &Movie, offset: u64) -> Vec<u8> {
+fn audio_minf(movie: &Movie, offset: u64, wide: bool) -> Vec<u8> {
     let mut smhd = full_box(0, 0);
     smhd.extend_from_slice(&0u16.to_be_bytes());
     smhd.extend_from_slice(&0u16.to_be_bytes());
     let mut body = box_of(b"smhd", &smhd);
     body.extend(dinf());
-    body.extend(stbl_audio(movie, offset));
+    body.extend(stbl_audio(movie, offset, wide));
     box_of(b"minf", &body)
 }
 
-fn stbl_video(movie: &Movie, offset: u64) -> Vec<u8> {
+fn stbl_video(movie: &Movie, offset: u64, wide: bool) -> Vec<u8> {
     let mut body = stsd_video(movie);
     body.extend(stts(&movie.video));
     body.extend(stss(&movie.video));
     body.extend(stsc(movie.video.len() as u32));
     body.extend(stsz(&movie.video));
-    body.extend(stco(offset));
+    body.extend(stco(offset, wide));
     box_of(b"stbl", &body)
 }
 
-fn stbl_audio(movie: &Movie, offset: u64) -> Vec<u8> {
+fn stbl_audio(movie: &Movie, offset: u64, wide: bool) -> Vec<u8> {
     let mut body = stsd_audio(movie);
     body.extend(stts(&movie.audio));
     body.extend(stsc(movie.audio.len() as u32));
     body.extend(stsz(&movie.audio));
-    body.extend(stco(offset));
+    body.extend(stco(offset, wide));
     box_of(b"stbl", &body)
 }
 
@@ -293,14 +357,19 @@ fn stsz(samples: &[Sample]) -> Vec<u8> {
     body.extend_from_slice(&0u32.to_be_bytes());
     body.extend_from_slice(&(samples.len() as u32).to_be_bytes());
     for sample in samples {
-        body.extend_from_slice(&(sample.data.len() as u32).to_be_bytes());
+        body.extend_from_slice(&sample.size.to_be_bytes());
     }
     box_of(b"stsz", &body)
 }
 
-fn stco(offset: u64) -> Vec<u8> {
+/// Un solo blocco di campioni per traccia: il suo offset, a 32 bit (`stco`) o a 64 (`co64`).
+fn stco(offset: u64, wide: bool) -> Vec<u8> {
     let mut body = full_box(0, 0);
     body.extend_from_slice(&1u32.to_be_bytes());
+    if wide {
+        body.extend_from_slice(&offset.to_be_bytes());
+        return box_of(b"co64", &body);
+    }
     body.extend_from_slice(&(offset as u32).to_be_bytes());
     box_of(b"stco", &body)
 }

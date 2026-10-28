@@ -111,13 +111,18 @@ impl H264Mkv {
                 match id {
                     CLUSTER_TIME => cluster_ts = read_uint(&mut self.reader, child)?,
                     SIMPLE_BLOCK => {
-                        let data = read_vec(&mut self.reader, child)?;
-                        emit_block(&data, cluster_ts, scale, video, None, f)?;
+                        // Prima il numero della traccia: i blocchi dell'audio non si leggono né si copiano.
+                        let (track, width) = if child > 0 { read_marked(&mut self.reader, true)? } else { (video, 0) };
+                        if track == video {
+                            self.reader.seek_relative(-(width as i64)).map_err(|_| "il video non è stato letto".to_string())?;
+                            let data = read_vec(&mut self.reader, child)?;
+                            emit_block(&data, cluster_ts, scale, video, None, f)?;
+                        }
                     }
                     BLOCK_GROUP => self.block_group(child_end, cluster_ts, scale, video, f)?,
                     _ => {}
                 }
-                self.reader.seek(SeekFrom::Start(child_end)).map_err(|_| "il video non è stato letto".to_string())?;
+                skip_to(&mut self.reader, child_end)?;
             }
         }
         Ok(())
@@ -213,7 +218,7 @@ impl H264Mkv {
                 BLOCK_DURATION => duration = Some(read_uint(&mut self.reader, size)?),
                 _ => {}
             }
-            self.reader.seek(SeekFrom::Start(child_end)).map_err(|_| "il video non è stato letto".to_string())?;
+            skip_to(&mut self.reader, child_end)?;
         }
         if let Some(data) = block {
             emit_block(&data, cluster_ts, scale, video, duration, f)?;
@@ -282,6 +287,16 @@ fn scale_100ns(ticks: u64, scale: u64) -> i64 {
 
 fn position(reader: &mut BufReader<File>) -> Result<u64, String> {
     reader.stream_position().map_err(|_| "il video non è stato letto".to_string())
+}
+
+/// Va a `end` restando nel buffer quando si può (un `seek` assoluto lo butterebbe ogni volta).
+fn skip_to(reader: &mut BufReader<File>, end: u64) -> Result<(), String> {
+    let here = position(reader)?;
+    if here != end {
+        let delta = i64::try_from(end as i128 - here as i128).map_err(|_| "il video non è stato letto".to_string())?;
+        reader.seek_relative(delta).map_err(|_| "il video non è stato letto".to_string())?;
+    }
+    Ok(())
 }
 
 fn skip_body(reader: &mut BufReader<File>) -> Result<(), String> {
