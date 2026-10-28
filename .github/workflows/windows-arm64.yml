@@ -280,25 +280,34 @@ jobs:
           "Il file da-bondeno c'è."
           Remove-Item $marker
 
-      - name: Motori x64 della release precedente con il nome nuovo
-        # trascrivi/ per x64 non cambia: i motori già pubblicati si riusano col numero di versione nuovo.
+      - name: Compila i motori x64 dai sorgenti correnti
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          $version = (Select-String -Path trascrivi\Cargo.toml -Pattern '^version\s*=\s*"(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
-          New-Item -ItemType Directory -Force motori-x64 | Out-Null
-          $tags = gh release list --limit 20 --json tagName --jq '.[].tagName'
-          foreach ($tag in $tags) {
-            gh release download $tag --pattern 'cedro-trascrivi-*-windows-x64-*.exe' --dir motori-x64 --clobber 2>$null
-            if (Get-ChildItem motori-x64 -Filter *.exe -ErrorAction SilentlyContinue) { "Motori presi da $tag"; break }
+          python -m pip install libclang
+          if ($LASTEXITCODE -ne 0) { throw 'libclang non installato' }
+          $env:LIBCLANG_PATH = python -c "import pathlib, clang; print(pathlib.Path(clang.__file__).parent / 'native')"
+          $sdk = Get-ChildItem C:\VulkanSDK -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $sdk) {
+            foreach ($i in 1..5) {
+              try { Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe; break }
+              catch { if ($i -eq 5) { throw }; Start-Sleep -Seconds (10 * $i) }
+            }
+            Start-Process .\vulkan-sdk.exe -ArgumentList '--accept-licenses', '--default-answer', '--confirm-command', 'install' -Wait
+            $sdk = Get-ChildItem C:\VulkanSDK -Directory | Sort-Object Name -Descending | Select-Object -First 1
           }
-          foreach ($f in Get-ChildItem motori-x64 -Filter *.exe) {
-            $new = $f.Name -replace '^cedro-trascrivi-[^-]+-windows', "cedro-trascrivi-$version-windows"
-            if ($new -ne $f.Name) { Move-Item $f.FullName (Join-Path motori-x64 $new) -Force }
-          }
-          Get-ChildItem motori-x64
-          if (-not (Get-ChildItem motori-x64 -Filter "*-$version-windows-x64-avx2.exe")) { throw 'motori x64 non trovati' }
+          if (-not $sdk) { throw 'Vulkan SDK x64 non trovato' }
+          $env:VULKAN_SDK = $sdk.FullName
+          powershell -File trascrivi\build.ps1 -Out "${{ github.workspace }}\motori-x64" -Target C:\ctv
+          if ($LASTEXITCODE -ne 0) { throw 'compilazione motori x64 fallita' }
+
+      - name: Prova motori x64 compatibili con il runner
+        shell: pwsh
+        run: |
+          # Non eseguire AVX-512/VNNI su runner che possono non avere quelle istruzioni.
+          New-Item -ItemType Directory -Force motori-prova | Out-Null
+          Get-ChildItem motori-x64 -Filter *.exe | Where-Object Name -Match '-(base|avx2|vulkan)\.exe$' | Copy-Item -Destination motori-prova
+          powershell -File trascrivi\prova.ps1 -Dir "${{ github.workspace }}\motori-prova"
+          if ($LASTEXITCODE -ne 0) { throw 'prova motori x64 fallita' }
 
       - uses: actions/upload-artifact@v4
         with:
