@@ -227,7 +227,10 @@ impl Settings {
         let old = read_config(path).unwrap_or_default();
         // Prima un file a parte, scritto davvero sul disco, poi lo scambio: se il PC si spegne a metà,
         // le impostazioni non vanno perse.
-        let temp = path.with_extension("txt.tmp");
+        // Un nome per ogni salvataggio: due Cedro (la ruota e le Impostazioni) non scrivono nello stesso file.
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let temp = path.with_extension(format!("txt.{}-{n}.tmp", std::process::id()));
         let written = fs::File::create(&temp).and_then(|mut file| {
             file.write_all(self.merge_into(&old).as_bytes())?;
             file.sync_all()
