@@ -1433,7 +1433,7 @@ mod tests {
         let request = Request { format: Format::Text, model: 0, gpu: std::env::var_os("CEDRO_TRASCRIVI_GPU").is_some(), avx512: false };
         let lines = std::sync::Mutex::new(Vec::new());
         let finished = std::sync::Mutex::new(None);
-        run(&[wav.clone()], &request, Some(&work), &Options::default(), &|event| match event {
+        run(std::slice::from_ref(&wav), &request, Some(&work), &Options::default(), &|event| match event {
             Event::Log(line) => lines.lock().unwrap().push(format!("{} {}", line.key, line.text)),
             Event::Finished { result, .. } => *finished.lock().unwrap() = Some(result),
             Event::Percent { .. } => {}

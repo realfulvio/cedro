@@ -111,9 +111,9 @@ impl Fonts {
                 (Weight::SerifBold, "serif:weight=200"),
                 (Weight::Mono, "monospace:weight=80"),
             ] {
-                if !faces.contains_key(&w) {
+                if let std::collections::hash_map::Entry::Vacant(e) = faces.entry(w) {
                     if let Some(f) = fc_match(pattern) {
-                        faces.insert(w, f);
+                        e.insert(f);
                     }
                 }
             }

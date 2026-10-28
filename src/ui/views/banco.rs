@@ -287,7 +287,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         f.button((x, BAR + 22.0, 134.0, 44.0), "Rimuovi", Some(ic::TRASH), 17.0, Act::RemoveChecked);
         let n = app.visible().len();
         f.text_r(&format!("{n} file nella coda"), (cx + cw - 220.0, BAR + 22.0, 214.0, 44.0), 17.0, SANS, pal.text);
-        if !super::notice(f, app, (cx + 560.0, BAR + 22.0, (cw - 560.0 - 230.0).max(0.0), 44.0), 14.0) {}
+        super::notice(f, app, (cx + 560.0, BAR + 22.0, (cw - 560.0 - 230.0).max(0.0), 44.0), 14.0);
         table(f, app, (cx, BAR + 86.0, cw, foot_y - BAR - 86.0 - 18.0), false);
     }
     footer(f, app, foot_y, simple);

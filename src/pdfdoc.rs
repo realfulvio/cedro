@@ -427,10 +427,10 @@ pub fn build(blocks: &[DocBlock], o: &PdfOptions) -> Result<Vec<u8>, String> {
             let s = (max / w0).min((height - 2.0 * margin) / h0).min(1.0);
             let (w, h) = (w0 * s, h0 * s);
             let gap = 6.0;
-            if y - h - gap < margin && !pages.last().map_or(true, Page::is_empty) {
+            if y - h - gap < margin && !pages.last().is_none_or(Page::is_empty) {
                 pages.push(Page::new());
                 y = height - margin;
-            } else if !pages.last().map_or(true, Page::is_empty) {
+            } else if !pages.last().is_none_or(Page::is_empty) {
                 y -= gap;
             }
             y -= h;
@@ -453,17 +453,17 @@ pub fn build(blocks: &[DocBlock], o: &PdfOptions) -> Result<Vec<u8>, String> {
         let wrapped = if text.is_empty() { vec![String::new()] } else { wrap(face, &text, size, scale, max) };
         // Un titolo non resta solo in fondo alla pagina.
         let need = leading * if block.heading > 0 { 2.5 } else { 1.0 } + before;
-        if y - need < margin && !pages.last().map_or(true, Page::is_empty) {
+        if y - need < margin && !pages.last().is_none_or(Page::is_empty) {
             pages.push(Page::new());
             y = height - margin;
-        } else if !pages.last().map_or(true, Page::is_empty) {
+        } else if !pages.last().is_none_or(Page::is_empty) {
             y -= before;
         }
         if block.heading > 0 && !text.trim().is_empty() {
             marks.push(Mark { level: block.heading, title: text.trim().to_string(), page: pages.len() - 1, y: y.min(height - 10.0) });
         }
         for line in wrapped {
-            if y - leading < margin && !pages.last().map_or(true, Page::is_empty) {
+            if y - leading < margin && !pages.last().is_none_or(Page::is_empty) {
                 pages.push(Page::new());
                 y = height - margin;
             }
@@ -850,7 +850,7 @@ mod tests {
         let long = DocBlock { text: "x".repeat(400), heading: 0, image: None };
         for size in [PageSize::A4, PageSize::A3, PageSize::Letter] {
             let o = PdfOptions { size, ..options(true, false) };
-            let pdf = build(&[long.clone()], &o).unwrap();
+            let pdf = build(std::slice::from_ref(&long), &o).unwrap();
             let doc = lopdf::Document::load_mem(&pdf).unwrap();
             let page = doc.get_pages()[&1];
             let media = doc.get_dictionary(page).unwrap().get(b"MediaBox").unwrap().as_array().unwrap();

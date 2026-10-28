@@ -70,7 +70,7 @@ fn standard(f: &mut Frame, app: &App) {
     // Fondo della zona di lavoro, con l'angolo arrotondato in alto a sinistra.
     f.p.rrect(NAV_W, TOP, w - NAV_W + 20.0, h - TOP + 20.0, 10.0, Some(pal.work), Some((pal.border, 1.0)));
     f.text("Conversioni", 298.0, 80.0, 600.0, 56.0, 42.0, SEMI, pal.text);
-    if super::notice(f, app, (760.0, 88.0, (insp_x + insp_w - 760.0).min(720.0), 44.0), 15.0) {}
+    super::notice(f, app, (760.0, 88.0, (insp_x + insp_w - 760.0).min(720.0), 44.0), 15.0);
 
     // Le categorie, schede con icona.
     let icons = [ic::IMAGE, ic::FILE, ic::FILE, ic::MENU, ic::AUDIO, ic::VIDEO];

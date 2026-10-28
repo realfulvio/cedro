@@ -425,7 +425,7 @@ fn lace_fixed(data: &[u8], mut at: usize) -> Result<Vec<Vec<u8>>, String> {
     }
     let frames = data[at] as usize + 1;
     at += 1;
-    if frames == 0 || (data.len() - at) % frames != 0 {
+    if frames == 0 || !(data.len() - at).is_multiple_of(frames) {
         return Err("il video non è stato letto".into());
     }
     let size = (data.len() - at) / frames;
@@ -518,8 +518,8 @@ mod tests {
     #[test]
     fn signed_ebml_lace_delta() {
         let mut block = vec![0x81, 0x00, 0x00, 0x86, 0x02, 0xC6, 0x80];
-        block.extend(std::iter::repeat(0x11).take(70));
-        block.extend(std::iter::repeat(0x22).take(7));
+        block.extend(std::iter::repeat_n(0x11, 70));
+        block.extend(std::iter::repeat_n(0x22, 7));
         block.push(0x33);
         let frames = split_block(&block).unwrap();
         assert_eq!(frames.len(), 3);

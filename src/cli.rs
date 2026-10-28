@@ -44,7 +44,7 @@ pub fn run() -> i32 {
             };
             let kind = if path.exists() { cedro::kind_of(path) } else { Kind::Other };
             for slice in cedro::slices(kind, mode) {
-                println!("{}\t{}", slice.id, cedro::i18n::tr(&slice.label));
+                println!("{}\t{}", slice.id, cedro::i18n::tr(slice.label));
             }
             return 0;
         }
@@ -114,7 +114,7 @@ pub fn install(release: &cedro::update::Release) -> Result<String, String> {
             cedro::i18n::tr_string(&format!("la release {} non ha il pacchetto per questo sistema (linux-{}): riprova più tardi", release.version, cedro::update::package_arch()))
         })?;
         let installed = cedro::update::install_package(asset)?;
-        return Ok(cedro::i18n::tr_string(&format!("Installata la versione {} in {}.", release.version, installed.display())));
+        Ok(cedro::i18n::tr_string(&format!("Installata la versione {} in {}.", release.version, installed.display())))
     }
     #[cfg(not(unix))]
     {

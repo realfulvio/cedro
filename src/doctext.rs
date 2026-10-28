@@ -512,7 +512,7 @@ fn odt_plain(xml: &str) -> String {
         } else if tag == "text:s" {
             // Un documento vero ne ha qualche decina: un file ostile non deve riempire la memoria.
             let n = attr_u32(raw, "text:c").unwrap_or(1).min(1024) as usize;
-            out.extend(std::iter::repeat(' ').take(n));
+            out.extend(std::iter::repeat_n(' ', n));
         } else if tag == "/text:p" || tag == "/text:h" {
             out.push('\n');
         }
