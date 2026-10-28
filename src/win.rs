@@ -1438,18 +1438,21 @@ pub(crate) fn check_updates(manual: bool) {
         let news = match update::check() {
             Ok(Some(release)) if manual => UpdateNews::Found { release, manual },
             Ok(Some(release)) => {
-                // Mai in mezzo a una conversione: riprova fra qualche minuto.
-                for _ in 0..12 {
+                // Mai in mezzo a una conversione (di un altro Cedro o della ruota di questo): riprova fra qualche minuto.
+                // Il blocco resta preso fino al lancio dell'installatore, così non ne parte una nuova nel frattempo.
+                for _ in 0..13 {
                     if !other_cedro_running() {
-                        break;
+                        if let Ok(_idle) = WHEEL_JOB.try_lock() {
+                            if let Err(e) = crate::cli::install_silent(&release) {
+                                append_log(&format!("aggiornamento: {e}"));
+                            } else {
+                                // L'installatore chiude questo Cedro fra poco: fino ad allora nessuna conversione nuova.
+                                std::thread::sleep(std::time::Duration::from_secs(60));
+                            }
+                            return;
+                        }
                     }
                     std::thread::sleep(std::time::Duration::from_secs(300));
-                }
-                if other_cedro_running() {
-                    return;
-                }
-                if let Err(e) = crate::cli::install_silent(&release) {
-                    append_log(&format!("aggiornamento: {e}"));
                 }
                 return;
             }
