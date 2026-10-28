@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.23.2"
+version = "0.24.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 cfb = "0.7"
 hound = "3.5"
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff", "ico"] }
 hayro = "0.8"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 lopdf = "0.36"
@@ -81,6 +81,7 @@ windows = { version = "0.61", features = [
     "Win32_System_Com_StructuredStorage",
     "Win32_System_Console",
     "Win32_System_DataExchange",
+    "Win32_System_JobObjects",
     "Win32_System_LibraryLoader",
     "Win32_System_Memory",
     "Win32_System_Ole",
@@ -111,3 +112,9 @@ rten-simd = { path = "vendor/rten-simd" }
 # Prototipo Android (NativeActivity, tutto Rust): vedi android/README.md
 [workspace]
 members = ["android"]
+
+# Binario più piccolo e più veloce: ottimizzazione tra le crate (LTO) e simboli di debug tolti.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

@@ -31,6 +31,8 @@ enum Job {
 
 struct Queue {
     jobs: VecDeque<Job>,
+    /// La finestra è chiusa: il thread finisce invece di aspettare per sempre.
+    closed: bool,
 }
 
 pub struct Loader {
@@ -90,14 +92,17 @@ fn info(path: &Path) -> Loaded {
 
 impl Loader {
     pub fn new(tx: Sender<Event>, wake: Arc<dyn Fn() + Send + Sync>) -> Loader {
-        let queue = Arc::new((Mutex::new(Queue { jobs: VecDeque::new() }), Condvar::new()));
+        let queue = Arc::new((Mutex::new(Queue { jobs: VecDeque::new(), closed: false }), Condvar::new()));
         let q = queue.clone();
         std::thread::spawn(move || loop {
             let job = {
                 let (lock, cv) = &*q;
                 let mut g = lock.lock().unwrap_or_else(|e| e.into_inner());
-                while g.jobs.is_empty() {
+                while g.jobs.is_empty() && !g.closed {
                     g = cv.wait(g).unwrap_or_else(|e| e.into_inner());
+                }
+                if g.closed {
+                    break;
                 }
                 g.jobs.pop_front()
             };
@@ -139,6 +144,14 @@ impl Loader {
         g.jobs.retain(|j| !matches!(j, Job::Preview(..)));
         g.jobs.push_front(Job::Preview(path.to_path_buf(), page));
         cv.notify_one();
+    }
+}
+
+impl Drop for Loader {
+    fn drop(&mut self) {
+        let (lock, cv) = &*self.queue;
+        lock.lock().unwrap_or_else(|e| e.into_inner()).closed = true;
+        cv.notify_all();
     }
 }
 

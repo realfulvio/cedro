@@ -218,10 +218,11 @@ fn download_private(asset: &Asset, dir: &std::path::Path) -> Result<PathBuf, Str
     use sha2::{Digest, Sha256};
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
+    // Senza codice di controllo non si scarica nemmeno.
+    let expected = asset.sha256.as_deref().ok_or("la release non indica lo SHA-256 del pacchetto")?;
     let response = agent().get(&asset.url).call().map_err(|e| format!("download non riuscito: {e}"))?;
     let mut bytes = Vec::new();
     response.into_reader().take(512 * 1024 * 1024).read_to_end(&mut bytes).map_err(|e| format!("download interrotto: {e}"))?;
-    let expected = asset.sha256.as_deref().ok_or("la release non indica lo SHA-256 del pacchetto")?;
     let actual: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
     if !actual.eq_ignore_ascii_case(expected) {
         return Err("lo SHA-256 del pacchetto non corrisponde: file scartato".into());
