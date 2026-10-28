@@ -208,7 +208,8 @@ fn drm_gpu() -> Option<String> {
         if !name.starts_with("card") || name.contains('-') {
             continue;
         }
-        let vendor = std::fs::read_to_string(entry.path().join("device/vendor")).ok()?;
+        // Una scheda senza `vendor` (simpledrm, dispositivi virtuali) non ferma la ricerca: si guarda la prossima.
+        let Ok(vendor) = std::fs::read_to_string(entry.path().join("device/vendor")) else { continue };
         let label = match vendor.trim() {
             "0x1002" => "AMD",
             "0x10de" => "NVIDIA",

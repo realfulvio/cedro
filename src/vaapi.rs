@@ -620,7 +620,7 @@ impl H264Encoder {
             return Err("scheda video: fotogramma incompleto".into());
         }
         self.upload(i420)?;
-        let idr = self.count % self.gop == 0;
+        let idr = self.count.is_multiple_of(self.gop);
         if idr {
             self.frame_num = 0;
             self.reference = None;
@@ -904,7 +904,7 @@ struct PackedBits {
 impl PackedBits {
     /// Unisce un'altra intestazione dopo questa: serve per mettere il PPS dietro l'SPS.
     fn extend(&mut self, other: PackedBits) {
-        debug_assert!(self.bits % 8 == 0);
+        debug_assert!(self.bits.is_multiple_of(8));
         self.bytes.extend(other.bytes);
         self.bits += other.bits;
     }
