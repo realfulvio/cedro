@@ -1,4 +1,4 @@
-fn crc_table() -> [u32; 256] {
+const fn crc_table() -> [u32; 256] {
     let mut table = [0u32; 256];
     let mut n = 0u32;
     while n < 256 {
@@ -14,8 +14,11 @@ fn crc_table() -> [u32; 256] {
     table
 }
 
-pub fn crc32(data: &[u8]) -> u32 {
-    let table = crc_table();
+/// La tabella si calcola una volta sola, alla compilazione.
+const CRC_TABLE: [u32; 256] = crc_table();
+
+fn crc32(data: &[u8]) -> u32 {
+    let table = &CRC_TABLE;
     let mut c = 0xffff_ffffu32;
     for &b in data {
         c = table[((c ^ b as u32) & 0xff) as usize] ^ (c >> 8);
@@ -28,10 +31,6 @@ fn u16(n: u16) -> [u8; 2] {
 }
 fn u32(n: u32) -> [u8; 4] {
     n.to_le_bytes()
-}
-
-pub fn zip_store(entries: &[(&str, &[u8])]) -> Vec<u8> {
-    zip_entries(entries, true)
 }
 
 /// Archivio compresso con i percorsi interi (docx, odt): i file XML pesano un decimo.
@@ -48,22 +47,22 @@ pub fn zip_archive(entries: &[(&str, &[u8])]) -> Vec<u8> {
         let options = zip::write::SimpleFileOptions::default().compression_method(method).compression_level(level);
         let written = writer.start_file(*name, options).and_then(|_| writer.write_all(data).map_err(Into::into));
         if written.is_err() {
-            return zip_entries(entries, false);
+            return zip_entries(entries);
         }
     }
     match writer.finish() {
         Ok(cursor) => cursor.into_inner(),
-        Err(_) => zip_entries(entries, false),
+        Err(_) => zip_entries(entries),
     }
 }
 
-fn zip_entries(entries: &[(&str, &[u8])], base_only: bool) -> Vec<u8> {
+/// Archivio senza compressione, se quello compresso non riesce. Non arriva a 4 GB: i file sono in memoria.
+fn zip_entries(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut locals = Vec::new();
     let mut centrals = Vec::new();
     let mut offset = 0u32;
     for (name, data) in entries {
-        let kept = if base_only { name.rsplit(['/', '\\']).next().unwrap_or("file") } else { name };
-        let name_b = kept.as_bytes();
+        let name_b = name.as_bytes();
         let crc = crc32(data);
         let size = data.len() as u32;
         let mut local = Vec::new();

@@ -126,8 +126,9 @@ pub fn media_in_page(html: &str, page_url: &str) -> Option<Media> {
         let mut from = 0;
         while let Some(i) = html[from..].find(tag) {
             let at = from + i;
-            let end = html[at..].find('>').map(|e| at + e).unwrap_or(html.len());
-            if let Some(v) = tag_attr(&html[at..end + 1], tag, "src") {
+            // Un tag mai chiuso (pagina tagliata) arriva fino in fondo, senza uscire dal testo.
+            let end = html[at..].find('>').map_or(html.len(), |e| at + e + 1);
+            if let Some(v) = tag_attr(&html[at..end], tag, "src") {
                 candidates.push(v);
             }
             from = at + tag.len();
@@ -230,8 +231,10 @@ pub fn resolve(url: &str, want: Want) -> Result<Media, String> {
         };
         return Ok(Media { url: url.to_string(), title: host_of(url), ext: ext.into(), size: None, audio: ctype.starts_with("audio/") });
     }
-    let mut html = String::new();
-    resp.into_reader().take(3_000_000).read_to_string(&mut html).map_err(|_| "La pagina non si legge come testo.")?;
+    // Il taglio a 3 MB può cadere a metà di un carattere, e non tutte le pagine sono in UTF-8.
+    let mut raw = Vec::new();
+    resp.into_reader().take(3_000_000).read_to_end(&mut raw).map_err(|_| "La pagina non si legge come testo.")?;
+    let html = String::from_utf8_lossy(&raw);
     media_in_page(&html, url).ok_or_else(|| "In questa pagina non trovo un video o un audio da scaricare (se è un flusso a pezzi o protetto, Cedro non lo prende).".into())
 }
 
@@ -315,6 +318,14 @@ mod tests {
         let m = media_in_page(r#"<script>{"contentUrl":"https:\/\/c.it\/v.mp4"}</script>"#, "https://a.it/").unwrap();
         assert_eq!(m.url, "https://c.it/v.mp4");
         assert!(media_in_page("<p>niente</p>", "https://a.it/").is_none());
+    }
+
+    /// Una pagina tagliata dentro un tag `<source` (mai chiuso): niente panic.
+    #[test]
+    fn page_cut_inside_a_tag() {
+        assert!(media_in_page("<p>x</p><video", "https://a.it/").is_none());
+        let m = media_in_page(r#"<video><source src="b.mp4" type="vid"#, "https://a.it/").unwrap();
+        assert_eq!(m.url, "https://a.it/b.mp4");
     }
 
     #[test]

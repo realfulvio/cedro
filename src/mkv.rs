@@ -111,13 +111,18 @@ impl H264Mkv {
                 match id {
                     CLUSTER_TIME => cluster_ts = read_uint(&mut self.reader, child)?,
                     SIMPLE_BLOCK => {
-                        let data = read_vec(&mut self.reader, child)?;
-                        emit_block(&data, cluster_ts, scale, video, None, f)?;
+                        // Prima il numero della traccia: i blocchi dell'audio non si leggono né si copiano.
+                        let (track, width) = if child > 0 { read_marked(&mut self.reader, true)? } else { (video, 0) };
+                        if track == video {
+                            self.reader.seek_relative(-(width as i64)).map_err(|_| "il video non è stato letto".to_string())?;
+                            let data = read_vec(&mut self.reader, child)?;
+                            emit_block(&data, cluster_ts, scale, video, None, f)?;
+                        }
                     }
                     BLOCK_GROUP => self.block_group(child_end, cluster_ts, scale, video, f)?,
                     _ => {}
                 }
-                self.reader.seek(SeekFrom::Start(child_end)).map_err(|_| "il video non è stato letto".to_string())?;
+                skip_to(&mut self.reader, child_end)?;
             }
         }
         Ok(())
@@ -213,7 +218,7 @@ impl H264Mkv {
                 BLOCK_DURATION => duration = Some(read_uint(&mut self.reader, size)?),
                 _ => {}
             }
-            self.reader.seek(SeekFrom::Start(child_end)).map_err(|_| "il video non è stato letto".to_string())?;
+            skip_to(&mut self.reader, child_end)?;
         }
         if let Some(data) = block {
             emit_block(&data, cluster_ts, scale, video, duration, f)?;
@@ -282,6 +287,16 @@ fn scale_100ns(ticks: u64, scale: u64) -> i64 {
 
 fn position(reader: &mut BufReader<File>) -> Result<u64, String> {
     reader.stream_position().map_err(|_| "il video non è stato letto".to_string())
+}
+
+/// Va a `end` restando nel buffer quando si può (un `seek` assoluto lo butterebbe ogni volta).
+fn skip_to(reader: &mut BufReader<File>, end: u64) -> Result<(), String> {
+    let here = position(reader)?;
+    if here != end {
+        let delta = i64::try_from(end as i128 - here as i128).map_err(|_| "il video non è stato letto".to_string())?;
+        reader.seek_relative(delta).map_err(|_| "il video non è stato letto".to_string())?;
+    }
+    Ok(())
 }
 
 fn skip_body(reader: &mut BufReader<File>) -> Result<(), String> {
@@ -410,7 +425,7 @@ fn lace_fixed(data: &[u8], mut at: usize) -> Result<Vec<Vec<u8>>, String> {
     }
     let frames = data[at] as usize + 1;
     at += 1;
-    if frames == 0 || (data.len() - at) % frames != 0 {
+    if frames == 0 || !(data.len() - at).is_multiple_of(frames) {
         return Err("il video non è stato letto".into());
     }
     let size = (data.len() - at) / frames;
@@ -503,8 +518,8 @@ mod tests {
     #[test]
     fn signed_ebml_lace_delta() {
         let mut block = vec![0x81, 0x00, 0x00, 0x86, 0x02, 0xC6, 0x80];
-        block.extend(std::iter::repeat(0x11).take(70));
-        block.extend(std::iter::repeat(0x22).take(7));
+        block.extend(std::iter::repeat_n(0x11, 70));
+        block.extend(std::iter::repeat_n(0x22, 7));
         block.push(0x33);
         let frames = split_block(&block).unwrap();
         assert_eq!(frames.len(), 3);

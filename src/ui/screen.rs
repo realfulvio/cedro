@@ -130,7 +130,9 @@ impl Screen {
     /// Disegna il fotogramma in un'immagine di `w`×`h` pixel con `scale` pixel per unità.
     pub fn render(&mut self, w: u32, h: u32, scale: f32) -> Painter<'_> {
         self.want_preview();
+        self.clamp_scrolls();
         let fonts = Fonts::for_theme(self.theme == ThemeId::Bondeno);
+        self.cache.trim(scale);
         let painter = Painter::new(w, h, scale, fonts, &mut self.cache);
         let ms = self.started.elapsed().as_millis() as u64;
         let mut f = Frame {
@@ -156,7 +158,26 @@ impl Screen {
         self.scrolls = std::mem::take(&mut f.scrolls);
         self.focusables = self.hits.iter().filter(|h| !matches!(h.act, Act::Nothing | Act::MenuPick(_) | Act::Minimize | Act::Maximize | Act::Close)).map(|h| h.act.clone()).collect();
         self.focusables.dedup();
+        // Una zona scorsa oltre la fine (file tolti, pagina più corta) va riportata nei limiti:
+        // lo fa il prossimo fotogramma, che si chiede subito.
+        if self.scrolls.iter().any(|(_, which, max)| self.ui.scroll(*which) > *max) {
+            self.animating = true;
+        }
         f.p
+    }
+
+    /// Riporta nei limiti le zone scorse oltre la fine nel fotogramma di prima.
+    fn clamp_scrolls(&mut self) {
+        let mut limits: std::collections::HashMap<Scroll, f32> = Default::default();
+        for (_, which, max) in &self.scrolls {
+            let e = limits.entry(*which).or_insert(0.0);
+            *e = e.max(*max);
+        }
+        for (which, max) in limits {
+            if self.ui.scroll(which) > max {
+                self.ui.scroll.insert(which, max);
+            }
+        }
     }
 
     /// Il tema «Documento al centro» mostra il file scelto: lo si fa preparare al thread dei file.

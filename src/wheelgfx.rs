@@ -48,10 +48,21 @@ pub fn render(n: usize, hover: i32) -> Vec<u8> {
 /// Come `render`, ma con `scale` pixel per unità logica (schermi ad alta densità).
 /// Nella versione standard le forme sono quelle della ruota nuova (vedi `ui::wheel`).
 pub fn render_scaled(n: usize, hover: i32, scale: u32) -> Vec<u8> {
-    if crate::edizione::bondeno() {
-        return render_tema(tema::attivo(), n, hover, scale);
+    // Il disegno dipende solo da questi quattro valori: passando da una fetta all'altra si riusa quello già fatto
+    // (copiare pochi MB costa molto meno che ridisegnare). Al massimo 12 disegni: una ruota con tutte le sue fette.
+    type Memo = Vec<((bool, usize, i32, u32), std::sync::Arc<[u8]>)>;
+    static MEMO: std::sync::Mutex<Memo> = std::sync::Mutex::new(Vec::new());
+    let key = (crate::edizione::bondeno(), n, hover, scale);
+    if let Some((_, v)) = MEMO.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|(k, _)| *k == key) {
+        return v.to_vec();
     }
-    render_new(n, hover, scale)
+    let v = if key.0 { render_tema(tema::attivo(), n, hover, scale) } else { render_new(n, hover, scale) };
+    let mut memo = MEMO.lock().unwrap_or_else(|e| e.into_inner());
+    if memo.len() >= 12 {
+        memo.remove(0);
+    }
+    memo.push((key, v.as_slice().into()));
+    v
 }
 
 /// Le forme della ruota nuova nello spazio di quella vecchia (stessi raggi, stessa finestra).

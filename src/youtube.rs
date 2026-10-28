@@ -361,7 +361,89 @@ fn command(program: &Path) -> Command {
         use std::os::unix::process::CommandExt;
         c.process_group(0); // un gruppo suo, per fermare anche i figli
     }
+    // Se Cedro cade, il programma lanciato cade con lui (il segnale arriva quando muore il thread che l'ha lanciato,
+    // cioè quello che lo aspetta).
+    #[cfg(target_os = "linux")]
+    unsafe {
+        use std::os::unix::process::CommandExt;
+        c.pre_exec(|| {
+            libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL);
+            Ok(())
+        });
+    }
     c
+}
+
+/// I gruppi dei programmi in corso (yt-dlp e i suoi figli), da fermare se Cedro esce.
+#[cfg(unix)]
+static GROUPS: std::sync::Mutex<Vec<u32>> = std::sync::Mutex::new(Vec::new());
+
+/// Tiene nota di un programma appena partito: su Linux il suo gruppo, su Windows lo mette nel job di Cedro,
+/// che Windows chiude (fermando tutto l'albero) quando Cedro finisce, in qualunque modo.
+fn track(child: &std::process::Child) {
+    #[cfg(unix)]
+    GROUPS.lock().unwrap_or_else(|e| e.into_inner()).push(child.id());
+    #[cfg(windows)]
+    join_job(child);
+    #[cfg(not(any(unix, windows)))]
+    let _ = child;
+}
+
+/// Il programma è finito o è stato fermato: non va più fermato all'uscita.
+fn untrack(child: &std::process::Child) {
+    #[cfg(unix)]
+    GROUPS.lock().unwrap_or_else(|e| e.into_inner()).retain(|&g| g != child.id());
+    #[cfg(not(unix))]
+    let _ = child;
+}
+
+/// Ferma yt-dlp, ffmpeg e deno ancora in corso: da chiamare prima di uscire con `process::exit`.
+pub fn kill_all() {
+    #[cfg(unix)]
+    for group in GROUPS.lock().unwrap_or_else(|e| e.into_inner()).drain(..) {
+        kill_group(group);
+    }
+}
+
+/// Ferma tutto il gruppo di processi guidato da `group` (vedi `command`).
+#[cfg(unix)]
+fn kill_group(group: u32) {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    unsafe {
+        libc::killpg(group as libc::pid_t, libc::SIGKILL);
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        let _ = Command::new("kill").args(["-KILL", "--", &format!("-{group}")]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    }
+}
+
+/// Windows: un job con «ferma tutto alla chiusura». I figli di yt-dlp (ffmpeg, deno) ci entrano da soli.
+#[cfg(windows)]
+fn join_job(child: &std::process::Child) {
+    use std::os::windows::io::AsRawHandle;
+    use std::sync::OnceLock;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    // L'handle come numero: HANDLE non si può tenere in una static. Resta aperto finché Cedro vive.
+    static JOB: OnceLock<usize> = OnceLock::new();
+    let job = *JOB.get_or_init(|| unsafe {
+        let Ok(job) = CreateJobObjectW(None, windows::core::PCWSTR::null()) else { return 0 };
+        let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let size = std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32;
+        match SetInformationJobObject(job, JobObjectExtendedLimitInformation, &info as *const _ as *const core::ffi::c_void, size) {
+            Ok(()) => job.0 as usize,
+            Err(_) => 0,
+        }
+    });
+    if job != 0 {
+        unsafe {
+            let _ = AssignProcessToJobObject(HANDLE(job as *mut core::ffi::c_void), HANDLE(child.as_raw_handle()));
+        }
+    }
 }
 
 /// Scarica yt-dlp se manca.
@@ -419,15 +501,21 @@ fn download_ffmpeg(emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<P
 /// Estrae da uno zip il file che finisce con `suffix` e lo scrive in `target`.
 fn extract_zip_entry(archive: &Path, suffix: &str, target: &Path) -> Result<(), String> {
     let mut zip = zip::ZipArchive::new(std::fs::File::open(archive).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-    let index = (0..zip.len())
-        .find(|&i| zip.by_index(i).ok().and_then(|f| f.name().ok().map(|n| n.ends_with(suffix))).unwrap_or(false))
-        .ok_or_else(|| format!("{suffix} non è nell'archivio"))?;
-    let mut entry = zip.by_index(index).map_err(|_| "archivio rovinato".to_string())?;
+    let name = zip.file_names().flatten().find(|n| n.ends_with(suffix)).map(|n| n.into_owned()).ok_or_else(|| format!("{suffix} non è nell'archivio"))?;
+    let mut entry = zip.by_name(&name).map_err(|_| "archivio rovinato".to_string())?;
     let part = target.with_extension("part");
     let mut out = std::fs::File::create(&part).map_err(|e| e.to_string())?;
-    std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
+    let copied = std::io::copy(&mut entry, &mut out).and_then(|_| out.sync_all());
     drop(out);
-    std::fs::rename(part, target).map_err(|e| e.to_string())
+    // Un file a metà (disco pieno, archivio rovinato) non resta sul disco.
+    if let Err(e) = copied {
+        let _ = std::fs::remove_file(&part);
+        return Err(e.to_string());
+    }
+    std::fs::rename(&part, target).map_err(|e| {
+        let _ = std::fs::remove_file(&part);
+        e.to_string()
+    })
 }
 
 /// Scarica deno se manca.
@@ -554,7 +642,7 @@ fn stamp_path() -> PathBuf {
 }
 
 /// Cerca una versione più nuova di yt-dlp, al massimo ogni `UPDATE_EVERY_HOURS` ore.
-pub fn update_ytdlp_if_due(ytdlp: &Path, emit: &mut dyn FnMut(Event)) {
+pub fn update_ytdlp_if_due(ytdlp: &Path, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) {
     let due = std::fs::metadata(stamp_path())
         .and_then(|m| m.modified())
         .ok()
@@ -565,11 +653,11 @@ pub fn update_ytdlp_if_due(ytdlp: &Path, emit: &mut dyn FnMut(Event)) {
         return;
     }
     emit(Event::Log("Controllo se yt-dlp ha una versione più nuova".into()));
-    match command(ytdlp).arg("-U").stdin(Stdio::null()).output() {
-        Ok(out) => {
-            let text = String::from_utf8_lossy(&out.stdout);
+    // Con una rete lenta o un proxy bloccato -U può non finire mai: lo si ferma con Annulla o dopo 2 minuti.
+    match capture_until(command(ytdlp).arg("-U"), cancel, Duration::from_secs(120)) {
+        Ok((text, _, ok)) => {
             let line = text.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("").trim().to_string();
-            if out.status.success() {
+            if ok {
                 let _ = std::fs::write(stamp_path(), b"ok");
                 emit(Event::Log(if line.is_empty() { "yt-dlp aggiornato".into() } else { line }));
             } else {
@@ -599,12 +687,30 @@ fn tool_version_now(name: &str, path: &Path) -> Option<String> {
     if name == "yt-dlp" {
         return ytdlp_version(path);
     }
-    let out = command(path).arg(if name == "ffmpeg" { "-version" } else { "--version" }).stdin(Stdio::null()).output().ok()?;
-    let text = String::from_utf8_lossy(&out.stdout);
+    let (text, _, ok) = capture_until(command(path).arg(if name == "ffmpeg" { "-version" } else { "--version" }), &AtomicBool::new(false), Duration::from_secs(30)).ok()?;
     let first = text.lines().next()?;
     let mut words = first.split_whitespace();
     let version = if name == "ffmpeg" { words.nth(2)? } else { words.nth(1)? };
-    out.status.success().then(|| version.to_string())
+    ok.then(|| version.to_string())
+}
+
+fn version_cache(name: &str) -> PathBuf {
+    tools_dir().join(format!("{name}.versione"))
+}
+
+/// La versione ricordata, se il file è più recente del programma (cioè non è stato aggiornato dopo).
+fn cached_version(name: &str, path: &Path) -> Option<String> {
+    let cache = version_cache(name);
+    let fresh = match (std::fs::metadata(&cache).and_then(|m| m.modified()), std::fs::metadata(path).and_then(|m| m.modified())) {
+        (Ok(c), Ok(p)) => c >= p,
+        _ => false,
+    };
+    if !fresh {
+        return None;
+    }
+    let text = std::fs::read_to_string(&cache).ok()?;
+    let text = text.trim();
+    (!text.is_empty()).then(|| text.to_string())
 }
 
 /// La versione del programma scaricato, per la scheda Informazioni. Ricordata in un file accanto al programma:
@@ -612,24 +718,20 @@ fn tool_version_now(name: &str, path: &Path) -> Option<String> {
 pub fn installed_version(name: &str) -> Option<String> {
     static BUSY: AtomicBool = AtomicBool::new(false);
     let path = tool_file(name)?;
-    let cache = tools_dir().join(format!("{name}.versione"));
-    let fresh = match (std::fs::metadata(&cache).and_then(|m| m.modified()), std::fs::metadata(&path).and_then(|m| m.modified())) {
-        (Ok(c), Ok(p)) => c >= p,
-        _ => false,
-    };
-    if fresh {
-        if let Ok(text) = std::fs::read_to_string(&cache) {
-            let text = text.trim();
-            if !text.is_empty() {
-                return Some(text.to_string());
-            }
-        }
+    if let Some(v) = cached_version(name, &path) {
+        return Some(v);
     }
+    // Un solo thread per tutti i programmi: la scheda chiede le tre versioni una dopo l'altra.
     if !BUSY.swap(true, Ordering::SeqCst) {
-        let name = name.to_string();
-        std::thread::spawn(move || {
-            if let Some(v) = tool_version_now(&name, &path) {
-                let _ = std::fs::write(tools_dir().join(format!("{name}.versione")), v);
+        std::thread::spawn(|| {
+            for n in ["yt-dlp", "ffmpeg", "deno"] {
+                if let Some(p) = tool_file(n) {
+                    if cached_version(n, &p).is_none() {
+                        if let Some(v) = tool_version_now(n, &p) {
+                            let _ = std::fs::write(version_cache(n), v);
+                        }
+                    }
+                }
             }
             BUSY.store(false, Ordering::SeqCst);
         });
@@ -638,8 +740,8 @@ pub fn installed_version(name: &str) -> Option<String> {
 }
 
 pub fn ytdlp_version(ytdlp: &Path) -> Option<String> {
-    let out = command(ytdlp).arg("--version").output().ok()?;
-    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    let (text, _, ok) = capture_until(command(ytdlp).arg("--version"), &AtomicBool::new(false), Duration::from_secs(30)).ok()?;
+    ok.then(|| text.trim().to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -672,15 +774,23 @@ fn kill_tree(child: &mut std::process::Child) {
     #[cfg(unix)]
     {
         // Il processo guida un gruppo suo (vedi `command`): si ferma tutto il gruppo.
-        let _ = Command::new("kill").args(["-KILL", "--", &format!("-{}", child.id())]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();
+        kill_group(child.id());
     }
     let _ = child.kill();
     let _ = child.wait();
+    untrack(child);
 }
 
 /// Esegue `cmd` e ne raccoglie le uscite, fermandolo se `cancel` si accende.
 fn capture(cmd: &mut Command, cancel: &AtomicBool) -> Result<(String, String, bool), String> {
+    capture_until(cmd, cancel, Duration::from_secs(365 * 86400))
+}
+
+/// Come `capture`, ma lo ferma anche dopo `limit`.
+fn capture_until(cmd: &mut Command, cancel: &AtomicBool, limit: Duration) -> Result<(String, String, bool), String> {
+    let deadline = std::time::Instant::now() + limit;
     let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())?;
+    track(&child);
     let mut out = child.stdout.take().ok_or("niente uscita")?;
     let mut err = child.stderr.take().ok_or("niente uscita")?;
     let t_out = std::thread::spawn(move || {
@@ -694,17 +804,23 @@ fn capture(cmd: &mut Command, cancel: &AtomicBool) -> Result<(String, String, bo
         text
     });
     let status = loop {
-        if cancel.load(Ordering::Relaxed) {
+        let late = std::time::Instant::now() >= deadline;
+        if cancel.load(Ordering::Relaxed) || late {
             kill_tree(&mut child);
             let _ = (t_out.join(), t_err.join());
-            return Err("Annullato".into());
+            return Err(if late { "tempo scaduto".into() } else { "Annullato".into() });
         }
         match child.try_wait() {
             Ok(Some(status)) => break status,
             Ok(None) => std::thread::sleep(Duration::from_millis(100)),
-            Err(e) => return Err(e.to_string()),
+            Err(e) => {
+                kill_tree(&mut child);
+                let _ = (t_out.join(), t_err.join());
+                return Err(e.to_string());
+            }
         }
     };
+    untrack(&child);
     Ok((t_out.join().unwrap_or_default(), t_err.join().unwrap_or_default(), status.success()))
 }
 
@@ -896,15 +1012,18 @@ fn eta_text(seconds: u64) -> String {
     }
 }
 
-/// «[download] Downloading item 3 of 18» → (3, 18).
+/// «[download] Downloading item 3 of 18» → (3, 18). Solo all'inizio della riga: un titolo che contiene
+/// le stesse parole (nel nome del file) non conta.
 pub fn parse_item(line: &str) -> Option<(usize, usize)> {
-    let rest = line.split("Downloading item ").nth(1).or_else(|| line.split("Downloading video ").nth(1))?;
+    let line = line.trim_start();
+    let rest = line.strip_prefix("[download] Downloading item ").or_else(|| line.strip_prefix("[download] Downloading video "))?;
     let mut it = rest.split_whitespace();
-    let n = it.next()?.parse().ok()?;
+    let n: usize = it.next()?.parse().ok()?;
     if it.next()? != "of" {
         return None;
     }
-    Some((n, it.next()?.parse().ok()?))
+    let m: usize = it.next()?.parse().ok()?;
+    (1..=m).contains(&n).then_some((n, m))
 }
 
 /// Righe di yt-dlp che non dicono nulla a chi guarda (copertine mancanti e simili).
@@ -928,8 +1047,14 @@ pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Res
     refresh_helpers_if_due(emit, cancel);
     let ffmpeg = ensure_ffmpeg(emit, cancel)?;
     let deno = ensure_deno(emit, cancel)?;
-    update_ytdlp_if_due(&ytdlp, emit);
-    if let Some(v) = ytdlp_version(&ytdlp) {
+    update_ytdlp_if_due(&ytdlp, emit, cancel);
+    // La versione ricordata per Informazioni, se c'è: yt-dlp.exe impiega qualche secondo solo a partire.
+    let version = cached_version("yt-dlp", &ytdlp).or_else(|| {
+        let v = ytdlp_version(&ytdlp)?;
+        let _ = std::fs::write(version_cache("yt-dlp"), &v);
+        Some(v)
+    });
+    if let Some(v) = version {
         emit(Event::Log(format!("yt-dlp versione {v}")));
     }
     let mut files = Vec::new();
@@ -993,6 +1118,7 @@ fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, 
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("yt-dlp non parte: {e}"))?;
+    track(&child);
     let (tx, rx) = mpsc::channel::<Line>();
     let out = child.stdout.take().ok_or("yt-dlp senza uscita")?;
     let err = child.stderr.take().ok_or("yt-dlp senza uscita")?;
@@ -1023,7 +1149,7 @@ fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, 
             Ok(Line::Out(line)) => {
                 if let Some((p, label)) = parse_progress(&line) {
                     // con una playlist l'avanzamento del link si divide per video
-                    let percent = ((item - 1) as f32 * 100.0 + p) / items as f32;
+                    let percent = (item.saturating_sub(1) as f32 * 100.0 + p) / items as f32;
                     emit(Event::Progress { index, total, percent, label });
                 } else if let Some(path) = line.strip_prefix("CEDROFILE|") {
                     let path = dest.join(path.trim());
@@ -1049,7 +1175,9 @@ fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, 
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }
-    let status = child.wait().map_err(|e| e.to_string())?;
+    let status = child.wait();
+    untrack(&child);
+    let status = status.map_err(|e| e.to_string())?;
     if files.is_empty() && !status.success() {
         return Err(first_error(&errors));
     }
@@ -1410,6 +1538,20 @@ mod tests {
         assert_eq!(parse_item("[download] Downloading item 3 of 18"), Some((3, 18)));
         assert_eq!(parse_item("[download] Downloading video 2 of 5"), Some((2, 5)));
         assert_eq!(parse_item("[download] 50%"), None);
+        // Un titolo con le stesse parole, o numeri fuori misura, non è un avanzamento della playlist.
+        assert_eq!(parse_item("[download] Destination: /tmp/Downloading item 0 of 5 x.webm"), None);
+        assert_eq!(parse_item("[download] Downloading item 0 of 5"), None);
+        assert_eq!(parse_item("[download] Downloading item 9 of 2"), None);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_stuck_program_is_stopped_in_time() {
+        let started = std::time::Instant::now();
+        let got = capture_until(command(Path::new("sleep")).arg("30"), &AtomicBool::new(false), Duration::from_millis(300));
+        assert_eq!(got, Err("tempo scaduto".to_string()));
+        assert!(started.elapsed() < Duration::from_secs(10));
+        assert_eq!(capture(command(Path::new("sleep")).arg("1"), &AtomicBool::new(true)), Err("Annullato".to_string()));
     }
 
     #[test]

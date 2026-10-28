@@ -219,7 +219,7 @@ fn open_panel(app: &Application) {
 }
 
 pub(crate) fn open_settings_window(app: &Application) {
-    linux_settings::open_settings(app, |settings| remember(settings));
+    linux_settings::open_settings(app, remember);
 }
 
 fn parse_launch(args: &[String]) -> Launch {
@@ -480,6 +480,7 @@ fn hover_of(wheel: &Wheel, monitor: usize, x: f64, y: f64) -> i32 {
     cedro::wheelgeom_hover(ox as f32 + 220.0, oy as f32 + 220.0, x as f32, y as f32, n)
 }
 
+#[cfg(debug_assertions)]
 fn choose(app: &Application, state: &Rc<RefCell<Wheel>>, monitor: usize, x: f64, y: f64) {
     point_at(state, monitor, x, y);
     choose_hover(app, state);
@@ -750,10 +751,10 @@ fn draw_look(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize,
 }
 
 fn draw_wheel(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize, state: &Rc<RefCell<Wheel>>) {
-    let _ = cr.set_operator(gtk4::cairo::Operator::Source);
+    cr.set_operator(gtk4::cairo::Operator::Source);
     cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
     let _ = cr.paint();
-    let _ = cr.set_operator(gtk4::cairo::Operator::Over);
+    cr.set_operator(gtk4::cairo::Operator::Over);
     if state.borrow().look.is_some() {
         draw_look(cr, width, height, monitor, state);
         return;
@@ -776,7 +777,7 @@ fn draw_wheel(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize
     }
     let rgb = |c: (u8, u8, u8)| cr.set_source_rgb(c.0 as f64 / 255.0, c.1 as f64 / 255.0, c.2 as f64 / 255.0);
     let tema = cedro::tema::attivo();
-    let _ = cr.select_font_face(tema.font, FontSlant::Normal, FontWeight::Bold);
+    cr.select_font_face(tema.font, FontSlant::Normal, FontWeight::Bold);
     for (index, slice) in list.iter().enumerate() {
         let (a0, a1) = cedro::wheelgeom_bounds(index, n);
         let mid = (a0 + a1) / 2.0;
@@ -808,7 +809,7 @@ fn draw_wheel(cr: &gtk4::cairo::Context, width: i32, height: i32, monitor: usize
     cr.set_font_size(17.0);
     show_centered(cr, cx, cy + 2.0, center);
     rgb(tema.hole_sub);
-    let _ = cr.select_font_face(tema.font, FontSlant::Normal, FontWeight::Normal);
+    cr.select_font_face(tema.font, FontSlant::Normal, FontWeight::Normal);
     cr.set_font_size(12.0);
     show_centered(cr, cx, cy + 24.0, &name);
 }
@@ -1061,7 +1062,11 @@ fn on_update(app: &Application, news: UpdateNews) {
                     if let Ok(exe) = update::installed_binary() {
                         let _ = std::process::Command::new("sh").arg("-c").arg("sleep 2; exec \"$0\" --background").arg(exe).spawn();
                     }
-                    glib::timeout_add_local_once(std::time::Duration::from_millis(800), || std::process::exit(0));
+                    glib::timeout_add_local_once(std::time::Duration::from_millis(800), || {
+                        // Un download in corso non resta orfano: yt-dlp e ffmpeg si fermano con Cedro.
+                        cedro::youtube::kill_all();
+                        std::process::exit(0)
+                    });
                     glib::ControlFlow::Break
                 }
             });

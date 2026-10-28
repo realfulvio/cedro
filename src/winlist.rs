@@ -106,6 +106,17 @@ pub fn create(parent: HWND, id: i32, r: (i32, i32, i32, i32)) -> HWND {
     }
 }
 
+/// Elimina i caratteri della lista: da chiamare quando la finestra che la contiene è chiusa.
+pub fn destroy() {
+    if let Some(s) = STATE.with(|s| s.borrow_mut().take()) {
+        for f in [s.bold, s.small, s.mono, s.mono_bold, s.tiny] {
+            unsafe {
+                let _ = DeleteObject(f.into());
+            }
+        }
+    }
+}
+
 fn cedro_face() -> PCWSTR {
     // Lo stesso carattere delle altre finestre di Cedro.
     crate::winfont::face()

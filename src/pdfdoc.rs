@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use skrifa::instance::{LocationRef, Size};
+use skrifa::charmap::Charmap;
+use skrifa::metrics::GlyphMetrics;
 use skrifa::{FontRef, GlyphId, MetadataProvider};
 
 use crate::engine::PageSize;
@@ -113,13 +115,17 @@ struct Face {
     upem: f32,
     /// glifo → carattere, per i soli caratteri usati.
     used: BTreeMap<u16, char>,
+    /// Tabelle del font lette una volta sola: si misurano tutti i caratteri del documento.
+    charmap: Charmap<'static>,
+    metrics: GlyphMetrics<'static>,
 }
 
 impl Face {
     fn new(data: &'static [u8], name: &'static str) -> Result<Face, String> {
         let font = FontRef::new(data).map_err(|e| format!("font non letto: {e}"))?;
         let upem = font.metrics(Size::unscaled(), LocationRef::default()).units_per_em as f32;
-        Ok(Face { data, name, upem, used: BTreeMap::new() })
+        let (charmap, metrics) = (font.charmap(), font.glyph_metrics(Size::unscaled(), LocationRef::default()));
+        Ok(Face { data, name, upem, used: BTreeMap::new(), charmap, metrics })
     }
 
     fn font(&self) -> FontRef<'static> {
@@ -127,18 +133,17 @@ impl Face {
     }
 
     fn glyph(&self, c: char) -> u16 {
-        self.font().charmap().map(c).map_or(0, |g| g.to_u32() as u16)
+        self.charmap.map(c).map_or(0, |g| g.to_u32() as u16)
     }
 
     /// Larghezza in unità di 1/1000 em.
     fn width(&self, gid: u16) -> f32 {
-        let font = self.font();
-        let advance = font.glyph_metrics(Size::unscaled(), LocationRef::default()).advance_width(GlyphId::new(gid as u32));
-        advance.unwrap_or(0.0) * 1000.0 / self.upem
+        self.metrics.advance_width(GlyphId::new(gid as u32)).unwrap_or(0.0) * 1000.0 / self.upem
     }
 
-    fn text_width(&self, text: &str, size: f32, scale: f32) -> f32 {
-        text.chars().map(|c| self.width(self.glyph(c))).sum::<f32>() * size / 1000.0 * scale
+    /// Larghezza di un carattere in unità di 1/1000 em.
+    fn char_width(&self, c: char) -> f32 {
+        self.width(self.glyph(c))
     }
 }
 
@@ -336,7 +341,8 @@ fn cmap(face: &Face) -> String {
 /CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def\n\
 /CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n",
     );
-    let entries: Vec<(&u16, &char)> = face.used.iter().collect();
+    // Il glifo 0 (quadratino) è di tutti i caratteri che il font non ha: non dice quale copiare.
+    let entries: Vec<(&u16, &char)> = face.used.iter().filter(|(gid, _)| **gid != 0).collect();
     for chunk in entries.chunks(100) {
         out.push_str(&format!("{} beginbfchar\n", chunk.len()));
         for (gid, c) in chunk {
@@ -351,13 +357,27 @@ fn cmap(face: &Face) -> String {
 }
 
 /// Spezza un paragrafo in righe che stanno nella `max` larghezza (parole, e a metà parola se serve).
+/// Le larghezze si sommano carattere per carattere mentre la riga cresce (non c'è crenatura):
+/// niente da rimisurare a ogni parola.
 fn wrap(face: &Face, text: &str, size: f32, scale: f32, max: f32) -> Vec<String> {
+    let fits = |units: f32| units * size / 1000.0 * scale <= max;
+    let space = face.char_width(' ');
     let mut lines = Vec::new();
     let mut current = String::new();
+    // Larghezza di `current` in 1/1000 em.
+    let mut current_units = 0.0f32;
+    let mut widths: Vec<f32> = Vec::new();
     for word in text.split(' ') {
-        let candidate = if current.is_empty() { word.to_string() } else { format!("{current} {word}") };
-        if face.text_width(&candidate, size, scale) <= max || current.is_empty() && word.is_empty() {
-            current = candidate;
+        widths.clear();
+        widths.extend(word.chars().map(|c| face.char_width(c)));
+        let start = if current.is_empty() { 0.0 } else { current_units + space };
+        let candidate = widths.iter().fold(start, |sum, w| sum + w);
+        if fits(candidate) || current.is_empty() && word.is_empty() {
+            if !current.is_empty() {
+                current.push(' ');
+            }
+            current.push_str(word);
+            current_units = candidate;
             continue;
         }
         if !current.is_empty() {
@@ -365,14 +385,17 @@ fn wrap(face: &Face, text: &str, size: f32, scale: f32, max: f32) -> Vec<String>
         }
         // Una parola più larga della riga si spezza.
         let mut piece = String::new();
-        for c in word.chars() {
-            let next = format!("{piece}{c}");
-            if face.text_width(&next, size, scale) > max && !piece.is_empty() {
+        let mut piece_units = 0.0f32;
+        for (c, w) in word.chars().zip(&widths) {
+            if !fits(piece_units + w) && !piece.is_empty() {
                 lines.push(std::mem::take(&mut piece));
+                piece_units = 0.0;
             }
             piece.push(c);
+            piece_units += w;
         }
         current = piece;
+        current_units = piece_units;
     }
     lines.push(current);
     lines
@@ -404,10 +427,10 @@ pub fn build(blocks: &[DocBlock], o: &PdfOptions) -> Result<Vec<u8>, String> {
             let s = (max / w0).min((height - 2.0 * margin) / h0).min(1.0);
             let (w, h) = (w0 * s, h0 * s);
             let gap = 6.0;
-            if y - h - gap < margin && !pages.last().map_or(true, Page::is_empty) {
+            if y - h - gap < margin && !pages.last().is_none_or(Page::is_empty) {
                 pages.push(Page::new());
                 y = height - margin;
-            } else if !pages.last().map_or(true, Page::is_empty) {
+            } else if !pages.last().is_none_or(Page::is_empty) {
                 y -= gap;
             }
             y -= h;
@@ -430,17 +453,17 @@ pub fn build(blocks: &[DocBlock], o: &PdfOptions) -> Result<Vec<u8>, String> {
         let wrapped = if text.is_empty() { vec![String::new()] } else { wrap(face, &text, size, scale, max) };
         // Un titolo non resta solo in fondo alla pagina.
         let need = leading * if block.heading > 0 { 2.5 } else { 1.0 } + before;
-        if y - need < margin && !pages.last().map_or(true, Page::is_empty) {
+        if y - need < margin && !pages.last().is_none_or(Page::is_empty) {
             pages.push(Page::new());
             y = height - margin;
-        } else if !pages.last().map_or(true, Page::is_empty) {
+        } else if !pages.last().is_none_or(Page::is_empty) {
             y -= before;
         }
         if block.heading > 0 && !text.trim().is_empty() {
             marks.push(Mark { level: block.heading, title: text.trim().to_string(), page: pages.len() - 1, y: y.min(height - 10.0) });
         }
         for line in wrapped {
-            if y - leading < margin && !pages.last().map_or(true, Page::is_empty) {
+            if y - leading < margin && !pages.last().is_none_or(Page::is_empty) {
                 pages.push(Page::new());
                 y = height - margin;
             }
@@ -767,12 +790,67 @@ mod tests {
         assert_eq!(u32::from_be_bytes(profile[0..4].try_into().unwrap()) as usize, profile.len());
     }
 
+    /// Il modo di prima: ogni riga candidata rimisurata da capo.
+    fn wrap_by_measuring(face: &Face, text: &str, size: f32, scale: f32, max: f32) -> Vec<String> {
+        let width = |t: &str| t.chars().map(|c| face.char_width(c)).sum::<f32>() * size / 1000.0 * scale;
+        let mut lines = Vec::new();
+        let mut current = String::new();
+        for word in text.split(' ') {
+            let candidate = if current.is_empty() { word.to_string() } else { format!("{current} {word}") };
+            if width(&candidate) <= max || current.is_empty() && word.is_empty() {
+                current = candidate;
+                continue;
+            }
+            if !current.is_empty() {
+                lines.push(std::mem::take(&mut current));
+            }
+            let mut piece = String::new();
+            for c in word.chars() {
+                if width(&format!("{piece}{c}")) > max && !piece.is_empty() {
+                    lines.push(std::mem::take(&mut piece));
+                }
+                piece.push(c);
+            }
+            current = piece;
+        }
+        lines.push(current);
+        lines
+    }
+
+    #[test]
+    fn wrapping_with_running_widths_matches_measuring_each_line() {
+        let face = Face::new(REGULAR, "TitilliumWeb-Regular").unwrap();
+        let texts = [
+            "Il Comune di Bondeno approva il documento allegato, con le modifiche richieste dalla commissione.".repeat(7),
+            format!("Prima  doppio spazio {} poi una parola lunghissima e la fine", "abcdefghij".repeat(30)),
+            " inizia con uno spazio e finisce con due  ".to_string(),
+            "αβγ città perché € — «virgolette»".repeat(9),
+            String::new(),
+        ];
+        for text in &texts {
+            for (size, scale, max) in [(11.0, 1.0, 481.6), (20.0, 1.12, 481.6), (13.5, 1.0, 40.0), (11.0, 1.0, 3.0)] {
+                assert_eq!(wrap(&face, text, size, scale, max), wrap_by_measuring(&face, text, size, scale, max), "{text:?} {size} {max}");
+            }
+        }
+    }
+
+    #[test]
+    fn characters_missing_from_the_font_are_not_copied_as_another() {
+        let mut o = options(true, false);
+        o.bookmarks = false;
+        let pdf = build(&[DocBlock { text: "ab 漢字 cd".into(), heading: 0, image: None }], &o).unwrap();
+        let text = lopdf::Document::load_mem(&pdf).unwrap().extract_text(&[1]).unwrap();
+        assert!(text.contains("ab") && text.contains("cd"), "{text:?}");
+        // Prima i due ideogrammi (glifo 0) si copiavano entrambi come il primo.
+        assert!(!text.contains("漢漢"), "{text:?}");
+    }
+
     #[test]
     fn long_words_and_page_sizes_fit() {
         let long = DocBlock { text: "x".repeat(400), heading: 0, image: None };
         for size in [PageSize::A4, PageSize::A3, PageSize::Letter] {
             let o = PdfOptions { size, ..options(true, false) };
-            let pdf = build(&[long.clone()], &o).unwrap();
+            let pdf = build(std::slice::from_ref(&long), &o).unwrap();
             let doc = lopdf::Document::load_mem(&pdf).unwrap();
             let page = doc.get_pages()[&1];
             let media = doc.get_dictionary(page).unwrap().get(b"MediaBox").unwrap().as_array().unwrap();

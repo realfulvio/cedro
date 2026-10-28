@@ -83,26 +83,54 @@ fn attr_text(tag: &str, name: &str) -> Option<String> {
     Some(tag[start..end].to_string())
 }
 
-/// Le porzioni di `xml` da `<tag` (seguito da `>`, spazio o `/`) fino alla chiusura `</tag>`.
+/// La posizione del prossimo `<tag` (seguito da `>`, spazio o `/`) da `from`.
+fn find_open(xml: &str, from: usize, open: &str) -> Option<usize> {
+    let mut at = from;
+    while let Some(found) = xml[at..].find(open) {
+        let start = at + found;
+        if matches!(xml[start + open.len()..].chars().next(), Some('>' | ' ' | '/')) {
+            return Some(start);
+        }
+        at = start + open.len();
+    }
+    None
+}
+
+/// Le porzioni di `xml` da `<tag` (seguito da `>`, spazio o `/`) fino alla chiusura `</tag>` corrispondente:
+/// un `<w:p>` dentro una casella di testo non chiude il paragrafo che la contiene.
 fn elements<'a>(xml: &'a str, tag: &str) -> Vec<&'a str> {
     let open = format!("<{tag}");
     let close = format!("</{tag}>");
     let mut out = Vec::new();
     let mut at = 0;
-    while let Some(found) = xml[at..].find(&open) {
-        let start = at + found;
-        let after = xml[start + open.len()..].chars().next();
-        if !matches!(after, Some('>') | Some(' ') | Some('/')) {
-            at = start + open.len();
-            continue;
-        }
+    while let Some(start) = find_open(xml, at, &open) {
         let tag_end = xml[start..].find('>').map_or(xml.len(), |e| start + e + 1);
         if xml[start..tag_end].ends_with("/>") {
             out.push(&xml[start..tag_end]);
             at = tag_end;
             continue;
         }
-        let end = xml[tag_end..].find(&close).map_or(xml.len(), |e| tag_end + e + close.len());
+        let mut depth = 1usize;
+        let mut pos = tag_end;
+        let end = loop {
+            let Some(c) = xml[pos..].find(&close).map(|c| pos + c) else { break xml.len() };
+            match find_open(xml, pos, &open) {
+                Some(o) if o < c => {
+                    let o_end = xml[o..].find('>').map_or(xml.len(), |e| o + e + 1);
+                    if !xml[o..o_end].ends_with("/>") {
+                        depth += 1;
+                    }
+                    pos = o_end;
+                }
+                _ => {
+                    depth -= 1;
+                    pos = c + close.len();
+                    if depth == 0 {
+                        break pos;
+                    }
+                }
+            }
+        };
         out.push(&xml[start..end]);
         at = end;
     }
@@ -124,6 +152,8 @@ fn docx_blocks(document: &str, styles: &str, media: &Media) -> Vec<crate::pdfdoc
             levels.push((id, level));
         }
     }
+    // Di mc:AlternateContent si tiene solo la scelta principale: il ripiego (VML) ripete immagini e caselle di testo.
+    let document = &without_fallbacks(document);
     elements(document, "w:p")
         .into_iter()
         .flat_map(|p| {
@@ -136,14 +166,13 @@ fn docx_blocks(document: &str, styles: &str, media: &Media) -> Vec<crate::pdfdoc
                 .or_else(|| heading_level_of(&style))
                 .or(outline.filter(|n| *n < 9).map(|n| (n + 1).min(3)))
                 .unwrap_or(0);
-            let text = ooxml_text(p).trim_end_matches('\n').replace('\t', "    ");
+            // Gli a capo (w:br, paragrafi delle caselle di testo) separano le parole: nel PDF diventano spazi.
+            let text = ooxml_text(p).trim_end_matches('\n').replace('\t', "    ").replace('\n', " ");
             let align = match p.find("<w:jc ").and_then(|i| attr_text(&p[i..], "w:val")).as_deref() {
                 Some("center") => 1,
                 Some("right" | "end") => 2,
                 _ => 0,
             };
-            // Di mc:AlternateContent si tiene solo la scelta principale: il ripiego VML è la stessa immagine.
-            let p = &without_fallbacks(p);
             let mut images = Vec::new();
             for d in elements(p, "w:drawing") {
                 // wp:extent in EMU (12700 per punto).
@@ -340,7 +369,8 @@ pub fn pdf_page_texts(path: &Path) -> Result<Vec<String>, String> {
     pages.sort_unstable();
     Ok(pages
         .into_iter()
-        .map(|page| doc.extract_text(&[page]).map(|t| t.trim().to_string()).unwrap_or_default())
+        // Si tengono i pezzi leggibili: un solo font non decodificabile non deve far perdere la pagina.
+        .map(|page| doc.extract_text_chunks(&[page]).into_iter().filter_map(Result::ok).collect::<String>().trim().to_string())
         .collect())
 }
 
@@ -390,7 +420,8 @@ pub fn docx_bytes(text: &str) -> Vec<u8> {
 
 fn docx_text(path: &Path) -> Result<String, String> {
     let xml = zip_entry(path, "word/document.xml")?;
-    Ok(ooxml_text(&xml))
+    // Le caselle di testo sono scritte due volte (wps e ripiego VML): se ne tiene una.
+    Ok(ooxml_text(&without_fallbacks(&xml)))
 }
 
 fn odt_text(path: &Path) -> Result<String, String> {
@@ -441,20 +472,25 @@ const MAX_XML: u64 = 512 * 1_000_000;
 fn ooxml_text(xml: &str) -> String {
     let mut out = String::new();
     let mut rest = xml;
+    // Dentro <w:tabs> i <w:tab> sono le posizioni delle tabulazioni, non tabulazioni nel testo.
+    let mut in_tabs = false;
     while let Some(start) = rest.find('<') {
         rest = &rest[start + 1..];
         let Some(end) = rest.find('>') else { break };
         let raw = &rest[..end];
         rest = &rest[end + 1..];
         let tag = raw.split_whitespace().next().unwrap_or(raw).trim_end_matches('/');
-        if tag == "w:t" {
-            let Some(close) = rest.find('<') else { break };
-            out.push_str(&xml_decode(&rest[..close]));
-            rest = &rest[close..];
-        } else if tag == "w:tab" {
-            out.push('\t');
-        } else if tag == "w:br" || tag == "w:cr" || tag == "/w:p" {
-            out.push('\n');
+        match tag {
+            "w:t" => {
+                let Some(close) = rest.find('<') else { break };
+                out.push_str(&xml_decode(&rest[..close]));
+                rest = &rest[close..];
+            }
+            "w:tabs" => in_tabs = !raw.ends_with('/'),
+            "/w:tabs" => in_tabs = false,
+            "w:tab" if !in_tabs => out.push('\t'),
+            "w:br" | "w:cr" | "/w:p" => out.push('\n'),
+            _ => {}
         }
     }
     out
@@ -474,9 +510,9 @@ fn odt_plain(xml: &str) -> String {
         } else if tag == "text:line-break" {
             out.push('\n');
         } else if tag == "text:s" {
-            for _ in 0..attr_u32(raw, "text:c").unwrap_or(1) {
-                out.push(' ');
-            }
+            // Un documento vero ne ha qualche decina: un file ostile non deve riempire la memoria.
+            let n = attr_u32(raw, "text:c").unwrap_or(1).min(1024) as usize;
+            out.extend(std::iter::repeat_n(' ', n));
         } else if tag == "/text:p" || tag == "/text:h" {
             out.push('\n');
         }
@@ -700,9 +736,17 @@ fn clx_text(word: &[u8], clx: &[u8]) -> String {
         return String::new();
     }
     let mut out = String::new();
+    // Il testo di un DOC vero non supera lo stream: pezzi che lo ripetono tutto non devono riempire la memoria.
+    let limit = word.len().saturating_mul(2).max(1 << 20);
+    let mut prev_cp = 0u32;
     for piece in 0..n {
         let cp = u32::from_le_bytes(plc[piece * 4..piece * 4 + 4].try_into().unwrap_or([0; 4]));
         let cp_next = u32::from_le_bytes(plc[(piece + 1) * 4..(piece + 1) * 4 + 4].try_into().unwrap_or([0; 4]));
+        // CP non crescenti: tabella rovinata.
+        if cp < prev_cp || cp_next < cp || out.len() > limit {
+            break;
+        }
+        prev_cp = cp_next;
         let pcd = 4 * (n + 1) + piece * 8;
         if pcd + 6 > plc.len() {
             break;
@@ -896,6 +940,73 @@ mod block_tests {
         });
         assert_eq!(*seen.borrow(), vec![("rId1".to_string(), Some((10.0, 10.0)))]);
         assert_eq!(blocks.len(), 1);
+    }
+
+    /// Una casella di testo come la salva Word: wps nella scelta, VML nel ripiego.
+    const TEXTBOX: &str = "<w:document><w:body><w:p><w:r><w:t>Prima</w:t></w:r><w:r><mc:AlternateContent>\
+<mc:Choice Requires=\"wps\"><w:drawing><wps:txbx><w:txbxContent><w:p><w:r><w:t>Casella</w:t></w:r></w:p></w:txbxContent></wps:txbx></w:drawing></mc:Choice>\
+<mc:Fallback><w:pict><v:textbox><w:txbxContent><w:p><w:r><w:t>Casella</w:t></w:r></w:p></w:txbxContent></v:textbox></w:pict></mc:Fallback>\
+</mc:AlternateContent></w:r><w:r><w:t>dopo</w:t></w:r></w:p><w:p><w:r><w:t>Fine</w:t></w:r></w:p></w:body></w:document>";
+
+    #[test]
+    fn a_docx_text_box_is_read_once_and_the_paragraph_keeps_its_end() {
+        let blocks = docx_blocks(TEXTBOX, "", &|_, _, _| None);
+        let texts: Vec<&str> = blocks.iter().map(|b| b.text.as_str()).collect();
+        assert_eq!(texts, vec!["PrimaCasella dopo", "Fine"]);
+        assert_eq!(ooxml_text(&without_fallbacks(TEXTBOX)).matches("Casella").count(), 1);
+    }
+
+    #[test]
+    fn nested_elements_close_at_their_own_end() {
+        let xml = "<a><a x=\"1\">uno</a><a/>due</a><ab>no</ab><a>tre</a>";
+        assert_eq!(elements(xml, "a"), vec!["<a><a x=\"1\">uno</a><a/>due</a>", "<a>tre</a>"]);
+        // Senza chiusura: fino in fondo, senza blocchi.
+        assert_eq!(elements("<a><a>x</a>", "a"), vec!["<a><a>x</a>"]);
+    }
+
+    #[test]
+    fn docx_tab_stops_are_not_tabs_in_the_text() {
+        let p = "<w:p><w:pPr><w:tabs><w:tab w:val=\"left\" w:pos=\"2835\"/><w:tab w:val=\"right\" w:pos=\"9000\"/></w:tabs></w:pPr>\
+<w:r><w:t>Nome</w:t></w:r><w:r><w:tab/><w:t>Data</w:t></w:r></w:p>";
+        assert_eq!(ooxml_text(p), "Nome\tData\n");
+        assert_eq!(ooxml_text("<w:p><w:pPr><w:tabs/></w:pPr><w:r><w:tab/><w:t>x</w:t></w:r></w:p>"), "\tx\n");
+    }
+
+    #[test]
+    fn odt_spaces_have_a_limit() {
+        let text = odt_plain("<text:p>a<text:s text:c=\"4000000000\"/>b<text:s text:c=\"3\"/>c<text:s/>d</text:p>");
+        assert_eq!(text.len(), 1 + 1024 + 1 + 3 + 1 + 1 + 1 + 1);
+        assert!(text.ends_with("b   c d\n"));
+    }
+
+    /// Una piece table con `n` pezzi, ciascuno di `len` caratteri compressi dall'inizio dello stream.
+    fn clx(cps: &[u32]) -> Vec<u8> {
+        let n = cps.len() - 1;
+        let mut plc = Vec::new();
+        for cp in cps {
+            plc.extend_from_slice(&cp.to_le_bytes());
+        }
+        for _ in 0..n {
+            plc.extend_from_slice(&[0, 0]);
+            plc.extend_from_slice(&(1u32 << 30).to_le_bytes());
+            plc.extend_from_slice(&[0, 0]);
+        }
+        let mut out = vec![0x02];
+        out.extend_from_slice(&(plc.len() as u32).to_le_bytes());
+        out.extend_from_slice(&plc);
+        out
+    }
+
+    #[test]
+    fn doc_pieces_cannot_repeat_the_stream_without_end() {
+        let word = vec![b'a'; 1000];
+        assert_eq!(clx_text(&word, &clx(&[0, 3, 5])), "aaaaa");
+        // 5000 pezzi che ripetono tutto lo stream: 5 MB di testo da 1 KB.
+        let cps: Vec<u32> = (0..=5000).map(|i| i * 1000).collect();
+        let text = clx_text(&word, &clx(&cps));
+        assert!(text.len() <= (1 << 20) + 1000, "{}", text.len());
+        // CP che tornano indietro: tabella rovinata, ci si ferma.
+        assert_eq!(clx_text(&word, &clx(&[0, 3, 1, 4])), "aaa");
     }
 
     fn levels(blocks: &[DocBlock]) -> Vec<(u8, &str)> {

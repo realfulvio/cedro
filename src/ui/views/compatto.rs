@@ -186,6 +186,10 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
             y += 36.0;
         }
         for &i in &vis {
+            if !f.p.shows_y(y, 62.0) {
+                y += 70.0;
+                continue;
+            }
             let file = &app.files[i];
             f.p.rrect(x, y, w, 62.0, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
             f.thumb(app, i, (x + 8.0, y + 8.0, 46.0, 46.0), 5.0);
