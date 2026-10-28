@@ -274,6 +274,7 @@ pub(crate) fn read(path: &Path) -> Result<(Vec<AviStream>, Vec<AviChunk>), Strin
     Ok((streams, chunks))
 }
 
+#[cfg(any(windows, test))]
 pub(crate) fn is_h264(stream: &AviStream) -> bool {
     stream.video && [b"H264", b"X264", b"AVC1"].iter().any(|n| same_cc(stream.compression, n) || same_cc(stream.handler, n))
 }
@@ -284,6 +285,7 @@ pub(crate) fn same_cc(value: [u8; 4], name: &[u8; 4]) -> bool {
 
 /// Per Media Foundation (Windows): un AVI con H.264 a lunghezze (avcC, «avc1») si riscrive con i codici di inizio
 /// e i parametri davanti a ogni punto di ripartenza, e con la sigla `H264`. Restituisce il file nuovo, se serviva.
+#[cfg(any(windows, test))]
 pub(crate) fn annex_b_copy(path: &Path, dir: &Path) -> Result<Option<std::path::PathBuf>, String> {
     let (streams, chunks) = read(path)?;
     let Some(vi) = streams.iter().position(is_h264) else {

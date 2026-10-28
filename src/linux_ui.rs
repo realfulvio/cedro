@@ -480,6 +480,7 @@ fn hover_of(wheel: &Wheel, monitor: usize, x: f64, y: f64) -> i32 {
     cedro::wheelgeom_hover(ox as f32 + 220.0, oy as f32 + 220.0, x as f32, y as f32, n)
 }
 
+#[cfg(debug_assertions)]
 fn choose(app: &Application, state: &Rc<RefCell<Wheel>>, monitor: usize, x: f64, y: f64) {
     point_at(state, monitor, x, y);
     choose_hover(app, state);
