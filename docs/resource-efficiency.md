@@ -29,6 +29,9 @@ deadlock. Waiting transcription/panel jobs can be cancelled. This is deliberatel
 a per-process limit, not a machine-wide service or inter-process lock. Preview
 loading and downloads are not serialized by this gate.
 
+On Windows the 0.26.3 silent updater now uses the same non-blocking admission
+check: it must wait for panel transcription/conversion as well as wheel work.
+
 ## GPU memory headroom
 
 The existing Vulkan/iGPU path remains enabled. Before loading the engine, current

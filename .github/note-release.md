@@ -16,6 +16,10 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
+- **Meno memoria con gli audio lunghi**: anteprima dell'onda e conversione WAV standard lavorano a pacchetti. Anche la preparazione dell'audio per la trascrizione conserva solo i campioni necessari al filtro, senza cambiare precisione o modello.
+- **Una coda comune per i lavori pesanti**: ruota e pannelli si coordinano; i lavori in attesa si possono annullare. Gli aggiornamenti silenziosi aspettano anche le conversioni dei pannelli e le trascrizioni.
+- **iGPU e Vulkan restano attivi**: se la RAM libera è limitata Cedro può usare la CPU con lo stesso modello; se il motore GPU si interrompe riprova il file sulla CPU, mantenendo la precisione scelta.
+
 - **Aggiornamenti silenziosi**: all'accensione del computer Cedro non disturba più. Aspetta due minuti, controlla e scarica a priorità minima, senza finestre né richieste; su Windows installa quando non c'è una conversione in corso e si riapre da solo, su Linux installa e parte aggiornato al prossimo avvio. Al massimo compare un avviso discreto «Cedro è stato aggiornato alla …». Dal menu «Controlla aggiornamenti» resta la domanda di sempre.
 
 - **Tutti i temi controllati con le ultime voci** (Archivi, ZIP, nome da modello, spia CPU/GPU, «Apri risultato» e «Ricomincia», menu del tasto destro): sistemate le sovrapposizioni nella finestrina del Compatto, in Windows essenziale (Semplificata) e in Documento al centro, dove spia e «Ricomincia» non si vedevano.
