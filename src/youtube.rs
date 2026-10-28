@@ -824,9 +824,33 @@ fn capture_until(cmd: &mut Command, cancel: &AtomicBool, limit: Duration) -> Res
     Ok((t_out.join().unwrap_or_default(), t_err.join().unwrap_or_default(), status.success()))
 }
 
+/// Adattatori inclusi in Cedro, isolati dai plugin installati dall'utente.
+fn web_adapters_dir() -> PathBuf {
+    tools_dir().join("cedro-adapters")
+}
+
+fn ensure_web_adapters() -> Result<(), String> {
+    let dir = web_adapters_dir().join("cedro/yt_dlp_plugins/extractor");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Non preparo gli adattatori web: {e}"))?;
+    for (name, source) in [
+        ("cedro_turbovid.py", include_str!("../resources/web-adapters/cedro_turbovid.py")),
+        ("cedro_eurostream.py", include_str!("../resources/web-adapters/cedro_eurostream.py")),
+    ] {
+        let path = dir.join(name);
+        if std::fs::read_to_string(&path).ok().as_deref() != Some(source) {
+            let pending = path.with_extension("py.tmp");
+            std::fs::write(&pending, source).map_err(|e| format!("Non salvo l'adattatore web: {e}"))?;
+            std::fs::rename(&pending, &path).map_err(|e| format!("Non aggiorno l'adattatore web: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
 /// Titolo, autore e durata di un link, senza scaricarlo.
 pub fn probe(ytdlp: &Path, url: &str, playlist: bool, cancel: &AtomicBool) -> Result<Info, String> {
+    ensure_web_adapters()?;
     let mut cmd = command(ytdlp);
+    cmd.arg("--ignore-config").arg("--plugin-dirs").arg("default").arg("--plugin-dirs").arg(web_adapters_dir());
     cmd.args(["--dump-single-json", "--flat-playlist", "--no-warnings", "--skip-download"]).arg(if playlist { "--yes-playlist" } else { "--no-playlist" }).arg("--").arg(url);
     let (stdout, stderr, ok) = capture(&mut cmd, cancel)?;
     if !ok {
@@ -890,6 +914,7 @@ pub fn build_args(r: &Request, ffmpeg: Option<&Path>, deno: Option<&Path>, in_pl
     let mut a: Vec<String> = Vec::new();
     let mut push = |items: &[&str]| a.extend(items.iter().map(|s| s.to_string()));
     push(&["--newline", "--no-quiet", "--no-colors", "--ignore-config", "--no-mtime", "--embed-metadata"]);
+    push(&["--plugin-dirs", "default", "--plugin-dirs", &web_adapters_dir().to_string_lossy()]);
     push(&["--progress-template", "download:CEDRO|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s"]);
     push(&["--print", "after_move:CEDROFILE|%(filepath)s"]);
     if cfg!(windows) {
@@ -1040,7 +1065,7 @@ enum Line {
 /// ferma gli altri, ma se nessuno riesce il risultato è un errore.
 pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<Vec<PathBuf>, String> {
     if r.urls.is_empty() {
-        return Err("Incolla almeno un link di YouTube".into());
+        return Err("Incolla almeno un link".into());
     }
     std::fs::create_dir_all(&r.dest).map_err(|e| format!("La cartella di destinazione non si apre: {e}"))?;
     let ytdlp = ensure_ytdlp(emit, cancel)?;
@@ -1436,6 +1461,14 @@ mod tests {
 
     fn req(audio: bool) -> Request {
         Request::new(vec!["https://youtu.be/x".into()], audio, PathBuf::from("/tmp/d"))
+    }
+
+    #[test]
+    fn includes_web_adapters_in_download_command() {
+        let args = build_args(&req(false), None, None, false);
+        assert!(args.windows(2).any(|p| p[0] == "--plugin-dirs" && p[1] == web_adapters_dir().to_string_lossy()));
+        assert!(args.windows(2).any(|p| p[0] == "--plugin-dirs" && p[1] == "default"));
+        assert!(!args.iter().any(|a| a == "--no-plugin-dirs"));
     }
 
     #[test]
