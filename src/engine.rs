@@ -838,6 +838,7 @@ impl Default for Options {
 
 /// Come `perform_into`, con le opzioni extra.
 pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    let _job = crate::resources::acquire(None).expect("uncancellable job");
     let before = NAMING.with(|n| {
         n.replace(Naming {
             exists: opts.exists,

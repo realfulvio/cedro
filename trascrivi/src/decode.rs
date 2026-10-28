@@ -18,11 +18,17 @@ use crate::Failure;
 pub const RATE: u32 = 16_000;
 
 pub fn to_16k_mono(path: &Path) -> Result<Vec<f32>, Failure> {
-    let (mono, rate) = decode_mono(path)?;
-    Ok(resample(&mono, rate, RATE))
+    let mut resampler: Option<StreamResampler> = None;
+    decode_mono(path, &mut |chunk, rate| {
+        let r = resampler.get_or_insert_with(|| StreamResampler::new(rate, RATE));
+        if r.from != rate { return Err(Failure::Other("frequenza audio cambiata durante la lettura".into())); }
+        r.push(chunk);
+        Ok(())
+    })?;
+    Ok(resampler.map(|r| r.finish()).unwrap_or_default())
 }
 
-fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), Failure> {
+fn decode_mono(path: &Path, each: &mut dyn FnMut(&[f32], u32) -> Result<(), Failure>) -> Result<(), Failure> {
     let file = File::open(path).map_err(|e| Failure::Other(format!("il file non si apre: {e}")))?;
     let stream = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
@@ -41,7 +47,7 @@ fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), Failure> {
         .ok_or_else(|| Failure::Unsupported("nel file non c'è una traccia audio".into()))?
         .clone();
     if track.codec_params.codec == CODEC_TYPE_OPUS {
-        return opus_mono(format.as_mut(), track.id, track.codec_params.delay.unwrap_or(0) as usize);
+        return opus_mono(format.as_mut(), track.id, track.codec_params.delay.unwrap_or(0) as usize, each);
     }
     let rate = track.codec_params.sample_rate.unwrap_or(RATE);
     let mut decoder = symphonia::default::get_codecs()
@@ -72,17 +78,18 @@ fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), Failure> {
             *buf = SampleBuffer::new(decoded.capacity() as u64, spec);
         }
         buf.copy_interleaved_ref(decoded);
+        mono.clear();
         mono.extend(buf.samples().chunks_exact(channels).map(|f| f.iter().sum::<f32>() / channels as f32));
+        each(&mono, rate)?;
     }
-    Ok((mono, rate))
+    Ok(())
 }
 
 /// Opus in Ogg o in MKV/WebM: libopus decodifica già in mono a 48 kHz.
-fn opus_mono(format: &mut dyn symphonia::core::formats::FormatReader, track: u32, pre_skip: usize) -> Result<(Vec<f32>, u32), Failure> {
+fn opus_mono(format: &mut dyn symphonia::core::formats::FormatReader, track: u32, mut pre_skip: usize, each: &mut dyn FnMut(&[f32], u32) -> Result<(), Failure>) -> Result<(), Failure> {
     let mut decoder = opus::Decoder::new(48_000, opus::Channels::Mono).map_err(|e| Failure::Other(format!("Opus non parte: {e}")))?;
     // 120 ms a 48 kHz: il pacchetto Opus più lungo possibile.
     let mut frame = vec![0f32; 5760];
-    let mut mono = Vec::new();
     loop {
         let packet = match format.next_packet() {
             Ok(p) => p,
@@ -94,17 +101,17 @@ fn opus_mono(format: &mut dyn symphonia::core::formats::FormatReader, track: u32
             continue;
         }
         match decoder.decode_float(&packet.data, &mut frame, false) {
-            Ok(n) => mono.extend_from_slice(&frame[..n]),
+            Ok(n) => { let skip = pre_skip.min(n); pre_skip -= skip; each(&frame[skip..n], 48_000)?; },
             Err(_) => continue,
         }
     }
-    mono.drain(..pre_skip.min(mono.len()));
-    Ok((mono, 48_000))
+    Ok(())
 }
 
 /// Ricampionamento con un filtro sinc a finestra di Hann, a tabella: il passa-basso toglie quello che
 /// a 16 kHz non entra senza fare eco (aliasing), e la tabella tiene veloce anche un'ora di audio.
-pub fn resample(input: &[f32], from: u32, to: u32) -> Vec<f32> {
+#[cfg(test)]
+fn resample(input: &[f32], from: u32, to: u32) -> Vec<f32> {
     if from == to || input.is_empty() {
         return input.to_vec();
     }
@@ -157,6 +164,71 @@ pub fn resample(input: &[f32], from: u32, to: u32) -> Vec<f32> {
     out
 }
 
+/// Same sinc filter and global sample positions as the reference implementation.
+/// Only the filter overlap and the current decoder packet remain at source rate.
+struct StreamResampler {
+    from: u32, to: u32, ratio: f64, half: isize, taps: usize, table: Vec<f32>,
+    input: Vec<f32>, base: usize, total: usize, output: Vec<f32>,
+}
+impl StreamResampler {
+    fn new(from: u32, to: u32) -> Self {
+    const PHASES: usize = 256;
+    let ratio = from as f64 / to as f64;
+    let cutoff = (to as f64 / from as f64).min(1.0) * 0.94;
+    let half = (8.0 / cutoff).ceil() as isize;
+    let taps = (2 * half) as usize;
+    let mut table = vec![0f32; PHASES * taps];
+    for p in 0..PHASES {
+        let frac = p as f64 / PHASES as f64;
+        let row = &mut table[p * taps..(p + 1) * taps];
+        let mut sum = 0.0;
+        for (k, w) in row.iter_mut().enumerate() {
+            let t = (k as isize - half + 1) as f64 - frac;
+            let x = cutoff * t;
+            let sinc = if x.abs() < 1e-9 { 1.0 } else { (std::f64::consts::PI * x).sin() / (std::f64::consts::PI * x) };
+            let hann = 0.5 + 0.5 * (std::f64::consts::PI * t / half as f64).cos();
+            let v = if t.abs() >= half as f64 { 0.0 } else { sinc * hann };
+            *w = v as f32;
+            sum += v;
+        }
+        for w in row.iter_mut() {
+            *w /= sum as f32;
+        }
+    }
+
+        Self { from, to, ratio, half, taps, table, input: Vec::new(), base: 0, total: 0, output: Vec::new() }
+    }
+    fn push(&mut self, chunk: &[f32]) {
+        self.total += chunk.len();
+        if self.from == self.to { self.output.extend_from_slice(chunk); return; }
+        self.input.extend_from_slice(chunk);
+        self.drain(false);
+    }
+    fn drain(&mut self, end: bool) {
+        if self.total == 0 { return; }
+        let target = (self.total as f64 / self.ratio).floor() as usize;
+        while self.output.len() < target {
+            let center = self.output.len() as f64 * self.ratio;
+            let base = center.floor() as isize;
+            let first = base - self.half + 1;
+            if !end && first + self.taps as isize > self.total as isize { break; }
+            let phase = (((center - base as f64) * 256.0) as usize).min(255);
+            let row = &self.table[phase * self.taps..(phase + 1) * self.taps];
+            let mut acc = 0f32;
+            for (k, w) in row.iter().enumerate() {
+                let at = (first + k as isize).clamp(0, self.total as isize - 1) as usize;
+                acc += self.input[at - self.base] * w;
+            }
+            self.output.push(acc);
+        }
+        let next = (self.output.len() as f64 * self.ratio).floor() as isize - self.half + 1;
+        let keep = next.max(0) as usize;
+        let remove = keep.saturating_sub(self.base).min(self.input.len());
+        self.input.drain(..remove); self.base += remove;
+    }
+    fn finish(mut self) -> Vec<f32> { if self.from != self.to { self.drain(true); } self.output }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,6 +241,20 @@ mod tests {
         (x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32).sqrt()
     }
 
+    #[test]
+    fn streaming_is_bit_exact_at_packet_boundaries() {
+        for from in [8000, 16000, 22050, 44100, 48000, 96000] {
+            for len in [0, 1, 7, 1001, 50000] {
+                let input = tone(441.0, from, 1.0).into_iter().cycle().take(len).collect::<Vec<_>>();
+                let expected = resample(&input, from, RATE);
+                for size in [1, 17, 1152, 4096] {
+                    let mut r = StreamResampler::new(from, RATE);
+                    for c in input.chunks(size) { r.push(c); assert!(r.input.len() < 4096 + 512); }
+                    assert_eq!(r.finish(), expected, "rate={from}, len={len}, chunk={size}");
+                }
+            }
+        }
+    }
     #[test]
     fn speech_band_passes_and_high_tones_are_removed() {
         let low = resample(&tone(1000.0, 48_000, 1.0), 48_000, 16_000);

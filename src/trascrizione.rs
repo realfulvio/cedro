@@ -1157,7 +1157,12 @@ fn power_on(request: &Request, model: &Path, sink: &dyn Fn(Event), cancel: &Atom
 fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
     let cpu = cpu_variant(request.avx512);
     let mut tries: Vec<Variant> = Vec::new();
-    if request.gpu {
+    let model_bytes = std::fs::metadata(model).map(|m| m.len()).unwrap_or(0);
+    let gpu_budget = crate::resources::gpu_headroom(crate::resources::available_memory(), model_bytes);
+    if request.gpu && !gpu_budget {
+        log(sink, Tone::Note, "Memoria", "RAM libera limitata: uso il processore con lo stesso modello e la stessa precisione");
+    }
+    if request.gpu && gpu_budget {
         if vulkan_loader_present() {
             tries.push(Variant::Vulkan);
         } else {
@@ -1232,6 +1237,10 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
 
 /// Come `run`, ma si ferma appena `cancel` si accende (Annulla): i file che restano finiscono come «Annullato».
 pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Options, cancel: &AtomicBool, sink: &dyn Fn(Event)) {
+    let Some(_job) = crate::resources::acquire(Some(cancel)) else {
+        for path in files { sink(Event::Finished { path: path.clone(), result: Err(CANCELLED.into()) }); }
+        return;
+    };
     let fail_all = |e: &str, from: usize| {
         for path in &files[from..] {
             sink(Event::Finished { path: path.clone(), result: Err(e.to_string()) });

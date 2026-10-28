@@ -31,6 +31,7 @@ pub mod wheelgeom;
 pub mod wheelgfx;
 pub mod webvideo;
 pub mod youtube;
+pub mod resources;
 mod zipstore;
 mod nal;
 mod avi;
