@@ -479,6 +479,8 @@ il PDF/A non ammette la password: togline una delle due	PDF/A doesn't allow a pa
 ~, con i segnalibri	, with bookmarks
 ~, protetto con password	, password-protected
 cartella di destinazione non creata ({}): {}	destination folder not created ({}): {}
+file non sostituito ({}): {}	file not replaced ({}): {}
+pagina non disegnata	page not rendered
 cartella mancante	missing folder
 immagine non letta: {}	image not read: {}
 {} → {} · {#}% in meno	{} → {} · {}% smaller
@@ -804,6 +806,7 @@ questo video non si può decomprimere: {}	this video can't be decompressed: {}
 formato video intermedio non letto	intermediate video format not read
 lettura video: {}	video reading: {}
 tempo del fotogramma: {}	frame time: {}
+tempo scaduto	timed out
 scrittura video: {}	video writing: {}
 lettura video interrotta	video reading interrupted
 fotogramma non letto: {}	frame not read: {}
@@ -833,6 +836,7 @@ AVI non letto: {}	AVI not read: {}
 AVI non letto	AVI not read
 MJPEG non letto: {}	MJPEG not read: {}
 il video è troppo lungo per questo MP4	the video is too long for this MP4
+il video è troppo lungo per questo AVI	the video is too long for this AVI
 scheda video: {} non riuscito ({})	graphics card: {} failed ({})
 scheda video: {#}×{#} non adatto	graphics card: {}×{} not suitable
 nessuna scheda video che codifica H.264	no graphics card that encodes H.264

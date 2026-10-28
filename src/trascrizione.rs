@@ -9,7 +9,8 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant};
 
 use crate::engine::{self, Options};
@@ -197,7 +198,16 @@ pub fn installed_models() -> Vec<String> {
 /// Vero se il motore (cedro-trascrivi) è già sul PC.
 pub fn engine_installed() -> bool {
     std::fs::read_dir(data_dir())
-        .map(|d| d.flatten().any(|e| e.file_name().to_string_lossy().starts_with("cedro-trascrivi-") && e.path().extension().is_some_and(|x| x == "exe" || x.is_empty())))
+        .map(|d| {
+            d.flatten().any(|e| {
+                // Su Linux il motore non ha estensione («cedro-trascrivi-avx2»); .version, .part e .sha256 non contano.
+                e.file_name().to_string_lossy().starts_with("cedro-trascrivi-")
+                    && match e.path().extension() {
+                        Some(x) => x == "exe",
+                        None => !cfg!(windows),
+                    }
+            })
+        })
         .unwrap_or(false)
 }
 
@@ -464,7 +474,7 @@ fn hex(bytes: &[u8]) -> String {
 
 /// Scarica `url` in `dest` passando da un file `.part`, con lo SHA-256 controllato se noto.
 /// Ogni 10% scrive a che punto è. Ritorna lo SHA-256 del file scaricato.
-fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, what: &str, sink: &dyn Fn(Event)) -> Result<String, String> {
+fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, what: &str, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<String, String> {
     use sha2::{Digest, Sha256};
     let response = http().get(url).call().map_err(|e| format!("download di {what} non riuscito: {e}"))?;
     let total = response.header("Content-Length").and_then(|v| v.parse::<u64>().ok()).unwrap_or(megabytes as u64 * 1_000_000);
@@ -478,6 +488,9 @@ fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, wha
     let mut buf = vec![0u8; 256 * 1024];
     let (mut done, mut shown) = (0u64, 0u64);
     let copied = loop {
+        if cancel.load(Ordering::Relaxed) {
+            break Err(CANCELLED.to_string());
+        }
         let n = match reader.read(&mut buf) {
             Ok(0) => break Ok(()),
             Ok(n) => n,
@@ -527,7 +540,7 @@ fn published_model_sha(model: &Model, wait: Duration) -> Option<String> {
 }
 
 /// Il modello pronto sul PC: scaricato la prima volta, riscaricato se ne è uscita una versione nuova.
-fn ensure_model(index: usize, sink: &dyn Fn(Event)) -> Result<PathBuf, String> {
+fn ensure_model(index: usize, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<PathBuf, String> {
     let model = MODELS.get(index).ok_or("modello sconosciuto")?;
     let dir = data_dir();
     let path = dir.join(model.file);
@@ -550,7 +563,7 @@ fn ensure_model(index: usize, sink: &dyn Fn(Event)) -> Result<PathBuf, String> {
     }
     let expected = published_model_sha(model, Duration::from_secs(20));
     let url = format!("{MODEL_BASE_URL}{}", model.file);
-    let sha = fetch(&url, &path, expected.as_deref(), model.megabytes, "il modello", sink)?;
+    let sha = fetch(&url, &path, expected.as_deref(), model.megabytes, "il modello", sink, cancel)?;
     std::fs::write(&sidecar, &sha).map_err(|e| format!("{} non scritto: {e}", sidecar.display()))?;
     log(sink, Tone::Step, "Modello", format!("«{}» scaricato e controllato", model.name));
     forget_old_models();
@@ -559,7 +572,7 @@ fn ensure_model(index: usize, sink: &dyn Fn(Event)) -> Result<PathBuf, String> {
 
 /// Il motore pronto sul PC, nella versione giusta per questa versione di Cedro.
 /// `CEDRO_TRASCRIVI_DIR` (per le prove) indica una cartella con i motori già compilati.
-fn ensure_engine(variant: Variant, sink: &dyn Fn(Event)) -> Result<PathBuf, String> {
+fn ensure_engine(variant: Variant, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<PathBuf, String> {
     if let Some(dir) = std::env::var_os("CEDRO_TRASCRIVI_DIR") {
         let path = PathBuf::from(dir).join(exe_name(variant));
         return if path.is_file() { Ok(path) } else { Err(format!("{} non c'è", path.display())) };
@@ -578,7 +591,7 @@ fn ensure_engine(variant: Variant, sink: &dyn Fn(Event)) -> Result<PathBuf, Stri
         if first { format!("lo scarico la prima volta ({})…", variant.describe()) } else { format!("lo aggiorno alla versione {} ({})…", crate::update::CURRENT, variant.describe()) },
     );
     let (url, sha, megabytes) = release_asset(&asset_name(variant))?;
-    fetch(&url, &path, Some(&sha), megabytes, "il motore", sink)?;
+    fetch(&url, &path, Some(&sha), megabytes, "il motore", sink, cancel)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -621,6 +634,18 @@ fn engine_in_release(json: &serde_json::Value, name: &str) -> Result<(String, St
     let sha = asset["digest"].as_str().and_then(|d| d.strip_prefix("sha256:")).ok_or("la release non indica lo SHA-256 del motore")?.to_string();
     let megabytes = (asset["size"].as_u64().unwrap_or(0) / 1_000_000) as u32;
     Ok((url, sha, megabytes.max(1)))
+}
+
+/// Il messaggio di un lavoro fermato con Annulla (lo stesso delle conversioni).
+const CANCELLED: &str = "Annullato";
+
+/// Quello che arriva dal motore mentre si aspetta.
+enum Next {
+    Line(serde_json::Value),
+    /// Si è premuto Annulla.
+    Cancelled,
+    /// Il motore si è chiuso.
+    Gone,
 }
 
 /// Il motore acceso: il processo, dove scrivergli e da dove leggere le sue righe.
@@ -688,8 +713,34 @@ impl Running {
     }
 
     /// La prossima riga del motore; `None` se si è chiuso.
+    #[cfg(target_os = "android")]
     fn next(&self) -> Option<serde_json::Value> {
         self.lines.recv().ok()
+    }
+
+    /// La prossima riga del motore, guardando intanto se si è premuto Annulla.
+    fn next_or_cancel(&self, cancel: &AtomicBool) -> Next {
+        loop {
+            if cancel.load(Ordering::Relaxed) {
+                return Next::Cancelled;
+            }
+            match self.lines.recv_timeout(Duration::from_millis(200)) {
+                Ok(v) => return Next::Line(v),
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => return Next::Gone,
+            }
+        }
+    }
+
+    /// Annulla: lo si ferma subito, senza aspettare un modello che sta ancora calcolando.
+    fn kill(mut self) {
+        #[cfg(target_os = "android")]
+        drop(self.requests.take());
+        drop(self.stdin.take());
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
     }
 
     /// Chiude stdin: il motore finisce e libera la memoria. Se non esce da solo, lo si ferma.
@@ -810,8 +861,21 @@ pub fn paragraphs(segments: &[Segment]) -> Vec<(i64, String)> {
     out
 }
 
+/// Testo per l'XML di Word: i caratteri speciali escapati, quelli vietati in XML 1.0 (controllo) tolti.
 fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    let mut out = String::with_capacity(s.len() + 8);
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\t' | '\n' | '\r' => out.push(c),
+            c if (c as u32) < 0x20 || c == '\u{FFFE}' || c == '\u{FFFF}' => {}
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// La data di oggi scritta per esteso («26 ottobre 2026»), dall'orologio del PC.
@@ -911,12 +975,13 @@ pub fn docx_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment]) ->
 
 /// Un audio che il motore non sa leggere, passato prima dal sistema: Media Foundation su Windows,
 /// ffmpeg o GStreamer su Linux. Ritorna un WAV temporaneo.
-fn system_decode(input: &Path) -> Result<PathBuf, String> {
+fn system_decode(input: &Path, cancel: &AtomicBool) -> Result<PathBuf, String> {
     // In una cartella nuova e solo nostra: su Linux /tmp è di tutti e ffmpeg scrive con -y.
     let dir = crate::engine::private_temp_dir("cedro-trascrivi")?;
     let temp = dir.join("audio.wav");
     #[cfg(windows)]
     {
+        let _ = cancel;
         if let Err(e) = crate::video::audio_to_wav(input, &temp) {
             let _ = std::fs::remove_dir_all(&dir);
             return Err(e);
@@ -925,29 +990,55 @@ fn system_decode(input: &Path) -> Result<PathBuf, String> {
     }
     #[cfg(not(windows))]
     {
-        let ffmpeg = Command::new("ffmpeg")
-            .args(["-nostdin", "-loglevel", "error", "-y", "-i"])
-            .arg(input)
-            .args(["-vn", "-ac", "1", "-ar", "16000"])
-            .arg(&temp)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-        if ffmpeg.is_ok_and(|s| s.success()) && temp.is_file() {
+        // Anche l'ffmpeg che Cedro ha scaricato per YouTube, se sul sistema non c'è.
+        let ffmpeg_bin = crate::youtube::ffmpeg_path().unwrap_or_else(|| PathBuf::from("ffmpeg"));
+        let ffmpeg = wait_or_cancel(
+            Command::new(ffmpeg_bin).args(["-nostdin", "-loglevel", "error", "-y", "-i"]).arg(input).args(["-vn", "-ac", "1", "-ar", "16000"]).arg(&temp),
+            cancel,
+        );
+        if cancel.load(Ordering::Relaxed) {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Err(CANCELLED.into());
+        }
+        if ffmpeg && temp.is_file() {
             return Ok(temp);
         }
         let location = format!("location={}", input.display());
         let out = format!("location={}", temp.display());
-        let gst = Command::new("gst-launch-1.0")
-            .args(["-q", "filesrc", &location, "!", "decodebin", "!", "audioconvert", "!", "audioresample", "!", "audio/x-raw,rate=16000,channels=1", "!", "wavenc", "!", "filesink", &out])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-        if gst.is_ok_and(|s| s.success()) && temp.metadata().is_ok_and(|m| m.len() > 44) {
+        let gst = wait_or_cancel(
+            Command::new("gst-launch-1.0").args(["-q", "filesrc", &location, "!", "decodebin", "!", "audioconvert", "!", "audioresample", "!", "audio/x-raw,rate=16000,channels=1", "!", "wavenc", "!", "filesink", &out]),
+            cancel,
+        );
+        if gst && temp.metadata().is_ok_and(|m| m.len() > 44) {
             return Ok(temp);
         }
         let _ = std::fs::remove_dir_all(&dir);
+        if cancel.load(Ordering::Relaxed) {
+            return Err(CANCELLED.into());
+        }
         Err("formato audio non supportato: installa ffmpeg per leggerlo".into())
+    }
+}
+
+/// Esegue un programma di conversione e lo aspetta; con Annulla lo ferma. Vero se è finito bene.
+#[cfg(not(windows))]
+fn wait_or_cancel(cmd: &mut Command, cancel: &AtomicBool) -> bool {
+    let Ok(mut child) = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() else { return false };
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return false;
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => return status.success(),
+            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return false;
+            }
+        }
     }
 }
 
@@ -956,19 +1047,27 @@ enum Outcome {
     Done { lang: String, secs: f64, segments: Vec<Segment> },
     Unsupported(String),
     Failed(String),
+    /// Il motore si è chiuso (o non riceve più): va riacceso per i file che restano.
+    EngineDied(String),
+    /// Si è premuto Annulla.
+    Cancelled,
 }
 
 /// Trascrive un file con il motore già acceso, raccontando i passi.
-fn one_file(engine: &mut Running, path: &Path, index: usize, sink: &dyn Fn(Event)) -> Outcome {
+fn one_file(engine: &mut Running, path: &Path, index: usize, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Outcome {
     if let Err(e) = engine.send(serde_json::json!({"file": path.to_string_lossy(), "lang": "auto"})) {
-        return Outcome::Failed(e);
+        return Outcome::EngineDied(e);
     }
     let mut segments = Vec::new();
     let mut secs = 0.0;
     let mut started = Instant::now();
     let mut shown = 0;
     loop {
-        let Some(event) = engine.next() else { return Outcome::Failed("il motore si è chiuso all'improvviso".into()) };
+        let event = match engine.next_or_cancel(cancel) {
+            Next::Line(event) => event,
+            Next::Cancelled => return Outcome::Cancelled,
+            Next::Gone => return Outcome::EngineDied("il motore si è chiuso all'improvviso".into()),
+        };
         match event["e"].as_str().unwrap_or("") {
             "audio" => {
                 secs = event["secs"].as_f64().unwrap_or(0.0);
@@ -1001,9 +1100,10 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, sink: &dyn Fn(Event
 
 /// Accende il motore scelto e aspetta che il modello sia in memoria. Con la scheda video, se il
 /// motore non ne trova una o non parte, ripiega su quello per processore.
-fn power_on(request: &Request, model: &Path, sink: &dyn Fn(Event)) -> Result<Running, String> {
+fn power_on(request: &Request, model: &Path, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
     #[cfg(target_os = "android")]
     {
+        let _ = cancel;
         // whisper.cpp è compilato con le istruzioni dotprod+fp16 (ARMv8.2): tutti i telefoni dal 2018 le hanno, ma si controlla
         // a runtime (HWCAP) invece di lasciar partire un'istruzione illegale.
         const HWCAP_FPHP: u64 = 1 << 9;
@@ -1036,11 +1136,11 @@ fn power_on(request: &Request, model: &Path, sink: &dyn Fn(Event)) -> Result<Run
         };
     }
     #[cfg(not(target_os = "android"))]
-    power_on_process(request, model, sink)
+    power_on_process(request, model, sink, cancel)
 }
 
 #[cfg(not(target_os = "android"))]
-fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event)) -> Result<Running, String> {
+fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
     let cpu = cpu_variant(request.avx512);
     let mut tries: Vec<Variant> = Vec::new();
     if request.gpu {
@@ -1055,8 +1155,9 @@ fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event)) -> Re
     let mut told = false;
     for (n, variant) in tries.iter().copied().enumerate() {
         let fallback_left = n + 1 < tries.len();
-        let exe = match ensure_engine(variant, sink) {
+        let exe = match ensure_engine(variant, sink, cancel) {
             Ok(exe) => exe,
+            Err(e) if e == CANCELLED => return Err(e),
             Err(e) if fallback_left => {
                 log(sink, Tone::Note, "Scheda video", format!("non disponibile ({e}): uso il processore"));
                 continue;
@@ -1067,7 +1168,14 @@ fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event)) -> Re
             log(sink, Tone::Step, "Motore", "lo accendo e carico il modello in memoria…");
         }
         let running = Running::start(&exe, model, false)?;
-        let ready = running.next();
+        let ready = match running.next_or_cancel(cancel) {
+            Next::Line(v) => Some(v),
+            Next::Gone => None,
+            Next::Cancelled => {
+                running.kill();
+                return Err(CANCELLED.into());
+            }
+        };
         match ready {
             Some(v) if v["e"] == "ready" => {
                 let secs = v["ms"].as_f64().unwrap_or(0.0) / 1000.0;
@@ -1102,6 +1210,11 @@ fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event)) -> Re
 /// Trascrive la coda, un file dopo l'altro, con un solo motore acceso per tutta la coda.
 /// `dest` è la cartella scelta (None = accanto all'originale); `opts` dice cosa fare se il nome esiste già.
 pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Options, sink: &dyn Fn(Event)) {
+    run_cancellable(files, request, dest, opts, &AtomicBool::new(false), sink)
+}
+
+/// Come `run`, ma si ferma appena `cancel` si accende (Annulla): i file che restano finiscono come «Annullato».
+pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Options, cancel: &AtomicBool, sink: &dyn Fn(Event)) {
     let fail_all = |e: &str, from: usize| {
         for path in &files[from..] {
             sink(Event::Finished { path: path.clone(), result: Err(e.to_string()) });
@@ -1112,6 +1225,11 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
     let mut model: Option<PathBuf> = None;
     let mut engine: Option<Running> = None;
     for (index, path) in files.iter().enumerate() {
+        if cancel.load(Ordering::Relaxed) {
+            // break, non return: il motore acceso si spegne qui sotto.
+            fail_all(CANCELLED, index);
+            break;
+        }
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
         log(sink, Tone::Step, "File", format!("{} di {}: {name}", index + 1, files.len()));
         let dir = dest.map(Path::to_path_buf).unwrap_or_else(|| path.parent().filter(|p| !p.as_os_str().is_empty()).map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from(".")));
@@ -1124,15 +1242,16 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
         };
         if engine.is_none() {
             let started = match &model {
-                Some(m) => power_on(request, m, sink),
-                None => ensure_model(request.model, sink).and_then(|m| {
-                    let r = power_on(request, &m, sink);
+                Some(m) => power_on(request, m, sink, cancel),
+                None => ensure_model(request.model, sink, cancel).and_then(|m| {
+                    let r = power_on(request, &m, sink, cancel);
                     model = Some(m);
                     r
                 }),
             };
             match started {
                 Ok(r) => engine = Some(r),
+                Err(e) if e == CANCELLED => return fail_all(&e, index),
                 Err(e) => {
                     log(sink, Tone::Error, "Errore", e.clone());
                     return fail_all(&e, index);
@@ -1140,21 +1259,30 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
             }
         }
         let running = engine.as_mut().expect("motore acceso");
-        let mut outcome = one_file(running, path, index, sink);
+        let mut outcome = one_file(running, path, index, sink, cancel);
         let mut temp = None;
         if let Outcome::Unsupported(why) = &outcome {
             log(sink, Tone::Muted, "", format!("Il motore non legge questo formato ({why}): lo apro con il sistema"));
-            match system_decode(path) {
+            match system_decode(path, cancel) {
                 Ok(wav) => {
-                    outcome = one_file(running, &wav, index, sink);
+                    outcome = one_file(running, &wav, index, sink, cancel);
                     temp = Some(wav);
                 }
+                Err(e) if e == CANCELLED => outcome = Outcome::Cancelled,
                 Err(e) => outcome = Outcome::Failed(e),
             }
         }
         if let Some(dir) = temp.as_deref().and_then(Path::parent) {
             let _ = std::fs::remove_dir_all(dir);
         }
+        if matches!(outcome, Outcome::Cancelled) {
+            // Il motore sta ancora calcolando: lo si ferma subito.
+            if let Some(e) = engine.take() {
+                e.kill();
+            }
+            return fail_all(CANCELLED, index);
+        }
+        let engine_gone = matches!(outcome, Outcome::EngineDied(_));
         let result = match outcome {
             Outcome::Done { lang, secs, segments } if segments.is_empty() => {
                 let _ = lang;
@@ -1175,12 +1303,12 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
                     })
                     .map_err(|e| format!("{} non scritto: {e}", out.display()))
             }
-            Outcome::Unsupported(e) | Outcome::Failed(e) => Err(e),
+            Outcome::Unsupported(e) | Outcome::Failed(e) | Outcome::EngineDied(e) => Err(e),
+            Outcome::Cancelled => Err(CANCELLED.to_string()),
         };
         if let Err(e) = &result {
             log(sink, Tone::Error, "Errore", format!("{name}: {e}"));
         }
-        let engine_gone = matches!(&result, Err(e) if e.contains("chiuso"));
         sink(Event::Finished { path: path.clone(), result });
         if engine_gone && index + 1 < files.len() {
             // Il motore è caduto: lo si riaccende per i file che restano.
@@ -1188,8 +1316,9 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
                 dead.stop();
             }
             if let Some(m) = &model {
-                match power_on(request, m, sink) {
+                match power_on(request, m, sink, cancel) {
                     Ok(r) => engine = Some(r),
+                    Err(e) if e == CANCELLED => return fail_all(&e, index + 1),
                     Err(e) => {
                         log(sink, Tone::Error, "Errore", e.clone());
                         return fail_all(&e, index + 1);
@@ -1223,6 +1352,14 @@ mod tests {
         assert_eq!(found, ("https://x/m.exe".to_string(), "ab".to_string(), 3));
         assert!(engine_in_release(&json, "cedro-trascrivi-0.18.1-windows-x64-base.exe").is_err());
         assert_eq!(ENGINE_TAGS[0], "motori-v");
+    }
+
+    #[test]
+    fn xml_escape_drops_forbidden_characters() {
+        assert_eq!(xml_escape("a & b <c> \"d\""), "a &amp; b &lt;c&gt; &quot;d&quot;");
+        assert_eq!(xml_escape("x\u{1}y\u{b}z\u{1f}"), "xyz");
+        assert_eq!(xml_escape("riga\tuno\n"), "riga\tuno\n");
+        assert_eq!(xml_escape("perché"), "perché");
     }
 
     #[test]
@@ -1298,7 +1435,7 @@ mod tests {
         let request = Request { format: Format::Text, model: 0, gpu: std::env::var_os("CEDRO_TRASCRIVI_GPU").is_some(), avx512: false };
         let lines = std::sync::Mutex::new(Vec::new());
         let finished = std::sync::Mutex::new(None);
-        run(&[wav.clone()], &request, Some(&work), &Options::default(), &|event| match event {
+        run(std::slice::from_ref(&wav), &request, Some(&work), &Options::default(), &|event| match event {
             Event::Log(line) => lines.lock().unwrap().push(format!("{} {}", line.key, line.text)),
             Event::Finished { result, .. } => *finished.lock().unwrap() = Some(result),
             Event::Percent { .. } => {}
@@ -1331,7 +1468,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("cedro-fetch-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let dest = dir.join("modello.bin");
-        assert!(fetch(&url, &dest, None, 1, "il modello", &|_| {}).is_err());
+        assert!(fetch(&url, &dest, None, 1, "il modello", &|_| {}, &AtomicBool::new(false)).is_err());
         assert!(!dest.exists());
         assert!(!dir.join("modello.part").exists());
         let _ = std::fs::remove_dir_all(&dir);
