@@ -51,7 +51,6 @@ fn categories(f: &mut Frame, app: &App, bottom: f32) {
     let pal = f.pal;
     f.p.fill(0.0, BAR, NAV_W, bottom - BAR, pal.bg);
     f.vline(NAV_W - 1.0, BAR, bottom - BAR);
-    let icons = [ic::IMAGE, ic::FILE, ic::FILE, ic::MENU, ic::AUDIO, ic::VIDEO];
     for (i, cat) in conversioni::CATEGORIES.iter().enumerate() {
         let y = BAR + 20.0 + i as f32 * 62.0;
         let on = i == app.category && app.activity == Activity::Convert;
@@ -63,7 +62,7 @@ fn categories(f: &mut Frame, app: &App, bottom: f32) {
         } else if f.hovered(&act) {
             f.p.rrect(r.0 - 8.0, r.1, r.2 + 8.0, r.3, 8.0, Some(pal.alt), None);
         }
-        f.icon(icons[i], 26.0, y + 14.0, 28.0, pal.text);
+        f.icon(super::category_icon(cat.kind), 26.0, y + 14.0, 28.0, pal.text);
         f.text(cat.name, 80.0, y, 110.0, 56.0, 19.0, SANS, pal.text);
         let count = app.files.iter().filter(|x| !x.voice_only && x.kind == cat.kind).count();
         if count > 0 && !on {
@@ -160,8 +159,7 @@ fn inspector(f: &mut Frame, app: &App, r: R) {
     f.p.fill(r.0, r.1, r.2, r.3, pal.bg);
     f.vline(r.0, r.1, r.3);
     let cat = &conversioni::CATEGORIES[app.category];
-    let icons = [ic::IMAGE, ic::FILE, ic::FILE, ic::MENU, ic::AUDIO, ic::VIDEO];
-    f.icon(icons[app.category], r.0 + 28.0, r.1 + 24.0, 34.0, pal.primary);
+    f.icon(super::category_icon(cat.kind), r.0 + 28.0, r.1 + 24.0, 34.0, pal.primary);
     f.text(&format!("Impostazioni {}", cat.name.to_lowercase()), r.0 + 78.0, r.1 + 16.0, r.2 - 100.0, 50.0, 25.0, SEMI, pal.text);
     let body = (r.0 + 1.0, r.1 + 80.0, r.2 - 2.0, r.3 - 90.0);
     let (x, w) = (r.0 + 28.0, r.2 - 56.0);
