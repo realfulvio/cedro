@@ -16,9 +16,10 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-- **Barra di avanzamento per i video**: nella riga del file che si sta convertendo compaiono percentuale e tempo che resta (in tutti i temi, su Windows e Linux), e la barra del lavoro intero avanza con il file. Prima restava «In corso» senza segni di vita per tutta la durata.
-- **File più piccoli a 720p**: se il video di partenza è già molto compresso, il bitrate di uscita non lo supera più di troppo (un 1080p60 da 666 MB diventava 617 MB; ora circa un terzo in meno). Con sorgenti ricche il risultato non cambia.
-- **Ridimensionamento più veloce** (stesso risultato bit per bit): le righe si dividono fra i core.
-- **«In attesa» vero**: se un altro lavoro pesante occupa il turno (per esempio una trascrizione), il file resta «In attesa» invece di mostrare «In corso»; e la trascrizione lo dice in «Cosa sta succedendo».
+- **Video dal web: Turbovid**: Cedro include un adattatore che riconosce il player pubblico e il suo MP4, sia nell'analisi del link sia nel download, su Windows e Linux.
+- **Catalogo Eurostream**: riconoscimento del catalogo «Matrimonio a prima vista Italia», con titoli e numerazione delle sezioni conservati nella playlist.
+- **Collegamenti Clicka**: Cedro segue i collegamenti pubblici riconosciuti verso Turbovid. Se il sito richiede un CAPTCHA o un accesso, occorre aprirlo nel browser e usare poi il link pubblico del player; il download dell'intero catalogo non è garantito.
 
-Dalla 0.26.4: audio a pacchetti (meno memoria), coda comune dei lavori pesanti, iGPU e Vulkan restano attivi, aggiornamenti silenziosi (invariati).
+Gli adattatori inclusi usano il motore yt-dlp già presente in Cedro e mantengono disponibili i plugin dell'utente. StreamingCommunity, DeltaBit e MixDrop non hanno adattatori dedicati in questa versione.
+
+Restano le novità della 0.26.5: avanzamento dei video con percentuale e tempo residuo, bitrate più contenuto a 720p, ridimensionamento distribuito fra i core e stato «In attesa» durante gli altri lavori pesanti.
