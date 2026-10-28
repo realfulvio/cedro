@@ -1,7 +1,7 @@
 //! One heavy job per process, shared by CLI, wheels and every panel.
 use std::cell::Cell;
-use std::sync::{Condvar, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
 static BUSY: Mutex<bool> = Mutex::new(false);
@@ -18,9 +18,16 @@ pub fn acquire(cancel: Option<&AtomicBool>) -> Option<JobGuard> {
     }
     let mut busy = BUSY.lock().unwrap_or_else(|e| e.into_inner());
     loop {
-        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) { return None; }
-        if !*busy { break; }
-        busy = READY.wait_timeout(busy, Duration::from_millis(100)).unwrap_or_else(|e| e.into_inner()).0;
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            return None;
+        }
+        if !*busy {
+            break;
+        }
+        busy = READY
+            .wait_timeout(busy, Duration::from_millis(100))
+            .unwrap_or_else(|e| e.into_inner())
+            .0;
     }
     *busy = true;
     DEPTH.with(|d| d.set(1));
@@ -29,7 +36,11 @@ pub fn acquire(cancel: Option<&AtomicBool>) -> Option<JobGuard> {
 
 impl Drop for JobGuard {
     fn drop(&mut self) {
-        let depth = DEPTH.with(|d| { let n = d.get() - 1; d.set(n); n });
+        let depth = DEPTH.with(|d| {
+            let n = d.get() - 1;
+            d.set(n);
+            n
+        });
         if depth == 0 {
             *BUSY.lock().unwrap_or_else(|e| e.into_inner()) = false;
             READY.notify_all();
@@ -42,13 +53,25 @@ pub fn available_memory() -> Option<u64> {
     #[cfg(windows)]
     unsafe {
         use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
-        let mut m = MEMORYSTATUSEX { dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32, ..Default::default() };
+        let mut m = MEMORYSTATUSEX {
+            dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32,
+            ..Default::default()
+        };
         return GlobalMemoryStatusEx(&mut m).ok().map(|_| m.ullAvailPhys);
     }
     #[cfg(target_os = "linux")]
     {
         let text = std::fs::read_to_string("/proc/meminfo").ok()?;
-        return text.lines().find_map(|l| l.strip_prefix("MemAvailable:")?.split_whitespace().next()?.parse::<u64>().ok()).map(|kb| kb * 1024);
+        return text
+            .lines()
+            .find_map(|l| {
+                l.strip_prefix("MemAvailable:")?
+                    .split_whitespace()
+                    .next()?
+                    .parse::<u64>()
+                    .ok()
+            })
+            .map(|kb| kb * 1024);
     }
     #[cfg(not(any(windows, target_os = "linux")))]
     None
@@ -57,7 +80,11 @@ pub fn available_memory() -> Option<u64> {
 /// Conservative extra headroom for GPU buffers, including shared-memory iGPUs.
 /// This changes the backend only: model and decoding parameters remain identical.
 pub fn gpu_headroom(free: Option<u64>, model_bytes: u64) -> bool {
-    free.is_none_or(|n| n >= model_bytes.saturating_mul(3).saturating_add(512 * 1024 * 1024))
+    free.is_none_or(|n| {
+        n >= model_bytes
+            .saturating_mul(3)
+            .saturating_add(512 * 1024 * 1024)
+    })
 }
 
 #[cfg(test)]
@@ -69,7 +96,11 @@ mod tests {
         let nested = acquire(None).unwrap();
         drop(nested);
         let cancelled = AtomicBool::new(true);
-        std::thread::scope(|s| { s.spawn(|| assert!(acquire(Some(&cancelled)).is_none())).join().unwrap(); });
+        std::thread::scope(|s| {
+            s.spawn(|| assert!(acquire(Some(&cancelled)).is_none()))
+                .join()
+                .unwrap();
+        });
         drop(first);
         assert!(acquire(None).is_some());
     }
