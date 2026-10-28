@@ -77,6 +77,26 @@ fn shape(mut pcm: Pcm, opts: &crate::engine::Options) -> Result<Pcm, String> {
 }
 
 pub fn to_wav(input: &Path, output: &Path, opts: &crate::engine::Options) -> Result<(), String> {
+    // No signal processing requested: write each decoded packet directly, losslessly.
+    // The legacy path retains all channel/normalization/silence-trimming semantics.
+    if opts.channels.is_none() && !opts.normalize && opts.trim_start_secs == 0 && opts.trim_silence_db.is_none() {
+        let mut writer: Option<WavWriter<std::io::BufWriter<File>>> = None;
+        let mut format = None;
+        let streamed = stream_symphonia(input, &mut |samples, rate, channels| {
+            if format.is_some_and(|f| f != (rate, channels)) { return Err("formato audio cambiato durante la lettura".into()); }
+            if writer.is_none() {
+                writer = Some(WavWriter::create(output, WavSpec { channels, sample_rate: rate, bits_per_sample: 16, sample_format: SampleFormat::Int }).map_err(|e| e.to_string())?);
+                format = Some((rate, channels));
+            }
+            for sample in samples { writer.as_mut().unwrap().write_sample(*sample).map_err(|e| e.to_string())?; }
+            Ok(())
+        });
+        match streamed {
+            Ok(_) => return writer.ok_or("audio vuoto")?.finalize().map_err(|e| e.to_string()),
+            Err(e) if writer.is_some() => return Err(e),
+            Err(_) => {} // Platform-only codecs use the original decoder.
+        }
+    }
     let pcm = shape(decode(input)?, opts)?;
     write_wav(output, &pcm)
 }
@@ -197,22 +217,50 @@ fn append_mp3(
 
 /// L'onda di un file audio in `n` colonne (0..1), per l'anteprima: un colpo d'occhio su dove c'è suono.
 pub fn waveform(path: &Path, n: usize) -> Option<Vec<f32>> {
+    waveform_stream(path, n).or_else(|| waveform_buffered(path, n))
+}
+
+fn waveform_stream(path: &Path, n: usize) -> Option<Vec<f32>> {
+    if n == 0 { return None; }
+    let mut frames = 0usize;
+    stream_symphonia(path, &mut |s, _, ch| {
+        frames += s.len() / ch.max(1) as usize;
+        Ok(())
+    }).ok()?;
+    if frames == 0 { return None; }
+    let bins = n.min(frames);
+    let mut sums = vec![0f64; bins];
+    let mut counts = vec![0usize; bins];
+    let mut at = 0usize;
+    let mut bin = 0usize;
+    stream_symphonia(path, &mut |s, _, ch| {
+        for frame in s.chunks_exact(ch.max(1) as usize) {
+            while bin + 1 < bins && at >= ((bin + 1) * frames / bins).max(bin * frames / bins + 1).min(frames) { bin += 1; }
+            for sample in frame { sums[bin] += (*sample as f64).powi(2); counts[bin] += 1; }
+            at += 1;
+        }
+        Ok(())
+    }).ok()?;
+    let mut v: Vec<f32> = sums.iter().zip(&counts).map(|(s,c)| (s / (*c).max(1) as f64).sqrt() as f32).collect();
+    let max = v.iter().copied().fold(0.0f32, f32::max).max(1.0);
+    for x in &mut v { *x /= max; }
+    Some((0..n).map(|i| v[i * bins / n]).collect())
+}
+
+// AVI and platform-only codecs retain their existing decoder and output.
+fn waveform_buffered(path: &Path, n: usize) -> Option<Vec<f32>> {
     let pcm = decode(path).ok()?;
     let ch = pcm.channels.max(1) as usize;
     let frames = pcm.samples.len() / ch;
-    if frames == 0 || n == 0 {
-        return None;
-    }
-    let mut v: Vec<f32> = (0..n)
-        .map(|i| {
-            let (a, b) = (i * frames / n, ((i + 1) * frames / n).max(i * frames / n + 1).min(frames));
-            let s = &pcm.samples[a * ch..b * ch];
-            let sum: f64 = s.iter().map(|x| (*x as f64).powi(2)).sum();
-            (sum / s.len().max(1) as f64).sqrt() as f32
-        })
-        .collect();
-    let max = v.iter().cloned().fold(0.0f32, f32::max).max(1.0);
-    v.iter_mut().for_each(|x| *x = (*x / max).clamp(0.0, 1.0));
+    if frames == 0 || n == 0 { return None; }
+    let mut v: Vec<f32> = (0..n).map(|i| {
+        let a = i * frames / n;
+        let b = ((i + 1) * frames / n).max(a + 1).min(frames);
+        let s = &pcm.samples[a * ch..b * ch];
+        (s.iter().map(|x| (*x as f64).powi(2)).sum::<f64>() / s.len().max(1) as f64).sqrt() as f32
+    }).collect();
+    let max = v.iter().copied().fold(0.0f32, f32::max).max(1.0);
+    for x in &mut v { *x /= max; }
     Some(v)
 }
 
@@ -258,6 +306,13 @@ fn decode_telefono(path: &Path) -> Result<Pcm, String> {
 }
 
 fn decode_symphonia(path: &Path) -> Result<Pcm, String> {
+    let mut samples = Vec::new();
+    let mut pcm = stream_symphonia(path, &mut |s, _, _| { samples.extend_from_slice(s); Ok(()) })?;
+    pcm.samples = samples;
+    Ok(pcm)
+}
+
+fn stream_symphonia(path: &Path, each: &mut dyn FnMut(&[i16], u32, u16) -> Result<(), String>) -> Result<Pcm, String> {
     let file = File::open(path).map_err(|e| e.to_string())?;
     let source = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
@@ -303,13 +358,13 @@ fn decode_symphonia(path: &Path) -> Result<Pcm, String> {
     #[cfg(any(windows, target_os = "linux", target_os = "android"))]
     if track.codec_params.codec == symphonia::core::codecs::CODEC_TYPE_OPUS {
         let head = track.codec_params.extra_data.clone().unwrap_or_default();
-        let (samples, channels) = decode_opus(format.as_mut(), track_id, &head)?;
-        return Ok(Pcm { rate: 48_000, channels, samples, tags });
+        let channels = stream_opus(format.as_mut(), track_id, &head, each)?;
+        return Ok(Pcm { rate: 48_000, channels, samples: Vec::new(), tags });
     }
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
         .map_err(|e| format!("audio non decodificato: {e}"))?;
-    let mut samples = Vec::new();
+    let mut count = 0usize;
     let mut rate = track.codec_params.sample_rate.unwrap_or(44100);
     let mut channels = track.codec_params.channels.map(|c| c.count() as u16).unwrap_or(0);
     loop {
@@ -334,19 +389,20 @@ fn decode_symphonia(path: &Path) -> Result<Pcm, String> {
         channels = decoded.spec().channels.count() as u16;
         let mut buf = SampleBuffer::<i16>::new(decoded.capacity() as u64, *decoded.spec());
         buf.copy_interleaved_ref(decoded);
-        samples.extend_from_slice(buf.samples());
+        count += buf.samples().len();
+        each(buf.samples(), rate, channels)?;
     }
-    if samples.is_empty() || channels == 0 {
+    if count == 0 || channels == 0 {
         return Err("l'audio non ha campioni".into());
     }
-    Ok(Pcm { rate, channels, samples, tags })
+    Ok(Pcm { rate, channels, samples: Vec::new(), tags })
 }
 
 /// Opus (Ogg, WebM, MKV): i pacchetti li dà symphonia, la decodifica è libopus. Esce a 48 kHz.
 #[cfg(any(windows, target_os = "linux", target_os = "android"))]
-fn decode_opus(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32, head: &[u8]) -> Result<(Vec<i16>, u16), String> {
+fn stream_opus(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32, head: &[u8], each: &mut dyn FnMut(&[i16], u32, u16) -> Result<(), String>) -> Result<u16, String> {
     let mut opus = OpusStream::new(head)?;
-    let mut samples: Vec<i16> = Vec::new();
+    let mut count = 0usize;
     loop {
         let packet = match f.next_packet() {
             Ok(p) => p,
@@ -355,12 +411,15 @@ fn decode_opus(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32
         if packet.track_id() != track_id {
             continue;
         }
-        samples.extend_from_slice(opus.decode(packet.buf()));
+        let channels = opus.channels();
+        let samples = opus.decode(packet.buf());
+        count += samples.len();
+        each(samples, 48_000, channels)?;
     }
-    if samples.is_empty() {
+    if count == 0 {
         return Err("l'audio non ha campioni".into());
     }
-    Ok((samples, opus.channels()))
+    Ok(opus.channels())
 }
 
 /// Decodificatore Opus a pacchetti (libopus), a 48 kHz: toglie da solo i campioni d'avvio (pre-skip).
@@ -734,5 +793,35 @@ mod out_tests {
         // Il CRC di Ogg di «OggS» con zeri: valore calcolato con libogg.
         assert_eq!(ogg_crc(b""), 0);
         assert_ne!(ogg_crc(b"OggS"), 0);
+    }
+}
+#[cfg(test)]
+mod streaming_tests {
+    use super::*;
+    #[test]
+    fn waveform_and_wav_are_identical_to_buffered_decoder() {
+        let dir = std::env::temp_dir().join(format!("cedro-stream-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for channels in [1, 2] {
+            for frames in [1, 7, 161, 10003] {
+                let path = dir.join(format!("{channels}-{frames}.wav"));
+                let pcm = Pcm::new(44100, channels, (0..frames * channels as usize).map(|i| ((i * 7919 % 65536) as i32 - 32768) as i16).collect());
+                write_wav(&path, &pcm).unwrap();
+                for n in [1, 17, 160, 1001] { assert_eq!(waveform_stream(&path, n), waveform_buffered(&path, n)); }
+                let out = dir.join("out.wav");
+                to_wav(&path, &out, &crate::engine::Options::default()).unwrap();
+                assert_eq!(decode(&out).unwrap().samples, pcm.samples);
+            }
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+    #[test]
+    #[ignore = "manual memory benchmark; run with --ignored --nocapture"]
+    fn waveform_memory_benchmark() {
+        let path = std::env::var_os("CEDRO_BENCH_AUDIO").expect("CEDRO_BENCH_AUDIO");
+        let start = std::time::Instant::now();
+        let result = if std::env::var_os("CEDRO_BENCH_BUFFERED").is_some() { waveform_buffered(Path::new(&path), 160) } else { waveform_stream(Path::new(&path), 160) };
+        assert_eq!(result.unwrap().len(), 160);
+        println!("waveform elapsed: {:?}", start.elapsed());
     }
 }
