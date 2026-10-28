@@ -120,6 +120,7 @@ fn go_or_cancel(f: &mut Frame, app: &App, r: R, size: f32, icon: &str, ready: bo
         let label = super::go_label(app);
         f.primary(r, &label, Some(icon), size, Act::Start, ready);
     }
+    super::go_extras(f, app, r, false);
 }
 
 /// La scelta di due voci affiancate (Word | Testo, Video | Solo audio).

@@ -134,6 +134,7 @@ fn frame(f: &mut Frame, app: &App, full: bool) {
     } else {
         f.primary(go, &super::go_label(app), Some(ic::CONVERT), 21.0, Act::Start, !app.targets().is_empty());
     }
+    super::go_extras(f, app, go, false);
     bottom_links(f, app, x, f.h - links_h, cw, full);
 }
 

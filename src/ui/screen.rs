@@ -573,8 +573,12 @@ impl Screen {
                 if self.ui.edit.is_some() {
                     self.ui.edit = None;
                 }
-                app.start();
+                match app.result_path().filter(|_| app.finished()) {
+                    Some(p) => plat.open_path(&p),
+                    None => app.start(),
+                }
             }
+            Act::Restart => app.restart(),
             Act::Cancel => app.cancel(),
             Act::Fold(fold) => {
                 if !self.ui.open.remove(&fold) {
