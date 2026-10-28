@@ -516,7 +516,8 @@ fn about_page() -> HBox {
     full.connect_clicked(|_| {
         // Il file sta accanto a cedro; se manca si apre la pagina del progetto.
         let target = match cedro::credits::full_file() {
-            Some(path) => format!("file://{}", path.display()),
+            // L'URI va codificato: un percorso con spazi o «#» non si aprirebbe.
+            Some(path) => gtk4::gio::File::for_path(&path).uri().to_string(),
             None => "https://github.com/realfulvio/cedro".to_string(),
         };
         let _ = gtk4::gio::AppInfo::launch_default_for_uri(&target, None::<&gtk4::gio::AppLaunchContext>);
@@ -672,7 +673,8 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     log.connect_clicked(|_| {
         let dir = cedro::config_dir();
         let _ = std::fs::create_dir_all(&dir);
-        let _ = gtk4::gio::AppInfo::launch_default_for_uri(&format!("file://{}", dir.display()), None::<&gtk4::gio::AppLaunchContext>);
+        let uri = gtk4::gio::File::for_path(&dir).uri();
+        let _ = gtk4::gio::AppInfo::launch_default_for_uri(&uri, None::<&gtk4::gio::AppLaunchContext>);
     });
     let autostart_row = setting("Avvia Cedro con il computer", "La stessa voce del menu dell'icona.", &autostart);
     let notify_row = setting("Avviso a fine conversione", "Una notifica con il nome del file creato.", &notify);
@@ -962,6 +964,8 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
             };
             if let Err(e) = write_settings(&settings) {
                 append_log(&format!("impostazioni non salvate: {e}"));
+                // Come su Windows: chi preme «Salva» deve sapere che non è andata.
+                gtk4::AlertDialog::builder().message(t(&format!("Impostazioni non salvate: {e}"))).build().show(Some(&window));
                 return;
             }
             if autostart.is_active() != crate::linux_ui::autostart_enabled() {
