@@ -226,6 +226,7 @@ fn footer(f: &mut Frame, app: &App, y: f32) {
         }
     }
     f.primary((go_x, y + 24.0, go_w, 74.0), &label, Some(ic::CONVERT), 22.0, Act::Start, ready && !app.busy());
+    super::go_extras(f, app, (go_x, y + 24.0, go_w, 74.0 + 14.0), false);
 }
 
 fn simplified(f: &mut Frame, app: &App) {
@@ -307,6 +308,7 @@ fn simplified(f: &mut Frame, app: &App) {
     let label = super::go_label(app);
     let ready = !app.targets().is_empty();
     f.primary((inner_x, fy + 108.0, inner_w, 88.0), &label, Some(ic::CONVERT), 28.0, Act::Start, ready && !app.busy());
+    super::go_extras(f, app, (inner_x, fy + 108.0, inner_w, 88.0 + 8.0), false);
     if app.busy() {
         if let Some(p) = app.progress() {
             f.p.rrect(inner_x, fy + 108.0 + 96.0, inner_w * p, 5.0, 2.5, Some(pal.primary), None);

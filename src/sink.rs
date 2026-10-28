@@ -58,6 +58,8 @@ pub(crate) fn gpu_used() -> bool {
 /// Lo dice il codificatore quando la scheda video ha preso il lavoro.
 pub(crate) fn note_gpu() {
     GPU_USED.with(|g| g.set(true));
+    let name = crate::accel::hardware().gpu.clone().unwrap_or_else(|| "codifica video".into());
+    crate::accel::set_in_use(true, name);
 }
 
 /// Le opzioni video in vigore su questo thread.
@@ -69,6 +71,9 @@ pub(crate) fn shape() -> VideoShape {
 pub(crate) fn with_shape<T>(shape: VideoShape, f: impl FnOnce() -> T) -> T {
     let before = SHAPE.with(|s| s.replace(shape));
     GPU_USED.with(|g| g.set(false));
+    if !shape.gpu {
+        crate::accel::set_in_use(false, "H.264 software");
+    }
     let out = f();
     SHAPE.with(|s| s.set(before));
     out
