@@ -1065,7 +1065,7 @@ fn on_drop() {
     // tenerlo occupato bloccherebbe mouse e tastiera di tutto il sistema, e Windows staccherebbe gli hook.
     std::thread::spawn(move || {
         // Un lavoro alla volta, come prima: il secondo aspetta che finisca il primo.
-        let _turn = WHEEL_JOB.lock().unwrap_or_else(|e| e.into_inner());
+        let _turn = cedro::resources::acquire(None).expect("uncancellable wheel job");
         // Lo stesso COM del thread del vassoio: ShellExecuteW lo vuole per aprire Esplora file sul file giusto.
         let com = unsafe { OleInitialize(None) }.is_ok();
         run_wheel_job(&all, slice, quality, beside);
@@ -1075,8 +1075,6 @@ fn on_drop() {
     });
 }
 
-/// Una conversione alla volta dalla ruota.
-static WHEEL_JOB: Mutex<()> = Mutex::new(());
 
 /// Il lavoro scelto sulla ruota, file per file, con la linea di avanzamento e il fumetto finale.
 fn run_wheel_job(all: &[PathBuf], slice: Slice, quality: u8, beside: bool) {
@@ -1442,7 +1440,7 @@ pub(crate) fn check_updates(manual: bool) {
                 // Il blocco resta preso fino al lancio dell'installatore, così non ne parte una nuova nel frattempo.
                 for _ in 0..13 {
                     if !other_cedro_running() {
-                        if let Ok(_idle) = WHEEL_JOB.try_lock() {
+                        if let Some(_idle) = cedro::resources::try_acquire() {
                             if let Err(e) = crate::cli::install_silent(&release) {
                                 append_log(&format!("aggiornamento: {e}"));
                             } else {
