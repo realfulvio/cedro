@@ -545,11 +545,26 @@ fn find_tables(shapes: &[Shape2], page: (f64, f64), glyphs: &mut Vec<Glyph>) -> 
         }
     }
     // Segmenti orizzontali con la stessa estensione: una griglia.
+    // Il primo gruppo che va bene vince; l'indice a celle di 2,5 punti evita di confrontare ogni
+    // segmento con tutti i gruppi (i disegni tecnici ne hanno decine di migliaia).
     let mut groups: Vec<(f64, f64, Vec<usize>)> = Vec::new();
+    let mut index: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    let cell = |v: f64| (v / 2.5).floor() as i64;
     for (i, s) in hs.iter().enumerate() {
-        match groups.iter_mut().find(|g| (g.0 - s.a).abs() < 2.5 && (g.1 - s.b).abs() < 2.5) {
-            Some(g) => g.2.push(i),
-            None => groups.push((s.a, s.b, vec![i])),
+        let (ka, kb) = (cell(s.a), cell(s.b));
+        let hit = (-1..=1)
+            .flat_map(|da: i64| (-1..=1).map(move |db: i64| (ka.saturating_add(da), kb.saturating_add(db))))
+            .filter_map(|k| index.get(&k))
+            .flatten()
+            .copied()
+            .filter(|&g| (groups[g].0 - s.a).abs() < 2.5 && (groups[g].1 - s.b).abs() < 2.5)
+            .min();
+        match hit {
+            Some(g) => groups[g].2.push(i),
+            None => {
+                index.entry((ka, kb)).or_default().push(groups.len());
+                groups.push((s.a, s.b, vec![i]));
+            }
         }
     }
     let mut tables = Vec::new();
@@ -969,22 +984,7 @@ fn find_figures(shapes: &[Shape2], pics: &[Pic], tables: &[Table], page: (f64, f
             items.push(Item { b: [p.x0, p.y0, p.x1, p.y1], pic: true });
         }
     }
-    // Unisce i riquadri che si toccano.
-    let mut clusters: Vec<(f64, f64, f64, f64, usize, bool)> = Vec::new();
-    for it in &items {
-        let mut cur = (it.b[0], it.b[1], it.b[2], it.b[3], 1usize, it.pic);
-        loop {
-            let hit = clusters.iter().position(|c| c.0 - 3.0 <= cur.2 && cur.0 - 3.0 <= c.2 && c.1 - 3.0 <= cur.3 && cur.1 - 3.0 <= c.3);
-            match hit {
-                Some(i) => {
-                    let c = clusters.swap_remove(i);
-                    cur = (cur.0.min(c.0), cur.1.min(c.1), cur.2.max(c.2), cur.3.max(c.3), cur.4 + c.4, cur.5 || c.5);
-                }
-                None => break,
-            }
-        }
-        clusters.push(cur);
-    }
+    let clusters = merge_touching(items.iter().map(|it| (it.b, it.pic)), page);
     let mut figs: Vec<Figure> = clusters
         .into_iter()
         .filter(|c| c.5 || (c.4 >= 5 && c.2 - c.0 >= 40.0 && c.3 - c.1 >= 40.0))
@@ -992,6 +992,82 @@ fn find_figures(shapes: &[Shape2], pics: &[Pic], tables: &[Table], page: (f64, f
         .collect();
     figs.sort_by(|a, b| a.y0.partial_cmp(&b.y0).unwrap_or(std::cmp::Ordering::Equal));
     figs
+}
+
+/// Un gruppo di riquadri che si toccano: estremi, quanti riquadri, se c'è un'immagine.
+type Cluster = (f64, f64, f64, f64, usize, bool);
+
+/// Unisce i riquadri che si toccano (entro 3 punti). Ogni riquadro cerca nella lista il primo
+/// gruppo che tocca, lo toglie (`swap_remove`) e lo assorbe, finché ne tocca: un indice a celle
+/// trova i gruppi vicini senza scorrere tutta la lista (le mappe e i disegni tecnici hanno decine
+/// di migliaia di forme), con lo stesso risultato e lo stesso ordine.
+fn merge_touching(items: impl Iterator<Item = ([f64; 4], bool)>, page: (f64, f64)) -> Vec<Cluster> {
+    const DEAD: usize = usize::MAX;
+    /// Oltre queste celle un gruppo va nella lista dei grandi, che si guarda sempre.
+    const BIG: usize = 16;
+    let touches = |c: &Cluster, cur: &Cluster| c.0 - 3.0 <= cur.2 && cur.0 - 3.0 <= c.2 && c.1 - 3.0 <= cur.3 && cur.1 - 3.0 <= c.3;
+    // Un riquadro rovesciato o con NaN non si mette nelle celle.
+    let sane = |c: &Cluster| c.0 <= c.2 && c.1 <= c.3;
+    // Celle di 1/32 della pagina; quel che sta fuori va nelle celle del bordo.
+    let side = page.0.max(page.1).max(1.0) / 32.0;
+    let nx = ((page.0 / side).ceil() as usize).clamp(1, 64);
+    let ny = ((page.1 / side).ceil() as usize).clamp(1, 64);
+    let cell = |v: f64, n: usize| ((v / side).floor().max(0.0) as usize).min(n - 1);
+    let range = |c: &Cluster| (cell(c.0 - 3.0, nx), cell(c.2 + 3.0, nx), cell(c.1 - 3.0, ny), cell(c.3 + 3.0, ny));
+    let mut grid: Vec<Vec<usize>> = vec![Vec::new(); nx * ny];
+    let mut big: Vec<usize> = Vec::new();
+    // La lista nell'ordine voluto, con l'id di ogni gruppo; `pos`: da id a posto nella lista.
+    let mut clusters: Vec<(Cluster, usize)> = Vec::new();
+    let mut pos: Vec<usize> = Vec::new();
+    for (b, pic) in items {
+        let mut cur: Cluster = (b[0], b[1], b[2], b[3], 1, pic);
+        loop {
+            let (x0, x1, y0, y1) = range(&cur);
+            let cells = (x1 + 1).saturating_sub(x0) * (y1 + 1).saturating_sub(y0);
+            let hit = if !sane(&cur) || cells + big.len() >= clusters.len() {
+                clusters.iter().position(|(c, _)| touches(c, &cur))
+            } else {
+                let mut best: Option<usize> = None;
+                let mut look = |list: &mut Vec<usize>| {
+                    list.retain(|id| pos[*id] != DEAD);
+                    for id in list.iter() {
+                        let p = pos[*id];
+                        if best.is_none_or(|b| p < b) && touches(&clusters[p].0, &cur) {
+                            best = Some(p);
+                        }
+                    }
+                };
+                look(&mut big);
+                for y in y0..=y1 {
+                    for x in x0..=x1 {
+                        look(&mut grid[y * nx + x]);
+                    }
+                }
+                best
+            };
+            let Some(p) = hit else { break };
+            let (c, id) = clusters.swap_remove(p);
+            pos[id] = DEAD;
+            if let Some((_, moved)) = clusters.get(p) {
+                pos[*moved] = p;
+            }
+            cur = (cur.0.min(c.0), cur.1.min(c.1), cur.2.max(c.2), cur.3.max(c.3), cur.4 + c.4, cur.5 || c.5);
+        }
+        let id = pos.len();
+        pos.push(clusters.len());
+        let (x0, x1, y0, y1) = range(&cur);
+        if !sane(&cur) || (x1 + 1 - x0) * (y1 + 1 - y0) > BIG {
+            big.push(id);
+        } else {
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    grid[y * nx + x].push(id);
+                }
+            }
+        }
+        clusters.push((cur, id));
+    }
+    clusters.into_iter().map(|(c, _)| c).collect()
 }
 
 /// Le scritte attaccate a un grafico (valori degli assi, etichette) fanno parte del grafico.
@@ -1185,6 +1261,10 @@ fn band_region(cols: &[(f64, f64)], glyphs: Vec<Vec<Glyph>>) -> Region {
 /// verticale, con testo pieno ai due lati. Restituisce (prima riga, ultima riga, colonne).
 fn column_bands(spans: &[Vec<(f64, f64)>], heights: &[(f64, f64)], left: f64, right: f64) -> Vec<(usize, usize, Vec<(f64, f64)>)> {
     let width = right - left;
+    // Un vettore per ogni punto di larghezza: nessuna pagina vera ha colonne più larghe di 7 m.
+    if !width.is_finite() || width > 20_000.0 {
+        return Vec::new();
+    }
     let n = width.ceil() as usize + 1;
     let mut cover = vec![0usize; n];
     for row in spans {
@@ -1401,6 +1481,8 @@ fn gather<'a>(page: &'a hayro::hayro_syntax::page::Page<'a>, interp_cache: &Inte
     // Il testo scritto fuori dal foglio non si vede: non va nel Word.
     glyphs.retain(|g| g.x >= -1.0 && g.x < w && g.y > 0.0 && g.y - g.size < h);
     for g in &mut glyphs {
+        // Un carattere non è più largo della pagina (Tz o Tm esagerati in un PDF ostile).
+        g.adv = g.adv.min(w).max(0.0);
         if let (Some(key), true) = (g.font_key, g.font.is_empty()) {
             if let Some((sum, n)) = stems.get(&key) {
                 g.bold = *n > 0 && sum / *n as f64 >= 96.0;
@@ -1456,9 +1538,12 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
     let gathered: Vec<Option<Gathered>> =
         original.pages().iter().enumerate().map(|(i, page)| want(i).then(|| gather(page, &interp_cache, &settings))).collect();
     let text_pages = gathered.iter().flatten().filter(|g| !g.glyphs.is_empty()).count();
-    let form_pages = gathered.iter().flatten().filter(|g| is_form(&group_lines(g.glyphs.clone(), 2.0), &g.shapes)).count();
+    // Una volta sola per pagina: serve qui per il documento e sotto per la pagina.
+    let page_form: Vec<bool> =
+        gathered.iter().map(|g| g.as_ref().is_some_and(|g| !g.glyphs.is_empty() && is_form(&group_lines(g.glyphs.clone(), 2.0), &g.shapes))).collect();
+    let form_pages = page_form.iter().filter(|f| **f).count();
     let form_doc = form_pages > 0 && form_pages * 2 > text_pages;
-    for (page, g) in original.pages().iter().zip(gathered) {
+    for ((page, g), page_is_form) in original.pages().iter().zip(gathered).zip(page_form) {
         let Some(Gathered { w, h, mut glyphs, mut shapes, pics }) = g else {
             raw.push(None);
             special.push(Some(Page::Merged));
@@ -1469,8 +1554,7 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
             let scale = (2000.0 / w.max(h).max(1.0)) as f32;
             let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
             let rendered = render(page, &cache, &settings, &RenderSettings::default(), &pixmap);
-            let png = rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?;
-            let rgb = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
+            let rgb = crate::ocr::pixmap_image(rendered)?.into_rgb8();
             if rgb.pixels().all(|p| p.0.iter().all(|&c| c >= 250)) {
                 // Pagina bianca: resta una pagina vuota, non un'immagine.
                 special.push(None);
@@ -1483,15 +1567,14 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
             special.push(Some(Page::Scan(ScanPage { width: w, height: h, jpeg })));
             continue;
         }
-        let lines = group_lines(glyphs.clone(), 2.0);
-        if form_doc || is_form(&lines, &shapes) {
+        if form_doc || page_is_form {
             let mut pics = pics;
             for s in shapes.iter().filter(|s| s.raster) {
                 pics.push(Pic { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, order: s.order });
             }
             shapes.retain(|s| !s.raster);
             // Nel modulo ogni scritta sta al suo posto: le scritte vicine restano separate.
-            let mut lines = group_lines(glyphs.clone(), 0.45);
+            let mut lines = group_lines(glyphs, 0.45);
             // Ogni scritta tiene in Word la larghezza del PDF: Word arrotonda il corpo ai mezzi
             // punti e non conosce la spaziatura del PDF, la differenza va tra i caratteri.
             for l in &mut lines {
@@ -1509,12 +1592,12 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
             // Le immagini vere si ritagliano dalla pagina disegnata senza testo.
             let mut cut = Vec::new();
             if !pics.is_empty() {
-                let scale = 200.0 / 72.0;
+                // 200 dpi, ma una tavola A0 o una mappa non diventa una pixmap da gigabyte (come per le figure).
+                let scale = (200.0 / 72.0f32).min(3200.0 / (w.max(h).max(1.0) as f32));
                 let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
                 let no_text = RenderSettings { skip_text: true, ..Default::default() };
                 let rendered = render(page, &cache, &settings, &no_text, &pixmap);
-                let png = rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?;
-                let full = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
+                let full = crate::ocr::pixmap_image(rendered)?.into_rgb8();
                 for pic in pics {
                     let s = scale as f64;
                     let (x, y) = (((pic.x0.max(0.0)) * s) as u32, ((pic.y0.max(0.0)) * s) as u32);
@@ -1549,8 +1632,7 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
             let scale = (200.0 / 72.0f32).min(3200.0 / (w.max(h).max(1.0) as f32));
             let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
             let rendered = render(page, &cache, &settings, &RenderSettings::default(), &pixmap);
-            let png = rendered.into_png().map_err(|e| format!("pagina non disegnata: {e}"))?;
-            let full = image::load_from_memory(&png).map_err(|e| e.to_string())?.to_rgb8();
+            let full = crate::ocr::pixmap_image(rendered)?.into_rgb8();
             for fig in figures {
                 let s = scale as f64;
                 let (x, y) = ((fig.x0 * s) as u32, (fig.y0 * s) as u32);
@@ -2376,12 +2458,14 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
     let ratio = if ratio == 0.0 { 1.2 } else { ratio };
     let leading = |size: f64| size * ratio;
     let mut lists: Vec<ListRef> = Vec::new();
-    let mut media: Vec<(String, Vec<u8>)> = Vec::new();
+    // I byte delle immagini restano nelle pagine: qui solo il nome nel Word e un riferimento.
+    let mut media: Vec<(String, &[u8])> = Vec::new();
+    let last_idx = pages.iter().rposition(|p| !matches!(p, Page::Merged));
     let mut rels = String::new();
     let mut body = String::new();
     let mut next_id = 1;
     for (i, page) in pages.iter().enumerate() {
-        let last_page = pages.iter().rposition(|p| !matches!(p, Page::Merged)) == Some(i);
+        let last_page = last_idx == Some(i);
         match page {
             Page::Flow(p) => {
                 let page_right = (p.width - right).max(20.0);
@@ -2457,7 +2541,7 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                                 Block::Image { fig, data, ext } => {
                                     let id = next_id;
                                     next_id += 1;
-                                    media.push((format!("word/media/immagine{id}.{ext}"), data.clone()));
+                                    media.push((format!("word/media/immagine{id}.{ext}"), data.as_slice()));
                                     let _ = write!(
                                         rels,
                                         "<Relationship Id=\"rIdImg{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/immagine{id}.{ext}\"/>"
@@ -2509,13 +2593,14 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                 // con l'OCR va nel testo alternativo dell'immagine (si legge senza sporcare la pagina).
                 let id = next_id;
                 next_id += 1;
-                media.push((format!("word/media/immagine{id}.jpg"), scan.jpeg.clone()));
+                media.push((format!("word/media/immagine{id}.jpg"), scan.jpeg.as_slice()));
                 let _ = write!(
                     rels,
                     "<Relationship Id=\"rIdImg{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/immagine{id}.jpg\"/>"
                 );
                 let ocr = fallback(i);
-                let descr = xml(&ocr).replace('\n', "&#10;");
+                // xml() toglie i caratteri di controllo: gli a capo tra i paragrafi si scrivono prima, come entità.
+                let descr = ocr.split('\n').map(xml).collect::<Vec<_>>().join("&#10;");
                 let picture = page_picture(id, "jpg", scan.width, scan.height, i + 1, &descr);
                 let mut parts = vec![picture];
                 let sect = sect_xml(&Sect { w: scan.width, h: scan.height, top: 20.0, bottom: 20.0, left: 20.0, right: 20.0, cols: Vec::new(), continuous: false });
@@ -2563,7 +2648,7 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                             flush(&mut group, &mut runs, &mut next_id);
                             let id = next_id;
                             next_id += 1;
-                            media.push((format!("word/media/immagine{id}.{ext}"), data.clone()));
+                            media.push((format!("word/media/immagine{id}.{ext}"), data.as_slice()));
                             let _ = write!(
                                 rels,
                                 "<Relationship Id=\"rIdImg{id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/immagine{id}.{ext}\"/>"
@@ -2668,7 +2753,75 @@ xmlns:wps=\"http://schemas.microsoft.com/office/word/2010/wordprocessingShape\">
         ("word/numbering.xml", numbering.as_bytes()),
     ];
     for (name, data) in &media {
-        entries.push((name.as_str(), data.as_slice()));
+        entries.push((name.as_str(), *data));
     }
     zip_archive(&entries)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Il modo di prima: ogni riquadro confrontato con tutti i gruppi della lista.
+    fn merge_by_scanning(items: &[([f64; 4], bool)]) -> Vec<Cluster> {
+        let mut clusters: Vec<Cluster> = Vec::new();
+        for (b, pic) in items {
+            let mut cur = (b[0], b[1], b[2], b[3], 1usize, *pic);
+            while let Some(i) = clusters.iter().position(|c| c.0 - 3.0 <= cur.2 && cur.0 - 3.0 <= c.2 && c.1 - 3.0 <= cur.3 && cur.1 - 3.0 <= c.3) {
+                let c = clusters.swap_remove(i);
+                cur = (cur.0.min(c.0), cur.1.min(c.1), cur.2.max(c.2), cur.3.max(c.3), cur.4 + c.4, cur.5 || c.5);
+            }
+            clusters.push(cur);
+        }
+        clusters
+    }
+
+    #[test]
+    fn grouping_touching_shapes_with_cells_gives_the_same_groups_in_the_same_order() {
+        // Numeri pseudo-casuali ripetibili.
+        let mut seed = 12345u64;
+        let mut next = move || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 33) as f64 / (1u64 << 31) as f64
+        };
+        for (n, small) in [(50, 30.0), (2000, 4.0), (3000, 12.0), (500, 120.0)] {
+            let mut items = Vec::new();
+            for k in 0..n {
+                let (x, y) = (next() * 700.0 - 50.0, next() * 900.0 - 30.0);
+                let (w, h) = (next() * small, next() * small);
+                // Ogni tanto uno grande, uno rovesciato o uno con NaN.
+                let b = match k % 97 {
+                    0 => [x, y, x + 400.0, y + 300.0],
+                    1 => [x + w, y, x, y + h],
+                    2 => [f64::NAN, y, x, y + h],
+                    _ => [x, y, x + w, y + h],
+                };
+                items.push((b, k % 13 == 0));
+            }
+            let fast = merge_touching(items.iter().copied(), (595.0, 842.0));
+            let slow = merge_by_scanning(&items);
+            assert_eq!(format!("{fast:?}"), format!("{slow:?}"), "n = {n}");
+        }
+    }
+
+    #[test]
+    fn absurdly_wide_text_does_not_allocate_a_column_per_point() {
+        let spans = vec![vec![(0.0, 10.0), (1.0e12, 1.0e12 + 5.0)]; 8];
+        let heights = vec![(10.0, 10.0); 8];
+        assert!(column_bands(&spans, &heights, 0.0, 1.0e12 + 5.0).is_empty());
+        assert!(column_bands(&spans, &heights, 0.0, f64::INFINITY).is_empty());
+    }
+
+    #[test]
+    fn ocr_text_of_a_scan_keeps_its_paragraphs() {
+        let pages = vec![Page::Scan(ScanPage { width: 595.0, height: 842.0, jpeg: vec![0xFF, 0xD8, 0xFF, 0xD9] })];
+        let docx = docx(&pages, |_| "Fine del primo.\nInizio <del> secondo".to_string());
+        let dir = std::env::temp_dir().join(format!("cedro-descr-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("scan.docx");
+        std::fs::write(&path, docx).unwrap();
+        let document = crate::doctext::zip_entry_for_test(&path, "word/document.xml");
+        assert!(document.contains("descr=\"Fine del primo.&#10;Inizio &lt;del&gt; secondo\""), "{document}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

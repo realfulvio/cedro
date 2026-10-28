@@ -141,6 +141,9 @@ fn step_files(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, s
         super::scrolled(f, (x + 1.0, y + 1.0, w - 2.0, h - 2.0), Scroll::Queue, |f| {
             for (n, &i) in rows.iter().enumerate() {
                 let ry = y + n as f32 * 100.0;
+                if !f.p.shows_y(ry, 100.0) {
+                    continue;
+                }
                 let file = &app.files[i];
                 if n > 0 {
                     f.hline(x, ry, w);
@@ -226,6 +229,9 @@ fn step_save(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, si
     super::scrolled(f, (x + 1.0, y + 1.0, w - 2.0, h - 2.0), Scroll::Queue, |f| {
         for (n, &i) in rows.iter().enumerate() {
             let ry = y + n as f32 * 66.0;
+            if !f.p.shows_y(ry, 66.0) {
+                continue;
+            }
             let file = &app.files[i];
             if n > 0 {
                 f.hline(x, ry, w);

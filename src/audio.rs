@@ -345,20 +345,8 @@ fn decode_symphonia(path: &Path) -> Result<Pcm, String> {
 /// Opus (Ogg, WebM, MKV): i pacchetti li dà symphonia, la decodifica è libopus. Esce a 48 kHz.
 #[cfg(any(windows, target_os = "linux", target_os = "android"))]
 fn decode_opus(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32, head: &[u8]) -> Result<(Vec<i16>, u16), String> {
-    use audiopus_sys as sys;
-    // OpusHead: 8 byte di firma, versione, canali, pre-skip (u16), …
-    let channels = match head.get(9) {
-        Some(c) if matches!(*c, 1 | 2) => *c as usize,
-        _ => return Err("Opus con più di due canali non letto".into()),
-    };
-    let preskip = if head.len() >= 12 { u16::from_le_bytes([head[10], head[11]]) as usize } else { 0 };
-    let mut err = 0;
-    let dec = unsafe { sys::opus_decoder_create(48_000, channels as i32, &mut err) };
-    if dec.is_null() || err != 0 {
-        return Err(format!("decodificatore Opus non creato ({err})"));
-    }
+    let mut opus = OpusStream::new(head)?;
     let mut samples: Vec<i16> = Vec::new();
-    let mut pcm = vec![0i16; 5760 * channels];
     loop {
         let packet = match f.next_packet() {
             Ok(p) => p,
@@ -367,19 +355,68 @@ fn decode_opus(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32
         if packet.track_id() != track_id {
             continue;
         }
-        let data = packet.buf();
-        let n = unsafe { sys::opus_decode(dec, data.as_ptr(), data.len() as i32, pcm.as_mut_ptr(), 5760, 0) };
-        if n > 0 {
-            samples.extend_from_slice(&pcm[..n as usize * channels]);
-        }
+        samples.extend_from_slice(opus.decode(packet.buf()));
     }
-    unsafe { sys::opus_decoder_destroy(dec) };
-    let skip = (preskip * channels).min(samples.len());
-    samples.drain(..skip);
     if samples.is_empty() {
         return Err("l'audio non ha campioni".into());
     }
-    Ok((samples, channels as u16))
+    Ok((samples, opus.channels()))
+}
+
+/// Decodificatore Opus a pacchetti (libopus), a 48 kHz: toglie da solo i campioni d'avvio (pre-skip).
+/// Lo usano l'audio e i video WebM/MKV con audio Opus.
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
+pub(crate) struct OpusStream {
+    dec: *mut audiopus_sys::OpusDecoder,
+    channels: usize,
+    skip: usize,
+    pcm: Vec<i16>,
+}
+
+// Il decodificatore appartiene a un solo OpusStream e si usa da un thread alla volta.
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
+unsafe impl Send for OpusStream {}
+
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
+impl OpusStream {
+    /// `head` è l'OpusHead della traccia: 8 byte di firma, versione, canali, pre-skip (u16), …
+    pub(crate) fn new(head: &[u8]) -> Result<OpusStream, String> {
+        use audiopus_sys as sys;
+        let channels = match head.get(9) {
+            Some(c) if matches!(*c, 1 | 2) => *c as usize,
+            _ => return Err("Opus con più di due canali non letto".into()),
+        };
+        let preskip = if head.len() >= 12 { u16::from_le_bytes([head[10], head[11]]) as usize } else { 0 };
+        let mut err = 0;
+        let dec = unsafe { sys::opus_decoder_create(48_000, channels as i32, &mut err) };
+        if dec.is_null() || err != 0 {
+            return Err(format!("decodificatore Opus non creato ({err})"));
+        }
+        Ok(OpusStream { dec, channels, skip: preskip * channels, pcm: vec![0i16; 5760 * channels] })
+    }
+
+    pub(crate) fn channels(&self) -> u16 {
+        self.channels as u16
+    }
+
+    /// I campioni (interlacciati) di un pacchetto; vuoto se il pacchetto è rovinato o tutto d'avvio.
+    pub(crate) fn decode(&mut self, data: &[u8]) -> &[i16] {
+        let n = unsafe { audiopus_sys::opus_decode(self.dec, data.as_ptr(), data.len() as i32, self.pcm.as_mut_ptr(), 5760, 0) };
+        if n <= 0 {
+            return &[];
+        }
+        let out = &self.pcm[..n as usize * self.channels];
+        let skip = self.skip.min(out.len());
+        self.skip -= skip;
+        &out[skip..]
+    }
+}
+
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
+impl Drop for OpusStream {
+    fn drop(&mut self) {
+        unsafe { audiopus_sys::opus_decoder_destroy(self.dec) };
+    }
 }
 
 fn write_wav(path: &Path, pcm: &Pcm) -> Result<(), String> {
@@ -401,27 +438,29 @@ fn resample(pcm: Pcm, to: u32) -> Pcm {
         return pcm;
     }
     let channels = pcm.channels as usize;
+    if channels == 0 || pcm.samples.len() < channels {
+        return pcm;
+    }
     let frames = pcm.samples.len() / channels;
     let out_frames = ((frames as u64 * to as u64) / pcm.rate as u64).max(1) as usize;
     let mut samples = Vec::with_capacity(out_frames * channels);
+    let last = frames.saturating_sub(1);
     for frame in 0..out_frames {
-        let src = (frame as u64 * pcm.rate as u64) / to as u64;
-        let src = (src as usize).min(frames.saturating_sub(1));
+        // Interpolazione lineare fra i due campioni vicini: meno ruvida del più vicino (88,2 e 96 kHz).
+        let at = frame as u64 * pcm.rate as u64;
+        let src = ((at / to as u64) as usize).min(last);
+        let next = (src + 1).min(last);
+        let frac = (at % to as u64) as i64;
         for ch in 0..channels {
-            samples.push(pcm.samples[src * channels + ch]);
+            let a = pcm.samples[src * channels + ch] as i64;
+            let b = pcm.samples[next * channels + ch] as i64;
+            samples.push((a + (b - a) * frac / to as i64) as i16);
         }
     }
     Pcm { rate: to, channels: pcm.channels, samples, tags: pcm.tags }
 }
 
 fn fold_stereo(pcm: Pcm) -> Pcm {
-    let channels = pcm.channels as usize;
-    let frames = pcm.samples.len() / channels;
-    let mut samples = Vec::with_capacity(frames * 2);
-    for frame in 0..frames {
-        let base = frame * channels;
-        samples.push(pcm.samples[base]);
-        samples.push(pcm.samples[base + 1]);
-    }
+    let samples = crate::sink::fold_stereo(&pcm.samples, pcm.channels);
     Pcm { rate: pcm.rate, channels: 2, samples, tags: pcm.tags }
 }

@@ -70,7 +70,7 @@ fn standard(f: &mut Frame, app: &App) {
     // Fondo della zona di lavoro, con l'angolo arrotondato in alto a sinistra.
     f.p.rrect(NAV_W, TOP, w - NAV_W + 20.0, h - TOP + 20.0, 10.0, Some(pal.work), Some((pal.border, 1.0)));
     f.text("Conversioni", 298.0, 80.0, 600.0, 56.0, 42.0, SEMI, pal.text);
-    if super::notice(f, app, (760.0, 88.0, (insp_x + insp_w - 760.0).min(720.0), 44.0), 15.0) {}
+    super::notice(f, app, (760.0, 88.0, (insp_x + insp_w - 760.0).min(720.0), 44.0), 15.0);
 
     // Le categorie, schede con icona.
     let icons = [ic::IMAGE, ic::FILE, ic::FILE, ic::MENU, ic::AUDIO, ic::VIDEO];
@@ -141,6 +141,9 @@ fn standard(f: &mut Frame, app: &App) {
         super::scrolled(f, list, Scroll::Queue, |f| {
             for (n, &i) in rows.iter().enumerate() {
                 let y = list.1 + n as f32 * 96.0;
+                if !f.p.shows_y(y, 96.0) {
+                    continue;
+                }
                 let file = &app.files[i];
                 f.hline(q.0, y, q.2);
                 if app.selected == Some(i) {
@@ -251,6 +254,9 @@ fn simplified(f: &mut Frame, app: &App) {
         super::scrolled(f, (list.0 + 1.0, list.1 + 1.0, list.2 - 2.0, list.3 - 2.0), Scroll::Queue, |f| {
             for (n, &i) in rows.iter().enumerate() {
                 let y = list.1 + n as f32 * 134.0;
+                if !f.p.shows_y(y, 134.0) {
+                    continue;
+                }
                 let file = &app.files[i];
                 if n > 0 {
                     f.hline(list.0, y, list.2);

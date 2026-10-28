@@ -70,14 +70,14 @@ fn finish(objects: &[Vec<u8>]) -> Vec<u8> {
     let mut offsets = vec![0usize];
     for (i, obj) in objects.iter().enumerate() {
         offsets.push(out.len());
-        let _ = write!(out, "{} 0 obj\n", i + 1);
+        let _ = writeln!(out, "{} 0 obj", i + 1);
         out.extend_from_slice(obj);
         out.extend_from_slice(b"\nendobj\n");
     }
     let xref_at = out.len();
     let _ = write!(out, "xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1);
     for off in offsets.iter().skip(1) {
-        let _ = write!(out, "{off:010} 00000 n \n");
+        let _ = writeln!(out, "{off:010} 00000 n ");
     }
     let _ = write!(
         out,

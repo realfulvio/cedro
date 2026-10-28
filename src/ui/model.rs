@@ -482,7 +482,7 @@ impl App {
                     inner.sort();
                     expanded.extend(inner);
                 }
-            } else {
+            } else if p.is_file() {
                 expanded.push(p);
             }
         }
@@ -499,12 +499,15 @@ impl App {
         let mut first: Option<(Kind, bool)> = None;
         let mut added = 0;
         let transcribing = self.activity == Activity::Transcribe;
-        for path in expanded.into_iter().filter(|p| p.is_file()) {
+        // I doppioni si cercano in un insieme: con migliaia di file il confronto uno a uno pesa.
+        let mut known: std::collections::HashSet<PathBuf> = self.files.iter().map(|f| f.path.clone()).collect();
+        for path in expanded {
             let voice_only = trascrizione::only_transcribable(&path);
             let kind = engine::kind_of(&path);
-            if (kind == Kind::Other && !voice_only) || self.files.iter().any(|f| f.path == path) {
+            if (kind == Kind::Other && !voice_only) || known.contains(&path) {
                 continue;
             }
+            known.insert(path.clone());
             first.get_or_insert((kind, voice_only || (transcribing && trascrizione::transcribable(&path))));
             self.loader.request(&path);
             self.files.push(FileItem { path, kind, voice_only, state: FileState::Waiting, message: "In attesa".into(), output: None, checked: true });
@@ -543,7 +546,15 @@ impl App {
                 Some(s) if s > index => Some(s - 1),
                 other => other,
             };
+            self.prune_media();
         }
+    }
+
+    /// Dimentica miniature, fotogrammi e pagine dei file non più in coda: la memoria non cresce a ogni lotto.
+    fn prune_media(&mut self) {
+        let live: std::collections::HashSet<&Path> = self.files.iter().map(|f| f.path.as_path()).collect();
+        self.media.retain(|p, _| live.contains(p.as_path()));
+        self.previews.retain(|(p, _), _| live.contains(p.as_path()));
     }
 
     /// Toglie dalla coda i file spuntati della vista (o tutti quelli della vista se nessuno è spuntato).
@@ -561,6 +572,7 @@ impl App {
         }
         self.files = keep;
         self.selected = self.visible().first().copied();
+        self.prune_media();
     }
 
     pub fn toggle_checked(&mut self, index: usize) {
@@ -729,7 +741,7 @@ impl App {
             return;
         }
         let paths: Vec<PathBuf> = targets.iter().map(|&i| self.files[i].path.clone()).collect();
-        self.begin(&targets, JobKind::Transcribe);
+        let cancel = self.begin(&targets, JobKind::Transcribe);
         self.transcribe.log.clear();
         self.transcribe.percent = 0;
         let settings = crate::read_settings();
@@ -742,7 +754,7 @@ impl App {
                 let _ = tx.send(e);
                 wake();
             };
-            trascrizione::run(&paths, &request, dest.as_deref(), &opts, &|event| match event {
+            trascrizione::run_cancellable(&paths, &request, dest.as_deref(), &opts, &cancel, &|event| match event {
                 trascrizione::Event::Log(line) => send(Event::TranscribeLog(line)),
                 trascrizione::Event::Percent { index, percent } => send(Event::TranscribePercent(index, percent)),
                 trascrizione::Event::Finished { path, result } => send(Event::Finished(path, result)),

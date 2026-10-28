@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicIsize, Ordering};
-use std::sync::{Mutex, Once};
+use std::sync::{Mutex, Once, OnceLock};
 use std::time::{Duration, Instant};
 
 use windows::{
@@ -198,7 +198,11 @@ unsafe fn paint(hwnd: HWND, f: &Frame) {
     fill(hdc, rc, KEY);
 
     // Etichetta: un riquadro bianco allineato a destra, largo quanto il testo.
-    let font = CreateFontW(-px(12), 0, 0, 0, 600, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, 0, crate::winfont::face());
+    // Il carattere si crea una volta sola: il DPI di sistema non cambia senza riavviare.
+    static FONT: OnceLock<isize> = OnceLock::new();
+    let font = HFONT(*FONT.get_or_init(|| {
+        CreateFontW(-px(12), 0, 0, 0, 600, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, 0, crate::winfont::face()).0 as isize
+    }) as *mut _);
     let old_font = SelectObject(hdc, font.into());
     let mut text: Vec<u16> = f.label.encode_utf16().collect();
     let mut size = SIZE::default();
@@ -212,13 +216,13 @@ unsafe fn paint(hwnd: HWND, f: &Frame) {
     let mut tr = RECT { left: chip.left + px(8), right: chip.right - px(8), ..chip };
     DrawTextW(hdc, &mut text, &mut tr, DT_SINGLELINE | DT_VCENTER | DT_RIGHT | DT_END_ELLIPSIS | DT_NOPREFIX);
     SelectObject(hdc, old_font);
-    let _ = DeleteObject(font.into());
 
     // La linea: 3 pixel in fondo.
     let (top, bottom) = (rc.bottom - px(3), rc.bottom);
     let (a, b) = sweep(f.phase);
     match f.ticks {
-        Some((done, total)) => {
+        // Un trattino per file, finché ci stanno (almeno 2 pixel l'uno).
+        Some((done, total)) if (total as i32).saturating_mul(px(4)) <= rc.right => {
             let gap = px(2);
             let seg = (rc.right - gap * (total as i32 - 1)) as f32 / total as f32;
             for i in 0..total {
@@ -231,6 +235,14 @@ unsafe fn paint(hwnd: HWND, f: &Frame) {
                     fill(hdc, RECT { left: left + (a * w) as i32, right: left + (b * w) as i32, ..r }, f.color);
                 }
             }
+        }
+        // Troppi file per i trattini: una linea sola, piena fin dove si è arrivati, e il tratto che scorre sul resto.
+        Some((done, total)) => {
+            fill(hdc, RECT { left: 0, top, right: rc.right, bottom }, TRACK);
+            let x_done = (done.min(total) as f32 / total as f32 * rc.right as f32) as i32;
+            fill(hdc, RECT { left: 0, top, right: x_done, bottom }, f.color);
+            let rest = (rc.right - x_done) as f32;
+            fill(hdc, RECT { left: x_done + (a * rest) as i32, top, right: x_done + (b * rest) as i32, bottom }, f.color);
         }
         None => {
             fill(hdc, RECT { left: 0, top, right: rc.right, bottom }, TRACK);
@@ -251,9 +263,14 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         WM_TIMER | WM_APP => {
             let visible = IsWindowVisible(hwnd).as_bool();
             match (frame().is_some(), visible) {
-                (true, false) => place(hwnd),
+                (true, false) => {
+                    place(hwnd);
+                    SetTimer(Some(hwnd), TIMER, 33, None);
+                }
                 (false, true) => {
+                    // Nascosta non serve svegliarsi 30 volte al secondo: il prossimo lavoro la riaccende.
                     let _ = ShowWindow(hwnd, SW_HIDE);
+                    let _ = KillTimer(Some(hwnd), TIMER);
                 }
                 _ => {}
             }
@@ -279,6 +296,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             // Clic: mostra l'ultimo file creato e chiude la barra (anche quella rossa di un errore).
             let last = job().take().and_then(|j| j.last);
             let _ = ShowWindow(hwnd, SW_HIDE);
+            let _ = KillTimer(Some(hwnd), TIMER);
             if let Some(path) = last {
                 let args = HSTRING::from(format!("/select,\"{}\"", path.display()));
                 ShellExecuteW(None, w!("open"), w!("explorer.exe"), &args, None, SW_SHOWNORMAL);
