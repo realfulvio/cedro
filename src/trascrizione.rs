@@ -1157,7 +1157,12 @@ fn power_on(request: &Request, model: &Path, sink: &dyn Fn(Event), cancel: &Atom
 fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
     let cpu = cpu_variant(request.avx512);
     let mut tries: Vec<Variant> = Vec::new();
-    if request.gpu {
+    let model_bytes = std::fs::metadata(model).map(|m| m.len()).unwrap_or(0);
+    let gpu_budget = crate::resources::gpu_headroom(crate::resources::available_memory(), model_bytes);
+    if request.gpu && !gpu_budget {
+        log(sink, Tone::Note, "Memoria", "RAM libera limitata: uso il processore con lo stesso modello e la stessa precisione");
+    }
+    if request.gpu && gpu_budget {
         if vulkan_loader_present() {
             tries.push(Variant::Vulkan);
         } else {
@@ -1232,6 +1237,10 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
 
 /// Come `run`, ma si ferma appena `cancel` si accende (Annulla): i file che restano finiscono come «Annullato».
 pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Options, cancel: &AtomicBool, sink: &dyn Fn(Event)) {
+    let Some(_job) = crate::resources::acquire(Some(cancel)) else {
+        for path in files { sink(Event::Finished { path: path.clone(), result: Err(CANCELLED.into()) }); }
+        return;
+    };
     let fail_all = |e: &str, from: usize| {
         for path in &files[from..] {
             sink(Event::Finished { path: path.clone(), result: Err(e.to_string()) });
@@ -1277,12 +1286,23 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
         }
         let running = engine.as_mut().expect("motore acceso");
         let mut outcome = one_file(running, path, index, sink, cancel);
+        // A driver can run out of shared memory after loading successfully.
+        // Retry this file once on CPU, retaining the exact model and precision.
+        if matches!(outcome, Outcome::EngineDied(_)) && crate::accel::in_use().is_some_and(|a| a.gpu) && !cancel.load(Ordering::Relaxed) {
+            if let Some(dead) = engine.take() { dead.stop(); }
+            log(sink, Tone::Note, "Scheda video", "motore interrotto: riprovo sul processore, con la stessa precisione");
+            let cpu_request = Request { format: request.format, model: request.model, gpu: false, avx512: request.avx512 };
+            match power_on(&cpu_request, model.as_ref().expect("modello caricato"), sink, cancel) {
+                Ok(mut cpu) => { outcome = one_file(&mut cpu, path, index, sink, cancel); engine = Some(cpu); }
+                Err(e) => outcome = Outcome::Failed(e),
+            }
+        }
         let mut temp = None;
         if let Outcome::Unsupported(why) = &outcome {
             log(sink, Tone::Muted, "", format!("Il motore non legge questo formato ({why}): lo apro con il sistema"));
             match system_decode(path, cancel) {
                 Ok(wav) => {
-                    outcome = one_file(running, &wav, index, sink, cancel);
+                    outcome = one_file(engine.as_mut().expect("motore acceso"), &wav, index, sink, cancel);
                     temp = Some(wav);
                 }
                 Err(e) if e == CANCELLED => outcome = Outcome::Cancelled,
