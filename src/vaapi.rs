@@ -11,6 +11,9 @@ use std::fs::{File, OpenOptions};
 use std::os::fd::AsRawFd;
 use std::sync::OnceLock;
 
+mod decode;
+pub(crate) use decode::{H264Decoder, I420Frame};
+
 type Display = *mut c_void;
 type Status = c_int;
 type Id = c_uint;
@@ -21,6 +24,7 @@ const INVALID_ID: Id = 0xffff_ffff;
 const PROFILE_H264_MAIN: c_int = 6;
 const PROFILE_H264_HIGH: c_int = 7;
 const PROFILE_H264_CONSTRAINED_BASELINE: c_int = 13;
+const ENTRY_VLD: c_int = 1;
 const ENTRY_ENC_SLICE: c_int = 6;
 const ENTRY_ENC_SLICE_LP: c_int = 8;
 
@@ -289,6 +293,7 @@ struct Lib {
     sync_surface: unsafe extern "C" fn(Display, Id) -> Status,
     derive_image: unsafe extern "C" fn(Display, Id, *mut Image) -> Status,
     create_image: unsafe extern "C" fn(Display, *mut ImageFormat, c_int, c_int, *mut Image) -> Status,
+    get_image: unsafe extern "C" fn(Display, Id, c_int, c_int, c_uint, c_uint, Id) -> Status,
     put_image:
         unsafe extern "C" fn(Display, Id, Id, c_int, c_int, c_uint, c_uint, c_int, c_int, c_uint, c_uint) -> Status,
     destroy_image: unsafe extern "C" fn(Display, Id) -> Status,
@@ -345,6 +350,7 @@ unsafe fn load() -> Option<Lib> {
             sync_surface: sym(va, c"vaSyncSurface")?,
             derive_image: sym(va, c"vaDeriveImage")?,
             create_image: sym(va, c"vaCreateImage")?,
+            get_image: sym(va, c"vaGetImage")?,
             put_image: sym(va, c"vaPutImage")?,
             destroy_image: sym(va, c"vaDestroyImage")?,
         })
@@ -378,10 +384,16 @@ impl Device {
     /// La prima scheda (/dev/dri/renderD128 e seguenti) che codifica H.264 a 8 bit 4:2:0.
     fn open() -> Option<Device> {
         let lib = lib()?;
-        (128..136).find_map(|n| Self::open_node(lib, &format!("/dev/dri/renderD{n}")))
+        (128..136).find_map(|n| Self::open_node(lib, &format!("/dev/dri/renderD{n}"), &Device::find_h264))
     }
 
-    fn open_node(lib: &'static Lib, path: &str) -> Option<Device> {
+    /// La prima scheda che decodifica H.264 a 8 bit 4:2:0 con uno dei profili dati.
+    fn open_decode(profiles: &[c_int]) -> Option<Device> {
+        let lib = lib()?;
+        (128..136).find_map(|n| Self::open_node(lib, &format!("/dev/dri/renderD{n}"), &|device: &Device| device.find_decode(profiles)))
+    }
+
+    fn open_node(lib: &'static Lib, path: &str, find: &dyn Fn(&Device) -> Option<(c_int, c_int)>) -> Option<Device> {
         let node = OpenOptions::new().read(true).write(true).open(path).ok()?;
         unsafe {
             let dpy = (lib.get_display_drm)(node.as_raw_fd());
@@ -401,7 +413,7 @@ impl Device {
                 return None;
             }
             let mut device = Device { lib, dpy, profile: 0, entrypoint: 0, _node: node };
-            let (profile, entrypoint) = device.find_h264()?;
+            let (profile, entrypoint) = find(&device)?;
             device.profile = profile;
             device.entrypoint = entrypoint;
             Some(device)
@@ -430,6 +442,32 @@ impl Device {
                     if entries.contains(&entry) && self.attribute(profile, entry, ATTRIB_RT_FORMAT) & RT_FORMAT_YUV420 != 0 {
                         return Some((profile, entry));
                     }
+                }
+            }
+            None
+        }
+    }
+
+    fn find_decode(&self, wanted: &[c_int]) -> Option<(c_int, c_int)> {
+        unsafe {
+            let mut profiles = vec![0; (self.lib.max_num_profiles)(self.dpy).max(1) as usize];
+            let mut count = 0;
+            if (self.lib.query_config_profiles)(self.dpy, profiles.as_mut_ptr(), &mut count) != SUCCESS {
+                return None;
+            }
+            profiles.truncate(count.max(0) as usize);
+            for &profile in wanted {
+                if !profiles.contains(&profile) {
+                    continue;
+                }
+                let mut entries = vec![0; (self.lib.max_num_entrypoints)(self.dpy).max(1) as usize];
+                let mut n = 0;
+                if (self.lib.query_config_entrypoints)(self.dpy, profile, entries.as_mut_ptr(), &mut n) != SUCCESS {
+                    continue;
+                }
+                entries.truncate(n.max(0) as usize);
+                if entries.contains(&ENTRY_VLD) && self.attribute(profile, ENTRY_VLD, ATTRIB_RT_FORMAT) & RT_FORMAT_YUV420 != 0 {
+                    return Some((profile, ENTRY_VLD));
                 }
             }
             None
