@@ -613,6 +613,7 @@ fn choose_hover(app: &Application, state: &Rc<RefCell<Wheel>>) {
 }
 
 fn run_slices(all: &[PathBuf], id: &str, label: &str, quality: u8, beside: bool) -> String {
+    let _job = cedro::resources::acquire(None).expect("uncancellable wheel job");
     let paths = if matches!(id, "dup" | "zip") { all.to_vec() } else { same_kind_paths(all) };
     let skipped = all.len().saturating_sub(paths.len());
     let mut notes = Vec::new();
