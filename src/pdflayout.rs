@@ -1555,7 +1555,8 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
             let scale = (2000.0 / w.max(h).max(1.0)) as f32;
             let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
             let rendered = render(page, &cache, &settings, &RenderSettings::default(), &pixmap);
-            let rgb = crate::ocr::pixmap_image(rendered)?.into_rgb8();
+            // Una pagina lunghissima e sottile può dare una pixmap vuota: diventa una pagina bianca, non un errore.
+            let rgb = crate::ocr::pixmap_image(rendered).map(|i| i.into_rgb8()).unwrap_or_default();
             if rgb.pixels().all(|p| p.0.iter().all(|&c| c >= 250)) {
                 // Pagina bianca: resta una pagina vuota, non un'immagine.
                 special.push(None);
@@ -1598,7 +1599,7 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
                 let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
                 let no_text = RenderSettings { skip_text: true, ..Default::default() };
                 let rendered = render(page, &cache, &settings, &no_text, &pixmap);
-                let full = crate::ocr::pixmap_image(rendered)?.into_rgb8();
+                let full = crate::ocr::pixmap_image(rendered).map(|i| i.into_rgb8()).unwrap_or_default();
                 for pic in pics {
                     let s = scale as f64;
                     let (x, y) = (((pic.x0.max(0.0)) * s) as u32, ((pic.y0.max(0.0)) * s) as u32);
@@ -1633,8 +1634,8 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
             let scale = (200.0 / 72.0f32).min(3200.0 / (w.max(h).max(1.0) as f32));
             let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
             let rendered = render(page, &cache, &settings, &RenderSettings::default(), &pixmap);
-            let full = crate::ocr::pixmap_image(rendered)?.into_rgb8();
-            for fig in figures {
+            let full = crate::ocr::pixmap_image(rendered).map(|i| i.into_rgb8()).unwrap_or_default();
+            for fig in figures.into_iter().filter(|_| full.width() > 0 && full.height() > 0) {
                 let s = scale as f64;
                 let (x, y) = ((fig.x0 * s) as u32, (fig.y0 * s) as u32);
                 let cw = (((fig.x1 - fig.x0) * s) as u32).min(full.width().saturating_sub(x)).max(1);
