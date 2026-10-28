@@ -137,6 +137,7 @@ fn table(f: &mut Frame, app: &App, r: R, simple: bool) {
                 f.vline(col_op, y, rh);
                 f.text(&op, col_op + 16.0, y, op_w - 20.0, rh, 18.0, SANS, pal.text);
             }
+            f.row_bar(file, tx, y + rh - 14.0, w, 5.0);
             f.vline(col_stat, y, rh);
             state_cell(f, file, col_stat + 14.0, y, rh, if simple { 22.0 } else { 18.0 });
             if file.state == FileState::Failed || file.state == FileState::Done {

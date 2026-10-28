@@ -245,6 +245,7 @@ fn step_save(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, si
             f.text(&file.name(), x + 88.0, ry + 8.0, w - 420.0, 30.0, 18.0, SEMI, pal.text);
             let msg = if file.state == FileState::Waiting { "Pronto".to_string() } else { file.message.clone() };
             f.text(&msg, x + 88.0, ry + 36.0, w - 420.0, 24.0, 15.0, SANS, f.state_color(file.state));
+            f.row_bar(file, x + 88.0, ry + 58.0, w - 420.0, 5.0);
             f.text_r(Frame::state_word(file.state), (x + w - 230.0, ry, 150.0, 66.0), 16.0, SANS, f.state_color(file.state));
             f.state_icon(file.state, x + w - 44.0, ry + 33.0, 13.0);
             if let Some(o) = &file.output {
