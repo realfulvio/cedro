@@ -785,7 +785,10 @@ impl App {
                 let _ = tx.send(Event::Started(path.clone()));
                 wake();
                 crate::accel::clear_in_use();
-                let result = conversioni::convert_one_out(&path, &action, quality, dest.as_deref(), &opts);
+                let result = match crate::resources::acquire(Some(&cancel)) {
+                    Some(_turn) => conversioni::convert_one_out(&path, &action, quality, dest.as_deref(), &opts),
+                    None => Err("Annullato".into()),
+                };
                 let _ = tx.send(Event::Finished(path, result));
                 wake();
             }
