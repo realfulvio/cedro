@@ -401,27 +401,29 @@ fn resample(pcm: Pcm, to: u32) -> Pcm {
         return pcm;
     }
     let channels = pcm.channels as usize;
+    if channels == 0 || pcm.samples.len() < channels {
+        return pcm;
+    }
     let frames = pcm.samples.len() / channels;
     let out_frames = ((frames as u64 * to as u64) / pcm.rate as u64).max(1) as usize;
     let mut samples = Vec::with_capacity(out_frames * channels);
+    let last = frames.saturating_sub(1);
     for frame in 0..out_frames {
-        let src = (frame as u64 * pcm.rate as u64) / to as u64;
-        let src = (src as usize).min(frames.saturating_sub(1));
+        // Interpolazione lineare fra i due campioni vicini: meno ruvida del più vicino (88,2 e 96 kHz).
+        let at = frame as u64 * pcm.rate as u64;
+        let src = ((at / to as u64) as usize).min(last);
+        let next = (src + 1).min(last);
+        let frac = (at % to as u64) as i64;
         for ch in 0..channels {
-            samples.push(pcm.samples[src * channels + ch]);
+            let a = pcm.samples[src * channels + ch] as i64;
+            let b = pcm.samples[next * channels + ch] as i64;
+            samples.push((a + (b - a) * frac / to as i64) as i16);
         }
     }
     Pcm { rate: to, channels: pcm.channels, samples, tags: pcm.tags }
 }
 
 fn fold_stereo(pcm: Pcm) -> Pcm {
-    let channels = pcm.channels as usize;
-    let frames = pcm.samples.len() / channels;
-    let mut samples = Vec::with_capacity(frames * 2);
-    for frame in 0..frames {
-        let base = frame * channels;
-        samples.push(pcm.samples[base]);
-        samples.push(pcm.samples[base + 1]);
-    }
+    let samples = crate::sink::fold_stereo(&pcm.samples, pcm.channels);
     Pcm { rate: pcm.rate, channels: 2, samples, tags: pcm.tags }
 }

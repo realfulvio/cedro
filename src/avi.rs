@@ -30,7 +30,20 @@ pub(crate) struct AviStream {
 pub(crate) struct AviChunk {
     pub stream: usize,
     pub video: bool,
-    pub data: Vec<u8>,
+    pub data: ChunkData,
+}
+
+/// I byte di un pacchetto: un pezzo del file letto una volta sola, senza copiarlo per ogni pacchetto.
+pub(crate) struct ChunkData {
+    file: std::sync::Arc<Vec<u8>>,
+    range: std::ops::Range<usize>,
+}
+
+impl std::ops::Deref for ChunkData {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.file[self.range.clone()]
+    }
 }
 
 /// Lunghezza dei prefissi e parametri (SPS, PPS) dell'avcC dentro `strf`, se c'è.
@@ -44,7 +57,7 @@ pub(crate) fn avc_config(extra: &[u8]) -> (usize, Vec<u8>) {
 
 /// L'audio di un AVI come campioni a 16 bit: PCM così com'è, MP3 e AAC passando da un file temporaneo.
 pub(crate) fn avi_audio_pcm(stream: &AviStream, chunks: &[AviChunk], index: usize) -> Result<Option<(Vec<i16>, u32, u16)>, String> {
-    let data: Vec<&[u8]> = chunks.iter().filter(|c| c.stream == index && !c.video).map(|c| c.data.as_slice()).collect();
+    let data: Vec<&[u8]> = chunks.iter().filter(|c| c.stream == index && !c.video).map(|c| &c.data[..]).collect();
     if data.is_empty() {
         return Ok(None);
     }
@@ -108,18 +121,44 @@ pub(crate) fn avi_audio(path: &Path) -> Result<crate::audio::Pcm, String> {
     Ok(crate::audio::Pcm::new(rate, channels, samples))
 }
 
-pub(crate) fn walk_riff(data: &[u8], streams: &mut Vec<AviStream>, chunks: &mut Vec<AviChunk>) -> Result<(), String> {
+/// Oltre questa profondità di `LIST` annidate il file è costruito male (e la ricorsione finirebbe lo stack).
+const MAX_DEPTH: u32 = 16;
+
+/// Scorre i blocchi di `data`, che sta in `file` da `base` in poi. Dentro `movi` un ultimo pacchetto
+/// tagliato (registrazione interrotta) chiude la lettura e si tiene quello che c'era.
+fn walk_riff(
+    file: &std::sync::Arc<Vec<u8>>,
+    base: usize,
+    data: &[u8],
+    depth: u32,
+    in_movi: bool,
+    streams: &mut Vec<AviStream>,
+    chunks: &mut Vec<AviChunk>,
+) -> Result<(), String> {
+    if depth > MAX_DEPTH {
+        return Err("AVI non letto".into());
+    }
     let mut i = 0;
     while i + 8 <= data.len() {
         let id = [data[i], data[i + 1], data[i + 2], data[i + 3]];
         let size = u32::from_le_bytes([data[i + 4], data[i + 5], data[i + 6], data[i + 7]]) as usize;
         i += 8;
-        if i + size > data.len() {
+        // OpenDML (AVI oltre 1 GB): dopo il primo `RIFF AVI ` vengono i `RIFF AVIX`, con altri `movi`.
+        let list = &id == b"LIST" || (&id == b"RIFF" && data.get(i..i + 4) == Some(b"AVIX"));
+        let size = if i + size <= data.len() {
+            size
+        } else if in_movi {
+            break;
+        } else if list && data.get(i..i + 4).is_some_and(|kind| kind == b"movi" || kind == b"AVIX") {
+            // Il file finisce prima di quanto dice la lista dei pacchetti: si legge quello che c'è.
+            data.len() - i
+        } else {
             return Err("AVI non letto".into());
-        }
+        };
+        let at = i;
         let payload = &data[i..i + size];
         i += size + (size & 1);
-        if &id == b"LIST" {
+        if list {
             if payload.len() < 4 {
                 return Err("AVI non letto".into());
             }
@@ -127,16 +166,15 @@ pub(crate) fn walk_riff(data: &[u8], streams: &mut Vec<AviStream>, chunks: &mut 
             let inner = &payload[4..];
             if kind == b"strl" {
                 streams.push(parse_strl(inner)?);
-            } else if kind == b"hdrl" {
-                walk_riff(inner, streams, chunks)?;
             } else {
-                walk_riff(inner, streams, chunks)?;
+                walk_riff(file, base + at + 4, inner, depth + 1, in_movi || kind == b"movi", streams, chunks)?;
             }
         } else if let Some(stream) = stream_of(id) {
             let video = id[2] == b'd' && (id[3] == b'c' || id[3] == b'b');
             let audio = &id[2..4] == b"wb";
             if video || audio {
-                chunks.push(AviChunk { stream, video, data: payload.to_vec() });
+                let start = base + at;
+                chunks.push(AviChunk { stream, video, data: ChunkData { file: file.clone(), range: start..start + size } });
             }
         }
     }
@@ -226,13 +264,13 @@ pub(crate) fn parse_strl(data: &[u8]) -> Result<AviStream, String> {
 
 /// Legge il file: i flussi e i pacchetti nell'ordine in cui stanno.
 pub(crate) fn read(path: &Path) -> Result<(Vec<AviStream>, Vec<AviChunk>), String> {
-    let bytes = std::fs::read(path).map_err(|err| format!("AVI non letto: {err}"))?;
+    let bytes = std::sync::Arc::new(std::fs::read(path).map_err(|err| format!("AVI non letto: {err}"))?);
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"AVI " {
         return Err("AVI non letto".into());
     }
     let mut streams = Vec::new();
     let mut chunks = Vec::new();
-    walk_riff(&bytes[12..], &mut streams, &mut chunks)?;
+    walk_riff(&bytes, 12, &bytes[12..], 0, false, &mut streams, &mut chunks)?;
     Ok((streams, chunks))
 }
 
@@ -312,7 +350,7 @@ pub(crate) fn annex_b_copy(path: &Path, dir: &Path) -> Result<Option<std::path::
         }
         let tag = if c.video { b"dc" } else { b"wb" };
         let id = [b'0' + (c.stream / 10) as u8, b'0' + (c.stream % 10) as u8, tag[0], tag[1]];
-        let mut data = c.data.clone();
+        let mut data = c.data.to_vec();
         let mut key = true;
         if c.stream == vi && c.video {
             let annex = if crate::nal::is_annex(&data) { data } else { crate::nal::length_to_annex(&data, nal_len) };
@@ -331,6 +369,10 @@ pub(crate) fn annex_b_copy(path: &Path, dir: &Path) -> Result<Option<std::path::
     body.extend(list(b"hdrl", hdrl));
     body.extend(list(b"movi", movi));
     body.extend(chunk(b"idx1", &index));
+    // Senza OpenDML il RIFF riscritto non passa i 4 GiB.
+    if body.len() > u32::MAX as usize {
+        return Err("il video è troppo lungo per questo AVI".into());
+    }
     let mut file = b"RIFF".to_vec();
     file.extend(le32(body.len() as u32));
     file.extend(body);
@@ -369,6 +411,63 @@ mod tests {
     fn aac_config_becomes_adts_header_fields() {
         assert_eq!(adts_rate_index(44_100), 4);
         assert_eq!(adts_rate_index(48_000), 3);
+    }
+
+    fn chunk(id: &[u8; 4], body: &[u8]) -> Vec<u8> {
+        let mut out = id.to_vec();
+        out.extend_from_slice(&(body.len() as u32).to_le_bytes());
+        out.extend_from_slice(body);
+        if body.len() % 2 == 1 {
+            out.push(0);
+        }
+        out
+    }
+
+    fn walk(bytes: Vec<u8>) -> Result<Vec<AviChunk>, String> {
+        let file = std::sync::Arc::new(bytes);
+        let (mut streams, mut chunks) = (Vec::new(), Vec::new());
+        walk_riff(&file, 0, &file, 0, false, &mut streams, &mut chunks)?;
+        Ok(chunks)
+    }
+
+    /// OpenDML: i pacchetti dei `RIFF AVIX` dopo il primo GB si leggono, non si saltano.
+    #[test]
+    fn opendml_extensions_are_read() {
+        let movi = |data: &[u8]| chunk(b"LIST", &[b"movi".as_slice(), &chunk(b"00dc", data)].concat());
+        let mut file = movi(b"uno");
+        file.extend(chunk(b"RIFF", &[b"AVIX".as_slice(), &movi(b"due")].concat()));
+        let chunks = walk(file).unwrap();
+        let data: Vec<&[u8]> = chunks.iter().map(|c| &c.data[..]).collect();
+        assert_eq!(data, vec![b"uno".as_slice(), b"due".as_slice()]);
+    }
+
+    /// Una registrazione interrotta: l'ultimo pacchetto è tagliato e la lista dice più di quanto c'è.
+    #[test]
+    fn interrupted_recording_keeps_what_was_written() {
+        let mut body = b"movi".to_vec();
+        body.extend(chunk(b"00dc", b"intero"));
+        body.extend(chunk(b"01wb", b"audio!"));
+        body.extend_from_slice(b"00dc");
+        body.extend_from_slice(&1000u32.to_le_bytes());
+        body.extend_from_slice(b"tagli");
+        let mut file = b"LIST".to_vec();
+        file.extend_from_slice(&5000u32.to_le_bytes());
+        file.extend(body);
+        let chunks = walk(file).unwrap();
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(&chunks[0].data[..], b"intero");
+        // Fuori da `movi` un blocco tagliato resta un errore.
+        assert!(walk(chunk(b"JUNK", b"abc")[..9].to_vec()).is_err());
+    }
+
+    /// Migliaia di liste annidate: errore, non lo stack finito.
+    #[test]
+    fn deep_nesting_is_refused() {
+        let mut file = chunk(b"00dc", b"x");
+        for _ in 0..100 {
+            file = chunk(b"LIST", &[b"abcd".as_slice(), &file].concat());
+        }
+        assert!(walk(file).is_err());
     }
 }
 

@@ -1,38 +1,54 @@
 //! "Ottimizza per il web": sposta il blocco `moov` di un MP4 davanti ai dati (`mdat`),
 //! così il video parte prima che sia scaricato tutto. Gli offset dei dati (`stco`, `co64`) si aggiornano.
 
-use std::fs;
+use std::fs::{self, File};
+use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 struct TopBox {
-    start: usize,
-    end: usize,
+    start: u64,
+    end: u64,
     kind: [u8; 4],
 }
 
-fn top_boxes(data: &[u8]) -> Result<Vec<TopBox>, String> {
+/// I blocchi di primo livello, leggendo solo le loro intestazioni: il file può essere di gigabyte.
+fn top_boxes<R: Read + Seek>(file: &mut R, len: u64) -> Result<Vec<TopBox>, String> {
     let mut out = Vec::new();
-    let mut at = 0usize;
-    while at + 8 <= data.len() {
-        let size32 = u32::from_be_bytes(data[at..at + 4].try_into().unwrap()) as u64;
-        let kind = [data[at + 4], data[at + 5], data[at + 6], data[at + 7]];
+    let mut at = 0u64;
+    while at + 8 <= len {
+        let mut head = [0u8; 16];
+        let wanted = if at + 16 <= len { 16 } else { 8 };
+        file.seek(SeekFrom::Start(at)).map_err(|e| format!("MP4 non letto: {e}"))?;
+        file.read_exact(&mut head[..wanted]).map_err(|e| format!("MP4 non letto: {e}"))?;
+        let size32 = u32::from_be_bytes(head[0..4].try_into().unwrap()) as u64;
+        let kind = [head[4], head[5], head[6], head[7]];
         let size = match size32 {
-            0 => (data.len() - at) as u64,
+            0 => len - at,
             1 => {
-                if at + 16 > data.len() {
+                if wanted < 16 {
                     return Err("MP4 troncato".into());
                 }
-                u64::from_be_bytes(data[at + 8..at + 16].try_into().unwrap())
+                u64::from_be_bytes(head[8..16].try_into().unwrap())
             }
             n => n,
         };
-        if size < 8 || at as u64 + size > data.len() as u64 {
+        if size < 8 || at.checked_add(size).is_none_or(|end| end > len) {
             return Err("MP4 con un blocco fuori misura".into());
         }
-        out.push(TopBox { start: at, end: at + size as usize, kind });
-        at += size as usize;
+        out.push(TopBox { start: at, end: at + size, kind });
+        at += size;
     }
     Ok(out)
+}
+
+/// Copia i byte `start..end` di `file` in `out`.
+fn copy_range(file: &mut File, start: u64, end: u64, out: &mut impl Write) -> Result<(), String> {
+    file.seek(SeekFrom::Start(start)).map_err(|e| format!("MP4 non letto: {e}"))?;
+    let copied = std::io::copy(&mut Read::by_ref(file).take(end - start), out).map_err(|e| format!("MP4 non scritto: {e}"))?;
+    if copied != end - start {
+        return Err("MP4 troncato".into());
+    }
+    Ok(())
 }
 
 /// Somma `shift` a tutti gli offset dei blocchi `stco` e `co64` dentro `moov`.
@@ -100,30 +116,44 @@ fn table_len(moov: &[u8], at: usize, size: usize, entry: usize) -> Result<usize,
 }
 
 /// Il file MP4 con il `moov` davanti ai dati. Se c'è già, non lo tocca.
+/// In memoria va solo il `moov`: il resto si copia a pezzi nel file nuovo.
 pub fn make_faststart(path: &Path) -> Result<(), String> {
-    let data = fs::read(path).map_err(|e| format!("MP4 non letto: {e}"))?;
-    let boxes = top_boxes(&data)?;
+    let mut file = File::open(path).map_err(|e| format!("MP4 non letto: {e}"))?;
+    let len = file.metadata().map_err(|e| format!("MP4 non letto: {e}"))?.len();
+    let boxes = top_boxes(&mut file, len)?;
     let moov_i = boxes.iter().position(|b| &b.kind == b"moov").ok_or("MP4 senza moov")?;
     let mdat_i = boxes.iter().position(|b| &b.kind == b"mdat").ok_or("MP4 senza dati")?;
     if moov_i < mdat_i {
         return Ok(());
     }
     let moov = &boxes[moov_i];
-    let mut new_moov = data[moov.start..moov.end].to_vec();
+    if moov.end - moov.start > 512 * 1024 * 1024 {
+        return Err("MP4 con un blocco fuori misura".into());
+    }
+    let mut new_moov = vec![0u8; (moov.end - moov.start) as usize];
+    file.seek(SeekFrom::Start(moov.start)).map_err(|e| format!("MP4 non letto: {e}"))?;
+    file.read_exact(&mut new_moov).map_err(|e| format!("MP4 non letto: {e}"))?;
     let shift = new_moov.len() as u64;
     shift_offsets(&mut new_moov, shift)?;
-    let mut out = Vec::with_capacity(data.len());
-    for b in boxes.iter().take(mdat_i) {
-        out.extend_from_slice(&data[b.start..b.end]);
-    }
-    out.extend_from_slice(&new_moov);
-    for (i, b) in boxes.iter().enumerate().skip(mdat_i) {
-        if i != moov_i {
-            out.extend_from_slice(&data[b.start..b.end]);
-        }
-    }
     let tmp = path.with_extension("mp4.tmp");
-    fs::write(&tmp, &out).map_err(|e| format!("MP4 non scritto: {e}"))?;
+    let written = (|| -> Result<(), String> {
+        let mut out = BufWriter::with_capacity(1 << 20, File::create(&tmp).map_err(|e| format!("MP4 non scritto: {e}"))?);
+        for b in boxes.iter().take(mdat_i) {
+            copy_range(&mut file, b.start, b.end, &mut out)?;
+        }
+        out.write_all(&new_moov).map_err(|e| format!("MP4 non scritto: {e}"))?;
+        for (i, b) in boxes.iter().enumerate().skip(mdat_i) {
+            if i != moov_i {
+                copy_range(&mut file, b.start, b.end, &mut out)?;
+            }
+        }
+        out.flush().map_err(|e| format!("MP4 non scritto: {e}"))
+    })();
+    drop(file);
+    if let Err(e) = written {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
     fs::rename(&tmp, path).map_err(|e| {
         let _ = fs::remove_file(&tmp);
         format!("MP4 non sostituito: {e}")
@@ -162,7 +192,8 @@ mod tests {
         make_faststart(&path).unwrap();
         let out = fs::read(&path).unwrap();
         assert_eq!(out.len(), file.len());
-        let kinds: Vec<[u8; 4]> = top_boxes(&out).unwrap().into_iter().map(|b| b.kind).collect();
+        let kinds: Vec<[u8; 4]> =
+            top_boxes(&mut std::io::Cursor::new(&out), out.len() as u64).unwrap().into_iter().map(|b| b.kind).collect();
         assert_eq!(kinds, vec![*b"ftyp", *b"moov", *b"mdat"]);
         let at = out.windows(4).position(|w| w == b"stco").unwrap();
         let moved = u32::from_be_bytes(out[at + 12..at + 16].try_into().unwrap()) as usize;
