@@ -222,11 +222,27 @@ pub fn waveform(path: &Path, n: usize) -> Option<Vec<f32>> {
 
 fn waveform_stream(path: &Path, n: usize) -> Option<Vec<f32>> {
     if n == 0 { return None; }
-    let mut frames = 0usize;
-    stream_symphonia(path, &mut |s, _, ch| {
-        frames += s.len() / ch.max(1) as usize;
-        Ok(())
-    }).ok()?;
+    let hint = (|| {
+        let source = MediaSourceStream::new(Box::new(File::open(path).ok()?), Default::default());
+        let probed = symphonia::default::get_probe().format(&Hint::new(), source, &FormatOptions::default(), &MetadataOptions::default()).ok()?;
+        let track = probed.format.default_track().filter(|t| t.codec_params.sample_rate.is_some())
+            .or_else(|| probed.format.tracks().iter().find(|t| t.codec_params.sample_rate.is_some()))?;
+        usize::try_from(track.codec_params.n_frames?).ok().filter(|n| *n > 0)
+    })();
+    let frames = match hint {
+        Some(n) => n,
+        None => {
+            let mut frames = 0usize;
+            stream_symphonia(path, &mut |s, _, ch| { frames += s.len() / ch.max(1) as usize; Ok(()) }).ok()?;
+            frames
+        }
+    };
+    let (wave, actual) = waveform_bins(path, n, frames)?;
+    if actual == frames { Some(wave) }
+    else { waveform_bins(path, n, actual).filter(|(_, count)| *count == actual).map(|(v, _)| v) }
+}
+
+fn waveform_bins(path: &Path, n: usize, frames: usize) -> Option<(Vec<f32>, usize)> {
     if frames == 0 { return None; }
     let bins = n.min(frames);
     let mut sums = vec![0f64; bins];
@@ -244,7 +260,7 @@ fn waveform_stream(path: &Path, n: usize) -> Option<Vec<f32>> {
     let mut v: Vec<f32> = sums.iter().zip(&counts).map(|(s,c)| (s / (*c).max(1) as f64).sqrt() as f32).collect();
     let max = v.iter().copied().fold(0.0f32, f32::max).max(1.0);
     for x in &mut v { *x /= max; }
-    Some((0..n).map(|i| v[i * bins / n]).collect())
+    Some(((0..n).map(|i| v[i * bins / n]).collect(), at))
 }
 
 // AVI and platform-only codecs retain their existing decoder and output.
