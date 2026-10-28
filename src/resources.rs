@@ -11,6 +11,24 @@ thread_local! { static DEPTH: Cell<usize> = const { Cell::new(0) }; }
 // A guard must be released on the acquiring thread (recursive archive conversions).
 pub struct JobGuard(std::marker::PhantomData<std::rc::Rc<()>>);
 
+/// Non-blocking admission for an automatic updater: never interrupt active work.
+pub fn try_acquire() -> Option<JobGuard> {
+    if DEPTH.with(|d| d.get() > 0) {
+        return acquire(None);
+    }
+    let mut busy = match BUSY.try_lock() {
+        Ok(g) => g,
+        Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
+        Err(std::sync::TryLockError::WouldBlock) => return None,
+    };
+    if *busy {
+        return None;
+    }
+    *busy = true;
+    DEPTH.with(|d| d.set(1));
+    Some(JobGuard(std::marker::PhantomData))
+}
+
 pub fn acquire(cancel: Option<&AtomicBool>) -> Option<JobGuard> {
     if DEPTH.with(|d| d.get() > 0) {
         DEPTH.with(|d| d.set(d.get() + 1));
@@ -103,6 +121,17 @@ mod tests {
         });
         drop(first);
         assert!(acquire(None).is_some());
+    }
+    #[test]
+    fn updater_cannot_enter_during_another_job() {
+        let held = acquire(None).unwrap();
+        std::thread::spawn(|| assert!(try_acquire().is_none()))
+            .join()
+            .unwrap();
+        assert!(try_acquire().is_some()); // Recursive admission on the owner thread.
+        drop(held);
+        let cancelled = AtomicBool::new(false);
+        assert!(acquire(Some(&cancelled)).is_some());
     }
     #[test]
     fn memory_policy_keeps_gpu_when_budget_allows() {
