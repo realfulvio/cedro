@@ -78,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "cedro-trascrivi"
-version = "0.26.8"
+version = "0.26.9"
 dependencies = [
  "libc",
  "opus",
