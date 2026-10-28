@@ -12,7 +12,7 @@ use std::os::fd::AsRawFd;
 use std::sync::OnceLock;
 
 mod decode;
-pub(crate) use decode::H264Decoder;
+pub(crate) use decode::{H264Decoder, I420Frame};
 
 type Display = *mut c_void;
 type Status = c_int;

@@ -1977,6 +1977,11 @@ fn with_gpu_fallback(run: impl Fn() -> Result<(), String>) -> Result<(), String>
     }
 }
 
+#[cfg(target_os = "linux")]
+fn frame_copy(frame: &crate::gpuenc::I420Frame) -> OwnedFrame {
+    OwnedFrame { y: frame.y.clone(), u: frame.u.clone(), v: frame.v.clone(), width: frame.width, height: frame.height }
+}
+
 /// Il decodificatore H.264 dei campioni: la scheda video (VA-API) se c'è, è permessa e il video è adatto,
 /// altrimenti OpenH264. Con la scheda i fotogrammi escono in ordine di visualizzazione, a tempo di decodifica
 /// dei campioni; con OpenH264 portano il tempo del campione che li ha fatti uscire, come sempre.
@@ -1988,6 +1993,71 @@ struct SampleDecoder {
     queue: std::collections::VecDeque<(i64, i64)>,
     /// Tempo e durata dell'ultimo campione (per i fotogrammi che escono alla fine con OpenH264).
     last: (i64, i64),
+    /// Il controllo dei primi fotogrammi della scheda video contro OpenH264, finché non è fatto.
+    check: Option<GpuCheck>,
+}
+
+/// Quanti fotogrammi della scheda si confrontano con OpenH264 prima di fidarsi.
+const CHECK_FRAMES: usize = 8;
+/// Quanti campioni si tengono per il confronto.
+const CHECK_SAMPLES: usize = 40;
+
+/// I primi campioni e i primi fotogrammi della scheda video, per controllarli contro OpenH264.
+struct GpuCheck {
+    header: Vec<u8>,
+    samples: Vec<Vec<u8>>,
+    frames: Vec<OwnedFrame>,
+}
+
+/// Quanto due piani sono vicini, in dB (99 se uguali).
+fn plane_psnr(a: &[u8], b: &[u8]) -> f64 {
+    if a.len() != b.len() || a.is_empty() {
+        return 0.0;
+    }
+    let sum: f64 = a.iter().zip(b).map(|(&x, &y)| (f64::from(x) - f64::from(y)).powi(2)).sum();
+    if sum == 0.0 {
+        return 99.0;
+    }
+    10.0 * (255.0f64 * 255.0 / (sum / a.len() as f64)).log10()
+}
+
+impl GpuCheck {
+    /// Decodifica gli stessi campioni con OpenH264 e confronta i fotogrammi: la scheda video di un PC
+    /// che sbaglia in silenzio non deve rovinare un video. `whole`: i campioni sono tutto il video.
+    fn verify(self, whole: bool) -> Result<(), String> {
+        let mut soft = h264_decoder()?;
+        if !self.header.is_empty() {
+            let _ = soft.decode(&self.header);
+        }
+        let mut want: Vec<OwnedFrame> = Vec::new();
+        for sample in &self.samples {
+            if let Ok(Some(frame)) = soft.decode(sample) {
+                want.push(owned_frame(&frame)?);
+            }
+        }
+        if whole {
+            if let Ok(rest) = soft.flush_remaining() {
+                for frame in &rest {
+                    want.push(owned_frame(frame)?);
+                }
+            }
+        }
+        let n = want.len().min(self.frames.len());
+        if n == 0 && !self.frames.is_empty() {
+            return Err(format!("{GPU_DECODE_FAILED}: nessun fotogramma da confrontare"));
+        }
+        for (index, (gpu, soft)) in self.frames.iter().zip(&want).take(n).enumerate() {
+            let worst = if (gpu.width, gpu.height) == (soft.width, soft.height) {
+                plane_psnr(&gpu.y, &soft.y).min(plane_psnr(&gpu.u, &soft.u)).min(plane_psnr(&gpu.v, &soft.v))
+            } else {
+                0.0
+            };
+            if worst < 38.0 {
+                return Err(format!("{GPU_DECODE_FAILED}: il fotogramma {index} è diverso da quello di OpenH264 ({worst:.1} dB)"));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl SampleDecoder {
@@ -2000,7 +2070,8 @@ impl SampleDecoder {
                 match crate::gpuenc::H264Decoder::new(&sets) {
                     Ok(gpu) => {
                         eprintln!("decodifica sulla scheda video: {}", gpu.name());
-                        return Ok(SampleDecoder { soft: None, gpu: Some(gpu), queue: Default::default(), last: (0, 333_333) });
+                        let check = GpuCheck { header: header.to_vec(), samples: Vec::new(), frames: Vec::new() };
+                        return Ok(SampleDecoder { soft: None, gpu: Some(gpu), queue: Default::default(), last: (0, 333_333), check: Some(check) });
                     }
                     Err(err) => eprintln!("decodifica sulla scheda video non usata: {err}"),
                 }
@@ -2011,9 +2082,9 @@ impl SampleDecoder {
             let _ = decoder.decode(header);
         }
         #[cfg(target_os = "linux")]
-        return Ok(SampleDecoder { soft: Some(decoder), gpu: None, queue: Default::default(), last: (0, 333_333) });
+        return Ok(SampleDecoder { soft: Some(decoder), gpu: None, queue: Default::default(), last: (0, 333_333), check: None });
         #[cfg(not(target_os = "linux"))]
-        Ok(SampleDecoder { soft: Some(decoder), queue: Default::default(), last: (0, 333_333) })
+        Ok(SampleDecoder { soft: Some(decoder), queue: Default::default(), last: (0, 333_333), check: None })
     }
 
     /// Un campione (Annex B) con la sua durata e il suo tempo (100 ns). I fotogrammi pronti vanno a `emit`
@@ -2038,6 +2109,21 @@ impl SampleDecoder {
             if had {
                 self.queue.push_back((duration, time));
             }
+            if let Some(check) = self.check.as_mut() {
+                if check.samples.len() < CHECK_SAMPLES {
+                    check.samples.push(annex.to_vec());
+                }
+                for frame in &frames {
+                    if check.frames.len() < CHECK_FRAMES {
+                        check.frames.push(frame_copy(frame));
+                    }
+                }
+                if check.frames.len() >= CHECK_FRAMES {
+                    if let Some(check) = self.check.take() {
+                        check.verify(false)?;
+                    }
+                }
+            }
             for frame in frames {
                 let (d, t) = self.queue.pop_front().unwrap_or((duration, time));
                 emit(OwnedFrame { y: frame.y, u: frame.u, v: frame.v, width: frame.width, height: frame.height }, d, t)?;
@@ -2061,6 +2147,15 @@ impl SampleDecoder {
                 Ok(())
             })
             .map_err(|err| format!("{GPU_DECODE_FAILED}: {err}"))?;
+            if let Some(mut check) = self.check.take() {
+                for frame in &frames {
+                    if check.frames.len() < CHECK_FRAMES {
+                        check.frames.push(frame_copy(frame));
+                    }
+                }
+                let whole = check.samples.len() < CHECK_SAMPLES;
+                check.verify(whole)?;
+            }
             for frame in frames {
                 let (d, t) = self.queue.pop_front().unwrap_or((self.last.1, self.last.0 + self.last.1));
                 emit(OwnedFrame { y: frame.y, u: frame.u, v: frame.v, width: frame.width, height: frame.height }, d, t)?;
