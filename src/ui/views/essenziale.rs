@@ -141,6 +141,9 @@ fn standard(f: &mut Frame, app: &App) {
         super::scrolled(f, list, Scroll::Queue, |f| {
             for (n, &i) in rows.iter().enumerate() {
                 let y = list.1 + n as f32 * 96.0;
+                if !f.p.shows_y(y, 96.0) {
+                    continue;
+                }
                 let file = &app.files[i];
                 f.hline(q.0, y, q.2);
                 if app.selected == Some(i) {
@@ -251,6 +254,9 @@ fn simplified(f: &mut Frame, app: &App) {
         super::scrolled(f, (list.0 + 1.0, list.1 + 1.0, list.2 - 2.0, list.3 - 2.0), Scroll::Queue, |f| {
             for (n, &i) in rows.iter().enumerate() {
                 let y = list.1 + n as f32 * 134.0;
+                if !f.p.shows_y(y, 134.0) {
+                    continue;
+                }
                 let file = &app.files[i];
                 if n > 0 {
                     f.hline(list.0, y, list.2);
