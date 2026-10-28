@@ -8,6 +8,9 @@ Da Word, ODT e RTF a PDF.	From Word, ODT and RTF to PDF.
 Da PDF a Word modificabile, a immagini o a testo.	From PDF to editable Word, images or text.
 TXT, Markdown, CSV, JSON e HTML.	TXT, Markdown, CSV, JSON and HTML.
 WAV, MP3, OGG, M4A, AAC e FLAC.	WAV, MP3, OGG, M4A, AAC and FLAC.
+MP3, WAV, FLAC, Opus e AIFF.	MP3, WAV, FLAC, Opus and AIFF.
+Archivi	Archives
+Converte i file dentro uno ZIP e lo rifà.	Converts the files inside a ZIP and rebuilds it.
 MP4, WebM, MOV, MKV e AVI.	MP4, WebM, MOV, MKV and AVI.
 leggera, per il web	light, for the web
 va bene dappertutto	works everywhere
@@ -1105,3 +1108,34 @@ Carattere	Font
 File di tipo {}	{} file
 File senza estensione	File without extension
 Cedro non può mostrare il contenuto di questo tipo di file, ma lo tiene in coda con il nome e il peso.	Cedro can't show the content of this kind of file, but keeps it in the queue with its name and size.
+Foto in WebP	Photos to WebP
+Foto in JPEG	Photos to JPEG
+Foto in PNG	Photos to PNG
+Audio in MP3	Audio to MP3
+Audio in WAV	Audio to WAV
+Documenti in PDF	Documents to PDF
+più leggere	lighter
+più leggero	lighter
+vanno dappertutto	work everywhere
+si aprono ovunque	open anywhere
+Nome del file	File name
+Vuoto = come l'originale. Usa %nome%, %data%, %ora%, %ext%	Empty = same as the original. Use %name%, %date%, %time%, %ext%
+per esempio %nome%_%data%	for example %name%_%date%
+Qualità Opus	Opus quality
+1 file convertito	1 file converted
+{#} file convertiti	{} files converted
+{#} lasciati com'erano	{} left as they were
+{#} non convertiti (vedi RAPPORTO-CEDRO.txt)	{} not converted (see RAPPORTO-CEDRO.txt)
+{#} con percorso non sicuro ignorati	{} with an unsafe path ignored
+l'archivio è vuoto	the archive is empty
+nello ZIP non ci sono foto da convertire in questo formato	there are no photos in the ZIP to convert to this format
+nello ZIP non c'è audio da convertire in questo formato	there is no audio in the ZIP to convert to this format
+nello ZIP non ci sono documenti da convertire in questo formato	there are no documents in the ZIP to convert to this format
+l'archivio contiene più di 8 GB di file: troppo grande	the archive holds more than 8 GB of files: too large
+HEIC e HEIF non sono ancora letti	HEIC and HEIF can't be read yet
+SVG troppo grande da disegnare	SVG too large to draw
+JPEG XL troppo grande	JPEG XL too large
+JPEG XL senza perdita · {}	Lossless JPEG XL · {}
+JPEG XL vuole un'immagine di almeno 2×2 punti	JPEG XL needs an image of at least 2×2 pixels
+FLAC accetta al massimo 8 canali	FLAC takes at most 8 channels
+Opus si scrive su Windows, su Linux e su Android	Opus is written on Windows, Linux and Android

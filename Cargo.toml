@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.24.0"
+version = "0.25.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 cfb = "0.7"
 hound = "3.5"
-image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff", "ico"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff", "ico", "tga", "qoi", "pnm", "hdr", "exr", "dds"] }
 hayro = "0.8"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 lopdf = "0.36"
@@ -25,8 +25,16 @@ rten = "0.26"
 rten-simd = "0.26"
 serde_json = "1"
 sha2 = "0.10"
-symphonia = { version = "0.5", default-features = false, features = ["mp3", "wav", "flac", "vorbis", "pcm", "aac", "isomp4", "ogg", "mkv"] }
+symphonia = { version = "0.5", default-features = false, features = ["mp3", "wav", "flac", "vorbis", "pcm", "aac", "isomp4", "ogg", "mkv", "aiff", "caf", "adpcm"] }
 ureq = "2"
+# Formati di foto in più, tutti in Rust: SVG (resvg), AVIF (ravif per scrivere, avif-decode/rav1d per leggere), JPEG XL (jxl-oxide per leggere, zune-jpegxl per scrivere); FLAC in scrittura (flacenc).
+resvg = { version = "0.49", default-features = false, features = ["text", "system-fonts"] }
+ravif = { version = "0.13", default-features = false }
+avif-decode = { version = "3", default-features = false }
+jxl-oxide = { version = "0.12", default-features = false }
+zune-jpegxl = { version = "0.5", default-features = false, features = ["std"] }
+zune-core = { version = "0.5", default-features = false }
+flacenc = { version = "0.5", default-features = false }
 zip = { version = "9", default-features = false, features = ["deflate"] }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
 
@@ -108,6 +116,8 @@ winresource = "0.1"
 hayro = { path = "vendor/hayro" }
 # rten-simd con l'interruttore per spegnere AVX-512 (Impostazioni)
 rten-simd = { path = "vendor/rten-simd" }
+# rav1d (lettura delle foto AVIF) senza l'assembly: niente nasm da installare
+rav1d = { path = "vendor/rav1d" }
 
 # Prototipo Android (NativeActivity, tutto Rust): vedi android/README.md
 [workspace]

@@ -74,15 +74,17 @@ Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Gui
 
 | Tipo | Formati | Con Shift |
 | --- | --- | --- |
-| Immagini | PNG, JPEG, WebP, BMP, GIF, TIFF | altro formato, PDF con testo cercabile |
+| Immagini | PNG, JPEG, WebP, AVIF, JPEG XL, **SVG**, BMP, GIF, TIFF, ICO, TGA, QOI, PNM, HDR, OpenEXR, DDS | altro formato, PDF con testo cercabile; nel pannello Conversioni anche AVIF, JPEG XL (senza perdita), ICO, TGA, QOI, PNM, HDR, OpenEXR |
 | Documenti | DOCX, DOC, ODT, RTF | PDF |
 | Testo | TXT, MD, CSV, JSON, HTML, XML | altro testo, PDF |
 | PDF | PDF | JPG, **Word modificabile** |
-| Audio | WAV, MP3, OGG, M4A, AAC, FLAC | WAV, MP3 |
+| Audio | WAV, MP3, OGG, **Opus**, M4A, AAC, FLAC, AIFF, CAF | WAV, MP3; nel pannello anche FLAC, Opus, AIFF |
 | Video | MP4, WebM, MOV, MKV, AVI | MP4 |
+| Archivi | ZIP | foto in WebP/JPEG/PNG, audio in MP3/WAV, documenti in PDF: converte i file dentro lo ZIP e lo rifà |
 
 **PDF in Word:** titoli con stili veri, paragrafi, tabelle vere (celle, sfondi, bordi, intestazione ripetuta tra le pagine), elenchi puntati e numerati, testo su più colonne e grafici al loro posto, modificabili come in un editor professionale. Le scansioni vengono lette con l'OCR in italiano.
 **Foto dal telefono:** vengono raddrizzate in automatico.
+**Riconosce i file dal contenuto:** una foto WebP chiamata «.jpg» si converte lo stesso. **Nome dei file a modello** (`%nome%_%data%`) nel pannello Conversioni.
 
 ## Più di una conversione
 

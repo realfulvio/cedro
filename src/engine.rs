@@ -22,7 +22,7 @@ fn err(msg: impl Into<String>) -> CedroError {
     CedroError(msg.into())
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
     Image,
     Text,
@@ -30,6 +30,8 @@ pub enum Kind {
     Video,
     Pdf,
     Doc,
+    /// Un archivio ZIP: si convertono i file che contiene.
+    Archive,
     Other,
 }
 
@@ -84,6 +86,38 @@ const AUDIO_CONVERT: &[Slice] = &[
     Slice { id: "wav", label: "WAV" },
     Slice { id: "mp3", label: "MP3" },
 ];
+const IMAGE_PANEL: &[Slice] = &[
+    Slice { id: "png", label: "PNG" },
+    Slice { id: "jpeg", label: "JPEG" },
+    Slice { id: "webp", label: "WebP" },
+    Slice { id: "avif", label: "AVIF" },
+    Slice { id: "jxl", label: "JPEG XL" },
+    Slice { id: "bmp", label: "BMP" },
+    Slice { id: "gif", label: "GIF" },
+    Slice { id: "tiff", label: "TIFF" },
+    Slice { id: "ico", label: "ICO" },
+    Slice { id: "tga", label: "TGA" },
+    Slice { id: "qoi", label: "QOI" },
+    Slice { id: "pnm", label: "PNM" },
+    Slice { id: "hdr", label: "HDR" },
+    Slice { id: "exr", label: "OpenEXR" },
+    Slice { id: "pdf", label: "PDF" },
+];
+const AUDIO_PANEL: &[Slice] = &[
+    Slice { id: "mp3", label: "MP3" },
+    Slice { id: "wav", label: "WAV" },
+    Slice { id: "flac", label: "FLAC" },
+    Slice { id: "opus", label: "Opus" },
+    Slice { id: "aiff", label: "AIFF" },
+];
+const ARCHIVE_CONVERT: &[Slice] = &[
+    Slice { id: "z-webp", label: "Foto in WebP" },
+    Slice { id: "z-jpeg", label: "Foto in JPEG" },
+    Slice { id: "z-png", label: "Foto in PNG" },
+    Slice { id: "z-mp3", label: "Audio in MP3" },
+    Slice { id: "z-wav", label: "Audio in WAV" },
+    Slice { id: "z-pdf", label: "Documenti in PDF" },
+];
 const VIDEO_CONVERT: &[Slice] = &[
     Slice { id: "mp4", label: "MP4" },
     Slice { id: "mp3", label: "Solo audio (MP3)" },
@@ -98,6 +132,16 @@ const PDF_CONVERT: &[Slice] = &[
 const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }];
 const EMPTY: &[Slice] = &[Slice { id: "none", label: "Niente qui" }];
 
+/// I formati di uscita del pannello Conversioni: quelli della ruota più gli altri, che alla ruota
+/// non entrano (la ruota ha una tavola con un numero fisso di fette).
+pub fn panel_slices(kind: Kind) -> &'static [Slice] {
+    match kind {
+        Kind::Image => IMAGE_PANEL,
+        Kind::Audio => AUDIO_PANEL,
+        other => slices(other, Mode::Convert),
+    }
+}
+
 pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
     match (kind, mode) {
         (_, Mode::Actions) => ACTIONS,
@@ -110,6 +154,7 @@ pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
         (Kind::Doc, Mode::Convert) => DOC_CONVERT,
         (Kind::Pdf, Mode::Convert) => PDF_CONVERT,
         (Kind::Pdf, Mode::Tools) => PDF_TOOLS,
+        (Kind::Archive, Mode::Convert) => ARCHIVE_CONVERT,
         _ => EMPTY,
     }
 }
@@ -165,16 +210,34 @@ pub fn extension(path: &Path) -> String {
         .to_ascii_lowercase()
 }
 
-pub fn kind_of(path: &Path) -> Kind {
-    match extension(path).as_str() {
+/// Il tipo di file secondo l'estensione.
+fn kind_by_extension(ext: &str) -> Kind {
+    match ext {
         "pdf" => Kind::Pdf,
         "doc" | "docx" | "odt" | "rtf" => Kind::Doc,
-        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "ico" => Kind::Image,
+        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "ico" | "svg" | "svgz" | "avif" | "jxl" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm" | "hdr" | "exr" | "dds" => Kind::Image,
         "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" => Kind::Text,
-        "wav" | "mp3" | "ogg" | "m4a" | "aac" | "flac" => Kind::Audio,
+        "wav" | "mp3" | "ogg" | "oga" | "opus" | "m4a" | "aac" | "flac" | "aif" | "aiff" | "aifc" | "caf" => Kind::Audio,
         "mp4" | "webm" | "mov" | "mkv" | "avi" => Kind::Video,
+        "zip" => Kind::Archive,
         _ => Kind::Other,
     }
+}
+
+/// Il tipo di file: dall'estensione, e dal contenuto quando l'estensione manca, non è conosciuta o
+/// dice una cosa diversa da quella che il file è (una foto WebP chiamata «.jpg»). I contenitori che
+/// possono ospitare tipi diversi (MP4, ZIP, Matroska) si giudicano solo dall'estensione.
+pub fn kind_of(path: &Path) -> Kind {
+    let by_ext = kind_by_extension(&extension(path));
+    let Some(real) = crate::imgfmt::sniff_file(path) else {
+        return by_ext;
+    };
+    let sure = matches!(real, "png" | "jpg" | "gif" | "webp" | "bmp" | "tiff" | "avif" | "jxl" | "qoi" | "dds" | "exr" | "hdr" | "pdf" | "flac" | "wav" | "aiff" | "ogg" | "opus" | "svg");
+    let by_content = kind_by_extension(real);
+    if by_content != Kind::Other && by_content != by_ext && (by_ext == Kind::Other || sure) {
+        return by_content;
+    }
+    by_ext
 }
 
 pub struct Output {
@@ -207,6 +270,8 @@ struct Naming {
     decided: Option<ExistsChoice>,
     /// Le copie fatte con un nome nuovo ma da buttare, perché l'utente ha scelto di saltare.
     skipped: Vec<PathBuf>,
+    /// Il modello del nome di uscita (`%nome%_%data%`), se scelto.
+    template: Option<String>,
     /// Dentro `perform_with`: i nomi nuovi si prenotano creando il file, e con «sostituisci» si scrive
     /// in un file temporaneo che prende il posto di quello vecchio solo a lavoro riuscito.
     guarded: bool,
@@ -267,6 +332,22 @@ fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
+/// Il nome di uscita secondo il modello scelto: il nome del file di partenza è sostituito dal modello,
+/// e quello che il motore aggiunge in fondo («-compresso», «-2»…) resta.
+fn templated_stem(file_stem: &str) -> String {
+    NAMING.with(|n| {
+        let n = n.borrow();
+        let (Some(template), Some(source)) = (n.template.as_deref(), n.source.as_deref()) else {
+            return file_stem.to_string();
+        };
+        let base = stem(source);
+        let Some(tail) = file_stem.strip_prefix(base.as_str()) else {
+            return file_stem.to_string();
+        };
+        crate::nametemplate::expand(template, &base, &extension(source), tail, crate::nametemplate::now()).unwrap_or_else(|| file_stem.to_string())
+    })
+}
+
 /// La scelta per un nome che esiste già: quella delle impostazioni, o la risposta alla domanda
 /// (chiesta una volta sola per file).
 fn choice_for(candidate: &Path) -> ExistsChoice {
@@ -308,6 +389,8 @@ fn replacement_for(dir: &Path, file_stem: &str, ext: &str, target: PathBuf) -> P
 /// nome già presente, ma mai quello del file di partenza: una conversione verso lo stesso formato non
 /// deve riscrivere l'originale.
 pub fn unique_output(dir: &Path, file_stem: &str, ext: &str) -> PathBuf {
+    let templated = templated_stem(file_stem);
+    let file_stem = templated.as_str();
     let candidate = dir.join(file_name(file_stem, ext));
     if claim(&candidate) {
         return candidate;
@@ -347,7 +430,7 @@ fn reserve(dir: &Path, file_stem: &str, ext: &str) -> CedroResult<PathBuf> {
 /// regola per i nomi che esistono già. `None` se il file esiste e si è scelto di saltarlo.
 pub fn choose_output(source: &Path, dir: &Path, file_stem: &str, ext: &str, opts: &Options) -> Option<PathBuf> {
     let before = NAMING.with(|n| {
-        n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(source.to_path_buf()), ..Default::default() })
+        n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(source.to_path_buf()), template: opts.name_template.clone(), ..Default::default() })
     });
     let out = unique_output(dir, file_stem, ext);
     let used = NAMING.with(|n| n.replace(before));
@@ -427,6 +510,29 @@ fn flatten(img: &DynamicImage, white: bool) -> image::RgbImage {
 }
 
 fn save_image(img: &DynamicImage, path: &Path, format: ImageFormat, quality: u8, white: bool) -> CedroResult<()> {
+    match format {
+        ImageFormat::Ico => {
+            let small = crate::imgfmt::ico_ready(img);
+            return DynamicImage::ImageRgba8(small.to_rgba8()).save_with_format(path, format).map_err(|e| err(e.to_string()));
+        }
+        ImageFormat::Qoi => {
+            let ready = if img.color().has_alpha() { DynamicImage::ImageRgba8(img.to_rgba8()) } else { DynamicImage::ImageRgb8(img.to_rgb8()) };
+            return ready.save_with_format(path, format).map_err(|e| err(e.to_string()));
+        }
+        ImageFormat::Pnm => {
+            use image::codecs::pnm::{PnmEncoder, PnmSubtype, SampleEncoding};
+            use image::ImageEncoder;
+            let rgb = flatten(img, white);
+            let mut file = fs::File::create(path).map_err(|e| err(e.to_string()))?;
+            return PnmEncoder::new(&mut file)
+                .with_subtype(PnmSubtype::Pixmap(SampleEncoding::Binary))
+                .write_image(rgb.as_raw(), rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
+                .map_err(|e| err(e.to_string()));
+        }
+        ImageFormat::Hdr => return DynamicImage::ImageRgb32F(img.to_rgb32f()).save_with_format(path, format).map_err(|e| err(e.to_string())),
+        ImageFormat::OpenExr => return DynamicImage::ImageRgba32F(img.to_rgba32f()).save_with_format(path, format).map_err(|e| err(e.to_string())),
+        _ => {}
+    }
     if format == ImageFormat::Jpeg {
         let rgb = flatten(img, white);
         let mut file = fs::File::create(path).map_err(|e| err(e.to_string()))?;
@@ -438,17 +544,8 @@ fn save_image(img: &DynamicImage, path: &Path, format: ImageFormat, quality: u8,
     img.save_with_format(path, format).map_err(|e| err(e.to_string()))
 }
 
-fn load_image(path: &Path, straighten: bool) -> CedroResult<DynamicImage> {
-    if straighten {
-        crate::ocr::open_upright(path).map_err(err)
-    } else {
-        // Il formato dal contenuto, come con «Raddrizza»: un JPEG chiamato .png si apre lo stesso.
-        image::ImageReader::open(path)
-            .and_then(|r| r.with_guessed_format())
-            .map_err(|e| err(format!("immagine non letta: {e}")))?
-            .decode()
-            .map_err(|e| err(format!("immagine non letta: {e}")))
-    }
+fn load_image(path: &Path, straighten: bool, target_side: Option<u32>) -> CedroResult<DynamicImage> {
+    crate::imgfmt::open(path, straighten, target_side).map_err(err)
 }
 
 /// Larghezza e altezza di un PNG, dall'intestazione (IHDR).
@@ -696,6 +793,8 @@ pub struct Options {
     pub faststart: bool,
     /// Documenti in PDF: password per aprire il file.
     pub password: Option<String>,
+    /// Il nome dei file scritti, a modello: `%nome%`, `%ext%`, `%data%`, `%ora%`, `%unix%`.
+    pub name_template: Option<String>,
 }
 
 impl Default for Options {
@@ -732,6 +831,7 @@ impl Default for Options {
             mute: false,
             faststart: false,
             password: None,
+            name_template: None,
         }
     }
 }
@@ -743,6 +843,7 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
             exists: opts.exists,
             ask: opts.on_exists.clone(),
             source: Some(path.to_path_buf()),
+            template: opts.name_template.clone(),
             guarded: true,
             ..Default::default()
         })
@@ -835,15 +936,14 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Ok(Output { path: out, message: size_message(before, after) });
     }
 
-    if extension(path) == "opus" && matches!(action, "wav" | "mp3") {
-        return Err(err("Opus non è ancora letto"));
-    }
-    if action == "wav" || action == "mp3" {
+    if matches!(action, "wav" | "mp3" | "flac" | "aiff" | "opus") {
         let out = reserve(&dir, &stem(path), action)?;
-        let result = if action == "wav" {
-            crate::audio::to_wav(path, &out, opts)
-        } else {
-            crate::audio::to_mp3(path, &out, quality, opts)
+        let result = match action {
+            "wav" => crate::audio::to_wav(path, &out, opts),
+            "mp3" => crate::audio::to_mp3(path, &out, quality, opts),
+            "flac" => crate::audio::to_flac(path, &out, opts),
+            "aiff" => crate::audio::to_aiff(path, &out, opts),
+            _ => crate::audio::to_opus(path, &out, quality, opts),
         };
         if let Err(e) = result {
             let _ = fs::remove_file(&out);
@@ -851,6 +951,10 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         }
         let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
         return Ok(Output { path: out, message: size_message(before, after) });
+    }
+    if kind == Kind::Archive && action.starts_with("z-") {
+        let (out, message) = crate::archive::convert(path, action, quality, &dir, opts).map_err(err)?;
+        return Ok(Output { path: out, message });
     }
     if action == "mp4" {
         let out = reserve(&dir, &stem(path), "mp4")?;
@@ -1102,7 +1206,14 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
 
     // Il formato e il nome prima di aprire l'immagine: un file da saltare non si legge neppure.
     let (format, ext, label_stem) = match action {
+        "avif" | "jxl" => (ImageFormat::Png, action, ""),
         "pdf" => (ImageFormat::Jpeg, "pdf", ""),
+        "ico" => (ImageFormat::Ico, "ico", ""),
+        "tga" => (ImageFormat::Tga, "tga", ""),
+        "qoi" => (ImageFormat::Qoi, "qoi", ""),
+        "pnm" => (ImageFormat::Pnm, "ppm", ""),
+        "hdr" => (ImageFormat::Hdr, "hdr", ""),
+        "exr" => (ImageFormat::OpenExr, "exr", ""),
         "png" | "strip" => (ImageFormat::Png, "png", if action == "strip" { "pulito" } else { "" }),
         "jpeg" => (ImageFormat::Jpeg, "jpg", ""),
         "compress" => (ImageFormat::Jpeg, "jpg", "compresso"),
@@ -1122,7 +1233,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     };
     let out = reserve(&dir, &file_stem, ext)?;
 
-    let mut img = load_image(path, opts.straighten)?;
+    let mut img = load_image(path, opts.straighten, opts.max_side)?;
     if let Some(side) = opts.max_side.filter(|s| *s > 0 && img.width().max(img.height()) > *s) {
         img = img.resize(side, side, image::imageops::FilterType::Lanczos3);
     }
@@ -1150,7 +1261,14 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Ok(Output { path: out, message });
     }
 
-    let q =if action == "compress" { quality.min(settings.compress_quality()) } else { quality };
+    if matches!(action, "avif" | "jxl") {
+        let bytes = if action == "avif" { crate::imgfmt::avif_bytes(&img, quality) } else { crate::imgfmt::jxl_bytes(&img) }.map_err(err)?;
+        write_bytes(&out, &bytes)?;
+        let message = if action == "avif" { size_message(before, bytes.len() as u64) } else { format!("JPEG XL senza perdita · {}", size_message(before, bytes.len() as u64)) };
+        return Ok(Output { path: out, message });
+    }
+
+    let q = if action == "compress" { quality.min(settings.compress_quality()) } else { quality };
     save_image(&img, &out, format, q, opts.white_background)?;
     let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
     let message = match action {
@@ -2180,14 +2298,12 @@ Luca,Bondeno
         fs::write(&utf16, wide).unwrap();
         let pdf = perform(&utf16, "pdf", 80).unwrap();
         assert!(fs::read(&pdf.path).unwrap().windows(5).any(|w| w == b"Cedro"));
-        assert!(kind_of(Path::new("nota.opus")) == Kind::Other);
+        assert!(kind_of(Path::new("nota.opus")) == Kind::Audio);
         assert_eq!(slices(Kind::Other, Mode::Convert)[0].id, "none");
+        // Un file .opus rotto non diventa un WAV vuoto: l'errore è chiaro.
         let opus = dir.join("nota.opus");
         fs::write(&opus, b"OpusHead").unwrap();
-        match perform(&opus, "wav", 80) {
-            Ok(_) => panic!("Opus non deve diventare WAV"),
-            Err(e) => assert!(e.to_string().contains("Opus"), "{e}"),
-        }
+        assert!(perform(&opus, "wav", 80).is_err(), "un Opus rotto non deve diventare un WAV");
         let photo = dir.join("foto.png");
         let other = dir.join("lettera.docx");
         fs::write(&photo, b"png").unwrap();
@@ -2943,4 +3059,297 @@ fn mp4_box_len(bytes: &[u8], name: &[u8; 4]) -> usize {
         i += size;
     }
     0
+}
+
+/// Prove dei formati in più (foto, audio, ZIP, nome a modello): ogni conversione si rilegge e si confronta.
+#[cfg(test)]
+mod format_tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn scratch() -> PathBuf {
+        let n = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("cedro-fmt-{n}"));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn sample_png(dir: &Path, name: &str, w: u32, h: u32, alpha: bool) -> PathBuf {
+        let mut img = image::RgbaImage::new(w, h);
+        for (x, y, p) in img.enumerate_pixels_mut() {
+            *p = image::Rgba([(x * 255 / w) as u8, (y * 255 / h) as u8, ((x + y) * 255 / (w + h)) as u8, if alpha && x < w / 2 { 128 } else { 255 }]);
+        }
+        let path = dir.join(name);
+        img.save(&path).unwrap();
+        path
+    }
+
+    fn opts() -> Options {
+        Options { exists: Exists::Replace, ..Default::default() }
+    }
+
+    #[test]
+    fn photo_formats_roundtrip() {
+        let dir = scratch();
+        let src = sample_png(&dir, "gradiente.png", 64, 48, false);
+        let original = image::open(&src).unwrap().to_rgb8();
+        // Formati senza perdita: tornano uguali.
+        for (action, ext) in [("tga", "tga"), ("qoi", "qoi"), ("pnm", "ppm"), ("tiff", "tiff"), ("bmp", "bmp"), ("jxl", "jxl")] {
+            let out = perform_with(&src, action, 80, None, &opts()).unwrap_or_else(|e| panic!("{action}: {e}"));
+            assert!(out.path.to_string_lossy().ends_with(ext), "{action}");
+            let back = crate::imgfmt::open(&out.path, false, None).unwrap_or_else(|e| panic!("{action} riletto: {e}")).to_rgb8();
+            assert_eq!(back.dimensions(), (64, 48), "{action}");
+            assert_eq!(back.as_raw(), original.as_raw(), "{action} deve essere senza perdita");
+        }
+        // ICO e HDR/EXR: stesse misure e colori vicini.
+        for (action, tolerance) in [("ico", 0i32), ("hdr", 12), ("exr", 2)] {
+            let out = perform_with(&src, action, 80, None, &opts()).unwrap_or_else(|e| panic!("{action}: {e}"));
+            let back = crate::imgfmt::open(&out.path, false, None).unwrap_or_else(|e| panic!("{action} riletto: {e}")).to_rgb8();
+            assert_eq!(back.dimensions(), (64, 48), "{action}");
+            let worst = back.as_raw().iter().zip(original.as_raw()).map(|(a, b)| (*a as i32 - *b as i32).abs()).max().unwrap();
+            assert!(worst <= tolerance, "{action}: scarto massimo {worst}");
+        }
+    }
+
+    #[test]
+    fn avif_keeps_look_and_alpha() {
+        let dir = scratch();
+        let src = sample_png(&dir, "trasparente.png", 64, 48, true);
+        let out = perform_with(&src, "avif", 90, None, &opts()).expect("avif");
+        assert!(fs::read(&out.path).unwrap()[4..12].starts_with(b"ftypavif"));
+        let back = crate::imgfmt::open(&out.path, false, None).expect("avif riletto").to_rgba8();
+        assert_eq!(back.dimensions(), (64, 48));
+        let original = image::open(&src).unwrap().to_rgba8();
+        // La trasparenza resta: a sinistra mezza, a destra piena.
+        assert!((back.get_pixel(5, 5)[3] as i32 - 128).abs() < 20, "alfa sinistra {}", back.get_pixel(5, 5)[3]);
+        assert!(back.get_pixel(60, 5)[3] > 235);
+        let diff: i64 = back.pixels().zip(original.pixels()).map(|(a, b)| (a[1] as i64 - b[1] as i64).abs()).sum();
+        assert!(diff / (64 * 48) < 12, "AVIF troppo lontano dall'originale");
+        // E da AVIF si torna a PNG con la ruota di sempre.
+        let png = perform_with(&out.path, "png", 80, None, &opts()).expect("avif in png");
+        assert!(image::open(&png.path).is_ok());
+        assert_eq!(kind_of(&out.path), Kind::Image);
+    }
+
+    #[test]
+    fn svg_becomes_image_and_pdf() {
+        let dir = scratch();
+        let svg = dir.join("logo.svg");
+        fs::write(&svg, r##"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20" viewBox="0 0 40 20"><rect width="20" height="20" fill="#ff0000"/><circle cx="30" cy="10" r="8" fill="#0000ff"/></svg>"##).unwrap();
+        assert_eq!(kind_of(&svg), Kind::Image);
+        let out = perform_with(&svg, "png", 80, None, &opts()).expect("svg in png");
+        let img = image::open(&out.path).unwrap().to_rgba8();
+        // Un logo piccolo si disegna ad almeno 1024 px sul lato lungo, con il fondo trasparente.
+        assert_eq!(img.width(), 1024);
+        assert_eq!(img.height(), 512);
+        assert_eq!(img.get_pixel(100, 250).0, [255, 0, 0, 255]);
+        assert_eq!(img.get_pixel(800, 250).0, [0, 0, 255, 255]);
+        assert_eq!(img.get_pixel(1000, 10)[3], 0);
+        let small = perform_with(&svg, "png", 80, None, &Options { max_side: Some(200), ..opts() }).expect("svg 200");
+        assert_eq!(image::open(&small.path).unwrap().width(), 200);
+        let pdf = perform_with(&svg, "pdf", 80, None, &opts()).expect("svg in pdf");
+        assert!(fs::read(&pdf.path).unwrap().starts_with(b"%PDF"));
+    }
+
+    #[test]
+    fn mislabelled_files_are_recognised_by_content() {
+        let dir = scratch();
+        let png = sample_png(&dir, "vera.png", 32, 32, false);
+        let webp = perform_with(&png, "webp", 80, None, &opts()).unwrap().path;
+        // Una WebP chiamata «.jpg» e un PNG senza estensione si leggono comunque.
+        let fake = dir.join("finta.jpg");
+        fs::copy(&webp, &fake).unwrap();
+        assert_eq!(kind_of(&fake), Kind::Image);
+        let out = perform_with(&fake, "png", 80, None, &opts()).expect("webp col nome sbagliato");
+        assert_eq!(image::open(&out.path).unwrap().width(), 32);
+        let bare = dir.join("senzaestensione");
+        fs::copy(&png, &bare).unwrap();
+        assert_eq!(kind_of(&bare), Kind::Image);
+        // Un PDF chiamato «.jpg» è un PDF.
+        let pdf = perform_with(&png, "pdf", 80, None, &opts()).unwrap().path;
+        let pdf_fake = dir.join("scansione.jpg");
+        fs::copy(&pdf, &pdf_fake).unwrap();
+        assert_eq!(kind_of(&pdf_fake), Kind::Pdf);
+        // Un DOCX (uno ZIP) resta un documento, non un archivio.
+        let docx = dir.join("lettera.docx");
+        fs::write(&docx, crate::zipstore::zip_archive(&[("word/document.xml", b"<w:document/>")])).unwrap();
+        assert_eq!(kind_of(&docx), Kind::Doc);
+        assert_eq!(kind_of(&dir.join("pacco.zip")), Kind::Archive);
+    }
+
+    fn sine_wav(dir: &Path, name: &str, rate: u32, channels: u16, secs: f32) -> PathBuf {
+        let path = dir.join(name);
+        let spec = hound::WavSpec { channels, sample_rate: rate, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+        let mut w = hound::WavWriter::create(&path, spec).unwrap();
+        for i in 0..(rate as f32 * secs) as u32 {
+            let v = ((i as f32 * 440.0 * std::f32::consts::TAU / rate as f32).sin() * 12000.0) as i16;
+            for c in 0..channels {
+                w.write_sample(if c == 0 { v } else { v / 2 }).unwrap();
+            }
+        }
+        w.finalize().unwrap();
+        path
+    }
+
+    fn zip_names(path: &Path) -> Vec<String> {
+        let mut archive = zip::ZipArchive::new(fs::File::open(path).unwrap()).unwrap();
+        (0..archive.len()).map(|i| archive.by_index(i).unwrap().name().unwrap().to_string()).collect()
+    }
+
+    fn rms(samples: &[i16]) -> f64 {
+        (samples.iter().map(|s| (*s as f64).powi(2)).sum::<f64>() / samples.len().max(1) as f64).sqrt()
+    }
+
+    #[test]
+    fn lossless_audio_roundtrips() {
+        let dir = scratch();
+        let src = sine_wav(&dir, "la.wav", 44_100, 2, 1.0);
+        let original = crate::audio::decode(&src).unwrap();
+        for action in ["flac", "aiff"] {
+            let out = perform_with(&src, action, 80, None, &opts()).unwrap_or_else(|e| panic!("{action}: {e}"));
+            assert_eq!(kind_of(&out.path), Kind::Audio, "{action}");
+            let back = crate::audio::decode(&out.path).unwrap_or_else(|e| panic!("{action} riletto: {e}"));
+            assert_eq!((back.rate, back.channels), (44_100, 2), "{action}");
+            assert_eq!(back.samples, original.samples, "{action} deve essere senza perdita");
+        }
+        // Dal FLAC si torna a WAV identico.
+        let flac = dir.join("la.flac");
+        let wav = perform_with(&flac, "wav", 80, Some(&dir.join("indietro")), &opts()).unwrap();
+        assert_eq!(crate::audio::decode(&wav.path).unwrap().samples, original.samples);
+    }
+
+    #[test]
+    fn flac_carries_the_tags() {
+        let dir = scratch();
+        let src = dir.join("canzone.wav");
+        let spec = hound::WavSpec { channels: 1, sample_rate: 22_050, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+        let mut w = hound::WavWriter::create(&src, spec).unwrap();
+        for i in 0..22_050 {
+            w.write_sample(((i as f32 * 0.05).sin() * 8000.0) as i16).unwrap();
+        }
+        w.finalize().unwrap();
+        // I tag di un file di partenza passano al FLAC: si parte da un FLAC con tag fatto a mano.
+        let flac = perform_with(&src, "flac", 80, None, &opts()).unwrap().path;
+        let mut bytes = fs::read(&flac).unwrap();
+        assert_eq!(&bytes[0..4], b"fLaC");
+        // Inserisce un blocco Vorbis comment come lo scrive Cedro, poi rilegge con symphonia.
+        let mut comment = Vec::new();
+        comment.extend_from_slice(&5u32.to_le_bytes());
+        comment.extend_from_slice(b"Cedro");
+        comment.extend_from_slice(&1u32.to_le_bytes());
+        let c = b"TITLE=Prova";
+        comment.extend_from_slice(&(c.len() as u32).to_le_bytes());
+        comment.extend_from_slice(c);
+        bytes[4] &= 0x7F;
+        let mut block = vec![0x80 | 4];
+        let len = comment.len() as u32;
+        block.extend_from_slice(&[(len >> 16) as u8, (len >> 8) as u8, len as u8]);
+        block.extend_from_slice(&comment);
+        bytes.splice(42..42, block);
+        let tagged = dir.join("con-tag.flac");
+        fs::write(&tagged, bytes).unwrap();
+        let pcm = crate::audio::decode(&tagged).unwrap();
+        assert_eq!(pcm.samples.len(), 22_050, "il blocco dei tag non rovina il flusso");
+        let back = perform_with(&tagged, "flac", 80, Some(&dir.join("giro")), &opts()).unwrap();
+        let again = fs::read(&back.path).unwrap();
+        let title = b"TITLE=Prova";
+        assert!(again.windows(title.len()).any(|w| w == title), "il titolo passa da FLAC a FLAC");
+    }
+
+    #[test]
+    fn opus_roundtrip_keeps_length_and_loudness() {
+        let dir = scratch();
+        let src = sine_wav(&dir, "voce.wav", 44_100, 2, 2.0);
+        let original = crate::audio::decode(&src).unwrap();
+        let out = perform_with(&src, "opus", 80, None, &opts()).expect("opus");
+        assert_eq!(kind_of(&out.path), Kind::Audio);
+        let head = fs::read(&out.path).unwrap();
+        assert!(head.starts_with(b"OggS") && head.windows(8).any(|w| w == b"OpusHead"));
+        let back = crate::audio::decode(&out.path).expect("opus riletto");
+        assert_eq!((back.rate, back.channels), (48_000, 2));
+        let secs = back.samples.len() as f32 / 2.0 / 48_000.0;
+        assert!((secs - 2.0).abs() < 0.05, "durata {secs}");
+        let (a, b) = (rms(&original.samples), rms(&back.samples));
+        assert!((a - b).abs() / a < 0.15, "volume {a} → {b}");
+        // E da .opus si converte in MP3 e WAV.
+        let wav = perform_with(&out.path, "wav", 80, Some(&dir.join("w")), &opts()).expect("opus in wav");
+        assert!(crate::audio::decode(&wav.path).unwrap().samples.len() > 90_000);
+        let mp3 = perform_with(&out.path, "mp3", 80, Some(&dir.join("m")), &opts()).expect("opus in mp3");
+        assert!(fs::metadata(&mp3.path).unwrap().len() > 1000);
+    }
+
+    #[test]
+    fn zip_conversion_rebuilds_the_archive() {
+        let dir = scratch();
+        let png = sample_png(&dir, "a.png", 32, 24, false);
+        let wav = sine_wav(&dir, "suono.wav", 22_050, 1, 0.5);
+        let bad = dir.join("rotta.png");
+        fs::write(&bad, b"non e una foto").unwrap();
+        let note = dir.join("note.txt");
+        fs::write(&note, "ciao").unwrap();
+        let pngb = fs::read(&png).unwrap();
+        let wavb = fs::read(&wav).unwrap();
+        let zip = dir.join("pacco.zip");
+        fs::write(&zip, crate::zipstore::zip_archive(&[("foto/a.png", &pngb), ("foto/rotta.png", b"non e una foto"), ("audio/suono.wav", &wavb), ("note.txt", b"ciao"), ("../fuori.png", &pngb)])).unwrap();
+        assert_eq!(kind_of(&zip), Kind::Archive);
+        let out = perform_with(&zip, "z-webp", 80, None, &opts()).expect("zip in webp");
+        assert!(out.path.to_string_lossy().ends_with("pacco-webp.zip"), "{:?}", out.path);
+        assert!(out.message.contains("1 file convertito"), "{}", out.message);
+        let names = zip_names(&out.path);
+        let mut archive = zip::ZipArchive::new(fs::File::open(&out.path).unwrap()).unwrap();
+        assert!(names.contains(&"foto/a.webp".to_string()), "{names:?}");
+        assert!(names.contains(&"foto/rotta.png".to_string()), "l'originale non convertibile resta: {names:?}");
+        assert!(names.contains(&"audio/suono.wav".to_string()) && names.contains(&"note.txt".to_string()), "{names:?}");
+        assert!(names.contains(&"RAPPORTO-CEDRO.txt".to_string()), "{names:?}");
+        assert!(!names.iter().any(|n| n.contains("fuori")), "percorso fuori cartella: {names:?}");
+        let mut webp = Vec::new();
+        std::io::Read::read_to_end(&mut archive.by_name("foto/a.webp").unwrap(), &mut webp).unwrap();
+        assert!(webp.starts_with(b"RIFF"));
+        // L'audio dello ZIP si converte in MP3.
+        let mp3 = perform_with(&zip, "z-mp3", 80, Some(&dir.join("mp3")), &opts()).expect("zip in mp3");
+        let names = zip_names(&mp3.path);
+        assert!(names.contains(&"audio/suono.mp3".to_string()) && !names.contains(&"audio/suono.wav".to_string()), "{names:?}");
+        // Niente da convertire: errore chiaro, non uno ZIP uguale.
+        let err = perform_with(&zip, "z-pdf", 80, Some(&dir.join("pdf")), &opts()).err().expect("niente da convertire");
+        assert!(err.0.contains("documenti"), "{}", err.0);
+    }
+
+    #[test]
+    fn zip_conversion_keeps_both_when_names_collide() {
+        let dir = scratch();
+        let png = fs::read(sample_png(&dir, "a.png", 32, 24, false)).unwrap();
+        let webp_src = perform_with(&dir.join("a.png"), "webp", 80, Some(&dir.join("w")), &opts()).unwrap().path;
+        let webp = fs::read(webp_src).unwrap();
+        for (label, entries) in [("png-prima", [("foto.png", png.as_slice()), ("foto.webp", webp.as_slice())]), ("webp-prima", [("foto.webp", webp.as_slice()), ("foto.png", png.as_slice())])] {
+            let zip = dir.join(format!("{label}.zip"));
+            fs::write(&zip, crate::zipstore::zip_archive(&entries)).unwrap();
+            let out = perform_with(&zip, "z-webp", 80, Some(&dir.join(label)), &opts()).expect(label);
+            let names = zip_names(&out.path);
+            assert_eq!(names.len(), 2, "{label}: {names:?}");
+            assert!(names.contains(&"foto.webp".to_string()), "{label}: {names:?}");
+            // L'originale WebP resta intatto, byte per byte.
+            let mut archive = zip::ZipArchive::new(fs::File::open(&out.path).unwrap()).unwrap();
+            let mut kept = Vec::new();
+            std::io::Read::read_to_end(&mut archive.by_name("foto.webp").unwrap(), &mut kept).unwrap();
+            assert_eq!(kept, webp, "{label}");
+        }
+    }
+
+    #[test]
+    fn output_names_follow_the_template() {
+        let dir = scratch();
+        let src = sample_png(&dir, "gita.png", 16, 16, false);
+        let out = perform_with(&src, "webp", 80, Some(&dir.join("o")), &Options { name_template: Some("%nome%_%data%".into()), ..opts() }).unwrap();
+        let name = out.path.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("gita_20") && name.ends_with(".webp") && name.len() == "gita_2026-10-28.webp".len(), "{name}");
+        // Le parti che aggiunge il motore restano in fondo.
+        let small = perform_with(&src, "compress", 80, Some(&dir.join("o")), &Options { name_template: Some("foto %ora%".into()), ..opts() }).unwrap();
+        let name = small.path.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("foto ") && name.ends_with("-compresso.jpg"), "{name}");
+        // Un modello vuoto lascia il nome di sempre; un modello con simboli proibiti li pulisce.
+        let plain = perform_with(&src, "bmp", 80, Some(&dir.join("o")), &Options { name_template: Some("  ".into()), ..opts() }).unwrap();
+        assert_eq!(plain.path.file_name().unwrap(), "gita.bmp");
+        let odd = perform_with(&src, "tga", 80, Some(&dir.join("o")), &Options { name_template: Some("a/b:%nome%".into()), ..opts() }).unwrap();
+        assert_eq!(odd.path.file_name().unwrap(), "a_b_gita.tga");
+    }
 }

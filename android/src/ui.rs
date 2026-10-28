@@ -232,7 +232,7 @@ fn righe(kind: Kind) -> Vec<&'static Riga> {
         Kind::Audio => &AUD,
         Kind::Video => &VID,
         Kind::Doc => &DOC,
-        Kind::Other => &[],
+        Kind::Archive | Kind::Other => &[],
     };
     let ids: Vec<&'static str> = [Mode::Convert, Mode::Tools].into_iter().flat_map(|m| list(kind, m)).map(|s| s.id).collect();
     // «trascrivi» non è nel catalogo del motore di conversione: è whisper.cpp dentro l'APK.
@@ -278,6 +278,7 @@ fn nome_tipo(kind: Kind) -> &'static str {
         Kind::Audio => "Audio",
         Kind::Video => "Video",
         Kind::Doc => "Documento",
+        Kind::Archive => "Archivio",
         Kind::Other => "File",
     }
 }

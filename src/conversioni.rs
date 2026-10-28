@@ -15,17 +15,18 @@ pub struct Category {
 }
 
 pub const CATEGORIES: &[Category] = &[
-    Category { kind: Kind::Image, name: "Immagini", hint: "Cambia formato, ridimensiona e raddrizza le foto.", accepts: "PNG, JPEG, WebP, BMP, GIF, TIFF" },
+    Category { kind: Kind::Image, name: "Immagini", hint: "Cambia formato, ridimensiona e raddrizza le foto.", accepts: "PNG, JPEG, WebP, AVIF, JPEG XL, SVG, BMP, GIF, TIFF, ICO, TGA, QOI, PNM, HDR, OpenEXR, DDS" },
     Category { kind: Kind::Doc, name: "Documenti", hint: "Da Word, ODT e RTF a PDF.", accepts: "DOCX, DOC, ODT, RTF" },
     Category { kind: Kind::Pdf, name: "PDF", hint: "Da PDF a Word modificabile, a immagini o a testo.", accepts: "PDF" },
     Category { kind: Kind::Text, name: "Testo", hint: "TXT, Markdown, CSV, JSON e HTML.", accepts: "TXT, MD, CSV, JSON, HTML, XML" },
-    Category { kind: Kind::Audio, name: "Audio", hint: "WAV, MP3, OGG, M4A, AAC e FLAC.", accepts: "WAV, MP3, OGG, M4A, AAC, FLAC" },
+    Category { kind: Kind::Audio, name: "Audio", hint: "MP3, WAV, FLAC, Opus e AIFF.", accepts: "WAV, MP3, OGG, Opus, M4A, AAC, FLAC, AIFF, CAF" },
     Category { kind: Kind::Video, name: "Video", hint: "MP4, WebM, MOV, MKV e AVI.", accepts: "MP4, WebM, MOV, MKV, AVI" },
+    Category { kind: Kind::Archive, name: "Archivi", hint: "Converte i file dentro uno ZIP e lo rifà.", accepts: "ZIP" },
 ];
 
 /// I formati di uscita di una categoria.
 pub fn formats(kind: Kind) -> &'static [Slice] {
-    engine::slices(kind, Mode::Convert)
+    engine::panel_slices(kind)
 }
 
 /// Gli strumenti di una categoria (comprimi, ruota, OCR…). Vuoto se non ce ne sono.
@@ -72,6 +73,12 @@ pub fn simple_formats(kind: Kind) -> &'static [SimpleFormat] {
         SimpleFormat { id: "mp4", title: "MP4", note: "va ovunque" },
         SimpleFormat { id: "mp3", title: "Solo audio", note: "senza immagini" },
     ];
+    const ARCHIVE: &[SimpleFormat] = &[
+        SimpleFormat { id: "z-webp", title: "Foto in WebP", note: "più leggere" },
+        SimpleFormat { id: "z-jpeg", title: "Foto in JPEG", note: "vanno dappertutto" },
+        SimpleFormat { id: "z-mp3", title: "Audio in MP3", note: "più leggero" },
+        SimpleFormat { id: "z-pdf", title: "Documenti in PDF", note: "si aprono ovunque" },
+    ];
     match kind {
         Kind::Image => IMAGE,
         Kind::Doc => DOC,
@@ -79,6 +86,7 @@ pub fn simple_formats(kind: Kind) -> &'static [SimpleFormat] {
         Kind::Text => TEXT,
         Kind::Audio => AUDIO,
         Kind::Video => VIDEO,
+        Kind::Archive => ARCHIVE,
         Kind::Other => &[],
     }
 }
@@ -149,6 +157,7 @@ pub enum Opt {
     Fps,
     Mute,
     FastStart,
+    NameTemplate,
 }
 
 /// Una riga della zona Opzioni del pannello.
@@ -263,13 +272,36 @@ const KEEP_TAGS: OptionDef = sw(Opt::KeepTags, "Mantieni titolo e artista", "Tag
 const HEIGHT: OptionDef = pick(Opt::VideoHeight, "Risoluzione", "Si rimpicciolisce, non si ingrandisce", VIDEO_HEIGHT, 0);
 const VIDEO_FPS: OptionDef = pick(Opt::Fps, "Fotogrammi al secondo", "Massimo", FPS, 0);
 const MUTE: OptionDef = sw(Opt::Mute, "Togli l'audio", "", false);
+const OPUS_KBPS_CHOICES: &[Choice] = &[
+    Choice { label: "64 kbps", value: 64 },
+    Choice { label: "96 kbps", value: 96 },
+    Choice { label: "128 kbps", value: 128 },
+    Choice { label: "160 kbps", value: 160 },
+    Choice { label: "192 kbps", value: 192 },
+];
+const OPUS_KBPS: OptionDef = pick(Opt::Mp3Kbps, "Qualità Opus", "", OPUS_KBPS_CHOICES, 128);
+const NAME_TEMPLATE: OptionDef = OptionDef {
+    opt: Opt::NameTemplate,
+    title: "Nome del file",
+    note: "Vuoto = come l'originale. Usa %nome%, %data%, %ora%, %ext%",
+    control: Control::Text { hint: "per esempio %nome%_%data%" },
+    default: 0,
+};
 const FAST_START: OptionDef = sw(Opt::FastStart, "Ottimizza per il web", "L'avvio parte subito", false);
 
 /// Le opzioni che valgono per questa categoria e questa voce; il motore le usa tutte.
 pub fn option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
+    let mut defs = format_option_defs(kind, action);
+    if action != "none" {
+        defs.push(&NAME_TEMPLATE);
+    }
+    defs
+}
+
+fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     match (kind, action) {
         (Kind::Image, "ocr") => vec![],
-        (Kind::Image, "jpeg" | "compress" | "pdf") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
+        (Kind::Image, "jpeg" | "compress" | "pdf" | "pnm") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
         (Kind::Image, _) => vec![&IMAGE_SIZE, &STRAIGHTEN],
         (Kind::Doc, "pdf") => vec![&PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
         (Kind::Pdf, "jpg" | "png") => vec![&PDF_DPI, &PDF_PAGES, &ONE_PER_PAGE],
@@ -281,7 +313,10 @@ pub fn option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
         (Kind::Text, "md" | "html") => vec![&TEXT_ENCODING, &HEADER_ROW],
         (Kind::Text, _) => vec![&TEXT_ENCODING],
         (Kind::Audio | Kind::Video, "mp3") => vec![&MP3_KBPS, &AUDIO_CHANNELS, &NORMALIZE, &TRIM_START, &TRIM_SILENCE, &KEEP_TAGS],
-        (Kind::Audio, "wav") => vec![&AUDIO_CHANNELS, &NORMALIZE, &TRIM_START, &TRIM_SILENCE],
+        (Kind::Audio, "wav" | "aiff") => vec![&AUDIO_CHANNELS, &NORMALIZE, &TRIM_START, &TRIM_SILENCE],
+        (Kind::Audio, "flac") => vec![&AUDIO_CHANNELS, &NORMALIZE, &TRIM_START, &TRIM_SILENCE, &KEEP_TAGS],
+        (Kind::Audio, "opus") => vec![&OPUS_KBPS, &AUDIO_CHANNELS, &NORMALIZE, &TRIM_START, &TRIM_SILENCE, &KEEP_TAGS],
+        (Kind::Archive, _) => vec![&IMAGE_SIZE],
         (Kind::Video, "mp4") => vec![&HEIGHT, &VIDEO_FPS, &MUTE, &FAST_START],
         _ => vec![],
     }
@@ -402,6 +437,7 @@ pub fn options_from(values: &Values) -> engine::Options {
     o.fps = Some(values.num(Opt::Fps, 0)).filter(|v| *v > 0);
     o.mute = on(Opt::Mute, false);
     o.faststart = on(Opt::FastStart, false);
+    o.name_template = Some(values.text_of(Opt::NameTemplate).trim().to_string()).filter(|t| !t.is_empty());
     o
 }
 
@@ -472,7 +508,7 @@ mod tests {
             Opt::Straighten, Opt::WhiteBackground, Opt::MaxSide, Opt::PageSize, Opt::Password, Opt::Dpi, Opt::PageRange,
             Opt::OnePerPage, Opt::Ocr, Opt::Tables, Opt::Columns, Opt::EmbedFonts, Opt::Bookmarks, Opt::PdfA, Opt::Encoding, Opt::CsvSeparator, Opt::PrettyJson, Opt::HeaderRow,
             Opt::Mp3Kbps, Opt::Channels, Opt::Normalize, Opt::TrimStart, Opt::TrimSilence, Opt::KeepTags, Opt::VideoHeight, Opt::Fps,
-            Opt::Mute, Opt::FastStart,
+            Opt::Mute, Opt::FastStart, Opt::NameTemplate,
         ];
         for opt in wanted {
             assert!(defs.iter().any(|d| d.opt == opt), "{opt:?} non compare in nessun pannello");
@@ -518,7 +554,7 @@ mod tests {
         assert!(keys(Kind::Pdf, "docx").contains(&Opt::Tables));
         assert!(keys(Kind::Image, "jpeg").contains(&Opt::WhiteBackground));
         assert!(!keys(Kind::Image, "png").contains(&Opt::WhiteBackground));
-        assert!(keys(Kind::Image, "ocr").is_empty());
+        assert_eq!(keys(Kind::Image, "ocr"), vec![Opt::NameTemplate]);
         assert!(keys(Kind::Text, "csv").contains(&Opt::CsvSeparator));
         assert!(keys(Kind::Video, "mp3").contains(&Opt::Mp3Kbps));
         assert!(keys(Kind::Audio, "wav").contains(&Opt::Channels) && !keys(Kind::Audio, "wav").contains(&Opt::Mp3Kbps));

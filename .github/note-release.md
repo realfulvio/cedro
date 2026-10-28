@@ -16,21 +16,17 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-Versione di **correzioni e ottimizzazione**: tutta l'app desktop riletta (74 problemi trovati e corretti), nessuna funzione tolta.
+Versione dei **nuovi formati**, tutta in Rust e senza programmi esterni:
 
-**Più veloce** (stesso PC, prima → dopo):
-- Video H.264 → MP4: **−43%** del tempo (decodifica e codifica in parallelo); WebM → MP4 **−17%** anche con l'audio in più, fino a −75% sui video lunghi; AVI con audio di 10 minuti da 73 s a 9 s.
-- PDF → Word **−54%**, PDF → immagine **−23%**, PDF → testo −13%.
-- Code con centinaia di file: l'interfaccia ridisegna in decine di millisecondi invece che in secondi.
-- Programma più leggero: **−22%** di dimensione.
+- **Foto**: AVIF e JPEG XL (anche in scrittura; il JPEG XL è senza perdita), SVG (si legge e si trasforma in foto), ICO, TGA, QOI, PNM, HDR, EXR e DDS. Il formato si riconosce dal contenuto, non solo dall'estensione.
+- **Audio**: FLAC, AIFF e Opus in uscita; CAF e ADPCM in lettura.
+- **ZIP**: Cedro converte i file dentro lo ZIP (foto, audio, documenti) e rifà l'archivio con le stesse cartelle. Quelli che non si convertono restano com'erano, con un «RAPPORTO-CEDRO.txt» che dice perché.
+- **Nome del file di uscita a modello**: `%nome%`, `%data%`, `%ora%`, `%ext%`, `%unix%` (per esempio `%nome%_%data%`).
+- Tutto è anche nel pannello Conversioni dell'app Android e nella riga di comando.
 
-**Correzioni principali**:
-- «Sostituisci» non cancella più il file vecchio se la conversione fallisce; «Salta il file» salta prima di lavorare.
-- La trascrizione si ferma davvero con **Annulla**; yt-dlp, ffmpeg e deno non restano accesi se chiudi Cedro.
-- Video: audio e immagini restano allineati anche dopo ore; audio 5.1/7.1 con le voci del canale centrale; WebM dei browser con la durata giusta; WebM con audio Opus su Linux non esce più muto; MP4 oltre 4 GB; AVI grandi (OpenDML) e registrazioni interrotte.
-- Word: caselle di testo non più doppie, niente tabulazioni spurie; ZIP oltre 4 GB; file con nomi non UTF-8 su Linux.
-- Windows: le conversioni dalla ruota non rallentano più mouse e tastiera; AltGr funziona nei campi (@ # [ ] €); niente perdite di risorse aprendo le Impostazioni.
-- OCR su Linux rispetta la lingua scelta; impostazioni salvate in ANSI/UTF-16 non si azzerano più.
+Il programma cresce di circa 5 MB. Non ci sono ancora HEIC/HEIF e i RAW delle fotocamere.
+
+Dalla 0.24.0: tutta l'app desktop riletta (74 problemi corretti) e più veloce: video H.264 → MP4 −43% del tempo, PDF → Word −54%, programma più leggero del 22% (prima dei nuovi formati). «Sostituisci» non cancella più il file vecchio se la conversione fallisce; la trascrizione si ferma davvero con **Annulla**; audio e video restano allineati anche dopo ore; ZIP e MP4 oltre 4 GB; AltGr funziona nei campi su Windows.
 
 Dalla 0.23.2: tasto destro nei campi di testo (Taglia, Copia, Incolla…) e link di altri siti nella scheda YouTube. Dalla 0.23.1: video H.264 con fotogrammi molto piccoli, audio Opus dei WebM e AVI completi (audio MP3/AAC, H.264, XVID e DivX). Dalla 0.23.0: anteprime per tutti i file nel tema «Documento al centro», con il tasto **Play** per ascoltare l'audio e guardare il video.
 
