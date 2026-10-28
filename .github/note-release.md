@@ -16,10 +16,23 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-- **Tasto destro nei campi di testo**: sul campo del link (YouTube, Video dal web) e su tutti gli altri si apre il menu classico con Taglia, Copia, Incolla, Elimina e Seleziona tutto, su Windows e su Linux.
-- **Scheda YouTube**: accetta anche i link di altri siti (Vimeo, Veoh e gli altri che yt-dlp conosce) e, se un link non va, lo dice con un avviso rosso invece di non fare nulla.
+Versione di **correzioni e ottimizzazione**: tutta l'app desktop riletta (74 problemi trovati e corretti), nessuna funzione tolta.
 
-Dalla 0.23.1: video H.264 con fotogrammi molto piccoli, audio Opus dei WebM e AVI completi (audio MP3/AAC, H.264, XVID e DivX). Dalla 0.23.0: anteprime per tutti i file nel tema «Documento al centro», con il tasto **Play** per ascoltare l'audio e guardare il video.
+**Più veloce** (stesso PC, prima → dopo):
+- Video H.264 → MP4: **−43%** del tempo (decodifica e codifica in parallelo); WebM → MP4 **−17%** anche con l'audio in più, fino a −75% sui video lunghi; AVI con audio di 10 minuti da 73 s a 9 s.
+- PDF → Word **−54%**, PDF → immagine **−23%**, PDF → testo −13%.
+- Code con centinaia di file: l'interfaccia ridisegna in decine di millisecondi invece che in secondi.
+- Programma più leggero: **−22%** di dimensione.
+
+**Correzioni principali**:
+- «Sostituisci» non cancella più il file vecchio se la conversione fallisce; «Salta il file» salta prima di lavorare.
+- La trascrizione si ferma davvero con **Annulla**; yt-dlp, ffmpeg e deno non restano accesi se chiudi Cedro.
+- Video: audio e immagini restano allineati anche dopo ore; audio 5.1/7.1 con le voci del canale centrale; WebM dei browser con la durata giusta; WebM con audio Opus su Linux non esce più muto; MP4 oltre 4 GB; AVI grandi (OpenDML) e registrazioni interrotte.
+- Word: caselle di testo non più doppie, niente tabulazioni spurie; ZIP oltre 4 GB; file con nomi non UTF-8 su Linux.
+- Windows: le conversioni dalla ruota non rallentano più mouse e tastiera; AltGr funziona nei campi (@ # [ ] €); niente perdite di risorse aprendo le Impostazioni.
+- OCR su Linux rispetta la lingua scelta; impostazioni salvate in ANSI/UTF-16 non si azzerano più.
+
+Dalla 0.23.2: tasto destro nei campi di testo (Taglia, Copia, Incolla…) e link di altri siti nella scheda YouTube. Dalla 0.23.1: video H.264 con fotogrammi molto piccoli, audio Opus dei WebM e AVI completi (audio MP3/AAC, H.264, XVID e DivX). Dalla 0.23.0: anteprime per tutti i file nel tema «Documento al centro», con il tasto **Play** per ascoltare l'audio e guardare il video.
 
 Dalla 0.22.0: Cedro parla inglese (Impostazioni → Lingua) e l'installatore di Windows chiede la lingua. Dalla 0.21.3: il doppio clic sull'icona di Windows apre il pannello Conversioni.
 

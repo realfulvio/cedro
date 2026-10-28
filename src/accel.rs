@@ -26,7 +26,12 @@ pub fn hardware() -> &'static Hardware {
 
 /// La scheda video codifica i video: c'è e l'interruttore è acceso.
 pub fn use_gpu() -> bool {
-    crate::read_settings().gpu && hardware().gpu.is_some()
+    use_gpu_with(&crate::read_settings())
+}
+
+/// Come `use_gpu`, con le impostazioni già lette (una conversione non rilegge il file).
+pub fn use_gpu_with(settings: &crate::settings::Settings) -> bool {
+    settings.gpu && hardware().gpu.is_some()
 }
 
 /// I calcoli usano AVX-512: il processore lo ha e l'interruttore è acceso.

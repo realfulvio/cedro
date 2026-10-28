@@ -94,7 +94,7 @@ pub fn width(with_real: bool) -> f32 {
 
 /// I tratti da disegnare, già spostati: «real» davanti se richiesto, poi il logo.
 pub fn items(with_real: bool) -> impl Iterator<Item = (Item, f32)> {
-    let real = with_real.then_some(REAL).unwrap_or(&[]).iter().map(|i| (*i, 0.0));
+    let real = if with_real { REAL } else { &[] }.iter().map(|i| (*i, 0.0));
     let dx = if with_real { MARK_OFFSET } else { 0.0 };
     real.chain(MARK.iter().map(move |i| (*i, dx)))
 }
