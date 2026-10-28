@@ -1286,12 +1286,23 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
         }
         let running = engine.as_mut().expect("motore acceso");
         let mut outcome = one_file(running, path, index, sink, cancel);
+        // A driver can run out of shared memory after loading successfully.
+        // Retry this file once on CPU, retaining the exact model and precision.
+        if matches!(outcome, Outcome::EngineDied(_)) && crate::accel::in_use().is_some_and(|a| a.gpu) && !cancel.load(Ordering::Relaxed) {
+            if let Some(dead) = engine.take() { dead.stop(); }
+            log(sink, Tone::Note, "Scheda video", "motore interrotto: riprovo sul processore, con la stessa precisione");
+            let cpu_request = Request { format: request.format, model: request.model, gpu: false, avx512: request.avx512 };
+            match power_on(&cpu_request, model.as_ref().expect("modello caricato"), sink, cancel) {
+                Ok(mut cpu) => { outcome = one_file(&mut cpu, path, index, sink, cancel); engine = Some(cpu); }
+                Err(e) => outcome = Outcome::Failed(e),
+            }
+        }
         let mut temp = None;
         if let Outcome::Unsupported(why) = &outcome {
             log(sink, Tone::Muted, "", format!("Il motore non legge questo formato ({why}): lo apro con il sistema"));
             match system_decode(path, cancel) {
                 Ok(wav) => {
-                    outcome = one_file(running, &wav, index, sink, cancel);
+                    outcome = one_file(engine.as_mut().expect("motore acceso"), &wav, index, sink, cancel);
                     temp = Some(wav);
                 }
                 Err(e) if e == CANCELLED => outcome = Outcome::Cancelled,
