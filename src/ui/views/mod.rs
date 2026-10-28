@@ -309,7 +309,7 @@ pub fn go_extras(f: &mut Frame, app: &App, r: R, side: bool) {
     let size = 14.0;
     if let Some(u) = app.spia() {
         let text = format!("{} · {}", if u.gpu { "GPU" } else { "CPU" }, u.detail);
-        let tw = f.measure(&text, size, SANS).min(r.2 - 30.0);
+        let tw = f.measure(&text, size, SANS).min(if side { 190.0 } else { r.2 - 30.0 });
         let dot = if u.gpu { pal.primary } else { pal.ok };
         let (x, y) = if side { (r.0 - 24.0 - tw - 14.0, r.1 + r.3 / 2.0 - 11.0) } else { (r.0 + (r.2 - tw - 14.0) / 2.0, r.1 + r.3 + 14.0) };
         f.p.rrect(x, y + 7.0, 8.0, 8.0, 4.0, Some(dot), None);
@@ -336,6 +336,22 @@ pub fn summary_line(app: &App) -> String {
     format!("{dest} · {opts}.")
 }
 
+/// «1 archivio», «2 immagini»: la categoria al singolare o al plurale secondo il numero.
+pub fn count_noun(n: usize, category: &str) -> String {
+    let one = match category {
+        "Immagini" => "immagine",
+        "Documenti" => "documento",
+        "Archivi" => "archivio",
+        "Testo" => "testo",
+        _ => "",
+    };
+    if n == 1 && !one.is_empty() {
+        format!("1 {one}")
+    } else {
+        format!("{n} {}", category.to_lowercase())
+    }
+}
+
 /// I file della coda che appartengono a un'altra categoria: «Altri file in coda: 2 PDF».
 pub fn others_link(f: &mut Frame, app: &App, x: f32, y: f32, h: f32, size: f32) -> f32 {
     let others = app.others();
@@ -347,7 +363,7 @@ pub fn others_link(f: &mut Frame, app: &App, x: f32, y: f32, h: f32, size: f32) 
     f.text("Altri file in coda:", cx, y, 200.0, h, size, SANS, pal.muted);
     cx += f.measure("Altri file in coda:", size, SANS) + 10.0;
     for (ci, n) in others {
-        let label = format!("{n} {}", conversioni::CATEGORIES[ci].name.to_lowercase());
+        let label = count_noun(n, conversioni::CATEGORIES[ci].name);
         let w = f.measure(&label, size, SEMI) + 8.0;
         let r = (cx - 4.0, y, w, h);
         let c = if f.hovered(&Act::Category(ci)) { mix(pal.primary, pal.text, 0.3) } else { pal.primary };
