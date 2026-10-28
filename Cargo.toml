@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.23.2"
+version = "0.24.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -89,6 +89,7 @@ windows = { version = "0.61", features = [
     "Win32_System_Com_StructuredStorage",
     "Win32_System_Console",
     "Win32_System_DataExchange",
+    "Win32_System_JobObjects",
     "Win32_System_LibraryLoader",
     "Win32_System_Memory",
     "Win32_System_Ole",
@@ -121,3 +122,9 @@ rav1d = { path = "vendor/rav1d" }
 # Prototipo Android (NativeActivity, tutto Rust): vedi android/README.md
 [workspace]
 members = ["android"]
+
+# Binario più piccolo e più veloce: ottimizzazione tra le crate (LTO) e simboli di debug tolti.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
