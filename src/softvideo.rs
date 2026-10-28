@@ -5,7 +5,7 @@ use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::Mutex;
 
 use symphonia::core::audio::{Layout, SampleBuffer};
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL, CODEC_TYPE_OPUS};
 use symphonia::core::errors::Error as SymError;
 use symphonia::core::formats::{FormatOptions, FormatReader};
 use symphonia::core::io::MediaSourceStream;
@@ -169,7 +169,21 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
         let _ = out.send(Err(err));
         let _ = send.send(segment);
     };
+    // Opus (WebM dei browser, vocali): symphonia dà i pacchetti, libopus li decodifica.
+    let mut opus = match opened.audio.as_ref() {
+        Some(audio) if audio.params.codec == CODEC_TYPE_OPUS => {
+            match crate::audio::OpusStream::new(audio.params.extra_data.as_deref().unwrap_or_default()) {
+                Ok(opus) => Some(opus),
+                Err(err) => {
+                    fail(format!("audio non decodificato: {err}"));
+                    return Ok((0, 0));
+                }
+            }
+        }
+        _ => None,
+    };
     let mut audio_dec = match opened.audio.as_ref() {
+        Some(_) if opus.is_some() => None,
         Some(audio) => match symphonia::default::get_codecs().make(&audio.params, &DecoderOptions::default()) {
             Ok(dec) => Some(dec),
             Err(err) => {
@@ -233,6 +247,18 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
                 }
             } else if audio_id == Some(packet.track_id()) {
                 audio_packets += 1;
+                if let Some(opus) = opus.as_mut() {
+                    let samples = opus.decode(packet.buf());
+                    if samples.is_empty() {
+                        continue;
+                    }
+                    audio_samples += samples.len();
+                    let item = Item::Audio { samples: samples.to_vec(), channels: opus.channels(), rate: 48_000 };
+                    if !put(&mut current, Entry::Audio(item), false) {
+                        break;
+                    }
+                    continue;
+                }
                 let Some(dec) = audio_dec.as_mut() else {
                     continue;
                 };
@@ -416,15 +442,17 @@ fn open_media(path: &Path) -> Result<Opened, String> {
         if track.id == video_id || track.codec_params.codec == CODEC_TYPE_NULL {
             return None;
         }
-        if symphonia::default::get_codecs()
-            .make(&track.codec_params, &DecoderOptions::default())
-            .is_err()
+        let opus = track.codec_params.codec == CODEC_TYPE_OPUS;
+        if !opus
+            && symphonia::default::get_codecs()
+                .make(&track.codec_params, &DecoderOptions::default())
+                .is_err()
         {
             return None;
         }
         Some(AudioIn {
             id: track.id,
-            rate: track.codec_params.sample_rate.unwrap_or(44100),
+            rate: if opus { 48_000 } else { track.codec_params.sample_rate.unwrap_or(44100) },
             channels: channel_count(&track.codec_params),
             params: track.codec_params.clone(),
         })
