@@ -81,15 +81,17 @@ The slices change with the file type. Not sure where to start? Open the **Guide*
 
 | Type | Formats | With Shift |
 | --- | --- | --- |
-| Images | PNG, JPEG, WebP, BMP, GIF, TIFF | other format, searchable PDF |
+| Images | PNG, JPEG, WebP, AVIF, JPEG XL, **SVG**, BMP, GIF, TIFF, ICO, TGA, QOI, PNM, HDR, OpenEXR, DDS | other format, searchable PDF; the Conversions panel adds AVIF, JPEG XL (lossless), ICO, TGA, QOI, PNM, HDR, OpenEXR |
 | Documents | DOCX, DOC, ODT, RTF | PDF |
 | Text | TXT, MD, CSV, JSON, HTML, XML | other text, PDF |
 | PDF | PDF | JPG, **editable Word** |
-| Audio | WAV, MP3, OGG, M4A, AAC, FLAC | WAV, MP3 |
+| Audio | WAV, MP3, OGG, **Opus**, M4A, AAC, FLAC, AIFF, CAF | WAV, MP3; the panel adds FLAC, Opus, AIFF |
 | Video | MP4, WebM, MOV, MKV, AVI | MP4 |
+| Archives | ZIP | photos to WebP/JPEG/PNG, audio to MP3/WAV, documents to PDF: converts the files inside the ZIP and rebuilds it |
 
 **PDF to Word:** real heading styles, paragraphs, real tables (cells, shading, borders, header row repeated across pages), bulleted and numbered lists, multi-column text and graphics kept in place, editable like in a professional editor. Scans are read with OCR.
 **Phone photos:** automatically straightened.
+**Files are recognised by content:** a WebP photo named ".jpg" still converts. **Output names from a template** (`%name%_%date%`) in the Conversions panel.
 
 ## More than conversion
 
