@@ -558,7 +558,7 @@ impl<'a> Frame<'a> {
             Kind::Text => self.text_icon(x, y, s),
             Kind::Audio => self.icon(ic::AUDIO, x, y, s, self.pal.primary),
             Kind::Video => self.icon(ic::VIDEO, x, y, s, self.pal.primary),
-            Kind::Other => self.icon(ic::FILE, x, y, s, self.pal.muted),
+            Kind::Other | Kind::Archive => self.icon(ic::FILE, x, y, s, self.pal.muted),
         }
     }
 
