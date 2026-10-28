@@ -79,4 +79,19 @@ mod tests {
         assert!(!gpu_headroom(Some(1 << 30), 574_000_000));
         assert!(gpu_headroom(None, 574_000_000));
     }
+    #[test]
+    fn concurrent_surfaces_never_overlap() {
+        let active = std::sync::atomic::AtomicUsize::new(0);
+        std::thread::scope(|s| {
+            for _ in 0..4 {
+                let active = &active;
+                s.spawn(move || {
+                    let _guard = acquire(None).unwrap();
+                    assert_eq!(active.fetch_add(1, Ordering::SeqCst), 0);
+                    std::thread::sleep(Duration::from_millis(5));
+                    assert_eq!(active.fetch_sub(1, Ordering::SeqCst), 1);
+                });
+            }
+        });
+    }
 }
