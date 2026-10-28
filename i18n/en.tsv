@@ -225,6 +225,7 @@ Impostazioni pdf	PDF settings
 Impostazioni testo	Text settings
 Impostazioni audio	Audio settings
 Impostazioni video	Video settings
+Impostazioni archivi	Archive settings
 immagini	images
 documenti	documents
 testo	text
@@ -252,13 +253,13 @@ Converti il documento	Convert the document
 Formato di output	Output format
 Anteprima dell'originale	Original preview
 Stai visualizzando il documento originale. Nessuna conversione è ancora stata eseguita.	You're viewing the original document. No conversion has been run yet.
-Se esiste già	If it already exists
+Se esiste già	If it exists
 In corso…	In progress…
 Impostazioni	Settings
 Nome file	File name
 Dimensione	Size
 Impostazioni di conversione	Conversion settings
-Se esiste già un file	If a file already exists
+Se esiste già un file	If file exists
 Converti in:	Convert to:
 Semplificata	Simplified
 Standard	Standard
@@ -852,6 +853,17 @@ copia del fotogramma	frame copy
 lettura del video	video reading
 scheda video: immagine troppo piccola	graphics card: image too small
 {#} immagini	{} images
+1 immagine	1 image
+{#} documenti	{} documents
+1 documento	1 document
+{#} archivi	{} archives
+1 archivio	1 archive
+1 file pronti	1 file ready
+1 file nella coda	1 file in the queue
+Taglia	Cut
+Incolla	Paste
+Elimina	Delete
+Seleziona tutto	Select all
 B/N	B/W
 Veloce · {}	Fast · {}
 Buona · {}	Good · {}
