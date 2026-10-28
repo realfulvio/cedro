@@ -22,4 +22,6 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 Gli adattatori inclusi usano il motore yt-dlp già presente in Cedro e mantengono disponibili i plugin dell'utente. StreamingCommunity, DeltaBit e MixDrop non hanno adattatori dedicati in questa versione.
 
+Resta la novità della 0.26.6: decodifica H.264 via VA-API su Linux per MP4, MOV e MKV, con controllo iniziale dei fotogrammi e ripiego sul processore quando necessario.
+
 Restano le novità della 0.26.5: avanzamento dei video con percentuale e tempo residuo, bitrate più contenuto a 720p, ridimensionamento distribuito fra i core e stato «In attesa» durante gli altri lavori pesanti.
