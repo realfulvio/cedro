@@ -45,6 +45,8 @@ mod mkv;
 mod mp4mux;
 #[cfg(target_os = "linux")]
 mod vaapi;
+#[cfg(target_os = "linux")]
+mod h264;
 #[cfg(target_os = "android")]
 mod mediacodec;
 #[cfg(target_os = "android")]
