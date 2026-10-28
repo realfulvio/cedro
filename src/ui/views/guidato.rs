@@ -299,6 +299,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         let label = super::go_label(app);
         let ready = !app.targets().is_empty() && !app.busy();
         f.primary(br, &label, Some(ic::CONVERT), 21.0, Act::Start, ready);
+        super::go_extras(f, app, br, true);
         if app.busy() {
             if let Some(p) = app.progress() {
                 f.p.rrect(br.0, br.1 + br.3 + 8.0, bw, 5.0, 2.5, Some(pal.border), None);

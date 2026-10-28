@@ -245,6 +245,7 @@ fn footer(f: &mut Frame, app: &App, y: f32, simple: bool) {
         let label = super::go_label(app);
         f.primary(go, &label, Some(ic::CONVERT), 20.0, Act::Start, !app.targets().is_empty());
     }
+    super::go_extras(f, app, go, false);
 }
 
 pub fn draw(f: &mut Frame, app: &App) {

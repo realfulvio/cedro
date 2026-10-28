@@ -253,6 +253,20 @@ impl Variant {
         }
     }
 
+    /// Il nome dell'istruzione, per la spia nella finestra (vuoto: nessuna istruzione avanzata).
+    fn isa(self) -> &'static str {
+        match self {
+            Variant::Base => "",
+            Variant::Avx2 => "AVX2",
+            Variant::AvxVnni => "AVX-VNNI",
+            Variant::Avx512 => "AVX-512",
+            Variant::Avx512Vnni => "AVX-512 VNNI",
+            Variant::Dotprod => "dotprod",
+            Variant::I8mm => "i8mm",
+            Variant::Vulkan => "Vulkan",
+        }
+    }
+
     fn describe(self) -> &'static str {
         match self {
             Variant::Base => "per processore",
@@ -1183,6 +1197,7 @@ fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event), cance
                 match v["gpu"].as_str() {
                     Some(gpu) if variant == Variant::Vulkan => {
                         log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · scheda video: {gpu}"));
+                        crate::accel::set_in_use(true, format!("Vulkan · {gpu}"));
                         return Ok(running);
                     }
                     _ if variant == Variant::Vulkan => {
@@ -1192,6 +1207,8 @@ fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event), cance
                     }
                     _ => {
                         log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · processore, {threads} thread ({})", variant.describe()));
+                        let isa = variant.isa();
+                        crate::accel::set_in_use(false, if isa.is_empty() { format!("{threads} thread") } else { format!("{isa} · {threads} thread") });
                         return Ok(running);
                     }
                 }
