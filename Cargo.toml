@@ -112,3 +112,9 @@ rten-simd = { path = "vendor/rten-simd" }
 # Prototipo Android (NativeActivity, tutto Rust): vedi android/README.md
 [workspace]
 members = ["android"]
+
+# Binario più piccolo e più veloce: ottimizzazione tra le crate (LTO) e simboli di debug tolti.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
