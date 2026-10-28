@@ -2064,7 +2064,8 @@ impl SampleDecoder {
     /// `header`: SPS e PPS in Annex B (vuoto se viaggiano nei campioni).
     fn open(header: &[u8]) -> Result<Self, String> {
         #[cfg(target_os = "linux")]
-        if crate::sink::shape().gpu && !GPU_DECODE_OFF.with(|off| off.get()) {
+        // Ancora in prova sulle schede vere: si accende con CEDRO_VA_DECODE=1.
+        if crate::sink::shape().gpu && std::env::var_os("CEDRO_VA_DECODE").is_some() && !GPU_DECODE_OFF.with(|off| off.get()) {
             let sets: Vec<&[u8]> = annex_nals(header).into_iter().filter(|nal| matches!(nal.first().map(|b| b & 0x1f), Some(7 | 8))).collect();
             if !sets.is_empty() {
                 match crate::gpuenc::H264Decoder::new(&sets) {
