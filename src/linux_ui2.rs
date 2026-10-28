@@ -450,13 +450,14 @@ fn open_surface(app: &Application, surface: Surface) {
             }
             let active = win.is_active();
             let mut redraw = false;
+            // Con un selettore di file aperto (ciclo annidato di `wait`) lo schermo è preso: i file restano in coda.
             if surface == Surface::Main {
-                let (paths, action) = {
-                    let mut slot = PENDING.lock().unwrap_or_else(|e| e.into_inner());
-                    (std::mem::take(&mut slot.0), slot.1.take())
-                };
-                if !paths.is_empty() {
-                    if let Ok(mut sc) = host.screen.try_borrow_mut() {
+                if let Ok(mut sc) = host.screen.try_borrow_mut() {
+                    let (paths, action) = {
+                        let mut slot = PENDING.lock().unwrap_or_else(|e| e.into_inner());
+                        (std::mem::take(&mut slot.0), slot.1.take())
+                    };
+                    if !paths.is_empty() {
                         sc.drop_files(paths);
                         if let Some(id) = action {
                             sc.app.set_action(id);

@@ -277,6 +277,19 @@ pub struct Job {
     pub file_started: Option<std::time::Instant>,
 }
 
+/// Il testo di un panic preso da `catch_unwind`, scritto anche nel registro.
+pub fn panic_text(p: &(dyn std::any::Any + Send)) -> String {
+    let what = p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_default();
+    crate::append_log(&format!("errore interno: {what}"));
+    if what.is_empty() { "Errore interno".to_string() } else { format!("Errore interno: {what}") }
+}
+
+/// Esegue `f` e trasforma un panic (un file che manda in crisi un decodificatore) in un errore: il lavoro
+/// va avanti con gli altri file e la finestra non resta «in corso» per sempre.
+pub fn guarded<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|p| Err(panic_text(&*p)))
+}
+
 /// Il tempo che resta, in parole: «circa 12 min», «meno di un minuto».
 fn time_left(secs: f32) -> String {
     let mins = (secs / 60.0).round() as u32;
@@ -301,6 +314,8 @@ pub enum Event {
     ConvertPercent(PathBuf, f32),
     Link(bool, youtube::Event),
     LinksFinished(bool, Result<Vec<PathBuf>, String>),
+    /// Il thread di lavoro si è interrotto per un errore interno: i file ancora in attesa o in corso falliscono.
+    Aborted(String),
     JobDone,
     Media(PathBuf, media::Loaded),
     Preview(PathBuf, usize, Option<Image>),
@@ -666,6 +681,7 @@ impl App {
         });
         self.selected = None;
         self.notice = None;
+        self.prune_media();
     }
 
     /// La spia: cosa accelera il lavoro in corso (solo conversioni e trascrizioni).
@@ -818,7 +834,7 @@ impl App {
                                     wake();
                                 }
                             },
-                            || conversioni::convert_one_out(&path, &action, quality, dest.as_deref(), &opts),
+                            || guarded(|| conversioni::convert_one_out(&path, &action, quality, dest.as_deref(), &opts)),
                         )
                     }
                     None => Err("Annullato".into()),
@@ -854,11 +870,16 @@ impl App {
                 let _ = tx.send(e);
                 wake();
             };
-            trascrizione::run_cancellable(&paths, &request, dest.as_deref(), &opts, &cancel, &|event| match event {
-                trascrizione::Event::Log(line) => send(Event::TranscribeLog(line)),
-                trascrizione::Event::Percent { index, percent } => send(Event::TranscribePercent(index, percent)),
-                trascrizione::Event::Finished { path, result } => send(Event::Finished(path, result)),
-            });
+            let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                trascrizione::run_cancellable(&paths, &request, dest.as_deref(), &opts, &cancel, &|event| match event {
+                    trascrizione::Event::Log(line) => send(Event::TranscribeLog(line)),
+                    trascrizione::Event::Percent { index, percent } => send(Event::TranscribePercent(index, percent)),
+                    trascrizione::Event::Finished { path, result } => send(Event::Finished(path, result)),
+                })
+            }));
+            if let Err(p) = run {
+                send(Event::Aborted(panic_text(&*p)));
+            }
             send(Event::JobDone);
         });
     }
@@ -922,14 +943,21 @@ impl App {
         self.job = Some(Job { kind: JobKind::Download { web }, total, done: 0, failed: 0, cancel: cancel.clone(), key: String::new(), targets: Vec::new(), part: 0.0, file_started: None });
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
         std::thread::spawn(move || {
-            let result = youtube::run(
-                &req,
-                &mut |e| {
-                    let _ = tx.send(Event::Link(web, e));
-                    wake();
-                },
-                &cancel,
-            );
+            let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                youtube::run(
+                    &req,
+                    &mut |e| {
+                        let _ = tx.send(Event::Link(web, e));
+                        wake();
+                    },
+                    &cancel,
+                )
+            }));
+            let result = run.unwrap_or_else(|p| {
+                let msg = panic_text(&*p);
+                let _ = tx.send(Event::Aborted(msg.clone()));
+                Err(msg)
+            });
             let _ = tx.send(Event::LinksFinished(web, result));
             let _ = tx.send(Event::JobDone);
             wake();
@@ -1078,6 +1106,29 @@ impl App {
                         }
                     }
                 }
+                Event::Aborted(msg) => {
+                    let kind = self.job.as_ref().map(|j| j.kind);
+                    let targets = self.job.as_ref().map(|j| j.targets.clone()).unwrap_or_default();
+                    let mut stopped = 0;
+                    for i in targets {
+                        if let Some(f) = self.files.get_mut(i).filter(|f| matches!(f.state, FileState::Waiting | FileState::Running)) {
+                            f.state = FileState::Failed;
+                            f.message = msg.clone();
+                            f.percent = None;
+                            stopped += 1;
+                        }
+                    }
+                    if let Some(job) = self.job.as_mut() {
+                        job.done += stopped;
+                        job.failed += stopped;
+                    }
+                    if let Some(JobKind::Download { web }) = kind {
+                        for r in self.links_mut(web).items.iter_mut().filter(|r| matches!(r.state, FileState::Waiting | FileState::Running)) {
+                            r.state = FileState::Failed;
+                            r.message = msg.clone();
+                        }
+                    }
+                }
                 Event::JobDone => {
                     crate::accel::clear_in_use();
                     if let Some(job) = self.job.take() {
@@ -1175,5 +1226,27 @@ mod tests {
         assert_eq!(time_left(30.0), "meno di un minuto");
         assert_eq!(time_left(12.0 * 60.0), "circa 12 min");
         assert_eq!(time_left(95.0 * 60.0), "circa 1 h 35 min");
+    }
+
+    #[test]
+    fn a_panic_becomes_an_error() {
+        assert_eq!(super::guarded(|| Ok::<_, String>(7)), Ok(7));
+        let err = super::guarded::<()>(|| panic!("decodificatore in crisi")).unwrap_err();
+        assert!(err.contains("decodificatore in crisi"), "{err}");
+    }
+
+    #[test]
+    fn an_aborted_job_does_not_stay_busy() {
+        use super::*;
+        let mut app = App::new(Arc::new(|| {}));
+        let path = PathBuf::from("/non/esiste/foto.jpg");
+        app.files.push(FileItem { path, kind: Kind::Image, voice_only: false, state: FileState::Running, message: "In corso".into(), output: None, checked: true, done_key: None, percent: Some(0.4) });
+        app.job = Some(Job { kind: JobKind::Transcribe, total: 1, done: 0, failed: 0, cancel: Arc::new(AtomicBool::new(false)), key: String::new(), targets: vec![0], part: 0.0, file_started: None });
+        app.tx.send(Event::Aborted("Errore interno".into())).unwrap();
+        app.tx.send(Event::JobDone).unwrap();
+        app.pump();
+        assert!(!app.busy());
+        assert_eq!(app.files[0].state, FileState::Failed);
+        assert!(app.notice.as_ref().is_some_and(|n| n.error));
     }
 }

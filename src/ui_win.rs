@@ -34,10 +34,6 @@ const WM_DRAG: u32 = WM_APP + 22;
 const WM_DROPPED: u32 = WM_APP + 23;
 const TIMER: usize = 77;
 
-thread_local! {
-    /// Un WM_WAKE è arrivato mentre lo schermo era occupato da una finestra di dialogo.
-    static LATE_WAKE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
 const ZOOM: f32 = cedro::ui::ZOOM;
 
 static MAIN: AtomicIsize = AtomicIsize::new(0);
@@ -53,6 +49,10 @@ struct Host {
     surface: Surface,
     tracking: std::cell::Cell<bool>,
     drop_target: RefCell<Option<IDropTarget>>,
+    /// Un WM_WAKE (o dei file) arrivati mentre lo schermo era occupato da una finestra di dialogo.
+    /// Uno per finestra: altrimenti la finestrella e il pannello si ruberebbero l'avviso.
+    late_wake: std::cell::Cell<bool>,
+    late_drop: std::cell::Cell<bool>,
 }
 
 #[derive(Default)]
@@ -125,11 +125,14 @@ impl Platform for Plat {
             let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
             if let Ok(mem) = GlobalAlloc(GMEM_MOVEABLE, wide.len() * 2) {
                 let ptr = GlobalLock(mem) as *mut u16;
-                if !ptr.is_null() {
+                let given = !ptr.is_null() && {
                     std::ptr::copy_nonoverlapping(wide.as_ptr(), ptr, wide.len());
                     let _ = GlobalUnlock(mem);
-                    // CF_UNICODETEXT = 13: la memoria passa al sistema.
-                    let _ = SetClipboardData(13, Some(HANDLE(mem.0)));
+                    // CF_UNICODETEXT = 13: la memoria passa al sistema, ma solo se la prende.
+                    SetClipboardData(13, Some(HANDLE(mem.0))).is_ok()
+                };
+                if !given {
+                    let _ = GlobalFree(Some(mem));
                 }
             }
             let _ = CloseClipboard();
@@ -146,8 +149,10 @@ impl Platform for Plat {
                 let mem = HGLOBAL(h.0);
                 let ptr = GlobalLock(mem) as *const u16;
                 if !ptr.is_null() {
+                    // Chi ha messo il testo può averlo lasciato senza lo zero finale: non si legge oltre il blocco.
+                    let max = GlobalSize(mem) / 2;
                     let mut len = 0;
-                    while *ptr.add(len) != 0 {
+                    while len < max && *ptr.add(len) != 0 {
                         len += 1;
                     }
                     out = Some(String::from_utf16_lossy(std::slice::from_raw_parts(ptr, len)));
@@ -375,6 +380,8 @@ unsafe fn create(surface: Surface) -> Result<()> {
         surface,
         tracking: std::cell::Cell::new(false),
         drop_target: RefCell::new(None),
+        late_wake: std::cell::Cell::new(false),
+        late_drop: std::cell::Cell::new(false),
     });
     HOSTS.with(|h| h.borrow_mut().push((hwnd.0 as isize, host.clone())));
     slot(surface).store(hwnd.0 as isize, Ordering::Relaxed);
@@ -553,13 +560,18 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         }
         WM_TIMER if wparam.0 == TIMER => {
             // Un avviso arrivato mentre un selettore di file teneva occupato lo schermo.
-            if LATE_WAKE.with(|w| w.get()) {
+            if host.late_wake.get() {
                 if let Ok(mut s) = host.screen.try_borrow_mut() {
-                    LATE_WAKE.with(|w| w.set(false));
+                    host.late_wake.set(false);
                     s.pump();
                     drop(s);
                     redraw(hwnd);
                 }
+            }
+            // File arrivati mentre un selettore era aperto: si riprovano adesso.
+            if host.late_drop.get() && host.screen.try_borrow_mut().is_ok() {
+                host.late_drop.set(false);
+                let _ = PostMessageW(Some(hwnd), WM_DROPPED, WPARAM(0), LPARAM(0));
             }
             let animating = host.screen.try_borrow().map(|s| s.animating()).unwrap_or(false);
             if animating {
@@ -573,7 +585,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                     s.pump();
                 }
                 // Un selettore di file è aperto: si riprende appena finisce (vedi il timer).
-                Err(_) => LATE_WAKE.with(|w| w.set(true)),
+                Err(_) => host.late_wake.set(true),
             }
             redraw(hwnd);
             LRESULT(0)
@@ -586,13 +598,17 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             LRESULT(0)
         }
         WM_DROPPED => {
-            let paths: Vec<PathBuf> = std::mem::take(&mut *DROPPED.lock().unwrap_or_else(|e| e.into_inner()));
-            let action = ACTION.lock().unwrap_or_else(|e| e.into_inner()).take();
-            if let Ok(mut s) = host.screen.try_borrow_mut() {
-                s.drop_files(paths);
-                if let Some(id) = action {
-                    s.app.set_action(id);
+            match host.screen.try_borrow_mut() {
+                Ok(mut s) => {
+                    let paths: Vec<PathBuf> = std::mem::take(&mut *DROPPED.lock().unwrap_or_else(|e| e.into_inner()));
+                    let action = ACTION.lock().unwrap_or_else(|e| e.into_inner()).take();
+                    s.drop_files(paths);
+                    if let Some(id) = action {
+                        s.app.set_action(id);
+                    }
                 }
+                // Un selettore di file tiene lo schermo: i file restano in coda e li riprende il timer.
+                Err(_) => host.late_drop.set(true),
             }
             redraw(hwnd);
             LRESULT(0)

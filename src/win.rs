@@ -49,6 +49,8 @@ static KEYS: AtomicU8 = AtomicU8::new(0b111);
 // Apre la ruota anche nelle finestre Apri/Salva (classe #32770).
 static DIALOGS: AtomicBool = AtomicBool::new(true);
 static UPDATE: Mutex<Option<UpdateNews>> = Mutex::new(None);
+/// Il messaggio «TaskbarCreated»: Esplora file è ripartito e l'icona va rimessa.
+static TASKBAR_CREATED: AtomicU32 = AtomicU32::new(0);
 
 enum UpdateNews {
     Found { release: update::Release, manual: bool },
@@ -157,7 +159,11 @@ pub fn start() -> std::result::Result<(), String> {
             g.quality = read_quality();
             g.icon = make_icon().unwrap_or(HICON::default());
         });
-        add_tray(hwnd)?;
+        TASKBAR_CREATED.store(RegisterWindowMessageW(w!("TaskbarCreated")), Ordering::Relaxed);
+        // All'accesso la barra può non esserci ancora: l'icona arriva con «TaskbarCreated».
+        if let Err(e) = add_tray(hwnd) {
+            append_log(&format!("icona non aggiunta: {e}"));
+        }
         // Dopo un aggiornamento silenzioso: un solo avviso discreto, a cose fatte.
         if let Some(version) = update::take_updated() {
             balloon(&format!("Cedro è stato aggiornato alla {version}."));
@@ -245,6 +251,11 @@ unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) 
 }
 
 unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    let taskbar = TASKBAR_CREATED.load(Ordering::Relaxed);
+    if taskbar != 0 && msg == taskbar {
+        let _ = add_tray(hwnd);
+        return LRESULT(0);
+    }
     match msg {
         WM_MEASUREITEM if crate::winmenu::measure(lparam) => LRESULT(1),
         WM_DRAWITEM if crate::winmenu::draw(lparam) => LRESULT(1),
@@ -1099,15 +1110,16 @@ fn run_wheel_job(all: &[PathBuf], slice: Slice, quality: u8, beside: bool) {
         crate::progress_win::step(i, &progress_label(i, path));
         // «Salva accanto all'originale» spuntato nella ruota vale per questo lavoro e basta.
         let out_dir = if beside { path.parent() } else { None };
-        match perform_into(path, slice.id, quality, out_dir) {
+        // Un panic su un file diventa un errore: la linea di avanzamento non resta accesa per sempre.
+        match cedro::ui::model::guarded(|| perform_into(path, slice.id, quality, out_dir).map_err(|e| e.0)) {
             Ok(out) => {
                 notes.push(format!("{} · {}", name(&out.path), out.message));
                 crate::progress_win::produced(&out.path);
                 last_out = Some(out.path);
             }
             Err(e) => {
-                failed.get_or_insert_with(|| e.0.clone());
-                notes.push(e.0);
+                failed.get_or_insert_with(|| e.clone());
+                notes.push(e);
             }
         }
     }
@@ -1346,10 +1358,14 @@ pub(crate) fn copy_text(text: &str) {
         let bytes = wide.len() * 2;
         if let Ok(h) = GlobalAlloc(GMEM_MOVEABLE, bytes) {
             let p = GlobalLock(h);
-            if !p.is_null() {
+            let given = !p.is_null() && {
                 std::ptr::copy_nonoverlapping(wide.as_ptr(), p as *mut u16, wide.len());
                 let _ = GlobalUnlock(h);
-                let _ = SetClipboardData(CF_UNICODETEXT.0 as u32, Some(HANDLE(h.0)));
+                SetClipboardData(CF_UNICODETEXT.0 as u32, Some(HANDLE(h.0))).is_ok()
+            };
+            // La memoria passa al sistema solo se SetClipboardData riesce.
+            if !given {
+                let _ = GlobalFree(Some(h));
             }
         }
         let _ = CloseClipboard();
