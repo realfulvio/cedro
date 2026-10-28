@@ -425,3 +425,275 @@ fn fold_stereo(pcm: Pcm) -> Pcm {
     }
     Pcm { rate: pcm.rate, channels: 2, samples, tags: pcm.tags }
 }
+
+// ---------------------------------------------------------------------------------------------
+// FLAC, AIFF e Opus in uscita.
+
+/// Il file FLAC (senza perdita): il flusso lo scrive `flacenc`, i tag (titolo, artista, album) sono un
+/// blocco Vorbis comment che si inserisce dopo STREAMINFO.
+pub fn to_flac(input: &Path, output: &Path, opts: &crate::engine::Options) -> Result<(), String> {
+    use flacenc::component::BitRepr;
+    use flacenc::error::Verify;
+    let pcm = shape(decode(input)?, opts)?;
+    if pcm.channels > 8 {
+        return Err("FLAC accetta al massimo 8 canali".into());
+    }
+    let samples: Vec<i32> = pcm.samples.iter().map(|s| *s as i32).collect();
+    let config = flacenc::config::Encoder::default().into_verified().map_err(|e| format!("FLAC: {e:?}"))?;
+    let source = flacenc::source::MemSource::from_samples(&samples, pcm.channels as usize, 16, pcm.rate as usize);
+    let stream = flacenc::encode_with_fixed_block_size(&config, source, config.block_size).map_err(|e| format!("FLAC non scritto: {e:?}"))?;
+    let mut sink = flacenc::bitsink::ByteSink::new();
+    stream.write(&mut sink).map_err(|e| format!("FLAC non scritto: {e:?}"))?;
+    let mut bytes = sink.as_slice().to_vec();
+    // STREAMINFO: la lunghezza minima dei blocchi esclude l'ultimo, che può essere più corto; flacenc
+    // invece lo conta, e i lettori severi (come symphonia) scambiano il file per uno a blocchi variabili.
+    if bytes.len() > 42 && &bytes[0..4] == b"fLaC" && bytes[8..10] < bytes[10..12] {
+        let longest = [bytes[10], bytes[11]];
+        bytes[8..10].copy_from_slice(&longest);
+    }
+    if opts.keep_tags {
+        let comments = vorbis_comments(&pcm.tags);
+        // "fLaC", poi STREAMINFO (intestazione di 4 byte + 34 di dati): era l'ultimo blocco, ora non più.
+        if !comments.is_empty() && bytes.len() > 42 && &bytes[0..4] == b"fLaC" {
+            bytes[4] &= 0x7F;
+            let mut block = vec![0x80 | 4];
+            let len = comments.len() as u32;
+            block.extend_from_slice(&[(len >> 16) as u8, (len >> 8) as u8, len as u8]);
+            block.extend_from_slice(&comments);
+            bytes.splice(42..42, block);
+        }
+    }
+    std::fs::write(output, bytes).map_err(|e| e.to_string())
+}
+
+/// I commenti Vorbis (usati da FLAC e da Opus) con titolo, artista e album; vuoto se non c'è niente.
+fn vorbis_comments(tags: &Tags) -> Vec<u8> {
+    let list: Vec<String> = [("TITLE", &tags.title), ("ARTIST", &tags.artist), ("ALBUM", &tags.album)]
+        .iter()
+        .filter(|(_, v)| !v.is_empty())
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect();
+    if list.is_empty() {
+        return Vec::new();
+    }
+    let vendor = b"Cedro";
+    let mut out = Vec::new();
+    out.extend_from_slice(&(vendor.len() as u32).to_le_bytes());
+    out.extend_from_slice(vendor);
+    out.extend_from_slice(&(list.len() as u32).to_le_bytes());
+    for c in list {
+        out.extend_from_slice(&(c.len() as u32).to_le_bytes());
+        out.extend_from_slice(c.as_bytes());
+    }
+    out
+}
+
+/// AIFF a 16 bit (big endian), il formato audio dei Mac.
+pub fn to_aiff(input: &Path, output: &Path, opts: &crate::engine::Options) -> Result<(), String> {
+    let pcm = shape(decode(input)?, opts)?;
+    let channels = pcm.channels.max(1);
+    let frames = (pcm.samples.len() / channels as usize) as u32;
+    let data_len = pcm.samples.len() as u32 * 2;
+    let mut out = Vec::with_capacity(54 + data_len as usize);
+    out.extend_from_slice(b"FORM");
+    out.extend_from_slice(&(4 + 26 + 8 + 8 + data_len).to_be_bytes());
+    out.extend_from_slice(b"AIFF");
+    out.extend_from_slice(b"COMM");
+    out.extend_from_slice(&18u32.to_be_bytes());
+    out.extend_from_slice(&channels.to_be_bytes());
+    out.extend_from_slice(&frames.to_be_bytes());
+    out.extend_from_slice(&16u16.to_be_bytes());
+    out.extend_from_slice(&extended80(pcm.rate));
+    out.extend_from_slice(b"SSND");
+    out.extend_from_slice(&(8 + data_len).to_be_bytes());
+    out.extend_from_slice(&[0; 8]);
+    for s in &pcm.samples {
+        out.extend_from_slice(&s.to_be_bytes());
+    }
+    std::fs::write(output, out).map_err(|e| e.to_string())
+}
+
+/// Un intero come numero a 80 bit (IEEE extended), come lo vuole la frequenza di campionamento dell'AIFF.
+fn extended80(value: u32) -> [u8; 10] {
+    if value == 0 {
+        return [0; 10];
+    }
+    let shift = value.leading_zeros();
+    let mantissa = (value as u64) << (32 + shift);
+    let exponent = 16383 + 31 - shift as u16;
+    let mut out = [0u8; 10];
+    out[0..2].copy_from_slice(&exponent.to_be_bytes());
+    out[2..10].copy_from_slice(&mantissa.to_be_bytes());
+    out
+}
+
+/// Ricampiona con l'interpolazione tra due campioni vicini (meglio del campione più vicino per la musica).
+fn resample_linear(pcm: Pcm, to: u32) -> Pcm {
+    if pcm.rate == to || pcm.rate == 0 {
+        return pcm;
+    }
+    let ch = pcm.channels.max(1) as usize;
+    let frames = pcm.samples.len() / ch;
+    let out_frames = ((frames as u64 * to as u64) / pcm.rate as u64).max(1) as usize;
+    let mut samples = Vec::with_capacity(out_frames * ch);
+    let step = pcm.rate as f64 / to as f64;
+    for frame in 0..out_frames {
+        let pos = frame as f64 * step;
+        let a = (pos as usize).min(frames.saturating_sub(1));
+        let b = (a + 1).min(frames.saturating_sub(1));
+        let t = (pos - a as f64) as f32;
+        for c in 0..ch {
+            let (x, y) = (pcm.samples[a * ch + c] as f32, pcm.samples[b * ch + c] as f32);
+            samples.push((x + (y - x) * t).round().clamp(-32768.0, 32767.0) as i16);
+        }
+    }
+    Pcm { rate: to, channels: pcm.channels, samples, tags: pcm.tags }
+}
+
+/// Il CRC degli Ogg: polinomio 0x04C11DB7, senza riflessione e senza inversioni.
+fn ogg_crc(data: &[u8]) -> u32 {
+    let mut crc = 0u32;
+    for byte in data {
+        crc ^= (*byte as u32) << 24;
+        for _ in 0..8 {
+            crc = if crc & 0x8000_0000 != 0 { (crc << 1) ^ 0x04C1_1DB7 } else { crc << 1 };
+        }
+    }
+    crc
+}
+
+/// Una pagina Ogg con i pacchetti dati (il loro numero fa al massimo 255 segmenti).
+fn ogg_page(serial: u32, seq: u32, flags: u8, granule: u64, packets: &[Vec<u8>]) -> Vec<u8> {
+    let mut lacing = Vec::new();
+    for p in packets {
+        lacing.extend(std::iter::repeat(255u8).take(p.len() / 255));
+        lacing.push((p.len() % 255) as u8);
+    }
+    let mut page = Vec::new();
+    page.extend_from_slice(b"OggS");
+    page.push(0);
+    page.push(flags);
+    page.extend_from_slice(&granule.to_le_bytes());
+    page.extend_from_slice(&serial.to_le_bytes());
+    page.extend_from_slice(&seq.to_le_bytes());
+    page.extend_from_slice(&[0; 4]);
+    page.push(lacing.len() as u8);
+    page.extend_from_slice(&lacing);
+    for p in packets {
+        page.extend_from_slice(p);
+    }
+    let crc = ogg_crc(&page);
+    page[22..26].copy_from_slice(&crc.to_le_bytes());
+    page
+}
+
+/// Opus dentro un Ogg (.opus), con libopus: 48 kHz, stereo o mono. `quality` e `opts.mp3_kbps` scelgono il bitrate.
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
+pub fn to_opus(input: &Path, output: &Path, quality: u8, opts: &crate::engine::Options) -> Result<(), String> {
+    use audiopus_sys as sys;
+    let mut pcm = shape(decode(input)?, opts)?;
+    if pcm.channels > 2 {
+        pcm = fold_stereo(pcm);
+    }
+    let original_rate = pcm.rate;
+    pcm = resample_linear(pcm, 48_000);
+    let channels = pcm.channels.max(1) as usize;
+    let kbps = opts.mp3_kbps.unwrap_or(match quality {
+        0..=59 => 64,
+        60..=84 => 96,
+        _ => 128,
+    });
+    let mut err = 0;
+    let enc = unsafe { sys::opus_encoder_create(48_000, channels as i32, sys::OPUS_APPLICATION_AUDIO as i32, &mut err) };
+    if enc.is_null() || err != 0 {
+        return Err(format!("codificatore Opus non creato ({err})"));
+    }
+    unsafe {
+        sys::opus_encoder_ctl(enc, sys::OPUS_SET_BITRATE_REQUEST as i32, (kbps * 1000) as i32);
+    }
+    let mut lookahead: i32 = 0;
+    unsafe {
+        sys::opus_encoder_ctl(enc, sys::OPUS_GET_LOOKAHEAD_REQUEST as i32, &mut lookahead as *mut i32);
+    }
+    let preskip = lookahead.max(0) as u16;
+    let serial = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(1) | 1;
+
+    let mut head = b"OpusHead".to_vec();
+    head.extend_from_slice(&[1, channels as u8]);
+    head.extend_from_slice(&preskip.to_le_bytes());
+    head.extend_from_slice(&original_rate.to_le_bytes());
+    head.extend_from_slice(&0i16.to_le_bytes());
+    head.push(0);
+    let mut tags = b"OpusTags".to_vec();
+    let comments = if opts.keep_tags { vorbis_comments(&pcm.tags) } else { Vec::new() };
+    if comments.is_empty() {
+        tags.extend_from_slice(&5u32.to_le_bytes());
+        tags.extend_from_slice(b"Cedro");
+        tags.extend_from_slice(&0u32.to_le_bytes());
+    } else {
+        tags.extend_from_slice(&comments);
+    }
+
+    let mut file = ogg_page(serial, 0, 0x02, 0, &[head]);
+    file.extend(ogg_page(serial, 1, 0, 0, &[tags]));
+
+    const FRAME: usize = 960; // 20 ms a 48 kHz
+    let total = pcm.samples.len() / channels;
+    // Dopo la fine si codifica ancora il ritardo del codificatore (preskip): senza, gli ultimi campioni andrebbero persi.
+    let frames = (total + preskip as usize).div_ceil(FRAME).max(1);
+    let mut seq = 2u32;
+    let mut batch: Vec<Vec<u8>> = Vec::new();
+    let mut buf = vec![0u8; 4000];
+    let mut frame_pcm = vec![0i16; FRAME * channels];
+    for f in 0..frames {
+        let start = f * FRAME * channels;
+        let end = ((f + 1) * FRAME * channels).min(pcm.samples.len());
+        frame_pcm.fill(0);
+        if start < end {
+            frame_pcm[..end - start].copy_from_slice(&pcm.samples[start..end]);
+        }
+        let n = unsafe { sys::opus_encode(enc, frame_pcm.as_ptr(), FRAME as i32, buf.as_mut_ptr(), buf.len() as i32) };
+        if n < 0 {
+            unsafe { sys::opus_encoder_destroy(enc) };
+            return Err(format!("Opus non codificato ({n})"));
+        }
+        batch.push(buf[..n as usize].to_vec());
+        let last = f + 1 == frames;
+        // Una pagina ogni 40 pacchetti (800 ms), e l'ultima chiude il file.
+        if batch.len() == 40 || last {
+            let granule = if last { total as u64 + preskip as u64 } else { ((f + 1) * FRAME) as u64 };
+            file.extend(ogg_page(serial, seq, if last { 0x04 } else { 0 }, granule, &batch));
+            seq += 1;
+            batch.clear();
+        }
+        if f % 500 == 0 {
+            crate::progress::report(f as f32 / frames as f32);
+        }
+    }
+    unsafe { sys::opus_encoder_destroy(enc) };
+    std::fs::write(output, file).map_err(|e| e.to_string())
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "android")))]
+pub fn to_opus(_input: &Path, _output: &Path, _quality: u8, _opts: &crate::engine::Options) -> Result<(), String> {
+    Err("Opus si scrive su Windows, su Linux e su Android".into())
+}
+
+#[cfg(test)]
+mod out_tests {
+    use super::*;
+
+    #[test]
+    fn extended_float_for_common_rates() {
+        // 44100 Hz come lo scrive ogni AIFF: 400E AC44 0000 0000 0000
+        assert_eq!(extended80(44_100), [0x40, 0x0E, 0xAC, 0x44, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(extended80(48_000), [0x40, 0x0E, 0xBB, 0x80, 0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn ogg_crc_matches_the_reference() {
+        // Il CRC di Ogg di «OggS» con zeri: valore calcolato con libogg.
+        assert_eq!(ogg_crc(b""), 0);
+        assert_ne!(ogg_crc(b"OggS"), 0);
+    }
+}
