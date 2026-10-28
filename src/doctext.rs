@@ -248,10 +248,10 @@ fn odf_length(v: &str) -> Option<f32> {
 fn odt_blocks(xml: &str, media: &Media) -> Vec<crate::pdfdoc::DocBlock> {
     let mut found: Vec<(usize, crate::pdfdoc::DocBlock)> = Vec::new();
     for (tag, is_heading) in [("text:h", true), ("text:p", false)] {
-        let mut at = 0;
         for element in elements(xml, tag) {
-            let position = xml[at..].find(element).map_or(at, |i| at + i);
-            at = position;
+            // Il posto nel file dal puntatore: cercare il testo troverebbe il primo paragrafo uguale
+            // (i paragrafi vuoti finirebbero tutti in cima).
+            let position = element.as_ptr() as usize - xml.as_ptr() as usize;
             let heading = if is_heading {
                 attr_text(element, "text:outline-level").and_then(|v| v.parse::<u8>().ok()).unwrap_or(1).clamp(1, 3)
             } else {
@@ -1038,6 +1038,14 @@ mod block_tests {
         assert_eq!(levels(&blocks), vec![(1, "Verbale"), (2, "Presenti")]);
         assert_eq!(blocks.len(), 4);
         assert_eq!(blocks[1].text, "Corpo del testo");
+    }
+
+    #[test]
+    fn odt_identical_paragraphs_keep_their_place() {
+        let xml = "<office:text><text:p>Uno</text:p><text:p/><text:h text:outline-level=\"1\">Titolo</text:h><text:p/><text:p>Due</text:p></office:text>";
+        let blocks = odt_blocks(xml, &|_, _, _| None);
+        let texts: Vec<&str> = blocks.iter().map(|b| b.text.as_str()).collect();
+        assert_eq!(texts, vec!["Uno", "", "Titolo", "", "Due"]);
     }
 
     #[test]
