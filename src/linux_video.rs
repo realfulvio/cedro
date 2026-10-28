@@ -1987,9 +1987,8 @@ fn frame_copy(frame: &crate::gpuenc::I420Frame) -> OwnedFrame {
 
 /// Se questa conversione decodifica sulla scheda video: impostazione GPU accesa e nessun errore già avuto.
 /// Va chiesto dal thread della conversione (le impostazioni sono lì) e passato a chi legge.
-/// Ancora in prova sulle schede vere: si accende con CEDRO_VA_DECODE=1.
 fn gpu_decode_wanted() -> bool {
-    crate::sink::shape().gpu && std::env::var_os("CEDRO_VA_DECODE").is_some() && !GPU_DECODE_OFF.with(|off| off.get())
+    crate::sink::shape().gpu && !GPU_DECODE_OFF.with(|off| off.get())
 }
 
 /// Il decodificatore H.264 dei campioni: la scheda video (VA-API) se c'è, è permessa e il video è adatto,
@@ -2041,8 +2040,11 @@ impl GpuCheck {
         }
         let mut want: Vec<OwnedFrame> = Vec::new();
         for sample in &self.samples {
-            if let Ok(Some(frame)) = soft.decode(sample) {
-                want.push(owned_frame(&frame)?);
+            match soft.decode(sample) {
+                Ok(Some(frame)) => want.push(owned_frame(&frame)?),
+                Ok(None) => {}
+                // OpenH264 non legge tutti i flussi con i B: se inciampa non è un riferimento valido.
+                Err(_) => return Ok(()),
             }
         }
         if whole {
