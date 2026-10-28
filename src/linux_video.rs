@@ -94,9 +94,9 @@ fn to_mp4_with(input: &Path, output: &Path) -> Result<(), String> {
             if head[..n].starts_with(b"RIFF") {
                 avi_to_mp4(input, output)
             } else if n >= 8 && &head[4..8] == b"ftyp" {
-                iso_to_mp4(input, output)
+                with_gpu_fallback(|| iso_to_mp4(input, output))
             } else if n >= 4 && head[..4] == [0x1A, 0x45, 0xDF, 0xA3] {
-                mkv_to_mp4(input, output)
+                with_gpu_fallback(|| mkv_to_mp4(input, output))
             } else {
                 container_to_mp4(input, output)
             }
@@ -720,13 +720,10 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let mut sink = None;
     let mut queued = Vec::new();
     let mut shown = 0u32;
+    let gpu_decode = gpu_decode_wanted();
     pipelined(
         |emit| {
-            let mut decoder = h264_decoder()?;
-            if !header.is_empty() {
-                let _ = decoder.decode(&header);
-            }
-            let mut last = (0i64, 333_333i64);
+            let mut decoder = SampleDecoder::open(&header, gpu_decode)?;
             for index in 1..=count {
                 let Some(sample) = reader
                     .read_sample(track_id, index)
@@ -740,18 +737,10 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                 }
                 let duration = ticks(u64::from(sample.duration), 1, timescale).max(1);
                 let time = ticks(sample.start_time, 1, timescale);
-                last = (time, duration);
-                if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
-                    sent(emit(Decoded::Frame(owned_frame(&frame)?, duration, time)))?;
-                }
+                decoder.decode(&annex, duration, time, &mut |frame, d, t| sent(emit(Decoded::Frame(frame, d, t))))?;
             }
             // Con i fotogrammi B il decodificatore ne trattiene qualcuno: escono qui, dopo l'ultimo.
-            if let Ok(rest) = decoder.flush_remaining() {
-                for (k, frame) in rest.iter().enumerate() {
-                    sent(emit(Decoded::Frame(owned_frame(frame)?, last.1, last.0 + last.1 * (k as i64 + 1))))?;
-                }
-            }
-            Ok(())
+            decoder.finish(&mut |frame, d, t| sent(emit(Decoded::Frame(frame, d, t))))
         },
         |item| {
             if let Decoded::Frame(owned, duration, time) = item {
@@ -825,13 +814,10 @@ fn iso_lenient(input: &Path, output: &Path) -> Result<(), String> {
     let mut sink = None;
     let mut queued = Vec::new();
     let mut shown = 0u32;
+    let gpu_decode = gpu_decode_wanted();
     pipelined(
         |emit| {
-            let mut decoder = h264_decoder()?;
-            if !header.is_empty() {
-                let _ = decoder.decode(&header);
-            }
-            let mut last = (0i64, 333_333i64);
+            let mut decoder = SampleDecoder::open(&header, gpu_decode)?;
             let mut sample_bytes = Vec::new();
             for sample in &video.samples {
                 // Un campione che esce dal file è un indice rovinato: niente memoria chiesta per niente.
@@ -847,18 +833,10 @@ fn iso_lenient(input: &Path, output: &Path) -> Result<(), String> {
                 }
                 let duration = ticks(u64::from(sample.duration), 1, video.timescale).max(1);
                 let time = ticks(sample.start, 1, video.timescale);
-                last = (time, duration);
-                if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
-                    sent(emit(Decoded::Frame(owned_frame(&frame)?, duration, time)))?;
-                }
+                decoder.decode(&annex, duration, time, &mut |frame, d, t| sent(emit(Decoded::Frame(frame, d, t))))?;
             }
             // Con i fotogrammi B il decodificatore ne trattiene qualcuno: escono qui, dopo l'ultimo.
-            if let Ok(rest) = decoder.flush_remaining() {
-                for (k, frame) in rest.iter().enumerate() {
-                    sent(emit(Decoded::Frame(owned_frame(frame)?, last.1, last.0 + last.1 * (k as i64 + 1))))?;
-                }
-            }
-            Ok(())
+            decoder.finish(&mut |frame, d, t| sent(emit(Decoded::Frame(frame, d, t))))
         },
         |item| {
             if let Decoded::Frame(owned, duration, time) = item {
@@ -1289,12 +1267,10 @@ fn mkv_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let mut sink = None;
     let mut queued = Vec::new();
     let mut shown = 0u32;
+    let gpu_decode = gpu_decode_wanted();
     pipelined(
         |emit| {
-            let mut decoder = h264_decoder()?;
-            if !header.is_empty() {
-                let _ = decoder.decode(&header);
-            }
+            let mut decoder = SampleDecoder::open(&header, gpu_decode)?;
             let mut emitted = 0i64;
             let mut pending: Option<(OwnedFrame, i64)> = None;
             let mut last_dur = fallback;
@@ -1303,8 +1279,7 @@ fn mkv_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                 if annex.is_empty() {
                     return Ok(());
                 }
-                if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
-                    let owned = owned_frame(&frame)?;
+                decoder.decode(&annex, duration, time, &mut |owned, duration, time| {
                     // Con la durata fissa dei fotogrammi i tempi si contano: con i fotogrammi B quelli dei blocchi
                     // sono nell'ordine di visione, non in quello in cui escono dal decodificatore.
                     if fixed > 0 {
@@ -1324,25 +1299,23 @@ fn mkv_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                         sent(emit(Decoded::Frame(prev, step, prev_time)))?;
                     }
                     pending = Some((owned, time));
+                    Ok(())
+                })
+            })?;
+            decoder.finish(&mut |owned, _, _| {
+                if fixed > 0 {
+                    sent(emit(Decoded::Frame(owned, fixed, emitted * fixed)))?;
+                    emitted += 1;
+                    return Ok(());
                 }
+                let mut next = 0;
+                if let Some((prev, prev_time)) = pending.take() {
+                    sent(emit(Decoded::Frame(prev, last_dur, prev_time)))?;
+                    next = prev_time + last_dur;
+                }
+                pending = Some((owned, next));
                 Ok(())
             })?;
-            if let Ok(rest) = decoder.flush_remaining() {
-                for frame in &rest {
-                    let owned = owned_frame(frame)?;
-                    if fixed > 0 {
-                        sent(emit(Decoded::Frame(owned, fixed, emitted * fixed)))?;
-                        emitted += 1;
-                        continue;
-                    }
-                    let mut next = 0;
-                    if let Some((prev, prev_time)) = pending.take() {
-                        sent(emit(Decoded::Frame(prev, last_dur, prev_time)))?;
-                        next = prev_time + last_dur;
-                    }
-                    pending = Some((owned, next));
-                }
-            }
             if let Some((prev, prev_time)) = pending.take() {
                 sent(emit(Decoded::Frame(prev, last_dur, prev_time)))?;
             }
@@ -1983,6 +1956,234 @@ fn h264_decoder() -> Result<Decoder, String> {
     use openh264::decoder::{DecoderConfig, Flush};
     Decoder::with_api_config(OpenH264API::from_source(), DecoderConfig::new().flush_after_decode(Flush::NoFlush))
         .map_err(|err| format!("H.264 non letto: {err}"))
+}
+
+/// Inizio degli errori della decodifica sulla scheda video: chi li vede rifà il video con OpenH264.
+const GPU_DECODE_FAILED: &str = "decodifica sulla scheda video";
+
+thread_local! {
+    /// Acceso dopo un errore della scheda: il secondo tentativo decodifica col processore.
+    static GPU_DECODE_OFF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Lancia `run`; se la decodifica sulla scheda video fallisce a metà, la rilancia con OpenH264.
+fn with_gpu_fallback(run: impl Fn() -> Result<(), String>) -> Result<(), String> {
+    match run() {
+        Err(err) if err.starts_with(GPU_DECODE_FAILED) => {
+            eprintln!("{err}: il video si rifà col processore");
+            GPU_DECODE_OFF.with(|off| off.set(true));
+            let again = run();
+            GPU_DECODE_OFF.with(|off| off.set(false));
+            again
+        }
+        other => other,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn frame_copy(frame: &crate::gpuenc::I420Frame) -> OwnedFrame {
+    OwnedFrame { y: frame.y.clone(), u: frame.u.clone(), v: frame.v.clone(), width: frame.width, height: frame.height }
+}
+
+/// Se questa conversione decodifica sulla scheda video: impostazione GPU accesa e nessun errore già avuto.
+/// Va chiesto dal thread della conversione (le impostazioni sono lì) e passato a chi legge.
+fn gpu_decode_wanted() -> bool {
+    crate::sink::shape().gpu && !GPU_DECODE_OFF.with(|off| off.get())
+}
+
+/// Il decodificatore H.264 dei campioni: la scheda video (VA-API) se c'è, è permessa e il video è adatto,
+/// altrimenti OpenH264. Con la scheda i fotogrammi escono in ordine di visualizzazione, a tempo di decodifica
+/// dei campioni; con OpenH264 portano il tempo del campione che li ha fatti uscire, come sempre.
+struct SampleDecoder {
+    soft: Option<Decoder>,
+    #[cfg(target_os = "linux")]
+    gpu: Option<crate::gpuenc::H264Decoder>,
+    /// Durata e tempo dei campioni con un fotogramma, in attesa del loro fotogramma (solo scheda video).
+    queue: std::collections::VecDeque<(i64, i64)>,
+    /// Tempo e durata dell'ultimo campione (per i fotogrammi che escono alla fine con OpenH264).
+    last: (i64, i64),
+    /// Il controllo dei primi fotogrammi della scheda video contro OpenH264, finché non è fatto.
+    check: Option<GpuCheck>,
+}
+
+/// Quanti fotogrammi della scheda si confrontano con OpenH264 prima di fidarsi.
+const CHECK_FRAMES: usize = 8;
+/// Quanti campioni si tengono per il confronto.
+const CHECK_SAMPLES: usize = 40;
+
+/// I primi campioni e i primi fotogrammi della scheda video, per controllarli contro OpenH264.
+struct GpuCheck {
+    header: Vec<u8>,
+    samples: Vec<Vec<u8>>,
+    frames: Vec<OwnedFrame>,
+}
+
+/// Quanto due piani sono vicini, in dB (99 se uguali).
+fn plane_psnr(a: &[u8], b: &[u8]) -> f64 {
+    if a.len() != b.len() || a.is_empty() {
+        return 0.0;
+    }
+    let sum: f64 = a.iter().zip(b).map(|(&x, &y)| (f64::from(x) - f64::from(y)).powi(2)).sum();
+    if sum == 0.0 {
+        return 99.0;
+    }
+    10.0 * (255.0f64 * 255.0 / (sum / a.len() as f64)).log10()
+}
+
+impl GpuCheck {
+    /// Decodifica gli stessi campioni con OpenH264 e confronta i fotogrammi: la scheda video di un PC
+    /// che sbaglia in silenzio non deve rovinare un video. `whole`: i campioni sono tutto il video.
+    fn verify(self, whole: bool) -> Result<(), String> {
+        let mut soft = h264_decoder()?;
+        if !self.header.is_empty() {
+            let _ = soft.decode(&self.header);
+        }
+        let mut want: Vec<OwnedFrame> = Vec::new();
+        for sample in &self.samples {
+            match soft.decode(sample) {
+                Ok(Some(frame)) => want.push(owned_frame(&frame)?),
+                Ok(None) => {}
+                // OpenH264 non legge tutti i flussi con i B: se inciampa non è un riferimento valido.
+                Err(_) => return Ok(()),
+            }
+        }
+        if whole {
+            if let Ok(rest) = soft.flush_remaining() {
+                for frame in &rest {
+                    want.push(owned_frame(frame)?);
+                }
+            }
+        }
+        let n = want.len().min(self.frames.len());
+        if n == 0 && !self.frames.is_empty() {
+            return Err(format!("{GPU_DECODE_FAILED}: nessun fotogramma da confrontare"));
+        }
+        for (index, (gpu, soft)) in self.frames.iter().zip(&want).take(n).enumerate() {
+            let worst = if (gpu.width, gpu.height) == (soft.width, soft.height) {
+                plane_psnr(&gpu.y, &soft.y).min(plane_psnr(&gpu.u, &soft.u)).min(plane_psnr(&gpu.v, &soft.v))
+            } else {
+                0.0
+            };
+            if worst < 38.0 {
+                return Err(format!("{GPU_DECODE_FAILED}: il fotogramma {index} è diverso da quello di OpenH264 ({worst:.1} dB)"));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl SampleDecoder {
+    /// `header`: SPS e PPS in Annex B (vuoto se viaggiano nei campioni).
+    fn open(header: &[u8], gpu: bool) -> Result<Self, String> {
+        #[cfg(target_os = "linux")]
+        if gpu {
+            let sets: Vec<&[u8]> = annex_nals(header).into_iter().filter(|nal| matches!(nal.first().map(|b| b & 0x1f), Some(7 | 8))).collect();
+            if !sets.is_empty() {
+                match crate::gpuenc::H264Decoder::new(&sets) {
+                    Ok(gpu) => {
+                        eprintln!("decodifica sulla scheda video: {}", gpu.name());
+                        let check = GpuCheck { header: header.to_vec(), samples: Vec::new(), frames: Vec::new() };
+                        return Ok(SampleDecoder { soft: None, gpu: Some(gpu), queue: Default::default(), last: (0, 333_333), check: Some(check) });
+                    }
+                    Err(err) => eprintln!("decodifica sulla scheda video non usata: {err}"),
+                }
+            }
+        }
+        let mut decoder = h264_decoder()?;
+        if !header.is_empty() {
+            let _ = decoder.decode(header);
+        }
+        #[cfg(target_os = "linux")]
+        return Ok(SampleDecoder { soft: Some(decoder), gpu: None, queue: Default::default(), last: (0, 333_333), check: None });
+        #[cfg(not(target_os = "linux"))]
+        Ok(SampleDecoder { soft: Some(decoder), queue: Default::default(), last: (0, 333_333), check: None })
+    }
+
+    /// Un campione (Annex B) con la sua durata e il suo tempo (100 ns). I fotogrammi pronti vanno a `emit`
+    /// con durata e tempo.
+    fn decode(
+        &mut self,
+        annex: &[u8],
+        duration: i64,
+        time: i64,
+        emit: &mut dyn FnMut(OwnedFrame, i64, i64) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.last = (time, duration);
+        #[cfg(target_os = "linux")]
+        if let Some(gpu) = self.gpu.as_mut() {
+            let mut frames = Vec::new();
+            let had = gpu
+                .decode(annex, &mut |frame| {
+                    frames.push(frame);
+                    Ok(())
+                })
+                .map_err(|err| format!("{GPU_DECODE_FAILED}: {err}"))?;
+            if had {
+                self.queue.push_back((duration, time));
+            }
+            if let Some(check) = self.check.as_mut() {
+                if check.samples.len() < CHECK_SAMPLES {
+                    check.samples.push(annex.to_vec());
+                }
+                for frame in &frames {
+                    if check.frames.len() < CHECK_FRAMES {
+                        check.frames.push(frame_copy(frame));
+                    }
+                }
+                if check.frames.len() >= CHECK_FRAMES {
+                    if let Some(check) = self.check.take() {
+                        check.verify(false)?;
+                    }
+                }
+            }
+            for frame in frames {
+                let (d, t) = self.queue.pop_front().unwrap_or((duration, time));
+                emit(OwnedFrame { y: frame.y, u: frame.u, v: frame.v, width: frame.width, height: frame.height }, d, t)?;
+            }
+            return Ok(());
+        }
+        let decoder = self.soft.as_mut().ok_or("H.264 non letto")?;
+        if let Some(frame) = decoder.decode(annex).map_err(|err| format!("H.264 non letto: {err}"))? {
+            emit(owned_frame(&frame)?, duration, time)?;
+        }
+        Ok(())
+    }
+
+    /// Fine dei campioni: escono i fotogrammi che il decodificatore teneva (per i B).
+    fn finish(&mut self, emit: &mut dyn FnMut(OwnedFrame, i64, i64) -> Result<(), String>) -> Result<(), String> {
+        #[cfg(target_os = "linux")]
+        if let Some(gpu) = self.gpu.as_mut() {
+            let mut frames = Vec::new();
+            gpu.flush(&mut |frame| {
+                frames.push(frame);
+                Ok(())
+            })
+            .map_err(|err| format!("{GPU_DECODE_FAILED}: {err}"))?;
+            if let Some(mut check) = self.check.take() {
+                for frame in &frames {
+                    if check.frames.len() < CHECK_FRAMES {
+                        check.frames.push(frame_copy(frame));
+                    }
+                }
+                let whole = check.samples.len() < CHECK_SAMPLES;
+                check.verify(whole)?;
+            }
+            for frame in frames {
+                let (d, t) = self.queue.pop_front().unwrap_or((self.last.1, self.last.0 + self.last.1));
+                emit(OwnedFrame { y: frame.y, u: frame.u, v: frame.v, width: frame.width, height: frame.height }, d, t)?;
+            }
+            return Ok(());
+        }
+        let last = self.last;
+        if let Some(decoder) = self.soft.as_mut() {
+            if let Ok(rest) = decoder.flush_remaining() {
+                for (k, frame) in rest.iter().enumerate() {
+                    emit(owned_frame(frame)?, last.1, last.0 + last.1 * (k as i64 + 1))?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
