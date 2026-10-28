@@ -72,6 +72,8 @@ pub struct FileItem {
     pub output: Option<PathBuf>,
     /// Spuntato nella tabella: la conversione prende solo quelli spuntati.
     pub checked: bool,
+    /// Le scelte con cui il file è stato fatto: se cambiano, si rifà.
+    pub done_key: Option<String>,
 }
 
 impl FileItem {
@@ -264,6 +266,9 @@ pub struct Job {
     pub done: usize,
     pub failed: usize,
     pub cancel: Arc<AtomicBool>,
+    /// Le scelte in vigore all'avvio e i file in lavoro (indici in `files`).
+    pub key: String,
+    pub targets: Vec<usize>,
 }
 
 /// Cosa i thread di lavoro dicono all'interfaccia.
@@ -311,8 +316,6 @@ pub struct App {
     pub youtube: Links,
     pub web: Links,
     pub notice: Option<Notice>,
-    /// Le scelte in vigore quando l'ultimo lavoro è finito: i file «Fatto» valgono finché non cambiano.
-    done_key: Option<String>,
     pub ask: Option<Ask>,
     /// Miniature, misure e numero di pagine dei file già letti.
     pub media: HashMap<PathBuf, media::Loaded>,
@@ -370,7 +373,6 @@ impl App {
             youtube: Links::new(false),
             web: Links::new(true),
             notice: None,
-            done_key: None,
             ask: None,
             media: HashMap::new(),
             previews: HashMap::new(),
@@ -503,7 +505,7 @@ impl App {
             known.insert(path.clone());
             first.get_or_insert((kind, voice_only || (transcribing && trascrizione::transcribable(&path))));
             self.loader.request(&path);
-            self.files.push(FileItem { path, kind, voice_only, state: FileState::Waiting, message: "In attesa".into(), output: None, checked: true });
+            self.files.push(FileItem { path, kind, voice_only, state: FileState::Waiting, message: "In attesa".into(), output: None, checked: true, done_key: None });
             added += 1;
         }
         match first {
@@ -604,7 +606,7 @@ impl App {
 
     /// Il file è già fatto con le scelte di adesso.
     fn is_fresh_done(&self, i: usize) -> bool {
-        matches!(self.files[i].state, FileState::Done | FileState::Skipped) && self.done_key.as_deref() == Some(self.settings_key().as_str())
+        matches!(self.files[i].state, FileState::Done | FileState::Skipped) && self.files[i].done_key.as_deref() == Some(self.settings_key().as_str())
     }
 
     /// I file che il pulsante lavorerebbe adesso, senza quelli già fatti con le stesse scelte.
@@ -643,7 +645,6 @@ impl App {
             keep
         });
         self.selected = None;
-        self.done_key = None;
         self.notice = None;
     }
 
@@ -747,9 +748,10 @@ impl App {
             f.state = FileState::Waiting;
             f.message = "In attesa".into();
             f.output = None;
+            f.done_key = None;
         }
         let cancel = Arc::new(AtomicBool::new(false));
-        self.job = Some(Job { kind, total: files.len(), done: 0, failed: 0, cancel: cancel.clone() });
+        self.job = Some(Job { kind, total: files.len(), done: 0, failed: 0, cancel: cancel.clone(), key: self.settings_key(), targets: files.to_vec() });
         self.notice = None;
         cancel
     }
@@ -880,7 +882,7 @@ impl App {
         let req = l.request();
         let total = req.urls.len();
         let cancel = Arc::new(AtomicBool::new(false));
-        self.job = Some(Job { kind: JobKind::Download { web }, total, done: 0, failed: 0, cancel: cancel.clone() });
+        self.job = Some(Job { kind: JobKind::Download { web }, total, done: 0, failed: 0, cancel: cancel.clone(), key: String::new(), targets: Vec::new() });
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
         std::thread::spawn(move || {
             let result = youtube::run(
@@ -918,16 +920,19 @@ impl App {
                 }
                 Event::Finished(path, result) => {
                     let mut failed = false;
+                    let key = self.job.as_ref().map(|j| j.key.clone());
                     if let Some(f) = self.files.iter_mut().find(|f| f.path == path) {
                         match result {
                             Ok((out, msg)) => {
                                 f.state = FileState::Done;
+                                f.done_key = key;
                                 f.message = format!("Fatto · {msg}");
                                 f.output = Some(out);
                             }
                             // Un file saltato perché esiste già è una scelta, non un errore.
                             Err(msg) if msg.contains("saltato") => {
                                 f.state = FileState::Skipped;
+                                f.done_key = key;
                                 f.message = format!("Saltato · {msg}");
                             }
                             Err(msg) => {
@@ -951,7 +956,7 @@ impl App {
                 }
                 Event::TranscribePercent(index, percent) => {
                     self.transcribe.percent = percent;
-                    let running: Vec<usize> = self.targets();
+                    let running: Vec<usize> = self.job.as_ref().map(|j| j.targets.clone()).unwrap_or_default();
                     if let Some(&i) = running.get(index) {
                         let f = &mut self.files[i];
                         if f.state == FileState::Waiting || f.state == FileState::Running {
@@ -1017,9 +1022,6 @@ impl App {
                 }
                 Event::JobDone => {
                     crate::accel::clear_in_use();
-                    if self.job.as_ref().is_some_and(|j| matches!(j.kind, JobKind::Convert | JobKind::Transcribe)) {
-                        self.done_key = Some(self.settings_key());
-                    }
                     if let Some(job) = self.job.take() {
                         if matches!(job.kind, JobKind::Convert | JobKind::Transcribe) {
                             let text = if job.failed > 0 {
