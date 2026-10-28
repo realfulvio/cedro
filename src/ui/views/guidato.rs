@@ -117,7 +117,12 @@ fn choice_cards(f: &mut Frame, app: &App, r: R) {
         format_icon(f, sf.id, x + 26.0, r.1 + (r.3 - isz) / 2.0, isz);
         let tx = x + 26.0 + isz + 26.0;
         let tw = (x + w - 30.0 - tx).max(60.0);
-        f.text(sf.title, tx, r.1 + r.3 * 0.18, tw, 34.0, 25.0, SEMI, pal.text);
+        // Titoli lunghi (Archivi: «Documenti in PDF») si rimpiccioliscono invece di tagliarsi.
+        let mut tsz = 25.0;
+        while tsz > 17.0 && f.measure(sf.title, tsz, SEMI) > tw {
+            tsz -= 1.0;
+        }
+        f.text(sf.title, tx, r.1 + r.3 * 0.18, tw, 34.0, tsz, SEMI, pal.text);
         f.para(sf.note, tx, r.1 + r.3 * 0.18 + 42.0, tw, 19.0, SANS, pal.muted, 1.35, 3);
         f.radio(x + w - 32.0, r.1 + 32.0, 13.0, on, pal.muted);
         f.focus_ring((x, r.1, w, r.3), 10.0, &act);
