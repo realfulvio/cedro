@@ -74,6 +74,8 @@ pub struct FileItem {
     pub checked: bool,
     /// Le scelte con cui il file è stato fatto: se cambiano, si rifà.
     pub done_key: Option<String>,
+    /// Quanto è fatto del file in lavoro (0..1), quando il motore lo sa: la barra nella riga.
+    pub percent: Option<f32>,
 }
 
 impl FileItem {
@@ -269,6 +271,22 @@ pub struct Job {
     /// Le scelte in vigore all'avvio e i file in lavoro (indici in `files`).
     pub key: String,
     pub targets: Vec<usize>,
+    /// Quanto è fatto del file in lavoro (0..1), per la barra del lavoro intero.
+    pub part: f32,
+    /// Quando è partito il file in lavoro, per il tempo che resta.
+    pub file_started: Option<std::time::Instant>,
+}
+
+/// Il tempo che resta, in parole: «circa 12 min», «meno di un minuto».
+fn time_left(secs: f32) -> String {
+    let mins = (secs / 60.0).round() as u32;
+    if secs < 60.0 {
+        "meno di un minuto".into()
+    } else if mins < 90 {
+        format!("circa {mins} min")
+    } else {
+        format!("circa {} h {:02} min", mins / 60, mins % 60)
+    }
 }
 
 /// Cosa i thread di lavoro dicono all'interfaccia.
@@ -279,6 +297,8 @@ pub enum Event {
     Ask(PathBuf, Sender<ExistsChoice>),
     TranscribeLog(trascrizione::Line),
     TranscribePercent(usize, u8),
+    /// L'avanzamento (0..1) del file che si sta convertendo.
+    ConvertPercent(PathBuf, f32),
     Link(bool, youtube::Event),
     LinksFinished(bool, Result<Vec<PathBuf>, String>),
     JobDone,
@@ -505,7 +525,7 @@ impl App {
             known.insert(path.clone());
             first.get_or_insert((kind, voice_only || (transcribing && trascrizione::transcribable(&path))));
             self.loader.request(&path);
-            self.files.push(FileItem { path, kind, voice_only, state: FileState::Waiting, message: "In attesa".into(), output: None, checked: true, done_key: None });
+            self.files.push(FileItem { path, kind, voice_only, state: FileState::Waiting, message: "In attesa".into(), output: None, checked: true, done_key: None, percent: None });
             added += 1;
         }
         match first {
@@ -751,7 +771,7 @@ impl App {
             f.done_key = None;
         }
         let cancel = Arc::new(AtomicBool::new(false));
-        self.job = Some(Job { kind, total: files.len(), done: 0, failed: 0, cancel: cancel.clone(), key: self.settings_key(), targets: files.to_vec() });
+        self.job = Some(Job { kind, total: files.len(), done: 0, failed: 0, cancel: cancel.clone(), key: self.settings_key(), targets: files.to_vec(), part: 0.0, file_started: None });
         self.notice = None;
         cancel
     }
@@ -782,11 +802,25 @@ impl App {
                     let _ = tx.send(Event::Finished(path, Err("Annullato".into())));
                     continue;
                 }
-                let _ = tx.send(Event::Started(path.clone()));
-                wake();
-                crate::accel::clear_in_use();
+                // «In corso» solo quando il lavoro parte davvero: se un altro lavoro occupa il turno, il file resta «In attesa».
                 let result = match crate::resources::acquire(Some(&cancel)) {
-                    Some(_turn) => conversioni::convert_one_out(&path, &action, quality, dest.as_deref(), &opts),
+                    Some(_turn) => {
+                        let _ = tx.send(Event::Started(path.clone()));
+                        wake();
+                        crate::accel::clear_in_use();
+                        let (tx, wake, file, last) = (tx.clone(), wake.clone(), path.clone(), std::cell::Cell::new(-1i32));
+                        // Un messaggio per ogni punto percentuale in più, non uno per fotogramma.
+                        crate::progress::con(
+                            move |p| {
+                                let n = (p * 100.0) as i32;
+                                if n != last.replace(n) {
+                                    let _ = tx.send(Event::ConvertPercent(file.clone(), p));
+                                    wake();
+                                }
+                            },
+                            || conversioni::convert_one_out(&path, &action, quality, dest.as_deref(), &opts),
+                        )
+                    }
                     None => Err("Annullato".into()),
                 };
                 let _ = tx.send(Event::Finished(path, result));
@@ -885,7 +919,7 @@ impl App {
         let req = l.request();
         let total = req.urls.len();
         let cancel = Arc::new(AtomicBool::new(false));
-        self.job = Some(Job { kind: JobKind::Download { web }, total, done: 0, failed: 0, cancel: cancel.clone(), key: String::new(), targets: Vec::new() });
+        self.job = Some(Job { kind: JobKind::Download { web }, total, done: 0, failed: 0, cancel: cancel.clone(), key: String::new(), targets: Vec::new(), part: 0.0, file_started: None });
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
         std::thread::spawn(move || {
             let result = youtube::run(
@@ -919,12 +953,32 @@ impl App {
                     if let Some(f) = self.files.iter_mut().find(|f| f.path == path) {
                         f.state = FileState::Running;
                         f.message = "In corso".into();
+                        f.percent = None;
+                    }
+                    if let Some(job) = self.job.as_mut() {
+                        job.part = 0.0;
+                        job.file_started = Some(std::time::Instant::now());
+                    }
+                }
+                Event::ConvertPercent(path, p) => {
+                    let eta = self.job.as_ref().and_then(|j| j.file_started).map(|t| t.elapsed().as_secs_f32());
+                    if let Some(f) = self.files.iter_mut().find(|f| f.path == path && f.state == FileState::Running) {
+                        f.percent = Some(p);
+                        f.message = match eta {
+                            // Un tempo che resta ha senso solo dopo un po' di lavoro fatto.
+                            Some(spent) if p >= 0.02 && spent >= 8.0 => format!("In corso · {:.0}% · {}", p * 100.0, time_left(spent * (1.0 - p) / p)),
+                            _ => format!("In corso · {:.0}%", p * 100.0),
+                        };
+                    }
+                    if let Some(job) = self.job.as_mut() {
+                        job.part = p;
                     }
                 }
                 Event::Finished(path, result) => {
                     let mut failed = false;
                     let key = self.job.as_ref().map(|j| j.key.clone());
                     if let Some(f) = self.files.iter_mut().find(|f| f.path == path) {
+                        f.percent = None;
                         match result {
                             Ok((out, msg)) => {
                                 f.state = FileState::Done;
@@ -946,6 +1000,7 @@ impl App {
                         }
                     }
                     if let Some(job) = self.job.as_mut() {
+                        job.part = 0.0;
                         job.done += 1;
                         job.failed += failed as usize;
                     }
@@ -1053,6 +1108,7 @@ impl App {
     pub fn progress(&self) -> Option<f32> {
         self.job.as_ref().map(|j| match j.kind {
             JobKind::Download { web } => self.links(web).progress,
+            JobKind::Convert => (j.done as f32 + j.part.clamp(0.0, 1.0)) / j.total.max(1) as f32,
             _ => j.done as f32 / j.total.max(1) as f32,
         })
     }
@@ -1107,5 +1163,17 @@ impl App {
 
     pub fn page_count(&self, index: usize) -> Option<usize> {
         self.files.get(index).and_then(|f| self.media.get(&f.path)).and_then(|m| m.pages)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::time_left;
+
+    #[test]
+    fn time_left_is_in_words() {
+        assert_eq!(time_left(30.0), "meno di un minuto");
+        assert_eq!(time_left(12.0 * 60.0), "circa 12 min");
+        assert_eq!(time_left(95.0 * 60.0), "circa 1 h 35 min");
     }
 }

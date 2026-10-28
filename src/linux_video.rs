@@ -79,6 +79,7 @@ fn hardware_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
 }
 
 fn to_mp4_with(input: &Path, output: &Path) -> Result<(), String> {
+    crate::sink::note_source(input);
     #[cfg(target_os = "android")]
     match hardware_to_mp4(input, output) {
         Ok(()) => return Ok(()),
@@ -154,6 +155,7 @@ impl VideoSink for H264Aac {
         audio: Option<(u32, u16)>,
     ) -> Result<Self, String> {
         let (out_w, out_h) = crate::sink::target_size(width, height);
+        crate::sink::cap_for(out_w as u64 * out_h as u64, width as u64 * height as u64);
         let shrinking = (out_w, out_h) != (width, height);
         if width < 2 || height < 2 || (!grabbing() && !shrinking && (width % 2 == 1 || height % 2 == 1)) {
             return Err(format!("il video è {width}×{height}: H.264 vuole misure pari"));
@@ -206,6 +208,7 @@ impl VideoSink for H264Aac {
         if grabbing() {
             return grab_frame(y, u, v, width, height, time);
         }
+        crate::sink::frame_progress(time);
         if width != self.src_w || height != self.src_h {
             return Err("il video cambia dimensione".into());
         }
@@ -1580,6 +1583,10 @@ fn avi_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let pix = &avi_pix(video.handler, video.compression, video.bits, video.signed_height)?;
     let (frames, secs) = crate::avi::video_timing(&streams, &chunks, video_index);
     let duration = ((secs * 10_000_000.0 / frames as f64) as i64).max(1);
+    if secs > 0.0 {
+        let size = std::fs::metadata(input).map(|m| m.len()).unwrap_or(0);
+        crate::sink::set_source((secs * 10_000_000.0) as i64, (size as f64 * 8.0 / secs) as u64);
+    }
     let width = video.width as usize;
     let height = video.height as usize;
     let audio_index = streams.iter().position(|stream| !stream.video && stream.channels > 0);

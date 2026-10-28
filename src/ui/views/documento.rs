@@ -84,6 +84,7 @@ fn file_list(f: &mut Frame, app: &App, r: R) {
                 _ => file.message.clone(),
             };
             f.text(&meta, r.0 + 78.0, y + 40.0, r.2 - 78.0 - 52.0, 26.0, 14.5, SANS, if file.state == FileState::Waiting { pal.muted } else { f.state_color(file.state) });
+            f.row_bar(file, r.0 + 78.0, y + 68.0, r.2 - 78.0 - 52.0, 5.0);
             let cx = r.0 + r.2 - 34.0;
             if file.state == FileState::Waiting {
                 let rm = Act::Remove(i);

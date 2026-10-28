@@ -29,6 +29,11 @@ pub fn try_acquire() -> Option<JobGuard> {
     Some(JobGuard(std::marker::PhantomData))
 }
 
+/// Un altro lavoro pesante tiene il turno (non questo thread): chi arriva dovrà aspettare.
+pub fn busy_elsewhere() -> bool {
+    DEPTH.with(|d| d.get() == 0) && *BUSY.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 pub fn acquire(cancel: Option<&AtomicBool>) -> Option<JobGuard> {
     if DEPTH.with(|d| d.get() > 0) {
         DEPTH.with(|d| d.set(d.get() + 1));
