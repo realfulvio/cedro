@@ -276,10 +276,10 @@ impl H264Decoder {
         matrix.scaling_list_8x8 = [[16; 64]; 2];
 
         let mut ids = Vec::new();
+        let mut slice_ids = Vec::new();
         let result = (|| -> Result<(), String> {
             ids.push(self.buffer(BUF_PIC_PARAM, bytes_of(&params))?);
             ids.push(self.buffer(BUF_IQ_MATRIX, bytes_of(&matrix))?);
-            let mut slice_ids = Vec::new();
             for slice in &picture.slices {
                 let slice_params = self.slice_parameters(slice);
                 slice_ids.push(self.buffer(BUF_SLICE_PARAM, bytes_of(&*slice_params))?);
@@ -293,6 +293,10 @@ impl H264Decoder {
             }
             Ok(())
         })();
+        // I buffer non li libera la scheda: senza questo ogni fotogramma ne lascia indietro (come fa ffmpeg).
+        for id in ids.into_iter().chain(slice_ids) {
+            unsafe { (lib.destroy_buffer)(dpy, id) };
+        }
         result
     }
 

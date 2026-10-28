@@ -254,10 +254,19 @@ pub(crate) fn parse_sps(nal: &[u8]) -> Result<Sps, String> {
     if chroma_format != 1 {
         return Err("H.264: solo 4:2:0 gestito dalla scheda".into());
     }
-    sps.log2_max_frame_num = r.ue()? + 4;
+    // Oltre 16 bit (12 + 4) lo SPS è rovinato: con 32 il modulo per i numeri dei fotogrammi sarebbe zero.
+    sps.log2_max_frame_num = r.ue()?.min(13) + 4;
+    if sps.log2_max_frame_num > 16 {
+        return Err("H.264: SPS non valido".into());
+    }
     sps.poc_type = r.ue()?;
     match sps.poc_type {
-        0 => sps.log2_max_poc_lsb = r.ue()? + 4,
+        0 => {
+            sps.log2_max_poc_lsb = r.ue()?.min(13) + 4;
+            if sps.log2_max_poc_lsb > 16 {
+                return Err("H.264: SPS non valido".into());
+            }
+        }
         1 => {
             sps.delta_pic_order_always_zero = r.flag()?;
             sps.offset_for_non_ref_pic = r.se()?;
@@ -275,8 +284,8 @@ pub(crate) fn parse_sps(nal: &[u8]) -> Result<Sps, String> {
     }
     sps.max_num_ref_frames = r.ue()?;
     sps.gaps_allowed = r.flag()?;
-    sps.mb_width = r.ue()? + 1;
-    let map_units = r.ue()? + 1;
+    sps.mb_width = r.ue()?.saturating_add(1);
+    let map_units = r.ue()?.saturating_add(1);
     if !r.flag()? {
         return Err("H.264: interlacciato non gestito dalla scheda".into());
     }
@@ -288,7 +297,7 @@ pub(crate) fn parse_sps(nal: &[u8]) -> Result<Sps, String> {
             *c = r.ue()?.saturating_mul(2);
         }
     }
-    if sps.mb_width > 256 || sps.mb_height > 256 || sps.crop[0] + sps.crop[1] >= sps.mb_width * 16 || sps.crop[2] + sps.crop[3] >= sps.mb_height * 16 {
+    if sps.mb_width > 256 || sps.mb_height > 256 || sps.crop[0].saturating_add(sps.crop[1]) >= sps.mb_width * 16 || sps.crop[2].saturating_add(sps.crop[3]) >= sps.mb_height * 16 {
         return Err("H.264: dimensioni non valide".into());
     }
     if sps.max_num_ref_frames > 16 {
@@ -312,7 +321,7 @@ pub(crate) fn parse_pps(nal: &[u8], chroma_format_idc: u32) -> Result<Pps, Strin
     if r.ue()? != 0 {
         return Err("H.264: gruppi di fette non gestiti dalla scheda".into());
     }
-    pps.num_ref_idx_default = [r.ue()? + 1, r.ue()? + 1];
+    pps.num_ref_idx_default = [r.ue()?.saturating_add(1), r.ue()?.saturating_add(1)];
     pps.weighted_pred = r.flag()?;
     pps.weighted_bipred_idc = r.bits(2)?;
     pps.pic_init_qp_minus26 = r.se()?;
@@ -489,9 +498,9 @@ fn parse_slice(nal: &[u8], spss: &HashMap<u32, Sps>, ppss: &HashMap<u32, Pps>) -
     if slice_type != SliceType::I {
         h.num_ref_idx_override = r.flag()?;
         if h.num_ref_idx_override {
-            h.num_ref_idx_active[0] = r.ue()? + 1;
+            h.num_ref_idx_active[0] = r.ue()?.saturating_add(1);
             if slice_type == SliceType::B {
-                h.num_ref_idx_active[1] = r.ue()? + 1;
+                h.num_ref_idx_active[1] = r.ue()?.saturating_add(1);
             }
         }
         if slice_type != SliceType::B {
@@ -1181,6 +1190,13 @@ mod tests {
     #[test]
     fn base_senza_b_esce_in_ordine() {
         assert_eq!(run(BASELINE), (0..24).collect::<Vec<_>>());
+    }
+
+    /// Uno SPS rovinato con log2_max_frame_num a 32: errore, non una divisione per zero più avanti.
+    #[test]
+    fn sps_con_numeri_fuori_misura() {
+        assert!(parse_sps(&[0x67, 66, 0, 30, 0xda, 0x79]).is_ok());
+        assert!(parse_sps(&[0x67, 66, 0, 30, 0x87, 0x5a, 0x79]).is_err());
     }
 
     #[test]
