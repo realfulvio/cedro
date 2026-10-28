@@ -76,7 +76,10 @@ pub(crate) struct StreamResampler {
     output: Vec<f32>,
 }
 impl StreamResampler {
-    pub(crate) fn new(from: u32, to: u32) -> Self {
+    pub(crate) fn new(from: u32, to: u32) -> Result<Self, String> {
+        if from == 0 || to == 0 {
+            return Err("frequenza audio nulla".into());
+        }
         const PHASES: usize = 256;
         let ratio = from as f64 / to as f64;
         let cutoff = (to as f64 / from as f64).min(1.0) * 0.94;
@@ -109,7 +112,7 @@ impl StreamResampler {
             }
         }
 
-        Self {
+        Ok(Self {
             from,
             to,
             ratio,
@@ -120,7 +123,7 @@ impl StreamResampler {
             base: 0,
             total: 0,
             output: Vec::new(),
-        }
+        })
     }
     pub(crate) fn push(&mut self, chunk: &[f32]) {
         self.total += chunk.len();
@@ -180,7 +183,7 @@ mod tests {
             let input: Vec<f32> = (0..count).map(sample).collect();
             resample(&input, 48000, RATE)
         } else {
-            let mut r = StreamResampler::new(48000, RATE);
+            let mut r = StreamResampler::new(48000, RATE).unwrap();
             for at in (0..count).step_by(4096) {
                 let packet: Vec<f32> = (at..(at + 4096).min(count)).map(sample).collect();
                 r.push(&packet);
@@ -211,6 +214,13 @@ mod tests {
     }
 
     #[test]
+    fn zero_sample_rates_are_rejected_before_resampling() {
+        for (from, to) in [(0, RATE), (RATE, 0), (0, 0)] {
+            assert!(StreamResampler::new(from, to).is_err());
+        }
+    }
+
+    #[test]
     fn streaming_is_bit_exact_at_packet_boundaries() {
         for from in [8000, 16000, 22050, 44100, 48000, 96000] {
             for len in [0, 1, 7, 1001, 50000] {
@@ -221,7 +231,7 @@ mod tests {
                     .collect::<Vec<_>>();
                 let expected = resample(&input, from, RATE);
                 for size in [1, 17, 1152, 4096] {
-                    let mut r = StreamResampler::new(from, RATE);
+                    let mut r = StreamResampler::new(from, RATE).unwrap();
                     for c in input.chunks(size) {
                         r.push(c);
                         assert!(r.input.len() < 4096 + 512);
