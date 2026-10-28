@@ -9,7 +9,7 @@
   #define BuildDir "..\target\release"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.26.2"
+  #define AppVersion "0.26.3"
 #endif
 
 [Setup]
@@ -93,6 +93,9 @@ Filename: "{app}\cedro.exe"; Parameters: "vista"; Description: "{cm:RunView}"; F
 Filename: "{app}\cedro.exe"; Description: "{cm:RunStart}"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\cedro.exe"; Parameters: "guida"; Description: "{cm:RunGuide}"; Flags: nowait postinstall skipifsilent
 
+; Aggiornamento silenzioso fatto da Cedro stesso (/SILENTUPDATE): Cedro si riapre da solo, senza finestre.
+Filename: "{app}\cedro.exe"; Flags: nowait; Check: SilentUpdate
+
 [UninstallDelete]
 Type: filesandordirs; Name: "{userappdata}\Cedro"
 
@@ -105,6 +108,15 @@ begin
   Result := True;
   if LoadStringFromFile(ExpandConstant('{userappdata}\Cedro\config.txt'), text) then
     Result := Pos('view_asked=1', text) = 0;
+end;
+
+function SilentUpdate: Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  for i := 1 to ParamCount do
+    if CompareText(ParamStr(i), '/SILENTUPDATE') = 0 then Result := True;
 end;
 
 procedure CloseCedro;
