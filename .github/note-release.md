@@ -16,9 +16,6 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-- **Barra di avanzamento per i video**: nella riga del file che si sta convertendo compaiono percentuale e tempo che resta (in tutti i temi, su Windows e Linux), e la barra del lavoro intero avanza con il file. Prima restava «In corso» senza segni di vita per tutta la durata.
-- **File più piccoli a 720p**: se il video di partenza è già molto compresso, il bitrate di uscita non lo supera più di troppo (un 1080p60 da 666 MB diventava 617 MB; ora circa un terzo in meno). Con sorgenti ricche il risultato non cambia.
-- **Ridimensionamento più veloce** (stesso risultato bit per bit): le righe si dividono fra i core.
-- **«In attesa» vero**: se un altro lavoro pesante occupa il turno (per esempio una trascrizione), il file resta «In attesa» invece di mostrare «In corso»; e la trascrizione lo dice in «Cosa sta succedendo».
+- **Decodifica video sulla scheda video (Linux)**: i video H.264 (MP4, MOV, MKV) si leggono con la GPU, Intel o AMD, invece che con un solo core del processore. Provata su una Radeon Renoir: fotogrammi identici a quelli di ffmpeg, anche con i B. A ogni video Cedro confronta i primi fotogrammi con quelli letti dal processore: se non coincidono, o se la scheda sbaglia a metà, rifà il video col processore. Interlacciato, 10 bit e video molto piccoli restano sul processore. Si spegne con l'interruttore GPU nelle impostazioni.
 
-Dalla 0.26.4: audio a pacchetti (meno memoria), coda comune dei lavori pesanti, iGPU e Vulkan restano attivi, aggiornamenti silenziosi (invariati).
+Dalla 0.26.5: barra di avanzamento e tempo che resta nei video, file più piccoli a 720p da sorgenti già compresse, «In attesa» vero (invariati).
