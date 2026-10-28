@@ -833,6 +833,7 @@ AVI non letto: {}	AVI not read: {}
 AVI non letto	AVI not read
 MJPEG non letto: {}	MJPEG not read: {}
 il video è troppo lungo per questo MP4	the video is too long for this MP4
+il video è troppo lungo per questo AVI	the video is too long for this AVI
 scheda video: {} non riuscito ({})	graphics card: {} failed ({})
 scheda video: {#}×{#} non adatto	graphics card: {}×{} not suitable
 nessuna scheda video che codifica H.264	no graphics card that encodes H.264
