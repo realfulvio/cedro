@@ -112,6 +112,9 @@ fn table(f: &mut Frame, app: &App, r: R, simple: bool) {
     super::scrolled(f, body, Scroll::Queue, |f| {
         for (n, &i) in visible.iter().enumerate() {
             let y = body.1 + n as f32 * rh;
+            if !f.p.shows_y(y, rh) {
+                continue;
+            }
             let file = &app.files[i];
             if file.state == FileState::Running {
                 f.p.fill_a(r.0 + 1.0, y, r.2 - 2.0, rh, pal.primary, 0.12);

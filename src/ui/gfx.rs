@@ -325,11 +325,23 @@ pub struct Painter<'a> {
 #[derive(Default)]
 pub struct GlyphCache {
     glyphs: HashMap<GlyphKey, Option<Glyph>>,
+    /// La scala dei glifi tenuti.
+    scale: f32,
 }
 
 impl GlyphCache {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Da chiamare prima di disegnare a `scale`: a ogni nuova scala (finestra stretta che si ridimensiona,
+    /// DPI) nasce una serie nuova di glifi e quelle vecchie non servono più, quindi si ricomincia da capo.
+    /// Un tetto largo copre il resto (cambi di tema). Si riempie di nuovo in un fotogramma.
+    pub fn trim(&mut self, scale: f32) {
+        if self.scale != scale || self.glyphs.len() > 20_000 {
+            self.glyphs.clear();
+            self.scale = scale;
+        }
     }
 }
 
@@ -400,6 +412,15 @@ impl<'a> Painter<'a> {
             Some((r, _)) => (r.left() as i32, r.top() as i32, r.right() as i32, r.bottom() as i32),
             None => (0, 0, self.pixmap.width() as i32, self.pixmap.height() as i32),
         }
+    }
+
+    /// Vero se la striscia logica `y`..`y + h` (più un margine per bordi e linee) tocca la zona
+    /// ritagliata: le righe di una lista fuori vista si possono saltare.
+    pub fn shows_y(&self, y: f32, h: f32) -> bool {
+        let (_, cy0, _, cy1) = self.clip_rect();
+        let top = (y - 4.0 + self.dy) * self.scale;
+        let bottom = (y + h + 4.0 + self.dy) * self.scale;
+        bottom >= cy0 as f32 && top <= cy1 as f32
     }
 
     pub fn clear(&mut self, c: Rgb) {
@@ -625,14 +646,29 @@ impl<'a> Painter<'a> {
         };
         let (dw, dh) = (iw * k, ih * k);
         let (ox, oy) = (x + (w - dw) / 2.0, y + (h - dh) / 2.0);
-        // La maschera: il riquadro (arrotondato) dentro la zona già ritagliata.
-        let mut mask = Mask::new(self.pixmap.width(), self.pixmap.height()).expect("maschera");
-        if let Some(p) = rrect_path(x, y, w, h, r) {
-            mask.fill_path(&p, FillRule::Winding, true, self.tf());
+        // La maschera: il riquadro (arrotondato) dentro la zona già ritagliata. Fuori dal riquadro
+        // resta a zero, quindi il conto con il ritaglio si fa solo lì: il costo segue l'immagine, non la finestra.
+        let Some(p) = rrect_path(x, y, w, h, r) else { return };
+        let (pw, ph) = (self.pixmap.width() as i32, self.pixmap.height() as i32);
+        let Some(b) = p.bounds().transform(self.tf()) else { return };
+        let bx0 = (b.left().floor() as i32 - 1).max(0);
+        let by0 = (b.top().floor() as i32 - 1).max(0);
+        let bx1 = (b.right().ceil() as i32 + 1).min(pw);
+        let by1 = (b.bottom().ceil() as i32 + 1).min(ph);
+        // Tutto fuori dalla zona ritagliata: non si vedrebbe niente.
+        let (cx0, cy0, cx1, cy1) = self.clip_rect();
+        if bx1.min(cx1) <= bx0.max(cx0) || by1.min(cy1) <= by0.max(cy0) {
+            return;
         }
+        let mut mask = Mask::new(self.pixmap.width(), self.pixmap.height()).expect("maschera");
+        mask.fill_path(&p, FillRule::Winding, true, self.tf());
         if let Some((_, clip)) = self.clips.last() {
-            for (m, c) in mask.data_mut().iter_mut().zip(clip.data()) {
-                *m = ((*m as u16 * *c as u16) / 255) as u8;
+            let (m, c) = (mask.data_mut(), clip.data());
+            for row in by0..by1 {
+                let (a, z) = ((row * pw + bx0) as usize, (row * pw + bx1) as usize);
+                for (m, c) in m[a..z].iter_mut().zip(&c[a..z]) {
+                    *m = ((*m as u16 * *c as u16) / 255) as u8;
+                }
             }
         }
         let tf = self.tf().pre_translate(ox, oy).pre_scale(k, k);
@@ -783,9 +819,9 @@ impl<'a> Painter<'a> {
         image::save_buffer(path, &rgba, self.pixmap.width(), self.pixmap.height(), image::ColorType::Rgba8).map_err(|e| e.to_string())
     }
 
-    /// I pixel finiti, BGRA premoltiplicati come li vuole Windows.
-    pub fn bgra(&self) -> Vec<u8> {
-        let mut out = self.pixmap.data().to_vec();
+    /// I pixel finiti, BGRA premoltiplicati come li vuole Windows. Consuma il pittore: niente copia del fotogramma.
+    pub fn bgra(self) -> Vec<u8> {
+        let mut out = self.pixmap.take();
         for p in out.chunks_exact_mut(4) {
             p.swap(0, 2);
         }
@@ -813,5 +849,67 @@ mod tests {
         if let Some(dir) = std::env::var_os("CEDRO_UI_SHOTS") {
             p.save_png(&std::path::Path::new(&dir).join("gfx.png")).unwrap();
         }
+    }
+
+    /// Il disegno di prima: maschera grande quanto tutto il fotogramma, moltiplicata per il ritaglio.
+    fn image_full_mask(p: &mut Painter, img: &Image, x: f32, y: f32, w: f32, h: f32, r: f32, fit: Fit) {
+        let (iw, ih) = (img.w as f32, img.h as f32);
+        let k = match fit {
+            Fit::Cover => (w / iw).max(h / ih),
+            Fit::Contain => (w / iw).min(h / ih),
+        };
+        let (ox, oy) = (x + (w - iw * k) / 2.0, y + (h - ih * k) / 2.0);
+        let mut mask = Mask::new(p.pixmap.width(), p.pixmap.height()).unwrap();
+        if let Some(path) = rrect_path(x, y, w, h, r) {
+            mask.fill_path(&path, FillRule::Winding, true, p.tf());
+        }
+        if let Some((_, clip)) = p.clips.last() {
+            for (m, c) in mask.data_mut().iter_mut().zip(clip.data()) {
+                *m = ((*m as u16 * *c as u16) / 255) as u8;
+            }
+        }
+        let tf = p.tf().pre_translate(ox, oy).pre_scale(k, k);
+        let paint = PixmapPaint { quality: FilterQuality::Bicubic, ..Default::default() };
+        p.pixmap.draw_pixmap(0, 0, img.pixmap.as_ref().as_ref(), &paint, tf, Some(&mask));
+    }
+
+    #[test]
+    fn image_matches_full_frame_mask() {
+        let fonts = Fonts::system();
+        let rgba: Vec<u8> = (0..64 * 40).flat_map(|i| [(i % 64 * 4) as u8, (i / 64 * 6) as u8, 120, if i % 7 == 0 { 200 } else { 255 }]).collect();
+        let img = Image::from_rgba(64, 40, &rgba).unwrap();
+        let cases = [(10.0, 15.0, 80.0, 60.0, 6.0, Fit::Cover), (-20.0, 40.0, 90.0, 50.0, 4.0, Fit::Contain), (30.0, -30.0, 70.0, 70.0, 0.0, Fit::Cover), (300.0, 10.0, 40.0, 40.0, 5.0, Fit::Cover)];
+        for clip in [None, Some((20.0, 25.0, 100.0, 40.0))] {
+            for (x, y, w, h, r, fit) in cases {
+                let (mut c1, mut c2) = (GlyphCache::new(), GlyphCache::new());
+                let mut a = Painter::new(200, 130, 1.5, &fonts, &mut c1);
+                let mut b = Painter::new(200, 130, 1.5, &fonts, &mut c2);
+                for p in [&mut a, &mut b] {
+                    p.clear((240, 240, 240));
+                    if let Some((cx, cy, cw, ch)) = clip {
+                        p.push_clip(cx, cy, cw, ch);
+                    }
+                    p.dy = -7.3;
+                }
+                a.image(&img, x, y, w, h, r, fit);
+                image_full_mask(&mut b, &img, x, y, w, h, r, fit);
+                assert!(a.pixmap.data() == b.pixmap.data(), "immagine diversa: {clip:?} {x} {y}");
+            }
+        }
+    }
+
+    #[test]
+    fn shows_y_follows_clip_and_scroll() {
+        let fonts = Fonts::system();
+        let mut cache = GlyphCache::new();
+        let mut p = Painter::new(200, 200, 2.0, &fonts, &mut cache);
+        p.push_clip(0.0, 20.0, 100.0, 40.0);
+        assert!(p.shows_y(30.0, 10.0));
+        assert!(p.shows_y(0.0, 20.0));
+        assert!(!p.shows_y(80.0, 10.0));
+        assert!(!p.shows_y(-20.0, 10.0));
+        p.dy -= 70.0;
+        assert!(p.shows_y(100.0, 10.0));
+        assert!(!p.shows_y(30.0, 10.0));
     }
 }

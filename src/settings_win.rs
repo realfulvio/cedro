@@ -278,14 +278,21 @@ fn font(height: i32, weight: i32, dpi: u32) -> HFONT {
     font_named(height, weight, dpi, crate::winfont::face())
 }
 
+thread_local! {
+    /// I caratteri creati per la finestra aperta: si eliminano quando si chiude.
+    static FONTS: RefCell<Vec<HFONT>> = const { RefCell::new(Vec::new()) };
+}
+
 fn font_named(height: i32, weight: i32, dpi: u32, face: PCWSTR) -> HFONT {
-    unsafe {
+    let f = unsafe {
         CreateFontW(
             -px(height, dpi), 0, 0, 0, weight, 0, 0, 0,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             0, face,
         )
-    }
+    };
+    FONTS.with(|fs| fs.borrow_mut().push(f));
+    f
 }
 
 /// Un controllo figlio; `section` lo lega a una sezione (None: sempre visibile).
@@ -1327,6 +1334,14 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             WINDOW.store(0, Ordering::Relaxed);
             COPIED.store(false, Ordering::Relaxed);
             LRESULT(0)
+        }
+        WM_NCDESTROY => {
+            // Arriva dopo i controlli figli: i caratteri non li usa più nessuno.
+            for f in FONTS.with(|fs| std::mem::take(&mut *fs.borrow_mut())) {
+                let _ = DeleteObject(f.into());
+            }
+            crate::winlist::destroy();
+            DefWindowProcW(hwnd, msg, wparam, lparam)
         }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }

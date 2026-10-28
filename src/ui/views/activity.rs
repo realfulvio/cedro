@@ -171,6 +171,9 @@ fn transcribe_queue(f: &mut Frame, app: &App, r: R, big: bool) {
     super::scrolled(f, (r.0 + 1.0, r.1 + 1.0, r.2 - 2.0, r.3 - 2.0), Scroll::Queue, |f| {
         for (n, &i) in rows.iter().enumerate() {
             let y = r.1 + n as f32 * rh;
+            if !f.p.shows_y(y, rh) {
+                continue;
+            }
             if n > 0 {
                 f.hline(r.0, y, r.2);
             }

@@ -398,7 +398,9 @@ unsafe fn paint(hwnd: HWND, host: &Host) {
     let mut rc = RECT::default();
     let _ = GetClientRect(hwnd, &mut rc);
     let (w, h) = (rc.right - rc.left, rc.bottom - rc.top);
+    // Anche senza niente da copiare la zona va convalidata, o Windows rimanda WM_PAINT senza sosta.
     if w <= 0 || h <= 0 {
+        let _ = ValidateRect(Some(hwnd), None);
         return;
     }
     let scale = scale_of(hwnd);
@@ -411,6 +413,7 @@ unsafe fn paint(hwnd: HWND, host: &Host) {
     }
     let f = host.frame.borrow();
     if f.bgra.is_empty() || f.w != w || f.h != h {
+        let _ = ValidateRect(Some(hwnd), None);
         return;
     }
     let mut ps = PAINTSTRUCT::default();
@@ -450,6 +453,11 @@ fn shift() -> bool {
 
 fn ctrl() -> bool {
     unsafe { GetKeyState(VK_CONTROL.0 as i32) < 0 }
+}
+
+/// AltGr arriva come Ctrl+Alt: con Alt premuto Ctrl non è una scorciatoia (@ # [ ] € sulla tastiera italiana).
+fn alt() -> bool {
+    unsafe { GetKeyState(VK_MENU.0 as i32) < 0 }
 }
 
 unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -686,9 +694,9 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 VK_END => Some(Key::End),
                 VK_UP => Some(Key::Up),
                 VK_DOWN => Some(Key::Down),
-                VK_V if ctrl() => Some(Key::Paste),
-                VK_C if ctrl() => Some(Key::Copy),
-                VK_A if ctrl() => Some(Key::SelectAll),
+                VK_V if ctrl() && !alt() => Some(Key::Paste),
+                VK_C if ctrl() && !alt() => Some(Key::Copy),
+                VK_A if ctrl() && !alt() => Some(Key::SelectAll),
                 _ => None,
             };
             if let Some(k) = key {
@@ -704,7 +712,7 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         }
         WM_CHAR => {
             let c = wparam.0 as u32;
-            if c >= 32 && c != 127 && !ctrl() {
+            if c >= 32 && c != 127 && (!ctrl() || alt()) {
                 // Le lettere fuori dal piano base arrivano come due unità UTF-16.
                 thread_local! { static HIGH: std::cell::Cell<u16> = const { std::cell::Cell::new(0) }; }
                 let unit = c as u16;
