@@ -69,6 +69,7 @@ pub enum Scroll {
 pub enum Act {
     Activity(Activity),
     Category(usize),
+    Restart,
     Action(&'static str),
     FormatMenu,
     AddFiles,
