@@ -452,7 +452,7 @@ impl<'a> Frame<'a> {
             let (asc, desc) = self.p.fonts().extents(size * self.p.scale, SANS);
             let base = r.1 + (r.3 - (asc + desc) / self.p.scale) / 2.0 + asc / self.p.scale;
             self.p.text_at(&shown, r.0 + pad - shift, base, size, SANS, pal.text);
-            if editing && (self.ms / 530) % 2 == 0 {
+            if editing && (self.ms / 530).is_multiple_of(2) {
                 self.p.fill(r.0 + pad - shift + caret_x, r.1 + r.3 * 0.22, 1.5, r.3 * 0.56, pal.text);
             }
         }

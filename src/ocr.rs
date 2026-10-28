@@ -509,7 +509,7 @@ mod tests {
         let pdf = crate::pdf::pdf_from_text("Una riga di prova\nE un'altra, più lunga, per avere dei grigi.");
         let doc = hayro::hayro_syntax::Pdf::new(pdf).unwrap();
         let pages = doc.pages();
-        let page = pages.get(0).unwrap();
+        let page = pages.first().unwrap();
         let draw = || {
             let pixmap = PixmapSettings { x_scale: 1.5, y_scale: 1.5, bg_color: WHITE };
             render(page, &RenderCache::new(), &hayro::hayro_interpret::InterpreterSettings::default(), &RenderSettings::default(), &pixmap)
