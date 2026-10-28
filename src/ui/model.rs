@@ -944,6 +944,12 @@ impl App {
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
         std::thread::spawn(move || {
             let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                // Keep the updater out through download, conversion and temporary-file cleanup.
+                let Some(_job) = crate::resources::acquire(Some(&cancel)) else {
+                    let message = "Annullato".to_string();
+                    let _ = tx.send(Event::Aborted(message.clone()));
+                    return Err(message);
+                };
                 youtube::run(
                     &req,
                     &mut |e| {
@@ -1233,6 +1239,35 @@ mod tests {
         assert_eq!(super::guarded(|| Ok::<_, String>(7)), Ok(7));
         let err = super::guarded::<()>(|| panic!("decodificatore in crisi")).unwrap_err();
         assert!(err.contains("decodificatore in crisi"), "{err}");
+    }
+
+    #[test]
+    fn queued_downloads_cancel_without_starting_helpers() {
+        use super::*;
+        // No network or helper startup is allowed while another job owns the gate.
+        let _owner = crate::resources::acquire(None).unwrap();
+        for web in [false, true] {
+            let mut app = App::new(Arc::new(|| {}));
+            app.links_mut(web).typed = "https://www.youtube.com/watch?v=test".into();
+            app.start_links(web);
+            assert!(app.busy());
+            assert!(matches!(app.rx.recv_timeout(std::time::Duration::from_millis(150)), Err(std::sync::mpsc::RecvTimeoutError::Timeout)));
+            app.cancel();
+            let mut events = Vec::new();
+            loop {
+                let event = app.rx.recv_timeout(std::time::Duration::from_secs(5)).expect("download cancellation stalled");
+                let done = matches!(event, Event::JobDone);
+                assert!(!matches!(event, Event::Link(_, _)), "download ran while queued");
+                events.push(event);
+                if done { break; }
+            }
+            for event in events { app.tx.send(event).unwrap(); }
+            app.pump();
+            assert!(!app.busy());
+            assert_eq!(app.links(web).note, "Annullato");
+            assert_eq!(app.links(web).items[0].state, FileState::Failed);
+            assert_eq!(app.links(web).items[0].message, "Annullato");
+        }
     }
 
     #[test]

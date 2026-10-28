@@ -777,6 +777,17 @@ impl Running {
     }
 }
 
+// A panic in an event sink must not leave whisper using RAM/CPU after the job gate is released.
+impl Drop for Running {
+    fn drop(&mut self) {
+        drop(self.stdin.take());
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
 /// Un segmento di parlato: inizio e fine in centesimi di secondo.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Segment {
@@ -1378,6 +1389,25 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn unwinding_reaps_the_transcription_process() {
+        let child = Command::new("sleep").arg("60").stdin(Stdio::piped()).spawn().unwrap();
+        let pid = child.id() as libc::pid_t;
+        let result = std::panic::catch_unwind(move || {
+            let (_tx, lines) = channel();
+            let _running = Running {
+                child: Some(child), stdin: None, lines,
+                #[cfg(target_os = "android")]
+                requests: None,
+            };
+            panic!("event sink failed");
+        });
+        assert!(result.is_err());
+        assert_eq!(unsafe { libc::kill(pid, 0) }, -1);
+        assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(libc::ESRCH));
+    }
 
     fn seg(t0: i64, t1: i64, text: &str) -> Segment {
         Segment { t0, t1, text: text.into() }

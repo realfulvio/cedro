@@ -454,7 +454,9 @@ impl<'a> Frame<'a> {
             let base = r.1 + (r.3 - (asc + desc) / self.p.scale) / 2.0 + asc / self.p.scale;
             self.p.text_at(&shown, r.0 + pad - shift, base, size, SANS, pal.text);
             if editing && (self.ms / 530).is_multiple_of(2) {
-                self.p.fill(r.0 + pad - shift + caret_x, r.1 + r.3 * 0.22, 1.5, r.3 * 0.56, pal.text);
+                // The rectangle fast path in tiny-skia asserts on a fractional, narrow caret.
+                // A rectangular path keeps its geometry and works with subpixel font advances.
+                self.p.rrect_a(r.0 + pad - shift + caret_x, r.1 + r.3 * 0.22, 1.5, r.3 * 0.56, 0.0, pal.text, 1.0);
             }
         }
         self.p.pop_clip();

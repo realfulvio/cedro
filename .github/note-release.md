@@ -16,13 +16,15 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-Release di sola solidità: una revisione completa del codice di Windows e Linux, senza cambiare né funzioni né aspetto.
+Correzioni di solidità per audio, trascrizione e gestione dei lavori, senza cambiare funzioni o aspetto.
 
-- **Video**: su Linux la decodifica sulla scheda video (VA-API) libera la memoria della scheda a ogni fotogramma, invece di accumularla nei video lunghi; un file H.264 rovinato ora ripiega sul processore invece di fermare la conversione. Su Windows il colore dei video con larghezza dispari è corretto.
-- **Conversioni**: se un lavoro fallisce o un decodificatore si blocca, non restano più file scritti a metà accanto ai tuoi; il salvataggio delle impostazioni non si rovina più quando ruota, pannello e impostazioni salvano insieme.
-- **PDF e documenti**: l'ordine dei paragrafi vuoti negli ODT è corretto, i PDF senza font incorporato mantengono punti elenco e simboli, un PDF con coordinate impazzite o con una pagina anomala non blocca più il PDF → Word.
-- **Video dal web e trascrizione**: titoli con lettere accentate non interrompono più il download su Windows, i messaggi di errore di yt-dlp arrivano interi, nessun file temporaneo dell'OCR lasciato in giro, pesi dei motori mostrati correttamente.
-- **Interfaccia**: se un lavoro va in crisi, la finestra non resta più bloccata su «conversione in corso» e le anteprime continuano a funzionare; l'icona nell'area di notifica torna da sola se Esplora file si riavvia; incollare e copiare testo non perde più memoria; i file trascinati mentre è aperto un selettore non si perdono; su Linux i percorsi con spazi o «#» si aprono dalle Impostazioni e un salvataggio fallito ora lo dice.
+- **YouTube e Video dal web**: l'aggiornamento automatico aspetta che il download e la pulizia dei file temporanei siano finiti. Un download in attesa del turno si può annullare.
+- **Ruota su Linux**: le operazioni rispettano lo stesso turno delle conversioni e della trascrizione, evitando lavori pesanti contemporanei nello stesso processo.
+- **Audio**: i file troppo grandi per AIFF vengono segnalati senza scrivere intestazioni errate; la scrittura non duplica più l'intero audio in memoria.
+- **Trascrizione**: il motore viene chiuso anche se il lavoro si interrompe con un errore interno. Il ricampionamento rifiuta frequenze nulle e controlla quella effettivamente decodificata; una richiesta con una lingua contenente byte nulli restituisce un errore invece di chiudere il motore.
+- **Campo dei link**: corretto un errore di disegno del cursore che interrompeva le build di debug quando si modificava il testo.
+
+Restano le novità della 0.26.8: revisione di solidità di video e VA-API, conversioni, PDF e documenti, download dal web e interfacce Windows e Linux.
 
 Restano le novità della 0.26.7: adattatori per Video dal web (Turbovid, catalogo Eurostream, collegamenti Clicka) basati sul motore yt-dlp già presente.
 
