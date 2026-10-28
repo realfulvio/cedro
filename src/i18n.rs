@@ -461,7 +461,7 @@ mod tests {
             let slots = it.matches("{}").count() + it.matches("{#}").count();
             for n in 1..=9 {
                 if en.contains(&format!("{{{n}}}")) {
-                    assert!(n <= slots, "riga {}: {{{n}}} senza segnaposto in italiano", n + 0);
+                    assert!(n <= slots, "riga {}: {{{n}}} senza segnaposto in italiano", n);
                 }
             }
         }

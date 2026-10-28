@@ -612,7 +612,7 @@ impl PageSel {
 
 /// Le pagine (da 0) di un documento di `total` pagine che la scelta lascia passare.
 fn pages_of(sel: &Option<PageSel>, total: usize) -> Vec<usize> {
-    (0..total).filter(|i| sel.as_ref().map_or(true, |s| s.contains(*i))).collect()
+    (0..total).filter(|i| sel.as_ref().is_none_or(|s| s.contains(*i))).collect()
 }
 
 /// Formato della pagina per i documenti convertiti in PDF.
@@ -1022,7 +1022,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     if kind == Kind::Pdf && action == "docx" {
         let out = reserve(&dir, &stem(path), "docx")?;
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
-        let want = |i: usize| opts.pages.as_ref().map_or(true, |s| s.contains(i));
+        let want = |i: usize| opts.pages.as_ref().is_none_or(|s| s.contains(i));
         let read = crate::pdflayout::ReadOptions { tables: opts.tables, columns: opts.columns };
         let every = crate::pdflayout::read_pages(&bytes, &read, want).map_err(err)?;
         let selected = pages_of(&opts.pages, every.len());

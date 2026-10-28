@@ -1759,7 +1759,7 @@ fn bgr_at(frame: &[u8], w: usize, h: usize, bits: u16, bottom_up: bool) -> Resul
         return Err("fotogramma troppo corto".into());
     }
     let packed = w * bytes;
-    let aligned = ((w as u32 * bits as u32 + 31) / 32 * 4) as usize;
+    let aligned = ((w as u32 * bits as u32).div_ceil(32) * 4) as usize;
     let stride = if frame.len() >= packed * h && (aligned == packed || frame.len() < aligned * h) {
         packed
     } else {
@@ -1986,7 +1986,7 @@ mod tests {
     fn length_prefixed_sample_starting_like_a_start_code() {
         // NAL da 256 byte con prefisso a 4 byte: 00 00 01 00 sembra un codice di inizio, ma è una lunghezza.
         let mut sample = vec![0, 0, 1, 0, 0x65];
-        sample.extend(std::iter::repeat(0x11).take(255));
+        sample.extend(std::iter::repeat_n(0x11, 255));
         assert!(!is_annex(&sample));
         assert!(is_annex(&[0, 0, 0, 1, 0x67, 0x42, 0x00, 0x1e]));
     }
@@ -2096,7 +2096,7 @@ mod tests {
         let mut frame = gray_frame(64, 64);
         // Un NAL di riempimento (tipo 12) da 1 MiB per fotogramma: i decodificatori lo saltano.
         frame.extend_from_slice(&[0, 0, 0, 1, 0x0C]);
-        frame.extend(std::iter::repeat(0xFF).take(1 << 20));
+        frame.extend(std::iter::repeat_n(0xFF, 1 << 20));
         frame.push(0x80);
         let frames = 4400;
         let mut sink = <super::H264Aac as super::VideoSink>::open(std::path::Path::new(&path), 64, 64, 333_333, Some((44_100, 1))).unwrap();
