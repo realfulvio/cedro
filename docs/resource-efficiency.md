@@ -57,6 +57,14 @@ set (includes harness overhead; not a whole-system measurement):
 |---|---:|---:|
 | Waveform, 20 minute 48 kHz stereo WAV | 307.33 MiB | 19.33 MiB |
 | Resampling, 10 minute 48 kHz mono to 16 kHz | 158.84 MiB | 76.56 MiB |
+| Actual Windows CLI WAV conversion, 20 minute stereo file | 309.43 MiB | 22.05 MiB |
+
+The CLI comparison uses the released Windows 0.26.2 executable and the 0.26.4
+candidate with the same isolated configuration. All 57,600,000 audio frames in
+both outputs and the input have the same PCM SHA-256:
+`84a93a7262a38033f96b93151317264ddfe1248ef599ea270225c5ce88c0d786`.
+Wall times in that run were 1.10 s and 1.23 s. VM Windows tests also passed
+the shared-job cancellation/exclusion checks and WAV/waveform identity checks.
 
 The resampler output contains 9,600,000 samples in both cases, with the same
 rolling sample-bit hash `2064603a153458b4`. In this run the filter took about
