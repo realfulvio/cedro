@@ -630,14 +630,15 @@ fn run_slices(all: &[PathBuf], id: &str, label: &str, quality: u8, beside: bool)
         crate::linux_progress::step(i, &step_label(i, path));
         // «Salva accanto all'originale» spuntato nella ruota vale per questo lavoro e basta.
         let out_dir = if beside { path.parent() } else { None };
-        match perform_into(path, id, quality, out_dir) {
+        // Un panic su un file diventa un errore: senza, la ruota resterebbe «occupata» e il processo non finirebbe più.
+        match cedro::ui::model::guarded(|| perform_into(path, id, quality, out_dir).map_err(|e| e.0)) {
             Ok(out) => {
                 notes.push(format!("{} · {}", name(&out.path), out.message));
                 last_out = Some(out.path);
             }
             Err(err) => {
-                failed.get_or_insert_with(|| err.0.clone());
-                notes.push(err.0);
+                failed.get_or_insert_with(|| err.clone());
+                notes.push(err);
             }
         }
     }
