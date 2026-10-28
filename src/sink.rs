@@ -160,9 +160,109 @@ pub(crate) fn resize_i420(y: &[u8], u: &[u8], v: &[u8], sw: u32, sh: u32, dw: u3
     )
 }
 
+/// Da 3-8 canali a stereo (downmix ITU, normalizzato): il canale centrale, dove stanno i dialoghi,
+/// e i surround vanno in entrambi i lati; l'LFE si lascia. Ordine dei canali di symphonia e di
+/// WAVEFORMATEXTENSIBLE: FL FR FC LFE BL BR SL SR (5 canali: FL FR FC BL BR; 4: FL FR BL BR).
+pub(crate) fn fold_stereo(samples: &[i16], channels: u16) -> Vec<i16> {
+    const K: f32 = std::f32::consts::FRAC_1_SQRT_2;
+    let ch = channels as usize;
+    if ch < 3 {
+        return samples.to_vec();
+    }
+    let norm = match ch {
+        3 | 4 => 1.0 / (1.0 + K),
+        5..=7 => 1.0 / (1.0 + 2.0 * K),
+        _ => 1.0 / (1.0 + 3.0 * K),
+    };
+    let mut out = Vec::with_capacity(samples.len() / ch * 2);
+    for f in samples.chunks_exact(ch) {
+        let s = |i: usize| f[i] as f32;
+        // Centro, dietro a sinistra, dietro a destra.
+        let (c, bl, br) = match ch {
+            3 => (s(2), 0.0, 0.0),
+            4 => (0.0, s(2), s(3)),
+            5 => (s(2), s(3), s(4)),
+            _ => (s(2), s(4), s(5)),
+        };
+        let (sl, sr) = if ch >= 8 { (s(6), s(7)) } else { (0.0, 0.0) };
+        let l = (s(0) + K * c + K * (bl + sl)) * norm;
+        let r = (s(1) + K * c + K * (br + sr)) * norm;
+        out.push(l.round().clamp(-32768.0, 32767.0) as i16);
+        out.push(r.round().clamp(-32768.0, 32767.0) as i16);
+    }
+    out
+}
+
+/// Cambio di frequenza dell'audio a pacchetti, con il resto portato da un pacchetto all'altro:
+/// ricampionando ogni pacchetto da solo si perdeva una frazione di campione ogni volta, e l'audio
+/// si accorciava (fino a qualche secondo all'ora) andando fuori sincrono col video.
+#[derive(Default)]
+pub(crate) struct Resampler {
+    /// Posizione del prossimo campione d'uscita dall'inizio del pacchetto, in campioni d'ingresso × `to`.
+    pos: u64,
+    from: u32,
+}
+
+impl Resampler {
+    /// Aggiunge a `out` i campioni di `input` (interleaved, `channels` canali) portati da `from` a `to` Hz.
+    pub(crate) fn push(&mut self, input: &[i16], channels: u16, from: u32, to: u32, out: &mut Vec<i16>) {
+        let ch = channels.max(1) as usize;
+        if from == 0 || to == 0 || from == to {
+            out.extend_from_slice(input);
+            return;
+        }
+        if from != self.from {
+            self.from = from;
+            self.pos = 0;
+        }
+        let frames = (input.len() / ch) as u64;
+        let limit = frames * to as u64;
+        out.reserve((limit / from as u64 + 1) as usize * ch);
+        while self.pos < limit {
+            let src = (self.pos / to as u64) as usize;
+            out.extend_from_slice(&input[src * ch..(src + 1) * ch]);
+            self.pos += from as u64;
+        }
+        self.pos -= limit;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn downmix_keeps_the_center_channel() {
+        // 5.1 con la voce solo sul centrale: deve sentirsi a sinistra e a destra.
+        let out = fold_stereo(&[0, 0, 10_000, 0, 0, 0], 6);
+        assert!(out.len() == 2 && out[0] > 2_000 && out[0] == out[1], "{out:?}");
+        // Tutto al massimo: si resta nel limite.
+        assert_eq!(fold_stereo(&[i16::MAX; 8], 8), vec![i16::MAX, i16::MAX]);
+        // La sinistra resta a sinistra.
+        let left = fold_stereo(&[10_000, 0, 0], 3);
+        assert!(left[0] > 5_000 && left[1] == 0, "{left:?}");
+    }
+
+    #[test]
+    fn resampling_by_packets_keeps_the_length() {
+        // Da 24 kHz a 44,1 kHz a pacchetti AAC da 1024 campioni, per un minuto: nessun campione perso.
+        let mut r = Resampler::default();
+        let packet = vec![0i16; 1024 * 2];
+        let packets = 24_000 * 60 / 1024;
+        let mut total = 0u64;
+        let mut out = Vec::new();
+        for _ in 0..packets {
+            out.clear();
+            r.push(&packet, 2, 24_000, 44_100, &mut out);
+            total += (out.len() / 2) as u64;
+        }
+        let want = packets as u64 * 1024 * 44_100 / 24_000;
+        assert!(total.abs_diff(want) <= 1, "{total} {want}");
+        // Stessa frequenza: i campioni passano come sono.
+        out.clear();
+        r.push(&[1, 2, 3, 4], 2, 48_000, 48_000, &mut out);
+        assert_eq!(out, vec![1, 2, 3, 4]);
+    }
 
     #[test]
     fn target_size_only_shrinks_and_stays_even() {
