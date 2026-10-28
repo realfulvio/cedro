@@ -270,7 +270,10 @@ pub fn go_label(app: &App) -> String {
             _ => format!("{} di {}…", job.done, job.total),
         };
     }
-    let n = app.targets().len();
+    if app.finished() {
+        return if app.targets().len() > 1 { "Apri cartella".into() } else { "Apri risultato".into() };
+    }
+    let n = if matches!(app.activity, Activity::Convert | Activity::Transcribe) { app.todo().len() } else { app.targets().len() };
     match app.activity {
         Activity::Transcribe if n == 0 => "Trascrivi".into(),
         Activity::Transcribe => format!("Trascrivi {n} file"),
@@ -284,6 +287,30 @@ pub fn go_label(app: &App) -> String {
                 format!("Converti {n} file")
             }
         }
+    }
+}
+
+/// Sotto il pulsante grande: durante il lavoro la spia (puntino + istruzione in uso, solo se c'è),
+/// a lavoro finito il link «Ricomincia». `r` è il pulsante; `side` mette la riga alla sua sinistra.
+pub fn go_extras(f: &mut Frame, app: &App, r: R, side: bool) {
+    let pal = f.pal;
+    let size = 14.0;
+    if let Some(u) = app.spia() {
+        let text = format!("{} · {}", if u.gpu { "GPU" } else { "CPU" }, u.detail);
+        let tw = f.measure(&text, size, SANS).min(r.2 - 30.0);
+        let dot = if u.gpu { pal.primary } else { pal.ok };
+        let (x, y) = if side { (r.0 - 24.0 - tw - 14.0, r.1 + r.3 / 2.0 - 11.0) } else { (r.0 + (r.2 - tw - 14.0) / 2.0, r.1 + r.3 + 14.0) };
+        f.p.rrect(x, y + 7.0, 8.0, 8.0, 4.0, Some(dot), None);
+        f.p.text(&text, x + 14.0, y, tw + 2.0, 22.0, size, SANS, pal.muted, Align::Left);
+    } else if app.finished() {
+        let label = "Ricomincia";
+        let tw = f.measure(label, size, SEMI);
+        let (x, y) = if side { (r.0 - 24.0 - tw, r.1 + r.3 / 2.0 - 11.0) } else { (r.0 + (r.2 - tw) / 2.0, r.1 + r.3 + 14.0) };
+        let hot = f.hovered(&Act::Restart);
+        let c = if hot { mix(pal.primary, pal.text, 0.3) } else { pal.primary };
+        f.p.text(label, x, y, tw + 2.0, 22.0, size, SEMI, c, Align::Left);
+        f.p.fill(x, y + 19.0, tw, 1.0, c);
+        f.hit((x - 6.0, y - 4.0, tw + 12.0, 30.0), Act::Restart);
     }
 }
 

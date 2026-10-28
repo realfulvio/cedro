@@ -376,6 +376,7 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
         } else {
             f.primary(go, &super::go_label(app), Some(ic::CONVERT), 22.0, Act::Start, ready);
         }
+        super::go_extras(f, app, go, false);
         let mut y = go.1 + go.3 + 40.0;
         if !super::notice(f, app, (x - 6.0, y, w + 12.0, 52.0), 14.0)
             && app.customized() {
@@ -449,6 +450,7 @@ fn footer(f: &mut Frame, app: &App, y: f32, simple: bool) {
         } else {
             f.primary(go, &super::go_label(app), Some(ic::CONVERT), 19.0, Act::Start, !app.targets().is_empty());
         }
+        super::go_extras(f, app, go, false);
     }
 }
 

@@ -42,6 +42,62 @@ pub fn use_avx512() -> bool {
 /// Applica l'interruttore AVX-512 ai calcoli di OCR (rten). Va chiamata prima di ogni lavoro che li usa.
 pub fn apply() {
     rten_simd::allow_avx512(use_avx512());
+    set_in_use(false, cpu_isa());
+}
+
+/// Cosa sta accelerando il lavoro di ora, per la spia nella finestra: scheda video o istruzioni del processore.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InUse {
+    /// Vero se è la scheda video, falso se è il processore.
+    pub gpu: bool,
+    /// Il nome preciso: «AVX-512 · 8 thread», «Vulkan · NVIDIA RTX 4000», «NVIDIA NVENC».
+    pub detail: String,
+}
+
+static IN_USE: std::sync::Mutex<Option<InUse>> = std::sync::Mutex::new(None);
+
+/// Lo dicono i motori di lavoro quando partono: la spia mostra solo quello che è davvero in uso.
+pub fn set_in_use(gpu: bool, detail: impl Into<String>) {
+    if let Ok(mut g) = IN_USE.lock() {
+        *g = Some(InUse { gpu, detail: detail.into() });
+    }
+}
+
+/// Fine del lavoro (o del file): nessuna accelerazione in uso.
+pub fn clear_in_use() {
+    if let Ok(mut g) = IN_USE.lock() {
+        *g = None;
+    }
+}
+
+pub fn in_use() -> Option<InUse> {
+    IN_USE.lock().ok().and_then(|g| g.clone())
+}
+
+/// Le istruzioni del processore che i calcoli usano adesso, col loro nome.
+pub fn cpu_isa() -> &'static str {
+    #[cfg(target_arch = "aarch64")]
+    {
+        let hw = hardware();
+        if use_avx512() && hw.dotprod {
+            return "i8mm";
+        }
+        if hw.dotprod {
+            return "dotprod";
+        }
+        "NEON"
+    }
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        if use_avx512() {
+            return "AVX-512";
+        }
+        #[cfg(target_arch = "x86_64")]
+        if std::is_x86_feature_detected!("avx2") {
+            return "AVX2";
+        }
+        "SSE"
+    }
 }
 
 /// Il nome delle istruzioni avanzate di questo processore, come lo legge una persona.
