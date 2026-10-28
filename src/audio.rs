@@ -824,10 +824,36 @@ mod streaming_tests {
                 let pcm = Pcm::new(44100, channels, (0..frames * channels as usize).map(|i| ((i * 7919 % 65536) as i32 - 32768) as i16).collect());
                 write_wav(&path, &pcm).unwrap();
                 for n in [1, 17, 160, 1001] { assert_eq!(waveform_stream(&path, n), waveform_buffered(&path, n)); }
+                // A container's advertised length may include encoder padding.
+                // Count mismatch must take the exact-length retry, not alter the waveform.
+                let (wrong, actual) = waveform_bins(&path, 160, frames + 31).unwrap();
+                assert_eq!(actual, frames);
+                let _ = wrong;
+                assert_eq!(waveform_bins(&path, 160, actual).unwrap().0, waveform_buffered(&path, 160).unwrap());
                 let out = dir.join("out.wav");
                 to_wav(&path, &out, &crate::engine::Options::default()).unwrap();
                 assert_eq!(decode(&out).unwrap().samples, pcm.samples);
             }
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+    #[test]
+    fn compressed_waveforms_match_the_original_decoder() {
+        let dir = std::env::temp_dir().join(format!("cedro-compressed-stream-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("source.wav");
+        write_wav(&wav, &Pcm::new(44100, 2, (0..44100).map(|i| ((i * 7919 % 60000) as i32 - 30000) as i16).collect())).unwrap();
+        let mp3 = dir.join("test.mp3");
+        to_mp3(&wav, &mp3, 82, &crate::engine::Options::default()).unwrap();
+        assert_eq!(waveform_stream(&mp3, 160), waveform_buffered(&mp3, 160));
+        let flac = dir.join("test.flac");
+        to_flac(&wav, &flac, &crate::engine::Options::default()).unwrap();
+        assert_eq!(waveform_stream(&flac, 160), waveform_buffered(&flac, 160));
+        #[cfg(any(windows, target_os = "linux", target_os = "android"))]
+        {
+            let opus = dir.join("test.opus");
+            to_opus(&wav, &opus, 82, &crate::engine::Options::default()).unwrap();
+            assert_eq!(waveform_stream(&opus, 160), waveform_buffered(&opus, 160));
         }
         let _ = std::fs::remove_dir_all(dir);
     }
