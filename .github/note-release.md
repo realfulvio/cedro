@@ -16,6 +16,6 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-- **Decodifica video sulla scheda video (Linux)**: i video H.264 (MP4, MOV, MKV) si leggono con la GPU, Intel o AMD, invece che con un solo core del processore. Che si tratti del collo di bottiglia lo si vede su un 1080p60: la lettura da sola occupava quasi tutto il tempo. A ogni video Cedro confronta i primi fotogrammi con quelli letti dal processore: se non coincidono, o se la scheda sbaglia a metà, rifà il video col processore. Interlacciato e 10 bit restano sul processore.
+- **Preparazione della decodifica video sulla scheda video (Linux)**: il codice per leggere i video H.264 con la GPU è dentro, con il controllo automatico contro OpenH264, ma resta spento finché non è provato su tutte le schede. Per ora i video si leggono come prima: nessuna differenza per chi usa Cedro.
 
 Dalla 0.26.5: barra di avanzamento e tempo che resta nei video, file più piccoli a 720p da sorgenti già compresse, «In attesa» vero (invariati).
