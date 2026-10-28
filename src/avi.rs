@@ -280,7 +280,7 @@ pub(crate) fn is_h264(stream: &AviStream) -> bool {
 }
 
 pub(crate) fn same_cc(value: [u8; 4], name: &[u8; 4]) -> bool {
-    value.iter().zip(name.iter()).all(|(a, b)| a.to_ascii_uppercase() == b.to_ascii_uppercase())
+    value.iter().zip(name.iter()).all(|(a, b)| a.eq_ignore_ascii_case(b))
 }
 
 /// Per Media Foundation (Windows): un AVI con H.264 a lunghezze (avcC, «avc1») si riscrive con i codici di inizio
@@ -292,7 +292,7 @@ pub(crate) fn annex_b_copy(path: &Path, dir: &Path) -> Result<Option<std::path::
         return Ok(None);
     };
     let (nal_len, header) = avc_config(&streams[vi].extra);
-    let needs = header.len() > 0
+    let needs = !header.is_empty()
         || chunks.iter().find(|c| c.stream == vi && c.video).is_some_and(|c| !crate::nal::is_annex(&c.data));
     if !needs {
         return Ok(None);
