@@ -158,6 +158,10 @@ pub fn start() -> std::result::Result<(), String> {
             g.icon = make_icon().unwrap_or(HICON::default());
         });
         add_tray(hwnd)?;
+        // Dopo un aggiornamento silenzioso: un solo avviso discreto, a cose fatte.
+        if let Some(version) = update::take_updated() {
+            balloon(&format!("Cedro è stato aggiornato alla {version}."));
+        }
         let settings = read_settings();
         apply_settings(&settings);
         if settings.update_check {
@@ -1413,14 +1417,42 @@ fn show_menu(hwnd: HWND) {
     }
 }
 
-/// All'avvio aspetta qualche secondo e tace se non c'è niente. Dal menu risponde sempre.
+/// Vero se c'è un altro Cedro in esecuzione oltre a questo (una conversione in corso): l'installatore lo chiuderebbe.
+fn other_cedro_running() -> bool {
+    use std::os::windows::process::CommandExt;
+    let out = std::process::Command::new("tasklist")
+        .args(["/FI", "IMAGENAME eq cedro.exe", "/FO", "CSV", "/NH"])
+        .creation_flags(0x0800_0000)
+        .output();
+    out.is_ok_and(|o| String::from_utf8_lossy(&o.stdout).to_lowercase().matches("cedro.exe").count() > 1)
+}
+
+/// Dal menu risponde sempre. In automatico (avvio, ogni 24 ore) lavora in silenzio e a priorità bassa:
+/// aspetta che il computer abbia finito di avviarsi, installa senza finestre e avvisa solo a cose fatte.
 pub(crate) fn check_updates(manual: bool) {
     std::thread::spawn(move || {
         if !manual {
-            std::thread::sleep(std::time::Duration::from_secs(8));
+            update::background_priority();
+            std::thread::sleep(std::time::Duration::from_secs(120));
         }
         let news = match update::check() {
-            Ok(Some(release)) if manual || !update::skipped(&release.version) => UpdateNews::Found { release, manual },
+            Ok(Some(release)) if manual => UpdateNews::Found { release, manual },
+            Ok(Some(release)) => {
+                // Mai in mezzo a una conversione: riprova fra qualche minuto.
+                for _ in 0..12 {
+                    if !other_cedro_running() {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(300));
+                }
+                if other_cedro_running() {
+                    return;
+                }
+                if let Err(e) = crate::cli::install_silent(&release) {
+                    append_log(&format!("aggiornamento: {e}"));
+                }
+                return;
+            }
             Ok(_) if manual => UpdateNews::Note(format!("Hai già l'ultima versione ({}).", update::CURRENT)),
             Err(e) if manual => UpdateNews::Note(e),
             Err(e) => {

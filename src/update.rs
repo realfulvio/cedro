@@ -302,6 +302,37 @@ pub fn unskip() {
     let _ = std::fs::remove_file(skip_file());
 }
 
+fn updated_file() -> PathBuf {
+    crate::config_dir().join("updated.txt")
+}
+
+/// Prima di un aggiornamento silenzioso: il Cedro nuovo, al primo avvio, saprà di dover avvisare che è andato tutto bene.
+pub fn mark_updated(version: &str) {
+    let _ = std::fs::create_dir_all(crate::config_dir());
+    let _ = std::fs::write(updated_file(), version);
+}
+
+/// La versione appena installata in silenzio, se questa è proprio quella: da dire una volta sola.
+pub fn take_updated() -> Option<String> {
+    let version = std::fs::read_to_string(updated_file()).ok()?.trim().to_string();
+    let _ = std::fs::remove_file(updated_file());
+    (version == CURRENT).then_some(version)
+}
+
+/// Il thread che lo chiama lavora a priorità minima (CPU e disco), per non disturbare chi usa il computer.
+pub fn background_priority() {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::System::Threading::{GetCurrentThread, SetThreadPriority, THREAD_MODE_BACKGROUND_BEGIN};
+        let _ = SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN);
+    }
+    #[cfg(unix)]
+    unsafe {
+        // Su Linux vale per il solo thread chiamante, e i programmi che lancia (tar, install.sh) la ereditano.
+        libc::setpriority(libc::PRIO_PROCESS as _, 0, 19);
+    }
+}
+
 /// Non chiedere più per questa versione, all'avvio.
 pub fn skip(version: &str) {
     let _ = std::fs::create_dir_all(crate::config_dir());

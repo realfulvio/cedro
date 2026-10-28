@@ -123,6 +123,27 @@ pub fn install(release: &cedro::update::Release) -> Result<String, String> {
     }
 }
 
+/// Aggiornamento silenzioso (Windows): scarica l'installatore e lo lancia senza finestre, a priorità bassa.
+/// L'installatore chiude Cedro e lo riapre da solo; il Cedro nuovo avvisa che è tutto a posto.
+#[cfg(windows)]
+pub fn install_silent(release: &cedro::update::Release) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    let asset = release.installer.as_ref().ok_or("la release non ha l'installatore per questo sistema")?;
+    let path = cedro::update::download(asset)?;
+    cedro::update::mark_updated(&release.version);
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
+    let started = std::process::Command::new(&path)
+        .args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/SILENTUPDATE"])
+        .creation_flags(CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS)
+        .spawn();
+    if let Err(e) = started {
+        let _ = std::fs::remove_file(cedro::config_dir().join("updated.txt"));
+        return Err(e.to_string());
+    }
+    Ok(())
+}
+
 fn print_help() {
     let help = "\
 Cedro — conversione locale, senza upload.

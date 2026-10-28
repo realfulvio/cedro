@@ -991,8 +991,10 @@ impl ksni::Tray for CedroTray {
 /// Dopo qualche secondo e poi ogni giorno, finché Cedro resta aperto. Rilegge la scelta a ogni giro.
 fn daily_updates() {
     std::thread::spawn(|| {
-        std::thread::sleep(Duration::from_secs(8));
-        loop {
+        // Niente fretta: prima il desktop finisce di avviarsi, e questo lavoro è a priorità minima.
+        cedro::update::background_priority();
+        std::thread::sleep(Duration::from_secs(120));
+        while !UPDATE_INSTALLED.load(std::sync::atomic::Ordering::Relaxed) {
             if cfg().update_check {
                 check_updates_now(false);
             }
@@ -1006,9 +1008,25 @@ pub(crate) fn check_updates(manual: bool) {
     std::thread::spawn(move || check_updates_now(manual));
 }
 
+/// Installato un aggiornamento in silenzio: finché Cedro resta aperto non se ne cerca un altro.
+static UPDATE_INSTALLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn check_updates_now(manual: bool) {
     let news = match update::check() {
-        Ok(Some(release)) if manual || !update::skipped(&release.version) => UpdateNews::Found { release, manual },
+        Ok(Some(release)) if manual => UpdateNews::Found { release, manual },
+        Ok(Some(release)) => {
+            // In automatico: scarica e installa senza chiedere né riavviare. Il Cedro nuovo parte al prossimo avvio.
+            match crate::cli::install(&release) {
+                Ok(_) => {
+                    UPDATE_INSTALLED.store(true, std::sync::atomic::Ordering::Relaxed);
+                    UpdateNews::Note(format!("Cedro è stato aggiornato alla {}. Si apre aggiornato al prossimo avvio.", release.version))
+                }
+                Err(e) => {
+                    append_log(&format!("aggiornamento: {e}"));
+                    return;
+                }
+            }
+        }
         Ok(_) if manual => UpdateNews::Note(format!("Hai già l'ultima versione ({}).", update::CURRENT)),
         Err(e) if manual => UpdateNews::Note(e),
         Err(e) => {

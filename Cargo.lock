@@ -538,7 +538,7 @@ dependencies = [
 
 [[package]]
 name = "cedro"
-version = "0.26.2"
+version = "0.26.3"
 dependencies = [
  "audiopus_sys",
  "avif-decode",
