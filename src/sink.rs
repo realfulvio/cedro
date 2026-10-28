@@ -345,7 +345,6 @@ mod tests {
         // Il tetto non passa da un lavoro all'altro.
         assert_eq!(with_shape(VideoShape::default(), || bitrate(1280, 720)), plain);
     }
-    use super::*;
 
     #[test]
     fn downmix_keeps_the_center_channel() {

@@ -81,7 +81,7 @@ fn main() {
                             } else if sc == "lavoro-spia" {
                                 let n = s.app.files.len();
                                 s.app.files[0].state = FileState::Running;
-                                s.app.job = Some(Job { kind: JobKind::Convert, total: n, done: 0, failed: 0, cancel: Arc::new(Default::default()), key: String::new(), targets: (0..n).collect() });
+                                s.app.job = Some(Job { kind: JobKind::Convert, total: n, done: 0, failed: 0, cancel: Arc::new(Default::default()), key: String::new(), targets: (0..n).collect(), part: 0.0, file_started: None });
                                 cedro::accel::set_in_use(true, "Vulkan · NVIDIA Quadro RTX 4000 con nome molto lungo");
                             } else {
                                 s.ui.open.insert(cedro::ui::core::Fold::MoreOptions);
