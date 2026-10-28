@@ -8,7 +8,7 @@ name: Linux
 on:
   push:
     branches: ["claude/**"]
-    paths: ["Cargo.*", "src/**", "vendor/**", "trascrivi/**", "installer/**", "examples/**", "build.rs", ".github/workflows/linux.yml"]
+    paths: ["Cargo.*", "src/**", "resources/**", "vendor/**", "trascrivi/**", "installer/**", "examples/**", "build.rs", ".github/workflows/linux.yml"]
   workflow_dispatch:
     inputs:
       tag:
@@ -39,6 +39,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends libgtk-4-dev libdbus-1-dev libasound2-dev pkg-config cmake clang
 
       - uses: Swatinem/rust-cache@v2
+
+      - name: Prove adattatori web
+        run: python resources/web-adapters/test_adapters.py
 
       - name: Prove
         run: cargo test --release --lib
