@@ -1245,8 +1245,10 @@ mod tests {
 
     #[test]
     fn transcribable_takes_voice_messages_and_videos() {
-        assert!(transcribable(Path::new("vocale.opus")));
-        assert!(only_transcribable(Path::new("vocale.opus")));
+        // Un vocale AMR entra solo nella trascrizione; Opus ora si converte anche, quindi è Audio.
+        assert!(transcribable(Path::new("vocale.amr")));
+        assert!(only_transcribable(Path::new("vocale.amr")));
+        assert!(transcribable(Path::new("vocale.opus")) && !only_transcribable(Path::new("vocale.opus")));
         assert!(transcribable(Path::new("riunione.m4a")) && !only_transcribable(Path::new("riunione.m4a")));
         assert!(transcribable(Path::new("seduta.mp4")));
         assert!(!transcribable(Path::new("foto.jpg")));

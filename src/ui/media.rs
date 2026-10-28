@@ -44,6 +44,13 @@ const PAGE: f32 = 1400.0;
 
 pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
     use image::ImageDecoder;
+    // SVG, AVIF e JPEG XL non passano dal lettore del crate `image`.
+    if matches!(crate::imgfmt::sniff_file(path), Some("svg" | "avif" | "jxl")) || matches!(engine::extension(path).as_str(), "svg" | "svgz") {
+        let img = crate::imgfmt::open(path, false, Some(side)).ok()?;
+        let size = (img.width(), img.height());
+        let small = img.thumbnail(side, side).to_rgba8();
+        return Some((Image::from_rgba(small.width(), small.height(), small.as_raw())?, size));
+    }
     let mut decoder = image::ImageReader::open(path).ok()?.with_guessed_format().ok()?.into_decoder().ok()?;
     let orientation = decoder.orientation().ok();
     let mut img = image::DynamicImage::from_decoder(decoder).ok()?;
@@ -83,7 +90,7 @@ fn info(path: &Path) -> Loaded {
             out.thumb = about.frames.first().cloned();
             out.about = Some(about);
         }
-        Kind::Other => out.about = Some(super::preview::about_other(path)),
+        Kind::Other | Kind::Archive => out.about = Some(super::preview::about_other(path)),
     }
     out
 }
