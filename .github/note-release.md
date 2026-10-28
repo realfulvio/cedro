@@ -16,11 +16,15 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-- **Video dal web: Turbovid**: Cedro include un adattatore che riconosce il player pubblico e il suo MP4, sia nell'analisi del link sia nel download, su Windows e Linux.
-- **Catalogo Eurostream**: riconoscimento del catalogo «Matrimonio a prima vista Italia», con titoli e numerazione delle sezioni conservati nella playlist.
-- **Collegamenti Clicka**: Cedro segue i collegamenti pubblici riconosciuti verso Turbovid. Se il sito richiede un CAPTCHA o un accesso, occorre aprirlo nel browser e usare poi il link pubblico del player; il download dell'intero catalogo non è garantito.
+Release di sola solidità: una revisione completa del codice di Windows e Linux, senza cambiare né funzioni né aspetto.
 
-Gli adattatori inclusi usano il motore yt-dlp già presente in Cedro e mantengono disponibili i plugin dell'utente. StreamingCommunity, DeltaBit e MixDrop non hanno adattatori dedicati in questa versione.
+- **Video**: su Linux la decodifica sulla scheda video (VA-API) libera la memoria della scheda a ogni fotogramma, invece di accumularla nei video lunghi; un file H.264 rovinato ora ripiega sul processore invece di fermare la conversione. Su Windows il colore dei video con larghezza dispari è corretto.
+- **Conversioni**: se un lavoro fallisce o un decodificatore si blocca, non restano più file scritti a metà accanto ai tuoi; il salvataggio delle impostazioni non si rovina più quando ruota, pannello e impostazioni salvano insieme.
+- **PDF e documenti**: l'ordine dei paragrafi vuoti negli ODT è corretto, i PDF senza font incorporato mantengono punti elenco e simboli, un PDF con coordinate impazzite o con una pagina anomala non blocca più il PDF → Word.
+- **Video dal web e trascrizione**: titoli con lettere accentate non interrompono più il download su Windows, i messaggi di errore di yt-dlp arrivano interi, nessun file temporaneo dell'OCR lasciato in giro, pesi dei motori mostrati correttamente.
+- **Interfaccia**: se un lavoro va in crisi, la finestra non resta più bloccata su «conversione in corso» e le anteprime continuano a funzionare; l'icona nell'area di notifica torna da sola se Esplora file si riavvia; incollare e copiare testo non perde più memoria; i file trascinati mentre è aperto un selettore non si perdono; su Linux i percorsi con spazi o «#» si aprono dalle Impostazioni e un salvataggio fallito ora lo dice.
+
+Restano le novità della 0.26.7: adattatori per Video dal web (Turbovid, catalogo Eurostream, collegamenti Clicka) basati sul motore yt-dlp già presente.
 
 Resta la novità della 0.26.6: decodifica H.264 via VA-API su Linux per MP4, MOV e MKV, con controllo iniziale dei fotogrammi e ripiego sul processore quando necessario.
 
