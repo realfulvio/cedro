@@ -377,14 +377,13 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
             f.primary(go, &super::go_label(app), Some(ic::CONVERT), 22.0, Act::Start, ready);
         }
         let mut y = go.1 + go.3 + 40.0;
-        if !super::notice(f, app, (x - 6.0, y, w + 12.0, 52.0), 14.0) {
-            if app.customized() {
+        if !super::notice(f, app, (x - 6.0, y, w + 12.0, 52.0), 14.0)
+            && app.customized() {
                 let tw = f.measure("Torna alle consigliate", 16.0, SEMI);
                 f.p.text("Torna alle consigliate", x, y, tw + 2.0, 26.0, 16.0, SEMI, pal.primary, Align::Left);
                 f.hit((x, y, tw, 26.0), Act::ResetRecommended);
                 y += 30.0;
             }
-        }
         let _ = y;
         return;
     }
