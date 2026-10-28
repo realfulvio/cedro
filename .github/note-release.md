@@ -16,6 +16,8 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
+- **Aggiornamenti silenziosi**: all'accensione del computer Cedro non disturba più. Aspetta due minuti, controlla e scarica a priorità minima, senza finestre né richieste; su Windows installa quando non c'è una conversione in corso e si riapre da solo, su Linux installa e parte aggiornato al prossimo avvio. Al massimo compare un avviso discreto «Cedro è stato aggiornato alla …». Dal menu «Controlla aggiornamenti» resta la domanda di sempre.
+
 - **Tutti i temi controllati con le ultime voci** (Archivi, ZIP, nome da modello, spia CPU/GPU, «Apri risultato» e «Ricomincia», menu del tasto destro): sistemate le sovrapposizioni nella finestrina del Compatto, in Windows essenziale (Semplificata) e in Documento al centro, dove spia e «Ricomincia» non si vedevano.
 - Archivi: l'intestazione dice ZIP → ZIP, i nomi delle schede nel Percorso guidato non si tagliano più, «1 archivio» e «1 immagine» al singolare.
 - Inglese: tradotte le voci del menu del tasto destro e «Impostazioni archivi»; etichette accorciate perché non si taglino.
