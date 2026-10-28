@@ -289,8 +289,10 @@ fn open_surface(app: &Application, surface: Surface) {
             let on_caption = host.screen.try_borrow().map(|sc| sc.caption_at(lx, ly)).unwrap_or(false);
             if on_caption {
                 if n >= 2 {
-                    let mut pl = p.borrow_mut();
-                    pl.toggle_maximize();
+                    // Durante un dialogo (ciclo annidato di `wait`) la piattaforma è già presa: si lascia stare.
+                    if let Ok(mut pl) = p.try_borrow_mut() {
+                        pl.toggle_maximize();
+                    }
                 } else if let (Some(surface), Some(dev)) = (win.surface(), g.current_event_device()) {
                     if let Ok(top) = surface.downcast::<gdk::Toplevel>() {
                         top.begin_move(&dev, 1, x, y, g.current_event_time());
@@ -309,7 +311,7 @@ fn open_surface(app: &Application, surface: Surface) {
             let s = scale_of(&host, &area2) / area2.scale_factor().max(1) as f32;
             let (lx, ly) = (x as f32 / s, y as f32 / s);
             // Il dialogo dei file gira dentro `pointer_up`: la finestra non deve essere già presa in prestito.
-            let mut pl = p.borrow_mut();
+            let Ok(mut pl) = p.try_borrow_mut() else { return };
             let mut sc = match host.screen.try_borrow_mut() {
                 Ok(s) => s,
                 Err(_) => return,
@@ -388,7 +390,8 @@ fn open_surface(app: &Application, surface: Surface) {
                 _ => None,
             };
             let Some(k) = k else { return glib::Propagation::Proceed };
-            let mut pl = p.borrow_mut();
+            // Gli appunti si leggono in un ciclo annidato (`wait`): un tasto ripetuto lì non deve rientrare.
+            let Ok(mut pl) = p.try_borrow_mut() else { return glib::Propagation::Proceed };
             let Ok(mut sc) = host.screen.try_borrow_mut() else { return glib::Propagation::Proceed };
             let used = if k == Key::Enter && sc.ui.menu.is_some() { sc.menu_enter(&mut *pl) } else { sc.key(k, &mut *pl) };
             drop(sc);
