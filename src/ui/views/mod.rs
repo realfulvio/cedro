@@ -290,6 +290,18 @@ pub fn go_label(app: &App) -> String {
     }
 }
 
+/// L'icona della scheda di una categoria (una per ogni `Kind`: aggiungere una categoria non deve fare uscire dai bordi).
+pub fn category_icon(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Image => ic::IMAGE,
+        Kind::Doc | Kind::Pdf => ic::FILE,
+        Kind::Text => ic::MENU,
+        Kind::Audio => ic::AUDIO,
+        Kind::Video => ic::VIDEO,
+        Kind::Archive | Kind::Other => ic::FOLDER,
+    }
+}
+
 /// Sotto il pulsante grande: durante il lavoro la spia (puntino + istruzione in uso, solo se c'è),
 /// a lavoro finito il link «Ricomincia». `r` è il pulsante; `side` mette la riga alla sua sinistra.
 pub fn go_extras(f: &mut Frame, app: &App, r: R, side: bool) {
