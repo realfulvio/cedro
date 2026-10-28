@@ -311,6 +311,8 @@ pub struct App {
     pub youtube: Links,
     pub web: Links,
     pub notice: Option<Notice>,
+    /// Le scelte in vigore quando l'ultimo lavoro è finito: i file «Fatto» valgono finché non cambiano.
+    done_key: Option<String>,
     pub ask: Option<Ask>,
     /// Miniature, misure e numero di pagine dei file già letti.
     pub media: HashMap<PathBuf, media::Loaded>,
@@ -368,6 +370,7 @@ impl App {
             youtube: Links::new(false),
             web: Links::new(true),
             notice: None,
+            done_key: None,
             ask: None,
             media: HashMap::new(),
             previews: HashMap::new(),
@@ -486,16 +489,6 @@ impl App {
                 expanded.push(p);
             }
         }
-        if !self.busy() {
-            // Si ricomincia: i «fatto» e gli errori di prima non servono più.
-            for f in self.files.iter_mut() {
-                if f.state != FileState::Waiting {
-                    f.state = FileState::Waiting;
-                    f.message = "In attesa".into();
-                    f.output = None;
-                }
-            }
-        }
         let mut first: Option<(Kind, bool)> = None;
         let mut added = 0;
         let transcribing = self.activity == Activity::Transcribe;
@@ -593,6 +586,73 @@ impl App {
     pub fn targets(&self) -> Vec<usize> {
         let visible = self.visible();
         visible.into_iter().filter(|&i| self.files[i].checked).collect()
+    }
+
+    /// Le scelte che cambiano il risultato: se cambiano, i file già fatti si rifanno.
+    fn settings_key(&self) -> String {
+        format!(
+            "{:?}|{}|{}|{}|{:?}|{:?}|{}",
+            self.activity,
+            self.category,
+            self.action,
+            self.quality,
+            self.dest,
+            self.values,
+            format!("{:?}{}", self.transcribe.format, self.transcribe.model)
+        )
+    }
+
+    /// Il file è già fatto con le scelte di adesso.
+    fn is_fresh_done(&self, i: usize) -> bool {
+        matches!(self.files[i].state, FileState::Done | FileState::Skipped) && self.done_key.as_deref() == Some(self.settings_key().as_str())
+    }
+
+    /// I file che il pulsante lavorerebbe adesso, senza quelli già fatti con le stesse scelte.
+    pub fn todo(&self) -> Vec<usize> {
+        self.targets().into_iter().filter(|&i| !self.is_fresh_done(i)).collect()
+    }
+
+    /// Il lavoro è finito e non c'è altro da fare: il pulsante diventa «Apri risultato».
+    pub fn finished(&self) -> bool {
+        matches!(self.activity, Activity::Convert | Activity::Transcribe)
+            && !self.busy()
+            && self.todo().is_empty()
+            && self.targets().iter().any(|&i| self.files[i].output.is_some())
+    }
+
+    /// Cosa apre «Apri risultato»: il file, o la cartella se i file sono più di uno.
+    pub fn result_path(&self) -> Option<PathBuf> {
+        let outs: Vec<&PathBuf> = self.targets().into_iter().filter_map(|i| self.files[i].output.as_ref()).collect();
+        match outs.as_slice() {
+            [] => None,
+            [one] => Some((*one).clone()),
+            [first, ..] => first.parent().map(|d| d.to_path_buf()),
+        }
+    }
+
+    /// «Ricomincia»: svuota la lista.
+    pub fn restart(&mut self) {
+        if self.busy() {
+            return;
+        }
+        let gone = self.targets();
+        let mut i = 0;
+        self.files.retain(|_| {
+            let keep = !gone.contains(&i);
+            i += 1;
+            keep
+        });
+        self.selected = None;
+        self.done_key = None;
+        self.notice = None;
+    }
+
+    /// La spia: cosa accelera il lavoro in corso (solo conversioni e trascrizioni).
+    pub fn spia(&self) -> Option<crate::accel::InUse> {
+        match self.job.as_ref().map(|j| j.kind) {
+            Some(JobKind::Convert | JobKind::Transcribe) => crate::accel::in_use(),
+            _ => None,
+        }
     }
 
     pub fn media_of(&self, path: &Path) -> Option<&media::Loaded> {
@@ -702,7 +762,7 @@ impl App {
             self.notice = Some(Notice { text: e, error: true });
             return;
         }
-        let targets = self.targets();
+        let targets = self.todo();
         if targets.is_empty() {
             self.notice = Some(Notice { text: "Aggiungi prima qualche file.".into(), error: false });
             return;
@@ -722,6 +782,7 @@ impl App {
                 }
                 let _ = tx.send(Event::Started(path.clone()));
                 wake();
+                crate::accel::clear_in_use();
                 let result = conversioni::convert_one_out(&path, &action, quality, dest.as_deref(), &opts);
                 let _ = tx.send(Event::Finished(path, result));
                 wake();
@@ -735,7 +796,7 @@ impl App {
         if self.busy() {
             return;
         }
-        let targets = self.targets();
+        let targets = self.todo();
         if targets.is_empty() {
             self.notice = Some(Notice { text: "Aggiungi prima un audio o un video.".into(), error: false });
             return;
@@ -955,6 +1016,10 @@ impl App {
                     }
                 }
                 Event::JobDone => {
+                    crate::accel::clear_in_use();
+                    if self.job.as_ref().is_some_and(|j| matches!(j.kind, JobKind::Convert | JobKind::Transcribe)) {
+                        self.done_key = Some(self.settings_key());
+                    }
                     if let Some(job) = self.job.take() {
                         if matches!(job.kind, JobKind::Convert | JobKind::Transcribe) {
                             let text = if job.failed > 0 {
