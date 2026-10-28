@@ -1237,6 +1237,9 @@ pub fn run(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Opt
 
 /// Come `run`, ma si ferma appena `cancel` si accende (Annulla): i file che restano finiscono come «Annullato».
 pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>, opts: &Options, cancel: &AtomicBool, sink: &dyn Fn(Event)) {
+    if crate::resources::busy_elsewhere() {
+        log(sink, Tone::Note, "", "Un altro lavoro è in corso: la trascrizione parte appena finisce");
+    }
     let Some(_job) = crate::resources::acquire(Some(cancel)) else {
         for path in files { sink(Event::Finished { path: path.clone(), result: Err(CANCELLED.into()) }); }
         return;

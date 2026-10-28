@@ -160,6 +160,7 @@ fn standard(f: &mut Frame, app: &App) {
                     _ => pal.muted,
                 };
                 f.text(&sub, tx, y + 48.0, name_w - 12.0, 22.0, 16.0, SANS, sub_c);
+                f.row_bar(file, tx, y + 77.0, name_w - 12.0, 6.0);
                 let (size, extra) = super::file_meta(app, i);
                 f.text(&size, col_size, y, 130.0, 96.0, 16.0, SANS, pal.muted);
                 f.text(&extra, col_size + 132.0, y, 140.0, 96.0, 16.0, SANS, pal.muted);
@@ -270,6 +271,7 @@ fn simplified(f: &mut Frame, app: &App) {
                     _ => pal.muted,
                 };
                 f.text(&sub, list.0 + 196.0, y + 70.0, list.2 - 520.0, 28.0, 20.0, SANS, sub_c);
+                f.row_bar(file, list.0 + 196.0, y + 106.0, list.2 - 520.0, 8.0);
                 let (size, _) = super::file_meta(app, i);
                 f.text(&size, list.0 + list.2 - 300.0, y, 200.0, 134.0, 20.0, SANS, pal.muted);
                 let cx = list.0 + list.2 - 60.0;
