@@ -16,6 +16,12 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-- **Decodifica video sulla scheda video (Linux)**: i video H.264 (MP4, MOV, MKV) si leggono con la GPU, Intel o AMD, invece che con un solo core del processore. Provata su una Radeon Renoir: fotogrammi identici a quelli di ffmpeg, anche con i B. A ogni video Cedro confronta i primi fotogrammi con quelli letti dal processore: se non coincidono, o se la scheda sbaglia a metà, rifà il video col processore. Interlacciato, 10 bit e video molto piccoli restano sul processore. Si spegne con l'interruttore GPU nelle impostazioni.
+- **Video dal web: Turbovid**: Cedro include un adattatore che riconosce il player pubblico e il suo MP4, sia nell'analisi del link sia nel download, su Windows e Linux.
+- **Catalogo Eurostream**: riconoscimento del catalogo «Matrimonio a prima vista Italia», con titoli e numerazione delle sezioni conservati nella playlist.
+- **Collegamenti Clicka**: Cedro segue i collegamenti pubblici riconosciuti verso Turbovid. Se il sito richiede un CAPTCHA o un accesso, occorre aprirlo nel browser e usare poi il link pubblico del player; il download dell'intero catalogo non è garantito.
 
-Dalla 0.26.5: barra di avanzamento e tempo che resta nei video, file più piccoli a 720p da sorgenti già compresse, «In attesa» vero (invariati).
+Gli adattatori inclusi usano il motore yt-dlp già presente in Cedro e mantengono disponibili i plugin dell'utente. StreamingCommunity, DeltaBit e MixDrop non hanno adattatori dedicati in questa versione.
+
+Resta la novità della 0.26.6: decodifica H.264 via VA-API su Linux per MP4, MOV e MKV, con controllo iniziale dei fotogrammi e ripiego sul processore quando necessario.
+
+Restano le novità della 0.26.5: avanzamento dei video con percentuale e tempo residuo, bitrate più contenuto a 720p, ridimensionamento distribuito fra i core e stato «In attesa» durante gli altri lavori pesanti.
