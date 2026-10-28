@@ -720,9 +720,10 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let mut sink = None;
     let mut queued = Vec::new();
     let mut shown = 0u32;
+    let gpu_decode = gpu_decode_wanted();
     pipelined(
         |emit| {
-            let mut decoder = SampleDecoder::open(&header)?;
+            let mut decoder = SampleDecoder::open(&header, gpu_decode)?;
             for index in 1..=count {
                 let Some(sample) = reader
                     .read_sample(track_id, index)
@@ -813,9 +814,10 @@ fn iso_lenient(input: &Path, output: &Path) -> Result<(), String> {
     let mut sink = None;
     let mut queued = Vec::new();
     let mut shown = 0u32;
+    let gpu_decode = gpu_decode_wanted();
     pipelined(
         |emit| {
-            let mut decoder = SampleDecoder::open(&header)?;
+            let mut decoder = SampleDecoder::open(&header, gpu_decode)?;
             let mut sample_bytes = Vec::new();
             for sample in &video.samples {
                 // Un campione che esce dal file è un indice rovinato: niente memoria chiesta per niente.
@@ -1265,9 +1267,10 @@ fn mkv_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let mut sink = None;
     let mut queued = Vec::new();
     let mut shown = 0u32;
+    let gpu_decode = gpu_decode_wanted();
     pipelined(
         |emit| {
-            let mut decoder = SampleDecoder::open(&header)?;
+            let mut decoder = SampleDecoder::open(&header, gpu_decode)?;
             let mut emitted = 0i64;
             let mut pending: Option<(OwnedFrame, i64)> = None;
             let mut last_dur = fallback;
@@ -1982,6 +1985,13 @@ fn frame_copy(frame: &crate::gpuenc::I420Frame) -> OwnedFrame {
     OwnedFrame { y: frame.y.clone(), u: frame.u.clone(), v: frame.v.clone(), width: frame.width, height: frame.height }
 }
 
+/// Se questa conversione decodifica sulla scheda video: impostazione GPU accesa e nessun errore già avuto.
+/// Va chiesto dal thread della conversione (le impostazioni sono lì) e passato a chi legge.
+/// Ancora in prova sulle schede vere: si accende con CEDRO_VA_DECODE=1.
+fn gpu_decode_wanted() -> bool {
+    crate::sink::shape().gpu && std::env::var_os("CEDRO_VA_DECODE").is_some() && !GPU_DECODE_OFF.with(|off| off.get())
+}
+
 /// Il decodificatore H.264 dei campioni: la scheda video (VA-API) se c'è, è permessa e il video è adatto,
 /// altrimenti OpenH264. Con la scheda i fotogrammi escono in ordine di visualizzazione, a tempo di decodifica
 /// dei campioni; con OpenH264 portano il tempo del campione che li ha fatti uscire, come sempre.
@@ -2062,10 +2072,9 @@ impl GpuCheck {
 
 impl SampleDecoder {
     /// `header`: SPS e PPS in Annex B (vuoto se viaggiano nei campioni).
-    fn open(header: &[u8]) -> Result<Self, String> {
+    fn open(header: &[u8], gpu: bool) -> Result<Self, String> {
         #[cfg(target_os = "linux")]
-        // Ancora in prova sulle schede vere: si accende con CEDRO_VA_DECODE=1.
-        if crate::sink::shape().gpu && std::env::var_os("CEDRO_VA_DECODE").is_some() && !GPU_DECODE_OFF.with(|off| off.get()) {
+        if gpu {
             let sets: Vec<&[u8]> = annex_nals(header).into_iter().filter(|nal| matches!(nal.first().map(|b| b & 0x1f), Some(7 | 8))).collect();
             if !sets.is_empty() {
                 match crate::gpuenc::H264Decoder::new(&sets) {
