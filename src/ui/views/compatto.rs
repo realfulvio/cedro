@@ -118,7 +118,8 @@ fn frame(f: &mut Frame, app: &App, full: bool) {
         return;
     }
     let go_h = 56.0;
-    let foot = f.h - links_h - go_h - 22.0;
+    // Sotto il pulsante c'è posto per la spia CPU/GPU o per «Ricomincia»: la zona scorrevole si accorcia.
+    let foot = f.h - links_h - go_h - 22.0 - if app.spia().is_some() || app.finished() { 26.0 } else { 0.0 };
     let body = (x, y, cw, foot - y - 4.0);
     super::scrolled(f, body, Scroll::Inspector, |f| convert_body(f, app, x, y, cw, simple));
     // Il pulsante grande e la riga di sotto restano fermi.
@@ -238,7 +239,7 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
     // Standard: da cosa, a cosa, qualità, altre opzioni, destinazione.
     f.text("Converti in", x, y, w, 26.0, 16.0, SEMI, pal.text);
     let half = (w - 56.0) / 2.0;
-    let from = format!("{} {}", vis.len().max(1), conversioni::CATEGORIES[app.category].name.to_lowercase());
+    let from = super::count_noun(vis.len().max(1), conversioni::CATEGORIES[app.category].name);
     f.p.rrect(x, y + 30.0, half, 42.0, 6.0, Some(pal.surface), Some((pal.border, 1.0)));
     f.text(&from, x + 14.0, y + 30.0, half - 20.0, 42.0, 15.0, SANS, pal.muted);
     f.icon(ic::ARROW_RIGHT, x + half + 14.0, y + 39.0, 24.0, pal.muted);

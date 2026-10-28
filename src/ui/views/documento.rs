@@ -395,9 +395,15 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
         f.text(app.files[i].path.extension().and_then(|e| e.to_str()).unwrap_or("").to_uppercase().as_str(), x + 68.0, r.1 + 30.0, 80.0, 56.0, 21.0, SEMI, pal.text);
     }
     f.icon(ic::ARROW_RIGHT, x + w / 2.0 - 16.0, r.1 + 44.0, 32.0, pal.text);
-    let target = id.to_uppercase();
+    // Un archivio esce sempre ZIP: «Foto in WebP» è cosa si fa dentro, non il formato.
+    let archive = app.kind() == Kind::Archive;
+    let target = if archive { "ZIP".to_string() } else { id.to_uppercase() };
     let tx = x + w - 168.0;
-    format_icon_small(f, id, tx, r.1 + 30.0, 56.0);
+    if archive {
+        f.kind_icon(Kind::Archive, tx, r.1 + 30.0, 56.0);
+    } else {
+        format_icon_small(f, id, tx, r.1 + 30.0, 56.0);
+    }
     f.text(&target, tx + 66.0, r.1 + 30.0, 100.0, 56.0, 21.0, SEMI, pal.text);
     let body = (r.0 + 1.0, r.1 + 108.0, r.2 - 2.0, r.3 - 108.0 - 130.0);
     super::scrolled(f, body, Scroll::Inspector, |f| super::options_panel(f, app, x, body.1 + 8.0, w, OPT_STD, true) + 16.0);
@@ -450,7 +456,7 @@ fn footer(f: &mut Frame, app: &App, y: f32, simple: bool) {
         } else {
             f.primary(go, &super::go_label(app), Some(ic::CONVERT), 19.0, Act::Start, !app.targets().is_empty());
         }
-        super::go_extras(f, app, go, false);
+        super::go_extras(f, app, go, true);
     }
 }
 

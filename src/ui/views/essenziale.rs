@@ -313,7 +313,7 @@ fn simplified(f: &mut Frame, app: &App) {
             f.p.rrect(inner_x, fy + 108.0 + 96.0, inner_w * p, 5.0, 2.5, Some(pal.primary), None);
         }
     }
-    let sy = fy + 108.0 + 88.0 + 30.0;
+    let sy = fy + 108.0 + 88.0 + 30.0 + if app.spia().is_some() || app.finished() { 30.0 } else { 0.0 };
     if !super::notice(f, app, (inner_x, sy - 8.0, inner_w, 46.0), 17.0) {
         let line = super::summary_line(app);
         f.text_c(&line, (inner_x, sy, inner_w, 30.0), 20.0, SANS, pal.muted);
