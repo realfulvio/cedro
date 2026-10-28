@@ -64,6 +64,9 @@ fn file_list(f: &mut Frame, app: &App, r: R) {
     super::scrolled(f, list, Scroll::Queue, |f| {
         for (n, &i) in vis.iter().enumerate() {
             let y = list.1 + n as f32 * rh;
+            if !f.p.shows_y(y, rh) {
+                continue;
+            }
             let file = &app.files[i];
             let on = app.selected == Some(i);
             let act = Act::Select(i);

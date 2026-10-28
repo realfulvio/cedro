@@ -1044,7 +1044,7 @@ fn on_drop() {
     }
     let kind = kind_of(&all[0]);
     let list = wheel_list(kind, mode);
-    let Some(slice) = list.get(hover as usize) else {
+    let Some(&slice) = list.get(hover as usize) else {
         return;
     };
     if slice.id == "none" {
@@ -1057,7 +1057,26 @@ fn on_drop() {
         balloon(&text);
         return;
     }
-    let paths = if matches!(slice.id, "dup" | "zip") { all.clone() } else { same_kind_paths(&all) };
+    // Le conversioni girano fuori da questo thread, che ospita gli hook globali e le finestre:
+    // tenerlo occupato bloccherebbe mouse e tastiera di tutto il sistema, e Windows staccherebbe gli hook.
+    std::thread::spawn(move || {
+        // Un lavoro alla volta, come prima: il secondo aspetta che finisca il primo.
+        let _turn = WHEEL_JOB.lock().unwrap_or_else(|e| e.into_inner());
+        // Lo stesso COM del thread del vassoio: ShellExecuteW lo vuole per aprire Esplora file sul file giusto.
+        let com = unsafe { OleInitialize(None) }.is_ok();
+        run_wheel_job(&all, slice, quality, beside);
+        if com {
+            unsafe { OleUninitialize() };
+        }
+    });
+}
+
+/// Una conversione alla volta dalla ruota.
+static WHEEL_JOB: Mutex<()> = Mutex::new(());
+
+/// Il lavoro scelto sulla ruota, file per file, con la linea di avanzamento e il fumetto finale.
+fn run_wheel_job(all: &[PathBuf], slice: Slice, quality: u8, beside: bool) {
+    let paths = if matches!(slice.id, "dup" | "zip") { all.to_vec() } else { same_kind_paths(all) };
     let skipped = all.len().saturating_sub(paths.len());
     let mut notes = Vec::new();
     let mut last_out = None;
