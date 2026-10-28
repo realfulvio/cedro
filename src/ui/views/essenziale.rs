@@ -73,7 +73,6 @@ fn standard(f: &mut Frame, app: &App) {
     super::notice(f, app, (760.0, 88.0, (insp_x + insp_w - 760.0).min(720.0), 44.0), 15.0);
 
     // Le categorie, schede con icona.
-    let icons = [ic::IMAGE, ic::FILE, ic::FILE, ic::MENU, ic::AUDIO, ic::VIDEO];
     let mut tx = 298.0;
     for (i, cat) in conversioni::CATEGORIES.iter().enumerate() {
         let on = i == app.category;
@@ -90,7 +89,7 @@ fn standard(f: &mut Frame, app: &App) {
             f.p.rrect(r.0, r.1, r.2, 52.0, 8.0, Some(pal.alt), None);
         }
         let c = if on { pal.primary } else { pal.text };
-        f.icon(icons[i], tx + 16.0, 164.0, 24.0, c);
+        f.icon(super::category_icon(cat.kind), tx + 16.0, 164.0, 24.0, c);
         f.text(cat.name, tx + 54.0, 150.0, tw + 4.0, 52.0, 18.0, SANS, c);
         if let Some(badge) = badge {
             let bx = tx + 54.0 + tw + 8.0;
