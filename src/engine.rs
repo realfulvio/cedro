@@ -275,7 +275,7 @@ struct Naming {
     /// Dentro `perform_with`: i nomi nuovi si prenotano creando il file, e con «sostituisci» si scrive
     /// in un file temporaneo che prende il posto di quello vecchio solo a lavoro riuscito.
     guarded: bool,
-    /// I nomi prenotati (file vuoti appena creati): se la conversione fallisce e restano vuoti, si tolgono.
+    /// I nomi prenotati (file creati da questo lavoro): se la conversione fallisce si tolgono.
     claimed: Vec<PathBuf>,
     /// Con «sostituisci»: (file temporaneo, file da sostituire).
     pending: Vec<(PathBuf, PathBuf)>,
@@ -849,24 +849,41 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
             ..Default::default()
         })
     });
+    let mut restore = RestoreNaming(Some(before));
     let result = perform_inner(path, action, quality, out_dir, opts);
-    let used = NAMING.with(|n| n.replace(before));
+    let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
     finish_outputs(result, used)
 }
 
+/// Se la conversione va in panico: i nomi tornano com'erano e i file prenotati o temporanei si tolgono.
+struct RestoreNaming(Option<Naming>);
+
+impl Drop for RestoreNaming {
+    fn drop(&mut self) {
+        if let Some(before) = self.0.take() {
+            let used = NAMING.with(|n| n.replace(before));
+            discard_outputs(&used);
+        }
+    }
+}
+
+/// Toglie i file temporanei di «sostituisci» e i nomi prenotati da questo lavoro: li ha creati Cedro
+/// (`create_new`), quindi a lavoro fallito sono vuoti o scritti a metà, mai file dell'utente.
+fn discard_outputs(used: &Naming) {
+    for (tmp, _) in &used.pending {
+        let _ = fs::remove_file(tmp);
+    }
+    for file in &used.claimed {
+        if fs::symlink_metadata(file).is_ok_and(|m| m.is_file()) {
+            let _ = fs::remove_file(file);
+        }
+    }
+}
+
 /// Dopo la conversione: con «sostituisci» i file temporanei prendono il posto di quelli vecchi (solo
-/// se è andata bene), e i nomi prenotati ma rimasti vuoti per un errore si tolgono.
+/// se è andata bene), e con un errore i nomi prenotati (vuoti o scritti a metà) si tolgono.
 fn finish_outputs(result: CedroResult<Output>, used: Naming) -> CedroResult<Output> {
-    let discard = || {
-        for (tmp, _) in &used.pending {
-            let _ = fs::remove_file(tmp);
-        }
-        for file in &used.claimed {
-            if fs::metadata(file).is_ok_and(|m| m.is_file() && m.len() == 0) {
-                let _ = fs::remove_file(file);
-            }
-        }
-    };
+    let discard = || discard_outputs(&used);
     if !used.skipped.is_empty() {
         discard();
         for file in &used.skipped {
@@ -1717,6 +1734,32 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
         let replaced = perform_with(&src, "jpeg", 80, None, &Options { exists: Exists::Replace, ..Default::default() }).unwrap();
         assert!(replaced.path.ends_with("foto.jpg"));
         assert!(!dir.join("foto-3.jpg").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_failed_job_removes_what_it_wrote_halfway() {
+        let dir = scratch();
+        let half = dir.join("foto.jpg");
+        fs::write(&half, b"\xFF\xD8 a meta").unwrap();
+        let mine = dir.join("mia.jpg");
+        fs::write(&mine, b"dell'utente").unwrap();
+        let used = Naming { claimed: vec![half.clone()], ..Default::default() };
+        assert!(finish_outputs(Err(err("disco pieno")), used).is_err());
+        assert!(!half.exists(), "il file scritto a metà non resta");
+        assert!(mine.exists());
+        // Anche con un panico a metà lavoro.
+        fs::write(&half, b"\xFF\xD8 a meta").unwrap();
+        let caught = std::thread::spawn({
+            let half = half.clone();
+            move || {
+                let _restore = RestoreNaming(Some(Naming::default()));
+                NAMING.with(|n| n.borrow_mut().claimed.push(half));
+                panic!("decodificatore");
+            }
+        })
+        .join();
+        assert!(caught.is_err() && !half.exists());
         let _ = fs::remove_dir_all(&dir);
     }
 
