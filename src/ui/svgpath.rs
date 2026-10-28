@@ -104,8 +104,8 @@ fn arc(pb: &mut PathBuilder, x1: f32, y1: f32, mut rx: f32, mut ry: f32, angle: 
     let cx = cos * cxp - sin * cyp + (x1 + x2) / 2.0;
     let cy = sin * cxp + cos * cyp + (y1 + y2) / 2.0;
     let ang = |ux: f32, uy: f32, vx: f32, vy: f32| {
-        let a = (ux * vy - uy * vx).atan2(ux * vx + uy * vy);
-        a
+        
+        (ux * vy - uy * vx).atan2(ux * vx + uy * vy)
     };
     let ux = (x1p - cxp) / rx;
     let uy = (y1p - cyp) / ry;

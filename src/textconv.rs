@@ -1,19 +1,22 @@
 //! Conversioni di testo vere: CSV, JSON, tabelle Markdown e HTML, codifiche di uscita.
 
 use crate::engine::Encoding;
+use std::borrow::Cow;
 
 /// Il testo nella codifica scelta; i caratteri che non ci stanno diventano `?`.
-pub fn encode(text: &str, encoding: Encoding) -> Vec<u8> {
+/// In UTF-8 sono i byte del testo stesso, senza copiarli.
+pub fn encode(text: &str, encoding: Encoding) -> Cow<'_, [u8]> {
     match encoding {
-        Encoding::Utf8 => text.as_bytes().to_vec(),
-        Encoding::Latin1 => text.chars().map(|c| if (c as u32) < 0x100 { c as u32 as u8 } else { b'?' }).collect(),
-        Encoding::Windows1252 => text
-            .chars()
-            .map(|c| match c as u32 {
-                0..=0x7F | 0xA0..=0xFF => c as u32 as u8,
-                _ => (0x80u8..=0x9F).find(|b| crate::doctext::cp1252(*b) == c).unwrap_or(b'?'),
-            })
-            .collect(),
+        Encoding::Utf8 => Cow::Borrowed(text.as_bytes()),
+        Encoding::Latin1 => Cow::Owned(text.chars().map(|c| if (c as u32) < 0x100 { c as u32 as u8 } else { b'?' }).collect()),
+        Encoding::Windows1252 => Cow::Owned(
+            text.chars()
+                .map(|c| match c as u32 {
+                    0..=0x7F | 0xA0..=0xFF => c as u32 as u8,
+                    _ => (0x80u8..=0x9F).find(|b| crate::doctext::cp1252(*b) == c).unwrap_or(b'?'),
+                })
+                .collect(),
+        ),
     }
 }
 
