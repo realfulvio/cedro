@@ -3064,6 +3064,27 @@ mod format_tests {
     }
 
     #[test]
+    fn zip_conversion_keeps_both_when_names_collide() {
+        let dir = scratch();
+        let png = fs::read(sample_png(&dir, "a.png", 32, 24, false)).unwrap();
+        let webp_src = perform_with(&dir.join("a.png"), "webp", 80, Some(&dir.join("w")), &opts()).unwrap().path;
+        let webp = fs::read(webp_src).unwrap();
+        for (label, entries) in [("png-prima", [("foto.png", png.as_slice()), ("foto.webp", webp.as_slice())]), ("webp-prima", [("foto.webp", webp.as_slice()), ("foto.png", png.as_slice())])] {
+            let zip = dir.join(format!("{label}.zip"));
+            fs::write(&zip, crate::zipstore::zip_archive(&entries)).unwrap();
+            let out = perform_with(&zip, "z-webp", 80, Some(&dir.join(label)), &opts()).expect(label);
+            let names = zip_names(&out.path);
+            assert_eq!(names.len(), 2, "{label}: {names:?}");
+            assert!(names.contains(&"foto.webp".to_string()), "{label}: {names:?}");
+            // L'originale WebP resta intatto, byte per byte.
+            let mut archive = zip::ZipArchive::new(fs::File::open(&out.path).unwrap()).unwrap();
+            let mut kept = Vec::new();
+            std::io::Read::read_to_end(&mut archive.by_name("foto.webp").unwrap(), &mut kept).unwrap();
+            assert_eq!(kept, webp, "{label}");
+        }
+    }
+
+    #[test]
     fn output_names_follow_the_template() {
         let dir = scratch();
         let src = sample_png(&dir, "gita.png", 16, 16, false);

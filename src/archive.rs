@@ -115,8 +115,10 @@ fn convert_in(
     let (mut converted, mut kept) = (0usize, 0usize);
     let mut failures: Vec<(String, String)> = Vec::new();
     let total = files.len();
-    for (i, rel) in files.iter().enumerate() {
-        crate::progress::report(i as f32 / total as f32);
+    // Prima si copiano i file che restano com'erano: così i loro nomi sono già presi e una conversione
+    // (per esempio «foto.png» in WebP) non può sovrascrivere un «foto.webp» che c'è nello ZIP, in qualunque ordine stiano.
+    let mut to_convert: Vec<&PathBuf> = Vec::new();
+    for rel in &files {
         let src = inside.join(rel);
         let out_dir = outside.join(rel.parent().unwrap_or(Path::new("")));
         fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
@@ -126,16 +128,25 @@ fn convert_in(
             other => ext == other,
         };
         if kinds.contains(&engine::kind_of(&src)) && !already {
-            match engine::perform_with(&src, format, quality, Some(&out_dir), &inner) {
-                Ok(_) => {
-                    converted += 1;
-                    continue;
-                }
-                Err(e) => failures.push((entry_name(rel), e.0)),
+            to_convert.push(rel);
+        } else {
+            fs::copy(&src, out_dir.join(src.file_name().unwrap_or_default())).map_err(|e| e.to_string())?;
+            kept += 1;
+        }
+    }
+    for (i, rel) in to_convert.into_iter().enumerate() {
+        crate::progress::report(i as f32 / total as f32);
+        let src = inside.join(rel);
+        let out_dir = outside.join(rel.parent().unwrap_or(Path::new("")));
+        match engine::perform_with(&src, format, quality, Some(&out_dir), &inner) {
+            Ok(_) => converted += 1,
+            Err(e) => {
+                failures.push((entry_name(rel), e.0));
+                // L'originale resta: il suo nome ha l'estensione di partenza, diversa da quella di uscita.
+                fs::copy(&src, out_dir.join(src.file_name().unwrap_or_default())).map_err(|e| e.to_string())?;
+                kept += 1;
             }
         }
-        fs::copy(&src, out_dir.join(src.file_name().unwrap_or_default())).map_err(|e| e.to_string())?;
-        kept += 1;
     }
     if converted == 0 && failures.is_empty() {
         return Err(match kinds[0] {
