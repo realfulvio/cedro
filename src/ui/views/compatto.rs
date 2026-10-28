@@ -199,6 +199,7 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
             let (size, extra) = super::file_meta(app, i);
             let sub = if file.state == FileState::Waiting { [size, extra].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("  ·  ") } else { file.message.clone() };
             f.text(&sub, x + 66.0, y + 34.0, w - 66.0 - 56.0, 22.0, 13.5, SANS, if file.state == FileState::Waiting { pal.muted } else { f.state_color(file.state) });
+            f.row_bar(file, x + 66.0, y + 55.0, w - 66.0 - 56.0, 4.0);
             let cx = x + w - 30.0;
             if file.state == FileState::Waiting {
                 let rm = Act::Remove(i);

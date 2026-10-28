@@ -126,6 +126,9 @@ Incolla prima un link di YouTube.	Paste a YouTube link first.
 Fatto · {}	Done · {}
 Saltato · {}	Skipped · {}
 In corso · {#}%	In progress · {}%
+In corso · {#}% · meno di un minuto	In progress · {}% · less than a minute left
+In corso · {#}% · circa {#} min	In progress · {}% · about {} min left
+In corso · {#}% · circa {#} h {#} min	In progress · {}% · about {}h {} min left
 In corso	In progress
 Fatto	Done
 Fatto · 1 file	Done · 1 file
@@ -1154,3 +1157,4 @@ Opus si scrive su Windows, su Linux e su Android	Opus is written on Windows, Lin
 Apri risultato	Open result
 Ricomincia	Start over
 codifica video	video encoding
+Un altro lavoro è in corso: la trascrizione parte appena finisce	Another job is running: the transcription will start as soon as it finishes

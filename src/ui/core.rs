@@ -510,6 +510,15 @@ impl<'a> Frame<'a> {
         }
     }
 
+    /// La barra di un file in lavoro, dentro la sua riga: sotto il nome e lo stato, larga quanto il testo.
+    pub fn row_bar(&mut self, file: &crate::ui::model::FileItem, x: f32, y: f32, w: f32, h: f32) {
+        let (FileState::Running, Some(p)) = (file.state, file.percent) else { return };
+        let pal = self.pal;
+        let r = h / 2.0;
+        self.p.rrect(x, y, w, h, r, Some(pal.border), None);
+        self.p.rrect(x, y, (w * p.clamp(0.0, 1.0)).max(h), h, r, Some(pal.primary), None);
+    }
+
     /// La parola dello stato.
     pub fn state_word(state: FileState) -> &'static str {
         match state {

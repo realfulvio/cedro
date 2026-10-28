@@ -28,6 +28,7 @@ pub fn to_mp4(input: &Path, output: &Path) -> Result<(), String> {
 }
 
 fn to_mp4_with(input: &Path, output: &Path) -> Result<(), String> {
+    crate::sink::note_source(input);
     let mf = to_mp4_mf(input, output);
     if mf.is_ok() {
         return mf;
@@ -235,6 +236,7 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
             None => (width, height),
         };
         let frame = ((enc_w as u64) << 32) | (enc_h as u64);
+        crate::sink::cap_for(enc_w as u64 * enc_h as u64, width as u64 * height as u64);
 
         let mut audio_in = None;
         let has_audio = !crate::sink::shape().mute && reader.GetNativeMediaType(audio_stream, 0).is_ok();
@@ -497,6 +499,9 @@ fn pump(
                             .map_err(|e| format!("tempo del fotogramma: {e}"))?;
                         ticks = ticks.saturating_add(step);
                     }
+                }
+                if let Ok(time) = sample.GetSampleTime() {
+                    crate::sink::frame_progress(time);
                 }
                 if let Some(g) = gate.as_deref_mut() {
                     if let Ok(time) = sample.GetSampleTime() {
@@ -793,6 +798,7 @@ impl EncodedVideo {
         let duration = if frame_duration > 0 { frame_duration } else { 333_333 }.max(gate.gap());
         let rate = rate_from_ticks(duration as u64);
         let frame = ((enc_w as u64) << 32) | (enc_h as u64);
+        crate::sink::cap_for(enc_w as u64 * enc_h as u64, width as u64 * height as u64);
         let wide_out = wide(output);
         unsafe {
             let writer = create_writer(&wide_out)?;
@@ -861,6 +867,7 @@ impl EncodedVideo {
         if width != self.src_w || height != self.src_h {
             return Err("il video cambia dimensione".into());
         }
+        crate::sink::frame_progress(time);
         if !self.gate.pass(time) {
             return Ok(());
         }

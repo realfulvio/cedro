@@ -16,12 +16,9 @@ Il Comune di Bondeno non è più un'edizione a parte: è un tema di Cedro, in Im
 
 ## Novità della {versione}
 
-- **Meno memoria con gli audio lunghi**: anteprima dell'onda e conversione WAV standard lavorano a pacchetti. Anche la preparazione dell'audio per la trascrizione conserva solo i campioni necessari al filtro, senza cambiare precisione o modello.
-- **Una coda comune per i lavori pesanti**: ruota e pannelli si coordinano; i lavori in attesa si possono annullare. Gli aggiornamenti silenziosi aspettano anche le conversioni dei pannelli e le trascrizioni.
-- **iGPU e Vulkan restano attivi**: se la RAM libera è limitata Cedro può usare la CPU con lo stesso modello; se il motore GPU si interrompe riprova il file sulla CPU, mantenendo la precisione scelta.
+- **Barra di avanzamento per i video**: nella riga del file che si sta convertendo compaiono percentuale e tempo che resta (in tutti i temi, su Windows e Linux), e la barra del lavoro intero avanza con il file. Prima restava «In corso» senza segni di vita per tutta la durata.
+- **File più piccoli a 720p**: se il video di partenza è già molto compresso, il bitrate di uscita non lo supera più di troppo (un 1080p60 da 666 MB diventava 617 MB; ora circa un terzo in meno). Con sorgenti ricche il risultato non cambia.
+- **Ridimensionamento più veloce** (stesso risultato bit per bit): le righe si dividono fra i core.
+- **«In attesa» vero**: se un altro lavoro pesante occupa il turno (per esempio una trascrizione), il file resta «In attesa» invece di mostrare «In corso»; e la trascrizione lo dice in «Cosa sta succedendo».
 
-- **Aggiornamenti silenziosi**: all'accensione del computer Cedro non disturba più. Aspetta due minuti, controlla e scarica a priorità minima, senza finestre né richieste; su Windows installa quando non c'è una conversione in corso e si riapre da solo, su Linux installa e parte aggiornato al prossimo avvio. Al massimo compare un avviso discreto «Cedro è stato aggiornato alla …». Dal menu «Controlla aggiornamenti» resta la domanda di sempre.
-
-- **Tutti i temi controllati con le ultime voci** (Archivi, ZIP, nome da modello, spia CPU/GPU, «Apri risultato» e «Ricomincia», menu del tasto destro): sistemate le sovrapposizioni nella finestrina del Compatto, in Windows essenziale (Semplificata) e in Documento al centro, dove spia e «Ricomincia» non si vedevano.
-- Archivi: l'intestazione dice ZIP → ZIP, i nomi delle schede nel Percorso guidato non si tagliano più, «1 archivio» e «1 immagine» al singolare.
-- Inglese: tradotte le voci del menu del tasto destro e «Impostazioni archivi»; etichette accorciate perché non si taglino.
+Dalla 0.26.4: audio a pacchetti (meno memoria), coda comune dei lavori pesanti, iGPU e Vulkan restano attivi, aggiornamenti silenziosi (invariati).
