@@ -365,6 +365,10 @@ pub fn pdf_text(path: &Path) -> Result<String, String> {
 /// Il testo incorporato di ogni pagina, in ordine. Vuoto se la pagina non ne ha.
 pub fn pdf_page_texts(path: &Path) -> Result<Vec<String>, String> {
     let doc = lopdf::Document::load(path).map_err(|e| format!("PDF non letto: {e}"))?;
+    // Da lopdf 0.46 un PDF con la password di apertura, letto senza, non ha pagine: lo si dice chiaro.
+    if doc.is_encrypted() && doc.get_pages().is_empty() {
+        return Err("il PDF è protetto da una password di apertura".into());
+    }
     let mut pages: Vec<u32> = doc.get_pages().keys().copied().collect();
     pages.sort_unstable();
     Ok(pages
@@ -1094,6 +1098,18 @@ mod block_tests {
         let pages = pdf_page_texts(&locked).unwrap();
         assert_eq!(pages.len(), 1);
         assert!(pages[0].contains("Ordinanza"), "{pages:?}");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_pdf_with_an_open_password_says_so() {
+        let d = dir();
+        let src = d.join("nota.rtf");
+        fs::write(&src, br"{\rtf1\ansi Verbale riservato}").unwrap();
+        let plain = perform_with(&src, "pdf", 80, None, &Options::default()).unwrap();
+        let locked = d.join("chiuso.pdf");
+        fs::write(&locked, crate::pdf::protect(&fs::read(&plain.path).unwrap(), "segreta").unwrap()).unwrap();
+        assert_eq!(pdf_page_texts(&locked).unwrap_err(), "il PDF è protetto da una password di apertura");
         let _ = fs::remove_dir_all(&d);
     }
 
