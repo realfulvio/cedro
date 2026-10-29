@@ -67,9 +67,18 @@ pub enum Failure {
     Other(String),
 }
 
+fn requested_language(request: &Value) -> Result<&str, Failure> {
+    let lang = request["lang"].as_str().unwrap_or("auto");
+    // whisper-rs constructs a CString and panics on NUL, even for a valid JSON string.
+    if lang.contains('\0') {
+        return Err(Failure::Other("lingua non valida: contiene un byte nullo".into()));
+    }
+    Ok(lang)
+}
+
 fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize) -> Result<String, Failure> {
     let file = request["file"].as_str().ok_or_else(|| Failure::Other("manca il file".into()))?;
-    let wanted = request["lang"].as_str().unwrap_or("auto");
+    let wanted = requested_language(request)?;
     let begin = Instant::now();
     let samples = decode::to_16k_mono(Path::new(file))?;
     if samples.len() < decode::RATE as usize / 10 {
@@ -155,4 +164,17 @@ fn value(args: &[String], name: &str) -> Option<String> {
 fn default_threads() -> usize {
     let n = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
     n.saturating_sub(1).clamp(1, 8)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn json_language_with_nul_is_an_error_not_a_panic() {
+        let request: Value = serde_json::from_str(r#"{"lang":"it\u0000"}"#).unwrap();
+        assert!(requested_language(&request).is_err());
+        assert_eq!(requested_language(&json!({})).ok(), Some("auto"));
+        assert_eq!(requested_language(&json!({"lang": "it"})).ok(), Some("it"));
+    }
 }
