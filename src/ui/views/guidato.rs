@@ -95,6 +95,8 @@ fn format_icon(f: &mut Frame, id: &str, x: f32, y: f32, s: f32) {
         "docx" | "doc" => f.word_icon(x, y, s),
         "txt" | "html" | "rtf" => f.text_icon(x, y, s),
         "pdf" => f.pdf_icon(x + s * 0.12, y + s * 0.05, s * 0.9),
+        "merge" => f.icon(super::pagine::MERGE, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
+        "split" => f.icon(super::pagine::SCISSORS, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
         "mp3" | "wav" | "m4a" | "ogg" | "flac" => f.icon(ic::AUDIO, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
         "mp4" | "mkv" => f.icon(ic::VIDEO, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
         _ => f.image_icon(x, y, s),
@@ -103,7 +105,7 @@ fn format_icon(f: &mut Frame, id: &str, x: f32, y: f32, s: f32) {
 
 fn choice_cards(f: &mut Frame, app: &App, r: R) {
     let pal = f.pal;
-    let list = conversioni::simple_formats(app.kind());
+    let list = app.simple_choices();
     let n = list.len().max(1) as f32;
     let gap = 14.0;
     let w = (r.2 - gap * (n - 1.0)) / n;
@@ -159,6 +161,12 @@ fn step_files(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, s
                 let (size, extra) = super::file_meta(app, i);
                 f.text(&size, x + w - 360.0, ry, 130.0, 100.0, 17.0, SANS, pal.muted);
                 f.text(&extra, x + w - 230.0, ry, 130.0, 100.0, 17.0, SANS, pal.muted);
+                if app.kind() == Kind::Pdf && app.action == "merge" && rows.len() > 1 {
+                    super::pagine::grip(f, app, i, x, ry + 50.0, 100.0);
+                    super::pagine::order_badge(f, n, x + 24.0, ry + 18.0, 14.0);
+                    super::pagine::drop_line(f, n, i, rows.len(), y, 100.0, x, w);
+                    super::pagine::order_arrows(f, app, i, x + w - 132.0, ry + 50.0, 26.0);
+                }
                 let act = Act::Remove(i);
                 if f.hovered(&act) {
                     f.p.circle(x + w - 48.0, ry + 50.0, 18.0, Some(pal.alt), None);
@@ -203,7 +211,12 @@ fn step_action(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, 
     f.select((x + w - sw - 24.0, y + 12.0, sw, 40.0), "Altri formati e strumenti", None, 16.0, Act::FormatMenu);
     let body = (x + 1.0, y + 62.0, w - 2.0, card.3 - 66.0);
     let cw = (w - 56.0).min(720.0);
-    super::scrolled(f, body, Scroll::Inspector, |f| super::options_panel(f, app, x + 28.0, y + 70.0, cw, OPT_STD, false) + 20.0);
+    super::scrolled(f, body, Scroll::Inspector, |f| {
+        // Unire e dividere: prima l'ordine dei file o la striscia delle pagine, poi le opzioni.
+        let extra = super::page_extras(f, app, x + 28.0, y + 70.0, cw, OPT_STD);
+        let top = y + 70.0 + if extra > 0.0 { extra + OPT_STD.gap } else { 0.0 };
+        top - (y + 70.0) + super::options_panel(f, app, x + 28.0, top, cw, OPT_STD, false) + 20.0
+    });
 }
 
 fn step_save(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, simple: bool) {

@@ -129,7 +129,9 @@ impl Screen {
 
     /// Disegna il fotogramma in un'immagine di `w`×`h` pixel con `scale` pixel per unità.
     pub fn render(&mut self, w: u32, h: u32, scale: f32) -> Painter<'_> {
+        self.app.simple_view = self.simple;
         self.want_preview();
+        self.want_page_thumbs();
         self.clamp_scrolls();
         let fonts = Fonts::for_theme(self.theme == ThemeId::Bondeno);
         self.cache.trim(scale);
@@ -201,6 +203,37 @@ impl Screen {
         }
     }
 
+    /// Unire e dividere i PDF mostrano le pagine: la striscia del file in evidenza (Dividi) e il file unito (Unisci).
+    fn want_page_thumbs(&mut self) {
+        let app = &mut self.app;
+        if app.activity != Activity::Convert || app.kind() != crate::engine::Kind::Pdf || self.simple {
+            return;
+        }
+        match app.pdf_mode() {
+            super::model::PdfMode::Split => {
+                let Some(i) = app.selected.filter(|i| app.visible().contains(i)).or(app.visible().first().copied()) else { return };
+                let Some(n) = app.page_count(i) else { return };
+                let path = app.files[i].path.clone();
+                app.want_page_thumbs(&path, 0..n.min(super::views::STRIP_MAX));
+            }
+            super::model::PdfMode::Merge => {
+                let mut budget = super::views::MERGED_MAX;
+                for i in app.targets() {
+                    let Some(n) = app.page_count(i) else { continue };
+                    let pages = super::views::merged_pages(app, i, n);
+                    let take: Vec<usize> = pages.into_iter().take(budget).collect();
+                    budget -= take.len();
+                    let path = app.files[i].path.clone();
+                    app.want_page_thumbs(&path, take);
+                    if budget == 0 {
+                        break;
+                    }
+                }
+            }
+            super::model::PdfMode::Convert => {}
+        }
+    }
+
     /// Vero se la finestra va ridisegnata spesso (rotelline, cursore che lampeggia).
     pub fn animating(&self) -> bool {
         self.animating
@@ -235,6 +268,10 @@ impl Screen {
     /// Il mouse si muove: vero se cambia qualcosa da ridisegnare.
     pub fn pointer_move(&mut self, x: f32, y: f32) -> bool {
         if let Some((act, r)) = self.ui.drag.clone() {
+            if matches!(act, Act::RowDrag(..)) {
+                self.ui.drag_y.1 = y;
+                return true;
+            }
             self.slide(&act, r, x);
             return true;
         }
@@ -257,12 +294,25 @@ impl Screen {
         self.ui.pressed = hit.as_ref().map(|h| h.0.clone());
         if let Some((act, HitKind::Slider, r)) = hit {
             self.ui.drag = Some((act.clone(), r));
-            self.slide(&act, r, x);
+            if matches!(act, Act::RowDrag(..)) {
+                self.ui.drag_y = (y, y);
+            } else {
+                self.slide(&act, r, x);
+            }
         }
     }
 
     pub fn pointer_up(&mut self, x: f32, y: f32, plat: &mut dyn Platform) {
         if let Some((act, _)) = self.ui.drag.take() {
+            if let Act::RowDrag(i, row_h) = act {
+                // Lasciata la riga: va al posto più vicino a dove è arrivata (un clic fermo non sposta niente).
+                let rows = ((self.ui.drag_y.1 - self.ui.drag_y.0) / row_h.max(1) as f32).round() as i32;
+                if rows != 0 {
+                    self.app.move_file(i, rows);
+                }
+                self.ui.pressed = None;
+                return;
+            }
             if act == Act::MediaSeek {
                 if let Some(frac) = self.app.media_scrub.take() {
                     self.app.media_seek(frac);
@@ -389,7 +439,7 @@ impl Screen {
         self.simple = simple;
         self.ui.menu = None;
         // In Semplificata la scelta deve stare tra quelle proposte; le opzioni scelte restano.
-        if simple && !was_simple && !conversioni::simple_formats(self.app.kind()).iter().any(|f| f.id == self.app.action) {
+        if simple && !was_simple && !self.app.simple_choices().iter().any(|f| f.id == self.app.action) {
             let keep = conversioni::formats(self.app.kind()).iter().chain(conversioni::tools(self.app.kind())).any(|s| s.id == self.app.action);
             if !keep {
                 self.app.action = self.app.default_action(true);
@@ -424,7 +474,7 @@ impl Screen {
         let kind = self.app.kind();
         let mut items: Vec<(String, Act)> = Vec::new();
         if self.simple {
-            for f in conversioni::simple_formats(kind) {
+            for f in self.app.simple_choices() {
                 items.push((format!("{} · {}", f.title, f.note), Act::Action(f.id)));
             }
         } else {
@@ -460,6 +510,10 @@ impl Screen {
                 app.set_category(i, simple);
             }
             Act::Action(id) => app.set_action(id),
+            Act::PdfMode(mode) => app.set_pdf_mode(mode, simple),
+            Act::MoveFile(i, d) => app.move_file(i, d),
+            Act::RowDrag(..) => {}
+            Act::Cut(i, after) => app.toggle_cut(i, after),
             Act::FormatMenu => {
                 let items = self.action_items();
                 let sel = items.iter().position(|(_, a)| matches!(a, Act::Action(id) if *id == self.app.action));
@@ -507,6 +561,10 @@ impl Screen {
             Act::OptPick(opt, v) => {
                 if let Some(def) = app.option_defs().into_iter().find(|d| d.opt == opt) {
                     app.values.set(def, v);
+                }
+                // Un altro modo di dividere: i tagli della striscia valgono solo per gli intervalli.
+                if opt == crate::conversioni::Opt::SplitHow && v != 2 {
+                    app.cuts.clear();
                 }
             }
             Act::OptSlider(_) | Act::Quality | Act::MediaSeek => {}
@@ -693,6 +751,7 @@ impl Screen {
         match field {
             Field::Opt(opt) => self.app.option_defs().into_iter().find(|d| d.opt == opt).map(|d| self.app.values.text(d).to_string()).unwrap_or_default(),
             Field::Link(web) => self.app.links(web).typed.clone(),
+            Field::FilePages(i) => self.app.files.get(i).map(|f| f.pages.clone()).unwrap_or_default(),
         }
     }
 
@@ -702,8 +761,16 @@ impl Screen {
                 if let Some(def) = self.app.option_defs().into_iter().find(|d| d.opt == opt) {
                     self.app.values.set_text(def, &text);
                 }
+                if opt == crate::conversioni::Opt::SplitRanges {
+                    self.app.ranges_typed();
+                }
             }
             Field::Link(web) => self.app.links_mut(web).typed = text,
+            Field::FilePages(i) => {
+                if let Some(f) = self.app.files.get_mut(i) {
+                    f.pages = text;
+                }
+            }
         }
     }
 
