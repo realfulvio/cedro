@@ -139,6 +139,31 @@ mod tests {
         assert!(acquire(Some(&cancelled)).is_some());
     }
     #[test]
+    fn a_waiting_job_can_cancel_without_releasing_the_owner() {
+        let owner = acquire(None).unwrap();
+        let cancelled = AtomicBool::new(false);
+        std::thread::scope(|s| {
+            let waiter = s.spawn(|| acquire(Some(&cancelled)).is_none());
+            cancelled.store(true, Ordering::Relaxed);
+            assert!(waiter.join().unwrap());
+            s.spawn(|| assert!(try_acquire().is_none())).join().unwrap();
+        });
+        drop(owner);
+    }
+
+    #[test]
+    fn unwinding_releases_nested_jobs() {
+        let owner = acquire(None).unwrap();
+        assert!(std::panic::catch_unwind(|| {
+            let _nested = acquire(None).unwrap();
+            panic!("decoder failed");
+        }).is_err());
+        std::thread::spawn(|| assert!(try_acquire().is_none())).join().unwrap();
+        drop(owner);
+        assert!(acquire(None).is_some());
+    }
+
+    #[test]
     fn memory_policy_keeps_gpu_when_budget_allows() {
         assert!(gpu_headroom(Some(4 << 30), 574_000_000));
         assert!(!gpu_headroom(Some(1 << 30), 574_000_000));

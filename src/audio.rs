@@ -606,11 +606,10 @@ fn vorbis_comments(tags: &Tags) -> Vec<u8> {
 pub fn to_aiff(input: &Path, output: &Path, opts: &crate::engine::Options) -> Result<(), String> {
     let pcm = shape(decode(input)?, opts)?;
     let channels = pcm.channels.max(1);
-    let frames = (pcm.samples.len() / channels as usize) as u32;
-    let data_len = pcm.samples.len() as u32 * 2;
-    let mut out = Vec::with_capacity(54 + data_len as usize);
+    let (frames, data_len, form_len) = aiff_sizes(pcm.samples.len(), channels)?;
+    let mut out = Vec::with_capacity(54);
     out.extend_from_slice(b"FORM");
-    out.extend_from_slice(&(4 + 26 + 8 + 8 + data_len).to_be_bytes());
+    out.extend_from_slice(&form_len.to_be_bytes());
     out.extend_from_slice(b"AIFF");
     out.extend_from_slice(b"COMM");
     out.extend_from_slice(&18u32.to_be_bytes());
@@ -621,10 +620,22 @@ pub fn to_aiff(input: &Path, output: &Path, opts: &crate::engine::Options) -> Re
     out.extend_from_slice(b"SSND");
     out.extend_from_slice(&(8 + data_len).to_be_bytes());
     out.extend_from_slice(&[0; 8]);
+    // Avoid duplicating the whole PCM buffer just to change its byte order.
+    use std::io::Write;
+    let mut file = std::io::BufWriter::new(File::create(output).map_err(|e| e.to_string())?);
+    file.write_all(&out).map_err(|e| e.to_string())?;
     for s in &pcm.samples {
-        out.extend_from_slice(&s.to_be_bytes());
+        file.write_all(&s.to_be_bytes()).map_err(|e| e.to_string())?;
     }
-    std::fs::write(output, out).map_err(|e| e.to_string())
+    file.flush().map_err(|e| e.to_string())
+}
+
+fn aiff_sizes(samples: usize, channels: u16) -> Result<(u32, u32, u32), String> {
+    let too_large = || "audio troppo lungo per AIFF (limite di 4 GiB)".to_string();
+    let data_len = samples.checked_mul(2).and_then(|n| u32::try_from(n).ok()).ok_or_else(too_large)?;
+    let form_len = data_len.checked_add(46).ok_or_else(too_large)?;
+    let frames = u32::try_from(samples / channels.max(1) as usize).map_err(|_| too_large())?;
+    Ok((frames, data_len, form_len))
 }
 
 /// Un intero come numero a 80 bit (IEEE extended), come lo vuole la frequenza di campionamento dell'AIFF.
@@ -796,6 +807,31 @@ pub fn to_opus(_input: &Path, _output: &Path, _quality: u8, _opts: &crate::engin
 #[cfg(test)]
 mod out_tests {
     use super::*;
+
+    #[test]
+    fn aiff_sizes_include_chunk_headers_without_overflow() {
+        assert_eq!(aiff_sizes(4, 2).unwrap(), (2, 8, 54));
+        let limit = ((u32::MAX - 46) / 2) as usize;
+        assert_eq!(aiff_sizes(limit, 1).unwrap().2, u32::MAX - 1);
+        for samples in [limit + 1, 1usize << 31, usize::MAX] {
+            assert!(aiff_sizes(samples, 2).is_err());
+        }
+    }
+
+    #[test]
+    fn aiff_roundtrip_preserves_samples_and_header_lengths() {
+        let dir = std::env::temp_dir().join(format!("cedro-aiff-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("input.wav");
+        let aiff = dir.join("output.aiff");
+        let pcm = Pcm::new(44100, 2, vec![i16::MIN, i16::MAX, 0, -1, 1234, -2345]);
+        write_wav(&wav, &pcm).unwrap();
+        to_aiff(&wav, &aiff, &crate::engine::Options::default()).unwrap();
+        let bytes = std::fs::read(&aiff).unwrap();
+        assert_eq!(u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as usize, bytes.len() - 8);
+        assert_eq!(decode(&aiff).unwrap().samples, pcm.samples);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn extended_float_for_common_rates() {

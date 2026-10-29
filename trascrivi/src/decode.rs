@@ -20,7 +20,10 @@ pub const RATE: u32 = 16_000;
 pub fn to_16k_mono(path: &Path) -> Result<Vec<f32>, Failure> {
     let mut resampler: Option<StreamResampler> = None;
     decode_mono(path, &mut |chunk, rate| {
-        let r = resampler.get_or_insert_with(|| StreamResampler::new(rate, RATE));
+        if resampler.is_none() {
+            resampler = Some(StreamResampler::new(rate, RATE).map_err(Failure::Other)?);
+        }
+        let r = resampler.as_mut().expect("resampler initialized");
         if r.from != rate { return Err(Failure::Other("frequenza audio cambiata durante la lettura".into())); }
         r.push(chunk);
         Ok(())
@@ -49,7 +52,6 @@ fn decode_mono(path: &Path, each: &mut dyn FnMut(&[f32], u32) -> Result<(), Fail
     if track.codec_params.codec == CODEC_TYPE_OPUS {
         return opus_mono(format.as_mut(), track.id, track.codec_params.delay.unwrap_or(0) as usize, each);
     }
-    let rate = track.codec_params.sample_rate.unwrap_or(RATE);
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
         .map_err(|e| Failure::Unsupported(format!("codifica audio non supportata ({e})")))?;
@@ -80,7 +82,7 @@ fn decode_mono(path: &Path, each: &mut dyn FnMut(&[f32], u32) -> Result<(), Fail
         buf.copy_interleaved_ref(decoded);
         mono.clear();
         mono.extend(buf.samples().chunks_exact(channels).map(|f| f.iter().sum::<f32>() / channels as f32));
-        each(&mono, rate)?;
+        each(&mono, spec.rate)?;
     }
     Ok(())
 }
