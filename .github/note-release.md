@@ -12,13 +12,16 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-Correzioni di solidità per audio, trascrizione e gestione dei lavori, senza cambiare funzioni o aspetto.
+**Unire e dividere i PDF.** Nella scheda PDF, in cima al pannello di destra, ora ci sono tre pulsanti: «Cosa vuoi fare: Converti · Unisci · Dividi».
 
-- **YouTube e Video dal web**: l'aggiornamento automatico aspetta che il download e la pulizia dei file temporanei siano finiti. Un download in attesa del turno si può annullare.
-- **Ruota su Linux**: le operazioni rispettano lo stesso turno delle conversioni e della trascrizione, evitando lavori pesanti contemporanei nello stesso processo.
-- **Audio**: i file troppo grandi per AIFF vengono segnalati senza scrivere intestazioni errate; la scrittura non duplica più l'intero audio in memoria.
-- **Trascrizione**: il motore viene chiuso anche se il lavoro si interrompe con un errore interno. Il ricampionamento rifiuta frequenze nulle e controlla quella effettivamente decodificata; una richiesta con una lingua contenente byte nulli restituisce un errore invece di chiudere il motore.
-- **Campo dei link**: corretto un errore di disegno del cursore che interrompeva le build di debug quando si modificava il testo.
+- **Unisci**: l'ordine lo decidi tu, trascinando le righe dalla maniglia o con le frecce. Il numero colorato su ogni file indica il suo posto nel file unito. Per ogni file puoi scegliere quali pagine entrano (per esempio 1-3,5), e una striscia ti mostra le pagine del file unito. Ogni file diventa un segnalibro; i segnalibri, i moduli compilabili e i link interni restano. Volendo si aggiunge una pagina bianca per la stampa fronte-retro e si protegge il risultato con una password.
+- **Dividi**: sotto il file compare la striscia delle sue pagine, e un clic tra due pagine mette o toglie un taglio. Puoi anche dividere ogni pagina, ogni N pagine, per intervalli (1-3, 4-6, 7-), ai segnalibri, oppure togliere delle pagine.
+- I PDF protetti chiedono la password. Gli originali non vengono mai toccati.
+- **Ruota** (Ctrl sui PDF): «Unisci» mette insieme i PDF scelti nell'ordine dei nomi, «Dividi» fa un file per pagina.
+- **Modalità Semplice**: compaiono «Un solo PDF» (con almeno due PDF) e «Dividi».
+- Tutto è scritto in Rust (lopdf per le pagine, hayro per le miniature) e funziona su Windows, Windows on ARM e Linux.
+
+Restano le novità della 0.26.9: correzioni di solidità per audio, trascrizione e gestione dei lavori, senza cambiare funzioni o aspetto.
 
 Restano le novità della 0.26.8: revisione di solidità di video e VA-API, conversioni, PDF e documenti, download dal web e interfacce Windows e Linux.
 
