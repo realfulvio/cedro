@@ -367,11 +367,13 @@ fn pages_card(f: &mut Frame, app: &App, q: R) {
             let big = (list.3 - 150.0).clamp(220.0, 410.0);
             super::pagine::stamp_view(f, app, i, q.0 + 24.0, list.1 + 12.0, q.2 - 48.0, big, 64.0) + 24.0
         } else {
-            // Il banco centrato nella scheda: posti larghi 150 come nella tavola.
-            let per_row = (((q.2 - 68.0 + 38.0) / 150.0) as usize).max(1);
-            let used = per_row as f32 * 150.0 - 38.0;
+            // Il banco centrato nella scheda, con le pagine più grandi che ci stanno tutte.
+            let n = app.board(i).map_or(1, |b| b.pages.len().min(super::BOARD_MAX));
+            let pw = board_page_width(q.2 - 68.0, list.3 - 57.0 - 70.0, n);
+            let per_row = (((q.2 - 68.0 + 38.0) / (pw + 38.0)) as usize).clamp(1, n.max(1));
+            let used = per_row as f32 * (pw + 38.0) - 38.0;
             let x = q.0 + ((q.2 - used) / 2.0).round();
-            super::pagine::board(f, app, i, x, list.1 + 57.0, used, 112.0) + 70.0
+            super::pagine::board(f, app, i, x, list.1 + 57.0, used, pw) + 70.0
         }
     });
     let hint = if stamped {
@@ -380,6 +382,21 @@ fn pages_card(f: &mut Frame, app: &App, q: R) {
         "Clic su una pagina per sceglierla (ancora per toglierla dalla scelta), trascina per spostarla. I pulsanti in alto valgono per la scelta: la ruotano di 90°, la tolgono o la copiano in un PDF nuovo."
     };
     f.para(hint, q.0 + 24.0, hint_y, q.2 - 48.0, 15.0, SANS, pal.muted, 1.4, 2);
+}
+
+/// La larghezza delle pagine del banco: la più grande (fino al lato delle miniature, 240 px in
+/// altezza) con cui `n` pagine stanno tutte in `w` × `h`; se non ci stanno, 140 e si scorre.
+fn board_page_width(w: f32, h: f32, n: usize) -> f32 {
+    let n = n.max(1);
+    let mut pw = 176.0f32;
+    while pw > 140.0 {
+        let per_row = (((w + 38.0) / (pw + 38.0)) as usize).max(1);
+        if n.div_ceil(per_row) as f32 * ((pw * 1.36).round() + 70.0) <= h {
+            return pw;
+        }
+        pw -= 4.0;
+    }
+    140.0
 }
 
 /// La coda di «Comprimi»: per ogni PDF il peso adesso, la stima dopo e il risparmio; sotto il totale.
