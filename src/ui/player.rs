@@ -172,6 +172,10 @@ impl Drop for Player {
 
 // ---- Audio ----
 
+/// Quanto può restare ferma la posizione dell'audio mentre suona prima di passare all'orologio.
+#[cfg(any(windows, target_os = "linux"))]
+const STALLED: Duration = Duration::from_millis(1500);
+
 fn audio_thread(path: &Path, sh: Arc<Shared>) {
     let pcm = crate::audio::decode(path).ok().filter(|p| !p.samples.is_empty() && p.channels > 0);
     #[cfg(any(windows, target_os = "linux"))]
@@ -183,25 +187,40 @@ fn audio_thread(path: &Path, sh: Arc<Shared>) {
         // Un salto fatto mentre si decodificava vale ancora: l'orologio senza audio sa dov'era.
         let start = sh.clock.lock().unwrap_or_else(|e| e.into_inner()).0;
         sh.audio_pos.store(((start * pcm.rate as f64) as u64) << FRAC, Ordering::Relaxed);
+        // Con cpal 0.18 il flusso si crea anche quando l'uscita non funziona (su Windows il servizio Audio
+        // fermo): se non parte o resta fermo mentre suona, l'orologio senza audio prende il suo posto.
         if let Ok(stream) = open_stream(pcm, sh.clone()) {
             use cpal::traits::StreamTrait;
-            sh.has_audio.store(true, Ordering::Relaxed);
-            sh.loading.store(false, Ordering::Relaxed);
-            let _ = stream.play();
-            (sh.wake)();
-            let mut last = Instant::now();
-            while !sh.stop.load(Ordering::Relaxed) {
-                std::thread::sleep(Duration::from_millis(30));
-                if sh.audio_pos.load(Ordering::Relaxed) >= sh.audio_len.load(Ordering::Relaxed) && !sh.ended.load(Ordering::Relaxed) {
-                    sh.finish();
+            if stream.play().is_ok() {
+                sh.has_audio.store(true, Ordering::Relaxed);
+                sh.loading.store(false, Ordering::Relaxed);
+                (sh.wake)();
+                let mut last = Instant::now();
+                let mut moved = (sh.audio_pos.load(Ordering::Relaxed), Instant::now());
+                while !sh.stop.load(Ordering::Relaxed) {
+                    std::thread::sleep(Duration::from_millis(30));
+                    let pos = sh.audio_pos.load(Ordering::Relaxed);
+                    if pos >= sh.audio_len.load(Ordering::Relaxed) && !sh.ended.load(Ordering::Relaxed) {
+                        sh.finish();
+                    }
+                    // Il tempo scritto accanto alla barra va aggiornato anche senza fotogrammi.
+                    if last.elapsed() > Duration::from_millis(250) && !sh.paused.load(Ordering::Relaxed) {
+                        last = Instant::now();
+                        (sh.wake)();
+                    }
+                    if pos != moved.0 || sh.paused.load(Ordering::Relaxed) || sh.ended.load(Ordering::Relaxed) {
+                        moved = (pos, Instant::now());
+                    } else if moved.1.elapsed() > STALLED {
+                        break;
+                    }
                 }
-                // Il tempo scritto accanto alla barra va aggiornato anche senza fotogrammi.
-                if last.elapsed() > Duration::from_millis(250) && !sh.paused.load(Ordering::Relaxed) {
-                    last = Instant::now();
-                    (sh.wake)();
+                if sh.stop.load(Ordering::Relaxed) {
+                    return;
                 }
+                let at = sh.position();
+                sh.has_audio.store(false, Ordering::Relaxed);
+                *sh.clock.lock().unwrap_or_else(|e| e.into_inner()) = (at, None);
             }
-            return;
         }
     }
     #[cfg(not(any(windows, target_os = "linux")))]
@@ -224,10 +243,13 @@ fn open_stream(pcm: Arc<crate::audio::Pcm>, sh: Arc<Shared>) -> Result<cpal::Str
     let supported = device.default_output_config().map_err(|e| e.to_string())?;
     let format = supported.sample_format();
     let config: cpal::StreamConfig = supported.into();
+    // cpal 0.17+ riporta anche i 24 bit (I24) e F64: con il ripiego su f32 quei dispositivi resterebbero muti.
     match format {
         SampleFormat::I16 => build::<i16>(&device, &config, pcm, sh),
         SampleFormat::U16 => build::<u16>(&device, &config, pcm, sh),
+        SampleFormat::I24 => build::<cpal::I24>(&device, &config, pcm, sh),
         SampleFormat::I32 => build::<i32>(&device, &config, pcm, sh),
+        SampleFormat::F64 => build::<f64>(&device, &config, pcm, sh),
         _ => build::<f32>(&device, &config, pcm, sh),
     }
 }
@@ -242,10 +264,10 @@ where
     let in_ch = pcm.channels.max(1) as usize;
     let frames = (pcm.samples.len() / in_ch) as u64;
     // Passo in fotogrammi del file per ogni fotogramma delle casse (ricampionamento semplice).
-    let step = ((pcm.rate as f64 / config.sample_rate.0.max(1) as f64) * (1u64 << FRAC) as f64) as u64;
+    let step = ((pcm.rate as f64 / config.sample_rate.max(1) as f64) * (1u64 << FRAC) as f64) as u64;
     device
         .build_output_stream(
-            config,
+            *config,
             move |data: &mut [T], _| {
                 let silent = T::from_sample(0.0f32);
                 if sh.paused.load(Ordering::Relaxed) || sh.stop.load(Ordering::Relaxed) {

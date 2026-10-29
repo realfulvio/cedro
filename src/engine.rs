@@ -2457,10 +2457,11 @@ Luca,Bondeno
         let bytes = fs::read(&out.path).unwrap();
         assert!(bytes.windows(8).any(|w| w == b"/Encrypt"));
         assert!(!bytes.windows(8).any(|w| w == b"segreta "), "il testo non deve essere in chiaro");
-        let mut wrong = lopdf::Document::load_mem(&bytes).unwrap();
-        assert!(wrong.decrypt("sbagliata").is_err());
-        let mut right = lopdf::Document::load_mem(&bytes).unwrap();
-        right.decrypt("bondeno").unwrap();
+        // lopdf 0.46: senza password un PDF cifrato si apre vuoto; la password si dà all'apertura (LoadOptions).
+        assert!(lopdf::Document::load_mem(&bytes).unwrap().get_pages().is_empty());
+        let with = |password| lopdf::Document::load_mem_with_options(&bytes, lopdf::LoadOptions::with_password(password));
+        assert!(with("sbagliata").is_err());
+        let right = with("bondeno").unwrap();
         let text = right.extract_text(&[1]).unwrap();
         assert!(text.contains("Delibera"), "{text}");
         let _ = fs::remove_dir_all(&dir);
@@ -2624,6 +2625,27 @@ Luca,Bondeno
         write_spec_doc(&legacy);
         let legacy_pdf = perform(&legacy, "pdf", 80).expect("DOC");
         assert!(fs::read(&legacy_pdf.path).unwrap().windows(5).any(|w| w == b"Cedro"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_doc_with_stray_fat_entries_past_the_end_is_read() {
+        // Alcuni programmi lasciano nella FAT voci «settore FAT» oltre la fine del file: cfb dalla 0.12 le ignora
+        // (validazione permissiva) invece di rifiutare l'intero DOC.
+        let dir = scratch();
+        let legacy = dir.join("vecchio.doc");
+        write_spec_doc(&legacy);
+        let mut bytes = fs::read(&legacy).unwrap();
+        let size = 1usize << u16::from_le_bytes([bytes[0x1E], bytes[0x1F]]);
+        let sectors = (bytes.len() - size).div_ceil(size);
+        let first_fat = u32::from_le_bytes(bytes[0x4C..0x50].try_into().unwrap()) as usize;
+        assert!(sectors < size / 4, "il DOC di prova sta in un solo settore di FAT");
+        let at = (first_fat + 1) * size + sectors * 4;
+        assert_eq!(&bytes[at..at + 4], &[0xFF; 4], "oltre la fine la FAT è libera");
+        bytes[at..at + 4].copy_from_slice(&0xFFFF_FFFDu32.to_le_bytes());
+        fs::write(&legacy, &bytes).unwrap();
+        let pdf = perform(&legacy, "pdf", 80).expect("DOC con FAT sporca");
+        assert!(fs::read(&pdf.path).unwrap().windows(5).any(|w| w == b"Cedro"));
         let _ = fs::remove_dir_all(&dir);
     }
 

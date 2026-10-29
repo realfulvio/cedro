@@ -7,19 +7,19 @@ description = "Converti e modifica file in locale, con una ruota al cursore. Win
 publish = false
 
 [dependencies]
-cfb = "0.7"
+cfb = "0.15"
 hound = "3.5"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff", "ico", "tga", "qoi", "pnm", "hdr", "exr", "dds"] }
 hayro = "0.8"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
-lopdf = "0.36"
+lopdf = "0.46"
 mp4 = "0.14"
 skrifa = "0.49"
 mp3lame-encoder = "0.2"
 ocrs = "0.13"
 png = "0.18"
 oxideav-vp8 = { version = "0.2.7", default-features = false }
-oxideav-vp9 = "0.0.13"
+oxideav-vp9 = "0.0.14"
 oxideav-mpeg4video = "0.1"
 rten = "0.26"
 rten-simd = "0.26"
@@ -40,11 +40,11 @@ tiny-skia = { version = "0.11", default-features = false, features = ["std", "si
 
 # Il tasto Play dell'anteprima: l'uscita audio del sistema (ALSA su Linux, WASAPI su Windows).
 [target.'cfg(any(windows, target_os = "linux"))'.dependencies]
-cpal = "0.15"
+cpal = "0.18"
 
 # Opus (audio dei WebM, vocali di WhatsApp e Telegram): libopus compilata dentro il programma.
 [target.'cfg(any(windows, target_os = "linux", target_os = "android"))'.dependencies]
-audiopus_sys = { version = "0.2", features = ["static"] }
+opusic-sys = "0.7"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 fdk-aac = "0.8"
