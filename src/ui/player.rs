@@ -224,10 +224,13 @@ fn open_stream(pcm: Arc<crate::audio::Pcm>, sh: Arc<Shared>) -> Result<cpal::Str
     let supported = device.default_output_config().map_err(|e| e.to_string())?;
     let format = supported.sample_format();
     let config: cpal::StreamConfig = supported.into();
+    // cpal 0.17+ riporta anche i 24 bit (I24) e F64: con il ripiego su f32 quei dispositivi resterebbero muti.
     match format {
         SampleFormat::I16 => build::<i16>(&device, &config, pcm, sh),
         SampleFormat::U16 => build::<u16>(&device, &config, pcm, sh),
+        SampleFormat::I24 => build::<cpal::I24>(&device, &config, pcm, sh),
         SampleFormat::I32 => build::<i32>(&device, &config, pcm, sh),
+        SampleFormat::F64 => build::<f64>(&device, &config, pcm, sh),
         _ => build::<f32>(&device, &config, pcm, sh),
     }
 }
@@ -242,10 +245,10 @@ where
     let in_ch = pcm.channels.max(1) as usize;
     let frames = (pcm.samples.len() / in_ch) as u64;
     // Passo in fotogrammi del file per ogni fotogramma delle casse (ricampionamento semplice).
-    let step = ((pcm.rate as f64 / config.sample_rate.0.max(1) as f64) * (1u64 << FRAC) as f64) as u64;
+    let step = ((pcm.rate as f64 / config.sample_rate.max(1) as f64) * (1u64 << FRAC) as f64) as u64;
     device
         .build_output_stream(
-            config,
+            *config,
             move |data: &mut [T], _| {
                 let silent = T::from_sample(0.0f32);
                 if sh.paused.load(Ordering::Relaxed) || sh.stop.load(Ordering::Relaxed) {
