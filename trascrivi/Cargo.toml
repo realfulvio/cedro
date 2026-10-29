@@ -23,6 +23,12 @@ whisper-rs = { version = "0.16" }
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# Su Windows ARM64 il motore si compila con clang-cl (ggml), e con clang-cl le parti ARM di libopus 1.6.1
+# scritte per MSVC non compilano (celt/arm/armcpu.c usa __emit; celt_neon_intr.c non trova
+# celt_inner_prod_neon). Il motore decodifica solo l'audio Opus da trascrivere: qui libopus va in C semplice.
+[target.'cfg(all(windows, target_arch = "aarch64"))'.dependencies]
+opusic-sys = { version = "0.7.6", features = ["no-simd", "no-runtime-feature-detection"] }
+
 [profile.release]
 lto = true
 strip = true
