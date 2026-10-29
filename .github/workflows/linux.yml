@@ -29,7 +29,7 @@ jobs:
     name: Cedro (build, prove, tar.gz)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
 
@@ -49,7 +49,7 @@ jobs:
       - name: Pacchetto tar.gz (e la copia per la vecchia edizione Comune di Bondeno)
         run: installer/build-linux.sh -o dist -b
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-tar
           path: dist/cedro-*-linux-x64.tar.gz
@@ -58,7 +58,7 @@ jobs:
     name: Motori di trascrizione (processore e Vulkan)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
 
@@ -87,7 +87,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends libgtk-4-dev libdbus-1-dev libasound2-dev
           CEDRO_TRASCRIVI_DIR="$PWD/prova" cargo test --release --lib transcribes_a_spoken_sentence -- --nocapture
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-motori
           path: dist-motori/cedro-trascrivi-*
@@ -98,9 +98,9 @@ jobs:
     needs: [app, motori]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: file
           merge-multiple: true
