@@ -76,6 +76,8 @@ pub struct FileItem {
     pub done_key: Option<String>,
     /// Quanto è fatto del file in lavoro (0..1), quando il motore lo sa: la barra nella riga.
     pub percent: Option<f32>,
+    /// Unire i PDF: le pagine di questo file che entrano («tutte» se vuoto), per esempio `1-3,5`.
+    pub pages: String,
 }
 
 impl FileItem {
@@ -319,6 +321,16 @@ pub enum Event {
     JobDone,
     Media(PathBuf, media::Loaded),
     Preview(PathBuf, usize, Option<Image>),
+    /// La miniatura di una pagina (la striscia di «Dividi», le pagine del file unito).
+    PageThumb(PathBuf, usize, Option<Image>),
+}
+
+/// Cosa fa la scheda PDF: converte, unisce o divide.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PdfMode {
+    Convert,
+    Merge,
+    Split,
 }
 
 /// Una domanda in attesa di risposta (file che esiste già).
@@ -362,6 +374,14 @@ pub struct App {
     pub player: Option<super::player::Player>,
     /// Dove sta il cursore della barra mentre lo si trascina (0..1).
     pub media_scrub: Option<f32>,
+    /// Le miniature piccole delle pagine dei PDF: (file, pagina) → immagine (`None` = in arrivo).
+    pub page_thumbs: HashMap<(PathBuf, usize), Option<Image>>,
+    /// «Dividi»: i tagli scelti sulla striscia, file per file (un file nuovo dopo queste pagine, da 1).
+    pub cuts: HashMap<PathBuf, Vec<u32>>,
+    /// La conversione scelta prima di passare a Unisci o Dividi: «Converti» la ritrova.
+    last_convert: String,
+    /// La finestra è in Semplificata (la tiene a giorno lo schermo): «Dividi» lì è una pagina per file.
+    pub simple_view: bool,
     tx: Sender<Event>,
     rx: Receiver<Event>,
     wake: Arc<dyn Fn() + Send + Sync>,
@@ -414,6 +434,10 @@ impl App {
             preview_page: 0,
             player: None,
             media_scrub: None,
+            page_thumbs: HashMap::new(),
+            cuts: HashMap::new(),
+            last_convert: String::new(),
+            simple_view: false,
             tx,
             rx,
             wake,
@@ -440,6 +464,12 @@ impl App {
             }
         }
         conversioni::formats(kind).first().map(|s| s.id.to_string()).unwrap_or_default()
+    }
+
+    /// Le scelte della Semplificata per la categoria: «Un solo PDF» solo con almeno due PDF in coda.
+    pub fn simple_choices(&self) -> Vec<&'static conversioni::SimpleFormat> {
+        let many = self.visible().len() >= 2;
+        conversioni::simple_formats(self.kind()).iter().filter(|f| f.id != "merge" || many).collect()
     }
 
     /// I file che l'attività di ora prende dalla coda: la categoria scelta, oppure (trascrizione)
@@ -483,7 +513,127 @@ impl App {
 
     /// Cambia la voce scelta; un'opzione mai toccata riparte dal suo valore consigliato.
     pub fn set_action(&mut self, id: &str) {
+        if !conversioni::is_page_action(&self.action) {
+            self.last_convert = self.action.clone();
+        }
         self.action = id.to_string();
+    }
+
+    /// Cosa fa adesso la scheda PDF.
+    pub fn pdf_mode(&self) -> PdfMode {
+        match self.action.as_str() {
+            "merge" => PdfMode::Merge,
+            "split" => PdfMode::Split,
+            _ => PdfMode::Convert,
+        }
+    }
+
+    /// I tre pulsanti in cima alla scheda PDF. «Converti» torna al formato scelto prima.
+    pub fn set_pdf_mode(&mut self, mode: PdfMode, simple: bool) {
+        match mode {
+            PdfMode::Merge => self.set_action("merge"),
+            PdfMode::Split => self.set_action("split"),
+            PdfMode::Convert if self.pdf_mode() != PdfMode::Convert => {
+                let back = std::mem::take(&mut self.last_convert);
+                let known = conversioni::formats(self.kind()).iter().chain(conversioni::tools(self.kind())).any(|s| s.id == back);
+                self.action = if known { back } else { self.default_action(simple) };
+                if conversioni::is_page_action(&self.action) {
+                    self.action = conversioni::formats(self.kind()).first().map(|s| s.id.to_string()).unwrap_or_default();
+                }
+            }
+            PdfMode::Convert => {}
+        }
+    }
+
+    /// Sposta un file della vista di `delta` posti (l'ordine della coda è l'ordine del PDF unito).
+    pub fn move_file(&mut self, index: usize, delta: i32) {
+        let vis = self.visible();
+        let Some(pos) = vis.iter().position(|&i| i == index) else { return };
+        let to = (pos as i32 + delta).clamp(0, vis.len() as i32 - 1) as usize;
+        self.move_file_to(index, to);
+    }
+
+    /// Porta un file della vista al posto `to` (da 0) della vista: gli altri scalano.
+    pub fn move_file_to(&mut self, index: usize, to: usize) {
+        if self.busy() {
+            return;
+        }
+        let vis = self.visible();
+        let Some(from) = vis.iter().position(|&i| i == index) else { return };
+        let to = to.min(vis.len().saturating_sub(1));
+        if from == to {
+            return;
+        }
+        // Si riordinano solo i posti della vista: i file delle altre categorie restano dove sono.
+        let mut order: Vec<FileItem> = vis.iter().map(|&i| self.files[i].clone()).collect();
+        let moved = order.remove(from);
+        order.insert(to, moved);
+        let selected_path = self.selected.and_then(|s| self.files.get(s)).map(|f| f.path.clone());
+        for (slot, item) in vis.iter().zip(order) {
+            self.files[*slot] = item;
+        }
+        self.selected = selected_path.and_then(|p| self.files.iter().position(|f| f.path == p));
+    }
+
+    /// Le miniature delle pagine `pages` (da 0) di un PDF, chieste una volta sola.
+    pub fn want_page_thumbs(&mut self, path: &Path, pages: impl IntoIterator<Item = usize>) {
+        let missing: Vec<usize> = pages.into_iter().filter(|p| !self.page_thumbs.contains_key(&(path.to_path_buf(), *p))).collect();
+        if missing.is_empty() {
+            return;
+        }
+        for p in &missing {
+            self.page_thumbs.insert((path.to_path_buf(), *p), None);
+        }
+        self.loader.page_thumbs(path, missing);
+    }
+
+    /// I tagli che la striscia mostra per un file: i suoi, o quelli che vengono dal modo scelto.
+    pub fn shown_cuts(&self, path: &Path, total: u32) -> Vec<u32> {
+        if let Some(c) = self.cuts.get(path) {
+            return c.clone();
+        }
+        let plan = conversioni::options_from(&self.values).pdf_pages.plan;
+        match crate::pdfpages::groups(&plan, total, None) {
+            Ok(groups) if !matches!(plan, crate::pdfpages::Plan::Remove(_) | crate::pdfpages::Plan::Bookmarks) => {
+                let mut cuts: Vec<u32> = groups.iter().filter_map(|g| g.pages.last().copied()).filter(|p| *p < total).collect();
+                // Solo gruppi di fila: «1-2, 5-6» non sono tagli.
+                let contiguous = groups.windows(2).all(|w| w[0].pages.last().map(|p| p + 1) == w[1].pages.first().copied());
+                if !contiguous {
+                    cuts.clear();
+                }
+                cuts
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Un clic tra due pagine della striscia: mette o toglie il taglio dopo `after` (da 1) e scrive
+    /// gli intervalli che ne vengono, così campo e striscia dicono la stessa cosa.
+    pub fn toggle_cut(&mut self, index: usize, after: u32) {
+        let Some(path) = self.files.get(index).map(|f| f.path.clone()) else { return };
+        let total = self.page_count(index).unwrap_or(0) as u32;
+        if total < 2 || after == 0 || after >= total {
+            return;
+        }
+        let mut cuts = self.shown_cuts(&path, total);
+        match cuts.iter().position(|c| *c == after) {
+            Some(i) => {
+                cuts.remove(i);
+            }
+            None => cuts.push(after),
+        }
+        cuts.sort_unstable();
+        let text = crate::pdfpages::cuts_text(&cuts, total);
+        self.cuts.insert(path, cuts);
+        self.values.set(&conversioni::SPLIT_HOW, 2);
+        self.values.set_text(&conversioni::SPLIT_RANGES, &text);
+    }
+
+    /// Il campo «Intervalli» scritto a mano vale di nuovo per il file in evidenza: i suoi tagli si tolgono.
+    pub fn ranges_typed(&mut self) {
+        if let Some(path) = self.selected.and_then(|i| self.files.get(i)).map(|f| f.path.clone()) {
+            self.cuts.remove(&path);
+        }
     }
 
     /// Il nome di ciò che si sta per fare, per il pulsante («WebP», «Comprimi»…).
@@ -492,7 +642,7 @@ impl App {
     }
 
     pub fn option_defs(&self) -> Vec<&'static OptionDef> {
-        conversioni::option_defs(self.kind(), &self.action)
+        conversioni::option_defs(self.kind(), &self.action).into_iter().filter(|d| conversioni::shown(d, &self.values)).collect()
     }
 
     /// Vero se le opzioni scelte non sono quelle consigliate (la Semplificata lo dice).
@@ -540,7 +690,7 @@ impl App {
             known.insert(path.clone());
             first.get_or_insert((kind, voice_only || (transcribing && trascrizione::transcribable(&path))));
             self.loader.request(&path);
-            self.files.push(FileItem { path, kind, voice_only, state: FileState::Waiting, message: "In attesa".into(), output: None, checked: true, done_key: None, percent: None });
+            self.files.push(FileItem { path, kind, voice_only, state: FileState::Waiting, message: "In attesa".into(), output: None, checked: true, done_key: None, percent: None, pages: String::new() });
             added += 1;
         }
         match first {
@@ -585,6 +735,8 @@ impl App {
         let live: std::collections::HashSet<&Path> = self.files.iter().map(|f| f.path.as_path()).collect();
         self.media.retain(|p, _| live.contains(p.as_path()));
         self.previews.retain(|(p, _), _| live.contains(p.as_path()));
+        self.page_thumbs.retain(|(p, _), _| live.contains(p.as_path()));
+        self.cuts.retain(|p, _| live.contains(p.as_path()));
     }
 
     /// Toglie dalla coda i file spuntati della vista (o tutti quelli della vista se nessuno è spuntato).
@@ -627,8 +779,18 @@ impl App {
 
     /// Le scelte che cambiano il risultato: se cambiano, i file già fatti si rifanno.
     fn settings_key(&self) -> String {
+        // Per unire contano anche l'ordine dei file e le loro pagine; per dividere i tagli.
+        let pages = if conversioni::is_page_action(&self.action) && self.activity == Activity::Convert {
+            let vis = self.visible();
+            let order: Vec<String> = vis.iter().map(|&i| format!("{}#{}", self.files[i].path.display(), self.files[i].pages)).collect();
+            let mut cuts: Vec<String> = self.cuts.iter().map(|(p, c)| format!("{}:{c:?}", p.display())).collect();
+            cuts.sort();
+            format!("{order:?}{cuts:?}")
+        } else {
+            String::new()
+        };
         format!(
-            "{:?}|{}|{}|{}|{:?}|{:?}|{}",
+            "{:?}|{}|{}|{}|{:?}|{:?}|{}|{pages}",
             self.activity,
             self.category,
             self.action,
@@ -659,7 +821,12 @@ impl App {
 
     /// Cosa apre «Apri risultato»: il file, o la cartella se i file sono più di uno.
     pub fn result_path(&self) -> Option<PathBuf> {
-        let outs: Vec<&PathBuf> = self.targets().into_iter().filter_map(|i| self.files[i].output.as_ref()).collect();
+        let mut outs: Vec<&PathBuf> = self.targets().into_iter().filter_map(|i| self.files[i].output.as_ref()).collect();
+        // Il PDF unito è lo stesso per tutti i file; i pezzi di un PDF diviso stanno nella cartella.
+        outs.dedup();
+        if self.action == "split" && self.activity == Activity::Convert {
+            return outs.first().and_then(|o| o.parent()).map(|d| d.to_path_buf());
+        }
         match outs.as_slice() {
             [] => None,
             [one] => Some((*one).clone()),
@@ -724,7 +891,24 @@ impl App {
 
     /// Il testo dell'errore se le scelte scritte a mano non vanno (per esempio le pagine).
     pub fn validate(&self) -> Result<(), String> {
-        conversioni::validate(&self.values, self.kind(), &self.action)?;
+        if !(self.simple_view && self.action == "split") {
+            conversioni::validate(&self.values, self.kind(), &self.action)?;
+        }
+        if self.kind() == Kind::Pdf && self.action == "merge" {
+            let targets = self.targets();
+            if targets.len() < 2 {
+                return Err("Per unire servono almeno due PDF spuntati.".into());
+            }
+            for &i in &targets {
+                let f = &self.files[i];
+                let sel = engine::PageSel::parse(&f.pages).map_err(|e| format!("{}: {e}", f.name()))?;
+                if let (Some(max), Some(n)) = (sel.and_then(|s| s.max_page()), self.page_count(i)) {
+                    if max > n {
+                        return Err(format!("{} ha {n} pagine: la pagina {max} non c'è.", f.name()));
+                    }
+                }
+            }
+        }
         if self.option_defs().iter().any(|d| d.opt == conversioni::Opt::PageRange) {
             // Le pagine chieste devono esserci in ogni PDF della coda.
             if let Ok(Some(sel)) = engine::PageSel::parse(self.values_text(conversioni::Opt::PageRange)) {
@@ -805,12 +989,21 @@ impl App {
             self.notice = Some(Notice { text: "Aggiungi prima qualche file.".into(), error: false });
             return;
         }
+        if self.kind() == Kind::Pdf && self.action == "merge" {
+            self.start_merge();
+            return;
+        }
         let paths: Vec<PathBuf> = targets.iter().map(|&i| self.files[i].path.clone()).collect();
+        // «Dividi»: chi ha i suoi tagli sulla striscia si divide lì, gli altri come dice il pannello.
+        let cuts: HashMap<PathBuf, Vec<u32>> = if self.action == "split" && !self.simple_view { self.cuts.clone() } else { HashMap::new() };
         let cancel = self.begin(&targets, JobKind::Convert);
         let action = self.action.clone();
         let quality = self.quality;
         let dest = self.dest.clone();
-        let opts = self.exists_options(conversioni::options_from(&self.values));
+        let mut opts = self.exists_options(conversioni::options_from(&self.values));
+        if self.simple_view && action == "split" {
+            opts.pdf_pages.plan = crate::pdfpages::Plan::EveryPage;
+        }
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
         std::thread::spawn(move || {
             for path in paths {
@@ -834,7 +1027,13 @@ impl App {
                                     wake();
                                 }
                             },
-                            || guarded(|| conversioni::convert_one_out(&path, &action, quality, dest.as_deref(), &opts)),
+                            || {
+                                let mut opts = opts.clone();
+                                if let Some(c) = cuts.get(&path) {
+                                    opts.pdf_pages.plan = crate::pdfpages::Plan::Cuts(c.clone());
+                                }
+                                guarded(|| conversioni::convert_one_out(&path, &action, quality, dest.as_deref(), &opts))
+                            },
                         )
                     }
                     None => Err("Annullato".into()),
@@ -842,6 +1041,52 @@ impl App {
                 let _ = tx.send(Event::Finished(path, result));
                 wake();
             }
+            let _ = tx.send(Event::JobDone);
+            wake();
+        });
+    }
+
+    /// «Unisci»: un lavoro solo per tutti i PDF spuntati, nell'ordine della coda; ogni file riceve lo stesso risultato.
+    fn start_merge(&mut self) {
+        // Anche quelli già fatti: il PDF unito si rifà sempre con tutti.
+        let targets = self.targets();
+        let sources: Vec<(PathBuf, Option<engine::PageSel>)> = targets.iter().map(|&i| (self.files[i].path.clone(), engine::PageSel::parse(&self.files[i].pages).ok().flatten())).collect();
+        let cancel = self.begin(&targets, JobKind::Convert);
+        let dest = self.dest.clone();
+        let opts = self.exists_options(conversioni::options_from(&self.values));
+        let (tx, wake) = (self.tx.clone(), self.wake.clone());
+        std::thread::spawn(move || {
+            let paths: Vec<PathBuf> = sources.iter().map(|(p, _)| p.clone()).collect();
+            let result = match crate::resources::acquire(Some(&cancel)) {
+                Some(_turn) => {
+                    for p in &paths {
+                        let _ = tx.send(Event::Started(p.clone()));
+                    }
+                    wake();
+                    let (tx, wake, file, last) = (tx.clone(), wake.clone(), paths[0].clone(), std::cell::Cell::new(-1i32));
+                    crate::progress::con(
+                        move |p| {
+                            let n = (p * 100.0) as i32;
+                            if n != last.replace(n) {
+                                let _ = tx.send(Event::ConvertPercent(file.clone(), p));
+                                wake();
+                            }
+                        },
+                        || {
+                            guarded(|| {
+                                // «Accanto all'originale» vuol dire accanto al primo file.
+                                let beside = sources[0].0.parent().filter(|p| !p.as_os_str().is_empty()).map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
+                                engine::merge_with(&sources, Some(dest.as_deref().unwrap_or(&beside)), &opts).map(|o| (o.path, o.message)).map_err(|e| e.0)
+                            })
+                        },
+                    )
+                }
+                None => Err("Annullato".into()),
+            };
+            for p in paths {
+                let _ = tx.send(Event::Finished(p, result.clone()));
+            }
+            wake();
             let _ = tx.send(Event::JobDone);
             wake();
         });
@@ -1156,6 +1401,11 @@ impl App {
                         *slot = img;
                     }
                 }
+                Event::PageThumb(path, page, img) => {
+                    if let Some(slot) = self.page_thumbs.get_mut(&(path, page)) {
+                        *slot = img;
+                    }
+                }
             }
         }
         changed
@@ -1184,7 +1434,8 @@ impl App {
 
     /// Il nome che avrebbe la copia con la regola «Aggiungi -2» (per l'esempio sotto la scelta).
     pub fn exists_example(&self) -> String {
-        let ext = if self.action.len() <= 5 { self.action.as_str() } else { "pdf" };
+        // Unire e dividere fanno PDF; le altre voci corte sono l'estensione.
+        let ext = if self.action.len() <= 5 && !conversioni::is_page_action(&self.action) { self.action.as_str() } else { "pdf" };
         match self.values.exists {
             Exists::Number => format!("Esempio: nomefile-2.{ext}"),
             Exists::Replace => "Il file con lo stesso nome viene sostituito.".into(),
@@ -1275,7 +1526,7 @@ mod tests {
         use super::*;
         let mut app = App::new(Arc::new(|| {}));
         let path = PathBuf::from("/non/esiste/foto.jpg");
-        app.files.push(FileItem { path, kind: Kind::Image, voice_only: false, state: FileState::Running, message: "In corso".into(), output: None, checked: true, done_key: None, percent: Some(0.4) });
+        app.files.push(FileItem { path, kind: Kind::Image, voice_only: false, state: FileState::Running, message: "In corso".into(), output: None, checked: true, done_key: None, percent: Some(0.4), pages: String::new() });
         app.job = Some(Job { kind: JobKind::Transcribe, total: 1, done: 0, failed: 0, cancel: Arc::new(AtomicBool::new(false)), key: String::new(), targets: vec![0], part: 0.0, file_started: None });
         app.tx.send(Event::Aborted("Errore interno".into())).unwrap();
         app.tx.send(Event::JobDone).unwrap();

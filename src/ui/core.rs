@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use super::assets as ic;
 use super::gfx::{Align, Fit, Painter, Rgb, Weight};
-use super::model::{Activity, App, FileState};
+use super::model::{Activity, App, FileState, PdfMode};
 use super::theme::{mix, Palette, ThemeId};
 use crate::conversioni::Opt;
 use crate::engine::{ExistsChoice, Kind};
@@ -43,6 +43,8 @@ pub enum LinkFlag {
 pub enum Field {
     Opt(Opt),
     Link(bool),
+    /// Unire i PDF: le pagine di un file della coda (indice in `files`).
+    FilePages(usize),
 }
 
 /// Le parti che si aprono e si chiudono («Altre opzioni»…).
@@ -135,6 +137,14 @@ pub enum Act {
     DismissNotice,
     MenuPick(usize),
     ActivityMenu,
+    /// I tre pulsanti della scheda PDF: Converti, Unisci, Dividi.
+    PdfMode(PdfMode),
+    /// Unire i PDF: sposta un file di tanti posti (su è negativo).
+    MoveFile(usize, i32),
+    /// Unire i PDF: la maniglia di una riga, che si trascina in su o in giù (indice del file, altezza della riga).
+    RowDrag(usize, u16),
+    /// Dividere i PDF: il taglio dopo una pagina (file, pagina da 1).
+    Cut(usize, u32),
     /// Solo per bloccare i clic sotto un riquadro (per esempio dentro un menu aperto).
     Nothing,
 }
@@ -174,6 +184,8 @@ pub struct UiState {
     pub open: HashSet<Fold>,
     /// Il cursore che si sta trascinando, con il suo riquadro.
     pub drag: Option<(Act, R)>,
+    /// Una riga trascinata (unire i PDF): la y dove è partita e quella di adesso.
+    pub drag_y: (f32, f32),
     /// Dei file passano sopra la finestra.
     pub dropping: bool,
     /// Il passo del Percorso guidato (0 file, 1 operazione, 2 salvataggio).
