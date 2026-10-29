@@ -27,6 +27,8 @@ pub struct Loaded {
 enum Job {
     Info(PathBuf),
     Preview(PathBuf, usize),
+    /// Le miniature di alcune pagine di un PDF, lette con una sola apertura del file.
+    Thumbs(PathBuf, Vec<usize>),
 }
 
 struct Queue {
@@ -43,6 +45,40 @@ pub struct Loader {
 const THUMB: u32 = 360;
 /// Lato lungo delle pagine dell'anteprima.
 const PAGE: f32 = 1400.0;
+/// Lato lungo delle miniature delle pagine (striscia di «Dividi», pagine del PDF unito).
+const PAGE_THUMB: f32 = 240.0;
+
+/// Le miniature di più pagine di un PDF: il file si legge e si analizza una volta sola.
+fn pdf_page_thumbs(path: &Path, pages: &[usize], side: f32, each: &mut dyn FnMut(usize, Option<Image>) -> bool) {
+    use hayro::hayro_interpret::InterpreterSettings;
+    use hayro::hayro_syntax::Pdf;
+    use hayro::vello_cpu::color::palette::css::WHITE;
+    use hayro::{render, PixmapSettings, RenderCache, RenderSettings};
+    let pdf = std::fs::read(path).ok().and_then(|b| Pdf::new(b).ok());
+    let Some(pdf) = pdf else {
+        for &p in pages {
+            if !each(p, None) {
+                return;
+            }
+        }
+        return;
+    };
+    let all = pdf.pages();
+    let cache = RenderCache::new();
+    for &n in pages {
+        let img = all.get(n).and_then(|p| {
+            let (w, h) = p.render_dimensions();
+            let scale = side / w.max(h).max(1.0);
+            let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
+            let r = render(p, &cache, &InterpreterSettings::default(), &RenderSettings::default(), &pixmap);
+            let (w, h) = (r.width() as u32, r.height() as u32);
+            (w > 0 && h > 0).then(|| Image::from_rgba(w, h, &r.take_rgba8(hayro::vello_cpu::peniko::ImageAlphaType::Alpha))).flatten()
+        });
+        if !each(n, img) {
+            return;
+        }
+    }
+}
 
 pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
     use image::ImageDecoder;
@@ -136,6 +172,20 @@ impl Loader {
                     });
                     tx.send(Event::Preview(path, page, img))
                 }
+                Some(Job::Thumbs(path, pages)) => {
+                    let mut ok = Ok(());
+                    let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        pdf_page_thumbs(&path, &pages, PAGE_THUMB, &mut |page, img| {
+                            ok = tx.send(Event::PageThumb(path.clone(), page, img));
+                            wake();
+                            ok.is_ok()
+                        })
+                    }));
+                    if let Err(p) = run {
+                        super::model::panic_text(&*p);
+                    }
+                    ok
+                }
                 None => Ok(()),
             };
             if sent.is_err() {
@@ -149,6 +199,13 @@ impl Loader {
     pub fn request(&self, path: &Path) {
         let (lock, cv) = &*self.queue;
         lock.lock().unwrap_or_else(|e| e.into_inner()).jobs.push_back(Job::Info(path.to_path_buf()));
+        cv.notify_one();
+    }
+
+    /// Le miniature delle pagine vengono dopo le informazioni dei file già chieste.
+    pub fn page_thumbs(&self, path: &Path, pages: Vec<usize>) {
+        let (lock, cv) = &*self.queue;
+        lock.lock().unwrap_or_else(|e| e.into_inner()).jobs.push_back(Job::Thumbs(path.to_path_buf(), pages));
         cv.notify_one();
     }
 
