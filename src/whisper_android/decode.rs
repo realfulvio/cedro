@@ -80,7 +80,7 @@ fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), Failure> {
 
 /// Opus (Ogg): i pacchetti li dà symphonia, la decodifica è libopus (statica, dentro l'APK). Esce a 48 kHz mono.
 fn opus_mono(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32, skip: usize, head: &[u8]) -> Result<(Vec<f32>, u32), Failure> {
-    use audiopus_sys as sys;
+    use opusic_sys as sys;
     // OpusHead: 8 byte di firma, versione, canali, pre-skip (u16), …
     let channels = match head.get(9) {
         Some(c) if matches!(*c, 1 | 2) => *c as i32,
