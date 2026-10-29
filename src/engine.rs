@@ -2327,6 +2327,27 @@ Luca,Bondeno
     }
 
     #[test]
+    fn a_doc_with_stray_fat_entries_past_the_end_is_read() {
+        // Alcuni programmi lasciano nella FAT voci «settore FAT» oltre la fine del file: cfb dalla 0.12 le ignora
+        // (validazione permissiva) invece di rifiutare l'intero DOC.
+        let dir = scratch();
+        let legacy = dir.join("vecchio.doc");
+        write_spec_doc(&legacy);
+        let mut bytes = fs::read(&legacy).unwrap();
+        let size = 1usize << u16::from_le_bytes([bytes[0x1E], bytes[0x1F]]);
+        let sectors = (bytes.len() - size).div_ceil(size);
+        let first_fat = u32::from_le_bytes(bytes[0x4C..0x50].try_into().unwrap()) as usize;
+        assert!(sectors < size / 4, "il DOC di prova sta in un solo settore di FAT");
+        let at = (first_fat + 1) * size + sectors * 4;
+        assert_eq!(&bytes[at..at + 4], &[0xFF; 4], "oltre la fine la FAT è libera");
+        bytes[at..at + 4].copy_from_slice(&0xFFFF_FFFDu32.to_le_bytes());
+        fs::write(&legacy, &bytes).unwrap();
+        let pdf = perform(&legacy, "pdf", 80).expect("DOC con FAT sporca");
+        assert!(fs::read(&pdf.path).unwrap().windows(5).any(|w| w == b"Cedro"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn windows_text_and_opus() {
         let dir = std::env::temp_dir().join(format!("cedro-ansi-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);

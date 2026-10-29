@@ -7,7 +7,7 @@ description = "Converti e modifica file in locale, con una ruota al cursore. Win
 publish = false
 
 [dependencies]
-cfb = "0.7"
+cfb = "0.15"
 hound = "3.5"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff", "ico", "tga", "qoi", "pnm", "hdr", "exr", "dds"] }
 hayro = "0.8"
