@@ -26,7 +26,7 @@ $arch = if ($arm) { "arm64" } else { "x64" }
 $vcvars = Join-Path $vs ("VC\Auxiliary\Build\" + $(if ($arm) { "vcvarsarm64.bat" } else { "vcvars64.bat" }))
 cmd /c "`"$vcvars`" >nul && set" | ForEach-Object { if ($_ -match '^([^=]+)=(.*)$') { Set-Item "Env:$($Matches[1])" $Matches[2] } }
 $env:CMAKE_GENERATOR = "Ninja"
-# CMake 4 rifiuta i CMakeLists vecchi (Opus): questa variabile gli dice di accettarli.
+# CMake 4 rifiuta i CMakeLists vecchi (serviva a libopus di audiopus_sys): resta per sicurezza.
 $env:CMAKE_POLICY_VERSION_MINIMUM = "3.5"
 
 # Ogni variante usa istruzioni diverse; GGML_NATIVE=OFF evita che il PC di build decida al posto di chi lo usa.

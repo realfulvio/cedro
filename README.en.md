@@ -157,7 +157,7 @@ cargo build --release
 - **Windows:** Microsoft C++ build tools. For the installer you need [Inno Setup 6](https://jrsoftware.org/isinfo.php) and `pwsh installer\build.ps1` (with `-Arm64` for Windows on ARM; the ARM64 transcription engine is built with `trascrivi\build.ps1` on an ARM PC and also requires LLVM).
 - **Linux:** a C compiler, `pkgconf` and the GTK 4 development packages. The first build also compiles OpenH264, FDK AAC and LAME. Run `cedro` once: it stays in the tray and writes the file menus. On GNOME the AppIndicator extension is needed for the icon.
   - Package: `installer/build-linux.sh` creates `dist/cedro-<version>-linux-x64.tar.gz` (program, licences and `install.sh`, which installs for the user without admin rights).
-  - Transcription: the engine (whisper.cpp) is built separately with `trascrivi/build.sh`, one variant per processor type (`base`, `avx2`, `avxvnni`, `avx512`, `avx512vnni`) plus `vulkan` for the graphics card. You need cmake, clang and libopus; for Vulkan the headers, `glslc` and the loader. The `cedro-trascrivi-<version>-linux-x64-<variant>` files go in the release: Cedro downloads them the first time you transcribe.
+  - Transcription: the engine (whisper.cpp) is built separately with `trascrivi/build.sh`, one variant per processor type (`base`, `avx2`, `avxvnni`, `avx512`, `avx512vnni`) plus `vulkan` for the graphics card. You need cmake and clang (libopus is built in); for Vulkan the headers, `glslc` and the loader. The `cedro-trascrivi-<version>-linux-x64-<variant>` files go in the release: Cedro downloads them the first time you transcribe.
 
 Settings live in `%APPDATA%\Cedro\config.txt` (Windows) and `~/.config/cedro/config.txt` (Linux).
 

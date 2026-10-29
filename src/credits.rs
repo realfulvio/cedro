@@ -92,9 +92,9 @@ pub const GROUPS: &[Group] = &[
 
 /// La versione di whisper.cpp dentro il motore: quella di whisper-rs-sys 0.15 (il test `whisper_version_matches_the_engine` avverte se cambia).
 const WHISPER_CPP: &str = "1.8.3";
-/// Le versioni dei programmi fissati dentro le librerie (LAME in mp3lame-sys, libopus in audiopus_sys).
+/// Le versioni dei programmi fissati dentro le librerie (LAME in mp3lame-sys, libopus in opusic-sys).
 const LAME: &str = "3.100";
-const LIBOPUS: &str = "1.3.1";
+const LIBOPUS: &str = "1.6.1";
 
 /// Le versioni delle librerie Rust di Cedro e del suo motore, decise alla compilazione.
 fn crate_version(name: &str) -> Option<&'static str> {
@@ -234,6 +234,14 @@ mod tests {
         let at = lock.find("name = \"whisper-rs-sys\"").expect("whisper-rs-sys");
         assert!(lock[at..].lines().nth(1).unwrap().contains("\"0.15."), "whisper-rs-sys è cambiata: aggiorna WHISPER_CPP");
         assert_eq!(WHISPER_CPP, "1.8.3");
+    }
+
+    #[test]
+    #[cfg(any(windows, target_os = "linux", target_os = "android"))]
+    fn libopus_version_is_the_one_shown() {
+        // libopus è compilata dentro opusic-sys: i riconoscimenti mostrano la sua versione.
+        let v = unsafe { std::ffi::CStr::from_ptr(opusic_sys::opus_get_version_string()) };
+        assert_eq!(v.to_str().unwrap(), format!("libopus {LIBOPUS}"));
     }
 
     #[test]
