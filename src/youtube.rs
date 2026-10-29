@@ -793,15 +793,16 @@ fn capture_until(cmd: &mut Command, cancel: &AtomicBool, limit: Duration) -> Res
     track(&child);
     let mut out = child.stdout.take().ok_or("niente uscita")?;
     let mut err = child.stderr.take().ok_or("niente uscita")?;
+    // Byte e poi testo: un carattere non UTF-8 (yt-dlp su Windows scrive nella codifica del sistema) non svuota tutto.
     let t_out = std::thread::spawn(move || {
-        let mut text = String::new();
-        let _ = out.read_to_string(&mut text);
-        text
+        let mut bytes = Vec::new();
+        let _ = out.read_to_end(&mut bytes);
+        String::from_utf8_lossy(&bytes).into_owned()
     });
     let t_err = std::thread::spawn(move || {
-        let mut text = String::new();
-        let _ = err.read_to_string(&mut text);
-        text
+        let mut bytes = Vec::new();
+        let _ = err.read_to_end(&mut bytes);
+        String::from_utf8_lossy(&bytes).into_owned()
     });
     let status = loop {
         let late = std::time::Instant::now() >= deadline;
@@ -850,7 +851,7 @@ fn ensure_web_adapters() -> Result<(), String> {
 pub fn probe(ytdlp: &Path, url: &str, playlist: bool, cancel: &AtomicBool) -> Result<Info, String> {
     ensure_web_adapters()?;
     let mut cmd = command(ytdlp);
-    cmd.arg("--ignore-config").arg("--plugin-dirs").arg("default").arg("--plugin-dirs").arg(web_adapters_dir());
+    cmd.arg("--ignore-config").arg("--encoding").arg("utf-8").arg("--plugin-dirs").arg("default").arg("--plugin-dirs").arg(web_adapters_dir());
     cmd.args(["--dump-single-json", "--flat-playlist", "--no-warnings", "--skip-download"]).arg(if playlist { "--yes-playlist" } else { "--no-playlist" }).arg("--").arg(url);
     let (stdout, stderr, ok) = capture(&mut cmd, cancel)?;
     if !ok {
@@ -914,6 +915,8 @@ pub fn build_args(r: &Request, ffmpeg: Option<&Path>, deno: Option<&Path>, in_pl
     let mut a: Vec<String> = Vec::new();
     let mut push = |items: &[&str]| a.extend(items.iter().map(|s| s.to_string()));
     push(&["--newline", "--no-quiet", "--no-colors", "--ignore-config", "--no-mtime", "--embed-metadata"]);
+    // In una pipe yt-dlp scrive con la codifica del sistema (su Windows cp1252): i nomi accentati non sarebbero UTF-8.
+    push(&["--encoding", "utf-8"]);
     push(&["--plugin-dirs", "default", "--plugin-dirs", &web_adapters_dir().to_string_lossy()]);
     push(&["--progress-template", "download:CEDRO|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s"]);
     push(&["--print", "after_move:CEDROFILE|%(filepath)s"]);
@@ -1131,6 +1134,24 @@ pub fn run(r: &Request, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Res
     Ok(files)
 }
 
+/// Le righe di un'uscita anche con byte non UTF-8: con `lines()` una riga così fermerebbe la lettura,
+/// la pipe si chiuderebbe e yt-dlp cadrebbe alla scrittura successiva.
+fn lossy_lines(reader: impl Read) -> impl Iterator<Item = String> {
+    let mut reader = BufReader::new(reader);
+    std::iter::from_fn(move || {
+        let mut buf = Vec::new();
+        match reader.read_until(b'\n', &mut buf) {
+            Ok(0) | Err(_) => None,
+            Ok(_) => {
+                while matches!(buf.last(), Some(b'\n' | b'\r')) {
+                    buf.pop();
+                }
+                Some(String::from_utf8_lossy(&buf).into_owned())
+            }
+        }
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, total: usize, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<Vec<PathBuf>, String> {
     let mut child = command(ytdlp)
@@ -1149,14 +1170,14 @@ fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, 
     let err = child.stderr.take().ok_or("yt-dlp senza uscita")?;
     let tx2 = tx.clone();
     std::thread::spawn(move || {
-        for line in BufReader::new(out).lines().map_while(Result::ok) {
+        for line in lossy_lines(out) {
             if tx.send(Line::Out(line)).is_err() {
                 break;
             }
         }
     });
     std::thread::spawn(move || {
-        for line in BufReader::new(err).lines().map_while(Result::ok) {
+        for line in lossy_lines(err) {
             if tx2.send(Line::Err(line)).is_err() {
                 break;
             }
@@ -1697,7 +1718,7 @@ mod tests {
         let fake = dir.join("yt-dlp");
         std::fs::write(
             &fake,
-            "#!/bin/sh\nfor a in \"$@\"; do last=\"$a\"; done\ncase \"$last\" in\n*bad*) echo 'ERROR: [youtube] bad: Private video' >&2; exit 1;;\nesac\necho '[download] Downloading item 1 of 2'\necho 'CEDRO|50|100|NA|10|5'\necho 'CEDRO|100|100|NA|10|0'\ntouch \"$last-out.mp4\"\necho \"CEDROFILE|$last-out.mp4\"\n",
+            "#!/bin/sh\nfor a in \"$@\"; do last=\"$a\"; done\ncase \"$last\" in\n*bad*) echo 'ERROR: [youtube] bad: Private video' >&2; exit 1;;\nesac\necho '[download] Downloading item 1 of 2'\nprintf '[download] Destination: Perch\\351.mp4\\n'\necho 'CEDRO|50|100|NA|10|5'\necho 'CEDRO|100|100|NA|10|0'\ntouch \"$last-out.mp4\"\necho \"CEDROFILE|$last-out.mp4\"\n",
         )
         .unwrap();
         std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -1708,6 +1729,8 @@ mod tests {
         assert_eq!(files, vec![dir.join("good-out.mp4")]);
         assert!(dir.join("good-out.mp4").exists());
         assert!(events.iter().any(|e| matches!(e, Event::Progress { percent, .. } if *percent > 49.0 && *percent < 51.0)), "{events:?}");
+        // Una riga non UTF-8 (cp1252) non ferma la lettura delle righe dopo.
+        assert!(events.iter().any(|e| matches!(e, Event::Log(l) if l.starts_with("[download] Destination: Perch"))), "{events:?}");
         let err = run_one(&fake, &args, "bad", &dir, 0, 1, &mut |_| {}, &cancel).unwrap_err();
         assert_eq!(err, "Il video è privato");
         cancel.store(true, Ordering::Relaxed);

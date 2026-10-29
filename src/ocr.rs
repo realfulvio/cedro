@@ -279,7 +279,11 @@ fn tesseract_lines(image: &DynamicImage) -> Option<Vec<Line>> {
     let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
     // BMP: niente compressione da fare e disfare per un file che vive un istante.
     let tmp = std::env::temp_dir().join(format!("cedro-ocr-{}-{n}.bmp", std::process::id()));
-    image.to_rgb8().save(&tmp).ok()?;
+    if image.to_rgb8().save(&tmp).is_err() {
+        // Disco pieno a metà scrittura: il BMP parziale (anche decine di MB) non resta in /tmp.
+        let _ = std::fs::remove_file(&tmp);
+        return None;
+    }
     let out = Command::new("tesseract")
         .arg(&tmp)
         .arg("-")
