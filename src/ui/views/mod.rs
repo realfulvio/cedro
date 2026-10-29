@@ -9,8 +9,10 @@ mod compatto;
 mod documento;
 mod essenziale;
 mod guidato;
+mod pagine;
 
 pub use activity::{links_page, transcribe_page};
+pub use pagine::{merged_pages, MERGE as ICON_MERGE, MERGED_MAX, SCISSORS as ICON_SCISSORS, STRIP_MAX};
 
 use super::assets as ic;
 use super::core::{Act, Field, Fold, Frame, Scroll, BOLD, R, SANS, SEMI};
@@ -184,6 +186,36 @@ pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32,
             let top = y + 28.0 + st.control_h + 8.0;
             28.0 + st.control_h + 8.0 + note_lines(f, def.note, top, w)
         }
+        Control::Segments(choices) => {
+            let v = app.values.get(def);
+            f.text(def.title, x, y, w, 24.0, st.label, SANS, pal.text);
+            // A gruppi di tre per riga, come nella tavola: «Ogni pagina · Ogni N · Intervalli», poi gli altri.
+            let seg_h = (st.control_h - 2.0).max(34.0);
+            let mut top = y + 28.0;
+            for row in choices.chunks(3) {
+                f.p.rrect(x, top, w, seg_h, 6.0, Some(pal.surface), Some((pal.border, 1.0)));
+                let cw = w / row.len() as f32;
+                for (k, c) in row.iter().enumerate() {
+                    let r = (x + k as f32 * cw, top, cw, seg_h);
+                    let act = Act::OptPick(def.opt, c.value);
+                    let on = c.value == v;
+                    if on {
+                        f.p.rrect(r.0 + 1.0, r.1 + 1.0, r.2 - 2.0, r.3 - 2.0, 5.0, Some(pal.alt), None);
+                        f.p.fill(r.0 + 1.0, r.1 + r.3 - 3.0, r.2 - 2.0, 3.0, pal.primary);
+                    } else if f.hovered(&act) {
+                        f.p.rrect(r.0 + 1.0, r.1 + 1.0, r.2 - 2.0, r.3 - 2.0, 5.0, Some(mix(pal.alt, pal.surface, 0.5)), None);
+                    }
+                    if k > 0 {
+                        f.vline(r.0, r.1 + 1.0, r.3 - 2.0);
+                    }
+                    f.text_c(c.label, (r.0 + 4.0, r.1, r.2 - 8.0, r.3), st.note + 1.0, if on { SEMI } else { SANS }, if on { pal.primary } else { pal.text });
+                    f.focus_ring(r, 6.0, &act);
+                    f.hit(r, act);
+                }
+                top += seg_h + 6.0;
+            }
+            top - y + 2.0 + note_lines(f, def.note, top + 2.0, w)
+        }
         Control::Password => {
             f.text(def.title, x, y, w, 24.0, st.label, SANS, pal.text);
             f.field((x, y + 28.0, w, st.control_h), Field::Opt(def.opt), app.values.text(def), "nessuna", 16.0, true);
@@ -196,9 +228,32 @@ pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32,
 /// Formato, qualità e opzioni della voce scelta, con «Altre opzioni» che si apre.
 /// Restituisce l'altezza disegnata (per lo scorrimento).
 pub fn options_panel(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: OptStyle, with_format: bool) -> f32 {
+    options_panel_ex(f, app, x, y, w, st, with_format, true)
+}
+
+/// Come `options_panel`; nella scheda PDF in cima ci sono i tre pulsanti «Cosa vuoi fare». `in_panel`
+/// dice se l'ordine dei file (Unisci) e la striscia delle pagine (Dividi) stanno qui, con la scritta
+/// sopra i pulsanti, o se il tema li mette nella sua coda e scrive «Cosa vuoi fare» per conto suo.
+pub fn options_panel_ex(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: OptStyle, with_format: bool, in_panel: bool) -> f32 {
     let pal = f.pal;
     let mut cy = y;
-    if with_format {
+    let modes = with_format && pagine::shows_modes(f, app);
+    if modes {
+        if in_panel {
+            f.text("Cosa vuoi fare", x, cy, w, 24.0, st.label, SANS, pal.text);
+            cy += 28.0;
+        }
+        cy += pagine::modes(f, app, x, cy, w, (st.control_h * 1.85).round()) + 16.0;
+        f.hline(x - 23.0, cy, w + 44.0);
+        cy += 16.0;
+        if in_panel {
+            let h = pagine::panel_extras(f, app, x, cy, w, st);
+            if h > 0.0 {
+                cy += h + st.gap;
+            }
+        }
+    }
+    if with_format && (!modes || app.pdf_mode() == super::model::PdfMode::Convert) {
         f.text("Formato", x, cy, w, 24.0, st.label, SANS, pal.text);
         let title = action_title(app, f.simple);
         f.select((x, cy + 28.0, w, st.control_h), &title, None, 16.0, Act::FormatMenu);
@@ -246,6 +301,15 @@ pub fn dest_select(f: &mut Frame, app: &App, r: R, size: f32) {
 }
 
 pub fn dest_note(app: &App) -> String {
+    if app.activity == Activity::Convert && app.kind() == Kind::Pdf {
+        match (app.pdf_mode(), &app.dest) {
+            (super::model::PdfMode::Merge, None) => return "Il file unito verrà salvato nella cartella del primo file.".into(),
+            (super::model::PdfMode::Merge, Some(p)) => return format!("Il file unito verrà salvato in {}.", p.display()),
+            (super::model::PdfMode::Split, None) => return "I file nuovi verranno salvati nella stessa cartella dell'originale.".into(),
+            (super::model::PdfMode::Split, Some(p)) => return format!("I file nuovi verranno salvati in {}.", p.display()),
+            _ => {}
+        }
+    }
     match &app.dest {
         None => "I file convertiti verranno salvati nella stessa cartella dei file originali.".into(),
         Some(p) => format!("I file convertiti verranno salvati in {}.", p.display()),
@@ -271,7 +335,12 @@ pub fn go_label(app: &App) -> String {
         };
     }
     if app.finished() {
-        return if app.targets().len() > 1 { "Apri cartella".into() } else { "Apri risultato".into() };
+        let one = match pagine::go_label(app).map(|_| app.pdf_mode()) {
+            Some(super::model::PdfMode::Merge) => true,
+            Some(super::model::PdfMode::Split) => false,
+            _ => app.targets().len() <= 1,
+        };
+        return if one { "Apri risultato".into() } else { "Apri cartella".into() };
     }
     let n = if matches!(app.activity, Activity::Convert | Activity::Transcribe) { app.todo().len() } else { app.targets().len() };
     match app.activity {
@@ -279,6 +348,9 @@ pub fn go_label(app: &App) -> String {
         Activity::Transcribe => format!("Trascrivi {n} file"),
         Activity::YouTube | Activity::Web => "Scarica".into(),
         Activity::Convert => {
+            if let Some(label) = pagine::go_label(app) {
+                return label;
+            }
             if n == 0 {
                 "Converti".into()
             } else if n == 1 {
@@ -445,6 +517,19 @@ pub fn scrolled(f: &mut Frame, r: R, which: Scroll, body: impl FnOnce(&mut Frame
 /// Il nome del tasto «Strumenti» di un tema, se la voce è uno strumento e non un formato.
 pub fn is_tool(app: &App) -> bool {
     conversioni::tools(app.kind()).iter().any(|s| s.id == app.action)
+}
+
+/// L'ordine dei file (Unisci) o la striscia delle pagine (Dividi) nella scheda PDF; 0 per il resto.
+pub fn page_extras(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: OptStyle) -> f32 {
+    if f.simple || app.activity != Activity::Convert || app.kind() != Kind::Pdf {
+        return 0.0;
+    }
+    pagine::panel_extras(f, app, x, y, w, st)
+}
+
+/// L'icona del pulsante grande: unire e dividere hanno la loro.
+pub fn go_icon(app: &App) -> &'static str {
+    pagine::go_icon(app)
 }
 
 pub const BOLD_W: super::gfx::Weight = BOLD;
