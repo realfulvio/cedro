@@ -145,6 +145,23 @@ pub enum Act {
     RowDrag(usize, u16),
     /// Dividere i PDF: il taglio dopo una pagina (file, pagina da 1).
     Cut(usize, u32),
+    /// «Pagine»: una pagina del banco, che si sceglie con un clic o si trascina
+    /// (file, posto, larghezza e altezza di un posto, posti per riga).
+    PageDrag(usize, usize, u16, u16, u16),
+    /// «Pagine»: gira le pagine scelte (file, 1 orario, -1 antiorario).
+    PagesRotate(usize, i32),
+    /// «Pagine»: toglie (o rimette) le pagine scelte.
+    PagesRemove(usize),
+    /// «Pagine»: copia le pagine scelte in un PDF nuovo.
+    PagesExtract(usize),
+    /// «Pagine»: sceglie tutte le pagine, o nessuna.
+    PagesAll(usize),
+    /// «Pagine»: torna alle pagine com'erano.
+    PagesReset(usize),
+    /// «Pagine»: l'elenco dei PDF per scegliere quello sul banco.
+    PagesFileMenu,
+    /// «Pagine» con numeri o filigrana: la pagina della striscia da vedere in grande (file, posto).
+    StampPick(usize, usize),
     /// Solo per bloccare i clic sotto un riquadro (per esempio dentro un menu aperto).
     Nothing,
 }
@@ -186,6 +203,8 @@ pub struct UiState {
     pub drag: Option<(Act, R)>,
     /// Una riga trascinata (unire i PDF): la y dove è partita e quella di adesso.
     pub drag_y: (f32, f32),
+    /// Una pagina trascinata («Pagine»): la x dove è partita e quella di adesso (la y è in `drag_y`).
+    pub drag_x: (f32, f32),
     /// Dei file passano sopra la finestra.
     pub dropping: bool,
     /// Il passo del Percorso guidato (0 file, 1 operazione, 2 salvataggio).

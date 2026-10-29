@@ -16,6 +16,7 @@ mod mp4fast;
 mod ocr;
 mod pdf;
 mod pdfdoc;
+mod pdfedit;
 mod pdfpages;
 mod pdflayout;
 pub mod settings;
@@ -61,7 +62,7 @@ pub(crate) use vaapi as gpuenc;
 pub(crate) use mediacodec as gpuenc;
 
 pub use engine::{
-    append_log, config_dir, merge_paths, merge_with, perform_with, PdfPages, Exists, ExistsAsk, ExistsChoice, Options, PageSel, unique_output, extension, kind_of, mode_from_vk, perform, perform_into, read_quality, same_kind_paths, slices, Kind,
+    append_log, config_dir, merge_paths, merge_with, perform_with, PdfEdit, PdfPages, saved_squeeze, size_words, squeeze_pdf, Exists, ExistsAsk, ExistsChoice, Options, PageSel, unique_output, extension, kind_of, mode_from_vk, perform, perform_into, read_quality, same_kind_paths, slices, Kind,
     Mode, Output, Slice,
 };
 pub use audio::waveform;

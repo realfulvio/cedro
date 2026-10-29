@@ -133,7 +133,7 @@ fn frame(f: &mut Frame, app: &App, full: bool) {
             f.p.rrect(go.0, go.1 + go_h + 6.0, go.2 * p, 4.0, 2.0, Some(pal.primary), None);
         }
     } else {
-        f.primary(go, &super::go_label(app), Some(ic::CONVERT), 21.0, Act::Start, !app.targets().is_empty());
+        f.primary(go, &super::go_label(app), Some(super::go_icon(app)), 21.0, Act::Start, !app.targets().is_empty());
     }
     super::go_extras(f, app, go, false);
     bottom_links(f, app, x, f.h - links_h, cw, full);
