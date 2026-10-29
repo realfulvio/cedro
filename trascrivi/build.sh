@@ -4,7 +4,7 @@
 #   -o  cartella dei file finiti (dist)          -c  solo le varianti per processore, niente Vulkan
 #   -t  cartella di compilazione (/tmp/ctv)      variante: base avx2 avxvnni avx512 avx512vnni vulkan
 #
-# Servono: Rust, cmake, un compilatore C++, libclang (per bindgen) e libopus con i suoi header.
+# Servono: Rust, cmake, un compilatore C++ e libclang (per bindgen); libopus è compilata dentro (opusic-sys).
 # Per la variante «vulkan» anche gli header di Vulkan, `glslc` e il caricatore (libvulkan.so):
 #   Arch: vulkan-headers vulkan-icd-loader shaderc   Debian/Ubuntu: libvulkan-dev glslc
 # Senza i pacchetti di sistema: VULKAN_SDK=<cartella con include/, lib/libvulkan.so e Bin/glslc> e Bin nel PATH.
