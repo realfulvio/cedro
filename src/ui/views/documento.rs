@@ -375,7 +375,7 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
                 f.p.rrect(go.0, go.1 + go.3 + 10.0, go.2 * p, 5.0, 2.5, Some(pal.primary), None);
             }
         } else {
-            f.primary(go, &super::go_label(app), Some(ic::CONVERT), 22.0, Act::Start, ready);
+            f.primary(go, &super::go_label(app), Some(super::go_icon(app)), 22.0, Act::Start, ready);
         }
         super::go_extras(f, app, go, false);
         let mut y = go.1 + go.3 + 40.0;
@@ -400,7 +400,7 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
     let archive = app.kind() == Kind::Archive;
     let target = if archive {
         "ZIP".to_string()
-    } else if conversioni::is_page_action(id) {
+    } else if conversioni::is_page_action(app.kind(), id) {
         "PDF".to_string()
     } else {
         id.to_uppercase()
@@ -409,7 +409,7 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
     if archive {
         f.kind_icon(Kind::Archive, tx, r.1 + 30.0, 56.0);
     } else {
-        format_icon_small(f, if conversioni::is_page_action(id) { "pdf" } else { id }, tx, r.1 + 30.0, 56.0);
+        format_icon_small(f, if conversioni::is_page_action(app.kind(), id) { "pdf" } else { id }, tx, r.1 + 30.0, 56.0);
     }
     f.text(&target, tx + 66.0, r.1 + 30.0, 100.0, 56.0, 21.0, SEMI, pal.text);
     let body = (r.0 + 1.0, r.1 + 108.0, r.2 - 2.0, r.3 - 108.0 - 130.0);
@@ -461,7 +461,7 @@ fn footer(f: &mut Frame, app: &App, y: f32, simple: bool) {
                 f.p.rrect(go.0, go.1 + go.3 + 4.0, go.2 * p, 3.0, 1.5, Some(pal.primary), None);
             }
         } else {
-            f.primary(go, &super::go_label(app), Some(ic::CONVERT), 19.0, Act::Start, !app.targets().is_empty());
+            f.primary(go, &super::go_label(app), Some(super::go_icon(app)), 19.0, Act::Start, !app.targets().is_empty());
         }
         super::go_extras(f, app, go, true);
     }

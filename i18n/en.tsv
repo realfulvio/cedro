@@ -1244,3 +1244,107 @@ intervallo «{}» non valido	invalid range «{}»
 l'intervallo «{}» non ha pagine	the range «{}» has no pages
 scrivi gli intervalli, per esempio 1-3, 4-6, 7-	type the ranges, for example 1-3, 4-6, 7-
 scrivi le pagine da togliere, per esempio 2,5-6	type the pages to remove, for example 2,5-6
+Rimetti	Restore
+{#} pagine · {}	{} pages · {}
+1 pagina · {}	1 page · {}
+Togli	Remove
+Estrai	Extract
+{#} pagine · 1 scelta	{} pages · 1 selected
+{#} pagine · {#} scelte	{} pages · {} selected
+Tolta · {#}	Removed · {}
+Ruotata {#}° · {#}	Rotated {}° · {}
+Si vedono le prime {#} pagine di {#}.	Showing the first {} pages of {}.
+Si prepara l'anteprima…	Preparing the preview…
+Anteprima della pagina {#} di {#}	Preview of page {} of {}
+Cosa succederà	What will happen
+Tolte	Removed
+Ruotata {#}°	Rotated {}°
+Ruotate {#}°	Rotated {}°
+Spostate	Moved
+Ordine nuovo	New order
+Scelte	Selected
+Pagina {#}	Page {}
+Pagine {} e altre {#}	Pages {} and {} more
+Pagine {}	Pages {}
+Nessuna modifica alle pagine: sceglile a sinistra con un clic.	No changes to the pages: click them on the left to select them.
+Torna alle pagine com'erano	Back to the original pages
+Tocca le pagine per sceglierle, trascinale per spostarle.	Tap the pages to select them, drag them to move them.
+Un PDF che non si riesce a ridurre resta com'è: non se ne salva mai uno più pesante.	A PDF that can't be made smaller stays as it is: a heavier one is never saved.
+Da {} a circa {}	From {} to about {}
+Da {} a {}	From {} to {}
+Da {} a	From {} to
+circa {}	about {}
+{} adesso	{} now
+{} dopo	{} after
+stima in corso…	estimating…
+Stima vera, fatta comprimendo in memoria.	Real estimate, made by compressing in memory.
+Pesi veri dei file salvati.	Real sizes of the saved files.
+Spunta i PDF da comprimere.	Tick the PDFs to compress.
+Si calcolano le stime…	Calculating the estimates…
+Se un file non si riesce a ridurre, resta com'è e la riga lo dice: non viene mai salvato un PDF più pesante dell'originale.	If a file can't be made smaller, it stays as it is and its row says so: a PDF heavier than the original is never saved.
+Peso adesso e stima dopo	Size now and estimate after
+Risparmio	Savings
+Già leggero	Already light
+si calcola la stima…	estimating…
+già leggero, resta com'è	already light, stays as it is
+stima pronta	estimate ready
+Clic su una pagina per sceglierla (ancora per toglierla dalla scelta), trascina per spostarla. I pulsanti in alto valgono per la scelta: la ruotano di 90°, la tolgono o la copiano in un PDF nuovo.	Click a page to select it (again to deselect it), drag it to move it. The buttons at the top act on the selection: they rotate it by 90°, remove it or copy it to a new PDF.
+Tocca una pagina della striscia per vederla in grande; i comandi in alto valgono per quella.	Tap a page in the strip to see it large; the commands at the top act on that page.
+Salva 1 pagina	Save 1 page
+Salva {#} pagine	Save {} pages
+Salva {#} PDF	Save {} PDFs
+Comprimi {#} PDF	Compress {} PDFs
+Riduci il peso	Reduce the size
+Il file nuovo viene salvato accanto all'originale.	The new file is saved next to the original.
+Il file nuovo viene salvato in {}.	The new file is saved in {}.
+I file compressi vengono salvati accanto agli originali.	Compressed files are saved next to the originals.
+I file compressi vengono salvati in {}.	Compressed files are saved in {}.
+Deve restare almeno una pagina.	At least one page must remain.
+Scegli prima le pagine da estrarre.	Select the pages to extract first.
+Numeri di pagina	Page numbers
+Es. «Pagina 1 di 8», sopra ogni pagina	E.g. "Page 1 of 8", on every page
+Posizione	Position
+Pagina 1 di N	Page 1 of N
+1 / N	1 / N
+Primo numero	First number
+Vuoto = 1	Empty = 1
+Corpo	Size
+Filigrana	Watermark
+Testo grande e chiaro sopra le pagine	Large, light text over the pages
+Testo della filigrana	Watermark text
+BOZZA	DRAFT
+Opacità	Opacity
+Diagonale	Diagonal
+Orizzontale	Horizontal
+Direzione	Direction
+Pagine con la filigrana	Pages with the watermark
+Vuoto = tutte. Per esempio 1-3,5	Empty = all. For example 1-3,5
+Livello	Level
+Equilibrata	Balanced
+Forte	Strong
+Leggera: ripulisce senza toccare le immagini. Equilibrata: immagini a 150 dpi, giusta per l'email. Forte: 100 dpi, il più piccolo.	Light: cleans up without touching the images. Balanced: images at 150 dpi, right for email. Strong: 100 dpi, the smallest.
+Togli metadati	Remove metadata
+Autore, programma, data di modifica	Author, program, modification date
+Scansioni in bianco e nero	Black and white scans
+Restano nitide e pesano molto meno	They stay sharp and weigh much less
+Più piccolo	Smaller
+per l'email	for email
+Il primo numero deve essere un numero da 1 in su.	The first number must be a number from 1 up.
+Pagina %n di %t	Page %n of %t
+Già leggero ({}): resta com'è	Already light ({}): stays as it is
+nessuna pagina da salvare	no pages to save
+~ pagine,	 pages,
+~ pagina,	 page,
+~ tolte	 removed
+~ tolta	 removed
+~ ruotate	 rotated
+~ ruotata	 rotated
+~, numerate	, numbered
+~, con filigrana	, watermarked
+I PDF diventano circa {} volte più piccoli e restano leggibili. Gli originali non si toccano.	The PDFs become about {} times smaller and stay readable. The originals are not touched.
+Il PDF diventa circa {} volte più piccolo e resta leggibile. L'originale non si tocca.	The PDF becomes about {} times smaller and stays readable. The original is not touched.
+I PDF diventano circa il {#}% più leggeri e restano leggibili. Gli originali non si toccano.	The PDFs become about {}% lighter and stay readable. The originals are not touched.
+Il PDF diventa circa il {#}% più leggero e resta leggibile. L'originale non si tocca.	The PDF becomes about {}% lighter and stays readable. The original is not touched.
+I PDF sono già leggeri: restano come sono.	The PDFs are already light: they stay as they are.
+Il PDF è già leggero: resta com'è.	The PDF is already light: it stays as it is.
+Si calcola quanto si risparmia…	Working out how much is saved…

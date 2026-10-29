@@ -511,8 +511,8 @@ fn press_look(app: &Application, state: &Rc<RefCell<Wheel>>, monitor: usize, x: 
                 let w = state.borrow();
                 let kind = w.launch.paths.first().map(|p| kind_of(p)).unwrap_or(cedro::Kind::Other);
                 let action = w.look.as_ref().and_then(|u| u.current()).and_then(|i| wheel_list(kind, w.launch.mode).get(i).map(|s| s.id));
-                // Unisci e Dividi (Ctrl) aprono Conversioni già sul pulsante giusto.
-                (w.launch.paths.clone(), action.filter(|id| w.launch.mode == Mode::Convert || cedro::conversioni::is_page_action(id)))
+                // Unisci, Dividi e Comprimi (Ctrl) aprono Conversioni già sul pulsante giusto.
+                (w.launch.paths.clone(), action.filter(|id| w.launch.mode == Mode::Convert || cedro::conversioni::is_page_action(kind, id)))
             };
             close_wheel(state);
             crate::linux_ui2::open_with(app, paths, action);

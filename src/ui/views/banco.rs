@@ -242,7 +242,7 @@ fn footer(f: &mut Frame, app: &App, y: f32, simple: bool) {
         f.text("Conversione in corso", r.0 + 70.0, r.1, r.2 - 76.0, r.3, 18.0, SANS, pal.muted);
     } else {
         let label = super::go_label(app);
-        f.primary(go, &label, Some(ic::CONVERT), 20.0, Act::Start, !app.targets().is_empty());
+        f.primary(go, &label, Some(super::go_icon(app)), 20.0, Act::Start, !app.targets().is_empty());
     }
     super::go_extras(f, app, go, false);
 }

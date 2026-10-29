@@ -481,9 +481,10 @@ fn on_input(kind: usize, extra: isize) {
 fn open_conversions_from_wheel() {
     let (paths, action) = SESSION.with(|s| {
         let g = s.borrow();
-        let action = g.look.as_ref().and_then(|u| u.current()).and_then(|i| wheel_list(g.paths.first().map(|p| kind_of(p)).unwrap_or(Kind::Other), g.mode).get(i).map(|sl| sl.id));
-        // Unisci e Dividi (Ctrl) aprono Conversioni già sul pulsante giusto.
-        (g.paths.clone(), action.filter(|id| g.mode == Mode::Convert || cedro::conversioni::is_page_action(id)))
+        let kind = g.paths.first().map(|p| kind_of(p)).unwrap_or(Kind::Other);
+        let action = g.look.as_ref().and_then(|u| u.current()).and_then(|i| wheel_list(kind, g.mode).get(i).map(|sl| sl.id));
+        // Unisci, Dividi e Comprimi (Ctrl) aprono Conversioni già sul pulsante giusto.
+        (g.paths.clone(), action.filter(|id| g.mode == Mode::Convert || cedro::conversioni::is_page_action(kind, id)))
     });
     close_wheel();
     crate::ui_win::open_with(paths, action);

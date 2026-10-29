@@ -104,29 +104,38 @@ fn standard(f: &mut Frame, app: &App) {
     let q = (q_x, 212.0, q_w, foot_y - 20.0 - 212.0);
     f.card(q, 12.0);
     let visible = app.visible();
-    // Barra: Aggiungi file (con la freccia per la cartella), Aggiungi cartella, Rimuovi, conteggio.
-    let add = (316.0, 234.0, 197.0, 40.0);
-    let hot = f.hovered(&Act::AddFiles);
-    f.p.rrect(add.0, add.1, add.2, add.3, 6.0, Some(if hot { mix(pal.primary, (0, 0, 0), 0.12) } else { pal.primary }), None);
-    f.icon(ic::ADD, add.0 + 14.0, add.1 + 8.0, 24.0, pal.on_primary);
-    f.text("Aggiungi file", add.0 + 46.0, add.1, 112.0, 40.0, 17.0, SEMI, pal.on_primary);
-    f.p.fill_a(add.0 + add.2 - 38.0, add.1, 1.0, 40.0, pal.on_primary, 0.35);
-    f.icon(ic::CHEVRON_DOWN, add.0 + add.2 - 31.0, add.1 + 8.0, 24.0, pal.on_primary);
-    f.hit((add.0, add.1, add.2 - 38.0, add.3), Act::AddFiles);
-    f.hit((add.0 + add.2 - 38.0, add.1, 38.0, add.3), Act::AddMenu);
-    let mut x = 544.0;
-    x += f.tool(x, 234.0, 40.0, "Aggiungi cartella", ic::FOLDER, 16.0, Act::AddFolder, true) + 8.0;
-    f.vline(x, 240.0, 30.0);
-    x += 20.0;
-    f.tool(x, 234.0, 40.0, "Rimuovi", ic::TRASH, 16.0, Act::RemoveChecked, !visible.is_empty() && !app.busy());
-    let count = format!("{} file", visible.len());
-    f.text_r(&count, (q.0 + q.2 - 140.0, 234.0, 70.0, 40.0), 16.0, SANS, pal.text);
-    f.icon(ic::MENU, q.0 + q.2 - 56.0, 242.0, 24.0, pal.text);
-
     let pdf_mode = if super::pagine::shows_modes(f, app) { app.pdf_mode() } else { PdfMode::Convert };
+    // Barra: Aggiungi file (con la freccia per la cartella), Aggiungi cartella, Rimuovi, conteggio.
+    // «Pagine» ha al suo posto il PDF sul banco e i comandi delle pagine.
+    let pages_mode = pdf_mode == PdfMode::Pages && !visible.is_empty();
+    if !pages_mode {
+        let add = (316.0, 234.0, 197.0, 40.0);
+        let hot = f.hovered(&Act::AddFiles);
+        f.p.rrect(add.0, add.1, add.2, add.3, 6.0, Some(if hot { mix(pal.primary, (0, 0, 0), 0.12) } else { pal.primary }), None);
+        f.icon(ic::ADD, add.0 + 14.0, add.1 + 8.0, 24.0, pal.on_primary);
+        f.text("Aggiungi file", add.0 + 46.0, add.1, 112.0, 40.0, 17.0, SEMI, pal.on_primary);
+        f.p.fill_a(add.0 + add.2 - 38.0, add.1, 1.0, 40.0, pal.on_primary, 0.35);
+        f.icon(ic::CHEVRON_DOWN, add.0 + add.2 - 31.0, add.1 + 8.0, 24.0, pal.on_primary);
+        f.hit((add.0, add.1, add.2 - 38.0, add.3), Act::AddFiles);
+        f.hit((add.0 + add.2 - 38.0, add.1, 38.0, add.3), Act::AddMenu);
+        let mut x = 544.0;
+        x += f.tool(x, 234.0, 40.0, "Aggiungi cartella", ic::FOLDER, 16.0, Act::AddFolder, true) + 8.0;
+        f.vline(x, 240.0, 30.0);
+        x += 20.0;
+        f.tool(x, 234.0, 40.0, "Rimuovi", ic::TRASH, 16.0, Act::RemoveChecked, !visible.is_empty() && !app.busy());
+        let count = format!("{} file", visible.len());
+        f.text_r(&count, (q.0 + q.2 - 140.0, 234.0, 70.0, 40.0), 16.0, SANS, pal.text);
+        f.icon(ic::MENU, q.0 + q.2 - 56.0, 242.0, 24.0, pal.text);
+    }
+
     if visible.is_empty() {
         super::drop_zone(f, app, (q.0 + 20.0, 300.0, q.2 - 40.0, q.3 - 108.0), true);
         super::others_link(f, app, q.0 + 24.0, q.1 + q.3 - 50.0, 30.0, 15.0);
+    } else if pdf_mode == PdfMode::Pages {
+        pages_card(f, app, q);
+    } else if pdf_mode == PdfMode::Compress {
+        compress_queue(f, app, q, &visible);
+        super::others_link(f, app, q.0 + 24.0, q.1 + q.3 - 40.0, 30.0, 15.0);
     } else if pdf_mode != PdfMode::Convert {
         page_queue(f, app, q, &visible, pdf_mode == PdfMode::Merge);
         super::others_link(f, app, q.0 + 24.0, q.1 + q.3 - 40.0, 30.0, 15.0);
@@ -337,6 +346,118 @@ fn page_queue(f: &mut Frame, app: &App, q: R, rows: &[usize], merge: bool) {
         }
         end - list.1 + 16.0
     });
+}
+
+/// «Pagine» al posto della coda: il PDF sul banco (si cambia dall'elenco), la barra dei comandi e le
+/// pagine; con numeri o filigrana accesi, la pagina vera in grande e la striscia. Misure della tavola A.
+fn pages_card(f: &mut Frame, app: &App, q: R) {
+    let pal = f.pal;
+    let Some(i) = super::pagine::split_file(app) else { return };
+    let name_w = 330.0f32.min(q.2 - 520.0).max(180.0);
+    f.select((q.0 + 20.0, 228.0, name_w, 44.0), &app.files[i].name(), None, 16.0, Act::PagesFileMenu);
+    let tools_w = super::pagine::pages_tools(f, app, i, q.0 + q.2 - 20.0, 230.0, 40.0, 16.0);
+    let count_x = q.0 + 20.0 + name_w + 12.0;
+    super::pagine::pages_count(f, app, i, count_x, 228.0, (q.0 + q.2 - 20.0 - tools_w - 12.0 - count_x).max(60.0), 44.0, 15.0);
+    f.hline(q.0 + 20.0, 286.0, q.2 - 40.0);
+    let stamped = !conversioni::options_from(&app.values).pdf_edit.stamp.is_empty();
+    let hint_y = q.1 + q.3 - 50.0;
+    let list = (q.0 + 1.0, 288.0, q.2 - 2.0, hint_y - 288.0 - 4.0);
+    super::scrolled(f, list, Scroll::Queue, |f| {
+        if stamped {
+            let big = (list.3 - 150.0).clamp(220.0, 410.0);
+            super::pagine::stamp_view(f, app, i, q.0 + 24.0, list.1 + 12.0, q.2 - 48.0, big, 64.0) + 24.0
+        } else {
+            // Il banco centrato nella scheda: posti larghi 150 come nella tavola.
+            let per_row = (((q.2 - 68.0 + 38.0) / 150.0) as usize).max(1);
+            let used = per_row as f32 * 150.0 - 38.0;
+            let x = q.0 + ((q.2 - used) / 2.0).round();
+            super::pagine::board(f, app, i, x, list.1 + 57.0, used, 112.0) + 70.0
+        }
+    });
+    let hint = if stamped {
+        "Tocca una pagina della striscia per vederla in grande; i comandi in alto valgono per quella."
+    } else {
+        "Clic su una pagina per sceglierla (ancora per toglierla dalla scelta), trascina per spostarla. I pulsanti in alto valgono per la scelta: la ruotano di 90°, la tolgono o la copiano in un PDF nuovo."
+    };
+    f.para(hint, q.0 + 24.0, hint_y, q.2 - 48.0, 15.0, SANS, pal.muted, 1.4, 2);
+}
+
+/// La coda di «Comprimi»: per ogni PDF il peso adesso, la stima dopo e il risparmio; sotto il totale.
+fn compress_queue(f: &mut Frame, app: &App, q: R, rows: &[usize]) {
+    let pal = f.pal;
+    const RH: f32 = 112.0;
+    let all = rows.iter().all(|&i| app.files[i].checked);
+    f.checkbox(q.0 + 20.0, 306.0, 22.0, all, Some(Act::CheckAll));
+    let bars_x = q.0 + (q.2 * 0.56).round();
+    let bars_w = (q.2 - 140.0 - (bars_x - q.0) - 24.0).clamp(120.0, 210.0);
+    let name_w = bars_x - (q.0 + 138.0) - 24.0;
+    f.text("Nome file", q.0 + 74.0, 296.0, 200.0, 42.0, 15.0, SANS, pal.text);
+    f.text("Peso adesso e stima dopo", bars_x, 296.0, 260.0, 42.0, 15.0, SANS, pal.text);
+    f.text("Risparmio", q.0 + q.2 - 130.0, 296.0, 100.0, 42.0, 15.0, SANS, pal.text);
+    let max = rows.iter().filter_map(|&i| app.media_of(&app.files[i].path).map(|m| m.bytes)).max().unwrap_or(1);
+    let total_h = 110.0;
+    let list = (q.0, 338.0, q.2, q.1 + q.3 - 338.0 - 44.0 - total_h);
+    let rows = rows.to_vec();
+    super::scrolled(f, list, Scroll::Queue, |f| {
+        for (n, &i) in rows.iter().enumerate() {
+            let y = list.1 + n as f32 * RH;
+            if !f.p.shows_y(y, RH) {
+                continue;
+            }
+            let file = &app.files[i];
+            f.hline(q.0, y, q.2);
+            if app.selected == Some(i) {
+                f.p.fill(q.0 + 1.0, y + 1.0, q.2 - 2.0, RH - 1.0, mix(pal.alt, pal.surface, 0.5));
+            }
+            f.hit((q.0, y, q.2, RH), Act::Select(i));
+            f.checkbox(q.0 + 20.0, y + 45.0, 22.0, file.checked, Some(Act::Check(i)));
+            f.thumb(app, i, (q.0 + 68.0, y + 18.0, 52.0, 70.0), 4.0);
+            f.text(&file.name(), q.0 + 138.0, y + 26.0, name_w, 24.0, 17.0, SEMI, pal.text);
+            let sub_c = match file.state {
+                FileState::Failed => pal.bad,
+                FileState::Done => pal.ok,
+                _ => pal.muted,
+            };
+            f.text(&super::pagine::squeeze_sub(app, i), q.0 + 138.0, y + 56.0, name_w, 22.0, 16.0, SANS, sub_c);
+            f.row_bar(file, q.0 + 138.0, y + 88.0, name_w, 6.0);
+            super::pagine::squeeze_bars(f, app, i, bars_x, y + 20.0, bars_w, max, 14.0);
+            super::pagine::saving_pill(f, app, i, q.0 + q.2 - 60.0, y + RH / 2.0, 16.0);
+            let cx = q.0 + q.2 - 44.0;
+            if file.state == FileState::Waiting {
+                let act = Act::Remove(i);
+                if f.hovered(&act) {
+                    f.p.circle(cx + 12.0, y + RH / 2.0, 18.0, Some(pal.alt), None);
+                }
+                f.icon(ic::CLOSE, cx, y + RH / 2.0 - 12.0, 24.0, pal.text);
+                f.hit((cx - 8.0, y + RH / 2.0 - 20.0, 40.0, 40.0), act);
+            } else {
+                f.state_icon(file.state, cx + 12.0, y + RH / 2.0, 14.0);
+                if let Some(out) = &file.output {
+                    f.hit((cx - 8.0, y + RH / 2.0 - 20.0, 40.0, 40.0), Act::OpenPath(out.clone()));
+                }
+            }
+        }
+        f.hline(q.0, list.1 + rows.len() as f32 * RH, q.2);
+        rows.len() as f32 * RH + 1.0
+    });
+    let ty = list.1 + list.3;
+    f.hline(q.0 + 1.0, ty, q.2 - 2.0);
+    match super::pagine::squeeze_total(app) {
+        Some((b, a, real)) => {
+            let from = format!("Da {} a", crate::engine::size_words(b));
+            let to = if real { crate::engine::size_words(a) } else { format!("circa {}", crate::engine::size_words(a)) };
+            let fw = f.measure(&from, 18.0, SANS) + f.measure(" ", 18.0, SANS);
+            f.text(&from, q.0 + 24.0, ty + 14.0, fw + 2.0, 30.0, 18.0, SANS, pal.text);
+            f.text(&to, q.0 + 24.0 + fw, ty + 14.0, 260.0, 30.0, 18.0, BOLD, pal.primary);
+            let note = if real { "Pesi veri dei file salvati." } else { "Stima vera, fatta comprimendo in memoria." };
+            f.text_r(note, (q.0 + 24.0 + fw + 200.0, ty + 16.0, q.2 - 48.0 - fw - 200.0, 26.0), 14.0, SANS, pal.muted);
+        }
+        None => {
+            let text = if app.targets().is_empty() { "Spunta i PDF da comprimere." } else { "Si calcolano le stime…" };
+            f.text(text, q.0 + 24.0, ty + 14.0, q.2 - 48.0, 30.0, 18.0, SANS, pal.muted);
+        }
+    }
+    f.para("Se un file non si riesce a ridurre, resta com'è e la riga lo dice: non viene mai salvato un PDF più pesante dell'originale.", q.0 + 24.0, ty + 54.0, q.2 - 48.0, 15.0, SANS, pal.muted, 1.4, 2);
 }
 
 /// L'altezza della striscia di «Dividi» sotto la riga (le stesse misure di `pagine::split_strip`).

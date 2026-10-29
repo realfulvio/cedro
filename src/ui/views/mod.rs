@@ -12,7 +12,7 @@ mod guidato;
 mod pagine;
 
 pub use activity::{links_page, transcribe_page};
-pub use pagine::{merged_pages, MERGE as ICON_MERGE, MERGED_MAX, SCISSORS as ICON_SCISSORS, STRIP_MAX};
+pub use pagine::{merged_pages, page_drop, split_file, BOARD_MAX, MERGE as ICON_MERGE, MERGED_MAX, SCISSORS as ICON_SCISSORS, SHRINK as ICON_SHRINK, STRIP_MAX};
 
 use super::assets as ic;
 use super::core::{Act, Field, Fold, Frame, Scroll, BOLD, R, SANS, SEMI};
@@ -216,6 +216,31 @@ pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32,
             }
             top - y + 2.0 + note_lines(f, def.note, top + 2.0, w)
         }
+        Control::Position => {
+            // La pagina in piccolo con i nove punti: angoli, lati e centro.
+            let v = app.values.get(def);
+            f.text(def.title, x, y + 20.0, w - 110.0, 24.0, st.label, SANS, pal.text);
+            let (cw, ch, gap) = (28.0, 20.0, 4.0);
+            let gx = x + w - (cw * 3.0 + gap * 2.0);
+            f.p.rrect(gx - 5.0, y - 5.0, cw * 3.0 + gap * 2.0 + 10.0, ch * 3.0 + gap * 2.0 + 10.0, 6.0, Some(pal.surface), Some((pal.border, 1.0)));
+            for k in 0..9u32 {
+                let r = (gx + (k % 3) as f32 * (cw + gap), y + (k / 3) as f32 * (ch + gap), cw, ch);
+                let act = Act::OptPick(def.opt, k);
+                let on = k == v;
+                let fill = if on {
+                    pal.primary
+                } else if f.hovered(&act) {
+                    mix(pal.alt, pal.border, 0.5)
+                } else {
+                    pal.alt
+                };
+                f.p.rrect(r.0, r.1, r.2, r.3, 4.0, Some(fill), None);
+                f.focus_ring(r, 4.0, &act);
+                f.hit(r, act);
+            }
+            let used = ch * 3.0 + gap * 2.0 + 12.0;
+            used + note_lines(f, def.note, y + used, w)
+        }
         Control::Password => {
             f.text(def.title, x, y, w, 24.0, st.label, SANS, pal.text);
             f.field((x, y + 28.0, w, st.control_h), Field::Opt(def.opt), app.values.text(def), "nessuna", 16.0, true);
@@ -262,8 +287,26 @@ pub fn options_panel_ex(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: Op
     if uses_quality(app.kind(), &app.action) {
         cy += quality(f, app, x, cy + 4.0, w, st, true) + st.gap;
     }
+    if modes && app.pdf_mode() == super::model::PdfMode::Pages {
+        let h = pagine::pages_summary(f, app, x, cy, w, st);
+        if h > 0.0 {
+            cy += h + 4.0;
+            f.hline(x, cy, w);
+            cy += 14.0;
+        }
+    }
     let defs = app.option_defs();
-    let shown = if st.visible == 0 { defs.len() } else { st.visible.min(defs.len()) };
+    // «Pagine» e «Comprimi» mostrano subito le loro opzioni; password e segnalibri stanno in «Altre opzioni».
+    let lead = match (app.kind(), app.action.as_str()) {
+        (Kind::Pdf, "pages") => defs.iter().position(|d| d.opt == conversioni::Opt::KeepBookmarks),
+        (Kind::Pdf, "compress") => defs.iter().position(|d| d.opt == conversioni::Opt::Password),
+        _ => None,
+    };
+    let shown = match lead {
+        Some(n) if st.visible != 0 => n,
+        _ if st.visible == 0 => defs.len(),
+        _ => st.visible.min(defs.len()),
+    };
     for def in &defs[..shown] {
         cy += option(f, app, def, x, cy, w, st) + st.gap;
     }
@@ -307,6 +350,10 @@ pub fn dest_note(app: &App) -> String {
             (super::model::PdfMode::Merge, Some(p)) => return format!("Il file unito verrà salvato in {}.", p.display()),
             (super::model::PdfMode::Split, None) => return "I file nuovi verranno salvati nella stessa cartella dell'originale.".into(),
             (super::model::PdfMode::Split, Some(p)) => return format!("I file nuovi verranno salvati in {}.", p.display()),
+            (super::model::PdfMode::Pages, None) => return "Il file nuovo viene salvato accanto all'originale.".into(),
+            (super::model::PdfMode::Pages, Some(p)) => return format!("Il file nuovo viene salvato in {}.", p.display()),
+            (super::model::PdfMode::Compress, None) => return "I file compressi vengono salvati accanto agli originali.".into(),
+            (super::model::PdfMode::Compress, Some(p)) => return format!("I file compressi vengono salvati in {}.", p.display()),
             _ => {}
         }
     }
@@ -400,6 +447,21 @@ pub fn go_extras(f: &mut Frame, app: &App, r: R, side: bool) {
 
 /// Riepilogo in parole di dove e come salva (Semplificata): veritiero, mai «consigliate» se non lo sono.
 pub fn summary_line(app: &App) -> String {
+    if app.kind() == Kind::Pdf && app.action == "compress" && app.activity == Activity::Convert {
+        let many = app.targets().len() > 1;
+        return match pagine::squeeze_total(app) {
+            Some((b, a, _)) if a * 100 < b * 67 => {
+                let r = format!("{:.1}", b as f64 / a.max(1) as f64).replace('.', ",");
+                if many { format!("I PDF diventano circa {r} volte più piccoli e restano leggibili. Gli originali non si toccano.") } else { format!("Il PDF diventa circa {r} volte più piccolo e resta leggibile. L'originale non si tocca.") }
+            }
+            Some((b, a, _)) if a < b => {
+                let p = 100 - a * 100 / b.max(1);
+                if many { format!("I PDF diventano circa il {p}% più leggeri e restano leggibili. Gli originali non si toccano.") } else { format!("Il PDF diventa circa il {p}% più leggero e resta leggibile. L'originale non si tocca.") }
+            }
+            Some(_) => if many { "I PDF sono già leggeri: restano come sono.".into() } else { "Il PDF è già leggero: resta com'è.".into() },
+            None => "Si calcola quanto si risparmia…".into(),
+        };
+    }
     let dest = match &app.dest {
         None => "Copie accanto agli originali".to_string(),
         Some(p) => format!("Copie in {}", super::model::short_dir(p)),
