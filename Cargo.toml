@@ -40,7 +40,7 @@ tiny-skia = { version = "0.11", default-features = false, features = ["std", "si
 
 # Il tasto Play dell'anteprima: l'uscita audio del sistema (ALSA su Linux, WASAPI su Windows).
 [target.'cfg(any(windows, target_os = "linux"))'.dependencies]
-cpal = "0.15"
+cpal = "0.18"
 
 # Opus (audio dei WebM, vocali di WhatsApp e Telegram): libopus compilata dentro il programma.
 [target.'cfg(any(windows, target_os = "linux", target_os = "android"))'.dependencies]
