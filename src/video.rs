@@ -732,9 +732,11 @@ fn nv12_into(src: &[u8], info: &FrameInfo, nv12: &mut [u8]) -> Result<(), String
         let copy = dst_w.min(src_w);
         nv12[y * dst_w..y * dst_w + copy].copy_from_slice(&src[y * stride..y * stride + copy]);
         if y % 2 == 0 {
+            // Coppie U/V: con larghezza dispari serve anche l'ultimo byte V della riga.
             let from = y_bytes + (y / 2).min(uv_rows - 1) * stride;
             let to = dst_w * dst_h + (y / 2) * dst_w;
-            nv12[to..to + copy].copy_from_slice(&src[from..from + copy]);
+            let uv = ((copy + 1) & !1).min(dst_w).min(stride).min(src.len().saturating_sub(from));
+            nv12[to..to + uv].copy_from_slice(&src[from..from + uv]);
         }
     }
     Ok(())
