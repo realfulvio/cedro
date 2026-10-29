@@ -129,7 +129,7 @@ const PDF_CONVERT: &[Slice] = &[
     Slice { id: "png", label: "PNG" },
     Slice { id: "txt", label: "Testo" },
 ];
-const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }, Slice { id: "merge", label: "Unisci" }, Slice { id: "split", label: "Dividi" }];
+const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }, Slice { id: "merge", label: "Unisci" }, Slice { id: "split", label: "Dividi" }, Slice { id: "compress", label: "Comprimi" }];
 const EMPTY: &[Slice] = &[Slice { id: "none", label: "Niente qui" }];
 
 /// I formati di uscita del pannello Conversioni: quelli della ruota più gli altri, che alla ruota
@@ -797,6 +797,21 @@ pub struct Options {
     pub name_template: Option<String>,
     /// Unire e dividere i PDF.
     pub pdf_pages: PdfPages,
+    /// Le pagine di un PDF (ruotare, togliere, estrarre, numeri e filigrana) e la compressione.
+    pub pdf_edit: PdfEdit,
+}
+
+/// Le scelte per le pagine di un PDF e per comprimerlo.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct PdfEdit {
+    /// Le pagine che restano (da 1), nell'ordine, con la rotazione in gradi; vuoto = tutte com'erano.
+    pub pages: Vec<(u32, i32)>,
+    /// Numeri di pagina e filigrana.
+    pub stamp: crate::pdfedit::Stamp,
+    /// Il nome del file nuovo dopo quello dell'originale (per esempio «-estratte»); vuoto = lo stesso nome.
+    pub suffix: String,
+    /// Quanto comprimere; `None` = il livello delle impostazioni (la ruota).
+    pub squeeze: Option<crate::pdfedit::Squeeze>,
 }
 
 /// Le scelte per unire e dividere i PDF.
@@ -855,6 +870,7 @@ impl Default for Options {
             password: None,
             name_template: None,
             pdf_pages: PdfPages::default(),
+            pdf_edit: PdfEdit::default(),
         }
     }
 }
@@ -1036,6 +1052,97 @@ fn split_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
         format!("Diviso in {} PDF", groups.len())
     };
     Ok(Output { path: outs[0].clone(), message })
+}
+
+/// Le pagine di un PDF: quelle che restano, nell'ordine, girate, con numeri e filigrana.
+fn edit_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
+    let pe = &opts.pdf_edit;
+    let pp = &opts.pdf_pages;
+    let out = reserve(dir, &format!("{}{}", stem(path), pe.suffix), "pdf")?;
+    let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+    let doc = crate::pdfpages::open(&bytes, pp.open_password.as_deref()).map_err(err)?;
+    let total = crate::pdfpages::page_count(&doc) as u32;
+    let list: Vec<(u32, i32)> = if pe.pages.is_empty() { (1..=total).map(|p| (p, 0)).collect() } else { pe.pages.clone() };
+    if let Some((p, _)) = list.iter().find(|(p, _)| *p == 0 || *p > total) {
+        return Err(err(format!("il PDF ha {total} pagine: la pagina {p} non c'è")));
+    }
+    if list.is_empty() {
+        return Err(err("nessuna pagina da salvare"));
+    }
+    crate::progress::report(0.2);
+    let settings = crate::pdfpages::Settings { file_bookmarks: false, duplex_blank: false, ..pp.settings.clone() };
+    let built = crate::pdfpages::build(&[crate::pdfpages::Part { doc: &doc, pages: list.iter().map(|(p, _)| *p).collect(), title: stem(path) }], &settings).map_err(err)?;
+    crate::progress::report(0.6);
+    let rotations: Vec<i32> = list.iter().map(|(_, r)| *r).collect();
+    let mut bytes = crate::pdfedit::finish(&built, &rotations, &pe.stamp).map_err(err)?;
+    let mut message = match list.len() {
+        1 => "1 pagina".to_string(),
+        n => format!("{n} pagine"),
+    };
+    let gone = total as usize - list.iter().map(|(p, _)| *p).collect::<std::collections::HashSet<_>>().len();
+    if gone > 0 && pe.suffix.is_empty() {
+        message.push_str(&if gone == 1 { ", 1 tolta".to_string() } else { format!(", {gone} tolte") });
+    }
+    let turned = rotations.iter().filter(|r| r.rem_euclid(360) != 0).count();
+    if turned > 0 {
+        message.push_str(&if turned == 1 { ", 1 ruotata".to_string() } else { format!(", {turned} ruotate") });
+    }
+    if pe.stamp.numbers.is_some() {
+        message.push_str(", numerate");
+    }
+    if pe.stamp.watermark.as_ref().is_some_and(|w| !w.text.trim().is_empty()) {
+        message.push_str(", con filigrana");
+    }
+    if let Some(pw) = opts.password.as_deref().filter(|p| !p.is_empty()) {
+        bytes = crate::pdf::protect(&bytes, pw).map_err(err)?;
+        message.push_str(", protetto con password");
+    }
+    write_bytes(&out, &bytes)?;
+    crate::progress::report(1.0);
+    Ok(Output { path: out, message })
+}
+
+/// Le dimensioni di un file in parole: «340 KB», «1,1 MB».
+pub fn size_words(bytes: u64) -> String {
+    let b = bytes as f64;
+    if b < 1024.0 * 1024.0 {
+        format!("{} KB", ((b / 1024.0).round() as u64).max(1))
+    } else {
+        format!("{:.1} MB", b / 1024.0 / 1024.0).replace('.', ",")
+    }
+}
+
+/// Il livello della compressione dalle impostazioni (la ruota usa quello scelto l'ultima volta).
+pub fn saved_squeeze() -> crate::pdfedit::Squeeze {
+    crate::pdfedit::Squeeze { level: crate::settings::read_settings().compress.min(2), ..Default::default() }
+}
+
+/// Il PDF compresso in memoria con le scelte date: (byte, peso di prima). Per le stime del pannello e per comprimere.
+pub fn squeeze_pdf(path: &Path, s: &crate::pdfedit::Squeeze, password: Option<&str>) -> Result<(Vec<u8>, u64), String> {
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let doc = crate::pdfpages::open(&bytes, password)?;
+    let out = crate::pdfedit::compress(doc, s)?;
+    Ok((out, bytes.len() as u64))
+}
+
+/// Comprime un PDF. Se non diventa più leggero non si scrive niente: l'originale va già bene.
+fn compress_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
+    let s = opts.pdf_edit.squeeze.unwrap_or_else(saved_squeeze);
+    crate::progress::report(0.1);
+    let (mut bytes, before) = squeeze_pdf(path, &s, opts.pdf_pages.open_password.as_deref()).map_err(err)?;
+    crate::progress::report(0.8);
+    let protected = opts.password.as_deref().filter(|p| !p.is_empty());
+    if let Some(pw) = protected {
+        bytes = crate::pdf::protect(&bytes, pw).map_err(err)?;
+    }
+    if bytes.len() as u64 >= before && protected.is_none() {
+        crate::progress::report(1.0);
+        return Ok(Output { path: path.to_path_buf(), message: format!("Già leggero ({}): resta com'è", size_words(before)) });
+    }
+    let out = reserve(dir, &format!("{}-compresso", stem(path)), "pdf")?;
+    write_bytes(&out, &bytes)?;
+    crate::progress::report(1.0);
+    Ok(Output { path: out, message: size_message(before, bytes.len() as u64) })
 }
 
 /// Se la conversione va in panico: i nomi tornano com'erano e i file prenotati o temporanei si tolgono.
@@ -1383,6 +1490,12 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
     if action == "split" && kind == Kind::Pdf {
         return split_pdf(path, &dir, opts);
+    }
+    if action == "pages" && kind == Kind::Pdf {
+        return edit_pdf(path, &dir, opts);
+    }
+    if action == "compress" && kind == Kind::Pdf {
+        return compress_pdf(path, &dir, opts);
     }
     if action == "merge" {
         return Err(err("per unire servono almeno due PDF"));
@@ -3319,6 +3432,25 @@ mod format_tests {
 
     fn opts() -> Options {
         Options { exists: Exists::Replace, ..Default::default() }
+    }
+
+    #[test]
+    fn pages_saves_the_chosen_pages_and_never_replaces_the_source() {
+        let dir = scratch();
+        let src = dir.join("circolare.pdf");
+        fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/circolare.pdf"), &src).unwrap();
+        let before = fs::read(&src).unwrap();
+        let mut o = opts();
+        o.pdf_edit.pages = vec![(2, 90)];
+        let out = perform_with(&src, "pages", 80, Some(&dir), &o).unwrap();
+        assert_ne!(out.path, src);
+        assert_eq!(fs::read(&src).unwrap(), before);
+        assert!(out.message.contains("1 pagina") && out.message.contains("1 ruotata"), "{}", out.message);
+        let doc = lopdf::Document::load(&out.path).unwrap();
+        assert_eq!(doc.get_pages().len(), 1);
+        // Comprimere un PDF già leggero non scrive niente.
+        let small = perform_with(&out.path, "compress", 80, Some(&dir), &o).unwrap();
+        assert!(small.path == out.path || fs::metadata(&small.path).unwrap().len() < fs::metadata(&out.path).unwrap().len());
     }
 
     #[test]
