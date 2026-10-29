@@ -271,6 +271,31 @@ impl Image {
         Some(Image { w, h, pixmap: Arc::new(pm) })
     }
 
+    /// L'immagine girata di `quarters` quarti di giro in senso orario (le pagine ruotate dei PDF).
+    pub fn turned(&self, quarters: i32) -> Image {
+        let q = quarters.rem_euclid(4);
+        if q == 0 {
+            return self.clone();
+        }
+        let (w, h) = (self.w as usize, self.h as usize);
+        let (nw, nh) = if q % 2 == 1 { (h, w) } else { (w, h) };
+        let Some(mut pm) = Pixmap::new(nw as u32, nh as u32) else { return self.clone() };
+        let src = self.pixmap.data();
+        let dst = pm.data_mut();
+        for y in 0..h {
+            for x in 0..w {
+                let (nx, ny) = match q {
+                    1 => (h - 1 - y, x),
+                    2 => (w - 1 - x, h - 1 - y),
+                    _ => (y, w - 1 - x),
+                };
+                let (s, d) = ((y * w + x) * 4, (ny * nw + nx) * 4);
+                dst[d..d + 4].copy_from_slice(&src[s..s + 4]);
+            }
+        }
+        Image { w: nw as u32, h: nh as u32, pixmap: Arc::new(pm) }
+    }
+
     /// Quello che ha disegnato un pittore, così com'è.
     pub fn from_painter(p: Painter) -> Image {
         Image { w: p.pixmap.width(), h: p.pixmap.height(), pixmap: Arc::new(p.pixmap) }

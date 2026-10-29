@@ -37,17 +37,19 @@ pub fn tools(kind: Kind) -> &'static [Slice] {
         &[]
     } else if kind == Kind::Pdf {
         // Unisci e Dividi hanno i loro pulsanti in cima al pannello, non stanno tra i formati.
-        &list[..list.iter().position(|s| is_page_action(s.id)).unwrap_or(list.len())]
+        &list[..list.iter().position(|s| is_page_action(kind, s.id)).unwrap_or(list.len())]
     } else {
         list
     }
 }
 
-/// Le due voci dei PDF che lavorano sulle pagine invece di convertire.
-pub const PAGE_ACTIONS: [&str; 2] = ["merge", "split"];
+/// Le voci dei PDF che hanno il loro pulsante in cima al pannello invece di stare tra i formati:
+/// unire, dividere, le pagine (ruotare, togliere, numeri, filigrana) e comprimere.
+pub const PAGE_ACTIONS: [&str; 4] = ["merge", "split", "pages", "compress"];
 
-pub fn is_page_action(action: &str) -> bool {
-    PAGE_ACTIONS.contains(&action)
+/// Vero per le voci dei PDF con il loro pulsante («compress» delle immagini è un formato come gli altri).
+pub fn is_page_action(kind: Kind, action: &str) -> bool {
+    kind == Kind::Pdf && PAGE_ACTIONS.contains(&action)
 }
 
 /// Un formato proposto dalla modalità Semplice: nome e una riga in parole comuni.
@@ -72,6 +74,7 @@ pub fn simple_formats(kind: Kind) -> &'static [SimpleFormat] {
         SimpleFormat { id: "txt", title: "Testo", note: "solo le parole" },
         SimpleFormat { id: "merge", title: "Un solo PDF", note: "li unisce in fila" },
         SimpleFormat { id: "split", title: "Dividi", note: "una pagina per file" },
+        SimpleFormat { id: "compress", title: "Più piccolo", note: "per l'email" },
     ];
     const TEXT: &[SimpleFormat] = &[
         SimpleFormat { id: "pdf", title: "PDF", note: "si apre ovunque" },
@@ -139,6 +142,8 @@ pub enum Control {
     Password,
     /// Una voce tra poche, tutte in vista (pulsanti affiancati).
     Segments(&'static [Choice]),
+    /// Un posto sulla pagina, da 0 a 8: la griglia 3 × 3 (in alto a sinistra … in basso a destra).
+    Position,
 }
 
 /// Tutte le opzioni che il motore capisce.
@@ -184,6 +189,19 @@ pub enum Opt {
     SplitRanges,
     SplitRemove,
     SplitName,
+    PageNumbers,
+    NumberPos,
+    NumberFormat,
+    NumberStart,
+    NumberSize,
+    Watermark,
+    WatermarkText,
+    WatermarkOpacity,
+    WatermarkAngle,
+    WatermarkPages,
+    SqueezeLevel,
+    StripMeta,
+    BwScans,
 }
 
 /// Una riga della zona Opzioni del pannello.
@@ -358,12 +376,41 @@ const DUPLEX_BLANK: OptionDef = sw(Opt::DuplexBlank, "Pagina bianca per il front
 const OPEN_PASSWORD: OptionDef = OptionDef { opt: Opt::OpenPassword, title: "Password per aprire", note: "Solo per i PDF protetti", control: Control::Password, default: 0 };
 const OUT_PASSWORD: OptionDef = OptionDef { opt: Opt::Password, title: "Proteggi con password", note: "Vuota = nessuna protezione", control: Control::Password, default: 0 };
 
+pub const PAGE_NUMBERS: OptionDef = sw(Opt::PageNumbers, "Numeri di pagina", "Es. «Pagina 1 di 8», sopra ogni pagina", false);
+pub const NUMBER_POS: OptionDef = OptionDef { opt: Opt::NumberPos, title: "Posizione", note: "", control: Control::Position, default: 7 };
+pub const NUMBER_FORMAT_CHOICES: &[Choice] = &[Choice { label: "1", value: 0 }, Choice { label: "Pagina 1 di N", value: 1 }, Choice { label: "1 / N", value: 2 }];
+pub const NUMBER_FORMAT: OptionDef = OptionDef { opt: Opt::NumberFormat, title: "Formato", note: "", control: Control::Segments(NUMBER_FORMAT_CHOICES), default: 1 };
+pub const NUMBER_START: OptionDef = OptionDef { opt: Opt::NumberStart, title: "Primo numero", note: "Vuoto = 1", control: Control::Text { hint: "1" }, default: 0 };
+pub const NUMBER_SIZE: OptionDef = OptionDef { opt: Opt::NumberSize, title: "Corpo", note: "", control: Control::Range { min: 7, max: 24, unit: "pt" }, default: 11 };
+pub const WATERMARK: OptionDef = sw(Opt::Watermark, "Filigrana", "Testo grande e chiaro sopra le pagine", false);
+pub const WATERMARK_TEXT: OptionDef = OptionDef { opt: Opt::WatermarkText, title: "Testo della filigrana", note: "", control: Control::Text { hint: "BOZZA" }, default: 0 };
+pub const WATERMARK_OPACITY: OptionDef = OptionDef { opt: Opt::WatermarkOpacity, title: "Opacità", note: "", control: Control::Range { min: 5, max: 80, unit: "%" }, default: 22 };
+pub const WATERMARK_ANGLE_CHOICES: &[Choice] = &[Choice { label: "Diagonale", value: 0 }, Choice { label: "Orizzontale", value: 1 }];
+pub const WATERMARK_ANGLE: OptionDef = OptionDef { opt: Opt::WatermarkAngle, title: "Direzione", note: "", control: Control::Segments(WATERMARK_ANGLE_CHOICES), default: 0 };
+pub const WATERMARK_PAGES: OptionDef = OptionDef {
+    opt: Opt::WatermarkPages,
+    title: "Pagine con la filigrana",
+    note: "Vuoto = tutte. Per esempio 1-3,5",
+    control: Control::Text { hint: "tutte" },
+    default: 0,
+};
+pub const SQUEEZE_CHOICES: &[Choice] = &[Choice { label: "Leggera", value: 0 }, Choice { label: "Equilibrata", value: 1 }, Choice { label: "Forte", value: 2 }];
+pub const SQUEEZE_LEVEL: OptionDef = OptionDef {
+    opt: Opt::SqueezeLevel,
+    title: "Livello",
+    note: "Leggera: ripulisce senza toccare le immagini. Equilibrata: immagini a 150 dpi, giusta per l'email. Forte: 100 dpi, il più piccolo.",
+    control: Control::Segments(SQUEEZE_CHOICES),
+    default: 1,
+};
+const STRIP_META: OptionDef = sw(Opt::StripMeta, "Togli metadati", "Autore, programma, data di modifica", true);
+const BW_SCANS: OptionDef = sw(Opt::BwScans, "Scansioni in bianco e nero", "Restano nitide e pesano molto meno", true);
+
 const FAST_START: OptionDef = sw(Opt::FastStart, "Ottimizza per il web", "L'avvio parte subito", false);
 
 /// Le opzioni che valgono per questa categoria e questa voce; il motore le usa tutte.
 pub fn option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     let mut defs = format_option_defs(kind, action);
-    if action != "none" && !is_page_action(action) {
+    if action != "none" && !is_page_action(kind, action) {
         defs.push(&NAME_TEMPLATE);
     }
     defs
@@ -379,6 +426,12 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
         (Kind::Pdf, "docx") => vec![&OCR, &TABLES, &COLUMNS, &PDF_PAGES],
         (Kind::Pdf, "txt") => vec![&OCR, &PDF_PAGES],
         (Kind::Pdf, "merge") => vec![&MERGE_NAME, &FILE_BOOKMARKS, &KEEP_BOOKMARKS, &KEEP_FORMS, &DUPLEX_BLANK, &OUT_PASSWORD, &OPEN_PASSWORD],
+        (Kind::Pdf, "pages") => vec![
+            &PAGE_NUMBERS, &NUMBER_POS, &NUMBER_FORMAT, &NUMBER_START, &NUMBER_SIZE,
+            &WATERMARK, &WATERMARK_TEXT, &WATERMARK_OPACITY, &WATERMARK_ANGLE, &WATERMARK_PAGES,
+            &KEEP_BOOKMARKS, &KEEP_FORMS, &OUT_PASSWORD, &OPEN_PASSWORD,
+        ],
+        (Kind::Pdf, "compress") => vec![&SQUEEZE_LEVEL, &STRIP_META, &BW_SCANS, &OUT_PASSWORD, &OPEN_PASSWORD],
         (Kind::Pdf, "split") => vec![&SPLIT_HOW, &SPLIT_EVERY, &SPLIT_RANGES, &SPLIT_REMOVE, &SPLIT_NAME, &KEEP_BOOKMARKS, &KEEP_FORMS, &OUT_PASSWORD, &OPEN_PASSWORD],
         (Kind::Text, "pdf") => vec![&PAGE, &EMBED_FONTS, &PDF_A],
         (Kind::Text, "csv") => vec![&TEXT_ENCODING, &CSV_SEPARATOR],
@@ -404,6 +457,9 @@ pub fn shown(def: &OptionDef, values: &Values) -> bool {
         Opt::SplitRemove => how == 4,
         // Un file solo esce già con il nome dell'originale e «-senza-pagine».
         Opt::SplitName => how != 4,
+        // Le scelte dei numeri e della filigrana si vedono quando sono accesi.
+        Opt::NumberPos | Opt::NumberFormat | Opt::NumberStart | Opt::NumberSize => values.get(&PAGE_NUMBERS) == 1,
+        Opt::WatermarkText | Opt::WatermarkOpacity | Opt::WatermarkAngle | Opt::WatermarkPages => values.get(&WATERMARK) == 1,
         _ => true,
     }
 }
@@ -473,6 +529,17 @@ impl Values {
 pub fn validate(values: &Values, kind: Kind, action: &str) -> Result<(), String> {
     if option_defs(kind, action).iter().any(|d| d.opt == Opt::PageRange) {
         PageSel::parse(values.text_of(Opt::PageRange))?;
+    }
+    if kind == Kind::Pdf && action == "pages" {
+        if values.get(&PAGE_NUMBERS) == 1 {
+            let start = values.text_of(Opt::NumberStart).trim();
+            if !start.is_empty() && start.parse::<u32>().ok().filter(|n| *n >= 1).is_none() {
+                return Err("Il primo numero deve essere un numero da 1 in su.".into());
+            }
+        }
+        if values.get(&WATERMARK) == 1 {
+            PageSel::parse(values.text_of(Opt::WatermarkPages))?;
+        }
     }
     if kind == Kind::Pdf && action == "split" {
         let how = values.num(Opt::SplitHow, SPLIT_HOW.default);
@@ -558,6 +625,25 @@ pub fn options_from(values: &Values) -> engine::Options {
         4 => Plan::Remove(values.text_of(Opt::SplitRemove).to_string()),
         _ => Plan::Ranges(values.text_of(Opt::SplitRanges).to_string()),
     };
+    let pe = &mut o.pdf_edit;
+    pe.stamp.numbers = on(Opt::PageNumbers, false).then(|| crate::pdfedit::Numbers {
+        pos: values.num(Opt::NumberPos, NUMBER_POS.default).min(8) as u8,
+        format: values.num(Opt::NumberFormat, NUMBER_FORMAT.default).min(2) as u8,
+        start: values.text_of(Opt::NumberStart).trim().parse::<u32>().ok().filter(|n| *n >= 1).unwrap_or(1),
+        size: values.num(Opt::NumberSize, NUMBER_SIZE.default),
+    });
+    pe.stamp.watermark = on(Opt::Watermark, false).then(|| crate::pdfedit::Watermark {
+        // Vuoto vale quello che il campo mostra in grigio.
+        text: Some(values.text_of(Opt::WatermarkText).trim().to_string()).filter(|t| !t.is_empty()).unwrap_or_else(|| crate::i18n::tr("BOZZA").into_owned()),
+        opacity: values.num(Opt::WatermarkOpacity, WATERMARK_OPACITY.default),
+        diagonal: values.num(Opt::WatermarkAngle, 0) == 0,
+        pages: values.text_of(Opt::WatermarkPages).trim().to_string(),
+    });
+    pe.squeeze = Some(crate::pdfedit::Squeeze {
+        level: values.num(Opt::SqueezeLevel, SQUEEZE_LEVEL.default).min(2) as u8,
+        strip_meta: on(Opt::StripMeta, true),
+        bw_scans: on(Opt::BwScans, true),
+    });
     o
 }
 
@@ -620,7 +706,9 @@ mod tests {
         // I valori di partenza del pannello coincidono con quelli di sempre del motore.
         // Solo «Dividi» parte diverso: il pannello propone gli intervalli, la ruota una pagina per file.
         let pdf_pages = engine::PdfPages { plan: Plan::Ranges(String::new()), ..Default::default() };
-        let expected = engine::Options { dpi: Some(144), mp3_kbps: Some(128), pdf_pages, ..Default::default() };
+        // La compressione dei PDF ha sempre le sue scelte (la ruota invece usa quelle delle impostazioni).
+        let pdf_edit = engine::PdfEdit { squeeze: Some(crate::pdfedit::Squeeze::default()), ..Default::default() };
+        let expected = engine::Options { dpi: Some(144), mp3_kbps: Some(128), pdf_pages, pdf_edit, ..Default::default() };
         assert_eq!(opts, expected);
     }
 
@@ -633,6 +721,8 @@ mod tests {
             Opt::Mp3Kbps, Opt::Channels, Opt::Normalize, Opt::TrimStart, Opt::TrimSilence, Opt::KeepTags, Opt::VideoHeight, Opt::Fps,
             Opt::Mute, Opt::FastStart, Opt::NameTemplate, Opt::MergeName, Opt::FileBookmarks, Opt::KeepBookmarks, Opt::KeepForms, Opt::DuplexBlank,
             Opt::OpenPassword, Opt::SplitHow, Opt::SplitEvery, Opt::SplitRanges, Opt::SplitRemove, Opt::SplitName,
+            Opt::PageNumbers, Opt::NumberPos, Opt::NumberFormat, Opt::NumberStart, Opt::NumberSize, Opt::Watermark, Opt::WatermarkText,
+            Opt::WatermarkOpacity, Opt::WatermarkAngle, Opt::WatermarkPages, Opt::SqueezeLevel, Opt::StripMeta, Opt::BwScans,
         ];
         for opt in wanted {
             assert!(defs.iter().any(|d| d.opt == opt), "{opt:?} non compare in nessun pannello");
@@ -651,6 +741,21 @@ mod tests {
                 assert_ne!(options_from(&values), options_from(&plain), "{:?} non arriva al motore", def.opt);
                 continue;
             }
+            // Le scelte dei numeri e della filigrana contano con il loro interruttore acceso.
+            let parent = match def.opt {
+                Opt::NumberPos | Opt::NumberFormat | Opt::NumberStart | Opt::NumberSize => Some(&PAGE_NUMBERS),
+                Opt::WatermarkText | Opt::WatermarkOpacity | Opt::WatermarkAngle | Opt::WatermarkPages => Some(&WATERMARK),
+                _ => None,
+            };
+            let base = match parent {
+                Some(p) => {
+                    let mut plain = Values::default();
+                    plain.set(p, 1);
+                    values.set(p, 1);
+                    options_from(&plain)
+                }
+                None => base.clone(),
+            };
             match &def.control {
                 Control::Switch => {
                     assert!(def.default <= 1);
@@ -669,8 +774,9 @@ mod tests {
                     let other = choices.iter().find(|c| c.value != def.default).expect("almeno due scelte");
                     values.set(def, other.value);
                 }
-                Control::Text { .. } => values.set_text(def, "2-4"),
+                Control::Text { .. } => values.set_text(def, if def.opt == Opt::NumberStart { "5" } else { "2-4" }),
                 Control::Password => values.set_text(def, "segreto"),
+                Control::Position => values.set(def, (def.default + 1) % 9),
             }
             assert_ne!(options_from(&values), base, "{:?} non arriva al motore", def.opt);
         }
@@ -733,7 +839,7 @@ mod simple_tests {
             assert!(!simple.is_empty());
             for f in simple {
                 // Unire e dividere sono voci delle pagine del PDF, non formati: il motore le ha tra gli strumenti.
-                let known = formats(cat.kind).iter().any(|s| s.id == f.id) || (is_page_action(f.id) && engine::slices(cat.kind, Mode::Tools).iter().any(|s| s.id == f.id));
+                let known = formats(cat.kind).iter().any(|s| s.id == f.id) || (is_page_action(cat.kind, f.id) && engine::slices(cat.kind, Mode::Tools).iter().any(|s| s.id == f.id));
                 assert!(known, "{} manca in {}", f.id, cat.name);
             }
         }

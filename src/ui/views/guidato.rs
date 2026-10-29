@@ -97,6 +97,7 @@ fn format_icon(f: &mut Frame, id: &str, x: f32, y: f32, s: f32) {
         "pdf" => f.pdf_icon(x + s * 0.12, y + s * 0.05, s * 0.9),
         "merge" => f.icon(super::pagine::MERGE, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
         "split" => f.icon(super::pagine::SCISSORS, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
+        "compress" => f.icon(super::pagine::SHRINK, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
         "mp3" | "wav" | "m4a" | "ogg" | "flac" => f.icon(ic::AUDIO, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
         "mp4" | "mkv" => f.icon(ic::VIDEO, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
         _ => f.image_icon(x, y, s),
@@ -317,7 +318,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     } else {
         let label = super::go_label(app);
         let ready = !app.targets().is_empty() && !app.busy();
-        f.primary(br, &label, Some(ic::CONVERT), 21.0, Act::Start, ready);
+        f.primary(br, &label, Some(super::go_icon(app)), 21.0, Act::Start, ready);
         super::go_extras(f, app, br, true);
         if app.busy() {
             if let Some(p) = app.progress() {

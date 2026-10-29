@@ -323,14 +323,45 @@ pub enum Event {
     Preview(PathBuf, usize, Option<Image>),
     /// La miniatura di una pagina (la striscia di «Dividi», le pagine del file unito).
     PageThumb(PathBuf, usize, Option<Image>),
+    /// «Comprimi»: quanto pesa il file e quanto peserebbe compresso (byte), per la chiave delle scelte.
+    Estimate(PathBuf, String, Result<(u64, u64), String>),
+    /// «Pagine»: la pagina vera con numeri e filigrana, per la chiave delle scelte.
+    StampPreview(String, Option<Image>),
 }
 
-/// Cosa fa la scheda PDF: converte, unisce o divide.
+/// Cosa fa la scheda PDF: converte, unisce, divide, cambia le pagine o comprime.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PdfMode {
     Convert,
     Merge,
     Split,
+    Pages,
+    Compress,
+}
+
+/// «Pagine»: le pagine di un PDF come diventeranno, nell'ordine nuovo.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct Board {
+    /// (pagina dell'originale da 1, gradi in più, tolta).
+    pub pages: Vec<(u32, i32, bool)>,
+    /// Le pagine scelte (posti in `pages`, da 0).
+    pub sel: Vec<usize>,
+}
+
+impl Board {
+    pub fn new(total: usize) -> Board {
+        Board { pages: (1..=total as u32).map(|p| (p, 0, false)).collect(), sel: Vec::new() }
+    }
+
+    /// Le pagine che si salvano: (pagina da 1, gradi).
+    pub fn kept(&self) -> Vec<(u32, i32)> {
+        self.pages.iter().filter(|p| !p.2).map(|p| (p.0, p.1)).collect()
+    }
+
+    /// Vero se è com'era: niente spostato, girato o tolto.
+    pub fn untouched(&self) -> bool {
+        self.pages.iter().enumerate().all(|(k, p)| p.0 == k as u32 + 1 && p.1.rem_euclid(360) == 0 && !p.2)
+    }
 }
 
 /// Una domanda in attesa di risposta (file che esiste già).
@@ -382,10 +413,19 @@ pub struct App {
     last_convert: String,
     /// La finestra è in Semplificata (la tiene a giorno lo schermo): «Dividi» lì è una pagina per file.
     pub simple_view: bool,
+    /// «Pagine»: le pagine di ogni PDF come le si è sistemate.
+    pub boards: HashMap<PathBuf, Board>,
+    /// «Pagine»: la pagina (posto tra quelle che restano, da 0) dell'anteprima con numeri e filigrana.
+    pub stamp_page: usize,
+    /// «Pagine»: l'anteprima con numeri e filigrana (chiave chiesta, ultima immagine arrivata).
+    pub stamp_view: (String, Option<Image>),
+    /// «Comprimi»: (file, chiave delle scelte) → (peso, peso compresso); `None` = si sta calcolando.
+    pub estimates: HashMap<(PathBuf, String), Option<Result<(u64, u64), String>>>,
     tx: Sender<Event>,
     rx: Receiver<Event>,
     wake: Arc<dyn Fn() + Send + Sync>,
     loader: media::Loader,
+    pdfwork: super::pdfwork::Worker,
 }
 
 /// «C:\Users\Mario\Documenti\Cedro» → «Cedro»; vuoto se non c'è un nome.
@@ -410,6 +450,7 @@ impl App {
     pub fn new(wake: Arc<dyn Fn() + Send + Sync>) -> App {
         let (tx, rx) = channel();
         let loader = media::Loader::new(tx.clone(), wake.clone());
+        let pdfwork = super::pdfwork::Worker::new(tx.clone(), wake.clone());
         let mut values = Values::new();
         if crate::read_settings().replace {
             values.exists = Exists::Replace;
@@ -438,10 +479,15 @@ impl App {
             cuts: HashMap::new(),
             last_convert: String::new(),
             simple_view: false,
+            boards: HashMap::new(),
+            stamp_page: 0,
+            stamp_view: (String::new(), None),
+            estimates: HashMap::new(),
             tx,
             rx,
             wake,
             loader,
+            pdfwork,
         };
         app.action = app.default_action(false);
         app
@@ -513,7 +559,7 @@ impl App {
 
     /// Cambia la voce scelta; un'opzione mai toccata riparte dal suo valore consigliato.
     pub fn set_action(&mut self, id: &str) {
-        if !conversioni::is_page_action(&self.action) {
+        if !conversioni::is_page_action(self.kind(), &self.action) {
             self.last_convert = self.action.clone();
         }
         self.action = id.to_string();
@@ -524,20 +570,24 @@ impl App {
         match self.action.as_str() {
             "merge" => PdfMode::Merge,
             "split" => PdfMode::Split,
+            "pages" => PdfMode::Pages,
+            "compress" => PdfMode::Compress,
             _ => PdfMode::Convert,
         }
     }
 
-    /// I tre pulsanti in cima alla scheda PDF. «Converti» torna al formato scelto prima.
+    /// I cinque pulsanti in cima alla scheda PDF. «Converti» torna al formato scelto prima.
     pub fn set_pdf_mode(&mut self, mode: PdfMode, simple: bool) {
         match mode {
             PdfMode::Merge => self.set_action("merge"),
             PdfMode::Split => self.set_action("split"),
+            PdfMode::Pages => self.set_action("pages"),
+            PdfMode::Compress => self.set_action("compress"),
             PdfMode::Convert if self.pdf_mode() != PdfMode::Convert => {
                 let back = std::mem::take(&mut self.last_convert);
                 let known = conversioni::formats(self.kind()).iter().chain(conversioni::tools(self.kind())).any(|s| s.id == back);
                 self.action = if known { back } else { self.default_action(simple) };
-                if conversioni::is_page_action(&self.action) {
+                if conversioni::is_page_action(self.kind(), &self.action) {
                     self.action = conversioni::formats(self.kind()).first().map(|s| s.id.to_string()).unwrap_or_default();
                 }
             }
@@ -634,6 +684,201 @@ impl App {
         if let Some(path) = self.selected.and_then(|i| self.files.get(i)).map(|f| f.path.clone()) {
             self.cuts.remove(&path);
         }
+    }
+
+    /// «Pagine»: le pagine del file `i` come le si è sistemate (com'erano, se non le si è toccate).
+    pub fn board(&self, i: usize) -> Option<Board> {
+        let path = &self.files.get(i)?.path;
+        if let Some(b) = self.boards.get(path) {
+            return Some(b.clone());
+        }
+        self.page_count(i).map(Board::new)
+    }
+
+    fn board_mut(&mut self, i: usize) -> Option<&mut Board> {
+        let n = self.page_count(i)?;
+        let path = self.files.get(i)?.path.clone();
+        Some(self.boards.entry(path).or_insert_with(|| Board::new(n)))
+    }
+
+    /// Un clic su una pagina: la sceglie o la toglie dalla scelta.
+    pub fn page_click(&mut self, i: usize, pos: usize) {
+        if self.busy() {
+            return;
+        }
+        let Some(b) = self.board_mut(i) else { return };
+        if pos >= b.pages.len() {
+            return;
+        }
+        match b.sel.iter().position(|&s| s == pos) {
+            Some(k) => {
+                b.sel.remove(k);
+            }
+            None => b.sel.push(pos),
+        }
+        b.sel.sort_unstable();
+        // L'anteprima con numeri e filigrana va sulla pagina toccata, se resta.
+        if let Some(b) = self.board(i) {
+            if !b.pages[pos].2 {
+                self.stamp_page = b.pages[..pos].iter().filter(|p| !p.2).count();
+            }
+        }
+    }
+
+    /// Tutte le pagine scelte, o nessuna se lo erano già tutte.
+    pub fn page_select_all(&mut self, i: usize) {
+        let Some(b) = self.board_mut(i) else { return };
+        b.sel = if b.sel.len() == b.pages.len() { Vec::new() } else { (0..b.pages.len()).collect() };
+    }
+
+    /// Gira le pagine scelte di 90° (`dir` 1 orario, -1 antiorario).
+    pub fn pages_rotate(&mut self, i: usize, dir: i32) {
+        if self.busy() {
+            return;
+        }
+        let Some(b) = self.board_mut(i) else { return };
+        for &s in &b.sel {
+            if let Some(p) = b.pages.get_mut(s) {
+                p.1 = (p.1 + 90 * dir).rem_euclid(360);
+            }
+        }
+    }
+
+    /// Toglie le pagine scelte; se lo erano già tutte, le rimette.
+    pub fn pages_remove(&mut self, i: usize) {
+        if self.busy() {
+            return;
+        }
+        let Some(b) = self.board_mut(i) else { return };
+        let all_gone = !b.sel.is_empty() && b.sel.iter().all(|&s| b.pages.get(s).is_some_and(|p| p.2));
+        for &s in &b.sel.clone() {
+            if let Some(p) = b.pages.get_mut(s) {
+                p.2 = !all_gone;
+            }
+        }
+        // Non si tolgono tutte: un PDF senza pagine non esiste.
+        if b.pages.iter().all(|p| p.2) {
+            for &s in &b.sel.clone() {
+                b.pages[s].2 = false;
+            }
+            self.notice = Some(Notice { text: "Deve restare almeno una pagina.".into(), error: true });
+        }
+    }
+
+    /// Sposta la pagina dal posto `from` al posto `to` (trascinata): la scelta la segue.
+    pub fn pages_move(&mut self, i: usize, from: usize, to: usize) {
+        if self.busy() {
+            return;
+        }
+        let Some(b) = self.board_mut(i) else { return };
+        let n = b.pages.len();
+        if from >= n || from == to.min(n - 1) {
+            return;
+        }
+        let to = to.min(n - 1);
+        let chosen: Vec<(u32, i32, bool)> = b.sel.iter().map(|&s| b.pages[s]).collect();
+        let moved = b.pages.remove(from);
+        b.pages.insert(to, moved);
+        b.sel = b.pages.iter().enumerate().filter(|(_, p)| chosen.contains(p)).map(|(k, _)| k).collect();
+    }
+
+    /// Torna alle pagine com'erano.
+    pub fn pages_reset(&mut self, i: usize) {
+        if let Some(path) = self.files.get(i).map(|f| f.path.clone()) {
+            self.boards.remove(&path);
+        }
+    }
+
+    /// La chiave delle scelte di «Comprimi» (per le stime).
+    pub fn squeeze_key(&self) -> String {
+        let opts = conversioni::options_from(&self.values);
+        format!("{:?}|{:?}", opts.pdf_edit.squeeze, opts.pdf_pages.open_password)
+    }
+
+    /// La stima del peso compresso del file `i` con le scelte di adesso: `None` se non c'è ancora.
+    pub fn estimate(&self, i: usize) -> Option<&Result<(u64, u64), String>> {
+        let path = self.files.get(i)?.path.clone();
+        self.estimates.get(&(path, self.squeeze_key()))?.as_ref()
+    }
+
+    /// Chiede le stime che mancano per i PDF della vista (una alla volta, in un thread a parte).
+    pub fn want_estimates(&mut self) {
+        let key = self.squeeze_key();
+        let opts = conversioni::options_from(&self.values);
+        let squeeze = opts.pdf_edit.squeeze.unwrap_or_else(engine::saved_squeeze);
+        let password = opts.pdf_pages.open_password.clone();
+        for i in self.visible() {
+            let path = self.files[i].path.clone();
+            let k = (path.clone(), key.clone());
+            if !self.estimates.contains_key(&k) {
+                self.estimates.insert(k, None);
+                self.pdfwork.estimate(&path, squeeze, password.clone(), &key);
+            }
+        }
+        // Le stime ancora in corso con un'altra chiave non arriveranno più: si tolgono, così si richiedono se si torna lì.
+        self.estimates.retain(|(_, k), v| v.is_some() || *k == key);
+    }
+
+    /// Le scelte di «Pagine» per il file `i`: pagine, numeri, filigrana.
+    pub fn stamp_key(&self, i: usize) -> Option<String> {
+        let file = self.files.get(i)?;
+        let b = self.board(i)?;
+        let opts = conversioni::options_from(&self.values);
+        Some(format!("{}|{:?}|{:?}|{}|{:?}", file.path.display(), b.kept(), opts.pdf_edit.stamp, self.stamp_page, opts.pdf_pages.open_password))
+    }
+
+    /// Chiede la pagina vera con numeri e filigrana per il file `i`, se le scelte sono cambiate.
+    pub fn want_stamp_preview(&mut self, i: usize) {
+        let opts = conversioni::options_from(&self.values);
+        if opts.pdf_edit.stamp.is_empty() {
+            return;
+        }
+        let Some(b) = self.board(i) else { return };
+        let kept = b.kept();
+        self.stamp_page = self.stamp_page.min(kept.len().saturating_sub(1));
+        let Some(key) = self.stamp_key(i) else { return };
+        if self.stamp_view.0 == key {
+            return;
+        }
+        self.stamp_view.0 = key.clone();
+        let path = self.files[i].path.clone();
+        self.pdfwork.stamp(&path, kept, opts.pdf_edit.stamp, self.stamp_page, opts.pdf_pages.open_password, &key);
+    }
+
+    /// «Estrai»: le pagine scelte del file `i` in un PDF nuovo (girate come si vedono, senza numeri né filigrana).
+    pub fn pages_extract(&mut self, i: usize) {
+        if self.busy() {
+            return;
+        }
+        let Some(b) = self.board(i) else { return };
+        let list: Vec<(u32, i32)> = b.sel.iter().filter_map(|&s| b.pages.get(s)).map(|p| (p.0, p.1)).collect();
+        if list.is_empty() {
+            self.notice = Some(Notice { text: "Scegli prima le pagine da estrarre.".into(), error: false });
+            return;
+        }
+        let path = self.files[i].path.clone();
+        let cancel = self.begin(&[i], JobKind::Convert);
+        let dest = self.dest.clone();
+        let mut opts = self.exists_options(conversioni::options_from(&self.values));
+        opts.pdf_edit.pages = list;
+        opts.pdf_edit.stamp = Default::default();
+        opts.pdf_edit.suffix = "-estratte".into();
+        let quality = self.quality;
+        let (tx, wake) = (self.tx.clone(), self.wake.clone());
+        std::thread::spawn(move || {
+            let result = match crate::resources::acquire(Some(&cancel)) {
+                Some(_turn) => {
+                    let _ = tx.send(Event::Started(path.clone()));
+                    wake();
+                    guarded(|| conversioni::convert_one_out(&path, "pages", quality, dest.as_deref(), &opts))
+                }
+                None => Err("Annullato".into()),
+            };
+            let _ = tx.send(Event::Finished(path, result));
+            wake();
+            let _ = tx.send(Event::JobDone);
+            wake();
+        });
     }
 
     /// Il nome di ciò che si sta per fare, per il pulsante («WebP», «Comprimi»…).
@@ -774,18 +1019,24 @@ impl App {
     /// I file che il pulsante principale lavorerebbe adesso.
     pub fn targets(&self) -> Vec<usize> {
         let visible = self.visible();
+        // «Pagine» lavora sul PDF che è sul banco, uno alla volta.
+        if self.activity == Activity::Convert && self.kind() == Kind::Pdf && self.action == "pages" && !self.simple_view {
+            return self.selected.filter(|i| visible.contains(i)).or(visible.first().copied()).into_iter().collect();
+        }
         visible.into_iter().filter(|&i| self.files[i].checked).collect()
     }
 
     /// Le scelte che cambiano il risultato: se cambiano, i file già fatti si rifanno.
     fn settings_key(&self) -> String {
         // Per unire contano anche l'ordine dei file e le loro pagine; per dividere i tagli.
-        let pages = if conversioni::is_page_action(&self.action) && self.activity == Activity::Convert {
+        let pages = if conversioni::is_page_action(self.kind(), &self.action) && self.activity == Activity::Convert {
             let vis = self.visible();
             let order: Vec<String> = vis.iter().map(|&i| format!("{}#{}", self.files[i].path.display(), self.files[i].pages)).collect();
             let mut cuts: Vec<String> = self.cuts.iter().map(|(p, c)| format!("{}:{c:?}", p.display())).collect();
             cuts.sort();
-            format!("{order:?}{cuts:?}")
+            let mut boards: Vec<String> = self.boards.iter().filter(|(_, b)| !b.untouched()).map(|(p, b)| format!("{}:{:?}", p.display(), b.kept())).collect();
+            boards.sort();
+            format!("{order:?}{cuts:?}{boards:?}")
         } else {
             String::new()
         };
@@ -994,8 +1245,21 @@ impl App {
             return;
         }
         let paths: Vec<PathBuf> = targets.iter().map(|&i| self.files[i].path.clone()).collect();
+        // «Comprimi»: il livello scelto diventa quello della ruota.
+        if self.action == "compress" && !self.simple_view {
+            if let Some(sq) = conversioni::options_from(&self.values).pdf_edit.squeeze {
+                let mut st = crate::read_settings();
+                if st.compress != sq.level {
+                    st.compress = sq.level;
+                    let _ = crate::settings::write_settings(&st);
+                }
+            }
+        }
         // «Dividi»: chi ha i suoi tagli sulla striscia si divide lì, gli altri come dice il pannello.
         let cuts: HashMap<PathBuf, Vec<u32>> = if self.action == "split" && !self.simple_view { self.cuts.clone() } else { HashMap::new() };
+        // «Pagine»: chi ha le pagine sistemate sul banco le salva così, gli altri tutte.
+        let boards: HashMap<PathBuf, Vec<(u32, i32)>> =
+            if self.action == "pages" { self.boards.iter().filter(|(_, b)| !b.untouched()).map(|(p, b)| (p.clone(), b.kept())).collect() } else { HashMap::new() };
         let cancel = self.begin(&targets, JobKind::Convert);
         let action = self.action.clone();
         let quality = self.quality;
@@ -1031,6 +1295,9 @@ impl App {
                                 let mut opts = opts.clone();
                                 if let Some(c) = cuts.get(&path) {
                                     opts.pdf_pages.plan = crate::pdfpages::Plan::Cuts(c.clone());
+                                }
+                                if let Some(list) = boards.get(&path) {
+                                    opts.pdf_edit.pages = list.clone();
                                 }
                                 guarded(|| conversioni::convert_one_out(&path, &action, quality, dest.as_deref(), &opts))
                             },
@@ -1406,6 +1673,16 @@ impl App {
                         *slot = img;
                     }
                 }
+                Event::Estimate(path, key, result) => {
+                    if let Some(slot) = self.estimates.get_mut(&(path, key)) {
+                        *slot = Some(result);
+                    }
+                }
+                Event::StampPreview(key, img) => {
+                    if self.stamp_view.0 == key {
+                        self.stamp_view.1 = img;
+                    }
+                }
             }
         }
         changed
@@ -1435,7 +1712,7 @@ impl App {
     /// Il nome che avrebbe la copia con la regola «Aggiungi -2» (per l'esempio sotto la scelta).
     pub fn exists_example(&self) -> String {
         // Unire e dividere fanno PDF; le altre voci corte sono l'estensione.
-        let ext = if self.action.len() <= 5 && !conversioni::is_page_action(&self.action) { self.action.as_str() } else { "pdf" };
+        let ext = if self.action.len() <= 5 && !conversioni::is_page_action(self.kind(), &self.action) { self.action.as_str() } else { "pdf" };
         match self.values.exists {
             Exists::Number => format!("Esempio: nomefile-2.{ext}"),
             Exists::Replace => "Il file con lo stesso nome viene sostituito.".into(),
@@ -1519,6 +1796,21 @@ mod tests {
             assert_eq!(app.links(web).items[0].state, FileState::Failed);
             assert_eq!(app.links(web).items[0].message, "Annullato");
         }
+    }
+
+    #[test]
+    fn a_board_keeps_order_turns_and_removals() {
+        let mut b = super::Board::new(4);
+        assert!(b.untouched());
+        b.pages[1].2 = true;
+        b.pages[2].1 = 90;
+        b.pages.swap(0, 3);
+        assert!(!b.untouched());
+        assert_eq!(b.kept(), vec![(4, 0), (3, 90), (1, 0)]);
+        // Trascinata di un posto e mezzo a destra: va due posti più in là, sulla stessa riga.
+        assert_eq!(crate::ui::views::page_drop(0, 225.0, 0.0, 150.0, 222.0, 5), 2);
+        assert_eq!(crate::ui::views::page_drop(4, 0.0, 230.0, 150.0, 222.0, 5), 9);
+        assert_eq!(crate::ui::views::page_drop(1, -900.0, 0.0, 150.0, 222.0, 5), 0);
     }
 
     #[test]
