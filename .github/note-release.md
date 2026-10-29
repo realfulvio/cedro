@@ -12,6 +12,10 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
+**Correzione.** PDF → testo o Word su un PDF con password di apertura: ora Cedro dice che il PDF è protetto, invece di «nessuna pagina in questo intervallo».
+
+Restano le novità della 0.27.0:
+
 **Versione stabile: librerie riviste e più solide.** Nessuna funzione nuova: Cedro diventa più robusto con i file difficili.
 
 - **PDF**: un PDF costruito con oggetti annidati in profondità non fa più chiudere Cedro (prima il programma si chiudeva di colpo); il testo estratto dai PDF non incolla più le parole a fine riga; Unisci, Dividi e Pagine aprono come prima i PDF protetti da password.
