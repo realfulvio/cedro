@@ -71,6 +71,7 @@ version = "0.26.9"
 dependencies = [
  "libc",
  "opus",
+ "opusic-sys",
  "serde_json",
  "symphonia",
  "whisper-rs",
