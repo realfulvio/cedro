@@ -442,7 +442,7 @@ fn stream_opus(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32
 /// Lo usano l'audio e i video WebM/MKV con audio Opus.
 #[cfg(any(windows, target_os = "linux", target_os = "android"))]
 pub(crate) struct OpusStream {
-    dec: *mut audiopus_sys::OpusDecoder,
+    dec: *mut opusic_sys::OpusDecoder,
     channels: usize,
     skip: usize,
     pcm: Vec<i16>,
@@ -456,7 +456,7 @@ unsafe impl Send for OpusStream {}
 impl OpusStream {
     /// `head` è l'OpusHead della traccia: 8 byte di firma, versione, canali, pre-skip (u16), …
     pub(crate) fn new(head: &[u8]) -> Result<OpusStream, String> {
-        use audiopus_sys as sys;
+        use opusic_sys as sys;
         let channels = match head.get(9) {
             Some(c) if matches!(*c, 1 | 2) => *c as usize,
             _ => return Err("Opus con più di due canali non letto".into()),
@@ -476,7 +476,7 @@ impl OpusStream {
 
     /// I campioni (interlacciati) di un pacchetto; vuoto se il pacchetto è rovinato o tutto d'avvio.
     pub(crate) fn decode(&mut self, data: &[u8]) -> &[i16] {
-        let n = unsafe { audiopus_sys::opus_decode(self.dec, data.as_ptr(), data.len() as i32, self.pcm.as_mut_ptr(), 5760, 0) };
+        let n = unsafe { opusic_sys::opus_decode(self.dec, data.as_ptr(), data.len() as i32, self.pcm.as_mut_ptr(), 5760, 0) };
         if n <= 0 {
             return &[];
         }
@@ -490,7 +490,7 @@ impl OpusStream {
 #[cfg(any(windows, target_os = "linux", target_os = "android"))]
 impl Drop for OpusStream {
     fn drop(&mut self) {
-        unsafe { audiopus_sys::opus_decoder_destroy(self.dec) };
+        unsafe { opusic_sys::opus_decoder_destroy(self.dec) };
     }
 }
 
@@ -715,7 +715,7 @@ fn ogg_page(serial: u32, seq: u32, flags: u8, granule: u64, packets: &[Vec<u8>])
 /// Opus dentro un Ogg (.opus), con libopus: 48 kHz, stereo o mono. `quality` e `opts.mp3_kbps` scelgono il bitrate.
 #[cfg(any(windows, target_os = "linux", target_os = "android"))]
 pub fn to_opus(input: &Path, output: &Path, quality: u8, opts: &crate::engine::Options) -> Result<(), String> {
-    use audiopus_sys as sys;
+    use opusic_sys as sys;
     let mut pcm = shape(decode(input)?, opts)?;
     if pcm.channels > 2 {
         pcm = fold_stereo(pcm);
