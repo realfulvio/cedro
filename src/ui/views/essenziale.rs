@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::ui::core::{HitKind, Scroll};
-use crate::ui::model::FileState;
+use crate::ui::model::{FileState, PdfMode};
 
 const NAV_W: f32 = 270.0;
 const TOP: f32 = 56.0;
@@ -123,9 +123,13 @@ fn standard(f: &mut Frame, app: &App) {
     f.text_r(&count, (q.0 + q.2 - 140.0, 234.0, 70.0, 40.0), 16.0, SANS, pal.text);
     f.icon(ic::MENU, q.0 + q.2 - 56.0, 242.0, 24.0, pal.text);
 
+    let pdf_mode = if super::pagine::shows_modes(f, app) { app.pdf_mode() } else { PdfMode::Convert };
     if visible.is_empty() {
         super::drop_zone(f, app, (q.0 + 20.0, 300.0, q.2 - 40.0, q.3 - 108.0), true);
         super::others_link(f, app, q.0 + 24.0, q.1 + q.3 - 50.0, 30.0, 15.0);
+    } else if pdf_mode != PdfMode::Convert {
+        page_queue(f, app, q, &visible, pdf_mode == PdfMode::Merge);
+        super::others_link(f, app, q.0 + 24.0, q.1 + q.3 - 40.0, 30.0, 15.0);
     } else {
         // Intestazione della tabella.
         let all = visible.iter().all(|&i| app.files[i].checked);
@@ -189,11 +193,163 @@ fn standard(f: &mut Frame, app: &App) {
     // L'ispettore.
     let ir = (insp_x, 212.0, insp_w, foot_y - 20.0 - 212.0);
     f.card(ir, 12.0);
-    f.text("Impostazioni di conversione", insp_x + 23.0, 230.0, insp_w - 40.0, 32.0, 20.0, SANS, pal.text);
-    let body = (insp_x + 1.0, 272.0, insp_w - 2.0, ir.1 + ir.3 - 272.0 - 8.0);
-    super::scrolled(f, body, Scroll::Inspector, |f| super::options_panel(f, app, insp_x + 24.0, 284.0, insp_w - 45.0, OPT_STD, true) + 20.0);
+    let modes = super::pagine::shows_modes(f, app);
+    let head = if modes { "Cosa vuoi fare" } else { "Impostazioni di conversione" };
+    f.text(head, insp_x + 23.0, 228.0, insp_w - 40.0, 32.0, 20.0, SANS, pal.text);
+    let top = if modes { 266.0 } else { 272.0 };
+    let body = (insp_x + 1.0, top, insp_w - 2.0, ir.1 + ir.3 - top - 8.0);
+    super::scrolled(f, body, Scroll::Inspector, |f| super::options_panel_ex(f, app, insp_x + 24.0, if modes { 268.0 } else { 284.0 }, insp_w - 45.0, OPT_STD, true, false) + 20.0);
 
     footer(f, app, foot_y);
+}
+
+/// La coda di «Unisci» (ordine, maniglia, frecce, pagine di ogni file, il file unito) e di «Dividi»
+/// (la riga scelta si apre sulla striscia delle pagine). Misure della tavola A.
+fn page_queue(f: &mut Frame, app: &App, q: R, rows: &[usize], merge: bool) {
+    let pal = f.pal;
+    const RH: f32 = 96.0;
+    let all = rows.iter().all(|&i| app.files[i].checked);
+    f.checkbox(q.0 + 20.0, 306.0, 22.0, all, Some(Act::CheckAll));
+    let col_pages = q.0 + q.2 - 276.0;
+    let col_size = q.0 + q.2 - 156.0;
+    let name_x = if merge { q.0 + 156.0 } else { q.0 + 150.0 };
+    let name_w = (col_pages - name_x - 20.0).max(140.0);
+    f.text(if merge { "Ordine e nome file" } else { "Nome file" }, q.0 + 74.0, 296.0, 260.0, 42.0, 15.0, SANS, pal.text);
+    f.text("Pagine", col_pages + 4.0, 296.0, 110.0, 42.0, 15.0, SANS, pal.text);
+    f.text("Dimensione", col_size, 296.0, 130.0, 42.0, 15.0, SANS, pal.text);
+    let list = (q.0, 338.0, q.2, q.1 + q.3 - 338.0 - 44.0);
+    let split_i = if merge { None } else { super::pagine::split_file(app) };
+    let targets = app.targets();
+    let rows = rows.to_vec();
+    super::scrolled(f, list, Scroll::Queue, |f| {
+        let mut y = list.1;
+        let mut dragged: Option<(usize, usize, f32)> = None;
+        let row = |f: &mut Frame, n: usize, i: usize, y: f32, lifted: bool| {
+            let file = &app.files[i];
+            let open = split_i == Some(i);
+            if lifted {
+                f.p.shadow(q.0 + 8.0, y, q.2 - 16.0, RH, 8.0, 14.0, 0.25, 6.0);
+                f.p.rrect(q.0 + 8.0, y, q.2 - 16.0, RH, 8.0, Some(pal.surface), Some((pal.primary, 1.5)));
+            } else {
+                f.hline(q.0, y, q.2);
+                if app.selected == Some(i) || open {
+                    f.p.fill(q.0 + 1.0, y + 1.0, q.2 - 2.0, RH - 1.0, mix(pal.alt, pal.surface, 0.5));
+                }
+                f.hit((q.0, y, q.2, RH), Act::Select(i));
+            }
+            f.checkbox(q.0 + 20.0, y + 37.0, 22.0, file.checked, Some(Act::Check(i)));
+            let sub_c = match file.state {
+                FileState::Failed => pal.bad,
+                FileState::Done => pal.ok,
+                _ => pal.muted,
+            };
+            if merge {
+                super::pagine::grip(f, app, i, q.0 + 50.0, y + 48.0, RH);
+                let pos = targets.iter().position(|&t| t == i);
+                let mark = pos.map(|p| super::pagine::file_color(pal, p));
+                f.thumb(app, i, (q.0 + 82.0, y + 13.0, 52.0, 70.0), 4.0);
+                if let Some(c) = mark {
+                    f.p.rrect(q.0 + 82.0, y + 13.0, 4.0, 70.0, 2.0, Some(c), None);
+                }
+                if let Some(p) = pos {
+                    super::pagine::order_badge(f, p, q.0 + 82.0, y + 20.0, 14.0);
+                }
+                f.text(&file.name(), name_x, y + 20.0, name_w, 24.0, 17.0, SEMI, pal.text);
+                f.text(&super::pagine::merge_sub(app, i), name_x, y + 48.0, name_w, 22.0, 16.0, SANS, sub_c);
+                f.row_bar(file, name_x, y + 77.0, name_w, 6.0);
+                f.field((col_pages, y + 26.0, 100.0, 40.0), Field::FilePages(i), &file.pages, "tutte", 15.0, false);
+                if app.selected == Some(i) || lifted {
+                    super::pagine::order_arrows(f, app, i, q.0 + q.2 - 104.0, y + 48.0, 24.0);
+                }
+            } else {
+                f.thumb(app, i, (q.0 + 74.0, y + 13.0, 52.0, 70.0), 4.0);
+                f.text(&file.name(), name_x, y + 20.0, name_w, 24.0, 17.0, SEMI, pal.text);
+                let sub = if file.state == FileState::Waiting { file.path.display().to_string() } else { file.message.clone() };
+                f.text(&sub, name_x, y + 48.0, name_w, 22.0, 16.0, SANS, sub_c);
+                f.row_bar(file, name_x, y + 77.0, name_w, 6.0);
+                let pages = app.page_count(i).map(|n| n.to_string()).unwrap_or_default();
+                f.text(&pages, col_pages + 4.0, y, 100.0, RH, 16.0, SANS, pal.muted);
+            }
+            let (size, _) = super::file_meta(app, i);
+            f.text(&size, col_size, y, 110.0, RH, 16.0, SANS, pal.muted);
+            let cx = q.0 + q.2 - 44.0;
+            if file.state == FileState::Waiting {
+                let act = Act::Remove(i);
+                if f.hovered(&act) {
+                    f.p.circle(cx + 12.0, y + 48.0, 18.0, Some(pal.alt), None);
+                }
+                f.icon(ic::CLOSE, cx, y + 36.0, 24.0, pal.text);
+                f.hit((cx - 8.0, y + 28.0, 40.0, 40.0), act);
+            } else {
+                f.state_icon(file.state, cx + 12.0, y + 48.0, 14.0);
+                if let Some(out) = &file.output {
+                    f.hit((cx - 8.0, y + 28.0, 40.0, 40.0), Act::OpenPath(out.clone()));
+                }
+            }
+            let _ = n;
+        };
+        for (n, &i) in rows.iter().enumerate() {
+            if merge {
+                if let Some(dy) = super::pagine::drag_offset(f, i) {
+                    dragged = Some((n, i, dy));
+                }
+            }
+            let open = split_i == Some(i);
+            let strip_h = if open { 
+                // La striscia si misura disegnandola fuori vista la prima volta: qui basta l'altezza calcolata.
+                strip_height(app, i, q.2 - 110.0)
+            } else {
+                0.0
+            };
+            let h = RH + strip_h;
+            if f.p.shows_y(y, h) {
+                if open {
+                    f.p.fill(q.0 + 1.0, y + 1.0, q.2 - 2.0, h - 1.0, mix(pal.alt, pal.surface, 0.5));
+                }
+                row(f, n, i, y, false);
+                if open {
+                    super::pagine::split_strip(f, app, i, q.0 + 74.0, y + RH + 8.0, q.2 - 110.0, 86.0);
+                }
+            }
+            y += h;
+        }
+        f.hline(q.0, y, q.2);
+        if let Some((n, i, dy)) = dragged {
+            // Dove andrà: la linea tra due righe, e la riga sollevata che segue il mouse.
+            let to = (n as i32 + (dy / RH).round() as i32).clamp(0, rows.len() as i32 - 1) as usize;
+            let line_y = list.1 + if to > n { (to + 1) as f32 * RH } else { to as f32 * RH };
+            f.p.rrect(q.0 + 12.0, line_y - 2.0, q.2 - 24.0, 4.0, 2.0, Some(pal.primary), None);
+            let ry = (list.1 + n as f32 * RH + dy).clamp(list.1 - RH / 2.0, y - RH / 2.0);
+            row(f, n, i, ry, true);
+        }
+        let mut end = y + 18.0;
+        if merge {
+            end += f.para(
+                "Trascina le righe dalla maniglia oppure usa le frecce: l'ordine della coda è l'ordine delle pagine nel file unito. Nel campo «Pagine» puoi scrivere per esempio 1-3,5.",
+                q.0 + 24.0, end, q.2 - 48.0, 15.0, SANS, pal.muted, 1.45, 3,
+            ) + 22.0;
+            end += super::pagine::merged_strip(f, app, q.0 + 24.0, end, q.2 - 48.0, 46.0);
+        } else if rows.len() > 1 {
+            end += f.para(
+                "La striscia si apre sotto il file selezionato: i tagli valgono per quel file, il campo «Intervalli» a destra per tutti quelli senza tagli.",
+                q.0 + 24.0, end, q.2 - 48.0, 15.0, SANS, pal.muted, 1.45, 3,
+            );
+        }
+        end - list.1 + 16.0
+    });
+}
+
+/// L'altezza della striscia di «Dividi» sotto la riga (le stesse misure di `pagine::split_strip`).
+fn strip_height(app: &App, i: usize, w: f32) -> f32 {
+    let Some(total) = app.page_count(i) else { return 34.0 };
+    let pw = 86.0f32;
+    let ph = (pw * 1.35).round();
+    let unit = pw + (pw * 0.5).round();
+    let per_row = ((w / unit) as usize).max(1);
+    let shown = total.min(super::STRIP_MAX);
+    let rows = shown.div_ceil(per_row);
+    let more = if total > shown { 28.0 } else { 0.0 };
+    8.0 + 30.0 + rows as f32 * (ph + 6.0 + 18.0 + 4.0 + 22.0 + 14.0) + more + 8.0
 }
 
 fn footer(f: &mut Frame, app: &App, y: f32) {
@@ -225,7 +381,7 @@ fn footer(f: &mut Frame, app: &App, y: f32) {
             f.p.rrect(go_x, y + 100.0, go_w * p, 6.0, 3.0, Some(pal.primary), None);
         }
     }
-    f.primary((go_x, y + 24.0, go_w, 74.0), &label, Some(ic::CONVERT), 22.0, Act::Start, ready && !app.busy());
+    f.primary((go_x, y + 24.0, go_w, 74.0), &label, Some(super::go_icon(app)), 22.0, Act::Start, ready && !app.busy());
     super::go_extras(f, app, (go_x, y + 24.0, go_w, 74.0 + 14.0), false);
 }
 
@@ -274,6 +430,13 @@ fn simplified(f: &mut Frame, app: &App) {
                 f.row_bar(file, list.0 + 196.0, y + 106.0, list.2 - 520.0, 8.0);
                 let (size, _) = super::file_meta(app, i);
                 f.text(&size, list.0 + list.2 - 300.0, y, 200.0, 134.0, 20.0, SANS, pal.muted);
+                // «Un solo PDF»: il numero del posto e le frecce per cambiare l'ordine.
+                if app.kind() == Kind::Pdf && app.action == "merge" && rows.len() > 1 {
+                    super::pagine::grip(f, app, i, list.0 + 1.0, y + 67.0, 134.0);
+                    super::pagine::order_badge(f, n, list.0 + 30.0, y + 24.0, 16.0);
+                    super::pagine::order_arrows(f, app, i, list.0 + list.2 - 150.0, y + 67.0, 30.0);
+                    super::pagine::drop_line(f, n, i, rows.len(), list.1, 134.0, list.0, list.2);
+                }
                 let cx = list.0 + list.2 - 60.0;
                 if file.state == FileState::Waiting {
                     let act = Act::Remove(i);
@@ -308,7 +471,7 @@ fn simplified(f: &mut Frame, app: &App) {
     f.select((inner_x + 164.0, fy, inner_w - 164.0, 68.0), &title, Some(icon), 24.0, Act::FormatMenu);
     let label = super::go_label(app);
     let ready = !app.targets().is_empty();
-    f.primary((inner_x, fy + 108.0, inner_w, 88.0), &label, Some(ic::CONVERT), 28.0, Act::Start, ready && !app.busy());
+    f.primary((inner_x, fy + 108.0, inner_w, 88.0), &label, Some(super::go_icon(app)), 28.0, Act::Start, ready && !app.busy());
     super::go_extras(f, app, (inner_x, fy + 108.0, inner_w, 88.0 + 8.0), false);
     if app.busy() {
         if let Some(p) = app.progress() {

@@ -5,6 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::engine::{self, Encoding, Exists, Kind, Mode, PageSel, PageSize, Slice};
+use crate::pdfpages::Plan;
 
 /// Una voce del menu a sinistra del pannello.
 pub struct Category {
@@ -34,9 +35,19 @@ pub fn tools(kind: Kind) -> &'static [Slice] {
     let list = engine::slices(kind, Mode::Tools);
     if list.iter().any(|s| s.id == "none") {
         &[]
+    } else if kind == Kind::Pdf {
+        // Unisci e Dividi hanno i loro pulsanti in cima al pannello, non stanno tra i formati.
+        &list[..list.iter().position(|s| is_page_action(s.id)).unwrap_or(list.len())]
     } else {
         list
     }
+}
+
+/// Le due voci dei PDF che lavorano sulle pagine invece di convertire.
+pub const PAGE_ACTIONS: [&str; 2] = ["merge", "split"];
+
+pub fn is_page_action(action: &str) -> bool {
+    PAGE_ACTIONS.contains(&action)
 }
 
 /// Un formato proposto dalla modalità Semplice: nome e una riga in parole comuni.
@@ -59,6 +70,8 @@ pub fn simple_formats(kind: Kind) -> &'static [SimpleFormat] {
         SimpleFormat { id: "docx", title: "Word", note: "da modificare" },
         SimpleFormat { id: "jpg", title: "Immagini", note: "una per pagina" },
         SimpleFormat { id: "txt", title: "Testo", note: "solo le parole" },
+        SimpleFormat { id: "merge", title: "Un solo PDF", note: "li unisce in fila" },
+        SimpleFormat { id: "split", title: "Dividi", note: "una pagina per file" },
     ];
     const TEXT: &[SimpleFormat] = &[
         SimpleFormat { id: "pdf", title: "PDF", note: "si apre ovunque" },
@@ -98,7 +111,7 @@ pub fn kind_of_files(paths: &[PathBuf]) -> Option<Kind> {
 
 /// Il nome che il pannello mostra per un formato o uno strumento, per esempio «WebP».
 pub fn action_label(kind: Kind, action: &str) -> &'static str {
-    formats(kind).iter().chain(tools(kind).iter()).find(|s| s.id == action).map(|s| s.label).unwrap_or("")
+    formats(kind).iter().chain(engine::slices(kind, Mode::Tools).iter()).find(|s| s.id == action).map(|s| s.label).unwrap_or("")
 }
 
 /// I file di `paths` che appartengono alla categoria.
@@ -124,6 +137,8 @@ pub enum Control {
     Text { hint: &'static str },
     /// Un testo da non mostrare mentre si scrive.
     Password,
+    /// Una voce tra poche, tutte in vista (pulsanti affiancati).
+    Segments(&'static [Choice]),
 }
 
 /// Tutte le opzioni che il motore capisce.
@@ -158,6 +173,17 @@ pub enum Opt {
     Mute,
     FastStart,
     NameTemplate,
+    MergeName,
+    FileBookmarks,
+    KeepBookmarks,
+    KeepForms,
+    DuplexBlank,
+    OpenPassword,
+    SplitHow,
+    SplitEvery,
+    SplitRanges,
+    SplitRemove,
+    SplitName,
 }
 
 /// Una riga della zona Opzioni del pannello.
@@ -287,12 +313,57 @@ const NAME_TEMPLATE: OptionDef = OptionDef {
     control: Control::Text { hint: "per esempio %nome%_%data%" },
     default: 0,
 };
+/// Come dividere: i valori sono quelli di `options_from`.
+pub const SPLIT_HOW_CHOICES: &[Choice] = &[
+    Choice { label: "Ogni pagina", value: 0 },
+    Choice { label: "Ogni N", value: 1 },
+    Choice { label: "Intervalli", value: 2 },
+    Choice { label: "Ai segnalibri", value: 3 },
+    Choice { label: "Togli pagine", value: 4 },
+];
+pub const SPLIT_HOW: OptionDef = OptionDef { opt: Opt::SplitHow, title: "Come dividere", note: "", control: Control::Segments(SPLIT_HOW_CHOICES), default: 2 };
+pub const SPLIT_RANGES: OptionDef = OptionDef {
+    opt: Opt::SplitRanges,
+    title: "Intervalli",
+    note: "Un file per ogni gruppo, per esempio 1-3, 4-6, 7-. Segue i tagli della striscia.",
+    control: Control::Text { hint: "1-3, 4-6, 7-" },
+    default: 0,
+};
+const SPLIT_EVERY: OptionDef = OptionDef { opt: Opt::SplitEvery, title: "Pagine per file", note: "L'ultimo file prende quelle che restano", control: Control::Range { min: 1, max: 50, unit: "" }, default: 2 };
+const SPLIT_REMOVE: OptionDef = OptionDef {
+    opt: Opt::SplitRemove,
+    title: "Pagine da togliere",
+    note: "Esce un PDF solo, senza queste pagine. Per esempio 2, 5-6",
+    control: Control::Text { hint: "2, 5-6" },
+    default: 0,
+};
+const SPLIT_NAME: OptionDef = OptionDef {
+    opt: Opt::SplitName,
+    title: "Nome dei file",
+    note: "Vuoto = nome-parte-1, nome-parte-2… Usa %nome%, %n%, %titolo%",
+    control: Control::Text { hint: "%nome%-parte-%n%" },
+    default: 0,
+};
+const MERGE_NAME: OptionDef = OptionDef {
+    opt: Opt::MergeName,
+    title: "Nome del file unito",
+    note: "Vuoto = il nome del primo file con «-unito»",
+    control: Control::Text { hint: "nome del primo file-unito" },
+    default: 0,
+};
+const FILE_BOOKMARKS: OptionDef = sw(Opt::FileBookmarks, "Un segnalibro per ogni file", "Nel PDF unito si salta da un file all'altro", true);
+const KEEP_BOOKMARKS: OptionDef = sw(Opt::KeepBookmarks, "Tieni i segnalibri dei file", "Finiscono sotto il segnalibro del loro file", true);
+const KEEP_FORMS: OptionDef = sw(Opt::KeepForms, "Tieni moduli e link", "Campi compilabili e collegamenti interni", true);
+const DUPLEX_BLANK: OptionDef = sw(Opt::DuplexBlank, "Pagina bianca per il fronte-retro", "Dopo i file con le pagine dispari: ognuno parte su un foglio nuovo", false);
+const OPEN_PASSWORD: OptionDef = OptionDef { opt: Opt::OpenPassword, title: "Password per aprire", note: "Solo per i PDF protetti", control: Control::Password, default: 0 };
+const OUT_PASSWORD: OptionDef = OptionDef { opt: Opt::Password, title: "Proteggi con password", note: "Vuota = nessuna protezione", control: Control::Password, default: 0 };
+
 const FAST_START: OptionDef = sw(Opt::FastStart, "Ottimizza per il web", "L'avvio parte subito", false);
 
 /// Le opzioni che valgono per questa categoria e questa voce; il motore le usa tutte.
 pub fn option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     let mut defs = format_option_defs(kind, action);
-    if action != "none" {
+    if action != "none" && !is_page_action(action) {
         defs.push(&NAME_TEMPLATE);
     }
     defs
@@ -307,6 +378,8 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
         (Kind::Pdf, "jpg" | "png") => vec![&PDF_DPI, &PDF_PAGES, &ONE_PER_PAGE],
         (Kind::Pdf, "docx") => vec![&OCR, &TABLES, &COLUMNS, &PDF_PAGES],
         (Kind::Pdf, "txt") => vec![&OCR, &PDF_PAGES],
+        (Kind::Pdf, "merge") => vec![&MERGE_NAME, &FILE_BOOKMARKS, &KEEP_BOOKMARKS, &KEEP_FORMS, &DUPLEX_BLANK, &OUT_PASSWORD, &OPEN_PASSWORD],
+        (Kind::Pdf, "split") => vec![&SPLIT_HOW, &SPLIT_EVERY, &SPLIT_RANGES, &SPLIT_REMOVE, &SPLIT_NAME, &KEEP_BOOKMARKS, &KEEP_FORMS, &OUT_PASSWORD, &OPEN_PASSWORD],
         (Kind::Text, "pdf") => vec![&PAGE, &EMBED_FONTS, &PDF_A],
         (Kind::Text, "csv") => vec![&TEXT_ENCODING, &CSV_SEPARATOR],
         (Kind::Text, "json") => vec![&TEXT_ENCODING, &PRETTY_JSON, &HEADER_ROW],
@@ -319,6 +392,19 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
         (Kind::Archive, _) => vec![&IMAGE_SIZE],
         (Kind::Video, "mp4") => vec![&HEIGHT, &VIDEO_FPS, &MUTE, &FAST_START],
         _ => vec![],
+    }
+}
+
+/// Vero se l'opzione si mostra con i valori di ora: i campi di «Dividi» seguono il modo scelto.
+pub fn shown(def: &OptionDef, values: &Values) -> bool {
+    let how = values.num(Opt::SplitHow, SPLIT_HOW.default);
+    match def.opt {
+        Opt::SplitEvery => how == 1,
+        Opt::SplitRanges => how == 2,
+        Opt::SplitRemove => how == 4,
+        // Un file solo esce già con il nome dell'originale e «-senza-pagine».
+        Opt::SplitName => how != 4,
+        _ => true,
     }
 }
 
@@ -388,6 +474,24 @@ pub fn validate(values: &Values, kind: Kind, action: &str) -> Result<(), String>
     if option_defs(kind, action).iter().any(|d| d.opt == Opt::PageRange) {
         PageSel::parse(values.text_of(Opt::PageRange))?;
     }
+    if kind == Kind::Pdf && action == "split" {
+        let how = values.num(Opt::SplitHow, SPLIT_HOW.default);
+        // Si controlla la scrittura; le pagine che mancano le dice il motore, file per file.
+        let check = |text: &str, empty: &str| -> Result<(), String> {
+            if text.trim().is_empty() {
+                return Err(empty.into());
+            }
+            for it in text.split([',', ';']).map(str::trim).filter(|t| !t.is_empty()) {
+                PageSel::parse(it)?;
+            }
+            Ok(())
+        };
+        match how {
+            2 => check(values.text_of(Opt::SplitRanges), "Scrivi gli intervalli, per esempio 1-3, 4-6, 7-, oppure taglia sulla striscia.")?,
+            4 => check(values.text_of(Opt::SplitRemove), "Scrivi le pagine da togliere, per esempio 2, 5-6.")?,
+            _ => {}
+        }
+    }
     Ok(())
 }
 
@@ -438,6 +542,22 @@ pub fn options_from(values: &Values) -> engine::Options {
     o.mute = on(Opt::Mute, false);
     o.faststart = on(Opt::FastStart, false);
     o.name_template = Some(values.text_of(Opt::NameTemplate).trim().to_string()).filter(|t| !t.is_empty());
+    let text = |opt: Opt| Some(values.text_of(opt).trim().to_string()).filter(|t| !t.is_empty());
+    let pp = &mut o.pdf_pages;
+    pp.settings.file_bookmarks = on(Opt::FileBookmarks, true);
+    pp.settings.keep_bookmarks = on(Opt::KeepBookmarks, true);
+    pp.settings.keep_forms = on(Opt::KeepForms, true);
+    pp.settings.duplex_blank = on(Opt::DuplexBlank, false);
+    pp.open_password = Some(values.text_of(Opt::OpenPassword).to_string()).filter(|p| !p.is_empty());
+    pp.merge_name = text(Opt::MergeName);
+    pp.split_name = text(Opt::SplitName);
+    pp.plan = match values.num(Opt::SplitHow, SPLIT_HOW.default) {
+        0 => Plan::EveryPage,
+        1 => Plan::Every(values.num(Opt::SplitEvery, 2).max(1)),
+        3 => Plan::Bookmarks,
+        4 => Plan::Remove(values.text_of(Opt::SplitRemove).to_string()),
+        _ => Plan::Ranges(values.text_of(Opt::SplitRanges).to_string()),
+    };
     o
 }
 
@@ -462,8 +582,9 @@ mod tests {
     fn every_def() -> Vec<&'static OptionDef> {
         let mut all: Vec<&'static OptionDef> = Vec::new();
         for c in CATEGORIES {
-            for s in formats(c.kind).iter().chain(tools(c.kind).iter()) {
-                for d in option_defs(c.kind, s.id) {
+            let ids = formats(c.kind).iter().chain(tools(c.kind).iter()).map(|s| s.id).chain(PAGE_ACTIONS.into_iter().filter(|_| c.kind == Kind::Pdf));
+            for id in ids {
+                for d in option_defs(c.kind, id) {
                     if !all.iter().any(|x| x.opt == d.opt) {
                         all.push(d);
                     }
@@ -497,7 +618,9 @@ mod tests {
     fn defaults_leave_the_engine_as_it_was() {
         let opts = options_from(&Values::default());
         // I valori di partenza del pannello coincidono con quelli di sempre del motore.
-        let expected = engine::Options { dpi: Some(144), mp3_kbps: Some(128), ..Default::default() };
+        // Solo «Dividi» parte diverso: il pannello propone gli intervalli, la ruota una pagina per file.
+        let pdf_pages = engine::PdfPages { plan: Plan::Ranges(String::new()), ..Default::default() };
+        let expected = engine::Options { dpi: Some(144), mp3_kbps: Some(128), pdf_pages, ..Default::default() };
         assert_eq!(opts, expected);
     }
 
@@ -508,7 +631,8 @@ mod tests {
             Opt::Straighten, Opt::WhiteBackground, Opt::MaxSide, Opt::PageSize, Opt::Password, Opt::Dpi, Opt::PageRange,
             Opt::OnePerPage, Opt::Ocr, Opt::Tables, Opt::Columns, Opt::EmbedFonts, Opt::Bookmarks, Opt::PdfA, Opt::Encoding, Opt::CsvSeparator, Opt::PrettyJson, Opt::HeaderRow,
             Opt::Mp3Kbps, Opt::Channels, Opt::Normalize, Opt::TrimStart, Opt::TrimSilence, Opt::KeepTags, Opt::VideoHeight, Opt::Fps,
-            Opt::Mute, Opt::FastStart, Opt::NameTemplate,
+            Opt::Mute, Opt::FastStart, Opt::NameTemplate, Opt::MergeName, Opt::FileBookmarks, Opt::KeepBookmarks, Opt::KeepForms, Opt::DuplexBlank,
+            Opt::OpenPassword, Opt::SplitHow, Opt::SplitEvery, Opt::SplitRanges, Opt::SplitRemove, Opt::SplitName,
         ];
         for opt in wanted {
             assert!(defs.iter().any(|d| d.opt == opt), "{opt:?} non compare in nessun pannello");
@@ -516,6 +640,17 @@ mod tests {
         let base = options_from(&Values::default());
         for def in defs {
             let mut values = Values::default();
+            // I campi di «Dividi» contano solo nel loro modo: si confrontano con quel modo e basta.
+            if matches!(def.opt, Opt::SplitRemove | Opt::SplitEvery) {
+                let mode = if def.opt == Opt::SplitRemove { 4 } else { 1 };
+                let mut plain = Values::default();
+                plain.set(&SPLIT_HOW, mode);
+                values.set(&SPLIT_HOW, mode);
+                values.set_text(def, "2-4");
+                values.set(def, 5);
+                assert_ne!(options_from(&values), options_from(&plain), "{:?} non arriva al motore", def.opt);
+                continue;
+            }
             match &def.control {
                 Control::Switch => {
                     assert!(def.default <= 1);
@@ -529,6 +664,10 @@ mod tests {
                 Control::Range { min, max, .. } => {
                     assert!(def.default >= *min && def.default <= *max);
                     values.set(def, *max);
+                }
+                Control::Segments(choices) => {
+                    let other = choices.iter().find(|c| c.value != def.default).expect("almeno due scelte");
+                    values.set(def, other.value);
                 }
                 Control::Text { .. } => values.set_text(def, "2-4"),
                 Control::Password => values.set_text(def, "segreto"),
@@ -593,7 +732,9 @@ mod simple_tests {
             let simple = simple_formats(cat.kind);
             assert!(!simple.is_empty());
             for f in simple {
-                assert!(formats(cat.kind).iter().any(|s| s.id == f.id), "{} manca in {}", f.id, cat.name);
+                // Unire e dividere sono voci delle pagine del PDF, non formati: il motore le ha tra gli strumenti.
+                let known = formats(cat.kind).iter().any(|s| s.id == f.id) || (is_page_action(f.id) && engine::slices(cat.kind, Mode::Tools).iter().any(|s| s.id == f.id));
+                assert!(known, "{} manca in {}", f.id, cat.name);
             }
         }
     }
