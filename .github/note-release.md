@@ -14,7 +14,7 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 **Versione stabile: librerie riviste e più solide.** Nessuna funzione nuova: Cedro diventa più robusto con i file difficili.
 
-- **PDF**: un PDF costruito con oggetti annidati in profondità non fa più chiudere Cedro (prima il programma si chiudeva di colpo); il testo estratto dai PDF non incolla più le parole a fine riga; Unisci, Dividi e Pagine aprono come prima i PDF protetti da password.
+- **PDF**: un PDF costruito con oggetti annidati in profondità non fa più chiudere Cedro (prima il programma si chiudeva di colpo); il testo estratto dai PDF non incolla più le parole a fine riga; Unisci, Dividi e Pagine aprono come prima i PDF protetti da password; un PDF con password di apertura convertito in testo o Word dice che è protetto, invece di «nessuna pagina».
 - **Documenti Word 97-2003 (.doc)**: si aprono anche quelli scritti da programmi che lasciano la struttura interna un po' imperfetta.
 - **Opus** (vocali di WhatsApp e Telegram): libreria Opus aggiornata alla 1.6.1, sempre compresa nel programma, anche nel motore di trascrizione.
 - **Anteprima audio**: se l'uscita audio non risponde (per esempio con il servizio Audio di Windows fermo) il tasto Play va avanti lo stesso, senza suono.
