@@ -12,15 +12,16 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Pagine e compressione dei PDF.** Nella scheda PDF i pulsanti in cima al pannello di destra diventano cinque: Converti · Unisci · Dividi · **Pagine** · **Comprimi**.
+**Versione stabile: librerie riviste e più solide.** Nessuna funzione nuova e nessun cambio di aspetto: Cedro diventa più robusto con i file difficili.
 
-- **Pagine**: le pagine del PDF compaiono come miniature vere. Un clic le sceglie, trascinandole cambi l'ordine; i comandi in alto le ruotano di 90° a sinistra o a destra, le tolgono (o le rimettono) e le copiano in un PDF nuovo con «Estrai». Il riquadro «Cosa succederà» riassume le modifiche prima di salvare.
-- **Numeri di pagina**: nove posizioni sulla pagina, formato «1», «Pagina 1 di N» o «1 / N», primo numero e corpo a scelta.
-- **Filigrana**: un testo come «BOZZA», con opacità, direzione (diagonale o orizzontale) e pagine a scelta. Con numeri o filigrana accesi vedi in grande la pagina vera come uscirà.
-- **Comprimi**: per ogni PDF vedi il peso di adesso e la stima di dopo, calcolata comprimendo davvero in memoria, con il risparmio e il totale. Tre livelli (Leggera, Equilibrata, Forte), metadati tolti e scansioni in bianco e nero che restano nitide pesando molto meno. Un PDF che non si riesce a ridurre resta com'è: non se ne salva mai uno più pesante.
-- **Ruota** (Ctrl sui PDF): compare «Comprimi», con il livello usato l'ultima volta.
-- **Modalità Semplice**: compare «Più piccolo · per l'email», che dice subito quanto si risparmia.
-- Gli originali non vengono mai toccati. Tutto è scritto in Rust e funziona su Windows, Windows on ARM e Linux.
+- **PDF**: un PDF costruito con oggetti annidati in profondità non fa più chiudere Cedro (prima il programma si chiudeva di colpo); il testo estratto dai PDF non incolla più le parole a fine riga; Unisci, Dividi e Pagine aprono come prima i PDF protetti da password.
+- **Documenti Word 97-2003 (.doc)**: si aprono anche quelli scritti da programmi che lasciano la struttura interna un po' imperfetta.
+- **Opus** (vocali di WhatsApp e Telegram): libreria Opus aggiornata alla 1.6.1, sempre compresa nel programma, anche nel motore di trascrizione.
+- **Anteprima audio**: se l'uscita audio non risponde (per esempio con il servizio Audio di Windows fermo) il tasto Play va avanti lo stesso, senza suono.
+- **Video WebM VP9**: lettura più veloce, con le immagini identiche a prima.
+- Funziona come prima su Windows, Windows on ARM e Linux.
+
+Restano le novità della 0.26.11: numeri di pagina, filigrana, pagine da riordinare e ruotare, compressione dei PDF.
 
 Restano le novità della 0.26.10: unire e dividere i PDF, con l'ordine da trascinare, le pagine da scegliere e la striscia con le forbici.
 
