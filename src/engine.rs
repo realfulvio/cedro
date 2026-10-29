@@ -2155,10 +2155,11 @@ Luca,Bondeno
         let bytes = fs::read(&out.path).unwrap();
         assert!(bytes.windows(8).any(|w| w == b"/Encrypt"));
         assert!(!bytes.windows(8).any(|w| w == b"segreta "), "il testo non deve essere in chiaro");
-        let mut wrong = lopdf::Document::load_mem(&bytes).unwrap();
-        assert!(wrong.decrypt("sbagliata").is_err());
-        let mut right = lopdf::Document::load_mem(&bytes).unwrap();
-        right.decrypt("bondeno").unwrap();
+        // lopdf 0.46: senza password un PDF cifrato si apre vuoto; la password si dà all'apertura (LoadOptions).
+        assert!(lopdf::Document::load_mem(&bytes).unwrap().get_pages().is_empty());
+        let with = |password| lopdf::Document::load_mem_with_options(&bytes, lopdf::LoadOptions::with_password(password));
+        assert!(with("sbagliata").is_err());
+        let right = with("bondeno").unwrap();
         let text = right.extract_text(&[1]).unwrap();
         assert!(text.contains("Delibera"), "{text}");
         let _ = fs::remove_dir_all(&dir);

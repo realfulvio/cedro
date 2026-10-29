@@ -1064,6 +1064,70 @@ mod block_tests {
     }
 
     #[test]
+    fn a_pdf_with_only_an_owner_password_keeps_its_text() {
+        // I PDF «protetti» solo contro la modifica (password di apertura vuota) si leggono senza chiedere nulla.
+        use lopdf::encryption::crypt_filters::{Aes128CryptFilter, CryptFilter};
+        use lopdf::encryption::{EncryptionState, EncryptionVersion, Permissions};
+        let d = dir();
+        let src = d.join("nota.rtf");
+        fs::write(&src, br"{\rtf1\ansi Ordinanza del sindaco}").unwrap();
+        let plain = perform_with(&src, "pdf", 80, None, &Options::default()).unwrap();
+        let mut doc = lopdf::Document::load(&plain.path).unwrap();
+        let id = lopdf::Object::string_literal(vec![7u8; 16]);
+        doc.trailer.set("ID", lopdf::Object::Array(vec![id.clone(), id]));
+        let mut filters: std::collections::BTreeMap<Vec<u8>, std::sync::Arc<dyn CryptFilter>> = std::collections::BTreeMap::new();
+        filters.insert(b"StdCF".to_vec(), std::sync::Arc::new(Aes128CryptFilter));
+        let state = EncryptionState::try_from(EncryptionVersion::V4 {
+            document: &doc,
+            encrypt_metadata: true,
+            crypt_filters: filters,
+            stream_filter: b"StdCF".to_vec(),
+            string_filter: b"StdCF".to_vec(),
+            owner_password: "proprietario",
+            user_password: "",
+            permissions: Permissions::PRINTABLE,
+        })
+        .unwrap();
+        doc.encrypt(&state).unwrap();
+        let locked = d.join("solo-proprietario.pdf");
+        doc.save(&locked).unwrap();
+        let pages = pdf_page_texts(&locked).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert!(pages[0].contains("Ordinanza"), "{pages:?}");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_pdf_with_deeply_nested_objects_is_an_error_not_a_crash() {
+        // RUSTSEC-2026-0187: lopdf prima della 0.42 andava in stack overflow (processo chiuso, niente panic da intercettare).
+        let nested = format!("{}{}", "[".repeat(20_000), "]".repeat(20_000));
+        let objects = [
+            format!("<< /Type /Catalog /Pages 2 0 R /X {nested} >>"),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>".to_string(),
+        ];
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for (i, body) in objects.iter().enumerate() {
+            offsets.push(pdf.len());
+            pdf.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
+        }
+        let xref = pdf.len();
+        pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+        for o in &offsets {
+            pdf.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+        let d = dir();
+        let path = d.join("annidato.pdf");
+        fs::write(&path, &pdf).unwrap();
+        // Basta arrivare qui: un errore o un testo vuoto vanno bene, la chiusura del programma no.
+        let _ = pdf_page_texts(&path);
+        let _ = crate::pdf::protect(&pdf, "segreta");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
     fn a_document_with_titles_gets_pdf_bookmarks() {
         let d = dir();
         let docx = d.join("delibera.docx");
