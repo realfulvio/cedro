@@ -101,6 +101,8 @@ pub struct WheelUi {
     pub name: String,
     pub kind: Kind,
     pub has_file: bool,
+    /// Quanti file dello stesso tipo ha la ruota: «Unisci» si accende da due in su.
+    pub files: usize,
     pub thumb: Option<Image>,
     pub quality: u8,
     pub beside: Beside,
@@ -133,6 +135,7 @@ impl WheelUi {
             name: String::new(),
             kind,
             has_file: false,
+            files: 1,
             thumb: None,
             quality: 82,
             beside: Beside::Locked,
@@ -327,10 +330,16 @@ impl WheelUi {
         changed
     }
 
+    /// La fetta `i` è spenta: «Unisci» con un file solo.
+    pub fn off(&self, i: usize) -> bool {
+        self.list.get(i).is_some_and(|s| s.id == "merge") && self.files < 2
+    }
+
     /// Un clic con il tasto sinistro.
     pub fn press(&mut self, x: f32, y: f32) -> Effect {
         let l = self.layout();
         match self.zone_in(&l, x, y) {
+            Zone::Slice(i) if self.off(i) => Effect::None,
             Zone::Slice(i) => {
                 if self.simple {
                     Effect::Commit(i)
@@ -357,6 +366,7 @@ impl WheelUi {
                 Effect::Redraw
             }
             Zone::Go => match self.current() {
+                Some(i) if self.off(i) => Effect::None,
                 Some(i) => Effect::Commit(i),
                 None => Effect::None,
             },
@@ -377,7 +387,7 @@ impl WheelUi {
     /// Disegna la ruota nell'immagine trasparente del pittore (scala già impostata dal chiamante).
     pub fn draw(&self, p: &mut Painter) {
         let l = self.layout();
-        let active = self.current();
+        let active = self.current().filter(|i| !self.off(*i));
         self.draw_disc(p, &l, active);
         self.draw_center(p, &l, active);
         if self.simple {
@@ -403,7 +413,7 @@ impl WheelUi {
             // Icona e nome, sul raggio di mezzo.
             let rm = (RI + RO) / 2.0 + 4.0;
             let (tx, ty) = (cx + ox + rm * mid.cos(), cy + oy + rm * mid.sin());
-            let fg = if on { (255, 255, 255) } else { INK };
+            let fg = if on { (255, 255, 255) } else if self.off(i) { (178, 190, 202) } else { INK };
             p.icon(icon_of(slice.id), tx - 17.0, ty - 40.0, 34.0, fg);
             p.text(slice.label, tx - 60.0, ty + 6.0, 120.0, 30.0, 21.0, Weight::Semibold, fg, Align::Center);
         }
@@ -677,6 +687,8 @@ fn icon_of(id: &str) -> &'static str {
         "compress" | "half" | "strip" => assets::DOWNLOAD,
         "rot90" => assets::CONVERT,
         "ocr" => assets::SEARCH,
+        "merge" => super::views::ICON_MERGE,
+        "split" => super::views::ICON_SCISSORS,
         "dup" => assets::COPY,
         "path" => assets::LINK,
         "zip" => assets::FOLDER,

@@ -482,7 +482,8 @@ fn open_conversions_from_wheel() {
     let (paths, action) = SESSION.with(|s| {
         let g = s.borrow();
         let action = g.look.as_ref().and_then(|u| u.current()).and_then(|i| wheel_list(g.paths.first().map(|p| kind_of(p)).unwrap_or(Kind::Other), g.mode).get(i).map(|sl| sl.id));
-        (g.paths.clone(), action.filter(|_| g.mode == Mode::Convert))
+        // Unisci e Dividi (Ctrl) aprono Conversioni già sul pulsante giusto.
+        (g.paths.clone(), action.filter(|id| g.mode == Mode::Convert || cedro::conversioni::is_page_action(id)))
     });
     close_wheel();
     crate::ui_win::open_with(paths, action);
@@ -900,6 +901,7 @@ fn new_look(paths: &[PathBuf], mode: Mode) -> WheelUi {
 fn set_look_file(ui: &mut WheelUi, paths: &[PathBuf]) {
     let Some(first) = paths.first() else { return };
     ui.has_file = true;
+    ui.files = same_kind_paths(paths).len();
     ui.name = if paths.len() > 1 { format!("{} (+{})", cedro::ui::wheel::file_name_of(first), paths.len() - 1) } else { cedro::ui::wheel::file_name_of(first) };
 }
 
@@ -1103,23 +1105,41 @@ fn run_wheel_job(all: &[PathBuf], slice: Slice, quality: u8, beside: bool) {
             format!("{} di {} · {}", i + 1, paths.len(), name(p))
         }
     };
-    if let Some(first) = paths.first() {
+    if slice.id == "merge" {
+        crate::progress_win::start(1, &format!("{} PDF → {}", paths.len(), slice.label));
+    } else if let Some(first) = paths.first() {
         crate::progress_win::start(paths.len(), &progress_label(0, first));
     }
-    for (i, path) in paths.iter().enumerate() {
-        crate::progress_win::step(i, &progress_label(i, path));
-        // «Salva accanto all'originale» spuntato nella ruota vale per questo lavoro e basta.
-        let out_dir = if beside { path.parent() } else { None };
-        // Un panic su un file diventa un errore: la linea di avanzamento non resta accesa per sempre.
-        match cedro::ui::model::guarded(|| perform_into(path, slice.id, quality, out_dir).map_err(|e| e.0)) {
+    if slice.id == "merge" {
+        // Unire è un lavoro solo: tutti i PDF in un file, nell'ordine dei nomi.
+        let out_dir = if beside { paths.first().and_then(|p| p.parent()) } else { None };
+        match cedro::ui::model::guarded(|| cedro::merge_paths(&paths, out_dir).map_err(|e| e.0)) {
             Ok(out) => {
                 notes.push(format!("{} · {}", name(&out.path), out.message));
-                crate::progress_win::produced(&out.path);
+            crate::progress_win::produced(&out.path);
                 last_out = Some(out.path);
             }
             Err(e) => {
                 failed.get_or_insert_with(|| e.clone());
                 notes.push(e);
+            }
+        }
+    } else {
+        for (i, path) in paths.iter().enumerate() {
+            crate::progress_win::step(i, &progress_label(i, path));
+            // «Salva accanto all'originale» spuntato nella ruota vale per questo lavoro e basta.
+            let out_dir = if beside { path.parent() } else { None };
+            // Un panic su un file diventa un errore: la linea di avanzamento non resta accesa per sempre.
+            match cedro::ui::model::guarded(|| perform_into(path, slice.id, quality, out_dir).map_err(|e| e.0)) {
+                Ok(out) => {
+                    notes.push(format!("{} · {}", name(&out.path), out.message));
+                    crate::progress_win::produced(&out.path);
+                    last_out = Some(out.path);
+                }
+                Err(e) => {
+                    failed.get_or_insert_with(|| e.clone());
+                    notes.push(e);
+                }
             }
         }
     }

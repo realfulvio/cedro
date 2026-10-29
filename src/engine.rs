@@ -129,7 +129,7 @@ const PDF_CONVERT: &[Slice] = &[
     Slice { id: "png", label: "PNG" },
     Slice { id: "txt", label: "Testo" },
 ];
-const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }];
+const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }, Slice { id: "merge", label: "Unisci" }, Slice { id: "split", label: "Dividi" }];
 const EMPTY: &[Slice] = &[Slice { id: "none", label: "Niente qui" }];
 
 /// I formati di uscita del pannello Conversioni: quelli della ruota più gli altri, che alla ruota
@@ -795,6 +795,28 @@ pub struct Options {
     pub password: Option<String>,
     /// Il nome dei file scritti, a modello: `%nome%`, `%ext%`, `%data%`, `%ora%`, `%unix%`.
     pub name_template: Option<String>,
+    /// Unire e dividere i PDF.
+    pub pdf_pages: PdfPages,
+}
+
+/// Le scelte per unire e dividere i PDF.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct PdfPages {
+    pub settings: crate::pdfpages::Settings,
+    /// La password per aprire i PDF protetti.
+    pub open_password: Option<String>,
+    /// Come dividere (dalla ruota: una pagina per file).
+    pub plan: crate::pdfpages::Plan,
+    /// Il nome del PDF unito (senza `.pdf`); vuoto = quello del primo file con «-unito».
+    pub merge_name: Option<String>,
+    /// Il nome dei pezzi, a modello: `%nome%`, `%n%`, `%titolo%`.
+    pub split_name: Option<String>,
+}
+
+impl Default for PdfPages {
+    fn default() -> Self {
+        PdfPages { settings: Default::default(), open_password: None, plan: crate::pdfpages::Plan::EveryPage, merge_name: None, split_name: None }
+    }
 }
 
 impl Default for Options {
@@ -832,6 +854,7 @@ impl Default for Options {
             faststart: false,
             password: None,
             name_template: None,
+            pdf_pages: PdfPages::default(),
         }
     }
 }
@@ -853,6 +876,166 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
     let result = perform_inner(path, action, quality, out_dir, opts);
     let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
     finish_outputs(result, used)
+}
+
+/// La ruota: unisce i PDF in un file solo, nell'ordine dei nomi (2 prima di 10), con le scelte delle impostazioni.
+pub fn merge_paths(paths: &[PathBuf], out_dir: Option<&Path>) -> CedroResult<Output> {
+    let mut sorted = paths.to_vec();
+    sorted.sort_by(|a, b| natural_cmp(&file_label(a).to_lowercase(), &file_label(b).to_lowercase()));
+    let exists = if crate::settings::read_settings().replace { Exists::Replace } else { Exists::Number };
+    let sources: Vec<(PathBuf, Option<PageSel>)> = sorted.into_iter().map(|p| (p, None)).collect();
+    merge_with(&sources, out_dir, &Options { exists, ..Options::default() })
+}
+
+/// Confronta due nomi tenendo i numeri come numeri: «pagina-2» viene prima di «pagina-10».
+fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    let (mut a, mut b) = (a.chars().peekable(), b.chars().peekable());
+    loop {
+        match (a.peek().copied(), b.peek().copied()) {
+            (None, None) => return std::cmp::Ordering::Equal,
+            (None, Some(_)) => return std::cmp::Ordering::Less,
+            (Some(_), None) => return std::cmp::Ordering::Greater,
+            (Some(x), Some(y)) if x.is_ascii_digit() && y.is_ascii_digit() => {
+                let take = |it: &mut std::iter::Peekable<std::str::Chars>| {
+                    let mut n = String::new();
+                    while let Some(c) = it.peek().copied().filter(char::is_ascii_digit) {
+                        n.push(c);
+                        it.next();
+                    }
+                    n
+                };
+                let (na, nb) = (take(&mut a), take(&mut b));
+                let (ta, tb) = (na.trim_start_matches('0'), nb.trim_start_matches('0'));
+                let ord = ta.len().cmp(&tb.len()).then_with(|| ta.cmp(tb));
+                if ord != std::cmp::Ordering::Equal {
+                    return ord;
+                }
+            }
+            (Some(x), Some(y)) => {
+                if x != y {
+                    return x.cmp(&y);
+                }
+                a.next();
+                b.next();
+            }
+        }
+    }
+}
+
+/// Unisce le pagine scelte di più PDF in uno, nell'ordine dato, con le stesse regole per i nomi delle
+/// conversioni (il nome di partenza è quello del primo file). `out_dir` vuota = accanto al primo file.
+pub fn merge_with(sources: &[(PathBuf, Option<PageSel>)], out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    let Some((first, _)) = sources.first() else {
+        return Err(err("nessun PDF da unire"));
+    };
+    if sources.len() < 2 {
+        return Err(err("per unire servono almeno due PDF"));
+    }
+    let _job = crate::resources::acquire(None).expect("uncancellable job");
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), guarded: true, ..Default::default() }));
+    let mut restore = RestoreNaming(Some(before));
+    let result = merge_inner(sources, out_dir, opts);
+    let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
+    finish_outputs(result, used)
+}
+
+fn merge_inner(sources: &[(PathBuf, Option<PageSel>)], out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    let first = &sources[0].0;
+    let dir = match out_dir {
+        Some(d) => {
+            fs::create_dir_all(d).map_err(|e| err(e.to_string()))?;
+            d.to_path_buf()
+        }
+        None => output_dir(first, &crate::settings::read_settings())?,
+    };
+    let pp = &opts.pdf_pages;
+    let name = pp.merge_name.as_deref().map(crate::pdfpages::safe_name).filter(|n| !n.is_empty()).unwrap_or_else(|| format!("{}-unito", stem(first)));
+    let name = name.strip_suffix(".pdf").map(str::to_string).unwrap_or(name);
+    // Il nome si sceglie prima di leggere: se va saltato, non si legge niente.
+    let out = reserve(&dir, &name, "pdf")?;
+    let mut docs = Vec::new();
+    for (i, (path, _)) in sources.iter().enumerate() {
+        crate::progress::report(i as f32 / sources.len() as f32 * 0.7);
+        let bytes = fs::read(path).map_err(|e| err(format!("{} non letto: {e}", file_label(path))))?;
+        let doc = crate::pdfpages::open(&bytes, pp.open_password.as_deref()).map_err(|e| err(format!("{}: {e}", file_label(path))))?;
+        docs.push(doc);
+    }
+    let mut parts = Vec::new();
+    let mut total = 0;
+    for ((path, sel), doc) in sources.iter().zip(&docs) {
+        let n = crate::pdfpages::page_count(doc);
+        if let Some(max) = sel.as_ref().and_then(|s| s.max_page()) {
+            if max > n {
+                return Err(err(format!("{} ha {n} pagine: la pagina {max} non c'è", file_label(path))));
+            }
+        }
+        let pages: Vec<u32> = pages_of(sel, n).into_iter().map(|i| i as u32 + 1).collect();
+        if pages.is_empty() {
+            return Err(err(format!("{}: nessuna pagina in questo intervallo", file_label(path))));
+        }
+        total += pages.len();
+        parts.push(crate::pdfpages::Part { doc, pages, title: stem(path) });
+    }
+    crate::progress::report(0.8);
+    let mut bytes = crate::pdfpages::build(&parts, &pp.settings).map_err(err)?;
+    let mut message = format!("{} PDF uniti, {total} pagine", sources.len());
+    if let Some(pw) = opts.password.as_deref().filter(|p| !p.is_empty()) {
+        bytes = crate::pdf::protect(&bytes, pw).map_err(err)?;
+        message.push_str(", protetto con password");
+    }
+    write_bytes(&out, &bytes)?;
+    crate::progress::report(1.0);
+    Ok(Output { path: out, message })
+}
+
+fn file_label(path: &Path) -> String {
+    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into())
+}
+
+/// Divide un PDF in più file secondo il piano scelto. Il primo file scritto è quello che si apre.
+fn split_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
+    let pp = &opts.pdf_pages;
+    let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+    let doc = crate::pdfpages::open(&bytes, pp.open_password.as_deref()).map_err(err)?;
+    let total = crate::pdfpages::page_count(&doc) as u32;
+    let groups = crate::pdfpages::groups(&pp.plan, total, Some(&doc)).map_err(err)?;
+    let base = stem(path);
+    let width = groups.len().to_string().len();
+    let template = pp.split_name.as_deref().map(str::trim).filter(|t| !t.is_empty());
+    let remove = matches!(pp.plan, crate::pdfpages::Plan::Remove(_));
+    // I nomi tutti prima: con «salta» o «chiedi» la risposta arriva prima di scrivere.
+    let mut outs = Vec::new();
+    for (i, g) in groups.iter().enumerate() {
+        let n = format!("{:0width$}", i + 1);
+        let title = g.title.as_deref().map(crate::pdfpages::safe_name).filter(|t| !t.is_empty());
+        let name = match template {
+            Some(t) => t.replace("%nome%", &base).replace("%n%", &n).replace("%titolo%", title.as_deref().unwrap_or(&n)),
+            None if remove => format!("{base}-senza-pagine"),
+            None => match &title {
+                Some(t) => format!("{base}-{n}-{t}"),
+                None => format!("{base}-parte-{n}"),
+            },
+        };
+        let name = crate::pdfpages::safe_name(&name);
+        outs.push(reserve(dir, if name.is_empty() { &base } else { &name }, "pdf")?);
+    }
+    let settings = crate::pdfpages::Settings { file_bookmarks: false, ..pp.settings.clone() };
+    for (i, (g, out)) in groups.iter().zip(&outs).enumerate() {
+        crate::progress::report(i as f32 / groups.len() as f32);
+        let mut bytes = crate::pdfpages::build(&[crate::pdfpages::Part { doc: &doc, pages: g.pages.clone(), title: base.clone() }], &settings).map_err(err)?;
+        if let Some(pw) = opts.password.as_deref().filter(|p| !p.is_empty()) {
+            bytes = crate::pdf::protect(&bytes, pw).map_err(err)?;
+        }
+        write_bytes(out, &bytes)?;
+    }
+    crate::progress::report(1.0);
+    let message = if remove {
+        let kept = groups[0].pages.len();
+        format!("Tolte {} pagine, ne restano {kept}", total as usize - kept)
+    } else {
+        format!("Diviso in {} PDF", groups.len())
+    };
+    Ok(Output { path: outs[0].clone(), message })
 }
 
 /// Se la conversione va in panico: i nomi tornano com'erano e i file prenotati o temporanei si tolgono.
@@ -1197,6 +1380,12 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         let text = crate::ocr::image_text(path).map_err(err)?;
         write_bytes(&out, text.as_bytes())?;
         return Ok(Output { path: out, message: "Testo letto".into() });
+    }
+    if action == "split" && kind == Kind::Pdf {
+        return split_pdf(path, &dir, opts);
+    }
+    if action == "merge" {
+        return Err(err("per unire servono almeno due PDF"));
     }
     if action == "ocr" && kind == Kind::Pdf {
         let out = reserve(&dir, &stem(path), "txt")?;
@@ -3395,5 +3584,14 @@ mod format_tests {
         assert_eq!(plain.path.file_name().unwrap(), "gita.bmp");
         let odd = perform_with(&src, "tga", 80, Some(&dir.join("o")), &Options { name_template: Some("a/b:%nome%".into()), ..opts() }).unwrap();
         assert_eq!(odd.path.file_name().unwrap(), "a_b_gita.tga");
+    }
+
+    #[test]
+    fn natural_order_counts_numbers() {
+        use std::cmp::Ordering::*;
+        assert_eq!(super::natural_cmp("pagina-2", "pagina-10"), Less);
+        assert_eq!(super::natural_cmp("a-010", "a-9"), Greater);
+        assert_eq!(super::natural_cmp("allegato", "allegato"), Equal);
+        assert_eq!(super::natural_cmp("b", "a1"), Greater);
     }
 }

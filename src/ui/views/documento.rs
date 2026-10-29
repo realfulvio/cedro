@@ -398,12 +398,18 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
     f.icon(ic::ARROW_RIGHT, x + w / 2.0 - 16.0, r.1 + 44.0, 32.0, pal.text);
     // Un archivio esce sempre ZIP: «Foto in WebP» è cosa si fa dentro, non il formato.
     let archive = app.kind() == Kind::Archive;
-    let target = if archive { "ZIP".to_string() } else { id.to_uppercase() };
+    let target = if archive {
+        "ZIP".to_string()
+    } else if conversioni::is_page_action(id) {
+        "PDF".to_string()
+    } else {
+        id.to_uppercase()
+    };
     let tx = x + w - 168.0;
     if archive {
         f.kind_icon(Kind::Archive, tx, r.1 + 30.0, 56.0);
     } else {
-        format_icon_small(f, id, tx, r.1 + 30.0, 56.0);
+        format_icon_small(f, if conversioni::is_page_action(id) { "pdf" } else { id }, tx, r.1 + 30.0, 56.0);
     }
     f.text(&target, tx + 66.0, r.1 + 30.0, 100.0, 56.0, 21.0, SEMI, pal.text);
     let body = (r.0 + 1.0, r.1 + 108.0, r.2 - 2.0, r.3 - 108.0 - 130.0);
