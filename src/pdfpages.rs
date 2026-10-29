@@ -31,11 +31,13 @@ impl Default for Settings {
 pub fn open(bytes: &[u8], password: Option<&str>) -> Result<Document, String> {
     let mut doc = Document::load_mem(bytes).map_err(|e| format!("PDF non letto: {e}"))?;
     if doc.is_encrypted() {
-        // Senza password lopdf ci ha già provato: resta cifrato solo se ne serve una.
+        // Senza password lopdf ci ha già provato: resta cifrato solo se ne serve una. Da lopdf 0.46 un PDF
+        // cifrato aperto senza la sua password resta vuoto: la password si dà all'apertura.
         let Some(pw) = password.filter(|p| !p.is_empty()) else {
             return Err("il PDF è protetto: scrivi la password in «Password per aprire»".into());
         };
-        doc.decrypt(pw).map_err(|_| "password sbagliata per questo PDF".to_string())?;
+        doc = Document::load_mem_with_options(bytes, lopdf::LoadOptions::with_password(pw))
+            .map_err(|_| "password sbagliata per questo PDF".to_string())?;
     }
     if doc.get_pages().is_empty() {
         return Err("il PDF non ha pagine".into());
