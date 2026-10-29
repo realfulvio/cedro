@@ -1,6 +1,6 @@
 [package]
 name = "cedro-trascrivi"
-version = "0.26.8"
+version = "0.26.9"
 edition = "2021"
 license = "MIT"
 description = "Il motore di trascrizione di Cedro (whisper.cpp): Cedro lo scarica alla prima trascrizione."
