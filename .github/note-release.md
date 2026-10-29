@@ -12,12 +12,13 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Versione stabile: librerie riviste e più solide.** Nessuna funzione nuova e nessun cambio di aspetto: Cedro diventa più robusto con i file difficili.
+**Versione stabile: librerie riviste e più solide.** Nessuna funzione nuova: Cedro diventa più robusto con i file difficili.
 
 - **PDF**: un PDF costruito con oggetti annidati in profondità non fa più chiudere Cedro (prima il programma si chiudeva di colpo); il testo estratto dai PDF non incolla più le parole a fine riga; Unisci, Dividi e Pagine aprono come prima i PDF protetti da password.
 - **Documenti Word 97-2003 (.doc)**: si aprono anche quelli scritti da programmi che lasciano la struttura interna un po' imperfetta.
 - **Opus** (vocali di WhatsApp e Telegram): libreria Opus aggiornata alla 1.6.1, sempre compresa nel programma, anche nel motore di trascrizione.
 - **Anteprima audio**: se l'uscita audio non risponde (per esempio con il servizio Audio di Windows fermo) il tasto Play va avanti lo stesso, senza suono.
+- **Pagine dei PDF**: le miniature sono più grandi e si adattano allo spazio della scheda.
 - **Video WebM VP9**: lettura più veloce, con le immagini identiche a prima.
 - Funziona come prima su Windows, Windows on ARM e Linux.
 
