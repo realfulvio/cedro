@@ -1849,7 +1849,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.2",
+ "windows-core 0.62.2",
 ]
 
 [[package]]
@@ -2953,9 +2953,9 @@ checksum = "506f2495a728488c2fee1ee54bc7f819ca934dc3246369b4100c83848f057852"
 
 [[package]]
 name = "oxideav-vp9"
-version = "0.0.13"
+version = "0.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01151d83fdb9dc1183ea47117e76a17421f8c08b9716506f61eccc493bb70d2c"
+checksum = "8393dcba264eff599aab26a41d1a296eeeed556f0b34d06df52b0d1889fa7732"
 dependencies = [
  "oxideav-core",
 ]
