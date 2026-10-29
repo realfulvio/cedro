@@ -115,17 +115,25 @@ impl Loader {
             };
             // Se la finestra non c'è più, il canale è chiuso e il thread finisce.
             let sent = match job {
+                // Un file che manda in crisi un decodificatore resta senza anteprima, ma il thread va avanti con gli altri.
                 Some(Job::Info(path)) => {
-                    let loaded = info(&path);
+                    let loaded = std::panic::catch_unwind(|| info(&path)).unwrap_or_else(|p| {
+                        super::model::panic_text(&*p);
+                        Loaded::default()
+                    });
                     tx.send(Event::Media(path, loaded))
                 }
                 Some(Job::Preview(path, page)) => {
-                    let img = match engine::kind_of(&path) {
+                    let img = std::panic::catch_unwind(|| match engine::kind_of(&path) {
                         Kind::Pdf => pdf_page(&path, page, PAGE),
                         Kind::Image => image_thumb(&path, PAGE as u32).map(|(i, _)| i),
                         Kind::Text | Kind::Doc => super::preview::render_page(&path, page, PAGE),
                         _ => None,
-                    };
+                    })
+                    .unwrap_or_else(|p| {
+                        super::model::panic_text(&*p);
+                        None
+                    });
                     tx.send(Event::Preview(path, page, img))
                 }
                 None => Ok(()),

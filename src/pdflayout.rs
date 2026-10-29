@@ -379,7 +379,8 @@ fn group_lines(glyphs: Vec<Glyph>, gap: f64) -> Vec<Line> {
             if gap && !g.text.starts_with(' ') {
                 if let Some(run) = line.runs.last_mut() {
                     if mono {
-                        let n = ((g.x - last_end) / cell).round().max(1.0) as usize;
+                        // Al più una riga lunghissima di spazi: con coordinate assurde (PDF ostile) non si chiedono GB.
+                        let n = ((g.x - last_end) / cell).round().clamp(1.0, 1000.0) as usize;
                         run.text.push_str(&" ".repeat(n));
                         line.natural += n as f64 * cell;
                     } else if !run.text.ends_with(' ') {
@@ -1554,7 +1555,8 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
             let scale = (2000.0 / w.max(h).max(1.0)) as f32;
             let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
             let rendered = render(page, &cache, &settings, &RenderSettings::default(), &pixmap);
-            let rgb = crate::ocr::pixmap_image(rendered)?.into_rgb8();
+            // Una pagina lunghissima e sottile può dare una pixmap vuota: diventa una pagina bianca, non un errore.
+            let rgb = crate::ocr::pixmap_image(rendered).map(|i| i.into_rgb8()).unwrap_or_default();
             if rgb.pixels().all(|p| p.0.iter().all(|&c| c >= 250)) {
                 // Pagina bianca: resta una pagina vuota, non un'immagine.
                 special.push(None);
@@ -1597,7 +1599,7 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
                 let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
                 let no_text = RenderSettings { skip_text: true, ..Default::default() };
                 let rendered = render(page, &cache, &settings, &no_text, &pixmap);
-                let full = crate::ocr::pixmap_image(rendered)?.into_rgb8();
+                let full = crate::ocr::pixmap_image(rendered).map(|i| i.into_rgb8()).unwrap_or_default();
                 for pic in pics {
                     let s = scale as f64;
                     let (x, y) = (((pic.x0.max(0.0)) * s) as u32, ((pic.y0.max(0.0)) * s) as u32);
@@ -1632,8 +1634,8 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
             let scale = (200.0 / 72.0f32).min(3200.0 / (w.max(h).max(1.0) as f32));
             let pixmap = PixmapSettings { x_scale: scale, y_scale: scale, bg_color: WHITE };
             let rendered = render(page, &cache, &settings, &RenderSettings::default(), &pixmap);
-            let full = crate::ocr::pixmap_image(rendered)?.into_rgb8();
-            for fig in figures {
+            let full = crate::ocr::pixmap_image(rendered).map(|i| i.into_rgb8()).unwrap_or_default();
+            for fig in figures.into_iter().filter(|_| full.width() > 0 && full.height() > 0) {
                 let s = scale as f64;
                 let (x, y) = ((fig.x0 * s) as u32, (fig.y0 * s) as u32);
                 let cw = (((fig.x1 - fig.x0) * s) as u32).min(full.width().saturating_sub(x)).max(1);
@@ -2810,6 +2812,26 @@ mod tests {
         let heights = vec![(10.0, 10.0); 8];
         assert!(column_bands(&spans, &heights, 0.0, 1.0e12 + 5.0).is_empty());
         assert!(column_bands(&spans, &heights, 0.0, f64::INFINITY).is_empty());
+    }
+
+    #[test]
+    fn monospaced_gaps_with_absurd_coordinates_stay_small() {
+        let g = |text: &str, x: f64| Glyph {
+            text: text.into(),
+            x,
+            y: 100.0,
+            size: 10.0,
+            adv: 6.0,
+            stretch: 1,
+            color: [0; 3],
+            bold: false,
+            italic: false,
+            font: "Courier".into(),
+            font_key: None,
+        };
+        let lines = group_lines(vec![g("a", 10.0), g("b", 16.0), g("c", 1.0e30)], 2.0);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].text().len() <= 1003, "{}", lines[0].text().len());
     }
 
     #[test]

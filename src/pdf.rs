@@ -7,17 +7,8 @@ pub(crate) fn win_ansi(text: &str) -> Vec<u8> {
         let b = if (32..=126).contains(&c) || (160..=255).contains(&c) {
             c as u8
         } else {
-            match c {
-                0x20ac => 0x80,
-                0x2026 => 0x85,
-                0x2018 => 0x91,
-                0x2019 => 0x92,
-                0x201c => 0x93,
-                0x201d => 0x94,
-                0x2013 => 0x96,
-                0x2014 => 0x97,
-                _ => b'?',
-            }
+            // Gli altri caratteri di WinAnsi (punto elenco •, ™, „, Š…): quelli che la codifica ha davvero.
+            (0x80..=0x9Fu8).find(|b| crate::doctext::cp1252(*b) == ch && crate::doctext::cp1252(*b) as u32 > 0xFF).unwrap_or(b'?')
         };
         out.push(b);
     }
@@ -236,4 +227,13 @@ pub fn protect(pdf: &[u8], password: &str) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     doc.save_to(&mut out).map_err(|e| e.to_string())?;
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn win_ansi_keeps_bullets_and_the_other_cp1252_signs() {
+        assert_eq!(super::win_ansi("• € ™ „ Š œ … — x"), vec![0x95, b' ', 0x80, b' ', 0x99, b' ', 0x84, b' ', 0x8A, b' ', 0x9C, b' ', 0x85, b' ', 0x97, b' ', b'x']);
+        assert_eq!(super::win_ansi("\u{81}漢"), b"??".to_vec());
+    }
 }
