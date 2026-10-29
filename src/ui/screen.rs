@@ -206,7 +206,15 @@ impl Screen {
     /// Unire e dividere i PDF mostrano le pagine: la striscia del file in evidenza (Dividi) e il file unito (Unisci).
     fn want_page_thumbs(&mut self) {
         let app = &mut self.app;
-        if app.activity != Activity::Convert || app.kind() != crate::engine::Kind::Pdf || self.simple {
+        if app.activity != Activity::Convert || app.kind() != crate::engine::Kind::Pdf {
+            return;
+        }
+        // «Più piccolo» della Semplificata dice anche lui quanto si risparmia.
+        if app.pdf_mode() == super::model::PdfMode::Compress {
+            app.want_estimates();
+            return;
+        }
+        if self.simple {
             return;
         }
         match app.pdf_mode() {
@@ -230,6 +238,14 @@ impl Screen {
                     }
                 }
             }
+            super::model::PdfMode::Pages => {
+                let Some(i) = super::views::split_file(app) else { return };
+                let Some(n) = app.page_count(i) else { return };
+                let path = app.files[i].path.clone();
+                app.want_page_thumbs(&path, 0..n.min(super::views::BOARD_MAX));
+                app.want_stamp_preview(i);
+            }
+            super::model::PdfMode::Compress => app.want_estimates(),
             super::model::PdfMode::Convert => {}
         }
     }
@@ -268,8 +284,9 @@ impl Screen {
     /// Il mouse si muove: vero se cambia qualcosa da ridisegnare.
     pub fn pointer_move(&mut self, x: f32, y: f32) -> bool {
         if let Some((act, r)) = self.ui.drag.clone() {
-            if matches!(act, Act::RowDrag(..)) {
+            if matches!(act, Act::RowDrag(..) | Act::PageDrag(..)) {
                 self.ui.drag_y.1 = y;
+                self.ui.drag_x.1 = x;
                 return true;
             }
             self.slide(&act, r, x);
@@ -294,8 +311,9 @@ impl Screen {
         self.ui.pressed = hit.as_ref().map(|h| h.0.clone());
         if let Some((act, HitKind::Slider, r)) = hit {
             self.ui.drag = Some((act.clone(), r));
-            if matches!(act, Act::RowDrag(..)) {
+            if matches!(act, Act::RowDrag(..) | Act::PageDrag(..)) {
                 self.ui.drag_y = (y, y);
+                self.ui.drag_x = (x, x);
             } else {
                 self.slide(&act, r, x);
             }
@@ -311,6 +329,18 @@ impl Screen {
                     self.app.move_file(i, rows);
                 }
                 self.ui.pressed = None;
+                return;
+            }
+            if let Act::PageDrag(i, pos, uw, uh, per_row) = act {
+                let (dx, dy) = (self.ui.drag_x.1 - self.ui.drag_x.0, self.ui.drag_y.1 - self.ui.drag_y.0);
+                self.ui.pressed = None;
+                // Un clic fermo sceglie la pagina; trascinata, va al posto più vicino a dove è arrivata.
+                if dx.abs() < 6.0 && dy.abs() < 6.0 {
+                    self.app.page_click(i, pos);
+                } else {
+                    let to = super::views::page_drop(pos, dx, dy, uw as f32, uh as f32, per_row as usize);
+                    self.app.pages_move(i, pos, to);
+                }
                 return;
             }
             if act == Act::MediaSeek {
@@ -512,7 +542,31 @@ impl Screen {
             Act::Action(id) => app.set_action(id),
             Act::PdfMode(mode) => app.set_pdf_mode(mode, simple),
             Act::MoveFile(i, d) => app.move_file(i, d),
-            Act::RowDrag(..) => {}
+            Act::RowDrag(..) | Act::PageDrag(..) => {}
+            Act::PagesRotate(i, dir) => self.app.pages_rotate(i, dir),
+            Act::PagesRemove(i) => self.app.pages_remove(i),
+            Act::PagesExtract(i) => self.app.pages_extract(i),
+            Act::PagesAll(i) => self.app.page_select_all(i),
+            Act::PagesReset(i) => self.app.pages_reset(i),
+            Act::PagesFileMenu => {
+                let vis = self.app.visible();
+                let items = vis.iter().map(|&i| (self.app.files[i].name(), Act::Select(i))).collect();
+                let sel = super::views::split_file(&self.app).and_then(|s| vis.iter().position(|&v| v == s));
+                self.open_menu(items, sel, &Act::PagesFileMenu);
+            }
+            Act::StampPick(i, pos) => {
+                if let Some(b) = self.app.board(i) {
+                    self.app.stamp_page = b.pages[..pos.min(b.pages.len())].iter().filter(|p| !p.2).count();
+                    if let Some(b) = self.app.boards.get_mut(&self.app.files[i].path) {
+                        b.sel = vec![pos];
+                    } else {
+                        let mut nb = b.clone();
+                        nb.sel = vec![pos];
+                        let path = self.app.files[i].path.clone();
+                        self.app.boards.insert(path, nb);
+                    }
+                }
+            }
             Act::Cut(i, after) => app.toggle_cut(i, after),
             Act::FormatMenu => {
                 let items = self.action_items();
@@ -540,6 +594,7 @@ impl Screen {
                 if app.selected != Some(i) {
                     app.selected = Some(i);
                     app.preview_page = 0;
+                    app.stamp_page = 0;
                 }
             }
             Act::OptSwitch(opt) => {
