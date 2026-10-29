@@ -214,7 +214,9 @@ pub fn engine_installed() -> bool {
 /// Il peso del modello scritto come lo legge una persona: «490 MB», «1,6 GB».
 pub fn size_text(megabytes: u32) -> String {
     if megabytes >= 1000 {
-        format!("{},{} GB", megabytes / 1000, (megabytes % 1000 + 50) / 100)
+        // Arrotondato ai decimi prima di dividere: 1960 MB è «2,0 GB», non «1,10 GB».
+        let tenths = (megabytes + 50) / 100;
+        format!("{},{} GB", tenths / 10, tenths % 10)
     } else {
         format!("{} MB", (megabytes + 5) / 10 * 10)
     }
@@ -1410,6 +1412,7 @@ mod tests {
         assert_eq!(size_text(148), "150 MB");
         assert_eq!(size_text(488), "490 MB");
         assert_eq!(size_text(1624), "1,6 GB");
+        assert_eq!(size_text(1960), "2,0 GB");
         assert_eq!(size_text(874), "870 MB");
     }
 
