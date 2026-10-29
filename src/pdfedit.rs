@@ -883,13 +883,13 @@ mod tests {
         let doc = Document::load_mem(&out).unwrap();
         let pages: Vec<ObjectId> = doc.get_pages().into_values().collect();
         for (i, id) in pages.iter().enumerate() {
-            let text = String::from_utf8_lossy(&doc.get_page_content(*id).unwrap()).to_string();
+            let text = String::from_utf8_lossy(&doc.get_page_content(*id)).to_string();
             assert!(text.contains(&format!("(Pagina {} di 3)", i + 1)), "pagina {i}: {text}");
             assert_eq!(text.contains("(BOZZA)"), i == 1, "filigrana solo sulla 2");
             assert!(doc.get_page_fonts(*id).unwrap().contains_key(b"CedroN".as_slice()));
         }
         // Il contenuto di prima resta chiuso tra q e Q: il nostro strato parte pulito.
-        let first = String::from_utf8_lossy(&doc.get_page_content(pages[0]).unwrap()).to_string();
+        let first = String::from_utf8_lossy(&doc.get_page_content(pages[0])).to_string();
         assert!(first.starts_with("q\n"));
     }
 
