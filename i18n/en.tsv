@@ -1158,3 +1158,89 @@ Apri risultato	Open result
 Ricomincia	Start over
 codifica video	video encoding
 Un altro lavoro è in corso: la trascrizione parte appena finisce	Another job is running: the transcription will start as soon as it finishes
+# Unire e dividere i PDF
+Cosa vuoi fare	What do you want to do
+Unisci	Merge
+Dividi	Split
+Un solo PDF	A single PDF
+li unisce in fila	joins them in a row
+una pagina per file	one page per file
+Ordine e nome file	Order and file name
+Ordine dei file	File order
+tutte	all
+Nome del file unito	Merged file name
+nome del primo file-unito	first-file-name-merged
+Vuoto = il nome del primo file con «-unito»	Empty = the first file's name with «-merged»
+Un segnalibro per ogni file	One bookmark per file
+Nel PDF unito si salta da un file all'altro	Jump from one file to the next in the merged PDF
+Tieni i segnalibri dei file	Keep the files' bookmarks
+Finiscono sotto il segnalibro del loro file	They go under their file's bookmark
+Tieni moduli e link	Keep forms and links
+Campi compilabili e collegamenti interni	Fillable fields and internal links
+Pagina bianca per il fronte-retro	Blank page for double-sided printing
+Dopo i file con le pagine dispari: ognuno parte su un foglio nuovo	After files with an odd page count: each one starts on a new sheet
+Proteggi con password	Protect with a password
+Password per aprire	Password to open
+Solo per i PDF protetti	Only for protected PDFs
+Come dividere	How to split
+Ogni pagina	Every page
+Ogni N	Every N
+Intervalli	Ranges
+Ai segnalibri	At bookmarks
+Togli pagine	Remove pages
+Pagine per file	Pages per file
+L'ultimo file prende quelle che restano	The last file gets the rest
+Un file per ogni gruppo, per esempio 1-3, 4-6, 7-. Segue i tagli della striscia.	One file per group, for example 1-3, 4-6, 7-. Follows the cuts on the strip.
+Pagine da togliere	Pages to remove
+Esce un PDF solo, senza queste pagine. Per esempio 2, 5-6	You get one PDF without these pages. For example 2, 5-6
+Nome dei file	File names
+Vuoto = nome-parte-1, nome-parte-2… Usa %nome%, %n%, %titolo%	Empty = name-parte-1, name-parte-2… Use %nome%, %n%, %titolo%
+Il file unito	The merged file
+Il file unito: si aspettano le pagine	The merged file: waiting for the pages
+Si leggono le pagine…	Reading the pages…
+Tocca tra due pagine per tagliare	Click between two pages to cut
+Le pagine segnate si tolgono	The marked pages are removed
+Parte {#}	Part {}
+Tolta	Removed
+e altre {#} pagine, {#} in tutto	and {} more pages, {} in all
+Si vedono le prime {#} pagine di {#}: per le altre scrivi gli intervalli a destra.	Showing the first {} of {} pages: type ranges on the right for the others.
+Diventa la pagina {#}	Becomes page {}
+Diventa le pagine {#}–{#}	Becomes pages {}–{}
+Nessuna pagina entra nel file unito	No page goes into the merged file
+Non spuntato: resta fuori	Not ticked: left out
+Trascina le righe dalla maniglia oppure usa le frecce: l'ordine della coda è l'ordine delle pagine nel file unito. Nel campo «Pagine» puoi scrivere per esempio 1-3,5.	Drag the rows by the handle or use the arrows: the queue order is the page order in the merged file. In the «Pages» field you can type for example 1-3,5.
+Trascina dalla maniglia o usa le frecce: l'ordine qui è l'ordine delle pagine nel file unito. In «tutte» puoi scrivere per esempio 1-3,5.	Drag by the handle or use the arrows: the order here is the page order in the merged file. In «all» you can type for example 1-3,5.
+La striscia si apre sotto il file selezionato: i tagli valgono per quel file, il campo «Intervalli» a destra per tutti quelli senza tagli.	The strip opens under the selected file: the cuts apply to that file, the «Ranges» field on the right to all files without cuts.
+I tagli valgono per il file scelto nella coda, gli intervalli per gli altri.	Cuts apply to the file selected in the queue, ranges to the others.
+Il file unito verrà salvato nella cartella del primo file.	The merged file will be saved in the first file's folder.
+Il file unito verrà salvato in {}.	The merged file will be saved in {}.
+I file nuovi verranno salvati nella stessa cartella dell'originale.	The new files will be saved in the same folder as the original.
+I file nuovi verranno salvati in {}.	The new files will be saved in {}.
+Unisci {#} PDF	Merge {} PDFs
+Dividi {#} PDF	Split {} PDFs
+Dividi in {#} PDF	Split into {} PDFs
+Dividi ai segnalibri	Split at bookmarks
+Togli le pagine	Remove the pages
+{#} pdf	{} PDFs
+{#} PDF uniti, {#} pagine	{} PDFs merged, {} pages
+{#} PDF uniti, {#} pagine, protetto con password	{} PDFs merged, {} pages, password protected
+Diviso in {#} PDF	Split into {} PDFs
+Tolte {#} pagine, ne restano {#}	Removed {} pages, {} left
+Per unire servono almeno due PDF spuntati.	Merging needs at least two ticked PDFs.
+per unire servono almeno due PDF	merging needs at least two PDFs
+nessun PDF da unire	no PDF to merge
+Scrivi gli intervalli, per esempio 1-3, 4-6, 7-, oppure taglia sulla striscia.	Type the ranges, for example 1-3, 4-6, 7-, or cut on the strip.
+Scrivi le pagine da togliere, per esempio 2, 5-6.	Type the pages to remove, for example 2, 5-6.
+il PDF è protetto: scrivi la password in «Password per aprire»	the PDF is protected: type the password in «Password to open»
+{}: il PDF è protetto: scrivi la password in «Password per aprire»	{}: the PDF is protected: type the password in «Password to open»
+password sbagliata per questo PDF	wrong password for this PDF
+{}: password sbagliata per questo PDF	{}: wrong password for this PDF
+il PDF non ha segnalibri: scegli un altro modo di dividerlo	the PDF has no bookmarks: choose another way to split it
+così non resta nessuna pagina	that leaves no pages
+nessuna pagina scelta	no pages chosen
+il PDF ha {#} pagine: la pagina {#} non c'è	the PDF has {} pages: page {} doesn't exist
+la pagina {#} non c'è: il PDF ne ha {#}	page {} doesn't exist: the PDF has {}
+intervallo «{}» non valido	invalid range «{}»
+l'intervallo «{}» non ha pagine	the range «{}» has no pages
+scrivi gli intervalli, per esempio 1-3, 4-6, 7-	type the ranges, for example 1-3, 4-6, 7-
+scrivi le pagine da togliere, per esempio 2,5-6	type the pages to remove, for example 2,5-6
