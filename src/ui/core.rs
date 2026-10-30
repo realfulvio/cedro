@@ -509,7 +509,7 @@ impl<'a> Frame<'a> {
         if shown.is_empty() && !editing {
             self.p.text(placeholder, r.0 + pad, r.1, room, r.3, size, SANS, pal.muted, Align::Left);
         } else {
-            let (asc, desc) = self.p.fonts().extents(size * self.p.scale, SANS);
+            let (asc, desc) = self.p.fonts().extents(super::gfx::text_size(size) * self.p.scale, SANS);
             let base = r.1 + (r.3 - (asc + desc) / self.p.scale) / 2.0 + asc / self.p.scale;
             self.p.text_at(&shown, r.0 + pad - shift, base, size, SANS, pal.text);
             if editing && (self.ms / 530).is_multiple_of(2) {
