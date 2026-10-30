@@ -1343,6 +1343,8 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                 Err("nessun parlato riconosciuto nell'audio".to_string())
             }
             Outcome::Done { lang, secs, segments } => {
+                // Le frasi restano salvate: «Rivedi» le riapre anche dopo aver chiuso Cedro.
+                let _ = crate::revisione::save(path, secs, &lang, &segments);
                 let bytes = match request.format {
                     Format::Word => docx_bytes(path, secs, &lang, &segments),
                     Format::Text => text_bytes(path, secs, &lang, &segments),

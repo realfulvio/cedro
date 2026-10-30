@@ -2790,8 +2790,6 @@ pub struct SheetTable {
     pub rows: Vec<Vec<SheetCell>>,
     /// La prima riga è l'intestazione.
     pub header: bool,
-    /// Tabella con i bordi; falsa per le colonne di testo allineate senza bordi.
-    pub ruled: bool,
 }
 
 /// Il testo di una pagina fuori dalle tabelle, riga per riga.
@@ -2865,7 +2863,7 @@ fn columns_table(rows: &[Tabbed], page: usize) -> Option<SheetTable> {
         out.push(line.into_iter().map(|text| SheetCell { text, span: 1 }).collect());
     }
     let header = rows[0].bold && rows.get(1).is_some_and(|r| !r.bold);
-    Some(SheetTable { pages: (page, page), rows: out, header, ruled: false })
+    Some(SheetTable { pages: (page, page), rows: out, header })
 }
 
 fn ruled_table(t: &Table, page: usize) -> SheetTable {
@@ -2885,7 +2883,7 @@ fn ruled_table(t: &Table, page: usize) -> SheetTable {
     });
     let header = t.rows.len() > 1 && (t.header || bold_top);
     let first = t.from.unwrap_or(page);
-    SheetTable { pages: (first, t.until.unwrap_or(first)), rows, header, ruled: true }
+    SheetTable { pages: (first, t.until.unwrap_or(first)), rows, header }
 }
 
 /// Le tabelle del PDF per il foglio di calcolo, nell'ordine del documento, e il testo che resta
@@ -2897,7 +2895,7 @@ pub fn sheet_contents(pages: &[Page], scan_text: impl Fn(usize) -> String) -> (V
         let mut lines: Vec<String> = Vec::new();
         let mut run: Vec<Tabbed> = Vec::new();
         let mut run_lines: Vec<String> = Vec::new();
-        let mut flush = |run: &mut Vec<Tabbed>, run_lines: &mut Vec<String>, lines: &mut Vec<String>, tables: &mut Vec<SheetTable>| {
+        let flush = |run: &mut Vec<Tabbed>, run_lines: &mut Vec<String>, lines: &mut Vec<String>, tables: &mut Vec<SheetTable>| {
             match columns_table(run, i) {
                 Some(t) => tables.push(t),
                 None => lines.append(run_lines),
