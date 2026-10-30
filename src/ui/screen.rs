@@ -136,7 +136,7 @@ impl Screen {
             self.ui.scroll.insert(Scroll::Review, to);
         }
         self.clamp_scrolls();
-        let fonts = Fonts::for_theme(self.theme == ThemeId::Bondeno);
+        let fonts = Fonts::for_theme(self.theme);
         self.cache.trim(scale);
         let painter = Painter::new(w, h, scale, fonts, &mut self.cache);
         let ms = self.started.elapsed().as_millis() as u64;

@@ -109,16 +109,16 @@ fn standard(f: &mut Frame, app: &App) {
     // «Pagine» ha al suo posto il PDF sul banco e i comandi delle pagine.
     let pages_mode = pdf_mode == PdfMode::Pages && !visible.is_empty();
     if !pages_mode {
-        let add = (316.0, 234.0, 197.0, 40.0);
+        let add = (316.0, 234.0, 222.0, 40.0);
         let hot = f.hovered(&Act::AddFiles);
         f.p.rrect(add.0, add.1, add.2, add.3, 6.0, Some(if hot { mix(pal.primary, (0, 0, 0), 0.12) } else { pal.primary }), None);
         f.icon(ic::ADD, add.0 + 14.0, add.1 + 8.0, 24.0, pal.on_primary);
-        f.text("Aggiungi file", add.0 + 46.0, add.1, 112.0, 40.0, 17.0, SEMI, pal.on_primary);
+        f.text("Aggiungi file", add.0 + 46.0, add.1, 134.0, 40.0, 17.0, SEMI, pal.on_primary);
         f.p.fill_a(add.0 + add.2 - 38.0, add.1, 1.0, 40.0, pal.on_primary, 0.35);
         f.icon(ic::CHEVRON_DOWN, add.0 + add.2 - 31.0, add.1 + 8.0, 24.0, pal.on_primary);
         f.hit((add.0, add.1, add.2 - 38.0, add.3), Act::AddFiles);
         f.hit((add.0 + add.2 - 38.0, add.1, 38.0, add.3), Act::AddMenu);
-        let mut x = 544.0;
+        let mut x = 569.0;
         x += f.tool(x, 234.0, 40.0, "Aggiungi cartella", ic::FOLDER, 16.0, Act::AddFolder, true) + 8.0;
         f.vline(x, 240.0, 30.0);
         x += 20.0;
@@ -498,16 +498,16 @@ fn footer(f: &mut Frame, app: &App, y: f32) {
     let go_w = 260.0;
     let go_x = w - 24.0 - go_w;
     // Destinazione: si accorcia con la finestra stretta.
-    let dest_w = 270.0f32.min((go_x - 40.0 - 552.0 - 330.0).max(150.0));
+    let dest_w = 220.0f32.min((go_x - 40.0 - 580.0 - 330.0).max(150.0));
     f.icon(ic::FOLDER, 306.0, y + 36.0, 24.0, pal.text);
-    f.text("Cartella di destinazione", 356.0, y + 25.0, 190.0, 30.0, 16.0, SEMI, pal.text);
-    super::dest_select(f, app, (552.0, y + 25.0, dest_w, 43.0), 16.0);
-    f.text(&super::dest_note(app), 356.0, y + 70.0, go_x - 380.0, 26.0, 14.5, SANS, pal.muted);
-    let ex = 552.0 + dest_w + 18.0;
+    f.text("Cartella di destinazione", 356.0, y + 25.0, 218.0, 30.0, 16.0, SEMI, pal.text);
+    super::dest_select(f, app, (580.0, y + 25.0, dest_w, 43.0), 16.0);
+    let ex = 580.0 + dest_w + 18.0;
+    f.para(&super::dest_note(app), 356.0, y + 68.0, ex - 12.0 - 356.0, 14.5, SANS, pal.muted, 1.2, 2);
     f.vline(ex, y + 22.0, 76.0);
     f.icon(ic::COPY, ex + 20.0, y + 30.0, 24.0, pal.text);
-    f.text("Se esiste già un file", ex + 63.0, y + 25.0, 160.0, 30.0, 16.0, SEMI, pal.text);
-    let sel_x = ex + 63.0 + 157.0;
+    f.text("Se esiste già un file", ex + 63.0, y + 25.0, 176.0, 30.0, 16.0, SEMI, pal.text);
+    let sel_x = ex + 63.0 + 176.0;
     let sel_w = (go_x - 26.0 - sel_x).clamp(120.0, 166.0);
     super::exists_select(f, app, (sel_x, y + 25.0, sel_w, 43.0), 16.0);
     f.text(&app.exists_example(), ex + 63.0, y + 66.0, go_x - ex - 80.0, 26.0, 14.5, SANS, pal.muted);
