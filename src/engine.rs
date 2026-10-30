@@ -126,6 +126,7 @@ const DOC_CONVERT: &[Slice] = &[Slice { id: "pdf", label: "PDF" }];
 const PDF_CONVERT: &[Slice] = &[
     Slice { id: "jpg", label: "JPG" },
     Slice { id: "docx", label: "Word OCR" },
+    Slice { id: "xlsx", label: "Excel" },
     Slice { id: "png", label: "PNG" },
     Slice { id: "txt", label: "Testo" },
 ];
@@ -753,6 +754,14 @@ pub struct Options {
     pub pages: Option<PageSel>,
     /// PDF in Word: le colonne del testo restano colonne (spenta: una colonna sola, in ordine di lettura).
     pub columns: bool,
+    /// PDF in Excel: un foglio per tabella (spenta: tutte in un foglio, una sotto l'altra).
+    pub sheet_per_table: bool,
+    /// PDF in Excel: numeri e date diventano valori (spenta: resta tutto testo).
+    pub cell_values: bool,
+    /// PDF in Excel: le tabelle che continuano sulla pagina dopo diventano una sola.
+    pub merge_tables: bool,
+    /// PDF in Excel: anche il testo fuori dalle tabelle, in un foglio a parte.
+    pub outside_text: bool,
     /// Audio: salta il silenzio iniziale, sotto questa soglia in dB sotto il massimo.
     pub trim_silence_db: Option<u32>,
     /// Documenti e testo in PDF: font incorporato nel file.
@@ -848,6 +857,10 @@ impl Default for Options {
             tables: true,
             pages: None,
             columns: true,
+            sheet_per_table: true,
+            cell_values: true,
+            merge_tables: true,
+            outside_text: false,
             trim_silence_db: None,
             embed_fonts: true,
             bookmarks: true,
@@ -1435,7 +1448,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         let out = reserve(&dir, &stem(path), "docx")?;
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
         let want = |i: usize| opts.pages.as_ref().is_none_or(|s| s.contains(i));
-        let read = crate::pdflayout::ReadOptions { tables: opts.tables, columns: opts.columns };
+        let read = crate::pdflayout::ReadOptions { tables: opts.tables, columns: opts.columns, merge: true };
         let every = crate::pdflayout::read_pages(&bytes, &read, want).map_err(err)?;
         let selected = pages_of(&opts.pages, every.len());
         if selected.is_empty() {
@@ -1463,6 +1476,36 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             "Word con le pagine scansionate come immagini".to_string()
         } else {
             format!("Word modificabile; {scanned} pagine scansionate messe come immagini")
+        };
+        return Ok(Output { path: out, message });
+    }
+    if kind == Kind::Pdf && action == "xlsx" {
+        let out = reserve(&dir, &stem(path), "xlsx")?;
+        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let want = |i: usize| opts.pages.as_ref().is_none_or(|s| s.contains(i));
+        let read = crate::pdflayout::ReadOptions { tables: true, columns: true, merge: opts.merge_tables };
+        let every = crate::pdflayout::read_pages(&bytes, &read, want).map_err(err)?;
+        let selected = pages_of(&opts.pages, every.len());
+        if selected.is_empty() {
+            return Err(err("nessuna pagina in questo intervallo"));
+        }
+        let scan_at: Vec<bool> = every.iter().enumerate().map(|(i, p)| p.is_scan() && selected.contains(&i)).collect();
+        let scanned = scan_at.iter().filter(|s| **s).count();
+        // Le scansioni non hanno tabelle da leggere: il loro testo (OCR) va nel foglio del testo.
+        let mut ocr: Vec<Option<String>> = Vec::new();
+        if scanned > 0 && opts.ocr {
+            ocr = crate::ocr::pdf_pages_where(&bytes, |i| scan_at.get(i).copied().unwrap_or(false)).unwrap_or_default();
+        }
+        let (tables, texts) = crate::pdflayout::sheet_contents(&every, |i| ocr.get(i).cloned().flatten().unwrap_or_default());
+        let sheet = crate::pdfxlsx::SheetOptions { one_per_table: opts.sheet_per_table, values: opts.cell_values, outside_text: opts.outside_text };
+        let xlsx = crate::pdfxlsx::xlsx(&tables, &texts, &sheet).map_err(err)?;
+        write_bytes(&out, &xlsx)?;
+        let message = match tables.len() {
+            0 if scanned > 0 && !opts.ocr => "Nessuna tabella: le pagine sono scansioni. Accendi «Leggi le scansioni» per averne il testo".to_string(),
+            0 => "Nessuna tabella nel PDF: il foglio ha il testo riga per riga".to_string(),
+            1 => "Excel con 1 tabella".to_string(),
+            n if opts.sheet_per_table => format!("Excel con {n} tabelle, una per foglio"),
+            n => format!("Excel con {n} tabelle in un foglio"),
         };
         return Ok(Output { path: out, message });
     }
@@ -1899,6 +1942,66 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
         let xml = crate::doctext::zip_entry_for_test(&flat.path, "word/document.xml");
         assert_eq!(xml.matches("<w:tr>").count(), 0, "senza tabelle");
         assert!(xml.contains("Luca") && xml.contains("Voto"), "il testo della tabella resta");
+    }
+
+    #[test]
+    fn pdf_tables_become_excel_sheets() {
+        // Una tabella con i bordi e, sotto, una a colonne senza bordi con date, protocolli e importi.
+        let mut content = String::from(
+            "0.5 w 50 720 m 350 720 l S 50 700 m 350 700 l S 50 680 m 350 680 l S 50 660 m 350 660 l S \
+50 720 m 50 660 l S 200 720 m 200 660 l S 350 720 m 350 660 l S \
+BT /F2 11 Tf 56 706 Td (Missione) Tj ET BT /F2 11 Tf 206 706 Td (2026) Tj ET \
+BT /F1 11 Tf 56 686 Td (Istruzione) Tj ET BT /F1 11 Tf 206 686 Td (642.180,50) Tj ET \
+BT /F1 11 Tf 56 666 Td (Trasporti) Tj ET BT /F1 11 Tf 206 666 Td (4,1%) Tj ET \
+BT /F2 16 Tf 50 750 Td (Spese correnti) Tj ET BT /F1 10 Tf 50 630 Td (Contributi ricevuti nell'anno.) Tj ET ",
+        );
+        let rows = [("Data", "Ente", "Prot.", "Importo"), ("14/02/2026", "Regione", "004127", "32.000,00"), ("03/04/2026", "Provincia", "009880", "8.500,00"), ("22/06/2026", "Ministero", "015302", "41.250,00")];
+        for (k, (a, b, c, d)) in rows.iter().enumerate() {
+            let y = 600 - k as i32 * 16;
+            let f = if k == 0 { "F2" } else { "F1" };
+            content.push_str(&format!("BT /{f} 10 Tf 50 {y} Td ({a}) Tj ET BT /{f} 10 Tf 140 {y} Td ({b}) Tj ET BT /{f} 10 Tf 240 {y} Td ({c}) Tj ET BT /{f} 10 Tf 300 {y} Td ({d}) Tj ET "));
+        }
+        let dir = scratch();
+        let path = dir.join("bilancio.pdf");
+        fs::write(&path, pdf_page(&content, 400, 800)).unwrap();
+        let out = perform(&path, "xlsx", 80).expect("Excel");
+        assert_eq!(out.path.extension().unwrap(), "xlsx");
+        assert!(out.message.contains("2 tabelle"), "{}", out.message);
+        let book = crate::doctext::zip_entry_for_test(&out.path, "xl/workbook.xml");
+        assert!(book.contains("Tabella 1 · p. 1") && book.contains("Tabella 2 · p. 1"), "{book}");
+        let strings = crate::doctext::zip_entry_for_test(&out.path, "xl/sharedStrings.xml");
+        let one = crate::doctext::zip_entry_for_test(&out.path, "xl/worksheets/sheet1.xml");
+        let two = crate::doctext::zip_entry_for_test(&out.path, "xl/worksheets/sheet2.xml");
+        // Numeri veri, con il formato giusto; l'intestazione resta testo e ferma in alto.
+        assert!(one.contains("<v>642180.5</v>"), "{one}");
+        assert!(one.contains("<v>0.041</v>"), "{one}");
+        assert!(one.contains("topLeftCell=\"A2\""), "intestazione non bloccata: {one}");
+        assert!(strings.contains("Missione") && strings.contains("Istruzione"), "{strings}");
+        // Le colonne senza bordi: la data è un numero (seriale), il protocollo resta testo con gli zeri.
+        assert!(two.contains("<v>32000</v>"), "{two}");
+        assert!(two.contains("<v>46067</v>"), "manca la data 14/02/2026: {two}");
+        assert!(strings.contains("004127") && strings.contains("Regione"), "{strings}");
+        assert!(!strings.contains("Contributi ricevuti"), "il testo fuori dalle tabelle va solo se chiesto");
+
+        // Tutto in un foglio, tutto testo, con il testo a parte.
+        let opts = Options { sheet_per_table: false, cell_values: false, outside_text: true, exists: Exists::Replace, ..Default::default() };
+        let out = perform_with(&path, "xlsx", 80, None, &opts).expect("Excel");
+        let book = crate::doctext::zip_entry_for_test(&out.path, "xl/workbook.xml");
+        assert!(book.contains("name=\"Tabelle\"") && book.contains("name=\"Testo\""), "{book}");
+        let strings = crate::doctext::zip_entry_for_test(&out.path, "xl/sharedStrings.xml");
+        assert!(strings.contains("642.180,50") && strings.contains("Contributi ricevuti"), "{strings}");
+    }
+
+    #[test]
+    fn pdf_without_tables_gives_the_text_in_excel() {
+        let content = "BT /F2 16 Tf 50 750 Td (Avviso) Tj ET BT /F1 11 Tf 50 720 Td (Gli uffici restano chiusi il 2 novembre.) Tj ET";
+        let dir = scratch();
+        let path = dir.join("avviso.pdf");
+        fs::write(&path, pdf_page(content, 400, 800)).unwrap();
+        let out = perform(&path, "xlsx", 80).expect("Excel");
+        assert!(out.message.contains("Nessuna tabella"), "{}", out.message);
+        let strings = crate::doctext::zip_entry_for_test(&out.path, "xl/sharedStrings.xml");
+        assert!(strings.contains("Gli uffici restano chiusi il 2 novembre."), "{strings}");
     }
 
     #[test]
@@ -3170,7 +3273,8 @@ Luca,Bondeno
         assert_eq!(slices(Kind::Doc, Mode::Convert)[0].id, "pdf");
         assert_eq!(slices(Kind::Pdf, Mode::Convert)[0].id, "jpg");
         assert_eq!(slices(Kind::Pdf, Mode::Convert)[1].id, "docx");
-        assert_eq!(slices(Kind::Pdf, Mode::Convert).len(), 4);
+        assert_eq!(slices(Kind::Pdf, Mode::Convert)[2].id, "xlsx");
+        assert_eq!(slices(Kind::Pdf, Mode::Convert).len(), 5);
         assert_eq!(slices(Kind::Pdf, Mode::Tools)[0].id, "ocr");
         assert!(slices(Kind::Image, Mode::Tools).iter().any(|s| s.id == "ocr"));
     }

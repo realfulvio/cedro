@@ -81,7 +81,7 @@ const PAGES: [Page; 6] = [
     Page {
         title: ["Tutte le conversioni", "in un solo pannello"],
         intro: "Dal menu dell'icona apri Conversioni. Trascini file anche di tipi diversi e scegli formato, strumenti e qualità.",
-        rows: [("Foto", "Immagini e documenti", "Formato, dimensioni, raddrizza, PDF/A"), ("PDF", "Da PDF a Word", "Tabelle, colonne, OCR in italiano"), ("Audio", "Audio e video", "Bitrate, taglio, risoluzione, fps")],
+        rows: [("Foto", "Immagini e documenti", "Formato, dimensioni, raddrizza, PDF/A"), ("PDF", "Da PDF a Word ed Excel", "Tabelle, colonne, OCR in italiano"), ("Audio", "Audio e video", "Bitrate, taglio, risoluzione, fps")],
         ms: 7000,
     },
     Page {

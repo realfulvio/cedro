@@ -5,7 +5,7 @@ Documenti	Documents
 Testo	Text
 Cambia formato, ridimensiona e raddrizza le foto.	Change format, resize and straighten photos.
 Da Word, ODT e RTF a PDF.	From Word, ODT and RTF to PDF.
-Da PDF a Word modificabile, a immagini o a testo.	From PDF to editable Word, images or text.
+Da PDF a Word modificabile, a Excel, a immagini o a testo.	From PDF to editable Word, Excel, images or text.
 TXT, Markdown, CSV, JSON e HTML.	TXT, Markdown, CSV, JSON and HTML.
 WAV, MP3, OGG, M4A, AAC e FLAC.	WAV, MP3, OGG, M4A, AAC and FLAC.
 MP3, WAV, FLAC, Opus e AIFF.	MP3, WAV, FLAC, Opus and AIFF.
@@ -1350,3 +1350,22 @@ Il PDF diventa circa il {#}% più leggero e resta leggibile. L'originale non si 
 I PDF sono già leggeri: restano come sono.	The PDFs are already light: they stay as they are.
 Il PDF è già leggero: resta com'è.	The PDF is already light: it stays as it is.
 Si calcola quanto si risparmia…	Working out how much is saved…
+Excel	Excel
+le tabelle	the tables
+Fogli	Sheets
+Un foglio per tabella	One sheet per table
+Tutto in uno	All in one
+Numeri e date come valori	Numbers and dates as values
+1.234,56 e 03/11/2026 si possono sommare e ordinare	1.234,56 and 03/11/2026 can be added up and sorted
+Riunisci le tabelle spezzate	Join split tables
+Quando continuano sulla pagina dopo	When they continue on the next page
+Anche il testo fuori dalle tabelle	Also the text outside tables
+In un foglio a parte	In a separate sheet
+Nessuna tabella: le pagine sono scansioni. Accendi «Leggi le scansioni» per averne il testo	No tables: the pages are scans. Turn on «Read scans» to get their text
+Nessuna tabella nel PDF: il foglio ha il testo riga per riga	No tables in the PDF: the sheet has the text line by line
+Excel con 1 tabella	Excel with 1 table
+Excel con {#} tabelle, una per foglio	Excel with {} tables, one per sheet
+Excel con {#} tabelle in un foglio	Excel with {} tables in one sheet
+nel PDF non ci sono né tabelle né testo da mettere nel foglio	the PDF has no tables or text to put in the sheet
+Scrive i file Excel delle tabelle dei PDF.	Writes the Excel files of PDF tables.
+Da PDF a Word ed Excel	From PDF to Word and Excel
