@@ -223,7 +223,8 @@ pub fn xlsx(tables: &[SheetTable], texts: &[SheetText], opts: &SheetOptions) -> 
             if t.header {
                 ws.set_freeze_panes(1, 0).map_err(err)?;
             }
-            ws.autofit_to_max_width(400);
+            ws.set_autofit_max_width(400);
+            ws.autofit();
         }
     } else if !tables.is_empty() {
         let ws = book.add_worksheet();
@@ -234,7 +235,8 @@ pub fn xlsx(tables: &[SheetTable], texts: &[SheetText], opts: &SheetOptions) -> 
             ws.write_string_with_format(row, 0, &title, &styles.title).map_err(err)?;
             row = write_table(ws, t, row + 1, &styles, opts.values).map_err(err)? + 1;
         }
-        ws.autofit_to_max_width(400);
+        ws.set_autofit_max_width(400);
+        ws.autofit();
     }
     if (opts.outside_text || tables.is_empty()) && !texts.is_empty() {
         let ws = book.add_worksheet();

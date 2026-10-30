@@ -45,6 +45,8 @@ pub enum Field {
     Link(bool),
     /// Unire i PDF: le pagine di un file della coda (indice in `files`).
     FilePages(usize),
+    /// «Rivedi»: il testo di una frase della trascrizione.
+    Review(usize),
 }
 
 /// Le parti che si aprono e si chiudono («Altre opzioni»…).
@@ -64,6 +66,9 @@ pub enum Scroll {
     Log,
     Preview,
     Page,
+    /// «Rivedi»: le frasi, e i punti da controllare.
+    Review,
+    ReviewFlags,
 }
 
 /// Cosa fa un clic.
@@ -162,6 +167,29 @@ pub enum Act {
     PagesFileMenu,
     /// «Pagine» con numeri o filigrana: la pagina della striscia da vedere in grande (file, posto).
     StampPick(usize, usize),
+    /// «Rivedi»: apre la revisione del file della coda (indice in `files`), o la chiude.
+    ReviewOpen(usize),
+    ReviewClose,
+    ReviewPlay,
+    /// La barra della posizione (si trascina).
+    ReviewSeek,
+    /// Salta avanti o indietro di tanti secondi.
+    ReviewSkip(i32),
+    /// Il tempo di una frase: la fa sentire da lì.
+    ReviewRow(usize),
+    /// Sceglie la frase da correggere.
+    ReviewPick(usize),
+    ReviewFlag(usize),
+    ReviewFix(usize),
+    ReviewDismiss(usize),
+    ReviewFixAll,
+    ReviewStep(i32),
+    ReviewUndo,
+    ReviewDelete(usize),
+    ReviewFollow,
+    ReviewOnly,
+    ReviewFormat(usize),
+    ReviewSave,
     /// Solo per bloccare i clic sotto un riquadro (per esempio dentro un menu aperto).
     Nothing,
 }

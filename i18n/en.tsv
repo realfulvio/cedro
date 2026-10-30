@@ -1369,3 +1369,40 @@ Excel con {#} tabelle in un foglio	Excel with {} tables in one sheet
 nel PDF non ci sono né tabelle né testo da mettere nel foglio	the PDF has no tables or text to put in the sheet
 Scrive i file Excel delle tabelle dei PDF.	Writes the Excel files of PDF tables.
 Da PDF a Word ed Excel	From PDF to Word and Excel
+Rivedi	Review
+Torna alle trascrizioni	Back to transcriptions
+Ripetuta	Repeated
+Giro di parole	Word loop
+Frase tipica	Typical phrase
+Nel silenzio	In silence
+Sistemato	Fixed
+Sistemata	Fixed
+Lasciata com'era	Left as it was
+La stessa frase {#} volte di fila: di solito è whisper che si incanta.	The same sentence {} times in a row: usually whisper getting stuck.
+Un giro di parole che si ripete dentro la frase.	A phrase that repeats inside the sentence.
+Una frase che whisper inventa quando non sente parlato.	A sentence whisper makes up when it hears no speech.
+Testo dove l'audio è quasi muto: forse non c'è parlato.	Text where the audio is almost silent: there may be no speech.
+{#} frasi · niente da controllare	{} sentences · nothing to check
+{#} frasi · {#} da controllare	{} sentences · {} to check
+Leggo l'onda dell'audio…	Reading the audio waveform…
+Indietro di 10 secondi	Back 10 seconds
+Avanti di 10 secondi	Forward 10 seconds
+Solo da controllare	Only those to check
+Segui l'audio	Follow the audio
+Nessuna frase da mostrare.	No sentences to show.
+(tolta) {}	(removed) {}
+Correggi la frase delle {}	Edit the sentence at {}
+Scegli una frase per correggerla; il tempo a sinistra la fa sentire.	Pick a sentence to edit it; the time on the left plays it.
+Da controllare	To check
+Prima	Previous
+Dopo	Next
+Sistema tutte le ripetizioni	Fix all repetitions
+Whisper qui non ha lasciato ripetizioni né frasi inventate: si può salvare così.	Whisper left no repetitions or made-up sentences here: it can be saved as it is.
+Risolvi	Fix
+Lascia così	Leave it
+Il file nuovo sta accanto all'originale.	The new file goes next to the original.
+Salvato: {}	Saved: {}
+Correggi	Edit
+La revisione di questo file non c'è più: trascrivilo di nuovo.	The review of this file is gone: transcribe it again.
+{} non scritto: {}	{} not written: {}
+Ripristina	Undo
