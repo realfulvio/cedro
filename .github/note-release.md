@@ -12,10 +12,8 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Rivedi la trascrizione, e da PDF a Excel.**
+**Correzioni di Rivedi trascrizione e PDF → Excel.**
 
-- **Rivedi** (Trascrizione): a lavoro finito, accanto al file compare il pulsante «Rivedi». Si apre una schermata con l'onda dell'audio e tutte le frasi con il loro tempo: un clic sul tempo fa sentire da quel punto, l'elenco segue l'audio, e una frase si corregge sul posto (con «Ripristina» per tornare indietro).
-- **Difetti di whisper**: Cedro segnala le ripetizioni (la stessa frase di fila, o un giro di parole che si ripete dentro la frase), le frasi tipiche che whisper inventa dove non c'è parlato («Sottotitoli a cura di…») e il testo dove l'audio è quasi muto. Si sistemano uno a uno, oppure tutte le ripetizioni in un colpo.
-- **Salva come** Word, testo semplice, **sottotitoli .srt o .vtt** (con i tempi giusti, anche dopo le correzioni). La revisione resta salvata: si riapre anche dopo aver chiuso Cedro.
-- **PDF → Excel**: nella scheda PDF il nuovo formato **Excel** mette le tabelle in un file .xlsx, una per foglio o tutte in uno. Numeri, percentuali, euro e date all'italiana diventano valori veri, mentre CAP, protocolli e codici restano testo; le tabelle spezzate su più pagine si riuniscono, il testo fuori dalle tabelle può andare in un foglio a parte. Riconosce anche le tabelle senza bordi, a colonne allineate; le scansioni passano dalla lettura del testo (OCR).
-- Tutto è scritto in Rust e funziona su Windows, Windows on ARM e Linux; l'originale non viene mai toccato.
+- **Rivedi**: Play e il clic sul tempo di una frase fanno sentire davvero l'audio (prima restavano muti e fermi a 00:00); anche il clic sull'onda porta l'ascolto in quel punto.
+- **Rivedi** si riapre anche dopo aver chiuso Cedro: rimesso il file in coda, il pulsante «Rivedi» riporta la revisione salvata, con le correzioni fatte.
+- **PDF → Excel**: i numeri restano scritti come nel PDF, senza aggiungere il punto delle migliaia («44012» non diventa più «44.012», «2026» non diventa «2.026»), e le colonne di codici (CAP, protocollo, matricola, telefono, partita IVA…) restano testo.
