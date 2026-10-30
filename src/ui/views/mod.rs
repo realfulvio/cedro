@@ -10,6 +10,7 @@ mod documento;
 mod essenziale;
 mod guidato;
 mod pagine;
+mod revisione;
 
 pub use activity::{links_page, transcribe_page};
 pub use pagine::{merged_pages, page_drop, split_file, BOARD_MAX, MERGE as ICON_MERGE, MERGED_MAX, SCISSORS as ICON_SCISSORS, SHRINK as ICON_SHRINK, STRIP_MAX};
@@ -41,6 +42,10 @@ pub fn min_size(theme: ThemeId, surface: Surface) -> (f32, f32) {
 }
 
 pub fn draw(f: &mut Frame, app: &App, surface: Surface) {
+    if app.review.is_some() {
+        revisione::draw(f, app);
+        return;
+    }
     if surface == Surface::Compact {
         compatto::draw(f, app);
         return;

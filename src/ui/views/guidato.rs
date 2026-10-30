@@ -93,6 +93,7 @@ fn format_icon(f: &mut Frame, id: &str, x: f32, y: f32, s: f32) {
     let pal = f.pal;
     match id {
         "docx" | "doc" => f.word_icon(x, y, s),
+        "xlsx" | "xls" => f.excel_icon(x, y, s),
         "txt" | "html" | "rtf" => f.text_icon(x, y, s),
         "pdf" => f.pdf_icon(x + s * 0.12, y + s * 0.05, s * 0.9),
         "merge" => f.icon(super::pagine::MERGE, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),

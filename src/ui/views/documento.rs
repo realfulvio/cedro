@@ -426,6 +426,7 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
 fn format_icon_small(f: &mut Frame, id: &str, x: f32, y: f32, s: f32) {
     match id {
         "docx" | "doc" => f.word_icon(x, y, s),
+        "xlsx" | "xls" => f.excel_icon(x, y, s),
         "txt" | "html" | "rtf" => f.text_icon(x, y, s),
         "pdf" => f.pdf_icon(x + s * 0.12, y + s * 0.05, s * 0.9),
         _ => f.image_icon(x, y, s),
