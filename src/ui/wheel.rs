@@ -27,7 +27,7 @@ const PUSH: f32 = 14.0;
 const HALF_GAP: f32 = 5.0;
 /// Arrotondamento degli angoli delle fette.
 const CORNER: f32 = 14.0;
-const PANEL_W: f32 = 327.0;
+const PANEL_W: f32 = 350.0;
 
 const ACC: Rgb = (8, 116, 242);
 const ACC_DARK: Rgb = (2, 98, 226);
@@ -201,8 +201,8 @@ impl WheelUi {
             }
             // Sotto il disco: titolo, frase e la riga con la destinazione e Esc.
             let line_y = disc_bottom + 142.0;
-            let a = fonts.measure(&crate::i18n::tr(&self.dest_note), 21.0, Weight::Regular) + 40.0;
-            let esc = fonts.measure("Esc", 20.0, Weight::Regular) + 32.0 + 14.0 + fonts.measure(&crate::i18n::tr("per chiudere"), 21.0, Weight::Regular);
+            let a = fonts.measure(&crate::i18n::tr(&self.dest_note), super::gfx::text_size(21.0), Weight::Regular) + 40.0;
+            let esc = fonts.measure("Esc", super::gfx::text_size(20.0), Weight::Regular) + 32.0 + 14.0 + fonts.measure(&crate::i18n::tr("per chiudere"), super::gfx::text_size(21.0), Weight::Regular);
             let full = a + 38.0 + esc;
             let x0 = (w - full) / 2.0;
             zones.push(((x0 + a + 38.0, line_y, esc, 44.0), Zone::Esc));
@@ -228,11 +228,11 @@ impl WheelUi {
             zones.push(((px + 26.0, y, pw - 52.0, 55.0), Zone::OpenFull));
             y += 55.0 + 24.0;
             panel = Some((px, top, pw, y - top));
-            w = px + pw + PAD;
-            // I tasti sotto, centrati.
+            // I tasti sotto, centrati; la finestra è larga almeno quanto la loro riga.
             let items = self.hint_items();
             let widths: Vec<f32> = items.iter().map(|(k, t, _)| hint_width(fonts, k, t)).collect();
             let total = widths.iter().sum::<f32>() + 34.0 * (items.len() as f32 - 1.0).max(0.0);
+            w = (px + pw + PAD).max(total + 2.0 * PAD);
             let mut x = (w - total) / 2.0;
             let hy = disc_bottom + 36.0;
             for ((_, _, zone), iw) in items.iter().zip(&widths) {
@@ -652,8 +652,8 @@ fn quality_at(slider: R, x: f32) -> u8 {
 }
 
 fn hint_width(fonts: &Fonts, key: &str, label: &str) -> f32 {
-    let kw = fonts.measure(key, 20.0, Weight::Regular) + 32.0;
-    kw + 14.0 + fonts.measure(&crate::i18n::tr(label), 21.0, Weight::Semibold)
+    let kw = fonts.measure(key, super::gfx::text_size(20.0), Weight::Regular) + 32.0;
+    kw + 14.0 + fonts.measure(&crate::i18n::tr(label), super::gfx::text_size(21.0), Weight::Semibold)
 }
 
 fn clip(p: &Painter, text: &str, size: f32, weight: Weight, w: f32) -> String {
