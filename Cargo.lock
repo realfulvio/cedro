@@ -580,7 +580,7 @@ dependencies = [
  "whisper-rs",
  "whisper-rs-sys",
  "windows 0.61.3",
- "windows-core 0.61.2",
+ "windows-core 0.62.2",
  "winresource",
  "zip",
  "zune-core",
