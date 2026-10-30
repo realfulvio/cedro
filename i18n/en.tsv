@@ -1367,7 +1367,7 @@ Riunisci le tabelle spezzate	Join split tables
 Quando continuano sulla pagina dopo	When they continue on the next page
 Anche il testo fuori dalle tabelle	Also the text outside tables
 In un foglio a parte	In a separate sheet
-Nessuna tabella: le pagine sono scansioni. Accendi «Leggi le scansioni» per averne il testo	No tables: the pages are scans. Turn on «Read scans» to get their text
+Nessuna tabella: le pagine sono scansioni. Accendi «Leggi le scansioni» per ritrovarne le tabelle	No tables: the pages are scans. Turn on «Read scans» to find their tables
 Nessuna tabella nel PDF: il foglio ha il testo riga per riga	No tables in the PDF: the sheet has the text line by line
 Excel con 1 tabella	Excel with 1 table
 Excel con {#} tabelle, una per foglio	Excel with {} tables, one per sheet
@@ -1412,3 +1412,9 @@ Correggi	Edit
 La revisione di questo file non c'è più: trascrivilo di nuovo.	The review of this file is gone: transcribe it again.
 {} non scritto: {}	{} not written: {}
 Ripristina	Undo
+Word di testo, con 1 pagina letta via OCR: controllalo. L'impaginazione non viene ricostruita.	Text Word document, with 1 page read via OCR: please check it. The layout is not rebuilt.
+Testo estratto dal PDF, con 1 pagina letta via OCR: controllalo.	Text extracted from the PDF, with 1 page read via OCR: please check it.
+Manca 1 pagina scansionata: l'OCR ne legge al massimo {#}.	1 scanned page is missing: OCR reads {} at most.
+Word modificabile; 1 pagina scansionata messa come immagine	Editable Word; 1 scanned page placed as an image
+Una pagina scansionata non è stata letta: accendi «Leggi le scansioni».	One scanned page was not read: turn on «Read scans».
+Le pagine scansionate non sono state lette: accendi «Leggi le scansioni».	The scanned pages were not read: turn on «Read scans».

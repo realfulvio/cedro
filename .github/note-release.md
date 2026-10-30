@@ -12,10 +12,10 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Rivedi la trascrizione, e da PDF a Excel.**
+**PDF → Excel legge anche le tabelle dei PDF scansionati.**
 
-- **Rivedi** (Trascrizione): a lavoro finito, accanto al file compare il pulsante «Rivedi». Si apre una schermata con l'onda dell'audio e tutte le frasi con il loro tempo: un clic sul tempo fa sentire da quel punto, l'elenco segue l'audio, e una frase si corregge sul posto (con «Ripristina» per tornare indietro).
-- **Difetti di whisper**: Cedro segnala le ripetizioni (la stessa frase di fila, o un giro di parole che si ripete dentro la frase), le frasi tipiche che whisper inventa dove non c'è parlato («Sottotitoli a cura di…») e il testo dove l'audio è quasi muto. Si sistemano uno a uno, oppure tutte le ripetizioni in un colpo.
-- **Salva come** Word, testo semplice, **sottotitoli .srt o .vtt** (con i tempi giusti, anche dopo le correzioni). La revisione resta salvata: si riapre anche dopo aver chiuso Cedro.
-- **PDF → Excel**: nella scheda PDF il nuovo formato **Excel** mette le tabelle in un file .xlsx, una per foglio o tutte in uno. Numeri, percentuali, euro e date all'italiana diventano valori veri, mentre CAP, protocolli e codici restano testo; le tabelle spezzate su più pagine si riuniscono, il testo fuori dalle tabelle può andare in un foglio a parte. Riconosce anche le tabelle senza bordi, a colonne allineate; le scansioni passano dalla lettura del testo (OCR).
-- Tutto è scritto in Rust e funziona su Windows, Windows on ARM e Linux; l'originale non viene mai toccato.
+- Con «Leggi le scansioni (OCR)» acceso, le pagine che sono foto o scansioni danno tabelle vere di Excel: Cedro raddrizza la pagina storta, ritrova le righe e le colonne (con o senza linee), tiene unite le celle scritte su due righe e unisce le tabelle che continuano sulla pagina dopo.
+- Numeri e date vengono riconosciuti; i decimali che l'OCR legge con il punto («80.00») tornano con la virgola («80,00»); la prima riga è l'intestazione quando si capisce.
+- Il testo fuori dalle tabelle va nel foglio del testo, riga per riga. Se le scansioni non vengono lette (opzione spenta), Cedro lo dice.
+- Su Linux, senza i dati italiani di Tesseract si usa quelli inglesi, che leggono molto meglio del modello incluso.
+- Corretto «1 pagine» nei messaggi quando la pagina è una sola.

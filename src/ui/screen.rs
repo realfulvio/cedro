@@ -187,6 +187,14 @@ impl Screen {
 
     /// Il tema «Documento al centro» mostra il file scelto: lo si fa preparare al thread dei file.
     fn want_preview(&mut self) {
+        // «Rivedi» copre tutta la finestra e ha il suo lettore (l'audio trascritto): non c'è anteprima da
+        // preparare e quel lettore non va fermato, altrimenti Play e i tempi non fanno sentire nulla.
+        if let Some(r) = self.app.review.as_ref() {
+            if self.app.player.as_ref().is_some_and(|p| p.path != r.source) {
+                self.app.player = None;
+            }
+            return;
+        }
         if self.theme != ThemeId::DocumentoAlCentro || self.surface != Surface::Main || self.app.activity != Activity::Convert {
             self.app.player = None;
             return;
@@ -1208,6 +1216,29 @@ mod tests {
         assert!(s.key(Key::Escape, &mut plat));
         assert!(s.ui.menu.is_none());
         assert_eq!(s.ui.edit, Some(Field::Link(false)));
+    }
+
+    #[test]
+    fn review_play_keeps_playing_across_frames() {
+        use crate::trascrizione::Segment;
+        let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+        s.request_appearance(ThemeId::WindowsEssenziale, false);
+        s.app.activity = Activity::Transcribe;
+        let segments = vec![Segment { t0: 0, t1: 500, text: "Buongiorno.".into() }, Segment { t0: 600, t1: 1100, text: "Arrivederci.".into() }];
+        s.app.review = Some(crate::ui::review::Review::new(Path::new("/tmp/cedro-non-c-e.wav"), 12.0, "it".into(), segments));
+        let mut plat = Fake { clip: String::new() };
+        // Il tempo di una frase la fa sentire da lì: il lettore resta acceso anche dopo altri fotogrammi.
+        click(&mut s, &Act::ReviewRow(1), &mut plat);
+        let (w, h) = s.preferred_size();
+        let _ = s.render(w as u32, h as u32, 1.0);
+        let _ = s.render(w as u32, h as u32, 1.0);
+        assert!(s.app.review_playing());
+        assert!(s.app.review_position() >= 6.0);
+        // Play mette in pausa, e la pausa resta.
+        click(&mut s, &Act::ReviewPlay, &mut plat);
+        let _ = s.render(w as u32, h as u32, 1.0);
+        assert!(!s.app.review_playing());
+        assert!(s.app.player.is_some());
     }
 
     #[test]

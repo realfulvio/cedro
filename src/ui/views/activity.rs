@@ -187,7 +187,8 @@ fn transcribe_queue(f: &mut Frame, app: &App, r: R, big: bool) {
             let open = file.output.clone().map(Act::OpenPath);
             job_row(f, (r.0 + isz + 16.0, y, r.2 - isz - 16.0, rh), &file.name(), &sub, file.state, pct, big, (!app.busy()).then_some(Act::Remove(i)), open);
             // Finita la trascrizione si può rivedere: ascoltare le frasi, correggerle, esportare anche i sottotitoli.
-            if file.state == FileState::Done && crate::revisione::has(&file.path) {
+            // Anche un file appena rimesso in coda, se la revisione è salvata da una volta prima (Cedro riaperto).
+            if matches!(file.state, FileState::Done | FileState::Waiting) && crate::revisione::has(&file.path) {
                 let bh = if big { 46.0 } else { 38.0 };
                 f.button((r.0 + r.2 - 150.0 - 112.0, y + (rh - bh) / 2.0, 104.0, bh), "Rivedi", None, if big { 17.0 } else { 15.0 }, Act::ReviewOpen(i));
             }
