@@ -327,6 +327,8 @@ pub enum Event {
     Estimate(PathBuf, String, Result<(u64, u64), String>),
     /// «Pagine»: la pagina vera con numeri e filigrana, per la chiave delle scelte.
     StampPreview(String, Option<Image>),
+    /// «Rivedi»: l'onda dell'audio del file che si sta rivedendo.
+    Wave(PathBuf, Option<Vec<f32>>),
 }
 
 /// Cosa fa la scheda PDF: converte, unisce, divide, cambia le pagine o comprime.
@@ -419,11 +421,15 @@ pub struct App {
     pub stamp_page: usize,
     /// «Pagine»: l'anteprima con numeri e filigrana (chiave chiesta, ultima immagine arrivata).
     pub stamp_view: (String, Option<Image>),
+    /// «Rivedi»: la trascrizione aperta per la revisione.
+    pub review: Option<super::review::Review>,
+    /// Dove sta il cursore della barra di «Rivedi» mentre lo si trascina (0..1).
+    pub review_scrub: Option<f32>,
     /// «Comprimi»: (file, chiave delle scelte) → (peso, peso compresso); `None` = si sta calcolando.
     pub estimates: HashMap<(PathBuf, String), Option<Result<(u64, u64), String>>>,
-    tx: Sender<Event>,
+    pub(super) tx: Sender<Event>,
     rx: Receiver<Event>,
-    wake: Arc<dyn Fn() + Send + Sync>,
+    pub(super) wake: Arc<dyn Fn() + Send + Sync>,
     loader: media::Loader,
     pdfwork: super::pdfwork::Worker,
 }
@@ -483,6 +489,8 @@ impl App {
             stamp_page: 0,
             stamp_view: (String::new(), None),
             estimates: HashMap::new(),
+            review: None,
+            review_scrub: None,
             tx,
             rx,
             wake,
@@ -1683,6 +1691,7 @@ impl App {
                         self.stamp_view.1 = img;
                     }
                 }
+                Event::Wave(path, bars) => self.review_wave(&path, bars),
             }
         }
         changed

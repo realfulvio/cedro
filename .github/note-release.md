@@ -12,15 +12,15 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Versione stabile: librerie riviste e più solide.** Nessuna funzione nuova: Cedro diventa più robusto con i file difficili.
+**Rivedi la trascrizione, e da PDF a Excel.**
 
-- **PDF**: un PDF costruito con oggetti annidati in profondità non fa più chiudere Cedro (prima il programma si chiudeva di colpo); il testo estratto dai PDF non incolla più le parole a fine riga; Unisci, Dividi e Pagine aprono come prima i PDF protetti da password; un PDF con password di apertura convertito in testo o Word dice che è protetto, invece di «nessuna pagina».
-- **Documenti Word 97-2003 (.doc)**: si aprono anche quelli scritti da programmi che lasciano la struttura interna un po' imperfetta.
-- **Opus** (vocali di WhatsApp e Telegram): libreria Opus aggiornata alla 1.6.1, sempre compresa nel programma, anche nel motore di trascrizione.
-- **Anteprima audio**: se l'uscita audio non risponde (per esempio con il servizio Audio di Windows fermo) il tasto Play va avanti lo stesso, senza suono.
-- **Pagine dei PDF**: le miniature sono più grandi e si adattano allo spazio della scheda.
-- **Video WebM VP9**: lettura più veloce, con le immagini identiche a prima.
-- Funziona come prima su Windows, Windows on ARM e Linux.
+- **Rivedi** (Trascrizione): a lavoro finito, accanto al file compare il pulsante «Rivedi». Si apre una schermata con l'onda dell'audio e tutte le frasi con il loro tempo: un clic sul tempo fa sentire da quel punto, l'elenco segue l'audio, e una frase si corregge sul posto (con «Ripristina» per tornare indietro).
+- **Difetti di whisper**: Cedro segnala le ripetizioni (la stessa frase di fila, o un giro di parole che si ripete dentro la frase), le frasi tipiche che whisper inventa dove non c'è parlato («Sottotitoli a cura di…») e il testo dove l'audio è quasi muto. Si sistemano uno a uno, oppure tutte le ripetizioni in un colpo.
+- **Salva come** Word, testo semplice, **sottotitoli .srt o .vtt** (con i tempi giusti, anche dopo le correzioni). La revisione resta salvata: si riapre anche dopo aver chiuso Cedro.
+- **PDF → Excel**: nella scheda PDF il nuovo formato **Excel** mette le tabelle in un file .xlsx, una per foglio o tutte in uno. Numeri, percentuali, euro e date all'italiana diventano valori veri, mentre CAP, protocolli e codici restano testo; le tabelle spezzate su più pagine si riuniscono, il testo fuori dalle tabelle può andare in un foglio a parte. Riconosce anche le tabelle senza bordi, a colonne allineate; le scansioni passano dalla lettura del testo (OCR).
+- Tutto è scritto in Rust e funziona su Windows, Windows on ARM e Linux; l'originale non viene mai toccato.
+
+Restano le novità della 0.27.0: versione stabile con le librerie riviste, PDF protetti da password e miniature delle pagine più grandi.
 
 Restano le novità della 0.26.11: numeri di pagina, filigrana, pagine da riordinare e ruotare, compressione dei PDF.
 
