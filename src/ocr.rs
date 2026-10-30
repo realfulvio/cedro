@@ -67,6 +67,16 @@ pub fn pdf_pages_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec
     Ok(texts)
 }
 
+/// Come `pdf_pages_where`, ma ridà le righe con le parole e le posizioni: per ritrovare le tabelle.
+pub fn pdf_pages_lines_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec<Option<Vec<Line>>>, String> {
+    let mut pages = vec![None; pdf_page_count(pdf)?];
+    render_pdf_images(pdf, &wanted, OCR_SCALE, crate::settings::read_settings().ocr_pages(), |i, image| {
+        pages[i] = Some(image_lines(&image).unwrap_or_default());
+        Ok(())
+    })?;
+    Ok(pages)
+}
+
 /// Una pagina (da 0) disegnata con il lato lungo di circa `side` pixel, in RGBA: per l'anteprima.
 pub fn render_page_rgba(bytes: &[u8], page: usize, side: f32) -> Result<(u32, u32, Vec<u8>), String> {
     use hayro::hayro_interpret::InterpreterSettings;
@@ -109,10 +119,20 @@ pub fn pdf_page_count(bytes: &[u8]) -> Result<usize, String> {
     Ok(pdf.pages().len())
 }
 
+/// Una parola letta dall'OCR: posizione orizzontale e larghezza in pixel.
+#[derive(Clone, Debug)]
+pub struct Word {
+    pub text: String,
+    pub x: f32,
+    pub w: f32,
+}
+
 /// Una riga letta dall'OCR, con il riquadro in pixel dell'immagine (origine in alto a sinistra).
 #[derive(Clone, Debug)]
 pub struct Line {
     pub text: String,
+    /// Le parole della riga, con dove cominciano e quanto sono larghe: servono a ritrovare le colonne di una tabella.
+    pub words: Vec<Word>,
     pub x: f32,
     pub y: f32,
     pub w: f32,
@@ -234,8 +254,16 @@ fn ocrs_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
         .flatten()
         .map(|line| {
             let r = line.bounding_rect();
+            let words = line
+                .words()
+                .map(|w| {
+                    let r = w.bounding_rect();
+                    Word { text: w.to_string(), x: r.left() as f32 / factor, w: r.width() as f32 / factor }
+                })
+                .collect();
             Line {
                 text: line.to_string(),
+                words,
                 x: r.left() as f32 / factor,
                 y: r.top() as f32 / factor,
                 w: r.width() as f32 / factor,
@@ -306,7 +334,7 @@ fn parse_tsv(tsv: &str) -> Vec<Line> {
         let key = format!("{}-{}-{}-{}", cols[1], cols[2], cols[3], cols[4]);
         let num = |i: usize| cols[i].trim().parse::<f32>().unwrap_or(0.0);
         match cols[0] {
-            "4" => lines.push((key, Line { text: String::new(), x: num(6), y: num(7), w: num(8), h: num(9) })),
+            "4" => lines.push((key, Line { text: String::new(), words: Vec::new(), x: num(6), y: num(7), w: num(8), h: num(9) })),
             "5" => {
                 let word = cols[11].trim();
                 if word.is_empty() {
@@ -317,6 +345,7 @@ fn parse_tsv(tsv: &str) -> Vec<Line> {
                         line.text.push(' ');
                     }
                     line.text.push_str(word);
+                    line.words.push(Word { text: word.to_string(), x: num(6), w: num(8) });
                 }
             }
             _ => {}
@@ -394,15 +423,17 @@ fn windows_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
     for line in result.Lines().map_err(e)? {
         let text = line.Text().map_err(e)?.to_string();
         let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, 0.0f32, 0.0f32);
+        let mut words = Vec::new();
         for word in line.Words().map_err(e)? {
             let r = word.BoundingRect().map_err(e)?;
+            words.push(Word { text: word.Text().map_err(e)?.to_string(), x: r.X / factor, w: r.Width / factor });
             x0 = x0.min(r.X);
             y0 = y0.min(r.Y);
             x1 = x1.max(r.X + r.Width);
             y1 = y1.max(r.Y + r.Height);
         }
         if x1 > x0 {
-            lines.push(Line { text, x: x0 / factor, y: y0 / factor, w: (x1 - x0) / factor, h: (y1 - y0) / factor });
+            lines.push(Line { text, words, x: x0 / factor, y: y0 / factor, w: (x1 - x0) / factor, h: (y1 - y0) / factor });
         }
     }
     Ok(lines)

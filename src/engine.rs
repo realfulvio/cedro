@@ -1491,17 +1491,18 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         }
         let scan_at: Vec<bool> = every.iter().enumerate().map(|(i, p)| p.is_scan() && selected.contains(&i)).collect();
         let scanned = scan_at.iter().filter(|s| **s).count();
-        // Le scansioni non hanno tabelle da leggere: il loro testo (OCR) va nel foglio del testo.
-        let mut ocr: Vec<Option<String>> = Vec::new();
+        // Le scansioni si leggono con l'OCR: dalle righe e dalle colonne si ricostruiscono le tabelle,
+        // il resto va nel foglio del testo.
+        let mut ocr: Vec<Option<Vec<crate::ocr::Line>>> = Vec::new();
         if scanned > 0 && opts.ocr {
-            ocr = crate::ocr::pdf_pages_where(&bytes, |i| scan_at.get(i).copied().unwrap_or(false)).unwrap_or_default();
+            ocr = crate::ocr::pdf_pages_lines_where(&bytes, |i| scan_at.get(i).copied().unwrap_or(false)).unwrap_or_default();
         }
         let (tables, texts) = crate::pdflayout::sheet_contents(&every, |i| ocr.get(i).cloned().flatten().unwrap_or_default());
         let sheet = crate::pdfxlsx::SheetOptions { one_per_table: opts.sheet_per_table, values: opts.cell_values, outside_text: opts.outside_text };
         let xlsx = crate::pdfxlsx::xlsx(&tables, &texts, &sheet).map_err(err)?;
         write_bytes(&out, &xlsx)?;
         let message = match tables.len() {
-            0 if scanned > 0 && !opts.ocr => "Nessuna tabella: le pagine sono scansioni. Accendi «Leggi le scansioni» per averne il testo".to_string(),
+            0 if scanned > 0 && !opts.ocr => "Nessuna tabella: le pagine sono scansioni. Accendi «Leggi le scansioni» per ritrovarne le tabelle".to_string(),
             0 => "Nessuna tabella nel PDF: il foglio ha il testo riga per riga".to_string(),
             1 => "Excel con 1 tabella".to_string(),
             n if opts.sheet_per_table => format!("Excel con {n} tabelle, una per foglio"),
@@ -2005,6 +2006,21 @@ BT /F2 16 Tf 50 750 Td (Spese correnti) Tj ET BT /F1 10 Tf 50 630 Td (Contributi
     }
 
     #[test]
+    fn scanned_pdf_gives_its_table_in_excel() {
+        let dir = scratch();
+        let path = dir.join("scansione.pdf");
+        fs::write(&path, pdf_from_jpeg(include_bytes!("../tests/fixtures/scan_tabella.jpg"), 1654, 2339, &[])).unwrap();
+        let opts = Options { ocr: true, exists: Exists::Replace, ..Default::default() };
+        let out = perform_with(&path, "xlsx", 80, None, &opts).expect("Excel");
+        assert!(out.message.contains("1 tabella"), "{}", out.message);
+        let strings = crate::doctext::zip_entry_for_test(&out.path, "xl/sharedStrings.xml");
+        assert!(strings.contains("Manutenzione") && strings.contains("Importo"), "{strings}");
+        let sheet = crate::doctext::zip_entry_for_test(&out.path, "xl/worksheets/sheet1.xml");
+        // Numero e data veri dove l'OCR ha letto bene.
+        assert!(sheet.contains("<v>120.5</v>") && sheet.contains("<v>46083</v>") && sheet.contains("<v>310.25</v>"), "{sheet}");
+    }
+
+    #[test]
     fn photo_to_searchable_pdf() {
         let dir = scratch();
         let src = dir.join("foglio.jpg");
@@ -2019,7 +2035,7 @@ BT /F2 16 Tf 50 750 Td (Spese correnti) Tj ET BT /F1 10 Tf 50 630 Td (Contributi
     #[test]
     fn lines_become_paragraphs() {
         use crate::ocr::{paragraphs_from_lines, paragraphs_from_text, Line};
-        let line = |text: &str, y: f32, w: f32| Line { text: text.into(), x: 10.0, y, w, h: 20.0 };
+        let line = |text: &str, y: f32, w: f32| Line { text: text.into(), words: Vec::new(), x: 10.0, y, w, h: 20.0 };
         let lines = [
             line("Gentile signore,", 0.0, 150.0),
             line("la riunione è spo-", 30.0, 500.0),

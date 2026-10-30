@@ -12,8 +12,7 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Correzioni di Rivedi trascrizione e PDF → Excel.**
+**PDF → Excel legge anche le tabelle dei PDF scansionati.**
 
-- **Rivedi**: Play e il clic sul tempo di una frase fanno sentire davvero l'audio (prima restavano muti e fermi a 00:00); anche il clic sull'onda porta l'ascolto in quel punto.
-- **Rivedi** si riapre anche dopo aver chiuso Cedro: rimesso il file in coda, il pulsante «Rivedi» riporta la revisione salvata, con le correzioni fatte.
-- **PDF → Excel**: i numeri restano scritti come nel PDF, senza aggiungere il punto delle migliaia («44012» non diventa più «44.012», «2026» non diventa «2.026»), e le colonne di codici (CAP, protocollo, matricola, telefono, partita IVA…) restano testo.
+- Con «Leggi le scansioni (OCR)» acceso, le pagine che sono foto o scansioni non danno più solo testo: Cedro ritrova righe e colonne e le mette in una tabella vera di Excel, con numeri e date riconosciuti.
+- I decimali che l'OCR legge con il punto («80.00») tornano con la virgola («80,00»); il testo fuori dalle tabelle va nel foglio del testo, riga per riga.

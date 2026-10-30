@@ -2812,6 +2812,7 @@ fn para_bold(p: &Para) -> bool {
 }
 
 /// Una riga di testo a pezzi staccati (colonne senza bordi): dove comincia ogni pezzo e cosa dice.
+#[derive(Clone)]
 struct Tabbed {
     starts: Vec<f64>,
     cells: Vec<String>,
@@ -2886,9 +2887,68 @@ fn ruled_table(t: &Table, page: usize) -> SheetTable {
     SheetTable { pages: (first, t.until.unwrap_or(first)), rows, header }
 }
 
+/// Le righe di una scansione lette dall'OCR, come righe a pezzi staccati: le righe a pari altezza
+/// si uniscono, e dove tra due parole c'è un vuoto più largo di una riga comincia una nuova colonna.
+fn scan_rows(lines: &[crate::ocr::Line]) -> Vec<Tabbed> {
+    let mut groups: Vec<(f32, f32, Vec<crate::ocr::Word>)> = Vec::new();
+    let mut sorted: Vec<&crate::ocr::Line> = lines.iter().filter(|l| !l.text.trim().is_empty()).collect();
+    sorted.sort_by(|a, b| (a.y + a.h / 2.0).partial_cmp(&(b.y + b.h / 2.0)).unwrap_or(std::cmp::Ordering::Equal));
+    for l in sorted {
+        let (top, bottom) = (l.y, l.y + l.h);
+        // Stessa riga della pagina: il vuoto tra due colonne a volte la spezza in due righe dell'OCR.
+        let same = groups.last().is_some_and(|(t, b, _)| {
+            let overlap = bottom.min(*b) - top.max(*t);
+            overlap > 0.5 * (bottom - top).min(b - t)
+        });
+        if !same {
+            groups.push((top, bottom, Vec::new()));
+        }
+        let g = groups.last_mut().expect("riga");
+        g.0 = g.0.min(top);
+        g.1 = g.1.max(bottom);
+        if l.words.is_empty() {
+            g.2.push(crate::ocr::Word { text: l.text.trim().to_string(), x: l.x, w: l.w });
+        } else {
+            g.2.extend(l.words.iter().cloned());
+        }
+    }
+    let mut rows = Vec::new();
+    for (top, bottom, mut ws) in groups {
+        if ws.is_empty() {
+            continue;
+        }
+        ws.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
+        let gap = 1.4 * (bottom - top);
+        let mut starts: Vec<f64> = Vec::new();
+        let mut cells: Vec<String> = Vec::new();
+        let mut end = f32::MIN;
+        for w in ws {
+            if cells.is_empty() || w.x - end > gap {
+                starts.push(w.x as f64);
+                cells.push(w.text.clone());
+            } else if let Some(last) = cells.last_mut() {
+                last.push(' ');
+                last.push_str(&w.text);
+            }
+            end = end.max(w.x + w.w);
+        }
+        // L'OCR spesso legge la virgola dei decimali come un punto: «80.00» è «80,00».
+        for c in &mut cells {
+            if let Some((int, dec)) = c.split_once('.') {
+                if !int.is_empty() && dec.len() == 2 && int.bytes().chain(dec.bytes()).all(|b| b.is_ascii_digit()) {
+                    *c = format!("{int},{dec}");
+                }
+            }
+        }
+        rows.push(Tabbed { starts, cells, bold: false });
+    }
+    rows
+}
+
 /// Le tabelle del PDF per il foglio di calcolo, nell'ordine del documento, e il testo che resta
-/// fuori. `scan_text` dà il testo letto con l'OCR delle pagine scansionate (vuoto se non c'è).
-pub fn sheet_contents(pages: &[Page], scan_text: impl Fn(usize) -> String) -> (Vec<SheetTable>, Vec<SheetText>) {
+/// fuori. `scan_lines` dà le righe lette con l'OCR delle pagine scansionate (vuote se non ci sono):
+/// anche da quelle si ritrovano le tabelle.
+pub fn sheet_contents(pages: &[Page], scan_lines: impl Fn(usize) -> Vec<crate::ocr::Line>) -> (Vec<SheetTable>, Vec<SheetText>) {
     let mut tables = Vec::new();
     let mut texts = Vec::new();
     for (i, page) in pages.iter().enumerate() {
@@ -2954,7 +3014,23 @@ pub fn sheet_contents(pages: &[Page], scan_text: impl Fn(usize) -> String) -> (V
                 }
                 flush(&mut run, &mut run_lines, &mut lines, &mut tables);
             }
-            Page::Scan(_) => lines.extend(scan_text(i).lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from)),
+            Page::Scan(_) => {
+                let rows = scan_rows(&scan_lines(i));
+                for (k, r) in rows.iter().enumerate() {
+                    // Una riga con colonne vere ha pezzi brevi; due colonne di prosa non fanno una tabella.
+                    let short = r.cells.iter().all(|c| c.split_whitespace().count() <= 10);
+                    let next_cols = rows.get(k + 1).is_some_and(|n| n.cells.len() > 1);
+                    // Una riga con un solo pezzo dentro una tabella (un totale, una cella vuota accanto) non la interrompe.
+                    if short && (r.cells.len() > 1 || (!run.is_empty() && next_cols)) {
+                        run_lines.push(r.cells.join(" "));
+                        run.push(r.clone());
+                    } else {
+                        flush(&mut run, &mut run_lines, &mut lines, &mut tables);
+                        lines.push(r.cells.join(" "));
+                    }
+                }
+                flush(&mut run, &mut run_lines, &mut lines, &mut tables);
+            }
             Page::Merged => {}
         }
         if !lines.is_empty() {
@@ -3049,5 +3125,40 @@ mod tests {
         let document = crate::doctext::zip_entry_for_test(&path, "word/document.xml");
         assert!(document.contains("descr=\"Fine del primo.&#10;Inizio &lt;del&gt; secondo\""), "{document}");
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_scanned_table_is_rebuilt_from_the_words_of_the_ocr() {
+        use crate::ocr::{Line, Word};
+        // Una riga della pagina: ogni gruppo di parole è (testo, x); parole a 12 px, vuoti larghi tra le colonne.
+        let row = |y: f32, cells: &[(&str, f32)]| {
+            let words: Vec<Word> = cells
+                .iter()
+                .flat_map(|(t, x)| t.split(' ').enumerate().map(move |(k, w)| Word { text: w.to_string(), x: x + k as f32 * 50.0, w: 40.0 }))
+                .collect();
+            let text = words.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" ");
+            let x = words[0].x;
+            let w = words.last().map(|l| l.x + l.w).unwrap_or(0.0) - x;
+            Line { text, words, x, y, w, h: 20.0 }
+        };
+        let lines = vec![
+            row(100.0, &[("Voce", 50.0), ("Importo", 400.0), ("Data", 700.0)]),
+            row(140.0, &[("Carta e toner", 50.0), ("120,50", 400.0), ("02/03/2026", 700.0)]),
+            row(180.0, &[("Pulizie", 50.0), ("80,00", 400.0)]),
+            row(220.0, &[("Totale", 50.0), ("200,50", 400.0)]),
+            row(300.0, &[("Scansione dell'archivio comunale", 50.0)]),
+        ];
+        let pages = vec![Page::Scan(ScanPage { width: 595.0, height: 842.0, jpeg: Vec::new() })];
+        let (tables, texts) = sheet_contents(&pages, |_| lines.clone());
+        assert_eq!(tables.len(), 1);
+        let t = &tables[0];
+        assert_eq!(t.rows.len(), 4);
+        let cell = |r: usize, c: usize| t.rows[r][c].text.as_str();
+        assert_eq!((cell(0, 0), cell(0, 1), cell(0, 2)), ("Voce", "Importo", "Data"));
+        assert_eq!((cell(1, 0), cell(1, 1), cell(1, 2)), ("Carta e toner", "120,50", "02/03/2026"));
+        // Il pezzo mancante resta vuoto nella sua colonna.
+        assert_eq!((cell(2, 1), cell(2, 2)), ("80,00", ""));
+        assert_eq!(cell(3, 0), "Totale");
+        assert_eq!(texts[0].lines, vec!["Scansione dell'archivio comunale".to_string()]);
     }
 }
