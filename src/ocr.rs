@@ -67,11 +67,24 @@ pub fn pdf_pages_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec
     Ok(texts)
 }
 
-/// Come `pdf_pages_where`, ma ridà le righe con le parole e le posizioni: per ritrovare le tabelle.
-pub fn pdf_pages_lines_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec<Option<Vec<Line>>>, String> {
+/// Una pagina scansionata letta per le tabelle: le righe con le parole e le linee di griglia.
+#[derive(Clone, Debug, Default)]
+pub struct ScanRead {
+    pub lines: Vec<Line>,
+    pub rules: crate::ocrscan::Rules,
+}
+
+/// Come `pdf_pages_where`, ma la pagina si raddrizza prima e ridà righe, parole, posizioni e linee di griglia:
+/// per ritrovare le tabelle.
+pub fn pdf_pages_scan_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec<Option<ScanRead>>, String> {
     let mut pages = vec![None; pdf_page_count(pdf)?];
     render_pdf_images(pdf, &wanted, OCR_SCALE, crate::settings::read_settings().ocr_pages(), |i, image| {
-        pages[i] = Some(image_lines(&image).unwrap_or_default());
+        let straight = crate::ocrscan::deskew(&image);
+        let rules = crate::ocrscan::rules(&straight);
+        let clear = crate::ocrscan::enhance(&straight);
+        // Una pagina con la griglia è un blocco di tabella: Tesseract la legge meglio così che cercando colonne di testo.
+        let lines = if rules.horizontal.len() >= 3 { image_lines_block(&crate::ocrscan::erase_rules(&clear, &rules)) } else { image_lines(&clear) };
+        pages[i] = Some(ScanRead { lines: lines.unwrap_or_default(), rules });
         Ok(())
     })?;
     Ok(pages)
@@ -157,10 +170,19 @@ pub fn image_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
         return Ok(lines);
     }
     #[cfg(not(windows))]
-    if let Some(lines) = tesseract_lines(image) {
+    if let Some(lines) = tesseract_lines(image, "3") {
         return Ok(lines);
     }
     ocrs_lines(image)
+}
+
+/// Come `image_lines`, ma chiede a Tesseract di leggere la pagina come un blocco unico di righe (tabelle).
+fn image_lines_block(image: &DynamicImage) -> Result<Vec<Line>, String> {
+    #[cfg(not(windows))]
+    if let Some(lines) = tesseract_lines(image, "6") {
+        return Ok(lines);
+    }
+    image_lines(image)
 }
 
 /// Unisce le righe in paragrafi: un paragrafo finisce dopo una riga corta
@@ -296,12 +318,14 @@ fn tesseract_lang(setting: &str, installed: &[String]) -> Option<&'static str> {
         // «Automatica» sceglie da sola tra italiano e inglese.
         "auto" if has("ita") && has("eng") => Some("ita+eng"),
         _ if has("ita") => Some("ita"),
+        // Senza l'italiano, l'inglese legge molto meglio del modello latino incluso.
+        _ if has("eng") => Some("eng"),
         _ => None,
     }
 }
 
 #[cfg(not(windows))]
-fn tesseract_lines(image: &DynamicImage) -> Option<Vec<Line>> {
+fn tesseract_lines(image: &DynamicImage, psm: &str) -> Option<Vec<Line>> {
     use std::process::Command;
     let lang = tesseract_lang(&crate::settings::read_settings().ocr_lang, tesseract_langs())?;
     let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
@@ -315,7 +339,7 @@ fn tesseract_lines(image: &DynamicImage) -> Option<Vec<Line>> {
     let out = Command::new("tesseract")
         .arg(&tmp)
         .arg("-")
-        .args(["-l", lang, "--psm", "3", "tsv"])
+        .args(["-l", lang, "--psm", psm, "tsv"])
         .output();
     let _ = std::fs::remove_file(&tmp);
     let out = out.ok().filter(|o| o.status.success())?;
@@ -336,8 +360,11 @@ fn parse_tsv(tsv: &str) -> Vec<Line> {
         match cols[0] {
             "4" => lines.push((key, Line { text: String::new(), words: Vec::new(), x: num(6), y: num(7), w: num(8), h: num(9) })),
             "5" => {
-                let word = cols[11].trim();
-                if word.is_empty() {
+                // Le linee di una tabella si attaccano spesso alle parole: «|-12%», «Descrizione =|».
+                let word = cols[11].trim().trim_matches(|c: char| matches!(c, '|' | '¦' | '_' | '='));
+                let word = if word.chars().any(|c| c.is_alphanumeric()) { word.trim_start_matches('—') } else { word };
+                // Le linee verticali di una tabella escono come «|»: non sono testo.
+                if word.is_empty() || word.chars().all(|c| matches!(c, '|' | '¦')) {
                     continue;
                 }
                 if let Some((_, line)) = lines.iter_mut().rev().find(|(k, _)| *k == key) {
@@ -533,7 +560,10 @@ mod tests {
         // Senza il modello voluto si usa quello latino incluso.
         assert_eq!(tesseract_lang("en", &langs(&["ita"])), None);
         assert_eq!(tesseract_lang("auto", &langs(&["ita"])), Some("ita"));
-        assert_eq!(tesseract_lang("auto", &langs(&["eng"])), None);
+        // Senza italiano si ripiega sull'inglese, e solo senza nessuno dei due sul modello incluso.
+        assert_eq!(tesseract_lang("auto", &langs(&["eng"])), Some("eng"));
+        assert_eq!(tesseract_lang("it", &langs(&["eng", "osd"])), Some("eng"));
+        assert_eq!(tesseract_lang("it", &langs(&["osd"])), None);
         assert_eq!(tesseract_lang("it", &[]), None);
     }
 

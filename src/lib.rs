@@ -14,6 +14,7 @@ mod imgfmt;
 mod nametemplate;
 mod mp4fast;
 mod ocr;
+mod ocrscan;
 mod pdf;
 mod pdfdoc;
 mod pdfedit;

@@ -1475,7 +1475,11 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         } else if scanned == pages.len() {
             "Word con le pagine scansionate come immagini".to_string()
         } else {
-            format!("Word modificabile; {scanned} pagine scansionate messe come immagini")
+            if scanned == 1 {
+                "Word modificabile; 1 pagina scansionata messa come immagine".to_string()
+            } else {
+                format!("Word modificabile; {scanned} pagine scansionate messe come immagini")
+            }
         };
         return Ok(Output { path: out, message });
     }
@@ -1493,21 +1497,29 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         let scanned = scan_at.iter().filter(|s| **s).count();
         // Le scansioni si leggono con l'OCR: dalle righe e dalle colonne si ricostruiscono le tabelle,
         // il resto va nel foglio del testo.
-        let mut ocr: Vec<Option<Vec<crate::ocr::Line>>> = Vec::new();
+        let mut ocr: Vec<Option<crate::ocr::ScanRead>> = Vec::new();
         if scanned > 0 && opts.ocr {
-            ocr = crate::ocr::pdf_pages_lines_where(&bytes, |i| scan_at.get(i).copied().unwrap_or(false)).unwrap_or_default();
+            ocr = crate::ocr::pdf_pages_scan_where(&bytes, |i| scan_at.get(i).copied().unwrap_or(false)).unwrap_or_default();
         }
         let (tables, texts) = crate::pdflayout::sheet_contents(&every, |i| ocr.get(i).cloned().flatten().unwrap_or_default());
         let sheet = crate::pdfxlsx::SheetOptions { one_per_table: opts.sheet_per_table, values: opts.cell_values, outside_text: opts.outside_text };
         let xlsx = crate::pdfxlsx::xlsx(&tables, &texts, &sheet).map_err(err)?;
         write_bytes(&out, &xlsx)?;
-        let message = match tables.len() {
+        let mut message = match tables.len() {
             0 if scanned > 0 && !opts.ocr => "Nessuna tabella: le pagine sono scansioni. Accendi «Leggi le scansioni» per ritrovarne le tabelle".to_string(),
             0 => "Nessuna tabella nel PDF: il foglio ha il testo riga per riga".to_string(),
             1 => "Excel con 1 tabella".to_string(),
             n if opts.sheet_per_table => format!("Excel con {n} tabelle, una per foglio"),
             n => format!("Excel con {n} tabelle in un foglio"),
         };
+        // Le scansioni non lette non danno né tabelle né testo: lo si dice, non restano zitte.
+        if scanned > 0 && !opts.ocr && !tables.is_empty() {
+            message.push_str(if scanned == 1 {
+                ". Una pagina scansionata non è stata letta: accendi «Leggi le scansioni»."
+            } else {
+                ". Le pagine scansionate non sono state lette: accendi «Leggi le scansioni»."
+            });
+        }
         return Ok(Output { path: out, message });
     }
     if kind == Kind::Pdf && action == "txt" {
@@ -1517,12 +1529,18 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         write_bytes(&out, &bytes)?;
         let mut message = match (action, ocr_pages) {
             ("docx", 0) => "Word di testo. L'impaginazione del PDF non viene ricostruita.".to_string(),
+            ("docx", 1) => "Word di testo, con 1 pagina letta via OCR: controllalo. L'impaginazione non viene ricostruita.".to_string(),
             ("docx", n) => format!("Word di testo, con {n} pagine lette via OCR: controllalo. L'impaginazione non viene ricostruita."),
             (_, 0) => "Testo estratto dal PDF".to_string(),
+            (_, 1) => "Testo estratto dal PDF, con 1 pagina letta via OCR: controllalo.".to_string(),
             (_, n) => format!("Testo estratto dal PDF, con {n} pagine lette via OCR: controllalo."),
         };
         if skipped > 0 {
-            message.push_str(&format!(" Mancano {skipped} pagine scansionate: l'OCR ne legge al massimo {}.", settings.ocr_pages()));
+            if skipped == 1 {
+                message.push_str(&format!(" Manca 1 pagina scansionata: l'OCR ne legge al massimo {}.", settings.ocr_pages()));
+            } else {
+                message.push_str(&format!(" Mancano {skipped} pagine scansionate: l'OCR ne legge al massimo {}.", settings.ocr_pages()));
+            }
         }
         return Ok(Output { path: out, message });
     }
@@ -2018,6 +2036,23 @@ BT /F2 16 Tf 50 750 Td (Spese correnti) Tj ET BT /F1 10 Tf 50 630 Td (Contributi
         let sheet = crate::doctext::zip_entry_for_test(&out.path, "xl/worksheets/sheet1.xml");
         // Numero e data veri dove l'OCR ha letto bene.
         assert!(sheet.contains("<v>120.5</v>") && sheet.contains("<v>46083</v>") && sheet.contains("<v>310.25</v>"), "{sheet}");
+    }
+
+    /// Prova a mano con PDF scansionati veri: CEDRO_SCAN_PDFS=a.pdf:b.pdf cargo test --lib scan_pdfs_by_hand -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn scan_pdfs_by_hand() {
+        let Ok(list) = std::env::var("CEDRO_SCAN_PDFS") else { return };
+        let dir = scratch();
+        for f in list.split(':') {
+            let path = dir.join(Path::new(f).file_name().unwrap());
+            fs::copy(f, &path).unwrap();
+            let opts = Options { ocr: true, sheet_per_table: true, outside_text: true, exists: Exists::Replace, ..Default::default() };
+            match perform_with(&path, "xlsx", 80, None, &opts) {
+                Ok(out) => println!("XLSX {} -> {} ({})", f, out.path.display(), out.message),
+                Err(e) => println!("XLSX {f} ERRORE {e:?}"),
+            }
+        }
     }
 
     #[test]

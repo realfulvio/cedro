@@ -1406,3 +1406,9 @@ Correggi	Edit
 La revisione di questo file non c'è più: trascrivilo di nuovo.	The review of this file is gone: transcribe it again.
 {} non scritto: {}	{} not written: {}
 Ripristina	Undo
+Word di testo, con 1 pagina letta via OCR: controllalo. L'impaginazione non viene ricostruita.	Text Word document, with 1 page read via OCR: please check it. The layout is not rebuilt.
+Testo estratto dal PDF, con 1 pagina letta via OCR: controllalo.	Text extracted from the PDF, with 1 page read via OCR: please check it.
+Manca 1 pagina scansionata: l'OCR ne legge al massimo {#}.	1 scanned page is missing: OCR reads {} at most.
+Word modificabile; 1 pagina scansionata messa come immagine	Editable Word; 1 scanned page placed as an image
+Una pagina scansionata non è stata letta: accendi «Leggi le scansioni».	One scanned page was not read: turn on «Read scans».
+Le pagine scansionate non sono state lette: accendi «Leggi le scansioni».	The scanned pages were not read: turn on «Read scans».
