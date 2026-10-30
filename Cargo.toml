@@ -51,7 +51,7 @@ opusic-sys = "0.7"
 fdk-aac = "0.8"
 libc = "0.2"
 gtk4 = { version = "0.10", features = ["v4_12"] }
-ksni = "0.2"
+ksni = "0.3"
 mp4 = "0.14"
 openh264 = { version = "0.9", default-features = false, features = ["source"] }
 
