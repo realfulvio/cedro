@@ -67,6 +67,29 @@ pub fn pdf_pages_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec
     Ok(texts)
 }
 
+/// Una pagina scansionata letta per le tabelle: le righe con le parole e le linee di griglia.
+#[derive(Clone, Debug, Default)]
+pub struct ScanRead {
+    pub lines: Vec<Line>,
+    pub rules: crate::ocrscan::Rules,
+}
+
+/// Come `pdf_pages_where`, ma la pagina si raddrizza prima e ridà righe, parole, posizioni e linee di griglia:
+/// per ritrovare le tabelle.
+pub fn pdf_pages_scan_where(pdf: &[u8], wanted: impl Fn(usize) -> bool) -> Result<Vec<Option<ScanRead>>, String> {
+    let mut pages = vec![None; pdf_page_count(pdf)?];
+    render_pdf_images(pdf, &wanted, OCR_SCALE, crate::settings::read_settings().ocr_pages(), |i, image| {
+        let straight = crate::ocrscan::deskew(&image);
+        let rules = crate::ocrscan::rules(&straight);
+        let clear = crate::ocrscan::enhance(&straight);
+        // Una pagina con la griglia è un blocco di tabella: Tesseract la legge meglio così che cercando colonne di testo.
+        let lines = if rules.horizontal.len() >= 3 { image_lines_block(&crate::ocrscan::erase_rules(&clear, &rules)) } else { image_lines(&clear) };
+        pages[i] = Some(ScanRead { lines: lines.unwrap_or_default(), rules });
+        Ok(())
+    })?;
+    Ok(pages)
+}
+
 /// Una pagina (da 0) disegnata con il lato lungo di circa `side` pixel, in RGBA: per l'anteprima.
 pub fn render_page_rgba(bytes: &[u8], page: usize, side: f32) -> Result<(u32, u32, Vec<u8>), String> {
     use hayro::hayro_interpret::InterpreterSettings;
@@ -109,10 +132,20 @@ pub fn pdf_page_count(bytes: &[u8]) -> Result<usize, String> {
     Ok(pdf.pages().len())
 }
 
+/// Una parola letta dall'OCR: posizione orizzontale e larghezza in pixel.
+#[derive(Clone, Debug)]
+pub struct Word {
+    pub text: String,
+    pub x: f32,
+    pub w: f32,
+}
+
 /// Una riga letta dall'OCR, con il riquadro in pixel dell'immagine (origine in alto a sinistra).
 #[derive(Clone, Debug)]
 pub struct Line {
     pub text: String,
+    /// Le parole della riga, con dove cominciano e quanto sono larghe: servono a ritrovare le colonne di una tabella.
+    pub words: Vec<Word>,
     pub x: f32,
     pub y: f32,
     pub w: f32,
@@ -137,10 +170,19 @@ pub fn image_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
         return Ok(lines);
     }
     #[cfg(not(windows))]
-    if let Some(lines) = tesseract_lines(image) {
+    if let Some(lines) = tesseract_lines(image, "3") {
         return Ok(lines);
     }
     ocrs_lines(image)
+}
+
+/// Come `image_lines`, ma chiede a Tesseract di leggere la pagina come un blocco unico di righe (tabelle).
+fn image_lines_block(image: &DynamicImage) -> Result<Vec<Line>, String> {
+    #[cfg(not(windows))]
+    if let Some(lines) = tesseract_lines(image, "6") {
+        return Ok(lines);
+    }
+    image_lines(image)
 }
 
 /// Unisce le righe in paragrafi: un paragrafo finisce dopo una riga corta
@@ -234,8 +276,16 @@ fn ocrs_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
         .flatten()
         .map(|line| {
             let r = line.bounding_rect();
+            let words = line
+                .words()
+                .map(|w| {
+                    let r = w.bounding_rect();
+                    Word { text: w.to_string(), x: r.left() as f32 / factor, w: r.width() as f32 / factor }
+                })
+                .collect();
             Line {
                 text: line.to_string(),
+                words,
                 x: r.left() as f32 / factor,
                 y: r.top() as f32 / factor,
                 w: r.width() as f32 / factor,
@@ -268,12 +318,14 @@ fn tesseract_lang(setting: &str, installed: &[String]) -> Option<&'static str> {
         // «Automatica» sceglie da sola tra italiano e inglese.
         "auto" if has("ita") && has("eng") => Some("ita+eng"),
         _ if has("ita") => Some("ita"),
+        // Senza l'italiano, l'inglese legge molto meglio del modello latino incluso.
+        _ if has("eng") => Some("eng"),
         _ => None,
     }
 }
 
 #[cfg(not(windows))]
-fn tesseract_lines(image: &DynamicImage) -> Option<Vec<Line>> {
+fn tesseract_lines(image: &DynamicImage, psm: &str) -> Option<Vec<Line>> {
     use std::process::Command;
     let lang = tesseract_lang(&crate::settings::read_settings().ocr_lang, tesseract_langs())?;
     let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
@@ -287,7 +339,7 @@ fn tesseract_lines(image: &DynamicImage) -> Option<Vec<Line>> {
     let out = Command::new("tesseract")
         .arg(&tmp)
         .arg("-")
-        .args(["-l", lang, "--psm", "3", "tsv"])
+        .args(["-l", lang, "--psm", psm, "tsv"])
         .output();
     let _ = std::fs::remove_file(&tmp);
     let out = out.ok().filter(|o| o.status.success())?;
@@ -306,10 +358,13 @@ fn parse_tsv(tsv: &str) -> Vec<Line> {
         let key = format!("{}-{}-{}-{}", cols[1], cols[2], cols[3], cols[4]);
         let num = |i: usize| cols[i].trim().parse::<f32>().unwrap_or(0.0);
         match cols[0] {
-            "4" => lines.push((key, Line { text: String::new(), x: num(6), y: num(7), w: num(8), h: num(9) })),
+            "4" => lines.push((key, Line { text: String::new(), words: Vec::new(), x: num(6), y: num(7), w: num(8), h: num(9) })),
             "5" => {
-                let word = cols[11].trim();
-                if word.is_empty() {
+                // Le linee di una tabella si attaccano spesso alle parole: «|-12%», «Descrizione =|».
+                let word = cols[11].trim().trim_matches(|c: char| matches!(c, '|' | '¦' | '_' | '='));
+                let word = if word.chars().any(|c| c.is_alphanumeric()) { word.trim_start_matches('—') } else { word };
+                // Le linee verticali di una tabella escono come «|»: non sono testo.
+                if word.is_empty() || word.chars().all(|c| matches!(c, '|' | '¦')) {
                     continue;
                 }
                 if let Some((_, line)) = lines.iter_mut().rev().find(|(k, _)| *k == key) {
@@ -317,6 +372,7 @@ fn parse_tsv(tsv: &str) -> Vec<Line> {
                         line.text.push(' ');
                     }
                     line.text.push_str(word);
+                    line.words.push(Word { text: word.to_string(), x: num(6), w: num(8) });
                 }
             }
             _ => {}
@@ -394,15 +450,17 @@ fn windows_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
     for line in result.Lines().map_err(e)? {
         let text = line.Text().map_err(e)?.to_string();
         let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, 0.0f32, 0.0f32);
+        let mut words = Vec::new();
         for word in line.Words().map_err(e)? {
             let r = word.BoundingRect().map_err(e)?;
+            words.push(Word { text: word.Text().map_err(e)?.to_string(), x: r.X / factor, w: r.Width / factor });
             x0 = x0.min(r.X);
             y0 = y0.min(r.Y);
             x1 = x1.max(r.X + r.Width);
             y1 = y1.max(r.Y + r.Height);
         }
         if x1 > x0 {
-            lines.push(Line { text, x: x0 / factor, y: y0 / factor, w: (x1 - x0) / factor, h: (y1 - y0) / factor });
+            lines.push(Line { text, words, x: x0 / factor, y: y0 / factor, w: (x1 - x0) / factor, h: (y1 - y0) / factor });
         }
     }
     Ok(lines)
@@ -502,7 +560,10 @@ mod tests {
         // Senza il modello voluto si usa quello latino incluso.
         assert_eq!(tesseract_lang("en", &langs(&["ita"])), None);
         assert_eq!(tesseract_lang("auto", &langs(&["ita"])), Some("ita"));
-        assert_eq!(tesseract_lang("auto", &langs(&["eng"])), None);
+        // Senza italiano si ripiega sull'inglese, e solo senza nessuno dei due sul modello incluso.
+        assert_eq!(tesseract_lang("auto", &langs(&["eng"])), Some("eng"));
+        assert_eq!(tesseract_lang("it", &langs(&["eng", "osd"])), Some("eng"));
+        assert_eq!(tesseract_lang("it", &langs(&["osd"])), None);
         assert_eq!(tesseract_lang("it", &[]), None);
     }
 
