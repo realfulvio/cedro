@@ -48,8 +48,10 @@ fn top_bar(f: &mut Frame, app: &App, simple: bool) {
         f.hit((cx - 8.0, 4.0, 44.0, 40.0), act);
     }
     if simple && app.activity == Activity::Convert {
-        let sx = gx - 46.0 - 16.0 - 300.0;
-        super::essenziale::mode_switch(f, (sx.max(x + 6.0), 8.0, 300.0, 46.0));
+        // Si stringe, fino a un minimo, se le schede (coi caratteri più grandi) arrivano vicino agli strumenti.
+        let end = gx - 46.0 - 16.0;
+        let sw = (end - (x + 6.0)).clamp(240.0, 300.0);
+        super::essenziale::mode_switch(f, (end - sw, 8.0, sw, 46.0));
     }
 }
 
@@ -348,7 +350,12 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
     let sel = app.selected.filter(|i| vis.contains(i));
     let id = app.action.as_str();
     if simple {
-        f.text("Converti il documento", x, r.1 + 34.0, w, 54.0, 27.0, Weight::SerifBold, pal.text);
+        // Il titolo si rimpicciolisce un poco, se serve, invece di finire con i puntini.
+        let mut title_size = 27.0;
+        while title_size > 20.0 && f.measure("Converti il documento", title_size, Weight::SerifBold) > w {
+            title_size -= 1.0;
+        }
+        f.text("Converti il documento", x, r.1 + 34.0, w, 54.0, title_size, Weight::SerifBold, pal.text);
         let card = (x - 6.0, r.1 + 112.0, w + 12.0, 82.0);
         f.p.rrect(card.0, card.1, card.2, card.3, 8.0, Some(pal.alt), None);
         if let Some(i) = sel {
