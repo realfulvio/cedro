@@ -19,6 +19,7 @@ mod pdfdoc;
 mod pdfedit;
 mod pdfpages;
 mod pdflayout;
+mod pdfxlsx;
 pub mod settings;
 pub mod tema;
 pub mod ui;

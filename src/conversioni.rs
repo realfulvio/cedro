@@ -18,7 +18,7 @@ pub struct Category {
 pub const CATEGORIES: &[Category] = &[
     Category { kind: Kind::Image, name: "Immagini", hint: "Cambia formato, ridimensiona e raddrizza le foto.", accepts: "PNG, JPEG, WebP, AVIF, JPEG XL, SVG, BMP, GIF, TIFF, ICO, TGA, QOI, PNM, HDR, OpenEXR, DDS" },
     Category { kind: Kind::Doc, name: "Documenti", hint: "Da Word, ODT e RTF a PDF.", accepts: "DOCX, DOC, ODT, RTF" },
-    Category { kind: Kind::Pdf, name: "PDF", hint: "Da PDF a Word modificabile, a immagini o a testo.", accepts: "PDF" },
+    Category { kind: Kind::Pdf, name: "PDF", hint: "Da PDF a Word modificabile, a Excel, a immagini o a testo.", accepts: "PDF" },
     Category { kind: Kind::Text, name: "Testo", hint: "TXT, Markdown, CSV, JSON e HTML.", accepts: "TXT, MD, CSV, JSON, HTML, XML" },
     Category { kind: Kind::Audio, name: "Audio", hint: "MP3, WAV, FLAC, Opus e AIFF.", accepts: "WAV, MP3, OGG, Opus, M4A, AAC, FLAC, AIFF, CAF" },
     Category { kind: Kind::Video, name: "Video", hint: "MP4, WebM, MOV, MKV e AVI.", accepts: "MP4, WebM, MOV, MKV, AVI" },
@@ -70,6 +70,7 @@ pub fn simple_formats(kind: Kind) -> &'static [SimpleFormat] {
     const DOC: &[SimpleFormat] = &[SimpleFormat { id: "pdf", title: "PDF", note: "si apre ovunque" }];
     const PDF: &[SimpleFormat] = &[
         SimpleFormat { id: "docx", title: "Word", note: "da modificare" },
+        SimpleFormat { id: "xlsx", title: "Excel", note: "le tabelle" },
         SimpleFormat { id: "jpg", title: "Immagini", note: "una per pagina" },
         SimpleFormat { id: "txt", title: "Testo", note: "solo le parole" },
         SimpleFormat { id: "merge", title: "Un solo PDF", note: "li unisce in fila" },
@@ -160,6 +161,10 @@ pub enum Opt {
     Ocr,
     Tables,
     Columns,
+    SheetPerTable,
+    CellValues,
+    MergeTables,
+    OutsideText,
     EmbedFonts,
     Bookmarks,
     PdfA,
@@ -234,6 +239,10 @@ const PAGE_SIZE: &[Choice] = &[
     Choice { label: "A3", value: 1 },
     Choice { label: "Lettera", value: 2 },
 ];
+const SHEETS: &[Choice] = &[
+    Choice { label: "Un foglio per tabella", value: 1 },
+    Choice { label: "Tutto in uno", value: 0 },
+];
 const DPI: &[Choice] = &[
     Choice { label: "72 dpi", value: 72 },
     Choice { label: "144 dpi", value: 144 },
@@ -300,6 +309,10 @@ const ONE_PER_PAGE: OptionDef = sw(Opt::OnePerPage, "Una immagine per pagina", "
 const OCR: OptionDef = sw(Opt::Ocr, "Leggi le scansioni (OCR)", "Solo dove manca il testo", true);
 const TABLES: OptionDef = sw(Opt::Tables, "Ricostruisci le tabelle", "Celle, sfondi e bordi", true);
 const COLUMNS: OptionDef = sw(Opt::Columns, "Tieni le colonne", "Il testo a colonne resta a colonne; spento va in colonna singola", true);
+const SHEET_PER_TABLE: OptionDef = OptionDef { opt: Opt::SheetPerTable, title: "Fogli", note: "", control: Control::Segments(SHEETS), default: 1 };
+const CELL_VALUES: OptionDef = sw(Opt::CellValues, "Numeri e date come valori", "1.234,56 e 03/11/2026 si possono sommare e ordinare", true);
+const MERGE_TABLES: OptionDef = sw(Opt::MergeTables, "Riunisci le tabelle spezzate", "Quando continuano sulla pagina dopo", true);
+const OUTSIDE_TEXT: OptionDef = sw(Opt::OutsideText, "Anche il testo fuori dalle tabelle", "In un foglio a parte", false);
 const EMBED_FONTS: OptionDef = sw(Opt::EmbedFonts, "Incorpora i caratteri", "Il PDF si vede uguale ovunque e il testo si copia", true);
 const BOOKMARKS: OptionDef = sw(Opt::Bookmarks, "Conserva i segnalibri", "Dai titoli del documento", true);
 const PDF_A: OptionDef = sw(Opt::PdfA, "PDF/A per l'archivio", "PDF/A-1b: font incorporati, profilo colore, metadati", false);
@@ -424,6 +437,7 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
         (Kind::Doc, "pdf") => vec![&PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
         (Kind::Pdf, "jpg" | "png") => vec![&PDF_DPI, &PDF_PAGES, &ONE_PER_PAGE],
         (Kind::Pdf, "docx") => vec![&OCR, &TABLES, &COLUMNS, &PDF_PAGES],
+        (Kind::Pdf, "xlsx") => vec![&SHEET_PER_TABLE, &CELL_VALUES, &MERGE_TABLES, &OUTSIDE_TEXT, &OCR, &PDF_PAGES],
         (Kind::Pdf, "txt") => vec![&OCR, &PDF_PAGES],
         (Kind::Pdf, "merge") => vec![&MERGE_NAME, &FILE_BOOKMARKS, &KEEP_BOOKMARKS, &KEEP_FORMS, &DUPLEX_BLANK, &OUT_PASSWORD, &OPEN_PASSWORD],
         (Kind::Pdf, "pages") => vec![
@@ -579,6 +593,10 @@ pub fn options_from(values: &Values) -> engine::Options {
     o.dpi = Some(values.num(Opt::Dpi, 144));
     o.pages = PageSel::parse(values.text_of(Opt::PageRange)).ok().flatten();
     o.columns = on(Opt::Columns, true);
+    o.sheet_per_table = on(Opt::SheetPerTable, true);
+    o.cell_values = on(Opt::CellValues, true);
+    o.merge_tables = on(Opt::MergeTables, true);
+    o.outside_text = on(Opt::OutsideText, false);
     o.embed_fonts = on(Opt::EmbedFonts, true);
     o.bookmarks = on(Opt::Bookmarks, true);
     o.pdfa = on(Opt::PdfA, false);
@@ -717,7 +735,7 @@ mod tests {
         let defs = every_def();
         let wanted = [
             Opt::Straighten, Opt::WhiteBackground, Opt::MaxSide, Opt::PageSize, Opt::Password, Opt::Dpi, Opt::PageRange,
-            Opt::OnePerPage, Opt::Ocr, Opt::Tables, Opt::Columns, Opt::EmbedFonts, Opt::Bookmarks, Opt::PdfA, Opt::Encoding, Opt::CsvSeparator, Opt::PrettyJson, Opt::HeaderRow,
+            Opt::OnePerPage, Opt::Ocr, Opt::Tables, Opt::Columns, Opt::SheetPerTable, Opt::CellValues, Opt::MergeTables, Opt::OutsideText, Opt::EmbedFonts, Opt::Bookmarks, Opt::PdfA, Opt::Encoding, Opt::CsvSeparator, Opt::PrettyJson, Opt::HeaderRow,
             Opt::Mp3Kbps, Opt::Channels, Opt::Normalize, Opt::TrimStart, Opt::TrimSilence, Opt::KeepTags, Opt::VideoHeight, Opt::Fps,
             Opt::Mute, Opt::FastStart, Opt::NameTemplate, Opt::MergeName, Opt::FileBookmarks, Opt::KeepBookmarks, Opt::KeepForms, Opt::DuplexBlank,
             Opt::OpenPassword, Opt::SplitHow, Opt::SplitEvery, Opt::SplitRanges, Opt::SplitRemove, Opt::SplitName,

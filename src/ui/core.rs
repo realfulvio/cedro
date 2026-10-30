@@ -637,6 +637,18 @@ impl<'a> Frame<'a> {
         self.p.text("W", x + 6.0 * k, y + 22.0 * k, 40.0 * k, 40.0 * k, 28.0 * k, BOLD, (255, 255, 255), Align::Center);
     }
 
+    /// Il foglio di calcolo: come l'icona di Word, in verde e con la X.
+    pub fn excel_icon(&mut self, x: f32, y: f32, s: f32) {
+        let k = s / 80.0;
+        let r = |p: &mut Painter, rx: f32, ry: f32, w: f32, h: f32, rad: f32, c: Rgb| p.rrect(x + rx * k, y + ry * k, w * k, h * k, rad * k, Some(c), None);
+        r(&mut self.p, 22.0, 8.0, 52.0, 64.0, 6.0, (0x21, 0xA3, 0x66));
+        for (i, c) in [(0x33, 0xC4, 0x81), (0x21, 0xA3, 0x66), (0x18, 0x7A, 0x4A), (0x10, 0x5E, 0x38)].into_iter().enumerate() {
+            self.p.fill(x + 48.0 * k, y + (8.0 + i as f32 * 16.0) * k, 26.0 * k, 15.0 * k, c);
+        }
+        r(&mut self.p, 6.0, 22.0, 40.0, 40.0, 5.0, (0x10, 0x7C, 0x41));
+        self.p.text("X", x + 6.0 * k, y + 22.0 * k, 40.0 * k, 40.0 * k, 28.0 * k, BOLD, (255, 255, 255), Align::Center);
+    }
+
     pub fn image_icon(&mut self, x: f32, y: f32, s: f32) {
         let k = s / 80.0;
         self.p.rrect(x + 4.0 * k, y + 6.0 * k, 72.0 * k, 68.0 * k, 6.0 * k, Some((0xD6, 0xF0, 0xE8)), None);

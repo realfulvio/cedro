@@ -498,6 +498,10 @@ struct Table {
     border: Option<([u8; 3], f64)>,
     header: bool,
     pad: f64,
+    /// Pagina del PDF (da 0) da cui viene, se è finita dentro la pagina prima con una tabella spezzata.
+    from: Option<usize>,
+    /// Ultima pagina del PDF (da 0) se la tabella continua sulle pagine dopo.
+    until: Option<usize>,
 }
 
 fn is_white(c: [u8; 3]) -> bool {
@@ -688,7 +692,7 @@ fn build_table(ys: &[f64], cols: &[f64], hs: &[Seg], verticals: &[&Seg], fills: 
     let header = rows.len() > 1 && rows[0].1.iter().all(|c| c.fill.is_some()) && rows[0].1.first().map(|c| c.fill) != rows[1].1.first().map(|c| c.fill);
     pads.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let pad = pads.get(pads.len() / 2).copied().unwrap_or(4.0).clamp(1.0, 12.0);
-    Table { x0, top, bottom, cols: cols.to_vec(), rows, border, header, pad }
+    Table { x0, top, bottom, cols: cols.to_vec(), rows, border, header, pad, from: None, until: None }
 }
 
 // ---------------------------------------------------------------- paragrafi
@@ -1517,11 +1521,13 @@ pub struct ReadOptions {
     pub tables: bool,
     /// Le colonne restano colonne; spenta, una colonna sola in ordine di lettura.
     pub columns: bool,
+    /// Una tabella che continua sulla pagina dopo diventa una tabella sola.
+    pub merge: bool,
 }
 
 impl Default for ReadOptions {
     fn default() -> Self {
-        ReadOptions { tables: true, columns: true }
+        ReadOptions { tables: true, columns: true, merge: true }
     }
 }
 
@@ -1680,7 +1686,9 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
         };
         pages.push(Page::Flow(layout_page(p, &sizes, read.columns)));
     }
-    merge_split_tables(&mut pages);
+    if read.merge {
+        merge_split_tables(&mut pages);
+    }
     number_lists(&mut pages);
     Ok(pages)
 }
@@ -1867,6 +1875,7 @@ fn merge_split_tables(pages: &mut [Page]) {
             continue;
         }
         let Page::Flow(mut next) = std::mem::replace(&mut pages[j], Page::Merged) else { unreachable!() };
+        let last = j;
         j += 1;
         let Page::Flow(cur) = &mut pages[i] else { unreachable!() };
         let Some(Block::Table(mut u)) = Some(next.segments[0].columns[0].remove(0)) else { unreachable!() };
@@ -1877,8 +1886,14 @@ fn merge_split_tables(pages: &mut [Page]) {
         }
         t.rows.append(&mut u.rows);
         t.bottom = u.bottom;
+        t.until = Some(last);
         if next.segments[0].columns[0].is_empty() {
             next.segments.remove(0);
+        }
+        for b in next.segments.iter_mut().flat_map(|s| s.columns.iter_mut().flatten()) {
+            if let Block::Table(t) = b {
+                t.from.get_or_insert(last);
+            }
         }
         cur.segments.append(&mut next.segments);
     }
@@ -2758,6 +2773,197 @@ xmlns:wps=\"http://schemas.microsoft.com/office/word/2010/wordprocessingShape\">
         entries.push((name.as_str(), *data));
     }
     zip_archive(&entries)
+}
+
+// ---------------------------------------------------------------- fogli di calcolo
+
+/// Una cella per il foglio di calcolo: il testo e quante colonne occupa.
+pub struct SheetCell {
+    pub text: String,
+    pub span: usize,
+}
+
+/// Una tabella del PDF pronta per il foglio di calcolo.
+pub struct SheetTable {
+    /// Pagine del PDF (da 0) dove comincia e dove finisce.
+    pub pages: (usize, usize),
+    pub rows: Vec<Vec<SheetCell>>,
+    /// La prima riga è l'intestazione.
+    pub header: bool,
+    /// Tabella con i bordi; falsa per le colonne di testo allineate senza bordi.
+    pub ruled: bool,
+}
+
+/// Il testo di una pagina fuori dalle tabelle, riga per riga.
+pub struct SheetText {
+    pub page: usize,
+    pub lines: Vec<String>,
+}
+
+fn para_text(p: &Para) -> String {
+    let mut text: String = p.runs.iter().map(|r| r.text.as_str()).collect();
+    if let Some(Marker::Number(n, NumFmt::Decimal, delim, _)) = p.marker {
+        text = format!("{n}{delim} {text}");
+    }
+    text.trim().to_string()
+}
+
+fn para_bold(p: &Para) -> bool {
+    let mut words = p.runs.iter().filter(|r| !r.text.trim().is_empty()).peekable();
+    words.peek().is_some() && words.all(|r| r.bold)
+}
+
+/// Una riga di testo a pezzi staccati (colonne senza bordi): dove comincia ogni pezzo e cosa dice.
+struct Tabbed {
+    starts: Vec<f64>,
+    cells: Vec<String>,
+    bold: bool,
+}
+
+fn tabbed(p: &Para) -> Option<Tabbed> {
+    if p.tabs.is_empty() || p.marker.is_some() {
+        return None;
+    }
+    let text: String = p.runs.iter().map(|r| r.text.as_str()).collect();
+    let cells: Vec<String> = text.split('\t').map(|c| c.trim().to_string()).collect();
+    if cells.len() != p.tabs.len() + 1 {
+        return None;
+    }
+    let mut starts = vec![p.first_x];
+    starts.extend(&p.tabs);
+    Some(Tabbed { starts, cells, bold: para_bold(p) })
+}
+
+/// Righe a pezzi staccati una sotto l'altra: diventano una tabella se sono almeno tre
+/// e almeno due hanno lo stesso numero di colonne, il massimo.
+fn columns_table(rows: &[Tabbed], page: usize) -> Option<SheetTable> {
+    let width = rows.iter().map(|r| r.cells.len()).max()?;
+    let full: Vec<&Tabbed> = rows.iter().filter(|r| r.cells.len() == width).collect();
+    if rows.len() < 3 || full.len() < 2 || width < 2 {
+        return None;
+    }
+    // Dove cominciano le colonne: la mediana degli inizi nelle righe complete.
+    let anchors: Vec<f64> = (0..width).map(|k| median(full.iter().map(|r| r.starts[k]).collect())).collect();
+    let mut out = Vec::new();
+    for r in rows {
+        let mut line: Vec<String> = vec![String::new(); width];
+        if r.cells.len() == width {
+            line = r.cells.clone();
+        } else {
+            // Ogni pezzo nella colonna più vicina, sempre a destra del pezzo prima.
+            let mut next = 0;
+            for (k, (x, text)) in r.starts.iter().zip(&r.cells).enumerate() {
+                let left = r.cells.len() - k - 1;
+                let last = width - 1 - left;
+                let col = (next..=last.max(next))
+                    .min_by(|a, b| (anchors[*a] - x).abs().partial_cmp(&(anchors[*b] - x).abs()).unwrap_or(std::cmp::Ordering::Equal))
+                    .unwrap_or(next);
+                line[col] = text.clone();
+                next = col + 1;
+            }
+        }
+        out.push(line.into_iter().map(|text| SheetCell { text, span: 1 }).collect());
+    }
+    let header = rows[0].bold && rows.get(1).is_some_and(|r| !r.bold);
+    Some(SheetTable { pages: (page, page), rows: out, header, ruled: false })
+}
+
+fn ruled_table(t: &Table, page: usize) -> SheetTable {
+    let rows: Vec<Vec<SheetCell>> = t
+        .rows
+        .iter()
+        .map(|(_, cells)| {
+            cells
+                .iter()
+                .map(|c| SheetCell { text: c.paras.iter().map(para_text).collect::<Vec<_>>().join("\n"), span: c.span })
+                .collect()
+        })
+        .collect();
+    let bold_top = t.rows.first().is_some_and(|(_, cells)| {
+        let mut full = cells.iter().filter(|c| !c.paras.is_empty()).peekable();
+        full.peek().is_some() && full.all(|c| c.paras.iter().all(para_bold))
+    });
+    let header = t.rows.len() > 1 && (t.header || bold_top);
+    let first = t.from.unwrap_or(page);
+    SheetTable { pages: (first, t.until.unwrap_or(first)), rows, header, ruled: true }
+}
+
+/// Le tabelle del PDF per il foglio di calcolo, nell'ordine del documento, e il testo che resta
+/// fuori. `scan_text` dà il testo letto con l'OCR delle pagine scansionate (vuoto se non c'è).
+pub fn sheet_contents(pages: &[Page], scan_text: impl Fn(usize) -> String) -> (Vec<SheetTable>, Vec<SheetText>) {
+    let mut tables = Vec::new();
+    let mut texts = Vec::new();
+    for (i, page) in pages.iter().enumerate() {
+        let mut lines: Vec<String> = Vec::new();
+        let mut run: Vec<Tabbed> = Vec::new();
+        let mut run_lines: Vec<String> = Vec::new();
+        let mut flush = |run: &mut Vec<Tabbed>, run_lines: &mut Vec<String>, lines: &mut Vec<String>, tables: &mut Vec<SheetTable>| {
+            match columns_table(run, i) {
+                Some(t) => tables.push(t),
+                None => lines.append(run_lines),
+            }
+            run.clear();
+            run_lines.clear();
+        };
+        match page {
+            Page::Flow(flow) => {
+                for seg in &flow.segments {
+                    for col in &seg.columns {
+                        for b in col {
+                            match b {
+                                Block::Para(p) => match tabbed(p) {
+                                    Some(t) => {
+                                        run_lines.push(t.cells.join(" "));
+                                        run.push(t);
+                                    }
+                                    None => {
+                                        flush(&mut run, &mut run_lines, &mut lines, &mut tables);
+                                        let text = para_text(p);
+                                        if !text.is_empty() {
+                                            lines.push(text);
+                                        }
+                                    }
+                                },
+                                Block::Table(t) => {
+                                    flush(&mut run, &mut run_lines, &mut lines, &mut tables);
+                                    tables.push(ruled_table(t, i));
+                                }
+                                Block::Image { .. } => flush(&mut run, &mut run_lines, &mut lines, &mut tables),
+                            }
+                        }
+                        flush(&mut run, &mut run_lines, &mut lines, &mut tables);
+                    }
+                }
+            }
+            Page::Form(form) => {
+                for l in join_tabbed(&form.lines) {
+                    let text = l.text();
+                    if l.tabs.is_empty() {
+                        flush(&mut run, &mut run_lines, &mut lines, &mut tables);
+                        if !text.trim().is_empty() {
+                            lines.push(text.trim().to_string());
+                        }
+                        continue;
+                    }
+                    let cells: Vec<String> = text.split('\t').map(|c| c.trim().to_string()).collect();
+                    if cells.len() != l.tabs.len() + 1 {
+                        continue;
+                    }
+                    let mut starts = vec![l.x];
+                    starts.extend(&l.tabs);
+                    run_lines.push(cells.join(" "));
+                    run.push(Tabbed { starts, cells, bold: l.all_bold() });
+                }
+                flush(&mut run, &mut run_lines, &mut lines, &mut tables);
+            }
+            Page::Scan(_) => lines.extend(scan_text(i).lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from)),
+            Page::Merged => {}
+        }
+        if !lines.is_empty() {
+            texts.push(SheetText { page: i, lines });
+        }
+    }
+    (tables, texts)
 }
 
 #[cfg(test)]
