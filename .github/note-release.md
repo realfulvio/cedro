@@ -14,5 +14,8 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 **PDF → Excel legge anche le tabelle dei PDF scansionati.**
 
-- Con «Leggi le scansioni (OCR)» acceso, le pagine che sono foto o scansioni non danno più solo testo: Cedro ritrova righe e colonne e le mette in una tabella vera di Excel, con numeri e date riconosciuti.
-- I decimali che l'OCR legge con il punto («80.00») tornano con la virgola («80,00»); il testo fuori dalle tabelle va nel foglio del testo, riga per riga.
+- Con «Leggi le scansioni (OCR)» acceso, le pagine che sono foto o scansioni danno tabelle vere di Excel: Cedro raddrizza la pagina storta, ritrova le righe e le colonne (con o senza linee), tiene unite le celle scritte su due righe e unisce le tabelle che continuano sulla pagina dopo.
+- Numeri e date vengono riconosciuti; i decimali che l'OCR legge con il punto («80.00») tornano con la virgola («80,00»); la prima riga è l'intestazione quando si capisce.
+- Il testo fuori dalle tabelle va nel foglio del testo, riga per riga. Se le scansioni non vengono lette (opzione spenta), Cedro lo dice.
+- Su Linux, senza i dati italiani di Tesseract si usa quelli inglesi, che leggono molto meglio del modello incluso.
+- Corretto «1 pagine» nei messaggi quando la pagina è una sola.
