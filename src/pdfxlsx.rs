@@ -1,6 +1,7 @@
 //! PDF in Excel: le tabelle trovate da `pdflayout` diventano fogli di calcolo. I numeri scritti
 //! all'italiana («1.234,56», «12%», «€ 50,00») e le date («03/11/2026») diventano valori veri,
-//! che si sommano e si ordinano; i codici con gli zeri davanti (CAP, protocolli) restano testo.
+//! che si sommano e si ordinano; i codici con gli zeri davanti, e le colonne di codici (CAP, protocolli),
+//! restano testo.
 
 use rust_xlsxwriter::{ExcelDateTime, Format, FormatAlign, Workbook, Worksheet, XlsxError};
 
@@ -116,7 +117,8 @@ pub fn value(text: &str) -> Value {
     let Some((plain, decimals)) = italian_number(s) else { return Value::Text };
     // La percentuale si sposta di due cifre nel testo, così 4,1% è proprio 0,041.
     let Ok(v) = (if percent { format!("{plain}e-2") } else { plain }).parse::<f64>() else { return Value::Text };
-    let grouped = s.contains('.') || v.abs() >= 1000.0;
+    // Il punto delle migliaia solo se c'è nel PDF: «44012» o «2026» non diventano «44.012» e «2.026».
+    let grouped = s.contains('.');
     let v = if negative { -v } else { sign * v };
     if percent {
         return Value::Number(v, format!("{}%", number_format(decimals, false)));
@@ -125,6 +127,12 @@ pub fn value(text: &str) -> Value {
         return Value::Number(v, format!("€ {}", number_format(decimals.max(2), true)));
     }
     Value::Number(v, number_format(decimals, grouped))
+}
+
+/// Un'intestazione di colonna di codici (CAP, protocollo, matricola…): i suoi numeri restano testo.
+fn code_header(head: &str) -> bool {
+    const CODES: [&str; 14] = ["cap", "codice", "cod", "protocollo", "prot", "matricola", "telefono", "tel", "cellulare", "iva", "iban", "cig", "cup", "pratica"];
+    head.to_lowercase().split(|c: char| !c.is_alphanumeric()).any(|w| CODES.contains(&w))
 }
 
 /// Il nome di un foglio: al massimo 31 caratteri, senza quelli che Excel non vuole.
@@ -188,6 +196,13 @@ fn write_cell(ws: &mut Worksheet, row: u32, col: u16, text: &str, head: bool, st
 /// Scrive una tabella a partire dalla riga `top`; restituisce la prima riga libera dopo.
 fn write_table(ws: &mut Worksheet, t: &SheetTable, top: u32, styles: &Styles, values: bool) -> Result<u32, XlsxError> {
     let mut row = top;
+    // Le colonne di codici, dall'intestazione (una cella che ne copre più colonne vale per tutte).
+    let mut codes: Vec<bool> = Vec::new();
+    if t.header {
+        for c in t.rows.first().into_iter().flatten() {
+            codes.extend(std::iter::repeat_n(code_header(&c.text), c.span.max(1)));
+        }
+    }
     for (r, cells) in t.rows.iter().enumerate() {
         let head = t.header && r == 0;
         let mut col: u16 = 0;
@@ -197,7 +212,8 @@ fn write_table(ws: &mut Worksheet, t: &SheetTable, top: u32, styles: &Styles, va
                 let fmt = if head { &styles.head } else { &styles.wrap };
                 ws.merge_range(row, col, row, col + span - 1, "", fmt)?;
             }
-            write_cell(ws, row, col, &c.text, head, styles, values)?;
+            let code = codes.get(col as usize).copied().unwrap_or(false);
+            write_cell(ws, row, col, &c.text, head, styles, values && !code)?;
             col += span;
         }
         row += 1;
@@ -278,6 +294,9 @@ mod tests {
         assert_eq!(num("642.180,50"), (642180.5, "#,##0.00".into()));
         assert_eq!(num("1.284.300,00").0, 1284300.0);
         assert_eq!(num("42"), (42.0, "0".into()));
+        // Senza il punto nel PDF non lo aggiunge neppure Excel.
+        assert_eq!(num("2026"), (2026.0, "0".into()));
+        assert_eq!(num("1234,5"), (1234.5, "0.0".into()));
         assert_eq!(num("3,5"), (3.5, "0.0".into()));
         assert_eq!(num("−7,6").0, -7.6);
         assert_eq!(num("(1.200,00)").0, -1200.0);
@@ -298,11 +317,38 @@ mod tests {
     fn codes_and_odd_numbers_stay_text() {
         for t in ["004127", "44012", "IT60X0542811101000000123456", "3.5", "1.23", "12.34.56", "1,2,3", "Via Roma 3", "", "12345678901234567", "a-b"] {
             if t == "44012" {
-                assert!(matches!(value(t), Value::Number(..)));
+                assert_eq!(value(t), Value::Number(44012.0, "0".into()));
                 continue;
             }
             assert_eq!(value(t), Value::Text, "{t}");
         }
+    }
+
+    #[test]
+    fn code_columns_stay_text() {
+        for h in ["CAP", "Codice", "N. protocollo", "Prot.", "Matricola", "Tel.", "Partita IVA", "Cod. fiscale"] {
+            assert!(code_header(h), "{h}");
+        }
+        for h in ["Capitolo", "Importo", "Anno", "Quota", "Telefonate", "Descrizione"] {
+            assert!(!code_header(h), "{h}");
+        }
+    }
+
+    #[test]
+    fn a_cap_column_is_written_as_text() {
+        use crate::pdflayout::SheetCell;
+        let cell = |t: &str| SheetCell { text: t.into(), span: 1 };
+        let t = SheetTable { pages: (0, 0), rows: vec![vec![cell("CAP"), cell("Importo")], vec![cell("44012"), cell("1.234,56")]], header: true };
+        let opts = SheetOptions { one_per_table: true, values: true, outside_text: false };
+        let bytes = xlsx(&[t], &[], &opts).unwrap();
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut sheet = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("xl/worksheets/sheet1.xml").unwrap(), &mut sheet).unwrap();
+        let mut shared = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("xl/sharedStrings.xml").unwrap(), &mut shared).unwrap();
+        // Il CAP è una stringa condivisa, l'importo un numero.
+        assert!(shared.contains(">44012<"), "{shared}");
+        assert!(sheet.contains("<v>1234.56</v>"), "{sheet}");
     }
 
     #[test]
