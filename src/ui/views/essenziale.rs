@@ -497,20 +497,23 @@ fn footer(f: &mut Frame, app: &App, y: f32) {
     f.hline(NAV_W, y, w - NAV_W);
     let go_w = 260.0;
     let go_x = w - 24.0 - go_w;
-    // Destinazione: si accorcia con la finestra stretta.
-    let dest_w = 220.0f32.min((go_x - 40.0 - 580.0 - 330.0).max(150.0));
+    // Le due scelte prendono lo spazio che le loro scritte chiedono (cambia con il carattere e con la lingua).
+    let lab1 = f.measure("Cartella di destinazione", 16.0, SEMI) + 12.0;
+    let lab2 = f.measure("Se esiste già", 16.0, SEMI) + 12.0;
+    let dest_x = 356.0 + lab1;
+    let dest_w = 260.0f32.min(go_x - 26.0 - 170.0 - 48.0 - lab2 - 18.0 - dest_x).max(170.0);
     f.icon(ic::FOLDER, 306.0, y + 36.0, 24.0, pal.text);
-    f.text("Cartella di destinazione", 356.0, y + 25.0, 218.0, 30.0, 16.0, SEMI, pal.text);
-    super::dest_select(f, app, (580.0, y + 25.0, dest_w, 43.0), 16.0);
-    let ex = 580.0 + dest_w + 18.0;
+    f.text("Cartella di destinazione", 356.0, y + 25.0, lab1, 30.0, 16.0, SEMI, pal.text);
+    super::dest_select(f, app, (dest_x, y + 25.0, dest_w, 43.0), 16.0);
+    let ex = dest_x + dest_w + 18.0;
     f.para(&super::dest_note(app), 356.0, y + 68.0, ex - 12.0 - 356.0, 14.5, SANS, pal.muted, 1.2, 2);
     f.vline(ex, y + 22.0, 76.0);
-    f.icon(ic::COPY, ex + 20.0, y + 30.0, 24.0, pal.text);
-    f.text("Se esiste già un file", ex + 63.0, y + 25.0, 176.0, 30.0, 16.0, SEMI, pal.text);
-    let sel_x = ex + 63.0 + 176.0;
-    let sel_w = (go_x - 26.0 - sel_x).clamp(120.0, 166.0);
+    f.icon(ic::COPY, ex + 16.0, y + 30.0, 24.0, pal.text);
+    f.text("Se esiste già", ex + 48.0, y + 25.0, lab2, 30.0, 16.0, SEMI, pal.text);
+    let sel_x = ex + 48.0 + lab2;
+    let sel_w = (go_x - 26.0 - sel_x).clamp(120.0, 170.0);
     super::exists_select(f, app, (sel_x, y + 25.0, sel_w, 43.0), 16.0);
-    f.text(&app.exists_example(), ex + 63.0, y + 66.0, go_x - ex - 80.0, 26.0, 14.5, SANS, pal.muted);
+    f.text(&app.exists_example(), ex + 48.0, y + 66.0, go_x - ex - 64.0, 26.0, 14.5, SANS, pal.muted);
     let label = super::go_label(app);
     let ready = app.busy() || !app.targets().is_empty();
     if app.busy() {
