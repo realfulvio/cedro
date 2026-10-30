@@ -26,6 +26,8 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CMAKE_POLICY_VERSION_MINIMUM: "3.5"
+  # Firma con SignPath (CODE_SIGNING_POLICY.md): solo nelle release e solo quando c'è il token del progetto.
+  FIRMA: ${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' && secrets.SIGNPATH_API_TOKEN != '' }}
 
 jobs:
   app:
@@ -86,6 +88,39 @@ jobs:
       - name: Installatore ARM64 (e la copia per la vecchia edizione Comune di Bondeno)
         shell: pwsh
         run: powershell -File installer\build.ps1 -Arm64
+
+      - name: Firma cedro.exe (SignPath)
+        if: env.FIRMA == 'true'
+        uses: ./.github/actions/firma
+        with:
+          nome: cedro-exe-arm64
+          file: target/release/cedro.exe
+          cartella: target/release
+          configurazione: exe
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+
+      - name: Installatore arm64 col cedro.exe firmato
+        if: env.FIRMA == 'true'
+        shell: pwsh
+        run: powershell -File installer\build.ps1 -SoloInstallatore -Arm64
+
+      - name: Firma l'installatore arm64 (SignPath)
+        if: env.FIRMA == 'true'
+        uses: ./.github/actions/firma
+        with:
+          nome: installatore-firmato-arm64
+          file: |
+            dist/Cedro-ARM64-Setup-*.exe
+            dist/Cedro-Bondeno-ARM64-Setup-*.exe
+          cartella: dist
+          configurazione: installatore
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -239,6 +274,39 @@ jobs:
       - name: Installatore x64 (e la copia per la vecchia edizione Comune di Bondeno)
         shell: pwsh
         run: powershell -File installer\build.ps1
+
+      - name: Firma cedro.exe (SignPath)
+        if: env.FIRMA == 'true'
+        uses: ./.github/actions/firma
+        with:
+          nome: cedro-exe-x64
+          file: target/release/cedro.exe
+          cartella: target/release
+          configurazione: exe
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+
+      - name: Installatore x64 col cedro.exe firmato
+        if: env.FIRMA == 'true'
+        shell: pwsh
+        run: powershell -File installer\build.ps1 -SoloInstallatore
+
+      - name: Firma l'installatore x64 (SignPath)
+        if: env.FIRMA == 'true'
+        uses: ./.github/actions/firma
+        with:
+          nome: installatore-firmato-x64
+          file: |
+            dist/Cedro-Setup-*.exe
+            dist/Cedro-Bondeno-Setup-*.exe
+          cartella: dist
+          configurazione: installatore
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
 
       - name: "Aggiornamento vero: una 0.17 installata prende e installa l'installatore x64 nuovo"
         # Fino alla 0.17 Cedro prende il primo file «Cedro-Setup….exe» della release (GitHub li elenca in ordine

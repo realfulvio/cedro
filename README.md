@@ -166,7 +166,7 @@ cedro show --conversione foto.png   # Linux: apre la ruota
 
 ### Sicurezza
 
-Codice aperto (MIT), nessun packer né offuscamento, nessuna rete oltre al controllo aggiornamenti. Gli hook del mouse e della tastiera restano nel processo di Cedro e non iniettano DLL in altri programmi. L'exe non è firmato Authenticode: SmartScreen avvisa la prima volta, ma non è un rilevamento di malware.
+Codice aperto (MIT), nessun packer né offuscamento, nessuna rete oltre al controllo aggiornamenti. Gli hook del mouse e della tastiera restano nel processo di Cedro e non iniettano DLL in altri programmi. L'exe non è ancora firmato Authenticode: SmartScreen avvisa la prima volta, ma non è un rilevamento di malware. La firma (gratuita per i progetti open source, di SignPath Foundation) è in arrivo: regole e privacy nella [Code signing policy](CODE_SIGNING_POLICY.md).
 
 ### Licenze
 
