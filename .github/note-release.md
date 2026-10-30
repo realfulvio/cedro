@@ -19,3 +19,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 - Il testo fuori dalle tabelle va nel foglio del testo, riga per riga. Se le scansioni non vengono lette (opzione spenta), Cedro lo dice.
 - Su Linux, senza i dati italiani di Tesseract si usa quelli inglesi, che leggono molto meglio del modello incluso.
 - Corretto «1 pagine» nei messaggi quando la pagina è una sola.
+
+**Caratteri più grandi e un carattere per ogni tema.**
+
+- Tutti i testi dell'interfaccia crescono di 2 punti, per leggere meglio.
+- Ogni tema ha il suo carattere: Windows essenziale quello di Windows, Percorso guidato Atkinson Hyperlegible, Cedro compatto Figtree, Banco di lavoro IBM Plex Sans, Documento al centro Source Sans 3, Comune di Bondeno Titillium Web.
+- Ho allargato i punti dove il testo più grande non ci stava: «Aggiungi file», la barra in basso, le schede di Aspetto, la ruota e le scelte «Un foglio per tabella».
