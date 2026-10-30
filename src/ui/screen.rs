@@ -132,6 +132,9 @@ impl Screen {
         self.app.simple_view = self.simple;
         self.want_preview();
         self.want_page_thumbs();
+        if let Some(to) = self.app.review_follow() {
+            self.ui.scroll.insert(Scroll::Review, to);
+        }
         self.clamp_scrolls();
         let fonts = Fonts::for_theme(self.theme == ThemeId::Bondeno);
         self.cache.trim(scale);
@@ -348,6 +351,11 @@ impl Screen {
                     self.app.media_seek(frac);
                 }
             }
+            if act == Act::ReviewSeek {
+                if let Some(frac) = self.app.review_scrub.take() {
+                    self.app.review_seek(frac);
+                }
+            }
             self.ui.pressed = None;
             return;
         }
@@ -482,6 +490,7 @@ impl Screen {
         match act {
             Act::Quality => self.app.quality = (40.0 + frac * 55.0).round() as u8,
             Act::MediaSeek => self.app.media_scrub = Some(frac),
+            Act::ReviewSeek => self.app.review_scrub = Some(frac),
             Act::OptSlider(opt) => {
                 if let Some(def) = self.app.option_defs().into_iter().find(|d| d.opt == *opt) {
                     if let Control::Range { min, max, .. } = def.control {
@@ -622,9 +631,81 @@ impl Screen {
                     app.cuts.clear();
                 }
             }
-            Act::OptSlider(_) | Act::Quality | Act::MediaSeek => {}
+            Act::OptSlider(_) | Act::Quality | Act::MediaSeek | Act::ReviewSeek => {}
+            Act::ReviewOpen(i) => app.review_open(i),
+            Act::ReviewClose => app.review_close(),
+            Act::ReviewPlay => app.review_toggle(),
+            Act::ReviewSkip(d) => app.review_skip(d),
+            Act::ReviewRow(i) => app.review_row_play(i),
+            Act::ReviewPick(i) => {
+                if let Some(r) = app.review.as_mut() {
+                    r.sel = Some(i);
+                }
+            }
+            Act::ReviewFlag(i) => app.review_go_flag(i),
+            Act::ReviewFix(i) => {
+                if let Some(r) = app.review.as_mut() {
+                    r.push_undo();
+                    r.fix(i);
+                    let at = r.flags.get(i).and_then(|f| f.segs.first().copied());
+                    r.sel = at.or(r.sel);
+                    r.step_flag(1);
+                }
+            }
+            Act::ReviewDismiss(i) => {
+                if let Some(r) = app.review.as_mut() {
+                    r.dismissed.insert(i);
+                    r.step_flag(1);
+                }
+            }
+            Act::ReviewFixAll => {
+                if let Some(r) = app.review.as_mut() {
+                    r.push_undo();
+                    r.fix_repeats();
+                    r.step_flag(1);
+                }
+            }
+            Act::ReviewStep(d) => app.review_step(d),
+            Act::ReviewUndo => {
+                if let Some(r) = app.review.as_mut() {
+                    r.undo();
+                }
+            }
+            Act::ReviewDelete(i) => {
+                if let Some(r) = app.review.as_mut() {
+                    r.push_undo();
+                    if let Some(row) = r.rows.get_mut(i) {
+                        row.removed = !row.removed;
+                    }
+                }
+            }
+            Act::ReviewFollow => {
+                if let Some(r) = app.review.as_mut() {
+                    r.follow = !r.follow;
+                    r.followed = None;
+                }
+            }
+            Act::ReviewOnly => {
+                if let Some(r) = app.review.as_mut() {
+                    r.only_flagged = !r.only_flagged;
+                }
+                self.ui.scroll.insert(Scroll::Review, 0.0);
+            }
+            Act::ReviewFormat(i) => {
+                if let Some(r) = app.review.as_mut() {
+                    r.format = i;
+                }
+            }
+            Act::ReviewSave => app.review_save(),
             Act::MediaPlay => app.media_toggle(),
             Act::Edit(field) => {
+                // Una correzione si annulla in un colpo solo: l'undo si prende quando si entra nella frase.
+                if let (Field::Review(i), Some(r)) = (field, app.review.as_mut()) {
+                    if self.ui.edit != Some(field) {
+                        r.push_undo();
+                    }
+                    r.sel = Some(i);
+                }
                 self.ui.edit = Some(field);
                 self.ui.sel_all = false;
                 self.ui.caret = self.field_text(field).chars().count();
@@ -807,6 +888,7 @@ impl Screen {
             Field::Opt(opt) => self.app.option_defs().into_iter().find(|d| d.opt == opt).map(|d| self.app.values.text(d).to_string()).unwrap_or_default(),
             Field::Link(web) => self.app.links(web).typed.clone(),
             Field::FilePages(i) => self.app.files.get(i).map(|f| f.pages.clone()).unwrap_or_default(),
+            Field::Review(i) => self.app.review.as_ref().and_then(|r| r.rows.get(i)).map(|r| r.text.clone()).unwrap_or_default(),
         }
     }
 
@@ -824,6 +906,11 @@ impl Screen {
             Field::FilePages(i) => {
                 if let Some(f) = self.app.files.get_mut(i) {
                     f.pages = text;
+                }
+            }
+            Field::Review(i) => {
+                if let Some(row) = self.app.review.as_mut().and_then(|r| r.rows.get_mut(i)) {
+                    row.text = text;
                 }
             }
         }

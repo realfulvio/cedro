@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.27.0"
+version = "0.28.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -13,6 +13,7 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png",
 hayro = "0.8"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 lopdf = "0.46"
+rust_xlsxwriter = { version = "0.102", default-features = false }
 mp4 = "0.14"
 skrifa = "0.49"
 mp3lame-encoder = "0.2"

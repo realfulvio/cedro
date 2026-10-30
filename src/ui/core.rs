@@ -45,6 +45,8 @@ pub enum Field {
     Link(bool),
     /// Unire i PDF: le pagine di un file della coda (indice in `files`).
     FilePages(usize),
+    /// «Rivedi»: il testo di una frase della trascrizione.
+    Review(usize),
 }
 
 /// Le parti che si aprono e si chiudono («Altre opzioni»…).
@@ -64,6 +66,9 @@ pub enum Scroll {
     Log,
     Preview,
     Page,
+    /// «Rivedi»: le frasi, e i punti da controllare.
+    Review,
+    ReviewFlags,
 }
 
 /// Cosa fa un clic.
@@ -162,6 +167,29 @@ pub enum Act {
     PagesFileMenu,
     /// «Pagine» con numeri o filigrana: la pagina della striscia da vedere in grande (file, posto).
     StampPick(usize, usize),
+    /// «Rivedi»: apre la revisione del file della coda (indice in `files`), o la chiude.
+    ReviewOpen(usize),
+    ReviewClose,
+    ReviewPlay,
+    /// La barra della posizione (si trascina).
+    ReviewSeek,
+    /// Salta avanti o indietro di tanti secondi.
+    ReviewSkip(i32),
+    /// Il tempo di una frase: la fa sentire da lì.
+    ReviewRow(usize),
+    /// Sceglie la frase da correggere.
+    ReviewPick(usize),
+    ReviewFlag(usize),
+    ReviewFix(usize),
+    ReviewDismiss(usize),
+    ReviewFixAll,
+    ReviewStep(i32),
+    ReviewUndo,
+    ReviewDelete(usize),
+    ReviewFollow,
+    ReviewOnly,
+    ReviewFormat(usize),
+    ReviewSave,
     /// Solo per bloccare i clic sotto un riquadro (per esempio dentro un menu aperto).
     Nothing,
 }
@@ -635,6 +663,18 @@ impl<'a> Frame<'a> {
         self.p.fill(x + 22.0 * k, y + 56.0 * k, 52.0 * k, 6.0 * k, (0x10, 0x3F, 0x91));
         r(&mut self.p, 6.0, 22.0, 40.0, 40.0, 5.0, (0x18, 0x5A, 0xBD));
         self.p.text("W", x + 6.0 * k, y + 22.0 * k, 40.0 * k, 40.0 * k, 28.0 * k, BOLD, (255, 255, 255), Align::Center);
+    }
+
+    /// Il foglio di calcolo: come l'icona di Word, in verde e con la X.
+    pub fn excel_icon(&mut self, x: f32, y: f32, s: f32) {
+        let k = s / 80.0;
+        let r = |p: &mut Painter, rx: f32, ry: f32, w: f32, h: f32, rad: f32, c: Rgb| p.rrect(x + rx * k, y + ry * k, w * k, h * k, rad * k, Some(c), None);
+        r(&mut self.p, 22.0, 8.0, 52.0, 64.0, 6.0, (0x21, 0xA3, 0x66));
+        for (i, c) in [(0x33, 0xC4, 0x81), (0x21, 0xA3, 0x66), (0x18, 0x7A, 0x4A), (0x10, 0x5E, 0x38)].into_iter().enumerate() {
+            self.p.fill(x + 48.0 * k, y + (8.0 + i as f32 * 16.0) * k, 26.0 * k, 15.0 * k, c);
+        }
+        r(&mut self.p, 6.0, 22.0, 40.0, 40.0, 5.0, (0x10, 0x7C, 0x41));
+        self.p.text("X", x + 6.0 * k, y + 22.0 * k, 40.0 * k, 40.0 * k, 28.0 * k, BOLD, (255, 255, 255), Align::Center);
     }
 
     pub fn image_icon(&mut self, x: f32, y: f32, s: f32) {
