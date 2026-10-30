@@ -6,10 +6,25 @@ Titillium Web (carattere)
   Licenza: SIL Open Font License 1.1 (testo in assets/fonts/OFL.txt)
   Sito: https://fonts.google.com/specimen/Titillium+Web
 
-Figtree (carattere, versione standard)
+Figtree (carattere, tema Cedro compatto)
   Autori: Erik D. Kennedy e collaboratori
   Licenza: SIL Open Font License 1.1 (testo in assets/fonts/OFL-Figtree.txt)
   Sito: https://fonts.google.com/specimen/Figtree
+
+Atkinson Hyperlegible Next (carattere, tema Percorso guidato; ridotto alle lettere latine)
+  Autori: Braille Institute e Applied Design Works
+  Licenza: SIL Open Font License 1.1 (testo in assets/fonts/OFL-Atkinson.txt)
+  Sito: https://fonts.google.com/specimen/Atkinson+Hyperlegible+Next
+
+IBM Plex Sans (carattere, tema Banco di lavoro; ridotto alle lettere latine)
+  Autori: IBM Corp.
+  Licenza: SIL Open Font License 1.1 (testo in assets/fonts/OFL-Plex.txt)
+  Sito: https://fonts.google.com/specimen/IBM+Plex+Sans
+
+Source Sans 3 (carattere, tema Documento al centro; ridotto alle lettere latine)
+  Autori: Adobe
+  Licenza: SIL Open Font License 1.1 (testo in assets/fonts/OFL-Source.txt)
+  Sito: https://fonts.google.com/specimen/Source+Sans+3
 
 Modelli OCR di ocrs (text-detection.onnx, text-recognition.onnx)
   Autore: Robert Knight
