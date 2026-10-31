@@ -19,6 +19,9 @@ use cedro::ui::views::uses_quality;
 use cedro::ui::wheel::list;
 use cedro::{Kind, Mode};
 
+mod pdf;
+pub use pdf::{Campo, Pagina, StatoPdf, Tasto};
+
 pub type R = (f32, f32, f32, f32);
 
 /// I temi che si possono scegliere (quello del Comune è dell'edizione dell'ente, non del telefono).
@@ -85,6 +88,8 @@ pub enum Sorgente {
     Altri,
     /// Un link (dagli appunti): «Video dal web».
     Link,
+    /// Altri PDF da unire (scelta multipla).
+    PdfAltri,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -117,6 +122,10 @@ pub enum Azione {
     Apri(u32),
     Condividi(u32),
     Svuota,
+    /// Le schermate dei PDF.
+    Pdf(pdf::PdfAz),
+    /// Un campo di testo: la tastiera scrive lì.
+    Campo(Campo),
     /// Un'area che non fa niente ma ferma il tocco.
     Niente,
 }
@@ -125,7 +134,10 @@ pub enum Effetto {
     Niente,
     Ridisegna,
     /// Da eseguire col motore.
-    Converti { id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32> },
+    /// `opts`: le scelte delle schermate (None = quelle di sempre); `unisci`: i PDF da unire, in ordine, con le pagine.
+    Converti { id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)> },
+    /// Prova la password del PDF: se va, se ne fa una copia senza.
+    Sblocca(String),
     /// Chiude Cedro: si torna all'app di prima.
     Esci,
     /// Il tema è cambiato: va ricordato.
@@ -179,10 +191,16 @@ struct Riga {
     sotto: &'static str,
     /// Vero se è un cambio di formato («Converti in X»); falso per le azioni («Comprimi»).
     conv: bool,
+    /// Arrivata con questa versione: la tessera lo dice.
+    nuovo: bool,
 }
 
 const fn r(id: &'static str, titolo: &'static str, sotto: &'static str, conv: bool) -> Riga {
-    Riga { id, titolo, sotto, conv }
+    Riga { id, titolo, sotto, conv, nuovo: false }
+}
+
+const fn rn(id: &'static str, titolo: &'static str, sotto: &'static str, conv: bool) -> Riga {
+    Riga { id, titolo, sotto, conv, nuovo: true }
 }
 
 /// Un «file» che in realtà è un link (http/https): si scarica, non si converte.
@@ -218,12 +236,17 @@ fn righe(kind: Kind) -> Vec<&'static Riga> {
         r("ocr", "Testo", "Riconosci scritte", false),
         r("half", "Dimezza", "Metà dimensioni", false),
     ];
-    static PDF: [Riga; 5] = [
+    static PDF: [Riga; 10] = [
         r("docx", "Word", "Con testo", true),
+        rn("xlsx", "Excel", "Le tabelle", true),
         r("txt", "Testo", "Estrae le parole", true),
         r("jpg", "JPG", "Una per pagina", true),
-        r("png", "PNG", "Una per pagina", true),
+        rn("merge", "Unisci", "Con altri PDF", false),
+        rn("split", "Dividi", "In più file", false),
+        rn("pages", "Pagine", "Ruota, togli, numeri", false),
+        rn("compress", "Comprimi", "Meno spazio", false),
         r("ocr", "Leggi", "Riconosci scritte", false),
+        r("png", "PNG", "Una per pagina", true),
     ];
     static TXT: [Riga; 3] = [r("pdf", "PDF", "Da stampare", true), r("html", "HTML", "Per il web", true), r("md", "Markdown", "Testo con segni", true)];
     static AUD: [Riga; 3] = [r("mp3", "MP3", "Più leggero", true), r("wav", "WAV", "Senza compressione", true), r("trascrivi", "Testo", "Dalla voce, offline", false)];
@@ -239,8 +262,8 @@ fn righe(kind: Kind) -> Vec<&'static Riga> {
         Kind::Archive | Kind::Other => &[],
     };
     let ids: Vec<&'static str> = [Mode::Convert, Mode::Tools].into_iter().flat_map(|m| list(kind, m)).map(|s| s.id).collect();
-    // «trascrivi» non è nel catalogo del motore di conversione: è whisper.cpp dentro l'APK.
-    tutte.iter().filter(|r| ids.contains(&r.id) || r.id == "trascrivi").collect()
+    // «trascrivi» non è nel catalogo del motore di conversione: è whisper.cpp dentro l'APK; «pages» è la schermata Pagine.
+    tutte.iter().filter(|r| ids.contains(&r.id) || r.id == "trascrivi" || (kind == Kind::Pdf && r.id == "pages")).collect()
 }
 
 fn sotto_altro(kind: Kind) -> &'static str {
@@ -257,8 +280,13 @@ fn icona_di(id: &str) -> &'static str {
         "webp" | "bmp" | "gray" | "jpeg" | "jpg" | "png" | "tiff" | "gif" => ic::IMAGE,
         "mp4" | "webm" | "mov" | "mkv" | "avi" => ic::VIDEO,
         "wav" | "mp3" | "ogg" | "m4a" | "aac" | "flac" => ic::AUDIO,
-        "compress" | "half" | "strip" => ic::DOWNLOAD,
+        "compress" => pdf::I_COMPRIMI,
+        "half" | "strip" => ic::DOWNLOAD,
         "rot90" => ic::CONVERT,
+        "xlsx" => pdf::I_EXCEL,
+        "merge" => pdf::I_UNISCI,
+        "split" => pdf::I_DIVIDI,
+        "pages" => pdf::I_PAGINE,
         "ocr" | "txt" => ic::SEARCH,
         "trascrivi" | "web-testo" => ic::TRANSCRIBE,
         _ => ic::FILE,
@@ -397,6 +425,10 @@ pub struct App {
     ora: Instant,
     /// Barre di sistema e gesti, in dp: sinistra, alto, destra, basso.
     pub margini: (f32, f32, f32, f32),
+    /// Le schermate dei PDF e le loro scelte.
+    pub pdf: StatoPdf,
+    /// Il campo di testo in cui scrive la tastiera.
+    pub campo: Option<Campo>,
 }
 
 /// Le lingue tra cui scegliere: chiave nel file, nome (quelli delle lingue non si traducono).
@@ -444,6 +476,8 @@ impl App {
             cursore: (0.0, 0.0, 1.0, 1.0),
             ora: Instant::now(),
             margini: (0.0, 0.0, 0.0, 0.0),
+            pdf: StatoPdf::default(),
+            campo: None,
         }
     }
 
@@ -460,6 +494,8 @@ impl App {
         self.scheda = Scheda::Ruota;
         self.foglio = da_condivisione && (!righe(kind).is_empty() || self.file.as_ref().is_some_and(|f| e_link(&f.path)));
         self.dal_foglio = false;
+        self.pdf = StatoPdf::default();
+        self.campo = None;
     }
 
     /// Un lavoro è finito (o fallito).
@@ -471,7 +507,10 @@ impl App {
     }
 
     /// Vero se serve ridisegnare a ogni fotogramma (barra di avanzamento che scorre).
-    pub fn animando(&self) -> bool {
+    pub fn animando(&mut self) -> bool {
+        if std::mem::take(&mut self.pdf.ridisegna) {
+            return true;
+        }
         self.lavori.iter().any(|l| l.stato == Stato::InCorso) && !self.scelta_file && (self.scheda == Scheda::Lavori || self.scheda == Scheda::Ruota)
     }
 
@@ -585,6 +624,10 @@ impl App {
     pub fn tocca_giu(&mut self, x: f32, y: f32) -> Effetto {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
         self.premuto = self.trova(x, y);
+        if let Some(Azione::Pdf(pdf::PdfAz::Maniglia(i))) = self.premuto {
+            self.pdf.trascina = Some((i, y, y));
+            return Effetto::Ridisegna;
+        }
         self.trascina = Some((y, self.scorri, false));
         if self.premuto == Some(Azione::Cursore) {
             self.imposta_cursore(x);
@@ -598,8 +641,13 @@ impl App {
             self.imposta_cursore(x);
             return Effetto::Ridisegna;
         }
+        if let Some((i, y0, _)) = self.pdf.trascina {
+            self.pdf.trascina = Some((i, y0, y));
+            return Effetto::Ridisegna;
+        }
         if let Some((y0, s0, mosso)) = self.trascina {
-            if (mosso || (y - y0).abs() > 10.0) && matches!(self.scheda, Scheda::Lavori | Scheda::Info | Scheda::Aspetto) && !self.foglio && !self.scelta_file {
+            let pagina = self.pdf.pagina.is_some() && !self.pdf.protetto && !self.scelta_file;
+            if (mosso || (y - y0).abs() > 10.0) && (pagina || matches!(self.scheda, Scheda::Lavori | Scheda::Info | Scheda::Aspetto) && !self.foglio && !self.scelta_file) {
                 self.scorri = (s0 - (y - y0)).clamp(0.0, self.scorri_max);
                 self.trascina = Some((y0, s0, true));
                 self.premuto = None;
@@ -613,6 +661,10 @@ impl App {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
         let giu = self.premuto.take();
         let mosso = self.trascina.take().is_some_and(|t| t.2);
+        if let Some((i, y0, y1)) = self.pdf.trascina.take() {
+            self.pdf.lascia(i, y1 - y0);
+            return Effetto::Ridisegna;
+        }
         let su = self.trova(x, y);
         match (giu, su) {
             (Some(a), Some(b)) if a == b && !mosso => self.attiva(a),
@@ -623,6 +675,7 @@ impl App {
     pub fn tocca_annulla(&mut self) {
         self.premuto = None;
         self.trascina = None;
+        self.pdf.trascina = None;
     }
 
     fn trova(&self, x: f32, y: f32) -> Option<Azione> {
@@ -641,6 +694,17 @@ impl App {
             self.scelta_file = false;
             return true;
         }
+        if self.campo.take().is_some() {
+            return true;
+        }
+        if self.pdf.protetto {
+            self.annulla_password();
+            return true;
+        }
+        if self.pdf.pagina.take().is_some() {
+            self.scorri = 0.0;
+            return true;
+        }
         if self.foglio {
             return false;
         }
@@ -657,6 +721,10 @@ impl App {
     }
 
     fn avvia(&mut self, id: &'static str, etichetta: &str, conv: bool) -> Effetto {
+        self.avvia_con(id, etichetta, conv, None, Vec::new())
+    }
+
+    fn avvia_con(&mut self, id: &'static str, etichetta: &str, conv: bool, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)>) -> Effetto {
         let Some(file) = self.file.clone() else { return Effetto::Niente };
         let lavoro = self.prossimo;
         self.prossimo += 1;
@@ -666,13 +734,24 @@ impl App {
         self.scheda = Scheda::Lavori;
         self.foglio = false;
         self.dal_foglio = false;
+        self.pdf.pagina = None;
+        self.campo = None;
         // Per «trascrivi» il campo qualità porta il modello scelto.
         let qualita = if id == "trascrivi" || id == "web-testo" { self.modello as u8 } else { self.qualita };
-        Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita, prog }
+        Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita, prog, opts, unisci }
     }
 
     fn attiva(&mut self, a: Azione) -> Effetto {
+        // Toccare altrove chiude la tastiera (tranne «mostra la password», che si usa scrivendo).
+        if !matches!(a, Azione::Campo(_) | Azione::Pdf(pdf::PdfAz::MostraPw)) {
+            self.campo = None;
+        }
         match a {
+            Azione::Pdf(az) => self.azione_pdf(az),
+            Azione::Campo(c) => {
+                self.campo = Some(c);
+                Effetto::Ridisegna
+            }
             Azione::Scheda(s) => {
                 // «Ruota» riporta sempre alla ruota vuota, pronta per un nuovo file.
                 if s == Scheda::Ruota {
@@ -715,11 +794,13 @@ impl App {
             Azione::Vai => {
                 if self.foglio {
                     match self.righe_ora().get(self.tessera).copied() {
+                        Some(riga) if self.kind == Kind::Pdf && pdf::schermata(riga.id).is_some() => self.apri_pagina(pdf::schermata(riga.id).unwrap_or(pdf::Pagina::Excel)),
                         Some(riga) => self.avvia(riga.id, riga.titolo, riga.conv),
                         None => Effetto::Niente,
                     }
                 } else {
                     match self.scelta.and_then(|i| self.fette().get(i).copied()) {
+                        Some(f) if self.kind == Kind::Pdf && pdf::schermata(f.id).is_some() => self.apri_pagina(pdf::schermata(f.id).unwrap_or(pdf::Pagina::Excel)),
                         Some(f) => {
                             let conv = self.modo == 0;
                             self.avvia(f.id, f.label, conv)
@@ -806,6 +887,8 @@ impl App {
         let (w, h) = (w - ml - mr, h - mt - mb);
         if self.scelta_file {
             self.pagina_scelta(p, w, h);
+        } else if let (Some(pg), true) = (self.pdf.pagina, self.file.is_some()) {
+            self.pagina_pdf(p, pg, w, h);
         } else if self.foglio && self.file.is_some() {
             self.pagina_foglio(p, w, h);
         } else {
@@ -817,6 +900,9 @@ impl App {
                 Scheda::Aspetto => self.pagina_aspetto(p, w, corpo),
             }
             self.barra_schede(p, w, h);
+        }
+        if self.pdf.protetto && self.file.is_some() && !self.scelta_file {
+            self.foglio_password(p, w, h);
         }
     }
 
@@ -1072,7 +1158,11 @@ impl App {
     fn pulsante_vai(&mut self, p: &mut Painter, bt: R) {
         let pal = self.pal();
         let testo = if self.foglio {
-            self.righe_ora().get(self.tessera).map(|r| if r.conv { format!("Converti in {}", r.titolo) } else { r.titolo.to_string() })
+            self.righe_ora().get(self.tessera).map(|r| match self.pdf.etichetta_vai(r.id) {
+                Some(t) => t,
+                None if r.conv => format!("Converti in {}", r.titolo),
+                None => r.titolo.to_string(),
+            })
         } else {
             self.scelta.and_then(|i| self.fette().get(i).copied()).map(|f| if self.modo == 1 { format!("Applica: {}", f.label) } else { format!("Converti in {}", f.label) })
         };
@@ -1205,9 +1295,9 @@ impl App {
             let rc = (gx + c as f32 * (tw + gap), gy + rr as f32 * (th + gap), tw, th);
             if i < tutte.len() {
                 let t = tutte[i];
-                self.tessera_vista(p, rc, icona_di(t.id), t.titolo, t.sotto, self.tessera == i, Azione::Tessera(i));
+                self.tessera_vista(p, rc, icona_di(t.id), t.titolo, t.sotto, self.tessera == i, t.nuovo, Azione::Tessera(i));
             } else {
-                self.tessera_vista(p, rc, ic::CONVERT, "Altro", sotto_altro(self.kind), false, Azione::Altro);
+                self.tessera_vista(p, rc, ic::CONVERT, "Altro", sotto_altro(self.kind), false, false, Azione::Altro);
             }
         }
 
@@ -1225,7 +1315,7 @@ impl App {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn tessera_vista(&mut self, p: &mut Painter, rc: R, icona: &str, titolo: &str, sotto: &str, scelta: bool, az: Azione) {
+    fn tessera_vista(&mut self, p: &mut Painter, rc: R, icona: &str, titolo: &str, sotto: &str, scelta: bool, nuovo: bool, az: Azione) {
         let pal = self.pal();
         let prem = self.premuto == Some(az);
         let fondo = if scelta { pal.primary } else if prem { mix(pal.surface, pal.primary, 0.14) } else { pal.surface };
@@ -1243,6 +1333,14 @@ impl App {
             p.icon(icona, rc.0 + 16.0, rc.1 + (rc.3 - 24.0) / 2.0, 24.0, if scelta { pal.on_primary } else { pal.primary });
             p.text(titolo, rc.0 + 54.0, rc.1 + rc.3 / 2.0 - 21.0, rc.2 - 60.0, 22.0, 16.0, Weight::Semibold, fg, Align::Left);
             p.text(sotto, rc.0 + 54.0, rc.1 + rc.3 / 2.0 + 1.0, rc.2 - 60.0, 20.0, 11.0, Weight::Regular, sg, Align::Left);
+            if nuovo {
+                let tw = p.measure(titolo, 16.0, Weight::Semibold);
+                let nx = rc.0 + 54.0 + tw + 6.0;
+                let nw = p.measure("NUOVO", 9.0, Weight::Semibold) + 2.0;
+                if nx + nw < rc.0 + rc.2 - 4.0 {
+                    p.text("NUOVO", nx, rc.1 + rc.3 / 2.0 - 21.0, nw, 22.0, 9.0, Weight::Semibold, if scelta { pal.on_primary } else { pal.ok }, Align::Left);
+                }
+            }
         }
         self.colpi.push((Forma::R(rc), az));
     }
@@ -1265,7 +1363,8 @@ impl App {
             p.rrect(rc.0, rc.1, rc.2, rc.3, 16.0, Some(if prem { mix(pal.surface, pal.primary, 0.14) } else { pal.surface }), Some((pal.border, 1.0)));
             p.rrect(rc.0 + 12.0, rc.1 + (th - 40.0) / 2.0, 40.0, 40.0, 12.0, Some(pal.alt), None);
             p.icon(icona, rc.0 + 20.0, rc.1 + (th - 24.0) / 2.0, 24.0, pal.primary);
-            p.text(nome, rc.0 + 62.0, rc.1, rc.2 - 70.0, th, 17.0, Weight::Semibold, pal.text, Align::Left);
+            let righe = p.wrap_lines(nome, 17.0, Weight::Semibold, rc.2 - 70.0, 2).len().max(1) as f32;
+            p.text_wrap(nome, rc.0 + 62.0, rc.1 + (th - righe * 22.0) / 2.0, rc.2 - 70.0, 17.0, Weight::Semibold, pal.text, 22.0, 2);
             self.colpi.push((Forma::R(rc), az));
         }
         let righe_voci = 5usize.div_ceil(colonne) as f32;

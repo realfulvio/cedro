@@ -49,7 +49,7 @@ const PAGE: f32 = 1400.0;
 const PAGE_THUMB: f32 = 240.0;
 
 /// Le miniature di più pagine di un PDF: il file si legge e si analizza una volta sola.
-fn pdf_page_thumbs(path: &Path, pages: &[usize], side: f32, each: &mut dyn FnMut(usize, Option<Image>) -> bool) {
+pub fn pdf_page_thumbs(path: &Path, pages: &[usize], side: f32, each: &mut dyn FnMut(usize, Option<Image>) -> bool) {
     use hayro::hayro_interpret::InterpreterSettings;
     use hayro::hayro_syntax::Pdf;
     use hayro::vello_cpu::color::palette::css::WHITE;
