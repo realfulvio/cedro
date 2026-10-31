@@ -69,6 +69,9 @@ pub use engine::{
     Mode, Output, Slice,
 };
 pub use audio::waveform;
+pub use pdfedit::{Numbers, Squeeze, Stamp, Watermark};
+pub use pdfpages::{groups as pdf_groups, Plan};
+pub use engine::{pdf_info, pdf_unlock};
 #[cfg(windows)]
 pub use ocr::windows_italian_installed;
 pub use settings::{read_settings, write_settings, Dest, Settings};
