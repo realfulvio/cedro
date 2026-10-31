@@ -19,6 +19,7 @@ use cedro::ui::views::uses_quality;
 use cedro::ui::wheel::list;
 use cedro::{Kind, Mode};
 
+mod casa;
 mod opzioni;
 mod pdf;
 mod rivedi;
@@ -97,6 +98,10 @@ pub enum Sorgente {
     Link,
     /// Altri PDF da unire (scelta multipla).
     PdfAltri,
+    /// File per la coda della finestra principale (scelta multipla).
+    Coda,
+    /// Tutti i file di una cartella, per la coda.
+    Cartella,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -141,12 +146,33 @@ pub enum Azione {
     Opz(opzioni::OpzAz),
     /// Il pulsante a fianco di «Converti»: apre «Altre opzioni».
     AltreOpzioni,
+    /// La finestra principale (dall'icona di Cedro).
+    Casa(casa::CasaAz),
     /// Un'area che non fa niente ma ferma il tocco.
     Niente,
 }
 
+/// Un lavoro da far partire col motore.
+pub struct Compito {
+    pub id: u32,
+    pub file: PathBuf,
+    pub azione: &'static str,
+    pub qualita: u8,
+    pub prog: Arc<AtomicU32>,
+    pub opts: Option<Box<cedro::Options>>,
+    pub unisci: Vec<(PathBuf, Option<cedro::PageSel>)>,
+}
+
 pub enum Effetto {
     Niente,
+    /// Più lavori, uno dopo l'altro (il pulsante grande della finestra principale).
+    Tanti(Vec<Compito>),
+    /// Il link dagli appunti va nel campo di «Video dal web».
+    Incolla,
+    /// Miniatura e misure di file messi in coda.
+    LeggiVoci(Vec<PathBuf>),
+    /// Pagine e segnalibri di un PDF aperto dalla finestra principale, e i PDF da unire.
+    LeggiPdf(PathBuf, Vec<PathBuf>),
     Ridisegna,
     /// Da eseguire col motore.
     /// `opts`: le scelte delle schermate (None = quelle di sempre); `unisci`: i PDF da unire, in ordine, con le pagine.
@@ -485,6 +511,13 @@ pub struct App {
     pub esiste: cedro::Exists,
     /// Gli altri file condivisi insieme al primo (per farne uno ZIP).
     pub altri: Vec<PathBuf>,
+    /// La finestra principale del tema, aperta dall'icona (falso quando si arriva da «Condividi»).
+    pub casa_aperta: bool,
+    pub casa: casa::Casa,
+    /// Lavori, Aspetto o Informazioni sopra la finestra principale, con la freccia per tornare.
+    pub sopra: Option<Scheda>,
+    /// Le pagine dei PDF in coda.
+    pub pdf_pagine: std::collections::HashMap<PathBuf, u32>,
 }
 
 /// Le lingue tra cui scegliere: chiave nel file, nome (quelli delle lingue non si traducono).
@@ -543,6 +576,10 @@ impl App {
             modello_nome: String::new(),
             esiste: cedro::Exists::Number,
             altri: Vec::new(),
+            casa_aperta: true,
+            casa: casa::Casa::default(),
+            sopra: None,
+            pdf_pagine: std::collections::HashMap::new(),
         }
     }
 
@@ -557,6 +594,10 @@ impl App {
         self.onda = None;
         self.scelta_file = false;
         self.scheda = Scheda::Ruota;
+        if da_condivisione {
+            self.casa_aperta = false;
+            self.sopra = None;
+        }
         self.foglio = da_condivisione && (!righe(kind).is_empty() || self.file.as_ref().is_some_and(|f| e_link(&f.path)));
         self.altri.clear();
         self.dal_foglio = false;
@@ -577,7 +618,7 @@ impl App {
 
     /// Vero se serve ridisegnare a ogni fotogramma (barra di avanzamento che scorre).
     pub fn animando(&mut self) -> bool {
-        if std::mem::take(&mut self.pdf.ridisegna) || self.rivedi.as_ref().is_some_and(|r| r.suona()) {
+        if std::mem::take(&mut self.pdf.ridisegna) || self.rivedi.as_ref().is_some_and(|r| r.suona()) || (self.casa_aperta && self.sopra.is_none() && self.lavori.iter().any(|l| l.stato == Stato::InCorso)) {
             return true;
         }
         self.lavori.iter().any(|l| l.stato == Stato::InCorso) && !self.scelta_file && (self.scheda == Scheda::Lavori || self.scheda == Scheda::Ruota)
@@ -719,6 +760,10 @@ impl App {
             self.trascina = Some((y, self.scorri_rivedi_ora(), false));
             return Effetto::Ridisegna;
         }
+        if self.casa_aperta && self.casa.elenco.is_some() {
+            self.trascina = Some((y, self.casa.elenco_scorri, false));
+            return Effetto::Ridisegna;
+        }
         if let Some(Azione::Pdf(pdf::PdfAz::Maniglia(i))) = self.premuto {
             self.pdf.trascina = Some((i, y, y));
             return Effetto::Ridisegna;
@@ -740,6 +785,15 @@ impl App {
             self.pdf.trascina = Some((i, y0, y));
             return Effetto::Ridisegna;
         }
+        if let (Some((y0, s0, mosso)), true) = (self.trascina, self.casa_aperta && self.casa.elenco.is_some()) {
+            if mosso || (y - y0).abs() > 10.0 {
+                self.casa.elenco_scorri = (s0 - (y - y0)).clamp(0.0, self.casa.elenco_max);
+                self.trascina = Some((y0, s0, true));
+                self.premuto = None;
+                return Effetto::Ridisegna;
+            }
+            return Effetto::Niente;
+        }
         if let (Some((y0, s0, mosso)), true) = (self.trascina, self.rivedi.is_some()) {
             if mosso || (y - y0).abs() > 10.0 {
                 self.scorri_rivedi(y - y0, s0);
@@ -750,7 +804,7 @@ impl App {
             return Effetto::Niente;
         }
         if let Some((y0, s0, mosso)) = self.trascina {
-            let pagina = (self.pdf.pagina.is_some() && !self.pdf.protetto || self.opzioni.is_some() || self.impostazioni) && !self.scelta_file;
+            let pagina = (self.pdf.pagina.is_some() && !self.pdf.protetto || self.opzioni.is_some() || self.impostazioni || self.casa_aperta && self.casa.elenco.is_none()) && !self.scelta_file;
             if (mosso || (y - y0).abs() > 10.0) && (pagina || matches!(self.scheda, Scheda::Lavori | Scheda::Info | Scheda::Aspetto) && !self.foglio && !self.scelta_file) {
                 self.scorri = (s0 - (y - y0)).clamp(0.0, self.scorri_max);
                 self.trascina = Some((y0, s0, true));
@@ -817,6 +871,20 @@ impl App {
             self.scorri = 0.0;
             return true;
         }
+        if self.casa_aperta {
+            if self.casa.elenco.take().is_some() {
+                return true;
+            }
+            if self.casa.guida || self.sopra.is_some() {
+                self.azione_casa(casa::CasaAz::Indietro);
+                return true;
+            }
+            if self.tema == ThemeId::PercorsoGuidato && self.casa.passo > 0 {
+                self.azione_casa(casa::CasaAz::Passo(-1));
+                return true;
+            }
+            return false;
+        }
         if self.foglio {
             return false;
         }
@@ -853,6 +921,9 @@ impl App {
         self.lavori.insert(0, Lavoro { id: lavoro, origine: file.nome.clone(), etichetta: etichetta.into(), conv, inizio: Instant::now(), quando: adesso(), stato: Stato::InCorso, prog: prog.clone(), sorgente, controlli: None });
         self.scorri = 0.0;
         self.scheda = Scheda::Lavori;
+        if self.casa_aperta {
+            self.sopra = Some(Scheda::Lavori);
+        }
         self.foglio = false;
         self.dal_foglio = false;
         self.pdf.pagina = None;
@@ -871,6 +942,7 @@ impl App {
             Azione::Pdf(az) => self.azione_pdf(az),
             Azione::Riv(az) => self.azione_rivedi(az),
             Azione::Opz(az) => self.azione_opzioni(az),
+            Azione::Casa(az) => self.azione_casa(az),
             Azione::AltreOpzioni => {
                 let id = if self.foglio { self.righe_ora().get(self.tessera).map(|r| r.id) } else { self.scelta.and_then(|i| self.fette().get(i).map(|f| f.id)) };
                 self.apri_opzioni(id)
@@ -1025,10 +1097,17 @@ impl App {
             self.pagina_rivedi(p, w, h);
         } else if self.impostazioni {
             self.pagina_impostazioni(p, w, h);
-        } else if self.opzioni.is_some() && self.file.is_some() {
+        } else if self.opzioni.is_some() && (self.file.is_some() || self.opzioni.as_ref().is_some_and(|o| o.da_casa.is_some())) {
             self.pagina_opzioni(p, w, h);
         } else if let (Some(pg), true) = (self.pdf.pagina, self.file.is_some()) {
             self.pagina_pdf(p, pg, w, h);
+        } else if self.casa_aperta {
+            match self.sopra {
+                Some(Scheda::Lavori) => self.pagina_lavori(p, w, h),
+                Some(Scheda::Aspetto) => self.pagina_aspetto(p, w, h),
+                Some(Scheda::Info) => self.pagina_info(p, w, h),
+                _ => self.pagina_casa(p, w, h),
+            }
         } else if self.foglio && self.file.is_some() {
             self.pagina_foglio(p, w, h);
         } else {
@@ -1057,6 +1136,13 @@ impl App {
 
     fn titolo_barra(&mut self, p: &mut Painter, x: f32, w: f32, titolo: &str) {
         let pal = self.pal();
+        // Sopra la finestra principale: la freccia per tornarci.
+        let (x, w) = if self.casa_aperta && self.sopra.is_some() {
+            self.bottone_icona(p, (4.0, 4.0, TOCCO, TOCCO), ic::ARROW_LEFT, Azione::Casa(casa::CasaAz::Indietro));
+            (60.0, w - (60.0 - x))
+        } else {
+            (x, w)
+        };
         p.text(titolo, x, 0.0, w, BARRA, 21.0, Weight::Semibold, pal.text, Align::Left);
     }
 
@@ -1482,15 +1568,18 @@ impl App {
         p.rrect(rc.0, rc.1, rc.2, rc.3, 16.0, Some(fondo), Some((if scelta { pal.primary } else { pal.border }, 1.0)));
         let fg = if scelta { pal.on_primary } else { pal.text };
         let sg = if scelta { mix(pal.primary, pal.on_primary, 0.8) } else { pal.muted };
-        let caja = if scelta { mix(pal.primary, pal.on_primary, 0.25) } else { pal.alt };
+        // Il colore del tipo di file che esce (il colore del tema resta per la tessera scelta).
+        let kc = casa::colore_kind(casa::kind_uscita(self.kind, self.righe_ora().get(match az { Azione::Tessera(i) => i, _ => usize::MAX }).map(|r| r.id).unwrap_or("")), self.tema.dark());
+        let kc = if matches!(az, Azione::Tessera(_)) { kc } else { pal.primary };
+        let caja = if scelta { mix(pal.primary, pal.on_primary, 0.25) } else { mix(pal.surface, kc, 0.16) };
         if rc.3 >= 84.0 {
             p.rrect(rc.0 + 12.0, rc.1 + 12.0, 38.0, 38.0, 11.0, Some(caja), None);
-            p.icon(icona, rc.0 + 19.0, rc.1 + 19.0, 24.0, if scelta { pal.on_primary } else { pal.primary });
+            p.icon(icona, rc.0 + 19.0, rc.1 + 19.0, 24.0, if scelta { pal.on_primary } else { kc });
             p.text(titolo, rc.0 + 12.0, rc.1 + rc.3 - 46.0, rc.2 - 20.0, 24.0, 17.0, Weight::Semibold, fg, Align::Left);
             p.text(sotto, rc.0 + 12.0, rc.1 + rc.3 - 26.0, rc.2 - 20.0, 20.0, 12.0, Weight::Regular, sg, Align::Left);
         } else {
             p.rrect(rc.0 + 10.0, rc.1 + (rc.3 - 36.0) / 2.0, 36.0, 36.0, 10.0, Some(caja), None);
-            p.icon(icona, rc.0 + 16.0, rc.1 + (rc.3 - 24.0) / 2.0, 24.0, if scelta { pal.on_primary } else { pal.primary });
+            p.icon(icona, rc.0 + 16.0, rc.1 + (rc.3 - 24.0) / 2.0, 24.0, if scelta { pal.on_primary } else { kc });
             p.text(titolo, rc.0 + 54.0, rc.1 + rc.3 / 2.0 - 21.0, rc.2 - 60.0, 22.0, 16.0, Weight::Semibold, fg, Align::Left);
             p.text(sotto, rc.0 + 54.0, rc.1 + rc.3 / 2.0 + 1.0, rc.2 - 60.0, 20.0, 11.0, Weight::Regular, sg, Align::Left);
             if nuovo {
