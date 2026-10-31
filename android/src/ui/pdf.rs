@@ -60,6 +60,8 @@ pub enum Campo {
     Opzione(usize),
     /// Il nome del file a modello, nelle Impostazioni.
     Modello,
+    /// Il link di «Video dal web» e di YouTube.
+    Link,
 }
 
 /// Quello che arriva dalla tastiera.
@@ -260,7 +262,7 @@ impl StatoPdf {
             Campo::ExcelPagine => &mut self.x_pagine,
             Campo::Filigrana => &mut self.testo_filigrana,
             Campo::PagineDi(i) => &mut self.unisci.get_mut(i)?.sel,
-            Campo::Opzione(_) | Campo::Modello => return None,
+            Campo::Opzione(_) | Campo::Modello | Campo::Link => return None,
         })
     }
 
@@ -400,6 +402,10 @@ impl App {
         match (c, t) {
             (_, Tasto::Invio) if c != Campo::Password => {
                 self.campo = None;
+                return Effetto::Ridisegna;
+            }
+            (Campo::Link, _) => {
+                self.tasto_casa(t);
                 return Effetto::Ridisegna;
             }
             (Campo::Opzione(k), _) => {
@@ -1285,6 +1291,11 @@ impl App {
         let testo = if self.pdf.sbloccando { "Apro…" } else { "Apri" };
         self.pulsante(p, apri, I_LUCCHETTO, testo, pronta.then_some(Azione::Pdf(PdfAz::Apri)));
     }
+}
+
+/// Come `maiuscola`, per le altre schermate.
+pub(super) fn maiuscola_pub(s: &str) -> String {
+    maiuscola(s)
 }
 
 /// I messaggi del motore cominciano in minuscolo: sullo schermo vanno da soli, con la maiuscola.
