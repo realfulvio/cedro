@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Rework: come si arriva</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&amp;display=swap">
+<style>
+body{margin:0}
+.g h2{margin:0 0 6px;font-size:15px;letter-spacing:.06em;text-transform:uppercase;color:#663079}
+.g p{margin:0;font-size:16px;line-height:1.45}
+.g .box{background:#FFFFFF;border:1px solid #E1DAE7;border-radius:18px;padding:18px 20px;display:flex;flex-direction:column;gap:8px}
+.g .t{display:grid;grid-template-columns:170px minmax(0,1fr);gap:6px 14px;font-size:15px;line-height:1.35}
+.g .t b{color:#241A31}
+.g .t span{color:#4E4759}
+</style>
+</helmet>
+<div class="g" style="width: 880px; height: 844px; box-sizing: border-box; padding: 40px 44px; background: #F7F5F9; color: #241A31; font-family: 'Source Sans 3', sans-serif; display: flex; flex-direction: column; gap: 18px">
+<h1 style="margin: 0; font-size: 34px; font-weight: 700">Come il desktop, ma per il pollice</h1>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<div class="box"><h2>Dall'icona di Cedro</h2><p>Si apre la finestra principale del tema scelto, come sul computer: Conversioni, Trascrizione, YouTube e Video dal web, con la coda di più file.</p></div>
+<div class="box"><h2>Da «Condividi»</h2><p>Si apre la ruota con il file al centro, come il clic destro sul computer. La ruota è uguale in tutti i temi e prende solo i colori e il carattere del tema.</p></div>
+</div>
+<div class="box">
+<h2>Cosa diventa ogni parte sul telefono</h2>
+<div class="t">
+<b>Attività</b><span>Barra in basso (Essenziale), schede in alto (Compatto, Banco, Documento), menu nell'intestazione (Guidato).</span>
+<b>Categorie</b><span>Schede che scorrono in orizzontale: Immagini, Documenti, PDF, Testo, Audio, Video, Archivi.</span>
+<b>Coda dei file</b><span>Righe a tutta larghezza con miniatura, peso e misure; si tocca per sceglierle, si scorre per toglierle.</span>
+<b>Ispettore</b><span>Riquadro «Impostazioni di conversione» sotto la coda, o foglio dal basso nel Banco di lavoro.</span>
+<b>Piede</b><span>Destinazione e «Se esiste già» in una riga, «Converti 3 file» sempre in basso e grande.</span>
+</div>
+</div>
+<p style="color: #6C6578; font-size: 15px">Testi e colori sono quelli del desktop 0.29. Ogni tema ha la sua disposizione e il suo carattere. Le funzioni della 0.24 restano le stesse sotto qualsiasi tema; cambia solo come sono disposte.</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":880,"height":844}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
