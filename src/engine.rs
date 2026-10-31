@@ -1138,6 +1138,21 @@ pub fn squeeze_pdf(path: &Path, s: &crate::pdfedit::Squeeze, password: Option<&s
     Ok((out, bytes.len() as u64))
 }
 
+/// Pagine e segnalibri di primo livello (pagina da 1, titolo) di un PDF, con la password se è protetto.
+pub fn pdf_info(path: &Path, password: Option<&str>) -> Result<(u32, Vec<(u32, String)>), String> {
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let doc = crate::pdfpages::open(&bytes, password)?;
+    Ok((crate::pdfpages::page_count(&doc) as u32, crate::pdfpages::top_bookmarks(&doc)))
+}
+
+/// Una copia senza password di un PDF protetto, in `out` (per lavorarlo come gli altri).
+pub fn pdf_unlock(path: &Path, password: &str, out: &Path) -> Result<(), String> {
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let mut doc = crate::pdfpages::open(&bytes, Some(password))?;
+    doc.trailer.remove(b"Encrypt");
+    fs::write(out, crate::pdfedit::save_packed(&doc)).map_err(|e| e.to_string())
+}
+
 /// Comprime un PDF. Se non diventa più leggero non si scrive niente: l'originale va già bene.
 fn compress_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
     let s = opts.pdf_edit.squeeze.unwrap_or_else(saved_squeeze);
