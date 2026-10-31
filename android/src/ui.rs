@@ -101,6 +101,8 @@ pub enum Azione {
     /// Il modello di trascrizione: 0 Veloce (tiny), 1 Buona (base).
     Modello(usize),
     Tema(usize),
+    /// «Caratteri»: Normali (falso) o Grandi (vero).
+    Caratteri(bool),
     /// 0 = lingua del telefono, 1 = italiano, 2 = inglese.
     Lingua(usize),
     /// «Copia le informazioni».
@@ -128,6 +130,8 @@ pub enum Effetto {
     Esci,
     /// Il tema è cambiato: va ricordato.
     SalvaTema(ThemeId),
+    /// La misura dei caratteri è cambiata: va ricordata.
+    SalvaCaratteri(bool),
     /// La lingua è cambiata («auto», «it» o «en»): va ricordata.
     SalvaLingua(&'static str),
     /// L'elenco dei lavori è cambiato: va ricordato.
@@ -353,6 +357,8 @@ impl Info {
 pub struct App {
     pub info: Info,
     pub tema: ThemeId,
+    /// Caratteri grandi (+2, come sul computer).
+    pub grandi: bool,
     /// «auto», «it» o «en».
     pub lingua: &'static str,
     /// La lingua del telefono, per «auto».
@@ -410,6 +416,7 @@ impl App {
         App {
             info: Info::default(),
             tema,
+            grandi: false,
             lingua: "auto",
             lingua_telefono: cedro::i18n::Lang::It,
             file: None,
@@ -730,6 +737,10 @@ impl App {
                 self.tema = TEMI[i];
                 Effetto::SalvaTema(self.tema)
             }
+            Azione::Caratteri(g) => {
+                self.grandi = g;
+                Effetto::SalvaCaratteri(g)
+            }
             Azione::CopiaInfo => Effetto::Copia(self.info.testo()),
             Azione::Lingua(i) => {
                 self.lingua = LINGUE[i].0;
@@ -972,8 +983,8 @@ impl App {
             y += 66.0;
         } else {
             let msg = "Tocca il cerchio per scegliere un file, oppure condividilo a Cedro da un'altra app.";
-            p.text_wrap(msg, x0, y, w0, 14.0, Weight::Regular, pal.muted, 20.0, 2);
-            y += 44.0;
+            let usata = p.text_wrap(msg, x0, y, w0, 14.0, Weight::Regular, pal.muted, 20.0, 2);
+            y += (usata + 6.0).max(44.0);
         }
         if ultimi && (orizz || y + 94.0 <= spazio + 2.0) {
             self.riga_ultimi(p, x0, y, w0, spazio - y);
@@ -1465,30 +1476,41 @@ impl App {
     fn pagina_aspetto(&mut self, p: &mut Painter, w: f32, h: f32) {
         let pal = self.pal();
         self.titolo_barra(p, 16.0, w - 32.0, "Aspetto");
-        let rh = if h < 420.0 { 52.0 } else { 66.0 };
+        let rh = if h < 420.0 { 60.0 } else { 80.0 };
         let ampio = w > 700.0;
         let cw = if ampio { 520.0 } else { w - 24.0 };
         let x = if ampio { (w - cw) / 2.0 } else { 12.0 };
         p.push_clip(0.0, BARRA, w, h - BARRA);
-        let top = BARRA + 4.0 - self.scorri;
+        let mut y = BARRA - self.scorri;
+        p.text("Tema", x + 4.0, y, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
+        y += 32.0;
         for (i, tema) in TEMI.into_iter().enumerate() {
-            let rc = (x, top + i as f32 * rh, cw, rh - 8.0);
+            let rc = (x, y + i as f32 * rh, cw, rh - 8.0);
             let attivo = tema == self.tema;
             let prem = self.premuto == Some(Azione::Tema(i));
             let pa = tema.palette();
-            p.rrect(rc.0, rc.1, rc.2, rc.3, 16.0, Some(if prem { mix(pal.alt, pal.primary, 0.2) } else { pal.surface }), Some((if attivo { pal.primary } else { pal.border }, if attivo { 2.0 } else { 1.0 })));
-            p.circle(rc.0 + 30.0, rc.1 + rc.3 / 2.0, 16.0, Some(pa.bg), Some((pa.border, 1.5)));
-            p.disc_a(rc.0 + 30.0, rc.1 + rc.3 / 2.0, 10.0, pa.primary, 1.0);
-            p.text(tema.name(), rc.0 + 60.0, rc.1, rc.2 - 110.0, rc.3, 17.0, Weight::Semibold, pal.text, Align::Left);
-            if attivo {
-                p.icon(ic::CHECK, rc.0 + rc.2 - 40.0, rc.1 + (rc.3 - 22.0) / 2.0, 22.0, pal.primary);
-            }
+            p.rrect(rc.0, rc.1, rc.2, rc.3, 18.0, Some(if prem { mix(pal.alt, pal.primary, 0.2) } else { pal.surface }), Some((if attivo { pal.primary } else { pal.border }, if attivo { 2.0 } else { 1.0 })));
+            let cy = rc.1 + rc.3 / 2.0;
+            p.circle(rc.0 + 32.0, cy, 18.0, Some(pa.bg), Some((pa.border, 1.5)));
+            p.disc_a(rc.0 + 32.0, cy, 10.0, pa.primary, 1.0);
+            // Nome, carattere e «Àa» nel carattere di quel tema.
+            let prima = p.swap_fonts(cedro::ui::gfx::Fonts::for_theme(tema));
+            let aw = p.measure("Àa", 24.0, Weight::Bold) + 8.0;
+            p.text(tema.name(), rc.0 + 62.0, cy - 24.0, rc.2 - 80.0 - aw, 26.0, 17.0, Weight::Semibold, pal.text, Align::Left);
+            p.text(nome_carattere(tema), rc.0 + 62.0, cy + 1.0, rc.2 - 80.0 - aw, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+            p.text("Àa", rc.0 + rc.2 - 14.0 - aw, rc.1, aw, rc.3, 24.0, Weight::Bold, pal.text, Align::Right);
+            p.swap_fonts(prima);
             self.colpi.push((Forma::R((rc.0, rc.1 - 2.0, rc.2, rc.3 + 4.0)), Azione::Tema(i)));
         }
-        let y0 = top + TEMI.len() as f32 * rh + 10.0;
-        p.text("Lingua", x + 4.0, y0, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
+        y += TEMI.len() as f32 * rh + 4.0;
+        p.text("Caratteri", x + 4.0, y, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
+        y += 32.0;
+        self.pillole(p, (x, y, cw, TOCCO), &["Normali", "Grandi"], usize::from(self.grandi), |i| Azione::Caratteri(i == 1));
+        y += TOCCO + 6.0;
+        y += p.text_wrap("Ogni tema ha il suo carattere, come sul computer. «Grandi» ingrandisce tutto il testo di Cedro.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3) + 10.0;
+        p.text("Lingua", x + 4.0, y, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
         for (i, (chiave, nome)) in LINGUE.iter().enumerate() {
-            let rc = (x, y0 + 32.0 + i as f32 * 56.0, cw, 48.0);
+            let rc = (x, y + 32.0 + i as f32 * 56.0, cw, 48.0);
             let attivo = self.lingua == *chiave;
             let prem = self.premuto == Some(Azione::Lingua(i));
             p.rrect(rc.0, rc.1, rc.2, rc.3, 14.0, Some(if prem { mix(pal.alt, pal.primary, 0.2) } else { pal.surface }), Some((if attivo { pal.primary } else { pal.border }, if attivo { 2.0 } else { 1.0 })));
@@ -1498,11 +1520,43 @@ impl App {
             }
             self.colpi.push((Forma::R((rc.0, rc.1 - 2.0, rc.2, rc.3 + 4.0)), Azione::Lingua(i)));
         }
-        let y = y0 + 32.0 + LINGUE.len() as f32 * 56.0 + 6.0;
-        p.text_wrap("Le copie vanno nella cartella Documenti. Il tema scelto resta tra un avvio e l'altro.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3);
+        let y = y + 32.0 + LINGUE.len() as f32 * 56.0 + 6.0;
+        let fine = y + p.text_wrap("Le copie vanno nella cartella Documenti. Il tema scelto resta tra un avvio e l'altro.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3);
         p.pop_clip();
-        self.scorri_max = (y + 62.0 + self.scorri - h).max(0.0);
+        self.scorri_max = (fine + 16.0 + self.scorri - h).max(0.0);
         self.scorri = self.scorri.min(self.scorri_max);
+    }
+
+    /// Una scelta a pillole («Normali | Grandi»): la voce `scelta` è piena.
+    fn pillole(&mut self, p: &mut Painter, rc: R, voci: &[&str], scelta: usize, az: impl Fn(usize) -> Azione) {
+        let pal = self.pal();
+        p.rrect(rc.0, rc.1, rc.2, rc.3, rc.3 / 2.0, Some(pal.alt), None);
+        let n = voci.len().max(1) as f32;
+        let vw = (rc.2 - 8.0) / n;
+        for (i, nome) in voci.iter().enumerate() {
+            let rr = (rc.0 + 4.0 + i as f32 * vw, rc.1 + 4.0, vw, rc.3 - 8.0);
+            let on = i == scelta;
+            let a = az(i);
+            if on {
+                p.rrect(rr.0, rr.1, rr.2, rr.3, rr.3 / 2.0, Some(pal.primary), None);
+            } else if self.premuto == Some(a) {
+                p.rrect_a(rr.0, rr.1, rr.2, rr.3, rr.3 / 2.0, pal.primary, 0.14);
+            }
+            p.text(nome, rr.0 + 4.0, rr.1, rr.2 - 8.0, rr.3, 15.0, Weight::Semibold, if on { pal.on_primary } else { pal.text }, Align::Center);
+            self.colpi.push((Forma::R((rr.0, rc.1, rr.2, rc.3)), a));
+        }
+    }
+}
+
+/// Il carattere di ogni tema, come lo dice «Aspetto».
+fn nome_carattere(t: ThemeId) -> &'static str {
+    match t {
+        ThemeId::WindowsEssenziale => "Roboto, quello del telefono",
+        ThemeId::PercorsoGuidato => "Atkinson Hyperlegible",
+        ThemeId::CedroCompatto => "Figtree",
+        ThemeId::BancoDiLavoro => "IBM Plex Sans",
+        ThemeId::DocumentoAlCentro => "Source Sans 3",
+        ThemeId::Bondeno => "Titillium Web",
     }
 }
 
