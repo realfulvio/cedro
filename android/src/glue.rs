@@ -55,6 +55,7 @@ fn estensione_da_mime(mime: &str) -> &'static str {
         "image/bmp" => "bmp",
         "image/tiff" => "tiff",
         "application/pdf" => "pdf",
+        "application/zip" | "application/x-zip-compressed" => "zip",
         "text/plain" => "txt",
         "text/markdown" => "md",
         "text/html" => "html",
@@ -106,6 +107,18 @@ fn mime_da_percorso(path: &Path) -> &'static str {
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "odt" => "application/vnd.oasis.opendocument.text",
         "rtf" => "application/rtf",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "zip" => "application/zip",
+        "opus" => "audio/ogg",
+        "aif" | "aiff" => "audio/aiff",
+        "avif" => "image/avif",
+        "jxl" => "image/jxl",
+        "ico" => "image/x-icon",
+        "tga" => "image/x-tga",
+        "pnm" | "ppm" | "pgm" | "pbm" => "image/x-portable-anymap",
+        "exr" => "image/x-exr",
+        "srt" => "application/x-subrip",
+        "vtt" => "text/vtt",
         _ => "application/octet-stream",
     }
 }
@@ -826,14 +839,22 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
     if azione == "trascrivi" {
         return trascrivi(&app, &c, id, &file, &out, &prog, qualita as usize);
     }
-    // Le scelte della schermata (o quelle di sempre), con «se esiste già» delle impostazioni.
-    let mut o = opts.map(|b| *b).unwrap_or_default();
-    o.exists = if cedro::read_settings().replace { cedro::Exists::Replace } else { cedro::Exists::Number };
+    // Le scelte della schermata, con «se esiste già» e il nome a modello delle Impostazioni (le mette `ui`).
+    let o = opts.map(|b| *b).unwrap_or_default();
     let esegui = |dove: &Path| {
         let p2 = prog.clone();
         cedro::progress::con(
             move |f| p2.store((f * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed),
-            || if unisci.is_empty() { cedro::perform_with(&file, azione, qualita, Some(dove), &o) } else { cedro::merge_with(&unisci, Some(dove), &o) },
+            || {
+                if azione == "zip-tutti" {
+                    let tutti: Vec<PathBuf> = unisci.iter().map(|u| u.0.clone()).collect();
+                    cedro::zip_paths(&tutti, dove, None, &o)
+                } else if unisci.is_empty() {
+                    cedro::perform_with(&file, azione, qualita, Some(dove), &o)
+                } else {
+                    cedro::merge_with(&unisci, Some(dove), &o)
+                }
+            },
         )
         .map_err(|e| e.to_string())
     };
@@ -1259,10 +1280,18 @@ fn ricevuti(ui: &mut App, c: &Consegne, cartella: &Path, v: Vec<Condiviso>) {
     let Some(primo) = v.next() else { return };
     log::info!("ricevuto {} ({})", primo.nome, primo.path.display());
     carica_file(ui, c, cartella, primo.path, primo.nome, true);
-    let altri: Vec<(PathBuf, String)> = v.filter(|c| tipo_di(&c.path) == cedro::Kind::Pdf).map(|c| (c.path, c.nome)).collect();
-    if !altri.is_empty() && ui.kind == cedro::Kind::Pdf {
+    let resto: Vec<Condiviso> = v.collect();
+    if resto.is_empty() {
+        return;
+    }
+    if ui.kind == cedro::Kind::Pdf && resto.iter().all(|c| tipo_di(&c.path) == cedro::Kind::Pdf) {
+        let altri: Vec<(PathBuf, String)> = resto.into_iter().map(|c| (c.path, c.nome)).collect();
         leggi_uniti(c, altri.iter().map(|a| a.0.clone()).collect(), None);
         ui.aggiungi_pdf(altri);
+    } else {
+        // File di tipi diversi: il foglio propone per prima cosa uno ZIP con tutti.
+        ui.altri = resto.into_iter().map(|c| c.path).collect();
+        ui.foglio = true;
     }
 }
 
@@ -1363,6 +1392,10 @@ fn android_main(app: AndroidApp) {
     let dati = app.internal_data_path().unwrap_or_else(|| PathBuf::from("/data/local/tmp"));
     // Il motore cerca le sue impostazioni in $HOME/.config/cedro.
     std::env::set_var("HOME", &dati);
+    // La cartella temporanea del motore (ZIP, audio a flussi): /data/local/tmp non è nostra.
+    let tmp = dati.join("tmp");
+    let _ = std::fs::create_dir_all(&tmp);
+    std::env::set_var("TMPDIR", &tmp);
     if let Some(librerie) = cartella_librerie(&app) {
         cedro::youtube::android::set_dirs(librerie, dati.clone());
     }
@@ -1377,6 +1410,19 @@ fn android_main(app: AndroidApp) {
     let tema = std::fs::read_to_string(&file_tema).map(|t| ThemeId::from_key(&t)).unwrap_or(ThemeId::WindowsEssenziale);
     let mut ui = App::new(tema);
     let file_caratteri = dati.join("caratteri.txt");
+    // Le impostazioni del motore (qualità, DPI, OCR) stanno nel suo config.txt; il resto qui.
+    ui.imp = cedro::read_settings();
+    ui.qualita = ui.imp.quality.clamp(40, 95);
+    let file_impostazioni = dati.join("impostazioni.txt");
+    if let Ok(t) = std::fs::read_to_string(&file_impostazioni) {
+        let mut righe = t.lines();
+        ui.esiste = match righe.next().unwrap_or("") {
+            "sostituisci" => cedro::Exists::Replace,
+            "salta" => cedro::Exists::Skip,
+            _ => cedro::Exists::Number,
+        };
+        ui.modello_nome = righe.next().unwrap_or("").to_string();
+    }
     ui.grandi = std::fs::read_to_string(&file_caratteri).is_ok_and(|t| t.trim() == "grandi");
     // La lingua: quella scelta nell'Aspetto, o quella del telefono (Android non ha LANG).
     let file_lingua = dati.join("lingua.txt");
@@ -1553,6 +1599,16 @@ fn android_main(app: AndroidApp) {
                         }
                         Effetto::SalvaCaratteri(g) => {
                             let _ = std::fs::write(&file_caratteri, if g { "grandi" } else { "normali" });
+                            sporco = true;
+                        }
+                        Effetto::SalvaImpostazioni => {
+                            let _ = cedro::write_settings(&ui.imp);
+                            let esiste = match ui.esiste {
+                                cedro::Exists::Replace => "sostituisci",
+                                cedro::Exists::Skip => "salta",
+                                _ => "numera",
+                            };
+                            let _ = std::fs::write(&file_impostazioni, format!("{esiste}\n{}", ui.modello_nome));
                             sporco = true;
                         }
                         Effetto::SalvaTema(t) => {
@@ -1735,6 +1791,10 @@ fn android_main(app: AndroidApp) {
             }
         }
         // La tastiera segue il campo attivo.
+        if std::mem::take(&mut ui.mostra_tastiera) && ui.campo.is_some() {
+            tastiera = true;
+            app.show_soft_input(true);
+        }
         if ui.campo.is_some() != tastiera {
             tastiera = ui.campo.is_some();
             if tastiera {

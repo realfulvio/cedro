@@ -56,6 +56,10 @@ pub enum Campo {
     Filigrana,
     /// Le pagine di un PDF da unire.
     PagineDi(usize),
+    /// Un testo di «Altre opzioni» (indice nell'elenco di ora).
+    Opzione(usize),
+    /// Il nome del file a modello, nelle Impostazioni.
+    Modello,
 }
 
 /// Quello che arriva dalla tastiera.
@@ -125,7 +129,7 @@ pub struct StatoPdf {
     pub miniature: HashMap<u32, Image>,
     pub chiedi: Vec<u32>,
     /// Dove sta il campo in cui si scrive (y, altezza), per tenerlo sopra la tastiera.
-    campo_vis: Option<(f32, f32)>,
+    pub(super) campo_vis: Option<(f32, f32)>,
     /// Lo scorrimento è cambiato dopo il disegno: serve un altro giro.
     pub ridisegna: bool,
     // Password
@@ -256,6 +260,7 @@ impl StatoPdf {
             Campo::ExcelPagine => &mut self.x_pagine,
             Campo::Filigrana => &mut self.testo_filigrana,
             Campo::PagineDi(i) => &mut self.unisci.get_mut(i)?.sel,
+            Campo::Opzione(_) | Campo::Modello => return None,
         })
     }
 
@@ -392,6 +397,29 @@ impl App {
     /// Un tasto: va nel campo attivo.
     pub fn tasto(&mut self, t: Tasto) -> Effetto {
         let Some(c) = self.campo else { return Effetto::Niente };
+        match (c, t) {
+            (_, Tasto::Invio) if c != Campo::Password => {
+                self.campo = None;
+                return Effetto::Ridisegna;
+            }
+            (Campo::Opzione(k), _) => {
+                self.tasto_opzione(k, t);
+                return Effetto::Ridisegna;
+            }
+            (Campo::Modello, _) => {
+                if let Some(s) = self.testo_opzione(c) {
+                    match t {
+                        Tasto::Canc => {
+                            s.pop();
+                        }
+                        Tasto::Car(ch) if !ch.is_control() && s.chars().count() < 80 => s.push(ch),
+                        _ => {}
+                    }
+                }
+                return Effetto::SalvaImpostazioni;
+            }
+            _ => {}
+        }
         match t {
             Tasto::Invio => {
                 self.campo = None;
@@ -624,7 +652,18 @@ impl App {
         p.pop_clip();
         self.scorri_max = (fine + 12.0 + self.scorri - (corpo.1 + corpo.3)).max(0.0);
         self.scorri = self.scorri.min(self.scorri_max);
-        // Il campo in cui si scrive resta a vista (la tastiera accorcia la finestra).
+        self.tieni_campo(corpo);
+        // Il piede: il pulsante grande, sempre in basso.
+        let (testo, icona, attivo, nota) = self.piede_pdf(pg);
+        let by = h - PIEDE + 12.0;
+        if let Some(n) = nota {
+            p.text(&n, x, by - 30.0, cw, 24.0, 13.0, Weight::Regular, pal.muted, Align::Center);
+        }
+        self.pulsante(p, (x, by, cw, 56.0), icona, &testo, attivo.then_some(Azione::Pdf(PdfAz::Vai)));
+    }
+
+    /// Il campo in cui si scrive resta a vista (la tastiera accorcia la finestra): si scorre fin lì.
+    pub(super) fn tieni_campo(&mut self, corpo: R) {
         if let (Some(_), Some((cy, ch))) = (self.campo, self.pdf.campo_vis) {
             let prima = self.scorri;
             if cy + ch > corpo.1 + corpo.3 - 8.0 {
@@ -634,13 +673,6 @@ impl App {
             }
             self.pdf.ridisegna = self.scorri != prima;
         }
-        // Il piede: il pulsante grande, sempre in basso.
-        let (testo, icona, attivo, nota) = self.piede_pdf(pg);
-        let by = h - PIEDE + 12.0;
-        if let Some(n) = nota {
-            p.text(&n, x, by - 30.0, cw, 24.0, 13.0, Weight::Regular, pal.muted, Align::Center);
-        }
-        self.pulsante(p, (x, by, cw, 56.0), icona, &testo, attivo.then_some(Azione::Pdf(PdfAz::Vai)));
     }
 
     fn piede_pdf(&self, pg: Pagina) -> (String, &'static str, bool, Option<String>) {
@@ -674,7 +706,7 @@ impl App {
 
     // ---- Pezzi comuni ----
 
-    fn etichetta(&self, p: &mut Painter, x: f32, y: f32, w: f32, t: &str) -> f32 {
+    pub(super) fn etichetta(&self, p: &mut Painter, x: f32, y: f32, w: f32, t: &str) -> f32 {
         p.text(t, x + 2.0, y, w, 28.0, 14.0, Weight::Semibold, self.pal().muted, Align::Left);
         30.0
     }
@@ -695,7 +727,7 @@ impl App {
         }
     }
 
-    fn interruttore(&self, p: &mut Painter, x: f32, cy: f32, on: bool) {
+    pub(super) fn interruttore(&self, p: &mut Painter, x: f32, cy: f32, on: bool) {
         let pal = self.pal();
         p.rrect(x, cy - 15.0, 52.0, 30.0, 15.0, Some(if on { pal.primary } else { pal.border }), None);
         p.circle(if on { x + 37.0 } else { x + 15.0 }, cy, 11.0, Some(BIANCO), None);
@@ -703,7 +735,7 @@ impl App {
 
     /// Una riga con titolo, spiegazione e interruttore. Restituisce l'altezza.
     #[allow(clippy::too_many_arguments)]
-    fn riga_sw(&mut self, p: &mut Painter, x: f32, y: f32, w: f32, titolo: &str, sotto: &str, on: bool, az: Azione, vista: R) -> f32 {
+    pub(super) fn riga_sw(&mut self, p: &mut Painter, x: f32, y: f32, w: f32, titolo: &str, sotto: &str, on: bool, az: Azione, vista: R) -> f32 {
         let pal = self.pal();
         let righe = p.wrap_lines(sotto, 13.0, Weight::Regular, w - 90.0, 2).len().max(1);
         let h = 44.0 + 20.0 * righe as f32;
@@ -716,7 +748,7 @@ impl App {
         h
     }
 
-    fn colpo(&mut self, rc: R, az: Azione, vista: R) {
+    pub(super) fn colpo(&mut self, rc: R, az: Azione, vista: R) {
         if let Some(r) = super::intersezione(rc, vista) {
             self.colpi.push((Forma::R(r), az));
         }
@@ -724,7 +756,7 @@ impl App {
 
     /// Un campo di testo: tocca e scrivi. `nascosto`: puntini al posto delle lettere.
     #[allow(clippy::too_many_arguments)]
-    fn campo_testo(&mut self, p: &mut Painter, rc: R, c: Campo, testo: &str, segnaposto: &str, suffisso: &str, nascosto: bool, vista: R) {
+    pub(super) fn campo_testo(&mut self, p: &mut Painter, rc: R, c: Campo, testo: &str, segnaposto: &str, suffisso: &str, nascosto: bool, vista: R) {
         let pal = self.pal();
         let attivo = self.campo == Some(c);
         if attivo {
@@ -752,7 +784,7 @@ impl App {
     }
 
     /// Una scelta a pillole dentro una zona che scorre.
-    fn pillole_in(&mut self, p: &mut Painter, rc: R, voci: &[&str], scelta: usize, az: impl Fn(usize) -> Azione, vista: R) {
+    pub(super) fn pillole_in(&mut self, p: &mut Painter, rc: R, voci: &[&str], scelta: usize, az: impl Fn(usize) -> Azione, vista: R) {
         let n0 = self.colpi.len();
         self.pillole(p, rc, voci, scelta, az);
         let nuovi: Vec<(Forma, Azione)> = self.colpi.drain(n0..).collect();
