@@ -20,7 +20,9 @@ use cedro::ui::wheel::list;
 use cedro::{Kind, Mode};
 
 mod pdf;
+mod rivedi;
 pub use pdf::{Campo, Pagina, StatoPdf, Tasto};
+pub use rivedi::da_controllare;
 
 pub type R = (f32, f32, f32, f32);
 
@@ -69,6 +71,10 @@ pub struct Lavoro {
     pub stato: Stato,
     /// Avanzamento in millesimi (0..=1000); `u32::MAX` finché il motore non lo sa.
     pub prog: Arc<AtomicU32>,
+    /// La trascrizione: l'audio di partenza, per «Rivedi».
+    pub sorgente: Option<PathBuf>,
+    /// I punti da controllare trovati nella trascrizione.
+    pub controlli: Option<usize>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -126,6 +132,10 @@ pub enum Azione {
     Pdf(pdf::PdfAz),
     /// Un campo di testo: la tastiera scrive lì.
     Campo(Campo),
+    /// «Rivedi» sulla scheda di una trascrizione.
+    Rivedi(u32),
+    /// Dentro «Rivedi trascrizione».
+    Riv(rivedi::RivAz),
     /// Un'area che non fa niente ma ferma il tocco.
     Niente,
 }
@@ -138,6 +148,10 @@ pub enum Effetto {
     Converti { id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)> },
     /// Prova la password del PDF: se va, se ne fa una copia senza.
     Sblocca(String),
+    /// Legge l'onda dell'audio di una revisione (percorso, durata).
+    OndaRevisione(PathBuf, f64),
+    /// Scrive un file nuovo (la revisione salvata) e lo consegna come il risultato del lavoro `id`.
+    Scrivi { id: u32, nome: String, dati: Vec<u8> },
     /// Chiude Cedro: si torna all'app di prima.
     Esci,
     /// Il tema è cambiato: va ricordato.
@@ -429,6 +443,8 @@ pub struct App {
     pub pdf: StatoPdf,
     /// Il campo di testo in cui scrive la tastiera.
     pub campo: Option<Campo>,
+    /// «Rivedi trascrizione», a tutto schermo.
+    pub rivedi: Option<rivedi::Rivedi>,
 }
 
 /// Le lingue tra cui scegliere: chiave nel file, nome (quelli delle lingue non si traducono).
@@ -478,6 +494,7 @@ impl App {
             margini: (0.0, 0.0, 0.0, 0.0),
             pdf: StatoPdf::default(),
             campo: None,
+            rivedi: None,
         }
     }
 
@@ -500,6 +517,7 @@ impl App {
 
     /// Un lavoro è finito (o fallito).
     pub fn finisce(&mut self, id: u32, stato: Stato) -> Effetto {
+        self.salvata(id, &stato);
         if let Some(l) = self.lavori.iter_mut().find(|l| l.id == id) {
             l.stato = stato;
         }
@@ -508,7 +526,7 @@ impl App {
 
     /// Vero se serve ridisegnare a ogni fotogramma (barra di avanzamento che scorre).
     pub fn animando(&mut self) -> bool {
-        if std::mem::take(&mut self.pdf.ridisegna) {
+        if std::mem::take(&mut self.pdf.ridisegna) || self.rivedi.as_ref().is_some_and(|r| r.suona()) {
             return true;
         }
         self.lavori.iter().any(|l| l.stato == Stato::InCorso) && !self.scelta_file && (self.scheda == Scheda::Lavori || self.scheda == Scheda::Ruota)
@@ -529,7 +547,18 @@ impl App {
         self.lavori
             .iter()
             .filter_map(|l| match &l.stato {
-                Stato::Fatto { path, msg, nome } => Some(format!("{}\t{}\t{}\t{}\t{}\t{}\t{}", l.quando, pulisci(&l.origine), pulisci(&l.etichetta), l.conv as u8, path.display(), pulisci(msg), pulisci(nome))),
+                Stato::Fatto { path, msg, nome } => Some(format!(
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    l.quando,
+                    pulisci(&l.origine),
+                    pulisci(&l.etichetta),
+                    l.conv as u8,
+                    path.display(),
+                    pulisci(msg),
+                    pulisci(nome),
+                    l.sorgente.as_ref().map(|p| p.display().to_string()).unwrap_or_default(),
+                    l.controlli.map(|n| n.to_string()).unwrap_or_default()
+                )),
                 _ => None,
             })
             .take(30)
@@ -561,6 +590,8 @@ impl App {
                 quando: c[0].parse().unwrap_or(0),
                 stato: Stato::Fatto { path, nome, msg: c[5].into() },
                 prog: Arc::new(AtomicU32::new(1000)),
+                sorgente: c.get(7).filter(|s| !s.is_empty()).map(PathBuf::from).filter(|p| cedro::revisione::has(p)),
+                controlli: c.get(8).and_then(|n| n.parse().ok()),
             });
             self.prossimo += 1;
         }
@@ -568,6 +599,11 @@ impl App {
 
     fn pal(&self) -> &'static Palette {
         self.tema.palette()
+    }
+
+    /// Il colore dei punti da controllare (arancio, leggibile sul tema chiaro e su quello scuro).
+    fn avviso(&self) -> (u8, u8, u8) {
+        if self.tema.dark() { (0xFF, 0xB4, 0x5C) } else { (0xA8, 0x4E, 0x00) }
     }
 
     fn ha_strumenti(&self) -> bool {
@@ -624,6 +660,10 @@ impl App {
     pub fn tocca_giu(&mut self, x: f32, y: f32) -> Effetto {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
         self.premuto = self.trova(x, y);
+        if self.rivedi.is_some() {
+            self.trascina = Some((y, self.scorri_rivedi_ora(), false));
+            return Effetto::Ridisegna;
+        }
         if let Some(Azione::Pdf(pdf::PdfAz::Maniglia(i))) = self.premuto {
             self.pdf.trascina = Some((i, y, y));
             return Effetto::Ridisegna;
@@ -644,6 +684,15 @@ impl App {
         if let Some((i, y0, _)) = self.pdf.trascina {
             self.pdf.trascina = Some((i, y0, y));
             return Effetto::Ridisegna;
+        }
+        if let (Some((y0, s0, mosso)), true) = (self.trascina, self.rivedi.is_some()) {
+            if mosso || (y - y0).abs() > 10.0 {
+                self.scorri_rivedi(y - y0, s0);
+                self.trascina = Some((y0, s0, true));
+                self.premuto = None;
+                return Effetto::Ridisegna;
+            }
+            return Effetto::Niente;
         }
         if let Some((y0, s0, mosso)) = self.trascina {
             let pagina = self.pdf.pagina.is_some() && !self.pdf.protetto && !self.scelta_file;
@@ -697,6 +746,10 @@ impl App {
         if self.campo.take().is_some() {
             return true;
         }
+        if self.rivedi.is_some() {
+            self.azione_rivedi(rivedi::RivAz::Chiudi);
+            return true;
+        }
         if self.pdf.protetto {
             self.annulla_password();
             return true;
@@ -729,7 +782,8 @@ impl App {
         let lavoro = self.prossimo;
         self.prossimo += 1;
         let prog = Arc::new(AtomicU32::new(u32::MAX));
-        self.lavori.insert(0, Lavoro { id: lavoro, origine: file.nome.clone(), etichetta: etichetta.into(), conv, inizio: Instant::now(), quando: adesso(), stato: Stato::InCorso, prog: prog.clone() });
+        let sorgente = (id == "trascrivi").then(|| file.path.clone());
+        self.lavori.insert(0, Lavoro { id: lavoro, origine: file.nome.clone(), etichetta: etichetta.into(), conv, inizio: Instant::now(), quando: adesso(), stato: Stato::InCorso, prog: prog.clone(), sorgente, controlli: None });
         self.scorri = 0.0;
         self.scheda = Scheda::Lavori;
         self.foglio = false;
@@ -748,6 +802,8 @@ impl App {
         }
         match a {
             Azione::Pdf(az) => self.azione_pdf(az),
+            Azione::Riv(az) => self.azione_rivedi(az),
+            Azione::Rivedi(id) => self.apri_rivedi(id),
             Azione::Campo(c) => {
                 self.campo = Some(c);
                 Effetto::Ridisegna
@@ -887,6 +943,8 @@ impl App {
         let (w, h) = (w - ml - mr, h - mt - mb);
         if self.scelta_file {
             self.pagina_scelta(p, w, h);
+        } else if self.rivedi.is_some() {
+            self.pagina_rivedi(p, w, h);
         } else if let (Some(pg), true) = (self.pdf.pagina, self.file.is_some()) {
             self.pagina_pdf(p, pg, w, h);
         } else if self.foglio && self.file.is_some() {
@@ -1446,6 +1504,7 @@ impl App {
             Stato::InCorso => 92.0,
             // Un link passato a un'altra app: non c'è un file da aprire o condividere.
             Stato::Fatto { path, .. } if path.as_os_str().is_empty() => 70.0,
+            Stato::Fatto { .. } if l.sorgente.is_some() && l.controlli.is_some_and(|n| n > 0) => 176.0,
             Stato::Fatto { .. } => 142.0,
             Stato::Errore(_) => 112.0,
         };
@@ -1485,8 +1544,18 @@ impl App {
                     return alt;
                 }
                 p.text(&format!("Salvato in {nome}"), x + 14.0, y + 54.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
-                let bw = (w - 28.0 - 10.0) / 2.0;
-                for (i, (et, az)) in [("Apri", Azione::Apri(l.id)), ("Condividi", Azione::Condividi(l.id))].into_iter().enumerate() {
+                if let Some(n) = l.controlli.filter(|n| *n > 0 && l.sorgente.is_some()) {
+                    let et = if n == 1 { "1 punto da controllare".to_string() } else { format!("{n} punti da controllare") };
+                    let ew = p.measure(&et, 13.0, Weight::Semibold) + 22.0;
+                    p.rrect(x + 14.0, y + 80.0, ew, 28.0, 14.0, Some(pal.alt), None);
+                    p.text(&et, x + 14.0, y + 80.0, ew, 28.0, 13.0, Weight::Semibold, self.avviso(), Align::Center);
+                }
+                let mut voci = vec![("Apri", Azione::Apri(l.id)), ("Condividi", Azione::Condividi(l.id))];
+                if l.sorgente.is_some() {
+                    voci.insert(0, ("Rivedi", Azione::Rivedi(l.id)));
+                }
+                let bw = (w - 28.0 - 10.0 * (voci.len() as f32 - 1.0)) / voci.len() as f32;
+                for (i, (et, az)) in voci.into_iter().enumerate() {
                     let rc = (x + 14.0 + i as f32 * (bw + 10.0), y + alt - 14.0 - TOCCO, bw, TOCCO);
                     let prem = self.premuto == Some(az);
                     let pieno = i == 0;

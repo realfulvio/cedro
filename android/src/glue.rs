@@ -788,6 +788,10 @@ struct Consegne {
     pagine: Arc<Mutex<Vec<(PathBuf, u32, Image)>>>,
     /// Com'è andata la password: la copia senza, o l'errore.
     sblocco: Casella<Result<PathBuf, String>>,
+    /// L'onda di una revisione aperta.
+    onda_riv: Casella<(PathBuf, Option<Vec<f32>>)>,
+    /// I punti da controllare di una trascrizione finita (lavoro, quanti).
+    controlli: Arc<Mutex<Vec<(u32, usize)>>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1179,7 +1183,12 @@ fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, ou
     });
     match esito.into_inner().unwrap_or_else(|e| e.into_inner()) {
         Some(Ok((path, msg))) => match consegna(app, path) {
-            Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg }),
+            Ok((path, nome)) => {
+                if let Some(n) = crate::ui::da_controllare(file) {
+                    c.controlli.lock().unwrap_or_else(|e| e.into_inner()).push((id, n));
+                }
+                invia(Stato::Fatto { path, nome, msg })
+            }
             Err(e) => invia(Stato::Errore(con_dettagli(&e, "trascrivi", file, out))),
         },
         Some(Err(e)) => invia(Stato::Errore(con_dettagli(&e, "trascrivi", file, out))),
@@ -1396,7 +1405,7 @@ fn android_main(app: AndroidApp) {
         Ok(_) => ricarica_recenti(cartella.clone(), &consegne),
         Err(e) => {
             log::error!("condivisione: {e}");
-            ui.lavori.insert(0, crate::ui::Lavoro { id: 9999, origine: "Condivisione".into(), etichetta: "File".into(), conv: false, inizio: std::time::Instant::now(), quando: crate::ui::adesso(), stato: Stato::Errore(e), prog: Arc::new(std::sync::atomic::AtomicU32::new(1000)) });
+            ui.lavori.insert(0, crate::ui::Lavoro { id: 9999, origine: "Condivisione".into(), etichetta: "File".into(), conv: false, inizio: std::time::Instant::now(), quando: crate::ui::adesso(), stato: Stato::Errore(e), prog: Arc::new(std::sync::atomic::AtomicU32::new(1000)), sorgente: None, controlli: None });
             ricarica_recenti(cartella.clone(), &consegne);
         }
     }
@@ -1504,6 +1513,28 @@ fn android_main(app: AndroidApp) {
                             sporco = true;
                             let (a, c) = (app.clone(), consegne.clone());
                             std::thread::spawn(move || converti(a, c, id, file, azione, qualita, prog, opts, unisci));
+                        }
+                        Effetto::OndaRevisione(path, secs) => {
+                            let slot = consegne.onda_riv.clone();
+                            std::thread::spawn(move || {
+                                let bars = cedro::waveform(&path, (secs as usize).clamp(300, 6000));
+                                *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some((path, bars));
+                            });
+                            sporco = true;
+                        }
+                        Effetto::Scrivi { id, nome, dati } => {
+                            let (a, c) = (app.clone(), consegne.clone());
+                            std::thread::spawn(move || {
+                                let dir = uscite(&a).unwrap_or_else(|| PathBuf::from(DOCUMENTI).join("Cedro"));
+                                let file = dir.join(&nome);
+                                let esito = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&file, &dati)).map_err(|e| e.to_string()).and_then(|_| consegna(&a, file));
+                                let stato = match esito {
+                                    Ok((path, visto)) => Stato::Fatto { path, msg: format!("{} · {}", nome_di(Path::new(&visto)), cedro::size_words(dati.len() as u64)), nome: visto },
+                                    Err(e) => Stato::Errore(e),
+                                };
+                                c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, stato));
+                            });
+                            sporco = true;
                         }
                         Effetto::Sblocca(pw) => {
                             if let Some(f) = &ui.file {
@@ -1628,6 +1659,16 @@ fn android_main(app: AndroidApp) {
                 ui.pdf.miniature.insert(n, img);
                 sporco = true;
             }
+        }
+        if let Some((p, bars)) = consegne.onda_riv.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            ui.onda_rivedi(&p, bars);
+            sporco = true;
+        }
+        for (id, n) in std::mem::take(&mut *consegne.controlli.lock().unwrap_or_else(|e| e.into_inner())) {
+            if let Some(l) = ui.lavori.iter_mut().find(|l| l.id == id) {
+                l.controlli = Some(n);
+            }
+            sporco = true;
         }
         if let Some(r) = consegne.sblocco.lock().unwrap_or_else(|e| e.into_inner()).take() {
             match r {
