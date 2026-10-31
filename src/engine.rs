@@ -590,6 +590,53 @@ fn zip_file(path: &Path, out: &Path, size: u64) -> CedroResult<()> {
     })
 }
 
+/// Uno ZIP con più file (senza ricomprimerli, come «In ZIP»), in `out_dir` con il nome `name` o quello del primo file.
+pub fn zip_paths(paths: &[PathBuf], out_dir: &Path, name: Option<&str>, opts: &Options) -> CedroResult<Output> {
+    let Some(first) = paths.first() else { return Err(err("nessun file da mettere nello ZIP")) };
+    let _job = crate::resources::acquire(None).expect("uncancellable job");
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), template: opts.name_template.clone(), guarded: true, ..Default::default() }));
+    let mut restore = RestoreNaming(Some(before));
+    let result = (|| {
+        fs::create_dir_all(out_dir).map_err(|e| err(e.to_string()))?;
+        let out = reserve(out_dir, name.unwrap_or(&stem(first)), "zip")?;
+        let total: u64 = paths.iter().filter_map(|p| fs::metadata(p).ok()).map(|m| m.len()).sum();
+        let written = (|| -> zip::result::ZipResult<()> {
+            let file = fs::File::create(&out)?;
+            let mut zw = zip::ZipWriter::new(std::io::BufWriter::new(file));
+            let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored).large_file(total >= u32::MAX as u64);
+            let mut used = std::collections::HashSet::new();
+            for (i, p) in paths.iter().enumerate() {
+                crate::progress::report(i as f32 / paths.len() as f32);
+                // Due file con lo stesso nome: il secondo diventa «nome (2).ext».
+                let base = file_label(p);
+                let mut entry = base.clone();
+                let mut n = 2;
+                while !used.insert(entry.to_lowercase()) {
+                    entry = match base.rsplit_once('.') {
+                        Some((s, e)) => format!("{s} ({n}).{e}"),
+                        None => format!("{base} ({n})"),
+                    };
+                    n += 1;
+                }
+                zw.start_file(entry, options)?;
+                std::io::copy(&mut fs::File::open(p)?, &mut zw)?;
+            }
+            let mut inner = zw.finish()?;
+            std::io::Write::flush(&mut inner)?;
+            Ok(())
+        })();
+        written.map_err(|e| {
+            let _ = fs::remove_file(&out);
+            err(e.to_string())
+        })?;
+        crate::progress::report(1.0);
+        let n = paths.len();
+        Ok(Output { path: out, message: if n == 1 { "1 file in ZIP".into() } else { format!("{n} file in un archivio ZIP") } })
+    })();
+    let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
+    finish_outputs(result, used)
+}
+
 fn write_bytes(path: &Path, bytes: &[u8]) -> CedroResult<()> {
     fs::write(path, bytes).map_err(|e| err(e.to_string()))
 }
@@ -2262,6 +2309,24 @@ BT /F2 16 Tf 50 750 Td (Spese correnti) Tj ET BT /F1 10 Tf 50 630 Td (Contributi
         assert_eq!(out.path, old);
         assert!(fs::read(&old).unwrap().starts_with(&[0xFF, 0xD8]));
         assert_eq!(names(), vec!["clip.jpg", "clip.png"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zip_paths_puts_every_file_and_renames_twins() {
+        let dir = scratch();
+        let (a, b) = (dir.join("a"), dir.join("b"));
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        fs::write(a.join("nota.txt"), b"uno").unwrap();
+        fs::write(b.join("nota.txt"), b"due").unwrap();
+        fs::write(dir.join("foto.png"), b"tre").unwrap();
+        let out = zip_paths(&[a.join("nota.txt"), b.join("nota.txt"), dir.join("foto.png")], &dir.join("o"), None, &Options::default()).unwrap();
+        assert_eq!(out.path.file_name().unwrap(), "nota.zip");
+        let archive = zip::ZipArchive::new(fs::File::open(&out.path).unwrap()).unwrap();
+        let mut nomi: Vec<String> = archive.file_names().map(|n| n.unwrap().into_owned()).collect();
+        nomi.sort();
+        assert_eq!(nomi, vec!["foto.png", "nota (2).txt", "nota.txt"]);
         let _ = fs::remove_dir_all(&dir);
     }
 
