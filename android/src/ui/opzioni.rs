@@ -39,6 +39,8 @@ pub enum OpzAz {
 pub struct Opzioni {
     pub formato: usize,
     pub valori: Values,
+    /// Aperte dalla finestra principale per questa categoria: «Fatto» torna lì con le scelte.
+    pub da_casa: Option<Kind>,
 }
 
 /// I formati di un tipo di file: quelli del pannello Conversioni del computer.
@@ -60,18 +62,24 @@ impl App {
         }
         let formato = id.and_then(|id| f.iter().position(|s| s.id == id || (id == "jpg" && s.id == "jpeg"))).unwrap_or(0);
         let valori = self.opzioni_salvate.take().unwrap_or_default();
-        self.opzioni = Some(Opzioni { formato, valori });
+        self.opzioni = Some(Opzioni { formato, valori, da_casa: None });
         self.scorri = 0.0;
         self.campo = None;
         Effetto::Ridisegna
     }
 
+    /// Il tipo di file delle opzioni aperte (quello del file, o la categoria della finestra principale).
+    fn kind_opz(&self) -> Kind {
+        self.opzioni.as_ref().and_then(|o| o.da_casa).unwrap_or(self.kind)
+    }
+
     fn defs(&self) -> Vec<&'static OptionDef> {
         let Some(o) = &self.opzioni else { return Vec::new() };
-        let f = formati(self.kind);
+        let kind = self.kind_opz();
+        let f = formati(kind);
         let id = f.get(o.formato).map(|s| s.id).unwrap_or("none");
         // Il nome a modello sta nelle Impostazioni: qui non si ripete.
-        conversioni::option_defs(self.kind, id).into_iter().filter(|d| d.opt != conversioni::Opt::NameTemplate && conversioni::shown(d, &o.valori)).collect()
+        conversioni::option_defs(kind, id).into_iter().filter(|d| d.opt != conversioni::Opt::NameTemplate && conversioni::shown(d, &o.valori)).collect()
     }
 
     /// Il testo di un campo di «Altre opzioni» o delle Impostazioni.
@@ -104,23 +112,33 @@ impl App {
                 if self.impostazioni {
                     self.impostazioni = false;
                 } else if let Some(o) = self.opzioni.take() {
-                    self.opzioni_salvate = Some(o.valori);
+                    match o.da_casa {
+                        Some(k) => self.da_opzioni(k, o.formato, o.valori),
+                        None => self.opzioni_salvate = Some(o.valori),
+                    }
                 }
                 self.scorri = 0.0;
                 return Effetto::Ridisegna;
             }
             OpzAz::Vai => {
+                let kind = self.kind_opz();
+                if self.opzioni.as_ref().is_some_and(|o| o.da_casa.is_some()) {
+                    if let Some(Opzioni { formato, valori, da_casa: Some(k) }) = self.opzioni.take() {
+                        self.da_opzioni(k, formato, valori);
+                    }
+                    return Effetto::Ridisegna;
+                }
                 let defs_ok = {
                     let Some(o) = &self.opzioni else { return Effetto::Niente };
-                    let f = formati(self.kind);
+                    let f = formati(kind);
                     let id = f.get(o.formato).map(|s| s.id).unwrap_or("none");
-                    conversioni::validate(&o.valori, self.kind, id).is_ok()
+                    conversioni::validate(&o.valori, kind, id).is_ok()
                 };
                 if !defs_ok {
                     return Effetto::Niente;
                 }
                 let Some(o) = self.opzioni.take() else { return Effetto::Niente };
-                let f = formati(self.kind);
+                let f = formati(kind);
                 let Some(s) = f.get(o.formato).copied() else { return Effetto::Niente };
                 let opts = conversioni::options_from(&o.valori);
                 self.opzioni_salvate = Some(o.valori);
@@ -258,7 +276,9 @@ impl App {
 
     pub(super) fn pagina_opzioni(&mut self, p: &mut Painter, w: f32, h: f32) {
         let pal = self.pal();
-        let nome = self.file.as_ref().map(|f| f.nome.clone()).unwrap_or_default();
+        let kind = self.kind_opz();
+        let da_casa = self.opzioni.as_ref().is_some_and(|o| o.da_casa.is_some());
+        let nome = if da_casa { conversioni::CATEGORIES.iter().find(|c| c.kind == kind).map(|c| c.name.to_string()).unwrap_or_default() } else { self.file.as_ref().map(|f| f.nome.clone()).unwrap_or_default() };
         self.barra_con(p, w, "Altre opzioni", &nome);
         let piede = 80.0;
         let vista = (0.0, BARRA, w, h - BARRA - piede);
@@ -268,7 +288,7 @@ impl App {
         p.push_clip(vista.0, vista.1, vista.2, vista.3);
         self.pdf.campo_vis = None;
         let mut y = BARRA + 4.0 - self.scorri;
-        let f = formati(self.kind);
+        let f = formati(kind);
         let scelto = self.opzioni.as_ref().map(|o| o.formato).unwrap_or(0);
         y += self.etichetta_opz(p, x, y, cw, "Formato");
         let voci: Vec<(String, bool)> = f.iter().map(|s| (s.label.to_string(), nuovo(s.id))).collect();
@@ -329,7 +349,7 @@ impl App {
             }
         }
         let f_id = f.get(scelto).map(|s| s.id).unwrap_or("none");
-        let errore = conversioni::validate(&valori, self.kind, f_id).err();
+        let errore = conversioni::validate(&valori, kind, f_id).err();
         if let Some(e) = &errore {
             y += p.text_wrap(e, x + 2.0, y, cw, 13.0, Weight::Regular, pal.bad, 18.0, 3) + 6.0;
         }
@@ -338,8 +358,17 @@ impl App {
         self.scorri_max = (y + 16.0 + self.scorri - (vista.1 + vista.3)).max(0.0);
         self.scorri = self.scorri.min(self.scorri_max);
         self.tieni_campo(vista);
-        let etichetta = f.get(scelto).map(|s| format!("Converti in {}", s.label)).unwrap_or_default();
+        let etichetta = if da_casa { "Fatto".to_string() } else { f.get(scelto).map(|s| format!("Converti in {}", s.label)).unwrap_or_default() };
         self.pulsante_opz(p, (x, h - piede + 12.0, cw, 56.0), &etichetta, errore.is_none().then_some(Azione::Opz(OpzAz::Vai)));
+    }
+
+    /// Le scelte fatte in «Altre opzioni» tornano alla finestra principale.
+    fn da_opzioni(&mut self, k: Kind, formato: usize, valori: Values) {
+        if let Some(s) = formati(k).get(formato) {
+            self.casa.operazione.insert(super::casa::ck(k), s.id);
+        }
+        self.casa.valori.insert(super::casa::ck(k), valori);
+        self.scorri = 0.0;
     }
 
     fn etichetta_opz(&self, p: &mut Painter, x: f32, y: f32, w: f32, t: &str) -> f32 {
