@@ -286,17 +286,17 @@ impl Guida {
         y += p.text_wrap(page.intro, x, y, COL_W, 13.0, Weight::Regular, pal.muted, 20.0, 7) + 14.0;
         let lit = self.lit_row(_t);
         for (i, (key, name, detail)) in page.rows.iter().enumerate() {
-            let r = (x, y, COL_W, 66.0);
+            let r = (x, y, COL_W, 72.0);
             let on = i == lit;
             let hot = self.hover == Some(Hit::Row(i));
             p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(if hot && !on { pal.alt } else { pal.surface }), Some((if on { pal.primary } else { pal.border }, if on { 2.0 } else { 1.0 })));
             let kw = 74.0;
-            p.rrect(r.0 + 10.0, r.1 + 18.0, kw, 30.0, 7.0, Some(if on { pal.primary } else { pal.alt }), None);
-            p.text(key, r.0 + 10.0, r.1 + 18.0, kw, 30.0, 12.0, Weight::Bold, if on { pal.on_primary } else { pal.text }, Align::Center);
-            p.text(name, r.0 + 96.0, r.1 + 6.0, r.2 - 106.0, 24.0, 13.0, Weight::Bold, pal.text, Align::Left);
-            p.text_wrap(detail, r.0 + 96.0, r.1 + 31.0, r.2 - 106.0, 11.0, Weight::Regular, pal.muted, 15.0, 2);
+            p.rrect(r.0 + 10.0, r.1 + 21.0, kw, 30.0, 7.0, Some(if on { pal.primary } else { pal.alt }), None);
+            p.text(key, r.0 + 10.0, r.1 + 21.0, kw, 30.0, 12.0, Weight::Bold, if on { pal.on_primary } else { pal.text }, Align::Center);
+            p.text(name, r.0 + 96.0, r.1 + 5.0, r.2 - 106.0, 24.0, 13.0, Weight::Bold, pal.text, Align::Left);
+            p.text_wrap(detail, r.0 + 96.0, r.1 + 29.0, r.2 - 106.0, 11.0, Weight::Regular, pal.muted, 15.0, 2);
             self.zones.push((r, Hit::Row(i)));
-            y += 74.0;
+            y += 80.0;
         }
     }
 
@@ -326,7 +326,7 @@ impl Guida {
             self.zones.push((prev, Hit::Prev));
         }
         let hot = self.hover == Some(Hit::Next);
-        let fill = if hot { mix(pal.primary, pal.text, 0.12) } else { pal.primary };
+        let fill = if hot { mix(pal.primary, pal.text, 0.22) } else { pal.primary };
         p.rrect(next.0, next.1, next.2, next.3, 8.0, Some(fill), None);
         let label = if self.page + 1 == PAGE_COUNT { "Chiudi" } else { "Avanti" };
         p.text(label, next.0, next.1, next.2, next.3, 13.0, Weight::Bold, pal.on_primary, Align::Center);
@@ -571,18 +571,18 @@ impl Stage<'_, '_> {
             ("Comune di Bondeno", (0, 94, 142)),
         ];
         let at = ((self.t / 900.0) as usize) % 6;
-        let (cw, ch, gap) = ((self.w - 36.0 - 20.0) / 3.0, 92.0, 10.0);
+        let (cw, ch, gap) = ((self.w - 36.0 - 20.0) / 3.0, 100.0, 10.0);
         for (i, (name, col)) in names.iter().enumerate() {
             let (cx, cy) = (self.x + 18.0 + (i % 3) as f32 * (cw + gap), self.y + 24.0 + (i / 3) as f32 * (ch + gap));
             let on = i == at;
             self.p.rrect(cx, cy, cw, ch, 9.0, Some(pal.surface), Some((if on { pal.primary } else { pal.border }, if on { 2.0 } else { 1.0 })));
             self.p.rrect(cx + 10.0, cy + 10.0, cw - 20.0, 34.0, 5.0, Some(*col), None);
-            self.p.text(name, cx + 8.0, cy + 46.0, cw - 16.0, ch - 48.0, 10.0, Weight::Semibold, pal.text, Align::Center);
+            self.p.text_wrap(name, cx + 8.0, cy + 48.0, cw - 16.0, 10.0, Weight::Semibold, pal.text, 14.0, 2);
         }
         let on_std = ((self.t / 1800.0) as usize) % 2 == 0;
-        self.chips(240.0, &[("Standard", on_std), ("Semplificata", !on_std)], 0.2);
+        self.chips(252.0, &[("Standard", on_std), ("Semplificata", !on_std)], 0.2);
         // Il testo normale e quello più grande.
-        let (x, y, w) = (self.x + 18.0, self.y + 296.0, self.w - 36.0);
+        let (x, y, w) = (self.x + 18.0, self.y + 306.0, self.w - 36.0);
         self.p.rrect(x, y, w, 100.0, 9.0, Some(pal.alt), None);
         self.p.text("Caratteri più grandi", x + 14.0, y + 8.0, w - 28.0, 28.0, 12.0, Weight::Bold, pal.text, Align::Left);
         self.p.text("Prima: il testo era piccolo da leggere.", x + 14.0, y + 38.0, w - 28.0, 22.0, 9.0, Weight::Regular, pal.muted, Align::Left);

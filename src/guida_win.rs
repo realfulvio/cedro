@@ -15,7 +15,8 @@ use windows::{
     Win32::Foundation::*,
     Win32::Graphics::Gdi::*,
     Win32::System::LibraryLoader::GetModuleHandleW,
-    Win32::UI::HiDpi::GetDpiForSystem,
+    Win32::Graphics::Dwm::*,
+    Win32::UI::HiDpi::{GetDpiForSystem, SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2},
     Win32::UI::Input::KeyboardAndMouse::*,
     Win32::UI::WindowsAndMessaging::*,
 };
@@ -30,6 +31,8 @@ static CACHE: Mutex<Vec<((usize, i32), Vec<u8>)>> = Mutex::new(Vec::new());
 
 struct State {
     guida: Guida,
+    /// Pixel per unità di disegno: la scala dello schermo, o meno se la finestra non ci starebbe.
+    k: f32,
     cache: GlyphCache,
     tracking: bool,
 }
@@ -47,12 +50,19 @@ extern "system" {
     fn GetTickCount64() -> u64;
 }
 
-fn px(v: f32, dpi: u32) -> i32 {
-    (v * dpi as f32 / 96.0).round() as i32
-}
-
-fn scale() -> f32 {
-    unsafe { GetDpiForSystem() as f32 / 96.0 }
+/// La scala con cui disegnare: quella del DPI, ridotta se la finestra non starebbe nell'area di lavoro.
+unsafe fn fit_scale(style: WINDOW_STYLE) -> f32 {
+    let dpi_scale = GetDpiForSystem() as f32 / 96.0;
+    let mut work = RECT::default();
+    let _ = SystemParametersInfoW(SPI_GETWORKAREA, 0, Some(&mut work as *mut RECT as *mut _), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0));
+    let mut frame = RECT::default();
+    let _ = AdjustWindowRect(&mut frame, style, false);
+    let avail_w = ((work.right - work.left) - (frame.right - frame.left)) as f32;
+    let avail_h = ((work.bottom - work.top) - (frame.bottom - frame.top)) as f32;
+    if avail_w <= 0.0 || avail_h <= 0.0 {
+        return dpi_scale;
+    }
+    dpi_scale.min(avail_w / W).min(avail_h / H)
 }
 
 pub fn open() {
@@ -72,6 +82,9 @@ pub fn open() {
 /// `cedro.exe guida`: la finestra da sola, con il suo ciclo di messaggi (usata dall'installatore).
 pub fn run_standalone() {
     crate::winfont::load();
+    unsafe {
+        let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    }
     open();
     unsafe {
         let mut msg = MSG::default();
@@ -92,8 +105,12 @@ unsafe fn create() -> Result<()> {
     let theme = cedro::edizione::tema();
     let instance: HINSTANCE = GetModuleHandleW(None)?.into();
     let class = w!("CedroGuida");
+    // L'icona di Cedro (la prima risorsa dell'exe) nella barra del titolo.
+    let icon = LoadIconW(Some(instance), PCWSTR(1usize as *const u16)).unwrap_or_default();
     let wc = WNDCLASSEXW {
         cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
+        hIcon: icon,
+        hIconSm: icon,
         lpfnWndProc: Some(proc),
         hInstance: instance,
         hCursor: LoadCursorW(None, IDC_ARROW)?,
@@ -101,16 +118,22 @@ unsafe fn create() -> Result<()> {
         ..Default::default()
     };
     RegisterClassExW(&wc);
-    let dpi = GetDpiForSystem();
     let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    let mut rect = RECT { left: 0, top: 0, right: px(W, dpi), bottom: px(H, dpi) };
+    let k = fit_scale(style);
+    let mut rect = RECT { left: 0, top: 0, right: (W * k).round() as i32, bottom: (H * k).round() as i32 };
     let _ = AdjustWindowRect(&mut rect, style, false);
     let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
     let x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
     let y = (GetSystemMetrics(SM_CYSCREEN) - height) / 3;
-    STATE.with(|s| *s.borrow_mut() = Some(State { guida: Guida::new(theme, now()), cache: GlyphCache::new(), tracking: false }));
+    STATE.with(|s| *s.borrow_mut() = Some(State { guida: Guida::new(theme, now()), k, cache: GlyphCache::new(), tracking: false }));
     let hwnd = CreateWindowExW(WINDOW_EX_STYLE::default(), class, &HSTRING::from(cedro::i18n::tr("Guida di Cedro").as_ref()), style | WS_VISIBLE, x, y, width, height, None, None, Some(instance), None)?;
     WINDOW.store(hwnd.0 as isize, Ordering::Relaxed);
+    // Su Windows 11 la barra del titolo prende i colori del tema.
+    let pal = theme.palette();
+    for (attribute, color) in [(DWMWA_CAPTION_COLOR, pal.surface), (DWMWA_BORDER_COLOR, pal.border), (DWMWA_TEXT_COLOR, pal.text)] {
+        let c = colorref(color);
+        let _ = DwmSetWindowAttribute(hwnd, attribute, &c as *const COLORREF as *const _, 4);
+    }
     SetTimer(Some(hwnd), TIMER, FRAME_MS, None);
     let _ = SetForegroundWindow(hwnd);
     Ok(())
@@ -307,7 +330,7 @@ unsafe fn finish(hwnd: HWND, out: Out) {
 }
 
 fn xy(lparam: LPARAM) -> (f32, f32) {
-    let d = scale();
+    let d = with(|st| st.k).unwrap_or(1.0);
     ((lparam.0 & 0xffff) as i16 as f32 / d, ((lparam.0 >> 16) & 0xffff) as i16 as f32 / d)
 }
 
