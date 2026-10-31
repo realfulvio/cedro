@@ -19,6 +19,7 @@ use cedro::ui::views::uses_quality;
 use cedro::ui::wheel::list;
 use cedro::{Kind, Mode};
 
+mod opzioni;
 mod pdf;
 mod rivedi;
 pub use pdf::{Campo, Pagina, StatoPdf, Tasto};
@@ -136,6 +137,10 @@ pub enum Azione {
     Rivedi(u32),
     /// Dentro «Rivedi trascrizione».
     Riv(rivedi::RivAz),
+    /// «Altre opzioni» e «Impostazioni».
+    Opz(opzioni::OpzAz),
+    /// Il pulsante a fianco di «Converti»: apre «Altre opzioni».
+    AltreOpzioni,
     /// Un'area che non fa niente ma ferma il tocco.
     Niente,
 }
@@ -150,6 +155,8 @@ pub enum Effetto {
     Sblocca(String),
     /// Legge l'onda dell'audio di una revisione (percorso, durata).
     OndaRevisione(PathBuf, f64),
+    /// Le impostazioni sono cambiate: vanno ricordate (`imp` nel motore, modello e «se esiste già» qui).
+    SalvaImpostazioni,
     /// Scrive un file nuovo (la revisione salvata) e lo consegna come il risultato del lavoro `id`.
     Scrivi { id: u32, nome: String, dati: Vec<u8> },
     /// Chiude Cedro: si torna all'app di prima.
@@ -241,10 +248,12 @@ fn righe_link(path: &Path) -> Vec<&'static Riga> {
 
 /// Le azioni da mettere nelle tessere per un tipo di file: solo quelle che il motore sa fare.
 fn righe(kind: Kind) -> Vec<&'static Riga> {
-    static IMG: [Riga; 7] = [
+    static IMG: [Riga; 9] = [
         r("jpeg", "JPG", "Più leggera", true),
         r("png", "PNG", "Senza perdita", true),
         r("webp", "WebP", "Per il web", true),
+        rn("avif", "AVIF", "Ancora più leggera", true),
+        rn("jxl", "JPEG XL", "Il JPEG nuovo", true),
         r("pdf", "PDF", "Un foglio", true),
         r("compress", "Comprimi", "Meno spazio", false),
         r("ocr", "Testo", "Riconosci scritte", false),
@@ -262,8 +271,23 @@ fn righe(kind: Kind) -> Vec<&'static Riga> {
         r("ocr", "Leggi", "Riconosci scritte", false),
         r("png", "PNG", "Una per pagina", true),
     ];
+    static ARC: [Riga; 6] = [
+        r("z-webp", "Foto in WebP", "Le immagini dello ZIP", false),
+        r("z-jpeg", "Foto in JPEG", "Le immagini dello ZIP", false),
+        r("z-png", "Foto in PNG", "Le immagini dello ZIP", false),
+        r("z-mp3", "Audio in MP3", "L'audio dello ZIP", false),
+        r("z-wav", "Audio in WAV", "L'audio dello ZIP", false),
+        r("z-pdf", "Documenti in PDF", "Word, testo, foto", false),
+    ];
     static TXT: [Riga; 3] = [r("pdf", "PDF", "Da stampare", true), r("html", "HTML", "Per il web", true), r("md", "Markdown", "Testo con segni", true)];
-    static AUD: [Riga; 3] = [r("mp3", "MP3", "Più leggero", true), r("wav", "WAV", "Senza compressione", true), r("trascrivi", "Testo", "Dalla voce, offline", false)];
+    static AUD: [Riga; 6] = [
+        r("mp3", "MP3", "Più leggero", true),
+        r("wav", "WAV", "Senza compressione", true),
+        rn("flac", "FLAC", "Senza perdita, leggero", true),
+        rn("opus", "Opus", "Il più leggero", true),
+        rn("aiff", "AIFF", "Per Mac e studi", true),
+        r("trascrivi", "Testo", "Dalla voce, offline", false),
+    ];
     static VID: [Riga; 3] = [r("mp4", "MP4", "Più leggero", true), r("mp3", "Solo audio", "MP3 dal video", false), r("trascrivi", "Testo", "Dalla voce, offline", false)];
     static DOC: [Riga; 1] = [r("pdf", "PDF", "Da documento", true)];
     let tutte: &'static [Riga] = match kind {
@@ -273,9 +297,10 @@ fn righe(kind: Kind) -> Vec<&'static Riga> {
         Kind::Audio => &AUD,
         Kind::Video => &VID,
         Kind::Doc => &DOC,
-        Kind::Archive | Kind::Other => &[],
+        Kind::Archive => &ARC,
+        Kind::Other => &[],
     };
-    let ids: Vec<&'static str> = [Mode::Convert, Mode::Tools].into_iter().flat_map(|m| list(kind, m)).map(|s| s.id).collect();
+    let ids: Vec<&'static str> = [Mode::Convert, Mode::Tools].into_iter().flat_map(|m| list(kind, m)).map(|s| s.id).chain(cedro::panel_slices(kind).iter().map(|s| s.id)).collect();
     // «trascrivi» non è nel catalogo del motore di conversione: è whisper.cpp dentro l'APK; «pages» è la schermata Pagine.
     tutte.iter().filter(|r| ids.contains(&r.id) || r.id == "trascrivi" || (kind == Kind::Pdf && r.id == "pages")).collect()
 }
@@ -293,7 +318,9 @@ fn icona_di(id: &str) -> &'static str {
         "web-audio" => ic::AUDIO,
         "webp" | "bmp" | "gray" | "jpeg" | "jpg" | "png" | "tiff" | "gif" => ic::IMAGE,
         "mp4" | "webm" | "mov" | "mkv" | "avi" => ic::VIDEO,
-        "wav" | "mp3" | "ogg" | "m4a" | "aac" | "flac" => ic::AUDIO,
+        "wav" | "mp3" | "ogg" | "m4a" | "aac" | "flac" | "opus" | "aiff" | "z-mp3" | "z-wav" => ic::AUDIO,
+        "avif" | "jxl" | "z-webp" | "z-jpeg" | "z-png" => ic::IMAGE,
+        "zip-tutti" => ic::FOLDER,
         "compress" => pdf::I_COMPRIMI,
         "half" | "strip" => ic::DOWNLOAD,
         "rot90" => ic::CONVERT,
@@ -443,8 +470,21 @@ pub struct App {
     pub pdf: StatoPdf,
     /// Il campo di testo in cui scrive la tastiera.
     pub campo: Option<Campo>,
+    /// Toccato un campo: la tastiera va mostrata (anche se il sistema l'aveva chiusa col tasto indietro).
+    pub mostra_tastiera: bool,
     /// «Rivedi trascrizione», a tutto schermo.
     pub rivedi: Option<rivedi::Rivedi>,
+    /// «Altre opzioni», e le scelte dell'ultima volta.
+    pub opzioni: Option<opzioni::Opzioni>,
+    opzioni_salvate: Option<cedro::conversioni::Values>,
+    /// «Impostazioni» aperte.
+    pub impostazioni: bool,
+    /// Le impostazioni del motore (qualità, DPI, OCR), il nome a modello e cosa fare se il file esiste già.
+    pub imp: cedro::Settings,
+    pub modello_nome: String,
+    pub esiste: cedro::Exists,
+    /// Gli altri file condivisi insieme al primo (per farne uno ZIP).
+    pub altri: Vec<PathBuf>,
 }
 
 /// Le lingue tra cui scegliere: chiave nel file, nome (quelli delle lingue non si traducono).
@@ -494,7 +534,15 @@ impl App {
             margini: (0.0, 0.0, 0.0, 0.0),
             pdf: StatoPdf::default(),
             campo: None,
+            mostra_tastiera: false,
             rivedi: None,
+            opzioni: None,
+            opzioni_salvate: None,
+            impostazioni: false,
+            imp: cedro::Settings::default(),
+            modello_nome: String::new(),
+            esiste: cedro::Exists::Number,
+            altri: Vec::new(),
         }
     }
 
@@ -510,9 +558,12 @@ impl App {
         self.scelta_file = false;
         self.scheda = Scheda::Ruota;
         self.foglio = da_condivisione && (!righe(kind).is_empty() || self.file.as_ref().is_some_and(|f| e_link(&f.path)));
+        self.altri.clear();
         self.dal_foglio = false;
         self.pdf = StatoPdf::default();
         self.campo = None;
+        self.opzioni = None;
+        self.altri.clear();
     }
 
     /// Un lavoro è finito (o fallito).
@@ -626,6 +677,10 @@ impl App {
     fn righe_ora(&self) -> Vec<&'static Riga> {
         if self.file.as_ref().is_some_and(|f| e_link(&f.path)) {
             righe_link(&self.file.as_ref().map(|f| f.path.clone()).unwrap_or_default())
+        } else if !self.altri.is_empty() {
+            // Più file condivisi insieme: per prima cosa uno ZIP con tutti.
+            static ZIP: Riga = rn("zip-tutti", "ZIP", "Tutti in un archivio", false);
+            std::iter::once(&ZIP).chain(righe(self.kind)).collect()
         } else {
             righe(self.kind)
         }
@@ -695,7 +750,7 @@ impl App {
             return Effetto::Niente;
         }
         if let Some((y0, s0, mosso)) = self.trascina {
-            let pagina = self.pdf.pagina.is_some() && !self.pdf.protetto && !self.scelta_file;
+            let pagina = (self.pdf.pagina.is_some() && !self.pdf.protetto || self.opzioni.is_some() || self.impostazioni) && !self.scelta_file;
             if (mosso || (y - y0).abs() > 10.0) && (pagina || matches!(self.scheda, Scheda::Lavori | Scheda::Info | Scheda::Aspetto) && !self.foglio && !self.scelta_file) {
                 self.scorri = (s0 - (y - y0)).clamp(0.0, self.scorri_max);
                 self.trascina = Some((y0, s0, true));
@@ -750,6 +805,10 @@ impl App {
             self.azione_rivedi(rivedi::RivAz::Chiudi);
             return true;
         }
+        if self.impostazioni || self.opzioni.is_some() {
+            self.azione_opzioni(opzioni::OpzAz::Indietro);
+            return true;
+        }
         if self.pdf.protetto {
             self.annulla_password();
             return true;
@@ -778,6 +837,14 @@ impl App {
     }
 
     fn avvia_con(&mut self, id: &'static str, etichetta: &str, conv: bool, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)>) -> Effetto {
+        // Le Impostazioni valgono per ogni lavoro: se il nome esiste già e il nome a modello.
+        let mut o = opts.unwrap_or_default();
+        o.exists = self.esiste;
+        if o.name_template.as_deref().is_none_or(|t| t.trim().is_empty()) && !self.modello_nome.trim().is_empty() {
+            o.name_template = Some(self.modello_nome.clone());
+        }
+        let opts = Some(o);
+        self.opzioni = None;
         let Some(file) = self.file.clone() else { return Effetto::Niente };
         let lavoro = self.prossimo;
         self.prossimo += 1;
@@ -803,9 +870,15 @@ impl App {
         match a {
             Azione::Pdf(az) => self.azione_pdf(az),
             Azione::Riv(az) => self.azione_rivedi(az),
+            Azione::Opz(az) => self.azione_opzioni(az),
+            Azione::AltreOpzioni => {
+                let id = if self.foglio { self.righe_ora().get(self.tessera).map(|r| r.id) } else { self.scelta.and_then(|i| self.fette().get(i).map(|f| f.id)) };
+                self.apri_opzioni(id)
+            }
             Azione::Rivedi(id) => self.apri_rivedi(id),
             Azione::Campo(c) => {
                 self.campo = Some(c);
+                self.mostra_tastiera = true;
                 Effetto::Ridisegna
             }
             Azione::Scheda(s) => {
@@ -851,6 +924,11 @@ impl App {
                 if self.foglio {
                     match self.righe_ora().get(self.tessera).copied() {
                         Some(riga) if self.kind == Kind::Pdf && pdf::schermata(riga.id).is_some() => self.apri_pagina(pdf::schermata(riga.id).unwrap_or(pdf::Pagina::Excel)),
+                        Some(riga) if riga.id == "zip-tutti" => {
+                            let tutti: Vec<(PathBuf, Option<cedro::PageSel>)> = self.file.iter().map(|f| f.path.clone()).chain(self.altri.iter().cloned()).map(|p| (p, None)).collect();
+                            let n = tutti.len();
+                            self.avvia_con("zip-tutti", &format!("ZIP di {n} file"), false, None, tutti)
+                        }
                         Some(riga) => self.avvia(riga.id, riga.titolo, riga.conv),
                         None => Effetto::Niente,
                     }
@@ -945,6 +1023,10 @@ impl App {
             self.pagina_scelta(p, w, h);
         } else if self.rivedi.is_some() {
             self.pagina_rivedi(p, w, h);
+        } else if self.impostazioni {
+            self.pagina_impostazioni(p, w, h);
+        } else if self.opzioni.is_some() && self.file.is_some() {
+            self.pagina_opzioni(p, w, h);
         } else if let (Some(pg), true) = (self.pdf.pagina, self.file.is_some()) {
             self.pagina_pdf(p, pg, w, h);
         } else if self.foglio && self.file.is_some() {
@@ -1212,11 +1294,31 @@ impl App {
         }
     }
 
-    /// Il pulsante grande «Converti in X».
+    /// L'azione scelta ora ha «Altre opzioni» (è un formato del pannello Conversioni).
+    fn ha_opzioni(&self) -> bool {
+        if self.file.as_ref().is_none_or(|f| e_link(&f.path)) {
+            return false;
+        }
+        let id = if self.foglio { self.righe_ora().get(self.tessera).map(|r| r.id) } else { self.scelta.and_then(|i| self.fette().get(i).map(|f| f.id)) };
+        let Some(id) = id else { return false };
+        opzioni::formati(self.kind).iter().any(|s| s.id == id || (id == "jpg" && s.id == "jpeg"))
+    }
+
+    /// Il pulsante grande «Converti in X», con a fianco quello di «Altre opzioni» se servono.
     fn pulsante_vai(&mut self, p: &mut Painter, bt: R) {
         let pal = self.pal();
+        let bt = if self.ha_opzioni() {
+            let g = (bt.0, bt.1, bt.3, bt.3);
+            let az = Azione::AltreOpzioni;
+            p.circle(g.0 + g.2 / 2.0, g.1 + g.3 / 2.0, g.3 / 2.0 - 1.0, Some(if self.premuto == Some(az) { pal.alt } else { pal.surface }), Some((pal.primary, 2.0)));
+            p.icon(ic::SETTINGS, g.0 + g.2 / 2.0 - 13.0, g.1 + g.3 / 2.0 - 13.0, 26.0, pal.primary);
+            self.colpi.push((Forma::R(g), az));
+            (bt.0 + bt.3 + 10.0, bt.1, bt.2 - bt.3 - 10.0, bt.3)
+        } else {
+            bt
+        };
         let testo = if self.foglio {
-            self.righe_ora().get(self.tessera).map(|r| match self.pdf.etichetta_vai(r.id) {
+            self.righe_ora().get(self.tessera).map(|r| match self.pdf.etichetta_vai(r.id).filter(|_| self.kind == Kind::Pdf) {
                 Some(t) => t,
                 None if r.conv => format!("Converti in {}", r.titolo),
                 None => r.titolo.to_string(),
@@ -1688,7 +1790,15 @@ impl App {
             }
             self.colpi.push((Forma::R((rc.0, rc.1 - 2.0, rc.2, rc.3 + 4.0)), Azione::Lingua(i)));
         }
-        let y = y + 32.0 + LINGUE.len() as f32 * 56.0 + 6.0;
+        let mut y = y + 32.0 + LINGUE.len() as f32 * 56.0 + 6.0;
+        let rc = (x, y, cw, 64.0);
+        let az = Azione::Opz(opzioni::OpzAz::ApriImpostazioni);
+        p.rrect(rc.0, rc.1, rc.2, rc.3, 16.0, Some(if self.premuto == Some(az) { mix(pal.alt, pal.primary, 0.2) } else { pal.surface }), Some((pal.border, 1.0)));
+        p.text("Impostazioni", rc.0 + 18.0, rc.1 + 8.0, rc.2 - 70.0, 26.0, 17.0, Weight::Semibold, pal.text, Align::Left);
+        p.text("Nome dei file, qualità, OCR", rc.0 + 18.0, rc.1 + 34.0, rc.2 - 70.0, 20.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+        p.icon("M9 6l6 6-6 6", rc.0 + rc.2 - 40.0, rc.1 + 20.0, 24.0, pal.muted);
+        self.colpi.push((Forma::R(rc), az));
+        y += 76.0;
         let fine = y + p.text_wrap("Le copie vanno nella cartella Documenti. Il tema scelto resta tra un avvio e l'altro.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3);
         p.pop_clip();
         self.scorri_max = (fine + 16.0 + self.scorri - h).max(0.0);
@@ -1700,9 +1810,20 @@ impl App {
         let pal = self.pal();
         p.rrect(rc.0, rc.1, rc.2, rc.3, rc.3 / 2.0, Some(pal.alt), None);
         let n = voci.len().max(1) as f32;
-        let vw = (rc.2 - 8.0) / n;
+        // Larghezze uguali se le scritte ci stanno, altrimenti in proporzione alle scritte.
+        let misure: Vec<f32> = voci.iter().map(|v| p.measure(v, 15.0, Weight::Semibold) + 20.0).collect();
+        let uguale = (rc.2 - 8.0) / n;
+        let larghe: Vec<f32> = if misure.iter().all(|m| *m <= uguale) {
+            vec![uguale; voci.len()]
+        } else {
+            let tot: f32 = misure.iter().sum();
+            misure.iter().map(|m| m / tot * (rc.2 - 8.0)).collect()
+        };
+        let mut px = rc.0 + 4.0;
         for (i, nome) in voci.iter().enumerate() {
-            let rr = (rc.0 + 4.0 + i as f32 * vw, rc.1 + 4.0, vw, rc.3 - 8.0);
+            let vw = larghe[i];
+            let rr = (px, rc.1 + 4.0, vw, rc.3 - 8.0);
+            px += vw;
             let on = i == scelta;
             let a = az(i);
             if on {
