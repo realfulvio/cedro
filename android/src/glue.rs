@@ -1241,6 +1241,8 @@ fn android_main(app: AndroidApp) {
     let file_lavori = dati.join("lavori.txt");
     let tema = std::fs::read_to_string(&file_tema).map(|t| ThemeId::from_key(&t)).unwrap_or(ThemeId::WindowsEssenziale);
     let mut ui = App::new(tema);
+    let file_caratteri = dati.join("caratteri.txt");
+    ui.grandi = std::fs::read_to_string(&file_caratteri).is_ok_and(|t| t.trim() == "grandi");
     // La lingua: quella scelta nell'Aspetto, o quella del telefono (Android non ha LANG).
     let file_lingua = dati.join("lingua.txt");
     ui.lingua_telefono = lingua_del_telefono(&app);
@@ -1357,6 +1359,10 @@ fn android_main(app: AndroidApp) {
                         }
                         Effetto::SalvaLingua(l) => {
                             let _ = std::fs::write(&file_lingua, l);
+                            sporco = true;
+                        }
+                        Effetto::SalvaCaratteri(g) => {
+                            let _ = std::fs::write(&file_caratteri, if g { "grandi" } else { "normali" });
                             sporco = true;
                         }
                         Effetto::SalvaTema(t) => {
@@ -1487,7 +1493,8 @@ fn android_main(app: AndroidApp) {
             if let Some(f) = &finestra {
                 let (w, h) = (f.width() as u32, f.height() as u32);
                 if w > 0 && h > 0 {
-                    let mut p = Painter::new(w, h, scala, Fonts::current(), &mut cache);
+                    let mut p = Painter::new(w, h, scala, Fonts::for_theme(ui.tema), &mut cache);
+                    p.larger = ui.grandi;
                     ui.disegna(&mut p, w as f32 / scala, h as f32 / scala);
                     presenta(f, &p);
                     sporco = false;
