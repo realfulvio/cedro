@@ -215,7 +215,11 @@ pub struct Casa {
     pub link: String,
     pub web: usize,
     pub guida: bool,
-    scorri_x: f32,
+    /// Lo scorrimento di lato delle fasce col dito: 0 = le categorie, 1 = la striscia dei file del Documento al centro.
+    pub fx: [f32; 2],
+    pub fx_max: [f32; 2],
+    /// La categoria già portata a vista nella fascia (quando cambia, la fascia la segue).
+    segui: Option<Kind>,
     /// Il Documento al centro mostra tutti i file nella striscia (la categoria segue quello mostrato).
     pub tutti: bool,
     /// Lo scorrimento dell'elenco a comparsa.
@@ -225,7 +229,7 @@ pub struct Casa {
 
 impl Default for Casa {
     fn default() -> Self {
-        Casa { att: Att::Conv, categoria: Kind::Image, coda: Vec::new(), operazione: HashMap::new(), valori: HashMap::new(), elenco: None, passo: 0, mostrato: 0, link: String::new(), web: 0, guida: false, scorri_x: 0.0, tutti: false, elenco_scorri: 0.0, elenco_max: 0.0 }
+        Casa { att: Att::Conv, categoria: Kind::Image, coda: Vec::new(), operazione: HashMap::new(), valori: HashMap::new(), elenco: None, passo: 0, mostrato: 0, link: String::new(), web: 0, guida: false, fx: [0.0; 2], fx_max: [0.0; 2], segui: None, tutti: false, elenco_scorri: 0.0, elenco_max: 0.0 }
     }
 }
 
@@ -835,20 +839,69 @@ impl App {
         }
     }
 
-    /// Le schede delle categorie che scorrono (Essenziale): restituisce l'altezza.
+    /// Fissa lo scorrimento della fascia `f` larga `vis` con il contenuto largo `tot`; `voluto` = (inizio, fine) di
+    /// una voce da portare a vista quando la categoria cambia. Registra la fascia per il dito. Restituisce lo scorrimento.
+    fn fascia(&mut self, f: usize, rc: R, vis: f32, tot: f32, voluto: Option<(f32, f32)>) -> f32 {
+        let max = (tot - vis).max(0.0);
+        self.casa.fx_max[f] = max;
+        let mut s = self.casa.fx[f];
+        if f == 0 && self.casa.segui != Some(self.casa.categoria) {
+            self.casa.segui = Some(self.casa.categoria);
+            if let Some((a, b)) = voluto {
+                if a < s {
+                    s = a - 24.0;
+                } else if b > s + vis {
+                    s = b - vis + 24.0;
+                }
+            }
+        }
+        s = s.clamp(0.0, max);
+        self.casa.fx[f] = s;
+        if max > 0.0 {
+            self.fasce.push((rc, f));
+        }
+        s
+    }
+
+    /// Le larghezze dei gettoni delle categorie (per la fascia che scorre).
+    fn larghi_categorie(&self, p: &Painter, dim: f32, base: f32, pallino: f32, grassetto: bool) -> Vec<f32> {
+        Casa::categorie()
+            .iter()
+            .map(|c| {
+                let on = c.kind == self.casa.categoria;
+                let tw = p.measure(c.name, dim, if on && grassetto { Weight::Semibold } else { Weight::Regular });
+                base + tw + if self.casa.quanti(c.kind) > 0 && !on { pallino } else { 0.0 }
+            })
+            .collect()
+    }
+
+    /// Dove sta la categoria scelta nella fascia: (inizio, fine) dal bordo sinistro.
+    fn pos_scelta(&self, larghi: &[f32], passo: f32) -> Option<(f32, f32)> {
+        let i = Casa::categorie().iter().position(|c| c.kind == self.casa.categoria)?;
+        let a: f32 = larghi[..i].iter().map(|l| l + passo).sum();
+        Some((a, a + larghi[i]))
+    }
+
+    /// Le schede delle categorie (Essenziale), che scorrono di lato col dito: restituisce l'altezza.
     fn schede_categorie(&mut self, p: &mut Painter, x: f32, y: f32, w: f32) -> f32 {
         let pal = self.pal();
         let scuro = self.scuro();
         let h = 46.0;
+        let passo = 20.0;
         p.fill(0.0, y + h - 1.0, x + w + 16.0, 1.0, pal.border);
-        let mut cx = x - self.casa.scorri_x;
-        p.push_clip(0.0, y, x + w + 16.0, h);
+        let larghi = self.larghi_categorie(p, 15.0, 30.0, 24.0, true);
+        let tot = larghi.iter().sum::<f32>() + passo * (larghi.len().saturating_sub(1)) as f32;
+        let voluto = self.pos_scelta(&larghi, passo);
+        let fascia = (0.0, y, x + w + 16.0, h);
+        let s = self.fascia(0, fascia, w, tot, voluto);
+        let mut cx = x - s;
+        p.push_clip(fascia.0, fascia.1, fascia.2, fascia.3);
         for (i, c) in Casa::categorie().iter().enumerate() {
             let on = c.kind == self.casa.categoria;
             let col = colore_kind(c.kind, scuro);
             let n = self.casa.quanti(c.kind);
             let tw = p.measure(c.name, 15.0, if on { Weight::Semibold } else { Weight::Regular });
-            let ww = 30.0 + tw + if n > 0 && !on { 24.0 } else { 0.0 };
+            let ww = larghi[i];
             self.kt(p, cx, y + 10.0, 24.0, col, icona_kind(c.kind));
             p.text(c.name, cx + 30.0, y, tw + 4.0, h - 2.0, 15.0, if on { Weight::Semibold } else { Weight::Regular }, if on { col } else { pal.text }, Align::Left);
             if n > 0 && !on {
@@ -858,20 +911,27 @@ impl App {
             if on {
                 p.fill(cx, y + h - 3.0, ww, 3.0, col);
             }
-            self.colpi.push((Forma::R((cx, y, ww, h)), Azione::Casa(CasaAz::Categoria(i))));
-            cx += ww + 20.0;
+            self.colpo((cx, y, ww, h), Azione::Casa(CasaAz::Categoria(i)), fascia);
+            cx += ww + passo;
         }
         p.pop_clip();
-        // Le schede che non stanno scorrono: la categoria scelta resta a vista.
-        let tot = cx + self.casa.scorri_x - x;
-        if tot > w {
-            let i = Casa::categorie().iter().position(|c| c.kind == self.casa.categoria).unwrap_or(0);
-            let voluto = (i as f32 * (tot / Casa::categorie().len() as f32) - w * 0.3).clamp(0.0, tot - w);
-            self.casa.scorri_x = voluto;
-        } else {
-            self.casa.scorri_x = 0.0;
-        }
+        // Una sfumatura sul bordo dice che c'è dell'altro da quella parte.
+        self.sfumature(p, fascia, s, self.casa.fx_max[0], pal.bg);
         h
+    }
+
+    /// Le sfumature ai lati di una fascia che scorre, dove c'è ancora contenuto nascosto.
+    fn sfumature(&self, p: &mut Painter, rc: R, s: f32, max: f32, bg: Rgb) {
+        let passi = 8;
+        for k in 0..passi {
+            let a = 0.9 * (1.0 - k as f32 / passi as f32);
+            if s > 0.5 {
+                p.rrect_a(rc.0 + k as f32 * 3.0, rc.1, 3.0, rc.3 - 1.0, 0.0, bg, a);
+            }
+            if s < max - 0.5 {
+                p.rrect_a(rc.0 + rc.2 - (k + 1) as f32 * 3.0, rc.1, 3.0, rc.3 - 1.0, 0.0, bg, a);
+            }
+        }
     }
 
     /// Il campo del link e le quattro scelte di «Video dal web» e YouTube. Restituisce l'altezza.
@@ -1501,14 +1561,20 @@ impl App {
             y += self.corpo_web(p, x, y, cw, vista);
         } else {
             if conv {
-                // Le categorie, a gettoni che scorrono.
-                let mut cx = x;
+                // Le categorie, a gettoni che scorrono di lato col dito.
+                let passo = 6.0;
+                let larghi = self.larghi_categorie(p, 14.0, 44.0, 12.0, false);
+                let tot = larghi.iter().sum::<f32>() + passo * (larghi.len().saturating_sub(1)) as f32;
+                let voluto = self.pos_scelta(&larghi, passo);
+                let fascia = super::intersezione((0.0, y - 4.0, w, 46.0), vista).unwrap_or((0.0, y - 4.0, w, 0.0));
+                let s = self.fascia(0, fascia, cw, tot, voluto);
+                let mut cx = x - s;
                 for (i, c) in Casa::categorie().iter().enumerate() {
                     let on = c.kind == self.casa.categoria;
                     let col = colore_kind(c.kind, scuro);
                     let tw = p.measure(c.name, 14.0, Weight::Regular);
                     let n = self.casa.quanti(c.kind);
-                    let ww = 44.0 + tw + if n > 0 && !on { 12.0 } else { 0.0 };
+                    let ww = larghi[i];
                     p.rrect(cx, y, ww, 38.0, 8.0, Some(if on { mix(pal.surface, col, 0.14) } else { pal.surface }), Some((if on { col } else { pal.border }, 1.0)));
                     self.kt(p, cx + 6.0, y + 6.0, 26.0, col, icona_kind(c.kind));
                     p.text(c.name, cx + 38.0, y, tw + 4.0, 38.0, 14.0, Weight::Regular, pal.text, Align::Left);
@@ -1516,8 +1582,9 @@ impl App {
                         p.circle(cx + ww - 10.0, y + 19.0, 3.5, Some(pal.primary), None);
                     }
                     self.colpo((cx, y - 4.0, ww, 46.0), Azione::Casa(CasaAz::Categoria(i)), vista);
-                    cx += ww + 6.0;
+                    cx += ww + passo;
                 }
+                self.sfumature(p, (0.0, y - 4.0, w, 46.0), s, self.casa.fx_max[0], pal.bg);
                 y += 48.0;
             }
             // Aggiungi file, cartella, quanti in coda.
@@ -1758,8 +1825,12 @@ impl App {
         p.icon(ic::ADD, add.0 + 12.0, add.1 + 12.0, 24.0, pal.text);
         self.colpi.push((Forma::R(add), Azione::Casa(CasaAz::Aggiungi)));
         let mostrato = vis.get(self.casa.mostrato).copied().or_else(|| vis.first().copied());
-        let mut fx = 70.0;
-        p.push_clip(66.0, y, w - 66.0, 72.0);
+        // La striscia scorre di lato col dito quando i file non ci stanno.
+        let fascia = (66.0, y, w - 66.0, 72.0);
+        let tot = vis.len() as f32 * 194.0 - 8.0;
+        let sf = self.fascia(1, fascia, w - 66.0 - 12.0, tot + 4.0, None);
+        let mut fx = 70.0 - sf;
+        p.push_clip(fascia.0, fascia.1, fascia.2, fascia.3);
         for (k, i) in vis.iter().copied().enumerate() {
             let v = self.casa.coda[i].clone();
             let on = Some(i) == mostrato;
@@ -1768,10 +1839,11 @@ impl App {
             self.miniatura_voce(p, &v, (rc.0 + 8.0, rc.1 + 8.0, 36.0, 36.0), 6.0);
             p.text(&v.nome, rc.0 + 52.0, rc.1 + 4.0, rc.2 - 58.0, 22.0, 14.0, Weight::Semibold, if v.scelto { pal.text } else { pal.muted }, Align::Left);
             self.info_voce_riga(p, &v, rc.0 + 52.0, rc.1 + 36.0, rc.2 - 58.0, 11.0, true);
-            self.colpi.push((Forma::R(rc), Azione::Casa(CasaAz::Mostra(k))));
+            self.colpo(rc, Azione::Casa(CasaAz::Mostra(k)), fascia);
             fx += rc.2 + 8.0;
         }
         p.pop_clip();
+        self.sfumature(p, fascia, sf, self.casa.fx_max[1], pal.surface);
         y += 72.0;
         // Il pannello in basso.
         let tras = self.casa.att == Att::Tras;
