@@ -1,6 +1,6 @@
 name: Note della release
 
-# Riscrive le note di una release già pubblicata con il testo di .github/note-release.md.
+# Riscrive le note di una release con il testo di .github/note-release.md (Android: android/note-release-<versione>.md).
 on:
   workflow_dispatch:
     inputs:
@@ -22,5 +22,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
         run: |
-          sed "s/{versione}/${TAG#v}/g; s#{repo}#${GITHUB_REPOSITORY}#g" .github/note-release.md > note.md
+          case "$TAG" in
+            android-v*) cp "android/note-release-${TAG#android-v}.md" note.md ;;
+            *) sed "s/{versione}/${TAG#v}/g; s#{repo}#${GITHUB_REPOSITORY}#g" .github/note-release.md > note.md ;;
+          esac
           gh release edit "$TAG" --notes-file note.md
