@@ -19,6 +19,13 @@ use cedro::ui::views::uses_quality;
 use cedro::ui::wheel::list;
 use cedro::{Kind, Mode};
 
+mod casa;
+mod opzioni;
+mod pdf;
+mod rivedi;
+pub use pdf::{Campo, Pagina, StatoPdf, Tasto};
+pub use rivedi::da_controllare;
+
 pub type R = (f32, f32, f32, f32);
 
 /// I temi che si possono scegliere (quello del Comune è dell'edizione dell'ente, non del telefono).
@@ -66,6 +73,10 @@ pub struct Lavoro {
     pub stato: Stato,
     /// Avanzamento in millesimi (0..=1000); `u32::MAX` finché il motore non lo sa.
     pub prog: Arc<AtomicU32>,
+    /// La trascrizione: l'audio di partenza, per «Rivedi».
+    pub sorgente: Option<PathBuf>,
+    /// I punti da controllare trovati nella trascrizione.
+    pub controlli: Option<usize>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -85,6 +96,12 @@ pub enum Sorgente {
     Altri,
     /// Un link (dagli appunti): «Video dal web».
     Link,
+    /// Altri PDF da unire (scelta multipla).
+    PdfAltri,
+    /// File per la coda della finestra principale (scelta multipla).
+    Coda,
+    /// Tutti i file di una cartella, per la coda.
+    Cartella,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -101,6 +118,8 @@ pub enum Azione {
     /// Il modello di trascrizione: 0 Veloce (tiny), 1 Buona (base).
     Modello(usize),
     Tema(usize),
+    /// «Caratteri»: Normali (falso) o Grandi (vero).
+    Caratteri(bool),
     /// 0 = lingua del telefono, 1 = italiano, 2 = inglese.
     Lingua(usize),
     /// «Copia le informazioni».
@@ -115,19 +134,63 @@ pub enum Azione {
     Apri(u32),
     Condividi(u32),
     Svuota,
+    /// Le schermate dei PDF.
+    Pdf(pdf::PdfAz),
+    /// Un campo di testo: la tastiera scrive lì.
+    Campo(Campo),
+    /// «Rivedi» sulla scheda di una trascrizione.
+    Rivedi(u32),
+    /// Dentro «Rivedi trascrizione».
+    Riv(rivedi::RivAz),
+    /// «Altre opzioni» e «Impostazioni».
+    Opz(opzioni::OpzAz),
+    /// Il pulsante a fianco di «Converti»: apre «Altre opzioni».
+    AltreOpzioni,
+    /// La finestra principale (dall'icona di Cedro).
+    Casa(casa::CasaAz),
     /// Un'area che non fa niente ma ferma il tocco.
     Niente,
 }
 
+/// Un lavoro da far partire col motore.
+pub struct Compito {
+    pub id: u32,
+    pub file: PathBuf,
+    pub azione: &'static str,
+    pub qualita: u8,
+    pub prog: Arc<AtomicU32>,
+    pub opts: Option<Box<cedro::Options>>,
+    pub unisci: Vec<(PathBuf, Option<cedro::PageSel>)>,
+}
+
 pub enum Effetto {
     Niente,
+    /// Più lavori, uno dopo l'altro (il pulsante grande della finestra principale).
+    Tanti(Vec<Compito>),
+    /// Il link dagli appunti va nel campo di «Video dal web».
+    Incolla,
+    /// Miniatura e misure di file messi in coda.
+    LeggiVoci(Vec<PathBuf>),
+    /// Pagine e segnalibri di un PDF aperto dalla finestra principale, e i PDF da unire.
+    LeggiPdf(PathBuf, Vec<PathBuf>),
     Ridisegna,
     /// Da eseguire col motore.
-    Converti { id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32> },
+    /// `opts`: le scelte delle schermate (None = quelle di sempre); `unisci`: i PDF da unire, in ordine, con le pagine.
+    Converti { id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)> },
+    /// Prova la password del PDF: se va, se ne fa una copia senza.
+    Sblocca(String),
+    /// Legge l'onda dell'audio di una revisione (percorso, durata).
+    OndaRevisione(PathBuf, f64),
+    /// Le impostazioni sono cambiate: vanno ricordate (`imp` nel motore, modello e «se esiste già» qui).
+    SalvaImpostazioni,
+    /// Scrive un file nuovo (la revisione salvata) e lo consegna come il risultato del lavoro `id`.
+    Scrivi { id: u32, nome: String, dati: Vec<u8> },
     /// Chiude Cedro: si torna all'app di prima.
     Esci,
     /// Il tema è cambiato: va ricordato.
     SalvaTema(ThemeId),
+    /// La misura dei caratteri è cambiata: va ricordata.
+    SalvaCaratteri(bool),
     /// La lingua è cambiata («auto», «it» o «en»): va ricordata.
     SalvaLingua(&'static str),
     /// L'elenco dei lavori è cambiato: va ricordato.
@@ -175,10 +238,16 @@ struct Riga {
     sotto: &'static str,
     /// Vero se è un cambio di formato («Converti in X»); falso per le azioni («Comprimi»).
     conv: bool,
+    /// Arrivata con questa versione: la tessera lo dice.
+    nuovo: bool,
 }
 
 const fn r(id: &'static str, titolo: &'static str, sotto: &'static str, conv: bool) -> Riga {
-    Riga { id, titolo, sotto, conv }
+    Riga { id, titolo, sotto, conv, nuovo: false }
+}
+
+const fn rn(id: &'static str, titolo: &'static str, sotto: &'static str, conv: bool) -> Riga {
+    Riga { id, titolo, sotto, conv, nuovo: true }
 }
 
 /// Un «file» che in realtà è un link (http/https): si scarica, non si converte.
@@ -205,24 +274,46 @@ fn righe_link(path: &Path) -> Vec<&'static Riga> {
 
 /// Le azioni da mettere nelle tessere per un tipo di file: solo quelle che il motore sa fare.
 fn righe(kind: Kind) -> Vec<&'static Riga> {
-    static IMG: [Riga; 7] = [
+    static IMG: [Riga; 9] = [
         r("jpeg", "JPG", "Più leggera", true),
         r("png", "PNG", "Senza perdita", true),
         r("webp", "WebP", "Per il web", true),
+        rn("avif", "AVIF", "Ancora più leggera", true),
+        rn("jxl", "JPEG XL", "Il JPEG nuovo", true),
         r("pdf", "PDF", "Un foglio", true),
         r("compress", "Comprimi", "Meno spazio", false),
         r("ocr", "Testo", "Riconosci scritte", false),
         r("half", "Dimezza", "Metà dimensioni", false),
     ];
-    static PDF: [Riga; 5] = [
+    static PDF: [Riga; 10] = [
         r("docx", "Word", "Con testo", true),
+        rn("xlsx", "Excel", "Le tabelle", true),
         r("txt", "Testo", "Estrae le parole", true),
         r("jpg", "JPG", "Una per pagina", true),
-        r("png", "PNG", "Una per pagina", true),
+        rn("merge", "Unisci", "Con altri PDF", false),
+        rn("split", "Dividi", "In più file", false),
+        rn("pages", "Pagine", "Ruota, togli, numeri", false),
+        rn("compress", "Comprimi", "Meno spazio", false),
         r("ocr", "Leggi", "Riconosci scritte", false),
+        r("png", "PNG", "Una per pagina", true),
+    ];
+    static ARC: [Riga; 6] = [
+        r("z-webp", "Foto in WebP", "Le immagini dello ZIP", false),
+        r("z-jpeg", "Foto in JPEG", "Le immagini dello ZIP", false),
+        r("z-png", "Foto in PNG", "Le immagini dello ZIP", false),
+        r("z-mp3", "Audio in MP3", "L'audio dello ZIP", false),
+        r("z-wav", "Audio in WAV", "L'audio dello ZIP", false),
+        r("z-pdf", "Documenti in PDF", "Word, testo, foto", false),
     ];
     static TXT: [Riga; 3] = [r("pdf", "PDF", "Da stampare", true), r("html", "HTML", "Per il web", true), r("md", "Markdown", "Testo con segni", true)];
-    static AUD: [Riga; 3] = [r("mp3", "MP3", "Più leggero", true), r("wav", "WAV", "Senza compressione", true), r("trascrivi", "Testo", "Dalla voce, offline", false)];
+    static AUD: [Riga; 6] = [
+        r("mp3", "MP3", "Più leggero", true),
+        r("wav", "WAV", "Senza compressione", true),
+        rn("flac", "FLAC", "Senza perdita, leggero", true),
+        rn("opus", "Opus", "Il più leggero", true),
+        rn("aiff", "AIFF", "Per Mac e studi", true),
+        r("trascrivi", "Testo", "Dalla voce, offline", false),
+    ];
     static VID: [Riga; 3] = [r("mp4", "MP4", "Più leggero", true), r("mp3", "Solo audio", "MP3 dal video", false), r("trascrivi", "Testo", "Dalla voce, offline", false)];
     static DOC: [Riga; 1] = [r("pdf", "PDF", "Da documento", true)];
     let tutte: &'static [Riga] = match kind {
@@ -232,11 +323,12 @@ fn righe(kind: Kind) -> Vec<&'static Riga> {
         Kind::Audio => &AUD,
         Kind::Video => &VID,
         Kind::Doc => &DOC,
-        Kind::Archive | Kind::Other => &[],
+        Kind::Archive => &ARC,
+        Kind::Other => &[],
     };
-    let ids: Vec<&'static str> = [Mode::Convert, Mode::Tools].into_iter().flat_map(|m| list(kind, m)).map(|s| s.id).collect();
-    // «trascrivi» non è nel catalogo del motore di conversione: è whisper.cpp dentro l'APK.
-    tutte.iter().filter(|r| ids.contains(&r.id) || r.id == "trascrivi").collect()
+    let ids: Vec<&'static str> = [Mode::Convert, Mode::Tools].into_iter().flat_map(|m| list(kind, m)).map(|s| s.id).chain(cedro::panel_slices(kind).iter().map(|s| s.id)).collect();
+    // «trascrivi» non è nel catalogo del motore di conversione: è whisper.cpp dentro l'APK; «pages» è la schermata Pagine.
+    tutte.iter().filter(|r| ids.contains(&r.id) || r.id == "trascrivi" || (kind == Kind::Pdf && r.id == "pages")).collect()
 }
 
 fn sotto_altro(kind: Kind) -> &'static str {
@@ -252,9 +344,16 @@ fn icona_di(id: &str) -> &'static str {
         "web-audio" => ic::AUDIO,
         "webp" | "bmp" | "gray" | "jpeg" | "jpg" | "png" | "tiff" | "gif" => ic::IMAGE,
         "mp4" | "webm" | "mov" | "mkv" | "avi" => ic::VIDEO,
-        "wav" | "mp3" | "ogg" | "m4a" | "aac" | "flac" => ic::AUDIO,
-        "compress" | "half" | "strip" => ic::DOWNLOAD,
+        "wav" | "mp3" | "ogg" | "m4a" | "aac" | "flac" | "opus" | "aiff" | "z-mp3" | "z-wav" => ic::AUDIO,
+        "avif" | "jxl" | "z-webp" | "z-jpeg" | "z-png" => ic::IMAGE,
+        "zip-tutti" => ic::FOLDER,
+        "compress" => pdf::I_COMPRIMI,
+        "half" | "strip" => ic::DOWNLOAD,
         "rot90" => ic::CONVERT,
+        "xlsx" => pdf::I_EXCEL,
+        "merge" => pdf::I_UNISCI,
+        "split" => pdf::I_DIVIDI,
+        "pages" => pdf::I_PAGINE,
         "ocr" | "txt" => ic::SEARCH,
         "trascrivi" | "web-testo" => ic::TRANSCRIBE,
         _ => ic::FILE,
@@ -353,6 +452,8 @@ impl Info {
 pub struct App {
     pub info: Info,
     pub tema: ThemeId,
+    /// Caratteri grandi (+2, come sul computer).
+    pub grandi: bool,
     /// «auto», «it» o «en».
     pub lingua: &'static str,
     /// La lingua del telefono, per «auto».
@@ -391,6 +492,32 @@ pub struct App {
     ora: Instant,
     /// Barre di sistema e gesti, in dp: sinistra, alto, destra, basso.
     pub margini: (f32, f32, f32, f32),
+    /// Le schermate dei PDF e le loro scelte.
+    pub pdf: StatoPdf,
+    /// Il campo di testo in cui scrive la tastiera.
+    pub campo: Option<Campo>,
+    /// Toccato un campo: la tastiera va mostrata (anche se il sistema l'aveva chiusa col tasto indietro).
+    pub mostra_tastiera: bool,
+    /// «Rivedi trascrizione», a tutto schermo.
+    pub rivedi: Option<rivedi::Rivedi>,
+    /// «Altre opzioni», e le scelte dell'ultima volta.
+    pub opzioni: Option<opzioni::Opzioni>,
+    opzioni_salvate: Option<cedro::conversioni::Values>,
+    /// «Impostazioni» aperte.
+    pub impostazioni: bool,
+    /// Le impostazioni del motore (qualità, DPI, OCR), il nome a modello e cosa fare se il file esiste già.
+    pub imp: cedro::Settings,
+    pub modello_nome: String,
+    pub esiste: cedro::Exists,
+    /// Gli altri file condivisi insieme al primo (per farne uno ZIP).
+    pub altri: Vec<PathBuf>,
+    /// La finestra principale del tema, aperta dall'icona (falso quando si arriva da «Condividi»).
+    pub casa_aperta: bool,
+    pub casa: casa::Casa,
+    /// Lavori, Aspetto o Informazioni sopra la finestra principale, con la freccia per tornare.
+    pub sopra: Option<Scheda>,
+    /// Le pagine dei PDF in coda.
+    pub pdf_pagine: std::collections::HashMap<PathBuf, u32>,
 }
 
 /// Le lingue tra cui scegliere: chiave nel file, nome (quelli delle lingue non si traducono).
@@ -410,6 +537,7 @@ impl App {
         App {
             info: Info::default(),
             tema,
+            grandi: false,
             lingua: "auto",
             lingua_telefono: cedro::i18n::Lang::It,
             file: None,
@@ -437,6 +565,21 @@ impl App {
             cursore: (0.0, 0.0, 1.0, 1.0),
             ora: Instant::now(),
             margini: (0.0, 0.0, 0.0, 0.0),
+            pdf: StatoPdf::default(),
+            campo: None,
+            mostra_tastiera: false,
+            rivedi: None,
+            opzioni: None,
+            opzioni_salvate: None,
+            impostazioni: false,
+            imp: cedro::Settings::default(),
+            modello_nome: String::new(),
+            esiste: cedro::Exists::Number,
+            altri: Vec::new(),
+            casa_aperta: true,
+            casa: casa::Casa::default(),
+            sopra: None,
+            pdf_pagine: std::collections::HashMap::new(),
         }
     }
 
@@ -451,12 +594,22 @@ impl App {
         self.onda = None;
         self.scelta_file = false;
         self.scheda = Scheda::Ruota;
+        if da_condivisione {
+            self.casa_aperta = false;
+            self.sopra = None;
+        }
         self.foglio = da_condivisione && (!righe(kind).is_empty() || self.file.as_ref().is_some_and(|f| e_link(&f.path)));
+        self.altri.clear();
         self.dal_foglio = false;
+        self.pdf = StatoPdf::default();
+        self.campo = None;
+        self.opzioni = None;
+        self.altri.clear();
     }
 
     /// Un lavoro è finito (o fallito).
     pub fn finisce(&mut self, id: u32, stato: Stato) -> Effetto {
+        self.salvata(id, &stato);
         if let Some(l) = self.lavori.iter_mut().find(|l| l.id == id) {
             l.stato = stato;
         }
@@ -464,7 +617,10 @@ impl App {
     }
 
     /// Vero se serve ridisegnare a ogni fotogramma (barra di avanzamento che scorre).
-    pub fn animando(&self) -> bool {
+    pub fn animando(&mut self) -> bool {
+        if std::mem::take(&mut self.pdf.ridisegna) || self.rivedi.as_ref().is_some_and(|r| r.suona()) || (self.casa_aperta && self.sopra.is_none() && self.lavori.iter().any(|l| l.stato == Stato::InCorso)) {
+            return true;
+        }
         self.lavori.iter().any(|l| l.stato == Stato::InCorso) && !self.scelta_file && (self.scheda == Scheda::Lavori || self.scheda == Scheda::Ruota)
     }
 
@@ -483,7 +639,18 @@ impl App {
         self.lavori
             .iter()
             .filter_map(|l| match &l.stato {
-                Stato::Fatto { path, msg, nome } => Some(format!("{}\t{}\t{}\t{}\t{}\t{}\t{}", l.quando, pulisci(&l.origine), pulisci(&l.etichetta), l.conv as u8, path.display(), pulisci(msg), pulisci(nome))),
+                Stato::Fatto { path, msg, nome } => Some(format!(
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    l.quando,
+                    pulisci(&l.origine),
+                    pulisci(&l.etichetta),
+                    l.conv as u8,
+                    path.display(),
+                    pulisci(msg),
+                    pulisci(nome),
+                    l.sorgente.as_ref().map(|p| p.display().to_string()).unwrap_or_default(),
+                    l.controlli.map(|n| n.to_string()).unwrap_or_default()
+                )),
                 _ => None,
             })
             .take(30)
@@ -515,6 +682,8 @@ impl App {
                 quando: c[0].parse().unwrap_or(0),
                 stato: Stato::Fatto { path, nome, msg: c[5].into() },
                 prog: Arc::new(AtomicU32::new(1000)),
+                sorgente: c.get(7).filter(|s| !s.is_empty()).map(PathBuf::from).filter(|p| cedro::revisione::has(p)),
+                controlli: c.get(8).and_then(|n| n.parse().ok()),
             });
             self.prossimo += 1;
         }
@@ -522,6 +691,11 @@ impl App {
 
     fn pal(&self) -> &'static Palette {
         self.tema.palette()
+    }
+
+    /// Il colore dei punti da controllare (arancio, leggibile sul tema chiaro e su quello scuro).
+    fn avviso(&self) -> (u8, u8, u8) {
+        if self.tema.dark() { (0xFF, 0xB4, 0x5C) } else { (0xA8, 0x4E, 0x00) }
     }
 
     fn ha_strumenti(&self) -> bool {
@@ -544,6 +718,10 @@ impl App {
     fn righe_ora(&self) -> Vec<&'static Riga> {
         if self.file.as_ref().is_some_and(|f| e_link(&f.path)) {
             righe_link(&self.file.as_ref().map(|f| f.path.clone()).unwrap_or_default())
+        } else if !self.altri.is_empty() {
+            // Più file condivisi insieme: per prima cosa uno ZIP con tutti.
+            static ZIP: Riga = rn("zip-tutti", "ZIP", "Tutti in un archivio", false);
+            std::iter::once(&ZIP).chain(righe(self.kind)).collect()
         } else {
             righe(self.kind)
         }
@@ -578,6 +756,18 @@ impl App {
     pub fn tocca_giu(&mut self, x: f32, y: f32) -> Effetto {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
         self.premuto = self.trova(x, y);
+        if self.rivedi.is_some() {
+            self.trascina = Some((y, self.scorri_rivedi_ora(), false));
+            return Effetto::Ridisegna;
+        }
+        if self.casa_aperta && self.casa.elenco.is_some() {
+            self.trascina = Some((y, self.casa.elenco_scorri, false));
+            return Effetto::Ridisegna;
+        }
+        if let Some(Azione::Pdf(pdf::PdfAz::Maniglia(i))) = self.premuto {
+            self.pdf.trascina = Some((i, y, y));
+            return Effetto::Ridisegna;
+        }
         self.trascina = Some((y, self.scorri, false));
         if self.premuto == Some(Azione::Cursore) {
             self.imposta_cursore(x);
@@ -591,8 +781,31 @@ impl App {
             self.imposta_cursore(x);
             return Effetto::Ridisegna;
         }
+        if let Some((i, y0, _)) = self.pdf.trascina {
+            self.pdf.trascina = Some((i, y0, y));
+            return Effetto::Ridisegna;
+        }
+        if let (Some((y0, s0, mosso)), true) = (self.trascina, self.casa_aperta && self.casa.elenco.is_some()) {
+            if mosso || (y - y0).abs() > 10.0 {
+                self.casa.elenco_scorri = (s0 - (y - y0)).clamp(0.0, self.casa.elenco_max);
+                self.trascina = Some((y0, s0, true));
+                self.premuto = None;
+                return Effetto::Ridisegna;
+            }
+            return Effetto::Niente;
+        }
+        if let (Some((y0, s0, mosso)), true) = (self.trascina, self.rivedi.is_some()) {
+            if mosso || (y - y0).abs() > 10.0 {
+                self.scorri_rivedi(y - y0, s0);
+                self.trascina = Some((y0, s0, true));
+                self.premuto = None;
+                return Effetto::Ridisegna;
+            }
+            return Effetto::Niente;
+        }
         if let Some((y0, s0, mosso)) = self.trascina {
-            if (mosso || (y - y0).abs() > 10.0) && matches!(self.scheda, Scheda::Lavori | Scheda::Info | Scheda::Aspetto) && !self.foglio && !self.scelta_file {
+            let pagina = (self.pdf.pagina.is_some() && !self.pdf.protetto || self.opzioni.is_some() || self.impostazioni || self.casa_aperta && self.casa.elenco.is_none()) && !self.scelta_file;
+            if (mosso || (y - y0).abs() > 10.0) && (pagina || matches!(self.scheda, Scheda::Lavori | Scheda::Info | Scheda::Aspetto) && !self.foglio && !self.scelta_file) {
                 self.scorri = (s0 - (y - y0)).clamp(0.0, self.scorri_max);
                 self.trascina = Some((y0, s0, true));
                 self.premuto = None;
@@ -606,6 +819,10 @@ impl App {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
         let giu = self.premuto.take();
         let mosso = self.trascina.take().is_some_and(|t| t.2);
+        if let Some((i, y0, y1)) = self.pdf.trascina.take() {
+            self.pdf.lascia(i, y1 - y0);
+            return Effetto::Ridisegna;
+        }
         let su = self.trova(x, y);
         match (giu, su) {
             (Some(a), Some(b)) if a == b && !mosso => self.attiva(a),
@@ -616,6 +833,7 @@ impl App {
     pub fn tocca_annulla(&mut self) {
         self.premuto = None;
         self.trascina = None;
+        self.pdf.trascina = None;
     }
 
     fn trova(&self, x: f32, y: f32) -> Option<Azione> {
@@ -634,6 +852,39 @@ impl App {
             self.scelta_file = false;
             return true;
         }
+        if self.campo.take().is_some() {
+            return true;
+        }
+        if self.rivedi.is_some() {
+            self.azione_rivedi(rivedi::RivAz::Chiudi);
+            return true;
+        }
+        if self.impostazioni || self.opzioni.is_some() {
+            self.azione_opzioni(opzioni::OpzAz::Indietro);
+            return true;
+        }
+        if self.pdf.protetto {
+            self.annulla_password();
+            return true;
+        }
+        if self.pdf.pagina.take().is_some() {
+            self.scorri = 0.0;
+            return true;
+        }
+        if self.casa_aperta {
+            if self.casa.elenco.take().is_some() {
+                return true;
+            }
+            if self.casa.guida || self.sopra.is_some() {
+                self.azione_casa(casa::CasaAz::Indietro);
+                return true;
+            }
+            if self.tema == ThemeId::PercorsoGuidato && self.casa.passo > 0 {
+                self.azione_casa(casa::CasaAz::Passo(-1));
+                return true;
+            }
+            return false;
+        }
         if self.foglio {
             return false;
         }
@@ -650,22 +901,58 @@ impl App {
     }
 
     fn avvia(&mut self, id: &'static str, etichetta: &str, conv: bool) -> Effetto {
+        self.avvia_con(id, etichetta, conv, None, Vec::new())
+    }
+
+    fn avvia_con(&mut self, id: &'static str, etichetta: &str, conv: bool, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)>) -> Effetto {
+        // Le Impostazioni valgono per ogni lavoro: se il nome esiste già e il nome a modello.
+        let mut o = opts.unwrap_or_default();
+        o.exists = self.esiste;
+        if o.name_template.as_deref().is_none_or(|t| t.trim().is_empty()) && !self.modello_nome.trim().is_empty() {
+            o.name_template = Some(self.modello_nome.clone());
+        }
+        let opts = Some(o);
+        self.opzioni = None;
         let Some(file) = self.file.clone() else { return Effetto::Niente };
         let lavoro = self.prossimo;
         self.prossimo += 1;
         let prog = Arc::new(AtomicU32::new(u32::MAX));
-        self.lavori.insert(0, Lavoro { id: lavoro, origine: file.nome.clone(), etichetta: etichetta.into(), conv, inizio: Instant::now(), quando: adesso(), stato: Stato::InCorso, prog: prog.clone() });
+        let sorgente = (id == "trascrivi").then(|| file.path.clone());
+        self.lavori.insert(0, Lavoro { id: lavoro, origine: file.nome.clone(), etichetta: etichetta.into(), conv, inizio: Instant::now(), quando: adesso(), stato: Stato::InCorso, prog: prog.clone(), sorgente, controlli: None });
         self.scorri = 0.0;
         self.scheda = Scheda::Lavori;
+        if self.casa_aperta {
+            self.sopra = Some(Scheda::Lavori);
+        }
         self.foglio = false;
         self.dal_foglio = false;
+        self.pdf.pagina = None;
+        self.campo = None;
         // Per «trascrivi» il campo qualità porta il modello scelto.
         let qualita = if id == "trascrivi" || id == "web-testo" { self.modello as u8 } else { self.qualita };
-        Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita, prog }
+        Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita, prog, opts, unisci }
     }
 
     fn attiva(&mut self, a: Azione) -> Effetto {
+        // Toccare altrove chiude la tastiera (tranne «mostra la password», che si usa scrivendo).
+        if !matches!(a, Azione::Campo(_) | Azione::Pdf(pdf::PdfAz::MostraPw)) {
+            self.campo = None;
+        }
         match a {
+            Azione::Pdf(az) => self.azione_pdf(az),
+            Azione::Riv(az) => self.azione_rivedi(az),
+            Azione::Opz(az) => self.azione_opzioni(az),
+            Azione::Casa(az) => self.azione_casa(az),
+            Azione::AltreOpzioni => {
+                let id = if self.foglio { self.righe_ora().get(self.tessera).map(|r| r.id) } else { self.scelta.and_then(|i| self.fette().get(i).map(|f| f.id)) };
+                self.apri_opzioni(id)
+            }
+            Azione::Rivedi(id) => self.apri_rivedi(id),
+            Azione::Campo(c) => {
+                self.campo = Some(c);
+                self.mostra_tastiera = true;
+                Effetto::Ridisegna
+            }
             Azione::Scheda(s) => {
                 // «Ruota» riporta sempre alla ruota vuota, pronta per un nuovo file.
                 if s == Scheda::Ruota {
@@ -708,11 +995,18 @@ impl App {
             Azione::Vai => {
                 if self.foglio {
                     match self.righe_ora().get(self.tessera).copied() {
+                        Some(riga) if self.kind == Kind::Pdf && pdf::schermata(riga.id).is_some() => self.apri_pagina(pdf::schermata(riga.id).unwrap_or(pdf::Pagina::Excel)),
+                        Some(riga) if riga.id == "zip-tutti" => {
+                            let tutti: Vec<(PathBuf, Option<cedro::PageSel>)> = self.file.iter().map(|f| f.path.clone()).chain(self.altri.iter().cloned()).map(|p| (p, None)).collect();
+                            let n = tutti.len();
+                            self.avvia_con("zip-tutti", &format!("ZIP di {n} file"), false, None, tutti)
+                        }
                         Some(riga) => self.avvia(riga.id, riga.titolo, riga.conv),
                         None => Effetto::Niente,
                     }
                 } else {
                     match self.scelta.and_then(|i| self.fette().get(i).copied()) {
+                        Some(f) if self.kind == Kind::Pdf && pdf::schermata(f.id).is_some() => self.apri_pagina(pdf::schermata(f.id).unwrap_or(pdf::Pagina::Excel)),
                         Some(f) => {
                             let conv = self.modo == 0;
                             self.avvia(f.id, f.label, conv)
@@ -729,6 +1023,10 @@ impl App {
             Azione::Tema(i) => {
                 self.tema = TEMI[i];
                 Effetto::SalvaTema(self.tema)
+            }
+            Azione::Caratteri(g) => {
+                self.grandi = g;
+                Effetto::SalvaCaratteri(g)
             }
             Azione::CopiaInfo => Effetto::Copia(self.info.testo()),
             Azione::Lingua(i) => {
@@ -795,6 +1093,21 @@ impl App {
         let (w, h) = (w - ml - mr, h - mt - mb);
         if self.scelta_file {
             self.pagina_scelta(p, w, h);
+        } else if self.rivedi.is_some() {
+            self.pagina_rivedi(p, w, h);
+        } else if self.impostazioni {
+            self.pagina_impostazioni(p, w, h);
+        } else if self.opzioni.is_some() && (self.file.is_some() || self.opzioni.as_ref().is_some_and(|o| o.da_casa.is_some())) {
+            self.pagina_opzioni(p, w, h);
+        } else if let (Some(pg), true) = (self.pdf.pagina, self.file.is_some()) {
+            self.pagina_pdf(p, pg, w, h);
+        } else if self.casa_aperta {
+            match self.sopra {
+                Some(Scheda::Lavori) => self.pagina_lavori(p, w, h),
+                Some(Scheda::Aspetto) => self.pagina_aspetto(p, w, h),
+                Some(Scheda::Info) => self.pagina_info(p, w, h),
+                _ => self.pagina_casa(p, w, h),
+            }
         } else if self.foglio && self.file.is_some() {
             self.pagina_foglio(p, w, h);
         } else {
@@ -806,6 +1119,9 @@ impl App {
                 Scheda::Aspetto => self.pagina_aspetto(p, w, corpo),
             }
             self.barra_schede(p, w, h);
+        }
+        if self.pdf.protetto && self.file.is_some() && !self.scelta_file {
+            self.foglio_password(p, w, h);
         }
     }
 
@@ -820,6 +1136,13 @@ impl App {
 
     fn titolo_barra(&mut self, p: &mut Painter, x: f32, w: f32, titolo: &str) {
         let pal = self.pal();
+        // Sopra la finestra principale: la freccia per tornarci.
+        let (x, w) = if self.casa_aperta && self.sopra.is_some() {
+            self.bottone_icona(p, (4.0, 4.0, TOCCO, TOCCO), ic::ARROW_LEFT, Azione::Casa(casa::CasaAz::Indietro));
+            (60.0, w - (60.0 - x))
+        } else {
+            (x, w)
+        };
         p.text(titolo, x, 0.0, w, BARRA, 21.0, Weight::Semibold, pal.text, Align::Left);
     }
 
@@ -972,8 +1295,8 @@ impl App {
             y += 66.0;
         } else {
             let msg = "Tocca il cerchio per scegliere un file, oppure condividilo a Cedro da un'altra app.";
-            p.text_wrap(msg, x0, y, w0, 14.0, Weight::Regular, pal.muted, 20.0, 2);
-            y += 44.0;
+            let usata = p.text_wrap(msg, x0, y, w0, 14.0, Weight::Regular, pal.muted, 20.0, 2);
+            y += (usata + 6.0).max(44.0);
         }
         if ultimi && (orizz || y + 94.0 <= spazio + 2.0) {
             self.riga_ultimi(p, x0, y, w0, spazio - y);
@@ -1057,11 +1380,35 @@ impl App {
         }
     }
 
-    /// Il pulsante grande «Converti in X».
+    /// L'azione scelta ora ha «Altre opzioni» (è un formato del pannello Conversioni).
+    fn ha_opzioni(&self) -> bool {
+        if self.file.as_ref().is_none_or(|f| e_link(&f.path)) {
+            return false;
+        }
+        let id = if self.foglio { self.righe_ora().get(self.tessera).map(|r| r.id) } else { self.scelta.and_then(|i| self.fette().get(i).map(|f| f.id)) };
+        let Some(id) = id else { return false };
+        opzioni::formati(self.kind).iter().any(|s| s.id == id || (id == "jpg" && s.id == "jpeg"))
+    }
+
+    /// Il pulsante grande «Converti in X», con a fianco quello di «Altre opzioni» se servono.
     fn pulsante_vai(&mut self, p: &mut Painter, bt: R) {
         let pal = self.pal();
+        let bt = if self.ha_opzioni() {
+            let g = (bt.0, bt.1, bt.3, bt.3);
+            let az = Azione::AltreOpzioni;
+            p.circle(g.0 + g.2 / 2.0, g.1 + g.3 / 2.0, g.3 / 2.0 - 1.0, Some(if self.premuto == Some(az) { pal.alt } else { pal.surface }), Some((pal.primary, 2.0)));
+            p.icon(ic::SETTINGS, g.0 + g.2 / 2.0 - 13.0, g.1 + g.3 / 2.0 - 13.0, 26.0, pal.primary);
+            self.colpi.push((Forma::R(g), az));
+            (bt.0 + bt.3 + 10.0, bt.1, bt.2 - bt.3 - 10.0, bt.3)
+        } else {
+            bt
+        };
         let testo = if self.foglio {
-            self.righe_ora().get(self.tessera).map(|r| if r.conv { format!("Converti in {}", r.titolo) } else { r.titolo.to_string() })
+            self.righe_ora().get(self.tessera).map(|r| match self.pdf.etichetta_vai(r.id).filter(|_| self.kind == Kind::Pdf) {
+                Some(t) => t,
+                None if r.conv => format!("Converti in {}", r.titolo),
+                None => r.titolo.to_string(),
+            })
         } else {
             self.scelta.and_then(|i| self.fette().get(i).copied()).map(|f| if self.modo == 1 { format!("Applica: {}", f.label) } else { format!("Converti in {}", f.label) })
         };
@@ -1194,9 +1541,9 @@ impl App {
             let rc = (gx + c as f32 * (tw + gap), gy + rr as f32 * (th + gap), tw, th);
             if i < tutte.len() {
                 let t = tutte[i];
-                self.tessera_vista(p, rc, icona_di(t.id), t.titolo, t.sotto, self.tessera == i, Azione::Tessera(i));
+                self.tessera_vista(p, rc, icona_di(t.id), t.titolo, t.sotto, self.tessera == i, t.nuovo, Azione::Tessera(i));
             } else {
-                self.tessera_vista(p, rc, ic::CONVERT, "Altro", sotto_altro(self.kind), false, Azione::Altro);
+                self.tessera_vista(p, rc, ic::CONVERT, "Altro", sotto_altro(self.kind), false, false, Azione::Altro);
             }
         }
 
@@ -1214,24 +1561,35 @@ impl App {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn tessera_vista(&mut self, p: &mut Painter, rc: R, icona: &str, titolo: &str, sotto: &str, scelta: bool, az: Azione) {
+    fn tessera_vista(&mut self, p: &mut Painter, rc: R, icona: &str, titolo: &str, sotto: &str, scelta: bool, nuovo: bool, az: Azione) {
         let pal = self.pal();
         let prem = self.premuto == Some(az);
         let fondo = if scelta { pal.primary } else if prem { mix(pal.surface, pal.primary, 0.14) } else { pal.surface };
         p.rrect(rc.0, rc.1, rc.2, rc.3, 16.0, Some(fondo), Some((if scelta { pal.primary } else { pal.border }, 1.0)));
         let fg = if scelta { pal.on_primary } else { pal.text };
         let sg = if scelta { mix(pal.primary, pal.on_primary, 0.8) } else { pal.muted };
-        let caja = if scelta { mix(pal.primary, pal.on_primary, 0.25) } else { pal.alt };
+        // Il colore del tipo di file che esce (il colore del tema resta per la tessera scelta).
+        let kc = casa::colore_kind(casa::kind_uscita(self.kind, self.righe_ora().get(match az { Azione::Tessera(i) => i, _ => usize::MAX }).map(|r| r.id).unwrap_or("")), self.tema.dark());
+        let kc = if matches!(az, Azione::Tessera(_)) { kc } else { pal.primary };
+        let caja = if scelta { mix(pal.primary, pal.on_primary, 0.25) } else { mix(pal.surface, kc, 0.16) };
         if rc.3 >= 84.0 {
             p.rrect(rc.0 + 12.0, rc.1 + 12.0, 38.0, 38.0, 11.0, Some(caja), None);
-            p.icon(icona, rc.0 + 19.0, rc.1 + 19.0, 24.0, if scelta { pal.on_primary } else { pal.primary });
+            p.icon(icona, rc.0 + 19.0, rc.1 + 19.0, 24.0, if scelta { pal.on_primary } else { kc });
             p.text(titolo, rc.0 + 12.0, rc.1 + rc.3 - 46.0, rc.2 - 20.0, 24.0, 17.0, Weight::Semibold, fg, Align::Left);
             p.text(sotto, rc.0 + 12.0, rc.1 + rc.3 - 26.0, rc.2 - 20.0, 20.0, 12.0, Weight::Regular, sg, Align::Left);
         } else {
             p.rrect(rc.0 + 10.0, rc.1 + (rc.3 - 36.0) / 2.0, 36.0, 36.0, 10.0, Some(caja), None);
-            p.icon(icona, rc.0 + 16.0, rc.1 + (rc.3 - 24.0) / 2.0, 24.0, if scelta { pal.on_primary } else { pal.primary });
+            p.icon(icona, rc.0 + 16.0, rc.1 + (rc.3 - 24.0) / 2.0, 24.0, if scelta { pal.on_primary } else { kc });
             p.text(titolo, rc.0 + 54.0, rc.1 + rc.3 / 2.0 - 21.0, rc.2 - 60.0, 22.0, 16.0, Weight::Semibold, fg, Align::Left);
             p.text(sotto, rc.0 + 54.0, rc.1 + rc.3 / 2.0 + 1.0, rc.2 - 60.0, 20.0, 11.0, Weight::Regular, sg, Align::Left);
+            if nuovo {
+                let tw = p.measure(titolo, 16.0, Weight::Semibold);
+                let nx = rc.0 + 54.0 + tw + 6.0;
+                let nw = p.measure("NUOVO", 9.0, Weight::Semibold) + 2.0;
+                if nx + nw < rc.0 + rc.2 - 4.0 {
+                    p.text("NUOVO", nx, rc.1 + rc.3 / 2.0 - 21.0, nw, 22.0, 9.0, Weight::Semibold, if scelta { pal.on_primary } else { pal.ok }, Align::Left);
+                }
+            }
         }
         self.colpi.push((Forma::R(rc), az));
     }
@@ -1254,7 +1612,8 @@ impl App {
             p.rrect(rc.0, rc.1, rc.2, rc.3, 16.0, Some(if prem { mix(pal.surface, pal.primary, 0.14) } else { pal.surface }), Some((pal.border, 1.0)));
             p.rrect(rc.0 + 12.0, rc.1 + (th - 40.0) / 2.0, 40.0, 40.0, 12.0, Some(pal.alt), None);
             p.icon(icona, rc.0 + 20.0, rc.1 + (th - 24.0) / 2.0, 24.0, pal.primary);
-            p.text(nome, rc.0 + 62.0, rc.1, rc.2 - 70.0, th, 17.0, Weight::Semibold, pal.text, Align::Left);
+            let righe = p.wrap_lines(nome, 17.0, Weight::Semibold, rc.2 - 70.0, 2).len().max(1) as f32;
+            p.text_wrap(nome, rc.0 + 62.0, rc.1 + (th - righe * 22.0) / 2.0, rc.2 - 70.0, 17.0, Weight::Semibold, pal.text, 22.0, 2);
             self.colpi.push((Forma::R(rc), az));
         }
         let righe_voci = 5usize.div_ceil(colonne) as f32;
@@ -1336,6 +1695,7 @@ impl App {
             Stato::InCorso => 92.0,
             // Un link passato a un'altra app: non c'è un file da aprire o condividere.
             Stato::Fatto { path, .. } if path.as_os_str().is_empty() => 70.0,
+            Stato::Fatto { .. } if l.sorgente.is_some() && l.controlli.is_some_and(|n| n > 0) => 176.0,
             Stato::Fatto { .. } => 142.0,
             Stato::Errore(_) => 112.0,
         };
@@ -1375,8 +1735,18 @@ impl App {
                     return alt;
                 }
                 p.text(&format!("Salvato in {nome}"), x + 14.0, y + 54.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
-                let bw = (w - 28.0 - 10.0) / 2.0;
-                for (i, (et, az)) in [("Apri", Azione::Apri(l.id)), ("Condividi", Azione::Condividi(l.id))].into_iter().enumerate() {
+                if let Some(n) = l.controlli.filter(|n| *n > 0 && l.sorgente.is_some()) {
+                    let et = if n == 1 { "1 punto da controllare".to_string() } else { format!("{n} punti da controllare") };
+                    let ew = p.measure(&et, 13.0, Weight::Semibold) + 22.0;
+                    p.rrect(x + 14.0, y + 80.0, ew, 28.0, 14.0, Some(pal.alt), None);
+                    p.text(&et, x + 14.0, y + 80.0, ew, 28.0, 13.0, Weight::Semibold, self.avviso(), Align::Center);
+                }
+                let mut voci = vec![("Apri", Azione::Apri(l.id)), ("Condividi", Azione::Condividi(l.id))];
+                if l.sorgente.is_some() {
+                    voci.insert(0, ("Rivedi", Azione::Rivedi(l.id)));
+                }
+                let bw = (w - 28.0 - 10.0 * (voci.len() as f32 - 1.0)) / voci.len() as f32;
+                for (i, (et, az)) in voci.into_iter().enumerate() {
                     let rc = (x + 14.0 + i as f32 * (bw + 10.0), y + alt - 14.0 - TOCCO, bw, TOCCO);
                     let prem = self.premuto == Some(az);
                     let pieno = i == 0;
@@ -1465,30 +1835,41 @@ impl App {
     fn pagina_aspetto(&mut self, p: &mut Painter, w: f32, h: f32) {
         let pal = self.pal();
         self.titolo_barra(p, 16.0, w - 32.0, "Aspetto");
-        let rh = if h < 420.0 { 52.0 } else { 66.0 };
+        let rh = if h < 420.0 { 60.0 } else { 80.0 };
         let ampio = w > 700.0;
         let cw = if ampio { 520.0 } else { w - 24.0 };
         let x = if ampio { (w - cw) / 2.0 } else { 12.0 };
         p.push_clip(0.0, BARRA, w, h - BARRA);
-        let top = BARRA + 4.0 - self.scorri;
+        let mut y = BARRA - self.scorri;
+        p.text("Tema", x + 4.0, y, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
+        y += 32.0;
         for (i, tema) in TEMI.into_iter().enumerate() {
-            let rc = (x, top + i as f32 * rh, cw, rh - 8.0);
+            let rc = (x, y + i as f32 * rh, cw, rh - 8.0);
             let attivo = tema == self.tema;
             let prem = self.premuto == Some(Azione::Tema(i));
             let pa = tema.palette();
-            p.rrect(rc.0, rc.1, rc.2, rc.3, 16.0, Some(if prem { mix(pal.alt, pal.primary, 0.2) } else { pal.surface }), Some((if attivo { pal.primary } else { pal.border }, if attivo { 2.0 } else { 1.0 })));
-            p.circle(rc.0 + 30.0, rc.1 + rc.3 / 2.0, 16.0, Some(pa.bg), Some((pa.border, 1.5)));
-            p.disc_a(rc.0 + 30.0, rc.1 + rc.3 / 2.0, 10.0, pa.primary, 1.0);
-            p.text(tema.name(), rc.0 + 60.0, rc.1, rc.2 - 110.0, rc.3, 17.0, Weight::Semibold, pal.text, Align::Left);
-            if attivo {
-                p.icon(ic::CHECK, rc.0 + rc.2 - 40.0, rc.1 + (rc.3 - 22.0) / 2.0, 22.0, pal.primary);
-            }
+            p.rrect(rc.0, rc.1, rc.2, rc.3, 18.0, Some(if prem { mix(pal.alt, pal.primary, 0.2) } else { pal.surface }), Some((if attivo { pal.primary } else { pal.border }, if attivo { 2.0 } else { 1.0 })));
+            let cy = rc.1 + rc.3 / 2.0;
+            p.circle(rc.0 + 32.0, cy, 18.0, Some(pa.bg), Some((pa.border, 1.5)));
+            p.disc_a(rc.0 + 32.0, cy, 10.0, pa.primary, 1.0);
+            // Nome, carattere e «Àa» nel carattere di quel tema.
+            let prima = p.swap_fonts(cedro::ui::gfx::Fonts::for_theme(tema));
+            let aw = p.measure("Àa", 24.0, Weight::Bold) + 8.0;
+            p.text(tema.name(), rc.0 + 62.0, cy - 24.0, rc.2 - 80.0 - aw, 26.0, 17.0, Weight::Semibold, pal.text, Align::Left);
+            p.text(nome_carattere(tema), rc.0 + 62.0, cy + 1.0, rc.2 - 80.0 - aw, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+            p.text("Àa", rc.0 + rc.2 - 14.0 - aw, rc.1, aw, rc.3, 24.0, Weight::Bold, pal.text, Align::Right);
+            p.swap_fonts(prima);
             self.colpi.push((Forma::R((rc.0, rc.1 - 2.0, rc.2, rc.3 + 4.0)), Azione::Tema(i)));
         }
-        let y0 = top + TEMI.len() as f32 * rh + 10.0;
-        p.text("Lingua", x + 4.0, y0, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
+        y += TEMI.len() as f32 * rh + 4.0;
+        p.text("Caratteri", x + 4.0, y, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
+        y += 32.0;
+        self.pillole(p, (x, y, cw, TOCCO), &["Normali", "Grandi"], usize::from(self.grandi), |i| Azione::Caratteri(i == 1));
+        y += TOCCO + 6.0;
+        y += p.text_wrap("Ogni tema ha il suo carattere, come sul computer. «Grandi» ingrandisce tutto il testo di Cedro.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3) + 10.0;
+        p.text("Lingua", x + 4.0, y, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
         for (i, (chiave, nome)) in LINGUE.iter().enumerate() {
-            let rc = (x, y0 + 32.0 + i as f32 * 56.0, cw, 48.0);
+            let rc = (x, y + 32.0 + i as f32 * 56.0, cw, 48.0);
             let attivo = self.lingua == *chiave;
             let prem = self.premuto == Some(Azione::Lingua(i));
             p.rrect(rc.0, rc.1, rc.2, rc.3, 14.0, Some(if prem { mix(pal.alt, pal.primary, 0.2) } else { pal.surface }), Some((if attivo { pal.primary } else { pal.border }, if attivo { 2.0 } else { 1.0 })));
@@ -1498,11 +1879,62 @@ impl App {
             }
             self.colpi.push((Forma::R((rc.0, rc.1 - 2.0, rc.2, rc.3 + 4.0)), Azione::Lingua(i)));
         }
-        let y = y0 + 32.0 + LINGUE.len() as f32 * 56.0 + 6.0;
-        p.text_wrap("Le copie vanno nella cartella Documenti. Il tema scelto resta tra un avvio e l'altro.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3);
+        let mut y = y + 32.0 + LINGUE.len() as f32 * 56.0 + 6.0;
+        let rc = (x, y, cw, 64.0);
+        let az = Azione::Opz(opzioni::OpzAz::ApriImpostazioni);
+        p.rrect(rc.0, rc.1, rc.2, rc.3, 16.0, Some(if self.premuto == Some(az) { mix(pal.alt, pal.primary, 0.2) } else { pal.surface }), Some((pal.border, 1.0)));
+        p.text("Impostazioni", rc.0 + 18.0, rc.1 + 8.0, rc.2 - 70.0, 26.0, 17.0, Weight::Semibold, pal.text, Align::Left);
+        p.text("Nome dei file, qualità, OCR", rc.0 + 18.0, rc.1 + 34.0, rc.2 - 70.0, 20.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+        p.icon("M9 6l6 6-6 6", rc.0 + rc.2 - 40.0, rc.1 + 20.0, 24.0, pal.muted);
+        self.colpi.push((Forma::R(rc), az));
+        y += 76.0;
+        let fine = y + p.text_wrap("Le copie vanno nella cartella Documenti. Il tema scelto resta tra un avvio e l'altro.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3);
         p.pop_clip();
-        self.scorri_max = (y + 62.0 + self.scorri - h).max(0.0);
+        self.scorri_max = (fine + 16.0 + self.scorri - h).max(0.0);
         self.scorri = self.scorri.min(self.scorri_max);
+    }
+
+    /// Una scelta a pillole («Normali | Grandi»): la voce `scelta` è piena.
+    fn pillole(&mut self, p: &mut Painter, rc: R, voci: &[&str], scelta: usize, az: impl Fn(usize) -> Azione) {
+        let pal = self.pal();
+        p.rrect(rc.0, rc.1, rc.2, rc.3, rc.3 / 2.0, Some(pal.alt), None);
+        let n = voci.len().max(1) as f32;
+        // Larghezze uguali se le scritte ci stanno, altrimenti in proporzione alle scritte.
+        let misure: Vec<f32> = voci.iter().map(|v| p.measure(v, 15.0, Weight::Semibold) + 20.0).collect();
+        let uguale = (rc.2 - 8.0) / n;
+        let larghe: Vec<f32> = if misure.iter().all(|m| *m <= uguale) {
+            vec![uguale; voci.len()]
+        } else {
+            let tot: f32 = misure.iter().sum();
+            misure.iter().map(|m| m / tot * (rc.2 - 8.0)).collect()
+        };
+        let mut px = rc.0 + 4.0;
+        for (i, nome) in voci.iter().enumerate() {
+            let vw = larghe[i];
+            let rr = (px, rc.1 + 4.0, vw, rc.3 - 8.0);
+            px += vw;
+            let on = i == scelta;
+            let a = az(i);
+            if on {
+                p.rrect(rr.0, rr.1, rr.2, rr.3, rr.3 / 2.0, Some(pal.primary), None);
+            } else if self.premuto == Some(a) {
+                p.rrect_a(rr.0, rr.1, rr.2, rr.3, rr.3 / 2.0, pal.primary, 0.14);
+            }
+            p.text(nome, rr.0 + 4.0, rr.1, rr.2 - 8.0, rr.3, 15.0, Weight::Semibold, if on { pal.on_primary } else { pal.text }, Align::Center);
+            self.colpi.push((Forma::R((rr.0, rc.1, rr.2, rc.3)), a));
+        }
+    }
+}
+
+/// Il carattere di ogni tema, come lo dice «Aspetto».
+fn nome_carattere(t: ThemeId) -> &'static str {
+    match t {
+        ThemeId::WindowsEssenziale => "Roboto, quello del telefono",
+        ThemeId::PercorsoGuidato => "Atkinson Hyperlegible",
+        ThemeId::CedroCompatto => "Figtree",
+        ThemeId::BancoDiLavoro => "IBM Plex Sans",
+        ThemeId::DocumentoAlCentro => "Source Sans 3",
+        ThemeId::Bondeno => "Titillium Web",
     }
 }
 
