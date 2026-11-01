@@ -1,4 +1,4 @@
-//! Il tasto Play dell'anteprima: l'audio esce dalle casse (cpal: ALSA su Linux, WASAPI su Windows) e il
+//! Il tasto Play dell'anteprima: l'audio esce dalle casse (cpal: ALSA su Linux, WASAPI su Windows, AAudio su Android) e il
 //! video si guarda nella scheda, sincronizzato con l'audio. Un thread per l'audio (che tiene lo stream
 //! del sistema), uno per i fotogrammi; tutti si fermano quando il lettore viene chiuso.
 
@@ -173,12 +173,12 @@ impl Drop for Player {
 // ---- Audio ----
 
 /// Quanto può restare ferma la posizione dell'audio mentre suona prima di passare all'orologio.
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
 const STALLED: Duration = Duration::from_millis(1500);
 
 fn audio_thread(path: &Path, sh: Arc<Shared>) {
     let pcm = crate::audio::decode(path).ok().filter(|p| !p.samples.is_empty() && p.channels > 0);
-    #[cfg(any(windows, target_os = "linux"))]
+    #[cfg(any(windows, target_os = "linux", target_os = "android"))]
     if let Some(pcm) = pcm {
         let pcm = Arc::new(pcm);
         let frames = (pcm.samples.len() / pcm.channels as usize) as u64;
@@ -223,7 +223,7 @@ fn audio_thread(path: &Path, sh: Arc<Shared>) {
             }
         }
     }
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(not(any(windows, target_os = "linux", target_os = "android")))]
     let _ = pcm;
     // Niente audio (o niente casse): corre l'orologio, così il video si vede lo stesso.
     sh.loading.store(false, Ordering::Relaxed);
@@ -234,7 +234,7 @@ fn audio_thread(path: &Path, sh: Arc<Shared>) {
     (sh.wake)();
 }
 
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
 fn open_stream(pcm: Arc<crate::audio::Pcm>, sh: Arc<Shared>) -> Result<cpal::Stream, String> {
     use cpal::traits::{DeviceTrait, HostTrait};
     use cpal::SampleFormat;
@@ -254,7 +254,7 @@ fn open_stream(pcm: Arc<crate::audio::Pcm>, sh: Arc<Shared>) -> Result<cpal::Str
     }
 }
 
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "android"))]
 fn build<T>(device: &cpal::Device, config: &cpal::StreamConfig, pcm: Arc<crate::audio::Pcm>, sh: Arc<Shared>) -> Result<cpal::Stream, String>
 where
     T: cpal::SizedSample + cpal::FromSample<f32>,
