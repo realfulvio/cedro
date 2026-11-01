@@ -1,0 +1,1 @@
+Nuova grafica: una finestra per tema come sul computer, con un colore per ogni tipo di file. PDF: Excel, Unisci, Dividi, Pagine, Comprimi, PDF con password. Rivedi trascrizione con l'audio. Altre opzioni e nuovi formati (FLAC, Opus, AVIF, JPEG XL), ZIP, Impostazioni, ultimi file.
