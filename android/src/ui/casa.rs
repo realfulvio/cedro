@@ -394,9 +394,10 @@ impl App {
             CasaAz::Mostra(i) => {
                 // Nel Documento al centro la categoria segue il file mostrato.
                 self.casa.mostrato = i;
-                if let Some(k) = self.casa.visibili().get(i).map(|j| self.casa.coda[*j].kind) {
-                    self.casa.categoria = k;
-                    self.casa.mostrato = self.casa.visibili().iter().position(|j| self.casa.coda[*j].kind == k).unwrap_or(0);
+                if let Some(j) = self.casa.visibili().get(i).copied() {
+                    self.casa.categoria = self.casa.coda[j].kind;
+                    // Resta quel file (non il primo dello stesso tipo), anche se cambiando categoria cambiano i visibili.
+                    self.casa.mostrato = self.casa.visibili().iter().position(|v| *v == j).unwrap_or(0);
                 }
             }
             CasaAz::Recente(i) => {
