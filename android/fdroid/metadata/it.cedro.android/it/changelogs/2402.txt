@@ -1,0 +1,1 @@
+Migliorato: le categorie in alto (Conversione PDF, Testo, Audio…) e la striscia dei file scorrono a destra e a sinistra col dito.

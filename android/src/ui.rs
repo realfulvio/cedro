@@ -485,8 +485,12 @@ pub struct App {
     scorri: f32,
     scorri_max: f32,
     trascina: Option<(f32, f32, bool)>,
+    /// Il trascinamento orizzontale di una fascia che scorre: (fascia, x di partenza, y di partenza, scorrimento di partenza, mosso).
+    trascina_x: Option<(usize, f32, f32, f32, bool)>,
     premuto: Option<Azione>,
     colpi: Vec<(Forma, Azione)>,
+    /// Le fasce che scorrono di lato col dito (rifatte a ogni disegno): riquadro e numero della fascia.
+    fasce: Vec<(R, usize)>,
     cursore: R,
     /// Istante attuale per le animazioni (fissato a ogni disegno).
     ora: Instant,
@@ -560,8 +564,10 @@ impl App {
             scorri: 0.0,
             scorri_max: 0.0,
             trascina: None,
+            trascina_x: None,
             premuto: None,
             colpi: Vec::new(),
+            fasce: Vec::new(),
             cursore: (0.0, 0.0, 1.0, 1.0),
             ora: Instant::now(),
             margini: (0.0, 0.0, 0.0, 0.0),
@@ -768,6 +774,12 @@ impl App {
             self.pdf.trascina = Some((i, y, y));
             return Effetto::Ridisegna;
         }
+        // Una fascia che scorre di lato (le categorie, la striscia dei file): si decide al primo movimento.
+        self.trascina_x = if self.casa_aperta && !(self.pdf.protetto && self.file.is_some()) {
+            self.fasce.iter().find(|(r, _)| Forma::R(*r).dentro(x, y)).map(|(_, f)| (*f, x, y, self.casa.fx[*f], false))
+        } else {
+            None
+        };
         self.trascina = Some((y, self.scorri, false));
         if self.premuto == Some(Azione::Cursore) {
             self.imposta_cursore(x);
@@ -784,6 +796,20 @@ impl App {
         if let Some((i, y0, _)) = self.pdf.trascina {
             self.pdf.trascina = Some((i, y0, y));
             return Effetto::Ridisegna;
+        }
+        if let Some((f, x0, y0, s0, mosso)) = self.trascina_x {
+            let (dx, dy) = (x - x0, y - y0);
+            if mosso || (dx.abs() > 10.0 && dx.abs() > dy.abs()) {
+                self.casa.fx[f] = (s0 - dx).clamp(0.0, self.casa.fx_max[f]);
+                self.trascina_x = Some((f, x0, y0, s0, true));
+                self.trascina = None;
+                self.premuto = None;
+                return Effetto::Ridisegna;
+            }
+            if dy.abs() > 10.0 {
+                // Il dito va in su o in giù: scorre la pagina, non la fascia.
+                self.trascina_x = None;
+            }
         }
         if let (Some((y0, s0, mosso)), true) = (self.trascina, self.casa_aperta && self.casa.elenco.is_some()) {
             if mosso || (y - y0).abs() > 10.0 {
@@ -818,7 +844,11 @@ impl App {
     pub fn tocca_su(&mut self, x: f32, y: f32) -> Effetto {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
         let giu = self.premuto.take();
-        let mosso = self.trascina.take().is_some_and(|t| t.2);
+        if let Some((f, x0, _, s0, true)) = self.trascina_x {
+            // L'ultimo tratto arriva con il sollevamento (gli spostamenti veloci vengono raggruppati).
+            self.casa.fx[f] = (s0 - (x - x0)).clamp(0.0, self.casa.fx_max[f]);
+        }
+        let mosso = self.trascina.take().is_some_and(|t| t.2) | self.trascina_x.take().is_some_and(|t| t.4);
         if let Some((i, y0, y1)) = self.pdf.trascina.take() {
             self.pdf.lascia(i, y1 - y0);
             return Effetto::Ridisegna;
@@ -833,6 +863,7 @@ impl App {
     pub fn tocca_annulla(&mut self) {
         self.premuto = None;
         self.trascina = None;
+        self.trascina_x = None;
         self.pdf.trascina = None;
     }
 
@@ -1085,6 +1116,7 @@ impl App {
     pub fn disegna(&mut self, p: &mut Painter, w: f32, h: f32) {
         self.ora = Instant::now();
         self.colpi.clear();
+        self.fasce.clear();
         let pal = self.pal();
         p.clear(pal.bg);
         let (ml, mt, mr, mb) = self.margini;
