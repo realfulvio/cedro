@@ -2,9 +2,17 @@
 //! e lo stemma in più punti. Motore, funzioni e pacchetti sono gli stessi della versione standard.
 //! Lo stemma è l'originale del sito del Comune (assets/bondeno/FONTE.md): si mostra così com'è, mai ritoccato.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+use crate::ui::theme::{ThemeId, THEMES};
 
 static BONDENO: AtomicBool = AtomicBool::new(false);
+static TEMA: AtomicUsize = AtomicUsize::new(0);
+
+/// Il tema scelto in Impostazioni › Aspetto, per il carattere e i disegni che non hanno la finestra a portata di mano.
+pub fn tema() -> ThemeId {
+    THEMES.get(TEMA.load(Ordering::Relaxed)).copied().unwrap_or(ThemeId::WindowsEssenziale)
+}
 
 /// Vero quando è scelto il tema «Comune di Bondeno» (Impostazioni › Aspetto): stemma, colori e carattere del Comune.
 /// Lo accendono `read_settings` e `write_settings`, così segue sempre l'impostazione `ui_theme`.
@@ -18,6 +26,8 @@ pub const CHIAVE_TEMA: &str = "bondeno";
 /// Chiamata da `settings` ogni volta che legge o scrive l'impostazione del tema.
 pub(crate) fn segui_tema(ui_theme: &str) {
     BONDENO.store(e_bondeno(ui_theme), Ordering::Relaxed);
+    let tema = ThemeId::from_key(ui_theme);
+    TEMA.store(THEMES.iter().position(|t| *t == tema).unwrap_or(0), Ordering::Relaxed);
 }
 
 fn e_bondeno(ui_theme: &str) -> bool {

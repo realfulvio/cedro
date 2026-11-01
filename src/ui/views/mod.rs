@@ -199,9 +199,15 @@ pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32,
             let mut top = y + 28.0;
             for row in choices.chunks(3) {
                 f.p.rrect(x, top, w, seg_h, 6.0, Some(pal.surface), Some((pal.border, 1.0)));
-                let cw = w / row.len() as f32;
+                // Colonne uguali; se una scritta non ci sta («Un foglio per tabella») si dividono in proporzione.
+                let need: Vec<f32> = row.iter().map(|c| f.measure(c.label, st.note + 1.0, SEMI) + 20.0).collect();
+                let equal = w / row.len() as f32;
+                let total: f32 = need.iter().sum();
+                let mut cx = x;
                 for (k, c) in row.iter().enumerate() {
-                    let r = (x + k as f32 * cw, top, cw, seg_h);
+                    let cw = if need.iter().all(|n| *n <= equal) { equal } else { need[k] * w / total };
+                    let r = (cx, top, cw, seg_h);
+                    cx += cw;
                     let act = Act::OptPick(def.opt, c.value);
                     let on = c.value == v;
                     if on {

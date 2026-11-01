@@ -590,6 +590,53 @@ fn zip_file(path: &Path, out: &Path, size: u64) -> CedroResult<()> {
     })
 }
 
+/// Uno ZIP con più file (senza ricomprimerli, come «In ZIP»), in `out_dir` con il nome `name` o quello del primo file.
+pub fn zip_paths(paths: &[PathBuf], out_dir: &Path, name: Option<&str>, opts: &Options) -> CedroResult<Output> {
+    let Some(first) = paths.first() else { return Err(err("nessun file da mettere nello ZIP")) };
+    let _job = crate::resources::acquire(None).expect("uncancellable job");
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), template: opts.name_template.clone(), guarded: true, ..Default::default() }));
+    let mut restore = RestoreNaming(Some(before));
+    let result = (|| {
+        fs::create_dir_all(out_dir).map_err(|e| err(e.to_string()))?;
+        let out = reserve(out_dir, name.unwrap_or(&stem(first)), "zip")?;
+        let total: u64 = paths.iter().filter_map(|p| fs::metadata(p).ok()).map(|m| m.len()).sum();
+        let written = (|| -> zip::result::ZipResult<()> {
+            let file = fs::File::create(&out)?;
+            let mut zw = zip::ZipWriter::new(std::io::BufWriter::new(file));
+            let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored).large_file(total >= u32::MAX as u64);
+            let mut used = std::collections::HashSet::new();
+            for (i, p) in paths.iter().enumerate() {
+                crate::progress::report(i as f32 / paths.len() as f32);
+                // Due file con lo stesso nome: il secondo diventa «nome (2).ext».
+                let base = file_label(p);
+                let mut entry = base.clone();
+                let mut n = 2;
+                while !used.insert(entry.to_lowercase()) {
+                    entry = match base.rsplit_once('.') {
+                        Some((s, e)) => format!("{s} ({n}).{e}"),
+                        None => format!("{base} ({n})"),
+                    };
+                    n += 1;
+                }
+                zw.start_file(entry, options)?;
+                std::io::copy(&mut fs::File::open(p)?, &mut zw)?;
+            }
+            let mut inner = zw.finish()?;
+            std::io::Write::flush(&mut inner)?;
+            Ok(())
+        })();
+        written.map_err(|e| {
+            let _ = fs::remove_file(&out);
+            err(e.to_string())
+        })?;
+        crate::progress::report(1.0);
+        let n = paths.len();
+        Ok(Output { path: out, message: if n == 1 { "1 file in ZIP".into() } else { format!("{n} file in un archivio ZIP") } })
+    })();
+    let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
+    finish_outputs(result, used)
+}
+
 fn write_bytes(path: &Path, bytes: &[u8]) -> CedroResult<()> {
     fs::write(path, bytes).map_err(|e| err(e.to_string()))
 }
@@ -1138,6 +1185,21 @@ pub fn squeeze_pdf(path: &Path, s: &crate::pdfedit::Squeeze, password: Option<&s
     Ok((out, bytes.len() as u64))
 }
 
+/// Pagine e segnalibri di primo livello (pagina da 1, titolo) di un PDF, con la password se è protetto.
+pub fn pdf_info(path: &Path, password: Option<&str>) -> Result<(u32, Vec<(u32, String)>), String> {
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let doc = crate::pdfpages::open(&bytes, password)?;
+    Ok((crate::pdfpages::page_count(&doc) as u32, crate::pdfpages::top_bookmarks(&doc)))
+}
+
+/// Una copia senza password di un PDF protetto, in `out` (per lavorarlo come gli altri).
+pub fn pdf_unlock(path: &Path, password: &str, out: &Path) -> Result<(), String> {
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let mut doc = crate::pdfpages::open(&bytes, Some(password))?;
+    doc.trailer.remove(b"Encrypt");
+    fs::write(out, crate::pdfedit::save_packed(&doc)).map_err(|e| e.to_string())
+}
+
 /// Comprime un PDF. Se non diventa più leggero non si scrive niente: l'originale va già bene.
 fn compress_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
     let s = opts.pdf_edit.squeeze.unwrap_or_else(saved_squeeze);
@@ -1475,7 +1537,11 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         } else if scanned == pages.len() {
             "Word con le pagine scansionate come immagini".to_string()
         } else {
-            format!("Word modificabile; {scanned} pagine scansionate messe come immagini")
+            if scanned == 1 {
+                "Word modificabile; 1 pagina scansionata messa come immagine".to_string()
+            } else {
+                format!("Word modificabile; {scanned} pagine scansionate messe come immagini")
+            }
         };
         return Ok(Output { path: out, message });
     }
@@ -1491,22 +1557,31 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         }
         let scan_at: Vec<bool> = every.iter().enumerate().map(|(i, p)| p.is_scan() && selected.contains(&i)).collect();
         let scanned = scan_at.iter().filter(|s| **s).count();
-        // Le scansioni non hanno tabelle da leggere: il loro testo (OCR) va nel foglio del testo.
-        let mut ocr: Vec<Option<String>> = Vec::new();
+        // Le scansioni si leggono con l'OCR: dalle righe e dalle colonne si ricostruiscono le tabelle,
+        // il resto va nel foglio del testo.
+        let mut ocr: Vec<Option<crate::ocr::ScanRead>> = Vec::new();
         if scanned > 0 && opts.ocr {
-            ocr = crate::ocr::pdf_pages_where(&bytes, |i| scan_at.get(i).copied().unwrap_or(false)).unwrap_or_default();
+            ocr = crate::ocr::pdf_pages_scan_where(&bytes, |i| scan_at.get(i).copied().unwrap_or(false)).unwrap_or_default();
         }
         let (tables, texts) = crate::pdflayout::sheet_contents(&every, |i| ocr.get(i).cloned().flatten().unwrap_or_default());
         let sheet = crate::pdfxlsx::SheetOptions { one_per_table: opts.sheet_per_table, values: opts.cell_values, outside_text: opts.outside_text };
         let xlsx = crate::pdfxlsx::xlsx(&tables, &texts, &sheet).map_err(err)?;
         write_bytes(&out, &xlsx)?;
-        let message = match tables.len() {
-            0 if scanned > 0 && !opts.ocr => "Nessuna tabella: le pagine sono scansioni. Accendi «Leggi le scansioni» per averne il testo".to_string(),
+        let mut message = match tables.len() {
+            0 if scanned > 0 && !opts.ocr => "Nessuna tabella: le pagine sono scansioni. Accendi «Leggi le scansioni» per ritrovarne le tabelle".to_string(),
             0 => "Nessuna tabella nel PDF: il foglio ha il testo riga per riga".to_string(),
             1 => "Excel con 1 tabella".to_string(),
             n if opts.sheet_per_table => format!("Excel con {n} tabelle, una per foglio"),
             n => format!("Excel con {n} tabelle in un foglio"),
         };
+        // Le scansioni non lette non danno né tabelle né testo: lo si dice, non restano zitte.
+        if scanned > 0 && !opts.ocr && !tables.is_empty() {
+            message.push_str(if scanned == 1 {
+                ". Una pagina scansionata non è stata letta: accendi «Leggi le scansioni»."
+            } else {
+                ". Le pagine scansionate non sono state lette: accendi «Leggi le scansioni»."
+            });
+        }
         return Ok(Output { path: out, message });
     }
     if kind == Kind::Pdf && action == "txt" {
@@ -1516,12 +1591,18 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         write_bytes(&out, &bytes)?;
         let mut message = match (action, ocr_pages) {
             ("docx", 0) => "Word di testo. L'impaginazione del PDF non viene ricostruita.".to_string(),
+            ("docx", 1) => "Word di testo, con 1 pagina letta via OCR: controllalo. L'impaginazione non viene ricostruita.".to_string(),
             ("docx", n) => format!("Word di testo, con {n} pagine lette via OCR: controllalo. L'impaginazione non viene ricostruita."),
             (_, 0) => "Testo estratto dal PDF".to_string(),
+            (_, 1) => "Testo estratto dal PDF, con 1 pagina letta via OCR: controllalo.".to_string(),
             (_, n) => format!("Testo estratto dal PDF, con {n} pagine lette via OCR: controllalo."),
         };
         if skipped > 0 {
-            message.push_str(&format!(" Mancano {skipped} pagine scansionate: l'OCR ne legge al massimo {}.", settings.ocr_pages()));
+            if skipped == 1 {
+                message.push_str(&format!(" Manca 1 pagina scansionata: l'OCR ne legge al massimo {}.", settings.ocr_pages()));
+            } else {
+                message.push_str(&format!(" Mancano {skipped} pagine scansionate: l'OCR ne legge al massimo {}.", settings.ocr_pages()));
+            }
         }
         return Ok(Output { path: out, message });
     }
@@ -2005,6 +2086,38 @@ BT /F2 16 Tf 50 750 Td (Spese correnti) Tj ET BT /F1 10 Tf 50 630 Td (Contributi
     }
 
     #[test]
+    fn scanned_pdf_gives_its_table_in_excel() {
+        let dir = scratch();
+        let path = dir.join("scansione.pdf");
+        fs::write(&path, pdf_from_jpeg(include_bytes!("../tests/fixtures/scan_tabella.jpg"), 1654, 2339, &[])).unwrap();
+        let opts = Options { ocr: true, exists: Exists::Replace, ..Default::default() };
+        let out = perform_with(&path, "xlsx", 80, None, &opts).expect("Excel");
+        assert!(out.message.contains("1 tabella"), "{}", out.message);
+        let strings = crate::doctext::zip_entry_for_test(&out.path, "xl/sharedStrings.xml");
+        assert!(strings.contains("Manutenzione") && strings.contains("Importo"), "{strings}");
+        let sheet = crate::doctext::zip_entry_for_test(&out.path, "xl/worksheets/sheet1.xml");
+        // Numero e data veri dove l'OCR ha letto bene.
+        assert!(sheet.contains("<v>120.5</v>") && sheet.contains("<v>46083</v>") && sheet.contains("<v>310.25</v>"), "{sheet}");
+    }
+
+    /// Prova a mano con PDF scansionati veri: CEDRO_SCAN_PDFS=a.pdf:b.pdf cargo test --lib scan_pdfs_by_hand -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn scan_pdfs_by_hand() {
+        let Ok(list) = std::env::var("CEDRO_SCAN_PDFS") else { return };
+        let dir = scratch();
+        for f in list.split(':') {
+            let path = dir.join(Path::new(f).file_name().unwrap());
+            fs::copy(f, &path).unwrap();
+            let opts = Options { ocr: true, sheet_per_table: true, outside_text: true, exists: Exists::Replace, ..Default::default() };
+            match perform_with(&path, "xlsx", 80, None, &opts) {
+                Ok(out) => println!("XLSX {} -> {} ({})", f, out.path.display(), out.message),
+                Err(e) => println!("XLSX {f} ERRORE {e:?}"),
+            }
+        }
+    }
+
+    #[test]
     fn photo_to_searchable_pdf() {
         let dir = scratch();
         let src = dir.join("foglio.jpg");
@@ -2019,7 +2132,7 @@ BT /F2 16 Tf 50 750 Td (Spese correnti) Tj ET BT /F1 10 Tf 50 630 Td (Contributi
     #[test]
     fn lines_become_paragraphs() {
         use crate::ocr::{paragraphs_from_lines, paragraphs_from_text, Line};
-        let line = |text: &str, y: f32, w: f32| Line { text: text.into(), x: 10.0, y, w, h: 20.0 };
+        let line = |text: &str, y: f32, w: f32| Line { text: text.into(), words: Vec::new(), x: 10.0, y, w, h: 20.0 };
         let lines = [
             line("Gentile signore,", 0.0, 150.0),
             line("la riunione è spo-", 30.0, 500.0),
@@ -2196,6 +2309,24 @@ BT /F2 16 Tf 50 750 Td (Spese correnti) Tj ET BT /F1 10 Tf 50 630 Td (Contributi
         assert_eq!(out.path, old);
         assert!(fs::read(&old).unwrap().starts_with(&[0xFF, 0xD8]));
         assert_eq!(names(), vec!["clip.jpg", "clip.png"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn zip_paths_puts_every_file_and_renames_twins() {
+        let dir = scratch();
+        let (a, b) = (dir.join("a"), dir.join("b"));
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(&b).unwrap();
+        fs::write(a.join("nota.txt"), b"uno").unwrap();
+        fs::write(b.join("nota.txt"), b"due").unwrap();
+        fs::write(dir.join("foto.png"), b"tre").unwrap();
+        let out = zip_paths(&[a.join("nota.txt"), b.join("nota.txt"), dir.join("foto.png")], &dir.join("o"), None, &Options::default()).unwrap();
+        assert_eq!(out.path.file_name().unwrap(), "nota.zip");
+        let archive = zip::ZipArchive::new(fs::File::open(&out.path).unwrap()).unwrap();
+        let mut nomi: Vec<String> = archive.file_names().map(|n| n.unwrap().into_owned()).collect();
+        nomi.sort();
+        assert_eq!(nomi, vec!["foto.png", "nota (2).txt", "nota.txt"]);
         let _ = fs::remove_dir_all(&dir);
     }
 

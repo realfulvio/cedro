@@ -12,8 +12,16 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Correzioni di Rivedi trascrizione e PDF → Excel.**
+**PDF → Excel legge anche le tabelle dei PDF scansionati.**
 
-- **Rivedi**: Play e il clic sul tempo di una frase fanno sentire davvero l'audio (prima restavano muti e fermi a 00:00); anche il clic sull'onda porta l'ascolto in quel punto.
-- **Rivedi** si riapre anche dopo aver chiuso Cedro: rimesso il file in coda, il pulsante «Rivedi» riporta la revisione salvata, con le correzioni fatte.
-- **PDF → Excel**: i numeri restano scritti come nel PDF, senza aggiungere il punto delle migliaia («44012» non diventa più «44.012», «2026» non diventa «2.026»), e le colonne di codici (CAP, protocollo, matricola, telefono, partita IVA…) restano testo.
+- Con «Leggi le scansioni (OCR)» acceso, le pagine che sono foto o scansioni danno tabelle vere di Excel: Cedro raddrizza la pagina storta, ritrova le righe e le colonne (con o senza linee), tiene unite le celle scritte su due righe e unisce le tabelle che continuano sulla pagina dopo.
+- Numeri e date vengono riconosciuti; i decimali che l'OCR legge con il punto («80.00») tornano con la virgola («80,00»); la prima riga è l'intestazione quando si capisce.
+- Il testo fuori dalle tabelle va nel foglio del testo, riga per riga. Se le scansioni non vengono lette (opzione spenta), Cedro lo dice.
+- Su Linux, senza i dati italiani di Tesseract si usa quelli inglesi, che leggono molto meglio del modello incluso.
+- Corretto «1 pagine» nei messaggi quando la pagina è una sola.
+
+**Caratteri più grandi e un carattere per ogni tema.**
+
+- Tutti i testi dell'interfaccia crescono di 2 punti, per leggere meglio.
+- Ogni tema ha il suo carattere: Windows essenziale quello di Windows, Percorso guidato Atkinson Hyperlegible, Cedro compatto Figtree, Banco di lavoro IBM Plex Sans, Documento al centro Source Sans 3, Comune di Bondeno Titillium Web.
+- Ho allargato i punti dove il testo più grande non ci stava: «Aggiungi file», la barra in basso, le schede di Aspetto, la ruota e le scelte «Un foglio per tabella».

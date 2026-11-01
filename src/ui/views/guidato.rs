@@ -15,7 +15,7 @@ fn chrome(f: &mut Frame, app: &App) {
     f.brand(30.0, 16.0, 30.0, 22.0, 12.0, None);
     // L'attività si cambia da qui: il percorso vale per tutte e quattro.
     let label = app.activity.name();
-    let sw = f.measure(label, 16.0, SANS) + 92.0;
+    let sw = f.measure(label, 16.0, SANS) + 112.0;
     f.select((176.0, 12.0, sw, 40.0), label, Some(app.activity.icon()), 16.0, Act::ActivityMenu);
     f.window_controls(f.w, 0.0, 48.0, pal.text, pal.alt);
     let gx = f.w - 3.0 * 46.0 - 56.0;
