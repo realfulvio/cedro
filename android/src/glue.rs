@@ -160,7 +160,11 @@ fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) 
         let n = j!(j!(env.call_method(&lista, "size", "()I", &[])).i());
         let mut out = Vec::new();
         for i in 0..n {
-            let uri = j!(j!(env.call_method(&lista, "get", "(I)Ljava/lang/Object;", &[JValue::Int(i)])).l());
+            let mut uri = j!(j!(env.call_method(&lista, "get", "(I)Ljava/lang/Object;", &[JValue::Int(i)])).l());
+            // Qualche app (e `am --esal`) manda i percorsi come testo invece che come Uri.
+            if !uri.is_null() && j!(env.is_instance_of(&uri, "java/lang/String")) {
+                uri = j!(j!(env.call_static_method("android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&uri)])).l());
+            }
             if !uri.is_null() {
                 out.push(copia_uri(env, attivita, &uri, "", cartella)?);
             }
@@ -1857,6 +1861,8 @@ fn android_main(app: AndroidApp) {
             sporco = true;
         }
         if let Some((p, img)) = consegne.miniatura.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            // Anche nell'elenco di Unisci, se il file è già lì.
+            ui.info_unito(&p, None, Some(img.clone()));
             if ui.file.as_ref().is_some_and(|f| f.path == p) {
                 ui.miniatura = Some(img);
                 sporco = true;
