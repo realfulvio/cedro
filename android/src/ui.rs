@@ -844,6 +844,10 @@ impl App {
     pub fn tocca_su(&mut self, x: f32, y: f32) -> Effetto {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
         let giu = self.premuto.take();
+        if let Some((f, x0, _, s0, true)) = self.trascina_x {
+            // L'ultimo tratto arriva con il sollevamento (gli spostamenti veloci vengono raggruppati).
+            self.casa.fx[f] = (s0 - (x - x0)).clamp(0.0, self.casa.fx_max[f]);
+        }
         let mosso = self.trascina.take().is_some_and(|t| t.2) | self.trascina_x.take().is_some_and(|t| t.4);
         if let Some((i, y0, y1)) = self.pdf.trascina.take() {
             self.pdf.lascia(i, y1 - y0);
