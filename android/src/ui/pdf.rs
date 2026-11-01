@@ -300,13 +300,7 @@ impl App {
         self.campo = None;
         match pg {
             Pagina::Unisci => {
-                if self.pdf.unisci.is_empty() {
-                    if let Some(f) = &self.file {
-                        let nome = f.nome.clone();
-                        self.pdf.nome_unito = format!("{} unito", nome.strip_suffix(".pdf").or_else(|| nome.strip_suffix(".PDF")).unwrap_or(&nome));
-                        self.pdf.unisci.push(DocUnito { path: f.path.clone(), nome, dim: f.dim, pagine: self.pdf.totale, thumb: self.miniatura.clone(), sel: String::new() });
-                    }
-                }
+                self.primo_unito();
                 if self.pdf.unisci.len() < 2 {
                     return Effetto::Scegli(Sorgente::PdfAltri);
                 }
@@ -315,6 +309,17 @@ impl App {
             _ => {}
         }
         Effetto::Ridisegna
+    }
+
+    /// Il PDF aperto in testa all'elenco di Unisci, con il nome del file unito.
+    fn primo_unito(&mut self) {
+        if self.pdf.unisci.is_empty() {
+            if let Some(f) = &self.file {
+                let nome = f.nome.clone();
+                self.pdf.nome_unito = format!("{} unito", nome.strip_suffix(".pdf").or_else(|| nome.strip_suffix(".PDF")).unwrap_or(&nome));
+                self.pdf.unisci.push(DocUnito { path: f.path.clone(), nome, dim: f.dim, pagine: self.pdf.totale, thumb: self.miniatura.clone(), sel: String::new() });
+            }
+        }
     }
 
     fn prepara_pagine(&mut self) {
@@ -339,6 +344,8 @@ impl App {
 
     /// Altri PDF da unire, scelti o condivisi.
     pub fn aggiungi_pdf(&mut self, files: Vec<(PathBuf, String)>) {
+        // Il PDF aperto è il primo dell'elenco (anche quando gli altri arrivano insieme a lui da «Condividi»).
+        self.primo_unito();
         for (path, nome) in files {
             let dim = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
             self.pdf.unisci.push(DocUnito { path, nome, dim, pagine: None, thumb: None, sel: String::new() });
