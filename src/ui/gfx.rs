@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
+use crate::ui::theme::ThemeId;
 use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::{FontRef, GlyphId, MetadataProvider};
@@ -118,6 +119,18 @@ impl Fonts {
                 }
             }
         }
+        #[cfg(target_os = "android")]
+        {
+            // Roboto, il carattere del telefono (Medium per i semigrassetti).
+            let dir = std::path::Path::new("/system/fonts");
+            for (w, name) in [(Weight::Regular, "Roboto-Regular.ttf"), (Weight::Semibold, "Roboto-Medium.ttf"), (Weight::Bold, "Roboto-Bold.ttf"), (Weight::Serif, "NotoSerif-Regular.ttf"), (Weight::SerifBold, "NotoSerif-Bold.ttf"), (Weight::Mono, "DroidSansMono.ttf")] {
+                if !faces.contains_key(&w) {
+                    if let Some(f) = read_face(&dir.join(name), 0) {
+                        faces.insert(w, f);
+                    }
+                }
+            }
+        }
         Fonts::with(faces)
     }
 
@@ -145,29 +158,50 @@ impl Fonts {
     /// I caratteri del tema Bondeno: Titillium Web (come il sito del Comune), con serif di sistema per le pagine.
     pub fn bondeno() -> &'static Fonts {
         static FONTS: OnceLock<Fonts> = OnceLock::new();
-        FONTS.get_or_init(|| {
-            let system = Fonts::shared();
-            let regular = Face::new(TITILLIUM.to_vec(), 0).expect("Titillium incorporato");
-            let bold = Face::new(TITILLIUM_BOLD.to_vec(), 0).expect("Titillium incorporato");
-            let mut faces = HashMap::new();
-            faces.insert(Weight::Regular, regular);
-            faces.insert(Weight::Semibold, bold.clone());
-            faces.insert(Weight::Bold, bold);
-            for w in [Weight::Serif, Weight::SerifBold, Weight::Mono] {
-                faces.insert(w, system.faces[&w].clone());
-            }
-            Fonts::with(faces)
-        })
+        FONTS.get_or_init(|| Fonts::embedded(TITILLIUM, TITILLIUM_BOLD, TITILLIUM_BOLD))
     }
 
-    /// I caratteri da usare con o senza il tema Bondeno.
-    pub fn for_theme(bondeno: bool) -> &'static Fonts {
-        if bondeno { Fonts::bondeno() } else { Fonts::shared() }
+    /// Una famiglia incorporata (regular, semibold, bold); serif e monospazio restano quelli di sistema.
+    fn embedded(regular: &[u8], semibold: &[u8], bold: &[u8]) -> Fonts {
+        let system = Fonts::shared();
+        let face = |b: &[u8]| Face::new(b.to_vec(), 0).expect("carattere incorporato");
+        let mut faces = HashMap::new();
+        faces.insert(Weight::Regular, face(regular));
+        faces.insert(Weight::Semibold, face(semibold));
+        faces.insert(Weight::Bold, face(bold));
+        for w in [Weight::Serif, Weight::SerifBold, Weight::Mono] {
+            faces.insert(w, system.faces[&w].clone());
+        }
+        Fonts::with(faces)
     }
 
-    /// I caratteri del tema in uso adesso (`edizione::bondeno`).
+    /// Il carattere di ogni tema: Segoe UI (quello di sistema) per Windows essenziale, uno incorporato per gli altri.
+    pub fn for_theme(theme: ThemeId) -> &'static Fonts {
+        macro_rules! famiglia {
+            ($nome:literal) => {{
+                static FONTS: OnceLock<Fonts> = OnceLock::new();
+                FONTS.get_or_init(|| {
+                    Fonts::embedded(
+                        include_bytes!(concat!("../../assets/fonts/tema/", $nome, "-regular.ttf")),
+                        include_bytes!(concat!("../../assets/fonts/tema/", $nome, "-semibold.ttf")),
+                        include_bytes!(concat!("../../assets/fonts/tema/", $nome, "-bold.ttf")),
+                    )
+                })
+            }};
+        }
+        match theme {
+            ThemeId::WindowsEssenziale => Fonts::shared(),
+            ThemeId::PercorsoGuidato => famiglia!("atkinson"),
+            ThemeId::CedroCompatto => famiglia!("figtree"),
+            ThemeId::BancoDiLavoro => famiglia!("plex"),
+            ThemeId::DocumentoAlCentro => famiglia!("source"),
+            ThemeId::Bondeno => Fonts::bondeno(),
+        }
+    }
+
+    /// I caratteri del tema in uso adesso (`edizione::tema`).
     pub fn current() -> &'static Fonts {
-        Fonts::for_theme(crate::edizione::bondeno())
+        Fonts::for_theme(crate::edizione::tema())
     }
 
     /// Il carattere che disegna `ch` con quel peso, e il suo glifo.
@@ -197,6 +231,12 @@ impl Fonts {
         let m = self.faces[&weight].font().metrics(Size::new(px), LocationRef::default());
         (m.ascent, -m.descent)
     }
+}
+
+/// La misura vera dei testi: i disegni dicono la misura di progetto, qui diventa più grande per leggere
+/// meglio (+2 per i testi, +1 dai titoli di 22 in su, che sono già grandi).
+pub fn text_size(size: f32) -> f32 {
+    if size < 22.0 { size + 2.0 } else { size + 1.0 }
 }
 
 struct PathPen(PathBuilder);
@@ -344,6 +384,8 @@ pub struct Painter<'a> {
     /// Spostamento corrente delle coordinate logiche (per le zone che scorrono).
     pub dx: f32,
     pub dy: f32,
+    /// Testi più grandi della misura di progetto (`text_size`): sì sul computer; su Android è la scelta «Caratteri».
+    pub larger: bool,
 }
 
 /// I glifi già disegnati: si tiene fra un fotogramma e l'altro.
@@ -404,11 +446,16 @@ pub fn rrect_path(x: f32, y: f32, w: f32, h: f32, r: f32) -> Option<tiny_skia::P
 impl<'a> Painter<'a> {
     /// Un'immagine nuova di `w`×`h` pixel, con `scale` pixel per unità logica.
     pub fn new(w: u32, h: u32, scale: f32, fonts: &'a Fonts, cache: &'a mut GlyphCache) -> Painter<'a> {
-        Painter { pixmap: Pixmap::new(w.max(1), h.max(1)).expect("dimensioni valide"), scale, fonts, cache, clips: Vec::new(), dx: 0.0, dy: 0.0 }
+        Painter { pixmap: Pixmap::new(w.max(1), h.max(1)).expect("dimensioni valide"), scale, fonts, cache, clips: Vec::new(), dx: 0.0, dy: 0.0, larger: true }
     }
 
     pub fn fonts(&self) -> &Fonts {
         self.fonts
+    }
+
+    /// Cambia i caratteri (per mostrare un testo in quelli di un altro tema) e dà quelli di prima.
+    pub fn swap_fonts(&mut self, fonts: &'a Fonts) -> &'a Fonts {
+        std::mem::replace(&mut self.fonts, fonts)
     }
 
     fn tf(&self) -> Transform {
@@ -707,7 +754,13 @@ impl<'a> Painter<'a> {
         self.measure_raw(&crate::i18n::tr(s), size, weight)
     }
 
+    /// La misura vera di un testo di progetto `size`.
+    fn ts(&self, size: f32) -> f32 {
+        if self.larger { text_size(size) } else { size }
+    }
+
     fn measure_raw(&self, s: &str, size: f32, weight: Weight) -> f32 {
+        let size = self.ts(size);
         self.fonts.measure(s, size * self.scale, weight) / self.scale
     }
 
@@ -738,7 +791,7 @@ impl<'a> Painter<'a> {
     pub fn text(&mut self, s: &str, x: f32, y: f32, w: f32, h: f32, size: f32, weight: Weight, c: Rgb, align: Align) {
         let s = self.ellipsize_raw(&crate::i18n::tr(s), size, weight, w.max(1.0));
         let tw = self.measure_raw(&s, size, weight);
-        let (asc, desc) = self.fonts.extents(size, weight);
+        let (asc, desc) = self.fonts.extents(self.ts(size), weight);
         let base = y + (h - (asc + desc)) / 2.0 + asc;
         let lx = match align {
             Align::Left => x,
@@ -752,9 +805,10 @@ impl<'a> Painter<'a> {
     /// Con `max_lines` > 0 l'ultima riga finisce con «…».
     pub fn text_wrap(&mut self, s: &str, x: f32, y: f32, w: f32, size: f32, weight: Weight, c: Rgb, line_h: f32, max_lines: usize) -> f32 {
         let lines = self.wrap_lines(s, size, weight, w, max_lines);
-        let (asc, _) = self.fonts.extents(size, weight);
+        let (asc, _) = self.fonts.extents(self.ts(size), weight);
+        let line_h = line_h * self.ts(size) / size;
         for (i, line) in lines.iter().enumerate() {
-            self.text_at(line, x, y + asc + (line_h - size * 1.2) / 2.0 + i as f32 * line_h, size, weight, c);
+            self.text_at(line, x, y + asc + (line_h - self.ts(size) * 1.2) / 2.0 + i as f32 * line_h, size, weight, c);
         }
         lines.len() as f32 * line_h
     }
@@ -786,6 +840,7 @@ impl<'a> Painter<'a> {
 
     /// Testo con la linea di base in `base`, a partire da `x` (unità logiche).
     pub fn text_at(&mut self, s: &str, x: f32, base: f32, size: f32, weight: Weight, c: Rgb) {
+        let size = self.ts(size);
         let s_px = size * self.scale;
         let mut pen = (x + self.dx) * self.scale;
         let base_px = ((base + self.dy) * self.scale).round();
@@ -857,6 +912,28 @@ impl<'a> Painter<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::theme::THEMES;
+
+    #[test]
+    fn text_is_two_points_bigger_and_titles_one() {
+        assert_eq!(text_size(13.0), 15.0);
+        assert_eq!(text_size(21.0), 23.0);
+        assert_eq!(text_size(34.0), 35.0);
+    }
+
+    #[test]
+    fn every_theme_has_a_font_that_covers_italian() {
+        for theme in THEMES {
+            let fonts = Fonts::for_theme(theme);
+            for weight in [Weight::Regular, Weight::Semibold, Weight::Bold] {
+                let accented = fonts.measure("àèéìòù « » € · … → × –", 18.0, weight);
+                assert!(accented > 100.0, "{theme:?} {weight:?}");
+                // Se mancasse un segno si userebbe il carattere di riserva: le larghezze tonde lo tradirebbero.
+                let (face, g) = fonts.glyph(weight, 'è');
+                assert!(face.font().charmap().map('è') == Some(g), "{theme:?} senza «è»");
+            }
+        }
+    }
 
     #[test]
     fn draws_text_shapes_icons_and_logo() {
