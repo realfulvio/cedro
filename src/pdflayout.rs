@@ -2812,6 +2812,7 @@ fn para_bold(p: &Para) -> bool {
 }
 
 /// Una riga di testo a pezzi staccati (colonne senza bordi): dove comincia ogni pezzo e cosa dice.
+#[derive(Clone)]
 struct Tabbed {
     starts: Vec<f64>,
     cells: Vec<String>,
@@ -2886,11 +2887,280 @@ fn ruled_table(t: &Table, page: usize) -> SheetTable {
     SheetTable { pages: (first, t.until.unwrap_or(first)), rows, header }
 }
 
+/// Una riga di una scansione: i pezzi staccati e dove sta (centro, in pixel dall'alto).
+struct ScanRow {
+    tab: Tabbed,
+    y: f32,
+}
+
+/// Le righe di una scansione lette dall'OCR, come righe a pezzi staccati: le righe a pari altezza
+/// si uniscono, e dove tra due parole c'è un vuoto più largo di una riga comincia una nuova colonna.
+fn scan_rows(lines: &[crate::ocr::Line]) -> Vec<ScanRow> {
+    let mut groups: Vec<(f32, f32, Vec<crate::ocr::Word>)> = Vec::new();
+    let mut sorted: Vec<&crate::ocr::Line> = lines.iter().filter(|l| !l.text.trim().is_empty()).collect();
+    sorted.sort_by(|a, b| (a.y + a.h / 2.0).partial_cmp(&(b.y + b.h / 2.0)).unwrap_or(std::cmp::Ordering::Equal));
+    for l in sorted {
+        let (top, bottom) = (l.y, l.y + l.h);
+        // Stessa riga della pagina: il vuoto tra due colonne a volte la spezza in due righe dell'OCR.
+        let same = groups.last().is_some_and(|(t, b, _)| {
+            let overlap = bottom.min(*b) - top.max(*t);
+            overlap > 0.5 * (bottom - top).min(b - t)
+        });
+        if !same {
+            groups.push((top, bottom, Vec::new()));
+        }
+        let g = groups.last_mut().expect("riga");
+        g.0 = g.0.min(top);
+        g.1 = g.1.max(bottom);
+        if l.words.is_empty() {
+            g.2.push(crate::ocr::Word { text: l.text.trim().to_string(), x: l.x, w: l.w });
+        } else {
+            g.2.extend(l.words.iter().cloned());
+        }
+    }
+    let mut rows = Vec::new();
+    for (top, bottom, mut ws) in groups {
+        if ws.is_empty() {
+            continue;
+        }
+        ws.sort_by(|a, b| a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal));
+        let gap = 1.0 * (bottom - top);
+        let mut starts: Vec<f64> = Vec::new();
+        let mut cells: Vec<String> = Vec::new();
+        let mut end = f32::MIN;
+        for w in ws {
+            if cells.is_empty() || w.x - end > gap {
+                starts.push(w.x as f64);
+                cells.push(w.text.clone());
+            } else if let Some(last) = cells.last_mut() {
+                last.push(' ');
+                last.push_str(&w.text);
+            }
+            end = end.max(w.x + w.w);
+        }
+        for c in &mut cells {
+            *c = fix_decimal(c);
+        }
+        rows.push(ScanRow { tab: Tabbed { starts, cells, bold: false }, y: (top + bottom) / 2.0 });
+    }
+    rows
+}
+
+/// In una tabella senza bordi una cella su due righe di testo (o centrata in verticale) dà righe in più:
+/// ogni riga che non comincia nella prima colonna si unisce alla riga della tabella più vicina in verticale.
+fn merge_wrapped(run: Vec<ScanRow>, line_h: f32) -> Vec<Tabbed> {
+    let width = run.iter().map(|r| r.tab.cells.len()).max().unwrap_or(0);
+    let full: Vec<&ScanRow> = run.iter().filter(|r| r.tab.cells.len() == width).collect();
+    let plain = |run: Vec<ScanRow>| run.into_iter().map(|r| r.tab).collect::<Vec<_>>();
+    if width < 2 || full.len() < 2 {
+        return plain(run);
+    }
+    let anchors: Vec<f64> = (0..width).map(|k| median(full.iter().map(|r| r.tab.starts[k]).collect())).collect();
+    let starts_first = |r: &ScanRow| (r.tab.starts[0] - anchors[0]).abs() <= 1.5 * line_h as f64;
+    // Una riga lunga e incompleta seguita subito (a meno di una riga e mezza) da una che ha i pezzi che le mancano
+    // è la stessa riga della tabella, su due righe di testo.
+    let mut wraps = vec![false; run.len()];
+    for k in 1..run.len() {
+        let (a, b) = (&run[k - 1], &run[k]);
+        wraps[k] = starts_first(a)
+            && starts_first(b)
+            && a.tab.cells.len() < width
+            && b.tab.cells.len() > a.tab.cells.len()
+            && a.tab.cells[0].split_whitespace().count() >= 6
+            && b.y - a.y < 1.5 * line_h;
+    }
+    let idx = |r: &ScanRow| run.iter().position(|x| std::ptr::eq(x, r)).unwrap_or(0);
+    let is_key = |r: &ScanRow| starts_first(r) && !wraps[idx(r)];
+    let keys = run.iter().filter(|r| is_key(r)).count();
+    if keys == run.len() || keys * 10 < run.len() * 6 {
+        return plain(run);
+    }
+    // Ogni pezzo nella colonna più vicina.
+    let column = |x: f64| (0..width).min_by(|a, b| (anchors[*a] - x).abs().partial_cmp(&(anchors[*b] - x).abs()).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(0);
+    let mut out: Vec<(f32, Vec<Vec<(f32, String)>>)> = Vec::new();
+    let mut key_of: Vec<Option<usize>> = Vec::new();
+    for r in &run {
+        if is_key(r) {
+            let mut cells = vec![Vec::new(); width];
+            for (x, t) in r.tab.starts.iter().zip(&r.tab.cells) {
+                cells[column(*x)].push((r.y, t.clone()));
+            }
+            out.push((r.y, cells));
+            key_of.push(Some(out.len() - 1));
+        } else {
+            key_of.push(None);
+        }
+    }
+    for (r, k) in run.iter().zip(&key_of) {
+        if k.is_some() {
+            continue;
+        }
+        let near = out.iter().enumerate().min_by(|a, b| (a.1 .0 - r.y).abs().partial_cmp(&(b.1 .0 - r.y).abs()).unwrap_or(std::cmp::Ordering::Equal)).map(|(i, o)| (i, (o.0 - r.y).abs()));
+        let target = match near {
+            Some((i, d)) if d <= 3.0 * line_h => i,
+            _ => {
+                out.push((r.y, vec![Vec::new(); width]));
+                out.len() - 1
+            }
+        };
+        for (x, t) in r.tab.starts.iter().zip(&r.tab.cells) {
+            out[target].1[column(*x)].push((r.y, t.clone()));
+        }
+    }
+    out.into_iter()
+        .map(|(_, mut cols)| {
+            let cells = cols
+                .iter_mut()
+                .map(|c| {
+                    c.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+                    c.iter().map(|p| p.1.as_str()).collect::<Vec<_>>().join(" ")
+                })
+                .collect();
+            Tabbed { starts: anchors.clone(), cells, bold: false }
+        })
+        .collect()
+}
+
+/// L'OCR legge spesso la virgola dei decimali come un punto o uno spazio («120.000.00», «100.5%», «12.000 00»):
+/// in una cella fatta solo di cifre, l'ultimo separatore seguito da una o due cifre torna la virgola.
+fn fix_decimal(cell: &str) -> String {
+    let t = cell.trim();
+    let (body, tail) = match t.find(|c: char| c == '%' || c == '€' || c == ' ' && t.ends_with(['%', '€'])) {
+        Some(i) if t[i..].trim_matches(|c| c == ' ' || c == '%' || c == '€').is_empty() => (t[..i].trim_end(), &t[i..]),
+        _ => (t, ""),
+    };
+    if body.is_empty() || !body.chars().all(|c| c.is_ascii_digit() || c == '.' || c == ' ') || body.contains(',') {
+        return cell.to_string();
+    }
+    let Some(i) = body.rfind(['.', ' ']) else { return cell.to_string() };
+    let (head, dec) = (&body[..i], &body[i + 1..]);
+    if dec.is_empty() || dec.len() > 2 || head.is_empty() {
+        return cell.to_string();
+    }
+    // Ciò che precede: un numero con le migliaia a gruppi di tre cifre.
+    let mut groups = head.split(['.', ' ']);
+    let first_ok = groups.next().is_some_and(|g| (1..=3).contains(&g.len()));
+    if !first_ok || !groups.all(|g| g.len() == 3) {
+        return cell.to_string();
+    }
+    format!("{},{dec}{tail}", head.replace(' ', "."))
+}
+
+fn has_digit(s: &str) -> bool {
+    s.chars().any(|c| c.is_ascii_digit())
+}
+
+/// Una riga che non ha cifre sopra righe che ne hanno è l'intestazione.
+fn guess_header(rows: &[Vec<SheetCell>]) -> bool {
+    rows.len() > 1 && rows[0].iter().all(|c| !has_digit(&c.text)) && rows[1..].iter().any(|r| r.iter().any(|c| has_digit(&c.text)))
+}
+
+/// Le tabelle con le linee di una pagina scansionata: le linee orizzontali dividono le righe, le verticali
+/// (o i vuoti tra le colonne) le colonne; una cella su più righe di testo resta una cella sola.
+/// Ritorna le tabelle e, per ogni riga letta dall'OCR, se è finita in una tabella.
+fn ruled_scan_tables(read: &crate::ocr::ScanRead, page: usize) -> (Vec<SheetTable>, Vec<bool>) {
+    let lines = &read.lines;
+    let mut used = vec![false; lines.len()];
+    let mut tables = Vec::new();
+    let mut heights: Vec<f64> = lines.iter().filter(|l| l.h > 0.0).map(|l| l.h as f64).collect();
+    if heights.is_empty() {
+        return (tables, used);
+    }
+    let line_h = median(std::mem::take(&mut heights)) as f32;
+    let mut hs: Vec<crate::ocrscan::Rule> = read.rules.horizontal.clone();
+    hs.sort_by(|a, b| a.pos.partial_cmp(&b.pos).unwrap_or(std::cmp::Ordering::Equal));
+    // Le linee a distanza di qualche riga di testo sono della stessa tabella.
+    let mut blocks: Vec<Vec<crate::ocrscan::Rule>> = Vec::new();
+    for r in hs {
+        match blocks.last_mut() {
+            Some(b) if r.pos - b.last().map_or(0.0, |l| l.pos) <= 6.0 * line_h => b.push(r),
+            _ => blocks.push(vec![r]),
+        }
+    }
+    for block in blocks.into_iter().filter(|b| b.len() >= 3) {
+        let (top, bottom) = (block[0].pos, block[block.len() - 1].pos);
+        let x0 = block.iter().map(|r| r.from).fold(f32::MAX, f32::min);
+        let x1 = block.iter().map(|r| r.to).fold(0.0, f32::max);
+        // Righe di testo dentro la tabella, con le loro parole.
+        let inside: Vec<usize> = (0..lines.len())
+            .filter(|i| {
+                let l = &lines[*i];
+                let mid = l.y + l.h / 2.0;
+                mid > top && mid < bottom && l.x + l.w / 2.0 >= x0 - line_h && l.x <= x1 + line_h
+            })
+            .collect();
+        let mut vs: Vec<f32> = read
+            .rules
+            .vertical
+            .iter()
+            .filter(|v| v.pos >= x0 - 4.0 && v.pos <= x1 + 4.0 && v.from <= bottom && v.to >= top)
+            .map(|v| v.pos)
+            .collect();
+        vs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        vs.dedup_by(|a, b| (*a - *b).abs() < line_h);
+        // (parola, riga OCR, banda) per ogni parola della tabella.
+        let band_of = |y: f32| block.windows(2).position(|w| y >= w[0].pos && y < w[1].pos);
+        let mut words: Vec<(f32, f32, String, usize, f32)> = Vec::new(); // (x, x_fine, testo, banda, y)
+        for &i in &inside {
+            let l = &lines[i];
+            let ws: Vec<crate::ocr::Word> =
+                if l.words.is_empty() { vec![crate::ocr::Word { text: l.text.trim().to_string(), x: l.x, w: l.w }] } else { l.words.clone() };
+            let y = l.y + l.h / 2.0;
+            if let Some(b) = band_of(y) {
+                for w in ws {
+                    words.push((w.x, w.x + w.w, w.text, b, y));
+                }
+            }
+        }
+        if words.is_empty() {
+            continue;
+        }
+        // Solo una griglia vera (linee anche verticali): le tabelle con le sole righe vanno per colonne, più sotto.
+        if vs.len() < 3 {
+            continue;
+        }
+        let columns: Vec<f32> = vs[..vs.len() - 1].to_vec();
+        let col_of = |x: f32| vs.windows(2).position(|w| x >= w[0] && x < w[1]).unwrap_or(if x < vs[0] { 0 } else { vs.len() - 2 });
+        let mut grid: Vec<Vec<Vec<(f32, f32, String)>>> = vec![vec![Vec::new(); columns.len()]; block.len() - 1];
+        for (x, x2, text, b, y) in &words {
+            grid[*b][col_of((x + x2) / 2.0)].push((*y, *x, text.clone()));
+        }
+        let rows: Vec<Vec<SheetCell>> = grid
+            .into_iter()
+            .map(|band| {
+                band.into_iter()
+                    .map(|mut cell| {
+                        cell.sort_by(|a, b| {
+                            let same = (a.0 - b.0).abs() <= line_h * 0.6;
+                            if same { a.1.partial_cmp(&b.1) } else { a.0.partial_cmp(&b.0) }.unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                        let text = cell.iter().map(|w| w.2.as_str()).collect::<Vec<_>>().join(" ");
+                        SheetCell { text: fix_decimal(text.trim()), span: 1 }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .filter(|r| r.iter().any(|c| !c.text.is_empty()))
+            .collect();
+        if rows.len() < 2 || columns.len() < 2 {
+            continue;
+        }
+        for &i in &inside {
+            used[i] = true;
+        }
+        let header = guess_header(&rows);
+        tables.push(SheetTable { pages: (page, page), rows, header });
+    }
+    (tables, used)
+}
+
 /// Le tabelle del PDF per il foglio di calcolo, nell'ordine del documento, e il testo che resta
-/// fuori. `scan_text` dà il testo letto con l'OCR delle pagine scansionate (vuoto se non c'è).
-pub fn sheet_contents(pages: &[Page], scan_text: impl Fn(usize) -> String) -> (Vec<SheetTable>, Vec<SheetText>) {
+/// fuori. `scan_read` dà le righe lette con l'OCR delle pagine scansionate (vuote se non ci sono):
+/// anche da quelle si ritrovano le tabelle.
+pub fn sheet_contents(pages: &[Page], scan_read: impl Fn(usize) -> crate::ocr::ScanRead) -> (Vec<SheetTable>, Vec<SheetText>) {
     let mut tables = Vec::new();
     let mut texts = Vec::new();
+    // Le tabelle nate da pagine scansionate (posizione in `tables`): quelle di pagine di fila si uniscono.
+    let mut scan_tables: Vec<usize> = Vec::new();
     for (i, page) in pages.iter().enumerate() {
         let mut lines: Vec<String> = Vec::new();
         let mut run: Vec<Tabbed> = Vec::new();
@@ -2954,14 +3224,72 @@ pub fn sheet_contents(pages: &[Page], scan_text: impl Fn(usize) -> String) -> (V
                 }
                 flush(&mut run, &mut run_lines, &mut lines, &mut tables);
             }
-            Page::Scan(_) => lines.extend(scan_text(i).lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from)),
+            Page::Scan(_) => {
+                let read = scan_read(i);
+                let (ruled, used) = ruled_scan_tables(&read, i);
+                scan_tables.extend(tables.len()..tables.len() + ruled.len());
+                tables.extend(ruled);
+                let rest: Vec<crate::ocr::Line> = read.lines.iter().zip(&used).filter(|(_, u)| !**u).map(|(l, _)| l.clone()).collect();
+                let line_h = median(rest.iter().filter(|l| l.h > 0.0).map(|l| l.h as f64).collect()) as f32;
+                let mut scan_run: Vec<ScanRow> = Vec::new();
+                let rows = scan_rows(&rest);
+                let flush_scan = |scan_run: &mut Vec<ScanRow>, lines: &mut Vec<String>, tables: &mut Vec<SheetTable>, scan_tables: &mut Vec<usize>| {
+                    if scan_run.is_empty() {
+                        return;
+                    }
+                    let texts: Vec<String> = scan_run.iter().map(|r| r.tab.cells.join(" ")).collect();
+                    match columns_table(&merge_wrapped(std::mem::take(scan_run), line_h), i) {
+                        Some(mut t) => {
+                            t.header = t.header || guess_header(&t.rows);
+                            scan_tables.push(tables.len());
+                            tables.push(t);
+                        }
+                        None => lines.extend(texts),
+                    }
+                };
+                let next_cols: Vec<bool> = rows.iter().map(|r| r.tab.cells.len() > 1).collect();
+                for (k, r) in rows.into_iter().enumerate() {
+                    // Una riga con colonne vere ha almeno un pezzo breve (un numero, una data, un codice); due colonne di prosa non fanno una tabella.
+                    let short = r.tab.cells.len() == 1 || r.tab.cells.iter().any(|c| c.split_whitespace().count() <= 4);
+                    // Una riga con un solo pezzo dentro una tabella (continua la cella sopra, un totale) non la interrompe.
+                    let follows = next_cols.iter().skip(k + 1).take(3).any(|c| *c);
+                    if short && (r.tab.cells.len() > 1 || (!scan_run.is_empty() && follows)) {
+                        scan_run.push(r);
+                    } else {
+                        flush_scan(&mut scan_run, &mut lines, &mut tables, &mut scan_tables);
+                        lines.push(r.tab.cells.join(" "));
+                    }
+                }
+                flush_scan(&mut scan_run, &mut lines, &mut tables, &mut scan_tables);
+            }
             Page::Merged => {}
         }
         if !lines.is_empty() {
             texts.push(SheetText { page: i, lines });
         }
     }
-    (tables, texts)
+    // Una tabella scansionata che continua sulla pagina dopo (stesse colonne) è una tabella sola.
+    let mut merged: Vec<(SheetTable, bool)> = Vec::new();
+    for (k, t) in tables.into_iter().enumerate() {
+        let from_scan = scan_tables.contains(&k);
+        if let Some((prev, prev_scan)) = merged.last_mut() {
+            let cols = |t: &SheetTable| t.rows.iter().map(|r| r.len()).max().unwrap_or(0);
+            let repeats = prev.header && t.rows.first().zip(prev.rows.first()).is_some_and(|(a, b)| a.iter().map(|c| &c.text).eq(b.iter().map(|c| &c.text)));
+            // Continua se ripete l'intestazione o se non ne ha una sua (una tabella con la sua intestazione è un'altra).
+            if from_scan && *prev_scan && prev.pages.1 + 1 == t.pages.0 && cols(prev) == cols(&t) && (repeats || !t.header) {
+                let mut rows = t.rows;
+                // L'intestazione ripetuta in cima alla pagina dopo non si copia.
+                if repeats {
+                    rows.remove(0);
+                }
+                prev.rows.extend(rows);
+                prev.pages.1 = t.pages.1;
+                continue;
+            }
+        }
+        merged.push((t, from_scan));
+    }
+    (merged.into_iter().map(|(t, _)| t).collect(), texts)
 }
 
 #[cfg(test)]
@@ -3049,5 +3377,114 @@ mod tests {
         let document = crate::doctext::zip_entry_for_test(&path, "word/document.xml");
         assert!(document.contains("descr=\"Fine del primo.&#10;Inizio &lt;del&gt; secondo\""), "{document}");
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_scanned_table_is_rebuilt_from_the_words_of_the_ocr() {
+        use crate::ocr::{Line, Word};
+        // Una riga della pagina: ogni gruppo di parole è (testo, x); parole a 12 px, vuoti larghi tra le colonne.
+        let row = |y: f32, cells: &[(&str, f32)]| {
+            let words: Vec<Word> = cells
+                .iter()
+                .flat_map(|(t, x)| t.split(' ').enumerate().map(move |(k, w)| Word { text: w.to_string(), x: x + k as f32 * 50.0, w: 40.0 }))
+                .collect();
+            let text = words.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" ");
+            let x = words[0].x;
+            let w = words.last().map(|l| l.x + l.w).unwrap_or(0.0) - x;
+            Line { text, words, x, y, w, h: 20.0 }
+        };
+        let lines = vec![
+            row(100.0, &[("Voce", 50.0), ("Importo", 400.0), ("Data", 700.0)]),
+            row(140.0, &[("Carta e toner", 50.0), ("120,50", 400.0), ("02/03/2026", 700.0)]),
+            row(180.0, &[("Pulizie", 50.0), ("80,00", 400.0)]),
+            row(220.0, &[("Totale", 50.0), ("200,50", 400.0)]),
+            row(300.0, &[("Scansione dell'archivio comunale", 50.0)]),
+        ];
+        let pages = vec![Page::Scan(ScanPage { width: 595.0, height: 842.0, jpeg: Vec::new() })];
+        let (tables, texts) = sheet_contents(&pages, |_| crate::ocr::ScanRead { lines: lines.clone(), rules: Default::default() });
+        assert_eq!(tables.len(), 1);
+        let t = &tables[0];
+        assert_eq!(t.rows.len(), 4);
+        let cell = |r: usize, c: usize| t.rows[r][c].text.as_str();
+        assert_eq!((cell(0, 0), cell(0, 1), cell(0, 2)), ("Voce", "Importo", "Data"));
+        assert_eq!((cell(1, 0), cell(1, 1), cell(1, 2)), ("Carta e toner", "120,50", "02/03/2026"));
+        // Il pezzo mancante resta vuoto nella sua colonna.
+        assert_eq!((cell(2, 1), cell(2, 2)), ("80,00", ""));
+        assert_eq!(cell(3, 0), "Totale");
+        assert_eq!(texts[0].lines, vec!["Scansione dell'archivio comunale".to_string()]);
+    }
+
+    #[test]
+    fn ocr_decimals_get_their_comma_back() {
+        assert_eq!(fix_decimal("120.000.00"), "120.000,00");
+        assert_eq!(fix_decimal("100.5%"), "100,5%");
+        assert_eq!(fix_decimal("12.000 00"), "12.000,00");
+        assert_eq!(fix_decimal("80.00"), "80,00");
+        assert_eq!(fix_decimal("2.469,00 €"), "2.469,00 €");
+        // Migliaia, versioni, date e codici restano come sono.
+        for same in ["12.000", "7.6.8", "02.03.26", "44012", "KB5124008", "1.234.567", "Voce 1.5"] {
+            assert_eq!(fix_decimal(same), same, "{same}");
+        }
+    }
+
+    #[test]
+    fn a_cell_on_two_lines_stays_one_row() {
+        use crate::ocr::{Line, Word};
+        let line = |y: f32, cells: &[(&str, f32)]| {
+            let words: Vec<Word> = cells.iter().flat_map(|(t, x)| t.split(' ').enumerate().map(move |(k, w)| Word { text: w.to_string(), x: x + k as f32 * 60.0, w: 50.0 })).collect();
+            let text = words.iter().map(|w| w.text.as_str()).collect::<Vec<_>>().join(" ");
+            Line { x: words[0].x, w: words.last().unwrap().x + 50.0 - words[0].x, text, words, y, h: 20.0 }
+        };
+        let lines = vec![
+            line(100.0, &[("Dispositivo", 50.0), ("Patch", 400.0)]),
+            line(160.0, &[("NB-CAVSAB2", 50.0), ("2026-09 Security Update", 400.0)]),
+            // Cella su due righe con il nome centrato in verticale.
+            line(220.0, &[("2026-08 Cumulative Update for Windows 11 version", 400.0)]),
+            line(242.0, &[("NB-PANLUC", 50.0), ("(KB5121003) (26100.9168)", 400.0)]),
+            line(310.0, &[("NB-SETTEC", 50.0), ("2026-06 Update", 400.0)]),
+            line(370.0, &[("SRV-ADUTIL", 50.0), ("2026-09 Update", 400.0)]),
+        ];
+        let pages = vec![Page::Scan(ScanPage { width: 595.0, height: 842.0, jpeg: Vec::new() })];
+        let (tables, _) = sheet_contents(&pages, |_| crate::ocr::ScanRead { lines: lines.clone(), rules: Default::default() });
+        assert_eq!(tables.len(), 1);
+        let t = &tables[0];
+        assert!(t.header);
+        let col0: Vec<&str> = t.rows.iter().map(|r| r[0].text.as_str()).collect();
+        assert_eq!(col0, ["Dispositivo", "NB-CAVSAB2", "NB-PANLUC", "NB-SETTEC", "SRV-ADUTIL"]);
+        assert_eq!(t.rows[2][1].text, "2026-08 Cumulative Update for Windows 11 version (KB5121003) (26100.9168)");
+    }
+
+    #[test]
+    fn a_ruled_scan_keeps_each_cell_in_its_box() {
+        use crate::ocr::{Line, Word};
+        use crate::ocrscan::{Rule, Rules};
+        let line = |y: f32, x: f32, text: &str| {
+            let words: Vec<Word> = text.split(' ').enumerate().map(|(k, w)| Word { text: w.to_string(), x: x + k as f32 * 60.0, w: 50.0 }).collect();
+            Line { text: text.into(), x, y, w: 60.0 * words.len() as f32, h: 20.0, words }
+        };
+        let hs = [100.0, 200.0, 300.0, 400.0].map(|pos| Rule { pos, from: 50.0, to: 650.0 });
+        let vs = [50.0, 250.0, 450.0, 650.0].map(|pos| Rule { pos, from: 100.0, to: 400.0 });
+        let lines = vec![
+            line(140.0, 60.0, "Voce"),
+            line(140.0, 260.0, "Importo"),
+            line(140.0, 460.0, "Data"),
+            // Una cella su due righe di testo, nella stessa casella.
+            line(220.0, 60.0, "Carta e"),
+            line(250.0, 60.0, "toner"),
+            line(235.0, 260.0, "120,50"),
+            line(235.0, 460.0, "02/03/2026"),
+            line(340.0, 60.0, "Pulizie"),
+            line(340.0, 260.0, "80,00"),
+        ];
+        let pages = vec![Page::Scan(ScanPage { width: 595.0, height: 842.0, jpeg: Vec::new() })];
+        let rules = Rules { horizontal: hs.to_vec(), vertical: vs.to_vec() };
+        let (tables, texts) = sheet_contents(&pages, |_| crate::ocr::ScanRead { lines: lines.clone(), rules: rules.clone() });
+        assert!(texts.is_empty(), "{:?}", texts.iter().map(|t| &t.lines).collect::<Vec<_>>());
+        let t = &tables[0];
+        assert_eq!(t.rows.len(), 3);
+        assert_eq!(t.rows[1][0].text, "Carta e toner");
+        assert_eq!((t.rows[1][1].text.as_str(), t.rows[1][2].text.as_str()), ("120,50", "02/03/2026"));
+        assert_eq!((t.rows[2][0].text.as_str(), t.rows[2][2].text.as_str()), ("Pulizie", ""));
+        assert!(t.header);
     }
 }

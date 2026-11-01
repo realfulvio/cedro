@@ -88,16 +88,16 @@ impl Aspetto {
         let gap = 12.0;
         let bw = (w - gap) / 2.0;
         for (i, (simple, name, text)) in [(false, "Standard", "Tutte le opzioni a portata di mano."), (true, "Semplificata", "Solo l'essenziale; il resto in «Altre opzioni».")].into_iter().enumerate() {
-            let r = (i as f32 * (bw + gap), y, bw, 64.0);
+            let r = (i as f32 * (bw + gap), y, bw, 76.0);
             let on = self.simple == simple;
             let hot = self.hover == Some(Hit::Mode(simple));
             self.choice(p, r, on, hot);
             p.text(name, r.0 + 40.0, r.1 + 11.0, r.2 - 52.0, 20.0, 14.0, Weight::Bold, t.fg, Align::Left);
-            p.text_wrap(text, r.0 + 40.0, r.1 + 32.0, r.2 - 52.0, 12.0, Weight::Regular, t.mute, 16.0, 2);
+            p.text_wrap(text, r.0 + 40.0, r.1 + 34.0, r.2 - 52.0, 12.0, Weight::Regular, t.mute, 16.0, 2);
             radio(p, r.0 + 20.0, r.1 + 22.0, on, t);
             self.zones.push((r, Hit::Mode(simple)));
         }
-        y += 64.0 + 22.0;
+        y += 76.0 + 22.0;
 
         // Temi
         p.text("Tema", 0.0, y, w, 20.0, 14.0, Weight::Bold, t.fg, Align::Left);
@@ -106,7 +106,9 @@ impl Aspetto {
         let cw = (w - gap * (cols as f32 - 1.0)) / cols as f32;
         let th = cw * (THUMB_H / THUMB_W);
         let desc_lines = if cols == 3 { 3 } else { 2 };
-        let ch = 10.0 + th + 10.0 + 20.0 + desc_lines as f32 * 16.0 + 14.0;
+        // I nomi lunghi vanno a capo: lo spazio è quello del più lungo.
+        let name_lines = THEMES.into_iter().map(|th| p.wrap_lines(th.name(), 14.0, Weight::Bold, cw - 24.0, 2).len()).max().unwrap_or(1);
+        let ch = 10.0 + th + 10.0 + name_lines as f32 * 20.0 + 2.0 + desc_lines as f32 * 19.0 + 14.0;
         for (i, theme) in THEMES.into_iter().enumerate() {
             let (col, row) = (i % cols, i / cols);
             let r = (col as f32 * (cw + gap), y + row as f32 * (ch + gap), cw, ch);
@@ -122,15 +124,15 @@ impl Aspetto {
                 p.line(cx - 4.5, cy + 0.5, cx - 1.0, cy + 4.0, t.acc_fg, 2.2);
                 p.line(cx - 1.0, cy + 4.0, cx + 5.0, cy - 3.5, t.acc_fg, 2.2);
             }
-            p.text(theme.name(), r.0 + 12.0, tr.1 + th + 10.0, cw - 24.0, 20.0, 14.0, Weight::Bold, t.fg, Align::Left);
-            p.text_wrap(theme.description(), r.0 + 12.0, tr.1 + th + 32.0, cw - 24.0, 12.0, Weight::Regular, t.mute, 16.0, desc_lines);
+            p.text_wrap(theme.name(), r.0 + 12.0, tr.1 + th + 10.0, cw - 24.0, 14.0, Weight::Bold, t.fg, 17.0, 2);
+            p.text_wrap(theme.description(), r.0 + 12.0, tr.1 + th + 12.0 + name_lines as f32 * 20.0, cw - 24.0, 12.0, Weight::Regular, t.mute, 16.0, desc_lines);
             self.zones.push((r, Hit::Theme(theme)));
         }
         let rows = THEMES.len().div_ceil(cols) as f32;
         y += rows * (ch + gap);
 
         let note = "Il nuovo aspetto compare nella finestra principale appena ci torni. Se Cedro sta lavorando, al termine del lavoro. I tuoi file e le opzioni scelte restano come sono.";
-        let used = p.text_wrap(note, 0.0, y + 4.0, w, 12.0, Weight::Regular, t.mute, 17.0, 4);
+        let used = p.text_wrap(note, 0.0, y + 4.0, w, 12.0, Weight::Regular, t.mute, 17.0, 5);
         y += 4.0 + used + 8.0;
 
         self.content_h = y - off;

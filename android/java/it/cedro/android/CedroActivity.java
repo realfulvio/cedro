@@ -1,6 +1,7 @@
 package it.cedro.android;
 
 import android.app.NativeActivity;
+import android.content.ClipData;
 import android.content.Intent;
 import android.net.Uri;
 
@@ -11,7 +12,7 @@ import android.net.Uri;
  */
 public class CedroActivity extends NativeActivity {
     public static final int CODICE_SCELTA = 4242;
-    private volatile Uri scelto;
+    private volatile Uri[] scelti;
     private volatile boolean novita;
 
     /** Una nuova condivisione (o l'apertura dall'icona) mentre Cedro è già aperto. */
@@ -31,17 +32,25 @@ public class CedroActivity extends NativeActivity {
 
     @Override
     protected void onActivityResult(int richiesta, int esito, Intent dati) {
-        if (richiesta == CODICE_SCELTA && esito == RESULT_OK && dati != null && dati.getData() != null) {
-            scelto = dati.getData();
+        if (richiesta == CODICE_SCELTA && esito == RESULT_OK && dati != null) {
+            // Con la scelta multipla i file arrivano nel ClipData; con uno solo, in getData().
+            ClipData c = dati.getClipData();
+            if (c != null && c.getItemCount() > 0) {
+                Uri[] u = new Uri[c.getItemCount()];
+                for (int i = 0; i < u.length; i++) u[i] = c.getItemAt(i).getUri();
+                scelti = u;
+            } else if (dati.getData() != null) {
+                scelti = new Uri[] { dati.getData() };
+            }
         } else {
             super.onActivityResult(richiesta, esito, dati);
         }
     }
 
-    /** Il file scelto dall'ultimo selettore, una volta sola (null se non c'è niente di nuovo). */
-    public Uri scelto() {
-        Uri u = scelto;
-        scelto = null;
+    /** I file scelti nell'ultimo selettore, una volta sola (null se non c'è niente di nuovo). */
+    public Uri[] scelti() {
+        Uri[] u = scelti;
+        scelti = null;
         return u;
     }
 }
