@@ -6,6 +6,7 @@
 pub mod aspetto;
 pub mod assets;
 pub mod gfx;
+pub mod guida;
 pub mod svgpath;
 pub mod theme;
 pub mod media;

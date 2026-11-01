@@ -12,16 +12,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**PDF → Excel legge anche le tabelle dei PDF scansionati.**
+**La Guida è rifatta.**
 
-- Con «Leggi le scansioni (OCR)» acceso, le pagine che sono foto o scansioni danno tabelle vere di Excel: Cedro raddrizza la pagina storta, ritrova le righe e le colonne (con o senza linee), tiene unite le celle scritte su due righe e unisce le tabelle che continuano sulla pagina dopo.
-- Numeri e date vengono riconosciuti; i decimali che l'OCR legge con il punto («80.00») tornano con la virgola («80,00»); la prima riga è l'intestazione quando si capisce.
-- Il testo fuori dalle tabelle va nel foglio del testo, riga per riga. Se le scansioni non vengono lette (opzione spenta), Cedro lo dice.
-- Su Linux, senza i dati italiani di Tesseract si usa quelli inglesi, che leggono molto meglio del modello incluso.
-- Corretto «1 pagine» nei messaggi quando la pagina è una sola.
-
-**Caratteri più grandi e un carattere per ogni tema.**
-
-- Tutti i testi dell'interfaccia crescono di 2 punti, per leggere meglio.
-- Ogni tema ha il suo carattere: Windows essenziale quello di Windows, Percorso guidato Atkinson Hyperlegible, Cedro compatto Figtree, Banco di lavoro IBM Plex Sans, Documento al centro Source Sans 3, Comune di Bondeno Titillium Web.
-- Ho allargato i punti dove il testo più grande non ci stava: «Aggiungi file», la barra in basso, le schede di Aspetto, la ruota e le scelte «Un foglio per tabella».
+- Si apre dal menu dell'icona («Guida…») e dalla fine dell'installazione: ora usa i colori e il carattere del tema che hai scelto (con lo stemma nel tema Comune di Bondeno), invece del vecchio blu fisso.
+- Otto argomenti con un indice a sinistra e un riquadro animato: la ruota, Conversioni, gli strumenti PDF (Unisci, Dividi, Pagine, Comprimi), PDF in Word ed Excel anche da scansioni, Trascrizione e Rivedi, YouTube e web, Aspetto (temi, Standard e Semplificata, caratteri più grandi) e Aggiornamenti.
+- Cambia argomento da sola; un clic su una riga la ferma su quella. Frecce, Invio e Spazio vanno avanti e indietro, Esc chiude.
+- Su Windows la finestra sta nello schermo anche con scala 150% o a 1024×768, ha l'icona di Cedro e la barra del titolo nei colori del tema.

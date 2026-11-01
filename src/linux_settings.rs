@@ -1179,62 +1179,108 @@ fn wheel_image(n: usize, hover: i32, scale: u32) -> Option<ImageSurface> {
     Some(surface)
 }
 
-/// Apre la Guida animata, o porta avanti quella già aperta.
+/// Apre la Guida animata, o porta avanti quella già aperta. Il disegno è `cedro::ui::guida`, nei colori
+/// e nel carattere del tema scelto.
 pub fn open_guide(app: &Application) {
+    use cedro::ui::gfx::{Fonts, GlyphCache, Painter};
+    use cedro::ui::guida::{Guida, Out, H, W};
+    use cedro::ui::screen::Key;
+
     for window in app.windows() {
         if window.title().is_some_and(|name| name == t("Guida di Cedro")) {
             window.present();
             return;
         }
     }
-    let window = titled(app, "Guida di Cedro", guida::W as i32, guida::H as i32);
+    let theme = cedro::ui::theme::ThemeId::from_key(&read_settings().ui_theme);
+    let window = titled(app, "Guida di Cedro", W as i32, H as i32);
+    window.set_resizable(false);
     let area = DrawingArea::new();
-    area.set_content_width(guida::W as i32);
-    area.set_content_height(guida::H as i32);
+    area.set_content_width(W as i32);
+    area.set_content_height(H as i32);
+    area.set_focusable(true);
     let started = Instant::now();
     let now = move || started.elapsed().as_millis() as u64;
-    let tour = Rc::new(Cell::new(guida::Tour::new(0)));
-    let cache: Rc<RefCell<Vec<((usize, i32), ImageSurface)>>> = Rc::new(RefCell::new(Vec::new()));
+    let guida = Rc::new(RefCell::new(Guida::new(theme, 0)));
+    let cache = Rc::new(RefCell::new(GlyphCache::new()));
     {
-        let tour = tour.clone();
-        area.set_draw_func(move |_, cr, _, _| {
+        let (guida, cache) = (guida.clone(), cache.clone());
+        area.set_draw_func(move |a, cr, w, h| {
+            let sf = a.scale_factor().max(1);
+            let (pw, ph) = (w * sf, h * sf);
+            if pw <= 0 || ph <= 0 {
+                return;
+            }
             let mut cache = cache.borrow_mut();
-            let mut canvas = CairoCanvas { cr, cache: &mut cache };
-            guida::draw(&mut canvas, &tour.get(), now());
+            let k = pw as f32 / W;
+            let mut painter = Painter::new(pw as u32, ph as u32, k, Fonts::for_theme(theme), &mut cache);
+            guida.borrow_mut().draw(&mut painter, now());
+            let data = painter.bgra();
+            if let Ok(img) = ImageSurface::create_for_data(data, gtk4::cairo::Format::ARgb32, pw, ph, pw * 4) {
+                cr.scale(1.0 / sf as f64, 1.0 / sf as f64);
+                let _ = cr.set_source_surface(&img, 0.0, 0.0);
+                let _ = cr.paint();
+            }
         });
     }
+    let motion = gtk4::EventControllerMotion::new();
+    {
+        let (g, ar) = (guida.clone(), area.clone());
+        motion.connect_motion(move |_, x, y| {
+            let mut g = g.borrow_mut();
+            g.pointer_move(x as f32 * W / ar.width().max(1) as f32, y as f32 * H / ar.height().max(1) as f32);
+            ar.set_cursor_from_name(Some(if g.is_hand() { "pointer" } else { "default" }));
+        });
+        let g = guida.clone();
+        motion.connect_leave(move |_| {
+            g.borrow_mut().pointer_leave();
+        });
+    }
+    area.add_controller(motion);
     let click = gtk4::GestureClick::new();
     {
-        let tour = tour.clone();
-        let window = window.clone();
-        click.connect_released(move |_, _, x, y| {
-            let mut t = tour.get();
-            match guida::hit(x as f32, y as f32, t.page) {
-                Some(guida::Hit::Page(i)) => t.goto(i, now()),
-                Some(guida::Hit::Prev) => t.goto(t.page + guida::PAGE_COUNT - 1, now()),
-                Some(guida::Hit::Next) if t.is_last() => {
-                    window.close();
-                    return;
-                }
-                Some(guida::Hit::Next) => t.goto(t.page + 1, now()),
-                Some(guida::Hit::Row(i)) => t.show_row(i, now()),
-                None => {}
+        let (g, ar, win) = (guida.clone(), area.clone(), window.clone());
+        click.connect_pressed(move |_, _, x, y| {
+            ar.grab_focus();
+            let out = g.borrow_mut().pointer_down(x as f32 * W / ar.width().max(1) as f32, y as f32 * H / ar.height().max(1) as f32, now());
+            if out == Out::Close {
+                win.close();
             }
-            tour.set(t);
         });
     }
     area.add_controller(click);
+    let keys = gtk4::EventControllerKey::new();
+    {
+        let (g, win) = (guida.clone(), window.clone());
+        keys.connect_key_pressed(move |_, key, _, _| {
+            let k = match key {
+                gtk4::gdk::Key::Escape => Key::Escape,
+                gtk4::gdk::Key::Right => Key::Right,
+                gtk4::gdk::Key::Left => Key::Left,
+                gtk4::gdk::Key::Down => Key::Down,
+                gtk4::gdk::Key::Up => Key::Up,
+                gtk4::gdk::Key::Return => Key::Enter,
+                gtk4::gdk::Key::space => Key::Space,
+                _ => return glib::Propagation::Proceed,
+            };
+            if g.borrow_mut().key(k, now()) == Out::Close {
+                win.close();
+            }
+            glib::Propagation::Stop
+        });
+    }
+    area.add_controller(keys);
     window.set_child(Some(&area));
+    area.grab_focus();
     let weak = area.downgrade();
     glib::timeout_add_local(std::time::Duration::from_millis(33), move || match weak.upgrade() {
-        Some(area) if area.is_mapped() => {
-            let mut t = tour.get();
-            t.tick(now());
-            tour.set(t);
-            area.queue_draw();
+        Some(area) => {
+            if area.is_mapped() {
+                guida.borrow_mut().tick(now());
+                area.queue_draw();
+            }
             glib::ControlFlow::Continue
         }
-        Some(_) => glib::ControlFlow::Continue,
         None => glib::ControlFlow::Break,
     });
     window.present();
