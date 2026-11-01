@@ -1354,6 +1354,8 @@ impl App {
         let sy = 62.0;
         p.rrect(x, sy, cw, 48.0, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
         let sw = (cw - 8.0) / att.len() as f32;
+        // Con quattro attività le scritte si rimpiccioliscono finché stanno nel loro segmento.
+        let dim = [14.0, 13.0, 12.0, 11.0].into_iter().find(|d| att.iter().all(|a| p.measure(if *a == Att::Web { "Web" } else { a.nome() }, *d, Weight::Semibold) + 18.0 <= sw)).unwrap_or(11.0);
         for (k, a) in att.iter().enumerate() {
             let on = *a == self.casa.att;
             let rc = (x + 4.0 + k as f32 * sw, sy + 4.0, sw, 40.0);
@@ -1363,12 +1365,12 @@ impl App {
             };
             if on {
                 p.rrect(rc.0, rc.1, rc.2, rc.3, 6.0, Some(pal.primary), None);
-                p.text(nome, rc.0, rc.1, rc.2, rc.3, 14.0, Weight::Semibold, pal.on_primary, Align::Center);
+                p.text(nome, rc.0, rc.1, rc.2, rc.3, dim, Weight::Semibold, pal.on_primary, Align::Center);
             } else {
-                let tw = p.measure(nome, 14.0, Weight::Regular);
+                let tw = p.measure(nome, dim, Weight::Regular);
                 let tx = rc.0 + (rc.2 - tw - 12.0) / 2.0;
                 p.circle(tx + 3.0, rc.1 + rc.3 / 2.0, 3.5, Some(colore_att(*a, scuro)), None);
-                p.text(nome, tx + 12.0, rc.1, tw + 4.0, rc.3, 14.0, Weight::Regular, pal.text, Align::Left);
+                p.text(nome, tx + 12.0, rc.1, tw + 4.0, rc.3, dim, Weight::Regular, pal.text, Align::Left);
             }
             self.colpi.push((Forma::R(rc), Azione::Casa(CasaAz::Att(k))));
         }
@@ -1470,19 +1472,22 @@ impl App {
         let ay = 54.0;
         p.fill(0.0, ay + 39.0, w, 1.0, pal.border);
         let mut ax = 16.0;
-        let totale: f32 = att.iter().map(|a| p.measure(a.nome(), 15.0, Weight::Semibold) + 34.0).sum();
-        let corti = totale > w - 20.0;
+        // Le scritte intere se ci stanno; altrimenti corte, poi più piccole e più vicine.
+        let (corti, dim, passo) = [(false, 15.0, 34.0), (true, 15.0, 34.0), (true, 14.0, 28.0), (true, 13.0, 24.0), (true, 12.0, 20.0)]
+            .into_iter()
+            .find(|(c, d, g)| att.iter().map(|a| p.measure(if *c { a.corto() } else { a.nome() }, *d, Weight::Semibold) + g).sum::<f32>() <= w - 16.0)
+            .unwrap_or((true, 12.0, 18.0));
         for (k, a) in att.iter().enumerate() {
             let on = *a == self.casa.att;
             let nome = if corti { a.corto() } else { a.nome() };
-            let tw = p.measure(nome, 15.0, if on { Weight::Semibold } else { Weight::Regular });
+            let tw = p.measure(nome, dim, if on { Weight::Semibold } else { Weight::Regular });
             p.circle(ax + 4.0, ay + 20.0, 4.0, Some(colore_att(*a, scuro)), None);
-            p.text(nome, ax + 14.0, ay, tw + 4.0, 40.0, 15.0, if on { Weight::Semibold } else { Weight::Regular }, if on { pal.text } else { pal.muted }, Align::Left);
+            p.text(nome, ax + 14.0, ay, tw + 4.0, 40.0, dim, if on { Weight::Semibold } else { Weight::Regular }, if on { pal.text } else { pal.muted }, Align::Left);
             if on {
                 p.fill(ax, ay + 37.0, tw + 14.0, 2.0, pal.primary);
             }
-            self.colpi.push((Forma::R((ax - 4.0, ay, tw + 22.0, 40.0)), Azione::Casa(CasaAz::Att(k))));
-            ax += tw + 34.0;
+            self.colpi.push((Forma::R((ax - 4.0, ay, tw + passo - 12.0, 40.0)), Azione::Casa(CasaAz::Att(k))));
+            ax += tw + passo;
         }
         let conv = self.casa.att == Att::Conv;
         let foglio_h = if conv { 236.0 } else if self.casa.att == Att::Tras { 150.0 } else { 0.0 };
@@ -1699,14 +1704,23 @@ impl App {
         p.fill(0.0, ay, w, 46.0, pal.surface);
         p.fill(0.0, ay + 45.0, w, 1.0, pal.border);
         let mut ax = 8.0;
-        let totale: f32 = att.iter().map(|a| p.measure(a.nome(), 14.0, Weight::Semibold) + 48.0).sum();
-        let corti = totale > w - 12.0;
+        // Schede intere se ci stanno; altrimenti nomi corti; altrimenti solo l'icona per quelle non scelte.
+        let largo = |p: &Painter, a: &Att, corti: bool, sola_icona: bool, on: bool| -> f32 {
+            if sola_icona && !on {
+                40.0
+            } else {
+                p.measure(if corti { a.corto() } else { a.nome() }, 14.0, Weight::Semibold) + 44.0
+            }
+        };
+        let (corti, sola_icona) = [(false, false), (true, false), (false, true), (true, true)]
+            .into_iter()
+            .find(|(c, i)| att.iter().map(|a| largo(p, a, *c, *i, *a == self.casa.att) + 4.0).sum::<f32>() <= w - 12.0)
+            .unwrap_or((true, true));
         for (k, a) in att.iter().enumerate() {
             let on = *a == self.casa.att;
             let col = colore_att(*a, scuro);
             let nome = if corti { a.corto() } else { a.nome() };
-            let tw = p.measure(nome, 14.0, if on { Weight::Semibold } else { Weight::Regular });
-            let ww = tw + 44.0;
+            let ww = largo(p, a, corti, sola_icona, on);
             if on {
                 p.fill(ax, ay, ww, 45.0, mix(pal.surface, pal.primary, 0.08));
                 p.fill(ax, ay + 42.0, ww, 3.0, pal.primary);
@@ -1714,8 +1728,10 @@ impl App {
             } else {
                 self.kt(p, ax + 6.0, ay + 10.0, 24.0, col, a.icona());
             }
-            p.text(nome, ax + 36.0, ay, tw + 4.0, 45.0, 14.0, if on { Weight::Semibold } else { Weight::Regular }, if on { pal.primary } else { pal.text }, Align::Left);
-            self.colpi.push((Forma::R((ax, ay, ww, 46.0)), Azione::Casa(CasaAz::Att(k))));
+            if on || !sola_icona {
+                p.text(nome, ax + 36.0, ay, ww - 38.0, 45.0, 14.0, if on { Weight::Semibold } else { Weight::Regular }, if on { pal.primary } else { pal.text }, Align::Left);
+            }
+            self.colpi.push((Forma::R((ax, ay, ww.max(TOCCO), 46.0)), Azione::Casa(CasaAz::Att(k))));
             ax += ww + 4.0;
         }
         let conv_o_tras = matches!(self.casa.att, Att::Conv | Att::Tras);
