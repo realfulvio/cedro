@@ -69,6 +69,14 @@ pub use engine::{
     Mode, Output, Slice,
 };
 pub use audio::waveform;
+pub use pdfedit::{Numbers, Squeeze, Stamp, Watermark};
+pub use pdfpages::{groups as pdf_groups, Plan};
+pub use engine::{panel_slices, pdf_info, pdf_unlock, zip_paths};
+
+/// Il nome che darebbe il modello `template` a un file `stem`.`ext` adesso (l'esempio delle impostazioni).
+pub fn name_example(template: &str, stem: &str, ext: &str) -> Option<String> {
+    nametemplate::expand(template, stem, ext, "", nametemplate::now())
+}
 #[cfg(windows)]
 pub use ocr::windows_italian_installed;
 pub use settings::{read_settings, write_settings, Dest, Settings};

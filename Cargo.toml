@@ -39,13 +39,11 @@ flacenc = { version = "0.5", default-features = false }
 zip = { version = "9", default-features = false, features = ["deflate"] }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
 
-# Il tasto Play dell'anteprima: l'uscita audio del sistema (ALSA su Linux, WASAPI su Windows).
-[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
-cpal = "0.18"
-
 # Opus (audio dei WebM, vocali di WhatsApp e Telegram): libopus compilata dentro il programma.
 [target.'cfg(any(windows, target_os = "linux", target_os = "android"))'.dependencies]
 opusic-sys = "0.7"
+# Il tasto Play dell'anteprima: l'uscita audio del sistema (ALSA su Linux, WASAPI su Windows, AAudio su Android).
+cpal = "0.18"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 fdk-aac = "0.8"

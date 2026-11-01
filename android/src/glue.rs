@@ -4,14 +4,14 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use android_activity::input::{InputEvent, KeyAction, Keycode, MotionAction};
+use android_activity::input::{InputEvent, KeyAction, KeyMapChar, Keycode, MotionAction};
 use android_activity::{AndroidApp, InputStatus, MainEvent, PollEvent};
 use cedro::ui::gfx::{Fonts, GlyphCache, Image, Painter};
 use cedro::ui::theme::ThemeId;
 use jni::objects::{JByteArray, JObject, JString, JValue};
 use jni::{JNIEnv, JavaVM};
 
-use crate::ui::{App, Archivio, Effetto, Info, Recente, Sorgente, Stato};
+use crate::ui::{App, Archivio, Compito, Effetto, Info, Recente, Sorgente, Stato, Tasto};
 
 /// Dove finiscono le copie.
 const DOCUMENTI: &str = "/storage/emulated/0/Documents";
@@ -55,6 +55,7 @@ fn estensione_da_mime(mime: &str) -> &'static str {
         "image/bmp" => "bmp",
         "image/tiff" => "tiff",
         "application/pdf" => "pdf",
+        "application/zip" | "application/x-zip-compressed" => "zip",
         "text/plain" => "txt",
         "text/markdown" => "md",
         "text/html" => "html",
@@ -106,12 +107,24 @@ fn mime_da_percorso(path: &Path) -> &'static str {
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "odt" => "application/vnd.oasis.opendocument.text",
         "rtf" => "application/rtf",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "zip" => "application/zip",
+        "opus" => "audio/ogg",
+        "aif" | "aiff" => "audio/aiff",
+        "avif" => "image/avif",
+        "jxl" => "image/jxl",
+        "ico" => "image/x-icon",
+        "tga" => "image/x-tga",
+        "pnm" | "ppm" | "pgm" | "pbm" => "image/x-portable-anymap",
+        "exr" => "image/x-exr",
+        "srt" => "application/x-subrip",
+        "vtt" => "text/vtt",
         _ => "application/octet-stream",
     }
 }
 
 /// Legge l'intento che ha avviato l'attività: se è un ACTION_SEND, copia il flusso in un file privato.
-fn leggi_condivisione(app: &AndroidApp, cartella: &Path) -> Result<Option<Condiviso>, String> {
+fn leggi_condivisione(app: &AndroidApp, cartella: &Path) -> Result<Vec<Condiviso>, String> {
     let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr() as *mut _) }.map_err(|e| e.to_string())?;
     let mut env = vm.attach_current_thread().map_err(|e| e.to_string())?;
     let attivita = unsafe { JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject) };
@@ -122,7 +135,7 @@ fn leggi_condivisione(app: &AndroidApp, cartella: &Path) -> Result<Option<Condiv
     r
 }
 
-fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) -> Result<Option<Condiviso>, String> {
+fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) -> Result<Vec<Condiviso>, String> {
     macro_rules! j {
         ($e:expr) => {
             match $e {
@@ -133,14 +146,34 @@ fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) 
     }
     let intento = j!(j!(env.call_method(attivita, "getIntent", "()Landroid/content/Intent;", &[])).l());
     if intento.is_null() {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let azione = j!(env.call_method(&intento, "getAction", "()Ljava/lang/String;", &[])).l().ok().and_then(|o| stringa(env, o));
-    if azione.as_deref() != Some("android.intent.action.SEND") {
-        return Ok(None);
-    }
     let mime = j!(env.call_method(&intento, "getType", "()Ljava/lang/String;", &[])).l().ok().and_then(|o| stringa(env, o)).unwrap_or_default();
     let chiave = j!(env.new_string("android.intent.extra.STREAM"));
+    if azione.as_deref() == Some("android.intent.action.SEND_MULTIPLE") {
+        // Più PDF condivisi insieme: si uniscono.
+        let lista = j!(j!(env.call_method(&intento, "getParcelableArrayListExtra", "(Ljava/lang/String;)Ljava/util/ArrayList;", &[JValue::Object(&chiave)])).l());
+        if lista.is_null() {
+            return Err("la condivisione non contiene file".into());
+        }
+        let n = j!(j!(env.call_method(&lista, "size", "()I", &[])).i());
+        let mut out = Vec::new();
+        for i in 0..n {
+            let mut uri = j!(j!(env.call_method(&lista, "get", "(I)Ljava/lang/Object;", &[JValue::Int(i)])).l());
+            // Qualche app (e `am --esal`) manda i percorsi come testo invece che come Uri.
+            if !uri.is_null() && j!(env.is_instance_of(&uri, "java/lang/String")) {
+                uri = j!(j!(env.call_static_method("android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&uri)])).l());
+            }
+            if !uri.is_null() {
+                out.push(copia_uri(env, attivita, &uri, "", cartella)?);
+            }
+        }
+        return Ok(out);
+    }
+    if azione.as_deref() != Some("android.intent.action.SEND") {
+        return Ok(Vec::new());
+    }
     let uri = j!(j!(env.call_method(&intento, "getParcelableExtra", "(Ljava/lang/String;)Landroid/os/Parcelable;", &[JValue::Object(&chiave)])).l());
     if uri.is_null() {
         if !mime.starts_with("text/") {
@@ -150,11 +183,11 @@ fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) 
         let k = j!(env.new_string("android.intent.extra.TEXT"));
         let testo = j!(env.call_method(&intento, "getStringExtra", "(Ljava/lang/String;)Ljava/lang/String;", &[JValue::Object(&k)])).l().ok().and_then(|o| stringa(env, o)).unwrap_or_default();
         return match cedro::webvideo::find_url(&testo) {
-            Some(url) => Ok(Some(Condiviso { nome: url.clone(), path: PathBuf::from(url) })),
+            Some(url) => Ok(vec![Condiviso { nome: url.clone(), path: PathBuf::from(url) }]),
             None => Err("il testo condiviso non contiene un link".into()),
         };
     }
-    copia_uri(env, attivita, &uri, &mime, cartella).map(Some)
+    copia_uri(env, attivita, &uri, &mime, cartella).map(|c| vec![c])
 }
 
 /// Il tipo del file per l'interfaccia: un vocale .opus (WhatsApp, Telegram) si trascrive, quindi conta come audio.
@@ -393,6 +426,13 @@ fn appunti(app: &AndroidApp) -> String {
 /// Apre il selettore di file di Android (ACTION_OPEN_DOCUMENT). Il risultato lo legge `scelto`.
 fn scegli(app: &AndroidApp, sorgente: Sorgente) -> Result<(), String> {
     con_attivita(app, |env, attivita| {
+        if sorgente == Sorgente::Cartella {
+            // Una cartella: il selettore dà l'albero, i file si leggono dopo (`figli`).
+            let azione = env.new_string("android.intent.action.OPEN_DOCUMENT_TREE").map_err(|e| e.to_string())?;
+            let intento = env.new_object("android/content/Intent", "(Ljava/lang/String;)V", &[JValue::Object(&azione)]).map_err(|e| jerr(env, e))?;
+            env.call_method(attivita, "startActivityForResult", "(Landroid/content/Intent;I)V", &[JValue::Object(&intento), JValue::Int(4242)]).map_err(|e| jerr(env, e))?;
+            return Ok(());
+        }
         let azione = env.new_string("android.intent.action.OPEN_DOCUMENT").map_err(|e| e.to_string())?;
         let intento = env.new_object("android/content/Intent", "(Ljava/lang/String;)V", &[JValue::Object(&azione)]).map_err(|e| jerr(env, e))?;
         let cat = env.new_string("android.intent.category.OPENABLE").map_err(|e| e.to_string())?;
@@ -401,6 +441,8 @@ fn scegli(app: &AndroidApp, sorgente: Sorgente) -> Result<(), String> {
             Sorgente::Foto => ("image/*", &[]),
             Sorgente::Audio => ("audio/*", &[]),
             Sorgente::Altri | Sorgente::Link => ("*/*", &[]),
+            Sorgente::PdfAltri => ("application/pdf", &[]),
+            Sorgente::Coda | Sorgente::Cartella => ("*/*", &[]),
             Sorgente::Documenti => (
                 "*/*",
                 &[
@@ -427,25 +469,85 @@ fn scegli(app: &AndroidApp, sorgente: Sorgente) -> Result<(), String> {
             let chiave = env.new_string("android.intent.extra.MIME_TYPES").map_err(|e| e.to_string())?;
             env.call_method(&intento, "putExtra", "(Ljava/lang/String;[Ljava/lang/String;)Landroid/content/Intent;", &[JValue::Object(&chiave), JValue::Object(&arr)]).map_err(|e| jerr(env, e))?;
         }
+        if matches!(sorgente, Sorgente::PdfAltri | Sorgente::Coda) {
+            let k = env.new_string("android.intent.extra.ALLOW_MULTIPLE").map_err(|e| e.to_string())?;
+            env.call_method(&intento, "putExtra", "(Ljava/lang/String;Z)Landroid/content/Intent;", &[JValue::Object(&k), JValue::Bool(1)]).map_err(|e| jerr(env, e))?;
+        }
         env.call_method(attivita, "startActivityForResult", "(Landroid/content/Intent;I)V", &[JValue::Object(&intento), JValue::Int(4242)]).map_err(|e| jerr(env, e))?;
         Ok(())
     })
 }
 
-/// Il file scelto nel selettore, se è arrivato: lo copia nella cartella dei file di Cedro.
-fn scelto(app: &AndroidApp, cartella: &Path) -> Option<Result<Condiviso, String>> {
+/// I file scelti nel selettore, se sono arrivati: li copia nella cartella dei file di Cedro.
+fn scelti(app: &AndroidApp, cartella: &Path, albero: bool) -> Option<Result<Vec<Condiviso>, String>> {
     let r = con_attivita(app, |env, attivita| {
-        let uri = env.call_method(attivita, "scelto", "()Landroid/net/Uri;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
-        if uri.is_null() {
+        let arr = env.call_method(attivita, "scelti", "()[Landroid/net/Uri;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        if arr.is_null() {
             return Ok(None);
         }
-        copia_uri(env, attivita, &uri, "", cartella).map(Some)
+        let arr = jni::objects::JObjectArray::from(arr);
+        let n = env.get_array_length(&arr).map_err(|e| jerr(env, e))?;
+        let mut out = Vec::new();
+        for i in 0..n {
+            let uri = env.get_object_array_element(&arr, i).map_err(|e| jerr(env, e))?;
+            if albero {
+                out.extend(figli(env, attivita, &uri, cartella)?);
+            } else {
+                out.push(copia_uri(env, attivita, &uri, "", cartella)?);
+            }
+        }
+        Ok(Some(out))
     });
     match r {
         Ok(Some(c)) => Some(Ok(c)),
         Ok(None) => None,
         Err(e) => Some(Err(e)),
     }
+}
+
+/// I file (non le sottocartelle) di una cartella scelta con OPEN_DOCUMENT_TREE, copiati nella cartella di Cedro.
+fn figli(env: &mut JNIEnv, attivita: &JObject, albero: &JObject, cartella: &Path) -> Result<Vec<Condiviso>, String> {
+    let dc = "android/provider/DocumentsContract";
+    let id = env.call_static_method(dc, "getTreeDocumentId", "(Landroid/net/Uri;)Ljava/lang/String;", &[JValue::Object(albero)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+    let lista = env
+        .call_static_method(dc, "buildChildDocumentsUriUsingTree", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(albero), JValue::Object(&id)])
+        .and_then(|v| v.l())
+        .map_err(|e| jerr(env, e))?;
+    let resolver = env.call_method(attivita, "getContentResolver", "()Landroid/content/ContentResolver;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+    let classe = env.find_class("java/lang/String").map_err(|e| jerr(env, e))?;
+    let c0 = env.new_string("document_id").map_err(|e| e.to_string())?;
+    let proiez = env.new_object_array(2, &classe, &c0).map_err(|e| jerr(env, e))?;
+    let c1 = env.new_string("mime_type").map_err(|e| e.to_string())?;
+    env.set_object_array_element(&proiez, 1, c1).map_err(|e| jerr(env, e))?;
+    let nulla = JObject::null();
+    let cur = env
+        .call_method(&resolver, "query", "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;", &[JValue::Object(&lista), JValue::Object(&proiez), JValue::Object(&nulla), JValue::Object(&nulla), JValue::Object(&nulla)])
+        .and_then(|v| v.l())
+        .map_err(|e| jerr(env, e))?;
+    let mut voci = Vec::new();
+    if !cur.is_null() {
+        while env.call_method(&cur, "moveToNext", "()Z", &[]).and_then(|v| v.z()).unwrap_or(false) {
+            let doc = env.call_method(&cur, "getString", "(I)Ljava/lang/String;", &[JValue::Int(0)]).and_then(|v| v.l()).ok().and_then(|o| stringa(env, o));
+            let mime = env.call_method(&cur, "getString", "(I)Ljava/lang/String;", &[JValue::Int(1)]).and_then(|v| v.l()).ok().and_then(|o| stringa(env, o)).unwrap_or_default();
+            if let Some(doc) = doc.filter(|_| mime != "vnd.android.document/directory") {
+                voci.push(doc);
+            }
+        }
+        let _ = env.call_method(&cur, "close", "()V", &[]);
+    }
+    let mut out = Vec::new();
+    for doc in voci.into_iter().take(200) {
+        let d = env.new_string(&doc).map_err(|e| e.to_string())?;
+        let uri = env
+            .call_static_method(dc, "buildDocumentUriUsingTree", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(albero), JValue::Object(&d)])
+            .and_then(|v| v.l())
+            .map_err(|e| jerr(env, e))?;
+        match copia_uri(env, attivita, &uri, "", cartella) {
+            Ok(c) => out.push(c),
+            Err(e) => log::warn!("cartella: {doc}: {e}"),
+        }
+    }
+    Ok(out)
 }
 
 /// Dice a Android che c'è un file nuovo in Documenti (così compare in Galleria e in File) e ne cerca il `content://`.
@@ -752,9 +854,24 @@ struct Consegne {
     onda: Casella<(PathBuf, Vec<f32>)>,
     recenti: Casella<Vec<Recente>>,
     esiti: Arc<Mutex<Vec<(u32, Stato)>>>,
+    /// Pagine e segnalibri del PDF aperto, o l'errore (protetto da password).
+    info_pdf: Casella<(PathBuf, Result<(u32, Vec<(u32, String)>), String>)>,
+    /// Pagine e miniatura dei PDF da unire.
+    unito: Arc<Mutex<Vec<(PathBuf, Option<u32>, Option<Image>)>>>,
+    /// Le miniature delle pagine (da 0) del PDF aperto.
+    pagine: Arc<Mutex<Vec<(PathBuf, u32, Image)>>>,
+    /// Com'è andata la password: la copia senza, o l'errore.
+    sblocco: Casella<Result<PathBuf, String>>,
+    /// L'onda di una revisione aperta.
+    onda_riv: Casella<(PathBuf, Option<Vec<f32>>)>,
+    /// I punti da controllare di una trascrizione finita (lavoro, quanti).
+    controlli: Arc<Mutex<Vec<(u32, usize)>>>,
+    /// Miniatura, misure e pagine dei file in coda nella finestra principale.
+    voci: Arc<Mutex<Vec<(PathBuf, Option<Image>, Option<(u32, u32)>, Option<u32>)>>>,
 }
 
-fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<std::sync::atomic::AtomicU32>) {
+#[allow(clippy::too_many_arguments)]
+fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<std::sync::atomic::AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)>) {
     let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
     if !assicura_scrittura(&app) {
         invia(Stato::Errore("Serve il permesso di scrivere in Documenti.".into()));
@@ -785,10 +902,28 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
     if azione == "trascrivi" {
         return trascrivi(&app, &c, id, &file, &out, &prog, qualita as usize);
     }
+    // Le scelte della schermata, con «se esiste già» e il nome a modello delle Impostazioni (le mette `ui`).
+    let o = opts.map(|b| *b).unwrap_or_default();
     let esegui = |dove: &Path| {
         let p2 = prog.clone();
-        cedro::progress::con(move |f| p2.store((f * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed), || cedro::perform_into(&file, azione, qualita, Some(dove))).map_err(|e| e.to_string())
+        cedro::progress::con(
+            move |f| p2.store((f * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed),
+            || {
+                if azione == "zip-tutti" {
+                    let tutti: Vec<PathBuf> = unisci.iter().map(|u| u.0.clone()).collect();
+                    cedro::zip_paths(&tutti, dove, None, &o)
+                } else if unisci.is_empty() {
+                    cedro::perform_with(&file, azione, qualita, Some(dove), &o)
+                } else {
+                    cedro::merge_with(&unisci, Some(dove), &o)
+                }
+            },
+        )
+        .map_err(|e| e.to_string())
     };
+    // I file che c'erano prima: quelli nuovi oltre al primo (pezzi di «Dividi», pagine in JPG) vanno consegnati tutti.
+    let elenco = |d: &Path| -> std::collections::HashSet<PathBuf> { std::fs::read_dir(d).into_iter().flatten().filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_file()).collect() };
+    let prima: std::collections::HashSet<PathBuf> = elenco(&out).into_iter().chain(elenco(&out.join("Cedro"))).collect();
     let mut esito = esegui(&out);
     if let Err(e) = &esito {
         if negato(e) {
@@ -807,6 +942,15 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
     match esito {
         Ok(o) => {
             log::info!("{azione}: salvato {} ({})", o.path.display(), o.message);
+            if let Some(dir) = o.path.parent() {
+                let mut altri: Vec<PathBuf> = elenco(dir).into_iter().filter(|p| *p != o.path && !prima.contains(p) && !nome_di(p).starts_with('.')).collect();
+                altri.sort();
+                for a in altri {
+                    if let Err(e) = consegna(&app, a.clone()) {
+                        log::warn!("{}: {e}", a.display());
+                    }
+                }
+            }
             match consegna(&app, o.path) {
                 Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg: o.message }),
                 Err(e) => invia(Stato::Errore(con_dettagli(&e, azione, &file, &out))),
@@ -1123,7 +1267,12 @@ fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, ou
     });
     match esito.into_inner().unwrap_or_else(|e| e.into_inner()) {
         Some(Ok((path, msg))) => match consegna(app, path) {
-            Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg }),
+            Ok((path, nome)) => {
+                if let Some(n) = crate::ui::da_controllare(file) {
+                    c.controlli.lock().unwrap_or_else(|e| e.into_inner()).push((id, n));
+                }
+                invia(Stato::Fatto { path, nome, msg })
+            }
             Err(e) => invia(Stato::Errore(con_dettagli(&e, "trascrivi", file, out))),
         },
         Some(Err(e)) => invia(Stato::Errore(con_dettagli(&e, "trascrivi", file, out))),
@@ -1182,6 +1331,33 @@ fn ricarica_recenti(cartella: PathBuf, c: &Consegne) {
     });
 }
 
+/// Quello che arriva da «Condividi»: un file, o più PDF da unire.
+fn ricevuti(ui: &mut App, c: &Consegne, cartella: &Path, v: Vec<Condiviso>) {
+    // Con «Unisci» aperto, i PDF condivisi si aggiungono all'elenco.
+    if ui.pdf.pagina == Some(crate::ui::Pagina::Unisci) && v.iter().all(|c| tipo_di(&c.path) == cedro::Kind::Pdf) {
+        leggi_uniti(c, v.iter().map(|c| c.path.clone()).collect(), ui.pdf.usata.clone());
+        ui.aggiungi_pdf(v.into_iter().map(|c| (c.path, c.nome)).collect());
+        return;
+    }
+    let mut v = v.into_iter();
+    let Some(primo) = v.next() else { return };
+    log::info!("ricevuto {} ({})", primo.nome, primo.path.display());
+    carica_file(ui, c, cartella, primo.path, primo.nome, true);
+    let resto: Vec<Condiviso> = v.collect();
+    if resto.is_empty() {
+        return;
+    }
+    if ui.kind == cedro::Kind::Pdf && resto.iter().all(|c| tipo_di(&c.path) == cedro::Kind::Pdf) {
+        let altri: Vec<(PathBuf, String)> = resto.into_iter().map(|c| (c.path, c.nome)).collect();
+        leggi_uniti(c, altri.iter().map(|a| a.0.clone()).collect(), None);
+        ui.aggiungi_pdf(altri);
+    } else {
+        // File di tipi diversi: il foglio propone per prima cosa uno ZIP con tutti.
+        ui.altri = resto.into_iter().map(|c| c.path).collect();
+        ui.foglio = true;
+    }
+}
+
 /// Mette un file nell'interfaccia e prepara, in un thread, l'anteprima (foto, prima pagina o onda).
 fn carica_file(ui: &mut App, c: &Consegne, cartella: &Path, path: PathBuf, nome: String, da_condivisione: bool) {
     if crate::ui::e_link(&path) {
@@ -1192,6 +1368,9 @@ fn carica_file(ui: &mut App, c: &Consegne, cartella: &Path, path: PathBuf, nome:
     }
     let kind = tipo_di(&path);
     ui.imposta_file(file_di(&path, nome), kind, da_condivisione);
+    if kind == cedro::Kind::Pdf {
+        leggi_pdf(c, path.clone());
+    }
     let (c2, p2) = (c.clone(), path.clone());
     std::thread::spawn(move || {
         if let Some(img) = cedro::ui::media::thumb_of(&p2, 600) {
@@ -1203,6 +1382,70 @@ fn carica_file(ui: &mut App, c: &Consegne, cartella: &Path, path: PathBuf, nome:
         }
     });
     ricarica_recenti(cartella.to_path_buf(), c);
+}
+
+/// Miniatura, misure e pagine dei file in coda, in un thread.
+fn leggi_voci(c: &Consegne, files: Vec<PathBuf>) {
+    let slot = c.voci.clone();
+    std::thread::spawn(move || {
+        for path in files {
+            let kind = tipo_di(&path);
+            let (thumb, misure) = match kind {
+                cedro::Kind::Image => cedro::ui::media::image_thumb(&path, 240).map(|(i, s)| (Some(i), Some(s))).unwrap_or((None, None)),
+                _ => (cedro::ui::media::thumb_of(&path, 360), None),
+            };
+            let pagine = (kind == cedro::Kind::Pdf).then(|| cedro::pdf_info(&path, None).ok().map(|(n, _)| n)).flatten();
+            slot.lock().unwrap_or_else(|e| e.into_inner()).push((path, thumb, misure, pagine));
+        }
+    });
+}
+
+/// Pagine e segnalibri di un PDF, in un thread (se è protetto, l'errore lo dice).
+fn leggi_pdf(c: &Consegne, path: PathBuf) {
+    let slot = c.info_pdf.clone();
+    std::thread::spawn(move || {
+        let r = cedro::pdf_info(&path, None);
+        *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some((path, r));
+    });
+}
+
+/// Pagine e miniatura dei PDF da unire, in un thread.
+fn leggi_uniti(c: &Consegne, files: Vec<PathBuf>, password: Option<String>) {
+    let slot = c.unito.clone();
+    std::thread::spawn(move || {
+        for path in files {
+            let pagine = cedro::pdf_info(&path, password.as_deref()).ok().map(|(n, _)| n);
+            let thumb = cedro::ui::media::thumb_of(&path, 200);
+            slot.lock().unwrap_or_else(|e| e.into_inner()).push((path, pagine, thumb));
+        }
+    });
+}
+
+/// Un PDF protetto: la password vale? Se sì, una copia senza password nella cartella dei file.
+fn sblocca(c: &Consegne, path: PathBuf, password: String, cartella: &Path) {
+    let slot = c.sblocco.clone();
+    let dir = cartella.join("sbloccati");
+    std::thread::spawn(move || {
+        let r = std::fs::create_dir_all(&dir).map_err(|e| e.to_string()).and_then(|_| {
+            let out = dir.join(path.file_name().unwrap_or_default());
+            cedro::pdf_unlock(&path, &password, &out).map(|_| out)
+        });
+        *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(r);
+    });
+}
+
+/// Le miniature delle pagine chieste (da 0), in un thread.
+fn miniature_pagine(c: &Consegne, path: PathBuf, pagine: Vec<u32>) {
+    let slot = c.pagine.clone();
+    std::thread::spawn(move || {
+        let idx: Vec<usize> = pagine.iter().map(|n| *n as usize).collect();
+        cedro::ui::media::pdf_page_thumbs(&path, &idx, 280.0, &mut |n, img| {
+            if let Some(img) = img {
+                slot.lock().unwrap_or_else(|e| e.into_inner()).push((path.clone(), n as u32, img));
+            }
+            true
+        });
+    });
 }
 
 /// Quanti core sono «grandi» (big.LITTLE): sono quelli con la capacità più alta. Sul Mi 9T due core A76 fanno quanto otto
@@ -1228,6 +1471,10 @@ fn android_main(app: AndroidApp) {
     let dati = app.internal_data_path().unwrap_or_else(|| PathBuf::from("/data/local/tmp"));
     // Il motore cerca le sue impostazioni in $HOME/.config/cedro.
     std::env::set_var("HOME", &dati);
+    // La cartella temporanea del motore (ZIP, audio a flussi): /data/local/tmp non è nostra.
+    let tmp = dati.join("tmp");
+    let _ = std::fs::create_dir_all(&tmp);
+    std::env::set_var("TMPDIR", &tmp);
     if let Some(librerie) = cartella_librerie(&app) {
         cedro::youtube::android::set_dirs(librerie, dati.clone());
     }
@@ -1241,6 +1488,21 @@ fn android_main(app: AndroidApp) {
     let file_lavori = dati.join("lavori.txt");
     let tema = std::fs::read_to_string(&file_tema).map(|t| ThemeId::from_key(&t)).unwrap_or(ThemeId::WindowsEssenziale);
     let mut ui = App::new(tema);
+    let file_caratteri = dati.join("caratteri.txt");
+    // Le impostazioni del motore (qualità, DPI, OCR) stanno nel suo config.txt; il resto qui.
+    ui.imp = cedro::read_settings();
+    ui.qualita = ui.imp.quality.clamp(40, 95);
+    let file_impostazioni = dati.join("impostazioni.txt");
+    if let Ok(t) = std::fs::read_to_string(&file_impostazioni) {
+        let mut righe = t.lines();
+        ui.esiste = match righe.next().unwrap_or("") {
+            "sostituisci" => cedro::Exists::Replace,
+            "salta" => cedro::Exists::Skip,
+            _ => cedro::Exists::Number,
+        };
+        ui.modello_nome = righe.next().unwrap_or("").to_string();
+    }
+    ui.grandi = std::fs::read_to_string(&file_caratteri).is_ok_and(|t| t.trim() == "grandi");
     // La lingua: quella scelta nell'Aspetto, o quella del telefono (Android non ha LANG).
     let file_lingua = dati.join("lingua.txt");
     ui.lingua_telefono = lingua_del_telefono(&app);
@@ -1264,14 +1526,11 @@ fn android_main(app: AndroidApp) {
     let cartella = dati.join("condivisi");
     let consegne = Consegne::default();
     match leggi_condivisione(&app, &cartella) {
-        Ok(Some(c)) => {
-            log::info!("ricevuto {} ({})", c.nome, c.path.display());
-            carica_file(&mut ui, &consegne, &cartella, c.path, c.nome, true);
-        }
-        Ok(None) => ricarica_recenti(cartella.clone(), &consegne),
+        Ok(v) if !v.is_empty() => ricevuti(&mut ui, &consegne, &cartella, v),
+        Ok(_) => ricarica_recenti(cartella.clone(), &consegne),
         Err(e) => {
             log::error!("condivisione: {e}");
-            ui.lavori.insert(0, crate::ui::Lavoro { id: 9999, origine: "Condivisione".into(), etichetta: "File".into(), conv: false, inizio: std::time::Instant::now(), quando: crate::ui::adesso(), stato: Stato::Errore(e), prog: Arc::new(std::sync::atomic::AtomicU32::new(1000)) });
+            ui.lavori.insert(0, crate::ui::Lavoro { id: 9999, origine: "Condivisione".into(), etichetta: "File".into(), conv: false, inizio: std::time::Instant::now(), quando: crate::ui::adesso(), stato: Stato::Errore(e), prog: Arc::new(std::sync::atomic::AtomicU32::new(1000)), sorgente: None, controlli: None });
             ricarica_recenti(cartella.clone(), &consegne);
         }
     }
@@ -1281,7 +1540,10 @@ fn android_main(app: AndroidApp) {
     let mut sporco = true;
     let mut esci = false;
     let mut animando = false;
-    let mut attesa_scelta = false;
+    let mut attesa_scelta: Option<Sorgente> = None;
+    let mut tastiera = false;
+    let mut accento: Option<char> = None;
+    let mut chieste: std::collections::HashSet<(PathBuf, u32)> = std::collections::HashSet::new();
     let mut servizio_attivo = false;
     let mut ultimo_servizio = std::time::Instant::now();
 
@@ -1327,6 +1589,33 @@ fn android_main(app: AndroidApp) {
                                 _ => {}
                             }
                         }
+                        InputEvent::KeyEvent(k) if ui.campo.is_some() && k.key_code() != Keycode::Back => {
+                            // La tastiera scrive nel campo attivo.
+                            if k.action() == KeyAction::Down {
+                                let t = match k.key_code() {
+                                    Keycode::Del => Some(Tasto::Canc),
+                                    Keycode::Enter | Keycode::NumpadEnter => Some(Tasto::Invio),
+                                    codice => match app.device_key_character_map(k.device_id()).and_then(|m| {
+                                        let c = m.get(codice, k.meta_state())?;
+                                        Ok(match (c, accento.take()) {
+                                            (KeyMapChar::CombiningAccent(a), _) => {
+                                                accento = Some(a);
+                                                None
+                                            }
+                                            (KeyMapChar::Unicode(ch), Some(a)) => Some(m.get_dead_char(a, ch)?.unwrap_or(ch)),
+                                            (KeyMapChar::Unicode(ch), None) => Some(ch),
+                                            (KeyMapChar::None, _) => None,
+                                        })
+                                    }) {
+                                        Ok(Some(ch)) => Some(Tasto::Car(ch)),
+                                        _ => None,
+                                    },
+                                };
+                                if let Some(t) = t {
+                                    eff = ui.tasto(t);
+                                }
+                            }
+                        }
                         InputEvent::KeyEvent(k) => {
                             if k.key_code() == Keycode::Back {
                                 // Il «indietro» chiude prima le schermate; se non c'è altro lo lasciamo al sistema.
@@ -1345,10 +1634,63 @@ fn android_main(app: AndroidApp) {
                     match eff {
                         Effetto::Niente => {}
                         Effetto::Ridisegna => sporco = true,
-                        Effetto::Converti { id, file, azione, qualita, prog } => {
+                        Effetto::Converti { id, file, azione, qualita, prog, opts, unisci } => {
                             sporco = true;
                             let (a, c) = (app.clone(), consegne.clone());
-                            std::thread::spawn(move || converti(a, c, id, file, azione, qualita, prog));
+                            std::thread::spawn(move || converti(a, c, id, file, azione, qualita, prog, opts, unisci));
+                        }
+                        Effetto::Tanti(compiti) => {
+                            sporco = true;
+                            let (a, c) = (app.clone(), consegne.clone());
+                            // Uno dopo l'altro: il motore lavora meglio su un file alla volta.
+                            std::thread::spawn(move || {
+                                for Compito { id, file, azione, qualita, prog, opts, unisci } in compiti {
+                                    converti(a.clone(), c.clone(), id, file, azione, qualita, prog, opts, unisci);
+                                }
+                            });
+                        }
+                        Effetto::Incolla => {
+                            ui.incolla(appunti(&app));
+                            sporco = true;
+                        }
+                        Effetto::LeggiVoci(v) => {
+                            leggi_voci(&consegne, v);
+                            sporco = true;
+                        }
+                        Effetto::LeggiPdf(path, altri) => {
+                            leggi_pdf(&consegne, path);
+                            if !altri.is_empty() {
+                                leggi_uniti(&consegne, altri, None);
+                            }
+                            sporco = true;
+                        }
+                        Effetto::OndaRevisione(path, secs) => {
+                            let slot = consegne.onda_riv.clone();
+                            std::thread::spawn(move || {
+                                let bars = cedro::waveform(&path, (secs as usize).clamp(300, 6000));
+                                *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some((path, bars));
+                            });
+                            sporco = true;
+                        }
+                        Effetto::Scrivi { id, nome, dati } => {
+                            let (a, c) = (app.clone(), consegne.clone());
+                            std::thread::spawn(move || {
+                                let dir = uscite(&a).unwrap_or_else(|| PathBuf::from(DOCUMENTI).join("Cedro"));
+                                let file = dir.join(&nome);
+                                let esito = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&file, &dati)).map_err(|e| e.to_string()).and_then(|_| consegna(&a, file));
+                                let stato = match esito {
+                                    Ok((path, visto)) => Stato::Fatto { path, msg: format!("{} · {}", nome_di(Path::new(&visto)), cedro::size_words(dati.len() as u64)), nome: visto },
+                                    Err(e) => Stato::Errore(e),
+                                };
+                                c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, stato));
+                            });
+                            sporco = true;
+                        }
+                        Effetto::Sblocca(pw) => {
+                            if let Some(f) = &ui.file {
+                                sblocca(&consegne, f.path.clone(), pw, &cartella);
+                            }
+                            sporco = true;
                         }
                         Effetto::Esci => chiudi(&app),
                         Effetto::Copia(testo) => {
@@ -1357,6 +1699,20 @@ fn android_main(app: AndroidApp) {
                         }
                         Effetto::SalvaLingua(l) => {
                             let _ = std::fs::write(&file_lingua, l);
+                            sporco = true;
+                        }
+                        Effetto::SalvaCaratteri(g) => {
+                            let _ = std::fs::write(&file_caratteri, if g { "grandi" } else { "normali" });
+                            sporco = true;
+                        }
+                        Effetto::SalvaImpostazioni => {
+                            let _ = cedro::write_settings(&ui.imp);
+                            let esiste = match ui.esiste {
+                                cedro::Exists::Replace => "sostituisci",
+                                cedro::Exists::Skip => "salta",
+                                _ => "numera",
+                            };
+                            let _ = std::fs::write(&file_impostazioni, format!("{esiste}\n{}", ui.modello_nome));
                             sporco = true;
                         }
                         Effetto::SalvaTema(t) => {
@@ -1377,7 +1733,7 @@ fn android_main(app: AndroidApp) {
                         }
                         Effetto::Scegli(s) => {
                             match scegli(&app, s) {
-                                Ok(()) => attesa_scelta = true,
+                                Ok(()) => attesa_scelta = Some(s),
                                 Err(e) => log::error!("selettore: {e}"),
                             }
                             sporco = true;
@@ -1413,28 +1769,100 @@ fn android_main(app: AndroidApp) {
         }
         // Una nuova condivisione mentre Cedro è già aperto.
         if con_attivita(&app, |env, att| env.call_method(att, "novita", "()Z", &[]).and_then(|v| v.z()).map_err(|e| jerr(env, e))).unwrap_or(false) {
-            if let Ok(Some(c)) = leggi_condivisione(&app, &cartella) {
-                log::info!("ricevuto {} ({})", c.nome, c.path.display());
-                carica_file(&mut ui, &consegne, &cartella, c.path, c.nome, true);
-                sporco = true;
+            match leggi_condivisione(&app, &cartella) {
+                Ok(v) if !v.is_empty() => ricevuti(&mut ui, &consegne, &cartella, v),
+                // Riaperto dall'icona: la finestra principale.
+                Ok(_) => ui.vai_casa(),
+                Err(e) => log::error!("condivisione: {e}"),
             }
+            sporco = true;
         }
-        if attesa_scelta {
-            match scelto(&app, &cartella) {
-                Some(Ok(c)) => {
-                    attesa_scelta = false;
-                    log::info!("scelto {} ({})", c.nome, c.path.display());
-                    carica_file(&mut ui, &consegne, &cartella, c.path, c.nome, false);
+        if let Some(sorgente) = attesa_scelta {
+            match scelti(&app, &cartella, sorgente == Sorgente::Cartella) {
+                Some(Ok(v)) if matches!(sorgente, Sorgente::Coda | Sorgente::Cartella) => {
+                    attesa_scelta = None;
+                    leggi_voci(&consegne, v.iter().map(|c| c.path.clone()).collect());
+                    ui.aggiungi_coda(v.into_iter().map(|c| { let k = tipo_di(&c.path); (c.path, c.nome, k) }).collect());
+                    sporco = true;
+                }
+                Some(Ok(v)) if sorgente == Sorgente::PdfAltri => {
+                    attesa_scelta = None;
+                    let pdf: Vec<(PathBuf, String)> = v.into_iter().filter(|c| tipo_di(&c.path) == cedro::Kind::Pdf).map(|c| (c.path, c.nome)).collect();
+                    leggi_uniti(&consegne, pdf.iter().map(|p| p.0.clone()).collect(), ui.pdf.usata.clone());
+                    ui.aggiungi_pdf(pdf);
+                    sporco = true;
+                }
+                Some(Ok(v)) => {
+                    attesa_scelta = None;
+                    if let Some(c) = v.into_iter().next() {
+                        log::info!("scelto {} ({})", c.nome, c.path.display());
+                        carica_file(&mut ui, &consegne, &cartella, c.path, c.nome, false);
+                    }
                     sporco = true;
                 }
                 Some(Err(e)) => {
-                    attesa_scelta = false;
+                    attesa_scelta = None;
                     log::error!("selettore: {e}");
                 }
                 None => {}
             }
         }
+        if let Some((p, r)) = consegne.info_pdf.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            if ui.file.as_ref().is_some_and(|f| f.path == p) {
+                match r {
+                    Ok((n, bm)) => ui.info_pdf(n, bm),
+                    Err(e) if e.contains("protetto") => ui.chiedi_password(),
+                    Err(e) => log::warn!("PDF: {e}"),
+                }
+                sporco = true;
+            }
+        }
+        for (p, n, img) in std::mem::take(&mut *consegne.unito.lock().unwrap_or_else(|e| e.into_inner())) {
+            ui.info_unito(&p, n, img);
+            sporco = true;
+        }
+        for (p, img, misure, pagine) in std::mem::take(&mut *consegne.voci.lock().unwrap_or_else(|e| e.into_inner())) {
+            if let Some(n) = pagine {
+                ui.pdf_pagine.insert(p.clone(), n);
+            }
+            ui.info_voce(&p, img, misure);
+            sporco = true;
+        }
+        for (p, n, img) in std::mem::take(&mut *consegne.pagine.lock().unwrap_or_else(|e| e.into_inner())) {
+            if ui.file.as_ref().is_some_and(|f| f.path == p) {
+                ui.pdf.miniature.insert(n, img);
+                sporco = true;
+            }
+        }
+        if let Some((p, bars)) = consegne.onda_riv.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            ui.onda_rivedi(&p, bars);
+            sporco = true;
+        }
+        for (id, n) in std::mem::take(&mut *consegne.controlli.lock().unwrap_or_else(|e| e.into_inner())) {
+            if let Some(l) = ui.lavori.iter_mut().find(|l| l.id == id) {
+                l.controlli = Some(n);
+            }
+            sporco = true;
+        }
+        if let Some(r) = consegne.sblocco.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            match r {
+                Ok(path) => {
+                    ui.sbloccato(path.clone());
+                    leggi_pdf(&consegne, path.clone());
+                    let (c2, p2) = (consegne.clone(), path);
+                    std::thread::spawn(move || {
+                        if let Some(img) = cedro::ui::media::thumb_of(&p2, 600) {
+                            *c2.miniatura.lock().unwrap_or_else(|e| e.into_inner()) = Some((p2.clone(), img));
+                        }
+                    });
+                }
+                Err(e) => ui.password_sbagliata(e),
+            }
+            sporco = true;
+        }
         if let Some((p, img)) = consegne.miniatura.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            // Anche nell'elenco di Unisci, se il file è già lì.
+            ui.info_unito(&p, None, Some(img.clone()));
             if ui.file.as_ref().is_some_and(|f| f.path == p) {
                 ui.miniatura = Some(img);
                 sporco = true;
@@ -1482,15 +1910,36 @@ fn android_main(app: AndroidApp) {
                 servizio_attivo = false;
             }
         }
+        // La tastiera segue il campo attivo.
+        if std::mem::take(&mut ui.mostra_tastiera) && ui.campo.is_some() {
+            tastiera = true;
+            app.show_soft_input(true);
+        }
+        if ui.campo.is_some() != tastiera {
+            tastiera = ui.campo.is_some();
+            if tastiera {
+                app.show_soft_input(true);
+            } else {
+                app.hide_soft_input(false);
+            }
+        }
         animando = ui.animando();
         if sporco || animando {
             if let Some(f) = &finestra {
                 let (w, h) = (f.width() as u32, f.height() as u32);
                 if w > 0 && h > 0 {
-                    let mut p = Painter::new(w, h, scala, Fonts::current(), &mut cache);
+                    let mut p = Painter::new(w, h, scala, Fonts::for_theme(ui.tema), &mut cache);
+                    p.larger = ui.grandi;
                     ui.disegna(&mut p, w as f32 / scala, h as f32 / scala);
                     presenta(f, &p);
                     sporco = false;
+                    // Le pagine che il disegno voleva e non c'erano.
+                    if let Some(path) = ui.file.as_ref().map(|f| f.path.clone()) {
+                        let nuove: Vec<u32> = std::mem::take(&mut ui.pdf.chiedi).into_iter().filter(|n| chieste.insert((path.clone(), *n))).collect();
+                        if !nuove.is_empty() {
+                            miniature_pagine(&consegne, path, nuove);
+                        }
+                    }
                 }
             }
         }
