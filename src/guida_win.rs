@@ -1,9 +1,13 @@
-//! Finestra "Guida": sei passi animati (vedi `cedro::guida`, che sa cosa disegnare e come muoverlo).
-//! Qui ci sono solo la finestra e le primitive GDI/GDI+ (doppio buffer); la ruota è quella vera di `wheelgfx`.
+//! Finestra «Guida» di Windows: mostra il disegno di `cedro::ui::guida` (lo stesso di Linux, nei colori e nel
+//! carattere del tema scelto) e le passa tempo, mouse e tastiera. Qui c'è solo la finestra.
 
-use cedro::guida::{self, Align, Canvas, Hit, Rgb, Tour};
+use cedro::guida::{Align, Canvas, Rgb};
+use cedro::ui::gfx::{Fonts, GlyphCache, Painter};
+use cedro::ui::guida::{Guida, Out, H, W};
+use cedro::ui::screen::Key;
 use cedro::wheelgeom::WHEEL;
 use cedro::wheelgfx;
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Mutex;
 use windows::{
@@ -11,32 +15,54 @@ use windows::{
     Win32::Foundation::*,
     Win32::Graphics::Gdi::*,
     Win32::System::LibraryLoader::GetModuleHandleW,
-    Win32::UI::HiDpi::GetDpiForSystem,
+    Win32::Graphics::Dwm::*,
+    Win32::UI::HiDpi::{GetDpiForSystem, SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2},
+    Win32::UI::Input::KeyboardAndMouse::*,
     Win32::UI::WindowsAndMessaging::*,
 };
 
 const TIMER: usize = 1;
 const FRAME_MS: u32 = 33;
+const WM_MOUSELEAVE: u32 = 0x02A3;
 
 static WINDOW: AtomicIsize = AtomicIsize::new(0);
-static TOUR: Mutex<Tour> = Mutex::new(Tour::new(0));
-/// Ruote già disegnate: (fette, fetta accesa o -1) → pixel BGRA premoltiplicati.
+/// Ruote già disegnate (per la finestra «Come vuoi usare Cedro?»): (fette, fetta accesa o -1) → pixel BGRA premoltiplicati.
 static CACHE: Mutex<Vec<((usize, i32), Vec<u8>)>> = Mutex::new(Vec::new());
+
+struct State {
+    guida: Guida,
+    /// Pixel per unità di disegno: la scala dello schermo, o meno se la finestra non ci starebbe.
+    k: f32,
+    cache: GlyphCache,
+    tracking: bool,
+}
+
+thread_local! {
+    static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
+}
 
 fn now() -> u64 {
     unsafe { GetTickCount64() }
 }
 
-fn px(v: i32, dpi: u32) -> i32 {
-    v * dpi as i32 / 96
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetTickCount64() -> u64;
 }
 
-fn tour() -> Tour {
-    *TOUR.lock().unwrap()
-}
-
-fn set_tour(t: Tour) {
-    *TOUR.lock().unwrap() = t;
+/// La scala con cui disegnare: quella del DPI, ridotta se la finestra non starebbe nell'area di lavoro.
+unsafe fn fit_scale(style: WINDOW_STYLE) -> f32 {
+    let dpi_scale = GetDpiForSystem() as f32 / 96.0;
+    let mut work = RECT::default();
+    let _ = SystemParametersInfoW(SPI_GETWORKAREA, 0, Some(&mut work as *mut RECT as *mut _), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0));
+    let mut frame = RECT::default();
+    let _ = AdjustWindowRect(&mut frame, style, false);
+    let avail_w = ((work.right - work.left) - (frame.right - frame.left)) as f32;
+    let avail_h = ((work.bottom - work.top) - (frame.bottom - frame.top)) as f32;
+    if avail_w <= 0.0 || avail_h <= 0.0 {
+        return dpi_scale;
+    }
+    dpi_scale.min(avail_w / W).min(avail_h / H)
 }
 
 pub fn open() {
@@ -56,6 +82,9 @@ pub fn open() {
 /// `cedro.exe guida`: la finestra da sola, con il suo ciclo di messaggi (usata dall'installatore).
 pub fn run_standalone() {
     crate::winfont::load();
+    unsafe {
+        let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    }
     open();
     unsafe {
         let mut msg = MSG::default();
@@ -71,10 +100,17 @@ pub fn run_standalone() {
 }
 
 unsafe fn create() -> Result<()> {
+    // Le impostazioni dicono il tema (e accendono lo stemma del Comune se serve).
+    let _ = cedro::settings::read_settings();
+    let theme = cedro::edizione::tema();
     let instance: HINSTANCE = GetModuleHandleW(None)?.into();
     let class = w!("CedroGuida");
+    // L'icona di Cedro (la prima risorsa dell'exe) nella barra del titolo.
+    let icon = LoadIconW(Some(instance), PCWSTR(1usize as *const u16)).unwrap_or_default();
     let wc = WNDCLASSEXW {
         cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
+        hIcon: icon,
+        hIconSm: icon,
         lpfnWndProc: Some(proc),
         hInstance: instance,
         hCursor: LoadCursorW(None, IDC_ARROW)?,
@@ -82,24 +118,25 @@ unsafe fn create() -> Result<()> {
         ..Default::default()
     };
     RegisterClassExW(&wc);
-    let dpi = GetDpiForSystem();
     let style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-    let mut rect = RECT { left: 0, top: 0, right: px(guida::W as i32, dpi), bottom: px(guida::H as i32, dpi) };
+    let k = fit_scale(style);
+    let mut rect = RECT { left: 0, top: 0, right: (W * k).round() as i32, bottom: (H * k).round() as i32 };
     let _ = AdjustWindowRect(&mut rect, style, false);
     let (width, height) = (rect.right - rect.left, rect.bottom - rect.top);
     let x = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
     let y = (GetSystemMetrics(SM_CYSCREEN) - height) / 3;
+    STATE.with(|s| *s.borrow_mut() = Some(State { guida: Guida::new(theme, now()), k, cache: GlyphCache::new(), tracking: false }));
     let hwnd = CreateWindowExW(WINDOW_EX_STYLE::default(), class, &HSTRING::from(cedro::i18n::tr("Guida di Cedro").as_ref()), style | WS_VISIBLE, x, y, width, height, None, None, Some(instance), None)?;
     WINDOW.store(hwnd.0 as isize, Ordering::Relaxed);
-    set_tour(Tour::new(now()));
+    // Su Windows 11 la barra del titolo prende i colori del tema.
+    let pal = theme.palette();
+    for (attribute, color) in [(DWMWA_CAPTION_COLOR, pal.surface), (DWMWA_BORDER_COLOR, pal.border), (DWMWA_TEXT_COLOR, pal.text)] {
+        let c = colorref(color);
+        let _ = DwmSetWindowAttribute(hwnd, attribute, &c as *const COLORREF as *const _, 4);
+    }
     SetTimer(Some(hwnd), TIMER, FRAME_MS, None);
     let _ = SetForegroundWindow(hwnd);
     Ok(())
-}
-
-#[link(name = "kernel32")]
-extern "system" {
-    fn GetTickCount64() -> u64;
 }
 
 fn colorref(c: Rgb) -> COLORREF {
@@ -247,33 +284,54 @@ impl Canvas for Gdi {
 
 unsafe fn paint(hwnd: HWND) {
     let mut ps = PAINTSTRUCT::default();
-    let screen = BeginPaint(hwnd, &mut ps);
-    let d = GetDpiForSystem();
-    let (w, h) = (px(guida::W as i32, d), px(guida::H as i32, d));
-    let dc = CreateCompatibleDC(Some(screen));
-    let bmp = CreateCompatibleBitmap(screen, w, h);
-    let old = SelectObject(dc, bmp.into());
-    guida::draw(&mut Gdi { dc, d: d as f32 / 96.0 }, &tour(), now());
-    let _ = BitBlt(screen, 0, 0, w, h, Some(dc), 0, 0, SRCCOPY);
-    SelectObject(dc, old);
-    let _ = DeleteObject(bmp.into());
-    let _ = DeleteDC(dc);
+    let hdc = BeginPaint(hwnd, &mut ps);
+    let mut rc = RECT::default();
+    let _ = GetClientRect(hwnd, &mut rc);
+    let (w, h) = (rc.right.max(1), rc.bottom.max(1));
+    STATE.with(|s| {
+        if let Some(st) = s.borrow_mut().as_mut() {
+            let theme = st.guida.theme;
+            let k = w as f32 / W;
+            let mut painter = Painter::new(w as u32, h as u32, k, Fonts::for_theme(theme), &mut st.cache);
+            st.guida.draw(&mut painter, now());
+            let data = painter.bgra();
+            let bmi = BITMAPINFO {
+                bmiHeader: BITMAPINFOHEADER {
+                    biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                    biWidth: w,
+                    biHeight: -h,
+                    biPlanes: 1,
+                    biBitCount: 32,
+                    biCompression: BI_RGB.0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            SetDIBitsToDevice(hdc, 0, 0, w as u32, h as u32, 0, 0, 0, h as u32, data.as_ptr() as *const _, &bmi, DIB_RGB_COLORS);
+        }
+    });
     let _ = EndPaint(hwnd, &ps);
 }
 
-/// Esegue il comando e dice se la finestra va chiusa.
-fn command(hit: Hit) -> bool {
-    let mut t = tour();
-    let at = now();
-    match hit {
-        Hit::Page(i) => t.goto(i, at),
-        Hit::Prev => t.goto(t.page + guida::PAGE_COUNT - 1, at),
-        Hit::Next if t.is_last() => return true,
-        Hit::Next => t.goto(t.page + 1, at),
-        Hit::Row(i) => t.show_row(i, at),
+fn with<T>(f: impl FnOnce(&mut State) -> T) -> Option<T> {
+    STATE.with(|s| s.borrow_mut().as_mut().map(f))
+}
+
+unsafe fn finish(hwnd: HWND, out: Out) {
+    match out {
+        Out::Close => {
+            let _ = DestroyWindow(hwnd);
+        }
+        Out::Redraw => {
+            let _ = InvalidateRect(Some(hwnd), None, false);
+        }
+        Out::None => {}
     }
-    set_tour(t);
-    false
+}
+
+fn xy(lparam: LPARAM) -> (f32, f32) {
+    let d = with(|st| st.k).unwrap_or(1.0);
+    ((lparam.0 & 0xffff) as i16 as f32 / d, ((lparam.0 >> 16) & 0xffff) as i16 as f32 / d)
 }
 
 unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -284,42 +342,66 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         }
         WM_ERASEBKGND => LRESULT(1),
         WM_TIMER => {
-            let mut t = tour();
-            t.tick(now());
-            set_tour(t);
+            with(|st| st.guida.tick(now()));
             let _ = InvalidateRect(Some(hwnd), None, false);
             LRESULT(0)
         }
-        WM_LBUTTONDOWN => {
-            let d = GetDpiForSystem() as f32 / 96.0;
-            let (x, y) = ((lparam.0 & 0xffff) as i16 as f32 / d, ((lparam.0 >> 16) & 0xffff) as i16 as f32 / d);
-            if let Some(hit) = guida::hit(x, y, tour().page) {
-                if command(hit) {
-                    let _ = DestroyWindow(hwnd);
+        WM_MOUSEMOVE => {
+            let (x, y) = xy(lparam);
+            with(|st| {
+                if !st.tracking {
+                    let mut t = TRACKMOUSEEVENT { cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32, dwFlags: TME_LEAVE, hwndTrack: hwnd, dwHoverTime: 0 };
+                    let _ = TrackMouseEvent(&mut t);
+                    st.tracking = true;
                 }
+                st.guida.pointer_move(x, y);
+            });
+            LRESULT(0)
+        }
+        WM_MOUSELEAVE => {
+            with(|st| {
+                st.tracking = false;
+                st.guida.pointer_leave();
+            });
+            LRESULT(0)
+        }
+        WM_SETCURSOR => {
+            if (lparam.0 & 0xffff) as u32 == HTCLIENT {
+                let hand = with(|st| st.guida.is_hand()).unwrap_or(false);
+                if let Ok(cur) = LoadCursorW(None, if hand { IDC_HAND } else { IDC_ARROW }) {
+                    SetCursor(Some(cur));
+                }
+                return LRESULT(1);
             }
+            DefWindowProcW(hwnd, msg, wparam, lparam)
+        }
+        WM_LBUTTONDOWN => {
+            let (x, y) = xy(lparam);
+            let out = with(|st| st.guida.pointer_down(x, y, now())).unwrap_or(Out::None);
+            finish(hwnd, out);
             LRESULT(0)
         }
         WM_KEYDOWN => {
-            let hit = match wparam.0 as u16 {
-                0x1B => {
-                    let _ = DestroyWindow(hwnd);
-                    return LRESULT(0);
-                }
-                0x27 => Some(Hit::Next), // freccia destra
-                0x25 if tour().page > 0 => Some(Hit::Prev), // freccia sinistra
+            let key = match VIRTUAL_KEY(wparam.0 as u16) {
+                VK_ESCAPE => Some(Key::Escape),
+                VK_RIGHT => Some(Key::Right),
+                VK_LEFT => Some(Key::Left),
+                VK_DOWN => Some(Key::Down),
+                VK_UP => Some(Key::Up),
+                VK_RETURN => Some(Key::Enter),
+                VK_SPACE => Some(Key::Space),
                 _ => None,
             };
-            if let Some(hit) = hit {
-                if command(hit) {
-                    let _ = DestroyWindow(hwnd);
-                }
+            if let Some(k) = key {
+                let out = with(|st| st.guida.key(k, now())).unwrap_or(Out::None);
+                finish(hwnd, out);
             }
             LRESULT(0)
         }
         WM_DESTROY => {
             let _ = KillTimer(Some(hwnd), TIMER);
             WINDOW.store(0, Ordering::Relaxed);
+            STATE.with(|s| *s.borrow_mut() = None);
             LRESULT(0)
         }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
