@@ -21,3 +21,20 @@ FFmpeg
   Sito: https://ffmpeg.org  ·  Compilazioni: https://github.com/BtbN/FFmpeg-Builds
   Scaricato alla prima volta che serve (su Linux si usa quello del sistema, se c'è).
   Il codice sorgente è disponibile ai siti indicati.
+
+Trascrizione: chi parla
+-----------------------
+
+Segmentazione pyannote 3.0 (in formato ONNX, da sherpa-onnx)
+  Modello che trova dove parla una voce e dove due voci si sovrappongono.
+  Autore: Hervé Bredin, CNRS. Licenza: MIT.
+  Sito e codice: https://github.com/pyannote/pyannote-audio
+  Conversione in ONNX: https://github.com/k2-fsa/sherpa-onnx (Apache-2.0)
+
+CAM++ di 3D-Speaker (zh-en common advanced, in formato ONNX)
+  Modello che calcola l'impronta di ogni voce, per raggruppare le frasi di chi parla.
+  Autore: Alibaba, progetto ModelScope 3D-Speaker. Licenza: Apache-2.0.
+  Sito e codice: https://github.com/modelscope/3D-Speaker
+
+  I due modelli (circa 40 MB) si scaricano la prima volta che si trascrive con il riconoscimento
+  delle voci acceso, nella cartella "voci" dei dati di Cedro, e vengono controllati con SHA-256.
