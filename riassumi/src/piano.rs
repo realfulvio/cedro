@@ -25,7 +25,8 @@ Da 3 a 5 frasi: di cosa si è parlato e come è finita.\n\
 Una riga per persona, così: «- Nome: cosa ha detto, chiesto o proposto». Usa i nomi esattamente come sono scritti nel testo \
 e attribuisci a ognuno solo quello che ha detto lui.\n\
 ## Decisioni\n\
-Una riga «- …» per ogni decisione presa davvero. Una proposta, un'ipotesi o un'intenzione non è una decisione. \
+Una riga «- …» per ogni decisione presa davvero: scrivi cosa è stato deciso o approvato (con importi e scopo), \
+non l'alternativa che qualcuno avrebbe preferito. Una proposta, un'ipotesi o un'intenzione non è una decisione. \
 Se non ce ne sono scrivi solo «- Nessuna».\n\
 ## Da fare\n\
 Una riga «- cosa fare (Nome di chi lo fa)» per ogni compito assegnato o preso. Tra parentesi va la persona che lo farà \
@@ -48,7 +49,8 @@ pub fn system_notes() -> String {
 ogni riga ha l'orario tra parentesi quadre, il nome di chi parla e cosa dice.\n\
 Scrivi appunti fedeli, SOLO con quello che c'è in questo pezzo:\n\
 - una riga per ogni persona che parla, così: «- Nome: cosa dice», con numeri, date e nomi esatti;\n\
-- poi, se ci sono, righe «DECISIONE: …» per le decisioni prese davvero (una proposta o un'intenzione non è una decisione);\n\
+- poi, se ci sono, righe «DECISIONE: …» per le decisioni prese davvero, con cosa è stato deciso o approvato, importi, scopo \
+e voti; non l'alternativa che qualcuno avrebbe preferito (una proposta o un'intenzione non è una decisione);\n\
 - e righe «DA FARE: cosa fare (Nome di chi lo fa)» per i compiti assegnati: tra parentesi chi lo farà, non chi lo chiede.\n\
 Usa i nomi esattamente come sono scritti nel testo e attribuisci a ognuno solo quello che ha detto lui. \
 Niente introduzioni né commenti."
