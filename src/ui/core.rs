@@ -47,6 +47,8 @@ pub enum Field {
     FilePages(usize),
     /// «Rivedi»: il testo di una frase della trascrizione.
     Review(usize),
+    /// «Rivedi», scheda «Chi parla»: il nome di una voce.
+    VoiceName(u8),
 }
 
 /// Le parti che si aprono e si chiudono («Altre opzioni»…).
@@ -69,6 +71,8 @@ pub enum Scroll {
     /// «Rivedi»: le frasi, e i punti da controllare.
     Review,
     ReviewFlags,
+    /// «Rivedi», scheda «Chi parla»: le voci.
+    ReviewVoices,
 }
 
 /// Cosa fa un clic.
@@ -190,6 +194,23 @@ pub enum Act {
     ReviewOnly,
     ReviewFormat(usize),
     ReviewSave,
+    /// «Rivedi»: la scheda a destra (0 «Da controllare», 1 «Chi parla»).
+    ReviewTab(u8),
+    /// «Rivedi»: il nome di chi parla in una frase, che apre il menu per cambiarlo.
+    ReviewSpeakerMenu(usize),
+    /// «Rivedi»: chi dice la frase (`NEW_VOICE` = una voce nuova).
+    ReviewSpeaker(usize, u8),
+    /// «Rivedi»: fa sentire un pezzo della voce.
+    ReviewVoicePlay(u8),
+    /// «Rivedi»: «Unisci a…» di una voce, e l'unione (da, in).
+    ReviewMergeMenu(u8),
+    ReviewMerge(u8, u8),
+    /// «Rivedi»: scrivere o no chi parla nel file salvato.
+    ReviewWriteVoices,
+    /// «Quante persone parlano?»: 0 Automatico, poi il numero; Trascrivi; Annulla.
+    VoicesPick(u8),
+    VoicesGo,
+    VoicesCancel,
     /// Solo per bloccare i clic sotto un riquadro (per esempio dentro un menu aperto).
     Nothing,
 }
@@ -212,6 +233,19 @@ pub struct Menu {
     pub anchor: R,
     pub items: Vec<(String, Act)>,
     pub selected: Option<usize>,
+    /// Una riga grigia in cima (per esempio «Chi dice questa frase?»).
+    pub title: Option<String>,
+    /// Il pallino colorato davanti a ogni voce (vuoto: nessuno).
+    pub swatches: Vec<Swatch>,
+}
+
+/// Il pallino davanti a una voce di menu.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Swatch {
+    None,
+    Color(Rgb),
+    /// Un cerchio tratteggiato: una cosa nuova («Voce nuova»).
+    New,
 }
 
 /// Lo stato della finestra che non è del lavoro: dove sta il mouse, cosa è aperto, quanto si è scorso.
@@ -279,7 +313,15 @@ pub const SANS: Weight = Weight::Regular;
 pub const SEMI: Weight = Weight::Semibold;
 pub const BOLD: Weight = Weight::Bold;
 
+/// Nel menu di una frase, la voce nuova.
+pub const NEW_VOICE: u8 = u8::MAX;
+
 impl<'a> Frame<'a> {
+    /// Il colore della voce `i` nel tema.
+    pub fn voice(&self, i: usize) -> Rgb {
+        super::theme::voice(self.theme, i)
+    }
+
     pub fn hit(&mut self, r: R, act: Act) {
         self.hits.push(Hit { r, act, kind: HitKind::Button });
     }
@@ -770,18 +812,31 @@ impl<'a> Frame<'a> {
         for (label, _) in &menu.items {
             w = w.max(self.measure(label, size, SANS) + 48.0);
         }
-        let h = row * menu.items.len() as f32 + 8.0;
+        let dots = menu.swatches.iter().any(|s| *s != Swatch::None);
+        if dots {
+            w += 26.0;
+        }
+        let head = if menu.title.is_some() { 34.0 } else { 0.0 };
+        if let Some(t) = &menu.title {
+            w = w.max(self.measure(t, 14.0, SANS) + 32.0);
+        }
+        let h = row * menu.items.len() as f32 + 8.0 + head;
         let below = menu.anchor.1 + menu.anchor.3 + 4.0;
         let y = if below + h > self.h - 8.0 && menu.anchor.1 - h - 4.0 > 8.0 { menu.anchor.1 - h - 4.0 } else { below.min(self.h - h - 8.0).max(8.0) };
         let x = menu.anchor.0.min(self.w - w - 8.0).max(8.0);
         self.p.shadow(x, y, w, h, 8.0, 10.0, 0.22, 4.0);
         self.p.rrect(x, y, w, h, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
         let items: Vec<(String, Act)> = menu.items.iter().map(|(l, a)| (l.clone(), a.clone())).collect();
+        let swatches = menu.swatches.clone();
+        let title = menu.title.clone();
         let selected = menu.selected;
         // Il menu copre quello che c'è sotto: i clic lì dentro non vanno ai controlli dietro.
         self.hits.push(Hit { r: (x, y, w, h), act: Act::Nothing, kind: HitKind::Button });
+        if let Some(t) = title {
+            self.p.text(&t, x + 16.0, y + 4.0, w - 24.0, head, 14.0, SANS, pal.muted, Align::Left);
+        }
         for (i, (label, act)) in items.into_iter().enumerate() {
-            let r = (x + 4.0, y + 4.0 + i as f32 * row, w - 8.0, row);
+            let r = (x + 4.0, y + 4.0 + head + i as f32 * row, w - 8.0, row);
             let hot = self.ui.hover == Some(Act::MenuPick(i));
             if hot || selected == Some(i) {
                 self.p.rrect(r.0, r.1, r.2, r.3, 6.0, Some(if hot { pal.alt } else { mix(pal.alt, pal.surface, 0.4) }), None);
@@ -789,7 +844,17 @@ impl<'a> Frame<'a> {
             if selected == Some(i) {
                 self.p.rrect(r.0 + 2.0, r.1 + 10.0, 3.0, r.3 - 20.0, 1.5, Some(pal.primary), None);
             }
-            self.p.text(&label, r.0 + 16.0, r.1, r.2 - 24.0, r.3, size, SANS, pal.text, Align::Left);
+            let mut tx = r.0 + 16.0;
+            if dots {
+                let (cx, cy) = (tx + 6.0, r.1 + r.3 / 2.0);
+                match swatches.get(i).copied().unwrap_or(Swatch::None) {
+                    Swatch::Color(c) => self.p.circle(cx, cy, 6.0, Some(c), None),
+                    Swatch::New => self.p.rrect_line(cx - 6.0, cy - 6.0, 12.0, 12.0, 6.0, pal.muted, 1.5, 1.0, Some((3.0, 2.0))),
+                    Swatch::None => {}
+                }
+                tx += 26.0;
+            }
+            self.p.text(&label, tx, r.1, r.2 - (tx - r.0) - 8.0, r.3, size, SANS, pal.text, Align::Left);
             let _ = act;
             self.hits.push(Hit { r, act: Act::MenuPick(i), kind: HitKind::Button });
         }
