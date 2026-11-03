@@ -29,7 +29,7 @@ jobs:
     name: Cedro (build, prove, tar.gz)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
 
@@ -49,7 +49,7 @@ jobs:
       - name: Pacchetto tar.gz (e la copia per la vecchia edizione Comune di Bondeno)
         run: installer/build-linux.sh -o dist -b
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-tar
           path: dist/cedro-*-linux-x64.tar.gz
@@ -58,7 +58,7 @@ jobs:
     name: Motori di trascrizione (processore e Vulkan)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
 
@@ -87,7 +87,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends libgtk-4-dev libdbus-1-dev libasound2-dev
           CEDRO_TRASCRIVI_DIR="$PWD/prova" cargo test --release --lib transcribes_a_spoken_sentence -- --nocapture
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-motori
           path: dist-motori/cedro-trascrivi-*
@@ -96,7 +96,7 @@ jobs:
     name: Motori del Riassunto AI (processore e Vulkan)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
 
@@ -120,7 +120,7 @@ jobs:
           CARGO_TARGET_DIR: ${{ runner.temp }}/crv/test
 
       # Il modello vero (2,7 GB) resta in cache tra un giro e l'altro.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/qwen
           key: qwen3.5-4b-q4km-unsloth
@@ -139,7 +139,7 @@ jobs:
           cp dist-riassumi/cedro-riassumi-*-linux-x64-avx2 dist-riassumi/cedro-riassumi-*-linux-x64-vulkan prova-riassumi/
           riassumi/prova.sh prova-riassumi "$model"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-riassumi
           path: dist-riassumi/cedro-riassumi-*
@@ -150,9 +150,9 @@ jobs:
     needs: [app, motori, riassunto]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: file
           merge-multiple: true
