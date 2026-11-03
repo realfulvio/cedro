@@ -20,8 +20,8 @@ symphonia = { version = "0.5", default-features = false, features = ["mp3", "mp1
 whisper-rs-sys = "0.15"
 whisper-rs = { version = "0.16" }
 # Chi parla (diarizzazione): i modelli ONNX delle voci girano in Rust con rten, le fbank con kaldi-native-fbank.
-rten = "0.26"
-rten-tensor = "0.26"
+rten = "0.27"
+rten-tensor = "0.27"
 kaldi-native-fbank = "0.1"
 
 [target.'cfg(unix)'.dependencies]
