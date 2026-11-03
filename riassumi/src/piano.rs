@@ -28,7 +28,10 @@ e attribuisci a ognuno solo quello che ha detto lui.\n\
 Una riga «- …» per ogni decisione presa davvero. Una proposta, un'ipotesi o un'intenzione non è una decisione. \
 Se non ce ne sono scrivi solo «- Nessuna».\n\
 ## Da fare\n\
-Una riga «- cosa fare (Nome di chi lo fa)» per ogni compito assegnato o preso. Se non ce ne sono scrivi solo «- Nessuno».\n\
+Una riga «- cosa fare (Nome di chi lo fa)» per ogni compito assegnato o preso. Tra parentesi va la persona che lo farà \
+(chi se l'è preso o a chi è stato affidato), non chi lo chiede. Se non si sa chi lo fa, non mettere le parentesi. \
+Se non ce ne sono scrivi solo «- Nessuno».\n\
+Non aggiungere motivi, cause o dettagli che nel testo non ci sono. \
 Scrivi in italiano semplice e corretto, con numeri, date e nomi esatti, senza ripetere le stesse frasi.";
 
 /// Le istruzioni quando la trascrizione si legge in una volta sola.
@@ -46,7 +49,7 @@ ogni riga ha l'orario tra parentesi quadre, il nome di chi parla e cosa dice.\n\
 Scrivi appunti fedeli, SOLO con quello che c'è in questo pezzo:\n\
 - una riga per ogni persona che parla, così: «- Nome: cosa dice», con numeri, date e nomi esatti;\n\
 - poi, se ci sono, righe «DECISIONE: …» per le decisioni prese davvero (una proposta o un'intenzione non è una decisione);\n\
-- e righe «DA FARE: cosa fare (Nome di chi lo fa)» per i compiti assegnati.\n\
+- e righe «DA FARE: cosa fare (Nome di chi lo fa)» per i compiti assegnati: tra parentesi chi lo farà, non chi lo chiede.\n\
 Usa i nomi esattamente come sono scritti nel testo e attribuisci a ognuno solo quello che ha detto lui. \
 Niente introduzioni né commenti."
         .to_string()
@@ -56,7 +59,10 @@ Niente introduzioni né commenti."
 pub fn system_from_notes() -> String {
     format!(
         "Sei un segretario preciso che scrive in italiano il riassunto di una riunione. Riceverai gli appunti presi pezzo \
-per pezzo, in ordine di tempo: ogni riga dice chi ha parlato e cosa ha detto, più le decisioni e i compiti trovati.\n{SUMMARY_RULES}"
+per pezzo, in ordine di tempo: ogni riga dice chi ha parlato e cosa ha detto, più le decisioni e i compiti trovati.\n\
+In «Chi ha detto cosa» metti ogni persona una volta sola, unendo quello che ha detto in tutti i pezzi. \
+In «Decisioni» riporta TUTTE le righe DECISIONE degli appunti e in «Da fare» TUTTE le righe DA FARE, \
+con lo stesso nome tra parentesi: non saltarne nessuna.\n{SUMMARY_RULES}"
     )
 }
 
