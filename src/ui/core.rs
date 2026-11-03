@@ -73,6 +73,8 @@ pub enum Scroll {
     ReviewFlags,
     /// «Rivedi», scheda «Chi parla»: le voci.
     ReviewVoices,
+    /// «Rivedi», scheda «Riassunto».
+    ReviewSummary,
 }
 
 /// Cosa fa un clic.
@@ -207,6 +209,16 @@ pub enum Act {
     ReviewMerge(u8, u8),
     /// «Rivedi»: scrivere o no chi parla nel file salvato.
     ReviewWriteVoices,
+    /// «Riassunto AI» nella coda: apre Rivedi sul riassunto (indice in `files`).
+    SummaryOpen(usize),
+    /// «Fai il riassunto», «Riprova», «Rifai».
+    SummaryStart,
+    SummaryCancel,
+    SummaryCopy,
+    /// Spunta una cosa da fare del riassunto.
+    SummaryTodo(usize),
+    /// «Metti il riassunto in cima al file».
+    SummaryOnTop,
     /// «Quante persone parlano?»: 0 Automatico, poi il numero; Trascrivi; Annulla.
     VoicesPick(u8),
     VoicesGo,

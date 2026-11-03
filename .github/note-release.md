@@ -12,10 +12,11 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**La trascrizione riconosce chi parla.**
+**Riassunto AI delle riunioni trascritte.**
 
-- Quando premi Trascrivi, Cedro chiede «Quante persone parlano?». Puoi lasciare Automatico, che le conta da solo, oppure scegliere un numero da 1 a 8. Con 1 il riconoscimento non si fa e la trascrizione è veloce come prima.
-- Nel testo ogni frase ha il suo interlocutore («Interlocutore 1», «Interlocutore 2»…) e ogni volta che cambia voce si va a capo. In cima al Word c'è la legenda delle voci, ognuna col suo colore e i minuti in cui ha parlato.
-- In Rivedi trascrizione, sotto l'onda, c'è una striscia colorata che mostra chi parla. Nella scheda «Chi parla» dai i nomi (cambiano in tutte le frasi), ascolti un pezzo di ogni voce e con «Unisci a…» rimetti insieme una persona che Cedro ha diviso in due. Per cambiare la voce di una sola frase basta un clic sul suo nome.
-- Si salva in Word, testo, .srt e .vtt, con o senza i nomi.
-- Tutto resta sul PC. La prima volta Cedro scarica il riconoscimento delle voci, circa 40 MB.
+- Dopo una trascrizione, accanto a «Rivedi» c'è il pulsante «Riassunto AI». In Rivedi trascrizione c'è la scheda «Riassunto» con quattro parti: In breve, Chi ha detto cosa, Decisioni e Da fare (con la casella da spuntare e il nome di chi se ne occupa).
+- Usa i nomi che hai dato agli interlocutori; se li cambi dopo, il riassunto si aggiorna da solo.
+- Lo scrive Qwen3.5-4B, un modello che gira tutto sul PC: niente va su internet. Usa la scheda video se c'è (Vulkan), altrimenti il processore.
+- Prima di partire controlla la memoria libera: servono circa 4 GB, e se non ci sono non parte e lo dice. Il modello si carica solo per il riassunto e poi si chiude, liberando la memoria. Le riunioni lunghe si leggono a pezzi.
+- Il riassunto resta salvato con la trascrizione, si copia con un clic e si può mettere in cima al Word o al testo.
+- La prima volta Cedro scarica il motore e il modello, circa 2,7 GB.

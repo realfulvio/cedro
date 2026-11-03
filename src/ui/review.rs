@@ -48,8 +48,14 @@ pub struct Review {
     pub names: Vec<String>,
     /// Scrivere chi parla nel file salvato.
     pub write_voices: bool,
-    /// La scheda a destra: 0 «Da controllare», 1 «Chi parla».
+    /// La scheda a destra: 0 «Da controllare», 1 «Chi parla», 2 «Riassunto».
     pub tab: u8,
+    /// Il Riassunto AI, se è stato fatto.
+    pub summary: Option<crate::riassunto::Stored>,
+    /// Mettere il riassunto in cima al file salvato (Word e testo).
+    pub summary_on_top: bool,
+    /// «Copia» appena premuto: il pulsante dice «Copiato».
+    pub summary_copied: bool,
     /// Il file scritto l'ultima volta, e cosa è successo.
     pub saved: Option<PathBuf>,
     pub note: String,
@@ -60,7 +66,7 @@ pub struct Review {
 }
 
 impl Review {
-    pub fn new(source: &Path, secs: f64, lang: String, segments: Vec<Segment>, names: Vec<String>) -> Review {
+    pub fn new(source: &Path, secs: f64, lang: String, segments: Vec<Segment>, names: Vec<String>, summary: Option<crate::riassunto::Stored>) -> Review {
         let rows: Vec<Row> = segments
             .into_iter()
             .map(|s| Row { t0: s.t0, t1: s.t1, orig: s.text.clone(), text: s.text, removed: false, speaker: s.speaker.filter(|v| (*v as usize) < names.len()) })
@@ -81,6 +87,9 @@ impl Review {
             names,
             write_voices: true,
             tab: 0,
+            summary_on_top: summary.is_some(),
+            summary_copied: false,
+            summary,
             saved: None,
             note: String::new(),
             followed: None,
@@ -121,6 +130,16 @@ impl Review {
     /// Il nome della voce `v` (quello di partenza se è stato cancellato).
     pub fn name(&self, v: u8) -> String {
         trascrizione::name_of(&self.names, Some(v)).unwrap_or_else(|| trascrizione::speaker_name(v as usize))
+    }
+
+    /// I nomi di adesso, uno per voce (quello di partenza dove è stato cancellato).
+    pub fn current_names(&self) -> Vec<String> {
+        (0..self.names.len() as u8).map(|v| self.name(v)).collect()
+    }
+
+    /// Il riassunto pronto da mostrare, con i nomi di adesso.
+    pub fn summary_sections(&self) -> Option<crate::riassunto::Sections> {
+        self.summary.as_ref().map(|s| s.sections(&self.current_names()))
     }
 
     /// Quante frasi e quanti secondi di parlato ha la voce `v`.
@@ -283,7 +302,7 @@ impl App {
         };
         let secs = saved.secs;
         self.notice = None;
-        self.review = Some(Review::new(&path, secs, saved.lang, saved.segments, saved.names));
+        self.review = Some(Review::new(&path, secs, saved.lang, saved.segments, saved.names, saved.summary));
         self.review_scrub = None;
         // L'onda si legge in un thread: sull'audio lungo ci vuole un po', e serve anche a trovare le frasi nel silenzio.
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
@@ -416,9 +435,11 @@ impl App {
         let ext = FORMATS[r.format.min(FORMATS.len() - 1)].1;
         // Con l'interruttore spento il file esce senza chi parla (i nomi restano nella revisione).
         let names: &[String] = if r.write_voices { &r.names } else { &[] };
+        // Il riassunto va solo nel Word e nel testo: i sottotitoli restano come sono.
+        let summary = r.summary_sections().filter(|_| r.summary_on_top);
         let bytes = match ext {
-            "docx" => trascrizione::docx_bytes(&r.source, r.secs, &r.lang, &segments, names),
-            "txt" => trascrizione::text_bytes(&r.source, r.secs, &r.lang, &segments, names),
+            "docx" => trascrizione::docx_bytes_with(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref()),
+            "txt" => trascrizione::text_bytes_with(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref()),
             "srt" => revisione::srt_bytes(&segments, names),
             _ => revisione::vtt_bytes(&segments, names),
         };
@@ -433,7 +454,7 @@ impl App {
         match std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&out, bytes)) {
             Ok(()) => {
                 // Le frasi corrette restano: la prossima volta si riparte da qui.
-                let _ = revisione::save(&r.source, r.secs, &r.lang, &segments, &r.names);
+                let _ = revisione::save_with(&r.source, r.secs, &r.lang, &segments, &r.names, r.summary.as_ref());
                 r.note = format!("Salvato: {}", out.file_name().and_then(|n| n.to_str()).unwrap_or(""));
                 r.saved = Some(out);
             }
@@ -479,7 +500,7 @@ mod tests {
     fn sample() -> Review {
         let mut segments = vec![seg(0, "Buongiorno a tutti."), seg(600, "Il bilancio è stato approvato."), seg(1200, "Il bilancio è stato approvato."), seg(1800, "Il bilancio è stato approvato."), seg(2400, "Sì sì sì sì sì sì sì va bene.")];
         segments.push(seg(3000, "Grazie e arrivederci."));
-        Review::new(Path::new("/tmp/prova.wav"), 40.0, "it".into(), segments, Vec::new())
+        Review::new(Path::new("/tmp/prova.wav"), 40.0, "it".into(), segments, Vec::new(), None)
     }
 
     fn with_voices() -> Review {
@@ -487,7 +508,7 @@ mod tests {
             .iter()
             .map(|(t0, v, text)| Segment { t0: *t0, t1: t0 + 500, text: text.to_string(), speaker: Some(*v) })
             .collect();
-        Review::new(Path::new("/tmp/voci.wav"), 30.0, "it".into(), segments, trascrizione::default_names(3))
+        Review::new(Path::new("/tmp/voci.wav"), 30.0, "it".into(), segments, trascrizione::default_names(3), None)
     }
 
     #[test]

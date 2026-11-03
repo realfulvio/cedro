@@ -813,6 +813,12 @@ impl<'a> Painter<'a> {
         lines.len() as f32 * line_h
     }
 
+    /// L'altezza che avrà `text_wrap` con gli stessi valori (anche con i caratteri grandi), per disegnare
+    /// il riquadro prima del testo.
+    pub fn wrap_height(&self, s: &str, size: f32, weight: Weight, w: f32, line_h: f32, max_lines: usize) -> f32 {
+        self.wrap_lines(s, size, weight, w, max_lines).len() as f32 * line_h * self.ts(size) / size
+    }
+
     /// Le righe in cui va a capo un testo (`\n` forza l'a capo).
     pub fn wrap_lines(&self, s: &str, size: f32, weight: Weight, w: f32, max_lines: usize) -> Vec<String> {
         let s = &*crate::i18n::tr(s);

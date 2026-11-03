@@ -159,7 +159,7 @@ pub enum Event {
     Finished { path: PathBuf, result: Result<(PathBuf, String), String> },
 }
 
-fn log(sink: &dyn Fn(Event), tone: Tone, key: &str, text: impl Into<String>) {
+pub(crate) fn log(sink: &dyn Fn(Event), tone: Tone, key: &str, text: impl Into<String>) {
     sink(Event::Log(Line { tone, key: key.to_string(), text: text.into(), speaker: None }));
 }
 
@@ -231,7 +231,7 @@ pub fn size_text(megabytes: u32) -> String {
 /// Quelle x86 e quelle ARM esistono tutte nel codice, ma ogni architettura ne sceglie solo le sue.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[allow(dead_code)]
-enum Variant {
+pub(crate) enum Variant {
     Base,
     Avx2,
     /// AVX2 con AVX-VNNI: Intel dalla 12ª generazione (che non ha AVX-512).
@@ -247,7 +247,7 @@ enum Variant {
 }
 
 impl Variant {
-    fn tag(self) -> &'static str {
+    pub(crate) fn tag(self) -> &'static str {
         match self {
             Variant::Base => "base",
             Variant::Avx2 => "avx2",
@@ -261,7 +261,7 @@ impl Variant {
     }
 
     /// Il nome dell'istruzione, per la spia nella finestra (vuoto: nessuna istruzione avanzata).
-    fn isa(self) -> &'static str {
+    pub(crate) fn isa(self) -> &'static str {
         match self {
             Variant::Base => "",
             Variant::Avx2 => "AVX2",
@@ -274,7 +274,7 @@ impl Variant {
         }
     }
 
-    fn describe(self) -> &'static str {
+    pub(crate) fn describe(self) -> &'static str {
         match self {
             Variant::Base => "per processore",
             Variant::Avx2 => "per processore, con AVX2",
@@ -289,7 +289,7 @@ impl Variant {
 }
 
 /// La versione per processore più veloce che questo PC sa eseguire. AVX-512 (x86) e i8mm (ARM) solo se le Impostazioni lo permettono.
-fn cpu_variant(avx512: bool) -> Variant {
+pub(crate) fn cpu_variant(avx512: bool) -> Variant {
     #[cfg(target_arch = "x86_64")]
     {
         use std::arch::is_x86_feature_detected as has;
@@ -415,7 +415,7 @@ fn cpu_list(text: &str) -> Vec<usize> {
 
 /// Vero se il PC ha davvero una scheda video che il motore può usare: il caricatore Vulkan non basta
 /// (una macchina virtuale o un PC vecchio può averlo senza scheda adatta).
-fn real_gpu_present() -> bool {
+pub(crate) fn real_gpu_present() -> bool {
     #[cfg(windows)]
     {
         use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE};
@@ -446,7 +446,7 @@ fn real_gpu_present() -> bool {
 
 /// Vero se il sistema ha il caricatore Vulkan (lo installano i driver della scheda video).
 /// Senza, il motore per la scheda video non partirebbe nemmeno.
-fn vulkan_loader_present() -> bool {
+pub(crate) fn vulkan_loader_present() -> bool {
     #[cfg(windows)]
     {
         use windows::core::w;
@@ -469,16 +469,26 @@ fn vulkan_loader_present() -> bool {
     }
 }
 
-fn exe_name(variant: Variant) -> String {
-    let suffix = if cfg!(windows) { ".exe" } else { "" };
-    format!("cedro-trascrivi-{}{suffix}", variant.tag())
+/// I motori che Cedro scarica: il nome del programma e la variabile che, nelle prove, indica una
+/// cartella con i motori già compilati.
+#[derive(Clone, Copy)]
+pub(crate) struct EngineKind {
+    pub name: &'static str,
+    pub env_dir: &'static str,
 }
 
-fn asset_name(variant: Variant) -> String {
+pub(crate) const TRASCRIVI: EngineKind = EngineKind { name: "cedro-trascrivi", env_dir: "CEDRO_TRASCRIVI_DIR" };
+
+pub(crate) fn engine_exe(kind: EngineKind, variant: Variant) -> String {
+    let suffix = if cfg!(windows) { ".exe" } else { "" };
+    format!("{}-{}{suffix}", kind.name, variant.tag())
+}
+
+pub(crate) fn engine_asset(kind: EngineKind, variant: Variant) -> String {
     let os = if cfg!(windows) { "windows" } else { "linux" };
     let suffix = if cfg!(windows) { ".exe" } else { "" };
     let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
-    format!("cedro-trascrivi-{}-{os}-{arch}-{}{suffix}", crate::update::CURRENT, variant.tag())
+    format!("{}-{}-{os}-{arch}-{}{suffix}", kind.name, crate::update::CURRENT, variant.tag())
 }
 
 fn http() -> ureq::Agent {
@@ -495,7 +505,7 @@ fn hex(bytes: &[u8]) -> String {
 
 /// Scarica `url` in `dest` passando da un file `.part`, con lo SHA-256 controllato se noto.
 /// Ogni 10% scrive a che punto è. Ritorna lo SHA-256 del file scaricato.
-fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, what: &str, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<String, String> {
+pub(crate) fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, what: &str, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<String, String> {
     use sha2::{Digest, Sha256};
     let response = http().get(url).call().map_err(|e| format!("download di {what} non riuscito: {e}"))?;
     let total = response.header("Content-Length").and_then(|v| v.parse::<u64>().ok()).unwrap_or(megabytes as u64 * 1_000_000);
@@ -548,9 +558,13 @@ fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, wha
 
 /// Lo SHA-256 del modello pubblicato: Hugging Face lo dice nell'intestazione, senza scaricare nulla.
 fn published_model_sha(model: &Model, wait: Duration) -> Option<String> {
+    published_sha(&format!("{MODEL_BASE_URL}{}", model.file), wait)
+}
+
+/// Lo SHA-256 di un file pubblicato su Hugging Face, dall'intestazione (senza scaricarlo).
+pub(crate) fn published_sha(url: &str, wait: Duration) -> Option<String> {
     let agent = ureq::AgentBuilder::new().timeout(wait).redirects(0).user_agent(&format!("cedro/{}", crate::update::CURRENT)).build();
-    let url = format!("{MODEL_BASE_URL}{}", model.file);
-    let response = match agent.head(&url).call() {
+    let response = match agent.head(url).call() {
         Ok(r) => r,
         Err(ureq::Error::Status(_, r)) => r,
         Err(_) => return None,
@@ -594,7 +608,14 @@ fn ensure_model(index: usize, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Resu
 /// Il motore pronto sul PC, nella versione giusta per questa versione di Cedro.
 /// `CEDRO_TRASCRIVI_DIR` (per le prove) indica una cartella con i motori già compilati.
 fn ensure_engine(variant: Variant, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<PathBuf, String> {
-    if let Some(dir) = std::env::var_os("CEDRO_TRASCRIVI_DIR") {
+    ensure_engine_of(TRASCRIVI, variant, sink, cancel)
+}
+
+/// Come `ensure_engine`, per un motore qualsiasi (trascrizione o riassunto).
+pub(crate) fn ensure_engine_of(kind: EngineKind, variant: Variant, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<PathBuf, String> {
+    let exe_name = |v| engine_exe(kind, v);
+    let asset_name = |v| engine_asset(kind, v);
+    if let Some(dir) = std::env::var_os(kind.env_dir) {
         let path = PathBuf::from(dir).join(exe_name(variant));
         return if path.is_file() { Ok(path) } else { Err(format!("{} non c'è", path.display())) };
     }
@@ -658,10 +679,10 @@ fn engine_in_release(json: &serde_json::Value, name: &str) -> Result<(String, St
 }
 
 /// Il messaggio di un lavoro fermato con Annulla (lo stesso delle conversioni).
-const CANCELLED: &str = "Annullato";
+pub(crate) const CANCELLED: &str = "Annullato";
 
 /// Quello che arriva dal motore mentre si aspetta.
-enum Next {
+pub(crate) enum Next {
     Line(serde_json::Value),
     /// Si è premuto Annulla.
     Cancelled,
@@ -670,7 +691,7 @@ enum Next {
 }
 
 /// Il motore acceso: il processo, dove scrivergli e da dove leggere le sue righe.
-struct Running {
+pub(crate) struct Running {
     child: Option<Child>,
     stdin: Option<ChildStdin>,
     lines: Receiver<serde_json::Value>,
@@ -682,13 +703,19 @@ struct Running {
 impl Running {
     fn start(exe: &Path, model: &Path, cpu: bool, voices: Option<&VoicePaths>) -> Result<Running, String> {
         let mut command = Command::new(exe);
-        command.arg("--model").arg(model).arg("--threads").arg(engine_threads().to_string()).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        command.arg("--model").arg(model).arg("--threads").arg(engine_threads().to_string());
         if cpu {
             command.arg("--cpu");
         }
         if let Some((seg, emb)) = voices {
             command.arg("--voci-seg").arg(seg).arg("--voci-emb").arg(emb);
         }
+        Running::spawn(command)
+    }
+
+    /// Avvia un motore già preparato con i suoi argomenti: righe JSON su stdin e stdout, priorità bassa.
+    pub(crate) fn spawn(mut command: Command) -> Result<Running, String> {
+        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -727,7 +754,7 @@ impl Running {
         Running { child: None, stdin: None, lines, requests: Some(requests) }
     }
 
-    fn send(&mut self, value: serde_json::Value) -> Result<(), String> {
+    pub(crate) fn send(&mut self, value: serde_json::Value) -> Result<(), String> {
         #[cfg(target_os = "android")]
         if let Some(requests) = &self.requests {
             return requests.send(value).map_err(|_| "il motore si è chiuso".to_string());
@@ -743,7 +770,7 @@ impl Running {
     }
 
     /// La prossima riga del motore, guardando intanto se si è premuto Annulla.
-    fn next_or_cancel(&self, cancel: &AtomicBool) -> Next {
+    pub(crate) fn next_or_cancel(&self, cancel: &AtomicBool) -> Next {
         loop {
             if cancel.load(Ordering::Relaxed) {
                 return Next::Cancelled;
@@ -757,7 +784,7 @@ impl Running {
     }
 
     /// Annulla: lo si ferma subito, senza aspettare un modello che sta ancora calcolando.
-    fn kill(mut self) {
+    pub(crate) fn kill(mut self) {
         #[cfg(target_os = "android")]
         drop(self.requests.take());
         drop(self.stdin.take());
@@ -768,7 +795,7 @@ impl Running {
     }
 
     /// Chiude stdin: il motore finisce e libera la memoria. Se non esce da solo, lo si ferma.
-    fn stop(mut self) {
+    pub(crate) fn stop(mut self) {
         #[cfg(target_os = "android")]
         drop(self.requests.take());
         drop(self.stdin.take());
@@ -1139,8 +1166,18 @@ fn heading(source: &Path, secs: f64, lang: &str) -> (String, String) {
 
 /// Il testo semplice. Con `names` (voci riconosciute) ogni paragrafo ha il nome di chi parla dopo l'orario.
 pub fn text_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String]) -> Vec<u8> {
+    text_bytes_with(source, secs, lang, segments, names, None)
+}
+
+/// Come `text_bytes`, con il Riassunto AI in cima (prima dell'elenco di chi parla).
+pub fn text_bytes_with(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Sections>) -> Vec<u8> {
     let (title, meta) = heading(source, secs, lang);
     let mut out = format!("{title}\n{meta}\n");
+    if let Some(sum) = summary {
+        out.push('\n');
+        out.push_str(&sum.plain());
+        out.push('\n');
+    }
     let used = used_voices(segments, names);
     if !used.is_empty() {
         let list: Vec<String> = used.iter().filter_map(|v| name_of(names, Some(*v as u8))).collect();
@@ -1160,6 +1197,49 @@ pub fn text_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment], na
 /// Il Word. Con `names` (voci riconosciute) in cima c'è la legenda delle voci con quanto ha parlato
 /// ognuna, e ogni paragrafo comincia col nome di chi parla, nel suo colore.
 pub fn docx_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String]) -> Vec<u8> {
+    docx_bytes_with(source, secs, lang, segments, names, None)
+}
+
+/// Il Riassunto AI nel Word: un riquadro azzurro con il bordo blu a sinistra, prima della legenda delle voci.
+/// I paragrafi di fila con lo stesso bordo e lo stesso fondo Word li unisce in un riquadro solo.
+fn docx_summary(sum: &crate::riassunto::Sections) -> String {
+    let para = |style: &str, runs: String| format!("<w:p><w:pPr><w:pStyle w:val=\"{style}\"/></w:pPr>{runs}</w:p>");
+    let run = |text: &str| format!("<w:r><w:t xml:space=\"preserve\">{}</w:t></w:r>", xml_escape(text));
+    let bold = |text: &str, color: Option<&str>| {
+        let c = color.map(|c| format!("<w:color w:val=\"{c}\"/>")).unwrap_or_default();
+        format!("<w:r><w:rPr><w:b/>{c}</w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r>", xml_escape(text))
+    };
+    let item = |runs: String| para("SummaryItem", format!("<w:r><w:t xml:space=\"preserve\">•\t</w:t></w:r>{runs}"));
+    let color = |v: Option<usize>| v.map(|v| VOICE_COLORS[v % VOICE_COLORS.len()]);
+    let mut out = para("SummaryTitle", bold(&crate::i18n::tr("Riassunto"), None));
+    out.push_str(&para("Summary", run(&sum.brief)));
+    if !sum.who.is_empty() {
+        out.push_str(&para("SummaryHead", bold(&crate::i18n::tr("Chi ha detto cosa"), None)));
+        for w in &sum.who {
+            out.push_str(&item(format!("{}{}", bold(&w.name, color(w.voice)), run(&format!(": {}", w.text)))));
+        }
+    }
+    out.push_str(&para("SummaryHead", bold(&crate::i18n::tr("Decisioni"), None)));
+    if sum.decisions.is_empty() {
+        out.push_str(&item(run(&crate::i18n::tr("Nessuna"))));
+    }
+    for d in &sum.decisions {
+        out.push_str(&item(run(d)));
+    }
+    out.push_str(&para("SummaryHead", bold(&crate::i18n::tr("Da fare"), None)));
+    if sum.todo.is_empty() {
+        out.push_str(&item(run(&crate::i18n::tr("Nessuno"))));
+    }
+    for t in &sum.todo {
+        let owner = t.owner.as_ref().map(|o| format!("{}{}{}", run(" ("), bold(o, color(t.voice)), run(")"))).unwrap_or_default();
+        out.push_str(&item(format!("{}{owner}", run(&t.what))));
+    }
+    out.push_str(&para("SummaryNote", run(&crate::i18n::tr(crate::riassunto::WARNING))));
+    out
+}
+
+/// Come `docx_bytes`, con il Riassunto AI in cima (prima della legenda delle voci).
+pub fn docx_bytes_with(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Sections>) -> Vec<u8> {
     let (title, meta) = heading(source, secs, lang);
     let mut body = format!(
         "<w:p><w:pPr><w:pStyle w:val=\"Title\"/></w:pPr><w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>\
@@ -1167,6 +1247,9 @@ pub fn docx_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment], na
         xml_escape(&title),
         xml_escape(&meta)
     );
+    if let Some(sum) = summary {
+        body.push_str(&docx_summary(sum));
+    }
     let used = used_voices(segments, names);
     if !used.is_empty() {
         let talk = talk_time(segments, names.len());
@@ -1235,6 +1318,17 @@ pub fn docx_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment], na
 <w:pPr><w:pBdr><w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"6\" w:color=\"D6DEE5\"/></w:pBdr><w:spacing w:after=\"280\"/></w:pPr><w:rPr><w:color w:val=\"5D7080\"/><w:sz w:val=\"20\"/></w:rPr></w:style>\
 <w:style w:type=\"paragraph\" w:styleId=\"Voices\"><w:name w:val=\"Interlocutori\"/><w:basedOn w:val=\"Normal\"/><w:next w:val=\"Normal\"/>\
 <w:pPr><w:pBdr><w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"6\" w:color=\"D6DEE5\"/></w:pBdr><w:spacing w:after=\"280\"/></w:pPr><w:rPr><w:sz w:val=\"20\"/></w:rPr></w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"Summary\"><w:name w:val=\"Riassunto\"/><w:basedOn w:val=\"Normal\"/>\
+<w:pPr><w:pBdr><w:left w:val=\"single\" w:sz=\"24\" w:space=\"8\" w:color=\"1F3864\"/></w:pBdr><w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"F4F7FB\"/>\
+<w:spacing w:after=\"80\"/><w:ind w:left=\"170\" w:right=\"170\"/></w:pPr></w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"SummaryTitle\"><w:name w:val=\"Riassunto titolo\"/><w:basedOn w:val=\"Summary\"/><w:next w:val=\"Summary\"/>\
+<w:pPr><w:spacing w:before=\"0\" w:after=\"60\"/></w:pPr><w:rPr><w:color w:val=\"1F3864\"/><w:sz w:val=\"26\"/></w:rPr></w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"SummaryHead\"><w:name w:val=\"Riassunto parte\"/><w:basedOn w:val=\"Summary\"/><w:next w:val=\"SummaryItem\"/>\
+<w:pPr><w:keepNext/><w:spacing w:before=\"80\" w:after=\"40\"/></w:pPr><w:rPr><w:sz w:val=\"21\"/></w:rPr></w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"SummaryItem\"><w:name w:val=\"Riassunto elenco\"/><w:basedOn w:val=\"Summary\"/>\
+<w:pPr><w:tabs><w:tab w:val=\"left\" w:pos=\"454\"/></w:tabs><w:spacing w:after=\"40\"/><w:ind w:left=\"454\" w:hanging=\"284\"/></w:pPr></w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"SummaryNote\"><w:name w:val=\"Riassunto avviso\"/><w:basedOn w:val=\"Summary\"/>\
+<w:pPr><w:spacing w:before=\"80\" w:after=\"320\"/></w:pPr><w:rPr><w:color w:val=\"777777\"/><w:sz w:val=\"18\"/></w:rPr></w:style>\
 <w:style w:type=\"character\" w:styleId=\"Time\"><w:name w:val=\"Orario\"/><w:rPr><w:color w:val=\"7D93A3\"/><w:sz w:val=\"18\"/></w:rPr></w:style>\
 </w:styles>",
         lang = word_language(lang)
