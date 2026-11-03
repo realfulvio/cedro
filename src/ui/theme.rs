@@ -231,3 +231,29 @@ mod tests {
         }
     }
 }
+
+/// Il colore di ogni tipo di file (schede delle categorie, zona dove si lasciano i file): gli stessi
+/// toni delle icone disegnate (PDF rosso, Word blu, immagine verde…). Li usa il tema base.
+pub fn kind_color(kind: crate::engine::Kind) -> Rgb {
+    use crate::engine::Kind;
+    match kind {
+        Kind::Image => hex(0x1F8A62),
+        Kind::Doc => hex(0x2B6FD3),
+        Kind::Pdf => hex(0xD2382C),
+        Kind::Text => hex(0x0D7C8F),
+        Kind::Audio => hex(0xD4570E),
+        Kind::Video => hex(0x7A3FC8),
+        Kind::Archive | Kind::Other => hex(0xA2760A),
+    }
+}
+
+/// Il colore di ogni attività nella barra di sinistra del tema base.
+pub fn activity_color(a: super::model::Activity) -> Rgb {
+    use super::model::Activity;
+    match a {
+        Activity::Convert => hex(0x2563B8),
+        Activity::Transcribe => hex(0xD4570E),
+        Activity::YouTube => hex(0xC8323C),
+        Activity::Web => hex(0x1E8A55),
+    }
+}
