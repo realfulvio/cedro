@@ -1555,3 +1555,60 @@ Le voci riconosciute	The recognised voices
 Un nome e un colore per ogni interlocutore	A name and a colour for each speaker
 1 frase · {#} min	1 sentence · {} min
 1 frase · meno di 1 min	1 sentence · under 1 min
+Riassunto AI	AI summary
+Riassunto	Summary
+Fai il riassunto	Write the summary
+Riassunto della riunione	Meeting summary
+Cedro legge la trascrizione e scrive in breve, chi ha detto cosa, le decisioni e le cose da fare. Per un'ora di riunione ci mette qualche minuto.	Cedro reads the transcript and writes a short summary, who said what, the decisions and the things to do. For an hour-long meeting it takes a few minutes.
+Cedro legge la trascrizione con i nomi di «Chi parla» e scrive in breve, chi ha detto cosa, le decisioni e le cose da fare. Per un'ora di riunione ci mette qualche minuto.	Cedro reads the transcript with the names from «Who's speaking» and writes a short summary, who said what, the decisions and the things to do. For an hour-long meeting it takes a few minutes.
+L'ultima volta non è riuscito: {}	Last time it didn't work: {}
+Memoria libera	Free memory
+{} · ne servono 4 GB	{} · 4 GB needed
+ne servono 4 GB	4 GB needed
+{} già sul PC	{} already on this PC
+Prima volta: scarica il modello	First time: downloads the model
+Lavora su	Runs on
+Tutto sul tuo PC	All on your PC
+niente internet	no internet
+Sto facendo il riassunto…	Writing the summary…
+Memoria libera: {}	Free memory: {}
+Memoria controllata	Memory checked
+Aspetto che finisca l'altro lavoro	Waiting for the other job to finish
+Scarico il modello: {}	Downloading the model: {}
+Carico il modello	Loading the model
+Modello pronto	Model ready
+Leggo la riunione: parte {} di {}	Reading the meeting: part {} of {}
+Leggo la riunione: metto insieme gli appunti	Reading the meeting: putting the notes together
+Leggo la riunione	Reading the meeting
+Scrivo il riassunto	Writing the summary
+{} · si può continuare a lavorare	{} · you can keep working
+Si può continuare a lavorare	You can keep working
+Meno di 1 minuto ancora	Less than 1 minute left
+Circa 1 minuto ancora	About 1 minute left
+Circa {} minuti ancora	About {} minutes left
+Memoria del PC	PC memory
+Altri programmi {}	Other programs {}
+Riassunto {}	Summary {}
+A fine riassunto il modello si chiude e i {} tornano liberi.	When the summary is done the model closes and the {} are free again.
+Poca memoria libera	Low free memory
+Per il riassunto servono 4 GB liberi, adesso ce ne sono {}. Chiudi qualche programma, per esempio il browser o Outlook, e riprova. Cedro non parte per non bloccare il PC.	The summary needs 4 GB free, right now there are {}. Close a few programs, for example the browser or Outlook, and try again. Cedro doesn't start so as not to freeze the PC.
+Riprova	Try again
+In breve	In short
+Chi ha detto cosa	Who said what
+Decisioni	Decisions
+Da fare	To do
+Nessuna decisione presa.	No decisions taken.
+Nessuna cosa da fare.	Nothing to do.
+Nessuna	None
+Copiato	Copied
+Rifai	Redo
+Scritto da {} sul tuo PC in {}. Controlla nomi, cifre e date prima di usarlo.	Written by {} on your PC in {}. Check names, figures and dates before using it.
+Metti il riassunto in cima al file	Put the summary at the top of the file
+Sta già facendo il riassunto di {}: aspetta che finisca.	Already writing the summary of {}: wait for it to finish.
+Riassunto automatico fatto sul PC: da controllare.	Automatic summary made on the PC: to be checked.
+Fa girare il modello del riassunto sul PC (programma scaricato al primo riassunto).	Runs the summary model on the PC (program downloaded with the first summary).
+Collega llama.cpp a Rust.	Connects llama.cpp to Rust.
+Il modello che scrive il riassunto (scaricato al primo riassunto, in formato GGUF di Unsloth).	The model that writes the summary (downloaded with the first summary, in Unsloth's GGUF format).
+motore cedro-riassumi	cedro-riassumi engine
+Sul tuo PC	On your PC
+In breve, decisioni e cose da fare	In short, decisions and things to do

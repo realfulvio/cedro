@@ -26,6 +26,13 @@ pub const SETTINGS: &str = "M9 3l-1 3-3 1-2 3 2 2-1 3 3 2 3-1 2 2 3-1 1-3 3-1 1-
 pub const TRANSCRIBE: &str = "M4 9v6M8 5v14M12 2v20M16 7v10M20 10v4";
 pub const TRASH: &str = "M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7";
 pub const VIDEO: &str = "M5.0 4.0h14.0a2.0 2.0 0 0 1 2.0 2.0v12.0a2.0 2.0 0 0 1 -2.0 2.0h-14.0a2.0 2.0 0 0 1 -2.0 -2.0v-12.0a2.0 2.0 0 0 1 2.0 -2.0z M10 8l6 4-6 4zM6 4v16M18 4v16";
+/// «Riassunto AI»: righe di testo che diventano poche.
+pub const SUMMARY: &str = "M4 5h16M4 9h16M4 13h9M15 16h5M15 19.5h3.5M4 17l3 3 3-3";
+/// La memoria del PC (un banco di RAM).
+pub const MEMORY: &str = "M4.5 7.0h15.0a1.5 1.5 0 0 1 1.5 1.5v7.0a1.5 1.5 0 0 1 -1.5 1.5h-15.0a1.5 1.5 0 0 1 -1.5 -1.5v-7.0a1.5 1.5 0 0 1 1.5 -1.5z M7 10v4M11 10v4M15 10v4M6 17v2M10 17v2M14 17v2M18 17v2";
+pub const LOCK: &str = "M7.0 11.0h10.0a2.0 2.0 0 0 1 2.0 2.0v5.0a2.0 2.0 0 0 1 -2.0 2.0h-10.0a2.0 2.0 0 0 1 -2.0 -2.0v-5.0a2.0 2.0 0 0 1 2.0 -2.0z M8 11V8a4 4 0 0 1 8 0v3";
+/// Il processore o la scheda video (un chip).
+pub const CHIP: &str = "M8.0 6.0h8.0a2.0 2.0 0 0 1 2.0 2.0v8.0a2.0 2.0 0 0 1 -2.0 2.0h-8.0a2.0 2.0 0 0 1 -2.0 -2.0v-8.0a2.0 2.0 0 0 1 2.0 -2.0z M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3";
 pub const WARNING: &str = "M12 3l10 18H2zM12 9v5M12 17v.1";
 pub const WEB: &str = "M3.0 12.0a9.0 9.0 0 1 0 18.0 0a9.0 9.0 0 1 0 -18.0 0z M8.0 12.0a4.0 9.0 0 1 0 8.0 0a4.0 9.0 0 1 0 -8.0 0z M3 12h18";
 pub const ZOOM_IN: &str = "M4.0 10.0a6.0 6.0 0 1 0 12.0 0a6.0 6.0 0 1 0 -12.0 0z M15 15l6 6M7 10h6M10 7v6";

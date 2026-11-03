@@ -7,7 +7,7 @@ name: Windows ARM64
 on:
   push:
     branches: ["claude/**"]
-    paths: ["Cargo.*", "src/**", "resources/**", "vendor/**", "trascrivi/**", "installer/**", "examples/**", "build.rs", ".github/workflows/windows-arm64.yml"]
+    paths: ["Cargo.*", "src/**", "resources/**", "vendor/**", "trascrivi/**", "riassumi/**", "installer/**", "examples/**", "build.rs", ".github/workflows/windows-arm64.yml"]
   workflow_dispatch:
     inputs:
       tag:
@@ -139,10 +139,36 @@ jobs:
         shell: pwsh
         run: powershell -File trascrivi\prova.ps1 -Dir ${{ github.workspace }}\dist-motori
 
+      - name: Motori del Riassunto AI base, dotprod, i8mm
+        shell: pwsh
+        run: powershell -File riassumi\build.ps1 -SoloCpu -Out ${{ github.workspace }}\dist-riassumi
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\qwen
+          key: qwen3.5-4b-q4km-unsloth
+
+      - name: Prova di riassunto (Qwen3.5-4B vero, motore dotprod)
+        shell: pwsh
+        run: |
+          $model = "${{ runner.temp }}\qwen\Qwen3.5-4B-Q4_K_M.gguf"
+          if (-not (Test-Path $model)) {
+            New-Item -ItemType Directory -Force (Split-Path $model) | Out-Null
+            curl.exe -fsSL --retry 5 -o "$model.part" https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf
+            if ($LASTEXITCODE -ne 0) { throw 'modello non scaricato' }
+            Move-Item "$model.part" $model
+          }
+          New-Item -ItemType Directory -Force prova-riassumi | Out-Null
+          Get-ChildItem dist-riassumi -Filter *-dotprod.exe | Copy-Item -Destination prova-riassumi
+          powershell -File riassumi\prova.ps1 -Dir prova-riassumi -Model $model
+          if ($LASTEXITCODE -ne 0) { throw 'prova del riassunto fallita' }
+
       - uses: actions/upload-artifact@v4
         with:
           name: motori-arm64
-          path: dist-motori/*.exe
+          path: |
+            dist-motori/*.exe
+            dist-riassumi/*.exe
 
 
   vulkan:
@@ -202,10 +228,16 @@ jobs:
         shell: pwsh
         run: powershell -File trascrivi\prova.ps1 -Dir ${{ github.workspace }}\dist-motori
 
+      - name: Motore del Riassunto AI Vulkan
+        shell: pwsh
+        run: powershell -File riassumi\build.ps1 -SoloVulkan -Out ${{ github.workspace }}\dist-riassumi
+
       - uses: actions/upload-artifact@v4
         with:
           name: motore-vulkan-arm64
-          path: dist-motori/*.exe
+          path: |
+            dist-motori/*.exe
+            dist-riassumi/*.exe
 
   x64:
     name: Cedro x64 (prove, installatore, motori)
@@ -307,6 +339,8 @@ jobs:
           $env:VULKAN_SDK = $sdk.FullName
           powershell -File trascrivi\build.ps1 -Out "${{ github.workspace }}\motori-x64" -Target C:\ctv
           if ($LASTEXITCODE -ne 0) { throw 'compilazione motori x64 fallita' }
+          powershell -File riassumi\build.ps1 -Out "${{ github.workspace }}\motori-x64" -Target C:\crv
+          if ($LASTEXITCODE -ne 0) { throw 'compilazione motori del riassunto x64 fallita' }
 
       - name: Prova motori x64 compatibili con il runner
         shell: pwsh
@@ -316,6 +350,26 @@ jobs:
           Get-ChildItem motori-x64 -Filter *.exe | Where-Object Name -Match '-(base|avx2|vulkan)\.exe$' | Copy-Item -Destination motori-prova
           powershell -File trascrivi\prova.ps1 -Dir "${{ github.workspace }}\motori-prova"
           if ($LASTEXITCODE -ne 0) { throw 'prova motori x64 fallita' }
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\qwen
+          key: qwen3.5-4b-q4km-unsloth
+
+      - name: Prova del Riassunto AI (Qwen3.5-4B vero, motori avx2 e vulkan)
+        shell: pwsh
+        run: |
+          $model = "${{ runner.temp }}\qwen\Qwen3.5-4B-Q4_K_M.gguf"
+          if (-not (Test-Path $model)) {
+            New-Item -ItemType Directory -Force (Split-Path $model) | Out-Null
+            curl.exe -fsSL --retry 5 -o "$model.part" https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf
+            if ($LASTEXITCODE -ne 0) { throw 'modello non scaricato' }
+            Move-Item "$model.part" $model
+          }
+          New-Item -ItemType Directory -Force prova-riassumi | Out-Null
+          Get-ChildItem motori-x64 -Filter cedro-riassumi-*.exe | Where-Object Name -Match '-(avx2|vulkan)\.exe$' | Copy-Item -Destination prova-riassumi
+          powershell -File riassumi\prova.ps1 -Dir prova-riassumi -Model $model
+          if ($LASTEXITCODE -ne 0) { throw 'prova del riassunto x64 fallita' }
 
       - uses: actions/upload-artifact@v4
         with:
@@ -355,7 +409,7 @@ jobs:
             gh release create "$MOTORI" --target "$GITHUB_SHA" --prerelease --title "Motori di trascrizione ${TAG#v} (non servono: li scarica Cedro)" \
               --notes "Questi file non vanno scaricati a mano: Cedro li prende da qui la prima volta che trascrivi. Per installare Cedro vai su https://github.com/${GITHUB_REPOSITORY}/releases/latest"
           fi
-          gh release upload "$MOTORI" $(find file -type f -name 'cedro-trascrivi-*') --clobber
+          gh release upload "$MOTORI" $(find file -type f \( -name 'cedro-trascrivi-*' -o -name 'cedro-riassumi-*' \)) --clobber
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             sed "s/{versione}/${TAG#v}/g; s#{repo}#${GITHUB_REPOSITORY}#g" .github/note-release.md > note.md
             # Una bozza non crea il tag, e il workflow «Linux» fa il checkout del tag: lo creo prima.

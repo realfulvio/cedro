@@ -333,6 +333,8 @@ pub enum Event {
     StampPreview(String, Option<Image>),
     /// «Rivedi»: l'onda dell'audio del file che si sta rivedendo.
     Wave(PathBuf, Option<Vec<f32>>),
+    /// «Riassunto AI»: cosa arriva dal motore per questo file.
+    Summary(PathBuf, crate::riassunto::Progress),
 }
 
 /// Cosa fa la scheda PDF: converte, unisce, divide, cambia le pagine o comprime.
@@ -429,6 +431,9 @@ pub struct App {
     pub review: Option<super::review::Review>,
     /// Dove sta il cursore della barra di «Rivedi» mentre lo si trascina (0..1).
     pub review_scrub: Option<f32>,
+    /// «Riassunto AI»: quello in corso (uno alla volta) e l'ultimo non riuscito.
+    pub summary_job: Option<super::summary::Job>,
+    pub summary_failure: Option<(PathBuf, crate::riassunto::Failure)>,
     /// «Comprimi»: (file, chiave delle scelte) → (peso, peso compresso); `None` = si sta calcolando.
     pub estimates: HashMap<(PathBuf, String), Option<Result<(u64, u64), String>>>,
     pub(super) tx: Sender<Event>,
@@ -495,6 +500,8 @@ impl App {
             estimates: HashMap::new(),
             review: None,
             review_scrub: None,
+            summary_job: None,
+            summary_failure: None,
             tx,
             rx,
             wake,
@@ -1715,6 +1722,7 @@ impl App {
                     }
                 }
                 Event::Wave(path, bars) => self.review_wave(&path, bars),
+                Event::Summary(path, p) => self.summary_event(&path, p),
             }
         }
         changed

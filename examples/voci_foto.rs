@@ -129,7 +129,7 @@ fn main() {
         let mut names = trascrizione::default_names(4);
         names[0] = "Sindaco".into();
         names[1] = "Segretaria comunale".into();
-        let mut r = Review::new(&audio[0], 75.0, "it".into(), segments, names);
+        let mut r = Review::new(&audio[0], 75.0, "it".into(), segments, names, None);
         r.bars = Some((0..900).map(|i| (0.3 + 0.6 * ((i as f32 / 7.0).sin() * 0.5 + 0.5)) * if (i / 40) % 5 == 4 { 0.1 } else { 1.0 }).collect());
         s.app.review = Some(r);
         let (w, h) = (1500.0, 980.0);
