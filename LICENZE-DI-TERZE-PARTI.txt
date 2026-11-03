@@ -36,5 +36,5 @@ CAM++ di 3D-Speaker (zh-en common advanced, in formato ONNX)
   Autore: Alibaba, progetto ModelScope 3D-Speaker. Licenza: Apache-2.0.
   Sito e codice: https://github.com/modelscope/3D-Speaker
 
-  I due modelli (circa 35 MB) si scaricano la prima volta che si trascrive con il riconoscimento
+  I due modelli (circa 40 MB) si scaricano la prima volta che si trascrive con il riconoscimento
   delle voci acceso, nella cartella "voci" dei dati di Cedro, e vengono controllati con SHA-256.

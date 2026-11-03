@@ -1553,3 +1553,5 @@ Fa i calcoli dei modelli: riconoscimento del testo e delle voci.	Runs the models
 {#} frasi · meno di 1 min	{} sentences · under 1 min
 Le voci riconosciute	The recognised voices
 Un nome e un colore per ogni interlocutore	A name and a colour for each speaker
+1 frase · {#} min	1 sentence · {} min
+1 frase · meno di 1 min	1 sentence · under 1 min

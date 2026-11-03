@@ -240,15 +240,22 @@ fn list(f: &mut Frame, app: &App, rv: &Review, r: R) {
             let mut tx = chip.0 + chip.2 + 16.0;
             if !rv.names.is_empty() {
                 let prev = n.checked_sub(1).and_then(|k| rows.get(k)).and_then(|k| rv.rows.get(*k)).and_then(|p| p.speaker);
-                if let Some(v) = row.speaker.filter(|v| prev != Some(*v)) {
+                if let Some(v) = row.speaker {
+                    // Se è la stessa voce della frase sopra il nome non si ripete: resta un pallino, e il chip
+                    // intero compare passandoci sopra o sulla frase scelta, così si può cambiare anche lì.
                     let (bg, fg) = chip_colors(f, v as usize);
                     let name = rv.name(v);
                     let cw = (f.measure(&name, 13.5, SEMI) + 34.0).min(180.0);
                     let cr = (tx, y + (ROW_H - 28.0) / 2.0, cw, 28.0);
                     let act = Act::ReviewSpeakerMenu(i);
-                    f.p.rrect(cr.0, cr.1, cr.2, cr.3, 14.0, Some(if f.hovered(&act) { mix(bg, fg, 0.12) } else { bg }), None);
-                    f.p.circle(cr.0 + 13.0, cr.1 + 14.0, 4.5, Some(f.voice(v as usize)), None);
-                    f.p.text(&crate::i18n::lit(&name), cr.0 + 24.0, cr.1, cr.2 - 32.0, cr.3, 13.5, SEMI, fg, Align::Left);
+                    let hot = f.hovered(&act);
+                    if prev != Some(v) || hot || sel {
+                        f.p.rrect(cr.0, cr.1, cr.2, cr.3, 14.0, Some(if hot { mix(bg, fg, 0.12) } else { bg }), None);
+                        f.p.circle(cr.0 + 13.0, cr.1 + 14.0, 4.5, Some(f.voice(v as usize)), None);
+                        f.p.text(&crate::i18n::lit(&name), cr.0 + 24.0, cr.1, cr.2 - 32.0, cr.3, 13.5, SEMI, fg, Align::Left);
+                    } else {
+                        f.p.circle(cr.0 + 13.0, cr.1 + 14.0, 4.5, Some(mix(f.voice(v as usize), pal.surface, 0.45)), None);
+                    }
                     f.focus_ring(cr, 14.0, &act);
                     f.hit(cr, act);
                 } else if row.speaker.is_none() {
@@ -458,7 +465,8 @@ fn voice_card(f: &mut Frame, rv: &Review, v: u8, r: R, can_merge: bool) {
     // Sotto: quante frasi, quanto ha parlato, «Unisci a…».
     let (n, secs) = rv.voice_stats(v);
     let sy = y + 40.0;
-    f.text(&format!("{n} frasi · {}", minutes(secs)), nr.0, sy, nr.2, 24.0, 13.0, SANS, pal.muted);
+    let count = if n == 1 { "1 frase".to_string() } else { format!("{n} frasi") };
+    f.text(&format!("{count} · {}", minutes(secs)), nr.0, sy, nr.2, 24.0, 13.0, SANS, pal.muted);
     if can_merge {
         let label = "Unisci a…";
         let tw = f.measure(label, 13.5, SEMI);
