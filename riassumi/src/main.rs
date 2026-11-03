@@ -87,7 +87,7 @@ fn main() {
         Ok(c) => c,
         Err(e) => fail(&format!("non c'è memoria per il riassunto ({e})")),
     };
-    let mut engine = Engine { model: &model, ctx, batch: LlamaBatch::new(BATCH as usize, 1), on_gpu: layers > 0 };
+    let mut engine = Engine { model: &model, ctx, batch: LlamaBatch::new(BATCH as usize, 1), on_gpu: layers > 0 && card.as_ref().is_some_and(|c| !c.integrated) };
     emit(json!({
         "e": "ready",
         "ms": start.elapsed().as_millis() as u64,
@@ -126,7 +126,9 @@ struct Engine<'a> {
     model: &'a LlamaModel,
     ctx: LlamaContext<'a>,
     batch: LlamaBatch<'a>,
-    /// Vero se almeno una parte del modello sta sulla scheda video.
+    /// Vero se almeno una parte del modello sta su una scheda video dedicata: solo lì si controlla se va
+    /// troppo piano (un'integrata è lenta di suo, ~3 token/s sulla Radeon del Ryzen 5700U, e non vuol dire
+    /// che sia occupata).
     on_gpu: bool,
 }
 
@@ -372,7 +374,7 @@ mod gpu {
     pub struct Card {
         pub name: String,
         /// Integrata (Radeon dei Ryzen, Intel): usa la stessa RAM del PC, che Cedro ha già controllato.
-        integrated: bool,
+        pub integrated: bool,
         free: usize,
     }
 
