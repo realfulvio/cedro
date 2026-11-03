@@ -84,17 +84,19 @@ fn link_lines(l: &Links) -> Vec<LogLine> {
 }
 
 /// La riga di un file da trascrivere (o di un link): nome, sotto lo stato, a destra l'icona.
-fn job_row(f: &mut Frame, r: R, title: &str, sub: &str, state: FileState, percent: Option<f32>, big: bool, remove: Option<Act>, open: Option<Act>) {
+/// `extra`: quanto spazio a destra lasciare ai pulsanti della riga (Rivedi, Riassunto AI), così il nome non ci va sotto.
+#[allow(clippy::too_many_arguments)]
+fn job_row(f: &mut Frame, r: R, title: &str, sub: &str, state: FileState, percent: Option<f32>, big: bool, remove: Option<Act>, open: Option<Act>, extra: f32) {
     let pal = f.pal;
     let (ts, ss) = if big { (20.0, 17.0) } else { (16.5, 14.5) };
     let right = 150.0;
-    f.text(title, r.0 + 18.0, r.1 + r.3 * 0.16, r.2 - right - 24.0, r.3 * 0.36, ts, SEMI, pal.text);
+    f.text(title, r.0 + 18.0, r.1 + r.3 * 0.16, r.2 - right - 24.0 - extra, r.3 * 0.36, ts, SEMI, pal.text);
     let sub_c = match state {
         FileState::Failed => pal.bad,
         FileState::Done => pal.ok,
         _ => pal.muted,
     };
-    f.text(sub, r.0 + 18.0, r.1 + r.3 * 0.52, r.2 - right - 24.0, r.3 * 0.32, ss, SANS, sub_c);
+    f.text(sub, r.0 + 18.0, r.1 + r.3 * 0.52, r.2 - right - 24.0 - extra, r.3 * 0.32, ss, SANS, sub_c);
     if let (FileState::Running, Some(p)) = (state, percent) {
         let bw = right - 60.0;
         let bx = r.0 + r.2 - right;
@@ -200,16 +202,42 @@ fn transcribe_queue(f: &mut Frame, app: &App, r: R, big: bool) {
             let sub = if file.state == FileState::Waiting && !size.is_empty() { format!("{} · {size}", file.path.parent().map(|p| p.display().to_string()).unwrap_or_default()) } else { file.message.clone() };
             let pct = if running == Some(i) { Some(app.transcribe.percent as f32) } else { None };
             let open = file.output.clone().map(Act::OpenPath);
-            job_row(f, (r.0 + isz + 16.0, y, r.2 - isz - 16.0, rh), &file.name(), &sub, file.state, pct, big, (!app.busy()).then_some(Act::Remove(i)), open);
             // Finita la trascrizione si può rivedere: ascoltare le frasi, correggerle, esportare anche i sottotitoli.
             // Anche un file appena rimesso in coda, se la revisione è salvata da una volta prima (Cedro riaperto).
-            if matches!(file.state, FileState::Done | FileState::Waiting) && crate::revisione::has(&file.path) {
+            let reviewable = matches!(file.state, FileState::Done | FileState::Waiting) && crate::revisione::has(&file.path);
+            let size = if big { 17.0 } else { 15.0 };
+            // Accanto a «Rivedi», «Riassunto AI»: apre Rivedi sul riassunto e lo fa (sui PC, non sul telefono).
+            let ai_w = if cfg!(target_os = "android") { 0.0 } else { f.measure("Riassunto AI", size, SEMI) + size * 1.1 + 40.0 };
+            let extra = if reviewable { 112.0 + if ai_w > 0.0 { ai_w + 8.0 } else { 0.0 } } else { 0.0 };
+            job_row(f, (r.0 + isz + 16.0, y, r.2 - isz - 16.0, rh), &file.name(), &sub, file.state, pct, big, (!app.busy()).then_some(Act::Remove(i)), open, extra);
+            if reviewable {
                 let bh = if big { 46.0 } else { 38.0 };
-                f.button((r.0 + r.2 - 150.0 - 112.0, y + (rh - bh) / 2.0, 104.0, bh), "Rivedi", None, if big { 17.0 } else { 15.0 }, Act::ReviewOpen(i));
+                let by = y + (rh - bh) / 2.0;
+                let ai_x = r.0 + r.2 - 150.0 - ai_w - 8.0;
+                f.button((ai_x - 112.0, by, 104.0, bh), "Rivedi", None, size, Act::ReviewOpen(i));
+                if ai_w > 0.0 {
+                    ai_button(f, (ai_x, by, ai_w, bh), size, Act::SummaryOpen(i));
+                }
             }
         }
         rows.len() as f32 * rh
     });
+}
+
+/// «Riassunto AI»: pulsante con il bordo e il testo del colore del tema, per distinguerlo da «Rivedi».
+fn ai_button(f: &mut Frame, r: R, size: f32, act: Act) {
+    let pal = f.pal;
+    let hover = f.hovered(&act);
+    let bg = if hover { mix(pal.primary, pal.surface, 0.9) } else { pal.surface };
+    f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(bg), Some((pal.primary, 1.2)));
+    let isz = (size * 1.1).round();
+    let label = "Riassunto AI";
+    let tw = f.measure(label, size, SEMI);
+    let x = r.0 + (r.2 - tw - isz - 8.0) / 2.0;
+    f.icon(ic::SUMMARY, x, r.1 + (r.3 - isz) / 2.0, isz, pal.primary);
+    f.p.text(label, x + isz + 8.0, r.1, tw + 2.0, r.3, size, SEMI, pal.primary, Align::Left);
+    f.focus_ring(r, 8.0, &act);
+    f.hit(r, act);
 }
 
 /// La pagina della Trascrizione dentro il riquadro `r`.
@@ -329,7 +357,7 @@ fn links_list(f: &mut Frame, app: &App, l: &Links, r: R, big: bool, scroll: bool
                 _ => it.message.clone(),
             };
             let pct = (it.state == FileState::Running).then_some(it.percent);
-            job_row(f, (r.0 + isz + 22.0, y, r.2 - isz - 22.0, rh), &title, &sub, it.state, pct, big, (!busy).then_some(Act::LinkRemove(web, n)), None);
+            job_row(f, (r.0 + isz + 22.0, y, r.2 - isz - 22.0, rh), &title, &sub, it.state, pct, big, (!busy).then_some(Act::LinkRemove(web, n)), None, 0.0);
         }
         items.len() as f32 * rh
     };
@@ -469,7 +497,7 @@ fn narrow_files(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32 {
         let (size, _) = super::file_meta(app, i);
         let sub = if file.state == FileState::Waiting { size } else { file.message.clone() };
         let pct = if running == Some(i) { Some(app.transcribe.percent as f32) } else { None };
-        job_row(f, (x + 56.0, ry, w - 56.0, rh), &file.name(), &sub, file.state, pct, false, (!app.busy()).then_some(Act::Remove(i)), file.output.clone().map(Act::OpenPath));
+        job_row(f, (x + 56.0, ry, w - 56.0, rh), &file.name(), &sub, file.state, pct, false, (!app.busy()).then_some(Act::Remove(i)), file.output.clone().map(Act::OpenPath), 0.0);
     }
     rows.len() as f32 * rh
 }

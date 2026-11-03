@@ -11,6 +11,7 @@ mod essenziale;
 mod guidato;
 mod pagine;
 mod revisione;
+mod riassunto;
 
 pub use activity::{links_page, transcribe_page};
 pub use pagine::{merged_pages, page_drop, split_file, BOARD_MAX, MERGE as ICON_MERGE, MERGED_MAX, SCISSORS as ICON_SCISSORS, SHRINK as ICON_SHRINK, STRIP_MAX};

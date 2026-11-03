@@ -95,7 +95,7 @@ const PAGES: [Page; 8] = [
         rows: &[
             ("Chi parla", "Le voci riconosciute", "Un nome e un colore per ogni interlocutore"),
             ("Rivedi", "Audio e testo insieme", "Play per frase, i punti da controllare in evidenza"),
-            ("Locale", "Resta sul PC", "Il motore si scarica al primo uso"),
+            ("Riassunto AI", "Sul tuo PC", "In breve, decisioni e cose da fare"),
         ],
     },
     Page {
