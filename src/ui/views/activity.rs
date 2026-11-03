@@ -20,7 +20,10 @@ fn header(f: &mut Frame, app: &App, r: R, title: &str, simple: bool) -> f32 {
 }
 
 /// Il riquadro «Cosa sta succedendo» con il pulsante Copia. Le righe arrivano dal motore.
-fn log_box(f: &mut Frame, r: R, lines: &[(Tone, String, String)]) {
+/// Una riga del riquadro: tono, parola evidenziata, testo, chi parla (con le voci).
+type LogLine = (Tone, String, String, Option<u8>);
+
+fn log_box(f: &mut Frame, r: R, lines: &[LogLine]) {
     let pal = f.pal;
     f.card(r, 10.0);
     f.text("Cosa sta succedendo", r.0 + 18.0, r.1 + 8.0, r.2 - 140.0, 32.0, 16.0, SEMI, pal.text);
@@ -37,7 +40,7 @@ fn log_box(f: &mut Frame, r: R, lines: &[(Tone, String, String)]) {
     let off = f.ui.scroll(Scroll::Log);
     let start_y = body.1 - (max - off.min(max));
     f.p.push_clip(body.0, body.1, body.2, body.3);
-    for (i, (tone, key, text)) in lines.iter().enumerate() {
+    for (i, (tone, key, text, speaker)) in lines.iter().enumerate() {
         let y = start_y + i as f32 * row;
         if y + row < body.1 || y > body.1 + body.3 {
             continue;
@@ -47,6 +50,15 @@ fn log_box(f: &mut Frame, r: R, lines: &[(Tone, String, String)]) {
             let kc = if *tone == Tone::Error { pal.bad } else { pal.primary };
             f.p.text(key, x, y, 200.0, row, 14.0, SEMI, kc, Align::Left);
             x += f.measure(key, 14.0, SEMI) + 8.0;
+        }
+        // Con le voci, prima della frase c'è chi la dice, nel suo colore.
+        if let Some(v) = speaker {
+            let who = trascrizione::speaker_name(*v as usize);
+            let vc = f.voice(*v as usize);
+            f.p.text(&crate::i18n::lit(&who), x, y, 220.0, row, 14.0, BOLD, vc, Align::Left);
+            x += f.measure(&who, 14.0, BOLD) + 6.0;
+            f.p.text("·", x, y, 12.0, row, 14.0, SANS, pal.muted, Align::Left);
+            x += 14.0;
         }
         let c = match tone {
             Tone::Error => pal.bad,
@@ -60,12 +72,12 @@ fn log_box(f: &mut Frame, r: R, lines: &[(Tone, String, String)]) {
     f.scrolls.push((body, Scroll::Log, max));
 }
 
-fn transcribe_lines(app: &App) -> Vec<(Tone, String, String)> {
-    app.transcribe.log.iter().map(|l| (l.tone, l.key.clone(), l.text.clone())).collect()
+fn transcribe_lines(app: &App) -> Vec<LogLine> {
+    app.transcribe.log.iter().map(|l| (l.tone, l.key.clone(), l.text.clone(), l.speaker)).collect()
 }
 
-fn link_lines(l: &Links) -> Vec<(Tone, String, String)> {
-    l.log.lines().map(|s| (if s.starts_with("Errore") { Tone::Error } else { Tone::Note }, String::new(), s.to_string())).collect()
+fn link_lines(l: &Links) -> Vec<LogLine> {
+    l.log.lines().map(|s| (if s.starts_with("Errore") { Tone::Error } else { Tone::Note }, String::new(), s.to_string(), None)).collect()
 }
 
 /// La riga di un file da trascrivere (o di un link): nome, sotto lo stato, a destra l'icona.
