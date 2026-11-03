@@ -119,6 +119,9 @@ pub struct Request {
     pub gpu: bool,
     /// Dalle Impostazioni: usare le istruzioni AVX-512 se il processore le ha.
     pub avx512: bool,
+    /// Quante persone parlano, dalla finestrella prima di trascrivere: 0 = le conta Cedro, 1 = una sola
+    /// (niente riconoscimento delle voci), 2..=8 = esattamente quelle.
+    pub speakers: u8,
 }
 
 /// Il tono di una riga della finestra «Cosa sta succedendo», per colorarla.
@@ -142,6 +145,8 @@ pub struct Line {
     /// La prima parola, evidenziata (per esempio «Modello»); vuota se non c'è.
     pub key: String,
     pub text: String,
+    /// Chi dice la frase (per le righe `Speech` con il riconoscimento delle voci acceso).
+    pub speaker: Option<u8>,
 }
 
 /// Cosa la trascrizione racconta a chi la guarda.
@@ -155,7 +160,7 @@ pub enum Event {
 }
 
 fn log(sink: &dyn Fn(Event), tone: Tone, key: &str, text: impl Into<String>) {
-    sink(Event::Log(Line { tone, key: key.to_string(), text: text.into() }));
+    sink(Event::Log(Line { tone, key: key.to_string(), text: text.into(), speaker: None }));
 }
 
 /// La cartella dei modelli e del motore: fuori dal profilo che si sposta in rete, perché pesa.
@@ -675,11 +680,14 @@ struct Running {
 }
 
 impl Running {
-    fn start(exe: &Path, model: &Path, cpu: bool) -> Result<Running, String> {
+    fn start(exe: &Path, model: &Path, cpu: bool, voices: Option<&VoicePaths>) -> Result<Running, String> {
         let mut command = Command::new(exe);
         command.arg("--model").arg(model).arg("--threads").arg(engine_threads().to_string()).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
         if cpu {
             command.arg("--cpu");
+        }
+        if let Some((seg, emb)) = voices {
+            command.arg("--voci-seg").arg(seg).arg("--voci-emb").arg(emb);
         }
         #[cfg(windows)]
         {
@@ -789,11 +797,170 @@ impl Drop for Running {
 }
 
 /// Un segmento di parlato: inizio e fine in centesimi di secondo.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Segment {
     pub t0: i64,
     pub t1: i64,
     pub text: String,
+    /// Chi parla (0 = Interlocutore 1), se le voci sono state riconosciute.
+    pub speaker: Option<u8>,
+}
+
+// ---------------------------------------------------------------- chi parla
+
+/// Il nome di partenza di una voce: «Interlocutore 1», «Interlocutore 2»…
+pub fn speaker_name(index: usize) -> String {
+    format!("{} {}", crate::i18n::tr("Interlocutore"), index + 1)
+}
+
+/// Al massimo quante voci si riconoscono.
+pub const MAX_VOICES: usize = 8;
+
+/// I nomi di partenza per `n` voci.
+pub fn default_names(n: usize) -> Vec<String> {
+    (0..n).map(speaker_name).collect()
+}
+
+/// Un turno di parola trovato dal riconoscimento delle voci (centesimi di secondo).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Turn {
+    pub t0: i64,
+    pub t1: i64,
+    pub speaker: u8,
+}
+
+/// Chi dice la frase da `t0` a `t1`: la voce che parla di più in quell'intervallo. Se nessuna voce lo
+/// copre (una frase nel silenzio), quella del turno più vicino.
+pub fn speaker_of(turns: &[Turn], t0: i64, t1: i64) -> Option<u8> {
+    if turns.is_empty() {
+        return None;
+    }
+    let mut overlap = [0i64; 256];
+    for t in turns {
+        let o = t1.min(t.t1) - t0.max(t.t0);
+        if o > 0 {
+            overlap[t.speaker as usize] += o;
+        }
+    }
+    let (best, amount) = overlap.iter().enumerate().max_by_key(|(_, o)| **o).map(|(i, o)| (i as u8, *o))?;
+    if amount > 0 {
+        return Some(best);
+    }
+    let mid = (t0 + t1) / 2;
+    turns.iter().min_by_key(|t| if mid < t.t0 { t.t0 - mid } else { (mid - t.t1).max(0) }).map(|t| t.speaker)
+}
+
+/// I due modelli delle voci (pyannote-segmentation-3.0 e CAM++ di 3D-Speaker), dalle release di
+/// sherpa-onnx. Lo SHA-256 è fissato qui: ogni versione di Cedro sa quali file vuole.
+struct VoiceModel {
+    /// Il nome sul PC.
+    file: &'static str,
+    url: &'static str,
+    /// SHA-256 di quello che si scarica.
+    sha: &'static str,
+    megabytes: u32,
+    /// Se si scarica un archivio .tar.bz2: il file da tirarne fuori e il suo SHA-256.
+    inner: Option<(&'static str, &'static str)>,
+}
+
+const VOICE_SEGMENTATION: VoiceModel = VoiceModel {
+    file: "voci-segmentazione-pyannote-3.0.onnx",
+    url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+    sha: "24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488",
+    megabytes: 7,
+    inner: Some(("sherpa-onnx-pyannote-segmentation-3-0/model.onnx", "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079")),
+};
+
+const VOICE_EMBEDDING: VoiceModel = VoiceModel {
+    file: "voci-impronte-campplus-zh-en-advanced.onnx",
+    url: "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+    sha: "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
+    megabytes: 28,
+    inner: None,
+};
+
+/// Il peso dei modelli delle voci, per dirlo prima di scaricarli.
+pub const VOICE_MEGABYTES: u32 = 40;
+
+fn voice_dir() -> PathBuf {
+    data_dir().join("voci")
+}
+
+fn voice_model_ready(m: &VoiceModel) -> bool {
+    let path = voice_dir().join(m.file);
+    let want = m.inner.map_or(m.sha, |(_, sha)| sha);
+    path.is_file() && std::fs::read_to_string(voice_dir().join(format!("{}.sha256", m.file))).is_ok_and(|s| s.trim().eq_ignore_ascii_case(want))
+}
+
+/// Vero se i modelli delle voci sono già sul PC.
+pub fn voice_models_ready() -> bool {
+    voice_model_ready(&VOICE_SEGMENTATION) && voice_model_ready(&VOICE_EMBEDDING)
+}
+
+/// Il file `name` dentro un archivio .tar.bz2 (tar «ustar» semplice, come quelli di sherpa-onnx).
+fn untar_bz2(archive: &Path, name: &str) -> Result<Vec<u8>, String> {
+    let file = std::fs::File::open(archive).map_err(|e| format!("archivio dei modelli non aperto: {e}"))?;
+    let mut tar = bzip2::read::BzDecoder::new(std::io::BufReader::new(file));
+    let mut header = [0u8; 512];
+    loop {
+        tar.read_exact(&mut header).map_err(|e| format!("archivio dei modelli rovinato: {e}"))?;
+        if header.iter().all(|b| *b == 0) {
+            return Err(format!("{name} non c'è nell'archivio"));
+        }
+        let field = |a: usize, b: usize| String::from_utf8_lossy(&header[a..b]).trim_end_matches('\0').trim().to_string();
+        let mut entry = field(0, 100);
+        let prefix = field(345, 500);
+        if !prefix.is_empty() {
+            entry = format!("{prefix}/{entry}");
+        }
+        let size = u64::from_str_radix(&field(124, 136), 8).map_err(|_| "archivio dei modelli rovinato (misura)".to_string())?;
+        let padded = size.div_ceil(512) * 512;
+        if entry == name {
+            let mut data = vec![0u8; size as usize];
+            tar.read_exact(&mut data).map_err(|e| format!("archivio dei modelli rovinato: {e}"))?;
+            return Ok(data);
+        }
+        std::io::copy(&mut (&mut tar).take(padded), &mut std::io::sink()).map_err(|e| format!("archivio dei modelli rovinato: {e}"))?;
+    }
+}
+
+fn ensure_voice_model(m: &VoiceModel, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<PathBuf, String> {
+    use sha2::{Digest, Sha256};
+    let dir = voice_dir();
+    let path = dir.join(m.file);
+    if voice_model_ready(m) {
+        return Ok(path);
+    }
+    let what = "i modelli delle voci";
+    match m.inner {
+        None => {
+            let sha = fetch(m.url, &path, Some(m.sha), m.megabytes, what, sink, cancel)?;
+            std::fs::write(dir.join(format!("{}.sha256", m.file)), sha).map_err(|e| e.to_string())?;
+        }
+        Some((inner, inner_sha)) => {
+            let archive = dir.join(format!("{}.tar.bz2", m.file));
+            fetch(m.url, &archive, Some(m.sha), m.megabytes, what, sink, cancel)?;
+            let data = untar_bz2(&archive, inner);
+            let _ = std::fs::remove_file(&archive);
+            let data = data?;
+            if !hex(&Sha256::digest(&data)).eq_ignore_ascii_case(inner_sha) {
+                return Err("il modello delle voci estratto non corrisponde all'originale".into());
+            }
+            std::fs::write(&path, &data).map_err(|e| format!("{} non scritto: {e}", path.display()))?;
+            std::fs::write(dir.join(format!("{}.sha256", m.file)), inner_sha).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(path)
+}
+
+/// I modelli delle voci pronti sul PC: scaricati la prima volta (circa 35 MB).
+fn ensure_voice_models(sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<(PathBuf, PathBuf), String> {
+    if !voice_models_ready() {
+        log(sink, Tone::Step, "Voci", format!("scarico la prima volta il riconoscimento delle voci ({})…", size_text(VOICE_MEGABYTES)));
+    }
+    let seg = ensure_voice_model(&VOICE_SEGMENTATION, sink, cancel)?;
+    let emb = ensure_voice_model(&VOICE_EMBEDDING, sink, cancel)?;
+    Ok((seg, emb))
 }
 
 /// «00:12:40» da centesimi di secondo.
@@ -862,9 +1029,18 @@ fn word_language(code: &str) -> String {
     }
 }
 
-/// I segmenti raggruppati in paragrafi: si va a capo dopo una pausa o quando il paragrafo è lungo.
-pub fn paragraphs(segments: &[Segment]) -> Vec<(i64, String)> {
-    let mut out: Vec<(i64, String)> = Vec::new();
+/// Un paragrafo del documento: da quando, chi parla (se le voci sono riconosciute) e il testo.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Paragraph {
+    pub t0: i64,
+    pub speaker: Option<u8>,
+    pub text: String,
+}
+
+/// I segmenti raggruppati in paragrafi: si va a capo quando cambia chi parla, dopo una pausa o quando
+/// il paragrafo è lungo.
+pub fn paragraphs(segments: &[Segment]) -> Vec<Paragraph> {
+    let mut out: Vec<Paragraph> = Vec::new();
     let mut last_end = 0i64;
     for seg in segments {
         let text = seg.text.trim();
@@ -872,20 +1048,51 @@ pub fn paragraphs(segments: &[Segment]) -> Vec<(i64, String)> {
             continue;
         }
         let pause = seg.t0 - last_end;
-        let sentence_ended = out.last().is_some_and(|(_, p)| p.ends_with(['.', '?', '!', '…']));
         let start_new = match out.last() {
             None => true,
-            Some((_, p)) => pause >= 150 || (p.chars().count() > 600 && sentence_ended) || p.chars().count() > 1200,
+            Some(p) => {
+                let len = p.text.chars().count();
+                let sentence_ended = p.text.ends_with(['.', '?', '!', '…']);
+                p.speaker != seg.speaker || pause >= 150 || (len > 600 && sentence_ended) || len > 1200
+            }
         };
         if start_new {
-            out.push((seg.t0, text.to_string()));
-        } else if let Some((_, p)) = out.last_mut() {
-            p.push(' ');
-            p.push_str(text);
+            out.push(Paragraph { t0: seg.t0, speaker: seg.speaker, text: text.to_string() });
+        } else if let Some(p) = out.last_mut() {
+            p.text.push(' ');
+            p.text.push_str(text);
         }
         last_end = seg.t1;
     }
     out
+}
+
+/// Il nome di chi parla in un paragrafo: dai nomi dati, altrimenti «Interlocutore N».
+pub fn name_of(names: &[String], speaker: Option<u8>) -> Option<String> {
+    let i = speaker? as usize;
+    if names.is_empty() {
+        return None;
+    }
+    Some(names.get(i).map(|n| n.trim()).filter(|n| !n.is_empty()).map(str::to_string).unwrap_or_else(|| speaker_name(i)))
+}
+
+/// Quanto ha parlato ognuna delle voci (secondi), nell'ordine dei nomi.
+pub fn talk_time(segments: &[Segment], voices: usize) -> Vec<f64> {
+    let mut out = vec![0.0; voices];
+    for s in segments {
+        if let Some(v) = s.speaker.map(|v| v as usize).filter(|v| *v < voices) {
+            out[v] += (s.t1 - s.t0).max(0) as f64 / 100.0;
+        }
+    }
+    out
+}
+
+/// I colori delle voci nel Word (gli stessi dei temi chiari di Cedro).
+pub const VOICE_COLORS: [&str; 8] = ["2563B8", "D4570E", "1E8A55", "B0308F", "A87A0C", "0D7C8F", "C8323C", "5B4BD1"];
+
+/// Le voci che compaiono davvero nelle frasi (dopo le correzioni qualcuna può sparire).
+fn used_voices(segments: &[Segment], names: &[String]) -> Vec<usize> {
+    (0..names.len()).filter(|v| segments.iter().any(|s| s.speaker == Some(*v as u8))).collect()
 }
 
 /// Testo per l'XML di Word: i caratteri speciali escapati, quelli vietati in XML 1.0 (controllo) tolti.
@@ -930,17 +1137,29 @@ fn heading(source: &Path, secs: f64, lang: &str) -> (String, String) {
     (title, meta)
 }
 
-pub fn text_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment]) -> Vec<u8> {
+/// Il testo semplice. Con `names` (voci riconosciute) ogni paragrafo ha il nome di chi parla dopo l'orario.
+pub fn text_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String]) -> Vec<u8> {
     let (title, meta) = heading(source, secs, lang);
-    let mut out = format!("{title}\n{meta}\n\n");
-    for (t0, text) in paragraphs(segments) {
-        out.push_str(&format!("[{}] {text}\n\n", clock(t0)));
+    let mut out = format!("{title}\n{meta}\n");
+    let used = used_voices(segments, names);
+    if !used.is_empty() {
+        let list: Vec<String> = used.iter().filter_map(|v| name_of(names, Some(*v as u8))).collect();
+        out.push_str(&format!("{}: {}\n", crate::i18n::tr("Interlocutori"), list.join(", ")));
+    }
+    out.push('\n');
+    for p in paragraphs(segments) {
+        match name_of(names, p.speaker) {
+            Some(name) => out.push_str(&format!("[{}] {name}: {}\n\n", clock(p.t0), p.text)),
+            None => out.push_str(&format!("[{}] {}\n\n", clock(p.t0), p.text)),
+        }
     }
     let eol = if cfg!(windows) { "\r\n" } else { "\n" };
     out.trim_end().replace('\n', eol).into_bytes()
 }
 
-pub fn docx_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment]) -> Vec<u8> {
+/// Il Word. Con `names` (voci riconosciute) in cima c'è la legenda delle voci con quanto ha parlato
+/// ognuna, e ogni paragrafo comincia col nome di chi parla, nel suo colore.
+pub fn docx_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String]) -> Vec<u8> {
     let (title, meta) = heading(source, secs, lang);
     let mut body = format!(
         "<w:p><w:pPr><w:pStyle w:val=\"Title\"/></w:pPr><w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>\
@@ -948,11 +1167,38 @@ pub fn docx_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment]) ->
         xml_escape(&title),
         xml_escape(&meta)
     );
-    for (t0, text) in paragraphs(segments) {
+    let used = used_voices(segments, names);
+    if !used.is_empty() {
+        let talk = talk_time(segments, names.len());
+        let mut legend = String::from("<w:p><w:pPr><w:pStyle w:val=\"Voices\"/></w:pPr>");
+        for (k, v) in used.iter().enumerate() {
+            let color = VOICE_COLORS[v % VOICE_COLORS.len()];
+            let name = name_of(names, Some(*v as u8)).unwrap_or_default();
+            if k > 0 {
+                legend.push_str("<w:r><w:t xml:space=\"preserve\">     </w:t></w:r>");
+            }
+            legend.push_str(&format!(
+                "<w:r><w:rPr><w:color w:val=\"{color}\"/></w:rPr><w:t>■ </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t xml:space=\"preserve\">{} </w:t></w:r><w:r><w:rPr><w:color w:val=\"5D7080\"/></w:rPr><w:t>{}</w:t></w:r>",
+                xml_escape(&name),
+                xml_escape(&minutes_text(talk[*v]))
+            ));
+        }
+        legend.push_str("</w:p>");
+        body.push_str(&legend);
+    }
+    for p in paragraphs(segments) {
+        let who = match (name_of(names, p.speaker), p.speaker) {
+            (Some(name), Some(v)) => format!(
+                "<w:r><w:rPr><w:b/><w:color w:val=\"{}\"/></w:rPr><w:t xml:space=\"preserve\">{}  </w:t></w:r>",
+                VOICE_COLORS[v as usize % VOICE_COLORS.len()],
+                xml_escape(&name)
+            ),
+            _ => String::new(),
+        };
         body.push_str(&format!(
-            "<w:p><w:r><w:rPr><w:rStyle w:val=\"Time\"/></w:rPr><w:t xml:space=\"preserve\">[{}]  </w:t></w:r><w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>",
-            clock(t0),
-            xml_escape(&text)
+            "<w:p><w:r><w:rPr><w:rStyle w:val=\"Time\"/></w:rPr><w:t xml:space=\"preserve\">[{}]  </w:t></w:r>{who}<w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>",
+            clock(p.t0),
+            xml_escape(&p.text)
         ));
     }
     let document = format!(
@@ -987,6 +1233,8 @@ pub fn docx_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment]) ->
 <w:pPr><w:spacing w:after=\"60\"/></w:pPr><w:rPr><w:b/><w:color w:val=\"005E8E\"/><w:sz w:val=\"36\"/></w:rPr></w:style>\
 <w:style w:type=\"paragraph\" w:styleId=\"Meta\"><w:name w:val=\"Meta\"/><w:basedOn w:val=\"Normal\"/><w:next w:val=\"Normal\"/>\
 <w:pPr><w:pBdr><w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"6\" w:color=\"D6DEE5\"/></w:pBdr><w:spacing w:after=\"280\"/></w:pPr><w:rPr><w:color w:val=\"5D7080\"/><w:sz w:val=\"20\"/></w:rPr></w:style>\
+<w:style w:type=\"paragraph\" w:styleId=\"Voices\"><w:name w:val=\"Interlocutori\"/><w:basedOn w:val=\"Normal\"/><w:next w:val=\"Normal\"/>\
+<w:pPr><w:pBdr><w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"6\" w:color=\"D6DEE5\"/></w:pBdr><w:spacing w:after=\"280\"/></w:pPr><w:rPr><w:sz w:val=\"20\"/></w:rPr></w:style>\
 <w:style w:type=\"character\" w:styleId=\"Time\"><w:name w:val=\"Orario\"/><w:rPr><w:color w:val=\"7D93A3\"/><w:sz w:val=\"18\"/></w:rPr></w:style>\
 </w:styles>",
         lang = word_language(lang)
@@ -1071,7 +1319,8 @@ fn wait_or_cancel(cmd: &mut Command, cancel: &AtomicBool) -> bool {
 
 /// Quello che il motore dice su un file, fino alla fine.
 enum Outcome {
-    Done { lang: String, secs: f64, segments: Vec<Segment> },
+    /// `voices`: quante voci diverse sono state riconosciute (0 = nessun riconoscimento).
+    Done { lang: String, secs: f64, segments: Vec<Segment>, voices: usize },
     Unsupported(String),
     Failed(String),
     /// Il motore si è chiuso (o non riceve più): va riacceso per i file che restano.
@@ -1081,11 +1330,18 @@ enum Outcome {
 }
 
 /// Trascrive un file con il motore già acceso, raccontando i passi.
-fn one_file(engine: &mut Running, path: &Path, index: usize, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Outcome {
-    if let Err(e) = engine.send(serde_json::json!({"file": path.to_string_lossy(), "lang": "auto"})) {
+fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Outcome {
+    let mut request = serde_json::json!({"file": path.to_string_lossy(), "lang": "auto"});
+    if speakers != 1 {
+        request["speakers"] = speakers.into();
+    }
+    if let Err(e) = engine.send(request) {
         return Outcome::EngineDied(e);
     }
     let mut segments = Vec::new();
+    let mut turns: Vec<Turn> = Vec::new();
+    let mut voices = 0usize;
+    let mut voice_shown = 0u8;
     let mut secs = 0.0;
     let mut started = Instant::now();
     let mut shown = 0;
@@ -1102,9 +1358,38 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, sink: &dyn Fn(Event
                 log(sink, Tone::Step, "Audio", format!("{} di parlato da trascrivere", minutes_text(secs)));
             }
             "lang" => log(sink, Tone::Step, "Lingua", format!("riconosciuta: {}", language_name(event["code"].as_str().unwrap_or("?")))),
+            "voices_start" => log(sink, Tone::Step, "Voci", "riconosco chi parla…"),
+            "voices_progress" => {
+                let p = event["p"].as_u64().unwrap_or(0).min(100) as u8;
+                if p / 25 > voice_shown && p < 100 {
+                    voice_shown = p / 25;
+                    log(sink, Tone::Muted, "", format!("Voci: {p}%"));
+                }
+            }
+            "voices" => {
+                turns = event["turns"]
+                    .as_array()
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(|t| Some(Turn { t0: t[0].as_i64()?, t1: t[1].as_i64()?, speaker: t[2].as_u64()?.min(255) as u8 }))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                voices = turns.iter().map(|t| t.speaker as usize + 1).max().unwrap_or(0);
+                let secs = event["ms"].as_f64().unwrap_or(0.0) / 1000.0;
+                let text = match voices {
+                    0 => "nessuna voce chiara: trascrivo senza nomi".to_string(),
+                    1 => format!("una sola voce ({secs:.0} s)"),
+                    n => format!("trovate {n} voci in {} ({secs:.0} s)", minutes_text(event_secs(&turns))),
+                };
+                log(sink, Tone::Step, "Voci", text);
+            }
+            "voices_error" => log(sink, Tone::Note, "Voci", format!("non riconosciute ({}): trascrivo senza nomi", event["msg"].as_str().unwrap_or("?"))),
             "seg" => {
-                let seg = Segment { t0: event["t0"].as_i64().unwrap_or(0), t1: event["t1"].as_i64().unwrap_or(0), text: event["text"].as_str().unwrap_or("").to_string() };
-                log(sink, Tone::Speech, &format!("[{}]", clock(seg.t0)), seg.text.clone());
+                let (t0, t1) = (event["t0"].as_i64().unwrap_or(0), event["t1"].as_i64().unwrap_or(0));
+                let speaker = if voices >= 2 { speaker_of(&turns, t0, t1) } else { None };
+                let seg = Segment { t0, t1, text: event["text"].as_str().unwrap_or("").to_string(), speaker };
+                sink(Event::Log(Line { tone: Tone::Speech, key: format!("[{}]", clock(seg.t0)), text: seg.text.clone(), speaker }));
                 segments.push(seg);
             }
             "progress" => {
@@ -1117,7 +1402,10 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, sink: &dyn Fn(Event
                     log(sink, Tone::Note, "Avanzamento", format!("{p}% · restano circa {}", left_text(left.max(1.0))));
                 }
             }
-            "end" => return Outcome::Done { lang: event["lang"].as_str().unwrap_or("it").to_string(), secs, segments },
+            "end" => {
+                let voices = if voices >= 2 { voices } else { 0 };
+                return Outcome::Done { lang: event["lang"].as_str().unwrap_or("it").to_string(), secs, segments, voices };
+            }
             "error" if event["unsupported"].as_bool() == Some(true) => return Outcome::Unsupported(event["msg"].as_str().unwrap_or("").to_string()),
             "error" => return Outcome::Failed(event["msg"].as_str().unwrap_or("errore del motore").to_string()),
             _ => {}
@@ -1125,12 +1413,20 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, sink: &dyn Fn(Event
     }
 }
 
+/// La durata dell'audio coperta dai turni, per il registro.
+fn event_secs(turns: &[Turn]) -> f64 {
+    turns.iter().map(|t| t.t1).max().unwrap_or(0) as f64 / 100.0
+}
+
 /// Accende il motore scelto e aspetta che il modello sia in memoria. Con la scheda video, se il
 /// motore non ne trova una o non parte, ripiega su quello per processore.
-fn power_on(request: &Request, model: &Path, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
+/// I due modelli delle voci sul PC (segmentazione, impronte).
+type VoicePaths = (PathBuf, PathBuf);
+
+fn power_on(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
     #[cfg(target_os = "android")]
     {
-        let _ = cancel;
+        let _ = (cancel, voices);
         // whisper.cpp è compilato con le istruzioni dotprod+fp16 (ARMv8.2): tutti i telefoni dal 2018 le hanno, ma si controlla
         // a runtime (HWCAP) invece di lasciar partire un'istruzione illegale.
         const HWCAP_FPHP: u64 = 1 << 9;
@@ -1163,11 +1459,11 @@ fn power_on(request: &Request, model: &Path, sink: &dyn Fn(Event), cancel: &Atom
         };
     }
     #[cfg(not(target_os = "android"))]
-    power_on_process(request, model, sink, cancel)
+    power_on_process(request, model, voices, sink, cancel)
 }
 
 #[cfg(not(target_os = "android"))]
-fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
+fn power_on_process(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
     let cpu = cpu_variant(request.avx512);
     let mut tries: Vec<Variant> = Vec::new();
     let model_bytes = std::fs::metadata(model).map(|m| m.len()).unwrap_or(0);
@@ -1199,7 +1495,7 @@ fn power_on_process(request: &Request, model: &Path, sink: &dyn Fn(Event), cance
         if !std::mem::replace(&mut told, true) {
             log(sink, Tone::Step, "Motore", "lo accendo e carico il modello in memoria…");
         }
-        let running = Running::start(&exe, model, false)?;
+        let running = Running::start(&exe, model, false, voices)?;
         let ready = match running.next_or_cancel(cancel) {
             Next::Line(v) => Some(v),
             Next::Gone => None,
@@ -1266,6 +1562,10 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
     // e vanno saltati, non si scarica né si carica nulla.
     let mut model: Option<PathBuf> = None;
     let mut engine: Option<Running> = None;
+    // Chi parla: i modelli delle voci si preparano insieme al motore. Se non si possono avere (niente
+    // internet la prima volta) si trascrive lo stesso, senza nomi.
+    let mut speakers = request.speakers;
+    let mut voices: Option<VoicePaths> = None;
     for (index, path) in files.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
             // break, non return: il motore acceso si spegne qui sotto.
@@ -1283,10 +1583,20 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
             continue;
         };
         if engine.is_none() {
+            if speakers != 1 && voices.is_none() {
+                match ensure_voice_models(sink, cancel) {
+                    Ok(v) => voices = Some(v),
+                    Err(e) if e == CANCELLED => return fail_all(&e, index),
+                    Err(e) => {
+                        log(sink, Tone::Note, "Voci", format!("{e}: trascrivo senza riconoscere chi parla"));
+                        speakers = 1;
+                    }
+                }
+            }
             let started = match &model {
-                Some(m) => power_on(request, m, sink, cancel),
+                Some(m) => power_on(request, m, voices.as_ref(), sink, cancel),
                 None => ensure_model(request.model, sink, cancel).and_then(|m| {
-                    let r = power_on(request, &m, sink, cancel);
+                    let r = power_on(request, &m, voices.as_ref(), sink, cancel);
                     model = Some(m);
                     r
                 }),
@@ -1301,15 +1611,15 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
             }
         }
         let running = engine.as_mut().expect("motore acceso");
-        let mut outcome = one_file(running, path, index, sink, cancel);
+        let mut outcome = one_file(running, path, index, speakers, sink, cancel);
         // A driver can run out of shared memory after loading successfully.
         // Retry this file once on CPU, retaining the exact model and precision.
         if matches!(outcome, Outcome::EngineDied(_)) && crate::accel::in_use().is_some_and(|a| a.gpu) && !cancel.load(Ordering::Relaxed) {
             if let Some(dead) = engine.take() { dead.stop(); }
             log(sink, Tone::Note, "Scheda video", "motore interrotto: riprovo sul processore, con la stessa precisione");
-            let cpu_request = Request { format: request.format, model: request.model, gpu: false, avx512: request.avx512 };
-            match power_on(&cpu_request, model.as_ref().expect("modello caricato"), sink, cancel) {
-                Ok(mut cpu) => { outcome = one_file(&mut cpu, path, index, sink, cancel); engine = Some(cpu); }
+            let cpu_request = Request { gpu: false, ..request.clone() };
+            match power_on(&cpu_request, model.as_ref().expect("modello caricato"), voices.as_ref(), sink, cancel) {
+                Ok(mut cpu) => { outcome = one_file(&mut cpu, path, index, speakers, sink, cancel); engine = Some(cpu); }
                 Err(e) => outcome = Outcome::Failed(e),
             }
         }
@@ -1318,7 +1628,7 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
             log(sink, Tone::Muted, "", format!("Il motore non legge questo formato ({why}): lo apro con il sistema"));
             match system_decode(path, cancel) {
                 Ok(wav) => {
-                    outcome = one_file(engine.as_mut().expect("motore acceso"), &wav, index, sink, cancel);
+                    outcome = one_file(engine.as_mut().expect("motore acceso"), &wav, index, speakers, sink, cancel);
                     temp = Some(wav);
                 }
                 Err(e) if e == CANCELLED => outcome = Outcome::Cancelled,
@@ -1337,17 +1647,14 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
         }
         let engine_gone = matches!(outcome, Outcome::EngineDied(_));
         let result = match outcome {
-            Outcome::Done { lang, secs, segments } if segments.is_empty() => {
-                let _ = lang;
-                let _ = secs;
-                Err("nessun parlato riconosciuto nell'audio".to_string())
-            }
-            Outcome::Done { lang, secs, segments } => {
+            Outcome::Done { segments, .. } if segments.is_empty() => Err("nessun parlato riconosciuto nell'audio".to_string()),
+            Outcome::Done { lang, secs, segments, voices } => {
+                let names = default_names(voices);
                 // Le frasi restano salvate: «Rivedi» le riapre anche dopo aver chiuso Cedro.
-                let _ = crate::revisione::save(path, secs, &lang, &segments);
+                let _ = crate::revisione::save(path, secs, &lang, &segments, &names);
                 let bytes = match request.format {
-                    Format::Word => docx_bytes(path, secs, &lang, &segments),
-                    Format::Text => text_bytes(path, secs, &lang, &segments),
+                    Format::Word => docx_bytes(path, secs, &lang, &segments, &names),
+                    Format::Text => text_bytes(path, secs, &lang, &segments, &names),
                 };
                 std::fs::create_dir_all(&dir)
                     .and_then(|_| std::fs::write(&out, bytes))
@@ -1371,7 +1678,7 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                 dead.stop();
             }
             if let Some(m) = &model {
-                match power_on(request, m, sink, cancel) {
+                match power_on(request, m, voices.as_ref(), sink, cancel) {
                     Ok(r) => engine = Some(r),
                     Err(e) if e == CANCELLED => return fail_all(&e, index + 1),
                     Err(e) => {
@@ -1412,7 +1719,11 @@ mod tests {
     }
 
     fn seg(t0: i64, t1: i64, text: &str) -> Segment {
-        Segment { t0, t1, text: text.into() }
+        Segment { t0, t1, text: text.into(), speaker: None }
+    }
+
+    fn said(t0: i64, t1: i64, speaker: u8, text: &str) -> Segment {
+        Segment { t0, t1, text: text.into(), speaker: Some(speaker) }
     }
 
     #[test]
@@ -1451,8 +1762,82 @@ mod tests {
     #[test]
     fn pauses_start_new_paragraphs() {
         let segs = [seg(0, 300, "Buongiorno a tutti."), seg(320, 600, "Iniziamo la seduta."), seg(900, 1200, "Primo punto.")];
-        let p = paragraphs(&segs);
+        let p: Vec<(i64, String)> = paragraphs(&segs).into_iter().map(|p| (p.t0, p.text)).collect();
         assert_eq!(p, vec![(0, "Buongiorno a tutti. Iniziamo la seduta.".to_string()), (900, "Primo punto.".to_string())]);
+    }
+
+    #[test]
+    fn a_new_speaker_starts_a_new_paragraph() {
+        let segs = [said(0, 300, 0, "Buongiorno a tutti."), said(320, 600, 0, "Apriamo la seduta."), said(620, 900, 1, "Chiedo la parola.")];
+        let p = paragraphs(&segs);
+        assert_eq!(p.len(), 2);
+        assert_eq!((p[0].speaker, p[0].text.as_str()), (Some(0), "Buongiorno a tutti. Apriamo la seduta."));
+        assert_eq!((p[1].t0, p[1].speaker), (620, Some(1)));
+    }
+
+    #[test]
+    fn each_sentence_goes_to_who_speaks_most_in_it() {
+        let turns = [Turn { t0: 0, t1: 500, speaker: 0 }, Turn { t0: 450, t1: 1000, speaker: 1 }, Turn { t0: 1500, t1: 2000, speaker: 0 }];
+        assert_eq!(speaker_of(&turns, 100, 480), Some(0));
+        assert_eq!(speaker_of(&turns, 400, 900), Some(1));
+        // Nel silenzio tra due turni: il più vicino.
+        assert_eq!(speaker_of(&turns, 1300, 1400), Some(0));
+        assert_eq!(speaker_of(&turns, 1050, 1100), Some(1));
+        assert_eq!(speaker_of(&[], 0, 100), None);
+    }
+
+    #[test]
+    fn outputs_carry_the_speakers_names() {
+        let segs = [said(400, 900, 0, "Apriamo la seduta."), said(1000, 1500, 1, "Chiedo la parola."), said(1600, 1900, 0, "Prego.")];
+        let names = vec!["Sindaco".to_string(), String::new()];
+        let txt = String::from_utf8(text_bytes(Path::new("/x/consiglio.mp3"), 60.0, "it", &segs, &names)).unwrap();
+        assert!(txt.contains("Interlocutori: Sindaco, Interlocutore 2"), "{txt}");
+        assert!(txt.contains("[00:00:04] Sindaco: Apriamo la seduta."));
+        assert!(txt.contains("[00:00:10] Interlocutore 2: Chiedo la parola."));
+        assert!(txt.contains("[00:00:16] Sindaco: Prego."));
+        // Senza nomi resta come prima.
+        let plain = String::from_utf8(text_bytes(Path::new("/x/consiglio.mp3"), 60.0, "it", &segs, &[])).unwrap();
+        assert!(plain.contains("[00:00:04] Apriamo la seduta.") && !plain.contains("Interlocutor"));
+        let docx = docx_bytes(Path::new("/x/consiglio.mp3"), 60.0, "it", &segs, &names);
+        let dir = std::env::temp_dir().join(format!("cedro-voci-docx-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("v.docx");
+        std::fs::write(&file, &docx).unwrap();
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&file).unwrap()).unwrap();
+        let mut xml = String::new();
+        zip.by_name("word/document.xml").unwrap().read_to_string(&mut xml).unwrap();
+        assert!(xml.contains("Sindaco") && xml.contains("Interlocutore 2"));
+        assert!(xml.contains(VOICE_COLORS[0]) && xml.contains(VOICE_COLORS[1]));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn untar_finds_the_model_in_a_bz2_archive() {
+        use std::io::Write as _;
+        // Un tar minimo con due file, compresso in bz2.
+        fn entry(name: &str, data: &[u8]) -> Vec<u8> {
+            let mut h = [0u8; 512];
+            h[..name.len()].copy_from_slice(name.as_bytes());
+            let size = format!("{:011o}\0", data.len());
+            h[124..136].copy_from_slice(size.as_bytes());
+            h[156] = b'0';
+            let mut out = h.to_vec();
+            out.extend_from_slice(data);
+            out.resize(512 + data.len().div_ceil(512) * 512, 0);
+            out
+        }
+        let mut tar = entry("cartella/LEGGIMI", b"ciao");
+        tar.extend(entry("cartella/model.onnx", &[7u8; 700]));
+        tar.extend([0u8; 1024]);
+        let dir = std::env::temp_dir().join(format!("cedro-untar-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("m.tar.bz2");
+        let mut enc = bzip2::write::BzEncoder::new(std::fs::File::create(&path).unwrap(), bzip2::Compression::fast());
+        enc.write_all(&tar).unwrap();
+        enc.finish().unwrap();
+        assert_eq!(untar_bz2(&path, "cartella/model.onnx").unwrap(), vec![7u8; 700]);
+        assert!(untar_bz2(&path, "cartella/altro").is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1469,12 +1854,12 @@ mod tests {
     #[test]
     fn outputs_carry_title_times_and_text() {
         let segs = [seg(400, 900, "Buongiorno & benvenuti <tutti>."), seg(2100, 2500, "Primo punto.")];
-        let txt = String::from_utf8(text_bytes(Path::new("/x/giunta.m4a"), 3240.0, "it", &segs)).unwrap();
+        let txt = String::from_utf8(text_bytes(Path::new("/x/giunta.m4a"), 3240.0, "it", &segs, &[])).unwrap();
         assert!(txt.starts_with("giunta"));
         assert!(txt.contains("54 min di audio · lingua: italiano"));
         assert!(txt.contains("[00:00:04] Buongiorno & benvenuti <tutti>."));
         assert!(txt.contains("[00:00:21] Primo punto."));
-        let docx = docx_bytes(Path::new("/x/giunta.m4a"), 3240.0, "it", &segs);
+        let docx = docx_bytes(Path::new("/x/giunta.m4a"), 3240.0, "it", &segs, &[]);
         let dir = std::env::temp_dir().join(format!("cedro-trascr-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("t.docx");
@@ -1507,7 +1892,7 @@ mod tests {
             eprintln!("espeak-ng non c'è: prova saltata");
             return;
         }
-        let request = Request { format: Format::Text, model: 0, gpu: std::env::var_os("CEDRO_TRASCRIVI_GPU").is_some(), avx512: false };
+        let request = Request { format: Format::Text, model: 0, gpu: std::env::var_os("CEDRO_TRASCRIVI_GPU").is_some(), avx512: false, speakers: 1 };
         let lines = std::sync::Mutex::new(Vec::new());
         let finished = std::sync::Mutex::new(None);
         run(std::slice::from_ref(&wav), &request, Some(&work), &Options::default(), &|event| match event {

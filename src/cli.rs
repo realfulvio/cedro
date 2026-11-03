@@ -153,8 +153,9 @@ Cedro — conversione locale, senza upload.
   cedro zip <file>
   cedro --quality 80 convert foto.png jpeg
   cedro update     controlla se su GitHub c'è una versione nuova
-  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--cpu]
-                   dalla voce a un Word (o a un testo), con il motore scaricato alla prima volta
+  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--cpu]
+                   dalla voce a un Word (o a un testo), con il motore scaricato alla prima volta;
+                   --voci dice quante persone parlano (auto le conta da solo, 1 non le riconosce)
 
 Senza argomenti, su Windows e su Linux, Cedro resta nella tray.
 Su Linux la ruota si apre dal menu del file, oppure così:
@@ -182,21 +183,36 @@ fn transcribe(files: &[OsString], args: &[OsString]) -> i32 {
         Some("buona") => 1,
         _ => trascrizione::default_model(),
     };
+    let voices = args.iter().position(|a| a == "--voci").and_then(|i| args.get(i + 1)).and_then(|a| a.to_str());
+    let speakers = match voices {
+        None | Some("auto") => 0,
+        Some(n) => match n.parse::<u8>() {
+            Ok(n) if (1..=trascrizione::MAX_VOICES as u8).contains(&n) => n,
+            _ => {
+                eprintln!("{}", cedro::i18n::tr("--voci vuole auto o un numero da 1 a 8"));
+                return 2;
+            }
+        },
+    };
     let settings = cedro::read_settings();
     let request = Request {
         format: if args.iter().any(|a| a == "--testo") { Format::Text } else { Format::Word },
         model,
         gpu: settings.gpu && !args.iter().any(|a| a == "--cpu"),
         avx512: settings.avx512,
+        speakers,
     };
     let paths: Vec<std::path::PathBuf> = files
         .iter()
-        .filter(|f| !f.as_encoded_bytes().starts_with(b"--") && !matches!(f.to_str(), Some("veloce" | "buona" | "massima")))
+        .filter(|f| !f.as_encoded_bytes().starts_with(b"--") && !matches!(f.to_str(), Some("veloce" | "buona" | "massima")) && Some(f.as_os_str()) != voices.map(std::ffi::OsStr::new))
         .map(std::path::PathBuf::from)
         .collect();
     let failed = std::sync::atomic::AtomicBool::new(false);
     trascrizione::run(&paths, &request, None, &cedro::Options::default(), &|event| match event {
-        Event::Log(line) => println!("{} {}", line.key, cedro::i18n::tr(&line.text)),
+        Event::Log(line) => match line.speaker {
+            Some(v) => println!("{} {}: {}", line.key, trascrizione::speaker_name(v as usize), line.text),
+            None => println!("{} {}", line.key, cedro::i18n::tr(&line.text)),
+        },
         Event::Percent { .. } => {}
         Event::Finished { path, result } => match result {
             Ok((out, msg)) => println!("OK {} -> {} ({})", path.display(), out.display(), cedro::i18n::tr(&msg)),

@@ -12,9 +12,10 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**La Guida è rifatta.**
+**La trascrizione riconosce chi parla.**
 
-- Si apre dal menu dell'icona («Guida…») e dalla fine dell'installazione: ora usa i colori e il carattere del tema che hai scelto (con lo stemma nel tema Comune di Bondeno), invece del vecchio blu fisso.
-- Otto argomenti con un indice a sinistra e un riquadro animato: la ruota, Conversioni, gli strumenti PDF (Unisci, Dividi, Pagine, Comprimi), PDF in Word ed Excel anche da scansioni, Trascrizione e Rivedi, YouTube e web, Aspetto (temi, Standard e Semplificata, caratteri più grandi) e Aggiornamenti.
-- Cambia argomento da sola; un clic su una riga la ferma su quella. Frecce, Invio e Spazio vanno avanti e indietro, Esc chiude.
-- Su Windows la finestra sta nello schermo anche con scala 150% o a 1024×768, ha l'icona di Cedro e la barra del titolo nei colori del tema.
+- Quando premi Trascrivi, Cedro chiede «Quante persone parlano?». Puoi lasciare Automatico, che le conta da solo, oppure scegliere un numero da 1 a 8. Con 1 il riconoscimento non si fa e la trascrizione è veloce come prima.
+- Nel testo ogni frase ha il suo interlocutore («Interlocutore 1», «Interlocutore 2»…) e ogni volta che cambia voce si va a capo. In cima al Word c'è la legenda delle voci, ognuna col suo colore e i minuti in cui ha parlato.
+- In Rivedi trascrizione, sotto l'onda, c'è una striscia colorata che mostra chi parla. Nella scheda «Chi parla» dai i nomi (cambiano in tutte le frasi), ascolti un pezzo di ogni voce e con «Unisci a…» rimetti insieme una persona che Cedro ha diviso in due. Per cambiare la voce di una sola frase basta un clic sul suo nome.
+- Si salva in Word, testo, .srt e .vtt, con o senza i nomi.
+- Tutto resta sul PC. La prima volta Cedro scarica il riconoscimento delle voci, circa 40 MB.
