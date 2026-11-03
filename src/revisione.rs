@@ -18,6 +18,8 @@ pub struct Saved {
     pub segments: Vec<Segment>,
     /// I nomi delle voci riconosciute (vuoto se non ci sono).
     pub names: Vec<String>,
+    /// Il Riassunto AI, se è stato fatto.
+    pub summary: Option<crate::riassunto::Stored>,
 }
 
 fn folder() -> PathBuf {
@@ -36,7 +38,13 @@ pub fn has(source: &Path) -> bool {
     review_path(source).is_file()
 }
 
+/// Salva le frasi di una trascrizione nuova: un riassunto di quella di prima non vale più.
 pub fn save(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String]) -> std::io::Result<()> {
+    save_with(source, secs, lang, segments, names, None)
+}
+
+/// Salva la revisione, con il Riassunto AI se c'è.
+pub fn save_with(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Stored>) -> std::io::Result<()> {
     let list: Vec<Value> = segments
         .iter()
         .map(|s| match s.speaker {
@@ -44,7 +52,22 @@ pub fn save(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &
             None => json!([s.t0, s.t1, s.text]),
         })
         .collect();
-    let body = json!({"source": source.to_string_lossy(), "secs": secs, "lang": lang, "segments": list, "voices": names});
+    let mut body = json!({"source": source.to_string_lossy(), "secs": secs, "lang": lang, "segments": list, "voices": names});
+    if let Some(s) = summary {
+        body["summary"] = s.to_json();
+    }
+    write_atomic(source, &body)
+}
+
+/// Mette (o cambia) il Riassunto AI nella revisione salvata, senza toccare le frasi.
+pub fn store_summary(source: &Path, summary: &crate::riassunto::Stored) -> std::io::Result<()> {
+    let text = std::fs::read_to_string(review_path(source))?;
+    let mut body: Value = serde_json::from_str(&text).map_err(std::io::Error::other)?;
+    body["summary"] = summary.to_json();
+    write_atomic(source, &body)
+}
+
+fn write_atomic(source: &Path, body: &Value) -> std::io::Result<()> {
     let path = review_path(source);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
@@ -67,7 +90,8 @@ pub fn load(source: &Path) -> Option<Saved> {
         })
         .collect();
     let names: Vec<String> = v["voices"].as_array().map(|a| a.iter().filter_map(|n| n.as_str().map(str::to_string)).take(trascrizione::MAX_VOICES).collect()).unwrap_or_default();
-    (!segments.is_empty()).then(|| Saved { secs: v["secs"].as_f64().unwrap_or(0.0), lang: v["lang"].as_str().unwrap_or("it").to_string(), segments, names })
+    let summary = crate::riassunto::Stored::from_json(&v["summary"]);
+    (!segments.is_empty()).then(|| Saved { secs: v["secs"].as_f64().unwrap_or(0.0), lang: v["lang"].as_str().unwrap_or("it").to_string(), segments, names, summary })
 }
 
 // ---------------------------------------------------------------- rilevatore
