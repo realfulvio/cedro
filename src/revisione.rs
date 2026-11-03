@@ -16,6 +16,8 @@ pub struct Saved {
     pub secs: f64,
     pub lang: String,
     pub segments: Vec<Segment>,
+    /// I nomi delle voci riconosciute (vuoto se non ci sono).
+    pub names: Vec<String>,
 }
 
 fn folder() -> PathBuf {
@@ -34,9 +36,15 @@ pub fn has(source: &Path) -> bool {
     review_path(source).is_file()
 }
 
-pub fn save(source: &Path, secs: f64, lang: &str, segments: &[Segment]) -> std::io::Result<()> {
-    let list: Vec<Value> = segments.iter().map(|s| json!([s.t0, s.t1, s.text])).collect();
-    let body = json!({"source": source.to_string_lossy(), "secs": secs, "lang": lang, "segments": list});
+pub fn save(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String]) -> std::io::Result<()> {
+    let list: Vec<Value> = segments
+        .iter()
+        .map(|s| match s.speaker {
+            Some(v) => json!([s.t0, s.t1, s.text, v]),
+            None => json!([s.t0, s.t1, s.text]),
+        })
+        .collect();
+    let body = json!({"source": source.to_string_lossy(), "secs": secs, "lang": lang, "segments": list, "voices": names});
     let path = review_path(source);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
@@ -53,9 +61,13 @@ pub fn load(source: &Path) -> Option<Saved> {
     let segments: Vec<Segment> = v["segments"]
         .as_array()?
         .iter()
-        .filter_map(|s| Some(Segment { t0: s[0].as_i64()?, t1: s[1].as_i64()?, text: s[2].as_str()?.to_string() }))
+        .filter_map(|s| {
+            let speaker = s[3].as_u64().filter(|v| (*v as usize) < trascrizione::MAX_VOICES).map(|v| v as u8);
+            Some(Segment { t0: s[0].as_i64()?, t1: s[1].as_i64()?, text: s[2].as_str()?.to_string(), speaker })
+        })
         .collect();
-    (!segments.is_empty()).then(|| Saved { secs: v["secs"].as_f64().unwrap_or(0.0), lang: v["lang"].as_str().unwrap_or("it").to_string(), segments })
+    let names: Vec<String> = v["voices"].as_array().map(|a| a.iter().filter_map(|n| n.as_str().map(str::to_string)).take(trascrizione::MAX_VOICES).collect()).unwrap_or_default();
+    (!segments.is_empty()).then(|| Saved { secs: v["secs"].as_f64().unwrap_or(0.0), lang: v["lang"].as_str().unwrap_or("it").to_string(), segments, names })
 }
 
 // ---------------------------------------------------------------- rilevatore
@@ -294,29 +306,40 @@ fn wrap(text: &str) -> String {
     }
 }
 
-fn cues(segments: &[Segment]) -> Vec<(i64, i64, String)> {
+/// I sottotitoli: inizio, fine, chi parla (se si scrive) e testo.
+fn cues(segments: &[Segment], names: &[String]) -> Vec<(i64, i64, Option<String>, String)> {
     let live: Vec<&Segment> = segments.iter().filter(|s| !s.text.trim().is_empty()).collect();
     live.iter()
         .enumerate()
         .map(|(k, s)| {
             // Un sottotitolo non deve finire dopo l'inizio del successivo, né durare meno di mezzo secondo.
             let end = s.t1.max(s.t0 + 50).min(live.get(k + 1).map_or(i64::MAX, |n| n.t0.max(s.t0 + 1)));
-            (s.t0, end, wrap(&s.text))
+            (s.t0, end, trascrizione::name_of(names, s.speaker), wrap(&s.text))
         })
         .collect()
 }
 
-pub fn srt_bytes(segments: &[Segment]) -> Vec<u8> {
+/// `names` vuoto: sottotitoli senza chi parla.
+pub fn srt_bytes(segments: &[Segment], names: &[String]) -> Vec<u8> {
     let mut out = String::new();
-    for (n, (a, b, text)) in cues(segments).iter().enumerate() {
+    for (n, (a, b, who, text)) in cues(segments, names).iter().enumerate() {
+        let text = match who {
+            Some(who) => format!("{who}: {text}"),
+            None => text.clone(),
+        };
         out.push_str(&format!("{}\n{} --> {}\n{text}\n\n", n + 1, stamp(*a, true), stamp(*b, true)));
     }
     out.into_bytes()
 }
 
-pub fn vtt_bytes(segments: &[Segment]) -> Vec<u8> {
+pub fn vtt_bytes(segments: &[Segment], names: &[String]) -> Vec<u8> {
     let mut out = String::from("WEBVTT\n\n");
-    for (a, b, text) in cues(segments) {
+    for (a, b, who, text) in cues(segments, names) {
+        // WebVTT ha il suo segno per chi parla: <v Nome>.
+        let text = match who {
+            Some(who) => format!("<v {}>{text}", who.replace(['<', '>', '&'], "")),
+            None => text,
+        };
         out.push_str(&format!("{} --> {}\n{text}\n\n", stamp(a, false), stamp(b, false)));
     }
     out.into_bytes()
@@ -327,7 +350,7 @@ mod tests {
     use super::*;
 
     fn seg(t0: i64, t1: i64, text: &str) -> Segment {
-        Segment { t0, t1, text: text.to_string() }
+        Segment { t0, t1, text: text.to_string(), speaker: None }
     }
 
     #[test]
@@ -339,11 +362,16 @@ mod tests {
         let b = dir.join("altra").join("giunta.m4a");
         assert_ne!(review_path(&a), review_path(&b));
         assert!(!has(&a));
-        save(&a, 12.5, "it", &[seg(0, 300, "Buongiorno a tutti."), seg(300, 700, "Iniziamo \"subito\" con l'ordine del giorno.")]).unwrap();
+        let mut second = seg(300, 700, "Iniziamo \"subito\" con l'ordine del giorno.");
+        second.speaker = Some(1);
+        let names = vec!["Sindaco".to_string(), "Segretaria".to_string()];
+        save(&a, 12.5, "it", &[seg(0, 300, "Buongiorno a tutti."), second], &names).unwrap();
         assert!(has(&a) && !has(&b));
         let back = load(&a).unwrap();
         assert_eq!((back.secs, back.lang.as_str(), back.segments.len()), (12.5, "it", 2));
         assert_eq!(back.segments[1].text, "Iniziamo \"subito\" con l'ordine del giorno.");
+        assert_eq!((back.segments[0].speaker, back.segments[1].speaker), (None, Some(1)));
+        assert_eq!(back.names, names);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -403,13 +431,19 @@ mod tests {
     #[test]
     fn subtitles_have_the_right_clock_and_never_overlap() {
         let rows = vec![seg(0, 450, "Buongiorno a tutti."), seg(400, 5000, "Questa è una frase abbastanza lunga da dover andare a capo sulla riga."), seg(5000, 5010, "Fine."), seg(6000, 7000, "  ")];
-        let srt = String::from_utf8(srt_bytes(&rows)).unwrap();
+        let srt = String::from_utf8(srt_bytes(&rows, &[])).unwrap();
         assert!(srt.starts_with("1\n00:00:00,000 --> 00:00:04,000\nBuongiorno a tutti.\n\n2\n00:00:04,000 --> 00:00:50,000\n"), "{srt}");
         assert!(srt.contains("abbastanza lunga\nda dover andare a capo sulla riga."), "{srt}");
         assert!(srt.contains("3\n00:00:50,000 --> 00:00:50,500\nFine."), "{srt}");
         assert!(!srt.contains("4\n"), "le frasi vuote non diventano sottotitoli");
-        let vtt = String::from_utf8(vtt_bytes(&rows)).unwrap();
+        let vtt = String::from_utf8(vtt_bytes(&rows, &[])).unwrap();
         assert!(vtt.starts_with("WEBVTT\n\n00:00:00.000 --> 00:00:04.000\n"), "{vtt}");
+        // Con le voci: il nome davanti nel .srt, il segno <v> nel .vtt.
+        let mut rows = rows;
+        rows[0].speaker = Some(0);
+        let names = vec!["Sindaco".to_string()];
+        assert!(String::from_utf8(srt_bytes(&rows, &names)).unwrap().contains("\nSindaco: Buongiorno a tutti.\n"));
+        assert!(String::from_utf8(vtt_bytes(&rows, &names)).unwrap().contains("\n<v Sindaco>Buongiorno a tutti.\n"));
         assert_eq!(stamp(372_550, true), "01:02:05,500");
     }
 }

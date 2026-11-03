@@ -254,6 +254,10 @@ pub struct Transcribe {
     pub log: Vec<trascrizione::Line>,
     /// Avanzamento del file in lavoro (0..100).
     pub percent: u8,
+    /// Quante persone parlano: 0 Automatico, 1 nessun riconoscimento, poi il numero.
+    pub speakers: u8,
+    /// La finestrella «Quante persone parlano?» è aperta.
+    pub asking: bool,
 }
 
 /// Il lavoro in corso.
@@ -471,7 +475,7 @@ impl App {
             dest: None,
             job: None,
             selected: None,
-            transcribe: Transcribe { format: trascrizione::Format::Word, model: trascrizione::default_model(), log: Vec::new(), percent: 0 },
+            transcribe: Transcribe { format: trascrizione::Format::Word, model: trascrizione::default_model(), log: Vec::new(), percent: 0, speakers: 0, asking: false },
             youtube: Links::new(false),
             web: Links::new(true),
             notice: None,
@@ -1208,7 +1212,7 @@ impl App {
     pub fn start(&mut self) {
         match self.activity {
             Activity::Convert => self.start_convert(),
-            Activity::Transcribe => self.start_transcribe(),
+            Activity::Transcribe => self.ask_voices(),
             Activity::YouTube => self.start_links(false),
             Activity::Web => self.start_links(true),
         }
@@ -1367,7 +1371,26 @@ impl App {
         });
     }
 
-    fn start_transcribe(&mut self) {
+    /// Prima di trascrivere si chiede quante persone parlano (si parte da Automatico).
+    fn ask_voices(&mut self) {
+        if self.busy() {
+            return;
+        }
+        if self.todo().is_empty() {
+            self.notice = Some(Notice { text: "Aggiungi prima un audio o un video.".into(), error: false });
+            return;
+        }
+        self.transcribe.asking = true;
+    }
+
+    /// La risposta della finestrella: si trascrive con quel numero di voci.
+    pub fn voices_go(&mut self) {
+        if std::mem::take(&mut self.transcribe.asking) {
+            self.start_transcribe();
+        }
+    }
+
+    pub fn start_transcribe(&mut self) {
         if self.busy() {
             return;
         }
@@ -1381,7 +1404,7 @@ impl App {
         self.transcribe.log.clear();
         self.transcribe.percent = 0;
         let settings = crate::read_settings();
-        let request = trascrizione::Request { format: self.transcribe.format, model: self.transcribe.model, gpu: settings.gpu, avx512: settings.avx512 };
+        let request = trascrizione::Request { format: self.transcribe.format, model: self.transcribe.model, gpu: settings.gpu, avx512: settings.avx512, speakers: self.transcribe.speakers.min(trascrizione::MAX_VOICES as u8) };
         let dest = self.dest.clone();
         let opts = self.exists_options(conversioni::options_from(&self.values));
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
