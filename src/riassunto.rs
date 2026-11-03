@@ -250,6 +250,9 @@ fn one_pass(running: &mut Running, request: &Value, cancel: &AtomicBool, sink: &
             "final" => sink(Progress::Step(Step::Writing)),
             "progress" => sink(Progress::Percent(v["p"].as_u64().unwrap_or(0).min(100) as u8)),
             "end" => return Pass::Done(v["text"].as_str().unwrap_or("").trim().to_string()),
+            // Sulla scheda video scriveva troppo piano (occupata da un altro programma): il motore è uscito
+            // e si rifà sul processore, come quando il driver cede.
+            "slow" => return Pass::Died(format!("scheda video occupata ({} token/s)", v["tps"].as_f64().unwrap_or(0.0))),
             "error" | "fatal" => return Pass::Failed(v["msg"].as_str().unwrap_or("il riassunto non è riuscito").to_string()),
             _ => {}
         }
@@ -606,10 +609,35 @@ fn parse(text: &str) -> Raw {
         }
     }
     raw.brief = brief.join(" ");
+    // Una persona sola per riga: il modello a volte la ripete (soprattutto dagli appunti a pezzi).
+    let mut who: Vec<(String, String)> = Vec::with_capacity(raw.who.len());
+    for (name, said) in std::mem::take(&mut raw.who) {
+        let key = name.to_lowercase();
+        match who.iter_mut().find(|(n, _)| !n.is_empty() && n.to_lowercase() == key) {
+            Some(prev) if !said.is_empty() && !prev.1.contains(said.as_str()) => {
+                let end = prev.1.trim_end().ends_with(['.', '!', '?']);
+                prev.1 = format!("{}{} {said}", prev.1.trim_end(), if end { "" } else { "." });
+            }
+            Some(_) => {}
+            None => who.push((name, said)),
+        }
+    }
+    raw.who = who;
+    raw.dedup_lists();
     if !found {
         raw.brief = text.trim().to_string();
     }
     raw
+}
+
+impl Raw {
+    /// Toglie le decisioni e i compiti ripetuti uguali (succede unendo gli appunti dei pezzi).
+    fn dedup_lists(&mut self) {
+        let mut seen = std::collections::HashSet::new();
+        self.decisions.retain(|d| seen.insert(d.to_lowercase()));
+        let mut seen = std::collections::HashSet::new();
+        self.todo.retain(|(w, o)| seen.insert((w.to_lowercase(), o.as_ref().map(|o| o.to_lowercase()))));
+    }
 }
 
 /// Il testo di una riga d'elenco («- …», «* …», «• …», «1. …»), o None se non è un elenco.
@@ -684,6 +712,9 @@ mod tests {
         let x = parse(text);
         assert_eq!(x.brief, "Una riunione breve.");
         assert_eq!(voice_of(&x.who[0].0, &names()), Some(0));
+        let twice = parse("## Chi ha detto cosa\n- Sindaco: apre la seduta\n- Bianchi: chiede i fondi\n- Sindaco: mette ai voti.\n## Decisioni\n- Approvato\n- Approvato\n## Da fare\n- Nessuno");
+        assert_eq!(twice.who, [("Sindaco".to_string(), "apre la seduta. mette ai voti.".to_string()), ("Bianchi".to_string(), "chiede i fondi".to_string())]);
+        assert_eq!(twice.decisions, ["Approvato"]);
         assert_eq!(x.decisions, ["Si rinvia."]);
         assert_eq!(x.todo, [("Mandare il verbale, entro venerdì".to_string(), None)]);
         assert_eq!(parse("Solo testo, senza titoli.").brief, "Solo testo, senza titoli.");

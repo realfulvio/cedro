@@ -21,8 +21,8 @@ pub fn pane(f: &mut Frame, app: &App, rv: &Review, r: R) {
         let y = r.1 + 4.0;
         let h = if let Some(job) = app.summary_job_for(&rv.source) {
             working(f, job, x, y, w)
-        } else if let Some(Failure::LowMemory(free)) = app.summary_failure_for(&rv.source) {
-            low_memory(f, *free, x, y, w)
+        } else if let Some(free) = still_low(app.summary_failure_for(&rv.source)) {
+            low_memory(f, free, x, y, w)
         } else if let Some(sections) = rv.summary_sections() {
             ready(f, rv, &sections, x, y, w)
         } else {
@@ -30,6 +30,14 @@ pub fn pane(f: &mut Frame, app: &App, rv: &Review, r: R) {
         };
         h + 18.0
     });
+}
+
+/// La memoria libera di adesso, se l'ultimo tentativo si è fermato per poca memoria e manca ancora:
+/// chiusi abbastanza programmi, l'avviso sparisce e torna «Fai il riassunto».
+fn still_low(failure: Option<&Failure>) -> Option<u64> {
+    let Some(Failure::LowMemory(then)) = failure else { return None };
+    let now = crate::resources::available_memory().unwrap_or(*then);
+    (now < riassunto::NEED_BYTES).then_some(now)
 }
 
 /// Su cosa lavorerà: la scheda video se le Impostazioni la vogliono e c'è, se no il processore.
@@ -183,8 +191,8 @@ fn memory(f: &mut Frame, job: &Job, x: f32, y: f32, w: f32) -> f32 {
     let other = total.saturating_sub(job.free.unwrap_or(total / 2));
     let (ix, iw) = (x + 12.0, w - 24.0);
     let note = format!("A fine riassunto il modello si chiude e i {} tornano liberi.", riassunto::gb(used));
-    let note_lines = f.p.wrap_lines(&note, 13.0, SANS, iw, 0).len() as f32;
-    let h = 12.0 + 22.0 + 16.0 + 24.0 + note_lines * 18.5 + 12.0;
+    let note_h = f.p.wrap_height(&note, 13.0, SANS, iw, 18.5, 0);
+    let h = 12.0 + 22.0 + 16.0 + 24.0 + note_h + 12.0;
     f.p.rrect(x, y, w, h, 10.0, Some(pal.alt), None);
     let mut cy = y + 12.0;
     f.text("Memoria del PC", ix, cy, iw - 80.0, 20.0, 13.5, SEMI, pal.text);
@@ -219,15 +227,14 @@ fn low_memory(f: &mut Frame, free: u64, x: f32, y0: f32, w: f32) -> f32 {
         "Per il riassunto servono 4 GB liberi, adesso ce ne sono {}. Chiudi qualche programma, per esempio il browser o Outlook, e riprova. Cedro non parte per non bloccare il PC.",
         riassunto::gb(free).trim_end_matches(" GB")
     );
-    let tw = w - 28.0 - 24.0 - 12.0;
-    let lines = f.p.wrap_lines(&body, 14.0, SANS, tw, 0).len() as f32;
-    let h = 14.0 + 24.0 + lines * 20.3 + 14.0;
+    let tw = w - 50.0 - 14.0;
+    let h = 38.0 + f.p.wrap_height(&body, 14.0, SANS, tw, 14.0 * 1.45, 0) + 14.0;
     f.p.rrect(x, y, w, h, 10.0, Some(pal.surface), Some((pal.bad, 1.5)));
     f.icon(ic::WARNING, x + 14.0, y + 14.0, 24.0, pal.bad);
     f.text("Poca memoria libera", x + 50.0, y + 12.0, tw, 24.0, 16.0, SEMI, pal.text);
     f.para(&body, x + 50.0, y + 38.0, tw, 14.0, SANS, pal.muted, 1.45, 0);
     y += h + 14.0;
-    y += facts(f, crate::resources::available_memory().or(Some(free)), x, y, w) + 14.0;
+    y += facts(f, Some(free), x, y, w) + 14.0;
     f.primary((x, y, w, 46.0), "Riprova", None, 16.0, Act::SummaryStart, true);
     y + 46.0 - y0
 }
@@ -305,13 +312,13 @@ fn ready(f: &mut Frame, rv: &Review, s: &riassunto::Sections, x: f32, y0: f32, w
         let tw = w - 26.0;
         let text = lit(&t.what);
         let lines = f.p.wrap_lines(&text, size, SANS, tw, 0);
-        let lh = size * 1.45;
         let h = f.para(&text, x + 26.0, y, tw, size, SANS, if on { pal.muted } else { pal.text }, 1.45, 0);
         // Chi lo fa: il chip dopo l'ultima riga, se ci sta; se no sotto.
         if let Some(owner) = &t.owner {
             let last = lines.last().map(|l| f.measure(l, size, SANS)).unwrap_or(0.0);
             let cw = f.measure(owner, 12.5, SEMI) + 30.0;
             let sep = f.measure(" · ", size, SANS);
+            let lh = h / lines.len().max(1) as f32;
             if last + sep + cw <= tw {
                 let ly = y + h - lh;
                 f.text(" · ", x + 26.0 + last, ly, sep + 2.0, lh, size, SANS, pal.text);
