@@ -880,7 +880,7 @@ const VOICE_EMBEDDING: VoiceModel = VoiceModel {
 };
 
 /// Il peso dei modelli delle voci, per dirlo prima di scaricarli.
-pub const VOICE_MEGABYTES: u32 = 35;
+pub const VOICE_MEGABYTES: u32 = 40;
 
 fn voice_dir() -> PathBuf {
     data_dir().join("voci")

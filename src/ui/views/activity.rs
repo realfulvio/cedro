@@ -34,6 +34,9 @@ fn log_box(f: &mut Frame, r: R, lines: &[LogLine]) {
         return;
     }
     let row = 22.0;
+    // Righe intere: in fondo il riquadro non mostra mai mezza riga tagliata sotto il titolo.
+    let fit = (body.3 / row).floor().max(1.0) * row;
+    let body = (body.0, body.1 + body.3 - fit, body.2, fit);
     let total = lines.len() as f32 * row;
     // Si vede sempre la fine: lo scorrimento parte dal fondo.
     let max = (total - body.3).max(0.0);
