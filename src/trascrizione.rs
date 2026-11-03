@@ -1605,7 +1605,7 @@ fn power_on_process(request: &Request, model: &Path, voices: Option<&VoicePaths>
                 match v["gpu"].as_str() {
                     Some(gpu) if variant == Variant::Vulkan => {
                         log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · scheda video: {gpu}"));
-                        crate::accel::set_in_use(true, format!("Vulkan · {gpu}"));
+                        crate::accel::set_in_use(true, crate::accel::gpu_model(gpu));
                         return Ok(running);
                     }
                     _ if variant == Variant::Vulkan => {

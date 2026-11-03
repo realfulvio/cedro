@@ -1612,3 +1612,15 @@ Il modello che scrive il riassunto (scaricato al primo riassunto, in formato GGU
 motore cedro-riassumi	cedro-riassumi engine
 Sul tuo PC	On your PC
 In breve, decisioni e cose da fare	In short, decisions and things to do
+Si prepara	Getting ready
+Trascrive	Transcribing
+Si prepara · file {#} di {#}	Getting ready · file {} of {}
+Trascrive · file {#} di {#}	Transcribing · file {} of {}
+Restano meno di un minuto	Less than a minute left
+Restano circa {#} min	About {} min left
+Restano circa {#} h {#} min	About {}h {} min left
+Calcolo il tempo che resta…	Working out the time left…
+Accendo il motore…	Starting the engine…
+Processore · {}	Processor · {}
+Radeon integrata	Integrated Radeon
+scheda video	graphics card
