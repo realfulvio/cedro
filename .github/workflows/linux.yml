@@ -8,7 +8,7 @@ name: Linux
 on:
   push:
     branches: ["claude/**"]
-    paths: ["Cargo.*", "src/**", "resources/**", "vendor/**", "trascrivi/**", "installer/**", "examples/**", "build.rs", ".github/workflows/linux.yml"]
+    paths: ["Cargo.*", "src/**", "resources/**", "vendor/**", "trascrivi/**", "riassumi/**", "installer/**", "examples/**", "build.rs", ".github/workflows/linux.yml"]
   workflow_dispatch:
     inputs:
       tag:
@@ -92,10 +92,62 @@ jobs:
           name: linux-motori
           path: dist-motori/cedro-trascrivi-*
 
+  riassunto:
+    name: Motori del Riassunto AI (processore e Vulkan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Librerie di sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake clang libclang-dev pkg-config libvulkan-dev glslc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: riassumi
+          cache-targets: false
+
+      - name: Motori base, avx2, avxvnni, avx512, avx512vnni, vulkan
+        run: riassumi/build.sh -o "$GITHUB_WORKSPACE/dist-riassumi" -t "$RUNNER_TEMP/crv"
+
+      - name: Prove della logica del motore
+        working-directory: riassumi
+        run: cargo test --release
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/crv/test
+
+      # Il modello vero (2,7 GB) resta in cache tra un giro e l'altro.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/qwen
+          key: qwen3.5-4b-q4km-unsloth
+
+      - name: Prova di riassunto (Qwen3.5-4B vero, sul processore del runner)
+        run: |
+          ls -l dist-riassumi
+          model="$RUNNER_TEMP/qwen/Qwen3.5-4B-Q4_K_M.gguf"
+          if [ ! -f "$model" ]; then
+            mkdir -p "$RUNNER_TEMP/qwen"
+            curl -fsSL --retry 5 -o "$model.part" https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf
+            mv "$model.part" "$model"
+          fi
+          # AVX-512 può mancare sul runner, e la versione base è solo più lenta: si provano avx2 e vulkan (che qui ripiega sul processore).
+          mkdir -p prova-riassumi
+          cp dist-riassumi/cedro-riassumi-*-linux-x64-avx2 dist-riassumi/cedro-riassumi-*-linux-x64-vulkan prova-riassumi/
+          riassumi/prova.sh prova-riassumi "$model"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-riassumi
+          path: dist-riassumi/cedro-riassumi-*
+
   pubblica:
     name: Aggiunge Linux alla release
     if: ${{ inputs.tag != '' }}
-    needs: [app, motori]
+    needs: [app, motori, riassunto]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -123,7 +175,11 @@ jobs:
             new="file/cedro-trascrivi-$version-linux-x64-${f##*-linux-x64-}"
             [ "$f" = "$new" ] || mv "$f" "$new"
           done
-          gh release upload "$MOTORI" file/cedro-trascrivi-*-linux-x64-* --clobber
+          for f in file/cedro-riassumi-*-linux-x64-*; do
+            new="file/cedro-riassumi-$version-linux-x64-${f##*-linux-x64-}"
+            [ "$f" = "$new" ] || mv "$f" "$new"
+          done
+          gh release upload "$MOTORI" file/cedro-trascrivi-*-linux-x64-* file/cedro-riassumi-*-linux-x64-* --clobber
           gh release upload "$TAG" file/cedro-*-linux-x64.tar.gz --clobber
           # La riga per Linux nella tabella «Scarica questo», se manca.
           gh release view "$TAG" --json body --jq .body > note.md

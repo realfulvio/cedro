@@ -38,3 +38,21 @@ CAM++ di 3D-Speaker (zh-en common advanced, in formato ONNX)
 
   I due modelli (circa 40 MB) si scaricano la prima volta che si trascrive con il riconoscimento
   delle voci acceso, nella cartella "voci" dei dati di Cedro, e vengono controllati con SHA-256.
+
+Riassunto AI
+------------
+
+llama.cpp (dentro il motore cedro-riassumi)
+  Programma che fa girare i modelli linguistici sul PC, anche sulla scheda video (Vulkan).
+  Autore: Georgi Gerganov e i collaboratori di ggml. Licenza: MIT.
+  Sito e codice: https://github.com/ggml-org/llama.cpp
+  Collegamento a Rust: llama-cpp-2 di utilityai (MIT o Apache-2.0),
+  https://github.com/utilityai/llama-cpp-rs
+
+Qwen3.5-4B (Q4_K_M, in formato GGUF di Unsloth)
+  Modello linguistico che scrive il riassunto della riunione, in italiano, sul PC.
+  Autore: Qwen Team, Alibaba Cloud. Licenza: Apache-2.0.
+  Sito: https://huggingface.co/Qwen  ·  Formato GGUF: https://huggingface.co/unsloth/Qwen3.5-4B-GGUF
+
+  Il motore e il modello (circa 2,7 GB) si scaricano la prima volta che si fa un riassunto,
+  nella cartella "trascrizione" dei dati di Cedro, e vengono controllati con SHA-256.

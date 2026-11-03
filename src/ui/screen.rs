@@ -715,7 +715,24 @@ impl Screen {
             Act::ReviewSave => app.review_save(),
             Act::ReviewTab(t) => {
                 if let Some(r) = app.review.as_mut() {
-                    r.tab = t.min(1);
+                    r.tab = t.min(2);
+                }
+            }
+            Act::SummaryOpen(i) => app.summary_open(i),
+            Act::SummaryStart => app.summary_start(),
+            Act::SummaryCancel => app.summary_cancel(),
+            Act::SummaryCopy => {
+                if let Some(s) = app.review.as_ref().and_then(|r| r.summary_sections()) {
+                    plat.copy_text(&s.plain());
+                    if let Some(r) = app.review.as_mut() {
+                        r.summary_copied = true;
+                    }
+                }
+            }
+            Act::SummaryTodo(k) => app.summary_toggle_todo(k),
+            Act::SummaryOnTop => {
+                if let Some(r) = app.review.as_mut().filter(|r| r.summary.is_some()) {
+                    r.summary_on_top = !r.summary_on_top;
                 }
             }
             Act::ReviewWriteVoices => {
@@ -1317,7 +1334,7 @@ mod tests {
         s.request_appearance(ThemeId::WindowsEssenziale, false);
         s.app.activity = Activity::Transcribe;
         let segments = vec![Segment { t0: 0, t1: 500, text: "Buongiorno.".into(), speaker: None }, Segment { t0: 600, t1: 1100, text: "Arrivederci.".into(), speaker: None }];
-        s.app.review = Some(crate::ui::review::Review::new(Path::new("/tmp/cedro-non-c-e.wav"), 12.0, "it".into(), segments, Vec::new()));
+        s.app.review = Some(crate::ui::review::Review::new(Path::new("/tmp/cedro-non-c-e.wav"), 12.0, "it".into(), segments, Vec::new(), None));
         let mut plat = Fake { clip: String::new() };
         // Il tempo di una frase la fa sentire da lì: il lettore resta acceso anche dopo altri fotogrammi.
         click(&mut s, &Act::ReviewRow(1), &mut plat);

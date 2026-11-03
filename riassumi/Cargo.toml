@@ -1,0 +1,27 @@
+[package]
+name = "cedro-riassumi"
+version = "0.31.0"
+edition = "2021"
+license = "MIT"
+description = "Il motore del Riassunto AI di Cedro (llama.cpp con Qwen3.5-4B): Cedro lo scarica al primo riassunto."
+publish = false
+
+# Programma a parte, fuori dal workspace di Cedro: compilarlo richiede cmake e un compilatore C++.
+[workspace]
+
+[features]
+# Il motore con la scheda video (Vulkan: NVIDIA, AMD e Intel, anche integrate). Serve il Vulkan SDK per compilarlo.
+vulkan = ["llama-cpp-2/vulkan"]
+
+[dependencies]
+# Niente OpenMP (su Windows vorrebbe vcomp140.dll) né la libreria «common» di llama.cpp: bastano il modello e il campionamento.
+llama-cpp-2 = { version = "=0.1.160", default-features = false }
+llama-cpp-sys-2 = { version = "=0.1.160", default-features = false }
+serde_json = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[profile.release]
+lto = true
+strip = true
