@@ -16,7 +16,7 @@ const INSP_W: f32 = 410.0;
 const LANE_H: f32 = 40.0;
 
 /// Il chip di una voce: fondo chiaro della voce, testo scuro (o acceso nei temi scuri).
-fn chip_colors(f: &Frame, v: usize) -> (Rgb, Rgb) {
+pub(super) fn chip_colors(f: &Frame, v: usize) -> (Rgb, Rgb) {
     let c = f.voice(v);
     let dark = f.theme.dark();
     (mix(c, f.pal.surface, if dark { 0.78 } else { 0.86 }), if dark { c } else { mix(c, (0, 0, 0), 0.25) })
@@ -309,34 +309,39 @@ fn list(f: &mut Frame, app: &App, rv: &Review, r: R) {
     }
 }
 
+/// Il Riassunto AI c'è sui PC (sul telefono il modello sarebbe troppo pesante).
+const SUMMARY: bool = !cfg!(target_os = "android");
+
 fn inspector(f: &mut Frame, app: &App, rv: &Review, r: R) {
-    let _ = app;
     f.card(r, 12.0);
     let (cx, cw) = (r.0 + 20.0, r.2 - 40.0);
     let mut y = r.1 + 16.0;
     let voices = !rv.names.is_empty();
-    if voices {
-        tabs(f, rv, (cx - 2.0, r.1 + 14.0, cw + 4.0, 38.0));
+    // Le schede: «Da controllare», «Chi parla» (con le voci) e «Riassunto».
+    let list: Vec<u8> = [0u8, 1, 2].into_iter().filter(|t| (*t != 1 || voices) && (*t != 2 || SUMMARY)).collect();
+    if list.len() > 1 {
+        tabs(f, rv, &list, (cx - 2.0, r.1 + 14.0, cw + 4.0, 38.0));
         y = r.1 + 14.0 + 38.0 + 14.0;
     }
-    // Salvataggio in fondo (con le voci, anche l'interruttore per scriverle).
-    let save_h = if voices { 228.0 } else { 188.0 };
+    // Salvataggio in fondo (con le voci, anche l'interruttore per scriverle; poi quello del riassunto).
+    let save_h = 188.0 + if voices { 40.0 } else { 0.0 } + if SUMMARY { 40.0 } else { 0.0 };
     let bottom = r.1 + r.3 - save_h;
-    if voices && rv.tab == 1 {
-        voice_cards(f, rv, (r.0 + 1.0, y, r.2 - 2.0, bottom - y));
-    } else {
-        checks(f, rv, r, y, bottom, !voices);
+    match rv.tab {
+        1 if voices => voice_cards(f, rv, (r.0 + 1.0, y, r.2 - 2.0, bottom - y)),
+        2 if SUMMARY => super::riassunto::pane(f, app, rv, (r.0 + 1.0, y, r.2 - 2.0, bottom - y)),
+        _ => checks(f, rv, r, y, bottom, list.len() == 1),
     }
     save_box(f, rv, (r.0, bottom, r.2, save_h), voices);
 }
 
-/// Le due schede: «Da controllare» (col numero dei punti aperti) e «Chi parla».
-fn tabs(f: &mut Frame, rv: &Review, r: R) {
+/// Le schede in alto a destra: «Da controllare» (col numero dei punti aperti), «Chi parla», «Riassunto».
+fn tabs(f: &mut Frame, rv: &Review, list: &[u8], r: R) {
     let pal = f.pal;
     f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
-    let half = r.2 / 2.0;
-    for t in 0..2u8 {
-        let tr = (r.0 + t as f32 * half, r.1, half, r.3);
+    let part = r.2 / list.len() as f32;
+    let size = if list.len() > 2 { 14.0 } else { 14.5 };
+    for (k, &t) in list.iter().enumerate() {
+        let tr = (r.0 + k as f32 * part, r.1, part, r.3);
         let act = Act::ReviewTab(t);
         let on = rv.tab == t;
         if on {
@@ -345,14 +350,18 @@ fn tabs(f: &mut Frame, rv: &Review, r: R) {
             f.p.rrect(tr.0 + 1.0, tr.1 + 1.0, tr.2 - 2.0, tr.3 - 2.0, 7.0, Some(pal.alt), None);
         }
         let fg = if on { pal.on_primary } else { pal.text };
-        let label = if t == 0 { "Da controllare" } else { "Chi parla" };
+        let label = match t {
+            0 => "Da controllare",
+            1 => "Chi parla",
+            _ => "Riassunto",
+        };
         let open = rv.open_count();
         let badge = (t == 0 && open > 0).then(|| open.to_string());
-        let tw = f.measure(label, 14.5, SEMI);
+        let tw = f.measure(label, size, SEMI);
         let bw = badge.as_ref().map_or(0.0, |b| f.measure(b, 12.0, SEMI) + 14.0);
         let total = tw + if badge.is_some() { bw + 8.0 } else { 0.0 };
         let x = tr.0 + (tr.2 - total) / 2.0;
-        f.p.text(label, x, tr.1, tw + 2.0, tr.3, 14.5, SEMI, fg, Align::Left);
+        f.p.text(label, x, tr.1, tw + 2.0, tr.3, size, SEMI, fg, Align::Left);
         if let Some(b) = badge {
             let br = (x + tw + 8.0, tr.1 + (tr.3 - 18.0) / 2.0, bw, 18.0);
             f.p.rrect(br.0, br.1, br.2, br.3, 9.0, Some(pal.bad), None);
@@ -517,7 +526,8 @@ fn name_field(f: &mut Frame, rv: &Review, v: u8, r: R) {
     f.hit_kind(r, act, HitKind::Text);
 }
 
-/// In fondo: l'interruttore «Scrivi chi parla nel file» (con le voci), il formato e Salva.
+/// In fondo: gli interruttori «Scrivi chi parla nel file» (con le voci) e «Metti il riassunto in cima al
+/// file» (spento e sbiadito finché il riassunto non c'è), il formato e Salva.
 fn save_box(f: &mut Frame, rv: &Review, r: R, voices: bool) {
     let pal = f.pal;
     let (cx, cw) = (r.0 + 20.0, r.2 - 40.0);
@@ -526,6 +536,18 @@ fn save_box(f: &mut Frame, rv: &Review, r: R, voices: bool) {
     if voices {
         f.switch(cx, sy + 4.0, 44.0, 24.0, rv.write_voices, Act::ReviewWriteVoices, None);
         f.text("Scrivi chi parla nel file", cx + 56.0, sy, cw - 56.0, 32.0, 14.5, SANS, pal.text);
+        sy += 40.0;
+    }
+    if SUMMARY {
+        let ready = rv.summary.is_some();
+        if ready {
+            f.switch(cx, sy + 4.0, 44.0, 24.0, rv.summary_on_top, Act::SummaryOnTop, None);
+        } else {
+            // Come nell'anteprima: la levetta spenta e sbiadita, che non si può toccare.
+            f.p.rrect(cx, sy + 4.0, 44.0, 24.0, 12.0, Some(mix(pal.border, pal.surface, 0.5)), None);
+            f.p.circle(cx + 12.0, sy + 16.0, 9.0, Some(pal.surface), None);
+        }
+        f.text("Metti il riassunto in cima al file", cx + 56.0, sy, cw - 56.0, 32.0, 14.5, SANS, if ready { pal.text } else { mix(pal.muted, pal.surface, 0.35) });
         sy += 40.0;
     }
     f.text("Salva come", cx, sy, cw, 26.0, 15.5, SANS, pal.text);
