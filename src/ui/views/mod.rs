@@ -537,7 +537,7 @@ pub fn go_extras(f: &mut Frame, app: &App, r: R, side: bool) {
     let pal = f.pal;
     let size = 14.0;
     if let Some(u) = app.spia() {
-        let text = format!("{} · {}", if u.gpu { "GPU" } else { "CPU" }, u.detail);
+        let text = if u.gpu { u.detail.clone() } else { format!("Processore · {}", u.detail) };
         let tw = f.measure(&text, size, SANS).min(if side { 190.0 } else { r.2 - 30.0 });
         let dot = if u.gpu { pal.primary } else { pal.ok };
         let (x, y) = if side { (r.0 - 24.0 - tw - 14.0, r.1 + r.3 / 2.0 - 11.0) } else { (r.0 + (r.2 - tw - 14.0) / 2.0, r.1 + r.3 + 14.0) };
