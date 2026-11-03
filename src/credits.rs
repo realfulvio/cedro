@@ -83,6 +83,14 @@ pub const GROUPS: &[Group] = &[
         ],
     },
     Group {
+        title: "Riassunto AI",
+        items: &[
+            c("llama.cpp", "Georgi Gerganov e ggml", "MIT", "Fa girare il modello del riassunto sul PC (programma scaricato al primo riassunto).", "github.com/ggml-org/llama.cpp"),
+            c("llama-cpp-2", "utilityai", "MIT o Apache-2.0", "Collega llama.cpp a Rust.", "github.com/utilityai/llama-cpp-rs"),
+            c("Qwen3.5-4B", "Qwen Team, Alibaba Cloud", "Apache-2.0", "Il modello che scrive il riassunto (scaricato al primo riassunto, in formato GGUF di Unsloth).", "huggingface.co/Qwen"),
+        ],
+    },
+    Group {
         title: "Interfaccia e sistema",
         items: &[
             c("windows-rs", "Microsoft", "MIT o Apache-2.0", "Le finestre e i servizi di Windows.", "github.com/microsoft/windows-rs"),
@@ -104,6 +112,8 @@ const WHISPER_CPP: &str = "1.8.3";
 /// Le versioni dei programmi fissati dentro le librerie (LAME in mp3lame-sys, libopus in opusic-sys).
 const LAME: &str = "3.100";
 const LIBOPUS: &str = "1.6.1";
+/// La versione di llama-cpp-2 nel motore del riassunto (fissata in riassumi/Cargo.toml).
+const LLAMA_CPP_2: &str = "0.1.160";
 
 /// Le versioni delle librerie Rust di Cedro e del suo motore, decise alla compilazione.
 fn crate_version(name: &str) -> Option<&'static str> {
@@ -140,6 +150,11 @@ pub fn version_text(item: &Component) -> Option<String> {
         "LAME" => Some(LAME.to_string()),
         "Opus" => Some(LIBOPUS.to_string()),
         "whisper-rs" => crates_text(&["whisper-rs"]),
+        "llama.cpp" | "llama-cpp-2" => {
+            let v = if item.name == "llama.cpp" { "motore cedro-riassumi" } else { LLAMA_CPP_2 };
+            Some(if crate::riassunto::engine_installed() { v.to_string() } else { format!("{v} · da scaricare") })
+        }
+        "Qwen3.5-4B" => Some(if crate::riassunto::model_ready() { "Q4_K_M".to_string() } else { format!("{} · da scaricare", "Q4_K_M") }),
         "Segmentazione pyannote 3.0" | "CAM++ di 3D-Speaker" | "sherpa-onnx" => {
             let what = match item.name {
                 "Segmentazione pyannote 3.0" => "segmentation-3.0",
