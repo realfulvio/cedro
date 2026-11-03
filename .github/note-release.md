@@ -12,11 +12,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Riassunto AI delle riunioni trascritte.**
+**Barra di avanzamento nella trascrizione.**
 
-- Dopo una trascrizione, accanto a «Rivedi» c'è il pulsante «Riassunto AI». In Rivedi trascrizione c'è la scheda «Riassunto» con quattro parti: In breve, Chi ha detto cosa, Decisioni e Da fare (con la casella da spuntare e il nome di chi se ne occupa).
-- Usa i nomi che hai dato agli interlocutori; se li cambi dopo, il riassunto si aggiorna da solo.
-- Lo scrive Qwen3.5-4B, un modello che gira tutto sul PC: niente va su internet. Usa la scheda video se c'è (Vulkan), altrimenti il processore.
-- Prima di partire controlla la memoria libera: servono circa 4 GB, e se non ci sono non parte e lo dice. Il modello si carica solo per il riassunto e poi si chiude, liberando la memoria. Le riunioni lunghe si leggono a pezzi.
-- Il riassunto resta salvato con la trascrizione, si copia con un clic e si può mettere in cima al Word o al testo.
-- La prima volta Cedro scarica il motore e il modello, circa 2,7 GB.
+- Mentre trascrive, sopra «Annulla» c'è un riquadro con la percentuale grande, il file su cui lavora («file 1 di 3»), la barra e quanto manca, calcolato dalla velocità vera.
+- Prima che la trascrizione parta dice cosa sta facendo: scarica il modello, accende il motore, riconosce le voci.
+- La scheda video si legge col solo modello: «Quadro RTX 4000», «Radeon integrata», senza sigle tecniche. Col processore c'è scritto «Processore · 8 thread». Lo stesso nel riassunto AI.
+- La barra del lavoro intero ora avanza anche durante il file, non solo alla fine.
