@@ -622,11 +622,27 @@ pub fn others_link(f: &mut Frame, app: &App, x: f32, y: f32, h: f32, size: f32) 
 /// La zona vuota dove si lasciano i file (bordo tratteggiato, icona, due righe).
 pub fn drop_zone(f: &mut Frame, app: &App, r: R, big: bool) {
     let pal = f.pal;
-    f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(mix(pal.alt, pal.surface, 0.4)), None);
-    f.p.rrect_line(r.0, r.1, r.2, r.3, 10.0, mix(pal.primary, pal.surface, 0.35), 2.0, 1.0, Some((9.0, 6.0)));
     let isz = if big { 44.0 } else { 32.0 };
     let cy = r.1 + r.3 / 2.0;
-    f.icon(ic::DOWNLOAD, r.0 + r.2 / 2.0 - isz / 2.0, cy - isz - 10.0, isz, pal.primary);
+    if f.theme == ThemeId::WindowsEssenziale {
+        // Il tema base colora la zona con il tipo di file scelto (o l'arancio della trascrizione).
+        let c = match app.activity {
+            Activity::Convert => super::theme::kind_color(conversioni::CATEGORIES[app.category].kind),
+            a => super::theme::activity_color(a),
+        };
+        f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(mix(c, pal.surface, 0.95)), None);
+        f.p.rrect_line(r.0, r.1, r.2, r.3, 12.0, mix(c, pal.surface, 0.45), 2.0, 1.0, Some((9.0, 6.0)));
+        let d = isz + 36.0;
+        let (ccx, ccy) = (r.0 + r.2 / 2.0, cy - d / 2.0 - 18.0);
+        f.p.circle(ccx, ccy, d / 2.0 + 8.0, Some(mix(c, pal.surface, 0.9)), None);
+        f.p.shadow(ccx - d / 2.0, ccy - d / 2.0, d, d, d / 2.0, 6.0, 0.14, 3.0);
+        f.p.circle(ccx, ccy, d / 2.0, Some(c), None);
+        f.icon(ic::DOWNLOAD, ccx - isz / 2.0, ccy - isz / 2.0, isz, (255, 255, 255));
+    } else {
+        f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(mix(pal.alt, pal.surface, 0.4)), None);
+        f.p.rrect_line(r.0, r.1, r.2, r.3, 10.0, mix(pal.primary, pal.surface, 0.35), 2.0, 1.0, Some((9.0, 6.0)));
+        f.icon(ic::DOWNLOAD, r.0 + r.2 / 2.0 - isz / 2.0, cy - isz - 10.0, isz, pal.primary);
+    }
     let cat = &conversioni::CATEGORIES[app.category];
     let (t, s) = match app.activity {
         Activity::Transcribe => ("Trascina qui audio e video", "MP3, WAV, M4A, OGG, OPUS, FLAC, WMA, AMR e video".to_string()),
