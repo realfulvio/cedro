@@ -969,11 +969,11 @@ impl App {
         y - y0
     }
 
-    /// Veloce o Buona, per la trascrizione. Restituisce l'altezza.
+    /// Veloce, Buona o Massima, per la trascrizione. Restituisce l'altezza.
     fn scelta_modello(&mut self, p: &mut Painter, x: f32, y: f32, w: f32, vista: R) -> f32 {
         let pal = self.pal();
         p.text("Modello", x, y, w, 26.0, 14.0, Weight::Semibold, pal.muted, Align::Left);
-        self.pillole_in(p, (x, y + 28.0, w, TOCCO), &["Veloce", "Buona"], self.modello.min(1), |i| Azione::Casa(CasaAz::Modello(i)), vista);
+        self.pillole_in(p, (x, y + 28.0, w, TOCCO), &["Veloce", "Buona", "Massima"], self.modello.min(2), |i| Azione::Casa(CasaAz::Modello(i)), vista);
         // Chi parla, come sul computer: con più persone il testo dice chi ha detto cosa.
         let cy = y + 28.0 + TOCCO + 10.0;
         p.text("Chi parla", x, cy, w, 26.0, 14.0, Weight::Semibold, pal.muted, Align::Left);
@@ -1212,7 +1212,7 @@ impl App {
         let (titolo, sotto) = match (att, passo) {
             (Att::Conv | Att::Tras, 0) => (if att == Att::Tras { "Cosa vuoi trascrivere?" } else { "Quali file vuoi convertire?" }, "Scegli i file oppure condividili con Cedro da un'altra app."),
             (Att::Conv, 1) => ("Cosa vuoi ottenere?", "Scegli il formato di destinazione."),
-            (Att::Tras, 1) => ("Quanto bene?", "«Buona» è più precisa, «Veloce» finisce prima."),
+            (Att::Tras, 1) => ("Quanto bene?", "«Veloce» finisce prima, «Massima» sbaglia meno parole."),
             (_, 0) => ("Quale video?", "Incolla il link copiato dal browser o da un'altra app."),
             (_, 1) => ("Cosa vuoi scaricare?", "Scegli che cosa tenere del video."),
             _ => ("Dove lo salvo?", "Controlla e conferma."),
@@ -1354,7 +1354,7 @@ impl App {
                 y += 28.0 + TOCCO + 14.0;
                 let riassunto = match att {
                     Att::Conv => format!("{} in {}", plurale(self.casa.categoria, self.casa.scelti().len()), self.casa.etichetta()),
-                    Att::Tras => format!("{} in testo, modello {}", plurale(Kind::Audio, self.casa.scelti().len()), if self.modello == 0 { "Veloce" } else { "Buona" }),
+                    Att::Tras => format!("{} in testo, modello {}", plurale(Kind::Audio, self.casa.scelti().len()), ["Veloce", "Buona", "Massima"][self.modello.min(2)]),
                     _ => format!("{}: {}", WEB[self.casa.web.min(3)].1, self.casa.link),
                 };
                 y += p.text_wrap(&riassunto, x, y, cw, 15.0, Weight::Semibold, pal.text, 21.0, 3);
