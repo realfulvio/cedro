@@ -40,7 +40,9 @@ pub const MODELS: &[Model] = &[
     // (base) sbagliava 1 parola su 6.
     Model { name: "Veloce", note: "Per appunti e messaggi vocali", file: "ggml-small-q8_0.bin", megabytes: 264 },
     Model { name: "Buona", note: "Per riunioni e interviste", file: "ggml-medium-q5_0.bin", megabytes: 539 },
-    Model { name: "Massima", note: "Per audio difficili, la più precisa", file: "ggml-large-v3-turbo-q5_0.bin", megabytes: 574 },
+    // «Massima» dalla 0.34: large-v3 completo (32 strati di decodifica invece dei 4 del turbo). Su un messaggio vocale vero
+    // sbaglia meno parole del turbo; costa il doppio sul processore.
+    Model { name: "Massima", note: "Per audio difficili, la più precisa", file: "ggml-large-v3-q5_0.bin", megabytes: 1081 },
 ];
 
 /// Il modello di partenza senza scheda video: «Buona».
@@ -57,7 +59,7 @@ pub fn default_model() -> usize {
 }
 
 /// I modelli delle versioni precedenti (non più usati): si tolgono dal PC appena arriva quello nuovo.
-const OLD_MODELS: &[&str] = &["ggml-base-q8_0.bin", "ggml-large-v3-turbo-q8_0.bin"];
+const OLD_MODELS: &[&str] = &["ggml-base-q8_0.bin", "ggml-large-v3-turbo-q8_0.bin", "ggml-large-v3-turbo-q5_0.bin"];
 
 fn forget_old_models() {
     let dir = data_dir();
@@ -185,7 +187,7 @@ pub fn model_ready(index: usize) -> bool {
     })
 }
 
-/// Il nome del modello di whisper, come si legge sul sito («small», «large-v3-turbo»), con il tipo di compressione.
+/// Il nome del modello di whisper, come si legge sul sito («small», «large-v3»), con il tipo di compressione.
 pub fn model_names(index: usize) -> String {
     let file = MODELS.get(index).map(|m| m.file).unwrap_or("");
     let core = file.trim_start_matches("ggml-").trim_end_matches(".bin");
