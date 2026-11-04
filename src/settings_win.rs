@@ -79,7 +79,6 @@ fn is_toggle(id: i32) -> bool {
 
 // Colori del sito del Comune di Bondeno (COLORREF = 0x00BBGGRR).
 const PRIMARY: COLORREF = COLORREF(0x008E5E00); // #005E8E
-const HOVER: COLORREF = COLORREF(0x00CC6600); // #0066CC
 const TEXT: COLORREF = COLORREF(0x00191919); // #191919
 const GREY: COLORREF = COLORREF(0x00645A45); // #455A64
 const OK: COLORREF = COLORREF(0x00467A1D); // #1d7a46
@@ -1005,6 +1004,34 @@ unsafe fn put_text(hdc: HDC, text: &str, rc: &RECT, font: HFONT, color: COLORREF
     SelectObject(hdc, old);
 }
 
+/// COLORREF (0x00BBGGRR) ↔ colore RGB dei disegni di `cedro::ui`.
+fn rgb_of(c: COLORREF) -> (u8, u8, u8) {
+    ((c.0 & 0xff) as u8, ((c.0 >> 8) & 0xff) as u8, ((c.0 >> 16) & 0xff) as u8)
+}
+
+fn colorref(c: (u8, u8, u8)) -> COLORREF {
+    COLORREF(c.0 as u32 | (c.1 as u32) << 8 | (c.2 as u32) << 16)
+}
+
+/// Copia sullo schermo un disegno BGRA (premoltiplicato, opaco) di `w`×`h` pixel in (`x`, `y`).
+unsafe fn blit(hdc: HDC, x: i32, y: i32, w: i32, h: i32, data: &[u8]) {
+    let bmi = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: w,
+            biHeight: -h,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    SetDIBitsToDevice(hdc, x, y, w as u32, h as u32, 0, 0, 0, h as u32, data.as_ptr() as *const _, &bmi, DIB_RGB_COLORS);
+}
+
+/// Una sezione nella colonna di sinistra: la piastrella del suo colore e il nome; quella scelta ha
+/// il fondo tinto e la linea del suo colore.
 unsafe fn draw_nav(dis: &DRAWITEMSTRUCT) {
     let index = (dis.CtlID as i32 - ID_NAV) as usize;
     let selected = STATE.with(|st| st.borrow().current == index);
@@ -1012,13 +1039,18 @@ unsafe fn draw_nav(dis: &DRAWITEMSTRUCT) {
     let r = dis.rcItem;
     let dpi = STATE.with(|st| st.borrow().dpi);
     clear(dis, SIDE);
+    let (_, c) = cedro::ui::sezioni::look(SECTIONS[index]);
+    let tint = colorref(cedro::ui::theme::mix(c, (255, 255, 255), 0.88));
     if selected {
-        crate::wingfx::round_rect(hdc, &r, px(5, dpi) as f32, Some(WHITE), None);
+        crate::wingfx::round_rect(hdc, &r, px(8, dpi) as f32, Some(tint), None);
         let bar = RECT { left: r.left, top: r.top + px(9, dpi), right: r.left + px(3, dpi), bottom: r.bottom - px(9, dpi) };
-        crate::wingfx::round_rect(hdc, &bar, px(2, dpi) as f32, Some(PRIMARY), None);
+        crate::wingfx::round_rect(hdc, &bar, px(2, dpi) as f32, Some(colorref(c)), None);
     }
+    let size = px(28, dpi);
+    let tile = cedro::ui::sezioni::tile_bgra(SECTIONS[index], selected, size as u32, dpi as f32 / 96.0, rgb_of(if selected { tint } else { SIDE }));
+    blit(hdc, r.left + px(8, dpi), r.top + (r.bottom - r.top - size) / 2, size, size, &tile);
     let font = STATE.with(|st| if selected { st.borrow().bold } else { st.borrow().font });
-    let text = RECT { left: r.left + px(14, dpi), ..r };
+    let text = RECT { left: r.left + px(46, dpi), ..r };
     put_text(hdc, SECTIONS[index], &text, font, TEXT, DT_LEFT);
     // Le due schede nuove della 0.15 portano l'etichetta «NUOVO» finché la versione non cambia.
     if index >= 6 && update::CURRENT.starts_with("0.15.") {
@@ -1159,7 +1191,23 @@ unsafe fn draw_push(dis: &DRAWITEMSTRUCT) {
     clear(dis, if id == IDOK.0 || id == IDCANCEL.0 { SIDE } else { WHITE });
     let radius = px(5, dpi) as f32;
     let (font, color) = if primary {
-        crate::wingfx::round_rect(hdc, &r, radius, Some(if pressed { HOVER } else { PRIMARY }), None);
+        // «Salva» in rilievo: ombra, sfumatura dall'alto e filo chiaro, come i pulsanti dei temi.
+        let (w, h) = (r.right - r.left, r.bottom - r.top);
+        let scale = dpi as f32 / 96.0;
+        let mut cache = cedro::ui::gfx::GlyphCache::new();
+        let mut p = cedro::ui::gfx::Painter::new(w as u32, h as u32, scale, cedro::ui::gfx::Fonts::current(), &mut cache);
+        p.clear(rgb_of(SIDE));
+        let (uw, uh) = (w as f32 / scale, h as f32 / scale);
+        let base = rgb_of(PRIMARY);
+        let (top, bottom) = if pressed {
+            (cedro::ui::theme::mix(base, (255, 255, 255), 0.04), cedro::ui::theme::mix(base, (0, 0, 0), 0.2))
+        } else {
+            (cedro::ui::theme::mix(base, (255, 255, 255), 0.16), cedro::ui::theme::mix(base, (0, 0, 0), 0.06))
+        };
+        p.shadow(2.0, 2.0, uw - 4.0, uh - 5.0, 6.0, 3.0, 0.22, 1.5);
+        p.rrect_vgrad(2.0, 1.0, uw - 4.0, uh - 5.0, 6.0, top, bottom);
+        p.rrect_line(2.0, 1.0, uw - 4.0, uh - 5.0, 6.0, (255, 255, 255), 1.0, 0.14, None);
+        blit(hdc, r.left, r.top, w, h, &p.bgra());
         (STATE.with(|st| st.borrow().bold), WHITE)
     } else {
         let fill = if pressed { COLORREF(0x00FFEEE6) } else { SIDE }; // #E6EEFF
@@ -1187,8 +1235,12 @@ unsafe fn paint(hwnd: HWND) {
     let foot_y = client.bottom - px(FOOT_H, dpi);
     let side = RECT { left: 0, top: 0, right: px(SIDE_W, dpi), bottom: foot_y };
     FillRect(hdc, &side, brush(&BRUSH_SIDE, SIDE));
-    let edge = RECT { left: px(SIDE_W, dpi) - 1, top: 0, right: px(SIDE_W, dpi), bottom: foot_y };
-    FillRect(hdc, &edge, brush(&BRUSH_LINE, LINE));
+    // Il contenuto è una scheda bianca sollevata sul fondo grigio chiaro, come i riquadri dei temi.
+    let content = RECT { left: px(SIDE_W, dpi), top: 0, right: client.right, bottom: foot_y };
+    FillRect(hdc, &content, brush(&BRUSH_SIDE, SIDE));
+    let card = RECT { left: px(SIDE_W + 6, dpi), top: px(12, dpi), right: client.right - px(14, dpi), bottom: foot_y - px(12, dpi) };
+    crate::wingfx::shadow(hdc, &card, px(12, dpi) as f32, px(8, dpi) as f32, 0.08);
+    crate::wingfx::round_rect(hdc, &card, px(12, dpi) as f32, Some(WHITE), Some((COLORREF(0x00EFECE9), 1.0)));
     let foot = RECT { left: 0, top: foot_y, right: client.right, bottom: client.bottom };
     FillRect(hdc, &foot, brush(&BRUSH_SIDE, SIDE));
     let top_line = RECT { left: 0, top: foot_y, right: client.right, bottom: foot_y + 1 };

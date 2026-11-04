@@ -18,6 +18,7 @@ pub mod summary;
 pub mod model;
 pub mod core;
 pub mod screen;
+pub mod sezioni;
 pub mod views;
 pub mod wheel;
 
