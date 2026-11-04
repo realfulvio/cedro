@@ -20,3 +20,10 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 - I pulsanti principali («Aggiungi file», «Converti») sono sfumati e in rilievo.
 - La zona «Trascina qui» prende il colore dell'attività o del tipo di file, e l'elenco dei formati accettati va a capo invece di essere tagliato.
 - Il tema Comune di Bondeno e gli altri temi restano come prima.
+
+**Barra di avanzamento nella trascrizione.**
+
+- Mentre trascrive, sopra «Annulla» c'è un riquadro con la percentuale grande, il file su cui lavora («file 1 di 3»), la barra e quanto manca, calcolato dalla velocità vera.
+- Prima che la trascrizione parta dice cosa sta facendo: scarica il modello, accende il motore, riconosce le voci.
+- La scheda video si legge col solo modello: «Quadro RTX 4000», «Radeon integrata», senza sigle tecniche. Col processore c'è scritto «Processore · 8 thread». Lo stesso nel riassunto AI.
+- La barra del lavoro intero ora avanza anche durante il file, non solo alla fine.
