@@ -15,20 +15,26 @@ fn recenti(app: &mut App) {
 }
 
 fn lavori(app: &mut App) {
-    let l = |id, o: &str, e: &str, conv, st| Lavoro { id, origine: o.into(), etichetta: e.into(), conv, inizio: Instant::now(), quando: cedro_android::ui::adesso() - 120 * id as u64, stato: st, prog: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(if id == 1 { 430 } else { 1000 })) };
+    let l = |id, o: &str, e: &str, conv, st| Lavoro { id, origine: o.into(), etichetta: e.into(), conv, inizio: Instant::now(), quando: cedro_android::ui::adesso() - 120 * id as u64, stato: st, prog: std::sync::Arc::new(std::sync::atomic::AtomicU32::new(if id == 1 { 430 } else { 1000 })), sorgente: None, controlli: None };
     let fatto = |n: &str, m: &str| Stato::Fatto { path: "x".into(), nome: n.into(), msg: m.into() };
-    app.lavori = vec![
+    let mut app_lavori = vec![
         l(1, "Riunione.m4a", "Word", true, Stato::InCorso),
         l(2, "condiviso.png", "JPG", true, fatto("condiviso.jpg", "282 KB → 94 KB · 66% in meno")),
         l(3, "Verbale.pdf", "Testo", true, fatto("Verbale.txt", "12 pagine")),
         l(4, "foto.png", "Comprimi", false, Stato::Errore("Non ho potuto leggere il file.".into())),
         l(5, "scansione.png", "PNG", true, fatto("scansione.png", "1,2 MB")),
     ];
+    // Il primo è una trascrizione, a metà da un minuto: si vede il riquadro con il tempo che resta.
+    app_lavori[0].sorgente = Some(PathBuf::from("Riunione.m4a"));
+    app_lavori[0].etichetta = "Testo".into();
+    app.partenze.insert(1, (Instant::now() - std::time::Duration::from_secs(60), 30));
+    app.lavori = app_lavori;
 }
 
 fn info() -> Info {
     let r = |k: &str, v: &str| (k.to_string(), v.to_string());
     Info {
+        versione: "0.25.0 (2500)".into(),
         generali: vec![r("Telefono", "Xiaomi Mi 9T"), r("Android", "11 (API 30)"), r("Processore", "Snapdragon 730"), r("Core", "8 (2 grandi + 6 piccoli)"), r("Memoria", "6,0 GB (3,1 GB liberi)"), r("Scheda video", "Adreno 618")],
         istruzioni: vec![("NEON".into(), true), ("dotprod".into(), true), ("i8mm".into(), false)],
         accelerazioni: vec![("Trascrizione".into(), "processore, dotprod".into(), true), ("Video MP4".into(), "codificatore del telefono".into(), true)],
@@ -46,6 +52,24 @@ fn scena(nome: &str, w: f32, h: f32, out: &PathBuf, f: impl FnOnce(&mut App)) {
     let scala = 2.75;
     let mut cache = GlyphCache::new();
     let mut p = Painter::new((w * scala) as u32, (h * scala) as u32, scala, Fonts::current(), &mut cache);
+    app.disegna(&mut p, w, h);
+    p.save_png(&out.join(format!("{nome}.png"))).unwrap();
+}
+
+/// La finestra principale di un tema, con due file in coda e un lavoro in corso.
+fn casa(nome: &str, tema: ThemeId, w: f32, h: f32, out: &PathBuf, f: impl FnOnce(&mut App)) {
+    let mut app = App::new(tema);
+    app.vai_casa();
+    let img = PathBuf::from("docs/hero.png");
+    app.aggiungi_coda(vec![(img.clone(), "Verbale_giunta.png".into(), cedro::Kind::Image), (img.clone(), "Foto sopralluogo.png".into(), cedro::Kind::Image)]);
+    let t = cedro::ui::media::thumb_of(&img, 140);
+    let m = cedro::ui::media::thumb_of(&img, 600);
+    app.info_voce(&img, m.or(t), Some((1600, 1200)));
+    recenti(&mut app);
+    f(&mut app);
+    let scala = 2.75;
+    let mut cache = GlyphCache::new();
+    let mut p = Painter::new((w * scala) as u32, (h * scala) as u32, scala, Fonts::for_theme(tema), &mut cache);
     app.disegna(&mut p, w, h);
     p.save_png(&out.join(format!("{nome}.png"))).unwrap();
 }
@@ -87,6 +111,13 @@ fn main() {
         lavori(a);
         a.scheda = Scheda::Lavori;
     });
+    for (i, t) in cedro::ui::theme::THEMES.into_iter().enumerate() {
+        casa(&format!("casa-{i}"), t, pw, ph, &out, |_| {});
+        casa(&format!("casa-{i}-lavori"), t, pw, ph, &out, |a| {
+            lavori(a);
+            a.sopra = Some(Scheda::Lavori);
+        });
+    }
     for m in cedro::i18n::misses() {
         println!("SENZA TRADUZIONE: {m:?}");
     }

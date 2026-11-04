@@ -94,28 +94,24 @@ pub fn ck(k: Kind) -> u8 {
 
 /// Il colore di un tipo di file: uguale in tutti i temi, più chiaro in quelli scuri.
 pub fn colore_kind(k: Kind, scuro: bool) -> Rgb {
-    let (c, s) = match k {
-        Kind::Image => ((0x0E, 0x7C, 0x86), (0x4F, 0xD1, 0xC5)),
-        Kind::Doc => ((0x2F, 0x5F, 0xD0), (0x7A, 0xA7, 0xFF)),
-        Kind::Pdf => ((0xC2, 0x36, 0x2B), (0xFF, 0x8A, 0x80)),
-        Kind::Text => ((0x5B, 0x65, 0x73), (0xC3, 0xCC, 0xD5)),
-        Kind::Audio => ((0xC2, 0x62, 0x0A), (0xFF, 0xB1, 0x5C)),
-        Kind::Video => ((0x8A, 0x3F, 0xC7), (0xC5, 0x9B, 0xFF)),
-        Kind::Archive => ((0x8C, 0x6A, 0x1F), (0xE2, 0xC0, 0x72)),
-        Kind::Other => ((0x5B, 0x65, 0x73), (0xC3, 0xCC, 0xD5)),
-    };
-    if scuro { s } else { c }
+    schiarisci(cedro::ui::theme::kind_color(k), scuro)
 }
 
-/// Il colore di un'attività.
+/// Nei temi scuri i colori di tipi e attività sono un po' più chiari, come sul computer.
+fn schiarisci(c: Rgb, scuro: bool) -> Rgb {
+    if scuro { mix(c, (255, 255, 255), 0.28) } else { c }
+}
+
+/// Il colore di un'attività: gli stessi del computer (Conversioni blu, Trascrizione arancio, YouTube rosso, Web verde).
 pub fn colore_att(a: Att, scuro: bool) -> Rgb {
-    let (c, s) = match a {
-        Att::Conv => ((0x79, 0x3F, 0xCB), (0xB5, 0x91, 0xF0)),
-        Att::Tras => ((0x14, 0x84, 0x5B), (0x5F, 0xD3, 0xA0)),
-        Att::Yt => ((0xD3, 0x30, 0x2F), (0xFF, 0x7B, 0x7B)),
-        Att::Web => ((0x0E, 0x7C, 0x86), (0x4F, 0xD1, 0xC5)),
+    use cedro::ui::model::Activity;
+    let att = match a {
+        Att::Conv => Activity::Convert,
+        Att::Tras => Activity::Transcribe,
+        Att::Yt => Activity::YouTube,
+        Att::Web => Activity::Web,
     };
-    if scuro { s } else { c }
+    schiarisci(cedro::ui::theme::activity_color(att), scuro)
 }
 
 pub fn icona_kind(k: Kind) -> &'static str {
@@ -651,9 +647,12 @@ impl App {
     #[allow(clippy::too_many_arguments)]
     fn cta(&mut self, p: &mut Painter, rc: R, raggio: f32, icona: Option<&str>, testo: &str, az: Option<Azione>, dim: f32) {
         let pal = self.pal();
-        let fondo = if az.is_none() { pal.alt } else if self.premuto == az { mix(pal.primary, (0, 0, 0), 0.15) } else { pal.primary };
         let fg = if az.is_some() { pal.on_primary } else { pal.muted };
-        p.rrect(rc.0, rc.1, rc.2, rc.3, raggio, Some(fondo), None);
+        if az.is_none() {
+            p.rrect(rc.0, rc.1, rc.2, rc.3, raggio, Some(pal.alt), None);
+        } else {
+            super::lucido(p, self.scuro(), rc.0, rc.1, rc.2, rc.3, raggio, pal.primary, self.premuto == az);
+        }
         let tw = p.measure(testo, dim, Weight::Bold).min(rc.2 - 50.0);
         let iw = if icona.is_some() { 32.0 } else { 0.0 };
         let x0 = rc.0 + (rc.2 - tw - iw) / 2.0;
@@ -903,7 +902,7 @@ impl App {
             let n = self.casa.quanti(c.kind);
             let tw = p.measure(c.name, 15.0, if on { Weight::Semibold } else { Weight::Regular });
             let ww = larghi[i];
-            self.kt(p, cx, y + 10.0, 24.0, col, icona_kind(c.kind));
+            super::piastrella(p, pal, scuro, cx, y + 10.0, 24.0, icona_kind(c.kind), col, on);
             p.text(c.name, cx + 30.0, y, tw + 4.0, h - 2.0, 15.0, if on { Weight::Semibold } else { Weight::Regular }, if on { col } else { pal.text }, Align::Left);
             if n > 0 && !on {
                 p.circle(cx + 30.0 + tw + 14.0, y + h / 2.0 - 1.0, 9.0, Some(mix(pal.surface, pal.primary, 0.14)), None);
@@ -979,7 +978,7 @@ impl App {
     fn ispettore_trascrizione(&mut self, p: &mut Painter, x: f32, y: f32, w: f32, vista: R) -> f32 {
         let pal = self.pal();
         let col = colore_att(Att::Tras, self.scuro());
-        p.rrect(x, y, w, 152.0, 10.0, Some(pal.surface), Some((pal.border, 1.0)));
+        super::sollevato(p, pal, self.tema.dark(), x, y, w, 152.0, 10.0);
         self.kt(p, x + 14.0, y + 12.0, 32.0, col, ic::TRANSCRIBE);
         p.text("Impostazioni della trascrizione", x + 56.0, y + 12.0, w - 70.0, 32.0, 16.0, Weight::Semibold, pal.text, Align::Left);
         let h = self.scelta_modello(p, x + 14.0, y + 52.0, w - 28.0, vista);
@@ -1016,16 +1015,20 @@ impl App {
             // Aggiungi file / cartella
             let b = (x, cy, p.measure("Aggiungi file", 15.0, Weight::Semibold) + 52.0, 42.0);
             let a = Azione::Casa(CasaAz::Aggiungi);
-            p.rrect(b.0, b.1, b.2, b.3, 6.0, Some(if self.premuto == Some(a) { mix(pal.primary, (0, 0, 0), 0.15) } else { pal.primary }), None);
+            super::lucido(p, scuro, b.0, b.1, b.2, b.3, 6.0, pal.primary, self.premuto == Some(a));
             p.icon(ic::ADD, b.0 + 12.0, b.1 + 10.0, 22.0, pal.on_primary);
             p.text("Aggiungi file", b.0 + 40.0, b.1, b.2 - 44.0, b.3, 15.0, Weight::Semibold, pal.on_primary, Align::Left);
             self.colpo(b, a, vista);
-            let c = (b.0 + b.2 + 8.0, cy, p.measure("Aggiungi cartella", 15.0, Weight::Regular) + 40.0, 42.0);
-            p.icon(ic::FOLDER, c.0 + 6.0, c.1 + 10.0, 22.0, pal.text);
-            p.text("Aggiungi cartella", c.0 + 34.0, c.1, c.2 - 34.0, c.3, 15.0, Weight::Regular, pal.text, Align::Left);
-            self.colpo(c, Azione::Casa(CasaAz::Cartella), vista);
             let vis = self.casa.visibili();
-            p.text(&format!("{} file", vis.len()), x, cy, cw, 42.0, 14.0, Weight::Regular, pal.muted, Align::Right);
+            let quanti = format!("{} file", vis.len());
+            let qw = p.measure(&quanti, 14.0, Weight::Regular) + 10.0;
+            // Su un telefono stretto «Aggiungi cartella» finirebbe sopra «N file»: resta «Cartella».
+            let et = if b.0 + b.2 + 8.0 + p.measure("Aggiungi cartella", 15.0, Weight::Regular) + 40.0 + qw > x + cw { "Cartella" } else { "Aggiungi cartella" };
+            let c = (b.0 + b.2 + 8.0, cy, p.measure(et, 15.0, Weight::Regular) + 40.0, 42.0);
+            p.icon(ic::FOLDER, c.0 + 6.0, c.1 + 10.0, 22.0, pal.text);
+            p.text(et, c.0 + 34.0, c.1, c.2 - 34.0, c.3, 15.0, Weight::Regular, pal.text, Align::Left);
+            self.colpo(c, Azione::Casa(CasaAz::Cartella), vista);
+            p.text(&quanti, x, cy, cw, 42.0, 14.0, Weight::Regular, pal.muted, Align::Right);
             cy += 52.0;
             if vis.is_empty() {
                 p.rrect_line(x, cy, cw, 96.0, 10.0, pal.border, 1.5, 1.0, Some((6.0, 5.0)));
@@ -1034,7 +1037,7 @@ impl App {
                 cy += 104.0;
             } else {
                 let rh = 64.0;
-                p.rrect(x, cy, cw, rh * vis.len() as f32, 10.0, Some(pal.surface), Some((pal.border, 1.0)));
+                super::sollevato(p, pal, self.tema.dark(), x, cy, cw, rh * vis.len() as f32, 10.0);
                 for (k, i) in vis.iter().copied().enumerate() {
                     let v = self.casa.coda[i].clone();
                     let ry = cy + k as f32 * rh;
@@ -1086,10 +1089,7 @@ impl App {
             let on = *a == self.casa.att;
             let col = colore_att(*a, scuro);
             let bx = k as f32 * bw;
-            if on {
-                p.rrect(bx + bw / 2.0 - 28.0, ny + 7.0, 56.0, 30.0, 15.0, Some(mix(pal.surface, col, 0.15)), None);
-            }
-            p.icon(a.icona(), bx + bw / 2.0 - 11.0, ny + 11.0, 22.0, col);
+            super::piastrella(p, pal, scuro, bx + bw / 2.0 - 16.0, ny + 6.0, 32.0, a.icona(), col, on);
             p.text(a.nome(), bx, ny + 40.0, bw, 20.0, 12.0, if on { Weight::Semibold } else { Weight::Regular }, if on { col } else { pal.muted }, Align::Center);
             self.colpi.push((Forma::R((bx, ny, bw, nav)), Azione::Casa(CasaAz::Att(k))));
         }
@@ -1112,7 +1112,7 @@ impl App {
             h += 50.0;
         }
         h += 44.0;
-        p.rrect(x, y, w, h, 10.0, Some(pal.surface), Some((pal.border, 1.0)));
+        super::sollevato(p, pal, self.tema.dark(), x, y, w, h, 10.0);
         self.kt(p, x + 14.0, y + 12.0, 34.0, col, icona_kind(self.casa.categoria));
         p.text("Impostazioni di conversione", x + 58.0, y + 12.0, w - 70.0, 34.0, 17.0, Weight::Semibold, pal.text, Align::Left);
         let mut cy = y + 56.0;
@@ -1220,7 +1220,7 @@ impl App {
                 let vis = self.casa.visibili();
                 if !vis.is_empty() {
                     let rh = 72.0;
-                    p.rrect(x, y, cw, rh * vis.len() as f32, 10.0, Some(pal.surface), Some((pal.border, 1.0)));
+                    super::sollevato(p, pal, self.tema.dark(), x, y, cw, rh * vis.len() as f32, 10.0);
                     for (k, i) in vis.iter().copied().enumerate() {
                         let v = self.casa.coda[i].clone();
                         let ry = y + k as f32 * rh;
@@ -1243,7 +1243,7 @@ impl App {
                 // Il riassunto dei file scelti.
                 let vis = self.casa.scelti();
                 let tot: u64 = vis.iter().map(|i| self.casa.coda[*i].dim).sum();
-                p.rrect(x, y, cw, 64.0, 10.0, Some(pal.surface), Some((pal.border, 1.0)));
+                super::sollevato(p, pal, self.tema.dark(), x, y, cw, 64.0, 10.0);
                 for (k, i) in vis.iter().take(3).enumerate() {
                     let v = self.casa.coda[*i].clone();
                     let mx = x + 12.0 + k as f32 * 20.0;
@@ -1281,7 +1281,7 @@ impl App {
                 y += 32.0;
                 let (_, sw) = self.principali();
                 let ch = 122.0 + if sw.is_some() { 50.0 } else { 0.0 };
-                p.rrect(x, y, cw, ch, 10.0, Some(pal.surface), Some((pal.border, 1.0)));
+                super::sollevato(p, pal, self.tema.dark(), x, y, cw, ch, 10.0);
                 p.text(&format!("Opzioni di conversione · {et}"), x + 12.0, y + 8.0, cw - 24.0, 28.0, 16.0, Weight::Bold, pal.text, Align::Left);
                 self.sel_in(p, (x + 12.0, y + 42.0, cw - 24.0, 44.0), "Altri formati e strumenti", Azione::Casa(CasaAz::Apri(Elenco::Formato)), vista);
                 let mut iy = y + 94.0;
@@ -1326,7 +1326,7 @@ impl App {
             }
             _ => {
                 // Salvataggio: dove, se esiste già, e il riassunto.
-                p.rrect(x, y, cw, 64.0, 10.0, Some(pal.surface), Some((pal.border, 1.0)));
+                super::sollevato(p, pal, self.tema.dark(), x, y, cw, 64.0, 10.0);
                 p.icon(ic::FOLDER, x + 14.0, y + 20.0, 24.0, pal.text);
                 p.text("Documenti/Cedro", x + 50.0, y + 8.0, cw - 60.0, 26.0, 16.0, Weight::Bold, pal.text, Align::Left);
                 p.text("Le copie nuove vanno qui; l'originale non si tocca.", x + 50.0, y + 34.0, cw - 60.0, 20.0, 13.0, Weight::Regular, pal.muted, Align::Left);
@@ -1389,9 +1389,12 @@ impl App {
             return self.cta(p, rc, 6.0, Some(icona), testo, az, 17.0);
         }
         let pal = self.pal();
-        let fondo = if az.is_none() { pal.alt } else if self.premuto == az { mix(pal.primary, (0, 0, 0), 0.15) } else { pal.primary };
         let fg = if az.is_some() { pal.on_primary } else { pal.muted };
-        p.rrect(rc.0, rc.1, rc.2, rc.3, 6.0, Some(fondo), None);
+        if az.is_none() {
+            p.rrect(rc.0, rc.1, rc.2, rc.3, 6.0, Some(pal.alt), None);
+        } else {
+            super::lucido(p, self.scuro(), rc.0, rc.1, rc.2, rc.3, 6.0, pal.primary, self.premuto == az);
+        }
         let tw = p.measure(testo, 18.0, Weight::Bold);
         let x0 = rc.0 + (rc.2 - tw - 30.0) / 2.0;
         p.text(testo, x0, rc.1, tw + 4.0, rc.3, 18.0, Weight::Bold, fg, Align::Left);
@@ -1413,7 +1416,7 @@ impl App {
         // Le attività, a segmenti.
         let att = attivita();
         let sy = 62.0;
-        p.rrect(x, sy, cw, 48.0, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
+        super::sollevato(p, pal, self.tema.dark(), x, sy, cw, 48.0, 8.0);
         let sw = (cw - 8.0) / att.len() as f32;
         // Con quattro attività le scritte si rimpiccioliscono finché stanno nel loro segmento.
         let dim = [14.0, 13.0, 12.0, 11.0].into_iter().find(|d| att.iter().all(|a| p.measure(if *a == Att::Web { "Web" } else { a.nome() }, *d, Weight::Semibold) + 18.0 <= sw)).unwrap_or(11.0);
@@ -1424,13 +1427,14 @@ impl App {
                 Att::Web => "Web",
                 _ => a.nome(),
             };
+            let col = colore_att(*a, scuro);
             if on {
-                p.rrect(rc.0, rc.1, rc.2, rc.3, 6.0, Some(pal.primary), None);
-                p.text(nome, rc.0, rc.1, rc.2, rc.3, dim, Weight::Semibold, pal.on_primary, Align::Center);
+                super::lucido(p, scuro, rc.0, rc.1, rc.2, rc.3, 6.0, col, false);
+                p.text(nome, rc.0, rc.1, rc.2, rc.3, dim, Weight::Semibold, (255, 255, 255), Align::Center);
             } else {
                 let tw = p.measure(nome, dim, Weight::Regular);
                 let tx = rc.0 + (rc.2 - tw - 12.0) / 2.0;
-                p.circle(tx + 3.0, rc.1 + rc.3 / 2.0, 3.5, Some(colore_att(*a, scuro)), None);
+                p.circle(tx + 3.0, rc.1 + rc.3 / 2.0, 3.5, Some(col), None);
                 p.text(nome, tx + 12.0, rc.1, tw + 4.0, rc.3, dim, Weight::Regular, pal.text, Align::Left);
             }
             self.colpi.push((Forma::R(rc), Azione::Casa(CasaAz::Att(k))));
@@ -1542,10 +1546,11 @@ impl App {
             let on = *a == self.casa.att;
             let nome = if corti { a.corto() } else { a.nome() };
             let tw = p.measure(nome, dim, if on { Weight::Semibold } else { Weight::Regular });
-            p.circle(ax + 4.0, ay + 20.0, 4.0, Some(colore_att(*a, scuro)), None);
+            let col = colore_att(*a, scuro);
+            p.circle(ax + 4.0, ay + 20.0, 4.0, Some(col), None);
             p.text(nome, ax + 14.0, ay, tw + 4.0, 40.0, dim, if on { Weight::Semibold } else { Weight::Regular }, if on { pal.text } else { pal.muted }, Align::Left);
             if on {
-                p.fill(ax, ay + 37.0, tw + 14.0, 2.0, pal.primary);
+                p.fill(ax, ay + 37.0, tw + 14.0, 2.0, col);
             }
             self.colpi.push((Forma::R((ax - 4.0, ay, tw + passo - 12.0, 40.0)), Azione::Casa(CasaAz::Att(k))));
             ax += tw + passo;
@@ -1606,7 +1611,7 @@ impl App {
             let hh = 38.0;
             let col_op = x + cw * 0.56;
             let col_st = x + cw * 0.74;
-            p.rrect(x, y, cw, hh + rh * vis.len().max(1) as f32, 6.0, Some(pal.surface), Some((pal.border, 1.0)));
+            super::sollevato(p, pal, self.tema.dark(), x, y, cw, hh + rh * vis.len().max(1) as f32, 6.0);
             p.fill(x + 1.0, y + 1.0, cw - 2.0, hh - 1.0, mix(pal.surface, pal.alt, 0.6));
             let tutti = !vis.is_empty() && vis.iter().all(|i| self.casa.coda[*i].scelto);
             p.rrect(x + 10.0, y + 8.0, 22.0, 22.0, 5.0, Some(if tutti { pal.primary } else { pal.surface }), if tutti { None } else { Some((pal.muted, 1.5)) });

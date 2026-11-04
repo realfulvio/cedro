@@ -256,7 +256,7 @@ impl App {
         let righe = if sotto.is_empty() { 0 } else { p.wrap_lines(sotto, 13.0, Weight::Regular, tw, 2).len() };
         let dim = if p.measure(titolo, 16.0, Weight::Semibold) <= tw { 16.0 } else { 14.0 };
         let h = if sotto.is_empty() { 60.0 } else { 44.0 + 20.0 * righe as f32 };
-        p.rrect(x, y, w, h, 16.0, Some(pal.surface), Some((pal.border, 1.0)));
+        super::sollevato(p, pal, self.tema.dark(), x, y, w, h, 16.0);
         if sotto.is_empty() {
             p.text(titolo, x + 14.0, y, tw, h, dim, Weight::Semibold, pal.text, Align::Left);
         } else {
@@ -433,7 +433,7 @@ impl App {
         y += TOCCO + 12.0;
         let n = if self.imp.ocr_max == 0 { "Tutte".to_string() } else { self.imp.ocr_max.to_string() };
         y += self.passi(p, x, y, cw, "Pagine massime per l'OCR", "Oltre, dice quali ha lasciato fuori", &n, Azione::Opz(OpzAz::PagineOcr(-10)), Azione::Opz(OpzAz::PagineOcr(10)), vista) + 8.0;
-        p.rrect(x, y, cw, 64.0, 16.0, Some(pal.surface), Some((pal.border, 1.0)));
+        super::sollevato(p, pal, self.tema.dark(), x, y, cw, 64.0, 16.0);
         p.text("Dove salvare", x + 14.0, y + 8.0, cw - 28.0, 26.0, 16.0, Weight::Semibold, pal.text, Align::Left);
         p.text("Documenti/Cedro, sul telefono", x + 14.0, y + 34.0, cw - 28.0, 20.0, 13.0, Weight::Regular, pal.muted, Align::Left);
         y += 72.0;
