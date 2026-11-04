@@ -1258,8 +1258,8 @@ fn libero(dir: &Path, file: &Path) -> PathBuf {
 fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, out: &std::path::Path, prog: &std::sync::atomic::AtomicU32, modello: usize) {
     use cedro::trascrizione::{run, Event, Format, Request};
     let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
-    // Su Android il riconoscimento delle voci non c'è: una voce sola.
-    let req = Request { format: Format::Text, model: modello.min(1), gpu: false, avx512: false, speakers: 1 };
+    // `modello` porta anche quante persone parlano (bit alti): 0 Automatico, 1 una sola, 2..=8.
+    let req = Request { format: Format::Text, model: (modello & 0x0f).min(1), gpu: false, avx512: false, speakers: (modello >> 4) as u8 };
     let esito: std::sync::Mutex<Option<Result<(PathBuf, String), String>>> = std::sync::Mutex::new(None);
     run(&[file.to_path_buf()], &req, Some(out), &cedro::Options::default(), &|e| match e {
         Event::Percent { percent, .. } => prog.store(percent as u32 * 10, std::sync::atomic::Ordering::Relaxed),

@@ -16,6 +16,10 @@ use kaldi_native_fbank::fbank::{FbankComputer, FbankOptions};
 use kaldi_native_fbank::online::{FeatureComputer, OnlineFeature};
 use std::sync::Arc;
 
+// Su Android questo file si compila dentro Cedro (src/whisper_android), che per l'OCR usa ancora rten 0.26:
+// lì la 0.27 delle voci ha un altro nome.
+#[cfg(target_os = "android")]
+use {rten_voci as rten, rten_tensor_voci as rten_tensor};
 use rten::{Model, RunOptions, ThreadPool};
 use rten_tensor::prelude::*;
 use rten_tensor::NdTensor;

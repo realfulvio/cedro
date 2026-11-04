@@ -194,6 +194,8 @@ pub enum Elenco {
     Opzione(usize),
     Esiste,
     Attivita,
+    /// Quante persone parlano (trascrizione).
+    Voci,
 }
 
 pub struct Casa {
@@ -437,6 +439,7 @@ impl App {
                         return Effetto::SalvaImpostazioni;
                     }
                     Some(Elenco::Attivita) => return self.azione_casa(CasaAz::Att(k)),
+                    Some(Elenco::Voci) => self.voci = (k as u8).min(8),
                     None => {}
                 }
             }
@@ -971,19 +974,29 @@ impl App {
         let pal = self.pal();
         p.text("Modello", x, y, w, 26.0, 14.0, Weight::Semibold, pal.muted, Align::Left);
         self.pillole_in(p, (x, y + 28.0, w, TOCCO), &["Veloce", "Buona"], self.modello.min(1), |i| Azione::Casa(CasaAz::Modello(i)), vista);
-        28.0 + TOCCO + 8.0
+        // Chi parla, come sul computer: con più persone il testo dice chi ha detto cosa.
+        let cy = y + 28.0 + TOCCO + 10.0;
+        p.text("Chi parla", x, cy, w, 26.0, 14.0, Weight::Semibold, pal.muted, Align::Left);
+        let testo = match self.voci {
+            0 => "Automatico".to_string(),
+            1 => "Una persona sola".to_string(),
+            n => format!("{n} persone"),
+        };
+        let rc = (x, cy + 28.0, w, 42.0);
+        self.sel_in(p, rc, &testo, Azione::Casa(CasaAz::Apri(Elenco::Voci)), vista);
+        28.0 + TOCCO + 10.0 + 28.0 + 42.0 + 8.0
     }
 
     /// L'ispettore della Trascrizione: modello e cosa esce. Restituisce l'altezza.
     fn ispettore_trascrizione(&mut self, p: &mut Painter, x: f32, y: f32, w: f32, vista: R) -> f32 {
         let pal = self.pal();
         let col = colore_att(Att::Tras, self.scuro());
-        super::sollevato(p, pal, self.tema.dark(), x, y, w, 152.0, 10.0);
+        super::sollevato(p, pal, self.tema.dark(), x, y, w, 230.0, 10.0);
         self.kt(p, x + 14.0, y + 12.0, 32.0, col, ic::TRANSCRIBE);
         p.text("Impostazioni della trascrizione", x + 56.0, y + 12.0, w - 70.0, 32.0, 16.0, Weight::Semibold, pal.text, Align::Left);
         let h = self.scelta_modello(p, x + 14.0, y + 52.0, w - 28.0, vista);
         p.text("Esce un file di testo con le frasi; poi «Rivedi» dai Lavori.", x + 14.0, y + 52.0 + h, w - 28.0, 20.0, 12.0, Weight::Regular, pal.muted, Align::Left);
-        160.0
+        238.0
     }
 
     // ---- Essenziale ----
@@ -1556,7 +1569,7 @@ impl App {
             ax += tw + passo;
         }
         let conv = self.casa.att == Att::Conv;
-        let foglio_h = if conv { 236.0 } else if self.casa.att == Att::Tras { 150.0 } else { 0.0 };
+        let foglio_h = if conv { 236.0 } else if self.casa.att == Att::Tras { 228.0 } else { 0.0 };
         let piede = 78.0;
         let x = 12.0;
         let cw = w - 24.0;
@@ -1978,6 +1991,11 @@ impl App {
                     _ => 0,
                 };
                 ("Se il file esiste già".into(), vec![("Aggiungi -2, -3".into(), None), ("Sostituisci il file".into(), None), ("Salta il file".into(), None)], Some(k))
+            }
+            Elenco::Voci => {
+                let mut voci = vec![("Automatico: le conta Cedro".to_string(), None), ("Una persona sola".to_string(), None)];
+                voci.extend((2..=8).map(|n| (format!("{n} persone"), None)));
+                ("Quante persone parlano?".into(), voci, Some(self.voci as usize))
             }
             Elenco::Attivita => {
                 let scuro = self.scuro();
