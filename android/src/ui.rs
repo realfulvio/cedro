@@ -24,7 +24,7 @@ mod opzioni;
 mod pdf;
 mod rivedi;
 pub use pdf::{Campo, Pagina, StatoPdf, Tasto};
-pub use rivedi::da_controllare;
+pub use rivedi::{da_controllare, FoglioRiv};
 
 pub type R = (f32, f32, f32, f32);
 
@@ -197,6 +197,8 @@ pub enum Effetto {
     SalvaLavori,
     /// Mette un testo negli appunti.
     Copia(String),
+    /// Il Riassunto AI di una trascrizione (lavoro `id`): le righe per il modello e i nomi delle voci.
+    Riassumi { id: u32, source: PathBuf, lines: Vec<String>, names: Vec<String>, prog: Arc<AtomicU32> },
     /// Apre il selettore di file di Android.
     Scegli(Sorgente),
     /// Carica un file già noto (da «Ultimi file»).
@@ -660,6 +662,12 @@ impl App {
     /// Un lavoro è finito (o fallito).
     pub fn finisce(&mut self, id: u32, stato: Stato) -> Effetto {
         self.salvata(id, &stato);
+        if let Some(rv) = self.rivedi.as_mut().filter(|rv| rv.riassunto.as_ref().is_some_and(|r| r.0 == id)) {
+            rv.riassunto = None;
+            if let Stato::Errore(e) = &stato {
+                rv.riassunto_nota = dividi_errore(e).0.to_string();
+            }
+        }
         if let Some(l) = self.lavori.iter_mut().find(|l| l.id == id) {
             l.stato = stato;
         }

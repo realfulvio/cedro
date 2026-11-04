@@ -62,6 +62,8 @@ pub enum Campo {
     Modello,
     /// Il link di «Video dal web» e di YouTube.
     Link,
+    /// Il nome di una voce in «Rivedi» › «Chi parla».
+    Voce(u8),
 }
 
 /// Quello che arriva dalla tastiera.
@@ -262,7 +264,7 @@ impl StatoPdf {
             Campo::ExcelPagine => &mut self.x_pagine,
             Campo::Filigrana => &mut self.testo_filigrana,
             Campo::PagineDi(i) => &mut self.unisci.get_mut(i)?.sel,
-            Campo::Opzione(_) | Campo::Modello | Campo::Link => return None,
+            Campo::Opzione(_) | Campo::Modello | Campo::Link | Campo::Voce(_) => return None,
         })
     }
 
@@ -407,6 +409,19 @@ impl App {
     pub fn tasto(&mut self, t: Tasto) -> Effetto {
         let Some(c) = self.campo else { return Effetto::Niente };
         match (c, t) {
+            (Campo::Voce(_), Tasto::Invio) => {
+                self.campo = None;
+                if let Some(rv) = self.rivedi.as_ref() {
+                    rv.salva_revisione();
+                }
+                return Effetto::Ridisegna;
+            }
+            (Campo::Voce(v), _) => {
+                if let Some(rv) = self.rivedi.as_mut() {
+                    rv.tasto_nome(v, t);
+                }
+                return Effetto::Ridisegna;
+            }
             (_, Tasto::Invio) if c != Campo::Password => {
                 self.campo = None;
                 return Effetto::Ridisegna;

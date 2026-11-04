@@ -866,6 +866,9 @@ struct Consegne {
     onda_riv: Casella<(PathBuf, Option<Vec<f32>>)>,
     /// I punti da controllare di una trascrizione finita (lavoro, quanti).
     controlli: Arc<Mutex<Vec<(u32, usize)>>>,
+    /// Il Riassunto AI: il passo in parole (lavoro, testo) e il risultato (lavoro, trascrizione, riassunto).
+    passo_riassunto: Arc<Mutex<Vec<(u32, String)>>>,
+    riassunti: Arc<Mutex<Vec<(u32, PathBuf, cedro::riassunto::Stored)>>>,
     /// Miniatura, misure e pagine dei file in coda nella finestra principale.
     voci: Arc<Mutex<Vec<(PathBuf, Option<Image>, Option<(u32, u32)>, Option<u32>)>>>,
 }
@@ -1281,6 +1284,41 @@ fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, ou
     }
 }
 
+/// Il Riassunto AI sul telefono: lo stesso `cedro::riassunto` del computer, col motore `cedro-riassumi` dentro l'APK.
+fn riassumi(c: &Consegne, id: u32, source: PathBuf, lines: Vec<String>, names: Vec<String>, prog: &std::sync::atomic::AtomicU32) {
+    use cedro::riassunto::{Failure, Options, Progress, Step};
+    use std::sync::atomic::Ordering;
+    let passo = |t: String| c.passo_riassunto.lock().unwrap_or_else(|e| e.into_inner()).push((id, t));
+    let mai = std::sync::atomic::AtomicBool::new(false);
+    let fine: Mutex<Option<Result<cedro::riassunto::Stored, Failure>>> = Mutex::new(None);
+    cedro::riassunto::run(lines, names, Options { gpu: false, avx512: false }, &mai, &|p| match p {
+        Progress::Step(s) => passo(match s {
+            Step::Waiting => "Aspetto che finisca l'altro lavoro…".into(),
+            Step::Download(t) => format!("Modello: {t}"),
+            Step::Loading => "Carico il modello in memoria…".into(),
+            Step::Reading(_, 1) => "Legge la riunione…".into(),
+            Step::Reading(i, n) => format!("Legge la riunione: parte {} di {n}", i + 1),
+            Step::Merging => "Mette insieme gli appunti…".into(),
+            Step::Writing => "Scrive il riassunto…".into(),
+        }),
+        Progress::Ready { .. } => passo(format!("Processore · {} thread", cedro::trascrizione::engine_threads())),
+        Progress::Percent(v) => prog.store(v as u32 * 10, Ordering::Relaxed),
+        Progress::Done(r) => *fine.lock().unwrap_or_else(|e| e.into_inner()) = Some(r),
+    });
+    let stato = match fine.into_inner().unwrap_or_else(|e| e.into_inner()) {
+        Some(Ok(s)) => {
+            let secs = s.ms / 1000;
+            c.riassunti.lock().unwrap_or_else(|e| e.into_inner()).push((id, source, s));
+            Stato::Fatto { path: PathBuf::new(), nome: String::new(), msg: format!("Pronto in «Rivedi» in {} min {:02} s", secs / 60, secs % 60) }
+        }
+        Some(Err(Failure::LowMemory(free))) => Stato::Errore(format!("Poca memoria libera ({}): chiudi qualche app e riprova", cedro::riassunto::gb(free))),
+        Some(Err(Failure::Cancelled)) => Stato::Errore("Riassunto annullato".into()),
+        Some(Err(Failure::Other(e))) => Stato::Errore(format!("Il riassunto non è riuscito: {e}")),
+        None => Stato::Errore("Il riassunto non è partito".into()),
+    };
+    c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, stato));
+}
+
 fn presenta(finestra: &android_activity::ndk::native_window::NativeWindow, p: &Painter) {
     use android_activity::ndk::hardware_buffer_format::HardwareBufferFormat;
     let _ = finestra.set_buffers_geometry(0, 0, Some(HardwareBufferFormat::R8G8B8A8_UNORM));
@@ -1477,6 +1515,7 @@ fn android_main(app: AndroidApp) {
     let _ = std::fs::create_dir_all(&tmp);
     std::env::set_var("TMPDIR", &tmp);
     if let Some(librerie) = cartella_librerie(&app) {
+        cedro::riassunto::android::set_libs(librerie.clone());
         cedro::youtube::android::set_dirs(librerie, dati.clone());
     }
     if std::env::var_os("RTEN_NUM_THREADS").is_none() {
@@ -1694,6 +1733,11 @@ fn android_main(app: AndroidApp) {
                             sporco = true;
                         }
                         Effetto::Esci => chiudi(&app),
+                        Effetto::Riassumi { id, source, lines, names, prog } => {
+                            let c = consegne.clone();
+                            std::thread::spawn(move || riassumi(&c, id, source, lines, names, &prog));
+                            sporco = true;
+                        }
                         Effetto::Copia(testo) => {
                             copia_negli_appunti(&app, &testo);
                             sporco = true;
@@ -1837,6 +1881,14 @@ fn android_main(app: AndroidApp) {
         }
         if let Some((p, bars)) = consegne.onda_riv.lock().unwrap_or_else(|e| e.into_inner()).take() {
             ui.onda_rivedi(&p, bars);
+            sporco = true;
+        }
+        for (id, nota) in std::mem::take(&mut *consegne.passo_riassunto.lock().unwrap_or_else(|e| e.into_inner())) {
+            ui.passo_riassunto(id, nota);
+            sporco = true;
+        }
+        for (_, source, s) in std::mem::take(&mut *consegne.riassunti.lock().unwrap_or_else(|e| e.into_inner())) {
+            ui.riassunto_pronto(&source, s);
             sporco = true;
         }
         for (id, n) in std::mem::take(&mut *consegne.controlli.lock().unwrap_or_else(|e| e.into_inner())) {
