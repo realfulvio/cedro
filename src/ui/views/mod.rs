@@ -598,14 +598,30 @@ pub fn count_noun(n: usize, category: &str) -> String {
 
 /// I file della coda che appartengono a un'altra categoria: «Altri file in coda: 2 PDF».
 pub fn others_link(f: &mut Frame, app: &App, x: f32, y: f32, h: f32, size: f32) -> f32 {
+    others_link_in(f, app, x, y, h, size, f32::INFINITY)
+}
+
+/// Come `others_link`, ma entro `max_w`: si rimpicciolisce un poco e, se non basta, lascia solo i link
+/// (nella finestrella di «Cedro compatto» l'ultimo finiva tagliato a metà).
+pub fn others_link_in(f: &mut Frame, app: &App, x: f32, y: f32, h: f32, size: f32, max_w: f32) -> f32 {
     let others = app.others();
     if others.is_empty() || app.activity != Activity::Convert {
         return 0.0;
     }
     let pal = f.pal;
+    let prefix = "Altri file in coda:";
+    let links = |f: &Frame, size: f32| -> f32 { others.iter().map(|&(ci, n)| f.measure(&count_noun(n, conversioni::CATEGORIES[ci].name), size, SEMI) + 18.0).sum() };
+    let full = |f: &Frame, size: f32| f.measure(prefix, size, SANS) + 10.0 + links(f, size) - 10.0;
+    let mut size = size;
+    while size > 11.0 && full(f, size) > max_w {
+        size -= 0.5;
+    }
+    let show_prefix = full(f, size) <= max_w;
     let mut cx = x;
-    f.text("Altri file in coda:", cx, y, 200.0, h, size, SANS, pal.muted);
-    cx += f.measure("Altri file in coda:", size, SANS) + 10.0;
+    if show_prefix {
+        f.text(prefix, cx, y, 200.0, h, size, SANS, pal.muted);
+        cx += f.measure(prefix, size, SANS) + 10.0;
+    }
     for (ci, n) in others {
         let label = count_noun(n, conversioni::CATEGORIES[ci].name);
         let w = f.measure(&label, size, SEMI) + 8.0;

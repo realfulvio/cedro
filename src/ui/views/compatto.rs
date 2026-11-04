@@ -223,8 +223,9 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
             y += 70.0;
         }
         // «Aggiungi file» c'è sempre, anche con la coda piena.
-        f.tool(x + 6.0, y, 36.0, "Aggiungi file", ic::ADD, 15.0, Act::AddFiles, true);
-        super::others_link(f, app, x + 190.0, y + 6.0, 24.0, 13.5);
+        let add_w = f.tool(x + 6.0, y, 36.0, "Aggiungi file", ic::ADD, 15.0, Act::AddFiles, true);
+        let ox = (x + 190.0).max(x + 6.0 + add_w + 12.0);
+        super::others_link_in(f, app, ox, y + 6.0, 24.0, 13.5, x + w - ox);
         y += 48.0;
     }
     y += 6.0;

@@ -11,7 +11,8 @@ const LIST_W: f32 = 272.0;
 const INSP_W: f32 = 402.0;
 const FOOT: f32 = 76.0;
 
-fn top_bar(f: &mut Frame, app: &App, simple: bool) {
+/// Vale `false` quando in Semplificata la scelta della modalità non sta accanto alle schede: la mette il piede.
+fn top_bar(f: &mut Frame, app: &App, simple: bool) -> bool {
     let pal = f.pal;
     f.p.fill(0.0, 0.0, f.w, BAR, pal.surface);
     f.hline(0.0, BAR - 1.0, f.w);
@@ -50,11 +51,17 @@ fn top_bar(f: &mut Frame, app: &App, simple: bool) {
         f.hit((cx - 8.0, 4.0, 44.0, 40.0), act);
     }
     if simple && app.activity == Activity::Convert {
-        // Si stringe, fino a un minimo, se le schede (coi caratteri più grandi) arrivano vicino agli strumenti.
+        // Si stringe, fino a un minimo, se le schede (coi caratteri più grandi) arrivano vicino agli strumenti;
+        // se nemmeno così ci sta (finestra stretta) non copre le schede: va nel piede, che in Semplificata è libero.
         let end = gx - 46.0 - 16.0;
-        let sw = (end - (x + 6.0)).clamp(240.0, 300.0);
+        let room = end - (x + 6.0);
+        if room < 240.0 {
+            return false;
+        }
+        let sw = room.min(300.0);
         super::essenziale::mode_switch(f, (end - sw, 8.0, sw, 46.0));
     }
+    true
 }
 
 fn file_list(f: &mut Frame, app: &App, r: R) {
@@ -377,7 +384,7 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
         f.text("Formato di output", x, r.1 + 226.0, w, 30.0, 18.0, SEMI, pal.text);
         let title = super::action_title(app, true);
         f.select((x, r.1 + 262.0, w, 62.0), &title, None, 19.0, Act::FormatMenu);
-        let line = format!("{} · {}", if app.customized() { "Impostazioni personalizzate" } else { "Impostazioni consigliate" }, "tutte le pagine");
+        let line = format!("{} · {}", if app.customized() { "Impostazioni personalizzate" } else { "Impostazioni consigliate" }, if app.kind() == Kind::Pdf { "tutte le pagine" } else { "tutti i file" });
         f.text(&line, x, r.1 + 336.0, w, 30.0, 16.0, SANS, pal.muted);
         let ready = !app.targets().is_empty();
         let go = (x, r.1 + 390.0, w, 66.0);
@@ -427,12 +434,14 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
         format_icon_small(f, if conversioni::is_page_action(app.kind(), id) { "pdf" } else { id }, tx, r.1 + 30.0, 56.0);
     }
     f.text(&target, tx + 66.0, r.1 + 30.0, 100.0, 56.0, 21.0, SEMI, pal.text);
-    let body = (r.0 + 1.0, r.1 + 108.0, r.2 - 2.0, r.3 - 108.0 - 130.0);
+    let body = (r.0 + 1.0, r.1 + 108.0, r.2 - 2.0, r.3 - 108.0 - 150.0);
     super::scrolled(f, body, Scroll::Inspector, |f| super::options_panel(f, app, x, body.1 + 8.0, w, OPT_STD, true) + 16.0);
-    let by = r.1 + r.3 - 120.0;
-    f.p.rrect(x - 6.0, by, w + 12.0, 96.0, 8.0, Some(mix(pal.primary, pal.surface, 0.9)), None);
+    // Alto abbastanza per il titolo e tre righe di testo (coi caratteri ingranditi la terza usciva dal riquadro).
+    let bh = 118.0;
+    let by = r.1 + r.3 - bh - 18.0;
+    f.p.rrect(x - 6.0, by, w + 12.0, bh, 8.0, Some(mix(pal.primary, pal.surface, 0.9)), None);
     f.icon(ic::HELP, x + 10.0, by + 16.0, 30.0, pal.primary);
-    if !super::notice(f, app, (x - 6.0, by, w + 12.0, 96.0), 14.0) {
+    if !super::notice(f, app, (x - 6.0, by, w + 12.0, bh), 14.0) {
         f.text("Anteprima dell'originale", x + 56.0, by + 10.0, w - 60.0, 30.0, 17.0, SEMI, pal.text);
         f.para("Stai visualizzando il documento originale. Nessuna conversione è ancora stata eseguita.", x + 56.0, by + 40.0, w - 62.0, 14.5, SANS, pal.muted, 1.35, 3);
     }
@@ -444,11 +453,14 @@ fn format_icon_small(f: &mut Frame, id: &str, x: f32, y: f32, s: f32) {
         "xlsx" | "xls" => f.excel_icon(x, y, s),
         "txt" | "html" | "rtf" => f.text_icon(x, y, s),
         "pdf" => f.pdf_icon(x + s * 0.12, y + s * 0.05, s * 0.9),
+        // Un audio o un video in uscita non è una foto: icona del suo tipo.
+        "mp3" | "wav" | "flac" | "ogg" | "opus" | "m4a" | "aac" | "aiff" | "wma" => f.kind_icon(Kind::Audio, x, y, s),
+        "mp4" | "mkv" | "webm" | "mov" | "avi" => f.kind_icon(Kind::Video, x, y, s),
         _ => f.image_icon(x, y, s),
     }
 }
 
-fn footer(f: &mut Frame, app: &App, y: f32, simple: bool) {
+fn footer(f: &mut Frame, app: &App, y: f32, simple: bool, switch_here: bool) {
     let pal = f.pal;
     f.p.fill(0.0, y, f.w, f.h - y, pal.surface);
     f.hline(0.0, y, f.w);
@@ -461,6 +473,9 @@ fn footer(f: &mut Frame, app: &App, y: f32, simple: bool) {
     }
     f.icon(ic::FOLDER, 660.0, y + 24.0, 28.0, pal.text);
     f.hit((650.0, y + 14.0, 48.0, 48.0), Act::DestPick);
+    if switch_here {
+        super::essenziale::mode_switch(f, (f.w - 24.0 - 300.0, y + 15.0, 300.0, 46.0));
+    }
     if !simple {
         let ex = 730.0;
         f.vline(ex - 14.0, y + 14.0, 48.0);
@@ -487,7 +502,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     let pal = f.pal;
     let simple = f.simple;
     f.p.clear(pal.bg);
-    top_bar(f, app, simple);
+    let switch_in_bar = top_bar(f, app, simple);
     if app.activity != Activity::Convert {
         let r = (28.0, BAR + 20.0, f.w - 56.0, f.h - BAR - 36.0);
         match app.activity {
@@ -511,5 +526,5 @@ pub fn draw(f: &mut Frame, app: &App) {
         f.button((26.0, foot_y - 70.0, 190.0, 46.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles);
         super::others_link(f, app, 232.0, foot_y - 58.0, 24.0, 14.0);
     }
-    footer(f, app, foot_y, simple);
+    footer(f, app, foot_y, simple, simple && !switch_in_bar);
 }
