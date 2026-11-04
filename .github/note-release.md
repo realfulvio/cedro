@@ -12,11 +12,11 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Riassunto AI delle riunioni trascritte.**
+**Il tema Windows essenziale è più curato.** Stessa disposizione e stessi comandi, con qualche tocco in più:
 
-- Dopo una trascrizione, accanto a «Rivedi» c'è il pulsante «Riassunto AI». In Rivedi trascrizione c'è la scheda «Riassunto» con quattro parti: In breve, Chi ha detto cosa, Decisioni e Da fare (con la casella da spuntare e il nome di chi se ne occupa).
-- Usa i nomi che hai dato agli interlocutori; se li cambi dopo, il riassunto si aggiorna da solo.
-- Lo scrive Qwen3.5-4B, un modello che gira tutto sul PC: niente va su internet. Usa la scheda video se c'è (Vulkan), altrimenti il processore.
-- Prima di partire controlla la memoria libera: servono circa 4 GB, e se non ci sono non parte e lo dice. Il modello si carica solo per il riassunto e poi si chiude, liberando la memoria. Le riunioni lunghe si leggono a pezzi.
-- Il riassunto resta salvato con la trascrizione, si copia con un clic e si può mettere in cima al Word o al testo.
-- La prima volta Cedro scarica il motore e il modello, circa 2,7 GB.
+- Nella barra di sinistra ogni attività ha la sua piastrella colorata: Conversioni blu, Trascrizione arancio, YouTube rosso, Video dal web verde.
+- Le schede dei tipi di file hanno il loro colore: PDF rosso, Documenti blu, Immagini verde, Audio arancio, Video viola.
+- La coda e le impostazioni stanno su riquadri sollevati con un'ombra morbida, e il piede in basso è una fascia chiara.
+- I pulsanti principali («Aggiungi file», «Converti») sono sfumati e in rilievo.
+- La zona «Trascina qui» prende il colore dell'attività o del tipo di file, e l'elenco dei formati accettati va a capo invece di essere tagliato.
+- Il tema Comune di Bondeno e gli altri temi restano come prima.
