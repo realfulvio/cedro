@@ -30,8 +30,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release -DGGML_OPENMP=OFF -DGGML_NATIVE=OFF \
             -DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16 -DBUILD_SHARED_LIBS=OFF \
             -DLLAMA_CURL=OFF -DLLAMA_BUILD_SERVER=OFF
-          cmake --build b -j4 --target llama-bench llama-cli llama-simple
-          mkdir ../out && cp b/bin/llama-bench b/bin/llama-cli b/bin/llama-simple ../out/ && cp ../versione.txt ../out/
+          cmake --build b -j4 --target llama-bench llama-simple
+          mkdir ../out && cp b/bin/llama-bench b/bin/llama-simple ../out/ && cp ../versione.txt ../out/
           ls -la ../out
       - uses: actions/upload-artifact@v4
         with:
