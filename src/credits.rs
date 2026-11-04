@@ -282,9 +282,11 @@ mod tests {
     #[test]
     fn engine_version_follows_cedro() {
         // Cedro scarica il motore dalla release con il proprio numero di versione: build.ps1 lo prende da qui.
-        let toml = include_str!("../trascrivi/Cargo.toml");
-        let line = toml.lines().find(|l| l.starts_with("version = ")).expect("version");
-        assert_eq!(line, format!("version = \"{}\"", env!("CARGO_PKG_VERSION")));
+        // Lo stesso per il motore del Riassunto AI: con un numero diverso la release si ferma prima di pubblicare.
+        for toml in [include_str!("../trascrivi/Cargo.toml"), include_str!("../riassumi/Cargo.toml")] {
+            let line = toml.lines().find(|l| l.starts_with("version = ")).expect("version");
+            assert_eq!(line, format!("version = \"{}\"", env!("CARGO_PKG_VERSION")));
+        }
     }
 
     #[test]
