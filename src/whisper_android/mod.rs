@@ -10,6 +10,9 @@ use serde_json::{json, Value};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 mod decode;
+// Prompt italiano e frase fantasma finale: le stesse regole del motore del computer (v0.34).
+#[path = "../../trascrivi/src/rifinitura.rs"]
+mod rifinitura;
 
 pub(crate) enum Failure {
     Unsupported(String),
@@ -73,7 +76,8 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, ev: &Sender
     };
     let _ = ev.send(json!({"e": "lang", "code": lang}));
 
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 5 });
+    // Come sul computer (v0.34): ricerca a fascio con 5 ipotesi, che toglie parole storpiate per circa il 15 % di tempo in più.
+    let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 });
     params.set_n_threads(threads as i32);
     params.set_language(Some(&lang));
     params.set_print_special(false);
@@ -82,13 +86,24 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, ev: &Sender
     params.set_print_timestamps(false);
     // Niente «[Musica]», «(applausi)» e simili al posto del parlato.
     params.set_suppress_nst(true);
+    // Un esempio con la punteggiatura: senza, il parlato informale esce minuscolo e senza punti.
+    if let Some(prompt) = rifinitura::initial_prompt(&lang) {
+        params.set_initial_prompt(prompt);
+    }
+    // Ogni frase parte quando arriva la successiva: l'ultima si guarda a parte, perché a fine audio whisper a volte
+    // inventa un «Grazie.» che nessuno ha detto.
+    let pending: std::sync::Arc<std::sync::Mutex<Option<(i64, i64, String)>>> = Default::default();
     params.set_segment_callback_safe_lossy({
         let ev = ev.clone();
+        let held = pending.clone();
         move |seg: whisper_rs::SegmentCallbackData| {
-        let text = seg.text.trim();
-        if !text.is_empty() {
-            let _ = ev.send(json!({"e": "seg", "t0": seg.start_timestamp, "t1": seg.end_timestamp, "text": text}));
-        }
+            let text = seg.text.trim();
+            if !text.is_empty() {
+                let prima = held.lock().unwrap_or_else(|e| e.into_inner()).replace((seg.start_timestamp, seg.end_timestamp, text.to_string()));
+                if let Some((t0, t1, text)) = prima {
+                    let _ = ev.send(json!({"e": "seg", "t0": t0, "t1": t1, "text": text}));
+                }
+            }
         }
     });
     let mut last = -1;
@@ -100,6 +115,13 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, ev: &Sender
         }
     });
     state.full(params, &samples).map_err(|e| Failure::Other(format!("trascrizione interrotta: {e}")))?;
+    let audio_end = (samples.len() as u64 * 100 / decode::RATE as u64) as i64;
+    let ultima = pending.lock().unwrap_or_else(|e| e.into_inner()).take();
+    if let Some((t0, t1, text)) = ultima {
+        if !rifinitura::phantom_tail(&text, t0, t1, audio_end) {
+            let _ = ev.send(json!({"e": "seg", "t0": t0, "t1": t1, "text": text}));
+        }
+    }
     Ok(lang)
 }
 

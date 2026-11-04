@@ -413,6 +413,44 @@ fn dividi_errore(m: &str) -> (&str, &str) {
     m.split_once("\n---\n").unwrap_or((m, ""))
 }
 
+// ---- Lo stile curato dei temi del computer (v0.33): riquadri sollevati, pulsanti sfumati, piastrelle ----
+
+/// Un riquadro sollevato, come `Frame::card` del computer: ombra morbida, fondo della superficie, filo leggero.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn sollevato(p: &mut Painter, pal: &Palette, scuro: bool, x: f32, y: f32, w: f32, h: f32, r: f32) {
+    p.shadow(x, y, w, h, r, 10.0, if scuro { 0.28 } else { 0.10 }, 3.0);
+    let bordo = if scuro { pal.border } else { mix(pal.border, pal.surface, 0.25) };
+    p.rrect(x, y, w, h, r, Some(pal.surface), Some((bordo, 1.0)));
+}
+
+/// Il fondo di un pulsante pieno in rilievo (`glossy_fill` del computer): ombra, sfumatura dall'alto,
+/// filo chiaro sul bordo; premuto è più scuro.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn lucido(p: &mut Painter, scuro: bool, x: f32, y: f32, w: f32, h: f32, r: f32, c: (u8, u8, u8), premuto: bool) {
+    let spread = (h * 0.14).clamp(4.0, 10.0);
+    p.shadow(x, y, w, h, r, spread, if scuro { 0.35 } else { 0.2 }, spread * 0.4);
+    let (su, giu) = if premuto { (mix(c, (255, 255, 255), 0.04), mix(c, (0, 0, 0), 0.2)) } else { (mix(c, (255, 255, 255), 0.16), mix(c, (0, 0, 0), 0.06)) };
+    p.rrect_vgrad(x, y, w, h, r, su, giu);
+    p.rrect_line(x, y, w, h, r, (255, 255, 255), 1.0, 0.12, None);
+}
+
+/// La piastrella colorata con l'icona (`tile` del computer): piena con l'icona bianca quando è scelta,
+/// appena tinta con l'icona del colore quando no.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn piastrella(p: &mut Painter, pal: &Palette, scuro: bool, x: f32, y: f32, s: f32, icona: &str, c: (u8, u8, u8), on: bool) {
+    let r = (s * 0.27).round();
+    let is = (s * 0.62).round();
+    let pad = (s - is) / 2.0;
+    if on {
+        p.shadow(x, y, s, s, r, 5.0, if scuro { 0.3 } else { 0.12 }, 2.0);
+        p.rrect_vgrad(x, y, s, s, r, mix(c, (255, 255, 255), 0.12), mix(c, (0, 0, 0), 0.06));
+        p.icon(icona, x + pad, y + pad, is, (255, 255, 255));
+    } else {
+        p.rrect(x, y, s, s, r, Some(mix(c, pal.surface, if scuro { 0.8 } else { 0.86 })), None);
+        p.icon(icona, x + pad, y + pad, is, c);
+    }
+}
+
 fn intersezione(a: R, b: R) -> Option<R> {
     let (x0, y0) = (a.0.max(b.0), a.1.max(b.1));
     let (x1, y1) = ((a.0 + a.2).min(b.0 + b.2), (a.1 + a.3).min(b.1 + b.3));
@@ -517,6 +555,8 @@ pub struct App {
     pub altri: Vec<PathBuf>,
     /// La finestra principale del tema, aperta dall'icona (falso quando si arriva da «Condividi»).
     pub casa_aperta: bool,
+    /// Per ogni trascrizione in corso: quando ha dato la prima percentuale, e quale (per il tempo che resta).
+    pub partenze: std::collections::HashMap<u32, (Instant, u32)>,
     pub casa: casa::Casa,
     /// Lavori, Aspetto o Informazioni sopra la finestra principale, con la freccia per tornare.
     pub sopra: Option<Scheda>,
@@ -583,6 +623,7 @@ impl App {
             esiste: cedro::Exists::Number,
             altri: Vec::new(),
             casa_aperta: true,
+            partenze: std::collections::HashMap::new(),
             casa: casa::Casa::default(),
             sopra: None,
             pdf_pagine: std::collections::HashMap::new(),
@@ -1446,9 +1487,12 @@ impl App {
         };
         let attivo = testo.is_some();
         let prem = attivo && self.premuto == Some(Azione::Vai);
-        let fondo = if !attivo { pal.alt } else if prem { mix(pal.primary, (0, 0, 0), 0.15) } else { pal.primary };
         let fg = if attivo { pal.on_primary } else { pal.muted };
-        p.rrect(bt.0, bt.1, bt.2, bt.3, bt.3 / 2.0, Some(fondo), None);
+        if attivo {
+            lucido(p, self.tema.dark(), bt.0, bt.1, bt.2, bt.3, bt.3 / 2.0, pal.primary, prem);
+        } else {
+            p.rrect(bt.0, bt.1, bt.2, bt.3, bt.3 / 2.0, Some(pal.alt), None);
+        }
         let et = testo.unwrap_or_else(|| "Scegli uno strumento".into());
         let tw = p.measure(&et, 18.0, Weight::Semibold).min(bt.2 - 70.0);
         let ix = bt.0 + (bt.2 - tw - 34.0) / 2.0;
@@ -1720,10 +1764,66 @@ impl App {
     }
 
     /// Una scheda di lavoro. Restituisce l'altezza.
+    /// Il riquadro dell'avanzamento di una trascrizione, come sul computer (v0.32): cosa fa e la percentuale
+    /// grande, su cosa lavora (processore e thread), la barra, il tempo che resta.
+    fn avanzamento_trascrizione(&mut self, p: &mut Painter, l: &Lavoro, r: R) {
+        let pal = self.pal();
+        let scuro = self.tema.dark();
+        let accento = casa::colore_att(casa::Att::Tras, scuro);
+        let m = l.prog.load(Ordering::Relaxed);
+        let pronto = m <= 1000;
+        if pronto && !self.partenze.contains_key(&l.id) {
+            self.partenze.insert(l.id, (self.ora, m));
+        }
+        p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(mix(accento, pal.surface, if scuro { 0.86 } else { 0.93 })), Some((mix(accento, pal.surface, 0.72), 1.0)));
+        let (x, w) = (r.0 + 14.0, r.2 - 28.0);
+        let perc = if pronto { m / 10 } else { 0 };
+        let pct = format!("{perc}%");
+        let pw = p.measure(&pct, 26.0, Weight::Semibold);
+        p.text(&pct, x + w - pw - 2.0, r.1 + 8.0, pw + 4.0, 36.0, 26.0, Weight::Semibold, accento, Align::Left);
+        let cosa = if perc == 0 { "Si prepara" } else { "Trascrive" };
+        p.text(cosa, x, r.1 + 8.0, w - pw - 12.0, 22.0, 15.0, Weight::Semibold, pal.text, Align::Left);
+        // La spia: su Android la trascrizione usa il processore (l'Adreno non ha il Vulkan che serve).
+        let cy = r.1 + 41.0;
+        p.disc_a(x + 4.0, cy, 6.5, pal.ok, 0.2);
+        p.circle(x + 4.0, cy, 3.5, Some(pal.ok), None);
+        p.text(&format!("Processore · {} thread", cedro::trascrizione::engine_threads()), x + 16.0, cy - 11.0, w - pw - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+        // La barra: binario chiaro, riempimento, un filo di luce e la testa chiara.
+        let (by, bh) = (r.1 + 60.0, 12.0);
+        p.rrect(x, by, w, bh, bh / 2.0, Some(mix(accento, pal.surface, 0.80)), None);
+        let fw = (w * perc as f32 / 100.0).max(if perc > 0 { bh } else { 0.0 });
+        if fw > 0.0 {
+            p.rrect(x, by, fw, bh, bh / 2.0, Some(accento), None);
+            p.rrect_a(x + 4.0, by + 2.0, (fw - 8.0).max(0.0), 3.0, 1.5, (255, 255, 255), 0.28);
+            if fw > bh + 6.0 {
+                p.disc_a(x + fw - bh / 2.0, by + bh / 2.0, 2.5, (255, 255, 255), 0.9);
+            }
+        } else {
+            // Prima della prima percentuale (modello che si scarica o si carica) la barra scorre.
+            p.push_clip(x, by, w, bh);
+            let t = (self.ora.duration_since(l.inizio).as_secs_f32() * 0.9).fract();
+            let sw = w * 0.3;
+            p.rrect(x - sw + (w + sw) * t, by, sw, bh, bh / 2.0, Some(accento), None);
+            p.pop_clip();
+        }
+        let resta = if perc == 0 {
+            "Accendo il motore…".to_string()
+        } else {
+            self.partenze.get(&l.id).and_then(|&(t0, m0)| {
+                let spesi = self.ora.duration_since(t0).as_secs_f32();
+                (m >= m0 + 50 && spesi >= 10.0 && m < 1000).then(|| format!("Restano {}", cedro::ui::model::time_left((1000 - m) as f32 * spesi / (m - m0) as f32)))
+            })
+            .unwrap_or_else(|| "Calcolo il tempo che resta…".into())
+        };
+        p.text(&resta, x, by + bh + 6.0, w, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+    }
+
     fn scheda_lavoro(&mut self, p: &mut Painter, k: usize, x: f32, y: f32, w: f32, vista: R) -> f32 {
         let pal = self.pal();
         let l = self.lavori[k].clone();
+        let trascrive = l.sorgente.is_some();
         let alt = match &l.stato {
+            Stato::InCorso if trascrive => 168.0,
             Stato::InCorso => 92.0,
             // Un link passato a un'altra app: non c'è un file da aprire o condividere.
             Stato::Fatto { path, .. } if path.as_os_str().is_empty() => 70.0,
@@ -1731,7 +1831,7 @@ impl App {
             Stato::Fatto { .. } => 142.0,
             Stato::Errore(_) => 112.0,
         };
-        p.rrect(x, y, w, alt, 16.0, Some(pal.surface), Some((pal.border, 1.0)));
+        sollevato(p, pal, self.tema.dark(), x, y, w, alt, 16.0);
         let titolo = if l.conv { format!("{} · {}", l.origine, l.etichetta) } else { format!("{}: {}", l.etichetta, l.origine) };
         let (stato_txt, stato_col) = match &l.stato {
             Stato::InCorso => ("In corso".to_string(), pal.primary),
@@ -1743,6 +1843,7 @@ impl App {
         p.text(&nome, x + 14.0, y + 8.0, w - sw - 40.0, 28.0, 16.0, Weight::Semibold, pal.text, Align::Left);
         p.text(&stato_txt, x + w - sw - 14.0, y + 8.0, sw, 28.0, 14.0, Weight::Semibold, stato_col, Align::Right);
         match &l.stato {
+            Stato::InCorso if trascrive => self.avanzamento_trascrizione(p, &l, (x + 12.0, y + 42.0, w - 24.0, alt - 54.0)),
             Stato::InCorso => {
                 let (bx, by, bw) = (x + 14.0, y + 44.0, w - 28.0);
                 p.rrect(bx, by, bw, 8.0, 4.0, Some(pal.alt), None);
@@ -1782,8 +1883,11 @@ impl App {
                     let rc = (x + 14.0 + i as f32 * (bw + 10.0), y + alt - 14.0 - TOCCO, bw, TOCCO);
                     let prem = self.premuto == Some(az);
                     let pieno = i == 0;
-                    let fondo = if pieno { if prem { mix(pal.primary, (0, 0, 0), 0.15) } else { pal.primary } } else if prem { pal.alt } else { pal.surface };
-                    p.rrect(rc.0, rc.1, rc.2, rc.3, 24.0, Some(fondo), if pieno { None } else { Some((pal.primary, 1.5)) });
+                    if pieno {
+                        lucido(p, self.tema.dark(), rc.0, rc.1, rc.2, rc.3, 24.0, pal.primary, prem);
+                    } else {
+                        p.rrect(rc.0, rc.1, rc.2, rc.3, 24.0, Some(if prem { pal.alt } else { pal.surface }), Some((pal.primary, 1.5)));
+                    }
                     p.text(et, rc.0, rc.1, rc.2, rc.3, 16.0, Weight::Semibold, if pieno { pal.on_primary } else { pal.primary }, Align::Center);
                     if let Some(r) = intersezione(rc, vista) {
                         self.colpi.push((Forma::R(r), az));
@@ -1815,7 +1919,7 @@ impl App {
         let pal = self.pal();
         let rh = 42.0;
         let h = righe.len() as f32 * rh + 4.0;
-        p.rrect(x, y, w, h, 16.0, Some(pal.surface), Some((pal.border, 1.0)));
+        sollevato(p, pal, self.tema.dark(), x, y, w, h, 16.0);
         for (i, (k, v, si)) in righe.iter().enumerate() {
             let ry = y + 2.0 + i as f32 * rh;
             if i > 0 {

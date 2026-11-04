@@ -255,7 +255,7 @@ impl App {
 
         // Il lettore: onda, salti, play e tempo.
         let card_h = 126.0;
-        p.rrect(x, y, cw, card_h, 20.0, Some(pal.surface), Some((pal.border, 1.0)));
+        super::sollevato(p, pal, self.tema.dark(), x, y, cw, card_h, 20.0);
         let pos = rv.posizione();
         let durata = rv.r.secs.max(0.001);
         let (ox, ow, oy, oh) = (x + 14.0, cw - 28.0, y + 12.0, 46.0);
