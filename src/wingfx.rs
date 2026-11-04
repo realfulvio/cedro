@@ -69,6 +69,42 @@ pub fn round_rect(hdc: HDC, r: &RECT, radius: f32, fill: Option<COLORREF>, line:
     }
 }
 
+/// Ombra morbida sotto un riquadro: strati sempre più larghi e più chiari (come `Painter::shadow`).
+pub fn shadow(hdc: HDC, r: &RECT, radius: f32, spread: f32, alpha: f32) {
+    startup();
+    unsafe {
+        let mut g: *mut GpGraphics = std::ptr::null_mut();
+        if GdipCreateFromHDC(hdc, &mut g) != Status(0) || g.is_null() {
+            return;
+        }
+        GdipSetSmoothingMode(g, SmoothingModeAntiAlias);
+        let steps = 6;
+        for i in (1..=steps).rev() {
+            let k = i as f32 / steps as f32;
+            let grow = spread * k;
+            let a = (alpha / steps as f32 * (1.0 - k * 0.6) * 255.0).round().clamp(0.0, 255.0) as u8;
+            let x = r.left as f32 - grow;
+            let y = r.top as f32 - grow + spread * 0.3;
+            let w = (r.right - r.left) as f32 + 2.0 * grow;
+            let h = (r.bottom - r.top) as f32 + 2.0 * grow;
+            let d = ((radius + grow) * 2.0).min(w).min(h).max(0.0);
+            let mut path: *mut GpPath = std::ptr::null_mut();
+            GdipCreatePath(FillModeAlternate, &mut path);
+            GdipAddPathArc(path, x, y, d, d, 180.0, 90.0);
+            GdipAddPathArc(path, x + w - d, y, d, d, 270.0, 90.0);
+            GdipAddPathArc(path, x + w - d, y + h - d, d, d, 0.0, 90.0);
+            GdipAddPathArc(path, x, y + h - d, d, d, 90.0, 90.0);
+            GdipClosePathFigure(path);
+            let mut brush: *mut GpSolidFill = std::ptr::null_mut();
+            GdipCreateSolidFill((a as u32) << 24, &mut brush);
+            GdipFillPath(g, brush as *mut GpBrush, path);
+            GdipDeleteBrush(brush as *mut GpBrush);
+            GdipDeletePath(path);
+        }
+        GdipDeleteGraphics(g);
+    }
+}
+
 /// Un cerchio pieno con il centro in (`cx`, `cy`).
 pub fn circle(hdc: HDC, cx: f32, cy: f32, radius: f32, color: COLORREF) {
     startup();

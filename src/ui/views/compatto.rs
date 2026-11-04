@@ -48,19 +48,21 @@ fn header(f: &mut Frame, full: bool, x: f32, w: f32) {
     f.hit((right - 38.0, 10.0, 40.0, 40.0), gear);
 }
 
-/// Una scheda a due, tre o quattro segmenti (la voce scelta piena di colore).
-fn segments(f: &mut Frame, r: R, items: &[(&str, &str, Act, bool)]) {
+/// Una scheda a due, tre o quattro segmenti: ogni voce ha il colore della sua attività (l'icona),
+/// quella scelta è piena di quel colore, in rilievo.
+fn segments(f: &mut Frame, r: R, items: &[(&str, &str, Act, bool, Activity)]) {
     let pal = f.pal;
     f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
     let w = r.2 / items.len() as f32;
-    for (i, (label, icon, act, on)) in items.iter().enumerate() {
+    for (i, (label, icon, act, on, a)) in items.iter().enumerate() {
         let b = (r.0 + i as f32 * w, r.1, w, r.3);
         if *on {
-            f.p.rrect(b.0, b.1, b.2, b.3, 8.0, Some(pal.primary), None);
+            f.glossy_fill(b, 8.0, crate::ui::theme::activity_color(*a), f.hovered(act));
         } else if f.hovered(act) {
             f.p.rrect(b.0 + 2.0, b.1 + 2.0, b.2 - 4.0, b.3 - 4.0, 6.0, Some(pal.alt), None);
         }
-        let c = if *on { pal.on_primary } else { pal.text };
+        let c = if *on { (255, 255, 255) } else { pal.text };
+        let ic_c = if *on { c } else { f.act_color(*a) };
         let size = if w < 120.0 { 13.5 } else { 15.5 };
         let tw = f.measure(label, size, if *on { SEMI } else { SANS });
         let show_icon = w > 135.0;
@@ -68,7 +70,7 @@ fn segments(f: &mut Frame, r: R, items: &[(&str, &str, Act, bool)]) {
         let total = tw + if show_icon { isz + 8.0 } else { 0.0 };
         let mut x = b.0 + (b.2 - total) / 2.0;
         if show_icon {
-            f.icon(icon, x, b.1 + (b.3 - isz) / 2.0, isz, c);
+            f.icon(icon, x, b.1 + (b.3 - isz) / 2.0, isz, ic_c);
             x += isz + 8.0;
         }
         f.text(label, x, b.1, tw + 4.0, b.3, size, if *on { SEMI } else { SANS }, c);
@@ -85,7 +87,7 @@ fn frame(f: &mut Frame, app: &App, full: bool) {
     header(f, full, if full { x } else { MARGIN }, if full { cw } else { f.w - 2.0 * MARGIN });
     let mut y = 66.0;
     if full {
-        let tabs: Vec<(&str, &str, Act, bool)> = Activity::ALL.iter().map(|a| (a.name(), a.icon(), Act::Activity(*a), app.activity == *a)).collect();
+        let tabs: Vec<(&str, &str, Act, bool, Activity)> = Activity::ALL.iter().map(|a| (a.name(), a.icon(), Act::Activity(*a), app.activity == *a, *a)).collect();
         segments(f, (x, y, cw, 46.0), &tabs);
         y += 56.0;
         if simple && app.activity == Activity::Convert {
@@ -97,12 +99,16 @@ fn frame(f: &mut Frame, app: &App, full: bool) {
         if simple && tab == 0 {
             super::essenziale::mode_switch(f, (x, y, cw, 48.0));
         } else {
-            segments(f, (x, y, cw, 46.0), &[("File", ic::FILE, Act::CompactTab(0), tab == 0), ("Link", ic::LINK, Act::CompactTab(1), tab == 1), ("Trascrivi", ic::TRANSCRIBE, Act::CompactTab(2), tab == 2)]);
+            segments(f, (x, y, cw, 46.0), &[
+                ("File", ic::FILE, Act::CompactTab(0), tab == 0, Activity::Convert),
+                ("Link", ic::LINK, Act::CompactTab(1), tab == 1, Activity::Web),
+                ("Trascrivi", ic::TRANSCRIBE, Act::CompactTab(2), tab == 2, Activity::Transcribe),
+            ]);
         }
         y += 58.0;
         if tab == 1 {
             let yt = app.activity == Activity::YouTube;
-            segments(f, (x, y, cw, 38.0), &[("YouTube", ic::VIDEO, Act::Activity(Activity::YouTube), yt), ("Altri siti", ic::WEB, Act::Activity(Activity::Web), !yt)]);
+            segments(f, (x, y, cw, 38.0), &[("YouTube", ic::VIDEO, Act::Activity(Activity::YouTube), yt, Activity::YouTube), ("Altri siti", ic::WEB, Act::Activity(Activity::Web), !yt, Activity::Web)]);
             y += 48.0;
         }
     }
@@ -193,7 +199,7 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
                 continue;
             }
             let file = &app.files[i];
-            f.p.rrect(x, y, w, 62.0, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
+            f.card((x, y, w, 62.0), 8.0);
             f.thumb(app, i, (x + 8.0, y + 8.0, 46.0, 46.0), 5.0);
             f.text(&file.name(), x + 66.0, y + 8.0, w - 66.0 - 56.0, 26.0, 15.5, SEMI, pal.text);
             let (size, extra) = super::file_meta(app, i);
@@ -242,7 +248,10 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
     let half = (w - 56.0) / 2.0;
     let from = super::count_noun(vis.len().max(1), conversioni::CATEGORIES[app.category].name);
     f.p.rrect(x, y + 30.0, half, 42.0, 6.0, Some(pal.surface), Some((pal.border, 1.0)));
-    f.text(&from, x + 14.0, y + 30.0, half - 20.0, 42.0, 15.0, SANS, pal.muted);
+    // Da cosa si parte: la piastrella del tipo di file, nel suo colore.
+    let kind = conversioni::CATEGORIES[app.category].kind;
+    f.tile(x + 7.0, y + 37.0, 28.0, super::category_icon(kind), f.kind_color(kind), false);
+    f.text(&from, x + 44.0, y + 30.0, half - 50.0, 42.0, 15.0, SANS, pal.text);
     f.icon(ic::ARROW_RIGHT, x + half + 14.0, y + 39.0, 24.0, pal.muted);
     let title = super::action_title(app, false);
     f.select((x + half + 56.0, y + 30.0, half, 42.0), &title, None, 15.5, Act::FormatMenu);

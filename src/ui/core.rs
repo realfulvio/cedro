@@ -386,9 +386,68 @@ impl<'a> Frame<'a> {
         self.p.icon(d, x, y, size, c);
     }
 
+    /// Il riquadro «sollevato» di tutti i temi: ombra morbida sotto e bordo appena accennato
+    /// (nei temi scuri l'ombra è più forte e il bordo resta pieno, se no il riquadro sparisce).
     pub fn card(&mut self, r: R, radius: f32) {
         let pal = self.pal;
-        self.p.rrect(r.0, r.1, r.2, r.3, radius, Some(pal.surface), Some((pal.border, 1.0)));
+        let dark = self.theme.dark();
+        self.p.shadow(r.0, r.1, r.2, r.3, radius, 10.0, if dark { 0.28 } else { 0.10 }, 3.0);
+        let border = if dark { pal.border } else { mix(pal.border, pal.surface, 0.25) };
+        self.p.rrect(r.0, r.1, r.2, r.3, radius, Some(pal.surface), Some((border, 1.0)));
+    }
+
+    /// I due colori della sfumatura di un pulsante pieno di colore `c` (più scuri sotto il mouse).
+    pub fn glossy(&self, c: Rgb, hot: bool) -> (Rgb, Rgb) {
+        if hot {
+            (mix(c, (255, 255, 255), 0.04), mix(c, (0, 0, 0), 0.2))
+        } else {
+            (mix(c, (255, 255, 255), 0.16), mix(c, (0, 0, 0), 0.06))
+        }
+    }
+
+    /// Il fondo di un pulsante pieno in rilievo: ombra, sfumatura dall'alto e filo chiaro sul bordo.
+    pub fn glossy_fill(&mut self, r: R, radius: f32, c: Rgb, hot: bool) {
+        let spread = (r.3 * 0.14).clamp(4.0, 10.0);
+        let a = if self.theme.dark() { 0.35 } else { 0.2 };
+        self.p.shadow(r.0, r.1, r.2, r.3, radius, spread, a, spread * 0.4);
+        let (top, bottom) = self.glossy(c, hot);
+        self.p.rrect_vgrad(r.0, r.1, r.2, r.3, radius, top, bottom);
+        self.p.rrect_line(r.0, r.1, r.2, r.3, radius, (255, 255, 255), 1.0, 0.12, None);
+    }
+
+    /// Il colore di un'attività (piastrelle, schede, icone): nei temi scuri un po' più chiaro.
+    pub fn act_color(&self, a: Activity) -> Rgb {
+        self.lift(super::theme::activity_color(a))
+    }
+
+    /// Il colore di un tipo di file: nei temi scuri un po' più chiaro.
+    pub fn kind_color(&self, k: Kind) -> Rgb {
+        self.lift(super::theme::kind_color(k))
+    }
+
+    fn lift(&self, c: Rgb) -> Rgb {
+        if self.theme.dark() {
+            mix(c, (255, 255, 255), 0.28)
+        } else {
+            c
+        }
+    }
+
+    /// La piastrella colorata con l'icona dentro: piena (icona bianca) quando è scelta,
+    /// appena tinta (icona del colore) quando no.
+    pub fn tile(&mut self, x: f32, y: f32, s: f32, icon: &str, c: Rgb, on: bool) {
+        let pal = self.pal;
+        let rad = (s * 0.25).round();
+        let isz = (s * 0.61).round();
+        let pad = (s - isz) / 2.0;
+        if on {
+            self.p.shadow(x, y, s, s, rad, 5.0, if self.theme.dark() { 0.3 } else { 0.12 }, 2.0);
+            self.p.rrect(x, y, s, s, rad, Some(c), None);
+            self.icon(icon, x + pad, y + pad, isz, (255, 255, 255));
+        } else {
+            self.p.rrect(x, y, s, s, rad, Some(mix(c, pal.surface, if self.theme.dark() { 0.8 } else { 0.86 })), None);
+            self.icon(icon, x + pad, y + pad, isz, c);
+        }
     }
 
     pub fn hline(&mut self, x: f32, y: f32, w: f32) {
@@ -403,8 +462,11 @@ impl<'a> Frame<'a> {
     pub fn primary(&mut self, r: R, label: &str, icon: Option<&str>, size: f32, act: Act, enabled: bool) {
         let pal = self.pal;
         let hover = enabled && self.hovered(&act);
-        let bg = if !enabled { mix(pal.primary, pal.surface, 0.55) } else if hover { mix(pal.primary, (0, 0, 0), 0.12) } else { pal.primary };
-        self.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(bg), None);
+        if enabled {
+            self.glossy_fill(r, 8.0, pal.primary, hover);
+        } else {
+            self.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(mix(pal.primary, pal.surface, 0.55)), None);
+        }
         let isz = (size * 1.35).round();
         let tw = self.measure(label, size, SEMI);
         let total = tw + if icon.is_some() { isz + 14.0 } else { 0.0 };
@@ -458,6 +520,11 @@ impl<'a> Frame<'a> {
 
     /// Una scelta chiusa (si apre in un elenco al clic).
     pub fn select(&mut self, r: R, label: &str, icon: Option<&str>, size: f32, act: Act) {
+        self.select_tinted(r, label, icon, None, size, act);
+    }
+
+    /// Come `select`; con `tint` l'icona sta in una piastrella di quel colore (l'attività scelta).
+    pub fn select_tinted(&mut self, r: R, label: &str, icon: Option<&str>, tint: Option<Rgb>, size: f32, act: Act) {
         let pal = self.pal;
         let open = self.ui.menu.as_ref().is_some_and(|m| m.anchor == r);
         let hover = self.hovered(&act);
@@ -466,8 +533,14 @@ impl<'a> Frame<'a> {
         let mut x = r.0 + pad;
         if let Some(d) = icon {
             let isz = (size * 1.2).round();
-            self.icon(d, x, r.1 + (r.3 - isz) / 2.0, isz, pal.text);
-            x += isz + 22.0;
+            if let Some(c) = tint {
+                let ts = (r.3 - 12.0).min(isz + 12.0);
+                self.tile(x - 6.0, r.1 + (r.3 - ts) / 2.0, ts, d, c, true);
+                x += ts + 4.0;
+            } else {
+                self.icon(d, x, r.1 + (r.3 - isz) / 2.0, isz, pal.text);
+                x += isz + 22.0;
+            }
         }
         let chev = (size * 1.05).round();
         self.p.text(label, x, r.1, r.0 + r.2 - pad - chev - 8.0 - x, r.3, size, SANS, pal.text, Align::Left);
