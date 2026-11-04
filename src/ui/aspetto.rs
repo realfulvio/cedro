@@ -152,8 +152,10 @@ impl Aspetto {
     fn choice(&self, p: &mut Painter, r: R, on: bool, hot: bool) {
         let t = self.tema;
         let rad = (t.radius as f32).max(4.0);
+        // Schede sollevate come i riquadri dei temi: quella scelta ha l'ombra più marcata e il bordo del colore.
         let fill = if hot && !on { t.surf } else { t.bg };
-        p.rrect(r.0, r.1, r.2, r.3, rad, Some(fill), Some(if on { (t.acc, 2.0) } else { (t.line, 1.0) }));
+        p.shadow(r.0, r.1, r.2, r.3, rad, if on { 10.0 } else { 7.0 }, if on { 0.14 } else { 0.07 }, 2.0);
+        p.rrect(r.0, r.1, r.2, r.3, rad, Some(fill), Some(if on { (t.acc, 2.0) } else { (super::theme::mix(t.line, t.bg, 0.2), 1.0) }));
     }
 
     fn thumb(&self, p: &mut Painter, r: R, theme: ThemeId) {

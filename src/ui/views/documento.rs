@@ -24,14 +24,16 @@ fn top_bar(f: &mut Frame, app: &App, simple: bool) {
         let w = tw + 78.0;
         let act = Act::Activity(a);
         let r = (x, 4.0, w, BAR - 5.0);
+        // Ogni attività ha il suo colore: l'icona, il fondo e la linea della scheda scelta.
+        let ac = f.act_color(a);
         if on {
-            f.p.rrect(r.0, r.1, r.2, r.3 + 4.0, 8.0, Some(pal.alt), None);
-            f.p.fill(r.0, BAR - 3.0, r.2, 3.0, pal.primary);
+            f.p.rrect(r.0, r.1, r.2, r.3 + 4.0, 8.0, Some(mix(ac, pal.surface, 0.9)), None);
+            f.p.rrect(r.0 + 4.0, BAR - 4.0, r.2 - 8.0, 4.0, 2.0, Some(ac), None);
         } else if f.hovered(&act) {
             f.p.rrect(r.0, r.1, r.2, r.3 - 6.0, 8.0, Some(mix(pal.alt, pal.surface, 0.5)), None);
         }
-        let c = if on { pal.primary } else { pal.text };
-        f.icon(a.icon(), x + 18.0, 18.0, 28.0, c);
+        let c = pal.text;
+        f.icon(a.icon(), x + 18.0, 18.0, 28.0, ac);
         f.text(a.name(), x + 56.0, 0.0, tw + 6.0, BAR - 3.0, 17.0, if on { SEMI } else { SANS }, c);
         f.focus_ring(r, 8.0, &act);
         f.hit(r, act);
@@ -73,7 +75,11 @@ fn file_list(f: &mut Frame, app: &App, r: R) {
             let on = app.selected == Some(i);
             let act = Act::Select(i);
             if on {
-                f.p.rrect(r.0 + 6.0, y + 3.0, r.2 - 14.0, rh - 6.0, 8.0, Some(pal.alt), None);
+                // Il file scelto è una scheda sollevata con la linea del colore del suo tipo.
+                let row = (r.0 + 8.0, y + 4.0, r.2 - 18.0, rh - 8.0);
+                f.p.shadow(row.0, row.1, row.2, row.3, 8.0, 6.0, 0.10, 2.0);
+                f.p.rrect(row.0, row.1, row.2, row.3, 8.0, Some(mix(pal.alt, pal.surface, 0.35)), Some((mix(pal.border, pal.surface, 0.3), 1.0)));
+                f.p.rrect(row.0, row.1 + 12.0, 4.0, row.3 - 24.0, 2.0, Some(f.kind_color(file.kind)), None);
             } else if f.hovered(&act) {
                 f.p.rrect(r.0 + 6.0, y + 3.0, r.2 - 14.0, rh - 6.0, 8.0, Some(mix(pal.alt, pal.surface, 0.5)), None);
             }
@@ -121,7 +127,9 @@ fn preview(f: &mut Frame, app: &App, r: R) {
     let vis = app.visible();
     let Some(i) = app.selected.filter(|i| vis.contains(i)) else {
         f.p.fill(r.0, r.1, r.2, r.3, mix(pal.border, pal.bg, 0.45));
-        super::drop_zone(f, app, (r.0 + 40.0, r.1 + 40.0, r.2 - 80.0, r.3 - 80.0), true);
+        // In Semplificata sotto c'è «Aggiungi file»: la zona si ferma prima, così non lo tocca.
+        let below = if f.simple { 56.0 } else { 0.0 };
+        super::drop_zone(f, app, (r.0 + 40.0, r.1 + 40.0, r.2 - 80.0, r.3 - 80.0 - below), true);
         return;
     };
     let file = &app.files[i];

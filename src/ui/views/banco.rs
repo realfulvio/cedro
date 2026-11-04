@@ -22,7 +22,7 @@ fn top_bar(f: &mut Frame, app: &App) {
     for a in Activity::ALL {
         let on = app.activity == a;
         let size = if on { 25.0 } else { 18.0 };
-        let tw = f.measure(a.name(), size, SANS);
+        let tw = f.measure(a.name(), size, if on { SEMI } else { SANS });
         let isz = if on { 0.0 } else { 30.0 };
         let w = tw + isz + if on { 0.0 } else { 14.0 } + 34.0;
         let r = (x, 0.0, w, BAR - 1.0);
@@ -31,14 +31,16 @@ fn top_bar(f: &mut Frame, app: &App) {
             f.p.fill_a(r.0, r.1, r.2, r.3, pal.alt, 0.6);
         }
         let c = if on { pal.text } else { mix(pal.text, pal.muted, 0.35) };
+        // Ogni attività ha il suo colore: l'icona e la linea sotto quella scelta.
+        let ac = f.act_color(a);
         let mut tx = x + 17.0;
         if !on {
-            f.icon(a.icon(), tx, 25.0, 30.0, c);
+            f.icon(a.icon(), tx, 25.0, 30.0, ac);
             tx += isz + 14.0;
         }
-        f.text(a.name(), tx, 0.0, tw + 6.0, BAR - 3.0, size, SANS, c);
+        f.text(a.name(), tx, 0.0, tw + 6.0, BAR - 3.0, size, if on { SEMI } else { SANS }, c);
         if on {
-            f.p.fill(x, BAR - 4.0, w, 3.0, pal.primary);
+            f.p.rrect(x + 6.0, BAR - 5.0, w - 12.0, 4.0, 2.0, Some(ac), None);
         }
         f.focus_ring(r, 4.0, &act);
         f.hit(r, act);
@@ -56,17 +58,19 @@ fn categories(f: &mut Frame, app: &App, bottom: f32) {
         let on = i == app.category && app.activity == Activity::Convert;
         let act = Act::Category(i);
         let r = (0.0, y, NAV_W - 6.0, 56.0);
+        // Ogni tipo di file ha il suo colore: piastrella, fondo e linea della scheda scelta.
+        let kc = f.kind_color(cat.kind);
         if on {
-            f.p.rrect(r.0 - 8.0, r.1, r.2 + 8.0, r.3, 8.0, Some(mix(pal.primary, pal.bg, 0.72)), None);
-            f.p.rrect(0.0, y + 12.0, 5.0, 32.0, 2.5, Some(pal.primary), None);
+            f.p.rrect(r.0 - 8.0, r.1, r.2 + 8.0, r.3, 8.0, Some(mix(kc, pal.bg, 0.8)), None);
+            f.p.rrect(0.0, y + 12.0, 5.0, 32.0, 2.5, Some(kc), None);
         } else if f.hovered(&act) {
             f.p.rrect(r.0 - 8.0, r.1, r.2 + 8.0, r.3, 8.0, Some(pal.alt), None);
         }
-        f.icon(super::category_icon(cat.kind), 26.0, y + 14.0, 28.0, pal.text);
-        f.text(cat.name, 80.0, y, 110.0, 56.0, 19.0, SANS, pal.text);
+        f.tile(20.0, y + 10.0, 36.0, super::category_icon(cat.kind), kc, on);
+        f.text(cat.name, 72.0, y, 118.0, 56.0, 19.0, if on { SEMI } else { SANS }, pal.text);
         let count = app.files.iter().filter(|x| !x.voice_only && x.kind == cat.kind).count();
         if count > 0 && !on {
-            f.p.circle(NAV_W - 28.0, y + 28.0, 4.0, Some(pal.primary), None);
+            f.p.circle(NAV_W - 28.0, y + 28.0, 4.5, Some(kc), None);
         }
         f.focus_ring(r, 8.0, &act);
         f.hit(r, act);
@@ -160,8 +164,8 @@ fn inspector(f: &mut Frame, app: &App, r: R) {
     f.p.fill(r.0, r.1, r.2, r.3, pal.bg);
     f.vline(r.0, r.1, r.3);
     let cat = &conversioni::CATEGORIES[app.category];
-    f.icon(super::category_icon(cat.kind), r.0 + 28.0, r.1 + 24.0, 34.0, pal.primary);
-    f.text(&format!("Impostazioni {}", cat.name.to_lowercase()), r.0 + 78.0, r.1 + 16.0, r.2 - 100.0, 50.0, 25.0, SEMI, pal.text);
+    f.tile(r.0 + 26.0, r.1 + 20.0, 42.0, super::category_icon(cat.kind), f.kind_color(cat.kind), true);
+    f.text(&format!("Impostazioni {}", cat.name.to_lowercase()), r.0 + 84.0, r.1 + 16.0, r.2 - 100.0, 50.0, 25.0, SEMI, pal.text);
     let body = (r.0 + 1.0, r.1 + 80.0, r.2 - 2.0, r.3 - 90.0);
     let (x, w) = (r.0 + 28.0, r.2 - 56.0);
     super::scrolled(f, body, Scroll::Inspector, |f| {
@@ -280,7 +284,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         let cx = NAV_W + 18.0;
         let cw = ix - cx - 14.0;
         let mut x = cx;
-        f.button((x, BAR + 22.0, 165.0, 44.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles);
+        f.primary((x, BAR + 22.0, 165.0, 44.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles, true);
         x += 177.0;
         f.button((x, BAR + 22.0, 192.0, 44.0), "Aggiungi cartella", Some(ic::ADD), 17.0, Act::AddFolder);
         x += 204.0;

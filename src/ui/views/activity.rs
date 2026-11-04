@@ -131,8 +131,8 @@ const PROGRESS_H: f32 = 112.0;
 /// della scheda video, o il processore), barra e tempo che resta. Va sopra il pulsante Annulla.
 fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
     let pal = f.pal;
-    // Nel tema base il riquadro prende l'arancio della Trascrizione (come la sua piastrella); negli altri il colore del tema.
-    let accent = if f.theme == super::super::theme::ThemeId::WindowsEssenziale { super::super::theme::activity_color(Activity::Transcribe) } else { pal.primary };
+    // Il riquadro prende l'arancio della Trascrizione (come la sua piastrella).
+    let accent = f.act_color(Activity::Transcribe);
     let p = app.transcribe.percent.min(100) as f32;
     f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(mix(accent, pal.surface, 0.93)), Some((mix(accent, pal.surface, 0.72), 1.0)));
     let (x, w) = (r.0 + 18.0, r.2 - 36.0);
@@ -409,13 +409,7 @@ fn links_list(f: &mut Frame, app: &App, l: &Links, r: R, big: bool, scroll: bool
         let cy = r.1 + r.3 / 2.0;
         let isz = if big { 40.0 } else { 32.0 };
         let icon = if web { ic::WEB } else { ic::VIDEO };
-        if f.theme == ThemeId::WindowsEssenziale {
-            super::tinted_empty(f, r, super::super::theme::activity_color(app.activity), icon, isz);
-        } else {
-            f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(mix(pal.alt, pal.surface, 0.4)), None);
-            f.p.rrect_line(r.0, r.1, r.2, r.3, 10.0, mix(pal.primary, pal.surface, 0.35), 2.0, 1.0, Some((9.0, 6.0)));
-            f.icon(icon, r.0 + (r.2 - isz) / 2.0, cy - isz - 8.0, isz, pal.primary);
-        }
+        super::tinted_empty(f, r, f.act_color(app.activity), icon, isz);
         f.text_c("Nessun link in coda", (r.0, cy, r.2, 30.0), if big { 21.0 } else { 18.0 }, SEMI, pal.text);
         let hint = if web { super::super::model::WEB_HINT } else { super::super::model::YT_HINT };
         f.text_c(hint, (r.0 + 16.0, cy + 30.0, r.2 - 32.0, 26.0), if big { 16.0 } else { 14.0 }, SANS, pal.muted);
