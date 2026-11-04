@@ -73,7 +73,7 @@ rten-tensor-voci = { package = "rten-tensor", version = "0.27" }
 kaldi-native-fbank = "0.1"
 
 [target.'cfg(windows)'.dependencies]
-windows-core = "0.61"
+windows-core = "0.62"
 windows = { version = "0.61", features = [
     "Foundation",
     "Foundation_Collections",
