@@ -124,11 +124,76 @@ fn job_row(f: &mut Frame, r: R, title: &str, sub: &str, state: FileState, percen
     }
 }
 
+/// Altezza del riquadro dell'avanzamento della trascrizione.
+const PROGRESS_H: f32 = 112.0;
+
+/// Il riquadro dell'avanzamento mentre trascrive: percentuale grande, su cosa lavora (solo il modello
+/// della scheda video, o il processore), barra e tempo che resta. Va sopra il pulsante Annulla.
+fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
+    let pal = f.pal;
+    // Nel tema base il riquadro prende l'arancio della Trascrizione (come la sua piastrella); negli altri il colore del tema.
+    let accent = if f.theme == super::super::theme::ThemeId::WindowsEssenziale { super::super::theme::activity_color(Activity::Transcribe) } else { pal.primary };
+    let p = app.transcribe.percent.min(100) as f32;
+    f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(mix(accent, pal.surface, 0.93)), Some((mix(accent, pal.surface, 0.72), 1.0)));
+    let (x, w) = (r.0 + 18.0, r.2 - 36.0);
+    // A destra la percentuale grande; a sinistra cosa fa (e quale file, se sono più d'uno)…
+    let pct = format!("{}%", p.round() as u32);
+    let pw = f.measure(&pct, 30.0, SEMI);
+    f.text_r(&pct, (x + w - pw - 4.0, r.1 + 12.0, pw + 4.0, 44.0), 30.0, SEMI, accent);
+    let total = app.job.as_ref().map(|j| j.total).unwrap_or(1);
+    let done = app.job.as_ref().map(|j| j.done).unwrap_or(0);
+    let what = if p <= 0.0 { "Si prepara" } else { "Trascrive" };
+    let what = if total > 1 { format!("{what} · file {} di {total}", (done + 1).min(total)) } else { what.to_string() };
+    let tw = w - pw - 16.0;
+    f.text(&what, x, r.1 + 12.0, tw, 24.0, 15.0, SEMI, pal.text);
+    // …e sotto, la spia: il modello della scheda video (o il processore) col puntino del suo colore.
+    if let Some(u) = app.spia() {
+        let (label, dot) = if u.gpu { (u.detail, accent) } else { (format!("Processore · {}", u.detail.rsplit(" · ").next().unwrap_or_default()), pal.ok) };
+        let cy = r.1 + 36.0 + 11.0;
+        f.p.disc_a(x + 4.0, cy, 6.5, dot, 0.2);
+        f.p.circle(x + 4.0, cy, 3.5, Some(dot), None);
+        f.text(&label, x + 16.0, r.1 + 36.0, tw - 16.0, 22.0, 13.5, SANS, pal.muted);
+    }
+    // La barra: binario chiaro, riempimento col colore del tema, un filo di luce in alto e la testa chiara.
+    let (by, bh) = (r.1 + 66.0, 12.0);
+    f.p.rrect(x, by, w, bh, bh / 2.0, Some(mix(accent, pal.surface, 0.80)), None);
+    let fw = (w * p / 100.0).max(if p > 0.0 { bh } else { 0.0 });
+    if fw > 0.0 {
+        f.p.rrect(x, by, fw, bh, bh / 2.0, Some(accent), None);
+        f.p.rrect_a(x + 4.0, by + 2.0, (fw - 8.0).max(0.0), 3.0, 1.5, (255, 255, 255), 0.28);
+        if fw > bh + 6.0 {
+            f.p.disc_a(x + fw - bh / 2.0, by + bh / 2.0, 2.5, (255, 255, 255), 0.9);
+        }
+    }
+    // In fondo: quanto manca, oppure il passo del motore prima che la trascrizione parta.
+    let left = if p <= 0.0 {
+        // (anche «Voci: 30%», così si vede che lavora mentre riconosce chi parla).
+        let step = app.transcribe.log.iter().rev().find(|l| matches!(l.tone, Tone::Step | Tone::Muted) && !l.text.is_empty());
+        step.map(|l| {
+            let (key, text) = (crate::i18n::tr(&l.key), crate::i18n::tr(&l.text));
+            match () {
+                _ if key.is_empty() => text.to_string(),
+                // «Lingua riconosciuta: italiano», non «Lingua: riconosciuta: italiano».
+                _ if text.contains(':') => format!("{key} {text}"),
+                _ => format!("{key}: {text}"),
+            }
+        })
+        .unwrap_or_else(|| "Accendo il motore…".into())
+    } else {
+        app.transcribe_left().map(|t| format!("Restano {t}")).unwrap_or_else(|| "Calcolo il tempo che resta…".into())
+    };
+    f.text(&left, x, r.1 + 84.0, w, 22.0, 13.5, SANS, pal.muted);
+}
+
 /// Il pulsante principale delle pagine: avvia, oppure annulla il lavoro in corso.
 fn go_or_cancel(f: &mut Frame, app: &App, r: R, size: f32, icon: &str, ready: bool) {
     if app.busy() {
         let pal = f.pal;
         f.button(r, "Annulla", Some(ic::CLOSE), size, Act::Cancel);
+        if app.activity == Activity::Transcribe {
+            // Barra, tempo e spia stanno nel riquadro sopra il pulsante.
+            return;
+        }
         if let Some(p) = app.progress() {
             f.p.rrect(r.0, r.1 + r.3 + 8.0, r.2, 5.0, 2.5, Some(pal.border), None);
             f.p.rrect(r.0, r.1 + r.3 + 8.0, r.2 * p.clamp(0.0, 1.0), 5.0, 2.5, Some(pal.primary), None);
@@ -253,7 +318,8 @@ pub fn transcribe_page(f: &mut Frame, app: &App, r: R, simple: bool) {
         let w = r.2.min(980.0);
         let x = r.0 + (r.2 - w) / 2.0;
         f.button((x + w - 200.0, r.1 + 2.0, 200.0, 46.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles);
-        let list_h = (r.1 + r.3 - top - 330.0).max(140.0);
+        let card = if app.busy() { PROGRESS_H + 18.0 } else { 0.0 };
+        let list_h = (r.1 + r.3 - top - 330.0 - card).max(140.0);
         transcribe_queue(f, app, (x, top, w, list_h), true);
         let mut y = top + list_h + 22.0;
         f.text("Risultato:", x, y, 160.0, 56.0, 21.0, SEMI, pal.text);
@@ -264,9 +330,14 @@ pub fn transcribe_page(f: &mut Frame, app: &App, r: R, simple: bool) {
         f.select((x + 170.0, y, 280.0, 50.0), model_name(app), None, 18.0, Act::TrModelMenu);
         f.text(&model_note(app), x + 470.0, y, w - 470.0, 50.0, 16.0, SANS, pal.muted);
         y += 72.0;
+        if app.busy() {
+            transcribe_progress(f, app, (x, y, w, PROGRESS_H));
+            y += PROGRESS_H + 18.0;
+        }
         go_or_cancel(f, app, (x, y, w, 76.0), 24.0, ic::TRANSCRIBE, ready);
         y += 96.0;
-        let last = app.transcribe.log.last().map(|l| if l.key.is_empty() { l.text.clone() } else { format!("{} {}", l.key, l.text) });
+        // Prima che parta la trascrizione il passo del motore è già nel riquadro: qui non si ripete.
+        let last = app.transcribe.log.last().filter(|_| !(app.busy() && app.transcribe.percent == 0)).map(|l| if l.key.is_empty() { l.text.clone() } else { format!("{} {}", l.key, l.text) });
         let line = last.unwrap_or_else(|| super::dest_note(app).replace("I file convertiti verranno salvati", "I testi verranno salvati"));
         let err = app.transcribe.log.last().is_some_and(|l| l.tone == Tone::Error);
         f.text_c(&line, (x, y, w, 28.0), 17.0, SANS, if err { pal.bad } else { pal.muted });
@@ -310,6 +381,12 @@ pub fn transcribe_page(f: &mut Frame, app: &App, r: R, simple: bool) {
     let note = super::dest_note(app).replace("I file convertiti verranno salvati", "I testi verranno salvati");
     f.para(&note, cx, y, cw, 14.0, SANS, pal.muted, 1.4, 3);
     let gy = ir.1 + ir.3 - 24.0 - 64.0 - 14.0;
+    if app.busy() {
+        // Sopra il pulsante: copre la nota sulla cartella, che durante il lavoro non serve.
+        let py = gy - PROGRESS_H - 16.0;
+        f.p.fill(cx - 2.0, py - 12.0, cw + 4.0, PROGRESS_H + 12.0, pal.surface);
+        transcribe_progress(f, app, (cx, py, cw, PROGRESS_H));
+    }
     go_or_cancel(f, app, (cx, gy, cw, 64.0), 20.0, ic::TRANSCRIBE, ready);
 }
 
@@ -515,7 +592,8 @@ fn narrow_transcribe(f: &mut Frame, app: &App, r: R, simple: bool) {
     }
     let gh = 56.0;
     let go_y = r.1 + r.3 - gh - 10.0;
-    let body = (r.0, top, r.2, go_y - top - 14.0);
+    let card = if app.busy() { PROGRESS_H + 12.0 } else { 0.0 };
+    let body = (r.0, top, r.2, go_y - top - 14.0 - card);
     let (x, w) = (r.0, r.2);
     let lines = transcribe_lines(app);
     super::scrolled(f, body, Scroll::Inspector, |f| {
@@ -542,6 +620,9 @@ fn narrow_transcribe(f: &mut Frame, app: &App, r: R, simple: bool) {
         }
         y - body.1
     });
+    if app.busy() {
+        transcribe_progress(f, app, (r.0, go_y - PROGRESS_H - 12.0, r.2, PROGRESS_H));
+    }
     go_or_cancel(f, app, (r.0, go_y, r.2, gh), 18.0, ic::TRANSCRIBE, !app.targets().is_empty());
 }
 

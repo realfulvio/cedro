@@ -997,10 +997,6 @@ pub fn clock(centis: i64) -> String {
 }
 
 /// Il tempo che manca, senza spazi (il riquadro del registro andrebbe a capo tra il numero e l'unità).
-fn left_text(secs: f64) -> String {
-    minutes_text(secs).replace(' ', "")
-}
-
 fn minutes_text(secs: f64) -> String {
     let mins = (secs / 60.0).round() as u64;
     match mins {
@@ -1437,8 +1433,8 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, sink:
     let mut voices = 0usize;
     let mut voice_shown = 0u8;
     let mut secs = 0.0;
-    let mut started = Instant::now();
     let mut shown = 0;
+    let mut first: Option<(Instant, u8)> = None;
     loop {
         let event = match engine.next_or_cancel(cancel) {
             Next::Line(event) => event,
@@ -1448,7 +1444,6 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, sink:
         match event["e"].as_str().unwrap_or("") {
             "audio" => {
                 secs = event["secs"].as_f64().unwrap_or(0.0);
-                started = Instant::now();
                 log(sink, Tone::Step, "Audio", format!("{} di parlato da trascrivere", minutes_text(secs)));
             }
             "lang" => log(sink, Tone::Step, "Lingua", format!("riconosciuta: {}", language_name(event["code"].as_str().unwrap_or("?")))),
@@ -1489,11 +1484,14 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, sink:
             "progress" => {
                 let p = event["p"].as_i64().unwrap_or(0).clamp(0, 100) as u8;
                 sink(Event::Percent { index, percent: p });
+                // La velocità si misura dalla prima percentuale, come nel riquadro della finestra:
+                // il tempo per riconoscere le voci e caricare il modello non conta.
+                let (t0, p0) = *first.get_or_insert((Instant::now(), p));
                 if p / 10 > shown && p < 100 {
                     shown = p / 10;
-                    let elapsed = started.elapsed().as_secs_f64();
-                    let left = elapsed * (100.0 - p as f64) / (p as f64).max(1.0);
-                    log(sink, Tone::Note, "Avanzamento", format!("{p}% · restano circa {}", left_text(left.max(1.0))));
+                    let spent = t0.elapsed().as_secs_f64();
+                    let text = if p > p0 && spent >= 6.0 { format!("{p}% · restano circa {}", minutes_text((spent * (100 - p) as f64 / (p - p0) as f64).max(1.0))) } else { format!("{p}%") };
+                    log(sink, Tone::Note, "Avanzamento", text);
                 }
             }
             "end" => {
@@ -1605,7 +1603,7 @@ fn power_on_process(request: &Request, model: &Path, voices: Option<&VoicePaths>
                 match v["gpu"].as_str() {
                     Some(gpu) if variant == Variant::Vulkan => {
                         log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · scheda video: {gpu}"));
-                        crate::accel::set_in_use(true, format!("Vulkan · {gpu}"));
+                        crate::accel::set_in_use(true, crate::accel::gpu_model(gpu));
                         return Ok(running);
                     }
                     _ if variant == Variant::Vulkan => {
