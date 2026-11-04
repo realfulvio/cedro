@@ -131,13 +131,26 @@ fn standard(f: &mut Frame, app: &App) {
         f.icon(ic::CHEVRON_DOWN, add.0 + add.2 - 31.0, add.1 + 8.0, 24.0, pal.on_primary);
         f.hit((add.0, add.1, add.2 - 38.0, add.3), Act::AddFiles);
         f.hit((add.0 + add.2 - 38.0, add.1, 38.0, add.3), Act::AddMenu);
+        // Il conteggio sta a destra; se la finestra è stretta i due comandi restano con la sola icona
+        // (prima «Aggiungi cartella», che è anche nella freccia di «Aggiungi file») invece di finirci sopra.
+        let count = format!("{} file", visible.len());
+        let count_w = f.measure(&count, 16.0, SANS);
+        let count_x = q.0 + q.2 - 70.0 - count_w;
+        let tool_w = |f: &Frame, label: &str| 48.0 + f.measure(label, 16.0, SANS);
+        let fits = |f: &Frame, a: &str, b: &str| 569.0 + tool_w(f, a) + 28.0 + tool_w(f, b) + 12.0 <= count_x;
+        let (folder, remove) = if fits(f, "Aggiungi cartella", "Rimuovi") {
+            ("Aggiungi cartella", "Rimuovi")
+        } else if fits(f, "", "Rimuovi") {
+            ("", "Rimuovi")
+        } else {
+            ("", "")
+        };
         let mut x = 569.0;
-        x += f.tool(x, 234.0, 40.0, "Aggiungi cartella", ic::FOLDER, 16.0, Act::AddFolder, true) + 8.0;
+        x += f.tool(x, 234.0, 40.0, folder, ic::FOLDER, 16.0, Act::AddFolder, true) + 8.0;
         f.vline(x, 240.0, 30.0);
         x += 20.0;
-        f.tool(x, 234.0, 40.0, "Rimuovi", ic::TRASH, 16.0, Act::RemoveChecked, !visible.is_empty() && !app.busy());
-        let count = format!("{} file", visible.len());
-        f.text_r(&count, (q.0 + q.2 - 140.0, 234.0, 70.0, 40.0), 16.0, SANS, pal.text);
+        f.tool(x, 234.0, 40.0, remove, ic::TRASH, 16.0, Act::RemoveChecked, !visible.is_empty() && !app.busy());
+        f.text_r(&count, (count_x - 4.0, 234.0, count_w + 4.0, 40.0), 16.0, SANS, pal.text);
         f.icon(ic::MENU, q.0 + q.2 - 56.0, 242.0, 24.0, pal.text);
     }
 
