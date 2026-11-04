@@ -513,6 +513,8 @@ pub struct App {
     pub qualita: u8,
     /// Modello di trascrizione scelto (indice in `trascrizione::MODELS`: 0 Veloce, 1 Buona).
     pub modello: usize,
+    /// Quante persone parlano (trascrizione): 0 Automatico, 1 una sola (niente riconoscimento), 2..=8.
+    pub voci: u8,
     pub lavori: Vec<Lavoro>,
     /// L'ultimo errore copiato: la sua icona diventa una spunta.
     copiato: Option<u32>,
@@ -596,6 +598,7 @@ impl App {
             tessera: 0,
             qualita: 82,
             modello: 1,
+            voci: 0,
             lavori: Vec::new(),
             copiato: None,
             recenti: Vec::new(),
@@ -1000,8 +1003,8 @@ impl App {
         self.dal_foglio = false;
         self.pdf.pagina = None;
         self.campo = None;
-        // Per «trascrivi» il campo qualità porta il modello scelto.
-        let qualita = if id == "trascrivi" || id == "web-testo" { self.modello as u8 } else { self.qualita };
+        // Per «trascrivi» il campo qualità porta il modello scelto (bit bassi) e quante persone parlano (bit alti).
+        let qualita = if id == "trascrivi" || id == "web-testo" { self.modello as u8 | self.voci.min(8) << 4 } else { self.qualita };
         Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita, prog, opts, unisci }
     }
 
