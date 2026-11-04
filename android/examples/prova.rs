@@ -16,7 +16,7 @@ fn main() {
         // prova trascrivi file [modello 0..2] [gpu 0/1]
         let model = a.get(3).and_then(|q| q.parse().ok()).unwrap_or(0);
         let gpu = a.get(4).is_some_and(|g| g == "1");
-        let req = cedro::trascrizione::Request { format: cedro::trascrizione::Format::Text, model, gpu, avx512: false };
+        let req = cedro::trascrizione::Request { format: cedro::trascrizione::Format::Text, model, gpu, avx512: false, speakers: 1 };
         let t = Instant::now();
         cedro::trascrizione::run(&[PathBuf::from(&a[2])], &req, Some(&out), &cedro::Options::default(), &|e| match e {
             cedro::trascrizione::Event::Log(l) => println!("{} {}", l.key, l.text),

@@ -22,6 +22,10 @@ serde_json = "1"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# Android (il motore dentro l'APK): la libreria C++ legata dentro il programma, che parte senza cercare libc++_shared.so.
+[target.'cfg(target_os = "android")'.dependencies]
+llama-cpp-sys-2 = { version = "=0.1.160", default-features = false, features = ["static-stdcxx"] }
+
 [profile.release]
 lto = true
 strip = true
