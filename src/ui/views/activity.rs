@@ -329,11 +329,16 @@ fn links_list(f: &mut Frame, app: &App, l: &Links, r: R, big: bool, scroll: bool
     let pal = f.pal;
     let web = l.web;
     if l.items.is_empty() {
-        f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(mix(pal.alt, pal.surface, 0.4)), None);
-        f.p.rrect_line(r.0, r.1, r.2, r.3, 10.0, mix(pal.primary, pal.surface, 0.35), 2.0, 1.0, Some((9.0, 6.0)));
         let cy = r.1 + r.3 / 2.0;
         let isz = if big { 40.0 } else { 32.0 };
-        f.icon(if web { ic::WEB } else { ic::VIDEO }, r.0 + (r.2 - isz) / 2.0, cy - isz - 8.0, isz, pal.primary);
+        let icon = if web { ic::WEB } else { ic::VIDEO };
+        if f.theme == ThemeId::WindowsEssenziale {
+            super::tinted_empty(f, r, super::super::theme::activity_color(app.activity), icon, isz);
+        } else {
+            f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(mix(pal.alt, pal.surface, 0.4)), None);
+            f.p.rrect_line(r.0, r.1, r.2, r.3, 10.0, mix(pal.primary, pal.surface, 0.35), 2.0, 1.0, Some((9.0, 6.0)));
+            f.icon(icon, r.0 + (r.2 - isz) / 2.0, cy - isz - 8.0, isz, pal.primary);
+        }
         f.text_c("Nessun link in coda", (r.0, cy, r.2, 30.0), if big { 21.0 } else { 18.0 }, SEMI, pal.text);
         let hint = if web { super::super::model::WEB_HINT } else { super::super::model::YT_HINT };
         f.text_c(hint, (r.0 + 16.0, cy + 30.0, r.2 - 32.0, 26.0), if big { 16.0 } else { 14.0 }, SANS, pal.muted);
