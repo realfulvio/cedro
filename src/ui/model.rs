@@ -1129,7 +1129,7 @@ impl App {
         let (t0, p0) = self.transcribe.since?;
         let p = self.transcribe.percent;
         let spent = t0.elapsed().as_secs_f32();
-        if p >= 100 || p < p0.saturating_add(2) || spent < 6.0 {
+        if p >= 100 || p < p0.saturating_add(5) || spent < 10.0 {
             return None;
         }
         let rate = (p - p0) as f32 / spent;
