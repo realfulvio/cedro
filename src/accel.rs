@@ -50,7 +50,7 @@ pub fn apply() {
 pub struct InUse {
     /// Vero se è la scheda video, falso se è il processore.
     pub gpu: bool,
-    /// Il nome preciso: «AVX-512 · 8 thread», «Vulkan · NVIDIA RTX 4000», «NVIDIA NVENC».
+    /// Il nome preciso: «AVX-512 · 8 thread», «Quadro RTX 4000» (solo il modello), «NVIDIA NVENC».
     pub detail: String,
 }
 
@@ -72,6 +72,33 @@ pub fn clear_in_use() {
 
 pub fn in_use() -> Option<InUse> {
     IN_USE.lock().ok().and_then(|g| g.clone())
+}
+
+/// Il nome della scheda video come lo legge una persona: solo il modello, senza marca, marchi e
+/// sigle del driver. «NVIDIA Quadro RTX 4000» → «Quadro RTX 4000»,
+/// «AMD Radeon(TM) Graphics (RADV RENOIR)» → «Radeon integrata», «Intel(R) UHD Graphics 620 (KBL GT2)» → «UHD Graphics 620».
+pub fn gpu_model(name: &str) -> String {
+    let mut clean = String::new();
+    let mut depth = 0u32;
+    for c in name.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => clean.push(c),
+            _ => {}
+        }
+    }
+    let words: Vec<&str> = clean.split_whitespace().filter(|w| !w.eq_ignore_ascii_case("corporation")).collect();
+    let words = match words.first() {
+        Some(v) if ["nvidia", "amd", "ati", "intel", "qualcomm", "apple", "arm"].contains(&v.to_ascii_lowercase().as_str()) && words.len() > 1 => &words[1..],
+        _ => &words[..],
+    };
+    let out = words.join(" ");
+    // La grafica integrata dei Ryzen si chiama solo «Radeon Graphics»: meglio dire cos'è.
+    if out.eq_ignore_ascii_case("radeon graphics") || out.eq_ignore_ascii_case("radeon vega graphics") {
+        return "Radeon integrata".into();
+    }
+    if out.is_empty() { "scheda video".into() } else { out }
 }
 
 /// Le istruzioni del processore che i calcoli usano adesso, col loro nome.
@@ -209,6 +236,16 @@ fn gpu_encoder() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gpu_model_is_just_the_model() {
+        assert_eq!(gpu_model("NVIDIA Quadro RTX 4000"), "Quadro RTX 4000");
+        assert_eq!(gpu_model("AMD Radeon(TM) Graphics (RADV RENOIR)"), "Radeon integrata");
+        assert_eq!(gpu_model("AMD Radeon RX 7600 (RADV NAVI33)"), "Radeon RX 7600");
+        assert_eq!(gpu_model("Intel(R) UHD Graphics 620 (KBL GT2)"), "UHD Graphics 620");
+        assert_eq!(gpu_model("Qualcomm(R) Adreno(TM) X1-85 GPU"), "Adreno X1-85 GPU");
+        assert_eq!(gpu_model("  "), "scheda video");
+    }
 
     #[test]
     fn avx512_follows_the_cpu() {
