@@ -578,7 +578,8 @@ fn place(id: i32, sec: Option<usize>, rc: RECT, dx: i32, dy: i32, dpi: u32) -> R
     let mid = left0 + (right0 - left0) * 35 / 100;
     let moved = |x: i32, y: i32| RECT { left: rc.left + x, top: rc.top + y, right: rc.right + x, bottom: rc.bottom + y };
     let wider = |x: i32, y: i32| RECT { right: rc.right + x, bottom: rc.bottom + y, ..rc };
-    if (ID_NAV..ID_NAV + SECTIONS.len() as i32).contains(&id) || id == ID_ENTE {
+    // Le pillole delle istruzioni sono una fila: restano accostate (quelle dopo la metà finivano a destra).
+    if (ID_NAV..ID_NAV + SECTIONS.len() as i32).contains(&id) || id == ID_ENTE || (ID_CHIP..ID_CHIP + 10).contains(&id) {
         return rc;
     }
     if sec.is_none() {
