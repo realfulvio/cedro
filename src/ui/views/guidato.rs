@@ -15,8 +15,9 @@ fn chrome(f: &mut Frame, app: &App) {
     f.brand(30.0, 16.0, 30.0, 22.0, 12.0, None);
     // L'attività si cambia da qui: il percorso vale per tutte e quattro.
     let label = app.activity.name();
-    let sw = f.measure(label, 16.0, SANS) + 112.0;
-    f.select((176.0, 12.0, sw, 40.0), label, Some(app.activity.icon()), 16.0, Act::ActivityMenu);
+    let sw = f.measure(label, 16.0, SANS) + 108.0;
+    let tint = f.act_color(app.activity);
+    f.select_tinted((176.0, 12.0, sw, 40.0), label, Some(app.activity.icon()), Some(tint), 16.0, Act::ActivityMenu);
     f.window_controls(f.w, 0.0, 48.0, pal.text, pal.alt);
     let gx = f.w - 3.0 * 46.0 - 56.0;
     let hot = f.hovered(&Act::OpenSettings);
@@ -44,20 +45,27 @@ fn stepper(f: &mut Frame, y: f32, step: u8, reach: u8) {
         let done = (i as u8) < step;
         let (ccx, ccy) = (xs[i], y);
         if on {
+            // Il passo in corso è un bollo in rilievo; quelli fatti hanno la spunta verde.
+            f.p.circle(ccx, ccy, 27.0, Some(mix(pal.primary, pal.bg, 0.85)), None);
+            f.p.shadow(ccx - 20.0, ccy - 20.0, 40.0, 40.0, 20.0, 6.0, 0.18, 2.0);
             f.p.circle(ccx, ccy, 20.0, Some(pal.primary), None);
         } else if done {
-            f.p.circle(ccx, ccy, 19.0, None, Some((pal.ok, 2.0)));
+            f.p.circle(ccx, ccy, 19.0, Some(mix(pal.ok, pal.bg, 0.86)), Some((pal.ok, 2.0)));
         } else {
-            f.p.circle(ccx, ccy, 19.0, None, Some((pal.muted, 2.0)));
+            f.p.circle(ccx, ccy, 19.0, Some(pal.surface), Some((mix(pal.muted, pal.bg, 0.4), 2.0)));
         }
-        let c = if on { pal.on_primary } else if done { pal.ok } else { pal.muted };
-        f.text_c(&(i + 1).to_string(), (ccx - 20.0, ccy - 20.0, 40.0, 40.0), 18.0, SEMI, c);
+        let c = if on { pal.on_primary } else { pal.muted };
+        if done {
+            f.icon(ic::CHECK, ccx - 11.0, ccy - 11.0, 22.0, pal.ok);
+        } else {
+            f.text_c(&(i + 1).to_string(), (ccx - 20.0, ccy - 20.0, 40.0, 40.0), 18.0, SEMI, c);
+        }
         let tc = if on { pal.primary } else if done { pal.text } else { pal.muted };
         f.text(names[i], ccx + 34.0, ccy - 20.0, lw[i] + 6.0, 40.0, 18.0, if on { SEMI } else { SANS }, tc);
         if i < 2 {
             let x0 = ccx + 34.0 + lw[i] + 18.0;
             let x1 = xs[i + 1] - 34.0;
-            f.p.fill(x0, ccy - 1.0, (x1 - x0).max(0.0), 2.0, if done { pal.primary } else { pal.border });
+            f.p.rrect(x0, ccy - 1.5, (x1 - x0).max(0.0), 3.0, 1.5, Some(if done { pal.ok } else { pal.border }), None);
         }
         if i as u8 <= reach && !on {
             f.hit((ccx - 24.0, ccy - 24.0, lw[i] + 70.0, 48.0), Act::Step(i as u8));
@@ -90,17 +98,16 @@ fn summary_card(f: &mut Frame, app: &App, r: R) {
 }
 
 fn format_icon(f: &mut Frame, id: &str, x: f32, y: f32, s: f32) {
-    let pal = f.pal;
     match id {
         "docx" | "doc" => f.word_icon(x, y, s),
         "xlsx" | "xls" => f.excel_icon(x, y, s),
         "txt" | "html" | "rtf" => f.text_icon(x, y, s),
         "pdf" => f.pdf_icon(x + s * 0.12, y + s * 0.05, s * 0.9),
-        "merge" => f.icon(super::pagine::MERGE, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
-        "split" => f.icon(super::pagine::SCISSORS, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
-        "compress" => f.icon(super::pagine::SHRINK, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
-        "mp3" | "wav" | "m4a" | "ogg" | "flac" => f.icon(ic::AUDIO, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
-        "mp4" | "mkv" => f.icon(ic::VIDEO, x + s * 0.1, y + s * 0.1, s * 0.8, pal.primary),
+        "merge" => f.tile(x, y, s, super::pagine::MERGE, f.kind_color(Kind::Pdf), false),
+        "split" => f.tile(x, y, s, super::pagine::SCISSORS, f.kind_color(Kind::Pdf), false),
+        "compress" => f.tile(x, y, s, super::pagine::SHRINK, f.kind_color(Kind::Pdf), false),
+        "mp3" | "wav" | "m4a" | "ogg" | "flac" => f.tile(x, y, s, ic::AUDIO, f.kind_color(Kind::Audio), false),
+        "mp4" | "mkv" => f.tile(x, y, s, ic::VIDEO, f.kind_color(Kind::Video), false),
         _ => f.image_icon(x, y, s),
     }
 }
@@ -115,8 +122,16 @@ fn choice_cards(f: &mut Frame, app: &App, r: R) {
         let x = r.0 + i as f32 * (w + gap);
         let on = app.action == sf.id;
         let act = Act::Action(sf.id);
-        let bg = if on { mix(pal.primary, pal.surface, 0.9) } else if f.hovered(&act) { pal.alt } else { pal.surface };
-        f.p.rrect(x, r.1, w, r.3, 10.0, Some(bg), Some((if on { pal.primary } else { pal.border }, if on { 2.0 } else { 1.0 })));
+        // Schede sollevate; quella scelta ha l'ombra più marcata, il fondo tinto e il bordo del tema.
+        if on {
+            f.p.shadow(x, r.1, w, r.3, 10.0, 12.0, 0.16, 4.0);
+            f.p.rrect(x, r.1, w, r.3, 10.0, Some(mix(pal.primary, pal.surface, 0.92)), Some((pal.primary, 2.0)));
+        } else {
+            f.card((x, r.1, w, r.3), 10.0);
+            if f.hovered(&act) {
+                f.p.rrect(x + 1.0, r.1 + 1.0, w - 2.0, r.3 - 2.0, 9.0, Some(pal.alt), None);
+            }
+        }
         let isz = (r.3 * 0.38).clamp(48.0, 84.0);
         format_icon(f, sf.id, x + 26.0, r.1 + (r.3 - isz) / 2.0, isz);
         let tx = x + 26.0 + isz + 26.0;
@@ -140,7 +155,7 @@ fn step_files(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, s
     super::notice(f, app, (x + w - 560.0, top + 8.0, 560.0, 44.0), 15.0);
     let y = top + 130.0;
     let visible = app.visible();
-    f.button((x + w - 220.0, top + 62.0, 220.0, 46.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles);
+    f.primary((x + w - 220.0, top + 62.0, 220.0, 46.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles, true);
     let h = (bottom - y - 36.0).max(160.0);
     if visible.is_empty() {
         super::drop_zone(f, app, (x, y, w, h), true);
@@ -228,14 +243,14 @@ fn step_save(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, si
     let mut y = top + 130.0;
     let card = (x, y, w, if simple { 150.0 } else { 196.0 });
     f.card(card, 10.0);
-    f.icon(ic::FOLDER, x + 30.0, y + 30.0, 30.0, pal.primary);
+    f.tile(x + 24.0, y + 24.0, 42.0, ic::FOLDER, f.kind_color(Kind::Image), false);
     f.text("Cartella di destinazione", x + 82.0, y + 24.0, 340.0, 40.0, 20.0, SEMI, pal.text);
     let sw = (w - 560.0).clamp(260.0, 520.0);
     super::dest_select(f, app, (x + 440.0, y + 20.0, sw, 48.0), 18.0);
     f.text(&super::dest_note(app), x + 82.0, y + 74.0, w - 110.0, 30.0, 16.0, SANS, pal.muted);
     if !simple {
         f.hline(x + 24.0, y + 116.0, w - 48.0);
-        f.icon(ic::COPY, x + 30.0, y + 138.0, 30.0, pal.primary);
+        f.tile(x + 24.0, y + 132.0, 42.0, ic::COPY, f.kind_color(Kind::Archive), false);
         f.text("Se esiste già un file", x + 82.0, y + 132.0, 340.0, 40.0, 20.0, SEMI, pal.text);
         super::exists_select(f, app, (x + 440.0, y + 130.0, 240.0, 48.0), 18.0);
         f.text(&app.exists_example(), x + 700.0, y + 130.0, w - 720.0, 48.0, 16.0, SANS, pal.muted);
