@@ -12,8 +12,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**La trascrizione è più precisa**, soprattutto sui messaggi vocali e sul parlato alla buona.
+**Ritocchi ai temi della 0.33.0**, dopo le prove con la finestra stretta e con la coda piena.
 
-- Il testo esce con punteggiatura e maiuscole: prima, sul parlato informale, poteva uscire tutto minuscolo e senza un punto.
-- Whisper valuta più ipotesi per ogni frase invece di prendere la prima: meno parole storpiate o spezzate a metà. Su frasi lette con audio da messaggio vocale «Veloce» passa da 12 a 8,5 parole sbagliate su 100, «Massima» resta sotto le 3.
-- Niente più «Grazie.» inventato in fondo alla trascrizione quando nessuno l'ha detto.
+- Windows essenziale e Comune di Bondeno: «Rimuovi» non finisce più sopra il numero dei file; se manca spazio i comandi restano con la sola icona.
+- Cedro compatto, anche nella finestrella dell'icona: «Altri file in coda» non taglia più l'ultimo tipo di file.
+- Documento al centro: in Semplificata la scelta della modalità non copre più la scheda «Video dal web»; l'anteprima dell'originale non esce dal riquadro; per MP3, WAV e MP4 l'icona d'uscita è quella audio/video e «tutte le pagine» compare solo per i PDF.
+- Impostazioni: in Aspetto le descrizioni di Standard e Semplificata non toccano più il bordo; su Windows, in Sistema, le istruzioni del processore restano accostate anche a finestra larga.
