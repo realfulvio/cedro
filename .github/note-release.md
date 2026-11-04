@@ -12,13 +12,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Tutti i temi e le Impostazioni sono più curati**, sulla linea del tema Windows essenziale della 0.32.0. Disposizioni e comandi restano gli stessi.
+**La trascrizione è più precisa**, soprattutto sui messaggi vocali e sul parlato alla buona.
 
-- In ogni tema le attività hanno il loro colore: Conversioni blu, Trascrizione arancio, YouTube rosso, Video dal web verde. Così anche i tipi di file: PDF rosso, Documenti blu, Immagini verde, Audio arancio, Video viola.
-- Percorso guidato: l'attività scelta in alto ha la sua piastrella, il passo in corso è in rilievo e quelli fatti hanno la spunta verde; le schede dei formati sono sollevate.
-- Cedro compatto: le schede in alto si colorano dell'attività scelta, i file stanno su riquadri sollevati e accanto a «Converti in» c'è la piastrella del tipo di file.
-- Banco di lavoro: le categorie a sinistra hanno le piastrelle colorate, le attività in alto l'icona e la linea del loro colore.
-- Documento al centro: attività colorate in alto e il file scelto sollevato, con la linea del colore del suo tipo.
-- Il tema Comune di Bondeno prende gli stessi ritocchi, nei colori del Comune.
-- In tutti i temi i riquadri hanno un'ombra morbida, i pulsanti principali sono sfumati e in rilievo e la zona «Trascina qui» prende il colore dell'attività o del tipo di file.
-- Impostazioni: ogni sezione ha la sua piastrella colorata, il contenuto sta su una scheda bianca sollevata e «Salva» è in rilievo. Le schede di Aspetto sono sollevate anche loro.
+- Il testo esce con punteggiatura e maiuscole: prima, sul parlato informale, poteva uscire tutto minuscolo e senza un punto.
+- Whisper valuta più ipotesi per ogni frase invece di prendere la prima: meno parole storpiate o spezzate a metà.
+- «Massima» usa ora il modello large-v3 completo (1,1 GB) al posto del turbo: è il più preciso, ma più lento (con la scheda video fino al doppio del tempo, col processore circa un quarto in più). Il turbo già scaricato si cancella da solo quando arriva il nuovo.
+- Niente più «Grazie.» inventato in fondo alla trascrizione quando nessuno l'ha detto.
