@@ -10,7 +10,7 @@ publish = false
 cfb = "0.16"
 hound = "3.5"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff", "ico", "tga", "qoi", "pnm", "hdr", "exr", "dds"] }
-hayro = "0.8"
+hayro = "0.9"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 lopdf = "0.47"
 rust_xlsxwriter = { version = "0.102", default-features = false }
