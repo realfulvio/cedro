@@ -991,12 +991,16 @@ impl App {
     fn ispettore_trascrizione(&mut self, p: &mut Painter, x: f32, y: f32, w: f32, vista: R) -> f32 {
         let pal = self.pal();
         let col = colore_att(Att::Tras, self.scuro());
-        super::sollevato(p, pal, self.tema.dark(), x, y, w, 230.0, 10.0);
+        // Con i caratteri grandi la nota va a capo: il riquadro cresce con lei.
+        const NOTA: &str = "Esce un file di testo con le frasi; poi «Rivedi» dai Lavori.";
+        let hn = p.wrap_height(NOTA, 12.0, Weight::Regular, w - 28.0, 18.0, 3);
+        let ch = 52.0 + 28.0 + TOCCO + 10.0 + 28.0 + 42.0 + 8.0 + hn + 12.0;
+        super::sollevato(p, pal, self.tema.dark(), x, y, w, ch, 10.0);
         self.kt(p, x + 14.0, y + 12.0, 32.0, col, ic::TRANSCRIBE);
         p.text("Impostazioni della trascrizione", x + 56.0, y + 12.0, w - 70.0, 32.0, 16.0, Weight::Semibold, pal.text, Align::Left);
         let h = self.scelta_modello(p, x + 14.0, y + 52.0, w - 28.0, vista);
-        p.text("Esce un file di testo con le frasi; poi «Rivedi» dai Lavori.", x + 14.0, y + 52.0 + h, w - 28.0, 20.0, 12.0, Weight::Regular, pal.muted, Align::Left);
-        238.0
+        p.text_wrap(NOTA, x + 14.0, y + 52.0 + h, w - 28.0, 12.0, Weight::Regular, pal.muted, 18.0, 3);
+        ch + 8.0
     }
 
     // ---- Essenziale ----

@@ -966,8 +966,9 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
                     }
                 }
             }
+            let privato = o.path.clone();
             match consegna(&app, o.path) {
-                Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg: o.message }),
+                Ok((path, nome)) => invia(Stato::Fatto { msg: col_nome_vero(&o.message, &privato, &nome), path, nome }),
                 Err(e) => invia(Stato::Errore(con_dettagli(&e, azione, &file, &out))),
             }
         }
@@ -1297,6 +1298,11 @@ fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, ou
     let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
     // `modello` porta anche quante persone parlano (bit alti): 0 Automatico, 1 una sola, 2..=8.
     let req = Request { format: Format::Text, model: (modello & 0x0f).min(cedro::trascrizione::MODELS.len() - 1), gpu: false, avx512: false, speakers: (modello >> 4) as u8 };
+    // «Salta» delle Impostazioni: se la trascrizione c'è già in Documenti/Cedro non si rifà (sul computer lo fa il motore).
+    let uscita = format!("{}.txt", file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
+    if let Some((uri, visto)) = gia_salvato(app, &uscita) {
+        return invia(Stato::Fatto { path: PathBuf::from(uri), nome: format!("{visto} (c'era già, lasciato com'era)"), msg: "Saltato: la trascrizione c'era già".into() });
+    }
     let esito: std::sync::Mutex<Option<Result<(PathBuf, String), String>>> = std::sync::Mutex::new(None);
     run(&[file.to_path_buf()], &req, Some(out), &cedro::Options::default(), &|e| match e {
         Event::Percent { percent, .. } => prog.store(percent as u32 * 10, std::sync::atomic::Ordering::Relaxed),
@@ -1310,8 +1316,9 @@ fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, ou
         Event::Finished { result, .. } => *esito.lock().unwrap_or_else(|e| e.into_inner()) = Some(result),
     });
     match esito.into_inner().unwrap_or_else(|e| e.into_inner()) {
-        Some(Ok((path, msg))) => match consegna(app, path) {
+        Some(Ok((privato, msg))) => match consegna(app, privato.clone()) {
             Ok((path, nome)) => {
+                let msg = col_nome_vero(&msg, &privato, &nome);
                 if let Some(n) = crate::ui::da_controllare(file) {
                     c.controlli.lock().unwrap_or_else(|e| e.into_inner()).push((id, n));
                 }
@@ -2100,4 +2107,36 @@ fn libero_in(env: &mut JNIEnv, resolver: &JObject, base: &JObject, rel: &str, no
         }
     }
     nome.to_string()
+}
+
+/// Con «Salta» nelle Impostazioni: il file `nome` è già in Documenti/Cedro (o Download/Cedro)? Indirizzo e nome visibile.
+fn gia_salvato(app: &AndroidApp, nome: &str) -> Option<(String, String)> {
+    if ESISTE.load(std::sync::atomic::Ordering::Relaxed) != 2 || uscite(app).is_none() {
+        return None;
+    }
+    con_attivita(app, |env, att| {
+        let resolver = env.call_method(att, "getContentResolver", "()Landroid/content/ContentResolver;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let esterno = env.new_string("external").map_err(|e| e.to_string())?;
+        for (raccolta, rel) in [("android/provider/MediaStore$Files", "Documents/Cedro"), ("android/provider/MediaStore$Downloads", "Download/Cedro")] {
+            let base = env.call_static_method(raccolta, "getContentUri", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&esterno)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+            if let Some(uri) = cerca(env, &resolver, &base, rel, nome) {
+                let testo = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+                return Ok(stringa(env, testo).map(|t| (t, format!("{rel}/{nome}"))));
+            }
+        }
+        Ok(None)
+    })
+    .ok()
+    .flatten()
+}
+
+/// Il messaggio del motore nomina il file come l'ha scritto lui: se MediaStore l'ha salvato con un altro nome
+/// («x-2.txt»), si mette quello vero.
+fn col_nome_vero(msg: &str, privato: &Path, visto: &str) -> String {
+    let prima = nome_di(privato);
+    let dopo = visto.rsplit('/').next().unwrap_or(visto);
+    if prima.is_empty() || prima == dopo || dopo.contains("c'era già") {
+        return msg.to_string();
+    }
+    msg.replace(&prima, dopo)
 }
