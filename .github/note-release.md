@@ -12,18 +12,13 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Il tema Windows essenziale è più curato.** Stessa disposizione e stessi comandi, con qualche tocco in più:
+**Tutti i temi e le Impostazioni sono più curati**, sulla linea del tema Windows essenziale della 0.32.0. Disposizioni e comandi restano gli stessi.
 
-- Nella barra di sinistra ogni attività ha la sua piastrella colorata: Conversioni blu, Trascrizione arancio, YouTube rosso, Video dal web verde.
-- Le schede dei tipi di file hanno il loro colore: PDF rosso, Documenti blu, Immagini verde, Audio arancio, Video viola.
-- La coda e le impostazioni stanno su riquadri sollevati con un'ombra morbida, e il piede in basso è una fascia chiara.
-- I pulsanti principali («Aggiungi file», «Converti») sono sfumati e in rilievo.
-- La zona «Trascina qui» prende il colore dell'attività o del tipo di file, e l'elenco dei formati accettati va a capo invece di essere tagliato.
-- Il tema Comune di Bondeno e gli altri temi restano come prima.
-
-**Barra di avanzamento nella trascrizione.**
-
-- Mentre trascrive, sopra «Annulla» c'è un riquadro con la percentuale grande, il file su cui lavora («file 1 di 3»), la barra e quanto manca, calcolato dalla velocità vera.
-- Prima che la trascrizione parta dice cosa sta facendo: scarica il modello, accende il motore, riconosce le voci.
-- La scheda video si legge col solo modello: «Quadro RTX 4000», «Radeon integrata», senza sigle tecniche. Col processore c'è scritto «Processore · 8 thread». Lo stesso nel riassunto AI.
-- La barra del lavoro intero ora avanza anche durante il file, non solo alla fine.
+- In ogni tema le attività hanno il loro colore: Conversioni blu, Trascrizione arancio, YouTube rosso, Video dal web verde. Così anche i tipi di file: PDF rosso, Documenti blu, Immagini verde, Audio arancio, Video viola.
+- Percorso guidato: l'attività scelta in alto ha la sua piastrella, il passo in corso è in rilievo e quelli fatti hanno la spunta verde; le schede dei formati sono sollevate.
+- Cedro compatto: le schede in alto si colorano dell'attività scelta, i file stanno su riquadri sollevati e accanto a «Converti in» c'è la piastrella del tipo di file.
+- Banco di lavoro: le categorie a sinistra hanno le piastrelle colorate, le attività in alto l'icona e la linea del loro colore.
+- Documento al centro: attività colorate in alto e il file scelto sollevato, con la linea del colore del suo tipo.
+- Il tema Comune di Bondeno prende gli stessi ritocchi, nei colori del Comune.
+- In tutti i temi i riquadri hanno un'ombra morbida, i pulsanti principali sono sfumati e in rilievo e la zona «Trascina qui» prende il colore dell'attività o del tipo di file.
+- Impostazioni: ogni sezione ha la sua piastrella colorata, il contenuto sta su una scheda bianca sollevata e «Salva» è in rilievo. Le schede di Aspetto sono sollevate anche loro.
