@@ -624,20 +624,14 @@ pub fn drop_zone(f: &mut Frame, app: &App, r: R, big: bool) {
     let pal = f.pal;
     let isz = if big { 44.0 } else { 32.0 };
     let cy = r.1 + r.3 / 2.0;
-    if f.theme == ThemeId::WindowsEssenziale {
+    let fine = f.theme == ThemeId::WindowsEssenziale;
+    if fine {
         // Il tema base colora la zona con il tipo di file scelto (o l'arancio della trascrizione).
         let c = match app.activity {
             Activity::Convert => super::theme::kind_color(conversioni::CATEGORIES[app.category].kind),
             a => super::theme::activity_color(a),
         };
-        f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(mix(c, pal.surface, 0.95)), None);
-        f.p.rrect_line(r.0, r.1, r.2, r.3, 12.0, mix(c, pal.surface, 0.45), 2.0, 1.0, Some((9.0, 6.0)));
-        let d = isz + 36.0;
-        let (ccx, ccy) = (r.0 + r.2 / 2.0, cy - d / 2.0 - 18.0);
-        f.p.circle(ccx, ccy, d / 2.0 + 8.0, Some(mix(c, pal.surface, 0.9)), None);
-        f.p.shadow(ccx - d / 2.0, ccy - d / 2.0, d, d, d / 2.0, 6.0, 0.14, 3.0);
-        f.p.circle(ccx, ccy, d / 2.0, Some(c), None);
-        f.icon(ic::DOWNLOAD, ccx - isz / 2.0, ccy - isz / 2.0, isz, (255, 255, 255));
+        tinted_empty(f, r, c, ic::DOWNLOAD, isz);
     } else {
         f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(mix(pal.alt, pal.surface, 0.4)), None);
         f.p.rrect_line(r.0, r.1, r.2, r.3, 10.0, mix(pal.primary, pal.surface, 0.35), 2.0, 1.0, Some((9.0, 6.0)));
@@ -649,8 +643,32 @@ pub fn drop_zone(f: &mut Frame, app: &App, r: R, big: bool) {
         _ => ("Trascina qui i file oppure fai clic", format!("{} · Accetta: {}", cat.hint, cat.accepts)),
     };
     f.text_c(t, (r.0, cy, r.2, 30.0), if big { 22.0 } else { 18.0 }, SEMI, pal.text);
-    f.text_c(&s, (r.0 + 12.0, cy + 30.0, r.2 - 24.0, 26.0), if big { 16.0 } else { 14.0 }, SANS, pal.muted);
+    let size = if big { 16.0 } else { 14.0 };
+    if fine {
+        // L'elenco dei formati va a capo invece di finire con «…».
+        let lines = f.p.wrap_lines(&s, size, SANS, r.2 - 48.0, 3);
+        for (i, line) in lines.iter().enumerate() {
+            f.text_c(line, (r.0 + 12.0, cy + 30.0 + i as f32 * (size * 1.35), r.2 - 24.0, 26.0), size, SANS, pal.muted);
+        }
+    } else {
+        f.text_c(&s, (r.0 + 12.0, cy + 30.0, r.2 - 24.0, 26.0), size, SANS, pal.muted);
+    }
     f.hit(r, Act::AddFiles);
+}
+
+/// La zona vuota del tema base: fondo appena tinto del colore `c`, bordo tratteggiato e il bollo
+/// con l'icona bianca sopra il centro (le scritte vanno da `r.1 + r.3 / 2` in giù).
+pub fn tinted_empty(f: &mut Frame, r: R, c: super::gfx::Rgb, icon: &str, isz: f32) {
+    let pal = f.pal;
+    let cy = r.1 + r.3 / 2.0;
+    f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(mix(c, pal.surface, 0.95)), None);
+    f.p.rrect_line(r.0, r.1, r.2, r.3, 12.0, mix(c, pal.surface, 0.45), 2.0, 1.0, Some((9.0, 6.0)));
+    let d = isz + 36.0;
+    let (ccx, ccy) = (r.0 + r.2 / 2.0, cy - d / 2.0 - 18.0);
+    f.p.circle(ccx, ccy, d / 2.0 + 8.0, Some(mix(c, pal.surface, 0.9)), None);
+    f.p.shadow(ccx - d / 2.0, ccy - d / 2.0, d, d, d / 2.0, 6.0, 0.14, 3.0);
+    f.p.circle(ccx, ccy, d / 2.0, Some(c), None);
+    f.icon(icon, ccx - isz / 2.0, ccy - isz / 2.0, isz, (255, 255, 255));
 }
 
 /// La miniatura con le misure e lo stato, una riga della coda (usata dai temi chiari).

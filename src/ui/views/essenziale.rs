@@ -135,7 +135,8 @@ fn standard(f: &mut Frame, app: &App) {
     let mut tx = 298.0;
     for (i, cat) in conversioni::CATEGORIES.iter().enumerate() {
         let on = i == app.category;
-        let tw = f.measure(cat.name, 18.0, SANS);
+        // Nel tema base la scheda scelta è in semigrassetto: la misura deve già tenerne conto.
+        let tw = f.measure(cat.name, 18.0, if fine(f) { SEMI } else { SANS });
         let count = app.files.iter().filter(|x| !x.voice_only && x.kind == cat.kind).count();
         let badge = (count > 0 && !on).then(|| count.to_string());
         let bw = badge.as_ref().map(|b| f.measure(b, 12.0, SEMI) + 12.0).unwrap_or(0.0).max(if badge.is_some() { 20.0 } else { 0.0 });
