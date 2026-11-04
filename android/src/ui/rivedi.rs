@@ -771,16 +771,23 @@ fn riassunto(p: &mut Painter, pal: &cedro::ui::theme::Palette, tema: cedro::ui::
     let mut y = y0;
     // In corso: barra e passo.
     if let Some((_, prog)) = &rv.riassunto {
-        let m = prog.load(std::sync::atomic::Ordering::Relaxed).min(1000);
+        // Oltre 1000: non si sa ancora (scarica il modello, lo carica): niente percentuale, barra vuota.
+        let grezzo = prog.load(std::sync::atomic::Ordering::Relaxed);
+        let noto = grezzo <= 1000;
+        let m = if noto { grezzo } else { 0 };
         super::sollevato(p, pal, scuro, x, y, cw, 130.0, 16.0);
         super::piastrella(p, pal, scuro, x + 14.0, y + 14.0, 40.0, SCINTILLA, ai, true);
         p.text("Riassunto AI in corso", x + 64.0, y + 12.0, cw - 140.0, 26.0, 16.0, Weight::Semibold, pal.text, Align::Left);
-        let pct = format!("{}%", m / 10);
-        p.text(&pct, x + cw - 80.0, y + 10.0, 66.0, 34.0, 24.0, Weight::Semibold, ai, Align::Right);
+        if noto {
+            let pct = format!("{}%", m / 10);
+            p.text(&pct, x + cw - 80.0, y + 10.0, 66.0, 34.0, 24.0, Weight::Semibold, ai, Align::Right);
+        }
         p.text(&rv.riassunto_nota, x + 64.0, y + 38.0, cw - 78.0, 20.0, 13.0, Weight::Regular, pal.muted, Align::Left);
         let (bx, by, bw) = (x + 14.0, y + 74.0, cw - 28.0);
         p.rrect(bx, by, bw, 10.0, 5.0, Some(mix(ai, pal.surface, 0.8)), None);
-        p.rrect(bx, by, (bw * m as f32 / 1000.0).max(10.0), 10.0, 5.0, Some(ai), None);
+        if noto {
+            p.rrect(bx, by, (bw * m as f32 / 1000.0).max(10.0), 10.0, 5.0, Some(ai), None);
+        }
         p.text_wrap("Il telefono può restare in tasca: a fine lavoro arriva una notifica.", bx, by + 18.0, bw, 12.0, Weight::Regular, pal.muted, 17.0, 2);
         return;
     }

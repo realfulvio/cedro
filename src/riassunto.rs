@@ -494,7 +494,10 @@ pub struct Sections {
     pub todo: Vec<Todo>,
 }
 
+#[cfg(not(target_os = "android"))]
 pub const WARNING: &str = "Riassunto automatico fatto sul PC: da controllare.";
+#[cfg(target_os = "android")]
+pub const WARNING: &str = "Riassunto automatico fatto sul telefono: da controllare.";
 
 impl Sections {
     /// Il riassunto come testo semplice: per «Copia» e in cima al file di testo.
