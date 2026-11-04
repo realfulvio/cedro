@@ -12,6 +12,15 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
+**Il tema Windows essenziale è più curato.** Stessa disposizione e stessi comandi, con qualche tocco in più:
+
+- Nella barra di sinistra ogni attività ha la sua piastrella colorata: Conversioni blu, Trascrizione arancio, YouTube rosso, Video dal web verde.
+- Le schede dei tipi di file hanno il loro colore: PDF rosso, Documenti blu, Immagini verde, Audio arancio, Video viola.
+- La coda e le impostazioni stanno su riquadri sollevati con un'ombra morbida, e il piede in basso è una fascia chiara.
+- I pulsanti principali («Aggiungi file», «Converti») sono sfumati e in rilievo.
+- La zona «Trascina qui» prende il colore dell'attività o del tipo di file, e l'elenco dei formati accettati va a capo invece di essere tagliato.
+- Il tema Comune di Bondeno e gli altri temi restano come prima.
+
 **Barra di avanzamento nella trascrizione.**
 
 - Mentre trascrive, sopra «Annulla» c'è un riquadro con la percentuale grande, il file su cui lavora («file 1 di 3»), la barra e quanto manca, calcolato dalla velocità vera.

@@ -5,38 +5,97 @@
 use super::*;
 use crate::ui::core::{HitKind, Scroll};
 use crate::ui::model::{FileState, PdfMode};
+use crate::ui::gfx::Rgb;
+use crate::ui::theme::{activity_color, kind_color};
 
 const NAV_W: f32 = 270.0;
 const TOP: f32 = 56.0;
 
+/// Il tema base ha i ritocchi «curati» (attività e tipi di file colorati, riquadri sollevati);
+/// Bondeno, che usa la stessa disposizione, resta con i colori piatti del sito del Comune.
+fn fine(f: &Frame) -> bool {
+    f.theme == ThemeId::WindowsEssenziale
+}
+
+/// Riquadro sollevato: ombra morbida sotto, bordo appena accennato.
+fn raised(f: &mut Frame, r: R, radius: f32) {
+    if fine(f) {
+        let pal = f.pal;
+        f.p.shadow(r.0, r.1, r.2, r.3, radius, 10.0, 0.10, 3.0);
+        f.p.rrect(r.0, r.1, r.2, r.3, radius, Some(pal.surface), Some((mix(pal.border, pal.surface, 0.25), 1.0)));
+    } else {
+        f.card(r, radius);
+    }
+}
+
+/// I due colori della sfumatura dei pulsanti pieni (più scuri sotto il mouse).
+fn glossy(f: &Frame, hot: bool) -> (Rgb, Rgb) {
+    let p = f.pal.primary;
+    if hot {
+        (mix(p, (255, 255, 255), 0.04), mix(p, (0, 0, 0), 0.2))
+    } else {
+        (mix(p, (255, 255, 255), 0.16), mix(p, (0, 0, 0), 0.06))
+    }
+}
+
+/// Il pulsante grande sfumato: icona, scritta, anello del fuoco e zona cliccabile (come `Frame::primary`).
+fn go_label_on(f: &mut Frame, r: R, label: &str, icon: &str, size: f32) {
+    let pal = f.pal;
+    let isz = (size * 1.35f32).round();
+    let tw = f.measure(label, size, SEMI);
+    let mut x = r.0 + (r.2 - tw - isz - 14.0) / 2.0;
+    f.icon(icon, x, r.1 + (r.3 - isz) / 2.0, isz, pal.on_primary);
+    x += isz + 14.0;
+    f.text(label, x, r.1, tw + 2.0, r.3, size, SEMI, pal.on_primary);
+    f.focus_ring(r, 8.0, &Act::Start);
+    f.hit(r, Act::Start);
+}
+
 fn nav(f: &mut Frame, app: &App) {
     let pal = f.pal;
+    let fine = fine(f);
     f.p.clear(pal.bg);
     f.caption((0.0, 0.0, f.w, TOP));
     f.brand(26.0, 15.0, 26.0, 18.0, 12.0, None);
     f.window_controls(f.w, 0.0, 48.0, pal.text, pal.alt);
-    let item = |f: &mut Frame, y: f32, icon: &str, label: &str, on: bool, act: Act| {
+    let item = |f: &mut Frame, y: f32, icon: &str, label: &str, on: bool, act: Act, tint: Option<Rgb>| {
         let r = (12.0, y, 242.0, 54.0);
+        let accent = tint.unwrap_or(pal.primary);
         if on {
-            f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(pal.nav_sel), None);
-            f.p.rrect(10.0, y + 14.0, 4.0, 26.0, 2.0, Some(pal.primary), None);
+            let bg = if tint.is_some() { mix(accent, pal.surface, 0.88) } else { pal.nav_sel };
+            f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(bg), None);
+            f.p.rrect(10.0, y + 14.0, 4.0, 26.0, 2.0, Some(accent), None);
         } else if f.hovered(&act) {
-            f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(pal.alt), None);
+            f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(pal.alt), None);
         }
-        let c = if on { pal.primary } else { pal.text };
-        f.icon(icon, 32.0, y + 15.0, 24.0, c);
-        f.text(label, 78.0, y, 170.0, 54.0, 19.0, SANS, c);
+        let c = if on { if tint.is_some() { pal.text } else { pal.primary } } else { pal.text };
+        if let Some(t) = tint {
+            // L'icona dentro una piastrella del colore dell'attività: piena quando è scelta.
+            let (tx, ty) = (26.0, y + 9.0);
+            if on {
+                f.p.shadow(tx, ty, 36.0, 36.0, 9.0, 5.0, 0.12, 2.0);
+                f.p.rrect(tx, ty, 36.0, 36.0, 9.0, Some(t), None);
+                f.icon(icon, tx + 7.0, ty + 7.0, 22.0, (255, 255, 255));
+            } else {
+                f.p.rrect(tx, ty, 36.0, 36.0, 9.0, Some(mix(t, pal.surface, 0.86)), None);
+                f.icon(icon, tx + 7.0, ty + 7.0, 22.0, t);
+            }
+        } else {
+            f.icon(icon, 32.0, y + 15.0, 24.0, c);
+        }
+        f.text(label, 78.0, y, 170.0, 54.0, 19.0, if on && fine { SEMI } else { SANS }, c);
         f.focus_ring(r, 8.0, &act);
         f.hit(r, act);
     };
     let ys = [78.0, 142.0, 210.0, 278.0];
     for (a, y) in Activity::ALL.iter().zip(ys) {
-        item(f, y, a.icon(), a.name(), app.activity == *a, Act::Activity(*a));
+        let tint = fine.then(|| activity_color(*a));
+        item(f, y, a.icon(), a.name(), app.activity == *a, Act::Activity(*a), tint);
     }
     let bottom = f.h - 1024.0;
     f.hline(28.0, 835.0 + bottom, 214.0);
-    item(f, 862.0 + bottom, ic::HELP, "Guida", false, Act::OpenGuide);
-    item(f, 930.0 + bottom, ic::SETTINGS, "Impostazioni", false, Act::OpenSettings);
+    item(f, 862.0 + bottom, ic::HELP, "Guida", false, Act::OpenGuide, None);
+    item(f, 930.0 + bottom, ic::SETTINGS, "Impostazioni", false, Act::OpenSettings, None);
 }
 
 pub fn draw(f: &mut Frame, app: &App) {
@@ -76,25 +135,29 @@ fn standard(f: &mut Frame, app: &App) {
     let mut tx = 298.0;
     for (i, cat) in conversioni::CATEGORIES.iter().enumerate() {
         let on = i == app.category;
-        let tw = f.measure(cat.name, 18.0, SANS);
+        // Nel tema base la scheda scelta è in semigrassetto: la misura deve già tenerne conto.
+        let tw = f.measure(cat.name, 18.0, if fine(f) { SEMI } else { SANS });
         let count = app.files.iter().filter(|x| !x.voice_only && x.kind == cat.kind).count();
         let badge = (count > 0 && !on).then(|| count.to_string());
         let bw = badge.as_ref().map(|b| f.measure(b, 12.0, SEMI) + 12.0).unwrap_or(0.0).max(if badge.is_some() { 20.0 } else { 0.0 });
         let r = (tx, 150.0, 16.0 + 24.0 + 14.0 + tw + 16.0 + if bw > 0.0 { bw + 6.0 } else { 0.0 }, 62.0);
+        // Nel tema base ogni tipo di file ha il suo colore (icona, linea sotto la scheda, numero).
+        let kc = if fine(f) { kind_color(cat.kind) } else { pal.primary };
         if on {
             f.p.rrect(r.0, r.1, r.2, r.3 + 8.0, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
             f.p.fill(r.0 + 1.0, r.1 + r.3 - 2.0, r.2 - 2.0, 12.0, pal.surface);
-            f.p.rrect(r.0, r.1 + 49.0, r.2, 3.0, 1.5, Some(pal.primary), None);
+            f.p.rrect(r.0, r.1 + 49.0, r.2, 3.0, 1.5, Some(kc), None);
         } else if f.hovered(&Act::Category(i)) {
-            f.p.rrect(r.0, r.1, r.2, 52.0, 8.0, Some(pal.alt), None);
+            f.p.rrect(r.0, r.1, r.2, 52.0, 8.0, Some(if fine(f) { mix(kc, pal.surface, 0.9) } else { pal.alt }), None);
         }
-        let c = if on { pal.primary } else { pal.text };
-        f.icon(super::category_icon(cat.kind), tx + 16.0, 164.0, 24.0, c);
-        f.text(cat.name, tx + 54.0, 150.0, tw + 4.0, 52.0, 18.0, SANS, c);
+        let c = if on { if fine(f) { pal.text } else { pal.primary } } else { pal.text };
+        let ic_c = if fine(f) { kc } else { c };
+        f.icon(super::category_icon(cat.kind), tx + 16.0, 164.0, 24.0, ic_c);
+        f.text(cat.name, tx + 54.0, 150.0, tw + 4.0, 52.0, 18.0, if on && fine(f) { SEMI } else { SANS }, c);
         if let Some(badge) = badge {
             let bx = tx + 54.0 + tw + 8.0;
-            f.p.rrect(bx, 167.0, bw, 20.0, 10.0, Some(mix(pal.primary, pal.surface, 0.85)), None);
-            f.text_c(&badge, (bx, 167.0, bw, 20.0), 12.0, SEMI, pal.primary);
+            f.p.rrect(bx, 167.0, bw, 20.0, 10.0, Some(mix(kc, pal.surface, 0.85)), None);
+            f.text_c(&badge, (bx, 167.0, bw, 20.0), 12.0, SEMI, kc);
         }
         f.hit((r.0, r.1, r.2, 52.0), Act::Category(i));
         tx += r.2 + 6.0;
@@ -102,7 +165,7 @@ fn standard(f: &mut Frame, app: &App) {
 
     // La coda.
     let q = (q_x, 212.0, q_w, foot_y - 20.0 - 212.0);
-    f.card(q, 12.0);
+    raised(f, q, 12.0);
     let visible = app.visible();
     let pdf_mode = if super::pagine::shows_modes(f, app) { app.pdf_mode() } else { PdfMode::Convert };
     // Barra: Aggiungi file (con la freccia per la cartella), Aggiungi cartella, Rimuovi, conteggio.
@@ -111,7 +174,15 @@ fn standard(f: &mut Frame, app: &App) {
     if !pages_mode {
         let add = (316.0, 234.0, 222.0, 40.0);
         let hot = f.hovered(&Act::AddFiles);
-        f.p.rrect(add.0, add.1, add.2, add.3, 6.0, Some(if hot { mix(pal.primary, (0, 0, 0), 0.12) } else { pal.primary }), None);
+        if fine(f) {
+            f.p.shadow(add.0, add.1, add.2, add.3, 6.0, 6.0, 0.16, 2.0);
+        }
+        if fine(f) {
+            let (top, bottom) = glossy(f, hot);
+            f.p.rrect_vgrad(add.0, add.1, add.2, add.3, 6.0, top, bottom);
+        } else {
+            f.p.rrect(add.0, add.1, add.2, add.3, 6.0, Some(if hot { mix(pal.primary, (0, 0, 0), 0.12) } else { pal.primary }), None);
+        }
         f.icon(ic::ADD, add.0 + 14.0, add.1 + 8.0, 24.0, pal.on_primary);
         f.text("Aggiungi file", add.0 + 46.0, add.1, 134.0, 40.0, 17.0, SEMI, pal.on_primary);
         f.p.fill_a(add.0 + add.2 - 38.0, add.1, 1.0, 40.0, pal.on_primary, 0.35);
@@ -201,7 +272,7 @@ fn standard(f: &mut Frame, app: &App) {
 
     // L'ispettore.
     let ir = (insp_x, 212.0, insp_w, foot_y - 20.0 - 212.0);
-    f.card(ir, 12.0);
+    raised(f, ir, 12.0);
     let modes = super::pagine::shows_modes(f, app);
     let head = if modes { "Cosa vuoi fare" } else { "Impostazioni di conversione" };
     f.text(head, insp_x + 23.0, 228.0, insp_w - 40.0, 32.0, 20.0, SANS, pal.text);
@@ -493,7 +564,13 @@ fn strip_height(app: &App, i: usize, w: f32) -> f32 {
 fn footer(f: &mut Frame, app: &App, y: f32) {
     let pal = f.pal;
     let w = f.w;
-    f.p.fill(NAV_W, y, w - NAV_W, f.h - y, pal.bg);
+    if fine(f) {
+        // Il piede è una fascia chiara appoggiata sopra la zona di lavoro.
+        f.p.shadow(NAV_W, y, w - NAV_W, f.h - y, 0.0, 8.0, 0.07, -2.0);
+        f.p.fill(NAV_W, y, w - NAV_W, f.h - y, pal.surface);
+    } else {
+        f.p.fill(NAV_W, y, w - NAV_W, f.h - y, pal.bg);
+    }
     f.hline(NAV_W, y, w - NAV_W);
     let go_w = 260.0;
     let go_x = w - 24.0 - go_w;
@@ -522,7 +599,18 @@ fn footer(f: &mut Frame, app: &App, y: f32) {
             f.p.rrect(go_x, y + 100.0, go_w * p, 6.0, 3.0, Some(pal.primary), None);
         }
     }
-    f.primary((go_x, y + 24.0, go_w, 74.0), &label, Some(super::go_icon(app)), 22.0, Act::Start, ready && !app.busy());
+    if fine(f) && ready && !app.busy() {
+        f.p.shadow(go_x, y + 24.0, go_w, 74.0, 8.0, 10.0, 0.22, 4.0);
+    }
+    if fine(f) && ready && !app.busy() {
+        // Il pulsante in rilievo: sfumato dal colore più chiaro in alto, con la scritta sopra.
+        let (top, bottom) = glossy(f, f.hovered(&Act::Start));
+        f.p.rrect_vgrad(go_x, y + 24.0, go_w, 74.0, 8.0, top, bottom);
+        f.p.rrect_line(go_x, y + 24.0, go_w, 74.0, 8.0, (255, 255, 255), 1.0, 0.12, None);
+        go_label_on(f, (go_x, y + 24.0, go_w, 74.0), &label, super::go_icon(app), 22.0);
+    } else {
+        f.primary((go_x, y + 24.0, go_w, 74.0), &label, Some(super::go_icon(app)), 22.0, Act::Start, ready && !app.busy());
+    }
     super::go_extras(f, app, (go_x, y + 24.0, go_w, 74.0 + 14.0), false);
 }
 
@@ -538,7 +626,7 @@ fn simplified(f: &mut Frame, app: &App) {
     let add = (w - 716.0, 104.0, 220.0, 46.0);
     f.button(add, "Aggiungi file", Some(ic::ADD), 18.0, Act::AddFiles);
     let card = (card_x, 188.0, card_w, h - 188.0 - 27.0);
-    f.p.rrect(card.0, card.1, card.2, card.3, 10.0, Some(pal.surface), Some((pal.border, 1.0)));
+    raised(f, card, 10.0);
     let inner_x = card_x + 28.0;
     let inner_w = card_w - 56.0;
     let visible = app.visible();
@@ -612,7 +700,16 @@ fn simplified(f: &mut Frame, app: &App) {
     f.select((inner_x + 164.0, fy, inner_w - 164.0, 68.0), &title, Some(icon), 24.0, Act::FormatMenu);
     let label = super::go_label(app);
     let ready = !app.targets().is_empty();
-    f.primary((inner_x, fy + 108.0, inner_w, 88.0), &label, Some(super::go_icon(app)), 28.0, Act::Start, ready && !app.busy());
+    let go = (inner_x, fy + 108.0, inner_w, 88.0);
+    if fine(f) && ready && !app.busy() {
+        let (top, bottom) = glossy(f, f.hovered(&Act::Start));
+        f.p.shadow(go.0, go.1, go.2, go.3, 8.0, 10.0, 0.22, 4.0);
+        f.p.rrect_vgrad(go.0, go.1, go.2, go.3, 8.0, top, bottom);
+        f.p.rrect_line(go.0, go.1, go.2, go.3, 8.0, (255, 255, 255), 1.0, 0.12, None);
+        go_label_on(f, go, &label, super::go_icon(app), 28.0);
+    } else {
+        f.primary(go, &label, Some(super::go_icon(app)), 28.0, Act::Start, ready && !app.busy());
+    }
     super::go_extras(f, app, (inner_x, fy + 108.0, inner_w, 88.0 + 8.0), false);
     if app.busy() {
         if let Some(p) = app.progress() {
