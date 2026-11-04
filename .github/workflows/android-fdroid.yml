@@ -57,6 +57,11 @@ jobs:
             gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern 'cedro-*.apk' --dir repo --clobber || true
           done
           ls repo
+          # La versione consigliata è sempre l'APK più nuovo: altrimenti F-Droid lo segna come «beta».
+          ultimo=$(ls repo/cedro-*.apk | sed 's/.*cedro-\(.*\)\.apk/\1/' | sort -V | tail -1)
+          IFS=. read -r v1 v2 v3 <<< "$ultimo"
+          sed -i "s/^CurrentVersion: .*/CurrentVersion: $ultimo/; s/^CurrentVersionCode: .*/CurrentVersionCode: $((v1 * 10000 + v2 * 100 + v3))/" metadata/it.cedro.android.yml
+          grep -E "^CurrentVersion" metadata/it.cedro.android.yml
           echo "$KEYSTORE_B64" | base64 -d > keystore.p12
           cat > config.yml <<CFG
           repo_url: https://realfulvio.github.io/cedro/fdroid/repo
