@@ -16,6 +16,18 @@ use crate::ui::{App, Archivio, Compito, Effetto, Info, Recente, Sorgente, Stato,
 /// Dove finiscono le copie.
 const DOCUMENTI: &str = "/storage/emulated/0/Documents";
 
+/// «Se il file esiste già» delle Impostazioni, per i file pubblicati in MediaStore (0 numera, 1 sostituisci, 2 salta).
+static ESISTE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+fn ricorda_esiste(e: cedro::Exists) {
+    let v = match e {
+        cedro::Exists::Replace => 1,
+        cedro::Exists::Skip => 2,
+        _ => 0,
+    };
+    ESISTE.store(v, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// Quello che arriva dal menu Condividi.
 struct Condiviso {
     path: PathBuf,
@@ -1030,6 +1042,28 @@ fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, 
     };
     let esterno = env.new_string("external").map_err(|e| e.to_string())?;
     let base = env.call_static_method(raccolta, "getContentUri", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&esterno)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+    // Se il nome c'è già vale la scelta delle Impostazioni, come sul computer: MediaStore da solo farebbe «x (2)».
+    let mut scelto = nome.to_string();
+    if let Some(uri) = cerca(env, resolver, &base, rel, nome) {
+        match ESISTE.load(std::sync::atomic::Ordering::Relaxed) {
+            2 => {
+                let testo = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+                let testo = stringa(env, testo).ok_or("indirizzo vuoto")?;
+                return Ok((testo, format!("{nome} (c'era già, lasciato com'era)")));
+            }
+            1 => {
+                let nulla = JObject::null();
+                let tolto = env.call_method(resolver, "delete", "(Landroid/net/Uri;Ljava/lang/String;[Ljava/lang/String;)I", &[JValue::Object(&uri), JValue::Object(&nulla), JValue::Object(&nulla)]);
+                if tolto.is_err() || env.exception_check().unwrap_or(false) {
+                    // Un file di un'altra app non si può togliere: si numera.
+                    let _ = env.exception_clear();
+                    scelto = libero_in(env, resolver, &base, rel, nome);
+                }
+            }
+            _ => scelto = libero_in(env, resolver, &base, rel, nome),
+        }
+    }
+    let nome = scelto.as_str();
     let cv = valori(env, &[("_display_name", Ok(nome)), ("mime_type", Ok(mime)), ("relative_path", Ok(rel)), ("is_pending", Err(1))])?;
     let uri = env
         .call_method(resolver, "insert", "(Landroid/net/Uri;Landroid/content/ContentValues;)Landroid/net/Uri;", &[JValue::Object(&base), JValue::Object(&cv)])
@@ -1548,6 +1582,7 @@ fn android_main(app: AndroidApp) {
         };
         ui.modello_nome = righe.next().unwrap_or("").to_string();
     }
+    ricorda_esiste(ui.esiste);
     ui.grandi = std::fs::read_to_string(&file_caratteri).is_ok_and(|t| t.trim() == "grandi");
     // La lingua: quella scelta nell'Aspetto, o quella del telefono (Android non ha LANG).
     let file_lingua = dati.join("lingua.txt");
@@ -1764,6 +1799,7 @@ fn android_main(app: AndroidApp) {
                                 _ => "numera",
                             };
                             let _ = std::fs::write(&file_impostazioni, format!("{esiste}\n{}", ui.modello_nome));
+                            ricorda_esiste(ui.esiste);
                             sporco = true;
                         }
                         Effetto::SalvaTema(t) => {
@@ -2014,4 +2050,54 @@ fn passo_trascrizione(key: &str, text: &str) -> Option<String> {
     };
     let mut c = t.chars();
     Some(c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default())
+}
+
+/// Il file `nome` nella cartella `rel` di MediaStore, se c'è (e Cedro lo può vedere).
+fn cerca<'a>(env: &mut JNIEnv<'a>, resolver: &JObject, base: &JObject, rel: &str, nome: &str) -> Option<JObject<'a>> {
+    let trovato = (|| -> Result<Option<JObject<'a>>, jni::errors::Error> {
+        let classe = env.find_class("java/lang/String")?;
+        let id = env.new_string("_id")?;
+        let proiez = env.new_object_array(1, &classe, &id)?;
+        let filtro = env.new_string("relative_path IN (?, ?) AND _display_name = ?")?;
+        let vuoto = env.new_string("")?;
+        let argomenti = env.new_object_array(3, &classe, &vuoto)?;
+        for (i, a) in [format!("{rel}/"), rel.to_string(), nome.to_string()].iter().enumerate() {
+            let a = env.new_string(a)?;
+            env.set_object_array_element(&argomenti, i as i32, &a)?;
+        }
+        let nulla = JObject::null();
+        let cur = env
+            .call_method(resolver, "query", "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;", &[JValue::Object(base), JValue::Object(&proiez), JValue::Object(&filtro), JValue::Object(&argomenti), JValue::Object(&nulla)])?
+            .l()?;
+        if cur.is_null() {
+            return Ok(None);
+        }
+        let mut uri = None;
+        if env.call_method(&cur, "moveToFirst", "()Z", &[])?.z()? {
+            let n = env.call_method(&cur, "getLong", "(I)J", &[JValue::Int(0)])?.j()?;
+            let u = env.call_static_method("android/content/ContentUris", "withAppendedId", "(Landroid/net/Uri;J)Landroid/net/Uri;", &[JValue::Object(base), JValue::Long(n)])?.l()?;
+            uri = Some(u);
+        }
+        let _ = env.call_method(&cur, "close", "()V", &[]);
+        Ok(uri)
+    })();
+    if env.exception_check().unwrap_or(false) {
+        let _ = env.exception_clear();
+    }
+    trovato.ok().flatten()
+}
+
+/// Il primo nome libero in `rel` come sul computer: «x-2.txt», «x-3.txt»…
+fn libero_in(env: &mut JNIEnv, resolver: &JObject, base: &JObject, rel: &str, nome: &str) -> String {
+    let (stem, ext) = match nome.rfind('.') {
+        Some(i) if i > 0 => (&nome[..i], &nome[i..]),
+        _ => (nome, ""),
+    };
+    for n in 2..1000 {
+        let prova = format!("{stem}-{n}{ext}");
+        if cerca(env, resolver, base, rel, &prova).is_none() {
+            return prova;
+        }
+    }
+    nome.to_string()
 }
