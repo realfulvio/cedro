@@ -41,7 +41,8 @@ pub const MODELS: &[Model] = &[
     Model { name: "Veloce", note: "Per appunti e messaggi vocali", file: "ggml-small-q8_0.bin", megabytes: 264 },
     Model { name: "Buona", note: "Per riunioni e interviste", file: "ggml-medium-q5_0.bin", megabytes: 539 },
     // «Massima» dalla 0.34: large-v3 completo (32 strati di decodifica invece dei 4 del turbo). Su un messaggio vocale vero
-    // sbaglia meno parole del turbo; costa il doppio sul processore.
+    // sbaglia meno parole del turbo. Misurato su Quadro RTX 4000: da 1,3 a 2 volte il tempo del turbo sulla scheda video
+    // (2,6 GB di VRAM invece di 1,1), il 20-30 % in più sul processore.
     Model { name: "Massima", note: "Per audio difficili, la più precisa", file: "ggml-large-v3-q5_0.bin", megabytes: 1081 },
 ];
 

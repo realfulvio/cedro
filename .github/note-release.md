@@ -14,7 +14,7 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 **La trascrizione è più precisa**, soprattutto sui messaggi vocali e sul parlato alla buona.
 
-- Il testo esce con punteggiatura e maiuscole: prima, sul parlato informale, poteva uscire tutto minuscolo e in un blocco unico. Con le frasi chiuse dai punti anche i paragrafi tornano al loro posto.
+- Il testo esce con punteggiatura e maiuscole: prima, sul parlato informale, poteva uscire tutto minuscolo e senza un punto.
 - Whisper valuta più ipotesi per ogni frase invece di prendere la prima: meno parole storpiate o spezzate a metà.
-- «Massima» usa ora il modello large-v3 completo (1,1 GB) al posto del turbo: è il più preciso, e il turbo già scaricato si cancella da solo quando arriva il nuovo.
+- «Massima» usa ora il modello large-v3 completo (1,1 GB) al posto del turbo: è il più preciso, ma più lento (con la scheda video fino al doppio del tempo, col processore circa un quarto in più). Il turbo già scaricato si cancella da solo quando arriva il nuovo.
 - Niente più «Grazie.» inventato in fondo alla trascrizione quando nessuno l'ha detto.
