@@ -1,0 +1,6 @@
+- Chi parla: la trascrizione riconosce le persone che parlano (automatico, una sola o 2-8).
+- Rivedi con tre schede: Frasi col nome di chi parla, Chi parla, Riassunto.
+- Riassunto AI sul telefono: in breve, chi ha detto cosa, decisioni, cose da fare.
+- Avanzamento della trascrizione con percentuale e tempo che resta.
+- Trascrizione più precisa, niente «Grazie.» inventato alla fine.
+- Temi più curati, colori per tipo di file e attività.

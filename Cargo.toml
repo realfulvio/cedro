@@ -66,6 +66,11 @@ openh264 = { version = "0.9", default-features = false, features = ["source"] }
 # whisper.cpp come libreria nell'APK (src/whisper_android).
 whisper-rs = "0.16"
 whisper-rs-sys = "0.15"
+# Chi parla (trascrivi/src/voci.rs, dentro l'APK): rten 0.27 come il motore del computer, col nome cambiato
+# perché l'OCR usa ancora la 0.26.
+rten-voci = { package = "rten", version = "0.27" }
+rten-tensor-voci = { package = "rten-tensor", version = "0.27" }
+kaldi-native-fbank = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-core = "0.61"

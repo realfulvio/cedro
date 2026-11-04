@@ -67,7 +67,7 @@ pub fn total_memory() -> Option<u64> {
         let mut m = MEMORYSTATUSEX { dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32, ..Default::default() };
         return GlobalMemoryStatusEx(&mut m).ok().map(|_| m.ullTotalPhys);
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         let text = std::fs::read_to_string("/proc/meminfo").ok()?;
         return text.lines().find_map(|l| l.strip_prefix("MemTotal:")?.split_whitespace().next()?.parse::<u64>().ok()).map(|kb| kb * 1024);
@@ -286,6 +286,12 @@ fn ensure_model(sink: &dyn Fn(TrEvent), cancel: &AtomicBool) -> Result<PathBuf, 
 /// Accende il motore: prima la versione per la scheda video (se c'è e le Impostazioni la vogliono),
 /// poi quella per il processore più veloce che il PC sa eseguire.
 fn power_on(model: &std::path::Path, opts: Options, sink: &dyn Fn(TrEvent), cancel: &AtomicBool) -> Result<(Running, Variant, Option<String>), String> {
+    #[cfg(target_os = "android")]
+    {
+        let _ = (opts, sink);
+        return android::power_on(model, cancel);
+    }
+    #[allow(unreachable_code)]
     let mut tries = Vec::new();
     if opts.gpu && trascrizione::real_gpu_present() {
         tries.push(Variant::Vulkan);
@@ -340,6 +346,58 @@ fn power_on(model: &std::path::Path, opts: Options, sink: &dyn Fn(TrEvent), canc
         return Ok((running, variant, gpu));
     }
     Err(last)
+}
+
+/// Android: il motore `cedro-riassumi` è nell'APK, nella cartella delle librerie (l'unico posto da cui Android
+/// lascia partire un programma), col nome `libcedro_riassumi.so`. Niente da scaricare tranne il modello.
+#[cfg(target_os = "android")]
+pub mod android {
+    use super::*;
+    use std::sync::OnceLock;
+
+    static LIBS: OnceLock<PathBuf> = OnceLock::new();
+
+    /// L'app dice dov'è la cartella delle librerie dell'APK (`nativeLibraryDir`).
+    pub fn set_libs(dir: PathBuf) {
+        let _ = LIBS.set(dir);
+    }
+
+    pub fn engine() -> Option<PathBuf> {
+        LIBS.get().map(|d| d.join("libcedro_riassumi.so")).filter(|p| p.is_file())
+    }
+
+    pub(super) fn power_on(model: &std::path::Path, cancel: &AtomicBool) -> Result<(Running, Variant, Option<String>), String> {
+        // Compilato con dotprod+fp16 come whisper: si controlla prima di farlo partire.
+        const HWCAP_FPHP: u64 = 1 << 9;
+        const HWCAP_ASIMDDP: u64 = 1 << 20;
+        let caps = unsafe { libc::getauxval(libc::AT_HWCAP) } as u64;
+        if caps & HWCAP_FPHP == 0 || caps & HWCAP_ASIMDDP == 0 {
+            return Err("questo telefono non ha le istruzioni (dotprod, fp16) che il riassunto usa".into());
+        }
+        let exe = engine().ok_or("il motore del riassunto non è in questo APK")?;
+        let mut command = Command::new(&exe);
+        command.arg("--model").arg(model).arg("--threads").arg(trascrizione::engine_threads().to_string());
+        let running = Running::spawn(command)?;
+        match running.next_or_cancel(cancel) {
+            Next::Line(v) if v["e"] == "ready" => {
+                let threads = v["threads"].as_u64().unwrap_or(0);
+                crate::accel::set_in_use(false, format!("{threads} thread"));
+                Ok((running, trascrizione::cpu_variant(false), None))
+            }
+            Next::Line(v) => {
+                running.stop();
+                Err(v["msg"].as_str().unwrap_or("il motore non è partito").to_string())
+            }
+            Next::Gone => {
+                running.stop();
+                Err("il motore si è chiuso subito".into())
+            }
+            Next::Cancelled => {
+                running.kill();
+                Err(CANCELLED.into())
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------- il riassunto salvato
@@ -436,7 +494,10 @@ pub struct Sections {
     pub todo: Vec<Todo>,
 }
 
+#[cfg(not(target_os = "android"))]
 pub const WARNING: &str = "Riassunto automatico fatto sul PC: da controllare.";
+#[cfg(target_os = "android")]
+pub const WARNING: &str = "Riassunto automatico fatto sul telefono: da controllare.";
 
 impl Sections {
     /// Il riassunto come testo semplice: per «Copia» e in cima al file di testo.

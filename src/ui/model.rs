@@ -299,7 +299,7 @@ pub fn guarded<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
 }
 
 /// Il tempo che resta, in parole: «circa 12 min», «meno di un minuto».
-fn time_left(secs: f32) -> String {
+pub fn time_left(secs: f32) -> String {
     let mins = (secs / 60.0).round() as u32;
     if secs < 60.0 {
         "meno di un minuto".into()

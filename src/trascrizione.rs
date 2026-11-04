@@ -592,7 +592,7 @@ fn ensure_model(index: usize, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Resu
                     log(sink, Tone::Step, "Modello", format!("«{}»: è uscita una versione nuova, la scarico ({})…", model.name, size_text(model.megabytes)));
                 }
                 _ => {
-                    log(sink, Tone::Step, "Modello", format!("«{}» già sul PC", model.name));
+                    log(sink, Tone::Step, "Modello", format!("«{}» già sul {}", model.name, if cfg!(target_os = "android") { "telefono" } else { "PC" }));
                     return Ok(path);
                 }
             }
@@ -752,8 +752,8 @@ impl Running {
 
     /// Android: whisper.cpp è dentro l'APK (src/whisper_android), niente eseguibile da scaricare.
     #[cfg(target_os = "android")]
-    fn embedded(model: &Path, gpu: bool) -> Running {
-        let (requests, lines) = crate::whisper_android::spawn(model, engine_threads(), gpu);
+    fn embedded(model: &Path, gpu: bool, voices: Option<&VoicePaths>) -> Running {
+        let (requests, lines) = crate::whisper_android::spawn(model, engine_threads(), gpu, voices.cloned());
         Running { child: None, stdin: None, lines, requests: Some(requests) }
     }
 
@@ -1521,7 +1521,7 @@ type VoicePaths = (PathBuf, PathBuf);
 fn power_on(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
     #[cfg(target_os = "android")]
     {
-        let _ = (cancel, voices);
+        let _ = cancel;
         // whisper.cpp è compilato con le istruzioni dotprod+fp16 (ARMv8.2): tutti i telefoni dal 2018 le hanno, ma si controlla
         // a runtime (HWCAP) invece di lasciar partire un'istruzione illegale.
         const HWCAP_FPHP: u64 = 1 << 9;
@@ -1532,12 +1532,12 @@ fn power_on(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: 
         }
         log(sink, Tone::Step, "Motore", "carico il modello in memoria…");
         let gpu = request.gpu && vulkan_loader_present();
-        let mut running = Running::embedded(model, gpu);
+        let mut running = Running::embedded(model, gpu, voices);
         let mut ready = running.next();
         if gpu && !matches!(&ready, Some(v) if v["e"] == "ready" && v["gpu"].is_string()) {
             log(sink, Tone::Note, "Scheda video", "non disponibile: uso il processore");
             running.stop();
-            running = Running::embedded(model, false);
+            running = Running::embedded(model, false, voices);
             ready = running.next();
         }
         return match ready {
