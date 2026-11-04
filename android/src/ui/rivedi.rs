@@ -105,7 +105,7 @@ fn etichetta(kind: Kind, count: usize) -> String {
 /// Quanti punti da controllare ha la trascrizione salvata di `source` (senza l'onda: ripetizioni e frasi tipiche).
 pub fn da_controllare(source: &Path) -> Option<usize> {
     let s = revisione::load(source)?;
-    Some(Review::new(source, s.secs, s.lang, s.segments, s.names).open_count())
+    Some(Review::new(source, s.secs, s.lang, s.segments, s.names, s.summary).open_count())
 }
 
 impl App {
@@ -116,7 +116,7 @@ impl App {
         let titolo = self.lavori.iter().find(|l| l.id == id).map(|l| l.origine.clone()).unwrap_or_default();
         let titolo = Path::new(&titolo).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or(titolo);
         let secs = s.secs;
-        self.rivedi = Some(Rivedi { r: Review::new(&src, secs, s.lang, s.segments, s.names), titolo, player: None, salva: None, nota: String::new(), altezze: Vec::new(), largo: 0.0, scorri: 0.0, scorri_max: 0.0, onda: (0.0, 0.0) });
+        self.rivedi = Some(Rivedi { r: Review::new(&src, secs, s.lang, s.segments, s.names, s.summary), titolo, player: None, salva: None, nota: String::new(), altezze: Vec::new(), largo: 0.0, scorri: 0.0, scorri_max: 0.0, onda: (0.0, 0.0) });
         Effetto::OndaRevisione(src, secs)
     }
 
