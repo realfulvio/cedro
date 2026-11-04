@@ -561,6 +561,8 @@ pub struct App {
     pub casa_aperta: bool,
     /// Per ogni trascrizione in corso: quando ha dato la prima percentuale, e quale (per il tempo che resta).
     pub partenze: std::collections::HashMap<u32, (Instant, u32)>,
+    /// Cosa sta facendo una trascrizione prima della prima percentuale (scarica il modello, rete interrotta…).
+    pub passi: std::collections::HashMap<u32, String>,
     pub casa: casa::Casa,
     /// Lavori, Aspetto o Informazioni sopra la finestra principale, con la freccia per tornare.
     pub sopra: Option<Scheda>,
@@ -629,6 +631,7 @@ impl App {
             altri: Vec::new(),
             casa_aperta: true,
             partenze: std::collections::HashMap::new(),
+            passi: std::collections::HashMap::new(),
             casa: casa::Casa::default(),
             sopra: None,
             pdf_pagine: std::collections::HashMap::new(),
@@ -1819,7 +1822,7 @@ impl App {
             p.pop_clip();
         }
         let resta = if perc == 0 {
-            "Accendo il motore…".to_string()
+            self.passi.get(&l.id).cloned().unwrap_or_else(|| "Accendo il motore…".to_string())
         } else {
             self.partenze.get(&l.id).and_then(|&(t0, m0)| {
                 let spesi = self.ora.duration_since(t0).as_secs_f32();

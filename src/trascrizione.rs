@@ -1642,7 +1642,11 @@ fn power_on(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: 
                 let secs = v["ms"].as_f64().unwrap_or(0.0) / 1000.0;
                 match v["gpu"].as_str() {
                     Some(g) => log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · scheda video: {g}")),
-                    None => log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · processore, {} thread", v["threads"].as_u64().unwrap_or(0))),
+                    None => {
+                        let threads = v["threads"].as_u64().unwrap_or(0);
+                        crate::accel::set_in_use(false, format!("{threads} thread"));
+                        log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · processore, {threads} thread"));
+                    }
                 }
                 Ok(running)
             }

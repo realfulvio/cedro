@@ -1266,7 +1266,13 @@ fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, ou
     let esito: std::sync::Mutex<Option<Result<(PathBuf, String), String>>> = std::sync::Mutex::new(None);
     run(&[file.to_path_buf()], &req, Some(out), &cedro::Options::default(), &|e| match e {
         Event::Percent { percent, .. } => prog.store(percent as u32 * 10, std::sync::atomic::Ordering::Relaxed),
-        Event::Log(l) => log::info!("trascrivi: {} {}", l.key, l.text),
+        Event::Log(l) => {
+            log::info!("trascrivi: {} {}", l.key, l.text);
+            // Prima della prima percentuale Lavori dice cosa succede: modello che si scarica, rete interrotta, attesa.
+            if let Some(t) = passo_trascrizione(&l.key, &l.text) {
+                c.passo_riassunto.lock().unwrap_or_else(|e| e.into_inner()).push((id, t));
+            }
+        }
         Event::Finished { result, .. } => *esito.lock().unwrap_or_else(|e| e.into_inner()) = Some(result),
     });
     match esito.into_inner().unwrap_or_else(|e| e.into_inner()) {
@@ -1997,4 +2003,15 @@ fn android_main(app: AndroidApp) {
             }
         }
     }
+}
+
+/// La riga del registro della trascrizione da mostrare in Lavori finché non c'è la percentuale, se serve.
+fn passo_trascrizione(key: &str, text: &str) -> Option<String> {
+    let t = match key {
+        "Modello" | "Motore" | "Voci" if !text.starts_with("pronto") => format!("{key}: {text}"),
+        "" if text.starts_with("Scaricati") || text.starts_with("Rete interrotta") || text.starts_with("Un altro lavoro") => text.to_string(),
+        _ => return None,
+    };
+    let mut c = t.chars();
+    Some(c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default())
 }
