@@ -45,16 +45,10 @@ fn runs_on() -> String {
     let settings = crate::read_settings();
     let gpu = &crate::sysinfo::info().gpu;
     if settings.gpu && crate::trascrizione::real_gpu_present() && !gpu.is_empty() {
-        format!("{} (Vulkan)", short_gpu(gpu))
+        crate::accel::gpu_model(gpu)
     } else {
         "processore".to_string()
     }
-}
-
-/// «AMD Radeon(TM) Graphics» → «AMD Radeon Graphics»: il nome senza marchi e parentesi.
-fn short_gpu(name: &str) -> String {
-    let clean = name.replace("(TM)", "").replace("(R)", "").replace("(tm)", "").replace("(r)", "");
-    clean.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Il riquadro con quello che serve: memoria, modello, dove lavora, niente internet.
@@ -344,12 +338,4 @@ fn ready(f: &mut Frame, rv: &Review, s: &riassunto::Sections, x: f32, y0: f32, w
     let note = format!("Scritto da {} sul tuo PC in {took}. Controlla nomi, cifre e date prima di usarlo.", riassunto::MODEL_NAME);
     y += f.para(&note, x, y, w, 13.0, SANS, pal.muted, 1.45, 0);
     y - y0
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn gpu_names_lose_the_marks() {
-        assert_eq!(super::short_gpu("AMD Radeon(TM)  Graphics"), "AMD Radeon Graphics");
-    }
 }

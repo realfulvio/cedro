@@ -254,6 +254,8 @@ pub struct Transcribe {
     pub log: Vec<trascrizione::Line>,
     /// Avanzamento del file in lavoro (0..100).
     pub percent: u8,
+    /// Quando il file in lavoro ha dato la prima percentuale, e quale: da qui il tempo che resta.
+    pub since: Option<(std::time::Instant, u8)>,
     /// Quante persone parlano: 0 Automatico, 1 nessun riconoscimento, poi il numero.
     pub speakers: u8,
     /// La finestrella «Quante persone parlano?» è aperta.
@@ -480,7 +482,7 @@ impl App {
             dest: None,
             job: None,
             selected: None,
-            transcribe: Transcribe { format: trascrizione::Format::Word, model: trascrizione::default_model(), log: Vec::new(), percent: 0, speakers: 0, asking: false },
+            transcribe: Transcribe { format: trascrizione::Format::Word, model: trascrizione::default_model(), log: Vec::new(), percent: 0, since: None, speakers: 0, asking: false },
             youtube: Links::new(false),
             web: Links::new(true),
             notice: None,
@@ -1121,6 +1123,19 @@ impl App {
         self.prune_media();
     }
 
+    /// Il tempo che resta al file in trascrizione, in parole («circa 4 min»): solo dopo un po' di lavoro
+    /// fatto, perché le prime percentuali (modello che si scalda) darebbero stime a caso.
+    pub fn transcribe_left(&self) -> Option<String> {
+        let (t0, p0) = self.transcribe.since?;
+        let p = self.transcribe.percent;
+        let spent = t0.elapsed().as_secs_f32();
+        if p >= 100 || p < p0.saturating_add(5) || spent < 10.0 {
+            return None;
+        }
+        let rate = (p - p0) as f32 / spent;
+        Some(time_left((100 - p) as f32 / rate))
+    }
+
     /// La spia: cosa accelera il lavoro in corso (solo conversioni e trascrizioni).
     pub fn spia(&self) -> Option<crate::accel::InUse> {
         match self.job.as_ref().map(|j| j.kind) {
@@ -1410,6 +1425,7 @@ impl App {
         let cancel = self.begin(&targets, JobKind::Transcribe);
         self.transcribe.log.clear();
         self.transcribe.percent = 0;
+        self.transcribe.since = None;
         let settings = crate::read_settings();
         let request = trascrizione::Request { format: self.transcribe.format, model: self.transcribe.model, gpu: settings.gpu, avx512: settings.avx512, speakers: self.transcribe.speakers.min(trascrizione::MAX_VOICES as u8) };
         let dest = self.dest.clone();
@@ -1588,6 +1604,8 @@ impl App {
                         job.done += 1;
                         job.failed += failed as usize;
                     }
+                    self.transcribe.percent = 0;
+                    self.transcribe.since = None;
                 }
                 Event::Ask(path, reply) => self.ask = Some(Ask { path, reply }),
                 Event::TranscribeLog(line) => {
@@ -1598,6 +1616,12 @@ impl App {
                 }
                 Event::TranscribePercent(index, percent) => {
                     self.transcribe.percent = percent;
+                    if self.transcribe.since.is_none() {
+                        self.transcribe.since = Some((std::time::Instant::now(), percent));
+                    }
+                    if let Some(job) = self.job.as_mut() {
+                        job.part = percent as f32 / 100.0;
+                    }
                     let running: Vec<usize> = self.job.as_ref().map(|j| j.targets.clone()).unwrap_or_default();
                     if let Some(&i) = running.get(index) {
                         let f = &mut self.files[i];
@@ -1732,8 +1756,7 @@ impl App {
     pub fn progress(&self) -> Option<f32> {
         self.job.as_ref().map(|j| match j.kind {
             JobKind::Download { web } => self.links(web).progress,
-            JobKind::Convert => (j.done as f32 + j.part.clamp(0.0, 1.0)) / j.total.max(1) as f32,
-            _ => j.done as f32 / j.total.max(1) as f32,
+            JobKind::Convert | JobKind::Transcribe => (j.done as f32 + j.part.clamp(0.0, 1.0)) / j.total.max(1) as f32,
         })
     }
 
