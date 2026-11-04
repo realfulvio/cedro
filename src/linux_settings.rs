@@ -29,11 +29,14 @@ window.cedro-panel button.suggested-action { background: #005E8E; color: #ffffff
 window.cedro-panel button.suggested-action label { color: #ffffff; }\
 window.cedro-panel frame > label { color: #005E8E; font-weight: bold; }\
 window.cedro-panel separator { background: #E5E5E5; min-height: 1px; }\
-window.cedro-panel list.cedro-nav { background: #F3F5F7; border-right: 1px solid #E5E5E5; padding: 10px 0; }\
-window.cedro-panel list.cedro-nav row { background: transparent; padding: 9px 14px; margin: 1px 8px; border-radius: 5px; }\
+window.cedro-panel list.cedro-nav { background: #F3F5F7; padding: 10px 0; }\
+window.cedro-panel list.cedro-nav row { background: transparent; padding: 5px 10px; margin: 1px 8px; border-radius: 8px; }\
+window.cedro-panel list.cedro-nav row:hover { background: rgba(0,0,0,0.04); }\
 window.cedro-panel list.cedro-nav row:selected { background: #ffffff; box-shadow: inset 3px 0 0 #005E8E; }\
 window.cedro-panel list.cedro-nav row:selected label { font-weight: bold; }\
-window.cedro-panel box.cedro-side { background: #F3F5F7; border-right: 1px solid #E5E5E5; }\
+window.cedro-panel box.cedro-side { background: #F3F5F7; }\
+window.cedro-panel box.cedro-middle { background: #F3F5F7; }\
+window.cedro-panel box.cedro-card { background: #ffffff; border: 1px solid #E9ECEF; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin: 12px 14px 12px 6px; }\
 window.cedro-panel box.cedro-side list.cedro-nav { border-right: none; padding-top: 4px; }\
 window.cedro-panel box.cedro-ente { margin: 14px 14px 4px; padding-bottom: 12px; border-bottom: 1px solid #E5E5E5; }\
 window.cedro-panel label.cedro-ente-nome { color: #005E8E; font-weight: bold; }\
@@ -41,8 +44,8 @@ window.cedro-panel box.cedro-ente-about { background: #F2F7FB; border: 1px solid
 window.cedro-panel box.cedro-foot { background: #F3F5F7; border-top: 1px solid #E5E5E5; padding: 12px 18px; }\
 window.cedro-panel button.cedro-sec { background: #F3F5F7; background-image: none; border: 1px solid #E5E5E5; border-radius: 5px; padding: 5px 14px; box-shadow: none; }\
 window.cedro-panel box.cedro-foot button.cedro-sec { background: #ffffff; }\
-window.cedro-panel button.cedro-pri { background: #005E8E; background-image: none; border: 1px solid #005E8E; border-radius: 5px; padding: 5px 20px; box-shadow: none; }\
-window.cedro-panel button.cedro-pri:hover { background: #0066CC; border-color: #0066CC; }\
+window.cedro-panel button.cedro-pri { background: #005E8E; background-image: linear-gradient(to bottom, ACC_TOP, ACC_BOTTOM); border: 1px solid ACC_BOTTOM; border-radius: 6px; padding: 5px 22px; box-shadow: 0 2px 6px rgba(0,0,0,0.2), inset 0 1px rgba(255,255,255,0.14); }\
+window.cedro-panel button.cedro-pri:hover { background-image: linear-gradient(to bottom, ACC_HOT_TOP, ACC_HOT_BOTTOM); }\
 window.cedro-panel button.cedro-pri label { color: #ffffff; font-weight: bold; }\
 window.cedro-panel switch.cedro-sw { background: #ffffff; background-image: none; border: 1px solid #455A64; border-radius: 10px; min-width: 40px; min-height: 20px; box-shadow: none; }\
 window.cedro-panel switch.cedro-sw:checked { background: #005E8E; border-color: #005E8E; }\
@@ -62,14 +65,35 @@ window.cedro-panel label.cedro-license { font-family: monospace; font-size: 80%;
 window.cedro-panel label.cedro-soon { font-size: 75%; font-weight: bold; padding: 1px 6px; border-radius: 4px; background: #E6EEFF; color: #005E8E; }";
 
 /// Il foglio di stile nei colori del tema: quelli scritti sono del Comune di Bondeno.
+/// In più: la sfumatura del pulsante «Salva» e il colore di ogni sezione (fondo e linea della scelta).
 fn css() -> String {
+    use cedro::ui::theme::mix;
     let t = cedro::tema::attivo();
-    if cedro::edizione::bondeno() {
-        return CSS.to_string();
-    }
     let hex = |c: (u8, u8, u8)| format!("#{:02X}{:02X}{:02X}", c.0, c.1, c.2);
-    CSS.replace("#005E8E", &hex(t.acc)).replace("#455A64", &hex(t.mute)).replace("#F3F5F7", &hex(t.surf)).replace("#E5E5E5", &hex(t.line)).replace("#191919", &hex(t.fg))
+    let base = if cedro::edizione::bondeno() {
+        CSS.to_string()
+    } else {
+        CSS.replace("#005E8E", &hex(t.acc)).replace("#455A64", &hex(t.mute)).replace("#F3F5F7", &hex(t.surf)).replace("#E5E5E5", &hex(t.line)).replace("#191919", &hex(t.fg))
+    };
+    let acc = if cedro::edizione::bondeno() { (0x00, 0x5E, 0x8E) } else { t.acc };
+    let mut css = base
+        .replace("ACC_HOT_TOP", &hex(mix(acc, (255, 255, 255), 0.04)))
+        .replace("ACC_HOT_BOTTOM", &hex(mix(acc, (0, 0, 0), 0.2)))
+        .replace("ACC_TOP", &hex(mix(acc, (255, 255, 255), 0.16)))
+        .replace("ACC_BOTTOM", &hex(mix(acc, (0, 0, 0), 0.06)));
+    for (i, name) in NAV_ORDER.iter().enumerate() {
+        let c = cedro::ui::sezioni::look(name).1;
+        css.push_str(&format!(
+            "window.cedro-panel list.cedro-nav row.cedro-sez-{i}:selected {{ background: {}; box-shadow: inset 3px 0 0 {}; }}",
+            hex(mix(c, (255, 255, 255), 0.88)),
+            hex(c)
+        ));
+    }
+    css
 }
+
+/// Le schede nell'ordine in cui si vedono («Aspetto» è la seconda).
+const NAV_ORDER: [&str; 9] = ["Generale", "Aspetto", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni"];
 
 fn style() {
     let Some(display) = gtk4::gdk::Display::default() else {
@@ -840,10 +864,20 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let nav = gtk4::ListBox::new();
     nav.add_css_class("cedro-nav");
     nav.set_size_request(190, -1);
-    for (name, _) in &order {
+    let mut tiles = Vec::new();
+    for (i, (name, _)) in order.iter().enumerate() {
+        // La piastrella colorata della sezione e il nome.
+        let line = HBox::new(Orientation::Horizontal, 10);
+        let tile = section_tile(name);
+        line.append(&tile);
+        tiles.push(tile);
         let label = Label::new(Some(&t(name)));
         label.set_xalign(0.0);
-        nav.append(&label);
+        line.append(&label);
+        nav.append(&line);
+        if let Some(row) = nav.row_at_index(i as i32) {
+            row.add_css_class(&format!("cedro-sez-{}", NAV_ORDER.iter().position(|n| n == name).unwrap_or(0)));
+        }
     }
     {
         let stack = stack.clone();
@@ -853,6 +887,9 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 if let Some((_, page)) = order.get(row.index() as usize) {
                     stack.set_visible_child_name(page);
                 }
+            }
+            for tile in &tiles {
+                tile.queue_draw();
             }
         });
     }
@@ -886,7 +923,13 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     scrolled.set_min_content_height(280);
     scrolled.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
     scrolled.set_child(Some(&stack));
-    middle.append(&scrolled);
+    // Il contenuto è una scheda bianca sollevata sul fondo grigio chiaro.
+    let card = HBox::new(Orientation::Vertical, 0);
+    card.add_css_class("cedro-card");
+    card.set_overflow(gtk4::Overflow::Hidden);
+    card.append(&scrolled);
+    middle.add_css_class("cedro-middle");
+    middle.append(&card);
 
     let credit = crate::linux_firma::firma(false, "", true);
     credit.set_halign(gtk4::Align::Start);
@@ -982,6 +1025,34 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     if let Ok(dir) = std::env::var("CEDRO_SHOTS") {
         shots(&window, &nav, order.iter().map(|(n, _)| n.to_string()).collect(), std::path::PathBuf::from(dir));
     }
+}
+
+/// La piastrella colorata di una sezione: piena se la sezione è quella scelta.
+fn section_tile(name: &'static str) -> DrawingArea {
+    let area = DrawingArea::new();
+    area.set_content_width(30);
+    area.set_content_height(30);
+    area.set_valign(gtk4::Align::Center);
+    area.set_draw_func(move |a, cr, w, h| {
+        let sf = a.scale_factor().max(1);
+        let (pw, ph) = (w * sf, h * sf);
+        if pw <= 0 || ph <= 0 {
+            return;
+        }
+        let on = a.ancestor(gtk4::ListBoxRow::static_type()).and_then(|r| r.downcast::<gtk4::ListBoxRow>().ok()).is_some_and(|r| r.is_selected());
+        let (_, c) = cedro::ui::sezioni::look(name);
+        let t = cedro::tema::attivo();
+        let side = if cedro::edizione::bondeno() { (0xF3, 0xF5, 0xF7) } else { t.surf };
+        let bg = if on { cedro::ui::theme::mix(c, (255, 255, 255), 0.88) } else { side };
+        let data = cedro::ui::sezioni::tile_bgra(name, on, pw.min(ph) as u32, sf as f32, bg);
+        let side_px = pw.min(ph);
+        if let Ok(img) = ImageSurface::create_for_data(data, gtk4::cairo::Format::ARgb32, side_px, side_px, side_px * 4) {
+            let _ = cr.scale(1.0 / sf as f64, 1.0 / sf as f64);
+            let _ = cr.set_source_surface(&img, 0.0, 0.0);
+            let _ = cr.paint();
+        }
+    });
+    area
 }
 
 /// Solo nelle build di prova: con `CEDRO_SHOTS=<cartella>` salva un'immagine di ogni scheda e si chiude.
