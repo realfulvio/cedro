@@ -638,7 +638,9 @@ pub fn drop_zone(f: &mut Frame, app: &App, r: R, big: bool) {
     f.text_c(t, (r.0, cy, r.2, 30.0), if big { 22.0 } else { 18.0 }, SEMI, pal.text);
     let size = if big { 16.0 } else { 14.0 };
     // L'elenco dei formati va a capo invece di finire con «…».
-    let lines = f.p.wrap_lines(&s, size, SANS, r.2 - 48.0, 3);
+    // Quante righe ci stanno sotto il titolo senza toccare il bordo (nelle zone basse anche una sola, con «…»).
+    let room = ((r.1 + r.3 - 10.0 - (cy + 30.0)) / (size * 1.35)).floor().clamp(1.0, 3.0) as usize;
+    let lines = f.p.wrap_lines(&s, size, SANS, r.2 - 48.0, room);
     for (i, line) in lines.iter().enumerate() {
         f.text_c(line, (r.0 + 12.0, cy + 30.0 + i as f32 * (size * 1.35), r.2 - 24.0, 26.0), size, SANS, pal.muted);
     }

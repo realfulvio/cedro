@@ -127,7 +127,9 @@ fn preview(f: &mut Frame, app: &App, r: R) {
     let vis = app.visible();
     let Some(i) = app.selected.filter(|i| vis.contains(i)) else {
         f.p.fill(r.0, r.1, r.2, r.3, mix(pal.border, pal.bg, 0.45));
-        super::drop_zone(f, app, (r.0 + 40.0, r.1 + 40.0, r.2 - 80.0, r.3 - 80.0), true);
+        // In Semplificata sotto c'è «Aggiungi file»: la zona si ferma prima, così non lo tocca.
+        let below = if f.simple { 56.0 } else { 0.0 };
+        super::drop_zone(f, app, (r.0 + 40.0, r.1 + 40.0, r.2 - 80.0, r.3 - 80.0 - below), true);
         return;
     };
     let file = &app.files[i];
