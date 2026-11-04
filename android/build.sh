@@ -36,6 +36,12 @@ fi
 cargo ndk -t arm64-v8a -P 26 build --release -p cedro-android $FEATURES
 cp target/aarch64-linux-android/release/libcedro_android.so "$OUT/apk/lib/arm64-v8a/"
 cp "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "$OUT/apk/lib/arm64-v8a/"
+# Il motore del Riassunto AI (riassumi/, llama.cpp in Rust) è un programma a parte come sul computer: nell'APK sta
+# nella cartella delle librerie (l'unico posto da cui Android lascia partire un programma) come libcedro_riassumi.so.
+# Con dotprod+fp16 come whisper (guardia HWCAP in riassunto.rs) e la libreria C++ dentro (niente libc++_shared da cercare).
+GGML_CPU_ARM_ARCH="$WHISPER_ARCH" cargo ndk -t arm64-v8a -P 26 build --release --manifest-path riassumi/Cargo.toml
+cp riassumi/target/aarch64-linux-android/release/cedro-riassumi "$OUT/apk/lib/arm64-v8a/libcedro_riassumi.so"
+LIBS="$LIBS libcedro_riassumi.so"
 # Risorse (icona del launcher, adattiva da Android 8) compilate con aapt2, senza Gradle.
 rm -rf "$OUT/res.zip" "$OUT/classes"; mkdir -p "$OUT/classes"
 "$BT/aapt2" compile --dir android/res -o "$OUT/res.zip"
