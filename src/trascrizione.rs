@@ -592,7 +592,7 @@ fn ensure_model(index: usize, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Resu
                     log(sink, Tone::Step, "Modello", format!("«{}»: è uscita una versione nuova, la scarico ({})…", model.name, size_text(model.megabytes)));
                 }
                 _ => {
-                    log(sink, Tone::Step, "Modello", format!("«{}» già sul PC", model.name));
+                    log(sink, Tone::Step, "Modello", format!("«{}» già sul {}", model.name, if cfg!(target_os = "android") { "telefono" } else { "PC" }));
                     return Ok(path);
                 }
             }

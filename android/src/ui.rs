@@ -670,6 +670,7 @@ impl App {
         }
         if let Some(l) = self.lavori.iter_mut().find(|l| l.id == id) {
             l.stato = stato;
+            l.quando = adesso(); // «finito N min fa», non da quando è partito
         }
         Effetto::SalvaLavori
     }
@@ -1798,7 +1799,7 @@ impl App {
         let cy = r.1 + 41.0;
         p.disc_a(x + 4.0, cy, 6.5, pal.ok, 0.2);
         p.circle(x + 4.0, cy, 3.5, Some(pal.ok), None);
-        p.text(&format!("Processore · {} thread", cedro::trascrizione::engine_threads()), x + 16.0, cy - 11.0, w - pw - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+        p.text(&processore_in_uso(), x + 16.0, cy - 11.0, w - pw - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
         // La barra: binario chiaro, riempimento, un filo di luce e la testa chiara.
         let (by, bh) = (r.1 + 60.0, 12.0);
         p.rrect(x, by, w, bh, bh / 2.0, Some(mix(accento, pal.surface, 0.80)), None);
@@ -2100,4 +2101,12 @@ fn sector(cx: f32, cy: f32, r0: f32, r1: f32, a0: f32, a1: f32, gap: f32) -> Vec
         pts.push((cx + r0 * a.cos(), cy + r0 * a.sin()));
     }
     pts
+}
+
+/// «Processore · 7 thread» come lo ha detto il motore partito (i core accesi cambiano col risparmio energetico).
+pub(crate) fn processore_in_uso() -> String {
+    match cedro::accel::in_use() {
+        Some(u) if !u.gpu && !u.detail.is_empty() => format!("Processore · {}", u.detail),
+        _ => format!("Processore · {} thread", cedro::trascrizione::engine_threads()),
+    }
 }
