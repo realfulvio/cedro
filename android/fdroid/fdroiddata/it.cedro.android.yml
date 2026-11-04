@@ -30,6 +30,8 @@ Builds:
       - export PATH=$HOME/.cargo/bin:$PATH && cargo install cargo-ndk --version 3.5.4
         --locked
       - export PATH=$HOME/.cargo/bin:$PATH && cargo fetch --locked --target aarch64-linux-android
+      - export PATH=$HOME/.cargo/bin:$PATH && cargo fetch --locked --target aarch64-linux-android
+        --manifest-path riassumi/Cargo.toml
     build:
       - export PATH=$HOME/.cargo/bin:$PATH
       - export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
