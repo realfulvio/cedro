@@ -331,7 +331,7 @@ fn power_on(model: &std::path::Path, opts: Options, sink: &dyn Fn(TrEvent), canc
         }
         let threads = ready["threads"].as_u64().unwrap_or(0);
         match &gpu {
-            Some(g) => crate::accel::set_in_use(true, format!("Vulkan · {g}")),
+            Some(g) => crate::accel::set_in_use(true, crate::accel::gpu_model(g)),
             None => {
                 let isa = variant.isa();
                 crate::accel::set_in_use(false, if isa.is_empty() { format!("{threads} thread") } else { format!("{isa} · {threads} thread") });
