@@ -165,8 +165,18 @@ fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
     }
     // In fondo: quanto manca, oppure il passo del motore prima che la trascrizione parta.
     let left = if p <= 0.0 {
-        let step = app.transcribe.log.iter().rev().find(|l| l.tone == Tone::Step && !l.key.is_empty());
-        step.map(|l| format!("{}: {}", crate::i18n::tr(&l.key), crate::i18n::tr(&l.text))).unwrap_or_else(|| "Accendo il motore…".into())
+        // (anche «Voci: 30%», così si vede che lavora mentre riconosce chi parla).
+        let step = app.transcribe.log.iter().rev().find(|l| matches!(l.tone, Tone::Step | Tone::Muted) && !l.text.is_empty());
+        step.map(|l| {
+            let (key, text) = (crate::i18n::tr(&l.key), crate::i18n::tr(&l.text));
+            match () {
+                _ if key.is_empty() => text.to_string(),
+                // «Lingua riconosciuta: italiano», non «Lingua: riconosciuta: italiano».
+                _ if text.contains(':') => format!("{key} {text}"),
+                _ => format!("{key}: {text}"),
+            }
+        })
+        .unwrap_or_else(|| "Accendo il motore…".into())
     } else {
         app.transcribe_left().map(|t| format!("Restano {t}")).unwrap_or_else(|| "Calcolo il tempo che resta…".into())
     };
