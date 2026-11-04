@@ -88,16 +88,17 @@ impl Aspetto {
         let gap = 12.0;
         let bw = (w - gap) / 2.0;
         for (i, (simple, name, text)) in [(false, "Standard", "Tutte le opzioni a portata di mano."), (true, "Semplificata", "Solo l'essenziale; il resto in «Altre opzioni».")].into_iter().enumerate() {
-            let r = (i as f32 * (bw + gap), y, bw, 76.0);
+            // Due righe di descrizione coi caratteri ingranditi (+2): il riquadro le contiene con margine.
+            let r = (i as f32 * (bw + gap), y, bw, 86.0);
             let on = self.simple == simple;
             let hot = self.hover == Some(Hit::Mode(simple));
             self.choice(p, r, on, hot);
             p.text(name, r.0 + 40.0, r.1 + 11.0, r.2 - 52.0, 20.0, 14.0, Weight::Bold, t.fg, Align::Left);
-            p.text_wrap(text, r.0 + 40.0, r.1 + 34.0, r.2 - 52.0, 12.0, Weight::Regular, t.mute, 16.0, 2);
+            p.text_wrap(text, r.0 + 40.0, r.1 + 34.0, r.2 - 52.0, 12.0, Weight::Regular, t.mute, 18.0, 2);
             radio(p, r.0 + 20.0, r.1 + 22.0, on, t);
             self.zones.push((r, Hit::Mode(simple)));
         }
-        y += 76.0 + 22.0;
+        y += 86.0 + 22.0;
 
         // Temi
         p.text("Tema", 0.0, y, w, 20.0, 14.0, Weight::Bold, t.fg, Align::Left);
