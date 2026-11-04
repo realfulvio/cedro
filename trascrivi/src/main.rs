@@ -17,6 +17,7 @@ use serde_json::{json, Value};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 mod decode;
+mod rifinitura;
 mod voci;
 
 fn main() {
@@ -160,7 +161,9 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
     };
     emit(json!({"e": "lang", "code": lang}));
 
-    let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 5 });
+    // Ricerca a fascio: whisper tiene 5 ipotesi e sceglie la frase più probabile, non la prima parola per volta.
+    // Su un messaggio vocale vero toglie parole storpiate per circa il 15 % di tempo in più.
+    let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 });
     params.set_n_threads(threads as i32);
     params.set_language(Some(&lang));
     params.set_print_special(false);
@@ -169,10 +172,19 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
     params.set_print_timestamps(false);
     // Niente «[Musica]», «(applausi)» e simili al posto del parlato.
     params.set_suppress_nst(true);
-    params.set_segment_callback_safe_lossy(|seg: whisper_rs::SegmentCallbackData| {
+    if let Some(prompt) = rifinitura::initial_prompt(&lang) {
+        params.set_initial_prompt(prompt);
+    }
+    // Ogni frase parte quando arriva la successiva: l'ultima si guarda a parte, perché a fine audio whisper a volte
+    // inventa un «Grazie.» che nessuno ha detto.
+    let pending: std::rc::Rc<std::cell::RefCell<Option<(i64, i64, String)>>> = Default::default();
+    let held = pending.clone();
+    params.set_segment_callback_safe_lossy(move |seg: whisper_rs::SegmentCallbackData| {
         let text = seg.text.trim();
         if !text.is_empty() {
-            emit(json!({"e": "seg", "t0": seg.start_timestamp, "t1": seg.end_timestamp, "text": text}));
+            if let Some((t0, t1, text)) = held.borrow_mut().replace((seg.start_timestamp, seg.end_timestamp, text.to_string())) {
+                emit(json!({"e": "seg", "t0": t0, "t1": t1, "text": text}));
+            }
         }
     });
     let mut last = -1;
@@ -183,6 +195,12 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
         }
     });
     state.full(params, &samples).map_err(|e| Failure::Other(format!("trascrizione interrotta: {e}")))?;
+    let audio_end = (samples.len() as u64 * 100 / decode::RATE as u64) as i64;
+    if let Some((t0, t1, text)) = pending.borrow_mut().take() {
+        if !rifinitura::phantom_tail(&text, t0, t1, audio_end) {
+            emit(json!({"e": "seg", "t0": t0, "t1": t1, "text": text}));
+        }
+    }
     Ok(lang)
 }
 
