@@ -131,13 +131,15 @@ const PROGRESS_H: f32 = 112.0;
 /// della scheda video, o il processore), barra e tempo che resta. Va sopra il pulsante Annulla.
 fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
     let pal = f.pal;
+    // Nel tema base il riquadro prende l'arancio della Trascrizione (come la sua piastrella); negli altri il colore del tema.
+    let accent = if f.theme == super::super::theme::ThemeId::WindowsEssenziale { super::super::theme::activity_color(Activity::Transcribe) } else { pal.primary };
     let p = app.transcribe.percent.min(100) as f32;
-    f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(mix(pal.primary, pal.surface, 0.93)), Some((mix(pal.primary, pal.surface, 0.72), 1.0)));
+    f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(mix(accent, pal.surface, 0.93)), Some((mix(accent, pal.surface, 0.72), 1.0)));
     let (x, w) = (r.0 + 18.0, r.2 - 36.0);
     // A destra la percentuale grande; a sinistra cosa fa (e quale file, se sono più d'uno)…
     let pct = format!("{}%", p.round() as u32);
     let pw = f.measure(&pct, 30.0, SEMI);
-    f.text_r(&pct, (x + w - pw - 4.0, r.1 + 12.0, pw + 4.0, 44.0), 30.0, SEMI, pal.primary);
+    f.text_r(&pct, (x + w - pw - 4.0, r.1 + 12.0, pw + 4.0, 44.0), 30.0, SEMI, accent);
     let total = app.job.as_ref().map(|j| j.total).unwrap_or(1);
     let done = app.job.as_ref().map(|j| j.done).unwrap_or(0);
     let what = if p <= 0.0 { "Si prepara" } else { "Trascrive" };
@@ -146,7 +148,7 @@ fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
     f.text(&what, x, r.1 + 12.0, tw, 24.0, 15.0, SEMI, pal.text);
     // …e sotto, la spia: il modello della scheda video (o il processore) col puntino del suo colore.
     if let Some(u) = app.spia() {
-        let (label, dot) = if u.gpu { (u.detail, pal.primary) } else { (format!("Processore · {}", u.detail.rsplit(" · ").next().unwrap_or_default()), pal.ok) };
+        let (label, dot) = if u.gpu { (u.detail, accent) } else { (format!("Processore · {}", u.detail.rsplit(" · ").next().unwrap_or_default()), pal.ok) };
         let cy = r.1 + 36.0 + 11.0;
         f.p.disc_a(x + 4.0, cy, 6.5, dot, 0.2);
         f.p.circle(x + 4.0, cy, 3.5, Some(dot), None);
@@ -154,10 +156,10 @@ fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
     }
     // La barra: binario chiaro, riempimento col colore del tema, un filo di luce in alto e la testa chiara.
     let (by, bh) = (r.1 + 66.0, 12.0);
-    f.p.rrect(x, by, w, bh, bh / 2.0, Some(mix(pal.primary, pal.surface, 0.80)), None);
+    f.p.rrect(x, by, w, bh, bh / 2.0, Some(mix(accent, pal.surface, 0.80)), None);
     let fw = (w * p / 100.0).max(if p > 0.0 { bh } else { 0.0 });
     if fw > 0.0 {
-        f.p.rrect(x, by, fw, bh, bh / 2.0, Some(pal.primary), None);
+        f.p.rrect(x, by, fw, bh, bh / 2.0, Some(accent), None);
         f.p.rrect_a(x + 4.0, by + 2.0, (fw - 8.0).max(0.0), 3.0, 1.5, (255, 255, 255), 0.28);
         if fw > bh + 6.0 {
             f.p.disc_a(x + fw - bh / 2.0, by + bh / 2.0, 2.5, (255, 255, 255), 0.9);
