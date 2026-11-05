@@ -71,25 +71,9 @@ pub(crate) fn note_source(input: &std::path::Path) {
 
 /// La durata in 100 ns, dalle tracce che il lettore dei contenitori conosce (MP4, MKV, WebM…).
 fn probe_total(input: &std::path::Path) -> Option<i64> {
-    use symphonia::core::{formats::FormatOptions, io::MediaSourceStream, meta::MetadataOptions, probe::Hint};
-    let file = std::fs::File::open(input).ok()?;
-    let mut hint = Hint::new();
-    if let Some(ext) = input.extension().and_then(|ext| ext.to_str()) {
-        hint.with_extension(ext);
-    }
-    let probed = symphonia::default::get_probe()
-        .format(&hint, MediaSourceStream::new(Box::new(file), Default::default()), &FormatOptions::default(), &MetadataOptions::default())
-        .ok()?;
-    let secs = probed
-        .format
-        .tracks()
-        .iter()
-        .filter_map(|t| {
-            let time = t.codec_params.time_base?.calc_time(t.codec_params.n_frames?);
-            Some(time.seconds as f64 + time.frac)
-        })
-        .fold(0.0, f64::max);
-    (secs > 0.0).then(|| (secs * 10_000_000.0) as i64)
+    let format = crate::symph::open(input).ok()?;
+    let secs = crate::symph::media_secs(format.as_ref())?;
+    Some((secs * 10_000_000.0) as i64)
 }
 
 /// Un fotogramma al tempo `time` (100 ns) è stato preso in carico: avanza la barra.
