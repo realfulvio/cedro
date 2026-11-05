@@ -17,3 +17,4 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 - MP3 e OGG convertiti hanno la durata esatta: non ci sono più i campioni di silenzio che l'encoder aggiunge all'inizio e alla fine.
 - Titolo e artista degli AIFF si leggono e passano nel file convertito; quelli dei WAV non hanno più un carattere in più in fondo.
 - Le pagine dei PDF in immagini vengono un po' più nitide e più leggere.
+- Riassunto AI: in «Chi ha detto cosa» una riga senza nome non comincia più con «: ».
