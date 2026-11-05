@@ -477,6 +477,13 @@ pub struct Said {
     pub text: String,
 }
 
+impl Said {
+    /// «Nome: testo», o solo il testo se il modello non ha dato un nome (con una voce sola capita).
+    pub fn line(&self) -> String {
+        if self.name.trim().is_empty() { self.text.clone() } else { format!("{}: {}", self.name, self.text) }
+    }
+}
+
 /// Una cosa da fare, con chi la fa.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Todo {
@@ -506,7 +513,7 @@ impl Sections {
         if !self.who.is_empty() {
             out.push_str("\nChi ha detto cosa:\n");
             for w in &self.who {
-                out.push_str(&format!("- {}: {}\n", w.name, w.text));
+                out.push_str(&format!("- {}\n", w.line()));
             }
         }
         out.push_str("\nDecisioni:\n");

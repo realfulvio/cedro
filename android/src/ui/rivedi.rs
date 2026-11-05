@@ -818,7 +818,7 @@ fn riassunto(p: &mut Painter, pal: &cedro::ui::theme::Palette, tema: cedro::ui::
     let w_t = cw - 28.0;
     let parti: Vec<(&str, Vec<String>)> = vec![
         ("In breve", vec![sez.brief.clone()]),
-        ("Chi ha detto cosa", sez.who.iter().map(|s| format!("{}: {}", s.name, s.text)).collect()),
+        ("Chi ha detto cosa", sez.who.iter().map(|s| s.line()).collect()),
         ("Decisioni", if sez.decisions.is_empty() { vec!["Nessuna decisione presa.".into()] } else { sez.decisions.clone() }),
     ];
     let piede = 120.0;
