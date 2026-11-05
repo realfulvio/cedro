@@ -51,7 +51,7 @@ dependencies = [
 
 [[package]]
 name = "cedro-riassumi"
-version = "0.35.1"
+version = "0.35.2"
 dependencies = [
  "libc",
  "llama-cpp-2",
