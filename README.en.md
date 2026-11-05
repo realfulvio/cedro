@@ -1,14 +1,14 @@
 <p align="right">🇬🇧 English · <a href="README.md">🇮🇹 Italiano</a></p>
 
 <p align="center">
-  <img src="docs/v2/hero-en.png" alt="Cedro: change a file's format with a right-click. Windows, Linux and Android">
+  <img src="docs/v3/hero-en.webp" alt="Cedro: change a file's format with a right-click. Windows, Linux and Android">
 </p>
 
 <p align="center">
   <a href="https://github.com/realfulvio/cedro/releases/latest"><img alt="Latest version" src="https://img.shields.io/github/v/release/realfulvio/cedro?color=6B3FC4&label=version&style=for-the-badge"></a>
   <img alt="Windows 10, 11 and ARM" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20ARM-1C1626?style=for-the-badge">
   <img alt="Linux Wayland" src="https://img.shields.io/badge/Linux-KDE%20%7C%20GNOME-1C1626?style=for-the-badge">
-  <img alt="Android coming soon" src="https://img.shields.io/badge/Android-F--Droid%20%2F%20APK-1C1626?style=for-the-badge">
+  <img alt="Android: F-Droid / APK" src="https://img.shields.io/badge/Android-F--Droid%20%2F%20APK-1C1626?style=for-the-badge">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-1C1626?style=for-the-badge"></a>
 </p>
 
@@ -17,6 +17,7 @@
   &nbsp;·&nbsp; <a href="#how-to-use-it">How to use it</a>
   &nbsp;·&nbsp; <a href="#what-it-converts">Formats</a>
   &nbsp;·&nbsp; <a href="#more-than-conversion">Tools</a>
+  &nbsp;·&nbsp; <a href="#transcription-and-summary">Transcription</a>
   &nbsp;·&nbsp; <a href="#cedro-for-android">Android</a>
   &nbsp;·&nbsp; <a href="#faq">FAQ</a>
 </p>
@@ -25,12 +26,14 @@
 
 Cedro changes the format of your files without opening any program. Hold **Shift**, **right-click** a file and a wheel appears: pick the format and the new copy shows up next to the original, which stays untouched. On a phone, just tap **Share**.
 
+It also transcribes meetings, recognises **who is speaking** and writes a **summary** with AI.
+
 Everything happens **on your own device**: your files are never uploaded anywhere. It is written entirely in **Rust**, and the code is open.
 
 > The interface is available in English and Italian (it follows your system language; change it in Settings). Most screenshots below show the Italian version.
 
 <p align="center">
-  <img src="docs/v2/ruote.png" width="760" alt="The Cedro wheel: on the left, conversions on a photo with JPEG selected; on the right, tools (compress, 50%, black and white, rotate, metadata, OCR)">
+  <img src="docs/v3/ruote-en.webp" width="760" alt="The Cedro wheel: on the left, conversions on a photo with JPEG selected; on the right, tools (compress, 50%, black and white, rotate, metadata, OCR)">
 </p>
 
 <p align="center">
@@ -45,7 +48,7 @@ Everything happens **on your own device**: your files are never uploaded anywher
 | **Windows 10 and 11** | [`Cedro-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest) |
 | **Windows on ARM** (Snapdragon X and similar) | [`Cedro-ARM64-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest): native build, faster transcription |
 | **Linux** (Wayland with KDE Plasma or GNOME) | [`cedro-….-linux-x64.tar.gz`](https://github.com/realfulvio/cedro/releases/latest): extract it and run `./install.sh`, no admin rights needed |
-| **Android** | coming soon: our own F-Droid repository, and APKs straight from the releases. Never on Google Play |
+| **Android** | signed APK from the [releases](https://github.com/realfulvio/cedro/releases?q=android-v) and our own F-Droid repository: `https://realfulvio.github.io/cedro/fdroid/repo`. Never on Google Play |
 
 **Windows:** double-click the installer (it installs for your user only, no administrator rights). The first time, Windows may say "Windows protected your PC", because the installer is not yet code-signed: click *More info*, then *Run anyway*. At the end of the setup leave **Launch Cedro** ticked: no window opens, an icon appears next to the clock.
 
@@ -96,30 +99,42 @@ The slices change with the file type. Not sure where to start? Open the **Guide*
 ## More than conversion
 
 <p align="center">
-  <img src="docs/v2/conversioni.png" width="780" alt="The Conversions panel: categories on the left, file queue in the middle, options on the right">
+  <img src="docs/v3/conversioni-en.webp" width="780" alt="The Conversions panel: categories on the left, file queue in the middle, options on the right">
 </p>
 
 **Conversions.** Open the panel from the icon menu: drag in files, even of different types, choose format, tools, quality and destination, and press the button at the bottom. Each category has its own options: photos (size, straighten, white background), documents (page size, embedded fonts, bookmarks, PDF/A-1b validated with veraPDF, password), PDF (OCR, tables, columns, pages like `1-3,5`, resolution), text, audio (kbps, channels, volume, trimming, tags) and video (resolution, fps, no audio, web-optimised). If the output name already exists: add `-2`, replace, skip or ask every time.
 
+### Transcription and summary
+
+<p align="center">
+  <img src="docs/v3/rivedi-en.webp" width="900" alt="The Review screen: a council meeting transcript with coloured speakers and, on the right, the summary">
+</p>
+
+**Transcription.** From audio and video to a Word document, plain text or subtitles, in Italian and locally (whisper.cpp). It picks the right build for your processor and uses the graphics card through Vulkan when there is one. Three accuracy levels, and a progress bar with the time left.
+
+**Who speaks.** It recognises the speakers and colours them; give each voice a name in the "Who's speaking" tab and it applies to the whole document.
+
+**AI summary.** With one click a small Italian-language model (llama.cpp, Qwen3.5-4B) writes the summary and "who said what". It loads only when you ask and then shuts down. Doubtful figures and votes are flagged *to check*.
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/v2/trascrizione.png" alt="Transcription tab: drop audio and video, choose Word or text and the accuracy"></td>
-    <td width="50%"><img src="docs/v2/youtube.png" alt="YouTube tab: paste links, choose video or audio only, quality and subtitles"></td>
+    <td width="50%"><img src="docs/v3/trascrizione-en.webp" alt="Transcription tab with the progress bar and the graphics card in use"></td>
+    <td width="50%"><img src="docs/v3/video-web-en.webp" alt="Web video tab: paste the link, choose video or audio only, quality and subtitles"></td>
   </tr>
   <tr>
-    <td><b>Transcription.</b> From audio and video to a Word document or plain text, locally (whisper.cpp). It picks the right build for your processor, with Vulkan on the graphics card.</td>
-    <td><b>YouTube and Web video.</b> Download video or audio only with quality, subtitles, cover art and chapters; the "Web video" tab also works with any page.</td>
+    <td><b>At work.</b> Progress, time left and which device is working (CPU or GPU).</td>
+    <td><b>YouTube and Web video.</b> Download video or audio only with quality, subtitles, cover art and chapters; it also works with any page.</td>
   </tr>
 </table>
 
 External components such as yt-dlp, deno, ffmpeg and the transcription engine are downloaded on first use and **update themselves**; licences are listed in *About*.
 
-## Five looks, two modes
+## Six looks, two modes
 
 The interface is entirely hand-drawn in Rust, identical on Windows and Linux. In **Settings › Appearance** you choose between layouts (the wheel is always the same) and between **Standard** mode, with every option within reach, and **Simplified**, with just the essentials. The **Comune di Bondeno** theme brings the municipality's colours, typeface and coat of arms.
 
 <p align="center">
-  <img src="docs/v2/temi.png" width="900" alt="Cedro's layouts: Essential Windows, Guided path, Workbench, Document at the centre, Comune di Bondeno and the compact window">
+  <img src="docs/v3/temi-en.webp" width="900" alt="Cedro's layouts: Essential Windows, Guided path, Workbench, Document at the centre, Comune di Bondeno and the compact window">
 </p>
 
 ## Cedro for Android
@@ -127,7 +142,7 @@ The interface is entirely hand-drawn in Rust, identical on Windows and Linux. In
 The same features as the desktop, designed for touch: from the gallery or the file manager tap **Share → Cedro**, pick on the wheel (with the file at the centre) and convert. Jobs are kept in a list with progress, and there are five themes to choose from.
 
 <p align="center">
-  <img src="docs/v2/android.png" width="820" alt="Cedro on Android: the wheel, the Share sheet, jobs and appearance">
+  <img src="docs/v3/android-en.webp" width="820" alt="Cedro on Android: the wheel, the Share sheet, jobs and appearance">
 </p>
 
 The app is a prototype and **does not go through Google Play**: you install it from our F-Droid repository (hosted on GitHub Pages) or as an APK from the releases. All the code is Rust, plus one tiny Java class for system integration.
