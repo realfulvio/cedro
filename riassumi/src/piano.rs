@@ -5,6 +5,12 @@
 //! un modello da 4 miliardi confonde chi ha detto cosa. A pezzi da circa 4000 token (appunti per ogni
 //! pezzo, poi il riassunto dagli appunti) le attribuzioni tornano giuste. Qui c'è solo logica pura,
 //! provata dai test: il modello e i token stanno in `main.rs`.
+//!
+//! La prova del 5 novembre 2026 (stesso PC, Ministral 3 3B, MiniCPM5-2B, Phi-4-mini e Qwen3.5-4B Q5 a confronto)
+//! ha tenuto Qwen3.5-4B Q4 e cambiato le istruzioni: un consiglio comunale dentro una seduta lunga dava
+//! «Decisioni: Nessuna» perché gli appunti si tagliavano prima delle righe DECISIONE. Ora decisioni e
+//! compiti stanno in testa agli appunti, con l'esito dei voti solo se c'è una votazione, e le dichiarazioni
+//! di voto dei gruppi non contano come decisioni (alla Camera le scambiava).
 
 /// Oltre questi token la trascrizione non si legge più in una volta sola.
 pub const SINGLE_MAX: usize = 6000;
@@ -13,8 +19,11 @@ pub const PART_MAX: usize = 4000;
 /// Il contesto del modello: basta per un pezzo o per una lettura sola, con le istruzioni e la risposta.
 pub const CONTEXT: u32 = 8192;
 /// Quanto può scrivere al massimo: gli appunti di un pezzo e il riassunto finale.
-pub const NOTES_TOKENS: usize = 700;
-pub const SUMMARY_TOKENS: usize = 1200;
+/// Prova del 5 novembre 2026: con 700 token gli appunti di una seduta lunga si tagliavano a metà in 5 pezzi
+/// su 6, e le decisioni (scritte in fondo) sparivano. Ora decisioni e compiti vanno in testa e c'è più spazio.
+pub const NOTES_TOKENS: usize = 1000;
+/// Con 20 persone che parlano, 1200 token finivano dentro «Chi ha detto cosa», prima delle decisioni.
+pub const SUMMARY_TOKENS: usize = 1600;
 
 /// Le regole per il riassunto finale: i quattro titoli che Cedro riconosce, sempre gli stessi.
 const SUMMARY_RULES: &str = "Scrivi il riassunto SOLO con quello che c'è nel testo, senza inventare nulla e senza aggiungere commenti. \
@@ -22,11 +31,15 @@ Usa esattamente questi quattro titoli, in quest'ordine:\n\
 ## In breve\n\
 Da 3 a 5 frasi: di cosa si è parlato e come è finita.\n\
 ## Chi ha detto cosa\n\
-Una riga per persona, così: «- Nome: cosa ha detto, chiesto o proposto». Usa i nomi esattamente come sono scritti nel testo \
+Una riga breve per persona, al massimo una frase, così: «- Nome: cosa ha detto, chiesto o proposto di più importante». Usa i nomi esattamente come sono scritti nel testo \
 e attribuisci a ognuno solo quello che ha detto lui.\n\
 ## Decisioni\n\
-Una riga «- …» per ogni decisione presa davvero: scrivi cosa è stato deciso o approvato (con importi e scopo), \
-non l'alternativa che qualcuno avrebbe preferito. Una proposta, un'ipotesi o un'intenzione non è una decisione. \
+Una riga «- …» per ogni decisione presa davvero: cosa è stato deciso, approvato, respinto o rinviato, con importi e scopo. \
+Anche un emendamento respinto o un punto rinviato è una decisione. Se nel testo c'è una votazione, aggiungi com'è finita \
+con le sue parole: «all'unanimità» solo se il testo lo dice, altrimenti «a maggioranza» con favorevoli, contrari e astenuti, \
+se sono detti. Se non c'è stata una votazione, non scrivere niente sui voti. \
+Una dichiarazione di voto, la posizione di un gruppo, una richiesta, un'idea o un'intenzione di qualcuno, \
+senza l'esito di una votazione o un accordo preso, non è una decisione. \
 Se non ce ne sono scrivi solo «- Nessuna».\n\
 ## Da fare\n\
 Una riga «- cosa fare (Nome di chi lo fa)» per ogni compito assegnato o preso. Tra parentesi va la persona che lo farà \
@@ -47,11 +60,14 @@ ogni riga ha l'orario tra parentesi quadre, il nome di chi parla e cosa dice.\n{
 pub fn system_notes() -> String {
     "Sei un segretario preciso che prende appunti in italiano. Riceverai un pezzo della trascrizione di una riunione: \
 ogni riga ha l'orario tra parentesi quadre, il nome di chi parla e cosa dice.\n\
-Scrivi appunti fedeli, SOLO con quello che c'è in questo pezzo:\n\
-- una riga per ogni persona che parla, così: «- Nome: cosa dice», con numeri, date e nomi esatti;\n\
-- poi, se ci sono, righe «DECISIONE: …» per le decisioni prese davvero, con cosa è stato deciso o approvato, importi, scopo \
-e voti; non l'alternativa che qualcuno avrebbe preferito (una proposta o un'intenzione non è una decisione);\n\
-- e righe «DA FARE: cosa fare (Nome di chi lo fa)» per i compiti assegnati: tra parentesi chi lo farà, non chi lo chiede.\n\
+Scrivi appunti brevi e fedeli, SOLO con quello che c'è in questo pezzo, in quest'ordine:\n\
+1. prima, se ci sono, le righe «DECISIONE: …» per le decisioni prese davvero (approvato, respinto o rinviato), con importi \
+e scopo; se nel testo c'è una votazione, aggiungi l'esito: «all'unanimità» solo se il testo lo dice, altrimenti favorevoli, \
+contrari e astenuti con i nomi, se detti (senza votazione non scrivere niente sui voti); se in questo pezzo nessuno annuncia \
+l'esito di una votazione o un accordo preso, scrivi solo «DECISIONE: nessuna»: una dichiarazione di voto, la posizione di un \
+gruppo, una richiesta, una proposta o un'intenzione non sono decisioni;\n\
+2. poi le righe «DA FARE: cosa fare (Nome di chi lo fa)» per i compiti assegnati o presi: tra parentesi chi lo farà, non chi lo chiede;\n\
+3. infine una riga per ogni persona che parla, così: «- Nome: cosa dice», al massimo due frasi, con numeri, date e nomi esatti.\n\
 Usa i nomi esattamente come sono scritti nel testo e attribuisci a ognuno solo quello che ha detto lui. \
 Niente introduzioni né commenti."
         .to_string()
@@ -63,7 +79,7 @@ pub fn system_from_notes() -> String {
         "Sei un segretario preciso che scrive in italiano il riassunto di una riunione. Riceverai gli appunti presi pezzo \
 per pezzo, in ordine di tempo: ogni riga dice chi ha parlato e cosa ha detto, più le decisioni e i compiti trovati.\n\
 In «Chi ha detto cosa» metti ogni persona una volta sola, unendo quello che ha detto in tutti i pezzi. \
-In «Decisioni» riporta TUTTE le righe DECISIONE degli appunti e in «Da fare» TUTTE le righe DA FARE, \
+In «Decisioni» riporta TUTTE le righe DECISIONE degli appunti (tranne «nessuna») e in «Da fare» TUTTE le righe DA FARE, \
 con lo stesso nome tra parentesi: non saltarne nessuna.\n{SUMMARY_RULES}"
     )
 }
@@ -71,8 +87,8 @@ con lo stesso nome tra parentesi: non saltarne nessuna.\n{SUMMARY_RULES}"
 /// Le istruzioni per stringere gli appunti, quando una riunione lunghissima ne dà troppi per una lettura sola.
 pub fn system_merge() -> String {
     "Sei un segretario preciso. Riceverai gli appunti di una parte di una riunione, presi pezzo per pezzo e in ordine di tempo. \
-Riscrivili più corti nello stesso formato: righe «- Nome: cosa dice» (una per persona, unendo quello che ha detto), \
-righe «DECISIONE: …» e righe «DA FARE: cosa fare (Nome)». Tieni tutte le decisioni, tutti i compiti, i numeri, le date \
+Riscrivili più corti nello stesso formato e in quest'ordine: prima le righe «DECISIONE: …», poi le righe \
+«DA FARE: cosa fare (Nome)», infine le righe «- Nome: cosa dice» (una per persona, unendo quello che ha detto). Tieni tutte le decisioni, tutti i compiti, i numeri, le date \
 e i nomi esatti; togli solo le ripetizioni. Non inventare nulla. Niente introduzioni né commenti."
         .to_string()
 }
@@ -189,6 +205,27 @@ mod tests {
         assert!(user_transcript(&[], Some((1, 3))).starts_with("Pezzo 2 di 3"));
         assert!(user_notes(&["- Sindaco: apre.".into()]).contains("### Pezzo 1\n- Sindaco: apre."));
         assert!(system_merge().contains("DA FARE"));
+    }
+
+    #[test]
+    fn votes_and_order_survive_long_meetings() {
+        // Decisioni e compiti in testa agli appunti: se il modello arriva al limite, si perde una persona, non un voto.
+        let notes = system_notes();
+        let (d, f, p) = (notes.find("«DECISIONE").unwrap(), notes.find("«DA FARE").unwrap(), notes.find("«- Nome: cosa dice»").unwrap());
+        assert!(d < f && f < p);
+        assert!(notes.contains("scrivi solo «DECISIONE: nessuna»"));
+        assert!(system_from_notes().contains("(tranne «nessuna»)"));
+        let merge = system_merge();
+        assert!(merge.find("«DECISIONE").unwrap() < merge.find("«- Nome: cosa dice»").unwrap());
+        for s in [system_single(), system_from_notes()] {
+            assert!(s.contains("respinto o rinviato") && s.contains("«all'unanimità» solo se il testo lo dice"));
+            // Senza votazione niente voti: una prima versione inventava «a maggioranza» per un accordo tra uffici.
+            assert!(s.contains("non scrivere niente sui voti"));
+            // Alla Camera le dichiarazioni di voto dei gruppi diventavano «decisioni».
+            assert!(s.contains("Una dichiarazione di voto, la posizione di un gruppo"));
+            assert!(s.contains("al massimo una frase"));
+        }
+        assert!(NOTES_TOKENS < CONTEXT as usize / 4 && SUMMARY_TOKENS < CONTEXT as usize / 4);
     }
 
     #[test]
