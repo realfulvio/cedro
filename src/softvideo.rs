@@ -4,14 +4,11 @@ use std::path::Path;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::Mutex;
 
-use symphonia::core::audio::{Layout, SampleBuffer};
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL, CODEC_TYPE_OPUS};
+use symphonia::core::codecs::audio::AudioCodecParameters;
+use symphonia::core::codecs::CodecParameters;
 use symphonia::core::errors::Error as SymError;
-use symphonia::core::formats::{FormatOptions, FormatReader};
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
-use symphonia::core::units::TimeBase;
+use symphonia::core::formats::FormatReader;
+use symphonia::core::packet::Packet;
 
 use oxideav_vp8::state::Vp8DecoderState;
 use oxideav_vp9::{split_superframe, Vp9SequenceDecoder};
@@ -37,7 +34,7 @@ struct AudioIn {
     id: u32,
     rate: u32,
     channels: u16,
-    params: symphonia::core::codecs::CodecParameters,
+    params: AudioCodecParameters,
 }
 
 enum VideoDec {
@@ -171,7 +168,7 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
     };
     // Opus (WebM dei browser, vocali): symphonia dà i pacchetti, libopus li decodifica.
     let mut opus = match opened.audio.as_ref() {
-        Some(audio) if audio.params.codec == CODEC_TYPE_OPUS => {
+        Some(audio) if audio.params.codec == crate::symph::CODEC_ID_OPUS => {
             match crate::audio::OpusStream::new(audio.params.extra_data.as_deref().unwrap_or_default()) {
                 Ok(opus) => Some(opus),
                 Err(err) => {
@@ -184,7 +181,7 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
     };
     let mut audio_dec = match opened.audio.as_ref() {
         Some(_) if opus.is_some() => None,
-        Some(audio) => match symphonia::default::get_codecs().make(&audio.params, &DecoderOptions::default()) {
+        Some(audio) => match crate::symph::decoder(&audio.params) {
             Ok(dec) => Some(dec),
             Err(err) => {
                 fail(format!("audio non decodificato: {err}"));
@@ -196,7 +193,7 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
     let audio_id = opened.audio.as_ref().map(|audio| audio.id);
     let mut audio_packets = 0u32;
     let mut audio_samples = 0usize;
-    let mut buf: Option<(symphonia::core::audio::SignalSpec, SampleBuffer<i16>)> = None;
+    let mut buf: Vec<i16> = Vec::new();
     let (jobs, queue) = sync_channel::<Gop>(workers);
     let queue = Mutex::new(queue);
     std::thread::scope(|scope| {
@@ -229,7 +226,8 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
         };
         loop {
             let packet = match opened.format.next_packet() {
-                Ok(packet) => packet,
+                Ok(Some(packet)) => packet,
+                Ok(None) => break,
                 Err(SymError::ResetRequired) => {
                     if let Some(dec) = audio_dec.as_mut() {
                         dec.reset();
@@ -238,17 +236,17 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
                 }
                 Err(_) => break,
             };
-            if packet.track_id() == opened.video_id {
-                let time = ticks(packet.ts(), opened.numer, opened.denom);
-                let duration = ticks(packet.dur(), opened.numer, opened.denom);
-                let key = is_keyframe(&codec, packet.buf());
-                if !put(&mut current, Entry::Video { bytes: packet.buf().to_vec(), time, duration }, key) {
+            if packet.track_id == opened.video_id {
+                let time = ticks(pts(&packet), opened.numer, opened.denom);
+                let duration = ticks(packet.dur.get(), opened.numer, opened.denom);
+                let key = is_keyframe(&codec, &packet.data);
+                if !put(&mut current, Entry::Video { bytes: packet.data.to_vec(), time, duration }, key) {
                     break;
                 }
-            } else if audio_id == Some(packet.track_id()) {
+            } else if audio_id == Some(packet.track_id) {
                 audio_packets += 1;
                 if let Some(opus) = opus.as_mut() {
-                    let samples = opus.decode(packet.buf());
+                    let samples = opus.decode(&packet.data);
                     if samples.is_empty() {
                         continue;
                     }
@@ -275,20 +273,14 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
                         break;
                     }
                 };
-                let spec = *decoded.spec();
-                // Il buffer si riusa finché basta e il formato non cambia.
-                let reuse = matches!(&buf, Some((kept, b)) if *kept == spec && b.capacity() >= decoded.capacity() * spec.channels.count());
-                if !reuse {
-                    buf = Some((spec, SampleBuffer::<i16>::new(decoded.capacity() as u64, spec)));
-                }
-                let (_, buf) = buf.as_mut().expect("buffer");
-                buf.copy_interleaved_ref(decoded);
-                let samples = buf.samples();
-                if samples.is_empty() {
+                let (rate, channels) = crate::symph::rate_channels(&decoded);
+                // Il buffer si riusa da un pacchetto all'altro.
+                crate::symph::interleaved_i16(&decoded, &mut buf);
+                if buf.is_empty() {
                     continue;
                 }
-                audio_samples += samples.len();
-                let item = Item::Audio { samples: samples.to_vec(), channels: spec.channels.count() as u16, rate: spec.rate };
+                audio_samples += buf.len();
+                let item = Item::Audio { samples: buf.clone(), channels, rate };
                 if !put(&mut current, Entry::Audio(item), false) {
                     break;
                 }
@@ -378,23 +370,23 @@ fn first_frame(input: &Path, codec: &Codec) -> Result<Geometry, String> {
     let mut video = decoder(codec);
     loop {
         let packet = match opened.format.next_packet() {
-            Ok(packet) => packet,
-            Err(_) => break,
+            Ok(Some(packet)) => packet,
+            _ => break,
         };
-        if packet.track_id() != opened.video_id {
+        if packet.track_id != opened.video_id {
             continue;
         }
-        let mut duration = ticks(packet.dur(), opened.numer, opened.denom);
-        if let Some(frame) = shown_frames(&mut video, packet.buf())?.into_iter().next() {
+        let mut duration = ticks(packet.dur.get(), opened.numer, opened.denom);
+        if let Some(frame) = shown_frames(&mut video, &packet.data)?.into_iter().next() {
             if frame.width < 2 || frame.height < 2 {
                 return Err("il video non ha una dimensione".into());
             }
             // Senza durata nel blocco: la distanza dal pacchetto video dopo.
             if duration <= 0 {
-                let time = ticks(packet.ts(), opened.numer, opened.denom);
-                while let Ok(next) = opened.format.next_packet() {
-                    if next.track_id() == opened.video_id {
-                        duration = (ticks(next.ts(), opened.numer, opened.denom) - time).max(0);
+                let time = ticks(pts(&packet), opened.numer, opened.denom);
+                while let Ok(Some(next)) = opened.format.next_packet() {
+                    if next.track_id == opened.video_id {
+                        duration = (ticks(pts(&next), opened.numer, opened.denom) - time).max(0);
                         break;
                     }
                 }
@@ -418,63 +410,41 @@ struct Opened {
 }
 
 fn open_media(path: &Path) -> Result<Opened, String> {
-    let file = File::open(path).map_err(|err| err.to_string())?;
-    let source = MediaSourceStream::new(Box::new(file), Default::default());
-    let mut hint = Hint::new();
-    if let Some(ext) = path.extension().and_then(|ext| ext.to_str()) {
-        hint.with_extension(ext);
-    }
-    let probed = symphonia::default::get_probe()
-        .format(&hint, source, &FormatOptions::default(), &MetadataOptions::default())
-        .map_err(|err| format!("WebM non letto: {err}"))?;
-    let format = probed.format;
+    let format = crate::symph::open(path).map_err(|err| format!("WebM non letto: {err}"))?;
+    // Il video: la traccia video (VP8/VP9), o quella che symphonia non sa leggere.
     let video = format
         .tracks()
         .iter()
-        .find(|track| track.codec_params.codec == CODEC_TYPE_NULL)
+        .find(|track| matches!(track.codec_params, Some(CodecParameters::Video(_)) | None))
         .ok_or("il WebM non ha un video")?;
     let video_id = video.id;
-    let time_base = video
-        .codec_params
-        .time_base
-        .unwrap_or_else(|| TimeBase::new(1_000_000, 1_000_000_000));
+    let (numer, denom) = video.time_base.map_or((1_000_000, 1_000_000_000), |tb| (tb.numer.get(), tb.denom.get()));
     let audio = format.tracks().iter().find_map(|track| {
-        if track.id == video_id || track.codec_params.codec == CODEC_TYPE_NULL {
+        if track.id == video_id {
             return None;
         }
-        let opus = track.codec_params.codec == CODEC_TYPE_OPUS;
-        if !opus
-            && symphonia::default::get_codecs()
-                .make(&track.codec_params, &DecoderOptions::default())
-                .is_err()
-        {
+        let params = crate::symph::audio_params(track)?;
+        let opus = params.codec == crate::symph::CODEC_ID_OPUS;
+        if !opus && crate::symph::decoder(params).is_err() {
             return None;
         }
         Some(AudioIn {
             id: track.id,
-            rate: if opus { 48_000 } else { track.codec_params.sample_rate.unwrap_or(44100) },
-            channels: channel_count(&track.codec_params),
-            params: track.codec_params.clone(),
+            rate: if opus { 48_000 } else { params.sample_rate.unwrap_or(44100) },
+            channels: channel_count(params),
+            params: params.clone(),
         })
     });
-    Ok(Opened {
-        format,
-        video_id,
-        numer: time_base.numer,
-        denom: time_base.denom,
-        audio,
-    })
+    Ok(Opened { format, video_id, numer, denom, audio })
 }
 
-fn channel_count(params: &symphonia::core::codecs::CodecParameters) -> u16 {
-    if let Some(channels) = params.channels {
-        return channels.count().max(1) as u16;
-    }
-    match params.channel_layout {
-        Some(Layout::Mono) => 1,
-        Some(_) => 2,
-        None => 1,
-    }
+fn channel_count(params: &AudioCodecParameters) -> u16 {
+    params.channels.as_ref().map_or(1, |channels| channels.count().max(1) as u16)
+}
+
+/// Il tempo di un pacchetto in unità della traccia (mai negativo).
+fn pts(packet: &Packet) -> u64 {
+    packet.pts.get().max(0) as u64
 }
 
 fn decoder(codec: &Codec) -> VideoDec {
@@ -659,17 +629,17 @@ pub(crate) fn peek(input: &Path, at: &[f64]) -> Result<Peek, String> {
         let target = (t.max(0.0) * 10_000_000.0) as i64;
         let jumped = opened
             .format
-            .seek(SeekMode::Coarse, SeekTo::Time { time: Time::from(t.max(0.0)), track_id: Some(opened.video_id) })
+            .seek(SeekMode::Coarse, SeekTo::Time { time: Time::try_from_secs_f64(t.max(0.0)).unwrap_or_default(), track_id: Some(opened.video_id) })
             .is_ok();
         let mut video = decoder(&codec);
         for _ in 0..600 {
-            let Ok(packet) = opened.format.next_packet() else { break };
-            if packet.track_id() != opened.video_id {
+            let Ok(Some(packet)) = opened.format.next_packet() else { break };
+            if packet.track_id != opened.video_id {
                 continue;
             }
-            let time = ticks(packet.ts(), opened.numer, opened.denom);
+            let time = ticks(pts(&packet), opened.numer, opened.denom);
             // Senza salto si decodifica tutto, ma si tiene solo il fotogramma del punto chiesto.
-            let Ok(frames) = shown_frames(&mut video, packet.buf()) else { continue };
+            let Ok(frames) = shown_frames(&mut video, &packet.data) else { continue };
             let Some(frame) = frames.into_iter().next() else { continue };
             if !jumped && time + 5_000_000 < target {
                 continue;
@@ -718,16 +688,16 @@ pub(crate) fn play(input: &Path, from: f64, mut tap: impl FnMut(&[u8], &[u8], &[
     let codec = codec_of(input)?;
     let mut opened = open_media(input)?;
     if from > 0.0 {
-        let _ = opened.format.seek(SeekMode::Coarse, SeekTo::Time { time: Time::from(from), track_id: Some(opened.video_id) });
+        let _ = opened.format.seek(SeekMode::Coarse, SeekTo::Time { time: Time::try_from_secs_f64(from).unwrap_or_default(), track_id: Some(opened.video_id) });
     }
     let mut video = decoder(&codec);
     loop {
-        let Ok(packet) = opened.format.next_packet() else { break };
-        if packet.track_id() != opened.video_id {
+        let Ok(Some(packet)) = opened.format.next_packet() else { break };
+        if packet.track_id != opened.video_id {
             continue;
         }
-        let time = ticks(packet.ts(), opened.numer, opened.denom);
-        let Ok(frames) = shown_frames(&mut video, packet.buf()) else { continue };
+        let time = ticks(pts(&packet), opened.numer, opened.denom);
+        let Ok(frames) = shown_frames(&mut video, &packet.data) else { continue };
         for frame in frames {
             if !tap(&frame.y, &frame.u, &frame.v, frame.width, frame.height, time) {
                 return Ok(());
