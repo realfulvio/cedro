@@ -12,9 +12,8 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Componenti aggiornati.** Cedro legge audio, video e PDF con le versioni nuove delle sue librerie (symphonia 0.6, hayro 0.9, lopdf 0.47, cfb 0.16, zip 9.3).
+**Cedro nella tray pesa meno.** Quando chiudi l'ultima finestra (Conversioni, Impostazioni, Guida), Cedro restituisce a Windows la memoria che gli serviva per disegnarla.
 
-- MP3 e OGG convertiti hanno la durata esatta: non ci sono più i campioni di silenzio che l'encoder aggiunge all'inizio e alla fine.
-- Titolo e artista degli AIFF si leggono e passano nel file convertito; quelli dei WAV non hanno più un carattere in più in fondo.
-- Le pagine dei PDF in immagini vengono un po' più nitide e più leggere.
-- Riassunto AI: in «Chi ha detto cosa» una riga senza nome non comincia più con «: ».
+- Nel Task Manager Cedro fermo nella tray scende da circa 50 MB a circa 1 MB; la memoria privata da 16 a 11-12 MB.
+- I caratteri di Windows (Segoe UI, Georgia, Consolas) si leggono direttamente dal file invece di copiarli in memoria.
+- Nessun controllo a intervalli: la pulizia parte solo quando si chiude una finestra e mai durante una conversione.
