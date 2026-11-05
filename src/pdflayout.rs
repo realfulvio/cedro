@@ -248,7 +248,7 @@ impl<'a> Device<'a> for Collector {
             let stretch = if (95..=105).contains(&stretch) { 100 } else { stretch };
             let (mut font, mut bold, mut italic, mut adv, mut font_key) = (String::new(), false, false, 0.0, None);
             if let hayro::hayro_interpret::font::Glyph::Outline(o) = &**glyph {
-                font_key = Some(o.font_cache_key());
+                font_key = Some(font_key_of(o));
                 adv = o.advance_width().map_or(0.0, |w| w as f64) * a.abs();
                 if let Some(data) = o.font_data() {
                     font = data.postscript_name.unwrap_or_default();
@@ -256,7 +256,7 @@ impl<'a> Device<'a> for Collector {
                     italic = data.is_italic;
                 } else if let Some(ch) = text.chars().next().filter(|c| c.is_alphabetic()) {
                     // Font Type1 senza nome: il grassetto si vede dallo spessore dei tratti.
-                    let key = o.font_cache_key();
+                    let key = font_key_of(o);
                     if self.seen.insert((key, ch)) {
                         let outline = o.outline();
                         let (area, perimeter) = (outline.area().abs(), outline.perimeter(0.5));
@@ -3487,4 +3487,30 @@ mod tests {
         assert_eq!((t.rows[2][0].text.as_str(), t.rows[2][2].text.as_str()), ("Pulizie", ""));
         assert!(t.header);
     }
+}
+
+/// La chiave del font di un glifo. Da hayro 0.9 l'identificatore pubblico è per glifo (programma del font
+/// + numero del glifo): il suo Hash scrive per primo l'impronta del programma del font, e questa basta
+/// per riconoscere il font, anche i Type1 senza nome.
+fn font_key_of(glyph: &hayro::hayro_interpret::font::OutlineGlyph) -> u128 {
+    use std::hash::{Hash, Hasher};
+    #[derive(Default)]
+    struct First(Option<u128>, std::collections::hash_map::DefaultHasher);
+    impl Hasher for First {
+        fn write(&mut self, bytes: &[u8]) {
+            self.1.write(bytes);
+        }
+        fn write_u128(&mut self, v: u128) {
+            if self.0.is_none() {
+                self.0 = Some(v);
+            }
+            self.1.write_u128(v);
+        }
+        fn finish(&self) -> u64 {
+            self.1.finish()
+        }
+    }
+    let mut h = First::default();
+    glyph.identifier().hash(&mut h);
+    h.0.unwrap_or_else(|| h.1.finish() as u128)
 }

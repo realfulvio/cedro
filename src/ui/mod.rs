@@ -14,9 +14,11 @@ pub mod pdfwork;
 pub mod player;
 pub mod preview;
 pub mod review;
+pub mod summary;
 pub mod model;
 pub mod core;
 pub mod screen;
+pub mod sezioni;
 pub mod views;
 pub mod wheel;
 

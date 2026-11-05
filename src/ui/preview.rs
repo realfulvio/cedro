@@ -349,35 +349,22 @@ struct Probe {
 }
 
 fn probe(path: &Path) -> Option<Probe> {
-    use symphonia::core::codecs::CODEC_TYPE_NULL;
-    use symphonia::core::formats::FormatOptions;
-    use symphonia::core::io::MediaSourceStream;
-    use symphonia::core::meta::MetadataOptions;
-    use symphonia::core::probe::Hint;
     let file = std::fs::File::open(path).ok()?;
-    let mss = MediaSourceStream::new(Box::new(file), Default::default());
-    let mut hint = Hint::new();
+    let mss = symphonia::core::io::MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = symphonia::core::formats::probe::Hint::new();
     hint.with_extension(&engine::extension(path));
-    let probed = symphonia::default::get_probe().format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default()).ok()?;
-    let mut duration: Option<f64> = None;
+    let format = crate::symph::open_source(mss, &hint).ok()?;
+    let duration = crate::symph::media_secs(format.as_ref());
     let mut audio = None;
-    for t in probed.format.tracks() {
-        let p = &t.codec_params;
-        if let (Some(n), Some(tb)) = (p.n_frames, p.time_base) {
-            let time = tb.calc_time(n);
-            let secs = time.seconds as f64 + time.frac;
-            if secs > 0.0 {
-                duration = Some(duration.map_or(secs, |d| d.max(secs)));
-            }
-        }
-        if p.codec != CODEC_TYPE_NULL && audio.is_none() {
-            let name = symphonia::default::get_codecs().get_codec(p.codec).map(|d| d.short_name.to_uppercase()).unwrap_or_default();
+    for t in format.tracks() {
+        if let (Some(p), None) = (crate::symph::audio_params(t), &audio) {
+            let name = crate::symph::codec_name(p).unwrap_or_default().to_uppercase();
             let name = match name.as_str() {
                 n if n.starts_with("PCM") => "PCM".to_string(),
                 "VORBIS" => "Vorbis".to_string(),
                 _ => name,
             };
-            audio = Some((name, p.channels.map(|c| c.count()), p.sample_rate));
+            audio = Some((name, p.channels.as_ref().map(|c| c.count()), p.sample_rate));
         }
     }
     Some(Probe { duration, audio })

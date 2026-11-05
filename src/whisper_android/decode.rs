@@ -5,13 +5,14 @@
 use std::fs::File;
 use std::path::Path;
 
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL, CODEC_TYPE_OPUS};
+use symphonia::core::codecs::audio::well_known::CODEC_ID_OPUS;
+use symphonia::core::codecs::audio::AudioDecoderOptions;
+use symphonia::core::codecs::CodecParameters;
 use symphonia::core::errors::Error as SymError;
+use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
 
 use super::Failure;
 
@@ -29,35 +30,37 @@ fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), Failure> {
     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
         hint.with_extension(&ext.to_lowercase());
     }
-    let probed = symphonia::default::get_probe()
-        .format(&hint, stream, &FormatOptions::default(), &MetadataOptions::default())
+    let mut format = symphonia::default::get_probe()
+        .probe(&hint, stream, FormatOptions::default(), MetadataOptions::default())
         .map_err(|e| Failure::Unsupported(format!("formato non riconosciuto ({e})")))?;
-    let mut format = probed.format;
     // In un video la prima traccia è spesso l'immagine: si prende la prima che ha un audio.
-    let track = format
+    let (track, params) = format
         .tracks()
         .iter()
-        .find(|t| t.codec_params.codec != CODEC_TYPE_NULL && t.codec_params.sample_rate.is_some())
-        .ok_or_else(|| Failure::Unsupported("nel file non c'è una traccia audio".into()))?
-        .clone();
-    if track.codec_params.codec == CODEC_TYPE_OPUS {
-        let head = track.codec_params.extra_data.clone().unwrap_or_default();
-        return opus_mono(format.as_mut(), track.id, track.codec_params.delay.unwrap_or(0) as usize, &head);
+        .find_map(|t| match &t.codec_params {
+            Some(CodecParameters::Audio(p)) if p.sample_rate.is_some() => Some((t.clone(), p.clone())),
+            _ => None,
+        })
+        .ok_or_else(|| Failure::Unsupported("nel file non c'è una traccia audio".into()))?;
+    if params.codec == CODEC_ID_OPUS {
+        let head = params.extra_data.clone().unwrap_or_default().into_vec();
+        return opus_mono(format.as_mut(), track.id, track.delay.unwrap_or(0) as usize, &head);
     }
-    let rate = track.codec_params.sample_rate.unwrap_or(RATE);
+    let rate = params.sample_rate.unwrap_or(RATE);
     let mut decoder = symphonia::default::get_codecs()
-        .make(&track.codec_params, &DecoderOptions::default())
+        .make_audio_decoder(&params, &AudioDecoderOptions::default())
         .map_err(|e| Failure::Unsupported(format!("codifica audio non supportata ({e})")))?;
     let mut mono = Vec::new();
-    let mut buffer: Option<SampleBuffer<f32>> = None;
+    let mut buf: Vec<f32> = Vec::new();
     loop {
         let packet = match format.next_packet() {
-            Ok(p) => p,
+            Ok(Some(p)) => p,
+            Ok(None) => break,
             Err(SymError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(SymError::ResetRequired) => break,
             Err(e) => return Err(Failure::Other(format!("lettura interrotta: {e}"))),
         };
-        if packet.track_id() != track.id {
+        if packet.track_id != track.id {
             continue;
         }
         let decoded = match decoder.decode(&packet) {
@@ -66,14 +69,10 @@ fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), Failure> {
             Err(SymError::DecodeError(_)) => continue,
             Err(e) => return Err(Failure::Other(format!("decodifica interrotta: {e}"))),
         };
-        let spec = *decoded.spec();
-        let channels = spec.channels.count().max(1);
-        let buf = buffer.get_or_insert_with(|| SampleBuffer::new(decoded.capacity() as u64, spec));
-        if buf.capacity() < decoded.capacity() * channels {
-            *buf = SampleBuffer::new(decoded.capacity() as u64, spec);
-        }
-        buf.copy_interleaved_ref(decoded);
-        mono.extend(buf.samples().chunks_exact(channels).map(|f| f.iter().sum::<f32>() / channels as f32));
+        let rate = decoded.spec().rate();
+        let channels = decoded.spec().channels().count().max(1);
+        decoded.copy_to_vec_interleaved(&mut buf);
+        mono.extend(buf.chunks_exact(channels).map(|f| f.iter().sum::<f32>() / channels as f32));
     }
     Ok((mono, rate))
 }
@@ -96,7 +95,8 @@ fn opus_mono(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32, 
     let mut pcm = vec![0f32; 5760 * channels as usize];
     loop {
         let packet = match f.next_packet() {
-            Ok(p) => p,
+            Ok(Some(p)) => p,
+            Ok(None) => break,
             Err(SymError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(SymError::ResetRequired) => break,
             Err(e) => {
@@ -104,10 +104,10 @@ fn opus_mono(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32, 
                 return Err(Failure::Other(format!("lettura interrotta: {e}")));
             }
         };
-        if packet.track_id() != track_id {
+        if packet.track_id != track_id {
             continue;
         }
-        let data = packet.buf();
+        let data = &packet.data[..];
         let n = unsafe { sys::opus_decode_float(dec, data.as_ptr(), data.len() as i32, pcm.as_mut_ptr(), 5760, 0) };
         if n <= 0 {
             continue; // un pacchetto rovinato si salta

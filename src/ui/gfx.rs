@@ -590,6 +590,23 @@ impl<'a> Painter<'a> {
         }
     }
 
+    /// Riquadro arrotondato con una sfumatura verticale (da `top` in alto a `bottom` in basso).
+    pub fn rrect_vgrad(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, top: Rgb, bottom: Rgb) {
+        let stops = vec![
+            tiny_skia::GradientStop::new(0.0, tiny_skia::Color::from_rgba8(top.0, top.1, top.2, 255)),
+            tiny_skia::GradientStop::new(1.0, tiny_skia::Color::from_rgba8(bottom.0, bottom.1, bottom.2, 255)),
+        ];
+        let Some(shader) = tiny_skia::LinearGradient::new(tiny_skia::Point::from_xy(0.0, y), tiny_skia::Point::from_xy(0.0, y + h), stops, tiny_skia::SpreadMode::Pad, Transform::identity()) else {
+            return self.rrect_a(x, y, w, h, r, bottom, 1.0);
+        };
+        if let Some(p) = rrect_path(x, y, w, h, r) {
+            let paint = Paint { shader, anti_alias: true, ..Default::default() };
+            let tf = self.tf();
+            let m = self.clips.last().map(|(_, m)| m);
+            self.pixmap.fill_path(&p, &paint, FillRule::Winding, tf, m);
+        }
+    }
+
     /// Solo il bordo; con `dash` tratteggiato (lunghezza tratto, spazio).
     pub fn rrect_line(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, c: Rgb, lw: f32, a: f32, dash: Option<(f32, f32)>) {
         let half = lw / 2.0;
@@ -872,6 +889,12 @@ impl<'a> Painter<'a> {
             self.text_at(line, x, y + asc + (line_h - self.ts(size) * 1.2) / 2.0 + i as f32 * line_h, size, weight, c);
         }
         lines.len() as f32 * line_h
+    }
+
+    /// L'altezza che avrà `text_wrap` con gli stessi valori (anche con i caratteri grandi), per disegnare
+    /// il riquadro prima del testo.
+    pub fn wrap_height(&self, s: &str, size: f32, weight: Weight, w: f32, line_h: f32, max_lines: usize) -> f32 {
+        self.wrap_lines(s, size, weight, w, max_lines).len() as f32 * line_h * self.ts(size) / size
     }
 
     /// Le righe in cui va a capo un testo (`\n` forza l'a capo).

@@ -88,16 +88,17 @@ impl Aspetto {
         let gap = 12.0;
         let bw = (w - gap) / 2.0;
         for (i, (simple, name, text)) in [(false, "Standard", "Tutte le opzioni a portata di mano."), (true, "Semplificata", "Solo l'essenziale; il resto in «Altre opzioni».")].into_iter().enumerate() {
-            let r = (i as f32 * (bw + gap), y, bw, 76.0);
+            // Due righe di descrizione coi caratteri ingranditi (+2): il riquadro le contiene con margine.
+            let r = (i as f32 * (bw + gap), y, bw, 86.0);
             let on = self.simple == simple;
             let hot = self.hover == Some(Hit::Mode(simple));
             self.choice(p, r, on, hot);
             p.text(name, r.0 + 40.0, r.1 + 11.0, r.2 - 52.0, 20.0, 14.0, Weight::Bold, t.fg, Align::Left);
-            p.text_wrap(text, r.0 + 40.0, r.1 + 34.0, r.2 - 52.0, 12.0, Weight::Regular, t.mute, 16.0, 2);
+            p.text_wrap(text, r.0 + 40.0, r.1 + 34.0, r.2 - 52.0, 12.0, Weight::Regular, t.mute, 18.0, 2);
             radio(p, r.0 + 20.0, r.1 + 22.0, on, t);
             self.zones.push((r, Hit::Mode(simple)));
         }
-        y += 76.0 + 22.0;
+        y += 86.0 + 22.0;
 
         // Temi
         p.text("Tema", 0.0, y, w, 20.0, 14.0, Weight::Bold, t.fg, Align::Left);
@@ -152,8 +153,10 @@ impl Aspetto {
     fn choice(&self, p: &mut Painter, r: R, on: bool, hot: bool) {
         let t = self.tema;
         let rad = (t.radius as f32).max(4.0);
+        // Schede sollevate come i riquadri dei temi: quella scelta ha l'ombra più marcata e il bordo del colore.
         let fill = if hot && !on { t.surf } else { t.bg };
-        p.rrect(r.0, r.1, r.2, r.3, rad, Some(fill), Some(if on { (t.acc, 2.0) } else { (t.line, 1.0) }));
+        p.shadow(r.0, r.1, r.2, r.3, rad, if on { 10.0 } else { 7.0 }, if on { 0.14 } else { 0.07 }, 2.0);
+        p.rrect(r.0, r.1, r.2, r.3, rad, Some(fill), Some(if on { (t.acc, 2.0) } else { (super::theme::mix(t.line, t.bg, 0.2), 1.0) }));
     }
 
     fn thumb(&self, p: &mut Painter, r: R, theme: ThemeId) {

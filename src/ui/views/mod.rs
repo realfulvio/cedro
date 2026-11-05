@@ -11,6 +11,7 @@ mod essenziale;
 mod guidato;
 mod pagine;
 mod revisione;
+mod riassunto;
 
 pub use activity::{links_page, transcribe_page};
 pub use pagine::{merged_pages, page_drop, split_file, BOARD_MAX, MERGE as ICON_MERGE, MERGED_MAX, SCISSORS as ICON_SCISSORS, SHRINK as ICON_SHRINK, STRIP_MAX};
@@ -23,6 +24,7 @@ use super::screen::Surface;
 use super::theme::{mix, ThemeId};
 use crate::conversioni::{self, Control, OptionDef};
 use crate::engine::{ExistsChoice, Kind};
+use crate::trascrizione;
 
 /// Quanto è grande la finestra appena aperta, in unità di disegno.
 pub fn preferred_size(theme: ThemeId, simple: bool, surface: Surface) -> (f32, f32) {
@@ -88,6 +90,103 @@ pub fn overlays(f: &mut Frame, app: &App) {
         f.button((x + 40.0 + bw, by, bw, 48.0), "Tieni entrambi", None, 17.0, Act::Answer(ExistsChoice::KeepBoth));
         f.primary((x + 52.0 + 2.0 * bw, by, bw, 48.0), "Sostituisci", None, 17.0, Act::Answer(ExistsChoice::Replace), true);
     }
+    if app.transcribe.asking {
+        voices_dialog(f, app);
+    }
+}
+
+/// Il consiglio sotto i numeri della finestrella «Quante persone parlano?».
+pub fn voices_hint(n: u8) -> String {
+    match n {
+        0 => "Va bene quasi sempre. Se poi Cedro divide una persona in due, in Rivedi le unisci con un clic.".into(),
+        1 => "Una sola voce: Cedro salta il riconoscimento delle voci. Veloce come oggi, senza nomi nel testo.".into(),
+        2 => "Due voci, per esempio un'intervista o una telefonata.".into(),
+        3 => "Tre voci: Cedro le raggruppa esattamente in tre.".into(),
+        n => format!("{n} voci: Cedro le raggruppa esattamente in {n}. Con tante voci conviene un audio pulito."),
+    }
+}
+
+/// «Quante persone parlano?»: si apre su «Trascrivi», come la finestra «Il file esiste già».
+fn voices_dialog(f: &mut Frame, app: &App) {
+    let pal = f.pal;
+    let sel = app.transcribe.speakers;
+    f.p.fill_a(0.0, 0.0, f.w, f.h, (0, 0, 0), 0.35);
+    f.hit((0.0, 0.0, f.w, f.h), Act::Nothing);
+    let w = 640.0f32.min(f.w - 32.0);
+    let pad = if w < 520.0 { 20.0 } else { 30.0 };
+    let cw = w - 2.0 * pad;
+    let lines = |f: &Frame, s: &str, size: f32, width: f32| (f.measure(s, size, SANS) / width.max(1.0)).ceil().clamp(1.0, 4.0);
+    let intro = "Cedro riconosce le voci e scrive chi parla prima di ogni frase. Se non lo sai, lascia Automatico: le conta da solo.";
+    let head_h = 32.0 + 6.0 + lines(f, intro, 16.0, cw - 50.0) * 16.0 * 1.45;
+    let hint = voices_hint(sel);
+    let hint_h = (lines(f, &hint, 14.5, cw - 52.0) * 14.5 * 1.4 + 20.0).max(44.0);
+    let (auto_h, nums_h, foot_h, gap) = (64.0, 58.0, 48.0, 18.0);
+    let h = 28.0 + head_h + gap + auto_h + gap + 16.0 + 10.0 + nums_h + gap + hint_h + gap + foot_h + 26.0;
+    let (x, y) = ((f.w - w) / 2.0, ((f.h - h) / 2.0).max(8.0));
+    f.p.shadow(x, y, w, h, 12.0, 18.0, 0.35, 8.0);
+    f.card((x, y, w, h), 12.0);
+    let cx = x + pad;
+    let mut cy = y + 28.0;
+    // Intestazione.
+    f.icon(ic::PEOPLE, cx, cy + 2.0, 34.0, pal.primary);
+    f.text("Quante persone parlano?", cx + 50.0, cy, cw - 50.0, 30.0, 24.0, SEMI, pal.text);
+    f.para(intro, cx + 50.0, cy + 38.0, cw - 50.0, 16.0, SANS, pal.muted, 1.45, 4);
+    cy += head_h + gap;
+    // Automatico.
+    let ar = (cx, cy, cw, auto_h);
+    let act = Act::VoicesPick(0);
+    let on = sel == 0;
+    let tint = mix(pal.primary, pal.surface, if f.theme.dark() { 0.82 } else { 0.92 });
+    let bg = if on { tint } else if f.hovered(&act) { pal.alt } else { pal.surface };
+    f.p.rrect(ar.0, ar.1, ar.2, ar.3, 10.0, Some(bg), Some((if on { pal.primary } else { pal.border }, 1.5)));
+    let (rx, ry) = (ar.0 + 27.0, ar.1 + ar.3 / 2.0);
+    f.p.circle(rx, ry, 10.0, None, Some((if on { pal.primary } else { pal.border }, 2.0)));
+    if on {
+        f.p.circle(rx, ry, 5.0, Some(pal.primary), None);
+    }
+    f.text("Automatico", ar.0 + 52.0, ar.1 + 9.0, cw - 70.0, 24.0, 17.0, BOLD, pal.text);
+    f.text("Cedro ascolta e conta le voci da solo", ar.0 + 52.0, ar.1 + 33.0, cw - 70.0, 20.0, 14.0, SANS, pal.muted);
+    f.focus_ring(ar, 10.0, &act);
+    f.hit(ar, act);
+    cy += auto_h + gap;
+    f.text("OPPURE DIMMI QUANTE SONO", cx, cy, cw, 16.0, 13.0, SANS, pal.muted);
+    cy += 16.0 + 10.0;
+    // I numeri, ognuno con i pallini delle sue voci.
+    let n = trascrizione::MAX_VOICES;
+    let bw = (cw - 8.0 * (n as f32 - 1.0)) / n as f32;
+    for k in 1..=n {
+        let br = (cx + (k - 1) as f32 * (bw + 8.0), cy, bw, nums_h);
+        let act = Act::VoicesPick(k as u8);
+        let on = sel as usize == k;
+        let bg = if on { pal.primary } else if f.hovered(&act) { pal.alt } else { pal.surface };
+        f.p.rrect(br.0, br.1, br.2, br.3, 10.0, Some(bg), Some((if on { pal.primary } else { pal.border }, 1.5)));
+        let fg = if on { pal.on_primary } else { pal.text };
+        f.text_c(&k.to_string(), (br.0, br.1 + 6.0, br.2, 30.0), 20.0, BOLD, fg);
+        // I pallini stanno nel tasto anche quando è stretto (la finestrella dell'icona).
+        let dot = 5.0f32.min((bw - 10.0 - (k as f32 - 1.0) * 2.0) / k as f32).max(2.5);
+        let dw = k as f32 * dot + (k as f32 - 1.0) * 2.0;
+        let mut dx = br.0 + (br.2 - dw) / 2.0;
+        for v in 0..k {
+            f.p.circle(dx + dot / 2.0, br.1 + 42.0, dot / 2.0, Some(if on { pal.on_primary } else { f.voice(v) }), None);
+            dx += dot + 2.0;
+        }
+        f.focus_ring(br, 10.0, &act);
+        f.hit(br, act);
+    }
+    cy += nums_h + gap;
+    // Il consiglio.
+    f.p.rrect(cx, cy, cw, hint_h, 8.0, Some(pal.alt), None);
+    f.icon(ic::INFO, cx + 12.0, cy + (hint_h - 18.0) / 2.0, 18.0, pal.primary);
+    let th = lines(f, &hint, 14.5, cw - 52.0) * 14.5 * 1.4;
+    f.para(&hint, cx + 40.0, cy + (hint_h - th) / 2.0, cw - 52.0, 14.5, SANS, pal.text, 1.4, 4);
+    cy += hint_h + gap;
+    // In fondo: per quanti file vale, Annulla, Trascrivi.
+    let files = app.todo().len();
+    let bw = if w < 520.0 { 104.0 } else { 150.0 };
+    let note = if files == 1 { "Vale per il file in coda.".to_string() } else { format!("Vale per i {files} file in coda.") };
+    f.text(&note, cx, cy, cw - 2.0 * bw - 24.0, foot_h, 14.5, SANS, pal.muted);
+    f.button((cx + cw - 2.0 * bw - 12.0, cy, bw, foot_h), "Annulla", None, 17.0, Act::VoicesCancel);
+    f.primary((cx + cw - bw, cy, bw, foot_h), "Trascrivi", None, 17.0, Act::VoicesGo, true);
 }
 
 /// La riga dell'avviso (errore in rosso, «fatto» in verde) con la crocetta per chiuderla.
@@ -438,7 +537,7 @@ pub fn go_extras(f: &mut Frame, app: &App, r: R, side: bool) {
     let pal = f.pal;
     let size = 14.0;
     if let Some(u) = app.spia() {
-        let text = format!("{} · {}", if u.gpu { "GPU" } else { "CPU" }, u.detail);
+        let text = if u.gpu { u.detail.clone() } else { format!("Processore · {}", u.detail) };
         let tw = f.measure(&text, size, SANS).min(if side { 190.0 } else { r.2 - 30.0 });
         let dot = if u.gpu { pal.primary } else { pal.ok };
         let (x, y) = if side { (r.0 - 24.0 - tw - 14.0, r.1 + r.3 / 2.0 - 11.0) } else { (r.0 + (r.2 - tw - 14.0) / 2.0, r.1 + r.3 + 14.0) };
@@ -499,14 +598,30 @@ pub fn count_noun(n: usize, category: &str) -> String {
 
 /// I file della coda che appartengono a un'altra categoria: «Altri file in coda: 2 PDF».
 pub fn others_link(f: &mut Frame, app: &App, x: f32, y: f32, h: f32, size: f32) -> f32 {
+    others_link_in(f, app, x, y, h, size, f32::INFINITY)
+}
+
+/// Come `others_link`, ma entro `max_w`: si rimpicciolisce un poco e, se non basta, lascia solo i link
+/// (nella finestrella di «Cedro compatto» l'ultimo finiva tagliato a metà).
+pub fn others_link_in(f: &mut Frame, app: &App, x: f32, y: f32, h: f32, size: f32, max_w: f32) -> f32 {
     let others = app.others();
     if others.is_empty() || app.activity != Activity::Convert {
         return 0.0;
     }
     let pal = f.pal;
+    let prefix = "Altri file in coda:";
+    let links = |f: &Frame, size: f32| -> f32 { others.iter().map(|&(ci, n)| f.measure(&count_noun(n, conversioni::CATEGORIES[ci].name), size, SEMI) + 18.0).sum() };
+    let full = |f: &Frame, size: f32| f.measure(prefix, size, SANS) + 10.0 + links(f, size) - 10.0;
+    let mut size = size;
+    while size > 11.0 && full(f, size) > max_w {
+        size -= 0.5;
+    }
+    let show_prefix = full(f, size) <= max_w;
     let mut cx = x;
-    f.text("Altri file in coda:", cx, y, 200.0, h, size, SANS, pal.muted);
-    cx += f.measure("Altri file in coda:", size, SANS) + 10.0;
+    if show_prefix {
+        f.text(prefix, cx, y, 200.0, h, size, SANS, pal.muted);
+        cx += f.measure(prefix, size, SANS) + 10.0;
+    }
     for (ci, n) in others {
         let label = count_noun(n, conversioni::CATEGORIES[ci].name);
         let w = f.measure(&label, size, SEMI) + 8.0;
@@ -523,19 +638,47 @@ pub fn others_link(f: &mut Frame, app: &App, x: f32, y: f32, h: f32, size: f32) 
 /// La zona vuota dove si lasciano i file (bordo tratteggiato, icona, due righe).
 pub fn drop_zone(f: &mut Frame, app: &App, r: R, big: bool) {
     let pal = f.pal;
-    f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(mix(pal.alt, pal.surface, 0.4)), None);
-    f.p.rrect_line(r.0, r.1, r.2, r.3, 10.0, mix(pal.primary, pal.surface, 0.35), 2.0, 1.0, Some((9.0, 6.0)));
     let isz = if big { 44.0 } else { 32.0 };
     let cy = r.1 + r.3 / 2.0;
-    f.icon(ic::DOWNLOAD, r.0 + r.2 / 2.0 - isz / 2.0, cy - isz - 10.0, isz, pal.primary);
+    // La zona prende il colore del tipo di file scelto (o l'arancio della trascrizione).
+    let c = match app.activity {
+        Activity::Convert => f.kind_color(conversioni::CATEGORIES[app.category].kind),
+        a => f.act_color(a),
+    };
+    tinted_empty(f, r, c, ic::DOWNLOAD, isz);
     let cat = &conversioni::CATEGORIES[app.category];
     let (t, s) = match app.activity {
         Activity::Transcribe => ("Trascina qui audio e video", "MP3, WAV, M4A, OGG, OPUS, FLAC, WMA, AMR e video".to_string()),
         _ => ("Trascina qui i file oppure fai clic", format!("{} · Accetta: {}", cat.hint, cat.accepts)),
     };
     f.text_c(t, (r.0, cy, r.2, 30.0), if big { 22.0 } else { 18.0 }, SEMI, pal.text);
-    f.text_c(&s, (r.0 + 12.0, cy + 30.0, r.2 - 24.0, 26.0), if big { 16.0 } else { 14.0 }, SANS, pal.muted);
+    let size = if big { 16.0 } else { 14.0 };
+    // L'elenco dei formati va a capo invece di finire con «…».
+    // Quante righe ci stanno sotto il titolo senza toccare il bordo (nelle zone basse anche una sola, con «…»).
+    let room = ((r.1 + r.3 - 10.0 - (cy + 30.0)) / (size * 1.35)).floor().clamp(1.0, 3.0) as usize;
+    let lines = f.p.wrap_lines(&s, size, SANS, r.2 - 48.0, room);
+    for (i, line) in lines.iter().enumerate() {
+        f.text_c(line, (r.0 + 12.0, cy + 30.0 + i as f32 * (size * 1.35), r.2 - 24.0, 26.0), size, SANS, pal.muted);
+    }
     f.hit(r, Act::AddFiles);
+}
+
+/// La zona vuota del tema base: fondo appena tinto del colore `c`, bordo tratteggiato e il bollo
+/// con l'icona bianca sopra il centro (le scritte vanno da `r.1 + r.3 / 2` in giù).
+pub fn tinted_empty(f: &mut Frame, r: R, c: super::gfx::Rgb, icon: &str, isz: f32) {
+    let pal = f.pal;
+    let cy = r.1 + r.3 / 2.0;
+    f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(mix(c, pal.surface, 0.95)), None);
+    f.p.rrect_line(r.0, r.1, r.2, r.3, 12.0, mix(c, pal.surface, 0.45), 2.0, 1.0, Some((9.0, 6.0)));
+    // Nelle zone basse (finestrella compatta) il bollo si rimpicciolisce per restare dentro al riquadro.
+    let d = (isz + 36.0).min(r.3 * 0.34);
+    let halo = if d < 60.0 { 4.0 } else { 8.0 };
+    let isz = isz.min(d - 18.0);
+    let (ccx, ccy) = (r.0 + r.2 / 2.0, (cy - d / 2.0 - 18.0).max(r.1 + d / 2.0 + halo + 8.0));
+    f.p.circle(ccx, ccy, d / 2.0 + halo, Some(mix(c, pal.surface, 0.9)), None);
+    f.p.shadow(ccx - d / 2.0, ccy - d / 2.0, d, d, d / 2.0, 6.0, 0.14, 3.0);
+    f.p.circle(ccx, ccy, d / 2.0, Some(c), None);
+    f.icon(icon, ccx - isz / 2.0, ccy - isz / 2.0, isz, (255, 255, 255));
 }
 
 /// La miniatura con le misure e lo stato, una riga della coda (usata dai temi chiari).

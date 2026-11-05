@@ -5,6 +5,7 @@
 use super::*;
 use crate::ui::core::{HitKind, Scroll};
 use crate::ui::model::{FileState, PdfMode};
+use crate::ui::gfx::Rgb;
 
 const NAV_W: f32 = 270.0;
 const TOP: f32 = 56.0;
@@ -15,28 +16,36 @@ fn nav(f: &mut Frame, app: &App) {
     f.caption((0.0, 0.0, f.w, TOP));
     f.brand(26.0, 15.0, 26.0, 18.0, 12.0, None);
     f.window_controls(f.w, 0.0, 48.0, pal.text, pal.alt);
-    let item = |f: &mut Frame, y: f32, icon: &str, label: &str, on: bool, act: Act| {
+    let item = |f: &mut Frame, y: f32, icon: &str, label: &str, on: bool, act: Act, tint: Option<Rgb>| {
         let r = (12.0, y, 242.0, 54.0);
+        let accent = tint.unwrap_or(pal.primary);
         if on {
-            f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(pal.nav_sel), None);
-            f.p.rrect(10.0, y + 14.0, 4.0, 26.0, 2.0, Some(pal.primary), None);
+            let bg = if tint.is_some() { mix(accent, pal.surface, 0.88) } else { pal.nav_sel };
+            f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(bg), None);
+            f.p.rrect(10.0, y + 14.0, 4.0, 26.0, 2.0, Some(accent), None);
         } else if f.hovered(&act) {
-            f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(pal.alt), None);
+            f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(pal.alt), None);
         }
-        let c = if on { pal.primary } else { pal.text };
-        f.icon(icon, 32.0, y + 15.0, 24.0, c);
-        f.text(label, 78.0, y, 170.0, 54.0, 19.0, SANS, c);
+        let c = if on { if tint.is_some() { pal.text } else { pal.primary } } else { pal.text };
+        if let Some(t) = tint {
+            // L'icona dentro una piastrella del colore dell'attività: piena quando è scelta.
+            f.tile(26.0, y + 9.0, 36.0, icon, t, on);
+        } else {
+            f.icon(icon, 32.0, y + 15.0, 24.0, c);
+        }
+        f.text(label, 78.0, y, 170.0, 54.0, 19.0, if on { SEMI } else { SANS }, c);
         f.focus_ring(r, 8.0, &act);
         f.hit(r, act);
     };
     let ys = [78.0, 142.0, 210.0, 278.0];
     for (a, y) in Activity::ALL.iter().zip(ys) {
-        item(f, y, a.icon(), a.name(), app.activity == *a, Act::Activity(*a));
+        let tint = Some(f.act_color(*a));
+        item(f, y, a.icon(), a.name(), app.activity == *a, Act::Activity(*a), tint);
     }
     let bottom = f.h - 1024.0;
     f.hline(28.0, 835.0 + bottom, 214.0);
-    item(f, 862.0 + bottom, ic::HELP, "Guida", false, Act::OpenGuide);
-    item(f, 930.0 + bottom, ic::SETTINGS, "Impostazioni", false, Act::OpenSettings);
+    item(f, 862.0 + bottom, ic::HELP, "Guida", false, Act::OpenGuide, None);
+    item(f, 930.0 + bottom, ic::SETTINGS, "Impostazioni", false, Act::OpenSettings, None);
 }
 
 pub fn draw(f: &mut Frame, app: &App) {
@@ -76,25 +85,29 @@ fn standard(f: &mut Frame, app: &App) {
     let mut tx = 298.0;
     for (i, cat) in conversioni::CATEGORIES.iter().enumerate() {
         let on = i == app.category;
-        let tw = f.measure(cat.name, 18.0, SANS);
+        // Nel tema base la scheda scelta è in semigrassetto: la misura deve già tenerne conto.
+        let tw = f.measure(cat.name, 18.0, SEMI);
         let count = app.files.iter().filter(|x| !x.voice_only && x.kind == cat.kind).count();
         let badge = (count > 0 && !on).then(|| count.to_string());
         let bw = badge.as_ref().map(|b| f.measure(b, 12.0, SEMI) + 12.0).unwrap_or(0.0).max(if badge.is_some() { 20.0 } else { 0.0 });
         let r = (tx, 150.0, 16.0 + 24.0 + 14.0 + tw + 16.0 + if bw > 0.0 { bw + 6.0 } else { 0.0 }, 62.0);
+        // Nel tema base ogni tipo di file ha il suo colore (icona, linea sotto la scheda, numero).
+        let kc = f.kind_color(cat.kind);
         if on {
             f.p.rrect(r.0, r.1, r.2, r.3 + 8.0, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
             f.p.fill(r.0 + 1.0, r.1 + r.3 - 2.0, r.2 - 2.0, 12.0, pal.surface);
-            f.p.rrect(r.0, r.1 + 49.0, r.2, 3.0, 1.5, Some(pal.primary), None);
+            f.p.rrect(r.0, r.1 + 49.0, r.2, 3.0, 1.5, Some(kc), None);
         } else if f.hovered(&Act::Category(i)) {
-            f.p.rrect(r.0, r.1, r.2, 52.0, 8.0, Some(pal.alt), None);
+            f.p.rrect(r.0, r.1, r.2, 52.0, 8.0, Some(mix(kc, pal.surface, 0.9)), None);
         }
-        let c = if on { pal.primary } else { pal.text };
-        f.icon(super::category_icon(cat.kind), tx + 16.0, 164.0, 24.0, c);
-        f.text(cat.name, tx + 54.0, 150.0, tw + 4.0, 52.0, 18.0, SANS, c);
+        let c = pal.text;
+        let ic_c = kc;
+        f.icon(super::category_icon(cat.kind), tx + 16.0, 164.0, 24.0, ic_c);
+        f.text(cat.name, tx + 54.0, 150.0, tw + 4.0, 52.0, 18.0, if on { SEMI } else { SANS }, c);
         if let Some(badge) = badge {
             let bx = tx + 54.0 + tw + 8.0;
-            f.p.rrect(bx, 167.0, bw, 20.0, 10.0, Some(mix(pal.primary, pal.surface, 0.85)), None);
-            f.text_c(&badge, (bx, 167.0, bw, 20.0), 12.0, SEMI, pal.primary);
+            f.p.rrect(bx, 167.0, bw, 20.0, 10.0, Some(mix(kc, pal.surface, 0.85)), None);
+            f.text_c(&badge, (bx, 167.0, bw, 20.0), 12.0, SEMI, kc);
         }
         f.hit((r.0, r.1, r.2, 52.0), Act::Category(i));
         tx += r.2 + 6.0;
@@ -111,20 +124,33 @@ fn standard(f: &mut Frame, app: &App) {
     if !pages_mode {
         let add = (316.0, 234.0, 222.0, 40.0);
         let hot = f.hovered(&Act::AddFiles);
-        f.p.rrect(add.0, add.1, add.2, add.3, 6.0, Some(if hot { mix(pal.primary, (0, 0, 0), 0.12) } else { pal.primary }), None);
+        f.glossy_fill(add, 6.0, pal.primary, hot);
         f.icon(ic::ADD, add.0 + 14.0, add.1 + 8.0, 24.0, pal.on_primary);
         f.text("Aggiungi file", add.0 + 46.0, add.1, 134.0, 40.0, 17.0, SEMI, pal.on_primary);
         f.p.fill_a(add.0 + add.2 - 38.0, add.1, 1.0, 40.0, pal.on_primary, 0.35);
         f.icon(ic::CHEVRON_DOWN, add.0 + add.2 - 31.0, add.1 + 8.0, 24.0, pal.on_primary);
         f.hit((add.0, add.1, add.2 - 38.0, add.3), Act::AddFiles);
         f.hit((add.0 + add.2 - 38.0, add.1, 38.0, add.3), Act::AddMenu);
+        // Il conteggio sta a destra; se la finestra è stretta i due comandi restano con la sola icona
+        // (prima «Aggiungi cartella», che è anche nella freccia di «Aggiungi file») invece di finirci sopra.
+        let count = format!("{} file", visible.len());
+        let count_w = f.measure(&count, 16.0, SANS);
+        let count_x = q.0 + q.2 - 70.0 - count_w;
+        let tool_w = |f: &Frame, label: &str| 48.0 + f.measure(label, 16.0, SANS);
+        let fits = |f: &Frame, a: &str, b: &str| 569.0 + tool_w(f, a) + 28.0 + tool_w(f, b) + 12.0 <= count_x;
+        let (folder, remove) = if fits(f, "Aggiungi cartella", "Rimuovi") {
+            ("Aggiungi cartella", "Rimuovi")
+        } else if fits(f, "", "Rimuovi") {
+            ("", "Rimuovi")
+        } else {
+            ("", "")
+        };
         let mut x = 569.0;
-        x += f.tool(x, 234.0, 40.0, "Aggiungi cartella", ic::FOLDER, 16.0, Act::AddFolder, true) + 8.0;
+        x += f.tool(x, 234.0, 40.0, folder, ic::FOLDER, 16.0, Act::AddFolder, true) + 8.0;
         f.vline(x, 240.0, 30.0);
         x += 20.0;
-        f.tool(x, 234.0, 40.0, "Rimuovi", ic::TRASH, 16.0, Act::RemoveChecked, !visible.is_empty() && !app.busy());
-        let count = format!("{} file", visible.len());
-        f.text_r(&count, (q.0 + q.2 - 140.0, 234.0, 70.0, 40.0), 16.0, SANS, pal.text);
+        f.tool(x, 234.0, 40.0, remove, ic::TRASH, 16.0, Act::RemoveChecked, !visible.is_empty() && !app.busy());
+        f.text_r(&count, (count_x - 4.0, 234.0, count_w + 4.0, 40.0), 16.0, SANS, pal.text);
         f.icon(ic::MENU, q.0 + q.2 - 56.0, 242.0, 24.0, pal.text);
     }
 
@@ -493,7 +519,9 @@ fn strip_height(app: &App, i: usize, w: f32) -> f32 {
 fn footer(f: &mut Frame, app: &App, y: f32) {
     let pal = f.pal;
     let w = f.w;
-    f.p.fill(NAV_W, y, w - NAV_W, f.h - y, pal.bg);
+    // Il piede è una fascia chiara appoggiata sopra la zona di lavoro.
+    f.p.shadow(NAV_W, y, w - NAV_W, f.h - y, 0.0, 8.0, 0.07, -2.0);
+    f.p.fill(NAV_W, y, w - NAV_W, f.h - y, pal.surface);
     f.hline(NAV_W, y, w - NAV_W);
     let go_w = 260.0;
     let go_x = w - 24.0 - go_w;
@@ -538,7 +566,7 @@ fn simplified(f: &mut Frame, app: &App) {
     let add = (w - 716.0, 104.0, 220.0, 46.0);
     f.button(add, "Aggiungi file", Some(ic::ADD), 18.0, Act::AddFiles);
     let card = (card_x, 188.0, card_w, h - 188.0 - 27.0);
-    f.p.rrect(card.0, card.1, card.2, card.3, 10.0, Some(pal.surface), Some((pal.border, 1.0)));
+    f.card(card, 10.0);
     let inner_x = card_x + 28.0;
     let inner_w = card_w - 56.0;
     let visible = app.visible();
@@ -612,7 +640,8 @@ fn simplified(f: &mut Frame, app: &App) {
     f.select((inner_x + 164.0, fy, inner_w - 164.0, 68.0), &title, Some(icon), 24.0, Act::FormatMenu);
     let label = super::go_label(app);
     let ready = !app.targets().is_empty();
-    f.primary((inner_x, fy + 108.0, inner_w, 88.0), &label, Some(super::go_icon(app)), 28.0, Act::Start, ready && !app.busy());
+    let go = (inner_x, fy + 108.0, inner_w, 88.0);
+    f.primary(go, &label, Some(super::go_icon(app)), 28.0, Act::Start, ready && !app.busy());
     super::go_extras(f, app, (inner_x, fy + 108.0, inner_w, 88.0 + 8.0), false);
     if app.busy() {
         if let Some(p) = app.progress() {

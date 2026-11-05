@@ -12,9 +12,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**La Guida è rifatta.**
+**Componenti aggiornati.** Cedro legge audio, video e PDF con le versioni nuove delle sue librerie (symphonia 0.6, hayro 0.9, lopdf 0.47, cfb 0.16, zip 9.3).
 
-- Si apre dal menu dell'icona («Guida…») e dalla fine dell'installazione: ora usa i colori e il carattere del tema che hai scelto (con lo stemma nel tema Comune di Bondeno), invece del vecchio blu fisso.
-- Otto argomenti con un indice a sinistra e un riquadro animato: la ruota, Conversioni, gli strumenti PDF (Unisci, Dividi, Pagine, Comprimi), PDF in Word ed Excel anche da scansioni, Trascrizione e Rivedi, YouTube e web, Aspetto (temi, Standard e Semplificata, caratteri più grandi) e Aggiornamenti.
-- Cambia argomento da sola; un clic su una riga la ferma su quella. Frecce, Invio e Spazio vanno avanti e indietro, Esc chiude.
-- Su Windows la finestra sta nello schermo anche con scala 150% o a 1024×768, ha l'icona di Cedro e la barra del titolo nei colori del tema.
+- MP3 e OGG convertiti hanno la durata esatta: non ci sono più i campioni di silenzio che l'encoder aggiunge all'inizio e alla fine.
+- Titolo e artista degli AIFF si leggono e passano nel file convertito; quelli dei WAV non hanno più un carattere in più in fondo.
+- Le pagine dei PDF in immagini vengono un po' più nitide e più leggere.
+- Riassunto AI: in «Chi ha detto cosa» una riga senza nome non comincia più con «: ».

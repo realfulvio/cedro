@@ -20,7 +20,10 @@ fn header(f: &mut Frame, app: &App, r: R, title: &str, simple: bool) -> f32 {
 }
 
 /// Il riquadro «Cosa sta succedendo» con il pulsante Copia. Le righe arrivano dal motore.
-fn log_box(f: &mut Frame, r: R, lines: &[(Tone, String, String)]) {
+/// Una riga del riquadro: tono, parola evidenziata, testo, chi parla (con le voci).
+type LogLine = (Tone, String, String, Option<u8>);
+
+fn log_box(f: &mut Frame, r: R, lines: &[LogLine]) {
     let pal = f.pal;
     f.card(r, 10.0);
     f.text("Cosa sta succedendo", r.0 + 18.0, r.1 + 8.0, r.2 - 140.0, 32.0, 16.0, SEMI, pal.text);
@@ -31,13 +34,16 @@ fn log_box(f: &mut Frame, r: R, lines: &[(Tone, String, String)]) {
         return;
     }
     let row = 22.0;
+    // Righe intere: in fondo il riquadro non mostra mai mezza riga tagliata sotto il titolo.
+    let fit = (body.3 / row).floor().max(1.0) * row;
+    let body = (body.0, body.1 + body.3 - fit, body.2, fit);
     let total = lines.len() as f32 * row;
     // Si vede sempre la fine: lo scorrimento parte dal fondo.
     let max = (total - body.3).max(0.0);
     let off = f.ui.scroll(Scroll::Log);
     let start_y = body.1 - (max - off.min(max));
     f.p.push_clip(body.0, body.1, body.2, body.3);
-    for (i, (tone, key, text)) in lines.iter().enumerate() {
+    for (i, (tone, key, text, speaker)) in lines.iter().enumerate() {
         let y = start_y + i as f32 * row;
         if y + row < body.1 || y > body.1 + body.3 {
             continue;
@@ -47,6 +53,15 @@ fn log_box(f: &mut Frame, r: R, lines: &[(Tone, String, String)]) {
             let kc = if *tone == Tone::Error { pal.bad } else { pal.primary };
             f.p.text(key, x, y, 200.0, row, 14.0, SEMI, kc, Align::Left);
             x += f.measure(key, 14.0, SEMI) + 8.0;
+        }
+        // Con le voci, prima della frase c'è chi la dice, nel suo colore.
+        if let Some(v) = speaker {
+            let who = trascrizione::speaker_name(*v as usize);
+            let vc = f.voice(*v as usize);
+            f.p.text(&crate::i18n::lit(&who), x, y, 220.0, row, 14.0, BOLD, vc, Align::Left);
+            x += f.measure(&who, 14.0, BOLD) + 6.0;
+            f.p.text("·", x, y, 12.0, row, 14.0, SANS, pal.muted, Align::Left);
+            x += 14.0;
         }
         let c = match tone {
             Tone::Error => pal.bad,
@@ -60,26 +75,28 @@ fn log_box(f: &mut Frame, r: R, lines: &[(Tone, String, String)]) {
     f.scrolls.push((body, Scroll::Log, max));
 }
 
-fn transcribe_lines(app: &App) -> Vec<(Tone, String, String)> {
-    app.transcribe.log.iter().map(|l| (l.tone, l.key.clone(), l.text.clone())).collect()
+fn transcribe_lines(app: &App) -> Vec<LogLine> {
+    app.transcribe.log.iter().map(|l| (l.tone, l.key.clone(), l.text.clone(), l.speaker)).collect()
 }
 
-fn link_lines(l: &Links) -> Vec<(Tone, String, String)> {
-    l.log.lines().map(|s| (if s.starts_with("Errore") { Tone::Error } else { Tone::Note }, String::new(), s.to_string())).collect()
+fn link_lines(l: &Links) -> Vec<LogLine> {
+    l.log.lines().map(|s| (if s.starts_with("Errore") { Tone::Error } else { Tone::Note }, String::new(), s.to_string(), None)).collect()
 }
 
 /// La riga di un file da trascrivere (o di un link): nome, sotto lo stato, a destra l'icona.
-fn job_row(f: &mut Frame, r: R, title: &str, sub: &str, state: FileState, percent: Option<f32>, big: bool, remove: Option<Act>, open: Option<Act>) {
+/// `extra`: quanto spazio a destra lasciare ai pulsanti della riga (Rivedi, Riassunto AI), così il nome non ci va sotto.
+#[allow(clippy::too_many_arguments)]
+fn job_row(f: &mut Frame, r: R, title: &str, sub: &str, state: FileState, percent: Option<f32>, big: bool, remove: Option<Act>, open: Option<Act>, extra: f32) {
     let pal = f.pal;
     let (ts, ss) = if big { (20.0, 17.0) } else { (16.5, 14.5) };
     let right = 150.0;
-    f.text(title, r.0 + 18.0, r.1 + r.3 * 0.16, r.2 - right - 24.0, r.3 * 0.36, ts, SEMI, pal.text);
+    f.text(title, r.0 + 18.0, r.1 + r.3 * 0.16, r.2 - right - 24.0 - extra, r.3 * 0.36, ts, SEMI, pal.text);
     let sub_c = match state {
         FileState::Failed => pal.bad,
         FileState::Done => pal.ok,
         _ => pal.muted,
     };
-    f.text(sub, r.0 + 18.0, r.1 + r.3 * 0.52, r.2 - right - 24.0, r.3 * 0.32, ss, SANS, sub_c);
+    f.text(sub, r.0 + 18.0, r.1 + r.3 * 0.52, r.2 - right - 24.0 - extra, r.3 * 0.32, ss, SANS, sub_c);
     if let (FileState::Running, Some(p)) = (state, percent) {
         let bw = right - 60.0;
         let bx = r.0 + r.2 - right;
@@ -107,11 +124,76 @@ fn job_row(f: &mut Frame, r: R, title: &str, sub: &str, state: FileState, percen
     }
 }
 
+/// Altezza del riquadro dell'avanzamento della trascrizione.
+const PROGRESS_H: f32 = 112.0;
+
+/// Il riquadro dell'avanzamento mentre trascrive: percentuale grande, su cosa lavora (solo il modello
+/// della scheda video, o il processore), barra e tempo che resta. Va sopra il pulsante Annulla.
+fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
+    let pal = f.pal;
+    // Il riquadro prende l'arancio della Trascrizione (come la sua piastrella).
+    let accent = f.act_color(Activity::Transcribe);
+    let p = app.transcribe.percent.min(100) as f32;
+    f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(mix(accent, pal.surface, 0.93)), Some((mix(accent, pal.surface, 0.72), 1.0)));
+    let (x, w) = (r.0 + 18.0, r.2 - 36.0);
+    // A destra la percentuale grande; a sinistra cosa fa (e quale file, se sono più d'uno)…
+    let pct = format!("{}%", p.round() as u32);
+    let pw = f.measure(&pct, 30.0, SEMI);
+    f.text_r(&pct, (x + w - pw - 4.0, r.1 + 12.0, pw + 4.0, 44.0), 30.0, SEMI, accent);
+    let total = app.job.as_ref().map(|j| j.total).unwrap_or(1);
+    let done = app.job.as_ref().map(|j| j.done).unwrap_or(0);
+    let what = if p <= 0.0 { "Si prepara" } else { "Trascrive" };
+    let what = if total > 1 { format!("{what} · file {} di {total}", (done + 1).min(total)) } else { what.to_string() };
+    let tw = w - pw - 16.0;
+    f.text(&what, x, r.1 + 12.0, tw, 24.0, 15.0, SEMI, pal.text);
+    // …e sotto, la spia: il modello della scheda video (o il processore) col puntino del suo colore.
+    if let Some(u) = app.spia() {
+        let (label, dot) = if u.gpu { (u.detail, accent) } else { (format!("Processore · {}", u.detail.rsplit(" · ").next().unwrap_or_default()), pal.ok) };
+        let cy = r.1 + 36.0 + 11.0;
+        f.p.disc_a(x + 4.0, cy, 6.5, dot, 0.2);
+        f.p.circle(x + 4.0, cy, 3.5, Some(dot), None);
+        f.text(&label, x + 16.0, r.1 + 36.0, tw - 16.0, 22.0, 13.5, SANS, pal.muted);
+    }
+    // La barra: binario chiaro, riempimento col colore del tema, un filo di luce in alto e la testa chiara.
+    let (by, bh) = (r.1 + 66.0, 12.0);
+    f.p.rrect(x, by, w, bh, bh / 2.0, Some(mix(accent, pal.surface, 0.80)), None);
+    let fw = (w * p / 100.0).max(if p > 0.0 { bh } else { 0.0 });
+    if fw > 0.0 {
+        f.p.rrect(x, by, fw, bh, bh / 2.0, Some(accent), None);
+        f.p.rrect_a(x + 4.0, by + 2.0, (fw - 8.0).max(0.0), 3.0, 1.5, (255, 255, 255), 0.28);
+        if fw > bh + 6.0 {
+            f.p.disc_a(x + fw - bh / 2.0, by + bh / 2.0, 2.5, (255, 255, 255), 0.9);
+        }
+    }
+    // In fondo: quanto manca, oppure il passo del motore prima che la trascrizione parta.
+    let left = if p <= 0.0 {
+        // (anche «Voci: 30%», così si vede che lavora mentre riconosce chi parla).
+        let step = app.transcribe.log.iter().rev().find(|l| matches!(l.tone, Tone::Step | Tone::Muted) && !l.text.is_empty());
+        step.map(|l| {
+            let (key, text) = (crate::i18n::tr(&l.key), crate::i18n::tr(&l.text));
+            match () {
+                _ if key.is_empty() => text.to_string(),
+                // «Lingua riconosciuta: italiano», non «Lingua: riconosciuta: italiano».
+                _ if text.contains(':') => format!("{key} {text}"),
+                _ => format!("{key}: {text}"),
+            }
+        })
+        .unwrap_or_else(|| "Accendo il motore…".into())
+    } else {
+        app.transcribe_left().map(|t| format!("Restano {t}")).unwrap_or_else(|| "Calcolo il tempo che resta…".into())
+    };
+    f.text(&left, x, r.1 + 84.0, w, 22.0, 13.5, SANS, pal.muted);
+}
+
 /// Il pulsante principale delle pagine: avvia, oppure annulla il lavoro in corso.
 fn go_or_cancel(f: &mut Frame, app: &App, r: R, size: f32, icon: &str, ready: bool) {
     if app.busy() {
         let pal = f.pal;
         f.button(r, "Annulla", Some(ic::CLOSE), size, Act::Cancel);
+        if app.activity == Activity::Transcribe {
+            // Barra, tempo e spia stanno nel riquadro sopra il pulsante.
+            return;
+        }
         if let Some(p) = app.progress() {
             f.p.rrect(r.0, r.1 + r.3 + 8.0, r.2, 5.0, 2.5, Some(pal.border), None);
             f.p.rrect(r.0, r.1 + r.3 + 8.0, r.2 * p.clamp(0.0, 1.0), 5.0, 2.5, Some(pal.primary), None);
@@ -185,16 +267,42 @@ fn transcribe_queue(f: &mut Frame, app: &App, r: R, big: bool) {
             let sub = if file.state == FileState::Waiting && !size.is_empty() { format!("{} · {size}", file.path.parent().map(|p| p.display().to_string()).unwrap_or_default()) } else { file.message.clone() };
             let pct = if running == Some(i) { Some(app.transcribe.percent as f32) } else { None };
             let open = file.output.clone().map(Act::OpenPath);
-            job_row(f, (r.0 + isz + 16.0, y, r.2 - isz - 16.0, rh), &file.name(), &sub, file.state, pct, big, (!app.busy()).then_some(Act::Remove(i)), open);
             // Finita la trascrizione si può rivedere: ascoltare le frasi, correggerle, esportare anche i sottotitoli.
             // Anche un file appena rimesso in coda, se la revisione è salvata da una volta prima (Cedro riaperto).
-            if matches!(file.state, FileState::Done | FileState::Waiting) && crate::revisione::has(&file.path) {
+            let reviewable = matches!(file.state, FileState::Done | FileState::Waiting) && crate::revisione::has(&file.path);
+            let size = if big { 17.0 } else { 15.0 };
+            // Accanto a «Rivedi», «Riassunto AI»: apre Rivedi sul riassunto e lo fa (sui PC, non sul telefono).
+            let ai_w = if cfg!(target_os = "android") { 0.0 } else { f.measure("Riassunto AI", size, SEMI) + size * 1.1 + 40.0 };
+            let extra = if reviewable { 112.0 + if ai_w > 0.0 { ai_w + 8.0 } else { 0.0 } } else { 0.0 };
+            job_row(f, (r.0 + isz + 16.0, y, r.2 - isz - 16.0, rh), &file.name(), &sub, file.state, pct, big, (!app.busy()).then_some(Act::Remove(i)), open, extra);
+            if reviewable {
                 let bh = if big { 46.0 } else { 38.0 };
-                f.button((r.0 + r.2 - 150.0 - 112.0, y + (rh - bh) / 2.0, 104.0, bh), "Rivedi", None, if big { 17.0 } else { 15.0 }, Act::ReviewOpen(i));
+                let by = y + (rh - bh) / 2.0;
+                let ai_x = r.0 + r.2 - 150.0 - ai_w - 8.0;
+                f.button((ai_x - 112.0, by, 104.0, bh), "Rivedi", None, size, Act::ReviewOpen(i));
+                if ai_w > 0.0 {
+                    ai_button(f, (ai_x, by, ai_w, bh), size, Act::SummaryOpen(i));
+                }
             }
         }
         rows.len() as f32 * rh
     });
+}
+
+/// «Riassunto AI»: pulsante con il bordo e il testo del colore del tema, per distinguerlo da «Rivedi».
+fn ai_button(f: &mut Frame, r: R, size: f32, act: Act) {
+    let pal = f.pal;
+    let hover = f.hovered(&act);
+    let bg = if hover { mix(pal.primary, pal.surface, 0.9) } else { pal.surface };
+    f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(bg), Some((pal.primary, 1.2)));
+    let isz = (size * 1.1).round();
+    let label = "Riassunto AI";
+    let tw = f.measure(label, size, SEMI);
+    let x = r.0 + (r.2 - tw - isz - 8.0) / 2.0;
+    f.icon(ic::SUMMARY, x, r.1 + (r.3 - isz) / 2.0, isz, pal.primary);
+    f.p.text(label, x + isz + 8.0, r.1, tw + 2.0, r.3, size, SEMI, pal.primary, Align::Left);
+    f.focus_ring(r, 8.0, &act);
+    f.hit(r, act);
 }
 
 /// La pagina della Trascrizione dentro il riquadro `r`.
@@ -210,7 +318,8 @@ pub fn transcribe_page(f: &mut Frame, app: &App, r: R, simple: bool) {
         let w = r.2.min(980.0);
         let x = r.0 + (r.2 - w) / 2.0;
         f.button((x + w - 200.0, r.1 + 2.0, 200.0, 46.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles);
-        let list_h = (r.1 + r.3 - top - 330.0).max(140.0);
+        let card = if app.busy() { PROGRESS_H + 18.0 } else { 0.0 };
+        let list_h = (r.1 + r.3 - top - 330.0 - card).max(140.0);
         transcribe_queue(f, app, (x, top, w, list_h), true);
         let mut y = top + list_h + 22.0;
         f.text("Risultato:", x, y, 160.0, 56.0, 21.0, SEMI, pal.text);
@@ -221,9 +330,14 @@ pub fn transcribe_page(f: &mut Frame, app: &App, r: R, simple: bool) {
         f.select((x + 170.0, y, 280.0, 50.0), model_name(app), None, 18.0, Act::TrModelMenu);
         f.text(&model_note(app), x + 470.0, y, w - 470.0, 50.0, 16.0, SANS, pal.muted);
         y += 72.0;
+        if app.busy() {
+            transcribe_progress(f, app, (x, y, w, PROGRESS_H));
+            y += PROGRESS_H + 18.0;
+        }
         go_or_cancel(f, app, (x, y, w, 76.0), 24.0, ic::TRANSCRIBE, ready);
         y += 96.0;
-        let last = app.transcribe.log.last().map(|l| if l.key.is_empty() { l.text.clone() } else { format!("{} {}", l.key, l.text) });
+        // Prima che parta la trascrizione il passo del motore è già nel riquadro: qui non si ripete.
+        let last = app.transcribe.log.last().filter(|_| !(app.busy() && app.transcribe.percent == 0)).map(|l| if l.key.is_empty() { l.text.clone() } else { format!("{} {}", l.key, l.text) });
         let line = last.unwrap_or_else(|| super::dest_note(app).replace("I file convertiti verranno salvati", "I testi verranno salvati"));
         let err = app.transcribe.log.last().is_some_and(|l| l.tone == Tone::Error);
         f.text_c(&line, (x, y, w, 28.0), 17.0, SANS, if err { pal.bad } else { pal.muted });
@@ -267,6 +381,12 @@ pub fn transcribe_page(f: &mut Frame, app: &App, r: R, simple: bool) {
     let note = super::dest_note(app).replace("I file convertiti verranno salvati", "I testi verranno salvati");
     f.para(&note, cx, y, cw, 14.0, SANS, pal.muted, 1.4, 3);
     let gy = ir.1 + ir.3 - 24.0 - 64.0 - 14.0;
+    if app.busy() {
+        // Sopra il pulsante: copre la nota sulla cartella, che durante il lavoro non serve.
+        let py = gy - PROGRESS_H - 16.0;
+        f.p.fill(cx - 2.0, py - 12.0, cw + 4.0, PROGRESS_H + 12.0, pal.surface);
+        transcribe_progress(f, app, (cx, py, cw, PROGRESS_H));
+    }
     go_or_cancel(f, app, (cx, gy, cw, 64.0), 20.0, ic::TRANSCRIBE, ready);
 }
 
@@ -286,11 +406,10 @@ fn links_list(f: &mut Frame, app: &App, l: &Links, r: R, big: bool, scroll: bool
     let pal = f.pal;
     let web = l.web;
     if l.items.is_empty() {
-        f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(mix(pal.alt, pal.surface, 0.4)), None);
-        f.p.rrect_line(r.0, r.1, r.2, r.3, 10.0, mix(pal.primary, pal.surface, 0.35), 2.0, 1.0, Some((9.0, 6.0)));
         let cy = r.1 + r.3 / 2.0;
         let isz = if big { 40.0 } else { 32.0 };
-        f.icon(if web { ic::WEB } else { ic::VIDEO }, r.0 + (r.2 - isz) / 2.0, cy - isz - 8.0, isz, pal.primary);
+        let icon = if web { ic::WEB } else { ic::VIDEO };
+        super::tinted_empty(f, r, f.act_color(app.activity), icon, isz);
         f.text_c("Nessun link in coda", (r.0, cy, r.2, 30.0), if big { 21.0 } else { 18.0 }, SEMI, pal.text);
         let hint = if web { super::super::model::WEB_HINT } else { super::super::model::YT_HINT };
         f.text_c(hint, (r.0 + 16.0, cy + 30.0, r.2 - 32.0, 26.0), if big { 16.0 } else { 14.0 }, SANS, pal.muted);
@@ -314,7 +433,7 @@ fn links_list(f: &mut Frame, app: &App, l: &Links, r: R, big: bool, scroll: bool
                 _ => it.message.clone(),
             };
             let pct = (it.state == FileState::Running).then_some(it.percent);
-            job_row(f, (r.0 + isz + 22.0, y, r.2 - isz - 22.0, rh), &title, &sub, it.state, pct, big, (!busy).then_some(Act::LinkRemove(web, n)), None);
+            job_row(f, (r.0 + isz + 22.0, y, r.2 - isz - 22.0, rh), &title, &sub, it.state, pct, big, (!busy).then_some(Act::LinkRemove(web, n)), None, 0.0);
         }
         items.len() as f32 * rh
     };
@@ -454,7 +573,7 @@ fn narrow_files(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32 {
         let (size, _) = super::file_meta(app, i);
         let sub = if file.state == FileState::Waiting { size } else { file.message.clone() };
         let pct = if running == Some(i) { Some(app.transcribe.percent as f32) } else { None };
-        job_row(f, (x + 56.0, ry, w - 56.0, rh), &file.name(), &sub, file.state, pct, false, (!app.busy()).then_some(Act::Remove(i)), file.output.clone().map(Act::OpenPath));
+        job_row(f, (x + 56.0, ry, w - 56.0, rh), &file.name(), &sub, file.state, pct, false, (!app.busy()).then_some(Act::Remove(i)), file.output.clone().map(Act::OpenPath), 0.0);
     }
     rows.len() as f32 * rh
 }
@@ -467,7 +586,8 @@ fn narrow_transcribe(f: &mut Frame, app: &App, r: R, simple: bool) {
     }
     let gh = 56.0;
     let go_y = r.1 + r.3 - gh - 10.0;
-    let body = (r.0, top, r.2, go_y - top - 14.0);
+    let card = if app.busy() { PROGRESS_H + 12.0 } else { 0.0 };
+    let body = (r.0, top, r.2, go_y - top - 14.0 - card);
     let (x, w) = (r.0, r.2);
     let lines = transcribe_lines(app);
     super::scrolled(f, body, Scroll::Inspector, |f| {
@@ -494,6 +614,9 @@ fn narrow_transcribe(f: &mut Frame, app: &App, r: R, simple: bool) {
         }
         y - body.1
     });
+    if app.busy() {
+        transcribe_progress(f, app, (r.0, go_y - PROGRESS_H - 12.0, r.2, PROGRESS_H));
+    }
     go_or_cancel(f, app, (r.0, go_y, r.2, gh), 18.0, ic::TRANSCRIBE, !app.targets().is_empty());
 }
 
