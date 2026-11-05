@@ -39,18 +39,75 @@ pub enum Align {
 /// Un file di carattere già letto, con l'indice dentro le raccolte .ttc.
 #[derive(Clone)]
 pub struct Face {
-    data: Arc<Vec<u8>>,
+    data: Arc<dyn AsRef<[u8]> + Send + Sync>,
     index: u32,
 }
 
 impl Face {
     pub fn new(data: Vec<u8>, index: u32) -> Option<Face> {
-        FontRef::from_index(&data, index).ok()?;
-        Some(Face { data: Arc::new(data), index })
+        Face::from_bytes(Arc::new(data), index)
+    }
+
+    /// Un carattere incorporato nel programma: si legge da lì, senza copiarlo in memoria.
+    pub fn from_static(data: &'static [u8], index: u32) -> Option<Face> {
+        Face::from_bytes(Arc::new(data), index)
+    }
+
+    fn from_bytes(data: Arc<dyn AsRef<[u8]> + Send + Sync>, index: u32) -> Option<Face> {
+        FontRef::from_index((*data).as_ref(), index).ok()?;
+        Some(Face { data, index })
     }
 
     fn font(&self) -> FontRef<'_> {
-        FontRef::from_index(&self.data, self.index).expect("controllato in new")
+        FontRef::from_index((*self.data).as_ref(), self.index).expect("controllato in new")
+    }
+}
+
+/// Un file di carattere mappato in memoria (Windows): le pagine restano quelle del file, condivise con
+/// gli altri programmi e restituibili al sistema, invece di una copia privata di qualche MB.
+#[cfg(windows)]
+struct Mapped {
+    view: windows::Win32::System::Memory::MEMORY_MAPPED_VIEW_ADDRESS,
+    len: usize,
+}
+
+#[cfg(windows)]
+unsafe impl Send for Mapped {}
+#[cfg(windows)]
+unsafe impl Sync for Mapped {}
+
+#[cfg(windows)]
+impl AsRef<[u8]> for Mapped {
+    fn as_ref(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.view.Value as *const u8, self.len) }
+    }
+}
+
+#[cfg(windows)]
+impl Drop for Mapped {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::System::Memory::UnmapViewOfFile(self.view);
+        }
+    }
+}
+
+#[cfg(windows)]
+fn map_file(path: &std::path::Path) -> Option<Mapped> {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::System::Memory::{CreateFileMappingW, MapViewOfFile, FILE_MAP_READ, PAGE_READONLY};
+    let file = std::fs::File::open(path).ok()?;
+    let len = usize::try_from(file.metadata().ok()?.len()).ok().filter(|&l| l > 0)?;
+    unsafe {
+        let mapping = CreateFileMappingW(HANDLE(file.as_raw_handle()), None, PAGE_READONLY, 0, 0, None).ok()?;
+        let view = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0);
+        // La vista tiene viva la mappatura anche dopo aver chiuso le maniglie.
+        let _ = CloseHandle(mapping);
+        if view.Value.is_null() {
+            return None;
+        }
+        Some(Mapped { view, len })
     }
 }
 
@@ -65,6 +122,10 @@ const TITILLIUM: &[u8] = include_bytes!("../../assets/fonts/TitilliumWeb-Regular
 const TITILLIUM_BOLD: &[u8] = include_bytes!("../../assets/fonts/TitilliumWeb-Bold.ttf");
 
 fn read_face(path: &std::path::Path, index: u32) -> Option<Face> {
+    #[cfg(windows)]
+    if let Some(mapped) = map_file(path) {
+        return Face::from_bytes(Arc::new(mapped), index);
+    }
     Face::new(std::fs::read(path).ok()?, index)
 }
 
@@ -135,8 +196,8 @@ impl Fonts {
     }
 
     pub fn with(mut faces: HashMap<Weight, Face>) -> Fonts {
-        let regular = Face::new(TITILLIUM.to_vec(), 0).expect("Titillium incorporato");
-        let bold = Face::new(TITILLIUM_BOLD.to_vec(), 0).expect("Titillium incorporato");
+        let regular = Face::from_static(TITILLIUM, 0).expect("Titillium incorporato");
+        let bold = Face::from_static(TITILLIUM_BOLD, 0).expect("Titillium incorporato");
         faces.entry(Weight::Regular).or_insert_with(|| regular.clone());
         let base = faces[&Weight::Regular].clone();
         faces.entry(Weight::Bold).or_insert_with(|| if Arc::ptr_eq(&base.data, &regular.data) { bold.clone() } else { base.clone() });
@@ -162,9 +223,9 @@ impl Fonts {
     }
 
     /// Una famiglia incorporata (regular, semibold, bold); serif e monospazio restano quelli di sistema.
-    fn embedded(regular: &[u8], semibold: &[u8], bold: &[u8]) -> Fonts {
+    fn embedded(regular: &'static [u8], semibold: &'static [u8], bold: &'static [u8]) -> Fonts {
         let system = Fonts::shared();
-        let face = |b: &[u8]| Face::new(b.to_vec(), 0).expect("carattere incorporato");
+        let face = |b: &'static [u8]| Face::from_static(b, 0).expect("carattere incorporato");
         let mut faces = HashMap::new();
         faces.insert(Weight::Regular, face(regular));
         faces.insert(Weight::Semibold, face(semibold));
@@ -875,7 +936,7 @@ impl<'a> Painter<'a> {
             let adv = self.fonts.advance(face, gid, s_px);
             let ix = pen.floor();
             let sub = ((pen - ix) * 4.0).floor() as u8;
-            let key: GlyphKey = (Arc::as_ptr(&face.data) as usize ^ face.index as usize, gid.to_u32(), size_key, sub);
+            let key: GlyphKey = (Arc::as_ptr(&face.data) as *const () as usize ^ face.index as usize, gid.to_u32(), size_key, sub);
             let glyph = self.cache.glyphs.entry(key).or_insert_with(|| raster_glyph(face, gid, s_px, sub as f32 / 4.0));
             if let Some(g) = glyph {
                 let ox = ix as i32 + g.left;
