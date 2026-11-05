@@ -224,6 +224,9 @@ impl App {
 
     /// A che punto è il riassunto (il passo, in parole).
     pub fn passo_riassunto(&mut self, id: u32, nota: String) {
+        if self.lavori.iter().any(|l| l.id == id) {
+            self.passi.insert(id, nota.clone());
+        }
         if let Some(rv) = self.rivedi.as_mut().filter(|rv| rv.riassunto.as_ref().is_some_and(|r| r.0 == id)) {
             rv.riassunto_nota = nota;
         }
@@ -251,7 +254,7 @@ impl App {
         if let Some(rv) = self.rivedi.as_mut().filter(|rv| rv.salva == Some(id)) {
             rv.salva = None;
             rv.nota = match stato {
-                Stato::Fatto { nome, .. } => format!("Salvato in {nome}"),
+                Stato::Fatto { nome, .. } => super::salvato_in(nome),
                 Stato::Errore(e) => super::dividi_errore(e).0.to_string(),
                 Stato::InCorso => String::new(),
             };

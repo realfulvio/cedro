@@ -1,0 +1,6 @@
+- Trascrizione più precisa: gli stessi modelli del computer (small, medium, large-v3-turbo).
+- Modello proposto in base alla memoria del telefono.
+- Il download dei modelli riprende da dove si è fermato se la rete cade.
+- Lavori mostra il download del modello e la rete interrotta.
+- «Se il file esiste già» rispettato: dialogo-2.txt, Sostituisci e Salta.
+- Corretto «download di il modello» in «del modello».

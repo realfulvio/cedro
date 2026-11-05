@@ -115,7 +115,7 @@ pub enum Azione {
     Modo(u8),
     Vai,
     Cursore,
-    /// Il modello di trascrizione: 0 Veloce (tiny), 1 Buona (base).
+    /// Il modello di trascrizione: 0 Veloce (small), 1 Buona (medium), 2 Massima (large-v3-turbo).
     Modello(usize),
     Tema(usize),
     /// «Caratteri»: Normali (falso) o Grandi (vero).
@@ -513,7 +513,7 @@ pub struct App {
     /// La tessera scelta in «Cosa ne faccio?».
     pub tessera: usize,
     pub qualita: u8,
-    /// Modello di trascrizione scelto (indice in `trascrizione::MODELS`: 0 Veloce, 1 Buona).
+    /// Modello di trascrizione scelto (indice in `trascrizione::MODELS`: 0 Veloce, 1 Buona, 2 Massima).
     pub modello: usize,
     /// Quante persone parlano (trascrizione): 0 Automatico, 1 una sola (niente riconoscimento), 2..=8.
     pub voci: u8,
@@ -561,6 +561,8 @@ pub struct App {
     pub casa_aperta: bool,
     /// Per ogni trascrizione in corso: quando ha dato la prima percentuale, e quale (per il tempo che resta).
     pub partenze: std::collections::HashMap<u32, (Instant, u32)>,
+    /// Cosa sta facendo una trascrizione prima della prima percentuale (scarica il modello, rete interrotta…).
+    pub passi: std::collections::HashMap<u32, String>,
     pub casa: casa::Casa,
     /// Lavori, Aspetto o Informazioni sopra la finestra principale, con la freccia per tornare.
     pub sopra: Option<Scheda>,
@@ -599,7 +601,7 @@ impl App {
             scelta: None,
             tessera: 0,
             qualita: 82,
-            modello: 1,
+            modello: modello_iniziale(),
             voci: 0,
             lavori: Vec::new(),
             copiato: None,
@@ -629,6 +631,7 @@ impl App {
             altri: Vec::new(),
             casa_aperta: true,
             partenze: std::collections::HashMap::new(),
+            passi: std::collections::HashMap::new(),
             casa: casa::Casa::default(),
             sopra: None,
             pdf_pagine: std::collections::HashMap::new(),
@@ -1519,11 +1522,11 @@ impl App {
     fn slider(&mut self, p: &mut Painter, rc: R) {
         let pal = self.pal();
         if self.modello_serve() {
-            // Trascrizione: due scelte al posto del cursore.
+            // Trascrizione: tre scelte al posto del cursore.
             p.text("Modello", rc.0, rc.1, 90.0, rc.3, 16.0, Weight::Regular, pal.text, Align::Left);
             let (x0, w) = (rc.0 + 92.0, rc.2 - 92.0);
-            let cw = (w - 8.0) / 2.0;
-            for (i, nome) in ["Veloce", "Buona"].into_iter().enumerate() {
+            let cw = (w - 16.0) / 3.0;
+            for (i, nome) in ["Veloce", "Buona", "Massima"].into_iter().enumerate() {
                 let cx = x0 + i as f32 * (cw + 8.0);
                 let on = self.modello == i;
                 p.rrect(cx, rc.1 + 4.0, cw, rc.3 - 8.0, (rc.3 - 8.0) / 2.0, Some(if on { pal.primary } else { pal.surface }), Some((if on { pal.primary } else { pal.border }, 1.0)));
@@ -1819,7 +1822,7 @@ impl App {
             p.pop_clip();
         }
         let resta = if perc == 0 {
-            "Accendo il motore…".to_string()
+            self.passi.get(&l.id).cloned().unwrap_or_else(|| "Accendo il motore…".to_string())
         } else {
             self.partenze.get(&l.id).and_then(|&(t0, m0)| {
                 let spesi = self.ora.duration_since(t0).as_secs_f32();
@@ -1879,7 +1882,7 @@ impl App {
                 if path.as_os_str().is_empty() {
                     return alt;
                 }
-                p.text(&format!("Salvato in {nome}"), x + 14.0, y + 54.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                p.text(&salvato_in(nome), x + 14.0, y + 54.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
                 if let Some(n) = l.controlli.filter(|n| *n > 0 && l.sorgente.is_some()) {
                     let et = if n == 1 { "1 punto da controllare".to_string() } else { format!("{n} punti da controllare") };
                     let ew = p.measure(&et, 13.0, Weight::Semibold) + 22.0;
@@ -2109,4 +2112,18 @@ pub(crate) fn processore_in_uso() -> String {
         Some(u) if !u.gpu && !u.detail.is_empty() => format!("Processore · {}", u.detail),
         _ => format!("Processore · {} thread", cedro::trascrizione::engine_threads()),
     }
+}
+
+/// Il modello di trascrizione proposto all'apertura: «Buona» sui telefoni con almeno 8 GB di memoria
+/// (i recenti la reggono bene), «Veloce» sui più vecchi. Gli altri restano sempre selezionabili.
+fn modello_iniziale() -> usize {
+    match cedro::riassunto::total_memory() {
+        Some(b) if b >= 7 * 1024 * 1024 * 1024 => 1,
+        _ => 0,
+    }
+}
+
+/// «Salvato in …», o com'è quando il file c'era già e non è stato scritto («Già presente: …»).
+pub(crate) fn salvato_in(nome: &str) -> String {
+    if nome.starts_with("Già presente") { nome.to_string() } else { format!("Salvato in {nome}") }
 }
