@@ -1,5 +1,6 @@
 pub mod accel;
 mod audio;
+mod symph;
 pub mod progress;
 pub mod conversioni;
 pub mod credits;

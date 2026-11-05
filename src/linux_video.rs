@@ -10,13 +10,10 @@ use openh264::decoder::Decoder;
 use openh264::encoder::{BitRate as H264Rate, Encoder, EncoderConfig, FrameRate, FrameType, Profile, VuiConfig};
 use openh264::formats::{YUVSlices, YUVSource};
 use openh264::OpenH264API;
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::{decl_codec_type, DecoderOptions};
+use symphonia::core::codecs::video::well_known::extra_data::VIDEO_EXTRA_DATA_ID_AVC_DECODER_CONFIG;
+use symphonia::core::codecs::video::well_known::CODEC_ID_H264;
+use symphonia::core::codecs::CodecParameters;
 use symphonia::core::errors::Error as SymError;
-use symphonia::core::formats::FormatOptions;
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
 
 use crate::mp4mux::{Movie, Mp4Writer, Sample};
 use crate::nal::{annex_nals, avcc_prefix, is_annex, length_to_annex};
@@ -1196,41 +1193,28 @@ fn annex_sample(sample: &[u8]) -> Vec<u8> {
 }
 
 fn write_symphonia_audio(input: &Path, sink: &mut H264Aac) -> Result<(), String> {
-    let file = File::open(input).map_err(|err| format!("l'audio del video non è stato letto: {err}"))?;
-    let stream = MediaSourceStream::new(Box::new(file), Default::default());
-    let mut hint = Hint::new();
-    if let Some(ext) = input.extension().and_then(|ext| ext.to_str()) {
-        hint.with_extension(ext);
-    }
-    let probed = symphonia::default::get_probe()
-        .format(&hint, stream, &FormatOptions::default(), &MetadataOptions::default())
-        .map_err(|_| "l'audio del video non è stato letto".to_string())?;
-    let mut format = probed.format;
-    let mut chosen = None;
-    for track in format.tracks() {
-        if symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default()).is_ok() {
-            let dec = symphonia::default::get_codecs()
-                .make(&track.codec_params, &DecoderOptions::default())
-                .map_err(|err| format!("audio non decodificato: {err}"))?;
-            chosen = Some((track.id, dec));
-            break;
-        }
-    }
+    let mut format = crate::symph::open(input).map_err(|_| "l'audio del video non è stato letto".to_string())?;
+    let chosen = format
+        .tracks()
+        .iter()
+        .find_map(|track| Some((track.id, crate::symph::decoder(crate::symph::audio_params(track)?).ok()?)));
     let Some((audio_id, mut dec)) = chosen else {
         return Err("l'audio del video non è stato letto".into());
     };
     let mut packets = 0u32;
     let mut samples = 0usize;
+    let mut buf = Vec::new();
     loop {
         let packet = match format.next_packet() {
-            Ok(packet) => packet,
+            Ok(Some(packet)) => packet,
+            Ok(None) => break,
             Err(SymError::ResetRequired) => {
                 dec.reset();
                 continue;
             }
             Err(_) => break,
         };
-        if packet.track_id() != audio_id {
+        if packet.track_id != audio_id {
             continue;
         }
         packets += 1;
@@ -1243,14 +1227,13 @@ fn write_symphonia_audio(input: &Path, sink: &mut H264Aac) -> Result<(), String>
             }
             Err(err) => return Err(format!("audio non decodificato: {err}")),
         };
-        let spec = *decoded.spec();
-        let mut buf = SampleBuffer::<i16>::new(decoded.capacity() as u64, spec);
-        buf.copy_interleaved_ref(decoded);
-        if buf.samples().is_empty() {
+        let (rate, channels) = crate::symph::rate_channels(&decoded);
+        crate::symph::interleaved_i16(&decoded, &mut buf);
+        if buf.is_empty() {
             continue;
         }
-        samples += buf.samples().len();
-        sink.write_pcm(buf.samples(), spec.channels.count() as u16, spec.rate)?;
+        samples += buf.len();
+        sink.write_pcm(&buf, channels, rate)?;
     }
     if packets > 0 && samples == 0 {
         return Err("l'audio del video non è stato letto".into());
@@ -1361,30 +1344,18 @@ fn annex_pref(sample: &[u8], nal_len: usize) -> Vec<u8> {
 }
 
 fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
-    let file = File::open(input).map_err(|err| format!("il video non è stato letto: {err}"))?;
-    let stream = MediaSourceStream::new(Box::new(file), Default::default());
-    let mut hint = Hint::new();
-    if let Some(ext) = input.extension().and_then(|ext| ext.to_str()) {
-        hint.with_extension(ext);
-    }
-    let probed = symphonia::default::get_probe()
-        .format(&hint, stream, &FormatOptions::default(), &MetadataOptions::default())
-        .map_err(|_| "il video non è stato letto".to_string())?;
-    let mut format = probed.format;
-    let video_id = format
+    let mut format = crate::symph::open(input).map_err(|_| "il video non è stato letto".to_string())?;
+    let (video_id, video_params, time_base) = format
         .tracks()
         .iter()
-        .find(|track| track.codec_params.codec == decl_codec_type(b"avc1"))
-        .map(|track| track.id)
+        .find_map(|track| match &track.codec_params {
+            Some(CodecParameters::Video(params)) if params.codec == CODEC_ID_H264 => Some((track.id, params.clone(), track.time_base)),
+            _ => None,
+        })
         .ok_or_else(|| "il video non è stato letto".to_string())?;
-    let video_params = format
-        .tracks()
-        .iter()
-        .find(|track| track.id == video_id)
-        .map(|track| track.codec_params.clone())
-        .ok_or_else(|| "il video non è stato letto".to_string())?;
-    let (nal_len, header) = avcc_prefix(video_params.extra_data.as_deref());
-    let (numer, denom) = video_params.time_base.map(|base| (base.numer, base.denom)).unwrap_or((1, 30));
+    let avcc = video_params.extra_data.iter().find(|extra| extra.id == VIDEO_EXTRA_DATA_ID_AVC_DECODER_CONFIG).map(|extra| &extra.data[..]);
+    let (nal_len, header) = avcc_prefix(avcc);
+    let (numer, denom) = time_base.map(|base| (base.numer.get(), base.denom.get())).unwrap_or((1, 30));
     let mut audio_dec = None;
     let mut audio_id = None;
     let mut audio_rate = 0u32;
@@ -1393,15 +1364,12 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         if track.id == video_id {
             continue;
         }
-        if symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default()).is_ok() {
+        let Some(params) = crate::symph::audio_params(track) else { continue };
+        if let Ok(dec) = crate::symph::decoder(params) {
             audio_id = Some(track.id);
-            audio_rate = track.codec_params.sample_rate.unwrap_or(44_100);
-            audio_channels = track.codec_params.channels.map(|ch| ch.count() as u16).unwrap_or(1).max(1);
-            audio_dec = Some(
-                symphonia::default::get_codecs()
-                    .make(&track.codec_params, &DecoderOptions::default())
-                    .map_err(|err| format!("audio non decodificato: {err}"))?,
-            );
+            audio_rate = params.sample_rate.unwrap_or(44_100);
+            audio_channels = params.channels.as_ref().map(|ch| ch.count() as u16).unwrap_or(1).max(1);
+            audio_dec = Some(dec);
             break;
         }
     }
@@ -1420,7 +1388,8 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
             let mut last = (0i64, 333_333i64);
             loop {
                 let packet = match format.next_packet() {
-                    Ok(packet) => packet,
+                    Ok(Some(packet)) => packet,
+                    Ok(None) => break,
                     Err(SymError::ResetRequired) => {
                         if let Some(dec) = audio_dec.as_mut() {
                             dec.reset();
@@ -1429,20 +1398,20 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                     }
                     Err(_) => break,
                 };
-                if packet.track_id() == video_id {
-                    let annex = if !is_annex(packet.buf()) {
-                        length_to_annex(packet.buf(), nal_len)
+                if packet.track_id == video_id {
+                    let annex = if !is_annex(&packet.data) {
+                        length_to_annex(&packet.data, nal_len)
                     } else {
-                        packet.buf().to_vec()
+                        packet.data.to_vec()
                     };
-                    let time = ticks(packet.ts(), numer, denom);
-                    let packet_dur = ticks(packet.dur(), numer, denom);
+                    let time = ticks(packet.pts.get().max(0) as u64, numer, denom);
+                    let packet_dur = ticks(packet.dur.get(), numer, denom);
                     let duration = if packet_dur > 0 { packet_dur } else { 333_333 };
                     last = (time, duration);
                     if let Some(frame) = decoder.decode(&annex).map_err(|err| format!("H.264 non letto: {err}"))? {
                         sent(emit(Decoded::Frame(owned_frame(&frame)?, duration, time)))?;
                     }
-                } else if audio_id == Some(packet.track_id()) {
+                } else if audio_id == Some(packet.track_id) {
                     audio_packets += 1;
                     let Some(dec) = audio_dec.as_mut() else { continue };
                     let decoded = match dec.decode(&packet) {
@@ -1454,18 +1423,14 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                         }
                         Err(err) => return Err(format!("audio non decodificato: {err}")),
                     };
-                    let spec = *decoded.spec();
-                    let mut buf = SampleBuffer::<i16>::new(decoded.capacity() as u64, spec);
-                    buf.copy_interleaved_ref(decoded);
-                    if buf.samples().is_empty() {
+                    let (rate, channels) = crate::symph::rate_channels(&decoded);
+                    let mut samples = Vec::new();
+                    crate::symph::interleaved_i16(&decoded, &mut samples);
+                    if samples.is_empty() {
                         continue;
                     }
-                    audio_samples += buf.samples().len();
-                    let pcm = EarlyPcm {
-                        samples: buf.samples().to_vec(),
-                        channels: spec.channels.count() as u16,
-                        rate: spec.rate,
-                    };
+                    audio_samples += samples.len();
+                    let pcm = EarlyPcm { samples, channels, rate };
                     sent(emit(Decoded::Pcm(pcm)))?;
                 }
             }
