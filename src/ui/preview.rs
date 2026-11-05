@@ -51,6 +51,12 @@ thread_local! {
     static GLYPHS: RefCell<GlyphCache> = RefCell::new(GlyphCache::new());
 }
 
+/// Butta l'ultima impaginazione e i glifi dell'anteprima: a finestre chiuse non servono più.
+pub fn release_caches() {
+    LAST.with(|l| *l.borrow_mut() = None);
+    GLYPHS.with(|g| *g.borrow_mut() = GlyphCache::new());
+}
+
 fn fonts() -> &'static Fonts {
     Fonts::current()
 }

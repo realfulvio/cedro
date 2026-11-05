@@ -20,10 +20,10 @@ use windows::{
     Win32::System::Ole::*,
     Win32::System::Registry::*,
     Win32::System::SystemServices::MODIFIERKEYS_FLAGS,
-    Win32::System::Threading::CreateMutexW,
+    Win32::System::Threading::{CreateMutexW, GetCurrentThreadId},
     Win32::System::Variant::VARIANT,
     Win32::UI::Accessibility::{
-        CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationValuePattern, TreeScope_Descendants, UIA_ValuePatternId,
+        SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK, CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationValuePattern, TreeScope_Descendants, UIA_ValuePatternId,
     },
     Win32::UI::HiDpi::*,
     Win32::UI::Input::KeyboardAndMouse::*,
@@ -175,6 +175,8 @@ pub fn start() -> std::result::Result<(), String> {
         }
         // Cedro resta aperto per giorni: ricontrolla ogni 24 ore se l'opzione è accesa.
         let _ = SetTimer(Some(hwnd), 10, 24 * 60 * 60 * 1000, None);
+        // Quando si chiude una finestra di Cedro, a finestre tutte chiuse la tray restituisce la memoria.
+        let closed = SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_DESTROY, None, Some(window_closed), 0, GetCurrentThreadId(), WINEVENT_OUTOFCONTEXT);
         let kb = SetWindowsHookExW(WH_KEYBOARD_LL, Some(kb_proc), None, 0).map_err(|e| e.to_string())?;
         let mouse = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_proc), None, 0).map_err(|e| e.to_string())?;
         let mut msg = MSG::default();
@@ -187,9 +189,59 @@ pub fn start() -> std::result::Result<(), String> {
         }
         let _ = UnhookWindowsHookEx(kb);
         let _ = UnhookWindowsHookEx(mouse);
+        if !closed.is_invalid() {
+            let _ = UnhookWinEvent(closed);
+        }
         remove_tray(hwnd);
     }
     Ok(())
+}
+
+/// Timer della pulizia a finestre chiuse.
+const TIMER_TRIM: usize = 11;
+
+unsafe extern "system" fn window_closed(_: HWINEVENTHOOK, _: u32, hwnd: HWND, object: i32, child: i32, _: u32, _: u32) {
+    // L'avviso arriva dopo: la finestra non c'è già più, si guarda solo che sia una finestra.
+    if object != OBJID_WINDOW.0 || child != CHILDID_SELF as i32 {
+        return;
+    }
+    let msg = HWND(HMSG.load(Ordering::Relaxed) as *mut _);
+    if !msg.0.is_null() && hwnd != msg {
+        // Un attimo dopo, quando Windows ha finito di smontare la finestra (e un'altra non si è già aperta).
+        let _ = SetTimer(Some(msg), TIMER_TRIM, 3000, None);
+    }
+}
+
+/// Vero se questo thread ha ancora una finestra visibile (Conversioni, Impostazioni, Guida, ruota, avanzamento…).
+fn any_window_open() -> bool {
+    unsafe extern "system" fn visible(hwnd: HWND, found: LPARAM) -> BOOL {
+        if IsWindowVisible(hwnd).as_bool() {
+            *(found.0 as *mut bool) = true;
+            return false.into();
+        }
+        true.into()
+    }
+    let mut found = false;
+    unsafe {
+        let _ = EnumThreadWindows(GetCurrentThreadId(), Some(visible), LPARAM(&mut found as *mut bool as isize));
+    }
+    found
+}
+
+/// A finestre chiuse e senza lavori in corso: via le cache di disegno, il mucchio compattato e le pagine
+/// restituite a Windows. Riaprire una finestra le ricarica in pochi millisecondi.
+fn trim_memory() {
+    if any_window_open() || cedro::resources::busy_elsewhere() {
+        return;
+    }
+    GLYPHS.with(|g| *g.borrow_mut() = GlyphCache::new());
+    cedro::ui::preview::release_caches();
+    unsafe {
+        if let Ok(heap) = windows::Win32::System::Memory::GetProcessHeap() {
+            let _ = windows::Win32::System::Memory::HeapCompact(heap, windows::Win32::System::Memory::HEAP_FLAGS(0));
+        }
+        let _ = windows::Win32::System::Threading::SetProcessWorkingSetSize(windows::Win32::System::Threading::GetCurrentProcess(), usize::MAX, usize::MAX);
+    }
 }
 
 unsafe extern "system" fn kb_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -307,6 +359,11 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
             LRESULT(0)
         }
         WM_TIMER => {
+            if wparam.0 == TIMER_TRIM {
+                let _ = KillTimer(Some(hwnd), TIMER_TRIM);
+                trim_memory();
+                return LRESULT(0);
+            }
             if wparam.0 == 10 {
                 if read_settings().update_check {
                     check_updates(false);
