@@ -13,7 +13,7 @@
 edition = "2024"
 rust-version = "1.92"
 name = "hayro"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Laurenz Stampfl <laurenz.stampfl@gmail.com>"]
 build = false
 autolib = false
@@ -31,17 +31,9 @@ resolver = "2"
 default = [
     "embed-fonts",
     "embed-cmaps",
-    "simd",
 ]
 embed-cmaps = ["hayro-interpret/embed-cmaps"]
 embed-fonts = ["hayro-interpret/embed-fonts"]
-logging = ["hayro-interpret/logging"]
-simd = [
-    "pic-scale/neon",
-    "pic-scale/rdm",
-    "pic-scale/sse",
-    "pic-scale/avx",
-]
 
 [lib]
 name = "hayro"
@@ -51,6 +43,11 @@ path = "src/lib.rs"
 name = "render"
 path = "examples/render.rs"
 
+[dependencies.ab_glyph_rasterizer]
+version = "0.1.10"
+features = ["std"]
+default-features = false
+
 [dependencies.bytemuck]
 version = "1"
 features = ["bytemuck_derive"]
@@ -59,7 +56,7 @@ features = ["bytemuck_derive"]
 version = "1.0.0"
 
 [dependencies.hayro-interpret]
-version = "0.8.0"
+version = "0.9.0"
 default-features = false
 
 [dependencies.image]
@@ -71,7 +68,12 @@ default-features = false
 version = "0.13.0"
 
 [dependencies.pic-scale]
-version = "0.7.9"
+version = "0.7.12"
+features = [
+    "neon",
+    "sse",
+    "avx",
+]
 default-features = false
 
 [dependencies.rustc-hash]
@@ -85,9 +87,6 @@ features = [
     "u8_pipeline",
 ]
 default-features = false
-
-[dev-dependencies.log]
-version = "0.4"
 
 [lints.clippy]
 collection_is_never_read = "warn"
