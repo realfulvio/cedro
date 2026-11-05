@@ -1010,7 +1010,7 @@ fn pubblica(env: &mut JNIEnv, att: &JObject, privato: &Path) -> Result<(String, 
         match pubblica_in(env, &resolver, raccolta, rel, privato, &nome, mime) {
             Ok((uri, visto)) => {
                 log::info!("pubblicato {} in {rel}/{visto} ({uri})", privato.display());
-                return Ok((uri, format!("{rel}/{visto}")));
+                return Ok((uri, if visto.starts_with("Già presente") { visto } else { format!("{rel}/{visto}") }));
             }
             Err(e) => {
                 log::warn!("MediaStore {rel}: {e}");
@@ -1050,7 +1050,7 @@ fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, 
             2 => {
                 let testo = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
                 let testo = stringa(env, testo).ok_or("indirizzo vuoto")?;
-                return Ok((testo, format!("{nome} (c'era già, lasciato com'era)")));
+                return Ok((testo, format!("Già presente: {rel}/{nome}")));
             }
             1 => {
                 let nulla = JObject::null();
@@ -1301,7 +1301,7 @@ fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, ou
     // «Salta» delle Impostazioni: se la trascrizione c'è già in Documenti/Cedro non si rifà (sul computer lo fa il motore).
     let uscita = format!("{}.txt", file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
     if let Some((uri, visto)) = gia_salvato(app, &uscita) {
-        return invia(Stato::Fatto { path: PathBuf::from(uri), nome: format!("{visto} (c'era già, lasciato com'era)"), msg: "Saltato: la trascrizione c'era già".into() });
+        return invia(Stato::Fatto { path: PathBuf::from(uri), nome: format!("Già presente: {visto}"), msg: "Saltato: la trascrizione c'era già".into() });
     }
     let esito: std::sync::Mutex<Option<Result<(PathBuf, String), String>>> = std::sync::Mutex::new(None);
     run(&[file.to_path_buf()], &req, Some(out), &cedro::Options::default(), &|e| match e {
@@ -2135,7 +2135,7 @@ fn gia_salvato(app: &AndroidApp, nome: &str) -> Option<(String, String)> {
 fn col_nome_vero(msg: &str, privato: &Path, visto: &str) -> String {
     let prima = nome_di(privato);
     let dopo = visto.rsplit('/').next().unwrap_or(visto);
-    if prima.is_empty() || prima == dopo || dopo.contains("c'era già") {
+    if prima.is_empty() || prima == dopo || visto.starts_with("Già presente") {
         return msg.to_string();
     }
     msg.replace(&prima, dopo)

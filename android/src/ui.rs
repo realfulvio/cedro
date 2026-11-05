@@ -1882,7 +1882,7 @@ impl App {
                 if path.as_os_str().is_empty() {
                     return alt;
                 }
-                p.text(&format!("Salvato in {nome}"), x + 14.0, y + 54.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                p.text(&salvato_in(nome), x + 14.0, y + 54.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
                 if let Some(n) = l.controlli.filter(|n| *n > 0 && l.sorgente.is_some()) {
                     let et = if n == 1 { "1 punto da controllare".to_string() } else { format!("{n} punti da controllare") };
                     let ew = p.measure(&et, 13.0, Weight::Semibold) + 22.0;
@@ -2121,4 +2121,9 @@ fn modello_iniziale() -> usize {
         Some(b) if b >= 7 * 1024 * 1024 * 1024 => 1,
         _ => 0,
     }
+}
+
+/// «Salvato in …», o com'è quando il file c'era già e non è stato scritto («Già presente: …»).
+pub(crate) fn salvato_in(nome: &str) -> String {
+    if nome.starts_with("Già presente") { nome.to_string() } else { format!("Salvato in {nome}") }
 }
