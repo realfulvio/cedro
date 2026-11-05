@@ -12,8 +12,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro nella tray pesa meno.** Quando chiudi l'ultima finestra (Conversioni, Impostazioni, Guida), Cedro restituisce a Windows la memoria che gli serviva per disegnarla.
+**Riassunto AI più preciso su decisioni e votazioni.** Il modello resta Qwen3.5-4B (provati altri quattro modelli dello stesso peso, nessuno era migliore); sono cambiate le istruzioni.
 
-- Nel Task Manager Cedro fermo nella tray scende da circa 50 MB a circa 1 MB; la memoria privata da 16 a 11-12 MB.
-- I caratteri di Windows (Segoe UI, Georgia, Consolas) si leggono direttamente dal file invece di copiarli in memoria.
-- Nessun controllo a intervalli: la pulizia parte solo quando si chiude una finestra e mai durante una conversione.
+- Nelle riunioni lunghe le decisioni non si perdono più: prima gli appunti di ogni parte si fermavano a metà e un consiglio comunale con cinque votazioni poteva finire in «Decisioni: Nessuna».
+- In «Decisioni» ci sono anche gli emendamenti respinti e i punti rinviati, con l'esito del voto («all'unanimità» solo quando è stato detto, altrimenti a maggioranza con favorevoli, contrari e astenuti).
+- Le dichiarazioni di voto dei gruppi e le proposte non vengono più scambiate per decisioni, e nelle riunioni senza votazioni non compaiono voti inventati.
+- «Chi ha detto cosa» è più corto, una frase per persona, così il riassunto non si interrompe prima di decisioni e compiti.
