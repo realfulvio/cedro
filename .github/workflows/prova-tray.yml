@@ -1,0 +1,54 @@
+name: Prova tray
+
+# Prova la tray di Windows di questo branch su un desktop vero (runner windows-latest): installa l'installatore x64
+# del «Windows ARM64» dello stesso branch, apre e chiude le finestre dal menu della tray (così parte la pulizia
+# della memoria) e prova la ruota con Maiusc+trascinamento prima e dopo. Schermate e registro nell'artifact «prova-tray».
+
+on:
+  push:
+    branches: ["claude/**"]
+    paths: ["prova-tray/**", ".github/workflows/prova-tray.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  tray:
+    runs-on: windows-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installatore x64 del branch (aspetta il «Windows ARM64» in corso)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $branch = '${{ github.ref_name }}'
+          for ($i = 0; $i -lt 90; $i++) {
+            $run = gh run list --repo ${{ github.repository }} --workflow windows-arm64.yml --branch $branch --limit 1 --json databaseId,status,conclusion,headSha | ConvertFrom-Json | Select-Object -First 1
+            "{0} {1} {2} {3}" -f $run.databaseId, $run.headSha, $run.status, $run.conclusion
+            if ($run.status -eq 'completed') { break }
+            Start-Sleep -Seconds 60
+          }
+          if ($run.conclusion -ne 'success') { throw "Windows ARM64 non riuscito ($($run.conclusion))" }
+          gh run download $run.databaseId --repo ${{ github.repository }} --name x64 --dir x64
+          $setup = Get-ChildItem x64 -Recurse -Filter 'Cedro-Setup-*.exe' | Select-Object -First 1
+          "Installo $($setup.Name)"
+          Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait
+          Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force
+
+      - name: Tray, pulizia e ruota
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force prova | Out-Null
+          powershell -NoProfile -ExecutionPolicy Bypass -File prova-tray\ruota.ps1 -Exe "$env:LOCALAPPDATA\Programs\Cedro\cedro.exe" -Out "$PWD\prova"
+          if ($LASTEXITCODE -ne 0) { throw 'prova della ruota non riuscita' }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prova-tray
+          path: prova/*
