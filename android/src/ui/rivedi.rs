@@ -254,7 +254,7 @@ impl App {
         if let Some(rv) = self.rivedi.as_mut().filter(|rv| rv.salva == Some(id)) {
             rv.salva = None;
             rv.nota = match stato {
-                Stato::Fatto { nome, .. } => format!("Salvato in {nome}"),
+                Stato::Fatto { nome, .. } => super::salvato_in(nome),
                 Stato::Errore(e) => super::dividi_errore(e).0.to_string(),
                 Stato::InCorso => String::new(),
             };
