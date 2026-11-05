@@ -25,12 +25,12 @@ pub struct Model {
     pub megabytes: u32,
 }
 
-/// Su Android il modello gira nel telefono: tiny e base (quantizzati) per i messaggi e gli appunti, small per l'audio difficile.
+/// Su Android gli stessi modelli del computer (0.34): small, medium e large-v3-turbo quantizzati, misurati sul Mi 9T.
 #[cfg(target_os = "android")]
 pub const MODELS: &[Model] = &[
-    Model { name: "Veloce", note: "Tiny: appunti brevi, il più leggero", file: "ggml-tiny-q5_1.bin", megabytes: 32 },
-    Model { name: "Buona", note: "Base: un buon compromesso", file: "ggml-base-q5_1.bin", megabytes: 60 },
-    Model { name: "Massima", note: "Small: la più precisa, lenta e pesante", file: "ggml-small-q5_1.bin", megabytes: 190 },
+    Model { name: "Veloce", note: "Per appunti e messaggi vocali", file: "ggml-small-q8_0.bin", megabytes: 264 },
+    Model { name: "Buona", note: "Per riunioni e interviste", file: "ggml-medium-q5_0.bin", megabytes: 539 },
+    Model { name: "Massima", note: "Per audio difficili, la più precisa", file: "ggml-large-v3-turbo-q5_0.bin", megabytes: 574 },
 ];
 
 #[cfg(not(target_os = "android"))]
@@ -506,52 +506,149 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// «di il modello» → «del modello»: la preposizione articolata giusta davanti a `what`.
+pub(crate) fn di(what: &str) -> String {
+    for (art, prep) in [("il ", "del "), ("lo ", "dello "), ("la ", "della "), ("i ", "dei "), ("gli ", "degli "), ("le ", "delle "), ("l'", "dell'")] {
+        if let Some(rest) = what.strip_prefix(art) {
+            return format!("{prep}{rest}");
+        }
+    }
+    format!("di {what}")
+}
+
+/// Quante volte di fila si riprova senza che arrivi un byte nuovo, prima di arrendersi.
+const FETCH_TRIES: u32 = 8;
+
 /// Scarica `url` in `dest` passando da un file `.part`, con lo SHA-256 controllato se noto.
+/// Se la rete cade (Wi-Fi che cambia, VPN, telefono che va in standby) riprende da dove era arrivato
+/// (richiesta «Range») e riprova da solo; anche un download lasciato a metà la volta prima riparte da lì.
 /// Ogni 10% scrive a che punto è. Ritorna lo SHA-256 del file scaricato.
 pub(crate) fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, what: &str, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<String, String> {
     use sha2::{Digest, Sha256};
-    let response = http().get(url).call().map_err(|e| format!("download di {what} non riuscito: {e}"))?;
-    let total = response.header("Content-Length").and_then(|v| v.parse::<u64>().ok()).unwrap_or(megabytes as u64 * 1_000_000);
     if let Some(dir) = dest.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("cartella {} non creata: {e}", dir.display()))?;
     }
     let part = dest.with_extension("part");
-    let mut file = std::fs::File::create(&part).map_err(|e| format!("{} non scrivibile: {e}", part.display()))?;
-    let mut reader = response.into_reader();
+    // Quello che c'è già nel .part (download interrotto la volta prima) si tiene: si rilegge per lo SHA-256.
     let mut hasher = Sha256::new();
+    let mut done = 0u64;
+    if let Ok(mut old) = std::fs::File::open(&part) {
+        let mut buf = vec![0u8; 1024 * 1024];
+        loop {
+            match old.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    hasher.update(&buf[..n]);
+                    done += n as u64;
+                }
+                Err(_) => {
+                    hasher = Sha256::new();
+                    done = 0;
+                    break;
+                }
+            }
+        }
+    }
+    let from_before = done > 0;
+    let mut total = megabytes as u64 * 1_000_000;
+    let mut known_total = false;
+    let mut shown = 0u64;
+    let mut misses = 0u32;
+    let mut last_err = String::new();
     let mut buf = vec![0u8; 256 * 1024];
-    let (mut done, mut shown) = (0u64, 0u64);
-    let copied = loop {
+    loop {
         if cancel.load(Ordering::Relaxed) {
-            break Err(CANCELLED.to_string());
+            return Err(CANCELLED.to_string());
         }
-        let n = match reader.read(&mut buf) {
-            Ok(0) => break Ok(()),
-            Ok(n) => n,
-            Err(e) => break Err(format!("download di {what} interrotto: {e}")),
+        if known_total && done >= total {
+            break;
+        }
+        if misses > 0 {
+            if misses >= FETCH_TRIES {
+                // Il .part resta: al prossimo tentativo si riparte da qui.
+                return Err(format!("download {} interrotto: {last_err}. Riprova: riparte da dove era arrivato", di(what)));
+            }
+            log(sink, Tone::Muted, "", format!("Rete interrotta, riprovo ({misses} di {})…", FETCH_TRIES - 1));
+            let wait = Instant::now() + Duration::from_secs((1u64 << misses.min(5)).min(30));
+            while Instant::now() < wait {
+                if cancel.load(Ordering::Relaxed) {
+                    return Err(CANCELLED.to_string());
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        }
+        let mut request = http().get(url);
+        if done > 0 {
+            request = request.set("Range", &format!("bytes={done}-"));
+        }
+        let response = match request.call() {
+            Ok(r) => r,
+            // Il file era già tutto nel .part.
+            Err(ureq::Error::Status(416, _)) if done > 0 => break,
+            Err(ureq::Error::Status(code, _)) if code < 500 && code != 408 && code != 429 => {
+                return Err(format!("download {} non riuscito: errore {code} dal server", di(what)));
+            }
+            Err(e) => {
+                last_err = e.to_string();
+                misses += 1;
+                continue;
+            }
         };
-        hasher.update(&buf[..n]);
-        if let Err(e) = file.write_all(&buf[..n]) {
-            break Err(format!("scrittura di {what} non riuscita (disco pieno?): {e}"));
+        let resumed = response.status() == 206;
+        if done > 0 && !resumed {
+            // Il server non sa riprendere: si ricomincia da capo.
+            done = 0;
+            hasher = Sha256::new();
         }
-        done += n as u64;
-        let tenth = done * 10 / total.max(1);
-        if tenth > shown && tenth < 10 {
-            shown = tenth;
-            log(sink, Tone::Muted, "", format!("Scaricati {} di {}", size_text((done / 1_000_000) as u32), size_text((total / 1_000_000) as u32)));
+        if let Some(t) = response.header("Content-Range").and_then(|v| v.rsplit('/').next()).and_then(|v| v.parse::<u64>().ok()) {
+            (total, known_total) = (t, true);
+        } else if let Some(len) = response.header("Content-Length").and_then(|v| v.parse::<u64>().ok()) {
+            (total, known_total) = (len + if resumed { done } else { 0 }, true);
         }
-    };
-    drop(file);
-    // Un download a metà (rete caduta, disco pieno) non resta sul disco: un modello pesa centinaia di MB.
-    if let Err(e) = copied {
-        let _ = std::fs::remove_file(&part);
-        return Err(e);
+        let file = if resumed { std::fs::OpenOptions::new().append(true).open(&part) } else { std::fs::File::create(&part) };
+        let mut file = file.map_err(|e| format!("{} non scrivibile: {e}", part.display()))?;
+        let mut reader = response.into_reader();
+        let before = done;
+        let outcome: Result<(), String> = loop {
+            if cancel.load(Ordering::Relaxed) {
+                return Err(CANCELLED.to_string());
+            }
+            let n = match reader.read(&mut buf) {
+                Ok(0) => break Ok(()),
+                Ok(n) => n,
+                Err(e) => break Err(e.to_string()),
+            };
+            hasher.update(&buf[..n]);
+            if let Err(e) = file.write_all(&buf[..n]) {
+                return Err(format!("scrittura {} non riuscita (disco pieno?): {e}", di(what)));
+            }
+            done += n as u64;
+            let tenth = done * 10 / total.max(1);
+            if tenth > shown && tenth < 10 {
+                shown = tenth;
+                log(sink, Tone::Muted, "", format!("Scaricati {} di {}", size_text((done / 1_000_000) as u32), size_text((total / 1_000_000) as u32)));
+            }
+        };
+        drop(file);
+        if done > before {
+            misses = 0;
+        }
+        match outcome {
+            Ok(()) if !known_total || done >= total => break,
+            Ok(()) => last_err = "la connessione si è chiusa prima della fine".into(),
+            Err(e) => last_err = e,
+        }
+        misses += 1;
     }
     let sha = hex(&hasher.finalize());
     if let Some(expected) = expected_sha {
         if !sha.eq_ignore_ascii_case(expected) {
             let _ = std::fs::remove_file(&part);
-            return Err(format!("{what} scaricato non corrisponde all'originale (SHA-256 diverso): scartato"));
+            if from_before {
+                // Il pezzo della volta prima era di un'altra versione del file: si riscarica tutto.
+                return fetch(url, dest, expected_sha, megabytes, what, sink, cancel);
+            }
+            return Err(format!("{what} scaricato non corrisponde all'originale (SHA-256 diverso): scartato, riprova"));
         }
     }
     let _ = std::fs::remove_file(dest);
@@ -1545,7 +1642,11 @@ fn power_on(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: 
                 let secs = v["ms"].as_f64().unwrap_or(0.0) / 1000.0;
                 match v["gpu"].as_str() {
                     Some(g) => log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · scheda video: {g}")),
-                    None => log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · processore, {} thread", v["threads"].as_u64().unwrap_or(0))),
+                    None => {
+                        let threads = v["threads"].as_u64().unwrap_or(0);
+                        crate::accel::set_in_use(false, format!("{threads} thread"));
+                        log(sink, Tone::Step, "Motore", format!("pronto in {secs:.1} s · processore, {threads} thread"));
+                    }
                 }
                 Ok(running)
             }
@@ -2006,26 +2107,47 @@ mod tests {
         let _ = std::fs::remove_dir_all(&work);
     }
 
-    /// Un download che si interrompe a metà non lascia il file `.part` sul disco.
+    /// Un download che si interrompe a metà riprende da dove era arrivato (richiesta «Range»).
     #[test]
-    fn a_broken_download_leaves_nothing_behind() {
+    fn a_broken_download_resumes() {
+        use sha2::{Digest, Sha256};
         use std::io::Write as _;
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let url = format!("http://{}/modello.bin", listener.local_addr().unwrap());
+        let ranges = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let seen = ranges.clone();
         std::thread::spawn(move || {
-            if let Ok((mut stream, _)) = listener.accept() {
-                let mut request = [0u8; 1024];
-                let _ = std::io::Read::read(&mut stream, &mut request);
-                // Promette un MB e ne manda dieci byte, poi chiude.
-                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000000\r\nConnection: close\r\n\r\n0123456789");
+            for (i, stream) in listener.incoming().take(2).enumerate() {
+                let Ok(mut stream) = stream else { continue };
+                let mut request = [0u8; 2048];
+                let n = std::io::Read::read(&mut stream, &mut request).unwrap_or(0);
+                let head = String::from_utf8_lossy(&request[..n]).to_lowercase();
+                seen.lock().unwrap().push(head.lines().find(|l| l.starts_with("range:")).unwrap_or("").to_string());
+                if i == 0 {
+                    // Promette venti byte, ne manda dieci e chiude: come una rete che cade.
+                    let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\nConnection: close\r\n\r\n0123456789");
+                } else {
+                    let _ = stream.write_all(b"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 10-19/20\r\nContent-Length: 10\r\nConnection: close\r\n\r\nabcdefghij");
+                }
             }
         });
         let dir = std::env::temp_dir().join(format!("cedro-fetch-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let dest = dir.join("modello.bin");
-        assert!(fetch(&url, &dest, None, 1, "il modello", &|_| {}, &AtomicBool::new(false)).is_err());
-        assert!(!dest.exists());
+        let want = hex(&Sha256::digest(b"0123456789abcdefghij"));
+        let sha = fetch(&url, &dest, Some(&want), 1, "il modello", &|_| {}, &AtomicBool::new(false)).unwrap();
+        assert_eq!(sha, want);
+        assert_eq!(std::fs::read(&dest).unwrap(), b"0123456789abcdefghij");
         assert!(!dir.join("modello.part").exists());
+        assert_eq!(ranges.lock().unwrap()[1].trim(), "range: bytes=10-");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn preposizioni_articolate() {
+        assert_eq!(di("il modello"), "del modello");
+        assert_eq!(di("il motore"), "del motore");
+        assert_eq!(di("i modelli delle voci"), "dei modelli delle voci");
+        assert_eq!(di("Cedro"), "di Cedro");
     }
 }
