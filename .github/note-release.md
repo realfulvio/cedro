@@ -12,9 +12,8 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Ritocchi ai temi della 0.33.0**, dopo le prove con la finestra stretta e con la coda piena.
+**Componenti aggiornati.** Cedro legge audio, video e PDF con le versioni nuove delle sue librerie (symphonia 0.6, hayro 0.9, lopdf 0.47, cfb 0.16, zip 9.3).
 
-- Windows essenziale e Comune di Bondeno: «Rimuovi» non finisce più sopra il numero dei file; se manca spazio i comandi restano con la sola icona.
-- Cedro compatto, anche nella finestrella dell'icona: «Altri file in coda» non taglia più l'ultimo tipo di file.
-- Documento al centro: in Semplificata la scelta della modalità non copre più la scheda «Video dal web»; l'anteprima dell'originale non esce dal riquadro; per MP3, WAV e MP4 l'icona d'uscita è quella audio/video e «tutte le pagine» compare solo per i PDF.
-- Impostazioni: in Aspetto le descrizioni di Standard e Semplificata non toccano più il bordo; su Windows, in Sistema, le istruzioni del processore restano accostate anche a finestra larga.
+- MP3 e OGG convertiti hanno la durata esatta: non ci sono più i campioni di silenzio che l'encoder aggiunge all'inizio e alla fine.
+- Titolo e artista degli AIFF si leggono e passano nel file convertito; quelli dei WAV non hanno più un carattere in più in fondo.
+- Le pagine dei PDF in immagini vengono un po' più nitide e più leggere.
