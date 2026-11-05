@@ -18,7 +18,12 @@ pub struct Row {
     /// Il testo di whisper, per sapere cosa è stato corretto.
     pub orig: String,
     pub removed: bool,
+    /// Chi la dice (indice in `Review::names`), se le voci sono state riconosciute.
+    pub speaker: Option<u8>,
 }
+
+/// Lo stato da rimettere con «Ripristina»: le frasi (testo, tolta, chi parla) e i nomi.
+type Snapshot = (Vec<(String, bool, Option<u8>)>, Vec<String>);
 
 /// In cosa si salva la revisione.
 pub const FORMATS: [(&str, &str); 4] = [("Word", "docx"), ("Testo", "txt"), (".srt", "srt"), (".vtt", "vtt")];
@@ -38,7 +43,19 @@ pub struct Review {
     pub only_flagged: bool,
     pub follow: bool,
     pub format: usize,
-    undo: Vec<Vec<(String, bool)>>,
+    undo: Vec<Snapshot>,
+    /// I nomi delle voci (vuoto: la trascrizione è senza voci).
+    pub names: Vec<String>,
+    /// Scrivere chi parla nel file salvato.
+    pub write_voices: bool,
+    /// La scheda a destra: 0 «Da controllare», 1 «Chi parla», 2 «Riassunto».
+    pub tab: u8,
+    /// Il Riassunto AI, se è stato fatto.
+    pub summary: Option<crate::riassunto::Stored>,
+    /// Mettere il riassunto in cima al file salvato (Word e testo).
+    pub summary_on_top: bool,
+    /// «Copia» appena premuto: il pulsante dice «Copiato».
+    pub summary_copied: bool,
     /// Il file scritto l'ultima volta, e cosa è successo.
     pub saved: Option<PathBuf>,
     pub note: String,
@@ -49,8 +66,11 @@ pub struct Review {
 }
 
 impl Review {
-    pub fn new(source: &Path, secs: f64, lang: String, segments: Vec<Segment>) -> Review {
-        let rows: Vec<Row> = segments.into_iter().map(|s| Row { t0: s.t0, t1: s.t1, orig: s.text.clone(), text: s.text, removed: false }).collect();
+    pub fn new(source: &Path, secs: f64, lang: String, segments: Vec<Segment>, names: Vec<String>, summary: Option<crate::riassunto::Stored>) -> Review {
+        let rows: Vec<Row> = segments
+            .into_iter()
+            .map(|s| Row { t0: s.t0, t1: s.t1, orig: s.text.clone(), text: s.text, removed: false, speaker: s.speaker.filter(|v| (*v as usize) < names.len()) })
+            .collect();
         let mut r = Review {
             source: source.to_path_buf(),
             secs,
@@ -64,18 +84,28 @@ impl Review {
             follow: true,
             format: 0,
             undo: Vec::new(),
+            names,
+            write_voices: true,
+            tab: 0,
+            summary_on_top: summary.is_some(),
+            summary_copied: false,
+            summary,
             saved: None,
             note: String::new(),
             followed: None,
             sel: None,
         };
         r.detect();
+        // Con le voci si parte da «Chi parla» (i nomi da dare), a meno che ci sia qualcosa da controllare.
+        if !r.names.is_empty() && r.open_count() == 0 {
+            r.tab = 1;
+        }
         r
     }
 
     /// Cerca i punti da controllare sul testo di whisper (le correzioni non li cambiano).
     pub fn detect(&mut self) {
-        let orig: Vec<Segment> = self.rows.iter().map(|r| Segment { t0: r.t0, t1: r.t1, text: r.orig.clone() }).collect();
+        let orig: Vec<Segment> = self.rows.iter().map(|r| Segment { t0: r.t0, t1: r.t1, text: r.orig.clone(), speaker: r.speaker }).collect();
         let wave = self.bars.as_deref().map(|bars| Wave { bars, secs: self.secs });
         self.flags = revisione::find(&orig, wave.as_ref());
         self.dismissed.clear();
@@ -84,7 +114,76 @@ impl Review {
 
     /// Le frasi che restano, con le correzioni.
     pub fn segments(&self) -> Vec<Segment> {
-        self.rows.iter().filter(|r| !r.removed).map(|r| Segment { t0: r.t0, t1: r.t1, text: r.text.trim().to_string() }).filter(|s| !s.text.is_empty()).collect()
+        self.rows
+            .iter()
+            .filter(|r| !r.removed)
+            .map(|r| Segment { t0: r.t0, t1: r.t1, text: r.text.trim().to_string(), speaker: r.speaker })
+            .filter(|s| !s.text.is_empty())
+            .collect()
+    }
+
+    /// Le voci che hanno ancora almeno una frase (dopo «Unisci» qualcuna resta vuota e non si mostra).
+    pub fn live_voices(&self) -> Vec<u8> {
+        (0..self.names.len() as u8).filter(|v| self.rows.iter().any(|r| !r.removed && r.speaker == Some(*v))).collect()
+    }
+
+    /// Il nome della voce `v` (quello di partenza se è stato cancellato).
+    pub fn name(&self, v: u8) -> String {
+        trascrizione::name_of(&self.names, Some(v)).unwrap_or_else(|| trascrizione::speaker_name(v as usize))
+    }
+
+    /// I nomi di adesso, uno per voce (quello di partenza dove è stato cancellato).
+    pub fn current_names(&self) -> Vec<String> {
+        (0..self.names.len() as u8).map(|v| self.name(v)).collect()
+    }
+
+    /// Il riassunto pronto da mostrare, con i nomi di adesso.
+    pub fn summary_sections(&self) -> Option<crate::riassunto::Sections> {
+        self.summary.as_ref().map(|s| s.sections(&self.current_names()))
+    }
+
+    /// Quante frasi e quanti secondi di parlato ha la voce `v`.
+    pub fn voice_stats(&self, v: u8) -> (usize, f64) {
+        self.rows.iter().filter(|r| !r.removed && r.speaker == Some(v)).fold((0, 0.0), |(n, s), r| (n + 1, s + (r.t1 - r.t0).max(0) as f64 / 100.0))
+    }
+
+    /// Un pezzo da far sentire della voce `v`: la sua frase più lunga (la prima, a parità).
+    pub fn voice_sample(&self, v: u8) -> Option<usize> {
+        (0..self.rows.len()).filter(|i| !self.rows[*i].removed && self.rows[*i].speaker == Some(v)).max_by_key(|i| (self.rows[*i].t1 - self.rows[*i].t0, std::cmp::Reverse(*i)))
+    }
+
+    /// Cambia chi dice la frase `row`. `NEW_VOICE` crea una voce nuova (o riusa una rimasta senza frasi).
+    pub fn set_speaker(&mut self, row: usize, v: u8) {
+        if row >= self.rows.len() {
+            return;
+        }
+        let v = if v == crate::ui::core::NEW_VOICE {
+            let live = self.live_voices();
+            if self.names.len() < trascrizione::MAX_VOICES {
+                self.names.push(trascrizione::speaker_name(self.names.len()));
+                self.names.len() as u8 - 1
+            } else if let Some(free) = (0..self.names.len() as u8).find(|v| !live.contains(v) && self.rows[row].speaker != Some(*v)) {
+                self.names[free as usize] = trascrizione::speaker_name(free as usize);
+                free
+            } else {
+                return;
+            }
+        } else if (v as usize) < self.names.len() {
+            v
+        } else {
+            return;
+        };
+        self.rows[row].speaker = Some(v);
+    }
+
+    /// «Unisci a…»: tutte le frasi della voce `from` passano a `into`.
+    pub fn merge(&mut self, from: u8, into: u8) {
+        if from == into || into as usize >= self.names.len() {
+            return;
+        }
+        for r in self.rows.iter_mut().filter(|r| r.speaker == Some(from)) {
+            r.speaker = Some(into);
+        }
     }
 
     /// Il punto è ancora da controllare: nessuno l'ha sistemato o lasciato com'era.
@@ -110,7 +209,7 @@ impl Review {
     }
 
     pub fn push_undo(&mut self) {
-        self.undo.push(self.rows.iter().map(|r| (r.text.clone(), r.removed)).collect());
+        self.undo.push((self.rows.iter().map(|r| (r.text.clone(), r.removed, r.speaker)).collect(), self.names.clone()));
         if self.undo.len() > 200 {
             self.undo.remove(0);
         }
@@ -121,11 +220,13 @@ impl Review {
     }
 
     pub fn undo(&mut self) {
-        if let Some(state) = self.undo.pop() {
-            for (r, (text, removed)) in self.rows.iter_mut().zip(state) {
+        if let Some((rows, names)) = self.undo.pop() {
+            for (r, (text, removed, speaker)) in self.rows.iter_mut().zip(rows) {
                 r.text = text;
                 r.removed = removed;
+                r.speaker = speaker;
             }
+            self.names = names;
         }
     }
 
@@ -201,7 +302,7 @@ impl App {
         };
         let secs = saved.secs;
         self.notice = None;
-        self.review = Some(Review::new(&path, secs, saved.lang, saved.segments));
+        self.review = Some(Review::new(&path, secs, saved.lang, saved.segments, saved.names, saved.summary));
         self.review_scrub = None;
         // L'onda si legge in un thread: sull'audio lungo ci vuole un po', e serve anche a trovare le frasi nel silenzio.
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
@@ -332,11 +433,15 @@ impl App {
         let Some(r) = self.review.as_mut() else { return };
         let segments = r.segments();
         let ext = FORMATS[r.format.min(FORMATS.len() - 1)].1;
+        // Con l'interruttore spento il file esce senza chi parla (i nomi restano nella revisione).
+        let names: &[String] = if r.write_voices { &r.names } else { &[] };
+        // Il riassunto va solo nel Word e nel testo: i sottotitoli restano come sono.
+        let summary = r.summary_sections().filter(|_| r.summary_on_top);
         let bytes = match ext {
-            "docx" => trascrizione::docx_bytes(&r.source, r.secs, &r.lang, &segments),
-            "txt" => trascrizione::text_bytes(&r.source, r.secs, &r.lang, &segments),
-            "srt" => revisione::srt_bytes(&segments),
-            _ => revisione::vtt_bytes(&segments),
+            "docx" => trascrizione::docx_bytes_with(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref()),
+            "txt" => trascrizione::text_bytes_with(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref()),
+            "srt" => revisione::srt_bytes(&segments, names),
+            _ => revisione::vtt_bytes(&segments, names),
         };
         let dir = dest.or_else(|| r.source.parent().filter(|p| !p.as_os_str().is_empty()).map(Path::to_path_buf)).unwrap_or_else(|| PathBuf::from("."));
         let stem = r.source.file_stem().and_then(|s| s.to_str()).unwrap_or("trascrizione");
@@ -349,7 +454,7 @@ impl App {
         match std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&out, bytes)) {
             Ok(()) => {
                 // Le frasi corrette restano: la prossima volta si riparte da qui.
-                let _ = revisione::save(&r.source, r.secs, &r.lang, &segments);
+                let _ = revisione::save_with(&r.source, r.secs, &r.lang, &segments, &r.names, r.summary.as_ref());
                 r.note = format!("Salvato: {}", out.file_name().and_then(|n| n.to_str()).unwrap_or(""));
                 r.saved = Some(out);
             }
@@ -389,13 +494,42 @@ mod tests {
     use super::*;
 
     fn seg(t0: i64, text: &str) -> Segment {
-        Segment { t0, t1: t0 + 500, text: text.to_string() }
+        Segment { t0, t1: t0 + 500, text: text.to_string(), speaker: None }
     }
 
     fn sample() -> Review {
         let mut segments = vec![seg(0, "Buongiorno a tutti."), seg(600, "Il bilancio è stato approvato."), seg(1200, "Il bilancio è stato approvato."), seg(1800, "Il bilancio è stato approvato."), seg(2400, "Sì sì sì sì sì sì sì va bene.")];
         segments.push(seg(3000, "Grazie e arrivederci."));
-        Review::new(Path::new("/tmp/prova.wav"), 40.0, "it".into(), segments)
+        Review::new(Path::new("/tmp/prova.wav"), 40.0, "it".into(), segments, Vec::new(), None)
+    }
+
+    fn with_voices() -> Review {
+        let segments: Vec<Segment> = [(0, 0, "Buonasera."), (600, 1, "Grazie."), (1200, 2, "Chiedo la parola."), (1800, 0, "Prego."), (2400, 2, "Ho finito.")]
+            .iter()
+            .map(|(t0, v, text)| Segment { t0: *t0, t1: t0 + 500, text: text.to_string(), speaker: Some(*v) })
+            .collect();
+        Review::new(Path::new("/tmp/voci.wav"), 30.0, "it".into(), segments, trascrizione::default_names(3), None)
+    }
+
+    #[test]
+    fn voices_change_merge_and_undo() {
+        let mut r = with_voices();
+        assert_eq!(r.tab, 1, "con le voci e niente da controllare si apre «Chi parla»");
+        assert_eq!(r.live_voices(), [0, 1, 2]);
+        assert_eq!(r.voice_stats(2), (2, 10.0));
+        r.push_undo();
+        r.names[0] = "Sindaco".into();
+        r.merge(2, 1);
+        assert_eq!(r.live_voices(), [0, 1]);
+        assert_eq!(r.segments().iter().map(|s| s.speaker).collect::<Vec<_>>(), [Some(0), Some(1), Some(1), Some(0), Some(1)]);
+        // Una voce nuova: la quarta, con il nome di partenza.
+        r.set_speaker(4, crate::ui::core::NEW_VOICE);
+        assert_eq!((r.rows[4].speaker, r.name(3).as_str()), (Some(3), "Interlocutore 4"));
+        assert_eq!(r.name(0), "Sindaco");
+        r.undo();
+        assert_eq!(r.live_voices(), [0, 1, 2]);
+        assert_eq!((r.name(0).as_str(), r.names.len()), ("Interlocutore 1", 3));
+        assert_eq!(r.voice_sample(2), Some(2));
     }
 
     #[test]

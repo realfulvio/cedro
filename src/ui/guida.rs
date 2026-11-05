@@ -91,11 +91,11 @@ const PAGES: [Page; 8] = [
     Page {
         nav: "Trascrizione",
         title: "Dalla voce al testo, poi rivedilo",
-        intro: "Trascrivi vocali, registrazioni e l'audio dei video; se c'è una scheda video compatibile Cedro la usa. In Rivedi riascolti ogni frase e correggi i punti dubbi.",
+        intro: "Trascrivi vocali, registrazioni e l'audio dei video; se c'è una scheda video compatibile Cedro la usa. Riconosce chi parla e in Rivedi riascolti ogni frase, dai i nomi e correggi i punti dubbi.",
         rows: &[
-            ("Testo", "Con i tempi", "Copiabile con un clic"),
+            ("Chi parla", "Le voci riconosciute", "Un nome e un colore per ogni interlocutore"),
             ("Rivedi", "Audio e testo insieme", "Play per frase, i punti da controllare in evidenza"),
-            ("Locale", "Resta sul PC", "Il motore si scarica al primo uso"),
+            ("Riassunto AI", "Sul tuo PC", "In breve, decisioni e cose da fare"),
         ],
     },
     Page {

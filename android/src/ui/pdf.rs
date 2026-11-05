@@ -62,6 +62,8 @@ pub enum Campo {
     Modello,
     /// Il link di «Video dal web» e di YouTube.
     Link,
+    /// Il nome di una voce in «Rivedi» › «Chi parla».
+    Voce(u8),
 }
 
 /// Quello che arriva dalla tastiera.
@@ -262,7 +264,7 @@ impl StatoPdf {
             Campo::ExcelPagine => &mut self.x_pagine,
             Campo::Filigrana => &mut self.testo_filigrana,
             Campo::PagineDi(i) => &mut self.unisci.get_mut(i)?.sel,
-            Campo::Opzione(_) | Campo::Modello | Campo::Link => return None,
+            Campo::Opzione(_) | Campo::Modello | Campo::Link | Campo::Voce(_) => return None,
         })
     }
 
@@ -407,6 +409,19 @@ impl App {
     pub fn tasto(&mut self, t: Tasto) -> Effetto {
         let Some(c) = self.campo else { return Effetto::Niente };
         match (c, t) {
+            (Campo::Voce(_), Tasto::Invio) => {
+                self.campo = None;
+                if let Some(rv) = self.rivedi.as_ref() {
+                    rv.salva_revisione();
+                }
+                return Effetto::Ridisegna;
+            }
+            (Campo::Voce(v), _) => {
+                if let Some(rv) = self.rivedi.as_mut() {
+                    rv.tasto_nome(v, t);
+                }
+                return Effetto::Ridisegna;
+            }
             (_, Tasto::Invio) if c != Campo::Password => {
                 self.campo = None;
                 return Effetto::Ridisegna;
@@ -1017,7 +1032,7 @@ impl App {
                     for (k, (inizio, titolo)) in bm.iter().enumerate() {
                         let fine = bm.get(k + 1).map(|b| b.0 - 1).unwrap_or(tot).max(*inizio);
                         let pag = if fine > *inizio { format!("Pagine {inizio}-{fine}") } else { format!("Pagina {inizio}") };
-                        p.rrect(x, y, w, 60.0, 16.0, Some(pal.surface), Some((pal.border, 1.0)));
+                        super::sollevato(p, pal, self.tema.dark(), x, y, w, 60.0, 16.0);
                         let nome = match titolo.as_str() {
                             "" => format!("{}. Senza titolo", k + 1),
                             t if t.starts_with(|c: char| c.is_ascii_digit()) => t.to_string(),
@@ -1097,7 +1112,7 @@ impl App {
         let pw = w;
         if self.pdf.pannello == 3 {
             let h = 150.0;
-            p.rrect(x, y, pw, h, 18.0, Some(pal.surface), Some((pal.border, 1.0)));
+            super::sollevato(p, pal, self.tema.dark(), x, y, pw, h, 18.0);
             // Dove: una griglia 3×3.
             for k in 0..9u8 {
                 let (gx, gy) = (x + 14.0 + (k % 3) as f32 * 18.0, y + 14.0 + (k / 3) as f32 * 18.0);
@@ -1125,7 +1140,7 @@ impl App {
             y += h;
         } else if self.pdf.pannello == 4 {
             let h = 134.0;
-            p.rrect(x, y, pw, h, 18.0, Some(pal.surface), Some((pal.border, 1.0)));
+            super::sollevato(p, pal, self.tema.dark(), x, y, pw, h, 18.0);
             p.text("Filigrana", x + 14.0, y + 10.0, pw - 100.0, 24.0, 16.0, Weight::Semibold, pal.text, Align::Left);
             p.text("Testo chiaro in diagonale su ogni pagina", x + 14.0, y + 34.0, pw - 100.0, 20.0, 13.0, Weight::Regular, pal.muted, Align::Left);
             self.interruttore(p, x + pw - 66.0, y + 32.0, self.pdf.filigrana);
@@ -1176,7 +1191,7 @@ impl App {
     fn riga_file(&mut self, p: &mut Painter, x: f32, y: f32, w: f32) -> f32 {
         let pal = self.pal();
         let h = 76.0;
-        p.rrect(x, y, w, h, 18.0, Some(pal.surface), Some((pal.border, 1.0)));
+        super::sollevato(p, pal, self.tema.dark(), x, y, w, h, 18.0);
         p.rrect(x + 12.0, y + 10.0, 42.0, 56.0, 4.0, Some(BIANCO), Some((pal.border, 1.0)));
         if let Some(img) = self.miniatura.clone() {
             p.image(&img, x + 13.0, y + 11.0, 40.0, 54.0, 3.0, Fit::Contain);

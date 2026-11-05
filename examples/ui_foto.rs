@@ -88,8 +88,11 @@ fn main() {
             for (act, surface) in [Activity::Convert, Activity::Transcribe, Activity::YouTube].into_iter().flat_map(|a| surfaces.iter().map(move |s| (a, *s))) {
                 let mut s = Screen::new(surface, Arc::new(|| {}));
                 s.request_appearance(theme, simple);
-                s.drop_files(vec![files[3].clone()]);
-                s.drop_files(images.clone());
+                // VUOTO=1: senza file, per vedere la zona «Trascina qui».
+                if std::env::var("VUOTO").is_err() {
+                    s.drop_files(vec![files[3].clone()]);
+                    s.drop_files(images.clone());
+                }
                 s.app.activity = act;
                 if surface == Surface::Compact {
                     s.ui.compact_tab = match act {

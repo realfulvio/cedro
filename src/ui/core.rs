@@ -47,6 +47,8 @@ pub enum Field {
     FilePages(usize),
     /// «Rivedi»: il testo di una frase della trascrizione.
     Review(usize),
+    /// «Rivedi», scheda «Chi parla»: il nome di una voce.
+    VoiceName(u8),
 }
 
 /// Le parti che si aprono e si chiudono («Altre opzioni»…).
@@ -69,6 +71,10 @@ pub enum Scroll {
     /// «Rivedi»: le frasi, e i punti da controllare.
     Review,
     ReviewFlags,
+    /// «Rivedi», scheda «Chi parla»: le voci.
+    ReviewVoices,
+    /// «Rivedi», scheda «Riassunto».
+    ReviewSummary,
 }
 
 /// Cosa fa un clic.
@@ -190,6 +196,33 @@ pub enum Act {
     ReviewOnly,
     ReviewFormat(usize),
     ReviewSave,
+    /// «Rivedi»: la scheda a destra (0 «Da controllare», 1 «Chi parla»).
+    ReviewTab(u8),
+    /// «Rivedi»: il nome di chi parla in una frase, che apre il menu per cambiarlo.
+    ReviewSpeakerMenu(usize),
+    /// «Rivedi»: chi dice la frase (`NEW_VOICE` = una voce nuova).
+    ReviewSpeaker(usize, u8),
+    /// «Rivedi»: fa sentire un pezzo della voce.
+    ReviewVoicePlay(u8),
+    /// «Rivedi»: «Unisci a…» di una voce, e l'unione (da, in).
+    ReviewMergeMenu(u8),
+    ReviewMerge(u8, u8),
+    /// «Rivedi»: scrivere o no chi parla nel file salvato.
+    ReviewWriteVoices,
+    /// «Riassunto AI» nella coda: apre Rivedi sul riassunto (indice in `files`).
+    SummaryOpen(usize),
+    /// «Fai il riassunto», «Riprova», «Rifai».
+    SummaryStart,
+    SummaryCancel,
+    SummaryCopy,
+    /// Spunta una cosa da fare del riassunto.
+    SummaryTodo(usize),
+    /// «Metti il riassunto in cima al file».
+    SummaryOnTop,
+    /// «Quante persone parlano?»: 0 Automatico, poi il numero; Trascrivi; Annulla.
+    VoicesPick(u8),
+    VoicesGo,
+    VoicesCancel,
     /// Solo per bloccare i clic sotto un riquadro (per esempio dentro un menu aperto).
     Nothing,
 }
@@ -212,6 +245,19 @@ pub struct Menu {
     pub anchor: R,
     pub items: Vec<(String, Act)>,
     pub selected: Option<usize>,
+    /// Una riga grigia in cima (per esempio «Chi dice questa frase?»).
+    pub title: Option<String>,
+    /// Il pallino colorato davanti a ogni voce (vuoto: nessuno).
+    pub swatches: Vec<Swatch>,
+}
+
+/// Il pallino davanti a una voce di menu.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Swatch {
+    None,
+    Color(Rgb),
+    /// Un cerchio tratteggiato: una cosa nuova («Voce nuova»).
+    New,
 }
 
 /// Lo stato della finestra che non è del lavoro: dove sta il mouse, cosa è aperto, quanto si è scorso.
@@ -279,7 +325,15 @@ pub const SANS: Weight = Weight::Regular;
 pub const SEMI: Weight = Weight::Semibold;
 pub const BOLD: Weight = Weight::Bold;
 
+/// Nel menu di una frase, la voce nuova.
+pub const NEW_VOICE: u8 = u8::MAX;
+
 impl<'a> Frame<'a> {
+    /// Il colore della voce `i` nel tema.
+    pub fn voice(&self, i: usize) -> Rgb {
+        super::theme::voice(self.theme, i)
+    }
+
     pub fn hit(&mut self, r: R, act: Act) {
         self.hits.push(Hit { r, act, kind: HitKind::Button });
     }
@@ -332,9 +386,68 @@ impl<'a> Frame<'a> {
         self.p.icon(d, x, y, size, c);
     }
 
+    /// Il riquadro «sollevato» di tutti i temi: ombra morbida sotto e bordo appena accennato
+    /// (nei temi scuri l'ombra è più forte e il bordo resta pieno, se no il riquadro sparisce).
     pub fn card(&mut self, r: R, radius: f32) {
         let pal = self.pal;
-        self.p.rrect(r.0, r.1, r.2, r.3, radius, Some(pal.surface), Some((pal.border, 1.0)));
+        let dark = self.theme.dark();
+        self.p.shadow(r.0, r.1, r.2, r.3, radius, 10.0, if dark { 0.28 } else { 0.10 }, 3.0);
+        let border = if dark { pal.border } else { mix(pal.border, pal.surface, 0.25) };
+        self.p.rrect(r.0, r.1, r.2, r.3, radius, Some(pal.surface), Some((border, 1.0)));
+    }
+
+    /// I due colori della sfumatura di un pulsante pieno di colore `c` (più scuri sotto il mouse).
+    pub fn glossy(&self, c: Rgb, hot: bool) -> (Rgb, Rgb) {
+        if hot {
+            (mix(c, (255, 255, 255), 0.04), mix(c, (0, 0, 0), 0.2))
+        } else {
+            (mix(c, (255, 255, 255), 0.16), mix(c, (0, 0, 0), 0.06))
+        }
+    }
+
+    /// Il fondo di un pulsante pieno in rilievo: ombra, sfumatura dall'alto e filo chiaro sul bordo.
+    pub fn glossy_fill(&mut self, r: R, radius: f32, c: Rgb, hot: bool) {
+        let spread = (r.3 * 0.14).clamp(4.0, 10.0);
+        let a = if self.theme.dark() { 0.35 } else { 0.2 };
+        self.p.shadow(r.0, r.1, r.2, r.3, radius, spread, a, spread * 0.4);
+        let (top, bottom) = self.glossy(c, hot);
+        self.p.rrect_vgrad(r.0, r.1, r.2, r.3, radius, top, bottom);
+        self.p.rrect_line(r.0, r.1, r.2, r.3, radius, (255, 255, 255), 1.0, 0.12, None);
+    }
+
+    /// Il colore di un'attività (piastrelle, schede, icone): nei temi scuri un po' più chiaro.
+    pub fn act_color(&self, a: Activity) -> Rgb {
+        self.lift(super::theme::activity_color(a))
+    }
+
+    /// Il colore di un tipo di file: nei temi scuri un po' più chiaro.
+    pub fn kind_color(&self, k: Kind) -> Rgb {
+        self.lift(super::theme::kind_color(k))
+    }
+
+    fn lift(&self, c: Rgb) -> Rgb {
+        if self.theme.dark() {
+            mix(c, (255, 255, 255), 0.28)
+        } else {
+            c
+        }
+    }
+
+    /// La piastrella colorata con l'icona dentro: piena (icona bianca) quando è scelta,
+    /// appena tinta (icona del colore) quando no.
+    pub fn tile(&mut self, x: f32, y: f32, s: f32, icon: &str, c: Rgb, on: bool) {
+        let pal = self.pal;
+        let rad = (s * 0.25).round();
+        let isz = (s * 0.61).round();
+        let pad = (s - isz) / 2.0;
+        if on {
+            self.p.shadow(x, y, s, s, rad, 5.0, if self.theme.dark() { 0.3 } else { 0.12 }, 2.0);
+            self.p.rrect(x, y, s, s, rad, Some(c), None);
+            self.icon(icon, x + pad, y + pad, isz, (255, 255, 255));
+        } else {
+            self.p.rrect(x, y, s, s, rad, Some(mix(c, pal.surface, if self.theme.dark() { 0.8 } else { 0.86 })), None);
+            self.icon(icon, x + pad, y + pad, isz, c);
+        }
     }
 
     pub fn hline(&mut self, x: f32, y: f32, w: f32) {
@@ -349,8 +462,11 @@ impl<'a> Frame<'a> {
     pub fn primary(&mut self, r: R, label: &str, icon: Option<&str>, size: f32, act: Act, enabled: bool) {
         let pal = self.pal;
         let hover = enabled && self.hovered(&act);
-        let bg = if !enabled { mix(pal.primary, pal.surface, 0.55) } else if hover { mix(pal.primary, (0, 0, 0), 0.12) } else { pal.primary };
-        self.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(bg), None);
+        if enabled {
+            self.glossy_fill(r, 8.0, pal.primary, hover);
+        } else {
+            self.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(mix(pal.primary, pal.surface, 0.55)), None);
+        }
         let isz = (size * 1.35).round();
         let tw = self.measure(label, size, SEMI);
         let total = tw + if icon.is_some() { isz + 14.0 } else { 0.0 };
@@ -404,6 +520,11 @@ impl<'a> Frame<'a> {
 
     /// Una scelta chiusa (si apre in un elenco al clic).
     pub fn select(&mut self, r: R, label: &str, icon: Option<&str>, size: f32, act: Act) {
+        self.select_tinted(r, label, icon, None, size, act);
+    }
+
+    /// Come `select`; con `tint` l'icona sta in una piastrella di quel colore (l'attività scelta).
+    pub fn select_tinted(&mut self, r: R, label: &str, icon: Option<&str>, tint: Option<Rgb>, size: f32, act: Act) {
         let pal = self.pal;
         let open = self.ui.menu.as_ref().is_some_and(|m| m.anchor == r);
         let hover = self.hovered(&act);
@@ -412,8 +533,14 @@ impl<'a> Frame<'a> {
         let mut x = r.0 + pad;
         if let Some(d) = icon {
             let isz = (size * 1.2).round();
-            self.icon(d, x, r.1 + (r.3 - isz) / 2.0, isz, pal.text);
-            x += isz + 22.0;
+            if let Some(c) = tint {
+                let ts = (r.3 - 12.0).min(isz + 12.0);
+                self.tile(x - 6.0, r.1 + (r.3 - ts) / 2.0, ts, d, c, true);
+                x += ts + 4.0;
+            } else {
+                self.icon(d, x, r.1 + (r.3 - isz) / 2.0, isz, pal.text);
+                x += isz + 22.0;
+            }
         }
         let chev = (size * 1.05).round();
         self.p.text(label, x, r.1, r.0 + r.2 - pad - chev - 8.0 - x, r.3, size, SANS, pal.text, Align::Left);
@@ -770,18 +897,31 @@ impl<'a> Frame<'a> {
         for (label, _) in &menu.items {
             w = w.max(self.measure(label, size, SANS) + 48.0);
         }
-        let h = row * menu.items.len() as f32 + 8.0;
+        let dots = menu.swatches.iter().any(|s| *s != Swatch::None);
+        if dots {
+            w += 26.0;
+        }
+        let head = if menu.title.is_some() { 34.0 } else { 0.0 };
+        if let Some(t) = &menu.title {
+            w = w.max(self.measure(t, 14.0, SANS) + 32.0);
+        }
+        let h = row * menu.items.len() as f32 + 8.0 + head;
         let below = menu.anchor.1 + menu.anchor.3 + 4.0;
         let y = if below + h > self.h - 8.0 && menu.anchor.1 - h - 4.0 > 8.0 { menu.anchor.1 - h - 4.0 } else { below.min(self.h - h - 8.0).max(8.0) };
         let x = menu.anchor.0.min(self.w - w - 8.0).max(8.0);
         self.p.shadow(x, y, w, h, 8.0, 10.0, 0.22, 4.0);
         self.p.rrect(x, y, w, h, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
         let items: Vec<(String, Act)> = menu.items.iter().map(|(l, a)| (l.clone(), a.clone())).collect();
+        let swatches = menu.swatches.clone();
+        let title = menu.title.clone();
         let selected = menu.selected;
         // Il menu copre quello che c'è sotto: i clic lì dentro non vanno ai controlli dietro.
         self.hits.push(Hit { r: (x, y, w, h), act: Act::Nothing, kind: HitKind::Button });
+        if let Some(t) = title {
+            self.p.text(&t, x + 16.0, y + 4.0, w - 24.0, head, 14.0, SANS, pal.muted, Align::Left);
+        }
         for (i, (label, act)) in items.into_iter().enumerate() {
-            let r = (x + 4.0, y + 4.0 + i as f32 * row, w - 8.0, row);
+            let r = (x + 4.0, y + 4.0 + head + i as f32 * row, w - 8.0, row);
             let hot = self.ui.hover == Some(Act::MenuPick(i));
             if hot || selected == Some(i) {
                 self.p.rrect(r.0, r.1, r.2, r.3, 6.0, Some(if hot { pal.alt } else { mix(pal.alt, pal.surface, 0.4) }), None);
@@ -789,7 +929,17 @@ impl<'a> Frame<'a> {
             if selected == Some(i) {
                 self.p.rrect(r.0 + 2.0, r.1 + 10.0, 3.0, r.3 - 20.0, 1.5, Some(pal.primary), None);
             }
-            self.p.text(&label, r.0 + 16.0, r.1, r.2 - 24.0, r.3, size, SANS, pal.text, Align::Left);
+            let mut tx = r.0 + 16.0;
+            if dots {
+                let (cx, cy) = (tx + 6.0, r.1 + r.3 / 2.0);
+                match swatches.get(i).copied().unwrap_or(Swatch::None) {
+                    Swatch::Color(c) => self.p.circle(cx, cy, 6.0, Some(c), None),
+                    Swatch::New => self.p.rrect_line(cx - 6.0, cy - 6.0, 12.0, 12.0, 6.0, pal.muted, 1.5, 1.0, Some((3.0, 2.0))),
+                    Swatch::None => {}
+                }
+                tx += 26.0;
+            }
+            self.p.text(&label, tx, r.1, r.2 - (tx - r.0) - 8.0, r.3, size, SANS, pal.text, Align::Left);
             let _ = act;
             self.hits.push(Hit { r, act: Act::MenuPick(i), kind: HitKind::Button });
         }

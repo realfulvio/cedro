@@ -16,6 +16,18 @@ use crate::ui::{App, Archivio, Compito, Effetto, Info, Recente, Sorgente, Stato,
 /// Dove finiscono le copie.
 const DOCUMENTI: &str = "/storage/emulated/0/Documents";
 
+/// «Se il file esiste già» delle Impostazioni, per i file pubblicati in MediaStore (0 numera, 1 sostituisci, 2 salta).
+static ESISTE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+fn ricorda_esiste(e: cedro::Exists) {
+    let v = match e {
+        cedro::Exists::Replace => 1,
+        cedro::Exists::Skip => 2,
+        _ => 0,
+    };
+    ESISTE.store(v, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// Quello che arriva dal menu Condividi.
 struct Condiviso {
     path: PathBuf,
@@ -866,6 +878,9 @@ struct Consegne {
     onda_riv: Casella<(PathBuf, Option<Vec<f32>>)>,
     /// I punti da controllare di una trascrizione finita (lavoro, quanti).
     controlli: Arc<Mutex<Vec<(u32, usize)>>>,
+    /// Il Riassunto AI: il passo in parole (lavoro, testo) e il risultato (lavoro, trascrizione, riassunto).
+    passo_riassunto: Arc<Mutex<Vec<(u32, String)>>>,
+    riassunti: Arc<Mutex<Vec<(u32, PathBuf, cedro::riassunto::Stored)>>>,
     /// Miniatura, misure e pagine dei file in coda nella finestra principale.
     voci: Arc<Mutex<Vec<(PathBuf, Option<Image>, Option<(u32, u32)>, Option<u32>)>>>,
 }
@@ -951,8 +966,9 @@ fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'stat
                     }
                 }
             }
+            let privato = o.path.clone();
             match consegna(&app, o.path) {
-                Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg: o.message }),
+                Ok((path, nome)) => invia(Stato::Fatto { msg: col_nome_vero(&o.message, &privato, &nome), path, nome }),
                 Err(e) => invia(Stato::Errore(con_dettagli(&e, azione, &file, &out))),
             }
         }
@@ -994,7 +1010,7 @@ fn pubblica(env: &mut JNIEnv, att: &JObject, privato: &Path) -> Result<(String, 
         match pubblica_in(env, &resolver, raccolta, rel, privato, &nome, mime) {
             Ok((uri, visto)) => {
                 log::info!("pubblicato {} in {rel}/{visto} ({uri})", privato.display());
-                return Ok((uri, format!("{rel}/{visto}")));
+                return Ok((uri, if visto.starts_with("Già presente") { visto } else { format!("{rel}/{visto}") }));
             }
             Err(e) => {
                 log::warn!("MediaStore {rel}: {e}");
@@ -1027,6 +1043,28 @@ fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, 
     };
     let esterno = env.new_string("external").map_err(|e| e.to_string())?;
     let base = env.call_static_method(raccolta, "getContentUri", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&esterno)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+    // Se il nome c'è già vale la scelta delle Impostazioni, come sul computer: MediaStore da solo farebbe «x (2)».
+    let mut scelto = nome.to_string();
+    if let Some(uri) = cerca(env, resolver, &base, rel, nome) {
+        match ESISTE.load(std::sync::atomic::Ordering::Relaxed) {
+            2 => {
+                let testo = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+                let testo = stringa(env, testo).ok_or("indirizzo vuoto")?;
+                return Ok((testo, format!("Già presente: {rel}/{nome}")));
+            }
+            1 => {
+                let nulla = JObject::null();
+                let tolto = env.call_method(resolver, "delete", "(Landroid/net/Uri;Ljava/lang/String;[Ljava/lang/String;)I", &[JValue::Object(&uri), JValue::Object(&nulla), JValue::Object(&nulla)]);
+                if tolto.is_err() || env.exception_check().unwrap_or(false) {
+                    // Un file di un'altra app non si può togliere: si numera.
+                    let _ = env.exception_clear();
+                    scelto = libero_in(env, resolver, &base, rel, nome);
+                }
+            }
+            _ => scelto = libero_in(env, resolver, &base, rel, nome),
+        }
+    }
+    let nome = scelto.as_str();
     let cv = valori(env, &[("_display_name", Ok(nome)), ("mime_type", Ok(mime)), ("relative_path", Ok(rel)), ("is_pending", Err(1))])?;
     let uri = env
         .call_method(resolver, "insert", "(Landroid/net/Uri;Landroid/content/ContentValues;)Landroid/net/Uri;", &[JValue::Object(&base), JValue::Object(&cv)])
@@ -1254,20 +1292,33 @@ fn libero(dir: &Path, file: &Path) -> PathBuf {
     posto
 }
 
-/// Voce in testo con whisper.cpp (nell'APK): il modello scelto (Veloce = tiny, Buona = base) si scarica al primo uso. Salva un .txt in Documenti.
+/// Voce in testo con whisper.cpp (nell'APK): il modello scelto (Veloce, Buona, Massima: gli stessi del computer) si scarica al primo uso. Salva un .txt in Documenti.
 fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, out: &std::path::Path, prog: &std::sync::atomic::AtomicU32, modello: usize) {
     use cedro::trascrizione::{run, Event, Format, Request};
     let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
-    let req = Request { format: Format::Text, model: modello.min(1), gpu: false, avx512: false };
+    // `modello` porta anche quante persone parlano (bit alti): 0 Automatico, 1 una sola, 2..=8.
+    let req = Request { format: Format::Text, model: (modello & 0x0f).min(cedro::trascrizione::MODELS.len() - 1), gpu: false, avx512: false, speakers: (modello >> 4) as u8 };
+    // «Salta» delle Impostazioni: se la trascrizione c'è già in Documenti/Cedro non si rifà (sul computer lo fa il motore).
+    let uscita = format!("{}.txt", file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
+    if let Some((uri, visto)) = gia_salvato(app, &uscita) {
+        return invia(Stato::Fatto { path: PathBuf::from(uri), nome: format!("Già presente: {visto}"), msg: "Saltato: la trascrizione c'era già".into() });
+    }
     let esito: std::sync::Mutex<Option<Result<(PathBuf, String), String>>> = std::sync::Mutex::new(None);
     run(&[file.to_path_buf()], &req, Some(out), &cedro::Options::default(), &|e| match e {
         Event::Percent { percent, .. } => prog.store(percent as u32 * 10, std::sync::atomic::Ordering::Relaxed),
-        Event::Log(l) => log::info!("trascrivi: {} {}", l.key, l.text),
+        Event::Log(l) => {
+            log::info!("trascrivi: {} {}", l.key, l.text);
+            // Prima della prima percentuale Lavori dice cosa succede: modello che si scarica, rete interrotta, attesa.
+            if let Some(t) = passo_trascrizione(&l.key, &l.text) {
+                c.passo_riassunto.lock().unwrap_or_else(|e| e.into_inner()).push((id, t));
+            }
+        }
         Event::Finished { result, .. } => *esito.lock().unwrap_or_else(|e| e.into_inner()) = Some(result),
     });
     match esito.into_inner().unwrap_or_else(|e| e.into_inner()) {
-        Some(Ok((path, msg))) => match consegna(app, path) {
+        Some(Ok((privato, msg))) => match consegna(app, privato.clone()) {
             Ok((path, nome)) => {
+                let msg = col_nome_vero(&msg, &privato, &nome);
                 if let Some(n) = crate::ui::da_controllare(file) {
                     c.controlli.lock().unwrap_or_else(|e| e.into_inner()).push((id, n));
                 }
@@ -1278,6 +1329,41 @@ fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, ou
         Some(Err(e)) => invia(Stato::Errore(con_dettagli(&e, "trascrivi", file, out))),
         None => invia(Stato::Errore("la trascrizione non è partita".into())),
     }
+}
+
+/// Il Riassunto AI sul telefono: lo stesso `cedro::riassunto` del computer, col motore `cedro-riassumi` dentro l'APK.
+fn riassumi(c: &Consegne, id: u32, source: PathBuf, lines: Vec<String>, names: Vec<String>, prog: &std::sync::atomic::AtomicU32) {
+    use cedro::riassunto::{Failure, Options, Progress, Step};
+    use std::sync::atomic::Ordering;
+    let passo = |t: String| c.passo_riassunto.lock().unwrap_or_else(|e| e.into_inner()).push((id, t));
+    let mai = std::sync::atomic::AtomicBool::new(false);
+    let fine: Mutex<Option<Result<cedro::riassunto::Stored, Failure>>> = Mutex::new(None);
+    cedro::riassunto::run(lines, names, Options { gpu: false, avx512: false }, &mai, &|p| match p {
+        Progress::Step(s) => passo(match s {
+            Step::Waiting => "Aspetto che finisca l'altro lavoro…".into(),
+            Step::Download(t) => format!("Modello: {t}"),
+            Step::Loading => "Carico il modello in memoria…".into(),
+            Step::Reading(_, 1) => "Legge la riunione…".into(),
+            Step::Reading(i, n) => format!("Legge la riunione: parte {} di {n}", i + 1),
+            Step::Merging => "Mette insieme gli appunti…".into(),
+            Step::Writing => "Scrive il riassunto…".into(),
+        }),
+        Progress::Ready { .. } => passo(format!("Processore · {} thread", cedro::trascrizione::engine_threads())),
+        Progress::Percent(v) => prog.store(v as u32 * 10, Ordering::Relaxed),
+        Progress::Done(r) => *fine.lock().unwrap_or_else(|e| e.into_inner()) = Some(r),
+    });
+    let stato = match fine.into_inner().unwrap_or_else(|e| e.into_inner()) {
+        Some(Ok(s)) => {
+            let secs = s.ms / 1000;
+            c.riassunti.lock().unwrap_or_else(|e| e.into_inner()).push((id, source, s));
+            Stato::Fatto { path: PathBuf::new(), nome: String::new(), msg: format!("Pronto in «Rivedi» in {} min {:02} s", secs / 60, secs % 60) }
+        }
+        Some(Err(Failure::LowMemory(free))) => Stato::Errore(format!("Poca memoria libera ({}): chiudi qualche app e riprova", cedro::riassunto::gb(free))),
+        Some(Err(Failure::Cancelled)) => Stato::Errore("Riassunto annullato".into()),
+        Some(Err(Failure::Other(e))) => Stato::Errore(format!("Il riassunto non è riuscito: {e}")),
+        None => Stato::Errore("Il riassunto non è partito".into()),
+    };
+    c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, stato));
 }
 
 fn presenta(finestra: &android_activity::ndk::native_window::NativeWindow, p: &Painter) {
@@ -1476,6 +1562,7 @@ fn android_main(app: AndroidApp) {
     let _ = std::fs::create_dir_all(&tmp);
     std::env::set_var("TMPDIR", &tmp);
     if let Some(librerie) = cartella_librerie(&app) {
+        cedro::riassunto::android::set_libs(librerie.clone());
         cedro::youtube::android::set_dirs(librerie, dati.clone());
     }
     if std::env::var_os("RTEN_NUM_THREADS").is_none() {
@@ -1502,6 +1589,7 @@ fn android_main(app: AndroidApp) {
         };
         ui.modello_nome = righe.next().unwrap_or("").to_string();
     }
+    ricorda_esiste(ui.esiste);
     ui.grandi = std::fs::read_to_string(&file_caratteri).is_ok_and(|t| t.trim() == "grandi");
     // La lingua: quella scelta nell'Aspetto, o quella del telefono (Android non ha LANG).
     let file_lingua = dati.join("lingua.txt");
@@ -1693,6 +1781,11 @@ fn android_main(app: AndroidApp) {
                             sporco = true;
                         }
                         Effetto::Esci => chiudi(&app),
+                        Effetto::Riassumi { id, source, lines, names, prog } => {
+                            let c = consegne.clone();
+                            std::thread::spawn(move || riassumi(&c, id, source, lines, names, &prog));
+                            sporco = true;
+                        }
                         Effetto::Copia(testo) => {
                             copia_negli_appunti(&app, &testo);
                             sporco = true;
@@ -1713,6 +1806,7 @@ fn android_main(app: AndroidApp) {
                                 _ => "numera",
                             };
                             let _ = std::fs::write(&file_impostazioni, format!("{esiste}\n{}", ui.modello_nome));
+                            ricorda_esiste(ui.esiste);
                             sporco = true;
                         }
                         Effetto::SalvaTema(t) => {
@@ -1838,6 +1932,14 @@ fn android_main(app: AndroidApp) {
             ui.onda_rivedi(&p, bars);
             sporco = true;
         }
+        for (id, nota) in std::mem::take(&mut *consegne.passo_riassunto.lock().unwrap_or_else(|e| e.into_inner())) {
+            ui.passo_riassunto(id, nota);
+            sporco = true;
+        }
+        for (_, source, s) in std::mem::take(&mut *consegne.riassunti.lock().unwrap_or_else(|e| e.into_inner())) {
+            ui.riassunto_pronto(&source, s);
+            sporco = true;
+        }
         for (id, n) in std::mem::take(&mut *consegne.controlli.lock().unwrap_or_else(|e| e.into_inner())) {
             if let Some(l) = ui.lavori.iter_mut().find(|l| l.id == id) {
                 l.controlli = Some(n);
@@ -1944,4 +2046,97 @@ fn android_main(app: AndroidApp) {
             }
         }
     }
+}
+
+/// La riga del registro della trascrizione da mostrare in Lavori finché non c'è la percentuale, se serve.
+fn passo_trascrizione(key: &str, text: &str) -> Option<String> {
+    let t = match key {
+        "Modello" | "Motore" | "Voci" if !text.starts_with("pronto") => format!("{key}: {text}"),
+        "" if text.starts_with("Scaricati") || text.starts_with("Rete interrotta") || text.starts_with("Un altro lavoro") => text.to_string(),
+        _ => return None,
+    };
+    let mut c = t.chars();
+    Some(c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default())
+}
+
+/// Il file `nome` nella cartella `rel` di MediaStore, se c'è (e Cedro lo può vedere).
+fn cerca<'a>(env: &mut JNIEnv<'a>, resolver: &JObject, base: &JObject, rel: &str, nome: &str) -> Option<JObject<'a>> {
+    let trovato = (|| -> Result<Option<JObject<'a>>, jni::errors::Error> {
+        let classe = env.find_class("java/lang/String")?;
+        let id = env.new_string("_id")?;
+        let proiez = env.new_object_array(1, &classe, &id)?;
+        let filtro = env.new_string("relative_path IN (?, ?) AND _display_name = ?")?;
+        let vuoto = env.new_string("")?;
+        let argomenti = env.new_object_array(3, &classe, &vuoto)?;
+        for (i, a) in [format!("{rel}/"), rel.to_string(), nome.to_string()].iter().enumerate() {
+            let a = env.new_string(a)?;
+            env.set_object_array_element(&argomenti, i as i32, &a)?;
+        }
+        let nulla = JObject::null();
+        let cur = env
+            .call_method(resolver, "query", "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;", &[JValue::Object(base), JValue::Object(&proiez), JValue::Object(&filtro), JValue::Object(&argomenti), JValue::Object(&nulla)])?
+            .l()?;
+        if cur.is_null() {
+            return Ok(None);
+        }
+        let mut uri = None;
+        if env.call_method(&cur, "moveToFirst", "()Z", &[])?.z()? {
+            let n = env.call_method(&cur, "getLong", "(I)J", &[JValue::Int(0)])?.j()?;
+            let u = env.call_static_method("android/content/ContentUris", "withAppendedId", "(Landroid/net/Uri;J)Landroid/net/Uri;", &[JValue::Object(base), JValue::Long(n)])?.l()?;
+            uri = Some(u);
+        }
+        let _ = env.call_method(&cur, "close", "()V", &[]);
+        Ok(uri)
+    })();
+    if env.exception_check().unwrap_or(false) {
+        let _ = env.exception_clear();
+    }
+    trovato.ok().flatten()
+}
+
+/// Il primo nome libero in `rel` come sul computer: «x-2.txt», «x-3.txt»…
+fn libero_in(env: &mut JNIEnv, resolver: &JObject, base: &JObject, rel: &str, nome: &str) -> String {
+    let (stem, ext) = match nome.rfind('.') {
+        Some(i) if i > 0 => (&nome[..i], &nome[i..]),
+        _ => (nome, ""),
+    };
+    for n in 2..1000 {
+        let prova = format!("{stem}-{n}{ext}");
+        if cerca(env, resolver, base, rel, &prova).is_none() {
+            return prova;
+        }
+    }
+    nome.to_string()
+}
+
+/// Con «Salta» nelle Impostazioni: il file `nome` è già in Documenti/Cedro (o Download/Cedro)? Indirizzo e nome visibile.
+fn gia_salvato(app: &AndroidApp, nome: &str) -> Option<(String, String)> {
+    if ESISTE.load(std::sync::atomic::Ordering::Relaxed) != 2 || uscite(app).is_none() {
+        return None;
+    }
+    con_attivita(app, |env, att| {
+        let resolver = env.call_method(att, "getContentResolver", "()Landroid/content/ContentResolver;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let esterno = env.new_string("external").map_err(|e| e.to_string())?;
+        for (raccolta, rel) in [("android/provider/MediaStore$Files", "Documents/Cedro"), ("android/provider/MediaStore$Downloads", "Download/Cedro")] {
+            let base = env.call_static_method(raccolta, "getContentUri", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&esterno)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+            if let Some(uri) = cerca(env, &resolver, &base, rel, nome) {
+                let testo = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+                return Ok(stringa(env, testo).map(|t| (t, format!("{rel}/{nome}"))));
+            }
+        }
+        Ok(None)
+    })
+    .ok()
+    .flatten()
+}
+
+/// Il messaggio del motore nomina il file come l'ha scritto lui: se MediaStore l'ha salvato con un altro nome
+/// («x-2.txt»), si mette quello vero.
+fn col_nome_vero(msg: &str, privato: &Path, visto: &str) -> String {
+    let prima = nome_di(privato);
+    let dopo = visto.rsplit('/').next().unwrap_or(visto);
+    if prima.is_empty() || prima == dopo || visto.starts_with("Già presente") {
+        return msg.to_string();
+    }
+    msg.replace(&prima, dopo)
 }

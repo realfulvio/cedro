@@ -1,7 +1,7 @@
 <p align="right"><a href="README.en.md">🇬🇧 English</a> · 🇮🇹 Italiano</p>
 
 <p align="center">
-  <img src="docs/v2/hero.png" alt="Cedro: cambia formato a un file con un clic destro. Windows, Linux e Android">
+  <img src="docs/v3/hero.webp" alt="Cedro: cambia formato a un file con un clic destro. Windows, Linux e Android">
 </p>
 
 <p align="center">
@@ -17,6 +17,7 @@
   &nbsp;·&nbsp; <a href="#come-si-usa">Come si usa</a>
   &nbsp;·&nbsp; <a href="#cosa-converte">Formati</a>
   &nbsp;·&nbsp; <a href="#più-di-una-conversione">Strumenti</a>
+  &nbsp;·&nbsp; <a href="#trascrizione-e-riassunto">Trascrizione</a>
   &nbsp;·&nbsp; <a href="#cedro-per-android">Android</a>
   &nbsp;·&nbsp; <a href="#domande">Domande</a>
 </p>
@@ -25,10 +26,12 @@
 
 Cedro cambia formato ai tuoi file senza farti aprire nessun programma. Tieni premuto **Shift**, fai **clic destro** su un file e si apre una ruota: scegli il formato e la copia nuova compare accanto all'originale, che resta com'era. Su telefono basta toccare **Condividi**.
 
+Trascrive anche le riunioni, riconosce **chi parla** e scrive il **riassunto** con l'intelligenza artificiale.
+
 Tutto avviene **sul tuo dispositivo**: i file non vengono caricati da nessuna parte. È scritto interamente in **Rust**, è in italiano e in inglese (segue la lingua del sistema) e il codice è aperto.
 
 <p align="center">
-  <img src="docs/v2/ruote.png" width="760" alt="La ruota di Cedro: a sinistra le conversioni su una foto con JPEG scelto, a destra gli strumenti (comprimi, 50%, bianco e nero, ruota, metadati, OCR)">
+  <img src="docs/v3/ruote.webp" width="760" alt="La ruota di Cedro: a sinistra le conversioni su una foto con JPEG scelto, a destra gli strumenti (comprimi, 50%, bianco e nero, ruota, metadati, OCR)">
 </p>
 
 ## Scarica e installa
@@ -38,7 +41,7 @@ Tutto avviene **sul tuo dispositivo**: i file non vengono caricati da nessuna pa
 | **Windows 10 e 11** | [`Cedro-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest) |
 | **Windows on ARM** (Snapdragon X e simili) | [`Cedro-ARM64-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest): versione nativa, più veloce nella trascrizione |
 | **Linux** (Wayland con KDE Plasma o GNOME) | [`cedro-….-linux-x64.tar.gz`](https://github.com/realfulvio/cedro/releases/latest): estrai e lancia `./install.sh`, senza permessi di amministratore |
-| **Android** | APK firmato dalle [release](https://github.com/realfulvio/cedro/releases/tag/android-v0.22.1) (dalla 0.21.3) e repository F-Droid nostro: `https://realfulvio.github.io/cedro/fdroid/repo`. Mai su Google Play |
+| **Android** | APK firmato dalle [release](https://github.com/realfulvio/cedro/releases?q=android-v) (dalla 0.21.3) e repository F-Droid nostro: `https://realfulvio.github.io/cedro/fdroid/repo`. Mai su Google Play |
 
 **Windows:** doppio clic sull'installatore (si installa solo per il tuo utente, senza diritti di amministratore). Alla prima esecuzione Windows può dire «Windows ha protetto il PC», perché l'installatore non è ancora firmato: *Ulteriori informazioni*, poi *Esegui comunque*. A fine installazione lascia spuntato **Avvia Cedro**: non si apre una finestra, compare l'icona vicino all'orologio.
 
@@ -89,30 +92,42 @@ Le fette cambiano con il tipo di file. Se non sai da dove partire, apri la **Gui
 ## Più di una conversione
 
 <p align="center">
-  <img src="docs/v2/conversioni.png" width="780" alt="Il pannello Conversioni: categorie a sinistra, coda di file al centro, opzioni a destra">
+  <img src="docs/v3/conversioni.webp" width="780" alt="Il pannello Conversioni: categorie a sinistra, coda di file al centro, opzioni a destra">
 </p>
 
 **Conversioni.** Dal menu dell'icona apri il pannello: trascini file anche di tipi diversi, scegli formato, strumenti, qualità e cartella, e premi il pulsante in basso. Ogni categoria ha le sue opzioni: foto (dimensioni, raddrizza, sfondo bianco), documenti (formato pagina, caratteri incorporati, segnalibri, PDF/A-1b validato con veraPDF, password), PDF (OCR, tabelle, colonne, pagine come `1-3,5`, risoluzione), testo, audio (kbps, canali, volume, tagli, tag) e video (risoluzione, fps, senza audio, ottimizzato per il web). Se il nome esiste già: aggiungi `-2`, sostituisci, salta o chiedi ogni volta.
 
+### Trascrizione e riassunto
+
+<p align="center">
+  <img src="docs/v3/rivedi.webp" width="900" alt="La schermata Rivedi: la trascrizione di un consiglio comunale con gli interlocutori colorati e, a destra, il riassunto">
+</p>
+
+**Trascrizione.** Da audio e video a un documento Word, a un testo o ai sottotitoli, in italiano e in locale (whisper.cpp). Sceglie da solo la variante giusta per il tuo processore e usa la scheda video con Vulkan quando c'è. Tre livelli di precisione, e una barra di avanzamento con il tempo che resta.
+
+**Chi parla.** Riconosce gli interlocutori e li colora; dai un nome a ogni voce nella scheda «Chi parla» e il nome vale in tutto il documento.
+
+**Riassunto AI.** Con un clic un piccolo modello in italiano (llama.cpp, Qwen3.5-4B) scrive il riassunto e «chi ha detto cosa». Si carica solo quando lo chiedi e poi si spegne. Cifre e voti dubbi sono segnati *da controllare*.
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/v2/trascrizione.png" alt="Scheda Trascrizione: trascina audio e video, scegli Word o testo e la precisione"></td>
-    <td width="50%"><img src="docs/v2/youtube.png" alt="Scheda YouTube: incolla i link, scegli video o solo audio, qualità e sottotitoli"></td>
+    <td width="50%"><img src="docs/v3/trascrizione.webp" alt="Scheda Trascrizione con la barra di avanzamento e la scheda video in uso"></td>
+    <td width="50%"><img src="docs/v3/video-web.webp" alt="Scheda Video dal web: incolla il link, scegli video o solo audio, qualità e sottotitoli"></td>
   </tr>
   <tr>
-    <td><b>Trascrizione.</b> Da audio e video a un documento Word o a un testo, in italiano e in locale (whisper.cpp). Sceglie da solo la variante giusta per il tuo processore, con Vulkan sulla scheda video.</td>
-    <td><b>YouTube e Video dal web.</b> Scarica video o solo audio con qualità, sottotitoli, copertina e capitoli; la scheda «Video dal web» funziona anche con pagine qualunque.</td>
+    <td><b>Al lavoro.</b> Avanzamento, tempo che resta e quale scheda sta lavorando (CPU o GPU).</td>
+    <td><b>YouTube e Video dal web.</b> Scarica video o solo audio con qualità, sottotitoli, copertina e capitoli; funziona anche con pagine qualunque.</td>
   </tr>
 </table>
 
 Componenti esterni come yt-dlp, deno, ffmpeg e il motore di trascrizione si scaricano al primo uso e si **aggiornano da soli**; le licenze sono in *Informazioni*.
 
-## Cinque aspetti, due modalità
+## Sei aspetti, due modalità
 
 La grafica è tutta disegnata a mano in Rust, uguale su Windows e Linux. In **Impostazioni › Aspetto** scegli tra le disposizioni (la ruota resta sempre quella) e tra la modalità **Standard**, con tutte le opzioni a portata di mano, e la **Semplificata**, con solo l'essenziale. Il tema del **Comune di Bondeno** porta colori, carattere e stemma del Comune.
 
 <p align="center">
-  <img src="docs/v2/temi.png" width="900" alt="Le disposizioni di Cedro: Windows essenziale, Percorso guidato, Banco di lavoro, Documento al centro, Comune di Bondeno e la finestrella compatta">
+  <img src="docs/v3/temi.webp" width="900" alt="Le disposizioni di Cedro: Windows essenziale, Percorso guidato, Banco di lavoro, Documento al centro, Comune di Bondeno e la finestrella compatta">
 </p>
 
 ## Cedro per Android
@@ -120,7 +135,7 @@ La grafica è tutta disegnata a mano in Rust, uguale su Windows e Linux. In **Im
 Le stesse funzioni del desktop, pensate per il tocco: dalla galleria o dal file manager premi **Condividi → Cedro**, scegli sulla ruota (con il file al centro) e converti. I lavori restano in una lista, con il progresso, e cinque temi a scelta.
 
 <p align="center">
-  <img src="docs/v2/android.png" width="820" alt="Cedro su Android: la ruota, il foglio Condividi, i lavori e l'aspetto">
+  <img src="docs/v3/android.webp" width="820" alt="Cedro su Android: la ruota, il foglio Condividi, i lavori e l'aspetto">
 </p>
 
 L'app è in fase di prototipo e **non passa da Google Play**: si installa dal nostro repository F-Droid (ospitato su GitHub Pages) o come APK dalle release. Tutto il codice è Rust, con una sola piccola classe Java per l'integrazione col sistema.

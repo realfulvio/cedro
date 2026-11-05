@@ -53,7 +53,7 @@ pub const GROUPS: &[Group] = &[
             c("resvg", "Yevhenii Reizner e collaboratori", "Apache-2.0 o MIT", "Disegna le immagini SVG.", "github.com/linebender/resvg"),
             c("ravif, rav1e, avif-decode, rav1d", "Kornel Lesiński, Xiph.Org, Memory Safety Initiative", "BSD-3-Clause o BSD-2-Clause", "Legge e scrive le foto AVIF.", "github.com/kornelski/cavif-rs"),
             c("jxl-oxide, zune-jpegxl", "Wonwoo Choi, Caleb Etemesi", "MIT o Apache-2.0", "Legge e scrive le foto JPEG XL.", "github.com/tirr-c/jxl-oxide"),
-            c("ocrs, rten", "Robert Knight", "MIT o Apache-2.0", "Riconoscimento del testo e i suoi calcoli.", "github.com/robertknight/ocrs"),
+            c("ocrs, rten", "Robert Knight", "MIT o Apache-2.0", "Fa i calcoli dei modelli: riconoscimento del testo e delle voci.", "github.com/robertknight/ocrs"),
             c("Modelli OCR di ocrs", "Robert Knight", "CC BY-SA 4.0", "I modelli che leggono il testo nelle immagini.", "github.com/robertknight/ocrs-models"),
         ],
     },
@@ -71,10 +71,23 @@ pub const GROUPS: &[Group] = &[
             c("whisper.cpp", "Georgi Gerganov e ggml", "MIT", "Trascrive l'audio, sul PC (programma scaricato alla prima trascrizione).", "github.com/ggml-org/whisper.cpp"),
             c("Modelli Whisper", "OpenAI", "MIT", "I modelli della trascrizione.", "github.com/openai/whisper"),
             c("whisper-rs", "Tazz4843", "Unlicense", "Collega whisper.cpp a Rust.", "codeberg.org/tazz4843/whisper-rs"),
+            c("Segmentazione pyannote 3.0", "Hervé Bredin, CNRS", "MIT", "Trova dove parla una voce e dove due si sovrappongono (scaricato alla prima trascrizione con le voci).", "github.com/pyannote/pyannote-audio"),
+            c("CAM++ di 3D-Speaker", "Alibaba (ModelScope 3D-Speaker)", "Apache-2.0", "Riconosce l'impronta di ogni voce, per dire chi parla (scaricato con la segmentazione).", "github.com/modelscope/3D-Speaker"),
+            c("sherpa-onnx", "Next-gen Kaldi (k2-fsa)", "Apache-2.0", "I modelli delle voci in ONNX, e il metodo che Cedro segue per raggrupparle.", "github.com/k2-fsa/sherpa-onnx"),
+            c("kaldi-native-fbank", "RustedBytes", "MIT", "Prepara l'audio per l'impronta delle voci.", "github.com/RustedBytes/kaldi-native-fbank"),
+            c("bzip2, libbz2-rs-sys", "Trifecta Tech Foundation, Julian Seward", "MIT o Apache-2.0", "Apre l'archivio dei modelli delle voci (libbz2-rs-sys ha la licenza di bzip2, simile a BSD).", "github.com/trifectatechfoundation/libbzip2-rs"),
             c("Opus", "Xiph.Org e altri", "BSD-3-Clause", "Legge e scrive i file .opus.", "opus-codec.org"),
             c("yt-dlp", "yt-dlp contributors", "Unlicense", "Scarica video e audio da YouTube e da molti altri siti (si scarica al primo uso).", "github.com/yt-dlp/yt-dlp"),
             c("FFmpeg", "Gli sviluppatori di FFmpeg", "LGPL-2.1", "Unisce video e audio dei download (si scarica al primo uso).", "ffmpeg.org"),
             c("Deno", "Deno Land Inc. e collaboratori", "MIT", "Serve a yt-dlp per i video ad alta qualità (si scarica al primo uso).", "github.com/denoland/deno"),
+        ],
+    },
+    Group {
+        title: "Riassunto AI",
+        items: &[
+            c("llama.cpp", "Georgi Gerganov e ggml", "MIT", "Fa girare il modello del riassunto sul PC (programma scaricato al primo riassunto).", "github.com/ggml-org/llama.cpp"),
+            c("llama-cpp-2", "utilityai", "MIT o Apache-2.0", "Collega llama.cpp a Rust.", "github.com/utilityai/llama-cpp-rs"),
+            c("Qwen3.5-4B", "Qwen Team, Alibaba Cloud", "Apache-2.0", "Il modello che scrive il riassunto (scaricato al primo riassunto, in formato GGUF di Unsloth).", "huggingface.co/Qwen"),
         ],
     },
     Group {
@@ -99,6 +112,8 @@ const WHISPER_CPP: &str = "1.8.3";
 /// Le versioni dei programmi fissati dentro le librerie (LAME in mp3lame-sys, libopus in opusic-sys).
 const LAME: &str = "3.100";
 const LIBOPUS: &str = "1.6.1";
+/// La versione di llama-cpp-2 nel motore del riassunto (fissata in riassumi/Cargo.toml).
+const LLAMA_CPP_2: &str = "0.1.160";
 
 /// Le versioni delle librerie Rust di Cedro e del suo motore, decise alla compilazione.
 fn crate_version(name: &str) -> Option<&'static str> {
@@ -135,6 +150,21 @@ pub fn version_text(item: &Component) -> Option<String> {
         "LAME" => Some(LAME.to_string()),
         "Opus" => Some(LIBOPUS.to_string()),
         "whisper-rs" => crates_text(&["whisper-rs"]),
+        "llama.cpp" | "llama-cpp-2" => {
+            let v = if item.name == "llama.cpp" { "motore cedro-riassumi" } else { LLAMA_CPP_2 };
+            Some(if crate::riassunto::engine_installed() { v.to_string() } else { format!("{v} · da scaricare") })
+        }
+        "Qwen3.5-4B" => Some(if crate::riassunto::model_ready() { "Q4_K_M".to_string() } else { format!("{} · da scaricare", "Q4_K_M") }),
+        "Segmentazione pyannote 3.0" | "CAM++ di 3D-Speaker" | "sherpa-onnx" => {
+            let what = match item.name {
+                "Segmentazione pyannote 3.0" => "segmentation-3.0",
+                "CAM++ di 3D-Speaker" => "zh-en common advanced",
+                _ => "modelli ONNX",
+            };
+            Some(if trascrizione::voice_models_ready() { what.to_string() } else { format!("{what} · da scaricare") })
+        }
+        "kaldi-native-fbank" => crates_text(&["kaldi-native-fbank"]),
+        "bzip2, libbz2-rs-sys" => crates_text(&["bzip2", "libbz2-rs-sys"]),
         "hayro" => crates_text(&["hayro"]),
         "lopdf" => crates_text(&["lopdf"]),
         "skrifa" => crates_text(&["skrifa"]),
@@ -252,9 +282,11 @@ mod tests {
     #[test]
     fn engine_version_follows_cedro() {
         // Cedro scarica il motore dalla release con il proprio numero di versione: build.ps1 lo prende da qui.
-        let toml = include_str!("../trascrivi/Cargo.toml");
-        let line = toml.lines().find(|l| l.starts_with("version = ")).expect("version");
-        assert_eq!(line, format!("version = \"{}\"", env!("CARGO_PKG_VERSION")));
+        // Lo stesso per il motore del Riassunto AI: con un numero diverso la release si ferma prima di pubblicare.
+        for toml in [include_str!("../trascrivi/Cargo.toml"), include_str!("../riassumi/Cargo.toml")] {
+            let line = toml.lines().find(|l| l.starts_with("version = ")).expect("version");
+            assert_eq!(line, format!("version = \"{}\"", env!("CARGO_PKG_VERSION")));
+        }
     }
 
     #[test]

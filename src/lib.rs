@@ -1,5 +1,6 @@
 pub mod accel;
 mod audio;
+mod symph;
 pub mod progress;
 pub mod conversioni;
 pub mod credits;
@@ -22,6 +23,7 @@ mod pdfpages;
 mod pdflayout;
 mod pdfxlsx;
 pub mod revisione;
+pub mod riassunto;
 pub mod settings;
 pub mod tema;
 pub mod ui;

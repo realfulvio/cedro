@@ -3,13 +3,7 @@ use std::path::Path;
 
 use hound::{SampleFormat, WavSpec, WavWriter};
 use mp3lame_encoder::{Bitrate, Builder, DualPcm, FlushNoGap, MonoPcm};
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::DecoderOptions;
 use symphonia::core::errors::Error as SymError;
-use symphonia::core::formats::FormatOptions;
-use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
 
 pub(crate) struct Pcm {
     pub(crate) rate: u32,
@@ -223,11 +217,10 @@ pub fn waveform(path: &Path, n: usize) -> Option<Vec<f32>> {
 fn waveform_stream(path: &Path, n: usize) -> Option<Vec<f32>> {
     if n == 0 { return None; }
     let hint = (|| {
-        let source = MediaSourceStream::new(Box::new(File::open(path).ok()?), Default::default());
-        let probed = symphonia::default::get_probe().format(&Hint::new(), source, &FormatOptions::default(), &MetadataOptions::default()).ok()?;
-        let track = probed.format.default_track().filter(|t| t.codec_params.sample_rate.is_some())
-            .or_else(|| probed.format.tracks().iter().find(|t| t.codec_params.sample_rate.is_some()))?;
-        usize::try_from(track.codec_params.n_frames?).ok().filter(|n| *n > 0)
+        let format = crate::symph::open(path).ok()?;
+        let track = crate::symph::audio_track(format.as_ref())?;
+        crate::symph::audio_params(&track)?.sample_rate?;
+        usize::try_from(track.num_frames?).ok().filter(|n| *n > 0)
     })();
     let frames = match hint {
         Some(n) => n,
@@ -329,63 +322,51 @@ fn decode_symphonia(path: &Path) -> Result<Pcm, String> {
 }
 
 fn stream_symphonia(path: &Path, each: &mut dyn FnMut(&[i16], u32, u16) -> Result<(), String>) -> Result<Pcm, String> {
-    let file = File::open(path).map_err(|e| e.to_string())?;
-    let source = MediaSourceStream::new(Box::new(file), Default::default());
-    let mut hint = Hint::new();
-    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-        hint.with_extension(ext);
-    }
-    let mut probed = symphonia::default::get_probe()
-        .format(&hint, source, &FormatOptions::default(), &MetadataOptions::default())
-        .map_err(|e| format!("audio non letto: {e}"))?;
+    let mut format = crate::symph::open(path)?;
     let mut tags = Tags::default();
     let mut collect = |rev: &symphonia::core::meta::MetadataRevision| {
-        use symphonia::core::meta::StandardTagKey::*;
-        for tag in rev.tags() {
-            let slot = match tag.std_key {
-                Some(TrackTitle) => &mut tags.title,
-                Some(Artist) => &mut tags.artist,
-                Some(Album) => &mut tags.album,
+        use symphonia::core::meta::StandardTag::*;
+        let all = rev.media.tags.iter().chain(rev.per_track.iter().flat_map(|t| t.metadata.tags.iter()));
+        for tag in all {
+            let (slot, value) = match &tag.std {
+                Some(TrackTitle(v)) => (&mut tags.title, v),
+                Some(Artist(v)) => (&mut tags.artist, v),
+                Some(Album(v)) => (&mut tags.album, v),
                 _ => continue,
             };
             if slot.is_empty() {
-                *slot = tag.value.to_string();
+                *slot = value.to_string();
             }
         }
     };
-    if let Some(mut log) = probed.metadata.get() {
-        if let Some(rev) = log.skip_to_latest() {
-            collect(rev);
-        }
-    }
-    if let Some(rev) = probed.format.metadata().skip_to_latest() {
+    if let Some(rev) = format.metadata().skip_to_latest() {
         collect(rev);
     }
-    let mut format = probed.format;
+    // symphonia 0.6.1 legge il LIST/INFO dei WAV ma poi lo perde: i titoli si leggono qui.
+    if tags.title.is_empty() && tags.artist.is_empty() && tags.album.is_empty() {
+        if let Some(info) = wav_info_tags(path) {
+            tags = info;
+        }
+    }
     // Nei video la traccia predefinita può essere quella delle immagini: si prende la prima con un audio.
-    let track = format
-        .default_track()
-        .filter(|t| t.codec_params.sample_rate.is_some())
-        .or_else(|| format.tracks().iter().find(|t| t.codec_params.sample_rate.is_some()))
-        .or_else(|| format.default_track())
-        .ok_or("l'audio non ha una traccia")?
-        .clone();
+    let track = crate::symph::audio_track(format.as_ref()).ok_or("l'audio non ha una traccia")?;
+    let params = crate::symph::audio_params(&track).ok_or("l'audio non ha una traccia")?.clone();
     let track_id = track.id;
     #[cfg(any(windows, target_os = "linux", target_os = "android"))]
-    if track.codec_params.codec == symphonia::core::codecs::CODEC_TYPE_OPUS {
-        let head = track.codec_params.extra_data.clone().unwrap_or_default();
+    if params.codec == crate::symph::CODEC_ID_OPUS {
+        let head = params.extra_data.clone().unwrap_or_default();
         let channels = stream_opus(format.as_mut(), track_id, &head, each)?;
         return Ok(Pcm { rate: 48_000, channels, samples: Vec::new(), tags });
     }
-    let mut decoder = symphonia::default::get_codecs()
-        .make(&track.codec_params, &DecoderOptions::default())
-        .map_err(|e| format!("audio non decodificato: {e}"))?;
+    let mut decoder = crate::symph::decoder(&params)?;
     let mut count = 0usize;
-    let mut rate = track.codec_params.sample_rate.unwrap_or(44100);
-    let mut channels = track.codec_params.channels.map(|c| c.count() as u16).unwrap_or(0);
+    let mut rate = params.sample_rate.unwrap_or(44100);
+    let mut channels = params.channels.as_ref().map(|c| c.count() as u16).unwrap_or(0);
+    let mut buf = Vec::new();
     loop {
         let packet = match format.next_packet() {
-            Ok(packet) => packet,
+            Ok(Some(packet)) => packet,
+            Ok(None) => break,
             Err(SymError::ResetRequired) => {
                 decoder.reset();
                 continue;
@@ -393,7 +374,7 @@ fn stream_symphonia(path: &Path, each: &mut dyn FnMut(&[i16], u32, u16) -> Resul
             Err(SymError::IoError(_)) => break,
             Err(_) => break,
         };
-        if packet.track_id() != track_id {
+        if packet.track_id != track_id {
             continue;
         }
         let decoded = match decoder.decode(&packet) {
@@ -401,17 +382,61 @@ fn stream_symphonia(path: &Path, each: &mut dyn FnMut(&[i16], u32, u16) -> Resul
             Err(SymError::DecodeError(_)) => continue,
             Err(_) => break,
         };
-        rate = decoded.spec().rate;
-        channels = decoded.spec().channels.count() as u16;
-        let mut buf = SampleBuffer::<i16>::new(decoded.capacity() as u64, *decoded.spec());
-        buf.copy_interleaved_ref(decoded);
-        count += buf.samples().len();
-        each(buf.samples(), rate, channels)?;
+        (rate, channels) = crate::symph::rate_channels(&decoded);
+        crate::symph::interleaved_i16(&decoded, &mut buf);
+        count += buf.len();
+        each(&buf, rate, channels)?;
     }
     if count == 0 || channels == 0 {
         return Err("l'audio non ha campioni".into());
     }
     Ok(Pcm { rate, channels, samples: Vec::new(), tags })
+}
+
+/// Titolo, artista e album dal blocco LIST/INFO di un WAV (INAM, IART, IPRD), leggendo solo le
+/// intestazioni dei blocchi prima dei campioni.
+fn wav_info_tags(path: &Path) -> Option<Tags> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = File::open(path).ok()?;
+    let mut head = [0u8; 12];
+    f.read_exact(&mut head).ok()?;
+    if &head[0..4] != b"RIFF" || &head[8..12] != b"WAVE" {
+        return None;
+    }
+    loop {
+        let mut chunk = [0u8; 8];
+        f.read_exact(&mut chunk).ok()?;
+        let len = u32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]) as u64;
+        let padded = len + (len & 1);
+        if &chunk[0..4] == b"data" {
+            return None;
+        }
+        if &chunk[0..4] != b"LIST" || !(4..=1 << 20).contains(&len) {
+            f.seek(SeekFrom::Current(padded as i64)).ok()?;
+            continue;
+        }
+        let mut list = vec![0u8; padded as usize];
+        f.read_exact(&mut list[..len as usize]).ok()?;
+        if &list[0..4] != b"INFO" {
+            continue;
+        }
+        let mut tags = Tags::default();
+        let mut at = 4usize;
+        while at + 8 <= len as usize {
+            let id = &list[at..at + 4];
+            let n = u32::from_le_bytes([list[at + 4], list[at + 5], list[at + 6], list[at + 7]]) as usize;
+            let Some(raw) = list.get(at + 8..at + 8 + n) else { break };
+            let text = String::from_utf8_lossy(raw).trim_end_matches('\0').trim().to_string();
+            match id {
+                b"INAM" => tags.title = text,
+                b"IART" => tags.artist = text,
+                b"IPRD" => tags.album = text,
+                _ => {}
+            }
+            at += 8 + n + (n & 1);
+        }
+        return Some(tags);
+    }
 }
 
 /// Opus (Ogg, WebM, MKV): i pacchetti li dà symphonia, la decodifica è libopus. Esce a 48 kHz.
@@ -421,14 +446,14 @@ fn stream_opus(f: &mut dyn symphonia::core::formats::FormatReader, track_id: u32
     let mut count = 0usize;
     loop {
         let packet = match f.next_packet() {
-            Ok(p) => p,
-            Err(_) => break,
+            Ok(Some(p)) => p,
+            _ => break,
         };
-        if packet.track_id() != track_id {
+        if packet.track_id != track_id {
             continue;
         }
         let channels = opus.channels();
-        let samples = opus.decode(packet.buf());
+        let samples = opus.decode(&packet.data);
         count += samples.len();
         each(samples, 48_000, channels)?;
     }

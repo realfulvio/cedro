@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
-use super::core::{inside, Act, Field, Fold, Frame, HitKind, LinkFlag, LinkMenu, Menu, Scroll, UiState, R};
+use super::core::{inside, Act, Field, Fold, Frame, HitKind, LinkFlag, LinkMenu, Menu, Scroll, Swatch, UiState, NEW_VOICE, R};
 use super::gfx::{Fonts, GlyphCache, Painter};
 use super::model::{Activity, App, Notice, AUDIO_FORMATS, SUBTITLES, VIDEO_FORMATS};
 use super::theme::ThemeId;
@@ -413,7 +413,7 @@ impl Screen {
             ("Elimina".to_string(), Act::FieldClear),
             ("Seleziona tutto".to_string(), Act::FieldSelectAll),
         ];
-        self.ui.menu = Some(Menu { anchor: (x, y - 4.0, 0.0, 0.0), items, selected: None });
+        self.ui.menu = Some(Menu { anchor: (x, y - 4.0, 0.0, 0.0), items, selected: None, title: None, swatches: Vec::new() });
         true
     }
 
@@ -513,7 +513,15 @@ impl Screen {
 
     fn open_menu(&mut self, items: Vec<(String, Act)>, selected: Option<usize>, anchor_act: &Act) {
         let anchor = self.hits.iter().rev().find(|h| &h.act == anchor_act).map(|h| h.r).unwrap_or((0.0, 0.0, 200.0, 40.0));
-        self.ui.menu = Some(Menu { anchor, items, selected });
+        self.ui.menu = Some(Menu { anchor, items, selected, title: None, swatches: Vec::new() });
+    }
+
+    /// Un menu con un titolo e un pallino colorato per voce (chi dice una frase, a chi unire una voce).
+    fn open_swatch_menu(&mut self, title: &str, items: Vec<(String, Act, Swatch)>, selected: Option<usize>, anchor_act: &Act) {
+        let anchor = self.hits.iter().rev().find(|h| &h.act == anchor_act).map(|h| h.r).unwrap_or((0.0, 0.0, 200.0, 40.0));
+        let swatches = items.iter().map(|i| i.2).collect();
+        let items = items.into_iter().map(|(l, a, _)| (l, a)).collect();
+        self.ui.menu = Some(Menu { anchor, items, selected, title: Some(title.to_string()), swatches });
     }
 
     /// Le voci del menu «Formato»: i formati, poi gli strumenti della categoria.
@@ -705,6 +713,76 @@ impl Screen {
                 }
             }
             Act::ReviewSave => app.review_save(),
+            Act::ReviewTab(t) => {
+                if let Some(r) = app.review.as_mut() {
+                    r.tab = t.min(2);
+                }
+            }
+            Act::SummaryOpen(i) => app.summary_open(i),
+            Act::SummaryStart => app.summary_start(),
+            Act::SummaryCancel => app.summary_cancel(),
+            Act::SummaryCopy => {
+                if let Some(s) = app.review.as_ref().and_then(|r| r.summary_sections()) {
+                    plat.copy_text(&s.plain());
+                    if let Some(r) = app.review.as_mut() {
+                        r.summary_copied = true;
+                    }
+                }
+            }
+            Act::SummaryTodo(k) => app.summary_toggle_todo(k),
+            Act::SummaryOnTop => {
+                if let Some(r) = app.review.as_mut().filter(|r| r.summary.is_some()) {
+                    r.summary_on_top = !r.summary_on_top;
+                }
+            }
+            Act::ReviewWriteVoices => {
+                if let Some(r) = app.review.as_mut() {
+                    r.write_voices = !r.write_voices;
+                }
+            }
+            Act::ReviewSpeakerMenu(row) => {
+                let Some(r) = app.review.as_ref() else { return };
+                let cur = r.rows.get(row).and_then(|x| x.speaker);
+                let mut items: Vec<(String, Act, Swatch)> =
+                    (0..r.names.len() as u8).map(|v| (crate::i18n::lit(&r.name(v)), Act::ReviewSpeaker(row, v), Swatch::Color(super::theme::voice(self.theme, v as usize)))).collect();
+                items.push(("Voce nuova".to_string(), Act::ReviewSpeaker(row, NEW_VOICE), Swatch::New));
+                let sel = cur.map(|v| v as usize);
+                self.open_swatch_menu("Chi dice questa frase?", items, sel, &Act::ReviewSpeakerMenu(row));
+            }
+            Act::ReviewSpeaker(row, v) => {
+                if let Some(r) = app.review.as_mut() {
+                    r.push_undo();
+                    r.set_speaker(row, v);
+                    r.sel = Some(row);
+                }
+            }
+            Act::ReviewVoicePlay(v) => {
+                if let Some(row) = app.review.as_ref().and_then(|r| r.voice_sample(v)) {
+                    app.review_row_play(row);
+                }
+            }
+            Act::ReviewMergeMenu(from) => {
+                let Some(r) = app.review.as_ref() else { return };
+                let items: Vec<(String, Act, Swatch)> = r
+                    .live_voices()
+                    .into_iter()
+                    .filter(|v| *v != from)
+                    .map(|v| (crate::i18n::lit(&r.name(v)), Act::ReviewMerge(from, v), Swatch::Color(super::theme::voice(self.theme, v as usize))))
+                    .collect();
+                if !items.is_empty() {
+                    let title = format!("Unisci «{}» a…", crate::i18n::lit(&r.name(from)));
+                    self.open_swatch_menu(&title, items, None, &Act::ReviewMergeMenu(from));
+                }
+            }
+            Act::ReviewMerge(from, into) => {
+                if let Some(r) = app.review.as_mut() {
+                    r.push_undo();
+                    r.merge(from, into);
+                }
+            }
+            Act::VoicesPick(n) => app.transcribe.speakers = n.min(trascrizione::MAX_VOICES as u8),
+            Act::VoicesGo => app.voices_go(),
+            Act::VoicesCancel => app.transcribe.asking = false,
             Act::MediaPlay => app.media_toggle(),
             Act::Edit(field) => {
                 // Una correzione si annulla in un colpo solo: l'undo si prende quando si entra nella frase.
@@ -713,6 +791,11 @@ impl Screen {
                         r.push_undo();
                     }
                     r.sel = Some(i);
+                }
+                if let (Field::VoiceName(_), Some(r)) = (field, app.review.as_mut()) {
+                    if self.ui.edit != Some(field) {
+                        r.push_undo();
+                    }
                 }
                 self.ui.edit = Some(field);
                 self.ui.sel_all = false;
@@ -853,7 +936,19 @@ impl Screen {
                 let text = match app.activity {
                     Activity::YouTube => app.youtube.log.clone(),
                     Activity::Web => app.web.log.clone(),
-                    _ => app.transcribe.log.iter().map(|l| if l.key.is_empty() { l.text.clone() } else { format!("{} {}", l.key, l.text) }).collect::<Vec<_>>().join("\n"),
+                    _ => app
+                        .transcribe
+                        .log
+                        .iter()
+                        .map(|l| {
+                            let text = match l.speaker {
+                                Some(v) => format!("{}: {}", trascrizione::speaker_name(v as usize), l.text),
+                                None => l.text.clone(),
+                            };
+                            if l.key.is_empty() { text } else { format!("{} {text}", l.key) }
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n"),
                 };
                 plat.copy_text(&text);
             }
@@ -897,6 +992,7 @@ impl Screen {
             Field::Link(web) => self.app.links(web).typed.clone(),
             Field::FilePages(i) => self.app.files.get(i).map(|f| f.pages.clone()).unwrap_or_default(),
             Field::Review(i) => self.app.review.as_ref().and_then(|r| r.rows.get(i)).map(|r| r.text.clone()).unwrap_or_default(),
+            Field::VoiceName(v) => self.app.review.as_ref().and_then(|r| r.names.get(v as usize)).cloned().unwrap_or_default(),
         }
     }
 
@@ -919,6 +1015,11 @@ impl Screen {
             Field::Review(i) => {
                 if let Some(row) = self.app.review.as_mut().and_then(|r| r.rows.get_mut(i)) {
                     row.text = text;
+                }
+            }
+            Field::VoiceName(v) => {
+                if let Some(name) = self.app.review.as_mut().and_then(|r| r.names.get_mut(v as usize)) {
+                    *name = text;
                 }
             }
         }
@@ -1043,6 +1144,9 @@ impl Screen {
                     self.app.answer(crate::engine::ExistsChoice::KeepBoth);
                     return true;
                 }
+                if std::mem::take(&mut self.app.transcribe.asking) {
+                    return true;
+                }
                 if self.app.notice.take().is_some() {
                     return true;
                 }
@@ -1061,6 +1165,11 @@ impl Screen {
                     (Some(i), _) => (i + n - 1) % n,
                 };
                 self.ui.focus_act = Some(self.focusables[next].clone());
+                true
+            }
+            Key::Enter if self.app.transcribe.asking && !matches!(self.ui.focus_act, Some(Act::VoicesPick(_) | Act::VoicesCancel)) => {
+                // Nella finestrella Invio vuol dire Trascrivi.
+                self.app.voices_go();
                 true
             }
             Key::Enter | Key::Space => {
@@ -1224,8 +1333,8 @@ mod tests {
         let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
         s.request_appearance(ThemeId::WindowsEssenziale, false);
         s.app.activity = Activity::Transcribe;
-        let segments = vec![Segment { t0: 0, t1: 500, text: "Buongiorno.".into() }, Segment { t0: 600, t1: 1100, text: "Arrivederci.".into() }];
-        s.app.review = Some(crate::ui::review::Review::new(Path::new("/tmp/cedro-non-c-e.wav"), 12.0, "it".into(), segments));
+        let segments = vec![Segment { t0: 0, t1: 500, text: "Buongiorno.".into(), speaker: None }, Segment { t0: 600, t1: 1100, text: "Arrivederci.".into(), speaker: None }];
+        s.app.review = Some(crate::ui::review::Review::new(Path::new("/tmp/cedro-non-c-e.wav"), 12.0, "it".into(), segments, Vec::new(), None));
         let mut plat = Fake { clip: String::new() };
         // Il tempo di una frase la fa sentire da lì: il lettore resta acceso anche dopo altri fotogrammi.
         click(&mut s, &Act::ReviewRow(1), &mut plat);

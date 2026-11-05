@@ -698,7 +698,6 @@ Archivi ZIP e file .docx.	ZIP archives and .docx files.
 Apache-2.0 o MIT	Apache-2.0 or MIT
 MIT o Apache-2.0	MIT or Apache-2.0
 Mathijs van de Nes e altri	Mathijs van de Nes and others
-Riconoscimento del testo e i suoi calcoli.	Text recognition and its calculations.
 Modelli OCR di ocrs	ocrs OCR models
 I modelli che leggono il testo nelle immagini.	The models that read text in images.
 Audio MP3.	MP3 audio.
@@ -879,6 +878,8 @@ Buona · {}	Good · {}
 Massima · {}	Maximum · {}
 Impostazioni consigliate · tutte le pagine	Recommended settings · all pages
 Impostazioni personalizzate · tutte le pagine	Custom settings · all pages
+Impostazioni consigliate · tutti i file	Recommended settings · all files
+Impostazioni personalizzate · tutti i file	Custom settings · all files
 Fino a 1080p	Up to 1080p
 720p	720p
 {#} componente	{} component
@@ -1491,7 +1492,7 @@ Strumenti PDF	PDF tools
 Tieni premuto un tasto, poi clic destro sul file	Hold down a key, then right-click the file
 Trascina i file, scegli, converti	Drag the files, choose, convert
 Trascina per l'ordine, scegli le pagine di ogni file	Drag to set the order, choose the pages of each file
-Trascrivi vocali, registrazioni e l'audio dei video; se c'è una scheda video compatibile Cedro la usa. In Rivedi riascolti ogni frase e correggi i punti dubbi.	Transcribe voice notes, recordings and the audio of videos; if there is a compatible graphics card Cedro uses it. In Review you replay each sentence and fix the doubtful spots.
+Trascrivi vocali, registrazioni e l'audio dei video; se c'è una scheda video compatibile Cedro la usa. Riconosce chi parla e in Rivedi riascolti ogni frase, dai i nomi e correggi i punti dubbi.	Transcribe voice notes, recordings and the audio of videos; if there is a compatible graphics card Cedro uses it. It recognises who is speaking, and in Review you replay each sentence, name the speakers and fix the doubtful spots.
 Un PDF in più	One PDF into several
 Un foglio per tabella, numeri nelle celle giuste	One sheet per table, numbers in the right cells
 Un link per riga	One link per line
@@ -1508,3 +1509,120 @@ scheda video usata	graphics card used
 storta e sfocata	crooked and blurry
 È uscita una nuova versione di Cedro	A new version of Cedro is out
 ▶ Riascolta	▶ Replay
+Interlocutore	Speaker
+Interlocutori	Speakers
+Voci	Voices
+Voce nuova	New voice
+Chi dice questa frase?	Who says this sentence?
+Unisci «{}» a…	Merge “{}” into…
+Unisci a…	Merge into…
+Chi parla	Who's speaking
+Chi parla?	Who?
+Scrivi chi parla nel file	Write who's speaking in the file
+Il nome cambia in tutte le frasi. Per una frase sola: clic sul suo nome a sinistra.	The name changes in every sentence. For one sentence only, click its name on the left.
+Quante persone parlano?	How many people are speaking?
+Cedro riconosce le voci e scrive chi parla prima di ogni frase. Se non lo sai, lascia Automatico: le conta da solo.	Cedro recognises the voices and writes who is speaking before each sentence. If you don't know, leave Automatic: it counts them by itself.
+Automatico	Automatic
+Cedro ascolta e conta le voci da solo	Cedro listens and counts the voices by itself
+OPPURE DIMMI QUANTE SONO	OR TELL ME HOW MANY
+Va bene quasi sempre. Se poi Cedro divide una persona in due, in Rivedi le unisci con un clic.	Right almost every time. If Cedro splits one person in two, you merge them in Review with one click.
+Una sola voce: Cedro salta il riconoscimento delle voci. Veloce come oggi, senza nomi nel testo.	One voice: Cedro skips voice recognition. As fast as before, with no names in the text.
+Due voci, per esempio un'intervista o una telefonata.	Two voices, for example an interview or a phone call.
+Tre voci: Cedro le raggruppa esattamente in tre.	Three voices: Cedro groups them into exactly three.
+{#} voci: Cedro le raggruppa esattamente in {#}. Con tante voci conviene un audio pulito.	{1} voices: Cedro groups them into exactly {2}. With many voices a clean recording helps.
+Vale per il file in coda.	Applies to the file in the queue.
+Vale per i {#} file in coda.	Applies to the {} files in the queue.
+riconosco chi parla…	recognising who is speaking…
+Voci: {#}%	Voices: {}%
+trovate {#} voci in {} ({#} s)	found {} voices in {} ({} s)
+una sola voce ({#} s)	only one voice ({} s)
+nessuna voce chiara: trascrivo senza nomi	no clear voice: transcribing without names
+non riconosciute ({}): trascrivo senza nomi	not recognised ({}): transcribing without names
+{}: trascrivo senza riconoscere chi parla	{}: transcribing without recognising who is speaking
+scarico la prima volta il riconoscimento delle voci ({})…	downloading voice recognition for the first time ({})…
+--voci vuole auto o un numero da 1 a 8	--voci takes auto or a number from 1 to 8
+Segmentazione pyannote 3.0	pyannote segmentation 3.0
+CAM++ di 3D-Speaker	3D-Speaker CAM++
+Trova dove parla una voce e dove due si sovrappongono (scaricato alla prima trascrizione con le voci).	Finds where a voice speaks and where two overlap (downloaded on the first transcription with voices).
+Riconosce l'impronta di ogni voce, per dire chi parla (scaricato con la segmentazione).	Recognises each voice's print, to tell who is speaking (downloaded with the segmentation).
+I modelli delle voci in ONNX, e il metodo che Cedro segue per raggrupparle.	The voice models in ONNX, and the method Cedro follows to group them.
+Prepara l'audio per l'impronta delle voci.	Prepares the audio for the voice print.
+Apre l'archivio dei modelli delle voci (libbz2-rs-sys ha la licenza di bzip2, simile a BSD).	Opens the voice models archive (libbz2-rs-sys uses the bzip2 licence, BSD-like).
+Fa i calcoli dei modelli: riconoscimento del testo e delle voci.	Runs the models: text and voice recognition.
+{#} frasi · {#} interlocutori · niente da controllare	{} sentences · {} speakers · nothing to check
+{#} frasi · {#} interlocutori · {#} da controllare	{} sentences · {} speakers · {} to check
+{#} frasi · {#} min	{} sentences · {} min
+{#} frasi · meno di 1 min	{} sentences · under 1 min
+Le voci riconosciute	The recognised voices
+Un nome e un colore per ogni interlocutore	A name and a colour for each speaker
+1 frase · {#} min	1 sentence · {} min
+1 frase · meno di 1 min	1 sentence · under 1 min
+Riassunto AI	AI summary
+Riassunto	Summary
+Fai il riassunto	Write the summary
+Riassunto della riunione	Meeting summary
+Cedro legge la trascrizione e scrive in breve, chi ha detto cosa, le decisioni e le cose da fare. Per un'ora di riunione ci mette qualche minuto.	Cedro reads the transcript and writes a short summary, who said what, the decisions and the things to do. For an hour-long meeting it takes a few minutes.
+Cedro legge la trascrizione con i nomi di «Chi parla» e scrive in breve, chi ha detto cosa, le decisioni e le cose da fare. Per un'ora di riunione ci mette qualche minuto.	Cedro reads the transcript with the names from «Who's speaking» and writes a short summary, who said what, the decisions and the things to do. For an hour-long meeting it takes a few minutes.
+L'ultima volta non è riuscito: {}	Last time it didn't work: {}
+Memoria libera	Free memory
+{} · ne servono 4 GB	{} · 4 GB needed
+ne servono 4 GB	4 GB needed
+{} già sul PC	{} already on this PC
+Prima volta: scarica il modello	First time: downloads the model
+Lavora su	Runs on
+Tutto sul tuo PC	All on your PC
+niente internet	no internet
+Sto facendo il riassunto…	Writing the summary…
+Memoria libera: {}	Free memory: {}
+Memoria controllata	Memory checked
+Aspetto che finisca l'altro lavoro	Waiting for the other job to finish
+Scarico il modello: {}	Downloading the model: {}
+Carico il modello	Loading the model
+Modello pronto	Model ready
+Leggo la riunione: parte {} di {}	Reading the meeting: part {} of {}
+Leggo la riunione: metto insieme gli appunti	Reading the meeting: putting the notes together
+Leggo la riunione	Reading the meeting
+Scrivo il riassunto	Writing the summary
+{} · si può continuare a lavorare	{} · you can keep working
+Si può continuare a lavorare	You can keep working
+Meno di 1 minuto ancora	Less than 1 minute left
+Circa 1 minuto ancora	About 1 minute left
+Circa {} minuti ancora	About {} minutes left
+Memoria del PC	PC memory
+Altri programmi {}	Other programs {}
+Riassunto {}	Summary {}
+A fine riassunto il modello si chiude e i {} tornano liberi.	When the summary is done the model closes and the {} are free again.
+Poca memoria libera	Low free memory
+Per il riassunto servono 4 GB liberi, adesso ce ne sono {}. Chiudi qualche programma, per esempio il browser o Outlook, e riprova. Cedro non parte per non bloccare il PC.	The summary needs 4 GB free, right now there are {}. Close a few programs, for example the browser or Outlook, and try again. Cedro doesn't start so as not to freeze the PC.
+Riprova	Try again
+In breve	In short
+Chi ha detto cosa	Who said what
+Decisioni	Decisions
+Da fare	To do
+Nessuna decisione presa.	No decisions taken.
+Nessuna cosa da fare.	Nothing to do.
+Nessuna	None
+Copiato	Copied
+Rifai	Redo
+Scritto da {} sul tuo PC in {}. Controlla nomi, cifre e date prima di usarlo.	Written by {} on your PC in {}. Check names, figures and dates before using it.
+Metti il riassunto in cima al file	Put the summary at the top of the file
+Sta già facendo il riassunto di {}: aspetta che finisca.	Already writing the summary of {}: wait for it to finish.
+Riassunto automatico fatto sul PC: da controllare.	Automatic summary made on the PC: to be checked.
+Fa girare il modello del riassunto sul PC (programma scaricato al primo riassunto).	Runs the summary model on the PC (program downloaded with the first summary).
+Collega llama.cpp a Rust.	Connects llama.cpp to Rust.
+Il modello che scrive il riassunto (scaricato al primo riassunto, in formato GGUF di Unsloth).	The model that writes the summary (downloaded with the first summary, in Unsloth's GGUF format).
+motore cedro-riassumi	cedro-riassumi engine
+Sul tuo PC	On your PC
+In breve, decisioni e cose da fare	In short, decisions and things to do
+Si prepara	Getting ready
+Trascrive	Transcribing
+Si prepara · file {#} di {#}	Getting ready · file {} of {}
+Trascrive · file {#} di {#}	Transcribing · file {} of {}
+Restano meno di un minuto	Less than a minute left
+Restano circa {#} min	About {} min left
+Restano circa {#} h {#} min	About {}h {} min left
+Calcolo il tempo che resta…	Working out the time left…
+Accendo il motore…	Starting the engine…
+Processore · {}	Processor · {}
+Radeon integrata	Integrated Radeon
+scheda video	graphics card

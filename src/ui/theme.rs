@@ -194,6 +194,17 @@ pub const BRAND_PRIMARY: Rgb = hex(0x793FCB);
 pub const BRAND_ACCENT: Rgb = hex(0x14845B);
 pub const BRAND_WORD: Rgb = hex(0x30213E);
 
+/// I colori delle voci riconosciute nella trascrizione: fissi, uguali in tutti i temi chiari (sono
+/// anche quelli del Word) e più accesi nei temi scuri.
+pub const VOICES_LIGHT: [Rgb; 8] = [hex(0x2563B8), hex(0xD4570E), hex(0x1E8A55), hex(0xB0308F), hex(0xA87A0C), hex(0x0D7C8F), hex(0xC8323C), hex(0x5B4BD1)];
+pub const VOICES_DARK: [Rgb; 8] = [hex(0x7FB2FF), hex(0xFFA36B), hex(0x62D99A), hex(0xF38AD6), hex(0xF2C75A), hex(0x5AD3E6), hex(0xFF8A8F), hex(0xA99CFF)];
+
+/// Il colore della voce `i` nel tema.
+pub fn voice(theme: ThemeId, i: usize) -> Rgb {
+    let set = if theme.dark() { &VOICES_DARK } else { &VOICES_LIGHT };
+    set[i % set.len()]
+}
+
 /// Mescola due colori: `k` = 0 dà `a`, 1 dà `b`.
 pub fn mix(a: Rgb, b: Rgb, k: f32) -> Rgb {
     let m = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * k).round() as u8;
@@ -211,5 +222,38 @@ mod tests {
         }
         assert_eq!(ThemeId::from_key("ruota-e-dettagli"), ThemeId::WindowsEssenziale);
         assert_eq!(ThemeId::from_key(""), ThemeId::WindowsEssenziale);
+    }
+
+    #[test]
+    fn voice_colors_match_the_word_ones() {
+        for (i, c) in VOICES_LIGHT.iter().enumerate() {
+            assert_eq!(format!("{:02X}{:02X}{:02X}", c.0, c.1, c.2), crate::trascrizione::VOICE_COLORS[i]);
+        }
+    }
+}
+
+/// Il colore di ogni tipo di file (schede delle categorie, zona dove si lasciano i file): gli stessi
+/// toni delle icone disegnate (PDF rosso, Word blu, immagine verde…). Li usa il tema base.
+pub fn kind_color(kind: crate::engine::Kind) -> Rgb {
+    use crate::engine::Kind;
+    match kind {
+        Kind::Image => hex(0x1F8A62),
+        Kind::Doc => hex(0x2B6FD3),
+        Kind::Pdf => hex(0xD2382C),
+        Kind::Text => hex(0x0D7C8F),
+        Kind::Audio => hex(0xD4570E),
+        Kind::Video => hex(0x7A3FC8),
+        Kind::Archive | Kind::Other => hex(0xA2760A),
+    }
+}
+
+/// Il colore di ogni attività nella barra di sinistra del tema base.
+pub fn activity_color(a: super::model::Activity) -> Rgb {
+    use super::model::Activity;
+    match a {
+        Activity::Convert => hex(0x2563B8),
+        Activity::Transcribe => hex(0xD4570E),
+        Activity::YouTube => hex(0xC8323C),
+        Activity::Web => hex(0x1E8A55),
     }
 }
