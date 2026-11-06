@@ -181,14 +181,12 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
     let wide_in = wide(input);
     let wide_out = wide(output);
     unsafe {
-        let mut attrs = None;
-        MFCreateAttributes(&mut attrs, 1).map_err(|e| format!("video non aperto: {e}"))?;
-        let attrs = attrs.ok_or("video non aperto")?;
-        attrs
-            .SetUINT32(&MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, 1)
-            .map_err(|e| format!("video non aperto: {e}"))?;
-        let reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), &attrs)
-            .map_err(|e| format!("video non aperto: {e}"))?;
+        // Con la scheda video accesa anche la decodifica va sulla scheda (DXVA: Intel, NVIDIA, AMD,
+        // integrate comprese). Se Windows non la concede si legge col processore come prima.
+        let reader = match gpu_decoder() {
+            Some(manager) => open_reader(&wide_in, Some(manager)).or_else(|_| open_reader(&wide_in, None))?,
+            None => open_reader(&wide_in, None)?,
+        };
         let video_stream = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
         let audio_stream = MF_SOURCE_READER_FIRST_AUDIO_STREAM.0 as u32;
         let native = reader
@@ -313,6 +311,112 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         writer.Finalize().map_err(|e| format!("MP4 non chiuso: {e}"))?;
     }
     Ok(())
+}
+
+/// Il lettore del video. Con `manager` decodifica la scheda video (DXVA) e i fotogrammi restano nella
+/// sua memoria; senza, decodifica il processore. La conversione di colore la fa il lettore in tutti e due i casi.
+fn open_reader(
+    wide_in: &[u16],
+    manager: Option<&windows::Win32::Media::MediaFoundation::IMFDXGIDeviceManager>,
+) -> Result<windows::Win32::Media::MediaFoundation::IMFSourceReader, String> {
+    use windows::Win32::Media::MediaFoundation::{MF_SOURCE_READER_D3D_MANAGER, MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING};
+    unsafe {
+        let mut attrs = None;
+        MFCreateAttributes(&mut attrs, 2).map_err(|e| format!("video non aperto: {e}"))?;
+        let attrs = attrs.ok_or("video non aperto")?;
+        match manager {
+            Some(manager) => {
+                // Con la scheda serve l'elaborazione «avanzata»: quella semplice non accetta il D3D.
+                attrs.SetUnknown(&MF_SOURCE_READER_D3D_MANAGER, manager).map_err(|e| format!("video non aperto: {e}"))?;
+                attrs
+                    .SetUINT32(&MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1)
+                    .map_err(|e| format!("video non aperto: {e}"))?;
+            }
+            None => attrs
+                .SetUINT32(&MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, 1)
+                .map_err(|e| format!("video non aperto: {e}"))?,
+        }
+        MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), &attrs).map_err(|e| format!("video non aperto: {e}"))
+    }
+}
+
+/// Il dispositivo D3D11 della scheda video per decodificare, se la scheda c'è ed è permessa.
+/// Uno solo per tutto Cedro: crearlo costa, e Media Foundation lo usa da più thread (è protetto).
+fn gpu_decoder() -> Option<&'static windows::Win32::Media::MediaFoundation::IMFDXGIDeviceManager> {
+    use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_HARDWARE;
+    use windows::Win32::Graphics::Direct3D11::{
+        D3D11CreateDevice, ID3D11Device, ID3D11Multithread, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+        D3D11_CREATE_DEVICE_VIDEO_SUPPORT, D3D11_SDK_VERSION,
+    };
+    use windows::Win32::Media::MediaFoundation::{IMFDXGIDeviceManager, MFCreateDXGIDeviceManager};
+    use windows::core::Interface;
+    struct Shared(IMFDXGIDeviceManager);
+    // Il gestore DXGI di Media Foundation è libero di thread (agile) e il dispositivo è protetto.
+    unsafe impl Send for Shared {}
+    unsafe impl Sync for Shared {}
+    static MANAGER: OnceLock<Option<Shared>> = OnceLock::new();
+    if !crate::sink::shape().gpu || std::env::var_os("CEDRO_NO_DXVA").is_some() {
+        return None;
+    }
+    MANAGER
+        .get_or_init(|| unsafe {
+            if !crate::trascrizione::real_gpu_present() {
+                return None;
+            }
+            let mut device: Option<ID3D11Device> = None;
+            D3D11CreateDevice(
+                None,
+                D3D_DRIVER_TYPE_HARDWARE,
+                windows::Win32::Foundation::HMODULE::default(),
+                D3D11_CREATE_DEVICE_VIDEO_SUPPORT | D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                None,
+                D3D11_SDK_VERSION,
+                Some(&mut device),
+                None,
+                None,
+            )
+            .ok()?;
+            let device = device?;
+            if let Ok(mt) = device.cast::<ID3D11Multithread>() {
+                let _ = mt.SetMultithreadProtected(true);
+            }
+            let mut token = 0u32;
+            let mut manager = None;
+            MFCreateDXGIDeviceManager(&mut token, &mut manager).ok()?;
+            let manager = manager?;
+            manager.ResetDevice(&device, token).ok()?;
+            Some(Shared(manager))
+        })
+        .as_ref()
+        .map(|s| &s.0)
+}
+
+/// Vero se il fotogramma sta nella memoria della scheda video (decodificato con DXVA).
+fn on_gpu(sample: &windows::Win32::Media::MediaFoundation::IMFSample) -> bool {
+    use windows::Win32::Media::MediaFoundation::IMFDXGIBuffer;
+    use windows::core::Interface;
+    unsafe { sample.GetBufferByIndex(0).is_ok_and(|b| b.cast::<IMFDXGIBuffer>().is_ok()) }
+}
+
+/// Il fotogramma della scheda video copiato in memoria, con i suoi tempi: l'encoder lo riceve come
+/// da un decodificatore normale.
+fn to_memory(
+    sample: &windows::Win32::Media::MediaFoundation::IMFSample,
+) -> Result<windows::Win32::Media::MediaFoundation::IMFSample, String> {
+    unsafe {
+        let len = sample.GetTotalLength().map_err(|e| format!("fotogramma non letto: {e}"))?;
+        let buffer = MFCreateMemoryBuffer(len.max(1)).map_err(|e| e.to_string())?;
+        sample.CopyToBuffer(&buffer).map_err(|e| format!("fotogramma non letto: {e}"))?;
+        let out = MFCreateSample().map_err(|e| e.to_string())?;
+        out.AddBuffer(&buffer).map_err(|e| e.to_string())?;
+        if let Ok(time) = sample.GetSampleTime() {
+            out.SetSampleTime(time).map_err(|e| format!("tempo del fotogramma: {e}"))?;
+        }
+        if let Ok(duration) = sample.GetSampleDuration() {
+            out.SetSampleDuration(duration).map_err(|e| format!("tempo del fotogramma: {e}"))?;
+        }
+        Ok(out)
+    }
 }
 
 struct OpenedVideo {
@@ -520,6 +624,9 @@ fn pump(
                 if let Some(info) = convert {
                     let packed = repack(&sample, info)?;
                     writer.WriteSample(dest, &packed).map_err(|e| format!("scrittura video: {e}"))?;
+                } else if on_gpu(&sample) {
+                    let copy = to_memory(&sample)?;
+                    writer.WriteSample(dest, &copy).map_err(|e| format!("scrittura video: {e}"))?;
                 } else {
                     writer.WriteSample(dest, &sample).map_err(|e| format!("scrittura video: {e}"))?;
                 }
