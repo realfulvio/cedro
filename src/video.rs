@@ -221,7 +221,7 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         let mut packed_size = (width, height);
         let scaled = if shrinking {
             let (out_w, out_h) = crate::sink::target_size(width, height);
-            scaled_reader(&wide_in, video_stream, out_w, out_h, (raw_rate >> 32 != 0 && raw_rate as u32 != 0).then_some(raw_rate)).map(|(r, media)| (r, media, out_w, out_h))
+            scaled_reader(&wide_in, video_stream, out_w, out_h, rate).map(|(r, media)| (r, media, out_w, out_h))
         } else {
             None
         };
@@ -338,7 +338,7 @@ fn scaled_reader(
     stream: u32,
     out_w: u32,
     out_h: u32,
-    rate: Option<u64>,
+    rate: u64,
 ) -> Option<(windows::Win32::Media::MediaFoundation::IMFSourceReader, windows::Win32::Media::MediaFoundation::IMFMediaType)> {
     use windows::Win32::Media::MediaFoundation::MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING;
     if out_w < 2 || out_h < 2 || out_w % 2 == 1 || out_h % 2 == 1 || std::env::var_os("CEDRO_SCALA_CEDRO").is_some() {
@@ -351,13 +351,27 @@ fn scaled_reader(
         attrs.SetUINT32(&MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1).ok()?;
         let reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), &attrs).ok()?;
         let frame = ((out_w as u64) << 32) | (out_h as u64);
-        // La cadenza solo se il file la dice: con una cadenza diversa da quella vera il processore video
-        // la converte, togliendo o ripetendo fotogrammi (un MKV senza cadenza ne perdeva).
-        let wanted = nv12_type(frame, rate.unwrap_or(0)).ok()?;
-        if rate.is_none() {
-            let _ = wanted.DeleteItem(&MF_MT_FRAME_RATE);
-        }
+        let wanted = nv12_type(frame, rate).ok()?;
         reader.SetCurrentMediaType(stream, None, &wanted).ok()?;
+        // Il processore video converte la cadenza a quella del tipo; MKV e WebM la dichiarano a metà
+        // (15,000015 fps per un 30 fps) e perderebbero un fotogramma su due: niente conversione.
+        {
+            use windows::core::Interface;
+            use windows::Win32::Media::MediaFoundation::{IMFSourceReaderEx, IMFTransform, MF_XVP_DISABLE_FRC};
+            let ex: IMFSourceReaderEx = reader.cast().ok()?;
+            let mut index = 0;
+            loop {
+                let mut category = GUID::zeroed();
+                let mut transform: Option<IMFTransform> = None;
+                if ex.GetTransformForStream(stream, index, Some(&mut category), &mut transform).is_err() {
+                    break;
+                }
+                if let Some(attrs) = transform.and_then(|t| t.GetAttributes().ok()) {
+                    let _ = attrs.SetUINT32(&MF_XVP_DISABLE_FRC, 1);
+                }
+                index += 1;
+            }
+        }
         let current = reader.GetCurrentMediaType(stream).ok()?;
         let got = current.GetUINT64(&MF_MT_FRAME_SIZE).ok()?;
         let nv12 = current.GetGUID(&MF_MT_SUBTYPE).ok()? == MFVideoFormat_NV12;
