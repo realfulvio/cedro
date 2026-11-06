@@ -751,8 +751,10 @@ fn planar_into(src: &[u8], info: &FrameInfo, swap_uv: bool, nv12: &mut [u8]) -> 
     let y_stride = if info.stride > 0 { info.stride as usize } else { src_w };
     // Con una misura dispari i piani del colore hanno una colonna e una riga in più (arrotondati in alto).
     let c_stride = if info.stride > 0 { y_stride.div_ceil(2) } else { src_w.div_ceil(2) }.max(1);
-    let y_plane = y_stride * src_h;
-    let c_plane = c_stride * src_h.div_ceil(2);
+    // I decodificatori possono dare più righe di quelle visibili (1088 per 1080): i piani del colore partono dopo.
+    let rows = padded_rows(src.len(), y_stride, src_h).unwrap_or(src_h);
+    let y_plane = y_stride * rows;
+    let c_plane = c_stride * rows.div_ceil(2);
     if src.len() < y_plane + c_plane * 2 {
         return Err("fotogramma troppo corto".into());
     }
@@ -782,7 +784,8 @@ fn nv12_into(src: &[u8], info: &FrameInfo, nv12: &mut [u8]) -> Result<(), String
     let dst_w = info.enc_w as usize;
     let dst_h = info.enc_h as usize;
     let stride = if info.stride > 0 { info.stride as usize } else { src_w };
-    let y_bytes = stride * src_h;
+    // Righe in più del decodificatore (1088 per 1080): il colore parte dopo di loro.
+    let y_bytes = stride * padded_rows(src.len(), stride, src_h).unwrap_or(src_h);
     let uv_bytes = stride * (src_h / 2);
     if src.len() < y_bytes + uv_bytes || stride < src_w {
         return Err("fotogramma troppo corto".into());
