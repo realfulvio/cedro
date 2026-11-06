@@ -110,7 +110,7 @@ pub const GROUPS: &[Group] = &[
 /// La versione di whisper.cpp dentro il motore: quella di whisper-rs-sys 0.15 (il test `whisper_version_matches_the_engine` avverte se cambia).
 const WHISPER_CPP: &str = "1.8.3";
 /// Le versioni dei programmi fissati dentro le librerie (LAME in mp3lame-sys, libopus in opusic-sys).
-const LAME: &str = "3.100";
+const LAME: &str = "4.0";
 const LIBOPUS: &str = "1.6.1";
 /// La versione di llama-cpp-2 nel motore del riassunto (fissata in riassumi/Cargo.toml).
 const LLAMA_CPP_2: &str = "0.1.160";
