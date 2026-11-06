@@ -187,7 +187,7 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         attrs
             .SetUINT32(&MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, 1)
             .map_err(|e| format!("video non aperto: {e}"))?;
-        let reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), &attrs)
+        let mut reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), &attrs)
             .map_err(|e| format!("video non aperto: {e}"))?;
         let video_stream = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
         let audio_stream = MF_SOURCE_READER_FIRST_AUDIO_STREAM.0 as u32;
@@ -216,8 +216,23 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
             _ => rate,
         };
 
-        let mut opened = uncompressed_type(&reader, video_stream, &native, frame, rate)?;
-        if shrinking {
+        // Rimpicciolire: lo fa il lettore di Windows (elaborazione video «avanzata», SIMD e più core)
+        // mentre decodifica; se non ci riesce, lo fa Cedro fotogramma per fotogramma come prima.
+        let mut packed_size = (width, height);
+        let scaled = if shrinking {
+            let (out_w, out_h) = crate::sink::target_size(width, height);
+            scaled_reader(&wide_in, video_stream, out_w, out_h, rate).map(|(r, media)| (r, media, out_w, out_h))
+        } else {
+            None
+        };
+        let mut opened = if let Some((r, media, out_w, out_h)) = scaled {
+            reader = r;
+            packed_size = (out_w, out_h);
+            OpenedVideo { media, convert: None }
+        } else {
+            uncompressed_type(&reader, video_stream, &native, frame, rate)?
+        };
+        if shrinking && packed_size == (width, height) {
             let (out_w, out_h) = crate::sink::target_size(width, height);
             let mut info = opened.convert.take().unwrap_or(FrameInfo {
                 kind: Pix::Nv12,
@@ -233,7 +248,7 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         }
         let (enc_w, enc_h) = match opened.convert.as_ref() {
             Some(f) => f.scale.unwrap_or((f.enc_w, f.enc_h)),
-            None => (width, height),
+            None => packed_size,
         };
         let frame = ((enc_w as u64) << 32) | (enc_h as u64);
         crate::sink::cap_for(enc_w as u64 * enc_h as u64, width as u64 * height as u64);
@@ -303,7 +318,7 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         let den = (rate as u32).max(1) as u64;
         let frame_ticks = 10_000_000u64.saturating_mul(den) / num.max(1);
         let mut gate = crate::sink::FrameGate::new();
-        let packed = opened.convert.is_none().then_some((width, height));
+        let packed = opened.convert.is_none().then_some(packed_size);
         let frames = pump(&reader, &writer, video_stream, video_index, Some(frame_ticks), opened.convert.as_ref(), packed, Some(&mut gate))?;
         if frames == 0 {
             return Err("il video non ha fotogrammi".into());
@@ -314,6 +329,35 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         writer.Finalize().map_err(|e| format!("MP4 non chiuso: {e}"))?;
     }
     Ok(())
+}
+
+/// Un lettore che dà i fotogrammi già rimpiccioliti a `out_w`×`out_h` in NV12: il ridimensionamento lo
+/// fa il processore video di Windows. `None` se Windows non lo concede per questo file.
+fn scaled_reader(
+    wide_in: &[u16],
+    stream: u32,
+    out_w: u32,
+    out_h: u32,
+    rate: u64,
+) -> Option<(windows::Win32::Media::MediaFoundation::IMFSourceReader, windows::Win32::Media::MediaFoundation::IMFMediaType)> {
+    use windows::Win32::Media::MediaFoundation::MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING;
+    if out_w < 2 || out_h < 2 || out_w % 2 == 1 || out_h % 2 == 1 || std::env::var_os("CEDRO_SCALA_CEDRO").is_some() {
+        return None;
+    }
+    unsafe {
+        let mut attrs = None;
+        MFCreateAttributes(&mut attrs, 1).ok()?;
+        let attrs = attrs?;
+        attrs.SetUINT32(&MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1).ok()?;
+        let reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), &attrs).ok()?;
+        let frame = ((out_w as u64) << 32) | (out_h as u64);
+        let wanted = nv12_type(frame, rate).ok()?;
+        reader.SetCurrentMediaType(stream, None, &wanted).ok()?;
+        let current = reader.GetCurrentMediaType(stream).ok()?;
+        let got = current.GetUINT64(&MF_MT_FRAME_SIZE).ok()?;
+        let nv12 = current.GetGUID(&MF_MT_SUBTYPE).ok()? == MFVideoFormat_NV12;
+        (nv12 && got == frame).then_some((reader, current))
+    }
 }
 
 struct OpenedVideo {
