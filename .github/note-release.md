@@ -12,14 +12,7 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Aggiornamenti davvero silenziosi su Windows.** Cedro si aggiorna da solo senza aprire finestre: alla fine compare solo la notifica «Cedro è stato aggiornato alla {versione}».
+**Video più belli e più veloci su Windows.**
 
-- L'aggiornamento automatico a volte non partiva («file utilizzato da un altro processo»): ora l'installatore si scarica ogni volta in una cartella sua.
-- Anche il «Sì» da «Controlla aggiornamenti» aggiorna in silenzio, senza la procedura guidata dell'installatore.
-- Chi ha una Cedro molto vecchia (fino alla 0.26.2), dopo il «Sì» non vede più la procedura guidata: l'installatore si rilancia da solo in silenzio.
-
-**Componenti aggiornati.** Stessi risultati, librerie più nuove.
-
-- OCR: il motore che legge il testo nelle immagini e nei PDF scansionati (rten) passa alla 0.27, la stessa già usata per riconoscere chi parla. Sui PDF di prova il testo letto è identico a prima.
-- MP3: il codificatore LAME passa dalla 3.100 alla 4.0. Sulla prova di 10 minuti l'audio esce identico.
-- Aggiornamenti minori di altre librerie (zip, flate2 e altre).
+- I video 1080p H.264 convertiti uscivano coi colori spostati (una riga verde in alto, colori fuori posto): ora escono giusti, anche quando se ne riduce la risoluzione.
+- Ridurre la risoluzione di un video è circa due volte più veloce (un 1080p portato a 720p: da 21 a 12 secondi; un 4K portato a 720p: da 44 a 24) e l'immagine è più nitida.
