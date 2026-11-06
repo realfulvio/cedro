@@ -110,6 +110,64 @@ begin
     Result := Pos('view_asked=1', text) = 0;
 end;
 
+// Le Cedro fino alla 0.26.2, detto «sì» all'aggiornamento, lanciano questo installatore senza parametri
+// dalla cartella temporanea (%TEMP%\Cedro-Setup-<v>.exe): invece della procedura guidata si rilancia da
+// solo in silenzio, come fanno le Cedro nuove, e alla fine resta solo la notifica di Cedro aggiornato.
+// Chi lo apre a mano (da Download, da un'altra cartella) o installa la prima volta vede la procedura di sempre.
+const
+  UNINSTALL_KEY = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{5C1CAEBF-024C-4A9F-BEC8-1FB3C9FEA4CE}_is1';
+
+function GetLongPathName(ShortPath: String; LongPath: String; Size: Cardinal): Cardinal;
+  external 'GetLongPathNameW@kernel32.dll stdcall';
+
+// %TEMP% spesso è scritto corto (C:\Users\ACCORS~1\...): si confrontano i nomi lunghi.
+function LongDir(path: String): String;
+var
+  buffer: String;
+  size: Cardinal;
+begin
+  Result := RemoveBackslashUnlessRoot(path);
+  SetLength(buffer, 1024);
+  size := GetLongPathName(Result, buffer, 1024);
+  if (size > 0) and (size < 1024) then
+    Result := RemoveBackslashUnlessRoot(Copy(buffer, 1, size));
+end;
+
+function LaunchedByOldCedro: Boolean;
+var
+  dir: String;
+begin
+  Result := False;
+  if WizardSilent then Exit;
+  if not (RegKeyExists(HKCU, UNINSTALL_KEY) or RegKeyExists(HKLM, UNINSTALL_KEY)) then Exit;
+  // Cedro-Setup-…, Cedro-ARM64-Setup-…, Cedro-Bondeno-Setup-…: i nomi che le Cedro scaricano.
+  if Pos('cedro-', LowerCase(ExtractFileName(ExpandConstant('{srcexe}')))) <> 1 then Exit;
+  dir := LongDir(ExtractFileDir(ExpandConstant('{srcexe}')));
+  // {tmp} è una sottocartella della cartella temporanea dell'utente: la stessa in cui scarica Cedro.
+  Result := (CompareText(dir, LongDir(ExtractFileDir(ExpandConstant('{tmp}')))) = 0)
+    or (CompareText(dir, LongDir(GetEnv('TMP'))) = 0) or (CompareText(dir, LongDir(GetEnv('TEMP'))) = 0);
+  if Result then Log('Lanciato da una Cedro vecchia da ' + dir + ': si rilancia in silenzio');
+end;
+
+function InitializeSetup: Boolean;
+var
+  code: Integer;
+begin
+  Result := True;
+  if not LaunchedByOldCedro then Exit;
+  CreateDir(ExpandConstant('{userappdata}\Cedro'));
+  SaveStringToFile(ExpandConstant('{userappdata}\Cedro\updated.txt'), '{#AppVersion}', False);
+  // Lanciare direttamente il file in uso dà «accesso negato»: lo fa partire cmd, nascosto.
+  if Exec(ExpandConstant('{cmd}'), '/C start "" "' + ExpandConstant('{srcexe}') + '" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /SILENTUPDATE',
+    '', SW_HIDE, ewNoWait, code) then
+    Result := False
+  else
+  begin
+    Log('Non si rilancia in silenzio: ' + SysErrorMessage(code));
+    DeleteFile(ExpandConstant('{userappdata}\Cedro\updated.txt'));
+  end;
+end;
+
 function SilentUpdate: Boolean;
 var
   i: Integer;

@@ -1594,8 +1594,9 @@ fn on_update(hwnd: HWND) {
     }
     balloon(&format!("Scarico Cedro {}…", release.version));
     std::thread::spawn(move || {
-        // L'installatore chiude Cedro da solo prima di copiare i file.
-        if let Err(e) = crate::cli::install(&release) {
+        // Detto sì, niente procedura guidata: lo stesso aggiornamento silenzioso dell'automatico.
+        // L'installatore chiude Cedro, lo riapre, e il Cedro nuovo avvisa con una notifica.
+        if let Err(e) = crate::cli::install_silent(&release) {
             append_log(&format!("aggiornamento: {e}"));
             post_update(UpdateNews::Note(format!("Aggiornamento non riuscito: {e}")));
         }
