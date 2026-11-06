@@ -187,7 +187,7 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         attrs
             .SetUINT32(&MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, 1)
             .map_err(|e| format!("video non aperto: {e}"))?;
-        let reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), &attrs)
+        let mut reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), &attrs)
             .map_err(|e| format!("video non aperto: {e}"))?;
         let video_stream = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
         let audio_stream = MF_SOURCE_READER_FIRST_AUDIO_STREAM.0 as u32;
@@ -216,8 +216,23 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
             _ => rate,
         };
 
-        let mut opened = uncompressed_type(&reader, video_stream, &native, frame, rate)?;
-        if shrinking {
+        // Rimpicciolire: lo fa il lettore di Windows (elaborazione video «avanzata», SIMD e più core)
+        // mentre decodifica; se non ci riesce, lo fa Cedro fotogramma per fotogramma come prima.
+        let mut packed_size = (width, height);
+        let scaled = if shrinking {
+            let (out_w, out_h) = crate::sink::target_size(width, height);
+            scaled_reader(&wide_in, video_stream, out_w, out_h, rate).map(|(r, media)| (r, media, out_w, out_h))
+        } else {
+            None
+        };
+        let mut opened = if let Some((r, media, out_w, out_h)) = scaled {
+            reader = r;
+            packed_size = (out_w, out_h);
+            OpenedVideo { media, convert: None }
+        } else {
+            uncompressed_type(&reader, video_stream, &native, frame, rate)?
+        };
+        if shrinking && packed_size == (width, height) {
             let (out_w, out_h) = crate::sink::target_size(width, height);
             let mut info = opened.convert.take().unwrap_or(FrameInfo {
                 kind: Pix::Nv12,
@@ -233,7 +248,7 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         }
         let (enc_w, enc_h) = match opened.convert.as_ref() {
             Some(f) => f.scale.unwrap_or((f.enc_w, f.enc_h)),
-            None => (width, height),
+            None => packed_size,
         };
         let frame = ((enc_w as u64) << 32) | (enc_h as u64);
         crate::sink::cap_for(enc_w as u64 * enc_h as u64, width as u64 * height as u64);
@@ -303,16 +318,65 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         let den = (rate as u32).max(1) as u64;
         let frame_ticks = 10_000_000u64.saturating_mul(den) / num.max(1);
         let mut gate = crate::sink::FrameGate::new();
-        let frames = pump(&reader, &writer, video_stream, video_index, Some(frame_ticks), opened.convert.as_ref(), Some(&mut gate))?;
+        let packed = opened.convert.is_none().then_some(packed_size);
+        let frames = pump(&reader, &writer, video_stream, video_index, Some(frame_ticks), opened.convert.as_ref(), packed, Some(&mut gate))?;
         if frames == 0 {
             return Err("il video non ha fotogrammi".into());
         }
         if let Some(index) = audio_index {
-            pump(&reader, &writer, audio_stream, index, None, None, None)?;
+            pump(&reader, &writer, audio_stream, index, None, None, None, None)?;
         }
         writer.Finalize().map_err(|e| format!("MP4 non chiuso: {e}"))?;
     }
     Ok(())
+}
+
+/// Un lettore che dà i fotogrammi già rimpiccioliti a `out_w`×`out_h` in NV12: il ridimensionamento lo
+/// fa il processore video di Windows. `None` se Windows non lo concede per questo file.
+fn scaled_reader(
+    wide_in: &[u16],
+    stream: u32,
+    out_w: u32,
+    out_h: u32,
+    rate: u64,
+) -> Option<(windows::Win32::Media::MediaFoundation::IMFSourceReader, windows::Win32::Media::MediaFoundation::IMFMediaType)> {
+    use windows::Win32::Media::MediaFoundation::MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING;
+    if out_w < 2 || out_h < 2 || out_w % 2 == 1 || out_h % 2 == 1 || std::env::var_os("CEDRO_SCALA_CEDRO").is_some() {
+        return None;
+    }
+    unsafe {
+        let mut attrs = None;
+        MFCreateAttributes(&mut attrs, 1).ok()?;
+        let attrs = attrs?;
+        attrs.SetUINT32(&MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1).ok()?;
+        let reader = MFCreateSourceReaderFromURL(PCWSTR(wide_in.as_ptr()), &attrs).ok()?;
+        let frame = ((out_w as u64) << 32) | (out_h as u64);
+        let wanted = nv12_type(frame, rate).ok()?;
+        reader.SetCurrentMediaType(stream, None, &wanted).ok()?;
+        // Il processore video converte la cadenza a quella del tipo; MKV e WebM la dichiarano a metà
+        // (15,000015 fps per un 30 fps) e perderebbero un fotogramma su due: niente conversione.
+        {
+            use windows::core::Interface;
+            use windows::Win32::Media::MediaFoundation::{IMFSourceReaderEx, IMFTransform, MF_XVP_DISABLE_FRC};
+            let ex: IMFSourceReaderEx = reader.cast().ok()?;
+            let mut index = 0;
+            loop {
+                let mut category = GUID::zeroed();
+                let mut transform: Option<IMFTransform> = None;
+                if ex.GetTransformForStream(stream, index, Some(&mut category), &mut transform).is_err() {
+                    break;
+                }
+                if let Some(attrs) = transform.and_then(|t| t.GetAttributes().ok()) {
+                    let _ = attrs.SetUINT32(&MF_XVP_DISABLE_FRC, 1);
+                }
+                index += 1;
+            }
+        }
+        let current = reader.GetCurrentMediaType(stream).ok()?;
+        let got = current.GetUINT64(&MF_MT_FRAME_SIZE).ok()?;
+        let nv12 = current.GetGUID(&MF_MT_SUBTYPE).ok()? == MFVideoFormat_NV12;
+        (nv12 && got == frame).then_some((reader, current))
+    }
 }
 
 struct OpenedVideo {
@@ -478,6 +542,7 @@ fn pump(
     dest: u32,
     frame_ticks: Option<u64>,
     convert: Option<&FrameInfo>,
+    packed: Option<(u32, u32)>,
     mut gate: Option<&mut crate::sink::FrameGate>,
 ) -> Result<u32, String> {
     let mut written = 0u32;
@@ -520,6 +585,8 @@ fn pump(
                 if let Some(info) = convert {
                     let packed = repack(&sample, info)?;
                     writer.WriteSample(dest, &packed).map_err(|e| format!("scrittura video: {e}"))?;
+                } else if let Some(fixed) = packed.and_then(|(w, h)| crop_padded(&sample, w, h).transpose()) {
+                    writer.WriteSample(dest, &fixed?).map_err(|e| format!("scrittura video: {e}"))?;
                 } else {
                     writer.WriteSample(dest, &sample).map_err(|e| format!("scrittura video: {e}"))?;
                 }
@@ -540,6 +607,63 @@ fn pump(
         }
     }
     Ok(written)
+}
+
+/// Il decodificatore H.264 di Windows dà i 1080p alti 1088 righe (multipli di 16): il colore (UV)
+/// comincia dopo le 8 righe in più, e l'encoder, che lo cerca subito dopo la 1080ª, prenderebbe
+/// i colori spostati. Qui il fotogramma si riporta a `width`×`height` esatti; `None` se è già giusto.
+fn crop_padded(
+    sample: &windows::Win32::Media::MediaFoundation::IMFSample,
+    width: u32,
+    height: u32,
+) -> Result<Option<windows::Win32::Media::MediaFoundation::IMFSample>, String> {
+    let (w, h) = (width as usize, height as usize);
+    let exact = w * h * 3 / 2;
+    unsafe {
+        let len = sample.GetTotalLength().map_err(|e| format!("fotogramma non letto: {e}"))? as usize;
+        if len <= exact || w == 0 {
+            return Ok(None);
+        }
+        let rows = padded_rows(len, w, h).ok_or_else(|| format!("fotogramma di {len} byte per {width}×{height}"))?;
+        let src = sample.ConvertToContiguousBuffer().map_err(|e| format!("fotogramma non letto: {e}"))?;
+        let mut ptr = std::ptr::null_mut();
+        let mut cur = 0u32;
+        src.Lock(&mut ptr, None, Some(&mut cur)).map_err(|e| format!("fotogramma non letto: {e}"))?;
+        if ptr.is_null() || (cur as usize) < w * rows * 3 / 2 {
+            let _ = src.Unlock();
+            return Err("fotogramma troppo corto".into());
+        }
+        let data = std::slice::from_raw_parts(ptr, cur as usize);
+        let mut nv12 = Vec::with_capacity(exact);
+        nv12.extend_from_slice(&data[..w * h]);
+        nv12.extend_from_slice(&data[w * rows..w * rows + w * h / 2]);
+        src.Unlock().map_err(|e| format!("fotogramma non letto: {e}"))?;
+        let buffer = MFCreateMemoryBuffer(exact as u32).map_err(|e| e.to_string())?;
+        let mut dst = std::ptr::null_mut();
+        buffer.Lock(&mut dst, None, None).map_err(|e| e.to_string())?;
+        if dst.is_null() {
+            let _ = buffer.Unlock();
+            return Err("buffer video vuoto".into());
+        }
+        std::ptr::copy_nonoverlapping(nv12.as_ptr(), dst, exact);
+        buffer.Unlock().map_err(|e| e.to_string())?;
+        buffer.SetCurrentLength(exact as u32).map_err(|e| e.to_string())?;
+        let out = MFCreateSample().map_err(|e| e.to_string())?;
+        out.AddBuffer(&buffer).map_err(|e| e.to_string())?;
+        if let Ok(time) = sample.GetSampleTime() {
+            out.SetSampleTime(time).map_err(|e| format!("tempo del fotogramma: {e}"))?;
+        }
+        if let Ok(duration) = sample.GetSampleDuration() {
+            out.SetSampleDuration(duration).map_err(|e| format!("tempo del fotogramma: {e}"))?;
+        }
+        Ok(Some(out))
+    }
+}
+
+/// Le righe vere di un NV12 largo `w` lungo `len` byte, se sono più di `h` e tornano esatte.
+fn padded_rows(len: usize, w: usize, h: usize) -> Option<usize> {
+    let rows = len * 2 / 3 / w.max(1);
+    (rows > h && rows % 2 == 0 && w * rows * 3 / 2 == len).then_some(rows)
 }
 
 fn repack(
@@ -690,8 +814,10 @@ fn planar_into(src: &[u8], info: &FrameInfo, swap_uv: bool, nv12: &mut [u8]) -> 
     let y_stride = if info.stride > 0 { info.stride as usize } else { src_w };
     // Con una misura dispari i piani del colore hanno una colonna e una riga in più (arrotondati in alto).
     let c_stride = if info.stride > 0 { y_stride.div_ceil(2) } else { src_w.div_ceil(2) }.max(1);
-    let y_plane = y_stride * src_h;
-    let c_plane = c_stride * src_h.div_ceil(2);
+    // I decodificatori possono dare più righe di quelle visibili (1088 per 1080): i piani del colore partono dopo.
+    let rows = padded_rows(src.len(), y_stride, src_h).unwrap_or(src_h);
+    let y_plane = y_stride * rows;
+    let c_plane = c_stride * rows.div_ceil(2);
     if src.len() < y_plane + c_plane * 2 {
         return Err("fotogramma troppo corto".into());
     }
@@ -721,7 +847,8 @@ fn nv12_into(src: &[u8], info: &FrameInfo, nv12: &mut [u8]) -> Result<(), String
     let dst_w = info.enc_w as usize;
     let dst_h = info.enc_h as usize;
     let stride = if info.stride > 0 { info.stride as usize } else { src_w };
-    let y_bytes = stride * src_h;
+    // Righe in più del decodificatore (1088 per 1080): il colore parte dopo di loro.
+    let y_bytes = stride * padded_rows(src.len(), stride, src_h).unwrap_or(src_h);
     let uv_bytes = stride * (src_h / 2);
     if src.len() < y_bytes + uv_bytes || stride < src_w {
         return Err("fotogramma troppo corto".into());
@@ -1263,6 +1390,14 @@ pub(crate) fn synthetic_mp4(output: &Path, width: u32, height: u32, frames: u32,
 
 #[cfg(test)]
 mod tests {
+    /// 1080p del decodificatore H.264 di Windows: 1088 righe nel buffer, il colore parte dalla 1088ª.
+    #[test]
+    fn padded_rows_found() {
+        assert_eq!(super::padded_rows(1920 * 1088 * 3 / 2, 1920, 1080), Some(1088));
+        assert_eq!(super::padded_rows(1920 * 1080 * 3 / 2, 1920, 1080), None);
+        assert_eq!(super::padded_rows(1280 * 720 * 3 / 2 + 7, 1280, 720), None);
+    }
+
     /// Lo stesso video 1280×720 di 10 secondi, col processore e con la scheda: tempi e grandezze.
     /// Gira solo con CEDRO_GPU_TEST=1 (dura qualche secondo) e lì la scheda deve averlo fatto.
     #[test]
