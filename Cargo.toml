@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.35.2"
+version = "0.35.3"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -16,14 +16,14 @@ lopdf = "0.47"
 rust_xlsxwriter = { version = "0.102", default-features = false }
 mp4 = "0.14"
 skrifa = "0.49"
-mp3lame-encoder = "0.2"
+mp3lame-encoder = "0.3"
 ocrs = "0.13"
 png = "0.18"
 oxideav-vp8 = { version = "0.2.7", default-features = false }
 oxideav-vp9 = "0.0.14"
 oxideav-mpeg4video = "0.1"
-rten = "0.26"
-rten-simd = "0.26"
+rten = "0.27"
+rten-simd = "0.27"
 serde_json = "1"
 sha2 = "0.10"
 symphonia = { version = "0.6", default-features = false, features = ["opt-simd", "id3v1", "id3v2", "ape", "mp3", "wav", "flac", "vorbis", "pcm", "aac", "isomp4", "ogg", "mkv", "aiff", "caf", "adpcm"] }
@@ -66,10 +66,7 @@ openh264 = { version = "0.9", default-features = false, features = ["source"] }
 # whisper.cpp come libreria nell'APK (src/whisper_android).
 whisper-rs = "0.16"
 whisper-rs-sys = "0.15"
-# Chi parla (trascrivi/src/voci.rs, dentro l'APK): rten 0.27 come il motore del computer, col nome cambiato
-# perché l'OCR usa ancora la 0.26.
-rten-voci = { package = "rten", version = "0.27" }
-rten-tensor-voci = { package = "rten-tensor", version = "0.27" }
+rten-tensor = "0.27"
 kaldi-native-fbank = "0.1"
 
 [target.'cfg(windows)'.dependencies]
@@ -120,6 +117,8 @@ winresource = "0.1"
 # hayro con l'opzione per disegnare la pagina senza testo (sfondo dei moduli in Word)
 [patch.crates-io]
 hayro = { path = "vendor/hayro" }
+# ocrs 0.13.1 con rten 0.27 (la versione pubblicata vuole ancora la 0.26; il ramo main di ocrs è già alla 0.27)
+ocrs = { path = "vendor/ocrs" }
 # rten-simd con l'interruttore per spegnere AVX-512 (Impostazioni)
 rten-simd = { path = "vendor/rten-simd" }
 # rav1d (lettura delle foto AVIF) senza l'assembly: niente nasm da installare
