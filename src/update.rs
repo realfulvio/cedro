@@ -161,9 +161,42 @@ pub fn download(asset: &Asset) -> Result<PathBuf, String> {
     }
     // Solo il nome del file: un nome con delle cartelle dentro non esce dalla cartella temporanea.
     let name = std::path::Path::new(&asset.name).file_name().ok_or("nome dell'installatore non valido")?;
-    let path = std::env::temp_dir().join(name);
+    let dir = fresh_download_dir(&std::env::temp_dir())?;
+    let path = dir.join(name);
     std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
     Ok(path)
+}
+
+const DOWNLOAD_PREFIX: &str = "cedro-aggiornamento-";
+
+/// Una cartella nuova per ogni installatore scaricato. Con un nome fisso in `%TEMP%` la scrittura falliva
+/// («file utilizzato da un altro processo», os error 32) se una copia di prima era ancora aperta
+/// (installatore in corso, antivirus): l'aggiornamento silenzioso saltava senza dire niente.
+/// Le cartelle dei giri precedenti (più vecchie di un'ora) si tolgono qui; quella di un installatore ancora aperto resta.
+fn fresh_download_dir(base: &std::path::Path) -> Result<PathBuf, String> {
+    static CALLS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    if let Ok(entries) = std::fs::read_dir(base) {
+        for entry in entries.flatten() {
+            let ours = entry.file_name().to_string_lossy().starts_with(DOWNLOAD_PREFIX);
+            // Solo quelle vecchie di un'ora: un altro scaricamento in corso non perde la sua.
+            let old = entry.metadata().ok().and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok()).is_some_and(|age| age.as_secs() > 3600);
+            if ours && old && entry.file_type().is_ok_and(|t| t.is_dir()) {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    for _ in 0..8 {
+        let n = CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = base.join(format!("{DOWNLOAD_PREFIX}{}-{nanos:x}-{n}", std::process::id()));
+        // `create_dir` non riesce se esiste già: una cartella preparata da altri non viene mai usata.
+        match std::fs::create_dir(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("cartella provvisoria non creata: {e}")),
+        }
+    }
+    Err("cartella provvisoria non creata".to_string())
 }
 
 /// Come il pacchetto per Linux chiama questa architettura (`cedro-<versione>-linux-<arch>.tar.gz`).
@@ -548,8 +581,26 @@ Connection: close
         let body = b"x".to_vec();
         let sneaky = Asset { name: "../cedro-prova-fuori.bin".into(), url: serve_once(body.clone()), sha256: Some(sha_of(&body)) };
         let path = download(&sneaky).unwrap();
-        assert_eq!(path, std::env::temp_dir().join("cedro-prova-fuori.bin"));
-        let _ = std::fs::remove_file(path);
+        assert_eq!(path.file_name().unwrap(), "cedro-prova-fuori.bin");
+        assert_eq!(path.parent().and_then(|d| d.parent()), Some(std::env::temp_dir().as_path()));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn each_download_gets_its_own_folder() {
+        let base = std::env::temp_dir().join(format!("cedro-prova-scarico-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let first = super::fresh_download_dir(&base).unwrap();
+        // Un installatore di prima, magari ancora aperto: il nuovo non va scritto sopra di lui.
+        std::fs::write(first.join("Cedro-Setup-9.9.9.exe"), b"vecchio").unwrap();
+        let second = super::fresh_download_dir(&base).unwrap();
+        assert_ne!(first, second);
+        assert!(second.is_dir());
+        assert!(!second.join("Cedro-Setup-9.9.9.exe").exists());
+        // Quelle di un giro appena fatto restano (potrebbe essere ancora in corso); le vecchie le toglie il prossimo giro.
+        assert!(first.join("Cedro-Setup-9.9.9.exe").exists());
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     /// La cartella dove si apre il pacchetto è nuova, solo dell'utente e mai la stessa due volte.
