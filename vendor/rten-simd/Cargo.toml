@@ -13,7 +13,7 @@
 edition = "2024"
 rust-version = "1.94.0"
 name = "rten-simd"
-version = "0.26.0"
+version = "0.27.0"
 authors = ["Robert Knight"]
 build = false
 include = [

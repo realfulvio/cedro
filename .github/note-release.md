@@ -12,9 +12,8 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Riassunto AI più preciso su decisioni e votazioni.** Il modello resta Qwen3.5-4B (provati altri quattro modelli dello stesso peso, nessuno era migliore); sono cambiate le istruzioni.
+**Componenti aggiornati.** Nessuna funzione cambia: stessi risultati, librerie più nuove.
 
-- Nelle riunioni lunghe le decisioni non si perdono più: prima gli appunti di ogni parte si fermavano a metà e un consiglio comunale con cinque votazioni poteva finire in «Decisioni: Nessuna».
-- In «Decisioni» ci sono anche gli emendamenti respinti e i punti rinviati, con l'esito del voto («all'unanimità» solo quando è stato detto, altrimenti a maggioranza con favorevoli, contrari e astenuti).
-- Le dichiarazioni di voto dei gruppi e le proposte non vengono più scambiate per decisioni, e nelle riunioni senza votazioni non compaiono voti inventati.
-- «Chi ha detto cosa» è più corto, una frase per persona, così il riassunto non si interrompe prima di decisioni e compiti.
+- OCR: il motore che legge il testo nelle immagini e nei PDF scansionati (rten) passa alla 0.27, la stessa già usata per riconoscere chi parla. Sui PDF di prova il testo letto è identico a prima.
+- MP3: il codificatore LAME passa dalla 3.100 alla 4.0. Sulla prova di 10 minuti l'audio esce identico.
+- Aggiornamenti minori di altre librerie (zip, flate2 e altre).
