@@ -53,6 +53,15 @@ fn main() {
             ui_win::run_standalone();
             return;
         }
+        if let Some(path) = viewer_arg(&args) {
+            ui_win::run_viewer(path);
+            return;
+        }
+        // Dal disinstallatore, senza console: via le associazioni dei file firmati.
+        if args.first().is_some_and(|a| a == "associa-no") {
+            let _ = cedro::associa::apply(false, false);
+            return;
+        }
         if args.first().is_some_and(|a| a == "vista") {
             vista_win::run_standalone();
             return;
@@ -82,9 +91,10 @@ fn main() {
     }
     #[cfg(target_os = "linux")]
     {
-        let ui = args
-            .first()
-            .is_some_and(|arg| matches!(arg.as_str(), "show" | "settings" | "impostazioni" | "guida" | "vista" | "conversioni" | "--background"));
+        let ui = viewer_arg(&args).is_some()
+            || args
+                .first()
+                .is_some_and(|arg| matches!(arg.as_str(), "show" | "settings" | "impostazioni" | "guida" | "vista" | "conversioni" | "--background"));
         if args.is_empty() || ui {
             // Cedro ha i suoi colori chiari: un tema scuro imposto da fuori (GTK_THEME=Breeze:dark,
             // Adwaita:dark…) dipingerebbe di nero le parti che il suo CSS non copre.
@@ -99,5 +109,15 @@ fn main() {
             eprintln!("Senza argomenti la ruota parte su Windows e su Linux.");
         }
         std::process::exit(cli::run());
+    }
+}
+
+/// `cedro verifica <file>` (il doppio clic su un file firmato) o un solo file firmato: il visualizzatore.
+#[cfg(any(windows, target_os = "linux"))]
+fn viewer_arg(args: &[String]) -> Option<std::path::PathBuf> {
+    match args {
+        [cmd, path] if cmd == "verifica" => Some(path.into()),
+        [path] if cedro::firma::is_signed_name(path) && std::path::Path::new(path).is_file() => Some(path.into()),
+        _ => None,
     }
 }

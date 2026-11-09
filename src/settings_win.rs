@@ -932,6 +932,10 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         ocr_lang: LANGS.get(sel(hwnd, ID_LANG)).unwrap_or(&"auto").to_string(),
         language: UI_LANGS.get(sel(hwnd, ID_UILANG)).unwrap_or(&"auto").to_string(),
         ocr_max: *MAX_PAGES.get(sel(hwnd, ID_MAXPAGES)).unwrap_or(&base.ocr_max),
+        // Le scelte della «Firma digitale» si fanno nella sua pagina: restano quelle di prima.
+        firma_assoc: base.firma_assoc,
+        firma_pdf: base.firma_pdf,
+        firma_online: base.firma_online,
     }
 }
 

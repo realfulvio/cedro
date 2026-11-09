@@ -909,7 +909,15 @@ fn evaluate(cx: &mut Ctx, chk: &cms::SignerCheck, claimed: Option<i64>, proof: O
             }
             Status::Unknown(e) => {
                 if cx.opts.online {
-                    why.push(format!("Non sono riuscito a controllare se il certificato è stato revocato ({e})."));
+                    let plain = if e.contains("non conosce") {
+                        "Il certificatore non conosce questo certificato: non so dire se è stato revocato.".to_string()
+                    } else if e.contains("non dice dove") {
+                        "Il certificato non dice a chi chiedere se è stato revocato.".to_string()
+                    } else {
+                        "Non sono riuscito a chiedere al certificatore se il certificato è stato revocato: forse manca la connessione o il servizio non risponde. Riprova più tardi.".to_string()
+                    };
+                    why.push(plain);
+                    s.details.push(("Revoca, errore".into(), e.clone()));
                     Check { level: Level::Warn, what: "Revoca", text: "non controllata".into(), counts: true }
                 } else {
                     Check { level: Level::Warn, what: "Revoca", text: "controllo online spento".into(), counts: false }

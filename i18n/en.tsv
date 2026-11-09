@@ -1626,3 +1626,79 @@ Accendo il motore…	Starting the engine…
 Processore · {}	Processor · {}
 Radeon integrata	Integrated Radeon
 scheda video	graphics card
+Firma digitale	Digital signature
+Trascina qui i file firmati	Drop signed files here
+Te li apro e ti dico se le firme valgono: .p7m, .p7s, .m7m, .tsd, .tsr e i PDF firmati.	I open them and tell you whether the signatures are valid: .p7m, .p7s, .m7m, .tsd, .tsr and signed PDFs.
+Apri e verifica	Open and verify
+Apri un .p7m o un PDF firmato: vedi il documento, chi l'ha firmato e se la firma vale.	Open a .p7m or a signed PDF: see the document, who signed it and whether the signature is valid.
+Apri un .p7m o un PDF firmato e vedi se la firma vale.	Open a .p7m or a signed PDF and see whether the signature is valid.
+Verifica una cartella	Verify a folder
+Controllo tutti i file firmati di una cartella, per esempio gli allegati di una PEC, e ti metto in cima quelli da guardare.	I check every signed file in a folder, for example the attachments of a certified email, and put the ones to look at on top.
+Tutti i file firmati di una cartella, quelli da guardare in cima.	Every signed file in a folder, the ones to look at on top.
+Apri con Cedro i file firmati	Open signed files with Cedro
+Doppio clic su .p7m, .p7s, .m7m, .tsd e .tsr	Double-click on .p7m, .p7s, .m7m, .tsd and .tsr
+Anche i PDF firmati	Signed PDFs too
+Se no restano al lettore PDF	Otherwise they stay with your PDF reader
+Controlla online la revoca	Check revocation online
+Chiedo al certificatore se è stato revocato	I ask the certification authority whether it was revoked
+Elenco europeo dei certificatori	European list of certification authorities
+Aggiorna ora	Update now
+Lo sto scaricando…	Downloading it…
+Non ancora scaricato	Not downloaded yet
+clic per riaprire	click to reopen
+Qui ritrovi i file firmati che apri, con il loro giudizio.	The signed files you open show up here, with their verdict.
+Firma valida	Valid signature
+Da guardare	Needs a look
+Non valida	Not valid
+Non firmato	Not signed
+Valida	Valid
+Verifica di più file	Verify several files
+Un rapporto unico in PDF	One PDF report
+Estrai tutti i documenti	Extract all documents
+Controllo le firme…	Checking the signatures…
+Salva il documento	Save the document
+Salva la versione firmata	Save the signed version
+Apri fuori da Cedro	Open outside Cedro
+Stampa	Print
+Rapporto di verifica	Verification report
+Firme	Signatures
+Chi ha firmato	Who signed
+Firma	Signature
+Marca temporale	Timestamp
+Marche temporali	Timestamps
+Com'è fatto il file	How the file is built
+Verifica alla data	Verify at a date
+Oggi	Today
+Quando è stato firmato	When it was signed
+Un altro giorno	Another day
+Verifica	Verify
+Scrivi la data come 03/10/2026.	Write the date like 03/10/2026.
+Le firme con la marca temporale si controllano all'ora della marca; le altre a oggi.	Signatures with a timestamp are checked at the time of the timestamp; the others as of today.
+Si controlla all'ora della marca o, senza marca, a quella scritta da chi ha firmato (non è certa).	Checked at the time of the timestamp or, without one, at the time written by the signer (not certain).
+Si controlla se le firme valevano quel giorno.	Checks whether the signatures were valid on that day.
+Dettagli tecnici del certificato	Technical details of the certificate
+Vedi la versione firmata	See the signed version
+Torna al file com'è adesso	Back to the file as it is now
+Torna al file	Back to the file
+Manca il file originale	The original file is missing
+Scegli il file originale	Choose the original file
+Questo tipo di file non lo so mostrare	I can't show this kind of file
+Non c'è un documento da mostrare	There is no document to show
+Il file è vuoto	The file is empty
+Documento	Document
+Certificato	Certificate
+Revoca	Revocation
+Data certa	Certain date
+Firma valida, con un avviso	Valid signature, with a warning
+Valida, con un avviso	Valid, with a warning
+Non valida: documento cambiato	Not valid: document changed
+Busta firmata	Signed envelope
+Busta esterna	Outer envelope
+Busta interna	Inner envelope
+Busta intermedia	Middle envelope
+Firma staccata (.p7s)	Detached signature (.p7s)
+firmata da	signed by
+firmata insieme da	signed together by
+con dentro la firma di	containing the signature of
+In quella cartella non ci sono file firmati.	There are no signed files in that folder.
+Il file non c'è più: è stato spostato o cancellato.	The file is gone: it was moved or deleted.

@@ -49,6 +49,8 @@ pub enum Field {
     Review(usize),
     /// «Rivedi», scheda «Chi parla»: il nome di una voce.
     VoiceName(u8),
+    /// Visualizzatore della firma: «Verifica alla data», un altro giorno (gg/mm/aaaa).
+    FirmaDate,
 }
 
 /// Le parti che si aprono e si chiudono («Altre opzioni»…).
@@ -75,6 +77,11 @@ pub enum Scroll {
     ReviewVoices,
     /// «Rivedi», scheda «Riassunto».
     ReviewSummary,
+    /// «Firma digitale»: la pagina, il documento del visualizzatore, le sue miniature e il pannello delle firme.
+    Firma,
+    FirmaDoc,
+    FirmaThumbs,
+    FirmaPanel,
 }
 
 /// Cosa fa un clic.
@@ -223,6 +230,44 @@ pub enum Act {
     VoicesPick(u8),
     VoicesGo,
     VoicesCancel,
+    /// «Firma digitale»: scegli i file da aprire e verificare, o una cartella.
+    FirmaAdd,
+    FirmaAddFolder,
+    /// Un file della verifica di più file (indice in `firma.items`): lo apre nel visualizzatore.
+    FirmaOpen(usize),
+    FirmaRemove(usize),
+    FirmaClear,
+    /// Un file tra gli ultimi aperti.
+    FirmaRecent(usize),
+    /// Il rapporto unico in PDF dei file verificati, e tutti i documenti estratti.
+    FirmaReport,
+    FirmaExtract,
+    /// Le opzioni della sezione (0 apri con Cedro, 1 anche i PDF, 2 revoca online).
+    FirmaSetting(u8),
+    /// Riscarica adesso l'elenco europeo dei certificatori.
+    FirmaTrust,
+    /// Visualizzatore: salva il documento, aprilo con il programma del sistema, stampalo.
+    VwSave,
+    VwOpenWith,
+    VwPrint,
+    VwZoom(i32),
+    /// Il rapporto di verifica in PDF.
+    VwReport,
+    /// Mostra o nasconde il pannello delle firme.
+    VwPanel,
+    /// Apre o chiude una firma nel pannello, e i suoi dettagli tecnici.
+    VwSigner(usize),
+    VwTech(usize),
+    /// «Verifica alla data»: 0 oggi, 1 quando è stato firmato, 2 un altro giorno; e «Verifica» col giorno scritto.
+    VwAt(u8),
+    VwAtApply,
+    /// La pagina del documento (da 0).
+    VwPage(usize),
+    /// Mostra la versione firmata di un PDF cambiato dopo (la firma), o torna al file com'è.
+    VwRevision(usize),
+    VwRevisionOff,
+    /// Firma staccata: scegli il file originale.
+    VwOriginal,
     /// Solo per bloccare i clic sotto un riquadro (per esempio dentro un menu aperto).
     Nothing,
 }

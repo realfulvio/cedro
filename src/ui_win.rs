@@ -38,6 +38,9 @@ const ZOOM: f32 = cedro::ui::ZOOM;
 
 static MAIN: AtomicIsize = AtomicIsize::new(0);
 static POPUP: AtomicIsize = AtomicIsize::new(0);
+static VIEWER: AtomicIsize = AtomicIsize::new(0);
+/// Il file firmato da mostrare nel visualizzatore che si sta aprendo.
+static VIEWER_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 static DROPPED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
 /// Il formato da preselezionare quando i file arrivano dalla ruota.
 static ACTION: Mutex<Option<&'static str>> = Mutex::new(None);
@@ -190,6 +193,17 @@ impl Platform for Plat {
         }
     }
 
+    fn print_path(&mut self, path: &Path) {
+        unsafe {
+            let p = HSTRING::from(path.as_os_str());
+            let r = ShellExecuteW(Some(self.hwnd), w!("print"), &p, PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
+            // Senza un programma che sappia stampare quel tipo di file, lo si apre: si stampa da lì.
+            if r.0 as usize <= 32 {
+                ShellExecuteW(Some(self.hwnd), w!("open"), &p, PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL);
+            }
+        }
+    }
+
     fn open_full(&mut self) {
         unsafe {
             let _ = PostMessageW(Some(self.hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
@@ -315,6 +329,7 @@ fn slot(surface: Surface) -> &'static AtomicIsize {
     match surface {
         Surface::Main => &MAIN,
         Surface::Compact => &POPUP,
+        Surface::Viewer => &VIEWER,
     }
 }
 
@@ -356,7 +371,15 @@ unsafe fn create(surface: Surface) -> Result<()> {
             let _ = PostMessageW(Some(HWND(h as *mut _)), WM_WAKE, WPARAM(0), LPARAM(0));
         }
     });
-    let screen = Screen::new(surface, wake);
+    let mut screen = Screen::new(surface, wake);
+    let mut title = HSTRING::from("Cedro");
+    if surface == Surface::Viewer {
+        if let Some(p) = VIEWER_PATH.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            title = HSTRING::from(format!("{name} · Cedro"));
+            screen.open_viewer(p);
+        }
+    }
     let (pw, ph) = screen.preferred_size();
     let sys_dpi = GetDpiForSystem() as f32;
     let k = sys_dpi / 96.0 * ZOOM;
@@ -368,11 +391,11 @@ unsafe fn create(surface: Surface) -> Result<()> {
     let (x, y) = match surface {
         // La finestrella sta vicino all'orologio, in basso a destra.
         Surface::Compact => (work.right - width - 12, work.bottom - height - 12),
-        Surface::Main => (work.left + (aw - width) / 2, work.top + (ah - height) / 3),
+        Surface::Main | Surface::Viewer => (work.left + (aw - width) / 2, work.top + (ah - height) / 3),
     };
     let style = WS_POPUP | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU | WS_CLIPCHILDREN;
     let ex = if surface == Surface::Compact { WS_EX_TOOLWINDOW } else { WINDOW_EX_STYLE(0) };
-    let hwnd = CreateWindowExW(ex, class, w!("Cedro"), style, x, y, width, height, None, None, Some(instance), None)?;
+    let hwnd = CreateWindowExW(ex, class, &title, style, x, y, width, height, None, None, Some(instance), None)?;
     wake_target.store(hwnd.0 as isize, Ordering::Relaxed);
     let host = Rc::new(Host {
         screen: RefCell::new(screen),
@@ -782,6 +805,28 @@ pub fn run_standalone() {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
             if MAIN.load(Ordering::Relaxed) == 0 && POPUP.load(Ordering::Relaxed) == 0 {
+                break;
+            }
+        }
+    }
+}
+
+/// `cedro.exe verifica <file>`: il visualizzatore di un file firmato, con il suo ciclo di messaggi.
+/// Ogni file ha la sua finestra (e il suo processo): se ne possono aprire più insieme.
+pub fn run_viewer(path: PathBuf) {
+    crate::winfont::load();
+    unsafe {
+        let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        let _ = OleInitialize(None);
+    }
+    *VIEWER_PATH.lock().unwrap_or_else(|e| e.into_inner()) = Some(path);
+    open_surface(Surface::Viewer);
+    unsafe {
+        let mut msg = MSG::default();
+        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+            let _ = TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+            if VIEWER.load(Ordering::Relaxed) == 0 {
                 break;
             }
         }

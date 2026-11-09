@@ -255,5 +255,6 @@ pub fn activity_color(a: super::model::Activity) -> Rgb {
         Activity::Transcribe => hex(0xD4570E),
         Activity::YouTube => hex(0xC8323C),
         Activity::Web => hex(0x1E8A55),
+        Activity::Firma => hex(0x5B4BD1),
     }
 }

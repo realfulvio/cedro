@@ -46,7 +46,17 @@ fn title_for(surface: Surface) -> &'static str {
     match surface {
         Surface::Main => TITLE,
         Surface::Compact => "Cedro compatto",
+        Surface::Viewer => "Cedro · verifica",
     }
+}
+
+/// Il file firmato da mostrare nel visualizzatore che si sta aprendo.
+static VIEWER_PATH: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+/// Il visualizzatore di un file firmato (doppio clic su un .p7m): una finestra per processo.
+pub fn open_viewer(app: &Application, path: PathBuf) {
+    *VIEWER_PATH.lock().unwrap_or_else(|e| e.into_inner()) = Some(path);
+    open_surface(app, Surface::Viewer);
 }
 
 struct Plat {
@@ -175,12 +185,19 @@ fn open_surface(app: &Application, surface: Surface) {
     }
     let woke = Arc::new(AtomicBool::new(false));
     let w2 = woke.clone();
-    let screen = Screen::new(surface, Arc::new(move || w2.store(true, Ordering::Relaxed)));
+    let mut screen = Screen::new(surface, Arc::new(move || w2.store(true, Ordering::Relaxed)));
+    let mut window_title = title.to_string();
+    if surface == Surface::Viewer {
+        if let Some(p) = VIEWER_PATH.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            window_title = format!("{} · Cedro", p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+            screen.open_viewer(p);
+        }
+    }
     let (pw, ph) = screen.preferred_size();
     let (mw, mh) = screen.min_size();
     let host = Rc::new(Host { screen: RefCell::new(screen), frame: RefCell::new(None), pointer: Cell::new((0.0, 0.0)) });
 
-    let window = ApplicationWindow::builder().application(app).title(title).decorated(false).resizable(true).build();
+    let window = ApplicationWindow::builder().application(app).title(window_title.as_str()).decorated(false).resizable(true).build();
     let z = cedro::ui::ZOOM;
     window.set_default_size((pw * z) as i32, (ph * z) as i32);
     let area = DrawingArea::new();
