@@ -12,7 +12,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Video più belli e più veloci su Windows.**
+**Installazione su Windows più affidabile: sempre una sola copia di Cedro.**
 
-- I video 1080p H.264 convertiti uscivano coi colori spostati (una riga verde in alto, colori fuori posto): ora escono giusti, anche quando se ne riduce la risoluzione.
-- Ridurre la risoluzione di un video è circa due volte più veloce (un 1080p portato a 720p: da 21 a 12 secondi; un 4K portato a 720p: da 44 a 24) e l'immagine è più nitida.
+- Niente più due Cedro installati insieme: la procedura non chiede più «per tutti gli utenti / solo per me», che faceva finire una copia in Programmi e poi l'aggiornamento automatico ne metteva una seconda per l'utente (due voci in App, due collegamenti).
+- Se Cedro è già installato per tutti gli utenti si aggiorna lì; se lo reinstalli a mano e ci sono due copie, propone di toglierne una.
+- Gli aggiornamenti automatici non riaccendono più l'avvio con Windows se l'avevi spento dal menu, e non rimettono il collegamento sul desktop se l'avevi cancellato.
+- Disinstallando a mano chiede se cancellare anche i modelli scaricati per trascrizione e Riassunto AI (possono pesare alcuni GB).

@@ -1510,6 +1510,19 @@ fn show_menu(hwnd: HWND) {
 }
 
 /// Vero se c'è un altro Cedro in esecuzione oltre a questo (una conversione in corso): l'installatore lo chiuderebbe.
+/// Vero se si può scrivere nella cartella di cedro.exe: falso quando è installato per tutti gli utenti.
+fn install_dir_writable() -> bool {
+    let Some(dir) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(|d| d.to_path_buf())) else { return true };
+    let probe = dir.join(format!(".cedro-scrivibile-{}", std::process::id()));
+    match std::fs::File::create(&probe) {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            true
+        }
+        Err(e) => e.kind() != std::io::ErrorKind::PermissionDenied,
+    }
+}
+
 fn other_cedro_running() -> bool {
     use std::os::windows::process::CommandExt;
     let out = std::process::Command::new("tasklist")
@@ -1529,6 +1542,9 @@ pub(crate) fn check_updates(manual: bool) {
         }
         let news = match update::check() {
             Ok(Some(release)) if manual => UpdateNews::Found { release, manual },
+            // Cedro installato per tutti gli utenti (in Programmi): l'installatore chiederebbe i permessi di
+            // amministratore, quindi niente aggiornamento silenzioso: si chiede come dal menu (e «No» salta la versione).
+            Ok(Some(release)) if !install_dir_writable() => UpdateNews::Found { release, manual: false },
             Ok(Some(release)) => {
                 // Mai in mezzo a una conversione (di un altro Cedro o della ruota di questo): riprova fra qualche minuto.
                 // Il blocco resta preso fino al lancio dell'installatore, così non ne parte una nuova nel frattempo.
