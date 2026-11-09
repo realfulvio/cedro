@@ -156,7 +156,18 @@ impl Screen {
         };
         views::draw(&mut f, &self.app, self.surface);
         views::overlays(&mut f, &self.app);
+        // Il menu a comparsa appare in dissolvenza: si tiene il fotogramma senza menu e lo si
+        // rimette sopra, sempre più trasparente (solo nei pochi fotogrammi dell'apertura).
+        let menu_key = Act::Nothing;
+        let open = f.ui.menu.is_some() as u8 as f32;
+        let shown = f.tween(&menu_key, super::anim::Slot::Menu, open, super::anim::HOVER_MS, super::anim::ease_out);
+        let under = (open > 0.0 && shown < 0.99).then(|| f.p.pixmap.clone());
         f.menu_overlay();
+        if let Some(under) = under {
+            let paint = tiny_skia::PixmapPaint { opacity: 1.0 - shown, ..Default::default() };
+            f.p.pixmap.draw_pixmap(0, 0, under.as_ref(), &paint, tiny_skia::Transform::identity(), None);
+        }
+        self.ui.anim.borrow_mut().end_frame();
         self.animating = f.animating || self.app.busy();
         self.hits = std::mem::take(&mut f.hits);
         self.captions = std::mem::take(&mut f.captions);
