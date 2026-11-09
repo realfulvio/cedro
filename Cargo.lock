@@ -545,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "cedro"
-version = "0.35.5"
+version = "0.36.0"
 dependencies = [
  "avif-decode",
  "bzip2",

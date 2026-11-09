@@ -12,9 +12,11 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Installazione su Windows più affidabile: sempre una sola copia di Cedro.**
+**Menu più chiari e colorati, foto ripulite senza perdere qualità, interfaccia più ordinata e viva.**
 
-- Niente più due Cedro installati insieme: la procedura non chiede più «per tutti gli utenti / solo per me», che faceva finire una copia in Programmi e poi l'aggiornamento automatico ne metteva una seconda per l'utente (due voci in App, due collegamenti).
-- Se Cedro è già installato per tutti gli utenti si aggiorna lì; se lo reinstalli a mano e ci sono due copie, propone di toglierne una.
-- Gli aggiornamenti automatici non riaccendono più l'avvio con Windows se l'avevi spento dal menu, e non rimettono il collegamento sul desktop se l'avevi cancellato.
-- Disinstallando a mano chiede se cancellare anche i modelli scaricati per trascrizione e Riassunto AI (possono pesare alcuni GB).
+- Il menu «Formato» ha un'iconcina colorata per ogni voce e nomi che si capiscono: «Ruota di 90° a destra», «Togli GPS e dati nascosti» al posto di «Strumento · …», con una breve spiegazione a fianco e le voci divise fra «Converti in» e gli strumenti.
+- Anche i menu delle impostazioni di conversione (dimensioni, pagina, qualità audio, video…) hanno l'iconcina e una spiegazione per ogni scelta.
+- «Togli GPS e dati nascosti» funziona come Scrambled Exif: su JPEG, PNG e WebP toglie posizione, fotocamera, data di scatto, miniatura, XMP e commenti senza ricomprimere la foto (qualità identica, file più leggero), tiene il verso giusto e i colori, e salva una copia «-pulito» dicendo cosa ha tolto.
+- La ruota al clic destro ora è spenta di default: si accende con «Usa la ruota» in Impostazioni > Ruota. Spenta, su Windows Cedro non tiene più agganci a tastiera e mouse; su Linux il menu del file ha la sola voce «Apri in Cedro».
+- Scritte e controlli tutti in riga, etichette delle opzioni in semigrassetto e più spazio fra un'opzione e l'altra.
+- Animazioni leggere: pulsanti che sfumano e si premono, icone che si muovono, scheda scelta che scivola, menu in dissolvenza. Si fermano subito a movimento finito e spariscono se nel sistema hai spento gli effetti di animazione.
