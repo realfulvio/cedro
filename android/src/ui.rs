@@ -19,7 +19,14 @@ use cedro::ui::views::uses_quality;
 use cedro::ui::wheel::list;
 use cedro::{Kind, Mode};
 
+pub mod anim;
 mod casa;
+pub mod firma;
+
+/// Quante attività ha questa build (la Firma digitale è l'ultima).
+pub fn attivita_n() -> usize {
+    casa::attivita().len()
+}
 mod opzioni;
 mod pdf;
 mod rivedi;
@@ -102,6 +109,10 @@ pub enum Sorgente {
     Coda,
     /// Tutti i file di una cartella, per la coda.
     Cartella,
+    /// Un file firmato da aprire nel visualizzatore.
+    Firmati,
+    /// Il file originale di una firma staccata (.p7s) o di una marca a parte (.tsr).
+    Originale,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -148,6 +159,8 @@ pub enum Azione {
     AltreOpzioni,
     /// La finestra principale (dall'icona di Cedro).
     Casa(casa::CasaAz),
+    /// La firma digitale: la sezione e il visualizzatore.
+    Firma(firma::FirmaAz),
     /// Un'area che non fa niente ma ferma il tocco.
     Niente,
 }
@@ -205,6 +218,8 @@ pub enum Effetto {
     UsaFile(PathBuf),
     Apri(PathBuf),
     Condividi(PathBuf),
+    /// Come `Scrivi`, poi apre (1) o condivide (2) il file scritto.
+    ScriviPoi { id: u32, nome: String, dati: Vec<u8>, poi: u8 },
 }
 
 #[derive(Clone, Copy)]
@@ -276,28 +291,30 @@ fn righe_link(path: &Path) -> Vec<&'static Riga> {
 
 /// Le azioni da mettere nelle tessere per un tipo di file: solo quelle che il motore sa fare.
 fn righe(kind: Kind) -> Vec<&'static Riga> {
-    static IMG: [Riga; 9] = [
+    static IMG: [Riga; 10] = [
         r("jpeg", "JPG", "Più leggera", true),
         r("png", "PNG", "Senza perdita", true),
         r("webp", "WebP", "Per il web", true),
-        rn("avif", "AVIF", "Ancora più leggera", true),
-        rn("jxl", "JPEG XL", "Il JPEG nuovo", true),
+        r("avif", "AVIF", "Ancora più leggera", true),
+        r("jxl", "JPEG XL", "Il JPEG nuovo", true),
         r("pdf", "PDF", "Un foglio", true),
         r("compress", "Comprimi", "Meno spazio", false),
         r("ocr", "Testo", "Riconosci scritte", false),
         r("half", "Dimezza", "Metà dimensioni", false),
+        rn("strip", "Togli GPS", "Luogo, data, fotocamera", false),
     ];
-    static PDF: [Riga; 10] = [
+    static PDF: [Riga; 11] = [
         r("docx", "Word", "Con testo", true),
-        rn("xlsx", "Excel", "Le tabelle", true),
+        r("xlsx", "Excel", "Le tabelle", true),
         r("txt", "Testo", "Estrae le parole", true),
         r("jpg", "JPG", "Una per pagina", true),
-        rn("merge", "Unisci", "Con altri PDF", false),
-        rn("split", "Dividi", "In più file", false),
-        rn("pages", "Pagine", "Ruota, togli, numeri", false),
-        rn("compress", "Comprimi", "Meno spazio", false),
+        r("merge", "Unisci", "Con altri PDF", false),
+        r("split", "Dividi", "In più file", false),
+        r("pages", "Pagine", "Ruota, togli, numeri", false),
+        r("compress", "Comprimi", "Meno spazio", false),
         r("ocr", "Leggi", "Riconosci scritte", false),
         r("png", "PNG", "Una per pagina", true),
+        rn("firme", "Firme", "Verifica chi ha firmato", false),
     ];
     static ARC: [Riga; 6] = [
         r("z-webp", "Foto in WebP", "Le immagini dello ZIP", false),
@@ -311,9 +328,9 @@ fn righe(kind: Kind) -> Vec<&'static Riga> {
     static AUD: [Riga; 6] = [
         r("mp3", "MP3", "Più leggero", true),
         r("wav", "WAV", "Senza compressione", true),
-        rn("flac", "FLAC", "Senza perdita, leggero", true),
-        rn("opus", "Opus", "Il più leggero", true),
-        rn("aiff", "AIFF", "Per Mac e studi", true),
+        r("flac", "FLAC", "Senza perdita, leggero", true),
+        r("opus", "Opus", "Il più leggero", true),
+        r("aiff", "AIFF", "Per Mac e studi", true),
         r("trascrivi", "Testo", "Dalla voce, offline", false),
     ];
     static VID: [Riga; 3] = [r("mp4", "MP4", "Più leggero", true), r("mp3", "Solo audio", "MP3 dal video", false), r("trascrivi", "Testo", "Dalla voce, offline", false)];
@@ -330,7 +347,7 @@ fn righe(kind: Kind) -> Vec<&'static Riga> {
     };
     let ids: Vec<&'static str> = [Mode::Convert, Mode::Tools].into_iter().flat_map(|m| list(kind, m)).map(|s| s.id).chain(cedro::panel_slices(kind).iter().map(|s| s.id)).collect();
     // «trascrivi» non è nel catalogo del motore di conversione: è whisper.cpp dentro l'APK; «pages» è la schermata Pagine.
-    tutte.iter().filter(|r| ids.contains(&r.id) || r.id == "trascrivi" || (kind == Kind::Pdf && r.id == "pages")).collect()
+    tutte.iter().filter(|r| ids.contains(&r.id) || r.id == "trascrivi" || (kind == Kind::Pdf && matches!(r.id, "pages" | "firme"))).collect()
 }
 
 fn sotto_altro(kind: Kind) -> &'static str {
@@ -350,12 +367,14 @@ fn icona_di(id: &str) -> &'static str {
         "avif" | "jxl" | "z-webp" | "z-jpeg" | "z-png" => ic::IMAGE,
         "zip-tutti" => ic::FOLDER,
         "compress" => pdf::I_COMPRIMI,
-        "half" | "strip" => ic::DOWNLOAD,
+        "half" => ic::DOWNLOAD,
+        "strip" => cedro::ui::voci::voce(Kind::Image, "strip").glyph.stroke,
         "rot90" => ic::CONVERT,
         "xlsx" => pdf::I_EXCEL,
         "merge" => pdf::I_UNISCI,
         "split" => pdf::I_DIVIDI,
         "pages" => pdf::I_PAGINE,
+        "firme" => ic::SHIELD,
         "ocr" | "txt" => ic::SEARCH,
         "trascrivi" | "web-testo" => ic::TRANSCRIBE,
         _ => ic::FILE,
@@ -530,6 +549,14 @@ pub struct App {
     /// Il trascinamento orizzontale di una fascia che scorre: (fascia, x di partenza, y di partenza, scorrimento di partenza, mosso).
     trascina_x: Option<(usize, f32, f32, f32, bool)>,
     premuto: Option<Azione>,
+    /// Le piccole animazioni (fogli, schede, tocchi).
+    pub anim: anim::Anim,
+    /// La firma digitale (stato del computer: verifiche, ultimi file, visualizzatore).
+    pub firma: cedro::ui::firma::FirmaUi,
+    /// Le pagine del documento firmato mostrato.
+    pub fpag: firma::Pagine,
+    /// Sveglia il ciclo degli eventi (una verifica finita in un thread).
+    pub sveglia: Arc<dyn Fn() + Send + Sync>,
     colpi: Vec<(Forma, Azione)>,
     /// Le fasce che scorrono di lato col dito (rifatte a ogni disegno): riquadro e numero della fascia.
     fasce: Vec<(R, usize)>,
@@ -613,6 +640,10 @@ impl App {
             trascina: None,
             trascina_x: None,
             premuto: None,
+            anim: anim::Anim::default(),
+            firma: cedro::ui::firma::FirmaUi::default(),
+            fpag: firma::Pagine::default(),
+            sveglia: Arc::new(|| {}),
             colpi: Vec::new(),
             fasce: Vec::new(),
             cursore: (0.0, 0.0, 1.0, 1.0),
@@ -680,6 +711,9 @@ impl App {
 
     /// Vero se serve ridisegnare a ogni fotogramma (barra di avanzamento che scorre).
     pub fn animando(&mut self) -> bool {
+        if self.anim.in_moto() || self.firma.busy() || self.firma.viewer.is_some() && !self.fpag.finite {
+            return true;
+        }
         if std::mem::take(&mut self.pdf.ridisegna) || self.rivedi.as_ref().is_some_and(|r| r.suona()) || (self.casa_aperta && self.sopra.is_none() && self.lavori.iter().any(|l| l.stato == Stato::InCorso)) {
             return true;
         }
@@ -886,7 +920,7 @@ impl App {
             return Effetto::Niente;
         }
         if let Some((y0, s0, mosso)) = self.trascina {
-            let pagina = (self.pdf.pagina.is_some() && !self.pdf.protetto || self.opzioni.is_some() || self.impostazioni || self.casa_aperta && self.casa.elenco.is_none()) && !self.scelta_file;
+            let pagina = (self.firma.viewer.is_some() || self.pdf.pagina.is_some() && !self.pdf.protetto || self.opzioni.is_some() || self.impostazioni || self.casa_aperta && self.casa.elenco.is_none()) && !self.scelta_file;
             if (mosso || (y - y0).abs() > 10.0) && (pagina || matches!(self.scheda, Scheda::Lavori | Scheda::Info | Scheda::Aspetto) && !self.foglio && !self.scelta_file) {
                 self.scorri = (s0 - (y - y0)).clamp(0.0, self.scorri_max);
                 self.trascina = Some((y0, s0, true));
@@ -940,6 +974,10 @@ impl App {
             return true;
         }
         if self.campo.take().is_some() {
+            return true;
+        }
+        if self.firma.viewer.is_some() {
+            self.azione_firma(firma::FirmaAz::Chiudi);
             return true;
         }
         if self.rivedi.is_some() {
@@ -1030,6 +1068,7 @@ impl App {
             Azione::Riv(az) => self.azione_rivedi(az),
             Azione::Opz(az) => self.azione_opzioni(az),
             Azione::Casa(az) => self.azione_casa(az),
+            Azione::Firma(az) => self.azione_firma(az),
             Azione::AltreOpzioni => {
                 let id = if self.foglio { self.righe_ora().get(self.tessera).map(|r| r.id) } else { self.scelta.and_then(|i| self.fette().get(i).map(|f| f.id)) };
                 self.apri_opzioni(id)
@@ -1083,6 +1122,13 @@ impl App {
                 if self.foglio {
                     match self.righe_ora().get(self.tessera).copied() {
                         Some(riga) if self.kind == Kind::Pdf && pdf::schermata(riga.id).is_some() => self.apri_pagina(pdf::schermata(riga.id).unwrap_or(pdf::Pagina::Excel)),
+                        Some(riga) if riga.id == "firme" => {
+                            // Il PDF nel visualizzatore delle firme (firmato o no: lo dice la fascia).
+                            if let Some(f) = self.file.clone() {
+                                self.apri_firmato(f.path);
+                            }
+                            Effetto::Ridisegna
+                        }
                         Some(riga) if riga.id == "zip-tutti" => {
                             let tutti: Vec<(PathBuf, Option<cedro::PageSel>)> = self.file.iter().map(|f| f.path.clone()).chain(self.altri.iter().cloned()).map(|p| (p, None)).collect();
                             let n = tutti.len();
@@ -1171,6 +1217,7 @@ impl App {
     /// Disegna tutto in un'immagine di `w`×`h` dp (il pittore ha già la scala).
     pub fn disegna(&mut self, p: &mut Painter, w: f32, h: f32) {
         self.ora = Instant::now();
+        self.anim.inizio();
         self.colpi.clear();
         self.fasce.clear();
         let pal = self.pal();
@@ -1181,6 +1228,8 @@ impl App {
         let (w, h) = (w - ml - mr, h - mt - mb);
         if self.scelta_file {
             self.pagina_scelta(p, w, h);
+        } else if self.firma.viewer.is_some() {
+            self.pagina_firma(p, w, h);
         } else if self.rivedi.is_some() {
             self.pagina_rivedi(p, w, h);
         } else if self.impostazioni {
@@ -1211,6 +1260,7 @@ impl App {
         if self.pdf.protetto && self.file.is_some() && !self.scelta_file {
             self.foglio_password(p, w, h);
         }
+        self.anim.fine();
     }
 
     fn bottone_icona(&mut self, p: &mut Painter, rc: R, icona: &str, az: Azione) {
