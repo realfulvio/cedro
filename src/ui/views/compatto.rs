@@ -232,7 +232,7 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
     if simple {
         f.text("Converti in", x, y, w, 26.0, 16.0, SEMI, pal.text);
         let title = super::action_title(app, true);
-        f.select((x, y + 30.0, w, 56.0), &title, None, 18.0, Act::FormatMenu);
+        f.select_voce((x, y + 30.0, w, 56.0), &title, app.action_voce(), 18.0, Act::FormatMenu);
         y += 100.0;
         f.text(&super::summary_line(app), x, y, w, 26.0, 14.0, SANS, pal.muted);
         y += 30.0;
@@ -255,7 +255,7 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
     f.text(&from, x + 44.0, y + 30.0, half - 50.0, 42.0, 15.0, SANS, pal.text);
     f.icon(ic::ARROW_RIGHT, x + half + 14.0, y + 39.0, 24.0, pal.muted);
     let title = super::action_title(app, false);
-    f.select((x + half + 56.0, y + 30.0, half, 42.0), &title, None, 15.5, Act::FormatMenu);
+    f.select_voce((x + half + 56.0, y + 30.0, half, 42.0), &title, app.action_voce(), 15.5, Act::FormatMenu);
     y += 72.0 + 18.0;
     let st = OptStyle { label: 15.5, note: 13.5, control_h: 40.0, gap: 20.0, visible: 0, switch_w: 48.0, switch_h: 26.0 };
     if super::uses_quality(app.kind(), &app.action) {
