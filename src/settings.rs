@@ -51,6 +51,12 @@ pub struct Settings {
     pub ui_theme: String,
     /// Lingua dell'interfaccia: `auto` (quella del sistema), `it` o `en`.
     pub language: String,
+    /// Firma digitale: il doppio clic sui file firmati (.p7m, .p7s, .m7m, .tsd, .tsr, .p7e) apre il visualizzatore.
+    pub firma_assoc: bool,
+    /// Anche i PDF (se no restano al lettore PDF e si aprono con «Verifica con Cedro»).
+    pub firma_pdf: bool,
+    /// Controlla online la revoca dei certificati (OCSP e CRL).
+    pub firma_online: bool,
 }
 
 impl Default for Settings {
@@ -78,6 +84,9 @@ impl Default for Settings {
             ocr_max: 100,
             ui_theme: String::new(),
             language: "auto".into(),
+            firma_assoc: true,
+            firma_pdf: false,
+            firma_online: true,
         }
     }
 }
@@ -159,6 +168,9 @@ impl Settings {
                         s.compress = n.min(2);
                     }
                 }
+                "firma_assoc" => s.firma_assoc = flag(value).unwrap_or(s.firma_assoc),
+                "firma_pdf" => s.firma_pdf = flag(value).unwrap_or(s.firma_pdf),
+                "firma_online" => s.firma_online = flag(value).unwrap_or(s.firma_online),
                 "ui_theme" => s.ui_theme = value.to_string(),
                 "language" if matches!(value, "auto" | "it" | "en") => s.language = value.to_string(),
                 "ocr_lang" if matches!(value, "auto" | "it" | "en") => s.ocr_lang = value.to_string(),
@@ -204,6 +216,9 @@ impl Settings {
             ("ocr_max", self.ocr_max.to_string()),
             ("ui_theme", self.ui_theme.clone()),
             ("language", self.language.clone()),
+            ("firma_assoc", b(self.firma_assoc).into()),
+            ("firma_pdf", b(self.firma_pdf).into()),
+            ("firma_online", b(self.firma_online).into()),
             ("ui_schema", "1".into()),
         ];
         let mut out: Vec<String> = old

@@ -51,7 +51,12 @@ enum Open {
     Settings,
     Guide,
     Conversions,
+    /// Il visualizzatore di un file firmato (`cedro verifica <file>`).
+    Viewer,
 }
+
+/// Il file da aprire nel visualizzatore.
+static VIEWER_FILE: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 enum UpdateNews {
     Found { release: update::Release, manual: bool },
@@ -159,6 +164,11 @@ pub fn start() -> i32 {
             Open::Settings => open_settings_window(app),
             Open::Guide => linux_settings::open_guide(app),
             Open::Conversions => open_panel(app),
+            Open::Viewer => {
+                if let Some(p) = VIEWER_FILE.lock().ok().and_then(|mut f| f.take()) {
+                    crate::linux_ui2::open_viewer(app, p);
+                }
+            }
             // Avviato a mano, senza file: si vede subito che c'è, anche senza vassoio.
             Open::Nothing if opened.borrow().launch.stay && !background => {
                 if cedro::read_settings().view_asked {
@@ -227,6 +237,17 @@ fn parse_launch(args: &[String]) -> Launch {
     let mut paths = Vec::new();
     let mut open = Open::Nothing;
     let mut background = false;
+    let viewer = match args {
+        [cmd, path] if cmd == "verifica" => Some(PathBuf::from(path)),
+        [path] if cedro::firma::is_signed_name(path) && std::path::Path::new(path).is_file() => Some(PathBuf::from(path)),
+        _ => None,
+    };
+    if let Some(p) = viewer {
+        if let Ok(mut f) = VIEWER_FILE.lock() {
+            *f = Some(p);
+        }
+        return Launch { stay: false, mode, paths, open: Open::Viewer, background };
+    }
     for arg in args.iter().filter(|arg| arg.as_str() != "show") {
         match arg.as_str() {
             "settings" | "impostazioni" => open = Open::Settings,
@@ -1011,6 +1032,7 @@ impl ksni::Tray for CedroTray {
 
 /// Dopo qualche secondo e poi ogni giorno, finché Cedro resta aperto. Rilegge la scelta a ogni giro.
 fn daily_updates() {
+    cedro::firma::trust::daily();
     std::thread::spawn(|| {
         // Niente fretta: prima il desktop finisce di avviarsi, e questo lavoro è a priorità minima.
         cedro::update::background_priority();
@@ -1176,6 +1198,11 @@ fn install_integrations() {
         let _ = set_autostart(true);
     }
     let _ = write_text(&root.join("kio/servicemenus/cedro.desktop"), &dolphin_menu(exe), true);
+    // Il doppio clic sui file firmati (si accende e si spegne nella «Firma digitale»).
+    let s = cedro::read_settings();
+    if let Err(e) = cedro::associa::apply(s.firma_assoc, s.firma_pdf) {
+        cedro::append_log(&format!("associazioni dei file firmati: {e}"));
+    }
     let _ = write_text(
         &root.join("nautilus-python/extensions/cedro.py"),
         &nautilus_python(exe),

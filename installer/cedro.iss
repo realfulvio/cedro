@@ -101,6 +101,10 @@ Filename: "{app}\cedro.exe"; Parameters: "guida"; Description: "{cm:RunGuide}"; 
 ; Aggiornamento silenzioso fatto da Cedro stesso (/SILENTUPDATE): Cedro si riapre da solo, senza finestre.
 Filename: "{app}\cedro.exe"; Flags: nowait runasoriginaluser; Check: SilentUpdate
 
+[UninstallRun]
+; Cedro toglie le sue voci per il doppio clic sui file firmati (.p7m, .p7s, .m7m, .tsd, .tsr, .p7e).
+Filename: "{app}\cedro.exe"; Parameters: "associa-no"; Flags: runhidden waituntilterminated; RunOnceId: "CedroAssociaNo"
+
 [UninstallDelete]
 Type: filesandordirs; Name: "{userappdata}\Cedro"
 

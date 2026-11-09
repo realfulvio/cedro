@@ -37,7 +37,7 @@ fn nav(f: &mut Frame, app: &App) {
         f.focus_ring(r, 8.0, &act);
         f.hit(r, act);
     };
-    let ys = [78.0, 142.0, 210.0, 278.0];
+    let ys = [78.0, 142.0, 210.0, 278.0, 346.0];
     for (a, y) in Activity::ALL.iter().zip(ys) {
         let tint = Some(f.act_color(*a));
         item(f, y, a.icon(), a.name(), app.activity == *a, Act::Activity(*a), tint);
@@ -60,6 +60,7 @@ pub fn draw(f: &mut Frame, app: &App) {
             let r = (x + 28.0, y + 24.0, f.w - x - 52.0, f.h - y - 44.0);
             match a {
                 Activity::Transcribe => transcribe_page(f, app, r, simple),
+                Activity::Firma => firma_page(f, app, r, simple),
                 Activity::YouTube => links_page(f, app, r, false, simple),
                 Activity::Web => links_page(f, app, r, true, simple),
                 Activity::Convert => {}

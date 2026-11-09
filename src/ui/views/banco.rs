@@ -260,6 +260,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         let r = (28.0, BAR + 20.0, f.w - 56.0, f.h - BAR - 36.0);
         match app.activity {
             Activity::Transcribe => transcribe_page(f, app, r, simple),
+            Activity::Firma => firma_page(f, app, r, simple),
             Activity::YouTube => links_page(f, app, r, false, simple),
             _ => links_page(f, app, r, true, simple),
         }

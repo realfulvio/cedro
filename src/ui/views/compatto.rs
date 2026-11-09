@@ -117,6 +117,7 @@ fn frame(f: &mut Frame, app: &App, full: bool) {
         let r = (x, y + 4.0, cw, f.h - y - 4.0 - links_h - 8.0);
         match app.activity {
             Activity::Transcribe => transcribe_page(f, app, r, simple),
+            Activity::Firma => firma_page(f, app, r, simple),
             Activity::YouTube => links_page(f, app, r, false, simple),
             _ => links_page(f, app, r, true, simple),
         }

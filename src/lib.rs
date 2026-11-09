@@ -4,6 +4,7 @@ mod symph;
 pub mod progress;
 pub mod conversioni;
 pub mod credits;
+pub mod associa;
 pub mod edizione;
 pub mod firma;
 pub mod guida;

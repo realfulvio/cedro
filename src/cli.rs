@@ -33,6 +33,26 @@ pub fn run() -> i32 {
             perform(std::path::Path::new(&positional[1]), &positional[2].to_string_lossy(), quality)
         }
         "update" => return update(),
+        // Dal disinstallatore: Cedro toglie le sue associazioni dei file firmati.
+        "associa-no" => {
+            return match cedro::associa::apply(false, false) {
+                Ok(()) => 0,
+                Err(e) => {
+                    eprintln!("{e}");
+                    1
+                }
+            }
+        }
+        // La verifica di un file firmato, scritta nel terminale.
+        "firma" if positional.len() >= 2 => {
+            let mut bad = false;
+            for p in &positional[1..] {
+                let r = cedro::firma::verify_path(std::path::Path::new(p), cedro::firma::Opts::default());
+                bad |= r.level == cedro::firma::Level::Bad;
+                println!("{}", cedro::firma::rapporto::text(&[&r]));
+            }
+            return if bad { 1 } else { 0 };
+        }
         "trascrivi" if positional.len() >= 2 => return transcribe(&positional[1..], &args),
         "zip" if positional.len() >= 2 => perform(std::path::Path::new(&positional[1]), "zip", quality),
         "slices" if positional.len() >= 2 => {
@@ -156,6 +176,8 @@ Cedro — conversione locale, senza upload.
   cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--cpu]
                    dalla voce a un Word (o a un testo), con il motore scaricato alla prima volta;
                    --voci dice quante persone parlano (auto le conta da solo, 1 non le riconosce)
+  cedro firma <file>…   verifica le firme digitali (.p7m, .p7s, .m7m, .tsd, .tsr, PDF firmati)
+  cedro verifica <file> apre il visualizzatore dei file firmati (come il doppio clic)
 
 Senza argomenti, su Windows e su Linux, Cedro resta nella tray.
 Su Linux la ruota si apre dal menu del file, oppure così:

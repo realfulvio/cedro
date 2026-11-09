@@ -7,7 +7,7 @@
 use super::cert::Cert;
 use base64::Engine;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 pub const LOTL_URL: &str = "https://ec.europa.eu/tools/lotl/eu-lotl.xml";
 const CA_QC: &str = "http://uri.etsi.org/TrstSvc/Svctype/CA/QC";
@@ -100,17 +100,33 @@ fn file() -> PathBuf {
     crate::engine::config_dir().join("firma").join("fiducia.txt")
 }
 
-static STORE: OnceLock<Mutex<Arc<Store>>> = OnceLock::new();
+static STORE: Mutex<Option<Arc<Store>>> = Mutex::new(None);
 static UPDATING: Mutex<bool> = Mutex::new(false);
 
-/// L'elenco in memoria (letto dal disco la prima volta).
+/// L'elenco in uso (letto dal disco la prima volta).
 pub fn store() -> Arc<Store> {
-    STORE.get_or_init(|| Mutex::new(Arc::new(load().unwrap_or_default()))).lock().unwrap_or_else(|e| e.into_inner()).clone()
+    let mut g = STORE.lock().unwrap_or_else(|e| e.into_inner());
+    g.get_or_insert_with(|| Arc::new(load().unwrap_or_default())).clone()
 }
 
-/// Per le prove: usa questo elenco.
+/// Per le prove, e dopo averlo scaricato: usa questo elenco.
 pub fn set_store(s: Store) {
-    *STORE.get_or_init(|| Mutex::new(Arc::new(Store::default()))).lock().unwrap_or_else(|e| e.into_inner()) = Arc::new(s);
+    *STORE.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(s));
+}
+
+/// Libera la memoria dell'elenco (si rilegge dal disco alla prossima verifica): per Cedro che resta
+/// aperto vicino all'orologio quando si chiudono le finestre.
+pub fn forget() {
+    *STORE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
+/// Quando è stato scaricato l'elenco e quanti certificatori ha, senza tenerlo in memoria.
+pub fn summary() -> (Option<i64>, usize) {
+    if let Some(s) = STORE.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        return (s.updated, s.entries.len());
+    }
+    let n = std::fs::read_to_string(file()).map(|t| t.lines().count().saturating_sub(1)).unwrap_or(0);
+    (saved_at(), n)
 }
 
 fn now() -> i64 {
@@ -145,6 +161,34 @@ pub fn refresh_if_old(done: impl FnOnce(bool) + Send + 'static) {
         };
         *UPDATING.lock().unwrap_or_else(|e| e.into_inner()) = false;
         done(ok);
+    });
+}
+
+/// Quando è stato scaricato l'elenco salvato, letto dalla prima riga del file (senza caricarlo).
+fn saved_at() -> Option<i64> {
+    use std::io::BufRead;
+    let f = std::fs::File::open(file()).ok()?;
+    let mut head = String::new();
+    std::io::BufReader::new(f).read_line(&mut head).ok()?;
+    head.trim_end().strip_prefix("cedro-fiducia 1\t")?.parse::<i64>().ok().filter(|&t| t > 0)
+}
+
+/// Per Cedro che resta aperto vicino all'orologio: ogni giorno riscarica l'elenco europeo dei
+/// certificatori e lo salva, senza tenerlo in memoria (la verifica lo legge quando serve).
+pub fn daily() {
+    std::thread::spawn(|| {
+        std::thread::sleep(std::time::Duration::from_secs(150));
+        loop {
+            if saved_at().is_none_or(|t| now() - t >= DAY) {
+                match download() {
+                    Ok(st) => {
+                        let _ = save(&st);
+                    }
+                    Err(e) => crate::append_log(&format!("firma: elenco dei certificatori non scaricato: {e}")),
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_secs(3 * 3600));
+        }
     });
 }
 
