@@ -217,7 +217,7 @@ pub struct OptStyle {
     pub switch_h: f32,
 }
 
-pub const OPT_STD: OptStyle = OptStyle { label: 16.0, note: 14.0, control_h: 42.0, gap: 26.0, visible: 2, switch_w: 52.0, switch_h: 28.0 };
+pub const OPT_STD: OptStyle = OptStyle { label: 15.0, note: 14.0, control_h: 42.0, gap: 24.0, visible: 2, switch_w: 52.0, switch_h: 28.0 };
 
 /// Vero se il motore usa la qualità per la voce scelta (JPEG, compressione, PDF di immagini, video).
 pub fn uses_quality(kind: Kind, action: &str) -> bool {
@@ -264,7 +264,7 @@ pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32,
     match &def.control {
         Control::Switch => {
             let on = app.values.get(def) != 0;
-            f.text(def.title, x, y, w - st.switch_w - 16.0, 26.0, st.label + 1.0, SANS, pal.text);
+            f.text(def.title, x, y, w - st.switch_w - 16.0, 26.0, st.label, SEMI, pal.text);
             f.switch(x + w - st.switch_w, y - 1.0, st.switch_w, st.switch_h, on, Act::OptSwitch(def.opt), None);
             34.0 + note_lines(f, def.note, y + 34.0, w - st.switch_w - 16.0)
         }
@@ -274,11 +274,11 @@ pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32,
             match crate::ui::voci::opzione(def.opt) {
                 Some(v) => {
                     f.voce_tile(x, y + 1.0, 22.0, &v);
-                    f.text(def.title, x + 30.0, y, w - 30.0, 24.0, st.label, SANS, pal.text);
+                    f.text(def.title, x + 30.0, y, w - 30.0, 24.0, st.label, SEMI, pal.text);
                     f.select_voce((x, y + 28.0, w, st.control_h), label, v, 16.0, Act::OptMenu(def.opt));
                 }
                 None => {
-                    f.text(def.title, x, y, w, 24.0, st.label, SANS, pal.text);
+                    f.text(def.title, x, y, w, 24.0, st.label, SEMI, pal.text);
                     f.select((x, y + 28.0, w, st.control_h), label, None, 16.0, Act::OptMenu(def.opt));
                 }
             }
@@ -287,21 +287,21 @@ pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32,
         }
         Control::Range { min, max, unit } => {
             let v = app.values.get(def);
-            f.text(def.title, x, y, w - 90.0, 24.0, st.label, SANS, pal.text);
+            f.text(def.title, x, y, w - 90.0, 24.0, st.label, SEMI, pal.text);
             f.numbox((x + w - 80.0, y - 8.0, 80.0, 38.0), &format!("{v}{unit}"), 16.0);
             let frac = (v - min) as f32 / (*max - *min).max(1) as f32;
             f.slider((x, y + 36.0, w, 24.0), frac, Act::OptSlider(def.opt));
             66.0 + note_lines(f, def.note, y + 66.0, w)
         }
         Control::Text { hint } => {
-            f.text(def.title, x, y, w, 24.0, st.label, SANS, pal.text);
+            f.text(def.title, x, y, w, 24.0, st.label, SEMI, pal.text);
             f.field((x, y + 28.0, w, st.control_h), Field::Opt(def.opt), app.values.text(def), hint, 16.0, false);
             let top = y + 28.0 + st.control_h + 8.0;
             28.0 + st.control_h + 8.0 + note_lines(f, def.note, top, w)
         }
         Control::Segments(choices) => {
             let v = app.values.get(def);
-            f.text(def.title, x, y, w, 24.0, st.label, SANS, pal.text);
+            f.text(def.title, x, y, w, 24.0, st.label, SEMI, pal.text);
             // A gruppi di tre per riga, come nella tavola: «Ogni pagina · Ogni N · Intervalli», poi gli altri.
             let seg_h = (st.control_h - 2.0).max(34.0);
             let mut top = y + 28.0;
@@ -398,7 +398,7 @@ pub fn options_panel_ex(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: Op
         }
     }
     if with_format && (!modes || app.pdf_mode() == super::model::PdfMode::Convert) {
-        f.text("Formato", x, cy, w, 24.0, st.label, SANS, pal.text);
+        f.text("Formato", x, cy, w, 24.0, st.label, SEMI, pal.text);
         let title = action_title(app, f.simple);
         f.select_voce((x, cy + 28.0, w, st.control_h), &title, app.action_voce(), 16.0, Act::FormatMenu);
         cy += 28.0 + st.control_h + st.gap;

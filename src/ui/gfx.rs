@@ -730,6 +730,17 @@ impl<'a> Painter<'a> {
         self.pixmap.stroke_path(&path, &color(c, 1.0), &st, tf, m);
     }
 
+    /// Come `icon`, girata di `deg` gradi attorno al suo centro (le icone che si muovono sotto il mouse).
+    pub fn icon_turned(&mut self, d: &str, x: f32, y: f32, size: f32, c: Rgb, deg: f32) {
+        let k = size / 24.0;
+        let Some(path) = super::svgpath::parse(d) else { return };
+        let st = Stroke { width: 1.8, line_cap: LineCap::Round, line_join: LineJoin::Round, ..Default::default() };
+        let h = size / 2.0;
+        let tf = self.tf().pre_translate(x + h, y + h).pre_concat(Transform::from_rotate(deg)).pre_translate(-h, -h).pre_scale(k, k);
+        let m = self.clips.last().map(|(_, m)| m);
+        self.pixmap.stroke_path(&path, &color(c, 1.0), &st, tf, m);
+    }
+
     /// Come `icon`, ma la forma è piena (le parti piene delle icone dei formati).
     pub fn icon_fill(&mut self, d: &str, x: f32, y: f32, size: f32, c: Rgb) {
         let k = size / 24.0;

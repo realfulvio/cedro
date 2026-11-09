@@ -5,11 +5,12 @@
 use super::*;
 use crate::ui::core::Scroll;
 use crate::ui::model::FileState;
+use crate::ui::gfx::Rgb;
 
 const BAR: f32 = 80.0;
 const NAV_W: f32 = 216.0;
 const INSP_W: f32 = 462.0;
-const FOOT: f32 = 168.0;
+const FOOT: f32 = 136.0;
 
 fn top_bar(f: &mut Frame, app: &App) {
     let pal = f.pal;
@@ -19,6 +20,8 @@ fn top_bar(f: &mut Frame, app: &App) {
     f.brand(20.0, 17.0, 46.0, 30.0, 14.0, None);
     f.vline(188.0, 24.0, 34.0);
     let mut x = 204.0;
+    // La linea sotto l'attività scelta scivola dalla vecchia alla nuova (posizione, larghezza, colore).
+    let mut lines: Vec<(f32, f32, Rgb)> = Vec::new();
     for a in Activity::ALL {
         let on = app.activity == a;
         let size = if on { 25.0 } else { 18.0 };
@@ -27,25 +30,29 @@ fn top_bar(f: &mut Frame, app: &App) {
         let w = tw + isz + if on { 0.0 } else { 14.0 } + 34.0;
         let r = (x, 0.0, w, BAR - 1.0);
         let act = Act::Activity(a);
-        if !on && f.hovered(&act) {
-            f.p.fill_a(r.0, r.1, r.2, r.3, pal.alt, 0.6);
-        }
+        let t = f.hover_t(&act, !on);
+        f.hover_fill(r, 0.0, pal.alt, 0.6 * t);
         let c = if on { pal.text } else { mix(pal.text, pal.muted, 0.35) };
         // Ogni attività ha il suo colore: l'icona e la linea sotto quella scelta.
         let ac = f.act_color(a);
         let mut tx = x + 17.0;
         if !on {
-            f.icon(a.icon(), tx, 25.0, 30.0, ac);
+            let ip = f.icon_t(&act, true);
+            f.icon_live(a.icon(), tx, 25.0, 30.0, ac, ip);
             tx += isz + 14.0;
         }
         f.text(a.name(), tx, 0.0, tw + 6.0, BAR - 3.0, size, if on { SEMI } else { SANS }, c);
-        if on {
-            f.p.rrect(x + 6.0, BAR - 5.0, w - 12.0, 4.0, 2.0, Some(ac), None);
-        }
+        lines.push((x + 6.0, w - 12.0, ac));
         f.focus_ring(r, 4.0, &act);
         f.hit(r, act);
         x += w + 12.0;
     }
+    let cur = Activity::ALL.iter().position(|a| *a == app.activity).unwrap_or(0);
+    let at = f.glide(&Act::Activity(Activity::Convert), cur as f32).clamp(0.0, (lines.len() - 1) as f32);
+    let (i0, i1) = (at.floor() as usize, at.ceil() as usize);
+    let k = at - i0 as f32;
+    let (a, b) = (lines[i0], lines[i1]);
+    f.p.rrect(a.0 + (b.0 - a.0) * k, BAR - 5.0, a.1 + (b.1 - a.1) * k, 4.0, 2.0, Some(mix(a.2, b.2, k)), None);
     f.window_controls(f.w, 0.0, 48.0, pal.text, pal.alt);
 }
 
@@ -53,6 +60,17 @@ fn categories(f: &mut Frame, app: &App, bottom: f32) {
     let pal = f.pal;
     f.p.fill(0.0, BAR, NAV_W, bottom - BAR, pal.bg);
     f.vline(NAV_W - 1.0, BAR, bottom - BAR);
+    // Il riquadro della categoria scelta scivola dalla vecchia alla nuova prendendone il colore.
+    if app.activity == Activity::Convert {
+        let cats = conversioni::CATEGORIES;
+        let at = f.glide(&Act::Category(usize::MAX), app.category as f32).clamp(0.0, (cats.len() - 1) as f32);
+        let (i0, i1) = (at.floor() as usize, at.ceil() as usize);
+        let k = at - i0 as f32;
+        let kc = mix(f.kind_color(cats[i0].kind), f.kind_color(cats[i1].kind), k);
+        let y = BAR + 20.0 + at * 62.0;
+        f.p.rrect(-8.0, y, NAV_W - 6.0 + 8.0, 56.0, 8.0, Some(mix(kc, pal.bg, 0.8)), None);
+        f.p.rrect(0.0, y + 12.0, 5.0, 32.0, 2.5, Some(kc), None);
+    }
     for (i, cat) in conversioni::CATEGORIES.iter().enumerate() {
         let y = BAR + 20.0 + i as f32 * 62.0;
         let on = i == app.category && app.activity == Activity::Convert;
@@ -60,13 +78,10 @@ fn categories(f: &mut Frame, app: &App, bottom: f32) {
         let r = (0.0, y, NAV_W - 6.0, 56.0);
         // Ogni tipo di file ha il suo colore: piastrella, fondo e linea della scheda scelta.
         let kc = f.kind_color(cat.kind);
-        if on {
-            f.p.rrect(r.0 - 8.0, r.1, r.2 + 8.0, r.3, 8.0, Some(mix(kc, pal.bg, 0.8)), None);
-            f.p.rrect(0.0, y + 12.0, 5.0, 32.0, 2.5, Some(kc), None);
-        } else if f.hovered(&act) {
-            f.p.rrect(r.0 - 8.0, r.1, r.2 + 8.0, r.3, 8.0, Some(pal.alt), None);
-        }
-        f.tile(20.0, y + 10.0, 36.0, super::category_icon(cat.kind), kc, on);
+        let t = f.hover_t(&act, !on);
+        f.hover_fill((r.0 - 8.0, r.1, r.2 + 8.0, r.3), 8.0, pal.alt, t);
+        let lift = crate::ui::anim::back_out(f.icon_t(&act, true)) * 2.0;
+        f.tile(20.0, y + 10.0 - lift, 36.0, super::category_icon(cat.kind), kc, on);
         f.text(cat.name, 72.0, y, 118.0, 56.0, 19.0, if on { SEMI } else { SANS }, pal.text);
         let count = app.files.iter().filter(|x| !x.voice_only && x.kind == cat.kind).count();
         if count > 0 && !on {
@@ -197,22 +212,22 @@ fn footer(f: &mut Frame, app: &App, y: f32, simple: bool) {
     let pal = f.pal;
     f.p.fill(0.0, y, f.w, f.h - y, pal.bg);
     f.hline(0.0, y, f.w);
-    let go = (f.w - 24.0 - 252.0, y + 48.0, 252.0, 60.0);
+    let go = (f.w - 24.0 - 252.0, y + 36.0, 252.0, 60.0);
     let (done, total) = app.job.as_ref().map(|j| (j.done, j.total)).unwrap_or((0, app.targets().len()));
     // Avanzamento complessivo: file finiti sul totale, non una stima.
     let prog_w = (go.0 - 30.0 - 24.0 - if simple { 460.0 } else { 0.0 }).clamp(200.0, 360.0);
     let px = if simple { 24.0 } else { go.0 - 30.0 - prog_w };
     if !simple {
-        f.vline(px - 18.0, y + 22.0, 100.0);
+        f.vline(px - 18.0, y + 20.0, 76.0);
     }
     let head = if app.busy() || done > 0 { format!("{done} di {total} completati") } else { format!("{total} file pronti") };
     if simple {
-        f.text(&head, px, y + 28.0, prog_w, 34.0, 22.0, SANS, pal.text);
+        f.text(&head, px, y + 20.0, prog_w, 34.0, 22.0, SANS, pal.text);
     } else {
-        f.text("Progresso complessivo", px, y + 26.0, prog_w, 30.0, 17.0, SANS, pal.text);
-        f.text(&head, px, y + 56.0, prog_w, 30.0, 20.0, SANS, pal.text);
+        f.text("Progresso complessivo", px, y + 20.0, prog_w, 24.0, 16.0, SEMI, pal.text);
+        f.text(&head, px, y + 52.0, prog_w, 26.0, 18.0, SANS, pal.text);
     }
-    let by = y + if simple { 82.0 } else { 100.0 };
+    let by = y + if simple { 70.0 } else { 88.0 };
     let bw = prog_w - 56.0;
     f.p.rrect(px, by, bw, 8.0, 4.0, Some(pal.alt), None);
     let p = app.progress().unwrap_or(0.0).clamp(0.0, 1.0);
@@ -223,21 +238,21 @@ fn footer(f: &mut Frame, app: &App, y: f32, simple: bool) {
     if simple {
         let mx = px + prog_w + 40.0;
         let line = super::summary_line(app);
-        f.icon(ic::COPY, mx, y + 58.0, 28.0, pal.muted);
-        f.text(&line, mx + 40.0, y + 48.0, go.0 - mx - 60.0, 60.0, 16.0, SANS, pal.text);
+        f.icon(ic::COPY, mx, y + 52.0, 28.0, pal.muted);
+        f.text(&line, mx + 40.0, y + 36.0, go.0 - mx - 60.0, 60.0, 16.0, SANS, pal.text);
     } else {
         // Destinazione e «se esiste già».
         let right = px - 36.0;
         let ex_w = 245.0;
         let ex_x = right - ex_w;
-        f.vline(ex_x - 16.0, y + 22.0, 100.0);
-        f.text("In caso di file già esistente", ex_x, y + 26.0, ex_w, 30.0, 17.0, SANS, pal.text);
-        super::exists_select(f, app, (ex_x, y + 60.0, ex_w, 48.0), 17.0);
+        f.vline(ex_x - 16.0, y + 20.0, 76.0);
+        f.text("In caso di file già esistente", ex_x, y + 20.0, ex_w, 24.0, 16.0, SEMI, pal.text);
+        super::exists_select(f, app, (ex_x, y + 52.0, ex_w, 44.0), 17.0);
         let dw = ex_x - 34.0 - 24.0;
-        f.text("Cartella di destinazione", 24.0, y + 26.0, dw, 30.0, 17.0, SANS, pal.text);
+        f.text("Cartella di destinazione", 24.0, y + 20.0, dw, 24.0, 16.0, SEMI, pal.text);
         let browse = 112.0;
-        super::dest_select(f, app, (24.0, y + 60.0, (dw - browse - 12.0).max(140.0), 48.0), 17.0);
-        f.button((24.0 + (dw - browse - 12.0).max(140.0) + 12.0, y + 60.0, browse, 48.0), "Sfoglia…", None, 17.0, Act::DestPick);
+        super::dest_select(f, app, (24.0, y + 52.0, (dw - browse - 12.0).max(140.0), 44.0), 17.0);
+        f.button((24.0 + (dw - browse - 12.0).max(140.0) + 12.0, y + 52.0, browse, 44.0), "Sfoglia…", None, 17.0, Act::DestPick);
     }
     if app.busy() {
         let r = go;
@@ -286,13 +301,13 @@ pub fn draw(f: &mut Frame, app: &App) {
         let mut x = cx;
         f.primary((x, BAR + 22.0, 165.0, 44.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles, true);
         x += 177.0;
-        f.button((x, BAR + 22.0, 192.0, 44.0), "Aggiungi cartella", Some(ic::ADD), 17.0, Act::AddFolder);
+        f.button((x, BAR + 22.0, 192.0, 44.0), "Aggiungi cartella", Some(ic::FOLDER), 17.0, Act::AddFolder);
         x += 204.0;
         f.button((x, BAR + 22.0, 134.0, 44.0), "Rimuovi", Some(ic::TRASH), 17.0, Act::RemoveChecked);
         let n = app.visible().len();
         let count = format!("{n} file nella coda");
         let count_w = f.measure(&count, 17.0, SANS) + 16.0;
-        f.text_r(&count, (cx + cw - 220.0, BAR + 22.0, 214.0, 44.0), 17.0, SANS, pal.text);
+        f.text_r(&count, (cx + cw - 220.0, BAR + 22.0, 220.0, 44.0), 17.0, SANS, pal.text);
         super::notice(f, app, (cx + 530.0, BAR + 22.0, (cw - 530.0 - count_w - 8.0).max(0.0), 44.0), 14.0);
         table(f, app, (cx, BAR + 86.0, cw, foot_y - BAR - 86.0 - 18.0), false);
     }
