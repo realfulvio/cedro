@@ -100,6 +100,28 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/html" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/pkcs7-mime" />
+                <data android:mimeType="application/x-pkcs7-mime" />
+                <data android:mimeType="application/pkcs7-signature" />
+                <data android:mimeType="application/x-pkcs7-signature" />
+                <data android:mimeType="application/timestamped-data" />
+                <data android:mimeType="application/timestamp-reply" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pkcs7-mime" />
+                <data android:mimeType="application/x-pkcs7-mime" />
+                <data android:mimeType="application/pkcs7-signature" />
+                <data android:mimeType="application/timestamped-data" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
         </activity>
     <service android:name="it.cedro.android.ServizioLavoro" android:exported="false" android:foregroundServiceType="dataSync" />
     <provider android:name="it.cedro.android.ArchiviProvider" android:authorities="it.cedro.android.files" android:exported="false" android:grantUriPermissions="true" />

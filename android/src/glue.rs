@@ -67,6 +67,10 @@ fn estensione_da_mime(mime: &str) -> &'static str {
         "image/bmp" => "bmp",
         "image/tiff" => "tiff",
         "application/pdf" => "pdf",
+        "application/pkcs7-mime" | "application/x-pkcs7-mime" => "p7m",
+        "application/pkcs7-signature" | "application/x-pkcs7-signature" => "p7s",
+        "application/timestamped-data" => "tsd",
+        "application/timestamp-reply" => "tsr",
         "application/zip" | "application/x-zip-compressed" => "zip",
         "text/plain" => "txt",
         "text/markdown" => "md",
@@ -182,6 +186,14 @@ fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) 
             }
         }
         return Ok(out);
+    }
+    if azione.as_deref() == Some("android.intent.action.VIEW") {
+        // «Apri con Cedro» (un allegato firmato nella mail): il file è nei dati dell'intento.
+        let uri = j!(j!(env.call_method(&intento, "getData", "()Landroid/net/Uri;", &[])).l());
+        if uri.is_null() {
+            return Ok(Vec::new());
+        }
+        return copia_uri(env, attivita, &uri, &mime, cartella).map(|c| vec![c]);
     }
     if azione.as_deref() != Some("android.intent.action.SEND") {
         return Ok(Vec::new());
@@ -454,7 +466,7 @@ fn scegli(app: &AndroidApp, sorgente: Sorgente) -> Result<(), String> {
             Sorgente::Audio => ("audio/*", &[]),
             Sorgente::Altri | Sorgente::Link => ("*/*", &[]),
             Sorgente::PdfAltri => ("application/pdf", &[]),
-            Sorgente::Coda | Sorgente::Cartella => ("*/*", &[]),
+            Sorgente::Coda | Sorgente::Cartella | Sorgente::Firmati | Sorgente::Originale => ("*/*", &[]),
             Sorgente::Documenti => (
                 "*/*",
                 &[
@@ -883,6 +895,8 @@ struct Consegne {
     riassunti: Arc<Mutex<Vec<(u32, PathBuf, cedro::riassunto::Stored)>>>,
     /// Miniatura, misure e pagine dei file in coda nella finestra principale.
     voci: Arc<Mutex<Vec<(PathBuf, Option<Image>, Option<(u32, u32)>, Option<u32>)>>>,
+    /// Le pagine del documento firmato mostrato (`None`: finite).
+    firma_pagine: Arc<Mutex<Vec<(PathBuf, Option<Image>)>>>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1425,6 +1439,12 @@ fn ricevuti(ui: &mut App, c: &Consegne, cartella: &Path, v: Vec<Condiviso>) {
         ui.aggiungi_pdf(v.into_iter().map(|c| (c.path, c.nome)).collect());
         return;
     }
+    // Un file firmato (.p7m, .p7s, .m7m, .tsd, .tsr): il visualizzatore delle firme.
+    if v.len() == 1 && App::e_firmato(&v[0].nome) {
+        log::info!("firmato {} ({})", v[0].nome, v[0].path.display());
+        ui.apri_firmato(v[0].path.clone());
+        return;
+    }
     let mut v = v.into_iter();
     let Some(primo) = v.next() else { return };
     log::info!("ricevuto {} ({})", primo.nome, primo.path.display());
@@ -1534,6 +1554,58 @@ fn miniature_pagine(c: &Consegne, path: PathBuf, pagine: Vec<u32>) {
     });
 }
 
+/// Vero se Android ha le animazioni spente (durata delle animazioni a 0).
+fn animazioni_spente(app: &AndroidApp) -> bool {
+    con_attivita(app, |env, att| {
+        let resolver = env.call_method(att, "getContentResolver", "()Landroid/content/ContentResolver;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
+        let nome = env.new_string("animator_duration_scale").map_err(|e| e.to_string())?;
+        let v = env
+            .call_static_method("android/provider/Settings$Global", "getFloat", "(Landroid/content/ContentResolver;Ljava/lang/String;F)F", &[JValue::Object(&resolver), JValue::Object(&nome), JValue::Float(1.0)])
+            .and_then(|v| v.f())
+            .map_err(|e| jerr(env, e))?;
+        Ok(v == 0.0)
+    })
+    .unwrap_or(false)
+}
+
+/// Le pagine del documento dentro un file firmato, una alla volta: PDF, immagine, testo o Word.
+fn pagine_firmato(c: &Consegne, path: PathBuf) {
+    let slot = c.firma_pagine.clone();
+    std::thread::spawn(move || {
+        let manda = |img: Option<Image>| slot.lock().unwrap_or_else(|e| e.into_inner()).push((path.clone(), img));
+        const LATO: f32 = 1200.0;
+        const MASSIMO: usize = 40;
+        match tipo_di(&path) {
+            cedro::Kind::Pdf => {
+                let n = cedro::pdf_info(&path, None).map(|(n, _)| n as usize).unwrap_or(0).min(MASSIMO);
+                let pagine: Vec<usize> = (0..n).collect();
+                cedro::ui::media::pdf_page_thumbs(&path, &pagine, LATO, &mut |_, img| {
+                    if let Some(i) = img {
+                        manda(Some(i));
+                    }
+                    true
+                });
+            }
+            cedro::Kind::Image => {
+                if let Some((i, _)) = cedro::ui::media::image_thumb(&path, LATO as u32) {
+                    manda(Some(i));
+                }
+            }
+            cedro::Kind::Text | cedro::Kind::Doc => {
+                let n = cedro::ui::preview::page_count(&path).unwrap_or(1).min(MASSIMO);
+                for k in 0..n {
+                    match cedro::ui::preview::render_page(&path, k, LATO) {
+                        Some(i) => manda(Some(i)),
+                        None => break,
+                    }
+                }
+            }
+            _ => {}
+        }
+        manda(None);
+    });
+}
+
 /// Quanti core sono «grandi» (big.LITTLE): sono quelli con la capacità più alta. Sul Mi 9T due core A76 fanno quanto otto
 /// insieme ai quattro piccoli, con molto meno calore: le reti dell'OCR (rten) girano su questi. None se i core sono tutti uguali.
 fn core_grandi() -> Option<usize> {
@@ -1575,6 +1647,12 @@ fn android_main(app: AndroidApp) {
     let file_lavori = dati.join("lavori.txt");
     let tema = std::fs::read_to_string(&file_tema).map(|t| ThemeId::from_key(&t)).unwrap_or(ThemeId::WindowsEssenziale);
     let mut ui = App::new(tema);
+    {
+        let sveglia = app.create_waker();
+        ui.sveglia = Arc::new(move || sveglia.wake());
+    }
+    // «Rimuovi animazioni» nelle impostazioni di accessibilità: le animazioni restano ferme.
+    ui.anim.calmo = animazioni_spente(&app);
     let file_caratteri = dati.join("caratteri.txt");
     // Le impostazioni del motore (qualità, DPI, OCR) stanno nel suo config.txt; il resto qui.
     ui.imp = cedro::read_settings();
@@ -1760,6 +1838,27 @@ fn android_main(app: AndroidApp) {
                             });
                             sporco = true;
                         }
+                        Effetto::ScriviPoi { id, nome, dati, poi } => {
+                            let (a, c) = (app.clone(), consegne.clone());
+                            std::thread::spawn(move || {
+                                let dir = uscite(&a).unwrap_or_else(|| PathBuf::from(DOCUMENTI).join("Cedro"));
+                                let file = dir.join(&nome);
+                                let esito = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&file, &dati)).map_err(|e| e.to_string()).and_then(|_| consegna(&a, file));
+                                let stato = match esito {
+                                    Ok((path, visto)) => {
+                                        if poi > 0 {
+                                            if let Err(e) = apri_o_condividi(&a, &path, poi == 2) {
+                                                log::error!("apri: {e}");
+                                            }
+                                        }
+                                        Stato::Fatto { path, msg: format!("{} · {}", nome_di(Path::new(&visto)), cedro::size_words(dati.len() as u64)), nome: visto }
+                                    }
+                                    Err(e) => Stato::Errore(e),
+                                };
+                                c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, stato));
+                            });
+                            sporco = true;
+                        }
                         Effetto::Scrivi { id, nome, dati } => {
                             let (a, c) = (app.clone(), consegne.clone());
                             std::thread::spawn(move || {
@@ -1871,12 +1970,37 @@ fn android_main(app: AndroidApp) {
             }
             sporco = true;
         }
+        if ui.firma_arrivi() {
+            sporco = true;
+        }
+        for (di, img) in std::mem::take(&mut *consegne.firma_pagine.lock().unwrap_or_else(|e| e.into_inner())) {
+            ui.firma_pagina(&di, img);
+            sporco = true;
+        }
+        if let Some(doc) = ui.fpag.chiedi.take() {
+            pagine_firmato(&consegne, doc);
+        }
         if let Some(sorgente) = attesa_scelta {
             match scelti(&app, &cartella, sorgente == Sorgente::Cartella) {
                 Some(Ok(v)) if matches!(sorgente, Sorgente::Coda | Sorgente::Cartella) => {
                     attesa_scelta = None;
                     leggi_voci(&consegne, v.iter().map(|c| c.path.clone()).collect());
                     ui.aggiungi_coda(v.into_iter().map(|c| { let k = tipo_di(&c.path); (c.path, c.nome, k) }).collect());
+                    sporco = true;
+                }
+                Some(Ok(v)) if sorgente == Sorgente::Firmati => {
+                    attesa_scelta = None;
+                    if let Some(c) = v.into_iter().next() {
+                        log::info!("firmato scelto {} ({})", c.nome, c.path.display());
+                        ui.apri_firmato(c.path);
+                    }
+                    sporco = true;
+                }
+                Some(Ok(v)) if sorgente == Sorgente::Originale => {
+                    attesa_scelta = None;
+                    if let Some(dati) = v.into_iter().next().and_then(|c| std::fs::read(&c.path).ok()) {
+                        ui.originale_firmato(dati);
+                    }
                     sporco = true;
                 }
                 Some(Ok(v)) if sorgente == Sorgente::PdfAltri => {
