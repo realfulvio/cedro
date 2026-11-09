@@ -46,8 +46,12 @@ fn kind_chip(f: &mut Frame, x: f32, y: f32, path: &std::path::Path) {
     let l = path.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     let (label, c): (&str, Rgb) = if l.ends_with(".pdf") {
         ("PDF", (0xD6, 0x3A, 0x2F))
-    } else if l.ends_with(".tsd") || l.ends_with(".m7m") || l.ends_with(".tsr") {
+    } else if l.ends_with(".tsd") {
         ("TSD", (0x0E, 0x7C, 0x86))
+    } else if l.ends_with(".m7m") {
+        ("M7M", (0x0E, 0x7C, 0x86))
+    } else if l.ends_with(".tsr") {
+        ("TSR", (0x0E, 0x7C, 0x86))
     } else if l.ends_with(".p7s") {
         ("P7S", (0x5B, 0x4B, 0xD1))
     } else if l.ends_with(".xml") || l.contains(".xml.") {
@@ -328,7 +332,7 @@ fn batch(f: &mut Frame, app: &App, r: R) {
             f.text(&crate::i18n::lit(&sub), tx, y + 31.0, rr.2 - (tx - rr.0) - right, 20.0, 12.5, SANS, pal.muted);
             match level {
                 Some(l) => {
-                    let c = level_color(f, l);
+                    let c = if it.report.as_ref().is_some_and(|r| r.unsigned()) { pal.muted } else { level_color(f, l) };
                     let when = it.report.as_ref().and_then(|r| r.signers.iter().filter_map(|s| s.when).min()).map(|t| {
                         let l = firma::local(t);
                         format!("firmato {:02}/{:02}", l.d, l.mo)
@@ -388,6 +392,7 @@ fn row_line(r: &Report) -> String {
                 "Documento" => c.text.clone(),
                 "Revoca" if c.text.starts_with("revocato") => format!("certificato {}", c.text),
                 "Revoca" => format!("revoca {}", c.text),
+                "Certificato" if c.text.starts_with("certificat") => c.text.clone(),
                 "Certificato" => format!("certificato {}", c.text),
                 _ => format!("{}: {}", c.what.to_lowercase(), c.text),
             });
@@ -437,7 +442,11 @@ pub fn draw_viewer(f: &mut Frame, app: &App) {
     let mut x = 14.0;
     // Un PDF firmato è già il documento: si salva solo la versione firmata, quando la si guarda.
     let own_pdf = v.path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
-    let save = if own_pdf {
+    let unsigned_doc = rep.as_ref().is_some_and(|r| r.unsigned());
+    let save = if unsigned_doc {
+        // Non firmato: il documento è il file stesso, non c'è niente da estrarre.
+        None
+    } else if own_pdf {
         v.revision.is_some().then(|| "Salva la versione firmata".to_string())
     } else if ext.is_empty() {
         Some("Salva il documento".to_string())
@@ -461,45 +470,50 @@ pub fn draw_viewer(f: &mut Frame, app: &App) {
         f.text_c(&format!("{}%", (v.zoom * 100.0).round()), (zx + 42.0, ty, 64.0, TOOLS), 14.5, SEMI, pal.text);
         f.button((zx + 108.0, ty + 9.0, 40.0, 40.0), "", Some(ic::ZOOM_IN), 15.0, Act::VwZoom(1));
     }
-    let mut rx = f.w - 14.0;
-    let pw = f.measure("Firme", 15.0, SANS) + 56.0;
-    rx -= pw;
-    let pact = Act::VwPanel;
-    if v.panel {
-        f.p.rrect(rx, ty + 9.0, pw, 40.0, 8.0, Some(pal.alt), Some((pal.border, 1.0)));
-        f.icon(ic::PANEL, rx + 12.0, ty + 17.0, 24.0, pal.primary);
-        f.text("Firme", rx + 42.0, ty + 9.0, pw - 46.0, 40.0, 15.0, SANS, pal.primary);
-        f.hit((rx, ty + 9.0, pw, 40.0), pact);
-    } else {
-        f.button((rx, ty + 9.0, pw, 40.0), "Firme", Some(ic::PANEL), 15.0, pact);
+    if !unsigned_doc {
+        let mut rx = f.w - 14.0;
+        let pw = f.measure("Firme", 15.0, SANS) + 56.0;
+        rx -= pw;
+        let pact = Act::VwPanel;
+        if v.panel {
+            f.p.rrect(rx, ty + 9.0, pw, 40.0, 8.0, Some(pal.alt), Some((pal.border, 1.0)));
+            f.icon(ic::PANEL, rx + 12.0, ty + 17.0, 24.0, pal.primary);
+            f.text("Firme", rx + 42.0, ty + 9.0, pw - 46.0, 40.0, 15.0, SANS, pal.primary);
+            f.hit((rx, ty + 9.0, pw, 40.0), pact);
+        } else {
+            f.button((rx, ty + 9.0, pw, 40.0), "Firme", Some(ic::PANEL), 15.0, pact);
+        }
+        let rw = f.measure("Rapporto di verifica", 15.0, SANS) + 56.0;
+        rx -= rw + 10.0;
+        f.button((rx, ty + 9.0, rw, 40.0), "Rapporto di verifica", Some(ic::FILE), 15.0, Act::VwReport);
     }
-    let rw = f.measure("Rapporto di verifica", 15.0, SANS) + 56.0;
-    rx -= rw + 10.0;
-    f.button((rx, ty + 9.0, rw, 40.0), "Rapporto di verifica", Some(ic::FILE), 15.0, Act::VwReport);
     // La fascia.
     let by = ty + TOOLS;
     let tw_band = f.w - 80.0 - if rep.as_ref().is_some_and(|r| !r.signers.is_empty()) && !v.panel { 220.0 } else { 20.0 };
-    let detail_h = f.p.wrap_height(&rep.as_ref().map(|r| r.detail.clone()).unwrap_or_default(), 14.5, SANS, tw_band, 14.5 * 1.4, 2).max(20.0);
+    let detail_h = f.p.wrap_height(&rep.as_ref().map(|r| r.detail.clone()).unwrap_or_default(), 14.5, SANS, tw_band, 14.5 * 1.4, 4).max(20.0);
     let band_h = (48.0 + detail_h).max(76.0);
     let (lvl, head, detail) = match &rep {
         None => (None, "Controllo le firme…".to_string(), "Un momento: leggo le buste, i certificati e l'elenco europeo dei certificatori.".to_string()),
         Some(r) => (Some(r.level), r.headline.clone(), r.detail.clone()),
     };
-    let bc = lvl.map(|l| level_color(f, l)).unwrap_or(pal.primary);
+    // Un file senza firme non è un errore: la fascia resta neutra.
+    let unsigned = rep.as_ref().is_some_and(|r| r.unsigned());
+    let bc = if unsigned { pal.muted } else { lvl.map(|l| level_color(f, l)).unwrap_or(pal.primary) };
     f.p.fill(0.0, by, f.w, band_h, mix(bc, pal.surface, if f.theme.dark() { 0.78 } else { 0.9 }));
     f.p.fill(0.0, by + band_h - 3.0, f.w, 3.0, bc);
     match lvl {
         Some(l) => {
             f.p.circle(38.0, by + band_h / 2.0, 17.0, Some(bc), None);
-            f.icon(level_mark(l), 27.0, by + band_h / 2.0 - 11.0, 22.0, (255, 255, 255));
+            let mark = if unsigned { ic::FILE } else { level_mark(l) };
+            f.icon(mark, 27.0, by + band_h / 2.0 - 11.0, 22.0, (255, 255, 255));
         }
         None => f.spinner(38.0, by + band_h / 2.0, 14.0, bc),
     }
     let show_btn = rep.as_ref().is_some_and(|r| !r.signers.is_empty()) && !v.panel;
     let tw = f.w - 80.0 - if show_btn { 220.0 } else { 20.0 };
-    let hc = if lvl.is_some() { bc } else { pal.text };
+    let hc = if lvl.is_some() && !unsigned { bc } else { pal.text };
     f.text(&head, 70.0, by + 10.0, tw, 28.0, 19.0, BOLD, hc);
-    f.para(&detail, 70.0, by + 40.0, tw, 14.5, SANS, pal.text, 1.4, 2);
+    f.para(&detail, 70.0, by + 40.0, tw, 14.5, SANS, pal.text, 1.4, 4);
     if show_btn {
         let n = rep.as_ref().map(|r| r.signers.len()).unwrap_or(0);
         let label = if n > 1 { format!("Mostra le {n} firme") } else { "Mostra la firma".into() };
@@ -513,7 +527,7 @@ pub fn draw_viewer(f: &mut Frame, app: &App) {
     // Corpo.
     let body_y = by + band_h;
     let body_h = f.h - body_y - FOOT;
-    let panel_w = if v.panel && rep.is_some() { PANEL_W.min(f.w * 0.45) } else { 0.0 };
+    let panel_w = if v.panel && rep.is_some() && !unsigned { PANEL_W.min(f.w * 0.45) } else { 0.0 };
     let pages = v.doc_path.as_ref().and_then(|p| app.media_of(p)).and_then(|m| m.pages).unwrap_or(1);
     let thumbs_w = if pageable && pages > 1 { 92.0 } else { 0.0 };
     f.p.fill(0.0, body_y, f.w, body_h, mix(pal.bg, pal.border, 0.35));
@@ -550,7 +564,7 @@ pub fn draw_viewer(f: &mut Frame, app: &App) {
                 Some(t) => s.push_str(&format!(" · elenco UE aggiornato {}", firma::relative(t).replace(" alle ", ", "))),
                 None => s.push_str(" · elenco UE non ancora scaricato"),
             }
-            if !r.online {
+            if !r.revoca_online() {
                 s.push_str(" · revoca non controllata online");
             }
             s
@@ -670,6 +684,18 @@ fn stage_draw(f: &mut Frame, app: &App, r: R) {
                     f.animating = true;
                 }
             }
+            // Il riquadro delle firme aperte che stanno su questa pagina, nel colore del giudizio.
+            if img.is_some() {
+                for (i, sg) in rep.signers.iter().enumerate() {
+                    let open = v.open.contains(&i) || rep.signers.len() == 1;
+                    let Some(pl) = sg.place.as_ref().filter(|p| open && p.visible && p.page == Some(v.page as u32 + 1)) else { continue };
+                    let Some(rc) = pl.rect else { continue };
+                    let c = level_color(f, sg.level);
+                    let (x0, y0) = (px + rc[0] * pw - 4.0, py + rc[1] * ph - 4.0);
+                    let (bw, bh) = ((rc[2] - rc[0]) * pw + 8.0, (rc[3] - rc[1]) * ph + 8.0);
+                    f.p.rrect(x0, y0, bw, bh, 6.0, None, Some((c, 2.5)));
+                }
+            }
             // Sopra la versione firmata, la scritta.
             if let Some((i, _)) = &v.revision {
                 let who = rep.signers.get(*i).map(|s| firma::title_case(&s.name)).unwrap_or_default();
@@ -728,7 +754,7 @@ fn panel(f: &mut Frame, app: &App, rep: &Report, r: R) {
             let when = s.when.map(|t| format!("{}, {}", firma::long_date(t), firma::hm(t))).unwrap_or_default();
             let mut sent = [when, s.role.clone()].into_iter().filter(|x| !x.is_empty()).collect::<Vec<_>>().join(" · ");
             if let Some(p) = s.place.as_ref().filter(|p| p.visible) {
-                if let Some(n) = p.page {
+                if let Some(n) = p.page.filter(|_| !sent.contains("pagina")) {
                     sent.push_str(&format!(" · firma visibile a pagina {n}"));
                 }
             }
@@ -871,10 +897,10 @@ fn signer_body(f: &mut Frame, app: &App, rep: &Report, i: usize, x: f32, mut y: 
     let v = app.firma.viewer.as_ref();
     let c = level_color(f, s.level);
     // Il perché.
-    let th = f.p.wrap_height(&s.why, 14.0, SANS, w - 28.0, 1.45 * 14.0, 8);
+    let th = f.p.wrap_height(&s.why, 14.0, SANS, w - 28.0, 1.45 * 14.0, 30);
     f.p.rrect(x, y, w, th + 22.0, 8.0, Some(mix(c, pal.surface, 0.9)), None);
     f.p.fill(x, y + 6.0, 3.0, th + 10.0, c);
-    f.para(&s.why, x + 14.0, y + 11.0, w - 28.0, 14.0, SANS, pal.text, 1.45, 8);
+    f.para(&s.why, x + 14.0, y + 11.0, w - 28.0, 14.0, SANS, pal.text, 1.45, 30);
     y += th + 34.0;
     // I quattro controlli, due per riga: il segno e il nome nel colore del giudizio, sotto il dettaglio.
     let cw = (w - 16.0) / 2.0;
@@ -886,8 +912,8 @@ fn signer_body(f: &mut Frame, app: &App, rep: &Report, i: usize, x: f32, mut y: 
             let cc = if ck.counts || ck.level == Level::Ok { level_color(f, ck.level) } else { pal.muted };
             f.icon(level_mark(ck.level), cx - 1.0, row_y + 3.0, 16.0, cc);
             f.text(ck.what, cx + 19.0, row_y, cw - 19.0, 22.0, 14.0, BOLD, cc);
-            let th = f.p.wrap_height(&ck.text, 12.5, SANS, cw, 12.5 * 1.35, 2).max(17.0);
-            f.para(&ck.text, cx, row_y + 21.0, cw, 12.5, SANS, pal.muted, 1.35, 2);
+            let th = f.p.wrap_height(&ck.text, 12.5, SANS, cw, 12.5 * 1.35, 4).max(17.0);
+            f.para(&ck.text, cx, row_y + 21.0, cw, 12.5, SANS, pal.muted, 1.35, 4);
             row_h = row_h.max(21.0 + th);
         }
         row_y += row_h + 10.0;

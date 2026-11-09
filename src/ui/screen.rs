@@ -1213,6 +1213,24 @@ impl Screen {
             Act::VwSigner(i) => {
                 if !v.open.remove(&i) {
                     v.open.insert(i);
+                    // Si porta la pagina sul riquadro della firma visibile.
+                    let place = v.report.as_ref().and_then(|r| r.signers.get(i)).and_then(|s| s.place.clone()).filter(|p| p.visible);
+                    if let Some(n) = place.as_ref().and_then(|p| p.page) {
+                        let n = n.saturating_sub(1) as usize;
+                        let changed = v.page != n;
+                        v.page = n;
+                        // Le misure dell'ultimo disegno: contenuto = pagina + 2 × 28 di margine.
+                        let target = match (place.and_then(|p| p.rect), self.scrolls.iter().find(|x| x.1 == Scroll::FirmaDoc)) {
+                            (Some(rc), Some((r, _, max))) if *max > 0.0 => {
+                                let ph = max + r.3 - 56.0;
+                                (28.0 + rc[1] * ph - r.3 * 0.3).clamp(0.0, *max)
+                            }
+                            _ => 0.0,
+                        };
+                        if changed || target > 0.0 {
+                            self.ui.scroll.insert(Scroll::FirmaDoc, target);
+                        }
+                    }
                 }
             }
             Act::VwTech(i) => {

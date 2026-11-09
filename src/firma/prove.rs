@@ -139,6 +139,10 @@ fn tsd_m7m_tsr() {
     let r = check_with("mario.txt.p7m.tsr", Some(read("mario.txt.p7m")));
     assert_eq!(r.timestamps.len(), 1);
     assert_eq!(r.level, Level::Ok);
+    // La marca staccata porta dentro anche le firme del file marcato.
+    assert_eq!(r.signers.len(), 1);
+    assert!(r.signers[0].when_certain);
+    assert_eq!(r.doc, read("documento.txt"));
     let r = check_with("mario.txt.p7m.tsr", Some(b"altro".to_vec()));
     assert_eq!(r.level, Level::Bad);
 }

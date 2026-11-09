@@ -91,6 +91,8 @@ fn main() {
         ("vw-tsd", "mario.txt.p7m.tsd"),
         ("vw-p7s", "documento.txt.p7s"),
         ("vw-controfirma", "controfirma.txt.p7m"),
+        ("vw-non-firmato", "tl.xml"),
+        ("vw-tsr", "mario.txt.p7m.tsr"),
     ];
     for (name, file) in views {
         tl();
