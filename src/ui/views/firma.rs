@@ -205,7 +205,7 @@ fn options(f: &mut Frame, app: &App, r: R, wide: bool) {
         ("Lo sto scaricando…".to_string(), pal.muted)
     } else {
         match updated {
-            Some(u) => (format!("Aggiornato {}, {count} certificatori", firma::relative(u)), pal.muted),
+            Some(u) => (format!("Aggiornato {} · {count} certificatori", firma::relative(u).replace(" alle ", " ")), pal.muted),
             None => ("Non ancora scaricato".into(), level_color(f, Level::Warn)),
         }
     };
