@@ -357,7 +357,7 @@ I componenti pesanti (trascrizione, video dal web) si scaricano solo al primo us
 Fine	Done
 Tieni premuto un tasto,	Hold down a key,
 poi clic destro sul file	then right-click the file
-Si apre la ruota. Clic sulla fetta: la copia nasce accanto all'originale, che resta dov'è.	The wheel opens. Click a slice: the copy appears next to the original, which stays where it is.
+Si apre la ruota (va accesa in Impostazioni > Ruota). Clic sulla fetta: la copia nasce accanto all'originale, che resta dov'è.	The wheel opens (turn it on in Settings > Wheel). Click a slice: the copy appears next to the original, which stays where it is.
 Cambia formato: JPEG, PDF, MP4…	Change format: JPEG, PDF, MP4…
 Modifica	Edit
 Comprimi, ruota, OCR, metadati…	Compress, rotate, OCR, metadata…
@@ -1730,3 +1730,6 @@ voce, leggerissimo	voice, very light
 voce, leggero	voice, light
 data di scatto	shooting date
 commenti	comments
+Usa la ruota	Use the wheel
+Tasto più clic destro su un file apre la ruota. Spenta, i file si convertono dalla finestra Conversioni.	A key plus right-click on a file opens the wheel. When off, files are converted from the Conversions window.
+Dal menu del file si apre la ruota. Spenta, «Apri in Cedro» porta i file nella finestra Conversioni.	The file menu opens the wheel. When off, “Open in Cedro” brings the files to the Conversions window.

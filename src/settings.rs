@@ -18,6 +18,8 @@ pub struct Settings {
     pub quality: u8,
     pub notify: bool,
     pub update_check: bool,
+    /// La ruota al clic destro (Shift, Ctrl o Alt). Spenta di default dalla 0.36: si accende in Impostazioni > Ruota.
+    pub wheel: bool,
     pub key_shift: bool,
     pub key_ctrl: bool,
     pub key_alt: bool,
@@ -59,6 +61,7 @@ impl Default for Settings {
             quality: 82,
             notify: true,
             update_check: true,
+            wheel: false,
             key_shift: true,
             key_ctrl: true,
             key_alt: true,
@@ -129,6 +132,7 @@ impl Settings {
                 }
                 "notify" => s.notify = flag(value).unwrap_or(s.notify),
                 "update_check" => s.update_check = flag(value).unwrap_or(s.update_check),
+                "wheel" => s.wheel = flag(value).unwrap_or(s.wheel),
                 "key_shift" => s.key_shift = flag(value).unwrap_or(s.key_shift),
                 "key_ctrl" => s.key_ctrl = flag(value).unwrap_or(s.key_ctrl),
                 "key_alt" => s.key_alt = flag(value).unwrap_or(s.key_alt),
@@ -185,6 +189,7 @@ impl Settings {
             ("quality", self.quality.clamp(40, 95).to_string()),
             ("notify", b(self.notify).into()),
             ("update_check", b(self.update_check).into()),
+            ("wheel", b(self.wheel).into()),
             ("key_shift", b(self.key_shift).into()),
             ("key_ctrl", b(self.key_ctrl).into()),
             ("key_alt", b(self.key_alt).into()),
@@ -296,6 +301,15 @@ mod tests {
         let s = Settings::parse("quality=99\nnotify=0\nkey_alt = off\nupdate_check=1\n");
         assert_eq!(s.quality, 95);
         assert!(!s.notify && !s.key_alt && s.update_check && s.key_shift);
+    }
+
+    #[test]
+    fn the_wheel_is_off_unless_turned_on() {
+        // Anche chi aggiorna da una versione che non scriveva la chiave la trova spenta.
+        assert!(!Settings::parse("key_shift=1\nkey_ctrl=1\n").wheel);
+        let on = Settings::parse("wheel=1\n");
+        assert!(on.wheel);
+        assert!(Settings::parse(&on.merge_into("")).wheel);
     }
 
     #[test]
