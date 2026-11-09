@@ -903,8 +903,14 @@ impl App {
     }
 
     /// Il nome di ciò che si sta per fare, per il pulsante («WebP», «Comprimi»…).
+    /// Il nome dell'azione scelta come lo dice il menu (per esempio «Ruota di 90° a destra»).
     pub fn action_label(&self) -> &'static str {
-        conversioni::action_label(self.kind(), &self.action)
+        super::voci::voce(self.kind(), &self.action).label
+    }
+
+    /// L'iconcina colorata dell'azione scelta.
+    pub fn action_voce(&self) -> super::voci::Voce {
+        super::voci::voce(self.kind(), &self.action)
     }
 
     pub fn option_defs(&self) -> Vec<&'static OptionDef> {
