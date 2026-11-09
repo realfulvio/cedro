@@ -171,6 +171,14 @@ impl SignUi {
         self.devices.get(self.device)
     }
 
+    /// Il dispositivo da mostrare in alto: quello scelto se firma, se no il primo che firma.
+    pub fn chip_device(&self) -> Option<&Device> {
+        match self.device() {
+            Some(d) if d.signing_cert().is_some() => Some(d),
+            other => self.devices.iter().find(|d| d.signing_cert().is_some()).or(other),
+        }
+    }
+
     pub fn save_settings(&self) {
         let mut s = crate::read_settings();
         let k = &self.s;
@@ -210,6 +218,10 @@ impl SignUi {
         }
         if self.step == 4 {
             self.files.clear();
+        }
+        if self.files.is_empty() {
+            // Coda nuova: la firma torna al suo posto (non dove era stata trascinata per altri file).
+            self.place = 0;
         }
         self.page = Page::Sign;
         self.step = 1;
@@ -336,6 +348,12 @@ impl SignUi {
             let x = pb[0] + cx * (pb[2] - pb[0]);
             let y = pb[3] - cy * (pb[3] - pb[1]);
             rect = [x - w / 2.0, y - h / 2.0, x + w / 2.0, y + h / 2.0];
+        } else if f.action == Action::PdfAgain {
+            // Il PDF è già firmato: il riquadro nuovo va sopra a quelli che ci sono, non addosso.
+            let h = rect[3] - rect[1];
+            let up = ((h + 10.0) * f.signers.len() as f32).min((pb[3] - pb[1]) - h - 84.0).max(0.0);
+            rect[1] += up;
+            rect[3] += up;
         }
         Place::Rect { page: page as u32 + 1, rect }
     }
@@ -501,7 +519,11 @@ impl SignUi {
                     self.scan_errors = e;
                     self.scanning = false;
                     self.scanned_once = true;
-                    self.device = keep.and_then(|k| self.devices.iter().position(|d| d.key() == k)).unwrap_or(0);
+                    // Si tiene quello scelto; se no il primo che firma.
+                    self.device = keep
+                        .and_then(|k| self.devices.iter().position(|d| d.key() == k))
+                        .or_else(|| self.devices.iter().position(|d| d.signing_cert().is_some()))
+                        .unwrap_or(0);
                     self.remind();
                 }
                 Msg::Start(i) => {
@@ -519,16 +541,17 @@ impl SignUi {
                 }
                 Msg::Finished(err) => {
                     self.running = false;
+                    // Dopo un PIN giusto la chiavetta toglie l'avviso «pochi tentativi»: si rilegge.
+                    if let Some(d) = self.devices.get_mut(self.device) {
+                        if let Some(p) = pkcs11::pin_state(d) {
+                            d.pin = p;
+                        }
+                    }
                     match err {
                         Some(e) if self.files.iter().all(|f| !matches!(f.state, State::Done { .. })) => {
                             // Niente firmato: si resta sul PIN con l'errore.
                             for f in &mut self.files {
                                 f.state = State::Wait;
-                            }
-                            if let Some(d) = self.devices.get_mut(self.device) {
-                                if let Some(p) = pkcs11::pin_state(d) {
-                                    d.pin = p;
-                                }
                             }
                             self.error = Some(e);
                         }
@@ -696,4 +719,23 @@ pub fn is_signed(p: &Path) -> bool {
         return !firmare::signer_names(&data).is_empty();
     }
     firmare::is_envelope(&data)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Un PDF già firmato: il riquadro della firma nuova va sopra a quello di prima, non addosso.
+    #[test]
+    fn second_signature_box_goes_above() {
+        let mut su = SignUi::default();
+        su.s.firma_visible = true;
+        su.s.firma_corner = 0;
+        let page = [0.0, 0.0, 595.0, 842.0];
+        let mk = |signers: Vec<String>, action| SignFile { path: "a.pdf".into(), action, out: "a.pdf".into(), signers, fields: Vec::new(), pages: vec![page], state: State::Wait };
+        let first = mk(Vec::new(), Action::Pdf);
+        let again = mk(vec!["MARIO ROSSI".into()], Action::PdfAgain);
+        let (Place::Rect { rect: a, .. }, Place::Rect { rect: b, .. }) = (su.place_for(&first), su.place_for(&again)) else { panic!() };
+        assert!(b[1] >= a[3], "{a:?} {b:?}");
+    }
 }
