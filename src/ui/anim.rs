@@ -111,6 +111,7 @@ impl<'a> Frame<'a> {
         drop(anims);
         if moving {
             self.animating = true;
+            self.gliding = true;
         }
         v
     }

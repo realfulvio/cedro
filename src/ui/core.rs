@@ -323,6 +323,8 @@ pub struct Frame<'a> {
     /// Millisecondi da quando la finestra è aperta (per le animazioni).
     pub ms: u64,
     pub animating: bool,
+    /// Si muove qualcosa delle animazioni brevi (`anim`): la finestra va al ritmo dello schermo.
+    pub gliding: bool,
 }
 
 pub const SANS: Weight = Weight::Regular;
