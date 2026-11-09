@@ -5,6 +5,7 @@ pub mod progress;
 pub mod conversioni;
 pub mod credits;
 pub mod edizione;
+pub mod firma;
 pub mod guida;
 pub mod i18n;
 pub mod logo;
