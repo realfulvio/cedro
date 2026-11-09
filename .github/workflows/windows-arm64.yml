@@ -337,6 +337,10 @@ jobs:
           $pf = Join-Path $env:ProgramFiles 'Cedro\cedro.exe'
           $mine = Join-Path $env:LOCALAPPDATA 'Programs\Cedro\cedro.exe'
           $common = Join-Path $env:PUBLIC 'Desktop\Cedro.lnk'
+          # Start-Process -Wait aspetterebbe anche Cedro, che l'aggiornamento riapre e resta nella tray.
+          function Invoke-Setup($exe, [string[]]$params) { $p = Start-Process $exe -ArgumentList $params -PassThru; $p.WaitForExit() }
+          # Il disinstallatore si copia in %TEMP% (_iu…) e lavora da lì: si aspetta anche quella copia.
+          function Wait-Uninstall { for ($i = 0; $i -lt 60; $i++) { if (-not (Get-Process | Where-Object { $_.ProcessName -match '^(_iu|unins)' })) { return }; Start-Sleep 2 } }
           function Stop-Cedro { Start-Sleep 2; Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force }
           function Wait-Version($key, $v) {
             for ($i = 0; $i -lt 90; $i++) {
@@ -347,15 +351,15 @@ jobs:
           }
           # Da zero: via la copia per l'utente lasciata dai passi prima.
           $u = (Get-ItemProperty $user -ErrorAction SilentlyContinue).UninstallString
-          if ($u) { Start-Process ($u.Trim('"')) -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait; Start-Sleep 3 }
+          if ($u) { Invoke-Setup ($u.Trim('"')) @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'); Start-Sleep 2; Wait-Uninstall }
           if (Test-Path $user) { throw 'la copia per l''utente non va via' }
 
           "1) Una 0.35.4 per tutti gli utenti (la scelta della procedura vecchia) si aggiorna in Programmi"
           gh release download v0.35.4 --pattern 'Cedro-Setup-*.exe' --dir permacchina
-          Start-Process (Get-Item permacchina\Cedro-Setup-*.exe).FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS', '/TASKS=desktopicon' -Wait
+          Invoke-Setup (Get-Item permacchina\Cedro-Setup-*.exe).FullName @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS', '/TASKS=desktopicon')
           Stop-Cedro
           if ((Get-ItemProperty $all).DisplayVersion -ne '0.35.4') { throw '0.35.4 per tutti non installata' }
-          Start-Process $setup -ArgumentList $silent -Wait
+          Invoke-Setup $setup @($silent)
           Wait-Version $all $version
           Stop-Cedro
           if (Test-Path $user) { throw 'COPIA DOPPIA: l''aggiornamento ha installato Cedro anche per l''utente' }
@@ -366,7 +370,7 @@ jobs:
           "2) Gli aggiornamenti silenziosi non riaccendono l'avvio con Windows e non rimettono il collegamento cancellato"
           Remove-ItemProperty $run -Name Cedro -ErrorAction SilentlyContinue
           Remove-Item $common -ErrorAction SilentlyContinue
-          Start-Process $setup -ArgumentList $silent -Wait
+          Invoke-Setup $setup @($silent)
           Wait-Version $all $version
           Stop-Cedro
           if ((Get-ItemProperty $run -ErrorAction SilentlyContinue).Cedro) { throw 'l''aggiornamento ha riacceso l''avvio con Windows' }
@@ -375,12 +379,12 @@ jobs:
 
           "3) Installando per tutti gli utenti, la copia per l'utente va via (e l'avvio con Windows passa alla nuova)"
           $u = (Get-ItemProperty $all).UninstallString.Trim('"')
-          Start-Process $u -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait; Start-Sleep 3
-          Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER' -Wait
+          Invoke-Setup $u @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'); Start-Sleep 2; Wait-Uninstall
+          Invoke-Setup $setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER')
           Stop-Cedro
           if (-not (Test-Path $mine)) { throw "manca $mine" }
           if ((Get-ItemProperty $run).Cedro -ne "`"$mine`"") { throw "avvio con Windows: $((Get-ItemProperty $run).Cedro)" }
-          Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS' -Wait
+          Invoke-Setup $setup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS')
           Stop-Cedro
           if (Test-Path $user) { throw 'COPIA DOPPIA: resta la voce per l''utente' }
           if (Test-Path $mine) { throw "COPIA DOPPIA: resta $mine" }
@@ -391,7 +395,7 @@ jobs:
           "4) Disinstallazione: niente cartella, voce, collegamenti, avvio con Windows"
           New-Item -ItemType Directory -Force (Join-Path $env:LOCALAPPDATA 'Cedro\trascrizione') | Out-Null
           $u = (Get-ItemProperty $all).UninstallString.Trim('"')
-          Start-Process $u -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait; Start-Sleep 3
+          Invoke-Setup $u @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'); Start-Sleep 2; Wait-Uninstall
           if (Test-Path $all) { throw 'resta la voce in Programmi' }
           if (Test-Path (Split-Path $pf)) { throw "resta $(Split-Path $pf)" }
           if ((Get-ItemProperty $run -ErrorAction SilentlyContinue).Cedro) { throw 'resta l''avvio con Windows' }
