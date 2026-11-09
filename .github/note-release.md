@@ -12,11 +12,15 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Menu più chiari e colorati, foto ripulite senza perdere qualità, interfaccia più ordinata e viva.**
+**Firma digitale: apri e verifica i file firmati, come con Dike o ArubaSign.**
 
-- Il menu «Formato» ha un'iconcina colorata per ogni voce e nomi che si capiscono: «Ruota di 90° a destra», «Togli GPS e dati nascosti» al posto di «Strumento · …», con una breve spiegazione a fianco e le voci divise fra «Converti in» e gli strumenti.
-- Anche i menu delle impostazioni di conversione (dimensioni, pagina, qualità audio, video…) hanno l'iconcina e una spiegazione per ogni scelta.
-- «Togli GPS e dati nascosti» funziona come Scrambled Exif: su JPEG, PNG e WebP toglie posizione, fotocamera, data di scatto, miniatura, XMP e commenti senza ricomprimere la foto (qualità identica, file più leggero), tiene il verso giusto e i colori, e salva una copia «-pulito» dicendo cosa ha tolto.
-- La ruota al clic destro ora è spenta di default: si accende con «Usa la ruota» in Impostazioni > Ruota. Spenta, su Windows Cedro non tiene più agganci a tastiera e mouse; su Linux il menu del file ha la sola voce «Apri in Cedro».
-- Scritte e controlli tutti in riga, etichette delle opzioni in semigrassetto e più spazio fra un'opzione e l'altra.
-- Animazioni leggere: pulsanti che sfumano e si premono, icone che si muovono, scheda scelta che scivola, menu in dissolvenza. Si fermano subito a movimento finito e spariscono se nel sistema hai spento gli effetti di animazione.
+- Nuova sezione «Firma digitale»: trascini un .p7m, .p7s, .m7m, .tsd, .tsr o un PDF firmato e Cedro ti dice subito se le firme valgono, in verde, giallo o rosso, con una frase chiara.
+- Si apre il visualizzatore: il documento al centro (PDF, Word, testo, immagini) e a destra chi ha firmato, quando, e i quattro controlli: documento non modificato, certificato qualificato nell'elenco europeo, revoca, data certa.
+- Buste una dentro l'altra, controfirme, firme staccate (.p7s con l'originale accanto), marche temporali (.tsd, .m7m, .tsr) e firme nei PDF, anche più di una.
+- PDF cambiato dopo la firma: lo dice e ti fa vedere la versione firmata, com'era al momento della firma, da salvare a parte.
+- Verifica alla data: oggi, quando è stato firmato o un altro giorno.
+- «Verifica una cartella» (per esempio gli allegati di una PEC): tutti i file firmati in un elenco, quelli da guardare in cima, con un rapporto unico in PDF ed estrazione di tutti i documenti.
+- Rapporto di verifica in PDF per ogni file, da allegare agli atti.
+- Doppio clic sui file firmati: si aprono in Cedro (si può spegnere; per i PDF firmati è una scelta a parte).
+- L'elenco europeo dei certificatori si aggiorna da solo ogni giorno; la revoca si controlla online (OCSP/CRL), e si può spegnere.
+- Da terminale: `cedro firma <file>` stampa l'esito.
