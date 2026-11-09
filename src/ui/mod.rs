@@ -20,6 +20,7 @@ pub mod core;
 pub mod screen;
 pub mod sezioni;
 pub mod views;
+pub mod voci;
 pub mod wheel;
 
 /// Le tavole sono 1536×1024: nelle finestre vere si disegna un po' più piccolo, così stanno in uno schermo normale.
