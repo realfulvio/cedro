@@ -29,6 +29,10 @@ pub trait Platform {
     fn close(&mut self);
     /// Dalla finestrella compatta al pannello completo.
     fn open_full(&mut self);
+    /// Manda un file alla stampante (dove il sistema non sa farlo, lo apre col programma che lo stampa).
+    fn print_path(&mut self, path: &Path) {
+        self.open_path(path);
+    }
 }
 
 /// Che finestra è.
@@ -38,6 +42,8 @@ pub enum Surface {
     Main,
     /// La finestrella che si apre dall'icona vicino all'orologio (Cedro compatto).
     Compact,
+    /// Il visualizzatore di un file firmato (doppio clic su un .p7m).
+    Viewer,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -135,6 +141,9 @@ impl Screen {
     /// Disegna il fotogramma in un'immagine di `w`×`h` pixel con `scale` pixel per unità.
     pub fn render(&mut self, w: u32, h: u32, scale: f32) -> Painter<'_> {
         self.app.simple_view = self.simple;
+        if self.surface == Surface::Viewer {
+            self.want_viewer();
+        }
         self.want_preview();
         self.want_page_thumbs();
         if let Some(to) = self.app.review_follow() {
@@ -214,7 +223,9 @@ impl Screen {
             return;
         }
         if self.theme != ThemeId::DocumentoAlCentro || self.surface != Surface::Main || self.app.activity != Activity::Convert {
-            self.app.player = None;
+            if self.surface != Surface::Viewer {
+                self.app.player = None;
+            }
             return;
         }
         // Cambiato file (o tolto dalla coda): quello che suonava si ferma.
@@ -465,7 +476,26 @@ impl Screen {
 
     pub fn drop_files(&mut self, paths: Vec<PathBuf>) {
         self.ui.dropping = false;
+        if self.surface == Surface::Viewer {
+            // Sul visualizzatore: il file lasciato si apre in un'altra finestra.
+            for p in paths.iter().filter(|p| p.is_file()) {
+                if let Err(e) = super::firma::launch_viewer(p) {
+                    self.notify(&e, true);
+                }
+            }
+            return;
+        }
+        if self.app.activity == Activity::Firma && self.app.review.is_none() {
+            self.firma_files(paths);
+            return;
+        }
         self.add_files(paths);
+    }
+
+    /// Apre questo file nel visualizzatore (la finestra `Surface::Viewer`).
+    pub fn open_viewer(&mut self, path: PathBuf) {
+        let wake = self.app.wake.clone();
+        self.app.firma.open_viewer(path, wake);
     }
 
     fn add_files(&mut self, paths: Vec<PathBuf>) {
@@ -1039,6 +1069,300 @@ impl Screen {
             }
             Act::Answer(choice) => app.answer(choice),
             Act::DismissNotice => app.notice = None,
+            a @ (Act::FirmaAdd
+            | Act::FirmaAddFolder
+            | Act::FirmaOpen(_)
+            | Act::FirmaRemove(_)
+            | Act::FirmaClear
+            | Act::FirmaRecent(_)
+            | Act::FirmaReport
+            | Act::FirmaExtract
+            | Act::FirmaSetting(_)
+            | Act::FirmaTrust) => self.firma_act(a, plat),
+            a @ (Act::VwSave
+            | Act::VwOpenWith
+            | Act::VwPrint
+            | Act::VwZoom(_)
+            | Act::VwReport
+            | Act::VwPanel
+            | Act::VwSigner(_)
+            | Act::VwTech(_)
+            | Act::VwAt(_)
+            | Act::VwAtApply
+            | Act::VwPage(_)
+            | Act::VwRevision(_)
+            | Act::VwRevisionOff
+            | Act::VwOriginal) => self.viewer_act(a, plat),
+        }
+    }
+
+    /// File scelti o lasciati sulla «Firma digitale»: uno solo si apre nel visualizzatore, di più si
+    /// verificano insieme.
+    fn firma_files(&mut self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
+        if paths.len() == 1 && paths[0].is_file() && self.app.firma.items.is_empty() {
+            if let Err(e) = super::firma::launch_viewer(&paths[0]) {
+                self.notify(&e, true);
+            }
+            return;
+        }
+        let wake = self.app.wake.clone();
+        self.app.firma.add(paths, wake);
+    }
+
+    fn firma_act(&mut self, act: Act, plat: &mut dyn Platform) {
+        let wake = self.app.wake.clone();
+        match act {
+            Act::FirmaAdd => {
+                let files = plat.pick_files();
+                self.firma_files(files);
+            }
+            Act::FirmaAddFolder => {
+                if let Some(d) = plat.pick_folder("Scegli la cartella con i file firmati") {
+                    let before = self.app.firma.items.len();
+                    self.app.firma.add(vec![d], wake);
+                    if self.app.firma.items.len() == before {
+                        self.notify("In quella cartella non ci sono file firmati.", false);
+                    }
+                }
+            }
+            Act::FirmaOpen(i) => {
+                if let Some(it) = self.app.firma.items.get(i) {
+                    if let Err(e) = super::firma::launch_viewer(&it.path.clone()) {
+                        self.notify(&e, true);
+                    }
+                }
+            }
+            Act::FirmaRemove(i) => {
+                if i < self.app.firma.items.len() {
+                    self.app.firma.items.remove(i);
+                }
+            }
+            Act::FirmaClear => self.app.firma.items.clear(),
+            Act::FirmaRecent(k) => {
+                if let Some(r) = self.app.firma.recent.get(k) {
+                    let p = r.path.clone();
+                    if !p.exists() {
+                        self.notify("Il file non c'è più: è stato spostato o cancellato.", true);
+                    } else if let Err(e) = super::firma::launch_viewer(&p) {
+                        self.notify(&e, true);
+                    }
+                }
+            }
+            Act::FirmaReport => {
+                let reports: Vec<std::sync::Arc<crate::firma::Report>> = self.app.firma.items.iter().filter_map(|i| i.report.clone()).collect();
+                let Some(first) = self.app.firma.items.first().map(|i| i.path.clone()) else { return };
+                let refs: Vec<&crate::firma::Report> = reports.iter().map(|r| r.as_ref()).collect();
+                match crate::firma::rapporto::pdf(&refs).and_then(|data| super::firma::save_beside(&first, "Rapporto di verifica delle firme.pdf", &data)) {
+                    Ok(p) => {
+                        self.notify(&format!("Rapporto salvato: {}", p.display()), false);
+                        plat.open_path(&p);
+                    }
+                    Err(e) => self.notify(&e, true),
+                }
+            }
+            Act::FirmaExtract => {
+                let mut saved = 0;
+                let mut errors = Vec::new();
+                for it in &self.app.firma.items {
+                    let Some(r) = &it.report else { continue };
+                    if r.doc.is_empty() || it.path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) {
+                        continue;
+                    }
+                    match super::firma::save_beside(&it.path, &r.doc_name, &r.doc) {
+                        Ok(_) => saved += 1,
+                        Err(e) => errors.push(e),
+                    }
+                }
+                if let Some(e) = errors.first() {
+                    self.notify(e, true);
+                } else if saved == 0 {
+                    self.notify("Non c'è nessun documento da estrarre: i PDF firmati sono già il documento.", false);
+                } else {
+                    let t = if saved == 1 { "Estratto 1 documento, accanto al suo file firmato.".to_string() } else { format!("Estratti {saved} documenti, ognuno accanto al suo file firmato.") };
+                    self.notify(&t, false);
+                }
+            }
+            Act::FirmaSetting(k) => {
+                let mut s = crate::read_settings();
+                match k {
+                    0 => s.firma_assoc = !s.firma_assoc,
+                    1 => s.firma_pdf = !s.firma_pdf,
+                    _ => s.firma_online = !s.firma_online,
+                }
+                let _ = crate::write_settings(&s);
+                self.app.firma.opts = (s.firma_assoc, s.firma_pdf, s.firma_online);
+                if k < 2 {
+                    if let Err(e) = crate::associa::apply(s.firma_assoc, s.firma_pdf) {
+                        self.notify(&e, true);
+                    }
+                }
+            }
+            Act::FirmaTrust => self.app.firma.update_trust(wake),
+            _ => {}
+        }
+    }
+
+    fn firma_at_apply(&mut self) {
+        let wake = self.app.wake.clone();
+        let Some(v) = self.app.firma.viewer.as_mut() else { return };
+        match super::firma::parse_day(&v.at_text) {
+            Some(t) => {
+                v.at_error = false;
+                self.ui.edit = None;
+                self.app.firma.reverify(crate::firma::At::Custom(t), None, wake);
+            }
+            None => v.at_error = true,
+        }
+    }
+
+    fn viewer_act(&mut self, act: Act, plat: &mut dyn Platform) {
+        let wake = self.app.wake.clone();
+        let Some(v) = self.app.firma.viewer.as_mut() else { return };
+        let shown = v.revision.as_ref().map(|r| r.1.clone()).or(v.doc_path.clone());
+        match act {
+            Act::VwSave => {
+                let Some(rep) = v.report.clone() else { return };
+                let (name, data): (String, Vec<u8>) = match &v.revision {
+                    Some((i, _)) => {
+                        let stem = std::path::Path::new(&rep.doc_name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                        (format!("{stem} (versione firmata).pdf"), rep.signed_revision(*i).unwrap_or_default().to_vec())
+                    }
+                    None => (rep.doc_name.clone(), rep.doc.clone()),
+                };
+                let signed = v.path.clone();
+                match super::firma::save_beside(&signed, &name, &data) {
+                    Ok(p) => {
+                        let n = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                        self.notify(&format!("Salvato «{n}» nella cartella del file firmato."), false);
+                    }
+                    Err(e) => self.notify(&e, true),
+                }
+            }
+            Act::VwOpenWith => {
+                if let Some(p) = shown {
+                    plat.open_path(&p);
+                }
+            }
+            Act::VwPrint => {
+                if let Some(p) = shown {
+                    plat.print_path(&p);
+                }
+            }
+            Act::VwZoom(d) => {
+                const STEPS: [f32; 8] = [0.5, 0.67, 0.75, 1.0, 1.25, 1.5, 2.0, 3.0];
+                let k = STEPS.iter().position(|z| (z - v.zoom).abs() < 0.01).unwrap_or(3) as i32;
+                v.zoom = STEPS[(k + d).clamp(0, STEPS.len() as i32 - 1) as usize];
+            }
+            Act::VwReport => {
+                let Some(rep) = v.report.clone() else { return };
+                let stem = v.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let signed = v.path.clone();
+                match crate::firma::rapporto::pdf(&[rep.as_ref()]).and_then(|d| super::firma::save_beside(&signed, &format!("{stem} - rapporto di verifica.pdf"), &d)) {
+                    Ok(p) => {
+                        // Si dice dove sta: se il lettore PDF non parte, il file si ritrova lo stesso.
+                        self.notify(&format!("Rapporto salvato: {}", p.display()), false);
+                        plat.open_path(&p);
+                    }
+                    Err(e) => self.notify(&e, true),
+                }
+            }
+            Act::VwPanel => v.panel = !v.panel,
+            Act::VwSigner(i) => {
+                if !v.open.remove(&i) {
+                    v.open.insert(i);
+                    // Si porta la pagina sul riquadro della firma visibile.
+                    let place = v.report.as_ref().and_then(|r| r.signers.get(i)).and_then(|s| s.place.clone()).filter(|p| p.visible);
+                    if let Some(n) = place.as_ref().and_then(|p| p.page) {
+                        let n = n.saturating_sub(1) as usize;
+                        let changed = v.page != n;
+                        v.page = n;
+                        // Le misure dell'ultimo disegno: contenuto = pagina + 2 × 28 di margine.
+                        let target = match (place.and_then(|p| p.rect), self.scrolls.iter().find(|x| x.1 == Scroll::FirmaDoc)) {
+                            (Some(rc), Some((r, _, max))) if *max > 0.0 => {
+                                let ph = max + r.3 - 56.0;
+                                (28.0 + rc[1] * ph - r.3 * 0.3).clamp(0.0, *max)
+                            }
+                            _ => 0.0,
+                        };
+                        if changed || target > 0.0 {
+                            self.ui.scroll.insert(Scroll::FirmaDoc, target);
+                        }
+                    }
+                }
+            }
+            Act::VwTech(i) => {
+                if !v.tech.remove(&i) {
+                    v.tech.insert(i);
+                }
+            }
+            Act::VwAt(k) => match k {
+                0 => {
+                    v.at_error = false;
+                    self.app.firma.reverify(crate::firma::At::Now, None, wake);
+                }
+                1 => {
+                    v.at_error = false;
+                    self.app.firma.reverify(crate::firma::At::Signing, None, wake);
+                }
+                _ => {
+                    if v.at_text.is_empty() {
+                        v.at_text = crate::firma::date(crate::firma::now());
+                    }
+                    let t = v.at_text.chars().count();
+                    self.ui.edit = Some(Field::FirmaDate);
+                    self.ui.sel_all = true;
+                    self.ui.caret = t;
+                }
+            },
+            Act::VwAtApply => self.firma_at_apply(),
+            Act::VwPage(i) => {
+                v.page = i;
+                self.ui.scroll.insert(Scroll::FirmaDoc, 0.0);
+            }
+            Act::VwRevision(i) => {
+                let Some(rep) = v.report.clone() else { return };
+                if let Some(data) = rep.signed_revision(i) {
+                    let stem = std::path::Path::new(&rep.doc_name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "documento".into());
+                    if let Some(p) = super::firma::write_temp(&format!("{stem} (versione firmata).pdf"), data) {
+                        v.revision = Some((i, p));
+                        v.page = 0;
+                        self.ui.scroll.insert(Scroll::FirmaDoc, 0.0);
+                    }
+                }
+            }
+            Act::VwRevisionOff => {
+                v.revision = None;
+                v.page = 0;
+            }
+            Act::VwOriginal => {
+                let files = plat.pick_files();
+                let Some(p) = files.into_iter().next() else { return };
+                match std::fs::read(&p) {
+                    Ok(data) => {
+                        let at = self.app.firma.viewer.as_ref().map(|v| v.at).unwrap_or(crate::firma::At::Now);
+                        self.app.firma.reverify(at, Some(data), wake);
+                    }
+                    Err(e) => self.notify(&format!("Non riesco a leggere il file: {e}"), true),
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Il visualizzatore chiede le informazioni, la pagina e le miniature del documento mostrato.
+    fn want_viewer(&mut self) {
+        let Some(v) = self.app.firma.viewer.as_ref() else { return };
+        let Some(path) = v.revision.as_ref().map(|r| r.1.clone()).or(v.doc_path.clone()) else { return };
+        let page = v.page;
+        self.app.want_media(&path);
+        self.app.want_preview(&path, page);
+        if crate::engine::kind_of(&path) == crate::engine::Kind::Pdf {
+            if let Some(n) = self.app.media_of(&path).and_then(|m| m.pages) {
+                self.app.want_page_thumbs(&path, 0..n.min(400));
+            }
         }
     }
 
@@ -1049,6 +1373,7 @@ impl Screen {
             Field::FilePages(i) => self.app.files.get(i).map(|f| f.pages.clone()).unwrap_or_default(),
             Field::Review(i) => self.app.review.as_ref().and_then(|r| r.rows.get(i)).map(|r| r.text.clone()).unwrap_or_default(),
             Field::VoiceName(v) => self.app.review.as_ref().and_then(|r| r.names.get(v as usize)).cloned().unwrap_or_default(),
+            Field::FirmaDate => self.app.firma.viewer.as_ref().map(|v| v.at_text.clone()).unwrap_or_default(),
         }
     }
 
@@ -1076,6 +1401,12 @@ impl Screen {
             Field::VoiceName(v) => {
                 if let Some(name) = self.app.review.as_mut().and_then(|r| r.names.get_mut(v as usize)) {
                     *name = text;
+                }
+            }
+            Field::FirmaDate => {
+                if let Some(v) = self.app.firma.viewer.as_mut() {
+                    v.at_text = text;
+                    v.at_error = false;
                 }
             }
         }
@@ -1175,6 +1506,9 @@ impl Screen {
                     self.ui.edit = None;
                     if let Field::Link(web) = field {
                         self.app.add_typed_links(web);
+                    }
+                    if field == Field::FirmaDate {
+                        self.firma_at_apply();
                     }
                     return true;
                 }

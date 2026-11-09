@@ -565,6 +565,20 @@ impl<'a> Painter<'a> {
     }
 
     pub fn fill_a(&mut self, x: f32, y: f32, w: f32, h: f32, c: Rgb, a: f32) {
+        // Le righe sottili (un pixel o meno) vanno sulla griglia dei pixel: nitide, e tiny-skia con
+        // un rettangolo così stretto a metà pixel si ferma su un controllo interno (hairline_aa).
+        let s = self.scale;
+        let (mut x, mut y, mut w, mut h) = (x, y, w, h);
+        if w * s < 1.5 {
+            let dx = ((x + self.dx) * s).round();
+            x = dx / s - self.dx;
+            w = (w * s).round().max(1.0) / s;
+        }
+        if h * s < 1.5 {
+            let dy = ((y + self.dy) * s).round();
+            y = dy / s - self.dy;
+            h = (h * s).round().max(1.0) / s;
+        }
         if let Some(r) = Rect::from_xywh(x, y, w, h) {
             let tf = self.tf();
             let m = self.clips.last().map(|(_, m)| m);

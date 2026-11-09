@@ -24,10 +24,11 @@ pub enum Activity {
     Transcribe,
     YouTube,
     Web,
+    Firma,
 }
 
 impl Activity {
-    pub const ALL: [Activity; 4] = [Activity::Convert, Activity::Transcribe, Activity::YouTube, Activity::Web];
+    pub const ALL: [Activity; 5] = [Activity::Convert, Activity::Transcribe, Activity::YouTube, Activity::Web, Activity::Firma];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -35,6 +36,7 @@ impl Activity {
             Activity::Transcribe => "Trascrizione",
             Activity::YouTube => "YouTube",
             Activity::Web => "Video dal web",
+            Activity::Firma => "Firma digitale",
         }
     }
 
@@ -45,6 +47,7 @@ impl Activity {
             Activity::Transcribe => TRANSCRIBE,
             Activity::YouTube => VIDEO,
             Activity::Web => WEB,
+            Activity::Firma => SHIELD,
         }
     }
 }
@@ -438,6 +441,9 @@ pub struct App {
     pub summary_failure: Option<(PathBuf, crate::riassunto::Failure)>,
     /// «Comprimi»: (file, chiave delle scelte) → (peso, peso compresso); `None` = si sta calcolando.
     pub estimates: HashMap<(PathBuf, String), Option<Result<(u64, u64), String>>>,
+    /// «Firma digitale»: i file da verificare, gli ultimi aperti e il visualizzatore.
+    pub firma: super::firma::FirmaUi,
+    media_asked: std::collections::HashSet<PathBuf>,
     pub(super) tx: Sender<Event>,
     rx: Receiver<Event>,
     pub(super) wake: Arc<dyn Fn() + Send + Sync>,
@@ -504,6 +510,8 @@ impl App {
             review_scrub: None,
             summary_job: None,
             summary_failure: None,
+            firma: Default::default(),
+            media_asked: Default::default(),
             tx,
             rx,
             wake,
@@ -1154,6 +1162,13 @@ impl App {
         self.media.get(path)
     }
 
+    /// Chiede una volta sola le informazioni di un file che non è in coda (il documento del visualizzatore).
+    pub fn want_media(&mut self, path: &Path) {
+        if !self.media.contains_key(path) && self.media_asked.insert(path.to_path_buf()) {
+            self.loader.request(path);
+        }
+    }
+
     /// Chiede di disegnare una pagina del documento per l'anteprima (fuori dal thread della finestra).
     pub fn want_preview(&mut self, path: &Path, page: usize) {
         let key = (path.to_path_buf(), page);
@@ -1243,6 +1258,7 @@ impl App {
             Activity::Transcribe => self.ask_voices(),
             Activity::YouTube => self.start_links(false),
             Activity::Web => self.start_links(true),
+            Activity::Firma => {}
         }
     }
 
@@ -1551,7 +1567,7 @@ impl App {
 
     /// Applica gli eventi arrivati dai thread. Vero se qualcosa è cambiato.
     pub fn pump(&mut self) -> bool {
-        let mut changed = false;
+        let mut changed = self.firma.pump();
         while let Ok(e) = self.rx.try_recv() {
             changed = true;
             match e {

@@ -176,6 +176,12 @@ pub fn start() -> std::result::Result<(), String> {
         if settings.update_check {
             check_updates(false);
         }
+        // L'elenco europeo dei certificatori per la «Firma digitale», aggiornato ogni giorno.
+        cedro::firma::trust::daily();
+        // Il doppio clic sui file firmati (si accende e si spegne nella «Firma digitale»).
+        if let Err(e) = cedro::associa::apply(settings.firma_assoc, settings.firma_pdf) {
+            append_log(&format!("associazioni dei file firmati: {e}"));
+        }
         // Cedro resta aperto per giorni: ricontrolla ogni 24 ore se l'opzione è accesa.
         let _ = SetTimer(Some(hwnd), 10, 24 * 60 * 60 * 1000, None);
         // Quando si chiude una finestra di Cedro, a finestre tutte chiuse la tray restituisce la memoria.

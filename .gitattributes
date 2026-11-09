@@ -1,0 +1,2 @@
+# I file di prova della firma vanno presi byte per byte (niente CRLF su Windows).
+tests/data/firma/** -text

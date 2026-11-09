@@ -5,6 +5,7 @@
 
 pub mod anim;
 pub mod aspetto;
+pub mod firma;
 pub mod assets;
 pub mod gfx;
 pub mod guida;

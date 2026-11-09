@@ -8,12 +8,14 @@ mod banco;
 mod compatto;
 mod documento;
 mod essenziale;
+mod firma;
 mod guidato;
 mod pagine;
 mod revisione;
 mod riassunto;
 
 pub use activity::{links_page, transcribe_page};
+pub use firma::{draw_viewer, firma_page, viewer_size};
 pub use pagine::{merged_pages, page_drop, split_file, BOARD_MAX, MERGE as ICON_MERGE, MERGED_MAX, SCISSORS as ICON_SCISSORS, SHRINK as ICON_SHRINK, STRIP_MAX};
 
 use super::assets as ic;
@@ -29,6 +31,7 @@ use crate::trascrizione;
 /// Quanto è grande la finestra appena aperta, in unità di disegno.
 pub fn preferred_size(theme: ThemeId, simple: bool, surface: Surface) -> (f32, f32) {
     match (theme, surface) {
+        (_, Surface::Viewer) => viewer_size(),
         (_, Surface::Compact) | (ThemeId::CedroCompatto, Surface::Main) => compatto::size(simple),
         _ => (1536.0, 1024.0),
     }
@@ -38,12 +41,17 @@ pub fn preferred_size(theme: ThemeId, simple: bool, surface: Surface) -> (f32, f
 /// (vedi `Screen::fit_scale`) invece di stringere i pezzi.
 pub fn min_size(theme: ThemeId, surface: Surface) -> (f32, f32) {
     match (theme, surface) {
+        (_, Surface::Viewer) => (960.0, 640.0),
         (_, Surface::Compact) | (ThemeId::CedroCompatto, Surface::Main) => (480.0, 560.0),
         _ => (1400.0, 920.0),
     }
 }
 
 pub fn draw(f: &mut Frame, app: &App, surface: Surface) {
+    if surface == Surface::Viewer {
+        draw_viewer(f, app);
+        return;
+    }
     if app.review.is_some() {
         revisione::draw(f, app);
         return;
@@ -513,6 +521,7 @@ pub fn go_label(app: &App) -> String {
         Activity::Transcribe if n == 0 => "Trascrivi".into(),
         Activity::Transcribe => format!("Trascrivi {n} file"),
         Activity::YouTube | Activity::Web => "Scarica".into(),
+        Activity::Firma => "Verifica".into(),
         Activity::Convert => {
             if let Some(label) = pagine::go_label(app) {
                 return label;

@@ -17,9 +17,9 @@ fn nav(f: &mut Frame, app: &App) {
     f.brand(26.0, 15.0, 26.0, 18.0, 12.0, None);
     f.window_controls(f.w, 0.0, 48.0, pal.text, pal.alt);
     // Le attività stanno ogni 64: il riquadro della scelta scivola da una all'altra.
-    let ys = [78.0, 142.0, 206.0, 270.0];
+    let ys = [78.0, 142.0, 206.0, 270.0, 334.0];
     let cur = Activity::ALL.iter().position(|a| *a == app.activity).unwrap_or(0);
-    let at = f.glide(&Act::Activity(Activity::Convert), cur as f32).clamp(0.0, 3.0);
+    let at = f.glide(&Act::Activity(Activity::Convert), cur as f32).clamp(0.0, (ys.len() - 1) as f32);
     let (i0, i1) = (at.floor() as usize, at.ceil() as usize);
     let k = at - i0 as f32;
     let py = ys[i0] + (ys[i1] - ys[i0]) * k;
@@ -64,6 +64,7 @@ pub fn draw(f: &mut Frame, app: &App) {
             let r = (x + 28.0, y + 24.0, f.w - x - 52.0, f.h - y - 44.0);
             match a {
                 Activity::Transcribe => transcribe_page(f, app, r, simple),
+                Activity::Firma => firma_page(f, app, r, simple),
                 Activity::YouTube => links_page(f, app, r, false, simple),
                 Activity::Web => links_page(f, app, r, true, simple),
                 Activity::Convert => {}
