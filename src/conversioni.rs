@@ -431,7 +431,8 @@ pub fn option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
 
 fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     match (kind, action) {
-        (Kind::Image, "ocr") => vec![],
+        // Leggere il testo e togliere i dati nascosti non ridimensionano né girano la foto.
+        (Kind::Image, "ocr" | "strip") => vec![],
         (Kind::Image, "jpeg" | "compress" | "pdf" | "pnm") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
         (Kind::Image, _) => vec![&IMAGE_SIZE, &STRAIGHTEN],
         (Kind::Doc, "pdf") => vec![&PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
