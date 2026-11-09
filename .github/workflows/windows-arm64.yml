@@ -338,7 +338,18 @@ jobs:
           $mine = Join-Path $env:LOCALAPPDATA 'Programs\Cedro\cedro.exe'
           $common = Join-Path $env:PUBLIC 'Desktop\Cedro.lnk'
           # Start-Process -Wait aspetterebbe anche Cedro, che l'aggiornamento riapre e resta nella tray.
-          function Invoke-Setup($exe, [string[]]$params) { $p = Start-Process $exe -ArgumentList $params -PassThru; $p.WaitForExit() }
+          $n = 0
+          function Invoke-Setup($exe, [string[]]$params) {
+            $script:n++
+            $log = Join-Path $env:RUNNER_TEMP "setup-$script:n.log"
+            "   > $(Split-Path $exe -Leaf) $($params -join ' ')"
+            $p = Start-Process $exe -ArgumentList ($params + "/LOG=$log") -PassThru
+            if (-not $p.WaitForExit(240000)) {
+              Get-Process | Where-Object { $_.ProcessName -match 'setup|unins|_iu|cedro|cmd' } | Format-Table Id, ProcessName, StartTime | Out-String
+              Get-ChildItem $env:RUNNER_TEMP -Filter 'setup-*.log' | ForEach-Object { "--- $($_.Name)"; Get-Content $_.FullName -Tail 40 }
+              throw "$exe non finisce"
+            }
+          }
           # Il disinstallatore si copia in %TEMP% (_iu…) e lavora da lì: si aspetta anche quella copia.
           function Wait-Uninstall { for ($i = 0; $i -lt 60; $i++) { if (-not (Get-Process | Where-Object { $_.ProcessName -match '^(_iu|unins)' })) { return }; Start-Sleep 2 } }
           function Stop-Cedro { Start-Sleep 2; Get-Process cedro -ErrorAction SilentlyContinue | Stop-Process -Force }
