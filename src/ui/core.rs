@@ -249,6 +249,12 @@ pub struct Menu {
     pub title: Option<String>,
     /// Il pallino colorato davanti a ogni voce (vuoto: nessuno).
     pub swatches: Vec<Swatch>,
+    /// Il menu dei formati: iconcina colorata e suggerimento grigio per ogni voce (vuoto: nessuno).
+    pub voci: Vec<Option<super::voci::Voce>>,
+    /// Le righe di titolo dei gruppi: prima della voce `usize` («Converti in», «Modifica l'immagine»).
+    pub groups: Vec<(usize, &'static str)>,
+    /// Con `voci`: solo il suggerimento, senza l'iconcina davanti (i valori di un'opzione).
+    pub plain: bool,
 }
 
 /// Il pallino davanti a una voce di menu.
@@ -544,6 +550,16 @@ impl<'a> Frame<'a> {
 
     /// Come `select`; con `tint` l'icona sta in una piastrella di quel colore (l'attività scelta).
     pub fn select_tinted(&mut self, r: R, label: &str, icon: Option<&str>, tint: Option<Rgb>, size: f32, act: Act) {
+        self.select_inner(r, label, icon, tint, None, size, act);
+    }
+
+    /// La scelta del formato: davanti al nome l'iconcina colorata della voce, come nel menu.
+    pub fn select_voce(&mut self, r: R, label: &str, voce: super::voci::Voce, size: f32, act: Act) {
+        self.select_inner(r, label, None, None, Some(voce), size, act);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn select_inner(&mut self, r: R, label: &str, icon: Option<&str>, tint: Option<Rgb>, voce: Option<super::voci::Voce>, size: f32, act: Act) {
         let pal = self.pal;
         let open = self.ui.menu.as_ref().is_some_and(|m| m.anchor == r);
         let t = self.hover_t(&act, true).max(open as u8 as f32);
@@ -551,7 +567,11 @@ impl<'a> Frame<'a> {
         self.p.rrect(r.0, r.1, r.2, r.3, 6.0, Some(pal.surface), Some((mix(pal.border, pal.primary, t), 1.0)));
         let pad = if r.3 > 56.0 { 26.0 } else { 16.0 };
         let mut x = r.0 + pad;
-        if let Some(d) = icon {
+        if let Some(v) = voce {
+            let ts = (r.3 - 16.0).min((size * 1.6).round()).max(20.0);
+            self.voce_tile(x - 4.0, r.1 + (r.3 - ts) / 2.0, ts, &v);
+            x += ts + 8.0;
+        } else if let Some(d) = icon {
             let isz = (size * 1.2).round();
             if let Some(c) = tint {
                 let ts = (r.3 - 12.0).min(isz + 12.0);
@@ -912,10 +932,27 @@ impl<'a> Frame<'a> {
         let Some(menu) = self.ui.menu.as_ref() else { return };
         let pal = self.pal;
         let row = 40.0f32.max(menu.anchor.3.min(48.0));
-        let size = if menu.anchor.3 > 56.0 { 20.0 } else { 16.0 };
+        let size = if menu.anchor.3 > 56.0 { 20.0f32 } else { 16.0 };
+        let hint_size = (size * 0.8).round();
+        let rich = menu.voci.iter().any(|v| v.is_some());
+        let plain = menu.plain;
+        let tile = (row * 0.65).round();
+        let group_h = 30.0;
         let mut w = menu.anchor.2;
-        for (label, _) in &menu.items {
-            w = w.max(self.measure(label, size, SANS) + 48.0);
+        for (i, (label, _)) in menu.items.iter().enumerate() {
+            let mut lw = self.measure(label, size, SANS) + 48.0;
+            if let Some(Some(v)) = menu.voci.get(i) {
+                if !plain {
+                    lw += tile + 12.0;
+                }
+                if !v.hint.is_empty() {
+                    lw += self.measure(v.hint, hint_size, SANS) + 28.0;
+                }
+            }
+            w = w.max(lw);
+        }
+        for (_, g) in &menu.groups {
+            w = w.max(self.measure(g, 13.0, SEMI) + 64.0);
         }
         let dots = menu.swatches.iter().any(|s| *s != Swatch::None);
         if dots {
@@ -925,7 +962,9 @@ impl<'a> Frame<'a> {
         if let Some(t) = &menu.title {
             w = w.max(self.measure(t, 14.0, SANS) + 32.0);
         }
-        let h = row * menu.items.len() as f32 + 8.0 + head;
+        w = w.min(self.w - 16.0);
+        let groups = menu.groups.clone();
+        let h = row * menu.items.len() as f32 + group_h * groups.len() as f32 + 8.0 + head;
         let below = menu.anchor.1 + menu.anchor.3 + 4.0;
         let y = if below + h > self.h - 8.0 && menu.anchor.1 - h - 4.0 > 8.0 { menu.anchor.1 - h - 4.0 } else { below.min(self.h - h - 8.0).max(8.0) };
         let x = menu.anchor.0.min(self.w - w - 8.0).max(8.0);
@@ -933,6 +972,7 @@ impl<'a> Frame<'a> {
         self.p.rrect(x, y, w, h, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
         let items: Vec<(String, Act)> = menu.items.iter().map(|(l, a)| (l.clone(), a.clone())).collect();
         let swatches = menu.swatches.clone();
+        let voci = menu.voci.clone();
         let title = menu.title.clone();
         let selected = menu.selected;
         // Il menu copre quello che c'è sotto: i clic lì dentro non vanno ai controlli dietro.
@@ -940,8 +980,21 @@ impl<'a> Frame<'a> {
         if let Some(t) = title {
             self.p.text(&t, x + 16.0, y + 4.0, w - 24.0, head, 14.0, SANS, pal.muted, Align::Left);
         }
+        let mut ry = y + 4.0 + head;
         for (i, (label, act)) in items.into_iter().enumerate() {
-            let r = (x + 4.0, y + 4.0 + head + i as f32 * row, w - 8.0, row);
+            if let Some((_, g)) = groups.iter().find(|(at, _)| *at == i) {
+                // Il titolo del gruppo, in piccolo, con la riga che arriva fino al bordo.
+                let g = crate::i18n::lit(&crate::i18n::tr(g).to_uppercase());
+                let tw = self.measure(&g, 12.5, SEMI);
+                self.p.text(&g, x + 16.0, ry + 6.0, w - 32.0, group_h - 6.0, 12.5, SEMI, pal.muted, Align::Left);
+                let lx = x + 16.0 + tw + 14.0;
+                if lx < x + w - 12.0 {
+                    self.p.rrect(lx, ry + 6.0 + (group_h - 6.0) / 2.0, x + w - 12.0 - lx, 1.0, 0.0, Some(pal.border), None);
+                }
+                ry += group_h;
+            }
+            let r = (x + 4.0, ry, w - 8.0, row);
+            ry += row;
             let hot = self.ui.hover == Some(Act::MenuPick(i));
             if hot || selected == Some(i) {
                 self.p.rrect(r.0, r.1, r.2, r.3, 6.0, Some(if hot { pal.alt } else { mix(pal.alt, pal.surface, 0.4) }), None);
@@ -959,9 +1012,39 @@ impl<'a> Frame<'a> {
                 }
                 tx += 26.0;
             }
-            self.p.text(&label, tx, r.1, r.2 - (tx - r.0) - 8.0, r.3, size, SANS, pal.text, Align::Left);
+            let mut right = r.0 + r.2 - 12.0;
+            if rich {
+                if let Some(Some(v)) = voci.get(i) {
+                    if !plain {
+                        self.voce_tile(tx - 4.0, r.1 + (r.3 - tile) / 2.0, tile, v);
+                    }
+                    if !v.hint.is_empty() {
+                        let hw = self.measure(v.hint, hint_size, SANS);
+                        self.p.text(v.hint, right - hw, r.1, hw + 2.0, r.3, hint_size, SANS, pal.muted, Align::Left);
+                        right -= hw + 22.0;
+                    }
+                }
+                if !plain {
+                    tx += tile + 8.0;
+                }
+            }
+            self.p.text(&label, tx, r.1, (right - tx).max(10.0), r.3, size, SANS, pal.text, Align::Left);
             let _ = act;
             self.hits.push(Hit { r, act: Act::MenuPick(i), kind: HitKind::Button });
         }
+    }
+
+    /// L'iconcina di una voce del menu formati: piastrella appena tinta, icona del colore della voce.
+    pub fn voce_tile(&mut self, x: f32, y: f32, s: f32, v: &super::voci::Voce) {
+        let c = self.lift(v.color);
+        let pal = self.pal;
+        let rad = (s * 0.27).round();
+        self.p.rrect(x, y, s, s, rad, Some(mix(c, pal.surface, if self.theme.dark() { 0.8 } else { 0.86 })), None);
+        let isz = (s * 0.62).round();
+        let pad = (s - isz) / 2.0;
+        if !v.glyph.fill.is_empty() {
+            self.p.icon_fill(v.glyph.fill, x + pad, y + pad, isz, c);
+        }
+        self.p.icon(v.glyph.stroke, x + pad, y + pad, isz, c);
     }
 }

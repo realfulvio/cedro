@@ -22,6 +22,7 @@ mod pdfedit;
 mod pdfpages;
 mod pdflayout;
 mod pdfxlsx;
+mod pulisci;
 pub mod revisione;
 pub mod riassunto;
 pub mod settings;

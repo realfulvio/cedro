@@ -86,6 +86,9 @@ pub struct Screen {
     focusables: Vec<Act>,
 }
 
+/// Le voci del menu «Formato», con iconcine e suggerimenti, e i titoli dei gruppi.
+pub type FormatItems = (Vec<(String, Act)>, Vec<Option<super::voci::Voce>>, Vec<(usize, &'static str)>);
+
 impl Screen {
     pub fn new(surface: Surface, wake: Arc<dyn Fn() + Send + Sync>) -> Screen {
         let s = crate::read_settings();
@@ -434,7 +437,7 @@ impl Screen {
             ("Elimina".to_string(), Act::FieldClear),
             ("Seleziona tutto".to_string(), Act::FieldSelectAll),
         ];
-        self.ui.menu = Some(Menu { anchor: (x, y - 4.0, 0.0, 0.0), items, selected: None, title: None, swatches: Vec::new() });
+        self.ui.menu = Some(Menu { anchor: (x, y - 4.0, 0.0, 0.0), items, selected: None, title: None, swatches: Vec::new(), voci: Vec::new(), groups: Vec::new(), plain: false });
         true
     }
 
@@ -534,7 +537,7 @@ impl Screen {
 
     fn open_menu(&mut self, items: Vec<(String, Act)>, selected: Option<usize>, anchor_act: &Act) {
         let anchor = self.hits.iter().rev().find(|h| &h.act == anchor_act).map(|h| h.r).unwrap_or((0.0, 0.0, 200.0, 40.0));
-        self.ui.menu = Some(Menu { anchor, items, selected, title: None, swatches: Vec::new() });
+        self.ui.menu = Some(Menu { anchor, items, selected, title: None, swatches: Vec::new(), voci: Vec::new(), groups: Vec::new(), plain: false });
     }
 
     /// Un menu con un titolo e un pallino colorato per voce (chi dice una frase, a chi unire una voce).
@@ -542,26 +545,45 @@ impl Screen {
         let anchor = self.hits.iter().rev().find(|h| &h.act == anchor_act).map(|h| h.r).unwrap_or((0.0, 0.0, 200.0, 40.0));
         let swatches = items.iter().map(|i| i.2).collect();
         let items = items.into_iter().map(|(l, a, _)| (l, a)).collect();
-        self.ui.menu = Some(Menu { anchor, items, selected, title: Some(title.to_string()), swatches });
+        self.ui.menu = Some(Menu { anchor, items, selected, title: Some(title.to_string()), swatches, voci: Vec::new(), groups: Vec::new(), plain: false });
     }
 
-    /// Le voci del menu «Formato»: i formati, poi gli strumenti della categoria.
-    pub fn action_items(&self) -> Vec<(String, Act)> {
+    /// Le voci del menu «Formato»: i formati, poi gli strumenti della categoria, ognuna con la sua
+    /// iconcina colorata e il suggerimento; e i titoli dei due gruppi quando ci sono gli strumenti.
+    pub fn action_items(&self) -> FormatItems {
+        use super::voci;
         let kind = self.app.kind();
         let mut items: Vec<(String, Act)> = Vec::new();
+        let mut rich = Vec::new();
+        let mut groups = Vec::new();
         if self.simple {
             for f in self.app.simple_choices() {
-                items.push((format!("{} · {}", f.title, f.note), Act::Action(f.id)));
+                let mut v = voci::voce(kind, f.id);
+                v.label = f.title;
+                v.hint = f.note;
+                items.push((f.title.to_string(), Act::Action(f.id)));
+                rich.push(Some(v));
             }
         } else {
-            for s in conversioni::formats(kind) {
-                items.push((s.label.to_string(), Act::Action(s.id)));
+            let tools = conversioni::tools(kind);
+            if !tools.is_empty() {
+                groups.push((0, "Converti in"));
             }
-            for s in conversioni::tools(kind) {
-                items.push((format!("Strumento · {}", s.label), Act::Action(s.id)));
+            for s in conversioni::formats(kind) {
+                let v = voci::voce(kind, s.id);
+                items.push((v.label.to_string(), Act::Action(s.id)));
+                rich.push(Some(v));
+            }
+            if !tools.is_empty() {
+                groups.push((items.len(), voci::tools_heading(kind)));
+            }
+            for s in tools {
+                let v = voci::voce(kind, s.id);
+                items.push((v.label.to_string(), Act::Action(s.id)));
+                rich.push(Some(v));
             }
         }
-        items
+        (items, rich, groups)
     }
 
     /// Esegue l'azione di un clic.
@@ -615,9 +637,13 @@ impl Screen {
             }
             Act::Cut(i, after) => app.toggle_cut(i, after),
             Act::FormatMenu => {
-                let items = self.action_items();
+                let (items, voci, groups) = self.action_items();
                 let sel = items.iter().position(|(_, a)| matches!(a, Act::Action(id) if *id == self.app.action));
                 self.open_menu(items, sel, &Act::FormatMenu);
+                if let Some(m) = self.ui.menu.as_mut() {
+                    m.voci = voci;
+                    m.groups = groups;
+                }
             }
             Act::AddFiles => {
                 let files = plat.pick_files();
@@ -656,6 +682,11 @@ impl Screen {
                         let items = choices.iter().map(|c| (c.label.to_string(), Act::OptPick(opt, c.value))).collect();
                         let sel = choices.iter().position(|c| c.value == cur);
                         self.open_menu(items, sel, &Act::OptMenu(opt));
+                        // L'iconcina dell'opzione resta sul pulsante; nel menu, due parole per valore.
+                        if let (Some(m), Some(icon)) = (self.ui.menu.as_mut(), super::voci::opzione(opt)) {
+                            m.voci = choices.iter().map(|c| Some(super::voci::Voce { label: c.label, hint: super::voci::suggerimento(opt, c.value), ..icon })).collect();
+                            m.plain = true;
+                        }
                     }
                 }
             }
@@ -869,6 +900,10 @@ impl Screen {
                 let items = EXISTS_CHOICES.iter().enumerate().map(|(i, (l, _))| (l.to_string(), Act::ExistsPick(i))).collect();
                 let sel = EXISTS_CHOICES.iter().position(|(_, e)| *e == app.values.exists);
                 self.open_menu(items, sel, &Act::ExistsMenu);
+                if let Some(m) = self.ui.menu.as_mut() {
+                    m.voci = EXISTS_CHOICES.iter().map(|(l, e)| Some(super::voci::Voce { label: l, hint: super::voci::suggerimento_esiste(*e), ..super::voci::esiste() })).collect();
+                    m.plain = true;
+                }
             }
             Act::ExistsPick(i) => {
                 if let Some((_, e)) = EXISTS_CHOICES.get(i) {
