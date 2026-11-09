@@ -657,13 +657,7 @@ fn simplified(f: &mut Frame, app: &App) {
     let fy = y0 + 46.0;
     f.text("Converti in:", inner_x + 2.0, fy, 160.0, 68.0, 24.0, SEMI, pal.text);
     let title = super::action_title(app, true);
-    let icon = match app.kind() {
-        Kind::Image => ic::IMAGE,
-        Kind::Audio => ic::AUDIO,
-        Kind::Video => ic::VIDEO,
-        _ => ic::FILE,
-    };
-    f.select((inner_x + 164.0, fy, inner_w - 164.0, 68.0), &title, Some(icon), 24.0, Act::FormatMenu);
+    f.select_voce((inner_x + 164.0, fy, inner_w - 164.0, 68.0), &title, app.action_voce(), 24.0, Act::FormatMenu);
     let label = super::go_label(app);
     let ready = !app.targets().is_empty();
     let go = (inner_x, fy + 108.0, inner_w, 88.0);

@@ -271,8 +271,17 @@ pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32,
         Control::Choice(choices) => {
             let v = app.values.get(def);
             let label = choices.iter().find(|c| c.value == v).map(|c| c.label).unwrap_or("");
-            f.text(def.title, x, y, w, 24.0, st.label, SEMI, pal.text);
-            f.select((x, y + 28.0, w, st.control_h), label, None, 16.0, Act::OptMenu(def.opt));
+            match crate::ui::voci::opzione(def.opt) {
+                Some(v) => {
+                    f.voce_tile(x, y + 1.0, 22.0, &v);
+                    f.text(def.title, x + 30.0, y, w - 30.0, 24.0, st.label, SEMI, pal.text);
+                    f.select_voce((x, y + 28.0, w, st.control_h), label, v, 16.0, Act::OptMenu(def.opt));
+                }
+                None => {
+                    f.text(def.title, x, y, w, 24.0, st.label, SEMI, pal.text);
+                    f.select((x, y + 28.0, w, st.control_h), label, None, 16.0, Act::OptMenu(def.opt));
+                }
+            }
             let top = y + 28.0 + st.control_h + 8.0;
             28.0 + st.control_h + 8.0 + note_lines(f, def.note, top, w)
         }
@@ -391,7 +400,7 @@ pub fn options_panel_ex(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: Op
     if with_format && (!modes || app.pdf_mode() == super::model::PdfMode::Convert) {
         f.text("Formato", x, cy, w, 24.0, st.label, SEMI, pal.text);
         let title = action_title(app, f.simple);
-        f.select((x, cy + 28.0, w, st.control_h), &title, None, 16.0, Act::FormatMenu);
+        f.select_voce((x, cy + 28.0, w, st.control_h), &title, app.action_voce(), 16.0, Act::FormatMenu);
         cy += 28.0 + st.control_h + st.gap;
     }
     if uses_quality(app.kind(), &app.action) {
