@@ -1782,8 +1782,19 @@ impl App {
     pub fn exists_example(&self) -> String {
         // Unire e dividere fanno PDF; le altre voci corte sono l'estensione.
         let ext = if self.action.len() <= 5 && !conversioni::is_page_action(self.kind(), &self.action) { self.action.as_str() } else { "pdf" };
+        // Gli strumenti delle immagini hanno il loro nome e la loro estensione (come in engine).
+        let (name, ext) = match (self.kind(), ext) {
+            (crate::engine::Kind::Image, "strip") => ("nomefile-pulito", "jpg"),
+            (crate::engine::Kind::Image, "compress") => ("nomefile-compresso", "jpg"),
+            (crate::engine::Kind::Image, "half") => ("nomefile-meta", "png"),
+            (crate::engine::Kind::Image, "gray") => ("nomefile-bn", "png"),
+            (crate::engine::Kind::Image, "rot90") => ("nomefile-ruotato", "png"),
+            (crate::engine::Kind::Image, "ocr") => ("nomefile", "txt"),
+            (crate::engine::Kind::Image, "jpeg") => ("nomefile", "jpg"),
+            (_, e) => ("nomefile", e),
+        };
         match self.values.exists {
-            Exists::Number => format!("Esempio: nomefile-2.{ext}"),
+            Exists::Number => format!("Esempio: {name}-2.{ext}"),
             Exists::Replace => "Il file con lo stesso nome viene sostituito.".into(),
             Exists::Skip => "Il file con lo stesso nome resta com'è.".into(),
             Exists::Ask => "Cedro te lo chiede file per file.".into(),

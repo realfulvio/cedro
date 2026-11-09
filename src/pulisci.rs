@@ -21,25 +21,25 @@ impl Tolto {
     pub fn frase(&self) -> String {
         let mut parti = Vec::new();
         if self.gps {
-            parti.push("posizione GPS");
+            parti.push("GPS");
         }
         if self.fotocamera {
             parti.push("fotocamera");
         }
         if self.data {
-            parti.push("data e impostazioni di scatto");
+            parti.push("data di scatto");
         }
         if self.miniatura {
             parti.push("miniatura");
         }
         if self.xmp {
-            parti.push("dati XMP");
+            parti.push("XMP");
         }
         if self.iptc {
-            parti.push("dati IPTC");
+            parti.push("IPTC");
         }
         if self.testi {
-            parti.push("testi e commenti");
+            parti.push("commenti");
         }
         if parti.is_empty() && self.altro_exif {
             parti.push("dati EXIF");
@@ -399,7 +399,7 @@ mod tests {
         let a = image::load_from_memory(&b).unwrap().to_rgb8();
         let c = image::load_from_memory(&out).unwrap().to_rgb8();
         assert_eq!(a.as_raw(), c.as_raw(), "i pixel devono restare identici");
-        assert!(t.frase().contains("posizione GPS"));
+        assert!(t.frase().contains("GPS"));
     }
 
     #[test]
