@@ -15,6 +15,8 @@ pub struct Item {
     pub report: Option<Arc<Report>>,
     /// Si sta ancora controllando la revoca online.
     pub checking: bool,
+    /// Venuto da una cartella: se risulta non firmato lo si toglie dall'elenco.
+    pub from_folder: bool,
 }
 
 /// Un file aperto di recente.
@@ -210,7 +212,7 @@ impl FirmaUi {
                 inner.sort();
                 for q in inner {
                     if is_candidate(&q) && !self.items.iter().any(|i| i.path == q) {
-                        self.items.push(Item { path: q.clone(), report: None, checking: true });
+                        self.items.push(Item { path: q.clone(), report: None, checking: true, from_folder: true });
                         self.spawn(q, At::Now, None, wake.clone());
                     }
                 }
@@ -219,7 +221,7 @@ impl FirmaUi {
             if self.items.iter().any(|i| i.path == p) {
                 continue;
             }
-            self.items.push(Item { path: p.clone(), report: None, checking: true });
+            self.items.push(Item { path: p.clone(), report: None, checking: true, from_folder: false });
             self.spawn(p, At::Now, None, wake.clone());
         }
     }
@@ -270,6 +272,13 @@ impl FirmaUi {
                 it.report = Some(report.clone());
                 it.checking = !last;
             }
+            // In una cartella (allegati di una PEC) i file senza firma non interessano: spariscono.
+            if report.unsigned() && self.items.iter().any(|i| i.path == path && i.from_folder) {
+                self.items.retain(|i| i.path != path);
+                if self.viewer.as_ref().is_none_or(|v| v.path != path) {
+                    continue;
+                }
+            }
             if let Some(v) = self.viewer.as_mut().filter(|v| v.path == path) {
                 if gen != self.generation {
                     continue;
@@ -288,7 +297,7 @@ impl FirmaUi {
                 v.report = Some(report.clone());
                 v.checking = !last;
             }
-            if last {
+            if last && !report.unsigned() {
                 remember(&path, &report);
                 self.recent = load_recent();
             }

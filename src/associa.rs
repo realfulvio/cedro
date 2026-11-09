@@ -165,9 +165,13 @@ mod imp {
         }
     }
 
-    pub fn desktop_entry(exe: &str) -> String {
+    /// `pdf`: dichiara anche i PDF. Spento non li si dichiara, sennò senza un lettore PDF predefinito
+    /// il sistema sceglierebbe Cedro.
+    pub fn desktop_entry(exe: &str, pdf: bool) -> String {
         let mut mimes: Vec<&str> = TYPES.iter().map(|t| t.0).collect();
-        mimes.push("application/pdf");
+        if pdf {
+            mimes.push("application/pdf");
+        }
         format!(
             "[Desktop Entry]\nType=Application\nName=Cedro · Verifica firma\nName[en]=Cedro · Verify signature\nComment=Apri e verifica i file firmati digitalmente\nComment[en]=Open and verify digitally signed files\nExec={} verifica %f\nIcon=dev.cedro.Cedro\nTerminal=false\nNoDisplay=true\nMimeType={};\nStartupNotify=true\n",
             quote(exe),
@@ -239,7 +243,7 @@ mod imp {
         let package = data.join("mime/packages/cedro-firma.xml");
         let mut changed = false;
         if on || pdf {
-            changed |= write(&desktop, &desktop_entry(&exe))?;
+            changed |= write(&desktop, &desktop_entry(&exe, pdf))?;
             changed |= write(&package, &mime_package())?;
         } else {
             changed |= std::fs::remove_file(&desktop).is_ok();
@@ -291,7 +295,9 @@ mod tests {
         assert!(off.contains("application/pdf=okular.desktop;"));
         let fresh = edit_mimeapps("", &["application/pkcs7-mime"], true);
         assert_eq!(fresh, "[Default Applications]\napplication/pkcs7-mime=dev.cedro.Verifica.desktop;\n");
-        assert!(desktop_entry("/usr/bin/cedro").contains("Exec=/usr/bin/cedro verifica %f"));
+        assert!(desktop_entry("/usr/bin/cedro", false).contains("Exec=/usr/bin/cedro verifica %f"));
+        assert!(!desktop_entry("/usr/bin/cedro", false).contains("application/pdf"));
+        assert!(desktop_entry("/usr/bin/cedro", true).contains("application/pdf"));
         assert!(mime_package().contains("*.tsd"));
     }
 }

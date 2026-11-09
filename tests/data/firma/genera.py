@@ -297,10 +297,10 @@ def simple_pdf(text):
     w.write(out)
     return out.getvalue()
 
-def sign_pdf(data, tag, when, ts=None, field="Firma1", visible=True, reason="Approvazione"):
+def sign_pdf(data, tag, when, ts=None, field="Firma1", visible=True, reason="Approvazione", box=(350, 60, 550, 120)):
     w = IncrementalPdfFileWriter(io.BytesIO(data))
     meta = signers.PdfSignatureMetadata(field_name=field, reason=reason, location="Bondeno", subfilter=__import__("pyhanko.sign.fields", fromlist=["x"]).SigSeedSubFilter.PADES)
-    spec = SigFieldSpec(field, on_page=0, box=(350, 60, 550, 120) if visible else None)
+    spec = SigFieldSpec(field, on_page=0, box=box if visible else None)
     from pyhanko.sign.fields import append_signature_field
     append_signature_field(w, spec)
     out = signers.sign_pdf(w, meta, signer=signer_of(tag), timestamper=ts, existing_fields_only=True)
@@ -309,7 +309,7 @@ def sign_pdf(data, tag, when, ts=None, field="Firma1", visible=True, reason="App
 base = simple_pdf("Determina n. 412: importo 48.300,00 euro")
 pdf1 = sign_pdf(base, "mario", D(2026, 11, 9, 10), ts=stamper(D(2026, 11, 9, 10)))
 write("determina_firmata.pdf", pdf1)
-pdf2 = sign_pdf(pdf1, "anna", D(2026, 11, 9, 11), field="Firma2")
+pdf2 = sign_pdf(pdf1, "anna", D(2026, 11, 9, 11), field="Firma2", box=(60, 60, 260, 120))
 write("determina_due_firme.pdf", pdf2)
 # Modifica dopo la firma: nuova versione della pagina con un importo diverso (aggiornamento incrementale).
 w = IncrementalPdfFileWriter(io.BytesIO(pdf1))

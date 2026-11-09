@@ -33,6 +33,8 @@ pub struct Place {
     pub page: Option<u32>,
     pub field: Option<String>,
     pub visible: bool,
+    /// Il riquadro sulla pagina, in frazioni (x0, y0, x1, y1; y dall'alto).
+    pub rect: Option<[f32; 4]>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -154,6 +156,16 @@ pub struct Report {
 }
 
 impl Report {
+    /// Il file non è firmato né marcato (o non si legge): non c'è niente da giudicare.
+    pub fn unsigned(&self) -> bool {
+        self.error.is_some() && self.signers.is_empty() && self.timestamps.is_empty() && !self.error.as_deref().is_some_and(|e| e.contains("cifrato"))
+    }
+
+    /// La revoca è stata davvero chiesta online per tutte le firme (non solo «controllo acceso»).
+    pub fn revoca_online(&self) -> bool {
+        self.online && !self.signers.iter().any(|s| s.checks.iter().any(|c| c.what == "Revoca" && c.text == "non controllata"))
+    }
+
     /// Il documento così com'era alla firma `i` (per i PDF cambiati dopo).
     pub fn signed_revision(&self, i: usize) -> Option<&[u8]> {
         let end = self.signers.get(i)?.revision_end?;
@@ -187,7 +199,9 @@ pub fn verify_path(path: &Path, mut opts: Opts) -> Report {
         Err(e) => return Report { name, error: Some(format!("non riesco a leggere il file: {e}")), ..Default::default() },
     };
     // Firma staccata: l'originale ha lo stesso nome senza .p7s.
-    if opts.detached.is_none() && name.to_ascii_lowercase().ends_with(".p7s") {
+    // Lo stesso per una marca staccata (.tsr): il file marcato le sta accanto.
+    let lower = name.to_ascii_lowercase();
+    if opts.detached.is_none() && (lower.ends_with(".p7s") || lower.ends_with(".tsr")) {
         let orig = path.with_file_name(&name[..name.len() - 4]);
         if let Ok(d) = std::fs::read(orig) {
             opts.detached = Some(d);
@@ -370,6 +384,7 @@ fn run(cx: &mut Ctx, name: &str, data: &[u8]) -> asn1::R<()> {
     let mut cur: Vec<u8> = data.to_vec();
     let mut outer_proof: Option<Proof> = None;
     let mut depth = 0;
+    let mut tsr_used = false;
     loop {
         depth += 1;
         if depth > 12 {
@@ -447,10 +462,18 @@ fn run(cx: &mut Ctx, name: &str, data: &[u8]) -> asn1::R<()> {
                             r.text = "la marca non corrisponde al file indicato".into();
                         }
                     }
+                    let proof = Proof { time: t.gen_time, tsa: short_tsa(&t.tsa_name), ok: r.level != Level::Bad };
                     cx.report.timestamps.push(r);
                     cx.report.layers.push(Layer { kind: LayerKind::Timestamped, label: "Marca temporale (.tsr)".into(), signers: vec![] });
                     name = strip_ext(&name, &["tsr"]);
                     match cx.opts.detached.clone() {
+                        // Il file marcato: se è a sua volta firmato si controllano anche le sue firme.
+                        Some(d) if !tsr_used => {
+                            tsr_used = true;
+                            outer_proof = earliest(outer_proof, Some(proof));
+                            cur = d;
+                            continue;
+                        }
                         Some(d) => cur = d,
                         None => {
                             cx.report.needs_original = true;
@@ -673,7 +696,7 @@ fn pdf(cx: &mut Ctx, data: &[u8], layer: usize, outer: Option<Proof>) {
             let list = pages.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", ");
             s.details.insert(2.min(s.details.len()), ("Cosa è cambiato".into(), format!("{} {list}, dopo la firma", if pages.len() == 1 { "pagina" } else { "pagine" })));
         }
-        let place = Place { page: ps.page, field: ps.field.clone(), visible: ps.visible };
+        let place = Place { page: ps.page, field: ps.field.clone(), visible: ps.visible, rect: ps.rect };
         let mut where_ = String::new();
         if let Some(p) = ps.page {
             where_ = format!("pagina {p}");
@@ -1032,7 +1055,11 @@ fn finish(r: &mut Report) {
     if r.needs_original {
         r.level = Level::Warn;
         r.headline = "Manca il file originale".into();
-        r.detail = "È una firma staccata: indica il file che è stato firmato e la controllo.".into();
+        r.detail = if r.signers.is_empty() {
+            "È una marca temporale staccata (.tsr): indica il file a cui si riferisce e la controllo.".into()
+        } else {
+            "È una firma staccata (.p7s): indica il file che è stato firmato e la controllo.".into()
+        };
         return;
     }
     let n = r.signers.len();

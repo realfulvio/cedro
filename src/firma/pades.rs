@@ -21,6 +21,8 @@ pub struct PdfSig {
     pub field: Option<String>,
     pub page: Option<u32>,
     pub visible: bool,
+    /// Il riquadro della firma visibile, in frazioni della pagina (x0, y0, x1, y1; y dall'alto).
+    pub rect: Option<[f32; 4]>,
 }
 
 impl PdfSig {
@@ -213,6 +215,7 @@ pub fn signatures(data: &[u8]) -> Vec<PdfSig> {
             field: None,
             page: None,
             visible: false,
+            rect: None,
         });
     }
     out.sort_by_key(|s| s.end());
@@ -220,6 +223,19 @@ pub fn signatures(data: &[u8]) -> Vec<PdfSig> {
         fields(data, &mut out);
     }
     out
+}
+
+/// Il /MediaBox di una pagina, anche ereditato dai nodi sopra.
+fn media_box(doc: &lopdf::Document, mut id: lopdf::ObjectId) -> Option<[f32; 4]> {
+    for _ in 0..16 {
+        let d = doc.get_dictionary(id).ok()?;
+        if let Ok(a) = d.get(b"MediaBox").and_then(|o| doc.dereference(o).map(|x| x.1)).and_then(|o| o.as_array()) {
+            let v: Vec<f32> = a.iter().filter_map(|o| o.as_float().ok()).collect();
+            return (v.len() == 4).then(|| [v[0], v[1], v[2], v[3]]);
+        }
+        id = d.get(b"Parent").ok()?.as_reference().ok()?;
+    }
+    None
 }
 
 /// Nome del campo, pagina e se la firma si vede: dai campi del modulo (con lopdf).
@@ -272,6 +288,13 @@ fn fields(data: &[u8], sigs: &mut [PdfSig]) {
                 let v: Vec<f32> = rect.iter().filter_map(|o| o.as_float().ok()).collect();
                 if v.len() == 4 && (v[2] - v[0]).abs() > 1.0 && (v[3] - v[1]).abs() > 1.0 {
                     s.visible = true;
+                    // In frazioni della pagina, per portarci lo sguardo nel visualizzatore.
+                    let pid = page.and_then(|n| pages.iter().find(|x| x.0 == n).map(|x| x.1));
+                    let mb = pid.and_then(|p| media_box(&doc, p)).unwrap_or([0.0, 0.0, 595.0, 842.0]);
+                    let (pw, ph) = ((mb[2] - mb[0]).max(1.0), (mb[3] - mb[1]).max(1.0));
+                    let (x0, x1) = (v[0].min(v[2]), v[0].max(v[2]));
+                    let (y0, y1) = (v[1].min(v[3]), v[1].max(v[3]));
+                    s.rect = Some([(x0 - mb[0]) / pw, 1.0 - (y1 - mb[1]) / ph, (x1 - mb[0]) / pw, 1.0 - (y0 - mb[1]) / ph].map(|t| t.clamp(0.0, 1.0)));
                 }
             }
             if page.is_some() {
