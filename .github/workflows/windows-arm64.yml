@@ -408,7 +408,9 @@ jobs:
           $u = (Get-ItemProperty $all).UninstallString.Trim('"')
           Invoke-Setup $u @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'); Start-Sleep 2; Wait-Uninstall
           if (Test-Path $all) { throw 'resta la voce in Programmi' }
-          if (Test-Path (Split-Path $pf)) { throw "resta $(Split-Path $pf)" }
+          # Il disinstallatore toglie la propria cartella per ultima, qualche istante dopo essere uscito.
+          for ($i = 0; $i -lt 30 -and (Test-Path (Split-Path $pf)); $i++) { Start-Sleep 1 }
+          if (Test-Path (Split-Path $pf)) { throw "resta $(Split-Path $pf): $((Get-ChildItem -Recurse (Split-Path $pf)).FullName -join ', ')" }
           if ((Get-ItemProperty $run -ErrorAction SilentlyContinue).Cedro) { throw 'resta l''avvio con Windows' }
           $links = Get-ChildItem "$env:ProgramData\Microsoft\Windows\Start Menu", "$env:APPDATA\Microsoft\Windows\Start Menu", "$env:PUBLIC\Desktop", ([Environment]::GetFolderPath('Desktop')) -Recurse -Filter 'Cedro*.lnk' -ErrorAction SilentlyContinue
           if ($links) { throw "restano collegamenti: $($links.FullName -join ', ')" }
