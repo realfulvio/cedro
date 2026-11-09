@@ -75,12 +75,16 @@ pub fn firma_page(f: &mut Frame, app: &App, r: R, simple: bool) {
         batch(f, app, r);
         return;
     }
+    if super::firmare::page(f, app, r) {
+        return;
+    }
     let pal = f.pal;
     let accent = f.act_color(Activity::Firma);
     let size = if simple { 40.0 } else { 34.0 };
     f.text("Firma digitale", r.0, r.1, 420.0, 50.0, size, SEMI, pal.text);
+    let cw = super::firmare::device_chip(f, app, r.0 + r.2, r.1 + 8.0);
     let nx = r.0 + f.measure("Firma digitale", size, SEMI) + 32.0;
-    super::notice(f, app, (nx, r.1 + 4.0, (r.0 + r.2 - nx).min(760.0), 42.0), 15.0);
+    super::notice(f, app, (nx, r.1 + 4.0, (r.0 + r.2 - nx - cw - 20.0).min(760.0), 42.0), 15.0);
     let mut y = r.1 + 66.0;
     let bottom = r.1 + r.3;
     // In alto: trascina qui a sinistra, le due strade a destra (strette: una sotto l'altra).
@@ -90,29 +94,67 @@ pub fn firma_page(f: &mut Frame, app: &App, r: R, simple: bool) {
         let dw = (r.2 * 0.56).round();
         ((r.0, y, dw, top_h), (r.0 + dw + 18.0, y, r.2 - dw - 18.0, top_h))
     } else {
-        ((r.0, y, r.2, top_h), (r.0, y + top_h + 16.0, r.2, 110.0))
+        ((r.0, y, r.2, top_h), (r.0, y + top_h + 16.0, r.2, 196.0))
     };
     drop_zone(f, dz, accent);
+    let ver = pal.ok;
     if wide {
         let ch = (cards.3 - 16.0) / 2.0;
-        big_card(f, (cards.0, cards.1, cards.2, ch), ic::SHIELD, accent, "Apri e verifica", "Apri un .p7m o un PDF firmato: vedi il documento, chi l'ha firmato e se la firma vale.", Act::FirmaAdd);
-        big_card(f, (cards.0, cards.1 + ch + 16.0, cards.2, ch), ic::FOLDER, accent, "Verifica una cartella", "Controllo tutti i file firmati di una cartella, per esempio gli allegati di una PEC, e ti metto in cima quelli da guardare.", Act::FirmaAddFolder);
+        big_card(f, (cards.0, cards.1, cards.2, ch), ic::PEN, accent, "Firma documenti", "Uno o tanti file insieme, con la chiavetta o la CNS. Il PIN lo metti una volta.", Act::FirmaPage(1));
+        big_card(f, (cards.0, cards.1 + ch + 16.0, cards.2, ch), ic::SHIELD, ver, "Apri e verifica", "Apri un .p7m o un PDF firmato: vedi il documento, chi l'ha firmato e se la firma vale.", Act::FirmaAdd);
         y += top_h + 18.0;
     } else {
-        let cw = (r.2 - 16.0) / 2.0;
-        big_card(f, (r.0, cards.1, cw, cards.3), ic::SHIELD, accent, "Apri e verifica", "Apri un .p7m o un PDF firmato e vedi se la firma vale.", Act::FirmaAdd);
-        big_card(f, (r.0 + cw + 16.0, cards.1, cw, cards.3), ic::FOLDER, accent, "Verifica una cartella", "Tutti i file firmati di una cartella, quelli da guardare in cima.", Act::FirmaAddFolder);
-        y = cards.1 + cards.3 + 18.0;
+        // Stretto: una sotto l'altra, a tutta larghezza.
+        let ch = 92.0;
+        big_card(f, (r.0, cards.1, r.2, ch), ic::PEN, accent, "Firma documenti", "Uno o tanti file insieme, il PIN lo metti una volta.", Act::FirmaPage(1));
+        big_card(f, (r.0, cards.1 + ch + 12.0, r.2, ch), ic::SHIELD, ver, "Apri e verifica", "Apri un .p7m o un PDF firmato e vedi se la firma vale.", Act::FirmaAdd);
+        y = cards.1 + 2.0 * ch + 12.0 + 18.0;
     }
-    // Le opzioni, in una riga.
-    let oh = if wide { 118.0 } else { 220.0 };
-    if bottom - y > oh + 120.0 {
-        options(f, app, (r.0, y, r.2, oh), wide);
-        y += oh + 18.0;
+    // Gli strumenti, in una riga.
+    let th = 70.0;
+    if bottom - y > th + 120.0 {
+        tools(f, (r.0, y, r.2, th));
+        y += th + 18.0;
     }
     // Ultimi file.
     if bottom - y > 110.0 {
         recent(f, app, (r.0, y, r.2, bottom - y));
+    }
+}
+
+/// «Verifica una cartella», «Chiavetta e certificati», «Opzioni».
+fn tools(f: &mut Frame, r: R) {
+    let pal = f.pal;
+    let items: [(&str, Rgb, &str, &str, Act); 3] = [
+        (ic::FOLDER, pal.ok, "Verifica una cartella", "Per esempio gli allegati di una PEC", Act::FirmaAddFolder),
+        (super::firmare::USB, (0x25, 0x63, 0xB8), "Chiavetta e certificati", "PIN, PUK, scadenze", Act::FirmaPage(2)),
+        (ic::SETTINGS, pal.muted, "Opzioni", "Formato, aspetto, dove salvo", Act::FirmaPage(3)),
+    ];
+    let gap = 12.0;
+    let w = (r.2 - gap * 2.0) / 3.0;
+    for (k, (icon, c, title, note, act)) in items.into_iter().enumerate() {
+        let rc = (r.0 + k as f32 * (w + gap), r.1, w, r.3);
+        let hot = f.hovered(&act);
+        f.card(rc, 12.0);
+        if hot {
+            f.p.rrect_line(rc.0, rc.1, rc.2, rc.3, 12.0, c, 1.5, 1.0, None);
+        }
+        let t = 40.0;
+        let ty = rc.1 + (rc.3 - t) / 2.0;
+        f.p.rrect(rc.0 + 16.0, ty, t, t, 10.0, Some(mix(c, pal.surface, 0.86)), None);
+        f.icon(icon, rc.0 + 26.0, ty + 10.0, 20.0, c);
+        let tx = rc.0 + 16.0 + t + 12.0;
+        let tw = rc.2 - (tx - rc.0) - 12.0;
+        if tw >= f.measure(note, 12.5, SANS) {
+            f.text(title, tx, rc.1 + rc.3 / 2.0 - 22.0, tw, 22.0, 15.0, SEMI, pal.text);
+            f.text(note, tx, rc.1 + rc.3 / 2.0 + 1.0, tw, 20.0, 12.5, SANS, pal.muted);
+        } else {
+            // Stretto: solo il nome, su due righe se serve.
+            let th = f.p.wrap_height(title, 14.5, SEMI, tw, 14.5 * 1.25, 2);
+            f.para(title, tx, rc.1 + (rc.3 - th) / 2.0, tw, 14.5, SEMI, pal.text, 1.25, 2);
+        }
+        f.focus_ring(rc, 12.0, &act);
+        f.hit(rc, act);
     }
 }
 
@@ -131,12 +173,12 @@ fn drop_zone(f: &mut Frame, r: R, c: Rgb) {
     f.p.rrect(tx, y, tile, tile, 18.0, Some(mix(c, pal.surface, 0.86)), None);
     f.icon(DOC_DOWN, tx + tile * 0.27, y + tile * 0.27, tile * 0.46, c);
     y += tile + 22.0;
-    f.text_c("Trascina qui i file firmati", (r.0, y, r.2, 30.0), 22.0, SEMI, pal.text);
+    f.text_c("Trascina qui i file", (r.0, y, r.2, 30.0), 22.0, SEMI, pal.text);
     y += 36.0;
-    let w = (r.2 - 80.0).min(380.0);
-    f.para("Te li apro e ti dico se le firme valgono: .p7m, .p7s, .m7m, .tsd, .tsr e i PDF firmati.", r.0 + (r.2 - w) / 2.0, y, w, 15.0, SANS, pal.muted, 1.45, 2);
+    let w = (r.2 - 80.0).min(420.0);
+    f.para("Se sono già firmati te li apro e ti dico se le firme valgono. Se non lo sono, li preparo per la firma.", r.0 + (r.2 - w) / 2.0, y, w, 15.0, SANS, pal.muted, 1.45, 3);
     if big {
-        y += 64.0;
+        y += 72.0;
         let bw = f.measure("Scegli i file", 15.5, SANS) + 34.0;
         f.button((r.0 + (r.2 - bw) / 2.0, y, bw, 40.0), "Scegli i file", None, 15.5, Act::FirmaAdd);
     }
@@ -164,56 +206,6 @@ fn big_card(f: &mut Frame, r: R, icon: &str, c: Rgb, title: &str, text: &str, ac
     f.icon("M9 6l6 6-6 6", r.0 + r.2 - 38.0, r.1 + r.3 / 2.0 - 11.0, 22.0, c);
     f.focus_ring(r, 12.0, &act);
     f.hit(r, act);
-}
-
-/// Le opzioni della sezione: tre levette e l'elenco europeo dei certificatori.
-fn options(f: &mut Frame, app: &App, r: R, wide: bool) {
-    let pal = f.pal;
-    let fu = &app.firma;
-    let (assoc, pdf, online) = fu.opts;
-    f.card(r, 12.0);
-    let items: [(&str, &str, bool, Act); 3] = [
-        ("Apri con Cedro i file firmati", "Doppio clic su .p7m, .p7s, .m7m, .tsd e .tsr", assoc, Act::FirmaSetting(0)),
-        ("Anche i PDF firmati", "Se no restano al lettore PDF", pdf, Act::FirmaSetting(1)),
-        ("Controlla online la revoca", "Chiedo al certificatore se è stato revocato", online, Act::FirmaSetting(2)),
-    ];
-    let cols = if wide { 4 } else { 2 };
-    let cw = (r.2 - 24.0) / cols as f32;
-    let rh = if wide { r.3 } else { r.3 / 2.0 };
-    for (k, (title, note, on, act)) in items.into_iter().enumerate() {
-        let cx = r.0 + 12.0 + (k % cols) as f32 * cw;
-        let cy = r.1 + (k / cols) as f32 * rh;
-        if k % cols > 0 {
-            f.vline(cx, cy + 18.0, rh - 36.0);
-        }
-        let x = cx + 12.0;
-        f.switch(x, cy + 22.0, 46.0, 26.0, on, act, None);
-        // Su colonne strette il titolo va a capo, non si taglia.
-        let th = f.p.wrap_height(title, 14.5, SEMI, cw - 82.0, 14.5 * 1.3, 2).max(20.0);
-        f.para(title, x + 58.0, cy + 18.0, cw - 82.0, 14.5, SEMI, pal.text, 1.3, 2);
-        f.para(note, x + 58.0, cy + 22.0 + th, cw - 82.0, 12.5, SANS, pal.muted, 1.35, if th > 24.0 { 2 } else { 3 });
-    }
-    let k = 3;
-    let cx = r.0 + 12.0 + (k % cols) as f32 * cw;
-    let cy = r.1 + (k / cols) as f32 * rh;
-    if k % cols > 0 {
-        f.vline(cx, cy + 18.0, rh - 36.0);
-    }
-    let x = cx + 12.0;
-    let (updated, count) = fu.tl_info;
-    let (t, c) = if fu.tl_busy || firma::trust::updating() {
-        ("Lo sto scaricando…".to_string(), pal.muted)
-    } else {
-        match updated {
-            Some(u) => (format!("Aggiornato {} · {count} certificatori", firma::relative(u).replace(" alle ", " ")), pal.muted),
-            None => ("Non ancora scaricato".into(), level_color(f, Level::Warn)),
-        }
-    };
-    f.text("Elenco europeo dei certificatori", x, cy + 18.0, cw - 24.0, 22.0, 14.5, SEMI, pal.text);
-    let lh = f.p.wrap_height(&t, 12.5, SANS, cw - 24.0, 12.5 * 1.35, 2).max(17.0);
-    f.para(&t, x, cy + 42.0, cw - 24.0, 12.5, SANS, c, 1.35, 2);
-    let bw = f.measure("Aggiorna ora", 13.5, SANS) + 46.0;
-    f.button((x, cy + 48.0 + lh, bw, 32.0), "Aggiorna ora", Some(ic::REFRESH), 13.5, Act::FirmaTrust);
 }
 
 /// «Ultimi file»: i file firmati aperti di recente, con il loro giudizio.

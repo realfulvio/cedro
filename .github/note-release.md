@@ -12,15 +12,14 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Firma digitale: apri e verifica i file firmati, come con Dike o ArubaSign.**
+**Firma digitale: ora firmi anche, con la chiavetta USB o la smart card (CNS), come con ArubaSign o Dike.**
 
-- Nuova sezione «Firma digitale»: trascini un .p7m, .p7s, .m7m, .tsd, .tsr o un PDF firmato e Cedro ti dice subito se le firme valgono, in verde, giallo o rosso, con una frase chiara.
-- Si apre il visualizzatore: il documento al centro (PDF, Word, testo, immagini) e a destra chi ha firmato, quando, e i quattro controlli: documento non modificato, certificato qualificato nell'elenco europeo, revoca, data certa.
-- Buste una dentro l'altra, controfirme, firme staccate (.p7s con l'originale accanto), marche temporali (.tsd, .m7m, .tsr) e firme nei PDF, anche più di una.
-- PDF cambiato dopo la firma: lo dice e ti fa vedere la versione firmata, com'era al momento della firma, da salvare a parte.
-- Verifica alla data: oggi, quando è stato firmato o un altro giorno.
-- «Verifica una cartella» (per esempio gli allegati di una PEC): tutti i file firmati in un elenco, quelli da guardare in cima, con un rapporto unico in PDF ed estrazione di tutti i documenti.
-- Rapporto di verifica in PDF per ogni file, da allegare agli atti.
-- Doppio clic sui file firmati: si aprono in Cedro (si può spegnere; per i PDF firmati è una scelta a parte).
-- L'elenco europeo dei certificatori si aggiorna da solo ogni giorno; la revoca si controlla online (OCSP/CRL), e si può spegnere.
-- Da terminale: `cedro firma <file>` stampa l'esito.
+- «Firma documenti» in tre passi: scegli i file (anche tanti insieme, o una cartella), come firmarli, poi scrivi il PIN una volta sola e firmo tutto.
+- Due formati: la busta .p7m (CAdES) per qualsiasi file, e il PDF firmato (PAdES) con la firma dentro il PDF. In automatico i PDF restano PDF e gli altri diventano .p7m; puoi anche scegliere tutto .p7m o tutto PDF (i file non PDF li trasformo prima in PDF).
+- Firma visibile nel PDF: nello spazio per la firma se c'è, dove la trascini tu sulla pagina, o invisibile. Nel riquadro nome, data e ora, e se vuoi uno stemma o la firma autografa scansionata.
+- File già firmati: aggiungi la tua firma accanto a quelle che ci sono, sopra come controfirma, o in una busta nuova. Sui PDF firmati la nuova firma si aggiunge senza rompere quelle di prima.
+- I file firmati vanno accanto agli originali (che non vengono toccati) o nella cartella che scegli; alla fine li apri nel visualizzatore per controllarli.
+- «Chiavetta e certificati»: la chiavetta o la carta collegata, i suoi certificati con la scadenza, e cambio del PIN, sblocco con il PUK e cambio del PUK.
+- Ti avviso quando il certificato di firma sta per scadere.
+- Funziona con le chiavette Aruba (bit4id), le CNS e tessere sanitarie (Athena, Incard) e con OpenSC; il driver si trova da solo o si sceglie a mano in Opzioni.
+- Trascinando file sulla sezione: quelli già firmati si aprono e si verificano, gli altri si preparano per la firma.

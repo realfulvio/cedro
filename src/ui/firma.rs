@@ -65,6 +65,8 @@ pub struct FirmaUi {
     pub opts: (bool, bool, bool),
     /// L'elenco dei certificatori: quando è stato scaricato e quanti sono.
     pub tl_info: (Option<i64>, usize),
+    /// «Firma documenti», «Chiavetta e certificati» e «Opzioni della firma».
+    pub sign: super::firmare::SignUi,
 }
 
 fn recent_file() -> PathBuf {
@@ -166,6 +168,7 @@ impl Default for FirmaUi {
             tl_done: Arc::default(),
             opts: (s.firma_assoc, s.firma_pdf, s.firma_online),
             tl_info: firma::trust::summary(),
+            sign: Default::default(),
         }
     }
 }
@@ -259,7 +262,7 @@ impl FirmaUi {
     /// Le risposte arrivate dai thread. Vero se è cambiato qualcosa.
     pub fn pump(&mut self) -> bool {
         let got: Vec<_> = std::mem::take(&mut *self.inbox.lock().unwrap_or_else(|e| e.into_inner()));
-        let mut changed = false;
+        let mut changed = self.sign.pump();
         if self.tl_done.lock().unwrap_or_else(|e| e.into_inner()).take().is_some() {
             self.tl_busy = false;
             self.tl_info = firma::trust::summary();
@@ -306,7 +309,7 @@ impl FirmaUi {
     }
 
     pub fn busy(&self) -> bool {
-        self.items.iter().any(|i| i.checking) || self.viewer.as_ref().is_some_and(|v| v.checking) || self.tl_busy
+        self.items.iter().any(|i| i.checking) || self.viewer.as_ref().is_some_and(|v| v.checking) || self.tl_busy || self.sign.busy()
     }
 
     /// Riscarica subito l'elenco europeo dei certificatori.

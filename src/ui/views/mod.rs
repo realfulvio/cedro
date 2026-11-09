@@ -9,6 +9,7 @@ mod compatto;
 mod documento;
 mod essenziale;
 mod firma;
+mod firmare;
 mod guidato;
 mod pagine;
 mod revisione;
