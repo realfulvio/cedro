@@ -575,10 +575,21 @@ fn step3(f: &mut Frame, app: &App, r: R) -> f32 {
     for x in su.files.iter().filter(|x| matches!(x.action, Action::Parallel | Action::Counter | Action::PdfAgain)) {
         let stem = name_of(&x.path);
         let how = if x.action == Action::Counter { "sopra" } else { "accanto" };
-        parts.push((format!("Su «{stem}» la tua firma va {how} a quella di {}, nello stesso file. ", crate::firma::title_case(&names(&x.signers))), false));
+        parts.push((format!("Su «{stem}» la tua firma va {how} a quella di {}. ", crate::firma::title_case(&names(&x.signers))), false));
     }
-    let dest = if su.s.firma_dir.trim().is_empty() { "accanto agli originali, che non vengono toccati.".to_string() } else { format!("nella cartella {}.", su.s.firma_dir.trim()) };
-    parts.push((format!("Salvo i file firmati {dest}"), false));
+    // I file già firmati ricevono la firma in più nello stesso file; gli altri diventano file nuovi.
+    let again = su.files.iter().filter(|x| matches!(x.action, Action::Parallel | Action::Counter | Action::PdfAgain)).count();
+    let fresh = n - again;
+    let dir = su.s.firma_dir.trim();
+    let dest = match (fresh, again, dir.is_empty()) {
+        (_, 0, true) => "Salvo i file firmati accanto agli originali, che non vengono toccati.".to_string(),
+        (_, 0, false) => format!("Salvo i file firmati nella cartella {}.", dir),
+        (0, _, true) => "La firma si aggiunge negli stessi file: le firme di prima restano valide.".to_string(),
+        (0, _, false) => format!("Salvo i file con la firma in più nella cartella {}; gli originali non vengono toccati.", dir),
+        (_, _, true) => "I nuovi file firmati vanno accanto agli originali; in quelli già firmati la firma si aggiunge nello stesso file.".to_string(),
+        (_, _, false) => format!("Salvo tutto nella cartella {}; gli originali non vengono toccati.", dir),
+    };
+    parts.push((dest, false));
     let text: String = parts.iter().map(|p| p.0.as_str()).collect();
     let tw = (r.2 - 50.0).min(720.0);
     let th = f.p.wrap_height(&text, 16.5, SANS, tw, 16.5 * 1.65, 8);
@@ -597,7 +608,7 @@ fn step3(f: &mut Frame, app: &App, r: R) -> f32 {
     let tries = dev.map(|d| d.pin.tries_text()).unwrap_or("");
     let locked = dev.is_some_and(|d| d.pin.locked);
     let note = if n > 1 { format!("{tries} · vale per tutti i {n} file") } else { tries.to_string() };
-    f.para(&note, rc.0 + 24.0, py + 50.0, if narrow { rc.2 - 48.0 } else { 262.0 }, 13.0, SANS, if locked || dev.is_some_and(|d| d.pin.count_low) { level(f, false) } else { pal.muted }, 1.35, 2);
+    f.para(&note, rc.0 + 24.0, py + 50.0, if narrow { rc.2 - 48.0 } else { 262.0 }, 13.0, SANS, if locked || dev.is_some_and(|d| d.pin.count_low) { level(f, false) } else { pal.muted }, 1.35, 3);
     let gw = 190.0;
     let (fx, fy, fw) = if narrow { (rc.0 + 24.0, py + 94.0, rc.2 - 48.0 - gw - 14.0) } else { (rc.0 + 300.0, py + 20.0, (rc.2 - 300.0 - gw - 50.0).min(380.0)) };
     if pinpad {
@@ -729,9 +740,9 @@ fn done(f: &mut Frame, app: &App, r: R) -> f32 {
 pub fn device_chip(f: &mut Frame, app: &App, x_right: f32, y: f32) -> f32 {
     let pal = f.pal;
     let su = &app.firma.sign;
-    let (dot, strong, rest, state): (Rgb, String, String, String) = match su.device() {
+    let (dot, strong, rest, state): (Rgb, String, String, String) = match su.chip_device() {
         Some(d) if d.signing_cert().is_some() => {
-            let left = su.days_left().unwrap_or(999);
+            let left = d.signing_cert().map(|c| (c.cert.not_after - firma::now()).div_euclid(86400)).unwrap_or(999);
             let st = if d.pin.locked {
                 "PIN bloccato".to_string()
             } else if su.s.firma_remind && left <= 90 && left >= 0 {

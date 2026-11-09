@@ -67,6 +67,13 @@ pub struct FirmaUi {
     pub tl_info: (Option<i64>, usize),
     /// «Firma documenti», «Chiavetta e certificati» e «Opzioni della firma».
     pub sign: super::firmare::SignUi,
+    /// «Ultimi file» lo scrive anche il visualizzatore (un altro processo): quando l'ho letto e l'ultimo controllo.
+    recent_seen: Option<std::time::SystemTime>,
+    recent_check: Option<std::time::Instant>,
+}
+
+fn recent_mtime() -> Option<std::time::SystemTime> {
+    std::fs::metadata(recent_file()).and_then(|m| m.modified()).ok()
 }
 
 fn recent_file() -> PathBuf {
@@ -161,6 +168,8 @@ impl Default for FirmaUi {
         FirmaUi {
             items: Vec::new(),
             recent: load_recent(),
+            recent_seen: recent_mtime(),
+            recent_check: None,
             viewer: None,
             inbox: Arc::default(),
             generation: 0,
@@ -263,6 +272,16 @@ impl FirmaUi {
     pub fn pump(&mut self) -> bool {
         let got: Vec<_> = std::mem::take(&mut *self.inbox.lock().unwrap_or_else(|e| e.into_inner()));
         let mut changed = self.sign.pump();
+        // Al massimo una volta al secondo si guarda se «Ultimi file» è cambiato da fuori.
+        if self.recent_check.is_none_or(|t| t.elapsed().as_millis() >= 1000) {
+            self.recent_check = Some(std::time::Instant::now());
+            let m = recent_mtime();
+            if m != self.recent_seen {
+                self.recent_seen = m;
+                self.recent = load_recent();
+                changed = true;
+            }
+        }
         if self.tl_done.lock().unwrap_or_else(|e| e.into_inner()).take().is_some() {
             self.tl_busy = false;
             self.tl_info = firma::trust::summary();

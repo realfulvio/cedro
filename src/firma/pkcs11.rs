@@ -334,6 +334,10 @@ pub fn scan() -> (Vec<Device>, Vec<String>) {
             };
             for slot in slots {
                 let Ok(ti) = m.get_token_info(slot) else { continue };
+                // Uno slot libero (non inizializzato) non è una chiavetta: SoftHSM e alcuni lettori ne mostrano.
+                if !ti.token_initialized() {
+                    continue;
+                }
                 let si = m.get_slot_info(slot).ok();
                 let serial = text(ti.serial_number());
                 let label = text(ti.label());
