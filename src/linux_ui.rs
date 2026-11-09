@@ -154,7 +154,13 @@ pub fn start() -> i32 {
             let guard = app.hold();
             opened.borrow_mut().resident = Some(guard);
         }
-        present_wheel(app, opened.clone());
+        // Con la ruota spenta (Impostazioni > Ruota) i file del menu vanno nella finestra Conversioni.
+        let paths = opened.borrow().launch.paths.clone();
+        if !paths.is_empty() && !cfg().wheel {
+            crate::linux_ui2::open_with(app, paths, None);
+        } else {
+            present_wheel(app, opened.clone());
+        }
         match launch_open {
             Open::Settings => open_settings_window(app),
             Open::Guide => linux_settings::open_guide(app),
@@ -1175,16 +1181,47 @@ fn install_integrations() {
     if autostart_enabled() {
         let _ = set_autostart(true);
     }
-    let _ = write_text(&root.join("kio/servicemenus/cedro.desktop"), &dolphin_menu(exe), true);
+    write_file_menus(&root, exe, cfg().wheel);
+}
+
+/// Le voci di Cedro nel menu del file. I tre modi della ruota quando è accesa;
+/// spenta, una sola voce «Apri in Cedro» che porta i file nella finestra Conversioni.
+fn write_file_menus(root: &std::path::Path, exe: &str, wheel: bool) {
+    let _ = write_text(&root.join("kio/servicemenus/cedro.desktop"), &dolphin_menu(exe, wheel), true);
     let _ = write_text(
         &root.join("nautilus-python/extensions/cedro.py"),
-        &nautilus_python(exe),
+        &nautilus_python(exe, wheel),
         false,
     );
-    for (name, flag) in [("Conversione", "conversione"), ("Strumenti", "strumenti"), ("Azioni", "azioni")] {
-        let _ = write_text(&root.join("nautilus/scripts/Cedro").join(name), &nautilus_script(exe, flag), true);
+    let scripts = root.join("nautilus/scripts/Cedro");
+    for (name, flag) in WHEEL_MENU {
+        let path = scripts.join(name);
+        if wheel {
+            let _ = write_text(&path, &nautilus_script(exe, flag), true);
+        } else {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    let open = scripts.join(OPEN_LABEL);
+    if wheel {
+        let _ = std::fs::remove_file(&open);
+    } else {
+        let _ = write_text(&open, &nautilus_script(exe, ""), true);
     }
 }
+
+/// Dopo «Salva» nelle Impostazioni: il menu del file segue subito la ruota accesa o spenta.
+pub(crate) fn refresh_file_menus(wheel: bool) {
+    let (Ok(exe), Some(root)) = (std::env::current_exe(), data_home()) else {
+        return;
+    };
+    if let Some(exe) = exe.to_str() {
+        write_file_menus(&root, exe, wheel);
+    }
+}
+
+const WHEEL_MENU: [(&str, &str); 3] = [("Conversione", "conversione"), ("Strumenti", "strumenti"), ("Azioni", "azioni")];
+const OPEN_LABEL: &str = "Apri in Cedro";
 
 /// Scrive l'icona nel tema dell'utente; se è cambiata (aggiornamento) avvisa KDE, che altrimenti tiene
 /// nella barra delle applicazioni quella vecchia finché non si rilegge la cache delle icone.
@@ -1257,15 +1294,26 @@ fn desktop_file(exe: &str, args: &str) -> String {
     )
 }
 
-fn dolphin_menu(exe: &str) -> String {
+fn dolphin_menu(exe: &str, wheel: bool) -> String {
     let exe = quote_exec(exe);
+    if !wheel {
+        return format!(
+            "[Desktop Entry]\nType=Service\nMimeType=all/allfiles;\nActions=apri;\nX-KDE-Priority=TopLevel\n\n[Desktop Action apri]\nName={OPEN_LABEL}\nName[en]=Open in Cedro\nIcon=dev.cedro.Cedro\nExec={exe} show %F\n"
+        );
+    }
     format!(
         "[Desktop Entry]\nType=Service\nMimeType=all/allfiles;\nActions=conversione;strumenti;azioni;\nX-KDE-Submenu=Cedro\nX-KDE-Priority=TopLevel\n\n[Desktop Action conversione]\nName=Conversione\nName[en]=Conversion\nExec={exe} show --conversione %F\n\n[Desktop Action strumenti]\nName=Strumenti\nName[en]=Tools\nExec={exe} show --strumenti %F\n\n[Desktop Action azioni]\nName=Azioni\nName[en]=Actions\nExec={exe} show --azioni %F\n"
     )
 }
 
-fn nautilus_python(exe: &str) -> String {
+fn nautilus_python(exe: &str, wheel: bool) -> String {
     let exe = exe.replace('\\', "\\\\").replace('"', "\\\"");
+    // Ruota spenta: la voce è una sola, con il modo vuoto (`cedro show <file>` apre Conversioni).
+    let modes = if wheel {
+        WHEEL_MENU.iter().map(|(label, mode)| format!("(\"{mode}\", \"{label}\")")).collect::<Vec<_>>().join(", ")
+    } else {
+        format!("(\"\", \"{OPEN_LABEL}\"),")
+    };
     format!(
         r#"# Scritto da Cedro a ogni avvio.
 import os
@@ -1291,23 +1339,31 @@ if Nautilus is not None:
                     paths.append(path)
             if not paths:
                 return []
+            modes = ({modes})
+            if len(modes) == 1:
+                mode, label = modes[0]
+                entry = Nautilus.MenuItem(name="Cedro::apri", label=label)
+                entry.connect("activate", self.open_mode, mode, list(paths))
+                return [entry]
             root = Nautilus.MenuItem(name="Cedro::root", label="Cedro")
             menu = Nautilus.Menu()
             root.set_submenu(menu)
-            for mode, label in (("conversione", "Conversione"), ("strumenti", "Strumenti"), ("azioni", "Azioni")):
+            for mode, label in modes:
                 entry = Nautilus.MenuItem(name="Cedro::" + mode, label=label)
                 entry.connect("activate", self.open_mode, mode, list(paths))
                 menu.append_item(entry)
             return [root]
 
         def open_mode(self, _item, mode, paths):
-            subprocess.Popen([EXE, "show", "--" + mode, *paths])
+            args = [EXE, "show"] + (["--" + mode] if mode else []) + list(paths)
+            subprocess.Popen(args)
 "#
     )
 }
 
 fn nautilus_script(exe: &str, mode: &str) -> String {
-    format!("#!/bin/bash\nmapfile -t paths <<< \"$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS\"\nexec {exe} show --{mode} \"${{paths[@]}}\"\n", exe = shell_quote(exe))
+    let flag = if mode.is_empty() { String::new() } else { format!(" --{mode}") };
+    format!("#!/bin/bash\nmapfile -t paths <<< \"$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS\"\nexec {exe} show{flag} \"${{paths[@]}}\"\n", exe = shell_quote(exe))
 }
 
 fn shell_quote(text: &str) -> String {
