@@ -383,7 +383,7 @@ fn inspector(f: &mut Frame, app: &App, r: R, simple: bool) {
         }
         f.text("Formato di output", x, r.1 + 226.0, w, 30.0, 18.0, SEMI, pal.text);
         let title = super::action_title(app, true);
-        f.select((x, r.1 + 262.0, w, 62.0), &title, None, 19.0, Act::FormatMenu);
+        f.select_voce((x, r.1 + 262.0, w, 62.0), &title, app.action_voce(), 19.0, Act::FormatMenu);
         let line = format!("{} · {}", if app.customized() { "Impostazioni personalizzate" } else { "Impostazioni consigliate" }, if app.kind() == Kind::Pdf { "tutte le pagine" } else { "tutti i file" });
         f.text(&line, x, r.1 + 336.0, w, 30.0, 16.0, SANS, pal.muted);
         let ready = !app.targets().is_empty();
