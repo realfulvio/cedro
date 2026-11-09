@@ -12,9 +12,15 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Installazione su Windows più affidabile: sempre una sola copia di Cedro.**
+**Firma digitale: apri e verifica i file firmati, come con Dike o ArubaSign.**
 
-- Niente più due Cedro installati insieme: la procedura non chiede più «per tutti gli utenti / solo per me», che faceva finire una copia in Programmi e poi l'aggiornamento automatico ne metteva una seconda per l'utente (due voci in App, due collegamenti).
-- Se Cedro è già installato per tutti gli utenti si aggiorna lì; se lo reinstalli a mano e ci sono due copie, propone di toglierne una.
-- Gli aggiornamenti automatici non riaccendono più l'avvio con Windows se l'avevi spento dal menu, e non rimettono il collegamento sul desktop se l'avevi cancellato.
-- Disinstallando a mano chiede se cancellare anche i modelli scaricati per trascrizione e Riassunto AI (possono pesare alcuni GB).
+- Nuova sezione «Firma digitale»: trascini un .p7m, .p7s, .m7m, .tsd, .tsr o un PDF firmato e Cedro ti dice subito se le firme valgono, in verde, giallo o rosso, con una frase chiara.
+- Si apre il visualizzatore: il documento al centro (PDF, Word, testo, immagini) e a destra chi ha firmato, quando, e i quattro controlli: documento non modificato, certificato qualificato nell'elenco europeo, revoca, data certa.
+- Buste una dentro l'altra, controfirme, firme staccate (.p7s con l'originale accanto), marche temporali (.tsd, .m7m, .tsr) e firme nei PDF, anche più di una.
+- PDF cambiato dopo la firma: lo dice e ti fa vedere la versione firmata, com'era al momento della firma, da salvare a parte.
+- Verifica alla data: oggi, quando è stato firmato o un altro giorno.
+- «Verifica una cartella» (per esempio gli allegati di una PEC): tutti i file firmati in un elenco, quelli da guardare in cima, con un rapporto unico in PDF ed estrazione di tutti i documenti.
+- Rapporto di verifica in PDF per ogni file, da allegare agli atti.
+- Doppio clic sui file firmati: si aprono in Cedro (si può spegnere; per i PDF firmati è una scelta a parte).
+- L'elenco europeo dei certificatori si aggiorna da solo ogni giorno; la revoca si controlla online (OCSP/CRL), e si può spegnere.
+- Da terminale: `cedro firma <file>` stampa l'esito.
