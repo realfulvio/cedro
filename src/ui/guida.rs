@@ -50,7 +50,7 @@ const PAGES: [Page; 8] = [
     Page {
         nav: "La ruota",
         title: "Tieni premuto un tasto, poi clic destro sul file",
-        intro: "Si apre la ruota. Clic sulla fetta: la copia nasce accanto all'originale, che resta dov'è.",
+        intro: "Si apre la ruota (va accesa in Impostazioni > Ruota). Clic sulla fetta: la copia nasce accanto all'originale, che resta dov'è.",
         rows: &[
             ("Shift", "Converti", "Cambia formato: JPEG, PDF, MP4…"),
             ("Ctrl", "Modifica", "Comprimi, ruota, OCR, metadati; sui PDF anche Unisci e Dividi"),

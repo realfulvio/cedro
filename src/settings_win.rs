@@ -24,6 +24,7 @@ const ID_NOTIFY: i32 = 102;
 const ID_REVEAL: i32 = 103;
 const ID_LOG: i32 = 104;
 const ID_PROGRESS: i32 = 105;
+const ID_WHEEL: i32 = 110;
 const ID_SHIFT: i32 = 111;
 const ID_CTRL: i32 = 112;
 const ID_ALT: i32 = 113;
@@ -69,7 +70,7 @@ const ID_LIST: i32 = 220;
 const ID_CHIP: i32 = 230;
 
 /// Gli interruttori a levetta: disegnati da Cedro, con lo stato tenuto qui.
-const TOGGLES: [i32; 11] = [ID_AUTO, ID_NOTIFY, ID_REVEAL, ID_PROGRESS, ID_SHIFT, ID_CTRL, ID_ALT, ID_DIALOGS, ID_UPDATE, ID_GPU, ID_AVX];
+const TOGGLES: [i32; 12] = [ID_AUTO, ID_NOTIFY, ID_REVEAL, ID_PROGRESS, ID_WHEEL, ID_SHIFT, ID_CTRL, ID_ALT, ID_DIALOGS, ID_UPDATE, ID_GPU, ID_AVX];
 /// I pulsanti disegnati da Cedro (Salva è quello blu).
 const PUSHES: [i32; 8] = [ID_LOG, ID_BROWSE, ID_CHECK_NOW, ID_UNSKIP, ID_COPY, ID_FULL, 1 /* IDOK */, 2 /* IDCANCEL */];
 
@@ -467,6 +468,7 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     heading_of(1);
     y = top;
     for (id, title, desc) in [
+        (ID_WHEEL, "Usa la ruota", "Tasto più clic destro su un file apre la ruota. Spenta, i file si convertono dalla finestra Conversioni."),
         (ID_SHIFT, "Shift apre le conversioni", "Tieni premuto Shift e fai clic destro sul file."),
         (ID_CTRL, "Ctrl apre gli strumenti", "Comprimi, ruota, OCR e le altre fette di Ctrl."),
         (ID_ALT, "Alt apre le azioni", "Duplica, percorso e ZIP. Spegnilo se Alt dà fastidio ad altri programmi."),
@@ -844,6 +846,7 @@ unsafe fn fill(hwnd: HWND, s: &Settings, autostart: bool) {
     set_check(hwnd, ID_NOTIFY, s.notify);
     set_check(hwnd, ID_REVEAL, s.reveal);
     set_check(hwnd, ID_PROGRESS, s.progress);
+    set_check(hwnd, ID_WHEEL, s.wheel);
     set_check(hwnd, ID_SHIFT, s.key_shift);
     set_check(hwnd, ID_CTRL, s.key_ctrl);
     set_check(hwnd, ID_ALT, s.key_alt);
@@ -912,6 +915,7 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         quality: quality(hwnd),
         notify: is_checked(hwnd, ID_NOTIFY),
         update_check: is_checked(hwnd, ID_UPDATE),
+        wheel: is_checked(hwnd, ID_WHEEL),
         key_shift: is_checked(hwnd, ID_SHIFT),
         key_ctrl: is_checked(hwnd, ID_CTRL),
         key_alt: is_checked(hwnd, ID_ALT),
