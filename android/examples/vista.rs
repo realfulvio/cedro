@@ -199,6 +199,13 @@ fn firma(out: &std::path::Path, w: f32, h: f32) {
         ];
         a.vista_attivita(n - 1);
     });
+    foto("m3-vuota", ThemeId::WindowsEssenziale, &mut |a| a.vista_attivita(0));
+    foto("m3-tras", ThemeId::WindowsEssenziale, &mut |a| a.vista_attivita(1));
+    foto("m3-web", ThemeId::WindowsEssenziale, &mut |a| a.vista_attivita(n - 2));
+    foto("m3-scuro", ThemeId::BancoDiLavoro, &mut |a| {
+        let img = PathBuf::from("docs/hero.png");
+        a.aggiungi_coda(vec![(img, "foto.png".into(), cedro::Kind::Image)]);
+    });
     foto("formati-immagini", ThemeId::WindowsEssenziale, &mut |a| {
         let img = PathBuf::from("docs/hero.png");
         a.aggiungi_coda(vec![(img, "foto.png".into(), cedro::Kind::Image)]);
