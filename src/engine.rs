@@ -1648,6 +1648,18 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Err(err("questa voce non si applica a questo file"));
     }
 
+    // Togli GPS e dati nascosti: la foto resta nel suo formato, senza ricomprimerla.
+    if action == "strip" {
+        let ext = extension(path);
+        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        if let Some(done) = crate::pulisci::pulisci(&ext, &bytes) {
+            let (clean, tolto) = done.map_err(err)?;
+            let out = reserve(&dir, &format!("{}-pulito", stem(path)), &ext)?;
+            write_bytes(&out, &clean)?;
+            return Ok(Output { path: out, message: tolto.frase() });
+        }
+    }
+
     // Il formato e il nome prima di aprire l'immagine: un file da saltare non si legge neppure.
     let (format, ext, label_stem) = match action {
         "avif" | "jxl" => (ImageFormat::Png, action, ""),
@@ -1716,7 +1728,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     save_image(&img, &out, format, q, opts.white_background)?;
     let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
     let message = match action {
-        "strip" => "Riscritto in PNG, senza metadati".into(),
+        "strip" => "Tolti tutti i dati nascosti (riscritta in PNG: questo formato non si può ripulire così com'è)".into(),
         "half" => format!("{}×{}", img.width(), img.height()),
         "rot90" => "Ruotato di 90°".into(),
         "gray" => "Bianco e nero".into(),
