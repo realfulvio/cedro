@@ -164,6 +164,13 @@ struct Host {
     /// L'ultimo fotogramma, per ridisegnare mentre un dialogo è aperto.
     frame: RefCell<Option<(gtk4::cairo::ImageSurface, i32, i32)>>,
     pointer: Cell<(f32, f32)>,
+    /// Un'animazione è in corso: si ridisegna a ogni fotogramma dello schermo finché finisce.
+    ticking: Cell<bool>,
+}
+
+/// Gli effetti di animazione del desktop (GNOME/KDE): spenti, Cedro non muove niente.
+fn calm() -> bool {
+    gtk4::Settings::default().is_some_and(|s| !s.is_gtk_enable_animations())
 }
 
 fn scale_of(host: &Host, area: &DrawingArea) -> f32 {
@@ -195,7 +202,7 @@ fn open_surface(app: &Application, surface: Surface) {
     }
     let (pw, ph) = screen.preferred_size();
     let (mw, mh) = screen.min_size();
-    let host = Rc::new(Host { screen: RefCell::new(screen), frame: RefCell::new(None), pointer: Cell::new((0.0, 0.0)) });
+    let host = Rc::new(Host { screen: RefCell::new(screen), frame: RefCell::new(None), pointer: Cell::new((0.0, 0.0)), ticking: Cell::new(false) });
 
     let window = ApplicationWindow::builder().application(app).title(window_title.as_str()).decorated(false).resizable(true).build();
     let z = cedro::ui::ZOOM;
@@ -236,10 +243,27 @@ fn open_surface(app: &Application, surface: Surface) {
             }
             let fit = scale_of(&host, a);
             if let Ok(mut screen) = host.screen.try_borrow_mut() {
+                screen.ui.calm = calm();
                 let painter = screen.render(pw as u32, ph as u32, fit);
                 let data = painter.bgra();
                 if let Ok(img) = gtk4::cairo::ImageSurface::create_for_data(data, gtk4::cairo::Format::ARgb32, pw, ph, pw * 4) {
                     *host.frame.borrow_mut() = Some((img, pw, ph));
+                }
+                // Durante un'animazione (pochi decimi di secondo) si va al ritmo dello schermo;
+                // poi la richiamata si toglie da sola e la finestra torna ferma.
+                if screen.gliding() && !host.ticking.get() {
+                    host.ticking.set(true);
+                    let h2 = host.clone();
+                    a.add_tick_callback(move |a, _| {
+                        let more = h2.screen.try_borrow().map(|s| s.gliding()).unwrap_or(true);
+                        if more {
+                            a.queue_draw();
+                            glib::ControlFlow::Continue
+                        } else {
+                            h2.ticking.set(false);
+                            glib::ControlFlow::Break
+                        }
+                    });
                 }
             }
             if let Some((img, fw, fh)) = host.frame.borrow().as_ref() {

@@ -341,6 +341,10 @@ pub struct UiState {
     /// Il controllo con il fuoco della tastiera (indice tra quelli raggiungibili col Tab).
     pub focus: Option<usize>,
     pub focus_act: Option<Act>,
+    /// Le animazioni in corso (si aggiornano mentre si disegna, vedi `anim`).
+    pub anim: std::cell::RefCell<super::anim::Anims>,
+    /// Effetti di animazione spenti nel sistema: niente movimenti, si salta subito alla fine.
+    pub calm: bool,
 }
 
 impl UiState {
@@ -370,6 +374,8 @@ pub struct Frame<'a> {
     /// Millisecondi da quando la finestra è aperta (per le animazioni).
     pub ms: u64,
     pub animating: bool,
+    /// Si muove qualcosa delle animazioni brevi (`anim`): la finestra va al ritmo dello schermo.
+    pub gliding: bool,
 }
 
 pub const SANS: Weight = Weight::Regular;
@@ -458,10 +464,17 @@ impl<'a> Frame<'a> {
 
     /// Il fondo di un pulsante pieno in rilievo: ombra, sfumatura dall'alto e filo chiaro sul bordo.
     pub fn glossy_fill(&mut self, r: R, radius: f32, c: Rgb, hot: bool) {
-        let spread = (r.3 * 0.14).clamp(4.0, 10.0);
+        self.glossy_fill_t(r, radius, c, hot as u8 as f32, 0.0);
+    }
+
+    /// Come `glossy_fill`, con il mouse che arriva (`t`, la sfumatura passa all'altra) e la
+    /// pressione (`press`: il pulsante si stringe un poco e l'ombra si accorcia).
+    pub fn glossy_fill_t(&mut self, r: R, radius: f32, c: Rgb, t: f32, press: f32) {
+        let r = Self::pressed_rect(r, press);
+        let spread = (r.3 * 0.14).clamp(4.0, 10.0) * (1.0 + 0.25 * t - 0.6 * press);
         let a = if self.theme.dark() { 0.35 } else { 0.2 };
         self.p.shadow(r.0, r.1, r.2, r.3, radius, spread, a, spread * 0.4);
-        let (top, bottom) = self.glossy(c, hot);
+        let (top, bottom) = self.glossy_t(c, t);
         self.p.rrect_vgrad(r.0, r.1, r.2, r.3, radius, top, bottom);
         self.p.rrect_line(r.0, r.1, r.2, r.3, radius, (255, 255, 255), 1.0, 0.12, None);
     }
@@ -512,9 +525,11 @@ impl<'a> Frame<'a> {
     /// Il pulsante principale: pieno del colore del tema, con un'icona a sinistra del testo.
     pub fn primary(&mut self, r: R, label: &str, icon: Option<&str>, size: f32, act: Act, enabled: bool) {
         let pal = self.pal;
-        let hover = enabled && self.hovered(&act);
+        let t = self.hover_t(&act, enabled);
+        let press = self.press_t(&act, enabled);
+        let ip = self.icon_t(&act, enabled);
         if enabled {
-            self.glossy_fill(r, 8.0, pal.primary, hover);
+            self.glossy_fill_t(r, 8.0, pal.primary, t, press);
         } else {
             self.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(mix(pal.primary, pal.surface, 0.55)), None);
         }
@@ -523,7 +538,7 @@ impl<'a> Frame<'a> {
         let total = tw + if icon.is_some() { isz + 14.0 } else { 0.0 };
         let mut x = r.0 + (r.2 - total) / 2.0;
         if let Some(d) = icon {
-            self.icon(d, x, r.1 + (r.3 - isz) / 2.0, isz, pal.on_primary);
+            self.icon_live(d, x, r.1 + (r.3 - isz) / 2.0, isz, pal.on_primary, ip);
             x += isz + 14.0;
         }
         self.p.text(label, x, r.1, tw + 2.0, r.3, size, SEMI, pal.on_primary, Align::Left);
@@ -536,14 +551,17 @@ impl<'a> Frame<'a> {
     /// Pulsante secondario: fondo della superficie, bordo, testo normale.
     pub fn button(&mut self, r: R, label: &str, icon: Option<&str>, size: f32, act: Act) {
         let pal = self.pal;
-        let hover = self.hovered(&act);
-        self.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(if hover { pal.alt } else { pal.surface }), Some((pal.border, 1.0)));
+        let t = self.hover_t(&act, true);
+        let press = self.press_t(&act, true);
+        let ip = self.icon_t(&act, true);
+        let rb = Self::pressed_rect(r, press);
+        self.p.rrect(rb.0, rb.1, rb.2, rb.3, 8.0, Some(mix(pal.surface, pal.alt, t)), Some((pal.border, 1.0)));
         let isz = (size * 1.3).round();
         let tw = self.measure(label, size, SANS);
         let total = tw + if icon.is_some() { isz + 10.0 } else { 0.0 };
         let mut x = r.0 + (r.2 - total) / 2.0;
         if let Some(d) = icon {
-            self.icon(d, x, r.1 + (r.3 - isz) / 2.0, isz, pal.text);
+            self.icon_live(d, x, r.1 + (r.3 - isz) / 2.0, isz, pal.text, ip);
             x += isz + 10.0;
         }
         self.p.text(label, x, r.1, tw + 2.0, r.3, size, SANS, pal.text, Align::Left);
@@ -557,11 +575,12 @@ impl<'a> Frame<'a> {
         let tw = self.measure(label, size, SANS);
         let w = 24.0 + 12.0 + tw + 12.0;
         let r = (x - 6.0, y, w, h);
-        if enabled && self.hovered(&act) {
-            self.p.rrect(r.0, r.1, r.2, r.3, 6.0, Some(pal.alt), None);
-        }
+        let t = self.hover_t(&act, enabled);
+        let press = self.press_t(&act, enabled);
+        let ip = self.icon_t(&act, enabled);
+        self.hover_fill(Self::pressed_rect(r, press), 6.0, pal.alt, t);
         let c = if enabled { pal.text } else { pal.muted };
-        self.icon(icon, x, y + (h - 24.0) / 2.0, 24.0, c);
+        self.icon_live(icon, x, y + (h - 24.0) / 2.0, 24.0, c, ip);
         self.p.text(label, x + 36.0, y, tw + 2.0, h, size, SANS, c, Align::Left);
         if enabled {
             self.hit(r, act);
@@ -588,8 +607,9 @@ impl<'a> Frame<'a> {
     fn select_inner(&mut self, r: R, label: &str, icon: Option<&str>, tint: Option<Rgb>, voce: Option<super::voci::Voce>, size: f32, act: Act) {
         let pal = self.pal;
         let open = self.ui.menu.as_ref().is_some_and(|m| m.anchor == r);
-        let hover = self.hovered(&act);
-        self.p.rrect(r.0, r.1, r.2, r.3, 6.0, Some(pal.surface), Some((if open || hover { pal.primary } else { pal.border }, 1.0)));
+        let t = self.hover_t(&act, true).max(open as u8 as f32);
+        let turn = self.tween(&act, super::anim::Slot::Open, open as u8 as f32, 160, super::anim::ease_out);
+        self.p.rrect(r.0, r.1, r.2, r.3, 6.0, Some(pal.surface), Some((mix(pal.border, pal.primary, t), 1.0)));
         let pad = if r.3 > 56.0 { 26.0 } else { 16.0 };
         let mut x = r.0 + pad;
         if let Some(v) = voce {
@@ -609,7 +629,7 @@ impl<'a> Frame<'a> {
         }
         let chev = (size * 1.05).round();
         self.p.text(label, x, r.1, r.0 + r.2 - pad - chev - 8.0 - x, r.3, size, SANS, pal.text, Align::Left);
-        self.icon(ic::CHEVRON_DOWN, r.0 + r.2 - pad - chev, r.1 + (r.3 - chev) / 2.0, chev, pal.text);
+        self.p.icon_turned(ic::CHEVRON_DOWN, r.0 + r.2 - pad - chev, r.1 + (r.3 - chev) / 2.0, chev, pal.text, 180.0 * turn);
         self.focus_ring(r, 6.0, &act);
         self.hit(r, act);
     }

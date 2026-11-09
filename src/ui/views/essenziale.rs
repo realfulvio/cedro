@@ -16,28 +16,32 @@ fn nav(f: &mut Frame, app: &App) {
     f.caption((0.0, 0.0, f.w, TOP));
     f.brand(26.0, 15.0, 26.0, 18.0, 12.0, None);
     f.window_controls(f.w, 0.0, 48.0, pal.text, pal.alt);
+    // Le attività stanno ogni 64: il riquadro della scelta scivola da una all'altra.
+    let ys = [78.0, 142.0, 206.0, 270.0, 334.0];
+    let cur = Activity::ALL.iter().position(|a| *a == app.activity).unwrap_or(0);
+    let at = f.glide(&Act::Activity(Activity::Convert), cur as f32).clamp(0.0, (ys.len() - 1) as f32);
+    let (i0, i1) = (at.floor() as usize, at.ceil() as usize);
+    let k = at - i0 as f32;
+    let py = ys[i0] + (ys[i1] - ys[i0]) * k;
+    let accent = mix(f.act_color(Activity::ALL[i0]), f.act_color(Activity::ALL[i1]), k);
+    f.p.rrect(12.0, py, 242.0, 54.0, 10.0, Some(mix(accent, pal.surface, 0.88)), None);
+    f.p.rrect(10.0, py + 14.0, 4.0, 26.0, 2.0, Some(accent), None);
     let item = |f: &mut Frame, y: f32, icon: &str, label: &str, on: bool, act: Act, tint: Option<Rgb>| {
         let r = (12.0, y, 242.0, 54.0);
-        let accent = tint.unwrap_or(pal.primary);
-        if on {
-            let bg = if tint.is_some() { mix(accent, pal.surface, 0.88) } else { pal.nav_sel };
-            f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(bg), None);
-            f.p.rrect(10.0, y + 14.0, 4.0, 26.0, 2.0, Some(accent), None);
-        } else if f.hovered(&act) {
-            f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(pal.alt), None);
-        }
-        let c = if on { if tint.is_some() { pal.text } else { pal.primary } } else { pal.text };
+        let t = f.hover_t(&act, !on);
+        let lift = super::super::anim::back_out(f.icon_t(&act, true)) * 2.0;
+        f.hover_fill(r, 10.0, pal.alt, t);
+        let c = if on && tint.is_none() { pal.primary } else { pal.text };
         if let Some(t) = tint {
             // L'icona dentro una piastrella del colore dell'attività: piena quando è scelta.
-            f.tile(26.0, y + 9.0, 36.0, icon, t, on);
+            f.tile(26.0, y + 9.0 - lift, 36.0, icon, t, on);
         } else {
-            f.icon(icon, 32.0, y + 15.0, 24.0, c);
+            f.icon(icon, 32.0, y + 15.0 - lift, 24.0, c);
         }
         f.text(label, 78.0, y, 170.0, 54.0, 19.0, if on { SEMI } else { SANS }, c);
         f.focus_ring(r, 8.0, &act);
         f.hit(r, act);
     };
-    let ys = [78.0, 142.0, 210.0, 278.0, 346.0];
     for (a, y) in Activity::ALL.iter().zip(ys) {
         let tint = Some(f.act_color(*a));
         item(f, y, a.icon(), a.name(), app.activity == *a, Act::Activity(*a), tint);
@@ -72,18 +76,20 @@ pub fn draw(f: &mut Frame, app: &App) {
 fn standard(f: &mut Frame, app: &App) {
     let pal = f.pal;
     let (w, h) = (f.w, f.h);
-    let foot_y = h - 166.0;
+    let foot_y = h - 156.0;
     let insp_w = 365.0;
     let insp_x = w - 21.0 - insp_w;
     let q_x = 296.0;
     let q_w = insp_x - 18.0 - q_x;
     // Fondo della zona di lavoro, con l'angolo arrotondato in alto a sinistra.
     f.p.rrect(NAV_W, TOP, w - NAV_W + 20.0, h - TOP + 20.0, 10.0, Some(pal.work), Some((pal.border, 1.0)));
-    f.text("Conversioni", 298.0, 80.0, 600.0, 56.0, 42.0, SEMI, pal.text);
+    f.text("Conversioni", 296.0, 80.0, 600.0, 56.0, 42.0, SEMI, pal.text);
     super::notice(f, app, (760.0, 88.0, (insp_x + insp_w - 760.0).min(720.0), 44.0), 15.0);
 
-    // Le categorie, schede con icona.
-    let mut tx = 298.0;
+    // Le categorie, schede con icona. Prima le misure, poi la scheda scelta (che scivola dalla
+    // vecchia alla nuova prendendone il colore), poi icone e nomi sopra.
+    let mut tabs: Vec<(R, f32, Option<String>, f32)> = Vec::new();
+    let mut tx = 296.0;
     for (i, cat) in conversioni::CATEGORIES.iter().enumerate() {
         let on = i == app.category;
         // Nel tema base la scheda scelta è in semigrassetto: la misura deve già tenerne conto.
@@ -92,26 +98,40 @@ fn standard(f: &mut Frame, app: &App) {
         let badge = (count > 0 && !on).then(|| count.to_string());
         let bw = badge.as_ref().map(|b| f.measure(b, 12.0, SEMI) + 12.0).unwrap_or(0.0).max(if badge.is_some() { 20.0 } else { 0.0 });
         let r = (tx, 150.0, 16.0 + 24.0 + 14.0 + tw + 16.0 + if bw > 0.0 { bw + 6.0 } else { 0.0 }, 62.0);
+        tabs.push((r, tw, badge, bw));
+        tx += r.2 + 6.0;
+    }
+    let cats = conversioni::CATEGORIES;
+    let last = (tabs.len() - 1) as f32;
+    let at = f.glide(&Act::Category(usize::MAX), app.category as f32).clamp(0.0, last);
+    let (i0, i1) = (at.floor() as usize, at.ceil() as usize);
+    let k = at - i0 as f32;
+    let (a, b) = (tabs[i0].0, tabs[i1].0);
+    let sel = (a.0 + (b.0 - a.0) * k, 150.0, a.2 + (b.2 - a.2) * k, 62.0);
+    let kc_sel = mix(f.kind_color(cats[i0].kind), f.kind_color(cats[i1].kind), k);
+    for (i, (r, _, _, _)) in tabs.iter().enumerate() {
+        if i != app.category {
+            let t = f.hover_t(&Act::Category(i), true);
+            let kc = f.kind_color(cats[i].kind);
+            f.hover_fill((r.0, r.1, r.2, 52.0), 8.0, mix(kc, pal.surface, 0.9), t);
+        }
+    }
+    f.p.rrect(sel.0, sel.1, sel.2, sel.3 + 8.0, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
+    f.p.fill(sel.0 + 1.0, sel.1 + sel.3 - 2.0, sel.2 - 2.0, 12.0, pal.surface);
+    f.p.rrect(sel.0, sel.1 + 49.0, sel.2, 3.0, 1.5, Some(kc_sel), None);
+    for (i, (cat, (r, tw, badge, bw))) in cats.iter().zip(tabs).enumerate() {
+        let on = i == app.category;
         // Nel tema base ogni tipo di file ha il suo colore (icona, linea sotto la scheda, numero).
         let kc = f.kind_color(cat.kind);
-        if on {
-            f.p.rrect(r.0, r.1, r.2, r.3 + 8.0, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
-            f.p.fill(r.0 + 1.0, r.1 + r.3 - 2.0, r.2 - 2.0, 12.0, pal.surface);
-            f.p.rrect(r.0, r.1 + 49.0, r.2, 3.0, 1.5, Some(kc), None);
-        } else if f.hovered(&Act::Category(i)) {
-            f.p.rrect(r.0, r.1, r.2, 52.0, 8.0, Some(mix(kc, pal.surface, 0.9)), None);
-        }
-        let c = pal.text;
-        let ic_c = kc;
-        f.icon(super::category_icon(cat.kind), tx + 16.0, 164.0, 24.0, ic_c);
-        f.text(cat.name, tx + 54.0, 150.0, tw + 4.0, 52.0, 18.0, if on { SEMI } else { SANS }, c);
+        let ip = f.icon_t(&Act::Category(i), !on);
+        f.icon_live(super::category_icon(cat.kind), r.0 + 16.0, 164.0, 24.0, kc, ip);
+        f.text(cat.name, r.0 + 54.0, 150.0, tw + 4.0, 52.0, 18.0, if on { SEMI } else { SANS }, pal.text);
         if let Some(badge) = badge {
-            let bx = tx + 54.0 + tw + 8.0;
+            let bx = r.0 + 54.0 + tw + 8.0;
             f.p.rrect(bx, 167.0, bw, 20.0, 10.0, Some(mix(kc, pal.surface, 0.85)), None);
             f.text_c(&badge, (bx, 167.0, bw, 20.0), 12.0, SEMI, kc);
         }
         f.hit((r.0, r.1, r.2, 52.0), Act::Category(i));
-        tx += r.2 + 6.0;
     }
 
     // La coda.
@@ -124,12 +144,15 @@ fn standard(f: &mut Frame, app: &App) {
     let pages_mode = pdf_mode == PdfMode::Pages && !visible.is_empty();
     if !pages_mode {
         let add = (316.0, 234.0, 222.0, 40.0);
-        let hot = f.hovered(&Act::AddFiles);
-        f.glossy_fill(add, 6.0, pal.primary, hot);
-        f.icon(ic::ADD, add.0 + 14.0, add.1 + 8.0, 24.0, pal.on_primary);
+        let t = f.hover_t(&Act::AddFiles, true);
+        let press = f.press_t(&Act::AddFiles, true);
+        let ip = f.icon_t(&Act::AddFiles, true);
+        f.glossy_fill_t(add, 6.0, pal.primary, t, press);
+        f.icon_live(ic::ADD, add.0 + 14.0, add.1 + 8.0, 24.0, pal.on_primary, ip);
         f.text("Aggiungi file", add.0 + 46.0, add.1, 134.0, 40.0, 17.0, SEMI, pal.on_primary);
         f.p.fill_a(add.0 + add.2 - 38.0, add.1, 1.0, 40.0, pal.on_primary, 0.35);
-        f.icon(ic::CHEVRON_DOWN, add.0 + add.2 - 31.0, add.1 + 8.0, 24.0, pal.on_primary);
+        let ip = f.icon_t(&Act::AddMenu, true);
+        f.icon_live(ic::CHEVRON_DOWN, add.0 + add.2 - 31.0, add.1 + 8.0, 24.0, pal.on_primary, ip);
         f.hit((add.0, add.1, add.2 - 38.0, add.3), Act::AddFiles);
         f.hit((add.0 + add.2 - 38.0, add.1, 38.0, add.3), Act::AddMenu);
         // Il conteggio sta a destra; se la finestra è stretta i due comandi restano con la sola icona
@@ -157,15 +180,15 @@ fn standard(f: &mut Frame, app: &App) {
 
     if visible.is_empty() {
         super::drop_zone(f, app, (q.0 + 20.0, 300.0, q.2 - 40.0, q.3 - 108.0), true);
-        super::others_link(f, app, q.0 + 24.0, q.1 + q.3 - 50.0, 30.0, 15.0);
+        super::others_link(f, app, q.0 + 20.0, q.1 + q.3 - 50.0, 30.0, 15.0);
     } else if pdf_mode == PdfMode::Pages {
         pages_card(f, app, q);
     } else if pdf_mode == PdfMode::Compress {
         compress_queue(f, app, q, &visible);
-        super::others_link(f, app, q.0 + 24.0, q.1 + q.3 - 40.0, 30.0, 15.0);
+        super::others_link(f, app, q.0 + 20.0, q.1 + q.3 - 40.0, 30.0, 15.0);
     } else if pdf_mode != PdfMode::Convert {
         page_queue(f, app, q, &visible, pdf_mode == PdfMode::Merge);
-        super::others_link(f, app, q.0 + 24.0, q.1 + q.3 - 40.0, 30.0, 15.0);
+        super::others_link(f, app, q.0 + 20.0, q.1 + q.3 - 40.0, 30.0, 15.0);
     } else {
         // Intestazione della tabella.
         let all = visible.iter().all(|&i| app.files[i].checked);
@@ -223,7 +246,7 @@ fn standard(f: &mut Frame, app: &App) {
             f.hline(q.0, end, q.2);
             rows.len() as f32 * 96.0 + 1.0
         });
-        super::others_link(f, app, q.0 + 24.0, q.1 + q.3 - 40.0, 30.0, 15.0);
+        super::others_link(f, app, q.0 + 20.0, q.1 + q.3 - 40.0, 30.0, 15.0);
     }
 
     // L'ispettore.
@@ -231,10 +254,10 @@ fn standard(f: &mut Frame, app: &App) {
     f.card(ir, 12.0);
     let modes = super::pagine::shows_modes(f, app);
     let head = if modes { "Cosa vuoi fare" } else { "Impostazioni di conversione" };
-    f.text(head, insp_x + 23.0, 228.0, insp_w - 40.0, 32.0, 20.0, SANS, pal.text);
-    let top = if modes { 266.0 } else { 272.0 };
+    f.text(head, insp_x + 24.0, 234.0, insp_w - 48.0, 40.0, 18.0, SEMI, pal.text);
+    let top = if modes { 282.0 } else { 282.0 };
     let body = (insp_x + 1.0, top, insp_w - 2.0, ir.1 + ir.3 - top - 8.0);
-    super::scrolled(f, body, Scroll::Inspector, |f| super::options_panel_ex(f, app, insp_x + 24.0, if modes { 268.0 } else { 284.0 }, insp_w - 45.0, OPT_STD, true, false) + 20.0);
+    super::scrolled(f, body, Scroll::Inspector, |f| super::options_panel_ex(f, app, insp_x + 24.0, if modes { 290.0 } else { 298.0 }, insp_w - 48.0, OPT_STD, true, false) + 20.0);
 
     footer(f, app, foot_y);
 }
@@ -524,35 +547,38 @@ fn footer(f: &mut Frame, app: &App, y: f32) {
     f.p.shadow(NAV_W, y, w - NAV_W, f.h - y, 0.0, 8.0, 0.07, -2.0);
     f.p.fill(NAV_W, y, w - NAV_W, f.h - y, pal.surface);
     f.hline(NAV_W, y, w - NAV_W);
-    let go_w = 260.0;
+    // Griglia del piede: etichetta (riga di 20) sopra la scelta (42), nota sotto la scelta, tutto
+    // a filo con il contenuto della coda (x 316). Il pulsante va dall'etichetta al fondo della scelta.
+    let go_w = 240.0;
     let go_x = w - 24.0 - go_w;
-    // Le due scelte prendono lo spazio che le loro scritte chiedono (cambia con il carattere e con la lingua).
-    let lab1 = f.measure("Cartella di destinazione", 16.0, SEMI) + 12.0;
-    let lab2 = f.measure("Se esiste già", 16.0, SEMI) + 12.0;
-    let dest_x = 356.0 + lab1;
-    let dest_w = 260.0f32.min(go_x - 26.0 - 170.0 - 48.0 - lab2 - 18.0 - dest_x).max(170.0);
-    f.icon(ic::FOLDER, 306.0, y + 36.0, 24.0, pal.text);
-    f.text("Cartella di destinazione", 356.0, y + 25.0, lab1, 30.0, 16.0, SEMI, pal.text);
-    super::dest_select(f, app, (dest_x, y + 25.0, dest_w, 43.0), 16.0);
-    let ex = dest_x + dest_w + 18.0;
-    f.para(&super::dest_note(app), 356.0, y + 68.0, ex - 12.0 - 356.0, 14.5, SANS, pal.muted, 1.2, 2);
-    f.vline(ex, y + 22.0, 76.0);
-    f.icon(ic::COPY, ex + 16.0, y + 30.0, 24.0, pal.text);
-    f.text("Se esiste già", ex + 48.0, y + 25.0, lab2, 30.0, 16.0, SEMI, pal.text);
-    let sel_x = ex + 48.0 + lab2;
-    let sel_w = (go_x - 26.0 - sel_x).clamp(120.0, 170.0);
-    super::exists_select(f, app, (sel_x, y + 25.0, sel_w, 43.0), 16.0);
-    f.text(&app.exists_example(), ex + 48.0, y + 66.0, go_x - ex - 64.0, 26.0, 14.5, SANS, pal.muted);
+    let (lab_y, ctl_y, note_y) = (y + 20.0, y + 46.0, y + 96.0);
+    let col = |f: &mut Frame, x: f32, icon: &str, label: &str| {
+        f.icon(icon, x, lab_y, 20.0, pal.muted);
+        f.text(label, x + 28.0, lab_y, 300.0, 20.0, 15.0, SEMI, pal.text);
+    };
+    let x1 = 316.0;
+    let dest_w = 300.0f32.min(go_x - 48.0 - 200.0 - 48.0 - x1).max(200.0);
+    col(f, x1, ic::FOLDER, "Cartella di destinazione");
+    super::dest_select(f, app, (x1, ctl_y, dest_w, 42.0), 16.0);
+    let ex = x1 + dest_w + 24.0;
+    f.vline(ex, y + 20.0, 110.0);
+    let x2 = ex + 24.0;
+    let sel_w = (go_x - 48.0 - x2).clamp(160.0, 200.0);
+    f.para(&super::dest_note(app), x1, note_y, ex - 24.0 - x1, 14.0, SANS, pal.muted, 1.4, 2);
+    col(f, x2, ic::COPY, "Se esiste già");
+    super::exists_select(f, app, (x2, ctl_y, sel_w, 42.0), 16.0);
+    f.para(&app.exists_example(), x2, note_y, sel_w + 40.0, 14.0, SANS, pal.muted, 1.4, 2);
     let label = super::go_label(app);
     let ready = app.busy() || !app.targets().is_empty();
+    let go = (go_x, lab_y, go_w, ctl_y + 42.0 - lab_y);
     if app.busy() {
         if let Some(p) = app.progress() {
-            f.p.rrect(go_x, y + 100.0, go_w, 6.0, 3.0, Some(pal.border), None);
-            f.p.rrect(go_x, y + 100.0, go_w * p, 6.0, 3.0, Some(pal.primary), None);
+            f.p.rrect(go_x, note_y, go_w, 6.0, 3.0, Some(pal.border), None);
+            f.p.rrect(go_x, note_y, go_w * p, 6.0, 3.0, Some(pal.primary), None);
         }
     }
-    f.primary((go_x, y + 24.0, go_w, 74.0), &label, Some(super::go_icon(app)), 22.0, Act::Start, ready && !app.busy());
-    super::go_extras(f, app, (go_x, y + 24.0, go_w, 74.0 + 14.0), false);
+    f.primary(go, &label, Some(super::go_icon(app)), 20.0, Act::Start, ready && !app.busy());
+    super::go_extras(f, app, (go.0, go.1, go.2, go.3 - 2.0), false);
 }
 
 fn simplified(f: &mut Frame, app: &App) {

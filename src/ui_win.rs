@@ -33,6 +33,15 @@ const WM_WAKE: u32 = WM_APP + 21;
 const WM_DRAG: u32 = WM_APP + 22;
 const WM_DROPPED: u32 = WM_APP + 23;
 const TIMER: usize = 77;
+/// Il passo veloce, solo mentre si muove un'animazione breve (mouse sopra, pressione, schede).
+const ANIM_TIMER: usize = 78;
+
+/// «Effetti di animazione» spenti in Impostazioni › Accessibilità: Cedro non muove niente.
+unsafe fn calm() -> bool {
+    let mut on = BOOL(1);
+    let _ = SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, Some(&mut on as *mut BOOL as *mut _), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0));
+    !on.as_bool()
+}
 
 const ZOOM: f32 = cedro::ui::ZOOM;
 
@@ -435,11 +444,19 @@ unsafe fn paint(hwnd: HWND, host: &Host) {
     }
     let scale = scale_of(hwnd);
     if let Ok(mut screen) = host.screen.try_borrow_mut() {
+        screen.ui.calm = calm();
         let painter = screen.render(w as u32, h as u32, scale);
         let mut f = host.frame.borrow_mut();
         f.w = w;
         f.h = h;
         f.bgra = painter.bgra();
+        drop(f);
+        // Durante un'animazione si ridisegna ogni 15 ms; finita, il passo veloce si ferma.
+        if screen.gliding() {
+            let _ = SetTimer(Some(hwnd), ANIM_TIMER, 15, None);
+        } else {
+            let _ = KillTimer(Some(hwnd), ANIM_TIMER);
+        }
     }
     let f = host.frame.borrow();
     if f.bgra.is_empty() || f.w != w || f.h != h {
@@ -578,6 +595,10 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             if let Ok(mut s) = host.screen.try_borrow_mut() {
                 s.reload_appearance();
             }
+            redraw(hwnd);
+            LRESULT(0)
+        }
+        WM_TIMER if wparam.0 == ANIM_TIMER => {
             redraw(hwnd);
             LRESULT(0)
         }
