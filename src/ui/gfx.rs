@@ -744,6 +744,15 @@ impl<'a> Painter<'a> {
         self.pixmap.stroke_path(&path, &color(c, 1.0), &st, tf, m);
     }
 
+    /// Come `icon`, ma la forma è piena (le parti piene delle icone dei formati).
+    pub fn icon_fill(&mut self, d: &str, x: f32, y: f32, size: f32, c: Rgb) {
+        let k = size / 24.0;
+        let Some(path) = super::svgpath::parse(d) else { return };
+        let tf = self.tf().pre_translate(x, y).pre_scale(k, k);
+        let m = self.clips.last().map(|(_, m)| m);
+        self.pixmap.fill_path(&path, &color(c, 0.9), FillRule::Winding, tf, m);
+    }
+
     /// Il simbolo Spicchio, quadrato di lato `size`.
     pub fn symbol(&mut self, x: f32, y: f32, size: f32) {
         self.brand(x, y, size / 512.0, 2, None);

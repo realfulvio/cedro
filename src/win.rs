@@ -48,6 +48,9 @@ static CUR_Y: AtomicI32 = AtomicI32::new(0);
 static KEYS: AtomicU8 = AtomicU8::new(0b111);
 // Apre la ruota anche nelle finestre Apri/Salva (classe #32770).
 static DIALOGS: AtomicBool = AtomicBool::new(true);
+// Gli agganci a tastiera e mouse di tutto il sistema: ci sono solo con la ruota accesa (0 = nessuno).
+static HOOK_KB: AtomicIsize = AtomicIsize::new(0);
+static HOOK_MOUSE: AtomicIsize = AtomicIsize::new(0);
 static UPDATE: Mutex<Option<UpdateNews>> = Mutex::new(None);
 /// Il messaggio «TaskbarCreated»: Esplora file è ripartito e l'icona va rimessa.
 static TASKBAR_CREATED: AtomicU32 = AtomicU32::new(0);
@@ -183,8 +186,6 @@ pub fn start() -> std::result::Result<(), String> {
         let _ = SetTimer(Some(hwnd), 10, 24 * 60 * 60 * 1000, None);
         // Quando si chiude una finestra di Cedro, a finestre tutte chiuse la tray restituisce la memoria.
         let closed = SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_DESTROY, None, Some(window_closed), 0, GetCurrentThreadId(), WINEVENT_OUTOFCONTEXT);
-        let kb = SetWindowsHookExW(WH_KEYBOARD_LL, Some(kb_proc), None, 0).map_err(|e| e.to_string())?;
-        let mouse = SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_proc), None, 0).map_err(|e| e.to_string())?;
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             if crate::settings_win::handle_message(&msg) {
@@ -193,8 +194,7 @@ pub fn start() -> std::result::Result<(), String> {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
-        let _ = UnhookWindowsHookEx(kb);
-        let _ = UnhookWindowsHookEx(mouse);
+        wheel_hooks(false);
         if !closed.is_invalid() {
             let _ = UnhookWinEvent(closed);
         }
@@ -606,7 +606,49 @@ pub(crate) fn apply_settings(s: &Settings) {
     let mask = (s.key_shift as u8) | (s.key_ctrl as u8) << 1 | (s.key_alt as u8) << 2;
     KEYS.store(mask, Ordering::Relaxed);
     DIALOGS.store(s.dialogs, Ordering::Relaxed);
+    wheel_hooks(s.wheel);
     SESSION.with(|session| session.borrow_mut().quality = s.quality);
+}
+
+/// Mette o toglie gli agganci a tastiera e mouse che aprono la ruota. Solo nel Cedro dell'icona
+/// (quello con la finestra dei messaggi): le Impostazioni aperte da sole non devono agganciarsi a niente.
+/// Con la ruota spenta Cedro non vede né tasti né clic: il sistema non passa più da lui.
+fn wheel_hooks(on: bool) {
+    if HMSG.load(Ordering::Relaxed) == 0 {
+        return;
+    }
+    unsafe {
+        let kb = HOOK_KB.load(Ordering::Relaxed);
+        let mouse = HOOK_MOUSE.load(Ordering::Relaxed);
+        if on && kb == 0 && mouse == 0 {
+            match (SetWindowsHookExW(WH_KEYBOARD_LL, Some(kb_proc), None, 0), SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_proc), None, 0)) {
+                (Ok(k), Ok(m)) => {
+                    HOOK_KB.store(k.0 as isize, Ordering::Relaxed);
+                    HOOK_MOUSE.store(m.0 as isize, Ordering::Relaxed);
+                }
+                (k, m) => {
+                    append_log("ruota: agganci a tastiera e mouse non riusciti");
+                    if let Ok(k) = k {
+                        let _ = UnhookWindowsHookEx(k);
+                    }
+                    if let Ok(m) = m {
+                        let _ = UnhookWindowsHookEx(m);
+                    }
+                }
+            }
+        } else if !on {
+            if kb != 0 {
+                let _ = UnhookWindowsHookEx(HHOOK(kb as *mut _));
+            }
+            if mouse != 0 {
+                let _ = UnhookWindowsHookEx(HHOOK(mouse as *mut _));
+            }
+            HOOK_KB.store(0, Ordering::Relaxed);
+            HOOK_MOUSE.store(0, Ordering::Relaxed);
+            RDOWN.store(false, Ordering::Relaxed);
+            EAT_RIGHT.store(false, Ordering::Relaxed);
+        }
+    }
 }
 
 fn mode_code(mode: Mode) -> u32 {

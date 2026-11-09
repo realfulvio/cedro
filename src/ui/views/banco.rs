@@ -271,7 +271,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         let y = BAR + 34.0;
         f.text("Converti in", 30.0, y + 8.0, 150.0, 56.0, 21.0, SANS, pal.text);
         let title = super::action_title(app, true);
-        f.select((164.0, y + 2.0, 264.0, 56.0), &title, None, 19.0, Act::FormatMenu);
+        f.select_voce((164.0, y + 2.0, 264.0, 56.0), &title, app.action_voce(), 19.0, Act::FormatMenu);
         f.button((446.0, y + 2.0, 230.0, 58.0), "Aggiungi file", Some(ic::ADD), 20.0, Act::AddFiles);
         super::notice(f, app, (700.0, y + 4.0, (f.w - 700.0 - 450.0).max(120.0), 54.0), 15.0);
         super::essenziale::mode_switch(f, (f.w - 440.0, y - 6.0, 420.0, 62.0));
