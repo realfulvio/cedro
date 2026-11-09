@@ -72,6 +72,26 @@ pub struct FirmaUi {
     recent_check: Option<std::time::Instant>,
 }
 
+/// «Ultimi file» lo cambia anche il visualizzatore, che è un altro processo: un filo leggero guarda il
+/// file una volta al secondo e sveglia la finestra quando cambia (la finestra ferma non fa giri da sola).
+pub fn watch_recent(wake: Arc<dyn Fn() + Send + Sync>) {
+    static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(move || {
+        let mut seen = recent_mtime();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            let m = recent_mtime();
+            if m != seen {
+                seen = m;
+                wake();
+            }
+        }
+    });
+}
+
 fn recent_mtime() -> Option<std::time::SystemTime> {
     std::fs::metadata(recent_file()).and_then(|m| m.modified()).ok()
 }

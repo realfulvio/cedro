@@ -141,6 +141,9 @@ impl Screen {
     /// Disegna il fotogramma in un'immagine di `w`×`h` pixel con `scale` pixel per unità.
     pub fn render(&mut self, w: u32, h: u32, scale: f32) -> Painter<'_> {
         self.app.simple_view = self.simple;
+        if self.app.activity == Activity::Firma && self.surface == Surface::Main {
+            super::firma::watch_recent(self.app.wake.clone());
+        }
         if self.surface == Surface::Viewer {
             self.want_viewer();
         }
@@ -1382,18 +1385,20 @@ impl Screen {
             }
             Act::FirmaPlace(k) => {
                 let su = &mut self.app.firma.sign;
-                su.place = k.min(2);
                 if k < 2 && !su.s.firma_visible {
                     su.s.firma_visible = true;
                     su.save_settings();
                 }
-                if k == 1 {
-                    // Si parte da dove sarebbe andata da sola.
+                if k == 1 && su.place != 1 {
+                    // Si parte da dove sarebbe andata da sola (sopra le firme che ci sono già), non da
+                    // dove era stata trascinata un'altra volta.
+                    su.place = 0;
                     if let Some((page, b)) = su.box_frac() {
                         su.box_page = page;
                         su.box_center = ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0);
                     }
                 }
+                su.place = k.min(2);
             }
             Act::FirmaBox => {}
             Act::FirmaBoxPage(d) => {

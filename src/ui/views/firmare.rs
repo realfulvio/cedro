@@ -584,6 +584,7 @@ fn step3(f: &mut Frame, app: &App, r: R) -> f32 {
     let dest = match (fresh, again, dir.is_empty()) {
         (_, 0, true) => "Salvo i file firmati accanto agli originali, che non vengono toccati.".to_string(),
         (_, 0, false) => format!("Salvo i file firmati nella cartella {}.", dir),
+        (0, 1, true) => "La firma si aggiunge nello stesso file: le firme di prima restano valide.".to_string(),
         (0, _, true) => "La firma si aggiunge negli stessi file: le firme di prima restano valide.".to_string(),
         (0, _, false) => format!("Salvo i file con la firma in più nella cartella {}; gli originali non vengono toccati.", dir),
         (_, _, true) => "I nuovi file firmati vanno accanto agli originali; in quelli già firmati la firma si aggiunge nello stesso file.".to_string(),
