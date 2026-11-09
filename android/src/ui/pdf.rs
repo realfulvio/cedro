@@ -790,7 +790,13 @@ impl App {
         if attivo {
             self.pdf.campo_vis = Some((rc.1, rc.3));
         }
-        p.rrect(rc.0, rc.1, rc.2, rc.3, 14.0, Some(pal.surface), Some((if attivo { pal.primary } else { pal.border }, if attivo { 2.0 } else { 1.0 })));
+        if self.tema == cedro::ui::theme::ThemeId::WindowsEssenziale {
+            // Campo pieno di M3: fondo tonale, la riga del colore principale solo quando si scrive.
+            let t = self.toni();
+            p.rrect(rc.0, rc.1, rc.2, rc.3, 16.0, Some(t.basso), if attivo { Some((pal.primary, 2.0)) } else { None });
+        } else {
+            p.rrect(rc.0, rc.1, rc.2, rc.3, 14.0, Some(pal.surface), Some((if attivo { pal.primary } else { pal.border }, if attivo { 2.0 } else { 1.0 })));
+        }
         let sw = if suffisso.is_empty() { 0.0 } else { p.measure(suffisso, 16.0, Weight::Regular) + 8.0 };
         let mostra: String = if nascosto { "•".repeat(testo.chars().count()) } else { testo.to_string() };
         let vuoto = mostra.is_empty();

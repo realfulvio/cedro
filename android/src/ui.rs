@@ -22,6 +22,7 @@ use cedro::{Kind, Mode};
 pub mod anim;
 mod casa;
 pub mod firma;
+mod m3;
 
 /// Quante attività ha questa build (la Firma digitale è l'ultima).
 pub fn attivita_n() -> usize {

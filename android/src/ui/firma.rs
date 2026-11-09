@@ -272,86 +272,98 @@ impl App {
     /// Il corpo della sezione «Firma digitale» (al posto della coda dei file). Restituisce l'altezza.
     pub(super) fn corpo_firma(&mut self, p: &mut Painter, x: f32, y0: f32, w: f32, vista: R) -> f32 {
         let pal = self.pal();
+        let t = self.toni();
         let scuro = self.tema.dark();
         let viola = super::casa::colore_firma(scuro);
+        let (cont, su) = super::m3::contenitore(viola, t.fondo, scuro);
         let mut y = y0;
-        // Apri e verifica.
-        let testo = "Apri un .p7m o un PDF firmato: vedi il documento, chi l'ha firmato e se la firma vale.";
-        let th = p.wrap_height(testo, 14.0, Weight::Regular, w - 116.0, 20.0, 4);
-        let ch = (th + 52.0).max(84.0);
+        // Il riquadro grande per aprire un file firmato, col timbro sullo sfondo.
+        let testo = ".p7m, .p7s, .tsd o PDF: vedi il documento, chi l'ha firmato e se la firma vale.";
+        let th = p.wrap_height(testo, 14.0, Weight::Regular, w - 120.0, 20.0, 4);
+        let ch = 20.0 + 30.0 + 8.0 + th + 16.0 + 48.0 + 20.0;
+        p.rrect(x, y, w, ch, 28.0, Some(cont), None);
+        p.push_clip(x, y, w, ch);
+        super::m3::sigillo(p, x + w - 118.0, y - 22.0, 150.0, mix(cont, viola, 0.16), "", viola);
+        p.pop_clip();
+        p.text("Apri un file firmato", x + 20.0, y + 20.0, w - 40.0, 30.0, 22.0, Weight::Bold, su, Align::Left);
+        p.text_wrap(testo, x + 20.0, y + 58.0, w - 120.0, 14.0, Weight::Regular, su, 20.0, 4);
+        let b = (x + 20.0, y + 58.0 + th + 16.0, p.measure("Scegli il file", 15.0, Weight::Bold) + 62.0, 48.0);
         let a = Azione::Firma(FirmaAz::Scegli);
-        super::sollevato(p, pal, scuro, x, y, w, ch, 12.0);
-        if self.premuto == Some(a) {
-            p.rrect(x, y, w, ch, 12.0, Some(pal.alt), None);
-        }
-        super::piastrella(p, pal, scuro, x + 14.0, y + 18.0, 48.0, ic::SHIELD, viola, false);
-        p.text("Apri e verifica", x + 76.0, y + 12.0, w - 110.0, 28.0, 17.0, Weight::Semibold, pal.text, Align::Left);
-        p.text_wrap(testo, x + 76.0, y + 40.0, w - 116.0, 14.0, Weight::Regular, pal.muted, 20.0, 4);
-        p.icon("M9 6l6 6-6 6", x + w - 28.0, y + ch / 2.0 - 10.0, 20.0, viola);
+        p.rrect(b.0, b.1, b.2, b.3, 24.0, Some(if self.premuto == Some(a) { mix(viola, (0, 0, 0), 0.15) } else { viola }), None);
+        p.icon(ic::SHIELD, b.0 + 16.0, b.1 + 13.0, 22.0, (255, 255, 255));
+        p.text("Scegli il file", b.0 + 46.0, b.1, b.2 - 50.0, b.3, 15.0, Weight::Bold, (255, 255, 255), Align::Left);
         self.colpo((x, y, w, ch), a, vista);
-        y += ch + 10.0;
-        y += p.text_wrap("Funziona anche con gli allegati firmati: aprili dalla mail o da WhatsApp e scegli Cedro.", x + 4.0, y, w - 8.0, 13.0, Weight::Regular, pal.muted, 18.0, 3) + 16.0;
-        // Ultimi file.
-        p.text("Ultimi file", x + 2.0, y, w, 24.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
-        y += 30.0;
+        y += ch + 8.0;
+        y += p.text_wrap("Gli allegati firmati della mail o di WhatsApp: aprili e scegli Cedro.", x + 4.0, y + 4.0, w - 8.0, 13.0, Weight::Regular, t.variante, 18.0, 3) + 16.0;
+        // Ultimi file, col timbro del giudizio.
+        p.text("Ultimi file", x + 4.0, y, w, 24.0, 14.0, Weight::Semibold, t.variante, Align::Left);
+        y += 32.0;
         let recenti = self.firma.recent.clone();
         if recenti.is_empty() {
-            p.rrect_line(x, y, w, 64.0, 10.0, pal.border, 1.5, 1.0, Some((6.0, 5.0)));
-            p.text_wrap("Qui ritrovi i file firmati che apri, con il loro giudizio.", x + 16.0, y + 12.0, w - 32.0, 14.0, Weight::Regular, pal.muted, 20.0, 2);
+            p.rrect(x, y, w, 64.0, 24.0, Some(t.basso), None);
+            p.text_wrap("Qui ritrovi i file firmati che apri, con il loro giudizio.", x + 20.0, y + 12.0, w - 40.0, 14.0, Weight::Regular, t.variante, 20.0, 2);
             y += 76.0;
         } else {
-            let rh = 60.0;
-            super::sollevato(p, pal, scuro, x, y, w, rh * recenti.len() as f32, 10.0);
+            let rh = 68.0;
+            let lh = rh * recenti.len() as f32 + 2.0 * (recenti.len() as f32 - 1.0);
+            p.rrect(x, y, w, lh, 24.0, Some(t.basso), None);
             for (k, r) in recenti.iter().enumerate() {
-                let ry = y + k as f32 * rh;
+                let ry = y + k as f32 * (rh + 2.0);
+                if k > 0 {
+                    p.fill(x, ry - 2.0, w, 2.0, t.fondo);
+                }
                 let a = Azione::Firma(FirmaAz::Recente(k));
                 if self.premuto == Some(a) {
-                    p.rrect(x + 1.0, ry + 1.0, w - 2.0, rh - 2.0, 9.0, Some(pal.alt), None);
-                }
-                if k > 0 {
-                    p.fill(x + 14.0, ry, w - 28.0, 1.0, pal.border);
+                    p.rrect(x, ry, w, rh, 8.0, Some(mix(t.basso, t.testo, 0.05)), None);
                 }
                 let c = colore_livello(self, r.level);
-                p.circle(x + 28.0, ry + rh / 2.0, 13.0, Some(c), None);
-                p.icon(segno(r.level), x + 19.0, ry + rh / 2.0 - 9.0, 18.0, (255, 255, 255));
-                p.text(&nome_visto(&r.path), x + 52.0, ry + 8.0, w - 64.0, 24.0, 15.0, Weight::Semibold, pal.text, Align::Left);
+                let (cc, _) = super::m3::contenitore(c, t.fondo, scuro);
+                super::m3::sigillo(p, x + 12.0, ry + 12.0, 44.0, cc, segno(r.level), c);
+                p.text(&nome_visto(&r.path), x + 68.0, ry + 12.0, w - 84.0, 24.0, 15.5, Weight::Semibold, t.testo, Align::Left);
                 let sotto = format!("{} · {}", r.headline, firma::relative(r.when));
-                p.text(&sotto, x + 52.0, ry + 32.0, w - 64.0, 20.0, 12.5, Weight::Regular, pal.muted, Align::Left);
+                p.text(&sotto, x + 68.0, ry + 36.0, w - 84.0, 20.0, 12.5, Weight::Regular, t.variante, Align::Left);
                 self.colpo((x, ry, w, rh), a, vista);
             }
-            y += rh * recenti.len() as f32 + 16.0;
+            y += lh + 16.0;
         }
-        // Le opzioni: revoca online ed elenco dei certificatori.
-        let sotto1 = "Chiedo al certificatore se il certificato è stato revocato";
-        let h1 = 44.0 + p.wrap_height(sotto1, 12.5, Weight::Regular, w - 96.0, 17.0, 3) + 12.0;
+        // I controlli: revoca online ed elenco europeo.
+        p.text("Controlli", x + 4.0, y, w, 24.0, 14.0, Weight::Semibold, t.variante, Align::Left);
+        y += 32.0;
         let (quando, quanti) = self.firma.tl_info;
         let riga = match quando {
-            Some(t) if quanti > 0 => format!("Aggiornato {} · {quanti} certificatori", firma::relative(t)),
+            Some(tq) if quanti > 0 => format!("{quanti} certificatori · aggiornato {}", firma::relative(tq)),
             _ => "Non ancora scaricato: lo scarico alla prima verifica".to_string(),
         };
-        let h2 = 44.0 + p.wrap_height(&riga, 12.5, Weight::Regular, w - 136.0, 17.0, 3).max(40.0) + 12.0;
-        let oh = h1 + h2;
-        super::sollevato(p, pal, scuro, x, y, w, oh, 10.0);
-        let a = Azione::Firma(FirmaAz::Online);
-        p.text("Controlla online la revoca", x + 14.0, y + 12.0, w - 96.0, 24.0, 15.0, Weight::Semibold, pal.text, Align::Left);
-        p.text_wrap(sotto1, x + 14.0, y + 38.0, w - 96.0, 12.5, Weight::Regular, pal.muted, 17.0, 3);
+        let pad = 6.0;
+        let h1 = {
+            let nh = p.wrap_height("Chiedo al certificatore se il certificato è stato revocato", 12.5, Weight::Regular, w - 2.0 * pad - 96.0, 17.0, 3);
+            (40.0 + nh + 8.0).max(64.0)
+        };
+        let nh2 = p.wrap_height(&riga, 12.5, Weight::Regular, w - 2.0 * pad - 130.0, 17.0, 3);
+        let h2 = (40.0 + nh2 + 8.0).max(64.0);
+        let tot = 2.0 * pad + h1 + pad + h2;
+        p.rrect(x, y, w, tot, 24.0, Some(t.basso), None);
         let on = self.imp.firma_online;
-        let t = self.anim.verso(super::anim::Chiave::Interruttore(1), if on { 1.0 } else { 0.0 }, 160.0);
-        interruttore(p, pal, x + w - 60.0, y + h1 / 2.0, t);
-        self.colpo((x, y, w, h1), a, vista);
-        p.fill(x + 14.0, y + h1, w - 28.0, 1.0, pal.border);
-        let y2 = y + h1;
-        p.text("Elenco europeo dei certificatori", x + 14.0, y2 + 12.0, w - 28.0, 24.0, 15.0, Weight::Semibold, pal.text, Align::Left);
-        p.text_wrap(&riga, x + 14.0, y2 + 38.0, w - 136.0, 12.5, Weight::Regular, pal.muted, 17.0, 3);
-        let b = (x + w - 112.0, y2 + 38.0, 98.0, 40.0);
-        let a = Azione::Firma(FirmaAz::Elenco);
+        self.riga_si_no(p, x + pad, y + pad, w - 2.0 * pad, "Revoca online", "Chiedo al certificatore se il certificato è stato revocato", on, 1, Azione::Firma(FirmaAz::Online), vista);
+        let ry = y + pad + h1 + pad;
+        let (ix, iw) = (x + pad, w - 2.0 * pad);
+        p.rrect(ix, ry, iw, h2, 18.0, Some(t.fondo), None);
+        p.text("Elenco europeo", ix + 16.0, ry + 12.0, iw - 130.0, 24.0, 15.5, Weight::Semibold, t.testo, Align::Left);
+        p.text_wrap(&riga, ix + 16.0, ry + 36.0, iw - 130.0, 12.5, Weight::Regular, t.variante, 17.0, 3);
         let occupato = self.firma.tl_busy;
-        p.rrect(b.0, b.1, b.2, b.3, 8.0, Some(if self.premuto == Some(a) { pal.alt } else { pal.surface }), Some((pal.border, 1.0)));
-        p.text(if occupato { "Scarico…" } else { "Aggiorna" }, b.0, b.1, b.2, b.3, 14.0, Weight::Semibold, if occupato { pal.muted } else { pal.primary }, Align::Center);
+        let et = if occupato { "Scarico…" } else { "Aggiorna" };
+        let bw = p.measure(et, 14.5, Weight::Bold) + 32.0;
+        let b = (ix + iw - bw - 10.0, ry + (h2 - 40.0) / 2.0, bw, 40.0);
+        let a = Azione::Firma(FirmaAz::Elenco);
+        if self.premuto == Some(a) {
+            p.rrect(b.0, b.1, b.2, b.3, 20.0, Some(mix(t.fondo, viola, 0.12)), None);
+        }
+        p.text(et, b.0, b.1, b.2, b.3, 14.5, Weight::Bold, if occupato { t.variante } else { viola }, Align::Center);
         if !occupato {
             self.colpo(b, a, vista);
         }
-        y += oh + 12.0;
+        let _ = pal;
+        y += tot + 16.0;
         y - y0
     }
 
@@ -374,98 +386,113 @@ impl App {
         // Barra in alto.
         self.bottone_icona(p, (4.0, 4.0, TOCCO, TOCCO), ic::ARROW_LEFT, Azione::Firma(FirmaAz::Chiudi));
         p.text(&nome, 60.0, 0.0, w - 72.0, 56.0, 17.0, Weight::Semibold, pal.text, Align::Left);
-        let mut top = 56.0;
-        // La fascia col giudizio.
-        match &rep {
-            Some(r) => {
-                let c = if r.unsigned() { pal.muted } else { colore_livello(self, r.level) };
-                let tw = w - 64.0;
-                let dh = if r.detail.is_empty() { 0.0 } else { p.wrap_height(&r.detail, 13.5, Weight::Regular, tw, 19.0, 4) };
-                let fh = 20.0 + 24.0 + dh + 6.0;
-                p.fill(-self.margini.0, top, w + self.margini.0 + self.margini.2, fh, mix(c, pal.surface, if scuro { 0.82 } else { 0.9 }));
-                p.fill(-self.margini.0, top + fh - 2.0, w + self.margini.0 + self.margini.2, 2.0, c);
-                p.circle(28.0, top + 24.0, 14.0, Some(c), None);
-                p.icon(if r.unsigned() { ic::FILE } else { segno(r.level) }, 19.0, top + 15.0, 18.0, (255, 255, 255));
-                p.text(&r.headline, 52.0, top + 10.0, tw, 26.0, 16.0, Weight::Bold, c, Align::Left);
-                if dh > 0.0 {
-                    p.text_wrap(&r.detail, 52.0, top + 36.0, tw, 13.5, Weight::Regular, pal.text, 19.0, 4);
-                }
-                top += fh;
-            }
-            None => {
-                p.fill(-self.margini.0, top, w + self.margini.0 + self.margini.2, 52.0, pal.alt);
-                rotella(p, self, 28.0, top + 26.0, pal.primary);
-                p.text("Controllo le firme…", 52.0, top, w - 64.0, 52.0, 15.0, Weight::Semibold, pal.text, Align::Left);
-                top += 52.0;
-            }
-        }
-        // Le azioni in basso.
-        let ab = 68.0;
-        let ay = h - ab;
-        let vista = (0.0, top, w, ay - top);
+        let top = 56.0;
+        let t = self.toni();
+        // Tutto scorre sotto la barra; le azioni stanno in una barra fluttuante in basso.
+        let vista = (0.0, top, w, h - top);
         p.push_clip(vista.0, vista.1, vista.2, vista.3);
         let x = 16.0;
         let cw = w - 32.0;
-        let mut y = top + 14.0 - self.scorri;
+        let mut y = top + 4.0 - self.scorri;
+        // Il giudizio: un riquadro nel colore dell'esito con il timbro.
+        match &rep {
+            Some(r) => {
+                let c = if r.unsigned() { t.variante } else { colore_livello(self, r.level) };
+                let (cont, su) = super::m3::contenitore(c, t.fondo, scuro);
+                let tw = cw - 108.0;
+                let hh = p.wrap_height(&r.headline, 20.0, Weight::Bold, tw, 25.0, 3);
+                let dh = if r.detail.is_empty() { 0.0 } else { p.wrap_height(&r.detail, 13.5, Weight::Regular, tw, 19.0, 6) + 6.0 };
+                let ch = (20.0 + hh + dh + 18.0).max(104.0);
+                // Il timbro arriva con un piccolo rimbalzo.
+                let v = self.anim.comparsa(super::anim::Chiave::Tocco(7), 360.0);
+                let k = 0.75 + 0.25 * super::anim::esci(v) + 0.06 * (v * std::f32::consts::PI).sin();
+                p.rrect(x, y, cw, ch, 28.0, Some(cont), None);
+                let s = 64.0 * k;
+                super::m3::sigillo(p, x + 18.0 + (64.0 - s) / 2.0, y + 20.0 + (64.0 - s) / 2.0, s, c, if r.unsigned() { ic::FILE } else { segno(r.level) }, cont);
+                p.text_wrap(&r.headline, x + 96.0, y + 20.0, tw, 20.0, Weight::Bold, su, 25.0, 3);
+                if dh > 0.0 {
+                    p.text_wrap(&r.detail, x + 96.0, y + 26.0 + hh, tw, 13.5, Weight::Regular, mix(su, t.testo, 0.4), 19.0, 6);
+                }
+                y += ch + 12.0;
+            }
+            None => {
+                p.rrect(x, y, cw, 80.0, 28.0, Some(t.basso), None);
+                rotella(p, self, x + 40.0, y + 40.0, pal.primary);
+                p.text("Controllo le firme…", x + 72.0, y, cw - 90.0, 80.0, 16.0, Weight::Semibold, t.testo, Align::Left);
+                y += 92.0;
+            }
+        }
         if let Some(r) = rep.as_ref() {
-            // Sul telefono prima il giudizio su ogni firma, poi il documento.
             if controllo && !r.signers.is_empty() {
-                y += p.text_wrap("Controllo la revoca online…", x, y, cw, 13.0, Weight::Regular, pal.muted, 18.0, 1) + 8.0;
+                y += p.text_wrap("Controllo la revoca online…", x + 4.0, y, cw, 13.0, Weight::Regular, t.variante, 18.0, 1) + 8.0;
             }
             y = self.firme(p, r, &aperte, &tecnici, revisione, x, y, cw, vista);
             if !r.signers.is_empty() || r.needs_original || !r.doc.is_empty() {
                 let titolo = if r.doc_name.trim().is_empty() || proprio_pdf(&self.firma.viewer.as_ref().map(|v| v.path.clone()).unwrap_or_default()) { "Documento".to_string() } else { format!("Documento: {}", r.doc_name) };
-                p.text(&titolo, x, y, cw, 28.0, 18.0, Weight::Semibold, pal.text, Align::Left);
-                y += 36.0;
+                p.text(&titolo, x + 4.0, y, cw, 28.0, 14.0, Weight::Semibold, t.variante, Align::Left);
+                y += 34.0;
             }
             y = self.documento_firmato(p, r, revisione, &aperte, x, y, cw, vista);
             if !r.signers.is_empty() {
                 y = self.alla_data(p, at, x, y, cw, vista);
             }
         }
+        y += 96.0;
         p.pop_clip();
-        self.scorri_max = (y + self.scorri - (vista.1 + vista.3) + 12.0).max(0.0);
+        self.scorri_max = (y + self.scorri - (vista.1 + vista.3)).max(0.0);
         self.scorri = self.scorri.min(self.scorri_max);
-        // La barra delle azioni.
-        p.fill(-self.margini.0, ay, w + self.margini.0 + self.margini.2, ab + self.margini.3, pal.surface);
-        p.fill(-self.margini.0, ay, w + self.margini.0 + self.margini.2, 1.0, pal.border);
+        // La barra fluttuante delle azioni (toolbar di M3 Expressive): Salva pieno, le altre con icona e nome.
         let Some(r) = rep else { return };
         let path = self.firma.viewer.as_ref().map(|v| v.path.clone()).unwrap_or_default();
-        let mut azioni: Vec<(String, &'static str, FirmaAz, bool)> = Vec::new();
         let ha_doc = !r.doc.is_empty();
-        if !r.unsigned() && ha_doc && (!proprio_pdf(&path) || revisione.is_some()) {
+        let salva = (!r.unsigned() && ha_doc && (!proprio_pdf(&path) || revisione.is_some())).then(|| {
             let ext = Path::new(&r.doc_name).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-            let t = if revisione.is_some() {
-                "Salva questa versione".to_string()
-            } else if ext.is_empty() {
+            if revisione.is_some() {
+                "Salva versione".to_string()
+            } else if ext.is_empty() || ext.len() > 4 {
                 "Salva".to_string()
             } else {
                 format!("Salva il .{ext}")
-            };
-            azioni.push((t, ic::DOWNLOAD, FirmaAz::Salva, true));
-        }
+            }
+        });
+        let mut altre: Vec<(&str, &'static str, FirmaAz)> = Vec::new();
         if ha_doc || proprio_pdf(&path) {
-            azioni.push(("Apri".into(), ic::OPEN_OUT, FirmaAz::Fuori, false));
-            azioni.push(("Condividi".into(), I_CONDIVIDI, FirmaAz::Condividi, false));
+            altre.push(("Apri", ic::OPEN_OUT, FirmaAz::Fuori));
+            altre.push(("Condividi", I_CONDIVIDI, FirmaAz::Condividi));
         }
         if !r.unsigned() && !r.signers.is_empty() {
-            azioni.push(("Rapporto".into(), ic::FILE, FirmaAz::Rapporto, false));
+            altre.push(("Rapporto", ic::FILE, FirmaAz::Rapporto));
         }
-        if azioni.is_empty() {
+        if salva.is_none() && altre.is_empty() {
             return;
         }
-        let bw = w / azioni.len() as f32;
         let viola = super::casa::colore_firma(scuro);
-        for (k, (t, i, az, primo)) in azioni.into_iter().enumerate() {
-            let rc = (k as f32 * bw, ay + 4.0, bw, ab - 8.0);
+        let sw = salva.as_ref().map(|s| p.measure(s, 15.0, Weight::Bold) + 56.0).unwrap_or(0.0);
+        let iw = 68.0;
+        let tw = 8.0 + sw + if salva.is_some() { 4.0 } else { 0.0 } + altre.len() as f32 * iw + 8.0;
+        let (tx, ty, th) = ((w - tw) / 2.0, h - 16.0 - 64.0, 64.0);
+        p.shadow(tx, ty, tw, th, 32.0, 14.0, if scuro { 0.45 } else { 0.2 }, 5.0);
+        p.rrect(tx, ty, tw, th, 32.0, Some(t.alto), None);
+        let mut bx = tx + 8.0;
+        if let Some(s) = salva {
+            let a = Azione::Firma(FirmaAz::Salva);
+            let b = (bx, ty + 8.0, sw, 48.0);
+            p.rrect(b.0, b.1, b.2, b.3, 24.0, Some(if self.premuto == Some(a) { mix(viola, (0, 0, 0), 0.15) } else { viola }), None);
+            p.icon(ic::DOWNLOAD, b.0 + 16.0, b.1 + 13.0, 22.0, (255, 255, 255));
+            p.text(&s, b.0 + 44.0, b.1, b.2 - 50.0, b.3, 15.0, Weight::Bold, (255, 255, 255), Align::Left);
+            self.colpi.push((Forma::R(b), a));
+            bx += sw + 4.0;
+        }
+        for (nome, icona, az) in altre {
             let a = Azione::Firma(az);
+            let b = (bx, ty + 4.0, iw, 56.0);
             if self.premuto == Some(a) {
-                p.rrect(rc.0 + 4.0, rc.1, rc.2 - 8.0, rc.3, 12.0, Some(pal.alt), None);
+                p.rrect(b.0 + 2.0, b.1, b.2 - 4.0, b.3, 24.0, Some(mix(t.alto, t.testo, 0.08)), None);
             }
-            let c = if primo { viola } else { pal.text };
-            p.icon(i, rc.0 + rc.2 / 2.0 - 12.0, rc.1 + 6.0, 24.0, c);
-            p.text(&t, rc.0 + 2.0, rc.1 + 34.0, rc.2 - 4.0, 20.0, 12.5, if primo { Weight::Semibold } else { Weight::Regular }, c, Align::Center);
-            self.colpi.push((Forma::R(rc), a));
+            p.icon(icona, b.0 + iw / 2.0 - 11.0, b.1 + 7.0, 22.0, t.testo);
+            p.text(nome, b.0, b.1 + 32.0, b.2, 18.0, 11.5, Weight::Semibold, t.variante, Align::Center);
+            self.colpi.push((Forma::R(b), a));
+            bx += iw;
         }
     }
 
@@ -583,9 +610,9 @@ impl App {
         let pal = self.pal();
         let scuro = self.tema.dark();
         if !r.signers.is_empty() {
-            p.text(if r.signers.len() > 1 { "Chi ha firmato" } else { "Firma" }, x, y, w, 28.0, 18.0, Weight::Semibold, pal.text, Align::Left);
-            p.text(&format!("controllato {}", firma::relative(r.checked_at).replace("oggi alle", "oggi,")), x, y, w, 28.0, 12.5, Weight::Regular, pal.muted, Align::Right);
-            y += 36.0;
+            p.text(if r.signers.len() > 1 { "Chi ha firmato" } else { "Firma" }, x + 4.0, y, w, 28.0, 14.0, Weight::Semibold, pal.muted, Align::Left);
+            p.text(&format!("controllato {}", firma::relative(r.checked_at).replace("oggi alle", "oggi,")), x, y, w - 4.0, 28.0, 12.5, Weight::Regular, pal.muted, Align::Right);
+            y += 34.0;
         }
         for i in r.ordered() {
             let s = &r.signers[i];
@@ -605,13 +632,15 @@ impl App {
             let hh = 64.0 + mh;
             // La scheda: testa sempre, corpo se aperta.
             let corpo_h = if aperta { self.corpo_firma_h(p, r, i, sw - 28.0, tecnici.contains(&i)) } else { 0.0 };
-            super::sollevato(p, pal, scuro, sx, y, sw, hh + corpo_h, 12.0);
+            let t = self.toni();
+            p.rrect(sx, y, sw, hh + corpo_h, 24.0, Some(t.basso), None);
             let a = Azione::Firma(FirmaAz::Firma(i));
             if self.premuto == Some(a) {
-                p.rrect(sx, y, sw, hh, 12.0, Some(pal.alt), None);
+                p.rrect(sx, y, sw, hh, 24.0, Some(mix(t.basso, t.testo, 0.05)), None);
             }
-            avatar(p, self, sx + 34.0, y + hh / 2.0, 22.0, &s.initials, s.level);
-            p.text(&s.name, sx + 68.0, y + 8.0, tw, 24.0, 15.5, Weight::Bold, pal.text, Align::Left);
+            let _ = scuro;
+            avatar(p, self, sx + 36.0, y + hh / 2.0, 22.0, &s.initials, s.level);
+            p.text(&firma::title_case(&s.name), sx + 68.0, y + 8.0, tw, 24.0, 16.0, Weight::Bold, pal.text, Align::Left);
             p.text_wrap(&sotto, sx + 68.0, y + 32.0, tw, 12.5, Weight::Regular, pal.muted, 17.0, 3);
             p.text(&s.summary, sx + 68.0, y + 34.0 + mh, tw, 22.0, 14.0, Weight::Semibold, c, Align::Left);
             p.icon(if aperta { "M6 15l6-6 6 6" } else { ic::CHEVRON_DOWN }, sx + sw - 34.0, y + hh / 2.0 - 11.0, 22.0, pal.muted);
@@ -643,10 +672,10 @@ impl App {
     fn corpo_firma_h(&self, p: &Painter, r: &Report, i: usize, w: f32, tecnici: bool) -> f32 {
         let s = &r.signers[i];
         let mut h = p.wrap_height(&s.why, 13.5, Weight::Regular, w - 24.0, 19.0, 30) + 20.0 + 14.0;
-        let cw = (w - 12.0) / 2.0;
+        let cw = (w - 8.0) / 2.0;
         for cks in s.checks.chunks(2) {
-            let rh = cks.iter().map(|ck| 21.0 + p.wrap_height(&ck.text, 12.0, Weight::Regular, cw, 16.0, 4).max(16.0)).fold(0.0, f32::max);
-            h += rh + 10.0;
+            let rh = cks.iter().map(|ck| 34.0 + p.wrap_height(&ck.text, 12.0, Weight::Regular, cw - 24.0, 16.0, 4).max(16.0) + 10.0).fold(0.0, f32::max);
+            h += rh + 8.0;
         }
         if s.revision_end.is_some() {
             h += 50.0;
@@ -668,23 +697,25 @@ impl App {
         let c = colore_livello(self, s.level);
         // Il perché.
         let th = p.wrap_height(&s.why, 13.5, Weight::Regular, w - 24.0, 19.0, 30);
-        p.rrect(x, y, w, th + 20.0, 8.0, Some(mix(c, pal.surface, 0.9)), None);
-        p.fill(x, y + 6.0, 3.0, th + 8.0, c);
+        let (cont, _) = super::m3::contenitore(c, self.toni().fondo, self.tema.dark());
+        p.rrect(x, y, w, th + 20.0, 16.0, Some(cont), None);
         p.text_wrap(&s.why, x + 12.0, y + 10.0, w - 24.0, 13.5, Weight::Regular, pal.text, 19.0, 30);
         y += th + 34.0;
-        // I quattro controlli, due per riga.
-        let cw = (w - 12.0) / 2.0;
+        // I quattro controlli: riquadri due per riga, segno e nome nel colore del giudizio.
+        let fondo = self.toni().fondo;
+        let cw = (w - 8.0) / 2.0;
         for cks in s.checks.chunks(2) {
-            let mut rh: f32 = 0.0;
+            let rh = cks.iter().map(|ck| 34.0 + p.wrap_height(&ck.text, 12.0, Weight::Regular, cw - 24.0, 16.0, 4).max(16.0) + 10.0).fold(0.0, f32::max);
             for (k, ck) in cks.iter().enumerate() {
-                let cx = x + k as f32 * (cw + 12.0);
+                let cx = x + k as f32 * (cw + 8.0);
                 let cc = if ck.counts || ck.level == Level::Ok { colore_livello(self, ck.level) } else { pal.muted };
-                p.icon(segno(ck.level), cx - 1.0, y + 3.0, 15.0, cc);
-                p.text(ck.what, cx + 18.0, y, cw - 18.0, 20.0, 13.5, Weight::Bold, cc, Align::Left);
-                let th = p.text_wrap(&ck.text, cx, y + 21.0, cw, 12.0, Weight::Regular, pal.muted, 16.0, 4).max(16.0);
-                rh = rh.max(21.0 + th);
+                p.rrect(cx, y, cw, rh, 16.0, Some(fondo), None);
+                p.icon(segno(ck.level), cx + 11.0, y + 12.0, 16.0, cc);
+                p.icon(segno(ck.level), cx + 11.4, y + 12.0, 16.0, cc);
+                p.text(ck.what, cx + 32.0, y + 8.0, cw - 40.0, 24.0, 13.5, Weight::Bold, cc, Align::Left);
+                p.text_wrap(&ck.text, cx + 12.0, y + 34.0, cw - 24.0, 12.0, Weight::Regular, pal.muted, 16.0, 4);
             }
-            y += rh + 10.0;
+            y += rh + 8.0;
         }
         if s.revision_end.is_some() {
             let vista_ora = revisione == Some(i);
@@ -735,17 +766,21 @@ impl App {
     fn alla_data(&mut self, p: &mut Painter, at: At, x: f32, mut y: f32, w: f32, vista: R) -> f32 {
         let pal = self.pal();
         y += 6.0;
-        p.text("Verifica alla data", x, y, w, 26.0, 16.0, Weight::Semibold, pal.text, Align::Left);
+        p.text("Verifica alla data", x + 4.0, y, w, 26.0, 14.0, Weight::Semibold, pal.muted, Align::Left);
         y += 34.0;
         let sel = if matches!(at, At::Signing) { 1 } else { 0 };
-        p.rrect(x, y, w, 44.0, 10.0, Some(pal.surface), Some((pal.border, 1.0)));
-        let mezzo = w / 2.0;
-        // La pastiglia scivola sulla scelta.
-        let px = self.anim.verso(super::anim::Chiave::Interruttore(2), x + sel as f32 * mezzo, 200.0);
-        p.rrect(px + 3.0, y + 3.0, mezzo - 6.0, 38.0, 8.0, Some(pal.primary), None);
-        for (k, t) in ["Oggi", "Quando è stato firmato"].iter().enumerate() {
-            let rc = (x + k as f32 * mezzo, y, mezzo, 44.0);
-            p.text(t, rc.0, rc.1, rc.2, rc.3, 14.0, Weight::Semibold, if k == sel { pal.on_primary } else { pal.text }, Align::Center);
+        let t = self.toni();
+        let mezzo = (w - 4.0) / 2.0;
+        let px = self.anim.verso(super::anim::Chiave::Interruttore(2), x + sel as f32 * (mezzo + 4.0), 220.0);
+        for k in 0..2 {
+            let rc = (x + k as f32 * (mezzo + 4.0), y, mezzo, 48.0);
+            p.rrect(rc.0, rc.1, rc.2, rc.3, 12.0, Some(t.alto), None);
+        }
+        p.rrect(px, y, mezzo, 48.0, 24.0, Some(pal.primary), None);
+        for (k, tt) in ["Oggi", "Quando è stato firmato"].iter().enumerate() {
+            let rc = (x + k as f32 * (mezzo + 4.0), y, mezzo, 48.0);
+            let on = (px - rc.0).abs() < mezzo / 2.0;
+            p.text(tt, rc.0, rc.1, rc.2, rc.3, 14.0, Weight::Semibold, if on { pal.on_primary } else { t.testo }, Align::Center);
             self.colpo(rc, Azione::Firma(FirmaAz::Alla(k as u8)), vista);
         }
         y += 54.0;
@@ -769,20 +804,14 @@ fn proprio_pdf(p: &Path) -> bool {
 fn avatar(p: &mut Painter, app: &App, cx: f32, cy: f32, rag: f32, iniziali: &str, l: Level) {
     let pal = app.pal();
     let c = colore_livello(app, l);
-    p.circle(cx, cy, rag, Some(mix(c, pal.surface, 0.82)), None);
-    p.text(iniziali, cx - rag, cy - rag, rag * 2.0, rag * 2.0, rag * 0.72, Weight::Bold, mix(c, pal.text, 0.35), Align::Center);
+    let (cont, su) = super::m3::contenitore(c, pal.bg, app.tema.dark());
+    p.circle(cx, cy, rag, Some(cont), None);
+    p.text(iniziali, cx - rag, cy - rag, rag * 2.0, rag * 2.0, rag * 0.68, Weight::Bold, su, Align::Center);
     let mr = rag * 0.42;
     let (mx, my) = (cx + rag * 0.72, cy + rag * 0.72);
     p.circle(mx, my, mr + 2.0, Some(pal.surface), None);
     p.circle(mx, my, mr, Some(c), None);
     p.icon(segno(l), mx - mr * 0.75, my - mr * 0.75, mr * 1.5, (255, 255, 255));
-}
-
-/// Un interruttore a `t` (0 spento, 1 acceso), con il pallino che scorre.
-pub(super) fn interruttore(p: &mut Painter, pal: &cedro::ui::theme::Palette, x: f32, cy: f32, t: f32) {
-    let fondo = mix(pal.border, pal.primary, t);
-    p.rrect(x, cy - 14.0, 46.0, 28.0, 14.0, Some(fondo), None);
-    p.circle(x + 14.0 + 18.0 * t, cy, 10.0, Some(mix(pal.surface, pal.on_primary, t)), None);
 }
 
 /// La rotella di attesa (gira finché si ridisegna).
