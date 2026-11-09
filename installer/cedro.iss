@@ -425,6 +425,9 @@ begin
   end;
   if CurUninstallStep = usPostUninstall then
   begin
+    // Quello che resta nella cartella di Cedro (file lasciati da Cedro stesso): via anche quello.
+    if CompareText(ExtractFileName(RemoveBackslashUnlessRoot(ExpandConstant('{app}'))), 'Cedro') = 0 then
+      DelTree(ExpandConstant('{app}'), True, True, True);
     // Modelli e motori scaricati (anche alcuni GB) e trascrizioni da rivedere: si chiede, nel silenzioso restano.
     data := ExpandConstant('{localappdata}\Cedro');
     if (not UninstallSilent) and DirExists(data) then
