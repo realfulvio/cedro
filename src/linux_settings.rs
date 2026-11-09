@@ -719,6 +719,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let general = page("Generale", &[&autostart_row, &notify_row, &reveal_row, &progress_row, &log_row, &lang_row]);
 
     // Ruota
+    let wheel_on = switch(current.wheel);
     let shift = switch(current.key_shift);
     let ctrl = switch(current.key_ctrl);
     let alt = switch(current.key_alt);
@@ -728,6 +729,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let wheel = page(
         "Ruota",
         &[
+            &setting("Usa la ruota", "Dal menu del file si apre la ruota. Spenta, «Apri in Cedro» porta i file nella finestra Conversioni.", &wheel_on),
             &setting("Shift apre le conversioni", "Tieni premuto Shift e fai clic destro sul file.", &shift),
             &setting("Ctrl apre gli strumenti", "Comprimi, ruota, OCR e le altre fette di Ctrl.", &ctrl),
             &setting("Alt apre le azioni", "Duplica, percorso e ZIP. Spegnilo se Alt dà fastidio ad altri programmi.", &alt),
@@ -988,6 +990,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 view_asked: base.view_asked,
                 reveal: reveal.is_active(),
                 update_check: updates.is_active(),
+                wheel: wheel_on.is_active(),
                 key_shift: shift.is_active(),
                 key_ctrl: ctrl.is_active(),
                 key_alt: alt.is_active(),
@@ -1015,6 +1018,9 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 if let Err(e) = crate::linux_ui::set_autostart(autostart.is_active()) {
                     append_log(&format!("avvio automatico: {e}"));
                 }
+            }
+            if settings.wheel != base.wheel {
+                crate::linux_ui::refresh_file_menus(settings.wheel);
             }
             on_saved(&settings);
             window.close();
