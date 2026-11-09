@@ -43,6 +43,7 @@ fn info() -> Info {
 
 fn scena(nome: &str, w: f32, h: f32, out: &PathBuf, f: impl FnOnce(&mut App)) {
     let mut app = App::new(ThemeId::WindowsEssenziale);
+    app.anim.calmo = true;
     let img = PathBuf::from("docs/hero.png");
     let file = Archivio { path: img.clone(), nome: "Verbale_giunta.png".into(), dim: 2_400_000 };
     app.imposta_file(file, cedro::Kind::Image, false);
@@ -59,6 +60,7 @@ fn scena(nome: &str, w: f32, h: f32, out: &PathBuf, f: impl FnOnce(&mut App)) {
 /// La finestra principale di un tema, con due file in coda e un lavoro in corso.
 fn casa(nome: &str, tema: ThemeId, w: f32, h: f32, out: &PathBuf, f: impl FnOnce(&mut App)) {
     let mut app = App::new(tema);
+    app.anim.calmo = true;
     app.vai_casa();
     let img = PathBuf::from("docs/hero.png");
     app.aggiungi_coda(vec![(img.clone(), "Verbale_giunta.png".into(), cedro::Kind::Image), (img.clone(), "Foto sopralluogo.png".into(), cedro::Kind::Image)]);
@@ -94,6 +96,7 @@ fn rivedi(nome: &str, tema: ThemeId, out: &PathBuf, scheda: u8, foglio: Option<c
     let riass = fatto.then(|| cedro::riassunto::Stored { text: RISPOSTA.into(), names: nomi.clone(), ms: 512_000, gpu: None, done: vec![] });
     let r = cedro::ui::review::Review::new(std::path::Path::new("Consiglio-comunale.m4a"), 2832.0, "it".into(), segs, nomi, riass);
     let mut app = App::new(tema);
+    app.anim.calmo = true;
     app.apri_rivedi_con(r, "Consiglio-comunale".into(), scheda, foglio, in_corso.then(|| (7, 380, "Legge la riunione: parte 2 di 3".to_string())));
     let (w, h) = (392.0, 800.0);
     let scala = 2.75;
@@ -113,6 +116,7 @@ fn main() {
     let out = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "/tmp/vista".into()));
     std::fs::create_dir_all(&out).unwrap();
     let (pw, ph, lw, lh) = (392.0, 800.0, 800.0, 360.0);
+    firma(&out, pw, ph);
     scena("foglio", pw, ph, &out, |a| a.foglio = true);
     scena("ruota", pw, ph, &out, |_| {});
     scena("ruota-strumenti", pw, ph, &out, |a| {
@@ -158,5 +162,98 @@ fn main() {
     rivedi("rivedi-chi-scuro", ThemeId::BancoDiLavoro, &out, 1, None, false, false);
     for m in cedro::i18n::misses() {
         println!("SENZA TRADUZIONE: {m:?}");
+    }
+}
+
+/// La firma digitale: la sezione (vuota e con gli ultimi file), il foglio dei formati con le iconcine
+/// e il visualizzatore sui file di prova del computer (tests/data/firma).
+fn firma(out: &std::path::Path, w: f32, h: f32) {
+    use cedro::firma::{self, trust, At, Opts};
+    use std::sync::Arc;
+    let dati = PathBuf::from("tests/data/firma");
+    let xml = std::fs::read_to_string(dati.join("tl.xml")).unwrap();
+    trust::set_store(trust::Store { entries: trust::parse_tl(&xml, "IT").unwrap(), updated: Some(firma::now()) });
+    let foto = |nome: &str, tema: ThemeId, f: &mut dyn FnMut(&mut App)| {
+        let mut app = App::new(tema);
+        app.anim.calmo = true;
+        app.vai_casa();
+        f(&mut app);
+        let scala = 2.75;
+        let mut cache = GlyphCache::new();
+        let mut p = Painter::new((w * scala) as u32, (h * scala) as u32, scala, Fonts::for_theme(tema), &mut cache);
+        app.disegna(&mut p, w, h);
+        p.save_png(&out.join(format!("{nome}.png"))).unwrap();
+    };
+    let n = cedro_android::ui::attivita_n();
+    for (k, t) in cedro::ui::theme::THEMES.into_iter().enumerate() {
+        foto(&format!("firma-casa-{k}"), t, &mut |a| {
+            a.firma.recent.clear();
+            a.vista_attivita(n - 1);
+        });
+    }
+    foto("firma-casa-recenti", ThemeId::WindowsEssenziale, &mut |a| {
+        a.firma.recent = vec![
+            cedro::ui::firma::Recent { path: "contratto_fornitura.pdf.p7m".into(), level: firma::Level::Ok, headline: "Firma valida".into(), when: firma::now() - 3600 },
+            cedro::ui::firma::Recent { path: "determina_42.pdf".into(), level: firma::Level::Warn, headline: "2 firme valide, con un avviso".into(), when: firma::now() - 90_000 },
+            cedro::ui::firma::Recent { path: "offerta.docx.p7m".into(), level: firma::Level::Bad, headline: "Certificato revocato".into(), when: firma::now() - 6 * 86400 },
+        ];
+        a.vista_attivita(n - 1);
+    });
+    foto("formati-immagini", ThemeId::WindowsEssenziale, &mut |a| {
+        let img = PathBuf::from("docs/hero.png");
+        a.aggiungi_coda(vec![(img, "foto.png".into(), cedro::Kind::Image)]);
+        a.vista_formati();
+    });
+    foto("formati-scuro", ThemeId::BancoDiLavoro, &mut |a| {
+        let img = PathBuf::from("docs/hero.png");
+        a.aggiungi_coda(vec![(img, "foto.png".into(), cedro::Kind::Image)]);
+        a.vista_formati();
+    });
+    for (nome, file, aperte, tema) in [
+        ("vw-p7m", "mario.txt.p7m", vec![], ThemeId::WindowsEssenziale),
+        ("vw-due-firme", "determina_due_firme.pdf", vec![1usize], ThemeId::WindowsEssenziale),
+        ("vw-tsd", "mario.txt.p7m.tsd", vec![], ThemeId::BancoDiLavoro),
+        ("vw-cambiato", "cambiato.txt.p7m", vec![], ThemeId::WindowsEssenziale),
+        ("vw-p7s", "documento.txt.p7s", vec![], ThemeId::WindowsEssenziale),
+    ] {
+        let path = dati.join(file);
+        let rep = firma::verify_path(&path, Opts { at: At::Now, online: false, detached: None, now: None });
+        foto(nome, tema, &mut |a| {
+            a.apri_firmato(path.clone());
+            let doc = if rep.doc.is_empty() { None } else { cedro::ui::firma::write_temp(&rep.doc_name, &rep.doc) };
+            if let Some(v) = a.firma.viewer.as_mut() {
+                v.report = Some(Arc::new(rep.clone()));
+                v.checking = false;
+                v.doc_path = doc.clone();
+                v.open.extend(aperte.iter().copied());
+                if rep.signers.len() == 1 {
+                    v.open.insert(0);
+                }
+            }
+            a.firma_arrivi();
+            // Le pagine, come le prepara glue.
+            if let Some(d) = a.fpag.chiedi.take() {
+                let kind = cedro::kind_of(&d);
+                if kind == cedro::Kind::Pdf {
+                    let n = cedro::pdf_info(&d, None).map(|(n, _)| n as usize).unwrap_or(0);
+                    let mut imgs = Vec::new();
+                    cedro::ui::media::pdf_page_thumbs(&d, &(0..n).collect::<Vec<_>>(), 1200.0, &mut |_, i| {
+                        imgs.extend(i);
+                        true
+                    });
+                    for i in imgs {
+                        a.firma_pagina(&d, Some(i));
+                    }
+                } else {
+                    let n = cedro::ui::preview::page_count(&d).unwrap_or(1);
+                    for k in 0..n {
+                        if let Some(i) = cedro::ui::preview::render_page(&d, k, 1200.0) {
+                            a.firma_pagina(&d, Some(i));
+                        }
+                    }
+                }
+                a.firma_pagina(&d, None);
+            }
+        });
     }
 }

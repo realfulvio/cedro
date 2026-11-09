@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use cedro::conversioni::{self, Control, OptionDef, Values};
 use cedro::ui::gfx::{Align, Fit, Image, Painter, Weight};
 use cedro::ui::theme::{mix, ThemeId};
+use cedro::ui::voci;
 use cedro::Kind;
 
 use super::opzioni::OpzAz;
@@ -18,6 +19,19 @@ use super::pdf::Campo;
 use super::{ic, App, Archivio, Azione, Effetto, Forma, Lavoro, Scheda, Sorgente, Stato, R, TOCCO};
 
 type Rgb = (u8, u8, u8);
+
+/// Una riga del foglio a comparsa: nome, iconcina (colore, tratto, parte piena) e due parole grigie.
+struct RigaElenco {
+    nome: String,
+    icona: Option<(Rgb, &'static str, &'static str)>,
+    nota: &'static str,
+}
+
+impl RigaElenco {
+    fn semplice(nome: &str, nota: &'static str) -> RigaElenco {
+        RigaElenco { nome: nome.to_string(), icona: None, nota }
+    }
+}
 
 /// Un file in coda.
 #[derive(Clone)]
@@ -39,6 +53,7 @@ pub enum Att {
     Tras,
     Yt,
     Web,
+    Firma,
 }
 
 impl Att {
@@ -48,13 +63,17 @@ impl Att {
             Att::Tras => "Trascrizione",
             Att::Yt => "YouTube",
             Att::Web => "Video dal web",
+            Att::Firma => "Firma digitale",
         }
     }
 
     /// Il nome corto, quando le schede non stanno tutte.
     fn corto(self) -> &'static str {
         match self {
+            Att::Conv => "Converti",
+            Att::Tras => "Trascrivi",
             Att::Web => "Web",
+            Att::Firma => "Firma",
             a => a.nome(),
         }
     }
@@ -65,6 +84,7 @@ impl Att {
             Att::Tras => ic::TRANSCRIBE,
             Att::Yt => I_YT,
             Att::Web => ic::WEB,
+            Att::Firma => ic::SHIELD,
         }
     }
 }
@@ -72,9 +92,9 @@ impl Att {
 /// Le attività di questa build (YouTube solo con yt-dlp nell'APK).
 pub fn attivita() -> Vec<Att> {
     if cfg!(feature = "youtube") {
-        vec![Att::Conv, Att::Tras, Att::Yt, Att::Web]
+        vec![Att::Conv, Att::Tras, Att::Yt, Att::Web, Att::Firma]
     } else {
-        vec![Att::Conv, Att::Tras, Att::Web]
+        vec![Att::Conv, Att::Tras, Att::Web, Att::Firma]
     }
 }
 
@@ -102,6 +122,11 @@ fn schiarisci(c: Rgb, scuro: bool) -> Rgb {
     if scuro { mix(c, (255, 255, 255), 0.28) } else { c }
 }
 
+/// Il viola della firma digitale.
+pub fn colore_firma(scuro: bool) -> Rgb {
+    colore_att(Att::Firma, scuro)
+}
+
 /// Il colore di un'attività: gli stessi del computer (Conversioni blu, Trascrizione arancio, YouTube rosso, Web verde).
 pub fn colore_att(a: Att, scuro: bool) -> Rgb {
     use cedro::ui::model::Activity;
@@ -110,6 +135,7 @@ pub fn colore_att(a: Att, scuro: bool) -> Rgb {
         Att::Tras => Activity::Transcribe,
         Att::Yt => Activity::YouTube,
         Att::Web => Activity::Web,
+        Att::Firma => Activity::Firma,
     };
     schiarisci(cedro::ui::theme::activity_color(att), scuro)
 }
@@ -277,8 +303,7 @@ impl Casa {
 
     /// Il nome dell'operazione («PNG», «Comprimi»).
     fn etichetta(&self) -> &'static str {
-        let id = self.operazione();
-        conversioni::formats(self.categoria).iter().chain(conversioni::tools(self.categoria)).find(|s| s.id == id).map(|s| s.label).unwrap_or(id)
+        voci::voce(self.categoria, self.operazione()).label
     }
 
     /// L'altra categoria con dei file, per «Altri file in coda».
@@ -505,6 +530,9 @@ impl App {
     /// Il pulsante grande: un lavoro per ogni file scelto (o il link).
     fn vai_casa_lavori(&mut self) -> Effetto {
         let att = self.casa.att;
+        if att == Att::Firma {
+            return Effetto::Scegli(super::Sorgente::Firmati);
+        }
         if matches!(att, Att::Yt | Att::Web) {
             let link = self.casa.link.trim().to_string();
             if cedro::webvideo::find_url(&link).is_none() {
@@ -562,6 +590,16 @@ impl App {
 
     // ================================================================ disegno
 
+    /// Per le fotografie della `vista`: l'attività `k` della finestra principale.
+    pub fn vista_attivita(&mut self, k: usize) {
+        self.azione_casa(CasaAz::Att(k));
+    }
+
+    /// Per le fotografie della `vista`: il foglio dei formati aperto.
+    pub fn vista_formati(&mut self) {
+        self.casa.elenco = Some(Elenco::Formato);
+    }
+
     pub(super) fn pagina_casa(&mut self, p: &mut Painter, w: f32, h: f32) {
         if self.casa.guida {
             return self.pagina_guida(p, w, h);
@@ -587,6 +625,18 @@ impl App {
         p.rrect(x, y, lato, lato, lato * 0.27, Some(fondo), None);
         let s = lato * 0.62;
         p.icon(icona, x + (lato - s) / 2.0, y + (lato - s) / 2.0, s, col);
+    }
+
+    /// L'iconcina di una voce del menu formati: piastrella appena tinta, icona del colore della voce.
+    #[allow(clippy::too_many_arguments)]
+    fn tessera(&self, p: &mut Painter, x: f32, y: f32, lato: f32, col: Rgb, tratto: &str, pieno: &str) {
+        p.rrect(x, y, lato, lato, (lato * 0.27).round(), Some(mix(col, self.pal().surface, if self.scuro() { 0.8 } else { 0.86 })), None);
+        let s = (lato * 0.62).round();
+        let d = (lato - s) / 2.0;
+        if !pieno.is_empty() {
+            p.icon_fill(pieno, x + d, y + d, s, col);
+        }
+        p.icon(tratto, x + d, y + d, s, col);
     }
 
     /// L'etichetta colorata del formato (`.kb`): restituisce la larghezza.
@@ -633,6 +683,13 @@ impl App {
         let prem = az.is_some() && self.premuto == az;
         p.rrect(rc.0, rc.1, rc.2, rc.3, raggio, Some(if prem { pal.alt } else { pal.surface }), Some((pal.border, 1.0)));
         let mut x = rc.0 + 12.0;
+        // La tendina del formato: davanti al nome l'iconcina colorata, come nel menu.
+        if az == Some(Azione::Casa(CasaAz::Apri(Elenco::Formato))) && testo == self.casa.etichetta() {
+            let v = voci::voce(self.casa.categoria, self.casa.operazione());
+            let ts = (rc.3 - 14.0).min(28.0);
+            self.tessera(p, x - 2.0, rc.1 + (rc.3 - ts) / 2.0, ts, schiarisci(v.color, self.scuro()), v.glyph.stroke, v.glyph.fill);
+            x += ts + 8.0;
+        }
         if !prefisso.is_empty() {
             let pw = p.measure(prefisso, dim, Weight::Regular) + 6.0;
             p.text(prefisso, x, rc.1, pw, rc.3, dim, Weight::Regular, pal.muted, Align::Left);
@@ -819,6 +876,7 @@ impl App {
     fn testo_cta(&self) -> (String, &'static str) {
         match self.casa.att {
             Att::Yt | Att::Web => ("Scarica".into(), ic::DOWNLOAD),
+            Att::Firma => ("Scegli il file firmato".into(), ic::SHIELD),
             Att::Tras => {
                 let n = self.casa.scelti().len();
                 (if n == 1 { "Trascrivi 1 file".into() } else { format!("Trascrivi {n} file") }, ic::TRANSCRIBE)
@@ -837,6 +895,7 @@ impl App {
     fn cta_pronta(&self) -> bool {
         match self.casa.att {
             Att::Yt | Att::Web => cedro::webvideo::find_url(&self.casa.link).is_some(),
+            Att::Firma => true,
             Att::Conv if self.casa.categoria == Kind::Pdf && self.casa.operazione() == "merge" => self.casa.scelti().len() >= 2 || !self.casa.scelti().is_empty(),
             _ => !self.casa.scelti().is_empty(),
         }
@@ -898,6 +957,7 @@ impl App {
         let fascia = (0.0, y, x + w + 16.0, h);
         let s = self.fascia(0, fascia, w, tot, voluto);
         let mut cx = x - s;
+        let mut linea = None;
         p.push_clip(fascia.0, fascia.1, fascia.2, fascia.3);
         for (i, c) in Casa::categorie().iter().enumerate() {
             let on = c.kind == self.casa.categoria;
@@ -912,10 +972,16 @@ impl App {
                 p.text(&n.to_string(), cx + 30.0 + tw + 5.0, y + h / 2.0 - 10.0, 18.0, 18.0, 10.0, Weight::Bold, pal.primary, Align::Center);
             }
             if on {
-                p.fill(cx, y + h - 3.0, ww, 3.0, col);
+                linea = Some((cx + s, ww, col));
             }
             self.colpo((cx, y, ww, h), Azione::Casa(CasaAz::Categoria(i)), fascia);
             cx += ww + passo;
+        }
+        // La linea sotto la categoria scelta scivola verso la nuova (posizione nel contenuto, poi si toglie lo scorrimento).
+        if let Some((lx, lw, col)) = linea {
+            let gx = self.anim.verso(super::anim::Chiave::Categoria, lx, 220.0);
+            let gw = self.anim.verso(super::anim::Chiave::CategoriaLargo, lw, 220.0);
+            p.fill(gx - s, y + h - 3.0, gw, 3.0, col);
         }
         p.pop_clip();
         // Una sfumatura sul bordo dice che c'è dell'altro da quella parte.
@@ -939,6 +1005,9 @@ impl App {
 
     /// Il campo del link e le quattro scelte di «Video dal web» e YouTube. Restituisce l'altezza.
     fn corpo_web(&mut self, p: &mut Painter, x: f32, y0: f32, w: f32, vista: R) -> f32 {
+        if self.casa.att == Att::Firma {
+            return self.corpo_firma(p, x, y0, w, vista);
+        }
         let pal = self.pal();
         let mut y = y0;
         let yt = self.casa.att == Att::Yt;
@@ -1026,7 +1095,7 @@ impl App {
         let x = 12.0;
         let cw = w - 24.0;
         let mut cy = y + 12.0 - self.scorri;
-        if matches!(self.casa.att, Att::Yt | Att::Web) {
+        if matches!(self.casa.att, Att::Yt | Att::Web | Att::Firma) {
             cy += self.corpo_web(p, x, cy, cw, vista);
         } else {
             // Aggiungi file / cartella
@@ -1102,13 +1171,24 @@ impl App {
         p.fill(0.0, ny, w, nav, pal.surface);
         p.fill(0.0, ny, w, 1.0, pal.border);
         let bw = w / att.len() as f32;
+        // I nomi interi se ci stanno tutti, altrimenti quelli corti.
+        let corti = att.iter().any(|a| p.measure(a.nome(), 12.0, Weight::Semibold) + 6.0 > bw);
+        // La piastrella della scelta scivola verso la nuova attività.
+        let scelta = att.iter().position(|a| *a == self.casa.att).unwrap_or(0) as f32;
+        let gx = self.anim.verso(super::anim::Chiave::Scheda, scelta * bw, 220.0);
         for (k, a) in att.iter().enumerate() {
             let on = *a == self.casa.att;
             let col = colore_att(*a, scuro);
             let bx = k as f32 * bw;
-            super::piastrella(p, pal, scuro, bx + bw / 2.0 - 16.0, ny + 6.0, 32.0, a.icona(), col, on);
-            p.text(a.nome(), bx, ny + 40.0, bw, 20.0, 12.0, if on { Weight::Semibold } else { Weight::Regular }, if on { col } else { pal.muted }, Align::Center);
+            let fermo = (gx - scelta * bw).abs() <= 0.5;
+            super::piastrella(p, pal, scuro, bx + bw / 2.0 - 16.0, ny + 6.0, 32.0, a.icona(), col, on && fermo);
+            let nome = if corti { a.corto() } else { a.nome() };
+            p.text(nome, bx, ny + 40.0, bw, 20.0, 12.0, if on { Weight::Semibold } else { Weight::Regular }, if on { col } else { pal.muted }, Align::Center);
             self.colpi.push((Forma::R((bx, ny, bw, nav)), Azione::Casa(CasaAz::Att(k))));
+        }
+        if (gx - scelta * bw).abs() > 0.5 {
+            let a = self.casa.att;
+            super::piastrella(p, pal, scuro, gx + bw / 2.0 - 16.0, ny + 6.0, 32.0, a.icona(), colore_att(a, scuro), true);
         }
     }
 
@@ -1184,6 +1264,20 @@ impl App {
         p.icon(I_GIU, b.0 + b.2 - 22.0, b.1 + 12.0, 16.0, pal.muted);
         self.colpi.push((Forma::R(b), a));
         self.testata_destra(p, w, 0.0, 56.0, true);
+        // La firma digitale non ha passi: si sceglie il file e si guarda.
+        if att == Att::Firma {
+            let vista = (0.0, 64.0, w, h - 64.0 - 86.0);
+            p.push_clip(vista.0, vista.1, vista.2, vista.3);
+            let y = vista.1 + 8.0 - self.scorri;
+            let fine = y + self.corpo_firma(p, 16.0, y, w - 32.0, vista);
+            p.pop_clip();
+            self.scorri_max = (fine + self.scorri - (vista.1 + vista.3) + 8.0).max(0.0);
+            self.scorri = self.scorri.min(self.scorri_max);
+            p.fill(0.0, h - 86.0, w, 1.0, pal.border);
+            let (t, i) = self.testo_cta();
+            self.cta(p, (16.0, h - 72.0, w - 32.0, 54.0), 6.0, Some(i), &t, Some(Azione::Casa(CasaAz::Vai)), 18.0);
+            return;
+        }
         // I tre passi
         let passo = self.casa.passo;
         let etichette = match att {
@@ -1460,7 +1554,7 @@ impl App {
         let vista = (0.0, sy + 56.0, w, h - sy - 56.0 - piede);
         p.push_clip(vista.0, vista.1, vista.2, vista.3);
         let mut y = vista.1 - self.scorri;
-        if matches!(self.casa.att, Att::Yt | Att::Web) {
+        if matches!(self.casa.att, Att::Yt | Att::Web | Att::Firma) {
             y += self.corpo_web(p, x, y, cw, vista);
         } else {
             let vis = self.casa.visibili();
@@ -1580,7 +1674,7 @@ impl App {
         let vista = (0.0, ay + 40.0, w, h - ay - 40.0 - piede - foglio_h);
         p.push_clip(vista.0, vista.1, vista.2, vista.3);
         let mut y = vista.1 + 10.0 - self.scorri;
-        if matches!(self.casa.att, Att::Yt | Att::Web) {
+        if matches!(self.casa.att, Att::Yt | Att::Web | Att::Firma) {
             y += self.corpo_web(p, x, y, cw, vista);
         } else {
             if conv {
@@ -1732,6 +1826,11 @@ impl App {
         p.fill(0.0, py, w, piede, pal.bg);
         p.fill(0.0, py, w, 1.0, pal.border);
         let (t, i) = self.testo_cta();
+        if self.casa.att == Att::Firma {
+            // La firma non ha file in coda: solo il pulsante, largo.
+            self.cta(p, (16.0, py + 13.0, w - 32.0, 52.0), 6.0, Some(i), &t, Some(Azione::Casa(CasaAz::Vai)), 17.0);
+            return;
+        }
         let tw = p.measure(&t, 17.0, Weight::Bold) + 64.0;
         let pronto = self.cta_pronta();
         self.cta(p, (w - 16.0 - tw, py + 13.0, tw, 52.0), 6.0, None, &t, pronto.then_some(Azione::Casa(CasaAz::Vai)), 17.0);
@@ -1956,24 +2055,29 @@ impl App {
         let pal = self.pal();
         let Some(e) = self.casa.elenco else { return };
         let (ml, mt, mr, mb) = self.margini;
-        p.rrect_a(-ml, -mt, w + ml + mr, h + mt + mb, 0.0, (10, 8, 16), 0.45);
+        let velo = self.anim.comparsa(super::anim::Chiave::Foglio, 200.0);
+        p.rrect_a(-ml, -mt, w + ml + mr, h + mt + mb, 0.0, (10, 8, 16), 0.45 * velo);
         self.colpi.push((Forma::R((-ml, -mt, w + ml + mr, h + mt + mb)), Azione::Casa(CasaAz::ChiudiElenco)));
-        let (titolo, voci, attuale): (String, Vec<(String, Option<(Rgb, &'static str)>)>, Option<usize>) = match e {
+        let scuro = self.scuro();
+        let mut gruppi: Vec<(usize, &'static str)> = Vec::new();
+        let (titolo, voci, attuale): (String, Vec<RigaElenco>, Option<usize>) = match e {
             Elenco::Formato => {
                 let tutte = self.operazioni();
-                let n_formati = conversioni::formats(self.casa.categoria).len();
+                let cat = self.casa.categoria;
+                let n_formati = conversioni::formats(cat).iter().filter(|s| s.id != "none").count();
                 let op = self.casa.operazione();
-                let scuro = self.scuro();
-                let voci = tutte
+                if n_formati < tutte.len() {
+                    gruppi.push((0, "Converti in"));
+                    gruppi.push((n_formati, voci::tools_heading(cat)));
+                }
+                let righe = tutte
                     .iter()
-                    .enumerate()
-                    .map(|(i, (id, nome))| {
-                        let k = kind_uscita(self.casa.categoria, id);
-                        let nome = if i >= n_formati { format!("{nome} (strumento)") } else { nome.to_string() };
-                        (nome, Some((colore_kind(k, scuro), icona_kind(k))))
+                    .map(|(id, _)| {
+                        let v = voci::voce(cat, id);
+                        RigaElenco { nome: v.label.to_string(), icona: Some((schiarisci(v.color, scuro), v.glyph.stroke, v.glyph.fill)), nota: v.hint }
                     })
                     .collect();
-                ("Converti in".into(), voci, tutte.iter().position(|t| t.0 == op))
+                ("Formato".into(), righe, tutte.iter().position(|t| t.0 == op))
             }
             Elenco::Opzione(k) => {
                 let defs = self.casa.defs();
@@ -1981,7 +2085,7 @@ impl App {
                     Some(d) => match &d.control {
                         Control::Choice(c) | Control::Segments(c) => {
                             let v = self.casa.valori().get(d);
-                            (d.title.to_string(), c.iter().map(|x| (x.label.to_string(), None)).collect(), c.iter().position(|x| x.value == v))
+                            (d.title.to_string(), c.iter().map(|x| RigaElenco::semplice(x.label, voci::suggerimento(d.opt, x.value))).collect(), c.iter().position(|x| x.value == v))
                         }
                         _ => (String::new(), Vec::new(), None),
                     },
@@ -1994,48 +2098,79 @@ impl App {
                     cedro::Exists::Skip => 2,
                     _ => 0,
                 };
-                ("Se il file esiste già".into(), vec![("Aggiungi -2, -3".into(), None), ("Sostituisci il file".into(), None), ("Salta il file".into(), None)], Some(k))
+                use cedro::Exists as X;
+                (
+                    "Se il file esiste già".into(),
+                    vec![
+                        RigaElenco::semplice("Aggiungi -2, -3", voci::suggerimento_esiste(X::Number)),
+                        RigaElenco::semplice("Sostituisci il file", voci::suggerimento_esiste(X::Replace)),
+                        RigaElenco::semplice("Salta il file", voci::suggerimento_esiste(X::Skip)),
+                    ],
+                    Some(k),
+                )
             }
             Elenco::Voci => {
-                let mut voci = vec![("Automatico: le conta Cedro".to_string(), None), ("Una persona sola".to_string(), None)];
-                voci.extend((2..=8).map(|n| (format!("{n} persone"), None)));
-                ("Quante persone parlano?".into(), voci, Some(self.voci as usize))
+                let mut v = vec![RigaElenco::semplice("Automatico: le conta Cedro", ""), RigaElenco::semplice("Una persona sola", "")];
+                v.extend((2..=8).map(|n| RigaElenco { nome: format!("{n} persone"), icona: None, nota: "" }));
+                ("Quante persone parlano?".into(), v, Some(self.voci as usize))
             }
             Elenco::Attivita => {
-                let scuro = self.scuro();
                 let att = attivita();
-                ("Attività".into(), att.iter().map(|a| (a.nome().to_string(), Some((colore_att(*a, scuro), a.icona())))).collect(), att.iter().position(|a| *a == self.casa.att))
+                ("Attività".into(), att.iter().map(|a| RigaElenco { nome: a.nome().to_string(), icona: Some((colore_att(*a, scuro), a.icona(), "")), nota: "" }).collect(), att.iter().position(|a| *a == self.casa.att))
             }
         };
-        let rh = 52.0;
-        let fh = (64.0 + voci.len() as f32 * rh).min(h * 0.8);
-        self.casa.elenco_max = (64.0 + voci.len() as f32 * rh - fh).max(0.0);
+        let con_note = voci.iter().any(|v| !v.nota.is_empty());
+        let rh = if con_note { 62.0 } else { 52.0 };
+        let gh = 32.0;
+        let alto = 64.0 + voci.len() as f32 * rh + gruppi.len() as f32 * gh;
+        // Il foglio sale dal basso: `entra` va da 0 a 1 nei primi 180 ms.
+        let entra = self.anim.comparsa(super::anim::Chiave::Foglio, 200.0);
+        let fh = alto.min(h * 0.8);
+        self.casa.elenco_max = (alto - fh).max(0.0);
         self.casa.elenco_scorri = self.casa.elenco_scorri.clamp(0.0, self.casa.elenco_max);
         let su = self.casa.elenco_scorri;
-        let fy = h - fh;
+        let fy = h - fh * super::anim::esci(entra);
         p.rrect(0.0, fy, w, fh + mb + 30.0, 24.0, Some(pal.surface), None);
         self.colpi.push((Forma::R((0.0, fy, w, fh)), Azione::Niente));
         p.rrect(w / 2.0 - 20.0, fy + 8.0, 40.0, 5.0, 3.0, Some(pal.border), None);
         p.text(&titolo, 20.0, fy + 18.0, w - 40.0, 34.0, 18.0, Weight::Bold, pal.text, Align::Left);
         let vista = (0.0, fy + 56.0, w, fh - 56.0);
         p.push_clip(vista.0, vista.1, vista.2, vista.3);
-        for (k, (nome, icona)) in voci.iter().enumerate() {
-            let ry = fy + 56.0 + k as f32 * rh - su;
+        let mut ry = fy + 56.0 - su;
+        for (k, riga) in voci.iter().enumerate() {
+            if let Some((_, g)) = gruppi.iter().find(|(at, _)| *at == k) {
+                // Il titolo del gruppo, in piccolo, con la riga fino al bordo (come nel menu del computer).
+                let g = g.to_uppercase();
+                let tw = p.measure(&g, 12.0, Weight::Semibold);
+                p.text(&g, 20.0, ry + 8.0, w - 40.0, gh - 8.0, 12.0, Weight::Semibold, pal.muted, Align::Left);
+                let lx = 20.0 + tw + 12.0;
+                if lx < w - 20.0 {
+                    p.fill(lx, ry + 8.0 + (gh - 8.0) / 2.0, w - 20.0 - lx, 1.0, pal.border);
+                }
+                ry += gh;
+            }
             let on = attuale == Some(k);
             let a = Azione::Casa(CasaAz::Voce(k));
             if on || self.premuto == Some(a) {
                 p.rrect(8.0, ry + 2.0, w - 16.0, rh - 4.0, 10.0, Some(mix(pal.surface, pal.primary, if on { 0.12 } else { 0.06 })), None);
             }
             let mut tx = 20.0;
-            if let Some((col, i)) = icona {
-                self.kt(p, 20.0, ry + 12.0, 28.0, *col, i);
-                tx = 60.0;
+            if let Some((col, tratto, pieno)) = riga.icona {
+                self.tessera(p, 18.0, ry + (rh - 32.0) / 2.0, 32.0, col, tratto, pieno);
+                tx = 62.0;
             }
-            p.text(nome, tx, ry, w - tx - 60.0, rh, 16.0, if on { Weight::Semibold } else { Weight::Regular }, if on { pal.primary } else { pal.text }, Align::Left);
+            let largo = w - tx - 56.0;
+            if riga.nota.is_empty() {
+                p.text(&riga.nome, tx, ry, largo, rh, 16.0, if on { Weight::Semibold } else { Weight::Regular }, if on { pal.primary } else { pal.text }, Align::Left);
+            } else {
+                p.text(&riga.nome, tx, ry + 9.0, largo, 24.0, 16.0, if on { Weight::Semibold } else { Weight::Regular }, if on { pal.primary } else { pal.text }, Align::Left);
+                p.text(riga.nota, tx, ry + 33.0, largo, 20.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+            }
             if on {
-                p.icon(ic::CHECK, w - 46.0, ry + 14.0, 22.0, pal.primary);
+                p.icon(ic::CHECK, w - 46.0, ry + (rh - 22.0) / 2.0, 22.0, pal.primary);
             }
             self.colpo((0.0, ry, w, rh), a, vista);
+            ry += rh;
         }
         p.pop_clip();
     }
