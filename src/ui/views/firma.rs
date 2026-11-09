@@ -188,8 +188,10 @@ fn options(f: &mut Frame, app: &App, r: R, wide: bool) {
         }
         let x = cx + 12.0;
         f.switch(x, cy + 22.0, 46.0, 26.0, on, act, None);
-        f.text(title, x + 58.0, cy + 18.0, cw - 82.0, 22.0, 14.5, SEMI, pal.text);
-        f.para(note, x + 58.0, cy + 42.0, cw - 82.0, 12.5, SANS, pal.muted, 1.35, 2);
+        // Su colonne strette il titolo va a capo, non si taglia.
+        let th = f.p.wrap_height(title, 14.5, SEMI, cw - 82.0, 14.5 * 1.3, 2).max(20.0);
+        f.para(title, x + 58.0, cy + 18.0, cw - 82.0, 14.5, SEMI, pal.text, 1.3, 2);
+        f.para(note, x + 58.0, cy + 22.0 + th, cw - 82.0, 12.5, SANS, pal.muted, 1.35, if th > 24.0 { 2 } else { 3 });
     }
     let k = 3;
     let cx = r.0 + 12.0 + (k % cols) as f32 * cw;
@@ -208,9 +210,10 @@ fn options(f: &mut Frame, app: &App, r: R, wide: bool) {
         }
     };
     f.text("Elenco europeo dei certificatori", x, cy + 18.0, cw - 24.0, 22.0, 14.5, SEMI, pal.text);
-    f.para(&t, x, cy + 42.0, cw - 24.0, 12.5, SANS, c, 1.35, 1);
+    let lh = f.p.wrap_height(&t, 12.5, SANS, cw - 24.0, 12.5 * 1.35, 2).max(17.0);
+    f.para(&t, x, cy + 42.0, cw - 24.0, 12.5, SANS, c, 1.35, 2);
     let bw = f.measure("Aggiorna ora", 13.5, SANS) + 46.0;
-    f.button((x, cy + 66.0, bw, 32.0), "Aggiorna ora", Some(ic::REFRESH), 13.5, Act::FirmaTrust);
+    f.button((x, cy + 48.0 + lh, bw, 32.0), "Aggiorna ora", Some(ic::REFRESH), 13.5, Act::FirmaTrust);
 }
 
 /// «Ultimi file»: i file firmati aperti di recente, con il loro giudizio.
@@ -549,6 +552,15 @@ pub fn draw_viewer(f: &mut Frame, app: &App) {
     f.p.fill(0.0, fy, f.w, FOOT, pal.surface);
     f.hline(0.0, fy, f.w);
     let foot = match &rep {
+        // Un file senza firme: elenco UE e revoca non c'entrano.
+        Some(r) if r.unsigned() => {
+            let mut s = crate::i18n::lit(&r.doc_name).to_string();
+            if pageable && pages > 1 {
+                s.push_str(&format!(", {pages} pagine"));
+            }
+            s.push_str(&format!(", {}", super::super::model::human_size(r.doc.len() as u64)));
+            s
+        }
         Some(r) => {
             let mut s = String::new();
             if !r.doc.is_empty() {
@@ -785,8 +797,10 @@ fn panel(f: &mut Frame, app: &App, rep: &Report, r: R) {
                 let c = level_color(f, t.level);
                 f.icon(ic::CLOCK, x, y + 2.0, 20.0, c);
                 f.text(&format!("{}, {}", firma::long_date(t.time), firma::hm(t.time)), x + 30.0, y, w - 30.0, 22.0, 14.5, SEMI, pal.text);
-                f.text(&format!("{} · {}", crate::i18n::lit(&t.tsa), t.text), x + 30.0, y + 22.0, w - 30.0, 20.0, 13.0, SANS, if t.level == Level::Ok { pal.muted } else { c });
-                y += 52.0;
+                let line = format!("{} · {}", crate::i18n::lit(&t.tsa), t.text);
+                let lh = f.p.wrap_height(&line, 13.0, SANS, w - 30.0, 13.0 * 1.4, 4).max(18.0);
+                f.para(&line, x + 30.0, y + 24.0, w - 30.0, 13.0, SANS, if t.level == Level::Ok { pal.muted } else { c }, 1.4, 4);
+                y += 34.0 + lh;
             }
             f.hline(x, y, w);
             y += 12.0;
