@@ -63,7 +63,7 @@ fn footer(reports: &[&Report]) -> DocBlock {
     let r0 = reports.first();
     let when = r0.map(|r| date_time(r.checked_at)).unwrap_or_default();
     let tl = r0.and_then(|r| r.trust_updated).map(|t| format!("elenco europeo dei certificatori aggiornato il {}", date_time(t))).unwrap_or_else(|| "elenco europeo dei certificatori non ancora scaricato".into());
-    let online = if !reports.is_empty() && reports.iter().all(|r| r.revoca_online()) { "revoca controllata online" } else { "revoca non controllata online" };
+    let online = if !reports.is_empty() && reports.iter().all(|r| r.revoca_online()) { "revoca controllata" } else { "revoca non controllata online" };
     p(format!("Controllato con Cedro {} il {when}; {tl}; {online}.", crate::update::CURRENT))
 }
 

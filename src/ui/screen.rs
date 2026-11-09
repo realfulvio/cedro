@@ -1205,7 +1205,11 @@ impl Screen {
                 let stem = v.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 let signed = v.path.clone();
                 match crate::firma::rapporto::pdf(&[rep.as_ref()]).and_then(|d| super::firma::save_beside(&signed, &format!("{stem} - rapporto di verifica.pdf"), &d)) {
-                    Ok(p) => plat.open_path(&p),
+                    Ok(p) => {
+                        // Si dice dove sta: se il lettore PDF non parte, il file si ritrova lo stesso.
+                        self.notify(&format!("Rapporto salvato: {}", p.display()), false);
+                        plat.open_path(&p);
+                    }
                     Err(e) => self.notify(&e, true),
                 }
             }
