@@ -5,6 +5,7 @@
 use super::*;
 use crate::ui::core::Scroll;
 use crate::ui::model::FileState;
+use crate::ui::gfx::Rgb;
 
 const BAR: f32 = 80.0;
 const NAV_W: f32 = 216.0;
@@ -19,6 +20,8 @@ fn top_bar(f: &mut Frame, app: &App) {
     f.brand(20.0, 17.0, 46.0, 30.0, 14.0, None);
     f.vline(188.0, 24.0, 34.0);
     let mut x = 204.0;
+    // La linea sotto l'attività scelta scivola dalla vecchia alla nuova (posizione, larghezza, colore).
+    let mut lines: Vec<(f32, f32, Rgb)> = Vec::new();
     for a in Activity::ALL {
         let on = app.activity == a;
         let size = if on { 25.0 } else { 18.0 };
@@ -27,25 +30,29 @@ fn top_bar(f: &mut Frame, app: &App) {
         let w = tw + isz + if on { 0.0 } else { 14.0 } + 34.0;
         let r = (x, 0.0, w, BAR - 1.0);
         let act = Act::Activity(a);
-        if !on && f.hovered(&act) {
-            f.p.fill_a(r.0, r.1, r.2, r.3, pal.alt, 0.6);
-        }
+        let t = f.hover_t(&act, !on);
+        f.hover_fill(r, 0.0, pal.alt, 0.6 * t);
         let c = if on { pal.text } else { mix(pal.text, pal.muted, 0.35) };
         // Ogni attività ha il suo colore: l'icona e la linea sotto quella scelta.
         let ac = f.act_color(a);
         let mut tx = x + 17.0;
         if !on {
-            f.icon(a.icon(), tx, 25.0, 30.0, ac);
+            let ip = f.icon_t(&act, true);
+            f.icon_live(a.icon(), tx, 25.0, 30.0, ac, ip);
             tx += isz + 14.0;
         }
         f.text(a.name(), tx, 0.0, tw + 6.0, BAR - 3.0, size, if on { SEMI } else { SANS }, c);
-        if on {
-            f.p.rrect(x + 6.0, BAR - 5.0, w - 12.0, 4.0, 2.0, Some(ac), None);
-        }
+        lines.push((x + 6.0, w - 12.0, ac));
         f.focus_ring(r, 4.0, &act);
         f.hit(r, act);
         x += w + 12.0;
     }
+    let cur = Activity::ALL.iter().position(|a| *a == app.activity).unwrap_or(0);
+    let at = f.glide(&Act::Activity(Activity::Convert), cur as f32).clamp(0.0, (lines.len() - 1) as f32);
+    let (i0, i1) = (at.floor() as usize, at.ceil() as usize);
+    let k = at - i0 as f32;
+    let (a, b) = (lines[i0], lines[i1]);
+    f.p.rrect(a.0 + (b.0 - a.0) * k, BAR - 5.0, a.1 + (b.1 - a.1) * k, 4.0, 2.0, Some(mix(a.2, b.2, k)), None);
     f.window_controls(f.w, 0.0, 48.0, pal.text, pal.alt);
 }
 
@@ -53,6 +60,17 @@ fn categories(f: &mut Frame, app: &App, bottom: f32) {
     let pal = f.pal;
     f.p.fill(0.0, BAR, NAV_W, bottom - BAR, pal.bg);
     f.vline(NAV_W - 1.0, BAR, bottom - BAR);
+    // Il riquadro della categoria scelta scivola dalla vecchia alla nuova prendendone il colore.
+    if app.activity == Activity::Convert {
+        let cats = conversioni::CATEGORIES;
+        let at = f.glide(&Act::Category(usize::MAX), app.category as f32).clamp(0.0, (cats.len() - 1) as f32);
+        let (i0, i1) = (at.floor() as usize, at.ceil() as usize);
+        let k = at - i0 as f32;
+        let kc = mix(f.kind_color(cats[i0].kind), f.kind_color(cats[i1].kind), k);
+        let y = BAR + 20.0 + at * 62.0;
+        f.p.rrect(-8.0, y, NAV_W - 6.0 + 8.0, 56.0, 8.0, Some(mix(kc, pal.bg, 0.8)), None);
+        f.p.rrect(0.0, y + 12.0, 5.0, 32.0, 2.5, Some(kc), None);
+    }
     for (i, cat) in conversioni::CATEGORIES.iter().enumerate() {
         let y = BAR + 20.0 + i as f32 * 62.0;
         let on = i == app.category && app.activity == Activity::Convert;
@@ -60,13 +78,10 @@ fn categories(f: &mut Frame, app: &App, bottom: f32) {
         let r = (0.0, y, NAV_W - 6.0, 56.0);
         // Ogni tipo di file ha il suo colore: piastrella, fondo e linea della scheda scelta.
         let kc = f.kind_color(cat.kind);
-        if on {
-            f.p.rrect(r.0 - 8.0, r.1, r.2 + 8.0, r.3, 8.0, Some(mix(kc, pal.bg, 0.8)), None);
-            f.p.rrect(0.0, y + 12.0, 5.0, 32.0, 2.5, Some(kc), None);
-        } else if f.hovered(&act) {
-            f.p.rrect(r.0 - 8.0, r.1, r.2 + 8.0, r.3, 8.0, Some(pal.alt), None);
-        }
-        f.tile(20.0, y + 10.0, 36.0, super::category_icon(cat.kind), kc, on);
+        let t = f.hover_t(&act, !on);
+        f.hover_fill((r.0 - 8.0, r.1, r.2 + 8.0, r.3), 8.0, pal.alt, t);
+        let lift = crate::ui::anim::back_out(f.icon_t(&act, true)) * 2.0;
+        f.tile(20.0, y + 10.0 - lift, 36.0, super::category_icon(cat.kind), kc, on);
         f.text(cat.name, 72.0, y, 118.0, 56.0, 19.0, if on { SEMI } else { SANS }, pal.text);
         let count = app.files.iter().filter(|x| !x.voice_only && x.kind == cat.kind).count();
         if count > 0 && !on {
