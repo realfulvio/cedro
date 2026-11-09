@@ -33,6 +33,20 @@ pub const MEMORY: &str = "M4.5 7.0h15.0a1.5 1.5 0 0 1 1.5 1.5v7.0a1.5 1.5 0 0 1 
 pub const LOCK: &str = "M7.0 11.0h10.0a2.0 2.0 0 0 1 2.0 2.0v5.0a2.0 2.0 0 0 1 -2.0 2.0h-10.0a2.0 2.0 0 0 1 -2.0 -2.0v-5.0a2.0 2.0 0 0 1 2.0 -2.0z M8 11V8a4 4 0 0 1 8 0v3";
 /// Il processore o la scheda video (un chip).
 pub const CHIP: &str = "M8.0 6.0h8.0a2.0 2.0 0 0 1 2.0 2.0v8.0a2.0 2.0 0 0 1 -2.0 2.0h-8.0a2.0 2.0 0 0 1 -2.0 -2.0v-8.0a2.0 2.0 0 0 1 2.0 -2.0z M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3";
+/// Firma digitale: lo scudo con la spunta.
+pub const SHIELD: &str = "M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6l8-3z M8.5 12l2.5 2.5 4.5-5";
+/// La penna della firma.
+pub const PEN: &str = "M4 20l4-1 11-11-3-3L5 16l-1 4z M14 6l3 3";
+/// La busta firmata.
+pub const ENVELOPE: &str = "M5.0 6.0h14.0a1.5 1.5 0 0 1 1.5 1.5v9.0a1.5 1.5 0 0 1 -1.5 1.5h-14.0a1.5 1.5 0 0 1 -1.5 -1.5v-9.0a1.5 1.5 0 0 1 1.5 -1.5z M4 7l8 6 8-6";
+/// Apri fuori da Cedro.
+pub const OPEN_OUT: &str = "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5";
+/// Il pannello a destra.
+pub const PANEL: &str = "M5.5 4.5h13.0a2.0 2.0 0 0 1 2.0 2.0v11.0a2.0 2.0 0 0 1 -2.0 2.0h-13.0a2.0 2.0 0 0 1 -2.0 -2.0v-11.0a2.0 2.0 0 0 1 2.0 -2.0z M14 4.5v15";
+/// Stampa.
+pub const PRINT: &str = "M7 9V4h10v5M7 17H5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M7 14h10v6H7z";
+pub const ZOOM_OUT: &str = "M4.0 10.0a6.0 6.0 0 1 0 12.0 0a6.0 6.0 0 1 0 -12.0 0z M15 15l6 6M7 10h6";
+pub const REFRESH: &str = "M20 11a8 8 0 0 0-14.6-4.5M4 13a8 8 0 0 0 14.6 4.5M5 3v4h4M19 21v-4h-4";
 pub const WARNING: &str = "M12 3l10 18H2zM12 9v5M12 17v.1";
 pub const WEB: &str = "M3.0 12.0a9.0 9.0 0 1 0 18.0 0a9.0 9.0 0 1 0 -18.0 0z M8.0 12.0a4.0 9.0 0 1 0 8.0 0a4.0 9.0 0 1 0 -8.0 0z M3 12h18";
 pub const ZOOM_IN: &str = "M4.0 10.0a6.0 6.0 0 1 0 12.0 0a6.0 6.0 0 1 0 -12.0 0z M15 15l6 6M7 10h6M10 7v6";
