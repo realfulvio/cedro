@@ -32,6 +32,9 @@ pub(crate) struct H264Mkv {
     pub default_100ns: i64,
     scale: u64,
     video_track: u64,
+    /// L'ultimo cluster arriva fino in fondo al file: registrazione interrotta (tagliato, o con la misura
+    /// «sconosciuta» di chi scrive a flusso). Lì un blocco a metà chiude la lettura invece di essere un errore.
+    open_tail: bool,
 }
 
 struct Piece {
@@ -63,16 +66,28 @@ impl H264Mkv {
             default_100ns: 0,
             scale: 1_000_000,
             video_track: 0,
+            open_tail: false,
         };
         while position(&mut mkv.reader)? + 2 <= seg_end {
             let id = read_id(&mut mkv.reader)?;
             let (size, unknown) = read_len(&mut mkv.reader)?;
+            let start = position(&mut mkv.reader)?;
+            let end = start.saturating_add(size);
+            // Registrazione interrotta (OBS, telefoni) o scritta a flusso: dal cluster tagliato o senza misura
+            // si legge fino in fondo quello che c'è, come per gli AVI.
+            if id == CLUSTER && (unknown || end > len) {
+                mkv.clusters.push((start, seg_end.saturating_sub(start)));
+                mkv.open_tail = true;
+                break;
+            }
             if unknown {
                 return Err("il video non è stato letto".into());
             }
-            let start = position(&mut mkv.reader)?;
-            let end = start.saturating_add(size);
             if end > len {
+                // Dopo i cluster interi (gli indici in fondo tagliati) i fotogrammi ci sono già tutti.
+                if !mkv.clusters.is_empty() {
+                    break;
+                }
                 return Err("il video non è stato letto".into());
             }
             match id {
@@ -97,17 +112,33 @@ impl H264Mkv {
         let clusters = self.clusters.clone();
         let scale = self.scale.max(1);
         let video = self.video_track;
-        for (at, size) in clusters {
+        let count = clusters.len();
+        for (index, (at, size)) in clusters.into_iter().enumerate() {
+            let tail = self.open_tail && index + 1 == count;
             let end = at.saturating_add(size);
             self.reader.seek(SeekFrom::Start(at)).map_err(|_| "il video non è stato letto".to_string())?;
             let mut cluster_ts = 0u64;
             while position(&mut self.reader)? + 2 <= end {
-                let id = read_id(&mut self.reader)?;
-                let (child, unknown) = read_len(&mut self.reader)?;
+                let header = read_id(&mut self.reader).and_then(|id| Ok((id, read_len(&mut self.reader)?)));
+                let (id, (child, unknown)) = match header {
+                    Ok(header) => header,
+                    // Il file finisce in mezzo a un'intestazione.
+                    Err(_) if tail => break,
+                    Err(err) => return Err(err),
+                };
+                if tail && id == CLUSTER {
+                    // Il cluster dopo, dentro quello senza misura: i suoi elementi seguono qui.
+                    cluster_ts = 0;
+                    continue;
+                }
                 if unknown {
                     return Err("il video non è stato letto".into());
                 }
                 let child_end = position(&mut self.reader)?.saturating_add(child);
+                if tail && child_end > end {
+                    // L'ultimo blocco è tagliato: si tiene quello che c'era prima.
+                    break;
+                }
                 match id {
                     CLUSTER_TIME => cluster_ts = read_uint(&mut self.reader, child)?,
                     SIMPLE_BLOCK => {
@@ -492,7 +523,52 @@ fn vint_at(data: &[u8], at: usize) -> Result<(u64, usize, usize), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::split_block;
+    use super::{split_block, H264Mkv};
+
+    fn el(id: &[u8], body: &[u8]) -> Vec<u8> {
+        let mut out = id.to_vec();
+        out.push(0x01);
+        out.extend_from_slice(&(body.len() as u64).to_be_bytes()[1..]);
+        out.extend_from_slice(body);
+        out
+    }
+
+    /// Una registrazione interrotta: segmento e cluster senza misura, l'ultimo blocco tagliato. I fotogrammi
+    /// interi si leggono, quello tagliato no.
+    #[test]
+    fn interrupted_recording_keeps_the_whole_blocks() {
+        let unknown = [0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
+        let entry = [el(&[0xD7], &[1]), el(&[0x83], &[1]), el(&[0x86], b"V_MPEG4/ISO/AVC")].concat();
+        let mut file = el(&[0x1A, 0x45, 0xDF, 0xA3], &el(&[0x42, 0x82], b"matroska"));
+        file.extend_from_slice(&[0x18, 0x53, 0x80, 0x67]);
+        file.extend_from_slice(&unknown);
+        file.extend(el(&[0x16, 0x54, 0xAE, 0x6B], &el(&[0xAE], &entry)));
+        for (ts, frames) in [(0u8, [b"uno", b"due"]), (40, [b"tre", b"qua"])] {
+            file.extend_from_slice(&[0x1F, 0x43, 0xB6, 0x75]);
+            file.extend_from_slice(&unknown);
+            file.extend(el(&[0xE7], &[ts]));
+            for (n, frame) in frames.iter().enumerate() {
+                file.extend(el(&[0xA3], &[&[0x81, 0x00, n as u8 * 20, 0x80][..], &frame[..]].concat()));
+            }
+        }
+        // L'ultimo blocco: l'intestazione dice 100 byte, il file finisce prima.
+        file.extend_from_slice(&[0xA3, 0x01, 0, 0, 0, 0, 0, 0, 100, 0x81, 0x00]);
+        let dir = std::env::temp_dir().join(format!("cedro-mkv-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("tagliato.mkv");
+        std::fs::write(&path, &file).unwrap();
+        let mut mkv = H264Mkv::open(&path).unwrap();
+        let mut got = Vec::new();
+        mkv.each(&mut |data, time, _| {
+            got.push((data.to_vec(), time));
+            Ok(())
+        })
+        .unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        let frames: Vec<&[u8]> = got.iter().map(|(d, _)| d.as_slice()).collect();
+        assert_eq!(frames, vec![&b"uno"[..], b"due", b"tre", b"qua"]);
+        assert_eq!(got[2].1, 40 * 10_000);
+    }
 
     #[test]
     fn block_without_lacing() {
