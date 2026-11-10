@@ -549,6 +549,10 @@ fn find_tables(shapes: &[Shape2], page: (f64, f64), glyphs: &mut Vec<Glyph>) -> 
             }
         }
     }
+    // Una griglia disegnata cella per cella (un riquadro per ogni giorno, per ogni casella) ha i lati
+    // spezzati: si riuniscono i tratti che si toccano, così le righe tornano lunghe come la tabella.
+    merge_collinear(&mut hs);
+    merge_collinear(&mut vs);
     // Segmenti orizzontali con la stessa estensione: una griglia.
     // Il primo gruppo che va bene vince; l'indice a celle di 2,5 punti evita di confrontare ogni
     // segmento con tutti i gruppi (i disegni tecnici ne hanno decine di migliaia).
@@ -572,7 +576,7 @@ fn find_tables(shapes: &[Shape2], page: (f64, f64), glyphs: &mut Vec<Glyph>) -> 
             }
         }
     }
-    let mut tables = Vec::new();
+    let mut cands: Vec<(Vec<f64>, Vec<f64>, Vec<&Seg>)> = Vec::new();
     for (gx0, gx1, members) in groups {
         let mut ys: Vec<f64> = members.iter().map(|&i| hs[i].pos).collect();
         ys.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -613,6 +617,10 @@ fn find_tables(shapes: &[Shape2], page: (f64, f64), glyphs: &mut Vec<Glyph>) -> 
             let (top, bottom) = (ys[0], *ys.last().unwrap());
             let mut cols: Vec<f64> = vec![gx0, gx1];
             for v in verticals.iter().filter(|v| v.a < bottom - 1.0 && v.b > top + 1.0) {
+                // Il bordo di uno sfondo che sta dentro la cella (a due punti dalla linea vera) non è una colonna.
+                if !v.visible && verticals.iter().any(|w| w.visible && (w.pos - v.pos).abs() < 4.5 && w.a < bottom && w.b > top) {
+                    continue;
+                }
                 cols.push(v.pos);
             }
             cols.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -620,10 +628,63 @@ fn find_tables(shapes: &[Shape2], page: (f64, f64), glyphs: &mut Vec<Glyph>) -> 
             if cols.len() < 2 {
                 continue;
             }
-            tables.push(build_table(&ys, &cols, &hs, &verticals, &fills, glyphs));
+            cands.push((ys, cols, verticals.clone()));
         }
     }
-    tables
+    // Una colonna sola dentro un'altra tabella è lo sfondo di una casella (il bollino colorato di un giorno,
+    // l'etichetta di una cella), non una tabella: non va in Word come tabella a parte.
+    let boxes: Vec<[f64; 4]> = cands.iter().map(|(ys, cols, _)| [cols[0], ys[0], *cols.last().unwrap(), *ys.last().unwrap()]).collect();
+    let keep: Vec<bool> = (0..cands.len())
+        .map(|i| {
+            if cands[i].1.len() > 2 {
+                return true;
+            }
+            // Quanto della sua altezza sta dentro tabelle con più colonne, che ne contengono la larghezza.
+            let (a, h) = (&boxes[i], boxes[i][3] - boxes[i][1]);
+            let covered: f64 = (0..cands.len())
+                .filter(|&j| j != i && cands[j].1.len() > 2 && a[0] >= boxes[j][0] - 1.5 && a[2] <= boxes[j][2] + 1.5)
+                .map(|j| (a[3].min(boxes[j][3]) - a[1].max(boxes[j][1])).max(0.0))
+                .sum();
+            covered < 0.6 * h
+        })
+        .collect();
+    let area = |b: &[f64; 4]| (b[2] - b[0]) * (b[3] - b[1]);
+    // Le tabelle più grandi per prime: prendono il loro testo prima che lo faccia una più piccola.
+    let mut order: Vec<usize> = (0..cands.len()).filter(|&i| keep[i]).collect();
+    order.sort_by(|&a, &b| area(&boxes[b]).partial_cmp(&area(&boxes[a])).unwrap_or(std::cmp::Ordering::Equal));
+    let mut built: Vec<(usize, Table)> = Vec::new();
+    for i in order {
+        let (ys, cols, verticals) = &cands[i];
+        built.push((i, build_table(ys, cols, &hs, verticals, &fills, glyphs)));
+    }
+    built.sort_by_key(|(i, _)| *i);
+    built.into_iter().map(|(_, t)| t).collect()
+}
+
+/// Riunisce i segmenti sulla stessa linea che si toccano (o quasi), a parità di aspetto.
+fn merge_collinear(segs: &mut Vec<Seg>) {
+    if segs.len() < 2 {
+        return;
+    }
+    segs.sort_by(|p, q| {
+        (p.pos * 2.0).round().partial_cmp(&(q.pos * 2.0).round()).unwrap_or(std::cmp::Ordering::Equal).then(p.visible.cmp(&q.visible)).then(p.a.partial_cmp(&q.a).unwrap_or(std::cmp::Ordering::Equal))
+    });
+    let mut out: Vec<Seg> = Vec::with_capacity(segs.len());
+    for s in segs.drain(..) {
+        match out.last_mut() {
+            Some(last)
+                if (last.pos - s.pos).abs() < 0.6
+                    && last.visible == s.visible
+                    && (last.width - s.width).abs() < 0.3
+                    && last.color == s.color
+                    && s.a <= last.b + 1.5 =>
+            {
+                last.b = last.b.max(s.b);
+            }
+            _ => out.push(s),
+        }
+    }
+    *segs = out;
 }
 
 fn build_table(ys: &[f64], cols: &[f64], hs: &[Seg], verticals: &[&Seg], fills: &[&Shape2], glyphs: &mut Vec<Glyph>) -> Table {
@@ -1669,16 +1730,23 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
         figures = kept;
         // Il testo chiaro stava sul fondo scuro della scheda: in Word, su carta bianca, non si
         // leggerebbe. Prende il colore del fondo (o il nero se il fondo è chiaro anche lui).
-        for g in glyphs.iter_mut().filter(|g| light(g.color) && boxes.iter().any(|f| g.x >= f.x0 && g.x <= f.x1 && g.y >= f.y0 && g.y <= f.y1)) {
+        for g in glyphs.iter_mut().filter(|g| light(g.color)) {
+            let in_box = boxes.iter().any(|f| g.x >= f.x0 && g.x <= f.x1 && g.y >= f.y0 && g.y <= f.y1);
+            let in_table = tables.iter().any(|t| g.x >= t.x0 - 1.0 && g.x <= t.cols.last().copied().unwrap_or(t.x0) + 1.0 && g.y >= t.top - 1.0 && g.y <= t.bottom + 1.0);
+            // Fuori dalle schede conta solo un fondo scuro vero (una fascia col titolo): senza, il testo resta com'è.
+            if !in_box && in_table {
+                continue;
+            }
             let under = shapes
                 .iter()
                 .filter(|s| s.x0 <= g.x && g.x <= s.x1 && s.y0 <= g.y && g.y <= s.y1)
                 .filter_map(|s| s.fill.map(|c| (c, (s.x1 - s.x0) * (s.y1 - s.y0))))
                 .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-            g.color = match under {
-                Some((c, _)) if !light(c) => c,
-                _ => [0, 0, 0],
-            };
+            match under {
+                Some((c, _)) if !light(c) => g.color = c,
+                _ if in_box => g.color = [0, 0, 0],
+                _ => {}
+            }
         }
         // Il testo dentro una figura fa parte dell'immagine.
         glyphs.retain(|g| !figures.iter().any(|f| g.x >= f.x0 && g.x <= f.x1 && g.y >= f.y0 && g.y <= f.y1));
@@ -3472,6 +3540,50 @@ mod tests {
             assert!(document.contains(words), "manca «{words}»: {document}");
         }
         // Il testo bianco della scheda non resta bianco su carta bianca.
+        assert!(!document.contains("FFFFFF"), "{document}");
+    }
+
+    fn docx_xml_of(pdf: &[u8], name: &str) -> String {
+        let pages = read_pages(pdf, &ReadOptions::default(), |_| true).unwrap();
+        let docx = docx(&pages, |_| String::new());
+        let dir = std::env::temp_dir().join(format!("cedro-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("prova.docx");
+        std::fs::write(&path, docx).unwrap();
+        let document = crate::doctext::zip_entry_for_test(&path, "word/document.xml");
+        let _ = std::fs::remove_dir_all(dir);
+        document
+    }
+
+    #[test]
+    fn a_grid_drawn_cell_by_cell_is_one_table_even_with_coloured_badges_inside() {
+        // Un calendario: ogni giorno è un riquadro col suo bordo, e alcuni hanno un bollino colorato
+        // a due punti dal bordo. Deve restare una tabella 3×3, non una colonna per ogni bollino.
+        let mut c = String::new();
+        for row in 0..3 {
+            for col in 0..3 {
+                let (x, y) = (60.0 + col as f64 * 150.0, 600.0 - row as f64 * 60.0);
+                c.push_str(&format!("0.5 G 1 1 1 rg {x} {y} 150 60 re B "));
+                if (row + col) % 2 == 0 {
+                    c.push_str(&format!("0.2 0.4 0.8 rg {} {} 146 36 re f ", x + 2.0, y + 2.0));
+                }
+                c.push_str(&format!("0 0 0 rg BT /F1 9 Tf {} {} Td (G{}{}) Tj ET ", x + 5.0, y + 48.0, row, col));
+            }
+        }
+        let document = docx_xml_of(&one_page_pdf(&c), "griglia");
+        assert_eq!(document.matches("<w:tbl>").count(), 1, "{document}");
+        assert_eq!(document.matches("<w:gridCol ").count(), 3, "{document}");
+        assert_eq!(document.matches("<w:tr>").count(), 3, "{document}");
+        for cell in ["G00", "G11", "G22"] {
+            assert!(document.contains(cell), "manca {cell}");
+        }
+    }
+
+    #[test]
+    fn white_title_on_a_dark_band_stays_readable_on_white_paper() {
+        let c = "0.05 0.35 0.25 rg 0 760 595 82 re f 1 1 1 rg BT /F1 20 Tf 40 800 Td (Calendario della raccolta) Tj ET 0 0 0 rg BT /F1 10 Tf 40 600 Td (Testo normale della pagina.) Tj ET";
+        let document = docx_xml_of(&one_page_pdf(c), "fascia");
+        assert!(document.contains("Calendario della raccolta"));
         assert!(!document.contains("FFFFFF"), "{document}");
     }
 

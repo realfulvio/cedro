@@ -12,7 +12,8 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Due correzioni: le foto in WebP pesano molto meno e il PDF in Word non trasforma più in immagini i riquadri con il testo.**
+**Il PDF in Word legge bene i calendari a caselle, e il WebP ha il cursore della qualità.**
 
-- JPG (e altre immagini) in WebP: ora il WebP è «leggero» davvero, con la qualità che scegli. Una foto da 80 KB in JPG pesava 570 KB in WebP, ora ne pesa circa 60. Per loghi e grafica, dove il formato senza perdita pesa meno, Cedro tiene quello; la trasparenza resta esatta.
-- PDF in Word: le schede colorate e i riquadri con frasi (per esempio un calendario o un volantino impaginato) restano testo da modificare, invece di diventare un'immagine; il testo chiaro su sfondo scuro prende il colore giusto invece di sparire su bianco.
+- PDF in Word: le tabelle disegnate casella per casella (un calendario con un riquadro per ogni giorno, un planner, un orario) tornano una tabella sola, con le sue colonne e righe, invece di decine di tabelline. Un calendario di prova di 6 pagine, che veniva fuori di 51 pagine, ora resta di 6 con tutte le parole.
+- PDF in Word: i titoli bianchi su una fascia colorata non spariscono più sulla carta bianca.
+- WebP e AVIF: nella ruota e in Conversioni c'è il cursore «Qualità», come per il JPG; prima la scelta c'era solo per JPG e compressione.

@@ -228,9 +228,9 @@ pub struct OptStyle {
 
 pub const OPT_STD: OptStyle = OptStyle { label: 15.0, note: 14.0, control_h: 42.0, gap: 24.0, visible: 2, switch_w: 52.0, switch_h: 28.0 };
 
-/// Vero se il motore usa la qualità per la voce scelta (JPEG, compressione, PDF di immagini, video).
+/// Vero se il motore usa la qualità per la voce scelta (JPEG, WebP, AVIF, compressione, PDF di immagini, video).
 pub fn uses_quality(kind: Kind, action: &str) -> bool {
-    matches!((kind, action), (Kind::Image, "jpeg" | "compress" | "pdf") | (Kind::Pdf, "jpg") | (Kind::Video, "mp4"))
+    matches!((kind, action), (Kind::Image, "jpeg" | "webp" | "avif" | "compress" | "pdf") | (Kind::Pdf, "jpg") | (Kind::Video, "mp4"))
 }
 
 /// Il nome della voce scelta per la scelta «Formato».
