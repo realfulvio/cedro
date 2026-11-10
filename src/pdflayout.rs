@@ -3388,6 +3388,93 @@ mod tests {
         }
     }
 
+    fn glyphs_of(lines: &[(&str, f64)], x: f64, size: f64) -> Vec<Glyph> {
+        let mut out = Vec::new();
+        for (text, y) in lines {
+            for (k, ch) in text.chars().enumerate() {
+                out.push(Glyph {
+                    text: ch.to_string(),
+                    x: x + k as f64 * size * 0.5,
+                    y: *y,
+                    size,
+                    adv: size * 0.5,
+                    stretch: 100,
+                    color: [255, 255, 255],
+                    bold: false,
+                    italic: false,
+                    font: "Helvetica".into(),
+                    font_key: None,
+                });
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_card_with_sentences_is_a_text_box_and_a_chart_with_labels_is_not() {
+        let card = Figure { x0: 40.0, y0: 100.0, x1: 300.0, y1: 300.0 };
+        let sentences = glyphs_of(&[("Umido organico", 120.0), ("Contenitore marrone da 25 litri con microchip.", 160.0), ("Sacchetti compostabili ben chiusi dentro il contenitore.", 180.0)], 50.0, 8.0);
+        assert!(text_box(&card, &sentences, &[]));
+        // Una sola frase che è quasi tutto il testo: la fascia col titolo e il sottotitolo.
+        let band = glyphs_of(&[("Ottobre 2026", 130.0), ("Calendario giorno per giorno della zona", 160.0)], 50.0, 8.0);
+        assert!(text_box(&card, &band, &[]));
+        // Un grafico: etichette brevi e numeri, che restano parte dell'immagine.
+        let chart = glyphs_of(&[("40", 120.0), ("30", 140.0), ("Gen Feb Mar Apr", 280.0), ("Number of Splits", 290.0)], 50.0, 8.0);
+        assert!(!text_box(&card, &chart, &[]));
+        // Con un'immagine incorporata dentro resta una figura, anche se ha frasi.
+        let photo = Pic { x0: 60.0, y0: 200.0, x1: 200.0, y1: 290.0, order: 0 };
+        assert!(!text_box(&card, &sentences, &[photo]));
+    }
+
+    /// Un PDF di una pagina con il contenuto dato (Helvetica come /F1).
+    fn one_page_pdf(content: &str) -> Vec<u8> {
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>".to_string(),
+            format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len() + 1),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
+        ];
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for (i, o) in objects.iter().enumerate() {
+            offsets.push(pdf.len());
+            pdf.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+        }
+        let xref = pdf.len();
+        pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+        for o in offsets {
+            pdf.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+        pdf
+    }
+
+    #[test]
+    fn the_sentences_of_a_coloured_card_stay_text_in_word_and_can_be_read() {
+        // Una scheda: fondo verde scuro, fascia del titolo e tre bollini che si toccano (cinque disegni),
+        // con il testo bianco sopra; sotto, un paragrafo normale.
+        let mut c = String::from("0.05 0.35 0.25 rg 40 500 260 200 re f 0.02 0.25 0.18 rg 40 670 260 30 re f ");
+        c.push_str("0.9 0.6 0.1 rg 260 675 10 10 re f 272 675 10 10 re f 284 675 10 10 re f ");
+        c.push_str("1 1 1 rg BT /F1 12 Tf 50 680 Td (Umido organico) Tj ET ");
+        c.push_str("BT /F1 9 Tf 50 640 Td (Contenitore marrone da venticinque litri con microchip.) Tj ET ");
+        c.push_str("BT /F1 9 Tf 50 625 Td (Sacchetti compostabili ben chiusi dentro il contenitore.) Tj ET ");
+        c.push_str("0 0 0 rg BT /F1 10 Tf 40 450 Td (Il calendario vale per tutta la zona del capoluogo.) Tj ET");
+        let pages = read_pages(&one_page_pdf(&c), &ReadOptions::default(), |_| true).unwrap();
+        let docx = docx(&pages, |_| String::new());
+        let dir = std::env::temp_dir().join(format!("cedro-scheda-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("scheda.docx");
+        std::fs::write(&path, docx).unwrap();
+        let document = crate::doctext::zip_entry_for_test(&path, "word/document.xml");
+        let _ = std::fs::remove_dir_all(dir);
+        for words in ["Umido organico", "venticinque litri con microchip", "compostabili ben chiusi", "tutta la zona"] {
+            assert!(document.contains(words), "manca «{words}»: {document}");
+        }
+        // Il testo bianco della scheda non resta bianco su carta bianca.
+        assert!(!document.contains("FFFFFF"), "{document}");
+    }
+
     #[test]
     fn absurdly_wide_text_does_not_allocate_a_column_per_point() {
         let spans = vec![vec![(0.0, 10.0), (1.0e12, 1.0e12 + 5.0)]; 8];
