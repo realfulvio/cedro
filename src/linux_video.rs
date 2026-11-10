@@ -1205,13 +1205,15 @@ fn write_symphonia_audio(input: &Path, sink: &mut H264Aac) -> Result<(), String>
     let chosen = format
         .tracks()
         .iter()
-        .find_map(|track| Some((track.id, crate::symph::decoder(crate::symph::audio_params(track)?).ok()?)));
-    let Some((audio_id, mut dec)) = chosen else {
+        .find_map(|track| Some((track.id, track.time_base, crate::symph::decoder(crate::symph::audio_params(track)?).ok()?)));
+    let Some((audio_id, time_base, mut dec)) = chosen else {
         return Err("l'audio del video non è stato letto".into());
     };
     let mut packets = 0u32;
     let mut samples = 0usize;
     let mut buf = Vec::new();
+    // Frequenza e canali dell'ultimo pacchetto decodificato, per il silenzio al posto di quelli rovinati.
+    let mut format_seen: Option<(u32, u16)> = None;
     loop {
         let packet = match format.next_packet() {
             Ok(Some(packet)) => packet,
@@ -1228,7 +1230,15 @@ fn write_symphonia_audio(input: &Path, sink: &mut H264Aac) -> Result<(), String>
         packets += 1;
         let decoded = match dec.decode(&packet) {
             Ok(decoded) => decoded,
-            Err(SymError::DecodeError(_)) => continue,
+            Err(SymError::DecodeError(_)) => {
+                if let Some((rate, channels)) = format_seen {
+                    let silence = crate::symph::silence_for(&packet, time_base, rate, channels);
+                    if !silence.is_empty() {
+                        sink.write_pcm(&silence, channels, rate)?;
+                    }
+                }
+                continue;
+            }
             Err(SymError::ResetRequired) => {
                 dec.reset();
                 continue;
@@ -1240,6 +1250,7 @@ fn write_symphonia_audio(input: &Path, sink: &mut H264Aac) -> Result<(), String>
         if buf.is_empty() {
             continue;
         }
+        format_seen = Some((rate, channels));
         samples += buf.len();
         sink.write_pcm(&buf, channels, rate)?;
     }
@@ -1368,6 +1379,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let mut audio_id = None;
     let mut audio_rate = 0u32;
     let mut audio_channels = 0u16;
+    let mut audio_base = None;
     for track in format.tracks() {
         if track.id == video_id {
             continue;
@@ -1375,6 +1387,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         let Some(params) = crate::symph::audio_params(track) else { continue };
         if let Ok(dec) = crate::symph::decoder(params) {
             audio_id = Some(track.id);
+            audio_base = track.time_base;
             audio_rate = params.sample_rate.unwrap_or(44_100);
             audio_channels = params.channels.as_ref().map(|ch| ch.count() as u16).unwrap_or(1).max(1);
             audio_dec = Some(dec);
@@ -1394,6 +1407,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                 let _ = decoder.decode(&header);
             }
             let mut last = (0i64, 333_333i64);
+            let mut format_seen: Option<(u32, u16)> = None;
             loop {
                 let packet = match format.next_packet() {
                     Ok(Some(packet)) => packet,
@@ -1424,7 +1438,16 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                     let Some(dec) = audio_dec.as_mut() else { continue };
                     let decoded = match dec.decode(&packet) {
                         Ok(decoded) => decoded,
-                        Err(SymError::DecodeError(_)) => continue,
+                        Err(SymError::DecodeError(_)) => {
+                            // Il silenzio al posto del pacchetto rovinato: l'audio dopo resta a tempo col video.
+                            if let Some((rate, channels)) = format_seen {
+                                let samples = crate::symph::silence_for(&packet, audio_base, rate, channels);
+                                if !samples.is_empty() {
+                                    sent(emit(Decoded::Pcm(EarlyPcm { samples, channels, rate })))?;
+                                }
+                            }
+                            continue;
+                        }
                         Err(SymError::ResetRequired) => {
                             dec.reset();
                             continue;
@@ -1437,6 +1460,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                     if samples.is_empty() {
                         continue;
                     }
+                    format_seen = Some((rate, channels));
                     audio_samples += samples.len();
                     let pcm = EarlyPcm { samples, channels, rate };
                     sent(emit(Decoded::Pcm(pcm)))?;
