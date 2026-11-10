@@ -542,7 +542,52 @@ fn save_image(img: &DynamicImage, path: &Path, format: ImageFormat, quality: u8,
             .map_err(|e| err(e.to_string()))?;
         return Ok(());
     }
+    if format == ImageFormat::WebP {
+        return write_bytes(path, &webp_bytes(img, quality)?);
+    }
     img.save_with_format(path, format).map_err(|e| err(e.to_string()))
+}
+
+/// Il lato massimo di un WebP con perdita (VP8: 14 bit).
+const WEBP_LOSSY_MAX_SIDE: u32 = 16383;
+
+/// Un WebP: con perdita (VP8, la trasparenza resta esatta) alla qualità di Cedro, perché «WebP» deve
+/// essere il formato leggero; senza perdita (VP8L) con la qualità 100, oltre il lato massimo del VP8 e
+/// quando così pesa meno (grafica, schermate, tinte piatte: lì è anche più fedele).
+fn webp_bytes(img: &DynamicImage, quality: u8) -> CedroResult<Vec<u8>> {
+    let (w, h) = (img.width(), img.height());
+    // I pixel come li vuole il codificatore: con il canale alfa solo se c'è una trasparenza vera.
+    let rgba = img.color().has_alpha().then(|| img.to_rgba8()).filter(|p| p.as_raw().chunks_exact(4).any(|px| px[3] != 255));
+    let rgb = if rgba.is_none() { Some(img.to_rgb8()) } else { None };
+    let (pixels, channels, color): (&[u8], u8, ExtendedColorType) = match (&rgba, &rgb) {
+        (Some(p), _) => (p.as_raw(), 4, ExtendedColorType::Rgba8),
+        (None, Some(p)) => (p.as_raw(), 3, ExtendedColorType::Rgb8),
+        (None, None) => return Err(err("immagine vuota")),
+    };
+    let lossless = || -> CedroResult<Vec<u8>> {
+        let mut out = Vec::new();
+        image::ImageEncoder::write_image(image::codecs::webp::WebPEncoder::new_lossless(&mut out), pixels, w, h, color).map_err(|e| err(e.to_string()))?;
+        Ok(out)
+    };
+    if quality >= 100 || w.max(h) > WEBP_LOSSY_MAX_SIDE {
+        return lossless();
+    }
+    let lossy = || -> Option<Vec<u8>> {
+        let opts = oxideav_webp::EncodeOptions::default().with_quality(quality as f32);
+        if channels == 4 {
+            oxideav_webp::encode_rgba8(w, h, pixels, &opts).ok()
+        } else {
+            oxideav_webp::encode_rgb8(w, h, pixels, &opts).ok()
+        }
+    };
+    // Un errore (o un panic) del codificatore con perdita non ferma la conversione: si scrive senza perdita.
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(lossy)).ok().flatten() {
+        Some(lossy) => match lossless() {
+            Ok(exact) if exact.len() < lossy.len() => Ok(exact),
+            _ => Ok(lossy),
+        },
+        None => lossless(),
+    }
 }
 
 fn load_image(path: &Path, straighten: bool, target_side: Option<u32>) -> CedroResult<DynamicImage> {
@@ -4030,6 +4075,133 @@ mod format_tests {
         assert_eq!(plain.path.file_name().unwrap(), "gita.bmp");
         let odd = perform_with(&src, "tga", 80, Some(&dir.join("o")), &Options { name_template: Some("a/b:%nome%".into()), ..opts() }).unwrap();
         assert_eq!(odd.path.file_name().unwrap(), "a_b_gita.tga");
+    }
+
+    /// Una «foto»: sfumature, un po' di struttura e rumore di sensore (deterministico), come in un JPG vero.
+    fn photo_png(dir: &Path, name: &str, w: u32, h: u32, alpha: bool) -> PathBuf {
+        let mut seed = 0x2545_F491u32;
+        let mut img = image::RgbaImage::new(w, h);
+        for (x, y, p) in img.enumerate_pixels_mut() {
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let noise = ((seed >> 24) % 9) as i32 - 4;
+            let wave = (((x as f32 / 9.0).sin() + (y as f32 / 13.0).cos()) * 30.0) as i32;
+            let c = |base: i32| (base + wave + noise).clamp(0, 255) as u8;
+            let a = if alpha { ((x * 255) / w.max(1)) as u8 } else { 255 };
+            *p = image::Rgba([c((x * 180 / w) as i32 + 40), c((y * 180 / h) as i32 + 40), c(((x + y) * 120 / (w + h)) as i32 + 60), a]);
+        }
+        let path = dir.join(name);
+        img.save(&path).unwrap();
+        path
+    }
+
+    fn lossless_webp_len(path: &Path) -> usize {
+        let img = image::open(path).unwrap().to_rgba8();
+        let mut out = Vec::new();
+        image::ImageEncoder::write_image(image::codecs::webp::WebPEncoder::new_lossless(&mut out), img.as_raw(), img.width(), img.height(), ExtendedColorType::Rgba8).unwrap();
+        out.len()
+    }
+
+    /// Chunk di un WebP (RIFF): i nomi di quelli presenti.
+    fn webp_chunks(bytes: &[u8]) -> Vec<[u8; 4]> {
+        let mut names = Vec::new();
+        let mut i = 12;
+        while i + 8 <= bytes.len() {
+            names.push(bytes[i..i + 4].try_into().unwrap());
+            let size = u32::from_le_bytes(bytes[i + 4..i + 8].try_into().unwrap()) as usize;
+            i += 8 + size + (size & 1);
+        }
+        names
+    }
+
+    #[test]
+    fn webp_of_a_photo_is_lossy_and_much_smaller_than_lossless() {
+        let dir = scratch();
+        let src = photo_png(&dir, "foto.png", 256, 192, false);
+        let out = perform_with(&src, "webp", 80, None, &opts()).unwrap();
+        let bytes = fs::read(&out.path).unwrap();
+        assert_eq!(webp_chunks(&bytes), vec![*b"VP8 "], "dev'essere VP8 con perdita");
+        let lossless = lossless_webp_len(&src);
+        assert!(bytes.len() * 4 < lossless, "con perdita {} contro senza perdita {lossless}", bytes.len());
+        let back = image::load_from_memory_with_format(&bytes, ImageFormat::WebP).expect("decodificabile da image");
+        assert_eq!((back.width(), back.height()), (256, 192));
+        // La qualità comanda: più alta, più grande.
+        let low = fs::read(perform_with(&src, "webp", 30, Some(&dir.join("q")), &opts()).unwrap().path).unwrap();
+        let high = fs::read(perform_with(&src, "webp", 95, Some(&dir.join("q")), &opts()).unwrap().path).unwrap();
+        assert!(low.len() < bytes.len() && bytes.len() < high.len(), "{} {} {}", low.len(), bytes.len(), high.len());
+        // E la fedeltà resta buona a qualità 80: errore medio per canale piccolo.
+        let (a, b) = (image::open(&src).unwrap().to_rgb8(), back.to_rgb8());
+        let diff: u64 = a.as_raw().iter().zip(b.as_raw()).map(|(x, y)| (*x as i64 - *y as i64).unsigned_abs()).sum();
+        assert!(diff / (a.as_raw().len() as u64) < 6, "errore medio {}", diff / a.as_raw().len() as u64);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn webp_at_quality_100_is_lossless() {
+        // Dall'interfaccia la qualità arriva al massimo a 95: la qualità 100 si prova sulla funzione.
+        let dir = scratch();
+        let src = photo_png(&dir, "foto.png", 64, 48, false);
+        let img = image::open(&src).unwrap();
+        let bytes = webp_bytes(&img, 100).unwrap();
+        assert_eq!(webp_chunks(&bytes), vec![*b"VP8L"]);
+        let back = image::load_from_memory_with_format(&bytes, ImageFormat::WebP).unwrap().to_rgb8();
+        assert_eq!(back.as_raw(), img.to_rgb8().as_raw());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn webp_keeps_real_transparency_exactly_and_drops_a_useless_alpha() {
+        let dir = scratch();
+        let src = photo_png(&dir, "trasparente.png", 200, 150, true);
+        let out = perform_with(&src, "webp", 80, None, &opts()).unwrap();
+        let bytes = fs::read(&out.path).unwrap();
+        let chunks = webp_chunks(&bytes);
+        assert!(chunks.contains(b"ALPH") && chunks.contains(b"VP8 "), "{chunks:?}");
+        let back = image::load_from_memory_with_format(&bytes, ImageFormat::WebP).unwrap().to_rgba8();
+        let original = image::open(&src).unwrap().to_rgba8();
+        assert_eq!(back.dimensions(), original.dimensions());
+        assert!(back.pixels().zip(original.pixels()).all(|(a, b)| a[3] == b[3]), "il canale alfa dev'essere esatto");
+        assert!(bytes.len() * 3 < lossless_webp_len(&src), "{} byte", bytes.len());
+        // Un PNG con il canale alfa tutto opaco esce senza canale alfa.
+        let flat = photo_png(&dir, "opaca.png", 64, 48, false);
+        let bytes = fs::read(perform_with(&flat, "webp", 80, Some(&dir.join("o")), &opts()).unwrap().path).unwrap();
+        assert!(!webp_chunks(&bytes).contains(b"ALPH"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn webp_of_flat_graphics_stays_lossless_when_that_is_smaller() {
+        let dir = scratch();
+        let mut img = image::RgbaImage::from_pixel(160, 120, image::Rgba([250, 250, 250, 255]));
+        for (x, y, p) in img.enumerate_pixels_mut() {
+            if (x / 8 + y / 8) % 5 == 0 {
+                *p = image::Rgba([10, 60, 160, 255]);
+            }
+        }
+        let src = dir.join("grafica.png");
+        img.save(&src).unwrap();
+        let bytes = fs::read(perform_with(&src, "webp", 80, None, &opts()).unwrap().path).unwrap();
+        assert_eq!(webp_chunks(&bytes), vec![*b"VP8L"]);
+        let back = image::load_from_memory_with_format(&bytes, ImageFormat::WebP).unwrap().to_rgba8();
+        assert_eq!(back.as_raw(), img.as_raw());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn webp_handles_tiny_and_odd_sizes_at_any_quality() {
+        let dir = scratch();
+        for (w, h) in [(1, 1), (2, 1), (1, 7), (3, 5), (17, 33), (16, 16), (31, 2)] {
+            let src = photo_png(&dir, &format!("p{w}x{h}.png"), w, h, false);
+            let img = image::open(&src).unwrap();
+            for q in [0, 1, 40, 82, 95, 99, 100] {
+                let bytes = webp_bytes(&img, q).unwrap_or_else(|e| panic!("{w}x{h} q{q}: {e}"));
+                let back = image::load_from_memory_with_format(&bytes, ImageFormat::WebP).unwrap_or_else(|e| panic!("{w}x{h} q{q}: {e}"));
+                assert_eq!((back.width(), back.height()), (w, h), "q{q}");
+            }
+            // E per l'azione intera, alla qualità che arriva dall'interfaccia.
+            let out = perform_with(&src, "webp", 82, Some(&dir.join("o")), &opts()).unwrap_or_else(|e| panic!("{w}x{h}: {e}"));
+            assert_eq!(image::open(&out.path).unwrap().width(), w);
+        }
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

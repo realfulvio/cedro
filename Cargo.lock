@@ -587,6 +587,7 @@ dependencies = [
  "oxideav-mpeg4video",
  "oxideav-vp8",
  "oxideav-vp9",
+ "oxideav-webp",
  "p256",
  "p384",
  "png",
@@ -3175,6 +3176,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8393dcba264eff599aab26a41d1a296eeeed556f0b34d06df52b0d1889fa7732"
 dependencies = [
  "oxideav-core",
+]
+
+[[package]]
+name = "oxideav-webp"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfca0cb5908192778a23da0b3ede28db58e663069ea70aab72b65b1cfaeb45b8"
+dependencies = [
+ "oxideav-vp8",
 ]
 
 [[package]]
