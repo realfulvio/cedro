@@ -683,10 +683,11 @@ fn stage_draw(f: &mut Frame, app: &App, r: R) {
             f.p.fill(px, py, pw, ph, (255, 255, 255));
             match img {
                 Some(i) => f.p.image(i, px, py, pw, ph, 0.0, crate::ui::gfx::Fit::Contain),
-                None => {
+                None if app.preview_loading(&path, v.page) => {
                     f.spinner(px + pw / 2.0, py + ph.min(r.3) / 2.0, 16.0, pal.primary);
                     f.animating = true;
                 }
+                None => {}
             }
             // Il riquadro delle firme aperte che stanno su questa pagina, nel colore del giudizio.
             if img.is_some() {
