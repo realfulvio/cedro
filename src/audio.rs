@@ -76,7 +76,7 @@ pub fn to_wav(input: &Path, output: &Path, opts: &crate::engine::Options) -> Res
     if opts.channels.is_none() && !opts.normalize && opts.trim_start_secs == 0 && opts.trim_silence_db.is_none() {
         let mut writer: Option<WavWriter<std::io::BufWriter<File>>> = None;
         let mut format = None;
-        let streamed = stream_symphonia(input, &mut |samples, rate, channels| {
+        let streamed = stream_symphonia_with(input, true, &mut |samples, rate, channels| {
             if format.is_some_and(|f| f != (rate, channels)) { return Err("formato audio cambiato durante la lettura".into()); }
             if writer.is_none() {
                 writer = Some(WavWriter::create(output, WavSpec { channels, sample_rate: rate, bits_per_sample: 16, sample_format: SampleFormat::Int }).map_err(|e| e.to_string())?);
@@ -340,12 +340,18 @@ fn decode_telefono(path: &Path) -> Result<Pcm, String> {
 
 fn decode_symphonia(path: &Path) -> Result<Pcm, String> {
     let mut samples = Vec::new();
-    let mut pcm = stream_symphonia(path, &mut |s, _, _| { samples.extend_from_slice(s); Ok(()) })?;
+    let mut pcm = stream_symphonia_with(path, true, &mut |s, _, _| { samples.extend_from_slice(s); Ok(()) })?;
     pcm.samples = samples;
     Ok(pcm)
 }
 
 fn stream_symphonia(path: &Path, each: &mut dyn FnMut(&[i16], u32, u16) -> Result<(), String>) -> Result<Pcm, String> {
+    stream_symphonia_with(path, false, each)
+}
+
+/// Come `stream_symphonia`; con `trim_priming` toglie i campioni d'avvio dell'AAC (non sono suono: senza, l'audio
+/// estratto da un video parte ~21 ms dopo l'immagine). L'onda dell'anteprima non lo fa: conta i campioni del contenitore.
+fn stream_symphonia_with(path: &Path, trim_priming: bool, each: &mut dyn FnMut(&[i16], u32, u16) -> Result<(), String>) -> Result<Pcm, String> {
     let mut format = crate::symph::open(path)?;
     let mut tags = Tags::default();
     let mut collect = |rev: &symphonia::core::meta::MetadataRevision| {
@@ -383,6 +389,7 @@ fn stream_symphonia(path: &Path, each: &mut dyn FnMut(&[i16], u32, u16) -> Resul
         return Ok(Pcm { rate: 48_000, channels, samples: Vec::new(), tags });
     }
     let mut decoder = crate::symph::decoder(&params)?;
+    let mut priming = if trim_priming { crate::symph::Priming::for_track(path, &track) } else { crate::symph::Priming::none() };
     let mut count = 0usize;
     let mut rate = params.sample_rate.unwrap_or(44100);
     let mut channels = params.channels.as_ref().map(|c| c.count() as u16).unwrap_or(0);
@@ -409,7 +416,10 @@ fn stream_symphonia(path: &Path, each: &mut dyn FnMut(&[i16], u32, u16) -> Resul
         (rate, channels) = crate::symph::rate_channels(&decoded);
         crate::symph::interleaved_i16(&decoded, &mut buf);
         count += buf.len();
-        each(&buf, rate, channels)?;
+        let kept = priming.trim(&buf, channels);
+        if !kept.is_empty() {
+            each(kept, rate, channels)?;
+        }
     }
     if count == 0 || channels == 0 {
         return Err("l'audio non ha campioni".into());
