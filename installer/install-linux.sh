@@ -39,8 +39,8 @@ fi
 mkdir -p "$dest" "$bindir"
 # Prima una copia a parte, poi lo scambio: se il PC si spegne durante l'aggiornamento silenzioso
 # il Cedro di prima resta intero, invece di un programma scritto a metà che non parte più.
-install -m 755 "$here/cedro" "$dest/cedro.nuovo"
-mv -f "$dest/cedro.nuovo" "$dest/cedro"
+install -m 755 "$here/cedro" "$dest/cedro.nuovo.$$"
+mv -f "$dest/cedro.nuovo.$$" "$dest/cedro"
 # Il file delle licenze sta accanto al programma: la scheda «Informazioni» lo cerca lì.
 [ -f "$here/Licenze di terze parti.txt" ] && install -m 644 "$here/Licenze di terze parti.txt" "$dest/"
 [ -f "$here/LICENSE" ] && install -m 644 "$here/LICENSE" "$dest/"
