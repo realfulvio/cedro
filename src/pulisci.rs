@@ -14,6 +14,8 @@ pub struct Tolto {
     pub xmp: bool,
     pub iptc: bool,
     pub testi: bool,
+    /// Dati attaccati dopo la fine dell'immagine (il video di una foto in movimento, tracce dei produttori).
+    pub coda: bool,
     pub altro_exif: bool,
 }
 
@@ -40,6 +42,9 @@ impl Tolto {
         }
         if self.testi {
             parti.push("commenti");
+        }
+        if self.coda {
+            parti.push("dati in coda");
         }
         if parti.is_empty() && self.altro_exif {
             parti.push("dati EXIF");
@@ -218,8 +223,58 @@ fn jpeg(b: &[u8]) -> Result<(Vec<u8>, Tolto), String> {
     for s in others {
         out.extend_from_slice(s);
     }
-    out.extend_from_slice(&b[rest..]);
+    // Dopo l'immagine ci possono essere dati attaccati: il video di una foto in movimento
+    // (Motion Photo), le tracce dei produttori. Le altre immagini JPEG (MPF) restano; il resto va via.
+    let mut fine = b.len();
+    if let Some(mut e) = fine_jpeg(b, rest) {
+        while b[e..].starts_with(&[0xFF, 0xD8]) {
+            match fine_jpeg(b, e + 2) {
+                Some(e2) => e = e2,
+                // Un'immagine che non si sa leggere: si lascia tutto com'è.
+                None => {
+                    e = b.len();
+                    break;
+                }
+            }
+        }
+        // Un po' di zeri in fondo non sono dati nascosti: la copia resta uguale.
+        if b[e..].iter().any(|&x| x != 0) {
+            fine = e;
+            t.coda = true;
+        }
+    }
+    out.extend_from_slice(&b[rest..fine]);
     Ok((out, t))
+}
+
+/// Dove finisce un JPEG: l'indice subito dopo il suo EOI. `da` è l'inizio dei segmenti (dopo «FFD8»).
+/// Passa i dati compressi (con gli stuzzicadenti «FF00» e i riavvii) e le immagini a più passate.
+fn fine_jpeg(b: &[u8], da: usize) -> Option<usize> {
+    let mut i = da;
+    while i + 2 <= b.len() {
+        if b[i] != 0xFF {
+            return None;
+        }
+        match b[i + 1] {
+            0xFF => i += 1,
+            0xD9 => return Some(i + 2),
+            0xD0..=0xD8 | 0x01 | 0x00 => i += 2,
+            m => {
+                let len = u16::from_be_bytes([*b.get(i + 2)?, *b.get(i + 3)?]) as usize;
+                if len < 2 {
+                    return None;
+                }
+                i += 2 + len;
+                if m == 0xDA {
+                    // Dati compressi: fino al prossimo segnalibro vero.
+                    while i + 1 < b.len() && !(b[i] == 0xFF && !matches!(b[i + 1], 0x00 | 0xFF | 0xD0..=0xD7)) {
+                        i += 1;
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 // ---------- PNG ----------
@@ -400,6 +455,61 @@ mod tests {
         let c = image::load_from_memory(&out).unwrap().to_rgb8();
         assert_eq!(a.as_raw(), c.as_raw(), "i pixel devono restare identici");
         assert!(t.frase().contains("GPS"));
+    }
+
+    fn video_in_coda() -> Vec<u8> {
+        // Un riquadro «ftyp» e dentro una posizione: come il video di una Motion Photo.
+        let mut v = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom".to_vec();
+        v.extend_from_slice(b"+45.0000+011.0000/");
+        v
+    }
+
+    #[test]
+    fn il_video_in_coda_di_una_foto_in_movimento_va_via() {
+        let (mut b, _) = jpeg_di_prova(1);
+        b.extend(video_in_coda());
+        let (out, t) = jpeg(&b).unwrap();
+        assert!(t.coda && t.frase().contains("coda"));
+        assert!(!out.windows(4).any(|w| w == b"ftyp") && !out.windows(7).any(|w| w == b"+45.000"));
+        assert_eq!(&out[out.len() - 2..], &[0xFF, 0xD9]);
+        let a = image::load_from_memory(&b).unwrap().to_rgb8();
+        let c = image::load_from_memory(&out).unwrap().to_rgb8();
+        assert_eq!(a.as_raw(), c.as_raw());
+    }
+
+    #[test]
+    fn le_altre_immagini_dopo_la_prima_restano_e_il_video_dopo_di_loro_va_via() {
+        let (mut b, img) = jpeg_di_prova(1);
+        b.extend_from_slice(&img);
+        let con_seconda = b.len();
+        b.extend(video_in_coda());
+        let (out, t) = jpeg(&b).unwrap();
+        assert!(t.coda);
+        // Le due immagini restano (la seconda intera), il video no.
+        assert!(out.len() > con_seconda - 400);
+        assert!(out.ends_with(&img[img.len() - 16..]));
+        assert!(!out.windows(4).any(|w| w == b"ftyp"));
+    }
+
+    #[test]
+    fn gli_zeri_in_fondo_non_cambiano_la_copia() {
+        let (mut b, _) = jpeg_di_prova(1);
+        let pulito = jpeg(&b).unwrap().0;
+        b.extend_from_slice(&[0, 0, 0]);
+        let (out, t) = jpeg(&b).unwrap();
+        assert!(!t.coda);
+        assert_eq!(out.len(), pulito.len() + 3);
+    }
+
+    #[test]
+    fn la_fine_di_un_jpeg_a_piu_passate_si_trova() {
+        // Due passate (SOS), i dati con «FF00» e un riavvio, un DHT in mezzo, poi l'EOI e della coda.
+        let b = [
+            0xFFu8, 0xD8, 0xFF, 0xDA, 0x00, 0x04, 0x01, 0x02, 0x12, 0xFF, 0x00, 0x34, 0xFF, 0xD0, 0x56, 0xFF, 0xC4, 0x00, 0x04, 0xAA, 0xBB, 0xFF, 0xDA, 0x00,
+            0x04, 0x01, 0x02, 0x78, 0xFF, 0xD9, b'x', b'y',
+        ];
+        assert_eq!(fine_jpeg(&b, 2), Some(30));
+        assert_eq!(fine_jpeg(&b[..20], 2), None);
     }
 
     #[test]

@@ -944,17 +944,13 @@ impl App {
         self.quality = engine::read_quality();
     }
 
-    /// Aggiunge file (e il contenuto delle cartelle, un livello) alla coda. Se i file nuovi sono
+    /// Aggiunge file (e il contenuto delle cartelle, anche delle sottocartelle) alla coda. Se i file nuovi sono
     /// di un'altra categoria, la vista passa a quella: altrimenti resterebbero invisibili.
     pub fn add_files(&mut self, paths: Vec<PathBuf>, simple: bool) -> usize {
         let mut expanded = Vec::new();
         for p in paths {
             if p.is_dir() {
-                if let Ok(rd) = std::fs::read_dir(&p) {
-                    let mut inner: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.is_file()).collect();
-                    inner.sort();
-                    expanded.extend(inner);
-                }
+                expanded.extend(crate::cartelle::file_in_cartella(&p, 20_000));
             } else if p.is_file() {
                 expanded.push(p);
             }

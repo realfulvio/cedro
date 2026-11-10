@@ -12,6 +12,7 @@ pub mod i18n;
 pub mod logo;
 mod doctext;
 mod archive;
+mod cartelle;
 mod engine;
 mod imgfmt;
 mod nametemplate;

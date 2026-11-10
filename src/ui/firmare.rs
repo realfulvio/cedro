@@ -245,14 +245,12 @@ impl SignUi {
         }
     }
 
-    /// Aggiunge file (le cartelle: i file che contengono, non le sottocartelle).
+    /// Aggiunge file (le cartelle: i file che contengono, anche nelle sottocartelle).
     pub fn add(&mut self, paths: Vec<PathBuf>) {
         let mut list = Vec::new();
         for p in paths {
             if p.is_dir() {
-                let mut inner: Vec<PathBuf> = std::fs::read_dir(&p).map(|rd| rd.flatten().map(|e| e.path()).filter(|x| x.is_file()).collect()).unwrap_or_default();
-                inner.sort();
-                list.extend(inner);
+                list.extend(crate::cartelle::file_in_cartella(&p, 5_000));
             } else if p.is_file() {
                 list.push(p);
             }
