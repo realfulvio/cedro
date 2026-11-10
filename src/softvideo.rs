@@ -36,6 +36,8 @@ struct AudioIn {
     channels: u16,
     params: AudioCodecParameters,
     time_base: Option<symphonia::core::units::TimeBase>,
+    /// I campioni d'avvio dell'AAC da scartare.
+    priming: crate::symph::Priming,
 }
 
 enum VideoDec {
@@ -192,6 +194,7 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
         None => None,
     };
     let audio_id = opened.audio.as_ref().map(|audio| audio.id);
+    let mut priming = opened.audio.as_mut().map_or_else(crate::symph::Priming::none, |audio| std::mem::replace(&mut audio.priming, crate::symph::Priming::none()));
     let audio_base = opened.audio.as_ref().and_then(|audio| audio.time_base);
     // Frequenza e canali dell'ultimo pacchetto decodificato, per il silenzio al posto di quelli rovinati.
     let mut format_seen: Option<(u32, u16)> = None;
@@ -294,7 +297,12 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
                 }
                 format_seen = Some((rate, channels));
                 audio_samples += buf.len();
-                let item = Item::Audio { samples: buf.clone(), channels, rate };
+                // I campioni d'avvio dell'AAC non sono suono: senza scartarli l'audio parte ~21 ms dopo il video.
+                let kept = priming.trim(&buf, channels);
+                if kept.is_empty() {
+                    continue;
+                }
+                let item = Item::Audio { samples: kept.to_vec(), channels, rate };
                 if !put(&mut current, Entry::Audio(item), false) {
                     break;
                 }
@@ -448,6 +456,7 @@ fn open_media(path: &Path) -> Result<Opened, String> {
             channels: channel_count(params),
             params: params.clone(),
             time_base: track.time_base,
+            priming: if opus { crate::symph::Priming::none() } else { crate::symph::Priming::for_track(path, track) },
         })
     });
     Ok(Opened { format, video_id, numer, denom, audio })

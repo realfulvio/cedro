@@ -1216,8 +1216,8 @@ fn write_symphonia_audio(input: &Path, sink: &mut H264Aac) -> Result<(), String>
     let chosen = format
         .tracks()
         .iter()
-        .find_map(|track| Some((track.id, track.time_base, crate::symph::decoder(crate::symph::audio_params(track)?).ok()?)));
-    let Some((audio_id, time_base, mut dec)) = chosen else {
+        .find_map(|track| Some((track.id, track.time_base, crate::symph::decoder(crate::symph::audio_params(track)?).ok()?, crate::symph::Priming::for_track(input, track))));
+    let Some((audio_id, time_base, mut dec, mut priming)) = chosen else {
         return Err("l'audio del video non è stato letto".into());
     };
     let mut packets = 0u32;
@@ -1263,7 +1263,12 @@ fn write_symphonia_audio(input: &Path, sink: &mut H264Aac) -> Result<(), String>
         }
         format_seen = Some((rate, channels));
         samples += buf.len();
-        sink.write_pcm(&buf, channels, rate)?;
+        // I campioni d'avvio dell'AAC non sono suono: senza scartarli l'audio parte ~21 ms dopo il video.
+        let kept = priming.trim(&buf, channels);
+        if kept.is_empty() {
+            continue;
+        }
+        sink.write_pcm(kept, channels, rate)?;
     }
     if packets > 0 && samples == 0 {
         return Err("l'audio del video non è stato letto".into());
@@ -1391,6 +1396,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let mut audio_rate = 0u32;
     let mut audio_channels = 0u16;
     let mut audio_base = None;
+    let mut priming = crate::symph::Priming::none();
     for track in format.tracks() {
         if track.id == video_id {
             continue;
@@ -1399,6 +1405,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         if let Ok(dec) = crate::symph::decoder(params) {
             audio_id = Some(track.id);
             audio_base = track.time_base;
+            priming = crate::symph::Priming::for_track(input, track);
             audio_rate = params.sample_rate.unwrap_or(44_100);
             audio_channels = params.channels.as_ref().map(|ch| ch.count() as u16).unwrap_or(1).max(1);
             audio_dec = Some(dec);
@@ -1473,7 +1480,12 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                     }
                     format_seen = Some((rate, channels));
                     audio_samples += samples.len();
-                    let pcm = EarlyPcm { samples, channels, rate };
+                    // I campioni d'avvio dell'AAC non sono suono: senza scartarli l'audio parte ~21 ms dopo il video.
+                    let kept = priming.trim(&samples, channels);
+                    if kept.is_empty() {
+                        continue;
+                    }
+                    let pcm = EarlyPcm { samples: kept.to_vec(), channels, rate };
                     sent(emit(Decoded::Pcm(pcm)))?;
                 }
             }
