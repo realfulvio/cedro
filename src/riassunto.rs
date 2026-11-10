@@ -311,7 +311,15 @@ fn power_on(model: &std::path::Path, opts: Options, sink: &dyn Fn(TrEvent), canc
         };
         let mut command = Command::new(&exe);
         command.arg("--model").arg(model).arg("--threads").arg(trascrizione::engine_threads().to_string());
-        let running = Running::spawn(command)?;
+        let running = match Running::spawn(command) {
+            Ok(running) => running,
+            // Un motore che non parte (antivirus, file rovinato) non ferma tutto: c'è quello per processore.
+            Err(e) if fallback_left => {
+                last = e;
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
         let ready = match running.next_or_cancel(cancel) {
             Next::Line(v) => v,
             Next::Gone => {

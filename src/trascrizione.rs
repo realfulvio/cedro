@@ -1691,7 +1691,15 @@ fn power_on_process(request: &Request, model: &Path, voices: Option<&VoicePaths>
         if !std::mem::replace(&mut told, true) {
             log(sink, Tone::Step, "Motore", "lo accendo e carico il modello in memoria…");
         }
-        let running = Running::start(&exe, model, false, voices)?;
+        let running = match Running::start(&exe, model, false, voices) {
+            Ok(running) => running,
+            // Un motore che non parte (antivirus, file rovinato) non ferma tutto: c'è quello per processore.
+            Err(e) if fallback_left => {
+                log(sink, Tone::Note, "Scheda video", format!("non partita ({e}): uso il processore"));
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
         let ready = match running.next_or_cancel(cancel) {
             Next::Line(v) => Some(v),
             Next::Gone => None,
