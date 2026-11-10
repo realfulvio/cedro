@@ -216,8 +216,16 @@ impl VideoSink for H264Aac {
         if self.encoder.is_none() {
             self.encoder = Some(open_h264(self.width, self.height, self.frame_duration)?);
         }
-        let resized = ((width, height) != (self.width, self.height))
-            .then(|| crate::sink::resize_i420(y, u, v, width, height, self.width, self.height));
+        let resized = if (width, height) != (self.width, self.height) {
+            // Il ridimensionamento legge i piani interi: un fotogramma più corto è un errore, non un crash.
+            let (cw, ch) = ((width as usize).div_ceil(2), (height as usize).div_ceil(2));
+            if y.len() < width as usize * height as usize || u.len() < cw * ch || v.len() < cw * ch {
+                return Err("fotogramma troppo corto".into());
+            }
+            Some(crate::sink::resize_i420(y, u, v, width, height, self.width, self.height))
+        } else {
+            None
+        };
         let (y, u, v) = match &resized {
             Some((ry, ru, rv)) => (ry.as_slice(), ru.as_slice(), rv.as_slice()),
             None => (y, u, v),
