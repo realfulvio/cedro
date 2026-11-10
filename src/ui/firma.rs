@@ -222,14 +222,16 @@ impl FirmaUi {
             let opts = Opts { at, online: false, detached: detached.clone(), now: None };
             let first = std::panic::catch_unwind(|| firma::verify_path(&path, opts)).unwrap_or_else(|_| Report { error: Some("errore interno durante la verifica".into()), ..Default::default() });
             let need_online = online && !first.signers.is_empty();
+            // Se il controllo in rete si rompe resta buono quello senza rete: senza una risposta «ultima»
+            // il file resterebbe «in verifica» per sempre (rotellina e finestra occupata).
+            let offline = need_online.then(|| first.clone());
             inbox.lock().unwrap_or_else(|e| e.into_inner()).push((path.clone(), gen, first, !need_online));
             wake();
-            if need_online {
+            if let Some(offline) = offline {
                 let opts = Opts { at, online: true, detached, now: None };
-                if let Ok(r) = std::panic::catch_unwind(|| firma::verify_path(&path, opts)) {
-                    inbox.lock().unwrap_or_else(|e| e.into_inner()).push((path, gen, r, true));
-                    wake();
-                }
+                let r = std::panic::catch_unwind(|| firma::verify_path(&path, opts)).unwrap_or(offline);
+                inbox.lock().unwrap_or_else(|e| e.into_inner()).push((path, gen, r, true));
+                wake();
             }
         });
         gen
