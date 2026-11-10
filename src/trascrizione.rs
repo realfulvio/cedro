@@ -1531,6 +1531,11 @@ enum Outcome {
 
 /// Trascrive un file con il motore già acceso, raccontando i passi.
 fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Outcome {
+    // Il percorso va al motore in JSON, cioè in UTF-8: un nome con byte non validi (Linux) arriverebbe storpiato
+    // e il file «non si apre». Lo si fa leggere al sistema, che riceve il percorso com'è, in un WAV dal nome semplice.
+    if path.to_str().is_none() {
+        return Outcome::Unsupported("nome del file non in UTF-8".into());
+    }
     let mut request = serde_json::json!({"file": path.to_string_lossy(), "lang": "auto"});
     if speakers != 1 {
         request["speakers"] = speakers.into();
