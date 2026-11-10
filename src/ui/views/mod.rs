@@ -768,3 +768,19 @@ pub fn go_icon(app: &App) -> &'static str {
 }
 
 pub const BOLD_W: super::gfx::Weight = BOLD;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_quality_slider_shows_for_every_lossy_image_format() {
+        for action in ["jpeg", "webp", "avif", "compress"] {
+            assert!(uses_quality(Kind::Image, action), "{action}");
+        }
+        // Senza perdita o senza qualità: niente cursore.
+        for action in ["png", "gif", "bmp", "jxl"] {
+            assert!(!uses_quality(Kind::Image, action), "{action}");
+        }
+    }
+}
