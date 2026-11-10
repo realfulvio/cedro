@@ -177,7 +177,8 @@ impl Drop for Player {
 const STALLED: Duration = Duration::from_millis(1500);
 
 fn audio_thread(path: &Path, sh: Arc<Shared>) {
-    let pcm = crate::audio::decode(path).ok().filter(|p| !p.samples.is_empty() && p.channels > 0);
+    // Un file che manda in crisi il decodificatore: si va avanti senza audio (se no «carico» per sempre).
+    let pcm = std::panic::catch_unwind(|| crate::audio::decode(path)).ok().and_then(|r| r.ok()).filter(|p| !p.samples.is_empty() && p.channels > 0);
     #[cfg(any(windows, target_os = "linux", target_os = "android"))]
     if let Some(pcm) = pcm {
         let pcm = Arc::new(pcm);
