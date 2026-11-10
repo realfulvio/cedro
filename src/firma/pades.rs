@@ -104,7 +104,7 @@ fn pdf_string(dict: &[u8], key: &[u8]) -> Option<String> {
                             Some(b'n') => out.push(b'\n'),
                             Some(b'r') => out.push(b'\r'),
                             Some(b't') => out.push(b'\t'),
-                            Some(d) if d.is_ascii_digit() => {
+                            Some(d) if (b'0'..=b'7').contains(d) => {
                                 let mut v = 0u32;
                                 let mut k = 0;
                                 while k < 3 && rest.get(j + k).is_some_and(|x| (b'0'..=b'7').contains(x)) {
@@ -413,6 +413,8 @@ mod tests {
     fn strings() {
         assert_eq!(pdf_string(b"/Reason (Approvazione \\(ok\\))/M", b"/Reason").as_deref(), Some("Approvazione (ok)"));
         assert_eq!(pdf_string(b"/Name <FEFF004D0052>", b"/Name").as_deref(), Some("MR"));
+        // «\8» non è un ottale: si tiene la cifra (prima andava in panico per un conto sotto zero).
+        assert_eq!(pdf_string(b"/Reason (a\\8b)", b"/Reason").as_deref(), Some("a8b"));
         assert_eq!(pdf_string(b"/SubFilter/ETSI.CAdES.detached/Type", b"/SubFilter").as_deref(), Some("ETSI.CAdES.detached"));
     }
 
