@@ -692,6 +692,9 @@ mkdir -p \"$HOME/.local/opt/cedro\" && : > \"$HOME/.local/opt/cedro/cedro\"
         assert_eq!(installed, home.join(".local/opt/cedro/cedro"));
         assert_eq!(std::fs::read_to_string(&installed).unwrap(), "#!/bin/sh\necho nuovo\n");
         assert!(home.join(".local/bin/cedro").exists());
+        // La copia provvisoria (scritta a parte e poi scambiata) non resta nella cartella.
+        let leftovers: Vec<_> = std::fs::read_dir(home.join(".local/opt/cedro")).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().contains("nuovo")).collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
         let _ = std::fs::remove_dir_all(&root);
     }
 
