@@ -1049,7 +1049,6 @@ impl App {
         let scuro = self.scuro();
         let att = attivita();
         let nav = 64.0;
-        p.clear(t.fondo);
         // Testata: simbolo e nome, Lavori e Impostazioni; sotto il titolo grande dell'attività.
         self.logo(p, 18.0, 0.0, 52.0, true, 18.0);
         self.testata_destra(p, w, 0.0, 52.0, false);
