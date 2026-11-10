@@ -1863,7 +1863,13 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                     Format::Text => text_bytes(path, secs, &lang, &segments, &names),
                 };
                 std::fs::create_dir_all(&dir)
-                    .and_then(|_| std::fs::write(&out, bytes))
+                    .and_then(|_| {
+                        // Un file scritto a metà (disco pieno) non deve restare: con «Salta» la prossima volta
+                        // verrebbe saltato come se la trascrizione ci fosse già.
+                        std::fs::write(&out, bytes).inspect_err(|_| {
+                            let _ = std::fs::remove_file(&out);
+                        })
+                    })
                     .map(|_| {
                         let file = out.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
                         log(sink, Tone::Step, "Salvato", file.clone());
