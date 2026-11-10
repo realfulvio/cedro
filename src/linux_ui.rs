@@ -104,7 +104,8 @@ struct Wheel {
 }
 
 pub fn start() -> i32 {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // `args_os`: con `args` un file dal nome non UTF-8 (menu del file di Dolphin o Nautilus) faceva chiudere Cedro.
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
     let launch = parse_launch(&args);
     install_integrations();
     let quit = Arc::new(AtomicBool::new(false));
@@ -238,14 +239,14 @@ pub(crate) fn open_settings_window(app: &Application) {
     linux_settings::open_settings(app, remember);
 }
 
-fn parse_launch(args: &[String]) -> Launch {
+fn parse_launch(args: &[std::ffi::OsString]) -> Launch {
     let mut mode = Mode::Convert;
     let mut paths = Vec::new();
     let mut open = Open::Nothing;
     let mut background = false;
     let viewer = match args {
         [cmd, path] if cmd == "verifica" => Some(PathBuf::from(path)),
-        [path] if cedro::firma::is_signed_name(path) && std::path::Path::new(path).is_file() => Some(PathBuf::from(path)),
+        [path] if cedro::firma::is_signed_name(&path.to_string_lossy()) && std::path::Path::new(path).is_file() => Some(PathBuf::from(path)),
         _ => None,
     };
     if let Some(p) = viewer {
@@ -254,17 +255,17 @@ fn parse_launch(args: &[String]) -> Launch {
         }
         return Launch { stay: false, mode, paths, open: Open::Viewer, background };
     }
-    for arg in args.iter().filter(|arg| arg.as_str() != "show") {
-        match arg.as_str() {
-            "settings" | "impostazioni" => open = Open::Settings,
-            "guida" => open = Open::Guide,
-            "conversioni" => open = Open::Conversions,
-            "--background" => background = true,
-            "--conversione" => mode = Mode::Convert,
-            "--strumenti" => mode = Mode::Tools,
-            "--azioni" => mode = Mode::Actions,
-            other if !other.starts_with('-') => {
-                let path = PathBuf::from(other);
+    for arg in args.iter().filter(|arg| *arg != "show") {
+        match arg.to_str() {
+            Some("settings" | "impostazioni") => open = Open::Settings,
+            Some("guida") => open = Open::Guide,
+            Some("conversioni") => open = Open::Conversions,
+            Some("--background") => background = true,
+            Some("--conversione") => mode = Mode::Convert,
+            Some("--strumenti") => mode = Mode::Tools,
+            Some("--azioni") => mode = Mode::Actions,
+            _ if !arg.as_encoded_bytes().starts_with(b"-") => {
+                let path = PathBuf::from(arg);
                 if path.is_file() {
                     paths.push(path);
                 }
