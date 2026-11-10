@@ -44,6 +44,17 @@ impl PdfSig {
     }
 }
 
+impl PdfSig {
+    /// Fuori dalla firma c'è solo il suo /Contents? Il file deve essere coperto dall'inizio e il buco
+    /// deve contenere soltanto «<esadecimale>»: altrimenti dentro il buco si possono nascondere oggetti
+    /// nuovi (attacco «signature wrapping») e la firma risulterebbe buona.
+    pub fn hole_is_contents(&self, data: &[u8]) -> bool {
+        let [a, b, c, _] = self.range;
+        let Some(hole) = a.checked_add(b).and_then(|s| data.get(s..c)) else { return false };
+        a == 0 && hole.len() >= 2 && hole[0] == b'<' && hole[hole.len() - 1] == b'>' && hole[1..hole.len() - 1].iter().all(|x| x.is_ascii_hexdigit() || x.is_ascii_whitespace())
+    }
+}
+
 pub fn is_pdf(data: &[u8]) -> bool {
     data.len() > 5 && data[..data.len().min(1024)].windows(5).any(|w| w == b"%PDF-")
 }
