@@ -20,6 +20,10 @@ pub const RATE: u32 = 16_000;
 
 pub fn to_16k_mono(path: &Path) -> Result<Vec<f32>, Failure> {
     let (mono, rate) = decode_mono(path)?;
+    // Una frequenza 0 (file rovinato) farebbe chiedere a `resample` un vettore infinito: panic e motore perso.
+    if rate == 0 && !mono.is_empty() {
+        return Err(Failure::Other("frequenza audio nulla: il file è rovinato".into()));
+    }
     Ok(resample(&mono, rate, RATE))
 }
 
