@@ -1736,9 +1736,12 @@ fn rgb_planes(
     if src.len() < stride * h || stride < w * bytes {
         return Err("fotogramma troppo corto".into());
     }
+    // Con misure dispari i piani del colore coprono anche l'ultima colonna e l'ultima riga (come in I420):
+    // il codificatore porta il fotogramma a misure pari e li legge interi.
+    let cw = w.div_ceil(2);
     let mut y = vec![16u8; w * h];
-    let mut u = vec![128u8; (w / 2) * (h / 2)];
-    let mut v = vec![128u8; (w / 2) * (h / 2)];
+    let mut u = vec![128u8; cw * h.div_ceil(2)];
+    let mut v = vec![128u8; cw * h.div_ceil(2)];
     for row in 0..h {
         let src_row = if bottom_up { h - 1 - row } else { row };
         for col in 0..w {
@@ -1751,7 +1754,7 @@ fn rgb_planes(
             let (yy, uu, vv) = yuv(r, g, b);
             y[row * w + col] = yy;
             if row % 2 == 0 && col % 2 == 0 {
-                let c = (row / 2) * (w / 2) + col / 2;
+                let c = (row / 2) * cw + col / 2;
                 u[c] = uu;
                 v[c] = vv;
             }
@@ -2162,6 +2165,14 @@ mod tests {
         sample.extend(std::iter::repeat_n(0x11, 255));
         assert!(!is_annex(&sample));
         assert!(is_annex(&[0, 0, 0, 1, 0x67, 0x42, 0x00, 0x1e]));
+    }
+
+    /// Un AVI non compresso con misure dispari: i piani del colore bastano per portarlo a misure pari.
+    #[test]
+    fn odd_rgb_frame_can_be_resized() {
+        let frame = super::rgb_planes(&[200u8; 3 * 3 * 3], 3, 3, 9, 3, false, false).unwrap();
+        let (y, u, v) = crate::sink::resize_i420(&frame.y, &frame.u, &frame.v, 3, 3, 4, 4);
+        assert_eq!((y.len(), u.len(), v.len()), (16, 4, 4));
     }
 
     /// Contatori enormi in tabelle piccole (file rovinato): errore, non gigabyte chiesti alla memoria.
