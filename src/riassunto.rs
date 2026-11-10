@@ -268,6 +268,7 @@ fn seed() -> u32 {
 fn ensure_model(sink: &dyn Fn(TrEvent), cancel: &AtomicBool) -> Result<PathBuf, String> {
     let path = model_path();
     let have = std::fs::read_to_string(sidecar()).ok().map(|s| s.trim().to_lowercase()).filter(|_| path.is_file());
+    let updating = have.is_some();
     if let Some(local) = have {
         // Un controllo veloce: senza internet si usa quello che c'è.
         match trascrizione::published_sha(MODEL_URL, Duration::from_secs(5)) {
@@ -278,7 +279,12 @@ fn ensure_model(sink: &dyn Fn(TrEvent), cancel: &AtomicBool) -> Result<PathBuf, 
         trascrizione::log(sink, trascrizione::Tone::Step, "Modello", "lo scarico la prima volta");
     }
     let expected = trascrizione::published_sha(MODEL_URL, Duration::from_secs(20));
-    let sha = trascrizione::fetch(MODEL_URL, &path, expected.as_deref(), MODEL_MB, "il modello", sink, cancel)?;
+    let sha = match trascrizione::fetch(MODEL_URL, &path, expected.as_deref(), MODEL_MB, "il modello", sink, cancel) {
+        Ok(sha) => sha,
+        // La versione nuova (2,7 GB) non è arrivata: quella di prima è intatta (si scarica nel .part) e si usa.
+        Err(e) if e != CANCELLED && updating && path.is_file() => return Ok(path),
+        Err(e) => return Err(e),
+    };
     std::fs::write(sidecar(), &sha).map_err(|e| format!("{} non scritto: {e}", sidecar().display()))?;
     Ok(path)
 }
