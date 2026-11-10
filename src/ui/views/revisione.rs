@@ -131,6 +131,7 @@ fn wave(f: &mut Frame, app: &App, rv: &Review, r: R) {
                 f.p.fill(cx, y + (h - bh) / 2.0, step - 1.0, bh, col);
             }
         }
+        _ if rv.wave_failed => {}
         _ => {
             f.spinner(r.0 + r.2 / 2.0 - 90.0, r.1 + r.3 / 2.0, 10.0, pal.primary);
             f.text("Leggo l'onda dell'audio…", r.0 + r.2 / 2.0 - 66.0, r.1, 300.0, r.3, 16.0, SANS, pal.muted);
