@@ -145,8 +145,17 @@ pub fn open(path: &Path, straighten: bool, target_side: Option<u32>) -> Result<D
 /// portata ad almeno 1024 px, perché un logo da 24 px sia utile.
 fn open_svg(path: &Path, target_side: Option<u32>) -> Result<DynamicImage, String> {
     let data = fs::read(path).map_err(|e| e.to_string())?;
+    // I caratteri del sistema si cercano una volta sola: leggerli tutti a ogni SVG costava decimi di secondo
+    // per file (una cartella di icone, le anteprime).
+    static FONTS: std::sync::OnceLock<std::sync::Arc<resvg::usvg::fontdb::Database>> = std::sync::OnceLock::new();
     let mut opt = resvg::usvg::Options::default();
-    opt.fontdb_mut().load_system_fonts();
+    opt.fontdb = FONTS
+        .get_or_init(|| {
+            let mut db = resvg::usvg::fontdb::Database::new();
+            db.load_system_fonts();
+            std::sync::Arc::new(db)
+        })
+        .clone();
     // Il testo dell'SVG usa i caratteri del sistema; se non c'è quello chiesto, vale il primo che si trova.
     let tree = resvg::usvg::Tree::from_data(&data, &opt).map_err(|e| format!("SVG non letto: {e}"))?;
     let size = tree.size();
