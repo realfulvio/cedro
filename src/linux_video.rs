@@ -1761,8 +1761,9 @@ fn mjpeg_frame(frame: &[u8]) -> Result<OwnedFrame, String> {
     let rgb = image.to_rgb8();
     let w = rgb.width() as usize;
     let h = rgb.height() as usize;
-    if w < 2 || h < 2 || w % 2 == 1 || h % 2 == 1 {
-        return Err(format!("il video è {w}×{h}: H.264 vuole misure pari"));
+    // Le misure dispari le porta a pari il codificatore, come per gli AVI non compressi.
+    if w < 2 || h < 2 {
+        return Err(format!("il video è {w}×{h}: troppo piccolo"));
     }
     rgb_planes(rgb.as_raw(), w, h, w * 3, 3, false, false)
 }
