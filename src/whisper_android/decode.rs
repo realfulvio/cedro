@@ -46,7 +46,9 @@ fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), Failure> {
         let head = params.extra_data.clone().unwrap_or_default().into_vec();
         return opus_mono(format.as_mut(), track.id, track.delay.unwrap_or(0) as usize, &head);
     }
-    let rate = params.sample_rate.unwrap_or(RATE);
+    // La frequenza vera è quella dei pacchetti decodificati (come nel motore del computer): l'intestazione può
+    // dirne un'altra, e ricampionare con quella darebbe un audio a velocità sbagliata e orari sballati.
+    let mut rate = params.sample_rate.unwrap_or(RATE);
     let mut decoder = symphonia::default::get_codecs()
         .make_audio_decoder(&params, &AudioDecoderOptions::default())
         .map_err(|e| Failure::Unsupported(format!("codifica audio non supportata ({e})")))?;
@@ -69,7 +71,7 @@ fn decode_mono(path: &Path) -> Result<(Vec<f32>, u32), Failure> {
             Err(SymError::DecodeError(_)) => continue,
             Err(e) => return Err(Failure::Other(format!("decodifica interrotta: {e}"))),
         };
-        let rate = decoded.spec().rate();
+        rate = decoded.spec().rate();
         let channels = decoded.spec().channels().count().max(1);
         decoded.copy_to_vec_interleaved(&mut buf);
         mono.extend(buf.chunks_exact(channels).map(|f| f.iter().sum::<f32>() / channels as f32));
