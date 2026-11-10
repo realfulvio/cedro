@@ -386,7 +386,7 @@ procedure SaveLanguage;
 var
   path: String;
   text: AnsiString;
-  code: String;
+  code, line: String;
 begin
   if ActiveLanguage = 'english' then code := 'en' else code := 'it';
   path := ExpandConstant('{userappdata}\Cedro\config.txt');
@@ -395,8 +395,10 @@ begin
   if Pos('language=', text) = 0 then
   begin
     ForceDirectories(ExpandConstant('{userappdata}\Cedro'));
-    if (Length(text) > 0) and (text[Length(text)] <> #10) then text := text + #13#10;
-    SaveStringToFile(path, 'language=' + code + #13#10, True);
+    line := 'language=' + code + #13#10;
+    // Un file che non finisce con l'a capo: senza, «language=» si attaccava all'ultima riga e la rovinava.
+    if (Length(text) > 0) and (text[Length(text)] <> #10) then line := #13#10 + line;
+    SaveStringToFile(path, line, True);
   end;
 end;
 
