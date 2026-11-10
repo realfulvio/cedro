@@ -176,6 +176,10 @@ pub fn run_standalone() {
     let _ = unsafe { windows::Win32::System::Ole::OleInitialize(None) };
     open();
     unsafe {
+        // La finestra non si è aperta (già scritto nel registro): senza finestre il ciclo aspetterebbe per sempre, processo invisibile.
+        if WINDOW.load(Ordering::Relaxed) == 0 {
+            return;
+        }
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             if !handle_message(&msg) {
