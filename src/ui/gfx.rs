@@ -441,7 +441,7 @@ pub struct Painter<'a> {
     pub scale: f32,
     fonts: &'a Fonts,
     cache: &'a mut GlyphCache,
-    clips: Vec<(Rect, Mask)>,
+    clips: Vec<(Rect, std::rc::Rc<Mask>)>,
     /// Spostamento corrente delle coordinate logiche (per le zone che scorrono).
     pub dx: f32,
     pub dy: f32,
@@ -449,12 +449,35 @@ pub struct Painter<'a> {
     pub larger: bool,
 }
 
+/// La maschera del ritaglio solo se serve: se il tracciato (allargato di `margine` pixel) sta tutto dentro
+/// il rettangolo del ritaglio, niente maschera. Con la maschera tiny-skia passa a una pipeline molto più lenta.
+fn maschera_per<'m>(clips: &'m [(Rect, std::rc::Rc<Mask>)], b: Rect, tf: Transform, margine: f32) -> Option<&'m Mask> {
+    let (r, m) = clips.last()?;
+    match b.transform(tf) {
+        Some(d) if d.left() - margine >= r.left() && d.top() - margine >= r.top() && d.right() + margine <= r.right() && d.bottom() + margine <= r.bottom() => None,
+        _ => Some(&**m),
+    }
+}
+
+/// Un'immagine preparata: quale (indirizzo dei pixel), misura in pixel, raggio in pixel, adattamento.
+type ChiaveImg = (usize, u32, u32, u32, bool);
+
 /// I glifi già disegnati: si tiene fra un fotogramma e l'altro.
 #[derive(Default)]
 pub struct GlyphCache {
     glyphs: HashMap<GlyphKey, Option<Glyph>>,
+    /// Le immagini già ridotte e arrotondate alla misura in cui si disegnano, col fotogramma dell'ultimo uso:
+    /// ridimensionarle (bicubico) e prepararne la maschera a ogni fotogramma costava più di tutto il resto.
+    /// Con l'originale tenuto vivo: finché la voce c'è, il suo indirizzo non può toccare a un'altra immagine.
+    immagini: HashMap<ChiaveImg, (Arc<Pixmap>, Arc<Pixmap>, u64)>,
+    /// Le maschere dei ritagli rettangolari (una per rettangolo e misura della finestra), riusate fra i fotogrammi.
+    maschere: HashMap<(i32, i32, i32, i32, u32, u32), (std::rc::Rc<Mask>, u64)>,
+    fotogramma: u64,
     /// La scala dei glifi tenuti.
     scale: f32,
+    /// Il foglio del fotogramma prima, da riusare (`Painter::new_riusando`): un foglio nuovo di 10 MB costa
+    /// soprattutto la prima scrittura di ogni pagina di memoria, qualche millisecondo a fotogramma sul telefono.
+    tela: Option<Pixmap>,
 }
 
 impl GlyphCache {
@@ -469,6 +492,23 @@ impl GlyphCache {
         if self.scale != scale || self.glyphs.len() > 20_000 {
             self.glyphs.clear();
             self.scale = scale;
+        }
+    }
+
+    /// Restituisce il foglio di un fotogramma finito, per il prossimo `Painter::new_riusando`.
+    pub fn ricicla(&mut self, pm: Pixmap) {
+        self.tela = Some(pm);
+    }
+
+    /// A ogni fotogramma: si dimenticano le immagini e le maschere non usate da un po'.
+    fn nuovo_fotogramma(&mut self) {
+        self.fotogramma += 1;
+        let f = self.fotogramma;
+        if self.immagini.len() > 48 {
+            self.immagini.retain(|_, (_, _, u)| f - *u < 30);
+        }
+        if self.maschere.len() > 16 {
+            self.maschere.retain(|_, (_, u)| f - *u < 30);
         }
     }
 }
@@ -505,8 +545,26 @@ pub fn rrect_path(x: f32, y: f32, w: f32, h: f32, r: f32) -> Option<tiny_skia::P
 }
 
 impl<'a> Painter<'a> {
+    /// Come `new`, ma riusa il foglio restituito con `GlyphCache::ricicla` se ha la stessa misura: il
+    /// contenuto è quello del fotogramma prima, quindi va pulito (`clear`) prima di disegnare.
+    pub fn new_riusando(w: u32, h: u32, scale: f32, fonts: &'a Fonts, cache: &'a mut GlyphCache) -> Painter<'a> {
+        match cache.tela.take() {
+            Some(pm) if pm.width() == w.max(1) && pm.height() == h.max(1) => {
+                cache.nuovo_fotogramma();
+                Painter { pixmap: pm, scale, fonts, cache, clips: Vec::new(), dx: 0.0, dy: 0.0, larger: true }
+            }
+            _ => Painter::new(w, h, scale, fonts, cache),
+        }
+    }
+
+    /// Il foglio disegnato (per restituirlo con `GlyphCache::ricicla`).
+    pub fn in_foglio(self) -> Pixmap {
+        self.pixmap
+    }
+
     /// Un'immagine nuova di `w`×`h` pixel, con `scale` pixel per unità logica.
     pub fn new(w: u32, h: u32, scale: f32, fonts: &'a Fonts, cache: &'a mut GlyphCache) -> Painter<'a> {
+        cache.nuovo_fotogramma();
         Painter { pixmap: Pixmap::new(w.max(1), h.max(1)).expect("dimensioni valide"), scale, fonts, cache, clips: Vec::new(), dx: 0.0, dy: 0.0, larger: true }
     }
 
@@ -531,8 +589,22 @@ impl<'a> Painter<'a> {
         if let Some((prev, _)) = self.clips.last() {
             r = r.intersect(prev).unwrap_or(Rect::from_xywh(0.0, 0.0, 0.0001, 0.0001).unwrap_or(*prev));
         }
-        let mut m = Mask::new(self.pixmap.width(), self.pixmap.height()).expect("maschera");
-        m.fill_path(&PathBuilder::from_rect(r), FillRule::Winding, false, Transform::identity());
+        let (pw, ph) = (self.pixmap.width(), self.pixmap.height());
+        let chiave = (r.left() as i32, r.top() as i32, r.right() as i32, r.bottom() as i32, pw, ph);
+        let f = self.cache.fotogramma;
+        let m = match self.cache.maschere.get_mut(&chiave) {
+            Some((m, u)) => {
+                *u = f;
+                m.clone()
+            }
+            None => {
+                let mut m = Mask::new(pw, ph).expect("maschera");
+                m.fill_path(&PathBuilder::from_rect(r), FillRule::Winding, false, Transform::identity());
+                let m = std::rc::Rc::new(m);
+                self.cache.maschere.insert(chiave, (m.clone(), f));
+                m
+            }
+        };
         self.clips.push((r, m));
     }
 
@@ -556,8 +628,250 @@ impl<'a> Painter<'a> {
         bottom >= cy0 as f32 && top <= cy1 as f32
     }
 
+    /// Disegna l'immagine già ridotta e arrotondata (preparata la prima volta e tenuta nella cache):
+    /// a ogni fotogramma resta solo una copia con la trasparenza. Falso se non si può (troppo grande).
+    #[allow(clippy::too_many_arguments)]
+    fn image_pronta(&mut self, img: &Image, x: f32, y: f32, w: f32, h: f32, r: f32, fit: Fit) -> bool {
+        let s = self.scale;
+        let (dw, dh) = ((w * s).round(), (h * s).round());
+        if dw < 1.0 || dh < 1.0 || dw * dh > 4_000_000.0 {
+            return false;
+        }
+        let (ix, iy) = (((x + self.dx) * s).round() as i32, ((y + self.dy) * s).round() as i32);
+        let (cx0, cy0, cx1, cy1) = self.clip_rect();
+        if ix + dw as i32 <= cx0 || iy + dh as i32 <= cy0 || ix >= cx1 || iy >= cy1 {
+            return true;
+        }
+        let chiave = (Arc::as_ptr(&img.pixmap) as usize, dw as u32, dh as u32, (r * s).round() as u32, matches!(fit, Fit::Cover));
+        let f = self.cache.fotogramma;
+        let pronta = match self.cache.immagini.get_mut(&chiave) {
+            Some((_, pm, u)) => {
+                *u = f;
+                pm.clone()
+            }
+            None => {
+                let Some(mut pm) = Pixmap::new(dw as u32, dh as u32) else { return false };
+                let (iw, ih) = (img.w as f32, img.h as f32);
+                let k = match fit {
+                    Fit::Cover => (dw / iw).max(dh / ih),
+                    Fit::Contain => (dw / iw).min(dh / ih),
+                };
+                let (ow, oh) = (iw * k, ih * k);
+                let tf = Transform::from_translate((dw - ow) / 2.0, (dh - oh) / 2.0).pre_scale(k, k);
+                let mut mask = Mask::new(dw as u32, dh as u32).expect("maschera");
+                if let Some(path) = rrect_path(0.0, 0.0, dw, dh, r * s) {
+                    mask.fill_path(&path, FillRule::Winding, true, Transform::identity());
+                }
+                let paint = PixmapPaint { quality: FilterQuality::Bicubic, ..Default::default() };
+                pm.draw_pixmap(0, 0, img.pixmap.as_ref().as_ref(), &paint, tf, Some(&mask));
+                let pm = Arc::new(pm);
+                self.cache.immagini.insert(chiave, (img.pixmap.clone(), pm.clone(), f));
+                pm
+            }
+        };
+        // Solo la parte che si vede, copiata a mano (sorgente sopra, premoltiplicata): il ritaglio è un rettangolo.
+        let (vx0, vy0) = (ix.max(cx0).max(0), iy.max(cy0).max(0));
+        let (vx1, vy1) = ((ix + dw as i32).min(cx1), (iy + dh as i32).min(cy1));
+        if vx1 > vx0 && vy1 > vy0 {
+            let pw = self.pixmap.width() as usize;
+            let sw = pronta.width() as usize;
+            let src = pronta.data();
+            let dst = self.pixmap.data_mut();
+            for y in vy0..vy1 {
+                let sy = (y - iy) as usize;
+                let so = sy * sw * 4 + (vx0 - ix) as usize * 4;
+                let n = (vx1 - vx0) as usize * 4;
+                let srow = &src[so..so + n];
+                let drow = &mut dst[y as usize * pw * 4 + vx0 as usize * 4..y as usize * pw * 4 + vx0 as usize * 4 + n];
+                for (d, s4) in drow.chunks_exact_mut(4).zip(srow.chunks_exact(4)) {
+                    let sa = s4[3] as u32;
+                    if sa == 255 {
+                        d.copy_from_slice(s4);
+                    } else if sa > 0 {
+                        let inv = 255 - sa;
+                        for i in 0..4 {
+                            d[i] = (s4[i] as u32 + (d[i] as u32 * inv + 127) / 255).min(255) as u8;
+                        }
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    /// `rett_pixel` senza la parte dentro `buco`: fino a quattro rettangoli intorno.
+    fn rett_buco(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, buco: Option<(f32, f32, f32, f32)>, c: Rgb, a: f32) {
+        let Some((bx0, by0, bx1, by1)) = buco else { return self.rett_pixel(x0, y0, x1, y1, c, a) };
+        if bx1 <= x0 || bx0 >= x1 || by1 <= y0 || by0 >= y1 {
+            return self.rett_pixel(x0, y0, x1, y1, c, a);
+        }
+        let (bx0, by0, bx1, by1) = (bx0.max(x0), by0.max(y0), bx1.min(x1), by1.min(y1));
+        self.rett_pixel(x0, y0, x1, by0, c, a);
+        self.rett_pixel(x0, by1, x1, y1, c, a);
+        self.rett_pixel(x0, by0, bx0, by1, c, a);
+        self.rett_pixel(bx1, by0, x1, by1, c, a);
+    }
+
+    /// Un rettangolo già in pixel, tagliato al ritaglio corrente: niente maschera (il ritaglio è un rettangolo).
+    /// I bordi frazionari restano sfumati; quelli interi sono netti, così i pezzi accostati non lasciano righe.
+    fn rett_pixel(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, c: Rgb, a: f32) {
+        let (cx0, cy0, cx1, cy1) = self.clip_rect();
+        let (x0, y0) = (x0.max(cx0 as f32), y0.max(cy0 as f32));
+        let (x1, y1) = (x1.min(cx1 as f32), y1.min(cy1 as f32));
+        if x1 <= x0 || y1 <= y0 || a <= 0.0 {
+            return;
+        }
+        // A mano: l'interno a pixel interi si riempie a blocchi (pieno: parole da 32 bit; trasparente: conti
+        // interi), solo i bordi frazionari si mescolano con la loro copertura. tiny-skia qui passava dalla
+        // pipeline generale con la maschera, molto più lenta.
+        let (pw, ph) = (self.pixmap.width() as usize, self.pixmap.height() as usize);
+        let a = a.clamp(0.0, 1.0);
+        let (ox0, oy0) = (x0.floor().max(0.0) as usize, y0.floor().max(0.0) as usize);
+        let (ox1, oy1) = ((x1.ceil().max(0.0) as usize).min(pw), (y1.ceil().max(0.0) as usize).min(ph));
+        let (jx0, jy0) = ((x0.ceil().max(0.0) as usize).min(ox1), (y0.ceil().max(0.0) as usize).min(oy1));
+        let (jx1, jy1) = ((x1.floor().max(0.0) as usize).max(jx0).min(pw), (y1.floor().max(0.0) as usize).max(jy0).min(ph));
+        let data = self.pixmap.data_mut();
+        let mescola = |d: &mut [u8], k: f32| {
+            if k <= 0.002 {
+                return;
+            }
+            let ka = ((k * 255.0) + 0.5).min(255.0) as u32;
+            let inv = 255 - ka;
+            d[0] = ((c.0 as u32 * ka + d[0] as u32 * inv + 127) / 255) as u8;
+            d[1] = ((c.1 as u32 * ka + d[1] as u32 * inv + 127) / 255) as u8;
+            d[2] = ((c.2 as u32 * ka + d[2] as u32 * inv + 127) / 255) as u8;
+            d[3] = ((255 * ka + d[3] as u32 * inv + 127) / 255) as u8;
+        };
+        let copertura_x = |px: usize| (x1.min(px as f32 + 1.0) - x0.max(px as f32)).clamp(0.0, 1.0);
+        let parola = u32::from_ne_bytes([c.0, c.1, c.2, 255]);
+        let ka = ((a * 255.0) + 0.5).min(255.0) as u32;
+        let inv = 255 - ka;
+        let pre = [c.0 as u32 * ka, c.1 as u32 * ka, c.2 as u32 * ka, 255 * ka];
+        for py in oy0..oy1 {
+            let cy = (y1.min(py as f32 + 1.0) - y0.max(py as f32)).clamp(0.0, 1.0);
+            let riga = &mut data[py * pw * 4..(py + 1) * pw * 4];
+            let interna = py >= jy0 && py < jy1;
+            // I bordi a sinistra e a destra (e le righe di bordo, tutte).
+            for px in (ox0..ox1).filter(|&px| !interna || px < jx0 || px >= jx1) {
+                mescola(&mut riga[px * 4..px * 4 + 4], a * cy * copertura_x(px));
+            }
+            if !interna || jx1 <= jx0 {
+                continue;
+            }
+            let pezzo = &mut riga[jx0 * 4..jx1 * 4];
+            if ka >= 255 {
+                // SAFETY: il pezzo è fatto di gruppi interi di 4 byte; `align_to_mut` lascia ai lati quello che non è allineato.
+                let (testa, corpo, coda) = unsafe { pezzo.align_to_mut::<u32>() };
+                if testa.is_empty() && coda.is_empty() {
+                    corpo.fill(parola);
+                } else {
+                    for d in pezzo.chunks_exact_mut(4) {
+                        d.copy_from_slice(&[c.0, c.1, c.2, 255]);
+                    }
+                }
+            } else if ka > 0 {
+                // SAFETY: come sopra.
+                let (testa, corpo, coda) = unsafe { pezzo.align_to_mut::<u32>() };
+                if testa.is_empty() && coda.is_empty() {
+                    // Due canali per volta in una parola (rosso e blu, verde e alfa): la velatura a tutto
+                    // schermo dei fogli costa la metà. Il /255 diventa /256 con arrotondamento (errore ≤ 1).
+                    let inv2 = inv + 1;
+                    let sorg = u32::from_ne_bytes([((pre[0] + 127) / 255) as u8, ((pre[1] + 127) / 255) as u8, ((pre[2] + 127) / 255) as u8, ((pre[3] + 127) / 255) as u8]);
+                    for d in corpo.iter_mut() {
+                        let v = *d;
+                        let rb = (((v & 0x00ff_00ff) * inv2) >> 8) & 0x00ff_00ff;
+                        let ga = (((v >> 8) & 0x00ff_00ff) * inv2) & 0xff00_ff00;
+                        *d = sorg.wrapping_add(rb | ga);
+                    }
+                } else {
+                    for d in pezzo.chunks_exact_mut(4) {
+                        d[0] = ((pre[0] + d[0] as u32 * inv + 127) / 255) as u8;
+                        d[1] = ((pre[1] + d[1] as u32 * inv + 127) / 255) as u8;
+                        d[2] = ((pre[2] + d[2] as u32 * inv + 127) / 255) as u8;
+                        d[3] = ((pre[3] + d[3] as u32 * inv + 127) / 255) as u8;
+                    }
+                }
+            }
+        }
+    }
+
+    /// I riquadri grandi senza passare dal tracciato: il centro e i lati sono rettangoli (veloci), solo i
+    /// quattro angoli sono tracciati. Su un telefono un fondo a tutto schermo così costa un decimo.
+    /// Falso se conviene il tracciato (riquadri piccoli, trasformazioni non semplici).
+    #[allow(clippy::too_many_arguments)]
+    fn rrect_veloce(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, c: Rgb, a: f32) -> bool {
+        self.rrect_veloce_buco(x, y, w, h, r, c, a, None)
+    }
+
+    /// Come `rrect_veloce`, lasciando vuoto il rettangolo `buco` (in pixel): per le ombre, che sotto
+    /// l'oggetto non si vedono e lì costavano sei riempimenti grandi quanto l'oggetto.
+    #[allow(clippy::too_many_arguments)]
+    fn rrect_veloce_buco(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, c: Rgb, a: f32, buco: Option<(f32, f32, f32, f32)>) -> bool {
+        let s = self.scale;
+        if w <= 0.0 || h <= 0.0 || w * h * s * s < 40_000.0 {
+            return false;
+        }
+        let r = r.min(w / 2.0).min(h / 2.0).max(0.0);
+        let (x0, y0) = ((x + self.dx) * s, (y + self.dy) * s);
+        let (x1, y1) = (x0 + w * s, y0 + h * s);
+        let rd = r * s;
+        let paint = color(c, a);
+        if rd < 0.5 {
+            self.rett_buco(x0, y0, x1, y1, buco, c, a);
+            return true;
+        }
+        // I tagli interni sui pixel interi.
+        let (xa, xb) = ((x0 + rd).ceil(), (x1 - rd).floor());
+        let (ya, yb) = ((y0 + rd).ceil(), (y1 - rd).floor());
+        if xb <= xa || yb <= ya {
+            return false;
+        }
+        self.rett_buco(xa, y0, xb, y1, buco, c, a);
+        self.rett_buco(x0, ya, xa, yb, buco, c, a);
+        self.rett_buco(xb, ya, x1, yb, buco, c, a);
+        // Gli angoli: il quarto di riquadro arrotondato dentro ciascun quadratino d'angolo.
+        let k = 0.552_284_8 * rd;
+        let clips = self.clips.clone();
+        let angoli = [
+            // (spigolo interno, punto sul lato orizzontale, controllo, punto sul lato verticale)
+            ((xa, ya), (xa, y0), (x0 + rd, y0), (x0 + rd - k, y0), (x0, y0 + rd - k), (x0, y0 + rd), (x0, ya)),
+            ((xb, ya), (xb, y0), (x1 - rd, y0), (x1 - rd + k, y0), (x1, y0 + rd - k), (x1, y0 + rd), (x1, ya)),
+            ((xa, yb), (xa, y1), (x0 + rd, y1), (x0 + rd - k, y1), (x0, y1 - rd + k), (x0, y1 - rd), (x0, yb)),
+            ((xb, yb), (xb, y1), (x1 - rd, y1), (x1 - rd + k, y1), (x1, y1 - rd + k), (x1, y1 - rd), (x1, yb)),
+        ];
+        for (dentro, lato_o, arco0, c1, c2, arco1, lato_v) in angoli {
+            let mut pb = PathBuilder::new();
+            pb.move_to(dentro.0, dentro.1);
+            pb.line_to(lato_o.0, lato_o.1);
+            pb.line_to(arco0.0, arco0.1);
+            pb.cubic_to(c1.0, c1.1, c2.0, c2.1, arco1.0, arco1.1);
+            pb.line_to(lato_v.0, lato_v.1);
+            pb.close();
+            if let Some(path) = pb.finish() {
+                let m = maschera_per(&clips, path.bounds(), Transform::identity(), 1.0);
+                self.pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), m);
+            }
+        }
+        true
+    }
+
     pub fn clear(&mut self, c: Rgb) {
-        self.pixmap.fill(tiny_skia::Color::from_rgba8(c.0, c.1, c.2, 255));
+        // Una riga, poi copie in blocco che raddoppiano: molto più veloce del riempimento pixel per pixel
+        // (su un telefono 1080×2340 da 4,4 ms a meno di 1).
+        let w = self.pixmap.width() as usize * 4;
+        let data = self.pixmap.data_mut();
+        if data.len() < w || w == 0 {
+            return;
+        }
+        for px in data[..w].chunks_exact_mut(4) {
+            px.copy_from_slice(&[c.0, c.1, c.2, 255]);
+        }
+        let mut fatto = w;
+        while fatto < data.len() {
+            let n = fatto.min(data.len() - fatto);
+            data.copy_within(0..n, fatto);
+            fatto += n;
+        }
     }
 
     pub fn fill(&mut self, x: f32, y: f32, w: f32, h: f32, c: Rgb) {
@@ -579,10 +893,10 @@ impl<'a> Painter<'a> {
             y = dy / s - self.dy;
             h = (h * s).round().max(1.0) / s;
         }
-        if let Some(r) = Rect::from_xywh(x, y, w, h) {
-            let tf = self.tf();
-            let m = self.clips.last().map(|(_, m)| m);
-            self.pixmap.fill_rect(r, &color(c, a), tf, m);
+        // In pixel, tagliato al ritaglio rettangolare: niente maschera.
+        let (x0, y0) = ((x + self.dx) * s, (y + self.dy) * s);
+        if w > 0.0 && h > 0.0 {
+            self.rett_pixel(x0, y0, x0 + w * s, y0 + h * s, c, a);
         }
     }
 
@@ -597,9 +911,12 @@ impl<'a> Painter<'a> {
     }
 
     pub fn rrect_a(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, c: Rgb, a: f32) {
+        if self.rrect_veloce(x, y, w, h, r, c, a) {
+            return;
+        }
         if let Some(p) = rrect_path(x, y, w, h, r) {
             let tf = self.tf();
-            let m = self.clips.last().map(|(_, m)| m);
+            let m = maschera_per(&self.clips, p.bounds(), tf, 1.0);
             self.pixmap.fill_path(&p, &color(c, a), FillRule::Winding, tf, m);
         }
     }
@@ -616,7 +933,7 @@ impl<'a> Painter<'a> {
         if let Some(p) = rrect_path(x, y, w, h, r) {
             let paint = Paint { shader, anti_alias: true, ..Default::default() };
             let tf = self.tf();
-            let m = self.clips.last().map(|(_, m)| m);
+            let m = maschera_per(&self.clips, p.bounds(), tf, 1.0);
             self.pixmap.fill_path(&p, &paint, FillRule::Winding, tf, m);
         }
     }
@@ -630,7 +947,7 @@ impl<'a> Painter<'a> {
                 st.dash = StrokeDash::new(vec![on, off], 0.0);
             }
             let tf = self.tf();
-            let m = self.clips.last().map(|(_, m)| m);
+            let m = maschera_per(&self.clips, p.bounds(), tf, 8.0);
             self.pixmap.stroke_path(&p, &color(c, a), &st, tf, m);
         }
     }
@@ -638,10 +955,20 @@ impl<'a> Painter<'a> {
     /// Ombra morbida sotto un riquadro: strati sempre più larghi e più chiari.
     pub fn shadow(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, spread: f32, a: f32, dy: f32) {
         let steps = 6;
+        // Sotto l'oggetto (che si disegna dopo, pieno) l'ombra non si vede: lì non si riempie.
+        let s = self.scale;
+        let rr = r.min(w / 2.0).min(h / 2.0).max(0.0);
+        let buco = ((x + self.dx + rr) * s, (y + self.dy + rr) * s, (x + self.dx + w - rr) * s, (y + self.dy + h - rr) * s);
+        let buco = (buco.0.ceil(), buco.1.ceil(), buco.2.floor(), buco.3.floor());
+        let buco = (buco.2 > buco.0 && buco.3 > buco.1).then_some(buco);
         for i in (1..=steps).rev() {
             let k = i as f32 / steps as f32;
             let g = spread * k;
-            self.rrect_a(x - g, y - g + dy, w + 2.0 * g, h + 2.0 * g, r + g, (0, 0, 0), a / steps as f32 * (1.0 - k * 0.6));
+            let (lx, ly, lw, lh, lr) = (x - g, y - g + dy, w + 2.0 * g, h + 2.0 * g, r + g);
+            let al = a / steps as f32 * (1.0 - k * 0.6);
+            if !self.rrect_veloce_buco(lx, ly, lw, lh, lr, (0, 0, 0), al, buco) {
+                self.rrect_a(lx, ly, lw, lh, lr, (0, 0, 0), al);
+            }
         }
     }
 
@@ -652,7 +979,7 @@ impl<'a> Painter<'a> {
         if let Some(p) = pb.finish() {
             let st = Stroke { width: lw, line_cap: LineCap::Butt, ..Default::default() };
             let tf = self.tf();
-            let m = self.clips.last().map(|(_, m)| m);
+            let m = maschera_per(&self.clips, p.bounds(), tf, 8.0);
             self.pixmap.stroke_path(&p, &color(c, 1.0), &st, tf, m);
         }
     }
@@ -662,7 +989,7 @@ impl<'a> Painter<'a> {
             return;
         }
         let tf = self.tf();
-        let m = self.clips.last().map(|(_, m)| m);
+        let m = self.clips.last().map(|(_, m)| &**m);
         if let (Some(c), Some(p)) = (fill, PathBuilder::from_circle(cx, cy, r)) {
             self.pixmap.fill_path(&p, &color(c, 1.0), FillRule::Winding, tf, m);
         }
@@ -694,7 +1021,7 @@ impl<'a> Painter<'a> {
         pb.close();
         let Some(path) = pb.finish() else { return };
         let tf = self.tf();
-        let m = self.clips.last().map(|(_, m)| m);
+        let m = maschera_per(&self.clips, path.bounds(), tf, 1.0);
         self.pixmap.fill_path(&path, &color(c, a), FillRule::Winding, tf, m);
         if r > 0.0 {
             let st = Stroke { width: 2.0 * r, line_join: LineJoin::Round, line_cap: LineCap::Round, ..Default::default() };
@@ -715,7 +1042,7 @@ impl<'a> Painter<'a> {
         pb.close();
         if let Some(p) = pb.finish() {
             let tf = self.tf();
-            let m = self.clips.last().map(|(_, m)| m);
+            let m = maschera_per(&self.clips, p.bounds(), tf, 1.0);
             self.pixmap.fill_path(&p, &color(c, a), FillRule::Winding, tf, m);
         }
     }
@@ -723,14 +1050,14 @@ impl<'a> Painter<'a> {
     /// Un tracciato qualunque già costruito, in unità logiche.
     pub fn fill_path(&mut self, p: &tiny_skia::Path, c: Rgb, a: f32, evenodd: bool) {
         let tf = self.tf();
-        let m = self.clips.last().map(|(_, m)| m);
+        let m = maschera_per(&self.clips, p.bounds(), tf, 1.0);
         self.pixmap.fill_path(p, &color(c, a), if evenodd { FillRule::EvenOdd } else { FillRule::Winding }, tf, m);
     }
 
     pub fn stroke_path(&mut self, p: &tiny_skia::Path, c: Rgb, lw: f32) {
         let st = Stroke { width: lw, line_cap: LineCap::Round, line_join: LineJoin::Round, ..Default::default() };
         let tf = self.tf();
-        let m = self.clips.last().map(|(_, m)| m);
+        let m = maschera_per(&self.clips, p.bounds(), tf, 8.0);
         self.pixmap.stroke_path(p, &color(c, 1.0), &st, tf, m);
     }
 
@@ -740,7 +1067,7 @@ impl<'a> Painter<'a> {
         let Some(path) = super::svgpath::parse(d) else { return };
         let st = Stroke { width: 1.8, line_cap: LineCap::Round, line_join: LineJoin::Round, ..Default::default() };
         let tf = self.tf().pre_translate(x, y).pre_scale(k, k);
-        let m = self.clips.last().map(|(_, m)| m);
+        let m = maschera_per(&self.clips, path.bounds(), tf, 8.0);
         self.pixmap.stroke_path(&path, &color(c, 1.0), &st, tf, m);
     }
 
@@ -751,7 +1078,7 @@ impl<'a> Painter<'a> {
         let st = Stroke { width: 1.8, line_cap: LineCap::Round, line_join: LineJoin::Round, ..Default::default() };
         let h = size / 2.0;
         let tf = self.tf().pre_translate(x + h, y + h).pre_concat(Transform::from_rotate(deg)).pre_translate(-h, -h).pre_scale(k, k);
-        let m = self.clips.last().map(|(_, m)| m);
+        let m = maschera_per(&self.clips, path.bounds(), tf, 8.0);
         self.pixmap.stroke_path(&path, &color(c, 1.0), &st, tf, m);
     }
 
@@ -760,7 +1087,7 @@ impl<'a> Painter<'a> {
         let k = size / 24.0;
         let Some(path) = super::svgpath::parse(d) else { return };
         let tf = self.tf().pre_translate(x, y).pre_scale(k, k);
-        let m = self.clips.last().map(|(_, m)| m);
+        let m = maschera_per(&self.clips, path.bounds(), tf, 1.0);
         self.pixmap.fill_path(&path, &color(c, 0.9), FillRule::Winding, tf, m);
     }
 
@@ -823,6 +1150,9 @@ impl<'a> Painter<'a> {
 
     /// Un'immagine nel riquadro, con gli angoli arrotondati se `r` > 0.
     pub fn image(&mut self, img: &Image, x: f32, y: f32, w: f32, h: f32, r: f32, fit: Fit) {
+        if self.image_pronta(img, x, y, w, h, r, fit) {
+            return;
+        }
         let (iw, ih) = (img.w as f32, img.h as f32);
         let k = match fit {
             Fit::Cover => (w / iw).max(h / ih),
@@ -1113,8 +1443,42 @@ mod tests {
                 }
                 a.image(&img, x, y, w, h, r, fit);
                 image_full_mask(&mut b, &img, x, y, w, h, r, fit);
-                assert!(a.pixmap.data() == b.pixmap.data(), "immagine diversa: {clip:?} {x} {y}");
+                // L'immagine ora si prepara una volta sola, già ridotta e arrotondata, e si posa sui pixel
+                // interi: rispetto al disegno con la maschera a tutto schermo cambiano solo i bordi di
+                // mezzo pixel. Stessa immagine, stesso posto, stesso ritaglio: differenza media minima.
+                let diff: u64 = a.pixmap.data().iter().zip(b.pixmap.data()).map(|(p, q)| (*p as i32 - *q as i32).unsigned_abs() as u64).sum();
+                let media = diff as f64 / a.pixmap.data().len() as f64;
+                assert!(media < 3.0, "immagine diversa: {clip:?} {x} {y} (differenza media {media:.2})");
             }
+        }
+    }
+
+    #[test]
+    fn riquadri_veloci_come_il_tracciato() {
+        // Il riquadro grande fatto a rettangoli e angoli deve venire come il tracciato intero, anche
+        // trasparente, con un ritaglio e con l'ombra (che sotto l'oggetto non si disegna).
+        let fonts = Fonts::system();
+        for (clip, alfa) in [(None, 1.0), (Some((15.0, 12.0, 160.0, 90.0)), 0.45)] {
+            let (mut c1, mut c2) = (GlyphCache::new(), GlyphCache::new());
+            let mut a = Painter::new(400, 260, 2.0, &fonts, &mut c1);
+            let mut b = Painter::new(400, 260, 2.0, &fonts, &mut c2);
+            for p in [&mut a, &mut b] {
+                p.clear((240, 242, 245));
+                if let Some((x, y, w, h)) = clip {
+                    p.push_clip(x, y, w, h);
+                }
+                p.dy = -0.3;
+            }
+            a.rrect_a(10.3, 8.6, 170.2, 110.7, 18.0, (20, 90, 140), alfa);
+            if let Some(path) = rrect_path(10.3, 8.6, 170.2, 110.7, 18.0) {
+                let tf = b.tf();
+                let m = b.clips.last().map(|(_, m)| m.clone());
+                b.pixmap.fill_path(&path, &color((20, 90, 140), alfa), FillRule::Winding, tf, m.as_deref());
+            }
+            let peggiore = a.pixmap.data().iter().zip(b.pixmap.data()).map(|(p, q)| (*p as i32 - *q as i32).unsigned_abs()).max().unwrap_or(0);
+            assert!(peggiore <= 40, "riquadro diverso: {clip:?} (scarto {peggiore})");
+            let diff: u64 = a.pixmap.data().iter().zip(b.pixmap.data()).map(|(p, q)| (*p as i32 - *q as i32).unsigned_abs() as u64).sum();
+            assert!((diff as f64 / a.pixmap.data().len() as f64) < 0.5, "riquadro diverso: {clip:?}");
         }
     }
 
@@ -1133,3 +1497,4 @@ mod tests {
         assert!(!p.shows_y(30.0, 10.0));
     }
 }
+
