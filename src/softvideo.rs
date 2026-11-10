@@ -35,6 +35,7 @@ struct AudioIn {
     rate: u32,
     channels: u16,
     params: AudioCodecParameters,
+    time_base: Option<symphonia::core::units::TimeBase>,
 }
 
 enum VideoDec {
@@ -191,6 +192,9 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
         None => None,
     };
     let audio_id = opened.audio.as_ref().map(|audio| audio.id);
+    let audio_base = opened.audio.as_ref().and_then(|audio| audio.time_base);
+    // Frequenza e canali dell'ultimo pacchetto decodificato, per il silenzio al posto di quelli rovinati.
+    let mut format_seen: Option<(u32, u16)> = None;
     let mut audio_packets = 0u32;
     let mut audio_samples = 0usize;
     let mut buf: Vec<i16> = Vec::new();
@@ -262,7 +266,16 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
                 };
                 let decoded = match dec.decode(&packet) {
                     Ok(decoded) => decoded,
-                    Err(SymError::DecodeError(_)) => continue,
+                    Err(SymError::DecodeError(_)) => {
+                        // Il silenzio al posto del pacchetto rovinato: l'audio dopo resta a tempo col video.
+                        if let Some((rate, channels)) = format_seen {
+                            let samples = crate::symph::silence_for(&packet, audio_base, rate, channels);
+                            if !samples.is_empty() && !put(&mut current, Entry::Audio(Item::Audio { samples, channels, rate }), false) {
+                                break;
+                            }
+                        }
+                        continue;
+                    }
                     Err(SymError::ResetRequired) => {
                         dec.reset();
                         continue;
@@ -279,6 +292,7 @@ fn read_items(mut opened: Opened, codec: Codec, workers: usize, frame_queue: usi
                 if buf.is_empty() {
                     continue;
                 }
+                format_seen = Some((rate, channels));
                 audio_samples += buf.len();
                 let item = Item::Audio { samples: buf.clone(), channels, rate };
                 if !put(&mut current, Entry::Audio(item), false) {
@@ -433,6 +447,7 @@ fn open_media(path: &Path) -> Result<Opened, String> {
             rate: if opus { 48_000 } else { params.sample_rate.unwrap_or(44100) },
             channels: channel_count(params),
             params: params.clone(),
+            time_base: track.time_base,
         })
     });
     Ok(Opened { format, video_id, numer, denom, audio })

@@ -145,6 +145,18 @@ impl Default for SignUi {
 
 type Wake = Arc<dyn Fn() + Send + Sync>;
 
+/// Nel thread della firma: se si rompe (panic), dice lo stesso che è finita, con un errore.
+struct SeSiRompe(Arc<Mutex<Vec<Msg>>>, Wake);
+
+impl Drop for SeSiRompe {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.0.lock().unwrap_or_else(|e| e.into_inner()).push(Msg::Finished(Some("errore interno durante la firma".into())));
+            (self.1)();
+        }
+    }
+}
+
 /// Il nome che non c'è ancora nella cartella: «nome.ext», «nome (2).ext»…
 fn free_name(dir: &Path, stem: &str, ext: &str) -> PathBuf {
     let p = dir.join(format!("{stem}.{ext}"));
@@ -412,6 +424,8 @@ impl SignUi {
                 inbox.lock().unwrap_or_else(|e| e.into_inner()).push(m);
                 wake();
             };
+            // Un panic (chiavetta, rete) non deve lasciare la firma «in corso» per sempre.
+            let _finito = SeSiRompe(inbox.clone(), wake.clone());
             let pin_opt = (!pin.is_empty()).then_some(pin.as_str());
             let mut key = match pkcs11::TokenKey::open(&dev, &cert.id, pin_opt) {
                 Ok(k) => k,
@@ -475,11 +489,12 @@ impl SignUi {
         let (kind, old, new) = (d.kind, d.old.clone(), d.new.clone());
         let inbox = self.inbox.clone();
         std::thread::spawn(move || {
-            let r = match kind {
+            let r = std::panic::catch_unwind(|| match kind {
                 0 => pkcs11::change_pin(&dev, &old, &new).map(|_| "PIN cambiato.".to_string()),
                 1 => pkcs11::unlock_pin(&dev, &old, &new).map(|_| "PIN sbloccato: ora vale quello nuovo.".to_string()),
                 _ => pkcs11::change_puk(&dev, &old, &new).map(|_| "PUK cambiato.".to_string()),
-            };
+            })
+            .unwrap_or_else(|_| Err("errore interno parlando con la chiavetta".into()));
             inbox.lock().unwrap_or_else(|e| e.into_inner()).push(Msg::Dialog(r));
             wake();
         });
@@ -491,7 +506,7 @@ impl SignUi {
         let inbox = self.inbox.clone();
         self.info = Some(("Chiedo al certificatore…".into(), false));
         std::thread::spawn(move || {
-            let msg = match firma::revoca::fetch_issuer(&c.cert) {
+            let msg = std::panic::catch_unwind(|| match firma::revoca::fetch_issuer(&c.cert) {
                 None => ("Non trovo il certificato di chi l'ha rilasciato: serve internet.".to_string(), true),
                 Some(ca) => {
                     let r = firma::revoca::check(&c.cert, &ca, &[], true);
@@ -501,7 +516,8 @@ impl SignUi {
                         _ => ("Non sono riuscito a chiederlo al certificatore. Riprova più tardi.".to_string(), true),
                     }
                 }
-            };
+            })
+            .unwrap_or_else(|_| ("Non sono riuscito a chiederlo al certificatore. Riprova più tardi.".to_string(), true));
             inbox.lock().unwrap_or_else(|e| e.into_inner()).push(Msg::Info(msg.0, msg.1));
             wake();
         });
@@ -673,9 +689,11 @@ fn sign_one(f: &SignFile, key: &pkcs11::TokenKey, place: &Place, look: &Look) ->
         Action::Pdf | Action::PdfAgain => pades_firma::sign(&data, key, place, look)?,
         Action::ConvertPdf => {
             let tmp = crate::engine::private_temp_dir("cedro-firma")?;
-            let o = crate::engine::perform_into(&f.path, "pdf", crate::engine::read_quality(), Some(&tmp)).map_err(|e| format!("non riesco a trasformarlo in PDF: {e}"))?;
-            let pdf = std::fs::read(&o.path).map_err(|e| e.to_string())?;
+            let made = crate::engine::perform_into(&f.path, "pdf", crate::engine::read_quality(), Some(&tmp))
+                .map_err(|e| format!("non riesco a trasformarlo in PDF: {e}"))
+                .and_then(|o| std::fs::read(&o.path).map_err(|e| e.to_string()));
             let _ = std::fs::remove_dir_all(&tmp);
+            let pdf = made?;
             let pages = pades_firma::pages(&pdf).unwrap_or_default();
             // Il posto: quello scelto, rifatto sulle pagine del PDF nuovo.
             let place = match place {

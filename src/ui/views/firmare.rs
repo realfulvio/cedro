@@ -386,10 +386,11 @@ fn placement(f: &mut Frame, app: &App, r: R, y: f32, pdf: &SignFile) -> f32 {
     f.p.fill(px, py, pw, ph, (255, 255, 255));
     match app.previews.get(&(pdf.path.clone(), page)).and_then(|i| i.as_ref()) {
         Some(img) => f.p.image(img, px, py, pw, ph, 0.0, crate::ui::gfx::Fit::Contain),
-        None => {
+        None if app.preview_loading(&pdf.path, page) => {
             f.spinner(px + pw / 2.0, py + ph / 2.0, 10.0, c);
             f.animating = true;
         }
+        None => {}
     }
     let shown = su.s.firma_visible && su.place != 2;
     if shown && frac[2] > frac[0] {

@@ -181,6 +181,21 @@ fn pdf_cambiato() {
 }
 
 #[test]
+fn pdf_oggetti_nascosti_nel_buco_della_firma() {
+    // Nel buco di /Contents (fuori dall'impronta) si scrive altro dopo la busta: la firma torna
+    // ancora, ma il PDF non è più quello firmato.
+    setup();
+    let mut pdf = read("determina_firmata.pdf");
+    let sig = super::pades::signatures(&pdf).remove(0);
+    assert!(sig.hole_is_contents(&pdf));
+    let hole_end = sig.range[2] - 1;
+    pdf[hole_end - 20..hole_end - 4].copy_from_slice(b">endobj 9 0 obj<");
+    let r = verify_bytes("d.pdf", &pdf, &Opts { at: At::Now, online: false, detached: None, now: Some(t(2026, 11, 9)) });
+    assert_eq!(status(&r, "", "Documento"), (Level::Bad, "la firma non copre tutto il file".into()));
+    assert_eq!(r.level, Level::Bad);
+}
+
+#[test]
 fn revoca_crl() {
     let c = super::cert::Cert::parse(&read("paolo.cer")).unwrap();
     let ca = super::cert::Cert::parse(&read("ca.cer")).unwrap();

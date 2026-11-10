@@ -57,6 +57,10 @@ impl Aspetto {
             let dir = std::env::temp_dir().join("cedro-aspetto");
             let files = demo_files(&dir);
             for key in order {
+                // Pagina chiusa nel frattempo: le anteprime non servono più a nessuno.
+                if Arc::strong_count(&t) == 1 {
+                    return;
+                }
                 if let Some(img) = render_thumb(key.0, key.1, &files) {
                     t.lock().unwrap().insert(key, img);
                     wake();
