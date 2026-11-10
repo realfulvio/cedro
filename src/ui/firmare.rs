@@ -689,9 +689,11 @@ fn sign_one(f: &SignFile, key: &pkcs11::TokenKey, place: &Place, look: &Look) ->
         Action::Pdf | Action::PdfAgain => pades_firma::sign(&data, key, place, look)?,
         Action::ConvertPdf => {
             let tmp = crate::engine::private_temp_dir("cedro-firma")?;
-            let o = crate::engine::perform_into(&f.path, "pdf", crate::engine::read_quality(), Some(&tmp)).map_err(|e| format!("non riesco a trasformarlo in PDF: {e}"))?;
-            let pdf = std::fs::read(&o.path).map_err(|e| e.to_string())?;
+            let made = crate::engine::perform_into(&f.path, "pdf", crate::engine::read_quality(), Some(&tmp))
+                .map_err(|e| format!("non riesco a trasformarlo in PDF: {e}"))
+                .and_then(|o| std::fs::read(&o.path).map_err(|e| e.to_string()));
             let _ = std::fs::remove_dir_all(&tmp);
+            let pdf = made?;
             let pages = pades_firma::pages(&pdf).unwrap_or_default();
             // Il posto: quello scelto, rifatto sulle pagine del PDF nuovo.
             let place = match place {
