@@ -36,6 +36,8 @@ pub struct Review {
     pub flags: Vec<Flag>,
     /// L'onda dell'audio: arriva dopo, quando è stata letta tutta.
     pub bars: Option<Vec<f32>>,
+    /// L'onda non si è potuta leggere (audio spostato o illeggibile): niente rotellina che gira per sempre.
+    pub wave_failed: bool,
     /// Il punto da controllare scelto nell'elenco.
     pub cur: usize,
     /// Quelli che si è deciso di lasciare com'erano.
@@ -78,6 +80,7 @@ impl Review {
             rows,
             flags: Vec::new(),
             bars: None,
+            wave_failed: false,
             cur: 0,
             dismissed: HashSet::new(),
             only_flagged: false,
@@ -308,7 +311,7 @@ impl App {
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
         std::thread::spawn(move || {
             let n = (secs as usize).clamp(300, 6000);
-            let bars = crate::audio::waveform(&path, n);
+            let bars = std::panic::catch_unwind(|| crate::audio::waveform(&path, n)).ok().flatten();
             let _ = tx.send(Event::Wave(path, bars));
             wake();
         });
@@ -326,6 +329,7 @@ impl App {
 
     pub(super) fn review_wave(&mut self, path: &Path, bars: Option<Vec<f32>>) {
         if let Some(r) = self.review.as_mut().filter(|r| r.source == path) {
+            r.wave_failed = bars.as_ref().is_none_or(|b| b.is_empty());
             r.bars = bars;
             if r.bars.is_some() {
                 // Con l'onda si trovano anche le frasi nel silenzio; le scelte già fatte restano valide perché
@@ -561,5 +565,16 @@ mod tests {
         let v = r.visible();
         assert!(!v.contains(&0));
         assert!(v.contains(&1) && v.contains(&4));
+    }
+
+    #[test]
+    fn a_wave_that_cannot_be_read_stops_waiting() {
+        let mut app = App::new(std::sync::Arc::new(|| {}));
+        app.review = Some(sample());
+        assert!(!app.review.as_ref().unwrap().wave_failed);
+        app.review_wave(Path::new("/tmp/prova.wav"), None);
+        assert!(app.review.as_ref().unwrap().wave_failed, "l'onda resterebbe «in lettura» per sempre");
+        app.review_wave(Path::new("/tmp/prova.wav"), Some(vec![0.5; 10]));
+        assert!(!app.review.as_ref().unwrap().wave_failed);
     }
 }
