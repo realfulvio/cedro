@@ -701,10 +701,12 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
             });
         }
     };
-    let (track_id, timescale, count, sps, pps, wants_audio) = {
+    let (track_id, timescale, count, sps, pps, wants_audio, other_audio) = {
         let tracks = reader.tracks();
         let mut video_info = None;
         let mut wants_audio = false;
+        // Un audio che il crate mp4 non riconosce (il PCM dei MOV delle fotocamere): lo legge symphonia.
+        let mut other_audio = false;
         for track in tracks.values() {
             match track.media_type().ok() {
                 Some(mp4::MediaType::H264) if video_info.is_none() => {
@@ -713,11 +715,12 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                     video_info = Some((track.track_id(), track.timescale().max(1), track.sample_count(), sps, pps));
                 }
                 Some(mp4::MediaType::AAC) => wants_audio = true,
+                None if matches!(track.track_type(), Ok(mp4::TrackType::Audio)) => other_audio = true,
                 _ => {}
             }
         }
         let (id, scale, count, sps, pps) = video_info.ok_or_else(|| "il video non è stato letto".to_string())?;
-        (id, scale, count, sps, pps, wants_audio)
+        (id, scale, count, sps, pps, wants_audio, other_audio)
     };
     let mut header = Vec::new();
     for nal in [&sps, &pps] {
@@ -763,8 +766,12 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         return Err("il video non ha fotogrammi".into());
     }
     let mut sink = sink.ok_or_else(|| "il video non ha fotogrammi".to_string())?;
-    if wants_audio {
-        write_symphonia_audio(input, &mut sink)?;
+    if wants_audio || other_audio {
+        match write_symphonia_audio(input, &mut sink) {
+            // Un audio che Cedro non sa leggere (e nessun AAC): il video resta senza, come prima.
+            Err(_) if !wants_audio && sink.audio.as_ref().is_none_or(|track| track.packets.is_empty() && track.pending.is_empty()) => {}
+            other => other?,
+        }
     }
     sink.finish()
 }
@@ -2331,3 +2338,4 @@ mod tests {
         assert!(std::fs::metadata(&path).unwrap().len() > u32::MAX as u64);
     }
 }
+
