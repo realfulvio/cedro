@@ -12,14 +12,12 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Firma digitale: ora firmi anche, con la chiavetta USB o la smart card (CNS), come con ArubaSign o Dike.**
+**Versione di sola correzione: ho riguardato tutto il codice e ho sistemato errori e punti deboli, senza funzioni nuove.**
 
-- «Firma documenti» in tre passi: scegli i file (anche tanti insieme, o una cartella), come firmarli, poi scrivi il PIN una volta sola e firmo tutto.
-- Due formati: la busta .p7m (CAdES) per qualsiasi file, e il PDF firmato (PAdES) con la firma dentro il PDF. In automatico i PDF restano PDF e gli altri diventano .p7m; puoi anche scegliere tutto .p7m o tutto PDF (i file non PDF li trasformo prima in PDF).
-- Firma visibile nel PDF: nello spazio per la firma se c'è, dove la trascini tu sulla pagina, o invisibile. Nel riquadro nome, data e ora, e se vuoi uno stemma o la firma autografa scansionata.
-- File già firmati: aggiungi la tua firma accanto a quelle che ci sono, sopra come controfirma, o in una busta nuova. Sui PDF firmati la nuova firma si aggiunge senza rompere quelle di prima.
-- I file firmati vanno accanto agli originali (che non vengono toccati) o nella cartella che scegli; alla fine li apri nel visualizzatore per controllarli.
-- «Chiavetta e certificati»: la chiavetta o la carta collegata, i suoi certificati con la scadenza, e cambio del PIN, sblocco con il PUK e cambio del PUK.
-- Ti avviso quando il certificato di firma sta per scadere.
-- Funziona con le chiavette Aruba (bit4id), le CNS e tessere sanitarie (Athena, Incard) e con OpenSC; il driver si trova da solo o si sceglie a mano in Opzioni.
-- Trascinando file sulla sezione: quelli già firmati si aprono e si verificano, gli altri si preparano per la firma.
+- Firma digitale: un PDF costruito apposta con oggetti nascosti nello spazio della firma non risulta più «firma valida»; PDF e certificati rovinati non fanno più chiudere la verifica; il PIN resta in memoria solo se serve.
+- Video: AVI con misure dispari, MKV di registrazioni interrotte e audio PCM dei MOV delle fotocamere ora si convertono; un pacchetto audio rovinato non fa più andare l'audio avanti al video.
+- Trascrizione e riassunto: se la scheda video non parte si prosegue col processore; se il download di un modello nuovo non riesce si usa quello già presente; i file di testo a metà vengono tolti.
+- Aggiornamenti su Linux più sicuri: se si spegne il PC a metà l'installazione non lascia un programma rotto.
+- Linux: aprire un file con il nome in codifica non UTF-8 non chiude più Cedro.
+- Interfaccia: niente più «caricamento» infinito o finestra che si ridisegna da ferma quando un'anteprima, un'onda audio o una verifica va male; meno memoria usata dalle immagini preparate; il lettore non si blocca se l'audio è rovinato.
+- Windows: le finestre di Conversioni, Verifica, Guida e Impostazioni non restano invisibili se Windows non riesce ad aprirle.
