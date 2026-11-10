@@ -54,8 +54,10 @@ fn blocks_of(r: &Report, out: &mut Vec<DocBlock>, level: u8) {
 fn size(n: usize) -> String {
     if n >= 1 << 20 {
         format!("{:.1} MB", n as f64 / (1 << 20) as f64).replace('.', ",")
-    } else {
+    } else if n >= 1024 {
         format!("{} KB", n.div_ceil(1024))
+    } else {
+        format!("{n} byte")
     }
 }
 
