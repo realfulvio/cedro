@@ -436,7 +436,9 @@ impl TokenKey {
                 None => break,
             }
         }
-        Ok(TokenKey { session: Mutex::new(s), key, rsa, always_auth, pin: p, cert: dc.der.clone(), chain })
+        // Il PIN resta in memoria solo per le chiavi che lo vogliono a ogni firma.
+        let pin = if always_auth { p } else { None };
+        Ok(TokenKey { session: Mutex::new(s), key, rsa, always_auth, pin, cert: dc.der.clone(), chain })
     }
 
     /// Aggiunge alla busta il certificato dell'autorità preso da internet (se non è sulla chiavetta).

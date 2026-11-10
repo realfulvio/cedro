@@ -378,8 +378,9 @@ pub fn parse_saved(s: &str) -> Option<Store> {
         let history = f[4]
             .split(',')
             .filter_map(|h| {
-                let (g, t) = h.split_at(1);
-                Some((g == "g", t.parse().ok()?))
+                // Campo vuoto o rovinato: split_at(1) andava in panico a ogni verifica.
+                let t = h.strip_prefix('g').map(|t| (true, t)).or_else(|| h.strip_prefix('w').map(|t| (false, t)))?;
+                Some((t.0, t.1.parse().ok()?))
             })
             .collect();
         let Ok(der) = base64::engine::general_purpose::STANDARD.decode(f[5]) else { continue };
@@ -387,4 +388,13 @@ pub fn parse_saved(s: &str) -> Option<Store> {
         entries.push(Entry { kind, country: f[1].into(), provider: f[2].into(), service: f[3].into(), history, cert });
     }
     Some(Store { entries, updated })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn elenco_salvato_rovinato_non_manda_in_panico() {
+        let s = super::parse_saved("cedro-fiducia 1\t5\nCA\tIT\tp\ts\t\tAAAA\nCA\tIT\tp\ts\tè1\tAAAA\n").unwrap();
+        assert!(s.entries.is_empty());
+    }
 }

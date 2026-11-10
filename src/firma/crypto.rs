@@ -155,7 +155,8 @@ fn verify_pss(params: &[u8], key: &[u8], data: &[u8], sig: &[u8]) -> R<bool> {
                     }
                     Some(2) => {
                         if let Some(n) = k.children()?.first() {
-                            salt = n.int()? as usize;
+                            // Un sale negativo o enorme farebbe andare la libreria fuori dai limiti.
+                            salt = usize::try_from(n.int()?).map_err(|_| "firma RSA-PSS con parametri non validi".to_string())?.min(1 << 16);
                         }
                     }
                     _ => {}

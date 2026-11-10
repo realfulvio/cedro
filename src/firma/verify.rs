@@ -609,6 +609,8 @@ fn pdf(cx: &mut Ctx, data: &[u8], layer: usize, outer: Option<Proof>) {
         cx.report.timestamps.push(r);
     }
     let dss = data.windows(4).any(|w| w == b"/DSS");
+    // CRL e certificati del DSS: uguali per tutte le firme, si leggono una volta (ogni lettura carica tutto il PDF).
+    let (dss_crl_list, dss_cert_list) = if dss { (dss_crls(data), dss_certs(data)) } else { (Vec::new(), Vec::new()) };
     for ps in sigs.iter().filter(|s| !s.doc_timestamp) {
         let Ok(parts) = ps.parts(data) else { continue };
         let sd = match cms::content_info(&ps.contents).and_then(|(_, n)| cms::parse_signed_data(&n)) {
@@ -663,9 +665,9 @@ fn pdf(cx: &mut Ctx, data: &[u8], layer: usize, outer: Option<Proof>) {
             "PAdES B-B".into()
         };
         let mut crls = sd.crls.clone();
-        crls.extend(dss_crls(data));
+        crls.extend(dss_crl_list.iter().cloned());
         let mut certs_pool = sd.certs.clone();
-        certs_pool.extend(dss_certs(data));
+        certs_pool.extend(dss_cert_list.iter().cloned());
         let claimed = si.signing_time().or(ps.m);
         let mut s = evaluate(cx, &chk, claimed, proof, ts_bad, &certs_pool, &crls, &si.digest_alg, &level_name, false);
         // Cosa è cambiato dopo.
@@ -688,6 +690,15 @@ fn pdf(cx: &mut Ctx, data: &[u8], layer: usize, outer: Option<Proof>) {
                     }
                 }
             }
+        }
+        if !ps.hole_is_contents(data) {
+            // Oggetti nascosti nel buco della firma: quello che si vede può non essere quello firmato.
+            if let Some(c) = s.checks.iter_mut().find(|c| c.what == "Documento") {
+                c.level = Level::Bad;
+                c.text = "la firma non copre tutto il file".into();
+            }
+            let rest = if s.why.starts_with("Il certificato era valido") { String::new() } else { s.why.clone() };
+            s.why = format!("La firma non copre tutto il file: una parte del PDF può essere stata cambiata dopo la firma senza che si veda. {rest}").trim().to_string();
         }
         if !matches!(after, pades::After::Nothing) {
             s.revision_end = Some(ps.end());

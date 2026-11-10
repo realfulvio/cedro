@@ -121,7 +121,7 @@ impl Cert {
         let subject_n = t.next().ok_or("certificato: manca il titolare")?;
         let spki_n = t.next().ok_or("certificato: manca la chiave")?;
         let sk = spki_n.children()?;
-        let (key_alg, key_params) = alg(&sk[0])?;
+        let (key_alg, key_params) = alg(sk.first().ok_or("certificato: chiave")?)?;
         let key = sk.get(1).ok_or("certificato: chiave")?.bits()?;
         let mut c = Cert {
             der: top.raw.to_vec(),
@@ -162,7 +162,7 @@ impl Cert {
             if n.ctx() == Some(3) {
                 for ext in n.children()?.first().map(|s| s.children()).transpose()?.unwrap_or_default() {
                     let e = ext.children()?;
-                    let id = e[0].oid()?;
+                    let id = e.first().ok_or("estensione")?.oid()?;
                     let val = e.last().ok_or("estensione")?.octets()?;
                     let _ = c.extension(&id, &val);
                 }
@@ -200,7 +200,7 @@ impl Cert {
             oid::EXT_AIA => {
                 for ad in v.children()? {
                     let k = ad.children()?;
-                    let method = k[0].oid()?;
+                    let method = k.first().ok_or("estensione")?.oid()?;
                     if k.get(1).is_some_and(|l| l.tag == 0x86) {
                         let url = String::from_utf8_lossy(k[1].body).to_string();
                         if method == oid::AD_OCSP {
@@ -237,7 +237,7 @@ impl Cert {
             oid::EXT_QC_STATEMENTS => {
                 for st in v.children()? {
                     let k = st.children()?;
-                    match k[0].oid()?.as_str() {
+                    match k.first().ok_or("estensione")?.oid()?.as_str() {
                         oid::QC_COMPLIANCE => self.qc_compliance = true,
                         oid::QC_SSCD => self.qc_sscd = true,
                         oid::QC_TYPE => {
