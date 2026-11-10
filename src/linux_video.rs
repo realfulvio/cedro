@@ -65,7 +65,11 @@ fn hardware_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let mut sink = sink.ok_or_else(|| "il video non ha fotogrammi".to_string())?;
     if decoder.has_audio {
         // L'audio: prima i decodificatori di Cedro (AAC, MP3, FLAC, Vorbis…), poi quello del telefono (Opus, AMR…).
-        if write_symphonia_audio(input, &mut sink).is_err() {
+        if let Err(err) = write_symphonia_audio(input, &mut sink) {
+            // Se una parte dell'audio è già nel file, quello del telefono si accoderebbe tutto dopo: audio doppio.
+            if sink.audio.as_ref().is_some_and(|track| !track.packets.is_empty() || !track.pending.is_empty()) {
+                return Err(err);
+            }
             let mut audio = crate::mediadec::AudioDecoder::open(input)?;
             while let Some((samples, channels, rate)) = audio.next()? {
                 sink.write_pcm(&samples, channels, rate)?;
@@ -216,8 +220,16 @@ impl VideoSink for H264Aac {
         if self.encoder.is_none() {
             self.encoder = Some(open_h264(self.width, self.height, self.frame_duration)?);
         }
-        let resized = ((width, height) != (self.width, self.height))
-            .then(|| crate::sink::resize_i420(y, u, v, width, height, self.width, self.height));
+        let resized = if (width, height) != (self.width, self.height) {
+            // Il ridimensionamento legge i piani interi: un fotogramma più corto è un errore, non un crash.
+            let (cw, ch) = ((width as usize).div_ceil(2), (height as usize).div_ceil(2));
+            if y.len() < width as usize * height as usize || u.len() < cw * ch || v.len() < cw * ch {
+                return Err("fotogramma troppo corto".into());
+            }
+            Some(crate::sink::resize_i420(y, u, v, width, height, self.width, self.height))
+        } else {
+            None
+        };
         let (y, u, v) = match &resized {
             Some((ry, ru, rv)) => (ry.as_slice(), ru.as_slice(), rv.as_slice()),
             None => (y, u, v),
@@ -689,10 +701,12 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
             });
         }
     };
-    let (track_id, timescale, count, sps, pps, wants_audio) = {
+    let (track_id, timescale, count, sps, pps, wants_audio, other_audio) = {
         let tracks = reader.tracks();
         let mut video_info = None;
         let mut wants_audio = false;
+        // Un audio che il crate mp4 non riconosce (il PCM dei MOV delle fotocamere): lo legge symphonia.
+        let mut other_audio = false;
         for track in tracks.values() {
             match track.media_type().ok() {
                 Some(mp4::MediaType::H264) if video_info.is_none() => {
@@ -701,11 +715,12 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                     video_info = Some((track.track_id(), track.timescale().max(1), track.sample_count(), sps, pps));
                 }
                 Some(mp4::MediaType::AAC) => wants_audio = true,
+                None if matches!(track.track_type(), Ok(mp4::TrackType::Audio)) => other_audio = true,
                 _ => {}
             }
         }
         let (id, scale, count, sps, pps) = video_info.ok_or_else(|| "il video non è stato letto".to_string())?;
-        (id, scale, count, sps, pps, wants_audio)
+        (id, scale, count, sps, pps, wants_audio, other_audio)
     };
     let mut header = Vec::new();
     for nal in [&sps, &pps] {
@@ -751,8 +766,12 @@ fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         return Err("il video non ha fotogrammi".into());
     }
     let mut sink = sink.ok_or_else(|| "il video non ha fotogrammi".to_string())?;
-    if wants_audio {
-        write_symphonia_audio(input, &mut sink)?;
+    if wants_audio || other_audio {
+        match write_symphonia_audio(input, &mut sink) {
+            // Un audio che Cedro non sa leggere (e nessun AAC): il video resta senza, come prima.
+            Err(_) if !wants_audio && sink.audio.as_ref().is_none_or(|track| track.packets.is_empty() && track.pending.is_empty()) => {}
+            other => other?,
+        }
     }
     sink.finish()
 }
@@ -1197,13 +1216,15 @@ fn write_symphonia_audio(input: &Path, sink: &mut H264Aac) -> Result<(), String>
     let chosen = format
         .tracks()
         .iter()
-        .find_map(|track| Some((track.id, crate::symph::decoder(crate::symph::audio_params(track)?).ok()?)));
-    let Some((audio_id, mut dec)) = chosen else {
+        .find_map(|track| Some((track.id, track.time_base, crate::symph::decoder(crate::symph::audio_params(track)?).ok()?)));
+    let Some((audio_id, time_base, mut dec)) = chosen else {
         return Err("l'audio del video non è stato letto".into());
     };
     let mut packets = 0u32;
     let mut samples = 0usize;
     let mut buf = Vec::new();
+    // Frequenza e canali dell'ultimo pacchetto decodificato, per il silenzio al posto di quelli rovinati.
+    let mut format_seen: Option<(u32, u16)> = None;
     loop {
         let packet = match format.next_packet() {
             Ok(Some(packet)) => packet,
@@ -1220,7 +1241,15 @@ fn write_symphonia_audio(input: &Path, sink: &mut H264Aac) -> Result<(), String>
         packets += 1;
         let decoded = match dec.decode(&packet) {
             Ok(decoded) => decoded,
-            Err(SymError::DecodeError(_)) => continue,
+            Err(SymError::DecodeError(_)) => {
+                if let Some((rate, channels)) = format_seen {
+                    let silence = crate::symph::silence_for(&packet, time_base, rate, channels);
+                    if !silence.is_empty() {
+                        sink.write_pcm(&silence, channels, rate)?;
+                    }
+                }
+                continue;
+            }
             Err(SymError::ResetRequired) => {
                 dec.reset();
                 continue;
@@ -1232,6 +1261,7 @@ fn write_symphonia_audio(input: &Path, sink: &mut H264Aac) -> Result<(), String>
         if buf.is_empty() {
             continue;
         }
+        format_seen = Some((rate, channels));
         samples += buf.len();
         sink.write_pcm(&buf, channels, rate)?;
     }
@@ -1360,6 +1390,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let mut audio_id = None;
     let mut audio_rate = 0u32;
     let mut audio_channels = 0u16;
+    let mut audio_base = None;
     for track in format.tracks() {
         if track.id == video_id {
             continue;
@@ -1367,6 +1398,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         let Some(params) = crate::symph::audio_params(track) else { continue };
         if let Ok(dec) = crate::symph::decoder(params) {
             audio_id = Some(track.id);
+            audio_base = track.time_base;
             audio_rate = params.sample_rate.unwrap_or(44_100);
             audio_channels = params.channels.as_ref().map(|ch| ch.count() as u16).unwrap_or(1).max(1);
             audio_dec = Some(dec);
@@ -1386,6 +1418,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                 let _ = decoder.decode(&header);
             }
             let mut last = (0i64, 333_333i64);
+            let mut format_seen: Option<(u32, u16)> = None;
             loop {
                 let packet = match format.next_packet() {
                     Ok(Some(packet)) => packet,
@@ -1416,7 +1449,16 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                     let Some(dec) = audio_dec.as_mut() else { continue };
                     let decoded = match dec.decode(&packet) {
                         Ok(decoded) => decoded,
-                        Err(SymError::DecodeError(_)) => continue,
+                        Err(SymError::DecodeError(_)) => {
+                            // Il silenzio al posto del pacchetto rovinato: l'audio dopo resta a tempo col video.
+                            if let Some((rate, channels)) = format_seen {
+                                let samples = crate::symph::silence_for(&packet, audio_base, rate, channels);
+                                if !samples.is_empty() {
+                                    sent(emit(Decoded::Pcm(EarlyPcm { samples, channels, rate })))?;
+                                }
+                            }
+                            continue;
+                        }
                         Err(SymError::ResetRequired) => {
                             dec.reset();
                             continue;
@@ -1429,6 +1471,7 @@ fn container_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
                     if samples.is_empty() {
                         continue;
                     }
+                    format_seen = Some((rate, channels));
                     audio_samples += samples.len();
                     let pcm = EarlyPcm { samples, channels, rate };
                     sent(emit(Decoded::Pcm(pcm)))?;
@@ -1718,8 +1761,9 @@ fn mjpeg_frame(frame: &[u8]) -> Result<OwnedFrame, String> {
     let rgb = image.to_rgb8();
     let w = rgb.width() as usize;
     let h = rgb.height() as usize;
-    if w < 2 || h < 2 || w % 2 == 1 || h % 2 == 1 {
-        return Err(format!("il video è {w}×{h}: H.264 vuole misure pari"));
+    // Le misure dispari le porta a pari il codificatore, come per gli AVI non compressi.
+    if w < 2 || h < 2 {
+        return Err(format!("il video è {w}×{h}: troppo piccolo"));
     }
     rgb_planes(rgb.as_raw(), w, h, w * 3, 3, false, false)
 }
@@ -1736,9 +1780,12 @@ fn rgb_planes(
     if src.len() < stride * h || stride < w * bytes {
         return Err("fotogramma troppo corto".into());
     }
+    // Con misure dispari i piani del colore coprono anche l'ultima colonna e l'ultima riga (come in I420):
+    // il codificatore porta il fotogramma a misure pari e li legge interi.
+    let cw = w.div_ceil(2);
     let mut y = vec![16u8; w * h];
-    let mut u = vec![128u8; (w / 2) * (h / 2)];
-    let mut v = vec![128u8; (w / 2) * (h / 2)];
+    let mut u = vec![128u8; cw * h.div_ceil(2)];
+    let mut v = vec![128u8; cw * h.div_ceil(2)];
     for row in 0..h {
         let src_row = if bottom_up { h - 1 - row } else { row };
         for col in 0..w {
@@ -1751,7 +1798,7 @@ fn rgb_planes(
             let (yy, uu, vv) = yuv(r, g, b);
             y[row * w + col] = yy;
             if row % 2 == 0 && col % 2 == 0 {
-                let c = (row / 2) * (w / 2) + col / 2;
+                let c = (row / 2) * cw + col / 2;
                 u[c] = uu;
                 v[c] = vv;
             }
@@ -2164,6 +2211,14 @@ mod tests {
         assert!(is_annex(&[0, 0, 0, 1, 0x67, 0x42, 0x00, 0x1e]));
     }
 
+    /// Un AVI non compresso con misure dispari: i piani del colore bastano per portarlo a misure pari.
+    #[test]
+    fn odd_rgb_frame_can_be_resized() {
+        let frame = super::rgb_planes(&[200u8; 3 * 3 * 3], 3, 3, 9, 3, false, false).unwrap();
+        let (y, u, v) = crate::sink::resize_i420(&frame.y, &frame.u, &frame.v, 3, 3, 4, 4);
+        assert_eq!((y.len(), u.len(), v.len()), (16, 4, 4));
+    }
+
     /// Contatori enormi in tabelle piccole (file rovinato): errore, non gigabyte chiesti alla memoria.
     #[test]
     fn damaged_tables_do_not_ask_for_gigabytes() {
@@ -2284,3 +2339,4 @@ mod tests {
         assert!(std::fs::metadata(&path).unwrap().len() > u32::MAX as u64);
     }
 }
+

@@ -87,6 +87,10 @@ pub fn run_standalone() {
     }
     open();
     unsafe {
+        // La finestra non si è aperta (già scritto nel registro): senza finestre il ciclo aspetterebbe per sempre, processo invisibile.
+        if WINDOW.load(Ordering::Relaxed) == 0 {
+            return;
+        }
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             let _ = TranslateMessage(&msg);
