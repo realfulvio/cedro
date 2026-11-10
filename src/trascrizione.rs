@@ -681,6 +681,7 @@ fn ensure_model(index: usize, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Resu
     let path = dir.join(model.file);
     let sidecar = dir.join(format!("{}.sha256", model.file));
     let have = std::fs::read_to_string(&sidecar).ok().map(|s| s.trim().to_lowercase()).filter(|_| path.is_file());
+    let updating = have.is_some();
     match have {
         Some(local) => {
             // Un controllo veloce: senza internet si usa quello che c'è.
@@ -698,7 +699,16 @@ fn ensure_model(index: usize, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Resu
     }
     let expected = published_model_sha(model, Duration::from_secs(20));
     let url = format!("{MODEL_BASE_URL}{}", model.file);
-    let sha = fetch(&url, &path, expected.as_deref(), model.megabytes, "il modello", sink, cancel)?;
+    let sha = match fetch(&url, &path, expected.as_deref(), model.megabytes, "il modello", sink, cancel) {
+        Ok(sha) => sha,
+        // La versione nuova non è arrivata (rete che cade, disco pieno): quella di prima è intatta, perché si
+        // scarica nel .part, e si usa; la prossima volta il download riparte da dove era arrivato.
+        Err(e) if e != CANCELLED && updating && path.is_file() => {
+            log(sink, Tone::Note, "Modello", format!("versione nuova non scaricata ({e}): uso quella che c'è"));
+            return Ok(path);
+        }
+        Err(e) => return Err(e),
+    };
     std::fs::write(&sidecar, &sha).map_err(|e| format!("{} non scritto: {e}", sidecar.display()))?;
     log(sink, Tone::Step, "Modello", format!("«{}» scaricato e controllato", model.name));
     forget_old_models();
