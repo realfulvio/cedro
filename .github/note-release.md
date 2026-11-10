@@ -12,8 +12,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Il PDF in Word legge bene i calendari a caselle, e il WebP ha il cursore della qualità.**
+**Il PDF in Word legge fino in fondo i calendari a caselle.**
 
-- PDF in Word: le tabelle disegnate casella per casella (un calendario con un riquadro per ogni giorno, un planner, un orario) tornano una tabella sola, con le sue colonne e righe, invece di decine di tabelline. Un calendario di prova di 6 pagine, che veniva fuori di 51 pagine, ora resta di 6 con tutte le parole.
-- PDF in Word: i titoli bianchi su una fascia colorata non spariscono più sulla carta bianca.
-- WebP e AVIF: nella ruota e in Conversioni c'è il cursore «Qualità», come per il JPG; prima la scelta c'era solo per JPG e compressione.
+- Le pagine fitte di caselle con scritte brevi (un calendario con i giorni, le etichette dei ritiri, i colori) non vengono più scambiate per un modulo: restano una tabella in Word, con le sue righe e colonne, invece di centinaia di forme sparse. Il calendario dei rifiuti di prova passa da una tabella a tre, con tutti i mesi.
+- La riga dei giorni della settimana (LUN, MAR…) sopra il calendario è la prima riga della tabella, ognuno nella sua cella, anche se gli angoli sono arrotondati.
+- Le etichette bianche sui bollini colorati («Umido», «Carta») non spariscono più sulla carta bianca: prendono il colore del bollino. Il numero del giorno e le etichette in basso nella stessa casella sono righe separate, e il numero non sparisce più.
+- Il margine in fondo alla pagina lascia posto al piè di pagina, che non finisce da solo su una pagina in più.
