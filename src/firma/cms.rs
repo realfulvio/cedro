@@ -162,7 +162,7 @@ pub fn parse_signer(n: &Node) -> R<SignerInfo> {
         Sid::Ski(sid_n.octets()?)
     } else {
         let s = sid_n.children()?;
-        Sid::IssuerSerial { issuer: s[0].raw.to_vec(), serial: s.get(1).ok_or("firmatario")?.body.to_vec() }
+        Sid::IssuerSerial { issuer: s.first().ok_or("firmatario")?.raw.to_vec(), serial: s.get(1).ok_or("firmatario")?.body.to_vec() }
     };
     let digest_alg = cert::alg(it.next().ok_or("firmatario")?)?.0;
     let mut signed_attrs_der = None;
@@ -294,7 +294,7 @@ pub fn parse_timestamp(token: &[u8]) -> R<Timestamp> {
     let t = asn1::parse(&tst)?;
     let k = t.children()?;
     let mi = k.get(2).ok_or("marca")?.children()?;
-    let hash_alg = cert::alg(&mi[0])?.0;
+    let hash_alg = cert::alg(mi.first().ok_or("marca")?)?.0;
     let imprint = mi.get(1).ok_or("marca")?.octets()?;
     let serial_hex = k.get(3).map(|s| s.body.iter().map(|b| format!("{b:02X}")).collect()).unwrap_or_default();
     let gen_time = k.get(4).ok_or("marca senza data")?.time()?;
@@ -333,4 +333,16 @@ pub fn timestamp_from_tsr(data: &[u8]) -> R<Timestamp> {
     let k = top.children()?;
     let token = k.get(1).ok_or("risposta della marca senza marca")?;
     parse_timestamp(token.raw)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn firmatario_rovinato_non_manda_in_panico() {
+        // SignerInfo con l'identificativo (issuerAndSerialNumber) vuoto.
+        let raw = [0x30, 0x05, 0x02, 0x01, 0x01, 0x30, 0x00];
+        assert!(parse_signer(&asn1::parse(&raw).unwrap()).is_err());
+    }
 }
