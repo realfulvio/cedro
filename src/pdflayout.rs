@@ -631,6 +631,55 @@ fn find_tables(shapes: &[Shape2], page: (f64, f64), glyphs: &mut Vec<Glyph>) -> 
             cands.push((ys, cols, verticals.clone()));
         }
     }
+    // Una fila di caselle colorate attaccata sopra o sotto la griglia (l'intestazione con i giorni
+    // della settimana) è una riga della tabella, anche se le caselle d'angolo hanno gli spigoli
+    // arrotondati e quindi non sono rettangoli.
+    for (ys, cols, _) in cands.iter_mut() {
+        let (x0, x1) = (cols[0], *cols.last().unwrap());
+        for above in [true, false] {
+            let edge = if above { ys[0] } else { *ys.last().unwrap() };
+            let band: Vec<&Shape2> = shapes
+                .iter()
+                .filter(|s| {
+                    let h = s.y1 - s.y0;
+                    s.fill.is_some()
+                        && !s.text
+                        && !s.raster
+                        && h > 3.0
+                        && h < 150.0
+                        && s.x0 >= x0 - 1.5
+                        && s.x1 <= x1 + 1.5
+                        && ((if above { s.y1 } else { s.y0 }) - edge).abs() < 1.0
+                })
+                .collect();
+            if band.is_empty() || band.iter().all(|s| s.fill.is_some_and(is_white)) {
+                continue;
+            }
+            let far = if above { band.iter().map(|s| s.y0).fold(f64::MAX, f64::min) } else { band.iter().map(|s| s.y1).fold(f64::MIN, f64::max) };
+            if band.iter().any(|s| ((if above { s.y0 } else { s.y1 }) - far).abs() > 1.0) {
+                continue;
+            }
+            // Le caselle devono coprire tutta la larghezza della tabella.
+            let mut spans: Vec<(f64, f64)> = band.iter().map(|s| (s.x0, s.x1)).collect();
+            spans.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+            let (mut covered, mut reach) = (0.0, x0);
+            for (a, b) in spans {
+                if b > reach {
+                    covered += b - a.max(reach);
+                    reach = b;
+                }
+            }
+            if covered < 0.95 * (x1 - x0) {
+                continue;
+            }
+            if above {
+                ys.insert(0, far);
+            } else {
+                ys.push(far);
+            }
+            fills.extend(band);
+        }
+    }
     // Una colonna sola dentro un'altra tabella è lo sfondo di una casella (il bollino colorato di un giorno,
     // l'etichetta di una cella), non una tabella: non va in Word come tabella a parte.
     let boxes: Vec<[f64; 4]> = cands.iter().map(|(ys, cols, _)| [cols[0], ys[0], *cols.last().unwrap(), *ys.last().unwrap()]).collect();
@@ -655,7 +704,7 @@ fn find_tables(shapes: &[Shape2], page: (f64, f64), glyphs: &mut Vec<Glyph>) -> 
     let mut built: Vec<(usize, Table)> = Vec::new();
     for i in order {
         let (ys, cols, verticals) = &cands[i];
-        built.push((i, build_table(ys, cols, &hs, verticals, &fills, glyphs)));
+        built.push((i, build_table(ys, cols, &hs, verticals, &fills, shapes, glyphs)));
     }
     built.sort_by_key(|(i, _)| *i);
     built.into_iter().map(|(_, t)| t).collect()
@@ -687,7 +736,7 @@ fn merge_collinear(segs: &mut Vec<Seg>) {
     *segs = out;
 }
 
-fn build_table(ys: &[f64], cols: &[f64], hs: &[Seg], verticals: &[&Seg], fills: &[&Shape2], glyphs: &mut Vec<Glyph>) -> Table {
+fn build_table(ys: &[f64], cols: &[f64], hs: &[Seg], verticals: &[&Seg], fills: &[&Shape2], shapes: &[Shape2], glyphs: &mut Vec<Glyph>) -> Table {
     let (x0, x1) = (cols[0], *cols.last().unwrap());
     let (top, bottom) = (ys[0], *ys.last().unwrap());
     // Testo della tabella: i caratteri la cui origine è dentro il riquadro.
@@ -722,10 +771,6 @@ fn build_table(ys: &[f64], cols: &[f64], hs: &[Seg], verticals: &[&Seg], fills: 
                     text.push(g.clone());
                 }
             }
-            let lines = group_lines(text, 2.0);
-            if let Some(l) = lines.first() {
-                pads.push(l.x - cx0);
-            }
             let fill = fills
                 .iter()
                 .rev()
@@ -739,11 +784,36 @@ fn build_table(ys: &[f64], cols: &[f64], hs: &[Seg], verticals: &[&Seg], fills: 
                         && f.x1 <= x1 + 1.5
                 })
                 .and_then(|f| f.fill);
-            let refs: Vec<&Line> = lines.iter().collect();
-            let paras = match refs.is_empty() {
-                true => Vec::new(),
-                false => vec![para_from_lines(&refs, cx0)],
-            };
+            // Testo chiaro su una casella senza sfondo scuro: stava su un bollino colorato (l'etichetta
+            // «Umido» di un giorno) che in Word non c'è, e su carta bianca non si leggerebbe. Prende il
+            // colore del bollino, o il nero.
+            if fill.is_none_or(light) {
+                for g in text.iter_mut().filter(|g| light(g.color)) {
+                    let under = shapes
+                        .iter()
+                        .filter(|s| !s.text && s.x0 <= g.x && g.x <= s.x1 && s.y0 <= g.y && g.y <= s.y1)
+                        .filter_map(|s| s.fill.map(|c| (c, (s.x1 - s.x0) * (s.y1 - s.y0))))
+                        .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+                    g.color = match under {
+                        Some((c, _)) if !light(c) => c,
+                        _ => [0, 0, 0],
+                    };
+                }
+            }
+            let lines = group_lines(text, 2.0);
+            if let Some(l) = lines.first() {
+                pads.push(l.x - cx0);
+            }
+            // Scritte lontane nella stessa casella (il numero del giorno in alto, le etichette in basso)
+            // sono paragrafi diversi: insieme darebbero un'interlinea enorme, e la riga crescerebbe in Word.
+            let mut groups: Vec<Vec<&Line>> = Vec::new();
+            for l in &lines {
+                match groups.last_mut() {
+                    Some(g) if l.baseline - g.last().unwrap().baseline <= 1.8 * l.size.max(g.last().unwrap().size) => g.push(l),
+                    _ => groups.push(vec![l]),
+                }
+            }
+            let paras = groups.iter().map(|g| para_from_lines(g, cx0)).collect();
             cells.push(Cell { span, paras, fill });
         }
         rows.push((ry1 - ry0, cells));
@@ -871,7 +941,9 @@ fn para_from_lines(lines: &[&Line], _col_x: f64) -> Para {
     }
     let first = lines[0];
     let last = lines[lines.len() - 1];
-    let pitch = (lines.len() > 1).then(|| (last.baseline - first.baseline) / (lines.len() - 1) as f64);
+    // Scritte della stessa fila su linee di base appena diverse non danno un passo (sarebbe negativo,
+    // e Word scarterebbe la riga).
+    let pitch = (lines.len() > 1).then(|| (last.baseline - first.baseline) / (lines.len() - 1) as f64).filter(|p| *p > 0.0);
     Para {
         runs,
         x: lines.iter().map(|l| l.x).fold(f64::MAX, f64::min),
@@ -1519,9 +1591,22 @@ pub struct FormPage {
     lines: Vec<Line>,
 }
 
+/// Le caselle piene di scritte brevi possono essere le celle di una tabella (un calendario): la
+/// pagina è un modulo solo se lo resta anche senza le tabelle che vi si trovano.
+fn grid_page(g: &Gathered) -> bool {
+    let mut glyphs = g.glyphs.clone();
+    let tables = find_tables(&g.shapes, (g.w, g.h), &mut glyphs);
+    if tables.is_empty() {
+        return false;
+    }
+    let inside = |s: &Shape2| tables.iter().any(|t| s.x0 >= t.x0 - 1.5 && s.x1 <= t.cols.last().copied().unwrap_or(t.x0) + 1.5 && s.y0 >= t.top - 1.5 && s.y1 <= t.bottom + 1.5);
+    let boxes = g.shapes.iter().filter(|s| (s.rect || s.line) && !inside(s)).count();
+    !is_form(&group_lines(glyphs, 2.0), boxes)
+}
+
 /// Una pagina di modulo: tante scritte brevi e piccole dentro tante caselle.
-fn is_form(lines: &[Line], shapes: &[Shape2]) -> bool {
-    let boxes = shapes.iter().filter(|s| s.rect || s.line).count();
+/// `boxes`: i riquadri e le linee della pagina.
+fn is_form(lines: &[Line], boxes: usize) -> bool {
     let small = lines.iter().filter(|l| l.size < 7.0).count();
     let chars = median(lines.iter().map(|l| l.text().chars().count() as f64).collect());
     lines.len() >= 80 && boxes >= 40 && chars <= 10.0 && small * 10 >= lines.len() * 3
@@ -1641,7 +1726,7 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
     let text_pages = gathered.iter().flatten().filter(|g| !g.glyphs.is_empty()).count();
     // Una volta sola per pagina: serve qui per il documento e sotto per la pagina.
     let page_form: Vec<bool> =
-        gathered.iter().map(|g| g.as_ref().is_some_and(|g| !g.glyphs.is_empty() && is_form(&group_lines(g.glyphs.clone(), 2.0), &g.shapes))).collect();
+        gathered.iter().map(|g| g.as_ref().is_some_and(|g| !g.glyphs.is_empty() && is_form(&group_lines(g.glyphs.clone(), 2.0), g.shapes.iter().filter(|s| s.rect || s.line).count()) && !grid_page(g))).collect();
     let form_pages = page_form.iter().filter(|f| **f).count();
     let form_doc = form_pages > 0 && form_pages * 2 > text_pages;
     for ((page, g), page_is_form) in original.pages().iter().zip(gathered).zip(page_form) {
@@ -2612,6 +2697,11 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                 let first_top = p.blocks().map(eff_top).fold(f64::MAX, f64::min);
                 let top = if first_top == f64::MAX { 40.0 } else { first_top.clamp(20.0, 150.0) };
                 let mut cursor = top;
+                // Il margine sotto: quello solito, ma con almeno 18 punti tra l'ultima scritta del PDF
+                // (il piè di pagina) e il margine, perché in Word le righe vengono di poco più alte e il
+                // piè di pagina finirebbe da solo sulla pagina dopo.
+                let content_bottom = p.blocks().map(|b| b.bottom()).fold(0.0, f64::max);
+                let bottom = (p.height - content_bottom - 18.0).clamp(18.0, 36.0);
                 for (si, seg) in p.segments.iter().enumerate() {
                     // Le colonne di Word cominciano dal margine e arrivano al margine destro.
                     let mut cols: Vec<(f64, f64)> = Vec::new();
@@ -2702,7 +2792,7 @@ pub fn docx(pages: &[Page], fallback: impl Fn(usize) -> String) -> Vec<u8> {
                         w: p.width,
                         h: p.height,
                         top,
-                        bottom: 36.0,
+                        bottom,
                         left: geo.left,
                         right: page_right,
                         cols,
@@ -3492,6 +3582,63 @@ mod tests {
         // Con un'immagine incorporata dentro resta una figura, anche se ha frasi.
         let photo = Pic { x0: 60.0, y0: 200.0, x1: 200.0, y1: 290.0, order: 0 };
         assert!(!text_box(&card, &sentences, &[photo]));
+    }
+
+    #[test]
+    fn a_calendar_full_of_small_labels_is_a_table_with_its_weekday_header_not_a_form() {
+        // Un mese: 6 settimane × 7 giorni disegnati casella per casella, con il numero del giorno e
+        // due etichette piccole (una bianca su un bollino colorato). Sopra, la fila scura dei giorni
+        // della settimana, con le caselle d'angolo arrotondate. Tante scritte brevi e piccole in tante
+        // caselle: sembra un modulo, ma è una tabella.
+        let rounded = |x: f64, y: f64, w: f64, h: f64, r: f64| {
+            let k = 0.5523 * r;
+            let (x1, y1) = (x + w, y + h);
+            let mut p = format!("{} {y} m {} {y} l ", x + r, x1 - r);
+            p += &format!("{} {y} {x1} {} {x1} {} c {x1} {} l ", x1 - r + k, y + r - k, y + r, y1 - r);
+            p += &format!("{x1} {} {} {y1} {} {y1} c {} {y1} l ", y1 - r + k, x1 - r + k, x1 - r, x + r);
+            p += &format!("{} {y1} {x} {} {x} {} c {x} {} l ", x + r - k, y1 - r + k, y1 - r, y + r);
+            p += &format!("{x} {} {} {y} {} {y} c h f ", y + r - k, x + r - k, x + r);
+            p
+        };
+        let (x0, top, cw, rh) = (40.0, 700.0, 70.0, 60.0);
+        let mut c = String::new();
+        let days = ["LUN", "MAR", "MER", "GIO", "VEN", "SAB", "DOM"];
+        for (i, d) in days.iter().enumerate() {
+            let x = x0 + i as f64 * cw;
+            c.push_str("0.05 0.35 0.28 rg ");
+            if i == 0 || i == 6 {
+                c.push_str(&rounded(x, top, cw, 20.0, 5.0));
+            } else {
+                c.push_str(&format!("{x} {top} {cw} 20 re f "));
+            }
+            c.push_str(&format!("1 1 1 rg BT /F1 9 Tf {} {} Td ({d}) Tj ET ", x + 25.0, top + 7.0));
+        }
+        for row in 0..6 {
+            for col in 0..7 {
+                let (x, y) = (x0 + col as f64 * cw, top - (row + 1) as f64 * rh);
+                c.push_str(&format!("0.8 G 1 1 1 rg {x} {y} {cw} {rh} re B "));
+                c.push_str(&format!("0 0 0 rg BT /F1 9 Tf {} {} Td ({}) Tj ET ", x + 4.0, y + rh - 12.0, row * 7 + col + 1));
+                c.push_str(&format!("0 0 0 rg BT /F1 5 Tf {} {} Td (Umido organico) Tj ET ", x + 4.0, y + 18.0));
+                c.push_str("0.12 0.3 0.6 rg ");
+                c.push_str(&rounded(x + 3.0, y + 3.0, 60.0, 9.0, 3.0));
+                c.push_str(&format!("1 1 1 rg BT /F1 5 Tf {} {} Td (Carta) Tj ET ", x + 6.0, y + 5.0));
+            }
+        }
+        let document = docx_xml_of(&one_page_pdf(&c), "calendario");
+        assert!(!document.contains("<wp:anchor"), "è finito tra i moduli: {document}");
+        assert_eq!(document.matches("<w:tbl>").count(), 1, "{document}");
+        assert_eq!(document.matches("<w:gridCol ").count(), 7, "{document}");
+        assert_eq!(document.matches("<w:tr>").count(), 7, "{document}");
+        // I giorni della settimana sono la prima riga, ognuno nella sua casella.
+        let header = &document[document.find("<w:tr>").unwrap()..document.find("</w:tr>").unwrap()];
+        assert!(header.contains("<w:tblHeader/>"), "{header}");
+        for d in days {
+            assert!(header.contains(&format!(">{d}</w:t></w:r></w:p></w:tc>")), "{d} non ha la sua casella: {header}");
+        }
+        // L'etichetta bianca sul bollino (che in Word non c'è) prende il colore del bollino.
+        let at = document.find(">Carta</w:t>").unwrap();
+        let run = &document[document[..at].rfind("<w:r>").unwrap()..at];
+        assert!(!run.contains("FFFFFF") && run.contains("1F4D99"), "{run}");
     }
 
     /// Un PDF di una pagina con il contenuto dato (Helvetica come /F1).
