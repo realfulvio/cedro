@@ -12,8 +12,7 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Audio e video in sincronia: tolto il piccolo ritardo che Cedro aggiungeva all'audio.**
+**Due correzioni: le foto in WebP pesano molto meno e il PDF in Word non trasforma più in immagini i riquadri con il testo.**
 
-- Video in MP4 con audio AAC (da MP4, MOV, MKV): l'audio non parte più circa 21 millisecondi dopo l'immagine.
-- MP3 creati da Cedro: non partono più circa 50 millisecondi in ritardo, perché ora hanno l'informazione di ritardo che i lettori usano per un avvio esatto.
-- Audio estratto da un video o da un m4a con AAC (in MP3, WAV, FLAC…): stesso ritardo tolto.
+- JPG (e altre immagini) in WebP: ora il WebP è «leggero» davvero, con la qualità che scegli. Una foto da 80 KB in JPG pesava 570 KB in WebP, ora ne pesa circa 60. Per loghi e grafica, dove il formato senza perdita pesa meno, Cedro tiene quello; la trasparenza resta esatta.
+- PDF in Word: le schede colorate e i riquadri con frasi (per esempio un calendario o un volantino impaginato) restano testo da modificare, invece di diventare un'immagine; il testo chiaro su sfondo scuro prende il colore giusto invece di sparire su bianco.
