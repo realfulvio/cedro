@@ -65,7 +65,11 @@ fn hardware_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let mut sink = sink.ok_or_else(|| "il video non ha fotogrammi".to_string())?;
     if decoder.has_audio {
         // L'audio: prima i decodificatori di Cedro (AAC, MP3, FLAC, Vorbis…), poi quello del telefono (Opus, AMR…).
-        if write_symphonia_audio(input, &mut sink).is_err() {
+        if let Err(err) = write_symphonia_audio(input, &mut sink) {
+            // Se una parte dell'audio è già nel file, quello del telefono si accoderebbe tutto dopo: audio doppio.
+            if sink.audio.as_ref().is_some_and(|track| !track.packets.is_empty() || !track.pending.is_empty()) {
+                return Err(err);
+            }
             let mut audio = crate::mediadec::AudioDecoder::open(input)?;
             while let Some((samples, channels, rate)) = audio.next()? {
                 sink.write_pcm(&samples, channels, rate)?;
