@@ -821,6 +821,10 @@ pub fn run_standalone() {
     }
     open();
     unsafe {
+        // La finestra non si è aperta (già scritto nel registro): senza finestre il ciclo aspetterebbe per sempre, processo invisibile.
+        if MAIN.load(Ordering::Relaxed) == 0 && POPUP.load(Ordering::Relaxed) == 0 {
+            return;
+        }
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             let _ = TranslateMessage(&msg);
@@ -843,6 +847,10 @@ pub fn run_viewer(path: PathBuf) {
     *VIEWER_PATH.lock().unwrap_or_else(|e| e.into_inner()) = Some(path);
     open_surface(Surface::Viewer);
     unsafe {
+        // La finestra non si è aperta (già scritto nel registro): senza finestre il ciclo aspetterebbe per sempre, processo invisibile.
+        if VIEWER.load(Ordering::Relaxed) == 0 {
+            return;
+        }
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).as_bool() {
             let _ = TranslateMessage(&msg);
