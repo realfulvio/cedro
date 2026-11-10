@@ -361,7 +361,7 @@ impl FirmaUi {
         self.tl_busy = true;
         let done = self.tl_done.clone();
         std::thread::spawn(move || {
-            let ok = match firma::trust::download() {
+            let ok = std::panic::catch_unwind(|| match firma::trust::download() {
                 Ok(st) => {
                     let _ = firma::trust::save(&st);
                     firma::trust::set_store(st);
@@ -371,7 +371,8 @@ impl FirmaUi {
                     crate::append_log(&format!("firma: elenco dei certificatori non scaricato: {e}"));
                     false
                 }
-            };
+            })
+            .unwrap_or(false);
             *done.lock().unwrap_or_else(|e| e.into_inner()) = Some(ok);
             wake();
         });
