@@ -12,12 +12,8 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Versione di sola correzione: ho riguardato tutto il codice e ho sistemato errori e punti deboli, senza funzioni nuove.**
+**Audio e video in sincronia: tolto il piccolo ritardo che Cedro aggiungeva all'audio.**
 
-- Firma digitale: un PDF costruito apposta con oggetti nascosti nello spazio della firma non risulta più «firma valida»; PDF e certificati rovinati non fanno più chiudere la verifica; il PIN resta in memoria solo se serve.
-- Video: AVI con misure dispari, MKV di registrazioni interrotte e audio PCM dei MOV delle fotocamere ora si convertono; un pacchetto audio rovinato non fa più andare l'audio avanti al video.
-- Trascrizione e riassunto: se la scheda video non parte si prosegue col processore; se il download di un modello nuovo non riesce si usa quello già presente; i file di testo a metà vengono tolti.
-- Aggiornamenti su Linux più sicuri: se si spegne il PC a metà l'installazione non lascia un programma rotto.
-- Linux: aprire un file con il nome in codifica non UTF-8 non chiude più Cedro.
-- Interfaccia: niente più «caricamento» infinito o finestra che si ridisegna da ferma quando un'anteprima, un'onda audio o una verifica va male; meno memoria usata dalle immagini preparate; il lettore non si blocca se l'audio è rovinato.
-- Windows: le finestre di Conversioni, Verifica, Guida e Impostazioni non restano invisibili se Windows non riesce ad aprirle.
+- Video in MP4 con audio AAC (da MP4, MOV, MKV): l'audio non parte più circa 21 millisecondi dopo l'immagine.
+- MP3 creati da Cedro: non partono più circa 50 millisecondi in ritardo, perché ora hanno l'informazione di ritardo che i lettori usano per un avvio esatto.
+- Audio estratto da un video o da un m4a con AAC (in MP3, WAV, FLAC…): stesso ritardo tolto.
