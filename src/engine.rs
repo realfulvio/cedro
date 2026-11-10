@@ -2625,6 +2625,38 @@ Luca,Bondeno
         let _ = fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn mp3_has_the_gapless_tag() {
+        let dir = scratch();
+        for (rate, channels) in [(44_100, 2u16), (44_100, 1), (22_050, 2), (48_000, 1)] {
+            let src = dir.join(format!("gap{rate}-{channels}.wav"));
+            let spec = hound::WavSpec { channels, sample_rate: rate, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+            let mut w = hound::WavWriter::create(&src, spec).unwrap();
+            for i in 0..rate {
+                let v = ((i as f32 * 440.0 * std::f32::consts::TAU / rate as f32).sin() * 12000.0) as i16;
+                for _ in 0..channels {
+                    w.write_sample(v).unwrap();
+                }
+            }
+            w.finalize().unwrap();
+            let mp3 = perform_with(&src, "mp3", 80, None, &Options::default()).unwrap();
+            let bytes = fs::read(&mp3.path).unwrap();
+            // Niente più frame vuoto in testa: c'è il frame Info (o Xing) di LAME.
+            assert!(bytes[..400].windows(4).any(|w| w == b"Info" || w == b"Xing"), "{rate} Hz, {channels} canali: manca il frame Info");
+            let format = crate::symph::open(&mp3.path).unwrap();
+            let track = crate::symph::audio_track(format.as_ref()).unwrap();
+            let (delay, padding) = (track.delay.unwrap_or(0), track.padding.unwrap_or(0));
+            assert!(delay > 0 && delay < 4000, "{rate} Hz, {channels} canali: ritardo {delay}");
+            assert!(padding > 0, "{rate} Hz, {channels} canali: padding {padding}");
+            // Tolti ritardo e padding, restano i campioni dell'originale.
+            let back = crate::audio::decode(&mp3.path).unwrap();
+            assert_eq!((back.rate, back.channels), (rate, channels), "{rate} Hz, {channels} canali");
+            let frames = back.samples.len() / channels as usize;
+            assert!(frames.abs_diff(rate as usize) < 600, "{rate} Hz, {channels} canali: {frames} campioni invece di {rate}");
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     fn long_pdf(dir: &Path) -> PathBuf {
         let text: Vec<String> = (1..=100).map(|n| format!("riga numero {n}")).collect();
         let pdf = dir.join("lungo.pdf");
