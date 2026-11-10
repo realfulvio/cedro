@@ -211,8 +211,19 @@ impl Drop for Decoder {
 /// Un buffer di uscita del decodificatore in tre piani I420, tagliato e ruotato.
 fn converti(d: &[u8], f: &OutFormat, rotation: i32, pts_us: i64) -> Result<Frame, String> {
     let (w, h) = (f.crop.0 & !1, f.crop.1 & !1);
-    let need = f.stride * f.slice * 3 / 2;
-    if d.len() < need.min(f.stride * (h + h / 2)) {
+    if w < 2 || h < 2 {
+        return Err("fotogramma troppo piccolo".into());
+    }
+    // L'ultimo byte che si legge davvero: con «slice-height» più alta delle righe (1088 per 1080) il colore
+    // comincia più in là, e un buffer che ci arriva appena non deve far leggere fuori (crash).
+    let base = f.stride * f.slice;
+    let luma_end = (h - 1) * f.stride + w;
+    let chroma_end = if f.color == PLANAR {
+        base + (f.stride / 2) * (f.slice / 2) + (h / 2 - 1) * (f.stride / 2) + w / 2
+    } else {
+        base + (h / 2 - 1) * f.stride + w
+    };
+    if d.len() < luma_end.max(chroma_end) {
         return Err("buffer di decodifica troppo corto".into());
     }
     let mut y = Vec::with_capacity(w * h);
@@ -220,7 +231,6 @@ fn converti(d: &[u8], f: &OutFormat, rotation: i32, pts_us: i64) -> Result<Frame
         y.extend_from_slice(&d[r * f.stride..r * f.stride + w]);
     }
     let (mut u, mut v) = (Vec::with_capacity(w * h / 4), Vec::with_capacity(w * h / 4));
-    let base = f.stride * f.slice;
     if f.color == PLANAR {
         let (cs, cslice) = (f.stride / 2, f.slice / 2);
         for r in 0..h / 2 {
