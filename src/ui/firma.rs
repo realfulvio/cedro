@@ -242,9 +242,7 @@ impl FirmaUi {
         firma::trust::refresh_if_old(|_| {});
         for p in paths {
             if p.is_dir() {
-                let mut inner: Vec<PathBuf> = std::fs::read_dir(&p).map(|rd| rd.flatten().map(|e| e.path()).filter(|x| x.is_file()).collect()).unwrap_or_default();
-                inner.sort();
-                for q in inner {
+                for q in crate::cartelle::file_in_cartella(&p, 5_000) {
                     if is_candidate(&q) && !self.items.iter().any(|i| i.path == q) {
                         self.items.push(Item { path: q.clone(), report: None, checking: true, from_folder: true });
                         self.spawn(q, At::Now, None, wake.clone());

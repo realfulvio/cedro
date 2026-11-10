@@ -12,9 +12,7 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Il PDF in Word legge fino in fondo i calendari a caselle.**
+**«Aggiungi cartella» prende anche le sottocartelle, e «Togli GPS» toglie anche il video nascosto nelle foto in movimento.**
 
-- Le pagine fitte di caselle con scritte brevi (un calendario con i giorni, le etichette dei ritiri, i colori) non vengono più scambiate per un modulo: restano una tabella in Word, con le sue righe e colonne, invece di centinaia di forme sparse. Il calendario dei rifiuti di prova passa da una tabella a tre, con tutti i mesi.
-- La riga dei giorni della settimana (LUN, MAR…) sopra il calendario è la prima riga della tabella, ognuno nella sua cella, anche se gli angoli sono arrotondati.
-- Le etichette bianche sui bollini colorati («Umido», «Carta») non spariscono più sulla carta bianca: prendono il colore del bollino. Il numero del giorno e le etichette in basso nella stessa casella sono righe separate, e il numero non sparisce più.
-- Il margine in fondo alla pagina lascia posto al piè di pagina, che non finisce da solo su una pagina in più.
+- «Aggiungi cartella» (in Conversioni, nel verificare e nel firmare le firme) prima prendeva solo i file direttamente nella cartella: ora scende anche nelle sottocartelle, in ordine di nome. Si saltano le cartelle nascoste (come `.git`) e i collegamenti a cartelle, e c'è un tetto di file per non riempire la coda con un disco intero.
+- Togli GPS e dati nascosti: nelle foto in movimento (Motion Photo di Google, Samsung) il video, con la sua posizione, sta attaccato in fondo al JPEG e la versione prima lo lasciava dov'era. Ora si toglie, e nel messaggio compare «dati in coda». Le altre immagini dentro il file (come quelle dell'HDR) restano, i pixel restano identici.
