@@ -34,10 +34,13 @@ impl PdfSig {
     /// I due pezzi firmati.
     pub fn parts<'a>(&self, data: &'a [u8]) -> R<[&'a [u8]; 2]> {
         let [a, b, c, d] = self.range;
-        if a + b > data.len() || c + d > data.len() || a + b > c {
+        let (Some(ab), Some(cd)) = (a.checked_add(b), c.checked_add(d)) else {
+            return Err("intervallo della firma fuori dal file".into());
+        };
+        if ab > data.len() || cd > data.len() || ab > c {
             return Err("intervallo della firma fuori dal file".into());
         }
-        Ok([&data[a..a + b], &data[c..c + d]])
+        Ok([&data[a..ab], &data[c..cd]])
     }
 }
 
@@ -188,18 +191,20 @@ pub fn signatures(data: &[u8]) -> Vec<PdfSig> {
             continue;
         }
         let range = [n[0], n[1], n[2], n[3]];
-        if out.iter().any(|s| s.range == range) || range[0] + range[1] > range[2] || range[2] + range[3] > data.len() {
+        // Numeri assurdi (file rovinato o fatto apposta): niente somme che traboccano.
+        let (Some(hole_start), Some(end)) = (range[0].checked_add(range[1]), range[2].checked_add(range[3])) else { continue };
+        if out.iter().any(|s| s.range == range) || hole_start > range[2] || end > data.len() {
             continue;
         }
-        let hole = &data[range[0] + range[1]..range[2]];
+        let hole = &data[hole_start..range[2]];
         let contents = unhex(hole);
         if contents.is_empty() {
             continue;
         }
         // Il dizionario: dall'«obj» prima fino all'«endobj» dopo.
-        let ds = rfind(data, b"obj", range[0] + range[1]).unwrap_or(p.saturating_sub(2000));
+        let ds = rfind(data, b"obj", hole_start).unwrap_or(p.saturating_sub(2000)).min(hole_start);
         let de = find(data, b"endobj", range[2]).unwrap_or(data.len().min(range[2] + 4000));
-        let mut dict = data[ds..range[0] + range[1]].to_vec();
+        let mut dict = data[ds..hole_start].to_vec();
         dict.extend_from_slice(&data[range[2]..de]);
         let sub_filter = pdf_string(&dict, b"/SubFilter").unwrap_or_default();
         let doc_timestamp = sub_filter == "ETSI.RFC3161" || find(&dict, b"/DocTimeStamp", 0).is_some();
@@ -409,5 +414,18 @@ mod tests {
         assert_eq!(pdf_string(b"/Reason (Approvazione \\(ok\\))/M", b"/Reason").as_deref(), Some("Approvazione (ok)"));
         assert_eq!(pdf_string(b"/Name <FEFF004D0052>", b"/Name").as_deref(), Some("MR"));
         assert_eq!(pdf_string(b"/SubFilter/ETSI.CAdES.detached/Type", b"/SubFilter").as_deref(), Some("ETSI.CAdES.detached"));
+    }
+
+    #[test]
+    fn byte_range_strano_non_manda_in_panico() {
+        // /ByteRange molto dopo il buco e senza «obj» prima: il dizionario non deve finire al contrario.
+        let mut pdf = b"%PDF-1.4\n<3003020100>".to_vec();
+        pdf.extend(std::iter::repeat_n(b' ', 3000));
+        pdf.extend(b"/ByteRange [0 9 21 5]");
+        let _ = signatures(&pdf);
+        // Numeri che traboccano.
+        let mut pdf = b"%PDF-1.4\n<3003020100>".to_vec();
+        pdf.extend(format!("/ByteRange [{} 2 1 5]", usize::MAX).as_bytes());
+        assert!(signatures(&pdf).is_empty());
     }
 }
