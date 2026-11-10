@@ -2,7 +2,7 @@ use std::fs::File;
 use std::path::Path;
 
 use hound::{SampleFormat, WavSpec, WavWriter};
-use mp3lame_encoder::{Bitrate, Builder, DualPcm, FlushNoGap, MonoPcm};
+use mp3lame_encoder::{Bitrate, Builder, DualPcm, FlushGap, MonoPcm};
 use symphonia::core::errors::Error as SymError;
 
 pub(crate) struct Pcm {
@@ -150,12 +150,36 @@ pub fn to_mp3(input: &Path, output: &Path, quality: u8, opts: &crate::engine::Op
             }
         }
     }
+    // Il flush «normale» (non NoGap) calcola il padding finale che finisce nel tag LAME.
     append_mp3(&mut mp3, mp3lame_encoder::max_required_buffer_size(chunk), |buf| {
-        encoder.flush::<FlushNoGap>(buf)
+        encoder.flush::<FlushGap>(buf)
     })?;
+    write_lame_tag(&encoder, &mut mp3);
     let mut file = if opts.keep_tags { id3v2(&pcm.tags) } else { Vec::new() };
     file.extend_from_slice(&mp3);
     std::fs::write(output, file).map_err(|e| e.to_string())
+}
+
+/// Il primo frame che LAME lascia vuoto in testa all'MP3 diventa il frame Info con il tag LAME (ritardo e
+/// padding del codificatore): senza, i lettori non sanno quanto togliere e il suono parte ~50 ms in ritardo
+/// (il ritardo del codificatore più quel frame vuoto). Se il tag non c'è o non combacia, il file resta com'era.
+fn write_lame_tag(encoder: &mp3lame_encoder::Encoder, mp3: &mut [u8]) {
+    let mut tag = Vec::new();
+    let size = encoder.lame_tag_size();
+    if size == 0 || size > mp3.len() {
+        return;
+    }
+    tag.reserve(size);
+    let Some(written) = encoder.lame_tag_encode_to_vec(&mut tag) else { return };
+    // Il frame vuoto da sostituire: stessa versione, bitrate e frequenza del tag (il quarto byte, con la modalità,
+    // può differire) e poi solo zeri.
+    let blank = tag.len() == written.get()
+        && tag.len() == size
+        && mp3[..3] == tag[..3]
+        && mp3[4..size].iter().all(|b| *b == 0);
+    if blank {
+        mp3[..size].copy_from_slice(&tag);
+    }
 }
 
 /// Il blocco ID3v2.4 (testo UTF-8) con titolo, artista e album; vuoto se non c'è niente da scrivere.
