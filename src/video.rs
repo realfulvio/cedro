@@ -1568,6 +1568,11 @@ pub(crate) fn play_frames(
                 if flags & (MF_SOURCE_READERF_ENDOFSTREAM.0 as u32) != 0 {
                     return Ok(shown);
                 }
+                // MF_SOURCE_READERF_ERROR: il lettore si è fermato e non darà più fotogrammi; senza uscire qui il
+                // ciclo girerebbe a vuoto per sempre (processore al massimo, Play bloccato).
+                if flags & 0x1 != 0 {
+                    return Err("lettura video interrotta".into());
+                }
                 let Some(sample) = sample else { continue };
                 let mut make = || -> Option<crate::softvideo::Rgba> {
                     let buffer = sample.ConvertToContiguousBuffer().ok()?;
