@@ -51,6 +51,12 @@ pub enum Field {
     VoiceName(u8),
     /// Visualizzatore della firma: «Verifica alla data», un altro giorno (gg/mm/aaaa).
     FirmaDate,
+    /// «Firma documenti»: il PIN, motivo e luogo della firma, la fine del nome; i campi del riquadro PIN/PUK.
+    FirmaPin,
+    FirmaReason,
+    FirmaLocation,
+    FirmaSuffix,
+    FirmaDlg(u8),
 }
 
 /// Le parti che si aprono e si chiudono («Altre opzioni»…).
@@ -82,6 +88,8 @@ pub enum Scroll {
     FirmaDoc,
     FirmaThumbs,
     FirmaPanel,
+    /// «Firma documenti», «Chiavetta e certificati», «Opzioni della firma».
+    FirmaSign,
 }
 
 /// Cosa fa un clic.
@@ -246,6 +254,47 @@ pub enum Act {
     FirmaSetting(u8),
     /// Riscarica adesso l'elenco europeo dei certificatori.
     FirmaTrust,
+    /// Le pagine della sezione: 0 inizio, 1 firma documenti, 2 chiavetta e certificati, 3 opzioni.
+    FirmaPage(u8),
+    /// «Firma documenti»: il passo (0 file, 1 come firmare, 2 PIN e firma, 3 fatto).
+    FirmaStep(u8),
+    FirmaSignAdd,
+    FirmaSignAddFolder,
+    FirmaSignRemove(usize),
+    /// Cerca di nuovo chiavette e lettori.
+    FirmaScan,
+    FirmaDevice(usize),
+    /// 0 lo scelgo io, 1 tutto in .p7m, 2 tutto in PDF firmato.
+    FirmaFormat(u8),
+    /// 0 nello spazio per la firma, 1 dove la metto io, 2 non si vede.
+    FirmaPlace(u8),
+    /// Il riquadro della firma sulla pagina (si trascina).
+    FirmaBox,
+    FirmaBoxPage(i32),
+    FirmaMore,
+    /// 0 accanto all'originale, 1 un'altra cartella (la sceglie).
+    FirmaDest(u8),
+    /// File già firmati: 0 aggiungo la mia firma, 1 controfirma, 2 busta dentro busta.
+    FirmaExisting(u8),
+    FirmaGo,
+    FirmaDoneFolder,
+    FirmaDoneView,
+    FirmaInfoClose,
+    /// Riquadro PIN/PUK: 0 cambia PIN, 1 sblocca con PUK, 2 cambia PUK.
+    FirmaDlg(u8),
+    FirmaDlgGo,
+    FirmaDlgClose,
+    FirmaCertView(usize),
+    FirmaCertRevoca(usize),
+    FirmaCertSave(usize),
+    /// Le levette delle opzioni: 0 ricorda il PIN, 1 firma visibile, 2 avvisami prima che scada.
+    FirmaOpt(u8),
+    FirmaFormatMenu,
+    FirmaImageMenu,
+    FirmaCornerMenu,
+    FirmaDriver,
+    /// Le voci dei menu: (quale menu, quale voce).
+    FirmaMenuPick(u8, u8),
     /// Visualizzatore: salva il documento, aprilo con il programma del sistema, stampalo.
     VwSave,
     VwOpenWith,

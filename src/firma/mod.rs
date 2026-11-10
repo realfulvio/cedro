@@ -6,8 +6,15 @@ pub mod asn1;
 pub mod cert;
 pub mod cms;
 pub mod crypto;
+pub mod firmare;
 pub mod oid;
 pub mod pades;
+pub mod pades_firma;
+#[cfg(any(windows, target_os = "linux"))]
+pub mod pkcs11;
+#[cfg(not(any(windows, target_os = "linux")))]
+#[path = "pkcs11_stub.rs"]
+pub mod pkcs11;
 pub mod rapporto;
 pub mod revoca;
 pub mod trust;

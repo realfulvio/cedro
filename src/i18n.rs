@@ -329,7 +329,11 @@ const LIT_CLOSE: char = '\u{E001}';
 const LIT_HOLD: char = '\u{E002}';
 
 /// Un testo dell'utente (un nome di file, per esempio) da lasciare com'è: `tr` non lo traduce e toglie i segni.
+/// Annidato (un nome di file dentro una frase già segnata) vale una volta sola.
 pub fn lit(s: &str) -> String {
+    if s.contains([LIT_OPEN, LIT_CLOSE]) {
+        return format!("{LIT_OPEN}{}{LIT_CLOSE}", s.replace([LIT_OPEN, LIT_CLOSE], ""));
+    }
     format!("{LIT_OPEN}{s}{LIT_CLOSE}")
 }
 

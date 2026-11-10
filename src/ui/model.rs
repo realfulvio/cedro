@@ -1568,6 +1568,10 @@ impl App {
     /// Applica gli eventi arrivati dai thread. Vero se qualcosa è cambiato.
     pub fn pump(&mut self) -> bool {
         let mut changed = self.firma.pump();
+        if let Some(t) = self.firma.sign.reminder.take() {
+            self.notice = Some(Notice { text: t, error: true });
+            changed = true;
+        }
         while let Ok(e) = self.rx.try_recv() {
             changed = true;
             match e {

@@ -44,6 +44,7 @@ pub const GROUPS: &[Group] = &[
             c("cfb", "Matthew D. Steele", "MIT", "Apre i vecchi file Word .doc.", "github.com/mdsteele/rust-cfb"),
             c("rust_xlsxwriter", "John McNamara", "MIT o Apache-2.0", "Scrive i file Excel delle tabelle dei PDF.", "github.com/jmcnamara/rust_xlsxwriter"),
             c("zip", "Mathijs van de Nes e altri", "MIT", "Archivi ZIP e file .docx.", "github.com/zip-rs/zip2"),
+            c("cryptoki", "Parsec Project", "Apache-2.0", "Parla con la chiavetta o la smart card per firmare (PKCS#11).", "github.com/parallaxsecond/rust-cryptoki"),
         ],
     },
     Group {
@@ -172,6 +173,7 @@ pub fn version_text(item: &Component) -> Option<String> {
         "cfb" => crates_text(&["cfb"]),
         "rust_xlsxwriter" => crates_text(&["rust_xlsxwriter"]),
         "zip" => crates_text(&["zip"]),
+        "cryptoki" => crates_text(&["cryptoki"]),
         "image, png" => crates_text(&["image", "png"]),
         "ocrs, rten" => crates_text(&["ocrs", "rten"]),
         "Symphonia" => crates_text(&["symphonia"]),

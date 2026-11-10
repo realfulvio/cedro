@@ -65,6 +65,35 @@ pub struct FirmaUi {
     pub opts: (bool, bool, bool),
     /// L'elenco dei certificatori: quando è stato scaricato e quanti sono.
     pub tl_info: (Option<i64>, usize),
+    /// «Firma documenti», «Chiavetta e certificati» e «Opzioni della firma».
+    pub sign: super::firmare::SignUi,
+    /// «Ultimi file» lo scrive anche il visualizzatore (un altro processo): quando l'ho letto e l'ultimo controllo.
+    recent_seen: Option<std::time::SystemTime>,
+    recent_check: Option<std::time::Instant>,
+}
+
+/// «Ultimi file» lo cambia anche il visualizzatore, che è un altro processo: un filo leggero guarda il
+/// file una volta al secondo e sveglia la finestra quando cambia (la finestra ferma non fa giri da sola).
+pub fn watch_recent(wake: Arc<dyn Fn() + Send + Sync>) {
+    static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if STARTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(move || {
+        let mut seen = recent_mtime();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            let m = recent_mtime();
+            if m != seen {
+                seen = m;
+                wake();
+            }
+        }
+    });
+}
+
+fn recent_mtime() -> Option<std::time::SystemTime> {
+    std::fs::metadata(recent_file()).and_then(|m| m.modified()).ok()
 }
 
 fn recent_file() -> PathBuf {
@@ -159,6 +188,8 @@ impl Default for FirmaUi {
         FirmaUi {
             items: Vec::new(),
             recent: load_recent(),
+            recent_seen: recent_mtime(),
+            recent_check: None,
             viewer: None,
             inbox: Arc::default(),
             generation: 0,
@@ -166,6 +197,7 @@ impl Default for FirmaUi {
             tl_done: Arc::default(),
             opts: (s.firma_assoc, s.firma_pdf, s.firma_online),
             tl_info: firma::trust::summary(),
+            sign: Default::default(),
         }
     }
 }
@@ -259,7 +291,17 @@ impl FirmaUi {
     /// Le risposte arrivate dai thread. Vero se è cambiato qualcosa.
     pub fn pump(&mut self) -> bool {
         let got: Vec<_> = std::mem::take(&mut *self.inbox.lock().unwrap_or_else(|e| e.into_inner()));
-        let mut changed = false;
+        let mut changed = self.sign.pump();
+        // Al massimo una volta al secondo si guarda se «Ultimi file» è cambiato da fuori.
+        if self.recent_check.is_none_or(|t| t.elapsed().as_millis() >= 1000) {
+            self.recent_check = Some(std::time::Instant::now());
+            let m = recent_mtime();
+            if m != self.recent_seen {
+                self.recent_seen = m;
+                self.recent = load_recent();
+                changed = true;
+            }
+        }
         if self.tl_done.lock().unwrap_or_else(|e| e.into_inner()).take().is_some() {
             self.tl_busy = false;
             self.tl_info = firma::trust::summary();
@@ -306,7 +348,7 @@ impl FirmaUi {
     }
 
     pub fn busy(&self) -> bool {
-        self.items.iter().any(|i| i.checking) || self.viewer.as_ref().is_some_and(|v| v.checking) || self.tl_busy
+        self.items.iter().any(|i| i.checking) || self.viewer.as_ref().is_some_and(|v| v.checking) || self.tl_busy || self.sign.busy()
     }
 
     /// Riscarica subito l'elenco europeo dei certificatori.

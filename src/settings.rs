@@ -59,6 +59,29 @@ pub struct Settings {
     pub firma_pdf: bool,
     /// Controlla online la revoca dei certificati (OCSP e CRL).
     pub firma_online: bool,
+    /// Il driver della chiavetta scelto a mano (vuoto = lo cerco da solo).
+    pub firma_driver: String,
+    /// Formato: 0 automatico (PDF in PDF firmato, gli altri .p7m), 1 tutto .p7m, 2 tutto PDF firmato.
+    pub firma_format: u8,
+    /// Cosa aggiungere al nome dei PDF firmati («_firmato»).
+    pub firma_suffix: String,
+    /// File già firmati: 0 firma accanto (parallela), 1 sopra (controfirma), 2 busta nuova.
+    pub firma_existing: u8,
+    /// Dove salvare i file firmati (vuoto = accanto agli originali).
+    pub firma_dir: String,
+    /// Firma visibile nei PDF.
+    pub firma_visible: bool,
+    /// L'immagine del riquadro (stemma o firma scansionata), vuoto = niente.
+    pub firma_image: String,
+    /// Dove va il riquadro se il PDF non ha lo spazio: 0 ultima pagina in basso a destra, 1 ultima in basso
+    /// a sinistra, 2 prima pagina in basso a destra.
+    pub firma_corner: u8,
+    pub firma_reason: String,
+    pub firma_location: String,
+    /// Tenere il PIN per tutta la coda (sempre: lo si dimentica alla fine), o chiederlo a ogni file.
+    pub firma_keep_pin: bool,
+    /// Avvisare 3 mesi, 1 mese e 1 settimana prima che scada il certificato.
+    pub firma_remind: bool,
 }
 
 impl Default for Settings {
@@ -90,6 +113,18 @@ impl Default for Settings {
             firma_assoc: true,
             firma_pdf: false,
             firma_online: true,
+            firma_driver: String::new(),
+            firma_format: 0,
+            firma_suffix: "_firmato".into(),
+            firma_existing: 0,
+            firma_dir: String::new(),
+            firma_visible: true,
+            firma_image: String::new(),
+            firma_corner: 0,
+            firma_reason: String::new(),
+            firma_location: String::new(),
+            firma_keep_pin: true,
+            firma_remind: true,
         }
     }
 }
@@ -175,6 +210,18 @@ impl Settings {
                 "firma_assoc" => s.firma_assoc = flag(value).unwrap_or(s.firma_assoc),
                 "firma_pdf" => s.firma_pdf = flag(value).unwrap_or(s.firma_pdf),
                 "firma_online" => s.firma_online = flag(value).unwrap_or(s.firma_online),
+                "firma_driver" => s.firma_driver = value.to_string(),
+                "firma_format" => s.firma_format = value.parse::<u8>().unwrap_or(0).min(2),
+                "firma_suffix" => s.firma_suffix = value.to_string(),
+                "firma_existing" => s.firma_existing = value.parse::<u8>().unwrap_or(0).min(2),
+                "firma_dir" => s.firma_dir = value.to_string(),
+                "firma_visible" => s.firma_visible = flag(value).unwrap_or(s.firma_visible),
+                "firma_image" => s.firma_image = value.to_string(),
+                "firma_corner" => s.firma_corner = value.parse::<u8>().unwrap_or(0).min(2),
+                "firma_reason" => s.firma_reason = value.to_string(),
+                "firma_location" => s.firma_location = value.to_string(),
+                "firma_keep_pin" => s.firma_keep_pin = flag(value).unwrap_or(s.firma_keep_pin),
+                "firma_remind" => s.firma_remind = flag(value).unwrap_or(s.firma_remind),
                 "ui_theme" => s.ui_theme = value.to_string(),
                 "language" if matches!(value, "auto" | "it" | "en") => s.language = value.to_string(),
                 "ocr_lang" if matches!(value, "auto" | "it" | "en") => s.ocr_lang = value.to_string(),
@@ -224,6 +271,18 @@ impl Settings {
             ("firma_assoc", b(self.firma_assoc).into()),
             ("firma_pdf", b(self.firma_pdf).into()),
             ("firma_online", b(self.firma_online).into()),
+            ("firma_driver", self.firma_driver.clone()),
+            ("firma_format", self.firma_format.to_string()),
+            ("firma_suffix", self.firma_suffix.clone()),
+            ("firma_existing", self.firma_existing.to_string()),
+            ("firma_dir", self.firma_dir.clone()),
+            ("firma_visible", b(self.firma_visible).into()),
+            ("firma_image", self.firma_image.clone()),
+            ("firma_corner", self.firma_corner.to_string()),
+            ("firma_reason", self.firma_reason.clone()),
+            ("firma_location", self.firma_location.clone()),
+            ("firma_keep_pin", b(self.firma_keep_pin).into()),
+            ("firma_remind", b(self.firma_remind).into()),
             ("ui_schema", "1".into()),
         ];
         let mut out: Vec<String> = old
