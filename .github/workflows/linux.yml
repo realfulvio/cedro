@@ -46,6 +46,12 @@ jobs:
       - name: Prove
         run: cargo test --release --lib
 
+      - name: Firma con una chiavetta finta (SoftHSM2, PKCS#11)
+        run: |
+          sudo apt-get install -y --no-install-recommends softhsm2 opensc openssl
+          source tools/prova-softhsm.sh
+          cargo test --release --lib firma::pkcs11 -- --nocapture
+
       - name: Pacchetto tar.gz (e la copia per la vecchia edizione Comune di Bondeno)
         run: installer/build-linux.sh -o dist -b
 

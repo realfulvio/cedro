@@ -141,6 +141,9 @@ impl Screen {
     /// Disegna il fotogramma in un'immagine di `w`×`h` pixel con `scale` pixel per unità.
     pub fn render(&mut self, w: u32, h: u32, scale: f32) -> Painter<'_> {
         self.app.simple_view = self.simple;
+        if self.app.activity == Activity::Firma && self.surface == Surface::Main {
+            super::firma::watch_recent(self.app.wake.clone());
+        }
         if self.surface == Surface::Viewer {
             self.want_viewer();
         }
@@ -214,6 +217,17 @@ impl Screen {
 
     /// Il tema «Documento al centro» mostra il file scelto: lo si fa preparare al thread dei file.
     fn want_preview(&mut self) {
+        // «Firma documenti», passo 2: la pagina dove va la firma.
+        if self.app.activity == Activity::Firma && self.surface == Surface::Main {
+            let su = &self.app.firma.sign;
+            if su.page == super::firmare::Page::Sign && su.step == 2 {
+                if let Some(pdf) = su.first_pdf() {
+                    let page = su.box_frac().map(|b| b.0).unwrap_or(su.box_page).min(pdf.pages.len().saturating_sub(1));
+                    let path = pdf.path.clone();
+                    self.app.want_preview(&path, page);
+                }
+            }
+        }
         // «Rivedi» copre tutta la finestra e ha il suo lettore (l'audio trascritto): non c'è anteprima da
         // preparare e quel lettore non va fermato, altrimenti Play e i tempi non fanno sentire nulla.
         if let Some(r) = self.app.review.as_ref() {
@@ -335,6 +349,10 @@ impl Screen {
                 self.ui.drag_x.1 = x;
                 return true;
             }
+            if act == Act::FirmaBox {
+                self.box_drag(r, x, y);
+                return true;
+            }
             self.slide(&act, r, x);
             return true;
         }
@@ -360,6 +378,8 @@ impl Screen {
             if matches!(act, Act::RowDrag(..) | Act::PageDrag(..)) {
                 self.ui.drag_y = (y, y);
                 self.ui.drag_x = (x, x);
+            } else if act == Act::FirmaBox {
+                self.box_drag(r, x, y);
             } else {
                 self.slide(&act, r, x);
             }
@@ -547,6 +567,18 @@ impl Screen {
         }
     }
 
+    /// Il riquadro della firma trascinato sulla pagina: il centro dove sta il puntatore, senza uscire dal foglio.
+    fn box_drag(&mut self, r: R, x: f32, y: f32) {
+        let su = &mut self.app.firma.sign;
+        let (hw, hh) = match su.box_frac() {
+            Some((_, b)) => ((b[2] - b[0]) / 2.0, (b[3] - b[1]) / 2.0),
+            None => (0.17, 0.04),
+        };
+        let cx = ((x - r.0) / r.2.max(1.0)).clamp(hw.min(0.5), (1.0 - hw).max(0.5));
+        let cy = ((y - r.1) / r.3.max(1.0)).clamp(hh.min(0.5), (1.0 - hh).max(0.5));
+        su.box_center = (cx, cy);
+    }
+
     fn slide(&mut self, act: &Act, r: R, x: f32) {
         let frac = ((x - r.0 - 10.0) / (r.2 - 20.0)).clamp(0.0, 1.0);
         match act {
@@ -626,6 +658,10 @@ impl Screen {
                 app.activity = a;
                 if a == Activity::Transcribe || a == Activity::Convert {
                     app.selected = app.visible().first().copied();
+                }
+                if a == Activity::Firma && !app.firma.sign.scanned_once {
+                    let wake = app.wake.clone();
+                    app.firma.sign.scan(wake);
                 }
             }
             Act::ActivityMenu => {
@@ -887,9 +923,11 @@ impl Screen {
                 if let Some(field) = self.ui.edit {
                     let text = self.field_text(field);
                     match act {
-                        Act::FieldCopy => plat.copy_text(&text),
+                        Act::FieldCopy if !secret(field) => plat.copy_text(&text),
                         Act::FieldCut => {
-                            plat.copy_text(&text);
+                            if !secret(field) {
+                                plat.copy_text(&text);
+                            }
                             self.set_field_text(field, String::new());
                             self.ui.caret = 0;
                         }
@@ -1079,6 +1117,36 @@ impl Screen {
             | Act::FirmaExtract
             | Act::FirmaSetting(_)
             | Act::FirmaTrust) => self.firma_act(a, plat),
+            a @ (Act::FirmaPage(_)
+            | Act::FirmaStep(_)
+            | Act::FirmaSignAdd
+            | Act::FirmaSignAddFolder
+            | Act::FirmaSignRemove(_)
+            | Act::FirmaScan
+            | Act::FirmaDevice(_)
+            | Act::FirmaFormat(_)
+            | Act::FirmaPlace(_)
+            | Act::FirmaBox
+            | Act::FirmaBoxPage(_)
+            | Act::FirmaMore
+            | Act::FirmaDest(_)
+            | Act::FirmaExisting(_)
+            | Act::FirmaGo
+            | Act::FirmaDoneFolder
+            | Act::FirmaDoneView
+            | Act::FirmaInfoClose
+            | Act::FirmaDlg(_)
+            | Act::FirmaDlgGo
+            | Act::FirmaDlgClose
+            | Act::FirmaCertView(_)
+            | Act::FirmaCertRevoca(_)
+            | Act::FirmaCertSave(_)
+            | Act::FirmaOpt(_)
+            | Act::FirmaFormatMenu
+            | Act::FirmaImageMenu
+            | Act::FirmaCornerMenu
+            | Act::FirmaDriver
+            | Act::FirmaMenuPick(..)) => self.sign_act(a, plat),
             a @ (Act::VwSave
             | Act::VwOpenWith
             | Act::VwPrint
@@ -1102,6 +1170,31 @@ impl Screen {
         if paths.is_empty() {
             return;
         }
+        let wake = self.app.wake.clone();
+        // Dentro «Firma documenti» i file lasciati si aggiungono a quelli da firmare.
+        let su = &mut self.app.firma.sign;
+        if su.page == super::firmare::Page::Sign && su.step < 4 && self.app.firma.items.is_empty() {
+            if !su.running {
+                su.step = 1;
+                su.add(paths);
+            }
+            return;
+        }
+        // Sull'inizio: quelli già firmati (e le cartelle) si verificano, gli altri si preparano per la firma.
+        if su.page == super::firmare::Page::Home && self.app.firma.items.is_empty() {
+            let (signed, plain): (Vec<PathBuf>, Vec<PathBuf>) = paths.into_iter().partition(|p| p.is_dir() || super::firmare::is_signed(p));
+            if !plain.is_empty() {
+                su.start(plain, wake);
+            }
+            if signed.is_empty() {
+                return;
+            }
+            return self.verify_files(signed);
+        }
+        self.verify_files(paths)
+    }
+
+    fn verify_files(&mut self, paths: Vec<PathBuf>) {
         if paths.len() == 1 && paths[0].is_file() && self.app.firma.items.is_empty() {
             if let Err(e) = super::firma::launch_viewer(&paths[0]) {
                 self.notify(&e, true);
@@ -1201,6 +1294,254 @@ impl Screen {
                 }
             }
             Act::FirmaTrust => self.app.firma.update_trust(wake),
+            _ => {}
+        }
+    }
+
+    /// «Firma documenti», «Chiavetta e certificati» e «Opzioni della firma».
+    fn sign_act(&mut self, act: Act, plat: &mut dyn Platform) {
+        use super::firmare::Page;
+        let wake = self.app.wake.clone();
+        match act {
+            Act::FirmaPage(k) => {
+                let su = &mut self.app.firma.sign;
+                match k {
+                    0 => su.home(),
+                    1 => su.start(Vec::new(), wake),
+                    2 => {
+                        su.page = Page::Devices;
+                        su.info = None;
+                        su.dialog = None;
+                        if !su.scanned_once {
+                            su.scan(wake);
+                        }
+                    }
+                    _ => {
+                        su.page = Page::Options;
+                        su.s = crate::read_settings();
+                    }
+                }
+                self.ui.edit = None;
+                self.ui.scroll.insert(Scroll::FirmaSign, 0.0);
+            }
+            Act::FirmaStep(n) => {
+                let su = &mut self.app.firma.sign;
+                if su.running {
+                    return;
+                }
+                let ok = match n {
+                    1 => true,
+                    2 => !su.files.is_empty(),
+                    _ => !su.files.is_empty() && su.can_sign(),
+                };
+                if ok {
+                    if su.step == 4 {
+                        su.files.clear();
+                    }
+                    su.step = n;
+                    su.error = None;
+                    su.plan();
+                    self.ui.edit = if n == 3 { Some(Field::FirmaPin) } else { None };
+                    self.ui.caret = su.pin.chars().count();
+                    self.ui.scroll.insert(Scroll::FirmaSign, 0.0);
+                }
+            }
+            Act::FirmaSignAdd => {
+                let files = plat.pick_files();
+                if !files.is_empty() {
+                    let su = &mut self.app.firma.sign;
+                    if su.page == Page::Sign && su.step < 4 {
+                        su.add(files);
+                    } else {
+                        su.start(files, wake);
+                    }
+                }
+            }
+            Act::FirmaSignAddFolder => {
+                if let Some(d) = plat.pick_folder("Cartella con i file da firmare") {
+                    let su = &mut self.app.firma.sign;
+                    let before = su.files.len();
+                    su.add(vec![d]);
+                    if su.files.len() == before {
+                        self.notify("In quella cartella non ci sono file da aggiungere.", false);
+                    }
+                }
+            }
+            Act::FirmaSignRemove(i) => self.app.firma.sign.remove(i),
+            Act::FirmaScan => self.app.firma.sign.scan(wake),
+            Act::FirmaDevice(i) => {
+                let su = &mut self.app.firma.sign;
+                if i < su.devices.len() && !su.running {
+                    su.device = i;
+                    su.pin.clear();
+                    su.error = None;
+                }
+            }
+            Act::FirmaFormat(k) => {
+                let su = &mut self.app.firma.sign;
+                su.s.firma_format = k.min(2);
+                su.save_settings();
+                su.plan();
+            }
+            Act::FirmaPlace(k) => {
+                let su = &mut self.app.firma.sign;
+                if k < 2 && !su.s.firma_visible {
+                    su.s.firma_visible = true;
+                    su.save_settings();
+                }
+                if k == 1 && su.place != 1 {
+                    // Si parte da dove sarebbe andata da sola (sopra le firme che ci sono già), non da
+                    // dove era stata trascinata un'altra volta.
+                    su.place = 0;
+                    if let Some((page, b)) = su.box_frac() {
+                        su.box_page = page;
+                        su.box_center = ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0);
+                    }
+                }
+                su.place = k.min(2);
+            }
+            Act::FirmaBox => {}
+            Act::FirmaBoxPage(d) => {
+                let su = &mut self.app.firma.sign;
+                let n = su.first_pdf().map(|p| p.pages.len()).unwrap_or(1).max(1);
+                let cur = su.box_page.min(n - 1) as i32;
+                su.box_page = (cur + d).clamp(0, n as i32 - 1) as usize;
+            }
+            Act::FirmaMore => {
+                let su = &mut self.app.firma.sign;
+                su.more = !su.more;
+            }
+            Act::FirmaDest(k) => {
+                if k == 0 {
+                    self.app.firma.sign.s.firma_dir.clear();
+                } else if let Some(d) = plat.pick_folder("Dove salvo i file firmati") {
+                    self.app.firma.sign.s.firma_dir = d.to_string_lossy().into_owned();
+                }
+                let su = &mut self.app.firma.sign;
+                su.save_settings();
+                su.plan();
+            }
+            Act::FirmaExisting(k) => {
+                let su = &mut self.app.firma.sign;
+                su.s.firma_existing = k.min(2);
+                su.save_settings();
+                su.plan();
+            }
+            Act::FirmaGo => {
+                let su = &mut self.app.firma.sign;
+                if su.page == Page::Sign && su.step == 3 && !su.running {
+                    self.ui.edit = None;
+                    su.sign(wake);
+                }
+            }
+            Act::FirmaDoneFolder => {
+                if let Some(d) = self.app.firma.sign.files.iter().find(|f| matches!(f.state, super::firmare::State::Done { .. })).and_then(|f| f.out.parent().map(Path::to_path_buf)) {
+                    plat.open_path(&d);
+                }
+            }
+            Act::FirmaDoneView => {
+                if let Some(p) = self.app.firma.sign.files.iter().find(|f| matches!(f.state, super::firmare::State::Done { .. })).map(|f| f.out.clone()) {
+                    if let Err(e) = super::firma::launch_viewer(&p) {
+                        self.notify(&e, true);
+                    }
+                }
+            }
+            Act::FirmaInfoClose => self.app.firma.sign.info = None,
+            Act::FirmaDlg(k) => {
+                let su = &mut self.app.firma.sign;
+                su.info = None;
+                su.dialog = Some(super::firmare::PinDialog { kind: k.min(2), old: String::new(), new: String::new(), again: String::new(), error: None, busy: false });
+                self.ui.edit = Some(Field::FirmaDlg(0));
+                self.ui.caret = 0;
+            }
+            Act::FirmaDlgGo => {
+                self.ui.edit = None;
+                self.app.firma.sign.run_dialog(wake);
+            }
+            Act::FirmaDlgClose => {
+                self.ui.edit = None;
+                let su = &mut self.app.firma.sign;
+                if !su.dialog.as_ref().is_some_and(|d| d.busy) {
+                    su.dialog = None;
+                }
+            }
+            Act::FirmaCertView(k) | Act::FirmaCertSave(k) => {
+                let Some(c) = self.app.firma.sign.device().and_then(|d| d.certs.get(k)).cloned() else { return };
+                let name = format!("{}.cer", crate::pdfpages::safe_name(&c.cert.subject.person()));
+                if matches!(act, Act::FirmaCertSave(_)) {
+                    if let Some(dir) = plat.pick_folder("Dove salvo il certificato") {
+                        let p = dir.join(&name);
+                        match std::fs::write(&p, &c.der) {
+                            Ok(()) => self.notify(&format!("Certificato salvato: {}", p.display()), false),
+                            Err(e) => self.notify(&format!("Non riesco a salvare il certificato: {e}"), true),
+                        }
+                    }
+                } else {
+                    match crate::engine::private_temp_dir("cedro-cert").and_then(|d| {
+                        let p = d.join(&name);
+                        std::fs::write(&p, &c.der).map(|_| p).map_err(|e| e.to_string())
+                    }) {
+                        Ok(p) => plat.open_path(&p),
+                        Err(e) => self.notify(&format!("Non riesco a mostrare il certificato: {e}"), true),
+                    }
+                }
+            }
+            Act::FirmaCertRevoca(k) => self.app.firma.sign.check_revocation(k, wake),
+            Act::FirmaOpt(k) => {
+                let su = &mut self.app.firma.sign;
+                match k {
+                    0 => su.s.firma_keep_pin = !su.s.firma_keep_pin,
+                    1 => su.s.firma_visible = !su.s.firma_visible,
+                    _ => su.s.firma_remind = !su.s.firma_remind,
+                }
+                su.save_settings();
+                su.plan();
+            }
+            Act::FirmaFormatMenu => {
+                let items = ["Automatico: PDF in PDF firmato, gli altri in .p7m", "Tutto in .p7m", "Tutto in PDF firmato"].iter().enumerate().map(|(k, t)| (t.to_string(), Act::FirmaMenuPick(0, k as u8))).collect();
+                let sel = Some(self.app.firma.sign.s.firma_format.min(2) as usize);
+                self.open_menu(items, sel, &Act::FirmaFormatMenu);
+            }
+            Act::FirmaImageMenu => {
+                let has = !self.app.firma.sign.s.firma_image.trim().is_empty();
+                let items = vec![("Niente".to_string(), Act::FirmaMenuPick(1, 0)), ("Scegli un'immagine (PNG o JPG)…".to_string(), Act::FirmaMenuPick(1, 1))];
+                self.open_menu(items, Some(has as usize), &Act::FirmaImageMenu);
+            }
+            Act::FirmaCornerMenu => {
+                let items = ["Ultima pagina, in basso a destra", "Ultima pagina, in basso a sinistra", "Prima pagina, in basso a destra"].iter().enumerate().map(|(k, t)| (t.to_string(), Act::FirmaMenuPick(2, k as u8))).collect();
+                let sel = Some(self.app.firma.sign.s.firma_corner.min(2) as usize);
+                self.open_menu(items, sel, &Act::FirmaCornerMenu);
+            }
+            Act::FirmaDriver => {
+                if self.app.firma.sign.s.firma_driver.trim().is_empty() {
+                    let Some(p) = plat.pick_files().into_iter().next() else { return };
+                    self.app.firma.sign.s.firma_driver = p.to_string_lossy().into_owned();
+                } else {
+                    self.app.firma.sign.s.firma_driver.clear();
+                }
+                let su = &mut self.app.firma.sign;
+                su.save_settings();
+                su.scan(wake);
+            }
+            Act::FirmaMenuPick(menu, k) => {
+                match (menu, k) {
+                    (0, k) => self.app.firma.sign.s.firma_format = k.min(2),
+                    (1, 0) => self.app.firma.sign.s.firma_image.clear(),
+                    (1, _) => {
+                        let Some(p) = plat.pick_files().into_iter().next() else { return };
+                        let ok = image::open(&p).is_ok();
+                        if !ok {
+                            self.notify("Questa non è un'immagine che so leggere: scegli un PNG o un JPG.", true);
+                            return;
+                        }
+                        self.app.firma.sign.s.firma_image = p.to_string_lossy().into_owned();
+                    }
+                    (_, k) => self.app.firma.sign.s.firma_corner = k.min(2),
+                }
+                let su = &mut self.app.firma.sign;
+                su.save_settings();
+                su.plan();
+            }
             _ => {}
         }
     }
@@ -1374,6 +1715,22 @@ impl Screen {
             Field::Review(i) => self.app.review.as_ref().and_then(|r| r.rows.get(i)).map(|r| r.text.clone()).unwrap_or_default(),
             Field::VoiceName(v) => self.app.review.as_ref().and_then(|r| r.names.get(v as usize)).cloned().unwrap_or_default(),
             Field::FirmaDate => self.app.firma.viewer.as_ref().map(|v| v.at_text.clone()).unwrap_or_default(),
+            Field::FirmaPin => self.app.firma.sign.pin.clone(),
+            Field::FirmaReason => self.app.firma.sign.s.firma_reason.clone(),
+            Field::FirmaLocation => self.app.firma.sign.s.firma_location.clone(),
+            Field::FirmaSuffix => self.app.firma.sign.s.firma_suffix.clone(),
+            Field::FirmaDlg(k) => self
+                .app
+                .firma
+                .sign
+                .dialog
+                .as_ref()
+                .map(|d| match k {
+                    0 => d.old.clone(),
+                    1 => d.new.clone(),
+                    _ => d.again.clone(),
+                })
+                .unwrap_or_default(),
         }
     }
 
@@ -1407,6 +1764,31 @@ impl Screen {
                 if let Some(v) = self.app.firma.viewer.as_mut() {
                     v.at_text = text;
                     v.at_error = false;
+                }
+            }
+            Field::FirmaPin => {
+                let su = &mut self.app.firma.sign;
+                su.pin = text;
+                su.error = None;
+            }
+            Field::FirmaReason | Field::FirmaLocation | Field::FirmaSuffix => {
+                let su = &mut self.app.firma.sign;
+                match field {
+                    Field::FirmaReason => su.s.firma_reason = text,
+                    Field::FirmaLocation => su.s.firma_location = text,
+                    _ => su.s.firma_suffix = text.trim().to_string(),
+                }
+                su.save_settings();
+                su.plan();
+            }
+            Field::FirmaDlg(k) => {
+                if let Some(d) = self.app.firma.sign.dialog.as_mut() {
+                    match k {
+                        0 => d.old = text,
+                        1 => d.new = text,
+                        _ => d.again = text,
+                    }
+                    d.error = None;
                 }
             }
         }
@@ -1494,7 +1876,9 @@ impl Screen {
                     return true;
                 }
                 Key::Copy => {
-                    plat.copy_text(&chars.iter().collect::<String>());
+                    if !secret(field) {
+                        plat.copy_text(&chars.iter().collect::<String>());
+                    }
                     return true;
                 }
                 Key::SelectAll => {
@@ -1509,6 +1893,12 @@ impl Screen {
                     }
                     if field == Field::FirmaDate {
                         self.firma_at_apply();
+                    }
+                    if field == Field::FirmaPin {
+                        self.act(Act::FirmaGo, plat);
+                    }
+                    if matches!(field, Field::FirmaDlg(_)) {
+                        self.act(Act::FirmaDlgGo, plat);
                     }
                     return true;
                 }
@@ -1626,6 +2016,11 @@ impl Screen {
     }
 }
 
+/// I campi del PIN e del PUK: non si copiano negli appunti.
+fn secret(field: Field) -> bool {
+    matches!(field, Field::FirmaPin | Field::FirmaDlg(_))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1654,6 +2049,132 @@ mod tests {
         fn toggle_maximize(&mut self) {}
         fn close(&mut self) {}
         fn open_full(&mut self) {}
+    }
+
+    /// «Firma documenti», «Chiavetta e certificati» e «Opzioni»: si disegnano in tutti i temi, i passi
+    /// vanno avanti solo quando possono e il riquadro della firma si trascina. Con CEDRO_UI_SHOTS=cartella
+    /// salva le schermate (per confrontarle con l'anteprima approvata).
+    #[test]
+    fn firma_sign_pages_draw() {
+        use crate::firma::pkcs11::{DevCert, DevKind, Device, PinState};
+        use super::super::firmare::{Page, State};
+        let dir = crate::engine::private_temp_dir("cedro-prova-firma-ui").unwrap();
+        let pdf = dir.join("Determina_412_2026.pdf");
+        std::fs::write(&pdf, crate::firma::pades_firma::tests::blank_pdf(false)).unwrap();
+        let doc = dir.join("Lettera_risposta_prot_8841.txt");
+        std::fs::write(&doc, "Gentile signora, in risposta alla sua richiesta…").unwrap();
+        let key = p256::ecdsa::SigningKey::from_bytes(&[7u8; 32].into()).unwrap();
+        let der = crate::firma::firmare::self_signed("MARIO ROSSI", &key);
+        let cert = crate::firma::cert::Cert::parse(&der).unwrap();
+        let dev = Device {
+            driver: PathBuf::from("libbit4xpki.so"),
+            slot: 0,
+            kind: DevKind::UsbKey,
+            label: "ArubaKey".into(),
+            manufacturer: "bit4id".into(),
+            model: "Aruba Key".into(),
+            serial: "1234".into(),
+            reader: "bit4id miniLector".into(),
+            certs: vec![DevCert { der, cert, id: vec![1], label: "Firma".into(), has_key: true, signing: true }],
+            pin: PinState { min_len: 5, max_len: 8, ..Default::default() },
+        };
+        let shots = std::env::var_os("CEDRO_UI_SHOTS").map(PathBuf::from);
+        let mut plat = Fake { clip: String::new() };
+        // Un clic sul controllo, se è disegnato nella finestra (se no è sotto: si fa l'azione).
+        let click = |s: &mut Screen, act: &Act, plat: &mut Fake| {
+            let _ = s.render(1440, 940, 1.0);
+            if !s.hits.iter().any(|h| &h.act == act) {
+                // Sotto: si scorre in fondo alla pagina.
+                s.ui.scroll.insert(Scroll::FirmaSign, 10_000.0);
+                let _ = s.render(1440, 940, 1.0);
+                let _ = s.render(1440, 940, 1.0);
+            }
+            match s.hits.iter().rev().find(|h| &h.act == act).map(|h| h.r) {
+                Some(r) if r.1 + r.3 / 2.0 < 930.0 => {
+                    let (x, y) = (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0);
+                    s.pointer_down(x, y);
+                    s.pointer_up(x, y, plat);
+                }
+                Some(_) => s.act(act.clone(), plat),
+                None => panic!("non disegnato: {act:?}"),
+            }
+        };
+        for theme in super::super::theme::THEMES {
+            let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+            s.request_appearance(theme, false);
+            s.app.activity = Activity::Firma;
+            let su = &mut s.app.firma.sign;
+            su.scanned_once = true;
+            su.devices = vec![dev.clone()];
+            let shot = |s: &mut Screen, name: &str| {
+                let (w, h) = (1440u32, 940u32);
+                let p = s.render(w, h, 1.0);
+                if let Some(d) = &shots {
+                    p.save_png(&d.join(format!("{theme:?}-{name}.png"))).unwrap();
+                }
+            };
+            shot(&mut s, "0-inizio");
+            click(&mut s, &Act::FirmaPage(1), &mut plat);
+            assert_eq!(s.app.firma.sign.page, Page::Sign);
+            // Senza file non si va avanti (il pulsante è spento, e anche l'azione non fa niente).
+            s.act(Act::FirmaStep(2), &mut plat);
+            assert_eq!(s.app.firma.sign.step, 1);
+            s.drop_files(vec![pdf.clone(), doc.clone()]);
+            assert_eq!(s.app.firma.sign.files.len(), 2);
+            shot(&mut s, "1-file");
+            click(&mut s, &Act::FirmaStep(2), &mut plat);
+            assert_eq!(s.app.firma.sign.step, 2);
+            // Prima che arrivi l'anteprima della pagina si aspetta un poco (la prepara un thread).
+            for _ in 0..50 {
+                let _ = s.render(1440, 940, 1.0);
+                s.pump();
+                if s.app.previews.get(&(pdf.clone(), 0)).is_some_and(|i| i.is_some()) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            shot(&mut s, "2-come");
+            click(&mut s, &Act::FirmaPlace(1), &mut plat);
+            let _ = s.render(1440, 940, 1.0);
+            let r = s.hits.iter().find(|h| h.act == Act::FirmaBox).map(|h| h.r).expect("la pagina si trascina");
+            s.pointer_down(r.0 + r.2 * 0.3, r.1 + r.3 * 0.2);
+            s.pointer_move(r.0 + r.2 * 0.4, r.1 + r.3 * 0.25);
+            s.pointer_up(r.0 + r.2 * 0.4, r.1 + r.3 * 0.25, &mut plat);
+            let (cx, cy) = s.app.firma.sign.box_center;
+            assert!((cx - 0.4).abs() < 0.01 && (cy - 0.25).abs() < 0.01, "{cx} {cy}");
+            shot(&mut s, "2-come-trascinata");
+            click(&mut s, &Act::FirmaMore, &mut plat);
+            shot(&mut s, "2-altre-opzioni");
+            click(&mut s, &Act::FirmaStep(3), &mut plat);
+            assert_eq!(s.app.firma.sign.step, 3);
+            assert_eq!(s.ui.edit, Some(Field::FirmaPin));
+            s.text_input("12345");
+            assert_eq!(s.app.firma.sign.pin, "12345");
+            // Il PIN non va negli appunti.
+            s.key(Key::Copy, &mut plat);
+            assert!(plat.clip.is_empty());
+            shot(&mut s, "3-pin");
+            {
+                let su = &mut s.app.firma.sign;
+                su.pin.clear();
+                for f in &mut su.files {
+                    f.state = State::Done { at: crate::firma::now(), signers: vec!["MARIO ROSSI".into()] };
+                }
+                su.step = 4;
+            }
+            shot(&mut s, "4-fatto");
+            click(&mut s, &Act::FirmaPage(0), &mut plat);
+            assert!(s.app.firma.sign.files.is_empty());
+            click(&mut s, &Act::FirmaPage(2), &mut plat);
+            shot(&mut s, "5-chiavetta");
+            click(&mut s, &Act::FirmaDlg(0), &mut plat);
+            shot(&mut s, "5-cambia-pin");
+            click(&mut s, &Act::FirmaDlgClose, &mut plat);
+            click(&mut s, &Act::FirmaPage(0), &mut plat);
+            click(&mut s, &Act::FirmaPage(3), &mut plat);
+            shot(&mut s, "6-opzioni");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn centre_of(s: &Screen, act: &Act) -> (f32, f32) {
