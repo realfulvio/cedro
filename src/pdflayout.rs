@@ -1075,6 +1075,39 @@ fn merge_touching(items: impl Iterator<Item = ([f64; 4], bool)>, page: (f64, f64
     clusters.into_iter().map(|(c, _)| c).collect()
 }
 
+/// Un colore chiaro, che su carta bianca quasi non si legge.
+fn light(c: [u8; 3]) -> bool {
+    0.2126 * c[0] as f64 + 0.7152 * c[1] as f64 + 0.0722 * c[2] as f64 > 185.0
+}
+
+/// Una riga di frase: almeno quattro parole di due o più lettere, e soprattutto lettere.
+fn prose_line(text: &str) -> bool {
+    let words = text.split(|c: char| !c.is_alphabetic()).filter(|w| w.chars().count() >= 2).count();
+    let letters = text.chars().filter(|c| c.is_alphabetic()).count();
+    let visible = text.chars().filter(|c| !c.is_whitespace()).count();
+    words >= 4 && letters * 10 >= visible * 6
+}
+
+/// Il gruppo di disegni è il fondo di un blocco di testo (una scheda, una fascia col titolo), non un
+/// grafico: dentro ci sono frasi (almeno due, o una che fa metà delle scritte) e nessuna immagine
+/// incorporata. I grafici hanno etichette brevi e numeri, che restano parte dell'immagine.
+fn text_box(f: &Figure, glyphs: &[Glyph], pics: &[Pic]) -> bool {
+    let overlaps = |p: &Pic| p.x1 - p.x0 >= 20.0 && p.y1 - p.y0 >= 20.0 && p.x0 < f.x1 && p.x1 > f.x0 && p.y0 < f.y1 && p.y1 > f.y0;
+    if pics.iter().any(overlaps) {
+        return false;
+    }
+    let inside: Vec<Glyph> = glyphs.iter().filter(|g| g.x >= f.x0 && g.x <= f.x1 && g.y >= f.y0 && g.y <= f.y1).cloned().collect();
+    if inside.is_empty() {
+        return false;
+    }
+    let texts: Vec<String> = group_lines(inside, 2.0).iter().map(|l| l.text()).collect();
+    let count = |t: &String| t.chars().filter(|c| !c.is_whitespace()).count();
+    let total: usize = texts.iter().map(count).sum();
+    let prose: Vec<&String> = texts.iter().filter(|t| prose_line(t)).collect();
+    let prose_chars: usize = prose.iter().map(|t| count(t)).sum();
+    prose.len() >= 2 || (prose.len() == 1 && prose_chars * 2 >= total)
+}
+
 /// Le scritte attaccate a un grafico (valori degli assi, etichette) fanno parte del grafico.
 fn absorb_labels(figs: &mut [Figure], glyphs: &[Glyph], body: f64) {
     if figs.is_empty() {
@@ -1630,6 +1663,23 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
         let mut figures = find_figures(if read.tables { &shapes[..] } else { &[] }, &pics, &tables, (w, h));
         let page_body = median(glyphs.iter().map(|g| g.size).collect());
         absorb_labels(&mut figures, &glyphs, page_body);
+        // Un riquadro colorato con frasi dentro (schede, intestazioni) è uno sfondo, non un grafico:
+        // il testo resta testo, invece di finire nell'immagine.
+        let (boxes, kept): (Vec<Figure>, Vec<Figure>) = figures.into_iter().partition(|f| text_box(f, &glyphs, &pics));
+        figures = kept;
+        // Il testo chiaro stava sul fondo scuro della scheda: in Word, su carta bianca, non si
+        // leggerebbe. Prende il colore del fondo (o il nero se il fondo è chiaro anche lui).
+        for g in glyphs.iter_mut().filter(|g| light(g.color) && boxes.iter().any(|f| g.x >= f.x0 && g.x <= f.x1 && g.y >= f.y0 && g.y <= f.y1)) {
+            let under = shapes
+                .iter()
+                .filter(|s| s.x0 <= g.x && g.x <= s.x1 && s.y0 <= g.y && g.y <= s.y1)
+                .filter_map(|s| s.fill.map(|c| (c, (s.x1 - s.x0) * (s.y1 - s.y0))))
+                .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+            g.color = match under {
+                Some((c, _)) if !light(c) => c,
+                _ => [0, 0, 0],
+            };
+        }
         // Il testo dentro una figura fa parte dell'immagine.
         glyphs.retain(|g| !figures.iter().any(|f| g.x >= f.x0 && g.x <= f.x1 && g.y >= f.y0 && g.y <= f.y1));
         for g in &glyphs {
