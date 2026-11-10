@@ -412,6 +412,8 @@ pub struct App {
     pub media: HashMap<PathBuf, media::Loaded>,
     /// Pagine dei documenti già disegnate per l'anteprima: (file, pagina) → immagine.
     pub previews: HashMap<(PathBuf, usize), Option<Image>>,
+    /// Le pagine dell'anteprima che non si sono potute disegnare (niente rotellina che gira per sempre).
+    pub previews_failed: std::collections::HashSet<(PathBuf, usize)>,
     /// La pagina dell'anteprima del documento.
     pub preview_page: usize,
     /// Il file audio o video che suona nell'anteprima (tasto Play).
@@ -495,6 +497,7 @@ impl App {
             ask: None,
             media: HashMap::new(),
             previews: HashMap::new(),
+            previews_failed: Default::default(),
             preview_page: 0,
             player: None,
             media_scrub: None,
@@ -1191,8 +1194,16 @@ impl App {
                     self.previews.remove(&k);
                 }
             }
+            let previews = &self.previews;
+            self.previews_failed.retain(|k| previews.contains_key(k));
             self.loader.preview(path, page);
         }
+    }
+
+    /// Vero mentre la pagina dell'anteprima è chiesta e non ancora arrivata (falso se non si è potuta disegnare).
+    pub fn preview_loading(&self, path: &Path, page: usize) -> bool {
+        let key = (path.to_path_buf(), page);
+        matches!(self.previews.get(&key), Some(None)) && !self.previews_failed.contains(&key)
     }
 
     /// Il testo dell'errore se le scelte scritte a mano non vanno (per esempio le pagine).
@@ -1752,7 +1763,11 @@ impl App {
                     self.media.insert(path, loaded);
                 }
                 Event::Preview(path, page, img) => {
-                    if let Some(slot) = self.previews.get_mut(&(path, page)) {
+                    let key = (path, page);
+                    if let Some(slot) = self.previews.get_mut(&key) {
+                        if img.is_none() {
+                            self.previews_failed.insert(key);
+                        }
                         *slot = img;
                     }
                 }
@@ -1926,5 +1941,21 @@ mod tests {
         assert!(!app.busy());
         assert_eq!(app.files[0].state, FileState::Failed);
         assert!(app.notice.as_ref().is_some_and(|n| n.error));
+    }
+
+    #[test]
+    fn a_page_that_cannot_be_drawn_stops_loading() {
+        use super::*;
+        let mut app = App::new(Arc::new(|| {}));
+        let path = PathBuf::from("/non/esiste/rotto.pdf");
+        app.want_preview(&path, 0);
+        assert!(app.preview_loading(&path, 0));
+        app.tx.send(Event::Preview(path.clone(), 0, None)).unwrap();
+        app.pump();
+        assert!(!app.preview_loading(&path, 0), "la rotellina girerebbe per sempre");
+        // Un'altra pagina chiesta dopo: la prima si potrà richiedere di nuovo.
+        app.want_preview(&path, 1);
+        assert!(app.preview_loading(&path, 1));
+        assert!(!app.previews_failed.contains(&(path.clone(), 0)) || app.previews.contains_key(&(path.clone(), 0)));
     }
 }
