@@ -1075,6 +1075,39 @@ fn merge_touching(items: impl Iterator<Item = ([f64; 4], bool)>, page: (f64, f64
     clusters.into_iter().map(|(c, _)| c).collect()
 }
 
+/// Un colore chiaro, che su carta bianca quasi non si legge.
+fn light(c: [u8; 3]) -> bool {
+    0.2126 * c[0] as f64 + 0.7152 * c[1] as f64 + 0.0722 * c[2] as f64 > 185.0
+}
+
+/// Una riga di frase: almeno quattro parole di due o più lettere, e soprattutto lettere.
+fn prose_line(text: &str) -> bool {
+    let words = text.split(|c: char| !c.is_alphabetic()).filter(|w| w.chars().count() >= 2).count();
+    let letters = text.chars().filter(|c| c.is_alphabetic()).count();
+    let visible = text.chars().filter(|c| !c.is_whitespace()).count();
+    words >= 4 && letters * 10 >= visible * 6
+}
+
+/// Il gruppo di disegni è il fondo di un blocco di testo (una scheda, una fascia col titolo), non un
+/// grafico: dentro ci sono frasi (almeno due, o una che fa metà delle scritte) e nessuna immagine
+/// incorporata. I grafici hanno etichette brevi e numeri, che restano parte dell'immagine.
+fn text_box(f: &Figure, glyphs: &[Glyph], pics: &[Pic]) -> bool {
+    let overlaps = |p: &Pic| p.x1 - p.x0 >= 20.0 && p.y1 - p.y0 >= 20.0 && p.x0 < f.x1 && p.x1 > f.x0 && p.y0 < f.y1 && p.y1 > f.y0;
+    if pics.iter().any(overlaps) {
+        return false;
+    }
+    let inside: Vec<Glyph> = glyphs.iter().filter(|g| g.x >= f.x0 && g.x <= f.x1 && g.y >= f.y0 && g.y <= f.y1).cloned().collect();
+    if inside.is_empty() {
+        return false;
+    }
+    let texts: Vec<String> = group_lines(inside, 2.0).iter().map(|l| l.text()).collect();
+    let count = |t: &String| t.chars().filter(|c| !c.is_whitespace()).count();
+    let total: usize = texts.iter().map(count).sum();
+    let prose: Vec<&String> = texts.iter().filter(|t| prose_line(t)).collect();
+    let prose_chars: usize = prose.iter().map(|t| count(t)).sum();
+    prose.len() >= 2 || (prose.len() == 1 && prose_chars * 2 >= total)
+}
+
 /// Le scritte attaccate a un grafico (valori degli assi, etichette) fanno parte del grafico.
 fn absorb_labels(figs: &mut [Figure], glyphs: &[Glyph], body: f64) {
     if figs.is_empty() {
@@ -1630,6 +1663,23 @@ pub fn read_pages(bytes: &[u8], read: &ReadOptions, want: impl Fn(usize) -> bool
         let mut figures = find_figures(if read.tables { &shapes[..] } else { &[] }, &pics, &tables, (w, h));
         let page_body = median(glyphs.iter().map(|g| g.size).collect());
         absorb_labels(&mut figures, &glyphs, page_body);
+        // Un riquadro colorato con frasi dentro (schede, intestazioni) è uno sfondo, non un grafico:
+        // il testo resta testo, invece di finire nell'immagine.
+        let (boxes, kept): (Vec<Figure>, Vec<Figure>) = figures.into_iter().partition(|f| text_box(f, &glyphs, &pics));
+        figures = kept;
+        // Il testo chiaro stava sul fondo scuro della scheda: in Word, su carta bianca, non si
+        // leggerebbe. Prende il colore del fondo (o il nero se il fondo è chiaro anche lui).
+        for g in glyphs.iter_mut().filter(|g| light(g.color) && boxes.iter().any(|f| g.x >= f.x0 && g.x <= f.x1 && g.y >= f.y0 && g.y <= f.y1)) {
+            let under = shapes
+                .iter()
+                .filter(|s| s.x0 <= g.x && g.x <= s.x1 && s.y0 <= g.y && g.y <= s.y1)
+                .filter_map(|s| s.fill.map(|c| (c, (s.x1 - s.x0) * (s.y1 - s.y0))))
+                .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+            g.color = match under {
+                Some((c, _)) if !light(c) => c,
+                _ => [0, 0, 0],
+            };
+        }
         // Il testo dentro una figura fa parte dell'immagine.
         glyphs.retain(|g| !figures.iter().any(|f| g.x >= f.x0 && g.x <= f.x1 && g.y >= f.y0 && g.y <= f.y1));
         for g in &glyphs {
@@ -3336,6 +3386,93 @@ mod tests {
             let slow = merge_by_scanning(&items);
             assert_eq!(format!("{fast:?}"), format!("{slow:?}"), "n = {n}");
         }
+    }
+
+    fn glyphs_of(lines: &[(&str, f64)], x: f64, size: f64) -> Vec<Glyph> {
+        let mut out = Vec::new();
+        for (text, y) in lines {
+            for (k, ch) in text.chars().enumerate() {
+                out.push(Glyph {
+                    text: ch.to_string(),
+                    x: x + k as f64 * size * 0.5,
+                    y: *y,
+                    size,
+                    adv: size * 0.5,
+                    stretch: 100,
+                    color: [255, 255, 255],
+                    bold: false,
+                    italic: false,
+                    font: "Helvetica".into(),
+                    font_key: None,
+                });
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_card_with_sentences_is_a_text_box_and_a_chart_with_labels_is_not() {
+        let card = Figure { x0: 40.0, y0: 100.0, x1: 300.0, y1: 300.0 };
+        let sentences = glyphs_of(&[("Umido organico", 120.0), ("Contenitore marrone da 25 litri con microchip.", 160.0), ("Sacchetti compostabili ben chiusi dentro il contenitore.", 180.0)], 50.0, 8.0);
+        assert!(text_box(&card, &sentences, &[]));
+        // Una sola frase che è quasi tutto il testo: la fascia col titolo e il sottotitolo.
+        let band = glyphs_of(&[("Ottobre 2026", 130.0), ("Calendario giorno per giorno della zona", 160.0)], 50.0, 8.0);
+        assert!(text_box(&card, &band, &[]));
+        // Un grafico: etichette brevi e numeri, che restano parte dell'immagine.
+        let chart = glyphs_of(&[("40", 120.0), ("30", 140.0), ("Gen Feb Mar Apr", 280.0), ("Number of Splits", 290.0)], 50.0, 8.0);
+        assert!(!text_box(&card, &chart, &[]));
+        // Con un'immagine incorporata dentro resta una figura, anche se ha frasi.
+        let photo = Pic { x0: 60.0, y0: 200.0, x1: 200.0, y1: 290.0, order: 0 };
+        assert!(!text_box(&card, &sentences, &[photo]));
+    }
+
+    /// Un PDF di una pagina con il contenuto dato (Helvetica come /F1).
+    fn one_page_pdf(content: &str) -> Vec<u8> {
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>".to_string(),
+            format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len() + 1),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
+        ];
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut offsets = Vec::new();
+        for (i, o) in objects.iter().enumerate() {
+            offsets.push(pdf.len());
+            pdf.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+        }
+        let xref = pdf.len();
+        pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+        for o in offsets {
+            pdf.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+        pdf
+    }
+
+    #[test]
+    fn the_sentences_of_a_coloured_card_stay_text_in_word_and_can_be_read() {
+        // Una scheda: fondo verde scuro, fascia del titolo e tre bollini che si toccano (cinque disegni),
+        // con il testo bianco sopra; sotto, un paragrafo normale.
+        let mut c = String::from("0.05 0.35 0.25 rg 40 500 260 200 re f 0.02 0.25 0.18 rg 40 670 260 30 re f ");
+        c.push_str("0.9 0.6 0.1 rg 260 675 10 10 re f 272 675 10 10 re f 284 675 10 10 re f ");
+        c.push_str("1 1 1 rg BT /F1 12 Tf 50 680 Td (Umido organico) Tj ET ");
+        c.push_str("BT /F1 9 Tf 50 640 Td (Contenitore marrone da venticinque litri con microchip.) Tj ET ");
+        c.push_str("BT /F1 9 Tf 50 625 Td (Sacchetti compostabili ben chiusi dentro il contenitore.) Tj ET ");
+        c.push_str("0 0 0 rg BT /F1 10 Tf 40 450 Td (Il calendario vale per tutta la zona del capoluogo.) Tj ET");
+        let pages = read_pages(&one_page_pdf(&c), &ReadOptions::default(), |_| true).unwrap();
+        let docx = docx(&pages, |_| String::new());
+        let dir = std::env::temp_dir().join(format!("cedro-scheda-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("scheda.docx");
+        std::fs::write(&path, docx).unwrap();
+        let document = crate::doctext::zip_entry_for_test(&path, "word/document.xml");
+        let _ = std::fs::remove_dir_all(dir);
+        for words in ["Umido organico", "venticinque litri con microchip", "compostabili ben chiusi", "tutta la zona"] {
+            assert!(document.contains(words), "manca «{words}»: {document}");
+        }
+        // Il testo bianco della scheda non resta bianco su carta bianca.
+        assert!(!document.contains("FFFFFF"), "{document}");
     }
 
     #[test]
