@@ -691,6 +691,15 @@ fn pdf(cx: &mut Ctx, data: &[u8], layer: usize, outer: Option<Proof>) {
                 }
             }
         }
+        if !ps.hole_is_contents(data) {
+            // Oggetti nascosti nel buco della firma: quello che si vede può non essere quello firmato.
+            if let Some(c) = s.checks.iter_mut().find(|c| c.what == "Documento") {
+                c.level = Level::Bad;
+                c.text = "la firma non copre tutto il file".into();
+            }
+            let rest = if s.why.starts_with("Il certificato era valido") { String::new() } else { s.why.clone() };
+            s.why = format!("La firma non copre tutto il file: una parte del PDF può essere stata cambiata dopo la firma senza che si veda. {rest}").trim().to_string();
+        }
         if !matches!(after, pades::After::Nothing) {
             s.revision_end = Some(ps.end());
         }
