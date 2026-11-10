@@ -11,6 +11,8 @@ use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, Track, TrackType};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
+use symphonia::core::packet::Packet;
+use symphonia::core::units::TimeBase;
 
 pub(crate) use symphonia::core::codecs::audio::well_known::CODEC_ID_OPUS;
 
@@ -70,6 +72,18 @@ pub(crate) fn rate_channels(decoded: &GenericAudioBufferRef<'_>) -> (u32, u16) {
     (spec.rate(), spec.channels().count() as u16)
 }
 
+/// Il silenzio al posto di un pacchetto audio rovinato che il decodificatore ha saltato: senza, tutto l'audio
+/// dopo arriverebbe in anticipo sul video (21 ms per ogni pacchetto AAC perso). Vuoto se la durata del
+/// pacchetto non si sa o non è credibile (oltre 10 secondi).
+pub(crate) fn silence_for(packet: &Packet, time_base: Option<TimeBase>, rate: u32, channels: u16) -> Vec<i16> {
+    let Some(base) = time_base else { return Vec::new() };
+    let frames = u128::from(packet.dur.get()) * u128::from(base.numer.get()) * u128::from(rate) / u128::from(base.denom.get());
+    if frames == 0 || frames > u128::from(rate) * 10 {
+        return Vec::new();
+    }
+    vec![0; frames as usize * channels.max(1) as usize]
+}
+
 /// La durata di una traccia in secondi, se il contenitore la dice.
 pub(crate) fn track_secs(track: &Track) -> Option<f64> {
     let base = track.time_base?;
@@ -91,4 +105,20 @@ pub(crate) fn media_secs(format: &dyn FormatReader) -> Option<f64> {
     let longest = format.tracks().iter().filter_map(track_secs).fold(None, |m: Option<f64>, s| Some(m.map_or(s, |m| m.max(s))));
     let secs = whole.into_iter().chain(longest).fold(0.0, f64::max);
     (secs > 0.0).then_some(secs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::num::NonZero;
+
+    #[test]
+    fn silence_matches_the_lost_packet() {
+        let packet = Packet::new(1, 0.into(), symphonia::core::units::Duration::new(1024), Vec::new());
+        let base = TimeBase { numer: NonZero::new(1).unwrap(), denom: NonZero::new(44_100).unwrap() };
+        assert_eq!(silence_for(&packet, Some(base), 44_100, 2).len(), 2048);
+        assert!(silence_for(&packet, None, 44_100, 2).is_empty());
+        let zero = Packet::new(1, 0.into(), symphonia::core::units::Duration::new(0), Vec::new());
+        assert!(silence_for(&zero, Some(base), 44_100, 2).is_empty());
+    }
 }
