@@ -681,6 +681,7 @@ fn ensure_model(index: usize, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Resu
     let path = dir.join(model.file);
     let sidecar = dir.join(format!("{}.sha256", model.file));
     let have = std::fs::read_to_string(&sidecar).ok().map(|s| s.trim().to_lowercase()).filter(|_| path.is_file());
+    let updating = have.is_some();
     match have {
         Some(local) => {
             // Un controllo veloce: senza internet si usa quello che c'è.
@@ -698,7 +699,16 @@ fn ensure_model(index: usize, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Resu
     }
     let expected = published_model_sha(model, Duration::from_secs(20));
     let url = format!("{MODEL_BASE_URL}{}", model.file);
-    let sha = fetch(&url, &path, expected.as_deref(), model.megabytes, "il modello", sink, cancel)?;
+    let sha = match fetch(&url, &path, expected.as_deref(), model.megabytes, "il modello", sink, cancel) {
+        Ok(sha) => sha,
+        // La versione nuova non è arrivata (rete che cade, disco pieno): quella di prima è intatta, perché si
+        // scarica nel .part, e si usa; la prossima volta il download riparte da dove era arrivato.
+        Err(e) if e != CANCELLED && updating && path.is_file() => {
+            log(sink, Tone::Note, "Modello", format!("versione nuova non scaricata ({e}): uso quella che c'è"));
+            return Ok(path);
+        }
+        Err(e) => return Err(e),
+    };
     std::fs::write(&sidecar, &sha).map_err(|e| format!("{} non scritto: {e}", sidecar.display()))?;
     log(sink, Tone::Step, "Modello", format!("«{}» scaricato e controllato", model.name));
     forget_old_models();
@@ -1521,6 +1531,11 @@ enum Outcome {
 
 /// Trascrive un file con il motore già acceso, raccontando i passi.
 fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Outcome {
+    // Il percorso va al motore in JSON, cioè in UTF-8: un nome con byte non validi (Linux) arriverebbe storpiato
+    // e il file «non si apre». Lo si fa leggere al sistema, che riceve il percorso com'è, in un WAV dal nome semplice.
+    if path.to_str().is_none() {
+        return Outcome::Unsupported("nome del file non in UTF-8".into());
+    }
     let mut request = serde_json::json!({"file": path.to_string_lossy(), "lang": "auto"});
     if speakers != 1 {
         request["speakers"] = speakers.into();
@@ -1853,7 +1868,13 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                     Format::Text => text_bytes(path, secs, &lang, &segments, &names),
                 };
                 std::fs::create_dir_all(&dir)
-                    .and_then(|_| std::fs::write(&out, bytes))
+                    .and_then(|_| {
+                        // Un file scritto a metà (disco pieno) non deve restare: con «Salta» la prossima volta
+                        // verrebbe saltato come se la trascrizione ci fosse già.
+                        std::fs::write(&out, bytes).inspect_err(|_| {
+                            let _ = std::fs::remove_file(&out);
+                        })
+                    })
                     .map(|_| {
                         let file = out.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
                         log(sink, Tone::Step, "Salvato", file.clone());
