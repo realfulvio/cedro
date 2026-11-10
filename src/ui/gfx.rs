@@ -462,6 +462,9 @@ fn maschera_per<'m>(clips: &'m [(Rect, std::rc::Rc<Mask>)], b: Rect, tf: Transfo
 /// Un'immagine preparata: quale (indirizzo dei pixel), misura in pixel, raggio in pixel, adattamento.
 type ChiaveImg = (usize, u32, u32, u32, bool);
 
+/// Il peso massimo delle immagini preparate tenute fra un fotogramma e l'altro.
+const IMMAGINI_MAX_BYTE: usize = 96 << 20;
+
 /// I glifi già disegnati: si tiene fra un fotogramma e l'altro.
 #[derive(Default)]
 pub struct GlyphCache {
@@ -504,11 +507,22 @@ impl GlyphCache {
     fn nuovo_fotogramma(&mut self) {
         self.fotogramma += 1;
         let f = self.fotogramma;
-        if self.immagini.len() > 48 {
+        // Anche a peso: ogni misura nuova (finestra che si ridimensiona, zoom, pagine sfogliate) è una voce
+        // fino a 16 MB, e sotto le 48 voci restavano tutte, centinaia di MB mai restituiti.
+        let peso = |m: &HashMap<ChiaveImg, (Arc<Pixmap>, Arc<Pixmap>, u64)>| m.values().map(|(_, pm, _)| pm.data().len()).sum::<usize>();
+        if self.immagini.len() > 48 || peso(&self.immagini) > IMMAGINI_MAX_BYTE {
             self.immagini.retain(|_, (_, _, u)| f - *u < 30);
+            if peso(&self.immagini) > IMMAGINI_MAX_BYTE {
+                self.immagini.retain(|_, (_, _, u)| f - *u <= 1);
+            }
         }
+        // Le maschere sono grandi quanto la finestra: ridimensionandola ne nasce una serie a ogni misura.
+        let peso_m = |m: &HashMap<(i32, i32, i32, i32, u32, u32), (std::rc::Rc<Mask>, u64)>| m.values().map(|(mk, _)| mk.data().len()).sum::<usize>();
         if self.maschere.len() > 16 {
             self.maschere.retain(|_, (_, u)| f - *u < 30);
+            if peso_m(&self.maschere) > IMMAGINI_MAX_BYTE {
+                self.maschere.retain(|_, (_, u)| f - *u <= 1);
+            }
         }
     }
 }
@@ -1468,6 +1482,22 @@ mod tests {
         p.image(&img, 80.0, 80.0, 40.0, 40.0, 0.0, Fit::Cover);
         p.image(&img, 70.0, 10.0, 60.0, 30.0, 4.0, Fit::Contain);
         assert_ne!(&p.pixmap.data()[(99 * 100 + 99) * 4..][..3], &[255, 255, 255]);
+    }
+
+    #[test]
+    fn le_immagini_preparate_non_crescono_senza_limite() {
+        // Venti misure diverse di una pagina grande (finestra che si ridimensiona): 4 MB l'una.
+        let mut cache = GlyphCache::new();
+        let orig = Arc::new(Pixmap::new(1, 1).unwrap());
+        for i in 0..40u32 {
+            cache.nuovo_fotogramma();
+            let f = cache.fotogramma;
+            cache.immagini.insert((0, 1000 + i, 1000, 0, false), (orig.clone(), Arc::new(Pixmap::new(1000 + i, 1000).unwrap()), f));
+        }
+        cache.nuovo_fotogramma();
+        let peso: usize = cache.immagini.values().map(|(_, pm, _)| pm.data().len()).sum();
+        assert!(peso <= IMMAGINI_MAX_BYTE, "{} MB tenuti", peso >> 20);
+        assert!(!cache.immagini.is_empty(), "quella dell'ultimo fotogramma resta");
     }
 
     #[test]
