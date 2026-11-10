@@ -2657,6 +2657,19 @@ Luca,Bondeno
         let _ = fs::remove_dir_all(&dir);
     }
 
+    #[test]
+    fn aac_priming_is_not_decoded() {
+        // La nota dura 11025 campioni (edit list: 1024 di priming): il decodificatore ne dà 12 blocchi da 1024
+        // e i primi 1024 non sono suono.
+        let dir = scratch();
+        let src = dir.join("nota.m4a");
+        fs::write(&src, include_bytes!("../tests/fixtures/nota.m4a")).unwrap();
+        let pcm = crate::audio::decode(&src).unwrap();
+        let frames = pcm.samples.len() / pcm.channels as usize;
+        assert!((11025..11025 + 1024).contains(&frames), "{frames} campioni");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     fn long_pdf(dir: &Path) -> PathBuf {
         let text: Vec<String> = (1..=100).map(|n| format!("riga numero {n}")).collect();
         let pdf = dir.join("lungo.pdf");
