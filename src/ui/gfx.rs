@@ -670,8 +670,9 @@ impl<'a> Painter<'a> {
             }
         };
         // Solo la parte che si vede, copiata a mano (sorgente sopra, premoltiplicata): il ritaglio è un rettangolo.
+        // Il ritaglio può uscire dal foglio (zone più grandi della finestra): si taglia anche al foglio.
         let (vx0, vy0) = (ix.max(cx0).max(0), iy.max(cy0).max(0));
-        let (vx1, vy1) = ((ix + dw as i32).min(cx1), (iy + dh as i32).min(cy1));
+        let (vx1, vy1) = ((ix + dw as i32).min(cx1).min(self.pixmap.width() as i32), (iy + dh as i32).min(cy1).min(self.pixmap.height() as i32));
         if vx1 > vx0 && vy1 > vy0 {
             let pw = self.pixmap.width() as usize;
             let sw = pronta.width() as usize;
@@ -1451,6 +1452,22 @@ mod tests {
                 assert!(media < 3.0, "immagine diversa: {clip:?} {x} {y} (differenza media {media:.2})");
             }
         }
+    }
+
+    #[test]
+    fn immagine_con_ritaglio_oltre_il_foglio() {
+        // Un ritaglio più grande della finestra (lista più alta della finestra piccola) e un'immagine che
+        // esce in basso e a destra: si disegna la parte dentro il foglio, senza uscire dai suoi pixel.
+        let fonts = Fonts::system();
+        let mut cache = GlyphCache::new();
+        let rgba = vec![200u8; 32 * 32 * 4];
+        let img = Image::from_rgba(32, 32, &rgba).unwrap();
+        let mut p = Painter::new(100, 100, 1.0, &fonts, &mut cache);
+        p.clear((255, 255, 255));
+        p.push_clip(0.0, 0.0, 300.0, 300.0);
+        p.image(&img, 80.0, 80.0, 40.0, 40.0, 0.0, Fit::Cover);
+        p.image(&img, 70.0, 10.0, 60.0, 30.0, 4.0, Fit::Contain);
+        assert_ne!(&p.pixmap.data()[(99 * 100 + 99) * 4..][..3], &[255, 255, 255]);
     }
 
     #[test]
