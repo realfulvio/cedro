@@ -192,7 +192,7 @@ Open source (MIT), no packer or obfuscation, no network use beyond update checks
 
 ### Licences
 
-Cedro is MIT. Some parts have their own licence: LAME (LGPL, MP3), the ocrs OCR model (CC BY-SA 4.0, sources in `models/FONTI.txt`), [oxideav-vp8](https://github.com/OxideAV/oxideav-vp8) and [oxideav-vp9](https://github.com/OxideAV/oxideav-vp9) (MIT), OpenH264 (BSD-2) and FDK AAC (Fraunhofer licence). Cedro is a from-scratch implementation and uses no code, icons or text from other converters.
+Cedro is MIT. Some parts have their own licence: LAME (LGPL, MP3), the ocrs OCR model (CC BY-SA 4.0, sources in `models/FONTI.txt`), [oxideav-vp8](https://github.com/OxideAV/oxideav-vp8), [oxideav-vp9](https://github.com/OxideAV/oxideav-vp9) and [oxideav-webp](https://github.com/OxideAV/oxideav-webp) (MIT), OpenH264 (BSD-2) and FDK AAC (Fraunhofer licence). Cedro is a from-scratch implementation and uses no code, icons or text from other converters.
 
 </details>
 
