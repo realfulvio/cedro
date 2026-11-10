@@ -1382,22 +1382,32 @@ fn riassumi(c: &Consegne, id: u32, source: PathBuf, lines: Vec<String>, names: V
 
 fn presenta(finestra: &android_activity::ndk::native_window::NativeWindow, p: &Painter) {
     use android_activity::ndk::hardware_buffer_format::HardwareBufferFormat;
-    let _ = finestra.set_buffers_geometry(0, 0, Some(HardwareBufferFormat::R8G8B8A8_UNORM));
+    // Il formato si imposta una volta sola per finestra (ogni volta costava una riconfigurazione).
+    static FORMATO: std::sync::Mutex<usize> = std::sync::Mutex::new(0);
+    {
+        let mut f = FORMATO.lock().unwrap_or_else(|e| e.into_inner());
+        let id = finestra.ptr().as_ptr() as usize;
+        if *f != id {
+            let _ = finestra.set_buffers_geometry(0, 0, Some(HardwareBufferFormat::R8G8B8A8_UNORM));
+            *f = id;
+        }
+    }
     let Ok(mut guardia) = finestra.lock(None) else { return };
     let (gw, gh, stride) = (guardia.width(), guardia.height(), guardia.stride());
     let Some(dest) = guardia.bytes() else { return };
     let src = p.pixmap.data();
     let pw = p.pixmap.width() as usize;
     let ph = p.pixmap.height() as usize;
+    let n = gw.min(pw) * 4;
+    // Una riga alla volta, copiata in blocco (prima era un byte alla volta: fino a 30 ms per fotogramma).
     for y in 0..gh.min(ph) {
-        let n = gw.min(pw) * 4;
         let da = y * stride * 4;
         if da + n > dest.len() {
             break;
         }
-        for i in 0..n {
-            dest[da + i] = std::mem::MaybeUninit::new(src[y * pw * 4 + i]);
-        }
+        let riga = &src[y * pw * 4..y * pw * 4 + n];
+        // SAFETY: `MaybeUninit<u8>` ha la stessa rappresentazione di `u8` e le zone non si sovrappongono.
+        unsafe { std::ptr::copy_nonoverlapping(riga.as_ptr(), dest[da..da + n].as_mut_ptr() as *mut u8, n) };
     }
 }
 
@@ -1706,6 +1716,7 @@ fn android_main(app: AndroidApp) {
     let mut sporco = true;
     let mut esci = false;
     let mut animando = false;
+    let mut ultimo_disegno = std::time::Instant::now();
     let mut attesa_scelta: Option<Sorgente> = None;
     let mut tastiera = false;
     let mut accento: Option<char> = None;
@@ -1714,8 +1725,10 @@ fn android_main(app: AndroidApp) {
     let mut ultimo_servizio = std::time::Instant::now();
 
     while !esci {
-        let attesa = if animando { 40 } else { 150 };
-        app.poll_events(Some(Duration::from_millis(attesa)), |ev| {
+        // Mentre qualcosa si muove si disegna al ritmo dello schermo (~60 al secondo): si aspetta solo
+        // quanto manca ai 16 ms dall'ultimo fotogramma. Da fermo si aspettano gli eventi.
+        let attesa = if animando { Duration::from_millis(16).saturating_sub(ultimo_disegno.elapsed()) } else { Duration::from_millis(150) };
+        app.poll_events(Some(attesa), |ev| {
             if let PollEvent::Main(m) = ev {
                 match m {
                     MainEvent::InitWindow { .. } => {
@@ -2154,10 +2167,13 @@ fn android_main(app: AndroidApp) {
             if let Some(f) = &finestra {
                 let (w, h) = (f.width() as u32, f.height() as u32);
                 if w > 0 && h > 0 {
-                    let mut p = Painter::new(w, h, scala, Fonts::for_theme(ui.tema), &mut cache);
+                    ultimo_disegno = std::time::Instant::now();
+                    let mut p = Painter::new_riusando(w, h, scala, Fonts::for_theme(ui.tema), &mut cache);
                     p.larger = ui.grandi;
                     ui.disegna(&mut p, w as f32 / scala, h as f32 / scala);
                     presenta(f, &p);
+                    let foglio = p.in_foglio();
+                    cache.ricicla(foglio);
                     sporco = false;
                     // Le pagine che il disegno voleva e non c'erano.
                     if let Some(path) = ui.file.as_ref().map(|f| f.path.clone()) {
