@@ -129,8 +129,8 @@ fn voices_dialog(f: &mut Frame, app: &App) {
     let head_h = 32.0 + 6.0 + lines(f, intro, 16.0, cw - 50.0) * 16.0 * 1.45;
     let hint = voices_hint(sel);
     let hint_h = (lines(f, &hint, 14.5, cw - 52.0) * 14.5 * 1.4 + 20.0).max(44.0);
-    let (auto_h, nums_h, foot_h, gap) = (64.0, 58.0, 48.0, 18.0);
-    let h = 28.0 + head_h + gap + auto_h + gap + 16.0 + 10.0 + nums_h + gap + hint_h + gap + foot_h + 26.0;
+    let (auto_h, nums_h, foot_h, gap, gloss_h) = (64.0, 58.0, 48.0, 18.0, 30.0);
+    let h = 28.0 + head_h + gap + auto_h + gap + 16.0 + 10.0 + nums_h + gap + hint_h + gap + gloss_h + gap + foot_h + 26.0;
     let (x, y) = ((f.w - w) / 2.0, ((f.h - h) / 2.0).max(8.0));
     f.p.shadow(x, y, w, h, 12.0, 18.0, 0.35, 8.0);
     f.card((x, y, w, h), 12.0);
@@ -189,6 +189,15 @@ fn voices_dialog(f: &mut Frame, app: &App) {
     let th = lines(f, &hint, 14.5, cw - 52.0) * 14.5 * 1.4;
     f.para(&hint, cx + 40.0, cy + (hint_h - th) / 2.0, cw - 52.0, 14.5, SANS, pal.text, 1.4, 4);
     cy += hint_h + gap;
+    // I termini dei referti veterinari: una spunta, ricordata per le volte dopo.
+    let act = Act::VoicesGlossary;
+    let on = app.transcribe.glossario_vet;
+    f.checkbox(cx, cy + 3.0, 24.0, on, None);
+    f.text("Referti veterinari", cx + 36.0, cy, 180.0, gloss_h, 16.0, BOLD, pal.text);
+    f.text("termini di anatomia patologica", cx + 36.0 + f.measure("Referti veterinari", 16.0, BOLD) + 10.0, cy + 1.0, cw - 230.0, gloss_h, 14.0, SANS, pal.muted);
+    f.focus_ring((cx - 4.0, cy - 2.0, cw + 8.0, gloss_h + 4.0), 6.0, &act);
+    f.hit((cx - 4.0, cy - 2.0, cw + 8.0, gloss_h + 4.0), act);
+    cy += gloss_h + gap;
     // In fondo: per quanti file vale, Annulla, Trascrivi.
     let files = app.todo().len();
     let bw = if w < 520.0 { 104.0 } else { 150.0 };

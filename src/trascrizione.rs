@@ -125,6 +125,9 @@ pub struct Request {
     /// Quante persone parlano, dalla finestrella prima di trascrivere: 0 = le conta Cedro, 1 = una sola
     /// (niente riconoscimento delle voci), 2..=8 = esattamente quelle.
     pub speakers: u8,
+    /// I termini che il motore deve aspettarsi (per esempio quelli dei referti veterinari): il nome di
+    /// una raccolta pronta («veterinaria») o parole separate da virgole. `None` = nessuno.
+    pub glossario: Option<String>,
 }
 
 /// Il tono di una riga della finestra «Cosa sta succedendo», per colorarla.
@@ -1530,7 +1533,7 @@ enum Outcome {
 }
 
 /// Trascrive un file con il motore già acceso, raccontando i passi.
-fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Outcome {
+fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, glossario: Option<&str>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Outcome {
     // Il percorso va al motore in JSON, cioè in UTF-8: un nome con byte non validi (Linux) arriverebbe storpiato
     // e il file «non si apre». Lo si fa leggere al sistema, che riceve il percorso com'è, in un WAV dal nome semplice.
     if path.to_str().is_none() {
@@ -1539,6 +1542,9 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, sink:
     let mut request = serde_json::json!({"file": path.to_string_lossy(), "lang": "auto"});
     if speakers != 1 {
         request["speakers"] = speakers.into();
+    }
+    if let Some(g) = glossario.map(str::trim).filter(|g| !g.is_empty()) {
+        request["glossario"] = g.into();
     }
     if let Err(e) = engine.send(request) {
         return Outcome::EngineDied(e);
@@ -1830,7 +1836,7 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
             }
         }
         let running = engine.as_mut().expect("motore acceso");
-        let mut outcome = one_file(running, path, index, speakers, sink, cancel);
+        let mut outcome = one_file(running, path, index, speakers, request.glossario.as_deref(), sink, cancel);
         // A driver can run out of shared memory after loading successfully.
         // Retry this file once on CPU, retaining the exact model and precision.
         if matches!(outcome, Outcome::EngineDied(_)) && crate::accel::in_use().is_some_and(|a| a.gpu) && !cancel.load(Ordering::Relaxed) {
@@ -1838,7 +1844,7 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
             log(sink, Tone::Note, "Scheda video", "motore interrotto: riprovo sul processore, con la stessa precisione");
             let cpu_request = Request { gpu: false, ..request.clone() };
             match power_on(&cpu_request, model.as_ref().expect("modello caricato"), voices.as_ref(), sink, cancel) {
-                Ok(mut cpu) => { outcome = one_file(&mut cpu, path, index, speakers, sink, cancel); engine = Some(cpu); }
+                Ok(mut cpu) => { outcome = one_file(&mut cpu, path, index, speakers, request.glossario.as_deref(), sink, cancel); engine = Some(cpu); }
                 Err(e) => outcome = Outcome::Failed(e),
             }
         }
@@ -1847,7 +1853,7 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
             log(sink, Tone::Muted, "", format!("Il motore non legge questo formato ({why}): lo apro con il sistema"));
             match system_decode(path, cancel) {
                 Ok(wav) => {
-                    outcome = one_file(engine.as_mut().expect("motore acceso"), &wav, index, speakers, sink, cancel);
+                    outcome = one_file(engine.as_mut().expect("motore acceso"), &wav, index, speakers, request.glossario.as_deref(), sink, cancel);
                     temp = Some(wav);
                 }
                 Err(e) if e == CANCELLED => outcome = Outcome::Cancelled,
@@ -2117,7 +2123,7 @@ mod tests {
             eprintln!("espeak-ng non c'è: prova saltata");
             return;
         }
-        let request = Request { format: Format::Text, model: 0, gpu: std::env::var_os("CEDRO_TRASCRIVI_GPU").is_some(), avx512: false, speakers: 1 };
+        let request = Request { format: Format::Text, model: 0, gpu: std::env::var_os("CEDRO_TRASCRIVI_GPU").is_some(), avx512: false, speakers: 1, glossario: None };
         let lines = std::sync::Mutex::new(Vec::new());
         let finished = std::sync::Mutex::new(None);
         run(std::slice::from_ref(&wav), &request, Some(&work), &Options::default(), &|event| match event {
