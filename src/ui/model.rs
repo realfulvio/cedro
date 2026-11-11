@@ -939,7 +939,23 @@ impl App {
             all.append(&mut defs);
             defs = all;
         }
+        // Con un'immagine di microscopia: canali, piani Z, contrasto e barra di scala, in cima.
+        if self.kind() == Kind::Image && self.activity == Activity::Convert {
+            if let Some((m, _)) = self.first_micro() {
+                let mut all = conversioni::micro_option_defs(&self.action, m.canali, m.z, m.t);
+                all.retain(|d| !defs.iter().any(|x| x.opt == d.opt));
+                all.append(&mut defs);
+                defs = all;
+            }
+        }
         defs.into_iter().filter(|d| conversioni::shown(d, &self.values)).collect()
+    }
+
+    /// La prima immagine di microscopia della coda, con quante ce ne sono.
+    pub fn first_micro(&self) -> Option<(&media::MicroInfo, usize)> {
+        let mut found = self.files.iter().filter_map(|f| self.media_of(&f.path).and_then(|m| m.micro.as_ref()));
+        let first = found.next()?;
+        Some((first, 1 + found.count()))
     }
 
     /// Il primo DICOM della coda, con quanti ce ne sono.

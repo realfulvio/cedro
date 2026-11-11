@@ -18,6 +18,7 @@ mod imgfmt;
 pub mod dicom;
 mod anonimizza;
 pub mod tabella;
+pub mod microscopia;
 mod nametemplate;
 mod mp4fast;
 mod ocr;

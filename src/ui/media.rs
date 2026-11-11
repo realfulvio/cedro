@@ -24,6 +24,8 @@ pub struct Loaded {
     pub slide: Option<SlideInfo>,
     /// I DICOM: la riga che li descrive e se il nome può essere scritto nei pixel.
     pub dicom: Option<DicomInfo>,
+    /// Le immagini di microscopia (OME-TIFF, ImageJ, TIFF a 16 bit).
+    pub micro: Option<MicroInfo>,
     /// La scheda di audio, video e altri file.
     pub about: Option<super::preview::About>,
 }
@@ -52,6 +54,23 @@ impl SlideInfo {
         };
         let (a, b, c) = (one(Pick::Overview), one(Pick::Medium), one(Pick::Full));
         SlideInfo { summary: [s.summary(false), s.summary(true)], picks: [a.0, b.0, c.0], ratios: [a.1, b.1, c.1], label: s.label.is_some(), macro_image: s.macro_image.is_some() }
+    }
+}
+
+/// Quello che il pannello mostra di un'immagine di microscopia.
+#[derive(Clone, Debug, Default)]
+pub struct MicroInfo {
+    /// «OME-TIFF · 3 canali · 12 piani Z · 16 bit · 2048×2048 · 0,325 µm/pixel», in italiano e in inglese.
+    pub summary: [String; 2],
+    pub canali: usize,
+    pub z: usize,
+    pub t: usize,
+    pub scala: bool,
+}
+
+impl MicroInfo {
+    pub fn of(p: &crate::microscopia::Pila) -> MicroInfo {
+        MicroInfo { summary: p.riassunto(), canali: p.canali.len(), z: p.z, t: p.t, scala: p.um_per_px.is_some() }
     }
 }
 
@@ -159,8 +178,9 @@ pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
         let rgba = image::DynamicImage::ImageRgb8(small).to_rgba8();
         return Some((Image::from_rgba(rgba.width(), rgba.height(), rgba.as_raw())?, (s.full().width, s.full().height)));
     }
-    // SVG, AVIF, JPEG XL e DICOM non passano dal lettore del crate `image`.
-    if matches!(crate::imgfmt::sniff_file(path), Some("svg" | "avif" | "jxl" | "dcm")) || matches!(engine::extension(path).as_str(), "svg" | "svgz" | "dcm" | "dicom") {
+    // SVG, AVIF, JPEG XL, DICOM e microscopia non passano dal lettore del crate `image`.
+    let micro = crate::imgfmt::sniff_file(path) == Some("tiff") && crate::microscopia::is_stack(path);
+    if micro || matches!(crate::imgfmt::sniff_file(path), Some("svg" | "avif" | "jxl" | "dcm")) || matches!(engine::extension(path).as_str(), "svg" | "svgz" | "dcm" | "dicom") {
         let img = crate::imgfmt::open(path, false, Some(side)).ok()?;
         let size = (img.width(), img.height());
         let small = img.thumbnail(side, side).to_rgba8();
@@ -196,6 +216,8 @@ fn info(path: &Path) -> Loaded {
             }
             if crate::imgfmt::sniff_file(path) == Some("dcm") || matches!(engine::extension(path).as_str(), "dcm" | "dicom") {
                 out.dicom = crate::dicom::DicomFile::open(path).ok().map(|f| DicomInfo::of(&f));
+            } else if crate::imgfmt::sniff_file(path) == Some("tiff") && crate::microscopia::is_stack(path) {
+                out.micro = crate::microscopia::Pila::open(path).ok().map(|p| MicroInfo::of(&p));
             }
         }
         Kind::Pdf => {

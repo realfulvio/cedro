@@ -1974,3 +1974,40 @@ foglio non letto: {}	sheet not read: {}
 testi del foglio non letti: {}	sheet text not read: {}
 cartella di lavoro non letta: {}	workbook not read: {}
 troppe colonne per Excel: {#} (al massimo {#})	too many columns for Excel: {} (at most {})
+# Microscopia (OME-TIFF, ImageJ, TIFF a 16 bit)
+Microscopia	Microscopy
+Sovrapposti	Overlaid
+Uno per file	One per file
+Entrambi	Both
+Centrale	Middle
+Sovrapposti: un'immagine a colori con ogni canale del suo colore	Overlaid: one colour image with each channel in its own colour
+Piani Z (profondità)	Z planes (depth)
+Massima: unisce i piani tenendo il punto più luminoso, come nelle figure degli articoli	Maximum: merges the planes keeping the brightest point, as in paper figures
+Tutti gli istanti	All time points
+Spento: solo il primo	Off: first only
+Contrasto automatico	Auto contrast
+A 16 bit la fluorescenza sembra quasi nera: si regola da solo, canale per canale	At 16 bit fluorescence looks almost black: it adjusts itself, channel by channel
+Barra di scala	Scale bar
+Se il file dice quanto è grande un pixel	If the file says how big a pixel is
+Per misurare: un file per canale, senza colori né contrasto	For measuring: one file per channel, no colours or contrast
+Il file non dice quanto è grande un pixel: senza barra di scala.	The file doesn't say how big a pixel is: no scale bar.
+~ · barra di scala 	 · scale bar 
+~. Il file non dice quanto è grande un pixel: senza barra di scala	. The file doesn't say how big a pixel is: no scale bar
+TIFF di un tipo che Cedro non legge ancora (serve grigio o RGB)	TIFF of a type Cedro can't read yet (grey or RGB needed)
+piano non trovato nel file	plane not found in the file
+tipo di pixel non letto	pixel type not read
+troppe pagine	too many pages
+niente da scrivere	nothing to write
+
+~ canali sovrapposti e uno per file	 channels overlaid and one per file
+~ canali sovrapposti	 channels overlaid
+~ canali, un file per canale	 channels, one file per channel
+~un file per piano Z	one file per Z plane
+~piano Z centrale	middle Z plane
+~proiezione massima di 	maximum projection of 
+~ piani Z	 Z planes
+~contrasto automatico	auto contrast
+~solo il primo istante	first time point only
+~valori originali a 16 bit, un file per canale	original 16-bit values, one file per channel
+
+~, uno per immagine (	, one per image (

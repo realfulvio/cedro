@@ -135,6 +135,10 @@ pub fn open(path: &Path, straighten: bool, target_side: Option<u32>) -> Result<D
     if kind == "tiff" && crate::svs::is_slide(path) {
         return crate::svs::open_image(path, target_side);
     }
+    // Microscopia (OME-TIFF, ImageJ, 16 bit): canali a colori e contrasto, non i 16 bit schiacciati.
+    if kind == "tiff" && crate::microscopia::is_stack(path) {
+        return crate::microscopia::apri(path);
+    }
     match kind {
         "svg" | "svgz" => open_svg(path, target_side),
         "avif" => open_avif(path),
