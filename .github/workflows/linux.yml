@@ -4,6 +4,9 @@ name: Linux
 # Pubblicare: parte da solo alla fine del workflow «Windows ARM64» quando pubblica una release, oppure
 # Actions → Linux → Run workflow con il tag (per esempio v0.18.1): il tar.gz va nella release v<versione>,
 # i motori nella pre-release «motori-v<versione>», e nelle note compare la riga per Linux.
+# Dove gira: sul minipc di casa (runner con l'etichetta cedro-linux, dentro un contenitore Ubuntu 24.04 con
+# le cartelle di compilazione che restano tra un giro e l'altro) se è acceso e libero; altrimenti sui runner
+# di GitHub, come prima. Lo decide il job «scegli» con tools/sonda-runner.sh.
 
 on:
   push:
@@ -18,6 +21,12 @@ on:
 
 permissions:
   contents: write
+  actions: write
+
+# Nel contenitore del minipc la shell predefinita sarebbe sh: si usa bash come sui runner di GitHub.
+defaults:
+  run:
+    shell: bash
 
 env:
   CARGO_TERM_COLOR: always
@@ -25,13 +34,46 @@ env:
   DEBIAN_FRONTEND: noninteractive
 
 jobs:
+  scegli:
+    name: Sceglie dove compilare (minipc o GitHub)
+    runs-on: ubuntu-latest
+    outputs:
+      locale: ${{ steps.sonda.outputs.locale }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: sonda
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SONDA_REF: ${{ github.ref_name }}
+        run: tools/sonda-runner.sh cedro-linux
+
   app:
     name: Cedro (build, prove, tar.gz)
-    runs-on: ubuntu-24.04
+    needs: scegli
+    runs-on: ${{ needs.scegli.outputs.locale == 'true' && fromJSON('["self-hosted", "cedro-linux"]') || 'ubuntu-24.04' }}
+    # Sul minipc: stesso sistema dei runner di GitHub (Ubuntu 24.04, quindi la stessa glibc minima per chi
+    # installa), con un volume che tiene Rust, i pacchetti scaricati e le cartelle di compilazione.
+    container:
+      image: ${{ needs.scegli.outputs.locale == 'true' && 'ubuntu:24.04' || '' }}
+      volumes: ["cedro-cache:/cache"]
     steps:
+      - name: Strumenti di base del contenitore (solo sul minipc)
+        if: ${{ needs.scegli.outputs.locale == 'true' }}
+        run: |
+          rm -f /etc/apt/apt.conf.d/docker-clean
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/10-cedro-tieni
+          mkdir -p /cache/apt-${{ github.job }}/partial && rm -rf /var/cache/apt/archives && ln -s /cache/apt-${{ github.job }} /var/cache/apt/archives
+          apt-get update
+          apt-get install -y --no-install-recommends sudo ca-certificates curl git build-essential python3 python-is-python3 xz-utils file util-linux
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
+
+      - name: Rust e cartelle che restano (solo sul minipc)
+        if: ${{ needs.scegli.outputs.locale == 'true' }}
+        run: tools/prepara-contenitore.sh target-app
 
       - name: Librerie di sistema
         run: |
@@ -39,6 +81,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends libgtk-4-dev libdbus-1-dev libasound2-dev pkg-config cmake clang
 
       - uses: Swatinem/rust-cache@v2
+        if: ${{ needs.scegli.outputs.locale != 'true' }}
 
       - name: Prove adattatori web
         run: python resources/web-adapters/test_adapters.py
@@ -60,13 +103,38 @@ jobs:
           name: linux-tar
           path: dist/cedro-*-linux-x64.tar.gz
 
+      # Nel contenitore si lavora come root: i file lasciati nella cartella del runner tornano all'utente
+      # del minipc, altrimenti il giro dopo non riesce a ripulirla.
+      - name: Restituisce i file all'utente del minipc
+        if: ${{ always() && needs.scegli.outputs.locale == 'true' }}
+        run: chown -R 1000:1000 "$GITHUB_WORKSPACE" "$RUNNER_TEMP" || true
+
   motori:
     name: Motori di trascrizione (processore e Vulkan)
-    runs-on: ubuntu-24.04
+    needs: scegli
+    runs-on: ${{ needs.scegli.outputs.locale == 'true' && fromJSON('["self-hosted", "cedro-linux"]') || 'ubuntu-24.04' }}
+    # Sul minipc: stesso sistema dei runner di GitHub (Ubuntu 24.04, quindi la stessa glibc minima per chi
+    # installa), con un volume che tiene Rust, i pacchetti scaricati e le cartelle di compilazione.
+    container:
+      image: ${{ needs.scegli.outputs.locale == 'true' && 'ubuntu:24.04' || '' }}
+      volumes: ["cedro-cache:/cache"]
     steps:
+      - name: Strumenti di base del contenitore (solo sul minipc)
+        if: ${{ needs.scegli.outputs.locale == 'true' }}
+        run: |
+          rm -f /etc/apt/apt.conf.d/docker-clean
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/10-cedro-tieni
+          mkdir -p /cache/apt-${{ github.job }}/partial && rm -rf /var/cache/apt/archives && ln -s /cache/apt-${{ github.job }} /var/cache/apt/archives
+          apt-get update
+          apt-get install -y --no-install-recommends sudo ca-certificates curl git build-essential python3 python-is-python3 xz-utils file util-linux
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
+
+      - name: Rust e cartelle che restano (solo sul minipc)
+        if: ${{ needs.scegli.outputs.locale == 'true' }}
+        run: tools/prepara-contenitore.sh target-motori
 
       - name: Librerie di sistema
         run: |
@@ -75,12 +143,13 @@ jobs:
             libvulkan-dev glslc espeak-ng
 
       - uses: Swatinem/rust-cache@v2
+        if: ${{ needs.scegli.outputs.locale != 'true' }}
         with:
           workspaces: trascrivi
           cache-targets: false
 
       - name: Motori base, avx2, avxvnni, avx512, avx512vnni, vulkan
-        run: trascrivi/build.sh -o "$GITHUB_WORKSPACE/dist-motori" -t "$RUNNER_TEMP/ctv"
+        run: trascrivi/build.sh -o "$GITHUB_WORKSPACE/dist-motori" -t "${CEDRO_CACHE:-$RUNNER_TEMP}/ctv"
 
       - name: Prova di trascrizione (voce sintetica)
         run: |
@@ -98,13 +167,38 @@ jobs:
           name: linux-motori
           path: dist-motori/cedro-trascrivi-*
 
+      # Nel contenitore si lavora come root: i file lasciati nella cartella del runner tornano all'utente
+      # del minipc, altrimenti il giro dopo non riesce a ripulirla.
+      - name: Restituisce i file all'utente del minipc
+        if: ${{ always() && needs.scegli.outputs.locale == 'true' }}
+        run: chown -R 1000:1000 "$GITHUB_WORKSPACE" "$RUNNER_TEMP" || true
+
   riassunto:
     name: Motori del Riassunto AI (processore e Vulkan)
-    runs-on: ubuntu-24.04
+    needs: scegli
+    runs-on: ${{ needs.scegli.outputs.locale == 'true' && fromJSON('["self-hosted", "cedro-linux"]') || 'ubuntu-24.04' }}
+    # Sul minipc: stesso sistema dei runner di GitHub (Ubuntu 24.04, quindi la stessa glibc minima per chi
+    # installa), con un volume che tiene Rust, i pacchetti scaricati e le cartelle di compilazione.
+    container:
+      image: ${{ needs.scegli.outputs.locale == 'true' && 'ubuntu:24.04' || '' }}
+      volumes: ["cedro-cache:/cache"]
     steps:
+      - name: Strumenti di base del contenitore (solo sul minipc)
+        if: ${{ needs.scegli.outputs.locale == 'true' }}
+        run: |
+          rm -f /etc/apt/apt.conf.d/docker-clean
+          echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/10-cedro-tieni
+          mkdir -p /cache/apt-${{ github.job }}/partial && rm -rf /var/cache/apt/archives && ln -s /cache/apt-${{ github.job }} /var/cache/apt/archives
+          apt-get update
+          apt-get install -y --no-install-recommends sudo ca-certificates curl git build-essential python3 python-is-python3 xz-utils file util-linux
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
+
+      - name: Rust e cartelle che restano (solo sul minipc)
+        if: ${{ needs.scegli.outputs.locale == 'true' }}
+        run: tools/prepara-contenitore.sh target-riassunto
 
       - name: Librerie di sistema
         run: |
@@ -112,21 +206,21 @@ jobs:
           sudo apt-get install -y --no-install-recommends cmake clang libclang-dev pkg-config libvulkan-dev glslc spirv-headers
 
       - uses: Swatinem/rust-cache@v2
+        if: ${{ needs.scegli.outputs.locale != 'true' }}
         with:
           workspaces: riassumi
           cache-targets: false
 
       - name: Motori base, avx2, avxvnni, avx512, avx512vnni, vulkan
-        run: riassumi/build.sh -o "$GITHUB_WORKSPACE/dist-riassumi" -t "$RUNNER_TEMP/crv"
+        run: riassumi/build.sh -o "$GITHUB_WORKSPACE/dist-riassumi" -t "${CEDRO_CACHE:-$RUNNER_TEMP}/crv"
 
       - name: Prove della logica del motore
         working-directory: riassumi
-        run: cargo test --release
-        env:
-          CARGO_TARGET_DIR: ${{ runner.temp }}/crv/test
+        run: CARGO_TARGET_DIR="${CEDRO_CACHE:-$RUNNER_TEMP}/crv/test" cargo test --release
 
       # Il modello vero (2,7 GB) resta in cache tra un giro e l'altro.
       - uses: actions/cache@v4
+        if: ${{ needs.scegli.outputs.locale != 'true' }}
         with:
           path: ${{ runner.temp }}/qwen
           key: qwen3.5-4b-q4km-unsloth
@@ -134,9 +228,9 @@ jobs:
       - name: Prova di riassunto (Qwen3.5-4B vero, sul processore del runner)
         run: |
           ls -l dist-riassumi
-          model="$RUNNER_TEMP/qwen/Qwen3.5-4B-Q4_K_M.gguf"
+          model="${CEDRO_CACHE:-$RUNNER_TEMP}/qwen/Qwen3.5-4B-Q4_K_M.gguf"
           if [ ! -f "$model" ]; then
-            mkdir -p "$RUNNER_TEMP/qwen"
+            mkdir -p "$(dirname "$model")"
             curl -fsSL --retry 5 -o "$model.part" https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf
             mv "$model.part" "$model"
           fi
@@ -149,6 +243,12 @@ jobs:
         with:
           name: linux-riassumi
           path: dist-riassumi/cedro-riassumi-*
+
+      # Nel contenitore si lavora come root: i file lasciati nella cartella del runner tornano all'utente
+      # del minipc, altrimenti il giro dopo non riesce a ripulirla.
+      - name: Restituisce i file all'utente del minipc
+        if: ${{ always() && needs.scegli.outputs.locale == 'true' }}
+        run: chown -R 1000:1000 "$GITHUB_WORKSPACE" "$RUNNER_TEMP" || true
 
   pubblica:
     name: Aggiunge Linux alla release

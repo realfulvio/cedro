@@ -1,0 +1,29 @@
+name: Sonda runner di casa
+run-name: Sonda ${{ inputs.etichetta || 'cedro-linux' }} ${{ inputs.id }}
+
+# Lanciata dal job «scegli» di linux.yml e windows-arm64.yml (tools/sonda-runner.sh): se un runner di casa
+# con l'etichetta (cedro-linux sul minipc, cedro-windows nella sua VM) la prende entro un paio di minuti,
+# la build gira lì; altrimenti la sonda viene annullata e la build va sui runner di GitHub.
+
+on:
+  # Il push serve solo a far conoscere a GitHub la sonda nei branch di prova.
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/sonda-runner.yml"]
+  workflow_dispatch:
+    inputs:
+      etichetta:
+        description: "Etichetta del runner (cedro-linux o cedro-windows)"
+        required: true
+        default: cedro-linux
+      id:
+        description: "Identificativo della sonda"
+        required: true
+        default: a-mano
+
+jobs:
+  sonda:
+    runs-on: ["self-hosted", "${{ inputs.etichetta || 'cedro-linux' }}"]
+    timeout-minutes: 5
+    steps:
+      - run: echo "Pronto"
