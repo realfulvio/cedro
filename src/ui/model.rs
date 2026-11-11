@@ -1844,6 +1844,8 @@ impl App {
         // Gli strumenti delle immagini hanno il loro nome e la loro estensione (come in engine).
         let (name, ext) = match (self.kind(), ext) {
             (crate::engine::Kind::Image, "strip") => ("nomefile-pulito", "jpg"),
+            (crate::engine::Kind::Pdf, "strip") => ("nomefile-anonimo", "pdf"),
+            (crate::engine::Kind::Doc, "strip") => ("nomefile-anonimo", "docx"),
             (crate::engine::Kind::Image, "compress") => ("nomefile-compresso", "jpg"),
             (crate::engine::Kind::Image, "half") => ("nomefile-meta", "png"),
             (crate::engine::Kind::Image, "gray") => ("nomefile-bn", "png"),

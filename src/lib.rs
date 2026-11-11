@@ -16,6 +16,7 @@ mod cartelle;
 mod engine;
 mod imgfmt;
 pub mod dicom;
+mod anonimizza;
 mod nametemplate;
 mod mp4fast;
 mod ocr;

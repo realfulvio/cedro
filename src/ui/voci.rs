@@ -124,6 +124,7 @@ pub fn voce(kind: Kind, id: &str) -> Voce {
         (Kind::Pdf, "compress") => v("Comprimi", "PDF più leggero", COMPRIMI, BLU),
         (Kind::Pdf, "merge") => v("Unisci", "un solo PDF", UNISCI, PETROLIO),
         (Kind::Pdf, "split") => v("Dividi", "una pagina per file", DIVIDI, ARANCIO),
+        (Kind::Pdf, "strip") => v("Togli autore e dati nascosti", "autore, programma, commenti", PULISCI, ROSSO),
         // Audio
         (Kind::Audio, "mp3") => v("MP3", "va bene ovunque", MP3, AUDIO),
         (Kind::Audio, "wav") => v("WAV", "senza compressione", WAV, COMP),
@@ -135,6 +136,7 @@ pub fn voce(kind: Kind, id: &str) -> Voce {
         (Kind::Video, "mp3") => v("Solo l'audio (MP3)", "toglie le immagini", MP3, AUDIO),
         // Documenti
         (Kind::Doc, "pdf") => v("PDF", "si apre ovunque", DOCPDF, PDF),
+        (Kind::Doc, "strip") => v("Togli autore e dati nascosti", "autore, revisioni, commenti", PULISCI, ROSSO),
         // Testo
         (Kind::Text, "txt") => v("TXT", "testo semplice", TXT, COMP),
         (Kind::Text, "html") => v("HTML", "pagina web", HTML, WEB),
@@ -262,6 +264,7 @@ pub fn tools_heading(kind: Kind) -> &'static str {
         Kind::Image => "Modifica l'immagine",
         Kind::Pdf => "Modifica il PDF",
         Kind::Text => "Modifica il testo",
+        Kind::Doc => "Modifica il documento",
         _ => "Strumenti",
     }
 }
