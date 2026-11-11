@@ -95,6 +95,11 @@ impl ThemeId {
         }
     }
 
+    /// Se il tema ha YouTube e i video dal web (Cedro 4 Labs no: la Guida e la scelta della vista li saltano).
+    pub fn has_web(self) -> bool {
+        self != ThemeId::CedroLabs
+    }
+
     /// Il tema scuro vuole il logo con la scritta chiara.
     pub fn dark(self) -> bool {
         matches!(self, ThemeId::CedroCompatto | ThemeId::BancoDiLavoro)
@@ -214,22 +219,25 @@ pub const BONDENO: Palette = Palette {
     nav_sel: hex(0xD9E9F4),
 };
 
-/// Cedro 4 Labs, «Bancone»: grigi freddi da laboratorio e un blu profondo, con contrasto alto per il
-/// bancone illuminato (testo su sfondo oltre 14:1).
+/// Cedro 4 Labs, «Bancone»: bianchi con una punta di verde acqua da laboratorio e un verde petrolio
+/// pieno, con contrasto alto per il bancone illuminato (testo su sfondo oltre 14:1).
 pub const LABS: Palette = Palette {
-    bg: hex(0xF4F7F8),
+    bg: hex(0xE6F2EF),
     surface: hex(0xFFFFFF),
-    alt: hex(0xEAF0F2),
-    text: hex(0x102027),
-    muted: hex(0x4E616A),
-    primary: hex(0x005A8C),
+    alt: hex(0xD5EAE5),
+    text: hex(0x0E2421),
+    muted: hex(0x465F5B),
+    primary: hex(0x00796B),
     on_primary: hex(0xFFFFFF),
-    border: hex(0xCBD7DC),
-    ok: hex(0x007A5A),
+    border: hex(0xB4D3CC),
+    ok: hex(0x2E7D32),
     bad: hex(0xB3261E),
-    work: hex(0xFAFCFC),
-    nav_sel: hex(0xE2EDF3),
+    work: hex(0xF5FBFA),
+    nav_sel: hex(0xC8E6DF),
 };
+
+/// L'etichetta «4 LABS» accanto al logo: il magenta dei laboratori, un colore che nessun altro tema usa.
+pub const LABS_BADGE: Rgb = hex(0x9C2F73);
 
 /// Colori del marchio (uguali in tutti i temi).
 pub const BRAND_PRIMARY: Rgb = hex(0x793FCB);
