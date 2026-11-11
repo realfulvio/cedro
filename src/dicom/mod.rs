@@ -291,8 +291,7 @@ impl<'a> Reader<'a> {
 
     fn fragments(&mut self) -> Result<Value, String> {
         let mut frags = Vec::new();
-        loop {
-            let Some(t) = self.tag() else { break };
+        while let Some(t) = self.tag() {
             let len = self.u32().ok_or("pixel troncati")?;
             if t == SEQ_END {
                 break;
