@@ -1810,3 +1810,52 @@ dati in coda	trailing data
 Usa la ruota	Use the wheel
 Tasto più clic destro su un file apre la ruota. Spenta, i file si convertono dalla finestra Conversioni.	A key plus right-click on a file opens the wheel. When off, files are converted from the Conversions window.
 Dal menu del file si apre la ruota. Spenta, «Apri in Cedro» porta i file nella finestra Conversioni.	The file menu opens the wheel. When off, “Open in Cedro” brings the files to the Conversions window.
+# Vetrini digitali (.svs)
+Vetrino	Slide
+Panoramica	Overview
+Media	Medium
+Piena	Full
+Etichetta	Label
+La targhetta con il codice del vetrino	The tag with the slide's code
+Foto del vetrino intero	Photo of the whole slide
+La «macro» scattata dallo scanner	The "macro" shot taken by the scanner
+{} × {} px · pieno	{} × {} px · full
+Per guardarlo a schermo o metterlo in un documento.	To look at on screen or put in a document.
+Il livello più grande che sta comodo in memoria.	The largest level that fits comfortably in memory.
+È la scelta di partenza.	It's the default choice.
+Ogni dettaglio dello scanner.	Every detail from the scanner.
+Si scrive a strisce: ci vuole qualche minuto.	It's written in strips: it takes a few minutes.
+Per questa voce si usa il livello più grande che sta in memoria.	For this format the largest level that fits in memory is used.
+A questa misura esce in TIFF.	At this size it comes out as TIFF.
+Misure del primo vetrino: ogni vetrino usa il suo livello.	Sizes of the first slide: each slide uses its own level.
+Riscritto in PNG dal vetrino, senza etichetta né dati dello scanner	Rewritten as PNG from the slide, without label or scanner data
+~ · con etichetta e foto del vetrino	 · with label and slide photo
+~ · con foto del vetrino	 · with slide photo
+~ · con etichetta	 · with label
+~ dal vetrino	 from the slide
+~ · in TIFF: 	 · as TIFF: 
+~ non regge 	 can't hold 
+~ · dal livello 	 · from level 
+~: il pieno è troppo grande per questa voce	: the full level is too big for this format
+vetrino non letto: {}	slide not read: {}
+non è un vetrino Aperio	not an Aperio slide
+il livello pieno non è a colori RGB a 8 bit	the full level isn't 8-bit RGB color
+il vetrino non ha livelli a tessere	the slide has no tiled levels
+il livello {#} × {#} è troppo grande da aprire intero	level {} × {} is too big to open whole
+misure del livello non valide	invalid level size
+zona fuori dal livello {#} × {#}	area outside level {} × {}
+zona troppo grande da aprire intera	area too big to open whole
+misure della zona non valide	invalid area size
+tessera {#} non letta: {}	tile {} not read: {}
+tessera {#}: {}	tile {}: {}
+decodifica interrotta	decoding interrupted
+immagine a più di 8 bit	image with more than 8 bits
+colori non gestiti: {}	unsupported colors: {}
+il JPEG si ferma a {#} px di lato	JPEG stops at {} px per side
+compressione interrotta	compression interrupted
+il TIFF supera i 4 GB	the TIFF exceeds 4 GB
+tessera a più di 8 bit	tile with more than 8 bits
+colori della tessera non gestiti	unsupported tile colors
+compressione {#} non gestita	compression {} not supported
+JPEG 2000 con {#} componenti	JPEG 2000 with {} components
+lettura interrotta	reading interrupted

@@ -92,7 +92,7 @@ fn file_list(f: &mut Frame, app: &App, r: R) {
             }
             f.hit((r.0, y, r.2 - 1.0, rh), act);
             f.kind_icon(file.kind, r.0 + 20.0, y + 18.0, 44.0);
-            f.text(&file.name(), r.0 + 78.0, y + 12.0, r.2 - 78.0 - 52.0, 28.0, 17.0, SEMI, pal.text);
+            super::file_name(f, app, i, r.0 + 78.0, y + 12.0, r.2 - 78.0 - 52.0, 28.0, 17.0, SEMI, pal.text);
             let (size, extra) = super::file_meta(app, i);
             let meta = match file.state {
                 FileState::Waiting => [extra, size].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("  ·  "),

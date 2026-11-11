@@ -168,13 +168,12 @@ fn step_files(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, s
                 if !f.p.shows_y(ry, 100.0) {
                     continue;
                 }
-                let file = &app.files[i];
                 if n > 0 {
                     f.hline(x, ry, w);
                 }
                 f.thumb(app, i, (x + 24.0, ry + 14.0, 110.0, 72.0), 6.0);
-                f.text(&file.name(), x + 158.0, ry + 20.0, w - 560.0, 30.0, 21.0, SEMI, pal.text);
-                f.text(&file.path.display().to_string(), x + 158.0, ry + 52.0, w - 560.0, 26.0, 16.0, SANS, pal.muted);
+                super::file_name(f, app, i, x + 158.0, ry + 20.0, w - 560.0, 30.0, 21.0, SEMI, pal.text);
+                f.text(&super::waiting_line(app, i), x + 158.0, ry + 52.0, w - 560.0, 26.0, 16.0, SANS, pal.muted);
                 let (size, extra) = super::file_meta(app, i);
                 f.text(&size, x + w - 360.0, ry, 130.0, 100.0, 17.0, SANS, pal.muted);
                 f.text(&extra, x + w - 230.0, ry, 130.0, 100.0, 17.0, SANS, pal.muted);
