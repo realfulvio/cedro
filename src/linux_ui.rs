@@ -654,15 +654,16 @@ fn run_slices(all: &[PathBuf], id: &str, label: &str, quality: u8, beside: bool)
     let step_label = |i: usize, p: &std::path::Path| {
         if paths.len() == 1 { format!("{} → {label}", name(p)) } else { format!("{} di {} · {}", i + 1, paths.len(), name(p)) }
     };
-    if id == "merge" {
-        crate::linux_progress::start(1, &format!("{} PDF → {}", paths.len(), label));
+    if id == "merge" || id == "figure" {
+        crate::linux_progress::start(1, &format!("{} file → {}", paths.len(), label));
     } else if let Some(first) = paths.first() {
         crate::linux_progress::start(paths.len(), &step_label(0, first));
     }
-    if id == "merge" {
-        // Unire è un lavoro solo: tutti i PDF in un file, nell'ordine dei nomi.
+    if id == "merge" || id == "figure" {
+        // Unire e la figura sono un lavoro solo: tutti i file in uno, nell'ordine dei nomi.
         let out_dir = if beside { paths.first().and_then(|p| p.parent()) } else { None };
-        match cedro::ui::model::guarded(|| cedro::merge_paths(&paths, out_dir).map_err(|e| e.0)) {
+        let one = |paths: &[PathBuf]| if id == "figure" { cedro::figure_paths(paths, out_dir) } else { cedro::merge_paths(paths, out_dir) };
+        match cedro::ui::model::guarded(|| one(&paths).map_err(|e| e.0)) {
             Ok(out) => {
                 notes.push(format!("{} · {}", name(&out.path), out.message));
                 last_out = Some(out.path);

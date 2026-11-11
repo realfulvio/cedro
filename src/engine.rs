@@ -69,6 +69,7 @@ const IMAGE_TOOLS: &[Slice] = &[
     Slice { id: "rot90", label: "Ruota" },
     Slice { id: "strip", label: "Metadati" },
     Slice { id: "ocr", label: "OCR" },
+    Slice { id: "figure", label: "Figura" },
 ];
 const TEXT_CONVERT: &[Slice] = &[
     Slice { id: "txt", label: "TXT" },
@@ -920,6 +921,8 @@ pub struct Options {
     pub micro_contrast: bool,
     pub micro_scale: bool,
     pub micro_16bit: bool,
+    /// La figura per un articolo (pannelli A B C): larghezza, dpi, lettere e barra di scala.
+    pub figura: crate::figura::Opzioni,
     /// Unire e dividere i PDF.
     pub pdf_pages: PdfPages,
     /// Le pagine di un PDF (ruotare, togliere, estrarre, numeri e filigrana) e la compressione.
@@ -1011,6 +1014,7 @@ impl Default for Options {
             micro_contrast: true,
             micro_scale: true,
             micro_16bit: false,
+            figura: crate::figura::Opzioni::default(),
             pdf_pages: PdfPages::default(),
             pdf_edit: PdfEdit::default(),
         }
@@ -1142,6 +1146,67 @@ fn merge_inner(sources: &[(PathBuf, Option<PageSel>)], out_dir: Option<&Path>, o
         message.push_str(", protetto con password");
     }
     write_bytes(&out, &bytes)?;
+    crate::progress::report(1.0);
+    Ok(Output { path: out, message })
+}
+
+/// La ruota: la figura per un articolo con le immagini scelte, nell'ordine dei nomi (A la prima).
+pub fn figure_paths(paths: &[PathBuf], out_dir: Option<&Path>) -> CedroResult<Output> {
+    let mut sorted = paths.to_vec();
+    sorted.sort_by(|a, b| natural_cmp(&file_label(a).to_lowercase(), &file_label(b).to_lowercase()));
+    let exists = if crate::settings::read_settings().replace { Exists::Replace } else { Exists::Number };
+    figure_with(&sorted, out_dir, &Options { exists, ..Options::default() })
+}
+
+/// La figura per un articolo: le immagini in pannelli A, B, C nell'ordine dato, in un TIFF con i dpi
+/// scritti dentro, più la legenda di testo accanto. Il nome viene dal primo file («-figura»).
+pub fn figure_with(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    let Some(first) = paths.first() else {
+        return Err(err("nessuna immagine per la figura"));
+    };
+    let _job = crate::resources::acquire(None).expect("uncancellable job");
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), guarded: true, ..Default::default() }));
+    let mut restore = RestoreNaming(Some(before));
+    let result = figure_inner(paths, out_dir, opts);
+    let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
+    finish_outputs(result, used)
+}
+
+fn figure_inner(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    let first = &paths[0];
+    let dir = match out_dir {
+        Some(d) => {
+            fs::create_dir_all(d).map_err(|e| err(e.to_string()))?;
+            d.to_path_buf()
+        }
+        None => output_dir(first, &crate::settings::read_settings())?,
+    };
+    if paths.len() > 26 {
+        return Err(err("una figura tiene al massimo 26 pannelli (A-Z)"));
+    }
+    let out = reserve(&dir, &format!("{}-figura", stem(first)), "tiff")?;
+    let mut pannelli = Vec::with_capacity(paths.len());
+    for (i, path) in paths.iter().enumerate() {
+        crate::progress::report(i as f32 / paths.len() as f32 * 0.8);
+        pannelli.push(crate::figura::pannello(path).map_err(err)?);
+    }
+    let opz = &opts.figura;
+    let figura = crate::figura::componi(pannelli, opz).map_err(err)?;
+    crate::progress::report(0.9);
+    let bytes = crate::figura::tiff(&figura.img, opz.dpi).map_err(err)?;
+    write_bytes(&out, &bytes)?;
+    // La legenda accanto, con lo stesso nome: si copia nella didascalia.
+    let legenda = out.with_file_name(format!("{}-legenda.txt", out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()));
+    let _ = fs::write(&legenda, crate::figura::legenda(&figura, opz));
+    let cm = |mm: f32| format!("{:.1}", mm / 10.0).replace('.', ",");
+    let alta = figura.img.height() as f32 / opz.dpi as f32 * 25.4;
+    let barre = figura.pannelli.iter().filter(|p| p.2.is_some()).count();
+    let n = figura.pannelli.len();
+    let mut message = format!("Figura {} × {} cm, {} dpi, {n} {}.", cm(opz.larghezza_mm as f32), cm(alta), opz.dpi, if n == 1 { "pannello" } else { "pannelli" });
+    if barre > 0 {
+        message.push_str(&format!(" {barre} con la barra di scala."));
+    }
+    message.push_str(" Legenda nel file di testo accanto.");
     crate::progress::report(1.0);
     Ok(Output { path: out, message })
 }
@@ -1786,6 +1851,9 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
     if action == "merge" {
         return Err(err("per unire servono almeno due PDF"));
+    }
+    if action == "figure" && kind == Kind::Image {
+        return figure_inner(&[path.to_path_buf()], Some(&dir), opts);
     }
     if action == "ocr" && kind == Kind::Pdf {
         let out = reserve(&dir, &stem(path), "txt")?;

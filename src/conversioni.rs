@@ -222,6 +222,10 @@ pub enum Opt {
     MicroContrast,
     MicroScale,
     Micro16,
+    FigWidth,
+    FigDpi,
+    FigLetters,
+    FigScale,
 }
 
 /// Una riga della zona Opzioni del pannello.
@@ -319,8 +323,8 @@ const SLIDE_MACRO: OptionDef = sw(Opt::SlideMacro, "Foto del vetrino intero", "L
 /// Le opzioni in più quando in coda c'è un vetrino digitale (.svs), in cima alle altre.
 pub fn slide_option_defs(action: &str) -> Vec<&'static OptionDef> {
     match action {
-        // Il testo si legge sempre dal livello «Media».
-        "ocr" => vec![],
+        // Il testo si legge sempre dal livello «Media»; la figura sceglie da sé.
+        "ocr" | "figure" => vec![],
         // Un file solo: il PDF, l'immagine ripulita o modificata non hanno etichetta e foto accanto.
         "pdf" | "strip" | "half" | "gray" | "rot90" => vec![&SLIDE_LEVEL],
         _ => vec![&SLIDE_LEVEL, &SLIDE_LABEL, &SLIDE_MACRO],
@@ -341,7 +345,7 @@ const DICOM_ANON: OptionDef = sw(Opt::DicomAnon, "Anonimizza", "Nome, ID, nascit
 /// Le opzioni in più quando in coda c'è un DICOM (TC, RX, ecografie), in cima alle altre.
 pub fn dicom_option_defs(action: &str) -> Vec<&'static OptionDef> {
     match action {
-        "ocr" | "ico" => vec![],
+        "ocr" | "ico" | "figure" => vec![],
         // Il DICOM anonimo resta un DICOM: finestra e immagini non c'entrano.
         "strip" => vec![&DICOM_ANON],
         "png" | "tiff" => vec![&DICOM_WINDOW, &DICOM_ALL, &DICOM_16, &DICOM_ANON],
@@ -369,7 +373,7 @@ const MICRO_16: OptionDef = sw(Opt::Micro16, "Valori originali a 16 bit", "Per m
 /// Le opzioni in più quando in coda c'è un'immagine di microscopia: solo quelle che servono al file
 /// (canali se sono più d'uno, piani Z, istanti), in cima alle altre.
 pub fn micro_option_defs(action: &str, canali: usize, z: usize, t: usize) -> Vec<&'static OptionDef> {
-    if matches!(action, "ocr" | "ico" | "strip") {
+    if matches!(action, "ocr" | "ico" | "strip" | "figure") {
         return vec![];
     }
     let mut v: Vec<&'static OptionDef> = Vec::new();
@@ -389,6 +393,16 @@ pub fn micro_option_defs(action: &str, canali: usize, z: usize, t: usize) -> Vec
     }
     v
 }
+
+const FIG_WIDTHS: &[Choice] = &[
+    Choice { label: "Una colonna (8,5 cm)", value: 85 },
+    Choice { label: "Pagina intera (17,5 cm)", value: 175 },
+];
+const FIG_DPIS: &[Choice] = &[Choice { label: "300 dpi", value: 300 }, Choice { label: "600 dpi", value: 600 }];
+const FIG_WIDTH: OptionDef = OptionDef { opt: Opt::FigWidth, title: "Larghezza", note: "Quella chiesta dalla rivista: una colonna o tutta la pagina", control: Control::Segments(FIG_WIDTHS), default: 175 };
+const FIG_DPI: OptionDef = OptionDef { opt: Opt::FigDpi, title: "Risoluzione", note: "300 dpi per foto e microscopia; 600 se la rivista lo chiede", control: Control::Segments(FIG_DPIS), default: 300 };
+const FIG_LETTERS: OptionDef = sw(Opt::FigLetters, "Lettere A, B, C", "In alto a sinistra di ogni pannello, nell'ordine della coda", true);
+const FIG_SCALE: OptionDef = sw(Opt::FigScale, "Barra di scala", "Sui pannelli di microscopia che dicono quanto è grande un pixel", true);
 
 /// Le opzioni del riquadro di un formato scientifico (vetrino, DICOM, microscopia): restano in vista, in cima.
 pub fn is_lead(opt: Opt) -> bool {
@@ -529,7 +543,8 @@ const FAST_START: OptionDef = sw(Opt::FastStart, "Ottimizza per il web", "L'avvi
 /// Le opzioni che valgono per questa categoria e questa voce; il motore le usa tutte.
 pub fn option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     let mut defs = format_option_defs(kind, action);
-    if action != "none" && !is_page_action(kind, action) {
+    // La figura ha il suo nome: quello del primo file con «-figura».
+    if action != "none" && action != "figure" && !is_page_action(kind, action) {
         defs.push(&NAME_TEMPLATE);
     }
     defs
@@ -539,6 +554,7 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     match (kind, action) {
         // Leggere il testo e togliere i dati nascosti non ridimensionano né girano la foto.
         (Kind::Image, "ocr" | "strip") => vec![],
+        (Kind::Image, "figure") => vec![&FIG_WIDTH, &FIG_DPI, &FIG_LETTERS, &FIG_SCALE],
         (Kind::Image, "jpeg" | "compress" | "pdf" | "pnm") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
         (Kind::Image, _) => vec![&IMAGE_SIZE, &STRAIGHTEN],
         (Kind::Doc, "pdf") => vec![&PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
@@ -748,6 +764,12 @@ pub fn options_from(values: &Values) -> engine::Options {
     o.micro_contrast = on(Opt::MicroContrast, true);
     o.micro_scale = on(Opt::MicroScale, true);
     o.micro_16bit = on(Opt::Micro16, false);
+    o.figura = crate::figura::Opzioni {
+        larghezza_mm: if values.num(Opt::FigWidth, FIG_WIDTH.default) == 85 { 85 } else { 175 },
+        dpi: if values.num(Opt::FigDpi, FIG_DPI.default) == 600 { 600 } else { 300 },
+        lettere: on(Opt::FigLetters, true),
+        barra: on(Opt::FigScale, true),
+    };
     let text = |opt: Opt| Some(values.text_of(opt).trim().to_string()).filter(|t| !t.is_empty());
     let pp = &mut o.pdf_pages;
     pp.settings.file_bookmarks = on(Opt::FileBookmarks, true);

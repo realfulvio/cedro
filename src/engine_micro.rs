@@ -343,4 +343,27 @@ mod prove {
         assert_eq!(pila.riassunto()[1], "Leica LIF · 2 images (this one: Serie1) · 2 channels · 3 Z planes · 2 time points · 12-bit · 6×4 · 0.25 µm/pixel · HC PL APO 63x/1.40 OIL");
         let _ = std::fs::remove_dir_all(&d);
     }
+
+    #[test]
+    fn la_figura_mette_insieme_microscopia_e_foto() {
+        let d = cartella("micro-figura");
+        let nd2 = crate::nd2::prove::nd2(&d, true);
+        let foto = d.join("b-foto.png");
+        image::RgbImage::from_pixel(300, 200, image::Rgb([200, 30, 30])).save(&foto).unwrap();
+        let o = Options { figura: crate::figura::Opzioni { larghezza_mm: 85, ..Default::default() }, ..Options::default() };
+        let out = super::super::figure_with(&[nd2.clone(), foto.clone()], None, &o).unwrap();
+        assert!(out.path.ends_with("zlib-figura.tiff"), "{}", out.path.display());
+        assert!(out.message.starts_with("Figura 8,5 × ") && out.message.contains("300 dpi, 2 pannelli. 1 con la barra di scala."), "{}", out.message);
+        let tiff = image::open(&out.path).unwrap();
+        // 85 mm a 300 dpi: 1004 pixel; i dpi sono scritti nel file.
+        assert_eq!(tiff.width(), 1004);
+        let mut dec = tiff::decoder::Decoder::new(std::fs::File::open(&out.path).unwrap()).unwrap();
+        assert_eq!(dec.get_tag_u32(tiff::tags::Tag::ResolutionUnit).unwrap(), 2);
+        let legenda = std::fs::read_to_string(d.join("zlib-figura-legenda.txt")).unwrap();
+        assert!(legenda.contains("(A) zlib.nd2 · barra di scala") && legenda.contains("(B) b-foto.png"), "{legenda}");
+        // Una foto sola dalla ruota: un pannello, senza barra.
+        let out = perform_with(&foto, "figure", 80, None, &Options::default()).unwrap();
+        assert!(out.message.contains("1 pannello.") && !out.message.contains("barra"), "{}", out.message);
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }
