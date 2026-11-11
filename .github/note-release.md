@@ -12,8 +12,11 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Le iconcine di «Cosa vuoi fare» nei PDF sono nuove, colorate e più grandi.**
+**Cedro apre i vetrini digitali (.svs) e li converte in immagini.**
 
-- I cinque pulsanti della scheda PDF (Converti, Unisci, Dividi, Pagine, Comprimi) hanno ognuno il suo colore (blu, verde, arancio, viola, petrolio) e un disegno nuovo che fa vedere cosa succede ai fogli: due che diventano uno, uno tagliato in due, uno schiacciato.
-- L'icona è più grande dentro il pulsante e la scritta un po' più piccola. Il pulsante scelto prende il colore della sua attività, non più quello del tema, e nei temi scuri i colori sono schiariti per leggersi bene.
-- Gli stessi disegni compaiono anche sul pulsante grande in basso, nel Percorso guidato e nella ruota.
+- Metti un vetrino Aperio (`.svs`) nella scheda Immagini e Cedro lo riconosce da solo: in coda compare «Vetrino» con la riga che dice quanti livelli ha, com'è compresso e a quanti ingrandimenti è stato scansionato.
+- Nel riquadro «Vetrino» scegli il livello: **Panoramica** (per guardarlo o metterlo in un documento), **Media** (il più grande che sta comodo in memoria, è la scelta di partenza) o **Piena** (ogni dettaglio dello scanner). Accanto a ogni scelta vedi le misure e il peso a occhio.
+- L'**etichetta** col codice del vetrino e la **foto del vetrino intero** escono accanto al file, nello stesso formato, e si tolgono con un interruttore.
+- Il livello pieno, anche da miliardi di pixel, si scrive a strisce in PNG, JPEG o TIFF senza riempire la memoria, usando tutti i core: 1,5 miliardi di pixel in 15 secondi in PNG e 19 in JPEG su un PC a 4 core. I formati che non reggono quelle misure escono in TIFF, e il messaggio lo dice.
+- Funzionano anche le tessere in JPEG 2000. OCR e PDF aprono i vetrini dal livello Media.
+- **Salvare in JPEG è fino a 23 volte più veloce**, per qualunque foto: prima la scrittura su disco era a piccoli pezzi.
