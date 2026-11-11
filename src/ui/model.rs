@@ -477,9 +477,12 @@ impl App {
         let loader = media::Loader::new(tx.clone(), wake.clone());
         let pdfwork = super::pdfwork::Worker::new(tx.clone(), wake.clone());
         let mut values = Values::new();
-        if crate::read_settings().replace {
+        let st = crate::read_settings();
+        if st.replace {
             values.exists = Exists::Replace;
         }
+        // La calibrazione del microscopio si scrive una volta e resta.
+        values.set_text(&conversioni::FIG_CALIBRATION, &st.calibrazione_10x);
         let mut app = App {
             activity: Activity::Convert,
             files: Vec::new(),
@@ -1349,6 +1352,14 @@ impl App {
         if targets.is_empty() {
             self.notice = Some(Notice { text: "Aggiungi prima qualche file.".into(), error: false });
             return;
+        }
+        if self.kind() == Kind::Image && self.action == "figure" {
+            let cal = self.values.text(&conversioni::FIG_CALIBRATION).trim().to_string();
+            let mut st = crate::read_settings();
+            if st.calibrazione_10x != cal {
+                st.calibrazione_10x = cal;
+                let _ = crate::settings::write_settings(&st);
+            }
         }
         if (self.kind() == Kind::Pdf && self.action == "merge") || (self.kind() == Kind::Image && self.action == "figure") {
             self.start_merge();

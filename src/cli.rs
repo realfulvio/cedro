@@ -69,6 +69,11 @@ pub fn run() -> i32 {
                     Some("--600") => figura.dpi = 600,
                     Some("--senza-lettere") => figura.lettere = false,
                     Some("--senza-barra") => figura.barra = false,
+                    // --obiettivo 40: la barra sulle foto senza misure, dalla calibrazione del 10x.
+                    Some(o) if o.starts_with("--obiettivo=") => {
+                        figura.obiettivo = o["--obiettivo=".len()..].trim_end_matches(['x', 'X']).parse().unwrap_or(0);
+                        figura.calibrazione_10x = cedro::read_settings().calibrazione_10x;
+                    }
                     _ => files.push(std::path::PathBuf::from(a)),
                 }
             }
@@ -197,7 +202,7 @@ Cedro — conversione locale, senza upload.
   cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--cpu]
                    dalla voce a un Word (o a un testo), con il motore scaricato alla prima volta;
                    --voci dice quante persone parlano (auto le conta da solo, 1 non le riconosce)
-  cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra]
+  cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra] [--obiettivo=40x]
                    la figura per un articolo: pannelli A, B, C in un TIFF a 300 dpi largo 17,5 cm
   cedro pacchetto <file o cartella>…   pacchetto di dati (ZIP BagIt con l'impronta SHA-256 di ogni file)
   cedro tool <pacchetto.zip> verify-pack   controlla che nessun file del pacchetto sia cambiato

@@ -39,6 +39,9 @@ pub struct Settings {
     pub avx512: bool,
     pub dest: Dest,
     pub dest_dir: String,
+    /// Laboratorio: i micron di un pixel della fotocamera del microscopio con l'obiettivo 10x, come
+    /// scritto (per esempio «0,65»); vuoto = non misurato. Gli altri obiettivi si ricavano da questo.
+    pub calibrazione_10x: String,
     /// Se il file esiste già lo sostituisce, invece di aggiungere un numero.
     pub replace: bool,
     /// Risoluzione di PDF in JPG, in dpi (100, 144, 200 o 300).
@@ -103,6 +106,7 @@ impl Default for Settings {
             avx512: true,
             dest: Dest::Same,
             dest_dir: String::new(),
+            calibrazione_10x: String::new(),
             replace: false,
             pdf_dpi: 144,
             compress: 1,
@@ -197,6 +201,7 @@ impl Settings {
                     }
                 }
                 "dest_dir" => s.dest_dir = value.to_string(),
+                "calibrazione_10x" => s.calibrazione_10x = value.trim().to_string(),
                 "pdf_dpi" => {
                     if let Ok(n) = value.parse::<u32>() {
                         s.pdf_dpi = n.clamp(72, 300);
@@ -262,6 +267,7 @@ impl Settings {
             ("replace", b(self.replace).into()),
             ("dest", dest.into()),
             ("dest_dir", self.dest_dir.clone()),
+            ("calibrazione_10x", self.calibrazione_10x.clone()),
             ("pdf_dpi", self.pdf_dpi.to_string()),
             ("compress", self.compress.to_string()),
             ("ocr_lang", self.ocr_lang.clone()),

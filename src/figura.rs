@@ -20,11 +20,23 @@ pub struct Opzioni {
     pub lettere: bool,
     /// La barra di scala sui pannelli che dicono quanto è grande un pixel.
     pub barra: bool,
+    /// Per le foto della fotocamera del microscopio (che non dicono quanto è grande un pixel):
+    /// l'obiettivo usato (0 = nessuna barra su quelle foto) e i micron di un pixel con il 10x, come li
+    /// ha scritti la persona.
+    pub obiettivo: u32,
+    pub calibrazione_10x: String,
+}
+
+impl Opzioni {
+    /// I micron di un pixel delle foto senza misure, se obiettivo e calibrazione ci sono.
+    fn foto_um(&self) -> Option<f64> {
+        pm_per_px(&self.calibrazione_10x, self.obiettivo).map(|pm| pm as f64 / 1e6)
+    }
 }
 
 impl Default for Opzioni {
     fn default() -> Self {
-        Opzioni { larghezza_mm: 175, dpi: 300, lettere: true, barra: true }
+        Opzioni { larghezza_mm: 175, dpi: 300, lettere: true, barra: true, obiettivo: 0, calibrazione_10x: String::new() }
     }
 }
 
@@ -45,6 +57,16 @@ pub struct Figura {
 
 /// Il pannello di un file: la microscopia con i canali a colori e la proiezione dei piani Z come
 /// nelle conversioni, il resto come lo apre Cedro (DICOM con la finestra giusta, SVG, RAW…).
+/// I picometri di un pixel con l'obiettivo `ingrandimento`, dalla calibrazione fatta con il 10x
+/// (scritta come la scrive una persona: «0,65» o «0.65» µm). `None` se non è un numero sensato.
+pub fn pm_per_px(calibrazione_10x: &str, ingrandimento: u32) -> Option<u32> {
+    let um: f64 = calibrazione_10x.trim().trim_end_matches("µm").trim().replace(',', ".").parse().ok()?;
+    if !(0.001..=100.0).contains(&um) || ingrandimento == 0 {
+        return None;
+    }
+    Some((um * 10.0 / ingrandimento as f64 * 1e6).round() as u32)
+}
+
 pub fn pannello(path: &Path) -> Result<Pannello, String> {
     let nome = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     if microscopia::is_stack(path) {
@@ -175,7 +197,7 @@ pub fn componi(pannelli: Vec<Pannello>, opz: &Opzioni) -> Result<Figura, String>
         let mut img = alla_larghezza(&p.img, casella);
         let mut barra = None;
         if opz.barra {
-            if let Some(um) = p.um_per_px {
+            if let Some(um) = p.um_per_px.or_else(|| opz.foto_um()) {
                 // Un pixel del pannello copre più (o meno) micron di uno del file.
                 let um_pannello = um * p.img.width() as f64 / img.width() as f64;
                 barra = microscopia::disegna_barra_sola(&mut img, um_pannello);
@@ -239,6 +261,20 @@ pub fn legenda(f: &Figura, opz: &Opzioni) -> String {
 #[cfg(test)]
 mod prove {
     use super::*;
+
+    #[test]
+    fn la_calibrazione_del_10x_vale_per_gli_altri_obiettivi() {
+        assert_eq!(pm_per_px("0,65", 10), Some(650_000));
+        assert_eq!(pm_per_px("0.65 µm", 40), Some(162_500));
+        assert_eq!(pm_per_px(" 1,3 ", 4), Some(3_250_000));
+        assert_eq!(pm_per_px("", 10), None);
+        assert_eq!(pm_per_px("abc", 10), None);
+        assert_eq!(pm_per_px("0,65", 0), None);
+        // Una foto senza misure prende la barra dall'obiettivo.
+        let opz = Opzioni { larghezza_mm: 85, obiettivo: 10, calibrazione_10x: "0,65".into(), ..Opzioni::default() };
+        let f = componi(vec![Pannello { img: tinta(1004, 500, [0, 0, 0]), um_per_px: None, nome: "foto.jpg".into() }], &opz).unwrap();
+        assert!(f.pannelli[0].2.is_some(), "{:?}", f.pannelli[0]);
+    }
 
     fn tinta(w: u32, h: u32, c: [u8; 3]) -> RgbImage {
         RgbImage::from_pixel(w, h, image::Rgb(c))

@@ -2071,7 +2071,7 @@ Pagina intera (17,5 cm)	Full page (17.5 cm)
 Lettere A, B, C	Letters A, B, C
 In alto a sinistra di ogni pannello, nell'ordine della coda	Top left of each panel, in queue order
 Sui pannelli di microscopia che dicono quanto è grande un pixel	On microscopy panels that state the pixel size
-  cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra]	  cedro figura <image>… [--colonna] [--600] [--senza-lettere] [--senza-barra]
+  cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra] [--obiettivo=40x]	  cedro figura <image>… [--colonna] [--600] [--senza-lettere] [--senza-barra] [--obiettivo=40x]
                    la figura per un articolo: pannelli A, B, C in un TIFF a 300 dpi largo 17,5 cm	                   a figure for a paper: panels A, B, C in a 300 dpi TIFF, 17.5 cm wide
 Pacchetto	Package
 Verifica il pacchetto di dati	Verify the data package
@@ -2089,3 +2089,9 @@ questo ZIP non è un pacchetto di dati: manca l'elenco delle impronte (manifest-
 l'elenco delle impronte è vuoto	the fingerprint list is empty
   cedro pacchetto <file o cartella>…   pacchetto di dati (ZIP BagIt con l'impronta SHA-256 di ogni file)	  cedro pacchetto <file or folder>…   data package (BagIt ZIP with the SHA-256 of every file)
   cedro tool <pacchetto.zip> verify-pack   controlla che nessun file del pacchetto sia cambiato	  cedro tool <package.zip> verify-pack   checks that no file in the package has changed
+Obiettivo delle foto	Objective of the photos
+Per le foto della fotocamera del microscopio, che non dicono quanto è grande un pixel: la barra si calcola dall'obiettivo	For photos from the microscope camera, which don't state the pixel size: the bar is computed from the objective
+Calibrazione con il 10x	Calibration with the 10x
+Micron per pixel con l'obiettivo 10x, misurati una volta con il vetrino micrometrico; Cedro se la ricorda	Microns per pixel with the 10x objective, measured once with a stage micrometer; Cedro remembers it
+per esempio 0,65	for example 0.65
+Scrivi la calibrazione: i micron di un pixel con il 10x, per esempio 0,65.	Enter the calibration: microns per pixel with the 10x, for example 0.65.
