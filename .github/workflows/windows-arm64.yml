@@ -299,10 +299,14 @@ jobs:
       - name: Inno Setup
         shell: pwsh
         run: |
-          if (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") { 'Inno Setup già installato'; exit 0 }
+          # Gli stessi posti in cui lo cerca installer\build.ps1. Sulla VM di casa il runner è un servizio di sistema:
+          # lì si installa per tutti gli utenti (in Programmi), perché «solo per me» finirebbe nel profilo di sistema.
+          $iscc = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          if ($iscc | Where-Object { Test-Path $_ }) { 'Inno Setup già installato'; exit 0 }
           Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe -OutFile is.exe
-          $p = Start-Process .\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait -PassThru
-          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")) { throw "Inno Setup non installato ($($p.ExitCode))" }
+          $scope = if ('${{ needs.scegli.outputs.locale }}' -eq 'true') { '/ALLUSERS' } else { '/CURRENTUSER' }
+          $p = Start-Process .\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', $scope, '/NORESTART' -Wait -PassThru
+          if (-not ($iscc | Where-Object { Test-Path $_ })) { throw "Inno Setup non installato ($($p.ExitCode))" }
 
       - name: Installatore x64 (e la copia per la vecchia edizione Comune di Bondeno)
         shell: pwsh
