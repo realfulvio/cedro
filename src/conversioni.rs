@@ -145,6 +145,8 @@ pub enum Control {
     Segments(&'static [Choice]),
     /// Un posto sulla pagina, da 0 a 8: la griglia 3 × 3 (in alto a sinistra … in basso a destra).
     Position,
+    /// Il livello di un vetrino digitale: schede una sotto l'altra con le misure del vetrino in coda.
+    Levels(&'static [Choice]),
 }
 
 /// Tutte le opzioni che il motore capisce.
@@ -207,6 +209,9 @@ pub enum Opt {
     SqueezeLevel,
     StripMeta,
     BwScans,
+    SlideLevel,
+    SlideLabel,
+    SlideMacro,
 }
 
 /// Una riga della zona Opzioni del pannello.
@@ -291,6 +296,26 @@ const FPS: &[Choice] = &[
     Choice { label: "25", value: 25 },
     Choice { label: "24", value: 24 },
 ];
+
+const SLIDE_LEVELS: &[Choice] = &[
+    Choice { label: "Panoramica", value: 0 },
+    Choice { label: "Media", value: 1 },
+    Choice { label: "Piena", value: 2 },
+];
+pub const SLIDE_LEVEL: OptionDef = OptionDef { opt: Opt::SlideLevel, title: "Vetrino", note: "", control: Control::Levels(SLIDE_LEVELS), default: 1 };
+const SLIDE_LABEL: OptionDef = sw(Opt::SlideLabel, "Etichetta", "La targhetta con il codice del vetrino", true);
+const SLIDE_MACRO: OptionDef = sw(Opt::SlideMacro, "Foto del vetrino intero", "La «macro» scattata dallo scanner", true);
+
+/// Le opzioni in più quando in coda c'è un vetrino digitale (.svs), in cima alle altre.
+pub fn slide_option_defs(action: &str) -> Vec<&'static OptionDef> {
+    match action {
+        // Il testo si legge sempre dal livello «Media».
+        "ocr" => vec![],
+        // Un file solo: il PDF, l'immagine ripulita o modificata non hanno etichetta e foto accanto.
+        "pdf" | "strip" | "half" | "gray" | "rot90" => vec![&SLIDE_LEVEL],
+        _ => vec![&SLIDE_LEVEL, &SLIDE_LABEL, &SLIDE_MACRO],
+    }
+}
 
 const STRAIGHTEN: OptionDef = sw(Opt::Straighten, "Raddrizza le foto", "Corregge la rotazione dei file del telefono", true);
 const WHITE_BG: OptionDef = sw(Opt::WhiteBackground, "Sfondo bianco", "Al posto della trasparenza, nel JPEG", true);
@@ -628,6 +653,9 @@ pub fn options_from(values: &Values) -> engine::Options {
     o.mute = on(Opt::Mute, false);
     o.faststart = on(Opt::FastStart, false);
     o.name_template = Some(values.text_of(Opt::NameTemplate).trim().to_string()).filter(|t| !t.is_empty());
+    o.slide_level = values.num(Opt::SlideLevel, SLIDE_LEVEL.default).min(2);
+    o.slide_label = on(Opt::SlideLabel, true);
+    o.slide_macro = on(Opt::SlideMacro, true);
     let text = |opt: Opt| Some(values.text_of(opt).trim().to_string()).filter(|t| !t.is_empty());
     let pp = &mut o.pdf_pages;
     pp.settings.file_bookmarks = on(Opt::FileBookmarks, true);
@@ -694,6 +722,12 @@ mod tests {
                         all.push(d);
                     }
                 }
+            }
+        }
+        // Le opzioni dei vetrini compaiono solo con un .svs in coda.
+        for d in slide_option_defs("png") {
+            if !all.iter().any(|x| x.opt == d.opt) {
+                all.push(d);
             }
         }
         all
@@ -796,6 +830,10 @@ mod tests {
                 Control::Text { .. } => values.set_text(def, if def.opt == Opt::NumberStart { "5" } else { "2-4" }),
                 Control::Password => values.set_text(def, "segreto"),
                 Control::Position => values.set(def, (def.default + 1) % 9),
+                Control::Levels(choices) => {
+                    let other = choices.iter().find(|c| c.value != def.default).expect("almeno due scelte");
+                    values.set(def, other.value);
+                }
             }
             assert_ne!(options_from(&values), base, "{:?} non arriva al motore", def.opt);
         }

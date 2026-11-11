@@ -925,7 +925,21 @@ impl App {
     }
 
     pub fn option_defs(&self) -> Vec<&'static OptionDef> {
-        conversioni::option_defs(self.kind(), &self.action).into_iter().filter(|d| conversioni::shown(d, &self.values)).collect()
+        let mut defs = conversioni::option_defs(self.kind(), &self.action);
+        // Con un vetrino in coda il riquadro «Vetrino» va in cima.
+        if self.kind() == Kind::Image && self.activity == Activity::Convert && self.first_slide().is_some() {
+            let mut all = conversioni::slide_option_defs(&self.action);
+            all.append(&mut defs);
+            defs = all;
+        }
+        defs.into_iter().filter(|d| conversioni::shown(d, &self.values)).collect()
+    }
+
+    /// Il primo vetrino digitale (.svs) della coda, con quanti ce ne sono.
+    pub fn first_slide(&self) -> Option<(&media::SlideInfo, usize)> {
+        let mut found = self.files.iter().filter_map(|f| self.media_of(&f.path).and_then(|m| m.slide.as_ref()));
+        let first = found.next()?;
+        Some((first, 1 + found.count()))
     }
 
     /// Vero se le opzioni scelte non sono quelle consigliate (la Semplificata lo dice).
