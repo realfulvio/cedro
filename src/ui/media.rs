@@ -22,6 +22,8 @@ pub struct Loaded {
     pub thumb: Option<Image>,
     /// I vetrini digitali (.svs): livelli e riga di descrizione.
     pub slide: Option<SlideInfo>,
+    /// I DICOM: la riga che li descrive e se il nome può essere scritto nei pixel.
+    pub dicom: Option<DicomInfo>,
     /// La scheda di audio, video e altri file.
     pub about: Option<super::preview::About>,
 }
@@ -50,6 +52,45 @@ impl SlideInfo {
         };
         let (a, b, c) = (one(Pick::Overview), one(Pick::Medium), one(Pick::Full));
         SlideInfo { summary: [s.summary(false), s.summary(true)], picks: [a.0, b.0, c.0], ratios: [a.1, b.1, c.1], label: s.label.is_some(), macro_image: s.macro_image.is_some() }
+    }
+}
+
+/// Quello che il pannello mostra di un DICOM.
+#[derive(Clone, Debug, Default)]
+pub struct DicomInfo {
+    /// «TC · 120 immagini · 512 × 512 · 0,5 mm», in italiano e in inglese.
+    pub summary: [String; 2],
+    pub modality: String,
+    pub frames: u32,
+    /// Ecografie e catture dello schermo: il nome può essere dentro l'immagine.
+    pub burned_in: bool,
+}
+
+impl DicomInfo {
+    pub fn of(f: &crate::dicom::DicomFile) -> DicomInfo {
+        let info = crate::dicom::pixel::Info::of(f).ok();
+        let modality = f.string(crate::dicom::tag(0x0008, 0x0060)).unwrap_or_default();
+        let frames = info.as_ref().map(|i| i.frames).unwrap_or(0);
+        let line = |english: bool| {
+            let mut parts: Vec<String> = Vec::new();
+            let name = crate::dicom::modality_name(&modality);
+            parts.push(if name.is_empty() { "DICOM".into() } else if english { modality.clone() } else { name.to_string() });
+            match &info {
+                Some(i) => {
+                    if i.frames > 1 {
+                        parts.push(if english { format!("{} images", i.frames) } else { format!("{} immagini", i.frames) });
+                    }
+                    parts.push(format!("{} × {}", i.cols, i.rows));
+                    if let Some((r, _)) = i.spacing {
+                        let mm = format!("{r:.2}").trim_end_matches('0').trim_end_matches('.').to_string();
+                        parts.push(format!("{} mm", if english { mm } else { mm.replace('.', ",") }));
+                    }
+                }
+                None => parts.push(if english { "no image (report or list)".into() } else { "senza immagine (referto o elenco)".into() }),
+            }
+            parts.join(" · ")
+        };
+        DicomInfo { summary: [line(false), line(true)], modality, frames, burned_in: crate::dicom::pixel::burned_in(f) }
     }
 }
 
@@ -118,8 +159,8 @@ pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
         let rgba = image::DynamicImage::ImageRgb8(small).to_rgba8();
         return Some((Image::from_rgba(rgba.width(), rgba.height(), rgba.as_raw())?, (s.full().width, s.full().height)));
     }
-    // SVG, AVIF e JPEG XL non passano dal lettore del crate `image`.
-    if matches!(crate::imgfmt::sniff_file(path), Some("svg" | "avif" | "jxl")) || matches!(engine::extension(path).as_str(), "svg" | "svgz") {
+    // SVG, AVIF, JPEG XL e DICOM non passano dal lettore del crate `image`.
+    if matches!(crate::imgfmt::sniff_file(path), Some("svg" | "avif" | "jxl" | "dcm")) || matches!(engine::extension(path).as_str(), "svg" | "svgz" | "dcm" | "dicom") {
         let img = crate::imgfmt::open(path, false, Some(side)).ok()?;
         let size = (img.width(), img.height());
         let small = img.thumbnail(side, side).to_rgba8();
@@ -152,6 +193,9 @@ fn info(path: &Path) -> Loaded {
             }
             if crate::svs::is_slide(path) {
                 out.slide = crate::svs::Slide::open(path).ok().map(|s| SlideInfo::of(&s));
+            }
+            if crate::imgfmt::sniff_file(path) == Some("dcm") || matches!(engine::extension(path).as_str(), "dcm" | "dicom") {
+                out.dicom = crate::dicom::DicomFile::open(path).ok().map(|f| DicomInfo::of(&f));
             }
         }
         Kind::Pdf => {

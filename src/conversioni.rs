@@ -212,6 +212,10 @@ pub enum Opt {
     SlideLevel,
     SlideLabel,
     SlideMacro,
+    DicomWindow,
+    DicomAllFrames,
+    Dicom16,
+    DicomAnon,
 }
 
 /// Una riga della zona Opzioni del pannello.
@@ -315,6 +319,33 @@ pub fn slide_option_defs(action: &str) -> Vec<&'static OptionDef> {
         "pdf" | "strip" | "half" | "gray" | "rot90" => vec![&SLIDE_LEVEL],
         _ => vec![&SLIDE_LEVEL, &SLIDE_LABEL, &SLIDE_MACRO],
     }
+}
+
+const DICOM_WINDOWS: &[Choice] = &[
+    Choice { label: "Del file", value: 0 },
+    Choice { label: "Polmone", value: 1 },
+    Choice { label: "Osso", value: 2 },
+    Choice { label: "Tessuti molli", value: 3 },
+];
+pub const DICOM_WINDOW: OptionDef = OptionDef { opt: Opt::DicomWindow, title: "Finestra", note: "«Del file» è quella scelta da chi ha fatto l'esame; Polmone, Osso e Tessuti molli sono quelle classiche della TC", control: Control::Segments(DICOM_WINDOWS), default: 0 };
+const DICOM_ALL: OptionDef = sw(Opt::DicomAllFrames, "Tutte le immagini della serie", "Spento: solo la prima", true);
+const DICOM_16: OptionDef = sw(Opt::Dicom16, "Valori originali a 16 bit", "Per misurare: niente finestra, unità Hounsfield intatte", false);
+const DICOM_ANON: OptionDef = sw(Opt::DicomAnon, "Anonimizza", "Nome, ID, nascita, medico, clinica e UID non escono; i file prendono un codice", true);
+
+/// Le opzioni in più quando in coda c'è un DICOM (TC, RX, ecografie), in cima alle altre.
+pub fn dicom_option_defs(action: &str) -> Vec<&'static OptionDef> {
+    match action {
+        "ocr" | "ico" => vec![],
+        // Il DICOM anonimo resta un DICOM: finestra e immagini non c'entrano.
+        "strip" => vec![&DICOM_ANON],
+        "png" | "tiff" => vec![&DICOM_WINDOW, &DICOM_ALL, &DICOM_16, &DICOM_ANON],
+        _ => vec![&DICOM_WINDOW, &DICOM_ALL, &DICOM_ANON],
+    }
+}
+
+/// Le opzioni del riquadro di un formato scientifico (vetrino, DICOM): restano in vista, in cima.
+pub fn is_lead(opt: Opt) -> bool {
+    matches!(opt, Opt::SlideLevel | Opt::SlideLabel | Opt::SlideMacro | Opt::DicomWindow | Opt::DicomAllFrames | Opt::Dicom16 | Opt::DicomAnon)
 }
 
 const STRAIGHTEN: OptionDef = sw(Opt::Straighten, "Raddrizza le foto", "Corregge la rotazione dei file del telefono", true);
@@ -656,6 +687,10 @@ pub fn options_from(values: &Values) -> engine::Options {
     o.slide_level = values.num(Opt::SlideLevel, SLIDE_LEVEL.default).min(2);
     o.slide_label = on(Opt::SlideLabel, true);
     o.slide_macro = on(Opt::SlideMacro, true);
+    o.dicom_window = values.num(Opt::DicomWindow, DICOM_WINDOW.default).min(3);
+    o.dicom_all_frames = on(Opt::DicomAllFrames, true);
+    o.dicom_16bit = on(Opt::Dicom16, false);
+    o.dicom_anon = on(Opt::DicomAnon, true);
     let text = |opt: Opt| Some(values.text_of(opt).trim().to_string()).filter(|t| !t.is_empty());
     let pp = &mut o.pdf_pages;
     pp.settings.file_bookmarks = on(Opt::FileBookmarks, true);
@@ -725,7 +760,7 @@ mod tests {
             }
         }
         // Le opzioni dei vetrini compaiono solo con un .svs in coda.
-        for d in slide_option_defs("png") {
+        for d in slide_option_defs("png").into_iter().chain(dicom_option_defs("png")) {
             if !all.iter().any(|x| x.opt == d.opt) {
                 all.push(d);
             }
