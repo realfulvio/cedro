@@ -130,7 +130,8 @@ const PDF_CONVERT: &[Slice] = &[
     Slice { id: "png", label: "PNG" },
     Slice { id: "txt", label: "Testo" },
 ];
-const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }, Slice { id: "merge", label: "Unisci" }, Slice { id: "split", label: "Dividi" }, Slice { id: "compress", label: "Comprimi" }];
+const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }, Slice { id: "strip", label: "Anonimo" }, Slice { id: "merge", label: "Unisci" }, Slice { id: "split", label: "Dividi" }, Slice { id: "compress", label: "Comprimi" }];
+const DOC_TOOLS: &[Slice] = &[Slice { id: "strip", label: "Anonimo" }];
 const EMPTY: &[Slice] = &[Slice { id: "none", label: "Niente qui" }];
 
 /// I formati di uscita del pannello Conversioni: quelli della ruota più gli altri, che alla ruota
@@ -155,6 +156,7 @@ pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
         (Kind::Doc, Mode::Convert) => DOC_CONVERT,
         (Kind::Pdf, Mode::Convert) => PDF_CONVERT,
         (Kind::Pdf, Mode::Tools) => PDF_TOOLS,
+        (Kind::Doc, Mode::Tools) => DOC_TOOLS,
         (Kind::Archive, Mode::Convert) => ARCHIVE_CONVERT,
         _ => EMPTY,
     }
@@ -1736,6 +1738,19 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         };
         write_bytes(&out, text.as_bytes())?;
         return Ok(Output { path: out, message });
+    }
+
+    // Togli autore e dati nascosti da PDF e documenti: il testo che si vede resta com'è.
+    if action == "strip" && matches!(kind, Kind::Pdf | Kind::Doc) {
+        let ext = extension(path);
+        if !crate::anonimizza::gestito(&ext) {
+            return Err(err("i .doc e .rtf vecchi non si ripuliscono: salvali prima in .docx o .odt"));
+        }
+        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let (clean, fatto) = crate::anonimizza::pulisci(&ext, &bytes).map_err(err)?;
+        let out = reserve(&dir, &format!("{}-anonimo", stem(path)), &ext)?;
+        write_bytes(&out, &clean)?;
+        return Ok(Output { path: out, message: fatto.frase() });
     }
 
     if kind != Kind::Image {

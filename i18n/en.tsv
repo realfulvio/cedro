@@ -1913,3 +1913,45 @@ i file esistono già: saltati	the files already exist: skipped
 ~date (spostate tutte insieme)	dates (all shifted together)
 ~allevamento	breeder
 Questa immagine può avere nome o data scritti dentro i pixel (ecografie, catture dello schermo): controllala prima di condividerla.	This image may have the name or date written in the pixels (ultrasounds, screen captures): check it before sharing.
+# Togli autore e dati nascosti da PDF e documenti
+Togli autore e dati nascosti	Remove author and hidden data
+autore, programma, commenti	author, program, comments
+autore, revisioni, commenti	author, revisions, comments
+Modifica il documento	Edit the document
+Anonimo	Anonymous
+Nessun dato nascosto trovato.	No hidden data found.
+Il testo del documento resta com'è: se il nome è scritto lì, va tolto a mano.	The document text stays as it is: if the name is written there, remove it by hand.
+Il PDF contiene allegati: non sono stati aperti, controllali.	The PDF has attachments: they were not opened, check them.
+formato non gestito	format not supported
+PDF protetto da password: togli prima la password e riprova	password-protected PDF: remove the password first and try again
+i .doc e .rtf vecchi non si ripuliscono: salvali prima in .docx o .odt	old .doc and .rtf files can't be cleaned: save them as .docx or .odt first
+documento non letto: {}	document not read: {}
+PDF non scritto: {}	PDF not written: {}
+~autore	author
+~programma	program
+~date di creazione e modifica	creation and modification dates
+~titolo	title
+~oggetto	subject
+~parole chiave	keywords
+~altre informazioni del documento	other document information
+~metadati XMP	XMP metadata
+~dati privati dei programmi	private program data
+~autori dei commenti	comment authors
+~date dei commenti	comment dates
+~dati della firma	signature details
+~azioni all'apertura	actions on opening
+~proprietà personalizzate	custom properties
+~elenco delle persone	list of people
+~miniatura	thumbnail
+~ultimo a modificare	last modified by
+~descrizione	description
+~categoria	category
+~chi ha stampato	printed by
+~numero di revisioni	revision count
+~tempo di modifica	editing time
+~modello	template
+~azienda	company
+~responsabile	manager
+~indirizzo dei collegamenti	hyperlink base
+~autori di commenti e revisioni	comment and revision authors
+~percorso del file sul PC	file path on the PC
