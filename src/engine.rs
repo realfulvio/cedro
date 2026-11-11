@@ -1307,6 +1307,10 @@ fn figure_inner(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) -> Ce
     if barre > 0 {
         message.push_str(&format!(" {barre} con la barra di scala."));
     }
+    // L'obiettivo da solo non basta: senza la calibrazione con il 10x la barra non si può calcolare.
+    if opz.barra && opz.obiettivo != 0 && crate::figura::pm_per_px(&opz.calibrazione_10x, opz.obiettivo).is_none() {
+        message.push_str(" Niente barra dall'obiettivo: manca la calibrazione con il 10x.");
+    }
     message.push_str(" Legenda nel file di testo accanto.");
     crate::progress::report(1.0);
     Ok(Output { path: out, message })
