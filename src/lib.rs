@@ -32,6 +32,7 @@ pub mod settings;
 pub mod tema;
 pub mod ui;
 pub mod sysinfo;
+pub mod svs;
 mod sink;
 mod textconv;
 pub mod trascrizione;
