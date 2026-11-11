@@ -593,6 +593,9 @@ jobs:
   apri:
     name: Pubblica la release quando ci sono tutti i pacchetti
     needs: pubblica
+    # always(): con ARM spento i job ARM risultano «saltati», e senza questo anche apri e verifica verrebbero
+    # saltati (la 0.40.0 è rimasta in bozza così).
+    if: ${{ always() && needs.pubblica.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 100
     steps:
@@ -620,6 +623,7 @@ jobs:
   verifica:
     name: "Dopo la pubblicazione: una 0.17 vera si aggiorna da GitHub, la nuova trascrive"
     needs: apri
+    if: ${{ always() && needs.apri.result == 'success' }}
     runs-on: windows-latest
     steps:
       - name: Controlla aggiornamenti dalla 0.17.1
