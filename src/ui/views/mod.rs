@@ -17,7 +17,7 @@ mod riassunto;
 
 pub use activity::{links_page, transcribe_page};
 pub use firma::{draw_viewer, firma_page, viewer_size};
-pub use pagine::{merged_pages, page_drop, split_file, BOARD_MAX, MERGE as ICON_MERGE, MERGED_MAX, SCISSORS as ICON_SCISSORS, SHRINK as ICON_SHRINK, STRIP_MAX};
+pub use pagine::{merged_pages, page_drop, split_file, BOARD_MAX, MERGE as ICON_MERGE, MERGED_MAX, SPLIT as ICON_SPLIT, SHRINK as ICON_SHRINK, STRIP_MAX};
 
 use super::assets as ic;
 use super::core::{Act, Field, Fold, Frame, Scroll, BOLD, R, SANS, SEMI};

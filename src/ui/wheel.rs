@@ -688,7 +688,7 @@ fn icon_of(id: &str) -> &'static str {
         "rot90" => assets::CONVERT,
         "ocr" => assets::SEARCH,
         "merge" => super::views::ICON_MERGE,
-        "split" => super::views::ICON_SCISSORS,
+        "split" => super::views::ICON_SPLIT,
         "dup" => assets::COPY,
         "path" => assets::LINK,
         "zip" => assets::FOLDER,
