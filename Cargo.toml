@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.38.7"
+version = "0.39.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -38,6 +38,10 @@ avif-decode = { version = "3", default-features = false }
 jxl-oxide = { version = "0.12", default-features = false }
 zune-jpegxl = { version = "0.5", default-features = false, features = ["std"] }
 zune-core = { version = "0.5", default-features = false }
+# Vetrini digitali (.svs): pagine TIFF/BigTIFF a tessere JPEG (zune-jpeg) e JPEG 2000 (hayro-jpeg2000), già dentro Cedro per image e hayro.
+tiff = "0.11"
+zune-jpeg = "0.5"
+hayro-jpeg2000 = { version = "0.5", default-features = false, features = ["simd"] }
 flacenc = { version = "0.5", default-features = false }
 zip = { version = "9", default-features = false, features = ["deflate"] }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
