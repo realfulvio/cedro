@@ -272,6 +272,24 @@ jobs:
         shell: pwsh
         run: powershell -File installer\build.ps1
 
+      - name: Versione portable (zip)
+        shell: pwsh
+        run: powershell -File installer\portable.ps1
+
+      - name: "Prova della versione portable: parte senza installare e tiene i dati accanto all'exe"
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $v = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
+          Expand-Archive "dist\Cedro-Portable-$v-x64.zip" -DestinationPath portable
+          $dir = Resolve-Path 'portable\Cedro-Portable'
+          foreach ($f in 'cedro.exe', 'cedro.portable', 'LICENSE', 'Licenze di terze parti.txt') { if (-not (Test-Path (Join-Path $dir $f))) { throw "manca $f nello zip" } }
+          # Con un APPDATA vuoto e a parte: se Cedro scrive lì, la prova fallisce.
+          $env:APPDATA = Join-Path $PWD 'appdata-finto'; $env:LOCALAPPDATA = Join-Path $PWD 'localappdata-finto'
+          New-Item -ItemType Directory -Force $env:APPDATA, $env:LOCALAPPDATA | Out-Null
+          & (Join-Path $dir 'cedro.exe') --quality 80 convert tests\fixtures\scan.jpg png 2>&1 | Out-Host
+          if (Get-ChildItem $env:APPDATA, $env:LOCALAPPDATA -Recurse -Force) { throw 'la versione portable ha scritto fuori dalla sua cartella' }
+
       - name: "Aggiornamento vero: una 0.17 installata prende e installa l'installatore x64 nuovo"
         # Fino alla 0.17 Cedro prende il primo file «Cedro-Setup….exe» della release (GitHub li elenca in ordine
         # alfabetico): qui si rifà la stessa scelta sui nomi della release nuova e si installa sopra la 0.17.1.
@@ -479,6 +497,7 @@ jobs:
           path: |
             dist/Cedro-Setup-*.exe
             dist/Cedro-Bondeno-Setup-*.exe
+            dist/Cedro-Portable-*-x64.zip
             motori-x64/*.exe
 
   pubblica:
@@ -505,7 +524,7 @@ jobs:
           V="${TAG#v}"
           CARGO=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
           if [ "$CARGO" != "$V" ]; then echo "Il tag $TAG non corrisponde alla versione $CARGO di Cargo.toml"; exit 1; fi
-          if find file -type f -name '*.exe' | grep -v -- "$V" | grep .; then echo "File di un'altra versione"; exit 1; fi
+          if find file -type f \( -name '*.exe' -o -name '*.zip' \) | grep -v -- "$V" | grep .; then echo "File di un'altra versione"; exit 1; fi
           MOTORI="motori-$TAG"
           if ! gh release view "$MOTORI" >/dev/null 2>&1; then
             gh release create "$MOTORI" --target "$GITHUB_SHA" --prerelease --title "Motori di trascrizione ${TAG#v} (non servono: li scarica Cedro)" \
@@ -519,7 +538,7 @@ jobs:
             # In bozza: nessun Cedro la vede finché non ci sono i pacchetti di tutti i sistemi (job «apri»).
             gh release create "$TAG" --target "$GITHUB_SHA" --draft --title "Cedro ${TAG#v}" --notes-file note.md
           fi
-          gh release upload "$TAG" $(find file -type f -name 'Cedro-*Setup-*.exe') --clobber
+          gh release upload "$TAG" $(find file -type f \( -name 'Cedro-*Setup-*.exe' -o -name 'Cedro-Portable-*-x64.zip' \)) --clobber
           for t in "$TAG" "$MOTORI"; do echo "== $t"; gh release view "$t" --json assets --jq '.assets[] | "\(.name)  \(.digest)"'; done
 
       - name: Linux (tar.gz e motori) con il workflow «Linux»
@@ -542,7 +561,7 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           V="${TAG#v}"
-          want="Cedro-Setup-$V.exe Cedro-ARM64-Setup-$V.exe Cedro-Bondeno-Setup-$V.exe Cedro-Bondeno-ARM64-Setup-$V.exe cedro-$V-linux-x64.tar.gz cedro-bondeno-$V-linux-x64.tar.gz"
+          want="Cedro-Setup-$V.exe Cedro-ARM64-Setup-$V.exe Cedro-Bondeno-Setup-$V.exe Cedro-Bondeno-ARM64-Setup-$V.exe Cedro-Portable-$V-x64.zip cedro-$V-linux-x64.tar.gz cedro-bondeno-$V-linux-x64.tar.gz"
           for i in $(seq 1 90); do
             have=$(gh release view "$TAG" --json assets --jq '.assets[].name')
             missing=""
