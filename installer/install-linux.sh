@@ -2,6 +2,7 @@
 # Installa Cedro per l'utente corrente: nessun permesso di amministratore.
 #   ./install.sh              copia Cedro in ~/.local/opt/cedro e lo collega in ~/.local/bin
 #   ./install.sh --no-start   come sopra, senza avviare Cedro (lo usa l'aggiornamento da dentro)
+#   ./install.sh --labs       come sopra, e al primo avvio Cedro parte con l'aspetto «Cedro 4 Labs» (per i laboratori)
 #   ./install.sh --uninstall  toglie Cedro e i menu che ha scritto (le impostazioni restano)
 # Serve GTK 4 (su Arch gtk4, su Debian/Ubuntu libgtk-4-1, su Fedora gtk4).
 set -euo pipefail
@@ -50,6 +51,13 @@ if [ -f "$here/da-bondeno" ]; then
   mkdir -p "$HOME/.config/cedro"
   : > "$HOME/.config/cedro/da-bondeno"
 fi
+# Per i laboratori: al primo avvio Cedro accende il tema Cedro 4 Labs (si cambia quando si vuole in Impostazioni).
+for arg in "$@"; do
+  if [ "$arg" = "--labs" ]; then
+    mkdir -p "$HOME/.config/cedro"
+    : > "$HOME/.config/cedro/da-labs"
+  fi
+done
 say "Cedro installato in $dest." "Cedro installed in $dest."
 case ":$PATH:" in
   *":$bindir:"*) ;;

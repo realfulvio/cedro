@@ -14,10 +14,20 @@ pub enum ThemeId {
     /// Comune di Bondeno: la disposizione di «Windows essenziale» con i colori e il carattere del sito del
     /// Comune e lo stemma accanto al logo (e in Impostazioni, guida, menu dell'icona).
     Bondeno,
+    /// Cedro 4 Labs: la disposizione di «Windows essenziale» pensata per i laboratori (biotech, ricerca,
+    /// veterinaria) e il loro ufficio: colori da bancone, bersagli grandi, niente YouTube né video dal web.
+    CedroLabs,
 }
 
-pub const THEMES: [ThemeId; 6] =
-    [ThemeId::WindowsEssenziale, ThemeId::PercorsoGuidato, ThemeId::CedroCompatto, ThemeId::BancoDiLavoro, ThemeId::DocumentoAlCentro, ThemeId::Bondeno];
+pub const THEMES: [ThemeId; 7] = [
+    ThemeId::WindowsEssenziale,
+    ThemeId::PercorsoGuidato,
+    ThemeId::CedroCompatto,
+    ThemeId::BancoDiLavoro,
+    ThemeId::DocumentoAlCentro,
+    ThemeId::Bondeno,
+    ThemeId::CedroLabs,
+];
 
 impl ThemeId {
     /// Il nome scritto in config.txt (`ui_theme=`).
@@ -29,6 +39,7 @@ impl ThemeId {
             ThemeId::BancoDiLavoro => "banco-di-lavoro",
             ThemeId::DocumentoAlCentro => "documento-al-centro",
             ThemeId::Bondeno => crate::edizione::CHIAVE_TEMA,
+            ThemeId::CedroLabs => "cedro-labs",
         }
     }
 
@@ -45,6 +56,7 @@ impl ThemeId {
             ThemeId::BancoDiLavoro => "Banco di lavoro",
             ThemeId::DocumentoAlCentro => "Documento al centro",
             ThemeId::Bondeno => "Comune di Bondeno",
+            ThemeId::CedroLabs => "Cedro 4 Labs",
         }
     }
 
@@ -56,6 +68,7 @@ impl ThemeId {
             ThemeId::BancoDiLavoro => "Tabella con stati, ispettore a destra.",
             ThemeId::DocumentoAlCentro => "L'originale al centro, opzioni accanto.",
             ThemeId::Bondeno => "Colori e carattere del Comune, con lo stemma.",
+            ThemeId::CedroLabs => "Per laboratori e ricerca: solo gli strumenti utili.",
         }
     }
 
@@ -67,7 +80,24 @@ impl ThemeId {
             ThemeId::BancoDiLavoro => &BANCO,
             ThemeId::DocumentoAlCentro => &DOCUMENTO,
             ThemeId::Bondeno => &BONDENO,
+            ThemeId::CedroLabs => &LABS,
         }
+    }
+
+    /// Le attività che il tema mostra nella barra: Cedro 4 Labs non ha YouTube né i video dal web
+    /// (in laboratorio non servono); il programma li ha sempre, tornando a un altro tema si rivedono.
+    pub fn activities(self) -> &'static [super::model::Activity] {
+        use super::model::Activity;
+        const LABS: [Activity; 3] = [Activity::Convert, Activity::Transcribe, Activity::Firma];
+        match self {
+            ThemeId::CedroLabs => &LABS,
+            _ => &Activity::ALL,
+        }
+    }
+
+    /// Se il tema ha YouTube e i video dal web (Cedro 4 Labs no: la Guida e la scelta della vista li saltano).
+    pub fn has_web(self) -> bool {
+        self != ThemeId::CedroLabs
     }
 
     /// Il tema scuro vuole il logo con la scritta chiara.
@@ -189,6 +219,26 @@ pub const BONDENO: Palette = Palette {
     nav_sel: hex(0xD9E9F4),
 };
 
+/// Cedro 4 Labs, «Bancone»: bianchi con una punta di verde acqua da laboratorio e un verde petrolio
+/// pieno, con contrasto alto per il bancone illuminato (testo su sfondo oltre 14:1).
+pub const LABS: Palette = Palette {
+    bg: hex(0xE6F2EF),
+    surface: hex(0xFFFFFF),
+    alt: hex(0xD5EAE5),
+    text: hex(0x0E2421),
+    muted: hex(0x465F5B),
+    primary: hex(0x00796B),
+    on_primary: hex(0xFFFFFF),
+    border: hex(0xB4D3CC),
+    ok: hex(0x2E7D32),
+    bad: hex(0xB3261E),
+    work: hex(0xF5FBFA),
+    nav_sel: hex(0xC8E6DF),
+};
+
+/// L'etichetta «4 LABS» accanto al logo: il magenta dei laboratori, un colore che nessun altro tema usa.
+pub const LABS_BADGE: Rgb = hex(0x9C2F73);
+
 /// Colori del marchio (uguali in tutti i temi).
 pub const BRAND_PRIMARY: Rgb = hex(0x793FCB);
 pub const BRAND_ACCENT: Rgb = hex(0x14845B);
@@ -222,6 +272,16 @@ mod tests {
         }
         assert_eq!(ThemeId::from_key("ruota-e-dettagli"), ThemeId::WindowsEssenziale);
         assert_eq!(ThemeId::from_key(""), ThemeId::WindowsEssenziale);
+    }
+
+    #[test]
+    fn labs_has_no_download_activities_and_the_others_keep_all() {
+        use crate::ui::model::Activity;
+        assert!(!ThemeId::CedroLabs.activities().contains(&Activity::YouTube));
+        assert!(!ThemeId::CedroLabs.activities().contains(&Activity::Web));
+        assert!(ThemeId::CedroLabs.activities().contains(&Activity::Convert));
+        assert_eq!(ThemeId::Bondeno.activities().len(), Activity::ALL.len());
+        assert_eq!(ThemeId::from_key("cedro-labs"), ThemeId::CedroLabs);
     }
 
     #[test]
