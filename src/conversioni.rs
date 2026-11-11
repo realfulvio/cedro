@@ -226,6 +226,8 @@ pub enum Opt {
     FigDpi,
     FigLetters,
     FigScale,
+    FigObjective,
+    FigCalibration,
 }
 
 /// Una riga della zona Opzioni del pannello.
@@ -403,6 +405,23 @@ const FIG_WIDTH: OptionDef = OptionDef { opt: Opt::FigWidth, title: "Larghezza",
 const FIG_DPI: OptionDef = OptionDef { opt: Opt::FigDpi, title: "Risoluzione", note: "300 dpi per foto e microscopia; 600 se la rivista lo chiede", control: Control::Segments(FIG_DPIS), default: 300 };
 const FIG_LETTERS: OptionDef = sw(Opt::FigLetters, "Lettere A, B, C", "In alto a sinistra di ogni pannello, nell'ordine della coda", true);
 const FIG_SCALE: OptionDef = sw(Opt::FigScale, "Barra di scala", "Sui pannelli di microscopia che dicono quanto è grande un pixel", true);
+const FIG_OBJECTIVES: &[Choice] = &[
+    Choice { label: "Nessuno", value: 0 },
+    Choice { label: "4x", value: 4 },
+    Choice { label: "10x", value: 10 },
+    Choice { label: "20x", value: 20 },
+    Choice { label: "40x", value: 40 },
+    Choice { label: "60x", value: 60 },
+    Choice { label: "100x", value: 100 },
+];
+const FIG_OBJECTIVE: OptionDef = OptionDef { opt: Opt::FigObjective, title: "Obiettivo delle foto", note: "Per le foto della fotocamera del microscopio, che non dicono quanto è grande un pixel: la barra si calcola dall'obiettivo", control: Control::Segments(FIG_OBJECTIVES), default: 0 };
+pub const FIG_CALIBRATION: OptionDef = OptionDef {
+    opt: Opt::FigCalibration,
+    title: "Calibrazione con il 10x",
+    note: "Micron per pixel con l'obiettivo 10x, misurati una volta con il vetrino micrometrico; Cedro se la ricorda",
+    control: Control::Text { hint: "per esempio 0,65" },
+    default: 0,
+};
 
 /// Le opzioni del riquadro di un formato scientifico (vetrino, DICOM, microscopia): restano in vista, in cima.
 pub fn is_lead(opt: Opt) -> bool {
@@ -554,7 +573,7 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     match (kind, action) {
         // Leggere il testo e togliere i dati nascosti non ridimensionano né girano la foto.
         (Kind::Image, "ocr" | "strip") => vec![],
-        (Kind::Image, "figure") => vec![&FIG_WIDTH, &FIG_DPI, &FIG_LETTERS, &FIG_SCALE],
+        (Kind::Image, "figure") => vec![&FIG_WIDTH, &FIG_DPI, &FIG_LETTERS, &FIG_SCALE, &FIG_OBJECTIVE, &FIG_CALIBRATION],
         (Kind::Image, "jpeg" | "compress" | "pdf" | "pnm") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
         (Kind::Image, _) => vec![&IMAGE_SIZE, &STRAIGHTEN],
         (Kind::Doc, "pdf") => vec![&PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
@@ -598,6 +617,8 @@ pub fn shown(def: &OptionDef, values: &Values) -> bool {
         // Le scelte dei numeri e della filigrana si vedono quando sono accesi.
         Opt::NumberPos | Opt::NumberFormat | Opt::NumberStart | Opt::NumberSize => values.get(&PAGE_NUMBERS) == 1,
         Opt::WatermarkText | Opt::WatermarkOpacity | Opt::WatermarkAngle | Opt::WatermarkPages => values.get(&WATERMARK) == 1,
+        Opt::FigObjective => values.get(&FIG_SCALE) == 1,
+        Opt::FigCalibration => values.get(&FIG_SCALE) == 1 && values.get(&FIG_OBJECTIVE) != 0,
         _ => true,
     }
 }
@@ -677,6 +698,12 @@ pub fn validate(values: &Values, kind: Kind, action: &str) -> Result<(), String>
         }
         if values.get(&WATERMARK) == 1 {
             PageSel::parse(values.text_of(Opt::WatermarkPages))?;
+        }
+    }
+    if kind == Kind::Image && action == "figure" && values.get(&FIG_SCALE) == 1 {
+        let obj = values.get(&FIG_OBJECTIVE);
+        if obj != 0 && crate::figura::pm_per_px(values.text_of(Opt::FigCalibration), obj).is_none() {
+            return Err("Scrivi la calibrazione: i micron di un pixel con il 10x, per esempio 0,65.".into());
         }
     }
     if kind == Kind::Pdf && action == "split" {
@@ -769,6 +796,8 @@ pub fn options_from(values: &Values) -> engine::Options {
         dpi: if values.num(Opt::FigDpi, FIG_DPI.default) == 600 { 600 } else { 300 },
         lettere: on(Opt::FigLetters, true),
         barra: on(Opt::FigScale, true),
+        obiettivo: values.num(Opt::FigObjective, 0),
+        calibrazione_10x: values.text_of(Opt::FigCalibration).trim().to_string(),
     };
     let text = |opt: Opt| Some(values.text_of(opt).trim().to_string()).filter(|t| !t.is_empty());
     let pp = &mut o.pdf_pages;
