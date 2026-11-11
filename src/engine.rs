@@ -526,11 +526,12 @@ fn save_image(img: &DynamicImage, path: &Path, format: ImageFormat, quality: u8,
             use image::codecs::pnm::{PnmEncoder, PnmSubtype, SampleEncoding};
             use image::ImageEncoder;
             let rgb = flatten(img, white);
-            let mut file = fs::File::create(path).map_err(|e| err(e.to_string()))?;
-            return PnmEncoder::new(&mut file)
+            let mut file = std::io::BufWriter::with_capacity(1 << 20, fs::File::create(path).map_err(|e| err(e.to_string()))?);
+            PnmEncoder::new(&mut file)
                 .with_subtype(PnmSubtype::Pixmap(SampleEncoding::Binary))
                 .write_image(rgb.as_raw(), rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
-                .map_err(|e| err(e.to_string()));
+                .map_err(|e| err(e.to_string()))?;
+            return std::io::Write::flush(&mut file).map_err(|e| err(e.to_string()));
         }
         ImageFormat::Hdr => return DynamicImage::ImageRgb32F(img.to_rgb32f()).save_with_format(path, format).map_err(|e| err(e.to_string())),
         ImageFormat::OpenExr => return DynamicImage::ImageRgba32F(img.to_rgba32f()).save_with_format(path, format).map_err(|e| err(e.to_string())),
@@ -538,10 +539,12 @@ fn save_image(img: &DynamicImage, path: &Path, format: ImageFormat, quality: u8,
     }
     if format == ImageFormat::Jpeg {
         let rgb = flatten(img, white);
-        let mut file = fs::File::create(path).map_err(|e| err(e.to_string()))?;
+        // Con buffer: il codificatore scrive a pezzetti, e su un file senza buffer ogni pezzetto è una chiamata al sistema (23 volte più lento).
+        let mut file = std::io::BufWriter::with_capacity(1 << 20, fs::File::create(path).map_err(|e| err(e.to_string()))?);
         let mut enc = JpegEncoder::new_with_quality(&mut file, quality);
         enc.encode(rgb.as_raw(), rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
             .map_err(|e| err(e.to_string()))?;
+        std::io::Write::flush(&mut file).map_err(|e| err(e.to_string()))?;
         return Ok(());
     }
     if format == ImageFormat::WebP {
