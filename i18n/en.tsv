@@ -2011,3 +2011,44 @@ niente da scrivere	nothing to write
 ~valori originali a 16 bit, un file per canale	original 16-bit values, one file per channel
 
 ~, uno per immagine (	, one per image (
+
+ND2 compresso con perdita (JPEG 2000): Cedro non lo legge ancora; da NIS-Elements si può esportare in TIFF	Lossy-compressed ND2 (JPEG 2000): Cedro can't read it yet; NIS-Elements can export it as TIFF
+ND2 di vecchio tipo (NIS-Elements 2, immagini in JPEG 2000): Cedro non lo legge ancora; da NIS-Elements si può esportare in TIFF	Old-style ND2 (NIS-Elements 2, JPEG 2000 images): Cedro can't read it yet; NIS-Elements can export it as TIFF
+altezza non trovata	height not found
+larghezza non trovata	width not found
+blocco ND2 non valido	invalid ND2 block
+blocco ND2 troppo grande	ND2 block too large
+blocco ND2 inatteso	unexpected ND2 block
+canale non trovato	channel not found
+file ND2 troppo corto	ND2 file too short
+file ND2 troncato	truncated ND2 file
+file LIF troncato	truncated LIF file
+il file LIF non ha immagini	the LIF file has no images
+il file ND2 non ha immagini	the ND2 file has no images
+immagine non trovata nel file LIF	image not found in the LIF file
+intestazione del file LIF non valida	invalid LIF file header
+intestazione del file LIF non letta: {}	LIF file header not read: {}
+non è un file LIF	not a LIF file
+manca la mappa dei blocchi in fondo al file ND2 (file non finito?)	the block map at the end of the ND2 file is missing (unfinished file?)
+mappa dei blocchi troncata	truncated block map
+mappa troncata	truncated map
+metadati troncati	truncated metadata
+metadati troppo annidati	metadata nested too deeply
+metadati troppo grandi	metadata too large
+metadati vuoti	empty metadata
+livello di metadati fuori misura	metadata level out of bounds
+livello di metadati troppo grande	metadata level too large
+metadati XML non letti: {}	XML metadata not read: {}
+metadati compressi non letti: {}	compressed metadata not read: {}
+tipo di metadato sconosciuto ({})	unknown metadata type ({})
+misure del file ND2 non valide	invalid ND2 file dimensions
+righe del file ND2 più corte del previsto	ND2 file rows shorter than expected
+nel file ND2 manca il blocco {}	the ND2 file is missing the block {}
+nel file LIF manca il blocco di «{}»	the LIF file is missing the block of “{}”
+il fotogramma {} non è dove dice la mappa	frame {} isn't where the map says
+fotogramma {} non decompresso: {}	frame {} not decompressed: {}
+dimensione vuota in «{}»	empty dimension in “{}”
+le misure di «{}» non stanno nei suoi dati	the dimensions of “{}” don't fit its data
+pixel di {} bit: Cedro non li legge ancora	{}-bit pixels: Cedro can't read them yet
+«{}» è troppo grande ({})	“{}” is too large ({})
+~ immagini del progetto	 project images

@@ -19,6 +19,8 @@ pub mod dicom;
 mod anonimizza;
 pub mod tabella;
 pub mod microscopia;
+pub mod nd2;
+pub mod lif;
 mod nametemplate;
 mod mp4fast;
 mod ocr;

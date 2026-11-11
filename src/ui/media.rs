@@ -179,7 +179,7 @@ pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
         return Some((Image::from_rgba(rgba.width(), rgba.height(), rgba.as_raw())?, (s.full().width, s.full().height)));
     }
     // SVG, AVIF, JPEG XL, DICOM e microscopia non passano dal lettore del crate `image`.
-    let micro = crate::imgfmt::sniff_file(path) == Some("tiff") && crate::microscopia::is_stack(path);
+    let micro = crate::microscopia::is_stack(path);
     if micro || matches!(crate::imgfmt::sniff_file(path), Some("svg" | "avif" | "jxl" | "dcm")) || matches!(engine::extension(path).as_str(), "svg" | "svgz" | "dcm" | "dicom") {
         let img = crate::imgfmt::open(path, false, Some(side)).ok()?;
         let size = (img.width(), img.height());
@@ -216,7 +216,7 @@ fn info(path: &Path) -> Loaded {
             }
             if crate::imgfmt::sniff_file(path) == Some("dcm") || matches!(engine::extension(path).as_str(), "dcm" | "dicom") {
                 out.dicom = crate::dicom::DicomFile::open(path).ok().map(|f| DicomInfo::of(&f));
-            } else if crate::imgfmt::sniff_file(path) == Some("tiff") && crate::microscopia::is_stack(path) {
+            } else if crate::microscopia::is_stack(path) {
                 out.micro = crate::microscopia::Pila::open(path).ok().map(|p| MicroInfo::of(&p));
             }
         }
