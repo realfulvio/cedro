@@ -344,10 +344,32 @@ impl Slide {
         &self,
         path: &Path,
         level: usize,
-        sink: impl FnMut(u32, &[u8]) -> Result<(), String>,
+        mut sink: impl FnMut(u32, &[u8]) -> Result<(), String>,
     ) -> Result<(), String> {
         let l = &self.levels[level];
-        self.read_window(path, level, (0, 0, l.width, l.height), sink)
+        // Si legge una fila avanti in un altro thread: mentre chi scrive comprime una fila, la
+        // successiva si sta già decodificando.
+        let (tx, rx) = std::sync::mpsc::sync_channel::<(u32, Vec<u8>)>(1);
+        std::thread::scope(|scope| {
+            let reader = scope.spawn(move || {
+                self.read_window(path, level, (0, 0, l.width, l.height), |y, rows| {
+                    // Chi scrive si è fermato (errore): non serve leggere oltre.
+                    tx.send((y, rows.to_vec())).map_err(|_| String::new())
+                })
+            });
+            let mut written = Ok(());
+            for (y, rows) in rx.iter() {
+                written = sink(y, &rows);
+                if written.is_err() {
+                    break;
+                }
+            }
+            // Chiudere il canale sblocca il lettore se chi scrive si è fermato prima.
+            drop(rx);
+            let read = reader.join().unwrap_or_else(|_| Err("lettura interrotta".into()));
+            written?;
+            read
+        })
     }
 
     /// Una zona di un livello (`x`, `y`, larghezza, altezza in pixel del livello), letta solo dalle tessere che la coprono.
@@ -561,26 +583,153 @@ impl Slide {
                 if l.width.max(l.height) > JPEG_MAX_SIDE {
                     return Err(format!("il JPEG si ferma a {JPEG_MAX_SIDE} px di lato"));
                 }
-                let view = Lazy {
-                    slide: self,
-                    path,
-                    level,
-                    band: std::cell::RefCell::new(Band::default()),
-                    failed: std::cell::RefCell::new(None),
-                };
-                let mut w = w;
-                image::codecs::jpeg::JpegEncoder::new_with_quality(&mut w, quality)
-                    .encode_image(&view)
-                    .map_err(|e| e.to_string())?;
-                if let Some(e) = view.failed.into_inner() {
-                    return Err(e);
-                }
-                use std::io::Write;
-                w.flush().map_err(|e| e.to_string())
+                write_jpeg(self, path, level, w, quality)
             }
             // Oltre circa 3,5 GB di pixel serve il BigTIFF (indirizzi a 64 bit).
             Streamed::Tiff => write_tiff(self, path, level, w, l.pixels() * 3 > 3_500_000_000),
         }
+    }
+}
+
+/// Il JPEG di un livello grande, codificato a fette in parallelo. Ogni fetta (poche file di blocchi da
+/// 8 × 8) è un JPEG a sé con le stesse tabelle; i dati delle fette si mettono uno dopo l'altro con i
+/// marcatori di ripartenza (RST), che ogni lettore JPEG conosce: è un JPEG normale, e la codifica,
+/// la parte lenta, usa tutti i core.
+fn write_jpeg<W: std::io::Write>(s: &Slide, path: &Path, level: usize, mut w: W, quality: u8) -> Result<(), String> {
+    let l = &s.levels[level];
+    let (mcu_w, mcu_h) = jpeg_mcu(quality)?;
+    let per_row = l.width.div_ceil(mcu_w);
+    // L'intervallo di ripartenza si conta in blocchi e sta in 16 bit.
+    let rows_per_slice = (65_535 / per_row).clamp(1, 8);
+    let slice_h = (mcu_h * rows_per_slice) as usize;
+    let row_bytes = l.width as usize * 3;
+    let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    // Si codificano insieme abbastanza fette da tenere occupati tutti i core.
+    let batch = slice_h * workers * 2;
+    let mut st = JpegSlices { w: &mut w, height: l.height, restart: (per_row * rows_per_slice) as u16, header: None, written: 0 };
+    let mut pending: Vec<u8> = Vec::with_capacity((batch + l.tile_h as usize) * row_bytes);
+    s.read_rows(path, level, |_, rows| {
+        pending.extend_from_slice(rows);
+        if pending.len() / row_bytes >= batch {
+            let whole = pending.len() / row_bytes / slice_h * slice_h;
+            st.encode(&pending[..whole * row_bytes], l.width, slice_h, quality, workers)?;
+            pending.drain(..whole * row_bytes);
+        }
+        Ok(())
+    })?;
+    if !pending.is_empty() {
+        st.encode(&pending, l.width, slice_h, quality, workers)?;
+    }
+    let io = |e: std::io::Error| e.to_string();
+    w.write_all(&[0xFF, 0xD9]).map_err(io)?;
+    w.flush().map_err(io)
+}
+
+/// Le misure di un blocco (MCU) del codificatore JPEG, lette da un JPEG di prova.
+fn jpeg_mcu(quality: u8) -> Result<(u32, u32), String> {
+    let mut probe = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut probe, quality).encode(&[0u8; 16 * 16 * 3], 16, 16, image::ExtendedColorType::Rgb8).map_err(|e| e.to_string())?;
+    let (head, _) = split_jpeg(&probe)?;
+    let sof = find_marker(head, 0xC0).ok_or("JPEG senza SOF0")?;
+    let n = head[sof + 9] as usize;
+    let (mut h, mut v) = (1u32, 1u32);
+    for c in 0..n {
+        let f = head[sof + 11 + c * 3];
+        h = h.max((f >> 4) as u32);
+        v = v.max((f & 15) as u32);
+    }
+    Ok((8 * h, 8 * v))
+}
+
+/// Dove inizia (dal byte 0xFF) il segmento `marker` nell'intestazione di un JPEG.
+fn find_marker(head: &[u8], marker: u8) -> Option<usize> {
+    let mut i = 2;
+    while i + 4 <= head.len() {
+        if head[i] != 0xFF {
+            return None;
+        }
+        if head[i + 1] == marker {
+            return Some(i);
+        }
+        i += 2 + u16::from_be_bytes([head[i + 2], head[i + 3]]) as usize;
+    }
+    None
+}
+
+/// Un JPEG diviso in intestazione (fino al segmento SOS compreso) e dati compressi (senza EOI).
+fn split_jpeg(b: &[u8]) -> Result<(&[u8], &[u8]), String> {
+    let sos = find_marker(b, 0xDA).ok_or("JPEG senza SOS")?;
+    let start = sos + 2 + u16::from_be_bytes([b[sos + 2], b[sos + 3]]) as usize;
+    if b.len() < start + 2 || b[b.len() - 2..] != [0xFF, 0xD9] {
+        return Err("JPEG senza EOI".into());
+    }
+    Ok((&b[..start], &b[start..b.len() - 2]))
+}
+
+/// Il JPEG a fette mentre si scrive.
+struct JpegSlices<'a, W: std::io::Write> {
+    w: &'a mut W,
+    height: u32,
+    /// Blocchi per fetta (intervallo di ripartenza).
+    restart: u16,
+    /// L'intestazione della prima fetta senza l'altezza: tutte le altre devono avere le stesse tabelle.
+    header: Option<Vec<u8>>,
+    written: u32,
+}
+
+impl<W: std::io::Write> JpegSlices<'_, W> {
+    /// Codifica in parallelo le righe `px` a fette di `slice_h` righe e ne scrive i dati in ordine.
+    fn encode(&mut self, px: &[u8], width: u32, slice_h: usize, quality: u8, workers: usize) -> Result<(), String> {
+        let row_bytes = width as usize * 3;
+        let slices: Vec<&[u8]> = px.chunks(slice_h * row_bytes).collect();
+        let mut done: Vec<Result<Vec<u8>, String>> = Vec::with_capacity(slices.len());
+        std::thread::scope(|scope| {
+            let per = slices.len().div_ceil(workers.max(1)).max(1);
+            let handles: Vec<_> = slices
+                .chunks(per)
+                .map(|group| {
+                    scope.spawn(move || {
+                        group
+                            .iter()
+                            .map(|px| {
+                                let mut out = Vec::with_capacity(px.len() / 6);
+                                image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality).encode(px, width, (px.len() / row_bytes) as u32, image::ExtendedColorType::Rgb8).map_err(|e| e.to_string())?;
+                                Ok(out)
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            for h in handles {
+                done.extend(h.join().unwrap_or_else(|_| vec![Err("codifica interrotta".into())]));
+            }
+        });
+        let io = |e: std::io::Error| e.to_string();
+        for jpeg in done {
+            let jpeg = jpeg?;
+            let (head, data) = split_jpeg(&jpeg)?;
+            let sof = find_marker(head, 0xC0).ok_or("JPEG senza SOF0")?;
+            let mut plain = head.to_vec();
+            plain[sof + 5..sof + 7].copy_from_slice(&[0, 0]);
+            match &self.header {
+                None => {
+                    // L'intestazione vera: l'altezza del livello e l'intervallo di ripartenza (DRI) prima di SOS.
+                    let sos = find_marker(head, 0xDA).ok_or("JPEG senza SOS")?;
+                    let mut first = head[..sos].to_vec();
+                    first[sof + 5..sof + 7].copy_from_slice(&(self.height as u16).to_be_bytes());
+                    first.extend_from_slice(&[0xFF, 0xDD, 0, 4]);
+                    first.extend_from_slice(&self.restart.to_be_bytes());
+                    first.extend_from_slice(&head[sos..]);
+                    self.w.write_all(&first).map_err(io)?;
+                    self.header = Some(plain);
+                }
+                Some(h) if *h != plain => return Err("le fette del JPEG hanno tabelle diverse".into()),
+                Some(_) => self.w.write_all(&[0xFF, 0xD0 + ((self.written - 1) % 8) as u8]).map_err(io)?,
+            }
+            self.w.write_all(data).map_err(io)?;
+            self.written += 1;
+        }
+        Ok(())
     }
 }
 
@@ -599,7 +748,7 @@ fn write_tiff<W: std::io::Write + Seek>(
 ) -> Result<(), String> {
     let l = &s.levels[level];
     // Tutte le strisce tranne l'ultima hanno le stesse righe: devono dividere esattamente la fila di tessere.
-    let strip_rows = if l.tile_h % TIFF_STRIP_ROWS == 0 {
+    let strip_rows = if l.tile_h.is_multiple_of(TIFF_STRIP_ROWS) {
         TIFF_STRIP_ROWS
     } else {
         l.tile_h
@@ -747,61 +896,6 @@ fn deflate_strip(rows: &[u8], row_bytes: usize) -> Vec<u8> {
     z.finish().unwrap_or_default()
 }
 
-/// Le righe del livello già lette per il JPEG: una fila di tessere (più 8 righe, perché il JPEG
-/// lavora a blocchi di 8 e una fila potrebbe non esserne multipla).
-#[derive(Default)]
-struct Band {
-    top: u32,
-    rows: u32,
-    px: Vec<u8>,
-}
-
-/// Il livello visto come un'immagine che si legge dall'alto in basso: il codificatore JPEG chiede i
-/// pixel a blocchi di 8 righe, e qui si carica una fila di tessere alla volta.
-struct Lazy<'a> {
-    slide: &'a Slide,
-    path: &'a Path,
-    level: usize,
-    band: std::cell::RefCell<Band>,
-    failed: std::cell::RefCell<Option<String>>,
-}
-
-impl image::GenericImageView for Lazy<'_> {
-    type Pixel = image::Rgb<u8>;
-
-    fn dimensions(&self) -> (u32, u32) {
-        let l = &self.slide.levels[self.level];
-        (l.width, l.height)
-    }
-
-    fn get_pixel(&self, x: u32, y: u32) -> image::Rgb<u8> {
-        let l = &self.slide.levels[self.level];
-        let mut b = self.band.borrow_mut();
-        if y < b.top || y >= b.top + b.rows {
-            let top = y - y % l.tile_h;
-            let rows = (l.tile_h + 8).min(l.height - top);
-            b.top = top;
-            b.rows = rows;
-            b.px.clear();
-            let mut px = std::mem::take(&mut b.px);
-            px.resize(l.width as usize * rows as usize * 3, 255);
-            let row_bytes = l.width as usize * 3;
-            let read =
-                self.slide
-                    .read_window(self.path, self.level, (0, top, l.width, rows), |t, r| {
-                        let start = (t - top) as usize * row_bytes;
-                        px[start..start + r.len()].copy_from_slice(r);
-                        Ok(())
-                    });
-            if let Err(e) = read {
-                self.failed.borrow_mut().get_or_insert(e);
-            }
-            b.px = px;
-        }
-        let i = ((y - b.top) as usize * l.width as usize + x as usize) * 3;
-        image::Rgb([b.px[i], b.px[i + 1], b.px[i + 2]])
-    }
-}
 
 /// Il vetrino come immagine qualsiasi (OCR, archivi, lettori che vogliono una foto in memoria): il
 /// livello «Media», o il più piccolo che arriva a `target_side`.
@@ -1145,6 +1239,15 @@ mod tests {
                 "{name}: {diff}"
             );
         }
+        // Il JPEG è fatto di fette codificate in parallelo, unite dai marcatori di ripartenza; il
+        // codificatore in un colpo solo dà gli stessi pixel.
+        let jpeg = std::fs::read(dir.join("a.jpg")).unwrap();
+        assert!(jpeg.windows(4).any(|w| w == [0xFF, 0xDD, 0, 4]), "manca DRI");
+        // 480 righe a fette di 64 (8 file di blocchi): 8 fette, 7 ripartenze.
+        assert_eq!(jpeg.windows(2).filter(|w| w[0] == 0xFF && (0xD0..=0xD7).contains(&w[1])).count(), 7);
+        let mut single = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut single, 92).encode_image(&whole).unwrap();
+        assert_eq!(image::load_from_memory(&single).unwrap().to_rgb8(), image::open(dir.join("a.jpg")).unwrap().to_rgb8());
         // Lo stesso TIFF in BigTIFF (sui vetrini oltre i 4 GB): il crate tiff lo rilegge uguale.
         let out = dir.join("big.tif");
         write_tiff(

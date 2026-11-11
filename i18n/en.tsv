@@ -1858,3 +1858,4 @@ tessera a più di 8 bit	tile with more than 8 bits
 colori della tessera non gestiti	unsupported tile colors
 compressione {#} non gestita	compression {} not supported
 JPEG 2000 con {#} componenti	JPEG 2000 with {} components
+lettura interrotta	reading interrupted
