@@ -75,6 +75,7 @@ const TEXT_CONVERT: &[Slice] = &[
     Slice { id: "html", label: "HTML" },
     Slice { id: "md", label: "MD" },
     Slice { id: "csv", label: "CSV" },
+    Slice { id: "xlsx", label: "Excel" },
     Slice { id: "json", label: "JSON" },
     Slice { id: "pdf", label: "PDF" },
 ];
@@ -221,7 +222,7 @@ fn kind_by_extension(ext: &str) -> Kind {
         "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "dcm" | "dicom" | "ico"
         | "svg" | "svgz" | "avif" | "jxl" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm"
         | "hdr" | "exr" | "dds" => Kind::Image,
-        "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" => Kind::Text,
+        "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" | "xlsx" | "xlsm" | "ods" => Kind::Text,
         "wav" | "mp3" | "ogg" | "oga" | "opus" | "m4a" | "aac" | "flac" | "aif" | "aiff" | "aifc" | "caf" => Kind::Audio,
         "mp4" | "webm" | "mov" | "mkv" | "avi" => Kind::Video,
         "zip" => Kind::Archive,
@@ -1471,28 +1472,77 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Ok(Output { path: out, message });
     }
 
-    if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "html" | "json" | "pdf" | "upper" | "lower") {
+    if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "xlsx" | "html" | "json" | "pdf" | "upper" | "lower") {
+        let from = extension(path);
+        // Excel e Calc: si leggono i fogli e da lì vale tutto come per un CSV.
+        let fogli = if matches!(from.as_str(), "xlsx" | "xlsm" | "ods") {
+            let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+            let mut fogli = crate::tabella::leggi(&from, &bytes).map_err(err)?;
+            fogli.retain(|f| !f.righe.is_empty());
+            if fogli.is_empty() {
+                return Err(err("il foglio di calcolo è vuoto"));
+            }
+            Some(fogli)
+        } else {
+            None
+        };
+        if let Some(fogli) = &fogli {
+            if action == "csv" && fogli.len() > 1 {
+                return fogli_in_csv(path, &dir, fogli, opts);
+            }
+        }
+        if action == "xlsx" {
+            let rows = match &fogli {
+                Some(f) => f[0].testo(false),
+                None => {
+                    let text = read_text(path)?;
+                    crate::textconv::parse_csv(&text, crate::tabella::separatore(&text, &from))
+                }
+            };
+            if fogli.is_some() && crate::tabella::piastre(&crate::tabella::celle(&rows, false), &rows).is_empty() {
+                return Err(err("è già un Excel: Cedro ne fa un altro solo se trova piastre da mettere una riga per pozzetto"));
+            }
+            let (bytes, message) = crate::tabella::in_excel(&rows, opts.header_row).map_err(err)?;
+            let out = reserve(&dir, &if fogli.is_some() { format!("{}-pozzetti", stem(path)) } else { stem(path) }, "xlsx")?;
+            write_bytes(&out, &bytes)?;
+            return Ok(Output { path: out, message });
+        }
         if action == "pdf" {
             let out = reserve(&dir, &stem(path), "pdf")?;
-            let text = read_text(path)?;
+            let text = match &fogli {
+                Some(f) => f[0].testo(true).iter().map(|r| r.join("   ")).collect::<Vec<_>>().join("\n"),
+                None => read_text(path)?,
+            };
             let blocks: Vec<crate::pdfdoc::DocBlock> =
                 text.split('\n').map(|l| crate::pdfdoc::DocBlock { text: l.trim_end().to_string(), heading: 0, image: None }).collect();
             return write_text_pdf(path, out, &blocks, opts);
         }
-        let text = read_text(path)?;
-        let from = extension(path);
+        // Un foglio di calcolo diventa un CSV a punto e virgola (i numeri con la virgola, come in Excel).
+        let (text, from) = match &fogli {
+            Some(f) => {
+                // Nel CSV la virgola va con il punto e virgola (Excel italiano); il JSON vuole il punto.
+                let virgola = match action {
+                    "csv" => opts.csv_separator.is_none_or(|s| s == ';'),
+                    "json" => false,
+                    _ => true,
+                };
+                (crate::textconv::write_csv(&f[0].testo(virgola), ';'), "csv".to_string())
+            }
+            None => (read_text(path)?, if from == "tsv" { "csv".to_string() } else { from }),
+        };
         let table = |text: &str| {
-            let sep = crate::textconv::detect_separator(text);
+            let sep = crate::tabella::separatore(text, "");
             crate::textconv::parse_csv(text, sep)
         };
         let (body, ext, suffix, message) = match action {
-            "upper" => (text.to_uppercase(), from.clone(), "-maiuscolo", "Testo scritto"),
-            "lower" => (text.to_lowercase(), from.clone(), "-minuscolo", "Testo scritto"),
+            "upper" => (text.to_uppercase(), if fogli.is_some() { "csv".into() } else { extension(path) }, "-maiuscolo", "Testo scritto"),
+            "lower" => (text.to_lowercase(), if fogli.is_some() { "csv".into() } else { extension(path) }, "-minuscolo", "Testo scritto"),
             "md" if from == "csv" => (crate::textconv::markdown_table(&table(&text), opts.header_row), "md".into(), "", "Tabella Markdown"),
             "md" => (text, "md".into(), "", "Testo scritto"),
             "csv" if from == "csv" => {
-                let sep = opts.csv_separator.unwrap_or_else(|| crate::textconv::detect_separator(&text));
-                (crate::textconv::write_csv(&table(&text), sep), "csv".into(), "", "CSV riscritto")
+                let sep = opts.csv_separator.unwrap_or_else(|| crate::tabella::separatore(&text, ""));
+                let message = if fogli.is_some() { "CSV dal foglio di calcolo" } else { "CSV riscritto" };
+                (crate::textconv::write_csv(&table(&text), sep), "csv".into(), "", message)
             }
             "csv" => (text, "csv".into(), "", "Testo scritto"),
             "html" => {
@@ -2063,6 +2113,22 @@ pub fn same_kind_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
     };
     let kind = kind_of(first);
     paths.iter().filter(|path| kind_of(path) == kind).cloned().collect()
+}
+
+/// Un CSV per ogni foglio: «nome-Foglio1.csv», «nome-Misure.csv»…
+fn fogli_in_csv(path: &Path, dir: &Path, fogli: &[crate::tabella::Foglio], opts: &Options) -> CedroResult<Output> {
+    let sep = opts.csv_separator.unwrap_or(';');
+    let virgola = sep == ';';
+    let mut first = None;
+    for f in fogli {
+        let nome: String = f.nome.chars().map(|c| if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_') { c } else { '_' }).collect();
+        let out = reserve(dir, &format!("{}-{}", stem(path), nome.trim()), "csv")?;
+        let body = crate::textconv::write_csv(&f.testo(virgola), sep);
+        write_bytes(&out, &crate::textconv::encode(&body, opts.encoding))?;
+        first.get_or_insert(out);
+    }
+    let path = first.ok_or_else(|| err("il foglio di calcolo è vuoto"))?;
+    Ok(Output { path, message: format!("{} fogli: un CSV per foglio", fogli.len()) })
 }
 
 fn read_text(path: &Path) -> CedroResult<String> {
@@ -3851,6 +3917,28 @@ Luca,Bondeno
         let mp3 = perform_with(&src, "mp3", 80, None, &Options::default()).unwrap();
         let bytes = fs::read(&mp3.path).unwrap();
         assert!(bytes.len() > 1000 && (bytes.starts_with(b"ID3") || bytes[0] == 0xFF), "non è un MP3");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn csv_di_laboratorio_in_excel_e_ritorno() {
+        let dir = std::env::temp_dir().join(format!("cedro-tabella-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let tsv = dir.join("qpcr.tsv");
+        fs::write(&tsv, "Gene\tCt\nMARCH1\t23,5\nSEPT2\t1,2E-05\n").unwrap();
+        assert_eq!(kind_of(&tsv), Kind::Text);
+        let x = perform_with(&tsv, "xlsx", 80, None, &Options::default()).unwrap();
+        assert_eq!(x.path.file_name().unwrap(), "qpcr.xlsx");
+        assert_eq!(kind_of(&x.path), Kind::Text);
+        let csv = perform_with(&x.path, "csv", 80, None, &Options::default()).unwrap();
+        let back = fs::read_to_string(&csv.path).unwrap();
+        assert!(back.contains("MARCH1;23,5") && back.contains("SEPT2;0,000012"), "{back}");
+        let punto = perform_with(&x.path, "csv", 80, None, &Options { csv_separator: Some(','), ..Default::default() }).unwrap();
+        assert!(fs::read_to_string(&punto.path).unwrap().contains("MARCH1,23.5"));
+        let json = perform_with(&x.path, "json", 80, None, &Options::default()).unwrap();
+        assert!(fs::read_to_string(&json.path).unwrap().contains("23.5"));
+        assert!(perform_with(&x.path, "xlsx", 80, None, &Options::default()).is_err());
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -142,6 +142,7 @@ pub fn voce(kind: Kind, id: &str) -> Voce {
         (Kind::Text, "html") => v("HTML", "pagina web", HTML, WEB),
         (Kind::Text, "md") => v("Markdown", "titoli ed elenchi", MD, NUOVI),
         (Kind::Text, "csv") => v("CSV", "tabella per Excel", CSV, WEB),
+        (Kind::Text, "xlsx") => v("Excel", "numeri veri, geni come testo", XLS, OFFICE),
         (Kind::Text, "json") => v("JSON", "dati per programmi", JSON, COMP),
         (Kind::Text, "pdf") => v("PDF", "pronto da stampare", DOCPDF, PDF),
         (Kind::Text, "upper") => v("Tutto MAIUSCOLO", "", MAIUSC, BLU),

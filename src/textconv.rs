@@ -20,28 +20,6 @@ pub fn encode(text: &str, encoding: Encoding) -> Cow<'_, [u8]> {
     }
 }
 
-/// Il separatore più usato nella prima riga: `;`, `,` o tabulazione.
-pub fn detect_separator(text: &str) -> char {
-    let first = text.lines().next().unwrap_or("");
-    let mut best = (';', 0usize);
-    for sep in [';', ',', '\t'] {
-        let mut quoted = false;
-        let n = first
-            .chars()
-            .filter(|c| {
-                if *c == '"' {
-                    quoted = !quoted;
-                }
-                !quoted && c == &sep
-            })
-            .count();
-        if n > best.1 {
-            best = (sep, n);
-        }
-    }
-    best.0
-}
-
 /// Le righe del CSV, con le virgolette (`""` dentro un campo è una virgoletta).
 pub fn parse_csv(text: &str, sep: char) -> Vec<Vec<String>> {
     let mut rows = Vec::new();
@@ -306,7 +284,7 @@ mod tests {
     #[test]
     fn csv_roundtrip_with_quotes_and_other_separators() {
         let text = "nome;nota\n\"Rossi; Luca\";\"dice \"\"ciao\"\"\"\nAnna;ok\n";
-        assert_eq!(detect_separator(text), ';');
+        assert_eq!(crate::tabella::separatore(text, "csv"), ';');
         let rows = parse_csv(text, ';');
         assert_eq!(rows[1], vec!["Rossi; Luca".to_string(), "dice \"ciao\"".to_string()]);
         let comma = write_csv(&rows, ',');
@@ -314,7 +292,7 @@ mod tests {
 Rossi; Luca,\"dice \"\"ciao\"\"\"
 "), "{comma}");
         assert_eq!(parse_csv(&comma, ','), rows);
-        assert_eq!(detect_separator("a\tb\tc\n"), '\t');
+        assert_eq!(crate::tabella::separatore("a\tb\tc\n", "csv"), '\t');
     }
 
     #[test]
