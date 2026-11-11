@@ -31,7 +31,9 @@ env:
 jobs:
   installato:
     name: Cedro installato (ARM64)
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    # ARM messo da parte dall'11/11/2026 (le release non hanno l'installatore ARM): dopo «Windows ARM64» non
+    # parte più da sola, solo a mano. Per riaccenderla: togliere «false &&».
+    if: ${{ github.event_name != 'workflow_run' || (false && github.event.workflow_run.conclusion == 'success') }}
     runs-on: windows-11-arm
     timeout-minutes: 45
     env:
@@ -182,7 +184,9 @@ jobs:
 
   siti:
     name: Video dal web e yt-dlp (ARM64 nativo)
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    # ARM messo da parte dall'11/11/2026 (le release non hanno l'installatore ARM): dopo «Windows ARM64» non
+    # parte più da sola, solo a mano. Per riaccenderla: togliere «false &&».
+    if: ${{ github.event_name != 'workflow_run' || (false && github.event.workflow_run.conclusion == 'success') }}
     runs-on: windows-11-arm
     timeout-minutes: 45
     steps:

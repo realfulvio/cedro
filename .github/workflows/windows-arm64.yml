@@ -22,6 +22,10 @@ on:
         description: "Non compila: toglie dalla release del tag (e dai suoi motori) i file di altre versioni"
         type: boolean
         default: false
+      arm:
+        description: "Anche Windows on ARM (messo da parte dall'11/11/2026: si riaccende solo quando lo chiede Luca)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -49,7 +53,7 @@ jobs:
 
   app:
     name: Cedro (build, prove, installatore)
-    if: ${{ !inputs.solo_pulizia }}
+    if: ${{ !inputs.solo_pulizia && inputs.arm }}
     runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
@@ -116,7 +120,7 @@ jobs:
 
   motori:
     name: Motore di trascrizione (processore)
-    if: ${{ !inputs.solo_pulizia }}
+    if: ${{ !inputs.solo_pulizia && inputs.arm }}
     runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
@@ -192,7 +196,7 @@ jobs:
 
   vulkan:
     name: Motore di trascrizione (scheda video Vulkan, Adreno)
-    if: ${{ !inputs.solo_pulizia }}
+    if: ${{ !inputs.solo_pulizia && inputs.arm }}
     runs-on: windows-11-arm
     continue-on-error: true
     steps:
@@ -532,7 +536,7 @@ jobs:
 
   pubblica:
     name: Pubblica la release
-    if: ${{ always() && inputs.tag != '' && needs.app.result == 'success' && needs.motori.result == 'success' && needs.x64.result == 'success' && needs.x64-installa.result == 'success' }}
+    if: ${{ always() && inputs.tag != '' && (!inputs.arm || (needs.app.result == 'success' && needs.motori.result == 'success')) && needs.x64.result == 'success' && needs.x64-installa.result == 'success' }}
     needs: [app, motori, vulkan, x64, x64-installa]
     runs-on: ubuntu-latest
     steps:
@@ -549,6 +553,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
+          ARM: ${{ inputs.arm }}
         run: |
           find file -type f | sort
           V="${TAG#v}"
@@ -563,6 +568,8 @@ jobs:
           gh release upload "$MOTORI" $(find file -type f \( -name 'cedro-trascrivi-*' -o -name 'cedro-riassumi-*' \)) --clobber
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             sed "s/{versione}/${TAG#v}/g; s#{repo}#${GITHUB_REPOSITORY}#g" .github/note-release.md > note.md
+            # Senza ARM: via la riga dell'installatore ARM e il consiglio su quale scegliere.
+            [ "$ARM" = true ] || sed -i '/ARM64-Setup-/d; /basato su ARM/d' note.md
             # Una bozza non crea il tag, e il workflow «Linux» fa il checkout del tag: lo creo prima.
             gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "$TAG" >/dev/null
             # In bozza: nessun Cedro la vede finché non ci sono i pacchetti di tutti i sistemi (job «apri»).
@@ -589,9 +596,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
+          ARM: ${{ inputs.arm }}
         run: |
           V="${TAG#v}"
-          want="Cedro-Setup-$V.exe Cedro-ARM64-Setup-$V.exe Cedro-Bondeno-Setup-$V.exe Cedro-Bondeno-ARM64-Setup-$V.exe cedro-$V-linux-x64.tar.gz cedro-bondeno-$V-linux-x64.tar.gz"
+          want="Cedro-Setup-$V.exe Cedro-Bondeno-Setup-$V.exe cedro-$V-linux-x64.tar.gz cedro-bondeno-$V-linux-x64.tar.gz"
+          [ "$ARM" = true ] && want="$want Cedro-ARM64-Setup-$V.exe Cedro-Bondeno-ARM64-Setup-$V.exe"
           for i in $(seq 1 90); do
             have=$(gh release view "$TAG" --json assets --jq '.assets[].name')
             missing=""
