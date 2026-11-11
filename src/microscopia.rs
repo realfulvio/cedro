@@ -32,6 +32,12 @@ pub enum Origine {
     Semplice,
 }
 
+/// Il nome di un canale e il suo colore, se il file lo dice.
+pub type NomeColore = (String, Option<(u8, u8, u8)>);
+
+/// Una voce di `TiffData`: (t, z, c) → pagina.
+type Voce = ((usize, usize, usize), usize);
+
 /// Com'è fatto il file: tutto quello che serve per sceglierne i piani, senza i pixel.
 #[derive(Clone, Debug)]
 pub struct Pila {
@@ -56,7 +62,7 @@ pub struct Pila {
     passo_z: usize,
     passo_t: usize,
     /// Per OME con `TiffData` esplicito: (t, z, c) → pagina.
-    mappa: Option<Vec<((usize, usize, usize), usize)>>,
+    mappa: Option<Vec<Voce>>,
     pub obiettivo: Option<String>,
 }
 
@@ -68,7 +74,6 @@ fn aperto(path: &Path) -> Result<Decoder<BufReader<File>>, String> {
 fn razionale(v: Value) -> Option<f64> {
     match v {
         Value::Rational(n, d) if d != 0 => Some(f64::from(n) / f64::from(d)),
-        Value::RationalBig(n, d) if d != 0 => Some(n as f64 / d as f64),
         Value::Float(f) => Some(f64::from(f)),
         Value::Double(f) => Some(f),
         _ => None,
@@ -212,7 +217,7 @@ impl Pila {
         let f = |a: &str| px.attribute(a).and_then(|v| v.parse::<f64>().ok());
         self.um_per_px = micron(f("PhysicalSizeX"), px.attribute("PhysicalSizeXUnit"));
         self.um_z = micron(f("PhysicalSizeZ"), px.attribute("PhysicalSizeZUnit"));
-        let nomi: Vec<(String, Option<(u8, u8, u8)>)> = px
+        let nomi: Vec<NomeColore> = px
             .children()
             .filter(|n| n.has_tag_name("Channel"))
             .map(|c| {
@@ -375,7 +380,7 @@ impl Pila {
 
 /// I colori di default quando il file non li dice: dal nome (DAPI blu, GFP verde, mCherry rosso,
 /// 647 magenta…) o, per un nome che non dice nulla, nell'ordine di ImageJ.
-pub fn canali_standard(n: usize, nomi: &[(String, Option<(u8, u8, u8)>)]) -> Vec<Canale> {
+pub fn canali_standard(n: usize, nomi: &[NomeColore]) -> Vec<Canale> {
     const ORDINE: [(u8, u8, u8); 7] = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 255), (0, 255, 255), (255, 0, 255), (255, 255, 0)];
     (0..n)
         .map(|i| {

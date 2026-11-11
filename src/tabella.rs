@@ -649,7 +649,7 @@ fn foglio_xlsx(xml: &str, shared: &[String], stili: &[u8], date1904: bool) -> Re
                 _ => match v.trim().parse::<f64>() {
                     Ok(x) => {
                         let tipo = c.attribute("s").and_then(|s| s.parse::<usize>().ok()).and_then(|s| stili.get(s)).copied().unwrap_or(0);
-                        if tipo != 0 && x >= 0.0 && x < 2_958_466.0 {
+                        if tipo != 0 && (0.0..2_958_466.0).contains(&x) {
                             Cella::Testo(data_excel(x, tipo, date1904))
                         } else {
                             Cella::Numero(x)
