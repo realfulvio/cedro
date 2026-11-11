@@ -365,11 +365,9 @@ fn line_samples(cd: &mut Coder, bits: &mut Bits, prev: &[Vec<i32>], cur: &mut [V
         if flat {
             let left = w - x + 1;
             let count = run_length(bits, left, run_index);
-            for c in 0..ns {
-                let ra = cur[c][x - 1];
-                for i in 0..count {
-                    cur[c][x + i] = ra;
-                }
+            for line in cur.iter_mut().take(ns) {
+                let ra = line[x - 1];
+                line[x..x + count].fill(ra);
             }
             x += count;
             if x > w {
