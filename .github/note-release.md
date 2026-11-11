@@ -12,7 +12,8 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**«Aggiungi cartella» prende anche le sottocartelle, e «Togli GPS» toglie anche il video nascosto nelle foto in movimento.**
+**Le iconcine di «Cosa vuoi fare» nei PDF sono nuove, colorate e più grandi.**
 
-- «Aggiungi cartella» (in Conversioni, nel verificare e nel firmare le firme) prima prendeva solo i file direttamente nella cartella: ora scende anche nelle sottocartelle, in ordine di nome. Si saltano le cartelle nascoste (come `.git`) e i collegamenti a cartelle, e c'è un tetto di file per non riempire la coda con un disco intero.
-- Togli GPS e dati nascosti: nelle foto in movimento (Motion Photo di Google, Samsung) il video, con la sua posizione, sta attaccato in fondo al JPEG e la versione prima lo lasciava dov'era. Ora si toglie, e nel messaggio compare «dati in coda». Le altre immagini dentro il file (come quelle dell'HDR) restano, i pixel restano identici.
+- I cinque pulsanti della scheda PDF (Converti, Unisci, Dividi, Pagine, Comprimi) hanno ognuno il suo colore (blu, verde, arancio, viola, petrolio) e un disegno nuovo che fa vedere cosa succede ai fogli: due che diventano uno, uno tagliato in due, uno schiacciato.
+- L'icona è più grande dentro il pulsante e la scritta un po' più piccola. Il pulsante scelto prende il colore della sua attività, non più quello del tema, e nei temi scuri i colori sono schiariti per leggersi bene.
+- Gli stessi disegni compaiono anche sul pulsante grande in basso, nel Percorso guidato e nella ruota.

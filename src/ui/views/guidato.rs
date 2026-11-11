@@ -104,7 +104,7 @@ fn format_icon(f: &mut Frame, id: &str, x: f32, y: f32, s: f32) {
         "txt" | "html" | "rtf" => f.text_icon(x, y, s),
         "pdf" => f.pdf_icon(x + s * 0.12, y + s * 0.05, s * 0.9),
         "merge" => f.tile(x, y, s, super::pagine::MERGE, f.kind_color(Kind::Pdf), false),
-        "split" => f.tile(x, y, s, super::pagine::SCISSORS, f.kind_color(Kind::Pdf), false),
+        "split" => f.tile(x, y, s, super::pagine::SPLIT, f.kind_color(Kind::Pdf), false),
         "compress" => f.tile(x, y, s, super::pagine::SHRINK, f.kind_color(Kind::Pdf), false),
         "mp3" | "wav" | "m4a" | "ogg" | "flac" => f.tile(x, y, s, ic::AUDIO, f.kind_color(Kind::Audio), false),
         "mp4" | "mkv" => f.tile(x, y, s, ic::VIDEO, f.kind_color(Kind::Video), false),
