@@ -219,7 +219,7 @@ fn kind_by_extension(ext: &str) -> Kind {
     match ext {
         "pdf" => Kind::Pdf,
         "doc" | "docx" | "odt" | "rtf" => Kind::Doc,
-        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "dcm" | "dicom" | "ico"
+        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "dcm" | "dicom" | "nd2" | "lif" | "ico"
         | "svg" | "svgz" | "avif" | "jxl" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm"
         | "hdr" | "exr" | "dds" => Kind::Image,
         "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" | "xlsx" | "xlsm" | "ods" => Kind::Text,
@@ -238,7 +238,7 @@ pub fn kind_of(path: &Path) -> Kind {
     let Some(real) = crate::imgfmt::sniff_file(path) else {
         return by_ext;
     };
-    let sure = matches!(real, "png" | "jpg" | "gif" | "webp" | "bmp" | "tiff" | "dcm" | "avif" | "jxl" | "qoi" | "dds" | "exr" | "hdr" | "pdf" | "flac" | "wav" | "aiff" | "ogg" | "opus" | "svg");
+    let sure = matches!(real, "png" | "jpg" | "gif" | "webp" | "bmp" | "tiff" | "dcm" | "nd2" | "lif" | "avif" | "jxl" | "qoi" | "dds" | "exr" | "hdr" | "pdf" | "flac" | "wav" | "aiff" | "ogg" | "opus" | "svg");
     let by_content = kind_by_extension(real);
     if by_content != Kind::Other && by_content != by_ext && (by_ext == Kind::Other || sure) {
         return by_content;
@@ -1831,12 +1831,10 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         }
     }
 
-    // Microscopia: canali a colori, piani Z, istanti e barra di scala.
-    if matches!(extension(path).as_str(), "tif" | "tiff" | "ome") || crate::imgfmt::sniff_file(path) == Some("tiff") {
-        if crate::microscopia::is_stack(path) {
-            if let Some(done) = micro_out::perform(path, action, quality, &dir, opts) {
-                return done;
-            }
+    // Microscopia (TIFF, ND2, LIF): canali a colori, piani Z, istanti e barra di scala.
+    if crate::microscopia::is_stack(path) {
+        if let Some(done) = micro_out::perform(path, action, quality, &dir, opts) {
+            return done;
         }
     }
 

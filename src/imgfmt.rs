@@ -39,6 +39,13 @@ pub fn sniff(head: &[u8]) -> Option<&'static str> {
     if starts(b"BM") && head.len() > 14 {
         return Some("bmp");
     }
+    // Nikon ND2 e Leica LIF, i formati dei microscopi.
+    if starts(&[0xDA, 0xCE, 0xBE, 0x0A]) {
+        return Some("nd2");
+    }
+    if crate::lif::riconosci(head) {
+        return Some("lif");
+    }
     // Anche BigTIFF (indirizzi a 64 bit: vetrini digitali, immagini oltre i 4 GB).
     if starts(b"II*\0") || starts(b"MM\0*") || starts(b"II+\0") || starts(b"MM\0+") {
         return Some("tiff");
@@ -136,7 +143,7 @@ pub fn open(path: &Path, straighten: bool, target_side: Option<u32>) -> Result<D
         return crate::svs::open_image(path, target_side);
     }
     // Microscopia (OME-TIFF, ImageJ, 16 bit): canali a colori e contrasto, non i 16 bit schiacciati.
-    if kind == "tiff" && crate::microscopia::is_stack(path) {
+    if matches!(kind, "tiff" | "nd2" | "lif") && crate::microscopia::is_stack(path) {
         return crate::microscopia::apri(path);
     }
     match kind {

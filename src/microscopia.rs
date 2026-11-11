@@ -1,5 +1,5 @@
-//! Immagini di microscopia in TIFF: OME-TIFF (quello dei microscopi e di Bio-Formats), TIFF di ImageJ
-//! o Fiji e i TIFF a 16 bit di camere scientifiche. Un file ha canali (colori di fluorescenza),
+//! Immagini di microscopia: OME-TIFF (quello dei microscopi e di Bio-Formats), TIFF di ImageJ o Fiji,
+//! i TIFF a 16 bit di camere scientifiche, gli ND2 di Nikon e i LIF di Leica (lettori in `nd2` e `lif`). Un file ha canali (colori di fluorescenza),
 //! piani Z (la profondità) e istanti nel tempo; per vederlo bene servono i colori dei canali, la
 //! proiezione dei piani Z e il contrasto automatico, perché a 16 bit un'immagine di fluorescenza
 //! «a 8 bit» è quasi nera. La barra di scala si disegna se il file dice quanto è grande un pixel.
@@ -10,6 +10,7 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use std::sync::Arc;
 
 use image::{DynamicImage, ImageBuffer, Luma, Rgb, RgbImage};
 use tiff::decoder::{ifd::Value, Decoder, DecodingResult, Limits};
@@ -30,7 +31,32 @@ pub enum Origine {
     ImageJ,
     /// Un TIFF a 16 bit senza metadati.
     Semplice,
+    /// Un ND2 di Nikon (NIS-Elements).
+    Nikon,
+    /// Un LIF di Leica (LAS X): un progetto con più immagini.
+    Leica,
 }
+
+/// Da dove vengono i pixel.
+#[derive(Clone)]
+enum Sorgente {
+    Tiff,
+    Nd2(Arc<crate::nd2::Nd2>),
+    Lif(Arc<crate::lif::Immagine>),
+}
+
+impl std::fmt::Debug for Sorgente {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Sorgente::Tiff => "Tiff",
+            Sorgente::Nd2(_) => "Nd2",
+            Sorgente::Lif(_) => "Lif",
+        })
+    }
+}
+
+/// Un asse messo in fila negli «istanti»: quanti sono e come si chiamano (in italiano e in inglese).
+pub type AsseT = (&'static str, &'static str, usize);
 
 /// Il nome di un canale e il suo colore, se il file lo dice.
 pub type NomeColore = (String, Option<(u8, u8, u8)>);
@@ -64,6 +90,12 @@ pub struct Pila {
     /// Per OME con `TiffData` esplicito: (t, z, c) → pagina.
     mappa: Option<Vec<Voce>>,
     pub obiettivo: Option<String>,
+    sorgente: Sorgente,
+    /// Cosa c'è negli istanti quando non sono solo il tempo (posizioni, tessere, lunghezze d'onda).
+    pub assi_t: Vec<AsseT>,
+    /// Le immagini del file (i LIF ne hanno più d'una) e quale è questa.
+    pub serie: Vec<String>,
+    pub numero_serie: usize,
 }
 
 fn aperto(path: &Path) -> Result<Decoder<BufReader<File>>, String> {
@@ -107,6 +139,13 @@ fn testa(d: &mut Decoder<BufReader<File>>) -> Option<Testa> {
 /// la descrizione OME o ImageJ, oppure è un TIFF a 16 bit in toni di grigio. Un vetrino Aperio no.
 pub fn is_stack(path: &Path) -> bool {
     let head = crate::imgfmt::head_of(path);
+    if crate::nd2::riconosci(&head) || crate::lif::riconosci(&head) {
+        return true;
+    }
+    // Un ND2 dei primi NIS-Elements (JPEG 2000): lo si prende per dire che non si legge.
+    if crate::engine::extension(path) == "nd2" && head.get(4..8) == Some(b"jP  ") {
+        return true;
+    }
     let tiff = head.starts_with(b"II*\0") || head.starts_with(b"MM\0*") || head.starts_with(b"II+\0") || head.starts_with(b"MM\0+");
     if !tiff {
         return false;
@@ -121,6 +160,126 @@ pub fn is_stack(path: &Path) -> bool {
 
 impl Pila {
     pub fn open(path: &Path) -> Result<Pila, String> {
+        Pila::open_serie(path, 0)
+    }
+
+    /// Tutte le immagini del file: una sola, tranne nei LIF (letti una volta sola).
+    pub fn open_tutte(path: &Path) -> Result<Vec<Pila>, String> {
+        if crate::lif::riconosci(&crate::imgfmt::head_of(path)) {
+            let lif = crate::lif::Lif::open(path)?;
+            let nomi: Vec<String> = lif.immagini.iter().map(|i| i.nome.clone()).collect();
+            return Ok(lif.immagini.into_iter().enumerate().map(|(k, i)| Pila::da_lif(i, nomi.clone(), k)).collect());
+        }
+        Ok(vec![Pila::open(path)?])
+    }
+
+    /// L'immagine numero `serie` del file (conta solo per i LIF).
+    pub fn open_serie(path: &Path, serie: usize) -> Result<Pila, String> {
+        let head = crate::imgfmt::head_of(path);
+        if crate::nd2::riconosci(&head) {
+            return Pila::da_nd2(crate::nd2::Nd2::open(path)?);
+        }
+        if crate::lif::riconosci(&head) {
+            let lif = crate::lif::Lif::open(path)?;
+            let nomi: Vec<String> = lif.immagini.iter().map(|i| i.nome.clone()).collect();
+            let i = lif.immagini.into_iter().nth(serie).ok_or("immagine non trovata nel file LIF")?;
+            return Ok(Pila::da_lif(i, nomi, serie));
+        }
+        if crate::engine::extension(path) == "nd2" {
+            return Err(crate::nd2::VECCHIO.into());
+        }
+        Pila::da_tiff(path)
+    }
+
+    fn vuota(origine: Origine, larghezza: u32, altezza: u32, sorgente: Sorgente) -> Pila {
+        Pila {
+            origine,
+            larghezza,
+            altezza,
+            canali: Vec::new(),
+            z: 1,
+            t: 1,
+            um_per_px: None,
+            um_z: None,
+            bit: 16,
+            pagine: 0,
+            campioni: 1,
+            planare: false,
+            passo_c: 1,
+            passo_z: 1,
+            passo_t: 1,
+            mappa: None,
+            obiettivo: None,
+            sorgente,
+            assi_t: Vec::new(),
+            serie: Vec::new(),
+            numero_serie: 0,
+        }
+    }
+
+    fn da_nd2(n: crate::nd2::Nd2) -> Result<Pila, String> {
+        use crate::nd2::Asse;
+        let mut p = Pila::vuota(Origine::Nikon, n.larghezza, n.altezza, Sorgente::Tiff);
+        p.canali = n.canali.clone();
+        p.z = n.z();
+        p.t = n.t();
+        p.um_per_px = n.um_per_px;
+        p.um_z = n.um_z;
+        p.bit = n.bit;
+        p.pagine = n.fotogrammi();
+        p.campioni = n.campioni;
+        p.obiettivo = n.obiettivo.clone();
+        let fuori_z: Vec<(Asse, usize)> = n.cicli.iter().filter(|(a, k)| *a != Asse::Z && *k > 1).copied().collect();
+        if fuori_z.iter().any(|(a, _)| *a != Asse::Tempo) {
+            p.assi_t = fuori_z
+                .iter()
+                .map(|(a, k)| match a {
+                    Asse::Posizione => ("posizioni", "positions", *k),
+                    Asse::Tempo => ("istanti", "time points", *k),
+                    _ => ("cicli", "loops", *k),
+                })
+                .collect();
+        }
+        p.sorgente = Sorgente::Nd2(Arc::new(n));
+        Ok(p)
+    }
+
+    fn da_lif(i: crate::lif::Immagine, serie: Vec<String>, numero: usize) -> Pila {
+        let mut p = Pila::vuota(Origine::Leica, i.larghezza, i.altezza, Sorgente::Tiff);
+        p.canali = canali_standard(i.canali.len(), &i.canali);
+        if i.rgb {
+            for (c, n) in p.canali.iter_mut().zip(["R", "G", "B"]) {
+                c.nome = n.to_string();
+            }
+            p.campioni = 3;
+        }
+        p.z = i.z;
+        p.t = i.t();
+        p.um_per_px = i.um_per_px;
+        p.um_z = i.um_z;
+        p.bit = i.bit;
+        p.obiettivo = i.obiettivo.clone();
+        if i.altri.iter().any(|(id, k)| *id != 4 && *k > 1) {
+            p.assi_t = i
+                .altri
+                .iter()
+                .map(|(id, k)| match id {
+                    4 => ("istanti", "time points", *k),
+                    5 => ("lunghezze d'onda di emissione", "emission wavelengths", *k),
+                    9 => ("lunghezze d'onda di eccitazione", "excitation wavelengths", *k),
+                    10 => ("tessere", "tiles", *k),
+                    6 => ("rotazioni", "rotations", *k),
+                    _ => ("cicli", "loops", *k),
+                })
+                .collect();
+        }
+        p.serie = serie;
+        p.numero_serie = numero;
+        p.sorgente = Sorgente::Lif(Arc::new(i));
+        p
+    }
+
+    fn da_tiff(path: &Path) -> Result<Pila, String> {
         let mut d = aperto(path)?;
         let t = testa(&mut d).ok_or("TIFF di un tipo che Cedro non legge ancora (serve grigio o RGB)")?;
         let mut pagine = 1;
@@ -151,6 +310,10 @@ impl Pila {
             passo_t: pagine,
             mappa: None,
             obiettivo: None,
+            sorgente: Sorgente::Tiff,
+            assi_t: Vec::new(),
+            serie: Vec::new(),
+            numero_serie: 0,
         };
         if t.descrizione.contains("<OME") {
             pila.origine = Origine::Ome;
@@ -351,9 +514,17 @@ impl Pila {
                     Origine::Ome => "OME-TIFF",
                     Origine::ImageJ => "TIFF di ImageJ",
                     Origine::Semplice => "TIFF a 16 bit",
+                    Origine::Nikon if en => "Nikon ND2",
+                    Origine::Nikon => "ND2 di Nikon",
+                    Origine::Leica if en => "Leica LIF",
+                    Origine::Leica => "LIF di Leica",
                 }
                 .into(),
             );
+            if self.serie.len() > 1 {
+                let nome = self.serie.get(self.numero_serie).cloned().unwrap_or_default();
+                p.push(if en { format!("{} images (this one: {nome})", self.serie.len()) } else { format!("{} immagini (questa: {nome})", self.serie.len()) });
+            }
             let n = self.canali.len();
             if n > 1 || self.origine == Origine::Ome {
                 p.push(if en { format!("{n} channel{}", if n == 1 { "" } else { "s" }) } else { format!("{n} canal{}", if n == 1 { "e" } else { "i" }) });
@@ -361,14 +532,23 @@ impl Pila {
             if self.z > 1 {
                 p.push(if en { format!("{} Z planes", self.z) } else { format!("{} piani Z", self.z) });
             }
-            if self.t > 1 {
-                p.push(if en { format!("{} time points", self.t) } else { format!("{} istanti", self.t) });
+            if self.assi_t.is_empty() {
+                if self.t > 1 {
+                    p.push(if en { format!("{} time points", self.t) } else { format!("{} istanti", self.t) });
+                }
+            } else {
+                for (it, inglese, n) in &self.assi_t {
+                    p.push(format!("{n} {}", if en { inglese } else { it }));
+                }
             }
             p.push(if en { format!("{}-bit", self.bit) } else { format!("{} bit", self.bit) });
             p.push(format!("{}×{}", self.larghezza, self.altezza));
             if let Some(um) = self.um_per_px {
                 let s = format!("{um:.4}").trim_end_matches('0').trim_end_matches('.').to_string();
                 p.push(if en { format!("{s} µm/pixel") } else { format!("{} µm/pixel", s.replace('.', ",")) });
+            }
+            if let Some(o) = &self.obiettivo {
+                p.push(o.clone());
             }
             p.join(" · ")
         };
@@ -488,20 +668,30 @@ impl Pila {
         Ok(Piano { dati, scala })
     }
 
+    /// Un piano letto dalla sorgente giusta; il lettore TIFF si apre la prima volta e poi si riusa.
+    fn piano_uno(&self, path: &Path, d: &mut Option<Decoder<BufReader<File>>>, c: usize, z: usize, t: usize) -> Result<Piano, String> {
+        match &self.sorgente {
+            Sorgente::Tiff => {
+                let d = match d {
+                    Some(d) => d,
+                    None => d.insert(aperto(path)?),
+                };
+                self.leggi_piano(d, c, z, t)
+            }
+            Sorgente::Nd2(n) => n.fotogramma(path, n.indice(z, t))?.into_iter().nth(c).ok_or_else(|| "canale non trovato".to_string()),
+            Sorgente::Lif(i) => i.piano(path, c, z, t),
+        }
+    }
+
     /// Il canale `c` all'istante `t`, con i piani Z uniti come scelto.
     pub fn canale(&self, path: &Path, c: usize, t: usize, piani: Piani) -> Result<Piano, String> {
-        let mut d = aperto(path)?;
+        let mut d = None;
         match piani {
-            Piani::Centrale => self.leggi_piano(&mut d, c, self.z / 2, t),
+            Piani::Centrale => self.piano_uno(path, &mut d, c, self.z / 2, t),
             Piani::Massimo => {
-                let mut totale = self.leggi_piano(&mut d, c, 0, t)?;
+                let mut totale = self.piano_uno(path, &mut d, c, 0, t)?;
                 for z in 1..self.z {
-                    let p = self.leggi_piano(&mut d, c, z, t)?;
-                    for (a, b) in totale.dati.iter_mut().zip(&p.dati) {
-                        if *b > *a {
-                            *a = *b;
-                        }
-                    }
+                    massimo(&mut totale, &self.piano_uno(path, &mut d, c, z, t)?);
                 }
                 Ok(totale)
             }
@@ -510,16 +700,44 @@ impl Pila {
 
     /// Un solo piano Z (per «un file per piano»).
     pub fn piano_z(&self, path: &Path, c: usize, z: usize, t: usize) -> Result<Piano, String> {
-        self.leggi_piano(&mut aperto(path)?, c, z, t)
+        self.piano_uno(path, &mut None, c, z, t)
     }
 
-    /// Tutti i canali di un istante, ognuno su un thread.
+    /// Tutti i canali di un istante, ognuno su un thread. Negli ND2 un fotogramma tiene tutti i
+    /// canali: si legge una volta sola, e sono i piani Z a dividersi i thread.
     pub fn canali_di(&self, path: &Path, t: usize, piani: Piani) -> Result<Vec<Piano>, String> {
+        if let Sorgente::Nd2(n) = &self.sorgente {
+            let zeta: Vec<usize> = match piani {
+                Piani::Centrale => vec![self.z / 2],
+                Piani::Massimo => (0..self.z).collect(),
+            };
+            let fili = std::thread::available_parallelism().map_or(4, |n| n.get()).clamp(1, 8).min(zeta.len());
+            let parti = self.in_parallelo((0..fili).collect(), |k| {
+                let mut tutti: Option<Vec<Piano>> = None;
+                for &z in zeta.iter().skip(k).step_by(fili) {
+                    let f = n.fotogramma(path, n.indice(z, t))?;
+                    match &mut tutti {
+                        None => tutti = Some(f),
+                        Some(a) => a.iter_mut().zip(&f).for_each(|(a, b)| massimo(a, b)),
+                    }
+                }
+                tutti.ok_or_else(|| "piano non trovato nel file".to_string())
+            })?;
+            let mut parti = parti.into_iter();
+            let mut out = parti.next().ok_or("piano non trovato nel file")?;
+            for p in parti {
+                out.iter_mut().zip(&p).for_each(|(a, b)| massimo(a, b));
+            }
+            return Ok(out);
+        }
         self.in_parallelo((0..self.canali.len()).collect(), |c| self.canale(path, c, t, piani))
     }
 
     /// Un piano Z di tutti i canali.
     pub fn canali_di_z(&self, path: &Path, z: usize, t: usize) -> Result<Vec<Piano>, String> {
+        if let Sorgente::Nd2(n) = &self.sorgente {
+            return n.fotogramma(path, n.indice(z, t));
+        }
         self.in_parallelo((0..self.canali.len()).collect(), |c| self.piano_z(path, c, z, t))
     }
 
@@ -531,6 +749,15 @@ impl Pila {
             let ths: Vec<_> = voci.iter().map(|c| s.spawn(|| lavoro(*c))).collect();
             ths.into_iter().map(|h| h.join().unwrap_or_else(|_| Err("lettura interrotta".into()))).collect()
         })
+    }
+}
+
+/// Tiene in `a` il più alto dei due valori, pixel per pixel.
+fn massimo(a: &mut Piano, b: &Piano) {
+    for (x, y) in a.dati.iter_mut().zip(&b.dati) {
+        if *y > *x {
+            *x = *y;
+        }
     }
 }
 
@@ -666,7 +893,8 @@ pub fn disegna_barra(img: &mut RgbImage, um_per_px: f64) -> Option<String> {
     let px = (um / um_per_px).round() as i64;
     let lato = w.min(h).max(1) as f64;
     let spessore = ((lato / 110.0).round() as i64).max(3);
-    let k = ((lato / 260.0).round() as i64).max(2);
+    // Le lettere: 2 pixel per punto dalle immagini medie in su, 1 per le piccolissime (128 px).
+    let k = ((lato / 260.0).round() as i64).max(if lato < 200.0 { 1 } else { 2 });
     let margine = (lato / 28.0).round().max(8.0) as i64;
     let (x1, y1) = (i64::from(w) - margine, i64::from(h) - margine);
     let (x0, y0) = (x1 - px, y1 - spessore);
@@ -688,7 +916,8 @@ pub fn disegna_barra(img: &mut RgbImage, um_per_px: f64) -> Option<String> {
     }
     // La scritta, centrata sopra la barra: contorno nero, poi bianco.
     let larghezza_testo = testo.chars().count() as i64 * 6 * k - k;
-    let tx = x0 + (px - larghezza_testo) / 2;
+    // Centrata sulla barra, ma dentro l'immagine anche quando la barra è più corta della scritta.
+    let tx = (x0 + (px - larghezza_testo) / 2).min(i64::from(w) - larghezza_testo - contorno - 1).max(contorno + 1);
     let ty = y0 - contorno - 4 * k - 7 * k;
     for (passo, colore) in [(true, [0u8, 0, 0]), (false, [255, 255, 255])] {
         for (i, ch) in testo.chars().enumerate() {
