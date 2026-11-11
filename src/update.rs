@@ -12,6 +12,8 @@ pub struct Release {
     pub version: String,
     pub page: String,
     pub installer: Option<Asset>,
+    /// Lo zip della versione portable (`Cedro-Portable-<versione>-x64.zip`), solo Windows x64.
+    pub portable: Option<Asset>,
     /// Il pacchetto per Linux (`cedro-<versione>-linux-x64.tar.gz`).
     pub package: Option<Asset>,
 }
@@ -57,7 +59,12 @@ pub fn check() -> Result<Option<Release>, String> {
 impl Release {
     /// Vero se la release ha il file che serve a questo sistema: l'installatore su Windows, il pacchetto su Linux.
     pub fn is_ready(&self) -> bool {
-        if cfg!(windows) { self.installer.is_some() } else { self.package.is_some() }
+        if cfg!(windows) {
+            // La versione portable si aggiorna con il suo zip, mai con l'installatore.
+            if crate::portable::is_portable() { self.portable.is_some() } else { self.installer.is_some() }
+        } else {
+            self.package.is_some()
+        }
     }
 }
 
@@ -86,7 +93,8 @@ fn parse_release(body: &str) -> Result<Release, String> {
     let installer = find(&|name| is_installer_for_this_arch(name));
     let suffix = format!("-linux-{}.tar.gz", package_arch());
     let package = find(&|name| is_package_of_this_edition(name, &suffix));
-    Ok(Release { version, page, installer, package })
+    let portable = find(&|name| crate::portable::is_package_name(name));
+    Ok(Release { version, page, installer, portable, package })
 }
 
 /// L'installatore x64 è `Cedro-Setup-<v>.exe`, quello per Windows on ARM `Cedro-ARM64-Setup-<v>.exe`.
@@ -141,6 +149,20 @@ fn parts(version: &str) -> Option<Vec<u64>> {
         out.push(0);
     }
     Some(out)
+}
+
+/// Aggiornamento della versione portable: scarica lo zip, ne controlla lo SHA-256 e sostituisce i file accanto a
+/// cedro.exe (i dati in `Dati` restano). Poi Cedro si riapre da solo.
+#[cfg(windows)]
+pub fn install_portable(release: &Release) -> Result<(), String> {
+    let asset = release.portable.as_ref().ok_or("la release non ha lo zip portable")?;
+    let dir = crate::portable::root().ok_or("Cedro non è in modalità portable")?.to_path_buf();
+    let zip = download(asset)?;
+    let result = crate::portable::apply_zip(&zip, &dir);
+    let _ = std::fs::remove_dir_all(zip.parent().unwrap_or(&zip));
+    result?;
+    mark_updated(&release.version);
+    Ok(())
 }
 
 /// Scarica l'installatore nella cartella temporanea e ne verifica lo SHA-256.
@@ -503,6 +525,16 @@ mod tests {
         let asset = release.installer.unwrap();
         assert_eq!(asset.url, for_this_arch("https://x/Cedro-Setup-0.8.0.exe"));
         assert_eq!(asset.sha256.as_deref(), Some("410cf4149103e3c6bf74a241ec6ea87e9cdff471f02d8242f858c73f2b0dced0"));
+    }
+
+    #[test]
+    fn the_portable_zip_is_found_and_never_taken_for_the_installer() {
+        let release = parse_release(r#"{"tag_name": "v9.0.0", "assets": [
+            {"name": "Cedro-Portable-9.0.0-x64.zip", "browser_download_url": "https://x/p.zip", "digest": "sha256:abc"},
+            {"name": "Cedro-Setup-9.0.0.exe", "browser_download_url": "https://x/a.exe", "digest": "sha256:abc"}]}"#)
+        .unwrap();
+        assert_eq!(release.portable.unwrap().name, "Cedro-Portable-9.0.0-x64.zip");
+        assert_eq!(release.installer.unwrap().name, "Cedro-Setup-9.0.0.exe");
     }
 
     #[test]
