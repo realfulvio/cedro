@@ -12,8 +12,8 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Le iconcine di «Cosa vuoi fare» nei PDF sono nuove, colorate e più grandi.**
+**Dopo l'installazione c'è l'icona di Cedro sul desktop, e con un doppio clic si apre la finestra.**
 
-- I cinque pulsanti della scheda PDF (Converti, Unisci, Dividi, Pagine, Comprimi) hanno ognuno il suo colore (blu, verde, arancio, viola, petrolio) e un disegno nuovo che fa vedere cosa succede ai fogli: due che diventano uno, uno tagliato in due, uno schiacciato.
-- L'icona è più grande dentro il pulsante e la scritta un po' più piccola. Il pulsante scelto prende il colore della sua attività, non più quello del tema, e nei temi scuri i colori sono schiariti per leggersi bene.
-- Gli stessi disegni compaiono anche sul pulsante grande in basso, nel Percorso guidato e nella ruota.
+- Il collegamento sul desktop (e quello nel menu Start) ora apre davvero la finestra di Cedro, non solo l'icona vicino all'orologio. Se Cedro è già in esecuzione tra le iconcine, il doppio clic gli fa mostrare la finestra, senza aprire una seconda copia.
+- L'avvio con Windows resta discreto: parte solo l'icona vicino all'orologio, come prima.
+- Se togli il collegamento dal desktop, gli aggiornamenti automatici non lo rimettono.
