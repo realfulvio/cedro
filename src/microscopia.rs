@@ -888,6 +888,15 @@ fn lettera(c: char) -> [u8; 7] {
 /// Disegna la barra in basso a destra: bianca con il contorno nero, con la scritta sopra.
 /// Ritorna la scritta (per il messaggio) se la scala c'è ed è abbastanza grande da disegnare.
 pub fn disegna_barra(img: &mut RgbImage, um_per_px: f64) -> Option<String> {
+    barra_con(img, um_per_px, true)
+}
+
+/// La barra senza la scritta, come nelle figure degli articoli (la misura va nella didascalia).
+pub fn disegna_barra_sola(img: &mut RgbImage, um_per_px: f64) -> Option<String> {
+    barra_con(img, um_per_px, false)
+}
+
+fn barra_con(img: &mut RgbImage, um_per_px: f64, con_testo: bool) -> Option<String> {
     let (w, h) = img.dimensions();
     let (um, testo) = misura_barra(w, um_per_px)?;
     let px = (um / um_per_px).round() as i64;
@@ -913,6 +922,9 @@ pub fn disegna_barra(img: &mut RgbImage, um_per_px: f64) -> Option<String> {
         for x in x0..x1 {
             macchia(x, y, [255, 255, 255]);
         }
+    }
+    if !con_testo {
+        return Some(testo);
     }
     // La scritta, centrata sopra la barra: contorno nero, poi bianco.
     let larghezza_testo = testo.chars().count() as i64 * 6 * k - k;

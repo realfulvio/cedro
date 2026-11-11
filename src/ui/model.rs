@@ -1251,6 +1251,9 @@ impl App {
         if !(self.simple_view && self.action == "split") {
             conversioni::validate(&self.values, self.kind(), &self.action)?;
         }
+        if self.kind() == Kind::Image && self.action == "figure" && self.targets().len() > 26 {
+            return Err("Una figura tiene al massimo 26 pannelli (dalla A alla Z).".into());
+        }
         if self.kind() == Kind::Pdf && self.action == "merge" {
             let targets = self.targets();
             if targets.len() < 2 {
@@ -1347,7 +1350,7 @@ impl App {
             self.notice = Some(Notice { text: "Aggiungi prima qualche file.".into(), error: false });
             return;
         }
-        if self.kind() == Kind::Pdf && self.action == "merge" {
+        if (self.kind() == Kind::Pdf && self.action == "merge") || (self.kind() == Kind::Image && self.action == "figure") {
             self.start_merge();
             return;
         }
@@ -1420,8 +1423,10 @@ impl App {
         });
     }
 
-    /// «Unisci»: un lavoro solo per tutti i PDF spuntati, nell'ordine della coda; ogni file riceve lo stesso risultato.
+    /// «Unisci» e «Figura»: un lavoro solo per tutti i file spuntati, nell'ordine della coda; ogni file
+    /// riceve lo stesso risultato.
     fn start_merge(&mut self) {
+        let figure = self.action == "figure";
         // Anche quelli già fatti: il PDF unito si rifà sempre con tutti.
         let targets = self.targets();
         let sources: Vec<(PathBuf, Option<engine::PageSel>)> = targets.iter().map(|&i| (self.files[i].path.clone(), engine::PageSel::parse(&self.files[i].pages).ok().flatten())).collect();
@@ -1450,7 +1455,9 @@ impl App {
                             guarded(|| {
                                 // «Accanto all'originale» vuol dire accanto al primo file.
                                 let beside = sources[0].0.parent().filter(|p| !p.as_os_str().is_empty()).map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
-                                engine::merge_with(&sources, Some(dest.as_deref().unwrap_or(&beside)), &opts).map(|o| (o.path, o.message)).map_err(|e| e.0)
+                                let out_dir = Some(dest.as_deref().unwrap_or(&beside));
+                                let done = if figure { engine::figure_with(&paths, out_dir, &opts) } else { engine::merge_with(&sources, out_dir, &opts) };
+                                done.map(|o| (o.path, o.message)).map_err(|e| e.0)
                             })
                         },
                     )

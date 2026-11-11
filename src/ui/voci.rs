@@ -38,6 +38,8 @@ const GRAFITE: Rgb = hex(0x56606B);
 const ARANCIO: Rgb = hex(0xD4570E);
 const ROSSO: Rgb = hex(0xC8323C);
 const VIOLA: Rgb = hex(0x663FC0);
+/// Il colore del laboratorio (figure, tabelle dei dati, microscopia).
+const LAB: Rgb = hex(0xC2306B);
 
 const fn g(stroke: &'static str, fill: &'static str) -> Glyph {
     Glyph { stroke, fill }
@@ -81,6 +83,7 @@ const MAIUSC: Glyph = g("M3 18 7.5 6 12 18 M4.7 13.5h5.6 M14 18V6h3.5a3 3 0 0 1 
 const MINUSC: Glyph = g("M4 14.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0z M11 11v7 M14 6v12 M14 14.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0z", "");
 const UNISCI: Glyph = g("M5 4h9v6H5z M5 14h9v6H5z M17 7h2v10h-2 M19 12h2", "");
 const DIVIDI: Glyph = g("M6 3h12v7H6z M6 14h12v7H6z M3 12h2 M8 12h2 M14 12h2 M19 12h2", "");
+const FIGURA: Glyph = g("M3 3h8v8H3z M13 3h8v8h-8z M3 13h8v8H3z M13 13h8v8h-8z M5 9.5h3", "");
 const ALTRO: Glyph = g("M6 3h8l4 4v14H6z M14 3v5h4", "");
 
 const fn v(label: &'static str, hint: &'static str, glyph: Glyph, color: Rgb) -> Voce {
@@ -114,6 +117,7 @@ pub fn voce(kind: Kind, id: &str) -> Voce {
         (Kind::Image, "rot90") => v("Ruota di 90° a destra", "senso orario", RUOTA, ARANCIO),
         (Kind::Image, "strip") => v("Togli GPS e dati nascosti", "luogo, data, fotocamera", PULISCI, ROSSO),
         (Kind::Image, "ocr") => v("Leggi il testo (OCR)", "copia le scritte", OCR, VIOLA),
+        (Kind::Image, "figure") => v("Figura per un articolo", "pannelli A B C, 300 dpi", FIGURA, LAB),
         // PDF
         (Kind::Pdf, "jpg") => v("JPG", "una foto per pagina", JPEG, WEB),
         (Kind::Pdf, "docx") => v("Word", "da modificare, anche scansioni", WORD, OFFICE),
@@ -162,6 +166,7 @@ fn id_label(id: &str) -> &'static str {
     match id {
         "merge" => "Unisci",
         "split" => "Dividi",
+        "figure" => "Figura",
         _ => "",
     }
 }

@@ -54,6 +54,22 @@ pub fn run() -> i32 {
             return if bad { 1 } else { 0 };
         }
         "trascrivi" if positional.len() >= 2 => return transcribe(&positional[1..], &args),
+        // La figura per un articolo: i file nell'ordine dato diventano i pannelli A, B, C.
+        "figura" if positional.len() >= 2 => {
+            let mut figura = cedro::figura::Opzioni::default();
+            let mut files = Vec::new();
+            for a in &positional[1..] {
+                match a.to_str() {
+                    Some("--colonna") => figura.larghezza_mm = 85,
+                    Some("--600") => figura.dpi = 600,
+                    Some("--senza-lettere") => figura.lettere = false,
+                    Some("--senza-barra") => figura.barra = false,
+                    _ => files.push(std::path::PathBuf::from(a)),
+                }
+            }
+            let exists = if cedro::read_settings().replace { cedro::Exists::Replace } else { cedro::Exists::Number };
+            cedro::figure_with(&files, None, &cedro::Options { figura, exists, ..cedro::Options::default() })
+        }
         "zip" if positional.len() >= 2 => perform(std::path::Path::new(&positional[1]), "zip", quality),
         "slices" if positional.len() >= 2 => {
             let path = std::path::Path::new(&positional[1]);
@@ -176,6 +192,8 @@ Cedro — conversione locale, senza upload.
   cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--cpu]
                    dalla voce a un Word (o a un testo), con il motore scaricato alla prima volta;
                    --voci dice quante persone parlano (auto le conta da solo, 1 non le riconosce)
+  cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra]
+                   la figura per un articolo: pannelli A, B, C in un TIFF a 300 dpi largo 17,5 cm
   cedro firma <file>…   verifica le firme digitali (.p7m, .p7s, .m7m, .tsd, .tsr, PDF firmati)
   cedro verifica <file> apre il visualizzatore dei file firmati (come il doppio clic)
 

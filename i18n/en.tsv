@@ -2052,3 +2052,24 @@ le misure di «{}» non stanno nei suoi dati	the dimensions of “{}” don't fi
 pixel di {} bit: Cedro non li legge ancora	{}-bit pixels: Cedro can't read them yet
 «{}» è troppo grande ({})	“{}” is too large ({})
 ~ immagini del progetto	 project images
+Figura {} × {} cm, {} dpi, {#} pannelli.	Figure {} × {} cm, {} dpi, {} panels.
+Figura {} × {} cm, {} dpi, {#} pannello.	Figure {} × {} cm, {} dpi, {} panel.
+{#} con la barra di scala.	{} with a scale bar.
+Legenda nel file di testo accanto.	Caption details in the text file alongside.
+nessuna immagine per la figura	no images for the figure
+una figura tiene al massimo 26 pannelli (A-Z)	a figure holds at most 26 panels (A-Z)
+figura troppo grande: meno pannelli o immagini meno alte	figure too large: fewer panels or shorter images
+Una figura tiene al massimo 26 pannelli (dalla A alla Z).	A figure holds at most 26 panels (A to Z).
+Figura	Figure
+Figura per un articolo	Figure for a paper
+pannelli A B C, 300 dpi	panels A B C, 300 dpi
+Larghezza	Width
+Quella chiesta dalla rivista: una colonna o tutta la pagina	What the journal asks for: one column or the full page
+Una colonna (8,5 cm)	One column (8.5 cm)
+Pagina intera (17,5 cm)	Full page (17.5 cm)
+300 dpi per foto e microscopia; 600 se la rivista lo chiede	300 dpi for photos and microscopy; 600 if the journal asks
+Lettere A, B, C	Letters A, B, C
+In alto a sinistra di ogni pannello, nell'ordine della coda	Top left of each panel, in queue order
+Sui pannelli di microscopia che dicono quanto è grande un pixel	On microscopy panels that state the pixel size
+  cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra]	  cedro figura <image>… [--colonna] [--600] [--senza-lettere] [--senza-barra]
+                   la figura per un articolo: pannelli A, B, C in un TIFF a 300 dpi largo 17,5 cm	                   a figure for a paper: panels A, B, C in a 300 dpi TIFF, 17.5 cm wide
