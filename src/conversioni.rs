@@ -228,6 +228,10 @@ pub enum Opt {
     FigScale,
     FigObjective,
     FigCalibration,
+    TileSize,
+    TileMag,
+    TileTissue,
+    TileJpeg,
 }
 
 /// Una riga della zona Opzioni del pannello.
@@ -326,9 +330,9 @@ const SLIDE_MACRO: OptionDef = sw(Opt::SlideMacro, "Foto del vetrino intero", "L
 pub fn slide_option_defs(action: &str) -> Vec<&'static OptionDef> {
     match action {
         // Il testo si legge sempre dal livello «Media»; la figura sceglie da sé.
-        "ocr" | "figure" => vec![],
+        "ocr" | "figure" | "tiles" | "mitosi" | "consult" | "strip" => vec![],
         // Un file solo: il PDF, l'immagine ripulita o modificata non hanno etichetta e foto accanto.
-        "pdf" | "strip" | "half" | "gray" | "rot90" => vec![&SLIDE_LEVEL],
+        "pdf" | "half" | "gray" | "rot90" => vec![&SLIDE_LEVEL],
         _ => vec![&SLIDE_LEVEL, &SLIDE_LABEL, &SLIDE_MACRO],
     }
 }
@@ -347,7 +351,7 @@ const DICOM_ANON: OptionDef = sw(Opt::DicomAnon, "Anonimizza", "Nome, ID, nascit
 /// Le opzioni in più quando in coda c'è un DICOM (TC, RX, ecografie), in cima alle altre.
 pub fn dicom_option_defs(action: &str) -> Vec<&'static OptionDef> {
     match action {
-        "ocr" | "ico" | "figure" => vec![],
+        "ocr" | "ico" | "figure" | "tiles" | "mitosi" | "consult" => vec![],
         // Il DICOM anonimo resta un DICOM: finestra e immagini non c'entrano.
         "strip" => vec![&DICOM_ANON],
         "png" | "tiff" => vec![&DICOM_WINDOW, &DICOM_ALL, &DICOM_16, &DICOM_ANON],
@@ -375,7 +379,7 @@ const MICRO_16: OptionDef = sw(Opt::Micro16, "Valori originali a 16 bit", "Per m
 /// Le opzioni in più quando in coda c'è un'immagine di microscopia: solo quelle che servono al file
 /// (canali se sono più d'uno, piani Z, istanti), in cima alle altre.
 pub fn micro_option_defs(action: &str, canali: usize, z: usize, t: usize) -> Vec<&'static OptionDef> {
-    if matches!(action, "ocr" | "ico" | "strip" | "figure") {
+    if matches!(action, "ocr" | "ico" | "strip" | "figure" | "tiles" | "mitosi" | "consult") {
         return vec![];
     }
     let mut v: Vec<&'static OptionDef> = Vec::new();
@@ -422,6 +426,18 @@ pub const FIG_CALIBRATION: OptionDef = OptionDef {
     control: Control::Text { hint: "per esempio 0,65" },
     default: 0,
 };
+
+const TILE_SIZES: &[Choice] = &[Choice { label: "256 px", value: 256 }, Choice { label: "512 px", value: 512 }];
+const TILE_MAGS: &[Choice] = &[
+    Choice { label: "20x (0,5 µm/px)", value: 20 },
+    Choice { label: "10x (1 µm/px)", value: 10 },
+    Choice { label: "Come scansionato", value: 0 },
+];
+const TILE_FORMATS: &[Choice] = &[Choice { label: "PNG", value: 0 }, Choice { label: "JPEG", value: 1 }];
+const TILE_SIZE: OptionDef = OptionDef { opt: Opt::TileSize, title: "Lato delle tessere", note: "256 per la maggior parte dei modelli; 512 per vedere più contesto", control: Control::Segments(TILE_SIZES), default: 256 };
+const TILE_MAG: OptionDef = OptionDef { opt: Opt::TileMag, title: "Ingrandimento", note: "Uguale per tutti i vetrini, anche se scansionati a 40x", control: Control::Segments(TILE_MAGS), default: 20 };
+const TILE_TISSUE: OptionDef = sw(Opt::TileTissue, "Solo tessuto", "Le tessere quasi tutte vetro bianco restano fuori", true);
+const TILE_FORMAT: OptionDef = OptionDef { opt: Opt::TileJpeg, title: "Formato", note: "PNG non perde niente; JPEG pesa un decimo", control: Control::Segments(TILE_FORMATS), default: 0 };
 
 /// Le opzioni del riquadro di un formato scientifico (vetrino, DICOM, microscopia): restano in vista, in cima.
 pub fn is_lead(opt: Opt) -> bool {
@@ -563,7 +579,7 @@ const FAST_START: OptionDef = sw(Opt::FastStart, "Ottimizza per il web", "L'avvi
 pub fn option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     let mut defs = format_option_defs(kind, action);
     // La figura ha il suo nome: quello del primo file con «-figura».
-    if action != "none" && action != "figure" && !is_page_action(kind, action) {
+    if action != "none" && !matches!(action, "figure" | "tiles" | "mitosi" | "consult") && !is_page_action(kind, action) {
         defs.push(&NAME_TEMPLATE);
     }
     defs
@@ -573,6 +589,8 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     match (kind, action) {
         // Leggere il testo e togliere i dati nascosti non ridimensionano né girano la foto.
         (Kind::Image, "ocr" | "strip") => vec![],
+        (Kind::Image, "tiles") => vec![&TILE_SIZE, &TILE_MAG, &TILE_TISSUE, &TILE_FORMAT],
+        (Kind::Image, "mitosi" | "consult") => vec![],
         (Kind::Image, "figure") => vec![&FIG_WIDTH, &FIG_DPI, &FIG_LETTERS, &FIG_SCALE, &FIG_OBJECTIVE, &FIG_CALIBRATION],
         (Kind::Image, "jpeg" | "compress" | "pdf" | "pnm") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
         (Kind::Image, _) => vec![&IMAGE_SIZE, &STRAIGHTEN],
@@ -791,6 +809,16 @@ pub fn options_from(values: &Values) -> engine::Options {
     o.micro_contrast = on(Opt::MicroContrast, true);
     o.micro_scale = on(Opt::MicroScale, true);
     o.micro_16bit = on(Opt::Micro16, false);
+    o.tessere = crate::svs_lab::Tessere {
+        lato: if values.num(Opt::TileSize, TILE_SIZE.default) == 512 { 512 } else { 256 },
+        ingrandimento: match values.num(Opt::TileMag, TILE_MAG.default) {
+            10 => 10,
+            0 => 0,
+            _ => 20,
+        },
+        solo_tessuto: on(Opt::TileTissue, true),
+        jpeg: values.num(Opt::TileJpeg, 0) == 1,
+    };
     o.figura = crate::figura::Opzioni {
         larghezza_mm: if values.num(Opt::FigWidth, FIG_WIDTH.default) == 85 { 85 } else { 175 },
         dpi: if values.num(Opt::FigDpi, FIG_DPI.default) == 600 { 600 } else { 300 },

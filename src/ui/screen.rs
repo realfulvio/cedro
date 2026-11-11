@@ -627,7 +627,7 @@ impl Screen {
                 rich.push(Some(v));
             }
         } else {
-            let tools = conversioni::tools(kind);
+            let tools = self.app.tools();
             if !tools.is_empty() {
                 groups.push((0, "Converti in"));
             }
@@ -639,7 +639,7 @@ impl Screen {
             if !tools.is_empty() {
                 groups.push((items.len(), voci::tools_heading(kind)));
             }
-            for s in tools {
+            for s in &tools {
                 let v = voci::voce(kind, s.id);
                 items.push((v.label.to_string(), Act::Action(s.id)));
                 rich.push(Some(v));

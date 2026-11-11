@@ -969,6 +969,12 @@ impl App {
     }
 
     /// Il primo vetrino digitale (.svs) della coda, con quanti ce ne sono.
+    /// Gli strumenti del pannello: quelli dei vetrini solo se in coda c'è un vetrino.
+    pub fn tools(&self) -> Vec<crate::engine::Slice> {
+        let vetrini = self.first_slide().is_some();
+        conversioni::tools(self.kind()).iter().filter(|s| vetrini || !crate::engine::SOLO_VETRINI.contains(&s.id)).copied().collect()
+    }
+
     pub fn first_slide(&self) -> Option<(&media::SlideInfo, usize)> {
         let mut found = self.files.iter().filter_map(|f| self.media_of(&f.path).and_then(|m| m.slide.as_ref()));
         let first = found.next()?;

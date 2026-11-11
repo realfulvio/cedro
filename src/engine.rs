@@ -72,6 +72,9 @@ const IMAGE_TOOLS: &[Slice] = &[
     Slice { id: "strip", label: "Metadati" },
     Slice { id: "ocr", label: "OCR" },
     Slice { id: "figure", label: "Figura" },
+    Slice { id: "tiles", label: "Tessere AI" },
+    Slice { id: "mitosi", label: "Mitosi" },
+    Slice { id: "consult", label: "Consulto" },
 ];
 const TEXT_CONVERT: &[Slice] = &[
     Slice { id: "txt", label: "TXT" },
@@ -929,6 +932,8 @@ pub struct Options {
     pub micro_16bit: bool,
     /// La figura per un articolo (pannelli A B C): larghezza, dpi, lettere e barra di scala.
     pub figura: crate::figura::Opzioni,
+    /// Le tessere per l'intelligenza artificiale dai vetrini.
+    pub tessere: crate::svs_lab::Tessere,
     /// Unire e dividere i PDF.
     pub pdf_pages: PdfPages,
     /// Le pagine di un PDF (ruotare, togliere, estrarre, numeri e filigrana) e la compressione.
@@ -1021,6 +1026,7 @@ impl Default for Options {
             micro_scale: true,
             micro_16bit: false,
             figura: crate::figura::Opzioni::default(),
+            tessere: crate::svs_lab::Tessere::default(),
             pdf_pages: PdfPages::default(),
             pdf_edit: PdfEdit::default(),
         }
@@ -1477,6 +1483,9 @@ fn finish_outputs(result: CedroResult<Output>, used: Naming) -> CedroResult<Outp
 mod dicom_out;
 #[path = "engine_micro.rs"]
 mod micro_out;
+#[path = "engine_svslab.rs"]
+mod svslab_out;
+pub use svslab_out::SOLO_VETRINI;
 
 /// Il formato del crate `image`, l'estensione e il pezzo di nome in più di ogni voce delle immagini.
 fn image_target(action: &str) -> Option<(ImageFormat, &'static str, &'static str)> {
@@ -1962,6 +1971,11 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         if let Some(done) = micro_out::perform(path, action, quality, &dir, opts) {
             return done;
         }
+    }
+
+    // I vetrini in laboratorio: copia anonima, tessere per l'AI, conta mitotica, consulto.
+    if let Some(done) = svslab_out::perform(path, action, &dir, opts) {
+        return done;
     }
 
     // Un vetrino digitale (.svs): si legge solo la struttura, i pixel dopo, un livello alla volta.
