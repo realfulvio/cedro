@@ -1005,6 +1005,17 @@ impl<'a> Frame<'a> {
         if word_size > 0.0 {
             let c = word.unwrap_or(self.pal.text);
             self.p.text("Cedro", x + sym + gap, y, 200.0, sym, word_size, SEMI, c, Align::Left);
+            if self.theme == ThemeId::CedroLabs {
+                // Cedro 4 Labs: «4 LABS» in un'etichetta col bordo, accanto alla scritta.
+                let w0 = self.measure("Cedro", word_size, SEMI);
+                let bs = (word_size * 0.6).round().max(9.0);
+                let bw = self.measure("4 LABS", bs, SEMI) + 14.0;
+                let bh = bs + 9.0;
+                let (bx, by) = (x + sym + gap + w0 + 10.0, y + sym / 2.0 - bh / 2.0);
+                let col = self.pal.primary;
+                self.p.rrect(bx, by, bw, bh, 5.0, None, Some((col, 1.5)));
+                self.p.text("4 LABS", bx + 7.0, by, bw, bh, bs, SEMI, col, Align::Left);
+            }
         }
     }
 
