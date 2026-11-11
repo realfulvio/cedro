@@ -74,8 +74,10 @@ fn main() {
             settings_win::run_standalone();
             return;
         }
-        if args.is_empty() {
-            if let Err(err) = win::start() {
+        // Il collegamento sul desktop e nel menu Start: Cedro parte nella tray (o, se c'è già, la lascia lì)
+        // e mostra la sua finestra. Senza argomenti (avvio con Windows) resta solo l'icona.
+        if args.is_empty() || args.first().is_some_and(|a| a == "apri" || a == "open") {
+            if let Err(err) = win::start(!args.is_empty()) {
                 cedro::append_log(&err);
             }
             return;
