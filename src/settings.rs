@@ -363,19 +363,29 @@ fn read_config(path: &Path) -> Option<String> {
 /// lascia questo file nella cartella delle impostazioni, e al primo avvio il tema Bondeno si accende da solo.
 pub const DA_BONDENO: &str = "da-bondeno";
 
-/// Se c'è il file `da-bondeno` in `dir`: sceglie il tema Bondeno nelle impostazioni e toglie il file.
-fn passa_a_bondeno(dir: &Path) {
-    let marker = dir.join(DA_BONDENO);
+/// Chi nell'installatore sceglie «Cedro 4 Labs» (o lo installa con `/TEMA=labs`, `./install.sh --labs`):
+/// stesso meccanismo, il tema Cedro 4 Labs si accende al primo avvio.
+pub const DA_LABS: &str = "da-labs";
+
+/// Se c'è il file `marker` in `dir`: sceglie il tema `chiave` nelle impostazioni e toglie il file.
+fn passa_a_tema(dir: &Path, marker: &str, chiave: &str) {
+    let marker = dir.join(marker);
     if !marker.is_file() {
         return;
     }
     let path = dir.join("config.txt");
     let mut s = Settings::load_from(&path);
-    s.ui_theme = crate::edizione::CHIAVE_TEMA.to_string();
+    s.ui_theme = chiave.to_string();
     // Il file si toglie solo se la scelta è stata scritta: altrimenti ci si riprova al prossimo avvio.
     if s.save_to(&path).is_ok() {
         let _ = fs::remove_file(&marker);
     }
+}
+
+/// I file lasciati dall'installatore: Bondeno, poi Cedro 4 Labs (se ci sono tutti e due vale l'ultimo).
+fn passa_a_bondeno(dir: &Path) {
+    passa_a_tema(dir, DA_BONDENO, crate::edizione::CHIAVE_TEMA);
+    passa_a_tema(dir, DA_LABS, crate::ui::theme::ThemeId::CedroLabs.key());
 }
 
 pub fn read_settings() -> Settings {
@@ -540,6 +550,22 @@ mod bondeno_tests {
         fs::write(nuova.join(DA_BONDENO), "").unwrap();
         passa_a_bondeno(&nuova);
         assert_eq!(Settings::load_from(&nuova.join("config.txt")).ui_theme, "bondeno");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn chi_sceglie_cedro_4_labs_nell_installatore_trova_il_tema_acceso() {
+        let dir = std::env::temp_dir().join(format!("cedro-da-labs-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("config.txt"), "quality=70\nui_theme=windows-essenziale\n").unwrap();
+        passa_a_bondeno(&dir);
+        assert_eq!(Settings::load_from(&dir.join("config.txt")).ui_theme, "windows-essenziale");
+        fs::write(dir.join(DA_LABS), "").unwrap();
+        passa_a_bondeno(&dir);
+        let s = Settings::load_from(&dir.join("config.txt"));
+        assert_eq!((s.ui_theme.as_str(), s.quality), ("cedro-labs", 70));
+        assert!(!dir.join(DA_LABS).exists());
         let _ = fs::remove_dir_all(&dir);
     }
 }

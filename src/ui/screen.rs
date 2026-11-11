@@ -558,6 +558,11 @@ impl Screen {
         self.theme = theme;
         self.simple = simple;
         self.ui.menu = None;
+        // Il tema può non avere l'attività in corso (Cedro 4 Labs non ha YouTube né i video dal web).
+        if !theme.activities().contains(&self.app.activity) {
+            self.app.activity = Activity::Convert;
+            self.app.selected = self.app.visible().first().copied();
+        }
         // In Semplificata la scelta deve stare tra quelle proposte; le opzioni scelte restano.
         if simple && !was_simple && !self.app.simple_choices().iter().any(|f| f.id == self.app.action) {
             let keep = conversioni::formats(self.app.kind()).iter().chain(conversioni::tools(self.app.kind())).any(|s| s.id == self.app.action);
