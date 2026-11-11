@@ -2095,3 +2095,38 @@ Calibrazione con il 10x	Calibration with the 10x
 Micron per pixel con l'obiettivo 10x, misurati una volta con il vetrino micrometrico; Cedro se la ricorda	Microns per pixel with the 10x objective, measured once with a stage micrometer; Cedro remembers it
 per esempio 0,65	for example 0.65
 Scrivi la calibrazione: i micron di un pixel con il 10x, per esempio 0,65.	Enter the calibration: microns per pixel with the 10x, for example 0.65.
+Tessere AI	AI tiles
+Mitosi	Mitoses
+Consulto	Consult
+Tessere per l'AI	Tiles for AI
+riquadri del vetrino, solo tessuto	slide tiles, tissue only
+Zona per la conta mitotica	Area for the mitotic count
+2,37 mm² in 10 campi	2.37 mm² in 10 fields
+Pacchetto per un consulto	Package for a consult
+vetrino anonimo e scheda	anonymous slide and case sheet
+Lato delle tessere	Tile size
+256 per la maggior parte dei modelli; 512 per vedere più contesto	256 for most models; 512 to see more context
+Ingrandimento	Magnification
+Uguale per tutti i vetrini, anche se scansionati a 40x	The same for every slide, even if scanned at 40x
+20x (0,5 µm/px)	20x (0.5 µm/px)
+10x (1 µm/px)	10x (1 µm/px)
+Come scansionato	As scanned
+Solo tessuto	Tissue only
+Le tessere quasi tutte vetro bianco restano fuori	Tiles that are almost all blank glass are left out
+PNG non perde niente; JPEG pesa un decimo	PNG loses nothing; JPEG weighs a tenth
+serve un vetrino digitale (.svs)	needs a digital slide (.svs)
+Vetrino copiato: non c'era niente da togliere	Slide copied: there was nothing to remove
+Vetrino anonimo: tolti {}	Anonymous slide: removed {}
+etichetta	label
+foto del vetrino	slide photo
+nome, data e utente dalle descrizioni	name, date and user from the descriptions
+{#} tessere da {#} pixel{}, con l'elenco in tessere.csv{}	{} tiles of {} pixels{}, listed in tessere.csv{}
+~ a {} µm per pixel	 at {} µm per pixel
+~ ({#} di vetro vuoto lasciate fuori)	 ({} of blank glass left out)
+Zona di 2,37 mm² in 10 campi numerati ({} µm per pixel), scelta dove ci sono più nuclei; la panoramica con la zona è accanto. Conta le mitosi nei 10 campi.	2.37 mm² area in 10 numbered fields ({} µm per pixel), chosen where nuclei are densest; the overview with the area is alongside. Count the mitoses in the 10 fields.
+Consulto {}: vetrino anonimo (tolti {}), panoramica e scheda da compilare, con le impronte SHA-256	Consult {}: anonymous slide (removed {}), overview and case sheet to fill in, with SHA-256 fingerprints
+il vetrino non dice quanto è grande un pixel: scegli «Come scansionato»	the slide does not state the pixel size: choose “As scanned”
+il vetrino è più piccolo di una tessera	the slide is smaller than one tile
+il vetrino non dice quanto è grande un pixel: l'area di 2,37 mm² non si può misurare	the slide does not state the pixel size: the 2.37 mm² area cannot be measured
+il vetrino è più piccolo dell'area di 2,37 mm²	the slide is smaller than the 2.37 mm² area
+nessuna zona di 2,37 mm² piena di tessuto	no 2.37 mm² area full of tissue

@@ -85,6 +85,9 @@ const UNISCI: Glyph = g("M5 4h9v6H5z M5 14h9v6H5z M17 7h2v10h-2 M19 12h2", "");
 const DIVIDI: Glyph = g("M6 3h12v7H6z M6 14h12v7H6z M3 12h2 M8 12h2 M14 12h2 M19 12h2", "");
 const FIGURA: Glyph = g("M3 3h8v8H3z M13 3h8v8h-8z M3 13h8v8H3z M13 13h8v8h-8z M5 9.5h3", "");
 const VERIFICA: Glyph = g("M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6l8-3z M8.5 12l2.5 2.5 4.5-5", "");
+const TESSERE: Glyph = g("M3 3h5v5H3z M10 3h5v5h-5z M17 3h4v5h-4z M3 10h5v5H3z M10 10h5v5h-5z M3 17h5v4H3z", "");
+const MITOSI: Glyph = g("M3 6h18v12H3z M6.6 6v12 M10.2 6v12 M13.8 6v12 M17.4 6v12 M3 12h18", "");
+const CONSULTO: Glyph = g("M4 8h16v12H4z M9 8V5h6v3 M8 13h8 M12 11v4", "");
 const ALTRO: Glyph = g("M6 3h8l4 4v14H6z M14 3v5h4", "");
 
 const fn v(label: &'static str, hint: &'static str, glyph: Glyph, color: Rgb) -> Voce {
@@ -118,6 +121,9 @@ pub fn voce(kind: Kind, id: &str) -> Voce {
         (Kind::Image, "rot90") => v("Ruota di 90° a destra", "senso orario", RUOTA, ARANCIO),
         (Kind::Image, "strip") => v("Togli GPS e dati nascosti", "luogo, data, fotocamera", PULISCI, ROSSO),
         (Kind::Image, "ocr") => v("Leggi il testo (OCR)", "copia le scritte", OCR, VIOLA),
+        (Kind::Image, "tiles") => v("Tessere per l'AI", "riquadri del vetrino, solo tessuto", TESSERE, LAB),
+        (Kind::Image, "mitosi") => v("Zona per la conta mitotica", "2,37 mm² in 10 campi", MITOSI, LAB),
+        (Kind::Image, "consult") => v("Pacchetto per un consulto", "vetrino anonimo e scheda", CONSULTO, LAB),
         (Kind::Image, "figure") => v("Figura per un articolo", "pannelli A B C, 300 dpi", FIGURA, LAB),
         // PDF
         (Kind::Pdf, "jpg") => v("JPG", "una foto per pagina", JPEG, WEB),

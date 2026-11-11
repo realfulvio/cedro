@@ -48,7 +48,8 @@ pub fn list(kind: Kind, mode: Mode) -> Vec<Slice> {
         out.extend(base.iter().filter(|s| !IMAGE_ORDER.contains(&s.id)).copied());
         return out;
     }
-    base.to_vec()
+    // Le voci dei vetrini stanno nel pannello, dove si vede se in coda c'è un vetrino.
+    base.iter().filter(|s| !engine::SOLO_VETRINI.contains(&s.id)).copied().collect()
 }
 
 /// Dove sta il mouse, o cosa si è toccato.
