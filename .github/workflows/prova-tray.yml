@@ -47,6 +47,13 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File prova-tray\ruota.ps1 -Exe "$env:LOCALAPPDATA\Programs\Cedro\cedro.exe" -Out "$PWD\prova"
           if ($LASTEXITCODE -ne 0) { throw 'prova della ruota non riuscita' }
 
+      - name: Collegamento sul desktop (doppio clic apre la finestra, anche con Cedro già nella tray)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force prova | Out-Null
+          powershell -NoProfile -ExecutionPolicy Bypass -File prova-tray\collegamento.ps1 -Exe "$env:LOCALAPPDATA\Programs\Cedro\cedro.exe" -Out "$PWD\prova"
+          if ($LASTEXITCODE -ne 0) { throw 'prova del collegamento non riuscita' }
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
