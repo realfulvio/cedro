@@ -36,6 +36,8 @@ const WM_APP_INPUT: u32 = WM_APP + 2;
 const WM_APP_DROP: u32 = WM_APP + 3;
 const WM_APP_RCLICK: u32 = WM_APP + 4;
 const WM_APP_UPDATE: u32 = WM_APP + 5;
+/// Dal collegamento sul desktop (`cedro.exe apri`): mostra la finestra di Cedro.
+const WM_APP_OPEN: u32 = WM_APP + 6;
 const RUN_KEY: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
 
 static RDOWN: AtomicBool = AtomicBool::new(false);
@@ -117,13 +119,18 @@ thread_local! {
     });
 }
 
-pub fn start() -> std::result::Result<(), String> {
+/// `open`: partito dal collegamento (`cedro.exe apri`), oltre all'icona vicino all'orologio si vede la finestra.
+pub fn start(open: bool) -> std::result::Result<(), String> {
     crate::winfont::load();
     unsafe {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         OleInitialize(None).map_err(|e| e.to_string())?;
         let _mutex = CreateMutexW(None, true, w!("Local\\CedroTray")).map_err(|e| e.to_string())?;
         if GetLastError() == ERROR_ALREADY_EXISTS {
+            // Cedro è già nella tray: il collegamento gli chiede di mostrare la finestra.
+            if open {
+                ask_running_to_open();
+            }
             return Ok(());
         }
         let _ = _mutex;
@@ -182,6 +189,9 @@ pub fn start() -> std::result::Result<(), String> {
         if let Err(e) = cedro::associa::apply(settings.firma_assoc, settings.firma_pdf) {
             append_log(&format!("associazioni dei file firmati: {e}"));
         }
+        if open {
+            let _ = PostMessageW(Some(hwnd), WM_APP_OPEN, WPARAM(0), LPARAM(0));
+        }
         // Cedro resta aperto per giorni: ricontrolla ogni 24 ore se l'opzione è accesa.
         let _ = SetTimer(Some(hwnd), 10, 24 * 60 * 60 * 1000, None);
         // Quando si chiude una finestra di Cedro, a finestre tutte chiuse la tray restituisce la memoria.
@@ -201,6 +211,28 @@ pub fn start() -> std::result::Result<(), String> {
         remove_tray(hwnd);
     }
     Ok(())
+}
+
+/// Il collegamento sul desktop con Cedro già nella tray: gli passa il permesso di stare in primo piano e
+/// gli chiede di mostrare la finestra.
+unsafe fn ask_running_to_open() {
+    if let Ok(msg) = FindWindowW(w!("CedroMsg"), w!("Cedro")) {
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(msg, Some(&mut pid));
+        if pid != 0 {
+            let _ = AllowSetForegroundWindow(pid);
+        }
+        let _ = PostMessageW(Some(msg), WM_APP_OPEN, WPARAM(0), LPARAM(0));
+    }
+}
+
+/// La finestra che si apre con il collegamento (o con un clic sull'icona, se il tema è «Cedro compatto»).
+fn open_main_window() {
+    if cedro::ui::theme::ThemeId::from_key(&read_settings().ui_theme) == cedro::ui::theme::ThemeId::CedroCompatto {
+        crate::ui_win::open_compact();
+    } else {
+        crate::ui_win::open();
+    }
 }
 
 /// Timer della pulizia a finestre chiuse.
@@ -327,6 +359,10 @@ unsafe extern "system" fn msg_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
                 // Il doppio clic apre il pannello Conversioni, come la voce del menu.
                 crate::ui_win::open();
             }
+            LRESULT(0)
+        }
+        WM_APP_OPEN => {
+            open_main_window();
             LRESULT(0)
         }
         WM_COMMAND => {
