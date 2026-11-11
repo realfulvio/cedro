@@ -404,68 +404,213 @@ pub fn tessere(path: &Path, dir: &Path, base: &str, o: &Tessere, avanzamento: &d
 pub const AREA_MM2: f64 = 2.37;
 const CAMPO_UM: f64 = 486.8; // √0,237 mm² in micron
 
-/// Quanta ematossilina c'è in un pixel: quanto è «nucleare» (deconvoluzione
-/// del colore di Ruifrok, la componente dell'ematossilina).
-fn ematossilina(p: &[u8]) -> f32 {
-    // Le densità ottiche dell'ematossilina e dell'eosina (Ruifrok e Johnston 2001), il terzo vettore
-    // perpendicolare (H, E, H×E normalizzati); qui la matrice inversa, calcolata a parte.
-    const INV: [[f32; 3]; 3] = [[1.4891, -1.0823, -0.3319], [-0.1626, 1.1179, -0.0756], [0.5125, -0.2921, 0.9403]];
-    let od = |v: u8| -(((v as f32) + 1.0) / 256.0).ln();
-    let (r, g, b) = (od(p[0]), od(p[1]), od(p[2]));
-    (INV[0][0] * r + INV[1][0] * g + INV[2][0] * b).max(0.0)
-}
-
-/// Dove contare: la zona larga 5 campi e alta 2 con più nuclei (la più scura di ematossilina), sul
-/// tessuto. Ritorna (x, y, larghezza, altezza) nel livello pieno.
+/// Dove contare: la zona larga 5 campi e alta 2 con più nuclei, sul tessuto buono. I nuclei si
+/// contano davvero, come macchie piccole, scure e bluastre a circa 1 µm per pixel: una piega del
+/// tessuto o una zona solo scura non vincono (sono macchie grandi, e scure rispetto al resto del
+/// vetrino). Ogni campo deve essere quasi tutto tessuto buono. Ritorna (x, y, larghezza, altezza)
+/// nel livello pieno.
 fn zona_densa(s: &Slide, path: &Path) -> Result<(u32, u32, u32, u32), String> {
     let mpp = s.mpp.ok_or("il vetrino non dice quanto è grande un pixel: l'area di 2,37 mm² non si può misurare")? as f64;
-    // Un livello piccolo per cercare: circa 8 µm per pixel.
-    let (liv, _) = livello_per(s, Some(8.0));
-    let liv = if s.levels[liv].pixels() > 60_000_000 { s.levels.len() - 1 } else { liv };
-    let img = s.read_level(path, liv)?;
-    let giu = s.full().width as f64 / img.width() as f64;
-    let um = mpp * giu;
-    let (zw, zh) = (((CAMPO_UM * 5.0) / um).round().max(1.0) as usize, ((CAMPO_UM * 2.0) / um).round().max(1.0) as usize);
-    let (w, h) = (img.width() as usize, img.height() as usize);
-    if zw > w || zh > h {
+    let (liv, scala) = livello_per(s, Some(1.0));
+    let l = &s.levels[liv];
+    let um_l = mpp * s.full().width as f64 / l.width as f64;
+    let passo = (scala.round() as u32).max(1);
+    let um = um_l * passo as f64;
+    // Celle di circa 32 µm: la griglia su cui si cercano i 2,37 mm².
+    let lato = ((32.0 / um).round() as u32).max(4);
+    let (gw, gh) = ((l.width / passo / lato) as usize, (l.height / passo / lato) as usize);
+    let cella_um = lato as f64 * um;
+    let (zw, zh) = (((CAMPO_UM * 5.0) / cella_um).round() as usize, ((CAMPO_UM * 2.0) / cella_um).round() as usize);
+    if zw == 0 || zh == 0 || zw > gw || zh > gh {
         return Err("il vetrino è più piccolo dell'area di 2,37 mm²".into());
     }
-    // Tabelle delle somme: ematossilina e tessuto.
-    let mut se = vec![0f64; (w + 1) * (h + 1)];
-    let mut st = vec![0f64; (w + 1) * (h + 1)];
-    for y in 0..h {
-        let (mut re, mut rt) = (0f64, 0f64);
-        for x in 0..w {
-            let p = img.get_pixel(x as u32, y as u32).0;
-            let t = tessuto(&p) as f64;
-            re += ematossilina(&p) as f64 * t;
-            rt += t;
-            se[(y + 1) * (w + 1) + x + 1] = se[y * (w + 1) + x + 1] + re;
-            st[(y + 1) * (w + 1) + x + 1] = st[y * (w + 1) + x + 1] + rt;
+    // Un nucleo: da circa 12 a 150 µm² (da 4 a 14 µm di diametro).
+    let area_px = |um2: f64| (um2 / (um * um)).round() as usize;
+    let (area_min, area_max) = (area_px(12.0).max(3), area_px(150.0).max(8));
+    let mut celle = vec![Cella::default(); gw * gh];
+    let righe_banda = (lato * passo) as usize;
+    let fila = righe_banda * l.width as usize * 3;
+    let mut banda: Vec<u8> = Vec::with_capacity(fila);
+    let mut riga = 0usize;
+    s.read_rows(path, liv, |_, rows| {
+        let mut rows = rows;
+        while !rows.is_empty() && riga < gh {
+            let prendi = (fila - banda.len()).min(rows.len());
+            banda.extend_from_slice(&rows[..prendi]);
+            rows = &rows[prendi..];
+            if banda.len() == fila {
+                let fuori = &mut celle[riga * gw..(riga + 1) * gw];
+                analizza_banda(&banda, l.width as usize, passo as usize, lato as usize, (area_min, area_max), fuori);
+                banda.clear();
+                riga += 1;
+            }
         }
+        Ok(())
+    })?;
+    // Le pieghe e le zone solo scure: molto più scure della metà del tessuto del vetrino.
+    let mut lum: Vec<f32> = celle.iter().filter(|c| c.tessuto >= 0.5).map(|c| c.lum).collect();
+    if lum.is_empty() {
+        return Err("nessuna zona di 2,37 mm² piena di tessuto".into());
     }
-    let somma = |tab: &[f64], x: usize, y: usize| tab[(y + zh) * (w + 1) + x + zw] - tab[y * (w + 1) + x + zw] - tab[(y + zh) * (w + 1) + x] + tab[y * (w + 1) + x];
-    let area = (zw * zh) as f64;
+    lum.sort_by(f32::total_cmp);
+    let mediana = lum[lum.len() / 2];
+    let buono: Vec<f64> = celle.iter().map(|c| if c.tessuto >= 0.5 && c.lum >= mediana * 0.6 { 1.0 } else { 0.0 }).collect();
+    let nuclei: Vec<f64> = celle.iter().zip(&buono).map(|(c, b)| c.nuclei as f64 * b).collect();
+    let tab = |v: &[f64]| {
+        let mut t = vec![0f64; (gw + 1) * (gh + 1)];
+        for y in 0..gh {
+            let mut r = 0.0;
+            for x in 0..gw {
+                r += v[y * gw + x];
+                t[(y + 1) * (gw + 1) + x + 1] = t[y * (gw + 1) + x + 1] + r;
+            }
+        }
+        t
+    };
+    let (tb, tn) = (tab(&buono), tab(&nuclei));
+    let somma = |t: &[f64], x: usize, y: usize, w: usize, h: usize| t[(y + h) * (gw + 1) + x + w] - t[y * (gw + 1) + x + w] - t[(y + h) * (gw + 1) + x] + t[y * (gw + 1) + x];
     let mut migliore: Option<(f64, usize, usize)> = None;
-    let passo = (zw.min(zh) / 8).max(1);
-    for y in (0..=h - zh).step_by(passo) {
-        for x in (0..=w - zw).step_by(passo) {
-            // Almeno l'80% di tessuto: niente bordi e buchi.
-            if somma(&st, x, y) < area * 0.8 {
+    for y in 0..=gh - zh {
+        for x in 0..=gw - zw {
+            if somma(&tb, x, y, zw, zh) < (zw * zh) as f64 * 0.85 {
                 continue;
             }
-            let v = somma(&se, x, y);
+            // Ognuno dei 10 campi almeno al 70% tessuto buono: niente campi a metà sul vetro.
+            let campi_ok = (0..2).all(|r| {
+                (0..5).all(|c| {
+                    let (x0, x1) = (x + c * zw / 5, x + (c + 1) * zw / 5);
+                    let (y0, y1) = (y + r * zh / 2, y + (r + 1) * zh / 2);
+                    somma(&tb, x0, y0, x1 - x0, y1 - y0) >= ((x1 - x0) * (y1 - y0)) as f64 * 0.7
+                })
+            });
+            if !campi_ok {
+                continue;
+            }
+            let v = somma(&tn, x, y, zw, zh);
             if migliore.is_none_or(|m| v > m.0) {
                 migliore = Some((v, x, y));
             }
         }
     }
     let (_, x, y) = migliore.ok_or("nessuna zona di 2,37 mm² piena di tessuto")?;
+    let giu = s.full().width as f64 / l.width as f64 * passo as f64 * lato as f64;
     let fw = (CAMPO_UM * 5.0 / mpp).round() as u32;
     let fh = (CAMPO_UM * 2.0 / mpp).round() as u32;
     let fx = ((x as f64 * giu).round() as u32).min(s.full().width.saturating_sub(fw));
     let fy = ((y as f64 * giu).round() as u32).min(s.full().height.saturating_sub(fh));
     Ok((fx, fy, fw, fh))
+}
+
+/// Una cella della griglia per la conta: quanto tessuto, la luminosità media del tessuto, i nuclei.
+#[derive(Clone, Copy, Default)]
+struct Cella {
+    tessuto: f32,
+    lum: f32,
+    nuclei: u32,
+}
+
+/// Una fila di celle: `banda` sono `lato*passo` righe intere del livello (RGB), larghe `w` pixel; se
+/// ne prende un pixel ogni `passo`. I nuclei si cercano a pezzi di 16 celle, in parallelo.
+fn analizza_banda(banda: &[u8], w: usize, passo: usize, lato: usize, area: (usize, usize), fuori: &mut [Cella]) {
+    let pezzo = 16usize;
+    let lavori: Vec<&mut [Cella]> = fuori.chunks_mut(pezzo).collect();
+    std::thread::scope(|sc| {
+        for (k, celle) in lavori.into_iter().enumerate() {
+            sc.spawn(move || {
+                let c0 = k * pezzo;
+                let n = celle.len();
+                let (pw, ph) = (n * lato, lato);
+                // Il pezzo a ~1 µm per pixel: luminosità, tessuto, bluastro.
+                let mut l = vec![0u8; pw * ph];
+                let mut t = vec![false; pw * ph];
+                let mut blu = vec![false; pw * ph];
+                for y in 0..ph {
+                    let riga = &banda[(y * passo) * w * 3..];
+                    for x in 0..pw {
+                        let i = ((c0 * lato + x) * passo) * 3;
+                        let p = &riga[i..i + 3];
+                        let (mx, mn) = (p[0].max(p[1]).max(p[2]), p[0].min(p[1]).min(p[2]));
+                        let j = y * pw + x;
+                        l[j] = ((p[0] as u16 + p[1] as u16 + p[2] as u16) / 3) as u8;
+                        t[j] = mx - mn >= 20 && mn < 230;
+                        blu[j] = p[2] as u16 * 10 >= p[0] as u16 * 11;
+                    }
+                }
+                // Per ogni cella: il fondo (il 75° percentile della luminosità del tessuto) e i pixel
+                // scuri rispetto al fondo.
+                let mut scuro = vec![false; pw * ph];
+                for (ci, c) in celle.iter_mut().enumerate() {
+                    let mut ist = [0u32; 256];
+                    let (mut nt, mut somma) = (0u32, 0u64);
+                    for y in 0..ph {
+                        for x in ci * lato..(ci + 1) * lato {
+                            let j = y * pw + x;
+                            if t[j] {
+                                ist[l[j] as usize] += 1;
+                                nt += 1;
+                                somma += l[j] as u64;
+                            }
+                        }
+                    }
+                    *c = Cella { tessuto: nt as f32 / (lato * lato) as f32, lum: if nt > 0 { somma as f32 / nt as f32 } else { 255.0 }, nuclei: 0 };
+                    if nt < 10 {
+                        continue;
+                    }
+                    let (mut acc, soglia) = (0u32, nt * 3 / 4);
+                    let fondo = ist.iter().position(|&v| {
+                        acc += v;
+                        acc >= soglia
+                    });
+                    let fondo = fondo.unwrap_or(255) as f32;
+                    let limite = (fondo * 0.75).min(150.0);
+                    for y in 0..ph {
+                        for x in ci * lato..(ci + 1) * lato {
+                            let j = y * pw + x;
+                            scuro[j] = t[j] && blu[j] && (l[j] as f32) < limite;
+                        }
+                    }
+                }
+                // Le macchie: quelle della misura di un nucleo contano nella cella del loro centro.
+                let mut visto = vec![false; pw * ph];
+                let mut pila = Vec::new();
+                for s0 in 0..pw * ph {
+                    if !scuro[s0] || visto[s0] {
+                        continue;
+                    }
+                    visto[s0] = true;
+                    pila.push(s0);
+                    let (mut n, mut sx) = (0usize, 0usize);
+                    while let Some(j) = pila.pop() {
+                        n += 1;
+                        sx += j % pw;
+                        let (x, y) = (j % pw, j / pw);
+                        let mut vicino = |q: usize| {
+                            if scuro[q] && !visto[q] {
+                                visto[q] = true;
+                                pila.push(q);
+                            }
+                        };
+                        if x > 0 {
+                            vicino(j - 1);
+                        }
+                        if x + 1 < pw {
+                            vicino(j + 1);
+                        }
+                        if y > 0 {
+                            vicino(j - pw);
+                        }
+                        if y + 1 < ph {
+                            vicino(j + pw);
+                        }
+                    }
+                    if n >= area.0 && n <= area.1 {
+                        let ci = (sx / n / lato).min(celle.len() - 1);
+                        celle[ci].nuclei += 1;
+                    }
+                }
+            });
+        }
+    });
 }
 
 fn rettangolo(img: &mut RgbImage, x: u32, y: u32, w: u32, h: u32, spessore: u32, c: Rgb<u8>) {
