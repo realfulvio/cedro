@@ -202,7 +202,7 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
             let file = &app.files[i];
             f.card((x, y, w, 62.0), 8.0);
             f.thumb(app, i, (x + 8.0, y + 8.0, 46.0, 46.0), 5.0);
-            f.text(&file.name(), x + 66.0, y + 8.0, w - 66.0 - 56.0, 26.0, 15.5, SEMI, pal.text);
+            super::file_name(f, app, i, x + 66.0, y + 8.0, w - 66.0 - 56.0, 26.0, 15.5, SEMI, pal.text);
             let (size, extra) = super::file_meta(app, i);
             let sub = if file.state == FileState::Waiting { [size, extra].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("  ·  ") } else { file.message.clone() };
             f.text(&sub, x + 66.0, y + 34.0, w - 66.0 - 56.0, 22.0, 13.5, SANS, if file.state == FileState::Waiting { pal.muted } else { f.state_color(file.state) });
@@ -262,7 +262,13 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
     if super::uses_quality(app.kind(), &app.action) {
         y += super::quality(f, app, x, y, w, st, false) + 14.0;
     }
-    let defs = app.option_defs();
+    let all = app.option_defs();
+    // Il riquadro «Vetrino» (in cima) resta in vista; le altre opzioni si aprono.
+    let lead = all.iter().take_while(|d| matches!(d.opt, conversioni::Opt::SlideLevel | conversioni::Opt::SlideLabel | conversioni::Opt::SlideMacro)).count();
+    for def in &all[..lead] {
+        y += super::option(f, app, def, x, y, w, st) + st.gap;
+    }
+    let defs = &all[lead..];
     if !defs.is_empty() {
         let open = f.ui.is_open(Fold::MoreOptions);
         let r = (x, y, w, 46.0);
@@ -276,7 +282,7 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
         f.hit(r, Act::Fold(Fold::MoreOptions));
         y += 58.0;
         if open {
-            for def in &defs {
+            for def in defs {
                 y += super::option(f, app, def, x + 4.0, y, w - 8.0, st) + st.gap;
             }
         }

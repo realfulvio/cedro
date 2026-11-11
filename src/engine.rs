@@ -216,7 +216,9 @@ fn kind_by_extension(ext: &str) -> Kind {
     match ext {
         "pdf" => Kind::Pdf,
         "doc" | "docx" | "odt" | "rtf" => Kind::Doc,
-        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "ico" | "svg" | "svgz" | "avif" | "jxl" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm" | "hdr" | "exr" | "dds" => Kind::Image,
+        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "ico"
+        | "svg" | "svgz" | "avif" | "jxl" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm"
+        | "hdr" | "exr" | "dds" => Kind::Image,
         "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" => Kind::Text,
         "wav" | "mp3" | "ogg" | "oga" | "opus" | "m4a" | "aac" | "flac" | "aif" | "aiff" | "aifc" | "caf" => Kind::Audio,
         "mp4" | "webm" | "mov" | "mkv" | "avi" => Kind::Video,
@@ -896,6 +898,10 @@ pub struct Options {
     pub password: Option<String>,
     /// Il nome dei file scritti, a modello: `%nome%`, `%ext%`, `%data%`, `%ora%`, `%unix%`.
     pub name_template: Option<String>,
+    /// I vetrini digitali (.svs): il livello (0 Panoramica, 1 Media, 2 Piena) e le immagini in più.
+    pub slide_level: u32,
+    pub slide_label: bool,
+    pub slide_macro: bool,
     /// Unire e dividere i PDF.
     pub pdf_pages: PdfPages,
     /// Le pagine di un PDF (ruotare, togliere, estrarre, numeri e filigrana) e la compressione.
@@ -974,6 +980,9 @@ impl Default for Options {
             faststart: false,
             password: None,
             name_template: None,
+            slide_level: 1,
+            slide_label: true,
+            slide_macro: true,
             pdf_pages: PdfPages::default(),
             pdf_edit: PdfEdit::default(),
         }
@@ -1693,8 +1702,16 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Err(err("questa voce non si applica a questo file"));
     }
 
+    // Un vetrino digitale (.svs): si legge solo la struttura, i pixel dopo, un livello alla volta.
+    let slide = if crate::svs::is_slide(path) {
+        Some(crate::svs::Slide::open(path).map_err(err)?)
+    } else {
+        None
+    };
+
     // Togli GPS e dati nascosti: la foto resta nel suo formato, senza ricomprimerla.
-    if action == "strip" {
+    // (Un vetrino non si legge intero: si riscrive in PNG dal livello scelto, senza etichetta.)
+    if action == "strip" && slide.is_none() {
         let ext = extension(path);
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
         if let Some(done) = crate::pulisci::pulisci(&ext, &bytes) {
@@ -1706,7 +1723,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
 
     // Il formato e il nome prima di aprire l'immagine: un file da saltare non si legge neppure.
-    let (format, ext, label_stem) = match action {
+    let (mut format, mut ext, label_stem) = match action {
         "avif" | "jxl" => (ImageFormat::Png, action, ""),
         "pdf" => (ImageFormat::Jpeg, "pdf", ""),
         "ico" => (ImageFormat::Ico, "ico", ""),
@@ -1727,6 +1744,21 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         "rot90" => (ImageFormat::Png, "png", "ruotato"),
         other => return Err(err(format!("azione sconosciuta: {other}"))),
     };
+    let q = if action == "compress" {
+        quality.min(settings.compress_quality())
+    } else {
+        quality
+    };
+    let plan = slide.as_ref().map(|s| slide_plan(s, action, q, opts));
+    if let Some(SlidePlan {
+        stream: Some(crate::svs::Streamed::Tiff),
+        ..
+    }) = &plan
+    {
+        if action != "tiff" {
+            (format, ext) = (ImageFormat::Tiff, "tiff");
+        }
+    }
     let file_stem = if label_stem.is_empty() {
         stem(path)
     } else {
@@ -1734,8 +1766,37 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     };
     let out = reserve(&dir, &file_stem, ext)?;
 
-    let mut img = load_image(path, opts.straighten, opts.max_side)?;
-    if let Some(side) = opts.max_side.filter(|s| *s > 0 && img.width().max(img.height()) > *s) {
+    // Il livello pieno di un vetrino, troppo grande per la memoria: si scrive a strisce.
+    if let (
+        Some(s),
+        Some(SlidePlan {
+            level,
+            stream: Some(how),
+            note,
+        }),
+    ) = (&slide, &plan)
+    {
+        s.write_streamed(path, *level, &out, *how).map_err(err)?;
+        let l = &s.levels[*level];
+        let mut message = format!(
+            "{} {}×{} dal vetrino",
+            ext.to_uppercase(),
+            l.width,
+            l.height
+        );
+        message.push_str(note);
+        message.push_str(&slide_extras(s, path, &dir, action, format, ext, q, opts)?);
+        return Ok(Output { path: out, message });
+    }
+
+    let mut img = match (&slide, &plan) {
+        (Some(s), Some(p)) => DynamicImage::ImageRgb8(s.read_level(path, p.level).map_err(err)?),
+        _ => load_image(path, opts.straighten, opts.max_side)?,
+    };
+    if let Some(side) = opts
+        .max_side
+        .filter(|s| *s > 0 && img.width().max(img.height()) > *s)
+    {
         img = img.resize(side, side, image::imageops::FilterType::Lanczos3);
     }
     match action {
@@ -1749,38 +1810,197 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         _ => {}
     }
 
-    if action == "pdf" {
-        let (jpeg, w, h) = jpeg_bytes(&img, 90, opts.white_background)?;
-        let lines = crate::ocr::image_lines(&img).unwrap_or_default();
-        let bytes = pdf_from_jpeg(&jpeg, w, h, &lines);
-        write_bytes(&out, &bytes)?;
-        let message = if lines.is_empty() {
-            format!("PDF {w}×{h}")
-        } else {
-            format!("PDF {w}×{h}, con il testo OCR selezionabile e ricercabile")
+    let mut done = 'write: {
+        if action == "pdf" {
+            let (jpeg, w, h) = jpeg_bytes(&img, 90, opts.white_background)?;
+            let lines = crate::ocr::image_lines(&img).unwrap_or_default();
+            let bytes = pdf_from_jpeg(&jpeg, w, h, &lines);
+            write_bytes(&out, &bytes)?;
+            let message = if lines.is_empty() {
+                format!("PDF {w}×{h}")
+            } else {
+                format!("PDF {w}×{h}, con il testo OCR selezionabile e ricercabile")
+            };
+            break 'write Output { path: out, message };
+        }
+
+        if matches!(action, "avif" | "jxl") && ext != "tiff" {
+            let bytes = if action == "avif" {
+                crate::imgfmt::avif_bytes(&img, quality)
+            } else {
+                crate::imgfmt::jxl_bytes(&img)
+            }
+            .map_err(err)?;
+            write_bytes(&out, &bytes)?;
+            let message = if action == "avif" {
+                size_message(before, bytes.len() as u64)
+            } else {
+                format!(
+                    "JPEG XL senza perdita · {}",
+                    size_message(before, bytes.len() as u64)
+                )
+            };
+            break 'write Output { path: out, message };
+        }
+
+        save_image(&img, &out, format, q, opts.white_background)?;
+        let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
+        let message = match action {
+            "strip" if slide.is_some() => "Riscritto in PNG dal vetrino, senza etichetta né dati dello scanner".into(),
+            "strip" => "Tolti tutti i dati nascosti (riscritta in PNG: questo formato non si può ripulire così com'è)".into(),
+            "half" => format!("{}×{}", img.width(), img.height()),
+            "rot90" => "Ruotato di 90°".into(),
+            "gray" => "Bianco e nero".into(),
+            // Un vetrino è molto più pesante del livello che se ne prende: il confronto dei pesi non direbbe niente.
+            _ if slide.is_some() => format!("{} {}×{} dal vetrino", ext.to_uppercase(), img.width(), img.height()),
+            "compress" | "jpeg" | "webp" => size_message(before, after),
+            _ => format!("{ext} {}×{}", img.width(), img.height()),
         };
-        return Ok(Output { path: out, message });
-    }
-
-    if matches!(action, "avif" | "jxl") {
-        let bytes = if action == "avif" { crate::imgfmt::avif_bytes(&img, quality) } else { crate::imgfmt::jxl_bytes(&img) }.map_err(err)?;
-        write_bytes(&out, &bytes)?;
-        let message = if action == "avif" { size_message(before, bytes.len() as u64) } else { format!("JPEG XL senza perdita · {}", size_message(before, bytes.len() as u64)) };
-        return Ok(Output { path: out, message });
-    }
-
-    let q = if action == "compress" { quality.min(settings.compress_quality()) } else { quality };
-    save_image(&img, &out, format, q, opts.white_background)?;
-    let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
-    let message = match action {
-        "strip" => "Tolti tutti i dati nascosti (riscritta in PNG: questo formato non si può ripulire così com'è)".into(),
-        "half" => format!("{}×{}", img.width(), img.height()),
-        "rot90" => "Ruotato di 90°".into(),
-        "gray" => "Bianco e nero".into(),
-        "compress" | "jpeg" | "webp" => size_message(before, after),
-        _ => format!("{ext} {}×{}", img.width(), img.height()),
+        Output { path: out, message }
     };
-    Ok(Output { path: out, message })
+    if let (Some(s), Some(p)) = (&slide, &plan) {
+        done.message.push_str(&p.note);
+        done.message
+            .push_str(&slide_extras(s, path, &dir, action, format, ext, q, opts)?);
+    }
+    Ok(done)
+}
+
+/// Come convertire un vetrino: quale livello e, se non sta in memoria, in quale formato a strisce.
+struct SlidePlan {
+    level: usize,
+    stream: Option<crate::svs::Streamed>,
+    /// Quello che il messaggio deve dire in più (il formato cambiato, il livello ridotto).
+    note: String,
+}
+
+fn slide_plan(s: &crate::svs::Slide, action: &str, quality: u8, opts: &Options) -> SlidePlan {
+    use crate::svs::{memory_limit, Pick, Streamed, JPEG_MAX_SIDE};
+    let picked = s.pick(Pick::from_value(opts.slide_level));
+    // Con «Dimensioni» basta il livello più piccolo che arriva a quella misura: si leggono meno pixel.
+    let level = opts
+        .max_side
+        .filter(|v| *v > 0)
+        .map(|side| s.for_side(picked, side))
+        .unwrap_or(picked);
+    let l = &s.levels[level];
+    // Il TIFF si scrive sempre a strisce: compresso (Deflate) e in parallelo, anche quando starebbe in memoria.
+    if action == "tiff" {
+        return SlidePlan {
+            level,
+            stream: Some(Streamed::Tiff),
+            note: String::new(),
+        };
+    }
+    if l.pixels() <= memory_limit() {
+        return SlidePlan {
+            level,
+            stream: None,
+            note: String::new(),
+        };
+    }
+    let side = l.width.max(l.height);
+    let stream = match action {
+        "png" => Some(Streamed::Png),
+        "tiff" => Some(Streamed::Tiff),
+        "jpeg" | "compress" if side <= JPEG_MAX_SIDE => Some(Streamed::Jpeg(quality)),
+        _ => None,
+    };
+    if stream.is_some() {
+        return SlidePlan {
+            level,
+            stream,
+            note: String::new(),
+        };
+    }
+    let name = match action {
+        "jpeg" | "compress" => "il JPEG",
+        "webp" => "il WebP",
+        "avif" => "l'AVIF",
+        "jxl" => "il JPEG XL",
+        "bmp" => "il BMP",
+        "gif" => "il GIF",
+        "tga" => "il TGA",
+        "qoi" => "il QOI",
+        "pnm" => "il PNM",
+        "hdr" => "l'HDR",
+        "exr" => "l'OpenEXR",
+        _ => "",
+    };
+    if !name.is_empty() {
+        // Un formato che non si scrive a strisce: il livello resta pieno, in TIFF.
+        return SlidePlan {
+            level,
+            stream: Some(Streamed::Tiff),
+            note: format!(" · in TIFF: {name} non regge {} × {} px", l.width, l.height),
+        };
+    }
+    // PDF, icona, metà, bianco e nero, ruota: servono i pixel in memoria, quindi il livello più grande che ci sta.
+    let fit = (level..s.levels.len())
+        .find(|&i| s.levels[i].pixels() <= memory_limit())
+        .unwrap_or(s.levels.len() - 1);
+    let f = &s.levels[fit];
+    SlidePlan {
+        level: fit,
+        stream: None,
+        note: format!(
+            " · dal livello {} × {}: il pieno è troppo grande per questa voce",
+            f.width, f.height
+        ),
+    }
+}
+
+/// L'etichetta e la foto del vetrino intero accanto al file convertito, nello stesso formato.
+/// Restituisce la parte del messaggio che le nomina.
+#[allow(clippy::too_many_arguments)]
+fn slide_extras(
+    s: &crate::svs::Slide,
+    path: &Path,
+    dir: &Path,
+    action: &str,
+    format: ImageFormat,
+    ext: &str,
+    quality: u8,
+    opts: &Options,
+) -> CedroResult<String> {
+    // Solo per i formati di immagine: un PDF, un'immagine ripulita o modificata restano un file solo.
+    if matches!(action, "pdf" | "strip" | "half" | "gray" | "rot90") {
+        return Ok(String::new());
+    }
+    let mut made = Vec::new();
+    for (want, ifd, suffix, word) in [
+        (opts.slide_label, s.label, "etichetta", "etichetta"),
+        (
+            opts.slide_macro,
+            s.macro_image,
+            "vetrino",
+            "foto del vetrino",
+        ),
+    ] {
+        let Some(ifd) = ifd.filter(|_| want) else {
+            continue;
+        };
+        let img = DynamicImage::ImageRgb8(s.read_extra(path, ifd).map_err(err)?);
+        // Se il nome esiste e si è scelto di saltarlo, si salta solo questa immagine in più.
+        let out = unique_output(dir, &format!("{}-{suffix}", stem(path)), ext);
+        if skipping(&out) {
+            continue;
+        }
+        match (action, ext) {
+            ("avif", "avif") => write_bytes(
+                &out,
+                &crate::imgfmt::avif_bytes(&img, quality).map_err(err)?,
+            )?,
+            ("jxl", "jxl") => write_bytes(&out, &crate::imgfmt::jxl_bytes(&img).map_err(err)?)?,
+            _ => save_image(&img, &out, format, quality, opts.white_background)?,
+        }
+        made.push(word);
+    }
+    Ok(match made.as_slice() {
+        [] => String::new(),
+        [one] => format!(" · con {one}"),
+        _ => format!(" · con {}", made.join(" e ")),
+    })
 }
 
 pub fn config_dir() -> PathBuf {
@@ -3300,6 +3520,96 @@ Luca,Bondeno
             let round = image::open(&back.path).unwrap();
             assert_eq!((round.width(), round.height()), (8, 6), "{action}");
         }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn slides_become_images_with_label_and_macro() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/svs");
+        let dir = scratch();
+        let src = dir.join("CMU-1.svs");
+        fs::copy(fixtures.join("cmu1-pezzo.svs"), &src).unwrap();
+        assert_eq!(kind_of(&src), Kind::Image);
+        // Anche con un'estensione sbagliata (il contenuto dice TIFF Aperio).
+        let odd = dir.join("vetrino.dat");
+        fs::copy(&src, &odd).unwrap();
+        assert_eq!(kind_of(&odd), Kind::Image);
+
+        let made = perform(&src, "png", 80).unwrap();
+        assert_eq!(made.path.file_name().unwrap(), "CMU-1.png");
+        assert!(
+            made.message.contains("480×480 dal vetrino"),
+            "{}",
+            made.message
+        );
+        assert!(
+            made.message.contains("etichetta e foto del vetrino"),
+            "{}",
+            made.message
+        );
+        assert_eq!(
+            image::open(&made.path).unwrap().to_rgb8().dimensions(),
+            (480, 480)
+        );
+        assert_eq!(
+            image::open(dir.join("CMU-1-etichetta.png"))
+                .unwrap()
+                .to_rgb8()
+                .dimensions(),
+            (97, 116)
+        );
+        assert!(dir.join("CMU-1-vetrino.png").exists());
+
+        // Senza etichetta e foto, in JPEG e con il lato lungo massimo.
+        let opts = Options {
+            slide_label: false,
+            slide_macro: false,
+            max_side: Some(200),
+            ..Options::default()
+        };
+        let small = perform_with(&src, "jpeg", 80, Some(&dir), &opts).unwrap();
+        assert_eq!(
+            image::open(&small.path).unwrap().to_rgb8().dimensions(),
+            (200, 200)
+        );
+        assert!(!dir.join("CMU-1-etichetta.jpg").exists());
+
+        // Il livello pieno «troppo grande» (limite abbassato): PNG e JPEG a strisce, il WebP diventa TIFF.
+        crate::svs::set_memory_limit(1000);
+        let full = Options {
+            slide_level: 2,
+            slide_label: false,
+            slide_macro: false,
+            ..Options::default()
+        };
+        for (action, ext) in [("png", "png"), ("jpeg", "jpg"), ("webp", "tiff")] {
+            let out = perform_with(&src, action, 85, Some(&dir), &full)
+                .unwrap_or_else(|e| panic!("{action}: {e}"));
+            assert_eq!(out.path.extension().unwrap(), ext, "{action}");
+            assert_eq!(
+                image::open(&out.path).unwrap().to_rgb8().dimensions(),
+                (480, 480),
+                "{action}"
+            );
+            assert_eq!(
+                out.message.contains("in TIFF"),
+                action == "webp",
+                "{}",
+                out.message
+            );
+        }
+        // Una voce che vuole i pixel in memoria prende il livello più grande che ci sta (qui nessuno: il più piccolo).
+        let turned = perform_with(&src, "rot90", 85, Some(&dir), &full).unwrap();
+        assert!(
+            turned.message.contains("troppo grande"),
+            "{}",
+            turned.message
+        );
+        crate::svs::set_memory_limit(crate::svs::IN_MEMORY_PIXELS);
+
+        // OCR e PDF aprono il vetrino come una foto (il livello «Media»).
+        let pdf = perform(&src, "pdf", 80).unwrap();
+        assert!(fs::read(&pdf.path).unwrap().starts_with(b"%PDF"));
         let _ = fs::remove_dir_all(&dir);
     }
 
