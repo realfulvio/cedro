@@ -431,6 +431,20 @@ mod tests {
     }
 
     #[test]
+    fn i_messaggi_del_laboratorio_si_traducono() {
+        let casi = [
+            ("Excel con 98 righe. Numeri con la virgola letti come numeri. Piastra da 96 pozzetti anche una riga per pozzetto (foglio Pozzetti). Nomi di geni e codici lasciati come testo.",
+             "Excel with 98 rows. Decimal-comma numbers read as numbers. 96-well plate also laid out one row per well (Pozzetti sheet). Gene names and codes kept as text."),
+            ("Tolti: autore, date di creazione e modifica, metadati XMP, autori dei commenti. Il testo del documento resta com'è: se il nome è scritto lì, va tolto a mano.",
+             "Removed: author, creation and modification dates, XMP metadata, comment authors. The document text stays as it is: if the name is written there, remove it by hand."),
+            ("3 fogli: un CSV per foglio", "3 sheets: one CSV per sheet"),
+        ];
+        for (it, en) in casi {
+            assert_eq!(translate(it, 0), en);
+        }
+    }
+
+    #[test]
     fn templates_and_exact() {
         let t = parse_table("Esci\tExit\nFatto · {}\tDone · {}\n{} file su {}\t{2} files, {1} done\n");
         assert_eq!(t.exact.get("Esci").map(String::as_str), Some("Exit"));

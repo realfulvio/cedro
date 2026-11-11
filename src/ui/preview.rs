@@ -82,6 +82,14 @@ fn pages_of(path: &Path) -> Option<std::rc::Rc<Pages>> {
 
 fn layout(path: &Path) -> Option<Pages> {
     match engine::kind_of(path) {
+        Kind::Text if matches!(engine::extension(path).as_str(), "xlsx" | "xlsm" | "ods") => {
+            // Il primo foglio non vuoto, come tabella (i numeri con la virgola, come in Excel).
+            let bytes = std::fs::read(path).ok()?;
+            let fogli = crate::tabella::leggi(&engine::extension(path), &bytes).ok()?;
+            let mut rows = fogli.iter().find(|f| !f.righe.is_empty())?.testo(true);
+            rows.truncate(MAX_ROWS);
+            Some(rows_pages(rows, ""))
+        }
         Kind::Text => {
             let mut bytes = Vec::new();
             std::io::Read::read_to_end(&mut std::io::Read::take(std::fs::File::open(path).ok()?, MAX_TEXT as u64), &mut bytes).ok()?;
@@ -180,12 +188,16 @@ fn is_number(s: &str) -> bool {
 
 /// CSV e TSV come tabella: la prima riga fa da intestazione e torna in cima a ogni pagina.
 fn table_pages(text: &str) -> Pages {
+    let sep = crate::tabella::separatore(text, "");
+    let mut rows = crate::textconv::parse_csv(text, sep);
+    rows.truncate(MAX_ROWS);
+    rows_pages(rows, text)
+}
+
+fn rows_pages(mut rows: Vec<Vec<String>>, text: &str) -> Pages {
     const SIZE: f32 = 9.0;
     const ROW: f32 = 19.0;
     const PAD: f32 = 5.0;
-    let sep = crate::textconv::detect_separator(text);
-    let mut rows = crate::textconv::parse_csv(text, sep);
-    rows.truncate(MAX_ROWS);
     rows.retain(|r| r.iter().any(|c| !c.trim().is_empty()));
     if rows.is_empty() {
         return text_pages(text);

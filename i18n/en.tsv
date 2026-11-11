@@ -6,7 +6,7 @@ Testo	Text
 Cambia formato, ridimensiona e raddrizza le foto.	Change format, resize and straighten photos.
 Da Word, ODT e RTF a PDF.	From Word, ODT and RTF to PDF.
 Da PDF a Word modificabile, a Excel, a immagini o a testo.	From PDF to editable Word, Excel, images or text.
-TXT, Markdown, CSV, JSON e HTML.	TXT, Markdown, CSV, JSON and HTML.
+TXT, Markdown, CSV, Excel, JSON e HTML.	TXT, Markdown, CSV, Excel, JSON and HTML.
 WAV, MP3, OGG, M4A, AAC e FLAC.	WAV, MP3, OGG, M4A, AAC and FLAC.
 MP3, WAV, FLAC, Opus e AIFF.	MP3, WAV, FLAC, Opus and AIFF.
 Archivi	Archives
@@ -1955,3 +1955,22 @@ PDF non scritto: {}	PDF not written: {}
 ~indirizzo dei collegamenti	hyperlink base
 ~autori di commenti e revisioni	comment and revision authors
 ~percorso del file sul PC	file path on the PC
+# Tabelle di laboratorio (CSV/TSV ↔ Excel, piastre)
+numeri veri, geni come testo	real numbers, genes kept as text
+Excel con {#} righe.	Excel with {} rows.
+Numeri con la virgola letti come numeri.	Decimal-comma numbers read as numbers.
+Piastra da {#} pozzetti anche una riga per pozzetto (foglio Pozzetti).	{}-well plate also laid out one row per well (Pozzetti sheet).
+{#} piastre da {#} pozzetti, anche una riga per pozzetto (foglio Pozzetti).	{} plates of {} wells, also laid out one row per well (Pozzetti sheet).
+Nomi di geni e codici lasciati come testo.	Gene names and codes kept as text.
+CSV dal foglio di calcolo	CSV from the spreadsheet
+{#} fogli: un CSV per foglio	{} sheets: one CSV per sheet
+il foglio di calcolo è vuoto	the spreadsheet is empty
+è già un Excel: Cedro ne fa un altro solo se trova piastre da mettere una riga per pozzetto	it's already an Excel file: Cedro only makes another one when it finds plates to lay out one row per well
+il file non è un foglio di calcolo leggibile (forse un .xls vecchio: salvalo in .xlsx)	the file is not a readable spreadsheet (maybe an old .xls: save it as .xlsx)
+cartella di lavoro non trovata nel file	workbook not found in the file
+nessun foglio nel file	no sheets in the file
+contenuto del foglio non trovato	sheet content not found
+foglio non letto: {}	sheet not read: {}
+testi del foglio non letti: {}	sheet text not read: {}
+cartella di lavoro non letta: {}	workbook not read: {}
+troppe colonne per Excel: {#} (al massimo {#})	too many columns for Excel: {} (at most {})

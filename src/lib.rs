@@ -17,6 +17,7 @@ mod engine;
 mod imgfmt;
 pub mod dicom;
 mod anonimizza;
+pub mod tabella;
 mod nametemplate;
 mod mp4fast;
 mod ocr;
