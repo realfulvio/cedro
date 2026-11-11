@@ -16,7 +16,7 @@ use crate::svs::Slide;
 // Copia anonima
 
 /// Le voci della descrizione Aperio che possono dire di chi è il vetrino: si cancellano.
-const VOCI_PERSONALI: &[&str] = &["Filename", "Date", "Time", "User", "Barcode", "Patient", "Title", "Case", "Accession", "Slide", "Label"];
+const VOCI_PERSONALI: &[&str] = &["Filename", "Date", "Time", "User", "Barcode", "Patient", "Title", "Case", "Accession", "Slide", "Label", "ImageID", "ScanScope ID"];
 
 struct Voce {
     tag: u16,
@@ -643,10 +643,10 @@ mod prove {
 
     #[test]
     fn la_descrizione_perde_nome_data_e_utente() {
-        let d = "Aperio Image Library v10\r\n46920x33014 JPEG/RGB Q=30|AppMag = 20|Filename = Rossi-Fido|Date = 12/29/09|Time = 09:59:15|User = abc|MPP = 0.4990";
+        let d = "Aperio Image Library v10\r\n46920x33014 JPEG/RGB Q=30|AppMag = 20|Filename = Rossi-Fido|Date = 12/29/09|Time = 09:59:15|User = abc|ImageID = 2026-0412|ScanScope ID = SS1302|MPP = 0.4990";
         let p = pulisci_descrizione(d);
         assert_eq!(p.len(), d.len());
-        assert!(!p.contains("Rossi") && !p.contains("12/29") && !p.contains("abc"));
+        assert!(!p.contains("Rossi") && !p.contains("12/29") && !p.contains("abc") && !p.contains("0412") && !p.contains("SS1302"));
         assert!(p.contains("AppMag = 20") && p.contains("MPP = 0.4990"));
     }
 
@@ -708,8 +708,11 @@ mod prove_vere {
         let dir = p.with_extension("prove");
         let _ = fs::create_dir_all(&dir);
         let t0 = std::time::Instant::now();
-        let c = conta_mitotica(&p, &dir.join("conta.jpg"), &dir.join("dove.jpg")).unwrap();
-        eprintln!("conta: zona {:?} a {} µm/px in {:?}", c.zona, c.um_per_px, t0.elapsed());
+        // Un vetrino più piccolo di 2,37 mm² non ha la zona: lo si dice e si va avanti con il resto.
+        match conta_mitotica(&p, &dir.join("conta.jpg"), &dir.join("dove.jpg")) {
+            Ok(c) => eprintln!("conta: zona {:?} a {} µm/px in {:?}", c.zona, c.um_per_px, t0.elapsed()),
+            Err(e) => eprintln!("conta: {e}"),
+        }
         let t0 = std::time::Instant::now();
         let f = tessere(&p, &dir.join("tessere"), "t", &Tessere::default(), &|_| {}).unwrap();
         eprintln!("tessere: {} scritte, {} scartate, {:?} µm/px in {:?}", f.scritte, f.scartate, f.um_per_px, t0.elapsed());
