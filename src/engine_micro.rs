@@ -366,4 +366,20 @@ mod prove {
         assert!(out.message.contains("1 pannello.") && !out.message.contains("barra"), "{}", out.message);
         let _ = std::fs::remove_dir_all(&d);
     }
+
+    #[test]
+    fn il_pacchetto_dei_dati_si_fa_e_si_verifica() {
+        let d = cartella("pacchetto");
+        std::fs::create_dir_all(d.join("piastra")).unwrap();
+        std::fs::write(d.join("piastra/misure.csv"), "A1;0,5\n").unwrap();
+        std::fs::write(d.join("piastra/note.txt"), "ok").unwrap();
+        let out = super::super::package_with(&[d.join("piastra")], None, &Options::default()).unwrap();
+        assert!(out.path.ends_with("piastra-pacchetto.zip"), "{}", out.path.display());
+        assert!(out.message.starts_with("Pacchetto con 2 file (1 KB), impronta SHA-256 di ognuno. Impronta dello ZIP: "), "{}", out.message);
+        let sha = std::fs::read_to_string(d.join("piastra-pacchetto.zip.sha256")).unwrap();
+        assert!(sha.ends_with("  piastra-pacchetto.zip\n") && sha.len() == 64 + 2 + "piastra-pacchetto.zip\n".len(), "{sha}");
+        let v = perform_with(&out.path, "verify-pack", 80, None, &Options::default()).unwrap();
+        assert_eq!(v.message, "Pacchetto integro: 2 file, tutte le impronte SHA-256 tornano.");
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }

@@ -52,7 +52,9 @@ const ACTIONS: &[Slice] = &[
     Slice { id: "dup", label: "Duplica" },
     Slice { id: "path", label: "Percorso" },
     Slice { id: "zip", label: "ZIP" },
+    Slice { id: "pack", label: "Pacchetto" },
 ];
+const ARCHIVE_TOOLS: &[Slice] = &[Slice { id: "verify-pack", label: "Verifica" }];
 const IMAGE_CONVERT: &[Slice] = &[
     Slice { id: "png", label: "PNG" },
     Slice { id: "jpeg", label: "JPEG" },
@@ -160,6 +162,7 @@ pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
         (Kind::Pdf, Mode::Tools) => PDF_TOOLS,
         (Kind::Doc, Mode::Tools) => DOC_TOOLS,
         (Kind::Archive, Mode::Convert) => ARCHIVE_CONVERT,
+        (Kind::Archive, Mode::Tools) => ARCHIVE_TOOLS,
         _ => EMPTY,
     }
 }
@@ -1150,6 +1153,47 @@ fn merge_inner(sources: &[(PathBuf, Option<PageSel>)], out_dir: Option<&Path>, o
     Ok(Output { path: out, message })
 }
 
+/// La ruota: il pacchetto dei dati con i file (e le cartelle) scelti.
+pub fn package_paths(paths: &[PathBuf], out_dir: Option<&Path>) -> CedroResult<Output> {
+    let exists = if crate::settings::read_settings().replace { Exists::Replace } else { Exists::Number };
+    package_with(paths, out_dir, &Options { exists, ..Options::default() })
+}
+
+/// Il pacchetto dei dati (BagIt): uno ZIP con l'impronta SHA-256 di ogni file e il LEGGIMI, più
+/// accanto un `.sha256` con l'impronta dello ZIP intero. Il nome viene dal primo file o cartella.
+pub fn package_with(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    let Some(first) = paths.first() else {
+        return Err(err("nessun file da mettere nel pacchetto"));
+    };
+    let _job = crate::resources::acquire(None).expect("uncancellable job");
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), guarded: true, ..Default::default() }));
+    let mut restore = RestoreNaming(Some(before));
+    let result = (|| {
+        let dir = match out_dir {
+            Some(d) => {
+                fs::create_dir_all(d).map_err(|e| err(e.to_string()))?;
+                d.to_path_buf()
+            }
+            None => output_dir(first, &crate::settings::read_settings())?,
+        };
+        let base = if first.is_dir() { first.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "dati".into()) } else { stem(first) };
+        let out = reserve(&dir, &format!("{base}-pacchetto"), "zip")?;
+        let nome = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "pacchetto".into());
+        let fatto = crate::pacchetto::crea(paths, &out, &nome, &|p| crate::progress::report(p)).map_err(err)?;
+        let zip_name = file_label(&out);
+        let _ = fs::write(out.with_file_name(format!("{zip_name}.sha256")), format!("{}  {zip_name}\n", fatto.impronta));
+        let message = format!(
+            "Pacchetto con {} file ({}), impronta SHA-256 di ognuno. Impronta dello ZIP: {}… (nel file .sha256 accanto). Per firmarlo: Firma digitale.",
+            fatto.file,
+            size_words(fatto.byte),
+            &fatto.impronta[..16]
+        );
+        Ok(Output { path: out, message })
+    })();
+    let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
+    finish_outputs(result, used)
+}
+
 /// La ruota: la figura per un articolo con le immagini scelte, nell'ordine dei nomi (A la prima).
 pub fn figure_paths(paths: &[PathBuf], out_dir: Option<&Path>) -> CedroResult<Output> {
     let mut sorted = paths.to_vec();
@@ -1473,6 +1517,14 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             message: path.display().to_string(),
         });
     }
+    // Verificare un pacchetto non scrive niente.
+    if action == "verify-pack" {
+        let v = crate::pacchetto::verifica(path, &|p| crate::progress::report(p)).map_err(err)?;
+        if !v.tutto_bene() {
+            return Err(err(v.messaggio()));
+        }
+        return Ok(Output { path: path.to_path_buf(), message: v.messaggio() });
+    }
     let settings = crate::settings::read_settings();
     let dir = match out_dir {
         Some(d) => {
@@ -1490,6 +1542,9 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         let out = reserve(&dir, &format!("{}-copia", stem(path)), &extension(path))?;
         fs::copy(path, &out).map_err(|e| err(e.to_string()))?;
         return Ok(Output { path: out, message: "Copia creata".into() });
+    }
+    if action == "pack" {
+        return package_with(&[path.to_path_buf()], Some(&dir), opts);
     }
     if action == "zip" {
         let out = reserve(&dir, &stem(path), "zip")?;

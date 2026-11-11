@@ -1197,7 +1197,7 @@ fn on_drop() {
 
 /// Il lavoro scelto sulla ruota, file per file, con la linea di avanzamento e il fumetto finale.
 fn run_wheel_job(all: &[PathBuf], slice: Slice, quality: u8, beside: bool) {
-    let paths = if matches!(slice.id, "dup" | "zip") { all.to_vec() } else { same_kind_paths(all) };
+    let paths = if matches!(slice.id, "dup" | "zip" | "pack") { all.to_vec() } else { same_kind_paths(all) };
     let skipped = all.len().saturating_sub(paths.len());
     let mut notes = Vec::new();
     let mut last_out = None;
@@ -1211,15 +1211,19 @@ fn run_wheel_job(all: &[PathBuf], slice: Slice, quality: u8, beside: bool) {
             format!("{} di {} · {}", i + 1, paths.len(), name(p))
         }
     };
-    if slice.id == "merge" || slice.id == "figure" {
+    if matches!(slice.id, "merge" | "figure" | "pack") {
         crate::progress_win::start(1, &format!("{} file → {}", paths.len(), slice.label));
     } else if let Some(first) = paths.first() {
         crate::progress_win::start(paths.len(), &progress_label(0, first));
     }
-    if slice.id == "merge" || slice.id == "figure" {
+    if matches!(slice.id, "merge" | "figure" | "pack") {
         // Unire e la figura sono un lavoro solo: tutti i file in uno, nell'ordine dei nomi.
         let out_dir = if beside { paths.first().and_then(|p| p.parent()) } else { None };
-        let one = |paths: &[PathBuf]| if slice.id == "figure" { cedro::figure_paths(paths, out_dir) } else { cedro::merge_paths(paths, out_dir) };
+        let one = |paths: &[PathBuf]| match slice.id {
+            "figure" => cedro::figure_paths(paths, out_dir),
+            "pack" => cedro::package_paths(paths, out_dir),
+            _ => cedro::merge_paths(paths, out_dir),
+        };
         match cedro::ui::model::guarded(|| one(&paths).map_err(|e| e.0)) {
             Ok(out) => {
                 notes.push(format!("{} · {}", name(&out.path), out.message));

@@ -644,7 +644,7 @@ fn choose_hover(app: &Application, state: &Rc<RefCell<Wheel>>) {
 
 fn run_slices(all: &[PathBuf], id: &str, label: &str, quality: u8, beside: bool) -> String {
     let _job = cedro::resources::acquire(None).expect("uncancellable wheel job");
-    let paths = if matches!(id, "dup" | "zip") { all.to_vec() } else { same_kind_paths(all) };
+    let paths = if matches!(id, "dup" | "zip" | "pack") { all.to_vec() } else { same_kind_paths(all) };
     let skipped = all.len().saturating_sub(paths.len());
     let mut notes = Vec::new();
     let mut failed = None;
@@ -654,15 +654,19 @@ fn run_slices(all: &[PathBuf], id: &str, label: &str, quality: u8, beside: bool)
     let step_label = |i: usize, p: &std::path::Path| {
         if paths.len() == 1 { format!("{} → {label}", name(p)) } else { format!("{} di {} · {}", i + 1, paths.len(), name(p)) }
     };
-    if id == "merge" || id == "figure" {
+    if matches!(id, "merge" | "figure" | "pack") {
         crate::linux_progress::start(1, &format!("{} file → {}", paths.len(), label));
     } else if let Some(first) = paths.first() {
         crate::linux_progress::start(paths.len(), &step_label(0, first));
     }
-    if id == "merge" || id == "figure" {
+    if matches!(id, "merge" | "figure" | "pack") {
         // Unire e la figura sono un lavoro solo: tutti i file in uno, nell'ordine dei nomi.
         let out_dir = if beside { paths.first().and_then(|p| p.parent()) } else { None };
-        let one = |paths: &[PathBuf]| if id == "figure" { cedro::figure_paths(paths, out_dir) } else { cedro::merge_paths(paths, out_dir) };
+        let one = |paths: &[PathBuf]| match id {
+            "figure" => cedro::figure_paths(paths, out_dir),
+            "pack" => cedro::package_paths(paths, out_dir),
+            _ => cedro::merge_paths(paths, out_dir),
+        };
         match cedro::ui::model::guarded(|| one(&paths).map_err(|e| e.0)) {
             Ok(out) => {
                 notes.push(format!("{} · {}", name(&out.path), out.message));
