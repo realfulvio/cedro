@@ -149,7 +149,7 @@ fn table(f: &mut Frame, app: &App, r: R, simple: bool) {
             if simple {
                 f.text(&file.name(), tx, y, if op_w == 0.0 { col_stat - tx - 12.0 } else { w }, rh, 22.0, SANS, pal.text);
             } else {
-                f.text(&file.name(), tx, y + 14.0, w, 30.0, 19.0, SANS, pal.text);
+                super::file_name(f, app, i, tx, y + 14.0, w, 30.0, 19.0, SANS, pal.text);
                 let (size, extra) = super::file_meta(app, i);
                 let meta = [size, extra].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("  ·  ");
                 f.text(&meta, tx, y + 46.0, w, 26.0, 16.0, SANS, pal.muted);
