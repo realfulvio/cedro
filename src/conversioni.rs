@@ -216,6 +216,12 @@ pub enum Opt {
     DicomAllFrames,
     Dicom16,
     DicomAnon,
+    MicroChannels,
+    MicroZ,
+    MicroAllT,
+    MicroContrast,
+    MicroScale,
+    Micro16,
 }
 
 /// Una riga della zona Opzioni del pannello.
@@ -343,9 +349,53 @@ pub fn dicom_option_defs(action: &str) -> Vec<&'static OptionDef> {
     }
 }
 
-/// Le opzioni del riquadro di un formato scientifico (vetrino, DICOM): restano in vista, in cima.
+const MICRO_CHANNEL_CHOICES: &[Choice] = &[
+    Choice { label: "Sovrapposti", value: 0 },
+    Choice { label: "Uno per file", value: 1 },
+    Choice { label: "Entrambi", value: 2 },
+];
+const MICRO_Z_CHOICES: &[Choice] = &[
+    Choice { label: "Massima", value: 0 },
+    Choice { label: "Centrale", value: 1 },
+    Choice { label: "Uno per file", value: 2 },
+];
+const MICRO_CHANNELS: OptionDef = OptionDef { opt: Opt::MicroChannels, title: "Canali", note: "Sovrapposti: un'immagine a colori con ogni canale del suo colore", control: Control::Segments(MICRO_CHANNEL_CHOICES), default: 0 };
+const MICRO_Z: OptionDef = OptionDef { opt: Opt::MicroZ, title: "Piani Z (profondità)", note: "Massima: unisce i piani tenendo il punto più luminoso, come nelle figure degli articoli", control: Control::Segments(MICRO_Z_CHOICES), default: 0 };
+const MICRO_ALL_T: OptionDef = sw(Opt::MicroAllT, "Tutti gli istanti", "Spento: solo il primo", true);
+const MICRO_CONTRAST: OptionDef = sw(Opt::MicroContrast, "Contrasto automatico", "A 16 bit la fluorescenza sembra quasi nera: si regola da solo, canale per canale", true);
+const MICRO_SCALE: OptionDef = sw(Opt::MicroScale, "Barra di scala", "Se il file dice quanto è grande un pixel", true);
+const MICRO_16: OptionDef = sw(Opt::Micro16, "Valori originali a 16 bit", "Per misurare: un file per canale, senza colori né contrasto", false);
+
+/// Le opzioni in più quando in coda c'è un'immagine di microscopia: solo quelle che servono al file
+/// (canali se sono più d'uno, piani Z, istanti), in cima alle altre.
+pub fn micro_option_defs(action: &str, canali: usize, z: usize, t: usize) -> Vec<&'static OptionDef> {
+    if matches!(action, "ocr" | "ico" | "strip") {
+        return vec![];
+    }
+    let mut v: Vec<&'static OptionDef> = Vec::new();
+    if canali > 1 {
+        v.push(&MICRO_CHANNELS);
+    }
+    if z > 1 {
+        v.push(&MICRO_Z);
+    }
+    if t > 1 {
+        v.push(&MICRO_ALL_T);
+    }
+    v.push(&MICRO_CONTRAST);
+    v.push(&MICRO_SCALE);
+    if matches!(action, "png" | "tiff") {
+        v.push(&MICRO_16);
+    }
+    v
+}
+
+/// Le opzioni del riquadro di un formato scientifico (vetrino, DICOM, microscopia): restano in vista, in cima.
 pub fn is_lead(opt: Opt) -> bool {
-    matches!(opt, Opt::SlideLevel | Opt::SlideLabel | Opt::SlideMacro | Opt::DicomWindow | Opt::DicomAllFrames | Opt::Dicom16 | Opt::DicomAnon)
+    matches!(
+        opt,
+        Opt::SlideLevel | Opt::SlideLabel | Opt::SlideMacro | Opt::DicomWindow | Opt::DicomAllFrames | Opt::Dicom16 | Opt::DicomAnon | Opt::MicroChannels | Opt::MicroZ | Opt::MicroAllT | Opt::MicroContrast | Opt::MicroScale | Opt::Micro16
+    )
 }
 
 const STRAIGHTEN: OptionDef = sw(Opt::Straighten, "Raddrizza le foto", "Corregge la rotazione dei file del telefono", true);
@@ -692,6 +742,12 @@ pub fn options_from(values: &Values) -> engine::Options {
     o.dicom_all_frames = on(Opt::DicomAllFrames, true);
     o.dicom_16bit = on(Opt::Dicom16, false);
     o.dicom_anon = on(Opt::DicomAnon, true);
+    o.micro_channels = values.num(Opt::MicroChannels, MICRO_CHANNELS.default).min(2);
+    o.micro_z = values.num(Opt::MicroZ, MICRO_Z.default).min(2);
+    o.micro_all_t = on(Opt::MicroAllT, true);
+    o.micro_contrast = on(Opt::MicroContrast, true);
+    o.micro_scale = on(Opt::MicroScale, true);
+    o.micro_16bit = on(Opt::Micro16, false);
     let text = |opt: Opt| Some(values.text_of(opt).trim().to_string()).filter(|t| !t.is_empty());
     let pp = &mut o.pdf_pages;
     pp.settings.file_bookmarks = on(Opt::FileBookmarks, true);
@@ -761,7 +817,7 @@ mod tests {
             }
         }
         // Le opzioni dei vetrini compaiono solo con un .svs in coda.
-        for d in slide_option_defs("png").into_iter().chain(dicom_option_defs("png")) {
+        for d in slide_option_defs("png").into_iter().chain(dicom_option_defs("png")).chain(micro_option_defs("png", 3, 3, 3)) {
             if !all.iter().any(|x| x.opt == d.opt) {
                 all.push(d);
             }

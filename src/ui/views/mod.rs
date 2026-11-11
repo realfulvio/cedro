@@ -267,7 +267,34 @@ pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32,
         let head = dicom_head(f, app, x, y, w, st);
         return head + option_body(f, app, def, x, y + head, w, st);
     }
+    // E il riquadro «Microscopia», sopra la prima delle sue opzioni.
+    if let Some((m, _)) = app.first_micro() {
+        if conversioni::micro_option_defs(&app.action, m.canali, m.z, m.t).first().is_some_and(|d| d.opt == def.opt) {
+            let head = micro_head(f, app, x, y, w, st);
+            return head + option_body(f, app, def, x, y + head, w, st);
+        }
+    }
     option_body(f, app, def, x, y, w, st)
+}
+
+/// Il colore delle immagini di microscopia: un verde da fluorescenza (GFP).
+pub const MICRO: super::gfx::Rgb = (0x1F, 0x9D, 0x55);
+
+/// L'intestazione del riquadro «Microscopia»: che file è (canali, piani, scala).
+fn micro_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: OptStyle) -> f32 {
+    let pal = f.pal;
+    let Some((info, count)) = app.first_micro() else { return 0.0 };
+    f.p.rrect(x, y + 7.0, 10.0, 10.0, 3.0, Some(MICRO), None);
+    f.text("Microscopia", x + 18.0, y, w - 18.0, 24.0, st.label, SEMI, pal.text);
+    let mut line = crate::i18n::lit(&info.summary[crate::i18n::english() as usize]);
+    if count > 1 {
+        line = format!("{line} · {count} file");
+    }
+    let mut h = 28.0 + f.para(&line, x, y + 28.0, w, st.note, SANS, pal.muted, 1.4, 3);
+    if !info.scala {
+        h += 4.0 + f.para("Il file non dice quanto è grande un pixel: senza barra di scala.", x, y + h + 4.0, w, st.note, SANS, pal.muted, 1.4, 2);
+    }
+    h + 10.0
 }
 
 /// Il colore dei DICOM (il quadratino del riquadro e l'etichetta nella coda): un blu da negativo radiografico.
@@ -542,6 +569,8 @@ pub fn file_name(f: &mut Frame, app: &App, i: usize, x: f32, y: f32, w: f32, h: 
         ("Vetrino", SLIDE)
     } else if media.and_then(|m| m.dicom.as_ref()).is_some() {
         ("DICOM", DICOM)
+    } else if media.and_then(|m| m.micro.as_ref()).is_some() {
+        ("Microscopia", MICRO)
     } else {
         f.text(&name, x, y, w, h, size, weight, c);
         return;
@@ -565,6 +594,9 @@ pub fn waiting_line(app: &App, i: usize) -> String {
         return crate::i18n::lit(&s.summary[crate::i18n::english() as usize]);
     }
     if let Some(d) = media.and_then(|m| m.dicom.as_ref()) {
+        return crate::i18n::lit(&d.summary[crate::i18n::english() as usize]);
+    }
+    if let Some(d) = media.and_then(|m| m.micro.as_ref()) {
         return crate::i18n::lit(&d.summary[crate::i18n::english() as usize]);
     }
     crate::i18n::lit(&file.path.display().to_string())

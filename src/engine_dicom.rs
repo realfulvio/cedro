@@ -153,7 +153,7 @@ fn finish_message(message: &mut String, notes: &[String], f: &DicomFile, opts: &
 }
 
 /// Esegue `job` per ogni indice, su tutti i core, e restituisce i risultati nell'ordine degli indici.
-fn in_parallel<T: Send>(items: &[usize], job: impl Fn(usize) -> Result<T, String> + Sync) -> Result<Vec<T>, String> {
+pub(super) fn in_parallel<T: Send>(items: &[usize], job: impl Fn(usize) -> Result<T, String> + Sync) -> Result<Vec<T>, String> {
     let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(items.len()).max(1);
     if threads == 1 {
         return items.iter().map(|i| job(*i)).collect();

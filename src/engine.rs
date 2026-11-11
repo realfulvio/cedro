@@ -911,6 +911,15 @@ pub struct Options {
     pub dicom_all_frames: bool,
     pub dicom_16bit: bool,
     pub dicom_anon: bool,
+    /// Microscopia (OME-TIFF, ImageJ, TIFF a 16 bit): canali (0 sovrapposti, 1 uno per file, 2 tutti),
+    /// piani Z (0 proiezione massima, 1 piano centrale, 2 un file per piano), tutti gli istanti, contrasto
+    /// automatico, barra di scala e valori originali a 16 bit.
+    pub micro_channels: u32,
+    pub micro_z: u32,
+    pub micro_all_t: bool,
+    pub micro_contrast: bool,
+    pub micro_scale: bool,
+    pub micro_16bit: bool,
     /// Unire e dividere i PDF.
     pub pdf_pages: PdfPages,
     /// Le pagine di un PDF (ruotare, togliere, estrarre, numeri e filigrana) e la compressione.
@@ -996,6 +1005,12 @@ impl Default for Options {
             dicom_all_frames: true,
             dicom_16bit: false,
             dicom_anon: true,
+            micro_channels: 0,
+            micro_z: 0,
+            micro_all_t: true,
+            micro_contrast: true,
+            micro_scale: true,
+            micro_16bit: false,
             pdf_pages: PdfPages::default(),
             pdf_edit: PdfEdit::default(),
         }
@@ -1346,10 +1361,12 @@ fn finish_outputs(result: CedroResult<Output>, used: Naming) -> CedroResult<Outp
     Ok(out)
 }
 
-/// Il formato del crate `image`, l'estensione e il pezzo di nome in più di ogni voce delle immagini.
 #[path = "engine_dicom.rs"]
 mod dicom_out;
+#[path = "engine_micro.rs"]
+mod micro_out;
 
+/// Il formato del crate `image`, l'estensione e il pezzo di nome in più di ogni voce delle immagini.
 fn image_target(action: &str) -> Option<(ImageFormat, &'static str, &'static str)> {
     Some(match action {
         "avif" => (ImageFormat::Png, "avif", ""),
@@ -1811,6 +1828,15 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     if crate::imgfmt::sniff_file(path) == Some("dcm") || matches!(extension(path).as_str(), "dcm" | "dicom") {
         if let Some(done) = dicom_out::perform(path, action, quality, &dir, opts) {
             return done;
+        }
+    }
+
+    // Microscopia: canali a colori, piani Z, istanti e barra di scala.
+    if matches!(extension(path).as_str(), "tif" | "tiff" | "ome") || crate::imgfmt::sniff_file(path) == Some("tiff") {
+        if crate::microscopia::is_stack(path) {
+            if let Some(done) = micro_out::perform(path, action, quality, &dir, opts) {
+                return done;
+            }
         }
     }
 

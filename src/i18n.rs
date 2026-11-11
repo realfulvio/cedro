@@ -438,6 +438,8 @@ mod tests {
             ("Tolti: autore, date di creazione e modifica, metadati XMP, autori dei commenti. Il testo del documento resta com'è: se il nome è scritto lì, va tolto a mano.",
              "Removed: author, creation and modification dates, XMP metadata, comment authors. The document text stays as it is: if the name is written there, remove it by hand."),
             ("3 fogli: un CSV per foglio", "3 sheets: one CSV per sheet"),
+            ("12 PNG, uno per immagine (2048×2048) · 3 canali sovrapposti · proiezione massima di 12 piani Z · contrasto automatico · barra di scala 50 µm",
+             "12 PNG, one per image (2048×2048) · 3 channels overlaid · maximum projection of 12 Z planes · auto contrast · scale bar 50 µm"),
         ];
         for (it, en) in casi {
             assert_eq!(translate(it, 0), en);
