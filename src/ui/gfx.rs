@@ -251,7 +251,7 @@ impl Fonts {
             }};
         }
         match theme {
-            ThemeId::WindowsEssenziale => Fonts::shared(),
+            ThemeId::WindowsEssenziale | ThemeId::CedroLabs => Fonts::shared(),
             ThemeId::PercorsoGuidato => famiglia!("atkinson"),
             ThemeId::CedroCompatto => famiglia!("figtree"),
             ThemeId::BancoDiLavoro => famiglia!("plex"),

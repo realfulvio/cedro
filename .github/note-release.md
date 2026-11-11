@@ -13,8 +13,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Dopo l'installazione c'è l'icona di Cedro sul desktop, e con un doppio clic si apre la finestra.**
+**Nuovo tema «Cedro 4 Labs», pensato per i laboratori, e l'installatore ti fa scegliere come lavorare.**
 
-- Il collegamento sul desktop (e quello nel menu Start) ora apre davvero la finestra di Cedro, non solo l'icona vicino all'orologio. Se Cedro è già in esecuzione tra le iconcine, il doppio clic gli fa mostrare la finestra, senza aprire una seconda copia.
-- L'avvio con Windows resta discreto: parte solo l'icona vicino all'orologio, come prima.
-- Se togli il collegamento dal desktop, gli aggiornamenti automatici non lo rimettono.
+- Alla prima installazione a mano compare la pagina «Come lavori con Cedro?»: scegli **Cedro standard** oppure **Cedro 4 Labs**, con due anteprime animate. Gli aggiornamenti e le installazioni silenziose non la mostrano; da riga di comando si può scegliere con `/TEMA=labs`. Su Linux lo script di installazione ha l'opzione `--labs`.
+- **Cedro 4 Labs** è un tema nuovo (si sceglie anche da Impostazioni › Aspetto) in verde petrolio, con la sigla «4 LABS» in magenta accanto al nome. Mostra solo ciò che serve in laboratorio e in ufficio: conversioni, trascrizione e firma digitale, senza YouTube e video dal web.
+- Nella Guida e nella finestra «Come vuoi usare Cedro?» con questo tema non compare più l'argomento su YouTube e sul web.
+- I temi ora sono sette.
