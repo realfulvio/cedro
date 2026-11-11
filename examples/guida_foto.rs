@@ -1,6 +1,6 @@
 //! Fotografie della Guida: `cargo run --example guida_foto -- <cartella>` (un PNG per tema e argomento).
 use cedro::ui::gfx::{Fonts, GlyphCache, Painter};
-use cedro::ui::guida::{Guida, H, PAGE_COUNT, W};
+use cedro::ui::guida::{Guida, H, W};
 use cedro::ui::theme::THEMES;
 
 fn main() {
@@ -12,7 +12,7 @@ fn main() {
         if only.is_some_and(|o| o != ti) {
             continue;
         }
-        for page in 0..PAGE_COUNT {
+        for page in 0..Guida::new(theme, 0).count() {
             let mut g = Guida::new(theme, 0);
             g.key(cedro::ui::screen::Key::Escape, 0);
             for _ in 0..page {
