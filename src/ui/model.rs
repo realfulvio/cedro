@@ -263,6 +263,8 @@ pub struct Transcribe {
     pub speakers: u8,
     /// La finestrella «Quante persone parlano?» è aperta.
     pub asking: bool,
+    /// I termini dei referti veterinari suggeriti al motore (spunta nella finestrella, ricordata).
+    pub glossario_vet: bool,
 }
 
 /// Il lavoro in corso.
@@ -493,7 +495,7 @@ impl App {
             dest: None,
             job: None,
             selected: None,
-            transcribe: Transcribe { format: trascrizione::Format::Word, model: trascrizione::default_model(), log: Vec::new(), percent: 0, since: None, speakers: 0, asking: false },
+            transcribe: Transcribe { format: trascrizione::Format::Word, model: trascrizione::default_model(), log: Vec::new(), percent: 0, since: None, speakers: 0, asking: false, glossario_vet: crate::read_settings().glossario_vet },
             youtube: Links::new(false),
             web: Links::new(true),
             notice: None,
@@ -1524,7 +1526,7 @@ impl App {
         self.transcribe.percent = 0;
         self.transcribe.since = None;
         let settings = crate::read_settings();
-        let request = trascrizione::Request { format: self.transcribe.format, model: self.transcribe.model, gpu: settings.gpu, avx512: settings.avx512, speakers: self.transcribe.speakers.min(trascrizione::MAX_VOICES as u8) };
+        let request = trascrizione::Request { format: self.transcribe.format, model: self.transcribe.model, gpu: settings.gpu, avx512: settings.avx512, speakers: self.transcribe.speakers.min(trascrizione::MAX_VOICES as u8), glossario: crate::settings::Settings { glossario_vet: self.transcribe.glossario_vet, ..settings.clone() }.glossario() };
         let dest = self.dest.clone();
         let opts = self.exists_options(conversioni::options_from(&self.values));
         let (tx, wake) = (self.tx.clone(), self.wake.clone());

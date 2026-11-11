@@ -899,6 +899,12 @@ impl Screen {
                 }
             }
             Act::VoicesPick(n) => app.transcribe.speakers = n.min(trascrizione::MAX_VOICES as u8),
+            Act::VoicesGlossary => {
+                app.transcribe.glossario_vet = !app.transcribe.glossario_vet;
+                let mut st = crate::read_settings();
+                st.glossario_vet = app.transcribe.glossario_vet;
+                let _ = crate::settings::write_settings(&st);
+            }
             Act::VoicesGo => app.voices_go(),
             Act::VoicesCancel => app.transcribe.asking = false,
             Act::MediaPlay => app.media_toggle(),

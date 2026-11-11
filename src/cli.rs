@@ -199,7 +199,7 @@ Cedro — conversione locale, senza upload.
   cedro zip <file>
   cedro --quality 80 convert foto.png jpeg
   cedro update     controlla se su GitHub c'è una versione nuova
-  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--cpu]
+  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--glossario veterinaria] [--cpu]
                    dalla voce a un Word (o a un testo), con il motore scaricato alla prima volta;
                    --voci dice quante persone parlano (auto le conta da solo, 1 non le riconosce)
   cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra] [--obiettivo=40x]
@@ -253,10 +253,23 @@ fn transcribe(files: &[OsString], args: &[OsString]) -> i32 {
         gpu: settings.gpu && !args.iter().any(|a| a == "--cpu"),
         avx512: settings.avx512,
         speakers,
+        // --glossario veterinaria (o parole separate da virgole); senza, quello scelto in Cedro.
+        glossario: args
+            .iter()
+            .position(|a| a == "--glossario")
+            .and_then(|i| args.get(i + 1))
+            .map(|g| g.to_string_lossy().into_owned())
+            .or_else(|| settings.glossario())
+            .filter(|g| !g.trim().is_empty()),
     };
     let paths: Vec<std::path::PathBuf> = files
         .iter()
-        .filter(|f| !f.as_encoded_bytes().starts_with(b"--") && !matches!(f.to_str(), Some("veloce" | "buona" | "massima")) && Some(f.as_os_str()) != voices.map(std::ffi::OsStr::new))
+        .enumerate()
+        .filter(|(i, f)| {
+            let dopo_glossario = *i > 0 && files[i - 1] == "--glossario";
+            !dopo_glossario && !f.as_encoded_bytes().starts_with(b"--") && !matches!(f.to_str(), Some("veloce" | "buona" | "massima")) && Some(f.as_os_str()) != voices.map(std::ffi::OsStr::new)
+        })
+        .map(|(_, f)| f)
         .map(std::path::PathBuf::from)
         .collect();
     let failed = std::sync::atomic::AtomicBool::new(false);

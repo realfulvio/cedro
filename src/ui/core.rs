@@ -236,6 +236,8 @@ pub enum Act {
     SummaryOnTop,
     /// «Quante persone parlano?»: 0 Automatico, poi il numero; Trascrivi; Annulla.
     VoicesPick(u8),
+    /// «Termini dei referti veterinari»: accende o spegne il glossario della trascrizione.
+    VoicesGlossary,
     VoicesGo,
     VoicesCancel,
     /// «Firma digitale»: scegli i file da aprire e verificare, o una cartella.
