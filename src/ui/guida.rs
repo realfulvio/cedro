@@ -111,9 +111,9 @@ const PAGES: [Page; 8] = [
     Page {
         nav: "Aspetto",
         title: "La finestra come la vuoi tu",
-        intro: "In Impostazioni, Aspetto: sei temi, la modalità Standard (tutte le opzioni) o Semplificata (solo l'essenziale) e i caratteri più grandi. Ogni tema ha il suo carattere. Questa Guida cambia insieme a loro.",
+        intro: "In Impostazioni, Aspetto: sette temi, la modalità Standard (tutte le opzioni) o Semplificata (solo l'essenziale) e i caratteri più grandi. Ogni tema ha il suo carattere. Questa Guida cambia insieme a loro.",
         rows: &[
-            ("Tema", "Sei disposizioni", "Dal Windows essenziale al Comune di Bondeno"),
+            ("Tema", "Sette disposizioni", "Dal Windows essenziale al Comune di Bondeno"),
             ("Modo", "Standard o Semplificata", "Il resto sta in «Altre opzioni»"),
             ("Testo", "Caratteri più grandi", "Più leggibili in tutta l'app"),
         ],
@@ -130,11 +130,14 @@ const PAGES: [Page; 8] = [
     },
 ];
 
-pub const PAGE_COUNT: usize = PAGES.len();
+/// L'argomento «YouTube e web» (Cedro 4 Labs lo salta: lì non c'è).
+const WEB_PAGE: usize = 5;
 
 pub struct Guida {
     pub theme: ThemeId,
+    /// La posizione nell'elenco degli argomenti del tema (`order`), non l'indice in `PAGES`.
     pub page: usize,
+    order: Vec<usize>,
     start: u64,
     hold: Option<usize>,
     hover: Option<Hit>,
@@ -143,11 +146,17 @@ pub struct Guida {
 
 impl Guida {
     pub fn new(theme: ThemeId, now: u64) -> Guida {
-        Guida { theme, page: 0, start: now, hold: None, hover: None, zones: Vec::new() }
+        let order = (0..PAGES.len()).filter(|i| theme.has_web() || *i != WEB_PAGE).collect();
+        Guida { theme, page: 0, order, start: now, hold: None, hover: None, zones: Vec::new() }
+    }
+
+    /// Quanti argomenti ha la Guida nel tema in uso.
+    pub fn count(&self) -> usize {
+        self.order.len()
     }
 
     fn goto(&mut self, page: usize, now: u64) {
-        self.page = page % PAGE_COUNT;
+        self.page = page % self.count();
         self.start = now;
         self.hold = None;
     }
@@ -188,8 +197,8 @@ impl Guida {
     fn apply(&mut self, hit: Hit, now: u64) -> Out {
         match hit {
             Hit::Page(i) => self.goto(i, now),
-            Hit::Prev => self.goto(self.page + PAGE_COUNT - 1, now),
-            Hit::Next if self.page + 1 == PAGE_COUNT => return Out::Close,
+            Hit::Prev => self.goto(self.page + self.count() - 1, now),
+            Hit::Next if self.page + 1 == self.count() => return Out::Close,
             Hit::Next => self.goto(self.page + 1, now),
             Hit::Row(i) => {
                 // Un clic su una riga ferma l'animazione su quella; un secondo clic la lascia ripartire.
@@ -218,13 +227,13 @@ impl Guida {
         self.head(p, pal);
         self.nav(p, pal);
         p.fill(NAV_W, HEAD_H, W - NAV_W, H - HEAD_H - FOOT_H, pal.work);
-        let page = &PAGES[self.page];
+        let page = &PAGES[self.order[self.page]];
         self.text_column(p, pal, page, t);
         let stage = (NAV_W + PAD + COL_W + 26.0, HEAD_H + 24.0, W - PAD - (NAV_W + PAD + COL_W + 26.0), H - HEAD_H - FOOT_H - 48.0);
         p.rrect(stage.0, stage.1, stage.2, stage.3, 12.0, Some(pal.surface), Some((pal.border, 1.0)));
         p.push_clip(stage.0, stage.1, stage.2, stage.3);
         let mut s = Stage { p, pal, x: stage.0, y: stage.1, w: stage.2, h: stage.3, t, lit: self.lit_row(t), hold: self.hold };
-        match self.page {
+        match self.order[self.page] {
             0 => s.ruota(),
             1 => s.conversioni(),
             2 => s.pdf(),
@@ -240,7 +249,7 @@ impl Guida {
 
     /// La riga in evidenza: quella scelta con un clic, altrimenti segue l'animazione.
     fn lit_row(&self, t: f32) -> usize {
-        let n = PAGES[self.page].rows.len();
+        let n = PAGES[self.order[self.page]].rows.len();
         match self.hold {
             Some(i) => i.min(n - 1),
             None if self.page == 0 => ((t / MODE_MS) as usize) % 3,
@@ -261,12 +270,13 @@ impl Guida {
         }
         let title = if crate::edizione::bondeno() { "Guida di Cedro · Comune di Bondeno" } else { "Guida di Cedro" };
         p.text(title, x, 0.0, 520.0, HEAD_H, 16.0, Weight::Bold, pal.text, Align::Left);
-        p.text(&format!("{} di {}", self.page + 1, PAGE_COUNT), W - 140.0, 0.0, 120.0, HEAD_H, 12.0, Weight::Regular, pal.muted, Align::Right);
+        p.text(&format!("{} di {}", self.page + 1, self.count()), W - 140.0, 0.0, 120.0, HEAD_H, 12.0, Weight::Regular, pal.muted, Align::Right);
     }
 
     fn nav(&mut self, p: &mut Painter, pal: &Palette) {
         p.fill(NAV_W - 1.0, HEAD_H, 1.0, H - HEAD_H - FOOT_H, pal.border);
-        for (i, page) in PAGES.iter().enumerate() {
+        for (i, &idx) in self.order.clone().iter().enumerate() {
+            let page = &PAGES[idx];
             let r = (10.0, HEAD_H + 14.0 + i as f32 * 46.0, NAV_W - 22.0, 40.0);
             let on = i == self.page;
             let hot = self.hover == Some(Hit::Page(i));
@@ -305,7 +315,7 @@ impl Guida {
         p.fill(0.0, y0, W, FOOT_H, pal.surface);
         p.fill(0.0, y0, W, 1.0, pal.border);
         let mut x = 20.0;
-        for i in 0..PAGE_COUNT {
+        for i in 0..self.count() {
             let w = if i == self.page { 26.0 } else { 10.0 };
             p.rrect(x, y0 + 23.0, w, 10.0, 5.0, Some(if i == self.page { pal.primary } else { pal.border }), None);
             x += w + 8.0;
@@ -328,7 +338,7 @@ impl Guida {
         let hot = self.hover == Some(Hit::Next);
         let fill = if hot { mix(pal.primary, pal.text, 0.22) } else { pal.primary };
         p.rrect(next.0, next.1, next.2, next.3, 8.0, Some(fill), None);
-        let label = if self.page + 1 == PAGE_COUNT { "Chiudi" } else { "Avanti" };
+        let label = if self.page + 1 == self.count() { "Chiudi" } else { "Avanti" };
         p.text(label, next.0, next.1, next.2, next.3, 13.0, Weight::Bold, pal.on_primary, Align::Center);
         self.zones.push((next, Hit::Next));
     }
@@ -618,7 +628,7 @@ mod tests {
         let mut cache = GlyphCache::new();
         for theme in THEMES {
             let mut g = Guida::new(theme, 0);
-            for page in 0..PAGE_COUNT {
+            for page in 0..g.count() {
                 for now in [0u64, 3300, 7700] {
                     let mut p = Painter::new(W as u32 / 2, H as u32 / 2, 0.5, Fonts::for_theme(theme), &mut cache);
                     g.draw(&mut p, now);
@@ -626,8 +636,24 @@ mod tests {
                 assert_eq!(g.page, page);
                 // «Avanti» sull'ultimo argomento chiude, altrimenti passa al successivo.
                 let out = g.key(Key::Right, 0);
-                assert_eq!(out == Out::Close, page + 1 == PAGE_COUNT);
+                assert_eq!(out == Out::Close, page + 1 == g.count());
             }
+        }
+    }
+
+    #[test]
+    fn cedro_4_labs_salta_l_argomento_youtube_e_web() {
+        let labs = Guida::new(ThemeId::CedroLabs, 0);
+        let standard = Guida::new(ThemeId::WindowsEssenziale, 0);
+        assert_eq!(labs.count() + 1, standard.count());
+        assert!(labs.order.iter().all(|&i| PAGES[i].nav != "YouTube e web"));
+        assert!(standard.order.iter().any(|&i| PAGES[i].nav == "YouTube e web"));
+        // Si passa da tutti gli argomenti e l'ultimo chiude, anche con un argomento in meno.
+        let mut g = Guida::new(ThemeId::CedroLabs, 0);
+        for page in 0..g.count() {
+            assert_eq!(g.page, page);
+            let out = g.key(Key::Right, 0);
+            assert_eq!(out == Out::Close, page + 1 == g.count());
         }
     }
 
