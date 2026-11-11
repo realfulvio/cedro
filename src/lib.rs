@@ -42,6 +42,7 @@ pub mod ui;
 pub mod sysinfo;
 pub mod svs;
 pub mod svs_lab;
+pub mod rx;
 mod sink;
 mod textconv;
 pub mod trascrizione;
