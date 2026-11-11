@@ -9,12 +9,21 @@ use crate::ui::theme::Palette;
 use crate::ui::model::{PdfMode, FileState};
 use std::path::Path;
 
-pub const MERGE: &str = "M6 3v5a4 4 0 0 0 4 4h4a4 4 0 0 1 4 4v5M18 3v5a4 4 0 0 1-4 4M15 18l3 3 3-3";
+// Le icone delle cinque attività del PDF: il tratto e la parte piena (il foglio che ne esce).
+pub const CONVERT: &str = "M3 3.5h7v9H3z M14 11.5h7v9h-7z M17.5 8V6.5A2.5 2.5 0 0 0 15 4h-2 M14 2l-2 2 2 2 M6.5 16v1.5A2.5 2.5 0 0 0 9 20h2 M10 18l2 2-2 2";
+pub const CONVERT_FILL: &str = "M14 11.5h7v9h-7z";
+pub const MERGE: &str = "M3 3h6v6H3z M15 3h6v6h-6z M6 9v1.5a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V9 M12 13.5V15 M8.5 15h7v6h-7z";
+pub const MERGE_FILL: &str = "M8.5 15h7v6h-7z";
+pub const SPLIT: &str = "M5 3h14v6H5z M5 15h14v6H5z M2.5 12h2.5 M8.5 12h2.5 M14.5 12h2.5 M20 12h1.5";
+pub const SPLIT_FILL: &str = "M5 15h14v6H5z";
+pub const PAGES: &str = "M4 3h6v8H4z M14 3h6v8h-6z M4 13h6v8H4z M14 13h6v8h-6z";
+pub const PAGES_FILL: &str = "M14 13h6v8h-6z";
+pub const SHRINK: &str = "M5 9.5h14v5H5z M12 2v5 M9.5 4.5 12 7l2.5-2.5 M12 22v-5 M9.5 19.5 12 17l2.5 2.5";
+pub const SHRINK_FILL: &str = "M5 9.5h14v5H5z";
+/// Le forbici della striscia di «Dividi» (tra una pagina e l'altra).
 pub const SCISSORS: &str = "M4 6a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0zM4 18a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0zM8.2 7.6 20 18M8.2 16.4 20 6";
 pub const GRIP: &str = "M9 6v.1M15 6v.1M9 12v.1M15 12v.1M9 18v.1M15 18v.1";
 pub const UP: &str = "M6 15l6-6 6 6";
-pub const PAGES: &str = "M7 3h10a1 1 0 0 1 1 1v13H6V4a1 1 0 0 1 1-1zM6 17v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3M9 8h6M9 12h6";
-pub const SHRINK: &str = "M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5M9 9 3 3M15 9l6-6M9 15l-6 6M15 15l6 6";
 pub const ROTATE_R: &str = "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7";
 pub const ROTATE_L: &str = "M4 11a8 8 0 1 1 2.3 5.7M4 4v7h7";
 pub const EXTRACT: &str = "M4 4h10v10H4zM10 10h10v10H10zM14 14l-3-3";
@@ -38,12 +47,21 @@ pub fn go_icon(app: &App) -> &'static str {
     }
     match app.pdf_mode() {
         PdfMode::Merge => MERGE,
-        PdfMode::Split => SCISSORS,
+        PdfMode::Split => SPLIT,
         PdfMode::Pages => PAGES,
         PdfMode::Compress => SHRINK,
         PdfMode::Convert => ic::CONVERT,
     }
 }
+
+/// Icona (tratto e parte piena), colore e nome di ogni attività del PDF, nell'ordine dei pulsanti.
+pub const MODES: [(PdfMode, &str, &str, Rgb, &str); 5] = [
+    (PdfMode::Convert, CONVERT, CONVERT_FILL, (0x25, 0x63, 0xB8), "Converti"),
+    (PdfMode::Merge, MERGE, MERGE_FILL, (0x1E, 0x8A, 0x55), "Unisci"),
+    (PdfMode::Split, SPLIT, SPLIT_FILL, (0xD4, 0x57, 0x0E), "Dividi"),
+    (PdfMode::Pages, PAGES, PAGES_FILL, (0x66, 0x3F, 0xC0), "Pagine"),
+    (PdfMode::Compress, SHRINK, SHRINK_FILL, (0x0E, 0x7C, 0x86), "Comprimi"),
+];
 
 /// Il colore del file `n` della coda (il segno sulle sue pagine nel file unito).
 pub fn file_color(pal: &Palette, n: usize) -> Rgb {
@@ -101,29 +119,50 @@ pub fn paper(f: &mut Frame, app: &App, path: &Path, page: usize, r: R, mark: Opt
 }
 
 /// I cinque pulsanti grandi, tre sopra e due sotto: Converti, Unisci, Dividi, Pagine, Comprimi.
+/// Ognuno ha la sua piastrella colorata; quello scelto prende il colore della sua attività.
 /// `h` è l'altezza di riferimento di un pulsante; restituisce l'altezza usata.
 pub fn modes(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, h: f32) -> f32 {
     let pal = f.pal;
+    let dark = f.theme.dark();
     let mode = app.pdf_mode();
     let gap = 8.0;
     let bw = (w - 2.0 * gap) / 3.0;
-    let bh = (h * 0.8).round();
-    let isz = (bh * 0.37).round();
-    let all = [(PdfMode::Convert, ic::CONVERT, "Converti"), (PdfMode::Merge, MERGE, "Unisci"), (PdfMode::Split, SCISSORS, "Dividi"), (PdfMode::Pages, PAGES, "Pagine"), (PdfMode::Compress, SHRINK, "Comprimi")];
-    for (k, (m, icon, label)) in all.into_iter().enumerate() {
+    let bh = (h * 0.9).round();
+    let ts = (bh * 0.6).round();
+    let isz = (ts * 0.76).round();
+    let lh = 16.0;
+    for (k, (m, stroke, fill, base, label)) in MODES.into_iter().enumerate() {
         let r = (x + (k % 3) as f32 * (bw + gap), y + (k / 3) as f32 * (bh + gap), bw, bh);
         let act = Act::PdfMode(m);
         let on = mode == m;
+        let c = if dark { mix(base, (255, 255, 255), 0.28) } else { base };
         if on {
-            f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(pal.alt), Some((pal.primary, 2.0)));
+            f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(mix(c, pal.surface, if dark { 0.82 } else { 0.9 })), Some((c, 2.0)));
         } else {
-            let bg = if f.hovered(&act) { mix(pal.alt, pal.surface, 0.5) } else { pal.surface };
+            let bg = if f.hovered(&act) { mix(c, pal.surface, if dark { 0.9 } else { 0.95 }) } else { pal.surface };
             f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(bg), Some((pal.border, 1.0)));
         }
-        let c = if on { pal.primary } else { pal.text };
-        let top = r.1 + (bh - isz - 4.0 - 20.0) / 2.0;
-        f.icon(icon, r.0 + (bw - isz) / 2.0, top, isz, c);
-        f.text_c(label, (r.0, top + isz + 4.0, bw, 20.0), (bh * 0.23).clamp(13.0, 15.0), if on { SEMI } else { SANS }, c);
+        let top = r.1 + (bh - ts - 3.0 - lh) / 2.0;
+        let tx = r.0 + (bw - ts) / 2.0;
+        let rad = (ts * 0.27).round();
+        let (tile, ink, tint) = if on {
+            let ink = if dark { pal.surface } else { (255, 255, 255) };
+            (c, ink, mix(c, ink, 0.55))
+        } else {
+            (mix(c, pal.surface, if dark { 0.8 } else { 0.86 }), c, mix(c, pal.surface, 0.62))
+        };
+        f.p.rrect(tx, top, ts, ts, rad, Some(tile), None);
+        let pad = (ts - isz) / 2.0;
+        f.p.icon_fill(fill, tx + pad, top + pad, isz, tint);
+        f.icon(stroke, tx + pad, top + pad, isz, ink);
+        let tc = if !on {
+            pal.text
+        } else if dark {
+            mix(c, (255, 255, 255), 0.45)
+        } else {
+            mix(c, (0, 0, 0), 0.15)
+        };
+        f.text_c(label, (r.0, top + ts + 3.0, bw, lh), 12.0, if on { SEMI } else { SANS }, tc);
         f.focus_ring(r, 8.0, &act);
         f.hit(r, act);
     }
