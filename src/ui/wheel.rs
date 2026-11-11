@@ -693,6 +693,8 @@ fn icon_of(id: &str) -> &'static str {
         "dup" => assets::COPY,
         "path" => assets::LINK,
         "zip" => assets::FOLDER,
+        "pack" => assets::LOCK,
+        "verify-pack" => assets::SHIELD,
         "upper" | "lower" => assets::TRANSCRIBE,
         _ => assets::FILE,
     }

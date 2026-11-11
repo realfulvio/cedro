@@ -2073,3 +2073,19 @@ In alto a sinistra di ogni pannello, nell'ordine della coda	Top left of each pan
 Sui pannelli di microscopia che dicono quanto è grande un pixel	On microscopy panels that state the pixel size
   cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra]	  cedro figura <image>… [--colonna] [--600] [--senza-lettere] [--senza-barra]
                    la figura per un articolo: pannelli A, B, C in un TIFF a 300 dpi largo 17,5 cm	                   a figure for a paper: panels A, B, C in a 300 dpi TIFF, 17.5 cm wide
+Pacchetto	Package
+Verifica il pacchetto di dati	Verify the data package
+impronte SHA-256 di ogni file	SHA-256 of every file
+Pacchetto con {#} file ({}), impronta SHA-256 di ognuno.	Package with {} files ({}), SHA-256 of each one.
+Impronta dello ZIP: {}… (nel file .sha256 accanto).	ZIP fingerprint: {}… (in the .sha256 file alongside).
+Per firmarlo: Firma digitale.	To sign it: Digital signature.
+Pacchetto integro: {#} file, tutte le impronte SHA-256 tornano.	Package intact: {} files, every SHA-256 matches.
+Pacchetto NON integro: {#} file a posto.	Package NOT intact: {} files fine.
+Cambiati: {}.	Changed: {}.
+Mancano: {}.	Missing: {}.
+Aggiunti dopo: {}.	Added later: {}.
+nessun file da mettere nel pacchetto	no files to put in the package
+questo ZIP non è un pacchetto di dati: manca l'elenco delle impronte (manifest-sha256.txt)	this ZIP is not a data package: the fingerprint list (manifest-sha256.txt) is missing
+l'elenco delle impronte è vuoto	the fingerprint list is empty
+  cedro pacchetto <file o cartella>…   pacchetto di dati (ZIP BagIt con l'impronta SHA-256 di ogni file)	  cedro pacchetto <file or folder>…   data package (BagIt ZIP with the SHA-256 of every file)
+  cedro tool <pacchetto.zip> verify-pack   controlla che nessun file del pacchetto sia cambiato	  cedro tool <package.zip> verify-pack   checks that no file in the package has changed

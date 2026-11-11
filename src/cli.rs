@@ -54,6 +54,11 @@ pub fn run() -> i32 {
             return if bad { 1 } else { 0 };
         }
         "trascrivi" if positional.len() >= 2 => return transcribe(&positional[1..], &args),
+        // Il pacchetto dei dati (BagIt con le impronte SHA-256): file e cartelle in uno ZIP.
+        "pacchetto" if positional.len() >= 2 => {
+            let files: Vec<std::path::PathBuf> = positional[1..].iter().map(std::path::PathBuf::from).collect();
+            cedro::package_paths(&files, None)
+        }
         // La figura per un articolo: i file nell'ordine dato diventano i pannelli A, B, C.
         "figura" if positional.len() >= 2 => {
             let mut figura = cedro::figura::Opzioni::default();
@@ -194,6 +199,8 @@ Cedro — conversione locale, senza upload.
                    --voci dice quante persone parlano (auto le conta da solo, 1 non le riconosce)
   cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra]
                    la figura per un articolo: pannelli A, B, C in un TIFF a 300 dpi largo 17,5 cm
+  cedro pacchetto <file o cartella>…   pacchetto di dati (ZIP BagIt con l'impronta SHA-256 di ogni file)
+  cedro tool <pacchetto.zip> verify-pack   controlla che nessun file del pacchetto sia cambiato
   cedro firma <file>…   verifica le firme digitali (.p7m, .p7s, .m7m, .tsd, .tsr, PDF firmati)
   cedro verifica <file> apre il visualizzatore dei file firmati (come il doppio clic)
 

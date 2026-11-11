@@ -84,6 +84,7 @@ const MINUSC: Glyph = g("M4 14.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0z M11 11v7 M
 const UNISCI: Glyph = g("M5 4h9v6H5z M5 14h9v6H5z M17 7h2v10h-2 M19 12h2", "");
 const DIVIDI: Glyph = g("M6 3h12v7H6z M6 14h12v7H6z M3 12h2 M8 12h2 M14 12h2 M19 12h2", "");
 const FIGURA: Glyph = g("M3 3h8v8H3z M13 3h8v8h-8z M3 13h8v8H3z M13 13h8v8h-8z M5 9.5h3", "");
+const VERIFICA: Glyph = g("M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6l8-3z M8.5 12l2.5 2.5 4.5-5", "");
 const ALTRO: Glyph = g("M6 3h8l4 4v14H6z M14 3v5h4", "");
 
 const fn v(label: &'static str, hint: &'static str, glyph: Glyph, color: Rgb) -> Voce {
@@ -158,6 +159,7 @@ pub fn voce(kind: Kind, id: &str) -> Voce {
         (Kind::Archive, "z-mp3") => v("Audio in MP3", "tutti gli audio", MP3, AUDIO),
         (Kind::Archive, "z-wav") => v("Audio in WAV", "", WAV, COMP),
         (Kind::Archive, "z-pdf") => v("Documenti in PDF", "Word, ODT, testi", DOCPDF, PDF),
+        (Kind::Archive, "verify-pack") => v("Verifica il pacchetto di dati", "impronte SHA-256 di ogni file", VERIFICA, LAB),
         _ => fallback,
     }
 }
