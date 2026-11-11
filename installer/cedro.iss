@@ -282,10 +282,13 @@ begin
   desc.Caption := text;
 end;
 
+// La pagina serve solo alla prima installazione fatta a mano: negli aggiornamenti, in silenzio e con /TEMA= non si
+// crea nemmeno (così quei percorsi restano identici a prima).
 procedure InitializeWizard;
 var
   i, gap, w: Integer;
 begin
+  if WasInstalled or WizardSilent or (ThemeParam <> '') then Exit;
   for i := 1 to 3 do
   begin
     ExtractTemporaryFile('std-' + IntToStr(i) + '.bmp');
@@ -304,21 +307,13 @@ begin
   end;
 end;
 
-// La pagina serve solo alla prima installazione fatta a mano: negli aggiornamenti, in silenzio e con /TEMA= no.
-function ShouldSkipPage(PageID: Integer): Boolean;
-begin
-  Result := False;
-  if (ThemePage <> nil) and (PageID = ThemePage.ID) then
-    Result := WasInstalled or WizardSilent or (ThemeParam <> '');
-end;
-
 // Cedro 4 Labs scelto nella pagina o da riga di comando: Cedro, al primo avvio, accende il tema (come per Bondeno).
 procedure LeaveThemeNote;
 var
   labs: Boolean;
 begin
   labs := CompareText(ThemeParam, 'labs') = 0;
-  if (ThemeParam = '') and (ThemePage <> nil) and (not WasInstalled) and (not WizardSilent) then
+  if ThemePage <> nil then
     labs := RadioLabs.Checked;
   if labs then
   begin
