@@ -49,7 +49,7 @@ pub fn list(kind: Kind, mode: Mode) -> Vec<Slice> {
         return out;
     }
     // Le voci dei vetrini stanno nel pannello, dove si vede se in coda c'è un vetrino.
-    base.iter().filter(|s| !engine::SOLO_VETRINI.contains(&s.id)).copied().collect()
+    base.iter().filter(|s| !engine::SOLO_VETRINI.contains(&s.id) && !engine::SOLO_DICOM.contains(&s.id)).copied().collect()
 }
 
 /// Dove sta il mouse, o cosa si è toccato.

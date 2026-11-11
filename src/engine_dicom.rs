@@ -261,6 +261,27 @@ mod prove {
     }
 
     #[test]
+    fn le_radiografie_per_il_proprietario_hanno_il_logo_che_poi_si_ricorda() {
+        let dir = scratch();
+        let src = series(&dir);
+        let logo = dir.join("logo.png");
+        image::RgbImage::from_pixel(60, 30, image::Rgb([0, 120, 200])).save(&logo).unwrap();
+        let salvato = dir.join("config").join("logo-clinica.png");
+        let mut o = opts();
+        o.rx_clinica = "Clinica Veterinaria Estense".into();
+        let out = super::super::rx_in(&[src.clone(), logo], Some(&dir), &o, &salvato).unwrap();
+        assert_eq!(out.path.file_name().unwrap(), "fido-radiografie.pdf");
+        assert!(out.message.contains("3 pagine") && out.message.contains("logo"), "{}", out.message);
+        let pdf = std::fs::read(&out.path).unwrap();
+        assert!(pdf.starts_with(b"%PDF"));
+        assert!(salvato.exists());
+        // La volta dopo basta il DICOM: il logo è quello ricordato.
+        let again = super::super::rx_in(&[src], Some(&dir), &o, &salvato).unwrap();
+        assert!(again.message.contains("con il logo"), "{}", again.message);
+        assert!(super::super::rx_in(&[dir.join("logo.png")], Some(&dir), &o, &salvato).is_err());
+    }
+
+    #[test]
     fn togli_dati_nascosti_fa_un_dicom_anonimo() {
         let dir = scratch();
         let src = series(&dir);

@@ -2133,3 +2133,17 @@ nessuna zona di 2,37 mm² piena di tessuto	no 2.37 mm² area full of tissue
 Referti veterinari	Veterinary reports
 termini di anatomia patologica	pathology terms
   cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--glossario veterinaria] [--cpu]	  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--glossario veterinaria] [--cpu]
+Proprietario	Owner
+Radiografie per il proprietario	X-rays for the owner
+PDF con il logo della clinica	PDF with the clinic logo
+Nome della clinica	Clinic name
+In cima a ogni pagina, accanto al logo; per il logo metti in coda anche la sua immagine. Cedro li ricorda	At the top of every page, next to the logo; for the logo add its image to the queue too. Cedro remembers both
+per esempio Clinica Veterinaria San Marco	for example San Marco Veterinary Clinic
+Spunta almeno una radiografia DICOM.	Tick at least one DICOM X-ray.
+nessuna radiografia DICOM in coda	no DICOM X-rays in the queue
+nessuna radiografia nei file	no X-rays in the files
+PDF per il proprietario, {#} pagine, con il logo della clinica.	PDF for the owner, {} pages, with the clinic logo.
+PDF per il proprietario, {#} pagina, con il logo della clinica.	PDF for the owner, {} page, with the clinic logo.
+PDF per il proprietario, {#} pagine.	PDF for the owner, {} pages.
+PDF per il proprietario, {#} pagina.	PDF for the owner, {} page.
+Per il logo metti in coda anche la sua immagine: Cedro poi se lo ricorda.	For the logo add its image to the queue too: Cedro will remember it.

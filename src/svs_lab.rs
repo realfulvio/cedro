@@ -4,7 +4,7 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use image::{Rgb, RgbImage};
 
@@ -628,6 +628,7 @@ pub fn consulto(path: &Path, out: &Path, codice: &str, avanzamento: &dyn Fn(f32)
 #[cfg(test)]
 mod prove {
     use super::*;
+    use std::path::PathBuf;
 
     fn fixture(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/svs").join(name)
@@ -703,7 +704,7 @@ mod prove_vere {
     #[ignore]
     fn file_vero() {
         let Ok(p) = std::env::var("CEDRO_SVS") else { return };
-        let p = PathBuf::from(p);
+        let p = std::path::PathBuf::from(p);
         let dir = p.with_extension("prove");
         let _ = fs::create_dir_all(&dir);
         let t0 = std::time::Instant::now();

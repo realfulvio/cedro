@@ -75,6 +75,7 @@ const IMAGE_TOOLS: &[Slice] = &[
     Slice { id: "tiles", label: "Tessere AI" },
     Slice { id: "mitosi", label: "Mitosi" },
     Slice { id: "consult", label: "Consulto" },
+    Slice { id: "rx", label: "Proprietario" },
 ];
 const TEXT_CONVERT: &[Slice] = &[
     Slice { id: "txt", label: "TXT" },
@@ -934,6 +935,8 @@ pub struct Options {
     pub figura: crate::figura::Opzioni,
     /// Le tessere per l'intelligenza artificiale dai vetrini.
     pub tessere: crate::svs_lab::Tessere,
+    /// Le radiografie per il proprietario: il nome della clinica in cima alla pagina.
+    pub rx_clinica: String,
     /// Unire e dividere i PDF.
     pub pdf_pages: PdfPages,
     /// Le pagine di un PDF (ruotare, togliere, estrarre, numeri e filigrana) e la compressione.
@@ -1027,6 +1030,7 @@ impl Default for Options {
             micro_16bit: false,
             figura: crate::figura::Opzioni::default(),
             tessere: crate::svs_lab::Tessere::default(),
+            rx_clinica: String::new(),
             pdf_pages: PdfPages::default(),
             pdf_edit: PdfEdit::default(),
         }
@@ -1197,6 +1201,50 @@ pub fn package_with(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) -
             size_words(fatto.byte),
             &fatto.impronta[..16]
         );
+        Ok(Output { path: out, message })
+    })();
+    let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
+    finish_outputs(result, used)
+}
+
+/// Le voci che valgono solo con un DICOM in coda (nel pannello, mai nella ruota).
+pub const SOLO_DICOM: &[&str] = &["rx"];
+
+/// Dove si ricorda il logo della clinica per le radiografie del proprietario.
+pub(crate) fn logo_clinica() -> PathBuf {
+    config_dir().join("logo-clinica.png")
+}
+
+/// Le radiografie per il proprietario: un PDF A4 con tutte le immagini dei DICOM dati, i dati
+/// dell'animale in chiaro e il logo della clinica (un'immagine non DICOM in coda, che si ricorda).
+pub fn rx_with(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    rx_in(paths, out_dir, opts, &logo_clinica())
+}
+
+fn rx_in(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options, logo_salvato: &Path) -> CedroResult<Output> {
+    let dicom: Vec<PathBuf> = paths.iter().filter(|p| crate::rx::e_dicom(p)).cloned().collect();
+    let Some(first) = dicom.first().cloned() else {
+        return Err(err("nessuna radiografia DICOM in coda"));
+    };
+    let _job = crate::resources::acquire(None).expect("uncancellable job");
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), guarded: true, ..Default::default() }));
+    let mut restore = RestoreNaming(Some(before));
+    let result = (|| {
+        let dir = match out_dir {
+            Some(d) => {
+                fs::create_dir_all(d).map_err(|e| err(e.to_string()))?;
+                d.to_path_buf()
+            }
+            None => output_dir(&first, &crate::settings::read_settings())?,
+        };
+        let logo = crate::rx::logo(paths, logo_salvato);
+        let (bytes, pagine, animale) = crate::rx::pdf(&dicom, &opts.rx_clinica, logo.as_ref(), &|p| crate::progress::report(p)).map_err(err)?;
+        let nome = crate::rx::nome_file(&animale).unwrap_or_else(|| stem(&first));
+        let out = reserve(&dir, &format!("{nome}-radiografie"), "pdf")?;
+        write_bytes(&out, &bytes)?;
+        crate::progress::report(1.0);
+        let mut message = format!("PDF per il proprietario, {pagine} {}", if pagine == 1 { "pagina" } else { "pagine" });
+        message.push_str(if logo.is_some() { ", con il logo della clinica." } else { ". Per il logo metti in coda anche la sua immagine: Cedro poi se lo ricorda." });
         Ok(Output { path: out, message })
     })();
     let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));

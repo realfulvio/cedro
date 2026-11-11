@@ -46,6 +46,8 @@ pub struct Settings {
     pub glossario_vet: bool,
     /// Trascrizione: altre parole da suggerire al motore, separate da virgole (nomi, farmaci, sigle).
     pub glossario_termini: String,
+    /// Radiografie per il proprietario: il nome della clinica in cima alla pagina.
+    pub nome_clinica: String,
     /// Se il file esiste già lo sostituisce, invece di aggiungere un numero.
     pub replace: bool,
     /// Risoluzione di PDF in JPG, in dpi (100, 144, 200 o 300).
@@ -113,6 +115,7 @@ impl Default for Settings {
             calibrazione_10x: String::new(),
             glossario_vet: false,
             glossario_termini: String::new(),
+            nome_clinica: String::new(),
             replace: false,
             pdf_dpi: 144,
             compress: 1,
@@ -222,6 +225,7 @@ impl Settings {
                 "calibrazione_10x" => s.calibrazione_10x = value.trim().to_string(),
                 "glossario_vet" => s.glossario_vet = flag(value).unwrap_or(s.glossario_vet),
                 "glossario_termini" => s.glossario_termini = value.trim().to_string(),
+                "nome_clinica" => s.nome_clinica = value.trim().to_string(),
                 "pdf_dpi" => {
                     if let Ok(n) = value.parse::<u32>() {
                         s.pdf_dpi = n.clamp(72, 300);
@@ -290,6 +294,7 @@ impl Settings {
             ("calibrazione_10x", self.calibrazione_10x.clone()),
             ("glossario_vet", b(self.glossario_vet).into()),
             ("glossario_termini", self.glossario_termini.clone()),
+            ("nome_clinica", self.nome_clinica.clone()),
             ("pdf_dpi", self.pdf_dpi.to_string()),
             ("compress", self.compress.to_string()),
             ("ocr_lang", self.ocr_lang.clone()),
