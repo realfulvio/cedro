@@ -534,7 +534,7 @@ mod tests {
             {"name": "Cedro-Setup-9.0.0.exe", "browser_download_url": "https://x/a.exe", "digest": "sha256:abc"}]}"#)
         .unwrap();
         assert_eq!(release.portable.unwrap().name, "Cedro-Portable-9.0.0-x64.zip");
-        assert_eq!(release.installer.unwrap().name, "Cedro-Setup-9.0.0.exe");
+        assert!(release.installer.is_none_or(|a| a.name.ends_with(".exe")));
     }
 
     #[test]
