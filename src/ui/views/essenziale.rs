@@ -18,12 +18,14 @@ fn nav(f: &mut Frame, app: &App) {
     f.window_controls(f.w, 0.0, 48.0, pal.text, pal.alt);
     // Le attività stanno ogni 64: il riquadro della scelta scivola da una all'altra.
     let ys = [78.0, 142.0, 206.0, 270.0, 334.0];
-    let cur = Activity::ALL.iter().position(|a| *a == app.activity).unwrap_or(0);
+    let acts = f.theme.activities();
+    let ys = &ys[..acts.len()];
+    let cur = acts.iter().position(|a| *a == app.activity).unwrap_or(0);
     let at = f.glide(&Act::Activity(Activity::Convert), cur as f32).clamp(0.0, (ys.len() - 1) as f32);
     let (i0, i1) = (at.floor() as usize, at.ceil() as usize);
     let k = at - i0 as f32;
     let py = ys[i0] + (ys[i1] - ys[i0]) * k;
-    let accent = mix(f.act_color(Activity::ALL[i0]), f.act_color(Activity::ALL[i1]), k);
+    let accent = mix(f.act_color(acts[i0]), f.act_color(acts[i1]), k);
     f.p.rrect(12.0, py, 242.0, 54.0, 10.0, Some(mix(accent, pal.surface, 0.88)), None);
     f.p.rrect(10.0, py + 14.0, 4.0, 26.0, 2.0, Some(accent), None);
     let item = |f: &mut Frame, y: f32, icon: &str, label: &str, on: bool, act: Act, tint: Option<Rgb>| {
@@ -42,7 +44,7 @@ fn nav(f: &mut Frame, app: &App) {
         f.focus_ring(r, 8.0, &act);
         f.hit(r, act);
     };
-    for (a, y) in Activity::ALL.iter().zip(ys) {
+    for (a, y) in acts.iter().zip(ys.iter().copied()) {
         let tint = Some(f.act_color(*a));
         item(f, y, a.icon(), a.name(), app.activity == *a, Act::Activity(*a), tint);
     }

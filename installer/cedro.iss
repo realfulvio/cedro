@@ -1,4 +1,6 @@
 ; Installer di Cedro per Windows (x64 e, con /DArm64, ARM64). Compilazione: installer\build.ps1 [-Arm64]
+; Pagina «Come lavori con Cedro?» (solo prima installazione a mano): Cedro standard o Cedro 4 Labs, con miniature che si muovono.
+; Chi sceglie Labs, o installa con /TEMA=labs, lascia il file «da-labs»: al primo avvio Cedro accende il tema.
 ; Il tema «Comune di Bondeno» è dentro Cedro (Impostazioni > Aspetto). Chi aveva la vecchia edizione Bondeno si
 ; aggiorna con la copia «Cedro-Bondeno-Setup-<versione>.exe» di questo stesso file: se l'installatore si chiama
 ; così, lascia il file «da-bondeno» e Cedro, al primo avvio, accende il tema Bondeno.
@@ -10,7 +12,7 @@
   #define BuildDir "..\target\release"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.39.1"
+  #define AppVersion "0.40.0"
 #endif
 
 [Setup]
@@ -64,6 +66,12 @@ italian.GroupStartup=Avvio:
 italian.RunView=Scegli come usare Cedro (Semplice o Completa)
 italian.RunStart=Avvia Cedro
 italian.RunGuide=Guarda come funziona (guida animata)
+italian.ThemeTitle=Come lavori con Cedro?
+italian.ThemeDesc=Scegli l'aspetto con cui parte. Lo cambi quando vuoi in Impostazioni, Aspetto.
+italian.ThemeStd=Cedro standard
+italian.ThemeStdText=Per l'ufficio e per tutti i giorni: foto, documenti, PDF, audio e video, trascrizione, YouTube e video dal web.
+italian.ThemeLabs=Cedro 4 Labs
+italian.ThemeLabsText=Per il laboratorio e la sua segreteria: solo gli strumenti utili, con colori da bancone e pulsanti grandi. Niente YouTube.
 english.TaskDesktop=Create a desktop shortcut
 english.GroupLinks=Shortcuts:
 english.TaskAutostart=Start Cedro when Windows starts
@@ -71,6 +79,12 @@ english.GroupStartup=Startup:
 english.RunView=Choose how to use Cedro (Simple or Full)
 english.RunStart=Start Cedro
 english.RunGuide=See how it works (animated guide)
+english.ThemeTitle=How do you work with Cedro?
+english.ThemeDesc=Choose the look Cedro starts with. You can change it any time in Settings, Appearance.
+english.ThemeStd=Cedro standard
+english.ThemeStdText=For the office and everyday use: photos, documents, PDF, audio and video, transcription, YouTube and web video.
+english.ThemeLabs=Cedro 4 Labs
+english.ThemeLabsText=For the laboratory and its office: only the useful tools, with bench-friendly colors and big buttons. No YouTube.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:TaskDesktop}"; GroupDescription: "{cm:GroupLinks}"
@@ -81,6 +95,14 @@ Source: "{#BuildDir}\cedro.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\Licenze di terze parti.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#IconFile}"; DestDir: "{app}"; DestName: "cedro.ico"; Flags: ignoreversion
+
+; Le miniature della pagina «Come lavori con Cedro?»: fotografie delle finestre vere (examples/installer_frames.rs).
+Source: "img\std-1.bmp"; Flags: dontcopy
+Source: "img\std-2.bmp"; Flags: dontcopy
+Source: "img\std-3.bmp"; Flags: dontcopy
+Source: "img\labs-1.bmp"; Flags: dontcopy
+Source: "img\labs-2.bmp"; Flags: dontcopy
+Source: "img\labs-3.bmp"; Flags: dontcopy
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\cedro.exe"; Parameters: "apri"; IconFilename: "{app}\cedro.ico"
@@ -170,6 +192,139 @@ begin
   Result := True;
   if WizardSilent and WasInstalled then
     Result := FileExists(ExpandConstant('{autodesktop}\{#AppName}.lnk'));
+end;
+
+// ---- Pagina «Come lavori con Cedro?»: Cedro standard o Cedro 4 Labs, con due miniature che si muovono ----
+var
+  ThemePage: TWizardPage;
+  RadioStd, RadioLabs: TNewRadioButton;
+  ImgStd, ImgLabs: TBitmapImage;
+  ThemeFrame: Integer;
+  ThemeTimer: LongWord;
+
+function SetTimer(hWnd: LongWord; nIDEvent, uElapse: LongWord; lpTimerFunc: LongWord): LongWord;
+  external 'SetTimer@user32.dll stdcall';
+function KillTimer(hWnd: LongWord; uIDEvent: LongWord): Boolean;
+  external 'KillTimer@user32.dll stdcall';
+
+// L'aspetto scelto da riga di comando: /TEMA=labs (per chi installa Cedro su tanti PC, anche in silenzio).
+function ThemeParam: String;
+begin
+  Result := Trim(ExpandConstant('{param:TEMA|}'));
+end;
+
+procedure ShowThemeFrame(n: Integer);
+begin
+  ImgStd.Bitmap.LoadFromFile(ExpandConstant('{tmp}\std-' + IntToStr(n) + '.bmp'));
+  ImgLabs.Bitmap.LoadFromFile(ExpandConstant('{tmp}\labs-' + IntToStr(n) + '.bmp'));
+end;
+
+procedure ThemeTick(Wnd: LongWord; Msg: LongWord; Event: LongWord; Time: LongWord);
+begin
+  ThemeFrame := (ThemeFrame mod 3) + 1;
+  try
+    ShowThemeFrame(ThemeFrame);
+  except
+    // Una miniatura che non si carica non deve mai fermare l'installazione.
+  end;
+end;
+
+procedure StartThemeTimer;
+begin
+  if ThemeTimer <> 0 then Exit;
+  ThemeTimer := SetTimer(0, 0, 1400, CreateCallback(@ThemeTick));
+end;
+
+procedure StopThemeTimer;
+begin
+  if ThemeTimer = 0 then Exit;
+  KillTimer(0, ThemeTimer);
+  ThemeTimer := 0;
+end;
+
+procedure PickStd(Sender: TObject);
+begin
+  RadioStd.Checked := True;
+end;
+
+procedure PickLabs(Sender: TObject);
+begin
+  RadioLabs.Checked := True;
+end;
+
+procedure MakeThemeColumn(left, width: Integer; var radio: TNewRadioButton; var img: TBitmapImage;
+  caption, text: String; click: TNotifyEvent);
+var
+  desc: TNewStaticText;
+begin
+  radio := TNewRadioButton.Create(ThemePage);
+  radio.Parent := ThemePage.Surface;
+  radio.Left := left;
+  radio.Top := 0;
+  radio.Width := width;
+  radio.Caption := caption;
+  radio.Font.Style := [fsBold];
+  img := TBitmapImage.Create(ThemePage);
+  img.Parent := ThemePage.Surface;
+  img.Left := left;
+  img.Top := radio.Height + ScaleY(8);
+  img.Width := width;
+  img.Height := (width * 2) div 3;
+  img.Stretch := True;
+  img.OnClick := click;
+  desc := TNewStaticText.Create(ThemePage);
+  desc.Parent := ThemePage.Surface;
+  desc.Left := left;
+  desc.Top := img.Top + img.Height + ScaleY(8);
+  desc.Width := width;
+  desc.AutoSize := True;
+  desc.WordWrap := True;
+  desc.Caption := text;
+end;
+
+// La pagina serve solo alla prima installazione fatta a mano: negli aggiornamenti, in silenzio e con /TEMA= non si
+// crea nemmeno (così quei percorsi restano identici a prima).
+procedure InitializeWizard;
+var
+  i, gap, w: Integer;
+begin
+  if WasInstalled or WizardSilent or (ThemeParam <> '') then Exit;
+  for i := 1 to 3 do
+  begin
+    ExtractTemporaryFile('std-' + IntToStr(i) + '.bmp');
+    ExtractTemporaryFile('labs-' + IntToStr(i) + '.bmp');
+  end;
+  ThemePage := CreateCustomPage(wpSelectDir, CustomMessage('ThemeTitle'), CustomMessage('ThemeDesc'));
+  gap := ScaleX(16);
+  w := (ThemePage.SurfaceWidth - gap) div 2;
+  MakeThemeColumn(0, w, RadioStd, ImgStd, CustomMessage('ThemeStd'), CustomMessage('ThemeStdText'), @PickStd);
+  MakeThemeColumn(w + gap, w, RadioLabs, ImgLabs, CustomMessage('ThemeLabs'), CustomMessage('ThemeLabsText'), @PickLabs);
+  RadioStd.Checked := True;
+  ThemeFrame := 1;
+  try
+    ShowThemeFrame(1);
+  except
+  end;
+end;
+
+// Cedro 4 Labs scelto nella pagina o da riga di comando: Cedro, al primo avvio, accende il tema (come per Bondeno).
+procedure LeaveThemeNote;
+var
+  labs: Boolean;
+begin
+  labs := CompareText(ThemeParam, 'labs') = 0;
+  if ThemePage <> nil then
+    labs := RadioLabs.Checked;
+  if labs then
+  begin
+    ForceDirectories(ExpandConstant('{userappdata}\Cedro'));
+    SaveStringToFile(ExpandConstant('{userappdata}\Cedro\da-labs'), '', False);
+  end;
+end;
+
+procedure DeinitializeSetup;
+begin
+  StopThemeTimer;
 end;
 
 // Le Cedro fino alla 0.26.2, detto «sì» all'aggiornamento, lanciano questo installatore senza parametri
@@ -276,6 +431,10 @@ procedure CurPageChanged(CurPageID: Integer);
 var
   value: String;
 begin
+  if ThemePage <> nil then
+  begin
+    if CurPageID = ThemePage.ID then StartThemeTimer else StopThemeTimer;
+  end;
   if (CurPageID <> wpSelectTasks) or TasksFromPc or not WasInstalled then Exit;
   TasksFromPc := True;
   if RegQueryStringValue(HKCU, RUN_KEY, 'Cedro', value) then WizardSelectTasks('autostart')
@@ -410,6 +569,7 @@ begin
   OfferRemoveAllUsersCopy;
   ApplyAutostart;
   SaveLanguage;
+  LeaveThemeNote;
 end;
 
 function InitializeUninstall: Boolean;
