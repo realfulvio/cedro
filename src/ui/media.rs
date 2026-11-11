@@ -20,8 +20,37 @@ pub struct Loaded {
     /// Pagine dei PDF e dell'anteprima di testi e documenti.
     pub pages: Option<usize>,
     pub thumb: Option<Image>,
+    /// I vetrini digitali (.svs): livelli e riga di descrizione.
+    pub slide: Option<SlideInfo>,
     /// La scheda di audio, video e altri file.
     pub about: Option<super::preview::About>,
+}
+
+/// Quello che il pannello mostra di un vetrino: la riga della coda e le misure dei livelli.
+#[derive(Clone, Debug, Default)]
+pub struct SlideInfo {
+    /// La riga che lo descrive, in italiano e in inglese: «Aperio · 3 livelli · tessere JPEG · 20× (0,499 µm/px)».
+    pub summary: [String; 2],
+    /// Larghezza e altezza del livello di ogni scelta: Panoramica, Media, Piena (e quale livello è).
+    pub picks: [(usize, u32, u32); 3],
+    /// Le divisioni rispetto al pieno di ogni scelta (1 per il pieno).
+    pub ratios: [u32; 3],
+    pub label: bool,
+    pub macro_image: bool,
+}
+
+impl SlideInfo {
+    pub fn of(s: &crate::svs::Slide) -> SlideInfo {
+        use crate::svs::Pick;
+        let full = s.full().width.max(1);
+        let one = |p: Pick| {
+            let i = s.pick(p);
+            let l = &s.levels[i];
+            ((i, l.width, l.height), (full as f32 / l.width.max(1) as f32).round().max(1.0) as u32)
+        };
+        let (a, b, c) = (one(Pick::Overview), one(Pick::Medium), one(Pick::Full));
+        SlideInfo { summary: [s.summary(false), s.summary(true)], picks: [a.0, b.0, c.0], ratios: [a.1, b.1, c.1], label: s.label.is_some(), macro_image: s.macro_image.is_some() }
+    }
 }
 
 enum Job {
@@ -82,6 +111,13 @@ pub fn pdf_page_thumbs(path: &Path, pages: &[usize], side: f32, each: &mut dyn F
 
 pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
     use image::ImageDecoder;
+    // Un vetrino: la sua miniatura (o il livello più piccolo), mai il livello pieno; le misure sono quelle del pieno.
+    if crate::svs::is_slide(path) {
+        let s = crate::svs::Slide::open(path).ok()?;
+        let small = s.preview(path, side).ok()?;
+        let rgba = image::DynamicImage::ImageRgb8(small).to_rgba8();
+        return Some((Image::from_rgba(rgba.width(), rgba.height(), rgba.as_raw())?, (s.full().width, s.full().height)));
+    }
     // SVG, AVIF e JPEG XL non passano dal lettore del crate `image`.
     if matches!(crate::imgfmt::sniff_file(path), Some("svg" | "avif" | "jxl")) || matches!(engine::extension(path).as_str(), "svg" | "svgz") {
         let img = crate::imgfmt::open(path, false, Some(side)).ok()?;
@@ -113,6 +149,9 @@ fn info(path: &Path) -> Loaded {
             if let Some((thumb, size)) = image_thumb(path, THUMB) {
                 out.thumb = Some(thumb);
                 out.size = Some(size);
+            }
+            if crate::svs::is_slide(path) {
+                out.slide = crate::svs::Slide::open(path).ok().map(|s| SlideInfo::of(&s));
             }
         }
         Kind::Pdf => {

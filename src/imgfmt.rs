@@ -34,7 +34,8 @@ pub fn sniff(head: &[u8]) -> Option<&'static str> {
     if starts(b"BM") && head.len() > 14 {
         return Some("bmp");
     }
-    if starts(b"II*\0") || starts(b"MM\0*") {
+    // Anche BigTIFF (indirizzi a 64 bit: vetrini digitali, immagini oltre i 4 GB).
+    if starts(b"II*\0") || starts(b"MM\0*") || starts(b"II+\0") || starts(b"MM\0+") {
         return Some("tiff");
     }
     if starts(&[0, 0, 1, 0]) && head.len() >= 6 && head[4] > 0 {
@@ -126,6 +127,10 @@ pub fn open(path: &Path, straighten: bool, target_side: Option<u32>) -> Result<D
     let head = head_of(path);
     let ext = crate::engine::extension(path);
     let kind: &str = sniff(&head).unwrap_or(ext.as_str());
+    // Un vetrino digitale non si apre intero: si prende un livello che sta in memoria.
+    if kind == "tiff" && crate::svs::is_slide(path) {
+        return crate::svs::open_image(path, target_side);
+    }
     match kind {
         "svg" | "svgz" => open_svg(path, target_side),
         "avif" => open_avif(path),

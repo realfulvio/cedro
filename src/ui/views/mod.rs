@@ -369,12 +369,165 @@ pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32,
             let used = ch * 3.0 + gap * 2.0 + 12.0;
             used + note_lines(f, def.note, y + used, w)
         }
+        Control::Levels(choices) => slide_levels(f, app, def, choices, x, y, w, st),
         Control::Password => {
             f.text(def.title, x, y, w, 24.0, st.label, SANS, pal.text);
             f.field((x, y + 28.0, w, st.control_h), Field::Opt(def.opt), app.values.text(def), "nessuna", 16.0, true);
             let top = y + 28.0 + st.control_h + 8.0;
             28.0 + st.control_h + 8.0 + note_lines(f, def.note, top, w)
         }
+    }
+}
+
+/// Il colore dei vetrini digitali (il quadratino del riquadro «Vetrino» e l'etichetta nella coda).
+pub const SLIDE: super::gfx::Rgb = (0xB4, 0x41, 0x7A);
+
+/// Un numero con il separatore delle migliaia: 46.000 (in inglese 46,000).
+fn thousands(n: u32) -> String {
+    let sep = if crate::i18n::english() { ',' } else { '.' };
+    let d = n.to_string();
+    let mut out = String::new();
+    for (i, c) in d.chars().enumerate() {
+        if i > 0 && (d.len() - i) % 3 == 0 {
+            out.push(sep);
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Quanto pesa, a occhio, un livello di `pixels` pixel nel formato scelto (un vetrino colorato con l'ematossilina:
+/// rapporti misurati su CMU-1). Serve solo a dare l'ordine di grandezza accanto alla scelta.
+fn slide_weight(action: &str, quality: u8, pixels: u64) -> u64 {
+    let jpeg = 0.06 + 0.0025 * (quality.clamp(40, 95) as f64 - 40.0);
+    let per_pixel = match action {
+        "jpeg" | "compress" => jpeg,
+        "webp" => jpeg * 0.6,
+        "avif" => jpeg * 0.4,
+        "pdf" => 0.25,
+        "png" | "strip" | "half" | "gray" | "rot90" => 1.7,
+        "jxl" => 1.3,
+        "tiff" => 1.9,
+        "gif" => 1.0,
+        "qoi" => 2.2,
+        "hdr" => 4.0,
+        "exr" => 6.0,
+        _ => 3.0,
+    };
+    (pixels as f64 * per_pixel) as u64
+}
+
+/// Il riquadro «Vetrino»: una scheda per livello (Panoramica, Media, Piena) con misure e peso, e una riga che spiega.
+#[allow(clippy::too_many_arguments)]
+fn slide_levels(f: &mut Frame, app: &App, def: &'static OptionDef, choices: &'static [conversioni::Choice], x: f32, y: f32, w: f32, st: OptStyle) -> f32 {
+    let pal = f.pal;
+    f.p.rrect(x, y + 7.0, 10.0, 10.0, 3.0, Some(SLIDE), None);
+    f.text(def.title, x + 18.0, y, w - 18.0, 24.0, st.label, SEMI, pal.text);
+    let Some((info, count)) = app.first_slide() else { return 28.0 };
+    let v = app.values.get(def);
+    // Le scelte che danno lo stesso livello (vetrini piccoli) diventano una scheda sola.
+    let mut groups: Vec<(usize, Vec<&conversioni::Choice>)> = Vec::new();
+    for c in choices {
+        let level = info.picks[c.value.min(2) as usize].0;
+        match groups.iter_mut().find(|g| g.0 == level) {
+            Some(g) => g.1.push(c),
+            None => groups.push((level, vec![c])),
+        }
+    }
+    let card_h = 52.0;
+    let mut top = y + 32.0;
+    let mut chosen = (0u32, 0u32, 2u32);
+    for (_, group) in &groups {
+        let on = group.iter().any(|c| c.value == v);
+        let shown = group[group.len() - 1];
+        let k = shown.value.min(2) as usize;
+        let act = Act::OptPick(def.opt, if on { v } else { shown.value });
+        let (_, lw, lh) = info.picks[k];
+        if on {
+            chosen = (lw, lh, k as u32);
+        }
+        let r = (x, top, w, card_h);
+        if on {
+            f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(pal.alt), Some((pal.primary, 2.0)));
+        } else {
+            let fill = if f.hovered(&act) { mix(pal.alt, pal.surface, 0.5) } else { pal.surface };
+            f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(fill), Some((pal.border, 1.0)));
+        }
+        let (cx, cy) = (x + 20.0, top + card_h / 2.0);
+        if on {
+            f.p.circle(cx, cy, 8.0, Some(pal.primary), None);
+            f.p.circle(cx, cy, 3.5, Some(pal.surface), None);
+        } else {
+            f.p.circle(cx, cy, 7.0, Some(pal.surface), Some((pal.border, 2.0)));
+        }
+        let weight = format!("~{}", super::model::human_size(slide_weight(&app.action, app.quality, lw as u64 * lh as u64)));
+        let ww = f.measure(&weight, st.note - 1.0, SANS) + 12.0;
+        let ratio = info.ratios[k];
+        let dims = if ratio <= 1 { format!("{} × {} px · pieno", thousands(lw), thousands(lh)) } else { format!("{} × {} px · ÷{ratio}", thousands(lw), thousands(lh)) };
+        f.text(shown.label, x + 38.0, top + 6.0, w - 46.0 - ww, 22.0, st.note + 0.5, SEMI, pal.text);
+        f.text(&dims, x + 38.0, top + 27.0, w - 46.0 - ww, 18.0, st.note - 1.5, SANS, pal.muted);
+        f.text_r(&weight, (x, top, w - 12.0, card_h), st.note - 1.0, SANS, pal.muted);
+        f.focus_ring(r, 8.0, &act);
+        f.hit(r, act);
+        top += card_h + 6.0;
+    }
+    let pixels = chosen.0 as u64 * chosen.1 as u64;
+    let mut hint = match chosen.2 {
+        0 => "Per guardarlo a schermo o metterlo in un documento.".to_string(),
+        1 => "Il livello più grande che sta comodo in memoria. È la scelta di partenza.".to_string(),
+        _ if pixels > crate::svs::IN_MEMORY_PIXELS => "Ogni dettaglio dello scanner. Si scrive a strisce: ci vuole qualche minuto.".to_string(),
+        _ => "Ogni dettaglio dello scanner.".to_string(),
+    };
+    if pixels > crate::svs::IN_MEMORY_PIXELS {
+        let side = chosen.0.max(chosen.1);
+        let as_tiff = match app.action.as_str() {
+            "png" | "tiff" => false,
+            "jpeg" | "compress" => side > crate::svs::JPEG_MAX_SIDE,
+            "webp" | "avif" | "jxl" | "bmp" | "gif" | "tga" | "qoi" | "pnm" | "hdr" | "exr" => true,
+            _ => {
+                hint.push_str(" Per questa voce si usa il livello più grande che sta in memoria.");
+                false
+            }
+        };
+        if as_tiff {
+            hint.push_str(" A questa misura esce in TIFF.");
+        }
+    }
+    if count > 1 {
+        hint.push_str(" Misure del primo vetrino: ogni vetrino usa il suo livello.");
+    }
+    top += 2.0;
+    top += f.para(&hint, x, top, w, st.note, SANS, pal.muted, 1.45, 4);
+    top - y
+}
+
+/// Il nome di un file in coda; per un vetrino digitale con l'etichetta «Vetrino» accanto.
+#[allow(clippy::too_many_arguments)]
+pub fn file_name(f: &mut Frame, app: &App, i: usize, x: f32, y: f32, w: f32, h: f32, size: f32, weight: super::gfx::Weight, c: super::gfx::Rgb) {
+    let file = &app.files[i];
+    let name = file.name();
+    if app.media_of(&file.path).and_then(|m| m.slide.as_ref()).is_none() {
+        f.text(&name, x, y, w, h, size, weight, c);
+        return;
+    }
+    let chip = "Vetrino";
+    let cs = (size * 0.72).max(11.0);
+    let cw = f.measure(chip, cs, SEMI) + 16.0;
+    let nw = f.measure(&name, size, weight).min(w - cw - 8.0).max(0.0);
+    f.text(&name, x, y, nw + 2.0, h, size, weight, c);
+    let pal = f.pal;
+    let ch = cs + 8.0;
+    let r = (x + nw + 8.0, y + (h - ch) / 2.0, cw, ch);
+    f.p.rrect(r.0, r.1, r.2, r.3, ch / 2.0, Some(mix(SLIDE, pal.surface, 0.86)), None);
+    f.text_c(chip, r, cs, SEMI, mix(SLIDE, pal.text, 0.15));
+}
+
+/// La seconda riga di un file in attesa: la cartella, o per un vetrino che cosa contiene.
+pub fn waiting_line(app: &App, i: usize) -> String {
+    let file = &app.files[i];
+    match app.media_of(&file.path).and_then(|m| m.slide.as_ref()) {
+        Some(s) => crate::i18n::lit(&s.summary[crate::i18n::english() as usize]),
+        None => crate::i18n::lit(&file.path.display().to_string()),
     }
 }
 
@@ -428,7 +581,11 @@ pub fn options_panel_ex(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: Op
     let lead = match (app.kind(), app.action.as_str()) {
         (Kind::Pdf, "pages") => defs.iter().position(|d| d.opt == conversioni::Opt::KeepBookmarks),
         (Kind::Pdf, "compress") => defs.iter().position(|d| d.opt == conversioni::Opt::Password),
-        _ => None,
+        // Il riquadro «Vetrino» si vede tutto; dimensioni e raddrizza vanno in «Altre opzioni».
+        _ => defs
+            .iter()
+            .rposition(|d| matches!(d.opt, conversioni::Opt::SlideLevel | conversioni::Opt::SlideLabel | conversioni::Opt::SlideMacro))
+            .map(|i| i + 1),
     };
     let shown = match lead {
         Some(n) if st.visible != 0 => n,

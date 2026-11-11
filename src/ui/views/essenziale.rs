@@ -215,8 +215,8 @@ fn standard(f: &mut Frame, app: &App) {
                 f.checkbox(q.0 + 20.0, y + 37.0, 22.0, file.checked, Some(Act::Check(i)));
                 f.thumb(app, i, (q.0 + 74.0, y + 13.0, 108.0, 70.0), 4.0);
                 let tx = q.0 + 206.0;
-                f.text(&file.name(), tx, y + 20.0, name_w - 12.0, 24.0, 17.0, SEMI, pal.text);
-                let sub = if file.state == FileState::Waiting { file.path.display().to_string() } else { file.message.clone() };
+                super::file_name(f, app, i, tx, y + 20.0, name_w - 12.0, 24.0, 17.0, SEMI, pal.text);
+                let sub = if file.state == FileState::Waiting { super::waiting_line(app, i) } else { file.message.clone() };
                 let sub_c = match file.state {
                     FileState::Failed => pal.bad,
                     FileState::Done => pal.ok,
@@ -323,7 +323,7 @@ fn page_queue(f: &mut Frame, app: &App, q: R, rows: &[usize], merge: bool) {
             } else {
                 f.thumb(app, i, (q.0 + 74.0, y + 13.0, 52.0, 70.0), 4.0);
                 f.text(&file.name(), name_x, y + 20.0, name_w, 24.0, 17.0, SEMI, pal.text);
-                let sub = if file.state == FileState::Waiting { file.path.display().to_string() } else { file.message.clone() };
+                let sub = if file.state == FileState::Waiting { super::waiting_line(app, i) } else { file.message.clone() };
                 f.text(&sub, name_x, y + 48.0, name_w, 22.0, 16.0, SANS, sub_c);
                 f.row_bar(file, name_x, y + 77.0, name_w, 6.0);
                 let pages = app.page_count(i).map(|n| n.to_string()).unwrap_or_default();
@@ -615,8 +615,8 @@ fn simplified(f: &mut Frame, app: &App) {
                     f.hline(list.0, y, list.2);
                 }
                 f.thumb(app, i, (list.0 + 26.0, y + 18.0, 140.0, 98.0), 6.0);
-                f.text(&file.name(), list.0 + 196.0, y + 36.0, list.2 - 520.0, 30.0, 22.0, SEMI, pal.text);
-                let sub = if file.state == FileState::Waiting { file.path.display().to_string() } else { file.message.clone() };
+                super::file_name(f, app, i, list.0 + 196.0, y + 36.0, list.2 - 520.0, 30.0, 22.0, SEMI, pal.text);
+                let sub = if file.state == FileState::Waiting { super::waiting_line(app, i) } else { file.message.clone() };
                 let sub_c = match file.state {
                     FileState::Failed => pal.bad,
                     FileState::Done => pal.ok,
