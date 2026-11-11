@@ -557,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "cedro"
-version = "0.38.8"
+version = "0.39.1"
 dependencies = [
  "avif-decode",
  "base64 0.22.1",
@@ -570,6 +570,7 @@ dependencies = [
  "flate2",
  "gtk4",
  "hayro",
+ "hayro-jpeg2000",
  "hound",
  "image",
  "jxl-oxide",
@@ -604,6 +605,7 @@ dependencies = [
  "sha2 0.10.9",
  "skrifa 0.49.0",
  "symphonia",
+ "tiff",
  "tiny-skia 0.11.4",
  "ureq",
  "whisper-rs",
@@ -613,6 +615,7 @@ dependencies = [
  "winresource",
  "zip",
  "zune-core",
+ "zune-jpeg",
  "zune-jpegxl",
 ]
 
