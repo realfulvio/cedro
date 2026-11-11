@@ -166,6 +166,41 @@ const UIDS: &[u32] = &[
 ];
 
 /// HMAC-SHA256: codici e UID nuovi che nessuno può ricostruire senza la chiave di questo computer.
+/// La chiave di questo PC per i codici dei pazienti: creata la prima volta e tenuta nella cartella di
+/// Cedro. Con la stessa chiave lo stesso paziente prende sempre lo stesso codice (e le stesse date
+/// spostate), così gli studi di uno stesso animale restano collegati; senza la chiave non si risale al nome.
+pub fn local_key() -> Vec<u8> {
+    let path = crate::engine::config_dir().join("anonimizza.chiave");
+    if let Ok(k) = std::fs::read(&path) {
+        if k.len() >= 32 {
+            return k;
+        }
+    }
+    let key = fresh_key();
+    let _ = std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new(".")));
+    let _ = std::fs::write(&path, &key);
+    key
+}
+
+/// 32 byte imprevedibili senza crate in più: i semi casuali dell'hash della libreria standard, l'ora
+/// in nanosecondi e il processo, passati in SHA-256.
+fn fresh_key() -> Vec<u8> {
+    use sha2::{Digest, Sha256};
+    use std::hash::{BuildHasher, Hasher};
+    let mut h = Sha256::new();
+    for i in 0..8u64 {
+        let mut s = std::collections::hash_map::RandomState::new().build_hasher();
+        s.write_u64(i);
+        h.update(s.finish().to_le_bytes());
+    }
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    h.update(now.to_le_bytes());
+    h.update(std::process::id().to_le_bytes());
+    let here = 0u8;
+    h.update((&here as *const u8 as usize).to_le_bytes());
+    h.finalize().to_vec()
+}
+
 pub fn hmac(key: &[u8], msg: &[u8]) -> [u8; 32] {
     use sha2::{Digest, Sha256};
     let mut k = [0u8; 64];

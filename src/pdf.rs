@@ -191,6 +191,40 @@ pub fn pdf_from_jpeg(jpeg: &[u8], px_w: u32, px_h: u32, lines: &[crate::ocr::Lin
     finish(&objects)
 }
 
+/// Più immagini JPEG, una per pagina (come «pdf_from_jpeg», senza testo): le serie di un DICOM.
+pub fn pdf_from_jpegs(images: &[(Vec<u8>, u32, u32)]) -> Vec<u8> {
+    let mut objects: Vec<Vec<u8>> = Vec::new();
+    objects.push(b"<< /Type /Catalog /Pages 2 0 R >>".to_vec());
+    let kids = (0..images.len()).map(|i| format!("{} 0 R", 3 + i * 3)).collect::<Vec<_>>().join(" ");
+    objects.push(format!("<< /Type /Pages /Kids [{kids}] /Count {} >>", images.len()).into_bytes());
+    for (i, (jpeg, px_w, px_h)) in images.iter().enumerate() {
+        let (px_w, px_h) = ((*px_w).max(1), (*px_h).max(1));
+        let page_id = 3 + i * 3;
+        let (page_w, page_h) = if px_w > px_h { (842.0, 595.0) } else { (595.0, 842.0) };
+        let scale = ((page_w - 72.0) / px_w as f64).min((page_h - 72.0) / px_h as f64);
+        let (dw, dh) = (px_w as f64 * scale, px_h as f64 * scale);
+        let (x, y) = ((page_w - dw) / 2.0, (page_h - dh) / 2.0);
+        objects.push(
+            format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {page_w} {page_h}] /Contents {} 0 R /Resources << /XObject << /Im {} 0 R >> >> >>", page_id + 1, page_id + 2)
+                .into_bytes(),
+        );
+        let content = format!("q {dw:.2} 0 0 {dh:.2} {x:.2} {y:.2} cm /Im Do Q\n");
+        let mut content_obj = format!("<< /Length {} >>\nstream\n", content.len()).into_bytes();
+        content_obj.extend_from_slice(content.as_bytes());
+        content_obj.extend_from_slice(b"endstream");
+        objects.push(content_obj);
+        let mut image_obj = format!(
+            "<< /Type /XObject /Subtype /Image /Width {px_w} /Height {px_h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length {} >>\nstream\n",
+            jpeg.len()
+        )
+        .into_bytes();
+        image_obj.extend_from_slice(jpeg);
+        image_obj.extend_from_slice(b"\nendstream");
+        objects.push(image_obj);
+    }
+    finish(&objects)
+}
+
 /// Il PDF protetto con una password (AES a 128 bit): chiede la password per aprirlo.
 pub fn protect(pdf: &[u8], password: &str) -> Result<Vec<u8>, String> {
     use lopdf::encryption::crypt_filters::{Aes128CryptFilter, CryptFilter};

@@ -1859,3 +1859,57 @@ colori della tessera non gestiti	unsupported tile colors
 compressione {#} non gestita	compression {} not supported
 JPEG 2000 con {#} componenti	JPEG 2000 with {} components
 lettura interrotta	reading interrupted
+# DICOM (TC, RX, ecografie)
+Del file	File
+Polmone	Lung
+Osso	Bone
+Tessuti molli	Soft tissue
+Finestra	Window
+«Del file» è quella scelta da chi ha fatto l'esame; Polmone, Osso e Tessuti molli sono quelle classiche della TC	"File" is the one chosen by whoever ran the exam; Lung, Bone and Soft tissue are the classic CT windows
+Tutte le immagini della serie	All images in the series
+Spento: solo la prima	Off: only the first
+Valori originali a 16 bit	Original 16-bit values
+Per misurare: niente finestra, unità Hounsfield intatte	For measuring: no window, Hounsfield units untouched
+Anonimizza	Anonymize
+Nome, ID, nascita, medico, clinica e UID non escono; i file prendono un codice	Name, ID, birth date, doctor, clinic and UIDs stay out; files get a code
+DICOM	DICOM
+{} · {#} file	{} · {} files
+In ecografie e catture dello schermo il nome può essere scritto dentro l'immagine: Cedro non lo cancella, controlla prima di condividere.	In ultrasounds and screen captures the name can be written inside the image: Cedro doesn't erase it, check before sharing.
+{} immagini	{} images
+senza immagine (referto o elenco)	no image (report or list)
+Ecografia	Ultrasound
+Mammografia	Mammography
+Fluoroscopia	Fluoroscopy
+Medicina nucleare	Nuclear medicine
+PDF di {#} pagine, un'immagine per pagina	{}-page PDF, one image per page
+{#} {}, uno per immagine ({#}×{#})	{2} {1}, one per image ({3}×{4})
+~ · finestra polmone	 · lung window
+~ · finestra osso	 · bone window
+~ · finestra tessuti molli	 · soft tissue window
+~ · finestra del file (polmone, osso e tessuti molli valgono per la TC)	 · window from the file (lung, bone and soft tissue apply to CT)
+~ · valori originali a 16 bit	 · original 16-bit values
+~ · valori originali a 16 bit, spostati di 32768 (gli Hounsfield negativi)	 · original 16-bit values, shifted by 32768 (negative Hounsfield)
+~. Attenzione: in questo tipo di immagine il nome può essere scritto dentro i pixel; controllala prima di condividerla	. Warning: in this kind of image the name may be written in the pixels; check it before sharing
+il DICOM non ha un'immagine	the DICOM has no image
+il DICOM non contiene un'immagine (forse è un referto o un elenco)	the DICOM contains no image (maybe a report or a list)
+file troncato	truncated file
+Nessun dato personale trovato	No personal data found
+~. Restano specie, razza, sesso, età e peso.	. Species, breed, sex, age and weight are kept.
+i file esistono già: saltati	the files already exist: skipped
+~Tolti: 	Removed: 
+~. Codice del paziente: 	. Patient code: 
+~nome del paziente	patient name
+~codice del paziente	patient ID
+~data di nascita	birth date
+~proprietario	owner
+~clinica o ospedale	clinic or hospital
+~medici e operatori	doctors and operators
+~indirizzi e telefoni	addresses and phone numbers
+~note e commenti	notes and comments
+~numeri di accettazione e di studio	accession and study numbers
+~numero di serie dell'apparecchio	device serial number
+~dati privati del produttore	manufacturer's private data
+~identificativi dell'esame (UID)	exam identifiers (UIDs)
+~date (spostate tutte insieme)	dates (all shifted together)
+~allevamento	breeder
+Questa immagine può avere nome o data scritti dentro i pixel (ecografie, catture dello schermo): controllala prima di condividerla.	This image may have the name or date written in the pixels (ultrasounds, screen captures): check it before sharing.

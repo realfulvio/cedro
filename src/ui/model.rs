@@ -932,7 +932,21 @@ impl App {
             all.append(&mut defs);
             defs = all;
         }
+        // Con un DICOM in coda il riquadro «DICOM» (finestra, serie, anonimizza) va in cima.
+        if self.kind() == Kind::Image && self.activity == Activity::Convert && self.first_dicom().is_some() {
+            let mut all = conversioni::dicom_option_defs(&self.action);
+            all.retain(|d| !defs.iter().any(|x| x.opt == d.opt));
+            all.append(&mut defs);
+            defs = all;
+        }
         defs.into_iter().filter(|d| conversioni::shown(d, &self.values)).collect()
+    }
+
+    /// Il primo DICOM della coda, con quanti ce ne sono.
+    pub fn first_dicom(&self) -> Option<(&media::DicomInfo, usize)> {
+        let mut found = self.files.iter().filter_map(|f| self.media_of(&f.path).and_then(|m| m.dicom.as_ref()));
+        let first = found.next()?;
+        Some((first, 1 + found.count()))
     }
 
     /// Il primo vetrino digitale (.svs) della coda, con quanti ce ne sono.

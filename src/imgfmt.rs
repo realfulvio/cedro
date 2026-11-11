@@ -13,6 +13,11 @@ use image::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 pub fn sniff(head: &[u8]) -> Option<&'static str> {
     let starts = |s: &[u8]| head.starts_with(s);
     let at = |i: usize, s: &[u8]| head.get(i..i + s.len()) == Some(s);
+    // DICOM: 128 byte di preambolo e poi «DICM». Va per primo: il preambolo può contenere
+    // un'intestazione TIFF (i file «doppi» DICOM/TIFF), ma il contenuto vero è il DICOM.
+    if at(128, b"DICM") {
+        return Some("dcm");
+    }
     if starts(b"\x89PNG\r\n\x1a\n") {
         return Some("png");
     }
@@ -108,11 +113,10 @@ pub fn sniff(head: &[u8]) -> Option<&'static str> {
     None
 }
 
-/// I primi byte di un file (fino a 64).
+/// I primi byte di un file (fino a 132: il DICOM ha la firma dopo 128 byte di preambolo).
 pub fn head_of(path: &Path) -> Vec<u8> {
-    let mut buf = vec![0u8; 64];
-    let n = fs::File::open(path).and_then(|mut f| f.read(&mut buf)).unwrap_or(0);
-    buf.truncate(n);
+    let mut buf = Vec::with_capacity(132);
+    let _ = fs::File::open(path).and_then(|f| f.take(132).read_to_end(&mut buf));
     buf
 }
 
@@ -135,6 +139,8 @@ pub fn open(path: &Path, straighten: bool, target_side: Option<u32>) -> Result<D
         "svg" | "svgz" => open_svg(path, target_side),
         "avif" => open_avif(path),
         "jxl" => open_jxl(path),
+        // Il DICOM: la prima immagine con la finestra scritta nel file.
+        "dcm" | "dicom" => crate::dicom::DicomFile::open(path).and_then(|f| crate::dicom::pixel::open_first(&f)),
         "heic" => Err("HEIC e HEIF non sono ancora letti".into()),
         _ if straighten => crate::ocr::open_upright(path),
         _ => image::ImageReader::open(path)

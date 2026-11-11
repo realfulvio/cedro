@@ -216,7 +216,7 @@ fn kind_by_extension(ext: &str) -> Kind {
     match ext {
         "pdf" => Kind::Pdf,
         "doc" | "docx" | "odt" | "rtf" => Kind::Doc,
-        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "ico"
+        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "dcm" | "dicom" | "ico"
         | "svg" | "svgz" | "avif" | "jxl" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm"
         | "hdr" | "exr" | "dds" => Kind::Image,
         "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" => Kind::Text,
@@ -235,7 +235,7 @@ pub fn kind_of(path: &Path) -> Kind {
     let Some(real) = crate::imgfmt::sniff_file(path) else {
         return by_ext;
     };
-    let sure = matches!(real, "png" | "jpg" | "gif" | "webp" | "bmp" | "tiff" | "avif" | "jxl" | "qoi" | "dds" | "exr" | "hdr" | "pdf" | "flac" | "wav" | "aiff" | "ogg" | "opus" | "svg");
+    let sure = matches!(real, "png" | "jpg" | "gif" | "webp" | "bmp" | "tiff" | "dcm" | "avif" | "jxl" | "qoi" | "dds" | "exr" | "hdr" | "pdf" | "flac" | "wav" | "aiff" | "ogg" | "opus" | "svg");
     let by_content = kind_by_extension(real);
     if by_content != Kind::Other && by_content != by_ext && (by_ext == Kind::Other || sure) {
         return by_content;
@@ -902,6 +902,12 @@ pub struct Options {
     pub slide_level: u32,
     pub slide_label: bool,
     pub slide_macro: bool,
+    /// I DICOM: la finestra (0 del file, 1 polmone, 2 osso, 3 tessuti molli), tutte le immagini o la
+    /// prima, i valori originali a 16 bit (PNG e TIFF) e i nomi in codice al posto di quello del file.
+    pub dicom_window: u32,
+    pub dicom_all_frames: bool,
+    pub dicom_16bit: bool,
+    pub dicom_anon: bool,
     /// Unire e dividere i PDF.
     pub pdf_pages: PdfPages,
     /// Le pagine di un PDF (ruotare, togliere, estrarre, numeri e filigrana) e la compressione.
@@ -983,6 +989,10 @@ impl Default for Options {
             slide_level: 1,
             slide_label: true,
             slide_macro: true,
+            dicom_window: 0,
+            dicom_all_frames: true,
+            dicom_16bit: false,
+            dicom_anon: true,
             pdf_pages: PdfPages::default(),
             pdf_edit: PdfEdit::default(),
         }
@@ -1331,6 +1341,36 @@ fn finish_outputs(result: CedroResult<Output>, used: Naming) -> CedroResult<Outp
         out.path = target.clone();
     }
     Ok(out)
+}
+
+/// Il formato del crate `image`, l'estensione e il pezzo di nome in più di ogni voce delle immagini.
+#[path = "engine_dicom.rs"]
+mod dicom_out;
+
+fn image_target(action: &str) -> Option<(ImageFormat, &'static str, &'static str)> {
+    Some(match action {
+        "avif" => (ImageFormat::Png, "avif", ""),
+        "jxl" => (ImageFormat::Png, "jxl", ""),
+        "pdf" => (ImageFormat::Jpeg, "pdf", ""),
+        "ico" => (ImageFormat::Ico, "ico", ""),
+        "tga" => (ImageFormat::Tga, "tga", ""),
+        "qoi" => (ImageFormat::Qoi, "qoi", ""),
+        "pnm" => (ImageFormat::Pnm, "ppm", ""),
+        "hdr" => (ImageFormat::Hdr, "hdr", ""),
+        "exr" => (ImageFormat::OpenExr, "exr", ""),
+        "png" => (ImageFormat::Png, "png", ""),
+        "strip" => (ImageFormat::Png, "png", "pulito"),
+        "jpeg" => (ImageFormat::Jpeg, "jpg", ""),
+        "compress" => (ImageFormat::Jpeg, "jpg", "compresso"),
+        "webp" => (ImageFormat::WebP, "webp", ""),
+        "bmp" => (ImageFormat::Bmp, "bmp", ""),
+        "gif" => (ImageFormat::Gif, "gif", ""),
+        "tiff" => (ImageFormat::Tiff, "tiff", ""),
+        "half" => (ImageFormat::Png, "png", "meta"),
+        "gray" => (ImageFormat::Png, "png", "bn"),
+        "rot90" => (ImageFormat::Png, "png", "ruotato"),
+        _ => return None,
+    })
 }
 
 fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
@@ -1702,6 +1742,13 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Err(err("questa voce non si applica a questo file"));
     }
 
+    // TC, RX, ecografie e risonanze: finestra, tutte le immagini della serie e anonimizzazione.
+    if crate::imgfmt::sniff_file(path) == Some("dcm") || matches!(extension(path).as_str(), "dcm" | "dicom") {
+        if let Some(done) = dicom_out::perform(path, action, quality, &dir, opts) {
+            return done;
+        }
+    }
+
     // Un vetrino digitale (.svs): si legge solo la struttura, i pixel dopo, un livello alla volta.
     let slide = if crate::svs::is_slide(path) {
         Some(crate::svs::Slide::open(path).map_err(err)?)
@@ -1723,26 +1770,8 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
 
     // Il formato e il nome prima di aprire l'immagine: un file da saltare non si legge neppure.
-    let (mut format, mut ext, label_stem) = match action {
-        "avif" | "jxl" => (ImageFormat::Png, action, ""),
-        "pdf" => (ImageFormat::Jpeg, "pdf", ""),
-        "ico" => (ImageFormat::Ico, "ico", ""),
-        "tga" => (ImageFormat::Tga, "tga", ""),
-        "qoi" => (ImageFormat::Qoi, "qoi", ""),
-        "pnm" => (ImageFormat::Pnm, "ppm", ""),
-        "hdr" => (ImageFormat::Hdr, "hdr", ""),
-        "exr" => (ImageFormat::OpenExr, "exr", ""),
-        "png" | "strip" => (ImageFormat::Png, "png", if action == "strip" { "pulito" } else { "" }),
-        "jpeg" => (ImageFormat::Jpeg, "jpg", ""),
-        "compress" => (ImageFormat::Jpeg, "jpg", "compresso"),
-        "webp" => (ImageFormat::WebP, "webp", ""),
-        "bmp" => (ImageFormat::Bmp, "bmp", ""),
-        "gif" => (ImageFormat::Gif, "gif", ""),
-        "tiff" => (ImageFormat::Tiff, "tiff", ""),
-        "half" => (ImageFormat::Png, "png", "meta"),
-        "gray" => (ImageFormat::Png, "png", "bn"),
-        "rot90" => (ImageFormat::Png, "png", "ruotato"),
-        other => return Err(err(format!("azione sconosciuta: {other}"))),
+    let Some((mut format, mut ext, label_stem)) = image_target(action) else {
+        return Err(err(format!("azione sconosciuta: {action}")));
     };
     let q = if action == "compress" {
         quality.min(settings.compress_quality())
