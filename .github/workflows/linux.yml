@@ -23,6 +23,11 @@ permissions:
   contents: write
   actions: write
 
+# Nel contenitore del minipc la shell predefinita sarebbe sh: si usa bash come sui runner di GitHub.
+defaults:
+  run:
+    shell: bash
+
 env:
   CARGO_TERM_COLOR: always
   CMAKE_POLICY_VERSION_MINIMUM: "3.5"
@@ -58,7 +63,7 @@ jobs:
         run: |
           rm -f /etc/apt/apt.conf.d/docker-clean
           echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/10-cedro-tieni
-          mkdir -p /cache/apt/partial && rm -rf /var/cache/apt/archives && ln -s /cache/apt /var/cache/apt/archives
+          mkdir -p /cache/apt-${{ github.job }}/partial && rm -rf /var/cache/apt/archives && ln -s /cache/apt-${{ github.job }} /var/cache/apt/archives
           apt-get update
           apt-get install -y --no-install-recommends sudo ca-certificates curl git build-essential python3 python-is-python3 xz-utils file util-linux
 
@@ -119,7 +124,7 @@ jobs:
         run: |
           rm -f /etc/apt/apt.conf.d/docker-clean
           echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/10-cedro-tieni
-          mkdir -p /cache/apt/partial && rm -rf /var/cache/apt/archives && ln -s /cache/apt /var/cache/apt/archives
+          mkdir -p /cache/apt-${{ github.job }}/partial && rm -rf /var/cache/apt/archives && ln -s /cache/apt-${{ github.job }} /var/cache/apt/archives
           apt-get update
           apt-get install -y --no-install-recommends sudo ca-certificates curl git build-essential python3 python-is-python3 xz-utils file util-linux
 
@@ -183,7 +188,7 @@ jobs:
         run: |
           rm -f /etc/apt/apt.conf.d/docker-clean
           echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/10-cedro-tieni
-          mkdir -p /cache/apt/partial && rm -rf /var/cache/apt/archives && ln -s /cache/apt /var/cache/apt/archives
+          mkdir -p /cache/apt-${{ github.job }}/partial && rm -rf /var/cache/apt/archives && ln -s /cache/apt-${{ github.job }} /var/cache/apt/archives
           apt-get update
           apt-get install -y --no-install-recommends sudo ca-certificates curl git build-essential python3 python-is-python3 xz-utils file util-linux
 
