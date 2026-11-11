@@ -10,7 +10,7 @@
   #define BuildDir "..\target\release"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.38.7"
+  #define AppVersion "0.39.1"
 #endif
 
 [Setup]
@@ -83,8 +83,8 @@ Source: "..\dist\Licenze di terze parti.txt"; DestDir: "{app}"; Flags: ignorever
 Source: "{#IconFile}"; DestDir: "{app}"; DestName: "cedro.ico"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\cedro.exe"; IconFilename: "{app}\cedro.ico"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\cedro.exe"; IconFilename: "{app}\cedro.ico"; Tasks: desktopicon; Check: DesktopIconWanted
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\cedro.exe"; Parameters: "apri"; IconFilename: "{app}\cedro.ico"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\cedro.exe"; Parameters: "apri"; IconFilename: "{app}\cedro.ico"; Tasks: desktopicon; Check: DesktopIconWanted
 
 [InstallDelete]
 ; Tolta la spunta del collegamento sul desktop in una nuova installazione a mano: il collegamento vecchio va via.
@@ -95,7 +95,7 @@ Type: files; Name: "{autodesktop}\{#AppName}.lnk"; Tasks: not desktopicon; Check
 
 [Run]
 Filename: "{app}\cedro.exe"; Parameters: "vista"; Description: "{cm:RunView}"; Flags: nowait postinstall skipifsilent; Check: ViewNotAsked
-Filename: "{app}\cedro.exe"; Description: "{cm:RunStart}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\cedro.exe"; Parameters: "apri"; Description: "{cm:RunStart}"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\cedro.exe"; Parameters: "guida"; Description: "{cm:RunGuide}"; Flags: nowait postinstall skipifsilent
 
 ; Aggiornamento silenzioso fatto da Cedro stesso (/SILENTUPDATE): Cedro si riapre da solo, senza finestre.
@@ -318,7 +318,7 @@ begin
     DeleteFile(ExpandConstant('{userdesktop}\{#AppName}.lnk'));
     // Il collegamento c'era: resta, per tutti.
     if not WizardIsTaskSelected('desktopicon') then
-      CreateShellLink(ExpandConstant('{commondesktop}\{#AppName}.lnk'), '', ExpandConstant('{app}\cedro.exe'), '', '',
+      CreateShellLink(ExpandConstant('{commondesktop}\{#AppName}.lnk'), '', ExpandConstant('{app}\cedro.exe'), 'apri', '',
         ExpandConstant('{app}\cedro.ico'), 0, SW_SHOWNORMAL);
   end;
   RegDeleteKeyIncludingSubkeys(HKCU, UNINSTALL_KEY);
