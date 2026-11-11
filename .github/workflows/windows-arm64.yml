@@ -3,6 +3,10 @@ name: Windows ARM64
 # Compila e prova Cedro su un vero Windows on ARM (runner windows-11-arm) e anche su x64.
 # Pubblicare: Actions → Windows ARM64 → Run workflow su main, con il tag (per esempio v0.18.0):
 # crea la release (se non c'è) con gli installatori x64 e ARM64 e tutti i motori di trascrizione.
+# Il job x64 (build, prove, installatore, motori) gira nella VM Windows del minipc di casa (runner con
+# l'etichetta cedro-windows, cartelle di compilazione che restano) se è accesa e libera, altrimenti su GitHub;
+# lo decide il job «scegli» con tools/sonda-runner.sh. Le prove che installano e disinstallano Cedro
+# (x64-installa) girano sempre su un runner di GitHub, usa e getta.
 
 on:
   push:
@@ -28,6 +32,21 @@ env:
   CMAKE_POLICY_VERSION_MINIMUM: "3.5"
 
 jobs:
+  scegli:
+    name: Sceglie dove compilare x64 (VM di casa o GitHub)
+    if: ${{ !inputs.solo_pulizia }}
+    runs-on: ubuntu-latest
+    outputs:
+      locale: ${{ steps.sonda.outputs.locale }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: sonda
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SONDA_REF: ${{ github.ref_name }}
+        run: tools/sonda-runner.sh cedro-windows
+
   app:
     name: Cedro (build, prove, installatore)
     if: ${{ !inputs.solo_pulizia }}
@@ -242,11 +261,23 @@ jobs:
   x64:
     name: Cedro x64 (prove, installatore, motori)
     if: ${{ !inputs.solo_pulizia }}
-    runs-on: windows-latest
+    needs: scegli
+    runs-on: ${{ needs.scegli.outputs.locale == 'true' && fromJSON('["self-hosted", "cedro-windows"]') || 'windows-latest' }}
     steps:
+      # Sulla VM di casa la cartella target resta tra un giro e l'altro (si toglie tutto il resto).
       - uses: actions/checkout@v4
+        with:
+          clean: ${{ needs.scegli.outputs.locale != 'true' }}
+
+      - name: Ripulisce la copia di lavoro tenendo target (solo sulla VM di casa)
+        if: ${{ needs.scegli.outputs.locale == 'true' }}
+        shell: pwsh
+        run: |
+          git clean -ffdx -e /target
+          git reset --hard HEAD
 
       - uses: Swatinem/rust-cache@v2
+        if: ${{ needs.scegli.outputs.locale != 'true' }}
 
       - name: Prove adattatori web
         shell: pwsh
@@ -264,6 +295,7 @@ jobs:
       - name: Inno Setup
         shell: pwsh
         run: |
+          if (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") { 'Inno Setup già installato'; exit 0 }
           Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe -OutFile is.exe
           $p = Start-Process .\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait -PassThru
           if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")) { throw "Inno Setup non installato ($($p.ExitCode))" }
@@ -271,6 +303,82 @@ jobs:
       - name: Installatore x64 (e la copia per la vecchia edizione Comune di Bondeno)
         shell: pwsh
         run: powershell -File installer\build.ps1
+
+      - name: Compila i motori x64 dai sorgenti correnti
+        shell: pwsh
+        run: |
+          python -m pip install libclang
+          if ($LASTEXITCODE -ne 0) { throw 'libclang non installato' }
+          $env:LIBCLANG_PATH = python -c "import pathlib, clang; print(pathlib.Path(clang.__file__).parent / 'native')"
+          $sdk = Get-ChildItem C:\VulkanSDK -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $sdk) {
+            foreach ($i in 1..5) {
+              try { Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe; break }
+              catch { if ($i -eq 5) { throw }; Start-Sleep -Seconds (10 * $i) }
+            }
+            Start-Process .\vulkan-sdk.exe -ArgumentList '--accept-licenses', '--default-answer', '--confirm-command', 'install' -Wait
+            $sdk = Get-ChildItem C:\VulkanSDK -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          }
+          if (-not $sdk) { throw 'Vulkan SDK x64 non trovato' }
+          $env:VULKAN_SDK = $sdk.FullName
+          powershell -File trascrivi\build.ps1 -Out "${{ github.workspace }}\motori-x64" -Target C:\ctv
+          if ($LASTEXITCODE -ne 0) { throw 'compilazione motori x64 fallita' }
+          powershell -File riassumi\build.ps1 -Out "${{ github.workspace }}\motori-x64" -Target C:\crv
+          if ($LASTEXITCODE -ne 0) { throw 'compilazione motori del riassunto x64 fallita' }
+
+      - name: Prova motori x64 compatibili con il runner
+        shell: pwsh
+        run: |
+          # Non eseguire AVX-512/VNNI su runner che possono non avere quelle istruzioni.
+          New-Item -ItemType Directory -Force motori-prova | Out-Null
+          Get-ChildItem motori-x64 -Filter *.exe | Where-Object Name -Match '-(base|avx2|vulkan)\.exe$' | Copy-Item -Destination motori-prova
+          powershell -File trascrivi\prova.ps1 -Dir "${{ github.workspace }}\motori-prova"
+          if ($LASTEXITCODE -ne 0) { throw 'prova motori x64 fallita' }
+
+      - uses: actions/cache@v4
+        if: ${{ needs.scegli.outputs.locale != 'true' }}
+        with:
+          path: ${{ runner.temp }}\qwen
+          key: qwen3.5-4b-q4km-unsloth
+
+      - name: Prova del Riassunto AI (Qwen3.5-4B vero, motori avx2 e vulkan)
+        shell: pwsh
+        env:
+          QWEN_DIR: ${{ needs.scegli.outputs.locale == 'true' && 'C:\cedro-cache\qwen' || format('{0}\qwen', runner.temp) }}
+        run: |
+          $model = "$env:QWEN_DIR\Qwen3.5-4B-Q4_K_M.gguf"
+          if (-not (Test-Path $model)) {
+            New-Item -ItemType Directory -Force (Split-Path $model) | Out-Null
+            curl.exe -fsSL --retry 5 -o "$model.part" https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf
+            if ($LASTEXITCODE -ne 0) { throw 'modello non scaricato' }
+            Move-Item "$model.part" $model
+          }
+          New-Item -ItemType Directory -Force prova-riassumi | Out-Null
+          Get-ChildItem motori-x64 -Filter cedro-riassumi-*.exe | Where-Object Name -Match '-(avx2|vulkan)\.exe$' | Copy-Item -Destination prova-riassumi
+          powershell -File riassumi\prova.ps1 -Dir prova-riassumi -Model $model
+          if ($LASTEXITCODE -ne 0) { throw 'prova del riassunto x64 fallita' }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: x64
+          path: |
+            dist/Cedro-Setup-*.exe
+            dist/Cedro-Bondeno-Setup-*.exe
+            motori-x64/*.exe
+
+  x64-installa:
+    name: Cedro x64 (installa, aggiorna e disinstalla davvero)
+    if: ${{ !inputs.solo_pulizia }}
+    needs: x64
+    # Sempre su GitHub: queste prove installano, aggiornano e tolgono Cedro dal sistema (anche per tutti gli
+    # utenti, in Programmi): su un PC che resta non si fanno.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: x64
 
       - name: "Aggiornamento vero: una 0.17 installata prende e installa l'installatore x64 nuovo"
         # Fino alla 0.17 Cedro prende il primo file «Cedro-Setup….exe» della release (GitHub li elenca in ordine
@@ -422,69 +530,10 @@ jobs:
           if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'Cedro\trascrizione'))) { throw 'la disinstallazione silenziosa ha cancellato i modelli' }
           "   ok"
 
-      - name: Compila i motori x64 dai sorgenti correnti
-        shell: pwsh
-        run: |
-          python -m pip install libclang
-          if ($LASTEXITCODE -ne 0) { throw 'libclang non installato' }
-          $env:LIBCLANG_PATH = python -c "import pathlib, clang; print(pathlib.Path(clang.__file__).parent / 'native')"
-          $sdk = Get-ChildItem C:\VulkanSDK -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
-          if (-not $sdk) {
-            foreach ($i in 1..5) {
-              try { Invoke-WebRequest https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe -OutFile vulkan-sdk.exe; break }
-              catch { if ($i -eq 5) { throw }; Start-Sleep -Seconds (10 * $i) }
-            }
-            Start-Process .\vulkan-sdk.exe -ArgumentList '--accept-licenses', '--default-answer', '--confirm-command', 'install' -Wait
-            $sdk = Get-ChildItem C:\VulkanSDK -Directory | Sort-Object Name -Descending | Select-Object -First 1
-          }
-          if (-not $sdk) { throw 'Vulkan SDK x64 non trovato' }
-          $env:VULKAN_SDK = $sdk.FullName
-          powershell -File trascrivi\build.ps1 -Out "${{ github.workspace }}\motori-x64" -Target C:\ctv
-          if ($LASTEXITCODE -ne 0) { throw 'compilazione motori x64 fallita' }
-          powershell -File riassumi\build.ps1 -Out "${{ github.workspace }}\motori-x64" -Target C:\crv
-          if ($LASTEXITCODE -ne 0) { throw 'compilazione motori del riassunto x64 fallita' }
-
-      - name: Prova motori x64 compatibili con il runner
-        shell: pwsh
-        run: |
-          # Non eseguire AVX-512/VNNI su runner che possono non avere quelle istruzioni.
-          New-Item -ItemType Directory -Force motori-prova | Out-Null
-          Get-ChildItem motori-x64 -Filter *.exe | Where-Object Name -Match '-(base|avx2|vulkan)\.exe$' | Copy-Item -Destination motori-prova
-          powershell -File trascrivi\prova.ps1 -Dir "${{ github.workspace }}\motori-prova"
-          if ($LASTEXITCODE -ne 0) { throw 'prova motori x64 fallita' }
-
-      - uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}\qwen
-          key: qwen3.5-4b-q4km-unsloth
-
-      - name: Prova del Riassunto AI (Qwen3.5-4B vero, motori avx2 e vulkan)
-        shell: pwsh
-        run: |
-          $model = "${{ runner.temp }}\qwen\Qwen3.5-4B-Q4_K_M.gguf"
-          if (-not (Test-Path $model)) {
-            New-Item -ItemType Directory -Force (Split-Path $model) | Out-Null
-            curl.exe -fsSL --retry 5 -o "$model.part" https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf
-            if ($LASTEXITCODE -ne 0) { throw 'modello non scaricato' }
-            Move-Item "$model.part" $model
-          }
-          New-Item -ItemType Directory -Force prova-riassumi | Out-Null
-          Get-ChildItem motori-x64 -Filter cedro-riassumi-*.exe | Where-Object Name -Match '-(avx2|vulkan)\.exe$' | Copy-Item -Destination prova-riassumi
-          powershell -File riassumi\prova.ps1 -Dir prova-riassumi -Model $model
-          if ($LASTEXITCODE -ne 0) { throw 'prova del riassunto x64 fallita' }
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: x64
-          path: |
-            dist/Cedro-Setup-*.exe
-            dist/Cedro-Bondeno-Setup-*.exe
-            motori-x64/*.exe
-
   pubblica:
     name: Pubblica la release
-    if: ${{ always() && inputs.tag != '' && needs.app.result == 'success' && needs.motori.result == 'success' && needs.x64.result == 'success' }}
-    needs: [app, motori, vulkan, x64]
+    if: ${{ always() && inputs.tag != '' && needs.app.result == 'success' && needs.motori.result == 'success' && needs.x64.result == 'success' && needs.x64-installa.result == 'success' }}
+    needs: [app, motori, vulkan, x64, x64-installa]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
