@@ -5,6 +5,7 @@
 
 use crate::guida::{Align, Canvas, Rgb};
 use crate::settings::{read_settings, write_settings};
+use crate::ui::theme::ThemeId;
 
 pub const W: f32 = 780.0;
 pub const H: f32 = 480.0;
@@ -81,6 +82,12 @@ pub fn initial() -> Choice {
     }
 }
 
+/// Se il tema scelto è Cedro 4 Labs: niente YouTube né video dal web nelle anteprime (si legge una volta sola).
+fn senza_web() -> bool {
+    static SENZA: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SENZA.get_or_init(|| !ThemeId::from_key(&read_settings().ui_theme).has_web())
+}
+
 fn lerp(a: f32, b: f32, k: f32) -> f32 {
     a + (b - a) * k
 }
@@ -136,7 +143,12 @@ fn mini_complete(c: &mut dyn Canvas, x: f32, y: f32, w: f32, h: f32, t: f32) {
     frame(c, x, y, w, h);
     c.clip(x, y, w, h);
     c.fill(x + 1.0, y + 18.0, 62.0, h - 19.0, SIDE);
-    for (i, name) in ["Immagini", "Documenti", "PDF", "Testo", "Audio", "Video", "YouTube"].iter().enumerate() {
+    let side: &[&str] = if senza_web() {
+        &["Immagini", "Documenti", "PDF", "Testo", "Audio", "Video", "Trascrizione", "Firma"]
+    } else {
+        &["Immagini", "Documenti", "PDF", "Testo", "Audio", "Video", "YouTube"]
+    };
+    for (i, name) in side.iter().enumerate() {
         let iy = y + 22.0 + i as f32 * 19.0;
         if i == 0 {
             c.fill(x + 1.0, iy - 2.0, 62.0, 19.0, BLUE);
@@ -185,7 +197,8 @@ fn mini_simple(c: &mut dyn Canvas, x: f32, y: f32, w: f32, h: f32, t: f32) {
     c.clip(x, y, w, h);
     c.fill(x + 1.0, y + 18.0, w - 2.0, 22.0, SIDE);
     let tab = (w - 2.0) / 3.0;
-    for (i, name) in ["Converti file", "Video dal web", "Trascrivi"].iter().enumerate() {
+    let tabs: [&str; 3] = if senza_web() { ["Converti file", "Trascrivi", "Firma"] } else { ["Converti file", "Video dal web", "Trascrivi"] };
+    for (i, name) in tabs.iter().enumerate() {
         let tx = x + 1.0 + i as f32 * tab;
         if i == 0 {
             c.fill(tx, y + 18.0, tab, 22.0, WHITE);
@@ -260,7 +273,8 @@ pub fn draw(c: &mut dyn Canvas, chosen: Choice, now: u64) {
     c.text("Si può cambiare quando vuoi da Impostazioni > Generale. Le funzioni sono le stesse.", 28.0, 54.0, W - 56.0, 24.0, 14.0, false, GREY, Align::Left, false);
     card(c, Choice::Complete, chosen, t);
     card(c, Choice::Simple, chosen, t);
-    c.text("I componenti pesanti (trascrizione, video dal web) si scaricano solo al primo uso.", 28.0, H - 58.0, W - 28.0 - 120.0 - 40.0, 40.0, 12.0, false, GREY, Align::Left, true);
+    let nota = if senza_web() { "Il componente pesante della trascrizione si scarica solo al primo uso." } else { "I componenti pesanti (trascrizione, video dal web) si scaricano solo al primo uso." };
+    c.text(nota, 28.0, H - 58.0, W - 28.0 - 120.0 - 40.0, 40.0, 12.0, false, GREY, Align::Left, true);
     c.round(BTN.0, BTN.1, BTN.2, BTN.3, 0.0, Some(BLUE), None);
     c.text("Fine", BTN.0, BTN.1, BTN.2, BTN.3, 15.0, true, WHITE, Align::Center, false);
 }
