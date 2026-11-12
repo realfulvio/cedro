@@ -1,5 +1,5 @@
 //! Immagini di microscopia: OME-TIFF (quello dei microscopi e di Bio-Formats), TIFF di ImageJ o Fiji,
-//! i TIFF a 16 bit di camere scientifiche, gli ND2 di Nikon e i LIF di Leica (lettori in `nd2` e `lif`). Un file ha canali (colori di fluorescenza),
+//! i TIFF a 16 bit di camere scientifiche, gli ND2 di Nikon, i LIF di Leica e i CZI di Zeiss (lettori in `nd2`, `lif` e `czi`). Un file ha canali (colori di fluorescenza),
 //! piani Z (la profondità) e istanti nel tempo; per vederlo bene servono i colori dei canali, la
 //! proiezione dei piani Z e il contrasto automatico, perché a 16 bit un'immagine di fluorescenza
 //! «a 8 bit» è quasi nera. La barra di scala si disegna se il file dice quanto è grande un pixel.
@@ -35,6 +35,8 @@ pub enum Origine {
     Nikon,
     /// Un LIF di Leica (LAS X): un progetto con più immagini.
     Leica,
+    /// Un CZI di Zeiss (ZEN): una o più scene, anche a mosaico.
+    Zeiss,
 }
 
 /// Da dove vengono i pixel.
@@ -43,6 +45,7 @@ enum Sorgente {
     Tiff,
     Nd2(Arc<crate::nd2::Nd2>),
     Lif(Arc<crate::lif::Immagine>),
+    Czi(Arc<crate::czi::Scena>),
 }
 
 impl std::fmt::Debug for Sorgente {
@@ -51,6 +54,7 @@ impl std::fmt::Debug for Sorgente {
             Sorgente::Tiff => "Tiff",
             Sorgente::Nd2(_) => "Nd2",
             Sorgente::Lif(_) => "Lif",
+            Sorgente::Czi(_) => "Czi",
         })
     }
 }
@@ -145,7 +149,7 @@ fn testa(d: &mut Decoder<BufReader<File>>) -> Option<Testa> {
 /// la descrizione OME o ImageJ, oppure è un TIFF a 16 bit in toni di grigio. Un vetrino Aperio no.
 pub fn is_stack(path: &Path) -> bool {
     let head = crate::imgfmt::head_of(path);
-    if crate::nd2::riconosci(&head) || crate::lif::riconosci(&head) {
+    if crate::nd2::riconosci(&head) || crate::lif::riconosci(&head) || crate::czi::riconosci(&head) {
         return true;
     }
     // Un ND2 dei primi NIS-Elements (JPEG 2000): lo si prende per dire che non si legge.
@@ -164,6 +168,15 @@ pub fn is_stack(path: &Path) -> bool {
     t.descrizione.contains("<OME") || t.descrizione.starts_with("ImageJ=") || (t.campioni == 1 && t.bit == 16)
 }
 
+/// I nomi delle scene di un CZI (vuoti se ce n'è una sola).
+fn nomi_scene(czi: &crate::czi::Czi) -> Vec<String> {
+    if czi.scene.len() > 1 {
+        czi.scene.iter().map(|s| s.nome.clone()).collect()
+    } else {
+        Vec::new()
+    }
+}
+
 /// Il messaggio per le immagini di un LIF lasciate fuori perché rovinate.
 fn avviso_lif(saltate: &[(String, String)]) -> Option<String> {
     match saltate {
@@ -178,8 +191,14 @@ impl Pila {
         Pila::open_serie(path, 0)
     }
 
-    /// Tutte le immagini del file: una sola, tranne nei LIF (letti una volta sola).
+    /// Tutte le immagini del file: una sola, tranne nei LIF e nei CZI con più scene (letti una volta sola).
     pub fn open_tutte(path: &Path) -> Result<Vec<Pila>, String> {
+        if crate::czi::riconosci(&crate::imgfmt::head_of(path)) {
+            let czi = crate::czi::Czi::open(path)?;
+            let nomi = nomi_scene(&czi);
+            let avviso = czi.avviso.clone();
+            return Ok(czi.scene.into_iter().enumerate().map(|(k, s)| Pila::da_czi(s, nomi.clone(), k, avviso.clone())).collect());
+        }
         if crate::lif::riconosci(&crate::imgfmt::head_of(path)) {
             let lif = crate::lif::Lif::open(path)?;
             let nomi: Vec<String> = lif.immagini.iter().map(|i| i.nome.clone()).collect();
@@ -198,9 +217,16 @@ impl Pila {
         Ok(vec![Pila::open(path)?])
     }
 
-    /// L'immagine numero `serie` del file (conta solo per i LIF).
+    /// L'immagine numero `serie` del file (conta solo per i LIF e i CZI).
     pub fn open_serie(path: &Path, serie: usize) -> Result<Pila, String> {
         let head = crate::imgfmt::head_of(path);
+        if crate::czi::riconosci(&head) {
+            let czi = crate::czi::Czi::open(path)?;
+            let nomi = nomi_scene(&czi);
+            let avviso = czi.avviso.clone();
+            let s = czi.scene.into_iter().nth(serie).ok_or("scena non trovata nel file CZI")?;
+            return Ok(Pila::da_czi(s, nomi, serie, avviso));
+        }
         if crate::nd2::riconosci(&head) {
             return Pila::da_nd2(crate::nd2::Nd2::open(path)?);
         }
@@ -309,6 +335,43 @@ impl Pila {
         p.serie = serie;
         p.numero_serie = numero;
         p.sorgente = Sorgente::Lif(Arc::new(i));
+        p
+    }
+
+    fn da_czi(s: crate::czi::Scena, serie: Vec<String>, numero: usize, avviso: Option<String>) -> Pila {
+        let mut p = Pila::vuota(Origine::Zeiss, s.larghezza, s.altezza, Sorgente::Tiff);
+        p.canali = if s.rgb { s.canali.iter().map(|(n, c)| Canale { nome: n.clone(), colore: c.unwrap_or((255, 255, 255)) }).collect() } else { canali_standard(s.canali.len(), &s.canali) };
+        if s.rgb {
+            p.campioni = 3;
+        }
+        p.z = s.z;
+        p.t = s.t();
+        p.um_per_px = s.um_per_px;
+        p.um_z = s.um_z;
+        p.bit = s.bit;
+        p.obiettivo = s.obiettivo.clone();
+        if s.altri.iter().any(|(a, k)| *a != b'T' && *k > 1) {
+            p.assi_t = s
+                .altri
+                .iter()
+                .map(|(a, k)| match a {
+                    b'T' => ("istanti", "time points", *k),
+                    b'R' => ("rotazioni", "rotations", *k),
+                    b'I' => ("illuminazioni", "illuminations", *k),
+                    b'H' => ("fasi", "phases", *k),
+                    b'V' => ("viste", "views", *k),
+                    _ => ("cicli", "loops", *k),
+                })
+                .collect();
+        }
+        let mut avvisi: Vec<String> = avviso.into_iter().collect();
+        if let Some((f, w, h)) = s.ridotta {
+            avvisi.push(format!("immagine grande ({w}×{h} pixel): letta ridotta 1:{f}, {}×{} pixel", s.larghezza, s.altezza));
+        }
+        p.avviso = (!avvisi.is_empty()).then(|| avvisi.join("; "));
+        p.serie = serie;
+        p.numero_serie = numero;
+        p.sorgente = Sorgente::Czi(Arc::new(s));
         p
     }
 
@@ -683,6 +746,8 @@ impl Pila {
                     Origine::Nikon => "ND2 di Nikon",
                     Origine::Leica if en => "Leica LIF",
                     Origine::Leica => "LIF di Leica",
+                    Origine::Zeiss if en => "Zeiss CZI",
+                    Origine::Zeiss => "CZI di Zeiss",
                 }
                 .into(),
             );
@@ -850,6 +915,7 @@ impl Pila {
             }
             Sorgente::Nd2(n) => n.fotogramma(path, n.indice(z, t))?.into_iter().nth(c).ok_or_else(|| "canale non trovato".to_string()),
             Sorgente::Lif(i) => i.piano(path, c, z, t),
+            Sorgente::Czi(s) => s.piano(path, c, z, t),
         }
     }
 
@@ -900,6 +966,28 @@ impl Pila {
             }
             return Ok(out);
         }
+        if let Sorgente::Czi(s) = &self.sorgente {
+            if s.componenti() > 1 {
+                // RGB: le tessere si leggono una volta sola per i tre colori.
+                let zeta: Vec<usize> = match piani {
+                    Piani::Centrale => vec![self.z / 2],
+                    Piani::Massimo => (0..self.z).collect(),
+                };
+                let fisici = self.canali.len() / s.componenti();
+                let per_canale = self.in_parallelo((0..fisici).collect(), |c| {
+                    let mut tutti: Option<Vec<Piano>> = None;
+                    for &z in &zeta {
+                        let f = s.piani(path, c, z, t)?;
+                        match &mut tutti {
+                            None => tutti = Some(f),
+                            Some(a) => a.iter_mut().zip(&f).for_each(|(a, b)| massimo(a, b)),
+                        }
+                    }
+                    tutti.ok_or_else(|| "piano non trovato nel file".to_string())
+                })?;
+                return Ok(per_canale.into_iter().flatten().collect());
+            }
+        }
         self.in_parallelo((0..self.canali.len()).collect(), |c| self.canale(path, c, t, piani))
     }
 
@@ -907,6 +995,12 @@ impl Pila {
     pub fn canali_di_z(&self, path: &Path, z: usize, t: usize) -> Result<Vec<Piano>, String> {
         if let Sorgente::Nd2(n) = &self.sorgente {
             return n.fotogramma(path, n.indice(z, t));
+        }
+        if let Sorgente::Czi(s) = &self.sorgente {
+            if s.componenti() > 1 {
+                let fisici = self.canali.len() / s.componenti();
+                return Ok(self.in_parallelo((0..fisici).collect(), |c| s.piani(path, c, z, t))?.into_iter().flatten().collect());
+            }
         }
         self.in_parallelo((0..self.canali.len()).collect(), |c| self.piano_z(path, c, z, t))
     }

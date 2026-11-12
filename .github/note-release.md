@@ -11,9 +11,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Componenti aggiornati, per sicurezza e manutenzione.** Nessun cambiamento nell'uso.
+**Cedro 4 Labs legge i file Zeiss CZI.**
 
-- Firma digitale: aggiornate le librerie di crittografia (RSA, curve P-256/P-384, SHA-1/SHA-2). Chiudono due avvisi di sicurezza (RUSTSEC-2023-0071 e RUSTSEC-2026-0387) sui tempi di calcolo; in Cedro non erano sfruttabili, perché le chiavi private restano nella chiavetta o nella smart card.
-- Riconoscimento del testo (OCR): ocrs 0.14 e rten 0.28, le versioni ufficiali. Il testo letto è identico a prima e la velocità è la stessa. Resta l'interruttore per spegnere AVX-512 nelle Impostazioni.
-- Video: decoder H.264, VP8 e MPEG-4 aggiornati con correzioni.
-- Aggiornati i certificati radice usati per i download e la libreria ZIP.
+- Si aprono i `.czi` di ZEN (confocali LSM, Axio Observer e Imager, Axio Scan, Celldiscoverer) come già i ND2 e i LIF: anteprima con i canali a colori, conversione in PNG, JPEG, TIFF e PDF, un file per canale o per piano Z, tutti gli istanti, valori originali a 16 bit e barra di scala dalla misura scritta nel file.
+- Ogni scena del file (più posizioni o più aree del vetrino) esce come immagine a sé, con il suo nome. I mosaici si ricompongono come in ZEN.
+- Si leggono tutte le compressioni di ZEN, compreso il JPEG XR dei vetrini. I vetrini troppo grandi si aprono ridotti, e Cedro dice di quanto.
+- I pixel sono gli stessi che dà la libreria ufficiale di Zeiss.

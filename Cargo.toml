@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.44.3"
+version = "0.45.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -43,6 +43,10 @@ zune-core = { version = "0.5", default-features = false }
 tiff = "0.11"
 zune-jpeg = "0.5"
 hayro-jpeg2000 = { version = "0.5", default-features = false, features = ["simd"] }
+# Zeiss CZI (microscopia): tessere zstd (ruzstd), JPEG XR (openreadout-jpegxr, decoder di jxrlib in Rust senza unsafe, versione fissata) e LZW (weezl, già dentro per tiff).
+ruzstd = "0.8"
+openreadout-jpegxr = "=0.4.0"
+weezl = "0.1"
 flacenc = { version = "0.5", default-features = false }
 zip = { version = "9", default-features = false, features = ["deflate"] }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
