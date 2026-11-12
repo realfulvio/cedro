@@ -871,13 +871,13 @@ fn panel_foot(f: &mut Frame, app: &App, r: R, deep: Rgb, exists: bool) {
     let (x, w) = (r.0 + 20.0, r.2 - 40.0);
     let foot_y = r.1 + r.3 - FOOT;
     f.hline(r.0 + 1.0, foot_y, r.2 - 2.0);
-    let half = (w - 10.0) / 2.0;
-    let (dw, ew) = if exists { (half, half) } else { (w, 0.0) };
+    // La cartella ha i nomi più lunghi («Accanto all'originale»): prende più spazio di «Se esiste già».
+    let (dw, ew) = if exists { (((w - 10.0) * 0.6).round(), w - 10.0 - ((w - 10.0) * 0.6).round()) } else { (w, 0.0) };
     f.text("Cartella di destinazione", x, foot_y + 12.0, dw, 20.0, 13.0, BOLD, pal.muted);
     super::dest_select(f, app, (x, foot_y + 34.0, dw, 40.0), 14.5);
     if exists {
-        f.text("Se esiste già", x + half + 10.0, foot_y + 12.0, ew, 20.0, 13.0, BOLD, pal.muted);
-        super::exists_select(f, app, (x + half + 10.0, foot_y + 34.0, ew, 40.0), 14.5);
+        f.text("Se esiste già", x + dw + 10.0, foot_y + 12.0, ew, 20.0, 13.0, BOLD, pal.muted);
+        super::exists_select(f, app, (x + dw + 10.0, foot_y + 34.0, ew, 40.0), 14.5);
     }
     let go = (x, foot_y + 88.0, w, 56.0);
     super::labs::go_button(f, app, go, deep);
@@ -914,6 +914,8 @@ fn out_line(f: &mut Frame, app: &App, r: R) {
             let ext = if app.transcribe.format == crate::trascrizione::Format::Word { "docx" } else { "txt" };
             format!("Esce come {}", crate::i18n::lit(&format!("{stem}.{ext}")))
         }
+        // In «Semplice» il riassunto sta già sotto le scelte, nel pannello: qui non si ripete.
+        Activity::Convert if f.simple => return,
         _ => super::summary_line(app),
     };
     let lines = f.p.wrap_lines(&crate::i18n::tr_string(&text), 14.0, SANS, r.2, 2);

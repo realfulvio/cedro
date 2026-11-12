@@ -111,10 +111,10 @@ const PAGES: [Page; 8] = [
     Page {
         nav: "Aspetto",
         title: "La finestra come la vuoi tu",
-        intro: "In Impostazioni, Aspetto: sette temi, la modalità Standard (tutte le opzioni) o Semplificata (solo l'essenziale) e i caratteri più grandi. Ogni tema ha il suo carattere. Questa Guida cambia insieme a loro.",
+        intro: "In Impostazioni, Aspetto: le tinte di Cedro e i temi di prima, la vista Semplice (solo l'essenziale) o Completa (tutti i comandi) e i caratteri più grandi. Ogni tema ha il suo carattere. Questa Guida cambia insieme a loro.",
         rows: &[
-            ("Tema", "Sette disposizioni", "Dal Windows essenziale al Comune di Bondeno"),
-            ("Modo", "Standard o Semplificata", "Il resto sta in «Altre opzioni»"),
+            ("Tema", "Quattro tinte e sette temi", "Da Cedro · Melanzana al Comune di Bondeno"),
+            ("Vista", "Semplice o Completa", "Si cambia anche in cima al pannello"),
             ("Testo", "Caratteri più grandi", "Più leggibili in tutta l'app"),
         ],
     },
