@@ -299,7 +299,7 @@ fn micro_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: OptStyle) ->
     let Some((info, count)) = app.first_micro() else { return 0.0 };
     f.p.rrect(x, y + 7.0, 10.0, 10.0, 3.0, Some(MICRO), None);
     f.text("Microscopia", x + 18.0, y, w - 18.0, 24.0, st.label, SEMI, pal.text);
-    let mut line = crate::i18n::lit(&info.summary[crate::i18n::english() as usize]);
+    let mut line = crate::i18n::lit(&info.summary[crate::i18n::foreign() as usize]);
     if count > 1 {
         line = format!("{line} · {count} file");
     }
@@ -319,7 +319,7 @@ fn dicom_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: OptStyle) ->
     let Some((info, count)) = app.first_dicom() else { return 0.0 };
     f.p.rrect(x, y + 7.0, 10.0, 10.0, 3.0, Some(DICOM), None);
     f.text("DICOM", x + 18.0, y, w - 18.0, 24.0, st.label, SEMI, pal.text);
-    let mut line = crate::i18n::lit(&info.summary[crate::i18n::english() as usize]);
+    let mut line = crate::i18n::lit(&info.summary[crate::i18n::foreign() as usize]);
     if count > 1 {
         line = format!("{line} · {count} file");
     }
@@ -604,13 +604,13 @@ pub fn waiting_line(app: &App, i: usize) -> String {
     let file = &app.files[i];
     let media = app.media_of(&file.path);
     if let Some(s) = media.and_then(|m| m.slide.as_ref()) {
-        return crate::i18n::lit(&s.summary[crate::i18n::english() as usize]);
+        return crate::i18n::lit(&s.summary[crate::i18n::foreign() as usize]);
     }
     if let Some(d) = media.and_then(|m| m.dicom.as_ref()) {
-        return crate::i18n::lit(&d.summary[crate::i18n::english() as usize]);
+        return crate::i18n::lit(&d.summary[crate::i18n::foreign() as usize]);
     }
     if let Some(d) = media.and_then(|m| m.micro.as_ref()) {
-        return crate::i18n::lit(&d.summary[crate::i18n::english() as usize]);
+        return crate::i18n::lit(&d.summary[crate::i18n::foreign() as usize]);
     }
     crate::i18n::lit(&file.path.display().to_string())
 }
