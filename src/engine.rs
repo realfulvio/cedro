@@ -2314,6 +2314,10 @@ fn slide_extras(
 }
 
 pub fn config_dir() -> PathBuf {
+    // Versione portable: tutto accanto a cedro.exe, niente nel profilo di Windows.
+    if let Some(data) = crate::portable::data_root() {
+        return data;
+    }
     if let Ok(appdata) = std::env::var("APPDATA") {
         return PathBuf::from(appdata).join("Cedro");
     }
