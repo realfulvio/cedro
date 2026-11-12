@@ -174,6 +174,8 @@ pub fn start(open: bool) -> std::result::Result<(), String> {
         if let Err(e) = add_tray(hwnd) {
             append_log(&format!("icona non aggiunta: {e}"));
         }
+        // Versione portable: dopo un aggiornamento toglie il cedro.exe vecchio.
+        cedro::portable::cleanup();
         // Dopo un aggiornamento silenzioso: un solo avviso discreto, a cose fatte.
         if let Some(version) = update::take_updated() {
             balloon(&format!("Cedro è stato aggiornato alla {version}."));
@@ -1564,6 +1566,14 @@ fn add_tray(hwnd: HWND) -> std::result::Result<(), String> {
     Ok(())
 }
 
+/// Chiude questo Cedro (la tray e le finestre): serve all'aggiornamento della versione portable, che si riapre da sola.
+pub(crate) fn quit_tray() {
+    unsafe {
+        let hwnd = HWND(HMSG.load(Ordering::Relaxed) as *mut _);
+        let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
+    }
+}
+
 fn remove_tray(hwnd: HWND) {
     unsafe {
         let mut nid = NOTIFYICONDATAW::default();
@@ -1639,6 +1649,7 @@ pub(crate) fn check_updates(manual: bool) {
                                 append_log(&format!("aggiornamento: {e}"));
                             } else {
                                 // L'installatore chiude questo Cedro fra poco: fino ad allora nessuna conversione nuova.
+                                // (La versione portable si riapre già da sola: qui non si arriva.)
                                 std::thread::sleep(std::time::Duration::from_secs(60));
                             }
                             return;
