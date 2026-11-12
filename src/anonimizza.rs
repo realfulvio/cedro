@@ -82,6 +82,7 @@ fn pdf(bytes: &[u8]) -> Result<(Vec<u8>, Fatto), String> {
     // Su tutti gli oggetti: XMP, dati privati dei programmi, autori e date dei commenti, JavaScript.
     let ids: Vec<_> = doc.objects.keys().copied().collect();
     let mut xmp_streams = Vec::new();
+    let mut firmato = false;
     for id in ids {
         let Some(obj) = doc.objects.get_mut(&id) else { continue };
         let dict = match obj {
@@ -102,7 +103,9 @@ fn pdf(bytes: &[u8]) -> Result<(Vec<u8>, Fatto), String> {
             fatto.tolto("dati privati dei programmi");
         }
         let is_annot = dict.get(b"Subtype").is_ok() && (dict.has(b"Rect") || dict.get(b"Type").and_then(Object::as_name).is_ok_and(|n| n == b"Annot"));
-        if is_annot {
+        // Nei campi dei moduli (Widget) /T è il nome del campo, non l'autore: senza, il modulo non va più.
+        let widget = dict.get(b"Subtype").and_then(Object::as_name).is_ok_and(|n| n == b"Widget");
+        if is_annot && !widget {
             if dict.remove(b"T").is_some() {
                 fatto.tolto("autori dei commenti");
             }
@@ -114,13 +117,20 @@ fn pdf(bytes: &[u8]) -> Result<(Vec<u8>, Fatto), String> {
             dict.remove(b"JS");
             fatto.tolto("JavaScript");
         }
-        if dict.get(b"Type").and_then(Object::as_name).is_ok_and(|n| n == b"Sig") {
-            // Una firma digitale dopo la pulizia non sarebbe più valida e porta il nome del firmatario.
-            for k in [&b"Name"[..], b"Location", b"Reason", b"ContactInfo", b"M"] {
+        if dict.get(b"Type").and_then(Object::as_name).is_ok_and(|n| n == b"Sig") || (dict.has(b"ByteRange") && dict.has(b"Contents") && dict.has(b"Filter")) {
+            // Una firma digitale dopo la pulizia non sarebbe più valida e porta il nome del firmatario,
+            // anche dentro il certificato (/Contents e /Cert): va via tutta.
+            for k in [&b"Name"[..], b"Location", b"Reason", b"ContactInfo", b"M", b"Contents", b"Cert", b"ByteRange", b"Prop_Build", b"Reference"] {
                 if dict.remove(k).is_some() {
-                    fatto.tolto("dati della firma");
+                    fatto.tolto("firma digitale con il certificato del firmatario");
+                    firmato = true;
                 }
             }
+        }
+        // Il campo della firma resta, senza firma.
+        if dict.get(b"FT").and_then(Object::as_name).is_ok_and(|n| n == b"Sig") && dict.remove(b"V").is_some() {
+            fatto.tolto("firma digitale con il certificato del firmatario");
+            firmato = true;
         }
         // Gli allegati restano (sono contenuto), ma vanno controllati.
         if dict.get(b"Type").and_then(Object::as_name).is_ok_and(|n| n == b"Filespec") && dict.has(b"EF") {
@@ -141,6 +151,13 @@ fn pdf(bytes: &[u8]) -> Result<(Vec<u8>, Fatto), String> {
         }
         cat.remove(b"Metadata");
         cat.remove(b"PieceInfo");
+        // I permessi legati a una firma (DocMDP) rimandano alla firma tolta.
+        if firmato {
+            cat.remove(b"Perms");
+        }
+    }
+    if firmato {
+        fatto.avvisi.push("Il PDF era firmato: la firma è stata tolta, perché dopo la pulizia non sarebbe più valida.".into());
     }
     if let Ok(names) = doc.catalog().and_then(|c| c.get(b"Names")).and_then(Object::as_reference) {
         if let Ok(Object::Dictionary(n)) = doc.get_object_mut(names) {
@@ -201,6 +218,17 @@ fn office(bytes: &[u8]) -> Result<(Vec<u8>, Fatto), String> {
                 if let Ok(text) = String::from_utf8(data.clone()) {
                     let pulito = xml(&name, &text, &mut fatto);
                     data = pulito.into_bytes();
+                }
+            }
+            // Le foto dentro il documento portano i loro dati (GPS, fotocamera, data): si puliscono
+            // come le foto sciolte, senza ricomprimerle.
+            let ext = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+            if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp") {
+                if let Some(Ok((pulita, tolto))) = crate::pulisci::pulisci(&ext, &data) {
+                    if pulita != data {
+                        fatto.tolto(if tolto.gps { "GPS e dati delle foto" } else { "dati delle foto" });
+                        data = pulita;
+                    }
                 }
             }
             let opts = zip::write::SimpleFileOptions::default().compression_method(method);
@@ -329,6 +357,9 @@ fn xml(name: &str, text: &str, fatto: &mut Fatto) -> String {
         ("userId", "Autore", "autori di commenti e revisioni"),
         ("displayName", "Autore", "autori di commenti e revisioni"),
         ("p:name", "Autore", "autori di commenti e revisioni"),
+        ("providerId", "None", "autori di commenti e revisioni"),
+        // Chi ha protetto la cartella di Excel (fileSharing) e le revisioni condivise.
+        ("userName", "Autore", "nomi utente"),
     ] {
         let (s, c) = attributo(&t, attr, value);
         if c {
@@ -336,17 +367,25 @@ fn xml(name: &str, text: &str, fatto: &mut Fatto) -> String {
         }
         t = s;
     }
-    if n.starts_with("xl/comments") || n.starts_with("ppt/commentauthors") {
+    if n.starts_with("xl/comments") {
         let (s, c) = svuota(&t, "author");
         if c {
             fatto.tolto("autori di commenti e revisioni");
         }
         t = s;
-        let (s, c) = attributo(&t, "name", "Autore");
-        if c && n.starts_with("ppt/commentauthors") {
-            fatto.tolto("autori di commenti e revisioni");
+    }
+    // PowerPoint: gli autori dei commenti, vecchi (commentAuthors) e nuovi (authors), con le iniziali.
+    if n.starts_with("ppt/commentauthors") || n.starts_with("ppt/authors") {
+        for (attr, value) in [("name", "Autore"), ("initials", "A")] {
+            let (s, c) = attributo(&t, attr, value);
+            if c {
+                fatto.tolto("autori di commenti e revisioni");
+            }
             t = s;
         }
+    }
+    if n.ends_with(".rels") {
+        t = collegamenti(&t, fatto);
     }
     if n == "content.xml" || n == "styles.xml" {
         for tag in ["dc:creator", "dc:date"] {
@@ -369,6 +408,41 @@ fn xml(name: &str, text: &str, fatto: &mut Fatto) -> String {
     t
 }
 
+/// Nei .rels il modello collegato (di solito Normal.dotm) è un percorso del PC con il nome utente di
+/// Windows: resta solo il nome del modello. Gli altri collegamenti a file del PC sono contenuto: restano,
+/// ma si dice di controllarli.
+fn collegamenti(text: &str, fatto: &mut Fatto) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("<Relationship ") {
+        let Some(j) = rest[i..].find('>') else { break };
+        out.push_str(&rest[..i]);
+        let el = &rest[i..i + j + 1];
+        let external = value_of(el, "TargetMode") == Some("External");
+        let target = value_of(el, "Target").unwrap_or("");
+        if external && value_of(el, "Type").is_some_and(|t| t.ends_with("/attachedTemplate")) {
+            let nome = target.rsplit(['/', '\\']).next().filter(|s| !s.is_empty()).unwrap_or("Normal.dotm");
+            if nome != target {
+                out.push_str(&el.replacen(&format!("Target=\"{target}\""), &format!("Target=\"{nome}\""), 1));
+                fatto.tolto("percorso del modello sul PC");
+            } else {
+                out.push_str(el);
+            }
+        } else {
+            if external && target.to_ascii_lowercase().starts_with("file:") {
+                let avviso = "Il documento ha collegamenti a file del computer (il percorso può contenere il nome utente): controllali.".to_string();
+                if !fatto.avvisi.contains(&avviso) {
+                    fatto.avvisi.push(avviso);
+                }
+            }
+            out.push_str(el);
+        }
+        rest = &rest[i + j + 1..];
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Toglie da [Content_Types].xml e dai .rels i riferimenti alle parti eliminate.
 fn togli_riferimenti(zip_bytes: Vec<u8>) -> Result<Vec<u8>, String> {
     let mut zin = zip::ZipArchive::new(Cursor::new(&zip_bytes)).map_err(|e| e.to_string())?;
@@ -385,7 +459,8 @@ fn togli_riferimenti(zip_bytes: Vec<u8>) -> Result<Vec<u8>, String> {
             let name = f.name().map_err(|e| e.to_string())?.to_string();
             let mut data = Vec::new();
             f.read_to_end(&mut data).map_err(|e| e.to_string())?;
-            if name == "[Content_Types].xml" || name.ends_with(".rels") {
+            // Anche il manifest degli OpenDocument elenca le parti (la miniatura).
+            if name == "[Content_Types].xml" || name.ends_with(".rels") || name == "META-INF/manifest.xml" {
                 if let Ok(text) = String::from_utf8(data.clone()) {
                     let mut kept = String::with_capacity(text.len());
                     let mut rest = text.as_str();
@@ -398,8 +473,9 @@ fn togli_riferimenti(zip_bytes: Vec<u8>) -> Result<Vec<u8>, String> {
                             break;
                         };
                         let el = &rest[i..i + j + 1];
-                        let target = value_of(el, "PartName").or_else(|| value_of(el, "Target"));
-                        let drop = (el.starts_with("<Override") || el.starts_with("<Relationship ")) && target.is_some_and(|t| tolta(&resolve(&name, t)));
+                        let target = value_of(el, "PartName").or_else(|| value_of(el, "Target")).or_else(|| value_of(el, "manifest:full-path"));
+                        let voce = el.starts_with("<Override") || el.starts_with("<Relationship ") || (el.starts_with("<manifest:file-entry") && el.ends_with("/>"));
+                        let drop = voce && target.is_some_and(|t| tolta(&resolve(&name, t)));
                         if !drop {
                             kept.push_str(el);
                         }
@@ -427,7 +503,7 @@ fn value_of<'a>(el: &'a str, attr: &str) -> Option<&'a str> {
 
 /// Il percorso di una parte a cui punta un .rels (relativo alla cartella della parte che lo possiede).
 fn resolve(rels_name: &str, target: &str) -> String {
-    if target.starts_with('/') || rels_name == "[Content_Types].xml" {
+    if target.starts_with('/') || rels_name == "[Content_Types].xml" || rels_name == "META-INF/manifest.xml" {
         return target.trim_start_matches('/').to_string();
     }
     // «word/_rels/document.xml.rels» descrive «word/document.xml»: la base è «word/».
@@ -519,5 +595,135 @@ mod prove {
         let frase = fatto.frase();
         assert!(frase.contains("autore") && frase.contains("metadati XMP") && frase.contains("autori dei commenti"), "{frase}");
         Document::load_mem(&out).unwrap();
+    }
+
+    fn zip_di(parti: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut out = Cursor::new(Vec::new());
+        {
+            let mut zw = zip::ZipWriter::new(&mut out);
+            for (n, b) in parti {
+                zw.start_file(*n, zip::write::SimpleFileOptions::default()).unwrap();
+                zw.write_all(b).unwrap();
+            }
+            zw.finish().unwrap();
+        }
+        out.into_inner()
+    }
+
+    fn parte(zip_bytes: &[u8], nome: &str) -> Option<Vec<u8>> {
+        let mut z = zip::ZipArchive::new(Cursor::new(zip_bytes)).unwrap();
+        let mut f = z.by_name(nome).ok()?;
+        let mut b = Vec::new();
+        f.read_to_end(&mut b).unwrap();
+        Some(b)
+    }
+
+    #[test]
+    fn un_pptx_perde_nomi_e_iniziali_degli_autori_dei_commenti() {
+        let z = zip_di(&[
+            ("[Content_Types].xml", br#"<Types/>"#),
+            ("ppt/authors.xml", br#"<p188:authorLst><p188:author id="{1}" name="Mario Rossi" initials="MR" userId="mario@clinica.it" providerId="AD"/></p188:authorLst>"#),
+            ("ppt/commentAuthors.xml", br#"<p:cmAuthorLst><p:cmAuthor id="0" name="Laura Bianchi" initials="LB" lastIdx="1" clrIdx="0"/></p:cmAuthorLst>"#),
+            ("ppt/slides/slide1.xml", br#"<p:sld><p:cSld name="Titolo"/></p:sld>"#),
+        ]);
+        let (out, fatto) = pulisci("pptx", &z).unwrap();
+        let s = tutto(&out);
+        for nome in ["Mario Rossi", "\"MR\"", "Laura Bianchi", "\"LB\"", "mario@clinica.it"] {
+            assert!(!s.contains(nome), "è rimasto «{nome}»:\n{s}");
+        }
+        // Il nome di una diapositiva non è una persona: resta.
+        assert!(s.contains(r#"name="Titolo""#), "{s}");
+        assert!(fatto.frase().contains("autori di commenti"));
+    }
+
+    #[test]
+    fn modello_collegato_e_nomi_utente_di_excel_non_restano() {
+        let rels = br#"<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/attachedTemplate" Target="file:///C:\Users\mario.rossi\AppData\Roaming\Microsoft\Templates\Normal.dotm" TargetMode="External"/><Relationship Id="rId2" Type="http://x/hyperlink" Target="https://www.clinica.it" TargetMode="External"/></Relationships>"#;
+        let (out, fatto) = pulisci("docx", &zip_di(&[("[Content_Types].xml", br#"<Types/>"#), ("word/_rels/settings.xml.rels", rels)])).unwrap();
+        let s = tutto(&out);
+        assert!(!s.contains("mario.rossi"), "{s}");
+        assert!(s.contains(r#"Target="Normal.dotm""#) && s.contains("https://www.clinica.it"), "{s}");
+        assert!(fatto.frase().contains("modello"), "{}", fatto.frase());
+        let z = zip_di(&[
+            ("[Content_Types].xml", br#"<Types/>"#),
+            ("xl/workbook.xml", br#"<workbook><fileSharing readOnlyRecommended="1" userName="Mario Rossi"/></workbook>"#),
+            ("xl/revisions/revisionHeaders.xml", br#"<headers><header guid="{1}" dateTime="2024-03-15T10:00:00" userName="Laura Bianchi"/></headers>"#),
+        ]);
+        let s = tutto(&pulisci("xlsx", &z).unwrap().0);
+        assert!(!s.contains("Mario Rossi") && !s.contains("Laura Bianchi"), "{s}");
+    }
+
+    #[test]
+    fn le_foto_dentro_il_documento_perdono_il_gps() {
+        let mut jpg = Vec::new();
+        image::RgbImage::from_pixel(4, 4, image::Rgb([200, 100, 50])).write_to(&mut Cursor::new(&mut jpg), image::ImageFormat::Jpeg).unwrap();
+        // Un blocco EXIF subito dopo l'inizio, con un segno riconoscibile.
+        let mut exif = b"Exif\0\0II*\0\x08\0\0\0\0\0\0\0\0\0GPS-45.4642N-9.19".to_vec();
+        let len = (exif.len() + 2) as u16;
+        let mut app1 = vec![0xFF, 0xE1];
+        app1.extend_from_slice(&len.to_be_bytes());
+        app1.append(&mut exif);
+        jpg.splice(2..2, app1);
+        let z = zip_di(&[("[Content_Types].xml", br#"<Types/>"#), ("word/media/image1.jpeg", &jpg)]);
+        let (out, fatto) = pulisci("docx", &z).unwrap();
+        let foto = parte(&out, "word/media/image1.jpeg").unwrap();
+        assert!(!foto.windows(12).any(|w| w == b"GPS-45.4642N"));
+        assert!(image::load_from_memory(&foto).is_ok());
+        assert!(fatto.frase().contains("foto"), "{}", fatto.frase());
+    }
+
+    #[test]
+    fn la_miniatura_degli_opendocument_esce_anche_dal_manifest() {
+        let manifest = br#"<manifest:manifest><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/><manifest:file-entry manifest:full-path="Thumbnails/thumbnail.png" manifest:media-type="image/png"/></manifest:manifest>"#;
+        let z = zip_di(&[("mimetype", b"application/vnd.oasis.opendocument.text"), ("META-INF/manifest.xml", manifest), ("content.xml", b"<office:document-content/>"), ("Thumbnails/thumbnail.png", b"PNG")]);
+        let (out, _) = pulisci("odt", &z).unwrap();
+        assert!(parte(&out, "Thumbnails/thumbnail.png").is_none());
+        let m = String::from_utf8(parte(&out, "META-INF/manifest.xml").unwrap()).unwrap();
+        assert!(!m.contains("thumbnail") && m.contains("content.xml"), "{m}");
+    }
+
+    fn pdf_con(extra: impl FnOnce(&mut lopdf::Document, lopdf::ObjectId) -> Vec<(&'static str, lopdf::Object)>) -> Vec<u8> {
+        use lopdf::{dictionary, Document, Object, Stream};
+        let mut doc = Document::with_version("1.7");
+        let pages = doc.new_object_id();
+        let content = doc.add_object(Stream::new(dictionary! {}, b"".to_vec()));
+        let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "Contents" => content });
+        doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+        let mut cat = dictionary! { "Type" => "Catalog", "Pages" => pages };
+        for (k, v) in extra(&mut doc, page) {
+            cat.set(k, v);
+        }
+        let catalog = doc.add_object(cat);
+        doc.trailer.set("Root", catalog);
+        let mut bytes = Vec::new();
+        doc.save_to(&mut bytes).unwrap();
+        bytes
+    }
+
+    #[test]
+    fn i_campi_dei_moduli_tengono_il_loro_nome() {
+        use lopdf::{dictionary, Object};
+        let bytes = pdf_con(|doc, page| {
+            let field = doc.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Widget", "FT" => "Tx", "P" => page, "Rect" => vec![0.into(), 0.into(), 100.into(), 20.into()], "T" => Object::string_literal("nome_paziente"), "V" => Object::string_literal("") });
+            vec![("AcroForm", Object::Dictionary(dictionary! { "Fields" => vec![field.into()] }))]
+        });
+        let (out, _) = pulisci("pdf", &bytes).unwrap();
+        assert!(String::from_utf8_lossy(&out).contains("nome_paziente"));
+    }
+
+    #[test]
+    fn la_firma_digitale_va_via_con_il_certificato() {
+        use lopdf::{dictionary, Object, StringFormat};
+        let bytes = pdf_con(|doc, page| {
+            // /Contents della firma: il PKCS#7 con il certificato (qui il CN in chiaro).
+            let sig = doc.add_object(dictionary! { "Type" => "Sig", "Filter" => "Adobe.PPKLite", "Name" => Object::string_literal("Mario Rossi"), "ByteRange" => vec![0.into(), 10.into(), 20.into(), 30.into()], "Contents" => Object::String(b"CN=Mario Rossi, O=Clinica".to_vec(), StringFormat::Literal) });
+            let field = doc.add_object(dictionary! { "Type" => "Annot", "Subtype" => "Widget", "FT" => "Sig", "P" => page, "Rect" => vec![0.into(), 0.into(), 0.into(), 0.into()], "T" => Object::string_literal("Firma1"), "V" => sig });
+            vec![("AcroForm", Object::Dictionary(dictionary! { "Fields" => vec![field.into()], "SigFlags" => 3 })), ("Perms", Object::Dictionary(dictionary! { "DocMDP" => sig }))]
+        });
+        let (out, fatto) = pulisci("pdf", &bytes).unwrap();
+        let s = String::from_utf8_lossy(&out);
+        assert!(!s.contains("Mario Rossi") && s.contains("Firma1"), "{s}");
+        assert!(fatto.frase().contains("firma"), "{}", fatto.frase());
+        lopdf::Document::load_mem(&out).unwrap();
     }
 }

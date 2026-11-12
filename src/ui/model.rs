@@ -639,7 +639,12 @@ impl App {
             Lab::Dati => {
                 self.activity = Activity::Convert;
                 cat(self, Kind::Text);
-                if !matches!(self.action.as_str(), "xlsx" | "csv") {
+                // Con soli Excel in coda «Porta in Excel» fallirebbe: si parte dal CSV.
+                let mut tabelle = self.files.iter().filter(|f| !f.voice_only && f.kind == Kind::Text).peekable();
+                let solo_fogli = tabelle.peek().is_some() && tabelle.all(|f| foglio_di_calcolo(&f.path));
+                if solo_fogli && self.action != "csv" {
+                    self.set_action("csv");
+                } else if !matches!(self.action.as_str(), "xlsx" | "csv") {
                     self.set_action("xlsx");
                 }
             }
@@ -1174,7 +1179,6 @@ impl App {
         Some((first, 1 + found.count()))
     }
 
-    /// Il primo vetrino digitale (.svs) della coda, con quanti ce ne sono.
     /// Gli strumenti del pannello: quelli dei vetrini solo se in coda c'è un vetrino.
     pub fn tools(&self) -> Vec<crate::engine::Slice> {
         let vetrini = self.first_slide().is_some();
@@ -1187,6 +1191,7 @@ impl App {
             .collect()
     }
 
+    /// Il primo vetrino digitale (.svs) della coda, con quanti ce ne sono.
     pub fn first_slide(&self) -> Option<(&media::SlideInfo, usize)> {
         let mut found = self.files.iter().filter_map(|f| self.media_of(&f.path).and_then(|m| m.slide.as_ref()));
         let first = found.next()?;
@@ -2312,4 +2317,9 @@ mod tests {
         assert!(app.preview_loading(&path, 1));
         assert!(!app.previews_failed.contains(&(path.clone(), 0)) || app.previews.contains_key(&(path.clone(), 0)));
     }
+}
+
+/// Vero per un foglio di calcolo (Excel, Calc): «Porta in Excel» non ha senso, si porta in CSV.
+pub fn foglio_di_calcolo(path: &std::path::Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "xlsx" | "xlsm" | "ods"))
 }

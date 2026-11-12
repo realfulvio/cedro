@@ -1238,13 +1238,16 @@ fn rx_in(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options, logo_salvato
             None => output_dir(&first, &crate::settings::read_settings())?,
         };
         let logo = crate::rx::logo(paths, logo_salvato);
-        let (bytes, pagine, animale) = crate::rx::pdf(&dicom, &opts.rx_clinica, logo.as_ref(), &|p| crate::progress::report(p)).map_err(err)?;
+        let (bytes, pagine, animale, saltati) = crate::rx::pdf(&dicom, &opts.rx_clinica, logo.as_ref(), &|p| crate::progress::report(p)).map_err(err)?;
         let nome = crate::rx::nome_file(&animale).unwrap_or_else(|| stem(&first));
         let out = reserve(&dir, &format!("{nome}-radiografie"), "pdf")?;
         write_bytes(&out, &bytes)?;
         crate::progress::report(1.0);
         let mut message = format!("PDF per il proprietario, {pagine} {}", if pagine == 1 { "pagina" } else { "pagine" });
         message.push_str(if logo.is_some() { ", con il logo della clinica." } else { ". Per il logo metti in coda anche la sua immagine: Cedro poi se lo ricorda." });
+        if !saltati.is_empty() {
+            message.push_str(&format!(" Saltati perché senza immagini: {}.", saltati.join(", ")));
+        }
         Ok(Output { path: out, message })
     })();
     let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
@@ -1727,12 +1730,15 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
                     "json" => false,
                     _ => true,
                 };
-                (crate::textconv::write_csv(&f[0].testo(virgola), ';'), "csv".to_string())
+                // Il CSV si scrive una volta sola con il separatore scelto: riletto, una colonna con
+                // «Rossi, Mario» diventerebbe due.
+                let sep = if action == "csv" { opts.csv_separator.unwrap_or(';') } else { ';' };
+                (crate::textconv::write_csv(&f[0].testo(virgola), sep), "csv".to_string())
             }
             None => (read_text(path)?, if from == "tsv" { "csv".to_string() } else { from }),
         };
         let table = |text: &str| {
-            let sep = crate::tabella::separatore(text, "");
+            let sep = if fogli.is_some() { ';' } else { crate::tabella::separatore(text, "") };
             crate::textconv::parse_csv(text, sep)
         };
         let (body, ext, suffix, message) = match action {
@@ -1740,6 +1746,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             "lower" => (text.to_lowercase(), if fogli.is_some() { "csv".into() } else { extension(path) }, "-minuscolo", "Testo scritto"),
             "md" if from == "csv" => (crate::textconv::markdown_table(&table(&text), opts.header_row), "md".into(), "", "Tabella Markdown"),
             "md" => (text, "md".into(), "", "Testo scritto"),
+            "csv" if fogli.is_some() => (text, "csv".into(), "", "CSV dal foglio di calcolo"),
             "csv" if from == "csv" => {
                 let sep = opts.csv_separator.unwrap_or_else(|| crate::tabella::separatore(&text, ""));
                 let message = if fogli.is_some() { "CSV dal foglio di calcolo" } else { "CSV riscritto" };
@@ -2372,6 +2379,18 @@ pub(crate) fn decode_text(bytes: &[u8]) -> String {
     }
     if bytes.starts_with(&[0xFE, 0xFF]) {
         return decode_utf16(&bytes[2..], false);
+    }
+    // UTF-16 senza BOM (alcuni strumenti di laboratorio): un byte su due è zero.
+    if bytes.len() >= 4 && bytes.len() % 2 == 0 {
+        let campione = &bytes[..bytes.len().min(4096)];
+        let zeri = |pari: bool| campione.iter().skip(usize::from(!pari)).step_by(2).filter(|b| **b == 0).count();
+        let meta = campione.len() / 2;
+        if zeri(false) * 10 >= meta * 9 && zeri(true) * 10 < meta {
+            return decode_utf16(bytes, true);
+        }
+        if zeri(true) * 10 >= meta * 9 && zeri(false) * 10 < meta {
+            return decode_utf16(bytes, false);
+        }
     }
     if let Ok(text) = std::str::from_utf8(bytes) {
         return text.to_string();
@@ -4159,6 +4178,14 @@ Luca,Bondeno
         let json = perform_with(&x.path, "json", 80, None, &Options::default()).unwrap();
         assert!(fs::read_to_string(&json.path).unwrap().contains("23.5"));
         assert!(perform_with(&x.path, "xlsx", 80, None, &Options::default()).is_err());
+        // Una colonna sola con la virgola nel testo resta una colonna (prima si ri-indovinava ',').
+        let nomi = dir.join("nomi.csv");
+        fs::write(&nomi, "Paziente\n\"Rossi, Mario\"\n\"Bianchi, Luca\"\n").unwrap();
+        let xn = perform_with(&nomi, "xlsx", 80, None, &Options::default()).unwrap();
+        let cn = perform_with(&xn.path, "csv", 80, None, &Options::default()).unwrap();
+        let testo = fs::read_to_string(&cn.path).unwrap();
+        let righe = crate::textconv::parse_csv(&testo, ';');
+        assert!(righe.iter().all(|r| r.len() == 1) && testo.contains("Rossi, Mario"), "{testo}");
         let _ = fs::remove_dir_all(&dir);
     }
 
