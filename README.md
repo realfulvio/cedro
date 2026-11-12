@@ -136,10 +136,10 @@ Componenti esterni come yt-dlp, deno, ffmpeg e il motore di trascrizione si scar
 
 | | Cosa c'è già | Cosa manca |
 | --- | --- | --- |
-| Immagini | Vetrini digitali `.svs` in immagine, DICOM (anche anonimizzato), Zeiss CZI, ND2 e LIF, OME-TIFF, figura per articolo con barra di scala | Hamamatsu NDPI, 3DHistech MRXS, VSI; DICOM da CD con DICOMDIR |
+| Immagini | Vetrini digitali Aperio `.svs`, Hamamatsu `.ndpi` e 3DHistech `.mrxs` in immagine e in copia anonima, DICOM (anche anonimizzato), Zeiss CZI, ND2 e LIF, OME-TIFF, figura per articolo con barra di scala | Olympus VSI; DICOM da CD con DICOMDIR |
 | Dati | CSV/TSV ↔ Excel, pacchetto dati con impronte SHA-256 (BagIt) | Mappa delle piastre a colori |
 | Privacy | Toglie nomi, autori, GPS e dati nascosti da PDF, Office, foto e DICOM | Altri formati proprietari |
-| Voce | Trascrizione con glossario veterinario, riassunto | Rifinitura dei referti |
+| Voce | Trascrizione con glossario veterinario, riassunto, referti dettati che restano «bozza» finché numeri e parole decisive non sono confermati | Referti già impaginati |
 
 Tutto resta sul computer, come in Cedro standard. Un laboratorio che manca di un formato o di una funzione può [aprire una segnalazione](https://github.com/realfulvio/cedro/issues).
 
