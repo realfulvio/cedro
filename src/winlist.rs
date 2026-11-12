@@ -250,7 +250,9 @@ pub fn draw(lparam: LPARAM) -> bool {
                     FillRect(hdc, &RECT { bottom: r.top + 1, ..r }, brush(LINE));
                     let head = r.top + px(ITEM_H, d);
                     // La licenza a destra, in una pillola chiara.
-                    let pill_w = text_width(hdc, item.license, st.mono_bold) + px(14, d);
+                    // Autore, licenza («MIT o Apache-2.0») e descrizione nella lingua scelta.
+                    let license = cedro::i18n::tr(item.license);
+                    let pill_w = text_width(hdc, &license, st.mono_bold) + px(14, d);
                     let pill = RECT {
                         left: r.right - px(30, d) - pill_w,
                         top: r.top + px(13, d),
@@ -258,15 +260,16 @@ pub fn draw(lparam: LPARAM) -> bool {
                         bottom: r.top + px(33, d),
                     };
                     crate::wingfx::round_rect(hdc, &pill, px(4, d) as f32, Some(SOFT), None);
-                    text(hdc, item.license, &pill, st.mono_bold, PRIMARY, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    text(hdc, &license, &pill, st.mono_bold, PRIMARY, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
                     // Nome, e «in arrivo» se la funzione è ancora in lavorazione.
                     let name_rc = RECT { left: r.left + px(4, d), top: r.top + px(5, d), right: pill.left - px(10, d), bottom: r.top + px(25, d) };
                     text(hdc, item.name, &name_rc, st.bold, TEXT, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
                     let mut at = name_rc.left + text_width(hdc, item.name, st.bold) + px(8, d);
                     if item.soon {
                         let tag = RECT { left: at, ..name_rc };
-                        text(hdc, "IN ARRIVO", &tag, st.tiny, PRIMARY, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-                        at += text_width(hdc, "IN ARRIVO", st.tiny) + px(8, d);
+                        let soon = cedro::i18n::tr("in arrivo").to_uppercase();
+                        text(hdc, &soon, &tag, st.tiny, PRIMARY, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+                        at += text_width(hdc, &soon, st.tiny) + px(8, d);
                     }
                     // La versione, in piccolo accanto al nome.
                     if let Some(v) = version {
@@ -274,7 +277,7 @@ pub fn draw(lparam: LPARAM) -> bool {
                         text(hdc, v, &tag, st.small, GREY, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
                     }
                     let sub = RECT { top: r.top + px(24, d), bottom: head - px(3, d), ..name_rc };
-                    let line = format!("{} · {}", item.author, item.what);
+                    let line = format!("{} · {}", cedro::i18n::tr(item.author), cedro::i18n::tr(item.what));
                     text(hdc, &line, &sub, st.small, GREY, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
                     chevron(hdc, r.right - px(14, d), r.top + px(ITEM_H / 2, d), px(4, d), st.open.contains(item.name));
                     if st.open.contains(item.name) {

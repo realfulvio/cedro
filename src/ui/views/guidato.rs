@@ -73,7 +73,8 @@ fn stepper(f: &mut Frame, y: f32, step: u8, reach: u8) {
     }
 }
 
-fn title(f: &mut Frame, x: f32, y: f32, t: &str, sub: &str, simple: bool) {
+/// `reserve`: lo spazio a destra della riga sotto il titolo lasciato a un pulsante (0 se non c'è).
+fn title(f: &mut Frame, x: f32, y: f32, t: &str, sub: &str, simple: bool, reserve: f32) {
     let pal = f.pal;
     // Nelle viste semplificate il selettore «Semplificata | Standard» sta in alto a destra: il titolo non ci finisce
     // sotto, anche nelle lingue dove è più lungo (inglese, tedesco…): si rimpicciolisce finché sta.
@@ -83,7 +84,7 @@ fn title(f: &mut Frame, x: f32, y: f32, t: &str, sub: &str, simple: bool) {
         size -= 2.0;
     }
     f.text(t, x, y, if simple { max_w } else { f.w - 2.0 * x }, 70.0, size, BOLD, pal.text);
-    f.text(sub, x, y + 70.0, f.w - 2.0 * x, 40.0, 25.0, SANS, pal.muted);
+    f.text(sub, x, y + 70.0, (f.w - 2.0 * x - reserve).max(200.0), 40.0, 25.0, SANS, pal.muted);
 }
 
 /// La scheda con il file (o i file) scelti e «Cambia file».
@@ -158,12 +159,13 @@ fn choice_cards(f: &mut Frame, app: &App, r: R) {
 
 fn step_files(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, simple: bool) {
     let pal = f.pal;
-    title(f, x, top, "Quali file vuoi convertire?", "Trascina i file qui oppure scegli dal computer.", simple);
+    // Il pulsante largo quanto il testo tradotto («Ajouter des fichiers», «Dateien hinzufügen»…).
+    let add_w = f.btn_w("Aggiungi file", 17.0, 220.0);
+    title(f, x, top, "Quali file vuoi convertire?", "Trascina i file qui oppure scegli dal computer.", simple, add_w + 16.0);
     super::notice(f, app, (x + w - 560.0, top + 8.0, 560.0, 44.0), 15.0);
     let y = top + 130.0;
     let visible = app.visible();
-    let bw = f.btn_w("Aggiungi file", 17.0, 220.0);
-    f.primary((x + w - bw, top + 62.0, bw, 46.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles, true);
+    f.primary((x + w - add_w, top + 62.0, add_w, 46.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles, true);
     let h = (bottom - y - 36.0).max(160.0);
     if visible.is_empty() {
         super::drop_zone(f, app, (x, y, w, h), true);
@@ -207,7 +209,7 @@ fn step_files(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, s
 fn step_action(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, simple: bool) {
     let pal = f.pal;
     let sub = if simple { "Scegli il formato di destinazione." } else { "Scegli il formato di destinazione e configura le opzioni." };
-    title(f, x, top, "Cosa vuoi ottenere?", sub, simple);
+    title(f, x, top, "Cosa vuoi ottenere?", sub, simple, 0.0);
     super::notice(f, app, (x + w - 560.0, top + 8.0, 560.0, 44.0), 15.0);
     let mut y = top + 130.0;
     summary_card(f, app, (x, y, w, 82.0));
@@ -245,7 +247,7 @@ fn step_action(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, 
 
 fn step_save(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, simple: bool) {
     let pal = f.pal;
-    title(f, x, top, "Dove salvo i file?", "Scegli la cartella: l'originale non viene mai toccato.", simple);
+    title(f, x, top, "Dove salvo i file?", "Scegli la cartella: l'originale non viene mai toccato.", simple, 0.0);
     super::notice(f, app, (x + w - 560.0, top + 8.0, 560.0, 44.0), 15.0);
     let mut y = top + 130.0;
     let card = (x, y, w, if simple { 150.0 } else { 196.0 });

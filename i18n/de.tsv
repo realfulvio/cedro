@@ -188,7 +188,7 @@ Cosa sta succedendo	Was passiert gerade
 Copia	Kopieren
 Qui compaiono i passi del lavoro e gli eventuali errori.	Hier erscheinen die Schritte des Auftrags und eventuelle Fehler.
 {} · pronto sul computer	{} · auf diesem Computer bereit
-{} · al primo uso si scarica ({})	{} · wird beim ersten Gebrauch heruntergeladen ({})
+{} · al primo uso si scarica ({})	{} · Download beim ersten Gebrauch ({})
 Aggiungi file	Dateien hinzufügen
 Risultato:	Ergebnis:
 Documento Word	Word-Dokument
@@ -2401,3 +2401,16 @@ Mostra la firma	Signatur anzeigen
 Versione firmata da {}: com'era al momento della firma	Von {} signierte Version: wie sie zum Zeitpunkt der Signatur war
 Scheda video attiva	Grafikkarte aktiv
 Il file log.txt e config.txt stanno nella cartella Dati, accanto a cedro.exe.	Die Dateien log.txt und config.txt liegen im Datenordner („Dati“) neben cedro.exe.
+Incolla il link di un video o di una playlist di YouTube (o di un altro sito).	Füge den Link eines YouTube-Videos oder einer Playlist ein (oder von einer anderen Seite).
+Disegna le immagini SVG.	Zeichnet SVG-Bilder.
+Legge MP3, FLAC, OGG, AAC, WAV, AIFF.	Liest MP3, FLAC, OGG, AAC, WAV, AIFF.
+Legge e scrive i file .opus.	Liest und schreibt .opus-Dateien.
+Legge e scrive le foto AVIF.	Liest und schreibt AVIF-Fotos.
+Legge e scrive le foto JPEG XL.	Liest und schreibt JPEG-XL-Fotos.
+Legge le tessere JPEG XR e zstd dei file Zeiss CZI.	Liest die JPEG-XR- und zstd-Kacheln von Zeiss-CZI-Dateien.
+Parla con la chiavetta o la smart card per firmare (PKCS#11).	Spricht zum Signieren mit dem Signaturschlüssel oder der Smartcard (PKCS#11).
+Scrive i file FLAC.	Schreibt FLAC-Dateien.
+Scrive le foto WebP.	Schreibt WebP-Fotos.
+BSD-2-Clause o MIT	BSD-2-Clause oder MIT
+BSD-3-Clause o BSD-2-Clause	BSD-3-Clause oder BSD-2-Clause
+The OpenReadout Authors (da jxrlib di Microsoft), Moritz Borcherding	The OpenReadout Authors (aus jxrlib von Microsoft), Moritz Borcherding
