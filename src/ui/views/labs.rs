@@ -237,7 +237,7 @@ fn home(f: &mut Frame, app: &App, area: R) {
     let tiles: [(&str, &str, Lab); 6] = [
         ("Vetrino", "SVS", Lab::Immagini),
         ("Radiografia", "DICOM", Lab::Immagini),
-        ("Microscopia", "ND2, LIF, TIFF a 16 bit", Lab::Immagini),
+        ("Microscopia", "CZI, ND2, LIF, TIFF a 16 bit", Lab::Immagini),
         ("Tabella", "CSV, Excel", Lab::Dati),
         ("Referto", "PDF, Word", Lab::Referti),
         ("Audio", "Dettato o riunione", Lab::Trascrivi),
@@ -324,7 +324,7 @@ fn empty(f: &mut Frame, app: &App, r: R) {
     f.p.text("Trascina qui i file oppure fai clic", r.0, cy, r.2, 32.0, 23.0, SEMI, LABS_INK, Align::Center);
     let cat = &conversioni::CATEGORIES[app.category];
     let accepts = match app.lab {
-        Lab::Immagini | Lab::Figura => "Vetrini SVS, DICOM, ND2, LIF, TIFF a 16 bit, PNG, JPEG e le altre immagini".to_string(),
+        Lab::Immagini | Lab::Figura => "Vetrini SVS, DICOM, CZI, ND2, LIF, TIFF a 16 bit, PNG, JPEG e le altre immagini".to_string(),
         Lab::Anonimizza => "DICOM, vetrini SVS, foto, PDF, Word".to_string(),
         Lab::Dati => "CSV, TSV, Excel, ODS, JSON".to_string(),
         Lab::Converti => "Immagini, documenti, PDF, testi, audio, video, archivi".to_string(),

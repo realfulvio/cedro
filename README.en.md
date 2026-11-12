@@ -131,7 +131,7 @@ External components such as yt-dlp, deno, ffmpeg and the transcription engine ar
 
 | | Already there | Still missing |
 | --- | --- | --- |
-| Images | Digital slides `.svs` to image, DICOM (also anonymised), ND2 and LIF, OME-TIFF, figure for a paper with a scale bar | Zeiss CZI, Hamamatsu NDPI, 3DHistech MRXS, VSI; DICOM from CD with DICOMDIR |
+| Images | Digital slides `.svs` to image, DICOM (also anonymised), Zeiss CZI, ND2 and LIF, OME-TIFF, figure for a paper with a scale bar | Hamamatsu NDPI, 3DHistech MRXS, VSI; DICOM from CD with DICOMDIR |
 | Data | CSV/TSV ↔ Excel, data package with SHA-256 fingerprints (BagIt) | Colour plate map |
 | Privacy | Strips names, authors, GPS and hidden data from PDF, Office, photos and DICOM | More proprietary formats |
 | Voice | Transcription with a veterinary glossary, summary | Report polishing |
@@ -140,10 +140,12 @@ Everything stays on your computer, as in standard Cedro. If your lab misses a fo
 
 ## All releases
 
-Since 21 October 2026, **89 versions** have come out for Windows and Linux. The latest:
+Since 21 October 2026, **91 versions** have come out for Windows and Linux. The latest:
 
 | Version | Date | What's new |
 | --- | --- | --- |
+| [0.45.0](https://github.com/realfulvio/cedro/releases/tag/v0.45.0) | 12/11 | Cedro 4 Labs reads Zeiss CZI files |
+| [0.44.3](https://github.com/realfulvio/cedro/releases/tag/v0.44.3) | 12/11 | Components updated for security and maintenance |
 | [0.44.2](https://github.com/realfulvio/cedro/releases/tag/v0.44.2) | 12/11 | Quality fixes for Cedro 4 Labs |
 | [0.44.0](https://github.com/realfulvio/cedro/releases/tag/v0.44.0) | 12/11 | New paged "Cedro" look with four tints |
 | [0.43.0](https://github.com/realfulvio/cedro/releases/tag/v0.43.0) | 12/11 | Cedro 4 Labs with the paged window |
