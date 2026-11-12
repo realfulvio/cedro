@@ -703,6 +703,7 @@ jobs:
           for t in "$TAG" "motori-$TAG"; do
             gh api "repos/$REPO/releases/tags/$t" --jq '.assets[] | "\(.id) \(.name)"' | while read -r id name; do
               case "$name" in
+                *ondeno*) echo "tolgo $t/$name (le copie «Bondeno» non si pubblicano più)"; gh api -X DELETE "repos/$REPO/releases/assets/$id" ;;
                 *"$V"*) echo "tengo $t/$name" ;;
                 *) echo "tolgo $t/$name"; gh api -X DELETE "repos/$REPO/releases/assets/$id" ;;
               esac
