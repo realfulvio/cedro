@@ -2412,3 +2412,4 @@ Mostra le {} firme	Show the {} signatures
 Mostra la firma	Show the signature
 È una firma staccata (.p7s) o una marca a parte (.tsr): la controllo insieme al file che è stato firmato. Di solito sta nella stessa cartella con lo stesso nome.	This is a detached signature (.p7s) or a separate timestamp (.tsr): I check it together with the file that was signed. It's usually in the same folder with the same name.
 Versione firmata da {}: com'era al momento della firma	Version signed by {}: as it was at the time of signing
+Scheda video attiva	Active graphics card
