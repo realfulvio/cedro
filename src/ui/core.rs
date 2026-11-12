@@ -578,6 +578,11 @@ impl<'a> Frame<'a> {
         self.p.fill(x, y, 1.0, h, self.pal.border);
     }
 
+    /// La larghezza di un pulsante con icona che contiene il testo (anche tradotto), non meno di `min`.
+    pub fn btn_w(&self, label: &str, size: f32, min: f32) -> f32 {
+        (self.measure(label, size, SEMI) + (size * 1.35).round() + 14.0 + 36.0).ceil().max(min)
+    }
+
     /// Il pulsante principale: pieno del colore del tema, con un'icona a sinistra del testo.
     pub fn primary(&mut self, r: R, label: &str, icon: Option<&str>, size: f32, act: Act, enabled: bool) {
         let pal = self.pal;

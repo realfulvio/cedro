@@ -2400,3 +2400,4 @@ Mostra la firma	Signatur anzeigen
 È una firma staccata (.p7s) o una marca a parte (.tsr): la controllo insieme al file che è stato firmato. Di solito sta nella stessa cartella con lo stesso nome.	Das ist eine abgetrennte Signatur (.p7s) oder ein separater Zeitstempel (.tsr): Ich prüfe sie zusammen mit der signierten Datei. Sie liegt meist im selben Ordner mit demselben Namen.
 Versione firmata da {}: com'era al momento della firma	Von {} signierte Version: wie sie zum Zeitpunkt der Signatur war
 Scheda video attiva	Grafikkarte aktiv
+Il file log.txt e config.txt stanno nella cartella Dati, accanto a cedro.exe.	Die Dateien log.txt und config.txt liegen im Datenordner („Dati“) neben cedro.exe.

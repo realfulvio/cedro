@@ -2400,3 +2400,4 @@ Mostra la firma	Mostrar a assinatura
 È una firma staccata (.p7s) o una marca a parte (.tsr): la controllo insieme al file che è stato firmato. Di solito sta nella stessa cartella con lo stesso nome.	É uma assinatura separada (.p7s) ou um carimbo à parte (.tsr): eu a verifico junto com o arquivo que foi assinado. Costuma ficar na mesma pasta com o mesmo nome.
 Versione firmata da {}: com'era al momento della firma	Versão assinada por {}: como era no momento da assinatura
 Scheda video attiva	Placa de vídeo ativa
+Il file log.txt e config.txt stanno nella cartella Dati, accanto a cedro.exe.	Os arquivos log.txt e config.txt estão na pasta de dados (Dati), ao lado do cedro.exe.
