@@ -95,8 +95,8 @@ jobs:
           source tools/prova-softhsm.sh
           cargo test --release --lib firma::pkcs11 -- --nocapture
 
-      - name: Pacchetto tar.gz (e la copia per la vecchia edizione Comune di Bondeno)
-        run: installer/build-linux.sh -o dist -b
+      - name: Pacchetto tar.gz
+        run: installer/build-linux.sh -o dist
 
       - uses: actions/upload-artifact@v4
         with:
