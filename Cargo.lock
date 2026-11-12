@@ -557,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "cedro"
-version = "0.41.0"
+version = "0.42.0"
 dependencies = [
  "avif-decode",
  "base64 0.22.1",
@@ -573,6 +573,7 @@ dependencies = [
  "hayro-jpeg2000",
  "hound",
  "image",
+ "jpeg-decoder",
  "jxl-oxide",
  "kaldi-native-fbank",
  "ksni",
@@ -2311,6 +2312,12 @@ dependencies = [
  "getrandom 0.4.3",
  "libc",
 ]
+
+[[package]]
+name = "jpeg-decoder"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
 
 [[package]]
 name = "js-sys"

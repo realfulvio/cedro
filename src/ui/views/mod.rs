@@ -129,8 +129,8 @@ fn voices_dialog(f: &mut Frame, app: &App) {
     let head_h = 32.0 + 6.0 + lines(f, intro, 16.0, cw - 50.0) * 16.0 * 1.45;
     let hint = voices_hint(sel);
     let hint_h = (lines(f, &hint, 14.5, cw - 52.0) * 14.5 * 1.4 + 20.0).max(44.0);
-    let (auto_h, nums_h, foot_h, gap) = (64.0, 58.0, 48.0, 18.0);
-    let h = 28.0 + head_h + gap + auto_h + gap + 16.0 + 10.0 + nums_h + gap + hint_h + gap + foot_h + 26.0;
+    let (auto_h, nums_h, foot_h, gap, gloss_h) = (64.0, 58.0, 48.0, 18.0, 30.0);
+    let h = 28.0 + head_h + gap + auto_h + gap + 16.0 + 10.0 + nums_h + gap + hint_h + gap + gloss_h + gap + foot_h + 26.0;
     let (x, y) = ((f.w - w) / 2.0, ((f.h - h) / 2.0).max(8.0));
     f.p.shadow(x, y, w, h, 12.0, 18.0, 0.35, 8.0);
     f.card((x, y, w, h), 12.0);
@@ -189,6 +189,15 @@ fn voices_dialog(f: &mut Frame, app: &App) {
     let th = lines(f, &hint, 14.5, cw - 52.0) * 14.5 * 1.4;
     f.para(&hint, cx + 40.0, cy + (hint_h - th) / 2.0, cw - 52.0, 14.5, SANS, pal.text, 1.4, 4);
     cy += hint_h + gap;
+    // I termini dei referti veterinari: una spunta, ricordata per le volte dopo.
+    let act = Act::VoicesGlossary;
+    let on = app.transcribe.glossario_vet;
+    f.checkbox(cx, cy + 3.0, 24.0, on, None);
+    f.text("Referti veterinari", cx + 36.0, cy, 180.0, gloss_h, 16.0, BOLD, pal.text);
+    f.text("termini di anatomia patologica", cx + 36.0 + f.measure("Referti veterinari", 16.0, BOLD) + 10.0, cy + 1.0, cw - 230.0, gloss_h, 14.0, SANS, pal.muted);
+    f.focus_ring((cx - 4.0, cy - 2.0, cw + 8.0, gloss_h + 4.0), 6.0, &act);
+    f.hit((cx - 4.0, cy - 2.0, cw + 8.0, gloss_h + 4.0), act);
+    cy += gloss_h + gap;
     // In fondo: per quanti file vale, Annulla, Trascrivi.
     let files = app.todo().len();
     let bw = if w < 520.0 { 104.0 } else { 150.0 };
@@ -262,6 +271,62 @@ pub fn quality(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: OptStyle, e
 
 /// Una opzione del motore (levetta, scelta, cursore, campo). Restituisce l'altezza usata.
 pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32, w: f32, st: OptStyle) -> f32 {
+    // Il riquadro «DICOM» comincia con la sua intestazione, sopra la prima delle sue opzioni.
+    if app.first_dicom().is_some() && conversioni::dicom_option_defs(&app.action).first().is_some_and(|d| d.opt == def.opt) {
+        let head = dicom_head(f, app, x, y, w, st);
+        return head + option_body(f, app, def, x, y + head, w, st);
+    }
+    // E il riquadro «Microscopia», sopra la prima delle sue opzioni.
+    if let Some((m, _)) = app.first_micro() {
+        if conversioni::micro_option_defs(&app.action, m.canali, m.z, m.t).first().is_some_and(|d| d.opt == def.opt) {
+            let head = micro_head(f, app, x, y, w, st);
+            return head + option_body(f, app, def, x, y + head, w, st);
+        }
+    }
+    option_body(f, app, def, x, y, w, st)
+}
+
+/// Il colore delle immagini di microscopia: un verde da fluorescenza (GFP).
+pub const MICRO: super::gfx::Rgb = (0x1F, 0x9D, 0x55);
+
+/// L'intestazione del riquadro «Microscopia»: che file è (canali, piani, scala).
+fn micro_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: OptStyle) -> f32 {
+    let pal = f.pal;
+    let Some((info, count)) = app.first_micro() else { return 0.0 };
+    f.p.rrect(x, y + 7.0, 10.0, 10.0, 3.0, Some(MICRO), None);
+    f.text("Microscopia", x + 18.0, y, w - 18.0, 24.0, st.label, SEMI, pal.text);
+    let mut line = crate::i18n::lit(&info.summary[crate::i18n::english() as usize]);
+    if count > 1 {
+        line = format!("{line} · {count} file");
+    }
+    let mut h = 28.0 + f.para(&line, x, y + 28.0, w, st.note, SANS, pal.muted, 1.4, 3);
+    if !info.scala {
+        h += 4.0 + f.para("Il file non dice quanto è grande un pixel: senza barra di scala.", x, y + h + 4.0, w, st.note, SANS, pal.muted, 1.4, 2);
+    }
+    h + 10.0
+}
+
+/// Il colore dei DICOM (il quadratino del riquadro e l'etichetta nella coda): un blu da negativo radiografico.
+pub const DICOM: super::gfx::Rgb = (0x2F, 0x6F, 0xB3);
+
+/// L'intestazione del riquadro «DICOM»: che esame è, e l'avviso se il nome può stare nei pixel.
+fn dicom_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: OptStyle) -> f32 {
+    let pal = f.pal;
+    let Some((info, count)) = app.first_dicom() else { return 0.0 };
+    f.p.rrect(x, y + 7.0, 10.0, 10.0, 3.0, Some(DICOM), None);
+    f.text("DICOM", x + 18.0, y, w - 18.0, 24.0, st.label, SEMI, pal.text);
+    let mut line = crate::i18n::lit(&info.summary[crate::i18n::english() as usize]);
+    if count > 1 {
+        line = format!("{line} · {count} file");
+    }
+    let mut h = 28.0 + f.para(&line, x, y + 28.0, w, st.note, SANS, pal.muted, 1.4, 2);
+    if info.burned_in {
+        h += 4.0 + f.para("In ecografie e catture dello schermo il nome può essere scritto dentro l'immagine: Cedro non lo cancella, controlla prima di condividere.", x, y + h + 4.0, w, st.note, SANS, pal.bad, 1.4, 3);
+    }
+    h + 10.0
+}
+
+fn option_body(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32, w: f32, st: OptStyle) -> f32 {
     let pal = f.pal;
     let note_lines = |f: &mut Frame, text: &str, top: f32, width: f32| -> f32 {
         if text.is_empty() {
@@ -314,7 +379,9 @@ pub fn option(f: &mut Frame, app: &App, def: &'static OptionDef, x: f32, y: f32,
             // A gruppi di tre per riga, come nella tavola: «Ogni pagina · Ogni N · Intervalli», poi gli altri.
             let seg_h = (st.control_h - 2.0).max(34.0);
             let mut top = y + 28.0;
-            for row in choices.chunks(3) {
+            // Quattro scelte (la finestra dei DICOM) stanno meglio due per riga: nessuna scritta tagliata.
+            let per_row = if choices.len() == 4 { 2 } else { 3 };
+            for row in choices.chunks(per_row) {
                 f.p.rrect(x, top, w, seg_h, 6.0, Some(pal.surface), Some((pal.border, 1.0)));
                 // Colonne uguali; se una scritta non ci sta («Un foglio per tabella») si dividono in proporzione.
                 let need: Vec<f32> = row.iter().map(|c| f.measure(c.label, st.note + 1.0, SEMI) + 20.0).collect();
@@ -506,11 +573,17 @@ fn slide_levels(f: &mut Frame, app: &App, def: &'static OptionDef, choices: &'st
 pub fn file_name(f: &mut Frame, app: &App, i: usize, x: f32, y: f32, w: f32, h: f32, size: f32, weight: super::gfx::Weight, c: super::gfx::Rgb) {
     let file = &app.files[i];
     let name = file.name();
-    if app.media_of(&file.path).and_then(|m| m.slide.as_ref()).is_none() {
+    let media = app.media_of(&file.path);
+    let (chip, tint) = if media.and_then(|m| m.slide.as_ref()).is_some() {
+        ("Vetrino", SLIDE)
+    } else if media.and_then(|m| m.dicom.as_ref()).is_some() {
+        ("DICOM", DICOM)
+    } else if media.and_then(|m| m.micro.as_ref()).is_some() {
+        ("Microscopia", MICRO)
+    } else {
         f.text(&name, x, y, w, h, size, weight, c);
         return;
-    }
-    let chip = "Vetrino";
+    };
     let cs = (size * 0.72).max(11.0);
     let cw = f.measure(chip, cs, SEMI) + 16.0;
     let nw = f.measure(&name, size, weight).min(w - cw - 8.0).max(0.0);
@@ -518,17 +591,24 @@ pub fn file_name(f: &mut Frame, app: &App, i: usize, x: f32, y: f32, w: f32, h: 
     let pal = f.pal;
     let ch = cs + 8.0;
     let r = (x + nw + 8.0, y + (h - ch) / 2.0, cw, ch);
-    f.p.rrect(r.0, r.1, r.2, r.3, ch / 2.0, Some(mix(SLIDE, pal.surface, 0.86)), None);
-    f.text_c(chip, r, cs, SEMI, mix(SLIDE, pal.text, 0.15));
+    f.p.rrect(r.0, r.1, r.2, r.3, ch / 2.0, Some(mix(tint, pal.surface, 0.86)), None);
+    f.text_c(chip, r, cs, SEMI, mix(tint, pal.text, 0.15));
 }
 
 /// La seconda riga di un file in attesa: la cartella, o per un vetrino che cosa contiene.
 pub fn waiting_line(app: &App, i: usize) -> String {
     let file = &app.files[i];
-    match app.media_of(&file.path).and_then(|m| m.slide.as_ref()) {
-        Some(s) => crate::i18n::lit(&s.summary[crate::i18n::english() as usize]),
-        None => crate::i18n::lit(&file.path.display().to_string()),
+    let media = app.media_of(&file.path);
+    if let Some(s) = media.and_then(|m| m.slide.as_ref()) {
+        return crate::i18n::lit(&s.summary[crate::i18n::english() as usize]);
     }
+    if let Some(d) = media.and_then(|m| m.dicom.as_ref()) {
+        return crate::i18n::lit(&d.summary[crate::i18n::english() as usize]);
+    }
+    if let Some(d) = media.and_then(|m| m.micro.as_ref()) {
+        return crate::i18n::lit(&d.summary[crate::i18n::english() as usize]);
+    }
+    crate::i18n::lit(&file.path.display().to_string())
 }
 
 /// Formato, qualità e opzioni della voce scelta, con «Altre opzioni» che si apre.
@@ -584,7 +664,7 @@ pub fn options_panel_ex(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: Op
         // Il riquadro «Vetrino» si vede tutto; dimensioni e raddrizza vanno in «Altre opzioni».
         _ => defs
             .iter()
-            .rposition(|d| matches!(d.opt, conversioni::Opt::SlideLevel | conversioni::Opt::SlideLabel | conversioni::Opt::SlideMacro))
+            .rposition(|d| conversioni::is_lead(d.opt))
             .map(|i| i + 1),
     };
     let shown = match lead {

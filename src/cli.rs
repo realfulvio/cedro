@@ -54,6 +54,32 @@ pub fn run() -> i32 {
             return if bad { 1 } else { 0 };
         }
         "trascrivi" if positional.len() >= 2 => return transcribe(&positional[1..], &args),
+        // Il pacchetto dei dati (BagIt con le impronte SHA-256): file e cartelle in uno ZIP.
+        "pacchetto" if positional.len() >= 2 => {
+            let files: Vec<std::path::PathBuf> = positional[1..].iter().map(std::path::PathBuf::from).collect();
+            cedro::package_paths(&files, None)
+        }
+        // La figura per un articolo: i file nell'ordine dato diventano i pannelli A, B, C.
+        "figura" if positional.len() >= 2 => {
+            let mut figura = cedro::figura::Opzioni::default();
+            let mut files = Vec::new();
+            for a in &positional[1..] {
+                match a.to_str() {
+                    Some("--colonna") => figura.larghezza_mm = 85,
+                    Some("--600") => figura.dpi = 600,
+                    Some("--senza-lettere") => figura.lettere = false,
+                    Some("--senza-barra") => figura.barra = false,
+                    // --obiettivo 40: la barra sulle foto senza misure, dalla calibrazione del 10x.
+                    Some(o) if o.starts_with("--obiettivo=") => {
+                        figura.obiettivo = o["--obiettivo=".len()..].trim_end_matches(['x', 'X']).parse().unwrap_or(0);
+                        figura.calibrazione_10x = cedro::read_settings().calibrazione_10x;
+                    }
+                    _ => files.push(std::path::PathBuf::from(a)),
+                }
+            }
+            let exists = if cedro::read_settings().replace { cedro::Exists::Replace } else { cedro::Exists::Number };
+            cedro::figure_with(&files, None, &cedro::Options { figura, exists, ..cedro::Options::default() })
+        }
         "zip" if positional.len() >= 2 => perform(std::path::Path::new(&positional[1]), "zip", quality),
         "slices" if positional.len() >= 2 => {
             let path = std::path::Path::new(&positional[1]);
@@ -198,9 +224,13 @@ Cedro — conversione locale, senza upload.
   cedro zip <file>
   cedro --quality 80 convert foto.png jpeg
   cedro update     controlla se su GitHub c'è una versione nuova
-  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--cpu]
+  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--glossario veterinaria] [--cpu]
                    dalla voce a un Word (o a un testo), con il motore scaricato alla prima volta;
                    --voci dice quante persone parlano (auto le conta da solo, 1 non le riconosce)
+  cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra] [--obiettivo=40x]
+                   la figura per un articolo: pannelli A, B, C in un TIFF a 300 dpi largo 17,5 cm
+  cedro pacchetto <file o cartella>…   pacchetto di dati (ZIP BagIt con l'impronta SHA-256 di ogni file)
+  cedro tool <pacchetto.zip> verify-pack   controlla che nessun file del pacchetto sia cambiato
   cedro firma <file>…   verifica le firme digitali (.p7m, .p7s, .m7m, .tsd, .tsr, PDF firmati)
   cedro verifica <file> apre il visualizzatore dei file firmati (come il doppio clic)
 
@@ -248,10 +278,23 @@ fn transcribe(files: &[OsString], args: &[OsString]) -> i32 {
         gpu: settings.gpu && !args.iter().any(|a| a == "--cpu"),
         avx512: settings.avx512,
         speakers,
+        // --glossario veterinaria (o parole separate da virgole); senza, quello scelto in Cedro.
+        glossario: args
+            .iter()
+            .position(|a| a == "--glossario")
+            .and_then(|i| args.get(i + 1))
+            .map(|g| g.to_string_lossy().into_owned())
+            .or_else(|| settings.glossario())
+            .filter(|g| !g.trim().is_empty()),
     };
     let paths: Vec<std::path::PathBuf> = files
         .iter()
-        .filter(|f| !f.as_encoded_bytes().starts_with(b"--") && !matches!(f.to_str(), Some("veloce" | "buona" | "massima")) && Some(f.as_os_str()) != voices.map(std::ffi::OsStr::new))
+        .enumerate()
+        .filter(|(i, f)| {
+            let dopo_glossario = *i > 0 && files[i - 1] == "--glossario";
+            !dopo_glossario && !f.as_encoded_bytes().starts_with(b"--") && !matches!(f.to_str(), Some("veloce" | "buona" | "massima")) && Some(f.as_os_str()) != voices.map(std::ffi::OsStr::new)
+        })
+        .map(|(_, f)| f)
         .map(std::path::PathBuf::from)
         .collect();
     let failed = std::sync::atomic::AtomicBool::new(false);
