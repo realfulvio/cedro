@@ -75,7 +75,14 @@ fn stepper(f: &mut Frame, y: f32, step: u8, reach: u8) {
 
 fn title(f: &mut Frame, x: f32, y: f32, t: &str, sub: &str, simple: bool) {
     let pal = f.pal;
-    f.text(t, x, y, f.w - 2.0 * x, 70.0, if simple { 58.0 } else { 54.0 }, BOLD, pal.text);
+    // Nelle viste semplificate il selettore «Semplificata | Standard» sta in alto a destra: il titolo non ci finisce
+    // sotto, anche nelle lingue dove è più lungo (inglese, tedesco…): si rimpicciolisce finché sta.
+    let max_w = if simple { (f.w - 424.0 - x).max(200.0) } else { f.w - 2.0 * x };
+    let mut size = if simple { 58.0 } else { 54.0 };
+    while size > 30.0 && f.measure(t, size, BOLD) > max_w {
+        size -= 2.0;
+    }
+    f.text(t, x, y, if simple { max_w } else { f.w - 2.0 * x }, 70.0, size, BOLD, pal.text);
     f.text(sub, x, y + 70.0, f.w - 2.0 * x, 40.0, 25.0, SANS, pal.muted);
 }
 
