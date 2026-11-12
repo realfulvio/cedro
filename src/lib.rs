@@ -12,6 +12,8 @@ pub mod guida;
 pub mod i18n;
 pub mod logo;
 mod doctext;
+#[cfg(test)]
+mod prove_labs;
 mod archive;
 mod cartelle;
 mod engine;

@@ -20,7 +20,8 @@ impl Cella {
     /// La cella scritta in un CSV: i numeri con la virgola o con il punto.
     pub fn testo(&self, virgola: bool) -> String {
         let num = |v: f64| {
-            let s = if v.is_finite() { format!("{v}") } else { String::new() };
+            // 15 cifre significative come Excel: 0,1+0,2 resta 0,3 e non 0,30000000000000004.
+            let s = if v.is_finite() { format!("{}", format!("{v:.14e}").parse::<f64>().unwrap_or(v)) } else { String::new() };
             if virgola {
                 s.replace('.', ",")
             } else {
@@ -29,6 +30,8 @@ impl Cella {
         };
         match self {
             Cella::Vuota => String::new(),
+            // Un testo che inizia con = o @ Excel, riaprendo il CSV, lo eseguirebbe come formula.
+            Cella::Testo(t) if t.starts_with(['=', '@']) => format!("'{t}"),
             Cella::Testo(t) => t.clone(),
             Cella::Numero(v) => num(*v),
             Cella::Percento(v, dec) => {
@@ -63,18 +66,41 @@ pub fn separatore(text: &str, ext: &str) -> char {
     if ext == "tsv" || ext == "tab" {
         return '\t';
     }
+    // Le righe vere: un a capo dentro le virgolette non chiude la riga (note su più righe).
+    let mut record: Vec<&str> = Vec::new();
+    let (mut inizio, mut dentro) = (0usize, false);
+    for (i, b) in text.bytes().enumerate() {
+        match b {
+            b'"' => dentro = !dentro,
+            b'\n' if !dentro => {
+                record.push(text[inizio..i].trim_end_matches('\r'));
+                inizio = i + 1;
+                if record.len() >= 60 {
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    if record.len() < 60 && inizio < text.len() {
+        record.push(&text[inizio..]);
+    }
     let mut best = (';', 0usize, 0usize);
     for sep in ['\t', ';', ','] {
         let (mut righe, mut tot) = (0, 0);
-        for line in text.lines().take(60) {
+        for line in record.iter().copied() {
             let mut quoted = false;
-            let n = line
-                .chars()
-                .filter(|c| {
-                    if *c == '"' {
+            let chars: Vec<char> = line.chars().collect();
+            let punto_e_virgola = line.contains(';');
+            let cifra = |i: Option<usize>| i.and_then(|i| chars.get(i)).is_some_and(char::is_ascii_digit);
+            // In una riga con il punto e virgola, la virgola fra due cifre è il decimale italiano (0,512;0,733).
+            let n = (0..chars.len())
+                .filter(|&i| {
+                    let c = chars[i];
+                    if c == '"' {
                         quoted = !quoted;
                     }
-                    !quoted && *c == sep
+                    !quoted && c == sep && !(sep == ',' && punto_e_virgola && cifra(i.checked_sub(1)) && cifra(Some(i + 1)))
                 })
                 .count();
             if n > 0 {
@@ -96,8 +122,12 @@ pub fn decimali_con_virgola(rows: &[Vec<String>]) -> bool {
         let t = cell.trim().trim_end_matches('%');
         let t = t.strip_prefix(['-', '+']).unwrap_or(t);
         let t = t.split(['e', 'E']).next().unwrap_or("");
+        // «1,234» o «1.234» possono essere migliaia (CSV americano con le virgolette): non contano.
         let semplice = |sep: char| match t.split_once(sep) {
-            Some((a, b)) => a.bytes().all(|c| c.is_ascii_digit()) && !b.is_empty() && b.bytes().all(|c| c.is_ascii_digit()),
+            Some((a, b)) => {
+                let migliaia = b.len() == 3 && (1..=3).contains(&a.len()) && !a.starts_with('0');
+                a.bytes().all(|c| c.is_ascii_digit()) && !b.is_empty() && b.bytes().all(|c| c.is_ascii_digit()) && !migliaia
+            }
             None => false,
         };
         if semplice(',') {
@@ -161,7 +191,12 @@ pub fn numero(s: &str, virgola: bool) -> Option<Cella> {
     if intero.len() > 1 && intero.starts_with('0') {
         return None;
     }
-    if intero.len() > 15 && frac.is_none() {
+    // Oltre 15 cifre Excel perde precisione (anche con i decimali): resta testo.
+    if intero.len() > 15 {
+        return None;
+    }
+    // «+39333…»: un telefono o un codice, non un numero da sommare.
+    if t.starts_with('+') && frac.is_none() && exp.is_none() && intero.len() >= 8 {
         return None;
     }
     let mut norm = String::with_capacity(t.len() + 2);
@@ -324,17 +359,18 @@ pub fn in_excel(rows: &[Vec<String>], intestazione: bool) -> Result<(Vec<u8>, St
         return Err(format!("troppe colonne per Excel: {larghezza} (al massimo {MAX_COLONNE})"));
     }
     let blocchi: Vec<&[Vec<Cella>]> = if celle.is_empty() { vec![&celle[..]] } else { celle.chunks(MAX_RIGHE - 1).collect() };
-    let mut testo_protetto = 0usize;
+    let mut testo_protetto = Conta::default();
     for (k, blocco) in blocchi.iter().enumerate() {
         let ws = book.add_worksheet();
         ws.set_name(if k == 0 { "Dati".to_string() } else { format!("Dati {}", k + 1) }).map_err(err)?;
         let (base, titolo) = if k > 0 && intestazione { (1u32, Some(&celle[0])) } else { (0, None) };
         if let Some(t) = titolo {
-            scrivi_riga(ws, 0, t, Some(&titoli), &mut testo_protetto).map_err(err)?;
+            scrivi_riga(ws, 0, t, None, Some(&titoli), virgola, &mut testo_protetto).map_err(err)?;
         }
         for (i, row) in blocco.iter().enumerate() {
             let fmt = (intestazione && k == 0 && i == 0).then_some(&titoli);
-            scrivi_riga(ws, base + i as u32, row, fmt, &mut testo_protetto).map_err(err)?;
+            let grezza = rows.get(k * (MAX_RIGHE - 1) + i).map(Vec::as_slice);
+            scrivi_riga(ws, base + i as u32, row, grezza, fmt, virgola, &mut testo_protetto).map_err(err)?;
         }
         larghezze(ws, titolo.into_iter().chain(blocco.iter())).map_err(err)?;
         if intestazione && !blocco.is_empty() && piastre.is_empty() {
@@ -354,7 +390,7 @@ pub fn in_excel(rows: &[Vec<String>], intestazione: bool) -> Result<(Vec<u8>, St
         let ws = book.add_worksheet();
         ws.set_name("Pozzetti").map_err(err)?;
         for (i, row) in pozzetti.iter().enumerate() {
-            scrivi_riga(ws, i as u32, row, (i == 0).then_some(&titoli), &mut testo_protetto).map_err(err)?;
+            scrivi_riga(ws, i as u32, row, None, (i == 0).then_some(&titoli), virgola, &mut testo_protetto).map_err(err)?;
         }
         larghezze(ws, pozzetti.iter()).map_err(err)?;
         ws.set_freeze_panes(1, 0).map_err(err)?;
@@ -367,8 +403,11 @@ pub fn in_excel(rows: &[Vec<String>], intestazione: bool) -> Result<(Vec<u8>, St
             frase.push_str(&format!(" {n} piastre da {} pozzetti, anche una riga per pozzetto (foglio Pozzetti).", p.righe * p.colonne));
         }
     }
-    if testo_protetto > 0 {
+    if testo_protetto.protetti > 0 {
         frase.push_str(" Nomi di geni e codici lasciati come testo.");
+    }
+    if testo_protetto.tagliate > 0 {
+        frase.push_str(&format!(" {} celle troppo lunghe per Excel tagliate a {MAX_CELLA} caratteri.", testo_protetto.tagliate));
     }
     Ok((book.save_to_buffer().map_err(err)?, frase))
 }
@@ -385,27 +424,70 @@ fn sembra_numero_o_data(t: &str) -> bool {
     gene_data || zeri || lungo || esp
 }
 
-fn scrivi_riga(ws: &mut rust_xlsxwriter::Worksheet, r: u32, row: &[Cella], fmt: Option<&rust_xlsxwriter::Format>, protetti: &mut usize) -> Result<(), rust_xlsxwriter::XlsxError> {
+/// Il massimo di caratteri in una cella di Excel.
+const MAX_CELLA: usize = 32_767;
+
+/// Quello che la frase finale racconta: testi protetti e celle tagliate.
+#[derive(Default)]
+struct Conta {
+    protetti: usize,
+    tagliate: usize,
+}
+
+/// Le cifre dopo la virgola scritte nel CSV quando finiscono con uno zero («1,50»): Excel le
+/// mostrerebbe come 1,5, perdendo le cifre significative.
+fn decimali_scritti(grezzo: &str, virgola: bool) -> Option<usize> {
+    let t = grezzo.trim();
+    if t.contains(['e', 'E']) {
+        return None;
+    }
+    let (_, frac) = t.split_once(if virgola { ',' } else { '.' })?;
+    (frac.ends_with('0') && frac.bytes().all(|c| c.is_ascii_digit())).then_some(frac.len().min(15))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn scrivi_riga(
+    ws: &mut rust_xlsxwriter::Worksheet,
+    r: u32,
+    row: &[Cella],
+    grezza: Option<&[String]>,
+    fmt: Option<&rust_xlsxwriter::Format>,
+    virgola: bool,
+    conta: &mut Conta,
+) -> Result<(), rust_xlsxwriter::XlsxError> {
     use rust_xlsxwriter::Format;
-    for (c, cella) in row.iter().enumerate() {
-        let c = c as u16;
+    for (i, cella) in row.iter().enumerate() {
+        let c = i as u16;
+        let tagliato = |t: &str, conta: &mut Conta| -> String {
+            if t.len() > MAX_CELLA && t.chars().count() > MAX_CELLA {
+                conta.tagliate += 1;
+                t.chars().take(MAX_CELLA).collect()
+            } else {
+                t.to_string()
+            }
+        };
         match (cella, fmt) {
             (Cella::Vuota, _) => {}
             (Cella::Testo(t), Some(f)) => {
-                ws.write_string_with_format(r, c, t, f)?;
+                ws.write_string_with_format(r, c, tagliato(t, conta), f)?;
             }
             (Cella::Testo(t), None) => {
                 if sembra_numero_o_data(t) {
-                    *protetti += 1;
+                    conta.protetti += 1;
                 }
-                ws.write_string(r, c, t)?;
+                ws.write_string(r, c, tagliato(t, conta))?;
             }
             (Cella::Numero(v), Some(f)) => {
                 ws.write_number_with_format(r, c, *v, f)?;
             }
-            (Cella::Numero(v), None) => {
-                ws.write_number(r, c, *v)?;
-            }
+            (Cella::Numero(v), None) => match grezza.and_then(|g| g.get(i)).and_then(|g| decimali_scritti(g, virgola)) {
+                Some(dec) => {
+                    ws.write_number_with_format(r, c, *v, &Format::new().set_num_format(format!("0.{}", "0".repeat(dec))))?;
+                }
+                None => {
+                    ws.write_number(r, c, *v)?;
+                }
+            },
             (Cella::Percento(v, dec), _) => {
                 let code = if *dec == 0 { "0%".to_string() } else { format!("0.{}%", "0".repeat(*dec)) };
                 ws.write_number_with_format(r, c, *v, &Format::new().set_num_format(code))?;
@@ -536,7 +618,8 @@ fn formati_data(xml: &str) -> Vec<u8> {
             let id: u32 = xf.attribute("numFmtId").and_then(|v| v.parse().ok()).unwrap_or(0);
             match id {
                 14..=17 => 1,
-                18..=21 | 45..=47 => 2,
+                18..=21 | 45 | 47 => 2,
+                46 => 5,
                 22 => 3,
                 _ => propri.get(&id).copied().unwrap_or(0),
             }
@@ -552,7 +635,16 @@ fn tipo_formato(code: &str) -> u8 {
     while let Some(c) = chars.next() {
         match c {
             '"' => quoted = !quoted,
-            '[' if !quoted => bracket = true,
+            '[' if !quoted => {
+                bracket = true;
+                // [h], [mm], [ss]: una durata che può superare le 24 ore (tempi di incubazione).
+                let dentro: String = chars.clone().take_while(|&c| c != ']').collect::<String>().to_ascii_lowercase();
+                if !dentro.is_empty() && (dentro.bytes().all(|b| b == b'h') || dentro.bytes().all(|b| b == b'm') || dentro.bytes().all(|b| b == b's')) {
+                    // 4: ore e minuti, 5: anche i secondi.
+                    let resto = chars.as_str().split(';').next().unwrap_or("").to_ascii_lowercase();
+                    return if dentro.starts_with('s') || resto.contains('s') { 5 } else { 4 };
+                }
+            }
             ']' if !quoted => bracket = false,
             '\\' | '_' | '*' => {
                 chars.next();
@@ -599,6 +691,12 @@ pub fn data_excel(v: f64, tipo: u8, date1904: bool) -> String {
     let (y, m, d) = giorno(giorni - base);
     let (h, mi, s) = (secondi / 3600, secondi / 60 % 60, secondi % 60);
     let ora = if s == 0 { format!("{h:02}:{mi:02}") } else { format!("{h:02}:{mi:02}:{s:02}") };
+    if tipo == 4 || tipo == 5 {
+        // Durata: le ore continuano oltre le 24 (36:00:00), niente data.
+        let tot = (v * 86_400.0).round() as i64;
+        let (h, mi, s) = (tot / 3600, tot / 60 % 60, tot % 60);
+        return if tipo == 4 && s == 0 { format!("{h}:{mi:02}") } else { format!("{h}:{mi:02}:{s:02}") };
+    }
     match tipo {
         2 => ora,
         3 if secondi != 0 => format!("{y:04}-{m:02}-{d:02} {ora}"),
@@ -640,7 +738,10 @@ fn foglio_xlsx(xml: &str, shared: &[String], stili: &[u8], date1904: bool) -> Re
                 continue;
             }
             let v = c.children().find(|n| n.has_tag_name("v")).and_then(|n| n.text()).unwrap_or("");
+            // Una formula senza il risultato salvato (file scritti da script): si tiene la formula.
+            let formula = c.children().find(|n| n.has_tag_name("f")).and_then(|n| n.text()).filter(|f| !f.trim().is_empty());
             let cella = match c.attribute("t").unwrap_or("n") {
+                _ if v.is_empty() && c.attribute("t") != Some("inlineStr") && formula.is_some() => Cella::Testo(format!("={}", formula.unwrap_or_default())),
                 "s" => v.trim().parse::<usize>().ok().and_then(|i| shared.get(i)).map_or(Cella::Vuota, |s| Cella::Testo(s.clone())),
                 "inlineStr" => c.children().find(|n| n.has_tag_name("is")).map_or(Cella::Vuota, |n| Cella::Testo(testo_di(n))),
                 "b" => Cella::Testo(if v.trim() == "1" { "TRUE" } else { "FALSE" }.into()),
@@ -728,6 +829,8 @@ fn cella_ods(c: roxmltree::Node) -> Cella {
                     s.push_str(&" ".repeat(n.min(1000)));
                 } else if d.tag_name().name() == "tab" {
                     s.push('\t');
+                } else if d.tag_name().name() == "line-break" {
+                    s.push('\n');
                 }
             }
             righe.push(s);
@@ -863,7 +966,9 @@ mod prove {
         assert_eq!(data_excel(1.0, 1, false), "1900-01-01");
         assert_eq!(tipo_formato("dd/mm/yyyy"), 1);
         assert_eq!(tipo_formato("0.00\" days\""), 0);
-        assert_eq!(tipo_formato("[h]:mm:ss"), 2);
+        assert_eq!(tipo_formato("[h]:mm:ss"), 5);
+        assert_eq!(tipo_formato("[h]:mm"), 4);
+        assert_eq!(data_excel(1.5, 5, false), "36:00:00");
         assert_eq!(durata_iso("PT14H30M05S"), "14:30:05");
     }
 

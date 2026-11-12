@@ -39,6 +39,9 @@ fn raccogli(paths: &[PathBuf]) -> Result<Vec<(PathBuf, String)>, String> {
                 giu(&p, &format!("{rel}/{nome}"), out)?;
             } else if tipo.is_file() || (tipo.is_symlink() && p.is_file()) {
                 out.push((p, format!("{rel}/{nome}")));
+            } else if tipo.is_symlink() && p.is_dir() {
+                // Seguirlo potrebbe girare in tondo; saltarlo perderebbe dati senza dirlo.
+                return Err(format!("{rel}/{nome}: è un collegamento a una cartella, metti la cartella vera"));
             }
         }
         Ok(())
@@ -55,11 +58,15 @@ fn raccogli(paths: &[PathBuf]) -> Result<Vec<(PathBuf, String)>, String> {
         }
     }
     // Due file con lo stesso nome da cartelle diverse: il secondo diventa «nome (2).ext».
+    // Anche un file che si chiama come una cartella di un altro (dati e dati/x.csv) cambia nome:
+    // nello ZIP non possono stare tutti e due.
+    let cartelle: std::collections::HashSet<String> =
+        out.iter().flat_map(|(_, r)| r.match_indices('/').map(|(i, _)| r[..i].to_lowercase()).collect::<Vec<_>>()).collect();
     let mut visti = std::collections::HashSet::new();
     for (_, rel) in out.iter_mut() {
         let base = rel.clone();
         let mut n = 2;
-        while !visti.insert(rel.to_lowercase()) {
+        while cartelle.contains(&rel.to_lowercase()) || !visti.insert(rel.to_lowercase()) {
             *rel = match base.rsplit_once('.').filter(|(s, _)| !s.ends_with('/')) {
                 Some((s, e)) => format!("{s} ({n}).{e}"),
                 None => format!("{base} ({n})"),
@@ -250,6 +257,12 @@ pub fn verifica(zip_path: &Path, avanzamento: &dyn Fn(f32)) -> Result<Verifica, 
             attesi.push((h.to_ascii_lowercase(), rel));
         }
     }
+    let bagit = manifesto.ends_with("manifest-sha256.txt");
+    if bagit {
+        // In un BagIt il manifesto elenca solo i dati, e ognuno una volta.
+        let mut visti = std::collections::HashSet::new();
+        attesi.retain(|(_, rel)| rel.starts_with("data/") && visti.insert(rel.clone()));
+    }
     if attesi.is_empty() {
         return Err("l'elenco delle impronte è vuoto".into());
     }
@@ -263,21 +276,41 @@ pub fn verifica(zip_path: &Path, avanzamento: &dyn Fn(f32)) -> Result<Verifica, 
             continue;
         };
         let mut hs = Sha256::new();
+        let mut rotto = false;
         loop {
-            let n = voce.read(&mut buf).map_err(|e| format!("{rel}: {e}"))?;
-            if n == 0 {
-                break;
+            match voce.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => hs.update(&buf[..n]),
+                // Un file rovinato dentro lo ZIP è un file cambiato: si va avanti con gli altri.
+                Err(_) => {
+                    rotto = true;
+                    break;
+                }
             }
-            hs.update(&buf[..n]);
         }
-        if esadecimale(&hs.finalize()) == *h {
+        if !rotto && esadecimale(&hs.finalize()) == *h {
             v.integri += 1;
         } else {
             v.diversi.push(rel.clone());
         }
     }
+    // Il tagmanifest protegge il manifesto stesso: chi cambia un dato e la sua riga si vede qui.
+    if bagit {
+        let mut testo = String::new();
+        if z.by_name(&format!("{radice}tagmanifest-sha256.txt")).is_ok_and(|mut f| f.read_to_string(&mut testo).is_ok()) {
+            for riga in testo.lines() {
+                let Some((h, rel)) = riga.trim_end_matches('\r').split_once(char::is_whitespace) else { continue };
+                let rel = da_manifesto(rel.trim_start());
+                let mut dati = Vec::new();
+                let ok = z.by_name(&format!("{radice}{rel}")).is_ok_and(|mut f| f.read_to_end(&mut dati).is_ok());
+                if !ok || !esadecimale(&Sha256::digest(&dati)).eq_ignore_ascii_case(h) {
+                    v.diversi.push(rel);
+                }
+            }
+        }
+    }
     // Nei pacchetti BagIt tutto quello che sta in data/ deve stare nel manifesto.
-    if manifesto.ends_with("manifest-sha256.txt") {
+    if bagit {
         let dati = format!("{radice}data/");
         for n in &nomi {
             if let Some(rel) = n.strip_prefix(&radice) {
