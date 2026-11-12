@@ -240,7 +240,7 @@ In caso di file già esistente	Wenn die Datei bereits existiert
 Sfoglia…	Durchsuchen…
 Conversione in corso	Konvertierung läuft
 Converti in	Konvertieren in
-{#} file nella coda	{} Dateien in der Warteschlange
+{#} file nella coda	{} Dateien in der Liste
 Link	Link
 Altri siti	Andere Seiten
 Scarica da web	Aus dem Web herunterladen
@@ -866,7 +866,7 @@ scheda video: immagine troppo piccola	Grafikkarte: Bild zu klein
 {#} archivi	{} Archive
 1 archivio	1 Archiv
 1 file pronti	1 Datei bereit
-1 file nella coda	1 Datei in der Warteschlange
+1 file nella coda	1 Datei in der Liste
 Taglia	Ausschneiden
 Incolla	Einfügen
 Elimina	Löschen
@@ -2399,3 +2399,4 @@ Mostra le {} firme	Die {} Signaturen anzeigen
 Mostra la firma	Signatur anzeigen
 È una firma staccata (.p7s) o una marca a parte (.tsr): la controllo insieme al file che è stato firmato. Di solito sta nella stessa cartella con lo stesso nome.	Das ist eine abgetrennte Signatur (.p7s) oder ein separater Zeitstempel (.tsr): Ich prüfe sie zusammen mit der signierten Datei. Sie liegt meist im selben Ordner mit demselben Namen.
 Versione firmata da {}: com'era al momento della firma	Von {} signierte Version: wie sie zum Zeitpunkt der Signatur war
+Scheda video attiva	Grafikkarte aktiv

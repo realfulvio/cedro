@@ -8,7 +8,7 @@ Da PDF a Word modificabile, a Excel, a immagini o a testo.	De PDF para Word edit
 TXT, Markdown, CSV, Excel, JSON e HTML.	TXT, Markdown, CSV, Excel, JSON e HTML.
 WAV, MP3, OGG, M4A, AAC e FLAC.	WAV, MP3, OGG, M4A, AAC e FLAC.
 MP3, WAV, FLAC, Opus e AIFF.	MP3, WAV, FLAC, Opus e AIFF.
-Archivi	Arquivos compactados
+Archivi	Arquivos
 Converte i file dentro uno ZIP e lo rifà.	Converte os arquivos dentro de um ZIP e o recria.
 MP4, WebM, MOV, MKV e AVI.	MP4, WebM, MOV, MKV e AVI.
 leggera, per il web	leve, para a web
@@ -2399,3 +2399,4 @@ Mostra le {} firme	Mostrar as {} assinaturas
 Mostra la firma	Mostrar a assinatura
 È una firma staccata (.p7s) o una marca a parte (.tsr): la controllo insieme al file che è stato firmato. Di solito sta nella stessa cartella con lo stesso nome.	É uma assinatura separada (.p7s) ou um carimbo à parte (.tsr): eu a verifico junto com o arquivo que foi assinado. Costuma ficar na mesma pasta com o mesmo nome.
 Versione firmata da {}: com'era al momento della firma	Versão assinada por {}: como era no momento da assinatura
+Scheda video attiva	Placa de vídeo ativa

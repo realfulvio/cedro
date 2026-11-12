@@ -190,8 +190,9 @@ fn inspector(f: &mut Frame, app: &App, r: R) {
         if !tools.is_empty() {
             f.hline(x, y, w);
             y += 22.0;
-            f.text("Strumenti", x, y, 110.0, 32.0, 19.0, SEMI, pal.text);
-            f.text("(al posto della conversione)", x + 108.0, y + 3.0, w - 108.0, 28.0, 15.0, SANS, pal.muted);
+            let hw = f.measure("Strumenti", 19.0, SEMI).ceil() + 10.0;
+            f.text("Strumenti", x, y, hw, 32.0, 19.0, SEMI, pal.text);
+            f.text("(al posto della conversione)", x + hw, y + 3.0, w - hw, 28.0, 15.0, SANS, pal.muted);
             y += 44.0;
             let home_id = app.default_action(false);
             let home = conversioni::formats(app.kind()).iter().find(|s| s.id == home_id).map(|s| s.id).unwrap_or("");
