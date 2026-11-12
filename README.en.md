@@ -1,14 +1,14 @@
 <p align="right">🇬🇧 English · <a href="README.md">🇮🇹 Italiano</a></p>
 
 <p align="center">
-  <img src="docs/v3/hero-en.webp" alt="Cedro: change a file's format with a right-click. Windows, Linux and Android">
+  <img src="docs/v4/hero-en.webp" alt="Cedro: every file, in the format you need. Windows and Linux">
 </p>
 
 <p align="center">
   <a href="https://github.com/realfulvio/cedro/releases/latest"><img alt="Latest version" src="https://img.shields.io/github/v/release/realfulvio/cedro?color=6B3FC4&label=version&style=for-the-badge"></a>
-  <img alt="Windows 10, 11 and ARM" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20ARM-1C1626?style=for-the-badge">
+  <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-1C1626?style=for-the-badge">
   <img alt="Linux Wayland" src="https://img.shields.io/badge/Linux-KDE%20%7C%20GNOME-1C1626?style=for-the-badge">
-  <img alt="Android: F-Droid / APK" src="https://img.shields.io/badge/Android-F--Droid%20%2F%20APK-1C1626?style=for-the-badge">
+  <a href="#cedro-4-labs-beta"><img alt="Cedro 4 Labs: beta" src="https://img.shields.io/badge/Cedro%204%20Labs-beta-F2B631?style=for-the-badge"></a>
   <a href="https://github.com/realfulvio/cedro/releases/latest"><img alt="Scanned with VirusTotal" src="https://img.shields.io/badge/scanned%20with-VirusTotal-1C1626?style=for-the-badge"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-1C1626?style=for-the-badge"></a>
 </p>
@@ -19,37 +19,47 @@
   &nbsp;·&nbsp; <a href="#what-it-converts">Formats</a>
   &nbsp;·&nbsp; <a href="#more-than-conversion">Tools</a>
   &nbsp;·&nbsp; <a href="#transcription-and-summary">Transcription</a>
-  &nbsp;·&nbsp; <a href="#cedro-for-android">Android</a>
+  &nbsp;·&nbsp; <a href="#cedro-4-labs-beta">Cedro 4 Labs</a>
+  &nbsp;·&nbsp; <a href="#all-releases">Releases</a>
   &nbsp;·&nbsp; <a href="#faq">FAQ</a>
 </p>
 
 ## What is it
 
-Cedro changes the format of your files without opening any program. Hold **Shift**, **right-click** a file and a wheel appears: pick the format and the new copy shows up next to the original, which stays untouched. On a phone, just tap **Share**.
+**Cedro is a program in its own right: a one-of-a-kind, independent project.** It is not a copy of a converter and does not depend on online services or other programs: it is written from scratch, entirely in **Rust**, with its own engine for images, PDFs, documents, audio and video. The code is open and the interface comes in English and Italian (it follows your system language).
 
-It also transcribes meetings, recognises **who is speaking** and writes a **summary** with AI.
+One window, many activities: **change the format** of photos, audio, video and documents; **work on PDFs** (merge, split, compress, turn into Word or Excel, scans too with OCR); **transcribe meetings**, recognise **who is speaking** and write the **summary**; **download video and audio** from the web; **sign** with a USB token or smart card (CNS) and verify signed files. The file stays at the centre, every command is in view, and the new copy shows up next to the original, which is never touched.
 
-Everything happens **on your own device**: your files are never uploaded anywhere. It is written entirely in **Rust**, and the code is open.
+Everything happens **on your own computer**: your files are never uploaded anywhere.
 
-> The interface is available in English and Italian (it follows your system language; change it in Settings). Most screenshots below show the Italian version.
+Are you a biotech, veterinary or research lab? There is also **[Cedro 4 Labs](#cedro-4-labs-beta)**, now in beta.
 
-<p align="center">
-  <img src="docs/v3/ruote-en.webp" width="760" alt="The Cedro wheel: on the left, conversions on a photo with JPEG selected; on the right, tools (compress, 50%, black and white, rotate, metadata, OCR)">
-</p>
+## What it looks like
 
 <p align="center">
-  <img src="docs/en/ruota-conversion.png" width="370" alt="The wheel in English: conversions on a photo, JPEG selected">
-  <img src="docs/en/ruota-tools.png" width="370" alt="The wheel in English: tools, with 50% selected">
+  <img src="docs/v4/converti-en.webp" width="49%" alt="Cedro, Convert page: the big file in the middle and every format on the right">
+  <img src="docs/v4/pdf-en.webp" width="49%" alt="Cedro, PDF page: page preview and the things you can do">
 </p>
+<p align="center">
+  <img src="docs/v4/trascrivi-en.webp" width="49%" alt="Cedro, Transcribe page: three accuracy levels, progress and text">
+  <img src="docs/v4/video-en.webp" width="49%" alt="Cedro, Web video page: paste the link, choose video or audio only">
+</p>
+<p align="center">
+  <img src="docs/v4/firma-en.webp" width="49%" alt="Cedro, Sign page: sign with a token or CNS, open and verify">
+  <img src="docs/v4/tinte-en.webp" width="49%" alt="Cedro's four tints: Cedro, Night, Forest and Paper">
+</p>
+
+Since 0.44 the default look is the new paged **Cedro** one, with four tints (Cedro, Night, Forest, Paper) and a **Simple** or **Full** view one click away. The five earlier looks, including the **Comune di Bondeno** one, are still in *Settings › Appearance*. Some labels in the screenshots are still shown in Italian.
 
 ## Download and install
 
 | Your device | What to download |
 | --- | --- |
 | **Windows 10 and 11** | [`Cedro-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest) |
-| **Windows on ARM** (Snapdragon X and similar) | [`Cedro-ARM64-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest): native build, faster transcription |
+| **Windows 10 and 11, portable** | [`Cedro-Portable-….-x64.zip`](https://github.com/realfulvio/cedro/releases/latest): extract and open `cedro.exe`, nothing to install; data and settings stay in the `Dati` folder next to the exe (x64 only) |
+| **Windows on ARM** | paused: the last version is 0.39.1, from 0.40 releases are x64 only |
 | **Linux** (Wayland with KDE Plasma or GNOME) | [`cedro-….-linux-x64.tar.gz`](https://github.com/realfulvio/cedro/releases/latest): extract it and run `./install.sh`, no admin rights needed |
-| **Android** | signed APK from the [releases](https://github.com/realfulvio/cedro/releases?q=android-v) and our own F-Droid repository: `https://realfulvio.github.io/cedro/fdroid/repo`. Never on Google Play |
+| **Android** | development paused (latest: 0.28.0): signed APK from the [releases](https://github.com/realfulvio/cedro/releases?q=android-v) and our own F-Droid repository `https://realfulvio.github.io/cedro/fdroid/repo`. Never on Google Play |
 
 **Windows:** double-click the installer (it installs for your user only, no administrator rights). The first time, Windows may say "Windows protected your PC", because the installer is not yet code-signed: click *More info*, then *Run anyway*. At the end of the setup leave **Launch Cedro** ticked: no window opens, an icon appears next to the clock.
 
@@ -59,11 +69,9 @@ After the first install it updates itself. To remove it: *Windows Settings, Apps
 
 **Antivirus check:** every file of every release is automatically scanned on [VirusTotal](https://www.virustotal.com) with 70+ antivirus engines; the result, with a link to each file's report, is at the bottom of the [release](https://github.com/realfulvio/cedro/releases/latest) notes. Nobody can promise "zero viruses" forever, but you can check it yourself: compare the SHA-256 of your download with the one in the report.
 
-<p align="center">
-  <img src="docs/shots/installatore-fine.png" width="440" alt="Last page of the Windows installer: Launch Cedro">
-</p>
+## The right-click wheel
 
-## How to use it
+Besides the window, Cedro has the **wheel**: turn it on in *Settings › Wheel*.
 
 1. Hold down a key.
 2. **Right-click** a file: in File Explorer, on the desktop, in your file manager or in an Open/Save dialog.
@@ -78,9 +86,7 @@ After the first install it updates itself. To remove it: *Windows Settings, Apps
 The slices change with the file type. Not sure where to start? Open the **Guide** from the icon: six animated steps.
 
 <p align="center">
-  <img src="docs/shots/ruota-shift-pdf.png" width="250" alt="Shift wheel on a PDF">
-  <img src="docs/shots/ruota-ctrl-foto-ocr.png" width="250" alt="Ctrl wheel on a photo, with OCR highlighted">
-  <img src="docs/shots/ruota-alt-zip.png" width="250" alt="Alt wheel, with ZIP highlighted">
+  <img src="docs/v4/ruote-en.webp" width="760" alt="The Cedro wheel: conversions on a photo on the left, tools on the right">
 </p>
 
 ## What it converts
@@ -101,17 +107,9 @@ The slices change with the file type. Not sure where to start? Open the **Guide*
 
 ## More than conversion
 
-<p align="center">
-  <img src="docs/v3/conversioni-en.webp" width="780" alt="The Conversions panel: categories on the left, file queue in the middle, options on the right">
-</p>
-
 **Conversions.** Open the panel from the icon menu: drag in files, even of different types, choose format, tools, quality and destination, and press the button at the bottom. Each category has its own options: photos (size, straighten, white background), documents (page size, embedded fonts, bookmarks, PDF/A-1b validated with veraPDF, password), PDF (OCR, tables, columns, pages like `1-3,5`, resolution), text, audio (kbps, channels, volume, trimming, tags) and video (resolution, fps, no audio, web-optimised). If the output name already exists: add `-2`, replace, skip or ask every time.
 
 ### Transcription and summary
-
-<p align="center">
-  <img src="docs/v3/rivedi-en.webp" width="900" alt="The Review screen: a council meeting transcript with coloured speakers and, on the right, the summary">
-</p>
 
 **Transcription.** From audio and video to a Word document, plain text or subtitles, in Italian and locally (whisper.cpp). It picks the right build for your processor and uses the graphics card through Vulkan when there is one. Three accuracy levels, and a progress bar with the time left.
 
@@ -119,43 +117,55 @@ The slices change with the file type. Not sure where to start? Open the **Guide*
 
 **AI summary.** With one click a small Italian-language model (llama.cpp, Qwen3.5-4B) writes the summary and "who said what". It loads only when you ask and then shuts down. Doubtful figures and votes are flagged *to check*.
 
-<table>
-  <tr>
-    <td width="50%"><img src="docs/v3/trascrizione-en.webp" alt="Transcription tab with the progress bar and the graphics card in use"></td>
-    <td width="50%"><img src="docs/v3/video-web-en.webp" alt="Web video tab: paste the link, choose video or audio only, quality and subtitles"></td>
-  </tr>
-  <tr>
-    <td><b>At work.</b> Progress, time left and which device is working (CPU or GPU).</td>
-    <td><b>YouTube and Web video.</b> Download video or audio only with quality, subtitles, cover art and chapters; it also works with any page.</td>
-  </tr>
-</table>
-
 External components such as yt-dlp, deno, ffmpeg and the transcription engine are downloaded on first use and **update themselves**; licences are listed in *About*.
 
-## Six looks, two modes
-
-The interface is entirely hand-drawn in Rust, identical on Windows and Linux. In **Settings › Appearance** you choose between layouts (the wheel is always the same) and between **Standard** mode, with every option within reach, and **Simplified**, with just the essentials. The **Comune di Bondeno** theme brings the municipality's colours, typeface and coat of arms.
+## Cedro 4 Labs (beta)
 
 <p align="center">
-  <img src="docs/v3/temi-en.webp" width="900" alt="Cedro's layouts: Essential Windows, Guided path, Workbench, Document at the centre, Comune di Bondeno and the compact window">
+  <img src="docs/v4/labs-en.webp" width="900" alt="Cedro 4 Labs: the paged window with the lab activities">
 </p>
 
-## Cedro for Android
+**Cedro 4 Labs** is the Cedro look designed for biotech, veterinary and research labs, and their office: six activities instead of file types ("Save images and slides", "Remove names", "Prepare a figure", "Convert data and plates", "Sign and send reports", "Transcribe and summarise"), plus the usual pages. Choose it in the installer or in *Settings › Appearance*.
 
-The same features as the desktop, designed for touch: from the gallery or the file manager tap **Share → Cedro**, pick on the wheel (with the file at the centre) and convert. Jobs are kept in a list with progress, and there are five themes to choose from.
+> ⚠️ **It is in beta: some features are still missing and others need polish.** If you use it in a lab, check the results and tell us what looks wrong.
 
-<p align="center">
-  <img src="docs/v3/android-en.webp" width="820" alt="Cedro on Android: the wheel, the Share sheet, jobs and appearance">
-</p>
+| | Already there | Still missing |
+| --- | --- | --- |
+| Images | Digital slides `.svs` to image, DICOM (also anonymised), ND2 and LIF, OME-TIFF, figure for a paper with a scale bar | Zeiss CZI, Hamamatsu NDPI, 3DHistech MRXS, VSI; DICOM from CD with DICOMDIR |
+| Data | CSV/TSV ↔ Excel, data package with SHA-256 fingerprints (BagIt) | Colour plate map |
+| Privacy | Strips names, authors, GPS and hidden data from PDF, Office, photos and DICOM | More proprietary formats |
+| Voice | Transcription with a veterinary glossary, summary | Report polishing |
 
-The app is a prototype and **does not go through Google Play**: you install it from our F-Droid repository (hosted on GitHub Pages) or as an APK from the releases. All the code is Rust, plus one tiny Java class for system integration.
+Everything stays on your computer, as in standard Cedro. If your lab misses a format or a feature, [open an issue](https://github.com/realfulvio/cedro/issues).
+
+## All releases
+
+Since 21 October 2026, **89 versions** have come out for Windows and Linux. The latest:
+
+| Version | Date | What's new |
+| --- | --- | --- |
+| [0.44.2](https://github.com/realfulvio/cedro/releases/tag/v0.44.2) | 12/11 | Quality fixes for Cedro 4 Labs |
+| [0.44.0](https://github.com/realfulvio/cedro/releases/tag/v0.44.0) | 12/11 | New paged "Cedro" look with four tints |
+| [0.43.0](https://github.com/realfulvio/cedro/releases/tag/v0.43.0) | 12/11 | Cedro 4 Labs with the paged window |
+| [0.42.0](https://github.com/realfulvio/cedro/releases/tag/v0.42.0) | 12/11 | Lab features (DICOM, ND2/LIF, figure, data package) |
+| [0.41.0](https://github.com/realfulvio/cedro/releases/tag/v0.41.0) | 12/11 | Portable version for Windows |
+| [0.40.0](https://github.com/realfulvio/cedro/releases/tag/v0.40.0) | 12/11 | Cedro 4 Labs theme and look choice in the installer |
+| [0.39.0](https://github.com/realfulvio/cedro/releases/tag/v0.39.0) | 11/11 | Digital slides (.svs) |
+| [0.38.0](https://github.com/realfulvio/cedro/releases/tag/v0.38.0) | 10/11 | Signing with a USB token or smart card |
+| [0.31.0](https://github.com/realfulvio/cedro/releases/tag/v0.31.0) | 03/11 | AI summary of meetings |
+| [0.26.10](https://github.com/realfulvio/cedro/releases/tag/v0.26.10) | 29/10 | Merge and split PDFs |
+| [0.22.0](https://github.com/realfulvio/cedro/releases/tag/v0.22.0) | 27/10 | English interface |
+| [0.6.0](https://github.com/realfulvio/cedro/releases/tag/v0.6.0) | 21/10 | Cedro comes to Linux |
+| [0.1.0](https://github.com/realfulvio/cedro/releases/tag/v0.1.0) | 21/10 | First version |
+
+**[→ The full log, version by version](docs/RILASCI.md)** (in Italian) · [all releases on GitHub](https://github.com/realfulvio/cedro/releases)
 
 ## FAQ
 
 **Does it change the original file?** No, it always makes a copy next to it.
 **Does it need internet?** Only for updates and to download components the first time (and, of course, for YouTube and Web video).
 **Why does Windows warn me?** The installer doesn't have the paid code signature yet. The code is open and you can inspect it here.
-**What about Mac?** Not for now: Windows, Linux (Wayland) and Android.
+**What about Mac?** Not for now: Windows and Linux (Wayland). Android is paused.
 
 ---
 
