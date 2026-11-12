@@ -35,6 +35,8 @@ fn kind_label(k: Kind) -> &'static str {
         Kind::Loop => "Giro di parole",
         Kind::Typical => "Frase tipica",
         Kind::Silence => "Nel silenzio",
+        Kind::Number => "Numeri e misure",
+        Kind::Meaning => "Parola decisiva",
     }
 }
 
@@ -44,7 +46,13 @@ fn kind_note(flag: &Flag) -> String {
         Kind::Loop => "Un giro di parole che si ripete dentro la frase.".to_string(),
         Kind::Typical => "Una frase che whisper inventa quando non sente parlato.".to_string(),
         Kind::Silence => "Testo dove l'audio è quasi muto: forse non c'è parlato.".to_string(),
+        Kind::Number => format!("Riascolta e conferma {} in «{}»", quoted(&flag.words), flag.snippet),
+        Kind::Meaning => format!("Cambia il senso se sentita male: {} in «{}»", quoted(&flag.words), flag.snippet),
     }
+}
+
+fn quoted(words: &[String]) -> String {
+    words.iter().take(6).map(|w| format!("«{w}»")).collect::<Vec<_>>().join(", ")
 }
 
 /// Il triangolo del Play o le due stanghette della pausa.
@@ -284,7 +292,8 @@ fn list(f: &mut Frame, app: &App, rv: &Review, r: R) {
                 let col = if open { pal.bad } else { pal.ok };
                 let pr = (area.0 + area.2 - 56.0 - pill_w, y + (ROW_H - 28.0) / 2.0, pill_w, 28.0);
                 f.p.rrect(pr.0, pr.1, pr.2, pr.3, 14.0, Some(mix(col, pal.surface, 0.88)), Some((mix(col, pal.surface, 0.5), 1.0)));
-                f.text_c(if open { kind_label(fl.kind) } else { "Sistemato" }, pr, 13.5, SEMI, col);
+                let chiuso = if matches!(fl.kind, Kind::Number | Kind::Meaning) { "Controllato" } else { "Sistemato" };
+                f.text_c(if open { kind_label(fl.kind) } else { chiuso }, pr, 13.5, SEMI, col);
                 f.hit(pr, Act::ReviewFlag(fi));
             }
             // Togli (o rimetti) la frase.
@@ -395,7 +404,9 @@ fn checks(f: &mut Frame, rv: &Review, r: R, mut y: f32, bottom: f32, title: bool
     if rv.flags.is_empty() {
         f.para("Whisper qui non ha lasciato ripetizioni né frasi inventate: si può salvare così.", cx, list_r.1 + 16.0, cw, 15.5, SANS, pal.muted, 1.4, 4);
     }
-    let ch = 118.0;
+    // I referti hanno la frase nella nota (fino a tre righe): la scheda è più alta.
+    let referti = rv.flags.iter().any(|f| matches!(f.kind, Kind::Number | Kind::Meaning));
+    let (ch, righe) = if referti { (150.0, 3) } else { (118.0, 2) };
     super::scrolled(f, list_r, Scroll::ReviewFlags, |f| {
         for (i, fl) in rv.flags.iter().enumerate() {
             let fy = list_r.1 + i as f32 * ch;
@@ -412,14 +423,26 @@ fn checks(f: &mut Frame, rv: &Review, r: R, mut y: f32, bottom: f32, title: bool
             f.p.circle(cx + 6.0, fy + 22.0, 5.0, Some(col), None);
             let at = fl.segs.first().and_then(|s| rv.rows.get(*s)).map(|row| clock(row.t0 as f64 / 100.0)).unwrap_or_default();
             f.text(&format!("{} · {at}", kind_label(fl.kind)), cx + 20.0, fy + 8.0, cw - 20.0, 28.0, 15.5, SEMI, pal.text);
-            f.para(&kind_note(fl), cx + 20.0, fy + 38.0, cw - 20.0, 13.5, SANS, pal.muted, 1.35, 2);
+            // La nota sta tra il titolo e i pulsanti: le righe in più si tagliano, non finiscono sotto.
+            f.para(&kind_note(fl), cx + 20.0, fy + 38.0, cw - 20.0, 13.5, SANS, pal.muted, 1.35, righe);
             f.hit((list_r.0, fy, list_r.2, ch - 44.0), Act::ReviewFlag(i));
             let by = fy + ch - 44.0;
-            if open {
+            let referto = matches!(fl.kind, Kind::Number | Kind::Meaning);
+            if open && referto {
+                // Il referto non si «risolve» da solo: si riascolta, si corregge sul posto o si conferma.
+                f.primary((cx + 20.0, by, 120.0, 34.0), "Confermo", Some(ic::CHECK), 14.5, Act::ReviewDismiss(i), true);
+                f.button((cx + 150.0, by, 130.0, 34.0), "Ascolta", None, 14.5, Act::ReviewFlag(i));
+            } else if open {
                 f.primary((cx + 20.0, by, 120.0, 34.0), "Risolvi", None, 14.5, Act::ReviewFix(i), true);
                 f.button((cx + 150.0, by, 130.0, 34.0), "Lascia così", None, 14.5, Act::ReviewDismiss(i));
             } else {
-                f.text(if rv.dismissed.contains(&i) { "Lasciata com'era" } else { "Sistemata" }, cx + 20.0, by, cw - 20.0, 34.0, 14.5, SANS, col);
+                let done = match (referto, rv.dismissed.contains(&i)) {
+                    (true, true) => "Confermata",
+                    (true, false) => "Corretta",
+                    (false, true) => "Lasciata com'era",
+                    (false, false) => "Sistemata",
+                };
+                f.text(done, cx + 20.0, by, cw - 20.0, 34.0, 14.5, SANS, col);
             }
         }
         rv.flags.len() as f32 * ch

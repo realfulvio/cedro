@@ -5,7 +5,7 @@
 
 mod activity;
 mod banco;
-mod cedro;
+pub mod cedro;
 mod compatto;
 mod documento;
 mod essenziale;

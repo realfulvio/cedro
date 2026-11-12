@@ -20,6 +20,7 @@ use cedro::ui::wheel::list;
 use cedro::{Kind, Mode};
 
 pub mod anim;
+pub mod tinte;
 mod casa;
 pub mod firma;
 mod m3;
@@ -37,8 +38,19 @@ pub use rivedi::{da_controllare, FoglioRiv};
 pub type R = (f32, f32, f32, f32);
 
 /// I temi che si possono scegliere (quello del Comune è dell'edizione dell'ente, non del telefono).
-pub const TEMI: [ThemeId; 5] =
-    [ThemeId::WindowsEssenziale, ThemeId::PercorsoGuidato, ThemeId::CedroCompatto, ThemeId::BancoDiLavoro, ThemeId::DocumentoAlCentro];
+pub const TEMI: [ThemeId; 9] = [
+    ThemeId::Cedro,
+    ThemeId::CedroNotte,
+    ThemeId::CedroBosco,
+    ThemeId::CedroCarta,
+    ThemeId::WindowsEssenziale,
+    ThemeId::PercorsoGuidato,
+    ThemeId::CedroCompatto,
+    ThemeId::BancoDiLavoro,
+    ThemeId::DocumentoAlCentro,
+];
+/// Le prime quattro sono le tinte del Cedro di partenza; le altre i temi di prima.
+const TINTE: usize = 4;
 
 const BARRA: f32 = 56.0;
 const TOCCO: f32 = 48.0;
@@ -592,6 +604,9 @@ pub struct App {
     /// Cosa sta facendo una trascrizione prima della prima percentuale (scarica il modello, rete interrotta…).
     pub passi: std::collections::HashMap<u32, String>,
     pub casa: casa::Casa,
+    /// Mentre si disegna il pannello chiaro del nuovo Cedro: il colore della pagina (le altre funzioni leggono i colori
+    /// da `pal()`, che lì dà la palette chiara con questo accento).
+    pannello: Option<(u8, u8, u8)>,
     /// Lavori, Aspetto o Informazioni sopra la finestra principale, con la freccia per tornare.
     pub sopra: Option<Scheda>,
     /// Le pagine dei PDF in coda.
@@ -661,6 +676,7 @@ impl App {
             partenze: std::collections::HashMap::new(),
             passi: std::collections::HashMap::new(),
             casa: casa::Casa::default(),
+            pannello: None,
             sopra: None,
             pdf_pagine: std::collections::HashMap::new(),
         }
@@ -783,12 +799,20 @@ impl App {
     }
 
     fn pal(&self) -> &'static Palette {
-        self.tema.palette()
+        match self.pannello {
+            Some(c) => tinte::palette_pannello(self.tema, c),
+            None => tinte::palette(self.tema),
+        }
+    }
+
+    /// Cornice scura (o chiara con la tinta «Carta»): decide i toni di tutte le schermate.
+    fn scuro(&self) -> bool {
+        self.pannello.is_none() && tinte::scuro(self.tema)
     }
 
     /// Il colore dei punti da controllare (arancio, leggibile sul tema chiaro e su quello scuro).
     fn avviso(&self) -> (u8, u8, u8) {
-        if self.tema.dark() { (0xFF, 0xB4, 0x5C) } else { (0xA8, 0x4E, 0x00) }
+        if self.scuro() { (0xFF, 0xB4, 0x5C) } else { (0xA8, 0x4E, 0x00) }
     }
 
     fn ha_strumenti(&self) -> bool {
@@ -999,6 +1023,10 @@ impl App {
             }
             if self.casa.guida || self.sopra.is_some() {
                 self.azione_casa(casa::CasaAz::Indietro);
+                return true;
+            }
+            if self.tema.is_cedro() && !self.casa.inizio {
+                self.azione_casa(casa::CasaAz::Nav(0));
                 return true;
             }
             if self.tema == ThemeId::PercorsoGuidato && self.casa.passo > 0 {
@@ -1236,14 +1264,24 @@ impl App {
         } else if let (Some(pg), true) = (self.pdf.pagina, self.file.is_some()) {
             self.pagina_pdf(p, pg, w, h);
         } else if self.casa_aperta {
+            // Il nuovo Cedro tiene la barra in basso anche su Lavori e Aspetto (senza voce scelta).
+            let hh = if self.tema.is_cedro() && self.sopra.is_some() && !self.casa.guida { h - NAV } else { h };
             match self.sopra {
-                Some(Scheda::Lavori) => self.pagina_lavori(p, w, h),
-                Some(Scheda::Aspetto) => self.pagina_aspetto(p, w, h),
-                Some(Scheda::Info) => self.pagina_info(p, w, h),
+                Some(Scheda::Lavori) => self.pagina_lavori(p, w, hh),
+                Some(Scheda::Aspetto) => self.pagina_aspetto(p, w, hh),
+                Some(Scheda::Info) => self.pagina_info(p, w, hh),
                 _ => self.pagina_casa(p, w, h),
             }
+            if hh != h {
+                self.barra_cedro(p, w, h, None);
+            }
         } else if self.foglio && self.file.is_some() {
-            self.pagina_foglio(p, w, h);
+            // Il nuovo Cedro: dopo «Condividi» la ruota, scura, col file al centro.
+            if self.tema.is_cedro() {
+                self.ruota(p, w, h);
+            } else {
+                self.pagina_foglio(p, w, h);
+            }
         } else {
             let corpo = h - NAV;
             match self.scheda {
@@ -1358,7 +1396,10 @@ impl App {
         let ultimi = !self.recenti.is_empty();
 
         // Barra: nome del file (o «Cedro») e, se il file ha strumenti, il selettore Converti / Strumenti.
-        let x_t = if self.dal_foglio {
+        let x_t = if self.foglio && self.tema.is_cedro() {
+            self.bottone_icona(p, (4.0, 4.0, TOCCO, TOCCO), ic::CLOSE, Azione::Esci);
+            56.0
+        } else if self.dal_foglio {
             self.bottone_icona(p, (4.0, 4.0, TOCCO, TOCCO), ic::ARROW_LEFT, Azione::IndietroFoglio);
             56.0
         } else {
@@ -1551,7 +1592,7 @@ impl App {
         let prem = attivo && self.premuto == Some(Azione::Vai);
         let fg = if attivo { pal.on_primary } else { pal.muted };
         if attivo {
-            lucido(p, self.tema.dark(), bt.0, bt.1, bt.2, bt.3, bt.3 / 2.0, pal.primary, prem);
+            lucido(p, self.scuro(), bt.0, bt.1, bt.2, bt.3, bt.3 / 2.0, pal.primary, prem);
         } else {
             p.rrect(bt.0, bt.1, bt.2, bt.3, bt.3 / 2.0, Some(pal.alt), None);
         }
@@ -1707,7 +1748,7 @@ impl App {
         let fg = if scelta { pal.on_primary } else { pal.text };
         let sg = if scelta { mix(pal.primary, pal.on_primary, 0.8) } else { pal.muted };
         // Il colore del tipo di file che esce (il colore del tema resta per la tessera scelta).
-        let kc = casa::colore_kind(casa::kind_uscita(self.kind, self.righe_ora().get(match az { Azione::Tessera(i) => i, _ => usize::MAX }).map(|r| r.id).unwrap_or("")), self.tema.dark());
+        let kc = casa::colore_kind(casa::kind_uscita(self.kind, self.righe_ora().get(match az { Azione::Tessera(i) => i, _ => usize::MAX }).map(|r| r.id).unwrap_or("")), self.scuro());
         let kc = if matches!(az, Azione::Tessera(_)) { kc } else { pal.primary };
         let caja = if scelta { mix(pal.primary, pal.on_primary, 0.25) } else { mix(pal.surface, kc, 0.16) };
         if rc.3 >= 84.0 {
@@ -1830,7 +1871,7 @@ impl App {
     /// grande, su cosa lavora (processore e thread), la barra, il tempo che resta.
     fn avanzamento_trascrizione(&mut self, p: &mut Painter, l: &Lavoro, r: R) {
         let pal = self.pal();
-        let scuro = self.tema.dark();
+        let scuro = self.scuro();
         let accento = casa::colore_att(casa::Att::Tras, scuro);
         let m = l.prog.load(Ordering::Relaxed);
         let pronto = m <= 1000;
@@ -1893,7 +1934,7 @@ impl App {
             Stato::Fatto { .. } => 142.0,
             Stato::Errore(_) => 112.0,
         };
-        sollevato(p, pal, self.tema.dark(), x, y, w, alt, 16.0);
+        sollevato(p, pal, self.scuro(), x, y, w, alt, 16.0);
         let titolo = if l.conv { format!("{} · {}", l.origine, l.etichetta) } else { format!("{}: {}", l.etichetta, l.origine) };
         let (stato_txt, stato_col) = match &l.stato {
             Stato::InCorso => ("In corso".to_string(), pal.primary),
@@ -1946,7 +1987,7 @@ impl App {
                     let prem = self.premuto == Some(az);
                     let pieno = i == 0;
                     if pieno {
-                        lucido(p, self.tema.dark(), rc.0, rc.1, rc.2, rc.3, 24.0, pal.primary, prem);
+                        lucido(p, self.scuro(), rc.0, rc.1, rc.2, rc.3, 24.0, pal.primary, prem);
                     } else {
                         p.rrect(rc.0, rc.1, rc.2, rc.3, 24.0, Some(if prem { pal.alt } else { pal.surface }), Some((pal.primary, 1.5)));
                     }
@@ -1981,7 +2022,7 @@ impl App {
         let pal = self.pal();
         let rh = 42.0;
         let h = righe.len() as f32 * rh + 4.0;
-        sollevato(p, pal, self.tema.dark(), x, y, w, h, 16.0);
+        sollevato(p, pal, self.scuro(), x, y, w, h, 16.0);
         for (i, (k, v, si)) in righe.iter().enumerate() {
             let ry = y + 2.0 + i as f32 * rh;
             if i > 0 {
@@ -2039,10 +2080,31 @@ impl App {
         let x = if ampio { (w - cw) / 2.0 } else { 12.0 };
         p.push_clip(0.0, BARRA, w, h - BARRA);
         let mut y = BARRA - self.scorri;
-        p.text("Tema", x + 4.0, y, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
+        // Le quattro tinte di Cedro: un quadrato per ciascuna, con i colori della sua cornice.
+        p.text("Tinta di Cedro", x + 4.0, y, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
         y += 32.0;
-        for (i, tema) in TEMI.into_iter().enumerate() {
-            let rc = (x, y + i as f32 * rh, cw, rh - 8.0);
+        let tw = (cw - 3.0 * 10.0) / 4.0;
+        for (i, tema) in TEMI.into_iter().take(TINTE).enumerate() {
+            let tx = x + i as f32 * (tw + 10.0);
+            let t = tema.tint();
+            let attivo = tema == self.tema;
+            p.rrect_vgrad(tx, y, tw, tw, 14.0, t.frame_hi, t.frame);
+            p.rrect(tx + tw * 0.14, y + tw * 0.56, tw * 0.72, tw * 0.3, 6.0, Some((255, 255, 255)), Some((t.line, 1.0)));
+            p.rrect_vgrad(tx + tw * 0.14, y + tw * 0.16, tw * 0.72, tw * 0.3, 6.0, (0xFF, 0x8F, 0x52), (0xB2, 0x3F, 0x73));
+            p.rrect(tx, y, tw, tw, 14.0, None, Some((if attivo { pal.primary } else { pal.border }, if attivo { 3.0 } else { 1.0 })));
+            p.text(tinte::nome(tema), tx - 4.0, y + tw + 2.0, tw + 8.0, 22.0, 13.0, if attivo { Weight::Bold } else { Weight::Semibold }, if attivo { pal.text } else { pal.muted }, Align::Center);
+            self.colpi.push((Forma::R((tx, y, tw, tw + 26.0)), Azione::Tema(i)));
+        }
+        y += tw + 34.0;
+        p.text("Vista di partenza", x + 4.0, y, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
+        y += 32.0;
+        self.pillole(p, (x, y, cw, TOCCO), &["Semplice", "Completa"], usize::from(!self.imp.simple), |i| Azione::Casa(casa::CasaAz::Vista(i == 1)));
+        y += TOCCO + 6.0;
+        y += p.text_wrap("Semplice mostra il formato e il pulsante; Completa anche qualità, dimensioni e le altre opzioni.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3) + 12.0;
+        p.text("Temi di prima", x + 4.0, y, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
+        y += 32.0;
+        for (i, tema) in TEMI.into_iter().enumerate().skip(TINTE) {
+            let rc = (x, y + (i - TINTE) as f32 * rh, cw, rh - 8.0);
             let attivo = tema == self.tema;
             let prem = self.premuto == Some(Azione::Tema(i));
             let pa = tema.palette();
@@ -2059,7 +2121,7 @@ impl App {
             p.swap_fonts(prima);
             self.colpi.push((Forma::R((rc.0, rc.1 - 2.0, rc.2, rc.3 + 4.0)), Azione::Tema(i)));
         }
-        y += TEMI.len() as f32 * rh + 4.0;
+        y += (TEMI.len() - TINTE) as f32 * rh + 4.0;
         p.text("Caratteri", x + 4.0, y, cw - 8.0, 30.0, 15.0, Weight::Semibold, pal.muted, Align::Left);
         y += 32.0;
         self.pillole(p, (x, y, cw, TOCCO), &["Normali", "Grandi"], usize::from(self.grandi), |i| Azione::Caratteri(i == 1));
@@ -2127,6 +2189,7 @@ impl App {
 /// Il carattere di ogni tema, come lo dice «Aspetto».
 fn nome_carattere(t: ThemeId) -> &'static str {
     match t {
+        ThemeId::Cedro | ThemeId::CedroNotte | ThemeId::CedroBosco | ThemeId::CedroCarta | ThemeId::CedroLabs => "Figtree",
         ThemeId::WindowsEssenziale => "Roboto, quello del telefono",
         ThemeId::PercorsoGuidato => "Atkinson Hyperlegible",
         ThemeId::CedroCompatto => "Figtree",

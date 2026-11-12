@@ -44,6 +44,8 @@ pub mod settings;
 pub mod tema;
 pub mod ui;
 pub mod sysinfo;
+pub mod mrxs;
+pub mod ndpi;
 pub mod svs;
 pub mod svs_lab;
 pub mod rx;

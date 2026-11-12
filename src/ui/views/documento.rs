@@ -164,7 +164,7 @@ fn preview(f: &mut Frame, app: &App, r: R) {
     f.p.fill(area.0, area.1, area.2, area.3, mix(pal.border, pal.bg, 0.45));
     let img = app.previews.get(&(file.path.clone(), page)).and_then(|o| o.clone()).or_else(|| app.media_of(&file.path).and_then(|m| m.thumb.clone()));
     let Some(img) = img else {
-        let msg = "Preparo l'anteprima…";
+        let msg = if app.previews_failed.contains(&(file.path.clone(), page)) { "Anteprima non disponibile: il file sembra danneggiato o incompleto." } else { "Preparo l'anteprima…" };
         f.kind_icon(file.kind, area.0 + area.2 / 2.0 - 40.0, area.1 + area.3 / 2.0 - 80.0, 80.0);
         f.text_c(msg, (area.0, area.1 + area.3 / 2.0 + 20.0, area.2, 34.0), 17.0, SANS, pal.muted);
         return;
