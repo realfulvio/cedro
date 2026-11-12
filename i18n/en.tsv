@@ -2265,3 +2265,6 @@ Il file al centro, tutti i comandi accanto.	The file in the middle, all the comm
 Lo stesso Cedro, con la cornice blu notte.	The same Cedro, with a midnight blue frame.
 Lo stesso Cedro, con la cornice verde bosco.	The same Cedro, with a forest green frame.
 Lo stesso Cedro, con la cornice chiara.	The same Cedro, with a light frame.
+Porta in CSV	Turn into CSV
+{#} celle troppo lunghe per Excel tagliate a {#} caratteri.	{} cells too long for Excel, cut to {} characters.
+{}: è un collegamento a una cartella, metti la cartella vera	{}: it is a link to a folder, add the real folder
