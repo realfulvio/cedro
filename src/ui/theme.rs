@@ -6,6 +6,13 @@ use super::gfx::Rgb;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum ThemeId {
+    /// Il Cedro di partenza (2026): cornice scura melanzana, attività a sinistra con le icone a gradiente,
+    /// il file grande al centro sopra un alone dei suoi colori e un pannello chiaro con tutti i comandi.
+    /// `CedroNotte`, `CedroBosco` e `CedroCarta` sono la stessa disposizione con un'altra tinta.
+    Cedro,
+    CedroNotte,
+    CedroBosco,
+    CedroCarta,
     WindowsEssenziale,
     PercorsoGuidato,
     CedroCompatto,
@@ -19,7 +26,11 @@ pub enum ThemeId {
     CedroLabs,
 }
 
-pub const THEMES: [ThemeId; 7] = [
+pub const THEMES: [ThemeId; 11] = [
+    ThemeId::Cedro,
+    ThemeId::CedroNotte,
+    ThemeId::CedroBosco,
+    ThemeId::CedroCarta,
     ThemeId::WindowsEssenziale,
     ThemeId::PercorsoGuidato,
     ThemeId::CedroCompatto,
@@ -33,6 +44,10 @@ impl ThemeId {
     /// Il nome scritto in config.txt (`ui_theme=`).
     pub fn key(self) -> &'static str {
         match self {
+            ThemeId::Cedro => "cedro",
+            ThemeId::CedroNotte => "cedro-notte",
+            ThemeId::CedroBosco => "cedro-bosco",
+            ThemeId::CedroCarta => "cedro-carta",
             ThemeId::WindowsEssenziale => "windows-essenziale",
             ThemeId::PercorsoGuidato => "percorso-guidato",
             ThemeId::CedroCompatto => "cedro-compatto",
@@ -43,13 +58,37 @@ impl ThemeId {
         }
     }
 
-    /// Un valore sconosciuto (o vuoto) torna a Windows essenziale: l'avvio non si blocca mai.
+    /// Un valore sconosciuto (o vuoto) è il Cedro di partenza: l'avvio non si blocca mai.
     pub fn from_key(key: &str) -> ThemeId {
-        THEMES.into_iter().find(|t| t.key() == key.trim()).unwrap_or(ThemeId::WindowsEssenziale)
+        THEMES.into_iter().find(|t| t.key() == key.trim()).unwrap_or(ThemeId::Cedro)
+    }
+
+    /// Il Cedro di partenza, in una delle sue quattro tinte.
+    pub fn is_cedro(self) -> bool {
+        matches!(self, ThemeId::Cedro | ThemeId::CedroNotte | ThemeId::CedroBosco | ThemeId::CedroCarta)
+    }
+
+    /// Le disposizioni a pagine (la barra con le icone a gradiente, il file al centro, il pannello a destra).
+    pub fn paged(self) -> bool {
+        self.is_cedro() || self == ThemeId::CedroLabs
+    }
+
+    /// I colori della cornice di questo tema (solo per le disposizioni a pagine).
+    pub fn tint(self) -> &'static Tint {
+        match self {
+            ThemeId::CedroNotte => &TINT_NOTTE,
+            ThemeId::CedroBosco => &TINT_BOSCO,
+            ThemeId::CedroCarta => &TINT_CARTA,
+            _ => &TINT_MELANZANA,
+        }
     }
 
     pub fn name(self) -> &'static str {
         match self {
+            ThemeId::Cedro => "Cedro · Melanzana",
+            ThemeId::CedroNotte => "Cedro · Notte",
+            ThemeId::CedroBosco => "Cedro · Bosco",
+            ThemeId::CedroCarta => "Cedro · Carta",
             ThemeId::WindowsEssenziale => "Windows essenziale",
             ThemeId::PercorsoGuidato => "Percorso guidato",
             ThemeId::CedroCompatto => "Cedro compatto",
@@ -62,6 +101,10 @@ impl ThemeId {
 
     pub fn description(self) -> &'static str {
         match self {
+            ThemeId::Cedro => "Il file al centro, tutti i comandi accanto.",
+            ThemeId::CedroNotte => "Lo stesso Cedro, con la cornice blu notte.",
+            ThemeId::CedroBosco => "Lo stesso Cedro, con la cornice verde bosco.",
+            ThemeId::CedroCarta => "Lo stesso Cedro, con la cornice chiara.",
             ThemeId::WindowsEssenziale => "Attività a sinistra, coda con ispettore.",
             ThemeId::PercorsoGuidato => "Tre passi: File, Operazione, Salvataggio.",
             ThemeId::CedroCompatto => "Finestrella dall'icona vicino all'orologio.",
@@ -74,6 +117,9 @@ impl ThemeId {
 
     pub fn palette(self) -> &'static Palette {
         match self {
+            ThemeId::Cedro | ThemeId::CedroCarta => &CEDRO,
+            ThemeId::CedroNotte => &CEDRO_NOTTE,
+            ThemeId::CedroBosco => &CEDRO_BOSCO,
             ThemeId::WindowsEssenziale => &ESSENZIALE,
             ThemeId::PercorsoGuidato => &GUIDATO,
             ThemeId::CedroCompatto => &COMPATTO,
@@ -236,6 +282,170 @@ pub const LABS: Palette = Palette {
     nav_sel: hex(0xE9E0F7),
 };
 
+/// Il Cedro di partenza: i colori del pannello chiaro dei comandi (e di Impostazioni e Guida).
+pub const CEDRO: Palette = Palette {
+    bg: hex(0xF5F2F9),
+    surface: hex(0xFFFFFF),
+    alt: hex(0xF3EFF8),
+    text: hex(0x2B1F38),
+    muted: hex(0x6A5E79),
+    primary: hex(0x793FCB),
+    on_primary: hex(0xFFFFFF),
+    border: hex(0xE2DCEA),
+    ok: hex(0x14845B),
+    bad: hex(0xB3261E),
+    work: hex(0xFAF8FC),
+    nav_sel: hex(0xE9E0F7),
+};
+
+pub const CEDRO_NOTTE: Palette = Palette {
+    bg: hex(0xF3F6FA),
+    surface: hex(0xFFFFFF),
+    alt: hex(0xEEF3F8),
+    text: hex(0x172B3A),
+    muted: hex(0x586B80),
+    primary: hex(0x2563B8),
+    on_primary: hex(0xFFFFFF),
+    border: hex(0xD9E2EC),
+    ok: hex(0x14845B),
+    bad: hex(0xB3261E),
+    work: hex(0xF8FAFC),
+    nav_sel: hex(0xDCEAF7),
+};
+
+pub const CEDRO_BOSCO: Palette = Palette {
+    bg: hex(0xF2F7F4),
+    surface: hex(0xFFFFFF),
+    alt: hex(0xEEF5F1),
+    text: hex(0x16302A),
+    muted: hex(0x586F66),
+    primary: hex(0x14845B),
+    on_primary: hex(0xFFFFFF),
+    border: hex(0xD8E5DE),
+    ok: hex(0x14845B),
+    bad: hex(0xB3261E),
+    work: hex(0xF7FAF8),
+    nav_sel: hex(0xDCEFE5),
+};
+
+/// La cornice di una disposizione a pagine: fondo (con la sfumatura in alto a sinistra), scritte,
+/// righe, il verde e il viola del marchio, il fondo della zona del file e il velo sotto il mouse.
+pub struct Tint {
+    pub frame: Rgb,
+    pub frame_hi: Rgb,
+    pub line: Rgb,
+    pub ink: Rgb,
+    pub muted: Rgb,
+    /// Le scritte della voce scelta nella barra.
+    pub sel: Rgb,
+    pub brand: Rgb,
+    pub leaf: Rgb,
+    pub stage: Rgb,
+    /// Il velo sotto il mouse: bianco sulle cornici scure, viola scuro su quella chiara.
+    pub hover: Rgb,
+    pub light: bool,
+}
+
+pub const TINT_MELANZANA: Tint = Tint {
+    frame: hex(0x1B1325),
+    frame_hi: hex(0x2B1D3B),
+    line: hex(0x3A2E4C),
+    ink: hex(0xF4EFFA),
+    muted: hex(0xB9ADCA),
+    sel: hex(0xFFFFFF),
+    brand: hex(0xB08CF5),
+    leaf: hex(0x45D39A),
+    stage: hex(0x09070C),
+    hover: hex(0xFFFFFF),
+    light: false,
+};
+
+pub const TINT_NOTTE: Tint = Tint {
+    frame: hex(0x0E1622),
+    frame_hi: hex(0x17293D),
+    line: hex(0x2A3D52),
+    ink: hex(0xEEF4FB),
+    muted: hex(0xA9B8C9),
+    sel: hex(0xFFFFFF),
+    brand: hex(0xB79CF5),
+    leaf: hex(0x45D39A),
+    stage: hex(0x06090D),
+    hover: hex(0xFFFFFF),
+    light: false,
+};
+
+pub const TINT_BOSCO: Tint = Tint {
+    frame: hex(0x0E1A15),
+    frame_hi: hex(0x17322A),
+    line: hex(0x2A463C),
+    ink: hex(0xEEF8F3),
+    muted: hex(0xA8C2B6),
+    sel: hex(0xFFFFFF),
+    brand: hex(0xB79CF5),
+    leaf: hex(0x45D39A),
+    stage: hex(0x060A08),
+    hover: hex(0xFFFFFF),
+    light: false,
+};
+
+pub const TINT_CARTA: Tint = Tint {
+    frame: hex(0xEEE9F4),
+    frame_hi: hex(0xFBF9FD),
+    line: hex(0xD6CDE2),
+    ink: hex(0x2B1F38),
+    muted: hex(0x6A5E79),
+    sel: hex(0x2B1F38),
+    brand: hex(0x793FCB),
+    leaf: hex(0x14845B),
+    stage: hex(0x1A1622),
+    hover: hex(0x3C1E5A),
+    light: true,
+};
+
+/// I colori dei comandi disegnati sulla zona scura del file (barra, elenchi, pagine del PDF): così i
+/// pezzi comuni (campi, elenchi, pagine) si leggono anche lì.
+pub const STAGE: Palette = Palette {
+    bg: hex(0x09070C),
+    surface: hex(0x1A1522),
+    alt: hex(0x2A2236),
+    text: hex(0xF4EFFA),
+    muted: hex(0xB9ADCA),
+    primary: hex(0xB08CF5),
+    on_primary: hex(0x15101C),
+    border: hex(0x3A2E4C),
+    ok: hex(0x5BE0A3),
+    bad: hex(0xFF8A8F),
+    work: hex(0x120E18),
+    nav_sel: hex(0x2A2236),
+};
+
+/// I due colori di una pagina del Cedro di partenza (pieno e acceso), come `lab_colors` per i laboratori.
+pub fn page_colors(lab: super::model::Lab) -> (Rgb, Rgb) {
+    use super::model::Lab;
+    match lab {
+        Lab::Home => (hex(0x793FCB), hex(0xB08CF5)),
+        Lab::Pdf => (hex(0xC8323C), hex(0xFF6B78)),
+        Lab::Trascrivi => (hex(0xD4570E), hex(0xFF8A3D)),
+        Lab::Video => (hex(0x1E8A55), hex(0x3DCB8A)),
+        Lab::Firma => (hex(0x5B4BD1), hex(0x9A8CF8)),
+        _ => (hex(0x2563B8), hex(0x4C9BF5)),
+    }
+}
+
+/// Il colore acceso di un tipo di file (il pallino delle etichette, la sfumatura delle tessere).
+pub fn kind_bright(kind: crate::engine::Kind) -> Rgb {
+    use crate::engine::Kind;
+    match kind {
+        Kind::Image => hex(0x3CCB9A),
+        Kind::Doc => hex(0x5B9BF5),
+        Kind::Pdf => hex(0xFF6B60),
+        Kind::Text => hex(0x35C6D2),
+        Kind::Audio => hex(0xFF8A3D),
+        Kind::Video => hex(0xA982EE),
+        Kind::Archive | Kind::Other => hex(0xF2B631),
+    }
+}
+
 /// La cornice di Cedro 4 Labs: melanzana scuro, scritte chiare, il verde e il viola del marchio schiariti.
 pub const LABS_FRAME: Rgb = hex(0x1B1325);
 pub const LABS_FRAME_HI: Rgb = hex(0x281D36);
@@ -259,6 +469,8 @@ pub fn lab_colors(lab: super::model::Lab) -> (Rgb, Rgb) {
         Lab::Trascrivi => (hex(0x7B4FC9), hex(0xA982EE)),
         Lab::Converti => (hex(0x0E7C86), hex(0x35C6D2)),
         Lab::Pdf => (hex(0xC8323C), hex(0xFF6B78)),
+        Lab::Video => (hex(0x1E8A55), hex(0x3DCB8A)),
+        Lab::Firma => (hex(0x5B4BD1), hex(0x9A8CF8)),
     }
 }
 
@@ -296,8 +508,9 @@ mod tests {
         for t in THEMES {
             assert_eq!(ThemeId::from_key(t.key()), t);
         }
-        assert_eq!(ThemeId::from_key("ruota-e-dettagli"), ThemeId::WindowsEssenziale);
-        assert_eq!(ThemeId::from_key(""), ThemeId::WindowsEssenziale);
+        assert_eq!(ThemeId::from_key("ruota-e-dettagli"), ThemeId::Cedro);
+        assert_eq!(ThemeId::from_key(""), ThemeId::Cedro);
+        assert!(THEMES.iter().filter(|t| t.is_cedro()).count() == 4);
     }
 
     #[test]

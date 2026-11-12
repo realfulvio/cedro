@@ -11,10 +11,12 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro 4 Labs ha una finestra nuova: una barra con le attività a sinistra, il file grande al centro, i comandi a destra.**
+**Cedro ha un aspetto nuovo: una barra con le pagine a sinistra, il file grande al centro, i comandi a destra.**
 
-- **La barra del laboratorio**: Salva immagini e vetrini, Togli i nomi, Prepara una figura, Converti dati e piastre, Firma e manda referti, Trascrivi e riassumi; sotto, «Cedro di sempre» con Converti file e Lavora sui PDF. Ogni voce ha il suo colore, che torna nel pulsante.
-- **Il file al centro**: l'anteprima grande su uno sfondo che prende i colori del file stesso, con la striscia delle miniature, «Aggiungi» e i file di altro tipo in coda a un clic.
-- **Semplice o Completa**: in cima al pannello a destra si sceglie. «Completa» mostra tutti i comandi (formato, dimensioni, qualità, salvataggio, cosa fare se il file esiste); «Semplice» solo le scelte pronte.
-- **Inizio con sei tessere**: Vetrino, Radiografia, Microscopia, Tabella, Referto, Audio. Si sceglie il tipo di file, si apre il file e Cedro dice che cosa ci si può fare, con il passaggio alla pagina giusta.
-- La barra segue quello che si sta facendo: se dal menu dei formati si sceglie «Figura», si passa a «Prepara una figura».
+- **Sei pagine nella barra**: Inizio, Converti, PDF, Trascrivi, Video dal web e Firma, ognuna con il suo colore. YouTube e gli altri siti ora stanno insieme in «Video dal web».
+- **Inizio con sei tessere**: Immagini, PDF, Documenti e testi, Audio, Video e Archivi ZIP, più il campo per incollare un link e la scheda per firmare o verificare un documento. Trascinato un file, Cedro apre la pagina giusta.
+- **Il file al centro**: l'anteprima grande su uno sfondo che prende i colori del file, con la striscia delle miniature in basso; con un clic si passa all'elenco dei file.
+- **PDF**: Converti, Unisci, Dividi, Pagine e Comprimi, con le pagine e il file unito grandi al centro.
+- **Semplice o Completa**: in cima al pannello a destra. Si parte da «Semplice», con le scelte pronte; «Completa» mostra tutti i formati, gli strumenti e le opzioni.
+- **Quattro tinte**: Melanzana (quella di partenza), Notte, Bosco e Carta, in Impostazioni › Aspetto. I temi di prima restano lì, così come Comune di Bondeno e Cedro 4 Labs, che non cambiano.
+- Chi aggiorna dall'aspetto di partenza passa da solo a quello nuovo, una volta sola; chi aveva scelto un altro tema lo ritrova com'era.

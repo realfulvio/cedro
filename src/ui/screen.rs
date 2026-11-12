@@ -143,6 +143,8 @@ impl Screen {
         self.app.simple_view = self.simple;
         if self.theme == ThemeId::CedroLabs {
             self.app.lab_sync();
+        } else if self.theme.is_cedro() {
+            self.app.cedro_sync();
         }
         if self.app.activity == Activity::Firma && self.surface == Surface::Main {
             super::firma::watch_recent(self.app.wake.clone());
@@ -239,7 +241,7 @@ impl Screen {
             }
             return;
         }
-        if !matches!(self.theme, ThemeId::DocumentoAlCentro | ThemeId::CedroLabs) || self.surface != Surface::Main || self.app.activity != Activity::Convert {
+        if !(matches!(self.theme, ThemeId::DocumentoAlCentro) || self.theme.paged()) || self.surface != Surface::Main || self.app.activity != Activity::Convert {
             if self.surface != Surface::Viewer {
                 self.app.player = None;
             }
@@ -523,7 +525,12 @@ impl Screen {
 
     fn add_files(&mut self, paths: Vec<PathBuf>) {
         let simple = self.simple;
-        self.app.add_files(paths, simple);
+        let added = self.app.add_files(paths, simple);
+        // Il Cedro di partenza: un file lasciato su «Inizio» apre la pagina che gli serve, con il file dentro.
+        if added > 0 && self.theme.is_cedro() && self.app.lab == super::model::Lab::Home {
+            self.app.lab = super::model::Lab::Converti;
+            self.app.cedro_sync();
+        }
     }
 
     /// Applica gli eventi dei lavori; vero se c'è da ridisegnare.
@@ -672,7 +679,18 @@ impl Screen {
                     app.firma.sign.scan(wake);
                 }
             }
-            Act::Lab(lab) => app.set_lab(lab, simple),
+            Act::Lab(lab) => {
+                app.set_lab(lab, simple);
+                // Il Cedro di partenza ha i PDF in una pagina loro: «Converti» parte dagli altri file.
+                if self.theme.is_cedro() && lab == super::model::Lab::Converti && app.kind() == crate::engine::Kind::Pdf {
+                    app.cedro_leave_pdf(simple);
+                }
+            }
+            Act::LabGo(super::model::Lab::Video, _) => {
+                // «Inizio»: il link incollato va nella pagina dei video, pronto da scaricare.
+                app.set_lab(super::model::Lab::Video, simple);
+                app.add_typed_links(false);
+            }
             Act::LabGo(super::model::Lab::Home, _) => {
                 // Le tessere di Inizio: si sceglie il file, poi la scheda dice che cosa ci si può fare.
                 let files = plat.pick_files();
