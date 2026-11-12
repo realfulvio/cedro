@@ -183,7 +183,14 @@ pub fn crea(paths: &[PathBuf], out: &Path, nome: &str, avanzamento: &dyn Fn(f32)
     // L'impronta dello ZIP intero, per chi lo cita.
     let mut h = Sha256::new();
     let mut f = fs::File::open(out).map_err(|e| e.to_string())?;
-    std::io::copy(&mut f, &mut h).map_err(|e| e.to_string())?;
+    let mut buf = vec![0u8; 1 << 16];
+    loop {
+        let n = std::io::Read::read(&mut f, &mut buf).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        h.update(&buf[..n]);
+    }
     avanzamento(1.0);
     Ok(Fatto { file: manifesto.len(), byte, impronta: esadecimale(&h.finalize()) })
 }

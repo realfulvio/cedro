@@ -210,8 +210,12 @@ mod prove {
     use std::path::PathBuf;
 
     fn scratch() -> PathBuf {
+        // Un numero per prova: con il solo orologio due prove in parallelo potevano avere la stessa cartella
+        // e una la cancellava sotto l'altra («file non trovato» in CI).
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let k = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        let dir = std::env::temp_dir().join(format!("cedro-dicom-{n}"));
+        let dir = std::env::temp_dir().join(format!("cedro-dicom-{}-{k}-{n}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
