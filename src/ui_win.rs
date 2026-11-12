@@ -570,6 +570,20 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 info.ptMinTrackSize.x = (mw * s) as i32;
                 info.ptMinTrackSize.y = (mh * s) as i32;
             }
+            // Una finestra WS_POPUP ingrandita prenderebbe tutto il monitor, sopra la barra delle
+            // applicazioni: la si tiene nell'area di lavoro (più la cornice che WM_NCCALCSIZE toglie).
+            let mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            let mut mi = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+            if GetMonitorInfoW(mon, &mut mi).as_bool() {
+                let d = dpi_of(hwnd) as u32;
+                let fx = GetSystemMetricsForDpi(SM_CXSIZEFRAME, d) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, d);
+                let fy = GetSystemMetricsForDpi(SM_CYSIZEFRAME, d) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, d);
+                let (w, m) = (mi.rcWork, mi.rcMonitor);
+                info.ptMaxPosition.x = w.left - m.left - fx;
+                info.ptMaxPosition.y = w.top - m.top - fy;
+                info.ptMaxSize.x = w.right - w.left + 2 * fx;
+                info.ptMaxSize.y = w.bottom - w.top + 2 * fy;
+            }
             LRESULT(0)
         }
         WM_ERASEBKGND => LRESULT(1),
