@@ -64,8 +64,8 @@ pub fn key_name(key_alg: &str, key_params: &[u8], key: &[u8]) -> String {
         oid::RSA => {
             use rsa::pkcs1::DecodeRsaPublicKey;
             use rsa::traits::PublicKeyParts;
-            match rsa::RsaPublicKey::from_pkcs1_der(key) {
-                Ok(k) => format!("RSA {}", k.n().bits()),
+            match rsa::PublicKey::from_pkcs1_der(key) {
+                Ok(k) => format!("RSA {}", k.n().bit_width()),
                 Err(_) => "RSA".into(),
             }
         }
@@ -100,7 +100,7 @@ pub fn verify_hashed(sig_alg: &str, hash_alg: &str, key_alg: &str, key_params: &
             if !matches!(sig_alg, oid::RSA | oid::RSA_SHA1 | oid::RSA_SHA224 | oid::RSA_SHA256 | oid::RSA_SHA384 | oid::RSA_SHA512) {
                 return Err(format!("firma RSA con un algoritmo inatteso ({sig_alg})"));
             }
-            let k = rsa::RsaPublicKey::from_pkcs1_der(key).map_err(|e| format!("chiave RSA illeggibile: {e}"))?;
+            let k = rsa::PublicKey::from_pkcs1_der(key).map_err(|e| format!("chiave RSA illeggibile: {e}"))?;
             // DigestInfo con i parametri NULL (il caso normale) e senza (qualche programma vecchio).
             let alg_null = asn1::seq(&[&asn1::oid_der(hash_alg), &[0x05, 0x00]]);
             let alg_bare = asn1::seq(&[&asn1::oid_der(hash_alg)]);
@@ -164,13 +164,13 @@ fn verify_pss(params: &[u8], key: &[u8], data: &[u8], sig: &[u8]) -> R<bool> {
             }
         }
     }
-    let k = rsa::RsaPublicKey::from_pkcs1_der(key).map_err(|e| format!("chiave RSA illeggibile: {e}"))?;
+    let k = rsa::PublicKey::from_pkcs1_der(key).map_err(|e| format!("chiave RSA illeggibile: {e}"))?;
     let hashed = digest(&hash, data)?;
     let ok = match hash.as_str() {
-        oid::SHA256 => k.verify(rsa::Pss::new_with_salt::<sha2::Sha256>(salt), &hashed, sig).is_ok(),
-        oid::SHA384 => k.verify(rsa::Pss::new_with_salt::<sha2::Sha384>(salt), &hashed, sig).is_ok(),
-        oid::SHA512 => k.verify(rsa::Pss::new_with_salt::<sha2::Sha512>(salt), &hashed, sig).is_ok(),
-        oid::SHA1 => k.verify(rsa::Pss::new_with_salt::<sha1::Sha1>(salt), &hashed, sig).is_ok(),
+        oid::SHA256 => k.verify(rsa::Pss::<sha2::Sha256>::new_with_salt(salt), &hashed, sig).is_ok(),
+        oid::SHA384 => k.verify(rsa::Pss::<sha2::Sha384>::new_with_salt(salt), &hashed, sig).is_ok(),
+        oid::SHA512 => k.verify(rsa::Pss::<sha2::Sha512>::new_with_salt(salt), &hashed, sig).is_ok(),
+        oid::SHA1 => k.verify(rsa::Pss::<sha1::Sha1>::new_with_salt(salt), &hashed, sig).is_ok(),
         _ => return Err("firma RSA-PSS con un'impronta non supportata".into()),
     };
     Ok(ok)
