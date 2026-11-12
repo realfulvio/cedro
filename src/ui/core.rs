@@ -63,6 +63,8 @@ pub enum Field {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Fold {
     MoreOptions,
+    /// Il Cedro di partenza: la coda come elenco invece del file grande.
+    ListView,
     LinkMore,
     Log,
 }
