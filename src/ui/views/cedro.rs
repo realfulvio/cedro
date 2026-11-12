@@ -57,7 +57,7 @@ fn page_icon(lab: Lab) -> &'static str {
 }
 
 /// Le sei immagini di «Inizio» (disegnate per Cedro, 480×360), nell'ordine delle tessere.
-fn tile_image(i: usize) -> Option<Image> {
+pub fn tile_image(i: usize) -> Option<Image> {
     static IMAGES: OnceLock<Vec<Option<Image>>> = OnceLock::new();
     const DATA: [&[u8]; 6] = [
         include_bytes!("../../../assets/cedro/immagini.jpg"),

@@ -1655,7 +1655,17 @@ fn android_main(app: AndroidApp) {
     }
     let file_tema = dati.join("tema.txt");
     let file_lavori = dati.join("lavori.txt");
-    let tema = std::fs::read_to_string(&file_tema).map(|t| ThemeId::from_key(&t)).unwrap_or(ThemeId::WindowsEssenziale);
+    let mut tema = std::fs::read_to_string(&file_tema).map(|t| ThemeId::from_key(&t)).unwrap_or(ThemeId::Cedro);
+    // Con la 0.45 arriva il nuovo Cedro: chi aveva ancora il tema di partenza di prima lo vede una volta sola;
+    // se poi sceglie di nuovo «Windows essenziale» resta.
+    let marca_045 = dati.join("tema-045");
+    if !marca_045.exists() {
+        if tema == ThemeId::WindowsEssenziale {
+            tema = ThemeId::Cedro;
+            let _ = std::fs::write(&file_tema, tema.key());
+        }
+        let _ = std::fs::write(&marca_045, "1");
+    }
     let mut ui = App::new(tema);
     {
         let sveglia = app.create_waker();
@@ -1694,7 +1704,7 @@ fn android_main(app: AndroidApp) {
     if let Ok(t) = std::fs::read_to_string(&file_lavori) {
         ui.carica_lavori(&t);
     }
-    icone_barre(&app, tema.dark());
+    icone_barre(&app, crate::ui::tinte::scuro(tema));
     let mut insets = (0.0, 0.0, 0.0, 0.0);
     let mut leggi_insets = true;
     let mut tentativi = 0;
@@ -1923,7 +1933,7 @@ fn android_main(app: AndroidApp) {
                         }
                         Effetto::SalvaTema(t) => {
                             let _ = std::fs::write(&file_tema, t.key());
-                            icone_barre(&app, t.dark());
+                            icone_barre(&app, crate::ui::tinte::scuro(t));
                             sporco = true;
                         }
                         Effetto::SalvaLavori => {

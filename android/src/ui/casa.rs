@@ -14,6 +14,8 @@ use cedro::ui::theme::{mix, ThemeId};
 use cedro::ui::voci;
 use cedro::Kind;
 
+mod telefono;
+
 use super::opzioni::OpzAz;
 use super::pdf::Campo;
 use super::{ic, App, Archivio, Azione, Effetto, Forma, Lavoro, Scheda, Sorgente, Stato, R, TOCCO};
@@ -211,6 +213,14 @@ pub enum CasaAz {
     AltraCategoria(usize),
     /// Un file di «Ultimi file» va in coda.
     Recente(usize),
+    /// Cedro 4 Labs a parte: la barra in basso del nuovo Cedro (Inizio, Converti, PDF, Trascrivi, Video, Firma).
+    Nav(usize),
+    /// Una delle sei tessere di «Inizio».
+    Tessera(usize),
+    /// Un file di «Ultimi file» di «Inizio»: va in coda e apre la sua pagina.
+    RecenteVai(usize),
+    /// Semplice (falso) o Completa (vero).
+    Vista(bool),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -249,11 +259,13 @@ pub struct Casa {
     /// Lo scorrimento dell'elenco a comparsa.
     pub elenco_scorri: f32,
     pub elenco_max: f32,
+    /// Il nuovo Cedro mostra «Inizio» (le sei tessere) invece della pagina di un'attività.
+    pub inizio: bool,
 }
 
 impl Default for Casa {
     fn default() -> Self {
-        Casa { att: Att::Conv, categoria: Kind::Image, coda: Vec::new(), operazione: HashMap::new(), valori: HashMap::new(), elenco: None, passo: 0, mostrato: 0, link: String::new(), web: 0, guida: false, fx: [0.0; 2], fx_max: [0.0; 2], segui: None, tutti: false, elenco_scorri: 0.0, elenco_max: 0.0 }
+        Casa { att: Att::Conv, categoria: Kind::Image, coda: Vec::new(), operazione: HashMap::new(), valori: HashMap::new(), elenco: None, passo: 0, mostrato: 0, link: String::new(), web: 0, guida: false, fx: [0.0; 2], fx_max: [0.0; 2], segui: None, tutti: false, elenco_scorri: 0.0, elenco_max: 0.0, inizio: true }
     }
 }
 
@@ -313,10 +325,6 @@ impl Casa {
 }
 
 impl App {
-    fn scuro(&self) -> bool {
-        self.tema.dark()
-    }
-
     /// Torna alla finestra principale (dall'icona di Cedro).
     pub fn vai_casa(&mut self) {
         self.casa_aperta = true;
@@ -329,6 +337,7 @@ impl App {
         self.opzioni = None;
         self.rivedi = None;
         self.scorri = 0.0;
+        self.casa.inizio = true;
     }
 
     /// File nuovi in coda (scelti con «Aggiungi file» o da una cartella).
@@ -351,6 +360,13 @@ impl App {
             if c.att == Att::Tras && !matches!(k, Kind::Audio | Kind::Video) {
                 c.att = Att::Conv;
                 c.categoria = k;
+            }
+            // Nel nuovo Cedro, dei file arrivati da fuori si vede subito la pagina del loro tipo.
+            if c.inizio && k != Kind::Other {
+                c.inizio = false;
+                if c.att == Att::Conv && c.quanti(c.categoria) == 0 {
+                    c.categoria = k;
+                }
             }
         }
     }
@@ -509,6 +525,57 @@ impl App {
                 self.scorri = 0.0;
             }
             CasaAz::Guida => self.casa.guida = true,
+            CasaAz::Nav(i) => {
+                self.sopra = None;
+                let c = &mut self.casa;
+                c.guida = false;
+                c.elenco = None;
+                c.passo = 0;
+                c.inizio = i == 0;
+                match i {
+                    1 => {
+                        c.att = Att::Conv;
+                        if c.categoria == Kind::Pdf {
+                            c.categoria = Kind::Image;
+                        }
+                    }
+                    2 => {
+                        c.att = Att::Conv;
+                        c.categoria = Kind::Pdf;
+                    }
+                    3 => c.att = Att::Tras,
+                    4 => c.att = Att::Web,
+                    5 => c.att = Att::Firma,
+                    _ => {}
+                }
+                c.mostrato = 0;
+                self.scorri = 0.0;
+            }
+            CasaAz::Tessera(i) => {
+                let k = [Kind::Image, Kind::Pdf, Kind::Doc, Kind::Audio, Kind::Video, Kind::Archive].get(i).copied().unwrap_or(Kind::Image);
+                let c = &mut self.casa;
+                c.inizio = false;
+                c.att = Att::Conv;
+                c.categoria = k;
+                c.mostrato = 0;
+                c.elenco = None;
+                self.scorri = 0.0;
+            }
+            CasaAz::RecenteVai(i) => {
+                if let Some(k) = self.recenti.get(i).map(|r| r.kind) {
+                    let c = &mut self.casa;
+                    c.inizio = false;
+                    c.att = Att::Conv;
+                    c.categoria = k;
+                    c.mostrato = 0;
+                    self.scorri = 0.0;
+                }
+                return self.azione_casa(CasaAz::Recente(i));
+            }
+            CasaAz::Vista(completa) => {
+                self.imp.simple = !completa;
+                return Effetto::SalvaImpostazioni;
+            }
             CasaAz::Indietro => {
                 if self.casa.guida {
                     self.casa.guida = false;
@@ -595,6 +662,16 @@ impl App {
         self.azione_casa(CasaAz::Att(k));
     }
 
+    /// Per le fotografie della `vista`: la pagina `k` della barra del nuovo Cedro (0 Inizio … 5 Firma).
+    pub fn vista_nav(&mut self, k: usize) {
+        self.azione_casa(CasaAz::Nav(k));
+    }
+
+    /// Per le fotografie della `vista`: Semplice o Completa.
+    pub fn vista_completa(&mut self, completa: bool) {
+        self.imp.simple = !completa;
+    }
+
     /// Per le fotografie della `vista`: il foglio dei formati aperto.
     pub fn vista_formati(&mut self) {
         self.casa.elenco = Some(Elenco::Formato);
@@ -606,6 +683,7 @@ impl App {
         }
         self.casa.tutti = false;
         match self.tema {
+            t if t.is_cedro() => self.casa_cedro(p, w, h),
             ThemeId::PercorsoGuidato => self.casa_guidato(p, w, h),
             ThemeId::CedroCompatto => self.casa_compatto(p, w, h),
             ThemeId::BancoDiLavoro => self.casa_banco(p, w, h),
@@ -1032,7 +1110,7 @@ impl App {
         const NOTA: &str = "Esce un file di testo con le frasi; poi «Rivedi» dai Lavori.";
         let hn = p.wrap_height(NOTA, 12.0, Weight::Regular, w - 28.0, 18.0, 3);
         let ch = 52.0 + 28.0 + TOCCO + 10.0 + 28.0 + 42.0 + 8.0 + hn + 12.0;
-        super::sollevato(p, pal, self.tema.dark(), x, y, w, ch, 10.0);
+        super::sollevato(p, pal, self.scuro(), x, y, w, ch, 10.0);
         self.kt(p, x + 14.0, y + 12.0, 32.0, col, ic::TRANSCRIBE);
         p.text("Impostazioni della trascrizione", x + 56.0, y + 12.0, w - 70.0, 32.0, 16.0, Weight::Semibold, pal.text, Align::Left);
         let h = self.scelta_modello(p, x + 14.0, y + 52.0, w - 28.0, vista);
@@ -1389,7 +1467,7 @@ impl App {
                 let vis = self.casa.visibili();
                 if !vis.is_empty() {
                     let rh = 72.0;
-                    super::sollevato(p, pal, self.tema.dark(), x, y, cw, rh * vis.len() as f32, 10.0);
+                    super::sollevato(p, pal, self.scuro(), x, y, cw, rh * vis.len() as f32, 10.0);
                     for (k, i) in vis.iter().copied().enumerate() {
                         let v = self.casa.coda[i].clone();
                         let ry = y + k as f32 * rh;
@@ -1412,7 +1490,7 @@ impl App {
                 // Il riassunto dei file scelti.
                 let vis = self.casa.scelti();
                 let tot: u64 = vis.iter().map(|i| self.casa.coda[*i].dim).sum();
-                super::sollevato(p, pal, self.tema.dark(), x, y, cw, 64.0, 10.0);
+                super::sollevato(p, pal, self.scuro(), x, y, cw, 64.0, 10.0);
                 for (k, i) in vis.iter().take(3).enumerate() {
                     let v = self.casa.coda[*i].clone();
                     let mx = x + 12.0 + k as f32 * 20.0;
@@ -1450,7 +1528,7 @@ impl App {
                 y += 32.0;
                 let (_, sw) = self.principali();
                 let ch = 122.0 + if sw.is_some() { 50.0 } else { 0.0 };
-                super::sollevato(p, pal, self.tema.dark(), x, y, cw, ch, 10.0);
+                super::sollevato(p, pal, self.scuro(), x, y, cw, ch, 10.0);
                 p.text(&format!("Opzioni di conversione · {et}"), x + 12.0, y + 8.0, cw - 24.0, 28.0, 16.0, Weight::Bold, pal.text, Align::Left);
                 self.sel_in(p, (x + 12.0, y + 42.0, cw - 24.0, 44.0), "Altri formati e strumenti", Azione::Casa(CasaAz::Apri(Elenco::Formato)), vista);
                 let mut iy = y + 94.0;
@@ -1495,7 +1573,7 @@ impl App {
             }
             _ => {
                 // Salvataggio: dove, se esiste già, e il riassunto.
-                super::sollevato(p, pal, self.tema.dark(), x, y, cw, 64.0, 10.0);
+                super::sollevato(p, pal, self.scuro(), x, y, cw, 64.0, 10.0);
                 p.icon(ic::FOLDER, x + 14.0, y + 20.0, 24.0, pal.text);
                 p.text("Documenti/Cedro", x + 50.0, y + 8.0, cw - 60.0, 26.0, 16.0, Weight::Bold, pal.text, Align::Left);
                 p.text("Le copie nuove vanno qui; l'originale non si tocca.", x + 50.0, y + 34.0, cw - 60.0, 20.0, 13.0, Weight::Regular, pal.muted, Align::Left);
@@ -1585,7 +1663,7 @@ impl App {
         // Le attività, a segmenti.
         let att = attivita();
         let sy = 62.0;
-        super::sollevato(p, pal, self.tema.dark(), x, sy, cw, 48.0, 8.0);
+        super::sollevato(p, pal, self.scuro(), x, sy, cw, 48.0, 8.0);
         let sw = (cw - 8.0) / att.len() as f32;
         // Con quattro attività le scritte si rimpiccioliscono finché stanno nel loro segmento.
         let dim = [14.0, 13.0, 12.0, 11.0].into_iter().find(|d| att.iter().all(|a| p.measure(if *a == Att::Web { "Web" } else { a.nome() }, *d, Weight::Semibold) + 18.0 <= sw)).unwrap_or(11.0);
@@ -1780,7 +1858,7 @@ impl App {
             let hh = 38.0;
             let col_op = x + cw * 0.56;
             let col_st = x + cw * 0.74;
-            super::sollevato(p, pal, self.tema.dark(), x, y, cw, hh + rh * vis.len().max(1) as f32, 6.0);
+            super::sollevato(p, pal, self.scuro(), x, y, cw, hh + rh * vis.len().max(1) as f32, 6.0);
             p.fill(x + 1.0, y + 1.0, cw - 2.0, hh - 1.0, mix(pal.surface, pal.alt, 0.6));
             let tutti = !vis.is_empty() && vis.iter().all(|i| self.casa.coda[*i].scelto);
             p.rrect(x + 10.0, y + 8.0, 22.0, 22.0, 5.0, Some(if tutti { pal.primary } else { pal.surface }), if tutti { None } else { Some((pal.muted, 1.5)) });
