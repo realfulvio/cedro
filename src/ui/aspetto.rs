@@ -1,4 +1,4 @@
-//! La pagina «Aspetto» delle Impostazioni: la modalità (Standard o Semplificata) e tutti i temi,
+//! La pagina «Aspetto» delle Impostazioni: la vista (Semplice o Completa) e tutti i temi,
 //! ciascuno con la sua anteprima. Le anteprime sono fotografie vere del disegno di Cedro, fatte
 //! in un thread con file di prova, quindi mostrano esattamente quello che si otterrà.
 //! Le due finestre delle Impostazioni (Windows e Linux) la ospitano così com'è: qui non c'è
@@ -87,11 +87,11 @@ impl Aspetto {
         let mut y = off + 4.0;
 
         // Modalità
-        p.text("Modalità", 0.0, y, w, 20.0, 14.0, Weight::Bold, t.fg, Align::Left);
+        p.text("Vista", 0.0, y, w, 20.0, 14.0, Weight::Bold, t.fg, Align::Left);
         y += 26.0;
         let gap = 12.0;
         let bw = (w - gap) / 2.0;
-        for (i, (simple, name, text)) in [(false, "Standard", "Tutte le opzioni a portata di mano."), (true, "Semplificata", "Solo l'essenziale; il resto in «Altre opzioni».")].into_iter().enumerate() {
+        for (i, (simple, name, text)) in [(false, "Completa", "Tutti i comandi e le opzioni in vista."), (true, "Semplice", "Solo l'essenziale; il resto a un clic.")].into_iter().enumerate() {
             // Due righe di descrizione coi caratteri ingranditi (+2): il riquadro le contiene con margine.
             let r = (i as f32 * (bw + gap), y, bw, 86.0);
             let on = self.simple == simple;

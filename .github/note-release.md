@@ -11,12 +11,10 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro ha un aspetto nuovo: una barra con le pagine a sinistra, il file grande al centro, i comandi a destra.**
+**Correzioni al nuovo aspetto di Cedro, trovate provandolo.**
 
-- **Sei pagine nella barra**: Inizio, Converti, PDF, Trascrivi, Video dal web e Firma, ognuna con il suo colore. YouTube e gli altri siti ora stanno insieme in «Video dal web».
-- **Inizio con sei tessere**: Immagini, PDF, Documenti e testi, Audio, Video e Archivi ZIP, più il campo per incollare un link e la scheda per firmare o verificare un documento. Trascinato un file, Cedro apre la pagina giusta.
-- **Il file al centro**: l'anteprima grande su uno sfondo che prende i colori del file, con la striscia delle miniature in basso; con un clic si passa all'elenco dei file.
-- **PDF**: Converti, Unisci, Dividi, Pagine e Comprimi, con le pagine e il file unito grandi al centro.
-- **Semplice o Completa**: in cima al pannello a destra. Si parte da «Semplice», con le scelte pronte; «Completa» mostra tutti i formati, gli strumenti e le opzioni.
-- **Quattro tinte**: Melanzana (quella di partenza), Notte, Bosco e Carta, in Impostazioni › Aspetto. I temi di prima restano lì, così come Comune di Bondeno e Cedro 4 Labs, che non cambiano.
-- Chi aggiorna dall'aspetto di partenza passa da solo a quello nuovo, una volta sola; chi aveva scelto un altro tema lo ritrova com'era.
+- Il messaggio «Fatto: N file.» resta sulla pagina che ha fatto il lavoro, invece di comparire anche su Converti, Trascrivi, Video dal web e Firma.
+- Tornando su «PDF» da un'altra pagina si ritrova la scelta lasciata (per esempio Unisci), invece di ripartire da «Word».
+- In Impostazioni › Aspetto le viste si chiamano come nella finestra: Semplice e Completa. Anche la Guida usa i nomi nuovi.
+- Nella vista Semplice la riga «Copie accanto agli originali · Impostazioni consigliate.» non è più scritta due volte.
+- Il menu «Cartella di destinazione» è più largo: «Accanto all'originale» si legge tutto.
