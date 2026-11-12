@@ -35,6 +35,8 @@ fn kind_label(k: Kind) -> &'static str {
         Kind::Loop => "Giro di parole",
         Kind::Typical => "Frase tipica",
         Kind::Silence => "Nel silenzio",
+        Kind::Number => "Numeri e misure",
+        Kind::Meaning => "Parola decisiva",
     }
 }
 
@@ -44,7 +46,13 @@ fn kind_note(flag: &Flag) -> String {
         Kind::Loop => "Un giro di parole che si ripete dentro la frase.".to_string(),
         Kind::Typical => "Una frase che whisper inventa quando non sente parlato.".to_string(),
         Kind::Silence => "Testo dove l'audio è quasi muto: forse non c'è parlato.".to_string(),
+        Kind::Number => format!("Riascolta e conferma: {}.", quoted(&flag.words)),
+        Kind::Meaning => format!("Una parola che cambia il senso se sentita male: {}.", quoted(&flag.words)),
     }
+}
+
+fn quoted(words: &[String]) -> String {
+    words.iter().take(6).map(|w| format!("«{w}»")).collect::<Vec<_>>().join(", ")
 }
 
 /// Il triangolo del Play o le due stanghette della pausa.
@@ -415,11 +423,22 @@ fn checks(f: &mut Frame, rv: &Review, r: R, mut y: f32, bottom: f32, title: bool
             f.para(&kind_note(fl), cx + 20.0, fy + 38.0, cw - 20.0, 13.5, SANS, pal.muted, 1.35, 2);
             f.hit((list_r.0, fy, list_r.2, ch - 44.0), Act::ReviewFlag(i));
             let by = fy + ch - 44.0;
-            if open {
+            let referto = matches!(fl.kind, Kind::Number | Kind::Meaning);
+            if open && referto {
+                // Il referto non si «risolve» da solo: si riascolta, si corregge sul posto o si conferma.
+                f.primary((cx + 20.0, by, 120.0, 34.0), "Confermo", Some(ic::CHECK), 14.5, Act::ReviewDismiss(i), true);
+                f.button((cx + 150.0, by, 130.0, 34.0), "Ascolta", None, 14.5, Act::ReviewFlag(i));
+            } else if open {
                 f.primary((cx + 20.0, by, 120.0, 34.0), "Risolvi", None, 14.5, Act::ReviewFix(i), true);
                 f.button((cx + 150.0, by, 130.0, 34.0), "Lascia così", None, 14.5, Act::ReviewDismiss(i));
             } else {
-                f.text(if rv.dismissed.contains(&i) { "Lasciata com'era" } else { "Sistemata" }, cx + 20.0, by, cw - 20.0, 34.0, 14.5, SANS, col);
+                let done = match (referto, rv.dismissed.contains(&i)) {
+                    (true, true) => "Confermata",
+                    (true, false) => "Corretta",
+                    (false, true) => "Lasciata com'era",
+                    (false, false) => "Sistemata",
+                };
+                f.text(done, cx + 20.0, by, cw - 20.0, 34.0, 14.5, SANS, col);
             }
         }
         rv.flags.len() as f32 * ch

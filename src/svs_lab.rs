@@ -1,4 +1,4 @@
-//! Il laboratorio sui vetrini digitali (.svs): la copia anonima del vetrino (via etichetta e foto del
+//! Il laboratorio sui vetrini digitali (.svs, .ndpi, .mrxs): la copia anonima del vetrino (via etichetta e foto del
 //! vetrino, via nome, data, ora e utente dalle descrizioni), le tessere per l'intelligenza artificiale,
 //! la zona per la conta mitotica (2,37 mm², dieci campi) e il pacchetto per un consulto.
 
@@ -256,10 +256,26 @@ pub fn anonimizza_sul_posto(path: &Path) -> Result<Vec<&'static str>, String> {
 }
 
 
-/// La copia anonima del vetrino in `out` (l'originale resta com'era).
+/// L'estensione giusta per la copia del vetrino: quella del suo formato.
+pub fn estensione(path: &Path) -> &'static str {
+    if crate::mrxs::is_mirax(path) {
+        "mrxs"
+    } else if crate::ndpi::is_ndpi(path) {
+        "ndpi"
+    } else {
+        "svs"
+    }
+}
+
+/// La copia anonima del vetrino in `out` (l'originale resta com'era). Per un MIRAX `out` è il
+/// `.mrxs` e accanto nasce la sua cartella dei dati.
 pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, String> {
+    if crate::mrxs::is_mirax(path) {
+        return crate::mrxs::copia_anonima(path, out);
+    }
     fs::copy(path, out).map_err(|e| e.to_string())?;
-    anonimizza_sul_posto(out).inspect_err(|_| {
+    let fatto = if crate::ndpi::is_ndpi(path) { crate::ndpi::anonimizza_sul_posto(out) } else { anonimizza_sul_posto(out) };
+    fatto.inspect_err(|_| {
         let _ = fs::remove_file(out);
     })
 }
@@ -789,7 +805,21 @@ fn numero(img: &mut RgbImage, opz: &usvg::Options, testo: &str, x: u32, y: u32, 
 /// di gigabyte sarebbe lento), 64 bit: due vetrini diversi non si confondono.
 pub fn codice_caso(path: &Path) -> String {
     use sha2::{Digest, Sha256};
+    // Il .mrxs è un file quasi vuoto, uguale per tanti vetrini: il caso si riconosce da Slidedat.ini
+    // (che ha l'identificativo del vetrino) e da Index.dat.
+    let mirax = crate::mrxs::is_mirax(path).then(|| path.with_extension(""));
+    let path_buf;
+    let path = match &mirax {
+        Some(d) => {
+            path_buf = d.join("Index.dat");
+            path_buf.as_path()
+        }
+        None => path,
+    };
     let mut h = Sha256::new();
+    if let Some(ini) = mirax.as_ref().and_then(|d| fs::read(d.join("Slidedat.ini")).ok()) {
+        h.update(&ini);
+    }
     let letto = (|| -> std::io::Result<()> {
         let mut f = File::open(path)?;
         let n = f.metadata()?.len();
@@ -822,7 +852,7 @@ pub fn consulto(path: &Path, out: &Path, codice: &str, avanzamento: &dyn Fn(f32)
     let tmp = out.with_file_name(format!(".{codice}-consulto-tmp-{}", std::process::id()));
     fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
     let fatto = (|| {
-        let svs = tmp.join(format!("{codice}.svs"));
+        let svs = tmp.join(format!("{codice}.{}", estensione(path)));
         let tolti = copia_anonima(path, &svs)?;
         avanzamento(0.3);
         let pano = s.preview(path, 4096)?;
@@ -840,10 +870,18 @@ pub fn consulto(path: &Path, out: &Path, codice: &str, avanzamento: &dyn Fn(f32)
         }
         scheda.push_str(&format!(".\nTolti per la privacy: {}.\n\n", tolti.join(", ")));
         scheda.push_str("Specie:\nRazza:\nEtà:\nSesso:\nSede del prelievo:\nDomanda clinica:\n\n");
-        scheda.push_str("Il vetrino si apre con QuPath, ImageScope o Cedro. Le impronte SHA-256 di ogni file sono in manifest-sha256.txt.\n");
+        scheda.push_str(match s.vendor {
+            crate::svs::Vendor::Mirax => "Il vetrino (il file .mrxs con la sua cartella accanto) si apre con QuPath, CaseViewer o Cedro.",
+            crate::svs::Vendor::Hamamatsu => "Il vetrino si apre con QuPath, NDP.view o Cedro.",
+            crate::svs::Vendor::Aperio => "Il vetrino si apre con QuPath, ImageScope o Cedro.",
+        });
+        scheda.push_str(" Le impronte SHA-256 di ogni file sono in manifest-sha256.txt.\n");
         let txt = tmp.join(format!("{codice}-scheda.txt"));
         fs::write(&txt, scheda).map_err(|e| e.to_string())?;
-        let files = vec![svs, jpg, txt];
+        let mut files = vec![svs.clone(), jpg, txt];
+        if s.vendor == crate::svs::Vendor::Mirax {
+            files.insert(1, svs.with_extension(""));
+        }
         let n = files.len();
         let nome = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| codice.to_string());
         crate::pacchetto::crea(&files, out, &nome, &|p| avanzamento(0.35 + p * 0.65))?;

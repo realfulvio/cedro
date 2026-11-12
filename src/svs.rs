@@ -7,6 +7,9 @@
 //! chi scrive il file (PNG, JPEG e TIFF si scrivono a strisce). Le tessere JPEG hanno le tabelle in
 //! comune (`JPEGTables`) e i colori già in RGB anche se il JPEG dice YCbCr; quelle JPEG 2000
 //! (33003 YCbCr, 33005 RGB) passano da hayro-jpeg2000. Tutto in Rust.
+//!
+//! Oltre agli Aperio si leggono gli Hamamatsu (.ndpi, in `ndpi`) e i 3DHistech MIRAX (.mrxs, in
+//! `mrxs`): stessa struttura a livelli, solo le tessere si prendono in un altro modo.
 
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
@@ -18,11 +21,52 @@ use tiff::tags::Tag;
 use tiff::ColorType;
 
 /// Le compressioni delle tessere.
-const JPEG: u16 = 7;
+pub(crate) const JPEG: u16 = 7;
 const JP2K_YCBCR: u16 = 33003;
 const JP2K_RGB: u16 = 33005;
 /// La fotometria YCbCr (6) del TIFF; RGB è 2.
-const PHOTOMETRIC_YCBCR: u16 = 6;
+pub(crate) const PHOTOMETRIC_YCBCR: u16 = 6;
+
+/// Chi ha fatto il vetrino: lo scanner decide come sono messe le tessere.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Vendor {
+    /// Aperio (.svs): TIFF a tessere.
+    Aperio,
+    /// Hamamatsu NanoZoomer (.ndpi): un JPEG enorme per livello, con i marcatori di ripartenza.
+    Hamamatsu,
+    /// 3DHistech MIRAX (.mrxs): le foto della fotocamera, ognuna al suo posto, in file di dati.
+    Mirax,
+}
+
+impl Vendor {
+    pub fn name(self) -> &'static str {
+        match self {
+            Vendor::Aperio => "Aperio",
+            Vendor::Hamamatsu => "Hamamatsu",
+            Vendor::Mirax => "3DHistech MIRAX",
+        }
+    }
+}
+
+/// Dove stanno le tessere di un livello.
+#[derive(Clone, Debug)]
+pub(crate) enum Source {
+    /// Tessere TIFF: indirizzi e grandezze in `offsets` e `counts` (Aperio).
+    Tiff,
+    /// Un JPEG NDPI: ogni tessera si ricompone dai suoi intervalli di ripartenza.
+    Ndpi(std::sync::Arc<crate::ndpi::Jpeg>),
+    /// Le foto MIRAX con la loro posizione: si incollano sulla tela.
+    Mirax(std::sync::Arc<crate::mrxs::Griglia>),
+}
+
+/// Un'immagine in più (etichetta, foto del vetrino, miniatura) che non è una pagina TIFF: un JPEG
+/// (o PNG, BMP) dentro un file, da `offset` per `len` byte.
+#[derive(Clone, Debug)]
+pub(crate) struct Blob {
+    pub path: std::path::PathBuf,
+    pub offset: u64,
+    pub len: u64,
+}
 
 /// Un livello della piramide: una pagina a tessere.
 #[derive(Clone, Debug)]
@@ -33,10 +77,11 @@ pub struct Level {
     pub tile_w: u32,
     pub tile_h: u32,
     pub compression: u16,
-    photometric: u16,
-    offsets: Vec<u64>,
-    counts: Vec<u64>,
-    tables: Option<Vec<u8>>,
+    pub(crate) photometric: u16,
+    pub(crate) offsets: Vec<u64>,
+    pub(crate) counts: Vec<u64>,
+    pub(crate) tables: Option<Vec<u8>>,
+    pub(crate) source: Source,
 }
 
 impl Level {
@@ -65,6 +110,11 @@ pub struct Slide {
     pub mpp: Option<f32>,
     /// L'ingrandimento dello scanner (20×, 40×).
     pub magnification: Option<f32>,
+    pub vendor: Vendor,
+    /// Per Hamamatsu e MIRAX `thumbnail`, `label` e `macro_image` sono indici qui, non pagine TIFF.
+    pub(crate) blobs: Vec<Blob>,
+    /// Il colore dove lo scanner non ha fotografato (MIRAX); bianco per gli altri.
+    pub(crate) fill: [u8; 3],
 }
 
 /// Quale livello si vuole: le tre voci del riquadro «Vetrino».
@@ -124,18 +174,24 @@ fn decoder(path: &Path) -> Result<Decoder<BufReader<File>>, String> {
 }
 
 /// I primi byte dicono TIFF o BigTIFF.
-fn tiff_head(head: &[u8]) -> bool {
+pub(crate) fn tiff_head(head: &[u8]) -> bool {
     head.starts_with(b"II*\0")
         || head.starts_with(b"MM\0*")
         || head.starts_with(b"II+\0")
         || head.starts_with(b"MM\0+")
 }
 
-/// Vero se il file è un vetrino Aperio: un TIFF la cui prima pagina si descrive come «Aperio».
-/// Legge solo l'intestazione e la prima pagina.
+/// Vero se il file è un vetrino: un Aperio (un TIFF la cui prima pagina si descrive come «Aperio»),
+/// un Hamamatsu NDPI o un MIRAX (.mrxs con accanto la sua cartella). Legge solo l'intestazione.
 pub fn is_slide(path: &Path) -> bool {
+    if crate::mrxs::is_mirax(path) {
+        return true;
+    }
     if !tiff_head(&crate::imgfmt::head_of(path)) {
         return false;
+    }
+    if crate::ndpi::is_ndpi(path) {
+        return true;
     }
     let Ok(file) = File::open(path) else {
         return false;
@@ -158,6 +214,12 @@ fn field(desc: &str, key: &str) -> Option<f32> {
 impl Slide {
     /// Apre il vetrino e ne legge la struttura (nessun pixel).
     pub fn open(path: &Path) -> Result<Slide, String> {
+        if crate::mrxs::is_mirax(path) {
+            return crate::mrxs::open(path);
+        }
+        if crate::ndpi::is_ndpi(path) {
+            return crate::ndpi::open(path);
+        }
         let mut d = decoder(path)?;
         let first = d
             .get_tag_ascii_string(Tag::ImageDescription)
@@ -172,6 +234,9 @@ impl Slide {
             macro_image: None,
             mpp: field(&first, "MPP"),
             magnification: field(&first, "AppMag"),
+            vendor: Vendor::Aperio,
+            blobs: Vec::new(),
+            fill: [255; 3],
         };
         let mut ifd = 0usize;
         loop {
@@ -204,6 +269,7 @@ impl Slide {
                     offsets,
                     counts,
                     tables,
+                    source: Source::Tiff,
                 };
                 let need = level.across() as usize * level.rows() as usize;
                 if samples != 3
@@ -281,6 +347,8 @@ impl Slide {
         match (self.full().compression, english) {
             (JPEG, _) => "JPEG",
             (JP2K_YCBCR | JP2K_RGB, _) => "JPEG 2000",
+            (crate::mrxs::PNG, _) => "PNG",
+            (crate::mrxs::BMP, _) => "BMP",
             (1, false) => "non compresse",
             (1, true) => "uncompressed",
             (5, _) => "LZW",
@@ -295,11 +363,12 @@ impl Slide {
     pub fn summary(&self, english: bool) -> String {
         let n = self.levels.len();
         let tiles = self.tiles_in(english);
+        let v = self.vendor.name();
         let mut s = match (english, n) {
-            (false, 1) => format!("Aperio · 1 livello · tessere {tiles}"),
-            (false, _) => format!("Aperio · {n} livelli · tessere {tiles}"),
-            (true, 1) => format!("Aperio · 1 level · {tiles} tiles"),
-            (true, _) => format!("Aperio · {n} levels · {tiles} tiles"),
+            (false, 1) => format!("{v} · 1 livello · tessere {tiles}"),
+            (false, _) => format!("{v} · {n} livelli · tessere {tiles}"),
+            (true, 1) => format!("{v} · 1 level · {tiles} tiles"),
+            (true, _) => format!("{v} · {n} levels · {tiles} tiles"),
         };
         let num = |v: f32| {
             if english {
@@ -408,6 +477,13 @@ impl Slide {
         mut sink: impl FnMut(u32, &[u8]) -> Result<(), String>,
     ) -> Result<(), String> {
         let l = &self.levels[level];
+        if let Source::Mirax(g) = &l.source {
+            return crate::mrxs::read_window(g, self.fill, win, sink);
+        }
+        let ndpi = match &l.source {
+            Source::Ndpi(j) => Some(j.clone()),
+            _ => None,
+        };
         let (wx, wy, ww, wh) = (
             win.0 as usize,
             win.1 as usize,
@@ -435,7 +511,10 @@ impl Slide {
             let bottom = ((row + 1) * th).min(wy + wh);
             // Le tessere della fila, lette dal disco in fila (sono di solito una dopo l'altra).
             let mut raw: Vec<Vec<u8>> = Vec::with_capacity(cols);
-            if !generic {
+            if let Some(j) = &ndpi {
+                // Hamamatsu: gli intervalli di tutta la fila stanno uno dopo l'altro nel file.
+                raw = j.band(&mut file, lunghezza_file, row, c0, c1)?;
+            } else if !generic {
                 for col in c0..c1 {
                     let i = row * across + col;
                     let (off, len) = (l.offsets[i], l.counts[i]);
@@ -511,6 +590,10 @@ impl Slide {
 
     /// Una delle immagini in più (miniatura, etichetta, macro), letta intera: sono piccole.
     pub fn read_extra(&self, path: &Path, ifd: usize) -> Result<RgbImage, String> {
+        if self.vendor != Vendor::Aperio {
+            let b = self.blobs.get(ifd).ok_or("immagine non trovata")?;
+            return read_blob(b);
+        }
         let mut d = decoder(path)?;
         d.seek_to_image(ifd).map_err(err)?;
         let (w, h) = d.dimensions().map_err(err)?;
@@ -543,6 +626,27 @@ impl Slide {
             img
         })
     }
+}
+
+/// Le misure di un'immagine in più fuori dal TIFF, senza decodificarla.
+pub(crate) fn read_blob_size(b: &Blob) -> Option<(u32, u32)> {
+    let mut f = File::open(&b.path).ok()?;
+    f.seek(SeekFrom::Start(b.offset)).ok()?;
+    let mut buf = vec![0u8; b.len.min(1 << 20) as usize];
+    f.read_exact(&mut buf).ok()?;
+    image::ImageReader::new(std::io::Cursor::new(buf)).with_guessed_format().ok()?.into_dimensions().ok()
+}
+
+/// Un'immagine in più fuori dal TIFF: JPEG, PNG o BMP dentro un file.
+pub(crate) fn read_blob(b: &Blob) -> Result<RgbImage, String> {
+    if b.len > 64 << 20 {
+        return Err("immagine in più troppo grande".into());
+    }
+    let mut f = File::open(&b.path).map_err(|e| e.to_string())?;
+    f.seek(SeekFrom::Start(b.offset)).map_err(|e| e.to_string())?;
+    let mut buf = vec![0u8; b.len as usize];
+    f.read_exact(&mut buf).map_err(|e| format!("immagine non letta: {e}"))?;
+    image::load_from_memory(&buf).map(|i| i.to_rgb8()).map_err(|e| format!("immagine non letta: {e}"))
 }
 
 /// Come scrivere un livello troppo grande per la memoria: un formato che si scrive a strisce.
@@ -972,7 +1076,7 @@ fn ycbcr_to_rgb(px: &mut [u8]) {
 }
 
 /// Decodifica una tessera: RGB a 8 bit, `tw` × `th` pixel. Una tessera vuota (0 byte) è bianca.
-fn decode_tile(l: &Level, raw: &[u8], tw: usize, th: usize) -> Result<Vec<u8>, String> {
+pub(crate) fn decode_tile(l: &Level, raw: &[u8], tw: usize, th: usize) -> Result<Vec<u8>, String> {
     let want = tw * th * 3;
     if raw.is_empty() {
         return Ok(vec![255; want]);
@@ -1310,7 +1414,7 @@ mod prove_revisione {
         let img = RgbImage::from_pixel(100, 50, image::Rgb([200, 30, 30]));
         let mut raw = Vec::new();
         image::codecs::jpeg::JpegEncoder::new_with_quality(&mut raw, 95).encode_image(&img).unwrap();
-        let l = Level { ifd: 0, width: 100, height: 50, tile_w: 240, tile_h: 240, compression: JPEG, photometric: PHOTOMETRIC_YCBCR, offsets: vec![0], counts: vec![0], tables: None };
+        let l = Level { ifd: 0, width: 100, height: 50, tile_w: 240, tile_h: 240, compression: JPEG, photometric: PHOTOMETRIC_YCBCR, offsets: vec![0], counts: vec![0], tables: None, source: Source::Tiff };
         let px = decode_tile(&l, &raw, 240, 240).unwrap();
         assert_eq!(px.len(), 240 * 240 * 3);
         let at = |x: usize, y: usize| &px[(y * 240 + x) * 3..(y * 240 + x) * 3 + 3];
@@ -1318,5 +1422,54 @@ mod prove_revisione {
         assert!(at(99, 49)[0] > 180, "{:?}", at(99, 49));
         assert_eq!(at(100, 0), [255, 255, 255]);
         assert_eq!(at(0, 50), [255, 255, 255]);
+    }
+
+    /// Prova a mano con vetrini veri (NDPI, MRXS, SVS): CEDRO_VETRINI=a.ndpi:b.mrxs cargo test --lib
+    /// vetrini_veri_a_mano -- --ignored --nocapture. Scrive in CEDRO_VETRINI_OUT (o nella cartella
+    /// temporanea) una zona del livello pieno, il livello più piccolo e le immagini in più, in PNG.
+    #[test]
+    #[ignore]
+    fn vetrini_veri_a_mano() {
+        let out = std::env::var("CEDRO_VETRINI_OUT").map(std::path::PathBuf::from).unwrap_or_else(|_| std::env::temp_dir());
+        for p in std::env::var("CEDRO_VETRINI").unwrap_or_default().split(':').filter(|p| !p.is_empty()) {
+            let p = Path::new(p);
+            let nome = p.file_stem().unwrap().to_string_lossy().into_owned();
+            let t = std::time::Instant::now();
+            let s = Slide::open(p).unwrap();
+            println!("{nome}: {} in {:?}", s.summary(false), t.elapsed());
+            for (i, l) in s.levels.iter().enumerate() {
+                println!("  livello {i}: {} × {} (tessere {} × {})", l.width, l.height, l.tile_w, l.tile_h);
+            }
+            let l0 = s.full();
+            let (w, h) = (2048.min(l0.width), 1024.min(l0.height));
+            // CEDRO_VETRINI_ZONA=x,y: la zona da leggere (sui vetrini radi il centro può essere vuoto).
+            let (x, y) = match std::env::var("CEDRO_VETRINI_ZONA").ok().and_then(|z| z.split_once(',').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))) {
+                Some((x, y)) => (u32::min(x, l0.width - w), u32::min(y, l0.height - h)),
+                None => ((l0.width - w) / 2, (l0.height - h) / 2),
+            };
+            let t = std::time::Instant::now();
+            let z = s.read_region(p, 0, x, y, w, h).unwrap();
+            println!("  zona {x},{y} {w}×{h} in {:?}", t.elapsed());
+            z.save(out.join(format!("{nome}-zona-{x}-{y}-{w}-{h}.png"))).unwrap();
+            let ultimo = s.levels.len() - 1;
+            s.read_level(p, ultimo).unwrap().save(out.join(format!("{nome}-livello-{ultimo}.png"))).unwrap();
+            for (cosa, i) in [("etichetta", s.label), ("macro", s.macro_image), ("miniatura", s.thumbnail)] {
+                if let Some(i) = i {
+                    s.read_extra(p, i).unwrap().save(out.join(format!("{nome}-{cosa}.png"))).unwrap();
+                }
+            }
+            // CEDRO_VETRINI_ANONIMO: anche la copia anonima, accanto alle prove.
+            if std::env::var("CEDRO_VETRINI_ANONIMO").is_ok() {
+                let ext = crate::svs_lab::estensione(p);
+                let a = out.join(format!("{nome}-anonimo.{ext}"));
+                let tolti = crate::svs_lab::copia_anonima(p, &a).unwrap();
+                println!("  copia anonima: tolti {}", tolti.join(", "));
+            }
+            if std::env::var("CEDRO_VETRINI_PIENO").is_ok() {
+                let t = std::time::Instant::now();
+                s.write_streamed(p, 0, &out.join(format!("{nome}-pieno.png")), Streamed::Png).unwrap();
+                println!("  livello pieno in PNG in {:?}", t.elapsed());
+            }
+        }
     }
 }

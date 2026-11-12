@@ -107,6 +107,11 @@ pub enum Kind {
     Typical,
     /// Una frase scritta dove l'audio è quasi muto.
     Silence,
+    /// Referti: una frase con numeri o misure (dimensioni, conte, percentuali, gradi), da riascoltare.
+    Number,
+    /// Referti: una frase con una parola che ne rovescia il senso se sentita male (non, assenza,
+    /// incapsulata/capsulata, destro/sinistro, benigno/maligno…), da riascoltare.
+    Meaning,
 }
 
 /// Un punto da controllare.
@@ -117,6 +122,8 @@ pub struct Flag {
     pub segs: Vec<usize>,
     /// Quante volte si ripete.
     pub count: usize,
+    /// Per `Number` e `Meaning`: le parole che l'hanno fatta segnare.
+    pub words: Vec<String>,
 }
 
 impl Flag {
@@ -254,6 +261,64 @@ fn median(mut v: Vec<f32>) -> f32 {
     v.get(v.len() / 2).copied().unwrap_or(0.0)
 }
 
+/// I numeri scritti in lettere che contano in un referto.
+const NUMERI: &[&str] = &[
+    "zero", "uno", "una", "due", "tre", "quattro", "cinque", "sei", "sette", "otto", "nove", "dieci", "undici", "dodici", "tredici", "quattordici", "quindici",
+    "sedici", "diciassette", "diciotto", "diciannove", "venti", "trenta", "quaranta", "cinquanta", "sessanta", "settanta", "ottanta", "novanta", "cento", "mille",
+    "mezzo", "mezza", "virgola", "percento", "millimetri", "millimetro", "centimetri", "centimetro", "micron", "mm", "cm", "grammi", "chili",
+];
+
+/// Le parole che rovesciano il senso di un referto se sentite male, con le loro coppie.
+const SENSO: &[&str] = &[
+    "non", "nessun", "nessuna", "assenza", "assente", "assenti", "presenza", "presente", "presenti", "negativo", "negativa", "negativi", "negative", "positivo",
+    "positiva", "positivi", "positive", "benigno", "benigna", "benigni", "benigne", "maligno", "maligna", "maligni", "maligne", "destro", "destra", "sinistro",
+    "sinistra", "incapsulato", "incapsulata", "capsulato", "capsulata", "infiltrante", "infiltranti", "infiltrato", "infiltrati", "indenne", "indenni", "libero",
+    "liberi", "coinvolto", "coinvolti", "completa", "incompleta", "radicale", "ben", "scarsamente", "moderatamente", "differenziato", "indifferenziato", "basso",
+    "alto", "grado", "invasivo", "invasiva", "invasione", "linfovascolare", "metastasi", "metastatico", "necrosi", "mitosi", "mitotico", "mitotiche", "senza",
+];
+
+/// Referti: le frasi con numeri e misure e quelle con parole che ne cambiano il senso. Una dettatura
+/// sentita male qui cambia la diagnosi: si segnano tutte, da riascoltare e confermare una per una.
+pub fn find_referto(rows: &[Segment]) -> Vec<Flag> {
+    let mut out = Vec::new();
+    for (i, r) in rows.iter().enumerate() {
+        let w = words(&r.text);
+        // Le parole di numero una dietro l'altra fanno una misura sola («12 mm», «tre virgola cinque»).
+        let mut num: Vec<String> = Vec::new();
+        let mut run: Vec<String> = Vec::new();
+        for t in r.text.split_whitespace() {
+            let is_num = t.chars().any(|c| c.is_ascii_digit()) || NUMERI.contains(&t.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect::<String>().as_str());
+            let clean = t.trim_matches(|c: char| !c.is_alphanumeric() && c != '%');
+            if is_num && !clean.is_empty() {
+                run.push(clean.to_string());
+            }
+            // La punteggiatura chiude la misura anche se la parola dopo è un numero.
+            if !is_num || clean.is_empty() || t.ends_with([',', ';', '.', ':']) {
+                if !run.is_empty() {
+                    num.push(run.join(" "));
+                    run.clear();
+                }
+            }
+        }
+        if !run.is_empty() {
+            num.push(run.join(" "));
+        }
+        let senso: Vec<String> = w.iter().filter(|t| SENSO.contains(&t.as_str())).cloned().collect();
+        let mut parole = num.clone();
+        for t in senso.iter() {
+            if !parole.contains(t) {
+                parole.push(t.clone());
+            }
+        }
+        if !num.is_empty() {
+            out.push(Flag { kind: Kind::Number, segs: vec![i], count: 1, words: parole });
+        } else if !senso.is_empty() {
+            out.push(Flag { kind: Kind::Meaning, segs: vec![i], count: 1, words: parole });
+        }
+    }
+    out
+}
+
 /// Trova i punti da controllare, nell'ordine in cui compaiono.
 pub fn find(rows: &[Segment], wave: Option<&Wave>) -> Vec<Flag> {
     let mut flags: Vec<Flag> = Vec::new();
@@ -269,7 +334,7 @@ pub fn find(rows: &[Segment], wave: Option<&Wave>) -> Vec<Flag> {
         let run = j - i;
         let long = norm[i].len() >= 6;
         if (run >= 3 && (norm[i].len() >= 2 || run >= 4)) || (run == 2 && long) {
-            flags.push(Flag { kind: Kind::Repeat, segs: (i..j).collect(), count: run });
+            flags.push(Flag { kind: Kind::Repeat, segs: (i..j).collect(), count: run, words: Vec::new() });
             i = j;
         } else {
             i += 1;
@@ -278,7 +343,7 @@ pub fn find(rows: &[Segment], wave: Option<&Wave>) -> Vec<Flag> {
     // Un giro di parole che si ripete dentro la frase.
     for (i, r) in rows.iter().enumerate() {
         if let Some((_, count)) = collapse_loops(&r.text) {
-            flags.push(Flag { kind: Kind::Loop, segs: vec![i], count });
+            flags.push(Flag { kind: Kind::Loop, segs: vec![i], count, words: Vec::new() });
         }
     }
     // Frasi inventate, e frasi dove l'audio è quasi muto.
@@ -295,7 +360,7 @@ pub fn find(rows: &[Segment], wave: Option<&Wave>) -> Vec<Flag> {
         if typical || quiet {
             let already = flags.iter().any(|f| f.kind == Kind::Repeat && f.segs.contains(&i));
             if !already {
-                flags.push(Flag { kind: if quiet { Kind::Silence } else { Kind::Typical }, segs: vec![i], count: 1 });
+                flags.push(Flag { kind: if quiet { Kind::Silence } else { Kind::Typical }, segs: vec![i], count: 1, words: Vec::new() });
             }
         }
     }
@@ -469,5 +534,22 @@ mod tests {
         assert!(String::from_utf8(srt_bytes(&rows, &names)).unwrap().contains("\nSindaco: Buongiorno a tutti.\n"));
         assert!(String::from_utf8(vtt_bytes(&rows, &names)).unwrap().contains("\n<v Sindaco>Buongiorno a tutti.\n"));
         assert_eq!(stamp(372_550, true), "01:02:05,500");
+    }
+
+    #[test]
+    fn nei_referti_si_segnano_numeri_e_parole_che_cambiano_il_senso() {
+        let rows = vec![
+            seg(0, 300, "Cute, regione dorsale."),
+            seg(300, 600, "Neoformazione di 2,5 cm, ben delimitata."),
+            seg(600, 900, "La lesione non è capsulata."),
+            seg(900, 1200, "Si contano tre mitosi in dieci campi."),
+            seg(1200, 1500, "Quadro compatibile con lipoma."),
+        ];
+        let f = find_referto(&rows);
+        let k: Vec<(Kind, usize)> = f.iter().map(|f| (f.kind, f.segs[0])).collect();
+        assert_eq!(k, vec![(Kind::Number, 1), (Kind::Meaning, 2), (Kind::Number, 3)], "{f:?}");
+        assert_eq!(f[0].words, ["2,5 cm", "ben"]);
+        assert_eq!(f[2].words, ["tre", "dieci", "mitosi"]);
+        assert!(f[1].words.contains(&"non".to_string()) && f[1].words.contains(&"capsulata".to_string()));
     }
 }

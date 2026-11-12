@@ -1283,8 +1283,16 @@ pub fn text_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment], na
 
 /// Come `text_bytes`, con il Riassunto AI in cima (prima dell'elenco di chi parla).
 pub fn text_bytes_with(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Sections>) -> Vec<u8> {
+    text_bytes_full(source, secs, lang, segments, names, summary, None)
+}
+
+/// Come `text_bytes_with`, con la riga della bozza (i punti del referto ancora da riascoltare) sotto il titolo.
+pub fn text_bytes_full(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Sections>, draft: Option<&str>) -> Vec<u8> {
     let (title, meta) = heading(source, secs, lang);
     let mut out = format!("{title}\n{meta}\n");
+    if let Some(d) = draft {
+        out.push_str(&format!("\n{d}\n"));
+    }
     if let Some(sum) = summary {
         out.push('\n');
         out.push_str(&sum.plain());
@@ -1352,6 +1360,11 @@ fn docx_summary(sum: &crate::riassunto::Sections) -> String {
 
 /// Come `docx_bytes`, con il Riassunto AI in cima (prima della legenda delle voci).
 pub fn docx_bytes_with(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Sections>) -> Vec<u8> {
+    docx_bytes_full(source, secs, lang, segments, names, summary, None)
+}
+
+/// Come `docx_bytes_with`, con la riga della bozza in rosso sotto il titolo.
+pub fn docx_bytes_full(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Sections>, draft: Option<&str>) -> Vec<u8> {
     let (title, meta) = heading(source, secs, lang);
     let mut body = format!(
         "<w:p><w:pPr><w:pStyle w:val=\"Title\"/></w:pPr><w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>\
@@ -1359,6 +1372,9 @@ pub fn docx_bytes_with(source: &Path, secs: f64, lang: &str, segments: &[Segment
         xml_escape(&title),
         xml_escape(&meta)
     );
+    if let Some(d) = draft {
+        body.push_str(&format!("<w:p><w:r><w:rPr><w:b/><w:color w:val=\"B3261E\"/></w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>", xml_escape(d)));
+    }
     if let Some(sum) = summary {
         body.push_str(&docx_summary(sum));
     }
