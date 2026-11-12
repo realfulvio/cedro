@@ -65,9 +65,16 @@ pub enum Lab {
     Trascrivi,
     Converti,
     Pdf,
+    /// Il Cedro di partenza: YouTube e gli altri siti in una pagina sola.
+    Video,
+    /// Il Cedro di partenza: firma e verifica.
+    Firma,
 }
 
 impl Lab {
+    /// Le pagine del Cedro di partenza, nell'ordine della barra.
+    pub const CEDRO: [Lab; 6] = [Lab::Home, Lab::Converti, Lab::Pdf, Lab::Trascrivi, Lab::Video, Lab::Firma];
+
     pub const LAB: [Lab; 6] = [Lab::Immagini, Lab::Anonimizza, Lab::Figura, Lab::Dati, Lab::Referti, Lab::Trascrivi];
     pub const STANDARD: [Lab; 2] = [Lab::Converti, Lab::Pdf];
 
@@ -82,6 +89,18 @@ impl Lab {
             Lab::Trascrivi => "Trascrivi e riassumi",
             Lab::Converti => "Converti file",
             Lab::Pdf => "Lavora sui PDF",
+            Lab::Video => "Video dal web",
+            Lab::Firma => "Firma",
+        }
+    }
+
+    /// Il nome nella barra del Cedro di partenza.
+    pub fn cedro_name(self) -> &'static str {
+        match self {
+            Lab::Converti => "Converti",
+            Lab::Pdf => "PDF",
+            Lab::Trascrivi => "Trascrivi",
+            _ => self.name(),
         }
     }
 }
@@ -584,7 +603,8 @@ impl App {
         match lab {
             // «Inizio» è la porta dei file da convertire: firma e trascrizione hanno la loro pagina.
             Lab::Home => self.activity = Activity::Convert,
-            Lab::Referti => {
+            Lab::Video => self.activity = Activity::YouTube,
+            Lab::Referti | Lab::Firma => {
                 self.activity = Activity::Firma;
                 if !self.firma.sign.scanned_once {
                     let wake = self.wake.clone();
@@ -659,6 +679,33 @@ impl App {
                 (Kind::Pdf, _, _) => Lab::Pdf,
                 _ => Lab::Converti,
             },
+        };
+    }
+
+    /// Il Cedro di partenza, «Converti» con un PDF in vista: si passa al primo tipo in coda che non è un
+    /// PDF (le immagini se non ce n'è).
+    pub fn cedro_leave_pdf(&mut self, simple: bool) {
+        let kind = self.files.iter().find(|f| !f.voice_only && f.kind != Kind::Pdf).map(|f| f.kind).unwrap_or(Kind::Image);
+        if let Some(i) = CATEGORIES.iter().position(|c| c.kind == kind) {
+            self.set_category(i, simple);
+        }
+        self.lab = Lab::Converti;
+        self.selected = self.visible().first().copied();
+        self.preview_page = 0;
+    }
+
+    /// Il Cedro di partenza: come `lab_sync`, con le sue sei pagine. I PDF hanno la loro pagina, gli altri
+    /// file stanno in «Converti»; YouTube e gli altri siti sono «Video dal web».
+    pub fn cedro_sync(&mut self) {
+        if self.lab == Lab::Home && self.activity == Activity::Convert {
+            return;
+        }
+        self.lab = match self.activity {
+            Activity::Firma => Lab::Firma,
+            Activity::Transcribe => Lab::Trascrivi,
+            Activity::YouTube | Activity::Web => Lab::Video,
+            Activity::Convert if self.kind() == Kind::Pdf => Lab::Pdf,
+            Activity::Convert => Lab::Converti,
         };
     }
 
@@ -2030,6 +2077,18 @@ impl App {
 
     /// Il nome che avrebbe la copia con la regola «Aggiungi -2» (per l'esempio sotto la scelta).
     pub fn exists_example(&self) -> String {
+        let (name, ext) = self.example_name();
+        match self.values.exists {
+            Exists::Number if ext.is_empty() => format!("Esempio: {name}-2"),
+            Exists::Number => format!("Esempio: {name}-2.{ext}"),
+            Exists::Replace => "Il file con lo stesso nome viene sostituito.".into(),
+            Exists::Skip => "Il file con lo stesso nome resta com'è.".into(),
+            Exists::Ask => "Cedro te lo chiede file per file.".into(),
+        }
+    }
+
+    /// Il nome (con «nomefile» al posto di quello vero) e l'estensione di quello che esce con la voce scelta.
+    pub fn example_name(&self) -> (&'static str, &str) {
         // Unire e dividere fanno PDF; le altre voci corte sono l'estensione.
         let ext = if self.action.len() <= 5 && !conversioni::is_page_action(self.kind(), &self.action) { self.action.as_str() } else { "pdf" };
         // Gli strumenti delle immagini hanno il loro nome e la loro estensione (come in engine).
@@ -2055,13 +2114,7 @@ impl App {
             (crate::engine::Kind::Image, "jpeg") => ("nomefile", "jpg"),
             (_, e) => ("nomefile", e),
         };
-        match self.values.exists {
-            Exists::Number if ext.is_empty() => format!("Esempio: {name}-2"),
-            Exists::Number => format!("Esempio: {name}-2.{ext}"),
-            Exists::Replace => "Il file con lo stesso nome viene sostituito.".into(),
-            Exists::Skip => "Il file con lo stesso nome resta com'è.".into(),
-            Exists::Ask => "Cedro te lo chiede file per file.".into(),
-        }
+        (name, ext)
     }
 
     /// Play o pausa per il file scelto nell'anteprima.

@@ -253,7 +253,7 @@ impl Fonts {
         match theme {
             ThemeId::WindowsEssenziale | ThemeId::CedroLabs => Fonts::shared(),
             ThemeId::PercorsoGuidato => famiglia!("atkinson"),
-            ThemeId::CedroCompatto => famiglia!("figtree"),
+            ThemeId::CedroCompatto | ThemeId::Cedro | ThemeId::CedroNotte | ThemeId::CedroBosco | ThemeId::CedroCarta => famiglia!("figtree"),
             ThemeId::BancoDiLavoro => famiglia!("plex"),
             ThemeId::DocumentoAlCentro => famiglia!("source"),
             ThemeId::Bondeno => Fonts::bondeno(),
@@ -1059,6 +1059,21 @@ impl<'a> Painter<'a> {
     }
 
     /// Un cerchio pieno con trasparenza.
+    /// Un bagliore tondo: il colore `c` pieno (opacità `a`) al centro, che sfuma fino a sparire sul bordo `r`.
+    pub fn glow(&mut self, cx: f32, cy: f32, r: f32, c: Rgb, a: f32) {
+        let stop = |t: f32, k: f32| tiny_skia::GradientStop::new(t, tiny_skia::Color::from_rgba(c.0 as f32 / 255.0, c.1 as f32 / 255.0, c.2 as f32 / 255.0, (a * k).clamp(0.0, 1.0)).unwrap_or(tiny_skia::Color::TRANSPARENT));
+        // Una curva morbida (più tappe): senza, si vedrebbe il cerchio dove il colore finisce.
+        let stops = (0..=8).map(|i| { let t = i as f32 / 8.0; let k = 1.0 - t * t * (3.0 - 2.0 * t); stop(t, k * k) }).collect();
+        let centre = tiny_skia::Point::from_xy(cx, cy);
+        let Some(shader) = tiny_skia::RadialGradient::new(centre, centre, r.max(0.1), stops, tiny_skia::SpreadMode::Pad, Transform::identity()) else { return };
+        if let Some(p) = PathBuilder::from_circle(cx, cy, r.max(0.1)) {
+            let paint = Paint { shader, anti_alias: true, ..Default::default() };
+            let tf = self.tf();
+            let m = maschera_per(&self.clips, p.bounds(), tf, 1.0);
+            self.pixmap.fill_path(&p, &paint, FillRule::Winding, tf, m);
+        }
+    }
+
     pub fn disc_a(&mut self, cx: f32, cy: f32, r: f32, c: Rgb, a: f32) {
         if let Some(p) = PathBuilder::from_circle(cx, cy, r.max(0.1)) {
             self.fill_path(&p, c, a, false);

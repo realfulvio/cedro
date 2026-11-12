@@ -2188,3 +2188,64 @@ Converti i file dentro lo ZIP	Convert the files inside the ZIP
 Vetrini SVS, DICOM, ND2, LIF, TIFF a 16 bit, PNG, JPEG e le altre immagini	SVS slides, DICOM, ND2, LIF, 16-bit TIFF, PNG, JPEG and other images
 DICOM, vetrini SVS, foto, PDF, Word	DICOM, SVS slides, photos, PDF, Word
 Immagini, documenti, PDF, testi, audio, video, archivi	Images, documents, PDFs, text, audio, video, archives
++ Aggiungi	+ Add
+{#} PDF da unire	{} PDFs to merge
+{#} pagine in tutto	{} pages in all
+1 PDF	1 PDF
+{#} PDF	{} PDFs
+1 PDF · {#} pagine	1 PDF · {} pages
+{#} PDF · {#} pagine	{} PDFs · {} pages
+1 video in coda	1 video in the queue
+{#} video in coda	{} videos in the queue
+1 video in coda · oltre mille siti riconosciuti	1 video in the queue · over a thousand sites supported
+{#} video in coda · oltre mille siti riconosciuti	{} videos in the queue · over a thousand sites supported
+Da YouTube o da un altro sito	From YouTube or another site
+Formato · {#} formati	Format · {} formats
+Converti in · {#} formati	Convert to · {} formats
+Esce come {}	Comes out as {}
+Esce come {}, e così l'altro	Comes out as {}, and the same for the other one
+Esce come {}, e così gli altri {#}	Comes out as {}, and the same for the other {}
+Archivi ZIP	ZIP archives
+Cambia formato, comprimi, leggi il testo	Change format, compress, read the text
+Cartella	Folder
+Cedro apre l'attività giusta con il file già dentro. Oppure scegli il tipo, o parti dalle voci a sinistra.	Cedro opens the right activity with the file already inside. Or pick the type, or start from the items on the left.
+Trascina qui un file	Drop a file here
+Converte i file dentro e rifà lo ZIP	Converts the files inside and rebuilds the ZIP
+Converti oppure trascrivi in Word	Convert, or transcribe to Word
+Cosa ne faccio	What do I do with it
+Cosa scarico	What to download
+Documenti e testi	Documents and text
+Firma o verifica un documento	Sign or verify a document
+PDF firmati, .p7m, chiavetta o smart card	Signed PDFs, .p7m, signing key or smart card
+Foto, audio e documenti in un colpo	Photos, audio and documents in one go
+In PDF, anche PDF/A per l'archivio	To PDF, also PDF/A for archiving
+In Word, Excel, immagini, testo	To Word, Excel, images, text
+In cosa lo trasformo	What do I turn it into
+Incolla un link di YouTube o di un altro sito	Paste a link from YouTube or another site
+Incolla un link di YouTube, RaiPlay, Vimeo o di un altro sito	Paste a link from YouTube, RaiPlay, Vimeo or another site
+Oppure uno strumento	Or a tool
+PNG, JPEG, WebP, AVIF, TIFF e altri	PNG, JPEG, WebP, AVIF, TIFF and more
+Rimpicciolisci, togli l'audio, solo l'audio	Shrink, remove the audio, audio only
+Unisci, dividi, pagine, comprimi, OCR	Merge, split, pages, compress, OCR
+Clic su una pagina per sceglierla, trascina per spostarla. I comandi in alto valgono per la scelta.	Click a page to select it, drag it to move it. The commands at the top apply to the selection.
+I tagli valgono per il file scelto nella striscia in basso, gli intervalli per gli altri.	The cuts apply to the file chosen in the strip below, the ranges to the others.
+Il testo compare qui mentre Cedro trascrive, con chi parla. A lavoro finito lo rivedi riascoltando i punti dubbi.	The text appears here while Cedro transcribes, with who is speaking. When it's done you can review it by listening again to the unclear parts.
+Scarica {#} video	Download {} videos
+Scarica 1 video	Download 1 video
+Vale per i link di YouTube	Applies to YouTube links
+Video MP4 · Fino a 1080p	MP4 video · Up to 1080p
+Un file per capitolo	One file per chapter
+Playlist e raccolte: scarica tutto	Playlists and collections: download everything
+Video {}	{} video
+Audio {}	{} audio
+Scarica {#} audio	Download {} audio files
+Scarica 1 audio	Download 1 audio file
+Firma documenti	Sign documents
+Uno o tanti file insieme, con la chiavetta o la CNS. Il PIN lo metti una volta.	One or many files together, with the signing key or the CNS card. You enter the PIN once.
+Chiavetta e certificati	Signing key and certificates
+PIN, PUK, scadenze	PIN, PUK, expiry dates
+Formato, aspetto, dove salvo	Format, appearance, where to save
+Nessuna chiavetta	No signing key
+collegala	plug it in
+Per esempio gli allegati di una PEC	For example the attachments of a certified email (PEC)
+Se sono già firmati te li apro e ti dico se le firme valgono. Se non lo sono, li preparo per la firma.	If they're already signed I open them and tell you whether the signatures are valid. If not, I get them ready for signing.
