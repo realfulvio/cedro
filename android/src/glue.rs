@@ -1682,11 +1682,8 @@ fn android_main(app: AndroidApp) {
     // La lingua: quella scelta nell'Aspetto, o quella del telefono (Android non ha LANG).
     let file_lingua = dati.join("lingua.txt");
     ui.lingua_telefono = lingua_del_telefono(&app);
-    ui.lingua = match std::fs::read_to_string(&file_lingua).unwrap_or_default().trim() {
-        "it" => "it",
-        "en" => "en",
-        _ => "auto",
-    };
+    let scelta = std::fs::read_to_string(&file_lingua).unwrap_or_default();
+    ui.lingua = crate::ui::LINGUE.iter().map(|l| l.0).find(|k| *k == scelta.trim()).unwrap_or("auto");
     // Da qui la lingua la decide solo Cedro per Android: leggere le impostazioni del motore non la cambia.
     cedro::i18n::fix();
     ui.applica_lingua();

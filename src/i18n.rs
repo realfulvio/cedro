@@ -14,20 +14,66 @@ use std::sync::{Mutex, OnceLock};
 pub enum Lang {
     It,
     En,
+    Es,
+    De,
+    Fr,
+    Pt,
 }
 
 impl Lang {
-    /// Il codice breve (`it`, `en`).
+    /// Tutte le lingue, nell'ordine dell'elenco nelle Impostazioni.
+    pub const ALL: [Lang; 6] = [Lang::It, Lang::En, Lang::Es, Lang::De, Lang::Fr, Lang::Pt];
+
+    /// Il codice breve (`it`, `en`, `es`, `de`, `fr`, `pt`).
     pub fn code(self) -> &'static str {
         match self {
             Lang::It => "it",
             Lang::En => "en",
+            Lang::Es => "es",
+            Lang::De => "de",
+            Lang::Fr => "fr",
+            Lang::Pt => "pt",
         }
+    }
+
+    /// Il nome della lingua nella lingua stessa.
+    pub fn name(self) -> &'static str {
+        match self {
+            Lang::It => "Italiano",
+            Lang::En => "English",
+            Lang::Es => "Español",
+            Lang::De => "Deutsch",
+            Lang::Fr => "Français",
+            Lang::Pt => "Português",
+        }
+    }
+
+    fn from_code(code: &str) -> Option<Lang> {
+        Lang::ALL.into_iter().find(|l| l.code() == code)
+    }
+
+    fn id(self) -> u8 {
+        Lang::ALL.iter().position(|l| *l == self).unwrap_or(0) as u8
     }
 }
 
 /// Le lingue tra cui scegliere nelle Impostazioni: chiave del file, nome nella lingua stessa.
-pub const CHOICES: &[(&str, &str)] = &[("it", "Italiano"), ("en", "English")];
+pub const CHOICES: &[(&str, &str)] = &[("it", "Italiano"), ("en", "English"), ("es", "Español"), ("de", "Deutsch"), ("fr", "Français"), ("pt", "Português")];
+
+/// Vero se `value` è un valore valido per `language` nel file delle impostazioni.
+pub fn is_setting(value: &str) -> bool {
+    value == "auto" || Lang::from_code(value).is_some()
+}
+
+/// Le chiavi per l'elenco «Lingua dell'interfaccia»: «auto» e poi tutte le lingue.
+pub fn setting_keys() -> Vec<&'static str> {
+    std::iter::once("auto").chain(CHOICES.iter().map(|c| c.0)).collect()
+}
+
+/// I nomi per l'elenco «Lingua dell'interfaccia» (dopo «Automatica»), nella loro lingua.
+pub fn setting_names() -> Vec<&'static str> {
+    CHOICES.iter().map(|c| c.1).collect()
+}
 
 static CURRENT: AtomicU8 = AtomicU8::new(0);
 static FIXED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -38,20 +84,23 @@ pub fn fix() {
 }
 
 pub fn lang() -> Lang {
-    if CURRENT.load(Ordering::Relaxed) == 1 {
-        Lang::En
-    } else {
-        Lang::It
-    }
+    Lang::ALL.get(CURRENT.load(Ordering::Relaxed) as usize).copied().unwrap_or(Lang::It)
 }
 
 pub fn set(l: Lang) {
-    CURRENT.store(if l == Lang::En { 1 } else { 0 }, Ordering::Relaxed);
+    if CURRENT.swap(l.id(), Ordering::Relaxed) != l.id() {
+        cache().lock().unwrap_or_else(|e| e.into_inner()).clear();
+    }
 }
 
 /// Vero se l'interfaccia è in inglese.
 pub fn english() -> bool {
     lang() == Lang::En
+}
+
+/// Vero se l'interfaccia non è in italiano: per i testi che nel codice hanno solo due versioni (italiano e inglese).
+pub fn foreign() -> bool {
+    lang() != Lang::It
 }
 
 /// Chiamata da `settings` a ogni lettura o scrittura: `auto` (o vuoto) segue il sistema, `it` e `en` sono fisse.
@@ -64,14 +113,10 @@ pub(crate) fn segui(setting: &str) {
 
 /// La lingua per un valore di `language`.
 pub fn from_setting(setting: &str) -> Lang {
-    match setting.trim() {
-        "it" => Lang::It,
-        "en" => Lang::En,
-        _ => detect(),
-    }
+    Lang::from_code(setting.trim()).unwrap_or_else(detect)
 }
 
-/// La lingua del sistema: italiano se è italiano, inglese per ogni altra.
+/// La lingua del sistema: una delle nostre se c'è, inglese per ogni altra.
 pub fn detect() -> Lang {
     // I test sono scritti in italiano: non dipendono dalla lingua della macchina che li esegue.
     if cfg!(test) {
@@ -87,11 +132,8 @@ pub fn from_tag(tag: &str) -> Lang {
 
 fn from_locale(tag: &str) -> Lang {
     let t = tag.trim().to_ascii_lowercase();
-    if t.starts_with("it") {
-        Lang::It
-    } else {
-        Lang::En
-    }
+    let code: String = t.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
+    Lang::from_code(&code).unwrap_or(Lang::En)
 }
 
 #[cfg(windows)]
@@ -223,9 +265,34 @@ fn parse_table(text: &str) -> Table {
     Table { exact, templates, fragments }
 }
 
+/// Le traduzioni di una lingua (`It` non ne ha: è il testo del codice). Le tabelle si leggono al primo uso.
+fn table_of(l: Lang) -> Option<&'static Table> {
+    static EN: OnceLock<Table> = OnceLock::new();
+    static ES: OnceLock<Table> = OnceLock::new();
+    static DE: OnceLock<Table> = OnceLock::new();
+    static FR: OnceLock<Table> = OnceLock::new();
+    static PT: OnceLock<Table> = OnceLock::new();
+    Some(match l {
+        Lang::It => return None,
+        Lang::En => EN.get_or_init(|| parse_table(include_str!("../i18n/en.tsv"))),
+        Lang::Es => ES.get_or_init(|| parse_table(include_str!("../i18n/es.tsv"))),
+        Lang::De => DE.get_or_init(|| parse_table(include_str!("../i18n/de.tsv"))),
+        Lang::Fr => FR.get_or_init(|| parse_table(include_str!("../i18n/fr.tsv"))),
+        Lang::Pt => PT.get_or_init(|| parse_table(include_str!("../i18n/pt.tsv"))),
+    })
+}
+
+/// La tabella dell'inglese: la base di tutte, e quella a cui ripiegano le altre per un testo che non hanno.
 fn table() -> &'static Table {
-    static T: OnceLock<Table> = OnceLock::new();
-    T.get_or_init(|| parse_table(include_str!("../i18n/en.tsv")))
+    table_of(Lang::En).expect("l'inglese ha la tabella")
+}
+
+/// La lingua in cui si traduce adesso: quella scelta, o l'inglese quando l'interfaccia è in italiano (per i test e `translate`).
+fn target() -> Lang {
+    match lang() {
+        Lang::It => Lang::En,
+        l => l,
+    }
 }
 
 /// Se `s` ha la forma del modello, le parti variabili.
@@ -275,7 +342,16 @@ fn fill(en: &str, caps: &[&str], depth: u8) -> String {
 }
 
 fn translate(s: &str, depth: u8) -> String {
-    let t = table();
+    let l = target();
+    let v = translate_with(table_of(l).unwrap_or_else(table), s, depth);
+    // Un testo che la lingua scelta non ha ancora si vede in inglese, meglio che in italiano.
+    if v == s && l != Lang::En {
+        return translate_with(table(), s, depth);
+    }
+    v
+}
+
+fn translate_with(t: &Table, s: &str, depth: u8) -> String {
     if let Some(en) = t.exact.get(s) {
         return en.clone();
     }
@@ -368,8 +444,8 @@ fn tr_plain(s: &str) -> Cow<'_, str> {
     if lang() == Lang::It || s.is_empty() {
         return Cow::Borrowed(s);
     }
-    let t = table();
-    if let Some(en) = t.exact.get(s) {
+    let t = table_of(lang()).unwrap_or_else(table);
+    if let Some(en) = t.exact.get(s).or_else(|| table().exact.get(s)) {
         // La tabella vive quanto il programma: nessuna copia.
         return Cow::Borrowed(en.as_str());
     }
@@ -426,7 +502,12 @@ mod tests {
         assert_eq!(from_locale("it_IT.UTF-8"), Lang::It);
         assert_eq!(from_locale("it-IT"), Lang::It);
         assert_eq!(from_locale("en_US.UTF-8"), Lang::En);
-        assert_eq!(from_locale("de-DE"), Lang::En);
+        assert_eq!(from_locale("de-DE"), Lang::De);
+        assert_eq!(from_locale("es_MX.UTF-8"), Lang::Es);
+        assert_eq!(from_locale("fr-CA"), Lang::Fr);
+        assert_eq!(from_locale("pt_BR"), Lang::Pt);
+        assert_eq!(from_locale("est"), Lang::En);
+        assert_eq!(from_locale("ja-JP"), Lang::En);
         assert_eq!(from_locale(""), Lang::En);
     }
 
@@ -465,7 +546,12 @@ mod tests {
 
     #[test]
     fn real_table_is_well_formed() {
-        let text = include_str!("../i18n/en.tsv");
+        for text in [include_str!("../i18n/en.tsv"), include_str!("../i18n/es.tsv"), include_str!("../i18n/de.tsv"), include_str!("../i18n/fr.tsv"), include_str!("../i18n/pt.tsv")] {
+            well_formed(text);
+        }
+    }
+
+    fn well_formed(text: &str) {
         let mut seen = std::collections::HashSet::new();
         for (n, line) in text.lines().enumerate() {
             if line.is_empty() || line.starts_with('#') {

@@ -599,16 +599,12 @@ pub struct App {
 }
 
 /// Le lingue tra cui scegliere: chiave nel file, nome (quelli delle lingue non si traducono).
-pub const LINGUE: [(&str, &str); 3] = [("auto", "Lingua del telefono"), ("it", "Italiano"), ("en", "English")];
+pub const LINGUE: [(&str, &str); 7] = [("auto", "Lingua del telefono"), ("it", "Italiano"), ("en", "English"), ("es", "Español"), ("de", "Deutsch"), ("fr", "Français"), ("pt", "Português")];
 
 impl App {
     /// Mette in uso la lingua scelta (per «auto», quella del telefono).
     pub fn applica_lingua(&self) {
-        cedro::i18n::set(match self.lingua {
-            "it" => cedro::i18n::Lang::It,
-            "en" => cedro::i18n::Lang::En,
-            _ => self.lingua_telefono,
-        });
+        cedro::i18n::set(cedro::i18n::Lang::ALL.into_iter().find(|l| l.code() == self.lingua).unwrap_or(self.lingua_telefono));
     }
 
     pub fn new(tema: ThemeId) -> App {
@@ -1292,7 +1288,7 @@ impl App {
         let y = h - NAV;
         p.fill(-ml, y, w + ml + mr, NAV + mb, pal.surface);
         p.fill(-ml, y, w + ml + mr, 1.0, pal.border);
-        let voci = [(Scheda::Ruota, if cedro::i18n::english() { "Wheel" } else { "Ruota" }, ic::CONVERT), (Scheda::Lavori, "Lavori", ic::CLOCK), (Scheda::Aspetto, "Aspetto", ic::SETTINGS), (Scheda::Info, "Info", ic::INFO)];
+        let voci = [(Scheda::Ruota, if cedro::i18n::foreign() { "Wheel" } else { "Ruota" }, ic::CONVERT), (Scheda::Lavori, "Lavori", ic::CLOCK), (Scheda::Aspetto, "Aspetto", ic::SETTINGS), (Scheda::Info, "Info", ic::INFO)];
         let cw = w / 4.0;
         let attivi = self.lavori.iter().filter(|l| l.stato == Stato::InCorso).count();
         for (i, (s, nome, icona)) in voci.into_iter().enumerate() {
