@@ -597,8 +597,10 @@ impl App {
                 cat(self, Kind::Image);
                 if lab == Lab::Figura {
                     self.set_action("figure");
-                } else if matches!(self.action.as_str(), "figure" | "strip") {
-                    self.action = self.default_action(simple);
+                } else if matches!(self.action.as_str(), "figure" | "strip") || (simple && self.action == self.default_action(true)) {
+                    // In «Semplice» la pagina offre JPEG, TIFF, PNG e PDF: il WebP consigliato da
+                    // «Converti file» qui non c'è, e la scheda direbbe che è una voce scelta in «Completa».
+                    self.action = if simple { "jpeg".to_string() } else { self.default_action(false) };
                 }
             }
             Lab::Anonimizza => {
@@ -627,6 +629,13 @@ impl App {
             }
             Lab::Converti => {
                 self.activity = Activity::Convert;
+                // Arrivando da «Converti dati» senza tabelle in coda la pagina resterebbe vuota: si passa
+                // al primo tipo di file che c'è davvero.
+                if !has(self, self.kind()) {
+                    if let Some(k) = self.files.iter().find(|f| !f.voice_only && CATEGORIES.iter().any(|c| c.kind == f.kind)).map(|f| f.kind) {
+                        cat(self, k);
+                    }
+                }
                 if matches!((self.kind(), self.action.as_str()), (Kind::Image, "figure") | (_, "strip")) {
                     self.action = self.default_action(simple);
                 }
@@ -715,8 +724,14 @@ impl App {
 
     pub fn set_category(&mut self, index: usize, simple: bool) {
         if index < CATEGORIES.len() && index != self.category {
+            // Cedro 4 Labs: su «Togli i nomi» i file di un altro tipo (dal chip «In coda anche» o appena
+            // aggiunti) si anonimizzano anche loro, se quel tipo lo permette, invece di cambiare pagina.
+            let strip = self.lab == Lab::Anonimizza && self.action == "strip";
             self.category = index;
             self.action = self.default_action(simple);
+            if strip && (conversioni::formats(self.kind()).iter().any(|s| s.id == "strip") || self.tools().iter().any(|s| s.id == "strip")) {
+                self.action = "strip".to_string();
+            }
             self.selected = self.visible().first().copied();
             self.preview_page = 0;
         }
@@ -2126,6 +2141,20 @@ mod tests {
         for lab in Lab::LAB.into_iter().chain(Lab::STANDARD) {
             assert!(!lab.name().is_empty());
         }
+        // In «Semplice» le immagini partono da JPEG (una delle voci della pagina), non dal WebP di «Converti file».
+        app.set_lab(Lab::Immagini, true);
+        app.action = app.default_action(true);
+        app.set_lab(Lab::Immagini, true);
+        assert_eq!(app.action, "jpeg");
+        app.set_lab(Lab::Anonimizza, true);
+        app.set_lab(Lab::Immagini, true);
+        assert_eq!(app.action, "jpeg");
+        // Su «Togli i nomi» il passaggio ai PDF in coda resta su «Togli i nomi».
+        app.set_lab(Lab::Anonimizza, false);
+        let pdf = CATEGORIES.iter().position(|c| c.kind == Kind::Pdf).unwrap();
+        app.set_category(pdf, false);
+        app.lab_sync();
+        assert_eq!((app.kind(), app.action.as_str(), app.lab), (Kind::Pdf, "strip", Lab::Anonimizza));
     }
 
     #[test]

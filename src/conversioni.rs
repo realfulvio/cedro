@@ -410,8 +410,8 @@ pub fn micro_option_defs(action: &str, canali: usize, z: usize, t: usize) -> Vec
 }
 
 const FIG_WIDTHS: &[Choice] = &[
-    Choice { label: "Una colonna (8,5 cm)", value: 85 },
-    Choice { label: "Pagina intera (17,5 cm)", value: 175 },
+    Choice { label: "Colonna, 8,5 cm", value: 85 },
+    Choice { label: "Pagina, 17,5 cm", value: 175 },
 ];
 const FIG_DPIS: &[Choice] = &[Choice { label: "300 dpi", value: 300 }, Choice { label: "600 dpi", value: 600 }];
 const FIG_WIDTH: OptionDef = OptionDef { opt: Opt::FigWidth, title: "Larghezza", note: "Quella chiesta dalla rivista: una colonna o tutta la pagina", control: Control::Segments(FIG_WIDTHS), default: 175 };
