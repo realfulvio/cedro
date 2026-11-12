@@ -79,7 +79,7 @@ pub fn sigillo(p: &mut Painter, x: f32, y: f32, s: f32, fondo: Rgb, segno: &str,
 
 impl App {
     pub(super) fn toni(&self) -> Toni {
-        toni(self.pal(), self.tema.dark())
+        toni(self.pal(), self.scuro())
     }
 
     /// Il pulsante principale: pillola piena alta 56, senza ombra. Senza azione è spento.
@@ -150,7 +150,7 @@ impl App {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn campo(&mut self, p: &mut Painter, rc: R, icona: Option<(Rgb, &str, &str)>, etichetta: &str, valore: &str, freccia: &str, az: Azione, vista: R) {
         let t = self.toni();
-        let scuro = self.tema.dark();
+        let scuro = self.scuro();
         let premuto = self.premuto == Some(az);
         p.rrect(rc.0, rc.1, rc.2, rc.3, 18.0, Some(if premuto { mix(t.fondo, t.testo, 0.06) } else { t.fondo }), None);
         let mut tx = rc.0 + 16.0;
@@ -202,7 +202,7 @@ impl App {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn barra_nav(&mut self, p: &mut Painter, w: f32, h: f32, voci: &[(&str, &str, Rgb)], scelta: usize, az: impl Fn(usize) -> Azione) {
         let t = self.toni();
-        let scuro = self.tema.dark();
+        let scuro = self.scuro();
         let (ml, _, mr, mb) = self.margini;
         let nav = 64.0;
         let ny = h - nav;
