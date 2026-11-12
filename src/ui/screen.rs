@@ -141,6 +141,9 @@ impl Screen {
     /// Disegna il fotogramma in un'immagine di `w`×`h` pixel con `scale` pixel per unità.
     pub fn render(&mut self, w: u32, h: u32, scale: f32) -> Painter<'_> {
         self.app.simple_view = self.simple;
+        if self.theme == ThemeId::CedroLabs {
+            self.app.lab_sync();
+        }
         if self.app.activity == Activity::Firma && self.surface == Surface::Main {
             super::firma::watch_recent(self.app.wake.clone());
         }
@@ -236,7 +239,7 @@ impl Screen {
             }
             return;
         }
-        if self.theme != ThemeId::DocumentoAlCentro || self.surface != Surface::Main || self.app.activity != Activity::Convert {
+        if !matches!(self.theme, ThemeId::DocumentoAlCentro | ThemeId::CedroLabs) || self.surface != Surface::Main || self.app.activity != Activity::Convert {
             if self.surface != Surface::Viewer {
                 self.app.player = None;
             }
@@ -667,6 +670,26 @@ impl Screen {
                 if a == Activity::Firma && !app.firma.sign.scanned_once {
                     let wake = app.wake.clone();
                     app.firma.sign.scan(wake);
+                }
+            }
+            Act::Lab(lab) => app.set_lab(lab, simple),
+            Act::LabGo(super::model::Lab::Home, _) => {
+                // Le tessere di Inizio: si sceglie il file, poi la scheda dice che cosa ci si può fare.
+                let files = plat.pick_files();
+                self.add_files(files);
+            }
+            Act::LabGo(lab, id) => {
+                app.set_lab(lab, simple);
+                if lab == super::model::Lab::Pdf && conversioni::is_page_action(app.kind(), id) {
+                    let mode = match id {
+                        "merge" => super::model::PdfMode::Merge,
+                        "split" => super::model::PdfMode::Split,
+                        "compress" => super::model::PdfMode::Compress,
+                        _ => super::model::PdfMode::Pages,
+                    };
+                    app.set_pdf_mode(mode, simple);
+                } else if app.activity == Activity::Convert {
+                    app.set_action(id);
                 }
             }
             Act::ActivityMenu => {

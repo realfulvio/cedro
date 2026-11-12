@@ -2148,3 +2148,43 @@ PDF per il proprietario, {#} pagine.	PDF for the owner, {} pages.
 PDF per il proprietario, {#} pagina.	PDF for the owner, {} page.
 Per il logo metti in coda anche la sua immagine: Cedro poi se lo ricorda.	For the logo add its image to the queue too: Cedro will remember it.
 Niente barra dall'obiettivo: manca la calibrazione con il 10x.	No bar from the objective: the 10x calibration is missing.
+# Cedro 4 Labs: la finestra a pagine
+Inizio	Home
+Laboratorio	Lab
+Cedro di sempre	Everyday Cedro
+Salva immagini e vetrini	Save images and slides
+Togli i nomi	Remove names
+Prepara una figura	Prepare a figure
+Converti dati e piastre	Convert data and plates
+Firma e manda referti	Sign and send reports
+Trascrivi e riassumi	Transcribe and summarise
+Lavora sui PDF	Work on PDFs
+Niente esce da questo PC	Nothing leaves this PC
+Che file hai?	What file do you have?
+Trascinalo qui dentro, oppure scegli il tipo. Se sai già cosa fare, parti dalle voci a sinistra.	Drop it in here, or pick its type. If you already know what to do, start from the entries on the left.
+Radiografia	X-ray
+Tabella	Table
+Referto	Report
+ND2, LIF, TIFF a 16 bit	ND2, LIF, 16-bit TIFF
+Dettato o riunione	Dictation or meeting
+Foto, documenti, video o archivi?	Photos, documents, video or archives?
+Con questo file puoi	With this file you can
+in «{}»	in “{}”
+In coda anche:	Also queued:
+Anche:	Also:
+Nessun file in coda	No files queued
+Stai usando una voce scelta in «Completa»: {}.	You're using an entry picked in “Full”: {}.
+Porta in Word	Turn into Word
+Porta in PDF	Turn into PDF
+Porta in Excel	Turn into Excel
+CSV pulito	Clean CSV
+Unisci a un altro PDF	Merge with another PDF
+Salva in JPEG, TIFF o PNG	Save as JPEG, TIFF or PNG
+Mettila in una figura	Put it in a figure
+Togli nomi e dati del proprietario	Remove names and owner details
+Converti in MP3, WAV, FLAC…	Convert to MP3, WAV, FLAC…
+Converti in MP4	Convert to MP4
+Converti i file dentro lo ZIP	Convert the files inside the ZIP
+Vetrini SVS, DICOM, ND2, LIF, TIFF a 16 bit, PNG, JPEG e le altre immagini	SVS slides, DICOM, ND2, LIF, 16-bit TIFF, PNG, JPEG and other images
+DICOM, vetrini SVS, foto, PDF, Word	DICOM, SVS slides, photos, PDF, Word
+Immagini, documenti, PDF, testi, audio, video, archivi	Images, documents, PDFs, text, audio, video, archives
