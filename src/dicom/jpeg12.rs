@@ -169,7 +169,7 @@ impl Idct {
                 for v in 0..8 {
                     s += self.cos[y][v] * tmp[v * 8 + x];
                 }
-                out[at + y * stride + x] = ((s.round() as i32) + shift).clamp(0, max);
+                out[at + y * stride + x] = (s.round() as i32).saturating_add(shift).clamp(0, max);
             }
         }
     }
@@ -243,6 +243,10 @@ pub fn decode(d: &[u8]) -> Result<Decoded, String> {
                 if seg.len() < 6 {
                     return Err("JPEG troncato".into());
                 }
+                // Un'immagine sola: un secondo fotogramma aggiungerebbe componenti a quelli che ci sono.
+                if !comps.is_empty() {
+                    return Err("JPEG con più di un'intestazione di fotogramma".into());
+                }
                 prec = seg[0] as u32;
                 h = u16::from_be_bytes([seg[1], seg[2]]) as usize;
                 w = u16::from_be_bytes([seg[3], seg[4]]) as usize;
@@ -274,7 +278,7 @@ pub fn decode(d: &[u8]) -> Result<Decoded, String> {
                 if comps.is_empty() {
                     return Err("JPEG senza intestazione".into());
                 }
-                let ns = seg[0] as usize;
+                let ns = seg.first().copied().unwrap_or(0) as usize;
                 if ns == 0 || ns > 4 || seg.len() < 1 + 2 * ns {
                     return Err("JPEG: scansione non valida".into());
                 }
@@ -297,10 +301,11 @@ pub fn decode(d: &[u8]) -> Result<Decoded, String> {
                     if t > 16 {
                         return Err("JPEG: dati non validi".into());
                     }
+                    // Con dati rovinati i numeri possono uscire di misura: si fa il giro invece di cadere.
                     let diff = extend(bits.receive(t), t);
-                    c.pred += diff;
+                    c.pred = c.pred.wrapping_add(diff);
                     let q = &qt[c.tq];
-                    coef[0] = c.pred * q[0];
+                    coef[0] = c.pred.wrapping_mul(q[0]);
                     let mut k = 1;
                     while k < 64 {
                         let rs = bits.decode(&ac[c.ta])?;
@@ -317,7 +322,7 @@ pub fn decode(d: &[u8]) -> Result<Decoded, String> {
                             break;
                         }
                         let z = ZIGZAG[k];
-                        coef[z] = extend(bits.receive(s), s) * q[z];
+                        coef[z] = extend(bits.receive(s), s).wrapping_mul(q[z]);
                         k += 1;
                     }
                     let at = by * 8 * c.stride + bx * 8;
@@ -408,14 +413,15 @@ pub fn decode(d: &[u8]) -> Result<Decoded, String> {
     Ok(Decoded { width: w as u32, height: h as u32, components: n as u32, samples })
 }
 
-/// La precisione dichiarata nel JPEG (8, 12 o 16), se c'è un'intestazione di fotogramma.
-pub fn precision(d: &[u8]) -> Option<u32> {
+/// Il marcatore dell'intestazione di fotogramma (SOF0…SOF15: dice se è sequenziale, progressivo o
+/// lossless) e la precisione dichiarata (8, 12, 16…), se c'è.
+pub fn sof(d: &[u8]) -> Option<(u8, u32)> {
     let mut i = 2usize;
     while i + 4 <= d.len() && d[i] == 0xFF {
         let m = d[i + 1];
         let len = u16::from_be_bytes([d[i + 2], d[i + 3]]) as usize;
         if matches!(m, 0xC0..=0xCF) && !matches!(m, 0xC4 | 0xC8 | 0xCC) {
-            return d.get(i + 4).map(|p| *p as u32);
+            return d.get(i + 4).map(|p| (m, *p as u32));
         }
         if m == 0xDA {
             return None;
@@ -423,4 +429,46 @@ pub fn precision(d: &[u8]) -> Option<u32> {
         i += 2 + len;
     }
     None
+}
+
+#[cfg(test)]
+mod prove {
+    use super::*;
+
+    /// Un SOF1 a 12 bit, 8×8, con `n` componenti.
+    fn sof(n: u8) -> Vec<u8> {
+        let mut s = vec![0xFF, 0xC1, 0x00, 8 + 3 * n, 12, 0, 8, 0, 8, n];
+        for i in 0..n {
+            s.extend_from_slice(&[i + 1, 0x11, 0]);
+        }
+        s
+    }
+
+    #[test]
+    fn una_scansione_vuota_non_fa_cadere_il_programma() {
+        // FFDA con lunghezza 2: il segmento non ha nemmeno il numero dei componenti.
+        let mut d = vec![0xFF, 0xD8];
+        d.extend_from_slice(&sof(1));
+        d.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x02, 0, 0, 0, 0]);
+        assert!(decode(&d).is_err());
+    }
+
+    #[test]
+    fn due_intestazioni_di_fotogramma_non_fanno_cadere_il_programma() {
+        // Due SOF a tre componenti: sarebbero sei componenti in un pixel che ne tiene quattro.
+        let mut d = vec![0xFF, 0xD8];
+        d.extend_from_slice(&sof(3));
+        d.extend_from_slice(&sof(3));
+        d.extend_from_slice(&[0xFF, 0xD9]);
+        assert!(decode(&d).is_err());
+    }
+
+    #[test]
+    fn il_tipo_di_jpeg_si_legge_dall_intestazione() {
+        let mut d = vec![0xFF, 0xD8];
+        d.extend_from_slice(&sof(1));
+        assert_eq!(super::sof(&d), Some((0xC1, 12)));
+        d[3] = 0xC3;
+        assert_eq!(super::sof(&d), Some((0xC3, 12)));
+    }
 }
