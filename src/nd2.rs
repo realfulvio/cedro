@@ -275,6 +275,8 @@ pub struct Nd2 {
     pub obiettivo: Option<String>,
     /// 3 per le foto a colori (un RGB), 1 per i canali di fluorescenza.
     pub campioni: usize,
+    /// L'acquisizione si è fermata a metà di un giro: gli ultimi piani mancano (e sono neri).
+    pub interrotta: bool,
 }
 
 fn leggi_blocco(f: &mut File, pos: u64, nome_atteso: Option<&[u8]>) -> Result<Vec<u8>, String> {
@@ -288,6 +290,11 @@ fn leggi_blocco(f: &mut File, pos: u64, nome_atteso: Option<&[u8]>) -> Result<Ve
     let dati = u64::from_le_bytes(h[8..16].try_into().map_err(|_| "file ND2 troncato")?);
     if dati > MAX_FOTOGRAMMA {
         return Err("blocco ND2 troppo grande".into());
+    }
+    // Le misure vengono dal file: prima di prendere la memoria si guarda che ci stiano davvero.
+    let resto = f.metadata().map_err(|e| e.to_string())?.len().saturating_sub(pos + 16);
+    if nome.saturating_add(dati) > resto {
+        return Err("file ND2 troncato".into());
     }
     let mut n = vec![0u8; nome as usize];
     f.read_exact(&mut n).map_err(|_| "file ND2 troncato")?;
@@ -457,6 +464,11 @@ impl Nd2 {
         if larghezza_byte < larghezza as usize * (bpc_bit / 8) * componenti {
             return Err("righe del file ND2 più corte del previsto".into());
         }
+        if (larghezza_byte as u64).saturating_mul(altezza as u64) > MAX_FOTOGRAMMA {
+            return Err("misure del file ND2 non valide".into());
+        }
+        // I bit veri del sensore (12, 14) dentro i 16 della memoria: servono per il fondo scala.
+        let significativi = num("uiBpcSignificant").map(|v| v as usize).filter(|v| *v > 8 && *v < bpc_bit && bpc_bit == 16);
 
         // Canali, colori, calibrazione, obiettivo.
         let meta = blocco(&mut f, if v3 { b"ImageMetadataSeqLV|0!" } else { b"ImageMetadataSeq|0!" }).and_then(|b| metadati(&b)).ok();
@@ -517,15 +529,18 @@ impl Nd2 {
             return Err("il file ND2 non ha immagini".into());
         }
         let um_z = lista.iter().find(|c| matches!(c.tipo, 4 | 10)).map(|c| c.passo_z).filter(|s| *s > 0.0);
+        let mut interrotta = false;
         let mut cicli: Vec<(Asse, usize)> = lista.iter().map(|c| (asse_di(c.tipo), c.n)).collect();
         let sequenza = sequenza.max(fotogrammi.keys().max().map_or(0, |m| m + 1)).max(1);
         let totale = cicli.iter().map(|(_, n)| *n).try_fold(1usize, |a, n| a.checked_mul(n)).unwrap_or(usize::MAX);
         let interni = cicli.iter().skip(1).map(|(_, n)| *n).try_fold(1usize, |a, n| a.checked_mul(n)).unwrap_or(usize::MAX);
         if cicli.is_empty() {
             cicli = vec![(if sequenza > 1 { Asse::Tempo } else { Asse::Z }, sequenza)];
-        } else if totale > sequenza && interni <= sequenza && sequenza % interni == 0 {
-            // Un'acquisizione fermata prima della fine: il ciclo più esterno ha meno giri.
-            cicli[0].1 = sequenza / interni;
+        } else if totale > sequenza && interni <= sequenza {
+            // Un'acquisizione fermata prima della fine: il ciclo più esterno ha meno giri, e l'ultimo
+            // può essere a metà (i fotogrammi che mancano restano neri).
+            cicli[0].1 = sequenza.div_ceil(interni);
+            interrotta = sequenza % interni != 0;
         } else if totale < sequenza && sequenza % totale == 0 {
             // Un ciclo che non conosciamo: lo si mette fuori, come un tempo.
             cicli.insert(0, (Asse::Altro, sequenza / totale));
@@ -533,7 +548,7 @@ impl Nd2 {
             cicli = vec![(Asse::Z, sequenza)];
         }
         let float = bpc_bit == 32;
-        let bit = bpc_bit as u8;
+        let bit = significativi.unwrap_or(bpc_bit) as u8;
         let campioni = if per_piano == 3 && n_piani == 1 && bpc_bit == 8 { 3 } else { 1 };
         Ok(Nd2 {
             larghezza,
@@ -551,6 +566,7 @@ impl Nd2 {
             um_z,
             obiettivo,
             campioni,
+            interrotta,
         })
     }
 
@@ -634,9 +650,10 @@ impl Nd2 {
             let dati: Vec<u16> = if self.decimale {
                 // Numeri decimali: tra 0 e 1 si portano a tutta scala, altrimenti si tengono come sono.
                 let f: Vec<f32> = (0..h).flat_map(|r| (0..w).map(move |x| (r, x))).map(|(r, x)| f32::from_le_bytes(valore(r, x, c).try_into().unwrap_or([0; 4]))).collect();
-                let alto = f.iter().copied().filter(|v| v.is_finite()).fold(0.0f32, f32::max);
-                let k = if alto > 0.0 && alto <= 1.0 { 65535.0 } else { 1.0 };
-                f.iter().map(|v| if v.is_finite() { (v * k).clamp(0.0, 65535.0) as u16 } else { 0 }).collect()
+                crate::microscopia::da_f32(&f)
+            } else if bpc == 4 {
+                let v: Vec<u32> = (0..h).flat_map(|r| (0..w).map(move |x| (r, x))).map(|(r, x)| u32::from_le_bytes(valore(r, x, c).try_into().unwrap_or([0; 4]))).collect();
+                crate::microscopia::da_u32(&v)
             } else {
                 let mut d = Vec::with_capacity(w * h);
                 for r in 0..h {
@@ -644,8 +661,7 @@ impl Nd2 {
                         let b = valore(r, x, c);
                         d.push(match bpc {
                             1 => u16::from(b[0]),
-                            2 => u16::from_le_bytes([b[0], b[1]]),
-                            _ => (u32::from_le_bytes([b[0], b[1], b[2], b[3]]) >> 16) as u16,
+                            _ => u16::from_le_bytes([b[0], b[1]]),
                         });
                     }
                 }
@@ -718,6 +734,11 @@ pub(crate) mod prove {
         scrivi(dir, compresso, None)
     }
 
+    /// Un ND2 come `nd2` ma fermato dopo `fotogrammi` fotogrammi.
+    pub fn scrivi_fermato(dir: &Path, fotogrammi: usize) -> std::path::PathBuf {
+        scrivi_n(dir, false, None, fotogrammi)
+    }
+
     /// Lo stesso file nella versione 2, con i metadati in XML.
     fn xml_v2(nome: &str, corpo: &str) -> String {
         format!("<?xml version=\"1.0\" encoding=\"UTF-8\"?><variant version=\"1.0\"><no_name runtype=\"{nome}\">{corpo}</no_name></variant>")
@@ -727,8 +748,13 @@ pub(crate) mod prove {
     }
 
     fn scrivi(dir: &Path, compresso: bool, v2: Option<()>) -> std::path::PathBuf {
+        scrivi_n(dir, compresso, v2, 6)
+    }
+
+    /// Come `scrivi`, con solo i primi `fotogrammi` fotogrammi (un'acquisizione fermata prima).
+    fn scrivi_n(dir: &Path, compresso: bool, v2: Option<()>, fotogrammi: usize) -> std::path::PathBuf {
         let (w, h, t, z) = (8usize, 6usize, 2usize, 3usize);
-        let attr = livello("SLxImageAttributes", &[intero("uiWidth", w as u32), intero("uiWidthBytes", (w * 4) as u32), intero("uiHeight", h as u32), intero("uiComp", 2), intero("uiBpcInMemory", 16), intero("uiBpcSignificant", 12), intero("uiSequenceCount", (t * z) as u32), intero("eCompression", if compresso { 0 } else { 2 })]);
+        let attr = livello("SLxImageAttributes", &[intero("uiWidth", w as u32), intero("uiWidthBytes", (w * 4) as u32), intero("uiHeight", h as u32), intero("uiComp", 2), intero("uiBpcInMemory", 16), intero("uiBpcSignificant", 12), intero("uiSequenceCount", fotogrammi as u32), intero("eCompression", if compresso { 0 } else { 2 })]);
         let piano = |d: &str, colore: u32| livello(if d == "DAPI" { "a0" } else { "a1" }, &[testo("sDescription", d), intero("uiColor", colore)]);
         let meta = livello(
             "SLxPictureMetadata",
@@ -795,6 +821,9 @@ pub(crate) mod prove {
         for ti in 0..t {
             for zi in 0..z {
                 let idx = ti * z + zi;
+                if idx >= fotogrammi {
+                    continue;
+                }
                 let mut px = Vec::new();
                 for y in 0..h {
                     for x in 0..w {
@@ -827,7 +856,7 @@ pub(crate) mod prove {
         file.extend(blocco(std::str::from_utf8(FIRMA_ELENCO).unwrap(), &elenco));
         file.extend(FIRMA_MAPPA);
         file.extend(pos_mappa.to_le_bytes());
-        let p = dir.join(format!("{}{}.nd2", if compresso { "zlib" } else { "grezzo" }, if v2.is_some() { "-v2" } else { "" }));
+        let p = dir.join(format!("{}{}{}.nd2", if compresso { "zlib" } else { "grezzo" }, if v2.is_some() { "-v2" } else { "" }, if fotogrammi < t * z { "-fermato" } else { "" }));
         std::fs::write(&p, file).unwrap();
         p
     }
@@ -904,5 +933,41 @@ pub(crate) mod prove {
         let mut d = Vec::new();
         leggi_cicli(&fasi, 0, &mut d);
         assert_eq!(d.iter().map(|c| c.n).collect::<Vec<_>>(), [12]);
+    }
+}
+
+#[cfg(test)]
+mod prove_revisione {
+    use super::*;
+
+    #[test]
+    fn un_acquisizione_fermata_a_meta_resta_tempo_per_z() {
+        // 2 istanti × 3 piani, fermata al 5° fotogramma: non diventa una pila di 5 piani Z.
+        let dir = std::env::temp_dir().join(format!("cedro-nd2-fermato-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = prove::scrivi_fermato(&dir, 5);
+        let n = Nd2::open(&p).unwrap();
+        assert_eq!((n.z(), n.t(), n.fotogrammi()), (3, 2, 5));
+        assert!(n.interrotta);
+        assert_eq!(n.fotogramma(&p, n.indice(1, 1)).unwrap()[0].dati[0], 111);
+        // Il piano che manca è nero.
+        assert!(n.fotogramma(&p, n.indice(2, 1)).unwrap()[0].dati.iter().all(|v| *v == 0));
+        let pila = crate::microscopia::Pila::open(&p).unwrap();
+        assert!(pila.avviso.is_some());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn un_blocco_che_dice_misure_assurde_non_prende_memoria() {
+        let dir = std::env::temp_dir().join(format!("cedro-nd2-assurdo-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("rotto.nd2");
+        let mut b = MAGIC.to_vec();
+        b.extend(0xFFFF_FFF0u32.to_le_bytes());
+        b.extend((1u64 << 31).to_le_bytes());
+        b.extend([0u8; 64]);
+        std::fs::write(&p, b).unwrap();
+        assert!(Nd2::open(&p).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

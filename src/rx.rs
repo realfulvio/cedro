@@ -322,16 +322,30 @@ pub fn pagina(
 }
 
 /// Le immagini di un DICOM, con la finestra scelta da chi ha fatto l'esame.
-fn lastre(path: &Path) -> Result<(Scheda, Vec<RgbImage>), String> {
+/// Chi è il paziente: l'ID del DICOM o, se manca, animale e proprietario.
+fn paziente(f: &DicomFile, s: &Scheda) -> String {
+    match f.string(tag(0x0010, 0x0020)).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+        Some(id) => id,
+        None => format!("{}|{}", s.animale, s.proprietario),
+    }
+}
+
+/// Le immagini di un DICOM, con la scheda e chi è il paziente. `Ok(None)`: il DICOM non ha immagini
+/// (un piano di cura, un referto strutturato) e si salta.
+fn lastre(path: &Path) -> Result<Option<(Scheda, String, Vec<RgbImage>)>, String> {
     let f = DicomFile::open(path)?;
+    if f.get(tag(0x7FE0, 0x0010)).is_none() {
+        return Ok(None);
+    }
     let info = pixel::Info::of(&f)?;
     let scheda = Scheda::di(&f);
+    let chi = paziente(&f, &scheda);
     let mut v = Vec::new();
     for i in 0..(info.frames as usize).min(50) {
         let fr = pixel::frame(&f, &info, i)?;
         v.push(pixel::render(&info, &fr, pixel::Window::File).to_rgb8());
     }
-    Ok((scheda, v))
+    Ok(Some((scheda, chi, v)))
 }
 
 /// Il logo: un'immagine in coda (non DICOM) diventa il logo e si ricorda per le volte dopo; se non
@@ -381,27 +395,41 @@ pub fn nome_file(animale: &str) -> Option<String> {
 }
 
 /// Il PDF per il proprietario con tutte le immagini dei DICOM dati (nell'ordine dato). Ritorna i byte,
-/// quante pagine e il nome dell'animale (per il nome del file).
+/// quante pagine, il nome dell'animale (per il nome del file) e i file saltati perché senza immagini.
+/// Le radiografie di animali diversi non finiscono mai nello stesso PDF: il proprietario riceverebbe
+/// anche quelle di un altro.
 pub fn pdf(
     dicom: &[PathBuf],
     clinica: &str,
     logo: Option<&RgbImage>,
     avanzamento: &dyn Fn(f32),
-) -> Result<(Vec<u8>, usize, String), String> {
+) -> Result<(Vec<u8>, usize, String, Vec<String>), String> {
     let mut tutte = Vec::new();
+    let mut pazienti: Vec<(String, String)> = Vec::new();
+    let mut saltati = Vec::new();
     for (i, p) in dicom.iter().enumerate() {
-        let (s, v) = lastre(p).map_err(|e| {
-            format!(
-                "{}: {e}",
-                p.file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default()
-            )
-        })?;
-        for img in v {
-            tutte.push((s.clone(), img));
+        let nome_file = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        match lastre(p).map_err(|e| format!("{nome_file}: {e}"))? {
+            Some((s, chi, v)) => {
+                if !pazienti.iter().any(|(c, _)| *c == chi) {
+                    let nome = if s.animale.is_empty() { nome_file.clone() } else { s.animale.clone() };
+                    pazienti.push((chi, nome));
+                }
+                for img in v {
+                    tutte.push((s.clone(), img));
+                }
+            }
+            None => saltati.push(nome_file),
         }
         avanzamento(i as f32 / dicom.len() as f32 * 0.5);
+    }
+    if pazienti.len() > 1 {
+        let nomi: Vec<&str> = pazienti.iter().map(|(_, n)| n.as_str()).collect();
+        return Err(format!(
+            "in coda ci sono radiografie di {} animali diversi ({}): fai un PDF per ogni animale, con in coda solo le sue",
+            pazienti.len(),
+            nomi.join(", ")
+        ));
     }
     if tutte.is_empty() {
         return Err("nessuna radiografia nei file".into());
@@ -418,7 +446,7 @@ pub fn pdf(
         pagine.push((b, pg.width(), pg.height()));
         avanzamento(0.5 + (k + 1) as f32 / n as f32 * 0.5);
     }
-    Ok((crate::pdf::pdf_from_jpegs(&pagine), n, animale))
+    Ok((crate::pdf::pdf_from_jpegs(&pagine), n, animale, saltati))
 }
 
 #[cfg(test)]
@@ -469,6 +497,42 @@ mod prove {
 }
 
 #[cfg(test)]
+mod prove_pazienti {
+    use crate::dicom::prove::ct;
+    use crate::dicom::{tag, DicomFile, Element, Syntax, Value};
+
+    fn dcm(dir: &std::path::Path, file: &str, nome: &str, id: &str, immagine: bool) -> std::path::PathBuf {
+        let mut f = DicomFile::read(&ct(4, 4, &[0; 16], Syntax::ExplicitLE)).unwrap();
+        f.body.retain(|e| e.tag != tag(0x0010, 0x0020) && e.tag != tag(0x0010, 0x0010));
+        f.body.push(Element { tag: tag(0x0010, 0x0010), vr: *b"PN", value: Value::Bytes(format!("{nome}^Rossi").into_bytes()) });
+        f.body.push(Element { tag: tag(0x0010, 0x0020), vr: *b"LO", value: Value::Bytes(id.as_bytes().to_vec()) });
+        if !immagine {
+            f.body.retain(|e| e.tag != crate::dicom::PIXEL_DATA);
+        }
+        f.body.sort_by_key(|e| e.tag);
+        let p = dir.join(file);
+        std::fs::write(&p, f.write()).unwrap();
+        p
+    }
+
+    #[test]
+    fn animali_diversi_non_finiscono_nello_stesso_pdf_e_i_dicom_senza_immagini_si_saltano() {
+        let dir = std::env::temp_dir().join(format!("cedro-rx-pazienti-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let fido = dcm(&dir, "a.dcm", "Fido", "A1", true);
+        let fido2 = dcm(&dir, "b.dcm", "Fido", "A1", true);
+        let piano = dcm(&dir, "piano.dcm", "Fido", "A1", false);
+        let rex = dcm(&dir, "c.dcm", "Rex", "B2", true);
+        let e = super::pdf(&[fido.clone(), rex], "", None, &|_| {}).unwrap_err();
+        assert!(e.contains("2 animali diversi") && e.contains("Fido") && e.contains("Rex"), "{e}");
+        let (_, n, animale, saltati) = super::pdf(&[fido, piano, fido2], "", None, &|_| {}).unwrap();
+        assert_eq!((n, animale.as_str(), saltati.len()), (2, "Fido", 1));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
 mod prove_vere {
     /// Con CEDRO_RX=a.dcm,b.dcm,logo.png: il PDF e la prima pagina in PNG accanto al primo file.
     #[test]
@@ -485,7 +549,7 @@ mod prove_vere {
             .cloned()
             .collect();
         let logo = super::logo(&paths, &dicom[0].with_extension("logo.png"));
-        let (bytes, n, animale) = super::pdf(
+        let (bytes, n, animale, _) = super::pdf(
             &dicom,
             "Clinica Veterinaria Estense",
             logo.as_ref(),
@@ -493,7 +557,7 @@ mod prove_vere {
         )
         .unwrap();
         std::fs::write(dicom[0].with_extension("rx.pdf"), bytes).unwrap();
-        let (s, v) = super::lastre(&dicom[0]).unwrap();
+        let (s, _, v) = super::lastre(&dicom[0]).unwrap().unwrap();
         super::pagina(
             &v[0],
             &s,
