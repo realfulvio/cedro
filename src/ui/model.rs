@@ -52,6 +52,40 @@ impl Activity {
     }
 }
 
+/// Le pagine di Cedro 4 Labs: «Inizio», le sei del laboratorio e le due del Cedro di sempre.
+/// Ognuna è un modo di arrivare a un'attività, a un tipo di file e a una voce che il motore ha già.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum Lab {
+    Home,
+    Immagini,
+    Anonimizza,
+    Figura,
+    Dati,
+    Referti,
+    Trascrivi,
+    Converti,
+    Pdf,
+}
+
+impl Lab {
+    pub const LAB: [Lab; 6] = [Lab::Immagini, Lab::Anonimizza, Lab::Figura, Lab::Dati, Lab::Referti, Lab::Trascrivi];
+    pub const STANDARD: [Lab; 2] = [Lab::Converti, Lab::Pdf];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Lab::Home => "Inizio",
+            Lab::Immagini => "Salva immagini e vetrini",
+            Lab::Anonimizza => "Togli i nomi",
+            Lab::Figura => "Prepara una figura",
+            Lab::Dati => "Converti dati e piastre",
+            Lab::Referti => "Firma e manda referti",
+            Lab::Trascrivi => "Trascrivi e riassumi",
+            Lab::Converti => "Converti file",
+            Lab::Pdf => "Lavora sui PDF",
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum FileState {
     Waiting,
@@ -394,6 +428,8 @@ pub struct Notice {
 
 pub struct App {
     pub activity: Activity,
+    /// Cedro 4 Labs: la pagina scelta nella barra di sinistra.
+    pub lab: Lab,
     pub files: Vec<FileItem>,
     pub category: usize,
     /// Il formato o lo strumento scelto (id del motore).
@@ -488,6 +524,7 @@ impl App {
         values.set_text(&conversioni::RX_CLINIC, &st.nome_clinica);
         let mut app = App {
             activity: Activity::Convert,
+            lab: Lab::Home,
             files: Vec::new(),
             category: 0,
             action: String::new(),
@@ -533,6 +570,105 @@ impl App {
 
     pub fn kind(&self) -> Kind {
         CATEGORIES[self.category].kind
+    }
+
+    /// Cedro 4 Labs: apre una pagina, cioè sceglie l'attività, il tipo di file e la voce che le servono.
+    /// I file in coda restano; se ce n'è uno del tipo giusto la pagina parte da quello.
+    pub fn set_lab(&mut self, lab: Lab, simple: bool) {
+        let has = |app: &App, k: Kind| app.files.iter().any(|f| !f.voice_only && f.kind == k);
+        let cat = |app: &mut App, k: Kind| {
+            if let Some(i) = CATEGORIES.iter().position(|c| c.kind == k) {
+                app.set_category(i, simple);
+            }
+        };
+        match lab {
+            // «Inizio» è la porta dei file da convertire: firma e trascrizione hanno la loro pagina.
+            Lab::Home => self.activity = Activity::Convert,
+            Lab::Referti => {
+                self.activity = Activity::Firma;
+                if !self.firma.sign.scanned_once {
+                    let wake = self.wake.clone();
+                    self.firma.sign.scan(wake);
+                }
+            }
+            Lab::Trascrivi => self.activity = Activity::Transcribe,
+            Lab::Immagini | Lab::Figura => {
+                self.activity = Activity::Convert;
+                cat(self, Kind::Image);
+                if lab == Lab::Figura {
+                    self.set_action("figure");
+                } else if matches!(self.action.as_str(), "figure" | "strip") || (simple && self.action == self.default_action(true)) {
+                    // In «Semplice» la pagina offre JPEG, TIFF, PNG e PDF: il WebP consigliato da
+                    // «Converti file» qui non c'è, e la scheda direbbe che è una voce scelta in «Completa».
+                    self.action = if simple { "jpeg".to_string() } else { self.default_action(false) };
+                }
+            }
+            Lab::Anonimizza => {
+                self.activity = Activity::Convert;
+                // Il tipo resta quello di adesso se si può anonimizzare; se no il primo che c'è in coda.
+                let ok = [Kind::Image, Kind::Pdf, Kind::Doc];
+                if !ok.contains(&self.kind()) || !has(self, self.kind()) {
+                    let k = ok.into_iter().find(|k| has(self, *k)).unwrap_or(Kind::Image);
+                    cat(self, k);
+                }
+                self.set_action("strip");
+            }
+            Lab::Dati => {
+                self.activity = Activity::Convert;
+                cat(self, Kind::Text);
+                if !matches!(self.action.as_str(), "xlsx" | "csv") {
+                    self.set_action("xlsx");
+                }
+            }
+            Lab::Pdf => {
+                self.activity = Activity::Convert;
+                cat(self, Kind::Pdf);
+                if self.action == "strip" {
+                    self.action = self.default_action(simple);
+                }
+            }
+            Lab::Converti => {
+                self.activity = Activity::Convert;
+                // Arrivando da «Converti dati» senza tabelle in coda la pagina resterebbe vuota: si passa
+                // al primo tipo di file che c'è davvero.
+                if !has(self, self.kind()) {
+                    if let Some(k) = self.files.iter().find(|f| !f.voice_only && CATEGORIES.iter().any(|c| c.kind == f.kind)).map(|f| f.kind) {
+                        cat(self, k);
+                    }
+                }
+                if matches!((self.kind(), self.action.as_str()), (Kind::Image, "figure") | (_, "strip")) {
+                    self.action = self.default_action(simple);
+                }
+            }
+        }
+        self.lab = lab;
+        if self.activity != Activity::Firma && self.selected.is_none_or(|s| !self.visible().contains(&s)) {
+            self.selected = self.visible().first().copied();
+            self.preview_page = 0;
+        }
+    }
+
+    /// Cedro 4 Labs: tiene la pagina d'accordo con quello che si sta facendo davvero. Se dal menu dei
+    /// formati si sceglie «Figura», o si lascia un PDF sulla pagina delle immagini, la barra lo segue.
+    pub fn lab_sync(&mut self) {
+        if self.lab == Lab::Home && self.activity == Activity::Convert {
+            return;
+        }
+        self.lab = match self.activity {
+            Activity::Firma => Lab::Referti,
+            Activity::Transcribe => Lab::Trascrivi,
+            Activity::YouTube | Activity::Web => self.lab,
+            Activity::Convert => match (self.kind(), self.action.as_str(), self.lab) {
+                (Kind::Image | Kind::Pdf | Kind::Doc, "strip", _) => Lab::Anonimizza,
+                (Kind::Image, "figure", _) => Lab::Figura,
+                (Kind::Image, _, Lab::Converti) => Lab::Converti,
+                (Kind::Image, _, _) => Lab::Immagini,
+                (Kind::Text, "xlsx" | "csv", Lab::Dati) => Lab::Dati,
+                (Kind::Pdf, _, Lab::Converti) => Lab::Converti,
+                (Kind::Pdf, _, _) => Lab::Pdf,
+                _ => Lab::Converti,
+            },
+        };
     }
 
     pub fn busy(&self) -> bool {
@@ -588,8 +724,14 @@ impl App {
 
     pub fn set_category(&mut self, index: usize, simple: bool) {
         if index < CATEGORIES.len() && index != self.category {
+            // Cedro 4 Labs: su «Togli i nomi» i file di un altro tipo (dal chip «In coda anche» o appena
+            // aggiunti) si anonimizzano anche loro, se quel tipo lo permette, invece di cambiare pagina.
+            let strip = self.lab == Lab::Anonimizza && self.action == "strip";
             self.category = index;
             self.action = self.default_action(simple);
+            if strip && (conversioni::formats(self.kind()).iter().any(|s| s.id == "strip") || self.tools().iter().any(|s| s.id == "strip")) {
+                self.action = "strip".to_string();
+            }
             self.selected = self.visible().first().copied();
             self.preview_page = 0;
         }
@@ -1970,6 +2112,50 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::time_left;
+
+    #[test]
+    fn labs_pages_follow_what_is_being_done() {
+        use super::*;
+        let mut app = App::new(Arc::new(|| {}));
+        assert_eq!(app.lab, Lab::Home);
+        // A «Inizio» si resta finché non si sceglie una pagina.
+        app.lab_sync();
+        assert_eq!(app.lab, Lab::Home);
+        app.set_lab(Lab::Figura, false);
+        assert_eq!((app.activity, app.kind(), app.action.as_str()), (Activity::Convert, Kind::Image, "figure"));
+        // Dal menu dei formati si passa a un formato qualunque: la barra torna su «Salva immagini e vetrini».
+        app.set_action("png");
+        app.lab_sync();
+        assert_eq!(app.lab, Lab::Immagini);
+        app.set_lab(Lab::Anonimizza, false);
+        assert_eq!(app.action, "strip");
+        app.set_lab(Lab::Immagini, false);
+        assert_ne!(app.action, "strip");
+        app.set_lab(Lab::Dati, true);
+        assert_eq!((app.kind(), app.action.as_str()), (Kind::Text, "xlsx"));
+        app.set_lab(Lab::Pdf, false);
+        assert_eq!(app.kind(), Kind::Pdf);
+        app.set_lab(Lab::Trascrivi, false);
+        app.lab_sync();
+        assert_eq!((app.activity, app.lab), (Activity::Transcribe, Lab::Trascrivi));
+        for lab in Lab::LAB.into_iter().chain(Lab::STANDARD) {
+            assert!(!lab.name().is_empty());
+        }
+        // In «Semplice» le immagini partono da JPEG (una delle voci della pagina), non dal WebP di «Converti file».
+        app.set_lab(Lab::Immagini, true);
+        app.action = app.default_action(true);
+        app.set_lab(Lab::Immagini, true);
+        assert_eq!(app.action, "jpeg");
+        app.set_lab(Lab::Anonimizza, true);
+        app.set_lab(Lab::Immagini, true);
+        assert_eq!(app.action, "jpeg");
+        // Su «Togli i nomi» il passaggio ai PDF in coda resta su «Togli i nomi».
+        app.set_lab(Lab::Anonimizza, false);
+        let pdf = CATEGORIES.iter().position(|c| c.kind == Kind::Pdf).unwrap();
+        app.set_category(pdf, false);
+        app.lab_sync();
+        assert_eq!((app.kind(), app.action.as_str(), app.lab), (Kind::Pdf, "strip", Lab::Anonimizza));
+    }
 
     #[test]
     fn time_left_is_in_words() {

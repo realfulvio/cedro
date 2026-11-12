@@ -11,6 +11,7 @@ mod essenziale;
 mod firma;
 mod firmare;
 mod guidato;
+mod labs;
 mod pagine;
 mod revisione;
 mod riassunto;
@@ -62,7 +63,8 @@ pub fn draw(f: &mut Frame, app: &App, surface: Surface) {
         return;
     }
     match f.theme {
-        ThemeId::WindowsEssenziale | ThemeId::Bondeno | ThemeId::CedroLabs => essenziale::draw(f, app),
+        ThemeId::WindowsEssenziale | ThemeId::Bondeno => essenziale::draw(f, app),
+        ThemeId::CedroLabs => labs::draw(f, app),
         ThemeId::PercorsoGuidato => guidato::draw(f, app),
         ThemeId::CedroCompatto => compatto::draw_full(f, app),
         ThemeId::BancoDiLavoro => banco::draw(f, app),

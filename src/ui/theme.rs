@@ -219,22 +219,48 @@ pub const BONDENO: Palette = Palette {
     nav_sel: hex(0xD9E9F4),
 };
 
-/// Cedro 4 Labs, «Bancone»: bianchi con una punta di verde acqua da laboratorio e un verde petrolio
-/// pieno, con contrasto alto per il bancone illuminato (testo su sfondo oltre 14:1).
+/// Cedro 4 Labs: i colori del pannello chiaro (comandi, Impostazioni, Guida). La cornice scura
+/// con il file sul suo alone la disegna `views::labs` con i colori qui sotto.
 pub const LABS: Palette = Palette {
-    bg: hex(0xE6F2EF),
+    bg: hex(0xF5F2F9),
     surface: hex(0xFFFFFF),
-    alt: hex(0xD5EAE5),
-    text: hex(0x0E2421),
-    muted: hex(0x465F5B),
-    primary: hex(0x00796B),
+    alt: hex(0xF3EFF8),
+    text: hex(0x30213E),
+    muted: hex(0x6A5E79),
+    primary: hex(0x793FCB),
     on_primary: hex(0xFFFFFF),
-    border: hex(0xB4D3CC),
-    ok: hex(0x2E7D32),
+    border: hex(0xE2DCEA),
+    ok: hex(0x14845B),
     bad: hex(0xB3261E),
-    work: hex(0xF5FBFA),
-    nav_sel: hex(0xC8E6DF),
+    work: hex(0xFAF8FC),
+    nav_sel: hex(0xE9E0F7),
 };
+
+/// La cornice di Cedro 4 Labs: melanzana scuro, scritte chiare, il verde e il viola del marchio schiariti.
+pub const LABS_FRAME: Rgb = hex(0x1B1325);
+pub const LABS_FRAME_HI: Rgb = hex(0x281D36);
+pub const LABS_INK: Rgb = hex(0xF4EFFA);
+pub const LABS_MUTED: Rgb = hex(0xB9ADCA);
+pub const LABS_LINE: Rgb = hex(0x3A2E4C);
+pub const LABS_LEAF: Rgb = hex(0x45D39A);
+pub const LABS_STAGE: Rgb = hex(0x09070C);
+
+/// I due colori di una pagina di Cedro 4 Labs: quello pieno (pulsante, scelta attiva) e quello
+/// acceso che fa la sfumatura dell'icona e il bagliore sulla cornice scura.
+pub fn lab_colors(lab: super::model::Lab) -> (Rgb, Rgb) {
+    use super::model::Lab;
+    match lab {
+        Lab::Home => (hex(0x793FCB), hex(0xB08CF5)),
+        Lab::Immagini => (hex(0x0072B2), hex(0x3FA9F5)),
+        Lab::Anonimizza => (hex(0xC24F00), hex(0xFF8A3D)),
+        Lab::Figura => (hex(0x008564), hex(0x2FCB9A)),
+        Lab::Dati => (hex(0xA66D00), hex(0xF2B631)),
+        Lab::Referti => (hex(0xB4447F), hex(0xF06BB0)),
+        Lab::Trascrivi => (hex(0x7B4FC9), hex(0xA982EE)),
+        Lab::Converti => (hex(0x0E7C86), hex(0x35C6D2)),
+        Lab::Pdf => (hex(0xC8323C), hex(0xFF6B78)),
+    }
+}
 
 /// L'etichetta «4 LABS» accanto al logo: il magenta dei laboratori, un colore che nessun altro tema usa.
 pub const LABS_BADGE: Rgb = hex(0x9C2F73);

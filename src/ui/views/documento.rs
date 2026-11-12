@@ -117,7 +117,7 @@ fn file_list(f: &mut Frame, app: &App, r: R) {
     super::others_link(f, app, r.0 + 18.0, r.1 + r.3 - 28.0, 22.0, 13.0);
 }
 
-fn nav_button(f: &mut Frame, x: f32, y: f32, left: bool, act: Act, enabled: bool) {
+pub(super) fn nav_button(f: &mut Frame, x: f32, y: f32, left: bool, act: Act, enabled: bool) {
     let pal = f.pal;
     if enabled && f.hovered(&act) {
         f.p.circle(x + 15.0, y + 15.0, 17.0, Some(pal.alt), None);
@@ -234,7 +234,7 @@ fn media_controls(f: &mut Frame, r: R, playing: bool, pos: f64, duration: f64, l
 }
 
 /// La scheda di un file audio, video o d'altro tipo, al centro dell'anteprima.
-fn media_card(f: &mut Frame, app: &App, i: usize, area: R) {
+pub(super) fn media_card(f: &mut Frame, app: &App, i: usize, area: R) {
     use crate::engine::Kind;
     let pal = f.pal;
     let file = &app.files[i];
