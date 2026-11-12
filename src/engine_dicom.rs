@@ -47,7 +47,8 @@ fn window_of(opts: &Options) -> (pixel::Window, &'static str) {
 fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> CedroResult<Output> {
     let mut f = DicomFile::open(path).map_err(err)?;
     let key = anon::local_key();
-    let base = base_name(&f, path, &key, opts.dicom_anon);
+    // «Togli dati nascosti» fa sempre un file anonimo: il nome del file non deve dire il paziente.
+    let base = base_name(&f, path, &key, opts.dicom_anon || action == "strip");
 
     // «Togli dati nascosti» su un DICOM: resta un DICOM, anonimizzato.
     if action == "strip" {
@@ -67,9 +68,9 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
     let quality = if action == "compress" { quality.min(crate::settings::read_settings().compress_quality()) } else { quality };
 
     // Un fotogramma pronto da salvare: finestra (o 16 bit), misure e ritocchi della voce.
-    let picture = |i: usize| -> Result<(DynamicImage, i64), String> {
+    let picture = |i: usize| -> Result<(DynamicImage, i64, bool), String> {
         let fr = pixel::frame(&f, &info, i)?;
-        let (mut img, offset) = if sixteen { pixel::render16(&info, &fr) } else { (pixel::render(&info, &fr, window), 0) };
+        let (mut img, offset, clipped) = if sixteen { pixel::render16(&info, &fr) } else { (pixel::render(&info, &fr, window), 0, false) };
         if let Some(side) = opts.max_side.filter(|s| *s > 0 && img.width().max(img.height()) > *s) {
             img = img.resize(side, side, image::imageops::FilterType::Lanczos3);
         }
@@ -79,7 +80,7 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
             "rot90" => img.rotate90(),
             _ => img,
         };
-        Ok((img, offset))
+        Ok((img, offset, clipped))
     };
 
     let mut notes: Vec<String> = Vec::new();
@@ -88,11 +89,14 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
     } else if !window_name.is_empty() {
         notes.push("finestra del file (polmone, osso e tessuti molli valgono per la TC)".into());
     }
+    if info.frames < info.declared_frames {
+        notes.push(format!("il file dice {} immagini ma ne contiene {}: è incompleto", info.declared_frames, info.frames));
+    }
 
     if action == "pdf" {
         let out = reserve(dir, &stem_out, "pdf")?;
         let pages = in_parallel(&frames, |i| {
-            let (img, _) = picture(i)?;
+            let (img, _, _) = picture(i)?;
             jpeg_bytes(&img, 90, opts.white_background).map_err(|e| e.to_string())
         })
         .map_err(err)?;
@@ -115,13 +119,13 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
     }
     let written = in_parallel(&outs.iter().map(|(i, _)| *i).collect::<Vec<_>>(), |i| {
         let out = &outs.iter().find(|(k, _)| *k == i).ok_or("immagine non trovata")?.1;
-        let (img, offset) = picture(i)?;
+        let (img, offset, clipped) = picture(i)?;
         match action {
             "avif" => std::fs::write(out, crate::imgfmt::avif_bytes(&img, quality)?).map_err(|e| e.to_string())?,
             "jxl" => std::fs::write(out, crate::imgfmt::jxl_bytes(&img)?).map_err(|e| e.to_string())?,
             _ => save_image(&img, out, format, quality, opts.white_background).map_err(|e| e.to_string())?,
         }
-        Ok((img.width(), img.height(), offset))
+        Ok((img.width(), img.height(), offset, clipped))
     });
     let sizes = match written {
         Ok(s) => s,
@@ -132,11 +136,24 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
             return Err(err(e));
         }
     };
-    let (w, h, offset) = sizes[0];
+    let (w, h, offset, _) = sizes[0];
     let up = ext.to_uppercase();
     let mut message = if outs.len() == 1 { format!("{up} {w}×{h}") } else { format!("{} {up}, uno per immagine ({w}×{h})", outs.len()) };
     if sixteen {
-        notes.push(if offset != 0 { format!("valori originali a 16 bit, spostati di {offset} (gli Hounsfield negativi)") } else { "valori originali a 16 bit".into() });
+        notes.push(match offset {
+            0 => "valori originali a 16 bit".into(),
+            32768 => format!("valori originali a 16 bit, spostati di {offset} (gli Hounsfield negativi)"),
+            _ => format!("valori originali a 16 bit, spostati di {offset} perché stiano nei 16 bit"),
+        });
+        if sizes.iter().any(|s| s.2 != offset) {
+            notes.push("lo spostamento non è lo stesso in tutte le immagini".into());
+        }
+        if sizes.iter().any(|s| s.3) {
+            notes.push("alcuni valori non stavano nei 16 bit e sono stati tagliati".into());
+        }
+        if info.photometric == "MONOCHROME1" {
+            notes.push("MONOCHROME1: i valori sono quelli del file, quindi il bianco e il nero appaiono scambiati".into());
+        }
     }
     finish_message(&mut message, &notes, &f, opts);
     Ok(Output { path: outs[0].1.clone(), message })
@@ -296,6 +313,33 @@ mod prove {
         let f = DicomFile::read(&bytes).unwrap();
         assert_eq!(crate::dicom::pixel::Info::of(&f).unwrap().frames, 3);
         assert!(out.message.contains("proprietario"), "{}", out.message);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn togli_dati_nascosti_non_mette_il_nome_nel_file_anche_senza_anonimizza() {
+        let dir = scratch();
+        let src = series(&dir);
+        let mut o = opts();
+        o.dicom_anon = false;
+        let out = perform_with(&src, "strip", 90, Some(&dir), &o).unwrap();
+        let name = out.path.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.starts_with("CED-") && !name.contains("Rossi"), "{name}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn una_serie_incompleta_si_converte_e_lo_si_dice() {
+        // Il file dice 5 immagini ma ne contiene 3: prima la serie falliva tutta alla quarta.
+        let dir = scratch();
+        let src = series(&dir);
+        let mut f = DicomFile::open(&src).unwrap();
+        f.body.retain(|e| e.tag != tag(0x0028, 0x0008));
+        f.body.push(Element { tag: tag(0x0028, 0x0008), vr: *b"IS", value: Value::Bytes(b"5 ".to_vec()) });
+        f.body.sort_by_key(|e| e.tag);
+        std::fs::write(&src, f.write()).unwrap();
+        let out = perform_with(&src, "png", 90, Some(&dir), &opts()).unwrap();
+        assert!(out.message.contains("3 PNG") && out.message.contains("incompleto"), "{}", out.message);
         std::fs::remove_dir_all(&dir).ok();
     }
 }

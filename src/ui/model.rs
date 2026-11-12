@@ -640,7 +640,8 @@ impl App {
                 self.activity = Activity::Convert;
                 cat(self, Kind::Text);
                 // Con soli Excel in coda «Porta in Excel» fallirebbe: si parte dal CSV.
-                let solo_fogli = self.files.iter().filter(|f| !f.voice_only && f.kind == Kind::Text).all(|f| foglio_di_calcolo(&f.path));
+                let mut tabelle = self.files.iter().filter(|f| !f.voice_only && f.kind == Kind::Text).peekable();
+                let solo_fogli = tabelle.peek().is_some() && tabelle.all(|f| foglio_di_calcolo(&f.path));
                 if solo_fogli && self.action != "csv" {
                     self.set_action("csv");
                 } else if !matches!(self.action.as_str(), "xlsx" | "csv") {

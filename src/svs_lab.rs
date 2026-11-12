@@ -103,10 +103,15 @@ fn pagine(f: &mut File) -> Result<(Tiff, Vec<Pagina>), String> {
     let t = Tiff { le, big };
     let mut pos = if big { t.u64(&h[8..16]) } else { t.u32(&h[4..8]) as u64 };
     let (dim_n, dim_voce, dim_off) = if big { (8usize, 20u64, 8usize) } else { (2usize, 12u64, 4usize) };
+    let lunghezza = f.metadata().map_err(|e| e.to_string())?.len();
     let mut out = Vec::new();
     while pos != 0 && out.len() < 10_000 {
         let nb = leggi_a(f, pos, dim_n)?;
         let n = if big { t.u64(&nb) } else { t.u16(&nb) as u64 };
+        // Il numero di voci viene dal file: deve starci, prima di prendere la memoria.
+        if n.checked_mul(dim_voce).is_none_or(|b| b > lunghezza) {
+            return Err("TIFF rovinato: pagina con troppe voci".into());
+        }
         let corpo = leggi_a(f, pos + dim_n as u64, (n * dim_voce) as usize + dim_off)?;
         let mut voci = Vec::new();
         for i in 0..n as usize {
@@ -128,6 +133,9 @@ fn pagine(f: &mut File) -> Result<(Tiff, Vec<Pagina>), String> {
 
 fn interi(f: &mut File, t: &Tiff, v: &Voce) -> Result<Vec<u64>, String> {
     let m = misura_tipo(v.tipo);
+    if m.checked_mul(v.n).is_none_or(|b| b > f.metadata().map(|x| x.len()).unwrap_or(0)) {
+        return Err("TIFF rovinato: elenco più grande del file".into());
+    }
     let b = leggi_a(f, v.pos_valore, (m * v.n) as usize)?;
     Ok((0..v.n as usize)
         .map(|i| {
@@ -143,15 +151,36 @@ fn interi(f: &mut File, t: &Tiff, v: &Voce) -> Result<Vec<u64>, String> {
 
 /// La descrizione con i valori delle voci personali sostituiti da spazi (stessa lunghezza, così il
 /// file non si sposta di un byte).
+#[cfg(test)]
 fn pulisci_descrizione(desc: &str) -> String {
-    desc.split('|')
-        .map(|parte| match parte.split_once('=') {
-            Some((k, v)) if VOCI_PERSONALI.iter().any(|p| k.trim().eq_ignore_ascii_case(p)) => format!("{k}={}", " ".repeat(v.len())),
-            _ => parte.to_string(),
-        })
-        .collect::<Vec<_>>()
-        .join("|")
+    String::from_utf8_lossy(&pulisci_byte(desc.as_bytes())).into_owned()
 }
+
+/// Come `pulisci_descrizione`, sui byte: una descrizione con lettere non UTF-8 (Latin-1) si pulisce
+/// lo stesso, senza cambiare lunghezza.
+fn pulisci_byte(desc: &[u8]) -> Vec<u8> {
+    let mut out = desc.to_vec();
+    let mut inizio = 0;
+    for parte in desc.split(|b| *b == b'|') {
+        if let Some(uguale) = parte.iter().position(|b| *b == b'=') {
+            let chiave = String::from_utf8_lossy(&parte[..uguale]);
+            if VOCI_PERSONALI.iter().any(|p| chiave.trim().eq_ignore_ascii_case(p)) {
+                for b in &mut out[inizio + uguale + 1..inizio + parte.len()] {
+                    // Lo zero finale del testo TIFF resta.
+                    if *b != 0 {
+                        *b = b' ';
+                    }
+                }
+            }
+        }
+        inizio += parte.len() + 1;
+    }
+    out
+}
+
+/// Le voci TIFF di testo che possono dire chi ha scansionato o di chi è il vetrino: DocumentName,
+/// PageName, Artist, HostComputer e l'XMP. Diventano spazi.
+const TAG_PERSONALI: &[u16] = &[269, 285, 315, 316, 700];
 
 /// Rende anonimo, sul posto, il vetrino `path` (una copia: l'originale non si tocca mai): toglie
 /// l'etichetta e la foto del vetrino intero (spesso con nome e codice del caso) azzerandone i pixel,
@@ -163,10 +192,11 @@ pub fn anonimizza_sul_posto(path: &Path) -> Result<Vec<&'static str>, String> {
     let mut via = Vec::new();
     for (i, p) in pag.iter().enumerate() {
         let desc_voce = p.voci.iter().find(|v| v.tag == 270);
-        let desc = match desc_voce {
-            Some(v) => String::from_utf8_lossy(&leggi_a(&mut f, v.pos_valore, v.n as usize)?).into_owned(),
-            None => String::new(),
+        let desc_byte = match desc_voce {
+            Some(v) if v.n <= 1 << 24 => leggi_a(&mut f, v.pos_valore, v.n as usize)?,
+            _ => Vec::new(),
         };
+        let desc = String::from_utf8_lossy(&desc_byte).into_owned();
         let tessere = p.voci.iter().any(|v| v.tag == 322);
         let etichetta = !tessere && i > 0 && desc.contains("label");
         let macro_ = !tessere && i > 0 && desc.contains("macro");
@@ -192,11 +222,21 @@ pub fn anonimizza_sul_posto(path: &Path) -> Result<Vec<&'static str>, String> {
             continue;
         }
         if let Some(v) = desc_voce {
-            let pulita = pulisci_descrizione(&desc);
-            if pulita != desc && pulita.len() == desc.len() && desc.len() == v.n as usize {
-                scrivi_a(&mut f, v.pos_valore, pulita.as_bytes())?;
+            let pulita = pulisci_byte(&desc_byte);
+            if pulita != desc_byte && desc_byte.len() == v.n as usize {
+                scrivi_a(&mut f, v.pos_valore, &pulita)?;
                 if !tolti.contains(&"nome, data e utente dalle descrizioni") {
                     tolti.push("nome, data e utente dalle descrizioni");
+                }
+            }
+        }
+        for v in p.voci.iter().filter(|v| TAG_PERSONALI.contains(&v.tag) && matches!(v.tipo, 1 | 2 | 7) && v.n > 0 && v.n <= 1 << 24) {
+            let vecchio = leggi_a(&mut f, v.pos_valore, v.n as usize)?;
+            let nuovo: Vec<u8> = vecchio.iter().map(|b| if *b == 0 { 0 } else { b' ' }).collect();
+            if nuovo != vecchio {
+                scrivi_a(&mut f, v.pos_valore, &nuovo)?;
+                if !tolti.contains(&"autore, computer e XMP") {
+                    tolti.push("autore, computer e XMP");
                 }
             }
         }
@@ -278,6 +318,11 @@ fn livello_per(s: &Slide, um_voluti: Option<f64>) -> (usize, f64) {
     scelto
 }
 
+/// Un numero per i messaggi: 0,499; 20.
+fn super_num(v: f64) -> String {
+    format!("{v:.3}").trim_end_matches('0').trim_end_matches('.').replace('.', ",")
+}
+
 /// Fatto delle tessere.
 pub struct TessereFatte {
     pub scritte: usize,
@@ -294,10 +339,24 @@ pub fn tessere(path: &Path, dir: &Path, base: &str, o: &Tessere, avanzamento: &d
         return Err("il vetrino non dice quanto è grande un pixel: scegli «Come scansionato»".into());
     }
     let (livello, scala) = livello_per(&s, voluti);
+    // Più ingrandimento di quello della scansione vorrebbe dire pixel inventati (interpolati), con
+    // un'etichetta di micron falsa: per un dataset di AI è un errore.
+    if let (Some(v), Some(mpp)) = (voluti, s.mpp) {
+        if scala < 0.98 {
+            let scansione = s.magnification.map(|m| format!("{}x, ", super_num(m as f64))).unwrap_or_default();
+            return Err(format!(
+                "il vetrino è scansionato a {scansione}{} µm per pixel: le tessere a {}x ({} µm per pixel) avrebbero pixel inventati. Scegli un ingrandimento più basso o «Come scansionato»",
+                super_num(mpp as f64),
+                o.ingrandimento,
+                super_num(v)
+            ));
+        }
+    }
     let l = s.levels[livello].clone();
     let sorgente = ((o.lato as f64 * scala).round() as u32).max(1);
     let giu = s.full().width as f64 / l.width as f64;
-    let um = s.mpp.map(|m| m as f64 * giu * scala);
+    // I micron veri di un pixel della tessera: quelli del livello per i pixel presi diviso il lato.
+    let um = s.mpp.map(|m| m as f64 * giu * sorgente as f64 / o.lato as f64);
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let mut csv = String::from("file;x;y;lato_px;um_per_px;tessuto\n");
     let (mut scritte, mut scartate) = (0usize, 0usize);
@@ -725,11 +784,35 @@ fn numero(img: &mut RgbImage, opz: &usvg::Options, testo: &str, x: u32, y: u32, 
 // ---------------------------------------------------------------------------------------------
 // Pacchetto consulto
 
-/// Il codice del caso: lo stesso per lo stesso file, senza dire niente del nome.
+/// Il codice del caso: lo stesso per lo stesso vetrino anche se spostato o rinominato, senza dire
+/// niente del nome. Viene dal contenuto (grandezza, primi e ultimi 4 MB: leggere tutto un vetrino
+/// di gigabyte sarebbe lento), 64 bit: due vetrini diversi non si confondono.
 pub fn codice_caso(path: &Path) -> String {
     use sha2::{Digest, Sha256};
-    let h = Sha256::digest(path.to_string_lossy().as_bytes());
-    format!("caso-{:02x}{:02x}{:02x}", h[0], h[1], h[2])
+    let mut h = Sha256::new();
+    let letto = (|| -> std::io::Result<()> {
+        let mut f = File::open(path)?;
+        let n = f.metadata()?.len();
+        h.update(n.to_le_bytes());
+        let pezzo = 4u64 << 20;
+        let mut b = vec![0u8; pezzo.min(n) as usize];
+        f.read_exact(&mut b)?;
+        h.update(&b);
+        if n > pezzo {
+            let da = n.saturating_sub(pezzo).max(pezzo);
+            f.seek(SeekFrom::Start(da))?;
+            let mut b = Vec::new();
+            f.read_to_end(&mut b)?;
+            h.update(&b);
+        }
+        Ok(())
+    })();
+    if letto.is_err() {
+        h = Sha256::new();
+        h.update(path.to_string_lossy().as_bytes());
+    }
+    let d = h.finalize();
+    format!("caso-{}", d[..8].iter().map(|b| format!("{b:02x}")).collect::<String>())
 }
 
 /// Il pacchetto per un consulto: lo ZIP (con le impronte SHA-256) della copia anonima del vetrino,
@@ -864,5 +947,78 @@ mod prove_vere {
         let t0 = std::time::Instant::now();
         let (n, tolti) = consulto(&p, &dir.join("consulto.zip"), &codice_caso(&p), &|_| {}).unwrap();
         eprintln!("consulto: {n} file, tolti {tolti:?} in {:?}", t0.elapsed());
+    }
+}
+
+#[cfg(test)]
+mod prove_revisione {
+    use super::*;
+
+    fn fixture(name: &str) -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/svs").join(name)
+    }
+
+    fn cartella(n: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("cedro-svslab-rev-{n}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn non_si_inventa_ingrandimento() {
+        // Un vetrino a 20x (0,499 µm/pixel) non dà tessere a 40x.
+        let d = cartella("ingrandimento");
+        let o = Tessere { lato: 64, ingrandimento: 40, solo_tessuto: false, jpeg: false };
+        let e = tessere(&fixture("cmu1-pezzo.svs"), &d.join("t"), "x", &o, &|_| {}).err().unwrap();
+        assert!(e.contains("pixel inventati") && e.contains("20x"), "{e}");
+        // A 20x sì, con i micron veri del pixel nel CSV.
+        let o = Tessere { lato: 64, ingrandimento: 20, solo_tessuto: false, jpeg: false };
+        let f = tessere(&fixture("cmu1-pezzo.svs"), &d.join("t2"), "x", &o, &|_| {}).unwrap();
+        assert!(f.um_per_px.is_some_and(|u| (u - 0.499).abs() < 0.001), "{:?}", f.um_per_px);
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn la_descrizione_non_utf8_si_pulisce_lo_stesso() {
+        let mut d = b"Aperio Image Library v10\r\n100x100 JPEG/RGB Q=30|AppMag = 20|User = Jos\xe9|Filename = Mar\xeda Rossi|MPP = 0.5\0".to_vec();
+        let pulita = pulisci_byte(&d);
+        assert_eq!(pulita.len(), d.len());
+        assert!(!pulita.windows(5).any(|w| w == b"Rossi") && !pulita.windows(3).any(|w| w == b"Jos"));
+        assert!(pulita.windows(10).any(|w| w == b"MPP = 0.5\0") && pulita.ends_with(b"\0"));
+        d.clear();
+    }
+
+    #[test]
+    fn autore_e_computer_si_tolgono() {
+        let d = cartella("autore");
+        let p = d.join("a.tif");
+        let mut f = File::create(&p).unwrap();
+        let mut enc = tiff::encoder::TiffEncoder::new(&mut f).unwrap();
+        let mut img = enc.new_image::<tiff::encoder::colortype::RGB8>(4, 4).unwrap();
+        img.encoder().write_tag(tiff::tags::Tag::Artist, "Mario Rossi").unwrap();
+        img.encoder().write_tag(tiff::tags::Tag::HostComputer, "PC-OSPEDALE-12").unwrap();
+        img.write_data(&[9u8; 48]).unwrap();
+        drop(enc);
+        drop(f);
+        let tolti = anonimizza_sul_posto(&p).unwrap();
+        let b = fs::read(&p).unwrap();
+        assert!(!b.windows(5).any(|w| w == b"Rossi") && !b.windows(8).any(|w| w == b"OSPEDALE"), "{tolti:?}");
+        assert!(tolti.contains(&"autore, computer e XMP"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn il_codice_del_caso_viene_dal_contenuto() {
+        let d = cartella("codice");
+        let a = d.join("Rossi Fido.svs");
+        let b = d.join("altro nome.svs");
+        fs::copy(fixture("cmu1-pezzo.svs"), &a).unwrap();
+        fs::copy(fixture("cmu1-pezzo.svs"), &b).unwrap();
+        let c = codice_caso(&a);
+        assert_eq!(c.len(), "caso-".len() + 16, "{c}");
+        assert_eq!(c, codice_caso(&b), "lo stesso vetrino con un altro nome ha lo stesso codice");
+        assert_ne!(c, codice_caso(&fixture("piramide.svs")));
+        let _ = fs::remove_dir_all(&d);
     }
 }

@@ -96,6 +96,12 @@ pub struct Pila {
     /// Le immagini del file (i LIF ne hanno più d'una) e quale è questa.
     pub serie: Vec<String>,
     pub numero_serie: usize,
+    /// Quello che non torna nel file e va detto a chi converte (un OME diviso in più file, una serie
+    /// di un LIF saltata perché rovinata…).
+    pub avviso: Option<String>,
+    /// I TIFF di ImageJ oltre i 4 GB: una pagina sola e i piani uno dopo l'altro, non compressi.
+    /// L'indirizzo del primo piano e se i byte sono little-endian.
+    contigui: Option<(u64, bool)>,
 }
 
 fn aperto(path: &Path) -> Result<Decoder<BufReader<File>>, String> {
@@ -158,6 +164,15 @@ pub fn is_stack(path: &Path) -> bool {
     t.descrizione.contains("<OME") || t.descrizione.starts_with("ImageJ=") || (t.campioni == 1 && t.bit == 16)
 }
 
+/// Il messaggio per le immagini di un LIF lasciate fuori perché rovinate.
+fn avviso_lif(saltate: &[(String, String)]) -> Option<String> {
+    match saltate {
+        [] => None,
+        [(n, e)] => Some(format!("1 immagine del progetto non letta: «{n}» ({e})")),
+        _ => Some(format!("{} immagini del progetto non lette: {}", saltate.len(), saltate.iter().map(|(n, _)| format!("«{n}»")).collect::<Vec<_>>().join(", "))),
+    }
+}
+
 impl Pila {
     pub fn open(path: &Path) -> Result<Pila, String> {
         Pila::open_serie(path, 0)
@@ -168,7 +183,17 @@ impl Pila {
         if crate::lif::riconosci(&crate::imgfmt::head_of(path)) {
             let lif = crate::lif::Lif::open(path)?;
             let nomi: Vec<String> = lif.immagini.iter().map(|i| i.nome.clone()).collect();
-            return Ok(lif.immagini.into_iter().enumerate().map(|(k, i)| Pila::da_lif(i, nomi.clone(), k)).collect());
+            let avviso = avviso_lif(&lif.saltate);
+            return Ok(lif
+                .immagini
+                .into_iter()
+                .enumerate()
+                .map(|(k, i)| {
+                    let mut p = Pila::da_lif(i, nomi.clone(), k);
+                    p.avviso = avviso.clone();
+                    p
+                })
+                .collect());
         }
         Ok(vec![Pila::open(path)?])
     }
@@ -182,8 +207,11 @@ impl Pila {
         if crate::lif::riconosci(&head) {
             let lif = crate::lif::Lif::open(path)?;
             let nomi: Vec<String> = lif.immagini.iter().map(|i| i.nome.clone()).collect();
+            let avviso = avviso_lif(&lif.saltate);
             let i = lif.immagini.into_iter().nth(serie).ok_or("immagine non trovata nel file LIF")?;
-            return Ok(Pila::da_lif(i, nomi, serie));
+            let mut p = Pila::da_lif(i, nomi, serie);
+            p.avviso = avviso;
+            return Ok(p);
         }
         if crate::engine::extension(path) == "nd2" {
             return Err(crate::nd2::VECCHIO.into());
@@ -214,6 +242,8 @@ impl Pila {
             assi_t: Vec::new(),
             serie: Vec::new(),
             numero_serie: 0,
+            avviso: None,
+            contigui: None,
         }
     }
 
@@ -229,6 +259,9 @@ impl Pila {
         p.pagine = n.fotogrammi();
         p.campioni = n.campioni;
         p.obiettivo = n.obiettivo.clone();
+        if n.interrotta {
+            p.avviso = Some("acquisizione interrotta: l'ultimo giro è incompleto e i piani che mancano sono neri".into());
+        }
         let fuori_z: Vec<(Asse, usize)> = n.cicli.iter().filter(|(a, k)| *a != Asse::Z && *k > 1).copied().collect();
         if fuori_z.iter().any(|(a, _)| *a != Asse::Tempo) {
             p.assi_t = fuori_z
@@ -314,13 +347,19 @@ impl Pila {
             assi_t: Vec::new(),
             serie: Vec::new(),
             numero_serie: 0,
+            avviso: None,
+            contigui: None,
         };
         if t.descrizione.contains("<OME") {
             pila.origine = Origine::Ome;
-            pila.leggi_ome(&t.descrizione);
+            let nome = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            pila.leggi_ome(&t.descrizione, &nome);
         } else if t.descrizione.starts_with("ImageJ=") {
             pila.origine = Origine::ImageJ;
             pila.leggi_imagej(&t.descrizione, &mut d);
+            if pagine == 1 {
+                pila.leggi_contigui(path, &t, &mut d);
+            }
         }
         if pila.canali.is_empty() {
             pila.canali = canali_standard(t.campioni.max(1), &[]);
@@ -329,23 +368,33 @@ impl Pila {
             (pila.passo_c, pila.passo_z, pila.passo_t) = (1, 1, pagine.max(1));
         }
         // Le dimensioni dichiarate non devono superare le pagine che ci sono davvero.
-        let ifd_c = pila.canali.len().div_ceil(pila.campioni).max(1);
-        if pila.mappa.is_none() && ifd_c * pila.z * pila.t > pagine {
-            // Un OME diviso in più file, o tagliato: si tiene quello che c'è, come piani Z.
+        let ifd_c = pila.canali.len().div_ceil(pila.campioni.max(1)).max(1);
+        let dichiarate = ifd_c.checked_mul(pila.z).and_then(|v| v.checked_mul(pila.t));
+        if pila.mappa.is_none() && dichiarate.is_none_or(|v| v > pila.pagine) {
+            // Un OME diviso in più file, o tagliato: si tiene quello che c'è, come piani Z, e lo si dice.
+            pila.avviso = pila.avviso.take().or(Some(format!(
+                "il file dichiara {} canali × {} piani Z × {} istanti ma ha {} pagine: letto come {} piani di un canale",
+                pila.canali.len(),
+                pila.z,
+                pila.t,
+                pila.pagine,
+                pila.pagine
+            )));
             pila.canali = canali_standard(pila.campioni.max(1), &[]);
-            pila.z = pagine;
+            pila.z = pila.pagine;
             pila.t = 1;
-            (pila.passo_c, pila.passo_z, pila.passo_t) = (1, 1, pagine);
+            (pila.passo_c, pila.passo_z, pila.passo_t) = (1, 1, pila.pagine);
         }
         Ok(pila)
     }
 
-    fn leggi_ome(&mut self, xml: &str) {
+    fn leggi_ome(&mut self, xml: &str, nome_file: &str) {
         let Ok(doc) = roxmltree::Document::parse_with_options(xml.trim(), roxmltree::ParsingOptions { allow_dtd: true, nodes_limit: u32::MAX, ..Default::default() }) else { return };
         // Il primo Image con i suoi Pixels (i file con più serie: la prima).
         let Some(px) = doc.descendants().find(|n| n.has_tag_name("Pixels")) else { return };
         let num = |a: &str| px.attribute(a).and_then(|v| v.parse::<usize>().ok()).filter(|v| *v > 0);
-        let size_c = num("SizeC").unwrap_or(1);
+        // Un file rovinato può dichiarare miliardi di canali: oltre 4096 non ha senso (e riempirebbe la memoria).
+        let size_c = num("SizeC").unwrap_or(1).min(4096);
         self.z = num("SizeZ").unwrap_or(1);
         self.t = num("SizeT").unwrap_or(1);
         let ordine = px.attribute("DimensionOrder").unwrap_or("XYZCT").to_ascii_uppercase();
@@ -363,18 +412,22 @@ impl Pila {
                 'T' => self.passo_t = passo,
                 _ => {}
             }
-            passo *= dim(c);
+            passo = passo.saturating_mul(dim(c));
         }
+        // Le unità di lunghezza di OME; «pixel» e «reference frame» non sono misure fisiche: niente barra.
         let micron = |v: Option<f64>, unita: Option<&str>| -> Option<f64> {
             let v = v.filter(|v| *v > 0.0 && v.is_finite())?;
-            Some(match unita.unwrap_or("µm") {
+            Some(match unita.unwrap_or("µm").trim() {
+                "µm" | "μm" | "um" => v,
                 "nm" => v / 1000.0,
                 "mm" => v * 1000.0,
                 "cm" => v * 10_000.0,
+                "dm" => v * 100_000.0,
                 "m" => v * 1_000_000.0,
                 "pm" => v / 1_000_000.0,
-                "Å" => v / 10_000.0,
-                _ => v,
+                "Å" | "\u{212B}" => v / 10_000.0,
+                "in" => v * 25_400.0,
+                _ => return None,
             })
         };
         let f = |a: &str| px.attribute(a).and_then(|v| v.parse::<f64>().ok());
@@ -406,42 +459,88 @@ impl Pila {
             .filter(|s| !s.is_empty());
         // TiffData esplicito: (FirstT, FirstZ, FirstC, IFD, PlaneCount).
         let dati: Vec<_> = px.children().filter(|n| n.has_tag_name("TiffData")).collect();
-        let esplicito = dati.iter().any(|n| n.attribute("FirstZ").or_else(|| n.attribute("FirstC")).or_else(|| n.attribute("FirstT")).is_some() || n.attribute("IFD").is_some_and(|v| v != "0"));
-        let esterni = dati.iter().any(|n| n.children().any(|c| c.has_tag_name("UUID") && c.attribute("FileName").is_some()));
-        if esplicito && !esterni {
-            let mut mappa = Vec::new();
-            for n in dati {
-                let g = |a: &str| n.attribute(a).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
-                let (t0, z0, c0, ifd) = (g("FirstT"), g("FirstZ"), g("FirstC"), g("IFD"));
-                let quanti = n.attribute("PlaneCount").and_then(|v| v.parse::<usize>().ok()).unwrap_or(if n.attribute("IFD").is_some() { 1 } else { usize::MAX });
-                // Un blocco di piani consecutivi in ordine DimensionOrder, a partire da (t0, z0, c0).
-                let (mut t, mut z, mut c) = (t0, z0, c0);
-                for k in 0..quanti.min(self.z * self.t * ifd_c) {
-                    mappa.push(((t, z, c), ifd + k));
-                    // Avanza secondo l'ordine: il primo dopo XY è il più veloce.
-                    let mut riporto = true;
-                    for ch in ordine.chars().skip(2).take(3) {
-                        if !riporto {
-                            break;
-                        }
-                        let (v, max) = match ch {
-                            'C' => (&mut c, ifd_c),
-                            'Z' => (&mut z, self.z),
-                            _ => (&mut t, self.t),
-                        };
-                        *v += 1;
-                        if *v >= max {
-                            *v = 0;
-                        } else {
-                            riporto = false;
-                        }
+        // Una voce è di questo file se non nomina un file, o nomina questo (con l'UUID dell'OME o con il
+        // nome). Bio-Formats scrive sempre `<UUID FileName=…>`, anche per un file solo.
+        let uuid_file = doc.root_element().attribute("UUID").map(str::trim);
+        let locale = |n: &roxmltree::Node| match n.children().find(|c| c.has_tag_name("UUID")) {
+            None => true,
+            Some(u) => {
+                let uuid = u.text().map(str::trim);
+                let nome = u.attribute("FileName").map(|f| f.rsplit(['/', '\\']).next().unwrap_or(f));
+                (uuid_file.is_some() && uuid == uuid_file) || nome == Some(nome_file) || (nome.is_none() && uuid_file.is_none())
+            }
+        };
+        let esterni = dati.iter().any(|n| !locale(n));
+        let esplicito = esterni || dati.iter().any(|n| n.attribute("FirstZ").or_else(|| n.attribute("FirstC")).or_else(|| n.attribute("FirstT")).is_some() || n.attribute("IFD").is_some_and(|v| v != "0"));
+        if !esplicito {
+            return;
+        }
+        let tutti = ifd_c.saturating_mul(self.z).saturating_mul(self.t);
+        let mut mappa: Vec<Voce> = Vec::new();
+        for n in dati.iter().filter(|n| locale(n)) {
+            let g = |a: &str| n.attribute(a).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+            let (t0, z0, c0, ifd) = (g("FirstT"), g("FirstZ"), g("FirstC"), g("IFD"));
+            let quanti = n.attribute("PlaneCount").and_then(|v| v.parse::<usize>().ok()).unwrap_or(if n.attribute("IFD").is_some() { 1 } else { usize::MAX });
+            // Un blocco di piani consecutivi in ordine DimensionOrder, a partire da (t0, z0, c0); mai
+            // oltre le pagine che il file ha davvero.
+            let (mut t, mut z, mut c) = (t0, z0, c0);
+            for k in 0..quanti.min(tutti).min(self.pagine) {
+                let Some(pagina) = ifd.checked_add(k).filter(|p| *p < self.pagine) else { break };
+                mappa.push(((t, z, c), pagina));
+                // Avanza secondo l'ordine: il primo dopo XY è il più veloce.
+                let mut riporto = true;
+                for ch in ordine.chars().skip(2).take(3) {
+                    if !riporto {
+                        break;
+                    }
+                    let (v, max) = match ch {
+                        'C' => (&mut c, ifd_c),
+                        'Z' => (&mut z, self.z),
+                        _ => (&mut t, self.t),
+                    };
+                    *v += 1;
+                    if *v >= max {
+                        *v = 0;
+                    } else {
+                        riporto = false;
                     }
                 }
             }
-            if !mappa.is_empty() {
-                self.mappa = Some(mappa);
+        }
+        if mappa.is_empty() {
+            return;
+        }
+        if esterni || mappa.len() < tutti {
+            // Un file di un OME-TIFF diviso in più file (o con meno piani di quelli dichiarati): si
+            // tengono gli istanti, i piani e i canali che ci sono qui, numerati da capo, e lo si dice.
+            let presenti = |f: fn(&Voce) -> usize| {
+                let mut v: Vec<usize> = mappa.iter().map(f).collect();
+                v.sort_unstable();
+                v.dedup();
+                v
+            };
+            let (ts, zs, cs) = (presenti(|v| v.0 .0), presenti(|v| v.0 .1), presenti(|v| v.0 .2));
+            let posto = |v: &[usize], x: usize| v.binary_search(&x).unwrap_or(0);
+            for voce in mappa.iter_mut() {
+                voce.0 = (posto(&ts, voce.0 .0), posto(&zs, voce.0 .1), posto(&cs, voce.0 .2));
+            }
+            self.avviso = Some(format!(
+                "{}: qui {} istanti su {}, {} piani Z su {}, {} canali su {}",
+                if esterni { "un file di un OME-TIFF diviso in più file" } else { "il file ha meno piani di quelli dichiarati" },
+                ts.len(),
+                self.t,
+                zs.len(),
+                self.z,
+                cs.len(),
+                ifd_c
+            ));
+            self.t = ts.len();
+            self.z = zs.len();
+            if self.campioni <= 1 {
+                self.canali = cs.iter().filter_map(|&c| self.canali.get(c).cloned()).collect();
             }
         }
+        self.mappa = Some(mappa);
     }
 
     fn leggi_imagej(&mut self, desc: &str, d: &mut Decoder<BufReader<File>>) {
@@ -483,6 +582,72 @@ impl Pila {
         }
         // I nomi dei canali non ci sono: colori standard, con la LUT se è il caso.
         self.canali = canali_standard(c, &[]);
+    }
+
+    /// ImageJ scrive le pile oltre i 4 GB (il limite del TIFF) con una pagina sola: gli altri piani
+    /// seguono il primo, non compressi. Se è così, le pagine sono le `images` della descrizione.
+    fn leggi_contigui(&mut self, path: &Path, t: &Testa, d: &mut Decoder<BufReader<File>>) {
+        let immagini = t.descrizione.lines().find_map(|l| l.strip_prefix("images=")).and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(1);
+        if immagini <= 1 || self.planare || !matches!(self.bit, 8 | 16 | 32) || d.get_tag_u32(Tag::Compression).unwrap_or(1) != 1 {
+            return;
+        }
+        let (Ok(offsets), Ok(conti)) = (d.get_tag_u64_vec(Tag::StripOffsets), d.get_tag_u64_vec(Tag::StripByteCounts)) else { return };
+        let Some(&inizio) = offsets.first() else { return };
+        let piano = u64::from(t.larghezza) * u64::from(t.altezza) * self.campioni.max(1) as u64 * u64::from(self.bit / 8);
+        // Le strisce del primo piano devono stare una dopo l'altra e fare un piano esatto.
+        let mut fine = inizio;
+        for (o, c) in offsets.iter().zip(&conti) {
+            if *o != fine {
+                return;
+            }
+            fine = fine.saturating_add(*c);
+        }
+        if fine - inizio != piano || piano == 0 {
+            return;
+        }
+        let lunghezza = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+        let ci_stanno = usize::try_from(lunghezza.saturating_sub(inizio) / piano).unwrap_or(usize::MAX);
+        let n = immagini.min(ci_stanno);
+        if n <= 1 {
+            return;
+        }
+        if n < immagini {
+            self.avviso = Some(format!("il file è tagliato: {n} piani su {immagini}"));
+        }
+        self.pagine = n;
+        self.contigui = Some((inizio, crate::imgfmt::head_of(path).starts_with(b"II")));
+    }
+
+    /// Un piano dei TIFF di ImageJ oltre i 4 GB (vedi `leggi_contigui`): letto direttamente dal file.
+    fn leggi_contiguo(&self, path: &Path, c: usize, z: usize, t: usize) -> Result<Piano, String> {
+        use std::io::{Read, Seek, SeekFrom};
+        let (inizio, le) = self.contigui.ok_or("piano non trovato nel file")?;
+        let (pagina, campione) = self.pagina(c, z, t).ok_or("piano non trovato nel file")?;
+        let n = self.larghezza as usize * self.altezza as usize;
+        let campioni = self.campioni.max(1);
+        let byte = usize::from(self.bit / 8).max(1);
+        let lato = n * campioni * byte;
+        let mut f = File::open(path).map_err(|e| e.to_string())?;
+        f.seek(SeekFrom::Start(inizio + pagina as u64 * lato as u64)).map_err(|e| e.to_string())?;
+        let mut b = vec![0u8; lato];
+        f.read_exact(&mut b).map_err(|_| format!("piano {} oltre la fine del file", pagina + 1))?;
+        let x = |i: usize| -> &[u8] {
+            let o = (i * campioni + campione) * byte;
+            &b[o..o + byte]
+        };
+        let (dati, scala) = match byte {
+            1 => ((0..n).map(|i| u16::from(x(i)[0])).collect(), 255),
+            2 => ((0..n).map(|i| if le { u16::from_le_bytes([x(i)[0], x(i)[1]]) } else { u16::from_be_bytes([x(i)[0], x(i)[1]]) }).collect(), 65535),
+            _ => {
+                // ImageJ a 32 bit è sempre a virgola mobile.
+                let v: Vec<f32> = (0..n).map(|i| {
+                    let a = [x(i)[0], x(i)[1], x(i)[2], x(i)[3]];
+                    if le { f32::from_le_bytes(a) } else { f32::from_be_bytes(a) }
+                }).collect();
+                (da_f32(&v), 65535)
+            }
+        };
+        Ok(Piano { dati, scala })
     }
 
     /// Che pagina e che campione portano il canale `c` del piano `z` all'istante `t`.
@@ -641,28 +806,32 @@ impl Pila {
             return Err(format!("la pagina {} ha misure diverse ({w}×{h})", pagina + 1));
         }
         let n = w as usize * h as usize;
-        let letto = d.read_image().map_err(|e| format!("pagina {} non letta: {e}", pagina + 1))?;
+        // `read_image` dei piani separati (PlanarConfiguration 2) legge solo il primo: qui si chiedono tutti.
+        let mut letto = DecodingResult::U8(Vec::new());
+        let disposizione = d.read_image_to_buffer(&mut letto).map_err(|e| format!("pagina {} non letta: {e}", pagina + 1))?;
+        if letto.as_buffer(0).as_bytes().len() < disposizione.complete_len {
+            return Err(format!("pagina {} non letta per intero", pagina + 1));
+        }
         let campioni = self.campioni.max(1);
-        // Il campione desiderato come sequenza lineare.
-        let prendi = |len: usize, at: &dyn Fn(usize) -> u16| -> Vec<u16> { (0..len).map(at).collect() };
+        // Il campione desiderato come sequenza lineare; un pixel che manca (file strano) vale 0, mai un panic.
         let indice = |i: usize| if self.planare { campione * n + i } else { i * campioni + campione };
+        fn scegli<T: Copy + Default>(v: &[T], n: usize, indice: impl Fn(usize) -> usize) -> Vec<T> {
+            (0..n).map(|i| v.get(indice(i)).copied().unwrap_or_default()).collect()
+        }
         let (dati, scala): (Vec<u16>, u16) = match letto {
-            DecodingResult::U8(v) => (prendi(n, &|i| u16::from(v[indice(i)])), 255),
-            DecodingResult::U16(v) => (prendi(n, &|i| v[indice(i)]), 65535),
-            DecodingResult::I16(v) => (prendi(n, &|i| (i32::from(v[indice(i)]) + 32768) as u16), 65535),
-            DecodingResult::I8(v) => (prendi(n, &|i| (i16::from(v[indice(i)]) + 128) as u16), 255),
-            DecodingResult::U32(v) => (prendi(n, &|i| (v[indice(i)] >> 16) as u16), 65535),
-            DecodingResult::I32(v) => (prendi(n, &|i| ((i64::from(v[indice(i)]) + 2_147_483_648) >> 16) as u16), 65535),
-            DecodingResult::F32(v) => {
-                let alto = v.iter().copied().filter(|x| x.is_finite()).fold(0.0f32, f32::max);
-                let k = if alto <= 1.0 { 65535.0 } else { 1.0 };
-                (prendi(n, &|i| (v[indice(i)].clamp(0.0, 65535.0 / k) * k) as u16), 65535)
+            DecodingResult::U8(v) => (scegli(&v, n, indice).into_iter().map(u16::from).collect(), 255),
+            DecodingResult::U16(v) => (scegli(&v, n, indice), 65535),
+            DecodingResult::I16(v) => (scegli(&v, n, indice).into_iter().map(|x| (i32::from(x) + 32768) as u16).collect(), 65535),
+            DecodingResult::I8(v) => (scegli(&v, n, indice).into_iter().map(|x| (i16::from(x) + 128) as u16).collect(), 255),
+            DecodingResult::U32(v) => (da_u32(&scegli(&v, n, indice)), 65535),
+            DecodingResult::I32(v) => {
+                // Senza negativi sono interi come gli altri; con i negativi si parte dal più basso.
+                let v = scegli(&v, n, indice);
+                let minimo = v.iter().copied().min().unwrap_or(0).min(0);
+                (da_u32(&v.iter().map(|x| (i64::from(*x) - i64::from(minimo)) as u32).collect::<Vec<_>>()), 65535)
             }
-            DecodingResult::F64(v) => {
-                let alto = v.iter().copied().filter(|x| x.is_finite()).fold(0.0f64, f64::max);
-                let k = if alto <= 1.0 { 65535.0 } else { 1.0 };
-                (prendi(n, &|i| (v[indice(i)].clamp(0.0, 65535.0 / k) * k) as u16), 65535)
-            }
+            DecodingResult::F32(v) => (da_f32(&scegli(&v, n, indice)), 65535),
+            DecodingResult::F64(v) => (da_f32(&scegli(&v, n, indice).into_iter().map(|x| x as f32).collect::<Vec<_>>()), 65535),
             _ => return Err("tipo di pixel non letto".into()),
         };
         Ok(Piano { dati, scala })
@@ -671,6 +840,7 @@ impl Pila {
     /// Un piano letto dalla sorgente giusta; il lettore TIFF si apre la prima volta e poi si riusa.
     fn piano_uno(&self, path: &Path, d: &mut Option<Decoder<BufReader<File>>>, c: usize, z: usize, t: usize) -> Result<Piano, String> {
         match &self.sorgente {
+            Sorgente::Tiff if self.contigui.is_some() => self.leggi_contiguo(path, c, z, t),
             Sorgente::Tiff => {
                 let d = match d {
                     Some(d) => d,
@@ -763,18 +933,51 @@ fn massimo(a: &mut Piano, b: &Piano) {
 
 // ------------------------------------------------------------------ Immagine
 
-/// I limiti del contrasto automatico: il valore sotto cui sta lo 0,5% dei pixel e quello sopra cui
-/// sta lo 0,2% (come «Auto» di ImageJ, più rispettoso dei fondi scuri).
-pub fn limiti(p: &Piano) -> (u16, u16) {
-    let mut istogramma = vec![0u32; p.scala as usize + 1];
-    for v in &p.dati {
-        istogramma[(*v).min(p.scala) as usize] += 1;
+/// Interi a 32 bit portati a 16: tali e quali se stanno in 16 bit (i conteggi delle camere, le
+/// etichette), altrimenti divisi quanto basta perché il più alto arrivi a fondo scala.
+pub(crate) fn da_u32(v: &[u32]) -> Vec<u16> {
+    let alto = v.iter().copied().max().unwrap_or(0);
+    if alto <= 65535 {
+        return v.iter().map(|x| *x as u16).collect();
     }
-    let tot = p.dati.len() as u64;
-    let (mut basso, mut alto) = (0u16, p.scala);
+    v.iter().map(|x| (u64::from(*x) * 65535 / u64::from(alto)) as u16).collect()
+}
+
+/// Numeri a virgola mobile portati a 16 bit: tra 0 e 1 a tutta scala, altrimenti tenuti come sono
+/// (sotto lo 0 e oltre 65.535 si taglia); quelli non finiti valgono 0.
+pub(crate) fn da_f32(v: &[f32]) -> Vec<u16> {
+    let alto = v.iter().copied().filter(|x| x.is_finite()).fold(0.0f32, f32::max);
+    let k = if alto > 0.0 && alto <= 1.0 { 65535.0 } else { 1.0 };
+    v.iter().map(|x| if x.is_finite() { (x * k).clamp(0.0, 65535.0) as u16 } else { 0 }).collect()
+}
+
+/// L'istogramma di un piano: quanti pixel per ogni valore da 0 a `scala`.
+pub fn istogramma(p: &Piano) -> Vec<u64> {
+    let mut ist = Vec::new();
+    aggiungi_istogramma(&mut ist, p);
+    ist
+}
+
+/// Aggiunge a `ist` i pixel di `p` (lo stesso canale in un altro istante o piano): così i limiti del
+/// contrasto si calcolano una volta per tutta la pila.
+pub fn aggiungi_istogramma(ist: &mut Vec<u64>, p: &Piano) {
+    if ist.len() < p.scala as usize + 1 {
+        ist.resize(p.scala as usize + 1, 0);
+    }
+    for v in &p.dati {
+        ist[(*v).min(p.scala) as usize] += 1;
+    }
+}
+
+/// I limiti del contrasto automatico da un istogramma: il valore sotto cui sta lo 0,5% dei pixel e
+/// quello sopra cui sta lo 0,2% (come «Auto» di ImageJ, più rispettoso dei fondi scuri).
+pub fn limiti_da(istogramma: &[u64]) -> (u16, u16) {
+    let scala = istogramma.len().saturating_sub(1).min(65535) as u16;
+    let tot: u64 = istogramma.iter().sum();
+    let (mut basso, mut alto) = (0u16, scala);
     let mut somma = 0u64;
     for (v, n) in istogramma.iter().enumerate() {
-        somma += u64::from(*n);
+        somma += *n;
         if somma * 1000 >= tot * 5 {
             basso = v as u16;
             break;
@@ -782,39 +985,71 @@ pub fn limiti(p: &Piano) -> (u16, u16) {
     }
     let mut somma = 0u64;
     for (v, n) in istogramma.iter().enumerate().rev() {
-        somma += u64::from(*n);
+        somma += *n;
         if somma * 1000 > tot * 2 {
             alto = v as u16;
             break;
         }
     }
     if alto <= basso {
-        alto = basso.saturating_add(1).min(p.scala.max(1));
+        alto = basso.saturating_add(1).min(scala.max(1));
     }
     (basso, alto)
 }
 
+/// I limiti del contrasto automatico di un piano solo.
+pub fn limiti(p: &Piano) -> (u16, u16) {
+    limiti_da(&istogramma(p))
+}
+
+/// I limiti senza contrasto: tutta la scala dei dati. Per i dati a 12 o 14 bit in 16 bit (ND2, LIF)
+/// il fondo scala è quello del sensore, se no l'immagine resta quasi nera.
+pub fn limiti_pieni(pila: &Pila, p: &Piano) -> (u16, u16) {
+    let alto = if p.scala == 65535 && pila.bit > 8 && pila.bit < 16 { (1u16 << pila.bit) - 1 } else { p.scala };
+    (0, alto.max(1))
+}
+
+/// I limiti di ogni canale di `canali`: col contrasto automatico, piano per piano; senza, la scala intera.
+pub fn limiti_di(pila: &Pila, canali: &[Piano], contrasto: bool) -> Vec<(u16, u16)> {
+    canali.iter().map(|p| if contrasto { limiti(p) } else { limiti_pieni(pila, p) }).collect()
+}
+
+/// I limiti scritti per chi legge: «DAPI 112–3480, GFP 90–2010».
+pub fn descrivi_limiti(pila: &Pila, limiti: &[(u16, u16)]) -> String {
+    limiti
+        .iter()
+        .enumerate()
+        .map(|(c, (b, a))| format!("{} {b}–{a}", pila.canali.get(c).map_or_else(|| format!("C{}", c + 1), |c| c.nome.clone())))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// La tavola che porta un valore tra `basso` e `alto` a 0..=255.
+fn tavola(scala: u16, (basso, alto): (u16, u16)) -> Vec<u8> {
+    let k = 65536.0 / f64::from(alto.saturating_sub(basso).max(1));
+    (0..=scala as usize).map(|v| ((v as f64 - f64::from(basso)) * k / 256.0).clamp(0.0, 255.0) as u8).collect()
+}
+
 /// I canali sovrapposti, ognuno acceso del suo colore (somma, come il «composito» di ImageJ).
 pub fn composita(pila: &Pila, canali: &[Piano], contrasto: bool) -> RgbImage {
+    composita_con(pila, canali, &limiti_di(pila, canali, contrasto))
+}
+
+/// Come `composita`, con i limiti di ogni canale già scelti (gli stessi per tutti gli istanti e i piani).
+pub fn composita_con(pila: &Pila, canali: &[Piano], limiti: &[(u16, u16)]) -> RgbImage {
     let (w, h) = (pila.larghezza, pila.altezza);
     let n = w as usize * h as usize;
-    let mut acc = vec![[0u16; 3]; n];
+    let mut acc = vec![[0u32; 3]; n];
     for (c, piano) in canali.iter().enumerate() {
         let colore = pila.canali.get(c).map_or((255, 255, 255), |c| c.colore);
-        let (basso, alto) = if contrasto { limiti(piano) } else { (0, piano.scala) };
-        let scala = 65536.0 / f64::from(alto.saturating_sub(basso).max(1));
+        let lim = limiti.get(c).copied().unwrap_or((0, piano.scala));
         // Tavola di conversione: valore → 0..=255 (una sola volta per canale).
-        let tavola: Vec<u8> = (0..=piano.scala as usize)
-            .map(|v| {
-                let x = ((v as f64 - f64::from(basso)) * scala / 256.0).clamp(0.0, 255.0);
-                x as u8
-            })
-            .collect();
+        let tavola = tavola(piano.scala, lim);
         for (px, v) in acc.iter_mut().zip(&piano.dati) {
-            let x = u16::from(tavola[(*v).min(piano.scala) as usize]);
-            px[0] += x * u16::from(colore.0) / 255;
-            px[1] += x * u16::from(colore.1) / 255;
-            px[2] += x * u16::from(colore.2) / 255;
+            let x = u32::from(tavola[(*v).min(piano.scala) as usize]);
+            px[0] += x * u32::from(colore.0) / 255;
+            px[1] += x * u32::from(colore.1) / 255;
+            px[2] += x * u32::from(colore.2) / 255;
         }
     }
     let mut out = RgbImage::new(w, h);
@@ -833,11 +1068,41 @@ pub fn sedici_bit(pila: &Pila, piano: &Piano) -> DynamicImage {
 
 /// Un canale in grigio con il suo contrasto.
 pub fn grigio_di(pila: &Pila, piano: &Piano, contrasto: bool) -> DynamicImage {
-    let (basso, alto) = if contrasto { limiti(piano) } else { (0, piano.scala) };
-    let scala = 65536.0 / f64::from(alto.saturating_sub(basso).max(1));
-    let tavola: Vec<u8> = (0..=piano.scala as usize).map(|v| ((v as f64 - f64::from(basso)) * scala / 256.0).clamp(0.0, 255.0) as u8).collect();
+    let lim = if contrasto { limiti(piano) } else { limiti_pieni(pila, piano) };
+    grigio_con(pila, piano, lim)
+}
+
+/// Un canale in grigio con i limiti già scelti.
+pub fn grigio_con(pila: &Pila, piano: &Piano, lim: (u16, u16)) -> DynamicImage {
+    let tavola = tavola(piano.scala, lim);
     let buf = ImageBuffer::from_raw(pila.larghezza, pila.altezza, piano.dati.iter().map(|v| tavola[(*v).min(piano.scala) as usize]).collect()).unwrap_or_else(|| image::GrayImage::new(1, 1));
     DynamicImage::ImageLuma8(buf)
+}
+
+/// L'OME-XML minimo (schema 2016-06) di un TIFF a 16 bit con un piano di un canale: Fiji
+/// (Bio-Formats) ci trova la misura del pixel in µm e il nome del canale. Tutto in ASCII, come vuole
+/// il TIFF: l'unità non si scrive (per lo schema PhysicalSizeX è in µm se non dice altro) e le lettere
+/// non ASCII dei nomi diventano riferimenti numerici (`&#181;`).
+pub fn ome_xml(nome: &str, canale: &str, larghezza: u32, altezza: u32, um_per_px: Option<f64>) -> String {
+    let esc = |s: &str| {
+        s.chars()
+            .map(|c| match c {
+                '&' => "&amp;".to_string(),
+                '<' => "&lt;".to_string(),
+                '>' => "&gt;".to_string(),
+                '"' => "&quot;".to_string(),
+                c if c.is_ascii_control() => " ".to_string(),
+                c if c.is_ascii() => c.to_string(),
+                c => format!("&#{};", c as u32),
+            })
+            .collect::<String>()
+    };
+    let misura = um_per_px.filter(|u| u.is_finite() && *u > 0.0).map(|u| format!(r#" PhysicalSizeX="{u}" PhysicalSizeY="{u}""#)).unwrap_or_default();
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?><OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd" Creator="Cedro"><Image ID="Image:0" Name="{}"><Pixels ID="Pixels:0" DimensionOrder="XYZCT" Type="uint16" SizeX="{larghezza}" SizeY="{altezza}" SizeZ="1" SizeC="1" SizeT="1"{misura}><Channel ID="Channel:0:0" Name="{}" SamplesPerPixel="1"/><TiffData IFD="0" PlaneCount="1"/></Pixels></Image></OME>"#,
+        esc(nome),
+        esc(canale)
+    )
 }
 
 // ------------------------------------------------------------------ Barra di scala
@@ -1093,5 +1358,162 @@ pub(crate) mod prove {
         TiffEncoder::new(&mut f).unwrap().write_image::<colortype::RGB8>(4, 4, &[7u8; 48]).unwrap();
         assert!(!is_stack(&p));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod prove_revisione {
+    use super::*;
+    use tiff::encoder::{colortype, TiffEncoder};
+
+    fn campione(n: &str) -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/micro").join(n)
+    }
+
+    #[test]
+    fn un_tiff_a_piani_separati_si_legge_tutto() {
+        // tifffile scrive così un RGB a 16 bit di forma (3, Y, X): prima tutto R, poi G, poi B.
+        let p = campione("planare-rgb16.ome.tif");
+        let pila = Pila::open(&p).unwrap();
+        assert_eq!(pila.canali.len(), 3);
+        let g = pila.canale(&p, 1, 0, Piani::Centrale).unwrap();
+        assert_eq!((g.dati[0], g.dati[4 * 24 + 5]), (2000, 60000));
+        assert_eq!(pila.canale(&p, 2, 0, Piani::Centrale).unwrap().dati[0], 3000);
+        assert_eq!(pila.canali_di(&p, 0, Piani::Massimo).unwrap().len(), 3);
+    }
+
+    #[test]
+    fn gli_interi_a_32_bit_piccoli_restano_tali_e_quali() {
+        let p = campione("u32.ome.tif");
+        let pila = Pila::open(&p).unwrap();
+        let c = pila.canale(&p, 0, 0, Piani::Centrale).unwrap();
+        assert_eq!(c.dati.iter().max(), Some(&1000));
+        assert!(c.dati.contains(&300));
+        let img = composita(&pila, &[c], true);
+        assert!(img.pixels().any(|p| p.0 != [0, 0, 0]), "un'immagine a 32 bit non deve uscire nera");
+        assert_eq!(da_u32(&[0, 70_000, 140_000]), [0, 32_767, 65_535]);
+    }
+
+    #[test]
+    fn l_unita_pixel_non_e_una_misura() {
+        let pila = Pila::open(&campione("unita-pixel.ome.tif")).unwrap();
+        assert_eq!(pila.um_per_px, None);
+    }
+
+    #[test]
+    fn un_pezzo_di_un_ome_diviso_in_piu_file() {
+        // Solo l'istante 2 di 3, con i suoi due canali: non diventano due piani Z di un canale.
+        let p = campione("multi_t1.ome.tif");
+        let pila = Pila::open(&p).unwrap();
+        assert_eq!(pila.canali.iter().map(|c| c.nome.as_str()).collect::<Vec<_>>(), ["DAPI", "GFP"]);
+        assert_eq!((pila.z, pila.t), (1, 1));
+        assert!(pila.avviso.as_deref().is_some_and(|a| a.contains("1 istanti su 3")), "{:?}", pila.avviso);
+        assert_eq!(pila.canale(&p, 0, 0, Piani::Massimo).unwrap().dati[0], 110);
+        assert_eq!(pila.canale(&p, 1, 0, Piani::Massimo).unwrap().dati[0], 111);
+    }
+
+    /// Un TIFF di ImageJ come quelli oltre i 4 GB: una pagina sola, i piani (16 bit) uno dopo l'altro.
+    fn imagej_contiguo(dir: &Path, nome: &str, immagini: usize, piani_veri: usize) -> std::path::PathBuf {
+        let (w, h) = (4u32, 3u32);
+        let desc = format!("ImageJ=1.53t\nimages={immagini}\nslices={immagini}\nunit=micron\n\0");
+        let piano = (w * h * 2) as usize;
+        let n_voci = 10u16;
+        let ifd = 8u32;
+        let dopo_ifd = ifd + 2 + u32::from(n_voci) * 12 + 4;
+        let dati = dopo_ifd + desc.len() as u32;
+        let mut b: Vec<u8> = b"II*\0".to_vec();
+        b.extend(ifd.to_le_bytes());
+        b.extend(n_voci.to_le_bytes());
+        let mut voce = |tag: u16, tipo: u16, n: u32, v: u32| {
+            b.extend(tag.to_le_bytes());
+            b.extend(tipo.to_le_bytes());
+            b.extend(n.to_le_bytes());
+            b.extend(v.to_le_bytes());
+        };
+        voce(256, 4, 1, w);
+        voce(257, 4, 1, h);
+        voce(258, 3, 1, 16);
+        voce(259, 3, 1, 1);
+        voce(262, 3, 1, 1);
+        voce(270, 2, desc.len() as u32, dopo_ifd);
+        voce(273, 4, 1, dati);
+        voce(277, 3, 1, 1);
+        voce(278, 4, 1, h);
+        voce(279, 4, 1, piano as u32);
+        b.extend(0u32.to_le_bytes());
+        b.extend(desc.as_bytes());
+        for k in 0..piani_veri {
+            for _ in 0..w * h {
+                b.extend(((k + 1) as u16 * 100).to_le_bytes());
+            }
+        }
+        let p = dir.join(nome);
+        std::fs::write(&p, b).unwrap();
+        p
+    }
+
+    #[test]
+    fn imagej_oltre_i_4_gb_ha_tutti_i_piani() {
+        let dir = std::env::temp_dir().join(format!("cedro-micro-contigui-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = imagej_contiguo(&dir, "grande.tif", 3, 3);
+        let pila = Pila::open(&p).unwrap();
+        assert_eq!((pila.z, pila.pagine), (3, 3));
+        assert_eq!(pila.piano_z(&p, 0, 2, 0).unwrap().dati[0], 300);
+        assert_eq!(pila.canale(&p, 0, 0, Piani::Massimo).unwrap().dati[5], 300);
+        // Un file tagliato: i piani che ci sono, e lo si dice.
+        let p = imagej_contiguo(&dir, "tagliato.tif", 5, 3);
+        let pila = Pila::open(&p).unwrap();
+        assert_eq!(pila.z, 3);
+        assert!(pila.avviso.as_deref().is_some_and(|a| a.contains("3 piani su 5")), "{:?}", pila.avviso);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn misure_assurde_non_riempiono_la_memoria() {
+        let dir = std::env::temp_dir().join(format!("cedro-micro-assurdo-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("assurdo.ome.tif");
+        let xml = r#"<OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06"><Image ID="Image:0"><Pixels ID="Pixels:0" DimensionOrder="XYZCT" Type="uint16" SizeX="4" SizeY="4" SizeZ="4294967296" SizeC="4000000000" SizeT="4294967296"><TiffData FirstZ="0"/></Pixels></Image></OME>"#;
+        let mut f = File::create(&p).unwrap();
+        let mut enc = TiffEncoder::new(&mut f).unwrap();
+        let mut img = enc.new_image::<colortype::Gray16>(4, 4).unwrap();
+        img.encoder().write_tag(Tag::ImageDescription, xml).unwrap();
+        img.write_data(&[5u16; 16]).unwrap();
+        drop(enc);
+        let pila = Pila::open(&p).unwrap();
+        assert!(pila.canali.len() <= 4096);
+        assert_eq!(pila.canale(&p, 0, 0, Piani::Centrale).unwrap().dati[0], 5);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn senza_contrasto_i_12_bit_vanno_a_fondo_scala_del_sensore() {
+        let mut pila = Pila::vuota(Origine::Nikon, 2, 1, Sorgente::Tiff);
+        pila.bit = 12;
+        let p = Piano { dati: vec![0, 4095], scala: 65535 };
+        assert_eq!(limiti_pieni(&pila, &p), (0, 4095));
+        pila.bit = 16;
+        assert_eq!(limiti_pieni(&pila, &p), (0, 65535));
+    }
+
+    #[test]
+    fn i_limiti_comuni_vengono_da_tutti_i_piani() {
+        let a = Piano { dati: vec![0; 1000].into_iter().chain([1000]).collect(), scala: 65535 };
+        let b = Piano { dati: (0..1000).map(|i| 100 + i as u16 * 10).collect(), scala: 65535 };
+        let mut ist = Vec::new();
+        aggiungi_istogramma(&mut ist, &a);
+        aggiungi_istogramma(&mut ist, &b);
+        let (basso, alto) = limiti_da(&ist);
+        // L'alto viene dal piano più acceso, non da quello quasi vuoto.
+        assert!(alto > 10_000 && basso == 0, "{basso}–{alto}");
+    }
+
+    #[test]
+    fn l_ome_xml_e_ascii_con_la_misura() {
+        let x = ome_xml("prova", "Alexa 488 µ<&>", 10, 20, Some(0.325));
+        assert!(x.is_ascii());
+        assert!(x.contains(r#"PhysicalSizeX="0.325""#) && x.contains("&#181;&lt;&amp;&gt;"));
+        assert!(roxmltree::Document::parse(&x).is_ok());
     }
 }

@@ -415,6 +415,7 @@ impl Slide {
             win.3 as usize,
         );
         let mut file = File::open(path).map_err(|e| e.to_string())?;
+        let lunghezza_file = file.metadata().map_err(|e| e.to_string())?.len();
         let across = l.across() as usize;
         let (tw, th) = (l.tile_w as usize, l.tile_h as usize);
         let (c0, c1) = (wx / tw, (wx + ww).div_ceil(tw));
@@ -437,8 +438,13 @@ impl Slide {
             if !generic {
                 for col in c0..c1 {
                     let i = row * across + col;
-                    let (off, len) = (l.offsets[i], l.counts[i] as usize);
-                    let mut buf = vec![0u8; len];
+                    let (off, len) = (l.offsets[i], l.counts[i]);
+                    // Un indirizzo o una grandezza fuori dal file (file rovinato o tagliato): prima di
+                    // prendere la memoria, non dopo.
+                    if len > 0 && off.checked_add(len).is_none_or(|fine| fine > lunghezza_file) {
+                        return Err(format!("tessera {i} fuori dal file (vetrino tagliato o rovinato)"));
+                    }
+                    let mut buf = vec![0u8; len as usize];
                     if len > 0 {
                         file.seek(SeekFrom::Start(off)).map_err(|e| e.to_string())?;
                         file.read_exact(&mut buf)
@@ -971,18 +977,31 @@ fn decode_tile(l: &Level, raw: &[u8], tw: usize, th: usize) -> Result<Vec<u8>, S
     if raw.is_empty() {
         return Ok(vec![255; want]);
     }
-    let mut px = match l.compression {
+    let (px, w, h) = match l.compression {
         JPEG => decode_jpeg(l, raw)?,
         JP2K_YCBCR | JP2K_RGB => decode_jp2k(l.compression, raw)?,
-        1 => raw.to_vec(),
+        1 => (raw.to_vec(), tw, th),
         other => return Err(format!("compressione {other} non gestita")),
     };
-    // Le tessere più piccole del previsto (codificatori pigri ai bordi) si completano di bianco.
-    px.resize(want, 255);
-    Ok(px)
+    if (w, h) == (tw, th) && px.len() >= want {
+        let mut px = px;
+        px.truncate(want);
+        return Ok(px);
+    }
+    // Una tessera con misure diverse (ai bordi alcuni codificatori la tagliano alla parte che c'è):
+    // si ricopia riga per riga in una tessera bianca della misura piena, così le righe restano a posto.
+    let mut out = vec![255u8; want];
+    let (cw, ch) = (w.min(tw), h.min(th));
+    for y in 0..ch {
+        let src = y * w * 3;
+        let Some(riga) = px.get(src..src + cw * 3) else { break };
+        out[y * tw * 3..y * tw * 3 + cw * 3].copy_from_slice(riga);
+    }
+    Ok(out)
 }
 
-fn decode_jpeg(l: &Level, raw: &[u8]) -> Result<Vec<u8>, String> {
+/// I pixel RGB della tessera JPEG, con larghezza e altezza.
+fn decode_jpeg(l: &Level, raw: &[u8]) -> Result<(Vec<u8>, usize, usize), String> {
     use zune_core::colorspace::ColorSpace;
     // Le tabelle in comune vanno davanti alla tessera: tabelle senza la fine (EOI), tessera senza l'inizio (SOI).
     let data: std::borrow::Cow<[u8]> = match &l.tables {
@@ -996,6 +1015,7 @@ fn decode_jpeg(l: &Level, raw: &[u8]) -> Result<Vec<u8>, String> {
     };
     let mut dec = zune_jpeg::JpegDecoder::new(zune_core::bytestream::ZCursor::new(&data[..]));
     dec.decode_headers().map_err(|e| format!("JPEG: {e:?}"))?;
+    let (w, h) = dec.dimensions().ok_or("JPEG senza misure")?;
     let input = dec.input_colorspace().unwrap_or(ColorSpace::YCbCr);
     // Con la fotometria RGB i valori sono già RGB, anche se il JPEG dice YCbCr: non si convertono.
     let out = if l.photometric == PHOTOMETRIC_YCBCR {
@@ -1005,14 +1025,15 @@ fn decode_jpeg(l: &Level, raw: &[u8]) -> Result<Vec<u8>, String> {
     };
     dec.set_options(zune_core::options::DecoderOptions::default().jpeg_set_out_colorspace(out));
     let px = dec.decode().map_err(|e| format!("JPEG: {e:?}"))?;
-    Ok(match out {
+    let px = match out {
         ColorSpace::Luma => px.iter().flat_map(|&g| [g, g, g]).collect(),
         ColorSpace::RGBA => px
             .chunks_exact(4)
             .flat_map(|p| [p[0], p[1], p[2]])
             .collect(),
         _ => px,
-    })
+    };
+    Ok((px, w, h))
 }
 
 /// Le misure di campionamento delle componenti (XRsiz) dal segmento SIZ del codestream.
@@ -1026,10 +1047,11 @@ fn subsampled_chroma(raw: &[u8]) -> bool {
     }
 }
 
-fn decode_jp2k(compression: u16, raw: &[u8]) -> Result<Vec<u8>, String> {
+fn decode_jp2k(compression: u16, raw: &[u8]) -> Result<(Vec<u8>, usize, usize), String> {
     use hayro_jpeg2000::{DecodeSettings, DecoderContext, Image};
     let image =
         Image::new(raw, &DecodeSettings::default()).map_err(|e| format!("JPEG 2000: {e:?}"))?;
+    let (w, h) = (image.width() as usize, image.height() as usize);
     let mut ctx = DecoderContext::default();
     let decoded = image
         .decode(&mut ctx)
@@ -1052,7 +1074,7 @@ fn decode_jp2k(compression: u16, raw: &[u8]) -> Result<Vec<u8>, String> {
         }
         n => return Err(format!("JPEG 2000 con {n} componenti")),
     }
-    Ok(px)
+    Ok((px, w, h))
 }
 
 #[cfg(test)]
@@ -1262,5 +1284,39 @@ mod tests {
         let back = image::open(&out).unwrap().to_rgb8();
         assert_eq!(back.as_raw(), whole.as_raw());
         let _ = std::fs::remove_dir_all(dir);
+    }
+}
+
+#[cfg(test)]
+mod prove_revisione {
+    use super::*;
+
+    fn fixture(name: &str) -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/svs").join(name)
+    }
+
+    #[test]
+    fn una_tessera_che_dice_di_essere_enorme_e_un_errore_non_un_crash() {
+        let p = fixture("cmu1-pezzo.svs");
+        let mut s = Slide::open(&p).unwrap();
+        s.levels[0].counts[1] = 1 << 40;
+        let e = s.read_level(&p, 0).unwrap_err();
+        assert!(e.contains("fuori dal file"), "{e}");
+    }
+
+    #[test]
+    fn una_tessera_di_bordo_piu_piccola_resta_al_suo_posto() {
+        // Una tessera 240×240 codificata con le sole misure che ci sono (100×50): le righe non scivolano.
+        let img = RgbImage::from_pixel(100, 50, image::Rgb([200, 30, 30]));
+        let mut raw = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut raw, 95).encode_image(&img).unwrap();
+        let l = Level { ifd: 0, width: 100, height: 50, tile_w: 240, tile_h: 240, compression: JPEG, photometric: PHOTOMETRIC_YCBCR, offsets: vec![0], counts: vec![0], tables: None };
+        let px = decode_tile(&l, &raw, 240, 240).unwrap();
+        assert_eq!(px.len(), 240 * 240 * 3);
+        let at = |x: usize, y: usize| &px[(y * 240 + x) * 3..(y * 240 + x) * 3 + 3];
+        assert!(at(0, 1)[0] > 180 && at(0, 1)[1] < 60, "{:?}", at(0, 1));
+        assert!(at(99, 49)[0] > 180, "{:?}", at(99, 49));
+        assert_eq!(at(100, 0), [255, 255, 255]);
+        assert_eq!(at(0, 50), [255, 255, 255]);
     }
 }

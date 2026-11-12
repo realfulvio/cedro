@@ -115,6 +115,78 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
     let scritta_barra = std::sync::Mutex::new(None::<String>);
     let contrasto = |s: usize| opts.micro_contrast && !pile[s].naturale();
 
+    // I lavori: (immagine, istante, piano Z o tutti), nello stesso ordine dei file e delle pagine.
+    let jobs: Vec<(usize, usize, Option<usize>)> = if action == "pdf" {
+        let mut v = Vec::new();
+        for (s, p) in pile.iter().enumerate() {
+            for t in istanti_di(p) {
+                for z in zeta_di(p) {
+                    v.push((s, t, z));
+                }
+            }
+        }
+        v
+    } else {
+        lavori.iter().map(|l| (l.s, l.t, l.z)).collect()
+    };
+    // I piani di un lavoro.
+    let piani_di = |s: usize, t: usize, z: Option<usize>| -> Result<Vec<Piano>, String> {
+        match z {
+            Some(z) => pile[s].canali_di_z(path, z, t),
+            None => pile[s].canali_di(path, t, piani),
+        }
+    };
+
+    // Il contrasto automatico: gli stessi limiti per ogni canale in tutti gli istanti e i piani della
+    // stessa immagine, così due istanti (o due piani) restano confrontabili. Si leggono prima tutti i
+    // piani una volta per l'istogramma; con un lavoro solo i piani letti si tengono per disegnarli.
+    let indici: Vec<usize> = (0..jobs.len()).collect();
+    let istogrammi: Vec<std::sync::Mutex<Vec<Vec<u64>>>> = pile.iter().map(|_| std::sync::Mutex::new(Vec::new())).collect();
+    let tenuti = std::sync::Mutex::new(None::<Vec<Piano>>);
+    if jobs.iter().any(|j| contrasto(j.0)) && !sedici {
+        in_parallel(&indici, |k| {
+            let (s, t, z) = jobs[k];
+            if !contrasto(s) {
+                return Ok(());
+            }
+            let c = piani_di(s, t, z)?;
+            {
+                let mut ist = istogrammi[s].lock().unwrap_or_else(|e| e.into_inner());
+                if ist.len() < c.len() {
+                    ist.resize(c.len(), Vec::new());
+                }
+                for (i, p) in c.iter().enumerate() {
+                    microscopia::aggiungi_istogramma(&mut ist[i], p);
+                }
+            }
+            if jobs.len() == 1 {
+                *tenuti.lock().unwrap_or_else(|e| e.into_inner()) = Some(c);
+            }
+            Ok(())
+        })
+        .map_err(err)?;
+    }
+    let limiti: Vec<Option<Vec<(u16, u16)>>> = istogrammi
+        .into_iter()
+        .map(|m| {
+            let ist = m.into_inner().unwrap_or_else(|e| e.into_inner());
+            (!ist.is_empty()).then(|| ist.iter().map(|h| microscopia::limiti_da(h)).collect())
+        })
+        .collect();
+    let piani_del = |k: usize| -> Result<Vec<Piano>, String> {
+        if let Some(c) = tenuti.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            return Ok(c);
+        }
+        let (s, t, z) = jobs[k];
+        piani_di(s, t, z)
+    };
+    let limiti_per = |s: usize, c: &[Piano]| -> Vec<(u16, u16)> {
+        match &limiti[s] {
+            Some(l) => l.clone(),
+            None => microscopia::limiti_di(&pile[s], c, false),
+        }
+    };
+
     // Un'immagine pronta: i ritocchi della voce (misure, bianco e nero, rotazione) dopo la barra.
     let ritocca = |mut img: DynamicImage| -> DynamicImage {
         if let Some(side) = opts.max_side.filter(|s| *s > 0 && img.width().max(img.height()) > *s) {
@@ -137,21 +209,15 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
         }
         DynamicImage::ImageRgb8(rgb)
     };
-    // I piani di un lavoro.
-    let piani_di = |s: usize, t: usize, z: Option<usize>| -> Result<Vec<Piano>, String> {
-        match z {
-            Some(z) => pile[s].canali_di_z(path, z, t),
-            None => pile[s].canali_di(path, t, piani),
-        }
-    };
     let disegna = |s: usize, c: &[Piano], pezzo: Pezzo| -> DynamicImage {
         let p = &pile[s];
         match pezzo {
-            Pezzo::Composito => ritocca(con_scala(DynamicImage::ImageRgb8(microscopia::composita(p, c, contrasto(s))), s)),
+            Pezzo::Composito => ritocca(con_scala(DynamicImage::ImageRgb8(microscopia::composita_con(p, c, &limiti_per(s, c))), s)),
             Pezzo::Canale(i) if sedici => ritocca(microscopia::sedici_bit(p, &c[i])),
             Pezzo::Canale(i) => {
                 // Un canale a parte è in grigio, ma con la barra serve il colore (RGB grigio).
-                let g = microscopia::grigio_di(p, &c[i], contrasto(s));
+                let lim = limiti_per(s, c).get(i).copied().unwrap_or((0, c[i].scala));
+                let g = microscopia::grigio_con(p, &c[i], lim);
                 ritocca(if barra(s).is_some() { con_scala(g, s) } else { g })
             }
         }
@@ -163,7 +229,7 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
             v.push(format!("{} immagini del progetto", pile.len()));
         }
         if sedici {
-            v.push("valori originali a 16 bit, un file per canale".to_string());
+            v.push("valori originali a 16 bit, un file per canale, con la misura del pixel (OME-XML nel TIFF)".to_string());
         } else {
             match (opts.micro_channels, pila.canali.len()) {
                 (_, 1) => {}
@@ -180,30 +246,28 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
                     _ => format!("proiezione massima di {z} piani Z"),
                 });
             }
-            if contrasto(0) {
-                v.push("contrasto automatico".to_string());
+            // Il contrasto cambia i valori: si dice come, con i limiti di ogni canale.
+            match (pile.len(), &limiti[0]) {
+                (1, Some(l)) if jobs.len() > 1 => v.push(format!("contrasto automatico, uguale in tutti i file ({})", microscopia::descrivi_limiti(pila, l))),
+                (1, Some(l)) => v.push(format!("contrasto automatico ({})", microscopia::descrivi_limiti(pila, l))),
+                _ if limiti.iter().any(Option::is_some) => v.push("contrasto automatico, uguale in tutti i file di ogni immagine".to_string()),
+                _ => {}
             }
         }
         if pile.iter().any(|p| p.t > 1) && !opts.micro_all_t {
             v.push("solo il primo istante".to_string());
         }
+        let mut avvisi: Vec<&str> = pile.iter().filter_map(|p| p.avviso.as_deref()).collect();
+        avvisi.dedup();
+        v.extend(avvisi.into_iter().map(str::to_string));
         v
     };
 
     let (messaggio, primo) = if action == "pdf" {
         let out = reserve(dir, &base, "pdf")?;
-        let mut jobs: Vec<(usize, usize, Option<usize>)> = Vec::new();
-        for (s, p) in pile.iter().enumerate() {
-            for t in istanti_di(p) {
-                for z in zeta_di(p) {
-                    jobs.push((s, t, z));
-                }
-            }
-        }
-        let indici: Vec<usize> = (0..jobs.len()).collect();
         let pagine = in_parallel(&indici, |k| {
-            let (s, t, z) = jobs[k];
-            let c = piani_di(s, t, z)?;
+            let s = jobs[k].0;
+            let c = piani_del(k)?;
             let mut pagine = Vec::new();
             for &pezzo in &pezzi[s] {
                 let img = disegna(s, &c, pezzo);
@@ -221,17 +285,23 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
         }
         (m, out)
     } else {
-        let indici: Vec<usize> = (0..lavori.len()).collect();
         let risultato = in_parallel(&indici, |k| {
             let l = &lavori[k];
-            let c = piani_di(l.s, l.t, l.z)?;
+            let c = piani_del(k)?;
             let mut misure = (0, 0);
             for (pezzo, out) in &l.uscite {
                 let img = disegna(l.s, &c, *pezzo);
                 misure = (img.width(), img.height());
-                match action {
-                    "avif" => std::fs::write(out, crate::imgfmt::avif_bytes(&img, quality)?).map_err(|e| e.to_string())?,
-                    "jxl" => std::fs::write(out, crate::imgfmt::jxl_bytes(&img)?).map_err(|e| e.to_string())?,
+                match (action, pezzo) {
+                    (_, Pezzo::Canale(i)) if sedici => {
+                        let p = &pile[l.s];
+                        // Il pixel dopo un eventuale ridimensionamento.
+                        let um = p.um_per_px.map(|u| u * f64::from(p.larghezza) / f64::from(img.width().max(1)));
+                        let nome = out.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                        scrivi_sedici(&img, out, action == "tiff", &nome, &p.canali[*i].nome, um)?
+                    }
+                    ("avif", _) => std::fs::write(out, crate::imgfmt::avif_bytes(&img, quality)?).map_err(|e| e.to_string())?,
+                    ("jxl", _) => std::fs::write(out, crate::imgfmt::jxl_bytes(&img)?).map_err(|e| e.to_string())?,
                     _ => save_image(&img, out, format, quality, opts.white_background).map_err(|e| e.to_string())?,
                 }
             }
@@ -267,6 +337,46 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
         }
     }
     Ok(Output { path: primo, message: messaggio })
+}
+
+/// Un canale a 16 bit con i valori originali. Il TIFF porta un OME-XML minimo con la misura del pixel
+/// in µm (Fiji con Bio-Formats lo legge) e la risoluzione in pixel per centimetro; il PNG la sua
+/// risoluzione in pixel per metro (pHYs).
+fn scrivi_sedici(img: &DynamicImage, out: &Path, tiff: bool, nome: &str, canale: &str, um: Option<f64>) -> Result<(), String> {
+    let g = img.to_luma16();
+    let (w, h) = g.dimensions();
+    let um = um.filter(|u| u.is_finite() && *u > 0.0);
+    let file = std::io::BufWriter::new(std::fs::File::create(out).map_err(|e| e.to_string())?);
+    if tiff {
+        use tiff::encoder::{colortype, Compression, Rational, TiffEncoder};
+        let mut file = file;
+        let mut enc = TiffEncoder::new(&mut file).map_err(|e| e.to_string())?.with_compression(Compression::Lzw);
+        let mut im = enc.new_image::<colortype::Gray16>(w, h).map_err(|e| e.to_string())?;
+        let xml = microscopia::ome_xml(nome, canale, w, h, um);
+        im.encoder().write_tag(tiff::tags::Tag::ImageDescription, xml.as_str()).map_err(|e| e.to_string())?;
+        if let Some(u) = um {
+            // Pixel per centimetro come frazione: il denominatore si sceglie perché il numeratore stia in 32 bit.
+            let per_cm = 10_000.0 / u;
+            let d: u32 = if per_cm < 4_000_000.0 { 1000 } else { 1 };
+            im.resolution(tiff::tags::ResolutionUnit::Centimeter, Rational { n: (per_cm * f64::from(d)).round().min(f64::from(u32::MAX)) as u32, d });
+        }
+        im.write_data(g.as_raw()).map_err(|e| e.to_string())?;
+        drop(enc);
+        use std::io::Write;
+        file.flush().map_err(|e| e.to_string())
+    } else {
+        let mut e = png::Encoder::new(file, w, h);
+        e.set_color(png::ColorType::Grayscale);
+        e.set_depth(png::BitDepth::Sixteen);
+        if let Some(u) = um {
+            let per_m = (1_000_000.0 / u).round().min(f64::from(u32::MAX)) as u32;
+            e.set_pixel_dims(Some(png::PixelDimensions { xppu: per_m, yppu: per_m, unit: png::Unit::Meter }));
+        }
+        let mut wr = e.write_header().map_err(|e| e.to_string())?;
+        let dati: Vec<u8> = g.as_raw().iter().flat_map(|v| v.to_be_bytes()).collect();
+        wr.write_image_data(&dati).map_err(|e| e.to_string())?;
+        wr.finish().map_err(|e| e.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -324,7 +434,7 @@ mod prove {
         // ND2: 2 canali, 3 piani Z, 2 istanti; tutti gli istanti, canali separati.
         let p = crate::nd2::prove::nd2(&d, true);
         let pila = crate::microscopia::Pila::open(&p).unwrap();
-        assert_eq!(pila.riassunto()[0], "ND2 di Nikon · 2 canali · 3 piani Z · 2 istanti · 16 bit · 8×6 · 0,65 µm/pixel · Plan Fluor 20x");
+        assert_eq!(pila.riassunto()[0], "ND2 di Nikon · 2 canali · 3 piani Z · 2 istanti · 12 bit · 8×6 · 0,65 µm/pixel · Plan Fluor 20x");
         let o = Options { micro_channels: 1, micro_all_t: true, ..Options::default() };
         let out = perform_with(&p, "png", 80, None, &o).unwrap();
         assert!(out.message.contains("4 PNG"), "{}", out.message);
@@ -380,6 +490,65 @@ mod prove {
         assert!(sha.ends_with("  piastra-pacchetto.zip\n") && sha.len() == 64 + 2 + "piastra-pacchetto.zip\n".len(), "{sha}");
         let v = perform_with(&out.path, "verify-pack", 80, None, &Options::default()).unwrap();
         assert_eq!(v.message, "Pacchetto integro: 2 file, tutte le impronte SHA-256 tornano.");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+}
+
+#[cfg(test)]
+mod prove_revisione {
+    use super::super::{perform_with, Options};
+    use std::path::Path;
+
+    fn copia(nome: &str, cartella: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        let d = std::env::temp_dir().join(format!("cedro-rev-{cartella}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let p = d.join(nome);
+        std::fs::copy(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/micro").join(nome), &p).unwrap();
+        (d, p)
+    }
+
+    #[test]
+    fn il_contrasto_e_lo_stesso_per_tutti_gli_istanti() {
+        // Due istanti con intensità 10 volte diverse: con limiti comuni il secondo resta più scuro.
+        let (d, p) = copia("tempo.ome.tif", "tempo");
+        let o = Options { micro_all_t: true, ..Options::default() };
+        let out = perform_with(&p, "png", 80, None, &o).unwrap();
+        assert!(out.message.contains("contrasto automatico, uguale in tutti i file (C1 "), "{}", out.message);
+        let a = image::open(d.join("tempo.ome-t01.png")).unwrap().to_rgb8();
+        let b = image::open(d.join("tempo.ome-t02.png")).unwrap().to_rgb8();
+        let (va, vb) = (a.get_pixel(40, 5)[0], b.get_pixel(40, 5)[0]);
+        assert!(va > 100 && vb < va / 4, "t1 {va}, t2 {vb}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn i_16_bit_portano_la_misura_del_pixel() {
+        let (d, p) = copia("tempo.ome.tif", "sedici");
+        let o = Options { micro_16bit: true, ..Options::default() };
+        let out = perform_with(&p, "tiff", 80, None, &o).unwrap();
+        // Il TIFF ha l'OME-XML: Cedro (come Bio-Formats) ci ritrova 0,5 µm per pixel e i valori originali.
+        let pila = crate::microscopia::Pila::open(&out.path).unwrap();
+        assert_eq!(pila.origine, crate::microscopia::Origine::Ome);
+        assert_eq!(pila.um_per_px, Some(0.5));
+        let piano = pila.canale(&out.path, 0, 0, crate::microscopia::Piani::Centrale).unwrap();
+        assert_eq!(piano.dati[63], 6300);
+        let mut dec = tiff::decoder::Decoder::new(std::fs::File::open(&out.path).unwrap()).unwrap();
+        assert_eq!(dec.get_tag_u32(tiff::tags::Tag::ResolutionUnit).unwrap(), 3);
+        // Il PNG a 16 bit: pixel per metro.
+        let out = perform_with(&p, "png", 80, None, &o).unwrap();
+        let dec = png::Decoder::new(std::io::BufReader::new(std::fs::File::open(&out.path).unwrap()));
+        let r = dec.read_info().unwrap();
+        let dims = r.info().pixel_dims.unwrap();
+        assert_eq!((dims.xppu, dims.unit), (2_000_000, png::Unit::Meter));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn un_pezzo_di_ome_lo_dice_nel_messaggio() {
+        let (d, p) = copia("multi_t1.ome.tif", "multi");
+        let out = perform_with(&p, "png", 80, None, &Options::default()).unwrap();
+        assert!(out.message.contains("2 canali sovrapposti") && out.message.contains("1 istanti su 3"), "{}", out.message);
         let _ = std::fs::remove_dir_all(&d);
     }
 }
