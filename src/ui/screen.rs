@@ -680,18 +680,31 @@ impl Screen {
                 }
             }
             Act::Lab(lab) => {
+                // Il Cedro di partenza: l'avviso («Fatto: 3 file.») resta sulla pagina che ha fatto il lavoro.
+                if self.theme.is_cedro() && lab != app.lab {
+                    app.notice = None;
+                }
                 app.set_lab(lab, simple);
                 // Il Cedro di partenza ha i PDF in una pagina loro: «Converti» parte dagli altri file.
                 if self.theme.is_cedro() && lab == super::model::Lab::Converti && app.kind() == crate::engine::Kind::Pdf {
                     app.cedro_leave_pdf(simple);
                 }
+                if self.theme.is_cedro() && lab == super::model::Lab::Pdf {
+                    app.cedro_back_to_pdf();
+                }
             }
             Act::LabGo(super::model::Lab::Video, _) => {
+                if self.theme.is_cedro() {
+                    app.notice = None;
+                }
                 // «Inizio»: il link incollato va nella pagina dei video, pronto da scaricare.
                 app.set_lab(super::model::Lab::Video, simple);
                 app.add_typed_links(false);
             }
             Act::LabGo(super::model::Lab::Home, _) => {
+                if self.theme.is_cedro() {
+                    app.notice = None;
+                }
                 // Le tessere di Inizio: si sceglie il file, poi la scheda dice che cosa ci si può fare.
                 let files = plat.pick_files();
                 self.add_files(files);
@@ -2226,6 +2239,32 @@ mod tests {
             click(&mut s, &Act::FirmaPage(3), &mut plat);
             shot(&mut s, "6-opzioni");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Il Cedro di partenza: l'avviso resta sulla pagina che ha fatto il lavoro e, tornando su «PDF»
+    /// da «Converti», si ritrova la voce lasciata (Unisci), non quella di partenza.
+    #[test]
+    fn cedro_pages_keep_their_own_notice_and_pdf_choice() {
+        use super::super::model::{Lab, Notice};
+        let dir = crate::engine::private_temp_dir("cedro-prova-pagine").unwrap();
+        let pdf = dir.join("Circolare.pdf");
+        std::fs::write(&pdf, crate::firma::pades_firma::tests::blank_pdf(false)).unwrap();
+        let jpg = dir.join("Foto.jpg");
+        image::RgbImage::from_pixel(64, 48, image::Rgb([200, 120, 60])).save(&jpg).unwrap();
+        let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+        s.request_appearance(ThemeId::Cedro, false);
+        s.drop_files(vec![pdf, jpg]);
+        let mut plat = Fake { clip: String::new() };
+        s.act(Act::Lab(Lab::Pdf), &mut plat);
+        assert_eq!(s.app.kind(), crate::engine::Kind::Pdf);
+        s.app.set_action("merge");
+        s.app.notice = Some(Notice { text: "Fatto: 2 file.".into(), error: false });
+        s.act(Act::Lab(Lab::Converti), &mut plat);
+        assert!(s.app.notice.is_none(), "l'avviso non deve seguire sulle altre pagine");
+        assert_ne!(s.app.kind(), crate::engine::Kind::Pdf);
+        s.act(Act::Lab(Lab::Pdf), &mut plat);
+        assert_eq!(s.app.action, "merge");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

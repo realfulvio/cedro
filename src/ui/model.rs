@@ -483,6 +483,8 @@ pub struct App {
     pub cuts: HashMap<PathBuf, Vec<u32>>,
     /// La conversione scelta prima di passare a Unisci o Dividi: «Converti» la ritrova.
     last_convert: String,
+    /// Il Cedro di partenza: la voce della pagina PDF (Unisci, Dividi…) mentre si guarda «Converti».
+    cedro_pdf_action: Option<String>,
     /// La finestra è in Semplificata (la tiene a giorno lo schermo): «Dividi» lì è una pagina per file.
     pub simple_view: bool,
     /// «Pagine»: le pagine di ogni PDF come le si è sistemate.
@@ -566,6 +568,7 @@ impl App {
             page_thumbs: HashMap::new(),
             cuts: HashMap::new(),
             last_convert: String::new(),
+            cedro_pdf_action: None,
             simple_view: false,
             boards: HashMap::new(),
             stamp_page: 0,
@@ -694,6 +697,8 @@ impl App {
     /// Il Cedro di partenza, «Converti» con un PDF in vista: si passa al primo tipo in coda che non è un
     /// PDF (le immagini se non ce n'è).
     pub fn cedro_leave_pdf(&mut self, simple: bool) {
+        // Tornando su «PDF» si ritrova la voce lasciata (Unisci, Dividi…), non quella di partenza.
+        self.cedro_pdf_action = Some(self.action.clone());
         let kind = self.files.iter().find(|f| !f.voice_only && f.kind != Kind::Pdf).map(|f| f.kind).unwrap_or(Kind::Image);
         if let Some(i) = CATEGORIES.iter().position(|c| c.kind == kind) {
             self.set_category(i, simple);
@@ -701,6 +706,15 @@ impl App {
         self.lab = Lab::Converti;
         self.selected = self.visible().first().copied();
         self.preview_page = 0;
+    }
+
+    /// Il Cedro di partenza, tornando su «PDF»: rimette la voce che c'era quando si è andati su «Converti».
+    pub fn cedro_back_to_pdf(&mut self) {
+        if let Some(a) = self.cedro_pdf_action.take() {
+            if self.kind() == Kind::Pdf {
+                self.action = a;
+            }
+        }
     }
 
     /// Il Cedro di partenza: come `lab_sync`, con le sue sei pagine. I PDF hanno la loro pagina, gli altri
