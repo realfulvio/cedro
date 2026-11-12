@@ -24,6 +24,7 @@ pub mod tabella;
 pub mod microscopia;
 pub mod nd2;
 pub mod lif;
+pub mod czi;
 pub mod figura;
 pub mod pacchetto;
 mod nametemplate;
