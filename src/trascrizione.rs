@@ -1896,9 +1896,28 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                 let names = default_names(voices);
                 // Le frasi restano salvate: «Rivedi» le riapre anche dopo aver chiuso Cedro.
                 let _ = crate::revisione::save(path, secs, &lang, &segments, &names);
+                // Con i referti veterinari le frasi con numeri e parole decisive vanno riascoltate in
+                // «Rivedi»: finché non lo sono il file è una bozza, col nome e la riga in cima che lo dicono.
+                let referto = request.glossario.as_deref().is_some_and(|g| g.split(',').any(|t| t.trim() == "veterinaria"));
+                let punti = if referto { crate::revisione::find_referto(&segments) } else { Vec::new() };
+                let draft = crate::revisione::riga_bozza(&segments, &punti.iter().collect::<Vec<_>>());
+                let out = match &draft {
+                    Some(_) => {
+                        let s = out.file_stem().and_then(|s| s.to_str()).unwrap_or(stem).to_string();
+                        let ext = request.format.ext();
+                        let mut o = dir.join(format!("{s} - bozza.{ext}"));
+                        let mut n = 2;
+                        while o.exists() {
+                            o = dir.join(format!("{s} - bozza ({n}).{ext}"));
+                            n += 1;
+                        }
+                        o
+                    }
+                    None => out.clone(),
+                };
                 let bytes = match request.format {
-                    Format::Word => docx_bytes(path, secs, &lang, &segments, &names),
-                    Format::Text => text_bytes(path, secs, &lang, &segments, &names),
+                    Format::Word => docx_bytes_full(path, secs, &lang, &segments, &names, None, draft.as_deref()),
+                    Format::Text => text_bytes_full(path, secs, &lang, &segments, &names, None, draft.as_deref()),
                 };
                 std::fs::create_dir_all(&dir)
                     .and_then(|_| {

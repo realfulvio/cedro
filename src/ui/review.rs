@@ -209,8 +209,8 @@ impl Review {
             Kind::Repeat => f.segs.iter().skip(1).any(|s| self.rows.get(*s).is_some_and(|r| !r.removed)),
             Kind::Loop => f.segs.first().and_then(|s| self.rows.get(*s)).is_some_and(|r| !r.removed && revisione::collapse_loops(&r.text).is_some()),
             Kind::Typical | Kind::Silence => f.segs.first().and_then(|s| self.rows.get(*s)).is_some_and(|r| !r.removed && r.text == r.orig),
-            // Riascoltata e corretta a mano vale come controllata; se no serve «Confermo».
-            Kind::Number | Kind::Meaning => f.segs.first().and_then(|s| self.rows.get(*s)).is_some_and(|r| !r.removed && r.text == r.orig),
+            // Riascoltata e corretta a mano (la frase non c'è più com'era) vale come controllata; se no serve «Confermo».
+            Kind::Number | Kind::Meaning => f.segs.first().and_then(|s| self.rows.get(*s)).is_some_and(|r| !r.removed && (if f.snippet.is_empty() { r.text == r.orig } else { r.text.contains(&f.snippet) })),
         }
     }
 
@@ -229,18 +229,9 @@ impl Review {
         if !self.is_draft() {
             return None;
         }
-        let open: Vec<usize> = (0..self.flags.len()).filter(|i| self.is_open(*i)).collect();
-        let points: Vec<String> = open
-            .iter()
-            .filter_map(|i| {
-                let fl = &self.flags[*i];
-                let row = fl.segs.first().and_then(|s| self.rows.get(*s))?;
-                let at = trascrizione::clock(row.t0);
-                Some(if fl.words.is_empty() { format!("[{at}]") } else { format!("[{at}] {}", fl.words.iter().map(|w| format!("«{w}»")).collect::<Vec<_>>().join(" ")) })
-            })
-            .collect();
-        let n = open.len();
-        Some(format!("BOZZA — {n} {} da riascoltare: {}", if n == 1 { "punto" } else { "punti" }, points.join(", ")))
+        let open: Vec<&Flag> = (0..self.flags.len()).filter(|i| self.is_open(*i)).map(|i| &self.flags[i]).collect();
+        let rows: Vec<Segment> = self.rows.iter().map(|r| Segment { t0: r.t0, t1: r.t1, text: String::new(), speaker: None }).collect();
+        revisione::riga_bozza(&rows, &open)
     }
 
     pub fn open_count(&self) -> usize {
@@ -249,7 +240,10 @@ impl Review {
 
     /// Il punto da controllare che comprende la frase `row`, se c'è.
     pub fn flag_of(&self, row: usize) -> Option<usize> {
-        self.flags.iter().position(|f| f.segs.contains(&row))
+        // Una frase può averne più d'uno (un referto con più frasi in un pezzo): prima quelli aperti.
+        let mut tutti = (0..self.flags.len()).filter(|i| self.flags[*i].segs.contains(&row));
+        let primo = tutti.next()?;
+        Some(std::iter::once(primo).chain(tutti).find(|i| self.is_open(*i)).unwrap_or(primo))
     }
 
     pub fn push_undo(&mut self) {

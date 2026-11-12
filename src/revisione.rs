@@ -124,6 +124,8 @@ pub struct Flag {
     pub count: usize,
     /// Per `Number` e `Meaning`: le parole che l'hanno fatta segnare.
     pub words: Vec<String>,
+    /// Per `Number` e `Meaning`: la frase del referto (un pezzo di whisper ne può avere più d'una).
+    pub snippet: String,
 }
 
 impl Flag {
@@ -282,41 +284,100 @@ const SENSO: &[&str] = &[
 pub fn find_referto(rows: &[Segment]) -> Vec<Flag> {
     let mut out = Vec::new();
     for (i, r) in rows.iter().enumerate() {
-        let w = words(&r.text);
-        // Le parole di numero una dietro l'altra fanno una misura sola («12 mm», «tre virgola cinque»).
-        let mut num: Vec<String> = Vec::new();
-        let mut run: Vec<String> = Vec::new();
-        for t in r.text.split_whitespace() {
-            let is_num = t.chars().any(|c| c.is_ascii_digit()) || NUMERI.contains(&t.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect::<String>().as_str());
-            let clean = t.trim_matches(|c: char| !c.is_alphanumeric() && c != '%');
-            if is_num && !clean.is_empty() {
-                run.push(clean.to_string());
-            }
-            // La punteggiatura chiude la misura anche se la parola dopo è un numero.
-            if !is_num || clean.is_empty() || t.ends_with([',', ';', '.', ':']) {
-                if !run.is_empty() {
-                    num.push(run.join(" "));
-                    run.clear();
+        // Whisper mette spesso più frasi in un pezzo solo (una dettatura di fila): ogni frase si
+        // controlla da sola, se no un «Confermo» confermerebbe tutto il referto.
+        for frase in frasi(&r.text) {
+            let (num, senso) = parole_referto(frase);
+            let mut parole = num.clone();
+            for t in senso.iter() {
+                if !parole.contains(t) {
+                    parole.push(t.clone());
                 }
             }
-        }
-        if !run.is_empty() {
-            num.push(run.join(" "));
-        }
-        let senso: Vec<String> = w.iter().filter(|t| SENSO.contains(&t.as_str())).cloned().collect();
-        let mut parole = num.clone();
-        for t in senso.iter() {
-            if !parole.contains(t) {
-                parole.push(t.clone());
-            }
-        }
-        if !num.is_empty() {
-            out.push(Flag { kind: Kind::Number, segs: vec![i], count: 1, words: parole });
-        } else if !senso.is_empty() {
-            out.push(Flag { kind: Kind::Meaning, segs: vec![i], count: 1, words: parole });
+            let kind = if !num.is_empty() {
+                Kind::Number
+            } else if !senso.is_empty() {
+                Kind::Meaning
+            } else {
+                continue;
+            };
+            out.push(Flag { kind, segs: vec![i], count: 1, words: parole, snippet: frase.to_string() });
         }
     }
     out
+}
+
+/// Le frasi di un testo: finiscono con . ! ? ; seguiti da uno spazio o dalla fine (non «2.5»).
+pub fn frasi(text: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut da = 0;
+    let b = text.as_bytes();
+    for (k, c) in text.char_indices() {
+        if matches!(c, '.' | '!' | '?' | ';') && b.get(k + 1).is_none_or(|n| n.is_ascii_whitespace()) {
+            let f = text[da..=k].trim();
+            if !f.is_empty() {
+                out.push(f);
+            }
+            da = k + 1;
+        }
+    }
+    let f = text[da..].trim();
+    if !f.is_empty() {
+        out.push(f);
+    }
+    out
+}
+
+/// I numeri e le misure di una frase (una misura per gruppo di parole di fila) e le parole che ne
+/// cambiano il senso.
+fn parole_referto(text: &str) -> (Vec<String>, Vec<String>) {
+    // Le parole di numero una dietro l'altra fanno una misura sola («12 mm», «tre virgola cinque»).
+    let mut num: Vec<String> = Vec::new();
+    let mut run: Vec<String> = Vec::new();
+    for t in text.split_whitespace() {
+        let is_num = t.chars().any(|c| c.is_ascii_digit()) || NUMERI.contains(&t.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect::<String>().as_str());
+        let clean = t.trim_matches(|c: char| !c.is_alphanumeric() && c != '%');
+        if is_num && !clean.is_empty() {
+            run.push(clean.to_string());
+        }
+        // La punteggiatura chiude la misura anche se la parola dopo è un numero.
+        if (!is_num || clean.is_empty() || t.ends_with([',', ';', '.', ':'])) && !run.is_empty() {
+            num.push(run.join(" "));
+            run.clear();
+        }
+    }
+    if !run.is_empty() {
+        num.push(run.join(" "));
+    }
+    let senso: Vec<String> = words(text).into_iter().filter(|t| SENSO.contains(&t.as_str())).collect();
+    (num, senso)
+}
+
+/// Il tempo come lo mostra «Rivedi»: 01:05, o 1:02:03 oltre l'ora.
+pub fn ora(centis: i64) -> String {
+    let s = (centis.max(0) as f64 / 100.0).round() as u64;
+    if s >= 3600 {
+        format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60)
+    } else {
+        format!("{:02}:{:02}", s / 60, s % 60)
+    }
+}
+
+/// La riga in cima a un referto ancora da controllare: quanti punti e dove, con le parole.
+pub fn riga_bozza(rows: &[Segment], flags: &[&Flag]) -> Option<String> {
+    if flags.is_empty() {
+        return None;
+    }
+    let punti: Vec<String> = flags
+        .iter()
+        .filter_map(|fl| {
+            let row = fl.segs.first().and_then(|s| rows.get(*s))?;
+            let at = ora(row.t0);
+            Some(if fl.words.is_empty() { format!("[{at}]") } else { format!("[{at}] {}", fl.words.iter().map(|w| format!("«{w}»")).collect::<Vec<_>>().join(" ")) })
+        })
+        .collect();
+    let n = flags.len();
+    Some(format!("BOZZA — {n} {} da riascoltare: {}", if n == 1 { "punto" } else { "punti" }, punti.join(", ")))
 }
 
 /// Trova i punti da controllare, nell'ordine in cui compaiono.
@@ -334,7 +395,7 @@ pub fn find(rows: &[Segment], wave: Option<&Wave>) -> Vec<Flag> {
         let run = j - i;
         let long = norm[i].len() >= 6;
         if (run >= 3 && (norm[i].len() >= 2 || run >= 4)) || (run == 2 && long) {
-            flags.push(Flag { kind: Kind::Repeat, segs: (i..j).collect(), count: run, words: Vec::new() });
+            flags.push(Flag { kind: Kind::Repeat, segs: (i..j).collect(), count: run, words: Vec::new(), snippet: String::new() });
             i = j;
         } else {
             i += 1;
@@ -343,7 +404,7 @@ pub fn find(rows: &[Segment], wave: Option<&Wave>) -> Vec<Flag> {
     // Un giro di parole che si ripete dentro la frase.
     for (i, r) in rows.iter().enumerate() {
         if let Some((_, count)) = collapse_loops(&r.text) {
-            flags.push(Flag { kind: Kind::Loop, segs: vec![i], count, words: Vec::new() });
+            flags.push(Flag { kind: Kind::Loop, segs: vec![i], count, words: Vec::new(), snippet: String::new() });
         }
     }
     // Frasi inventate, e frasi dove l'audio è quasi muto.
@@ -360,7 +421,7 @@ pub fn find(rows: &[Segment], wave: Option<&Wave>) -> Vec<Flag> {
         if typical || quiet {
             let already = flags.iter().any(|f| f.kind == Kind::Repeat && f.segs.contains(&i));
             if !already {
-                flags.push(Flag { kind: if quiet { Kind::Silence } else { Kind::Typical }, segs: vec![i], count: 1, words: Vec::new() });
+                flags.push(Flag { kind: if quiet { Kind::Silence } else { Kind::Typical }, segs: vec![i], count: 1, words: Vec::new(), snippet: String::new() });
             }
         }
     }
@@ -551,5 +612,12 @@ mod tests {
         assert_eq!(f[0].words, ["2,5 cm", "ben"]);
         assert_eq!(f[2].words, ["tre", "dieci", "mitosi"]);
         assert!(f[1].words.contains(&"non".to_string()) && f[1].words.contains(&"capsulata".to_string()));
+        // Una dettatura di fila in un pezzo solo: una voce per frase, ognuna col suo tipo.
+        let tutto = [seg(0, 1500, "Cane di otto anni. Massa di 2.5 cm. La lesione non è capsulata. Buona giornata.")];
+        let f = find_referto(&tutto);
+        let k: Vec<(Kind, &str)> = f.iter().map(|f| (f.kind, f.snippet.as_str())).collect();
+        assert_eq!(k, [(Kind::Number, "Cane di otto anni."), (Kind::Number, "Massa di 2.5 cm."), (Kind::Meaning, "La lesione non è capsulata.")]);
+        assert_eq!(ora(6150), "01:02");
+        assert_eq!(riga_bozza(&tutto, &[&f[1]]).unwrap(), "BOZZA — 1 punto da riascoltare: [00:00] «2.5 cm»");
     }
 }

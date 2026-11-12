@@ -1465,6 +1465,13 @@ mod prove_revisione {
                 let tolti = crate::svs_lab::copia_anonima(p, &a).unwrap();
                 println!("  copia anonima: tolti {}", tolti.join(", "));
             }
+            // CEDRO_VETRINI_TESSERE: le tessere a 5x, per vedere quante sono sul tessuto.
+            if std::env::var("CEDRO_VETRINI_TESSERE").is_ok() {
+                let o = crate::svs_lab::Tessere { ingrandimento: 5, ..Default::default() };
+                let d = out.join(format!("{nome}-tessere"));
+                let f = crate::svs_lab::tessere(p, &d, &nome, &o, &|_| {}).unwrap();
+                println!("  vetro {:?}, tessere {} scritte, {} scartate", crate::svs_lab::colore_vetro(&s, p), f.scritte, f.scartate);
+            }
             if std::env::var("CEDRO_VETRINI_PIENO").is_ok() {
                 let t = std::time::Instant::now();
                 s.write_streamed(p, 0, &out.join(format!("{nome}-pieno.png")), Streamed::Png).unwrap();

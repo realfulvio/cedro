@@ -1130,12 +1130,30 @@ impl App {
     /// Il nome di ciò che si sta per fare, per il pulsante («WebP», «Comprimi»…).
     /// Il nome dell'azione scelta come lo dice il menu (per esempio «Ruota di 90° a destra»).
     pub fn action_label(&self) -> &'static str {
-        super::voci::voce(self.kind(), &self.action).label
+        self.voce(&self.action).label
     }
 
     /// L'iconcina colorata dell'azione scelta.
     pub fn action_voce(&self) -> super::voci::Voce {
-        super::voci::voce(self.kind(), &self.action)
+        self.voce(&self.action)
+    }
+
+    /// La voce del menu per l'azione `id` con i file in coda: «Togli i dati nascosti» sui vetrini
+    /// digitali è la copia anonima del vetrino, non il GPS delle foto.
+    pub fn voce(&self, id: &str) -> super::voci::Voce {
+        let mut v = super::voci::voce(self.kind(), id);
+        if id == "strip" && self.kind() == Kind::Image {
+            let immagini: Vec<&Path> = self.files.iter().filter(|f| f.kind == Kind::Image).map(|f| f.path.as_path()).collect();
+            let vetrini = immagini.iter().filter(|p| self.media_of(p).is_some_and(|m| m.slide.is_some())).count();
+            if vetrini > 0 && vetrini == immagini.len() {
+                v.label = "Copia anonima del vetrino";
+                v.hint = "via etichetta, foto del vetrino, nomi e date";
+            } else if vetrini > 0 {
+                v.label = "Togli nomi e dati nascosti";
+                v.hint = "vetrini: copia anonima · foto: GPS e data";
+            }
+        }
+        v
     }
 
     pub fn option_defs(&self) -> Vec<&'static OptionDef> {

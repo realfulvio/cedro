@@ -635,7 +635,7 @@ impl Screen {
         let mut groups = Vec::new();
         if self.simple {
             for f in self.app.simple_choices() {
-                let mut v = voci::voce(kind, f.id);
+                let mut v = self.app.voce(f.id);
                 v.label = f.title;
                 v.hint = f.note;
                 items.push((f.title.to_string(), Act::Action(f.id)));
@@ -647,7 +647,7 @@ impl Screen {
                 groups.push((0, "Converti in"));
             }
             for s in conversioni::formats(kind) {
-                let v = voci::voce(kind, s.id);
+                let v = self.app.voce(s.id);
                 items.push((v.label.to_string(), Act::Action(s.id)));
                 rich.push(Some(v));
             }
@@ -655,7 +655,7 @@ impl Screen {
                 groups.push((items.len(), voci::tools_heading(kind)));
             }
             for s in &tools {
-                let v = voci::voce(kind, s.id);
+                let v = self.app.voce(s.id);
                 items.push((v.label.to_string(), Act::Action(s.id)));
                 rich.push(Some(v));
             }

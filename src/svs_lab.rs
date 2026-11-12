@@ -302,9 +302,28 @@ impl Default for Tessere {
     }
 }
 
+/// Il colore del vetro del vetrino: il colore più frequente della panoramica, se è chiaro. Il vetro
+/// non è sempre bianco (gli Hamamatsu lo fanno beige, circa 205,194,182): senza saperlo il vetro
+/// colorato conterebbe come tessuto.
+pub(crate) fn colore_vetro(s: &Slide, path: &Path) -> [u8; 3] {
+    let Ok(img) = s.preview(path, 1024) else { return [255; 3] };
+    let mut conta = vec![0u32; 1 << 15];
+    for p in img.pixels() {
+        conta[((p[0] as usize >> 3) << 10) | ((p[1] as usize >> 3) << 5) | (p[2] as usize >> 3)] += 1;
+    }
+    let (i, _) = conta.iter().enumerate().max_by_key(|(_, n)| **n).unwrap_or((0, &0));
+    let c = [((i >> 10) as u8) << 3 | 4, (((i >> 5) & 31) as u8) << 3 | 4, ((i & 31) as u8) << 3 | 4];
+    // Un fondo scuro vuol dire che il vetrino è quasi tutto tessuto (o è una fluorescenza): si tiene il bianco.
+    if c.iter().map(|v| *v as u32).sum::<u32>() / 3 >= 160 {
+        c
+    } else {
+        [255; 3]
+    }
+}
+
 /// Quanto di un'immagine è tessuto: pixel colorati (l'ematossilina e l'eosina lo sono, il vetro
-/// e la polvere no) e non bianchi.
-fn tessuto(img: &[u8]) -> f32 {
+/// e la polvere no), non bianchi e diversi dal colore del vetro.
+fn tessuto(img: &[u8], vetro: [u8; 3]) -> f32 {
     let n = img.len() / 3;
     if n == 0 {
         return 0.0;
@@ -312,7 +331,8 @@ fn tessuto(img: &[u8]) -> f32 {
     let mut t = 0usize;
     for p in img.chunks_exact(3) {
         let (mx, mn) = (p[0].max(p[1]).max(p[2]), p[0].min(p[1]).min(p[2]));
-        if mx - mn >= 20 && mn < 230 {
+        let dal_vetro = (0..3).map(|k| (p[k] as i32 - vetro[k] as i32).abs()).max().unwrap_or(0);
+        if mx - mn >= 20 && mn < 230 && dal_vetro >= 25 {
             t += 1;
         }
     }
@@ -369,6 +389,7 @@ pub fn tessere(path: &Path, dir: &Path, base: &str, o: &Tessere, avanzamento: &d
         }
     }
     let l = s.levels[livello].clone();
+    let vetro = colore_vetro(&s, path);
     let sorgente = ((o.lato as f64 * scala).round() as u32).max(1);
     let giu = s.full().width as f64 / l.width as f64;
     // I micron veri di un pixel della tessera: quelli del livello per i pixel presi diviso il lato.
@@ -412,7 +433,7 @@ pub fn tessere(path: &Path, dir: &Path, base: &str, o: &Tessere, avanzamento: &d
                                         let a = r * w + x0 * 3;
                                         px.extend_from_slice(&banda[a..a + sorgente as usize * 3]);
                                     }
-                                    let t = tessuto(&px);
+                                    let t = tessuto(&px, vetro);
                                     if o.solo_tessuto && t < 0.5 {
                                         v.push(Ok(None));
                                         continue;
@@ -905,6 +926,17 @@ mod prove {
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn il_vetro_beige_degli_hamamatsu_non_e_tessuto() {
+        let vetro = [205u8, 194, 182];
+        let px: Vec<u8> = std::iter::repeat_n(vetro, 100).flatten().collect();
+        assert_eq!(tessuto(&px, vetro), 0.0);
+        assert_eq!(tessuto(&px, [255; 3]), 1.0, "senza il colore del vetro sembrerebbe tutto tessuto");
+        // Il rosa dell'eosina resta tessuto.
+        let rosa: Vec<u8> = std::iter::repeat_n([200u8, 120, 170], 100).flatten().collect();
+        assert_eq!(tessuto(&rosa, vetro), 1.0);
     }
 
     #[test]

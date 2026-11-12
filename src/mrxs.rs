@@ -658,11 +658,36 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
         }
         // Slidedat.ini: le chiavi personali restano ma vuote.
         let ini = a.join("Slidedat.ini");
+        // L'identificativo del vetrino (un GUID dello scanner, che riporta al caso) cambia in uno nuovo
+        // della stessa lunghezza, in Slidedat.ini e in testa all'indice, che devono restare uguali.
+        let letto = Ini::leggi(&ini)?;
+        let vecchio_id = letto.get("GENERAL", "SLIDE_ID").unwrap_or("").to_string();
+        let nuovo_id = {
+            use sha2::{Digest, Sha256};
+            let h = Sha256::digest([vecchio_id.as_bytes(), b"cedro-anonimo"].concat());
+            let hex: String = h.iter().map(|b| format!("{b:02X}")).collect::<String>().repeat(2);
+            hex[..vecchio_id.len().min(hex.len())].to_string()
+        };
+        let cambia_id = !vecchio_id.is_empty() && nuovo_id.len() == vecchio_id.len() && vecchio_id.is_ascii();
+        if cambia_id {
+            let indice = a.join(letto.serve("HIERARCHICAL", "INDEXFILE")?);
+            let mut f = fs::OpenOptions::new().read(true).write(true).open(&indice).map_err(|e| e.to_string())?;
+            let mut testa = vec![0u8; VERSIONE_INDICE.len() + vecchio_id.len()];
+            f.read_exact(&mut testa).map_err(|e| e.to_string())?;
+            if &testa[VERSIONE_INDICE.len()..] == vecchio_id.as_bytes() {
+                f.seek(SeekFrom::Start(VERSIONE_INDICE.len() as u64)).map_err(|e| e.to_string())?;
+                f.write_all(nuovo_id.as_bytes()).map_err(|e| e.to_string())?;
+            }
+        }
         let testo = fs::read(&ini).map_err(|e| e.to_string())?;
         let mut cambiato = false;
         let mut nuovo = String::new();
         for riga in String::from_utf8_lossy(&testo).split_inclusive('\n') {
             match riga.split_once('=') {
+                Some((k, v)) if cambia_id && k.trim().trim_start_matches('\u{feff}') == "SLIDE_ID" && v.trim() == vecchio_id => {
+                    nuovo.push_str(&riga.replacen(&vecchio_id, &nuovo_id, 1));
+                    cambiato = true;
+                }
                 Some((k, v)) if chiave_personale(k.trim()) && !v.trim().is_empty() => {
                     let fine = if riga.ends_with("\r\n") { "\r\n" } else if riga.ends_with('\n') { "\n" } else { "" };
                     nuovo.push_str(&format!("{}= {fine}", k));
@@ -673,7 +698,7 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
         }
         if cambiato {
             fs::write(&ini, nuovo).map_err(|e| e.to_string())?;
-            tolti.push("nome, progetto, data e codici da Slidedat.ini");
+            tolti.push("nome, progetto, data, codici e identificativo del vetrino da Slidedat.ini");
         }
         Ok(tolti)
     })();
@@ -823,7 +848,9 @@ mod prove {
         let s2 = Slide::open(&out).unwrap();
         let lab2 = s2.read_extra(&out, s2.label.unwrap()).unwrap();
         assert!(lab2.get_pixel(20, 15)[1] > 240, "{:?}", lab2.get_pixel(20, 15));
-        assert!(!fs::read_to_string(d.join("anonimo").join("Slidedat.ini")).unwrap().contains("Rossi"));
+        let ini_anonimo = fs::read_to_string(d.join("anonimo").join("Slidedat.ini")).unwrap();
+        assert!(!ini_anonimo.contains("Rossi") && !ini_anonimo.contains("0123456789ABCDEF0123456789ABCDEF"), "{ini_anonimo}");
+        assert!(!fs::read(d.join("anonimo").join("Index.dat")).unwrap().windows(32).any(|w| w == b"0123456789ABCDEF0123456789ABCDEF"));
         assert_eq!(s2.read_level(&out, 1).unwrap(), s.read_level(&p, 1).unwrap());
         // Dal motore: la copia anonima è un .mrxs col codice del caso e la sua cartella; il consulto
         // porta anche la cartella dei dati, con le impronte.
