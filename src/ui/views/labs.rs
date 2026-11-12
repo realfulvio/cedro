@@ -235,7 +235,7 @@ fn home(f: &mut Frame, app: &App, area: R) {
     f.p.text("Che file hai?", x, area.1 + 6.0, w, 50.0, 38.0, BOLD, LABS_INK, Align::Left);
     f.p.text("Trascinalo qui dentro, oppure scegli il tipo. Se sai già cosa fare, parti dalle voci a sinistra.", x, area.1 + 58.0, w, 28.0, 17.0, SANS, LABS_MUTED, Align::Left);
     let tiles: [(&str, &str, Lab); 6] = [
-        ("Vetrino", "SVS", Lab::Immagini),
+        ("Vetrino", "SVS · NDPI · MRXS", Lab::Immagini),
         ("Radiografia", "DICOM", Lab::Immagini),
         ("Microscopia", "CZI, ND2, LIF, TIFF a 16 bit", Lab::Immagini),
         ("Tabella", "CSV, Excel", Lab::Dati),
@@ -324,8 +324,8 @@ fn empty(f: &mut Frame, app: &App, r: R) {
     f.p.text("Trascina qui i file oppure fai clic", r.0, cy, r.2, 32.0, 23.0, SEMI, LABS_INK, Align::Center);
     let cat = &conversioni::CATEGORIES[app.category];
     let accepts = match app.lab {
-        Lab::Immagini | Lab::Figura => "Vetrini SVS, DICOM, CZI, ND2, LIF, TIFF a 16 bit, PNG, JPEG e le altre immagini".to_string(),
-        Lab::Anonimizza => "DICOM, vetrini SVS, foto, PDF, Word".to_string(),
+        Lab::Immagini | Lab::Figura => "Vetrini SVS, NDPI e MRXS, DICOM, CZI, ND2, LIF, TIFF a 16 bit, PNG, JPEG e le altre immagini".to_string(),
+        Lab::Anonimizza => "DICOM, vetrini SVS, NDPI e MRXS, foto, PDF, Word".to_string(),
         Lab::Dati => "CSV, TSV, Excel, ODS, JSON".to_string(),
         Lab::Converti => "Immagini, documenti, PDF, testi, audio, video, archivi".to_string(),
         _ => format!("{} · {}", cat.hint, cat.accepts),
@@ -375,6 +375,11 @@ pub(super) fn viewer(f: &mut Frame, app: &App, i: usize, area: R) {
     let page = app.preview_page.min(pages - 1);
     let img = app.previews.get(&(file.path.clone(), page)).and_then(|o| o.clone()).or_else(|| app.media_of(&file.path).and_then(|m| m.thumb.clone()));
     let Some(img) = img else {
+        // Un file che non si è potuto leggere (troncato, danneggiato) lo dice, invece di girare per sempre.
+        if app.previews_failed.contains(&(file.path.clone(), page)) {
+            f.p.text("Anteprima non disponibile: il file sembra danneggiato o incompleto.", area.0, area.1 + area.3 / 2.0 - 15.0, area.2, 30.0, 17.0, SANS, LABS_MUTED, Align::Center);
+            return;
+        }
         f.spinner(area.0 + area.2 / 2.0, area.1 + area.3 / 2.0 - 20.0, 16.0, LABS_INK);
         f.p.text("Preparo l'anteprima…", area.0, area.1 + area.3 / 2.0 + 10.0, area.2, 30.0, 17.0, SANS, LABS_MUTED, Align::Center);
         f.animating = true;
@@ -631,11 +636,10 @@ fn side_panel(f: &mut Frame, app: &App, r: R) {
     let body = (r.0 + 1.0, y, r.2 - 2.0, foot_y - y);
     if f.simple {
         let ids = choices(app);
-        let kind = app.kind();
         super::scrolled(f, body, Scroll::Inspector, |f| {
             let mut cy = body.1 + 2.0;
             for id in &ids {
-                let v = voci::voce(kind, id);
+                let v = app.voce(id);
                 choice_row(f, (x, cy, w, 62.0), &v, v.label, v.hint, app.action == *id, Act::Action(id), deep);
                 cy += 70.0;
             }
@@ -738,7 +742,7 @@ pub(super) fn file_card(f: &mut Frame, app: &App, r: R) {
             f.hover_fill(row, 12.0, pal.alt, t);
             f.p.rrect_vgrad(x, cy + 13.0, 36.0, 36.0, 10.0, bright, deep);
             f.icon(lab_icon(lab), x + 8.0, cy + 21.0, 20.0, WHITE);
-            let label = if name.is_empty() { voci::voce(kind, id).label } else { name };
+            let label = if name.is_empty() { app.voce(id).label } else { name };
             f.text(label, x + 50.0, cy + 9.0, w - 54.0, 24.0, 16.5, SEMI, pal.text);
             let sub = format!("in «{}»", lab.name());
             f.text(&sub, x + 50.0, cy + 32.0, w - 54.0, 20.0, 14.0, SANS, pal.muted);
