@@ -441,7 +441,8 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     let r = row(0, y, "Barra di avanzamento", "Una linea sottile in basso a destra mentre converte, verde a lavoro finito.", 40, 0);
     toggle(0, ID_PROGRESS, &r);
     y = r.next;
-    let r = row(0, y, "Registro attività", "Il file log.txt e config.txt stanno in %APPDATA%\\Cedro.", 130, 0);
+    let log_where = if cedro::portable::is_portable() { "Il file log.txt e config.txt stanno nella cartella Dati, accanto a cedro.exe." } else { "Il file log.txt e config.txt stanno in %APPDATA%\\Cedro." };
+    let r = row(0, y, "Registro attività", log_where, 130, 0);
     button(0, ID_LOG, &r, "Apri cartella", 130);
     y = r.next;
     let r = row(0, y, "Lingua dell'interfaccia", "Automatica segue la lingua di Windows. Vale subito dopo «Salva».", 190, 0);

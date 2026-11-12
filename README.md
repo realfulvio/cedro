@@ -39,6 +39,7 @@ Tutto avviene **sul tuo dispositivo**: i file non vengono caricati da nessuna pa
 | Il tuo dispositivo | Cosa scaricare |
 | --- | --- |
 | **Windows 10 e 11** | [`Cedro-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest) |
+| **Windows 10 e 11, portable** | [`Cedro-Portable-….-x64.zip`](https://github.com/realfulvio/cedro/releases/latest): estrai e apri `cedro.exe`, niente da installare; dati e impostazioni restano nella cartella `Dati` accanto all'exe (solo x64) |
 | **Windows on ARM** (Snapdragon X e simili) | [`Cedro-ARM64-Setup-….exe`](https://github.com/realfulvio/cedro/releases/latest): versione nativa, più veloce nella trascrizione |
 | **Linux** (Wayland con KDE Plasma o GNOME) | [`cedro-….-linux-x64.tar.gz`](https://github.com/realfulvio/cedro/releases/latest): estrai e lancia `./install.sh`, senza permessi di amministratore |
 | **Android** | APK firmato dalle [release](https://github.com/realfulvio/cedro/releases?q=android-v) (dalla 0.21.3) e repository F-Droid nostro: `https://realfulvio.github.io/cedro/fdroid/repo`. Mai su Google Play |
