@@ -48,7 +48,8 @@ pub fn list(kind: Kind, mode: Mode) -> Vec<Slice> {
         out.extend(base.iter().filter(|s| !IMAGE_ORDER.contains(&s.id)).copied());
         return out;
     }
-    base.to_vec()
+    // Le voci dei vetrini stanno nel pannello, dove si vede se in coda c'è un vetrino.
+    base.iter().filter(|s| !engine::SOLO_VETRINI.contains(&s.id) && !engine::SOLO_DICOM.contains(&s.id)).copied().collect()
 }
 
 /// Dove sta il mouse, o cosa si è toccato.
@@ -689,9 +690,12 @@ fn icon_of(id: &str) -> &'static str {
         "ocr" => assets::SEARCH,
         "merge" => super::views::ICON_MERGE,
         "split" => super::views::ICON_SPLIT,
+        "figure" => "M3 3h8v8H3z M13 3h8v8h-8z M3 13h8v8H3z M13 13h8v8h-8z",
         "dup" => assets::COPY,
         "path" => assets::LINK,
         "zip" => assets::FOLDER,
+        "pack" => assets::LOCK,
+        "verify-pack" => assets::SHIELD,
         "upper" | "lower" => assets::TRANSCRIBE,
         _ => assets::FILE,
     }

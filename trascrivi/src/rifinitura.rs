@@ -12,6 +12,36 @@ pub fn initial_prompt(lang: &str) -> Option<&'static str> {
     }
 }
 
+/// I termini dei referti veterinari di anatomia patologica e citologia, scritti come in un referto:
+/// whisper li riconosce molto meglio se li ha «già visti» nel testo che precede l'audio.
+const VETERINARIA: &str = "Referto istologico veterinario, cane e gatto: mastocitoma cutaneo di grado II secondo Kiupel e Patnaik, \
+carcinoma mammario tubulopapillare, linfoma multicentrico, emangiosarcoma splenico, osteosarcoma, melanoma orale, \
+sarcoma dei tessuti molli, fibrosarcoma, adenoma perianale, istiocitoma, lipoma, plasmocitoma. Margini chirurgici indenni, \
+invasione linfovascolare, conta mitotica 14 in 2,37 mm², anisocariosi, pleomorfismo nucleare, necrosi, Ki-67, \
+immunoistochimica, agoaspirato, citologia, linfonodo regionale.";
+
+/// Il glossario chiesto: «veterinaria» diventa la raccolta pronta, le altre parole restano come sono.
+fn glossario(g: &str) -> String {
+    g.split(',')
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .map(|t| if t.eq_ignore_ascii_case("veterinaria") { VETERINARIA.to_string() } else { t.to_string() })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Il prompt completo: l'esempio della lingua e, se c'è, il glossario. Whisper tiene solo gli ultimi
+/// 224 gettoni del prompt, quindi il glossario sta in fondo e il testo totale resta corto.
+pub fn prompt(lang: &str, glossario_chiesto: Option<&str>) -> Option<String> {
+    let g = glossario_chiesto.map(glossario).filter(|g| !g.is_empty()).map(|g| g.chars().filter(|c| *c != '\0').take(700).collect::<String>());
+    match (initial_prompt(lang), g) {
+        (Some(p), Some(g)) => Some(format!("{p} {g}")),
+        (None, Some(g)) => Some(g),
+        (Some(p), None) => Some(p.to_string()),
+        (None, None) => None,
+    }
+}
+
 /// Le frasi che whisper inventa sul silenzio o a fine audio (le ha imparate dai sottotitoli dei video).
 const PHANTOMS: &[&str] = &[
     "grazie",
@@ -59,6 +89,17 @@ fn is_phantom(words: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn il_glossario_va_in_fondo_al_prompt() {
+        let p = prompt("it", Some("veterinaria, Metacam")).unwrap();
+        assert!(p.starts_with("Ciao, scusami.") && p.contains("mastocitoma") && p.ends_with(", Metacam"), "{p}");
+        assert_eq!(prompt("en", Some("Metacam")).as_deref(), Some("Metacam"));
+        assert_eq!(prompt("en", None), None);
+        assert_eq!(prompt("it", Some(" , ")).as_deref(), initial_prompt("it"));
+        // Il glossario veterinario resta corto: whisper ne tiene circa 224 gettoni.
+        assert!(VETERINARIA.split_whitespace().count() < 90);
+    }
 
     #[test]
     fn italian_has_a_punctuated_prompt_others_none() {

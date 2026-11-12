@@ -263,6 +263,8 @@ pub struct Transcribe {
     pub speakers: u8,
     /// La finestrella «Quante persone parlano?» è aperta.
     pub asking: bool,
+    /// I termini dei referti veterinari suggeriti al motore (spunta nella finestrella, ricordata).
+    pub glossario_vet: bool,
 }
 
 /// Il lavoro in corso.
@@ -477,9 +479,13 @@ impl App {
         let loader = media::Loader::new(tx.clone(), wake.clone());
         let pdfwork = super::pdfwork::Worker::new(tx.clone(), wake.clone());
         let mut values = Values::new();
-        if crate::read_settings().replace {
+        let st = crate::read_settings();
+        if st.replace {
             values.exists = Exists::Replace;
         }
+        // La calibrazione del microscopio si scrive una volta e resta.
+        values.set_text(&conversioni::FIG_CALIBRATION, &st.calibrazione_10x);
+        values.set_text(&conversioni::RX_CLINIC, &st.nome_clinica);
         let mut app = App {
             activity: Activity::Convert,
             files: Vec::new(),
@@ -490,7 +496,7 @@ impl App {
             dest: None,
             job: None,
             selected: None,
-            transcribe: Transcribe { format: trascrizione::Format::Word, model: trascrizione::default_model(), log: Vec::new(), percent: 0, since: None, speakers: 0, asking: false },
+            transcribe: Transcribe { format: trascrizione::Format::Word, model: trascrizione::default_model(), log: Vec::new(), percent: 0, since: None, speakers: 0, asking: false, glossario_vet: crate::read_settings().glossario_vet },
             youtube: Links::new(false),
             web: Links::new(true),
             notice: None,
@@ -932,10 +938,52 @@ impl App {
             all.append(&mut defs);
             defs = all;
         }
+        // Con un DICOM in coda il riquadro «DICOM» (finestra, serie, anonimizza) va in cima.
+        if self.kind() == Kind::Image && self.activity == Activity::Convert && self.first_dicom().is_some() {
+            let mut all = conversioni::dicom_option_defs(&self.action);
+            all.retain(|d| !defs.iter().any(|x| x.opt == d.opt));
+            all.append(&mut defs);
+            defs = all;
+        }
+        // Con un'immagine di microscopia: canali, piani Z, contrasto e barra di scala, in cima.
+        if self.kind() == Kind::Image && self.activity == Activity::Convert {
+            if let Some((m, _)) = self.first_micro() {
+                let mut all = conversioni::micro_option_defs(&self.action, m.canali, m.z, m.t);
+                all.retain(|d| !defs.iter().any(|x| x.opt == d.opt));
+                all.append(&mut defs);
+                defs = all;
+            }
+        }
         defs.into_iter().filter(|d| conversioni::shown(d, &self.values)).collect()
     }
 
+    /// La prima immagine di microscopia della coda, con quante ce ne sono.
+    pub fn first_micro(&self) -> Option<(&media::MicroInfo, usize)> {
+        let mut found = self.files.iter().filter_map(|f| self.media_of(&f.path).and_then(|m| m.micro.as_ref()));
+        let first = found.next()?;
+        Some((first, 1 + found.count()))
+    }
+
+    /// Il primo DICOM della coda, con quanti ce ne sono.
+    pub fn first_dicom(&self) -> Option<(&media::DicomInfo, usize)> {
+        let mut found = self.files.iter().filter_map(|f| self.media_of(&f.path).and_then(|m| m.dicom.as_ref()));
+        let first = found.next()?;
+        Some((first, 1 + found.count()))
+    }
+
     /// Il primo vetrino digitale (.svs) della coda, con quanti ce ne sono.
+    /// Gli strumenti del pannello: quelli dei vetrini solo se in coda c'è un vetrino.
+    pub fn tools(&self) -> Vec<crate::engine::Slice> {
+        let vetrini = self.first_slide().is_some();
+        let dicom = self.first_dicom().is_some();
+        conversioni::tools(self.kind())
+            .iter()
+            .filter(|s| vetrini || !crate::engine::SOLO_VETRINI.contains(&s.id))
+            .filter(|s| dicom || !crate::engine::SOLO_DICOM.contains(&s.id))
+            .copied()
+            .collect()
+    }
+
     pub fn first_slide(&self) -> Option<(&media::SlideInfo, usize)> {
         let mut found = self.files.iter().filter_map(|f| self.media_of(&f.path).and_then(|m| m.slide.as_ref()));
         let first = found.next()?;
@@ -1221,6 +1269,12 @@ impl App {
         if !(self.simple_view && self.action == "split") {
             conversioni::validate(&self.values, self.kind(), &self.action)?;
         }
+        if self.kind() == Kind::Image && self.action == "rx" && !self.targets().iter().any(|&i| crate::rx::e_dicom(&self.files[i].path)) {
+            return Err("Spunta almeno una radiografia DICOM.".into());
+        }
+        if self.kind() == Kind::Image && self.action == "figure" && self.targets().len() > 26 {
+            return Err("Una figura tiene al massimo 26 pannelli (dalla A alla Z).".into());
+        }
         if self.kind() == Kind::Pdf && self.action == "merge" {
             let targets = self.targets();
             if targets.len() < 2 {
@@ -1317,7 +1371,23 @@ impl App {
             self.notice = Some(Notice { text: "Aggiungi prima qualche file.".into(), error: false });
             return;
         }
-        if self.kind() == Kind::Pdf && self.action == "merge" {
+        if self.kind() == Kind::Image && self.action == "figure" {
+            let cal = self.values.text(&conversioni::FIG_CALIBRATION).trim().to_string();
+            let mut st = crate::read_settings();
+            if st.calibrazione_10x != cal {
+                st.calibrazione_10x = cal;
+                let _ = crate::settings::write_settings(&st);
+            }
+        }
+        if self.kind() == Kind::Image && self.action == "rx" {
+            let clinica = self.values.text(&conversioni::RX_CLINIC).trim().to_string();
+            let mut st = crate::read_settings();
+            if st.nome_clinica != clinica {
+                st.nome_clinica = clinica;
+                let _ = crate::settings::write_settings(&st);
+            }
+        }
+        if (self.kind() == Kind::Pdf && self.action == "merge") || (self.kind() == Kind::Image && matches!(self.action.as_str(), "figure" | "rx")) {
             self.start_merge();
             return;
         }
@@ -1390,8 +1460,10 @@ impl App {
         });
     }
 
-    /// «Unisci»: un lavoro solo per tutti i PDF spuntati, nell'ordine della coda; ogni file riceve lo stesso risultato.
+    /// «Unisci» e «Figura»: un lavoro solo per tutti i file spuntati, nell'ordine della coda; ogni file
+    /// riceve lo stesso risultato.
     fn start_merge(&mut self) {
+        let action = self.action.clone();
         // Anche quelli già fatti: il PDF unito si rifà sempre con tutti.
         let targets = self.targets();
         let sources: Vec<(PathBuf, Option<engine::PageSel>)> = targets.iter().map(|&i| (self.files[i].path.clone(), engine::PageSel::parse(&self.files[i].pages).ok().flatten())).collect();
@@ -1420,7 +1492,13 @@ impl App {
                             guarded(|| {
                                 // «Accanto all'originale» vuol dire accanto al primo file.
                                 let beside = sources[0].0.parent().filter(|p| !p.as_os_str().is_empty()).map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("."));
-                                engine::merge_with(&sources, Some(dest.as_deref().unwrap_or(&beside)), &opts).map(|o| (o.path, o.message)).map_err(|e| e.0)
+                                let out_dir = Some(dest.as_deref().unwrap_or(&beside));
+                                let done = match action.as_str() {
+                                    "figure" => engine::figure_with(&paths, out_dir, &opts),
+                                    "rx" => engine::rx_with(&paths, out_dir, &opts),
+                                    _ => engine::merge_with(&sources, out_dir, &opts),
+                                };
+                                done.map(|o| (o.path, o.message)).map_err(|e| e.0)
                             })
                         },
                     )
@@ -1470,7 +1548,7 @@ impl App {
         self.transcribe.percent = 0;
         self.transcribe.since = None;
         let settings = crate::read_settings();
-        let request = trascrizione::Request { format: self.transcribe.format, model: self.transcribe.model, gpu: settings.gpu, avx512: settings.avx512, speakers: self.transcribe.speakers.min(trascrizione::MAX_VOICES as u8) };
+        let request = trascrizione::Request { format: self.transcribe.format, model: self.transcribe.model, gpu: settings.gpu, avx512: settings.avx512, speakers: self.transcribe.speakers.min(trascrizione::MAX_VOICES as u8), glossario: crate::settings::Settings { glossario_vet: self.transcribe.glossario_vet, ..settings.clone() }.glossario() };
         let dest = self.dest.clone();
         let opts = self.exists_options(conversioni::options_from(&self.values));
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
@@ -1828,8 +1906,20 @@ impl App {
         // Unire e dividere fanno PDF; le altre voci corte sono l'estensione.
         let ext = if self.action.len() <= 5 && !conversioni::is_page_action(self.kind(), &self.action) { self.action.as_str() } else { "pdf" };
         // Gli strumenti delle immagini hanno il loro nome e la loro estensione (come in engine).
+        // Le voci del laboratorio hanno nomi loro (come in engine).
+        let lab = match (self.kind(), self.action.as_str()) {
+            (crate::engine::Kind::Image, "figure") => Some(("nomefile-figura", "tiff")),
+            (crate::engine::Kind::Image, "tiles") => Some(("nomefile-tessere", "")),
+            (crate::engine::Kind::Image, "mitosi") => Some(("nomefile-conta-mitotica", "jpg")),
+            (crate::engine::Kind::Image, "consult") => Some(("caso-1a2b3c-consulto", "zip")),
+            (crate::engine::Kind::Image, "rx") => Some(("nomeanimale-radiografie", "pdf")),
+            _ => None,
+        };
         let (name, ext) = match (self.kind(), ext) {
+            _ if lab.is_some() => lab.unwrap_or_default(),
             (crate::engine::Kind::Image, "strip") => ("nomefile-pulito", "jpg"),
+            (crate::engine::Kind::Pdf, "strip") => ("nomefile-anonimo", "pdf"),
+            (crate::engine::Kind::Doc, "strip") => ("nomefile-anonimo", "docx"),
             (crate::engine::Kind::Image, "compress") => ("nomefile-compresso", "jpg"),
             (crate::engine::Kind::Image, "half") => ("nomefile-meta", "png"),
             (crate::engine::Kind::Image, "gray") => ("nomefile-bn", "png"),
@@ -1839,6 +1929,7 @@ impl App {
             (_, e) => ("nomefile", e),
         };
         match self.values.exists {
+            Exists::Number if ext.is_empty() => format!("Esempio: {name}-2"),
             Exists::Number => format!("Esempio: {name}-2.{ext}"),
             Exists::Replace => "Il file con lo stesso nome viene sostituito.".into(),
             Exists::Skip => "Il file con lo stesso nome resta com'è.".into(),

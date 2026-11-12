@@ -6,7 +6,7 @@ Testo	Text
 Cambia formato, ridimensiona e raddrizza le foto.	Change format, resize and straighten photos.
 Da Word, ODT e RTF a PDF.	From Word, ODT and RTF to PDF.
 Da PDF a Word modificabile, a Excel, a immagini o a testo.	From PDF to editable Word, Excel, images or text.
-TXT, Markdown, CSV, JSON e HTML.	TXT, Markdown, CSV, JSON and HTML.
+TXT, Markdown, CSV, Excel, JSON e HTML.	TXT, Markdown, CSV, Excel, JSON and HTML.
 WAV, MP3, OGG, M4A, AAC e FLAC.	WAV, MP3, OGG, M4A, AAC and FLAC.
 MP3, WAV, FLAC, Opus e AIFF.	MP3, WAV, FLAC, Opus and AIFF.
 Archivi	Archives
@@ -1859,3 +1859,292 @@ colori della tessera non gestiti	unsupported tile colors
 compressione {#} non gestita	compression {} not supported
 JPEG 2000 con {#} componenti	JPEG 2000 with {} components
 lettura interrotta	reading interrupted
+# DICOM (TC, RX, ecografie)
+Del file	File
+Polmone	Lung
+Osso	Bone
+Tessuti molli	Soft tissue
+Finestra	Window
+«Del file» è quella scelta da chi ha fatto l'esame; Polmone, Osso e Tessuti molli sono quelle classiche della TC	"File" is the one chosen by whoever ran the exam; Lung, Bone and Soft tissue are the classic CT windows
+Tutte le immagini della serie	All images in the series
+Spento: solo la prima	Off: only the first
+Valori originali a 16 bit	Original 16-bit values
+Per misurare: niente finestra, unità Hounsfield intatte	For measuring: no window, Hounsfield units untouched
+Anonimizza	Anonymize
+Nome, ID, nascita, medico, clinica e UID non escono; i file prendono un codice	Name, ID, birth date, doctor, clinic and UIDs stay out; files get a code
+DICOM	DICOM
+{} · {#} file	{} · {} files
+In ecografie e catture dello schermo il nome può essere scritto dentro l'immagine: Cedro non lo cancella, controlla prima di condividere.	In ultrasounds and screen captures the name can be written inside the image: Cedro doesn't erase it, check before sharing.
+{} immagini	{} images
+senza immagine (referto o elenco)	no image (report or list)
+Ecografia	Ultrasound
+Mammografia	Mammography
+Fluoroscopia	Fluoroscopy
+Medicina nucleare	Nuclear medicine
+PDF di {#} pagine, un'immagine per pagina	{}-page PDF, one image per page
+{#} {}, uno per immagine ({#}×{#})	{2} {1}, one per image ({3}×{4})
+~ · finestra polmone	 · lung window
+~ · finestra osso	 · bone window
+~ · finestra tessuti molli	 · soft tissue window
+~ · finestra del file (polmone, osso e tessuti molli valgono per la TC)	 · window from the file (lung, bone and soft tissue apply to CT)
+~ · valori originali a 16 bit	 · original 16-bit values
+~ · valori originali a 16 bit, spostati di 32768 (gli Hounsfield negativi)	 · original 16-bit values, shifted by 32768 (negative Hounsfield)
+~. Attenzione: in questo tipo di immagine il nome può essere scritto dentro i pixel; controllala prima di condividerla	. Warning: in this kind of image the name may be written in the pixels; check it before sharing
+il DICOM non ha un'immagine	the DICOM has no image
+il DICOM non contiene un'immagine (forse è un referto o un elenco)	the DICOM contains no image (maybe a report or a list)
+file troncato	truncated file
+Nessun dato personale trovato	No personal data found
+~. Restano specie, razza, sesso, età e peso.	. Species, breed, sex, age and weight are kept.
+i file esistono già: saltati	the files already exist: skipped
+~Tolti: 	Removed: 
+~. Codice del paziente: 	. Patient code: 
+~nome del paziente	patient name
+~codice del paziente	patient ID
+~data di nascita	birth date
+~proprietario	owner
+~clinica o ospedale	clinic or hospital
+~medici e operatori	doctors and operators
+~indirizzi e telefoni	addresses and phone numbers
+~note e commenti	notes and comments
+~numeri di accettazione e di studio	accession and study numbers
+~numero di serie dell'apparecchio	device serial number
+~dati privati del produttore	manufacturer's private data
+~identificativi dell'esame (UID)	exam identifiers (UIDs)
+~date (spostate tutte insieme)	dates (all shifted together)
+~allevamento	breeder
+Questa immagine può avere nome o data scritti dentro i pixel (ecografie, catture dello schermo): controllala prima di condividerla.	This image may have the name or date written in the pixels (ultrasounds, screen captures): check it before sharing.
+# Togli autore e dati nascosti da PDF e documenti
+Togli autore e dati nascosti	Remove author and hidden data
+autore, programma, commenti	author, program, comments
+autore, revisioni, commenti	author, revisions, comments
+Modifica il documento	Edit the document
+Anonimo	Anonymous
+Nessun dato nascosto trovato.	No hidden data found.
+Il testo del documento resta com'è: se il nome è scritto lì, va tolto a mano.	The document text stays as it is: if the name is written there, remove it by hand.
+Il PDF contiene allegati: non sono stati aperti, controllali.	The PDF has attachments: they were not opened, check them.
+formato non gestito	format not supported
+PDF protetto da password: togli prima la password e riprova	password-protected PDF: remove the password first and try again
+i .doc e .rtf vecchi non si ripuliscono: salvali prima in .docx o .odt	old .doc and .rtf files can't be cleaned: save them as .docx or .odt first
+documento non letto: {}	document not read: {}
+PDF non scritto: {}	PDF not written: {}
+~autore	author
+~programma	program
+~date di creazione e modifica	creation and modification dates
+~titolo	title
+~oggetto	subject
+~parole chiave	keywords
+~altre informazioni del documento	other document information
+~metadati XMP	XMP metadata
+~dati privati dei programmi	private program data
+~autori dei commenti	comment authors
+~date dei commenti	comment dates
+~dati della firma	signature details
+~azioni all'apertura	actions on opening
+~proprietà personalizzate	custom properties
+~elenco delle persone	list of people
+~miniatura	thumbnail
+~ultimo a modificare	last modified by
+~descrizione	description
+~categoria	category
+~chi ha stampato	printed by
+~numero di revisioni	revision count
+~tempo di modifica	editing time
+~modello	template
+~azienda	company
+~responsabile	manager
+~indirizzo dei collegamenti	hyperlink base
+~autori di commenti e revisioni	comment and revision authors
+~percorso del file sul PC	file path on the PC
+# Tabelle di laboratorio (CSV/TSV ↔ Excel, piastre)
+numeri veri, geni come testo	real numbers, genes kept as text
+Excel con {#} righe.	Excel with {} rows.
+Numeri con la virgola letti come numeri.	Decimal-comma numbers read as numbers.
+Piastra da {#} pozzetti anche una riga per pozzetto (foglio Pozzetti).	{}-well plate also laid out one row per well (Pozzetti sheet).
+{#} piastre da {#} pozzetti, anche una riga per pozzetto (foglio Pozzetti).	{} plates of {} wells, also laid out one row per well (Pozzetti sheet).
+Nomi di geni e codici lasciati come testo.	Gene names and codes kept as text.
+CSV dal foglio di calcolo	CSV from the spreadsheet
+{#} fogli: un CSV per foglio	{} sheets: one CSV per sheet
+il foglio di calcolo è vuoto	the spreadsheet is empty
+è già un Excel: Cedro ne fa un altro solo se trova piastre da mettere una riga per pozzetto	it's already an Excel file: Cedro only makes another one when it finds plates to lay out one row per well
+il file non è un foglio di calcolo leggibile (forse un .xls vecchio: salvalo in .xlsx)	the file is not a readable spreadsheet (maybe an old .xls: save it as .xlsx)
+cartella di lavoro non trovata nel file	workbook not found in the file
+nessun foglio nel file	no sheets in the file
+contenuto del foglio non trovato	sheet content not found
+foglio non letto: {}	sheet not read: {}
+testi del foglio non letti: {}	sheet text not read: {}
+cartella di lavoro non letta: {}	workbook not read: {}
+troppe colonne per Excel: {#} (al massimo {#})	too many columns for Excel: {} (at most {})
+# Microscopia (OME-TIFF, ImageJ, TIFF a 16 bit)
+Microscopia	Microscopy
+Sovrapposti	Overlaid
+Uno per file	One per file
+Entrambi	Both
+Centrale	Middle
+Sovrapposti: un'immagine a colori con ogni canale del suo colore	Overlaid: one colour image with each channel in its own colour
+Piani Z (profondità)	Z planes (depth)
+Massima: unisce i piani tenendo il punto più luminoso, come nelle figure degli articoli	Maximum: merges the planes keeping the brightest point, as in paper figures
+Tutti gli istanti	All time points
+Spento: solo il primo	Off: first only
+Contrasto automatico	Auto contrast
+A 16 bit la fluorescenza sembra quasi nera: si regola da solo, canale per canale	At 16 bit fluorescence looks almost black: it adjusts itself, channel by channel
+Barra di scala	Scale bar
+Se il file dice quanto è grande un pixel	If the file says how big a pixel is
+Per misurare: un file per canale, senza colori né contrasto	For measuring: one file per channel, no colours or contrast
+Il file non dice quanto è grande un pixel: senza barra di scala.	The file doesn't say how big a pixel is: no scale bar.
+~ · barra di scala 	 · scale bar 
+~. Il file non dice quanto è grande un pixel: senza barra di scala	. The file doesn't say how big a pixel is: no scale bar
+TIFF di un tipo che Cedro non legge ancora (serve grigio o RGB)	TIFF of a type Cedro can't read yet (grey or RGB needed)
+piano non trovato nel file	plane not found in the file
+tipo di pixel non letto	pixel type not read
+troppe pagine	too many pages
+niente da scrivere	nothing to write
+
+~ canali sovrapposti e uno per file	 channels overlaid and one per file
+~ canali sovrapposti	 channels overlaid
+~ canali, un file per canale	 channels, one file per channel
+~un file per piano Z	one file per Z plane
+~piano Z centrale	middle Z plane
+~proiezione massima di 	maximum projection of 
+~ piani Z	 Z planes
+~contrasto automatico	auto contrast
+~solo il primo istante	first time point only
+~valori originali a 16 bit, un file per canale	original 16-bit values, one file per channel
+
+~, uno per immagine (	, one per image (
+
+ND2 compresso con perdita (JPEG 2000): Cedro non lo legge ancora; da NIS-Elements si può esportare in TIFF	Lossy-compressed ND2 (JPEG 2000): Cedro can't read it yet; NIS-Elements can export it as TIFF
+ND2 di vecchio tipo (NIS-Elements 2, immagini in JPEG 2000): Cedro non lo legge ancora; da NIS-Elements si può esportare in TIFF	Old-style ND2 (NIS-Elements 2, JPEG 2000 images): Cedro can't read it yet; NIS-Elements can export it as TIFF
+altezza non trovata	height not found
+larghezza non trovata	width not found
+blocco ND2 non valido	invalid ND2 block
+blocco ND2 troppo grande	ND2 block too large
+blocco ND2 inatteso	unexpected ND2 block
+canale non trovato	channel not found
+file ND2 troppo corto	ND2 file too short
+file ND2 troncato	truncated ND2 file
+file LIF troncato	truncated LIF file
+il file LIF non ha immagini	the LIF file has no images
+il file ND2 non ha immagini	the ND2 file has no images
+immagine non trovata nel file LIF	image not found in the LIF file
+intestazione del file LIF non valida	invalid LIF file header
+intestazione del file LIF non letta: {}	LIF file header not read: {}
+non è un file LIF	not a LIF file
+manca la mappa dei blocchi in fondo al file ND2 (file non finito?)	the block map at the end of the ND2 file is missing (unfinished file?)
+mappa dei blocchi troncata	truncated block map
+mappa troncata	truncated map
+metadati troncati	truncated metadata
+metadati troppo annidati	metadata nested too deeply
+metadati troppo grandi	metadata too large
+metadati vuoti	empty metadata
+livello di metadati fuori misura	metadata level out of bounds
+livello di metadati troppo grande	metadata level too large
+metadati XML non letti: {}	XML metadata not read: {}
+metadati compressi non letti: {}	compressed metadata not read: {}
+tipo di metadato sconosciuto ({})	unknown metadata type ({})
+misure del file ND2 non valide	invalid ND2 file dimensions
+righe del file ND2 più corte del previsto	ND2 file rows shorter than expected
+nel file ND2 manca il blocco {}	the ND2 file is missing the block {}
+nel file LIF manca il blocco di «{}»	the LIF file is missing the block of “{}”
+il fotogramma {} non è dove dice la mappa	frame {} isn't where the map says
+fotogramma {} non decompresso: {}	frame {} not decompressed: {}
+dimensione vuota in «{}»	empty dimension in “{}”
+le misure di «{}» non stanno nei suoi dati	the dimensions of “{}” don't fit its data
+pixel di {} bit: Cedro non li legge ancora	{}-bit pixels: Cedro can't read them yet
+«{}» è troppo grande ({})	“{}” is too large ({})
+~ immagini del progetto	 project images
+Figura {} × {} cm, {} dpi, {#} pannelli.	Figure {} × {} cm, {} dpi, {} panels.
+Figura {} × {} cm, {} dpi, {#} pannello.	Figure {} × {} cm, {} dpi, {} panel.
+{#} con la barra di scala.	{} with a scale bar.
+Legenda nel file di testo accanto.	Caption details in the text file alongside.
+nessuna immagine per la figura	no images for the figure
+una figura tiene al massimo 26 pannelli (A-Z)	a figure holds at most 26 panels (A-Z)
+figura troppo grande: meno pannelli o immagini meno alte	figure too large: fewer panels or shorter images
+Una figura tiene al massimo 26 pannelli (dalla A alla Z).	A figure holds at most 26 panels (A to Z).
+Figura	Figure
+Figura per un articolo	Figure for a paper
+pannelli A B C, 300 dpi	panels A B C, 300 dpi
+Larghezza	Width
+Quella chiesta dalla rivista: una colonna o tutta la pagina	What the journal asks for: one column or the full page
+Una colonna (8,5 cm)	One column (8.5 cm)
+Pagina intera (17,5 cm)	Full page (17.5 cm)
+300 dpi per foto e microscopia; 600 se la rivista lo chiede	300 dpi for photos and microscopy; 600 if the journal asks
+Lettere A, B, C	Letters A, B, C
+In alto a sinistra di ogni pannello, nell'ordine della coda	Top left of each panel, in queue order
+Sui pannelli di microscopia che dicono quanto è grande un pixel	On microscopy panels that state the pixel size
+  cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra] [--obiettivo=40x]	  cedro figura <image>… [--colonna] [--600] [--senza-lettere] [--senza-barra] [--obiettivo=40x]
+                   la figura per un articolo: pannelli A, B, C in un TIFF a 300 dpi largo 17,5 cm	                   a figure for a paper: panels A, B, C in a 300 dpi TIFF, 17.5 cm wide
+Pacchetto	Package
+Verifica il pacchetto di dati	Verify the data package
+impronte SHA-256 di ogni file	SHA-256 of every file
+Pacchetto con {#} file ({}), impronta SHA-256 di ognuno.	Package with {} files ({}), SHA-256 of each one.
+Impronta dello ZIP: {}… (nel file .sha256 accanto).	ZIP fingerprint: {}… (in the .sha256 file alongside).
+Per firmarlo: Firma digitale.	To sign it: Digital signature.
+Pacchetto integro: {#} file, tutte le impronte SHA-256 tornano.	Package intact: {} files, every SHA-256 matches.
+Pacchetto NON integro: {#} file a posto.	Package NOT intact: {} files fine.
+Cambiati: {}.	Changed: {}.
+Mancano: {}.	Missing: {}.
+Aggiunti dopo: {}.	Added later: {}.
+nessun file da mettere nel pacchetto	no files to put in the package
+questo ZIP non è un pacchetto di dati: manca l'elenco delle impronte (manifest-sha256.txt)	this ZIP is not a data package: the fingerprint list (manifest-sha256.txt) is missing
+l'elenco delle impronte è vuoto	the fingerprint list is empty
+  cedro pacchetto <file o cartella>…   pacchetto di dati (ZIP BagIt con l'impronta SHA-256 di ogni file)	  cedro pacchetto <file or folder>…   data package (BagIt ZIP with the SHA-256 of every file)
+  cedro tool <pacchetto.zip> verify-pack   controlla che nessun file del pacchetto sia cambiato	  cedro tool <package.zip> verify-pack   checks that no file in the package has changed
+Obiettivo delle foto	Objective of the photos
+Per le foto della fotocamera del microscopio, che non dicono quanto è grande un pixel: la barra si calcola dall'obiettivo	For photos from the microscope camera, which don't state the pixel size: the bar is computed from the objective
+Calibrazione con il 10x	Calibration with the 10x
+Micron per pixel con l'obiettivo 10x, misurati una volta con il vetrino micrometrico; Cedro se la ricorda	Microns per pixel with the 10x objective, measured once with a stage micrometer; Cedro remembers it
+per esempio 0,65	for example 0.65
+Scrivi la calibrazione: i micron di un pixel con il 10x, per esempio 0,65.	Enter the calibration: microns per pixel with the 10x, for example 0.65.
+Tessere AI	AI tiles
+Mitosi	Mitoses
+Consulto	Consult
+Tessere per l'AI	Tiles for AI
+riquadri del vetrino, solo tessuto	slide tiles, tissue only
+Zona per la conta mitotica	Area for the mitotic count
+2,37 mm² in 10 campi	2.37 mm² in 10 fields
+Pacchetto per un consulto	Package for a consult
+vetrino anonimo e scheda	anonymous slide and case sheet
+Lato delle tessere	Tile size
+256 per la maggior parte dei modelli; 512 per vedere più contesto	256 for most models; 512 to see more context
+Ingrandimento	Magnification
+Uguale per tutti i vetrini, anche se scansionati a 40x	The same for every slide, even if scanned at 40x
+20x (0,5 µm/px)	20x (0.5 µm/px)
+10x (1 µm/px)	10x (1 µm/px)
+Come scansionato	As scanned
+Solo tessuto	Tissue only
+Le tessere quasi tutte vetro bianco restano fuori	Tiles that are almost all blank glass are left out
+PNG non perde niente; JPEG pesa un decimo	PNG loses nothing; JPEG weighs a tenth
+serve un vetrino digitale (.svs)	needs a digital slide (.svs)
+Vetrino copiato: non c'era niente da togliere	Slide copied: there was nothing to remove
+Vetrino anonimo: tolti {}	Anonymous slide: removed {}
+etichetta	label
+foto del vetrino	slide photo
+nome, data e utente dalle descrizioni	name, date and user from the descriptions
+{#} tessere da {#} pixel{}, con l'elenco in tessere.csv{}	{} tiles of {} pixels{}, listed in tessere.csv{}
+~ a {} µm per pixel	 at {} µm per pixel
+~ ({#} di vetro vuoto lasciate fuori)	 ({} of blank glass left out)
+Zona di 2,37 mm² in 10 campi numerati ({} µm per pixel), scelta dove ci sono più nuclei; la panoramica con la zona è accanto. Conta le mitosi nei 10 campi.	2.37 mm² area in 10 numbered fields ({} µm per pixel), chosen where nuclei are densest; the overview with the area is alongside. Count the mitoses in the 10 fields.
+Consulto {}: vetrino anonimo (tolti {}), panoramica e scheda da compilare, con le impronte SHA-256	Consult {}: anonymous slide (removed {}), overview and case sheet to fill in, with SHA-256 fingerprints
+il vetrino non dice quanto è grande un pixel: scegli «Come scansionato»	the slide does not state the pixel size: choose “As scanned”
+il vetrino è più piccolo di una tessera	the slide is smaller than one tile
+il vetrino non dice quanto è grande un pixel: l'area di 2,37 mm² non si può misurare	the slide does not state the pixel size: the 2.37 mm² area cannot be measured
+il vetrino è più piccolo dell'area di 2,37 mm²	the slide is smaller than the 2.37 mm² area
+nessuna zona di 2,37 mm² piena di tessuto	no 2.37 mm² area full of tissue
+Referti veterinari	Veterinary reports
+termini di anatomia patologica	pathology terms
+  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--glossario veterinaria] [--cpu]	  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--glossario veterinaria] [--cpu]
+Proprietario	Owner
+Radiografie per il proprietario	X-rays for the owner
+PDF con il logo della clinica	PDF with the clinic logo
+Nome della clinica	Clinic name
+In cima a ogni pagina, accanto al logo; per il logo metti in coda anche la sua immagine. Cedro li ricorda	At the top of every page, next to the logo; for the logo add its image to the queue too. Cedro remembers both
+per esempio Clinica Veterinaria San Marco	for example San Marco Veterinary Clinic
+Spunta almeno una radiografia DICOM.	Tick at least one DICOM X-ray.
+nessuna radiografia DICOM in coda	no DICOM X-rays in the queue
+nessuna radiografia nei file	no X-rays in the files
+PDF per il proprietario, {#} pagine, con il logo della clinica.	PDF for the owner, {} pages, with the clinic logo.
+PDF per il proprietario, {#} pagina, con il logo della clinica.	PDF for the owner, {} page, with the clinic logo.
+PDF per il proprietario, {#} pagine.	PDF for the owner, {} pages.
+PDF per il proprietario, {#} pagina.	PDF for the owner, {} page.
+Per il logo metti in coda anche la sua immagine: Cedro poi se lo ricorda.	For the logo add its image to the queue too: Cedro will remember it.
+Niente barra dall'obiettivo: manca la calibrazione con il 10x.	No bar from the objective: the 10x calibration is missing.

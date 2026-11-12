@@ -632,7 +632,7 @@ impl Screen {
                 rich.push(Some(v));
             }
         } else {
-            let tools = conversioni::tools(kind);
+            let tools = self.app.tools();
             if !tools.is_empty() {
                 groups.push((0, "Converti in"));
             }
@@ -644,7 +644,7 @@ impl Screen {
             if !tools.is_empty() {
                 groups.push((items.len(), voci::tools_heading(kind)));
             }
-            for s in tools {
+            for s in &tools {
                 let v = voci::voce(kind, s.id);
                 items.push((v.label.to_string(), Act::Action(s.id)));
                 rich.push(Some(v));
@@ -904,6 +904,12 @@ impl Screen {
                 }
             }
             Act::VoicesPick(n) => app.transcribe.speakers = n.min(trascrizione::MAX_VOICES as u8),
+            Act::VoicesGlossary => {
+                app.transcribe.glossario_vet = !app.transcribe.glossario_vet;
+                let mut st = crate::read_settings();
+                st.glossario_vet = app.transcribe.glossario_vet;
+                let _ = crate::settings::write_settings(&st);
+            }
             Act::VoicesGo => app.voices_go(),
             Act::VoicesCancel => app.transcribe.asking = false,
             Act::MediaPlay => app.media_toggle(),

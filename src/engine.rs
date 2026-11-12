@@ -52,7 +52,9 @@ const ACTIONS: &[Slice] = &[
     Slice { id: "dup", label: "Duplica" },
     Slice { id: "path", label: "Percorso" },
     Slice { id: "zip", label: "ZIP" },
+    Slice { id: "pack", label: "Pacchetto" },
 ];
+const ARCHIVE_TOOLS: &[Slice] = &[Slice { id: "verify-pack", label: "Verifica" }];
 const IMAGE_CONVERT: &[Slice] = &[
     Slice { id: "png", label: "PNG" },
     Slice { id: "jpeg", label: "JPEG" },
@@ -69,12 +71,18 @@ const IMAGE_TOOLS: &[Slice] = &[
     Slice { id: "rot90", label: "Ruota" },
     Slice { id: "strip", label: "Metadati" },
     Slice { id: "ocr", label: "OCR" },
+    Slice { id: "figure", label: "Figura" },
+    Slice { id: "tiles", label: "Tessere AI" },
+    Slice { id: "mitosi", label: "Mitosi" },
+    Slice { id: "consult", label: "Consulto" },
+    Slice { id: "rx", label: "Proprietario" },
 ];
 const TEXT_CONVERT: &[Slice] = &[
     Slice { id: "txt", label: "TXT" },
     Slice { id: "html", label: "HTML" },
     Slice { id: "md", label: "MD" },
     Slice { id: "csv", label: "CSV" },
+    Slice { id: "xlsx", label: "Excel" },
     Slice { id: "json", label: "JSON" },
     Slice { id: "pdf", label: "PDF" },
 ];
@@ -130,7 +138,8 @@ const PDF_CONVERT: &[Slice] = &[
     Slice { id: "png", label: "PNG" },
     Slice { id: "txt", label: "Testo" },
 ];
-const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }, Slice { id: "merge", label: "Unisci" }, Slice { id: "split", label: "Dividi" }, Slice { id: "compress", label: "Comprimi" }];
+const PDF_TOOLS: &[Slice] = &[Slice { id: "ocr", label: "OCR" }, Slice { id: "strip", label: "Anonimo" }, Slice { id: "merge", label: "Unisci" }, Slice { id: "split", label: "Dividi" }, Slice { id: "compress", label: "Comprimi" }];
+const DOC_TOOLS: &[Slice] = &[Slice { id: "strip", label: "Anonimo" }];
 const EMPTY: &[Slice] = &[Slice { id: "none", label: "Niente qui" }];
 
 /// I formati di uscita del pannello Conversioni: quelli della ruota più gli altri, che alla ruota
@@ -155,7 +164,9 @@ pub fn slices(kind: Kind, mode: Mode) -> &'static [Slice] {
         (Kind::Doc, Mode::Convert) => DOC_CONVERT,
         (Kind::Pdf, Mode::Convert) => PDF_CONVERT,
         (Kind::Pdf, Mode::Tools) => PDF_TOOLS,
+        (Kind::Doc, Mode::Tools) => DOC_TOOLS,
         (Kind::Archive, Mode::Convert) => ARCHIVE_CONVERT,
+        (Kind::Archive, Mode::Tools) => ARCHIVE_TOOLS,
         _ => EMPTY,
     }
 }
@@ -216,10 +227,10 @@ fn kind_by_extension(ext: &str) -> Kind {
     match ext {
         "pdf" => Kind::Pdf,
         "doc" | "docx" | "odt" | "rtf" => Kind::Doc,
-        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "ico"
+        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "dcm" | "dicom" | "nd2" | "lif" | "ico"
         | "svg" | "svgz" | "avif" | "jxl" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm"
         | "hdr" | "exr" | "dds" => Kind::Image,
-        "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" => Kind::Text,
+        "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" | "xlsx" | "xlsm" | "ods" => Kind::Text,
         "wav" | "mp3" | "ogg" | "oga" | "opus" | "m4a" | "aac" | "flac" | "aif" | "aiff" | "aifc" | "caf" => Kind::Audio,
         "mp4" | "webm" | "mov" | "mkv" | "avi" => Kind::Video,
         "zip" => Kind::Archive,
@@ -235,7 +246,7 @@ pub fn kind_of(path: &Path) -> Kind {
     let Some(real) = crate::imgfmt::sniff_file(path) else {
         return by_ext;
     };
-    let sure = matches!(real, "png" | "jpg" | "gif" | "webp" | "bmp" | "tiff" | "avif" | "jxl" | "qoi" | "dds" | "exr" | "hdr" | "pdf" | "flac" | "wav" | "aiff" | "ogg" | "opus" | "svg");
+    let sure = matches!(real, "png" | "jpg" | "gif" | "webp" | "bmp" | "tiff" | "dcm" | "nd2" | "lif" | "avif" | "jxl" | "qoi" | "dds" | "exr" | "hdr" | "pdf" | "flac" | "wav" | "aiff" | "ogg" | "opus" | "svg");
     let by_content = kind_by_extension(real);
     if by_content != Kind::Other && by_content != by_ext && (by_ext == Kind::Other || sure) {
         return by_content;
@@ -905,6 +916,27 @@ pub struct Options {
     pub slide_level: u32,
     pub slide_label: bool,
     pub slide_macro: bool,
+    /// I DICOM: la finestra (0 del file, 1 polmone, 2 osso, 3 tessuti molli), tutte le immagini o la
+    /// prima, i valori originali a 16 bit (PNG e TIFF) e i nomi in codice al posto di quello del file.
+    pub dicom_window: u32,
+    pub dicom_all_frames: bool,
+    pub dicom_16bit: bool,
+    pub dicom_anon: bool,
+    /// Microscopia (OME-TIFF, ImageJ, TIFF a 16 bit): canali (0 sovrapposti, 1 uno per file, 2 tutti),
+    /// piani Z (0 proiezione massima, 1 piano centrale, 2 un file per piano), tutti gli istanti, contrasto
+    /// automatico, barra di scala e valori originali a 16 bit.
+    pub micro_channels: u32,
+    pub micro_z: u32,
+    pub micro_all_t: bool,
+    pub micro_contrast: bool,
+    pub micro_scale: bool,
+    pub micro_16bit: bool,
+    /// La figura per un articolo (pannelli A B C): larghezza, dpi, lettere e barra di scala.
+    pub figura: crate::figura::Opzioni,
+    /// Le tessere per l'intelligenza artificiale dai vetrini.
+    pub tessere: crate::svs_lab::Tessere,
+    /// Le radiografie per il proprietario: il nome della clinica in cima alla pagina.
+    pub rx_clinica: String,
     /// Unire e dividere i PDF.
     pub pdf_pages: PdfPages,
     /// Le pagine di un PDF (ruotare, togliere, estrarre, numeri e filigrana) e la compressione.
@@ -986,6 +1018,19 @@ impl Default for Options {
             slide_level: 1,
             slide_label: true,
             slide_macro: true,
+            dicom_window: 0,
+            dicom_all_frames: true,
+            dicom_16bit: false,
+            dicom_anon: true,
+            micro_channels: 0,
+            micro_z: 0,
+            micro_all_t: true,
+            micro_contrast: true,
+            micro_scale: true,
+            micro_16bit: false,
+            figura: crate::figura::Opzioni::default(),
+            tessere: crate::svs_lab::Tessere::default(),
+            rx_clinica: String::new(),
             pdf_pages: PdfPages::default(),
             pdf_edit: PdfEdit::default(),
         }
@@ -1117,6 +1162,156 @@ fn merge_inner(sources: &[(PathBuf, Option<PageSel>)], out_dir: Option<&Path>, o
         message.push_str(", protetto con password");
     }
     write_bytes(&out, &bytes)?;
+    crate::progress::report(1.0);
+    Ok(Output { path: out, message })
+}
+
+/// La ruota: il pacchetto dei dati con i file (e le cartelle) scelti.
+pub fn package_paths(paths: &[PathBuf], out_dir: Option<&Path>) -> CedroResult<Output> {
+    let exists = if crate::settings::read_settings().replace { Exists::Replace } else { Exists::Number };
+    package_with(paths, out_dir, &Options { exists, ..Options::default() })
+}
+
+/// Il pacchetto dei dati (BagIt): uno ZIP con l'impronta SHA-256 di ogni file e il LEGGIMI, più
+/// accanto un `.sha256` con l'impronta dello ZIP intero. Il nome viene dal primo file o cartella.
+pub fn package_with(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    let Some(first) = paths.first() else {
+        return Err(err("nessun file da mettere nel pacchetto"));
+    };
+    let _job = crate::resources::acquire(None).expect("uncancellable job");
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), guarded: true, ..Default::default() }));
+    let mut restore = RestoreNaming(Some(before));
+    let result = (|| {
+        let dir = match out_dir {
+            Some(d) => {
+                fs::create_dir_all(d).map_err(|e| err(e.to_string()))?;
+                d.to_path_buf()
+            }
+            None => output_dir(first, &crate::settings::read_settings())?,
+        };
+        let base = if first.is_dir() { first.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "dati".into()) } else { stem(first) };
+        let out = reserve(&dir, &format!("{base}-pacchetto"), "zip")?;
+        let nome = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "pacchetto".into());
+        let fatto = crate::pacchetto::crea(paths, &out, &nome, &|p| crate::progress::report(p)).map_err(err)?;
+        let zip_name = file_label(&out);
+        let _ = fs::write(out.with_file_name(format!("{zip_name}.sha256")), format!("{}  {zip_name}\n", fatto.impronta));
+        let message = format!(
+            "Pacchetto con {} file ({}), impronta SHA-256 di ognuno. Impronta dello ZIP: {}… (nel file .sha256 accanto). Per firmarlo: Firma digitale.",
+            fatto.file,
+            size_words(fatto.byte),
+            &fatto.impronta[..16]
+        );
+        Ok(Output { path: out, message })
+    })();
+    let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
+    finish_outputs(result, used)
+}
+
+/// Le voci che valgono solo con un DICOM in coda (nel pannello, mai nella ruota).
+pub const SOLO_DICOM: &[&str] = &["rx"];
+
+/// Dove si ricorda il logo della clinica per le radiografie del proprietario.
+pub(crate) fn logo_clinica() -> PathBuf {
+    config_dir().join("logo-clinica.png")
+}
+
+/// Le radiografie per il proprietario: un PDF A4 con tutte le immagini dei DICOM dati, i dati
+/// dell'animale in chiaro e il logo della clinica (un'immagine non DICOM in coda, che si ricorda).
+pub fn rx_with(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    rx_in(paths, out_dir, opts, &logo_clinica())
+}
+
+fn rx_in(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options, logo_salvato: &Path) -> CedroResult<Output> {
+    let dicom: Vec<PathBuf> = paths.iter().filter(|p| crate::rx::e_dicom(p)).cloned().collect();
+    let Some(first) = dicom.first().cloned() else {
+        return Err(err("nessuna radiografia DICOM in coda"));
+    };
+    let _job = crate::resources::acquire(None).expect("uncancellable job");
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), guarded: true, ..Default::default() }));
+    let mut restore = RestoreNaming(Some(before));
+    let result = (|| {
+        let dir = match out_dir {
+            Some(d) => {
+                fs::create_dir_all(d).map_err(|e| err(e.to_string()))?;
+                d.to_path_buf()
+            }
+            None => output_dir(&first, &crate::settings::read_settings())?,
+        };
+        let logo = crate::rx::logo(paths, logo_salvato);
+        let (bytes, pagine, animale) = crate::rx::pdf(&dicom, &opts.rx_clinica, logo.as_ref(), &|p| crate::progress::report(p)).map_err(err)?;
+        let nome = crate::rx::nome_file(&animale).unwrap_or_else(|| stem(&first));
+        let out = reserve(&dir, &format!("{nome}-radiografie"), "pdf")?;
+        write_bytes(&out, &bytes)?;
+        crate::progress::report(1.0);
+        let mut message = format!("PDF per il proprietario, {pagine} {}", if pagine == 1 { "pagina" } else { "pagine" });
+        message.push_str(if logo.is_some() { ", con il logo della clinica." } else { ". Per il logo metti in coda anche la sua immagine: Cedro poi se lo ricorda." });
+        Ok(Output { path: out, message })
+    })();
+    let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
+    finish_outputs(result, used)
+}
+
+/// La ruota: la figura per un articolo con le immagini scelte, nell'ordine dei nomi (A la prima).
+pub fn figure_paths(paths: &[PathBuf], out_dir: Option<&Path>) -> CedroResult<Output> {
+    let mut sorted = paths.to_vec();
+    sorted.sort_by(|a, b| natural_cmp(&file_label(a).to_lowercase(), &file_label(b).to_lowercase()));
+    let exists = if crate::settings::read_settings().replace { Exists::Replace } else { Exists::Number };
+    figure_with(&sorted, out_dir, &Options { exists, ..Options::default() })
+}
+
+/// La figura per un articolo: le immagini in pannelli A, B, C nell'ordine dato, in un TIFF con i dpi
+/// scritti dentro, più la legenda di testo accanto. Il nome viene dal primo file («-figura»).
+pub fn figure_with(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    let Some(first) = paths.first() else {
+        return Err(err("nessuna immagine per la figura"));
+    };
+    let _job = crate::resources::acquire(None).expect("uncancellable job");
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), guarded: true, ..Default::default() }));
+    let mut restore = RestoreNaming(Some(before));
+    let result = figure_inner(paths, out_dir, opts);
+    let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
+    finish_outputs(result, used)
+}
+
+fn figure_inner(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
+    let first = &paths[0];
+    let dir = match out_dir {
+        Some(d) => {
+            fs::create_dir_all(d).map_err(|e| err(e.to_string()))?;
+            d.to_path_buf()
+        }
+        None => output_dir(first, &crate::settings::read_settings())?,
+    };
+    if paths.len() > 26 {
+        return Err(err("una figura tiene al massimo 26 pannelli (A-Z)"));
+    }
+    let out = reserve(&dir, &format!("{}-figura", stem(first)), "tiff")?;
+    let mut pannelli = Vec::with_capacity(paths.len());
+    for (i, path) in paths.iter().enumerate() {
+        crate::progress::report(i as f32 / paths.len() as f32 * 0.8);
+        pannelli.push(crate::figura::pannello(path).map_err(err)?);
+    }
+    let opz = &opts.figura;
+    let figura = crate::figura::componi(pannelli, opz).map_err(err)?;
+    crate::progress::report(0.9);
+    let bytes = crate::figura::tiff(&figura.img, opz.dpi).map_err(err)?;
+    write_bytes(&out, &bytes)?;
+    // La legenda accanto, con lo stesso nome: si copia nella didascalia.
+    let legenda = out.with_file_name(format!("{}-legenda.txt", out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()));
+    let _ = fs::write(&legenda, crate::figura::legenda(&figura, opz));
+    let cm = |mm: f32| format!("{:.1}", mm / 10.0).replace('.', ",");
+    let alta = figura.img.height() as f32 / opz.dpi as f32 * 25.4;
+    let barre = figura.pannelli.iter().filter(|p| p.2.is_some()).count();
+    let n = figura.pannelli.len();
+    let mut message = format!("Figura {} × {} cm, {} dpi, {n} {}.", cm(opz.larghezza_mm as f32), cm(alta), opz.dpi, if n == 1 { "pannello" } else { "pannelli" });
+    if barre > 0 {
+        message.push_str(&format!(" {barre} con la barra di scala."));
+    }
+    // L'obiettivo da solo non basta: senza la calibrazione con il 10x la barra non si può calcolare.
+    if opz.barra && opz.obiettivo != 0 && crate::figura::pm_per_px(&opz.calibrazione_10x, opz.obiettivo).is_none() {
+        message.push_str(" Niente barra dall'obiettivo: manca la calibrazione con il 10x.");
+    }
+    message.push_str(" Legenda nel file di testo accanto.");
     crate::progress::report(1.0);
     Ok(Output { path: out, message })
 }
@@ -1336,6 +1531,41 @@ fn finish_outputs(result: CedroResult<Output>, used: Naming) -> CedroResult<Outp
     Ok(out)
 }
 
+#[path = "engine_dicom.rs"]
+mod dicom_out;
+#[path = "engine_micro.rs"]
+mod micro_out;
+#[path = "engine_svslab.rs"]
+mod svslab_out;
+pub use svslab_out::SOLO_VETRINI;
+
+/// Il formato del crate `image`, l'estensione e il pezzo di nome in più di ogni voce delle immagini.
+fn image_target(action: &str) -> Option<(ImageFormat, &'static str, &'static str)> {
+    Some(match action {
+        "avif" => (ImageFormat::Png, "avif", ""),
+        "jxl" => (ImageFormat::Png, "jxl", ""),
+        "pdf" => (ImageFormat::Jpeg, "pdf", ""),
+        "ico" => (ImageFormat::Ico, "ico", ""),
+        "tga" => (ImageFormat::Tga, "tga", ""),
+        "qoi" => (ImageFormat::Qoi, "qoi", ""),
+        "pnm" => (ImageFormat::Pnm, "ppm", ""),
+        "hdr" => (ImageFormat::Hdr, "hdr", ""),
+        "exr" => (ImageFormat::OpenExr, "exr", ""),
+        "png" => (ImageFormat::Png, "png", ""),
+        "strip" => (ImageFormat::Png, "png", "pulito"),
+        "jpeg" => (ImageFormat::Jpeg, "jpg", ""),
+        "compress" => (ImageFormat::Jpeg, "jpg", "compresso"),
+        "webp" => (ImageFormat::WebP, "webp", ""),
+        "bmp" => (ImageFormat::Bmp, "bmp", ""),
+        "gif" => (ImageFormat::Gif, "gif", ""),
+        "tiff" => (ImageFormat::Tiff, "tiff", ""),
+        "half" => (ImageFormat::Png, "png", "meta"),
+        "gray" => (ImageFormat::Png, "png", "bn"),
+        "rot90" => (ImageFormat::Png, "png", "ruotato"),
+        _ => return None,
+    })
+}
+
 fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>, opts: &Options) -> CedroResult<Output> {
     if !path.exists() {
         return Err(err("file non trovato"));
@@ -1350,6 +1580,14 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             path: path.to_path_buf(),
             message: path.display().to_string(),
         });
+    }
+    // Verificare un pacchetto non scrive niente.
+    if action == "verify-pack" {
+        let v = crate::pacchetto::verifica(path, &|p| crate::progress::report(p)).map_err(err)?;
+        if !v.tutto_bene() {
+            return Err(err(v.messaggio()));
+        }
+        return Ok(Output { path: path.to_path_buf(), message: v.messaggio() });
     }
     let settings = crate::settings::read_settings();
     let dir = match out_dir {
@@ -1368,6 +1606,9 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         let out = reserve(&dir, &format!("{}-copia", stem(path)), &extension(path))?;
         fs::copy(path, &out).map_err(|e| err(e.to_string()))?;
         return Ok(Output { path: out, message: "Copia creata".into() });
+    }
+    if action == "pack" {
+        return package_with(&[path.to_path_buf()], Some(&dir), opts);
     }
     if action == "zip" {
         let out = reserve(&dir, &stem(path), "zip")?;
@@ -1432,28 +1673,77 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Ok(Output { path: out, message });
     }
 
-    if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "html" | "json" | "pdf" | "upper" | "lower") {
+    if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "xlsx" | "html" | "json" | "pdf" | "upper" | "lower") {
+        let from = extension(path);
+        // Excel e Calc: si leggono i fogli e da lì vale tutto come per un CSV.
+        let fogli = if matches!(from.as_str(), "xlsx" | "xlsm" | "ods") {
+            let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+            let mut fogli = crate::tabella::leggi(&from, &bytes).map_err(err)?;
+            fogli.retain(|f| !f.righe.is_empty());
+            if fogli.is_empty() {
+                return Err(err("il foglio di calcolo è vuoto"));
+            }
+            Some(fogli)
+        } else {
+            None
+        };
+        if let Some(fogli) = &fogli {
+            if action == "csv" && fogli.len() > 1 {
+                return fogli_in_csv(path, &dir, fogli, opts);
+            }
+        }
+        if action == "xlsx" {
+            let rows = match &fogli {
+                Some(f) => f[0].testo(false),
+                None => {
+                    let text = read_text(path)?;
+                    crate::textconv::parse_csv(&text, crate::tabella::separatore(&text, &from))
+                }
+            };
+            if fogli.is_some() && crate::tabella::piastre(&crate::tabella::celle(&rows, false), &rows).is_empty() {
+                return Err(err("è già un Excel: Cedro ne fa un altro solo se trova piastre da mettere una riga per pozzetto"));
+            }
+            let (bytes, message) = crate::tabella::in_excel(&rows, opts.header_row).map_err(err)?;
+            let out = reserve(&dir, &if fogli.is_some() { format!("{}-pozzetti", stem(path)) } else { stem(path) }, "xlsx")?;
+            write_bytes(&out, &bytes)?;
+            return Ok(Output { path: out, message });
+        }
         if action == "pdf" {
             let out = reserve(&dir, &stem(path), "pdf")?;
-            let text = read_text(path)?;
+            let text = match &fogli {
+                Some(f) => f[0].testo(true).iter().map(|r| r.join("   ")).collect::<Vec<_>>().join("\n"),
+                None => read_text(path)?,
+            };
             let blocks: Vec<crate::pdfdoc::DocBlock> =
                 text.split('\n').map(|l| crate::pdfdoc::DocBlock { text: l.trim_end().to_string(), heading: 0, image: None }).collect();
             return write_text_pdf(path, out, &blocks, opts);
         }
-        let text = read_text(path)?;
-        let from = extension(path);
+        // Un foglio di calcolo diventa un CSV a punto e virgola (i numeri con la virgola, come in Excel).
+        let (text, from) = match &fogli {
+            Some(f) => {
+                // Nel CSV la virgola va con il punto e virgola (Excel italiano); il JSON vuole il punto.
+                let virgola = match action {
+                    "csv" => opts.csv_separator.is_none_or(|s| s == ';'),
+                    "json" => false,
+                    _ => true,
+                };
+                (crate::textconv::write_csv(&f[0].testo(virgola), ';'), "csv".to_string())
+            }
+            None => (read_text(path)?, if from == "tsv" { "csv".to_string() } else { from }),
+        };
         let table = |text: &str| {
-            let sep = crate::textconv::detect_separator(text);
+            let sep = crate::tabella::separatore(text, "");
             crate::textconv::parse_csv(text, sep)
         };
         let (body, ext, suffix, message) = match action {
-            "upper" => (text.to_uppercase(), from.clone(), "-maiuscolo", "Testo scritto"),
-            "lower" => (text.to_lowercase(), from.clone(), "-minuscolo", "Testo scritto"),
+            "upper" => (text.to_uppercase(), if fogli.is_some() { "csv".into() } else { extension(path) }, "-maiuscolo", "Testo scritto"),
+            "lower" => (text.to_lowercase(), if fogli.is_some() { "csv".into() } else { extension(path) }, "-minuscolo", "Testo scritto"),
             "md" if from == "csv" => (crate::textconv::markdown_table(&table(&text), opts.header_row), "md".into(), "", "Tabella Markdown"),
             "md" => (text, "md".into(), "", "Testo scritto"),
             "csv" if from == "csv" => {
-                let sep = opts.csv_separator.unwrap_or_else(|| crate::textconv::detect_separator(&text));
-                (crate::textconv::write_csv(&table(&text), sep), "csv".into(), "", "CSV riscritto")
+                let sep = opts.csv_separator.unwrap_or_else(|| crate::tabella::separatore(&text, ""));
+                let message = if fogli.is_some() { "CSV dal foglio di calcolo" } else { "CSV riscritto" };
+                (crate::textconv::write_csv(&table(&text), sep), "csv".into(), "", message)
             }
             "csv" => (text, "csv".into(), "", "Testo scritto"),
             "html" => {
@@ -1681,6 +1971,9 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     if action == "merge" {
         return Err(err("per unire servono almeno due PDF"));
     }
+    if action == "figure" && kind == Kind::Image {
+        return figure_inner(&[path.to_path_buf()], Some(&dir), opts);
+    }
     if action == "ocr" && kind == Kind::Pdf {
         let out = reserve(&dir, &stem(path), "txt")?;
         let mut message = "Testo del PDF.".to_string();
@@ -1701,8 +1994,40 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Ok(Output { path: out, message });
     }
 
+    // Togli autore e dati nascosti da PDF e documenti: il testo che si vede resta com'è.
+    if action == "strip" && matches!(kind, Kind::Pdf | Kind::Doc) {
+        let ext = extension(path);
+        if !crate::anonimizza::gestito(&ext) {
+            return Err(err("i .doc e .rtf vecchi non si ripuliscono: salvali prima in .docx o .odt"));
+        }
+        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let (clean, fatto) = crate::anonimizza::pulisci(&ext, &bytes).map_err(err)?;
+        let out = reserve(&dir, &format!("{}-anonimo", stem(path)), &ext)?;
+        write_bytes(&out, &clean)?;
+        return Ok(Output { path: out, message: fatto.frase() });
+    }
+
     if kind != Kind::Image {
         return Err(err("questa voce non si applica a questo file"));
+    }
+
+    // TC, RX, ecografie e risonanze: finestra, tutte le immagini della serie e anonimizzazione.
+    if crate::imgfmt::sniff_file(path) == Some("dcm") || matches!(extension(path).as_str(), "dcm" | "dicom") {
+        if let Some(done) = dicom_out::perform(path, action, quality, &dir, opts) {
+            return done;
+        }
+    }
+
+    // Microscopia (TIFF, ND2, LIF): canali a colori, piani Z, istanti e barra di scala.
+    if crate::microscopia::is_stack(path) {
+        if let Some(done) = micro_out::perform(path, action, quality, &dir, opts) {
+            return done;
+        }
+    }
+
+    // I vetrini in laboratorio: copia anonima, tessere per l'AI, conta mitotica, consulto.
+    if let Some(done) = svslab_out::perform(path, action, &dir, opts) {
+        return done;
     }
 
     // Un vetrino digitale (.svs): si legge solo la struttura, i pixel dopo, un livello alla volta.
@@ -1726,26 +2051,8 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
 
     // Il formato e il nome prima di aprire l'immagine: un file da saltare non si legge neppure.
-    let (mut format, mut ext, label_stem) = match action {
-        "avif" | "jxl" => (ImageFormat::Png, action, ""),
-        "pdf" => (ImageFormat::Jpeg, "pdf", ""),
-        "ico" => (ImageFormat::Ico, "ico", ""),
-        "tga" => (ImageFormat::Tga, "tga", ""),
-        "qoi" => (ImageFormat::Qoi, "qoi", ""),
-        "pnm" => (ImageFormat::Pnm, "ppm", ""),
-        "hdr" => (ImageFormat::Hdr, "hdr", ""),
-        "exr" => (ImageFormat::OpenExr, "exr", ""),
-        "png" | "strip" => (ImageFormat::Png, "png", if action == "strip" { "pulito" } else { "" }),
-        "jpeg" => (ImageFormat::Jpeg, "jpg", ""),
-        "compress" => (ImageFormat::Jpeg, "jpg", "compresso"),
-        "webp" => (ImageFormat::WebP, "webp", ""),
-        "bmp" => (ImageFormat::Bmp, "bmp", ""),
-        "gif" => (ImageFormat::Gif, "gif", ""),
-        "tiff" => (ImageFormat::Tiff, "tiff", ""),
-        "half" => (ImageFormat::Png, "png", "meta"),
-        "gray" => (ImageFormat::Png, "png", "bn"),
-        "rot90" => (ImageFormat::Png, "png", "ruotato"),
-        other => return Err(err(format!("azione sconosciuta: {other}"))),
+    let Some((mut format, mut ext, label_stem)) = image_target(action) else {
+        return Err(err(format!("azione sconosciuta: {action}")));
     };
     let q = if action == "compress" {
         quality.min(settings.compress_quality())
@@ -2026,6 +2333,22 @@ pub fn same_kind_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
     };
     let kind = kind_of(first);
     paths.iter().filter(|path| kind_of(path) == kind).cloned().collect()
+}
+
+/// Un CSV per ogni foglio: «nome-Foglio1.csv», «nome-Misure.csv»…
+fn fogli_in_csv(path: &Path, dir: &Path, fogli: &[crate::tabella::Foglio], opts: &Options) -> CedroResult<Output> {
+    let sep = opts.csv_separator.unwrap_or(';');
+    let virgola = sep == ';';
+    let mut first = None;
+    for f in fogli {
+        let nome: String = f.nome.chars().map(|c| if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_') { c } else { '_' }).collect();
+        let out = reserve(dir, &format!("{}-{}", stem(path), nome.trim()), "csv")?;
+        let body = crate::textconv::write_csv(&f.testo(virgola), sep);
+        write_bytes(&out, &crate::textconv::encode(&body, opts.encoding))?;
+        first.get_or_insert(out);
+    }
+    let path = first.ok_or_else(|| err("il foglio di calcolo è vuoto"))?;
+    Ok(Output { path, message: format!("{} fogli: un CSV per foglio", fogli.len()) })
 }
 
 fn read_text(path: &Path) -> CedroResult<String> {
@@ -3814,6 +4137,28 @@ Luca,Bondeno
         let mp3 = perform_with(&src, "mp3", 80, None, &Options::default()).unwrap();
         let bytes = fs::read(&mp3.path).unwrap();
         assert!(bytes.len() > 1000 && (bytes.starts_with(b"ID3") || bytes[0] == 0xFF), "non è un MP3");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn csv_di_laboratorio_in_excel_e_ritorno() {
+        let dir = std::env::temp_dir().join(format!("cedro-tabella-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let tsv = dir.join("qpcr.tsv");
+        fs::write(&tsv, "Gene\tCt\nMARCH1\t23,5\nSEPT2\t1,2E-05\n").unwrap();
+        assert_eq!(kind_of(&tsv), Kind::Text);
+        let x = perform_with(&tsv, "xlsx", 80, None, &Options::default()).unwrap();
+        assert_eq!(x.path.file_name().unwrap(), "qpcr.xlsx");
+        assert_eq!(kind_of(&x.path), Kind::Text);
+        let csv = perform_with(&x.path, "csv", 80, None, &Options::default()).unwrap();
+        let back = fs::read_to_string(&csv.path).unwrap();
+        assert!(back.contains("MARCH1;23,5") && back.contains("SEPT2;0,000012"), "{back}");
+        let punto = perform_with(&x.path, "csv", 80, None, &Options { csv_separator: Some(','), ..Default::default() }).unwrap();
+        assert!(fs::read_to_string(&punto.path).unwrap().contains("MARCH1,23.5"));
+        let json = perform_with(&x.path, "json", 80, None, &Options::default()).unwrap();
+        assert!(fs::read_to_string(&json.path).unwrap().contains("23.5"));
+        assert!(perform_with(&x.path, "xlsx", 80, None, &Options::default()).is_err());
         let _ = fs::remove_dir_all(&dir);
     }
 

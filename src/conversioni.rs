@@ -19,7 +19,7 @@ pub const CATEGORIES: &[Category] = &[
     Category { kind: Kind::Image, name: "Immagini", hint: "Cambia formato, ridimensiona e raddrizza le foto.", accepts: "PNG, JPEG, WebP, AVIF, JPEG XL, SVG, BMP, GIF, TIFF, ICO, TGA, QOI, PNM, HDR, OpenEXR, DDS" },
     Category { kind: Kind::Doc, name: "Documenti", hint: "Da Word, ODT e RTF a PDF.", accepts: "DOCX, DOC, ODT, RTF" },
     Category { kind: Kind::Pdf, name: "PDF", hint: "Da PDF a Word modificabile, a Excel, a immagini o a testo.", accepts: "PDF" },
-    Category { kind: Kind::Text, name: "Testo", hint: "TXT, Markdown, CSV, JSON e HTML.", accepts: "TXT, MD, CSV, JSON, HTML, XML" },
+    Category { kind: Kind::Text, name: "Testo", hint: "TXT, Markdown, CSV, Excel, JSON e HTML.", accepts: "TXT, MD, CSV, TSV, XLSX, ODS, JSON, HTML, XML" },
     Category { kind: Kind::Audio, name: "Audio", hint: "MP3, WAV, FLAC, Opus e AIFF.", accepts: "WAV, MP3, OGG, Opus, M4A, AAC, FLAC, AIFF, CAF" },
     Category { kind: Kind::Video, name: "Video", hint: "MP4, WebM, MOV, MKV e AVI.", accepts: "MP4, WebM, MOV, MKV, AVI" },
     Category { kind: Kind::Archive, name: "Archivi", hint: "Converte i file dentro uno ZIP e lo rifà.", accepts: "ZIP" },
@@ -212,6 +212,27 @@ pub enum Opt {
     SlideLevel,
     SlideLabel,
     SlideMacro,
+    DicomWindow,
+    DicomAllFrames,
+    Dicom16,
+    DicomAnon,
+    MicroChannels,
+    MicroZ,
+    MicroAllT,
+    MicroContrast,
+    MicroScale,
+    Micro16,
+    FigWidth,
+    FigDpi,
+    FigLetters,
+    FigScale,
+    FigObjective,
+    FigCalibration,
+    TileSize,
+    TileMag,
+    TileTissue,
+    TileJpeg,
+    RxClinic,
 }
 
 /// Una riga della zona Opzioni del pannello.
@@ -297,6 +318,14 @@ const FPS: &[Choice] = &[
     Choice { label: "24", value: 24 },
 ];
 
+pub const RX_CLINIC: OptionDef = OptionDef {
+    opt: Opt::RxClinic,
+    title: "Nome della clinica",
+    note: "In cima a ogni pagina, accanto al logo; per il logo metti in coda anche la sua immagine. Cedro li ricorda",
+    control: Control::Text { hint: "per esempio Clinica Veterinaria San Marco" },
+    default: 0,
+};
+
 const SLIDE_LEVELS: &[Choice] = &[
     Choice { label: "Panoramica", value: 0 },
     Choice { label: "Media", value: 1 },
@@ -309,12 +338,122 @@ const SLIDE_MACRO: OptionDef = sw(Opt::SlideMacro, "Foto del vetrino intero", "L
 /// Le opzioni in più quando in coda c'è un vetrino digitale (.svs), in cima alle altre.
 pub fn slide_option_defs(action: &str) -> Vec<&'static OptionDef> {
     match action {
-        // Il testo si legge sempre dal livello «Media».
-        "ocr" => vec![],
+        // Il testo si legge sempre dal livello «Media»; la figura sceglie da sé.
+        "ocr" | "figure" | "tiles" | "mitosi" | "consult" | "rx" | "strip" => vec![],
         // Un file solo: il PDF, l'immagine ripulita o modificata non hanno etichetta e foto accanto.
-        "pdf" | "strip" | "half" | "gray" | "rot90" => vec![&SLIDE_LEVEL],
+        "pdf" | "half" | "gray" | "rot90" => vec![&SLIDE_LEVEL],
         _ => vec![&SLIDE_LEVEL, &SLIDE_LABEL, &SLIDE_MACRO],
     }
+}
+
+const DICOM_WINDOWS: &[Choice] = &[
+    Choice { label: "Del file", value: 0 },
+    Choice { label: "Polmone", value: 1 },
+    Choice { label: "Osso", value: 2 },
+    Choice { label: "Tessuti molli", value: 3 },
+];
+pub const DICOM_WINDOW: OptionDef = OptionDef { opt: Opt::DicomWindow, title: "Finestra", note: "«Del file» è quella scelta da chi ha fatto l'esame; Polmone, Osso e Tessuti molli sono quelle classiche della TC", control: Control::Segments(DICOM_WINDOWS), default: 0 };
+const DICOM_ALL: OptionDef = sw(Opt::DicomAllFrames, "Tutte le immagini della serie", "Spento: solo la prima", true);
+const DICOM_16: OptionDef = sw(Opt::Dicom16, "Valori originali a 16 bit", "Per misurare: niente finestra, unità Hounsfield intatte", false);
+const DICOM_ANON: OptionDef = sw(Opt::DicomAnon, "Anonimizza", "Nome, ID, nascita, medico, clinica e UID non escono; i file prendono un codice", true);
+
+/// Le opzioni in più quando in coda c'è un DICOM (TC, RX, ecografie), in cima alle altre.
+pub fn dicom_option_defs(action: &str) -> Vec<&'static OptionDef> {
+    match action {
+        "ocr" | "ico" | "figure" | "tiles" | "mitosi" | "consult" | "rx" => vec![],
+        // Il DICOM anonimo resta un DICOM: finestra e immagini non c'entrano.
+        "strip" => vec![&DICOM_ANON],
+        "png" | "tiff" => vec![&DICOM_WINDOW, &DICOM_ALL, &DICOM_16, &DICOM_ANON],
+        _ => vec![&DICOM_WINDOW, &DICOM_ALL, &DICOM_ANON],
+    }
+}
+
+const MICRO_CHANNEL_CHOICES: &[Choice] = &[
+    Choice { label: "Sovrapposti", value: 0 },
+    Choice { label: "Uno per file", value: 1 },
+    Choice { label: "Entrambi", value: 2 },
+];
+const MICRO_Z_CHOICES: &[Choice] = &[
+    Choice { label: "Massima", value: 0 },
+    Choice { label: "Centrale", value: 1 },
+    Choice { label: "Uno per file", value: 2 },
+];
+const MICRO_CHANNELS: OptionDef = OptionDef { opt: Opt::MicroChannels, title: "Canali", note: "Sovrapposti: un'immagine a colori con ogni canale del suo colore", control: Control::Segments(MICRO_CHANNEL_CHOICES), default: 0 };
+const MICRO_Z: OptionDef = OptionDef { opt: Opt::MicroZ, title: "Piani Z (profondità)", note: "Massima: unisce i piani tenendo il punto più luminoso, come nelle figure degli articoli", control: Control::Segments(MICRO_Z_CHOICES), default: 0 };
+const MICRO_ALL_T: OptionDef = sw(Opt::MicroAllT, "Tutti gli istanti", "Spento: solo il primo", true);
+const MICRO_CONTRAST: OptionDef = sw(Opt::MicroContrast, "Contrasto automatico", "A 16 bit la fluorescenza sembra quasi nera: si regola da solo, canale per canale", true);
+const MICRO_SCALE: OptionDef = sw(Opt::MicroScale, "Barra di scala", "Se il file dice quanto è grande un pixel", true);
+const MICRO_16: OptionDef = sw(Opt::Micro16, "Valori originali a 16 bit", "Per misurare: un file per canale, senza colori né contrasto", false);
+
+/// Le opzioni in più quando in coda c'è un'immagine di microscopia: solo quelle che servono al file
+/// (canali se sono più d'uno, piani Z, istanti), in cima alle altre.
+pub fn micro_option_defs(action: &str, canali: usize, z: usize, t: usize) -> Vec<&'static OptionDef> {
+    if matches!(action, "ocr" | "ico" | "strip" | "figure" | "tiles" | "mitosi" | "consult" | "rx") {
+        return vec![];
+    }
+    let mut v: Vec<&'static OptionDef> = Vec::new();
+    if canali > 1 {
+        v.push(&MICRO_CHANNELS);
+    }
+    if z > 1 {
+        v.push(&MICRO_Z);
+    }
+    if t > 1 {
+        v.push(&MICRO_ALL_T);
+    }
+    v.push(&MICRO_CONTRAST);
+    v.push(&MICRO_SCALE);
+    if matches!(action, "png" | "tiff") {
+        v.push(&MICRO_16);
+    }
+    v
+}
+
+const FIG_WIDTHS: &[Choice] = &[
+    Choice { label: "Una colonna (8,5 cm)", value: 85 },
+    Choice { label: "Pagina intera (17,5 cm)", value: 175 },
+];
+const FIG_DPIS: &[Choice] = &[Choice { label: "300 dpi", value: 300 }, Choice { label: "600 dpi", value: 600 }];
+const FIG_WIDTH: OptionDef = OptionDef { opt: Opt::FigWidth, title: "Larghezza", note: "Quella chiesta dalla rivista: una colonna o tutta la pagina", control: Control::Segments(FIG_WIDTHS), default: 175 };
+const FIG_DPI: OptionDef = OptionDef { opt: Opt::FigDpi, title: "Risoluzione", note: "300 dpi per foto e microscopia; 600 se la rivista lo chiede", control: Control::Segments(FIG_DPIS), default: 300 };
+const FIG_LETTERS: OptionDef = sw(Opt::FigLetters, "Lettere A, B, C", "In alto a sinistra di ogni pannello, nell'ordine della coda", true);
+const FIG_SCALE: OptionDef = sw(Opt::FigScale, "Barra di scala", "Sui pannelli di microscopia che dicono quanto è grande un pixel", true);
+const FIG_OBJECTIVES: &[Choice] = &[
+    Choice { label: "Nessuno", value: 0 },
+    Choice { label: "4x", value: 4 },
+    Choice { label: "10x", value: 10 },
+    Choice { label: "20x", value: 20 },
+    Choice { label: "40x", value: 40 },
+    Choice { label: "60x", value: 60 },
+    Choice { label: "100x", value: 100 },
+];
+const FIG_OBJECTIVE: OptionDef = OptionDef { opt: Opt::FigObjective, title: "Obiettivo delle foto", note: "Per le foto della fotocamera del microscopio, che non dicono quanto è grande un pixel: la barra si calcola dall'obiettivo", control: Control::Segments(FIG_OBJECTIVES), default: 0 };
+pub const FIG_CALIBRATION: OptionDef = OptionDef {
+    opt: Opt::FigCalibration,
+    title: "Calibrazione con il 10x",
+    note: "Micron per pixel con l'obiettivo 10x, misurati una volta con il vetrino micrometrico; Cedro se la ricorda",
+    control: Control::Text { hint: "per esempio 0,65" },
+    default: 0,
+};
+
+const TILE_SIZES: &[Choice] = &[Choice { label: "256 px", value: 256 }, Choice { label: "512 px", value: 512 }];
+const TILE_MAGS: &[Choice] = &[
+    Choice { label: "20x (0,5 µm/px)", value: 20 },
+    Choice { label: "10x (1 µm/px)", value: 10 },
+    Choice { label: "Come scansionato", value: 0 },
+];
+const TILE_FORMATS: &[Choice] = &[Choice { label: "PNG", value: 0 }, Choice { label: "JPEG", value: 1 }];
+const TILE_SIZE: OptionDef = OptionDef { opt: Opt::TileSize, title: "Lato delle tessere", note: "256 per la maggior parte dei modelli; 512 per vedere più contesto", control: Control::Segments(TILE_SIZES), default: 256 };
+const TILE_MAG: OptionDef = OptionDef { opt: Opt::TileMag, title: "Ingrandimento", note: "Uguale per tutti i vetrini, anche se scansionati a 40x", control: Control::Segments(TILE_MAGS), default: 20 };
+const TILE_TISSUE: OptionDef = sw(Opt::TileTissue, "Solo tessuto", "Le tessere quasi tutte vetro bianco restano fuori", true);
+const TILE_FORMAT: OptionDef = OptionDef { opt: Opt::TileJpeg, title: "Formato", note: "PNG non perde niente; JPEG pesa un decimo", control: Control::Segments(TILE_FORMATS), default: 0 };
+
+/// Le opzioni del riquadro di un formato scientifico (vetrino, DICOM, microscopia): restano in vista, in cima.
+pub fn is_lead(opt: Opt) -> bool {
+    matches!(
+        opt,
+        Opt::SlideLevel | Opt::SlideLabel | Opt::SlideMacro | Opt::DicomWindow | Opt::DicomAllFrames | Opt::Dicom16 | Opt::DicomAnon | Opt::MicroChannels | Opt::MicroZ | Opt::MicroAllT | Opt::MicroContrast | Opt::MicroScale | Opt::Micro16
+    )
 }
 
 const STRAIGHTEN: OptionDef = sw(Opt::Straighten, "Raddrizza le foto", "Corregge la rotazione dei file del telefono", true);
@@ -448,7 +587,8 @@ const FAST_START: OptionDef = sw(Opt::FastStart, "Ottimizza per il web", "L'avvi
 /// Le opzioni che valgono per questa categoria e questa voce; il motore le usa tutte.
 pub fn option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     let mut defs = format_option_defs(kind, action);
-    if action != "none" && !is_page_action(kind, action) {
+    // La figura ha il suo nome: quello del primo file con «-figura».
+    if action != "none" && !matches!(action, "figure" | "tiles" | "mitosi" | "consult" | "rx") && !is_page_action(kind, action) {
         defs.push(&NAME_TEMPLATE);
     }
     defs
@@ -458,6 +598,10 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
     match (kind, action) {
         // Leggere il testo e togliere i dati nascosti non ridimensionano né girano la foto.
         (Kind::Image, "ocr" | "strip") => vec![],
+        (Kind::Image, "tiles") => vec![&TILE_SIZE, &TILE_MAG, &TILE_TISSUE, &TILE_FORMAT],
+        (Kind::Image, "mitosi" | "consult") => vec![],
+        (Kind::Image, "rx") => vec![&RX_CLINIC],
+        (Kind::Image, "figure") => vec![&FIG_WIDTH, &FIG_DPI, &FIG_LETTERS, &FIG_SCALE, &FIG_OBJECTIVE, &FIG_CALIBRATION],
         (Kind::Image, "jpeg" | "compress" | "pdf" | "pnm") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
         (Kind::Image, _) => vec![&IMAGE_SIZE, &STRAIGHTEN],
         (Kind::Doc, "pdf") => vec![&PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
@@ -475,6 +619,7 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
         (Kind::Pdf, "split") => vec![&SPLIT_HOW, &SPLIT_EVERY, &SPLIT_RANGES, &SPLIT_REMOVE, &SPLIT_NAME, &KEEP_BOOKMARKS, &KEEP_FORMS, &OUT_PASSWORD, &OPEN_PASSWORD],
         (Kind::Text, "pdf") => vec![&PAGE, &EMBED_FONTS, &PDF_A],
         (Kind::Text, "csv") => vec![&TEXT_ENCODING, &CSV_SEPARATOR],
+        (Kind::Text, "xlsx") => vec![&HEADER_ROW],
         (Kind::Text, "json") => vec![&TEXT_ENCODING, &PRETTY_JSON, &HEADER_ROW],
         (Kind::Text, "md" | "html") => vec![&TEXT_ENCODING, &HEADER_ROW],
         (Kind::Text, _) => vec![&TEXT_ENCODING],
@@ -500,6 +645,8 @@ pub fn shown(def: &OptionDef, values: &Values) -> bool {
         // Le scelte dei numeri e della filigrana si vedono quando sono accesi.
         Opt::NumberPos | Opt::NumberFormat | Opt::NumberStart | Opt::NumberSize => values.get(&PAGE_NUMBERS) == 1,
         Opt::WatermarkText | Opt::WatermarkOpacity | Opt::WatermarkAngle | Opt::WatermarkPages => values.get(&WATERMARK) == 1,
+        Opt::FigObjective => values.get(&FIG_SCALE) == 1,
+        Opt::FigCalibration => values.get(&FIG_SCALE) == 1 && values.get(&FIG_OBJECTIVE) != 0,
         _ => true,
     }
 }
@@ -581,6 +728,12 @@ pub fn validate(values: &Values, kind: Kind, action: &str) -> Result<(), String>
             PageSel::parse(values.text_of(Opt::WatermarkPages))?;
         }
     }
+    if kind == Kind::Image && action == "figure" && values.get(&FIG_SCALE) == 1 {
+        let obj = values.get(&FIG_OBJECTIVE);
+        if obj != 0 && crate::figura::pm_per_px(values.text_of(Opt::FigCalibration), obj).is_none() {
+            return Err("Scrivi la calibrazione: i micron di un pixel con il 10x, per esempio 0,65.".into());
+        }
+    }
     if kind == Kind::Pdf && action == "split" {
         let how = values.num(Opt::SplitHow, SPLIT_HOW.default);
         // Si controlla la scrittura; le pagine che mancano le dice il motore, file per file.
@@ -656,6 +809,35 @@ pub fn options_from(values: &Values) -> engine::Options {
     o.slide_level = values.num(Opt::SlideLevel, SLIDE_LEVEL.default).min(2);
     o.slide_label = on(Opt::SlideLabel, true);
     o.slide_macro = on(Opt::SlideMacro, true);
+    o.dicom_window = values.num(Opt::DicomWindow, DICOM_WINDOW.default).min(3);
+    o.dicom_all_frames = on(Opt::DicomAllFrames, true);
+    o.dicom_16bit = on(Opt::Dicom16, false);
+    o.dicom_anon = on(Opt::DicomAnon, true);
+    o.micro_channels = values.num(Opt::MicroChannels, MICRO_CHANNELS.default).min(2);
+    o.micro_z = values.num(Opt::MicroZ, MICRO_Z.default).min(2);
+    o.micro_all_t = on(Opt::MicroAllT, true);
+    o.micro_contrast = on(Opt::MicroContrast, true);
+    o.micro_scale = on(Opt::MicroScale, true);
+    o.micro_16bit = on(Opt::Micro16, false);
+    o.tessere = crate::svs_lab::Tessere {
+        lato: if values.num(Opt::TileSize, TILE_SIZE.default) == 512 { 512 } else { 256 },
+        ingrandimento: match values.num(Opt::TileMag, TILE_MAG.default) {
+            10 => 10,
+            0 => 0,
+            _ => 20,
+        },
+        solo_tessuto: on(Opt::TileTissue, true),
+        jpeg: values.num(Opt::TileJpeg, 0) == 1,
+    };
+    o.figura = crate::figura::Opzioni {
+        larghezza_mm: if values.num(Opt::FigWidth, FIG_WIDTH.default) == 85 { 85 } else { 175 },
+        dpi: if values.num(Opt::FigDpi, FIG_DPI.default) == 600 { 600 } else { 300 },
+        lettere: on(Opt::FigLetters, true),
+        barra: on(Opt::FigScale, true),
+        obiettivo: values.num(Opt::FigObjective, 0),
+        calibrazione_10x: values.text_of(Opt::FigCalibration).trim().to_string(),
+    };
+    o.rx_clinica = values.text_of(Opt::RxClinic).trim().to_string();
     let text = |opt: Opt| Some(values.text_of(opt).trim().to_string()).filter(|t| !t.is_empty());
     let pp = &mut o.pdf_pages;
     pp.settings.file_bookmarks = on(Opt::FileBookmarks, true);
@@ -725,7 +907,7 @@ mod tests {
             }
         }
         // Le opzioni dei vetrini compaiono solo con un .svs in coda.
-        for d in slide_option_defs("png") {
+        for d in slide_option_defs("png").into_iter().chain(dicom_option_defs("png")).chain(micro_option_defs("png", 3, 3, 3)) {
             if !all.iter().any(|x| x.opt == d.opt) {
                 all.push(d);
             }
