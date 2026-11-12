@@ -146,6 +146,12 @@ fn update() -> i32 {
 
 /// Su Windows scarica e avvia l'installatore; su Linux installa il pacchetto se può. Altrimenti apre la pagina della release.
 pub fn install(release: &cedro::update::Release) -> Result<String, String> {
+    // Versione portable: si sostituiscono i file della cartella, senza installatore.
+    #[cfg(windows)]
+    if cedro::portable::is_portable() {
+        cedro::update::install_portable(release)?;
+        return Ok(cedro::i18n::tr_string(&format!("Aggiornata la versione portable alla {}: riapri Cedro.", release.version)));
+    }
     #[cfg(windows)]
     if let Some(asset) = &release.installer {
         let path = cedro::update::download(asset)?;
@@ -174,6 +180,11 @@ pub fn install(release: &cedro::update::Release) -> Result<String, String> {
 #[cfg(windows)]
 pub fn install_silent(release: &cedro::update::Release) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
+    // Versione portable: niente installatore. Si sostituiscono i file, poi Cedro si riapre da solo.
+    if cedro::portable::is_portable() {
+        cedro::update::install_portable(release)?;
+        return restart_portable();
+    }
     let asset = release.installer.as_ref().ok_or("la release non ha l'installatore per questo sistema")?;
     let path = cedro::update::download(asset)?;
     cedro::update::mark_updated(&release.version);
@@ -187,6 +198,20 @@ pub fn install_silent(release: &cedro::update::Release) -> Result<(), String> {
         let _ = std::fs::remove_file(cedro::config_dir().join("updated.txt"));
         return Err(e.to_string());
     }
+    Ok(())
+}
+
+/// Dopo l'aggiornamento della versione portable: fra qualche secondo riparte il cedro.exe nuovo, mentre questo si chiude.
+#[cfg(windows)]
+fn restart_portable() -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    let exe = cedro::portable::root().ok_or("Cedro non è in modalità portable")?.join("cedro.exe");
+    std::process::Command::new("cmd")
+        .raw_arg(format!("/D /C \"ping -n 4 127.0.0.1 >nul & start \"\" \"{}\"\"", exe.display()))
+        .creation_flags(0x0800_0000)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    crate::win::quit_tray();
     Ok(())
 }
 
