@@ -5,6 +5,7 @@
 
 mod activity;
 mod banco;
+mod cedro;
 mod compatto;
 mod documento;
 mod essenziale;
@@ -65,6 +66,7 @@ pub fn draw(f: &mut Frame, app: &App, surface: Surface) {
     match f.theme {
         ThemeId::WindowsEssenziale | ThemeId::Bondeno => essenziale::draw(f, app),
         ThemeId::CedroLabs => labs::draw(f, app),
+        ThemeId::Cedro | ThemeId::CedroNotte | ThemeId::CedroBosco | ThemeId::CedroCarta => cedro::draw(f, app),
         ThemeId::PercorsoGuidato => guidato::draw(f, app),
         ThemeId::CedroCompatto => compatto::draw_full(f, app),
         ThemeId::BancoDiLavoro => banco::draw(f, app),
