@@ -21,9 +21,9 @@ fn header(f: &mut Frame, app: &App, r: R, title: &str, simple: bool) -> f32 {
 
 /// Il riquadro «Cosa sta succedendo» con il pulsante Copia. Le righe arrivano dal motore.
 /// Una riga del riquadro: tono, parola evidenziata, testo, chi parla (con le voci).
-type LogLine = (Tone, String, String, Option<u8>);
+pub(super) type LogLine = (Tone, String, String, Option<u8>);
 
-fn log_box(f: &mut Frame, r: R, lines: &[LogLine]) {
+pub(super) fn log_box(f: &mut Frame, r: R, lines: &[LogLine]) {
     let pal = f.pal;
     f.card(r, 10.0);
     f.text("Cosa sta succedendo", r.0 + 18.0, r.1 + 8.0, r.2 - 140.0, 32.0, 16.0, SEMI, pal.text);
@@ -75,18 +75,18 @@ fn log_box(f: &mut Frame, r: R, lines: &[LogLine]) {
     f.scrolls.push((body, Scroll::Log, max));
 }
 
-fn transcribe_lines(app: &App) -> Vec<LogLine> {
+pub(super) fn transcribe_lines(app: &App) -> Vec<LogLine> {
     app.transcribe.log.iter().map(|l| (l.tone, l.key.clone(), l.text.clone(), l.speaker)).collect()
 }
 
-fn link_lines(l: &Links) -> Vec<LogLine> {
+pub(super) fn link_lines(l: &Links) -> Vec<LogLine> {
     l.log.lines().map(|s| (if s.starts_with("Errore") { Tone::Error } else { Tone::Note }, String::new(), s.to_string(), None)).collect()
 }
 
 /// La riga di un file da trascrivere (o di un link): nome, sotto lo stato, a destra l'icona.
 /// `extra`: quanto spazio a destra lasciare ai pulsanti della riga (Rivedi, Riassunto AI), così il nome non ci va sotto.
 #[allow(clippy::too_many_arguments)]
-fn job_row(f: &mut Frame, r: R, title: &str, sub: &str, state: FileState, percent: Option<f32>, big: bool, remove: Option<Act>, open: Option<Act>, extra: f32) {
+pub(super) fn job_row(f: &mut Frame, r: R, title: &str, sub: &str, state: FileState, percent: Option<f32>, big: bool, remove: Option<Act>, open: Option<Act>, extra: f32) {
     let pal = f.pal;
     let (ts, ss) = if big { (20.0, 17.0) } else { (16.5, 14.5) };
     let right = 150.0;
@@ -125,11 +125,11 @@ fn job_row(f: &mut Frame, r: R, title: &str, sub: &str, state: FileState, percen
 }
 
 /// Altezza del riquadro dell'avanzamento della trascrizione.
-const PROGRESS_H: f32 = 112.0;
+pub(super) const PROGRESS_H: f32 = 112.0;
 
 /// Il riquadro dell'avanzamento mentre trascrive: percentuale grande, su cosa lavora (solo il modello
 /// della scheda video, o il processore), barra e tempo che resta. Va sopra il pulsante Annulla.
-fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
+pub(super) fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
     let pal = f.pal;
     // Il riquadro prende l'arancio della Trascrizione (come la sua piastrella).
     let accent = f.act_color(Activity::Transcribe);
@@ -186,7 +186,7 @@ fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
 }
 
 /// Il pulsante principale delle pagine: avvia, oppure annulla il lavoro in corso.
-fn go_or_cancel(f: &mut Frame, app: &App, r: R, size: f32, icon: &str, ready: bool) {
+pub(super) fn go_or_cancel(f: &mut Frame, app: &App, r: R, size: f32, icon: &str, ready: bool) {
     if app.busy() {
         let pal = f.pal;
         f.button(r, "Annulla", Some(ic::CLOSE), size, Act::Cancel);
@@ -206,7 +206,7 @@ fn go_or_cancel(f: &mut Frame, app: &App, r: R, size: f32, icon: &str, ready: bo
 }
 
 /// La scelta di due voci affiancate (Word | Testo, Video | Solo audio).
-fn pair(f: &mut Frame, r: R, labels: [&str; 2], icons: [&str; 2], first_on: bool, acts: [Act; 2], size: f32) {
+pub(super) fn pair(f: &mut Frame, r: R, labels: [&str; 2], icons: [&str; 2], first_on: bool, acts: [Act; 2], size: f32) {
     let pal = f.pal;
     let half = (r.2 - 10.0) / 2.0;
     for i in 0..2 {
@@ -227,7 +227,7 @@ fn pair(f: &mut Frame, r: R, labels: [&str; 2], icons: [&str; 2], first_on: bool
 }
 
 /// La precisione della trascrizione con il peso del modello se va ancora scaricato.
-fn model_note(app: &App) -> String {
+pub(super) fn model_note(app: &App) -> String {
     let m = &trascrizione::MODELS[app.transcribe.model.min(trascrizione::MODELS.len() - 1)];
     if trascrizione::model_ready(app.transcribe.model) {
         format!("{} · pronto sul computer", m.note)
@@ -241,7 +241,7 @@ fn model_name(app: &App) -> &'static str {
 }
 
 /// La coda dei file da trascrivere, con la zona vuota quando non c'è niente.
-fn transcribe_queue(f: &mut Frame, app: &App, r: R, big: bool) {
+pub(super) fn transcribe_queue(f: &mut Frame, app: &App, r: R, big: bool) {
     let rows = app.visible();
     if rows.is_empty() {
         super::drop_zone(f, app, r, big);
@@ -290,7 +290,7 @@ fn transcribe_queue(f: &mut Frame, app: &App, r: R, big: bool) {
 }
 
 /// «Riassunto AI»: pulsante con il bordo e il testo del colore del tema, per distinguerlo da «Rivedi».
-fn ai_button(f: &mut Frame, r: R, size: f32, act: Act) {
+pub(super) fn ai_button(f: &mut Frame, r: R, size: f32, act: Act) {
     let pal = f.pal;
     let hover = f.hovered(&act);
     let bg = if hover { mix(pal.primary, pal.surface, 0.9) } else { pal.surface };
@@ -391,7 +391,7 @@ pub fn transcribe_page(f: &mut Frame, app: &App, r: R, simple: bool) {
 }
 
 /// Il campo del link con «Aggiungi» accanto.
-fn link_input(f: &mut Frame, l: &Links, r: R, big: bool) {
+pub(super) fn link_input(f: &mut Frame, l: &Links, r: R, big: bool) {
     let pal = f.pal;
     let web = l.web;
     let bw = if big { 170.0 } else { 140.0 };
@@ -402,7 +402,7 @@ fn link_input(f: &mut Frame, l: &Links, r: R, big: bool) {
     f.primary((r.0 + r.2 - bw, r.1, bw, r.3), "Aggiungi", Some(ic::ADD), size, Act::LinkAdd(web), !l.typed.trim().is_empty());
 }
 
-fn links_list(f: &mut Frame, app: &App, l: &Links, r: R, big: bool, scroll: bool) {
+pub(super) fn links_list(f: &mut Frame, app: &App, l: &Links, r: R, big: bool, scroll: bool) {
     let pal = f.pal;
     let web = l.web;
     if l.items.is_empty() {
@@ -446,7 +446,7 @@ fn links_list(f: &mut Frame, app: &App, l: &Links, r: R, big: bool, scroll: bool
 
 /// Tutte le scelte del download (tipo, formato, qualità, sottotitoli, opzioni, cartella), dall'alto
 /// `y0`; restituisce la y dove finiscono. Le usano sia l'ispettore sia la finestrella stretta.
-fn link_settings(f: &mut Frame, l: &Links, cx: f32, y0: f32, cw: f32) -> f32 {
+pub(super) fn link_settings(f: &mut Frame, l: &Links, cx: f32, y0: f32, cw: f32) -> f32 {
     let pal = f.pal;
     let web = l.web;
     let mut y = y0;

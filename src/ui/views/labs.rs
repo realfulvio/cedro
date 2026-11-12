@@ -39,6 +39,8 @@ fn lab_icon(lab: Lab) -> &'static str {
         Lab::Trascrivi => ic::TRANSCRIBE,
         Lab::Converti => ic::CONVERT,
         Lab::Pdf => ic::FILE,
+        Lab::Video => ic::WEB,
+        Lab::Firma => ic::PEN,
     }
 }
 
@@ -72,7 +74,7 @@ thread_local! {
     static HALOS: RefCell<HashMap<PathBuf, (u32, u32, Image)>> = RefCell::new(HashMap::new());
 }
 
-fn halo(app: &App, i: usize) -> Option<Image> {
+pub(super) fn halo(app: &App, i: usize) -> Option<Image> {
     let file = app.files.get(i)?;
     let thumb = app.media_of(&file.path)?.thumb.as_ref()?;
     HALOS.with(|h| {
@@ -282,7 +284,7 @@ fn home(f: &mut Frame, app: &App, area: R) {
 }
 
 /// Il centro: il file scelto, grande, sopra l'alone dei suoi colori; sotto, la striscia dei file in coda.
-fn stage_draw(f: &mut Frame, app: &App, r: R) {
+pub(super) fn stage_draw(f: &mut Frame, app: &App, r: R) {
     let vis = app.visible();
     let sel = app.selected.filter(|i| vis.contains(i)).or(vis.first().copied());
     f.p.rrect(r.0, r.1, r.2, r.3, 16.0, Some(LABS_STAGE), None);
@@ -356,7 +358,7 @@ fn others(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32 {
     cx - x
 }
 
-fn viewer(f: &mut Frame, app: &App, i: usize, area: R) {
+pub(super) fn viewer(f: &mut Frame, app: &App, i: usize, area: R) {
     let file = &app.files[i];
     if matches!(file.kind, Kind::Audio | Kind::Video | Kind::Other | Kind::Archive) {
         super::documento::media_card(f, app, i, area);
@@ -478,7 +480,7 @@ fn strip(f: &mut Frame, app: &App, r: R, vis: &[usize], sel: usize) {
 }
 
 /// Il nome del file scelto e che cos'è, in cima al pannello. Restituisce l'altezza usata.
-fn file_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32 {
+pub(super) fn file_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32 {
     let pal = f.pal;
     let vis = app.visible();
     match app.selected.filter(|i| vis.contains(i)).or(vis.first().copied()) {
@@ -512,7 +514,7 @@ fn file_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32 {
 }
 
 /// Semplice | Completa: quanti comandi vedere.
-fn mode_switch(f: &mut Frame, r: R) {
+pub(super) fn mode_switch(f: &mut Frame, r: R) {
     let pal = f.pal;
     f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(pal.alt), None);
     let half = (r.2 - 6.0) / 2.0;
@@ -547,7 +549,7 @@ fn choices(app: &App) -> Vec<&'static str> {
 }
 
 /// Una riga da scegliere: l'iconcina colorata, il nome, una riga che spiega.
-fn choice_row(f: &mut Frame, r: R, voce: &voci::Voce, label: &str, hint: &str, on: bool, act: Act, deep: Rgb) {
+pub(super) fn choice_row(f: &mut Frame, r: R, voce: &voci::Voce, label: &str, hint: &str, on: bool, act: Act, deep: Rgb) {
     let pal = f.pal;
     let t = f.hover_t(&act, !on);
     if on {
@@ -569,7 +571,7 @@ fn choice_row(f: &mut Frame, r: R, voce: &voci::Voce, label: &str, hint: &str, o
 }
 
 /// Il pulsante grande, del colore della pagina.
-fn go_button(f: &mut Frame, app: &App, r: R, deep: Rgb) {
+pub(super) fn go_button(f: &mut Frame, app: &App, r: R, deep: Rgb) {
     let pal = f.pal;
     let label = super::go_label(app);
     let enabled = !app.busy() && !app.targets().is_empty();
@@ -676,7 +678,7 @@ fn side_panel(f: &mut Frame, app: &App, r: R) {
 }
 
 /// «Inizio» con un file: che cosa ci si può fare, e in quale pagina.
-fn file_card(f: &mut Frame, app: &App, r: R) {
+pub(super) fn file_card(f: &mut Frame, app: &App, r: R) {
     let pal = f.pal;
     f.p.rrect(r.0, r.1, r.2, r.3, 16.0, Some(pal.surface), None);
     let (x, w) = (r.0 + 24.0, r.2 - 48.0);
