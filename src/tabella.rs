@@ -117,6 +117,12 @@ pub fn separatore(text: &str, ext: &str) -> char {
 
 /// Vero se i decimali del file sono con la virgola (CSV dell'Excel italiano, `;` come separatore).
 pub fn decimali_con_virgola(rows: &[Vec<String>]) -> bool {
+    decimali(rows).0
+}
+
+/// I decimali del file: con la virgola, e se si è sicuri (ci sono numeri con i decimali scritti in
+/// un modo solo). Quando si è sicuri «1,234» con i decimali a punto è milleduecentotrentaquattro.
+pub fn decimali(rows: &[Vec<String>]) -> (bool, bool) {
     let (mut virgola, mut punto) = (0usize, 0usize);
     for cell in rows.iter().flatten().take(200_000) {
         let t = cell.trim().trim_end_matches('%');
@@ -136,7 +142,7 @@ pub fn decimali_con_virgola(rows: &[Vec<String>]) -> bool {
             punto += 1;
         }
     }
-    virgola > punto
+    (virgola > punto, virgola.max(punto) > 0 && virgola.min(punto) == 0)
 }
 
 /// Il numero scritto nella cella, se è proprio un numero. Restano testo: i codici con gli zeri
@@ -144,6 +150,12 @@ pub fn decimali_con_virgola(rows: &[Vec<String>]) -> bool {
 /// notazione scientifica (2310009E13: la «E» conta solo con la virgola o con il segno, 1,5E3 o 1E-05),
 /// i numeri ambigui con un solo gruppo di migliaia (1.234 con i decimali a virgola) e le date.
 pub fn numero(s: &str, virgola: bool) -> Option<Cella> {
+    numero_in(s, virgola, false)
+}
+
+/// Come [`numero`]; con `migliaia` un solo gruppo di migliaia (1,234 con i decimali a punto) vale
+/// come migliaia: i decimali del file sono sicuri.
+pub fn numero_in(s: &str, virgola: bool, migliaia: bool) -> Option<Cella> {
     let t = s.trim();
     if t.is_empty() || t.len() > 40 {
         return None;
@@ -178,7 +190,7 @@ pub fn numero(s: &str, virgola: bool) -> Option<Cella> {
         let gruppi: Vec<&str> = int_part.split(gruppo).collect();
         let ok = (1..=3).contains(&gruppi[0].len()) && gruppi.iter().all(|g| g.bytes().all(|c| c.is_ascii_digit())) && gruppi[1..].iter().all(|g| g.len() == 3);
         // «1.234» da solo può essere milleduecento o uno virgola due: resta testo.
-        if !ok || (gruppi.len() == 2 && frac.is_none()) || exp.is_some() {
+        if !ok || (gruppi.len() == 2 && frac.is_none() && !migliaia) || exp.is_some() {
             return None;
         }
         gruppi.concat()
@@ -228,6 +240,10 @@ pub fn numero(s: &str, virgola: bool) -> Option<Cella> {
 
 /// Le righe del CSV come celle: numeri dove sono numeri, il resto testo.
 pub fn celle(rows: &[Vec<String>], virgola: bool) -> Vec<Vec<Cella>> {
+    celle_in(rows, virgola, false)
+}
+
+fn celle_in(rows: &[Vec<String>], virgola: bool, migliaia: bool) -> Vec<Vec<Cella>> {
     rows.iter()
         .map(|r| {
             r.iter()
@@ -235,7 +251,7 @@ pub fn celle(rows: &[Vec<String>], virgola: bool) -> Vec<Vec<Cella>> {
                     if c.trim().is_empty() {
                         Cella::Vuota
                     } else {
-                        numero(c, virgola).unwrap_or_else(|| Cella::Testo(c.clone()))
+                        numero_in(c, virgola, migliaia).unwrap_or_else(|| Cella::Testo(c.clone()))
                     }
                 })
                 .collect()
@@ -347,8 +363,8 @@ const MAX_COLONNE: usize = 16_384;
 /// L'Excel della tabella. Ritorna il file e la frase per l'utente.
 pub fn in_excel(rows: &[Vec<String>], intestazione: bool) -> Result<(Vec<u8>, String), String> {
     use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook};
-    let virgola = decimali_con_virgola(rows);
-    let celle = celle(rows, virgola);
+    let (virgola, sicuro) = decimali(rows);
+    let celle = celle_in(rows, virgola, sicuro);
     let piastre = piastre(&celle, rows);
     let mut book = Workbook::new();
     let titoli = Format::new().set_bold().set_background_color(Color::RGB(0xE3F1E6)).set_border_bottom(FormatBorder::Thin);

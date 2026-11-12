@@ -315,3 +315,18 @@ fn p06_file_e_cartella_con_lo_stesso_nome() {
     let dentro = nomi.iter().any(|n| n.starts_with("p/data/dati/"));
     assert!(!(file && dentro), "{nomi:?}");
 }
+
+/// Prova dal vero: in un CSV americano con decimali a punto, «1,234» e «2,000» sono migliaia.
+#[test]
+fn t17_migliaia_con_decimali_a_punto_sicuri() {
+    let csv = "Count,OD\n\"1,234\",0.5\n\"2,000\",-3.25\n";
+    let rows = parse_csv(csv, separatore(csv, "csv"));
+    let (x, _) = in_excel(&rows, true).unwrap();
+    let f = &leggi("xlsx", &x).unwrap()[0];
+    assert_eq!(f.righe[1][0], Cella::Numero(1234.0));
+    assert_eq!(f.righe[2][0], Cella::Numero(2000.0));
+    // Senza decimali nel file resta ambiguo: testo.
+    let solo = vec![vec!["n".to_string()], vec!["1,234".to_string()]];
+    let (x, _) = in_excel(&solo, true).unwrap();
+    assert_eq!(leggi("xlsx", &x).unwrap()[0].righe[1][0], Cella::Testo("1,234".into()));
+}

@@ -1238,13 +1238,16 @@ fn rx_in(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options, logo_salvato
             None => output_dir(&first, &crate::settings::read_settings())?,
         };
         let logo = crate::rx::logo(paths, logo_salvato);
-        let (bytes, pagine, animale) = crate::rx::pdf(&dicom, &opts.rx_clinica, logo.as_ref(), &|p| crate::progress::report(p)).map_err(err)?;
+        let (bytes, pagine, animale, saltati) = crate::rx::pdf(&dicom, &opts.rx_clinica, logo.as_ref(), &|p| crate::progress::report(p)).map_err(err)?;
         let nome = crate::rx::nome_file(&animale).unwrap_or_else(|| stem(&first));
         let out = reserve(&dir, &format!("{nome}-radiografie"), "pdf")?;
         write_bytes(&out, &bytes)?;
         crate::progress::report(1.0);
         let mut message = format!("PDF per il proprietario, {pagine} {}", if pagine == 1 { "pagina" } else { "pagine" });
         message.push_str(if logo.is_some() { ", con il logo della clinica." } else { ". Per il logo metti in coda anche la sua immagine: Cedro poi se lo ricorda." });
+        if !saltati.is_empty() {
+            message.push_str(&format!(" Saltati perché senza immagini: {}.", saltati.join(", ")));
+        }
         Ok(Output { path: out, message })
     })();
     let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
