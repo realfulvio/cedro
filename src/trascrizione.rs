@@ -171,6 +171,9 @@ pub(crate) fn log(sink: &dyn Fn(Event), tone: Tone, key: &str, text: impl Into<S
 
 /// La cartella dei modelli e del motore: fuori dal profilo che si sposta in rete, perché pesa.
 pub fn data_dir() -> PathBuf {
+    if let Some(data) = crate::portable::data_root() {
+        return data.join("trascrizione");
+    }
     if let Some(local) = std::env::var_os("LOCALAPPDATA") {
         return PathBuf::from(local).join("Cedro").join("trascrizione");
     }
