@@ -23,7 +23,11 @@ on:
         type: boolean
         default: false
       arm:
-        description: "Anche Windows on ARM (messo da parte dall'11/11/2026: si riaccende solo quando lo chiede Luca)"
+        description: "Anche Windows on ARM"
+        type: boolean
+        default: true
+      solo_arm:
+        description: "Solo Windows on ARM: aggiunge gli installatori e i motori ARM64 a una release già pubblicata, senza ricompilare x64"
         type: boolean
         default: false
 
@@ -38,7 +42,7 @@ env:
 jobs:
   scegli:
     name: Sceglie dove compilare x64 (VM di casa o GitHub)
-    if: ${{ !inputs.solo_pulizia }}
+    if: ${{ !inputs.solo_pulizia && !inputs.solo_arm }}
     runs-on: ubuntu-latest
     outputs:
       locale: ${{ steps.sonda.outputs.locale }}
@@ -53,7 +57,7 @@ jobs:
 
   app:
     name: Cedro (build, prove, installatore)
-    if: ${{ !inputs.solo_pulizia && inputs.arm }}
+    if: ${{ !inputs.solo_pulizia && (inputs.arm || inputs.solo_arm) }}
     runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
@@ -120,7 +124,7 @@ jobs:
 
   motori:
     name: Motore di trascrizione (processore)
-    if: ${{ !inputs.solo_pulizia && inputs.arm }}
+    if: ${{ !inputs.solo_pulizia && (inputs.arm || inputs.solo_arm) }}
     runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v4
@@ -196,7 +200,7 @@ jobs:
 
   vulkan:
     name: Motore di trascrizione (scheda video Vulkan, Adreno)
-    if: ${{ !inputs.solo_pulizia && inputs.arm }}
+    if: ${{ !inputs.solo_pulizia && (inputs.arm || inputs.solo_arm) }}
     runs-on: windows-11-arm
     continue-on-error: true
     steps:
@@ -264,7 +268,7 @@ jobs:
 
   x64:
     name: Cedro x64 (prove, installatore, motori)
-    if: ${{ !inputs.solo_pulizia }}
+    if: ${{ !inputs.solo_pulizia && !inputs.solo_arm }}
     needs: scegli
     runs-on: ${{ needs.scegli.outputs.locale == 'true' && fromJSON('["self-hosted", "cedro-windows"]') || 'windows-latest' }}
     steps:
@@ -395,7 +399,7 @@ jobs:
 
   x64-installa:
     name: Cedro x64 (installa, aggiorna e disinstalla davvero)
-    if: ${{ !inputs.solo_pulizia }}
+    if: ${{ !inputs.solo_pulizia && !inputs.solo_arm }}
     needs: x64
     # Sempre su GitHub: queste prove installano, aggiornano e tolgono Cedro dal sistema (anche per tutti gli
     # utenti, in Programmi): su un PC che resta non si fanno.
@@ -559,7 +563,7 @@ jobs:
 
   pubblica:
     name: Pubblica la release
-    if: ${{ always() && inputs.tag != '' && (!inputs.arm || (needs.app.result == 'success' && needs.motori.result == 'success')) && needs.x64.result == 'success' && needs.x64-installa.result == 'success' }}
+    if: ${{ always() && inputs.tag != '' && (!(inputs.arm || inputs.solo_arm) || (needs.app.result == 'success' && needs.motori.result == 'success')) && (inputs.solo_arm || (needs.x64.result == 'success' && needs.x64-installa.result == 'success')) }}
     needs: [app, motori, vulkan, x64, x64-installa]
     runs-on: ubuntu-latest
     steps:
@@ -576,7 +580,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
-          ARM: ${{ inputs.arm }}
+          ARM: ${{ inputs.arm || inputs.solo_arm }}
         run: |
           find file -type f | sort
           V="${TAG#v}"
@@ -591,17 +595,23 @@ jobs:
           gh release upload "$MOTORI" $(find file -type f \( -name 'cedro-trascrivi-*' -o -name 'cedro-riassumi-*' \)) --clobber
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             sed "s/{versione}/${TAG#v}/g; s#{repo}#${GITHUB_REPOSITORY}#g" .github/note-release.md > note.md
-            # Senza ARM: via la riga dell'installatore ARM e il consiglio su quale scegliere.
-            [ "$ARM" = true ] || sed -i '/ARM64-Setup-/d; /basato su ARM/d' note.md
+            # Con ARM: la riga dell'installatore ARM e il consiglio su quale scegliere.
+            [ "$ARM" = true ] && tools/note-arm.sh note.md "${TAG#v}" "$GITHUB_REPOSITORY"
             # Una bozza non crea il tag, e il workflow «Linux» fa il checkout del tag: lo creo prima.
             gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "$TAG" >/dev/null
             # In bozza: nessun Cedro la vede finché non ci sono i pacchetti di tutti i sistemi (job «apri»).
             gh release create "$TAG" --target "$GITHUB_SHA" --draft --title "Cedro ${TAG#v}" --notes-file note.md
+          elif [ "$ARM" = true ]; then
+            # Release già pubblicata (per esempio con «solo_arm»): aggiungo la riga ARM alle note che ha.
+            gh release view "$TAG" --json body --jq .body > note.md
+            tools/note-arm.sh note.md "${TAG#v}" "$GITHUB_REPOSITORY"
+            gh release edit "$TAG" --notes-file note.md
           fi
           gh release upload "$TAG" $(find file -type f \( -name 'Cedro-*Setup-*.exe' -o -name 'Cedro-Portable-*-x64.zip' \)) --clobber
           for t in "$TAG" "$MOTORI"; do echo "== $t"; gh release view "$t" --json assets --jq '.assets[] | "\(.name)  \(.digest)"'; done
 
       - name: Linux (tar.gz e motori) con il workflow «Linux»
+        if: ${{ !inputs.solo_arm }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
@@ -622,7 +632,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
-          ARM: ${{ inputs.arm }}
+          ARM: ${{ inputs.arm || inputs.solo_arm }}
         run: |
           V="${TAG#v}"
           want="Cedro-Setup-$V.exe Cedro-Bondeno-Setup-$V.exe Cedro-Portable-$V-x64.zip cedro-$V-linux-x64.tar.gz cedro-bondeno-$V-linux-x64.tar.gz"
