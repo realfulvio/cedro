@@ -1,0 +1,33 @@
+name: Antivirus
+
+# Fa analizzare su VirusTotal (70 e più antivirus) i file di una release e scrive il risultato nelle note.
+# Parte da solo alla fine del workflow «Windows ARM64», quando la release diventa pubblica; si può anche
+# lanciare a mano: Actions → Antivirus → Run workflow con il tag (per esempio v0.43.0).
+# Serve il segreto VT_API_KEY (chiave gratuita di virustotal.com); senza, il workflow salta senza errori.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag della release da analizzare (per esempio v0.43.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  virustotal:
+    name: Analisi su VirusTotal
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Analizza e scrive nelle note
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [ -z "$VT_API_KEY" ]; then echo "Manca il segreto VT_API_KEY: analisi saltata."; exit 0; fi
+          tools/antivirus.sh "$TAG"

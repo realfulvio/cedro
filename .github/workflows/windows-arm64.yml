@@ -638,6 +638,8 @@ jobs:
           if [ -n "$missing" ]; then echo "La release resta in bozza: mancano$missing"; exit 1; fi
           gh release edit "$TAG" --draft=false --latest
           gh release view "$TAG" --json isDraft,assets --jq '"bozza: \(.isDraft)", (.assets[].name)'
+          # Analisi antivirus su VirusTotal (workflow «Antivirus»): scrive il risultato nelle note.
+          gh workflow run antivirus.yml --ref "$GITHUB_REF_NAME" -f tag="$TAG" || echo "Analisi antivirus non avviata"
 
   verifica:
     name: "Dopo la pubblicazione: una 0.17 vera si aggiorna da GitHub, la nuova trascrive"
