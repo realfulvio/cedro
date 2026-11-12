@@ -292,7 +292,8 @@ pub fn tiff(img: &RgbImage, dpi: u32) -> Result<Vec<u8>, String> {
 pub fn legenda(f: &Figura, opz: &Opzioni) -> String {
     let cm = |mm: f32| format!("{:.1}", mm / 10.0).replace('.', ",");
     let altezza_mm = f.img.height() as f32 / opz.dpi as f32 * 25.4;
-    let mut s = format!("Figura: {} × {} cm, {} dpi, {} pannelli\n\n", cm(opz.larghezza_mm as f32), cm(altezza_mm), opz.dpi, f.pannelli.len());
+    let pannelli = if f.pannelli.len() == 1 { "1 pannello".to_string() } else { format!("{} pannelli", f.pannelli.len()) };
+    let mut s = format!("Figura: {} × {} cm, {} dpi, {pannelli}\n\n", cm(opz.larghezza_mm as f32), cm(altezza_mm), opz.dpi);
     for (ch, nome, barra, note) in &f.pannelli {
         s.push_str(&format!("({ch}) {nome}"));
         if let Some(b) = barra {

@@ -141,6 +141,7 @@ const RULES: &[(u32, Act, &str)] = &[
     (tag(0x0008, 0x0116), Act::Remove, CLINIC),
     (tag(0x0008, 0x1030), Act::Remove, DESCR),
     (tag(0x0008, 0x103E), Act::Remove, DESCR),
+    (tag(0x0018, 0x1030), Act::Remove, DESCR),
     (tag(0x0008, 0x1111), Act::Remove, NUMBERS),
     (tag(0x0008, 0x4000), Act::Remove, NOTES),
     (tag(0x0010, 0x0050), Act::Remove, ID),

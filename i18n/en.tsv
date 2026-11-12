@@ -2268,3 +2268,5 @@ Lo stesso Cedro, con la cornice chiara.	The same Cedro, with a light frame.
 Porta in CSV	Turn into CSV
 {#} celle troppo lunghe per Excel tagliate a {#} caratteri.	{} cells too long for Excel, cut to {} characters.
 {}: è un collegamento a una cartella, metti la cartella vera	{}: it is a link to a folder, add the real folder
+in coda ci sono radiografie di {#} animali diversi ({}): fai un PDF per ogni animale, con in coda solo le sue	the queue holds X-rays of {} different animals ({}): make one PDF per animal, with only its files in the queue
+ Saltati perché senza immagini: {}.	 Skipped because they have no images: {}.

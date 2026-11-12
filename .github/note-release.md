@@ -24,3 +24,4 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 - Pacchetto di dati: un file rovinato dentro lo ZIP viene segnalato come cambiato invece di fermare la verifica; si controlla anche l'elenco delle impronte stesso.
 - Cedro 4 Labs: per un Excel in coda la scheda propone il CSV, per uno ZIP la verifica del pacchetto.
 - Nessun blocco del programma con file DICOM, JPEG o vetrini rovinati.
+- Radiografie per il proprietario: Cedro non mette mai nello stesso PDF le lastre di animali diversi e salta i DICOM senza immagini (piani di cura, referti) invece di fermarsi.
