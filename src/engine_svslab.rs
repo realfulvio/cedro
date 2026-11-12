@@ -1,4 +1,4 @@
-//! Le voci di laboratorio sui vetrini (.svs): copia anonima, tessere per l'AI, conta mitotica e
+//! Le voci di laboratorio sui vetrini (.svs, .ndpi, .mrxs): copia anonima, tessere per l'AI, conta mitotica e
 //! consulto. Il lavoro vero sta in `svs_lab`; qui i nomi dei file e i messaggi.
 
 use std::path::Path;
@@ -15,14 +15,28 @@ pub fn perform(path: &Path, action: &str, dir: &Path, opts: &Options) -> Option<
         return None;
     }
     if !vetrino {
-        return Some(Err(err("serve un vetrino digitale (.svs)")));
+        return Some(Err(err("serve un vetrino digitale (.svs, .ndpi o .mrxs)")));
     }
     let report = |p: f32| crate::progress::report(p);
     Some((|| match action {
         "strip" => {
             // Il nome del file spesso è quello del paziente o del proprietario: la copia prende il codice del caso.
             let codice = crate::svs_lab::codice_caso(path);
-            let out = reserve(dir, &format!("{codice}-anonimo"), "svs")?;
+            let ext = crate::svs_lab::estensione(path);
+            let out = if ext == "mrxs" {
+                // Il MIRAX ha anche la cartella dei dati: un nome libero per tutti e due.
+                let mut n = 1;
+                loop {
+                    let nome = if n == 1 { format!("{codice}-anonimo") } else { format!("{codice}-anonimo ({n})") };
+                    let f = dir.join(format!("{nome}.mrxs"));
+                    if !f.exists() && !dir.join(&nome).exists() {
+                        break f;
+                    }
+                    n += 1;
+                }
+            } else {
+                reserve(dir, &format!("{codice}-anonimo"), ext)?
+            };
             let tolti = crate::svs_lab::copia_anonima(path, &out).map_err(err)?;
             let message = if tolti.is_empty() { format!("Vetrino copiato come {codice}: non c'era niente da togliere") } else { format!("Vetrino anonimo {codice}: tolti {}", tolti.join(", ")) };
             Ok(Output { path: out, message })

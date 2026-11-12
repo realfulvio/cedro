@@ -1283,8 +1283,16 @@ pub fn text_bytes(source: &Path, secs: f64, lang: &str, segments: &[Segment], na
 
 /// Come `text_bytes`, con il Riassunto AI in cima (prima dell'elenco di chi parla).
 pub fn text_bytes_with(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Sections>) -> Vec<u8> {
+    text_bytes_full(source, secs, lang, segments, names, summary, None)
+}
+
+/// Come `text_bytes_with`, con la riga della bozza (i punti del referto ancora da riascoltare) sotto il titolo.
+pub fn text_bytes_full(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Sections>, draft: Option<&str>) -> Vec<u8> {
     let (title, meta) = heading(source, secs, lang);
     let mut out = format!("{title}\n{meta}\n");
+    if let Some(d) = draft {
+        out.push_str(&format!("\n{d}\n"));
+    }
     if let Some(sum) = summary {
         out.push('\n');
         out.push_str(&sum.plain());
@@ -1352,6 +1360,11 @@ fn docx_summary(sum: &crate::riassunto::Sections) -> String {
 
 /// Come `docx_bytes`, con il Riassunto AI in cima (prima della legenda delle voci).
 pub fn docx_bytes_with(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Sections>) -> Vec<u8> {
+    docx_bytes_full(source, secs, lang, segments, names, summary, None)
+}
+
+/// Come `docx_bytes_with`, con la riga della bozza in rosso sotto il titolo.
+pub fn docx_bytes_full(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Sections>, draft: Option<&str>) -> Vec<u8> {
     let (title, meta) = heading(source, secs, lang);
     let mut body = format!(
         "<w:p><w:pPr><w:pStyle w:val=\"Title\"/></w:pPr><w:r><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>\
@@ -1359,6 +1372,9 @@ pub fn docx_bytes_with(source: &Path, secs: f64, lang: &str, segments: &[Segment
         xml_escape(&title),
         xml_escape(&meta)
     );
+    if let Some(d) = draft {
+        body.push_str(&format!("<w:p><w:r><w:rPr><w:b/><w:color w:val=\"B3261E\"/></w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>", xml_escape(d)));
+    }
     if let Some(sum) = summary {
         body.push_str(&docx_summary(sum));
     }
@@ -1880,9 +1896,28 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                 let names = default_names(voices);
                 // Le frasi restano salvate: «Rivedi» le riapre anche dopo aver chiuso Cedro.
                 let _ = crate::revisione::save(path, secs, &lang, &segments, &names);
+                // Con i referti veterinari le frasi con numeri e parole decisive vanno riascoltate in
+                // «Rivedi»: finché non lo sono il file è una bozza, col nome e la riga in cima che lo dicono.
+                let referto = request.glossario.as_deref().is_some_and(|g| g.split(',').any(|t| t.trim() == "veterinaria"));
+                let punti = if referto { crate::revisione::find_referto(&segments) } else { Vec::new() };
+                let draft = crate::revisione::riga_bozza(&segments, &punti.iter().collect::<Vec<_>>());
+                let out = match &draft {
+                    Some(_) => {
+                        let s = out.file_stem().and_then(|s| s.to_str()).unwrap_or(stem).to_string();
+                        let ext = request.format.ext();
+                        let mut o = dir.join(format!("{s} - bozza.{ext}"));
+                        let mut n = 2;
+                        while o.exists() {
+                            o = dir.join(format!("{s} - bozza ({n}).{ext}"));
+                            n += 1;
+                        }
+                        o
+                    }
+                    None => out.clone(),
+                };
                 let bytes = match request.format {
-                    Format::Word => docx_bytes(path, secs, &lang, &segments, &names),
-                    Format::Text => text_bytes(path, secs, &lang, &segments, &names),
+                    Format::Word => docx_bytes_full(path, secs, &lang, &segments, &names, None, draft.as_deref()),
+                    Format::Text => text_bytes_full(path, secs, &lang, &segments, &names, None, draft.as_deref()),
                 };
                 std::fs::create_dir_all(&dir)
                     .and_then(|_| {
