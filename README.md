@@ -9,6 +9,7 @@
   <img alt="Windows 10, 11 e ARM" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20ARM-1C1626?style=for-the-badge">
   <img alt="Linux Wayland" src="https://img.shields.io/badge/Linux-KDE%20%7C%20GNOME-1C1626?style=for-the-badge">
   <img alt="Android: F-Droid / APK" src="https://img.shields.io/badge/Android-F--Droid%20%2F%20APK-1C1626?style=for-the-badge">
+  <a href="https://github.com/realfulvio/cedro/releases/latest"><img alt="Analizzato con VirusTotal" src="https://img.shields.io/badge/analizzato%20con-VirusTotal-1C1626?style=for-the-badge"></a>
   <a href="LICENSE"><img alt="Licenza MIT" src="https://img.shields.io/badge/licenza-MIT-1C1626?style=for-the-badge"></a>
 </p>
 
@@ -49,6 +50,8 @@ Tutto avviene **sul tuo dispositivo**: i file non vengono caricati da nessuna pa
 **Linux:** Cedro resta nell'area di notifica e scrive da solo i menu del file manager. Su GNOME serve l'estensione AppIndicator per vedere l'icona.
 
 Dopo la prima installazione si aggiorna da solo. Per toglierlo: *Impostazioni di Windows, App, Cedro* (Linux: `./install.sh --uninstall`).
+
+**Controllo antivirus:** ogni file di ogni release viene analizzato in automatico su [VirusTotal](https://www.virustotal.com) con più di 70 antivirus; il risultato, con il link al rapporto di ciascun file, è in fondo alle note della [release](https://github.com/realfulvio/cedro/releases/latest). Nessuno può garantire «zero virus» per sempre, ma puoi verificarlo tu stesso: confronta anche lo SHA-256 del file scaricato con quello del rapporto.
 
 <p align="center">
   <img src="docs/shots/installatore-fine.png" width="440" alt="Ultima pagina dell'installatore di Windows: Avvia Cedro e Guarda come funziona">
