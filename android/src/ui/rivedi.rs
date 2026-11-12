@@ -402,6 +402,7 @@ impl App {
         let avviso = self.avviso();
         let premuto = self.premuto;
         let mut colpi: Vec<(Forma, Azione)> = Vec::new();
+        let scuro_t = super::tinte::scuro(self.tema);
         let Some(rv) = self.rivedi.as_mut() else { return };
         // Barra
         let indietro = (4.0, 4.0, TOCCO, TOCCO);
@@ -418,7 +419,7 @@ impl App {
 
         // Il lettore: onda, salti, play e tempo.
         let card_h = 126.0;
-        super::sollevato(p, pal, self.tema.dark(), x, y, cw, card_h, 20.0);
+        super::sollevato(p, pal, scuro_t, x, y, cw, card_h, 20.0);
         let pos = rv.posizione();
         let durata = rv.r.secs.max(0.001);
         let (ox, ow, oy, oh) = (x + 14.0, cw - 28.0, y + 12.0, 46.0);
@@ -481,7 +482,7 @@ impl App {
             let rc = (x + k as f32 * sw + 3.0, y + 3.0, sw - 6.0, 38.0);
             let on = rv.r.tab == *id;
             if on {
-                super::sollevato(p, pal, self.tema.dark(), rc.0, rc.1, rc.2, rc.3, 19.0);
+                super::sollevato(p, pal, scuro_t, rc.0, rc.1, rc.2, rc.3, 19.0);
             }
             p.text(t, rc.0, rc.1, rc.2, rc.3, 15.0, if on { Weight::Semibold } else { Weight::Regular }, if on { pal.text } else { pal.muted }, Align::Center);
             colpi.push((Forma::R((rc.0, y, rc.2, 44.0)), Azione::Riv(RivAz::Scheda(*id))));
@@ -578,7 +579,7 @@ impl App {
                 let vc = cedro::ui::theme::voice(self.tema, v as usize);
                 let nome = row.speaker.map(|v| rv.r.name(v)).unwrap_or_else(|| "Chi parla?".into());
                 let nw = p.measure(&nome, 13.0, Weight::Semibold).min(tw - 40.0) + 34.0;
-                p.rrect(x + 70.0, ry + 6.0, nw, 26.0, 13.0, Some(mix(vc, pal.surface, if self.tema.dark() { 0.78 } else { 0.86 })), None);
+                p.rrect(x + 70.0, ry + 6.0, nw, 26.0, 13.0, Some(mix(vc, pal.surface, if scuro_t { 0.78 } else { 0.86 })), None);
                 p.circle(x + 82.0, ry + 19.0, 4.5, Some(vc), None);
                 p.text(&nome, x + 92.0, ry + 6.0, nw - 30.0, 26.0, 13.0, Weight::Semibold, vc, Align::Left);
                 p.icon("M6 9l6 6 6-6", x + 70.0 + nw - 18.0, ry + 12.0, 13.0, vc);
@@ -679,7 +680,7 @@ impl App {
             let ry = fy + 60.0 + k as f32 * rh;
             let nuova = *v == cedro::ui::core::NEW_VOICE;
             let vc = if nuova { pal.muted } else { cedro::ui::theme::voice(tema, *v as usize) };
-            super::piastrella(p, pal, tema.dark(), 20.0, ry + 9.0, 36.0, if nuova { ic::ADD } else { "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c0-4 4-6 8-6s8 2 8 6" }, vc, !nuova);
+            super::piastrella(p, pal, super::tinte::scuro(tema), 20.0, ry + 9.0, 36.0, if nuova { ic::ADD } else { "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c0-4 4-6 8-6s8 2 8 6" }, vc, !nuova);
             p.text(nome, 70.0, ry, w - 90.0, rh, 16.0, Weight::Regular, pal.text, Align::Left);
             let az = match f {
                 FoglioRiv::Voce(_) => RivAz::Voce(*v),
@@ -711,7 +712,7 @@ impl App {
 #[allow(clippy::too_many_arguments)]
 fn chi_parla(p: &mut Painter, pal: &cedro::ui::theme::Palette, tema: cedro::ui::theme::ThemeId, rv: &mut Rivedi, r: super::R, campo: Option<super::pdf::Campo>, premuto: Option<Azione>, colpi: &mut Vec<(Forma, Azione)>) {
     let (x, mut y, cw) = (r.0, r.1, r.2);
-    let scuro = tema.dark();
+    let scuro = super::tinte::scuro(tema);
     let voci = rv.r.live_voices();
     for v in voci.iter().copied() {
         let vc = cedro::ui::theme::voice(tema, v as usize);
@@ -769,7 +770,7 @@ fn chi_parla(p: &mut Painter, pal: &cedro::ui::theme::Palette, tema: cedro::ui::
 fn riassunto(p: &mut Painter, pal: &cedro::ui::theme::Palette, tema: cedro::ui::theme::ThemeId, rv: &mut Rivedi, r: super::R, premuto: Option<Azione>, colpi: &mut Vec<(Forma, Azione)>) {
     let (x, y0, cw, alto) = r;
     let h = y0 + alto;
-    let scuro = tema.dark();
+    let scuro = super::tinte::scuro(tema);
     let ai = mix((0x7A, 0x3F, 0xC8), (255, 255, 255), if scuro { 0.28 } else { 0.0 });
     let mut y = y0;
     // In corso: barra e passo.
