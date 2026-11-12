@@ -372,6 +372,48 @@ impl Image {
         Some(Image { w, h, pixmap: Arc::new(pm) })
     }
 
+    /// L'immagine ridotta a pochi pixel (la media di ogni riquadro): ingrandita torna una macchia
+    /// sfumata dei suoi colori, l'alone dietro il file di Cedro 4 Labs.
+    /// Quanto è chiara l'immagine nel complesso, da 0 (nera) a 1 (bianca).
+    pub fn luma(&self) -> f32 {
+        let (mut sum, mut n) = (0u64, 0u64);
+        for p in self.pixmap.data().chunks_exact(4).step_by(((self.w * self.h) as usize / 4096).max(1)) {
+            sum += (p[0] as u64 * 3 + p[1] as u64 * 6 + p[2] as u64) / 10;
+            n += 1;
+        }
+        sum as f32 / n.max(1) as f32 / 255.0
+    }
+
+    pub fn tiny(&self, w: u32, h: u32) -> Option<Image> {
+        let (sw, sh) = (self.w.max(1), self.h.max(1));
+        let src = self.pixmap.data();
+        let mut pm = Pixmap::new(w, h)?;
+        for (i, d) in pm.data_mut().chunks_exact_mut(4).enumerate() {
+            let (cx, cy) = (i as u32 % w, i as u32 / w);
+            let (x0, x1) = (cx * sw / w, ((cx + 1) * sw / w).max(cx * sw / w + 1).min(sw));
+            let (y0, y1) = (cy * sh / h, ((cy + 1) * sh / h).max(cy * sh / h + 1).min(sh));
+            // Un campione ogni tanto basta: è una macchia, non una miniatura.
+            let (stepx, stepy) = (((x1 - x0) / 12).max(1), ((y1 - y0) / 12).max(1));
+            let (mut r, mut g, mut b, mut n) = (0u32, 0u32, 0u32, 0u32);
+            let mut y = y0;
+            while y < y1 {
+                let mut x = x0;
+                while x < x1 {
+                    let k = ((y * sw + x) * 4) as usize;
+                    r += src[k] as u32;
+                    g += src[k + 1] as u32;
+                    b += src[k + 2] as u32;
+                    n += 1;
+                    x += stepx;
+                }
+                y += stepy;
+            }
+            let n = n.max(1);
+            d.copy_from_slice(&[(r / n) as u8, (g / n) as u8, (b / n) as u8, 255]);
+        }
+        Some(Image { w, h, pixmap: Arc::new(pm) })
+    }
+
     /// L'immagine girata di `quarters` quarti di giro in senso orario (le pagine ruotate dei PDF).
     pub fn turned(&self, quarters: i32) -> Image {
         let q = quarters.rem_euclid(4);
