@@ -106,7 +106,7 @@ impl Default for Settings {
             dialogs: true,
             reveal: false,
             progress: true,
-            // Dalla 0.43 si parte dalla vista Semplice; Bondeno e Cedro 4 Labs restano come prima (`passa_a_tema`).
+            // Dalla 0.44 si parte dalla vista Semplice; Bondeno e Cedro 4 Labs restano come prima (`passa_a_tema`).
             simple: true,
             view_asked: false,
             gpu: true,
@@ -381,7 +381,7 @@ fn passa_a_tema(dir: &Path, marker: &str, chiave: &str) {
     let nuove = !path.is_file();
     let mut s = Settings::load_from(&path);
     s.ui_theme = chiave.to_string();
-    // Bondeno e Cedro 4 Labs partono dalla vista Completa, come prima della 0.43.
+    // Bondeno e Cedro 4 Labs partono dalla vista Completa, come prima della 0.44.
     if nuove {
         s.simple = false;
     }
@@ -398,7 +398,7 @@ fn passa_a_bondeno(dir: &Path) {
     al_nuovo_aspetto(dir);
 }
 
-/// Una volta sola, aggiornando da prima della 0.43: chi aveva l'aspetto di partenza (Windows essenziale)
+/// Una volta sola, aggiornando da prima della 0.44: chi aveva l'aspetto di partenza (Windows essenziale)
 /// passa al nuovo aspetto Cedro, con la vista Semplice se non aveva scelto la Completa. Gli altri temi restano.
 fn al_nuovo_aspetto(dir: &Path) {
     let path = dir.join("config.txt");
@@ -615,7 +615,7 @@ mod bondeno_tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("config.txt");
-        // Prima della 0.43, aspetto di partenza e vista Completa mai scelta: nuovo aspetto e vista Semplice.
+        // Prima della 0.44, aspetto di partenza e vista Completa mai scelta: nuovo aspetto e vista Semplice.
         fs::write(&path, "quality=70\nsimple=0\nui_theme=windows-essenziale\nui_schema=1\n").unwrap();
         passa_a_bondeno(&dir);
         let s = Settings::load_from(&path);
