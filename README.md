@@ -145,11 +145,12 @@ Tutto resta sul computer, come in Cedro standard. Un laboratorio che manca di un
 
 ## Tutti i rilasci
 
-Dal 21 ottobre 2026 sono uscite **90 versioni** per Windows e Linux. Le ultime:
+Dal 21 ottobre 2026 sono uscite **91 versioni** per Windows e Linux. Le ultime:
 
 | Versione | Data | Novità |
 | --- | --- | --- |
 | [0.45.0](https://github.com/realfulvio/cedro/releases/tag/v0.45.0) | 12/11 | Cedro 4 Labs legge i file Zeiss CZI |
+| [0.44.3](https://github.com/realfulvio/cedro/releases/tag/v0.44.3) | 12/11 | Componenti aggiornati per sicurezza e manutenzione |
 | [0.44.2](https://github.com/realfulvio/cedro/releases/tag/v0.44.2) | 12/11 | Correzioni di qualità per Cedro 4 Labs |
 | [0.44.0](https://github.com/realfulvio/cedro/releases/tag/v0.44.0) | 12/11 | Nuovo aspetto «Cedro» a pagine con quattro tinte |
 | [0.43.0](https://github.com/realfulvio/cedro/releases/tag/v0.43.0) | 12/11 | Cedro 4 Labs con la finestra a pagine |
