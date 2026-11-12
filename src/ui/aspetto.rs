@@ -1,4 +1,4 @@
-//! La pagina «Aspetto» delle Impostazioni: la modalità (Standard o Semplificata) e i cinque temi,
+//! La pagina «Aspetto» delle Impostazioni: la modalità (Standard o Semplificata) e tutti i temi,
 //! ciascuno con la sua anteprima. Le anteprime sono fotografie vere del disegno di Cedro, fatte
 //! in un thread con file di prova, quindi mostrano esattamente quello che si otterrà.
 //! Le due finestre delle Impostazioni (Windows e Linux) la ospitano così com'è: qui non c'è
