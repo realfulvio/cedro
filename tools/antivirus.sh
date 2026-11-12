@@ -29,24 +29,35 @@ mapfile -t files < <(find "$dir" -maxdepth 1 -type f -printf '%f\n' | sort)
 [ "${#files[@]}" -gt 0 ] || { echo "Nessun file da analizzare in $TAG"; exit 1; }
 
 rows=""; worst=0; most=0
+declare -A fatto   # sha256 -> "esito|segnalazioni": file identici si analizzano una volta sola
 for f in "${files[@]}"; do
   sha=$(sha256sum "$dir/$f" | cut -d' ' -f1)
   echo "== $f  $sha"
-  # Si carica sempre: così l'analisi è fresca, con le firme antivirus di oggi.
-  url=$(vt "$API/files/upload_url" | jq -r .data)
-  id=$(vt -F "file=@$dir/$f" "$url" | jq -r .data.id)
-  [ -n "$id" ] && [ "$id" != null ] || { echo "Caricamento di $f non riuscito"; exit 1; }
-  for _ in $(seq 1 60); do
-    a=$(vt "$API/analyses/$id")
-    [ "$(jq -r .data.attributes.status <<<"$a")" = completed ] && break
-    sleep 30
-  done
-  [ "$(jq -r .data.attributes.status <<<"$a")" = completed ] || { echo "Analisi di $f non finita in tempo"; exit 1; }
-  read -r bad sus tot < <(jq -r '.data.attributes.stats | "\(.malicious) \(.suspicious) \(.malicious + .suspicious + .undetected + .harmless)"' <<<"$a")
-  echo "   segnalazioni: $bad malevolo, $sus sospetto, su $tot antivirus"
-  [ $((bad + sus)) -gt "$worst" ] && worst=$((bad + sus))
+  if [ -z "${fatto[$sha]:-}" ]; then
+    id=""
+    for _ in 1 2 3; do
+      url=$(vt "$API/files/upload_url" | jq -r '.data // empty')
+      [ -n "$url" ] && id=$(vt -F "file=@$dir/$f" "$url" | jq -r '.data.id // empty')
+      [ -n "$id" ] && break
+      sleep 30
+    done
+    [ -n "$id" ] || { echo "Caricamento di $f non riuscito"; exit 1; }
+    a=""
+    for _ in $(seq 1 60); do
+      a=$(vt "$API/analyses/$id")
+      [ "$(jq -r .data.attributes.status <<<"$a")" = completed ] && break
+      sleep 30
+    done
+    [ "$(jq -r .data.attributes.status <<<"$a")" = completed ] || { echo "Analisi di $f non finita in tempo"; exit 1; }
+    read -r bad sus tot < <(jq -r '.data.attributes.stats | "\(.malicious) \(.suspicious) \(.malicious + .suspicious + .undetected + .harmless)"' <<<"$a")
+    chi=$(jq -r '[.data.attributes.results[] | select(.category=="malicious" or .category=="suspicious") | "\(.engine_name): \(.result // .category)"] | join("; ")' <<<"$a" | tr "|" "/")
+    if [ $((bad + sus)) -eq 0 ]; then esito="✅ nessuna segnalazione su $tot"; else esito="⚠️ $((bad + sus)) segnalazione su $tot ($chi)"; fi
+    fatto[$sha]="$esito|$((bad + sus))|$tot"
+  fi
+  IFS='|' read -r esito n tot <<<"${fatto[$sha]}"
+  echo "   $esito"
+  [ "$n" -gt "$worst" ] && worst=$n
   [ "$tot" -gt "$most" ] && most=$tot
-  if [ $((bad + sus)) -eq 0 ]; then esito="✅ nessuna segnalazione su $tot"; else esito="⚠️ $((bad + sus)) segnalazioni su $tot"; fi
   rows+="| \`$f\` | $esito | [rapporto](https://www.virustotal.com/gui/file/$sha) |"$'\n'
 done
 
