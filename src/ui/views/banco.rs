@@ -186,7 +186,7 @@ fn inspector(f: &mut Frame, app: &App, r: R) {
     super::scrolled(f, body, Scroll::Inspector, |f| {
         let mut y = body.1 + 6.0;
         y += super::options_panel(f, app, x, y, w, OPT_STD, true) + 6.0;
-        let tools = conversioni::tools(app.kind());
+        let tools = app.tools();
         if !tools.is_empty() {
             f.hline(x, y, w);
             y += 22.0;
@@ -195,7 +195,7 @@ fn inspector(f: &mut Frame, app: &App, r: R) {
             y += 44.0;
             let home_id = app.default_action(false);
             let home = conversioni::formats(app.kind()).iter().find(|s| s.id == home_id).map(|s| s.id).unwrap_or("");
-            for t in tools {
+            for t in &tools {
                 let on = app.action == t.id;
                 let act = Act::Action(if on { home } else { t.id });
                 f.checkbox(x, y + 2.0, 24.0, on, None);

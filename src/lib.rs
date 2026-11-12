@@ -16,6 +16,14 @@ mod archive;
 mod cartelle;
 mod engine;
 mod imgfmt;
+pub mod dicom;
+mod anonimizza;
+pub mod tabella;
+pub mod microscopia;
+pub mod nd2;
+pub mod lif;
+pub mod figura;
+pub mod pacchetto;
 mod nametemplate;
 mod mp4fast;
 mod ocr;
@@ -34,6 +42,8 @@ pub mod tema;
 pub mod ui;
 pub mod sysinfo;
 pub mod svs;
+pub mod svs_lab;
+pub mod rx;
 mod sink;
 mod textconv;
 pub mod trascrizione;
@@ -73,7 +83,7 @@ pub(crate) use vaapi as gpuenc;
 pub(crate) use mediacodec as gpuenc;
 
 pub use engine::{
-    append_log, config_dir, merge_paths, merge_with, perform_with, PdfEdit, PdfPages, saved_squeeze, size_words, squeeze_pdf, Exists, ExistsAsk, ExistsChoice, Options, PageSel, unique_output, extension, kind_of, mode_from_vk, perform, perform_into, read_quality, same_kind_paths, slices, Kind,
+    append_log, config_dir, figure_paths, figure_with, package_paths, package_with, merge_paths, merge_with, perform_with, PdfEdit, PdfPages, saved_squeeze, size_words, squeeze_pdf, Exists, ExistsAsk, ExistsChoice, Options, PageSel, unique_output, extension, kind_of, mode_from_vk, perform, perform_into, read_quality, same_kind_paths, slices, Kind,
     Mode, Output, Slice,
 };
 pub use audio::waveform;

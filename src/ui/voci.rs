@@ -38,6 +38,8 @@ const GRAFITE: Rgb = hex(0x56606B);
 const ARANCIO: Rgb = hex(0xD4570E);
 const ROSSO: Rgb = hex(0xC8323C);
 const VIOLA: Rgb = hex(0x663FC0);
+/// Il colore del laboratorio (figure, tabelle dei dati, microscopia).
+const LAB: Rgb = hex(0xC2306B);
 
 const fn g(stroke: &'static str, fill: &'static str) -> Glyph {
     Glyph { stroke, fill }
@@ -81,6 +83,12 @@ const MAIUSC: Glyph = g("M3 18 7.5 6 12 18 M4.7 13.5h5.6 M14 18V6h3.5a3 3 0 0 1 
 const MINUSC: Glyph = g("M4 14.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0z M11 11v7 M14 6v12 M14 14.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0z", "");
 const UNISCI: Glyph = g("M5 4h9v6H5z M5 14h9v6H5z M17 7h2v10h-2 M19 12h2", "");
 const DIVIDI: Glyph = g("M6 3h12v7H6z M6 14h12v7H6z M3 12h2 M8 12h2 M14 12h2 M19 12h2", "");
+const FIGURA: Glyph = g("M3 3h8v8H3z M13 3h8v8h-8z M3 13h8v8H3z M13 13h8v8h-8z M5 9.5h3", "");
+const VERIFICA: Glyph = g("M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6l8-3z M8.5 12l2.5 2.5 4.5-5", "");
+const TESSERE: Glyph = g("M3 3h5v5H3z M10 3h5v5h-5z M17 3h4v5h-4z M3 10h5v5H3z M10 10h5v5h-5z M3 17h5v4H3z", "");
+const MITOSI: Glyph = g("M3 6h18v12H3z M6.6 6v12 M10.2 6v12 M13.8 6v12 M17.4 6v12 M3 12h18", "");
+const RX: Glyph = g("M4 3h16v18H4z M8 7h8 M12 7v10 M9 10q3 1.5 6 0 M9 13q3 1.5 6 0 M10 17h4", "");
+const CONSULTO: Glyph = g("M4 8h16v12H4z M9 8V5h6v3 M8 13h8 M12 11v4", "");
 const ALTRO: Glyph = g("M6 3h8l4 4v14H6z M14 3v5h4", "");
 
 const fn v(label: &'static str, hint: &'static str, glyph: Glyph, color: Rgb) -> Voce {
@@ -114,6 +122,11 @@ pub fn voce(kind: Kind, id: &str) -> Voce {
         (Kind::Image, "rot90") => v("Ruota di 90° a destra", "senso orario", RUOTA, ARANCIO),
         (Kind::Image, "strip") => v("Togli GPS e dati nascosti", "luogo, data, fotocamera", PULISCI, ROSSO),
         (Kind::Image, "ocr") => v("Leggi il testo (OCR)", "copia le scritte", OCR, VIOLA),
+        (Kind::Image, "tiles") => v("Tessere per l'AI", "riquadri del vetrino, solo tessuto", TESSERE, LAB),
+        (Kind::Image, "mitosi") => v("Zona per la conta mitotica", "2,37 mm² in 10 campi", MITOSI, LAB),
+        (Kind::Image, "consult") => v("Pacchetto per un consulto", "vetrino anonimo e scheda", CONSULTO, LAB),
+        (Kind::Image, "rx") => v("Radiografie per il proprietario", "PDF con il logo della clinica", RX, LAB),
+        (Kind::Image, "figure") => v("Figura per un articolo", "pannelli A B C, 300 dpi", FIGURA, LAB),
         // PDF
         (Kind::Pdf, "jpg") => v("JPG", "una foto per pagina", JPEG, WEB),
         (Kind::Pdf, "docx") => v("Word", "da modificare, anche scansioni", WORD, OFFICE),
@@ -124,6 +137,7 @@ pub fn voce(kind: Kind, id: &str) -> Voce {
         (Kind::Pdf, "compress") => v("Comprimi", "PDF più leggero", COMPRIMI, BLU),
         (Kind::Pdf, "merge") => v("Unisci", "un solo PDF", UNISCI, PETROLIO),
         (Kind::Pdf, "split") => v("Dividi", "una pagina per file", DIVIDI, ARANCIO),
+        (Kind::Pdf, "strip") => v("Togli autore e dati nascosti", "autore, programma, commenti", PULISCI, ROSSO),
         // Audio
         (Kind::Audio, "mp3") => v("MP3", "va bene ovunque", MP3, AUDIO),
         (Kind::Audio, "wav") => v("WAV", "senza compressione", WAV, COMP),
@@ -135,11 +149,13 @@ pub fn voce(kind: Kind, id: &str) -> Voce {
         (Kind::Video, "mp3") => v("Solo l'audio (MP3)", "toglie le immagini", MP3, AUDIO),
         // Documenti
         (Kind::Doc, "pdf") => v("PDF", "si apre ovunque", DOCPDF, PDF),
+        (Kind::Doc, "strip") => v("Togli autore e dati nascosti", "autore, revisioni, commenti", PULISCI, ROSSO),
         // Testo
         (Kind::Text, "txt") => v("TXT", "testo semplice", TXT, COMP),
         (Kind::Text, "html") => v("HTML", "pagina web", HTML, WEB),
         (Kind::Text, "md") => v("Markdown", "titoli ed elenchi", MD, NUOVI),
         (Kind::Text, "csv") => v("CSV", "tabella per Excel", CSV, WEB),
+        (Kind::Text, "xlsx") => v("Excel", "numeri veri, geni come testo", XLS, OFFICE),
         (Kind::Text, "json") => v("JSON", "dati per programmi", JSON, COMP),
         (Kind::Text, "pdf") => v("PDF", "pronto da stampare", DOCPDF, PDF),
         (Kind::Text, "upper") => v("Tutto MAIUSCOLO", "", MAIUSC, BLU),
@@ -151,6 +167,7 @@ pub fn voce(kind: Kind, id: &str) -> Voce {
         (Kind::Archive, "z-mp3") => v("Audio in MP3", "tutti gli audio", MP3, AUDIO),
         (Kind::Archive, "z-wav") => v("Audio in WAV", "", WAV, COMP),
         (Kind::Archive, "z-pdf") => v("Documenti in PDF", "Word, ODT, testi", DOCPDF, PDF),
+        (Kind::Archive, "verify-pack") => v("Verifica il pacchetto di dati", "impronte SHA-256 di ogni file", VERIFICA, LAB),
         _ => fallback,
     }
 }
@@ -159,6 +176,7 @@ fn id_label(id: &str) -> &'static str {
     match id {
         "merge" => "Unisci",
         "split" => "Dividi",
+        "figure" => "Figura",
         _ => "",
     }
 }
@@ -262,6 +280,7 @@ pub fn tools_heading(kind: Kind) -> &'static str {
         Kind::Image => "Modifica l'immagine",
         Kind::Pdf => "Modifica il PDF",
         Kind::Text => "Modifica il testo",
+        Kind::Doc => "Modifica il documento",
         _ => "Strumenti",
     }
 }
