@@ -9,6 +9,7 @@
   <img alt="Windows 10, 11 and ARM" src="https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20ARM-1C1626?style=for-the-badge">
   <img alt="Linux Wayland" src="https://img.shields.io/badge/Linux-KDE%20%7C%20GNOME-1C1626?style=for-the-badge">
   <img alt="Android: F-Droid / APK" src="https://img.shields.io/badge/Android-F--Droid%20%2F%20APK-1C1626?style=for-the-badge">
+  <a href="https://github.com/realfulvio/cedro/releases/latest"><img alt="Scanned with VirusTotal" src="https://img.shields.io/badge/scanned%20with-VirusTotal-1C1626?style=for-the-badge"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-1C1626?style=for-the-badge"></a>
 </p>
 
@@ -55,6 +56,8 @@ Everything happens **on your own device**: your files are never uploaded anywher
 **Linux:** Cedro stays in the notification area and writes the file manager menus by itself. On GNOME you need the AppIndicator extension to see the icon.
 
 After the first install it updates itself. To remove it: *Windows Settings, Apps, Cedro* (Linux: `./install.sh --uninstall`).
+
+**Antivirus check:** every file of every release is automatically scanned on [VirusTotal](https://www.virustotal.com) with 70+ antivirus engines; the result, with a link to each file's report, is at the bottom of the [release](https://github.com/realfulvio/cedro/releases/latest) notes. Nobody can promise "zero viruses" forever, but you can check it yourself: compare the SHA-256 of your download with the one in the report.
 
 <p align="center">
   <img src="docs/shots/installatore-fine.png" width="440" alt="Last page of the Windows installer: Launch Cedro">
