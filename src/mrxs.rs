@@ -664,7 +664,10 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
         let vecchio_id = letto.get("GENERAL", "SLIDE_ID").unwrap_or("").to_string();
         let nuovo_id = {
             use sha2::{Digest, Sha256};
-            let h = Sha256::digest([vecchio_id.as_bytes(), b"cedro-anonimo"].concat());
+            // Con l'ora e il processo, non solo dal vecchio: chi ha l'elenco degli identificativi veri non
+            // può ricalcolare il nuovo e risalire al caso.
+            let ora = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+            let h = Sha256::digest([vecchio_id.as_bytes(), &ora.to_le_bytes(), &std::process::id().to_le_bytes(), out.as_os_str().as_encoded_bytes()].concat());
             let hex: String = h.iter().map(|b| format!("{b:02X}")).collect::<String>().repeat(2);
             hex[..vecchio_id.len().min(hex.len())].to_string()
         };
