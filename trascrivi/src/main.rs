@@ -172,7 +172,8 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
     params.set_print_timestamps(false);
     // Niente «[Musica]», «(applausi)» e simili al posto del parlato.
     params.set_suppress_nst(true);
-    if let Some(prompt) = rifinitura::initial_prompt(&lang) {
+    let prompt = rifinitura::prompt(&lang, request["glossario"].as_str());
+    if let Some(prompt) = &prompt {
         params.set_initial_prompt(prompt);
     }
     // Ogni frase parte quando arriva la successiva: l'ultima si guarda a parte, perché a fine audio whisper a volte

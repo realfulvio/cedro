@@ -264,7 +264,7 @@ fn convert_body(f: &mut Frame, app: &App, x: f32, y0: f32, w: f32, simple: bool)
     }
     let all = app.option_defs();
     // Il riquadro «Vetrino» (in cima) resta in vista; le altre opzioni si aprono.
-    let lead = all.iter().take_while(|d| matches!(d.opt, conversioni::Opt::SlideLevel | conversioni::Opt::SlideLabel | conversioni::Opt::SlideMacro)).count();
+    let lead = all.iter().take_while(|d| conversioni::is_lead(d.opt)).count();
     for def in &all[..lead] {
         y += super::option(f, app, def, x, y, w, st) + st.gap;
     }
