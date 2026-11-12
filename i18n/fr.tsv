@@ -2282,3 +2282,120 @@ Porta in CSV	Transformer en CSV
 {}: è un collegamento a una cartella, metti la cartella vera	{} : c'est un lien vers un dossier, ajoutez le vrai dossier
 in coda ci sono radiografie di {#} animali diversi ({}): fai un PDF per ogni animale, con in coda solo le sue	la file contient des radiographies de {} animaux différents ({}) : faites un PDF par animal, avec seulement ses fichiers dans la file
  Saltati perché senza immagini: {}.	 Ignorés car ils n'ont pas d'images : {}.
+Il modello si scarica al primo uso e poi resta sul PC.	Le modèle est téléchargé à la première utilisation puis reste sur le PC.
+Esempio:	Exemple :
+nomefile	nomdufichier
+nomefile-anonimo	nomdufichier-anonyme
+nomefile-pulito	nomdufichier-nettoye
+nomefile-compresso	nomdufichier-compresse
+nomefile-meta	nomdufichier-moitie
+nomefile-bn	nomdufichier-nb
+nomefile-ruotato	nomdufichier-pivote
+nomefile-figura	nomdufichier-figure
+nomefile-tessere	nomdufichier-tuiles
+nomefile-conta-mitotica	nomdufichier-comptage-mitotique
+caso-1a2b3c-consulto	cas-1a2b3c-consultation
+nomeanimale-radiografie	nomanimal-radiographies
+controllato oggi, {}	vérifié aujourd'hui, {}
+controllato ieri alle {}	vérifié hier à {}
+controllato il {}	vérifié le {}
+Scegli la cartella con i file firmati	Choisissez le dossier contenant les fichiers signés
+Non c'è nessun documento da estrarre: i PDF firmati sono già il documento.	Il n'y a aucun document à extraire : les PDF signés sont déjà le document.
+Estratto 1 documento, accanto al suo file firmato.	1 document extrait, à côté de son fichier signé.
+Estratti {} documenti, ognuno accanto al suo file firmato.	{} documents extraits, chacun à côté de son fichier signé.
+Cartella con i file da firmare	Dossier contenant les fichiers à signer
+In quella cartella non ci sono file da aggiungere.	Il n'y a aucun fichier à ajouter dans ce dossier.
+Dove salvo i file firmati	Où enregistrer les fichiers signés
+Dove salvo il certificato	Où enregistrer le certificat
+Non riesco a salvare il certificato: {}	Je ne peux pas enregistrer le certificat : {}
+Non riesco a mostrare il certificato: {}	Je ne peux pas afficher le certificat : {}
+Scegli un'immagine (PNG o JPG)…	Choisissez une image (PNG ou JPG)…
+Questa non è un'immagine che so leggere: scegli un PNG o un JPG.	Ce n'est pas une image que je sais lire : choisissez un PNG ou un JPG.
+Salvato «{}» nella cartella del file firmato.	« {} » enregistré dans le dossier du fichier signé.
+Non riesco a leggere il file: {}	Je ne peux pas lire le fichier : {}
+Questo link è già in coda.	Ce lien est déjà dans la file.
+Errore interno: {}	Erreur interne : {}
+errore interno: {}	erreur interne : {}
+Leggo il testo…	Lecture du texte…
+Per laboratori e ricerca: solo gli strumenti utili.	Pour les laboratoires et la recherche : seulement les outils utiles.
+PDF: da convertire, unire, dividere, sistemare o comprimere	PDF : à convertir, fusionner, diviser, arranger ou compresser
+https://… (la pagina del video)	https://… (la page de la vidéo)
+Scrivi il PIN della chiavetta.	Saisissez le code PIN de la clé.
+I due nuovi non sono uguali.	Les deux nouveaux ne sont pas identiques.
+Scrivi tutti i campi.	Remplissez tous les champs.
+Il nuovo PIN deve avere almeno {} cifre.	Le nouveau code PIN doit comporter au moins {} chiffres.
+Chiedo al certificatore…	Je demande à l'autorité de certification…
+Il certificato non è revocato né sospeso.	Le certificat n'est ni révoqué ni suspendu.
+Il certificato risulta REVOCATO o sospeso: non usarlo per firmare.	Le certificat est REVOQUÉ ou suspendu : ne l'utilisez pas pour signer.
+Non sono riuscito a chiederlo al certificatore. Riprova più tardi.	Je n'ai pas pu interroger l'autorité de certification. Réessayez plus tard.
+Questi file verranno firmati	Ces fichiers seront signés
+Puoi trascinarne altri dentro la finestra in qualsiasi momento.	Vous pouvez en faire glisser d'autres dans la fenêtre à tout moment.
+Nessun file: aggiungili o trascinali qui	Aucun fichier : ajoutez-les ou faites-les glisser ici
+Con cosa firmi?	Avec quoi signez-vous ?
+Cerco la chiavetta e le smart card…	Recherche de la clé et des cartes à puce…
+Non trovo nessuna chiavetta né smart card	Je ne trouve aucune clé ni carte à puce
+In che formato?	Dans quel format ?
+I PDF restano PDF con la firma sul foglio, tutti gli altri diventano .p7m	Les PDF restent des PDF avec la signature sur la page, tous les autres deviennent .p7m
+Nello spazio per la firma	Dans l'espace de signature
+Il PDF ha già un riquadro «{}» a pagina {}	Le PDF a déjà un cadre « {} » à la page {}
+Questo PDF non ha uno spazio per la firma: la metto in basso a destra dell'ultima pagina	Ce PDF n'a pas d'espace de signature : je la place en bas à droite de la dernière page
+Dove la metto io	Où je la place
+Trascina il riquadro sulla pagina	Faites glisser le cadre sur la page
+La firma c'è e vale uguale, ma sul foglio non compare	La signature est là et vaut tout autant, mais n'apparaît pas sur la page
+File già firmati	Fichiers déjà signés
+Si scrivono nella firma dei PDF (facoltativi)	S'inscrivent dans la signature des PDF (facultatifs)
+Salvo i file firmati accanto agli originali, che non vengono toccati.	J'enregistre les fichiers signés à côté des originaux, qui ne sont pas touchés.
+Salvo i file firmati nella cartella {}.	J'enregistre les fichiers signés dans le dossier {}.
+Salvo i file con la firma in più nella cartella {}; gli originali non vengono toccati.	J'enregistre les fichiers avec la signature en plus dans le dossier {} ; les originaux ne sont pas touchés.
+I nuovi file firmati vanno accanto agli originali; in quelli già firmati la firma si aggiunge nello stesso file.	Les nouveaux fichiers signés vont à côté des originaux ; dans ceux déjà signés, la signature s'ajoute dans le même fichier.
+Salvo tutto nella cartella {}; gli originali non vengono toccati.	J'enregistre tout dans le dossier {} ; les originaux ne sont pas touchés.
+PIN della carta	Code PIN de la carte
+PIN della chiavetta	Code PIN de la clé
+Scrivi il PIN sul tastierino del lettore quando te lo chiede.	Saisissez le code PIN sur le clavier du lecteur quand il le demande.
+Scrivi il PIN	Saisissez le code PIN
+1 file firmato	1 fichier signé
+{} file firmati	{} fichiers signés
+Apri la cartella	Ouvrir le dossier
+Guarda il file firmato	Voir le fichier signé
+Cerco la chiavetta…	Recherche de la clé…
+Nessuna chiavetta né smart card collegata	Aucune clé ni carte à puce connectée
+Non trovo il driver della chiavetta: installa quello del tuo certificatore (per la Aruba Key: bit4id) o sceglilo a mano in Opzioni	Je ne trouve pas le pilote de la clé : installez celui de votre autorité de certification (pour la clé Aruba : bit4id) ou choisissez-le à la main dans Options
+Sul dispositivo non ci sono certificati personali.	Il n'y a pas de certificats personnels sur le dispositif.
+serve per firmare	sert à signer
+serve per entrare nei siti	sert à se connecter aux sites
+scaduto il {}	expiré le {}
+scade il {}, tra {} giorni	expire le {}, dans {} jours
+Vedi il certificato	Voir le certificat
+Controlla se è revocato	Vérifier s'il est révoqué
+Salva come .cer	Enregistrer en .cer
+Cambia il PIN	Changer le code PIN
+Sblocca con il PUK	Débloquer avec le PUK
+Cambia il PUK	Changer le PUK
+Avvisami prima che scada	Prévenez-moi avant son expiration
+Te lo dico quando mancano 3 mesi o meno	Je vous le dis quand il reste 3 mois ou moins
+PUK (nella busta del certificatore)	PUK (dans l'enveloppe de l'autorité de certification)
+Opzioni della firma	Options de la signature
+Nome dei file firmati	Nom des fichiers signés
+Tieni il PIN per tutta la coda	Garder le code PIN pour toute la file
+Lo dimentico appena ho finito	Je l'oublie dès que j'ai fini
+Si vede sul foglio	Visible sur la page
+Un riquadro con nome, data e ora	Un cadre avec nom, date et heure
+La firma c'è e vale, ma non compare	La signature est là et valide, mais n'apparaît pas
+Posizione se il PDF non ha lo spazio	Position si le PDF n'a pas d'espace
+Chiedo al certificatore se il certificato è stato revocato	Je demande à l'autorité de certification si le certificat a été révoqué
+Non trovato: installa quello del certificatore	Introuvable : installez celui de l'autorité de certification
+Trovato da solo: {}	Trouvé automatiquement : {}
+Driver della chiavetta	Pilote de la clé
+Avvisami prima che scada il certificato	Prévenez-moi avant l'expiration du certificat
+Nella cartella {}	Dans le dossier {}
+Uno o tanti file insieme, il PIN lo metti una volta.	Un ou plusieurs fichiers ensemble, le code PIN se saisit une seule fois.
+Ne sto controllando {}. Quelli da guardare vanno in cima; clic su un file per aprirlo nel visualizzatore.	J'en vérifie {}. Ceux à regarder vont en haut ; cliquez sur un fichier pour l'ouvrir dans la visionneuse.
+Tutte le firme sono a posto. Clic su un file per aprirlo nel visualizzatore.	Toutes les signatures sont en ordre. Cliquez sur un fichier pour l'ouvrir dans la visionneuse.
+1 file da guardare, in cima	1 fichier à regarder, en haut
+{} file da guardare, in cima	{} fichiers à regarder, en haut
+Salva il .{}	Enregistrer le .{}
+Un momento: leggo le buste, i certificati e l'elenco europeo dei certificatori.	Un instant : je lis les enveloppes, les certificats et la liste européenne des autorités de certification.
+Mostra le {} firme	Afficher les {} signatures
+Mostra la firma	Afficher la signature
+È una firma staccata (.p7s) o una marca a parte (.tsr): la controllo insieme al file che è stato firmato. Di solito sta nella stessa cartella con lo stesso nome.	C'est une signature détachée (.p7s) ou un horodatage à part (.tsr) : je la vérifie avec le fichier qui a été signé. Elle se trouve en général dans le même dossier avec le même nom.
+Versione firmata da {}: com'era al momento della firma	Version signée par {} : telle qu'elle était au moment de la signature

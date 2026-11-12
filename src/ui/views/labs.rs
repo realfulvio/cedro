@@ -350,7 +350,7 @@ fn others(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32 {
     f.p.text(head, x, y, w, 26.0, 14.5, SANS, LABS_MUTED, Align::Left);
     let mut cx = x + f.measure(head, 14.5, SANS) + 10.0;
     for (ci, n) in list {
-        let label = format!("{n} {}", conversioni::CATEGORIES[ci].name);
+        let label = format!("{n} {}", crate::i18n::tr(conversioni::CATEGORIES[ci].name));
         let lw = f.measure(&label, 14.5, SEMI);
         if cx + lw > x + w {
             break;
