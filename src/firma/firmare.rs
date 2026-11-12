@@ -333,7 +333,7 @@ pub fn self_signed(cn: &str, key: &p256::ecdsa::SigningKey) -> Vec<u8> {
         &asn1::tlv(0x31, &asn1::seq(&[&asn1::oid_der(oid::COUNTRY), &asn1::tlv(0x13, b"IT")])),
         &asn1::tlv(0x31, &asn1::seq(&[&asn1::oid_der(oid::CN), &asn1::tlv(0x0C, cn.as_bytes())])),
     ]);
-    let point = key.verifying_key().to_encoded_point(false);
+    let point = key.verifying_key().to_sec1_point(false);
     let spki = asn1::seq(&[&asn1::seq(&[&asn1::oid_der(oid::EC_PUBLIC_KEY), &asn1::oid_der(oid::P256)]), &asn1::tlv(0x03, &[&[0u8][..], point.as_bytes()].concat())]);
     let validity = asn1::seq(&[&cms_time(super::now() - 86400), &cms_time(super::now() + 365 * 86400)]);
     let alg = asn1::seq(&[&asn1::oid_der(oid::ECDSA_SHA256)]);

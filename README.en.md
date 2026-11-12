@@ -140,11 +140,12 @@ Everything stays on your computer, as in standard Cedro. If your lab misses a fo
 
 ## All releases
 
-Since 21 October 2026, **90 versions** have come out for Windows and Linux. The latest:
+Since 21 October 2026, **91 versions** have come out for Windows and Linux. The latest:
 
 | Version | Date | What's new |
 | --- | --- | --- |
 | [0.45.0](https://github.com/realfulvio/cedro/releases/tag/v0.45.0) | 12/11 | Cedro 4 Labs reads Zeiss CZI files |
+| [0.44.3](https://github.com/realfulvio/cedro/releases/tag/v0.44.3) | 12/11 | Components updated for security and maintenance |
 | [0.44.2](https://github.com/realfulvio/cedro/releases/tag/v0.44.2) | 12/11 | Quality fixes for Cedro 4 Labs |
 | [0.44.0](https://github.com/realfulvio/cedro/releases/tag/v0.44.0) | 12/11 | New paged "Cedro" look with four tints |
 | [0.43.0](https://github.com/realfulvio/cedro/releases/tag/v0.43.0) | 12/11 | Cedro 4 Labs with the paged window |
