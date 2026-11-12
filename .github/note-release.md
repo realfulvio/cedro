@@ -11,17 +11,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Correzioni per Cedro 4 Labs, trovate con un controllo di qualità su file veri.**
+**Componenti aggiornati, per sicurezza e manutenzione.** Nessun cambiamento nell'uso.
 
-- Figura per l'articolo: con un vetrino SVS la barra di scala ora viene dalla misura del vetrino. Prima usava la calibrazione della fotocamera e poteva sbagliare di circa tre volte. La legenda dice proiezione, contrasto usato e da dove viene la barra.
-- Anonimizzazione DICOM più completa: vanno via anche i testi dei referti strutturati, telefoni, organizzazioni, scritte sovrapposte (overlay), miniature e tutti gli identificativi dell'esame. Nei file più vecchi (Implicit VR) restavano alcuni nomi e date.
-- Le radiografie DICOM compresse senza perdita a più di 8 bit si aprono con i valori giusti.
-- Togli i nomi da Word, Excel e PowerPoint: vanno via anche autori e iniziali dei commenti di PowerPoint, i nomi utente di Excel, il percorso del modello collegato e la posizione GPS delle foto dentro il documento. Nei PDF i campi dei moduli restano funzionanti e la firma digitale va via con il certificato.
-- Microscopia: si aprono i TIFF a piani separati e quelli a 32 bit, che prima davano errore o uscivano neri. Il contrasto automatico è lo stesso per tutti gli istanti dello stesso canale, così le differenze di intensità restano visibili. Il TIFF a 16 bit tiene la calibrazione in µm (Fiji la legge).
-- Si leggono anche le acquisizioni ND2 interrotte, i progetti LIF con una serie rovinata e gli OME-TIFF divisi in più file.
-- Vetrini: la copia anonima e le tessere non portano più il nome del file originale. Le tessere AI non vengono ingrandite oltre la scansione.
-- Tabelle: «1,234» nei CSV americani non diventa più 1,234. Si tengono le durate oltre le 24 ore, le cifre decimali scritte (1,50) e le celle molto lunghe. Da Excel a CSV il separatore scelto è rispettato.
-- Pacchetto di dati: un file rovinato dentro lo ZIP viene segnalato come cambiato invece di fermare la verifica; si controlla anche l'elenco delle impronte stesso.
-- Cedro 4 Labs: per un Excel in coda la scheda propone il CSV, per uno ZIP la verifica del pacchetto.
-- Nessun blocco del programma con file DICOM, JPEG o vetrini rovinati.
-- Radiografie per il proprietario: Cedro non mette mai nello stesso PDF le lastre di animali diversi e salta i DICOM senza immagini (piani di cura, referti) invece di fermarsi.
+- Firma digitale: aggiornate le librerie di crittografia (RSA, curve P-256/P-384, SHA-1/SHA-2). Chiudono due avvisi di sicurezza (RUSTSEC-2023-0071 e RUSTSEC-2026-0387) sui tempi di calcolo; in Cedro non erano sfruttabili, perché le chiavi private restano nella chiavetta o nella smart card.
+- Riconoscimento del testo (OCR): ocrs 0.14 e rten 0.28, le versioni ufficiali. Il testo letto è identico a prima e la velocità è la stessa. Resta l'interruttore per spegnere AVX-512 nelle Impostazioni.
+- Video: decoder H.264, VP8 e MPEG-4 aggiornati con correzioni.
+- Aggiornati i certificati radice usati per i download e la libreria ZIP.
