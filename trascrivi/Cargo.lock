@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "cedro-trascrivi"
-version = "0.44.0"
+version = "0.44.1"
 dependencies = [
  "kaldi-native-fbank",
  "libc",
