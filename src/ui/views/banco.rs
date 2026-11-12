@@ -251,7 +251,7 @@ fn footer(f: &mut Frame, app: &App, y: f32, simple: bool) {
         super::exists_select(f, app, (ex_x, y + 52.0, ex_w, 44.0), 17.0);
         let dw = ex_x - 34.0 - 24.0;
         f.text("Cartella di destinazione", 24.0, y + 20.0, dw, 24.0, 16.0, SEMI, pal.text);
-        let browse = 112.0;
+        let browse = (f.measure("Sfoglia…", 17.0, SANS) + 36.0).ceil().max(112.0);
         super::dest_select(f, app, (24.0, y + 52.0, (dw - browse - 12.0).max(140.0), 44.0), 17.0);
         f.button((24.0 + (dw - browse - 12.0).max(140.0) + 12.0, y + 52.0, browse, 44.0), "Sfoglia…", None, 17.0, Act::DestPick);
     }
@@ -301,16 +301,22 @@ pub fn draw(f: &mut Frame, app: &App) {
         let cx = NAV_W + 18.0;
         let cw = ix - cx - 14.0;
         let mut x = cx;
-        f.primary((x, BAR + 22.0, 165.0, 44.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles, true);
-        x += 177.0;
-        f.button((x, BAR + 22.0, 192.0, 44.0), "Aggiungi cartella", Some(ic::FOLDER), 17.0, Act::AddFolder);
-        x += 204.0;
-        f.button((x, BAR + 22.0, 134.0, 44.0), "Rimuovi", Some(ic::TRASH), 17.0, Act::RemoveChecked);
+        // Larghezze dal testo tradotto: in tedesco o francese «Aggiungi file» è più lungo.
+        let bw = |f: &Frame, label: &str, min: f32| (f.measure(label, 17.0, SEMI) + 23.0 + 14.0 + 24.0).ceil().max(min);
+        let w1 = bw(f, "Aggiungi file", 165.0);
+        f.primary((x, BAR + 22.0, w1, 44.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles, true);
+        x += w1 + 12.0;
+        let w2 = bw(f, "Aggiungi cartella", 192.0);
+        f.button((x, BAR + 22.0, w2, 44.0), "Aggiungi cartella", Some(ic::FOLDER), 17.0, Act::AddFolder);
+        x += w2 + 12.0;
+        let w3 = bw(f, "Rimuovi", 134.0);
+        f.button((x, BAR + 22.0, w3, 44.0), "Rimuovi", Some(ic::TRASH), 17.0, Act::RemoveChecked);
+        x += w3;
         let n = app.visible().len();
         let count = format!("{n} file nella coda");
         let count_w = f.measure(&count, 17.0, SANS) + 16.0;
         f.text_r(&count, (cx + cw - 220.0, BAR + 22.0, 220.0, 44.0), 17.0, SANS, pal.text);
-        super::notice(f, app, (cx + 530.0, BAR + 22.0, (cw - 530.0 - count_w - 8.0).max(0.0), 44.0), 14.0);
+        super::notice(f, app, (x + 20.0, BAR + 22.0, (cw - (x + 20.0 - cx) - count_w - 8.0).max(0.0), 44.0), 14.0);
         table(f, app, (cx, BAR + 86.0, cw, foot_y - BAR - 86.0 - 18.0), false);
     }
     footer(f, app, foot_y, simple);
