@@ -1,6 +1,4 @@
 # Compila cedro.exe e crea dist\Cedro-Setup-<versione>.exe (serve Inno Setup 6).
-# Accanto all'installatore c'è una copia identica, dist\Cedro-Bondeno-[ARM64-]Setup-<versione>.exe: serve a chi ha
-# ancora la vecchia edizione Comune di Bondeno, che cerca solo quel nome per aggiornarsi (ora il Comune è un tema).
 # Con -Arm64 crea dist\Cedro-ARM64-Setup-<versione>.exe per Windows on ARM: su un PC ARM compila in nativo,
 # su un PC x64 con il target aarch64-pc-windows-msvc (servono gli strumenti ARM64 di Visual Studio e LLVM).
 param([switch]$Arm64)
@@ -30,5 +28,4 @@ if ($Arm64) { $flags += '/DArm64' }
 if ($LASTEXITCODE -ne 0) { throw 'ISCC fallito' }
 $arm = $(if ($Arm64) { 'ARM64-' } else { '' })
 $setup = "dist\Cedro-${arm}Setup-$version.exe"
-Copy-Item $setup "dist\Cedro-Bondeno-${arm}Setup-$version.exe" -Force
 Get-Item $setup
