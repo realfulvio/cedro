@@ -131,7 +131,7 @@ External components such as yt-dlp, deno, ffmpeg and the transcription engine ar
 
 | | Already there | Still missing |
 | --- | --- | --- |
-| Images | Digital slides `.svs` to image, DICOM (also anonymised), ND2 and LIF, OME-TIFF, figure for a paper with a scale bar | Zeiss CZI, Hamamatsu NDPI, 3DHistech MRXS, VSI; DICOM from CD with DICOMDIR |
+| Images | Digital slides `.svs` to image, DICOM (also anonymised), Zeiss CZI, ND2 and LIF, OME-TIFF, figure for a paper with a scale bar | Hamamatsu NDPI, 3DHistech MRXS, VSI; DICOM from CD with DICOMDIR |
 | Data | CSV/TSV ↔ Excel, data package with SHA-256 fingerprints (BagIt) | Colour plate map |
 | Privacy | Strips names, authors, GPS and hidden data from PDF, Office, photos and DICOM | More proprietary formats |
 | Voice | Transcription with a veterinary glossary, summary | Report polishing |
@@ -140,16 +140,16 @@ Everything stays on your computer, as in standard Cedro. If your lab misses a fo
 
 ## All releases
 
-Since 21 October 2026, **89 versions** have come out for Windows and Linux. The latest:
+Since 21 October 2026, **90 versions** have come out for Windows and Linux. The latest:
 
 | Version | Date | What's new |
 | --- | --- | --- |
+| [0.45.0](https://github.com/realfulvio/cedro/releases/tag/v0.45.0) | 12/11 | Cedro 4 Labs reads Zeiss CZI files |
 | [0.44.2](https://github.com/realfulvio/cedro/releases/tag/v0.44.2) | 12/11 | Quality fixes for Cedro 4 Labs |
 | [0.44.0](https://github.com/realfulvio/cedro/releases/tag/v0.44.0) | 12/11 | New paged "Cedro" look with four tints |
 | [0.43.0](https://github.com/realfulvio/cedro/releases/tag/v0.43.0) | 12/11 | Cedro 4 Labs with the paged window |
 | [0.42.0](https://github.com/realfulvio/cedro/releases/tag/v0.42.0) | 12/11 | Lab features (DICOM, ND2/LIF, figure, data package) |
 | [0.41.0](https://github.com/realfulvio/cedro/releases/tag/v0.41.0) | 12/11 | Portable version for Windows |
-| [0.40.0](https://github.com/realfulvio/cedro/releases/tag/v0.40.0) | 12/11 | Cedro 4 Labs theme and look choice in the installer |
 | [0.39.0](https://github.com/realfulvio/cedro/releases/tag/v0.39.0) | 11/11 | Digital slides (.svs) |
 | [0.38.0](https://github.com/realfulvio/cedro/releases/tag/v0.38.0) | 10/11 | Signing with a USB token or smart card |
 | [0.31.0](https://github.com/realfulvio/cedro/releases/tag/v0.31.0) | 03/11 | AI summary of meetings |
