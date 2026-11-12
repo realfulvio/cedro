@@ -65,6 +65,9 @@ pub struct Review {
     pub followed: Option<usize>,
     /// La frase aperta alla correzione.
     pub sel: Option<usize>,
+    /// È un referto (dettatura veterinaria): le frasi con numeri e parole decisive vanno riascoltate e
+    /// confermate, e finché ne resta una il file esce come bozza.
+    pub referto: bool,
 }
 
 impl Review {
@@ -97,6 +100,7 @@ impl Review {
             note: String::new(),
             followed: None,
             sel: None,
+            referto: false,
         };
         r.detect();
         // Con le voci si parte da «Chi parla» (i nomi da dare), a meno che ci sia qualcosa da controllare.
@@ -111,6 +115,12 @@ impl Review {
         let orig: Vec<Segment> = self.rows.iter().map(|r| Segment { t0: r.t0, t1: r.t1, text: r.orig.clone(), speaker: r.speaker }).collect();
         let wave = self.bars.as_deref().map(|bars| Wave { bars, secs: self.secs });
         self.flags = revisione::find(&orig, wave.as_ref());
+        if self.referto {
+            // Le frasi già segnate per i difetti di whisper non si segnano due volte.
+            let taken: HashSet<usize> = self.flags.iter().flat_map(|f| f.segs.iter().copied()).collect();
+            self.flags.extend(revisione::find_referto(&orig).into_iter().filter(|f| f.segs.iter().all(|s| !taken.contains(s))));
+            self.flags.sort_by_key(|f| f.segs.first().copied().unwrap_or(0));
+        }
         self.dismissed.clear();
         self.cur = 0;
     }
@@ -199,7 +209,29 @@ impl Review {
             Kind::Repeat => f.segs.iter().skip(1).any(|s| self.rows.get(*s).is_some_and(|r| !r.removed)),
             Kind::Loop => f.segs.first().and_then(|s| self.rows.get(*s)).is_some_and(|r| !r.removed && revisione::collapse_loops(&r.text).is_some()),
             Kind::Typical | Kind::Silence => f.segs.first().and_then(|s| self.rows.get(*s)).is_some_and(|r| !r.removed && r.text == r.orig),
+            // Riascoltata e corretta a mano (la frase non c'è più com'era) vale come controllata; se no serve «Confermo».
+            Kind::Number | Kind::Meaning => f.segs.first().and_then(|s| self.rows.get(*s)).is_some_and(|r| !r.removed && (if f.snippet.is_empty() { r.text == r.orig } else { r.text.contains(&f.snippet) })),
         }
+    }
+
+    /// I punti del referto ancora da riascoltare (numeri e parole decisive).
+    pub fn draft_points(&self) -> Vec<usize> {
+        (0..self.flags.len()).filter(|i| matches!(self.flags[*i].kind, Kind::Number | Kind::Meaning) && self.is_open(*i)).collect()
+    }
+
+    /// Il referto esce come bozza: c'è ancora qualcosa da riascoltare.
+    pub fn is_draft(&self) -> bool {
+        self.referto && self.open_count() > 0
+    }
+
+    /// La riga in cima alla bozza: quanti punti e dove.
+    pub fn draft_line(&self) -> Option<String> {
+        if !self.is_draft() {
+            return None;
+        }
+        let open: Vec<&Flag> = (0..self.flags.len()).filter(|i| self.is_open(*i)).map(|i| &self.flags[i]).collect();
+        let rows: Vec<Segment> = self.rows.iter().map(|r| Segment { t0: r.t0, t1: r.t1, text: String::new(), speaker: None }).collect();
+        revisione::riga_bozza(&rows, &open)
     }
 
     pub fn open_count(&self) -> usize {
@@ -208,7 +240,10 @@ impl Review {
 
     /// Il punto da controllare che comprende la frase `row`, se c'è.
     pub fn flag_of(&self, row: usize) -> Option<usize> {
-        self.flags.iter().position(|f| f.segs.contains(&row))
+        // Una frase può averne più d'uno (un referto con più frasi in un pezzo): prima quelli aperti.
+        let mut tutti = (0..self.flags.len()).filter(|i| self.flags[*i].segs.contains(&row));
+        let primo = tutti.next()?;
+        Some(std::iter::once(primo).chain(tutti).find(|i| self.is_open(*i)).unwrap_or(primo))
     }
 
     pub fn push_undo(&mut self) {
@@ -255,6 +290,10 @@ impl Review {
                 if let Some(r) = flag.segs.first().and_then(|s| self.rows.get_mut(*s)) {
                     r.removed = true;
                 }
+            }
+            // Riascoltata e giusta: si conferma.
+            Kind::Number | Kind::Meaning => {
+                self.dismissed.insert(i);
             }
         }
     }
@@ -305,7 +344,15 @@ impl App {
         };
         let secs = saved.secs;
         self.notice = None;
-        self.review = Some(Review::new(&path, secs, saved.lang, saved.segments, saved.names, saved.summary));
+        let mut rv = Review::new(&path, secs, saved.lang, saved.segments, saved.names, saved.summary);
+        if self.transcribe.glossario_vet {
+            rv.referto = true;
+            rv.detect();
+            if rv.open_count() > 0 {
+                rv.tab = 0;
+            }
+        }
+        self.review = Some(rv);
         self.review_scrub = None;
         // L'onda si legge in un thread: sull'audio lungo ci vuole un po', e serve anche a trovare le frasi nel silenzio.
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
@@ -441,25 +488,32 @@ impl App {
         let names: &[String] = if r.write_voices { &r.names } else { &[] };
         // Il riassunto va solo nel Word e nel testo: i sottotitoli restano come sono.
         let summary = r.summary_sections().filter(|_| r.summary_on_top);
+        // Un referto con punti ancora da riascoltare esce come bozza, con l'elenco dei punti in cima.
+        let draft = r.draft_line();
         let bytes = match ext {
-            "docx" => trascrizione::docx_bytes_with(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref()),
-            "txt" => trascrizione::text_bytes_with(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref()),
+            "docx" => trascrizione::docx_bytes_full(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref(), draft.as_deref()),
+            "txt" => trascrizione::text_bytes_full(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref(), draft.as_deref()),
             "srt" => revisione::srt_bytes(&segments, names),
             _ => revisione::vtt_bytes(&segments, names),
         };
         let dir = dest.or_else(|| r.source.parent().filter(|p| !p.as_os_str().is_empty()).map(Path::to_path_buf)).unwrap_or_else(|| PathBuf::from("."));
         let stem = r.source.file_stem().and_then(|s| s.to_str()).unwrap_or("trascrizione");
-        let mut out = dir.join(format!("{stem} - rivisto.{ext}"));
+        let tag = if draft.is_some() { "bozza" } else { "rivisto" };
+        let mut out = dir.join(format!("{stem} - {tag}.{ext}"));
         let mut n = 2;
         while out.exists() {
-            out = dir.join(format!("{stem} - rivisto ({n}).{ext}"));
+            out = dir.join(format!("{stem} - {tag} ({n}).{ext}"));
             n += 1;
         }
         match std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&out, bytes)) {
             Ok(()) => {
                 // Le frasi corrette restano: la prossima volta si riparte da qui.
                 let _ = revisione::save_with(&r.source, r.secs, &r.lang, &segments, &r.names, r.summary.as_ref());
-                r.note = format!("Salvato: {}", out.file_name().and_then(|n| n.to_str()).unwrap_or(""));
+                let name = out.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                r.note = match r.open_count() {
+                    n if draft.is_some() => format!("Salvato come bozza ({n} da riascoltare): {name}"),
+                    _ => format!("Salvato: {name}"),
+                };
                 r.saved = Some(out);
             }
             Err(e) => {
@@ -565,6 +619,25 @@ mod tests {
         let v = r.visible();
         assert!(!v.contains(&0));
         assert!(v.contains(&1) && v.contains(&4));
+    }
+
+    #[test]
+    fn a_report_stays_a_draft_until_every_point_is_checked() {
+        let segments = vec![seg(0, "Cane meticcio di otto anni."), seg(600, "Massa di 12 mm al fegato."), seg(1200, "Non si osservano metastasi."), seg(1800, "Buona giornata.")];
+        let mut r = Review::new(Path::new("/tmp/referto.wav"), 30.0, "it".into(), segments, Vec::new(), None);
+        assert_eq!(r.open_count(), 0, "senza referto i numeri non si segnano");
+        r.referto = true;
+        r.detect();
+        let kinds: Vec<(Kind, usize)> = r.flags.iter().map(|f| (f.kind, f.segs[0])).collect();
+        assert_eq!(kinds, [(Kind::Number, 0), (Kind::Number, 1), (Kind::Meaning, 2)]);
+        let line = r.draft_line().expect("ci sono punti aperti: è una bozza");
+        assert!(line.starts_with("BOZZA — 3 punti") && line.contains("«12 mm»") && line.contains("«non» «metastasi»"), "{line}");
+        // Confermata la prima, corretta a mano la seconda: resta la terza.
+        r.fix(0);
+        r.rows[1].text = "Massa di 15 mm al fegato.".into();
+        assert_eq!(r.draft_points(), [2]);
+        r.dismissed.insert(2);
+        assert!(!r.is_draft() && r.draft_line().is_none());
     }
 
     #[test]

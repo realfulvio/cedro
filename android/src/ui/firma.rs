@@ -55,7 +55,7 @@ pub fn colore_livello(app: &App, l: Level) -> Rgb {
     match l {
         Level::Ok => pal.ok,
         Level::Warn => {
-            if app.tema.dark() {
+            if super::tinte::scuro(app.tema) {
                 (0xF0, 0xB4, 0x4C)
             } else {
                 (0xA8, 0x5A, 0x00)
@@ -273,7 +273,7 @@ impl App {
     pub(super) fn corpo_firma(&mut self, p: &mut Painter, x: f32, y0: f32, w: f32, vista: R) -> f32 {
         let pal = self.pal();
         let t = self.toni();
-        let scuro = self.tema.dark();
+        let scuro = self.scuro();
         let viola = super::casa::colore_firma(scuro);
         let (cont, su) = super::m3::contenitore(viola, t.fondo, scuro);
         let mut y = y0;
@@ -371,7 +371,7 @@ impl App {
 
     pub(super) fn pagina_firma(&mut self, p: &mut Painter, w: f32, h: f32) {
         let pal = self.pal();
-        let scuro = self.tema.dark();
+        let scuro = self.scuro();
         let Some(v) = self.firma.viewer.as_ref() else { return };
         let nome = nome_visto(&v.path);
         let rep = v.report.clone();
@@ -514,7 +514,7 @@ impl App {
             y += h + 8.0;
             let b = (x, y, w, 48.0);
             let a = Azione::Firma(FirmaAz::Originale);
-            super::lucido(p, self.tema.dark(), b.0, b.1, b.2, b.3, 10.0, pal.primary, self.premuto == Some(a));
+            super::lucido(p, self.scuro(), b.0, b.1, b.2, b.3, 10.0, pal.primary, self.premuto == Some(a));
             p.text("Scegli il file originale", b.0, b.1, b.2, b.3, 16.0, Weight::Semibold, pal.on_primary, Align::Center);
             self.colpo(b, a, vista);
             return y + 64.0;
@@ -608,7 +608,7 @@ impl App {
     #[allow(clippy::too_many_arguments)]
     fn firme(&mut self, p: &mut Painter, r: &Report, aperte: &std::collections::HashSet<usize>, tecnici: &std::collections::HashSet<usize>, revisione: Option<usize>, x: f32, mut y: f32, w: f32, vista: R) -> f32 {
         let pal = self.pal();
-        let scuro = self.tema.dark();
+        let scuro = self.scuro();
         if !r.signers.is_empty() {
             p.text(if r.signers.len() > 1 { "Chi ha firmato" } else { "Firma" }, x + 4.0, y, w, 28.0, 14.0, Weight::Semibold, pal.muted, Align::Left);
             p.text(&format!("controllato {}", firma::relative(r.checked_at).replace("oggi alle", "oggi,")), x, y, w - 4.0, 28.0, 12.5, Weight::Regular, pal.muted, Align::Right);
@@ -697,7 +697,7 @@ impl App {
         let c = colore_livello(self, s.level);
         // Il perché.
         let th = p.wrap_height(&s.why, 13.5, Weight::Regular, w - 24.0, 19.0, 30);
-        let (cont, _) = super::m3::contenitore(c, self.toni().fondo, self.tema.dark());
+        let (cont, _) = super::m3::contenitore(c, self.toni().fondo, self.scuro());
         p.rrect(x, y, w, th + 20.0, 16.0, Some(cont), None);
         p.text_wrap(&s.why, x + 12.0, y + 10.0, w - 24.0, 13.5, Weight::Regular, pal.text, 19.0, 30);
         y += th + 34.0;
@@ -804,7 +804,7 @@ fn proprio_pdf(p: &Path) -> bool {
 fn avatar(p: &mut Painter, app: &App, cx: f32, cy: f32, rag: f32, iniziali: &str, l: Level) {
     let pal = app.pal();
     let c = colore_livello(app, l);
-    let (cont, su) = super::m3::contenitore(c, pal.bg, app.tema.dark());
+    let (cont, su) = super::m3::contenitore(c, pal.bg, super::tinte::scuro(app.tema));
     p.circle(cx, cy, rag, Some(cont), None);
     p.text(iniziali, cx - rag, cy - rag, rag * 2.0, rag * 2.0, rag * 0.68, Weight::Bold, su, Align::Center);
     let mr = rag * 0.42;

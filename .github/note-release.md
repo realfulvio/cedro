@@ -11,9 +11,8 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro 4 Labs legge i file Zeiss CZI.**
+**Cedro 4 Labs legge i vetrini Hamamatsu e 3DHistech, e i referti dettati restano bozza finché non sono controllati.**
 
-- Si aprono i `.czi` di ZEN (confocali LSM, Axio Observer e Imager, Axio Scan, Celldiscoverer) come già i ND2 e i LIF: anteprima con i canali a colori, conversione in PNG, JPEG, TIFF e PDF, un file per canale o per piano Z, tutti gli istanti, valori originali a 16 bit e barra di scala dalla misura scritta nel file.
-- Ogni scena del file (più posizioni o più aree del vetrino) esce come immagine a sé, con il suo nome. I mosaici si ricompongono come in ZEN.
-- Si leggono tutte le compressioni di ZEN, compreso il JPEG XR dei vetrini. I vetrini troppo grandi si aprono ridotti, e Cedro dice di quanto.
-- I pixel sono gli stessi che dà la libreria ufficiale di Zeiss.
+- Si aprono i vetrini Hamamatsu `.ndpi` (NanoZoomer) e 3DHistech `.mrxs` (Pannoramic, il file con la sua cartella accanto) come già gli Aperio `.svs`: anteprima, immagine del livello scelto, foto del vetrino e miniatura. I pixel sono gli stessi che dà OpenSlide.
+- Copia anonima, codice del caso, tessere per l'AI, zona per la conta mitotica e pacchetto per il consulto valgono anche per questi vetrini: via l'etichetta, la foto del vetrino con l'etichetta, i codici a barre, la data, il nome del vetrino e del progetto.
+- Nella revisione di una trascrizione con «Referti veterinari» acceso, ogni frase con numeri e misure (2,5 cm, tre mitosi) e ogni parola che cambia il senso se sentita male (non, assente, destro, maligno…) va riascoltata e confermata, o corretta sul posto. Finché ne resta una, il file si salva come «bozza» con l'elenco dei punti in cima.

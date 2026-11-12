@@ -18,7 +18,6 @@ use crate::ui::core::{LinkFlag, LinkMenu, Scroll};
 use crate::ui::gfx::{Fit, Image, Rgb};
 use crate::ui::model::{FileState, Lab, PdfMode, AUDIO_QUALITY, SUBTITLES, VIDEO_QUALITY};
 use crate::ui::theme::{kind_bright, kind_color, page_colors, Tint, STAGE};
-use crate::ui::voci;
 
 const TOP: f32 = 60.0;
 const RAIL: f32 = 252.0;
@@ -57,7 +56,7 @@ fn page_icon(lab: Lab) -> &'static str {
 }
 
 /// Le sei immagini di «Inizio» (disegnate per Cedro, 480×360), nell'ordine delle tessere.
-fn tile_image(i: usize) -> Option<Image> {
+pub fn tile_image(i: usize) -> Option<Image> {
     static IMAGES: OnceLock<Vec<Option<Image>>> = OnceLock::new();
     const DATA: [&[u8]; 6] = [
         include_bytes!("../../../assets/cedro/immagini.jpg"),
@@ -779,7 +778,7 @@ fn format_chips(app: &App, list: &[Slice]) -> Vec<(String, Rgb, bool, Act)> {
     list.iter()
         .filter(|s| !conversioni::is_page_action(kind, s.id))
         .map(|s| {
-            let v = voci::voce(kind, s.id);
+            let v = app.voce(s.id);
             (v.label.to_string(), v.color, app.action == s.id, Act::Action(s.id))
         })
         .collect()
@@ -788,11 +787,10 @@ fn format_chips(app: &App, list: &[Slice]) -> Vec<(String, Rgb, bool, Act)> {
 /// Le scelte pronte di «Semplice»: righe grandi con l'icona colorata. Restituisce l'altezza.
 fn simple_rows(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, deep: Rgb) -> f32 {
     let pal = f.pal;
-    let kind = app.kind();
     let mut cy = y;
     let choices = app.simple_choices();
     for c in &choices {
-        let v = voci::voce(kind, c.id);
+        let v = app.voce(c.id);
         let on = app.action == c.id;
         super::labs::choice_row(f, (x, cy, w, 60.0), &v, c.title, c.note, on, Act::Action(c.id), deep);
         cy += 68.0;
