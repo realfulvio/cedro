@@ -189,11 +189,12 @@ impl Coder {
         if k == 0 {
             return high as i32;
         }
-        ((high << k) + bits.read(k)) as i32
+        // Tetto: con dati rovinati i calcoli che seguono non devono uscire dagli i32.
+        ((high << k) + bits.read(k)).min(1 << 30) as i32
     }
 
     fn fix(&self, px: i32, err: i32) -> i32 {
-        let mut rx = px + err * (2 * self.near + 1);
+        let mut rx = px.wrapping_add(err.wrapping_mul(2 * self.near + 1));
         if rx < -self.near {
             rx += self.range * (2 * self.near + 1);
         } else if rx > self.p.maxval + self.near {
@@ -212,8 +213,9 @@ impl Coder {
             ra + rb - rc
         };
         px = (px + sign * self.c[q]).clamp(0, self.p.maxval);
+        // In i64: con RESET grande (dal file) N << k non sta in un i32.
         let mut k = 0;
-        while (self.n[q] << k) < self.a[q] && k < 24 {
+        while ((self.n[q] as i64) << k) < self.a[q] as i64 && k < 24 {
             k += 1;
         }
         let m = self.decode_value(bits, k, self.limit);
@@ -230,8 +232,9 @@ impl Coder {
             -(m + 1) / 2
         };
         // Aggiornamento del contesto (A.6).
-        self.b[q] += err * (2 * self.near + 1);
-        self.a[q] += err.abs();
+        // Con dati rovinati i contatori possono uscire di misura: si fa il giro invece di cadere.
+        self.b[q] = self.b[q].wrapping_add(err.wrapping_mul(2 * self.near + 1));
+        self.a[q] = self.a[q].saturating_add(err.saturating_abs());
         if self.n[q] == self.p.reset {
             self.a[q] >>= 1;
             self.b[q] = if self.b[q] >= 0 { self.b[q] >> 1 } else { -((1 - self.b[q]) >> 1) };
@@ -263,9 +266,9 @@ impl Coder {
     fn interruption(&mut self, bits: &mut Bits, ra: i32, rb: i32, run_index: usize, own_type: bool) -> i32 {
         let ri = (own_type && (ra - rb).abs() <= self.near) as usize;
         let q = 365 + ri;
-        let temp = if ri == 1 { self.a[q] + (self.n[q] >> 1) } else { self.a[q] };
+        let temp = if ri == 1 { self.a[q].saturating_add(self.n[q] >> 1) } else { self.a[q] };
         let mut k = 0;
-        while (self.n[q] << k) < temp && k < 24 {
+        while ((self.n[q] as i64) << k) < temp as i64 && k < 24 {
             k += 1;
         }
         let limit = self.limit.saturating_sub(J[run_index] + 1);
@@ -278,7 +281,7 @@ impl Coder {
         if err < 0 {
             self.nn[ri] += 1;
         }
-        self.a[q] += (em + 1 - ri as i32) >> 1;
+        self.a[q] = self.a[q].saturating_add(em.wrapping_add(1 - ri as i32) >> 1);
         if self.n[q] == self.p.reset {
             self.a[q] >>= 1;
             self.n[q] >>= 1;
@@ -446,7 +449,10 @@ pub fn decode(d: &[u8]) -> Result<Decoded, String> {
                 if !seen_frame {
                     return Err("JPEG-LS senza intestazione".into());
                 }
-                let ns = seg[0] as usize;
+                let ns = seg.first().copied().unwrap_or(0) as usize;
+                if ns == 0 || ns > 4 || seg.len() < 3 + ns * 2 {
+                    return Err("JPEG-LS: scansione non valida".into());
+                }
                 let scan_comps: Vec<usize> = (0..ns).map(|i| ids.iter().position(|id| *id == seg[1 + i * 2]).unwrap_or(i)).collect();
                 let near = seg[1 + ns * 2] as i32;
                 let ilv = seg[2 + ns * 2];
@@ -467,9 +473,6 @@ pub fn decode(d: &[u8]) -> Result<Decoded, String> {
                 }
                 if p.reset == 0 {
                     p.reset = 64;
-                }
-                if ns == 0 || ns > 4 || seg.len() < 3 + ns * 2 {
-                    return Err("JPEG-LS: scansione non valida".into());
                 }
                 let mut cd = Coder::new(p, near, bits_p);
                 let mut bits = Bits::new(d, pos + 2 + len);
@@ -529,4 +532,47 @@ pub fn decode(d: &[u8]) -> Result<Decoded, String> {
         }
     }
     Ok(Decoded { width: w as u32, height: h as u32, components: comps as u32, samples })
+}
+
+#[cfg(test)]
+mod prove {
+    use super::*;
+
+    /// L'intestazione di un JPEG-LS 8×8 a 8 bit in grigio.
+    fn testa() -> Vec<u8> {
+        let mut d = vec![0xFF, 0xD8];
+        d.extend_from_slice(&[0xFF, 0xF7, 0x00, 0x0B, 8, 0, 8, 0, 8, 1, 1, 0x11, 0]);
+        d
+    }
+
+    #[test]
+    fn una_scansione_troppo_corta_non_fa_cadere_il_programma() {
+        // Ns = 4 ma il segmento ha un solo byte: prima si leggeva oltre la fine.
+        let mut d = testa();
+        d.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x03, 4, 0xFF, 0xD9]);
+        assert!(decode(&d).is_err());
+        let mut d = testa();
+        d.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x02, 0xFF, 0xD9]);
+        assert!(decode(&d).is_err());
+    }
+
+    #[test]
+    fn dati_a_caso_con_reset_grande_non_fanno_cadere_il_programma() {
+        // RESET = 65535 dal file: N << k usciva dagli i32 (prova utile con i controlli di overflow).
+        for seed in 0..32u32 {
+            let mut d = testa();
+            d.extend_from_slice(&[0xFF, 0xF8, 0x00, 0x0D, 1, 0, 255, 0, 3, 0, 7, 0, 21, 0xFF, 0xFF]);
+            d.extend_from_slice(&[0xFF, 0xDA, 0x00, 0x08, 1, 1, 0, 0, 0, 0]);
+            let mut x = seed.wrapping_mul(2654435761).wrapping_add(1);
+            for _ in 0..200 {
+                x ^= x << 13;
+                x ^= x >> 17;
+                x ^= x << 5;
+                let b = (x >> 24) as u8;
+                d.push(if b == 0xFF { 0x7F } else { b });
+            }
+            d.extend_from_slice(&[0xFF, 0xD9]);
+            let _ = decode(&d);
+        }
+    }
 }
