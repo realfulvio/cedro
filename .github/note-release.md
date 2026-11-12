@@ -3,6 +3,7 @@
 | Il tuo computer | File da scaricare |
 | --- | --- |
 | **Windows** (quasi tutti i PC) | [**Cedro-Setup-{versione}.exe**](https://github.com/{repo}/releases/download/v{versione}/Cedro-Setup-{versione}.exe) |
+| **Windows portable** (x64, senza installazione) | [**Cedro-Portable-{versione}-x64.zip**](https://github.com/{repo}/releases/download/v{versione}/Cedro-Portable-{versione}-x64.zip) |
 | **Windows on ARM** (Snapdragon X e simili) | [**Cedro-ARM64-Setup-{versione}.exe**](https://github.com/{repo}/releases/download/v{versione}/Cedro-ARM64-Setup-{versione}.exe) |
 | **Linux** (Wayland con KDE Plasma o GNOME) | [**cedro-{versione}-linux-x64.tar.gz**](https://github.com/{repo}/releases/download/v{versione}/cedro-{versione}-linux-x64.tar.gz) |
 
@@ -12,9 +13,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Nuovo tema «Cedro 4 Labs», pensato per i laboratori, e l'installatore ti fa scegliere come lavorare.**
+**Cedro ora c'è anche in versione portable per Windows: si apre senza installare niente.**
 
-- Alla prima installazione a mano compare la pagina «Come lavori con Cedro?»: scegli **Cedro standard** oppure **Cedro 4 Labs**, con due anteprime animate. Gli aggiornamenti e le installazioni silenziose non la mostrano; da riga di comando si può scegliere con `/TEMA=labs`. Su Linux lo script di installazione ha l'opzione `--labs`.
-- **Cedro 4 Labs** è un tema nuovo (si sceglie anche da Impostazioni › Aspetto) in verde petrolio, con la sigla «4 LABS» in magenta accanto al nome. Mostra solo ciò che serve in laboratorio e in ufficio: conversioni, trascrizione e firma digitale, senza YouTube e video dal web.
-- Nella Guida e nella finestra «Come vuoi usare Cedro?» con questo tema non compare più l'argomento su YouTube e sul web.
-- I temi ora sono sette.
+- Nella release c'è `Cedro-Portable-{versione}-x64.zip` (Windows x64). Lo estrai dove vuoi, anche su una chiavetta, e apri `cedro.exe`.
+- Impostazioni, registro, modelli della trascrizione e programmi scaricati (motore di trascrizione, video dal web) stanno nella cartella `Dati` accanto a `cedro.exe`: niente nel profilo di Windows. Per spostare Cedro basta portarsi dietro la cartella, per toglierlo basta cancellarla.
+- Anche la versione portable si aggiorna da sola: scarica lo zip nuovo, ne controlla lo SHA-256, sostituisce i file della cartella (lasciando com'è `Dati`) e si riapre.
+- L'installatore resta com'era: la portable è un pacchetto in più.
