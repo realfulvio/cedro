@@ -11,8 +11,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro 4 Labs legge i vetrini Hamamatsu e 3DHistech, e i referti dettati restano bozza finché non sono controllati.**
+**Cedro parla anche spagnolo, tedesco, francese e portoghese del Brasile.**
 
-- Si aprono i vetrini Hamamatsu `.ndpi` (NanoZoomer) e 3DHistech `.mrxs` (Pannoramic, il file con la sua cartella accanto) come già gli Aperio `.svs`: anteprima, immagine del livello scelto, foto del vetrino e miniatura. I pixel sono gli stessi che dà OpenSlide.
-- Copia anonima, codice del caso, tessere per l'AI, zona per la conta mitotica e pacchetto per il consulto valgono anche per questi vetrini: via l'etichetta, la foto del vetrino con l'etichetta, i codici a barre, la data, il nome del vetrino e del progetto.
-- Nella revisione di una trascrizione con «Referti veterinari» acceso, ogni frase con numeri e misure (2,5 cm, tre mitosi) e ogni parola che cambia il senso se sentita male (non, assente, destro, maligno…) va riascoltata e confermata, o corretta sul posto. Finché ne resta una, il file si salva come «bozza» con l'elenco dei punti in cima.
+- In Impostazioni, «Lingua dell'interfaccia» offre ora Automatica, Italiano, English, Español, Deutsch, Français e Português (Brasil). «Automatica» segue la lingua di Windows o di Linux.
+- Tutto passa dalla traduzione: finestre, menu dell'icona, notifiche, programma da riga di comando e app Android. Una frase senza traduzione ripiega sull'inglese, poi sull'italiano.
+- I testi più lunghi (il tedesco soprattutto) si rimpiccioliscono un poco prima di tagliarsi e i pulsanti si allargano al testo.
+- Provato a schermo su Linux e Windows in tutte le lingue; restano in italiano i messaggi tecnici del motore di firma digitale.
