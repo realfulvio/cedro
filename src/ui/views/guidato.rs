@@ -162,7 +162,8 @@ fn step_files(f: &mut Frame, app: &App, x: f32, w: f32, top: f32, bottom: f32, s
     super::notice(f, app, (x + w - 560.0, top + 8.0, 560.0, 44.0), 15.0);
     let y = top + 130.0;
     let visible = app.visible();
-    f.primary((x + w - 220.0, top + 62.0, 220.0, 46.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles, true);
+    let bw = f.btn_w("Aggiungi file", 17.0, 220.0);
+    f.primary((x + w - bw, top + 62.0, bw, 46.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles, true);
     let h = (bottom - y - 36.0).max(160.0);
     if visible.is_empty() {
         super::drop_zone(f, app, (x, y, w, h), true);
