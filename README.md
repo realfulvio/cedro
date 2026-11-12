@@ -136,7 +136,7 @@ Componenti esterni come yt-dlp, deno, ffmpeg e il motore di trascrizione si scar
 
 | | Cosa c'è già | Cosa manca |
 | --- | --- | --- |
-| Immagini | Vetrini digitali `.svs` in immagine, DICOM (anche anonimizzato), ND2 e LIF, OME-TIFF, figura per articolo con barra di scala | Zeiss CZI, Hamamatsu NDPI, 3DHistech MRXS, VSI; DICOM da CD con DICOMDIR |
+| Immagini | Vetrini digitali `.svs` in immagine, DICOM (anche anonimizzato), Zeiss CZI, ND2 e LIF, OME-TIFF, figura per articolo con barra di scala | Hamamatsu NDPI, 3DHistech MRXS, VSI; DICOM da CD con DICOMDIR |
 | Dati | CSV/TSV ↔ Excel, pacchetto dati con impronte SHA-256 (BagIt) | Mappa delle piastre a colori |
 | Privacy | Toglie nomi, autori, GPS e dati nascosti da PDF, Office, foto e DICOM | Altri formati proprietari |
 | Voce | Trascrizione con glossario veterinario, riassunto | Rifinitura dei referti |
@@ -145,16 +145,16 @@ Tutto resta sul computer, come in Cedro standard. Un laboratorio che manca di un
 
 ## Tutti i rilasci
 
-Dal 21 ottobre 2026 sono uscite **89 versioni** per Windows e Linux. Le ultime:
+Dal 21 ottobre 2026 sono uscite **90 versioni** per Windows e Linux. Le ultime:
 
 | Versione | Data | Novità |
 | --- | --- | --- |
+| [0.45.0](https://github.com/realfulvio/cedro/releases/tag/v0.45.0) | 12/11 | Cedro 4 Labs legge i file Zeiss CZI |
 | [0.44.2](https://github.com/realfulvio/cedro/releases/tag/v0.44.2) | 12/11 | Correzioni di qualità per Cedro 4 Labs |
 | [0.44.0](https://github.com/realfulvio/cedro/releases/tag/v0.44.0) | 12/11 | Nuovo aspetto «Cedro» a pagine con quattro tinte |
 | [0.43.0](https://github.com/realfulvio/cedro/releases/tag/v0.43.0) | 12/11 | Cedro 4 Labs con la finestra a pagine |
 | [0.42.0](https://github.com/realfulvio/cedro/releases/tag/v0.42.0) | 12/11 | Funzioni per i laboratori (DICOM, ND2/LIF, figura, pacchetto dati) |
 | [0.41.0](https://github.com/realfulvio/cedro/releases/tag/v0.41.0) | 12/11 | Versione portable per Windows |
-| [0.40.0](https://github.com/realfulvio/cedro/releases/tag/v0.40.0) | 12/11 | Tema Cedro 4 Labs e scelta dell'aspetto nell'installatore |
 | [0.39.0](https://github.com/realfulvio/cedro/releases/tag/v0.39.0) | 11/11 | Vetrini digitali (.svs) |
 | [0.38.0](https://github.com/realfulvio/cedro/releases/tag/v0.38.0) | 10/11 | Firma con chiavetta USB o smart card |
 | [0.31.0](https://github.com/realfulvio/cedro/releases/tag/v0.31.0) | 03/11 | Riassunto AI delle riunioni |
