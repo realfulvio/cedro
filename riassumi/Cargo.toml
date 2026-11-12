@@ -1,6 +1,6 @@
 [package]
 name = "cedro-riassumi"
-version = "0.42.0"
+version = "0.43.0"
 edition = "2021"
 license = "MIT"
 description = "Il motore del Riassunto AI di Cedro (llama.cpp con Qwen3.5-4B): Cedro lo scarica al primo riassunto."
