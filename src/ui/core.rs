@@ -96,6 +96,9 @@ pub enum Scroll {
 #[derive(Clone, PartialEq, Debug)]
 pub enum Act {
     Activity(Activity),
+    /// Cedro 4 Labs: una pagina della barra di sinistra; e una pagina con la voce già scelta.
+    Lab(super::model::Lab),
+    LabGo(super::model::Lab, &'static str),
     Category(usize),
     Restart,
     Action(&'static str),
