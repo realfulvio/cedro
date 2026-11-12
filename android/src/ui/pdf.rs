@@ -1038,7 +1038,7 @@ impl App {
                     for (k, (inizio, titolo)) in bm.iter().enumerate() {
                         let fine = bm.get(k + 1).map(|b| b.0 - 1).unwrap_or(tot).max(*inizio);
                         let pag = if fine > *inizio { format!("Pagine {inizio}-{fine}") } else { format!("Pagina {inizio}") };
-                        super::sollevato(p, pal, self.tema.dark(), x, y, w, 60.0, 16.0);
+                        super::sollevato(p, pal, self.scuro(), x, y, w, 60.0, 16.0);
                         let nome = match titolo.as_str() {
                             "" => format!("{}. Senza titolo", k + 1),
                             t if t.starts_with(|c: char| c.is_ascii_digit()) => t.to_string(),
@@ -1118,7 +1118,7 @@ impl App {
         let pw = w;
         if self.pdf.pannello == 3 {
             let h = 150.0;
-            super::sollevato(p, pal, self.tema.dark(), x, y, pw, h, 18.0);
+            super::sollevato(p, pal, self.scuro(), x, y, pw, h, 18.0);
             // Dove: una griglia 3×3.
             for k in 0..9u8 {
                 let (gx, gy) = (x + 14.0 + (k % 3) as f32 * 18.0, y + 14.0 + (k / 3) as f32 * 18.0);
@@ -1146,7 +1146,7 @@ impl App {
             y += h;
         } else if self.pdf.pannello == 4 {
             let h = 134.0;
-            super::sollevato(p, pal, self.tema.dark(), x, y, pw, h, 18.0);
+            super::sollevato(p, pal, self.scuro(), x, y, pw, h, 18.0);
             p.text("Filigrana", x + 14.0, y + 10.0, pw - 100.0, 24.0, 16.0, Weight::Semibold, pal.text, Align::Left);
             p.text("Testo chiaro in diagonale su ogni pagina", x + 14.0, y + 34.0, pw - 100.0, 20.0, 13.0, Weight::Regular, pal.muted, Align::Left);
             self.interruttore(p, x + pw - 66.0, y + 32.0, self.pdf.filigrana);
@@ -1197,7 +1197,7 @@ impl App {
     fn riga_file(&mut self, p: &mut Painter, x: f32, y: f32, w: f32) -> f32 {
         let pal = self.pal();
         let h = 76.0;
-        super::sollevato(p, pal, self.tema.dark(), x, y, w, h, 18.0);
+        super::sollevato(p, pal, self.scuro(), x, y, w, h, 18.0);
         p.rrect(x + 12.0, y + 10.0, 42.0, 56.0, 4.0, Some(BIANCO), Some((pal.border, 1.0)));
         if let Some(img) = self.miniatura.clone() {
             p.image(&img, x + 13.0, y + 11.0, 40.0, 54.0, 3.0, Fit::Contain);
