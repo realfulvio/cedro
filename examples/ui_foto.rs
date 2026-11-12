@@ -73,12 +73,41 @@ fn main() {
     if std::env::var("LANG_FOTO").is_ok_and(|v| v == "en") {
         cedro::i18n::set(cedro::i18n::Lang::En);
         cedro::i18n::record_misses(true);
+    } else if std::env::args().nth(2).as_deref() == Some("cedro-labs") {
+        cedro::i18n::set(cedro::i18n::Lang::It);
+        cedro::i18n::fix();
     }
     let out = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "foto".into()));
     std::fs::create_dir_all(&out).unwrap();
     let only = std::env::args().nth(2);
     let files = demo_files(&std::env::temp_dir().join("cedro-ui-demo"));
     let images: Vec<PathBuf> = files.iter().filter(|p| p.extension().is_some_and(|e| e == "jpg")).cloned().collect();
+    // Cedro 4 Labs: una foto per pagina, nelle due viste, più Inizio vuoto e con un file.
+    if only.as_deref() == Some("cedro-labs") {
+        use cedro::ui::model::Lab;
+        let size = std::env::var("SIZE").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse::<u32>().ok()?, b.parse::<u32>().ok()?)))).unwrap_or((1536, 1024));
+        for simple in [false, true] {
+            for (lab, pieno) in std::iter::once((Lab::Home, false)).chain(std::iter::once(Lab::Home).chain(Lab::LAB).chain(Lab::STANDARD).map(|l| (l, true))) {
+                let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+                s.request_appearance(ThemeId::CedroLabs, simple);
+                if pieno {
+                    s.drop_files(images.clone());
+                    s.drop_files(vec![files[3].clone()]);
+                }
+                s.app.set_lab(lab, simple);
+                settle(&mut s);
+                s.render(size.0, size.1, 1.0);
+                settle(&mut s);
+                let name = format!("labs-{}-{}{}.png", if simple { "sempl" } else { "compl" }, format!("{lab:?}").to_lowercase(), if pieno { "" } else { "-vuoto" });
+                s.render(size.0, size.1, 1.0).save_png(&out.join(&name)).unwrap();
+                println!("{name}");
+            }
+        }
+        for m in cedro::i18n::misses() {
+            println!("SENZA TRADUZIONE: {m:?}");
+        }
+        return;
+    }
     for theme in THEMES {
         if only.as_deref().is_some_and(|o| o != theme.key()) {
             continue;
