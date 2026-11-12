@@ -155,6 +155,7 @@ Dal 21 ottobre 2026 sono uscite **90 versioni** per Windows e Linux. Le ultime:
 | [0.43.0](https://github.com/realfulvio/cedro/releases/tag/v0.43.0) | 12/11 | Cedro 4 Labs con la finestra a pagine |
 | [0.42.0](https://github.com/realfulvio/cedro/releases/tag/v0.42.0) | 12/11 | Funzioni per i laboratori (DICOM, ND2/LIF, figura, pacchetto dati) |
 | [0.41.0](https://github.com/realfulvio/cedro/releases/tag/v0.41.0) | 12/11 | Versione portable per Windows |
+| [0.40.0](https://github.com/realfulvio/cedro/releases/tag/v0.40.0) | 12/11 | Tema Cedro 4 Labs e scelta dell'aspetto nell'installatore |
 | [0.39.0](https://github.com/realfulvio/cedro/releases/tag/v0.39.0) | 11/11 | Vetrini digitali (.svs) |
 | [0.38.0](https://github.com/realfulvio/cedro/releases/tag/v0.38.0) | 10/11 | Firma con chiavetta USB o smart card |
 | [0.31.0](https://github.com/realfulvio/cedro/releases/tag/v0.31.0) | 03/11 | Riassunto AI delle riunioni |
