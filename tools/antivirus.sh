@@ -29,6 +29,7 @@ mapfile -t files < <(find "$dir" -maxdepth 1 -type f -printf '%f\n' | sort)
 [ "${#files[@]}" -gt 0 ] || { echo "Nessun file da analizzare in $TAG"; exit 1; }
 
 rows=""; worst=0; most=0
+declare -A nomi; ordine=()
 declare -A fatto   # sha256 -> "esito|segnalazioni": file identici si analizzano una volta sola
 for f in "${files[@]}"; do
   sha=$(sha256sum "$dir/$f" | cut -d' ' -f1)
@@ -58,7 +59,12 @@ for f in "${files[@]}"; do
   echo "   $esito"
   [ "$n" -gt "$worst" ] && worst=$n
   [ "$tot" -gt "$most" ] && most=$tot
-  rows+="| \`$f\` | $esito | [rapporto](https://www.virustotal.com/gui/file/$sha) |"$'\n'
+  # File con lo stesso hash (per esempio i due installatori) stanno in una riga sola.
+  if [ -z "${nomi[$sha]:-}" ]; then ordine+=("$sha"); nomi[$sha]="\`$f\`"; else nomi[$sha]+=", \`$f\`"; fi
+done
+for sha in "${ordine[@]}"; do
+  IFS='|' read -r esito _ <<<"${fatto[$sha]}"
+  rows+="| ${nomi[$sha]} | $esito | [rapporto](https://www.virustotal.com/gui/file/$sha) |"$'\n'
 done
 
 if [ "$worst" -eq 0 ]; then
