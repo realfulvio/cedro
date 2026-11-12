@@ -82,6 +82,70 @@ fn main() {
     let only = std::env::args().nth(2);
     let files = demo_files(&std::env::temp_dir().join("cedro-ui-demo"));
     let images: Vec<PathBuf> = files.iter().filter(|p| p.extension().is_some_and(|e| e == "jpg")).cloned().collect();
+    // Il Cedro di partenza: una foto per pagina nelle due viste, Inizio, l'elenco e (TINTE=1) le quattro tinte.
+    if only.as_deref().is_some_and(|o| o.starts_with("cedro") && o != "cedro-labs" && o != "cedro-compatto") {
+        use cedro::ui::model::Lab;
+        let size = std::env::var("SIZE").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse::<u32>().ok()?, b.parse::<u32>().ok()?)))).unwrap_or((1536, 1024));
+        let wav = std::env::temp_dir().join("cedro-ui-demo").join("Consiglio-comunale-12-ottobre.wav");
+        {
+            let spec = hound::WavSpec { channels: 1, sample_rate: 16000, bits_per_sample: 16, sample_format: hound::SampleFormat::Int };
+            let mut w = hound::WavWriter::create(&wav, spec).unwrap();
+            for n in 0..16000 * 6 {
+                let t = n as f32 / 16000.0;
+                let env = (t * 3.1).sin().abs() * (t * 0.7).cos().abs();
+                w.write_sample(((t * 220.0 * std::f32::consts::TAU).sin() * env * 12000.0) as i16).unwrap();
+            }
+            w.finalize().unwrap();
+        }
+        let _ = std::fs::copy(&files[3], files[3].with_file_name("Circolare-copia.pdf"));
+        let themes: Vec<ThemeId> = THEMES.into_iter().filter(|t| t.is_cedro() && (std::env::var("TINTE").is_ok() || only.as_deref() == Some(t.key()))).collect();
+        for theme in themes {
+            for simple in [true, false] {
+                let pages: Vec<(Lab, &str)> = vec![(Lab::Home, "vuoto"), (Lab::Home, ""), (Lab::Converti, ""), (Lab::Converti, "elenco"), (Lab::Pdf, ""), (Lab::Pdf, "unisci"), (Lab::Pdf, "pagine"), (Lab::Trascrivi, ""), (Lab::Video, ""), (Lab::Firma, "")];
+                for (lab, extra) in pages {
+                    let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+                    s.request_appearance(theme, simple);
+                    if extra != "vuoto" {
+                        s.drop_files(images.clone());
+                        s.drop_files(vec![files[3].clone(), files[3].with_file_name("Circolare-copia.pdf")]);
+                        if lab == Lab::Trascrivi {
+                            s.drop_files(vec![wav.clone()]);
+                        }
+                    }
+                    s.app.youtube.add("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+                    s.app.youtube.add("https://www.raiplay.it/video/2026/10/esempio.html");
+                    s.app.set_lab(lab, simple);
+                    if lab == Lab::Converti {
+                        s.app.cedro_leave_pdf(simple);
+                    }
+                    if extra == "elenco" {
+                        s.ui.open.insert(cedro::ui::core::Fold::ListView);
+                    }
+                    if extra == "unisci" {
+                        s.app.set_pdf_mode(cedro::ui::model::PdfMode::Merge, simple);
+                    }
+                    if extra == "pagine" {
+                        s.app.set_pdf_mode(cedro::ui::model::PdfMode::Pages, simple);
+                    }
+                    if lab == Lab::Home && extra.is_empty() {
+                        s.app.lab = Lab::Home;
+                    }
+                    settle(&mut s);
+                    s.render(size.0, size.1, 1.0);
+                    settle(&mut s);
+                    s.render(size.0, size.1, 1.0);
+                    settle(&mut s);
+                    let name = format!("{}-{}-{}{}.png", theme.key(), if simple { "sempl" } else { "compl" }, format!("{lab:?}").to_lowercase(), if extra.is_empty() { String::new() } else { format!("-{extra}") });
+                    s.render(size.0, size.1, 1.0).save_png(&out.join(&name)).unwrap();
+                    println!("{name}");
+                }
+            }
+        }
+        for m in cedro::i18n::misses() {
+            println!("SENZA TRADUZIONE: {m:?}");
+        }
+        return;
+    }
     // Cedro 4 Labs: una foto per pagina, nelle due viste, più Inizio vuoto e con un file.
     if only.as_deref() == Some("cedro-labs") {
         use cedro::ui::model::Lab;
