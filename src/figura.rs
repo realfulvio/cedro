@@ -40,18 +40,23 @@ impl Default for Opzioni {
     }
 }
 
-/// Un pannello: l'immagine e, per la microscopia, i micron di un suo pixel.
+/// Un pannello: l'immagine e, per la microscopia e i vetrini, i micron di un suo pixel.
 pub struct Pannello {
     pub img: RgbImage,
     pub um_per_px: Option<f64>,
     pub nome: String,
+    /// Come è stato fatto il pannello (proiezione, contrasto con i suoi limiti, serie e istante): va
+    /// nella legenda, perché chi legge l'articolo deve saperlo.
+    pub note: Vec<String>,
+    /// Una foto della fotocamera senza misure: solo a queste vale la calibrazione scritta a mano.
+    pub foto: bool,
 }
 
 /// La figura fatta.
 pub struct Figura {
     pub img: RgbImage,
-    /// Per ogni pannello: la lettera, il nome del file e la barra (se c'è).
-    pub pannelli: Vec<(char, String, Option<String>)>,
+    /// Per ogni pannello: la lettera, il nome del file, la barra (se c'è) e come è stato fatto.
+    pub pannelli: Vec<(char, String, Option<String>, String)>,
     pub colonne: usize,
 }
 
@@ -72,12 +77,45 @@ pub fn pannello(path: &Path) -> Result<Pannello, String> {
     if microscopia::is_stack(path) {
         let pila = Pila::open(path)?;
         let canali = pila.canali_di(path, 0, Piani::Massimo)?;
-        let img = microscopia::composita(&pila, &canali, !pila.naturale());
-        return Ok(Pannello { img, um_per_px: pila.um_per_px, nome });
+        let mut note = Vec::new();
+        if pila.serie.len() > 1 {
+            note.push(format!("immagine 1 di {} («{}»)", pila.serie.len(), pila.serie.first().cloned().unwrap_or_default()));
+        }
+        if pila.t > 1 {
+            note.push(format!("istante 1 di {}", pila.t));
+        }
+        if pila.z > 1 {
+            note.push(format!("proiezione massima di {} piani Z", pila.z));
+        }
+        // Il contrasto cambia i valori: nella legenda vanno i limiti di ogni canale.
+        let contrasto = !pila.naturale();
+        let limiti = microscopia::limiti_di(&pila, &canali, contrasto);
+        if contrasto {
+            note.push(format!("contrasto automatico lineare per canale (0,5% dei pixel sotto e 0,2% sopra saturati): {}", microscopia::descrivi_limiti(&pila, &limiti)));
+        }
+        if let Some(a) = &pila.avviso {
+            note.push(a.clone());
+        }
+        let img = microscopia::composita_con(&pila, &canali, &limiti);
+        return Ok(Pannello { img, um_per_px: pila.um_per_px, nome, note, foto: false });
     }
-    // Un vetrino o una foto enorme non serve intero: 6000 pixel bastano per 17,5 cm a 600 dpi (4134).
+    // Un vetrino: il livello giusto per 6000 pixel e la misura del pixel dalla descrizione Aperio.
+    if crate::svs::is_slide(path) {
+        let s = crate::svs::Slide::open(path).map_err(|e| format!("{nome}: {e}"))?;
+        let livello = s.for_side(s.pick(crate::svs::Pick::Medium), 6000);
+        let mut img = s.read_level(path, livello).map_err(|e| format!("{nome}: {e}"))?;
+        if img.width().max(img.height()) > 6000 {
+            img = DynamicImage::ImageRgb8(img).thumbnail(6000, 6000).to_rgb8();
+        }
+        let um = s.mpp.map(|m| f64::from(m) * f64::from(s.full().width) / f64::from(img.width().max(1)));
+        return Ok(Pannello { img, um_per_px: um, nome, note: Vec::new(), foto: false });
+    }
+    // Una foto enorme non serve intera: 6000 pixel bastano per 17,5 cm a 600 dpi (4134).
     let img = crate::imgfmt::open(path, true, Some(6000)).map_err(|e| format!("{nome}: {e}"))?;
-    Ok(Pannello { img: senza_trasparenza(img), um_per_px: None, nome })
+    // Solo le foto (JPEG, PNG, TIFF…) possono venire dalla fotocamera del microscopio; un DICOM, un SVG o
+    // un PDF no.
+    let foto = matches!(crate::engine::extension(path).as_str(), "jpg" | "jpeg" | "png" | "tif" | "tiff" | "bmp" | "webp" | "heic" | "heif");
+    Ok(Pannello { img: senza_trasparenza(img), um_per_px: None, nome, note: Vec::new(), foto })
 }
 
 fn senza_trasparenza(img: DynamicImage) -> RgbImage {
@@ -191,16 +229,23 @@ pub fn componi(pannelli: Vec<Pannello>, opz: &Opzioni) -> Result<Figura, String>
     let casella = (larghezza - spazio * (colonne as u32 - 1)) / colonne as u32;
     let margine_lettera = px(1.2, opz.dpi);
 
-    let mut righe: Vec<Vec<(RgbImage, char, String, Option<String>)>> = Vec::new();
+    let mut righe: Vec<Vec<(RgbImage, char, String, Option<String>, String)>> = Vec::new();
     for (i, p) in pannelli.into_iter().enumerate() {
         let ch = (b'A' + i as u8) as char;
         let mut img = alla_larghezza(&p.img, casella);
         let mut barra = None;
+        let mut note = p.note;
         if opz.barra {
-            if let Some(um) = p.um_per_px.or_else(|| opz.foto_um()) {
+            // La misura del file prima di tutto; la calibrazione scritta a mano solo per le foto della
+            // fotocamera (mai per un vetrino, un grafico vettoriale o una microscopia che ha la sua).
+            let manuale = if p.foto && p.um_per_px.is_none() { opz.foto_um() } else { None };
+            if let Some(um) = p.um_per_px.or(manuale) {
                 // Un pixel del pannello copre più (o meno) micron di uno del file.
                 let um_pannello = um * p.img.width() as f64 / img.width() as f64;
                 barra = microscopia::disegna_barra_sola(&mut img, um_pannello);
+                if barra.is_some() && manuale.is_some() {
+                    note.push(format!("barra dalla calibrazione scritta a mano (obiettivo {}x)", opz.obiettivo));
+                }
             }
         }
         if opz.lettere {
@@ -210,7 +255,7 @@ pub fn componi(pannelli: Vec<Pannello>, opz: &Opzioni) -> Result<Figura, String>
             righe.push(Vec::new());
         }
         if let Some(r) = righe.last_mut() {
-            r.push((img, ch, p.nome, barra));
+            r.push((img, ch, p.nome, barra, note.join(" · ")));
         }
     }
     let altezze: Vec<u32> = righe.iter().map(|r| r.iter().map(|(img, ..)| img.height()).max().unwrap_or(0)).collect();
@@ -222,10 +267,10 @@ pub fn componi(pannelli: Vec<Pannello>, opz: &Opzioni) -> Result<Figura, String>
     let mut y = 0u32;
     let mut pannelli_fatti = Vec::new();
     for (r, riga) in righe.into_iter().enumerate() {
-        for (c, (img, ch, nome, barra)) in riga.into_iter().enumerate() {
+        for (c, (img, ch, nome, barra, note)) in riga.into_iter().enumerate() {
             let x = c as u32 * (casella + spazio);
             image::imageops::replace(&mut tela, &img, i64::from(x), i64::from(y));
-            pannelli_fatti.push((ch, nome, barra));
+            pannelli_fatti.push((ch, nome, barra, note));
         }
         y += altezze[r] + spazio;
     }
@@ -247,11 +292,15 @@ pub fn tiff(img: &RgbImage, dpi: u32) -> Result<Vec<u8>, String> {
 pub fn legenda(f: &Figura, opz: &Opzioni) -> String {
     let cm = |mm: f32| format!("{:.1}", mm / 10.0).replace('.', ",");
     let altezza_mm = f.img.height() as f32 / opz.dpi as f32 * 25.4;
-    let mut s = format!("Figura: {} × {} cm, {} dpi, {} pannelli\n\n", cm(opz.larghezza_mm as f32), cm(altezza_mm), opz.dpi, f.pannelli.len());
-    for (ch, nome, barra) in &f.pannelli {
+    let pannelli = if f.pannelli.len() == 1 { "1 pannello".to_string() } else { format!("{} pannelli", f.pannelli.len()) };
+    let mut s = format!("Figura: {} × {} cm, {} dpi, {pannelli}\n\n", cm(opz.larghezza_mm as f32), cm(altezza_mm), opz.dpi);
+    for (ch, nome, barra, note) in &f.pannelli {
         s.push_str(&format!("({ch}) {nome}"));
         if let Some(b) = barra {
             s.push_str(&format!(" · barra di scala {b}"));
+        }
+        if !note.is_empty() {
+            s.push_str(&format!(" · {note}"));
         }
         s.push('\n');
     }
@@ -272,7 +321,7 @@ mod prove {
         assert_eq!(pm_per_px("0,65", 0), None);
         // Una foto senza misure prende la barra dall'obiettivo.
         let opz = Opzioni { larghezza_mm: 85, obiettivo: 10, calibrazione_10x: "0,65".into(), ..Opzioni::default() };
-        let f = componi(vec![Pannello { img: tinta(1004, 500, [0, 0, 0]), um_per_px: None, nome: "foto.jpg".into() }], &opz).unwrap();
+        let f = componi(vec![Pannello { img: tinta(1004, 500, [0, 0, 0]), um_per_px: None, nome: "foto.jpg".into(), note: Vec::new(), foto: true }], &opz).unwrap();
         assert!(f.pannelli[0].2.is_some(), "{:?}", f.pannelli[0]);
     }
 
@@ -284,10 +333,10 @@ mod prove {
     fn i_pannelli_vanno_in_griglia_con_lettere_e_barra() {
         let opz = Opzioni { larghezza_mm: 85, dpi: 300, ..Opzioni::default() };
         let pannelli = vec![
-            Pannello { img: tinta(400, 300, [0, 0, 0]), um_per_px: Some(0.5), nome: "a.ome.tif".into() },
-            Pannello { img: tinta(200, 200, [250, 250, 250]), um_per_px: None, nome: "b.png".into() },
-            Pannello { img: tinta(100, 50, [0, 0, 0]), um_per_px: None, nome: "c.jpg".into() },
-            Pannello { img: tinta(100, 100, [0, 0, 0]), um_per_px: None, nome: "d.jpg".into() },
+            Pannello { img: tinta(400, 300, [0, 0, 0]), um_per_px: Some(0.5), nome: "a.ome.tif".into(), note: Vec::new(), foto: false },
+            Pannello { img: tinta(200, 200, [250, 250, 250]), um_per_px: None, nome: "b.png".into(), note: Vec::new(), foto: true },
+            Pannello { img: tinta(100, 50, [0, 0, 0]), um_per_px: None, nome: "c.jpg".into(), note: Vec::new(), foto: true },
+            Pannello { img: tinta(100, 100, [0, 0, 0]), um_per_px: None, nome: "d.jpg".into(), note: Vec::new(), foto: true },
         ];
         let f = componi(pannelli, &opz).unwrap();
         // 85 mm a 300 dpi = 1004 px; 2×2 con 2 mm (24 px) in mezzo: caselle di 490.
@@ -314,5 +363,40 @@ mod prove {
     #[test]
     fn colonne_sensate() {
         assert_eq!((1..=10).map(colonne_per).collect::<Vec<_>>(), [1, 2, 3, 2, 3, 3, 4, 4, 3, 4]);
+    }
+}
+
+#[cfg(test)]
+mod prove_revisione {
+    use super::*;
+
+    #[test]
+    fn il_vetrino_ha_la_sua_barra_e_non_quella_della_fotocamera() {
+        // CMU-1 a 0,499 µm per pixel, con una calibrazione della fotocamera (40x) che non c'entra.
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/svs/cmu1-pezzo.svs");
+        let pan = pannello(&p).unwrap();
+        assert!(!pan.foto);
+        assert!(pan.um_per_px.is_some_and(|u| (u - 0.499).abs() < 1e-3), "{:?}", pan.um_per_px);
+        let opz = Opzioni { larghezza_mm: 85, obiettivo: 40, calibrazione_10x: "0,65".into(), ..Opzioni::default() };
+        let f = componi(vec![pan], &opz).unwrap();
+        // 480 px × 0,499 µm in 1004 px: 0,239 µm per pixel del pannello, la barra tonda è 50 µm (con la
+        // fotocamera sarebbe stata 10 µm).
+        assert_eq!(f.pannelli[0].2.as_deref(), Some("50 µm"));
+        assert!(!f.pannelli[0].3.contains("calibrazione"));
+    }
+
+    #[test]
+    fn la_legenda_dice_proiezione_contrasto_e_istante() {
+        let dir = std::env::temp_dir().join(format!("cedro-figura-rev-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = crate::microscopia::prove::ome(&dir);
+        let pan = pannello(&p).unwrap();
+        let foto = Pannello { img: RgbImage::from_pixel(300, 200, image::Rgb([200, 200, 200])), um_per_px: None, nome: "foto.jpg".into(), note: Vec::new(), foto: true };
+        let opz = Opzioni { larghezza_mm: 85, obiettivo: 10, calibrazione_10x: "0,65".into(), ..Opzioni::default() };
+        let f = componi(vec![pan, foto], &opz).unwrap();
+        let leg = legenda(&f, &opz);
+        assert!(leg.contains("proiezione massima di 3 piani Z") && leg.contains("contrasto automatico lineare per canale") && leg.contains("DAPI ") && leg.contains("GFP "), "{leg}");
+        assert!(leg.contains("(B) foto.jpg · barra di scala") && leg.contains("calibrazione scritta a mano (obiettivo 10x)"), "{leg}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

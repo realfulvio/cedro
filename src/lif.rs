@@ -65,6 +65,8 @@ pub struct Immagine {
 #[derive(Debug)]
 pub struct Lif {
     pub immagini: Vec<Immagine>,
+    /// Le immagini rovinate o tagliate, lasciate fuori: (nome, perché). Le altre si leggono lo stesso.
+    pub saltate: Vec<(String, String)>,
 }
 
 fn leggi_u32(f: &mut impl Read) -> Option<u32> {
@@ -234,9 +236,10 @@ fn immagine(el: roxmltree::Node, nome: String, blocchi: &HashMap<String, (u64, u
     }
 
     // L'ultimo byte che si legge deve stare nel blocco.
-    let mut ultimo = lista.iter().map(|c| c.scarto + c.byte as u64).max().unwrap_or(0);
+    // Conti con il controllo: i numeri vengono dal file e un file rovinato non deve far girare a vuoto.
+    let mut ultimo = lista.iter().map(|c| c.scarto.saturating_add(c.byte as u64)).max().unwrap_or(0);
     for d in [Some(&x), Some(&righe), dim_z.as_ref()].into_iter().flatten().chain(altri.iter()) {
-        ultimo += (d.n as u64 - 1) * d.passo;
+        ultimo = ultimo.saturating_add((d.n as u64 - 1).saturating_mul(d.passo));
     }
     if ultimo > grandezza.min(dentro) {
         return Err(format!("le misure di «{nome}» non stanno nei suoi dati"));
@@ -269,19 +272,22 @@ fn immagine(el: roxmltree::Node, nome: String, blocchi: &HashMap<String, (u64, u
     }))
 }
 
-fn raccogli(el: roxmltree::Node, percorso: &str, blocchi: &HashMap<String, (u64, u64)>, out: &mut Vec<Immagine>, profondita: u32) -> Result<(), String> {
+/// Le immagini dell'elemento e dei suoi figli. Un'immagine rovinata (un blocco che manca, misure che
+/// non stanno nei dati: un'acquisizione interrotta) va in `saltate` e le altre si leggono lo stesso.
+fn raccogli(el: roxmltree::Node, percorso: &str, blocchi: &HashMap<String, (u64, u64)>, out: &mut Vec<Immagine>, saltate: &mut Vec<(String, String)>, profondita: u32) {
     if profondita > 64 || out.len() > 10_000 {
-        return Ok(());
+        return;
     }
     let nome = el.attribute("Name").unwrap_or("").trim().to_string();
     let percorso = if percorso.is_empty() { nome.clone() } else { format!("{percorso}/{nome}") };
-    if let Some(i) = immagine(el, percorso.clone(), blocchi)? {
-        out.push(i);
+    match immagine(el, percorso.clone(), blocchi) {
+        Ok(Some(i)) => out.push(i),
+        Ok(None) => {}
+        Err(e) => saltate.push((percorso.clone(), e)),
     }
     for figlio_el in figlio(el, "Children").into_iter().flat_map(|c| figli(c, "Element")) {
-        raccogli(figlio_el, &percorso, blocchi, out, profondita + 1)?;
+        raccogli(figlio_el, &percorso, blocchi, out, saltate, profondita + 1);
     }
-    Ok(())
 }
 
 impl Lif {
@@ -349,19 +355,29 @@ impl Lif {
         }
 
         let mut immagini = Vec::new();
+        let mut saltate = Vec::new();
         let elemento = figlio(radice, "Element").ok_or("il file LIF non ha immagini")?;
-        raccogli(elemento, "", &blocchi, &mut immagini, 0)?;
+        raccogli(elemento, "", &blocchi, &mut immagini, &mut saltate, 0);
         // Il nome della radice è quello del progetto: non serve ripeterlo.
         let radice_nome = elemento.attribute("Name").unwrap_or("").trim().to_string();
-        for i in &mut immagini {
-            if let Some(r) = i.nome.strip_prefix(&format!("{radice_nome}/")) {
-                i.nome = r.to_string();
+        let corto = |n: &mut String| {
+            if let Some(r) = n.strip_prefix(&format!("{radice_nome}/")) {
+                *n = r.to_string();
             }
+        };
+        for i in &mut immagini {
+            corto(&mut i.nome);
+        }
+        for (n, _) in &mut saltate {
+            corto(n);
         }
         if immagini.is_empty() {
-            return Err("il file LIF non ha immagini".into());
+            return Err(match saltate.first() {
+                Some((_, e)) => e.clone(),
+                None => "il file LIF non ha immagini".into(),
+            });
         }
-        Ok(Lif { immagini })
+        Ok(Lif { immagini, saltate })
     }
 }
 
@@ -409,9 +425,11 @@ impl Immagine {
         };
         let dati: Vec<u16> = if canale.decimale {
             let v: Vec<f32> = (0..h).flat_map(|y| (0..w).map(move |x| (y, x))).map(|(y, x)| f32::from_le_bytes(valore(y, x).try_into().unwrap_or([0; 4]))).collect();
-            let alto = v.iter().copied().filter(|x| x.is_finite()).fold(0.0f32, f32::max);
-            let k = if alto > 0.0 && alto <= 1.0 { 65535.0 } else { 1.0 };
-            v.iter().map(|x| if x.is_finite() { (x * k).clamp(0.0, 65535.0) as u16 } else { 0 }).collect()
+            crate::microscopia::da_f32(&v)
+        } else if bpc == 4 {
+            // Interi a 32 bit: tali e quali se stanno in 16 bit (mai spostati di 16 bit, che li azzera).
+            let v: Vec<u32> = (0..h).flat_map(|y| (0..w).map(move |x| (y, x))).map(|(y, x)| u32::from_le_bytes(valore(y, x).try_into().unwrap_or([0; 4]))).collect();
+            crate::microscopia::da_u32(&v)
         } else {
             let mut d = Vec::with_capacity(w * h);
             for y in 0..h {
@@ -419,8 +437,7 @@ impl Immagine {
                     let b = valore(y, x);
                     d.push(match bpc {
                         1 => u16::from(b[0]),
-                        2 => u16::from_le_bytes([b[0], b[1]]),
-                        _ => (u32::from_le_bytes([b[0], b[1], b[2], b[3]]) >> 16) as u16,
+                        _ => u16::from_le_bytes([b[0], b[1]]),
                     });
                 }
             }
@@ -553,5 +570,27 @@ pub(crate) mod prove {
             }
             std::fs::write(format!("{}.{k}.u16", p.display()), out).unwrap();
         }
+    }
+}
+
+#[cfg(test)]
+mod prove_revisione {
+    use super::*;
+
+    #[test]
+    fn un_immagine_tagliata_non_porta_via_le_altre() {
+        // L'ultima immagine (XZ) è tagliata a metà: Serie1 si legge lo stesso, e lo si dice.
+        let dir = std::env::temp_dir().join(format!("cedro-lif-tagliato-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = prove::lif(&dir);
+        let b = std::fs::read(&p).unwrap();
+        std::fs::write(&p, &b[..b.len() - 5]).unwrap();
+        let l = Lif::open(&p).unwrap();
+        assert_eq!(l.immagini.iter().map(|i| i.nome.as_str()).collect::<Vec<_>>(), ["Serie1"]);
+        assert_eq!(l.saltate.len(), 1);
+        assert_eq!(l.saltate[0].0, "Cartella/XZ");
+        let pile = crate::microscopia::Pila::open_tutte(&p).unwrap();
+        assert!(pile[0].avviso.as_deref().is_some_and(|a| a.contains("Cartella/XZ")), "{:?}", pile[0].avviso);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

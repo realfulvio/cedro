@@ -210,7 +210,14 @@ fn page(f: &mut Frame, app: &App, area: R) {
         let mut x = r.0;
         f.text("Anche:", x, r.1, 70.0, 40.0, 15.0, SEMI, pal.muted);
         x += f.measure("Anche:", 15.0, SEMI) + 14.0;
-        for (label, lab, id) in [("Radiografie per il proprietario", Lab::Immagini, "rx"), ("Pacchetto per un consulto", Lab::Immagini, "consult"), ("PDF in Word", Lab::Pdf, "docx")] {
+        // Le scorciatoie per radiografie e vetrini solo se in coda c'è un DICOM o un vetrino.
+        let scorciatoie = [("Radiografie per il proprietario", Lab::Immagini, "rx"), ("Pacchetto per un consulto", Lab::Immagini, "consult"), ("PDF in Word", Lab::Pdf, "docx")];
+        let (dicom, vetrini) = (app.first_dicom().is_some(), app.first_slide().is_some());
+        for (label, lab, id) in scorciatoie.into_iter().filter(|(_, _, id)| match *id {
+            "rx" => dicom,
+            "consult" => vetrini,
+            _ => true,
+        }) {
             let w = f.measure(label, 15.0, SEMI) + 32.0;
             f.button((x, r.1, w, 40.0), label, None, 15.0, Act::LabGo(lab, id));
             x += w + 10.0;
@@ -712,10 +719,12 @@ pub(super) fn file_card(f: &mut Frame, app: &App, r: R) {
         }
         Kind::Pdf => rows.extend([(Lab::Pdf, "docx", "Porta in Word"), (Lab::Pdf, "merge", "Unisci a un altro PDF"), (Lab::Pdf, "split", "Dividi"), (Lab::Pdf, "compress", "Comprimi"), (Lab::Anonimizza, "strip", "")]),
         Kind::Doc => rows.extend([(Lab::Converti, "pdf", "Porta in PDF"), (Lab::Anonimizza, "strip", "")]),
+        // Un Excel non si porta in Excel: diventa CSV (o un Excel per pozzetto, se ha piastre).
+        Kind::Text if crate::ui::model::foglio_di_calcolo(&file.path) => rows.extend([(Lab::Dati, "csv", "Porta in CSV"), (Lab::Converti, "pdf", "Porta in PDF")]),
         Kind::Text => rows.extend([(Lab::Dati, "xlsx", "Porta in Excel"), (Lab::Dati, "csv", "CSV pulito"), (Lab::Converti, "pdf", "Porta in PDF")]),
         Kind::Audio => rows.push((Lab::Converti, "mp3", "Converti in MP3, WAV, FLAC…")),
         Kind::Video => rows.push((Lab::Converti, "mp4", "Converti in MP4")),
-        Kind::Archive => rows.push((Lab::Converti, "z-webp", "Converti i file dentro lo ZIP")),
+        Kind::Archive => rows.extend([(Lab::Converti, "verify-pack", "Verifica il pacchetto di dati"), (Lab::Converti, "z-webp", "Converti i file dentro lo ZIP")]),
         Kind::Other => {}
     }
     let body = (r.0 + 1.0, y, r.2 - 2.0, r.1 + r.3 - y - 12.0);

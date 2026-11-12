@@ -6,6 +6,7 @@
 //! quelle compresse (i fotogrammi restano nei loro frammenti e li decodifica `pixel`).
 
 pub mod anon;
+pub mod dizionario;
 pub mod jpeg12;
 pub mod jpegls;
 pub mod pixel;
@@ -81,6 +82,8 @@ const ITEM_END: u32 = tag(0xFFFE, 0xE00D);
 const SEQ_END: u32 = tag(0xFFFE, 0xE0DD);
 pub const PIXEL_DATA: u32 = tag(0x7FE0, 0x0010);
 const UNDEFINED: u32 = 0xFFFF_FFFF;
+/// Oltre questa misura un DICOM «deflated» decompresso è considerato rovinato (1 GB).
+const MAX_INFLATED: usize = 1 << 30;
 
 /// I VR che in Explicit VR hanno 2 byte riservati e la lunghezza su 4 byte.
 fn long_vr(vr: [u8; 2]) -> bool {
@@ -113,8 +116,13 @@ pub fn dictionary_vr(t: u32) -> [u8; 2] {
         0x0028_0002 | 0x0028_0006 | 0x0028_0010 | 0x0028_0011 | 0x0028_0100 | 0x0028_0101 | 0x0028_0102 | 0x0028_0103 | 0x0028_1101 | 0x0028_1102 | 0x0028_1103 => b"US",
         0x0028_1201..=0x0028_1203 => b"OW",
         0x0008_1110 | 0x0008_1111 | 0x0008_1115 | 0x0008_1120 | 0x0008_1140 | 0x0008_1032 | 0x0008_2112 | 0x0010_1002 | 0x0010_2202 | 0x0010_2293 | 0x0010_2294 | 0x0040_0275
-        | 0x0040_0260 | 0x0040_A730 | 0x0028_3010 | 0x0008_9215 | 0x0040_0100 | 0x0018_9346 => b"SQ",
+        | 0x0040_0260 | 0x0040_A730 | 0x0028_3010 | 0x0008_9215 | 0x0040_0100 | 0x0018_9346 | 0x5200_9229 | 0x5200_9230 | 0x0028_9145 | 0x0028_9132 => b"SQ",
         PIXEL_DATA => b"OW",
+        // Gli altri nomi, date e UID dello standard: senza, in Implicit VR l'anonimizzazione non li vedrebbe.
+        _ if dizionario::PN.binary_search(&t).is_ok() => b"PN",
+        _ if dizionario::DA.binary_search(&t).is_ok() => b"DA",
+        _ if dizionario::DT.binary_search(&t).is_ok() => b"DT",
+        _ if dizionario::UI.binary_search(&t).is_ok() => b"UI",
         _ => b"UN",
     };
     *vr
@@ -250,13 +258,19 @@ impl<'a> Reader<'a> {
         }
         let len = len as usize;
         let stop = self.pos.checked_add(len).filter(|e| *e <= self.b.len()).ok_or("file troncato")?;
-        let looks_like_items = self.b.get(self.pos..self.pos + 4).is_some_and(|h| {
-            let g = if self.syntax.big() { u16::from_be_bytes([h[0], h[1]]) } else { u16::from_le_bytes([h[0], h[1]]) };
-            let e = if self.syntax.big() { u16::from_be_bytes([h[2], h[3]]) } else { u16::from_le_bytes([h[2], h[3]]) };
-            tag(g, e) == ITEM
-        });
-        if &vr == b"SQ" || (len >= 8 && looks_like_items && matches!(&vr, b"UN")) {
+        if &vr == b"SQ" {
             let items = self.items(stop, false, depth)?;
+            self.pos = stop;
+            return Ok(Value::Seq(items));
+        }
+        // Un UN che contiene voci: per lo standard il suo contenuto è sempre in Implicit VR Little Endian.
+        let un_items = &vr == b"UN" && len >= 8 && self.b.get(self.pos..self.pos + 4) == Some(&[0xFE, 0xFF, 0x00, 0xE0][..]);
+        if un_items {
+            let saved = self.syntax;
+            self.syntax = Syntax::ImplicitLE;
+            let items = self.items(stop, false, depth);
+            self.syntax = saved;
+            let items = items?;
             self.pos = stop;
             return Ok(Value::Seq(items));
         }
@@ -369,7 +383,11 @@ impl DicomFile {
         let inflated;
         let (data, start) = if deflated {
             let mut out = Vec::new();
-            flate2::read::DeflateDecoder::new(&bytes[pos..]).read_to_end(&mut out).map_err(|e| format!("DICOM compresso non letto: {e}"))?;
+            // Un limite alla decompressione: pochi byte rovinati (o fatti apposta) non devono riempire la memoria.
+            flate2::read::DeflateDecoder::new(&bytes[pos..]).take(MAX_INFLATED as u64 + 1).read_to_end(&mut out).map_err(|e| format!("DICOM compresso non letto: {e}"))?;
+            if out.len() > MAX_INFLATED {
+                return Err("DICOM compresso troppo grande".into());
+            }
             inflated = out;
             (&inflated[..], 0)
         } else {
@@ -696,6 +714,31 @@ pub(crate) mod prove {
             let again = DicomFile::read(&f.write()).unwrap();
             assert_eq!(again.body, f.body);
         }
+    }
+
+    #[test]
+    fn un_un_con_voci_si_legge_in_implicit_anche_nei_file_big_endian() {
+        // Il contenuto di un UN è sempre Implicit VR Little Endian, qualunque sia la sintassi del file.
+        let mut un = vec![0xFE, 0xFF, 0x00, 0xE0, 14, 0, 0, 0];
+        un.extend_from_slice(&[0x10, 0x00, 0x10, 0x00, 6, 0, 0, 0]);
+        un.extend_from_slice(b"Fido^R");
+        let body = vec![el(tag(0x0008, 0x0018), b"UI", b"1.2.3"), Element { tag: tag(0x0040, 0xA730), vr: *b"UN", value: Value::Bytes(un) }];
+        let bytes = DicomFile { meta: vec![], body, syntax: Syntax::ExplicitBE, ts: TS_BIG.into() }.write();
+        let f = DicomFile::read(&bytes).unwrap();
+        let Some(Element { value: Value::Seq(items), .. }) = f.get(tag(0x0040, 0xA730)) else { panic!("non è una sequenza: {:?}", f.get(tag(0x0040, 0xA730))) };
+        assert_eq!(find(&items[0], tag(0x0010, 0x0010)).map(|e| text(e.bytes())).as_deref(), Some("Fido^R"));
+    }
+
+    #[test]
+    fn il_dizionario_conosce_nomi_date_e_uid_dello_standard() {
+        for list in [dizionario::PN, dizionario::DA, dizionario::DT, dizionario::UI] {
+            assert!(list.windows(2).all(|w| w[0] < w[1]), "elenco non in ordine");
+        }
+        assert_eq!(&dictionary_vr(tag(0x0040, 0x1010)), b"PN");
+        assert_eq!(&dictionary_vr(tag(0x0040, 0xA121)), b"DA");
+        assert_eq!(&dictionary_vr(tag(0x0008, 0x3010)), b"UI");
+        assert_eq!(&dictionary_vr(tag(0x0008, 0x0018)), b"UI");
+        assert_eq!(&dictionary_vr(tag(0x0009, 0x1001)), b"UN");
     }
 
     #[test]
