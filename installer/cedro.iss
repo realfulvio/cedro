@@ -12,7 +12,7 @@
   #define BuildDir "..\target\release"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.45.0"
+  #define AppVersion "0.46.0"
 #endif
 
 [Setup]

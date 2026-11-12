@@ -1,4 +1,4 @@
-//! Il laboratorio sui vetrini digitali (.svs): la copia anonima del vetrino (via etichetta e foto del
+//! Il laboratorio sui vetrini digitali (.svs, .ndpi, .mrxs): la copia anonima del vetrino (via etichetta e foto del
 //! vetrino, via nome, data, ora e utente dalle descrizioni), le tessere per l'intelligenza artificiale,
 //! la zona per la conta mitotica (2,37 mm², dieci campi) e il pacchetto per un consulto.
 
@@ -256,10 +256,26 @@ pub fn anonimizza_sul_posto(path: &Path) -> Result<Vec<&'static str>, String> {
 }
 
 
-/// La copia anonima del vetrino in `out` (l'originale resta com'era).
+/// L'estensione giusta per la copia del vetrino: quella del suo formato.
+pub fn estensione(path: &Path) -> &'static str {
+    if crate::mrxs::is_mirax(path) {
+        "mrxs"
+    } else if crate::ndpi::is_ndpi(path) {
+        "ndpi"
+    } else {
+        "svs"
+    }
+}
+
+/// La copia anonima del vetrino in `out` (l'originale resta com'era). Per un MIRAX `out` è il
+/// `.mrxs` e accanto nasce la sua cartella dei dati.
 pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, String> {
+    if crate::mrxs::is_mirax(path) {
+        return crate::mrxs::copia_anonima(path, out);
+    }
     fs::copy(path, out).map_err(|e| e.to_string())?;
-    anonimizza_sul_posto(out).inspect_err(|_| {
+    let fatto = if crate::ndpi::is_ndpi(path) { crate::ndpi::anonimizza_sul_posto(out) } else { anonimizza_sul_posto(out) };
+    fatto.inspect_err(|_| {
         let _ = fs::remove_file(out);
     })
 }
@@ -286,9 +302,28 @@ impl Default for Tessere {
     }
 }
 
+/// Il colore del vetro del vetrino: il colore più frequente della panoramica, se è chiaro. Il vetro
+/// non è sempre bianco (gli Hamamatsu lo fanno beige, circa 205,194,182): senza saperlo il vetro
+/// colorato conterebbe come tessuto.
+pub(crate) fn colore_vetro(s: &Slide, path: &Path) -> [u8; 3] {
+    let Ok(img) = s.preview(path, 1024) else { return [255; 3] };
+    let mut conta = vec![0u32; 1 << 15];
+    for p in img.pixels() {
+        conta[((p[0] as usize >> 3) << 10) | ((p[1] as usize >> 3) << 5) | (p[2] as usize >> 3)] += 1;
+    }
+    let (i, _) = conta.iter().enumerate().max_by_key(|(_, n)| **n).unwrap_or((0, &0));
+    let c = [((i >> 10) as u8) << 3 | 4, (((i >> 5) & 31) as u8) << 3 | 4, ((i & 31) as u8) << 3 | 4];
+    // Un fondo scuro vuol dire che il vetrino è quasi tutto tessuto (o è una fluorescenza): si tiene il bianco.
+    if c.iter().map(|v| *v as u32).sum::<u32>() / 3 >= 160 {
+        c
+    } else {
+        [255; 3]
+    }
+}
+
 /// Quanto di un'immagine è tessuto: pixel colorati (l'ematossilina e l'eosina lo sono, il vetro
-/// e la polvere no) e non bianchi.
-fn tessuto(img: &[u8]) -> f32 {
+/// e la polvere no), non bianchi e diversi dal colore del vetro.
+fn tessuto(img: &[u8], vetro: [u8; 3]) -> f32 {
     let n = img.len() / 3;
     if n == 0 {
         return 0.0;
@@ -296,7 +331,8 @@ fn tessuto(img: &[u8]) -> f32 {
     let mut t = 0usize;
     for p in img.chunks_exact(3) {
         let (mx, mn) = (p[0].max(p[1]).max(p[2]), p[0].min(p[1]).min(p[2]));
-        if mx - mn >= 20 && mn < 230 {
+        let dal_vetro = (0..3).map(|k| (p[k] as i32 - vetro[k] as i32).abs()).max().unwrap_or(0);
+        if mx - mn >= 20 && mn < 230 && dal_vetro >= 25 {
             t += 1;
         }
     }
@@ -353,6 +389,7 @@ pub fn tessere(path: &Path, dir: &Path, base: &str, o: &Tessere, avanzamento: &d
         }
     }
     let l = s.levels[livello].clone();
+    let vetro = colore_vetro(&s, path);
     let sorgente = ((o.lato as f64 * scala).round() as u32).max(1);
     let giu = s.full().width as f64 / l.width as f64;
     // I micron veri di un pixel della tessera: quelli del livello per i pixel presi diviso il lato.
@@ -396,7 +433,7 @@ pub fn tessere(path: &Path, dir: &Path, base: &str, o: &Tessere, avanzamento: &d
                                         let a = r * w + x0 * 3;
                                         px.extend_from_slice(&banda[a..a + sorgente as usize * 3]);
                                     }
-                                    let t = tessuto(&px);
+                                    let t = tessuto(&px, vetro);
                                     if o.solo_tessuto && t < 0.5 {
                                         v.push(Ok(None));
                                         continue;
@@ -789,7 +826,21 @@ fn numero(img: &mut RgbImage, opz: &usvg::Options, testo: &str, x: u32, y: u32, 
 /// di gigabyte sarebbe lento), 64 bit: due vetrini diversi non si confondono.
 pub fn codice_caso(path: &Path) -> String {
     use sha2::{Digest, Sha256};
+    // Il .mrxs è un file quasi vuoto, uguale per tanti vetrini: il caso si riconosce da Slidedat.ini
+    // (che ha l'identificativo del vetrino) e da Index.dat.
+    let mirax = crate::mrxs::is_mirax(path).then(|| path.with_extension(""));
+    let path_buf;
+    let path = match &mirax {
+        Some(d) => {
+            path_buf = d.join("Index.dat");
+            path_buf.as_path()
+        }
+        None => path,
+    };
     let mut h = Sha256::new();
+    if let Some(ini) = mirax.as_ref().and_then(|d| fs::read(d.join("Slidedat.ini")).ok()) {
+        h.update(&ini);
+    }
     let letto = (|| -> std::io::Result<()> {
         let mut f = File::open(path)?;
         let n = f.metadata()?.len();
@@ -822,7 +873,7 @@ pub fn consulto(path: &Path, out: &Path, codice: &str, avanzamento: &dyn Fn(f32)
     let tmp = out.with_file_name(format!(".{codice}-consulto-tmp-{}", std::process::id()));
     fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
     let fatto = (|| {
-        let svs = tmp.join(format!("{codice}.svs"));
+        let svs = tmp.join(format!("{codice}.{}", estensione(path)));
         let tolti = copia_anonima(path, &svs)?;
         avanzamento(0.3);
         let pano = s.preview(path, 4096)?;
@@ -840,10 +891,18 @@ pub fn consulto(path: &Path, out: &Path, codice: &str, avanzamento: &dyn Fn(f32)
         }
         scheda.push_str(&format!(".\nTolti per la privacy: {}.\n\n", tolti.join(", ")));
         scheda.push_str("Specie:\nRazza:\nEtà:\nSesso:\nSede del prelievo:\nDomanda clinica:\n\n");
-        scheda.push_str("Il vetrino si apre con QuPath, ImageScope o Cedro. Le impronte SHA-256 di ogni file sono in manifest-sha256.txt.\n");
+        scheda.push_str(match s.vendor {
+            crate::svs::Vendor::Mirax => "Il vetrino (il file .mrxs con la sua cartella accanto) si apre con QuPath, CaseViewer o Cedro.",
+            crate::svs::Vendor::Hamamatsu => "Il vetrino si apre con QuPath, NDP.view o Cedro.",
+            crate::svs::Vendor::Aperio => "Il vetrino si apre con QuPath, ImageScope o Cedro.",
+        });
+        scheda.push_str(" Le impronte SHA-256 di ogni file sono in manifest-sha256.txt.\n");
         let txt = tmp.join(format!("{codice}-scheda.txt"));
         fs::write(&txt, scheda).map_err(|e| e.to_string())?;
-        let files = vec![svs, jpg, txt];
+        let mut files = vec![svs.clone(), jpg, txt];
+        if s.vendor == crate::svs::Vendor::Mirax {
+            files.insert(1, svs.with_extension(""));
+        }
         let n = files.len();
         let nome = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| codice.to_string());
         crate::pacchetto::crea(&files, out, &nome, &|p| avanzamento(0.35 + p * 0.65))?;
@@ -867,6 +926,17 @@ mod prove {
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
+    }
+
+    #[test]
+    fn il_vetro_beige_degli_hamamatsu_non_e_tessuto() {
+        let vetro = [205u8, 194, 182];
+        let px: Vec<u8> = std::iter::repeat_n(vetro, 100).flatten().collect();
+        assert_eq!(tessuto(&px, vetro), 0.0);
+        assert_eq!(tessuto(&px, [255; 3]), 1.0, "senza il colore del vetro sembrerebbe tutto tessuto");
+        // Il rosa dell'eosina resta tessuto.
+        let rosa: Vec<u8> = std::iter::repeat_n([200u8, 120, 170], 100).flatten().collect();
+        assert_eq!(tessuto(&rosa, vetro), 1.0);
     }
 
     #[test]
