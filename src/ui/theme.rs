@@ -1,6 +1,6 @@
 //! I temi della versione standard: come sono disposte le finestre e con quali colori.
 //! Il logo Spicchio è lo stesso in tutti; cambiano disposizione e palette (kit «temi e logo»).
-//! La modalità (Standard o Semplificata) è un'altra scelta: è l'impostazione `simple` di sempre.
+//! La vista (Semplice o Completa) è un'altra scelta: è l'impostazione `simple` di sempre.
 
 use super::gfx::Rgb;
 
