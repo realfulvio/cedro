@@ -11,7 +11,7 @@ static TEMA: AtomicUsize = AtomicUsize::new(0);
 
 /// Il tema scelto in Impostazioni › Aspetto, per il carattere e i disegni che non hanno la finestra a portata di mano.
 pub fn tema() -> ThemeId {
-    THEMES.get(TEMA.load(Ordering::Relaxed)).copied().unwrap_or(ThemeId::WindowsEssenziale)
+    THEMES.get(TEMA.load(Ordering::Relaxed)).copied().unwrap_or(ThemeId::Cedro)
 }
 
 /// Vero quando è scelto il tema «Comune di Bondeno» (Impostazioni › Aspetto): stemma, colori e carattere del Comune.

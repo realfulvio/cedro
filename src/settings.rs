@@ -58,7 +58,7 @@ pub struct Settings {
     pub ocr_lang: String,
     /// Pagine al massimo per l'OCR di un PDF; 0 vuol dire tutte.
     pub ocr_max: u32,
-    /// Il tema della versione standard (`ui::theme::ThemeId::key`); sconosciuto = Windows essenziale.
+    /// Il tema della versione standard (`ui::theme::ThemeId::key`); vuoto o sconosciuto = Cedro (Melanzana).
     pub ui_theme: String,
     /// Lingua dell'interfaccia: `auto` (quella del sistema), `it` o `en`.
     pub language: String,
@@ -106,7 +106,8 @@ impl Default for Settings {
             dialogs: true,
             reveal: false,
             progress: true,
-            simple: false,
+            // Dalla 0.44 si parte dalla vista Semplice; Bondeno e Cedro 4 Labs restano come prima (`passa_a_tema`).
+            simple: true,
             view_asked: false,
             gpu: true,
             avx512: true,
@@ -316,7 +317,7 @@ impl Settings {
             ("firma_location", self.firma_location.clone()),
             ("firma_keep_pin", b(self.firma_keep_pin).into()),
             ("firma_remind", b(self.firma_remind).into()),
-            ("ui_schema", "1".into()),
+            ("ui_schema", UI_SCHEMA.to_string()),
         ];
         let mut out: Vec<String> = old
             .lines()
@@ -367,6 +368,9 @@ pub const DA_BONDENO: &str = "da-bondeno";
 /// stesso meccanismo, il tema Cedro 4 Labs si accende al primo avvio.
 pub const DA_LABS: &str = "da-labs";
 
+/// La versione delle impostazioni dell'aspetto scritta in `config.txt` (`ui_schema`). 2 = c'è il nuovo aspetto Cedro.
+const UI_SCHEMA: u32 = 2;
+
 /// Se c'è il file `marker` in `dir`: sceglie il tema `chiave` nelle impostazioni e toglie il file.
 fn passa_a_tema(dir: &Path, marker: &str, chiave: &str) {
     let marker = dir.join(marker);
@@ -374,8 +378,13 @@ fn passa_a_tema(dir: &Path, marker: &str, chiave: &str) {
         return;
     }
     let path = dir.join("config.txt");
+    let nuove = !path.is_file();
     let mut s = Settings::load_from(&path);
     s.ui_theme = chiave.to_string();
+    // Bondeno e Cedro 4 Labs partono dalla vista Completa, come prima della 0.44.
+    if nuove {
+        s.simple = false;
+    }
     // Il file si toglie solo se la scelta è stata scritta: altrimenti ci si riprova al prossimo avvio.
     if s.save_to(&path).is_ok() {
         let _ = fs::remove_file(&marker);
@@ -386,6 +395,34 @@ fn passa_a_tema(dir: &Path, marker: &str, chiave: &str) {
 fn passa_a_bondeno(dir: &Path) {
     passa_a_tema(dir, DA_BONDENO, crate::edizione::CHIAVE_TEMA);
     passa_a_tema(dir, DA_LABS, crate::ui::theme::ThemeId::CedroLabs.key());
+    al_nuovo_aspetto(dir);
+}
+
+/// Una volta sola, aggiornando da prima della 0.44: chi aveva l'aspetto di partenza (Windows essenziale)
+/// passa al nuovo aspetto Cedro, con la vista Semplice se non aveva scelto la Completa. Gli altri temi restano.
+fn al_nuovo_aspetto(dir: &Path) {
+    let path = dir.join("config.txt");
+    let Some(text) = read_config(&path) else { return };
+    let schema = text
+        .strip_prefix('\u{feff}')
+        .unwrap_or(&text)
+        .lines()
+        .filter_map(|line| line.trim().split_once('='))
+        .find(|(k, _)| k.trim() == "ui_schema")
+        .and_then(|(_, v)| v.trim().parse::<u32>().ok())
+        .unwrap_or(0);
+    if schema >= UI_SCHEMA {
+        return;
+    }
+    let mut s = Settings::parse(&text);
+    if !matches!(s.ui_theme.trim(), "" | "windows-essenziale") {
+        return;
+    }
+    s.ui_theme = crate::ui::theme::ThemeId::Cedro.key().to_string();
+    if !s.view_asked {
+        s.simple = true;
+    }
+    let _ = s.save_to(&path);
 }
 
 pub fn read_settings() -> Settings {
@@ -477,8 +514,11 @@ mod tests {
     }
 
     #[test]
-    fn simple_mode_is_off_by_default_and_round_trips() {
-        assert!(!Settings::default().simple);
+    fn simple_mode_is_on_by_default_and_round_trips() {
+        assert!(Settings::default().simple);
+        let mut s = Settings::default();
+        s.simple = false;
+        assert!(!Settings::parse(&s.merge_into("")).simple);
         let mut s = Settings::default();
         s.simple = true;
         assert!(Settings::parse(&s.merge_into("")).simple);
@@ -518,7 +558,7 @@ mod theme_tests {
         let text = s.merge_into(old);
         assert!(text.contains("mia_chiave=resta"));
         assert_eq!(text.matches("ui_theme=").count(), 1);
-        assert!(text.contains("ui_schema=1"));
+        assert!(text.contains("ui_schema=2"));
         assert_eq!(Settings::parse(&text).ui_theme, "percorso-guidato");
         // Un file vecchio, senza le chiavi nuove, resta com'era.
         assert_eq!(Settings::parse("simple=0\n").ui_theme, "");
@@ -558,7 +598,7 @@ mod bondeno_tests {
         let dir = std::env::temp_dir().join(format!("cedro-da-labs-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("config.txt"), "quality=70\nui_theme=windows-essenziale\n").unwrap();
+        fs::write(dir.join("config.txt"), "quality=70\nui_theme=windows-essenziale\nui_schema=2\n").unwrap();
         passa_a_bondeno(&dir);
         assert_eq!(Settings::load_from(&dir.join("config.txt")).ui_theme, "windows-essenziale");
         fs::write(dir.join(DA_LABS), "").unwrap();
@@ -566,6 +606,42 @@ mod bondeno_tests {
         let s = Settings::load_from(&dir.join("config.txt"));
         assert_eq!((s.ui_theme.as_str(), s.quality), ("cedro-labs", 70));
         assert!(!dir.join(DA_LABS).exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn chi_aveva_l_aspetto_di_partenza_passa_al_nuovo_una_volta_sola() {
+        let dir = std::env::temp_dir().join(format!("cedro-nuovo-aspetto-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.txt");
+        // Prima della 0.44, aspetto di partenza e vista Completa mai scelta: nuovo aspetto e vista Semplice.
+        fs::write(&path, "quality=70\nsimple=0\nui_theme=windows-essenziale\nui_schema=1\n").unwrap();
+        passa_a_bondeno(&dir);
+        let s = Settings::load_from(&path);
+        assert_eq!((s.ui_theme.as_str(), s.simple, s.quality), ("cedro", true, 70));
+        // Chi poi rimette Windows essenziale lo ritrova.
+        let mut s = s;
+        s.ui_theme = "windows-essenziale".into();
+        s.save_to(&path).unwrap();
+        passa_a_bondeno(&dir);
+        assert_eq!(Settings::load_from(&path).ui_theme, "windows-essenziale");
+        // La Completa scelta apposta resta; un altro tema resta com'è.
+        fs::write(&path, "simple=0\nview_asked=1\n").unwrap();
+        passa_a_bondeno(&dir);
+        let s = Settings::load_from(&path);
+        assert_eq!((s.ui_theme.as_str(), s.simple), ("cedro", false));
+        fs::write(&path, "ui_theme=banco-di-lavoro\nsimple=0\n").unwrap();
+        passa_a_bondeno(&dir);
+        let s = Settings::load_from(&path);
+        assert_eq!((s.ui_theme.as_str(), s.simple), ("banco-di-lavoro", false));
+        // Installazione nuova di Cedro 4 Labs: vista Completa come prima.
+        let nuova = dir.join("labs");
+        fs::create_dir_all(&nuova).unwrap();
+        fs::write(nuova.join(DA_LABS), "").unwrap();
+        passa_a_bondeno(&nuova);
+        let s = Settings::load_from(&nuova.join("config.txt"));
+        assert_eq!((s.ui_theme.as_str(), s.simple), ("cedro-labs", false));
         let _ = fs::remove_dir_all(&dir);
     }
 }
