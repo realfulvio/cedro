@@ -1,4 +1,4 @@
-//! Le conversioni delle immagini di microscopia (OME-TIFF, ImageJ, TIFF a 16 bit, ND2, LIF): i canali sovrapposti
+//! Le conversioni delle immagini di microscopia (OME-TIFF, ImageJ, TIFF a 16 bit, ND2, LIF, CZI): i canali sovrapposti
 //! a colori o uno per file, i piani Z uniti (proiezione massima) o separati, un file per istante,
 //! contrasto automatico, valori originali a 16 bit e barra di scala. Le voci che il TIFF non cambia
 //! (OCR, icona, tira via i dati) passano dal percorso comune.
@@ -53,7 +53,7 @@ fn pezzi_di(pila: &Pila, sedici: bool, opts: &Options) -> Vec<Pezzo> {
 }
 
 fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> CedroResult<Output> {
-    // Un LIF è un progetto con più immagini: ognuna dà i suoi file.
+    // Un LIF è un progetto con più immagini (un CZI può avere più scene): ognuna dà i suoi file.
     let pile = Pila::open_tutte(path).map_err(err)?;
     let pila = &pile[0];
     let (format, ext, label) = image_target(action).ok_or_else(|| err(format!("azione sconosciuta: {action}")))?;
@@ -451,6 +451,34 @@ mod prove {
         assert_eq!(image::open(d.join("progetto-Cartella_XZ.png")).unwrap().to_rgb8().dimensions(), (5, 3));
         let pila = crate::microscopia::Pila::open(&p).unwrap();
         assert_eq!(pila.riassunto()[1], "Leica LIF · 2 images (this one: Serie1) · 2 channels · 3 Z planes · 2 time points · 12-bit · 6×4 · 0.25 µm/pixel · HC PL APO 63x/1.40 OIL");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn czi_si_converte_scena_per_scena() {
+        let d = cartella("micro-czi");
+        // Due scene: P1 (2 canali, 2 piani Z, mosaico di 2 tessere zstd) e P2.
+        let p = crate::czi::prove::czi(&d);
+        assert_eq!(crate::engine::kind_of(&p), crate::engine::Kind::Image);
+        assert!(crate::microscopia::is_stack(&p));
+        let pila = crate::microscopia::Pila::open(&p).unwrap();
+        assert_eq!(pila.origine, crate::microscopia::Origine::Zeiss);
+        assert_eq!(pila.riassunto()[0], "CZI di Zeiss · 2 immagini (questa: P1) · 2 canali · 2 piani Z · 12 bit · 8×4 · 0,325 µm/pixel · Plan-Apochromat 20x/0.8 M27");
+        assert_eq!(pila.riassunto()[1], "Zeiss CZI · 2 images (this one: P1) · 2 channels · 2 Z planes · 12-bit · 8×4 · 0.325 µm/pixel · Plan-Apochromat 20x/0.8 M27");
+        let o = Options { micro_channels: 1, ..Options::default() };
+        let out = perform_with(&p, "png", 80, None, &o).unwrap();
+        let tutti: Vec<String> = std::fs::read_dir(&d).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        assert!(out.message.contains("4 PNG") && out.message.contains("2 immagini del progetto"), "{} {tutti:?}", out.message);
+        assert_eq!(image::open(d.join("prova-P1-EGFP.png")).unwrap().to_luma8().dimensions(), (8, 4));
+        assert_eq!(image::open(d.join("prova-P2-DAPI.png")).unwrap().to_luma8().dimensions(), (3, 2));
+        // L'anteprima: i canali a colori.
+        let im = crate::imgfmt::open(&p, false, None).unwrap();
+        assert_eq!((im.width(), im.height()), (8, 4));
+        // I valori originali a 16 bit: la proiezione massima del canale EGFP (piano Z 2: 1100 + …).
+        let o = Options { micro_16bit: true, ..Options::default() };
+        perform_with(&p, "tiff", 80, None, &o).unwrap();
+        let t = crate::microscopia::Pila::open(&d.join("prova-P1-EGFP.tiff")).unwrap();
+        assert_eq!(t.canale(&d.join("prova-P1-EGFP.tiff"), 0, 0, crate::microscopia::Piani::Centrale).unwrap().dati[..3], [1100, 1101, 1102]);
         let _ = std::fs::remove_dir_all(&d);
     }
 
