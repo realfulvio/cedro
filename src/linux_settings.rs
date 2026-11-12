@@ -362,7 +362,7 @@ fn credit_row(item: &cedro::credits::Component) -> gtk4::ListBoxRow {
         soon.add_css_class("cedro-soon");
         top.append(&soon);
     }
-    let by = Label::new(Some(&format!("{} · {}", item.author, item.license)));
+    let by = Label::new(Some(&format!("{} · {}", t(item.author), t(item.license))));
     by.set_xalign(0.0);
     by.add_css_class("cedro-muted");
     let what = Label::new(Some(&t(item.what)));

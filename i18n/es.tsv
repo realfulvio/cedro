@@ -2401,3 +2401,16 @@ Mostra la firma	Mostrar la firma
 Versione firmata da {}: com'era al momento della firma	Versión firmada por {}: como era en el momento de la firma
 Scheda video attiva	Tarjeta gráfica activa
 Il file log.txt e config.txt stanno nella cartella Dati, accanto a cedro.exe.	Los archivos log.txt y config.txt están en la carpeta de datos (Dati), junto a cedro.exe.
+Incolla il link di un video o di una playlist di YouTube (o di un altro sito).	Pega el enlace de un vídeo o una lista de reproducción de YouTube (o de otro sitio).
+Disegna le immagini SVG.	Dibuja las imágenes SVG.
+Legge MP3, FLAC, OGG, AAC, WAV, AIFF.	Lee MP3, FLAC, OGG, AAC, WAV, AIFF.
+Legge e scrive i file .opus.	Lee y escribe archivos .opus.
+Legge e scrive le foto AVIF.	Lee y escribe fotos AVIF.
+Legge e scrive le foto JPEG XL.	Lee y escribe fotos JPEG XL.
+Legge le tessere JPEG XR e zstd dei file Zeiss CZI.	Lee los mosaicos JPEG XR y zstd de los archivos Zeiss CZI.
+Parla con la chiavetta o la smart card per firmare (PKCS#11).	Habla con la llave de firma o la tarjeta inteligente para firmar (PKCS#11).
+Scrive i file FLAC.	Escribe archivos FLAC.
+Scrive le foto WebP.	Escribe fotos WebP.
+BSD-2-Clause o MIT	BSD-2-Clause o MIT
+BSD-3-Clause o BSD-2-Clause	BSD-3-Clause o BSD-2-Clause
+The OpenReadout Authors (da jxrlib di Microsoft), Moritz Borcherding	The OpenReadout Authors (de jxrlib de Microsoft), Moritz Borcherding
