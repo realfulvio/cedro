@@ -314,9 +314,11 @@ pub fn draw(f: &mut Frame, app: &App) {
         x += w3;
         let n = app.visible().len();
         let count = format!("{n} file nella coda");
-        let count_w = f.measure(&count, 17.0, SANS) + 16.0;
-        let cbw = (cx + cw - x - 16.0).clamp(90.0, 220.0);
-        f.text_r(&count, (cx + cw - cbw, BAR + 22.0, cbw, 44.0), 17.0, SANS, pal.text);
+        // Il conteggio sta nello spazio rimasto a destra dei pulsanti: con le finestre strette e i testi
+        // lunghi (tedesco) si rimpicciolisce invece di finire sopra «Rimuovi».
+        let room = (cx + cw - x - 12.0).clamp(0.0, 220.0);
+        let count_w = (f.measure(&count, 17.0, SANS) + 16.0).min(room);
+        f.text_r(&count, (cx + cw - room, BAR + 22.0, room, 44.0), 17.0, SANS, pal.text);
         super::notice(f, app, (x + 20.0, BAR + 22.0, (cw - (x + 20.0 - cx) - count_w - 8.0).max(0.0), 44.0), 14.0);
         table(f, app, (cx, BAR + 86.0, cw, foot_y - BAR - 86.0 - 18.0), false);
     }
