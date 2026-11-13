@@ -5,6 +5,47 @@ use std::fs::{self, File};
 use std::io::{BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
+/// Il file sotto il lettore del crate `mp4`, che si accorge quando la libreria gira a vuoto: con una
+/// scatola grande 0 (o da 1 a 7 byte) dentro `moov`, `mp4` torna a leggere sempre la stessa
+/// intestazione, senza fine. Dopo troppe riletture di fila dello stesso punto è un file rovinato.
+pub(crate) struct NoLoop<R> {
+    inner: R,
+    last: u64,
+    same: u32,
+    /// Dall'ultimo spostamento c'è stata almeno una lettura vera (i campioni da 0 byte non ne fanno).
+    read: bool,
+}
+
+impl<R: Read> Read for NoLoop<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.read = true;
+        self.inner.read(buf)
+    }
+}
+
+impl<R: Seek> Seek for NoLoop<R> {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        if let SeekFrom::Start(at) = pos {
+            if at == self.last && self.read {
+                self.same += 1;
+                if self.same > 64 {
+                    return Err(std::io::Error::other("file MP4 rovinato: una scatola fa girare a vuoto il lettore"));
+                }
+            } else {
+                self.last = at;
+                self.same = 0;
+            }
+            self.read = false;
+        }
+        self.inner.seek(pos)
+    }
+}
+
+/// `Mp4Reader::read_header` che non può restare in un giro senza fine su un file rovinato.
+pub(crate) fn mp4_reader(file: File, size: u64) -> mp4::Result<mp4::Mp4Reader<std::io::BufReader<NoLoop<File>>>> {
+    mp4::Mp4Reader::read_header(std::io::BufReader::new(NoLoop { inner: file, last: u64::MAX, same: 0, read: false }), size)
+}
+
 struct TopBox {
     start: u64,
     end: u64,
@@ -169,6 +210,21 @@ mod tests {
         out.extend_from_slice(kind);
         out.extend_from_slice(body);
         out
+    }
+
+    #[test]
+    fn a_zero_sized_box_inside_moov_is_an_error_not_an_endless_loop() {
+        let mut file = make(b"ftyp", b"isom0000isom");
+        // moov con dentro una scatola «free» dichiarata grande 0: il crate `mp4` la rileggerebbe senza fine.
+        file.extend_from_slice(&make(b"moov", &[0, 0, 0, 0, b'f', b'r', b'e', b'e', 0, 0, 0, 0, 0, 0, 0, 0]));
+        let dir = std::env::temp_dir().join(format!("cedro-noloop-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("rovinato.mp4");
+        fs::write(&path, &file).unwrap();
+        let f = File::open(&path).unwrap();
+        let size = f.metadata().unwrap().len();
+        assert!(mp4_reader(f, size).is_err());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

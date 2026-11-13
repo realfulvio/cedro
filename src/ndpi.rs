@@ -418,6 +418,11 @@ pub fn open(path: &Path) -> Result<Slide, String> {
         let tessere = t.restart > 0 && across > 0 && w % mcu_w == 0 && (across * rows > 1);
         let jpeg = if tessere {
             let quanti = across * rows;
+            // Ogni intervallo finisce con un RST (2 byte): più intervalli dei byte è un file rovinato,
+            // e l'indice non deve prendere gigabyte di memoria.
+            if quanti as u64 > len / 2 {
+                return Err("NDPI rovinato: le misure del livello non tornano con i suoi dati".into());
+            }
             let indice = (|| -> Option<Vec<u64>> {
                 let bassi = p.voce(TAG_MCU_BASSI)?.interi(&mut f).ok()?;
                 if bassi.len() != quanti {
@@ -455,7 +460,6 @@ pub fn open(path: &Path) -> Result<Slide, String> {
             Jpeg { sof: t.sof, header: Vec::new(), starts: vec![start], end, across: 1, rows: 1, stack: 1, mcu_h: h, tile_w: w, whole: true }
         };
         let (tile_w, tile_h) = if jpeg.whole { (w, h) } else { (jpeg.tile_w, jpeg.stack as u32 * t.mcu_h) };
-        let n_tessere = (w.div_ceil(tile_w) as usize) * (h.div_ceil(tile_h) as usize);
         // Micron per pixel dalla risoluzione TIFF (in centimetri per gli NDPI).
         let unita = num(&mut f, 296).unwrap_or(2.0);
         let mpp = num(&mut f, 282).filter(|r| *r > 0.0).map(|r| if unita == 3.0 { 10_000.0 / r } else { 25_400.0 / r });
@@ -467,8 +471,9 @@ pub fn open(path: &Path) -> Result<Slide, String> {
             tile_h,
             compression: JPEG,
             photometric: PHOTOMETRIC_YCBCR,
-            offsets: vec![0; n_tessere],
-            counts: vec![0; n_tessere],
+            // Le tessere NDPI si trovano con `jpeg.starts`: gli indirizzi TIFF non servono (come MIRAX).
+            offsets: Vec::new(),
+            counts: Vec::new(),
             tables: None,
             source: Source::Ndpi(Arc::new(jpeg)),
         };
@@ -665,6 +670,17 @@ mod prove {
         let p = dir.join("finto.ndpi");
         std::fs::write(&p, f).unwrap();
         (p, img)
+    }
+
+    #[test]
+    fn un_ndpi_con_le_misure_rovinate_da_un_errore_e_non_chiede_gigabyte() {
+        // Trovato rovinando a caso un NDPI: le misure del livello facevano chiedere 16 GB di memoria e Cedro si chiudeva.
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ndpi-rovinato.ndpi");
+        if let Ok(s) = Slide::open(&p) {
+            for l in 0..s.levels.len() {
+                let _ = s.read_level(&p, l);
+            }
+        }
     }
 
     #[test]
