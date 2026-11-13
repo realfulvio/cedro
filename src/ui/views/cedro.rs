@@ -90,9 +90,93 @@ fn gpu_name() -> Option<&'static str> {
             let on = crate::read_settings().gpu && crate::accel::hardware().gpu.is_some();
             let name = on.then(|| short_gpu(&crate::sysinfo::info().gpu)).filter(|n| !n.is_empty());
             let _ = NAME.set(name);
+            GPU_DONE.store(true, std::sync::atomic::Ordering::Relaxed);
         });
     });
     NAME.get().and_then(|n| n.as_deref())
+}
+
+/// Vero quando la scheda video è già stata cercata (anche se non c'è o è spenta).
+fn gpu_checked() -> bool {
+    gpu_name().is_some() || GPU_DONE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+static GPU_DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// La riga di stato in alto a destra: a riposo la scheda video pronta (o «Solo processore»); durante
+/// un lavoro cosa lo accelera davvero; mentre arriva un componente (yt-dlp, ffmpeg, modelli) il suo nome,
+/// quanto manca e una barretta. Si legge da destra, accanto ai pulsanti della finestra.
+/// `idle`: anche a riposo (Cedro 4 Labs a riposo dice «Niente esce da questo PC»). Vero se ha disegnato.
+pub(super) fn status_line(f: &mut Frame, app: &App, t: &Tint, idle: bool, cy: f32) -> bool {
+    use crate::componenti::Fase;
+    let size = 14.5;
+    let right = f.w - 3.0 * 46.0 - 24.0;
+    let pick = |dark: Rgb, light: Rgb| if t.light { light } else { dark };
+    let (blue, amber, coral) = (pick((0x5C, 0xB8, 0xFF), (0x1F, 0x6F, 0xB8)), pick((0xF2, 0xB8, 0x4B), (0x9A, 0x62, 0x00)), pick((0xFF, 0x8A, 0x80), (0xC0, 0x3C, 0x32)));
+    enum Mark {
+        Dot { live: bool },
+        Down,
+        Spin,
+    }
+    let (mark, c, head, tail, bar): (Mark, Rgb, String, String, Option<f32>) = if let Some(s) = crate::componenti::attuale() {
+        f.animating = true;
+        let name = &s.nome;
+        match s.fase {
+            Fase::Scarica { fatti, totale } => {
+                let mb = |b: u64| (b as f64 / 1_000_000.0).round() as u64;
+                let tail = if totale > 0 { format!(" · {} di {} MB", mb(fatti), mb(totale).max(1)) } else if fatti > 0 { format!(" · {} MB", mb(fatti)) } else { String::new() };
+                let bar = (totale > 0).then(|| (fatti as f32 / totale as f32).clamp(0.0, 1.0));
+                (Mark::Down, blue, crate::i18n::tr(&format!("Scarico {name}")).into_owned(), tail, bar)
+            }
+            Fase::Aggiorna => (Mark::Spin, amber, crate::i18n::tr(&format!("Aggiorno {name}")).into_owned(), String::new(), None),
+            Fase::Errore => (Mark::Dot { live: false }, coral, crate::i18n::tr(&format!("Non ho scaricato {name}")).into_owned(), crate::i18n::tr(" · riprovo al prossimo lavoro").into_owned(), None),
+        }
+    } else if let Some(u) = app.spia() {
+        f.animating = true;
+        if u.gpu {
+            (Mark::Dot { live: true }, t.brand, crate::i18n::tr("Accelera la scheda video").into_owned(), format!(" · {}", crate::i18n::lit(&u.detail)), None)
+        } else {
+            (Mark::Dot { live: true }, t.leaf, crate::i18n::tr("Lavora il processore").into_owned(), format!(" · {}", crate::i18n::lit(&u.detail)), None)
+        }
+    } else if !idle {
+        return false;
+    } else if let Some(name) = gpu_name() {
+        (Mark::Dot { live: false }, t.leaf, crate::i18n::tr("Scheda video attiva").into_owned(), format!(" · {}", crate::i18n::lit(name)), None)
+    } else if gpu_checked() {
+        let isa = crate::accel::cpu_isa();
+        let tail = if isa.is_empty() { String::new() } else { format!(" · {}", crate::i18n::lit(isa)) };
+        (Mark::Dot { live: false }, t.leaf, crate::i18n::tr("Solo processore").into_owned(), tail, None)
+    } else {
+        return false;
+    };
+    let tail = crate::i18n::tr(&tail).into_owned();
+    let hw = f.measure(&head, size, SEMI);
+    let tw = f.measure(&tail, size, SANS).min(360.0);
+    let bw = if bar.is_some() { 110.0 + 12.0 } else { 0.0 };
+    let x = right - hw - tw - bw;
+    match mark {
+        Mark::Dot { live } => {
+            if live {
+                let k = (f.ms % 1600) as f32 / 1600.0;
+                f.p.disc_a(x - 16.0, cy, 4.5 + 7.0 * k, c, 0.42 * (1.0 - k));
+            } else {
+                f.p.disc_a(x - 16.0, cy, 8.5, c, 0.22);
+            }
+            f.p.circle(x - 16.0, cy, 4.5, Some(c), None);
+        }
+        Mark::Down => f.icon(ic::DOWNLOAD, x - 25.0, cy - 9.0, 18.0, c),
+        Mark::Spin => f.icon(ic::REFRESH, x - 25.0, cy - 9.0, 18.0, c),
+    }
+    f.p.text(&head, x, cy - 16.0, hw + 4.0, 32.0, size, SEMI, c, Align::Left);
+    f.p.text(&tail, x + hw, cy - 16.0, tw + 4.0, 32.0, size, SANS, t.muted, Align::Left);
+    if let Some(p) = bar {
+        let bx = x + hw + tw + 12.0;
+        f.p.rrect_a(bx, cy - 2.5, 110.0, 5.0, 2.5, t.ink, 0.14);
+        if p > 0.0 {
+            f.p.rrect(bx, cy - 2.5, (110.0 * p).max(5.0), 5.0, 2.5, Some(c), None);
+        }
+    }
+    true
 }
 
 /// Il nome della scheda senza la marca davanti, che nella barra non serve.
@@ -160,17 +244,7 @@ fn frame(f: &mut Frame, app: &App) {
     f.p.symbol(22.0, 16.0, 28.0);
     f.p.text("Cedro", 58.0, 14.0, 140.0, 32.0, 21.0, BOLD, t.ink, Align::Left);
     f.window_controls(f.w, 0.0, 48.0, t.ink, t.frame_hi);
-    if let Some(name) = gpu_name() {
-        let head = "Scheda video attiva";
-        let tail = format!(" · {name}");
-        let hw = f.measure(head, 14.5, SEMI);
-        let tw = f.measure(&tail, 14.5, SANS);
-        let x = f.w - 3.0 * 46.0 - 24.0 - hw - tw;
-        f.p.disc_a(x - 16.0, 30.0, 8.5, t.leaf, 0.22);
-        f.p.circle(x - 16.0, 30.0, 4.5, Some(t.leaf), None);
-        f.p.text(head, x, 14.0, hw + 4.0, 32.0, 14.5, SEMI, t.leaf, Align::Left);
-        f.p.text(&tail, x + hw, 14.0, tw + 4.0, 32.0, 14.5, SANS, t.muted, Align::Left);
-    }
+    status_line(f, app, t, true, 30.0);
     let mut y = TOP + 4.0;
     for lab in Lab::CEDRO {
         rail_item(f, app, t, y, lab);

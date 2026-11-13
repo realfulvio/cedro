@@ -224,6 +224,16 @@ fn get_text(url: &str) -> Result<String, String> {
 
 /// Scarica `url` in `dest` (via un file `.part`), controllando lo SHA-256 se lo si conosce.
 fn download(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<(), String> {
+    // La riga di stato in alto mostra il componente che arriva.
+    let job = crate::componenti::Lavoro::scarica(what);
+    let result = download_inner(url, dest, sha256, what, emit, cancel);
+    if let Err(e) = &result {
+        job.fallito(e);
+    }
+    result
+}
+
+fn download_inner(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<(), String> {
     let response = agent().get(url).call().map_err(|e| format!("Non riesco a scaricare {what}: {e}"))?;
     let total: u64 = response.header("Content-Length").and_then(|v| v.parse().ok()).unwrap_or(0);
     let mut reader = response.into_reader();
@@ -258,6 +268,7 @@ fn download(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut
         }
         hasher.update(&buf[..n]);
         done += n as u64;
+        crate::componenti::scarica(what, done, total);
         if total > 0 {
             let pct = (done * 100 / total) as i32;
             if pct != last_pct {
@@ -653,6 +664,7 @@ pub fn update_ytdlp_if_due(ytdlp: &Path, emit: &mut dyn FnMut(Event), cancel: &A
         return;
     }
     emit(Event::Log("Controllo se yt-dlp ha una versione più nuova".into()));
+    let _job = crate::componenti::Lavoro::aggiorna("yt-dlp");
     // Con una rete lenta o un proxy bloccato -U può non finire mai: lo si ferma con Annulla o dopo 2 minuti.
     match capture_until(command(ytdlp).arg("-U"), cancel, Duration::from_secs(120)) {
         Ok((text, _, ok)) => {
