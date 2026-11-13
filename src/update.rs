@@ -640,14 +640,19 @@ Connection: close
     #[test]
     fn the_update_folder_is_private_and_unique() {
         use std::os::unix::fs::PermissionsExt;
-        let a = private_dir().unwrap();
-        let b = private_dir().unwrap();
-        assert_ne!(a, b);
-        for dir in [&a, &b] {
-            assert_eq!(std::fs::metadata(dir).unwrap().permissions().mode() & 0o777, 0o700, "{}", dir.display());
-            assert!(dir.starts_with(std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|d| d.is_dir()).unwrap_or_else(|| crate::config_dir().join("tmp"))));
-            let _ = std::fs::remove_dir_all(dir);
-        }
+        // Con il blocco del HOME finto: altri test lo cambiano e `config_dir()` cambierebbe sotto i piedi.
+        let home = std::env::temp_dir().join(format!("cedro-prova-home-{}", std::process::id()));
+        with_fake_home(&home, || {
+            let a = private_dir().unwrap();
+            let b = private_dir().unwrap();
+            assert_ne!(a, b);
+            for dir in [&a, &b] {
+                assert_eq!(std::fs::metadata(dir).unwrap().permissions().mode() & 0o777, 0o700, "{}", dir.display());
+                assert!(dir.starts_with(std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).filter(|d| d.is_dir()).unwrap_or_else(|| crate::config_dir().join("tmp"))));
+                let _ = std::fs::remove_dir_all(dir);
+            }
+        });
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[cfg(unix)]
