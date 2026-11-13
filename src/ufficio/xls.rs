@@ -354,6 +354,9 @@ fn name_areas(rgce: &[u8]) -> Vec<(u32, u32, u32, u32)> {
                 let r2 = u16_at(rgce, i + 5) as u32;
                 let c1 = (u16_at(rgce, i + 7) & 0x3FFF) as u32;
                 let c2 = (u16_at(rgce, i + 9) & 0x3FFF) as u32;
+                // In un .xls la riga 65536 e la colonna IV sono la fine del foglio: righe o colonne intere.
+                let r2 = if r2 >= 0xFFFF { MAX_ROWS - 1 } else { r2 };
+                let c2 = if c2 >= 0xFF { MAX_COLS - 1 } else { c2 };
                 out.push((r1, c1, r2, c2));
                 i += 11;
             }
@@ -444,7 +447,7 @@ pub fn leggi_xls(bytes: &[u8], fonts_db: &mut super::font::Fonti) -> Result<Cart
     if bytes.len() > 4 && bytes[1] <= 0x08 && matches!(bytes[0], 0x09) {
         return Err("è un .xls di Excel 4 o precedente: aprilo e salvalo in .xlsx".into());
     }
-    let mut comp = cfb::CompoundFile::open(std::io::Cursor::new(bytes)).map_err(|_| "il file non è un foglio Excel leggibile".to_string())?;
+    let mut comp = super::apri_ole(bytes).map_err(|_| "il file non è un foglio Excel leggibile".to_string())?;
     let mut s = Vec::new();
     let opened = comp.open_stream("/Workbook").or_else(|_| comp.open_stream("/Book"));
     opened.map_err(|_| "nel file non c'è una cartella di Excel".to_string())?.read_to_end(&mut s).map_err(|e| e.to_string())?;

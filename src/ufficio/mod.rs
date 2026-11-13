@@ -106,12 +106,64 @@ pub fn is_documento(ext: &str) -> bool {
 }
 
 pub fn leggi_documento(ext: &str, bytes: &[u8]) -> Result<documento::Documento, String> {
+    // Conta il contenuto, non il nome: un RTF salvato come .doc, un .doc rinominato .docx.
+    let ext = match tipo_documento(bytes) {
+        Some(vero) if vero != tipo_documento_ext(ext) => vero,
+        _ => ext,
+    };
     match ext {
         "docx" | "docm" | "dotx" | "dotm" => docx::leggi_docx(bytes),
         "odt" | "ott" => odt::leggi_odt(bytes),
         "rtf" => rtf::leggi_rtf(bytes),
         "doc" | "dot" => doc::leggi_doc(bytes),
         _ => Err(format!("«{ext}» non è un documento di testo")),
+    }
+}
+
+/// Apre un file OLE (vecchi Word ed Excel). Alcuni programmi scrivono una FAT più lunga del file:
+/// Word e Excel li aprono lo stesso, qui si allunga il file con settori vuoti e si riprova.
+pub(crate) fn apri_ole(bytes: &[u8]) -> std::io::Result<cfb::CompoundFile<std::io::Cursor<std::borrow::Cow<'_, [u8]>>>> {
+    use std::borrow::Cow;
+    match cfb::CompoundFile::open(std::io::Cursor::new(Cow::Borrowed(bytes))) {
+        Err(e) if e.to_string().contains("but file has only") => {
+            let voci: usize = e.to_string().split("FAT has ").nth(1).and_then(|r| r.split(' ').next()).and_then(|n| n.parse().ok()).unwrap_or(0);
+            let settore = if bytes.get(30) == Some(&12) { 4096 } else { 512 };
+            let serve = settore * (voci + 1);
+            if serve <= bytes.len() || serve > bytes.len().saturating_mul(8).max(1 << 20) {
+                return Err(e);
+            }
+            let mut v = bytes.to_vec();
+            v.resize(serve, 0);
+            cfb::CompoundFile::open(std::io::Cursor::new(Cow::Owned(v)))
+        }
+        r => r,
+    }
+}
+
+/// Il formato vero di un documento dai suoi primi byte (`None`: non si capisce).
+fn tipo_documento(bytes: &[u8]) -> Option<&'static str> {
+    let t = bytes.iter().position(|b| !b.is_ascii_whitespace()).map_or(&bytes[..0], |i| &bytes[i..]);
+    if t.starts_with(b"{\\rtf") {
+        return Some("rtf");
+    }
+    if bytes.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) {
+        // Un Word nuovo protetto da password è chiuso dentro un file OLE: lo dice il lettore DOCX.
+        let nome: Vec<u8> = "EncryptionInfo".encode_utf16().flat_map(u16::to_le_bytes).collect();
+        return Some(if bytes.windows(nome.len()).any(|w| w == nome.as_slice()) { "docx" } else { "doc" });
+    }
+    if bytes.starts_with(b"PK") {
+        let odt = bytes.get(30..).is_some_and(|r| r.starts_with(b"mimetype") && r.get(8..).is_some_and(|m| m.starts_with(b"application/vnd.oasis.opendocument.text")));
+        return Some(if odt { "odt" } else { "docx" });
+    }
+    None
+}
+
+fn tipo_documento_ext(ext: &str) -> &'static str {
+    match ext {
+        "odt" | "ott" => "odt",
+        "rtf" => "rtf",
+        "doc" | "dot" => "doc",
+        _ => "docx",
     }
 }
 

@@ -1265,10 +1265,17 @@ impl<'a> Impaginatore<'a> {
             _ => self.pages.last().map_or(1, |p| p.num + 1),
         };
         let tw = s.w - s.margini[0] - s.margini[1];
-        let hh = self.header_height(Self::variant(s, first, num % 2 == 0, doc.pari_dispari, true), tw);
-        let fh = self.header_height(Self::variant(s, first, num % 2 == 0, doc.pari_dispari, false), tw);
-        let top = s.margini[2].max(s.dist_testa + hh);
-        let bottom = s.h - s.margini[3].max(s.dist_piede + fh);
+        let testa = Self::variant(s, first, num % 2 == 0, doc.pari_dispari, true);
+        let piede = Self::variant(s, first, num % 2 == 0, doc.pari_dispari, false);
+        // Senza intestazione (o piè di pagina) la sua distanza dal bordo non sposta il corpo.
+        let top = match testa {
+            Some(_) => s.margini[2].max(s.dist_testa + self.header_height(testa, tw)),
+            None => s.margini[2],
+        };
+        let bottom = s.h - match piede {
+            Some(_) => s.margini[3].max(s.dist_piede + self.header_height(piede, tw)),
+            None => s.margini[3],
+        };
         self.geo = Geo { w: s.w, h: s.h, ml: s.margini[0], mr: s.margini[1], top, bottom };
         self.pages.push(PageInfo { p: Pagina::new(s.w, s.h), sez: self.sez, num, first_of_section: first, notes: Vec::new(), notes_h: 0.0, body_bottom: bottom, back: Vec::new(), zones: Vec::new() });
         self.y = top;

@@ -411,7 +411,10 @@ pub(super) fn voce_bytes(zip: &mut zip::ZipArchive<Cursor<&[u8]>>, nome: &str) -
 }
 
 pub(super) fn parse(xml: &str) -> Result<roxmltree::Document<'_>, String> {
-    roxmltree::Document::parse_with_options(xml, roxmltree::ParsingOptions { nodes_limit: u32::MAX, ..Default::default() }).map_err(|e| format!("foglio non letto: {e}"))
+    roxmltree::Document::parse_with_options(xml, roxmltree::ParsingOptions { nodes_limit: u32::MAX, ..Default::default() }).map_err(|e| match e {
+        roxmltree::Error::DtdDetected => "il file contiene una DTD, che Cedro non apre per sicurezza".to_string(),
+        e => format!("contenuto del file non letto: {e}"),
+    })
 }
 
 pub(super) fn attr<'a>(n: roxmltree::Node<'a, 'a>, name: &str) -> Option<&'a str> {

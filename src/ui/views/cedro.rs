@@ -558,7 +558,11 @@ fn count_line(app: &App, vis: &[usize]) -> String {
         let pages: usize = vis.iter().filter_map(|&i| app.page_count(i)).sum();
         let n = vis.len();
         let head = if n == 1 { "1 PDF".to_string() } else { format!("{n} PDF") };
-        return if pages > 0 { format!("{head} · {pages} pagine") } else { head };
+        return match pages {
+            0 => head,
+            1 => format!("{head} · 1 pagina"),
+            _ => format!("{head} · {pages} pagine"),
+        };
     }
     if vis.len() == 1 {
         "1 file".into()

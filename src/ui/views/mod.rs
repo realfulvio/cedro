@@ -948,6 +948,7 @@ pub fn file_meta(app: &App, index: usize) -> (String, String) {
     let size = m.map(|m| super::model::human_size(m.bytes)).unwrap_or_default();
     let extra = match (m.and_then(|m| m.size), m.and_then(|m| m.pages)) {
         (Some((w, h)), _) => format!("{w} × {h}"),
+        (_, Some(1)) => "1 pagina".to_string(),
         (_, Some(p)) => format!("{p} pagine"),
         _ => String::new(),
     };

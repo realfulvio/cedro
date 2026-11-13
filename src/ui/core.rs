@@ -883,7 +883,12 @@ impl<'a> Frame<'a> {
             None => {
                 self.p.rrect(r.0, r.1, r.2, r.3, radius, Some(pal.alt), None);
                 let s = r.3.min(r.2) * 0.6;
-                self.kind_icon(f.kind, r.0 + (r.2 - s) / 2.0, r.1 + (r.3 - s) / 2.0, s);
+                if crate::ufficio::is_foglio(&crate::engine::extension(&f.path)) {
+                    // I fogli di calcolo stanno fra i testi, ma si riconoscono dalla loro icona verde.
+                    self.excel_icon(r.0 + (r.2 - s) / 2.0, r.1 + (r.3 - s) / 2.0, s);
+                } else {
+                    self.kind_icon(f.kind, r.0 + (r.2 - s) / 2.0, r.1 + (r.3 - s) / 2.0, s);
+                }
             }
         }
     }
