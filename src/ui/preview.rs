@@ -432,7 +432,7 @@ fn video_codec(path: &Path) -> Option<String> {
     if head.len() >= 8 && &head[4..8] == b"ftyp" {
         let file = std::fs::File::open(path).ok()?;
         let size = file.metadata().ok()?.len();
-        if let Ok(reader) = mp4::Mp4Reader::read_header(std::io::BufReader::new(file), size) {
+        if let Ok(reader) = crate::mp4fast::mp4_reader(file, size) {
             for t in reader.tracks().values() {
                 match t.media_type() {
                     Ok(mp4::MediaType::H264) => return Some("H.264".into()),
@@ -487,7 +487,7 @@ fn frames_at(path: &Path, at: &[f64]) -> (Vec<(u32, u32, Vec<u8>)>, Option<(u32,
 fn mp4_info(path: &Path) -> Option<((u32, u32), f64, f64)> {
     let file = std::fs::File::open(path).ok()?;
     let size = file.metadata().ok()?.len();
-    let reader = mp4::Mp4Reader::read_header(std::io::BufReader::new(file), size).ok()?;
+    let reader = crate::mp4fast::mp4_reader(file, size).ok()?;
     let t = reader.tracks().values().find(|t| matches!(t.track_type(), Ok(mp4::TrackType::Video)))?;
     Some(((t.width() as u32, t.height() as u32), t.frame_rate(), t.duration().as_secs_f64()))
 }
