@@ -2,7 +2,9 @@ name: Windows ARM64
 
 # Compila e prova Cedro su un vero Windows on ARM (runner windows-11-arm) e anche su x64.
 # Pubblicare: Actions → Windows ARM64 → Run workflow su main, con il tag (per esempio v0.18.0):
-# crea la release (se non c'è) con gli installatori x64 e ARM64 e tutti i motori di trascrizione.
+# crea la release (se non c'è) con installatore e portable x64, Linux e i motori x64.
+# Windows on ARM NON si costruisce più nelle release: si accende («arm» o «solo_arm») solo su richiesta
+# esplicita di Luca (2026-11-13).
 # Il job x64 (build, prove, installatore, motori) gira nella VM Windows del minipc di casa (runner con
 # l'etichetta cedro-windows, cartelle di compilazione che restano) se è accesa e libera, altrimenti su GitHub;
 # lo decide il job «scegli» con tools/sonda-runner.sh. Le prove che installano e disinstallano Cedro
@@ -23,9 +25,9 @@ on:
         type: boolean
         default: false
       arm:
-        description: "Anche Windows on ARM"
+        description: "Anche Windows on ARM (solo se Luca lo chiede esplicitamente)"
         type: boolean
-        default: true
+        default: false
       solo_arm:
         description: "Solo Windows on ARM: aggiunge gli installatori e i motori ARM64 a una release già pubblicata, senza ricompilare x64"
         type: boolean
