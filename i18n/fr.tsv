@@ -1,0 +1,2416 @@
+# Traduzioni fr: italiano, TAB, traduzione. Le righe mancanti ripiegano sull'inglese.
+Immagini	Images
+Documenti	Documents
+Testo	Texte
+Cambia formato, ridimensiona e raddrizza le foto.	Changez le format, redimensionnez et redressez les photos.
+Da Word, ODT e RTF a PDF.	De Word, ODT et RTF vers PDF.
+Da PDF a Word modificabile, a Excel, a immagini o a testo.	De PDF vers Word modifiable, Excel, images ou texte.
+TXT, Markdown, CSV, Excel, JSON e HTML.	TXT, Markdown, CSV, Excel, JSON et HTML.
+WAV, MP3, OGG, M4A, AAC e FLAC.	WAV, MP3, OGG, M4A, AAC et FLAC.
+MP3, WAV, FLAC, Opus e AIFF.	MP3, WAV, FLAC, Opus et AIFF.
+Archivi	Archives
+Converte i file dentro uno ZIP e lo rifà.	Convertit les fichiers d'un ZIP et le reconstruit.
+MP4, WebM, MOV, MKV e AVI.	MP4, WebM, MOV, MKV et AVI.
+leggera, per il web	légère, pour le web
+va bene dappertutto	fonctionne partout
+nitida, senza perdite	nette, sans perte
+un documento	un document
+si apre ovunque	s'ouvre partout
+da modificare	à modifier
+una per pagina	une par page
+solo le parole	seulement les mots
+testo semplice	texte brut
+pagina web	page web
+leggero, va ovunque	léger, se lit partout
+qualità piena	qualité maximale
+va ovunque	se lit partout
+Solo audio	Audio seul
+senza immagini	sans image
+Originali	Originaux
+Lettera	Lettre
+No	Non
+Sotto -30 dB	Sous -30 dB
+Sotto -40 dB	Sous -40 dB
+Sotto -50 dB	Sous -50 dB
+Come l'originale	Comme l'original
+Punto e virgola ;	Point-virgule ;
+Virgola ,	Virgule ,
+Tabulazione	Tabulation
+Stereo	Stéréo
+Mono	Mono
+Raddrizza le foto	Redresser les photos
+Corregge la rotazione dei file del telefono	Corrige la rotation des photos de téléphone
+Sfondo bianco	Fond blanc
+Al posto della trasparenza, nel JPEG	Au lieu de la transparence, en JPEG
+Dimensioni	Taille
+Lato lungo massimo; le più piccole restano come sono	Côté le plus long ; les plus petits restent tels quels
+Formato pagina	Taille de page
+Password del PDF	Mot de passe du PDF
+Vuota = nessuna protezione	Vide = sans protection
+Risoluzione immagini	Résolution des images
+Più dpi, più nitide e più pesanti	Plus de ppp : plus net et plus lourd
+Pagine	Pages
+Vuoto = tutte. Per esempio 1-3,5 oppure 4-	Vide = toutes. Par exemple 1-3,5 ou 4-
+tutte, oppure 1-3,5	toutes, ou 1-3,5
+Una immagine per pagina	Une image par page
+Spenta: una sola immagine lunga	Désactivé : une seule image longue
+Leggi le scansioni (OCR)	Lire les scans (OCR)
+Solo dove manca il testo	Seulement là où le texte manque
+Ricostruisci le tabelle	Reconstruire les tableaux
+Celle, sfondi e bordi	Cellules, fonds et bordures
+Tieni le colonne	Conserver les colonnes
+Il testo a colonne resta a colonne; spento va in colonna singola	Le texte des colonnes reste en colonnes ; désactivé, une seule colonne
+Incorpora i caratteri	Incorporer les polices
+Il PDF si vede uguale ovunque e il testo si copia	Le PDF s'affiche partout pareil et le texte peut être copié
+Conserva i segnalibri	Conserver les signets
+Dai titoli del documento	À partir des titres du document
+PDF/A per l'archivio	PDF/A pour l'archivage
+PDF/A-1b: font incorporati, profilo colore, metadati	PDF/A-1b : polices incorporées, profil colorimétrique, métadonnées
+Codifica	Encodage
+Del file scritto	Du fichier écrit
+Separatore CSV	Séparateur du CSV
+Rendi leggibile il JSON	Rendre le JSON lisible
+Rientri e a capo	Indentations et sauts de ligne
+Prima riga come titoli	Première ligne comme en-têtes
+Per le tabelle e il JSON dal CSV	Pour les tableaux et le JSON issus du CSV
+Qualità MP3	Qualité du MP3
+Canali	Canaux
+Normalizza il volume	Normaliser le volume
+Porta il picco al massimo	Amène le pic au maximum
+Taglia l'inizio	Couper le début
+Secondi saltati all'inizio	Secondes ignorées au début
+Taglia il silenzio iniziale	Supprimer le silence du début
+Il resto resta com'è	Le reste reste tel quel
+Mantieni titolo e artista	Conserver le titre et l'artiste
+Tag del file	Balises du fichier
+Risoluzione	Résolution
+Si rimpicciolisce, non si ingrandisce	Peut seulement réduire, jamais agrandir
+Fotogrammi al secondo	Images par seconde
+Massimo	Maximale
+Togli l'audio	Supprimer l'audio
+Ottimizza per il web	Optimiser pour le web
+L'avvio parte subito	La lecture démarre tout de suite
+Aggiungi -2, -3…	Ajouter -2, -3…
+Sostituisci il file	Remplacer le fichier
+Salta il file	Ignorer le fichier
+Chiedi ogni volta	Demander à chaque fois
+Conversioni	Conversions
+Trascrizione	Transcription
+Video dal web	Vidéo du web
+Migliore	Meilleure
+Fino a 1080p · consigliato	Jusqu'à 1080p · recommandé
+720p · file leggero	720p · fichier léger
+480p · file piccolo	480p · petit fichier
+Buona · consigliata	Bonne · recommandée
+Leggera	Légère
+Nessuno	Aucune
+Italiano	Italien
+Italiano e inglese	Italien et anglais
+Tutti	Toutes
+Incolla il link della pagina che contiene il video (RaiPlay, Vimeo, Internet Archive e oltre mille altri siti).	Collez le lien de la page qui contient la vidéo (RaiPlay, Vimeo, Internet Archive et plus de mille autres sites).
+Funziona con i siti che yt-dlp riconosce. Se un sito non è supportato, o il video è protetto o chiede un accesso, lo vedi accanto al link.	Fonctionne avec les sites reconnus par yt-dlp. Si un site n'est pas pris en charge, ou si la vidéo est protégée ou demande une connexion, vous le verrez à côté du lien.
+Incolla il link di un video o di una playlist di YouTube.	Collez le lien d'une vidéo ou d'une playlist YouTube.
+Scaricati	Téléchargements
+In attesa	En attente
+{} · {} · in {}	{} · {} · en {}
+{#} KB	{} Ko
+{#} byte	{} octets
+Nessun file che Cedro sappia convertire.	Aucun fichier que Cedro puisse convertir.
+{} ha {#} pagine: la pagina {#} non c'è.	{} compte {} pages : la page {} n'existe pas.
+Aggiungi prima qualche file.	Ajoutez d'abord des fichiers.
+Annullato	Annulé
+Aggiungi prima un audio o un video.	Ajoutez d'abord un fichier audio ou vidéo.
+Incolla prima il link di una pagina con un video.	Collez d'abord le lien d'une page contenant une vidéo.
+Incolla prima un link di YouTube.	Collez d'abord un lien YouTube.
+Fatto · {}	Terminé · {}
+Saltato · {}	Ignoré · {}
+In corso · {#}%	En cours · {}%
+In corso · {#}% · meno di un minuto	En cours · {}% · moins d'une minute restante
+In corso · {#}% · circa {#} min	En cours · {}% · environ {} min restantes
+In corso · {#}% · circa {#} h {#} min	En cours · {}% · environ {} h {} min restantes
+In corso	En cours
+Fatto	Terminé
+Fatto · 1 file	Terminé · 1 fichier
+Fatto · {#} file	Terminé · {} fichiers
+{} · playlist di {#} video	{} · playlist de {} vidéos
+Fatto: 1 file in {}	Terminé : 1 fichier en {}
+Fatto: {#} file in {}	Terminé : {} fichiers en {}
+Finito	Terminé
+{#} di {#} file non riusciti: il motivo è accanto a ciascuno.	{} fichiers sur {} ont échoué : la raison est indiquée à côté de chacun.
+Fatto: 1 file.	Terminé : 1 fichier.
+Fatto: {#} file.	Terminé : {} fichiers.
+Accanto all'originale	À côté de l'original
+Esempio: nomefile-2.{}	Exemple : nomdufichier-2.{}
+Il file con lo stesso nome viene sostituito.	Le fichier du même nom est remplacé.
+Il file con lo stesso nome resta com'è.	Le fichier du même nom est laissé tel quel.
+Cedro te lo chiede file per file.	Cedro vous demande fichier par fichier.
+Converti	Convertir
+Sostituisci	Remplacer
+Qualità	Qualité
+Annulla	Annuler
+Trascrivi	Transcrire
+Altre opzioni ({#})	Plus d'options ({})
+Impostazioni personalizzate	Réglages personnalisés
+Impostazioni consigliate	Réglages recommandés
+Lascia qui i file da aggiungere	Déposez ici les fichiers à ajouter
+Il file esiste già	Le fichier existe déjà
+«{}» c'è già nella cartella di destinazione. Cosa vuoi fare?	« {} » est déjà dans le dossier de destination. Que voulez-vous faire ?
+Salta	Ignorer
+Tieni entrambi	Garder les deux
+Minore dimensione	Taille réduite
+Qualità superiore	Meilleure qualité
+Formato	Format
+Questa voce non ha altre opzioni.	Cet élément n'a pas d'autres options.
+I file convertiti verranno salvati nella stessa cartella dei file originali.	Les fichiers convertis seront enregistrés dans le même dossier que les originaux.
+I file convertiti verranno salvati in {}.	Les fichiers convertis seront enregistrés dans {}.
+I testi verranno salvati nella stessa cartella dei file originali.	Les transcriptions seront enregistrées dans le même dossier que les originaux.
+I testi verranno salvati in {}.	Les transcriptions seront enregistrées dans {}.
+Aggiungi -2	Ajouter -2
+Chiedi	Demander
+{#} di {#}…	{} sur {}…
+Trascrivi {#} file	Transcrire {} fichiers
+Trascrivi 1 file	Transcrire 1 fichier
+Scarica	Télécharger
+Converti 1 file	Convertir 1 fichier
+Converti {#} file	Convertir {} fichiers
+Copie accanto agli originali	Copies à côté des originaux
+Copie in {}	Copies dans {}
+{} · Impostazioni personalizzate.	{} · Réglages personnalisés.
+{} · Impostazioni consigliate.	{} · Réglages recommandés.
+Altri file in coda:	Autres fichiers dans la file :
+Trascina qui audio e video	Déposez ici l'audio et la vidéo
+MP3, WAV, M4A, OGG, OPUS, FLAC, WMA, AMR e video	MP3, WAV, M4A, OGG, OPUS, FLAC, WMA, AMR et vidéo
+Trascina qui i file oppure fai clic	Déposez les fichiers ici ou cliquez
+{} · Accetta: {}	{} · Accepte : {}
+{#} pagine	{} pages
+1 pagina	1 page
+Cosa sta succedendo	Ce qui se passe
+Copia	Copier
+Qui compaiono i passi del lavoro e gli eventuali errori.	Les étapes du travail et les éventuelles erreurs apparaissent ici.
+{} · pronto sul computer	{} · prêt sur cet ordinateur
+{} · al primo uso si scarica ({})	{} · téléchargé à la première utilisation ({})
+Aggiungi file	Ajouter des fichiers
+Risultato:	Résultat :
+Documento Word	Document Word
+Testo semplice	Texte brut
+Precisione:	Précision :
+Aggiungi cartella	Ajouter un dossier
+Rimuovi	Retirer
+{#} file	{} fichiers
+1 file	1 fichier
+Impostazioni di trascrizione	Réglages de transcription
+Risultato	Résultat
+Word	Word
+Precisione	Précision
+Cartella di destinazione	Dossier de destination
+Aggiungi	Ajouter
+Nessun link in coda	Aucun lien dans la file
+Salva come	Enregistrer sous
+Sottotitoli	Sous-titres
+Copertina nel file	Image de couverture dans le fichier
+Capitoli e descrizione nel file	Chapitres et description dans le fichier
+Dividi per capitoli	Découper par chapitres
+Salta le parti sponsorizzate	Ignorer les parties sponsorisées
+Livella il volume	Égaliser le volume
+Raccolte: scarica tutto	Collections : tout télécharger
+Playlist: scarica tutta	Playlist : tout télécharger
+Salta i già scaricati	Ignorer ce qui est déjà téléchargé
+Scarica:	Télécharger :
+Cambia cartella	Changer de dossier
+Impostazioni del download	Réglages de téléchargement
+File	Fichiers
+Operazione	Opération
+Stato	État
+Impostazioni immagini	Réglages d'image
+Impostazioni documenti	Réglages de document
+Impostazioni pdf	Réglages PDF
+Impostazioni testo	Réglages de texte
+Impostazioni audio	Réglages audio
+Impostazioni video	Réglages vidéo
+Impostazioni archivi	Réglages d'archive
+immagini	images
+documenti	documents
+testo	texte
+Strumenti	Outils
+(al posto della conversione)	(à la place de la conversion)
+{#} di {#} completati	{} sur {} terminés
+{#} file pronti	{} fichiers prêts
+Progresso complessivo	Progression globale
+In caso di file già esistente	Si le fichier existe déjà
+Sfoglia…	Parcourir…
+Conversione in corso	Conversion en cours
+Converti in	Convertir en
+{#} file nella coda	{} fichiers dans la file
+Link	Lien
+Altri siti	Autres sites
+Scarica da web	Télécharger depuis le web
+Apri pannello completo	Ouvrir le panneau complet
+Guida	Aide
+Torna alle consigliate	Revenir au recommandé
+In caso di conflitto	En cas de conflit
+Preparo l'anteprima…	Préparation de l'aperçu…
+Anteprima non disponibile per questo tipo di file.	Aperçu indisponible pour ce type de fichier.
+Converti il documento	Convertir le document
+{} e altri {}	{} et {} autres
+Formato di output	Format de sortie
+Anteprima dell'originale	Aperçu de l'original
+Stai visualizzando il documento originale. Nessuna conversione è ancora stata eseguita.	Vous voyez le document original. Aucune conversion n'a encore été effectuée.
+Se esiste già	Si le fichier existe
+In corso…	En cours…
+Impostazioni	Réglages
+Nome file	Nom du fichier
+Dimensione	Taille
+Impostazioni di conversione	Réglages de conversion
+Se esiste già un file	Si le fichier existe
+Converti in:	Convertir en :
+Semplificata	Simplifié
+Standard	Standard
+Indietro	Retour
+Salvataggio	Enregistrement
+Cambia file	Changer de fichiers
+Quali file vuoi convertire?	Quels fichiers voulez-vous convertir ?
+Trascina i file qui oppure scegli dal computer.	Déposez les fichiers ici ou choisissez-les sur votre ordinateur.
+Scegli il formato di destinazione.	Choisissez le format de destination.
+Scegli il formato di destinazione e configura le opzioni.	Choisissez le format de destination et réglez les options.
+Cosa vuoi ottenere?	Que voulez-vous obtenir ?
+Opzioni · {}	Options · {}
+Opzioni di conversione · {}	Options de conversion · {}
+Altri formati e strumenti	Autres formats et outils
+Dove salvo i file?	Où enregistrer les fichiers ?
+Scegli la cartella: l'originale non viene mai toccato.	Choisissez le dossier : l'original n'est jamais touché.
+Pronto	Prêt
+Sto lavorando sui file…	Traitement des fichiers…
+L'originale resta al sicuro.	L'original reste en sécurité.
+Continua	Continuer
+Completato	Terminé
+Saltato	Ignoré
+Errore	Erreur
+Windows essenziale	Windows essentiel
+Percorso guidato	Parcours guidé
+Cedro compatto	Cedro compact
+Banco di lavoro	Établi
+Documento al centro	Le document d'abord
+Attività a sinistra, coda con ispettore.	Activités à gauche, file avec inspecteur.
+Tre passi: File, Operazione, Salvataggio.	Trois étapes : Fichiers, Opération, Enregistrement.
+Finestrella dall'icona vicino all'orologio.	Petite fenêtre depuis l'icône à côté de l'horloge.
+Tabella con stati, ispettore a destra.	Tableau avec états, inspecteur à droite.
+L'originale al centro, opzioni accanto.	L'original au centre, les options à côté.
+Colori e carattere del Comune, con lo stemma.	Les couleurs et la typographie de la commune, avec les armoiries.
+Modalità	Mode
+Tutte le opzioni a portata di mano.	Toutes les options à portée de main.
+Solo l'essenziale; il resto in «Altre opzioni».	Seulement l'essentiel ; le reste sous « Plus d'options ».
+Tema	Thème
+Il nuovo aspetto compare nella finestra principale appena ci torni. Se Cedro sta lavorando, al termine del lavoro. I tuoi file e le opzioni scelte restano come sono.	Le nouvel aspect apparaît dans la fenêtre principale dès que vous y revenez, ou quand le travail en cours se termine. Vos fichiers et les options choisies restent tels quels.
+Strumento · {}	Outil · {}
+Cartella con i file da convertire	Dossier contenant les fichiers à convertir
+Aggiungi file…	Ajouter des fichiers…
+Aggiungi una cartella…	Ajouter un dossier…
+Scegli una cartella…	Choisir un dossier…
+Dove salvare i download	Où enregistrer les téléchargements
+{} pronto	{} prêt
+{} pronti	{} prêts
+Shift	Maj
+Ctrl	Ctrl
+Alt	Alt
+Esc	Échap
+per chiudere	pour fermer
+Conversione	Conversion
+Azioni	Actions
+L'originale resta sempre dov'è.	L'original reste toujours où il est.
+Copia accanto all'originale	Copier à côté de l'original
+In attesa…	En attente…
+Converti in {}	Convertir en {}
+Applica: {}	Appliquer : {}
+Scegli un formato	Choisissez un format
+Scegli uno strumento	Choisissez un outil
+Scegli un'azione	Choisissez une action
+Scegli	Choisir
+Salva accanto all'originale	Enregistrer à côté de l'original
+Va dove dicono le Impostazioni.	Va là où les Réglages l'indiquent.
+Applica	Appliquer
+Esegui	Exécuter
+Apri Conversioni	Ouvrir Conversions
+Clicca un formato per convertire.	Cliquez sur un format pour convertir.
+La conversione usa le impostazioni consigliate.	La conversion utilise les réglages recommandés.
+Clicca uno strumento da applicare.	Cliquez sur un outil pour l'appliquer.
+Lo strumento usa le impostazioni consigliate.	L'outil utilise les réglages recommandés.
+Clicca un'azione.	Cliquez sur une action.
+Conversioni di Cedro	Conversions Cedro
+Trascina qui i file	Déposez les fichiers ici
+CONVERTI IN	CONVERTIR EN
+STRUMENTI · OPZIONI · QUALITÀ	OUTILS · OPTIONS · QUALITÉ
+Comprimi	Compresser
+Dimensioni: Originali	Taille : Original
+Qualità 82	Qualité 82
+Converti 2 file · WebP	Convertir 2 fichiers · WebP
+Converti file	Convertir des fichiers
+Cosa vuoi convertire?	Que voulez-vous convertir ?
+senza perdite	sans perte
+Completa	Complète
+Semplice	Simple
+Tutte le opzioni subito in vista: formati, strumenti, qualità, dove salvare.	Toutes les options sous les yeux : formats, outils, qualité, où enregistrer.
+Solo l'essenziale: trascini i file, scegli in che cosa trasformarli, premi il pulsante.	Seulement l'essentiel : déposez les fichiers, choisissez en quoi les convertir, appuyez sur le bouton.
+Come vuoi usare Cedro?	Comment voulez-vous utiliser Cedro ?
+Si può cambiare quando vuoi da Impostazioni > Generale. Le funzioni sono le stesse.	Vous pouvez le changer à tout moment dans Réglages > Général. Les fonctions sont les mêmes.
+I componenti pesanti (trascrizione, video dal web) si scaricano solo al primo uso.	Les composants lourds (transcription, vidéo du web) ne sont téléchargés qu'à la première utilisation.
+Fine	Terminé
+Tieni premuto un tasto,	Maintenez une touche enfoncée,
+poi clic destro sul file	puis faites un clic droit sur le fichier
+Si apre la ruota (va accesa in Impostazioni > Ruota). Clic sulla fetta: la copia nasce accanto all'originale, che resta dov'è.	La roue s'ouvre (activez-la dans Réglages > Roue). Cliquez sur une part : la copie apparaît à côté de l'original, qui reste où il est.
+Cambia formato: JPEG, PDF, MP4…	Changer de format : JPEG, PDF, MP4…
+Modifica	Modifier
+Comprimi, ruota, OCR, metadati…	Compresser, pivoter, OCR, métadonnées…
+Azioni sul file	Actions sur les fichiers
+Duplica, copia il percorso, ZIP	Dupliquer, copier le chemin, ZIP
+Tutte le conversioni	Toutes les conversions
+in un solo pannello	dans un seul panneau
+Dal menu dell'icona apri Conversioni. Trascini file anche di tipi diversi e scegli formato, strumenti e qualità.	Ouvrez Conversions depuis le menu de l'icône. Déposez des fichiers, même de types différents, et choisissez format, outils et qualité.
+Foto	Photo
+Immagini e documenti	Images et documents
+Formato, dimensioni, raddrizza, PDF/A	Format, taille, redressement, PDF/A
+Da PDF a Word	De PDF à Word
+Tabelle, colonne, OCR in italiano	Tableaux, colonnes, OCR en italien
+Audio e video	Audio et vidéo
+Bitrate, taglio, risoluzione, fps	Débit, découpe, résolution, ips
+YouTube e video	YouTube et vidéo
+dal web, senza altro	depuis le web, sans rien d'autre
+Incolla uno o più link, scegli Video o Solo audio. Gli strumenti si scaricano da soli la prima volta.	Collez un ou plusieurs liens, choisissez Vidéo ou Audio seul. Les outils se téléchargent tout seuls la première fois.
+Anche elenchi di link in un colpo	Même des listes de liens en une fois
+Da molti altri siti	De nombreux autres sites
+MP3 o M4A, senza immagini	MP3 ou M4A, sans image
+Dalla voce al testo,	De la voix au texte,
+anche con la scheda video	même avec la carte graphique
+Trascrivi vocali, registrazioni e l'audio dei video. Se c'è una scheda video compatibile, Cedro la usa.	Transcrivez des notes vocales, des enregistrements et le son des vidéos. S'il y a une carte graphique compatible, Cedro l'utilise.
+Trascrizione audio	Transcription audio
+Con i tempi, copiabile con un clic	Avec horodatage, copiable en un clic
+Più veloce	Plus rapide
+Vulkan, oppure il processore giusto	Vulkan, ou le bon processeur
+Locale	Local
+Resta sul PC	Reste sur votre PC
+Il motore si scarica al primo uso	Le moteur est téléchargé à la première utilisation
+Si tiene aggiornato	Se tient
+da solo	à jour
+Impostazioni ha una scheda Sistema con le caratteristiche del PC e una Informazioni con crediti e licenze.	Les Réglages ont un onglet Système avec les caractéristiques de votre PC et un onglet À propos avec les crédits et les licences.
+Aggiornamenti	Mises à jour
+Controlla e chiede prima di installare	Vérifie et demande avant d'installer
+Sistema	Système
+Processore, scheda video, memoria	Processeur, carte graphique, mémoire
+Informazioni	À propos
+Versione e licenze dei componenti	Version et licences des composants
+Su Windows,	Sous Windows,
+Windows on ARM e Linux	Windows on ARM et Linux
+Stesse funzioni dappertutto. L'installatore giusto lo sceglie Cedro quando si aggiorna.	Les mêmes fonctions partout. Cedro choisit le bon installateur lors de la mise à jour.
+Windows 10 e 11	Windows 10 et 11
+Il solito installatore	L'installateur habituel
+Versione nativa, non emulata	Version native, non émulée
+KDE Plasma e GNOME	KDE Plasma et GNOME
+Guida di Cedro · Comune di Bondeno	Guide de Cedro · Commune de Bondeno
+Guida di Cedro	Guide de Cedro
+{#} di {#}	{} sur {}
+Chiudi	Fermer
+Avanti	Suivant
+CONVERSIONE	CONVERSION
+STRUMENTI	OUTILS
+AZIONI	ACTIONS
+Scala	Redimensionner
+Ruota	Pivoter
+Metadati	Métadonnées
+MAIUSC.	VERR MAJ
+Duplica	Dupliquer
+Percorso	Chemin
+Trascina qui i file o clicca	Déposez les fichiers ici ou cliquez
+OPZIONI	OPTIONS
+Tabelle	Tableaux
+Colonne	Colonnes
+Fatto: 3 file Word accanto agli originali	Terminé : 3 fichiers Word à côté des originaux
+Sto convertendo…	Conversion…
+Converti 3 file · Word	Convertir 3 fichiers · Word
+Immagini e suono	Image et son
+Per ascoltare	Pour écouter
+Fatto: il video è nella cartella	Terminé : la vidéo est dans le dossier
+Scarico dal web…	Téléchargement depuis le web…
+Buongiorno a tutti e grazie di essere qui.	Bonjour à tous, et merci d'être là.
+Oggi parliamo del bilancio del comune.	Aujourd'hui, nous parlons du budget communal.
+Il primo punto riguarda le manutenzioni…	Le premier point concerne l'entretien…
+Scheda video trovata: trascrizione più veloce	Carte graphique trouvée : transcription plus rapide
+Generale	Général
+Processore	Processeur
+Scheda video	Carte graphique
+Memoria	Mémoire
+Nuova versione pronta · Aggiorna	Nouvelle version prête · Mettre à jour
+Snapdragon X e simili	Snapdragon X et similaires
+Wayland · KDE Plasma e GNOME	Wayland · KDE Plasma et GNOME
+Avvio automatico non cambiato: {}	Démarrage à l'ouverture de session non modifié : {}
+Nessun file sotto il cursore	Aucun fichier sous le curseur
+Copia nella cartella «Cedro»	Copier dans le dossier « Cedro »
+la cartella scelta	le dossier choisi
+Copia in {}	Copier dans {}
+Niente da fare su questo file	Rien à faire pour ce fichier
+{#} di {#} · {}	{} sur {} · {}
+Errore · {}	Erreur · {}
+✓ Fatto · {#} file in {}	✓ Terminé · {} fichiers en {}
+✓ Fatto · {}	✓ Terminé · {}
+{#} file di altro tipo lasciati stare	{} fichiers d'un autre type ignorés
+{#} file\n{}	{} fichiers\n{}
+Conversioni…	Conversions…
+Impostazioni…	Réglages…
+Guida…	Aide…
+Controlla aggiornamenti	Rechercher des mises à jour
+Avvio automatico	Démarrer automatiquement
+Esci	Quitter
+Hai già l'ultima versione ({}).	Vous avez déjà la dernière version ({}).
+È disponibile Cedro {}. Hai la {}.\n\nVuoi aggiornare adesso?	Cedro {} est disponible. Vous avez la {}.\n\nVoulez-vous mettre à jour maintenant ?
+Scarico Cedro {}…	Téléchargement de Cedro {}…
+Aggiornamento non riuscito: {}	Échec de la mise à jour : {}
+Aggiornamento non riuscito: il lavoro si è interrotto.	Échec de la mise à jour : le travail a été interrompu.
+{} Cedro si riapre.	{} Cedro va se rouvrir.
+Una conversione è ancora in corso: aspetta che finisca.	Une conversion est encore en cours : attendez qu'elle se termine.
+Scegli i file	Choisir des fichiers
+Tutti i file	Tous les fichiers
+GitHub non risponde: {}	GitHub ne répond pas : {}
+release senza tag	version sans étiquette
+Maiuscolo	Majuscules
+Minuscolo	Minuscules
+Solo audio (MP3)	Audio seul (MP3)
+Word OCR	Word OCR
+Niente qui	Rien ici
+nessuna pagina in questo intervallo	aucune page dans cette plage
+questo PDF non ha testo da copiare; OCR: {}	ce PDF n'a pas de texte copiable ; OCR : {}
+questo PDF non ha testo da copiare né da leggere con l'OCR	ce PDF n'a pas de texte copiable ni rien que l'OCR puisse lire
+il PDF/A non ammette la password: togline una delle due	PDF/A n'autorise pas de mot de passe : retirez l'un des deux
+~ con i caratteri incorporati	 avec polices incorporées
+~, con i segnalibri	, avec signets
+~, protetto con password	, protégé par mot de passe
+cartella di destinazione non creata ({}): {}	dossier de destination non créé ({}) : {}
+file non sostituito ({}): {}	fichier non remplacé ({}) : {}
+pagina non disegnata	page non rendue
+cartella mancante	dossier manquant
+immagine non letta: {}	image non lue : {}
+{} → {} · {#}% in meno	{} → {} · {}% plus petit
+pagine «{}» non valide: scrivi per esempio 1-3,5	pages « {} » non valides : écrivez par exemple 1-3,5
+il file esiste già: saltato	le fichier existe déjà : ignoré
+file non trovato	fichier introuvable
+nessuno strumento per questo file	aucun outil pour ce fichier
+Copia creata	Copie créée
+Opus non è ancora letto	Opus ne peut pas encore être lu
+il video MP4 si converte su Windows e su Linux	La conversion vidéo MP4 fonctionne sous Windows et Linux
+~ · con la scheda video	 · avec la carte graphique
+Testo scritto	Texte écrit
+Tabella Markdown	Tableau Markdown
+CSV riscritto	CSV réécrit
+Pagina HTML	Page HTML
+JSON riscritto	JSON réécrit
+JSON dal CSV	JSON à partir de CSV
+il JSON si ottiene da un file JSON o CSV	Le JSON provient d'un fichier JSON ou CSV
+troppe pagine per un'immagine sola: scegli «Una immagine per pagina» o meno dpi	trop de pages pour une seule image : choisissez « Une image par page » ou moins de ppp
+{} unico, {#} pagine una sotto l'altra	{} unique, {} pages empilées les unes sous les autres
+{#} {}, uno per pagina	{} {}, un par page
+nessuna pagina convertita	aucune page convertie
+Word modificabile: titoli, paragrafi e tabelle del PDF	Word modifiable : titres, paragraphes et tableaux du PDF
+Word con le pagine scansionate come immagini; il testo letto con l'OCR è nel testo alternativo	Word avec les pages numérisées en images ; le texte lu par OCR est dans le texte de remplacement
+Word con le pagine scansionate come immagini	Word avec les pages numérisées en images
+Word modificabile; {#} pagine scansionate messe come immagini	Word modifiable ; {} pages numérisées placées en images
+Word di testo. L'impaginazione del PDF non viene ricostruita.	Document Word de texte. La mise en page du PDF n'est pas reconstituée.
+Word di testo, con {#} pagine lette via OCR: controllalo. L'impaginazione non viene ricostruita.	Document Word de texte, avec {} pages lues par OCR : vérifiez-le. La mise en page n'est pas reconstituée.
+Testo estratto dal PDF	Texte extrait du PDF
+Testo estratto dal PDF, con {#} pagine lette via OCR: controllalo.	Texte extrait du PDF, avec {} pages lues par OCR : vérifiez-le.
+Mancano {#} pagine scansionate: l'OCR ne legge al massimo {#}.	{} pages numérisées manquent : l'OCR en lit {} au maximum.
+Testo letto	Texte lu
+Testo del PDF.	Texte du PDF.
+L'OCR ha letto {#} pagine su {#}: le altre mancano.	L'OCR a lu {} pages sur {} : les autres manquent.
+questa voce non si applica a questo file	cet élément ne s'applique pas à ce fichier
+PDF {}×{}, con il testo OCR selezionabile e ricercabile	PDF {}×{}, avec texte OCR sélectionnable et consultable
+azione sconosciuta: {}	action inconnue : {}
+Riscritto in PNG, senza metadati	Réécrit en PNG, sans métadonnées
+Ruotato di 90°	Pivoté de 90°
+Bianco e nero	Noir et blanc
+testo non letto: {}	texte non lu : {}
+cartella temporanea non creata: {}	dossier temporaire non créé : {}
+cartella temporanea non creata	dossier temporaire non créé
+Questo non è un link di YouTube: per gli altri siti usa «Video dal web».	Ce n'est pas un lien YouTube : pour les autres sites, utilisez « Vidéo du web ».
+Questo non sembra un link: deve iniziare con https://	Cela ne ressemble pas à un lien : il doit commencer par https://
+Questo non sembra un link di YouTube.	Cela ne ressemble pas à un lien YouTube.
+Al primo uso Cedro scarica da solo {} (circa {#} MB, una volta sola) e poi li tiene aggiornati.	À la première utilisation, Cedro télécharge {} tout seul (environ {} Mo, une seule fois) puis les tient à jour.
+Non riesco a scaricare {}: {}	Je ne peux pas télécharger {} : {}
+Scaricamento di {} interrotto: {}	Téléchargement de {} interrompu : {}
+Scrittura di {} non riuscita (disco pieno?): {}	Échec de l'écriture de {} (disque plein ?) : {}
+Scarico {}	Téléchargement de {}
+{}: il file scaricato non corrisponde al codice di controllo	{} : le fichier téléchargé ne correspond pas à la somme de contrôle
+yt-dlp non c'è ancora: lo scarico (una volta sola, circa 20 MB)	yt-dlp n'est pas encore là : téléchargement en cours (une seule fois, environ 20 Mo)
+Non trovo il codice di controllo di yt-dlp: riprova più tardi	Somme de contrôle de yt-dlp introuvable : réessayez plus tard
+yt-dlp scaricato	yt-dlp téléchargé
+ffmpeg non c'è ancora: lo scarico (una volta sola, circa 140 MB)	ffmpeg n'est pas encore là : téléchargement en cours (une seule fois, environ 140 Mo)
+Non trovo il codice di controllo di ffmpeg: riprova più tardi	Somme de contrôle de ffmpeg introuvable : réessayez plus tard
+ffmpeg scaricato	ffmpeg téléchargé
+deno non c'è ancora: lo scarico (una volta sola, circa 45 MB)	deno n'est pas encore là : téléchargement en cours (une seule fois, environ 45 Mo)
+Non trovo il codice di controllo di deno: riprova più tardi	Somme de contrôle de deno introuvable : réessayez plus tard
+deno scaricato	deno téléchargé
+{} non è nell'archivio	{} n'est pas dans l'archive
+archivio rovinato	archive endommagée
+Per aprire ffmpeg serve il programma «tar»: {}	Pour ouvrir ffmpeg, le programme « tar » est nécessaire : {}
+Non riesco ad aprire l'archivio di ffmpeg (servono tar e xz)	Je ne peux pas ouvrir l'archive de ffmpeg (tar et xz sont nécessaires)
+{} ha una versione più nuova: la scarico	{} a une version plus récente : téléchargement en cours
+Non riesco ad aggiornare {}: resta la versione che c'è	Je ne peux pas mettre à jour {} : la version actuelle est conservée
+Controllo se yt-dlp ha una versione più nuova	Vérification de l'existence d'une version plus récente de yt-dlp
+yt-dlp aggiornato	yt-dlp mis à jour
+Non riesco ad aggiornare yt-dlp ({})	Je ne peux pas mettre à jour yt-dlp ({})
+nessuna risposta	pas de réponse
+Non riesco ad aggiornare yt-dlp: {}	Je ne peux pas mettre à jour yt-dlp : {}
+Il link non ha un titolo	Le lien n'a pas de titre
+niente uscita	pas de sortie
+Questo sito non è supportato (o il link non porta a un video)	Ce site n'est pas pris en charge (ou le lien ne mène pas à une vidéo)
+Il video è protetto da DRM e non si può scaricare	La vidéo est protégée par DRM et ne peut pas être téléchargée
+Il video non è disponibile nel tuo Paese	La vidéo n'est pas disponible dans votre pays
+Il video richiede un accesso: non posso scaricarlo	La vidéo exige une connexion : je ne peux pas la télécharger
+Il video è privato	La vidéo est privée
+Il video è per maggiorenni: serve l'accesso a YouTube	La vidéo est soumise à une limite d'âge : il faut se connecter à YouTube
+Il video non è disponibile	La vidéo n'est pas disponible
+Il video è solo per gli iscritti al canale	La vidéo est réservée aux membres de la chaîne
+YouTube chiede di confermare che non sei un robot: riprova più tardi	YouTube demande de confirmer que vous n'êtes pas un robot : réessayez plus tard
+Il sito ha limitato le richieste: riprova fra qualche minuto	Le site a limité les requêtes : réessayez dans quelques minutes
+Il sito ha rifiutato la richiesta: riprova più tardi	Le site a refusé la requête : réessayez plus tard
+Il sito ha risposto con un errore: {}	Le site a répondu par une erreur : {}
+Non riesco a raggiungere il sito: controlla la connessione	Je ne peux pas joindre le site : vérifiez votre connexion
+yt-dlp non ha dato risposta	yt-dlp n'a pas répondu
+{#}% · {} di {}	{} % · {} sur {}
+~ · restano 	 · restant
+Incolla almeno un link di YouTube	Collez au moins un lien YouTube
+La cartella di destinazione non si apre: {}	Le dossier de destination ne peut pas être ouvert : {}
+yt-dlp versione {}	yt-dlp version {}
+Link {#} di {#}: {}	Lien {} sur {} : {}
+Preparo il download	Préparation du téléchargement
+Playlist «{}»: {#} video	Playlist « {} » : {} vidéos
+Errore: {}	Erreur : {}
+Nessun file scaricato	Aucun fichier téléchargé
+yt-dlp non parte: {}	yt-dlp ne démarre pas : {}
+yt-dlp senza uscita	yt-dlp n'a pas de sortie
+Pronto: {}	Prêt : {}
+Video {#} di {#} della playlist	Vidéo {} sur {} de la playlist
+Veloce	Rapide
+Buona	Bonne
+Massima	Maximale
+Per appunti e messaggi vocali	Pour les notes et les messages vocaux
+Per riunioni e interviste	Pour les réunions et les entretiens
+Per audio difficili, la più precisa	Pour l'audio difficile, la plus précise
+per processore	pour processeur
+per processore, con AVX2	pour processeur, avec AVX2
+per processore, con AVX-VNNI	pour processeur, avec AVX-VNNI
+per processore, con AVX-512	pour processeur, avec AVX-512
+per processore, con AVX-512 VNNI	pour processeur, avec AVX-512 VNNI
+per processore, con dotprod	pour processeur, avec dotprod
+per processore, con i8mm	pour processeur, avec i8mm
+per scheda video	pour carte graphique
+download di {} non riuscito: {}	échec du téléchargement de {} : {}
+cartella {} non creata: {}	dossier {} non créé : {}
+{} non scrivibile: {}	{} non accessible en écriture : {}
+download di {} interrotto: {}	téléchargement de {} interrompu : {}
+scrittura di {} non riuscita (disco pieno?): {}	échec de l'écriture de {} (disque plein ?) : {}
+Scaricati {} di {}	{} téléchargés sur {}
+{} scaricato non corrisponde all'originale (SHA-256 diverso): scartato	le {} téléchargé ne correspond pas à l'original (SHA-256 différent) : écarté
+{} non salvato: {}	{} non enregistré : {}
+modello sconosciuto	modèle inconnu
+Modello	Modèle
+«{}»: è uscita una versione nuova, la scarico ({})…	« {} » : une nouvelle version est sortie, téléchargement en cours ({})…
+«{}» già sul PC	« {} » est déjà sur ce PC
+«{}»: lo scarico la prima volta ({})…	« {} » : téléchargement à la première fois ({})…
+«{}» scaricato e controllato	« {} » téléchargé et vérifié
+il modello	le modèle
+il motore	le moteur
+{} non c'è	{} manque
+Motore	Moteur
+lo scarico la prima volta ({})…	téléchargement à la première fois ({})…
+lo aggiorno alla versione {} ({})…	mise à jour vers la version {} ({})…
+scaricato e controllato	téléchargé et vérifié
+il motore di questa versione ({}) non è ancora pubblicato: riprova tra qualche minuto	le moteur de cette version ({}) n'est pas encore publié : réessayez dans quelques minutes
+indirizzo del motore mancante	adresse du moteur manquante
+la release non indica lo SHA-256 del motore	la version n'indique pas le SHA-256 du moteur
+il motore non parte: {}	le moteur ne démarre pas : {}
+il motore non risponde	le moteur ne répond pas
+il motore si è chiuso	le moteur s'est fermé
+italiano	Italien
+inglese	Anglais
+francese	Français
+tedesco	Allemand
+spagnolo	Espagnol
+portoghese	Portugais
+rumeno	Roumain
+albanese	Albanais
+arabo	Arabe
+cinese	Chinois
+ucraino	Ukrainien
+russo	Russe
+polacco	Polonais
+olandese	Néerlandais
+turco	Turc
+greco	Grec
+serbo	Serbe
+croato	Croate
+sloveno	Slovène
+giapponese	Japonais
+coreano	Coréen
+bengalese	Bengali
+gennaio	janvier
+febbraio	février
+marzo	mars
+aprile	avril
+maggio	mai
+giugno	juin
+luglio	juillet
+agosto	août
+settembre	septembre
+ottobre	octobre
+novembre	novembre
+dicembre	décembre
+Trascrizione del {} · {} di audio · lingua: {}	Transcription de {} · {} d'audio · langue : {}
+formato audio non supportato: installa ffmpeg per leggerlo	format audio non pris en charge : installez ffmpeg pour le lire
+il motore si è chiuso all'improvviso	le moteur s'est fermé de façon inattendue
+Audio	Audio
+{} di parlato da trascrivere	{} de parole à transcrire
+Lingua	Langue
+riconosciuta: {}	détectée : {}
+Avanzamento	Progression
+{#}% · restano circa {}	{} % · environ {} restantes
+errore del motore	erreur du moteur
+Nessun driver Vulkan per la scheda video: uso il processore	Pas de pilote Vulkan pour la carte graphique : le processeur est utilisé
+non disponibile ({}): uso il processore	indisponible ({}) : le processeur est utilisé
+lo accendo e carico il modello in memoria…	démarrage et chargement du modèle en mémoire…
+pronto in {} s · scheda video: {}	prêt en {} s · carte graphique : {}
+nessuna adatta: uso il processore	aucune adaptée : le processeur est utilisé
+pronto in {} s · processore, {#} thread ({})	prêt en {} s · processeur, {} threads ({})
+il motore non è partito	le moteur n'a pas démarré
+il motore si è chiuso subito	le moteur s'est fermé tout de suite
+non partita ({}): uso il processore	échec du démarrage ({}) : le processeur est utilisé
+{#} di {#}: {}	{} sur {} : {}
+{}: il file esiste già, saltato	{} : le fichier existe déjà, ignoré
+Il motore non legge questo formato ({}): lo apro con il sistema	Le moteur ne peut pas lire ce format ({}) : ouverture avec le système
+nessun parlato riconosciuto nell'audio	aucune parole reconnue dans l'audio
+Salvato	Enregistré
+Motore spento: memoria liberata, processore libero.	Moteur arrêté : mémoire libérée, processeur libre.
+Documenti e PDF	Documents et PDF
+Immagini e OCR	Images et OCR
+Interfaccia e sistema	Interface et système
+Disegna le pagine dei PDF.	Dessine les pages des PDF.
+Legge e scrive i file PDF.	Lit et écrit des fichiers PDF.
+Legge i caratteri dentro i PDF.	Lit les polices contenues dans les PDF.
+Apre i vecchi file Word .doc.	Ouvre les anciens fichiers Word .doc.
+Archivi ZIP e file .docx.	Archives ZIP et fichiers .docx.
+Apache-2.0 o MIT	Apache-2.0 ou MIT
+MIT o Apache-2.0	MIT ou Apache-2.0
+Mathijs van de Nes e altri	Mathijs van de Nes et autres
+Modelli OCR di ocrs	Modèles OCR de ocrs
+I modelli che leggono il testo nelle immagini.	Les modèles qui lisent le texte dans les images.
+Audio MP3.	Audio MP3.
+Legge MP3, FLAC, OGG, AAC, WAV.	Lit MP3, FLAC, OGG, AAC, WAV.
+Fa suonare audio e video col tasto Play dell'anteprima.	Lit l'audio et la vidéo avec le bouton Lecture de l'aperçu.
+oxideav VP8 e VP9	oxideav VP8 et VP9
+Legge i video WebM.	Lit les vidéos WebM.
+Scrive i file WAV.	Écrit des fichiers WAV.
+Video H.264 su Linux.	Vidéo H.264 sous Linux.
+Licenza FDK AAC	Licence FDK AAC
+Audio AAC su Linux.	Audio AAC sous Linux.
+Georgi Gerganov e ggml	Georgi Gerganov et ggml
+Trascrive l'audio, sul PC (programma scaricato alla prima trascrizione).	Transcrit l'audio sur votre PC (programme téléchargé à la première transcription).
+Modelli Whisper	Modèles Whisper
+I modelli della trascrizione.	Les modèles de transcription.
+Collega whisper.cpp a Rust.	Relie whisper.cpp à Rust.
+Xiph.Org e altri	Xiph.Org et autres
+Legge i vocali .opus.	Lit les messages vocaux .opus.
+Scarica video e audio da YouTube e da molti altri siti (si scarica al primo uso).	Télécharge la vidéo et l'audio de YouTube et de nombreux autres sites (téléchargé à la première utilisation).
+Gli sviluppatori di FFmpeg	Les développeurs de FFmpeg
+Unisce video e audio dei download (si scarica al primo uso).	Fusionne la vidéo et l'audio des téléchargements (téléchargé à la première utilisation).
+Deno Land Inc. e collaboratori	Deno Land Inc. et contributeurs
+Serve a yt-dlp per i video ad alta qualità (si scarica al primo uso).	Nécessaire à yt-dlp pour les vidéos de haute qualité (téléchargé à la première utilisation).
+Le finestre e i servizi di Windows.	Fenêtres et services Windows.
+Le finestre su Linux.	Windows sous Linux.
+L'icona vicino all'orologio su Linux.	L'icône à côté de l'horloge sous Linux.
+Martin Algesten, serde-rs, RustCrypto	Martin Algesten, serde-rs, RustCrypto
+Controllo degli aggiornamenti.	Vérification des mises à jour.
+Yevhenii Reizner e collaboratori	Yevhenii Reizner et contributeurs
+Disegna le finestre della versione standard.	Dessine les fenêtres de la version standard.
+Erik D. Kennedy e collaboratori	Erik D. Kennedy et contributeurs
+Il carattere del tema Cedro compatto.	La typographie du thème Cedro compact.
+Il carattere del tema Percorso guidato.	La typographie du thème Parcours guidé.
+Il carattere del tema Banco di lavoro.	La typographie du thème Établi.
+Il carattere del tema Documento al centro.	La typographie du thème Le document d'abord.
+Accademia di Belle Arti di Urbino	Accademia di Belle Arti di Urbino
+Braille Institute e Applied Design Works	Braille Institute et Applied Design Works
+IBM Corp.	IBM Corp.
+Adobe	Adobe
+Il carattere di Cedro.	La typographie de Cedro.
+{} · da scaricare	{} · à télécharger
+ultima versione · da scaricare	dernière version · à télécharger
+Licenze di terze parti.txt	Licences tierces.txt
+Codifica H.264 con {}	Encodage H.264 avec {}
+Nessuna codifica video hardware	Pas d'encodage vidéo matériel
+Processore: {}	Processeur : {}
+Memoria: {}\nScheda video: {} ({})\nSistema: {}\n	Mémoire : {}\nCarte graphique : {} ({})\nSystème : {}\n
+Istruzioni: {}	Instructions : {}
+{} sì	{} oui
+Accelerazione GPU: {}\nAccelerazione {}: {}\n	Accélération GPU : {}\nAccélération {} : {}\n
+non disponibile	indisponible
+Processore sconosciuto	Processeur inconnu
+{#} core ({#} P + {#} E) · {#} thread	{} cœurs ({} P + {} E) · {} threads
+{#} core · {#} thread	{} cœurs · {} threads
+{} (integrata)	{} (intégrée)
+Scheda video sconosciuta	Carte graphique inconnue
+{} (scheda video)	{} (carte graphique)
+formato di documento non letto	format de document non lu
+il documento non contiene testo	le document ne contient pas de texte
+questo PDF non ha testo da copiare	ce PDF n'a pas de texte copiable
+PDF non letto: {}	PDF non lu : {}
+JSON non valido: virgolette aperte	JSON invalide : guillemets non fermés
+JSON non valido: parentesi che non tornano	JSON invalide : crochets non concordants
+JSON non valido: parentesi aperte	JSON invalide : crochets non fermés
+il taglio dell'inizio è più lungo dell'audio	la coupe du début est plus longue que l'audio
+l'audio è tutto sotto -{#} dB: niente da tenere	l'audio est entièrement sous -{} dB : il ne reste rien
+il codificatore MP3 non parte	l'encodeur MP3 ne démarre pas
+buffer MP3 troppo corto	tampon MP3 trop court
+audio non letto: {}	audio non lu : {}
+l'audio non ha una traccia	l'audio n'a pas de piste
+audio non decodificato: {}	audio non décodé : {}
+l'audio non ha campioni	l'audio n'a pas d'échantillons
+(nessun testo)	(pas de texte)
+il PDF non ha pagine	le PDF n'a pas de pages
+nessun testo letto nelle pagine	aucun texte lu dans les pages
+PDF non disegnato: {}	PDF non rendu : {}
+pagina che non c'è	page qui n'existe pas
+pagina non disegnata: {}	page non rendue : {}
+nessun testo riconosciuto	aucun texte reconnu
+OCR di Windows: {}	OCR Windows : {}
+modello OCR: {}	Modèle OCR : {}
+OCR non pronto: {}	OCR non prêt : {}
+MP4 troncato	MP4 tronqué
+MP4 con un blocco fuori misura	MP4 avec un bloc de taille excessive
+il video è troppo grande per spostare il moov	la vidéo est trop grande pour déplacer le moov
+MP4 con un offset fuori misura	MP4 avec un décalage excessif
+MP4 con una tabella troppo corta	MP4 avec une table trop courte
+MP4 con una tabella fuori misura	MP4 avec une table de taille excessive
+MP4 non letto: {}	MP4 non lu : {}
+MP4 senza moov	MP4 sans moov
+MP4 senza dati	MP4 sans données
+MP4 non scritto: {}	MP4 non écrit : {}
+MP4 non sostituito: {}	MP4 non remplacé : {}
+non è un webm vp8 o vp9	pas un WebM VP8 ou VP9
+il video non ha fotogrammi	la vidéo n'a pas d'images
+l'audio del video non è stato letto	l'audio de la vidéo n'a pas été lu
+il video non ha una dimensione	la vidéo n'a pas de taille
+WebM non letto: {}	WebM non lu : {}
+il WebM non ha un video	le WebM n'a pas de vidéo
+VP8 non letto: {}	VP8 non lu : {}
+VP9 non letto: {}	VP9 non lu : {}
+fotogramma troppo corto	image trop courte
+MP4 non creato: {}	MP4 non créé : {}
+MP4 non creato	MP4 non créé
+video non aperto: {}	vidéo non ouverte : {}
+video non aperto	vidéo non ouverte
+il file non ha un video	le fichier n'a pas de vidéo
+il video è {#}×{#}: H.264 vuole misure pari	la vidéo fait {}×{} : H.264 exige des dimensions paires
+H.264 non disponibile: {}	H.264 indisponible : {}
+ingresso video ({#}×{#}): {}	entrée vidéo ({}×{}) : {}
+scrittura MP4 non partita: {}	l'écriture du MP4 n'a pas démarré : {}
+MP4 non chiuso: {}	MP4 non fermé : {}
+questo video non si può decomprimere	cette vidéo ne peut pas être décompressée
+questo video non si può decomprimere: {}	cette vidéo ne peut pas être décompressée : {}
+formato video intermedio non letto	format vidéo intermédiaire non lu
+lettura video: {}	lecture de la vidéo : {}
+tempo del fotogramma: {}	temps de l'image : {}
+tempo scaduto	délai dépassé
+scrittura video: {}	écriture de la vidéo : {}
+lettura video interrotta	lecture de la vidéo interrompue
+fotogramma non letto: {}	image non lue : {}
+buffer video vuoto	tampon vidéo vide
+il video cambia dimensione	la vidéo change de taille
+audio senza traccia	audio sans piste
+l'audio del video non coincide col formato previsto	l'audio de la vidéo ne correspond pas au format attendu
+scrittura audio: {}	écriture de l'audio : {}
+AAC non disponibile: {}	AAC indisponible : {}
+ingresso audio: {}	entrée audio : {}
+video di Windows non pronto: {}	vidéo Windows non prête : {}
+Windows non sa leggere questo file	Windows ne peut pas lire ce fichier
+nel file non c'è una traccia audio	le fichier n'a pas de piste audio
+Windows non ha il decodificatore per questo audio	Windows n'a pas de décodeur pour cet audio
+WAV temporaneo non scritto: {}	WAV temporaire non écrit : {}
+lettura audio: {}	lecture de l'audio : {}
+il video non è stato letto: {}	la vidéo n'a pas été lue : {}
+il video non è stato letto	la vidéo n'a pas été lue
+H.264 non scritto: {}	H.264 non écrit : {}
+H.264 non pronto: {}	H.264 non prêt : {}
+AAC non pronto: {}	AAC non prêt : {}
+AAC non scritto: {}	AAC non écrit : {}
+H.264 senza parametri	H.264 sans paramètres
+H.264 non letto: {}	H.264 non lu : {}
+l'audio del video non è stato letto: {}	l'audio de la vidéo n'a pas été lu : {}
+AVI non letto: {}	AVI non lu : {}
+AVI non letto	AVI non lu
+MJPEG non letto: {}	MJPEG non lu : {}
+il video è troppo lungo per questo MP4	la vidéo est trop longue pour ce MP4
+il video è troppo lungo per questo AVI	la vidéo est trop longue pour cet AVI
+scheda video: {} non riuscito ({})	carte graphique : {} a échoué ({})
+scheda video: {#}×{#} non adatto	carte graphique : {}×{} non adapté
+nessuna scheda video che codifica H.264	aucune carte graphique n'encode le H.264
+scheda video: superfici non create ({})	carte graphique : surfaces non créées ({})
+scheda video: contesto non creato ({})	carte graphique : contexte non créé ({})
+scheda video: memoria per il video non creata ({})	carte graphique : mémoire vidéo non créée ({})
+scheda video: fotogramma incompleto	carte graphique : image incomplète
+scheda video: il flusso non ha le intestazioni H.264	carte graphique : le flux n'a pas d'en-têtes H.264
+scheda video: fotogramma vuoto	carte graphique : image vide
+attesa della scheda	attente de la carte
+scheda video: immagine non scrivibile ({})	carte graphique : image non inscriptible ({})
+copia del fotogramma	copie de l'image
+lettura del video	lecture de la vidéo
+scheda video: immagine troppo piccola	carte graphique : image trop petite
+{#} immagini	{} images
+1 immagine	1 image
+{#} documenti	{} documents
+1 documento	1 document
+{#} archivi	{} archives
+1 archivio	1 archive
+1 file pronti	1 fichier prêt
+1 file nella coda	1 fichier dans la file
+Taglia	Couper
+Incolla	Coller
+Elimina	Supprimer
+Seleziona tutto	Tout sélectionner
+B/N	N/B
+Veloce · {}	Rapide · {}
+Buona · {}	Bonne · {}
+Massima · {}	Maximale · {}
+Impostazioni consigliate · tutte le pagine	Réglages recommandés · toutes les pages
+Impostazioni personalizzate · tutte le pagine	Réglages personnalisés · toutes les pages
+Impostazioni consigliate · tutti i file	Réglages recommandés · tous les fichiers
+Impostazioni personalizzate · tutti i file	Réglages personnalisés · tous les fichiers
+Fino a 1080p	Jusqu'à 1080p
+720p	720p
+{#} componente	{} composant
+{#} componenti	{} composants
+QUESTO PC	CE PC
+ISTRUZIONI DEL PROCESSORE	INSTRUCTIONS DU PROCESSEUR
+ACCELERAZIONI	ACCÉLÉRATIONS
+CODICE APERTO USATO DA CEDRO	OPEN SOURCE UTILISÉ PAR CEDRO
+Accelerazione GPU	Accélération GPU
+Accelerazione AVX-512	Accélération AVX-512
+Accelerazione i8mm	Accélération i8mm
+Video in MP4 con la scheda video o la grafica integrata. Se la scheda rifiuta un video, Cedro lo rifà col processore.	Vidéo MP4 avec la carte graphique ou le graphisme intégré. Si la carte refuse une vidéo, Cedro la refait avec le processeur.
+Calcoli più veloci per OCR e trascrizione dell'audio.	Calculs plus rapides pour l'OCR et la transcription audio.
+Trovata: {}	Trouvé : {}
+Trovato: {}	Trouvée : {}
+Non disponibile su questo PC	Indisponible sur ce PC
+Il processore non ha {}	Le processeur n'a pas {}
+Non rilevate su questo processore.	Aucune détectée sur ce processeur.
+Copia informazioni	Copier les informations
+Letto all'avvio di Cedro.	Lu au démarrage de Cedro.
+Copiato: incollalo nella segnalazione.	Copié : collez-le dans le rapport.
+Copiate: incollale in una segnalazione	Copiées : collez-les dans un rapport
+in arrivo	bientôt
+IN ARRIVO	BIENTÔT
+NUOVO	NOUVEAU
+Convertitore di file, con una ruota al cursore · Licenza MIT	Convertisseur de fichiers avec une roue au curseur · licence MIT
+Tema Comune di Bondeno	Thème de la commune de Bondeno
+Comune di\nBondeno	Commune de\nBondeno
+Stesse funzioni di Cedro, con i colori, il carattere e lo stemma del Comune. Si cambia in Aspetto.	Les mêmes fonctions de Cedro, avec les couleurs, la typographie et les armoiries de la commune. À changer dans Apparence.
+Cedro esiste grazie a queste persone e ai loro progetti. Grazie.	Cedro existe grâce à ces personnes et à leurs projets. Merci.
+Cerca un componente o una licenza	Rechercher un composant ou une licence
+Apri le licenze complete	Ouvrir les licences complètes
+Tutti i {#} componenti, anche quelli minori, nel file «Licenze di terze parti».	Les {} composants, y compris les mineurs, dans le fichier « Licences tierces ».
+Tutti i componenti, anche quelli minori, nel file «Licenze di terze parti».	Tous les composants, y compris les mineurs, dans le fichier « Licences tierces ».
+Aspetto	Apparence
+Impostazioni di Cedro	Réglages de Cedro
+Cedro: scegli la vista	Cedro : choisissez l'affichage
+Avvia Cedro con Windows	Démarrer Cedro avec Windows
+Avvia Cedro con il computer	Démarrer Cedro avec l'ordinateur
+La stessa voce del menu dell'icona e dell'installatore.	La même entrée que dans le menu de l'icône et l'installateur.
+La stessa voce del menu dell'icona.	La même entrée que dans le menu de l'icône.
+Avviso a fine conversione	Notification à la fin d'une conversion
+Il fumetto vicino all'orologio con il nome del file creato.	La bulle près de l'horloge avec le nom du fichier créé.
+Una notifica con il nome del file creato.	Une notification avec le nom du fichier créé.
+Mostra il file nuovo	Afficher le nouveau fichier
+A lavoro finito apre la cartella in Esplora file e seleziona la copia.	À la fin, ouvre le dossier dans l'Explorateur de fichiers et sélectionne la copie.
+A lavoro finito apre la cartella e seleziona la copia.	À la fin, ouvre le dossier et sélectionne la copie.
+Barra di avanzamento	Barre de progression
+Una linea sottile in basso a destra mentre converte, verde a lavoro finito.	Une fine ligne en bas à droite pendant la conversion, verte à la fin.
+Avanzamento mentre converte	Progression pendant la conversion
+Una linea sottile nel pannello e, su KDE, tra le notifiche.	Une fine ligne dans le panneau et, sous KDE, parmi les notifications.
+Registro attività	Journal d'activité
+Il file log.txt e config.txt stanno in %APPDATA%\\Cedro.	Les fichiers log.txt et config.txt se trouvent dans %APPDATA%\\Cedro.
+Il file log.txt e config.txt stanno nella cartella di Cedro.	Les fichiers log.txt et config.txt se trouvent dans le dossier de Cedro.
+Apri cartella	Ouvrir le dossier
+Lingua dell'interfaccia	Langue de l'interface
+Automatica segue la lingua di Windows. Vale subito dopo «Salva».	Automatique suit la langue de Windows. Prend effet juste après « Enregistrer ».
+Automatica segue la lingua del sistema. Vale subito dopo «Salva».	Automatique suit la langue du système. Prend effet juste après « Enregistrer ».
+Automatica	Automatique
+Shift apre le conversioni	Maj ouvre les conversions
+Tieni premuto Shift e fai clic destro sul file.	Maintenez Maj et faites un clic droit sur le fichier.
+Ctrl apre gli strumenti	Ctrl ouvre les outils
+Comprimi, ruota, OCR e le altre fette di Ctrl.	Compresser, pivoter, OCR et les autres parts de Ctrl.
+Alt apre le azioni	Alt ouvre les actions
+Duplica, percorso e ZIP. Spegnilo se Alt dà fastidio ad altri programmi.	Dupliquer, chemin et ZIP. Désactivez-le si Alt gêne d'autres programmes.
+Apri nelle finestre Apri/Salva	Ouvrir dans les boîtes de dialogue Ouvrir/Enregistrer
+Usa la ruota anche scegliendo un file in un programma.	Utiliser la roue aussi lors du choix d'un fichier dans un programme.
+Non disponibile su Wayland: il desktop non lascia a Cedro intervenire nelle finestre degli altri programmi. Usa il menu del file.	Indisponible sous Wayland : le bureau ne permet pas à Cedro d'agir sur les fenêtres des autres programmes. Utilisez le menu du fichier.
+Dove mettere la copia	Où mettre la copie
+Nella stessa cartella del file	Dans le même dossier que le fichier
+In una sottocartella «Cedro»	Dans un sous-dossier « Cedro »
+Sempre in questa cartella:	Toujours dans ce dossier :
+Se il file esiste già	Si le fichier existe déjà
+Aggiungi un numero: foto-2.jpg. Sostituisci riscrive il file.	Ajoute un numéro : photo-2.jpg. Remplacer écrase le fichier.
+Aggiungi un numero	Ajouter un numéro
+Nessuna cartella scelta	Aucun dossier choisi
+Cartella dove salvare le copie	Dossier où enregistrer les copies
+Scegli la cartella di destinazione con «Sfoglia…».	Choisissez le dossier de destination avec « Parcourir… ».
+Qualità JPEG e WebP	Qualité de JPEG et WebP
+Anche per MP3 e PDF in JPG. Più alta, file più grandi.	Aussi pour MP3 et PDF en JPG. Plus élevée signifie des fichiers plus gros.
+PDF in JPG: risoluzione	PDF en JPG : résolution
+Più dpi, immagini più nitide e più grandi.	Plus de ppp : images plus nettes et plus grandes.
+Comprimi immagine	Compresser l'image
+Quanto riduce la fetta «Comprimi».	De combien la part « Compresser » réduit.
+100 dpi, leggero	100 ppp, légère
+144 dpi, normale	144 ppp, normale
+200 dpi	200 ppp
+300 dpi, stampa	300 ppp, impression
+Poco	Peu
+Medio	Moyen
+Molto	Beaucoup
+Lingua del testo	Langue du texte
+Automatica usa l'italiano di Windows. Se la lingua manca, quella dell'utente.	Automatique utilise l'italien de Windows. Si cette langue manque, celle de l'utilisateur.
+Automatica sceglie da sola tra italiano e inglese.	Automatique choisit tout seul entre italien et anglais.
+Inglese	Anglais
+Italiano per l'OCR di Windows	Italien pour l'OCR de Windows
+Senza, le lettere accentate escono peggio.	Sans lui, les lettres accentuées sont moins bien reconnues.
+Installato	Installé
+Non installato	Non installé
+Pagine al massimo per PDF	Nombre maximal de pages par PDF
+Oltre il limite l'OCR salta le pagine e lo dice.	Au-delà de la limite, l'OCR ignore des pages et le signale.
+Tutte	Toutes
+Versione installata	Version installée
+Controlla ora	Vérifier maintenant
+Cerca gli aggiornamenti da solo	Rechercher les mises à jour tout seul
+All'avvio e poi ogni 24 ore, in silenzio se non c'è niente.	Au démarrage puis toutes les 24 heures, en silence s'il n'y a rien.
+Hai detto no alla {}: all'avvio non la propone più.	Vous avez refusé la version {} : elle n'est plus proposée au démarrage.
+Nessuna versione rifiutata.	Aucune version refusée.
+Versione saltata	Version ignorée
+Proponila di nuovo	La proposer à nouveau
+Salva	Enregistrer
+Impostazioni non salvate: {}	Réglages non enregistrés : {}
+Cedro — conversione locale, senza upload.	Cedro — conversion locale, sans envoi de fichiers.
+  cedro update     controlla se su GitHub c'è una versione nuova	  cedro update     cherche sur GitHub une version plus récente
+  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--cpu]	  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--cpu]
+                   dalla voce a un Word (o a un testo), con il motore scaricato alla prima volta	                   de la parole à un fichier Word (ou texte), avec le moteur téléchargé à la première utilisation
+Senza argomenti, su Windows e su Linux, Cedro resta nella tray.	Sans arguments, sous Windows et Linux, Cedro reste dans la zone de notification.
+Su Linux la ruota si apre dal menu del file, oppure così:	Sous Linux, la roue s'ouvre depuis le menu du fichier, ou ainsi :
+La prima volta scrive i menu di Dolphin e di Nautilus.	La première fois, il écrit les menus de Dolphin et Nautilus.
+Su Linux la configurazione sta in ~/.config/cedro/config.txt.	Sous Linux, la configuration se trouve dans ~/.config/cedro/config.txt.
+Le conversioni sono nel programma: non servono LibreOffice, ffmpeg, Tesseract né Poppler.	Les conversions sont intégrées : pas besoin de LibreOffice, ffmpeg, Tesseract ni Poppler.
+Il video MP4, su Windows, usa i codificatori di Windows (H.264 e AAC).	La vidéo MP4, sous Windows, utilise les encodeurs de Windows (H.264 et AAC).
+Su Linux usa OpenH264 e FDK AAC, compilati dentro il programma.	Sous Linux, il utilise OpenH264 et FDK AAC, compilés dans le programme.
+L'MP3 usa LAME, compilato dentro l'eseguibile.	Le MP3 utilise LAME, compilé dans l'exécutable.
+L'originale non viene mai sovrascritto.	L'original n'est jamais écrasé.
+Cedro {} è già l'ultima versione.	Cedro {} est déjà la dernière version.
+C'è Cedro {} (hai la {}).\n{}	Cedro {} est disponible (vous avez la {}).\n{}
+Vuoi aggiornare? [s/N]	Mettre à jour maintenant ? [y/N]
+Avviato {}.	{} démarré.
+Aperta la pagina della release: {}	Page de la version ouverte : {}
+la release {} non ha il pacchetto per questo sistema (linux-{}): riprova più tardi	la version {} n'a pas de paquet pour ce système (linux-{}) : réessayez plus tard
+Installata la versione {} in {}.	Version {} installée dans {}.
+ERRORE {}: {}	ERREUR {} : {}
+accesa	oui
+spenta	non
+no	non
+ERRORE	ERREUR
+Memoria: {}	Mémoire : {}
+Scheda video: {} ({})	Carte graphique : {} ({})
+Sistema: {}	Système : {}
+Accelerazione GPU: {}	Accélération GPU : {}
+Accelerazione {}: {}	Accélération {} : {}
+download non riuscito: {}	échec du téléchargement : {}
+download interrotto: {}	téléchargement interrompu : {}
+lo SHA-256 dell'installatore non corrisponde: file scartato	le SHA-256 de l'installateur ne correspond pas : fichier écarté
+lo SHA-256 del pacchetto non corrisponde: file scartato	le SHA-256 du paquet ne correspond pas : fichier écarté
+cartella provvisoria non creata: {}	dossier temporaire non créé : {}
+tar non parte: {}	tar ne démarre pas : {}
+il pacchetto non si apre	le paquet ne s'ouvre pas
+install.sh non è riuscito: {}	install.sh a échoué : {}
+il programma nuovo non è al suo posto	le nouveau programme n'est pas en place
+{} min fa	il y a {} min
+{} h fa	il y a {} h
+{} g fa	il y a {} j
+Altri file	Autres fichiers
+Altro	Autres
+Apri	Ouvrir
+BMP, GIF, TIFF…	BMP, GIF, TIFF…
+Condividi	Partager
+Cosa ne faccio?	Que dois-je en faire ?
+Dimezza	Réduire de moitié
+Immagine · {}	Image · {}
+Lavori	Travaux
+Le copie vanno nella cartella Documenti. Il tema scelto resta tra un avvio e l'altro.	Les copies vont dans le dossier Documents. Le thème et la langue choisis sont conservés d'un lancement à l'autre.
+Lingua del telefono	Langue du téléphone
+Link dagli appunti	Lien du presse-papiers
+Meno spazio	Moins d'espace
+Metà dimensioni	Moitié de la taille
+Non ho potuto leggere il file.	Je n'ai pas pu lire le fichier.
+Non riuscito	Échec
+Per il web	Pour le web
+Più leggera	Plus léger
+Recenti	Récents
+Riconosci scritte	Lire le texte
+Salvato in Documenti: {}	Enregistré dans Documents : {}
+Salvato in {}	Enregistré dans {}
+Scegli il file	Choisissez le fichier
+Scegli un file	Choisissez un fichier
+Senza perdita	Sans perte
+Svuota	Effacer
+Tocca il cerchio per scegliere un file, oppure condividilo a Cedro da un'altra app.	Touchez le cercle pour choisir un fichier, ou partagez-en un avec Cedro depuis une autre application.
+Ultimi file	Fichiers récents
+Un foglio	Une feuille
+{} · circa {} s alla fine	{} · environ {} s restantes
+ · circa {} s alla fine	 · environ {} s restantes
+{} a {} · {}% in meno	{} à {} · {} % plus petit
+{}% · circa {} s alla fine	{} % · environ {} s restantes
+Comprimi: {}	Compresser : {}
+{} · {}	{} · {}
+Converti i tuoi file	Convertissez vos fichiers
+Ancora niente	Rien pour l'instant
+Qui vedi i file in lavorazione, i risultati e la cronologia.	Vous voyez ici les fichiers en cours, les résultats et l'historique.
+I file che scegli o condividi a Cedro compaiono qui.	Les fichiers que vous choisissez ou partagez avec Cedro apparaissent ici.
+Lavoro in corso da {} s	Travail en cours depuis {} s
+Apri con un'altra app	Ouvrir avec une autre application
+Il migliore che c'è	La meilleure disponible
+MP3 dal video	MP3 de la vidéo
+Video leggero	Vidéo légère
+Senza compressione	Sans compression
+Dalla voce, offline	De la parole, hors ligne
+Con testo	Avec texte
+Estrae le parole	Extrait les mots
+Una per pagina	Une par page
+Da stampare	Pour imprimer
+Testo con segni	Texte avec balisage
+Più leggero	Plus léger
+Da documento	D'un document
+Tutte le azioni	Toutes les actions
+Serve il permesso di scrivere in Documenti.	L'autorisation d'écrire dans Documents est nécessaire.
+Documenti non è scrivibile: {}	Documents n'est pas accessible en écriture : {}
+Link passato a un'altra app	Lien transmis à une autre application
+la trascrizione non è partita	la transcription n'a pas démarré
+Cedro sta lavorando	Cedro travaille
+{} lavori in corso	{} travaux en cours
+Scarica con…	Télécharger avec…
+Android non ha ancora registrato il file	Android n'a pas encore enregistré le fichier
+Info	Infos
+Copia le informazioni	Copier les informations
+Istruzioni del processore	Instructions du processeur
+Accelerazioni usate	Accélérations utilisées
+Telefono	Téléphone
+Core	Cœurs
+{} (API {})	{} (API {})
+{} ({} liberi)	{} ({} libres)
+{#} ({#} grandi + {#} piccoli)	{} ({} gros + {} petits)
+Istruzioni	Instructions
+Video MP4	Vidéo MP4
+processore	processeur
+processore, {}	processeur, {}
+codificatore del telefono	l'encodeur du téléphone
+codificatore del telefono ({})	l'encodeur du téléphone ({})
+non indicata dal telefono	non indiqué par le téléphone
+sì	oui
+Durata	Durée
+modificato il	modifié le
+Frequenza	Fréquence d'échantillonnage
+Peso	Taille
+Immagine	Image
+{#} canali	{} canaux
+Archivio compresso	Archive compressée
+Programma	Programme
+Foglio di calcolo	Feuille de calcul
+Presentazione	Présentation
+Messaggio di posta	Message électronique
+Carattere	Police
+File di tipo {}	Fichier {}
+File senza estensione	Fichier sans extension
+Cedro non può mostrare il contenuto di questo tipo di file, ma lo tiene in coda con il nome e il peso.	Cedro ne peut pas afficher le contenu de ce type de fichier, mais le garde dans la file avec son nom et sa taille.
+Foto in WebP	Photos en WebP
+Foto in JPEG	Photos en JPEG
+Foto in PNG	Photos en PNG
+Audio in MP3	Audio en MP3
+Audio in WAV	Audio en WAV
+Documenti in PDF	Documents en PDF
+più leggere	plus léger
+più leggero	plus léger
+vanno dappertutto	fonctionnent partout
+si aprono ovunque	s'ouvrent partout
+Nome del file	Nom du fichier
+Vuoto = come l'originale. Usa %nome%, %data%, %ora%, %ext%	Vide = comme l'original. Utilisez %name%, %date%, %time%, %ext%
+per esempio %nome%_%data%	par exemple %name%_%date%
+Qualità Opus	Qualité d'Opus
+1 file convertito	1 fichier converti
+{#} file convertiti	{} fichiers convertis
+{#} lasciati com'erano	{} laissés tels quels
+{#} non convertiti (vedi RAPPORTO-CEDRO.txt)	{} non convertis (voir RAPPORTO-CEDRO.txt)
+{#} con percorso non sicuro ignorati	{} avec un chemin non sûr ignorés
+l'archivio è vuoto	l'archive est vide
+nello ZIP non ci sono foto da convertire in questo formato	il n'y a pas de photos dans le ZIP à convertir dans ce format
+nello ZIP non c'è audio da convertire in questo formato	il n'y a pas d'audio dans le ZIP à convertir dans ce format
+nello ZIP non ci sono documenti da convertire in questo formato	il n'y a pas de documents dans le ZIP à convertir dans ce format
+l'archivio contiene più di 8 GB di file: troppo grande	l'archive contient plus de 8 Go de fichiers : trop grande
+HEIC e HEIF non sono ancora letti	HEIC et HEIF ne peuvent pas encore être lus
+SVG troppo grande da disegnare	SVG trop grand pour être dessiné
+JPEG XL troppo grande	JPEG XL trop grand
+JPEG XL senza perdita · {}	JPEG XL sans perte · {}
+JPEG XL vuole un'immagine di almeno 2×2 punti	JPEG XL exige une image d'au moins 2×2 pixels
+FLAC accetta al massimo 8 canali	FLAC accepte au maximum 8 canaux
+Opus si scrive su Windows, su Linux e su Android	Opus s'écrit sous Windows, Linux et Android
+Apri risultato	Ouvrir le résultat
+Ricomincia	Recommencer
+codifica video	encodage vidéo
+Un altro lavoro è in corso: la trascrizione parte appena finisce	Un autre travail est en cours : la transcription démarrera dès qu'il sera terminé
+Cosa vuoi fare	Que voulez-vous faire
+Unisci	Fusionner
+Dividi	Diviser
+Un solo PDF	Un seul PDF
+li unisce in fila	les joint les uns à la suite des autres
+una pagina per file	une page par fichier
+Ordine e nome file	Ordre et nom du fichier
+Ordine dei file	Ordre des fichiers
+tutte	toutes
+Nome del file unito	Nom du fichier fusionné
+nome del primo file-unito	nom-du-premier-fichier-fusionné
+Vuoto = il nome del primo file con «-unito»	Vide = le nom du premier fichier avec « -fusionné »
+Un segnalibro per ogni file	Un signet par fichier
+Nel PDF unito si salta da un file all'altro	Passer d'un fichier au suivant dans le PDF fusionné
+Tieni i segnalibri dei file	Conserver les signets des fichiers
+Finiscono sotto il segnalibro del loro file	Ils se placent sous le signet de leur fichier
+Tieni moduli e link	Conserver les formulaires et les liens
+Campi compilabili e collegamenti interni	Champs remplissables et liens internes
+Pagina bianca per il fronte-retro	Page blanche pour l'impression recto verso
+Dopo i file con le pagine dispari: ognuno parte su un foglio nuovo	Après les fichiers ayant un nombre impair de pages : chacun commence sur une nouvelle feuille
+Proteggi con password	Protéger par mot de passe
+Password per aprire	Mot de passe d'ouverture
+Solo per i PDF protetti	Seulement pour les PDF protégés
+Come dividere	Comment diviser
+Ogni pagina	Chaque page
+Ogni N	Toutes les N
+Intervalli	Plages
+Ai segnalibri	Aux signets
+Togli pagine	Retirer des pages
+Pagine per file	Pages par fichier
+L'ultimo file prende quelle che restano	Le dernier fichier reçoit le reste
+Un file per ogni gruppo, per esempio 1-3, 4-6, 7-. Segue i tagli della striscia.	Un fichier par groupe, par exemple 1-3, 4-6, 7-. Suit les coupes de la bande.
+Pagine da togliere	Pages à retirer
+Esce un PDF solo, senza queste pagine. Per esempio 2, 5-6	Vous obtenez un PDF sans ces pages. Par exemple 2, 5-6
+Nome dei file	Noms des fichiers
+Vuoto = nome-parte-1, nome-parte-2… Usa %nome%, %n%, %titolo%	Vide = nom-partie-1, nom-partie-2… Utilisez %nome%, %n%, %titolo%
+Il file unito	Le fichier fusionné
+Il file unito: si aspettano le pagine	Le fichier fusionné : en attente des pages
+Si leggono le pagine…	Lecture des pages…
+Tocca tra due pagine per tagliare	Cliquez entre deux pages pour couper
+Le pagine segnate si tolgono	Les pages marquées sont retirées
+Parte {#}	Partie {}
+Tolta	Retirées
+e altre {#} pagine, {#} in tutto	et {} pages de plus, {} au total
+Si vedono le prime {#} pagine di {#}: per le altre scrivi gli intervalli a destra.	Affichage des {} premières pages sur {} : saisissez des plages à droite pour les autres.
+Diventa la pagina {#}	Devient la page {}
+Diventa le pagine {#}–{#}	Deviennent les pages {}–{}
+Nessuna pagina entra nel file unito	Aucune page n'entre dans le fichier fusionné
+Non spuntato: resta fuori	Non coché : laissé de côté
+Trascina le righe dalla maniglia oppure usa le frecce: l'ordine della coda è l'ordine delle pagine nel file unito. Nel campo «Pagine» puoi scrivere per esempio 1-3,5.	Faites glisser les lignes par la poignée ou utilisez les flèches : l'ordre de la file est l'ordre des pages dans le fichier fusionné. Dans le champ « Pages », vous pouvez saisir par exemple 1-3,5.
+Trascina dalla maniglia o usa le frecce: l'ordine qui è l'ordine delle pagine nel file unito. In «tutte» puoi scrivere per esempio 1-3,5.	Faites glisser par la poignée ou utilisez les flèches : l'ordre ici est l'ordre des pages dans le fichier fusionné. Dans « toutes », vous pouvez saisir par exemple 1-3,5.
+La striscia si apre sotto il file selezionato: i tagli valgono per quel file, il campo «Intervalli» a destra per tutti quelli senza tagli.	La bande s'ouvre sous le fichier sélectionné : les coupes valent pour ce fichier, le champ « Plages » à droite pour tous les fichiers sans coupes.
+I tagli valgono per il file scelto nella coda, gli intervalli per gli altri.	Les coupes valent pour le fichier sélectionné dans la file, les plages pour les autres.
+Il file unito verrà salvato nella cartella del primo file.	Le fichier fusionné sera enregistré dans le dossier du premier fichier.
+Il file unito verrà salvato in {}.	Le fichier fusionné sera enregistré dans {}.
+I file nuovi verranno salvati nella stessa cartella dell'originale.	Les nouveaux fichiers seront enregistrés dans le même dossier que l'original.
+I file nuovi verranno salvati in {}.	Les nouveaux fichiers seront enregistrés dans {}.
+Unisci {#} PDF	Fusionner {} PDF
+Dividi {#} PDF	Diviser {} PDF
+Dividi in {#} PDF	Diviser en {} PDF
+Dividi ai segnalibri	Diviser aux signets
+Togli le pagine	Retirer les pages
+{#} pdf	{} PDF
+{#} PDF uniti, {#} pagine	{} PDF fusionnés, {} pages
+{#} PDF uniti, {#} pagine, protetto con password	{} PDF fusionnés, {} pages, protégés par mot de passe
+Diviso in {#} PDF	Divisé en {} PDF
+Tolte {#} pagine, ne restano {#}	{} pages retirées, {} restantes
+Per unire servono almeno due PDF spuntati.	La fusion exige au moins deux PDF cochés.
+per unire servono almeno due PDF	la fusion exige au moins deux PDF
+nessun PDF da unire	aucun PDF à fusionner
+Scrivi gli intervalli, per esempio 1-3, 4-6, 7-, oppure taglia sulla striscia.	Saisissez les plages, par exemple 1-3, 4-6, 7-, ou coupez sur la bande.
+Scrivi le pagine da togliere, per esempio 2, 5-6.	Saisissez les pages à retirer, par exemple 2, 5-6.
+il PDF è protetto: scrivi la password in «Password per aprire»	le PDF est protégé : saisissez le mot de passe dans « Mot de passe d'ouverture »
+{}: il PDF è protetto: scrivi la password in «Password per aprire»	{} : le PDF est protégé : saisissez le mot de passe dans « Mot de passe d'ouverture »
+il PDF è protetto da una password di apertura	le PDF est protégé par un mot de passe d'ouverture
+{}: il PDF è protetto da una password di apertura	{} : le PDF est protégé par un mot de passe d'ouverture
+password sbagliata per questo PDF	mot de passe incorrect pour ce PDF
+{}: password sbagliata per questo PDF	{} : mot de passe incorrect pour ce PDF
+il PDF non ha segnalibri: scegli un altro modo di dividerlo	le PDF n'a pas de signets : choisissez une autre façon de le diviser
+così non resta nessuna pagina	cela ne laisse aucune page
+nessuna pagina scelta	aucune page choisie
+il PDF ha {#} pagine: la pagina {#} non c'è	le PDF compte {} pages : la page {} n'existe pas
+la pagina {#} non c'è: il PDF ne ha {#}	la page {} n'existe pas : le PDF en compte {}
+intervallo «{}» non valido	plage « {} » non valide
+l'intervallo «{}» non ha pagine	la plage « {} » ne contient aucune page
+scrivi gli intervalli, per esempio 1-3, 4-6, 7-	saisissez les plages, par exemple 1-3, 4-6, 7-
+scrivi le pagine da togliere, per esempio 2,5-6	saisissez les pages à retirer, par exemple 2,5-6
+Rimetti	Rétablir
+{#} pagine · {}	{} pages · {}
+1 pagina · {}	1 page · {}
+Togli	Retirer
+Estrai	Extraire
+{#} pagine · 1 scelta	{} pages · 1 sélectionnée
+{#} pagine · {#} scelte	{} pages · {} sélectionnées
+Tolta · {#}	Retirées · {}
+Ruotata {#}° · {#}	Pivotées de {}° · {}
+Si vedono le prime {#} pagine di {#}.	Affichage des {} premières pages sur {}.
+Si prepara l'anteprima…	Préparation de l'aperçu…
+Anteprima della pagina {#} di {#}	Aperçu de la page {} sur {}
+Cosa succederà	Ce qui va se passer
+Tolte	Retirées
+Ruotata {#}°	Pivotée de {}°
+Ruotate {#}°	Pivotées de {}°
+Spostate	Déplacées
+Ordine nuovo	Nouvel ordre
+Scelte	Sélectionnées
+Pagina {#}	Page {}
+Pagine {} e altre {#}	Pages {} et {} autres
+Pagine {}	Pages {}
+Nessuna modifica alle pagine: sceglile a sinistra con un clic.	Aucune modification des pages : cliquez dessus à gauche pour les sélectionner.
+Torna alle pagine com'erano	Revenir aux pages d'origine
+Tocca le pagine per sceglierle, trascinale per spostarle.	Touchez les pages pour les sélectionner, faites-les glisser pour les déplacer.
+Un PDF che non si riesce a ridurre resta com'è: non se ne salva mai uno più pesante.	Un PDF qui ne peut pas être réduit reste tel quel : un PDF plus lourd n'est jamais enregistré.
+Da {} a circa {}	De {} à environ {}
+Da {} a {}	De {} à {}
+Da {} a	De {} à
+circa {}	environ {}
+{} adesso	{} maintenant
+{} dopo	{} après
+stima in corso…	estimation…
+Stima vera, fatta comprimendo in memoria.	Estimation réelle, obtenue en compressant en mémoire.
+Pesi veri dei file salvati.	Tailles réelles des fichiers enregistrés.
+Spunta i PDF da comprimere.	Cochez les PDF à compresser.
+Si calcolano le stime…	Calcul des estimations…
+Se un file non si riesce a ridurre, resta com'è e la riga lo dice: non viene mai salvato un PDF più pesante dell'originale.	Si un fichier ne peut pas être réduit, il reste tel quel et sa ligne l'indique : un PDF plus lourd que l'original n'est jamais enregistré.
+Peso adesso e stima dopo	Taille actuelle et estimation après
+Risparmio	Gain
+Già leggero	Déjà léger
+si calcola la stima…	estimation…
+già leggero, resta com'è	déjà léger, reste tel quel
+stima pronta	estimation prête
+Clic su una pagina per sceglierla (ancora per toglierla dalla scelta), trascina per spostarla. I pulsanti in alto valgono per la scelta: la ruotano di 90°, la tolgono o la copiano in un PDF nuovo.	Cliquez sur une page pour la sélectionner (encore pour la désélectionner), faites-la glisser pour la déplacer. Les boutons du haut agissent sur la sélection : ils la pivotent de 90°, la retirent ou la copient dans un nouveau PDF.
+Tocca una pagina della striscia per vederla in grande; i comandi in alto valgono per quella.	Touchez une page de la bande pour la voir en grand ; les commandes du haut agissent sur cette page.
+Salva 1 pagina	Enregistrer 1 page
+Salva {#} pagine	Enregistrer {} pages
+Salva {#} PDF	Enregistrer {} PDF
+Comprimi {#} PDF	Compresser {} PDF
+Riduci il peso	Réduire la taille
+Il file nuovo viene salvato accanto all'originale.	Le nouveau fichier est enregistré à côté de l'original.
+Il file nuovo viene salvato in {}.	Le nouveau fichier est enregistré dans {}.
+I file compressi vengono salvati accanto agli originali.	Les fichiers compressés sont enregistrés à côté des originaux.
+I file compressi vengono salvati in {}.	Les fichiers compressés sont enregistrés dans {}.
+Deve restare almeno una pagina.	Il doit rester au moins une page.
+Scegli prima le pagine da estrarre.	Sélectionnez d'abord les pages à extraire.
+Numeri di pagina	Numéros de page
+Es. «Pagina 1 di 8», sopra ogni pagina	P. ex. « Page 1 sur 8 », sur chaque page
+Posizione	Position
+Pagina 1 di N	Page 1 sur N
+1 / N	1 / N
+Primo numero	Premier numéro
+Vuoto = 1	Vide = 1
+Corpo	Taille
+Filigrana	Filigrane
+Testo grande e chiaro sopra le pagine	Texte grand et clair sur les pages
+Testo della filigrana	Texte du filigrane
+BOZZA	BROUILLON
+Opacità	Opacité
+Diagonale	Diagonale
+Orizzontale	Horizontale
+Direzione	Direction
+Pagine con la filigrana	Pages avec le filigrane
+Vuoto = tutte. Per esempio 1-3,5	Vide = toutes. Par exemple 1-3,5
+Livello	Niveau
+Equilibrata	Équilibré
+Forte	Fort
+Leggera: ripulisce senza toccare le immagini. Equilibrata: immagini a 150 dpi, giusta per l'email. Forte: 100 dpi, il più piccolo.	Léger : nettoie sans toucher aux images. Équilibré : images à 150 ppp, adapté au courriel. Fort : 100 ppp, le plus petit.
+Togli metadati	Supprimer les métadonnées
+Autore, programma, data di modifica	Auteur, programme, date de modification
+Scansioni in bianco e nero	Scans en noir et blanc
+Restano nitide e pesano molto meno	Ils restent nets et pèsent beaucoup moins
+Più piccolo	Plus petit
+per l'email	pour le courriel
+Il primo numero deve essere un numero da 1 in su.	Le premier numéro doit être un nombre à partir de 1.
+Pagina %n di %t	Page %n sur %t
+Già leggero ({}): resta com'è	Déjà léger ({}) : reste tel quel
+nessuna pagina da salvare	aucune page à enregistrer
+~ pagine,	 pages,
+~ pagina,	 page,
+~ tolte	 retirées
+~ tolta	 retirée
+~ ruotate	 pivotées
+~ ruotata	 pivotée
+~, numerate	, numéroté
+~, con filigrana	, avec filigrane
+I PDF diventano circa {} volte più piccoli e restano leggibili. Gli originali non si toccano.	Les PDF deviennent environ {} fois plus petits et restent lisibles. Les originaux ne sont pas touchés.
+Il PDF diventa circa {} volte più piccolo e resta leggibile. L'originale non si tocca.	Le PDF devient environ {} fois plus petit et reste lisible. L'original n'est pas touché.
+I PDF diventano circa il {#}% più leggeri e restano leggibili. Gli originali non si toccano.	Les PDF deviennent environ {} % plus légers et restent lisibles. Les originaux ne sont pas touchés.
+Il PDF diventa circa il {#}% più leggero e resta leggibile. L'originale non si tocca.	Le PDF devient environ {} % plus léger et reste lisible. L'original n'est pas touché.
+I PDF sono già leggeri: restano come sono.	Les PDF sont déjà légers : ils restent tels quels.
+Il PDF è già leggero: resta com'è.	Le PDF est déjà léger : il reste tel quel.
+Si calcola quanto si risparmia…	Calcul du gain…
+Excel	Excel
+le tabelle	les tableaux
+Fogli	Feuilles
+Un foglio per tabella	Une feuille par tableau
+Tutto in uno	Tout en une
+Numeri e date come valori	Nombres et dates comme valeurs
+1.234,56 e 03/11/2026 si possono sommare e ordinare	1.234,56 et 03/11/2026 peuvent être additionnés et triés
+Riunisci le tabelle spezzate	Joindre les tableaux scindés
+Quando continuano sulla pagina dopo	Quand ils continuent sur la page suivante
+Anche il testo fuori dalle tabelle	Aussi le texte hors des tableaux
+In un foglio a parte	Dans une feuille séparée
+Nessuna tabella: le pagine sono scansioni. Accendi «Leggi le scansioni» per ritrovarne le tabelle	Pas de tableaux : les pages sont des scans. Activez « Lire les scans » pour trouver leurs tableaux
+Nessuna tabella nel PDF: il foglio ha il testo riga per riga	Pas de tableaux dans le PDF : la feuille contient le texte ligne par ligne
+Excel con 1 tabella	Excel avec 1 tableau
+Excel con {#} tabelle, una per foglio	Excel avec {} tableaux, un par feuille
+Excel con {#} tabelle in un foglio	Excel avec {} tableaux dans une feuille
+nel PDF non ci sono né tabelle né testo da mettere nel foglio	le PDF n'a ni tableaux ni texte à mettre dans la feuille
+Scrive i file Excel delle tabelle dei PDF.	Écrit les fichiers Excel des tableaux des PDF.
+Da PDF a Word ed Excel	De PDF à Word et Excel
+Rivedi	Relecture
+Torna alle trascrizioni	Retour aux transcriptions
+Ripetuta	Répétée
+Giro di parole	Boucle de mots
+Frase tipica	Phrase typique
+Nel silenzio	Dans le silence
+Sistemato	Corrigée
+Sistemata	Corrigé
+Lasciata com'era	Laissée telle quelle
+La stessa frase {#} volte di fila: di solito è whisper che si incanta.	La même phrase {} fois de suite : en général whisper se bloque.
+Un giro di parole che si ripete dentro la frase.	Une phrase qui se répète à l'intérieur de la phrase.
+Una frase che whisper inventa quando non sente parlato.	Une phrase que whisper invente quand il n'entend pas de parole.
+Testo dove l'audio è quasi muto: forse non c'è parlato.	Texte là où l'audio est presque silencieux : il n'y a peut-être pas de parole.
+{#} frasi · niente da controllare	{} phrases · rien à vérifier
+{#} frasi · {#} da controllare	{} phrases · {} à vérifier
+Leggo l'onda dell'audio…	Lecture de la forme d'onde de l'audio…
+Indietro di 10 secondi	Reculer de 10 secondes
+Avanti di 10 secondi	Avancer de 10 secondes
+Solo da controllare	Seulement celles à vérifier
+Segui l'audio	Suivre l'audio
+Nessuna frase da mostrare.	Aucune phrase à afficher.
+(tolta) {}	(supprimée) {}
+Correggi la frase delle {}	Modifier la phrase à {}
+Scegli una frase per correggerla; il tempo a sinistra la fa sentire.	Choisissez une phrase pour la modifier ; l'heure à gauche la lit.
+Da controllare	À vérifier
+Prima	Précédent
+Dopo	Suivant
+Sistema tutte le ripetizioni	Corriger toutes les répétitions
+Whisper qui non ha lasciato ripetizioni né frasi inventate: si può salvare così.	Whisper n'a laissé ici ni répétitions ni phrases inventées : on peut l'enregistrer tel quel.
+Risolvi	Corriger
+Lascia così	La laisser
+Il file nuovo sta accanto all'originale.	Le nouveau fichier est placé à côté de l'original.
+Salvato: {}	Enregistré : {}
+Correggi	Modifier
+La revisione di questo file non c'è più: trascrivilo di nuovo.	La relecture de ce fichier n'existe plus : transcrivez-le à nouveau.
+{} non scritto: {}	{} non écrit : {}
+Ripristina	Annuler
+Word di testo, con 1 pagina letta via OCR: controllalo. L'impaginazione non viene ricostruita.	Document Word de texte, avec 1 page lue par OCR : vérifiez-le. La mise en page n'est pas reconstituée.
+Testo estratto dal PDF, con 1 pagina letta via OCR: controllalo.	Texte extrait du PDF, avec 1 page lue par OCR : vérifiez-le.
+Manca 1 pagina scansionata: l'OCR ne legge al massimo {#}.	1 page numérisée manque : l'OCR en lit {} au maximum.
+Word modificabile; 1 pagina scansionata messa come immagine	Word modifiable ; 1 page numérisée placée en image
+Una pagina scansionata non è stata letta: accendi «Leggi le scansioni».	Une page numérisée n'a pas été lue : activez « Lire les scans ».
+Le pagine scansionate non sono state lette: accendi «Leggi le scansioni».	Les pages numérisées n'ont pas été lues : activez « Lire les scans ».
+Adesso: due punti in più, ovunque.	Maintenant : deux points plus grand, partout.
+Anche di tipi diversi, con stato e anteprima	Même de types différents, avec état et aperçu
+Anche elenchi	Aussi des listes
+Anche le foto di pagine	Aussi des photos de pages
+Anche più link in un colpo. Gli strumenti si scaricano da soli la prima volta e si tengono aggiornati.	Aussi plusieurs liens à la fois. Les outils se téléchargent tout seuls la première fois et se tiennent à jour.
+Audio e testo insieme	Audio et texte ensemble
+Avanzo	Excédent
+Caratteri più grandi	Texte plus grand
+Cedro chiede se sostituire, tenere entrambi o saltare	Cedro demande s'il faut remplacer, garder les deux ou ignorer
+Cedro controlla le novità e chiede prima di installare. Impostazioni, Sistema mostra processore, scheda video e memoria; Informazioni ha versione e licenze.	Cedro cherche les nouveautés et demande avant d'installer. Dans Réglages, Système montre processeur, carte graphique et mémoire ; À propos contient la version et les licences.
+Clic sulle miniature, poi i pulsanti in alto	Cliquez sur les miniatures puis sur les boutons du haut
+Coda	File
+Colonne, titoli, immagini	Colonnes, titres, images
+Comprimi, ruota, OCR, metadati; sui PDF anche Unisci e Dividi	Compresser, pivoter, OCR, métadonnées ; pour les PDF aussi Fusionner et Diviser
+Con i tempi	Avec horodatage
+Conferma	Confirmer
+Consiglio comunale	Conseil municipal
+Copia in un PDF nuovo	Copier dans un nouveau PDF
+Copia testo	Copier le texte
+Copiabile con un clic	Copier en un clic
+Da PDF a documento modificabile	De PDF à un document modifiable
+Dal Windows essenziale al Comune di Bondeno	De Windows essentiel à la commune de Bondeno
+Dal menu dell'icona apri Conversioni. Trascini file anche di tipi diversi: a sinistra le attività, al centro la coda, a destra le opzioni del file scelto.	Ouvrez Conversions depuis le menu de l'icône. Faites glisser des fichiers, même de types différents : activités à gauche, file au centre, options du fichier choisi à droite.
+Dalla voce al testo, poi rivedilo	De la voix au texte, puis la relire
+Dimensioni, raddrizza, PDF/A, bitrate, taglio	Taille, redressement, PDF/A, débit, découpe
+Entrate	Recettes
+Esempio: la tabella ricavata da un PDF scansionato.	Exemple : le tableau extrait d'un PDF numérisé.
+Esiste	Existe
+Formato e qualità	Format et qualité
+Gli strumenti si scaricano al primo uso e si aggiornano da soli.	Les outils se téléchargent à la première utilisation et se mettent à jour tout seuls.
+Il carattere cambia con il tema; la Guida segue il tema scelto.	La typographie change avec le thème ; ce Guide suit le thème choisi.
+Il consiglio comunale è convocato per	Le conseil municipal est convoqué
+Il file c'è già	Le fichier existe déjà
+Il file c'è già: sostituire, tenere entrambi o saltare?	Le fichier existe déjà : remplacer, garder les deux ou ignorer ?
+Il motore gira sul tuo PC e usa la scheda video se può.	Le moteur tourne sur votre PC et utilise la carte graphique si possible.
+Il resto sta in «Altre opzioni»	Le reste se trouve sous « Plus d'options »
+In Impostazioni, Aspetto: sei temi, la modalità Standard (tutte le opzioni) o Semplificata (solo l'essenziale) e i caratteri più grandi. Ogni tema ha il suo carattere. Questa Guida cambia insieme a loro.	Dans Réglages, Apparence : six thèmes, mode Standard (toutes les options) ou Simplifié (l'essentiel seulement) et texte plus grand. Chaque thème a sa propre typographie. Ce Guide change avec eux.
+In coda	En file
+Incolla un link, scegli Video o Solo audio	Collez un lien, choisissez Vidéo ou Audio seul
+Installa	Installer
+Intervista sindaco	Entretien avec le maire
+La finestra come la vuoi tu	La fenêtre comme vous la voulez
+La ruota	La roue
+La ruota è uguale in tutti i temi. Clic su una riga a sinistra per fermarti su quel modo.	La roue est la même dans tous les thèmes. Cliquez sur une ligne à gauche pour rester sur ce mode.
+Nella scheda PDF ci sono quattro strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.	L'onglet PDF a quatre outils en plus de la conversion. Les originaux ne sont jamais touchés : le résultat est toujours une nouvelle copie.
+Opzioni	Options
+PDF in Word/Excel	PDF en Word/Excel
+Per pagine o intervalli, con le miniature	Par pages ou plages, avec miniatures
+Peso ridotto	Taille réduite
+Più PDF in uno	Plusieurs PDF en un
+Più file insieme	Plusieurs fichiers à la fois
+Più leggibili in tutta l'app	Plus facile à lire dans toute l'application
+Play per frase, i punti da controllare in evidenza	Lecture phrase par phrase, passages douteux surlignés
+Prima: il testo era piccolo da leggere.	Avant : le texte était petit à lire.
+Qualità 85	Qualité 85
+Raddrizza, OCR, riconosce le tabelle	Redresse, OCR, reconnaît les tableaux
+Raddrizzo e leggo in italiano…	Redressement et lecture en italien…
+Risoluzione a scelta	Résolution de votre choix
+Ruota 90°	Pivoter de 90°
+Ruota, togli, copia	Pivoter, retirer, copier
+Salva come Excel	Enregistrer en Excel
+Salva come Word	Enregistrer en Word
+Scansione	Scan
+Sei disposizioni	Six mises en page
+Senza immagini	Sans image
+Si tiene aggiornato da solo	Se tient à jour tout seul
+Standard o Semplificata	Standard ou Simplifié
+Stesse funzioni dappertutto: l'installatore giusto lo sceglie Cedro quando si aggiorna.	Les mêmes fonctions partout : Cedro choisit le bon installateur lors de la mise à jour.
+Stima prima; mai più pesante dell'originale	D'abord l'estimation ; jamais plus lourd que l'original
+Strumenti PDF	Outils PDF
+Tieni premuto un tasto, poi clic destro sul file	Maintenez une touche enfoncée puis faites un clic droit sur le fichier
+Trascina i file, scegli, converti	Faites glisser les fichiers, choisissez, convertissez
+Trascina per l'ordine, scegli le pagine di ogni file	Faites glisser pour fixer l'ordre, choisissez les pages de chaque fichier
+Trascrivi vocali, registrazioni e l'audio dei video; se c'è una scheda video compatibile Cedro la usa. Riconosce chi parla e in Rivedi riascolti ogni frase, dai i nomi e correggi i punti dubbi.	Transcrivez des notes vocales, des enregistrements et le son des vidéos ; s'il y a une carte graphique compatible, Cedro l'utilise. Il reconnaît qui parle, et dans la Relecture vous réécoutez chaque phrase, nommez les intervenants et corrigez les passages douteux.
+Un PDF in più	Un PDF en plusieurs
+Un foglio per tabella, numeri nelle celle giuste	Une feuille par tableau, nombres dans les bonnes cellules
+Un link per riga	Un lien par ligne
+Unisci, dividi, riordina e comprimi i PDF	Fusionnez, divisez, réordonnez et compressez des PDF
+Uscite	Dépenses
+Video	Vidéo
+Word mantiene colonne e impaginazione, Excel prende le tabelle. Funziona anche con i PDF scansionati: Cedro raddrizza la pagina e legge il testo in italiano.	Word conserve colonnes et mise en page, Excel prend les tableaux. Cela marche aussi sur les PDF numérisés : Cedro redresse la page et lit le texte en italien.
+YouTube e web	YouTube et web
+da controllare	à vérifier
+giovedì alle diciotto	Jeudi à dix-huit heures
+in corso	en cours
+presso la sala consiliare.	dans la salle du conseil.
+scheda video usata	carte graphique utilisée
+storta e sfocata	de travers et flou
+È uscita una nuova versione di Cedro	Une nouvelle version de Cedro est sortie
+▶ Riascolta	▶ Réécouter
+Interlocutore	Intervenant
+Interlocutori	Intervenants
+Voci	Voix
+Voce nuova	Nouvelle voix
+Chi dice questa frase?	Qui dit cette phrase ?
+Unisci «{}» a…	Fusionner « {} » avec…
+Unisci a…	Fusionner avec…
+Chi parla	Qui parle
+Chi parla?	Qui ?
+Scrivi chi parla nel file	Écrire qui parle dans le fichier
+Il nome cambia in tutte le frasi. Per una frase sola: clic sul suo nome a sinistra.	Le nom change dans toutes les phrases. Pour une seule phrase, cliquez sur son nom à gauche.
+Quante persone parlano?	Combien de personnes parlent ?
+Cedro riconosce le voci e scrive chi parla prima di ogni frase. Se non lo sai, lascia Automatico: le conta da solo.	Cedro reconnaît les voix et écrit qui parle avant chaque phrase. Si vous ne savez pas, laissez Automatique : il les compte tout seul.
+Automatico	Automatique
+Cedro ascolta e conta le voci da solo	Cedro écoute et compte les voix tout seul
+OPPURE DIMMI QUANTE SONO	OU INDIQUEZ COMBIEN
+Va bene quasi sempre. Se poi Cedro divide una persona in due, in Rivedi le unisci con un clic.	Juste presque à chaque fois. Si Cedro scinde une personne en deux, vous les fusionnez dans la Relecture en un clic.
+Una sola voce: Cedro salta il riconoscimento delle voci. Veloce come oggi, senza nomi nel testo.	Une voix : Cedro saute la reconnaissance des voix. Aussi rapide qu'avant, sans noms dans le texte.
+Due voci, per esempio un'intervista o una telefonata.	Deux voix, par exemple un entretien ou un appel téléphonique.
+Tre voci: Cedro le raggruppa esattamente in tre.	Trois voix : Cedro les regroupe en exactement trois.
+{#} voci: Cedro le raggruppa esattamente in {#}. Con tante voci conviene un audio pulito.	{1} voix : Cedro les regroupe en exactement {2}. Avec beaucoup de voix, un enregistrement propre aide.
+Vale per il file in coda.	S'applique au fichier de la file.
+Vale per i {#} file in coda.	S'applique aux {} fichiers de la file.
+riconosco chi parla…	reconnaissance de qui parle…
+Voci: {#}%	Voix : {} %
+trovate {#} voci in {} ({#} s)	{} voix trouvées en {} ({} s)
+una sola voce ({#} s)	une seule voix ({} s)
+nessuna voce chiara: trascrivo senza nomi	aucune voix claire : transcription sans noms
+non riconosciute ({}): trascrivo senza nomi	non reconnues ({}) : transcription sans noms
+{}: trascrivo senza riconoscere chi parla	{} : transcription sans reconnaître qui parle
+scarico la prima volta il riconoscimento delle voci ({})…	téléchargement de la reconnaissance des voix pour la première fois ({})…
+--voci vuole auto o un numero da 1 a 8	--voci accepte auto ou un nombre de 1 à 8
+Segmentazione pyannote 3.0	pyannote segmentation 3.0
+CAM++ di 3D-Speaker	3D-Speaker CAM++
+Trova dove parla una voce e dove due si sovrappongono (scaricato alla prima trascrizione con le voci).	Trouve où une voix parle et où deux se chevauchent (téléchargé à la première transcription avec voix).
+Riconosce l'impronta di ogni voce, per dire chi parla (scaricato con la segmentazione).	Reconnaît l'empreinte de chaque voix pour savoir qui parle (téléchargé avec la segmentation).
+I modelli delle voci in ONNX, e il metodo che Cedro segue per raggrupparle.	Les modèles de voix en ONNX et la méthode que Cedro suit pour les regrouper.
+Prepara l'audio per l'impronta delle voci.	Prépare l'audio pour l'empreinte vocale.
+Apre l'archivio dei modelli delle voci (libbz2-rs-sys ha la licenza di bzip2, simile a BSD).	Ouvre l'archive des modèles de voix (libbz2-rs-sys utilise la licence bzip2, proche de BSD).
+Fa i calcoli dei modelli: riconoscimento del testo e delle voci.	Exécute les modèles : reconnaissance du texte et de la voix.
+{#} frasi · {#} interlocutori · niente da controllare	{} phrases · {} intervenants · rien à vérifier
+{#} frasi · {#} interlocutori · {#} da controllare	{} phrases · {} intervenants · {} à vérifier
+{#} frasi · {#} min	{} phrases · {} min
+{#} frasi · meno di 1 min	{} phrases · moins de 1 min
+Le voci riconosciute	Les voix reconnues
+Un nome e un colore per ogni interlocutore	Un nom et une couleur pour chaque intervenant
+1 frase · {#} min	1 phrase · {} min
+1 frase · meno di 1 min	1 phrase · moins de 1 min
+Riassunto AI	Résumé par IA
+Riassunto	Résumé
+Fai il riassunto	Rédiger le résumé
+Riassunto della riunione	Résumé de la réunion
+Cedro legge la trascrizione e scrive in breve, chi ha detto cosa, le decisioni e le cose da fare. Per un'ora di riunione ci mette qualche minuto.	Cedro lit la transcription et rédige un court résumé, qui a dit quoi, les décisions et les choses à faire. Pour une réunion d'une heure, cela prend quelques minutes.
+Cedro legge la trascrizione con i nomi di «Chi parla» e scrive in breve, chi ha detto cosa, le decisioni e le cose da fare. Per un'ora di riunione ci mette qualche minuto.	Cedro lit la transcription avec les noms de « Qui parle » et rédige un court résumé, qui a dit quoi, les décisions et les choses à faire. Pour une réunion d'une heure, cela prend quelques minutes.
+L'ultima volta non è riuscito: {}	La dernière fois, cela n'a pas marché : {}
+Memoria libera	Mémoire libre
+{} · ne servono 4 GB	{} · 4 Go nécessaires
+ne servono 4 GB	4 Go nécessaires
+{} già sul PC	{} est déjà sur ce PC
+Prima volta: scarica il modello	La première fois : télécharge le modèle
+Lavora su	Fonctionne sur
+Tutto sul tuo PC	Tout sur votre PC
+niente internet	sans internet
+Sto facendo il riassunto…	Rédaction du résumé…
+Memoria libera: {}	Mémoire libre : {}
+Memoria controllata	Mémoire vérifiée
+Aspetto che finisca l'altro lavoro	Attente de la fin de l'autre travail
+Scarico il modello: {}	Téléchargement du modèle : {}
+Carico il modello	Chargement du modèle
+Modello pronto	Modèle prêt
+Leggo la riunione: parte {} di {}	Lecture de la réunion : partie {} sur {}
+Leggo la riunione: metto insieme gli appunti	Lecture de la réunion : assemblage des notes
+Leggo la riunione	Lecture de la réunion
+Scrivo il riassunto	Rédaction du résumé
+{} · si può continuare a lavorare	{} · vous pouvez continuer à travailler
+Si può continuare a lavorare	Vous pouvez continuer à travailler
+Meno di 1 minuto ancora	Moins d'une minute restante
+Circa 1 minuto ancora	Environ 1 minute restante
+Circa {} minuti ancora	Environ {} minutes restantes
+Memoria del PC	Mémoire du PC
+Altri programmi {}	Autres programmes {}
+Riassunto {}	Résumé {}
+A fine riassunto il modello si chiude e i {} tornano liberi.	Quand le résumé est terminé, le modèle se ferme et les {} sont de nouveau libres.
+Poca memoria libera	Peu de mémoire libre
+Per il riassunto servono 4 GB liberi, adesso ce ne sono {}. Chiudi qualche programma, per esempio il browser o Outlook, e riprova. Cedro non parte per non bloccare il PC.	Le résumé a besoin de 4 Go libres, il y en a actuellement {}. Fermez quelques programmes, par exemple le navigateur ou Outlook, et réessayez. Cedro ne démarre pas pour ne pas bloquer le PC.
+Riprova	Réessayer
+In breve	En bref
+Chi ha detto cosa	Qui a dit quoi
+Decisioni	Décisions
+Da fare	À faire
+Nessuna decisione presa.	Aucune décision n'a été prise.
+Nessuna cosa da fare.	Rien à faire.
+Nessuna	Aucune
+Copiato	Copié
+Rifai	Refaire
+Scritto da {} sul tuo PC in {}. Controlla nomi, cifre e date prima di usarlo.	Rédigé par {} sur votre PC en {}. Vérifiez les noms, chiffres et dates avant de l'utiliser.
+Metti il riassunto in cima al file	Placer le résumé au début du fichier
+Sta già facendo il riassunto di {}: aspetta che finisca.	Le résumé de {} est déjà en cours de rédaction : attendez qu'il se termine.
+Riassunto automatico fatto sul PC: da controllare.	Résumé automatique fait sur le PC : à vérifier.
+Fa girare il modello del riassunto sul PC (programma scaricato al primo riassunto).	Exécute le modèle de résumé sur le PC (programme téléchargé avec le premier résumé).
+Collega llama.cpp a Rust.	Relie llama.cpp à Rust.
+Il modello che scrive il riassunto (scaricato al primo riassunto, in formato GGUF di Unsloth).	Le modèle qui rédige le résumé (téléchargé avec le premier résumé, au format GGUF d'Unsloth).
+motore cedro-riassumi	moteur cedro-riassumi
+Sul tuo PC	Sur votre PC
+In breve, decisioni e cose da fare	En bref, décisions et choses à faire
+Si prepara	Préparation
+Trascrive	Transcription
+Si prepara · file {#} di {#}	Préparation · fichier {} sur {}
+Trascrive · file {#} di {#}	Transcription · fichier {} sur {}
+Restano meno di un minuto	Moins d'une minute restante
+Restano circa {#} min	Environ {} min restantes
+Restano circa {#} h {#} min	Environ {} h {} min restantes
+Calcolo il tempo che resta…	Calcul du temps restant…
+Accendo il motore…	Démarrage du moteur…
+Processore · {}	Processeur · {}
+Radeon integrata	Radeon intégrée
+scheda video	carte graphique
+Firma digitale	Signature numérique
+Trascina qui i file firmati	Déposez ici les fichiers signés
+Te li apro e ti dico se le firme valgono: .p7m, .p7s, .m7m, .tsd, .tsr e i PDF firmati.	Je les ouvre et je vous dis si les signatures sont valides : .p7m, .p7s, .m7m, .tsd, .tsr et PDF signés.
+Apri e verifica	Ouvrir et vérifier
+Apri un .p7m o un PDF firmato: vedi il documento, chi l'ha firmato e se la firma vale.	Ouvrez un .p7m ou un PDF signé : voyez le document, qui l'a signé et si la signature est valide.
+Apri un .p7m o un PDF firmato e vedi se la firma vale.	Ouvrez un .p7m ou un PDF signé et voyez si la signature est valide.
+Verifica una cartella	Vérifier un dossier
+Controllo tutti i file firmati di una cartella, per esempio gli allegati di una PEC, e ti metto in cima quelli da guardare.	Je vérifie chaque fichier signé d'un dossier, par exemple les pièces jointes d'un courriel certifié, et je place en haut ceux qu'il faut regarder.
+Tutti i file firmati di una cartella, quelli da guardare in cima.	Tous les fichiers signés d'un dossier, en haut ceux qu'il faut regarder.
+Apri con Cedro i file firmati	Ouvrir les fichiers signés avec Cedro
+Doppio clic su .p7m, .p7s, .m7m, .tsd e .tsr	Double-clic sur .p7m, .p7s, .m7m, .tsd et .tsr
+Anche i PDF firmati	Aussi les PDF signés
+Se no restano al lettore PDF	Sinon ils restent avec votre lecteur PDF
+Controlla online la revoca	Vérifier la révocation en ligne
+Chiedo al certificatore se è stato revocato	Je demande à l'autorité de certification s'il a été révoqué
+Elenco europeo dei certificatori	Liste européenne des autorités de certification
+Aggiorna ora	Mettre à jour maintenant
+Lo sto scaricando…	Téléchargement…
+Non ancora scaricato	Pas encore téléchargée
+clic per riaprire	cliquez pour le rouvrir
+Qui ritrovi i file firmati che apri, con il loro giudizio.	Les fichiers signés que vous ouvrez apparaissent ici, avec leur verdict.
+Firma valida	Signature valide
+Da guardare	À examiner
+Non valida	Non valide
+Non firmato	Non signé
+Valida	Valide
+Verifica di più file	Vérifier plusieurs fichiers
+Un rapporto unico in PDF	Un rapport PDF
+Estrai tutti i documenti	Extraire tous les documents
+Controllo le firme…	Vérification des signatures…
+Salva il documento	Enregistrer le document
+Salva la versione firmata	Enregistrer la version signée
+Apri fuori da Cedro	Ouvrir hors de Cedro
+Stampa	Imprimer
+Rapporto di verifica	Rapport de vérification
+Firme	Signatures
+Chi ha firmato	Qui a signé
+Firma	Signature
+Marca temporale	Horodatage
+Marche temporali	Horodatages
+Com'è fatto il file	Comment le fichier est construit
+Verifica alla data	Vérifier à une date
+Oggi	Aujourd'hui
+Quando è stato firmato	Au moment de la signature
+Un altro giorno	Un autre jour
+Verifica	Vérifier
+Scrivi la data come 03/10/2026.	Écrivez la date comme 03/10/2026.
+Le firme con la marca temporale si controllano all'ora della marca; le altre a oggi.	Les signatures horodatées sont vérifiées au moment de l'horodatage ; les autres à la date d'aujourd'hui.
+Si controlla all'ora della marca o, senza marca, a quella scritta da chi ha firmato (non è certa).	Vérifiée au moment de l'horodatage ou, à défaut, au moment indiqué par le signataire (non certain).
+Si controlla se le firme valevano quel giorno.	Vérifie si les signatures étaient valides ce jour-là.
+Dettagli tecnici del certificato	Détails techniques du certificat
+Vedi la versione firmata	Voir la version signée
+Torna al file com'è adesso	Revenir au fichier tel qu'il est maintenant
+Torna al file	Revenir au fichier
+Manca il file originale	Le fichier original est manquant
+Scegli il file originale	Choisissez le fichier original
+Questo tipo di file non lo so mostrare	Je ne peux pas afficher ce type de fichier
+Non c'è un documento da mostrare	Il n'y a pas de document à afficher
+Il file è vuoto	Le fichier est vide
+Documento	Document
+Certificato	Certificat
+Revoca	Révocation
+Data certa	Date certaine
+Firma valida, con un avviso	Signature valide, avec un avertissement
+Valida, con un avviso	Valide, avec un avertissement
+Non valida: documento cambiato	Non valide : document modifié
+Busta firmata	Enveloppe signée
+Busta esterna	Enveloppe extérieure
+Busta interna	Enveloppe intérieure
+Busta intermedia	Enveloppe intermédiaire
+Firma staccata (.p7s)	Signature détachée (.p7s)
+firmata da	signé par
+firmata insieme da	signé conjointement par
+con dentro la firma di	contenant la signature de
+In quella cartella non ci sono file firmati.	Il n'y a pas de fichiers signés dans ce dossier.
+Il file non c'è più: è stato spostato o cancellato.	Le fichier n'est plus là : il a été déplacé ou supprimé.
+21 × 29,7 cm	21 × 29,7 cm
+29,7 × 42 cm	29,7 × 42 cm
+4K, schermi grandi	4K, grands écrans
+Dimezza le misure	Réduire la taille de moitié
+Excel in inglese, programmi	Excel en anglais, programmes
+Excel in italiano	Excel en italien
+Full HD	Full HD
+Full HD, va bene quasi sempre	Full HD, presque toujours suffisant
+HD, circa metà peso	HD, environ la moitié de la taille
+Leggi il testo (OCR)	Lire le texte (OCR)
+Mac, senza compressione	Mac, non compressé
+Modifica il PDF	Modifier le PDF
+Modifica il testo	Modifier le texte
+Modifica l'immagine	Modifier l'image
+Nessun dato nascosto: copia identica	Pas de données cachées : copie identique
+PDF più leggero	PDF plus léger
+Rendi il testo ricercabile (OCR)	Rendre le texte consultable (OCR)
+Ruota di 90° a destra	Pivoter de 90° à droite
+Solo l'audio (MP3)	Audio seul (MP3)
+Solo testo	Texte seul
+TV europea	TV européenne
+Togli GPS e dati nascosti	Supprimer le GPS et les données cachées
+Tolti	Supprimé
+Tutto MAIUSCOLO	TOUT EN MAJUSCULES
+USA, 21,6 × 27,9 cm	États-Unis, 21,6 × 27,9 cm
+Word, ODT, testi	Word, ODT, textes
+animazioni	animations
+anteprime, leggerissime	aperçus, très légers
+buona da leggere	facile à lire
+cinema	cinéma
+cinema ed effetti	cinéma et effets
+con testo ricercabile	avec texte consultable
+copia le scritte	copie l'écriture
+da incollare in Excel	à coller dans Excel
+da modificare, anche scansioni	modifiable, scans aussi
+data e impostazioni di scatto	date de prise de vue et réglages
+dati EXIF	données EXIF
+dati IPTC	données IPTC
+dati XMP	données XMP
+dati per programmi	données pour programmes
+decidi tu, file per file	vous décidez, fichier par fichier
+destra e sinistra	gauche et droite
+equilibrato	équilibré
+fluido	fluide
+foto, leggero	photos, léger
+fotocamera	appareil photo
+grafica 3D e giochi	graphismes 3D et jeux
+icone di Windows	icônes Windows
+il vecchio si perde	l'ancien est perdu
+lascia il vecchio	conserve l'ancien
+lascia tutto	conserve tout
+leggero, per il telefono	léger, pour téléphones
+luci ad alta dinamica	lumière à grande plage dynamique
+luogo, data, fotocamera	lieu, date, appareil
+massima qualità	meilleure qualité
+metà larghezza e altezza	moitié de la largeur et de la hauteur
+metà peso, per la voce	moitié de la taille, pour la voix
+miniatura	miniature
+musica	musique
+musica, alta qualità	musique, haute qualité
+musica, leggero	musique, léger
+nessun ridimensionamento	sans redimensionnement
+nessuna perdita, leggero	sans perte, léger
+per email e chat	pour courriel et messagerie
+per la stampa	pour imprimer
+per le scansioni	pour les scans
+per siti e WhatsApp	pour les sites web et WhatsApp
+piccolissimo	minuscule
+piccolissimo, ottimo per la voce	minuscule, idéal pour la voix
+posizione GPS	position GPS
+programmi Linux	programmes Linux
+pronto da stampare	prêt à imprimer
+schermo nitido	net à l'écran
+schermo, leggero	écran, léger
+senso orario	dans le sens horaire
+senza compressione	non compressé
+senza impaginazione	sans mise en page
+solo il silenzio vero	seulement le vrai silence
+stampa e archivio	impression et archivage
+stesso aspetto, meno MB	même aspect, moins de Mo
+tabella per Excel	tableau pour Excel
+tabelle in fogli di calcolo	tableaux dans des feuilles de calcul
+taglia di più	coupe davantage
+testi e commenti	textes et commentaires
+tiene tutti e due	conserve les deux
+titoli ed elenchi	titres et listes
+toglie i colori	supprime les couleurs
+toglie le immagini	abandonne l'image
+trasparenza, nessuna perdita	transparence, sans perte
+tutte le foto dello zip	toutes les photos du zip
+tutti gli audio	tous les fichiers audio
+tutto minuscolo	tout en minuscules
+un solo PDF	un seul PDF
+un'immagine per pagina	une image par page
+una foto per pagina	une photo par page
+va bene ovunque	fonctionne partout
+vecchi programmi Windows	anciens programmes Windows
+vecchi sistemi	anciens systèmes
+veloce da aprire	s'ouvre vite
+voce e podcast	voix et podcasts
+voce, leggerissimo	voix, très léger
+voce, leggero	voix, léger
+data di scatto	date de prise de vue
+commenti	commentaires
+dati in coda	données en fin de fichier
+Usa la ruota	Utiliser la roue
+Tasto più clic destro su un file apre la ruota. Spenta, i file si convertono dalla finestra Conversioni.	Une touche plus clic droit sur un fichier ouvre la roue. Désactivé, les fichiers se convertissent depuis la fenêtre Conversions.
+Dal menu del file si apre la ruota. Spenta, «Apri in Cedro» porta i file nella finestra Conversioni.	Le menu du fichier ouvre la roue. Désactivé, « Ouvrir dans Cedro » amène les fichiers dans la fenêtre Conversions.
+Vetrino	Lame
+Panoramica	Vue d'ensemble
+Media	Moyen
+Piena	Complet
+Etichetta	Étiquette
+La targhetta con il codice del vetrino	L'étiquette avec le code de la lame
+Foto del vetrino intero	Photo de toute la lame
+La «macro» scattata dallo scanner	La prise « macro » faite par le scanner
+{} × {} px · pieno	{} × {} px · complet
+Per guardarlo a schermo o metterlo in un documento.	Pour regarder à l'écran ou mettre dans un document.
+Il livello più grande che sta comodo in memoria.	Le plus grand niveau qui tient confortablement en mémoire.
+È la scelta di partenza.	C'est le choix par défaut.
+Ogni dettaglio dello scanner.	Tous les détails du scanner.
+Si scrive a strisce: ci vuole qualche minuto.	Il s'écrit par bandes : cela prend quelques minutes.
+Per questa voce si usa il livello più grande che sta in memoria.	Pour ce format, on utilise le plus grand niveau qui tient en mémoire.
+A questa misura esce in TIFF.	À cette taille, il sort en TIFF.
+Misure del primo vetrino: ogni vetrino usa il suo livello.	Tailles de la première lame : chaque lame utilise son propre niveau.
+Riscritto in PNG dal vetrino, senza etichetta né dati dello scanner	Réécrit en PNG à partir de la lame, sans étiquette ni données du scanner
+~ · con etichetta e foto del vetrino	 · avec étiquette et photo de la lame
+~ · con foto del vetrino	 · avec photo de la lame
+~ · con etichetta	 · avec étiquette
+~ dal vetrino	 de la lame
+~ · in TIFF: 	 · en TIFF : 
+~ non regge 	 n'accepte pas 
+~ · dal livello 	 · à partir du niveau 
+~: il pieno è troppo grande per questa voce	: le niveau complet est trop grand pour ce format
+vetrino non letto: {}	lame non lue : {}
+non è un vetrino Aperio	pas une lame Aperio
+il livello pieno non è a colori RGB a 8 bit	le niveau complet n'est pas en couleur RVB 8 bits
+il vetrino non ha livelli a tessere	la lame n'a pas de niveaux en tuiles
+il livello {#} × {#} è troppo grande da aprire intero	le niveau {} × {} est trop grand pour être ouvert en entier
+misure del livello non valide	taille de niveau invalide
+zona fuori dal livello {#} × {#}	zone hors du niveau {} × {}
+zona troppo grande da aprire intera	zone trop grande pour être ouverte en entier
+misure della zona non valide	taille de zone invalide
+tessera {#} non letta: {}	tuile {} non lue : {}
+tessera {#}: {}	tuile {} : {}
+decodifica interrotta	décodage interrompu
+immagine a più di 8 bit	image de plus de 8 bits
+colori non gestiti: {}	couleurs non prises en charge : {}
+il JPEG si ferma a {#} px di lato	JPEG s'arrête à {} px par côté
+compressione interrotta	compression interrompue
+il TIFF supera i 4 GB	le TIFF dépasse 4 Go
+tessera a più di 8 bit	tuile de plus de 8 bits
+colori della tessera non gestiti	couleurs de tuile non prises en charge
+compressione {#} non gestita	compression {} non prise en charge
+JPEG 2000 con {#} componenti	JPEG 2000 avec {} composantes
+lettura interrotta	lecture interrompue
+Del file	Fichier
+Polmone	Poumon
+Osso	Os
+Tessuti molli	Tissus mous
+Finestra	Fenêtre
+«Del file» è quella scelta da chi ha fatto l'esame; Polmone, Osso e Tessuti molli sono quelle classiche della TC	« Fichier » est celle choisie par la personne qui a fait l'examen ; Poumon, Os et Tissus mous sont les fenêtres classiques du scanner
+Tutte le immagini della serie	Toutes les images de la série
+Spento: solo la prima	Désactivé : seulement la première
+Valori originali a 16 bit	Valeurs d'origine 16 bits
+Per misurare: niente finestra, unità Hounsfield intatte	Pour mesurer : sans fenêtre, unités Hounsfield intactes
+Anonimizza	Anonymiser
+Nome, ID, nascita, medico, clinica e UID non escono; i file prendono un codice	Nom, identifiant, date de naissance, médecin, clinique et UID sont exclus ; les fichiers reçoivent un code
+DICOM	DICOM
+{} · {#} file	{} · {} fichiers
+In ecografie e catture dello schermo il nome può essere scritto dentro l'immagine: Cedro non lo cancella, controlla prima di condividere.	Dans les échographies et les captures d'écran, le nom peut être écrit dans l'image : Cedro ne l'efface pas, vérifiez avant de partager.
+{} immagini	{} images
+senza immagine (referto o elenco)	pas d'image (rapport ou liste)
+Ecografia	Échographie
+Mammografia	Mammographie
+Fluoroscopia	Fluoroscopie
+Medicina nucleare	Médecine nucléaire
+PDF di {#} pagine, un'immagine per pagina	PDF de {} pages, une image par page
+{#} {}, uno per immagine ({#}×{#})	{2} {1}, un par image ({3}×{4})
+~ · finestra polmone	 · fenêtre pulmonaire
+~ · finestra osso	 · fenêtre osseuse
+~ · finestra tessuti molli	 · fenêtre des tissus mous
+~ · finestra del file (polmone, osso e tessuti molli valgono per la TC)	 · fenêtre du fichier (poumon, os et tissus mous valent pour le scanner)
+~ · valori originali a 16 bit	 · valeurs d'origine 16 bits
+~ · valori originali a 16 bit, spostati di 32768 (gli Hounsfield negativi)	 · valeurs d'origine 16 bits, décalées de 32768 (Hounsfield négatifs)
+~. Attenzione: in questo tipo di immagine il nome può essere scritto dentro i pixel; controllala prima di condividerla	. Attention : dans ce type d'image, le nom peut être écrit dans les pixels ; vérifiez avant de partager
+il DICOM non ha un'immagine	le DICOM n'a pas d'image
+il DICOM non contiene un'immagine (forse è un referto o un elenco)	le DICOM ne contient pas d'image (peut-être un rapport ou une liste)
+file troncato	fichier tronqué
+Nessun dato personale trovato	Aucune donnée personnelle trouvée
+~. Restano specie, razza, sesso, età e peso.	. L'espèce, la race, le sexe, l'âge et le poids sont conservés.
+i file esistono già: saltati	les fichiers existent déjà : ignoré
+~Tolti: 	Supprimé : 
+~. Codice del paziente: 	. Code du patient : 
+~nome del paziente	nom du patient
+~codice del paziente	identifiant du patient
+~data di nascita	date de naissance
+~proprietario	propriétaire
+~clinica o ospedale	clinique ou hôpital
+~medici e operatori	médecins et opérateurs
+~indirizzi e telefoni	adresses et numéros de téléphone
+~note e commenti	notes et commentaires
+~numeri di accettazione e di studio	numéros d'accession et d'étude
+~numero di serie dell'apparecchio	numéro de série de l'appareil
+~dati privati del produttore	données privées du fabricant
+~identificativi dell'esame (UID)	identifiants de l'examen (UID)
+~date (spostate tutte insieme)	dates (toutes décalées ensemble)
+~allevamento	éleveur
+Questa immagine può avere nome o data scritti dentro i pixel (ecografie, catture dello schermo): controllala prima di condividerla.	Cette image peut avoir le nom ou la date écrits dans les pixels (échographies, captures d'écran) : vérifiez avant de partager.
+Togli autore e dati nascosti	Supprimer l'auteur et les données cachées
+autore, programma, commenti	auteur, programme, commentaires
+autore, revisioni, commenti	auteur, révisions, commentaires
+Modifica il documento	Modifier le document
+Anonimo	Anonyme
+Nessun dato nascosto trovato.	Aucune donnée cachée trouvée.
+Il testo del documento resta com'è: se il nome è scritto lì, va tolto a mano.	Le texte du document reste tel quel : si le nom y est écrit, retirez-le à la main.
+Il PDF contiene allegati: non sono stati aperti, controllali.	Le PDF a des pièces jointes : elles n'ont pas été ouvertes, vérifiez-les.
+formato non gestito	format non pris en charge
+PDF protetto da password: togli prima la password e riprova	PDF protégé par mot de passe : retirez d'abord le mot de passe et réessayez
+i .doc e .rtf vecchi non si ripuliscono: salvali prima in .docx o .odt	les anciens fichiers .doc et .rtf ne peuvent pas être nettoyés : enregistrez-les d'abord en .docx ou .odt
+documento non letto: {}	document non lu : {}
+PDF non scritto: {}	PDF non écrit : {}
+~autore	auteur
+~programma	programme
+~date di creazione e modifica	dates de création et de modification
+~titolo	titre
+~oggetto	sujet
+~parole chiave	mots-clés
+~altre informazioni del documento	autres informations du document
+~metadati XMP	métadonnées XMP
+~dati privati dei programmi	données privées du programme
+~autori dei commenti	auteurs des commentaires
+~date dei commenti	dates des commentaires
+~dati della firma	détails de la signature
+~azioni all'apertura	actions à l'ouverture
+~proprietà personalizzate	propriétés personnalisées
+~elenco delle persone	liste de personnes
+~miniatura	miniature
+~ultimo a modificare	dernière modification par
+~descrizione	description
+~categoria	catégorie
+~chi ha stampato	imprimé par
+~numero di revisioni	nombre de révisions
+~tempo di modifica	temps d'édition
+~modello	modèle
+~azienda	société
+~responsabile	responsable
+~indirizzo dei collegamenti	base des liens hypertextes
+~autori di commenti e revisioni	auteurs des commentaires et révisions
+~percorso del file sul PC	chemin du fichier sur le PC
+numeri veri, geni come testo	vrais nombres, gènes conservés en texte
+Excel con {#} righe.	Excel avec {} lignes.
+Numeri con la virgola letti come numeri.	Nombres à virgule décimale lus comme des nombres.
+Piastra da {#} pozzetti anche una riga per pozzetto (foglio Pozzetti).	Plaque de {} puits aussi présentée avec une ligne par puits (feuille Pozzetti).
+{#} piastre da {#} pozzetti, anche una riga per pozzetto (foglio Pozzetti).	{} plaques de {} puits, aussi présentées avec une ligne par puits (feuille Pozzetti).
+Nomi di geni e codici lasciati come testo.	Noms de gènes et codes conservés en texte.
+CSV dal foglio di calcolo	CSV à partir de la feuille de calcul
+{#} fogli: un CSV per foglio	{} feuilles : un CSV par feuille
+il foglio di calcolo è vuoto	la feuille de calcul est vide
+è già un Excel: Cedro ne fa un altro solo se trova piastre da mettere una riga per pozzetto	c'est déjà un fichier Excel : Cedro n'en crée un autre que s'il trouve des plaques à présenter avec une ligne par puits
+il file non è un foglio di calcolo leggibile (forse un .xls vecchio: salvalo in .xlsx)	le fichier n'est pas une feuille de calcul lisible (peut-être un ancien .xls : enregistrez-le en .xlsx)
+cartella di lavoro non trovata nel file	classeur introuvable dans le fichier
+nessun foglio nel file	pas de feuilles dans le fichier
+contenuto del foglio non trovato	contenu de la feuille introuvable
+foglio non letto: {}	feuille non lue : {}
+testi del foglio non letti: {}	texte de la feuille non lu : {}
+cartella di lavoro non letta: {}	classeur non lu : {}
+troppe colonne per Excel: {#} (al massimo {#})	trop de colonnes pour Excel : {} ({} au maximum)
+Microscopia	Microscopie
+Sovrapposti	Superposés
+Uno per file	Un par fichier
+Entrambi	Les deux
+Centrale	Médian
+Sovrapposti: un'immagine a colori con ogni canale del suo colore	Superposés : une image en couleur avec chaque canal dans sa couleur
+Piani Z (profondità)	Plans Z (profondeur)
+Massima: unisce i piani tenendo il punto più luminoso, come nelle figure degli articoli	Maximale : fusionne les plans en gardant le point le plus lumineux, comme dans les figures d'articles
+Tutti gli istanti	Tous les points temporels
+Spento: solo il primo	Désactivé : seulement le premier
+Contrasto automatico	Contraste automatique
+A 16 bit la fluorescenza sembra quasi nera: si regola da solo, canale per canale	En 16 bits, la fluorescence paraît presque noire : elle s'ajuste toute seule, canal par canal
+Barra di scala	Barre d'échelle
+Se il file dice quanto è grande un pixel	Si le fichier indique la taille d'un pixel
+Per misurare: un file per canale, senza colori né contrasto	Pour mesurer : un fichier par canal, sans couleurs ni contraste
+Il file non dice quanto è grande un pixel: senza barra di scala.	Le fichier n'indique pas la taille d'un pixel : pas de barre d'échelle.
+~ · barra di scala 	 · barre d'échelle 
+~. Il file non dice quanto è grande un pixel: senza barra di scala	. Le fichier n'indique pas la taille d'un pixel : pas de barre d'échelle
+TIFF di un tipo che Cedro non legge ancora (serve grigio o RGB)	TIFF d'un type que Cedro ne sait pas encore lire (gris ou RVB requis)
+piano non trovato nel file	plan introuvable dans le fichier
+tipo di pixel non letto	type de pixel non lu
+troppe pagine	trop de pages
+niente da scrivere	rien à écrire
+~ canali sovrapposti e uno per file	 canaux superposés et un par fichier
+~ canali sovrapposti	 canaux superposés
+~ canali, un file per canale	 canaux, un fichier par canal
+~un file per piano Z	un fichier par plan Z
+~piano Z centrale	plan Z médian
+~proiezione massima di 	projection maximale de 
+~ piani Z	 plans Z
+~contrasto automatico	contraste automatique
+~solo il primo istante	seulement le premier point temporel
+~valori originali a 16 bit, un file per canale	valeurs d'origine 16 bits, un fichier par canal
+~, uno per immagine (	, un par image (
+ND2 compresso con perdita (JPEG 2000): Cedro non lo legge ancora; da NIS-Elements si può esportare in TIFF	ND2 à compression avec perte (JPEG 2000) : Cedro ne sait pas encore le lire ; NIS-Elements peut l'exporter en TIFF
+ND2 di vecchio tipo (NIS-Elements 2, immagini in JPEG 2000): Cedro non lo legge ancora; da NIS-Elements si può esportare in TIFF	ND2 à l'ancienne (NIS-Elements 2, images JPEG 2000) : Cedro ne sait pas encore le lire ; NIS-Elements peut l'exporter en TIFF
+altezza non trovata	hauteur introuvable
+larghezza non trovata	largeur introuvable
+blocco ND2 non valido	bloc ND2 invalide
+blocco ND2 troppo grande	bloc ND2 trop grand
+blocco ND2 inatteso	bloc ND2 inattendu
+canale non trovato	canal introuvable
+file ND2 troppo corto	fichier ND2 trop court
+file ND2 troncato	fichier ND2 tronqué
+file LIF troncato	fichier LIF tronqué
+il file LIF non ha immagini	le fichier LIF n'a pas d'images
+il file ND2 non ha immagini	le fichier ND2 n'a pas d'images
+immagine non trovata nel file LIF	image introuvable dans le fichier LIF
+intestazione del file LIF non valida	en-tête du fichier LIF invalide
+intestazione del file LIF non letta: {}	en-tête du fichier LIF non lu : {}
+non è un file LIF	pas un fichier LIF
+manca la mappa dei blocchi in fondo al file ND2 (file non finito?)	la carte des blocs en fin de fichier ND2 est absente (fichier inachevé ?)
+mappa dei blocchi troncata	carte des blocs tronquée
+mappa troncata	carte tronquée
+metadati troncati	métadonnées tronquées
+metadati troppo annidati	métadonnées imbriquées trop profondément
+metadati troppo grandi	métadonnées trop grandes
+metadati vuoti	métadonnées vides
+livello di metadati fuori misura	niveau de métadonnées hors limites
+livello di metadati troppo grande	niveau de métadonnées trop grand
+metadati XML non letti: {}	métadonnées XML non lues : {}
+metadati compressi non letti: {}	métadonnées compressées non lues : {}
+tipo di metadato sconosciuto ({})	type de métadonnées inconnu ({})
+misure del file ND2 non valide	dimensions du fichier ND2 invalides
+righe del file ND2 più corte del previsto	lignes du fichier ND2 plus courtes que prévu
+nel file ND2 manca il blocco {}	il manque le bloc {} dans le fichier ND2
+nel file LIF manca il blocco di «{}»	il manque le bloc de « {} » dans le fichier LIF
+file CZI troncato	fichier CZI tronqué
+non è un file CZI	pas un fichier CZI
+il file CZI non ha immagini	le fichier CZI n'a pas d'images
+il file CZI non ha immagini (directory mancante o rovinata)	le fichier CZI n'a pas d'images (répertoire absent ou endommagé)
+directory del file CZI tagliata	répertoire CZI tronqué
+directory del file CZI non valida	répertoire CZI invalide
+voce della directory CZI sconosciuta	entrée du répertoire CZI inconnue
+scena non trovata nel file CZI	scène introuvable dans le fichier CZI
+tessera del file CZI non trovata	tuile CZI introuvable
+il CZI è diviso in più file: letta solo questa parte	le CZI est réparti en plusieurs fichiers : seule cette partie a été lue
+scena «{}» non letta ({})	scène « {} » non lue ({})
+immagine grande ({}×{} pixel): letta ridotta 1:{}, {}×{} pixel	grande image ({}×{} pixels) : lue réduite 1:{}, {}×{} pixels
+misure dell'immagine non valide	dimensions d'image invalides
+nessuna tessera al livello scelto	pas de tuiles au niveau choisi
+scena vuota	scène vide
+tessere di tipo diverso nello stesso canale	tuiles de types différents dans le même canal
+pixel complessi (trasformate di Fourier) non letti	pixels complexes (transformées de Fourier) non lus
+pixel a 64 bit non letti	pixels 64 bits non lus
+tipo di pixel {} sconosciuto	type de pixel inconnu {}
+compressione {} non letta	compression {} non lue
+compressione {} di sistema non letta	compression système {} non lue
+compressione {} della fotocamera non letta	compression de la caméra {} non lue
+intestazione zstd della tessera non valida	en-tête de tuile zstd invalide
+JPEG XR diverso dal tipo della tessera	JPEG XR ne correspond pas au type de tuile
+JPEG a più di 8 bit nel CZI non letto	JPEG de plus de 8 bits dans un CZI non lu
+CZI, ND2, LIF, TIFF a 16 bit	CZI, ND2, LIF, TIFF 16 bits
+Vetrini SVS, DICOM, CZI, ND2, LIF, TIFF a 16 bit, PNG, JPEG e le altre immagini	Lames SVS, DICOM, CZI, ND2, LIF, TIFF 16 bits, PNG, JPEG et autres images
+il fotogramma {} non è dove dice la mappa	l'image {} n'est pas là où la carte l'indique
+fotogramma {} non decompresso: {}	image {} non décompressée : {}
+dimensione vuota in «{}»	dimension vide dans « {} »
+le misure di «{}» non stanno nei suoi dati	les dimensions de « {} » ne correspondent pas à ses données
+pixel di {} bit: Cedro non li legge ancora	pixels {} bits : Cedro ne sait pas encore les lire
+«{}» è troppo grande ({})	« {} » est trop grand ({})
+~ immagini del progetto	 images du projet
+Figura {} × {} cm, {} dpi, {#} pannelli.	Figure de {} × {} cm, {} ppp, {} panneaux.
+Figura {} × {} cm, {} dpi, {#} pannello.	Figure de {} × {} cm, {} ppp, {} panneau.
+{#} con la barra di scala.	{} avec barre d'échelle.
+Legenda nel file di testo accanto.	Les détails de la légende sont dans le fichier texte joint.
+nessuna immagine per la figura	pas d'images pour la figure
+una figura tiene al massimo 26 pannelli (A-Z)	une figure contient au maximum 26 panneaux (A-Z)
+figura troppo grande: meno pannelli o immagini meno alte	figure trop grande : moins de panneaux ou des images plus courtes
+Una figura tiene al massimo 26 pannelli (dalla A alla Z).	Une figure contient au maximum 26 panneaux (de A à Z).
+Figura	Figure
+Figura per un articolo	Figure pour un article
+pannelli A B C, 300 dpi	panneaux A B C, 300 ppp
+Larghezza	Largeur
+Quella chiesta dalla rivista: una colonna o tutta la pagina	Ce que demande la revue : une colonne ou la page entière
+Colonna, 8,5 cm	Colonne, 8,5 cm
+Pagina, 17,5 cm	Page entière, 17,5 cm
+300 dpi per foto e microscopia; 600 se la rivista lo chiede	300 ppp pour les photos et la microscopie ; 600 si la revue le demande
+Lettere A, B, C	Lettres A, B, C
+In alto a sinistra di ogni pannello, nell'ordine della coda	En haut à gauche de chaque panneau, dans l'ordre de la file
+Sui pannelli di microscopia che dicono quanto è grande un pixel	Sur les panneaux de microscopie qui indiquent la taille du pixel
+  cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra] [--obiettivo=40x]	  cedro figura <image>… [--colonna] [--600] [--senza-lettere] [--senza-barra] [--obiettivo=40x]
+                   la figura per un articolo: pannelli A, B, C in un TIFF a 300 dpi largo 17,5 cm	                   une figure pour un article : panneaux A, B, C dans un TIFF 300 ppp, 17,5 cm de large
+Pacchetto	Paquet
+Verifica il pacchetto di dati	Vérifier le paquet de données
+impronte SHA-256 di ogni file	SHA-256 de chaque fichier
+Pacchetto con {#} file ({}), impronta SHA-256 di ognuno.	Paquet de {} fichiers ({}), SHA-256 de chacun.
+Impronta dello ZIP: {}… (nel file .sha256 accanto).	Empreinte du ZIP : {}… (dans le fichier .sha256 joint).
+Per firmarlo: Firma digitale.	Pour le signer : Signature numérique.
+Pacchetto integro: {#} file, tutte le impronte SHA-256 tornano.	Paquet intact : {} fichiers, tous les SHA-256 correspondent.
+Pacchetto NON integro: {#} file a posto.	Paquet NON intact : {} fichiers corrects.
+Cambiati: {}.	Modifiés : {}.
+Mancano: {}.	Manquants : {}.
+Aggiunti dopo: {}.	Ajoutés plus tard : {}.
+nessun file da mettere nel pacchetto	pas de fichiers à mettre dans le paquet
+questo ZIP non è un pacchetto di dati: manca l'elenco delle impronte (manifest-sha256.txt)	ce ZIP n'est pas un paquet de données : la liste des empreintes (manifest-sha256.txt) est absente
+l'elenco delle impronte è vuoto	la liste des empreintes est vide
+  cedro pacchetto <file o cartella>…   pacchetto di dati (ZIP BagIt con l'impronta SHA-256 di ogni file)	  cedro pacchetto <fichier ou dossier>…   paquet de données (ZIP BagIt avec le SHA-256 de chaque fichier)
+  cedro tool <pacchetto.zip> verify-pack   controlla che nessun file del pacchetto sia cambiato	  cedro tool <paquet.zip> verify-pack   vérifie qu'aucun fichier du paquet n'a changé
+Obiettivo delle foto	Objectif des photos
+Per le foto della fotocamera del microscopio, che non dicono quanto è grande un pixel: la barra si calcola dall'obiettivo	Pour les photos de la caméra du microscope, qui n'indiquent pas la taille du pixel : la barre est calculée à partir de l'objectif
+Calibrazione con il 10x	Étalonnage avec le 10x
+Micron per pixel con l'obiettivo 10x, misurati una volta con il vetrino micrometrico; Cedro se la ricorda	Microns par pixel avec l'objectif 10x, mesurés une fois avec un micromètre objet ; Cedro s'en souvient
+per esempio 0,65	par exemple 0,65
+Scrivi la calibrazione: i micron di un pixel con il 10x, per esempio 0,65.	Saisissez l'étalonnage : microns par pixel avec le 10x, par exemple 0,65.
+Tessere AI	Tuiles pour l'IA
+Mitosi	Mitoses
+Consulto	Consultation
+Tessere per l'AI	Tuiles pour l'IA
+riquadri del vetrino, solo tessuto	tuiles de la lame, tissu seulement
+Zona per la conta mitotica	Zone pour le comptage mitotique
+2,37 mm² in 10 campi	2,37 mm² en 10 champs
+Pacchetto per un consulto	Paquet pour une consultation
+vetrino anonimo e scheda	lame anonyme et fiche du cas
+Lato delle tessere	Taille de tuile
+256 per la maggior parte dei modelli; 512 per vedere più contesto	256 pour la plupart des modèles ; 512 pour voir plus de contexte
+Ingrandimento	Grossissement
+Uguale per tutti i vetrini, anche se scansionati a 40x	Le même pour toutes les lames, même scannées à 40x
+20x (0,5 µm/px)	20x (0,5 µm/px)
+10x (1 µm/px)	10x (1 µm/px)
+Come scansionato	Comme numérisé
+Solo tessuto	Tissu seulement
+Le tessere quasi tutte vetro bianco restano fuori	Les tuiles qui sont presque entièrement du verre vide sont écartées
+PNG non perde niente; JPEG pesa un decimo	PNG ne perd rien ; JPEG pèse un dixième
+serve un vetrino digitale (.svs)	exige une lame numérique (.svs)
+Vetrino copiato: non c'era niente da togliere	Lame copiée : il n'y avait rien à supprimer
+Vetrino anonimo: tolti {}	Lame anonyme : supprimé {}
+etichetta	étiquette
+foto del vetrino	photo de la lame
+nome, data e utente dalle descrizioni	nom, date et utilisateur des descriptions
+{#} tessere da {#} pixel{}, con l'elenco in tessere.csv{}	{} tuiles de {} pixels{}, listées dans tessere.csv{}
+~ a {} µm per pixel	 à {} µm par pixel
+~ ({#} di vetro vuoto lasciate fuori)	 ({} de verre vide écartées)
+Zona di 2,37 mm² in 10 campi numerati ({} µm per pixel), scelta dove ci sono più nuclei; la panoramica con la zona è accanto. Conta le mitosi nei 10 campi.	Zone de 2,37 mm² en 10 champs numérotés ({} µm par pixel), choisie là où les noyaux sont les plus denses ; la vue d'ensemble avec la zone est à côté. Comptez les mitoses dans les 10 champs.
+Consulto {}: vetrino anonimo (tolti {}), panoramica e scheda da compilare, con le impronte SHA-256	Consultation {} : lame anonyme (supprimé {}), vue d'ensemble et fiche du cas à remplir, avec empreintes SHA-256
+il vetrino non dice quanto è grande un pixel: scegli «Come scansionato»	la lame n'indique pas la taille du pixel : choisissez « Comme numérisé »
+il vetrino è più piccolo di una tessera	la lame est plus petite qu'une tuile
+il vetrino non dice quanto è grande un pixel: l'area di 2,37 mm² non si può misurare	la lame n'indique pas la taille du pixel : la zone de 2,37 mm² ne peut pas être mesurée
+il vetrino è più piccolo dell'area di 2,37 mm²	la lame est plus petite que la zone de 2,37 mm²
+nessuna zona di 2,37 mm² piena di tessuto	aucune zone de 2,37 mm² remplie de tissu
+Referti veterinari	Comptes rendus vétérinaires
+termini di anatomia patologica	termes de pathologie
+  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--glossario veterinaria] [--cpu]	  cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--glossario veterinaria] [--cpu]
+Proprietario	Propriétaire
+Radiografie per il proprietario	Radiographies pour le propriétaire
+PDF con il logo della clinica	PDF avec le logo de la clinique
+Nome della clinica	Nom de la clinique
+In cima a ogni pagina, accanto al logo; per il logo metti in coda anche la sua immagine. Cedro li ricorda	En haut de chaque page, à côté du logo ; pour le logo, ajoutez aussi son image à la file. Cedro retient les deux
+per esempio Clinica Veterinaria San Marco	par exemple Clinique vétérinaire San Marco
+Spunta almeno una radiografia DICOM.	Cochez au moins une radiographie DICOM.
+nessuna radiografia DICOM in coda	pas de radiographies DICOM dans la file
+nessuna radiografia nei file	pas de radiographies dans les fichiers
+PDF per il proprietario, {#} pagine, con il logo della clinica.	PDF pour le propriétaire, {} pages, avec le logo de la clinique.
+PDF per il proprietario, {#} pagina, con il logo della clinica.	PDF pour le propriétaire, {} page, avec le logo de la clinique.
+PDF per il proprietario, {#} pagine.	PDF pour le propriétaire, {} pages.
+PDF per il proprietario, {#} pagina.	PDF pour le propriétaire, {} page.
+Per il logo metti in coda anche la sua immagine: Cedro poi se lo ricorda.	Pour le logo, ajoutez aussi son image à la file : Cedro s'en souviendra.
+Niente barra dall'obiettivo: manca la calibrazione con il 10x.	Pas de barre issue de l'objectif : l'étalonnage du 10x est manquant.
+Inizio	Accueil
+Laboratorio	Laboratoire
+Cedro di sempre	Cedro au quotidien
+Salva immagini e vetrini	Enregistrer images et lames
+Togli i nomi	Supprimer les noms
+Prepara una figura	Préparer une figure
+Converti dati e piastre	Convertir données et plaques
+Firma e manda referti	Signer et envoyer des comptes rendus
+Trascrivi e riassumi	Transcrire et résumer
+Lavora sui PDF	Travailler avec des PDF
+Niente esce da questo PC	Rien ne quitte ce PC
+Che file hai?	Quel fichier avez-vous ?
+Trascinalo qui dentro, oppure scegli il tipo. Se sai già cosa fare, parti dalle voci a sinistra.	Déposez-le ici ou choisissez son type. Si vous savez déjà quoi faire, commencez par les entrées à gauche.
+Radiografia	Radiographie
+Tabella	Tableau
+Referto	Compte rendu
+Dettato o riunione	Dictée ou réunion
+Foto, documenti, video o archivi?	Photos, documents, vidéo ou archives ?
+Con questo file puoi	Avec ce fichier, vous pouvez
+in «{}»	dans « {} »
+In coda anche:	Aussi dans la file :
+Anche:	Aussi :
+Nessun file in coda	Aucun fichier dans la file
+Stai usando una voce scelta in «Completa»: {}.	Vous utilisez une entrée choisie dans « Complète » : {}.
+Porta in Word	Transformer en Word
+Porta in PDF	Transformer en PDF
+Porta in Excel	Transformer en Excel
+CSV pulito	Nettoyer le CSV
+Unisci a un altro PDF	Fusionner avec un autre PDF
+Salva in JPEG, TIFF o PNG	Enregistrer en JPEG, TIFF ou PNG
+Mettila in una figura	Le mettre dans une figure
+Togli nomi e dati del proprietario	Supprimer les noms et les données du propriétaire
+Converti in MP3, WAV, FLAC…	Convertir en MP3, WAV, FLAC…
+Converti in MP4	Convertir en MP4
+Converti i file dentro lo ZIP	Convertir les fichiers du ZIP
+DICOM, vetrini SVS, foto, PDF, Word	DICOM, lames SVS, photos, PDF, Word
+Immagini, documenti, PDF, testi, audio, video, archivi	Images, documents, PDF, texte, audio, vidéo, archives
++ Aggiungi	+ Ajouter
+{#} PDF da unire	{} PDF à fusionner
+{#} pagine in tutto	{} pages au total
+1 PDF	1 PDF
+{#} PDF	{} PDF
+1 PDF · {#} pagine	1 PDF · {} pages
+{#} PDF · {#} pagine	{} PDF · {} pages
+1 video in coda	1 vidéo dans la file
+{#} video in coda	{} vidéos dans la file
+1 video in coda · oltre mille siti riconosciuti	1 vidéo dans la file · plus de mille sites pris en charge
+{#} video in coda · oltre mille siti riconosciuti	{} vidéos dans la file · plus de mille sites pris en charge
+Da YouTube o da un altro sito	De YouTube ou d'un autre site
+Formato · {#} formati	Format · {} formats
+Converti in · {#} formati	Convertir en · {} formats
+Esce come {}	Donne du {}
+Esce come {}, e così l'altro	Donne du {}, et de même pour l'autre
+Esce come {}, e così gli altri {#}	Donne du {}, et de même pour les {} autres
+Archivi ZIP	Archives ZIP
+Cambia formato, comprimi, leggi il testo	Changer de format, compresser, lire le texte
+Cartella	Dossier
+Cedro apre l'attività giusta con il file già dentro. Oppure scegli il tipo, o parti dalle voci a sinistra.	Cedro ouvre la bonne activité avec le fichier déjà dedans. Ou choisissez le type, ou commencez par les éléments à gauche.
+Trascina qui un file	Déposez un fichier ici
+Converte i file dentro e rifà lo ZIP	Convertit les fichiers à l'intérieur et reconstruit le ZIP
+Converti oppure trascrivi in Word	Convertir, ou transcrire en Word
+Cosa ne faccio	Que faire avec
+Cosa scarico	Quoi télécharger
+Documenti e testi	Documents et texte
+Firma o verifica un documento	Signer ou vérifier un document
+PDF firmati, .p7m, chiavetta o smart card	PDF signés, .p7m, clé de signature ou carte à puce
+Foto, audio e documenti in un colpo	Photos, audio et documents en une fois
+In PDF, anche PDF/A per l'archivio	En PDF, aussi PDF/A pour l'archivage
+In Word, Excel, immagini, testo	En Word, Excel, images, texte
+In cosa lo trasformo	En quoi le transformer
+Incolla un link di YouTube o di un altro sito	Collez un lien de YouTube ou d'un autre site
+Incolla un link di YouTube, RaiPlay, Vimeo o di un altro sito	Collez un lien de YouTube, RaiPlay, Vimeo ou d'un autre site
+Oppure uno strumento	Ou un outil
+PNG, JPEG, WebP, AVIF, TIFF e altri	PNG, JPEG, WebP, AVIF, TIFF et plus
+Rimpicciolisci, togli l'audio, solo l'audio	Réduire, supprimer l'audio, audio seul
+Unisci, dividi, pagine, comprimi, OCR	Fusionner, diviser, pages, compresser, OCR
+Clic su una pagina per sceglierla, trascina per spostarla. I comandi in alto valgono per la scelta.	Cliquez sur une page pour la sélectionner, faites-la glisser pour la déplacer. Les commandes du haut agissent sur la sélection.
+I tagli valgono per il file scelto nella striscia in basso, gli intervalli per gli altri.	Les coupes valent pour le fichier choisi dans la bande du bas, les plages pour les autres.
+Il testo compare qui mentre Cedro trascrive, con chi parla. A lavoro finito lo rivedi riascoltando i punti dubbi.	Le texte apparaît ici pendant que Cedro transcrit, avec qui parle. Une fois terminé, vous pouvez le relire en réécoutant les passages peu clairs.
+Scarica {#} video	Télécharger {} vidéos
+Scarica 1 video	Télécharger 1 vidéo
+Vale per i link di YouTube	S'applique aux liens YouTube
+Video MP4 · Fino a 1080p	Vidéo MP4 · Jusqu'à 1080p
+Un file per capitolo	Un fichier par chapitre
+Playlist e raccolte: scarica tutto	Playlists et collections : tout télécharger
+Video {}	{} vidéo
+Audio {}	{} audio
+Scarica {#} audio	Télécharger {} fichiers audio
+Scarica 1 audio	Télécharger 1 fichier audio
+Firma documenti	Signer des documents
+Uno o tanti file insieme, con la chiavetta o la CNS. Il PIN lo metti una volta.	Un ou plusieurs fichiers ensemble, avec la clé de signature ou la carte CNS. Vous saisissez le code PIN une seule fois.
+Chiavetta e certificati	Clé de signature et certificats
+PIN, PUK, scadenze	PIN, PUK, dates d'expiration
+Formato, aspetto, dove salvo	Format, apparence, où enregistrer
+Nessuna chiavetta	Pas de clé de signature
+collegala	branchez-la
+Per esempio gli allegati di una PEC	Par exemple les pièces jointes d'un courriel certifié (PEC)
+Se sono già firmati te li apro e ti dico se le firme valgono. Se non lo sono, li preparo per la firma.	S'ils sont déjà signés, je les ouvre et je vous dis si les signatures sont valides. Sinon, je les prépare pour la signature.
+Tutti i comandi e le opzioni in vista.	Toutes les commandes et options sous les yeux.
+Solo l'essenziale; il resto a un clic.	Seulement l'essentiel ; le reste à un clic.
+In Impostazioni, Aspetto: le tinte di Cedro e i temi di prima, la vista Semplice (solo l'essenziale) o Completa (tutti i comandi) e i caratteri più grandi. Ogni tema ha il suo carattere. Questa Guida cambia insieme a loro.	Dans Réglages, Apparence : les teintes de Cedro et les thèmes précédents, l'affichage Simple (l'essentiel seulement) ou Complet (toutes les commandes) et texte plus grand. Chaque thème a sa propre typographie. Ce Guide change avec eux.
+Quattro tinte e sette temi	Quatre teintes et sept thèmes
+Da Cedro · Melanzana al Comune di Bondeno	De Cedro · Aubergine à la commune de Bondeno
+Semplice o Completa	Simple ou Complète
+Si cambia anche in cima al pannello	Peut aussi se changer en haut du panneau
+Vista	Affichage
+Cedro · Melanzana	Cedro · Aubergine
+Cedro · Notte	Cedro · Nuit
+Cedro · Bosco	Cedro · Forêt
+Cedro · Carta	Cedro · Papier
+Il file al centro, tutti i comandi accanto.	Le fichier au centre, toutes les commandes à côté.
+Lo stesso Cedro, con la cornice blu notte.	Le même Cedro, avec un cadre bleu nuit.
+Lo stesso Cedro, con la cornice verde bosco.	Le même Cedro, avec un cadre vert forêt.
+Lo stesso Cedro, con la cornice chiara.	Le même Cedro, avec un cadre clair.
+Porta in CSV	Transformer en CSV
+{#} celle troppo lunghe per Excel tagliate a {#} caratteri.	{} cellules trop longues pour Excel, coupées à {} caractères.
+{}: è un collegamento a una cartella, metti la cartella vera	{} : c'est un lien vers un dossier, ajoutez le vrai dossier
+in coda ci sono radiografie di {#} animali diversi ({}): fai un PDF per ogni animale, con in coda solo le sue	la file contient des radiographies de {} animaux différents ({}) : faites un PDF par animal, avec seulement ses fichiers dans la file
+ Saltati perché senza immagini: {}.	 Ignorés car ils n'ont pas d'images : {}.
+Il modello si scarica al primo uso e poi resta sul PC.	Le modèle est téléchargé à la première utilisation puis reste sur le PC.
+Esempio:	Exemple :
+nomefile	nomdufichier
+nomefile-anonimo	nomdufichier-anonyme
+nomefile-pulito	nomdufichier-nettoye
+nomefile-compresso	nomdufichier-compresse
+nomefile-meta	nomdufichier-moitie
+nomefile-bn	nomdufichier-nb
+nomefile-ruotato	nomdufichier-pivote
+nomefile-figura	nomdufichier-figure
+nomefile-tessere	nomdufichier-tuiles
+nomefile-conta-mitotica	nomdufichier-comptage-mitotique
+caso-1a2b3c-consulto	cas-1a2b3c-consultation
+nomeanimale-radiografie	nomanimal-radiographies
+controllato oggi, {}	vérifié aujourd'hui, {}
+controllato ieri alle {}	vérifié hier à {}
+controllato il {}	vérifié le {}
+Scegli la cartella con i file firmati	Choisissez le dossier contenant les fichiers signés
+Non c'è nessun documento da estrarre: i PDF firmati sono già il documento.	Il n'y a aucun document à extraire : les PDF signés sont déjà le document.
+Estratto 1 documento, accanto al suo file firmato.	1 document extrait, à côté de son fichier signé.
+Estratti {} documenti, ognuno accanto al suo file firmato.	{} documents extraits, chacun à côté de son fichier signé.
+Cartella con i file da firmare	Dossier contenant les fichiers à signer
+In quella cartella non ci sono file da aggiungere.	Il n'y a aucun fichier à ajouter dans ce dossier.
+Dove salvo i file firmati	Où enregistrer les fichiers signés
+Dove salvo il certificato	Où enregistrer le certificat
+Non riesco a salvare il certificato: {}	Je ne peux pas enregistrer le certificat : {}
+Non riesco a mostrare il certificato: {}	Je ne peux pas afficher le certificat : {}
+Scegli un'immagine (PNG o JPG)…	Choisissez une image (PNG ou JPG)…
+Questa non è un'immagine che so leggere: scegli un PNG o un JPG.	Ce n'est pas une image que je sais lire : choisissez un PNG ou un JPG.
+Salvato «{}» nella cartella del file firmato.	« {} » enregistré dans le dossier du fichier signé.
+Non riesco a leggere il file: {}	Je ne peux pas lire le fichier : {}
+Questo link è già in coda.	Ce lien est déjà dans la file.
+Errore interno: {}	Erreur interne : {}
+errore interno: {}	erreur interne : {}
+Leggo il testo…	Lecture du texte…
+Per laboratori e ricerca: solo gli strumenti utili.	Pour les laboratoires et la recherche : seulement les outils utiles.
+PDF: da convertire, unire, dividere, sistemare o comprimere	PDF : à convertir, fusionner, diviser, arranger ou compresser
+https://… (la pagina del video)	https://… (la page de la vidéo)
+Scrivi il PIN della chiavetta.	Saisissez le code PIN de la clé.
+I due nuovi non sono uguali.	Les deux nouveaux ne sont pas identiques.
+Scrivi tutti i campi.	Remplissez tous les champs.
+Il nuovo PIN deve avere almeno {} cifre.	Le nouveau code PIN doit comporter au moins {} chiffres.
+Chiedo al certificatore…	Je demande à l'autorité de certification…
+Il certificato non è revocato né sospeso.	Le certificat n'est ni révoqué ni suspendu.
+Il certificato risulta REVOCATO o sospeso: non usarlo per firmare.	Le certificat est REVOQUÉ ou suspendu : ne l'utilisez pas pour signer.
+Non sono riuscito a chiederlo al certificatore. Riprova più tardi.	Je n'ai pas pu interroger l'autorité de certification. Réessayez plus tard.
+Questi file verranno firmati	Ces fichiers seront signés
+Puoi trascinarne altri dentro la finestra in qualsiasi momento.	Vous pouvez en faire glisser d'autres dans la fenêtre à tout moment.
+Nessun file: aggiungili o trascinali qui	Aucun fichier : ajoutez-les ou faites-les glisser ici
+Con cosa firmi?	Avec quoi signez-vous ?
+Cerco la chiavetta e le smart card…	Recherche de la clé et des cartes à puce…
+Non trovo nessuna chiavetta né smart card	Je ne trouve aucune clé ni carte à puce
+In che formato?	Dans quel format ?
+I PDF restano PDF con la firma sul foglio, tutti gli altri diventano .p7m	Les PDF restent des PDF avec la signature sur la page, tous les autres deviennent .p7m
+Nello spazio per la firma	Dans l'espace de signature
+Il PDF ha già un riquadro «{}» a pagina {}	Le PDF a déjà un cadre « {} » à la page {}
+Questo PDF non ha uno spazio per la firma: la metto in basso a destra dell'ultima pagina	Ce PDF n'a pas d'espace de signature : je la place en bas à droite de la dernière page
+Dove la metto io	Où je la place
+Trascina il riquadro sulla pagina	Faites glisser le cadre sur la page
+La firma c'è e vale uguale, ma sul foglio non compare	La signature est là et vaut tout autant, mais n'apparaît pas sur la page
+File già firmati	Fichiers déjà signés
+Si scrivono nella firma dei PDF (facoltativi)	S'inscrivent dans la signature des PDF (facultatifs)
+Salvo i file firmati accanto agli originali, che non vengono toccati.	J'enregistre les fichiers signés à côté des originaux, qui ne sont pas touchés.
+Salvo i file firmati nella cartella {}.	J'enregistre les fichiers signés dans le dossier {}.
+Salvo i file con la firma in più nella cartella {}; gli originali non vengono toccati.	J'enregistre les fichiers avec la signature en plus dans le dossier {} ; les originaux ne sont pas touchés.
+I nuovi file firmati vanno accanto agli originali; in quelli già firmati la firma si aggiunge nello stesso file.	Les nouveaux fichiers signés vont à côté des originaux ; dans ceux déjà signés, la signature s'ajoute dans le même fichier.
+Salvo tutto nella cartella {}; gli originali non vengono toccati.	J'enregistre tout dans le dossier {} ; les originaux ne sont pas touchés.
+PIN della carta	Code PIN de la carte
+PIN della chiavetta	Code PIN de la clé
+Scrivi il PIN sul tastierino del lettore quando te lo chiede.	Saisissez le code PIN sur le clavier du lecteur quand il le demande.
+Scrivi il PIN	Saisissez le code PIN
+1 file firmato	1 fichier signé
+{} file firmati	{} fichiers signés
+Apri la cartella	Ouvrir le dossier
+Guarda il file firmato	Voir le fichier signé
+Cerco la chiavetta…	Recherche de la clé…
+Nessuna chiavetta né smart card collegata	Aucune clé ni carte à puce connectée
+Non trovo il driver della chiavetta: installa quello del tuo certificatore (per la Aruba Key: bit4id) o sceglilo a mano in Opzioni	Je ne trouve pas le pilote de la clé : installez celui de votre autorité de certification (pour la clé Aruba : bit4id) ou choisissez-le à la main dans Options
+Sul dispositivo non ci sono certificati personali.	Il n'y a pas de certificats personnels sur le dispositif.
+serve per firmare	sert à signer
+serve per entrare nei siti	sert à se connecter aux sites
+scaduto il {}	expiré le {}
+scade il {}, tra {} giorni	expire le {}, dans {} jours
+Vedi il certificato	Voir le certificat
+Controlla se è revocato	Vérifier s'il est révoqué
+Salva come .cer	Enregistrer en .cer
+Cambia il PIN	Changer le code PIN
+Sblocca con il PUK	Débloquer avec le PUK
+Cambia il PUK	Changer le PUK
+Avvisami prima che scada	Prévenez-moi avant son expiration
+Te lo dico quando mancano 3 mesi o meno	Je vous le dis quand il reste 3 mois ou moins
+PUK (nella busta del certificatore)	PUK (dans l'enveloppe de l'autorité de certification)
+Opzioni della firma	Options de la signature
+Nome dei file firmati	Nom des fichiers signés
+Tieni il PIN per tutta la coda	Garder le code PIN pour toute la file
+Lo dimentico appena ho finito	Je l'oublie dès que j'ai fini
+Si vede sul foglio	Visible sur la page
+Un riquadro con nome, data e ora	Un cadre avec nom, date et heure
+La firma c'è e vale, ma non compare	La signature est là et valide, mais n'apparaît pas
+Posizione se il PDF non ha lo spazio	Position si le PDF n'a pas d'espace
+Chiedo al certificatore se il certificato è stato revocato	Je demande à l'autorité de certification si le certificat a été révoqué
+Non trovato: installa quello del certificatore	Introuvable : installez celui de l'autorité de certification
+Trovato da solo: {}	Trouvé automatiquement : {}
+Driver della chiavetta	Pilote de la clé
+Avvisami prima che scada il certificato	Prévenez-moi avant l'expiration du certificat
+Nella cartella {}	Dans le dossier {}
+Uno o tanti file insieme, il PIN lo metti una volta.	Un ou plusieurs fichiers ensemble, le code PIN se saisit une seule fois.
+Ne sto controllando {}. Quelli da guardare vanno in cima; clic su un file per aprirlo nel visualizzatore.	J'en vérifie {}. Ceux à regarder vont en haut ; cliquez sur un fichier pour l'ouvrir dans la visionneuse.
+Tutte le firme sono a posto. Clic su un file per aprirlo nel visualizzatore.	Toutes les signatures sont en ordre. Cliquez sur un fichier pour l'ouvrir dans la visionneuse.
+1 file da guardare, in cima	1 fichier à regarder, en haut
+{} file da guardare, in cima	{} fichiers à regarder, en haut
+Salva il .{}	Enregistrer le .{}
+Un momento: leggo le buste, i certificati e l'elenco europeo dei certificatori.	Un instant : je lis les enveloppes, les certificats et la liste européenne des autorités de certification.
+Mostra le {} firme	Afficher les {} signatures
+Mostra la firma	Afficher la signature
+È una firma staccata (.p7s) o una marca a parte (.tsr): la controllo insieme al file che è stato firmato. Di solito sta nella stessa cartella con lo stesso nome.	C'est une signature détachée (.p7s) ou un horodatage à part (.tsr) : je la vérifie avec le fichier qui a été signé. Elle se trouve en général dans le même dossier avec le même nom.
+Versione firmata da {}: com'era al momento della firma	Version signée par {} : telle qu'elle était au moment de la signature
+Scheda video attiva	Carte graphique active
+Il file log.txt e config.txt stanno nella cartella Dati, accanto a cedro.exe.	Les fichiers log.txt et config.txt se trouvent dans le dossier de données (Dati), à côté de cedro.exe.
+Incolla il link di un video o di una playlist di YouTube (o di un altro sito).	Collez le lien d'une vidéo ou d'une playlist YouTube (ou d'un autre site).
+Disegna le immagini SVG.	Dessine les images SVG.
+Legge MP3, FLAC, OGG, AAC, WAV, AIFF.	Lit MP3, FLAC, OGG, AAC, WAV, AIFF.
+Legge e scrive i file .opus.	Lit et écrit les fichiers .opus.
+Legge e scrive le foto AVIF.	Lit et écrit les photos AVIF.
+Legge e scrive le foto JPEG XL.	Lit et écrit les photos JPEG XL.
+Legge le tessere JPEG XR e zstd dei file Zeiss CZI.	Lit les tuiles JPEG XR et zstd des fichiers Zeiss CZI.
+Parla con la chiavetta o la smart card per firmare (PKCS#11).	Dialogue avec la clé de signature ou la carte à puce pour signer (PKCS#11).
+Scrive i file FLAC.	Écrit des fichiers FLAC.
+Scrive le foto WebP.	Écrit des photos WebP.
+BSD-2-Clause o MIT	BSD-2-Clause ou MIT
+BSD-3-Clause o BSD-2-Clause	BSD-3-Clause ou BSD-2-Clause
+The OpenReadout Authors (da jxrlib di Microsoft), Moritz Borcherding	The OpenReadout Authors (d'après jxrlib de Microsoft), Moritz Borcherding
