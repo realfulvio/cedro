@@ -169,7 +169,7 @@ impl Diarizer {
         let mut active = vec![vec![false; stop]; k];
         for f in 0..stop {
             let mut order: Vec<usize> = (0..k).collect();
-            order.sort_by(|a, b| votes[f][*b].partial_cmp(&votes[f][*a]).unwrap());
+            order.sort_by(|a, b| votes[f][*b].total_cmp(&votes[f][*a]));
             for o in order.iter().take(count[f].min(k)) {
                 if votes[f][*o] > 0.0 {
                     active[*o][f] = true;
@@ -454,7 +454,7 @@ impl Tree {
         }
         // In ordine di distanza, come lo vuole il taglio.
         let mut order: Vec<usize> = (0..merges.len()).collect();
-        order.sort_by(|a, b| merges[*a].2.partial_cmp(&merges[*b].2).unwrap());
+        order.sort_by(|a, b| merges[*a].2.total_cmp(&merges[*b].2));
         // Rinumerazione degli id dopo il riordino.
         let mut remap = std::collections::HashMap::new();
         let mut sorted = Vec::with_capacity(merges.len());
