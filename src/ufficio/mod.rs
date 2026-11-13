@@ -13,6 +13,7 @@ pub mod documento;
 pub mod docx;
 pub mod impagina_doc;
 pub mod odt;
+pub mod rtf;
 
 /// Le scelte del pannello per i documenti d'ufficio (i valori sono quelli del pannello).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -99,13 +100,14 @@ pub fn foglio_pdf(ext: &str, bytes: &[u8], file_name: &str, title: &str, s: &Sce
 }
 /// I documenti di testo che Cedro mette in pagina da sé.
 pub fn is_documento(ext: &str) -> bool {
-    matches!(ext, "docx" | "docm" | "dotx" | "dotm" | "odt" | "ott")
+    matches!(ext, "docx" | "docm" | "dotx" | "dotm" | "odt" | "ott" | "rtf")
 }
 
 pub fn leggi_documento(ext: &str, bytes: &[u8]) -> Result<documento::Documento, String> {
     match ext {
         "docx" | "docm" | "dotx" | "dotm" => docx::leggi_docx(bytes),
         "odt" | "ott" => odt::leggi_odt(bytes),
+        "rtf" => rtf::leggi_rtf(bytes),
         _ => Err(format!("«{ext}» non è un documento di testo")),
     }
 }

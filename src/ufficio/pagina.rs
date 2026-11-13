@@ -29,7 +29,7 @@ pub enum Dash {
     Dotted,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Target {
     Uri(String),
     /// Un segnalibro del documento (il nome).

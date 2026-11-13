@@ -566,6 +566,7 @@ dependencies = [
  "cfb",
  "cpal",
  "cryptoki",
+ "encoding_rs",
  "fdk-aac",
  "flacenc",
  "flate2",
