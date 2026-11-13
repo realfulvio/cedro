@@ -1,6 +1,7 @@
 //! Formati di foto che il crate `image` non legge o non scrive da solo, tutti in Rust:
 //! SVG (resvg), AVIF (ravif per scrivere, avif-decode con rav1d per leggere) e JPEG XL
-//! (jxl-oxide per leggere, zune-jpegxl per scrivere, senza perdita). Qui c'è anche il riconoscimento
+//! (jxl-oxide per leggere, zune-jpegxl per scrivere, senza perdita) e HEIC/HEIF delle foto dell'iPhone
+//! (heifer per leggere, con i colori portati a sRGB). Qui c'è anche il riconoscimento
 //! del tipo di file dal contenuto.
 
 use std::fs;
@@ -75,10 +76,14 @@ pub fn sniff(head: &[u8]) -> Option<&'static str> {
         return Some("jxl");
     }
     if at(4, b"ftyp") {
-        if at(8, b"avif") || at(8, b"avis") {
+        // Il marchio principale e quelli compatibili: un AVIF può dichiararsi «mif1» e dire «avif» dopo.
+        let end = u32::from_be_bytes([head[0], head[1], head[2], head[3]]) as usize;
+        let compatible: Vec<&[u8]> = head.get(16..end.min(head.len())).unwrap_or(&[]).chunks_exact(4).collect();
+        let has = |b: &[u8]| at(8, b) || compatible.contains(&b);
+        if has(b"avif") || has(b"avis") {
             return Some("avif");
         }
-        if at(8, b"heic") || at(8, b"heix") || at(8, b"mif1") || at(8, b"msf1") || at(8, b"heim") || at(8, b"hevc") {
+        if has(b"heic") || has(b"heix") || has(b"heim") || has(b"heis") || has(b"hevc") || has(b"hevx") || at(8, b"mif1") || at(8, b"msf1") {
             return Some("heic");
         }
         if at(8, b"M4A ") || at(8, b"M4B ") {
@@ -155,7 +160,8 @@ pub fn open(path: &Path, straighten: bool, target_side: Option<u32>) -> Result<D
         "jxl" => open_jxl(path),
         // Il DICOM: la prima immagine con la finestra scritta nel file.
         "dcm" | "dicom" => crate::dicom::DicomFile::open(path).and_then(|f| crate::dicom::pixel::open_first(&f)),
-        "heic" => Err("HEIC e HEIF non sono ancora letti".into()),
+        // La rotazione delle foto HEIC è nel file (irot/imir) e heifer la applica: l'EXIF non conta.
+        "heic" | "heif" | "hif" => open_heic(path, target_side),
         _ if straighten => crate::ocr::open_upright(path),
         _ => image::ImageReader::open(path)
             .map_err(|e| e.to_string())?
@@ -201,6 +207,40 @@ fn open_svg(path: &Path, target_side: Option<u32>) -> Result<DynamicImage, Strin
         rgba.extend_from_slice(&[c.red(), c.green(), c.blue(), c.alpha()]);
     }
     RgbaImage::from_raw(pw, ph, rgba).map(DynamicImage::ImageRgba8).ok_or_else(|| "SVG non disegnato".into())
+}
+
+/// Una foto HEIC/HEIF: l'immagine principale, girata come dice il file e con i colori in sRGB (le foto
+/// dell'iPhone sono in Display P3). Per una miniatura piccola basta quella che il file porta con sé.
+fn open_heic(path: &Path, target_side: Option<u32>) -> Result<DynamicImage, String> {
+    let data = fs::read(path).map_err(|e| e.to_string())?;
+    if let Some(side) = target_side.filter(|s| *s <= 400) {
+        if let Ok(Some(t)) = heifer::decode_thumbnail(&data) {
+            if t.width.max(t.height) * 4 >= side * 3 {
+                let rgba: Vec<u8> = t.to_rgba8();
+                if let Some(img) = RgbaImage::from_raw(t.width, t.height, rgba) {
+                    return Ok(heic_opaque(img, t.has_alpha));
+                }
+            }
+        }
+    }
+    let options = heifer::Options::default();
+    // Un profilo colore che heifer non sa convertire: i colori restano come sono scritti.
+    let image = heifer::decode_srgb_rgba8(&data, &options).or_else(|_| heifer::decode_rgba8(&data, &options)).map_err(|e| format!("HEIC non letto: {e}"))?;
+    let (w, h) = (image.width, image.height);
+    if image.has_alpha {
+        return RgbaImage::from_raw(w, h, image.data).map(DynamicImage::ImageRgba8).ok_or_else(|| "HEIC con misure non valide".into());
+    }
+    // Senza trasparenza la foto resta RGB: meno memoria, e il JPEG non deve togliere l'alfa.
+    RgbImage::from_raw(w, h, image.into_rgb8()).map(DynamicImage::ImageRgb8).ok_or_else(|| "HEIC con misure non valide".into())
+}
+
+/// La miniatura del file, come foto RGB se non è trasparente.
+fn heic_opaque(img: RgbaImage, alpha: bool) -> DynamicImage {
+    if alpha {
+        DynamicImage::ImageRgba8(img)
+    } else {
+        DynamicImage::ImageRgb8(DynamicImage::ImageRgba8(img).to_rgb8())
+    }
 }
 
 fn open_avif(path: &Path) -> Result<DynamicImage, String> {
@@ -303,5 +343,57 @@ pub fn ico_ready(img: &DynamicImage) -> DynamicImage {
         img.resize(256, 256, image::imageops::FilterType::Lanczos3)
     } else {
         img.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ftyp(major: &[u8; 4], compatible: &[&[u8; 4]]) -> Vec<u8> {
+        let size = 16 + 4 * compatible.len();
+        let mut b = (size as u32).to_be_bytes().to_vec();
+        b.extend_from_slice(b"ftyp");
+        b.extend_from_slice(major);
+        b.extend_from_slice(&[0, 0, 0, 0]);
+        for c in compatible {
+            b.extend_from_slice(*c);
+        }
+        b.extend_from_slice(&[0, 0, 0, 8, b'm', b'e', b't', b'a']);
+        b
+    }
+
+    #[test]
+    fn heic_and_avif_are_told_apart_by_their_brands() {
+        assert_eq!(sniff(&ftyp(b"heic", &[b"mif1", b"heic"])), Some("heic"));
+        assert_eq!(sniff(&ftyp(b"mif1", &[b"mif1", b"heic"])), Some("heic"));
+        // Un AVIF che si dichiara «mif1» e dice «avif» tra i compatibili non è un HEIC.
+        assert_eq!(sniff(&ftyp(b"mif1", &[b"mif1", b"avif", b"miaf"])), Some("avif"));
+        assert_eq!(sniff(&ftyp(b"avif", &[b"mif1"])), Some("avif"));
+        assert_eq!(sniff(&ftyp(b"isom", &[b"mp41"])), Some("mp4"));
+    }
+
+    #[test]
+    fn heic_photo_opens_with_its_colors() {
+        let dir = std::env::temp_dir().join(format!("cedro-heic-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        // Anche con l'estensione sbagliata: conta il contenuto.
+        for name in ["foto.heic", "foto.jpg"] {
+            let path = dir.join(name);
+            fs::write(&path, include_bytes!("../tests/fixtures/foto.heic")).unwrap();
+            assert_eq!(crate::engine::kind_of(&path), crate::engine::Kind::Image);
+            let img = open(&path, true, None).unwrap();
+            assert_eq!((img.width(), img.height()), (96, 64));
+            assert!(!img.color().has_alpha());
+            let rgb = img.to_rgb8();
+            let (left, right) = (rgb.get_pixel(10, 32), rgb.get_pixel(85, 32));
+            assert!(left[0] > 190 && left[2] < 80, "{left:?}");
+            assert!(right[2] > 180 && right[0] < 80, "{right:?}");
+        }
+        // Un file troncato non manda in crisi il lettore: dice che non lo legge.
+        let path = dir.join("rotto.heic");
+        fs::write(&path, &include_bytes!("../tests/fixtures/foto.heic")[..300]).unwrap();
+        assert!(open(&path, false, None).is_err());
+        let _ = fs::remove_dir_all(&dir);
     }
 }
