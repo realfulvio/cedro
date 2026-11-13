@@ -2450,3 +2450,18 @@ i modelli delle voci	les modèles de voix
 YouTube non dà i sottotitoli adesso: riprova più tardi o togli i sottotitoli	YouTube ne fournit pas les sous-titres pour l'instant : réessaie plus tard ou désactive les sous-titres
 Il sito non dà i sottotitoli adesso (limite di richieste): scarico il video senza	Le site ne fournit pas les sous-titres pour l'instant (limite de requêtes) : je télécharge la vidéo sans
 Non riesco a scaricare il video	Impossible de télécharger la vidéo
+Caso	Cas
++ Caso o campione	+ Cas ou échantillon
+Lavori di oggi	Travaux du jour
+Ancora nessuno. Ogni lavoro finisce qui, con i nomi dei file usciti.	Aucun pour l'instant. Chaque travail arrive ici, avec les noms des fichiers créés.
+Gli originali non sono mai stati toccati.	Les originaux n'ont jamais été touchés.
+… e altri {#} file	… et {#} autres fichiers
+Copia per il quaderno	Copier pour le cahier
+Caso o campione	Cas ou échantillon
+Se c'è, il codice entra nei nomi dei file che Cedro scrive, dopo la data. Resta finché non lo togli.	S'il y en a un, son code entre dans les noms des fichiers que Cedro écrit, après la date. Il reste jusqu'à ce que tu le retires.
+Codice	Code
+Nota (per te, non entra nei nomi)	Note (pour toi, pas dans les noms)
+Togli il caso	Retirer le cas
+Metti	Mettre
+  cedro --caso V-2026-0457 convert vetrino.svs png    i file nuovi si chiamano data_caso_nome (senza --caso vale quello scelto nell'app; --senza-caso lo esclude)	  cedro --caso V-2026-0457 convert lame.svs png    les nouveaux fichiers s'appellent date_cas_nom (sans --caso, c'est le cas choisi dans l'app ; --senza-caso l'exclut)
+--caso vuole un codice, per esempio V-2026-0457	--caso demande un code, par exemple V-2026-0457
