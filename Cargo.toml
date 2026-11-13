@@ -93,7 +93,7 @@ rten-tensor = "0.28"
 kaldi-native-fbank = "0.1"
 
 [target.'cfg(windows)'.dependencies]
-windows-core = "0.61"
+windows-core = "0.62"
 windows = { version = "0.61", features = [
     "Foundation",
     "Foundation_Collections",
