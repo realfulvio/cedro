@@ -29,6 +29,18 @@ impl Caso {
     }
 }
 
+/// Le opzioni di un lavoro con il caso: con un codice i nomi nuovi diventano «data_caso_nome»
+/// (a meno di un modello già scelto); senza, restano quelle di prima.
+pub fn opzioni(caso: Option<&str>, mut opts: crate::engine::Options) -> crate::engine::Options {
+    if let Some(code) = caso {
+        opts.caso = Some(code.to_string());
+        if opts.name_template.is_none() {
+            opts.name_template = Some(MODELLO.to_string());
+        }
+    }
+    opts
+}
+
 /// Il codice come pezzo di nome: spazi e caratteri vietati diventano «-», al più 48 caratteri.
 pub fn pulisci(code: &str) -> String {
     let mut out = String::new();
@@ -166,6 +178,18 @@ pub fn di_oggi(elenco: &[Lavoro]) -> Vec<&Lavoro> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn le_opzioni_col_caso_cambiano_solo_i_nomi() {
+        let senza = opzioni(None, crate::engine::Options::default());
+        assert_eq!((senza.caso, senza.name_template), (None, None));
+        let con = opzioni(Some("V-1"), crate::engine::Options::default());
+        assert_eq!(con.caso.as_deref(), Some("V-1"));
+        assert_eq!(con.name_template.as_deref(), Some(MODELLO));
+        // Un modello scelto da chi usa Cedro resta com'è.
+        let proprio = opzioni(Some("V-1"), crate::engine::Options { name_template: Some("%nome%_%caso%".into()), ..Default::default() });
+        assert_eq!(proprio.name_template.as_deref(), Some("%nome%_%caso%"));
+    }
+
     use super::*;
 
     #[test]

@@ -2427,3 +2427,5 @@ Codice	Code
 Nota (per te, non entra nei nomi)	Notiz (für dich, nicht in den Dateinamen)
 Togli il caso	Fall entfernen
 Metti	Setzen
+  cedro --caso V-2026-0457 convert vetrino.svs png    i file nuovi si chiamano data_caso_nome (senza --caso vale quello scelto nell'app; --senza-caso lo esclude)	  cedro --caso V-2026-0457 convert praeparat.svs png    neue Dateien heißen Datum_Fall_Name (ohne --caso gilt der Fall aus der App; --senza-caso lässt ihn weg)
+--caso vuole un codice, per esempio V-2026-0457	--caso braucht einen Code, zum Beispiel V-2026-0457

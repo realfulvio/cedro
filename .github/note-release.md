@@ -17,3 +17,5 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 - Il caso resta anche dopo aver chiuso Cedro, finché non lo togli.
 - «Lavori», in alto a destra, apre l'elenco di quello che è uscito oggi: ora, cosa hai fatto, caso e nomi dei file. «Copia per il quaderno» mette negli appunti il caso e i nomi, uno per riga, pronti da incollare. L'elenco sta solo su questo computer.
 - Nel modello dei nomi si può scrivere anche `%caso%`.
+- Anche da riga di comando: `cedro --caso V-2026-0457 convert vetrino.svs png`. Senza `--caso` vale il caso scelto nell'app, con `--senza-caso` i nomi restano quelli di sempre.
+- Nell'elenco dei lavori l'ora è giusta anche per i lavori fatti prima del cambio tra ora solare e legale (su Windows).
