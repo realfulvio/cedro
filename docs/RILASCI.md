@@ -10,6 +10,7 @@ Ogni versione pubblicata finora, dalla più recente alla prima. Le note complete
 
 | Versione | Data | Cosa porta |
 | --- | --- | --- |
+| [0.50.0](https://github.com/realfulvio/cedro/releases/tag/v0.50.0) | 13/11 | Cedro 4 Labs: **caso o campione** (il codice entra nei nomi dei file: data, caso, nome) e pagina **Lavori** con l'elenco di quello che è uscito oggi, da copiare nel quaderno di laboratorio |
 | [0.47.0](https://github.com/realfulvio/cedro/releases/tag/v0.47.0) | 12/11 | Cedro parla anche **spagnolo, tedesco, francese e portoghese del Brasile** (oltre a italiano e inglese), su Desktop e Android; lingua automatica dal sistema |
 | [0.46.0](https://github.com/realfulvio/cedro/releases/tag/v0.46.0) | 12/11 | Cedro 4 Labs legge i vetrini **Hamamatsu NDPI** e **3DHistech MRXS** (anche in copia anonima e consulto); referti dettati che escono come bozza finché numeri e parole decisive non sono confermati |
 | [0.45.0](https://github.com/realfulvio/cedro/releases/tag/v0.45.0) | 12/11 | Cedro 4 Labs legge i file **Zeiss CZI**: scene, mosaici, canali, piani Z, compressioni di ZEN compreso il JPEG XR dei vetrini |

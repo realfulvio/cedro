@@ -73,7 +73,7 @@ fn main() {
     if std::env::var("LANG_FOTO").is_ok_and(|v| v == "en") {
         cedro::i18n::set(cedro::i18n::Lang::En);
         cedro::i18n::record_misses(true);
-    } else if std::env::args().nth(2).as_deref() == Some("cedro-labs") {
+    } else if matches!(std::env::args().nth(2).as_deref(), Some("cedro-labs") | Some("cedro-caso")) {
         cedro::i18n::set(cedro::i18n::Lang::It);
         cedro::i18n::fix();
     }
@@ -83,7 +83,7 @@ fn main() {
     let files = demo_files(&std::env::temp_dir().join("cedro-ui-demo"));
     let images: Vec<PathBuf> = files.iter().filter(|p| p.extension().is_some_and(|e| e == "jpg")).cloned().collect();
     // Il Cedro di partenza: una foto per pagina nelle due viste, Inizio, l'elenco e (TINTE=1) le quattro tinte.
-    if only.as_deref().is_some_and(|o| o.starts_with("cedro") && o != "cedro-labs" && o != "cedro-compatto") {
+    if only.as_deref().is_some_and(|o| o.starts_with("cedro") && o != "cedro-labs" && o != "cedro-caso" && o != "cedro-compatto") {
         use cedro::ui::model::Lab;
         let size = std::env::var("SIZE").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse::<u32>().ok()?, b.parse::<u32>().ok()?)))).unwrap_or((1536, 1024));
         let wav = std::env::temp_dir().join("cedro-ui-demo").join("Consiglio-comunale-12-ottobre.wav");
@@ -143,6 +143,42 @@ fn main() {
         }
         for m in cedro::i18n::misses() {
             println!("SENZA TRADUZIONE: {m:?}");
+        }
+        return;
+    }
+    // Il caso e i «Lavori»: barra con il caso, finestrella, pagina dei lavori (da lanciare con XDG_CONFIG_HOME/APPDATA su una cartella vuota).
+    if only.as_deref() == Some("cedro-caso") {
+        use cedro::ui::model::Lab;
+        let size = std::env::var("SIZE").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse::<u32>().ok()?, b.parse::<u32>().ok()?)))).unwrap_or((1536, 1024));
+        for simple in [false, true] {
+            for (nome, passo) in [("barra-vuota", 0), ("dialogo", 1), ("barra-caso", 2), ("lavori", 3)] {
+                let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+                s.request_appearance(ThemeId::CedroLabs, simple);
+                s.drop_files(images.clone());
+                s.app.set_lab(Lab::Home, simple);
+                if passo >= 1 {
+                    s.app.caso_bozza = ("V-2026-0457".into(), "Luna, labrador".into());
+                }
+                if passo == 1 {
+                    s.app.caso_aperto = true;
+                }
+                if passo >= 2 {
+                    s.app.caso_conferma();
+                }
+                if passo == 3 {
+                    let when = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                    for (i, (w, outs)) in [("Salva immagini e vetrini", vec!["2026-11-13_V-2026-0457_vetrino.png", "2026-11-13_V-2026-0457_vetrino_2.png"]), ("Togli i nomi", vec!["2026-11-13_V-2026-0457_referto.pdf"])].into_iter().enumerate() {
+                        cedro::caso::registra(&mut s.app.lavori, cedro::caso::Lavoro { when: when - 600 * i as u64, what: w.into(), caso: "V-2026-0457".into(), outputs: outs.into_iter().map(String::from).collect() });
+                    }
+                    s.app.lavori_aperti = true;
+                }
+                settle(&mut s);
+                s.render(size.0, size.1, 1.0);
+                settle(&mut s);
+                let name = format!("caso-{}-{nome}.png", if simple { "sempl" } else { "compl" });
+                s.render(size.0, size.1, 1.0).save_png(&out.join(&name)).unwrap();
+                println!("{name}");
+            }
         }
         return;
     }

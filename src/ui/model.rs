@@ -463,6 +463,16 @@ pub struct App {
     pub transcribe: Transcribe,
     pub youtube: Links,
     pub web: Links,
+    /// Cedro 4 Labs: il caso o campione di lavoro (entra nei nomi dei file) e i lavori fatti, dal più vecchio.
+    pub caso: Option<crate::caso::Caso>,
+    pub lavori: Vec<crate::caso::Lavoro>,
+    /// La finestrella del caso è aperta, con quel che c'è scritto nei due campi (codice, nota).
+    pub caso_aperto: bool,
+    pub caso_bozza: (String, String),
+    /// Si guarda l'elenco dei lavori invece della pagina scelta.
+    pub lavori_aperti: bool,
+    /// L'ultimo «Copia per il quaderno» (il lavoro, da 0 tra quelli di oggi): per dire «Copiato».
+    pub quaderno_copiato: Option<usize>,
     pub notice: Option<Notice>,
     pub ask: Option<Ask>,
     /// Miniature, misure e numero di pagine dei file già letti.
@@ -557,6 +567,12 @@ impl App {
             transcribe: Transcribe { format: trascrizione::Format::Word, model: trascrizione::default_model(), log: Vec::new(), percent: 0, since: None, speakers: 0, asking: false, glossario_vet: crate::read_settings().glossario_vet },
             youtube: Links::new(false),
             web: Links::new(true),
+            caso: crate::caso::carica(),
+            lavori: crate::caso::lavori(),
+            caso_aperto: false,
+            caso_bozza: (String::new(), String::new()),
+            lavori_aperti: false,
+            quaderno_copiato: None,
             notice: None,
             ask: None,
             media: HashMap::new(),
@@ -597,6 +613,7 @@ impl App {
     /// Cedro 4 Labs: apre una pagina, cioè sceglie l'attività, il tipo di file e la voce che le servono.
     /// I file in coda restano; se ce n'è uno del tipo giusto la pagina parte da quello.
     pub fn set_lab(&mut self, lab: Lab, simple: bool) {
+        self.lavori_aperti = false;
         let has = |app: &App, k: Kind| app.files.iter().any(|f| !f.voice_only && f.kind == k);
         let cat = |app: &mut App, k: Kind| {
             if let Some(i) = CATEGORIES.iter().position(|c| c.kind == k) {
@@ -1539,6 +1556,13 @@ impl App {
     }
 
     fn exists_options(&self, mut opts: engine::Options) -> engine::Options {
+        // Con un caso scelto i nomi dei file nuovi cominciano con la data e il caso (a meno di un modello proprio).
+        if let Some(caso) = &self.caso {
+            opts.caso = Some(caso.code.clone());
+            if opts.name_template.is_none() {
+                opts.name_template = Some(crate::caso::MODELLO.to_string());
+            }
+        }
         if opts.exists == Exists::Ask {
             let tx = self.tx.clone();
             let wake = self.wake.clone();
@@ -1550,6 +1574,50 @@ impl App {
             }));
         }
         opts
+    }
+
+    /// Un lavoro finito entra nell'elenco dei lavori, con i nomi dei file usciti (niente se non è uscito nulla).
+    fn registra_lavoro(&mut self, job: &Job) {
+        if !matches!(job.kind, JobKind::Convert | JobKind::Transcribe) {
+            return;
+        }
+        let mut outputs: Vec<String> = Vec::new();
+        for &i in &job.targets {
+            let Some(out) = self.files.get(i).filter(|f| f.state == FileState::Done).and_then(|f| f.output.as_ref()) else { continue };
+            let name = out.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+            if !name.is_empty() && !outputs.contains(&name) {
+                outputs.push(name);
+            }
+        }
+        if outputs.is_empty() {
+            return;
+        }
+        let what = if self.lab == Lab::Home { Lab::Converti.name() } else { self.lab.name() };
+        let when = crate::nametemplate::now().unix;
+        crate::caso::registra(&mut self.lavori, crate::caso::Lavoro { when, what: crate::i18n::tr(what).to_string(), caso: self.caso.as_ref().map(|c| c.code.clone()).unwrap_or_default(), outputs });
+        self.quaderno_copiato = None;
+    }
+
+    /// Mette il caso scritto nella finestrella (o lo toglie, se il codice è vuoto) e ricorda la scelta.
+    pub fn caso_conferma(&mut self) {
+        self.caso = crate::caso::Caso::new(&self.caso_bozza.0, &self.caso_bozza.1);
+        crate::caso::salva(self.caso.as_ref());
+        self.caso_aperto = false;
+    }
+
+    /// Toglie il caso: i file nuovi tornano ai nomi di sempre.
+    pub fn caso_togli(&mut self) {
+        self.caso = None;
+        self.caso_bozza = (String::new(), String::new());
+        crate::caso::salva(None);
+        self.caso_aperto = false;
+    }
+
+    /// Apre la finestrella del caso con quel che c'è già.
+    pub fn caso_apri(&mut self) {
+        self.caso_bozza = self.caso.as_ref().map(|c| (c.code.clone(), c.note.clone())).unwrap_or_default();
+        self.caso_aperto = true;
+        self.lavori_aperti = false;
     }
 
     /// Il pulsante principale dell'attività di ora.
@@ -2063,6 +2131,7 @@ impl App {
                 Event::JobDone => {
                     crate::accel::clear_in_use();
                     if let Some(job) = self.job.take() {
+                        self.registra_lavoro(&job);
                         if matches!(job.kind, JobKind::Convert | JobKind::Transcribe) {
                             let text = if job.failed > 0 {
                                 format!("{} di {} file non riusciti: il motivo è accanto a ciascuno.", job.failed, job.total)
