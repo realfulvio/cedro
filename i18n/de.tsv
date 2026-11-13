@@ -2427,3 +2427,16 @@ Markdown con titoli, elenchi e tabelle	Markdown mit Überschriften, Listen und T
 la carta scelta nel file	das in der Datei gewählte Papier
 1 PDF · 1 pagina	1 PDF · 1 Seite
 {#} PDF · 1 pagina	{} PDFs · 1 Seite
+documento di Word 1 o 2 per Windows: formato troppo vecchio	Dokument aus Word 1 oder 2 für Windows: Format zu alt
+documento di Word troppo vecchio	Word-Dokument zu alt
+il documento è protetto da password	das Dokument ist kennwortgeschützt
+il file .doc è rovinato e non si può leggere	die .doc-Datei ist beschädigt und kann nicht gelesen werden
+il file Excel è protetto da password: aprilo e salvalo senza	die Excel-Datei ist kennwortgeschützt: öffne sie und speichere sie ohne Kennwort
+il file contiene una DTD, che Cedro non apre per sicurezza	die Datei enthält eine DTD, die Cedro aus Sicherheitsgründen nicht öffnet
+il file non è un RTF	die Datei ist kein RTF
+il file non è un documento Word leggibile	die Datei ist kein lesbares Word-Dokument
+il file non è un documento di Writer leggibile	die Datei ist kein lesbares Writer-Dokument
+il file non è un foglio Excel leggibile	die Datei ist keine lesbare Excel-Tabelle
+il foglio di calcolo è vuoto: non c'è niente da stampare	die Tabelle ist leer: es gibt nichts zu drucken
+non è un documento di Word	kein Word-Dokument
+documento senza testo	Dokument ohne Text
