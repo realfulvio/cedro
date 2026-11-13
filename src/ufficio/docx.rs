@@ -346,7 +346,6 @@ impl TcProps {
 
 #[derive(Clone, Debug, Default)]
 struct Style {
-    kind: String,
     based_on: Option<String>,
     next_numbered: bool,
     p: PProps,
@@ -390,7 +389,6 @@ impl Styles {
                 }
             }
             let mut style = Style {
-                kind,
                 based_on: wchild(st, "basedOn").and_then(|b| wval(b)).map(str::to_string),
                 p: wchild(st, "pPr").map(PProps::parse).unwrap_or_default(),
                 r: wchild(st, "rPr").map(RProps::parse).unwrap_or_default(),
@@ -468,6 +466,7 @@ struct Level {
     fmt: String,
     text: String,
     suff_tab: bool,
+    jc: Allinea,
     p: PProps,
     r: RProps,
     legal: bool,
@@ -492,6 +491,11 @@ impl Numbering {
             fmt: wchild(l, "numFmt").and_then(|x| wval(x)).unwrap_or("decimal").to_string(),
             text: wchild(l, "lvlText").and_then(|x| wval(x)).unwrap_or("").to_string(),
             suff_tab: !matches!(wchild(l, "suff").and_then(|x| wval(x)), Some("space" | "nothing")),
+            jc: match wchild(l, "lvlJc").and_then(|x| wval(x)) {
+                Some("right" | "end") => Allinea::Destra,
+                Some("center") => Allinea::Centro,
+                _ => Allinea::Sinistra,
+            },
             p: wchild(l, "pPr").map(PProps::parse).unwrap_or_default(),
             r: wchild(l, "rPr").map(RProps::parse).unwrap_or_default(),
             legal: on(wchild(l, "isLgl")).unwrap_or(false),
@@ -645,11 +649,12 @@ pub fn bullet_char(c: char) -> char {
 struct Field {
     instr: String,
     result: bool,
+    /// Casella di spunta di un modulo (FORMCHECKBOX): spuntata o no.
+    check: Option<bool>,
 }
 
 struct Part {
     rels: HashMap<String, String>,
-    dir: String,
 }
 
 struct Ctx<'z> {
@@ -682,7 +687,7 @@ fn rels_of(zip: &mut zip::ZipArchive<Cursor<&[u8]>>, part: &str) -> Part {
             }
         }
     }
-    Part { rels, dir: dir.to_string() }
+    Part { rels }
 }
 
 fn resolve(dir: &str, target: &str) -> String {
@@ -828,6 +833,7 @@ impl<'z> Ctx<'z> {
                     if !text.is_empty() {
                         par.etichetta = Some((text, font));
                         par.etichetta_tab = level.suff_tab;
+                        par.etichetta_allinea = level.jc;
                     }
                 }
             }
@@ -913,7 +919,7 @@ impl<'z> Ctx<'z> {
                     }
                     "fldSimple" => {
                         let instr = attr(c, "instr").unwrap_or("").trim().to_string();
-                        self.fields.push(Field { instr, result: true });
+                        self.fields.push(Field { instr, result: true, check: None });
                         let before = par.runs.len();
                         self.field_start(par, base);
                         if par.runs.len() == before || !is_page_field(&self.fields.last().map(|f| f.instr.clone()).unwrap_or_default()) {
@@ -977,7 +983,11 @@ impl<'z> Ctx<'z> {
             if c.tag_name().namespace() == Some(W) {
                 match name {
                     "fldChar" => match attr(c, "fldCharType") {
-                        Some("begin") => self.fields.push(Field { instr: String::new(), result: false }),
+                        Some("begin") => {
+                            let cb = wchild(c, "ffData").and_then(|d| wchild(d, "checkBox"));
+                            let check = cb.map(|b| on(wchild(b, "checked")).or_else(|| on(wchild(b, "default"))).unwrap_or(false));
+                            self.fields.push(Field { instr: String::new(), result: false, check });
+                        }
                         Some("separate") => {
                             if let Some(f) = self.fields.last_mut() {
                                 f.result = true;
@@ -989,6 +999,11 @@ impl<'z> Ctx<'z> {
                         Some("end") => {
                             // Un campo senza risultato (PAGE scritto senza «separate»): il numero va messo ora.
                             if let Some(f) = self.fields.pop() {
+                                if let Some(v) = f.check.filter(|_| f.instr.trim_start().to_uppercase().starts_with("FORMCHECKBOX")) {
+                                    if self.fields.iter().all(|f| f.result && !is_page_field(&f.instr)) && !hidden {
+                                        push(par, Pezzo::Testo(if v { "\u{2612}" } else { "\u{2610}" }.into()));
+                                    }
+                                }
                                 if !f.result && is_page_field(&f.instr) && self.fields.iter().all(|f| f.result && !is_page_field(&f.instr)) {
                                     self.fields.push(f);
                                     self.field_start(par, &r);
@@ -1421,7 +1436,7 @@ impl<'z> Ctx<'z> {
         if righe.is_empty() {
             return None;
         }
-        Some(Tabella { griglia, righe, allinea, rientro, bordo_h: None, bordo_v: None, relativa: None })
+        Some(Tabella { griglia, righe, allinea, rientro, relativa: None })
     }
 
     /// Le intestazioni o i piè di una sezione, letti dalle loro parti.

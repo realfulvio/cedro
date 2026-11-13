@@ -551,6 +551,7 @@ impl Lettore {
             vedove: p.widctl,
             tabs: p.tabs.clone(),
             etichetta_tab: et.as_ref().is_some_and(|e| e.2),
+            etichetta_allinea: Allinea::Sinistra,
             etichetta: et.map(|(t, f, _)| (t, f.unwrap_or_else(|| self.font_di(&st.car)))),
             titolo,
             sfondo: p.sfondo.and_then(|c| self.colore(c)),
@@ -700,7 +701,7 @@ impl Lettore {
             out.push(Riga { celle: row, altezza: tw(d.altezza), intestazione: d.intestazione, non_dividere: d.non_dividere });
         }
         let pad0 = primo.celle.first().and_then(|c| c.pad[0]).or(primo.pad[0]).unwrap_or(tw(primo.gaph));
-        Some(Tabella { griglia, righe: out, allinea: primo.allinea, rientro: tw(x[0]) + pad0, bordo_h: None, bordo_v: None, relativa: None })
+        Some(Tabella { griglia, righe: out, allinea: primo.allinea, rientro: tw(x[0]) + pad0, relativa: None })
     }
 
     fn fine_sezione(&mut self, finale: bool) {
@@ -764,7 +765,7 @@ impl Lettore {
     }
 
     fn tabella_font(&mut self, g: &[Nodo]) {
-        let mut voce = |me: &mut Self, v: &[Nodo]| {
+        let voce = |me: &mut Self, v: &[Nodo]| {
             let mut id = None;
             let mut cs = 0;
             let mut cpg = None;

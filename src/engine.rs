@@ -130,7 +130,14 @@ const VIDEO_CONVERT: &[Slice] = &[
     Slice { id: "mp4", label: "MP4" },
     Slice { id: "mp3", label: "Solo audio (MP3)" },
 ];
-const DOC_CONVERT: &[Slice] = &[Slice { id: "pdf", label: "PDF" }];
+const DOC_CONVERT: &[Slice] = &[
+    Slice { id: "pdf", label: "PDF" },
+    Slice { id: "docx", label: "Word" },
+    Slice { id: "odt", label: "ODT" },
+    Slice { id: "html", label: "HTML" },
+    Slice { id: "md", label: "Markdown" },
+    Slice { id: "txt", label: "Testo" },
+];
 const PDF_CONVERT: &[Slice] = &[
     Slice { id: "jpg", label: "JPG" },
     Slice { id: "docx", label: "Word OCR" },
@@ -508,8 +515,14 @@ fn write_sheet_pdf(path: &Path, from: &str, dir: &Path, opts: &Options) -> Cedro
     };
     let pages = crate::ocr::pdf_page_count(&pdf).unwrap_or(0);
     let mut message = format!("PDF di {pages} {}", if pages == 1 { "pagina" } else { "pagine" });
+    if opts.embed_fonts || opts.pdfa {
+        message.push_str(", con i caratteri incorporati");
+    }
     if opts.pdfa {
         message.push_str(", PDF/A-1b");
+    }
+    if opts.bookmarks && pdf.windows(10).any(|w| w == b"/Outlines ") {
+        message.push_str(", con i segnalibri");
     }
     if let Some(password) = password {
         pdf = crate::pdf::protect(&pdf, password).map_err(err)?;
@@ -1825,6 +1838,29 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         let out = reserve(&dir, &stem(path), "pdf")?;
         let blocks = crate::doctext::document_blocks(path).map_err(err)?;
         return write_text_pdf(path, out, &blocks, opts);
+    }
+    if kind == Kind::Doc && matches!(action, "docx" | "odt" | "html" | "md" | "txt") {
+        // Il documento letto com'è (caratteri, paragrafi, tabelle, immagini, note) e riscritto.
+        let from = extension(path);
+        if !crate::ufficio::is_documento(&from) {
+            return Err(err(format!("«{from}» non è un documento letto da Cedro")));
+        }
+        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let mut doc = crate::ufficio::leggi_documento(&from, &bytes).map_err(err)?;
+        if doc.titolo.trim().is_empty() {
+            doc.titolo = stem(path);
+        }
+        use crate::ufficio::scrivi_doc as w;
+        let (data, message): (Vec<u8>, &str) = match action {
+            "docx" => (w::docx(&doc), "Documento di Word"),
+            "odt" => (w::odt(&doc), "Documento di Writer (ODT)"),
+            "html" => (w::html(&doc, &doc.titolo).into_bytes(), "Pagina web con le immagini dentro"),
+            "md" => (w::markdown(&doc).into_bytes(), "Markdown con titoli, elenchi e tabelle"),
+            _ => (crate::textconv::encode(&w::testo(&doc), opts.encoding).into_owned(), "Solo testo"),
+        };
+        let out = reserve(&dir, &stem(path), action)?;
+        write_bytes(&out, &data)?;
+        return Ok(Output { path: out, message: message.to_string() });
     }
     if kind == Kind::Pdf && matches!(action, "jpg" | "png") {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
@@ -3426,11 +3462,12 @@ Luca,Bondeno
         let dir = scratch();
         let src = dir.join("delibera.rtf");
         fs::write(&src, br"{\rtf1\ansi Delibera segreta del comune}").unwrap();
-        let a3 = perform_with(&src, "pdf", 80, None, &Options { page_size: PageSize::A3, ..Default::default() }).unwrap();
+        let carta = |c| Options { ufficio: crate::ufficio::Scelte { carta: Some(c), ..Default::default() }, exists: Exists::Replace, ..Default::default() };
+        let a3 = perform_with(&src, "pdf", 80, None, &carta(PageSize::A3)).unwrap();
         let bytes = fs::read(&a3.path).unwrap();
-        assert!(bytes.windows(20).any(|w| w == b"/MediaBox [0 0 842 1".as_slice()));
-        let letter = perform_with(&src, "pdf", 80, None, &Options { page_size: PageSize::Letter, ..Default::default() }).unwrap();
-        assert!(fs::read(&letter.path).unwrap().windows(18).any(|w| w == b"[0 0 612 792] /Con".as_slice()));
+        assert!(bytes.windows(30).any(|w| w == b"/MediaBox [0 0 842.00 1191.00]".as_slice()));
+        let letter = perform_with(&src, "pdf", 80, None, &carta(PageSize::Letter)).unwrap();
+        assert!(fs::read(&letter.path).unwrap().windows(29).any(|w| w == b"/MediaBox [0 0 612.00 792.00]".as_slice()));
 
         let locked = Options { password: Some("bondeno".into()), ..Default::default() };
         let out = perform_with(&src, "pdf", 80, None, &locked).unwrap();
@@ -3599,7 +3636,7 @@ Luca,Bondeno
         let docx = perform(&pdf.path, "docx", 80).unwrap();
         assert!(fs::read(&docx.path).unwrap().starts_with(b"PK"));
         let rtf = dir.join("nota.rtf");
-        fs::write(&rtf, b"{\rtf1 Cedro rtf}").unwrap();
+        fs::write(&rtf, br"{\rtf1 Cedro rtf}").unwrap();
         let rtf_pdf = perform(&rtf, "pdf", 80).unwrap();
         assert!(fs::read(&rtf_pdf.path).unwrap().windows(5).any(|w| w == b"Cedro"));
         let legacy = dir.join("vecchio.doc");

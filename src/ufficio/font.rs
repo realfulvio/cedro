@@ -4,7 +4,7 @@
 //! non ha si disegnano finti (tratto più spesso, testo inclinato), come fanno Word e LibreOffice.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 use skrifa::instance::{LocationRef, Size};
@@ -381,12 +381,6 @@ impl Fonti {
         }
         self.runs(id, text).iter().map(|(f, s)| self.faces[*f].width(s, size)).sum()
     }
-}
-
-/// Glifi usati da un font del PDF, con il carattere che rappresentano (per copiare il testo).
-#[derive(Default)]
-pub struct Used {
-    pub glyphs: BTreeMap<u16, char>,
 }
 
 #[cfg(test)]

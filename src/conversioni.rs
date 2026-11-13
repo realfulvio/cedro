@@ -17,7 +17,7 @@ pub struct Category {
 
 pub const CATEGORIES: &[Category] = &[
     Category { kind: Kind::Image, name: "Immagini", hint: "Cambia formato, ridimensiona e raddrizza le foto.", accepts: "PNG, JPEG, HEIC, WebP, AVIF, JPEG XL, SVG, BMP, GIF, TIFF, ICO, TGA, QOI, PNM, HDR, OpenEXR, DDS" },
-    Category { kind: Kind::Doc, name: "Documenti", hint: "Da Word, ODT e RTF a PDF.", accepts: "DOCX, DOC, ODT, RTF" },
+    Category { kind: Kind::Doc, name: "Documenti", hint: "Da Word, ODT, RTF e DOC a PDF, Word, ODT, HTML e testo.", accepts: "DOCX, DOC, ODT, RTF" },
     Category { kind: Kind::Pdf, name: "PDF", hint: "Da PDF a Word modificabile, a Excel, a immagini o a testo.", accepts: "PDF" },
     Category { kind: Kind::Text, name: "Testo", hint: "TXT, Markdown, CSV, Excel, JSON e HTML.", accepts: "TXT, MD, CSV, TSV, XLSX, XLS, ODS, JSON, HTML, XML" },
     Category { kind: Kind::Audio, name: "Audio", hint: "MP3, WAV, FLAC, Opus e AIFF.", accepts: "WAV, MP3, OGG, Opus, M4A, AAC, FLAC, AIFF, CAF" },
@@ -67,7 +67,11 @@ pub fn simple_formats(kind: Kind) -> &'static [SimpleFormat] {
         SimpleFormat { id: "png", title: "PNG", note: "nitida, senza perdite" },
         SimpleFormat { id: "pdf", title: "PDF", note: "un documento" },
     ];
-    const DOC: &[SimpleFormat] = &[SimpleFormat { id: "pdf", title: "PDF", note: "si apre ovunque" }];
+    const DOC: &[SimpleFormat] = &[
+        SimpleFormat { id: "pdf", title: "PDF", note: "si apre ovunque" },
+        SimpleFormat { id: "docx", title: "Word", note: "da modificare" },
+        SimpleFormat { id: "txt", title: "Testo", note: "solo le parole" },
+    ];
     const PDF: &[SimpleFormat] = &[
         SimpleFormat { id: "docx", title: "Word", note: "da modificare" },
         SimpleFormat { id: "xlsx", title: "Excel", note: "le tabelle" },
@@ -649,6 +653,7 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
         (Kind::Image, "jpeg" | "compress" | "pdf" | "pnm") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
         (Kind::Image, _) => vec![&IMAGE_SIZE, &STRAIGHTEN],
         (Kind::Doc, "pdf") => vec![&OFFICE_PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
+        (Kind::Doc, "txt") => vec![&TEXT_ENCODING],
         (Kind::Pdf, "jpg" | "png") => vec![&PDF_DPI, &PDF_PAGES, &ONE_PER_PAGE],
         (Kind::Pdf, "docx") => vec![&OCR, &TABLES, &COLUMNS, &PDF_PAGES],
         (Kind::Pdf, "xlsx") => vec![&SHEET_PER_TABLE, &CELL_VALUES, &MERGE_TABLES, &OUTSIDE_TEXT, &OCR, &PDF_PAGES],

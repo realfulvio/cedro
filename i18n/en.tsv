@@ -4,7 +4,7 @@ Immagini	Images
 Documenti	Documents
 Testo	Text
 Cambia formato, ridimensiona e raddrizza le foto.	Change format, resize and straighten photos.
-Da Word, ODT e RTF a PDF.	From Word, ODT and RTF to PDF.
+Da Word, ODT, RTF e DOC a PDF, Word, ODT, HTML e testo.	From Word, ODT, RTF and DOC to PDF, Word, ODT, HTML and text.
 Da PDF a Word modificabile, a Excel, a immagini o a testo.	From PDF to editable Word, Excel, images or text.
 TXT, Markdown, CSV, Excel, JSON e HTML.	TXT, Markdown, CSV, Excel, JSON and HTML.
 WAV, MP3, OGG, M4A, AAC e FLAC.	WAV, MP3, OGG, M4A, AAC and FLAC.
@@ -2295,3 +2295,13 @@ Porta in CSV	Turn into CSV
 {}: è un collegamento a una cartella, metti la cartella vera	{}: it is a link to a folder, add the real folder
 in coda ci sono radiografie di {#} animali diversi ({}): fai un PDF per ogni animale, con in coda solo le sue	the queue holds X-rays of {} different animals ({}): make one PDF per animal, with only its files in the queue
  Saltati perché senza immagini: {}.	 Skipped because they have no images: {}.
+tiene caratteri, tabelle e immagini	keeps fonts, tables and images
+per LibreOffice e OpenOffice	for LibreOffice and OpenOffice
+pagina web, immagini dentro	web page, images included
+titoli, elenchi e tabelle	headings, lists and tables
+Documento di Word	Word document
+Documento di Writer (ODT)	Writer document (ODT)
+Pagina web con le immagini dentro	Web page with images included
+Markdown con titoli, elenchi e tabelle	Markdown with headings, lists and tables
+«{}» non è un documento letto da Cedro	“{1}” is not a document Cedro can read
+la carta scelta nel file	the paper set in the file
