@@ -293,6 +293,8 @@ struct Naming {
     skipped: Vec<PathBuf>,
     /// Il modello del nome di uscita (`%nome%_%data%`), se scelto.
     template: Option<String>,
+    /// Il caso o campione di lavoro: il suo codice entra dove il modello dice `%caso%`.
+    caso: Option<String>,
     /// Dentro `perform_with`: i nomi nuovi si prenotano creando il file, e con «sostituisci» si scrive
     /// in un file temporaneo che prende il posto di quello vecchio solo a lavoro riuscito.
     guarded: bool,
@@ -362,10 +364,12 @@ fn templated_stem(file_stem: &str) -> String {
             return file_stem.to_string();
         };
         let base = stem(source);
-        let Some(tail) = file_stem.strip_prefix(base.as_str()) else {
-            return file_stem.to_string();
+        // Un nome che non parte da quello del file di partenza (la figura, il pacchetto) è tutto «nome».
+        let (base, tail) = match file_stem.strip_prefix(base.as_str()) {
+            Some(tail) => (base.as_str(), tail),
+            None => (file_stem, ""),
         };
-        crate::nametemplate::expand(template, &base, &extension(source), tail, crate::nametemplate::now()).unwrap_or_else(|| file_stem.to_string())
+        crate::nametemplate::expand_caso(template, base, &extension(source), tail, crate::nametemplate::now(), n.caso.as_deref().unwrap_or("")).unwrap_or_else(|| file_stem.to_string())
     })
 }
 
@@ -451,7 +455,7 @@ fn reserve(dir: &Path, file_stem: &str, ext: &str) -> CedroResult<PathBuf> {
 /// regola per i nomi che esistono già. `None` se il file esiste e si è scelto di saltarlo.
 pub fn choose_output(source: &Path, dir: &Path, file_stem: &str, ext: &str, opts: &Options) -> Option<PathBuf> {
     let before = NAMING.with(|n| {
-        n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(source.to_path_buf()), template: opts.name_template.clone(), ..Default::default() })
+        n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(source.to_path_buf()), template: opts.name_template.clone(), caso: opts.caso.clone(), ..Default::default() })
     });
     let out = unique_output(dir, file_stem, ext);
     let used = NAMING.with(|n| n.replace(before));
@@ -699,7 +703,7 @@ fn zip_file(path: &Path, out: &Path, size: u64) -> CedroResult<()> {
 pub fn zip_paths(paths: &[PathBuf], out_dir: &Path, name: Option<&str>, opts: &Options) -> CedroResult<Output> {
     let Some(first) = paths.first() else { return Err(err("nessun file da mettere nello ZIP")) };
     let _job = crate::resources::acquire(None).expect("uncancellable job");
-    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), template: opts.name_template.clone(), guarded: true, ..Default::default() }));
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), template: opts.name_template.clone(), caso: opts.caso.clone(), guarded: true, ..Default::default() }));
     let mut restore = RestoreNaming(Some(before));
     let result = (|| {
         fs::create_dir_all(out_dir).map_err(|e| err(e.to_string()))?;
@@ -956,6 +960,8 @@ pub struct Options {
     pub password: Option<String>,
     /// Il nome dei file scritti, a modello: `%nome%`, `%ext%`, `%data%`, `%ora%`, `%unix%`.
     pub name_template: Option<String>,
+    /// Il caso o campione di lavoro (il codice da mettere dove il modello dice `%caso%`).
+    pub caso: Option<String>,
     /// I vetrini digitali (.svs): il livello (0 Panoramica, 1 Media, 2 Piena) e le immagini in più.
     pub slide_level: u32,
     pub slide_label: bool,
@@ -1061,6 +1067,7 @@ impl Default for Options {
             faststart: false,
             password: None,
             name_template: None,
+            caso: None,
             slide_level: 1,
             slide_label: true,
             slide_macro: true,
@@ -1093,6 +1100,7 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
             ask: opts.on_exists.clone(),
             source: Some(path.to_path_buf()),
             template: opts.name_template.clone(),
+            caso: opts.caso.clone(),
             guarded: true,
             ..Default::default()
         })
@@ -1157,7 +1165,7 @@ pub fn merge_with(sources: &[(PathBuf, Option<PageSel>)], out_dir: Option<&Path>
         return Err(err("per unire servono almeno due PDF"));
     }
     let _job = crate::resources::acquire(None).expect("uncancellable job");
-    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), guarded: true, ..Default::default() }));
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), template: opts.name_template.clone(), caso: opts.caso.clone(), guarded: true, ..Default::default() }));
     let mut restore = RestoreNaming(Some(before));
     let result = merge_inner(sources, out_dir, opts);
     let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
@@ -1226,7 +1234,7 @@ pub fn package_with(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) -
         return Err(err("nessun file da mettere nel pacchetto"));
     };
     let _job = crate::resources::acquire(None).expect("uncancellable job");
-    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), guarded: true, ..Default::default() }));
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), template: opts.name_template.clone(), caso: opts.caso.clone(), guarded: true, ..Default::default() }));
     let mut restore = RestoreNaming(Some(before));
     let result = (|| {
         let dir = match out_dir {
@@ -1274,7 +1282,7 @@ fn rx_in(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options, logo_salvato
         return Err(err("nessuna radiografia DICOM in coda"));
     };
     let _job = crate::resources::acquire(None).expect("uncancellable job");
-    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), guarded: true, ..Default::default() }));
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), template: opts.name_template.clone(), caso: opts.caso.clone(), guarded: true, ..Default::default() }));
     let mut restore = RestoreNaming(Some(before));
     let result = (|| {
         let dir = match out_dir {
@@ -1316,7 +1324,7 @@ pub fn figure_with(paths: &[PathBuf], out_dir: Option<&Path>, opts: &Options) ->
         return Err(err("nessuna immagine per la figura"));
     };
     let _job = crate::resources::acquire(None).expect("uncancellable job");
-    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), guarded: true, ..Default::default() }));
+    let before = NAMING.with(|n| n.replace(Naming { exists: opts.exists, ask: opts.on_exists.clone(), source: Some(first.clone()), template: opts.name_template.clone(), caso: opts.caso.clone(), guarded: true, ..Default::default() }));
     let mut restore = RestoreNaming(Some(before));
     let result = figure_inner(paths, out_dir, opts);
     let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));

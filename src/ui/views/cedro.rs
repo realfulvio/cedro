@@ -106,8 +106,9 @@ static GPU_DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::
 /// La riga di stato in alto a destra: a riposo la scheda video pronta (o «Solo processore»); durante
 /// un lavoro cosa lo accelera davvero; mentre arriva un componente (yt-dlp, ffmpeg, modelli) il suo nome,
 /// quanto manca e una barretta. Si legge da destra, accanto ai pulsanti della finestra.
-/// `idle`: anche a riposo (Cedro 4 Labs a riposo dice «Niente esce da questo PC»). Vero se ha disegnato.
-pub(super) fn status_line(f: &mut Frame, app: &App, t: &Tint, idle: bool, cy: f32) -> bool {
+/// `idle`: anche a riposo (Cedro 4 Labs a riposo dice «Niente esce da questo PC»). Se ha disegnato, dice dove
+/// comincia (il bordo sinistro), così gli altri pulsanti della barra non ci finiscono sotto.
+pub(super) fn status_line(f: &mut Frame, app: &App, t: &Tint, idle: bool, cy: f32) -> Option<f32> {
     use crate::componenti::Fase;
     let size = 14.5;
     let right = f.w - 3.0 * 46.0 - 24.0;
@@ -139,7 +140,7 @@ pub(super) fn status_line(f: &mut Frame, app: &App, t: &Tint, idle: bool, cy: f3
             (Mark::Dot { live: true }, t.leaf, crate::i18n::tr("Lavora il processore").into_owned(), format!(" · {}", crate::i18n::lit(&u.detail)), None)
         }
     } else if !idle {
-        return false;
+        return None;
     } else if let Some(name) = gpu_name() {
         (Mark::Dot { live: false }, t.leaf, crate::i18n::tr("Scheda video attiva").into_owned(), format!(" · {}", crate::i18n::lit(name)), None)
     } else if gpu_checked() {
@@ -149,7 +150,7 @@ pub(super) fn status_line(f: &mut Frame, app: &App, t: &Tint, idle: bool, cy: f3
     } else {
         // La scheda video si cerca in sottofondo: ridisegna finché non c'è la risposta.
         f.animating = true;
-        return false;
+        return None;
     };
     let tail = crate::i18n::tr(&tail).into_owned();
     let hw = f.measure(&head, size, SEMI);
@@ -178,7 +179,7 @@ pub(super) fn status_line(f: &mut Frame, app: &App, t: &Tint, idle: bool, cy: f3
             f.p.rrect(bx, cy - 2.5, (110.0 * p).max(5.0), 5.0, 2.5, Some(c), None);
         }
     }
-    true
+    Some(x - 25.0)
 }
 
 /// Il nome della scheda senza la marca davanti, che nella barra non serve.

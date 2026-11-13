@@ -11,13 +11,11 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro apre e converte i file d'ufficio, senza Office né LibreOffice.**
+**Cedro 4 Labs conosce il caso su cui lavori e tiene l'elenco di quello che hai fatto.**
 
-- **Word in PDF come lo stampa Word**: .docx, .odt, .rtf e .doc (anche i vecchi Word 6 e Word 95) con stili, tabelle e celle unite, elenchi numerati, intestazioni e piè di pagina, note, immagini, caselle di testo e segnalibri. Si sceglie la carta: come nel file, A4, A3 o Lettera.
-- Dai documenti si esce anche in **Word, ODT, HTML, Markdown e testo**.
-- **Excel in PDF**: .xlsx, .ods e .xls stampati come li stampa il loro programma, con aree di stampa, adattamento alla pagina, orientamento, griglia e righe ripetute.
-- **Foto HEIC e HEIF dell'iPhone**: si aprono, si vedono e si convertono in JPEG, PNG o PDF con i colori giusti.
-- Al centro della finestra c'è sempre l'anteprima del file di partenza: pagine del documento, del foglio o la foto.
-- Un file con l'estensione sbagliata (un RTF salvato come .doc) si apre lo stesso; i file protetti da password o rovinati danno un messaggio chiaro.
-- Da riga di comando «jpg» e «tif» valgono come «jpeg» e «tiff».
-- Provato con circa 1.850 conversioni di file veri e di collaudo su Linux e Windows, confrontando le pagine con quelle di LibreOffice.
+- In alto, accanto al nome, «+ Caso o campione»: scrivi il codice (per esempio V-2026-0457) e, se vuoi, una nota per te. Finché non lo togli, ogni file che Cedro scrive si chiama «data, caso, nome»: `2026-11-13_V-2026-0457_vetrino`. Senza caso i nomi restano quelli di sempre. La nota non entra mai nei nomi.
+- Il caso resta anche dopo aver chiuso Cedro, finché non lo togli.
+- «Lavori», in alto a destra, apre l'elenco di quello che è uscito oggi: ora, cosa hai fatto, caso e nomi dei file. «Copia per il quaderno» mette negli appunti il caso e i nomi, uno per riga, pronti da incollare. L'elenco sta solo su questo computer.
+- Nel modello dei nomi si può scrivere anche `%caso%`.
+- Anche da riga di comando: `cedro --caso V-2026-0457 convert vetrino.svs png`. Senza `--caso` vale il caso scelto nell'app, con `--senza-caso` i nomi restano quelli di sempre.
+- Nell'elenco dei lavori l'ora è giusta anche per i lavori fatti prima del cambio tra ora solare e legale (su Windows).

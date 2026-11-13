@@ -29,6 +29,7 @@ pub mod czi;
 pub mod figura;
 pub mod pacchetto;
 mod nametemplate;
+pub mod caso;
 mod mp4fast;
 mod ocr;
 mod ocrscan;
