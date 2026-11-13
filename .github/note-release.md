@@ -11,9 +11,12 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro non si chiude più davanti a un file rovinato.**
+**Trascrivi con la traccia audio a tutto schermo.**
 
-- Un video MOV o MP4 con un blocco danneggiato dentro non fa più girare Cedro all'infinito (neppure nell'anteprima): dice che il video non si legge.
-- Le foto (DDS, BMP e altre) con misure assurde nell'intestazione, i vetrini NDPI e SVS e i TIFF dei microscopi (OME-TIFF) con valori impossibili non fanno più chiudere Cedro per mancanza di memoria: danno un errore e il resto della coda va avanti.
-- Nel riconoscimento delle voci un risultato non valido del modello non ferma più la trascrizione.
-- Provato rovinando a caso 52 tipi di file (video, audio, foto, Office, PDF, ZIP, vetrini, firme digitali) circa 6.000 volte.
+- Mentre Cedro trascrive, l'onda sonora occupa tutto il centro e la parte già trascritta si colora. Sotto ci sono i comandi per riascoltare: Play e Pausa, 10 secondi indietro e avanti, frase prima e dopo, un clic sull'onda per spostarti, velocità (0,75×, 1×, 1,5×, 2×) e volume.
+- Tre viste sempre a un clic: solo onda, onda e testo, solo testo. La frase che senti è evidenziata nel testo e il testo la segue.
+- Il testo che si trascrive ha una barra di scorrimento ben visibile e le parole arrivano raggruppate in frasi, una per riga.
+- «Rivedi» e «Riassunto AI» sono più grandi e colorati.
+- Il pannello di destra si allarga e si stringe trascinando il bordo (doppio clic per tornare alla misura di base) e Cedro ricorda la larghezza.
+- La scheda video si legge una volta sola, in alto; sotto il pulsante una riga dice cosa sta facendo Cedro («Trascrive · file 1 di 7»).
+- Provato su Windows con una trascrizione vera e sullo schermo di Linux.
