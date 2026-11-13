@@ -1,4 +1,4 @@
-use cedro::{perform, read_quality, Kind, Mode};
+use cedro::{read_quality, Kind, Mode};
 use std::ffi::OsString;
 
 pub fn run() -> i32 {
@@ -10,9 +10,27 @@ pub fn run() -> i32 {
         return if args.is_empty() { 2 } else { 0 };
     }
     let mut quality = read_quality();
+    // Il caso: quello ricordato dall'app, oppure `--caso CODICE`, oppure `--senza-caso`.
+    let mut caso = cedro::caso::carica().map(|c| c.code);
     let mut positional = Vec::new();
     let mut i = 0;
     while i < args.len() {
+        if args[i] == "--senza-caso" {
+            caso = None;
+            i += 1;
+            continue;
+        }
+        if args[i] == "--caso" {
+            match args.get(i + 1).and_then(|v| v.to_str()).and_then(|v| cedro::caso::Caso::new(v, "")) {
+                Some(c) => caso = Some(c.code),
+                None => {
+                    eprintln!("{}", cedro::i18n::tr("--caso vuole un codice, per esempio V-2026-0457"));
+                    return 2;
+                }
+            }
+            i += 2;
+            continue;
+        }
         if args[i] == "--quality" {
             if let Some(v) = args.get(i + 1) {
                 quality = v.to_str().and_then(|v| v.parse::<u8>().ok()).unwrap_or(quality).clamp(40, 95);
@@ -28,9 +46,11 @@ pub fn run() -> i32 {
         return 2;
     }
     let cmd = positional[0].to_string_lossy();
+    let exists = if cedro::read_settings().replace { cedro::Exists::Replace } else { cedro::Exists::Number };
+    let opts = cedro::caso::opzioni(caso.as_deref(), cedro::Options { exists, ..cedro::Options::default() });
     let result = match cmd.as_ref() {
         "convert" | "tool" if positional.len() >= 3 => {
-            perform(std::path::Path::new(&positional[1]), &positional[2].to_string_lossy(), quality)
+            cedro::perform_with(std::path::Path::new(&positional[1]), &positional[2].to_string_lossy(), quality, None, &opts)
         }
         "update" => return update(),
         // Dal disinstallatore: Cedro toglie le sue associazioni dei file firmati.
@@ -53,11 +73,11 @@ pub fn run() -> i32 {
             }
             return if bad { 1 } else { 0 };
         }
-        "trascrivi" if positional.len() >= 2 => return transcribe(&positional[1..], &args),
+        "trascrivi" if positional.len() >= 2 => return transcribe(&positional[1..], &args, &opts),
         // Il pacchetto dei dati (BagIt con le impronte SHA-256): file e cartelle in uno ZIP.
         "pacchetto" if positional.len() >= 2 => {
             let files: Vec<std::path::PathBuf> = positional[1..].iter().map(std::path::PathBuf::from).collect();
-            cedro::package_paths(&files, None)
+            cedro::package_with(&files, None, &opts)
         }
         // La figura per un articolo: i file nell'ordine dato diventano i pannelli A, B, C.
         "figura" if positional.len() >= 2 => {
@@ -77,10 +97,9 @@ pub fn run() -> i32 {
                     _ => files.push(std::path::PathBuf::from(a)),
                 }
             }
-            let exists = if cedro::read_settings().replace { cedro::Exists::Replace } else { cedro::Exists::Number };
-            cedro::figure_with(&files, None, &cedro::Options { figura, exists, ..cedro::Options::default() })
+            cedro::figure_with(&files, None, &cedro::Options { figura, ..opts })
         }
-        "zip" if positional.len() >= 2 => perform(std::path::Path::new(&positional[1]), "zip", quality),
+        "zip" if positional.len() >= 2 => cedro::perform_with(std::path::Path::new(&positional[1]), "zip", quality, None, &opts),
         "slices" if positional.len() >= 2 => {
             let path = std::path::Path::new(&positional[1]);
             let mode = match positional.get(2).and_then(|m| m.to_str()) {
@@ -223,6 +242,7 @@ Cedro — conversione locale, senza upload.
   cedro tool <file> <compress|half|gray|rot90|strip|upper|lower|ocr|dup|path|zip>
   cedro zip <file>
   cedro --quality 80 convert foto.png jpeg
+  cedro --caso V-2026-0457 convert vetrino.svs png    i file nuovi si chiamano data_caso_nome (senza --caso vale quello scelto nell'app; --senza-caso lo esclude)
   cedro update     controlla se su GitHub c'è una versione nuova
   cedro trascrivi <audio>… [--testo] [--precisione veloce|buona|massima] [--voci auto|1-8] [--glossario veterinaria] [--cpu]
                    dalla voce a un Word (o a un testo), con il motore scaricato alla prima volta;
@@ -252,7 +272,7 @@ L'originale non viene mai sovrascritto.";
 }
 
 /// `cedro trascrivi`: la stessa trascrizione della scheda, con i passi stampati man mano.
-fn transcribe(files: &[OsString], args: &[OsString]) -> i32 {
+fn transcribe(files: &[OsString], args: &[OsString], opts: &cedro::Options) -> i32 {
     use cedro::trascrizione::{self, Event, Format, Request};
     let model = match args.iter().position(|a| a == "--precisione").and_then(|i| args.get(i + 1)).and_then(|a| a.to_str()) {
         Some("veloce") => 0,
@@ -298,7 +318,7 @@ fn transcribe(files: &[OsString], args: &[OsString]) -> i32 {
         .map(std::path::PathBuf::from)
         .collect();
     let failed = std::sync::atomic::AtomicBool::new(false);
-    trascrizione::run(&paths, &request, None, &cedro::Options::default(), &|event| match event {
+    trascrizione::run(&paths, &request, None, opts, &|event| match event {
         Event::Log(line) => match line.speaker {
             Some(v) => println!("{} {}: {}", line.key, trascrizione::speaker_name(v as usize), line.text),
             None => println!("{} {}", line.key, cedro::i18n::tr(&line.text)),
