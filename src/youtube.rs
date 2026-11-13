@@ -224,6 +224,16 @@ fn get_text(url: &str) -> Result<String, String> {
 
 /// Scarica `url` in `dest` (via un file `.part`), controllando lo SHA-256 se lo si conosce.
 fn download(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<(), String> {
+    // La riga di stato in alto mostra il componente che arriva.
+    let job = crate::componenti::Lavoro::scarica(what);
+    let result = download_inner(url, dest, sha256, what, emit, cancel);
+    if let Err(e) = &result {
+        job.fallito(e);
+    }
+    result
+}
+
+fn download_inner(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<(), String> {
     let response = agent().get(url).call().map_err(|e| format!("Non riesco a scaricare {what}: {e}"))?;
     let total: u64 = response.header("Content-Length").and_then(|v| v.parse().ok()).unwrap_or(0);
     let mut reader = response.into_reader();
@@ -258,6 +268,7 @@ fn download(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut
         }
         hasher.update(&buf[..n]);
         done += n as u64;
+        crate::componenti::scarica(what, done, total);
         if total > 0 {
             let pct = (done * 100 / total) as i32;
             if pct != last_pct {
@@ -653,6 +664,7 @@ pub fn update_ytdlp_if_due(ytdlp: &Path, emit: &mut dyn FnMut(Event), cancel: &A
         return;
     }
     emit(Event::Log("Controllo se yt-dlp ha una versione più nuova".into()));
+    let _job = crate::componenti::Lavoro::aggiorna("yt-dlp");
     // Con una rete lenta o un proxy bloccato -U può non finire mai: lo si ferma con Annulla o dopo 2 minuti.
     match capture_until(command(ytdlp).arg("-U"), cancel, Duration::from_secs(120)) {
         Ok((text, _, ok)) => {
@@ -865,7 +877,9 @@ pub fn first_error(stderr: &str) -> String {
     let line = stderr.lines().rev().find(|l| l.contains("ERROR")).unwrap_or(stderr.lines().last().unwrap_or("")).trim();
     let line = line.trim_start_matches("ERROR:").trim();
     let low = line.to_lowercase();
-    if low.contains("unsupported url") {
+    if low.contains("video subtitles") && (low.contains("http error 429") || low.contains("too many requests")) {
+        "YouTube non dà i sottotitoli adesso: riprova più tardi o togli i sottotitoli".into()
+    } else if low.contains("unsupported url") {
         "Questo sito non è supportato (o il link non porta a un video)".into()
     } else if low.contains("drm") {
         "Il video è protetto da DRM e non si può scaricare".into()
@@ -1152,8 +1166,39 @@ fn lossy_lines(reader: impl Read) -> impl Iterator<Item = String> {
     })
 }
 
+/// Segnale interno: yt-dlp si è fermato perché i sottotitoli non si scaricano (YouTube risponde 429
+/// alle richieste dei sottotitoli anche quando il video è scaricabile).
+const SUBTITLES_FAILED: &str = "\u{1}sottotitoli";
+
+/// Gli stessi argomenti senza sottotitoli.
+fn without_subtitles(args: &[String]) -> Vec<String> {
+    let mut out = Vec::with_capacity(args.len());
+    let mut skip = false;
+    for a in args {
+        if skip {
+            skip = false;
+        } else if a == "--sub-langs" {
+            skip = true;
+        } else if !matches!(a.as_str(), "--write-subs" | "--write-auto-subs" | "--embed-subs") {
+            out.push(a.clone());
+        }
+    }
+    out
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, total: usize, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<Vec<PathBuf>, String> {
+    match run_once(ytdlp, args, url, dest, index, total, emit, cancel) {
+        Err(e) if e == SUBTITLES_FAILED => {
+            emit(Event::Log("Il sito non dà i sottotitoli adesso (limite di richieste): scarico il video senza".into()));
+            run_once(ytdlp, &without_subtitles(args), url, dest, index, total, emit, cancel).map_err(|e| if e == SUBTITLES_FAILED { "Non riesco a scaricare il video".to_string() } else { e })
+        }
+        other => other,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_once(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, total: usize, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<Vec<PathBuf>, String> {
     let mut child = command(ytdlp)
         .args(args)
         .arg("--")
@@ -1225,6 +1270,9 @@ fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, 
     untrack(&child);
     let status = status.map_err(|e| e.to_string())?;
     if files.is_empty() && !status.success() {
+        if errors.contains("Unable to download video subtitles") && args.iter().any(|a| a == "--embed-subs") {
+            return Err(SUBTITLES_FAILED.into());
+        }
         return Err(first_error(&errors));
     }
     Ok(files)
@@ -1646,6 +1694,14 @@ mod tests {
     }
 
     #[test]
+    fn subtitles_removed_for_retry() {
+        let a: Vec<String> = ["--x", "--write-subs", "--write-auto-subs", "--sub-langs", "it,it-orig", "--embed-subs", "--y"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(without_subtitles(&a), vec!["--x", "--y"]);
+        assert!(first_error("ERROR: Unable to download video subtitles for 'it': HTTP Error 429: Too Many Requests").contains("sottotitoli"));
+        assert!(first_error("ERROR: [x] HTTP Error 429: Too Many Requests").contains("limitato"));
+    }
+
+    #[test]
     fn any_site_link_is_accepted() {
         assert!(is_video_url("https://vimeo.com/76979871"));
         assert!(is_video_url("https://archive.org/details/x"));
@@ -1696,6 +1752,22 @@ mod tests {
         let err = probe(&ytdlp, "https://www.rust-lang.org/", false, &cancel).unwrap_err();
         println!("non supportato: {err}");
         assert!(err.starts_with("Questo sito non è supportato"), "{err}");
+    }
+
+    /// Prova vera su YouTube con i sottotitoli in italiano: anche se YouTube risponde 429 ai
+    /// sottotitoli il video deve arrivare. `cargo test --release youtube_with_subtitles -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn youtube_with_subtitles() {
+        let cancel = AtomicBool::new(false);
+        let dest = std::env::temp_dir().join(format!("cedro-yt-{}", std::process::id()));
+        let mut r = Request::new(vec!["https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string()], false, dest.clone());
+        r.quality = 360;
+        r.subtitles = 1;
+        let got = run(&r, &mut |e| if let Event::Log(t) = e { println!("  {t}") }, &cancel);
+        let _ = std::fs::remove_dir_all(&dest);
+        let files = got.expect("download");
+        assert!(!files.is_empty());
     }
 
     #[test]

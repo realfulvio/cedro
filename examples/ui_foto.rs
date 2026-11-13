@@ -150,6 +150,10 @@ fn main() {
     if only.as_deref() == Some("cedro-caso") {
         use cedro::ui::model::Lab;
         let size = std::env::var("SIZE").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse::<u32>().ok()?, b.parse::<u32>().ok()?)))).unwrap_or((1536, 1024));
+        // STATO=1: mentre arriva un componente, per vedere la riga di stato accanto al caso e a «Lavori».
+        if std::env::var("STATO").is_ok() {
+            cedro::componenti::scarica("modello del riassunto", 12_400_000, 20_100_000);
+        }
         for simple in [false, true] {
             for (nome, passo) in [("barra-vuota", 0), ("dialogo", 1), ("barra-caso", 2), ("lavori", 3)] {
                 let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
@@ -178,6 +182,33 @@ fn main() {
                 let name = format!("caso-{}-{nome}.png", if simple { "sempl" } else { "compl" });
                 s.render(size.0, size.1, 1.0).save_png(&out.join(&name)).unwrap();
                 println!("{name}");
+            }
+        }
+        return;
+    }
+    // La riga di stato in alto: componente che arriva, che si aggiorna, non scaricato (Cedro, Carta e 4 Labs).
+    if only.as_deref() == Some("riga-stato") {
+        use cedro::ui::model::Lab;
+        let states: [(&str, fn()); 4] = [
+            ("riposo", || {}),
+            ("scarica", || cedro::componenti::scarica("yt-dlp", 12_400_000, 20_100_000)),
+            ("aggiorna", || cedro::componenti::aggiorna("yt-dlp")),
+            ("errore", || cedro::componenti::errore("il modello")),
+        ];
+        for theme in [ThemeId::Cedro, ThemeId::CedroCarta, ThemeId::CedroLabs] {
+            for (name, set) in states {
+                cedro::componenti::azzera();
+                set();
+                let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+                s.request_appearance(theme, false);
+                s.app.youtube.add("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+                s.app.set_lab(Lab::Video, false);
+                settle(&mut s);
+                s.render(1536, 1024, 1.0);
+                settle(&mut s);
+                let file = format!("riga-{}-{name}.png", theme.key());
+                s.render(1536, 1024, 1.0).save_png(&out.join(&file)).unwrap();
+                println!("{file}");
             }
         }
         return;

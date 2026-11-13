@@ -688,7 +688,7 @@ fn sent(ok: bool) -> Result<(), String> {
 fn iso_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
     let file = File::open(input).map_err(|err| format!("il video non è stato letto: {err}"))?;
     let size = file.metadata().map_err(|err| format!("il video non è stato letto: {err}"))?.len();
-    let mut reader = match mp4::Mp4Reader::read_header(std::io::BufReader::new(file), size) {
+    let mut reader = match crate::mp4fast::mp4_reader(file, size) {
         Ok(reader) => reader,
         // Il crate mp4 scambia i campi della descrizione audio QuickTime v1 per una scatola.
         Err(err) => {
@@ -1918,7 +1918,7 @@ pub(crate) fn play_frames(input: &Path, tap: impl FnMut(&[u8], &[u8], &[u8], u32
 fn iso_keyframes(input: &Path, at: &[f64]) -> Result<Peek, String> {
     let file = File::open(input).map_err(|err| err.to_string())?;
     let size = file.metadata().map_err(|err| err.to_string())?.len();
-    let mut reader = mp4::Mp4Reader::read_header(std::io::BufReader::new(file), size).map_err(|err| err.to_string())?;
+    let mut reader = crate::mp4fast::mp4_reader(file, size).map_err(|err| err.to_string())?;
     let (id, count, fps, sync, header) = {
         let track = reader
             .tracks()
@@ -2308,7 +2308,7 @@ mod tests {
         for pass in 0..2 {
             let file = std::fs::File::open(&path).unwrap();
             let size = file.metadata().unwrap().len();
-            let mut reader = mp4::Mp4Reader::read_header(std::io::BufReader::new(file), size).unwrap();
+            let mut reader = crate::mp4fast::mp4_reader(file, size).unwrap();
             let (video, audio) = {
                 let tracks = reader.tracks();
                 let id = |kind| tracks.values().find(|t| t.media_type().ok() == Some(kind)).map(|t| (t.track_id(), t.sample_count())).unwrap();

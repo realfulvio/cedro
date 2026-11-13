@@ -39,7 +39,8 @@ pub fn zip_archive(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     for (name, data) in entries {
         // Le immagini sono già compresse: comprimerle ancora non serve.
-        let (method, level) = if name.ends_with(".png") || name.ends_with(".jpg") || name.ends_with(".jpeg") {
+        // ODF: «mimetype» va in testa e senza compressione.
+        let (method, level) = if *name == "mimetype" || name.ends_with(".png") || name.ends_with(".jpg") || name.ends_with(".jpeg") {
             (zip::CompressionMethod::Stored, None)
         } else {
             (zip::CompressionMethod::Deflated, Some(9))

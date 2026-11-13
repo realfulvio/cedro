@@ -1159,6 +1159,10 @@ impl App {
     /// digitali è la copia anonima del vetrino, non il GPS delle foto.
     pub fn voce(&self, id: &str) -> super::voci::Voce {
         let mut v = super::voci::voce(self.kind(), id);
+        // Un foglio di calcolo in PDF esce con le pagine, le celle e i colori del file.
+        if id == "pdf" && self.kind() == Kind::Text && !self.files.is_empty() && self.files.iter().all(|f| foglio_di_calcolo(&f.path)) {
+            v.hint = "le pagine come le stampa Excel";
+        }
         if id == "strip" && self.kind() == Kind::Image {
             let immagini: Vec<&Path> = self.files.iter().filter(|f| f.kind == Kind::Image).map(|f| f.path.as_path()).collect();
             let vetrini = immagini.iter().filter(|p| self.media_of(p).is_some_and(|m| m.slide.is_some())).count();
@@ -1187,6 +1191,16 @@ impl App {
             all.retain(|d| !defs.iter().any(|x| x.opt == d.opt));
             all.append(&mut defs);
             defs = all;
+        }
+        // Con un foglio di calcolo in coda il PDF ha le scelte della stampa (fogli, adatta, carta…).
+        if self.kind() == Kind::Text && self.activity == Activity::Convert && self.files.iter().any(|f| foglio_di_calcolo(&f.path)) {
+            let sheet = conversioni::sheet_option_defs(&self.action);
+            if !sheet.is_empty() {
+                defs.retain(|d| !sheet.iter().any(|x| x.opt == d.opt) && d.opt != conversioni::Opt::PageSize);
+                let mut all = sheet;
+                all.append(&mut defs);
+                defs = all;
+            }
         }
         // Con un'immagine di microscopia: canali, piani Z, contrasto e barra di scala, in cima.
         if self.kind() == Kind::Image && self.activity == Activity::Convert {
@@ -2403,5 +2417,5 @@ mod tests {
 
 /// Vero per un foglio di calcolo (Excel, Calc): «Porta in Excel» non ha senso, si porta in CSV.
 pub fn foglio_di_calcolo(path: &std::path::Path) -> bool {
-    path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "xlsx" | "xlsm" | "ods"))
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "xlsx" | "xlsm" | "ods" | "xls"))
 }

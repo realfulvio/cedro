@@ -2414,6 +2414,42 @@ Scrive le foto WebP.	Escribe fotos WebP.
 BSD-2-Clause o MIT	BSD-2-Clause o MIT
 BSD-3-Clause o BSD-2-Clause	BSD-3-Clause o BSD-2-Clause
 The OpenReadout Authors (da jxrlib di Microsoft), Moritz Borcherding	The OpenReadout Authors (de jxrlib de Microsoft), Moritz Borcherding
+Da Word, ODT, RTF e DOC a PDF, Word, ODT, HTML e testo.	De Word, ODT, RTF y DOC a PDF, Word, ODT, HTML y texto.
+tiene caratteri, tabelle e immagini	conserva fuentes, tablas e imágenes
+per LibreOffice e OpenOffice	para LibreOffice y OpenOffice
+pagina web, immagini dentro	página web, imágenes incluidas
+titoli, elenchi e tabelle	títulos, listas y tablas
+Documento di Word	Documento de Word
+Documento di Writer (ODT)	Documento de Writer (ODT)
+Pagina web con le immagini dentro	Página web con las imágenes incluidas
+Markdown con titoli, elenchi e tabelle	Markdown con títulos, listas y tablas
+«{}» non è un documento letto da Cedro	«{}» no es un documento que Cedro pueda leer
+la carta scelta nel file	el papel elegido en el archivo
+1 PDF · 1 pagina	1 PDF · 1 página
+{#} PDF · 1 pagina	{} PDF · 1 página
+documento di Word 1 o 2 per Windows: formato troppo vecchio	documento de Word 1 o 2 para Windows: formato demasiado antiguo
+documento di Word troppo vecchio	documento de Word demasiado antiguo
+il documento è protetto da password	el documento está protegido con contraseña
+il file .doc è rovinato e non si può leggere	el archivo .doc está dañado y no se puede leer
+il file Excel è protetto da password: aprilo e salvalo senza	el archivo de Excel está protegido con contraseña: ábrelo y guárdalo sin ella
+il file contiene una DTD, che Cedro non apre per sicurezza	el archivo contiene una DTD, que Cedro no abre por seguridad
+il file non è un RTF	el archivo no es un RTF
+il file non è un documento Word leggibile	el archivo no es un documento de Word legible
+il file non è un documento di Writer leggibile	el archivo no es un documento de Writer legible
+il file non è un foglio Excel leggibile	el archivo no es una hoja de Excel legible
+il foglio di calcolo è vuoto: non c'è niente da stampare	la hoja de cálculo está vacía: no hay nada que imprimir
+non è un documento di Word	no es un documento de Word
+documento senza testo	documento sin texto
+Solo processore	Solo procesador
+Accelera la scheda video	Acelera la tarjeta gráfica
+Lavora il processore	Trabaja el procesador
+Aggiorno {}	Actualizando {}
+Non ho scaricato {}	No se pudo descargar {}
+ · riprovo al prossimo lavoro	 · lo reintento en el próximo trabajo
+i modelli delle voci	los modelos de voz
+YouTube non dà i sottotitoli adesso: riprova più tardi o togli i sottotitoli	YouTube no da los subtítulos ahora: inténtalo más tarde o quita los subtítulos
+Il sito non dà i sottotitoli adesso (limite di richieste): scarico il video senza	El sitio no da los subtítulos ahora (límite de solicitudes): descargo el vídeo sin ellos
+Non riesco a scaricare il video	No puedo descargar el vídeo
 Caso	Caso
 + Caso o campione	+ Caso o muestra
 Lavori di oggi	Trabajos de hoy

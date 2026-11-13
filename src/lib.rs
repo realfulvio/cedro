@@ -1,4 +1,5 @@
 pub mod accel;
+pub mod componenti;
 mod audio;
 mod symph;
 pub mod portable;
@@ -34,6 +35,7 @@ mod ocr;
 mod ocrscan;
 mod pdf;
 mod pdfdoc;
+mod ufficio;
 mod pdfedit;
 mod pdfpages;
 mod pdflayout;

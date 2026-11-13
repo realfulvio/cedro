@@ -530,6 +530,18 @@ const FETCH_TRIES: u32 = 8;
 /// (richiesta «Range») e riprova da solo; anche un download lasciato a metà la volta prima riparte da lì.
 /// Ogni 10% scrive a che punto è. Ritorna lo SHA-256 del file scaricato.
 pub(crate) fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, what: &str, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<String, String> {
+    // La riga di stato in alto mostra il componente che arriva.
+    let job = crate::componenti::Lavoro::scarica(what);
+    let result = fetch_inner(url, dest, expected_sha, megabytes, what, sink, cancel);
+    if let Err(e) = &result {
+        if e != CANCELLED {
+            job.fallito(e);
+        }
+    }
+    result
+}
+
+fn fetch_inner(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, what: &str, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<String, String> {
     use sha2::{Digest, Sha256};
     if let Some(dir) = dest.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("cartella {} non creata: {e}", dir.display()))?;
@@ -629,6 +641,7 @@ pub(crate) fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabyte
                 return Err(format!("scrittura {} non riuscita (disco pieno?): {e}", di(what)));
             }
             done += n as u64;
+            crate::componenti::scarica(what, done, if known_total { total } else { 0 });
             let tenth = done * 10 / total.max(1);
             if tenth > shown && tenth < 10 {
                 shown = tenth;
@@ -652,7 +665,7 @@ pub(crate) fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabyte
             let _ = std::fs::remove_file(&part);
             if from_before {
                 // Il pezzo della volta prima era di un'altra versione del file: si riscarica tutto.
-                return fetch(url, dest, expected_sha, megabytes, what, sink, cancel);
+                return fetch_inner(url, dest, expected_sha, megabytes, what, sink, cancel);
             }
             return Err(format!("{what} scaricato non corrisponde all'originale (SHA-256 diverso): scartato, riprova"));
         }
