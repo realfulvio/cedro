@@ -178,9 +178,9 @@ pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
         let rgba = image::DynamicImage::ImageRgb8(small).to_rgba8();
         return Some((Image::from_rgba(rgba.width(), rgba.height(), rgba.as_raw())?, (s.full().width, s.full().height)));
     }
-    // SVG, AVIF, JPEG XL, DICOM e microscopia non passano dal lettore del crate `image`.
+    // SVG, AVIF, HEIC, JPEG XL, DICOM e microscopia non passano dal lettore del crate `image`.
     let micro = crate::microscopia::is_stack(path);
-    if micro || matches!(crate::imgfmt::sniff_file(path), Some("svg" | "avif" | "jxl" | "dcm")) || matches!(engine::extension(path).as_str(), "svg" | "svgz" | "dcm" | "dicom") {
+    if micro || matches!(crate::imgfmt::sniff_file(path), Some("svg" | "avif" | "heic" | "jxl" | "dcm")) || matches!(engine::extension(path).as_str(), "svg" | "svgz" | "dcm" | "dicom") {
         let img = crate::imgfmt::open(path, false, Some(side)).ok()?;
         let size = (img.width(), img.height());
         let small = img.thumbnail(side, side).to_rgba8();
