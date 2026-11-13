@@ -9,6 +9,9 @@ pub mod numfmt;
 pub mod foglio;
 pub mod stampa_fogli;
 pub mod ods;
+pub mod documento;
+pub mod docx;
+pub mod impagina_doc;
 
 /// Le scelte del pannello per i documenti d'ufficio (i valori sono quelli del pannello).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -93,6 +96,32 @@ pub fn foglio_pdf(ext: &str, bytes: &[u8], file_name: &str, title: &str, s: &Sce
     }
     pdf::scrivi(&doc, &pdf::Opzioni { embed: s.embed || s.pdfa, bookmarks: s.bookmarks, pdfa: s.pdfa, links: true })
 }
+/// I documenti di testo che Cedro mette in pagina da sé.
+pub fn is_documento(ext: &str) -> bool {
+    matches!(ext, "docx" | "docm" | "dotx" | "dotm")
+}
+
+pub fn leggi_documento(ext: &str, bytes: &[u8]) -> Result<documento::Documento, String> {
+    match ext {
+        "docx" | "docm" | "dotx" | "dotm" => docx::leggi_docx(bytes),
+        _ => Err(format!("«{ext}» non è un documento di testo")),
+    }
+}
+
+/// Un documento di testo stampato in PDF come lo stampa Word.
+pub fn documento_pdf(ext: &str, bytes: &[u8], title: &str, s: &Scelte) -> Result<Vec<u8>, String> {
+    let mut doc = leggi_documento(ext, bytes)?;
+    if let Some(c) = s.carta {
+        let (w, h) = carta_pt(c);
+        for sez in &mut doc.sezioni {
+            let landscape = sez.w > sez.h;
+            (sez.w, sez.h) = if landscape { (h, w) } else { (w, h) };
+        }
+    }
+    let st = impagina_doc::impagina(&doc, font::Fonti::new(), title);
+    pdf::scrivi(&st, &pdf::Opzioni { embed: s.embed || s.pdfa, bookmarks: s.bookmarks, pdfa: s.pdfa, links: true })
+}
+
 pub mod xls;
 
 #[cfg(test)]
@@ -106,7 +135,8 @@ mod prove_vere {
             let bytes = std::fs::read(path).unwrap();
             let ext = path.rsplit('.').next().unwrap().to_lowercase();
             let t = std::time::Instant::now();
-            let pdf = match super::foglio_pdf(&ext, &bytes, path, "prova", &super::Scelte::default()) {
+            let made = if super::is_documento(&ext) { super::documento_pdf(&ext, &bytes, "prova", &super::Scelte::default()) } else { super::foglio_pdf(&ext, &bytes, path, "prova", &super::Scelte::default()) };
+            let pdf = match made {
                 Ok(p) => p,
                 Err(e) => {
                     eprintln!("{path}: ERRORE {e}");

@@ -32,6 +32,8 @@ pub struct Face {
     pub ascent: f32,
     pub descent: f32,
     pub gap: f32,
+    /// L'interlinea in più che Word aggiunge alla riga (external leading di Windows).
+    pub leading: f32,
     pub cap_height: f32,
     pub bbox: [f32; 4],
     pub italic_angle: f32,
@@ -60,6 +62,15 @@ impl Face {
             Ok(os2) if os2.us_win_ascent() > 0 => (os2.us_win_ascent() as f32 * k, os2.us_win_descent() as f32 * k, 0.0),
             _ => (metrics.ascent * k, -metrics.descent * k, metrics.leading * k),
         };
+        // Come GDI: lineGap dell'hhea meno quello che le misure «win» hanno già in più.
+        let leading = match (font.os2(), font.hhea()) {
+            (Ok(os2), Ok(hh)) if os2.us_win_ascent() > 0 => {
+                let win = os2.us_win_ascent() as f32 + os2.us_win_descent() as f32;
+                let hhea = hh.ascender().to_i16() as f32 - hh.descender().to_i16() as f32;
+                (hh.line_gap().to_i16() as f32 - (win - hhea)).max(0.0) * k
+            }
+            _ => 0.0,
+        };
         let cap_height = metrics.cap_height.map_or(ascent * 0.7, |c| c * k);
         let bbox = metrics.bounds.map_or([-200.0, -300.0, 1200.0, 1000.0], |b| [b.x_min * k, b.y_min * k, b.x_max * k, b.y_max * k]);
         let italic_angle = font.post().map(|p| p.italic_angle().to_f64() as f32).unwrap_or(0.0);
@@ -80,6 +91,7 @@ impl Face {
             ascent,
             descent,
             gap,
+            leading,
             cap_height,
             bbox,
             italic_angle,
@@ -242,6 +254,11 @@ impl Fonti {
             return *id;
         }
         let id = self.find(&key.family, bold, italic).unwrap_or_else(|| self.builtin_face(bold, italic));
+        // Caladea ha le larghezze di Cambria ma righe più alte: le misure verticali sono quelle di Cambria.
+        if key.family == "cambria" && self.faces[id].family.starts_with("Caladea") {
+            let f = &mut self.faces[id];
+            (f.ascent, f.descent, f.gap, f.leading) = (950.0, 222.0, 0.0, 0.0);
+        }
         self.by_key.insert(key, id);
         id
     }
