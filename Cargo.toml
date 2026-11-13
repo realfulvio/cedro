@@ -17,6 +17,8 @@ lopdf = "0.47"
 rust_xlsxwriter = { version = "0.102", default-features = false }
 mp4 = "0.14"
 skrifa = "0.49"
+# I PDF da Word ed Excel incorporano solo i caratteri usati dei font del sistema (Calibri, Arial…): file piccoli.
+subsetter = { version = "0.2", default-features = false }
 mp3lame-encoder = "0.3"
 ocrs = "0.14"
 png = "0.18"
