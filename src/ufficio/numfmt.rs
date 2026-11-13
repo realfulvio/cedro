@@ -106,6 +106,11 @@ struct Section {
     cond: Option<(String, f64)>,
 }
 
+/// Vero se il formato mostra una data o un'ora.
+pub fn is_date(code: &str) -> bool {
+    split_sections(code).first().is_some_and(|sec| parse_section(sec).toks.iter().any(|t| matches!(t, Tok::Date(_) | Tok::AmPm | Tok::Elapsed(_))))
+}
+
 fn named_color(name: &str) -> Option<Rgb> {
     Some(match name.to_ascii_lowercase().as_str() {
         "black" | "nero" => (0, 0, 0),
@@ -334,9 +339,52 @@ pub fn general(v: f64, l: &Locale) -> String {
     s.replace('.', &l.dec.to_string())
 }
 
+type Names = ([&'static str; 12], [&'static str; 7]);
+
+const DE: Names = (
+    ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
+    ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"],
+);
+const FR: Names = (
+    ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
+    ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"],
+);
+const ES: Names = (
+    ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+    ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"],
+);
+const PT: Names = (
+    ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"],
+    ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"],
+);
+
+/// I nomi di mesi e giorni chiesti dal codice di lingua del formato («[$-409]» inglese, «[$-407]»
+/// tedesco…): una data scritta così resta in quella lingua, come in Excel.
+fn lcid_names(code: &str) -> Option<Names> {
+    let start = code.find("[$")?;
+    let inner = &code[start + 2..start + 2 + code[start + 2..].find(']')?];
+    let hex = inner.rsplit_once('-')?.1;
+    let lcid = u32::from_str_radix(hex.get(hex.len().saturating_sub(4)..)?, 16).ok()?;
+    Some(match lcid & 0x3FF {
+        0x09 => (EN.months, EN.days),
+        0x10 => (IT.months, IT.days),
+        0x07 => DE,
+        0x0C => FR,
+        0x0A => ES,
+        0x16 => PT,
+        _ => return None,
+    })
+}
+
 /// Il testo di un numero con un formato. Restituisce anche il colore chiesto dal formato.
 pub fn format(v: f64, code: &str, date1904: bool, l: &Locale) -> (String, Option<Rgb>) {
     let code = code.trim();
+    if let Some((months, days)) = lcid_names(code) {
+        if months[0] != l.months[0] {
+            let named = Locale { dec: l.dec, thou: l.thou, months, days, short_date: l.short_date };
+            return format(v, code, date1904, &named);
+        }
+    }
     if code.is_empty() || code.eq_ignore_ascii_case("general") || code.eq_ignore_ascii_case("standard") {
         return (general(v, l), None);
     }
@@ -655,7 +703,8 @@ fn render_date(v: f64, sec: &Section, date1904: bool, l: &Locale) -> String {
                     _ => {}
                 }
             }
-            Tok::Dec => out.push(l.dec),
+            // In una data il punto è un punto («d.m.yyyy»), non la virgola dei decimali.
+            Tok::Dec => out.push('.'),
             Tok::Digit(c) => out.push(*c),
             Tok::Percent => out.push('%'),
             Tok::Thou => out.push(','),
@@ -712,6 +761,8 @@ mod tests {
         assert_eq!(f(46337.604166666664, "h:mm AM/PM"), "2:30 PM");
         assert_eq!(f(1.5, "[h]:mm"), "36:00");
         assert_eq!(f(46337.0, "mmm-yy"), "nov-26");
+        assert_eq!(f(46337.0, "[$-409]dddd, mmmm dd, yyyy"), "Wednesday, November 11, 2026");
+        assert_eq!(f(46337.0, "[$-407]d. mmmm yyyy"), "11. November 2026");
         assert_eq!(f(0.000694444, "mm:ss"), "01:00");
     }
 

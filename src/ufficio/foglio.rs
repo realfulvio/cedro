@@ -245,6 +245,8 @@ pub struct Cartella {
     pub stili: Vec<Stile>,
     pub attivo: usize,
     pub date1904: bool,
+    /// Calc stampa anche il testo che esce a destra dell'ultima colonna usata; Excel lo taglia.
+    pub testo_fuori: bool,
 }
 
 impl Cartella {
@@ -382,35 +384,45 @@ pub fn paper(n: u32) -> Option<(f32, f32)> {
 
 // ------------------------------------------------------------------ lettura xlsx
 
-const MAX_XML: u64 = 512 << 20;
+pub(super) const MAX_XML: u64 = 512 << 20;
 
-fn voce(zip: &mut zip::ZipArchive<Cursor<&[u8]>>, nome: &str) -> Option<String> {
-    let f = zip.by_name(nome).ok()?;
+/// Il nome vero di una voce dello ZIP: alcuni programmi scrivono «xl\\styles.xml» o cambiano le maiuscole.
+fn real_name(zip: &zip::ZipArchive<Cursor<&[u8]>>, nome: &str) -> Option<String> {
+    if zip.index_for_name(nome).is_some() {
+        return Some(nome.to_string());
+    }
+    zip.file_names().filter_map(|n| n.ok()).find(|n| n.replace('\\', "/").eq_ignore_ascii_case(nome)).map(|n| n.to_string())
+}
+
+pub(super) fn voce(zip: &mut zip::ZipArchive<Cursor<&[u8]>>, nome: &str) -> Option<String> {
+    let nome = real_name(zip, nome)?;
+    let f = zip.by_name(&nome).ok()?;
     let mut s = String::new();
     f.take(MAX_XML).read_to_string(&mut s).ok()?;
     Some(s)
 }
 
-fn voce_bytes(zip: &mut zip::ZipArchive<Cursor<&[u8]>>, nome: &str) -> Option<Vec<u8>> {
-    let f = zip.by_name(nome).ok()?;
+pub(super) fn voce_bytes(zip: &mut zip::ZipArchive<Cursor<&[u8]>>, nome: &str) -> Option<Vec<u8>> {
+    let nome = real_name(zip, nome)?;
+    let f = zip.by_name(&nome).ok()?;
     let mut v = Vec::new();
     f.take(MAX_XML).read_to_end(&mut v).ok()?;
     Some(v)
 }
 
-fn parse(xml: &str) -> Result<roxmltree::Document<'_>, String> {
+pub(super) fn parse(xml: &str) -> Result<roxmltree::Document<'_>, String> {
     roxmltree::Document::parse_with_options(xml, roxmltree::ParsingOptions { nodes_limit: u32::MAX, ..Default::default() }).map_err(|e| format!("foglio non letto: {e}"))
 }
 
-fn attr<'a>(n: roxmltree::Node<'a, 'a>, name: &str) -> Option<&'a str> {
+pub(super) fn attr<'a>(n: roxmltree::Node<'a, 'a>, name: &str) -> Option<&'a str> {
     n.attributes().find(|a| a.name() == name).map(|a| a.value())
 }
 
-fn child<'a>(n: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
+pub(super) fn child<'a>(n: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
     n.children().find(|c| c.tag_name().name() == name)
 }
 
-fn truthy(v: Option<&str>) -> bool {
+pub(super) fn truthy(v: Option<&str>) -> bool {
     matches!(v, Some("1" | "true" | "on"))
 }
 
@@ -592,7 +604,7 @@ pub fn col_points(chars: f64, mdw: f64) -> f32 {
 
 /// La colonna normale da `baseColWidth`: i caratteri più il margine di 5 pixel, arrotondati in su
 /// a 8 pixel come fa Excel (Calibri 11: 8 caratteri → 64 pixel, i soliti «8,43»).
-fn base_points(chars: f64, mdw: f64) -> f32 {
+pub fn base_points(chars: f64, mdw: f64) -> f32 {
     (((chars * mdw + 5.0) / 8.0).ceil() * 8.0 * 0.75) as f32
 }
 
@@ -690,7 +702,7 @@ pub fn leggi_xlsx(bytes: &[u8], fonts: &mut super::font::Fonti) -> Result<Cartel
     if fogli.is_empty() {
         return Err("nessun foglio nel file".into());
     }
-    Ok(Cartella { fogli, stili: styles.stili, attivo, date1904 })
+    Ok(Cartella { fogli, stili: styles.stili, attivo, date1904, testo_fuori: false })
 }
 
 fn sheet_xlsx(xml: &str, shared: &[String], theme: &[Rgb], stili: &[Stile], mdw: f64, f: &mut Foglio) -> Result<(), String> {

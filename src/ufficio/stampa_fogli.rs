@@ -50,8 +50,8 @@ impl Default for OpzioniFogli {
 
 /// Spazio tra il testo e il bordo della cella (2 pixel).
 const PAD: f32 = 1.5;
-const GRID: Rgb = (160, 160, 160);
-const HEAD_FILL: Rgb = (233, 233, 233);
+/// Excel e Calc stampano la griglia e le intestazioni di riga e colonna in nero, senza sfondo.
+const GRID: Rgb = (0, 0, 0);
 
 struct Sheet<'a> {
     f: &'a Foglio,
@@ -305,6 +305,32 @@ fn col_name(mut c: u32) -> String {
     s
 }
 
+/// L'ultima colonna da stampare contando il testo che esce a destra delle celle (come Calc).
+fn overflow_edge(book: &Cartella, f: &Foglio, area: Area, fonts: &mut Fonti) -> u32 {
+    let mut edge = area.3;
+    for (&(r, c), cell) in f.celle.range((area.0, 0)..=(area.2, u32::MAX)) {
+        if c < area.1 || c > area.3 || f.row_hidden(r) {
+            continue;
+        }
+        let Valore::Testo(t) = &cell.valore else { continue };
+        let st = book.stile(cell.stile);
+        if st.wrap || !matches!(st.h, HAlign::General | HAlign::Left) || f.unioni.iter().any(|u| u.0 <= r && r <= u.2 && u.1 <= c && c <= u.3) {
+            continue;
+        }
+        let font = fonts.get(&st.font.nome, st.font.bold, st.font.italic);
+        let mut need = fonts.width(font, t.lines().next().unwrap_or(""), st.font.size) + 2.0 * PAD;
+        let mut x = c;
+        need -= f.col_width(x);
+        // Il testo passa sopra le celle vuote a destra, finché serve.
+        while need > 0.0 && x + 1 < super::foglio::MAX_COLS && !f.celle.get(&(r, x + 1)).is_some_and(|n| n.valore != Valore::Vuoto) {
+            x += 1;
+            need -= f.col_width(x);
+        }
+        edge = edge.max(x);
+    }
+    edge
+}
+
 /// Impagina i fogli della cartella. `fonts` misura e poi resta nel documento.
 pub fn impagina(book: &Cartella, mut fonts: Fonti, o: &OpzioniFogli, title: &str) -> Result<Stampato, String> {
     let mut out: Vec<Pagina> = Vec::new();
@@ -318,8 +344,23 @@ pub fn impagina(book: &Cartella, mut fonts: Fonti, o: &OpzioniFogli, title: &str
     let mut plans = Vec::new();
     for &i in &chosen {
         let f = &book.fogli[i];
-        let Some(area) = f.stampa.area.or_else(|| f.used(&book.stili)) else { continue };
-        let area = (area.0, area.1, area.2.min(super::foglio::MAX_ROWS - 1), area.3.min(super::foglio::MAX_COLS - 1));
+        let used = f.used(&book.stili);
+        let Some(mut area) = f.stampa.area.or(used) else { continue };
+        // Un'area a righe o colonne intere ($1:$1048576) si ferma all'ultima cella usata, come in Excel.
+        if let (Some(_), Some(u)) = (f.stampa.area, used) {
+            if area.2 >= super::foglio::MAX_ROWS - 1 {
+                area.2 = u.2.max(area.0);
+            }
+            if area.3 >= super::foglio::MAX_COLS - 1 {
+                area.3 = u.3.max(area.1);
+            }
+        } else if f.stampa.area.is_some() && used.is_none() {
+            continue;
+        }
+        let mut area = (area.0, area.1, area.2.min(super::foglio::MAX_ROWS - 1), area.3.min(super::foglio::MAX_COLS - 1));
+        if book.testo_fuori && f.stampa.area.is_none() {
+            area.3 = overflow_edge(book, f, area, &mut fonts);
+        }
         let rows: Vec<u32> = (area.0..=area.2).filter(|r| !f.row_hidden(*r)).collect();
         let cols: Vec<u32> = (area.1..=area.3).filter(|c| !f.col_hidden(*c)).collect();
         let mut sheet = Sheet { f, book, rows, cols, heights: std::collections::HashMap::new() };
@@ -511,15 +552,15 @@ fn draw_page(s: &Sheet, area: Area, p: &Placed, rows: &[u32], cols: &[u32], page
                 let inside_right = merge_of(r, c).is_some_and(|m| c < m.0 .3);
                 let inside_bottom = merge_of(r, c).is_some_and(|m| r < m.0 .2);
                 if !inside_right {
-                    page.ops.push(Op::Line { x1: cx + cw, y1: ry, x2: cx + cw, y2: ry + rh, width: 0.3, color: GRID, dash: Dash::Solid });
+                    page.ops.push(Op::Line { x1: cx + cw, y1: ry, x2: cx + cw, y2: ry + rh, width: 0.25, color: GRID, dash: Dash::Solid });
                 }
                 if !inside_bottom {
-                    page.ops.push(Op::Line { x1: cx, y1: ry + rh, x2: cx + cw, y2: ry + rh, width: 0.3, color: GRID, dash: Dash::Solid });
+                    page.ops.push(Op::Line { x1: cx, y1: ry + rh, x2: cx + cw, y2: ry + rh, width: 0.25, color: GRID, dash: Dash::Solid });
                 }
             }
         }
-        page.ops.push(Op::Line { x1: left, y1: top, x2: right, y2: top, width: 0.3, color: GRID, dash: Dash::Solid });
-        page.ops.push(Op::Line { x1: left, y1: top, x2: left, y2: bottom, width: 0.3, color: GRID, dash: Dash::Solid });
+        page.ops.push(Op::Line { x1: left, y1: top, x2: right, y2: top, width: 0.25, color: GRID, dash: Dash::Solid });
+        page.ops.push(Op::Line { x1: left, y1: top, x2: left, y2: bottom, width: 0.25, color: GRID, dash: Dash::Solid });
     }
     // 3. testo
     for &(r, ry, rh) in &ys {
@@ -707,23 +748,22 @@ fn draw_page(s: &Sheet, area: Area, p: &Placed, rows: &[u32], cols: &[u32], page
     page.ops.push(Op::Unclip);
     // 6. intestazioni di riga e colonna (A, B, C… e 1, 2, 3…)
     if st.intestazioni {
-        let font = fonts.get("Calibri", false, false);
-        let size = 9.0 * k;
+        let normal = &s.book.stile(0).font;
+        let font = fonts.get(&normal.nome, false, false);
+        let size = normal.size.min(10.0) * k;
         let hy = y0;
         let hh = p.head_h * k;
-        page.ops.push(Op::Rect { x: x0, y: hy, w: right - x0, h: hh, color: HEAD_FILL });
-        page.ops.push(Op::Rect { x: x0, y: hy, w: p.head_w * k, h: bottom - hy, color: HEAD_FILL });
         for &(c, cx, cw) in &xs {
             let t = col_name(c);
             let w = fonts.width(font, &t, size);
             push_text(page, fonts, font, cx + (cw - w) / 2.0, hy + hh * 0.72, size, BLACK, &t);
-            page.ops.push(Op::Line { x1: cx + cw, y1: hy, x2: cx + cw, y2: hy + hh, width: 0.3, color: GRID, dash: Dash::Solid });
+            page.ops.push(Op::Line { x1: cx + cw, y1: hy, x2: cx + cw, y2: hy + hh, width: 0.25, color: GRID, dash: Dash::Solid });
         }
         for &(r, ry, rh) in &ys {
             let t = (r + 1).to_string();
             let w = fonts.width(font, &t, size);
             push_text(page, fonts, font, x0 + (p.head_w * k - w) / 2.0, ry + rh * 0.72, size, BLACK, &t);
-            page.ops.push(Op::Line { x1: x0, y1: ry + rh, x2: x0 + p.head_w * k, y2: ry + rh, width: 0.3, color: GRID, dash: Dash::Solid });
+            page.ops.push(Op::Line { x1: x0, y1: ry + rh, x2: x0 + p.head_w * k, y2: ry + rh, width: 0.25, color: GRID, dash: Dash::Solid });
         }
     }
     let _ = area;
@@ -758,7 +798,7 @@ mod tests {
             Stile { font: Carattere { bold: true, ..Carattere::default() }, fill: Some((221, 235, 247)), bordi: [Some(thin); 4], ..Stile::default() },
             Stile { numfmt: "#,##0.00 \"€\"".into(), ..Stile::default() },
         ];
-        Cartella { fogli: vec![f, hidden], stili, attivo: 0, date1904: false }
+        Cartella { fogli: vec![f, hidden], stili, attivo: 0, date1904: false, testo_fuori: false }
     }
 
     fn texts(p: &Pagina) -> String {
