@@ -57,6 +57,9 @@ pub enum Field {
     FirmaLocation,
     FirmaSuffix,
     FirmaDlg(u8),
+    /// Cedro 4 Labs, finestrella del caso: il codice e la nota.
+    CasoCodice,
+    CasoNota,
 }
 
 /// Le parti che si aprono e si chiudono («Altre opzioni»…).
@@ -92,6 +95,8 @@ pub enum Scroll {
     FirmaPanel,
     /// «Firma documenti», «Chiavetta e certificati», «Opzioni della firma».
     FirmaSign,
+    /// Cedro 4 Labs: l'elenco dei lavori di oggi.
+    Lavori,
 }
 
 /// Cosa fa un clic.
@@ -137,6 +142,14 @@ pub enum Act {
     ResetRecommended,
     OpenGuide,
     OpenSettings,
+    /// Cedro 4 Labs: la finestrella del caso (si apre, si conferma, si toglie, si chiude) e l'elenco dei lavori.
+    CasoApri,
+    CasoOk,
+    CasoTogli,
+    CasoChiudi,
+    LavoriApri,
+    /// «Copia per il quaderno» di un lavoro (indice tra quelli di oggi, dal più nuovo).
+    Quaderno(usize),
     OpenPath(PathBuf),
     Minimize,
     Maximize,

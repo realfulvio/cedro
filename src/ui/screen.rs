@@ -964,6 +964,30 @@ impl Screen {
                 st.glossario_vet = app.transcribe.glossario_vet;
                 let _ = crate::settings::write_settings(&st);
             }
+            Act::CasoApri => app.caso_apri(),
+            Act::CasoOk => {
+                app.caso_conferma();
+                self.ui.edit = None;
+            }
+            Act::CasoTogli => {
+                app.caso_togli();
+                self.ui.edit = None;
+            }
+            Act::CasoChiudi => {
+                app.caso_aperto = false;
+                self.ui.edit = None;
+            }
+            Act::LavoriApri => {
+                app.lavori_aperti = !app.lavori_aperti;
+                app.caso_aperto = false;
+                app.quaderno_copiato = None;
+            }
+            Act::Quaderno(i) => {
+                if let Some(l) = crate::caso::di_oggi(&app.lavori).get(i) {
+                    plat.copy_text(&l.per_quaderno());
+                    app.quaderno_copiato = Some(i);
+                }
+            }
             Act::VoicesGo => app.voices_go(),
             Act::VoicesCancel => app.transcribe.asking = false,
             Act::MediaPlay => app.media_toggle(),
@@ -1779,6 +1803,8 @@ impl Screen {
             Field::FilePages(i) => self.app.files.get(i).map(|f| f.pages.clone()).unwrap_or_default(),
             Field::Review(i) => self.app.review.as_ref().and_then(|r| r.rows.get(i)).map(|r| r.text.clone()).unwrap_or_default(),
             Field::VoiceName(v) => self.app.review.as_ref().and_then(|r| r.names.get(v as usize)).cloned().unwrap_or_default(),
+            Field::CasoCodice => self.app.caso_bozza.0.clone(),
+            Field::CasoNota => self.app.caso_bozza.1.clone(),
             Field::FirmaDate => self.app.firma.viewer.as_ref().map(|v| v.at_text.clone()).unwrap_or_default(),
             Field::FirmaPin => self.app.firma.sign.pin.clone(),
             Field::FirmaReason => self.app.firma.sign.s.firma_reason.clone(),
@@ -1825,6 +1851,8 @@ impl Screen {
                     *name = text;
                 }
             }
+            Field::CasoCodice => self.app.caso_bozza.0 = text,
+            Field::CasoNota => self.app.caso_bozza.1 = text,
             Field::FirmaDate => {
                 if let Some(v) = self.app.firma.viewer.as_mut() {
                     v.at_text = text;
@@ -1965,6 +1993,9 @@ impl Screen {
                     if matches!(field, Field::FirmaDlg(_)) {
                         self.act(Act::FirmaDlgGo, plat);
                     }
+                    if matches!(field, Field::CasoCodice | Field::CasoNota) {
+                        self.act(Act::CasoOk, plat);
+                    }
                     return true;
                 }
                 Key::Escape | Key::Tab | Key::ShiftTab => {
@@ -1990,6 +2021,9 @@ impl Screen {
                     return true;
                 }
                 if std::mem::take(&mut self.app.transcribe.asking) {
+                    return true;
+                }
+                if std::mem::take(&mut self.app.caso_aperto) {
                     return true;
                 }
                 if self.app.notice.take().is_some() {

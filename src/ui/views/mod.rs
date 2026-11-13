@@ -106,6 +106,9 @@ pub fn overlays(f: &mut Frame, app: &App) {
     if app.transcribe.asking {
         voices_dialog(f, app);
     }
+    if app.caso_aperto {
+        labs::caso_dialog(f, app);
+    }
 }
 
 /// Il consiglio sotto i numeri della finestrella «Quante persone parlano?».

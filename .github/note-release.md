@@ -11,9 +11,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro parla anche spagnolo, tedesco, francese e portoghese del Brasile.**
+**Cedro 4 Labs conosce il caso su cui lavori e tiene l'elenco di quello che hai fatto.**
 
-- In Impostazioni, «Lingua dell'interfaccia» offre ora Automatica, Italiano, English, Español, Deutsch, Français e Português (Brasil). «Automatica» segue la lingua di Windows o di Linux.
-- Tutto passa dalla traduzione: finestre, menu dell'icona, notifiche, programma da riga di comando e app Android. Una frase senza traduzione ripiega sull'inglese, poi sull'italiano.
-- I testi più lunghi (il tedesco soprattutto) si rimpiccioliscono un poco prima di tagliarsi e i pulsanti si allargano al testo.
-- Provato a schermo su Linux e Windows in tutte le lingue; restano in italiano i messaggi tecnici del motore di firma digitale.
+- In alto, accanto al nome, «+ Caso o campione»: scrivi il codice (per esempio V-2026-0457) e, se vuoi, una nota per te. Finché non lo togli, ogni file che Cedro scrive si chiama «data, caso, nome»: `2026-11-13_V-2026-0457_vetrino`. Senza caso i nomi restano quelli di sempre. La nota non entra mai nei nomi.
+- Il caso resta anche dopo aver chiuso Cedro, finché non lo togli.
+- «Lavori», in alto a destra, apre l'elenco di quello che è uscito oggi: ora, cosa hai fatto, caso e nomi dei file. «Copia per il quaderno» mette negli appunti il caso e i nomi, uno per riga, pronti da incollare. L'elenco sta solo su questo computer.
+- Nel modello dei nomi si può scrivere anche `%caso%`.

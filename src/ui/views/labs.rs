@@ -12,7 +12,7 @@ use super::*;
 use crate::ui::core::Scroll;
 use crate::ui::gfx::{Fit, Image, Rgb};
 use crate::ui::model::{FileState, Lab};
-use crate::ui::theme::{lab_colors, LABS_FRAME, LABS_FRAME_HI, LABS_INK, LABS_LEAF, LABS_MUTED, LABS_STAGE};
+use crate::ui::theme::{lab_colors, LABS_FRAME, LABS_FRAME_HI, LABS_INK, LABS_LEAF, LABS_LINE, LABS_MUTED, LABS_STAGE};
 use crate::ui::voci;
 
 const TOP: f32 = 64.0;
@@ -114,6 +114,10 @@ fn frame(f: &mut Frame, app: &App) {
     f.p.disc_a(lx - 16.0, 32.0, 9.0, LABS_LEAF, 0.22);
     f.p.circle(lx - 16.0, 32.0, 5.0, Some(LABS_LEAF), None);
     f.p.text(local, lx, 17.0, lw + 4.0, 30.0, 15.0, SEMI, LABS_LEAF, Align::Left);
+    // Il caso su cui si lavora e l'elenco dei lavori di oggi.
+    let jobs_w = lavori_button(f, app, lx - 16.0 - 9.0 - 14.0);
+    let cx = 64.0 + cw + 8.0 + f.measure("4 Labs", 22.0, BOLD) + 22.0;
+    caso_button(f, app, cx, lx - 16.0 - 9.0 - 14.0 - jobs_w - 12.0 - cx);
 
     let mut y = TOP + 4.0;
     rail_item(f, y, Lab::Home, Lab::Home.name(), app.lab == Lab::Home, Act::Lab(Lab::Home));
@@ -141,6 +145,144 @@ fn frame(f: &mut Frame, app: &App) {
         f.focus_ring(r, 10.0, &act);
         f.hit(r, act);
     }
+}
+
+/// Il pulsante del caso in alto: «Caso V-2026-0457 · Luna, labrador», o «+ Caso o campione» se non c'è.
+/// Sta accanto al nome, non occupa una fascia. Un clic apre la finestrella con codice e nota.
+fn caso_button(f: &mut Frame, app: &App, x: f32, room: f32) {
+    let act = Act::CasoApri;
+    let (h, y) = (36.0, 14.0);
+    let hover = f.hover_t(&act, true);
+    if let Some(c) = &app.caso {
+        let (label, code) = (crate::i18n::tr_string("Caso"), c.code.as_str());
+        let (lw, cw) = (f.measure(&label, 14.5, SEMI), f.measure(code, 14.5, BOLD));
+        let mut w = 12.0 + lw + 6.0 + cw + 12.0;
+        let note = if c.note.is_empty() { None } else { Some(c.note.clone()) };
+        let nw = note.as_ref().map(|n| f.measure(n, 14.0, SANS)).unwrap_or(0.0);
+        let show_note = note.is_some() && w + 8.0 + nw <= room;
+        if show_note {
+            w += 8.0 + nw;
+        }
+        let w = w.min(room.max(80.0));
+        f.p.rrect_a(x, y, w, h, 10.0, WHITE, 0.08 + 0.06 * hover);
+        let mut tx = x + 12.0;
+        f.p.text(&label, tx, y, lw + 2.0, h, 14.5, SEMI, LABS_INK, Align::Left);
+        tx += lw + 6.0;
+        f.p.text(code, tx, y, (w - (tx - x) - 8.0).max(10.0), h, 14.5, BOLD, LABS_INK, Align::Left);
+        if show_note {
+            f.p.text(note.as_deref().unwrap_or(""), tx + cw + 8.0, y, nw + 4.0, h, 14.0, SANS, LABS_MUTED, Align::Left);
+        }
+        f.focus_ring((x, y, w, h), 10.0, &act);
+        f.hit((x, y, w, h), act);
+    } else {
+        let label = crate::i18n::tr_string("+ Caso o campione");
+        let w = (f.measure(&label, 14.5, SEMI) + 28.0).min(room.max(80.0));
+        f.p.rrect_a(x, y, w, h, 10.0, WHITE, 0.06 * hover);
+        f.p.rrect_line(x, y, w, h, 10.0, LABS_LINE, 1.5, 1.0, Some((6.0, 4.0)));
+        f.p.text(&label, x + 14.0, y, w - 20.0, h, 14.5, SEMI, LABS_MUTED, Align::Left);
+        f.focus_ring((x, y, w, h), 10.0, &act);
+        f.hit((x, y, w, h), act);
+    }
+}
+
+/// «Lavori» con quanti ne sono usciti oggi, a destra prima di «Niente esce da questo PC». Ritorna la larghezza.
+fn lavori_button(f: &mut Frame, app: &App, right: f32) -> f32 {
+    let act = Act::LavoriApri;
+    let n = crate::caso::di_oggi(&app.lavori).len();
+    let label = crate::i18n::tr_string("Lavori");
+    let count = if n > 0 { n.to_string() } else { String::new() };
+    let lw = f.measure(&label, 14.5, SEMI);
+    let cw = if n > 0 { f.measure(&count, 14.5, BOLD) + 6.0 } else { 0.0 };
+    let (w, h, y) = (lw + cw + 28.0, 36.0, 14.0);
+    let x = right - w;
+    let hover = f.hover_t(&act, true);
+    if app.lavori_aperti {
+        f.p.rrect_a(x, y, w, h, 10.0, WHITE, 0.14);
+    } else {
+        f.p.rrect_a(x, y, w, h, 10.0, WHITE, 0.06 * hover);
+    }
+    f.p.rrect_line(x, y, w, h, 10.0, LABS_LINE, 1.5, 1.0, None);
+    f.p.text(&label, x + 14.0, y, lw + 2.0, h, 14.5, SEMI, LABS_INK, Align::Left);
+    if n > 0 {
+        f.p.text(&count, x + 14.0 + lw + 6.0, y, cw, h, 14.5, BOLD, LABS_LEAF, Align::Left);
+    }
+    f.focus_ring((x, y, w, h), 10.0, &act);
+    f.hit((x, y, w, h), act);
+    w
+}
+
+/// L'elenco dei lavori di oggi: cosa si è fatto, per quale caso, i nomi dei file usciti e, per ognuno,
+/// il testo da incollare nel quaderno.
+fn lavori_page(f: &mut Frame, app: &App, area: R) {
+    let pal = f.pal;
+    f.p.rrect(area.0, area.1, area.2, area.3, 16.0, Some(pal.work), None);
+    let list = crate::caso::di_oggi(&app.lavori);
+    let inner = (area.0 + 32.0, area.1 + 26.0, area.2 - 64.0, area.3 - 40.0);
+    f.text("Lavori di oggi", inner.0, inner.1, inner.2, 44.0, 32.0, BOLD, pal.text);
+    let sub = if list.is_empty() { "Ancora nessuno. Ogni lavoro finisce qui, con i nomi dei file usciti." } else { "Gli originali non sono mai stati toccati." };
+    f.text(sub, inner.0, inner.1 + 46.0, inner.2, 26.0, 16.5, SANS, pal.muted);
+    let body = (inner.0, inner.1 + 88.0, inner.2, inner.3 - 88.0);
+    let list: Vec<(usize, &crate::caso::Lavoro)> = list.into_iter().enumerate().collect();
+    crate::ui::views::scrolled(f, body, Scroll::Lavori, |f| {
+        let mut y = body.1;
+        for (i, l) in &list {
+            let shown = l.outputs.len().min(6);
+            let rows = shown + usize::from(l.outputs.len() > shown);
+            let h = 46.0 + rows as f32 * 22.0 + 16.0;
+            f.p.rrect_a(body.0, y + h - 1.0, body.2, 1.0, 0.0, pal.border, 1.0);
+            let head = format!("{}  ·  {}", l.ora(), crate::i18n::tr_string(&l.what));
+            f.p.text(&head, body.0, y + 8.0, body.2 - 260.0, 28.0, 17.0, BOLD, pal.text, Align::Left);
+            if !l.caso.is_empty() {
+                let hw = f.measure(&head, 17.0, BOLD);
+                f.p.text(&format!("{} {}", crate::i18n::tr_string("Caso"), l.caso), body.0 + hw + 16.0, y + 8.0, 260.0, 28.0, 15.0, SEMI, pal.muted, Align::Left);
+            }
+            for (k, name) in l.outputs.iter().take(shown).enumerate() {
+                f.p.text(name, body.0 + 4.0, y + 44.0 + k as f32 * 22.0, body.2 - 280.0, 22.0, 15.0, SANS, pal.text, Align::Left);
+            }
+            if l.outputs.len() > shown {
+                let more = crate::i18n::tr_string(&format!("… e altri {} file", l.outputs.len() - shown));
+                f.p.text(&more, body.0 + 4.0, y + 44.0 + shown as f32 * 22.0, body.2 - 280.0, 22.0, 15.0, SANS, pal.muted, Align::Left);
+            }
+            let copied = app.quaderno_copiato == Some(*i);
+            let label = if copied { "Copiato" } else { "Copia per il quaderno" };
+            f.button((body.0 + body.2 - 250.0, y + 6.0, 240.0, 38.0), label, None, 15.0, Act::Quaderno(*i));
+            y += h + 6.0;
+        }
+        y - body.1
+    });
+}
+
+/// La finestrella del caso: il codice (entra nei nomi dei file) e una nota libera.
+pub fn caso_dialog(f: &mut Frame, app: &App) {
+    let pal = f.pal;
+    f.p.fill_a(0.0, 0.0, f.w, f.h, (0, 0, 0), 0.35);
+    f.hit((0.0, 0.0, f.w, f.h), Act::CasoChiudi);
+    let w = 560.0f32.min(f.w - 32.0);
+    let h = 330.0;
+    let (x, y) = ((f.w - w) / 2.0, ((f.h - h) / 2.0).max(8.0));
+    f.p.shadow(x, y, w, h, 12.0, 18.0, 0.35, 8.0);
+    f.card((x, y, w, h), 12.0);
+    f.hit((x, y, w, h), Act::Nothing);
+    let (cx, cw) = (x + 28.0, w - 56.0);
+    let mut cy = y + 24.0;
+    f.text("Caso o campione", cx, cy, cw, 34.0, 24.0, SEMI, pal.text);
+    cy += 40.0;
+    f.para("Se c'è, il codice entra nei nomi dei file che Cedro scrive, dopo la data. Resta finché non lo togli.", cx, cy, cw, 15.0, SANS, pal.muted, 1.4, 3);
+    cy += 52.0;
+    f.text("Codice", cx, cy, cw, 22.0, 14.0, SEMI, pal.muted);
+    cy += 24.0;
+    f.field((cx, cy, cw, 42.0), Field::CasoCodice, &app.caso_bozza.0, "V-2026-0457", 16.0, false);
+    cy += 54.0;
+    f.text("Nota (per te, non entra nei nomi)", cx, cy, cw, 22.0, 14.0, SEMI, pal.muted);
+    cy += 24.0;
+    f.field((cx, cy, cw, 42.0), Field::CasoNota, &app.caso_bozza.1, "Luna, labrador", 16.0, false);
+    cy += 62.0;
+    let bw = 130.0;
+    if app.caso.is_some() {
+        f.button((cx, cy, 150.0, 46.0), "Togli il caso", None, 16.0, Act::CasoTogli);
+    }
+    f.button((cx + cw - 2.0 * bw - 12.0, cy, bw, 46.0), "Annulla", None, 16.0, Act::CasoChiudi);
+    f.primary((cx + cw - bw, cy, bw, 46.0), "Metti", None, 16.0, Act::CasoOk, !crate::caso::pulisci(&app.caso_bozza.0).is_empty());
 }
 
 /// Una voce della barra: l'icona su una piastrella sfumata del suo colore, e la voce scelta che si
@@ -184,6 +326,10 @@ fn rail_item(f: &mut Frame, y: f32, lab: Lab, label: &str, on: bool, act: Act) {
 pub fn draw(f: &mut Frame, app: &App) {
     frame(f, app);
     let area = (RAIL, TOP, f.w - RAIL - PAD, f.h - TOP - PAD);
+    if app.lavori_aperti {
+        lavori_page(f, app, area);
+        return;
+    }
     match app.lab {
         Lab::Home if app.files.is_empty() => home(f, app, area),
         Lab::Home => {
