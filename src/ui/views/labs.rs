@@ -234,7 +234,7 @@ fn lavori_page(f: &mut Frame, app: &App, area: R) {
             f.p.text(&head, body.0, y + 8.0, body.2 - 260.0, 28.0, 17.0, BOLD, pal.text, Align::Left);
             if !l.caso.is_empty() {
                 let hw = f.measure(&head, 17.0, BOLD);
-                f.p.text(&format!("{} {}", crate::i18n::tr_string("Caso"), l.caso), body.0 + hw + 16.0, y + 8.0, 260.0, 28.0, 15.0, SEMI, pal.muted, Align::Left);
+                f.p.text(&format!("{} {}", crate::i18n::tr_string("Caso"), l.caso), body.0 + hw + 16.0, y + 8.0, (body.2 - 250.0 - hw - 16.0 - 12.0).clamp(20.0, 260.0), 28.0, 15.0, SEMI, pal.muted, Align::Left);
             }
             for (k, name) in l.outputs.iter().take(shown).enumerate() {
                 f.p.text(name, body.0 + 4.0, y + 44.0 + k as f32 * 22.0, body.2 - 280.0, 22.0, 15.0, SANS, pal.text, Align::Left);
