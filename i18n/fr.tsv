@@ -2414,6 +2414,32 @@ Scrive le foto WebP.	Écrit des photos WebP.
 BSD-2-Clause o MIT	BSD-2-Clause ou MIT
 BSD-3-Clause o BSD-2-Clause	BSD-3-Clause ou BSD-2-Clause
 The OpenReadout Authors (da jxrlib di Microsoft), Moritz Borcherding	The OpenReadout Authors (d'après jxrlib de Microsoft), Moritz Borcherding
+Da Word, ODT, RTF e DOC a PDF, Word, ODT, HTML e testo.	De Word, ODT, RTF et DOC vers PDF, Word, ODT, HTML et texte.
+tiene caratteri, tabelle e immagini	garde polices, tableaux et images
+per LibreOffice e OpenOffice	pour LibreOffice et OpenOffice
+pagina web, immagini dentro	page web, images incluses
+titoli, elenchi e tabelle	titres, listes et tableaux
+Documento di Word	Document Word
+Documento di Writer (ODT)	Document Writer (ODT)
+Pagina web con le immagini dentro	Page web avec les images incluses
+Markdown con titoli, elenchi e tabelle	Markdown avec titres, listes et tableaux
+«{}» non è un documento letto da Cedro	« {} » n'est pas un document que Cedro sait lire
+la carta scelta nel file	le papier choisi dans le fichier
+1 PDF · 1 pagina	1 PDF · 1 page
+{#} PDF · 1 pagina	{} PDF · 1 page
+documento di Word 1 o 2 per Windows: formato troppo vecchio	document Word 1 ou 2 pour Windows : format trop ancien
+documento di Word troppo vecchio	document Word trop ancien
+il documento è protetto da password	le document est protégé par un mot de passe
+il file .doc è rovinato e non si può leggere	le fichier .doc est endommagé et ne peut pas être lu
+il file Excel è protetto da password: aprilo e salvalo senza	le fichier Excel est protégé par un mot de passe : ouvrez-le et enregistrez-le sans
+il file contiene una DTD, che Cedro non apre per sicurezza	le fichier contient une DTD, que Cedro n'ouvre pas par sécurité
+il file non è un RTF	le fichier n'est pas un RTF
+il file non è un documento Word leggibile	le fichier n'est pas un document Word lisible
+il file non è un documento di Writer leggibile	le fichier n'est pas un document Writer lisible
+il file non è un foglio Excel leggibile	le fichier n'est pas une feuille Excel lisible
+il foglio di calcolo è vuoto: non c'è niente da stampare	la feuille de calcul est vide : il n'y a rien à imprimer
+non è un documento di Word	ce n'est pas un document Word
+documento senza testo	document sans texte
 Solo processore	Processeur seul
 Accelera la scheda video	La carte graphique accélère
 Lavora il processore	Le processeur travaille
