@@ -11,9 +11,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro parla anche spagnolo, tedesco, francese e portoghese del Brasile.**
+**Cedro non si chiude più davanti a un file rovinato.**
 
-- In Impostazioni, «Lingua dell'interfaccia» offre ora Automatica, Italiano, English, Español, Deutsch, Français e Português (Brasil). «Automatica» segue la lingua di Windows o di Linux.
-- Tutto passa dalla traduzione: finestre, menu dell'icona, notifiche, programma da riga di comando e app Android. Una frase senza traduzione ripiega sull'inglese, poi sull'italiano.
-- I testi più lunghi (il tedesco soprattutto) si rimpiccioliscono un poco prima di tagliarsi e i pulsanti si allargano al testo.
-- Provato a schermo su Linux e Windows in tutte le lingue; restano in italiano i messaggi tecnici del motore di firma digitale.
+- Un video MOV o MP4 con un blocco danneggiato dentro non fa più girare Cedro all'infinito (neppure nell'anteprima): dice che il video non si legge.
+- Le foto (DDS, BMP e altre) con misure assurde nell'intestazione, i vetrini NDPI e SVS e i TIFF dei microscopi (OME-TIFF) con valori impossibili non fanno più chiudere Cedro per mancanza di memoria: danno un errore e il resto della coda va avanti.
+- Nel riconoscimento delle voci un risultato non valido del modello non ferma più la trascrizione.
+- Provato rovinando a caso 52 tipi di file (video, audio, foto, Office, PDF, ZIP, vetrini, firme digitali) circa 6.000 volte.
