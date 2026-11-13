@@ -155,6 +155,8 @@ pub struct Paragrafo {
     /// delle celle.
     pub auto_prima: bool,
     pub auto_dopo: bool,
+    /// Interlinea come Writer: il multiplo si applica al testo, non alle immagini nella riga.
+    pub interlinea_testo: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -193,6 +195,8 @@ pub struct Tabella {
     /// Bordi interni tra celle (orizzontali e verticali) se la cella non dice altro.
     pub bordo_h: Option<Linea>,
     pub bordo_v: Option<Linea>,
+    /// Larghezza in parte dello spazio disponibile (ODT `rel-width`): la griglia è in proporzione.
+    pub relativa: Option<f32>,
 }
 
 /// Un oggetto fuori dal testo (immagine o casella di testo ancorata): posizione sulla pagina.
