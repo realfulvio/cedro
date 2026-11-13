@@ -2,7 +2,8 @@ name: Windows ARM64
 
 # Compila e prova Cedro su un vero Windows on ARM (runner windows-11-arm) e anche su x64.
 # Pubblicare: Actions → Windows ARM64 → Run workflow su main, con il tag (per esempio v0.18.0):
-# crea la release (se non c'è) con installatore e portable x64, Linux e i motori x64.
+# crea il tag e la bozza subito e fa partire «Linux» in parallelo; poi aggiunge installatore e portable x64 e i motori x64
+# (ripresi dalla release precedente se trascrivi/ e riassumi/ non sono cambiati).
 # Windows on ARM NON si costruisce più nelle release: si accende («arm» o «solo_arm») solo su richiesta
 # esplicita di Luca (2026-11-13).
 # Il job x64 (build, prove, installatore, motori) gira nella VM Windows del minipc di casa (runner con
@@ -56,6 +57,30 @@ jobs:
           GH_REPO: ${{ github.repository }}
           SONDA_REF: ${{ github.ref_name }}
         run: tools/sonda-runner.sh cedro-windows
+
+  # Linux parte subito, insieme a Windows (prima partiva solo quando Windows aveva finito, e i tempi si sommavano):
+  # qui si controlla la versione, si crea il tag e la bozza della release (il workflow «Linux» fa il checkout del
+  # tag e aggiunge i suoi file a una release che deve già esistere) e si lancia «Linux».
+  prepara:
+    name: Crea il tag e la bozza della release e fa partire Linux
+    if: ${{ !inputs.solo_pulizia && !inputs.solo_arm && inputs.tag != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          V="${TAG#v}"
+          CARGO=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "$CARGO" != "$V" ]; then echo "Il tag $TAG non corrisponde alla versione $CARGO di Cargo.toml"; exit 1; fi
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            sed "s/{versione}/$V/g; s#{repo}#${GITHUB_REPOSITORY}#g" .github/note-release.md > note.md
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null 2>&1 || git ls-remote --exit-code --tags origin "$TAG" >/dev/null
+            # In bozza: nessun Cedro la vede finché non ci sono i pacchetti di tutti i sistemi (job «apri»).
+            gh release create "$TAG" --target "$GITHUB_SHA" --draft --title "Cedro $V" --notes-file note.md
+          fi
+          gh workflow run linux.yml --ref "$GITHUB_REF_NAME" -f tag="$TAG"
 
   app:
     name: Cedro (build, prove, installatore)
@@ -285,6 +310,20 @@ jobs:
           git clean -ffdx -e /target
           git reset --hard HEAD
 
+      - name: Stato della VM (CPU, RAM, Defender, target), solo per leggere (solo sulla VM di casa)
+        if: ${{ needs.scegli.outputs.locale == 'true' }}
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          # Solo lettura: serve a capire perché la compilazione di Cedro su questa VM prende fino a un'ora
+          # (su Linux 10 minuti). Non cambia nessuna impostazione di sicurezza.
+          try { $mp = (Get-MpPreference -ErrorAction Stop); "Esclusioni di Defender: $($mp.ExclusionPath -join ', ')" } catch { "Esclusioni di Defender non leggibili ($_)" }
+          try { $mp = Get-MpComputerStatus -ErrorAction Stop; "Defender in tempo reale: $($mp.RealTimeProtectionEnabled)" } catch { "Defender: stato non leggibile ($_)" }
+          Get-CimInstance Win32_Processor | Format-List Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, CurrentClockSpeed
+          Get-CimInstance Win32_OperatingSystem | ForEach-Object { 'RAM libera: {0} MB su {1} MB' -f [int]($_.FreePhysicalMemory / 1024), [int]($_.TotalVisibleMemorySize / 1024) }
+          'Disco C libero: {0:N1} GB' -f ((Get-PSDrive C).Free / 1GB)
+          'Cartella target: {0:N1} GB' -f ((Get-ChildItem target -Recurse -File -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum / 1GB)
+
       - uses: Swatinem/rust-cache@v2
         if: ${{ needs.scegli.outputs.locale != 'true' }}
 
@@ -335,7 +374,46 @@ jobs:
           & (Join-Path $dir 'cedro.exe') --quality 80 convert tests\fixtures\scan.jpg png 2>&1 | Out-Host
           if (Get-ChildItem $env:APPDATA, $env:LOCALAPPDATA -Recurse -Force) { throw 'la versione portable ha scritto fuori dalla sua cartella' }
 
+      # I motori cambiano di rado, ma la loro versione sale a ogni release e li fa ricompilare tutti (12 compilazioni,
+      # circa 12 minuti): se trascrivi/ e riassumi/ sono uguali a quelli dell'ultima release si riprendono da lì
+      # (già provati) con il nome della versione nuova. Nel dubbio si ricompila.
+      - name: Motori della versione precedente, se i sorgenti non sono cambiati
+        id: riuso
+        if: ${{ inputs.tag != '' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          $riuso = 'false'
+          try {
+            $h = @{ Authorization = "Bearer $env:GH_TOKEN"; 'User-Agent' = 'cedro-ci' }
+            $api = "https://api.github.com/repos/$env:GITHUB_REPOSITORY"
+            $prec = (Invoke-RestMethod "$api/releases/latest" -Headers $h).tag_name
+            if ($prec -eq $env:TAG) { throw "la release più recente è già $prec" }
+            python tools/motori-invariati.py $prec
+            if ($LASTEXITCODE -ne 0) { throw 'sorgenti dei motori cambiati o non confrontabili' }
+            $mot = Invoke-RestMethod "$api/releases/tags/motori-$prec" -Headers $h
+            $vecchia = $prec.TrimStart('v'); $nuova = $env:TAG.TrimStart('v')
+            $nomi = foreach ($m in 'trascrivi', 'riassumi') { foreach ($v in 'base', 'avx2', 'avxvnni', 'avx512', 'avx512vnni', 'vulkan') { "cedro-$m-$vecchia-windows-x64-$v.exe" } }
+            $assets = foreach ($n in $nomi) { $a = $mot.assets | Where-Object name -eq $n | Select-Object -First 1; if (-not $a) { throw "manca $n in motori-$prec" }; $a }
+            New-Item -ItemType Directory -Force motori-x64 | Out-Null
+            foreach ($a in $assets) {
+              $dest = Join-Path motori-x64 $a.name.Replace("-$vecchia-", "-$nuova-")
+              Invoke-WebRequest $a.browser_download_url -OutFile $dest
+              $hash = (Get-FileHash $dest -Algorithm SHA256).Hash.ToLower()
+              if ($a.digest -and $a.digest -ne "sha256:$hash") { throw "SHA-256 diverso per $($a.name)" }
+            }
+            $riuso = 'true'
+            "Motori ripresi da motori-$prec (12 file, rinominati $nuova)"
+          } catch {
+            "Motori da ricompilare: $_"
+            Remove-Item motori-x64 -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          "riuso=$riuso" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+
       - name: Compila i motori x64 dai sorgenti correnti
+        if: ${{ steps.riuso.outputs.riuso != 'true' }}
         shell: pwsh
         run: |
           python -m pip install libclang
@@ -373,6 +451,7 @@ jobs:
           key: qwen3.5-4b-q4km-unsloth
 
       - name: Prova del Riassunto AI (Qwen3.5-4B vero, motori avx2 e vulkan)
+        if: ${{ steps.riuso.outputs.riuso != 'true' }}
         shell: pwsh
         env:
           QWEN_DIR: ${{ needs.scegli.outputs.locale == 'true' && 'C:\cedro-cache\qwen' || format('{0}\qwen', runner.temp) }}
@@ -538,8 +617,8 @@ jobs:
 
   pubblica:
     name: Pubblica la release
-    if: ${{ always() && inputs.tag != '' && (!(inputs.arm || inputs.solo_arm) || (needs.app.result == 'success' && needs.motori.result == 'success')) && (inputs.solo_arm || (needs.x64.result == 'success' && needs.x64-installa.result == 'success')) }}
-    needs: [app, motori, vulkan, x64, x64-installa]
+    if: ${{ always() && inputs.tag != '' && (!(inputs.arm || inputs.solo_arm) || (needs.app.result == 'success' && needs.motori.result == 'success')) && (inputs.solo_arm || (needs.prepara.result == 'success' && needs.x64.result == 'success' && needs.x64-installa.result == 'success')) }}
+    needs: [prepara, app, motori, vulkan, x64, x64-installa]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -584,13 +663,6 @@ jobs:
           fi
           gh release upload "$TAG" $(find file -type f \( -name 'Cedro-*Setup-*.exe' -o -name 'Cedro-Portable-*-x64.zip' \)) --clobber
           for t in "$TAG" "$MOTORI"; do echo "== $t"; gh release view "$t" --json assets --jq '.assets[] | "\(.name)  \(.digest)"'; done
-
-      - name: Linux (tar.gz e motori) con il workflow «Linux»
-        if: ${{ !inputs.solo_arm }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
-        run: gh workflow run linux.yml --ref "$GITHUB_REF_NAME" -f tag="$TAG"
 
   # Le versioni già installate non distinguono «manca ancora il mio pacchetto» da «non c'è»: la release
   # diventa pubblica (e «latest») solo quando ha i sei pacchetti, compresi i tar.gz del workflow «Linux».
