@@ -1754,6 +1754,22 @@ mod tests {
         assert!(err.starts_with("Questo sito non è supportato"), "{err}");
     }
 
+    /// Prova vera su YouTube con i sottotitoli in italiano: anche se YouTube risponde 429 ai
+    /// sottotitoli il video deve arrivare. `cargo test --release youtube_with_subtitles -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn youtube_with_subtitles() {
+        let cancel = AtomicBool::new(false);
+        let dest = std::env::temp_dir().join(format!("cedro-yt-{}", std::process::id()));
+        let mut r = Request::new(vec!["https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string()], false, dest.clone());
+        r.quality = 360;
+        r.subtitles = 1;
+        let got = run(&r, &mut |e| if let Event::Log(t) = e { println!("  {t}") }, &cancel);
+        let _ = std::fs::remove_dir_all(&dest);
+        let files = got.expect("download");
+        assert!(!files.is_empty());
+    }
+
     #[test]
     fn errors_in_italian() {
         assert_eq!(first_error("WARNING: x\nERROR: [youtube] abc: Private video. Sign in"), "Il video è privato");
