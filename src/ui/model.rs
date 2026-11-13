@@ -2145,8 +2145,8 @@ impl App {
     pub fn exists_example(&self) -> String {
         let (name, ext) = self.example_name();
         match self.values.exists {
-            Exists::Number if ext.is_empty() => format!("Esempio: {name}-2"),
-            Exists::Number => format!("Esempio: {name}-2.{ext}"),
+            Exists::Number if ext.is_empty() => format!("{} {}-2", crate::i18n::tr("Esempio:"), crate::i18n::lit(&crate::i18n::tr(name))),
+            Exists::Number => format!("{} {}-2.{ext}", crate::i18n::tr("Esempio:"), crate::i18n::lit(&crate::i18n::tr(name))),
             Exists::Replace => "Il file con lo stesso nome viene sostituito.".into(),
             Exists::Skip => "Il file con lo stesso nome resta com'è.".into(),
             Exists::Ask => "Cedro te lo chiede file per file.".into(),

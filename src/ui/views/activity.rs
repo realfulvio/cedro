@@ -317,7 +317,8 @@ pub fn transcribe_page(f: &mut Frame, app: &App, r: R, simple: bool) {
         // Una colonna: i file, il risultato, la precisione, il pulsante; lo stato sempre in vista.
         let w = r.2.min(980.0);
         let x = r.0 + (r.2 - w) / 2.0;
-        f.button((x + w - 200.0, r.1 + 2.0, 200.0, 46.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles);
+        let bw = f.btn_w("Aggiungi file", 17.0, 200.0);
+        f.button((x + w - bw, r.1 + 2.0, bw, 46.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles);
         let card = if app.busy() { PROGRESS_H + 18.0 } else { 0.0 };
         let list_h = (r.1 + r.3 - top - 330.0 - card).max(140.0);
         transcribe_queue(f, app, (x, top, w, list_h), true);
@@ -346,8 +347,9 @@ pub fn transcribe_page(f: &mut Frame, app: &App, r: R, simple: bool) {
     let left_w = r.2 - INSP_W - 20.0;
     // Barra della coda.
     let mut x = r.0;
-    f.primary((x, top, 190.0, 42.0), "Aggiungi file", Some(ic::ADD), 16.0, Act::AddFiles, true);
-    x += 206.0;
+    let bw = f.btn_w("Aggiungi file", 16.0, 190.0);
+    f.primary((x, top, bw, 42.0), "Aggiungi file", Some(ic::ADD), 16.0, Act::AddFiles, true);
+    x += bw + 16.0;
     x += f.tool(x, top + 1.0, 40.0, "Aggiungi cartella", ic::FOLDER, 15.0, Act::AddFolder, true) + 6.0;
     f.tool(x, top + 1.0, 40.0, "Rimuovi", ic::TRASH, 15.0, Act::RemoveChecked, !app.visible().is_empty() && !app.busy());
     let n = app.visible().len();
@@ -592,7 +594,8 @@ fn narrow_transcribe(f: &mut Frame, app: &App, r: R, simple: bool) {
     let lines = transcribe_lines(app);
     super::scrolled(f, body, Scroll::Inspector, |f| {
         let mut y = body.1;
-        f.button((x, y, 168.0, 40.0), "Aggiungi file", Some(ic::ADD), 15.0, Act::AddFiles);
+        let bw = f.btn_w("Aggiungi file", 15.0, 168.0);
+        f.button((x, y, bw, 40.0), "Aggiungi file", Some(ic::ADD), 15.0, Act::AddFiles);
         f.text_r(&format!("{} file", app.visible().len()), (x + w - 100.0, y, 100.0, 40.0), 14.0, SANS, pal.muted);
         y += 52.0;
         y += narrow_files(f, app, x, y, w) + 20.0;

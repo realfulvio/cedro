@@ -190,8 +190,9 @@ fn inspector(f: &mut Frame, app: &App, r: R) {
         if !tools.is_empty() {
             f.hline(x, y, w);
             y += 22.0;
-            f.text("Strumenti", x, y, 110.0, 32.0, 19.0, SEMI, pal.text);
-            f.text("(al posto della conversione)", x + 108.0, y + 3.0, w - 108.0, 28.0, 15.0, SANS, pal.muted);
+            let hw = f.measure("Strumenti", 19.0, SEMI).ceil() + 10.0;
+            f.text("Strumenti", x, y, hw, 32.0, 19.0, SEMI, pal.text);
+            f.text("(al posto della conversione)", x + hw, y + 3.0, w - hw, 28.0, 15.0, SANS, pal.muted);
             y += 44.0;
             let home_id = app.default_action(false);
             let home = conversioni::formats(app.kind()).iter().find(|s| s.id == home_id).map(|s| s.id).unwrap_or("");
@@ -250,7 +251,7 @@ fn footer(f: &mut Frame, app: &App, y: f32, simple: bool) {
         super::exists_select(f, app, (ex_x, y + 52.0, ex_w, 44.0), 17.0);
         let dw = ex_x - 34.0 - 24.0;
         f.text("Cartella di destinazione", 24.0, y + 20.0, dw, 24.0, 16.0, SEMI, pal.text);
-        let browse = 112.0;
+        let browse = (f.measure("Sfoglia…", 17.0, SANS) + 36.0).ceil().max(112.0);
         super::dest_select(f, app, (24.0, y + 52.0, (dw - browse - 12.0).max(140.0), 44.0), 17.0);
         f.button((24.0 + (dw - browse - 12.0).max(140.0) + 12.0, y + 52.0, browse, 44.0), "Sfoglia…", None, 17.0, Act::DestPick);
     }
@@ -284,11 +285,16 @@ pub fn draw(f: &mut Frame, app: &App) {
     let foot_y = f.h - FOOT;
     if simple {
         let y = BAR + 34.0;
-        f.text("Converti in", 30.0, y + 8.0, 150.0, 56.0, 21.0, SANS, pal.text);
+        // Larghezze dal testo tradotto: «Convertir en», «Konvertieren in», «Converter para» sono più lunghi di «Converti in».
+        let lw = f.measure("Converti in", 21.0, SANS).ceil() + 14.0;
+        let sx = (30.0 + lw).max(164.0);
+        f.text("Converti in", 30.0, y + 8.0, lw, 56.0, 21.0, SANS, pal.text);
         let title = super::action_title(app, true);
-        f.select_voce((164.0, y + 2.0, 264.0, 56.0), &title, app.action_voce(), 19.0, Act::FormatMenu);
-        f.button((446.0, y + 2.0, 230.0, 58.0), "Aggiungi file", Some(ic::ADD), 20.0, Act::AddFiles);
-        super::notice(f, app, (700.0, y + 4.0, (f.w - 700.0 - 450.0).max(120.0), 54.0), 15.0);
+        f.select_voce((sx, y + 2.0, 264.0, 56.0), &title, app.action_voce(), 19.0, Act::FormatMenu);
+        let bx = sx + 264.0 + 18.0;
+        f.button((bx, y + 2.0, 230.0, 58.0), "Aggiungi file", Some(ic::ADD), 20.0, Act::AddFiles);
+        let nx = bx + 230.0 + 24.0;
+        super::notice(f, app, (nx, y + 4.0, (f.w - nx - 450.0).max(120.0), 54.0), 15.0);
         super::essenziale::mode_switch(f, (f.w - 440.0, y - 6.0, 420.0, 62.0));
         let top = y + 100.0;
         table(f, app, (30.0, top, f.w - 60.0, foot_y - top - 30.0), true);
@@ -300,16 +306,25 @@ pub fn draw(f: &mut Frame, app: &App) {
         let cx = NAV_W + 18.0;
         let cw = ix - cx - 14.0;
         let mut x = cx;
-        f.primary((x, BAR + 22.0, 165.0, 44.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles, true);
-        x += 177.0;
-        f.button((x, BAR + 22.0, 192.0, 44.0), "Aggiungi cartella", Some(ic::FOLDER), 17.0, Act::AddFolder);
-        x += 204.0;
-        f.button((x, BAR + 22.0, 134.0, 44.0), "Rimuovi", Some(ic::TRASH), 17.0, Act::RemoveChecked);
+        // Larghezze dal testo tradotto: in tedesco o francese «Aggiungi file» è più lungo.
+        let bw = |f: &Frame, label: &str, min: f32| (f.measure(label, 17.0, SEMI) + 23.0 + 14.0 + 24.0).ceil().max(min);
+        let w1 = bw(f, "Aggiungi file", 165.0);
+        f.primary((x, BAR + 22.0, w1, 44.0), "Aggiungi file", Some(ic::ADD), 17.0, Act::AddFiles, true);
+        x += w1 + 12.0;
+        let w2 = bw(f, "Aggiungi cartella", 192.0);
+        f.button((x, BAR + 22.0, w2, 44.0), "Aggiungi cartella", Some(ic::FOLDER), 17.0, Act::AddFolder);
+        x += w2 + 12.0;
+        let w3 = bw(f, "Rimuovi", 134.0);
+        f.button((x, BAR + 22.0, w3, 44.0), "Rimuovi", Some(ic::TRASH), 17.0, Act::RemoveChecked);
+        x += w3;
         let n = app.visible().len();
         let count = format!("{n} file nella coda");
-        let count_w = f.measure(&count, 17.0, SANS) + 16.0;
-        f.text_r(&count, (cx + cw - 220.0, BAR + 22.0, 220.0, 44.0), 17.0, SANS, pal.text);
-        super::notice(f, app, (cx + 530.0, BAR + 22.0, (cw - 530.0 - count_w - 8.0).max(0.0), 44.0), 14.0);
+        // Il conteggio sta nello spazio rimasto a destra dei pulsanti: con le finestre strette e i testi
+        // lunghi (tedesco) si rimpicciolisce invece di finire sopra «Rimuovi».
+        let room = (cx + cw - x - 12.0).clamp(0.0, 220.0);
+        let count_w = (f.measure(&count, 17.0, SANS) + 16.0).min(room);
+        f.text_r(&count, (cx + cw - room, BAR + 22.0, room, 44.0), 17.0, SANS, pal.text);
+        super::notice(f, app, (x + 20.0, BAR + 22.0, (cw - (x + 20.0 - cx) - count_w - 8.0).max(0.0), 44.0), 14.0);
         table(f, app, (cx, BAR + 86.0, cw, foot_y - BAR - 86.0 - 18.0), false);
     }
     footer(f, app, foot_y, simple);
