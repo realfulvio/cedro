@@ -147,6 +147,8 @@ pub(super) fn status_line(f: &mut Frame, app: &App, t: &Tint, idle: bool, cy: f3
         let tail = if isa.is_empty() { String::new() } else { format!(" · {}", crate::i18n::lit(isa)) };
         (Mark::Dot { live: false }, t.leaf, crate::i18n::tr("Solo processore").into_owned(), tail, None)
     } else {
+        // La scheda video si cerca in sottofondo: ridisegna finché non c'è la risposta.
+        f.animating = true;
         return false;
     };
     let tail = crate::i18n::tr(&tail).into_owned();
