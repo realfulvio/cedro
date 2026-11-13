@@ -459,11 +459,18 @@ impl<'a> Impaginatore<'a> {
         let ind = par.rientro_sx + if first { par.prima_riga } else { 0.0 };
         let mut x = ind.max(lim_l);
         if first && !self.preps[pi].label.is_empty() {
+            let tot: f32 = self.preps[pi].label.iter().map(|l| l.w).sum();
+            let mut lx = match par.etichetta_allinea {
+                Allinea::Destra => x - tot,
+                Allinea::Centro => x - tot / 2.0,
+                _ => x,
+            };
             for l in self.preps[pi].label.clone() {
                 let lw = l.w;
-                items.push((l, x));
-                x += lw;
+                items.push((l, lx));
+                lx += lw;
             }
+            x = lx;
             if par.etichetta_tab {
                 let (stop, _, _) = self.next_stop(par, x, true);
                 x = if stop > right && x < right { x + 6.0 } else { stop.max(x) };
@@ -1050,8 +1057,10 @@ impl<'a> Impaginatore<'a> {
             })
             .collect();
         let mut data: Vec<RowData> = Vec::new();
+        let mut row_notes: Vec<Vec<usize>> = Vec::new();
         for (ri, r) in rows.iter().enumerate() {
             let mut cells = Vec::new();
+            let mut notes = Vec::new();
             let mut h: f32 = 0.0;
             for cell in r {
                 let c = cell.c;
@@ -1069,6 +1078,8 @@ impl<'a> Impaginatore<'a> {
                     self.in_cell += 1;
                     self.blocks_units(&c.blocchi, (cw - ml - mr).max(4.0), &mut units);
                     self.in_cell -= 1;
+                    // Le note delle celle vanno a piè della pagina dove sta la riga.
+                    notes.extend(units.iter().flat_map(|u| u.notes.iter().copied()));
                     self.stack(units, (cw - ml - mr).max(4.0))
                 };
                 let open_bottom = rows.get(ri + 1).is_some_and(|nr| nr.iter().any(|n| n.col == cell.col && n.c.vmerge == Some(false)));
@@ -1086,6 +1097,7 @@ impl<'a> Impaginatore<'a> {
             let want = t.righe[ri].altezza.abs();
             let h = if exact { want } else { h.max(want).max(1.0) };
             data.push(RowData { cells, h, exact });
+            row_notes.push(notes);
         }
         // Celle unite in verticale: la riga in fondo al gruppo cresce se il contenuto non ci sta.
         for ri in 0..data.len() {
@@ -1126,6 +1138,7 @@ impl<'a> Impaginatore<'a> {
             let mut u = Unit::ops(Draw::default(), r.h);
             u.split = !t.righe[ri].non_dividere && !r.exact && !in_group[ri];
             u.body = Body::Row(r);
+            u.notes = std::mem::take(&mut row_notes[ri]);
             if ri < heads {
                 u.keep = true;
             } else {
@@ -1452,6 +1465,7 @@ impl<'a> Impaginatore<'a> {
                             second.floats.clear();
                             second.brk = None;
                             second.before = 0.0;
+                            second.notes.clear();
                             let floats = std::mem::take(&mut u.floats);
                             first.floats = floats;
                             first.split = false;

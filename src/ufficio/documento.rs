@@ -139,6 +139,8 @@ pub struct Paragrafo {
     pub etichetta: Option<(String, Font)>,
     /// Dopo l'etichetta: tabulazione (true) o spazio.
     pub etichetta_tab: bool,
+    /// Come si allinea l'etichetta sulla sua posizione (a destra: finisce lì).
+    pub etichetta_allinea: Allinea,
     /// Livello del titolo (1…9) per i segnalibri del PDF.
     pub titolo: Option<u8>,
     pub sfondo: Option<Rgb>,
@@ -192,9 +194,6 @@ pub struct Tabella {
     /// 0 sinistra, 1 centro, 2 destra.
     pub allinea: u8,
     pub rientro: f32,
-    /// Bordi interni tra celle (orizzontali e verticali) se la cella non dice altro.
-    pub bordo_h: Option<Linea>,
-    pub bordo_v: Option<Linea>,
     /// Larghezza in parte dello spazio disponibile (ODT `rel-width`): la griglia è in proporzione.
     pub relativa: Option<f32>,
 }

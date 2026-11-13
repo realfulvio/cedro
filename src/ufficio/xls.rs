@@ -648,7 +648,7 @@ pub fn leggi_xls(bytes: &[u8], fonts_db: &mut super::font::Fonti) -> Result<Cart
         let mut setup: Option<Vec<u8>> = None;
         let mut pending_formula: Option<(u32, u32, u32)> = None;
         let mut drawing: Vec<u8> = Vec::new();
-        let mut put = |f: &mut Foglio, r: u32, c: u32, valore: Valore, stile: u32| {
+        let put = |f: &mut Foglio, r: u32, c: u32, valore: Valore, stile: u32| {
             if r < MAX_ROWS && c < MAX_COLS {
                 f.celle.insert((r, c), Cella { valore, stile, mostra: None, link: None });
             }

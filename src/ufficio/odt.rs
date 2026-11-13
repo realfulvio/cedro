@@ -120,6 +120,7 @@ struct ListLevel {
     tab: bool,
     tab_pos: Option<f32>,
     font: Option<String>,
+    jc: Allinea,
 }
 
 #[derive(Default)]
@@ -170,6 +171,11 @@ fn list_levels(n: roxmltree::Node) -> Vec<ListLevel> {
             tab,
             tab_pos,
             font: tp.and_then(|t| attr(t, "font-name").or_else(|| attr(t, "font-family"))).map(str::to_string),
+            jc: match lp.and_then(|p| attr(p, "text-align")) {
+                Some("end" | "right") => Allinea::Destra,
+                Some("center") => Allinea::Centro,
+                _ => Allinea::Sinistra,
+            },
         };
         if levels.len() < lvl {
             levels.resize(lvl, level.clone());
@@ -675,6 +681,7 @@ impl<'z> Ctx<'z> {
                     lf.underline = false;
                     par.etichetta = Some((text, lf));
                     par.etichetta_tab = lv.tab;
+                    par.etichetta_allinea = lv.jc;
                     if let Some(tp) = lv.tab_pos {
                         if !par.tabs.iter().any(|t| (t.pos - tp).abs() < 0.5) && tp > par.rientro_sx + par.prima_riga {
                             par.tabs.push(Tab { pos: tp, tipo: TipoTab::Sinistra, leader: None });
@@ -968,7 +975,7 @@ impl<'z> Ctx<'z> {
         };
         // In Writer il bordo della tabella sta sul margine: il testo della cella è rientrato.
         let rientro = tp.get("tb:margin-left").and_then(length).unwrap_or(0.0) + righe.first().and_then(|r| r.celle.first()).map_or(0.0, |c| c.margini[0]);
-        Some(Tabella { griglia, righe, allinea, rientro, bordo_h: None, bordo_v: None, relativa })
+        Some(Tabella { griglia, righe, allinea, rientro, relativa })
     }
 
     fn cell(&mut self, c: roxmltree::Node, _col: usize) -> Cella {
