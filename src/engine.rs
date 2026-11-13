@@ -228,7 +228,7 @@ fn kind_by_extension(ext: &str) -> Kind {
         "pdf" => Kind::Pdf,
         "doc" | "docx" | "odt" | "rtf" => Kind::Doc,
         "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "ndpi" | "mrxs" | "dcm" | "dicom" | "nd2" | "lif" | "czi" | "ico"
-        | "svg" | "svgz" | "avif" | "jxl" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm"
+        | "svg" | "svgz" | "avif" | "jxl" | "heic" | "heif" | "hif" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm"
         | "hdr" | "exr" | "dds" => Kind::Image,
         "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" | "xlsx" | "xlsm" | "ods" => Kind::Text,
         "wav" | "mp3" | "ogg" | "oga" | "opus" | "m4a" | "aac" | "flac" | "aif" | "aiff" | "aifc" | "caf" => Kind::Audio,
@@ -246,7 +246,7 @@ pub fn kind_of(path: &Path) -> Kind {
     let Some(real) = crate::imgfmt::sniff_file(path) else {
         return by_ext;
     };
-    let sure = matches!(real, "png" | "jpg" | "gif" | "webp" | "bmp" | "tiff" | "dcm" | "nd2" | "lif" | "czi" | "avif" | "jxl" | "qoi" | "dds" | "exr" | "hdr" | "pdf" | "flac" | "wav" | "aiff" | "ogg" | "opus" | "svg");
+    let sure = matches!(real, "png" | "jpg" | "gif" | "webp" | "bmp" | "tiff" | "dcm" | "nd2" | "lif" | "czi" | "avif" | "heic" | "jxl" | "qoi" | "dds" | "exr" | "hdr" | "pdf" | "flac" | "wav" | "aiff" | "ogg" | "opus" | "svg");
     let by_content = kind_by_extension(real);
     if by_content != Kind::Other && by_content != by_ext && (by_ext == Kind::Other || sure) {
         return by_content;

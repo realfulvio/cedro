@@ -16,7 +16,7 @@ pub struct Category {
 }
 
 pub const CATEGORIES: &[Category] = &[
-    Category { kind: Kind::Image, name: "Immagini", hint: "Cambia formato, ridimensiona e raddrizza le foto.", accepts: "PNG, JPEG, WebP, AVIF, JPEG XL, SVG, BMP, GIF, TIFF, ICO, TGA, QOI, PNM, HDR, OpenEXR, DDS" },
+    Category { kind: Kind::Image, name: "Immagini", hint: "Cambia formato, ridimensiona e raddrizza le foto.", accepts: "PNG, JPEG, HEIC, WebP, AVIF, JPEG XL, SVG, BMP, GIF, TIFF, ICO, TGA, QOI, PNM, HDR, OpenEXR, DDS" },
     Category { kind: Kind::Doc, name: "Documenti", hint: "Da Word, ODT e RTF a PDF.", accepts: "DOCX, DOC, ODT, RTF" },
     Category { kind: Kind::Pdf, name: "PDF", hint: "Da PDF a Word modificabile, a Excel, a immagini o a testo.", accepts: "PDF" },
     Category { kind: Kind::Text, name: "Testo", hint: "TXT, Markdown, CSV, Excel, JSON e HTML.", accepts: "TXT, MD, CSV, TSV, XLSX, ODS, JSON, HTML, XML" },
