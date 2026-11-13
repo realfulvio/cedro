@@ -1301,8 +1301,25 @@ impl<'a> Painter<'a> {
         chars[..lo].iter().collect::<String>().trim_end().to_string() + "…"
     }
 
+    /// Il corpo con cui un testo TRADOTTO sta in `w`: in tedesco, spagnolo… le frasi sono più lunghe,
+    /// quindi si rimpicciolisce un poco (fino a circa tre quarti) prima di tagliare. L'italiano e i testi
+    /// dell'utente (nomi di file) restano com'erano.
+    pub fn fit_size(&self, s: &str, size: f32, weight: Weight, w: f32) -> f32 {
+        let t = crate::i18n::tr(s);
+        if t.as_ref() == s || self.measure_raw(&t, size, weight) <= w {
+            return size;
+        }
+        for k in [0.94, 0.88, 0.82, 0.76] {
+            if self.measure_raw(&t, size * k, weight) <= w {
+                return size * k;
+            }
+        }
+        size * 0.76
+    }
+
     /// Una riga di testo centrata in verticale nel riquadro; troppo lunga, finisce con «…».
     pub fn text(&mut self, s: &str, x: f32, y: f32, w: f32, h: f32, size: f32, weight: Weight, c: Rgb, align: Align) {
+        let size = self.fit_size(s, size, weight, w.max(1.0));
         let s = self.ellipsize_raw(&crate::i18n::tr(s), size, weight, w.max(1.0));
         let tw = self.measure_raw(&s, size, weight);
         let (asc, desc) = self.fonts.extents(self.ts(size), weight);

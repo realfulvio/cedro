@@ -4,12 +4,13 @@
 
 Ogni versione pubblicata finora, dalla più recente alla prima. Le note complete di ciascuna, con i file da scaricare e il controllo antivirus, sono nella pagina [Releases](https://github.com/realfulvio/cedro/releases).
 
-> In tre settimane, dal 21 ottobre al 12 novembre 2026: **92 versioni** per Windows e Linux.
+> In tre settimane, dal 21 ottobre al 12 novembre 2026: **93 versioni** per Windows e Linux.
 
 ## Novembre 2026: Cedro 4 Labs e il nuovo aspetto
 
 | Versione | Data | Cosa porta |
 | --- | --- | --- |
+| [0.47.0](https://github.com/realfulvio/cedro/releases/tag/v0.47.0) | 12/11 | Cedro parla anche **spagnolo, tedesco, francese e portoghese del Brasile** (oltre a italiano e inglese), su Desktop e Android; lingua automatica dal sistema |
 | [0.46.0](https://github.com/realfulvio/cedro/releases/tag/v0.46.0) | 12/11 | Cedro 4 Labs legge i vetrini **Hamamatsu NDPI** e **3DHistech MRXS** (anche in copia anonima e consulto); referti dettati che escono come bozza finché numeri e parole decisive non sono confermati |
 | [0.45.0](https://github.com/realfulvio/cedro/releases/tag/v0.45.0) | 12/11 | Cedro 4 Labs legge i file **Zeiss CZI**: scene, mosaici, canali, piani Z, compressioni di ZEN compreso il JPEG XR dei vetrini |
 | [0.44.3](https://github.com/realfulvio/cedro/releases/tag/v0.44.3) | 12/11 | Componenti aggiornati per sicurezza e manutenzione (firme RSA ed ECDSA, OCR) |

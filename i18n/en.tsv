@@ -2307,3 +2307,135 @@ Markdown con titoli, elenchi e tabelle	Markdown with headings, lists and tables
 la carta scelta nel file	the paper set in the file
 1 PDF · 1 pagina	1 PDF · 1 page
 {#} PDF · 1 pagina	{} PDFs · 1 page
+Il modello si scarica al primo uso e poi resta sul PC.	The model is downloaded on first use and then stays on this PC.
+Esempio:	Example:
+nomefile	filename
+nomefile-anonimo	filename-anonymous
+nomefile-pulito	filename-clean
+nomefile-compresso	filename-compressed
+nomefile-meta	filename-half
+nomefile-bn	filename-bw
+nomefile-ruotato	filename-rotated
+nomefile-figura	filename-figure
+nomefile-tessere	filename-tiles
+nomefile-conta-mitotica	filename-mitotic-count
+caso-1a2b3c-consulto	case-1a2b3c-consult
+nomeanimale-radiografie	animalname-xrays
+controllato oggi, {}	checked today, {}
+controllato ieri alle {}	checked yesterday at {}
+controllato il {}	checked on {}
+Scegli la cartella con i file firmati	Choose the folder with the signed files
+Non c'è nessun documento da estrarre: i PDF firmati sono già il documento.	There's no document to extract: signed PDFs already are the document.
+Estratto 1 documento, accanto al suo file firmato.	Extracted 1 document, next to its signed file.
+Estratti {} documenti, ognuno accanto al suo file firmato.	Extracted {} documents, each next to its signed file.
+Cartella con i file da firmare	Folder with the files to sign
+In quella cartella non ci sono file da aggiungere.	There are no files to add in that folder.
+Dove salvo i file firmati	Where to save the signed files
+Dove salvo il certificato	Where to save the certificate
+Non riesco a salvare il certificato: {}	I can't save the certificate: {}
+Non riesco a mostrare il certificato: {}	I can't show the certificate: {}
+Scegli un'immagine (PNG o JPG)…	Choose an image (PNG or JPG)…
+Questa non è un'immagine che so leggere: scegli un PNG o un JPG.	This isn't an image I can read: choose a PNG or a JPG.
+Salvato «{}» nella cartella del file firmato.	Saved "{}" in the signed file's folder.
+Non riesco a leggere il file: {}	I can't read the file: {}
+Questo link è già in coda.	This link is already in the queue.
+Errore interno: {}	Internal error: {}
+errore interno: {}	internal error: {}
+Leggo il testo…	Reading the text…
+Per laboratori e ricerca: solo gli strumenti utili.	For labs and research: just the useful tools.
+PDF: da convertire, unire, dividere, sistemare o comprimere	PDF: to convert, merge, split, fix or compress
+https://… (la pagina del video)	https://… (the page with the video)
+Scrivi il PIN della chiavetta.	Enter the key's PIN.
+I due nuovi non sono uguali.	The two new ones don't match.
+Scrivi tutti i campi.	Fill in every field.
+Il nuovo PIN deve avere almeno {} cifre.	The new PIN must have at least {} digits.
+Chiedo al certificatore…	Asking the certification authority…
+Il certificato non è revocato né sospeso.	The certificate is neither revoked nor suspended.
+Il certificato risulta REVOCATO o sospeso: non usarlo per firmare.	The certificate is REVOKED or suspended: don't use it to sign.
+Non sono riuscito a chiederlo al certificatore. Riprova più tardi.	I couldn't ask the certification authority. Try again later.
+Questi file verranno firmati	These files will be signed
+Puoi trascinarne altri dentro la finestra in qualsiasi momento.	You can drag more into the window at any time.
+Nessun file: aggiungili o trascinali qui	No files: add them or drag them here
+Con cosa firmi?	What do you sign with?
+Cerco la chiavetta e le smart card…	Looking for the key and smart cards…
+Non trovo nessuna chiavetta né smart card	I can't find any key or smart card
+In che formato?	In what format?
+I PDF restano PDF con la firma sul foglio, tutti gli altri diventano .p7m	PDFs stay PDFs with the signature on the page, everything else becomes .p7m
+Nello spazio per la firma	In the signature space
+Il PDF ha già un riquadro «{}» a pagina {}	The PDF already has a "{}" box on page {}
+Questo PDF non ha uno spazio per la firma: la metto in basso a destra dell'ultima pagina	This PDF has no signature space: I'll put it at the bottom right of the last page
+Dove la metto io	Where I put it
+Trascina il riquadro sulla pagina	Drag the box onto the page
+La firma c'è e vale uguale, ma sul foglio non compare	The signature is there and equally valid, but it doesn't appear on the page
+File già firmati	Already signed files
+Si scrivono nella firma dei PDF (facoltativi)	Written into the PDF signature (optional)
+Salvo i file firmati accanto agli originali, che non vengono toccati.	I save the signed files next to the originals, which are not touched.
+Salvo i file firmati nella cartella {}.	I save the signed files in the folder {}.
+Salvo i file con la firma in più nella cartella {}; gli originali non vengono toccati.	I save the files with the extra signature in the folder {}; the originals are not touched.
+I nuovi file firmati vanno accanto agli originali; in quelli già firmati la firma si aggiunge nello stesso file.	New signed files go next to the originals; in already signed ones the signature is added in the same file.
+Salvo tutto nella cartella {}; gli originali non vengono toccati.	I save everything in the folder {}; the originals are not touched.
+PIN della carta	Card PIN
+PIN della chiavetta	Key PIN
+Scrivi il PIN sul tastierino del lettore quando te lo chiede.	Type the PIN on the reader's keypad when it asks.
+Scrivi il PIN	Enter the PIN
+1 file firmato	1 file signed
+{} file firmati	{} files signed
+Apri la cartella	Open the folder
+Guarda il file firmato	View the signed file
+Cerco la chiavetta…	Looking for the key…
+Nessuna chiavetta né smart card collegata	No key or smart card connected
+Non trovo il driver della chiavetta: installa quello del tuo certificatore (per la Aruba Key: bit4id) o sceglilo a mano in Opzioni	I can't find the key's driver: install the one from your certification authority (for the Aruba Key: bit4id) or pick it by hand in Options
+Sul dispositivo non ci sono certificati personali.	There are no personal certificates on the device.
+serve per firmare	used for signing
+serve per entrare nei siti	used to log in to websites
+scaduto il {}	expired on {}
+scade il {}, tra {} giorni	expires on {}, in {} days
+Vedi il certificato	View the certificate
+Controlla se è revocato	Check whether it's revoked
+Salva come .cer	Save as .cer
+Cambia il PIN	Change the PIN
+Sblocca con il PUK	Unlock with the PUK
+Cambia il PUK	Change the PUK
+Avvisami prima che scada	Warn me before it expires
+Te lo dico quando mancano 3 mesi o meno	I'll tell you when 3 months or less are left
+PUK (nella busta del certificatore)	PUK (in the certification authority's envelope)
+Opzioni della firma	Signature options
+Nome dei file firmati	Name of the signed files
+Tieni il PIN per tutta la coda	Keep the PIN for the whole queue
+Lo dimentico appena ho finito	I forget it as soon as I'm done
+Si vede sul foglio	Visible on the page
+Un riquadro con nome, data e ora	A box with name, date and time
+La firma c'è e vale, ma non compare	The signature is there and valid, but doesn't appear
+Posizione se il PDF non ha lo spazio	Position if the PDF has no space
+Chiedo al certificatore se il certificato è stato revocato	Ask the certification authority whether the certificate was revoked
+Non trovato: installa quello del certificatore	Not found: install the one from the certification authority
+Trovato da solo: {}	Found automatically: {}
+Driver della chiavetta	Key driver
+Avvisami prima che scada il certificato	Warn me before the certificate expires
+Nella cartella {}	In the folder {}
+Uno o tanti file insieme, il PIN lo metti una volta.	One or many files together, you enter the PIN once.
+Ne sto controllando {}. Quelli da guardare vanno in cima; clic su un file per aprirlo nel visualizzatore.	I'm checking {}. The ones to look at go to the top; click a file to open it in the viewer.
+Tutte le firme sono a posto. Clic su un file per aprirlo nel visualizzatore.	All signatures are fine. Click a file to open it in the viewer.
+1 file da guardare, in cima	1 file to look at, at the top
+{} file da guardare, in cima	{} files to look at, at the top
+Salva il .{}	Save the .{}
+Un momento: leggo le buste, i certificati e l'elenco europeo dei certificatori.	One moment: I'm reading the envelopes, the certificates and the European list of certification authorities.
+Mostra le {} firme	Show the {} signatures
+Mostra la firma	Show the signature
+È una firma staccata (.p7s) o una marca a parte (.tsr): la controllo insieme al file che è stato firmato. Di solito sta nella stessa cartella con lo stesso nome.	This is a detached signature (.p7s) or a separate timestamp (.tsr): I check it together with the file that was signed. It's usually in the same folder with the same name.
+Versione firmata da {}: com'era al momento della firma	Version signed by {}: as it was at the time of signing
+Scheda video attiva	Active graphics card
+Il file log.txt e config.txt stanno nella cartella Dati, accanto a cedro.exe.	The log.txt and config.txt files are in the Data folder, next to cedro.exe.
+Incolla il link di un video o di una playlist di YouTube (o di un altro sito).	Paste the link of a YouTube video or playlist (or from another site).
+Disegna le immagini SVG.	Draws SVG images.
+Legge MP3, FLAC, OGG, AAC, WAV, AIFF.	Reads MP3, FLAC, OGG, AAC, WAV, AIFF.
+Legge e scrive i file .opus.	Reads and writes .opus files.
+Legge e scrive le foto AVIF.	Reads and writes AVIF photos.
+Legge e scrive le foto JPEG XL.	Reads and writes JPEG XL photos.
+Legge le tessere JPEG XR e zstd dei file Zeiss CZI.	Reads the JPEG XR and zstd tiles of Zeiss CZI files.
+Parla con la chiavetta o la smart card per firmare (PKCS#11).	Talks to the signing key or smart card to sign (PKCS#11).
+Scrive i file FLAC.	Writes FLAC files.
+Scrive le foto WebP.	Writes WebP photos.
+BSD-2-Clause o MIT	BSD-2-Clause or MIT
+BSD-3-Clause o BSD-2-Clause	BSD-3-Clause or BSD-2-Clause
+The OpenReadout Authors (da jxrlib di Microsoft), Moritz Borcherding	The OpenReadout Authors (from Microsoft jxrlib), Moritz Borcherding
