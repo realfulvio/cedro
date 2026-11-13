@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "cedro"
-version = "0.47.1"
+version = "0.51.0"
 dependencies = [
  "avif-decode",
  "base64 0.22.1",

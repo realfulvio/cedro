@@ -161,6 +161,20 @@ pub enum Act {
     MediaPlay,
     /// La barra della posizione dell'audio o del video (si trascina).
     MediaSeek,
+    /// Salta avanti o indietro di tanti secondi nell'audio in anteprima.
+    MediaSkip(i32),
+    /// Alla frase prima (-1) o dopo (1).
+    MediaPhrase(i32),
+    /// La velocità dell'audio in anteprima (indice in `SPEEDS`).
+    MediaSpeed(u8),
+    /// Il volume dell'audio in anteprima (si trascina).
+    MediaVolume,
+    /// Come si vede Trascrivi: 0 solo onda, 1 onda e testo, 2 solo testo.
+    TrView(u8),
+    /// Il bordo del pannello di destra, che si trascina per allargarlo o stringerlo.
+    SideGrip,
+    /// La barra di scorrimento del testo che si trascrive (si trascina).
+    LogScroll,
     CompactTab(u8),
     OpenFull,
     Theme(ThemeId),
@@ -382,6 +396,12 @@ pub struct UiState {
     pub open: HashSet<Fold>,
     /// Il cursore che si sta trascinando, con il suo riquadro.
     pub drag: Option<(Act, R)>,
+    /// Larghezza scelta per il pannello di destra (None = quella di base).
+    pub side_w: Option<f32>,
+    /// Quando è stato premuto per ultimo il bordo del pannello (il doppio clic ripristina la larghezza).
+    pub side_click: Option<std::time::Instant>,
+    /// Larghezza dell'ultimo fotogramma disegnato, in unità logiche (serve a trascinare il pannello).
+    pub frame_w: f32,
     /// Una riga trascinata (unire i PDF): la y dove è partita e quella di adesso.
     pub drag_y: (f32, f32),
     /// Una pagina trascinata («Pagine»): la x dove è partita e quella di adesso (la y è in `drag_y`).

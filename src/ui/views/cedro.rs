@@ -22,15 +22,19 @@ use crate::ui::theme::{kind_bright, kind_color, page_colors, Tint, STAGE};
 const TOP: f32 = 60.0;
 const RAIL: f32 = 252.0;
 const PAD: f32 = 12.0;
-const SIDE: f32 = 404.0;
+/// Larghezza di base del pannello di destra, e i limiti entro cui si trascina il suo bordo.
+const SIDE: f32 = 440.0;
+const SIDE_MIN: f32 = 340.0;
+/// Quanto resta almeno al centro (il file) quando il pannello si allarga.
+const STAGE_MIN: f32 = 560.0;
 const STRIP: f32 = 92.0;
 /// Barra dei comandi in cima alla zona del file.
 const BAR: f32 = 62.0;
 /// Il piede del pannello: cartella, «se esiste già», pulsante e riga di quello che esce.
 const FOOT: f32 = 214.0;
-const WHITE: Rgb = (255, 255, 255);
-const STAGE_INK: Rgb = (0xF4, 0xEF, 0xFA);
-const STAGE_MUTED: Rgb = (0xB9, 0xAD, 0xCA);
+pub(super) const WHITE: Rgb = (255, 255, 255);
+pub(super) const STAGE_INK: Rgb = (0xF4, 0xEF, 0xFA);
+pub(super) const STAGE_MUTED: Rgb = (0xB9, 0xAD, 0xCA);
 
 const OPT: OptStyle = OptStyle { label: 15.0, note: 14.0, control_h: 42.0, gap: 18.0, visible: 0, switch_w: 52.0, switch_h: 28.0 };
 
@@ -110,7 +114,7 @@ fn short_gpu(name: &str) -> String {
 }
 
 /// I colori della pagina aperta: quello pieno e quello acceso.
-fn colors(app: &App) -> (Rgb, Rgb) {
+pub(super) fn colors(app: &App) -> (Rgb, Rgb) {
     page_colors(app.lab)
 }
 
@@ -130,8 +134,12 @@ pub fn draw(f: &mut Frame, app: &App) {
         home(f, app, area);
         return;
     }
-    let stage = (area.0, area.1, area.2 - SIDE - PAD, area.3);
-    let side = (area.0 + area.2 - SIDE, area.1, SIDE, area.3);
+    let sw = side_w(f, area.2);
+    let stage = (area.0, area.1, area.2 - sw - PAD, area.3);
+    let side = (area.0 + area.2 - sw, area.1, sw, area.3);
+    if !matches!(app.lab, Lab::Firma) {
+        side_grip(f, (side.0 - PAD, area.1, PAD, area.3));
+    }
     match app.lab {
         Lab::Firma => firma(f, app, area),
         Lab::Trascrivi => {
@@ -147,6 +155,22 @@ pub fn draw(f: &mut Frame, app: &App) {
             convert_panel(f, app, side);
         }
     }
+}
+
+/// La larghezza del pannello di destra: quella scelta trascinando il bordo, tenuta entro i limiti.
+fn side_w(f: &Frame, area_w: f32) -> f32 {
+    let want = f.ui.side_w.unwrap_or(SIDE);
+    want.clamp(SIDE_MIN, (area_w - PAD - STAGE_MIN).max(SIDE_MIN))
+}
+
+/// Il bordo del pannello: una maniglia che si trascina per allargarlo o stringerlo (la larghezza resta salvata).
+fn side_grip(f: &mut Frame, r: R) {
+    let t = f.theme.tint();
+    let act = Act::SideGrip;
+    let hot = f.hovered(&act) || f.ui.drag.as_ref().is_some_and(|d| d.0 == Act::SideGrip);
+    let c = if hot { t.ink } else { mix(t.ink, t.frame, 0.7) };
+    f.p.rrect(r.0 + r.2 / 2.0 - 2.0, r.1 + r.3 / 2.0 - 30.0, 4.0, 60.0, 2.0, Some(c), None);
+    f.hit_kind((r.0 - 4.0, r.1, r.2 + 8.0, r.3), act, crate::ui::core::HitKind::Slider);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -936,6 +960,13 @@ fn transcribe_stage(f: &mut Frame, app: &App, r: R) {
         strip(f, app, (r.0, r.1 + r.3 - STRIP, r.2, STRIP), &vis, sel, false, &count_line(app, &vis));
         return;
     };
+    // Un audio con la sua onda: l'onda prende tutto il centro, con i comandi d'ascolto e il testo a scelta.
+    if super::onda::applies(app, i) {
+        super::onda::view_toggle(f, app, r.0 + r.2 - 14.0, r.1 + 12.0);
+        super::onda::stage(f, app, i, c);
+        strip(f, app, (r.0, r.1 + r.3 - STRIP, r.2, STRIP), &vis, sel, false, &count_line(app, &vis));
+        return;
+    }
     // In alto il file che si ascolta (con play e posizione), sotto il foglio dove compare il testo.
     let wave_h = (c.3 * 0.3).clamp(150.0, 260.0);
     super::documento::media_card(f, app, i, (c.0, c.1, c.2, wave_h));
@@ -944,14 +975,42 @@ fn transcribe_stage(f: &mut Frame, app: &App, r: R) {
     strip(f, app, (r.0, r.1 + r.3 - STRIP, r.2, STRIP), &vis, sel, false, &count_line(app, &vis));
 }
 
+/// Mette insieme le parole di una stessa voce in frasi lunghe al massimo `chars` caratteri (una riga): si spezza
+/// dove finisce una frase, quando cambia chi parla o dopo una pausa. La riga tiene l'orario della prima parola.
+fn group_phrases(said: &[super::activity::LogLine], chars: usize) -> Vec<super::activity::LogLine> {
+    let mut out: Vec<super::activity::LogLine> = Vec::new();
+    let mut last_t = f64::MIN;
+    for l in said {
+        let t = crate::trascrizione::parse_clock(&l.1);
+        let join = out.last().is_some_and(|g| {
+            g.0 == l.0
+                && g.3 == l.3
+                && !g.2.ends_with(['.', '?', '!', '…'])
+                && g.2.chars().count() + 1 + l.2.chars().count() <= chars
+                && t.zip(Some(last_t)).is_none_or(|(t, p)| t - p <= 4.0)
+        });
+        if join {
+            let g = out.last_mut().expect("riga");
+            g.2.push(' ');
+            g.2.push_str(&l.2);
+        } else {
+            out.push(l.clone());
+        }
+        if let Some(t) = t {
+            last_t = t;
+        }
+    }
+    out
+}
+
 /// Il foglio della trascrizione: le frasi con chi parla mentre arrivano; in fondo lo stato, Rivedi e
 /// Riassunto AI quando il testo è pronto.
-fn paper_box(f: &mut Frame, app: &App, r: R) {
+pub(super) fn paper_box(f: &mut Frame, app: &App, r: R) {
     let pal = f.pal;
     let (deep, _) = colors(app);
     f.p.shadow(r.0, r.1, r.2, r.3, 12.0, 18.0, 0.4, 8.0);
     f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(pal.surface), None);
-    let st_h = 48.0;
+    let st_h = 64.0;
     let text = (r.0, r.1, r.2, r.3 - st_h);
     let lines = super::activity::transcribe_lines(app);
     let said: Vec<_> = lines.iter().filter(|l| l.3.is_some() || l.0 == crate::trascrizione::Tone::Speech).cloned().collect();
@@ -959,7 +1018,15 @@ fn paper_box(f: &mut Frame, app: &App, r: R) {
         let ph = "Il testo compare qui mentre Cedro trascrive, con chi parla. A lavoro finito lo rivedi riascoltando i punti dubbi.";
         f.para(ph, r.0 + 22.0, r.1 + 18.0, r.2 - 44.0, 16.0, SANS, pal.muted, 1.6, 4);
     } else {
-        super::activity::log_box(f, (text.0 + 6.0, text.1 + 6.0, text.2 - 12.0, text.3 - 6.0), &said);
+        // Le parole arrivano una alla volta: si leggono raggruppate in frasi, quante ne stanno in una riga.
+        let chars = (((text.2 - 12.0 - 300.0) / 7.2) as usize).max(30);
+        let said = group_phrases(&said, chars);
+        // Mentre si riascolta il file che sta trascrivendo, la frase che suona è evidenziata (e seguita se suona).
+        let hot = selected(app).filter(|&i| app.files[i].state == FileState::Running).and_then(|i| app.player.as_ref().filter(|p| p.path == app.files[i].path)).and_then(|p| {
+            let pos = p.position();
+            said.iter().rposition(|l| crate::trascrizione::parse_clock(&l.1).is_some_and(|t| t <= pos + 0.05)).map(|k| (k, p.playing()))
+        });
+        super::activity::log_box(f, (text.0 + 6.0, text.1 + 6.0, text.2 - 12.0, text.3 - 6.0), &said, hot);
     }
     f.hline(r.0, r.1 + r.3 - st_h, r.2);
     let sy = r.1 + r.3 - st_h;
@@ -974,21 +1041,23 @@ fn paper_box(f: &mut Frame, app: &App, r: R) {
         f.text(&key, x, sy, 200.0, st_h, 13.5, BOLD, deep);
         x += f.measure(&key, 13.5, BOLD) + 8.0;
     }
-    let right_w = 250.0;
-    f.text(&rest, x, sy, r.0 + r.2 - right_w - x, st_h, 13.5, SANS, pal.muted);
-    // Rivedi e Riassunto AI per il file scelto, se ha una trascrizione.
+    // Rivedi e Riassunto AI per il file scelto, se ha una trascrizione: grandi e colorati, si notano subito.
+    let mut right_w = 24.0;
     if let Some(i) = selected(app) {
         let file = &app.files[i];
         if matches!(file.state, FileState::Done | FileState::Waiting) && crate::revisione::has(&file.path) {
-            let ai_w = if cfg!(target_os = "android") { 0.0 } else { f.measure("Riassunto AI", 13.5, SEMI) + 38.0 };
-            let bx = r.0 + r.2 - 12.0 - ai_w;
+            let ai_w = if cfg!(target_os = "android") { 0.0 } else { f.measure("Riassunto AI", 15.5, SEMI) + 60.0 };
+            let (bh, by) = (44.0, sy + (st_h - 44.0) / 2.0);
+            let bx = r.0 + r.2 - 14.0 - ai_w;
             if ai_w > 0.0 {
-                super::activity::ai_button(f, (bx, sy + 8.0, ai_w, 32.0), 13.5, Act::SummaryOpen(i));
+                super::activity::ai_button(f, (bx, by, ai_w, bh), 15.5, Act::SummaryOpen(i));
             }
-            f.button((bx - 8.0 - 84.0, sy + 8.0, 84.0, 32.0), "Rivedi", None, 13.5, Act::ReviewOpen(i));
+            let rw = 124.0;
+            f.primary((bx - 10.0 - if ai_w > 0.0 { 0.0 } else { -ai_w } - rw, by, rw, bh), "Rivedi", Some(ic::AUDIO), 15.5, Act::ReviewOpen(i), true);
+            right_w = ai_w + rw + 10.0 + 28.0;
         }
     }
-    f.tool(r.0 + r.2 - 12.0 - 90.0 - if selected(app).is_some_and(|i| crate::revisione::has(&app.files[i].path)) { 260.0 } else { 0.0 }, sy + 8.0, 32.0, "Copia", ic::COPY, 13.5, Act::CopyLog, !lines.is_empty());
+    f.text(&rest, x, sy, (r.0 + r.2 - right_w - x).max(40.0), st_h, 13.5, SANS, pal.muted);
 }
 
 fn transcribe_panel(f: &mut Frame, app: &App, r: R) {
@@ -1015,8 +1084,8 @@ fn transcribe_panel(f: &mut Frame, app: &App, r: R) {
         }
         cy += f.para("Il modello si scarica al primo uso e poi resta sul PC.", x, cy + 2.0, w, 14.0, SANS, pal.muted, 1.4, 2) + 14.0;
         if app.busy() && app.activity == Activity::Transcribe {
-            super::activity::transcribe_progress(f, app, (x, cy, w, super::activity::PROGRESS_H));
-            cy += super::activity::PROGRESS_H + 14.0;
+            super::activity::transcribe_progress(f, app, (x, cy, w, super::activity::PROGRESS_H_CEDRO));
+            cy += super::activity::PROGRESS_H_CEDRO + 14.0;
         }
         cy - top + 18.0
     });
