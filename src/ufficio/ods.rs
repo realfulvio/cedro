@@ -25,7 +25,7 @@ pub fn length(s: &str) -> Option<f32> {
     })
 }
 
-fn color(s: &str) -> Option<Rgb> {
+pub(super) fn color(s: &str) -> Option<Rgb> {
     if s == "transparent" {
         return None;
     }
@@ -33,7 +33,7 @@ fn color(s: &str) -> Option<Rgb> {
 }
 
 /// «0.74pt solid #000000» → bordo.
-fn border(s: &str) -> Option<Bordo> {
+pub(super) fn border(s: &str) -> Option<Bordo> {
     let mut width = 0.5;
     let mut dash = Dash::Solid;
     let mut double = false;

@@ -44,6 +44,8 @@ struct Frag {
     note: Option<usize>,
     /// 1 numero di pagina, 2 totale (nel corpo: segnaposto).
     field: u8,
+    /// Dopo c'è un trattino facoltativo: se la riga va a capo qui, il trattino si vede.
+    shy: bool,
 }
 
 struct Prep<'a> {
@@ -76,6 +78,9 @@ struct Line {
     leaders: Vec<(f32, f32, char, usize)>,
     asc: f32,
     desc: f32,
+    /// Le misure del solo testo (senza immagini), per l'interlinea alla Writer.
+    t_asc: f32,
+    t_desc: f32,
     end: usize,
     kind: End,
 }
@@ -319,7 +324,7 @@ impl<'a> Impaginatore<'a> {
                     return;
                 }
                 let w = me.fonts.width(id, word, size) + font.spacing * word.chars().count() as f32;
-                out.push(Frag { k: K::Word, text: std::mem::take(word), font: id, size, rise, asc: a + rise, desc: d - rise, w, style, link: link.clone(), brk_after: brk, note, field });
+                out.push(Frag { k: K::Word, text: std::mem::take(word), font: id, size, rise, asc: a + rise, desc: d - rise, w, style, link: link.clone(), brk_after: brk, note, field, shy: false });
             };
             for c in seg.chars() {
                 match c {
@@ -327,17 +332,23 @@ impl<'a> Impaginatore<'a> {
                         flush(self, out, &mut word, false);
                         let t = if c == '\u{200B}' { String::new() } else { c.to_string() };
                         let w = if t.is_empty() { 0.0 } else { self.fonts.width(id, &t, size) + font.spacing };
-                        out.push(Frag { k: K::Space, text: t, font: id, size, rise, asc: a + rise, desc: d - rise, w, style, link: link.clone(), brk_after: true, note: None, field: 0 });
+                        out.push(Frag { k: K::Space, text: t, font: id, size, rise, asc: a + rise, desc: d - rise, w, style, link: link.clone(), brk_after: true, note: None, field: 0, shy: false });
                     }
                     '\t' => {
                         flush(self, out, &mut word, false);
-                        out.push(Frag { k: K::Tab, text: String::new(), font: id, size, rise: 0.0, asc: a, desc: d, w: 0.0, style, link: None, brk_after: true, note: None, field: 0 });
+                        out.push(Frag { k: K::Tab, text: String::new(), font: id, size, rise: 0.0, asc: a, desc: d, w: 0.0, style, link: None, brk_after: true, note: None, field: 0, shy: false });
                     }
                     '\n' | '\u{2028}' => {
                         flush(self, out, &mut word, false);
-                        out.push(Frag { k: K::ACapo, text: String::new(), font: id, size, rise: 0.0, asc: a, desc: d, w: 0.0, style, link: None, brk_after: true, note: None, field: 0 });
+                        out.push(Frag { k: K::ACapo, text: String::new(), font: id, size, rise: 0.0, asc: a, desc: d, w: 0.0, style, link: None, brk_after: true, note: None, field: 0, shy: false });
                     }
-                    '\u{AD}' | '\r' => {}
+                    '\u{AD}' => {
+                        flush(self, out, &mut word, true);
+                        if let Some(f) = out.last_mut() {
+                            f.shy = f.k == K::Word;
+                        }
+                    }
+                    '\r' => {}
                     '-' | '\u{2010}' | '\u{2013}' | '\u{2014}' | '/' if !word.is_empty() && c != '/' => {
                         word.push(c);
                         flush(self, out, &mut word, true);
@@ -368,7 +379,7 @@ impl<'a> Impaginatore<'a> {
             let simple = |k: K, me: &mut Self, frags: &mut Vec<Frag>| {
                 let id = me.font_id(&r.font);
                 let (a, d) = me.face_metrics(id, r.font.size.max(1.0));
-                frags.push(Frag { k, text: String::new(), font: id, size: r.font.size, rise: 0.0, asc: a, desc: d, w: 0.0, style, link: None, brk_after: true, note: None, field: 0 });
+                frags.push(Frag { k, text: String::new(), font: id, size: r.font.size, rise: 0.0, asc: a, desc: d, w: 0.0, style, link: None, brk_after: true, note: None, field: 0, shy: false });
             };
             match &r.pezzo {
                 Pezzo::Testo(t) => self.push_text(&mut frags, t, &r.font, style, &r.link, None, 0),
@@ -378,7 +389,7 @@ impl<'a> Impaginatore<'a> {
                 Pezzo::SaltoColonna => simple(K::Colonna, self, &mut frags),
                 Pezzo::Immagine { img, w: iw, h: ih } => {
                     let id = self.font_id(&r.font);
-                    frags.push(Frag { k: K::Img(*img, *iw, *ih), text: String::new(), font: id, size: r.font.size, rise: 0.0, asc: *ih, desc: 0.0, w: *iw, style, link: r.link.clone(), brk_after: true, note: None, field: 0 });
+                    frags.push(Frag { k: K::Img(*img, *iw, *ih), text: String::new(), font: id, size: r.font.size, rise: 0.0, asc: *ih, desc: 0.0, w: *iw, style, link: r.link.clone(), brk_after: true, note: None, field: 0, shy: false });
                 }
                 Pezzo::Nota(i) => {
                     let n = self.doc.note.get(*i).map(|n| n.0.clone()).unwrap_or_default();
@@ -562,6 +573,17 @@ impl<'a> Impaginatore<'a> {
                     if x + fr.w > right + 0.01 && seg.is_none() {
                         if let Some((n, j)) = last_break.filter(|(n, _)| *n > content_start) {
                             items.truncate(n);
+                            // A capo su un trattino facoltativo: il trattino si scrive.
+                            if let Some((last, lx)) = items.last().cloned() {
+                                if last.shy {
+                                    let mut h = last.clone();
+                                    h.text = "-".into();
+                                    h.note = None;
+                                    h.w = self.fonts.width(h.font, "-", h.size);
+                                    items.push((h, lx + last.w));
+                                    x = lx + last.w + self.fonts.width(last.font, "-", last.size);
+                                }
+                            }
                             i = j;
                             kind = End::Soft;
                             break;
@@ -590,9 +612,12 @@ impl<'a> Impaginatore<'a> {
                                 a.w = acc;
                                 b.w = (fr.w - acc).max(0.0);
                                 a.brk_after = true;
-                                self.preps[pi].frags[i] = b;
+                                // Due pezzi: la riga dopo riparte dal secondo (l'indice avanza).
+                                self.preps[pi].frags[i] = a.clone();
+                                self.preps[pi].frags.insert(i + 1, b);
                                 items.push((a, x));
                                 x += acc;
+                                i += 1;
                                 kind = End::Soft;
                                 break;
                             }
@@ -611,17 +636,25 @@ impl<'a> Impaginatore<'a> {
         // Misure della riga.
         let mut asc: f32 = 0.0;
         let mut desc: f32 = 0.0;
+        let (mut t_asc, mut t_desc): (f32, f32) = (0.0, 0.0);
         for (f, _) in &items {
             if f.k == K::Tab && f.w == 0.0 {
                 continue;
             }
             asc = asc.max(f.asc);
             desc = desc.max(f.desc);
+            if !matches!(f.k, K::Img(..)) {
+                t_asc = t_asc.max(f.asc);
+                t_desc = t_desc.max(f.desc);
+            }
         }
         let p = &self.preps[pi];
         if items.is_empty() || kind == End::Last {
             asc = asc.max(p.end_asc);
             desc = desc.max(p.end_desc);
+        }
+        if t_asc + t_desc <= 0.0 {
+            (t_asc, t_desc) = (p.end_asc, p.end_desc);
         }
         // Allineamento: gli spazi in fondo non contano.
         let mut used_end = x;
@@ -654,7 +687,7 @@ impl<'a> Impaginatore<'a> {
             }
             _ => {}
         }
-        Line { items, leaders, asc, desc, end: i, kind }
+        Line { items, leaders, asc, desc, t_asc, t_desc, end: i, kind }
     }
 
     /// L'altezza della riga e la posizione della linea di base dentro di lei.
@@ -662,6 +695,11 @@ impl<'a> Impaginatore<'a> {
         let natural = l.asc + l.desc;
         match par.interlinea {
             // Lo spazio in più va sotto il testo; con meno di una riga si taglia sopra.
+            // Writer: il multiplo vale per il testo, un'immagine più alta conta per quel che è.
+            Interlinea::Multipla(m) if par.interlinea_testo && l.asc + l.desc > l.t_asc + l.t_desc => {
+                let h = ((l.t_asc + l.t_desc) * m.max(0.06)).max(natural);
+                (h, l.asc)
+            }
             Interlinea::Multipla(m) => {
                 let h = natural * m.max(0.06);
                 (h, if h >= natural { l.asc } else { h - l.desc })
@@ -972,6 +1010,14 @@ impl<'a> Impaginatore<'a> {
         let ncols = t.griglia.len().max(1);
         let mut grid = t.griglia.clone();
         grid.resize(ncols, 72.0);
+        if let Some(f) = t.relativa {
+            // Griglia in proporzione: la tabella prende la sua parte dello spazio tra i margini.
+            let avail = (w - t.rientro.max(0.0)).max(10.0) * f;
+            let sum: f32 = grid.iter().sum::<f32>().max(0.001);
+            for g in grid.iter_mut() {
+                *g = *g / sum * avail;
+            }
+        }
         let total: f32 = grid.iter().sum();
         let first_ml = t.righe.first().and_then(|r| r.celle.iter().find(|c| c.span > 0)).map_or(5.4, |c| c.margini[0]);
         let x0 = match t.allinea {

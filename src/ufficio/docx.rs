@@ -1421,7 +1421,7 @@ impl<'z> Ctx<'z> {
         if righe.is_empty() {
             return None;
         }
-        Some(Tabella { griglia, righe, allinea, rientro, bordo_h: None, bordo_v: None })
+        Some(Tabella { griglia, righe, allinea, rientro, bordo_h: None, bordo_v: None, relativa: None })
     }
 
     /// Le intestazioni o i piè di una sezione, letti dalle loro parti.
