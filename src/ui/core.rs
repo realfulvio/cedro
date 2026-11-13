@@ -578,6 +578,11 @@ impl<'a> Frame<'a> {
         self.p.fill(x, y, 1.0, h, self.pal.border);
     }
 
+    /// La larghezza di un pulsante con icona che contiene il testo (anche tradotto), non meno di `min`.
+    pub fn btn_w(&self, label: &str, size: f32, min: f32) -> f32 {
+        (self.measure(label, size, SEMI) + (size * 1.35).round() + 14.0 + 36.0).ceil().max(min)
+    }
+
     /// Il pulsante principale: pieno del colore del tema, con un'icona a sinistra del testo.
     pub fn primary(&mut self, r: R, label: &str, icon: Option<&str>, size: f32, act: Act, enabled: bool) {
         let pal = self.pal;
@@ -589,6 +594,7 @@ impl<'a> Frame<'a> {
         } else {
             self.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(mix(pal.primary, pal.surface, 0.55)), None);
         }
+        let size = self.p.fit_size(label, size, SEMI, r.2 - 24.0 - if icon.is_some() { (size * 1.35).round() + 14.0 } else { 0.0 });
         let isz = (size * 1.35).round();
         let tw = self.measure(label, size, SEMI);
         let total = tw + if icon.is_some() { isz + 14.0 } else { 0.0 };
@@ -612,6 +618,7 @@ impl<'a> Frame<'a> {
         let ip = self.icon_t(&act, true);
         let rb = Self::pressed_rect(r, press);
         self.p.rrect(rb.0, rb.1, rb.2, rb.3, 8.0, Some(mix(pal.surface, pal.alt, t)), Some((pal.border, 1.0)));
+        let size = self.p.fit_size(label, size, SANS, r.2 - 24.0 - if icon.is_some() { (size * 1.3).round() + 10.0 } else { 0.0 });
         let isz = (size * 1.3).round();
         let tw = self.measure(label, size, SANS);
         let total = tw + if icon.is_some() { isz + 10.0 } else { 0.0 };
