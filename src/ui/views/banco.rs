@@ -285,11 +285,16 @@ pub fn draw(f: &mut Frame, app: &App) {
     let foot_y = f.h - FOOT;
     if simple {
         let y = BAR + 34.0;
-        f.text("Converti in", 30.0, y + 8.0, 150.0, 56.0, 21.0, SANS, pal.text);
+        // Larghezze dal testo tradotto: «Convertir en», «Konvertieren in», «Converter para» sono più lunghi di «Converti in».
+        let lw = f.measure("Converti in", 21.0, SANS).ceil() + 14.0;
+        let sx = (30.0 + lw).max(164.0);
+        f.text("Converti in", 30.0, y + 8.0, lw, 56.0, 21.0, SANS, pal.text);
         let title = super::action_title(app, true);
-        f.select_voce((164.0, y + 2.0, 264.0, 56.0), &title, app.action_voce(), 19.0, Act::FormatMenu);
-        f.button((446.0, y + 2.0, 230.0, 58.0), "Aggiungi file", Some(ic::ADD), 20.0, Act::AddFiles);
-        super::notice(f, app, (700.0, y + 4.0, (f.w - 700.0 - 450.0).max(120.0), 54.0), 15.0);
+        f.select_voce((sx, y + 2.0, 264.0, 56.0), &title, app.action_voce(), 19.0, Act::FormatMenu);
+        let bx = sx + 264.0 + 18.0;
+        f.button((bx, y + 2.0, 230.0, 58.0), "Aggiungi file", Some(ic::ADD), 20.0, Act::AddFiles);
+        let nx = bx + 230.0 + 24.0;
+        super::notice(f, app, (nx, y + 4.0, (f.w - nx - 450.0).max(120.0), 54.0), 15.0);
         super::essenziale::mode_switch(f, (f.w - 440.0, y - 6.0, 420.0, 62.0));
         let top = y + 100.0;
         table(f, app, (30.0, top, f.w - 60.0, foot_y - top - 30.0), true);
