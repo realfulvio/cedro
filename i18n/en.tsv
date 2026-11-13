@@ -2439,3 +2439,16 @@ Scrive le foto WebP.	Writes WebP photos.
 BSD-2-Clause o MIT	BSD-2-Clause or MIT
 BSD-3-Clause o BSD-2-Clause	BSD-3-Clause or BSD-2-Clause
 The OpenReadout Authors (da jxrlib di Microsoft), Moritz Borcherding	The OpenReadout Authors (from Microsoft jxrlib), Moritz Borcherding
+documento di Word 1 o 2 per Windows: formato troppo vecchio	Word 1 or 2 for Windows document: format too old
+documento di Word troppo vecchio	Word document too old
+il documento è protetto da password	the document is password-protected
+il file .doc è rovinato e non si può leggere	the .doc file is damaged and cannot be read
+il file Excel è protetto da password: aprilo e salvalo senza	the Excel file is password-protected: open it and save it without one
+il file contiene una DTD, che Cedro non apre per sicurezza	the file contains a DTD, which Cedro does not open for safety
+il file non è un RTF	the file is not an RTF
+il file non è un documento Word leggibile	the file is not a readable Word document
+il file non è un documento di Writer leggibile	the file is not a readable Writer document
+il file non è un foglio Excel leggibile	the file is not a readable Excel sheet
+il foglio di calcolo è vuoto: non c'è niente da stampare	the spreadsheet is empty: there is nothing to print
+non è un documento di Word	not a Word document
+documento senza testo	document without text

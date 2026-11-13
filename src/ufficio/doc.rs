@@ -2153,7 +2153,11 @@ fn tabella(righe: Vec<(Tap, Vec<Vec<Blocco>>)>) -> Option<Tabella> {
 }
 
 pub fn leggi_doc(bytes: &[u8]) -> Result<Documento, String> {
-    let mut cf = super::apri_ole(bytes).map_err(|e| format!("DOC non letto: {e}"))?;
+    if bytes.len() >= 2 && matches!(u16_at(bytes, 0), 0xA59B | 0xA59C | 0xA5DB) {
+        // Word 1 e 2 per Windows: niente contenitore OLE, il FIB sta in testa al file.
+        return Err("documento di Word 1 o 2 per Windows: formato troppo vecchio".into());
+    }
+    let mut cf = super::apri_ole(bytes).map_err(|_| "il file .doc è rovinato e non si può leggere".to_string())?;
     let mut leggi = |nome: &str| -> Option<Vec<u8>> {
         let mut v = Vec::new();
         cf.open_stream(nome).ok()?.read_to_end(&mut v).ok()?;
@@ -2163,7 +2167,7 @@ pub fn leggi_doc(bytes: &[u8]) -> Result<Documento, String> {
     let ident = u16_at(&word, 0);
     let w6 = ident == 0xA5DC && word.len() >= 0x200;
     if word.len() < 0x200 || (ident != 0xA5EC && !w6) {
-        return Err(if ident == 0xA59B || ident == 0xA59C { "documento di Word 2 per Windows: formato troppo vecchio".into() } else { "non è un documento di Word".into() });
+        return Err(if ident == 0xA59B || ident == 0xA59C { "documento di Word 1 o 2 per Windows: formato troppo vecchio".into() } else { "non è un documento di Word".into() });
     }
     let n_fib = u16_at(&word, 2);
     let flags = u16_at(&word, 0x0A);
@@ -2421,5 +2425,7 @@ mod test {
     #[test]
     fn rifiuta_file_non_word() {
         assert!(leggi_doc(b"non sono un doc").is_err());
+        let e = leggi_doc(&[0xDB, 0xA5, 0x2D, 0, 0x31, 0x40, 9, 4]).err().unwrap();
+        assert!(e.contains("Word 1 o 2"), "{e}");
     }
 }
