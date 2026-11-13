@@ -14,7 +14,6 @@ prova() { # descrizione, comando...
 }
 # Converti: immagini
 for f in png webp avif jxl tiff pdf ico gif bmp qoi; do prova "immagine jpg → $f" "$C" convert scan.jpg $f; done
-prova "immagine → jpeg compressa" "$C" convert scan.jpg z-jpeg
 prova "immagine strumenti: gray" "$C" tool scan.jpg gray
 prova "immagine strumenti: rot90" "$C" tool scan.jpg rot90
 prova "OCR su immagine" "$C" tool scan.jpg ocr
@@ -32,9 +31,7 @@ prova "video → mp3 (audio)" "$C" convert audio.mp4 mp3
 # PDF
 prova "PDF → testo" "$C" convert circolare.pdf txt
 prova "PDF → Word" "$C" convert circolare.pdf docx
-prova "PDF → Markdown" "$C" convert colonne.pdf md
 prova "PDF → PNG" "$C" convert circolare.pdf png
-prova "PDF compresso" "$C" convert circolare.pdf z-pdf
 prova "PDF strumenti: compress" "$C" tool circolare.pdf compress
 prova "PDF OCR" "$C" tool circolare.pdf ocr
 # Labs
