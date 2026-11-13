@@ -192,7 +192,7 @@ fn preview(f: &mut Frame, app: &App, r: R) {
 const CONTROLS: f32 = 52.0;
 
 /// Il triangolo del Play o le due stanghette della pausa, centrati in (cx, cy).
-fn play_glyph(f: &mut Frame, cx: f32, cy: f32, r: f32, c: crate::ui::gfx::Rgb, pause: bool) {
+pub(super) fn play_glyph(f: &mut Frame, cx: f32, cy: f32, r: f32, c: crate::ui::gfx::Rgb, pause: bool) {
     if pause {
         f.p.fill(cx - r * 0.7, cy - r * 0.8, r * 0.5, r * 1.6, c);
         f.p.fill(cx + r * 0.2, cy - r * 0.8, r * 0.5, r * 1.6, c);

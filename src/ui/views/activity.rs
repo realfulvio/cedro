@@ -126,6 +126,17 @@ pub(super) fn job_row(f: &mut Frame, r: R, title: &str, sub: &str, state: FileSt
 
 /// Altezza del riquadro dell'avanzamento della trascrizione.
 pub(super) const PROGRESS_H: f32 = 112.0;
+/// Nelle pagine Cedro la spia della scheda video sta già in alto: il riquadro è più basso.
+pub(super) const PROGRESS_H_CEDRO: f32 = 92.0;
+
+/// «Trascrive · file 1 di 7», già tradotto: cosa sta facendo Cedro, per la riga sotto il pulsante.
+pub(super) fn transcribe_what(app: &App) -> String {
+    let total = app.job.as_ref().map(|j| j.total).unwrap_or(1);
+    let done = app.job.as_ref().map(|j| j.done).unwrap_or(0);
+    let what = if app.transcribe.percent == 0 { "Si prepara" } else { "Trascrive" };
+    let text = if total > 1 { format!("{what} · file {} di {total}", (done + 1).min(total)) } else { what.to_string() };
+    crate::i18n::tr_string(&text)
+}
 
 /// Il riquadro dell'avanzamento mentre trascrive: percentuale grande, su cosa lavora (solo il modello
 /// della scheda video, o il processore), barra e tempo che resta. Va sopra il pulsante Annulla.
@@ -145,9 +156,11 @@ pub(super) fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
     let what = if p <= 0.0 { "Si prepara" } else { "Trascrive" };
     let what = if total > 1 { format!("{what} · file {} di {total}", (done + 1).min(total)) } else { what.to_string() };
     let tw = w - pw - 16.0;
-    f.text(&what, x, r.1 + 12.0, tw, 24.0, 15.0, SEMI, pal.text);
+    // Nelle pagine Cedro il titolo è fisso: cosa fa Cedro sta sotto il pulsante e la scheda video in alto.
+    let cedro = f.theme.is_cedro();
+    f.text(if cedro { "Trascrizione in corso" } else { &what }, x, r.1 + 12.0, tw, 24.0, 15.0, SEMI, pal.text);
     // …e sotto, la spia: il modello della scheda video (o il processore) col puntino del suo colore.
-    if let Some(u) = app.spia() {
+    if let (false, Some(u)) = (cedro, app.spia()) {
         let (label, dot) = if u.gpu { (u.detail, accent) } else { (format!("Processore · {}", u.detail.rsplit(" · ").next().unwrap_or_default()), pal.ok) };
         let cy = r.1 + 36.0 + 11.0;
         f.p.disc_a(x + 4.0, cy, 6.5, dot, 0.2);
@@ -155,7 +168,7 @@ pub(super) fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
         f.text(&label, x + 16.0, r.1 + 36.0, tw - 16.0, 22.0, 13.5, SANS, pal.muted);
     }
     // La barra: binario chiaro, riempimento col colore del tema, un filo di luce in alto e la testa chiara.
-    let (by, bh) = (r.1 + 66.0, 12.0);
+    let (by, bh) = (r.1 + if cedro { 46.0 } else { 66.0 }, 12.0);
     f.p.rrect(x, by, w, bh, bh / 2.0, Some(mix(accent, pal.surface, 0.80)), None);
     let fw = (w * p / 100.0).max(if p > 0.0 { bh } else { 0.0 });
     if fw > 0.0 {
@@ -182,7 +195,7 @@ pub(super) fn transcribe_progress(f: &mut Frame, app: &App, r: R) {
     } else {
         app.transcribe_left().map(|t| format!("Restano {t}")).unwrap_or_else(|| "Calcolo il tempo che resta…".into())
     };
-    f.text(&left, x, r.1 + 84.0, w, 22.0, 13.5, SANS, pal.muted);
+    f.text(&left, x, r.1 + if cedro { 64.0 } else { 84.0 }, w, 22.0, 13.5, SANS, pal.muted);
 }
 
 /// Il pulsante principale delle pagine: avvia, oppure annulla il lavoro in corso.

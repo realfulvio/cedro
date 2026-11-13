@@ -105,7 +105,7 @@ impl Screen {
         }
         Screen {
             app,
-            ui: UiState::default(),
+            ui: UiState { side_w: (s.side_w > 0).then_some(s.side_w as f32), ..UiState::default() },
             theme,
             simple: s.simple,
             surface,
@@ -162,6 +162,7 @@ impl Screen {
         self.cache.trim(scale);
         let painter = Painter::new(w, h, scale, fonts, &mut self.cache);
         let ms = self.started.elapsed().as_millis() as u64;
+        self.ui.frame_w = w as f32 / scale;
         let mut f = Frame {
             p: painter,
             hits: Vec::new(),
@@ -419,6 +420,13 @@ impl Screen {
                     self.app.media_seek(frac);
                 }
             }
+            if act == Act::SideGrip {
+                if let Some(w) = self.ui.side_w {
+                    let mut st = crate::read_settings();
+                    st.side_w = w.round().clamp(0.0, 2000.0) as u16;
+                    let _ = crate::write_settings(&st);
+                }
+            }
             if act == Act::ReviewSeek {
                 if let Some(frac) = self.app.review_scrub.take() {
                     self.app.review_seek(frac);
@@ -600,6 +608,8 @@ impl Screen {
             Act::Quality => self.app.quality = (40.0 + frac * 55.0).round() as u8,
             Act::MediaSeek => self.app.media_scrub = Some(frac),
             Act::ReviewSeek => self.app.review_scrub = Some(frac),
+            Act::MediaVolume => self.app.set_play_volume(frac),
+            Act::SideGrip => self.ui.side_w = Some((self.ui.frame_w - views::SIDE_RIGHT - x).max(0.0)),
             Act::OptSlider(opt) => {
                 if let Some(def) = self.app.option_defs().into_iter().find(|d| d.opt == *opt) {
                     if let Control::Range { min, max, .. } = def.control {
@@ -824,7 +834,10 @@ impl Screen {
                     app.cuts.clear();
                 }
             }
-            Act::OptSlider(_) | Act::Quality | Act::MediaSeek | Act::ReviewSeek => {}
+            Act::OptSlider(_) | Act::Quality | Act::MediaSeek | Act::MediaVolume | Act::SideGrip | Act::ReviewSeek => {}
+            Act::MediaSkip(d) => app.media_skip(d),
+            Act::MediaSpeed(k) => app.set_play_speed(k),
+            Act::TrView(v) => app.tr_view = v.min(2),
             Act::ReviewOpen(i) => app.review_open(i),
             Act::ReviewClose => app.review_close(),
             Act::ReviewPlay => app.review_toggle(),
