@@ -165,12 +165,23 @@ fn err(e: impl std::fmt::Display) -> String {
     format!("vetrino non letto: {e}")
 }
 
+/// I limiti del lettore TIFF. I vetrini grandi hanno centinaia di migliaia di tessere e l'elenco degli
+/// indirizzi supera i limiti di partenza (1 MB), ma «senza limiti» faceva chiedere centinaia di GB a un
+/// file rovinato che dichiara un valore enorme (e Cedro si chiudeva): un valore non può essere più
+/// grande del file, e nessuna immagine o striscia si apre oltre i 4 GB.
+pub(crate) fn tiff_limits(file_len: u64) -> Limits {
+    let mut limits = Limits::unlimited();
+    limits.ifd_value_size = file_len.min(1 << 30) as usize;
+    limits.decoding_buffer_size = 4 << 30;
+    limits
+}
+
 fn decoder(path: &Path) -> Result<Decoder<BufReader<File>>, String> {
     let file = File::open(path).map_err(|e| e.to_string())?;
-    // I vetrini grandi hanno centinaia di migliaia di tessere: l'elenco degli indirizzi supera i limiti di partenza.
+    let len = file.metadata().map_err(|e| e.to_string())?.len();
     Ok(Decoder::new(BufReader::new(file))
         .map_err(err)?
-        .with_limits(Limits::unlimited()))
+        .with_limits(tiff_limits(len)))
 }
 
 /// I primi byte dicono TIFF o BigTIFF.
@@ -1397,6 +1408,13 @@ mod prove_revisione {
 
     fn fixture(name: &str) -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/svs").join(name)
+    }
+
+    #[test]
+    fn un_valore_di_un_tag_grande_quanto_la_memoria_e_un_errore_non_un_abort() {
+        // Trovato rovinando a caso un SVS: un tag che dichiara un valore di 1 TB faceva chiudere Cedro.
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/svs-rovinato.svs");
+        let _ = Slide::open(&p);
     }
 
     #[test]
