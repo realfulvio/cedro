@@ -56,6 +56,13 @@ pub fn fine(nome: &str) {
     }
 }
 
+/// Toglie qualunque stato (anche un errore): per le foto della finestra.
+pub fn azzera() {
+    if let Ok(mut g) = ORA.lock() {
+        *g = None;
+    }
+}
+
 pub fn attuale() -> Option<Stato> {
     let mut g = ORA.lock().ok()?;
     if matches!(g.as_ref(), Some(s) if s.fase == Fase::Errore && s.da.elapsed() > ERRORE_PER) {
