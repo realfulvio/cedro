@@ -975,6 +975,34 @@ fn transcribe_stage(f: &mut Frame, app: &App, r: R) {
     strip(f, app, (r.0, r.1 + r.3 - STRIP, r.2, STRIP), &vis, sel, false, &count_line(app, &vis));
 }
 
+/// Mette insieme le parole di una stessa voce in frasi lunghe al massimo `chars` caratteri (una riga): si spezza
+/// dove finisce una frase, quando cambia chi parla o dopo una pausa. La riga tiene l'orario della prima parola.
+fn group_phrases(said: &[super::activity::LogLine], chars: usize) -> Vec<super::activity::LogLine> {
+    let mut out: Vec<super::activity::LogLine> = Vec::new();
+    let mut last_t = f64::MIN;
+    for l in said {
+        let t = crate::trascrizione::parse_clock(&l.1);
+        let join = out.last().is_some_and(|g| {
+            g.0 == l.0
+                && g.3 == l.3
+                && !g.2.ends_with(['.', '?', '!', '…'])
+                && g.2.chars().count() + 1 + l.2.chars().count() <= chars
+                && t.zip(Some(last_t)).is_none_or(|(t, p)| t - p <= 4.0)
+        });
+        if join {
+            let g = out.last_mut().expect("riga");
+            g.2.push(' ');
+            g.2.push_str(&l.2);
+        } else {
+            out.push(l.clone());
+        }
+        if let Some(t) = t {
+            last_t = t;
+        }
+    }
+    out
+}
+
 /// Il foglio della trascrizione: le frasi con chi parla mentre arrivano; in fondo lo stato, Rivedi e
 /// Riassunto AI quando il testo è pronto.
 pub(super) fn paper_box(f: &mut Frame, app: &App, r: R) {
@@ -982,7 +1010,7 @@ pub(super) fn paper_box(f: &mut Frame, app: &App, r: R) {
     let (deep, _) = colors(app);
     f.p.shadow(r.0, r.1, r.2, r.3, 12.0, 18.0, 0.4, 8.0);
     f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(pal.surface), None);
-    let st_h = 48.0;
+    let st_h = 64.0;
     let text = (r.0, r.1, r.2, r.3 - st_h);
     let lines = super::activity::transcribe_lines(app);
     let said: Vec<_> = lines.iter().filter(|l| l.3.is_some() || l.0 == crate::trascrizione::Tone::Speech).cloned().collect();
@@ -990,7 +1018,15 @@ pub(super) fn paper_box(f: &mut Frame, app: &App, r: R) {
         let ph = "Il testo compare qui mentre Cedro trascrive, con chi parla. A lavoro finito lo rivedi riascoltando i punti dubbi.";
         f.para(ph, r.0 + 22.0, r.1 + 18.0, r.2 - 44.0, 16.0, SANS, pal.muted, 1.6, 4);
     } else {
-        super::activity::log_box(f, (text.0 + 6.0, text.1 + 6.0, text.2 - 12.0, text.3 - 6.0), &said);
+        // Le parole arrivano una alla volta: si leggono raggruppate in frasi, quante ne stanno in una riga.
+        let chars = (((text.2 - 12.0 - 300.0) / 7.2) as usize).max(30);
+        let said = group_phrases(&said, chars);
+        // Mentre si riascolta il file che sta trascrivendo, la frase che suona è evidenziata (e seguita se suona).
+        let hot = selected(app).filter(|&i| app.files[i].state == FileState::Running).and_then(|i| app.player.as_ref().filter(|p| p.path == app.files[i].path)).and_then(|p| {
+            let pos = p.position();
+            said.iter().rposition(|l| crate::trascrizione::parse_clock(&l.1).is_some_and(|t| t <= pos + 0.05)).map(|k| (k, p.playing()))
+        });
+        super::activity::log_box(f, (text.0 + 6.0, text.1 + 6.0, text.2 - 12.0, text.3 - 6.0), &said, hot);
     }
     f.hline(r.0, r.1 + r.3 - st_h, r.2);
     let sy = r.1 + r.3 - st_h;
@@ -1005,21 +1041,23 @@ pub(super) fn paper_box(f: &mut Frame, app: &App, r: R) {
         f.text(&key, x, sy, 200.0, st_h, 13.5, BOLD, deep);
         x += f.measure(&key, 13.5, BOLD) + 8.0;
     }
-    let right_w = 250.0;
-    f.text(&rest, x, sy, r.0 + r.2 - right_w - x, st_h, 13.5, SANS, pal.muted);
-    // Rivedi e Riassunto AI per il file scelto, se ha una trascrizione.
+    // Rivedi e Riassunto AI per il file scelto, se ha una trascrizione: grandi e colorati, si notano subito.
+    let mut right_w = 24.0;
     if let Some(i) = selected(app) {
         let file = &app.files[i];
         if matches!(file.state, FileState::Done | FileState::Waiting) && crate::revisione::has(&file.path) {
-            let ai_w = if cfg!(target_os = "android") { 0.0 } else { f.measure("Riassunto AI", 13.5, SEMI) + 38.0 };
-            let bx = r.0 + r.2 - 12.0 - ai_w;
+            let ai_w = if cfg!(target_os = "android") { 0.0 } else { f.measure("Riassunto AI", 15.5, SEMI) + 60.0 };
+            let (bh, by) = (44.0, sy + (st_h - 44.0) / 2.0);
+            let bx = r.0 + r.2 - 14.0 - ai_w;
             if ai_w > 0.0 {
-                super::activity::ai_button(f, (bx, sy + 8.0, ai_w, 32.0), 13.5, Act::SummaryOpen(i));
+                super::activity::ai_button(f, (bx, by, ai_w, bh), 15.5, Act::SummaryOpen(i));
             }
-            f.button((bx - 8.0 - 84.0, sy + 8.0, 84.0, 32.0), "Rivedi", None, 13.5, Act::ReviewOpen(i));
+            let rw = 124.0;
+            f.primary((bx - 10.0 - if ai_w > 0.0 { 0.0 } else { -ai_w } - rw, by, rw, bh), "Rivedi", Some(ic::AUDIO), 15.5, Act::ReviewOpen(i), true);
+            right_w = ai_w + rw + 10.0 + 28.0;
         }
     }
-    f.tool(r.0 + r.2 - 12.0 - 90.0 - if selected(app).is_some_and(|i| crate::revisione::has(&app.files[i].path)) { 260.0 } else { 0.0 }, sy + 8.0, 32.0, "Copia", ic::COPY, 13.5, Act::CopyLog, !lines.is_empty());
+    f.text(&rest, x, sy, (r.0 + r.2 - right_w - x).max(40.0), st_h, 13.5, SANS, pal.muted);
 }
 
 fn transcribe_panel(f: &mut Frame, app: &App, r: R) {

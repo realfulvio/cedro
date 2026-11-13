@@ -174,16 +174,34 @@ fn controls(f: &mut Frame, app: &App, r: R, playing: bool, pos: f64, duration: f
             f.hit((c.0 - 30.0, c.1 - 30.0, 60.0, 60.0), act);
             cx += 54.0 + 10.0;
         }
-        let b = (cx, cy - 21.0, 66.0, 42.0);
+        let b = (cx, cy - 21.0, 62.0, 42.0);
         let act = Act::MediaSkip(secs);
         let h = f.hover_t(&act, true);
         f.p.rrect_a(b.0, b.1, b.2, b.3, 12.0, WHITE, 0.1 + 0.08 * h);
         f.text_c(label, b, 14.0, BOLD, STAGE_INK);
         f.focus_ring(b, 12.0, &act);
         f.hit(b, act);
-        cx += 66.0 + 10.0;
+        cx += 62.0 + 8.0;
     }
-    cx += 8.0;
+    // Alla frase prima o dopo (se il file ha già delle frasi con gli orari).
+    for dir in [-1, 1] {
+        let b = (cx, cy - 21.0, 42.0, 42.0);
+        let act = Act::MediaPhrase(dir);
+        let h = f.hover_t(&act, true);
+        f.p.rrect_a(b.0, b.1, b.2, b.3, 12.0, WHITE, 0.1 + 0.08 * h);
+        let (gx, gy, g) = (b.0 + 21.0, cy, 7.0);
+        if dir < 0 {
+            f.p.fill(gx - g - 1.0, gy - g, 2.5, 2.0 * g, STAGE_INK);
+            f.p.poly(&[(gx + g, gy - g), (gx - g + 3.0, gy), (gx + g, gy + g)], STAGE_INK, 1.0);
+        } else {
+            f.p.fill(gx + g - 1.5, gy - g, 2.5, 2.0 * g, STAGE_INK);
+            f.p.poly(&[(gx - g, gy - g), (gx + g - 3.0, gy), (gx - g, gy + g)], STAGE_INK, 1.0);
+        }
+        f.focus_ring(b, 12.0, &act);
+        f.hit(b, act);
+        cx += 42.0 + 8.0;
+    }
+    cx += 6.0;
     let now = crate::ui::preview::clock(pos);
     let total = crate::ui::preview::clock(duration);
     let time = format!("{now} / {total}");
@@ -196,7 +214,7 @@ fn controls(f: &mut Frame, app: &App, r: R, playing: bool, pos: f64, duration: f
     let room = rx - cx;
     let speeds: Vec<f32> = SPEEDS.iter().map(|(l, _)| f.measure(l, 13.5, BOLD) + 18.0).collect();
     let speeds_w: f32 = speeds.iter().sum::<f32>() + 4.0 * (SPEEDS.len() as f32 - 1.0);
-    if room >= speeds_w + 8.0 + 96.0 {
+    if room >= speeds_w + 12.0 + 96.0 + 48.0 {
         let track = (rx - 96.0, cy - 2.0, 96.0, 4.0);
         f.p.rrect(track.0, track.1, track.2, track.3, 2.0, Some(mix(WHITE, CARD, 0.78)), None);
         f.p.rrect(track.0, track.1, track.2 * app.play_vol, track.3, 2.0, Some(bright), None);

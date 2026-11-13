@@ -1107,6 +1107,17 @@ fn ensure_voice_models(sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<(Pat
 }
 
 /// «00:12:40» da centesimi di secondo.
+/// Il contrario di `clock`: «[00:12:40]» (parentesi comprese o no) in secondi.
+pub fn parse_clock(key: &str) -> Option<f64> {
+    let mut secs = 0.0;
+    let mut parts = 0;
+    for p in key.trim().trim_matches(|c| c == '[' || c == ']').split(':') {
+        secs = secs * 60.0 + p.parse::<f64>().ok()?;
+        parts += 1;
+    }
+    (parts == 3).then_some(secs)
+}
+
 pub fn clock(centis: i64) -> String {
     let secs = centis.max(0) / 100;
     format!("{:02}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60)
@@ -2021,6 +2032,9 @@ mod tests {
         assert_eq!(clock(4), "00:00:00");
         assert_eq!(clock(76_000), "00:12:40");
         assert_eq!(clock(366_100), "01:01:01");
+        assert_eq!(parse_clock("[00:12:40]"), Some(760.0));
+        assert_eq!(parse_clock("01:01:01"), Some(3661.0));
+        assert_eq!(parse_clock("Motore"), None);
         assert_eq!(size_text(148), "150 MB");
         assert_eq!(size_text(488), "490 MB");
         assert_eq!(size_text(1624), "1,6 GB");

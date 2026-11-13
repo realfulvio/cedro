@@ -23,7 +23,8 @@ fn header(f: &mut Frame, app: &App, r: R, title: &str, simple: bool) -> f32 {
 /// Una riga del riquadro: tono, parola evidenziata, testo, chi parla (con le voci).
 pub(super) type LogLine = (Tone, String, String, Option<u8>);
 
-pub(super) fn log_box(f: &mut Frame, r: R, lines: &[LogLine]) {
+/// `hot`: la riga che si sta ascoltando (evidenziata, e il riquadro la segue).
+pub(super) fn log_box(f: &mut Frame, r: R, lines: &[LogLine], hot: Option<(usize, bool)>) {
     let pal = f.pal;
     f.card(r, 10.0);
     f.text("Cosa sta succedendo", r.0 + 18.0, r.1 + 8.0, r.2 - 140.0, 32.0, 16.0, SEMI, pal.text);
@@ -41,12 +42,20 @@ pub(super) fn log_box(f: &mut Frame, r: R, lines: &[LogLine]) {
     // Si vede sempre la fine: lo scorrimento parte dal fondo.
     let max = (total - body.3).max(0.0);
     let off = f.ui.scroll(Scroll::Log);
-    let start_y = body.1 - (max - off.min(max));
+    let mut start_y = body.1 - (max - off.min(max));
+    if let Some((h, true)) = hot {
+        // Si ascolta: la riga che suona sta a metà riquadro (senza uscire dal primo e dall'ultimo posto).
+        let want = body.1 + (body.3 - row) / 2.0 - h as f32 * row;
+        start_y = want.clamp(body.1 - max, body.1);
+    }
     f.p.push_clip(body.0, body.1, body.2, body.3);
     for (i, (tone, key, text, speaker)) in lines.iter().enumerate() {
         let y = start_y + i as f32 * row;
         if y + row < body.1 || y > body.1 + body.3 {
             continue;
+        }
+        if hot.is_some_and(|h| h.0 == i) {
+            f.p.rrect_a(r.0 + 8.0, y, r.2 - 16.0, row, 6.0, pal.primary, 0.16);
         }
         let mut x = r.0 + 18.0;
         if !key.is_empty() {
@@ -68,9 +77,19 @@ pub(super) fn log_box(f: &mut Frame, r: R, lines: &[LogLine]) {
             Tone::Note => pal.muted,
             _ => pal.text,
         };
-        f.p.text(text, x, y, r.0 + r.2 - 18.0 - x, row, 14.0, SANS, c, Align::Left);
+        f.p.text(text, x, y, r.0 + r.2 - 40.0 - x, row, 14.0, SANS, c, Align::Left);
     }
     f.p.pop_clip();
+    // La barra di scorrimento, ben visibile sul bordo destro: si trascina o ci si clicca sopra.
+    if max > 0.0 {
+        let track = (body.0 + body.2 - 20.0, body.1 + 2.0, 10.0, body.3 - 4.0);
+        let eff = (max + start_y - body.1).clamp(0.0, max);
+        let thumb = (track.3 * body.3 / (max + body.3)).max(36.0).min(track.3);
+        let ty = track.1 + (track.3 - thumb) * (1.0 - eff / max);
+        f.p.rrect(track.0, track.1, track.2, track.3, 5.0, Some(mix(pal.border, pal.surface, 0.4)), None);
+        f.p.rrect(track.0 + 1.0, ty, track.2 - 2.0, thumb, 4.0, Some(pal.primary), None);
+        f.hit_kind((track.0 - 6.0, track.1, track.2 + 12.0, track.3), Act::LogScroll, crate::ui::core::HitKind::Slider);
+    }
     // Lo scorrimento qui conta al contrario (0 = fondo): la rotella verso l'alto mostra le righe vecchie.
     f.scrolls.push((body, Scroll::Log, max));
 }
@@ -306,8 +325,8 @@ pub(super) fn transcribe_queue(f: &mut Frame, app: &App, r: R, big: bool) {
 pub(super) fn ai_button(f: &mut Frame, r: R, size: f32, act: Act) {
     let pal = f.pal;
     let hover = f.hovered(&act);
-    let bg = if hover { mix(pal.primary, pal.surface, 0.9) } else { pal.surface };
-    f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(bg), Some((pal.primary, 1.2)));
+    let bg = if hover { mix(pal.primary, pal.surface, 0.8) } else { mix(pal.primary, pal.surface, 0.9) };
+    f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(bg), Some((pal.primary, 1.6)));
     let isz = (size * 1.1).round();
     let label = "Riassunto AI";
     let tw = f.measure(label, size, SEMI);
@@ -371,7 +390,7 @@ pub fn transcribe_page(f: &mut Frame, app: &App, r: R, simple: bool) {
     let qy = top + 58.0;
     let qh = (r.1 + r.3 - qy - log_h - 18.0).max(120.0);
     transcribe_queue(f, app, (r.0, qy, left_w, qh), false);
-    log_box(f, (r.0, qy + qh + 18.0, left_w, log_h), &transcribe_lines(app));
+    log_box(f, (r.0, qy + qh + 18.0, left_w, log_h), &transcribe_lines(app), None);
 
     // L'ispettore: risultato, precisione, destinazione, pulsante.
     let ix = r.0 + left_w + 20.0;
@@ -550,7 +569,7 @@ pub fn links_page(f: &mut Frame, app: &App, r: R, web: bool, simple: bool) {
     let qy = top + 62.0;
     let qh = (r.1 + r.3 - qy - log_h - 18.0).max(120.0);
     links_list(f, app, l, (r.0, qy, left_w, qh), false, true);
-    log_box(f, (r.0, qy + qh + 18.0, left_w, log_h), &link_lines(l));
+    log_box(f, (r.0, qy + qh + 18.0, left_w, log_h), &link_lines(l), None);
 
     let ix = r.0 + left_w + 20.0;
     let ir = (ix, top, INSP_W, r.1 + r.3 - top);
@@ -625,7 +644,7 @@ fn narrow_transcribe(f: &mut Frame, app: &App, r: R, simple: bool) {
         y += 70.0 + 8.0;
         y += f.para(&super::dest_note(app).replace("I file convertiti verranno salvati", "I testi verranno salvati"), x, y, w, 13.5, SANS, pal.muted, 1.4, 3) + 16.0;
         if !simple {
-            log_box(f, (x, y, w, 170.0), &lines);
+            log_box(f, (x, y, w, 170.0), &lines, None);
             y += 186.0;
         }
         y - body.1
@@ -665,7 +684,7 @@ fn narrow_links(f: &mut Frame, app: &App, r: R, web: bool, simple: bool) {
             y += f.para(&line, x, y, w, 14.0, SANS, pal.muted, 1.4, 3) + 8.0;
         } else {
             y = link_settings(f, l, x, y, w) + 12.0;
-            log_box(f, (x, y, w, 170.0), &link_lines(l));
+            log_box(f, (x, y, w, 170.0), &link_lines(l), None);
             y += 186.0;
         }
         y - body.1
