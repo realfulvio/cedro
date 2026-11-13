@@ -2361,4 +2361,28 @@ mod tests {
         assert!(s.app.youtube.items.is_empty());
         assert!(s.app.notice.as_ref().is_some_and(|n| n.error));
     }
+
+    /// Prova a mano: `CEDRO_UI_FILES=a.docx:b.xlsx CEDRO_UI_SHOTS=cartella cargo test --lib foto_ufficio -- --ignored`
+    /// apre ogni file nella finestra come se fosse trascinato e salva la schermata con la sua anteprima.
+    #[test]
+    #[ignore]
+    fn foto_ufficio() {
+        let (Some(files), Some(dir)) = (std::env::var_os("CEDRO_UI_FILES"), std::env::var_os("CEDRO_UI_SHOTS")) else { return };
+        let dir = PathBuf::from(dir);
+        for f in std::env::split_paths(&files) {
+            let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+            s.drop_files(vec![f.clone()]);
+            for _ in 0..100 {
+                let _ = s.render(1440, 940, 1.0);
+                s.pump();
+                if s.app.previews.iter().any(|((p, _), i)| p == &f && i.is_some()) || s.app.previews_failed.iter().any(|(p, _)| p == &f) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            let _ = s.render(1440, 940, 1.0);
+            let name = f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            s.render(1440, 940, 1.0).save_png(&dir.join(format!("{name}.png"))).unwrap();
+        }
+    }
 }

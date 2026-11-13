@@ -64,6 +64,7 @@ const WORD: Glyph = g("M6 3h8l4 4v14H6z M14 3v5h4 M8.5 11l1.5 6 2-4.5 2 4.5 1.5-
 const XLS: Glyph = g("M4 4h16v16H4z M4 9.5h16 M4 15h16 M10 4v16", "");
 const TXT: Glyph = g("M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 15.5h6 M9 19h3", "");
 const HTML: Glyph = g("M8 7l-5 5 5 5 M16 7l5 5-5 5 M13.5 5l-3 14", "");
+const ODT: Glyph = g("M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 15h6 M9 18h6 M9 9h2", "");
 const MD: Glyph = g("M3 6h18v12H3z M6 15V9l2.5 3L11 9v6 M16 9v6 M13.5 12.5 16 15l2.5-2.5", "");
 const CSV: Glyph = g("M4 4h16v16H4z M4 9.5h16 M4 15h16 M9.3 4v16 M14.7 4v16", "");
 const JSON: Glyph = g("M9 4H8a2 2 0 0 0-2 2v3.5L4 12l2 2.5V18a2 2 0 0 0 2 2h1 M15 4h1a2 2 0 0 1 2 2v3.5l2 2.5-2 2.5V18a2 2 0 0 1-2 2h-1", "");
@@ -149,6 +150,11 @@ pub fn voce(kind: Kind, id: &str) -> Voce {
         (Kind::Video, "mp3") => v("Solo l'audio (MP3)", "toglie le immagini", MP3, AUDIO),
         // Documenti
         (Kind::Doc, "pdf") => v("PDF", "si apre ovunque", DOCPDF, PDF),
+        (Kind::Doc, "docx") => v("Word", "tiene caratteri, tabelle e immagini", WORD, OFFICE),
+        (Kind::Doc, "odt") => v("ODT", "per LibreOffice e OpenOffice", ODT, NUOVI),
+        (Kind::Doc, "html") => v("HTML", "pagina web, immagini dentro", HTML, WEB),
+        (Kind::Doc, "md") => v("Markdown", "titoli, elenchi e tabelle", MD, NUOVI),
+        (Kind::Doc, "txt") => v("Solo testo", "senza impaginazione", TXT, COMP),
         (Kind::Doc, "strip") => v("Togli autore e dati nascosti", "autore, revisioni, commenti", PULISCI, ROSSO),
         // Testo
         (Kind::Text, "txt") => v("TXT", "testo semplice", TXT, COMP),
@@ -198,7 +204,7 @@ pub fn opzione(opt: crate::conversioni::Opt) -> Option<Voce> {
     use crate::conversioni::Opt as O;
     let (glyph, color) = match opt {
         O::MaxSide => (O_MISURE, WEB),
-        O::PageSize => (O_PAGINA, OFFICE),
+        O::PageSize | O::OfficePage => (O_PAGINA, OFFICE),
         O::Dpi => (O_DPI, PDF),
         O::Encoding => (O_CODIFICA, COMP),
         O::CsvSeparator => (O_SEPARATORE, WEB),
@@ -229,6 +235,10 @@ pub fn suggerimento(opt: crate::conversioni::Opt, value: u32) -> &'static str {
         (O::PageSize, 0) => "21 × 29,7 cm",
         (O::PageSize, 1) => "29,7 × 42 cm",
         (O::PageSize, 2) => "USA, 21,6 × 27,9 cm",
+        (O::OfficePage, 0) => "la carta scelta nel file",
+        (O::OfficePage, 1) => "21 × 29,7 cm",
+        (O::OfficePage, 2) => "29,7 × 42 cm",
+        (O::OfficePage, 3) => "USA, 21,6 × 27,9 cm",
         (O::Dpi, 72) => "schermo, leggero",
         (O::Dpi, 144) => "schermo nitido",
         (O::Dpi, 200) => "buona da leggere",
