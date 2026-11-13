@@ -1552,6 +1552,9 @@ fn theme_fonts(xml: Option<&str>) -> (String, String) {
 
 /// Legge un .docx.
 pub fn leggi_docx(bytes: &[u8]) -> Result<Documento, String> {
+    if bytes.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]) {
+        return Err("il documento è protetto da password".into());
+    }
     let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| "il file non è un documento Word leggibile".to_string())?;
     // La parte principale: dalle relazioni del pacchetto (di solito word/document.xml).
     let main = voce(&mut zip, "_rels/.rels")

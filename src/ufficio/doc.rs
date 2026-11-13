@@ -169,6 +169,214 @@ fn sprms(g: &[u8]) -> Vec<(u16, &[u8])> {
     out
 }
 
+// ---------------------------------------------------------------- Word 6/95
+
+/// La misura dell'operando di uno sprm di Word 6/95 (un byte di codice): i byte fissi, 255 se davanti
+/// c'è un byte di lunghezza, 254 se ce ne sono due (sprmTDefTable). `None`: sprm sconosciuto.
+fn misura_w6(op: u8) -> Option<usize> {
+    Some(match op {
+        2 => 2,
+        3 | 12 | 15 | 23 | 64 | 68 | 74 | 77 | 79 | 81 | 82 | 103 | 105 | 106 | 108 | 113 | 115 | 116 | 120 | 133 | 188 | 191 | 207 => 255,
+        4..=11 | 13 | 14 | 24 | 25 | 29 | 37 | 44 | 50 | 51 => 1,
+        16..=19 | 21 | 22 | 26..=28 | 30..=36 | 38..=43 | 45..=49 => 2,
+        20 => 4,
+        52 | 83 | 163 => 0,
+        65..=67 | 71 | 75 | 85..=92 | 94 | 98 | 100 | 102 | 104 | 117..=119 => 1,
+        69 | 72 | 80 | 93 | 96 | 97 | 99 | 101 | 107 | 109..=112 | 121..=124 => 2,
+        70 => 4,
+        73 | 95 => 3,
+        131 | 132 | 138 | 139 | 142 | 143 | 146 | 147 | 150..=153 | 158 | 159 | 162 => 1,
+        136 | 137 => 3,
+        140 | 141 | 144 | 145 | 148 | 149 | 154..=157 | 160 | 161 | 164..=171 => 2,
+        182..=184 | 189 | 195 | 197 | 198 => 2,
+        185 | 186 => 1,
+        187 => 12,
+        190 => 254,
+        192 | 194 | 196 | 200 => 4,
+        193 | 199 => 5,
+        _ => return None,
+    })
+}
+
+/// Un bordo di Word 6 (due byte) come BRC80 di Word 97.
+fn brc_w6(v: u16) -> [u8; 4] {
+    let (largo, tipo) = ((v & 7) as u8, ((v >> 3) & 3) as u8);
+    if v == 0 || tipo == 0 {
+        return [0; 4];
+    }
+    let (w8, t) = match largo {
+        6 => (6, 6),
+        7 => (6, 22),
+        n => (n.max(1) * 6, [1, 1, 2, 3][tipo as usize]),
+    };
+    [w8, t, ((v >> 6) & 0x1F) as u8, ((v >> 11) & 0x1F) as u8 | (((v >> 5) & 1) as u8) << 5]
+}
+
+/// Le proprietà di Word 6/95 riscritte con gli sprm di Word 97 che il resto del lettore conosce.
+/// Si tengono quelle che contano per la pagina; le altre (revisioni, numerazione automatica) restano fuori.
+fn da_w6(g: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    let fisso = |out: &mut Vec<u8>, code: u16, v: &[u8]| {
+        out.extend_from_slice(&code.to_le_bytes());
+        out.extend_from_slice(v);
+    };
+    let var = |out: &mut Vec<u8>, code: u16, v: &[u8]| {
+        out.extend_from_slice(&code.to_le_bytes());
+        out.push(v.len().min(255) as u8);
+        out.extend_from_slice(&v[..v.len().min(255)]);
+    };
+    while i < g.len() {
+        let op = g[i];
+        i += 1;
+        let Some(m) = misura_w6(op) else { break };
+        let (v, dopo): (&[u8], usize) = match m {
+            255 => {
+                let n = *g.get(i).unwrap_or(&0) as usize;
+                (g.get(i + 1..i + 1 + n).unwrap_or(&[]), i + 1 + n)
+            }
+            254 => {
+                // Come in Word 97, la misura conta un byte in più dei dati.
+                let n = (u16_at(g, i) as usize).saturating_sub(1);
+                (g.get(i + 2..i + 2 + n).unwrap_or(&[]), i + 2 + n)
+            }
+            n => (g.get(i..i + n).unwrap_or(&[]), i + n),
+        };
+        i = dopo;
+        let uguale: Option<u16> = match op {
+            2 => Some(0x4600),
+            5 => Some(0x2403),
+            7 => Some(0x2405),
+            8 => Some(0x2406),
+            9 => Some(0x2407),
+            16 => Some(0x840E),
+            17 => Some(0x840F),
+            19 => Some(0x8411),
+            20 => Some(0x6412),
+            21 => Some(0xA413),
+            22 => Some(0xA414),
+            24 => Some(0x2416),
+            25 => Some(0x2417),
+            47 => Some(0x442D),
+            51 => Some(0x2431),
+            71 => Some(0x0806),
+            75 => Some(0x080A),
+            80 => Some(0x4A30),
+            85 => Some(0x0835),
+            86 => Some(0x0836),
+            87 => Some(0x0837),
+            90 => Some(0x083A),
+            91 => Some(0x083B),
+            92 => Some(0x083C),
+            93 => Some(0x4A4F),
+            94 => Some(0x2A3E),
+            96 => Some(0x8840),
+            98 => Some(0x2A42),
+            99 => Some(0x4A43),
+            101 => Some(0x4845),
+            104 => Some(0x2A48),
+            117 => Some(0x0855),
+            142 => Some(0x3009),
+            143 => Some(0x300A),
+            144 => Some(0x500B),
+            145 => Some(0x900C),
+            150 => Some(0x3011),
+            153 => Some(SPRM_IHDT_W6),
+            156 => Some(0xB017),
+            157 => Some(0xB018),
+            161 => Some(0x501C),
+            162 => Some(0x301D),
+            164 => Some(0xB01F),
+            165 => Some(0xB020),
+            166 => Some(0xB021),
+            167 => Some(0xB022),
+            168 => Some(0x9023),
+            169 => Some(0x9024),
+            182 => Some(0x5400),
+            183 => Some(0x9601),
+            184 => Some(0x9602),
+            185 => Some(0x3403),
+            186 => Some(0x3404),
+            189 => Some(0x9407),
+            _ => None,
+        };
+        if let Some(code) = uguale {
+            if v.len() == m {
+                fisso(&mut out, code, v);
+            }
+            continue;
+        }
+        match op {
+            15 => var(&mut out, 0xC60D, v),
+            23 => var(&mut out, 0xC615, v),
+            38..=42 => fisso(&mut out, [0x6424, 0x6425, 0x6426, 0x6427, 0x6428][(op - 38) as usize], &brc_w6(u16_at(v, 0))),
+            68 if v.len() >= 4 => fisso(&mut out, 0x6A03, &v[..4]),
+            187 => {
+                let b: Vec<u8> = (0..6).flat_map(|k| brc_w6(u16_at(v, k * 2))).collect();
+                var(&mut out, 0xD605, &b);
+            }
+            190 if !v.is_empty() => {
+                // sprmTDefTable: i centri restano, le celle (10 byte) diventano TC80 (20 byte).
+                let n = v[0] as usize;
+                let mut d = vec![v[0]];
+                d.extend_from_slice(v.get(1..1 + (n + 1) * 2).unwrap_or(&[]));
+                let base = 1 + (n + 1) * 2;
+                for k in 0..n {
+                    let tc = v.get(base + k * 10..base + k * 10 + 10).unwrap_or(&[0; 10]);
+                    d.extend_from_slice(&tc[..2]);
+                    d.extend_from_slice(&[0, 0]);
+                    for b in 0..4 {
+                        d.extend_from_slice(&brc_w6(u16_at(tc, 2 + b * 2)));
+                    }
+                }
+                out.extend_from_slice(&0xD608u16.to_le_bytes());
+                out.extend_from_slice(&((d.len() + 1) as u16).to_le_bytes());
+                out.extend_from_slice(&d);
+            }
+            191 => var(&mut out, 0xD609, v),
+            193 if v.len() >= 5 => {
+                let mut d = v[..3].to_vec();
+                d.extend_from_slice(&brc_w6(u16_at(v, 3)));
+                var(&mut out, 0xD620, &d);
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Il segno, per le sezioni di Word 6, di quali intestazioni e piè ci sono (sprmSGprfIhdt).
+const SPRM_IHDT_W6: u16 = 0x32FF;
+
+/// La tabella dei caratteri a un byte di un documento di Word 6/95: dal set di caratteri del font
+/// (Cirillico, Europa centrale…) o, per i font «ANSI», dalla lingua del documento.
+fn caratteri_w6(lid: u16, chs: u8) -> Vec<char> {
+    let enc = match chs {
+        2 => return (0..=255u32).map(|b| char::from_u32(if b < 0x20 { b } else { 0xF000 + b }).unwrap_or(' ')).collect(),
+        77 => encoding_rs::MACINTOSH,
+        161 => encoding_rs::WINDOWS_1253,
+        162 => encoding_rs::WINDOWS_1254,
+        163 => encoding_rs::WINDOWS_1258,
+        177 => encoding_rs::WINDOWS_1255,
+        178 => encoding_rs::WINDOWS_1256,
+        186 => encoding_rs::WINDOWS_1257,
+        204 => encoding_rs::WINDOWS_1251,
+        222 => encoding_rs::WINDOWS_874,
+        238 => encoding_rs::WINDOWS_1250,
+        _ => match lid & 0x3FF {
+        0x05 | 0x0E | 0x15 | 0x18 | 0x1A | 0x1B | 0x1C | 0x24 => encoding_rs::WINDOWS_1250,
+        0x02 | 0x19 | 0x22 | 0x23 | 0x2F => encoding_rs::WINDOWS_1251,
+        0x08 => encoding_rs::WINDOWS_1253,
+        0x1F => encoding_rs::WINDOWS_1254,
+        0x0D => encoding_rs::WINDOWS_1255,
+        0x01 => encoding_rs::WINDOWS_1256,
+        0x25..=0x27 => encoding_rs::WINDOWS_1257,
+        _ => encoding_rs::WINDOWS_1252,
+        },
+    };
+    (0..=255u8).map(|b| enc.decode_without_bom_handling(&[b]).0.chars().next().unwrap_or(' ')).collect()
+}
+
 // ---------------------------------------------------------------- proprietà
 
 #[derive(Clone, Debug, Default)]
@@ -623,6 +831,15 @@ struct Lettore<'a> {
     note_rif: [Vec<u32>; 2],
     cache_pap: HashMap<usize, Pap>,
     profondita: usize,
+    /// Word 6/95: tutto nello stream WordDocument, testo a un byte, sprm di un byte.
+    w6: bool,
+    cp8: Vec<char>,
+    /// Word 6: la tabella dei caratteri di ogni font (dal suo set di caratteri).
+    cp8_font: Vec<Vec<char>>,
+    /// Word 6: quante pagine FKP di caratteri e di paragrafi ci sono (anche oltre la tabella salvata).
+    cpn_bte: [usize; 2],
+    /// Word 6: le intestazioni già lette (ci sono solo quelle che le sezioni dichiarano).
+    testate_w6: usize,
 }
 
 impl<'a> Lettore<'a> {
@@ -650,6 +867,19 @@ impl<'a> Lettore<'a> {
     }
 
     fn leggi_pezzi(&mut self) -> Result<(), String> {
+        if self.w6 && (u16_at(self.word, 0x0A) & 0x0004 == 0 || self.fc(33).1 == 0) {
+            // Word 6 non «complesso»: il testo è tutto di seguito, un byte per carattere.
+            let fc_min = u32_at(self.word, 0x18);
+            let n: u32 = self.ccp.iter().sum::<u32>() + 1;
+            let limite = self.word.len() as u32;
+            for j in 0..n {
+                // Il byte resta com'è: la sua lettera dipende dal font del tratto (vedi `lettera_w6`).
+                let b = self.word.get((fc_min + j).min(limite) as usize).copied().unwrap_or(b' ');
+                self.testo.push(b as u16);
+            }
+            self.pezzi.push((0, n, fc_min, true, 0));
+            return Ok(());
+        }
         let clx = self.tab(33);
         let mut i = 0;
         while i < clx.len() && clx[i] == 0x01 {
@@ -670,8 +900,9 @@ impl<'a> Lettore<'a> {
                 break;
             }
             let raw = u32_at(d, 2);
-            let comp = raw & (1 << 30) != 0;
-            let fc = raw & 0x3FFF_FFFF;
+            // In Word 6 i pezzi sono sempre a un byte e l'fc è già in byte.
+            let comp = self.w6 || raw & (1 << 30) != 0;
+            let fc = if self.w6 { raw.wrapping_mul(2) } else { raw & 0x3FFF_FFFF };
             let prm = u16_at(d, 6);
             let n = (z - a) as usize;
             let mut letti = 0;
@@ -679,7 +910,7 @@ impl<'a> Lettore<'a> {
                 let off = (fc / 2) as usize;
                 for j in 0..n {
                     let Some(&b) = self.word.get(off + j) else { break };
-                    self.testo.push(crate::doctext::cp1252(b) as u32 as u16);
+                    self.testo.push(if self.w6 { b as u16 } else { crate::doctext::cp1252(b) as u32 as u16 });
                     letti += 1;
                 }
             } else {
@@ -717,39 +948,68 @@ impl<'a> Lettore<'a> {
         }
     }
 
+    /// Le pagine FKP (caratteri o paragrafi) dalla loro tabella: in Word 6 i numeri sono a due byte,
+    /// e se il file è stato salvato in fretta le ultime pagine seguono la tabella.
+    fn pagine_fkp(&self, k: usize) -> Vec<usize> {
+        if !self.w6 {
+            let (_, dati) = Self::plc(self.tab(k), 4);
+            return dati.iter().map(|d| (u32_at(d, 0) & 0x3F_FFFF) as usize).collect();
+        }
+        let (_, dati) = Self::plc(self.tab(k), 2);
+        let mut pn: Vec<usize> = dati.iter().map(|d| u16_at(d, 0) as usize).collect();
+        let quante = self.cpn_bte[if k == 12 { 0 } else { 1 }].min(4096);
+        while pn.len() < quante {
+            let dopo = pn.last().map_or(0, |p| p + 1);
+            pn.push(dopo);
+        }
+        pn
+    }
+
     fn leggi_fkp(&mut self) {
         let word = self.word;
+        let w6 = self.w6;
         // Caratteri.
-        let (pos, dati) = Self::plc(self.tab(12), 4);
-        let _ = pos;
-        for d in dati {
-            let pn = (u32_at(d, 0) & 0x3F_FFFF) as usize;
+        for pn in self.pagine_fkp(12) {
             let Some(page) = word.get(pn * 512..pn * 512 + 512) else { continue };
             let n = page[511] as usize;
             for k in 0..n {
                 let (a, z) = (u32_at(page, k * 4), u32_at(page, (k + 1) * 4));
                 let off = page.get(4 * (n + 1) + k).copied().unwrap_or(0) as usize * 2;
-                let g = if off == 0 { Vec::new() } else { let cb = page[off] as usize; page.get(off + 1..off + 1 + cb).unwrap_or(&[]).to_vec() };
+                let mut g = if off == 0 { Vec::new() } else { let cb = page[off] as usize; page.get(off + 1..off + 1 + cb).unwrap_or(&[]).to_vec() };
+                if w6 {
+                    g = da_w6(&g);
+                }
                 self.chpx.push((a, z, g));
             }
         }
         self.chpx.sort_by_key(|c| c.0);
-        // Paragrafi.
-        let (_, dati) = Self::plc(self.tab(13), 4);
-        for d in dati {
-            let pn = (u32_at(d, 0) & 0x3F_FFFF) as usize;
+        // Paragrafi (in Word 6 ogni voce dopo gli fc è lunga 7 byte, non 13).
+        let bx = if w6 { 7 } else { 13 };
+        for pn in self.pagine_fkp(13) {
             let Some(page) = word.get(pn * 512..pn * 512 + 512) else { continue };
             let n = page[511] as usize;
             for k in 0..n {
                 let (a, z) = (u32_at(page, k * 4), u32_at(page, (k + 1) * 4));
-                let off = page.get(4 * (n + 1) + k * 13).copied().unwrap_or(0) as usize * 2;
+                let off = page.get(4 * (n + 1) + k * bx).copied().unwrap_or(0) as usize * 2;
                 if off == 0 {
                     self.papx.push((a, z, vec![0, 0]));
                     continue;
                 }
                 let cb = page[off] as usize;
-                let (start, len) = if cb == 0 { (off + 2, page.get(off + 1).copied().unwrap_or(0) as usize * 2) } else { (off + 1, cb * 2 - 1) };
-                self.papx.push((a, z, page.get(start..start + len).unwrap_or(&[0, 0]).to_vec()));
+                let (start, len) = if w6 {
+                    (off + 1, cb * 2)
+                } else if cb == 0 {
+                    (off + 2, page.get(off + 1).copied().unwrap_or(0) as usize * 2)
+                } else {
+                    (off + 1, cb * 2 - 1)
+                };
+                let mut g = page.get(start..start + len).unwrap_or(&[0, 0]).to_vec();
+                if w6 && g.len() >= 2 {
+                    let resto = da_w6(&g[2..]);
+                    g.truncate(2);
+                    g.extend(resto);
+                }
+                self.papx.push((a, z, g));
             }
         }
         self.papx.sort_by_key(|c| c.0);
@@ -778,10 +1038,18 @@ impl<'a> Lettore<'a> {
             let stk = (u16_at(std, 2) & 0xF) as u8;
             let base = u16_at(std, 2) >> 4;
             let cupx = (u16_at(std, 4) & 0xF) as usize;
-            let mut i = cb_base.max(10);
-            let cch = u16_at(std, i) as usize;
-            let nome: String = (0..cch).map(|k| u16_at(std, i + 2 + k * 2)).map(|u| char::from_u32(u as u32).unwrap_or(' ')).collect();
-            i += 2 + cch * 2 + 2;
+            let (nome, mut i) = if self.w6 {
+                // Word 6: la base è di 8 byte e il nome è a un byte per carattere.
+                let i = cb_base.max(8);
+                let cch = std.get(i).copied().unwrap_or(0) as usize;
+                let nome: String = std.get(i + 1..i + 1 + cch).unwrap_or(&[]).iter().map(|b| self.cp8[*b as usize]).collect();
+                (nome, i + 1 + cch + 1)
+            } else {
+                let i = cb_base.max(10);
+                let cch = u16_at(std, i) as usize;
+                let nome: String = (0..cch).map(|k| u16_at(std, i + 2 + k * 2)).map(|u| char::from_u32(u as u32).unwrap_or(' ')).collect();
+                (nome, i + 2 + cch * 2 + 2)
+            };
             let mut upx: Vec<Vec<u8>> = Vec::new();
             for _ in 0..cupx {
                 if i % 2 == 1 {
@@ -790,6 +1058,15 @@ impl<'a> Lettore<'a> {
                 let n = u16_at(std, i) as usize;
                 upx.push(std.get(i + 2..i + 2 + n).unwrap_or(&[]).to_vec());
                 i += 2 + n;
+            }
+            if self.w6 {
+                for (k, u) in upx.iter_mut().enumerate() {
+                    // Nel primo UPX di uno stile di paragrafo, davanti alle proprietà c'è l'istd.
+                    let salta = if stk == 1 && k == 0 { 2.min(u.len()) } else { 0 };
+                    let mut nuovo = u[..salta].to_vec();
+                    nuovo.extend(da_w6(&u[salta..]));
+                    *u = nuovo;
+                }
             }
             let para = stk == 1;
             let (papx, chpx) = if para { (upx.first().map(|u| u.get(2..).unwrap_or(&[]).to_vec()).unwrap_or_default(), upx.get(1).cloned().unwrap_or_default()) } else if stk == 2 { (Vec::new(), upx.first().cloned().unwrap_or_default()) } else { (Vec::new(), Vec::new()) };
@@ -800,6 +1077,20 @@ impl<'a> Lettore<'a> {
     fn leggi_font(&mut self) {
         let s = self.tab(15);
         if s.len() < 4 {
+            return;
+        }
+        if self.w6 {
+            // Word 6: in testa la misura in byte, poi le FFN con il nome a un byte per carattere.
+            let fine = (u16_at(s, 0) as usize).min(s.len());
+            let mut at = 2;
+            while at < fine && self.fonts.len() < 4096 {
+                let cb = s[at] as usize;
+                let f = &s[at + 1..(at + 1 + cb).min(s.len())];
+                let chs = f.get(3).copied().unwrap_or(0);
+                let nome: String = f.get(5..).unwrap_or(&[]).iter().take_while(|b| **b != 0).map(|b| self.cp8[*b as usize]).collect();
+                self.fonts.push((nome, chs));
+                at += 1 + cb;
+            }
             return;
         }
         let mut n = u16_at(s, 0) as usize;
@@ -1533,6 +1824,15 @@ impl<'a> Lettore<'a> {
         self.profondita -= 1;
     }
 
+    /// Word 6: il byte del testo come lettera, con la tabella del font del tratto.
+    fn lettera_w6(&self, ch: u16, c: &Chp) -> u16 {
+        if !self.w6 || ch < 0x20 || ch > 0xFF {
+            return ch;
+        }
+        let t = self.cp8_font.get(c.ftc as usize).unwrap_or(&self.cp8);
+        t.get(ch as usize).map_or(ch, |u| *u as u32 as u16)
+    }
+
     fn caratteri(&mut self, da: u32, a: u32, p: &Pap, testata: bool) {
         let mut cp = da;
         while cp < a {
@@ -1560,7 +1860,7 @@ impl<'a> Lettore<'a> {
             }
             let mut buf = String::new();
             for x in cp..fine {
-                let ch = self.testo[x as usize];
+                let ch = self.lettera_w6(self.testo[x as usize], &c);
                 let speciale = matches!(ch, 0x00..=0x1F) || (c.spec && matches!(ch, 0x01 | 0x02 | 0x05 | 0x08 | 0x28));
                 if !speciale {
                     if self.campi.last().is_some_and(|f| !f.risultato) {
@@ -1853,37 +2153,56 @@ fn tabella(righe: Vec<(Tap, Vec<Vec<Blocco>>)>) -> Option<Tabella> {
 }
 
 pub fn leggi_doc(bytes: &[u8]) -> Result<Documento, String> {
-    let mut cf = cfb::CompoundFile::open(std::io::Cursor::new(bytes)).map_err(|e| format!("DOC non letto: {e}"))?;
+    let mut cf = super::apri_ole(bytes).map_err(|e| format!("DOC non letto: {e}"))?;
     let mut leggi = |nome: &str| -> Option<Vec<u8>> {
         let mut v = Vec::new();
         cf.open_stream(nome).ok()?.read_to_end(&mut v).ok()?;
         Some(v)
     };
     let word = leggi("/WordDocument").ok_or("DOC senza testo")?;
-    if word.len() < 0x200 || u16_at(&word, 0) != 0xA5EC {
-        return Err("non è un documento Word 97–2003".into());
+    let ident = u16_at(&word, 0);
+    let w6 = ident == 0xA5DC && word.len() >= 0x200;
+    if word.len() < 0x200 || (ident != 0xA5EC && !w6) {
+        return Err(if ident == 0xA59B || ident == 0xA59C { "documento di Word 2 per Windows: formato troppo vecchio".into() } else { "non è un documento di Word".into() });
     }
     let n_fib = u16_at(&word, 2);
     let flags = u16_at(&word, 0x0A);
     if flags & 0x0100 != 0 {
         return Err("il documento è protetto da password".into());
     }
-    if n_fib < 101 {
-        return Err("documento Word 6/95: formato troppo vecchio".into());
+    if !w6 && n_fib < 101 {
+        return Err("documento di Word troppo vecchio".into());
     }
-    let table = leggi(if flags & 0x0200 != 0 { "/1Table" } else { "/0Table" }).ok_or("DOC senza tabella")?;
-    let data = leggi("/Data").unwrap_or_default();
-    // FIB: le parti a misura variabile.
-    let mut at = 32usize;
-    let csw = u16_at(&word, at) as usize;
-    at += 2 + csw * 2;
-    let cslw = u16_at(&word, at) as usize;
-    let lw = at + 2;
-    at += 2 + cslw * 4;
-    let ccp = [3, 4, 5, 6, 7, 8, 9, 10].map(|k| if k < cslw { u32_at(&word, lw + k * 4) } else { 0 });
-    let npair = u16_at(&word, at) as usize;
-    at += 2;
-    let fib = (0..npair).map(|k| (u32_at(&word, at + k * 8), u32_at(&word, at + k * 8 + 4))).collect();
+    let (table, data, ccp, fib, cpn_bte) = if w6 {
+        // Word 6/95: FIB fisso; le coppie fc/lcb da 0x58, con 10 byte di altri campi dopo la 38ª.
+        let ccp = [0, 1, 2, 3, 4, 5, 6, 7].map(|k| u32_at(&word, 0x34 + k * 4));
+        let fib: Vec<(u32, u32)> = (0..64)
+            .map(|k| {
+                let at = if k < 38 { 0x58 + k * 8 } else { 0x192 + (k - 38) * 8 };
+                if at + 8 <= 0x2A0.min(word.len()) {
+                    (u32_at(&word, at), u32_at(&word, at + 4))
+                } else {
+                    (0, 0)
+                }
+            })
+            .collect();
+        (word.clone(), word.clone(), ccp, fib, [u16_at(&word, 0x18E) as usize, u16_at(&word, 0x190) as usize])
+    } else {
+        let table = leggi(if flags & 0x0200 != 0 { "/1Table" } else { "/0Table" }).ok_or("DOC senza tabella")?;
+        let data = leggi("/Data").unwrap_or_default();
+        // FIB: le parti a misura variabile.
+        let mut at = 32usize;
+        let csw = u16_at(&word, at) as usize;
+        at += 2 + csw * 2;
+        let cslw = u16_at(&word, at) as usize;
+        let lw = at + 2;
+        at += 2 + cslw * 4;
+        let ccp = [3, 4, 5, 6, 7, 8, 9, 10].map(|k| if k < cslw { u32_at(&word, lw + k * 4) } else { 0 });
+        let npair = u16_at(&word, at) as usize;
+        at += 2;
+        let fib = (0..npair).map(|k| (u32_at(&word, at + k * 8), u32_at(&word, at + k * 8 + 4))).collect();
+        (table, data, ccp, fib, [0, 0])
+    };
     let mut l = Lettore {
         word: &word,
         table: &table,
@@ -1912,13 +2231,27 @@ pub fn leggi_doc(bytes: &[u8]) -> Result<Documento, String> {
         note_rif: [Vec::new(), Vec::new()],
         cache_pap: HashMap::new(),
         profondita: 0,
+        w6,
+        cp8: if w6 { caratteri_w6(u16_at(&word, 6), 0) } else { Vec::new() },
+        cp8_font: Vec::new(),
+        cpn_bte,
+        testate_w6: 0,
     };
     l.leggi_pezzi()?;
     l.leggi_fkp();
     l.leggi_stili();
     l.leggi_font();
-    l.leggi_liste();
-    l.leggi_disegni();
+    if w6 {
+        let lid = u16_at(&word, 6);
+        l.cp8_font = l.fonts.iter().map(|f| caratteri_w6(lid, f.1)).collect();
+    }
+    if !w6 {
+        l.leggi_liste();
+        l.leggi_disegni();
+    } else {
+        // Le intestazioni cominciano dopo i separatori delle note che il documento ha.
+        l.testate_w6 = l.tab(31).get(1).map_or(0, |b| b.count_ones() as usize);
+    }
     for (slot, k) in [(0usize, 2usize), (1, 46)] {
         let (cps, _) = Lettore::plc(l.tab(k), 2);
         l.note_rif[slot] = cps.iter().take(cps.len().saturating_sub(1)).copied().collect();
@@ -1940,11 +2273,19 @@ pub fn leggi_doc(bytes: &[u8]) -> Result<Documento, String> {
         let mut s = Sezione { w: 612.0, h: 792.0, margini: [90.0, 90.0, 72.0, 72.0], dist_testa: 36.0, dist_piede: 36.0, ..Default::default() };
         let mut salto = 2;
         let mut orizzontale = false;
+        let mut ihdt = 0u8;
         if let Some(d) = sed.get(k) {
             let fc = i32_at(d, 2);
             if fc >= 0 {
                 let cb = u16_at(l.word, fc as usize) as usize;
                 let g = l.word.get(fc as usize + 2..fc as usize + 2 + cb).unwrap_or(&[]);
+                let g6;
+                let g = if l.w6 {
+                    g6 = da_w6(g);
+                    g6.as_slice()
+                } else {
+                    g
+                };
                 for (op, v) in sprms(g) {
                     let b0 = v.first().copied().unwrap_or(0);
                     match op {
@@ -1967,6 +2308,7 @@ pub fn leggi_doc(bytes: &[u8]) -> Result<Documento, String> {
                             }
                         }
                         0x301D => orizzontale = b0 == 2,
+                        SPRM_IHDT_W6 => ihdt = b0,
                         _ => {}
                     }
                 }
@@ -1984,7 +2326,19 @@ pub fn leggi_doc(bytes: &[u8]) -> Result<Documento, String> {
         // Intestazioni e piè: 6 per sezione dopo i 6 separatori delle note; vuote = come la sezione prima.
         let mut t: [Option<Vec<Blocco>>; 6] = Default::default();
         for (j, slot) in t.iter_mut().enumerate() {
-            *slot = l.testata(6 + k * 6 + j).or_else(|| testate_prec[j].clone());
+            let storia = if l.w6 {
+                // Word 6: ci sono solo le intestazioni che la sezione dichiara, una dopo l'altra.
+                if ihdt & (1 << j) == 0 {
+                    None
+                } else {
+                    let n = l.testate_w6;
+                    l.testate_w6 += 1;
+                    l.testata(n)
+                }
+            } else {
+                l.testata(6 + k * 6 + j)
+            };
+            *slot = storia.or_else(|| testate_prec[j].clone());
             testate_prec[j] = slot.clone();
         }
         let [hp, hd, fp, fd, hf, ff] = t;
@@ -2042,6 +2396,26 @@ mod test {
         assert_eq!(c.testo(), "B2");
         assert_eq!(doc.note.len(), 1);
         assert!(pars.iter().any(|p| p.testo() == "Fine."));
+    }
+
+    #[test]
+    fn legge_word6() {
+        // Dai file di prova di Apache POI (Word 6.0, testo a 8 bit, licenza Apache 2.0).
+        let doc = leggi_doc(include_bytes!("../../tests/fixtures/word6.doc")).unwrap();
+        let testi: Vec<String> = doc.sezioni[0].blocchi.iter().filter_map(|b| if let Blocco::Par(p) = b { Some(p.testo()) } else { None }).collect();
+        assert!(testi.iter().any(|t| t == "The quick brown fox jumps over the lazy dog"), "{testi:?}");
+    }
+
+    #[test]
+    fn word6_tabella_con_ombra() {
+        // sprmTDefTable (190) con una cella: la misura conta un byte in più; poi sprmTDefTableShd (191).
+        let mut g = vec![190, 16, 0, 1, 0x10, 0, 0x20, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        g.extend_from_slice(&[191, 2, 0x00, 0x15]);
+        let w97 = da_w6(&g);
+        let ops: Vec<u16> = sprms(&w97).iter().map(|s| s.0).collect();
+        assert_eq!(ops, vec![0xD608, 0xD609]);
+        let shd = sprms(&w97).into_iter().find(|s| s.0 == 0xD609).unwrap().1;
+        assert_eq!(shd80(u16_at(shd, 0)), Some((191, 191, 191)));
     }
 
     #[test]
