@@ -4,12 +4,13 @@
 
 Ogni versione pubblicata finora, dalla più recente alla prima. Le note complete di ciascuna, con i file da scaricare e il controllo antivirus, sono nella pagina [Releases](https://github.com/realfulvio/cedro/releases).
 
-> In tre settimane, dal 21 ottobre al 12 novembre 2026: **93 versioni** per Windows e Linux.
+> In tre settimane, dal 21 ottobre al 13 novembre 2026: **94 versioni** per Windows e Linux.
 
 ## Novembre 2026: Cedro 4 Labs e il nuovo aspetto
 
 | Versione | Data | Cosa porta |
 | --- | --- | --- |
+| [0.51.0](https://github.com/realfulvio/cedro/releases/tag/v0.51.0) | 13/11 | Trascrivi con la **traccia audio a tutto schermo** (comandi d'ascolto, frase che suona evidenziata), testo in frasi con barra di scorrimento, pannello di destra ridimensionabile |
 | [0.47.1](https://github.com/realfulvio/cedro/releases/tag/v0.47.1) | 13/11 | Cedro non si chiude più davanti a un file rovinato: video che giravano all'infinito, foto, vetrini e TIFF da microscopio con misure impossibili, voci |
 | [0.47.0](https://github.com/realfulvio/cedro/releases/tag/v0.47.0) | 12/11 | Cedro parla anche **spagnolo, tedesco, francese e portoghese del Brasile** (oltre a italiano e inglese), su Desktop e Android; lingua automatica dal sistema |
 | [0.46.0](https://github.com/realfulvio/cedro/releases/tag/v0.46.0) | 12/11 | Cedro 4 Labs legge i vetrini **Hamamatsu NDPI** e **3DHistech MRXS** (anche in copia anonima e consulto); referti dettati che escono come bozza finché numeri e parole decisive non sono confermati |
