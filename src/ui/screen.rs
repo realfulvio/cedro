@@ -243,7 +243,11 @@ impl Screen {
             return;
         }
         if !(matches!(self.theme, ThemeId::DocumentoAlCentro) || self.theme.paged()) || self.surface != Surface::Main || self.app.activity != Activity::Convert {
-            if self.surface != Surface::Viewer {
+            // In Trascrivi (Cedro) l'audio del file scelto si riascolta mentre trascrive: il lettore resta finché il file è quello.
+            let listening = self.theme.is_cedro()
+                && self.app.activity == Activity::Transcribe
+                && self.app.player.as_ref().is_some_and(|p| self.app.selected.and_then(|i| self.app.files.get(i)).is_some_and(|f| f.path == p.path));
+            if self.surface != Surface::Viewer && !listening {
                 self.app.player = None;
             }
             return;
@@ -359,6 +363,10 @@ impl Screen {
                 self.box_drag(r, x, y);
                 return true;
             }
+            if act == Act::LogScroll {
+                self.log_drag(r, y);
+                return true;
+            }
             self.slide(&act, r, x);
             return true;
         }
@@ -379,6 +387,18 @@ impl Screen {
     pub fn pointer_down(&mut self, x: f32, y: f32) {
         let hit = self.hit_at(x, y).map(|h| (h.act.clone(), h.kind, h.r));
         self.ui.pressed = hit.as_ref().map(|h| h.0.clone());
+        // Doppio clic sul bordo del pannello: torna alla larghezza di base.
+        if matches!(hit, Some((Act::SideGrip, ..))) {
+            if self.ui.side_click.take().is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(450)) {
+                self.ui.side_w = None;
+                let mut st = crate::read_settings();
+                st.side_w = 0;
+                let _ = crate::write_settings(&st);
+                self.ui.pressed = None;
+                return;
+            }
+            self.ui.side_click = Some(Instant::now());
+        }
         if let Some((act, HitKind::Slider, r)) = hit {
             self.ui.drag = Some((act.clone(), r));
             if matches!(act, Act::RowDrag(..) | Act::PageDrag(..)) {
@@ -386,6 +406,8 @@ impl Screen {
                 self.ui.drag_x = (x, x);
             } else if act == Act::FirmaBox {
                 self.box_drag(r, x, y);
+            } else if act == Act::LogScroll {
+                self.log_drag(r, y);
             } else {
                 self.slide(&act, r, x);
             }
@@ -600,6 +622,17 @@ impl Screen {
         let cx = ((x - r.0) / r.2.max(1.0)).clamp(hw.min(0.5), (1.0 - hw).max(0.5));
         let cy = ((y - r.1) / r.3.max(1.0)).clamp(hh.min(0.5), (1.0 - hh).max(0.5));
         su.box_center = (cx, cy);
+    }
+
+    /// Il testo che si trascrive trascinato dalla sua barra (lo scorrimento conta dal fondo: 0 = fine).
+    fn log_drag(&mut self, r: R, y: f32) {
+        let Some((body, _, max)) = self.scrolls.iter().find(|s| s.1 == Scroll::Log).copied() else { return };
+        if max <= 0.0 {
+            return;
+        }
+        let thumb = (r.3 * body.3 / (max + body.3)).max(36.0).min(r.3);
+        let t = ((y - r.1 - thumb / 2.0) / (r.3 - thumb).max(1.0)).clamp(0.0, 1.0);
+        self.ui.scroll.insert(Scroll::Log, (1.0 - t) * max);
     }
 
     fn slide(&mut self, act: &Act, r: R, x: f32) {
@@ -834,8 +867,9 @@ impl Screen {
                     app.cuts.clear();
                 }
             }
-            Act::OptSlider(_) | Act::Quality | Act::MediaSeek | Act::MediaVolume | Act::SideGrip | Act::ReviewSeek => {}
+            Act::OptSlider(_) | Act::Quality | Act::MediaSeek | Act::MediaVolume | Act::SideGrip | Act::LogScroll | Act::ReviewSeek => {}
             Act::MediaSkip(d) => app.media_skip(d),
+            Act::MediaPhrase(d) => app.media_phrase(d),
             Act::MediaSpeed(k) => app.set_play_speed(k),
             Act::TrView(v) => app.tr_view = v.min(2),
             Act::ReviewOpen(i) => app.review_open(i),

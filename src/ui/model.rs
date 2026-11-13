@@ -2208,6 +2208,36 @@ impl App {
         }
     }
 
+    /// Dove cominciano le frasi del file scelto, in secondi: quelle in arrivo se lavora, quelle salvate se è finito.
+    pub fn phrase_starts(&self) -> Vec<f64> {
+        let Some(file) = self.selected.and_then(|i| self.files.get(i)) else { return Vec::new() };
+        match file.state {
+            FileState::Running => self.transcribe.log.iter().filter(|l| l.tone == trascrizione::Tone::Speech).filter_map(|l| trascrizione::parse_clock(&l.key)).collect(),
+            FileState::Done => crate::revisione::load(&file.path).map(|s| s.segments.iter().map(|g| g.t0 as f64 / 100.0).collect()).unwrap_or_default(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Salta alla frase prima (`dir` < 0: l'inizio di quella che si sente, o della precedente se è appena partita) o dopo.
+    pub fn media_phrase(&mut self, dir: i32) {
+        let starts = self.phrase_starts();
+        let Some(i) = self.selected else { return };
+        let Some(file) = self.files.get(i) else { return };
+        let pos = self.player.as_ref().filter(|p| p.path == file.path).map_or(0.0, |p| p.position());
+        let to = if dir < 0 {
+            starts.iter().rev().find(|&&t| t < pos - 1.5).copied().or_else(|| starts.first().map(|_| 0.0))
+        } else {
+            starts.iter().find(|&&t| t > pos + 0.05).copied()
+        };
+        let Some(to) = to else { return };
+        if self.player.as_ref().is_none_or(|p| p.path != file.path) {
+            self.media_toggle();
+        }
+        if let Some(p) = self.player.as_mut() {
+            p.seek(to);
+        }
+    }
+
     pub fn set_play_speed(&mut self, k: u8) {
         self.play_speed = k.min(SPEEDS.len() as u8 - 1);
         let pct = SPEEDS[self.play_speed as usize].1;
