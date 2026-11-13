@@ -11,9 +11,7 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro non si chiude più davanti a un file rovinato.**
+**Video dal web non si blocca più sui sottotitoli, e in alto a destra torna la riga che dice cosa sta facendo Cedro.**
 
-- Un video MOV o MP4 con un blocco danneggiato dentro non fa più girare Cedro all'infinito (neppure nell'anteprima): dice che il video non si legge.
-- Le foto (DDS, BMP e altre) con misure assurde nell'intestazione, i vetrini NDPI e SVS e i TIFF dei microscopi (OME-TIFF) con valori impossibili non fanno più chiudere Cedro per mancanza di memoria: danno un errore e il resto della coda va avanti.
-- Nel riconoscimento delle voci un risultato non valido del modello non ferma più la trascrizione.
-- Provato rovinando a caso 52 tipi di file (video, audio, foto, Office, PDF, ZIP, vetrini, firme digitali) circa 6.000 volte.
+- YouTube in questi giorni rifiuta spesso i sottotitoli («troppe richieste») e il download si fermava con «Il sito ha limitato le richieste». Ora, se i sottotitoli non arrivano, Cedro scarica comunque il video senza e lo scrive nel registro.
+- In alto a destra, accanto ai pulsanti della finestra, una riga dice cosa accelera il lavoro in corso (scheda video con la tecnica, oppure processore con istruzioni e thread) e quando Cedro scarica o aggiorna un componente: yt-dlp, ffmpeg, deno, motori e modelli di trascrizione e riassunto, con quanto manca e una barretta. A riposo mostra la scheda video pronta, o «Solo processore».

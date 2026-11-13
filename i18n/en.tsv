@@ -2427,3 +2427,13 @@ Scrive le foto WebP.	Writes WebP photos.
 BSD-2-Clause o MIT	BSD-2-Clause or MIT
 BSD-3-Clause o BSD-2-Clause	BSD-3-Clause or BSD-2-Clause
 The OpenReadout Authors (da jxrlib di Microsoft), Moritz Borcherding	The OpenReadout Authors (from Microsoft jxrlib), Moritz Borcherding
+Solo processore	Processor only
+Accelera la scheda video	Graphics card accelerating
+Lavora il processore	Processor working
+Aggiorno {}	Updating {}
+Non ho scaricato {}	Could not download {}
+ · riprovo al prossimo lavoro	 · will retry on the next job
+i modelli delle voci	the voice models
+YouTube non dà i sottotitoli adesso: riprova più tardi o togli i sottotitoli	YouTube is not serving subtitles right now: try again later or turn subtitles off
+Il sito non dà i sottotitoli adesso (limite di richieste): scarico il video senza	The site is not serving subtitles right now (rate limit): downloading the video without them
+Non riesco a scaricare il video	Cannot download the video
