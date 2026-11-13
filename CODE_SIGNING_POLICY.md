@@ -2,7 +2,7 @@
 
 Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).
 
-This policy covers the Windows files of [Cedro](https://github.com/realfulvio/cedro) published on the [GitHub releases page](https://github.com/realfulvio/cedro/releases): `cedro.exe` and the installers `Cedro-Setup-<version>.exe` and `Cedro-ARM64-Setup-<version>.exe` (x64 and Windows on ARM). Nothing else is signed with this certificate.
+This policy covers the Windows files of [Cedro](https://github.com/realfulvio/cedro) published on the [GitHub releases page](https://github.com/realfulvio/cedro/releases): `cedro.exe` (also inside `Cedro-Portable-<version>-x64.zip`) and the installers `Cedro-Setup-<version>.exe` and `Cedro-Bondeno-Setup-<version>.exe` (x64; Windows on ARM installers when that build is enabled). Nothing else is signed with this certificate.
 
 ## What gets signed
 
