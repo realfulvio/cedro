@@ -1650,6 +1650,14 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     };
     let before = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let kind = kind_of(path);
+    // I nomi comuni dei formati valgono anche dove l'azione si chiama nell'altro modo (`convert foto.heic jpg`).
+    let action = match (kind, action) {
+        (Kind::Pdf, "jpeg") => "jpg",
+        (Kind::Pdf, a) => a,
+        (_, "jpg") => "jpeg",
+        (_, "tif") => "tiff",
+        (_, a) => a,
+    };
 
     if action == "dup" {
         // Senza estensione la copia non ne prende una (prima diventava «nome-copia.copia»).
@@ -2930,6 +2938,19 @@ BT /F2 16 Tf 50 750 Td (Spese correnti) Tj ET BT /F1 10 Tf 50 630 Td (Contributi
         let keep = Options { max_side: Some(800), ..Default::default() };
         let out = perform_with(&src, "webp", 80, None, &keep).unwrap();
         assert_eq!(image::open(&out.path).unwrap().width(), 400);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn jpg_and_tif_are_names_for_jpeg_and_tiff() {
+        let dir = scratch();
+        let src = dir.join("foto.png");
+        DynamicImage::ImageRgb8(RgbImage::from_pixel(40, 20, Rgb([10, 90, 140]))).save(&src).unwrap();
+        let out = perform_with(&src, "jpg", 80, None, &Options::default()).unwrap();
+        assert_eq!(extension(&out.path), "jpg");
+        assert_eq!(image::open(&out.path).unwrap().width(), 40);
+        let out = perform_with(&src, "tif", 80, None, &Options::default()).unwrap();
+        assert!(matches!(extension(&out.path).as_str(), "tif" | "tiff"), "{}", out.path.display());
         let _ = fs::remove_dir_all(&dir);
     }
 
