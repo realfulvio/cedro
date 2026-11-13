@@ -33,6 +33,7 @@ mod ocr;
 mod ocrscan;
 mod pdf;
 mod pdfdoc;
+mod ufficio;
 mod pdfedit;
 mod pdfpages;
 mod pdflayout;
