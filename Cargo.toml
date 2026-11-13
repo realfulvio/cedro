@@ -1,12 +1,14 @@
 [package]
 name = "cedro"
-version = "0.48.0"
+version = "0.49.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
 publish = false
 
 [dependencies]
+# Le codifiche a 8 bit e a due byte dei vecchi formati (RTF, DOC).
+encoding_rs = "0.8"
 cfb = "0.16"
 hound = "3.5"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp", "tiff", "ico", "tga", "qoi", "pnm", "hdr", "exr", "dds"] }
@@ -17,6 +19,8 @@ lopdf = "0.47"
 rust_xlsxwriter = { version = "0.102", default-features = false }
 mp4 = "0.14"
 skrifa = "0.49"
+# I PDF da Word ed Excel incorporano solo i caratteri usati dei font del sistema (Calibri, Arial…): file piccoli.
+subsetter = { version = "0.2", default-features = false }
 mp3lame-encoder = "0.3"
 ocrs = "0.14"
 png = "0.18"
@@ -39,6 +43,8 @@ avif-decode = { version = "3", default-features = false }
 jxl-oxide = { version = "0.12", default-features = false }
 zune-jpegxl = { version = "0.5", default-features = false, features = ["std"] }
 zune-core = { version = "0.5", default-features = false }
+# Foto HEIC/HEIF (iPhone): heifer, decodificatore HEVC in Rust senza unsafe; i colori Display P3 passano a sRGB.
+heifer = { version = "0.5", default-features = false }
 # Vetrini digitali (.svs): pagine TIFF/BigTIFF a tessere JPEG (zune-jpeg) e JPEG 2000 (hayro-jpeg2000), già dentro Cedro per image e hayro.
 tiff = "0.11"
 zune-jpeg = "0.5"

@@ -60,7 +60,7 @@ impl DocImage {
     }
 
     /// Larghezza e altezza in punti.
-    fn points(&self) -> (f32, f32) {
+    pub(crate) fn points(&self) -> (f32, f32) {
         if self.size_cpt.0 > 0 && self.size_cpt.1 > 0 {
             (self.size_cpt.0 as f32 / 100.0, self.size_cpt.1 as f32 / 100.0)
         } else {
@@ -70,7 +70,7 @@ impl DocImage {
 }
 
 /// Larghezza, altezza e componenti di colore di un JPEG (dal segmento SOF).
-fn jpeg_info(b: &[u8]) -> Option<(u32, u32, u8)> {
+pub(crate) fn jpeg_info(b: &[u8]) -> Option<(u32, u32, u8)> {
     if b.len() < 4 || b[0] != 0xFF || b[1] != 0xD8 {
         return None;
     }
@@ -194,7 +194,7 @@ impl Builder {
     }
 }
 
-fn stream(dict: &str, data: &[u8], compress: bool) -> Vec<u8> {
+pub(crate) fn stream(dict: &str, data: &[u8], compress: bool) -> Vec<u8> {
     let (extra, body) = if compress {
         let mut enc = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
         let _ = enc.write_all(data);
@@ -208,7 +208,7 @@ fn stream(dict: &str, data: &[u8], compress: bool) -> Vec<u8> {
     out
 }
 
-fn pdf_string(text: &str) -> String {
+pub(crate) fn pdf_string(text: &str) -> String {
     // UTF-16BE con BOM: vale per ogni carattere.
     let mut out = String::from("<FEFF");
     for u in text.encode_utf16() {
@@ -218,7 +218,7 @@ fn pdf_string(text: &str) -> String {
     out
 }
 
-fn date_now() -> (String, String) {
+pub(crate) fn date_now() -> (String, String) {
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
     let (days, rest) = ((secs / 86400) as i64, secs % 86400);
     // Da giorni dal 1970 a data civile (algoritmo di Howard Hinnant).
@@ -240,7 +240,7 @@ fn date_now() -> (String, String) {
 }
 
 /// Il profilo sRGB (ICC v2, matrici e curve a gamma 2,2) che il PDF/A chiede come profilo di uscita.
-fn srgb_profile() -> Vec<u8> {
+pub(crate) fn srgb_profile() -> Vec<u8> {
     fn s15(v: f64) -> [u8; 4] {
         ((v * 65536.0).round() as i32).to_be_bytes()
     }
@@ -315,7 +315,7 @@ fn srgb_profile() -> Vec<u8> {
     out
 }
 
-fn xmp(title: &str, iso_date: &str) -> String {
+pub(crate) fn xmp(title: &str, iso_date: &str) -> String {
     let esc = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
     format!(
         "<?xpacket begin=\"\u{feff}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n\
