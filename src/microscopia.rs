@@ -13,7 +13,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use image::{DynamicImage, ImageBuffer, Luma, Rgb, RgbImage};
-use tiff::decoder::{ifd::Value, Decoder, DecodingResult, Limits};
+use tiff::decoder::{ifd::Value, Decoder, DecodingResult};
 use tiff::tags::Tag;
 
 /// Un canale: il nome (DAPI, GFP…) e il colore con cui si accende.
@@ -110,7 +110,8 @@ pub struct Pila {
 
 fn aperto(path: &Path) -> Result<Decoder<BufReader<File>>, String> {
     let file = File::open(path).map_err(|e| e.to_string())?;
-    Decoder::new(BufReader::new(file)).map(|d| d.with_limits(Limits::unlimited())).map_err(|e| e.to_string())
+    let len = file.metadata().map_err(|e| e.to_string())?.len();
+    Decoder::new(BufReader::new(file)).map(|d| d.with_limits(crate::svs::tiff_limits(len))).map_err(|e| e.to_string())
 }
 
 fn razionale(v: Value) -> Option<f64> {
@@ -1462,6 +1463,13 @@ mod prove_revisione {
 
     fn campione(n: &str) -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/micro").join(n)
+    }
+
+    #[test]
+    fn un_tiff_con_un_valore_di_tag_enorme_e_un_errore_non_un_abort() {
+        // Trovato rovinando a caso un OME-TIFF: un tag che dichiara decine di GB faceva chiudere Cedro.
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tiff-ome-rovinato.tif");
+        let _ = Pila::open_tutte(&p);
     }
 
     #[test]
