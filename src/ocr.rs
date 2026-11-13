@@ -12,6 +12,9 @@ pub fn image_text(path: &Path) -> Result<String, String> {
     recognize(&open_upright(path)?)
 }
 
+/// La memoria massima per i pixel di un'immagine che si apre intera.
+const MAX_IMAGE_BYTES: u64 = 2 << 30;
+
 /// Apre un'immagine e la raddrizza secondo l'orientamento EXIF, come fanno le foto del telefono.
 pub fn open_upright(path: &Path) -> Result<DynamicImage, String> {
     use image::{ImageDecoder, ImageReader};
@@ -25,6 +28,12 @@ pub fn open_upright(path: &Path) -> Result<DynamicImage, String> {
         .into_decoder()
         .map_err(|e| format!("immagine non letta: {e}"))?;
     let orientation = decoder.orientation().ok();
+    // Le misure vengono dall'intestazione del file: una rovinata (un DDS, un BMP) può chiederne di assurde, e
+    // allocarle chiude Cedro. Oltre 2 GB di pixel non è una foto: è un file rotto.
+    if decoder.total_bytes() > MAX_IMAGE_BYTES {
+        let (w, h) = decoder.dimensions();
+        return Err(format!("immagine troppo grande ({w} × {h} pixel): il file è rovinato o non sta in memoria"));
+    }
     let mut image = DynamicImage::from_decoder(decoder).map_err(|e| format!("immagine non letta: {e}"))?;
     if let Some(o) = orientation {
         image.apply_orientation(o);
@@ -589,5 +598,12 @@ mod tests {
         let (w, h, rgba) = render_page_rgba(&crate::pdf::pdf_from_text("x"), 0, 100.0).unwrap();
         assert_eq!(rgba.len(), (w * h * 4) as usize);
         assert!(rgba.chunks_exact(4).all(|p| p[3] == 255));
+    }
+
+    #[test]
+    fn an_image_header_asking_for_absurd_sizes_is_an_error_not_an_abort() {
+        // Un DDS rovinato che dichiara decine di GB di pixel: prima Cedro si chiudeva senza dire niente.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/dds-misure-assurde.dds");
+        assert!(open_upright(&path).is_err());
     }
 }

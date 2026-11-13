@@ -4,7 +4,7 @@ Immagini	Images
 Documenti	Documents
 Testo	Text
 Cambia formato, ridimensiona e raddrizza le foto.	Change format, resize and straighten photos.
-Da Word, ODT e RTF a PDF.	From Word, ODT and RTF to PDF.
+Da Word, ODT, RTF e DOC a PDF, Word, ODT, HTML e testo.	From Word, ODT, RTF and DOC to PDF, Word, ODT, HTML and text.
 Da PDF a Word modificabile, a Excel, a immagini o a testo.	From PDF to editable Word, Excel, images or text.
 TXT, Markdown, CSV, Excel, JSON e HTML.	TXT, Markdown, CSV, Excel, JSON and HTML.
 WAV, MP3, OGG, M4A, AAC e FLAC.	WAV, MP3, OGG, M4A, AAC and FLAC.
@@ -2295,6 +2295,18 @@ Porta in CSV	Turn into CSV
 {}: è un collegamento a una cartella, metti la cartella vera	{}: it is a link to a folder, add the real folder
 in coda ci sono radiografie di {#} animali diversi ({}): fai un PDF per ogni animale, con in coda solo le sue	the queue holds X-rays of {} different animals ({}): make one PDF per animal, with only its files in the queue
  Saltati perché senza immagini: {}.	 Skipped because they have no images: {}.
+tiene caratteri, tabelle e immagini	keeps fonts, tables and images
+per LibreOffice e OpenOffice	for LibreOffice and OpenOffice
+pagina web, immagini dentro	web page, images included
+titoli, elenchi e tabelle	headings, lists and tables
+Documento di Word	Word document
+Documento di Writer (ODT)	Writer document (ODT)
+Pagina web con le immagini dentro	Web page with images included
+Markdown con titoli, elenchi e tabelle	Markdown with headings, lists and tables
+«{}» non è un documento letto da Cedro	“{1}” is not a document Cedro can read
+la carta scelta nel file	the paper set in the file
+1 PDF · 1 pagina	1 PDF · 1 page
+{#} PDF · 1 pagina	{} PDFs · 1 page
 Il modello si scarica al primo uso e poi resta sul PC.	The model is downloaded on first use and then stays on this PC.
 Esempio:	Example:
 nomefile	filename
@@ -2427,6 +2439,29 @@ Scrive le foto WebP.	Writes WebP photos.
 BSD-2-Clause o MIT	BSD-2-Clause or MIT
 BSD-3-Clause o BSD-2-Clause	BSD-3-Clause or BSD-2-Clause
 The OpenReadout Authors (da jxrlib di Microsoft), Moritz Borcherding	The OpenReadout Authors (from Microsoft jxrlib), Moritz Borcherding
+documento di Word 1 o 2 per Windows: formato troppo vecchio	Word 1 or 2 for Windows document: format too old
+documento di Word troppo vecchio	Word document too old
+il documento è protetto da password	the document is password-protected
+il file .doc è rovinato e non si può leggere	the .doc file is damaged and cannot be read
+il file Excel è protetto da password: aprilo e salvalo senza	the Excel file is password-protected: open it and save it without one
+il file contiene una DTD, che Cedro non apre per sicurezza	the file contains a DTD, which Cedro does not open for safety
+il file non è un RTF	the file is not an RTF
+il file non è un documento Word leggibile	the file is not a readable Word document
+il file non è un documento di Writer leggibile	the file is not a readable Writer document
+il file non è un foglio Excel leggibile	the file is not a readable Excel sheet
+il foglio di calcolo è vuoto: non c'è niente da stampare	the spreadsheet is empty: there is nothing to print
+non è un documento di Word	not a Word document
+documento senza testo	document without text
+Solo processore	Processor only
+Accelera la scheda video	Graphics card accelerating
+Lavora il processore	Processor working
+Aggiorno {}	Updating {}
+Non ho scaricato {}	Could not download {}
+ · riprovo al prossimo lavoro	 · will retry on the next job
+i modelli delle voci	the voice models
+YouTube non dà i sottotitoli adesso: riprova più tardi o togli i sottotitoli	YouTube is not serving subtitles right now: try again later or turn subtitles off
+Il sito non dà i sottotitoli adesso (limite di richieste): scarico il video senza	The site is not serving subtitles right now (rate limit): downloading the video without them
+Non riesco a scaricare il video	Cannot download the video
 Caso	Case
 + Caso o campione	+ Case or sample
 Lavori di oggi	Today's jobs

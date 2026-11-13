@@ -107,17 +107,24 @@ fn frame(f: &mut Frame, app: &App) {
     let cw = f.measure("Cedro", 22.0, BOLD);
     f.p.text("4 Labs", 64.0 + cw + 8.0, 17.0, 120.0, 30.0, 22.0, BOLD, LABS_LEAF, Align::Left);
     f.window_controls(f.w, 0.0, 48.0, LABS_INK, LABS_FRAME_HI);
-    // Cedro lavora tutto sul computer: lo si dice in alto, dove in laboratorio lo si cerca.
-    let local = "Niente esce da questo PC";
-    let lw = f.measure(local, 15.0, SEMI);
-    let lx = f.w - 3.0 * 46.0 - 26.0 - lw;
-    f.p.disc_a(lx - 16.0, 32.0, 9.0, LABS_LEAF, 0.22);
-    f.p.circle(lx - 16.0, 32.0, 5.0, Some(LABS_LEAF), None);
-    f.p.text(local, lx, 17.0, lw + 4.0, 30.0, 15.0, SEMI, LABS_LEAF, Align::Left);
+    // Mentre lavora o scarica un componente, la riga dice cosa usa; a riposo che tutto resta sul PC.
+    let left = match super::cedro::status_line(f, app, &crate::ui::theme::TINT_MELANZANA, false, 32.0) {
+        Some(x) => x,
+        None => {
+            // Cedro lavora tutto sul computer: lo si dice in alto, dove in laboratorio lo si cerca.
+            let local = "Niente esce da questo PC";
+            let lw = f.measure(local, 15.0, SEMI);
+            let lx = f.w - 3.0 * 46.0 - 26.0 - lw;
+            f.p.disc_a(lx - 16.0, 32.0, 9.0, LABS_LEAF, 0.22);
+            f.p.circle(lx - 16.0, 32.0, 5.0, Some(LABS_LEAF), None);
+            f.p.text(local, lx, 17.0, lw + 4.0, 30.0, 15.0, SEMI, LABS_LEAF, Align::Left);
+            lx - 16.0 - 9.0
+        }
+    };
     // Il caso su cui si lavora e l'elenco dei lavori di oggi.
-    let jobs_w = lavori_button(f, app, lx - 16.0 - 9.0 - 14.0);
+    let jobs_w = lavori_button(f, app, left - 14.0);
     let cx = 64.0 + cw + 8.0 + f.measure("4 Labs", 22.0, BOLD) + 22.0;
-    caso_button(f, app, cx, lx - 16.0 - 9.0 - 14.0 - jobs_w - 12.0 - cx);
+    caso_button(f, app, cx, left - 14.0 - jobs_w - 12.0 - cx);
 
     let mut y = TOP + 4.0;
     rail_item(f, y, Lab::Home, Lab::Home.name(), app.lab == Lab::Home, Act::Lab(Lab::Home));

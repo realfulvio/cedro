@@ -130,7 +130,14 @@ const VIDEO_CONVERT: &[Slice] = &[
     Slice { id: "mp4", label: "MP4" },
     Slice { id: "mp3", label: "Solo audio (MP3)" },
 ];
-const DOC_CONVERT: &[Slice] = &[Slice { id: "pdf", label: "PDF" }];
+const DOC_CONVERT: &[Slice] = &[
+    Slice { id: "pdf", label: "PDF" },
+    Slice { id: "docx", label: "Word" },
+    Slice { id: "odt", label: "ODT" },
+    Slice { id: "html", label: "HTML" },
+    Slice { id: "md", label: "Markdown" },
+    Slice { id: "txt", label: "Testo" },
+];
 const PDF_CONVERT: &[Slice] = &[
     Slice { id: "jpg", label: "JPG" },
     Slice { id: "docx", label: "Word OCR" },
@@ -228,9 +235,9 @@ fn kind_by_extension(ext: &str) -> Kind {
         "pdf" => Kind::Pdf,
         "doc" | "docx" | "odt" | "rtf" => Kind::Doc,
         "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "ndpi" | "mrxs" | "dcm" | "dicom" | "nd2" | "lif" | "czi" | "ico"
-        | "svg" | "svgz" | "avif" | "jxl" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm"
+        | "svg" | "svgz" | "avif" | "jxl" | "heic" | "heif" | "hif" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm"
         | "hdr" | "exr" | "dds" => Kind::Image,
-        "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" | "xlsx" | "xlsm" | "ods" => Kind::Text,
+        "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" | "xlsx" | "xlsm" | "ods" | "xls" => Kind::Text,
         "wav" | "mp3" | "ogg" | "oga" | "opus" | "m4a" | "aac" | "flac" | "aif" | "aiff" | "aifc" | "caf" => Kind::Audio,
         "mp4" | "webm" | "mov" | "mkv" | "avi" => Kind::Video,
         "zip" => Kind::Archive,
@@ -246,7 +253,7 @@ pub fn kind_of(path: &Path) -> Kind {
     let Some(real) = crate::imgfmt::sniff_file(path) else {
         return by_ext;
     };
-    let sure = matches!(real, "png" | "jpg" | "gif" | "webp" | "bmp" | "tiff" | "dcm" | "nd2" | "lif" | "czi" | "avif" | "jxl" | "qoi" | "dds" | "exr" | "hdr" | "pdf" | "flac" | "wav" | "aiff" | "ogg" | "opus" | "svg");
+    let sure = matches!(real, "png" | "jpg" | "gif" | "webp" | "bmp" | "tiff" | "dcm" | "nd2" | "lif" | "czi" | "avif" | "heic" | "jxl" | "qoi" | "dds" | "exr" | "hdr" | "pdf" | "flac" | "wav" | "aiff" | "ogg" | "opus" | "svg");
     let by_content = kind_by_extension(real);
     if by_content != Kind::Other && by_content != by_ext && (by_ext == Kind::Other || sure) {
         return by_content;
@@ -268,7 +275,7 @@ pub fn mode_from_vk(vk: u32) -> Option<Mode> {
     }
 }
 
-fn stem(path: &Path) -> String {
+pub(crate) fn stem(path: &Path) -> String {
     // Un nome non UTF-8 (Linux) resta riconoscibile: con «file» per tutti, le copie si sostituirebbero a vicenda.
     path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into())
 }
@@ -468,7 +475,7 @@ fn write_text_pdf(path: &Path, out: PathBuf, blocks: &[crate::pdfdoc::DocBlock],
         return Err(err("il PDF/A non ammette la password: togline una delle due"));
     }
     let options = crate::pdfdoc::PdfOptions {
-        size: opts.page_size,
+        size: opts.ufficio.carta.unwrap_or(opts.page_size),
         embed: opts.embed_fonts,
         bookmarks: opts.bookmarks,
         pdfa: opts.pdfa,
@@ -490,6 +497,43 @@ fn write_text_pdf(path: &Path, out: PathBuf, blocks: &[crate::pdfdoc::DocBlock],
         message.push_str(", protetto con password");
     }
     write_bytes(&out, &bytes)?;
+    Ok(Output { path: out, message })
+}
+
+/// Un documento d'ufficio in PDF, impaginato come lo stampa il suo programma (Word, Writer, Excel, Calc).
+fn write_sheet_pdf(path: &Path, from: &str, dir: &Path, opts: &Options) -> CedroResult<Output> {
+    let password = opts.password.as_deref().filter(|p| !p.is_empty());
+    if opts.pdfa && password.is_some() {
+        return Err(err("il PDF/A non ammette la password: togline una delle due"));
+    }
+    let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let mut scelte = opts.ufficio;
+    scelte.embed = opts.embed_fonts;
+    scelte.bookmarks = opts.bookmarks;
+    scelte.pdfa = opts.pdfa;
+    let mut pdf = if crate::ufficio::is_documento(from) {
+        crate::ufficio::documento_pdf(from, &bytes, &stem(path), &scelte).map_err(err)?
+    } else {
+        crate::ufficio::foglio_pdf(from, &bytes, &name, &stem(path), &scelte).map_err(err)?
+    };
+    let pages = crate::ocr::pdf_page_count(&pdf).unwrap_or(0);
+    let mut message = format!("PDF di {pages} {}", if pages == 1 { "pagina" } else { "pagine" });
+    if opts.embed_fonts || opts.pdfa {
+        message.push_str(", con i caratteri incorporati");
+    }
+    if opts.pdfa {
+        message.push_str(", PDF/A-1b");
+    }
+    if opts.bookmarks && pdf.windows(10).any(|w| w == b"/Outlines ") {
+        message.push_str(", con i segnalibri");
+    }
+    if let Some(password) = password {
+        pdf = crate::pdf::protect(&pdf, password).map_err(err)?;
+        message.push_str(", protetto con password");
+    }
+    let out = reserve(dir, &stem(path), "pdf")?;
+    write_bytes(&out, &pdf)?;
     Ok(Output { path: out, message })
 }
 
@@ -947,6 +991,8 @@ pub struct Options {
     pub pdf_pages: PdfPages,
     /// Le pagine di un PDF (ruotare, togliere, estrarre, numeri e filigrana) e la compressione.
     pub pdf_edit: PdfEdit,
+    /// Documenti e fogli d'ufficio in PDF: carta, fogli, adattamento, orientamento, griglia.
+    pub ufficio: crate::ufficio::Scelte,
 }
 
 /// Le scelte per le pagine di un PDF e per comprimerlo.
@@ -1040,6 +1086,7 @@ impl Default for Options {
             rx_clinica: String::new(),
             pdf_pages: PdfPages::default(),
             pdf_edit: PdfEdit::default(),
+            ufficio: Default::default(),
         }
     }
 }
@@ -1611,6 +1658,14 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     };
     let before = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let kind = kind_of(path);
+    // I nomi comuni dei formati valgono anche dove l'azione si chiama nell'altro modo (`convert foto.heic jpg`).
+    let action = match (kind, action) {
+        (Kind::Pdf, "jpeg") => "jpg",
+        (Kind::Pdf, a) => a,
+        (_, "jpg") => "jpeg",
+        (_, "tif") => "tiff",
+        (_, a) => a,
+    };
 
     if action == "dup" {
         // Senza estensione la copia non ne prende una (prima diventava «nome-copia.copia»).
@@ -1687,7 +1742,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "xlsx" | "html" | "json" | "pdf" | "upper" | "lower") {
         let from = extension(path);
         // Excel e Calc: si leggono i fogli e da lì vale tutto come per un CSV.
-        let fogli = if matches!(from.as_str(), "xlsx" | "xlsm" | "ods") {
+        let fogli = if matches!(from.as_str(), "xlsx" | "xlsm" | "ods" | "xls") {
             let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
             let mut fogli = crate::tabella::leggi(&from, &bytes).map_err(err)?;
             fogli.retain(|f| !f.righe.is_empty());
@@ -1718,6 +1773,10 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             let out = reserve(&dir, &if fogli.is_some() { format!("{}-pozzetti", stem(path)) } else { stem(path) }, "xlsx")?;
             write_bytes(&out, &bytes)?;
             return Ok(Output { path: out, message });
+        }
+        // Il foglio di calcolo si stampa come lo stampa il suo programma: celle, pagine e impostazioni del file.
+        if action == "pdf" && crate::ufficio::is_foglio(&from) {
+            return write_sheet_pdf(path, &from, &dir, opts);
         }
         if action == "pdf" {
             let out = reserve(&dir, &stem(path), "pdf")?;
@@ -1788,9 +1847,36 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
 
     if kind == Kind::Doc && action == "pdf" {
+        let from = extension(path);
+        if crate::ufficio::is_documento(&from) {
+            return write_sheet_pdf(path, &from, &dir, opts);
+        }
         let out = reserve(&dir, &stem(path), "pdf")?;
         let blocks = crate::doctext::document_blocks(path).map_err(err)?;
         return write_text_pdf(path, out, &blocks, opts);
+    }
+    if kind == Kind::Doc && matches!(action, "docx" | "odt" | "html" | "md" | "txt") {
+        // Il documento letto com'è (caratteri, paragrafi, tabelle, immagini, note) e riscritto.
+        let from = extension(path);
+        if !crate::ufficio::is_documento(&from) {
+            return Err(err(format!("«{from}» non è un documento letto da Cedro")));
+        }
+        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let mut doc = crate::ufficio::leggi_documento(&from, &bytes).map_err(err)?;
+        if doc.titolo.trim().is_empty() {
+            doc.titolo = stem(path);
+        }
+        use crate::ufficio::scrivi_doc as w;
+        let (data, message): (Vec<u8>, &str) = match action {
+            "docx" => (w::docx(&doc), "Documento di Word"),
+            "odt" => (w::odt(&doc), "Documento di Writer (ODT)"),
+            "html" => (w::html(&doc, &doc.titolo).into_bytes(), "Pagina web con le immagini dentro"),
+            "md" => (w::markdown(&doc).into_bytes(), "Markdown con titoli, elenchi e tabelle"),
+            _ => (crate::textconv::encode(&w::testo(&doc), opts.encoding).into_owned(), "Solo testo"),
+        };
+        let out = reserve(&dir, &stem(path), action)?;
+        write_bytes(&out, &data)?;
+        return Ok(Output { path: out, message: message.to_string() });
     }
     if kind == Kind::Pdf && matches!(action, "jpg" | "png") {
         let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
@@ -2660,6 +2746,40 @@ BT /F2 18 Tf 0 g 50 750 Td (Titolo) Tj ET BT /F1 10 Tf 0 g 50 600 Td (Testo sott
     }
 
     #[test]
+    fn spreadsheets_print_as_their_program_does() {
+        use rust_xlsxwriter::{Format, Workbook};
+        let dir = scratch();
+        let path = dir.join("spese.xlsx");
+        let mut wb = Workbook::new();
+        let ws = wb.add_worksheet().set_name("Spese 2026").unwrap();
+        let money = Format::new().set_num_format("#,##0.00 \"€\"");
+        ws.write_string(0, 0, "Voce").unwrap();
+        ws.write_string(0, 1, "Importo").unwrap();
+        for r in 1..150u32 {
+            ws.write_string(r, 0, format!("Capitolo {r}")).unwrap();
+            ws.write_number_with_format(r, 1, r as f64 * 1000.5, &money).unwrap();
+        }
+        ws.set_column_width(1, 16).unwrap();
+        ws.set_repeat_rows(0, 0).unwrap();
+        ws.set_footer("&CPagina &P di &N");
+        wb.save(&path).unwrap();
+        let out = perform(&path, "pdf", 80).expect("PDF dal foglio");
+        assert!(out.message.contains("pagine"), "{}", out.message);
+        let doc = lopdf::Document::load(&out.path).unwrap();
+        let n = doc.get_pages().len() as u32;
+        assert!(n >= 3, "{n}");
+        let p2 = doc.extract_text(&[2]).unwrap();
+        assert!(p2.contains("Voce") && p2.contains("Importo"), "titoli non ripetuti: {p2}");
+        assert!(p2.contains(&format!("Pagina 2 di {n}")), "{p2}");
+        let all = doc.extract_text(&(1..=n).collect::<Vec<_>>()).unwrap();
+        assert!(all.contains("1.000,50 €") || all.contains("1,000.50 €"), "{all}");
+        // Una pagina sola, se chiesto.
+        let one = Options { ufficio: crate::ufficio::Scelte { adatta: 2, ..Default::default() }, exists: Exists::Replace, ..Default::default() };
+        let out = perform_with(&path, "pdf", 80, None, &one).unwrap();
+        assert_eq!(lopdf::Document::load(&out.path).unwrap().get_pages().len(), 1);
+    }
+
+    #[test]
     fn pdf_tables_become_excel_sheets() {
         // Una tabella con i bordi e, sotto, una a colonne senza bordi con date, protocolli e importi.
         let mut content = String::from(
@@ -2826,6 +2946,19 @@ BT /F2 16 Tf 50 750 Td (Spese correnti) Tj ET BT /F1 10 Tf 50 630 Td (Contributi
         let keep = Options { max_side: Some(800), ..Default::default() };
         let out = perform_with(&src, "webp", 80, None, &keep).unwrap();
         assert_eq!(image::open(&out.path).unwrap().width(), 400);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn jpg_and_tif_are_names_for_jpeg_and_tiff() {
+        let dir = scratch();
+        let src = dir.join("foto.png");
+        DynamicImage::ImageRgb8(RgbImage::from_pixel(40, 20, Rgb([10, 90, 140]))).save(&src).unwrap();
+        let out = perform_with(&src, "jpg", 80, None, &Options::default()).unwrap();
+        assert_eq!(extension(&out.path), "jpg");
+        assert_eq!(image::open(&out.path).unwrap().width(), 40);
+        let out = perform_with(&src, "tif", 80, None, &Options::default()).unwrap();
+        assert!(matches!(extension(&out.path).as_str(), "tif" | "tiff"), "{}", out.path.display());
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -3358,11 +3491,12 @@ Luca,Bondeno
         let dir = scratch();
         let src = dir.join("delibera.rtf");
         fs::write(&src, br"{\rtf1\ansi Delibera segreta del comune}").unwrap();
-        let a3 = perform_with(&src, "pdf", 80, None, &Options { page_size: PageSize::A3, ..Default::default() }).unwrap();
+        let carta = |c| Options { ufficio: crate::ufficio::Scelte { carta: Some(c), ..Default::default() }, exists: Exists::Replace, ..Default::default() };
+        let a3 = perform_with(&src, "pdf", 80, None, &carta(PageSize::A3)).unwrap();
         let bytes = fs::read(&a3.path).unwrap();
-        assert!(bytes.windows(20).any(|w| w == b"/MediaBox [0 0 842 1".as_slice()));
-        let letter = perform_with(&src, "pdf", 80, None, &Options { page_size: PageSize::Letter, ..Default::default() }).unwrap();
-        assert!(fs::read(&letter.path).unwrap().windows(18).any(|w| w == b"[0 0 612 792] /Con".as_slice()));
+        assert!(bytes.windows(30).any(|w| w == b"/MediaBox [0 0 842.00 1191.00]".as_slice()));
+        let letter = perform_with(&src, "pdf", 80, None, &carta(PageSize::Letter)).unwrap();
+        assert!(fs::read(&letter.path).unwrap().windows(29).any(|w| w == b"/MediaBox [0 0 612.00 792.00]".as_slice()));
 
         let locked = Options { password: Some("bondeno".into()), ..Default::default() };
         let out = perform_with(&src, "pdf", 80, None, &locked).unwrap();
@@ -3531,7 +3665,7 @@ Luca,Bondeno
         let docx = perform(&pdf.path, "docx", 80).unwrap();
         assert!(fs::read(&docx.path).unwrap().starts_with(b"PK"));
         let rtf = dir.join("nota.rtf");
-        fs::write(&rtf, b"{\rtf1 Cedro rtf}").unwrap();
+        fs::write(&rtf, br"{\rtf1 Cedro rtf}").unwrap();
         let rtf_pdf = perform(&rtf, "pdf", 80).unwrap();
         assert!(fs::read(&rtf_pdf.path).unwrap().windows(5).any(|w| w == b"Cedro"));
         let legacy = dir.join("vecchio.doc");
