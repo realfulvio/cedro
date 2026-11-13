@@ -538,6 +538,13 @@ fn larghezze<'a>(ws: &mut rust_xlsxwriter::Worksheet, rows: impl Iterator<Item =
 
 /// I fogli di un .xlsx/.xlsm o di un .ods.
 pub fn leggi(ext: &str, bytes: &[u8]) -> Result<Vec<Foglio>, String> {
+    if ext == "xls" {
+        let mut fogli = crate::ufficio::xls::tabella(bytes)?;
+        for f in &mut fogli {
+            pulisci_bordi(&mut f.righe);
+        }
+        return Ok(fogli);
+    }
     let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| "il file non è un foglio di calcolo leggibile (forse un .xls vecchio: salvalo in .xlsx)".to_string())?;
     let mut fogli = if ext == "ods" { leggi_ods(&mut zip)? } else { leggi_xlsx(&mut zip)? };
     for f in &mut fogli {

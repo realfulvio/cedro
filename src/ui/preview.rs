@@ -82,7 +82,7 @@ fn pages_of(path: &Path) -> Option<std::rc::Rc<Pages>> {
 
 fn layout(path: &Path) -> Option<Pages> {
     match engine::kind_of(path) {
-        Kind::Text if matches!(engine::extension(path).as_str(), "xlsx" | "xlsm" | "ods") => {
+        Kind::Text if matches!(engine::extension(path).as_str(), "xlsx" | "xlsm" | "ods" | "xls") => {
             // Il primo foglio non vuoto, come tabella (i numeri con la virgola, come in Excel).
             let bytes = std::fs::read(path).ok()?;
             let fogli = crate::tabella::leggi(&engine::extension(path), &bytes).ok()?;
@@ -105,13 +105,51 @@ fn layout(path: &Path) -> Option<Pages> {
     }
 }
 
+/// I fogli di calcolo si mostrano come li stampa il loro programma: le pagine del file, con le sue
+/// impostazioni di stampa (non il risultato delle opzioni scelte). Il PDF in memoria dell'ultimo file.
+fn printed(path: &Path) -> Option<std::sync::Arc<Vec<u8>>> {
+    type Last = Option<(std::path::PathBuf, Option<std::time::SystemTime>, std::sync::Arc<Vec<u8>>)>;
+    static LAST_PRINTED: std::sync::Mutex<Last> = std::sync::Mutex::new(None);
+    let ext = engine::extension(path);
+    if !crate::ufficio::is_foglio(&ext) {
+        return None;
+    }
+    let stamp = std::fs::metadata(path).and_then(|m| m.modified()).ok();
+    let mut last = LAST_PRINTED.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((p, s, pdf)) = last.as_ref() {
+        if p == path && *s == stamp {
+            return Some(pdf.clone());
+        }
+    }
+    let bytes = std::fs::read(path).ok()?;
+    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    // Per guardare basta il PDF leggero: caratteri del sistema non incorporati.
+    let scelte = crate::ufficio::Scelte { embed: false, bookmarks: false, ..Default::default() };
+    let pdf = std::sync::Arc::new(crate::ufficio::foglio_pdf(&ext, &bytes, &name, &engine::stem(path), &scelte).ok()?);
+    *last = Some((path.to_path_buf(), stamp, pdf.clone()));
+    Some(pdf)
+}
+
+/// Vero se l'anteprima del file sono le sue pagine stampate (fogli di calcolo).
+pub fn is_printed(path: &Path) -> bool {
+    crate::ufficio::is_foglio(&engine::extension(path))
+}
+
 /// Quante pagine ha l'anteprima di un file di testo o di un documento.
 pub fn page_count(path: &Path) -> Option<usize> {
+    if is_printed(path) {
+        return printed(path).and_then(|pdf| crate::ocr::pdf_page_count(&pdf).ok());
+    }
     pages_of(path).map(|p| p.len().max(1))
 }
 
 /// Una pagina dell'anteprima, con il lato lungo di `side` pixel.
 pub fn render_page(path: &Path, page: usize, side: f32) -> Option<Image> {
+    if is_printed(path) {
+        let pdf = printed(path)?;
+        let (w, h, rgba) = crate::ocr::render_page_rgba(&pdf, page, side).ok()?;
+        return Image::from_rgba(w, h, &rgba);
+    }
     let pages = pages_of(path)?;
     let ops = pages.get(page.min(pages.len().saturating_sub(1)))?;
     let scale = side / PAGE_H;
