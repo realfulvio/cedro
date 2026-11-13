@@ -1,7 +1,7 @@
 name: Linux
 
 # Compila e prova Cedro per Linux (x86-64) e crea il pacchetto tar.gz e i motori di trascrizione.
-# Pubblicare: parte da solo alla fine del workflow «Windows ARM64» quando pubblica una release, oppure
+# Pubblicare: parte da solo all'inizio del workflow «Windows ARM64» (in parallelo) quando pubblica una release, oppure
 # Actions → Linux → Run workflow con il tag (per esempio v0.18.1): il tar.gz va nella release v<versione>,
 # i motori nella pre-release «motori-v<versione>», e nelle note compare la riga per Linux.
 # Dove gira: sul minipc di casa (runner con l'etichetta cedro-linux, dentro un contenitore Ubuntu 24.04 con
@@ -48,6 +48,43 @@ jobs:
           SONDA_REF: ${{ github.ref_name }}
         run: tools/sonda-runner.sh cedro-linux
 
+  # Se trascrivi/ e riassumi/ sono uguali all'ultima release (cambia solo la loro versione) i motori non si
+  # ricompilano né si riprovano: si riprendono da «motori-<tag precedente>» e si rinominano (12 compilazioni e la
+  # prova del modello vero risparmiate). Nel dubbio, o senza tag, si compila tutto come prima.
+  invarianti:
+    name: Controlla se i motori sono cambiati
+    runs-on: ubuntu-latest
+    outputs:
+      riuso: ${{ steps.conf.outputs.riuso }}
+      precedente: ${{ steps.conf.outputs.precedente }}
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ inputs.tag != '' }}
+        with:
+          ref: ${{ inputs.tag }}
+      - id: conf
+        if: ${{ inputs.tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          riuso=false; prec=""
+          prec=$(gh release view --json tagName --jq .tagName 2>/dev/null) || prec=""
+          if [ -z "$prec" ] || [ "$prec" = "$TAG" ]; then
+            echo "Nessuna release precedente utilizzabile ($prec): si compila tutto"
+          elif ! python3 tools/motori-invariati.py "$prec"; then
+            echo "Sorgenti dei motori cambiati: si compila tutto"
+          else
+            have=$(gh release view "motori-$prec" --json assets --jq '.assets[].name' 2>/dev/null || true)
+            ok=true
+            for m in trascrivi riassumi; do for v in base avx2 avxvnni avx512 avx512vnni vulkan; do
+              grep -qxF "cedro-$m-${prec#v}-linux-x64-$v" <<<"$have" || { echo "manca cedro-$m-${prec#v}-linux-x64-$v in motori-$prec"; ok=false; }
+            done; done
+            if $ok; then riuso=true; echo "Motori da riprendere da motori-$prec"; else echo "Motori della release precedente incompleti: si compila tutto"; fi
+          fi
+          echo "riuso=$riuso" >> "$GITHUB_OUTPUT"
+          echo "precedente=$prec" >> "$GITHUB_OUTPUT"
   app:
     name: Cedro (build, prove, tar.gz)
     needs: scegli
@@ -111,7 +148,8 @@ jobs:
 
   motori:
     name: Motori di trascrizione (processore e Vulkan)
-    needs: scegli
+    needs: [scegli, invarianti]
+    if: ${{ needs.invarianti.outputs.riuso != 'true' }}
     runs-on: ${{ needs.scegli.outputs.locale == 'true' && fromJSON('["self-hosted", "cedro-linux"]') || 'ubuntu-24.04' }}
     # Sul minipc: stesso sistema dei runner di GitHub (Ubuntu 24.04, quindi la stessa glibc minima per chi
     # installa), con un volume che tiene Rust, i pacchetti scaricati e le cartelle di compilazione.
@@ -175,7 +213,8 @@ jobs:
 
   riassunto:
     name: Motori del Riassunto AI (processore e Vulkan)
-    needs: scegli
+    needs: [scegli, invarianti]
+    if: ${{ needs.invarianti.outputs.riuso != 'true' }}
     runs-on: ${{ needs.scegli.outputs.locale == 'true' && fromJSON('["self-hosted", "cedro-linux"]') || 'ubuntu-24.04' }}
     # Sul minipc: stesso sistema dei runner di GitHub (Ubuntu 24.04, quindi la stessa glibc minima per chi
     # installa), con un volume che tiene Rust, i pacchetti scaricati e le cartelle di compilazione.
@@ -252,8 +291,9 @@ jobs:
 
   pubblica:
     name: Aggiunge Linux alla release
-    if: ${{ inputs.tag != '' }}
-    needs: [app, motori, riassunto]
+    # I motori possono essere stati saltati (ripresi dalla release precedente): «skipped» va bene, «failure» no.
+    if: ${{ always() && inputs.tag != '' && needs.app.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.motori.result) && contains(fromJSON('["success", "skipped"]'), needs.riassunto.result) }}
+    needs: [app, motori, riassunto, invarianti]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -263,6 +303,18 @@ jobs:
           path: file
           merge-multiple: true
 
+      - name: Motori della release precedente (sorgenti invariati)
+        if: ${{ needs.invarianti.outputs.riuso == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREC: ${{ needs.invarianti.outputs.precedente }}
+        run: |
+          mkdir -p file
+          gh release download "motori-$PREC" --pattern 'cedro-trascrivi-*-linux-x64-*' --pattern 'cedro-riassumi-*-linux-x64-*' --dir file
+          # Controllo del SHA-256 contro quello registrato da GitHub al momento del caricamento.
+          gh release view "motori-$PREC" --json assets --jq '.assets[] | select((.name | test("linux-x64-")) and .digest != null) | "\(.digest | sub("sha256:"; ""))  \(.name)"' > somme.txt
+          (cd file && sha256sum -c ../somme.txt)
+          # Il nome con la versione nuova lo mette il ciclo qui sotto.
       - name: Release ${{ inputs.tag }}
         env:
           GH_TOKEN: ${{ github.token }}
