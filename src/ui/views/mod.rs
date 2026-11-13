@@ -13,6 +13,7 @@ mod firma;
 mod firmare;
 mod guidato;
 mod labs;
+mod onda;
 mod pagine;
 mod revisione;
 mod riassunto;
@@ -20,6 +21,9 @@ mod riassunto;
 pub use activity::{links_page, transcribe_page};
 pub use firma::{draw_viewer, firma_page, viewer_size};
 pub use pagine::{merged_pages, page_drop, split_file, BOARD_MAX, MERGE as ICON_MERGE, MERGED_MAX, SPLIT as ICON_SPLIT, SHRINK as ICON_SHRINK, STRIP_MAX};
+
+/// Margine a destra della finestra, fino al pannello (serve a trascinarne il bordo).
+pub const SIDE_RIGHT: f32 = 12.0;
 
 use super::assets as ic;
 use super::core::{Act, Field, Fold, Frame, Scroll, BOLD, R, SANS, SEMI};
@@ -796,13 +800,17 @@ pub fn category_icon(kind: Kind) -> &'static str {
 pub fn go_extras(f: &mut Frame, app: &App, r: R, side: bool) {
     let pal = f.pal;
     let size = 14.0;
-    if let Some(u) = app.spia() {
-        let text = if u.gpu { u.detail.clone() } else { format!("Processore · {}", u.detail) };
+    // Nelle pagine Cedro la scheda video si legge già in alto: qui una riga dice cosa sta facendo Cedro.
+    let line = if f.theme.is_cedro() && app.activity == Activity::Transcribe && app.busy() {
+        Some((activity::transcribe_what(app), pal.primary))
+    } else {
+        app.spia().map(|u| if u.gpu { (u.detail.clone(), pal.primary) } else { (format!("Processore · {}", u.detail), pal.ok) })
+    };
+    if let Some((text, dot)) = line {
         let tw = f.measure(&text, size, SANS).min(if side { 190.0 } else { r.2 - 30.0 });
-        let dot = if u.gpu { pal.primary } else { pal.ok };
         let (x, y) = if side { (r.0 - 24.0 - tw - 14.0, r.1 + r.3 / 2.0 - 11.0) } else { (r.0 + (r.2 - tw - 14.0) / 2.0, r.1 + r.3 + 14.0) };
         f.p.rrect(x, y + 7.0, 8.0, 8.0, 4.0, Some(dot), None);
-        f.p.text(&text, x + 14.0, y, tw + 2.0, 22.0, size, SANS, pal.muted, Align::Left);
+        f.text(&text, x + 14.0, y, tw + 2.0, 22.0, size, SANS, pal.muted);
     } else if app.finished() {
         let label = "Ricomincia";
         let tw = f.measure(label, size, SEMI);
