@@ -16,10 +16,10 @@ pub struct Category {
 }
 
 pub const CATEGORIES: &[Category] = &[
-    Category { kind: Kind::Image, name: "Immagini", hint: "Cambia formato, ridimensiona e raddrizza le foto.", accepts: "PNG, JPEG, WebP, AVIF, JPEG XL, SVG, BMP, GIF, TIFF, ICO, TGA, QOI, PNM, HDR, OpenEXR, DDS" },
-    Category { kind: Kind::Doc, name: "Documenti", hint: "Da Word, ODT e RTF a PDF.", accepts: "DOCX, DOC, ODT, RTF" },
+    Category { kind: Kind::Image, name: "Immagini", hint: "Cambia formato, ridimensiona e raddrizza le foto.", accepts: "PNG, JPEG, HEIC, WebP, AVIF, JPEG XL, SVG, BMP, GIF, TIFF, ICO, TGA, QOI, PNM, HDR, OpenEXR, DDS" },
+    Category { kind: Kind::Doc, name: "Documenti", hint: "Da Word, ODT, RTF e DOC a PDF, Word, ODT, HTML e testo.", accepts: "DOCX, DOC, ODT, RTF" },
     Category { kind: Kind::Pdf, name: "PDF", hint: "Da PDF a Word modificabile, a Excel, a immagini o a testo.", accepts: "PDF" },
-    Category { kind: Kind::Text, name: "Testo", hint: "TXT, Markdown, CSV, Excel, JSON e HTML.", accepts: "TXT, MD, CSV, TSV, XLSX, ODS, JSON, HTML, XML" },
+    Category { kind: Kind::Text, name: "Testo", hint: "TXT, Markdown, CSV, Excel, JSON e HTML.", accepts: "TXT, MD, CSV, TSV, XLSX, XLS, ODS, JSON, HTML, XML" },
     Category { kind: Kind::Audio, name: "Audio", hint: "MP3, WAV, FLAC, Opus e AIFF.", accepts: "WAV, MP3, OGG, Opus, M4A, AAC, FLAC, AIFF, CAF" },
     Category { kind: Kind::Video, name: "Video", hint: "MP4, WebM, MOV, MKV e AVI.", accepts: "MP4, WebM, MOV, MKV, AVI" },
     Category { kind: Kind::Archive, name: "Archivi", hint: "Converte i file dentro uno ZIP e lo rifà.", accepts: "ZIP" },
@@ -67,7 +67,11 @@ pub fn simple_formats(kind: Kind) -> &'static [SimpleFormat] {
         SimpleFormat { id: "png", title: "PNG", note: "nitida, senza perdite" },
         SimpleFormat { id: "pdf", title: "PDF", note: "un documento" },
     ];
-    const DOC: &[SimpleFormat] = &[SimpleFormat { id: "pdf", title: "PDF", note: "si apre ovunque" }];
+    const DOC: &[SimpleFormat] = &[
+        SimpleFormat { id: "pdf", title: "PDF", note: "si apre ovunque" },
+        SimpleFormat { id: "docx", title: "Word", note: "da modificare" },
+        SimpleFormat { id: "txt", title: "Testo", note: "solo le parole" },
+    ];
     const PDF: &[SimpleFormat] = &[
         SimpleFormat { id: "docx", title: "Word", note: "da modificare" },
         SimpleFormat { id: "xlsx", title: "Excel", note: "le tabelle" },
@@ -233,6 +237,13 @@ pub enum Opt {
     TileTissue,
     TileJpeg,
     RxClinic,
+    OfficePage,
+    SheetScope,
+    SheetFit,
+    SheetOrient,
+    SheetGrid,
+    SheetRepeat,
+    SheetFooter,
 }
 
 /// Una riga della zona Opzioni del pannello.
@@ -448,6 +459,43 @@ const TILE_MAG: OptionDef = OptionDef { opt: Opt::TileMag, title: "Ingrandimento
 const TILE_TISSUE: OptionDef = sw(Opt::TileTissue, "Solo tessuto", "Le tessere quasi tutte vetro bianco restano fuori", true);
 const TILE_FORMAT: OptionDef = OptionDef { opt: Opt::TileJpeg, title: "Formato", note: "PNG non perde niente; JPEG pesa un decimo", control: Control::Segments(TILE_FORMATS), default: 0 };
 
+const OFFICE_PAGES: &[Choice] = &[
+    Choice { label: "Come il file", value: 0 },
+    Choice { label: "A4", value: 1 },
+    Choice { label: "A3", value: 2 },
+    Choice { label: "Lettera", value: 3 },
+];
+pub const OFFICE_PAGE: OptionDef = pick(Opt::OfficePage, "Formato pagina", "«Come il file»: la carta scelta nel programma che l'ha scritto", OFFICE_PAGES, 0);
+const SHEET_SCOPES: &[Choice] = &[Choice { label: "Tutti", value: 0 }, Choice { label: "Solo quello aperto", value: 1 }];
+const SHEET_SCOPE: OptionDef = OptionDef { opt: Opt::SheetScope, title: "Fogli", note: "Tutti quelli visibili, uno dopo l'altro; i fogli nascosti restano fuori", control: Control::Segments(SHEET_SCOPES), default: 0 };
+const SHEET_FITS: &[Choice] = &[
+    Choice { label: "Come il file", value: 0 },
+    Choice { label: "Colonne in una pagina", value: 1 },
+    Choice { label: "Foglio in una pagina", value: 2 },
+    Choice { label: "Misura vera (100%)", value: 3 },
+];
+const SHEET_FIT: OptionDef = pick(Opt::SheetFit, "Adatta", "«Come il file»: la scala o le pagine scelte in Excel o Calc", SHEET_FITS, 0);
+const SHEET_ORIENTS: &[Choice] = &[
+    Choice { label: "Come il file", value: 0 },
+    Choice { label: "Automatico", value: 1 },
+    Choice { label: "Verticale", value: 2 },
+    Choice { label: "Orizzontale", value: 3 },
+];
+const SHEET_ORIENT: OptionDef = OptionDef { opt: Opt::SheetOrient, title: "Orientamento", note: "Automatico: orizzontale quando il foglio è più largo che lungo", control: Control::Segments(SHEET_ORIENTS), default: 0 };
+const SHEET_GRIDS: &[Choice] = &[Choice { label: "Come il file", value: 0 }, Choice { label: "Sì", value: 1 }, Choice { label: "No", value: 2 }];
+const SHEET_GRID: OptionDef = OptionDef { opt: Opt::SheetGrid, title: "Griglia", note: "Le righe grigie tra le celle, come sullo schermo", control: Control::Segments(SHEET_GRIDS), default: 0 };
+const SHEET_REPEAT: OptionDef = sw(Opt::SheetRepeat, "Ripeti la prima riga", "In cima a ogni pagina, se il file non ha già righe da ripetere", false);
+const SHEET_FOOTER: OptionDef = sw(Opt::SheetFooter, "Nome del foglio e pagina in fondo", "Se il file non ha un piè di pagina suo", false);
+
+/// Le opzioni del PDF quando in coda c'è un foglio di calcolo (Excel, Calc, .xls): prendono il posto
+/// di quelle del testo.
+pub fn sheet_option_defs(action: &str) -> Vec<&'static OptionDef> {
+    match action {
+        "pdf" => vec![&SHEET_SCOPE, &SHEET_FIT, &SHEET_ORIENT, &OFFICE_PAGE, &SHEET_GRID, &SHEET_REPEAT, &SHEET_FOOTER, &EMBED_FONTS, &PDF_A, &PASSWORD],
+        _ => vec![],
+    }
+}
+
 /// Le opzioni del riquadro di un formato scientifico (vetrino, DICOM, microscopia): restano in vista, in cima.
 pub fn is_lead(opt: Opt) -> bool {
     matches!(
@@ -604,7 +652,8 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
         (Kind::Image, "figure") => vec![&FIG_WIDTH, &FIG_DPI, &FIG_LETTERS, &FIG_SCALE, &FIG_OBJECTIVE, &FIG_CALIBRATION],
         (Kind::Image, "jpeg" | "compress" | "pdf" | "pnm") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
         (Kind::Image, _) => vec![&IMAGE_SIZE, &STRAIGHTEN],
-        (Kind::Doc, "pdf") => vec![&PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
+        (Kind::Doc, "pdf") => vec![&OFFICE_PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
+        (Kind::Doc, "txt") => vec![&TEXT_ENCODING],
         (Kind::Pdf, "jpg" | "png") => vec![&PDF_DPI, &PDF_PAGES, &ONE_PER_PAGE],
         (Kind::Pdf, "docx") => vec![&OCR, &TABLES, &COLUMNS, &PDF_PAGES],
         (Kind::Pdf, "xlsx") => vec![&SHEET_PER_TABLE, &CELL_VALUES, &MERGE_TABLES, &OUTSIDE_TEXT, &OCR, &PDF_PAGES],
@@ -838,6 +887,21 @@ pub fn options_from(values: &Values) -> engine::Options {
         calibrazione_10x: values.text_of(Opt::FigCalibration).trim().to_string(),
     };
     o.rx_clinica = values.text_of(Opt::RxClinic).trim().to_string();
+    o.ufficio = crate::ufficio::Scelte {
+        carta: match values.num(Opt::OfficePage, 0) {
+            1 => Some(PageSize::A4),
+            2 => Some(PageSize::A3),
+            3 => Some(PageSize::Letter),
+            _ => None,
+        },
+        solo_attivo: values.num(Opt::SheetScope, 0) == 1,
+        adatta: values.num(Opt::SheetFit, 0).min(3) as u8,
+        orienta: values.num(Opt::SheetOrient, 0).min(3) as u8,
+        griglia: values.num(Opt::SheetGrid, 0).min(2) as u8,
+        ripeti_prima: on(Opt::SheetRepeat, false),
+        piede_nome: on(Opt::SheetFooter, false),
+        ..Default::default()
+    };
     let text = |opt: Opt| Some(values.text_of(opt).trim().to_string()).filter(|t| !t.is_empty());
     let pp = &mut o.pdf_pages;
     pp.settings.file_bookmarks = on(Opt::FileBookmarks, true);
@@ -907,7 +971,7 @@ mod tests {
             }
         }
         // Le opzioni dei vetrini compaiono solo con un .svs in coda.
-        for d in slide_option_defs("png").into_iter().chain(dicom_option_defs("png")).chain(micro_option_defs("png", 3, 3, 3)) {
+        for d in slide_option_defs("png").into_iter().chain(dicom_option_defs("png")).chain(micro_option_defs("png", 3, 3, 3)).chain(sheet_option_defs("pdf")) {
             if !all.iter().any(|x| x.opt == d.opt) {
                 all.push(d);
             }
@@ -958,6 +1022,7 @@ mod tests {
             Opt::OpenPassword, Opt::SplitHow, Opt::SplitEvery, Opt::SplitRanges, Opt::SplitRemove, Opt::SplitName,
             Opt::PageNumbers, Opt::NumberPos, Opt::NumberFormat, Opt::NumberStart, Opt::NumberSize, Opt::Watermark, Opt::WatermarkText,
             Opt::WatermarkOpacity, Opt::WatermarkAngle, Opt::WatermarkPages, Opt::SqueezeLevel, Opt::StripMeta, Opt::BwScans,
+            Opt::OfficePage, Opt::SheetScope, Opt::SheetFit, Opt::SheetOrient, Opt::SheetGrid, Opt::SheetRepeat, Opt::SheetFooter,
         ];
         for opt in wanted {
             assert!(defs.iter().any(|d| d.opt == opt), "{opt:?} non compare in nessun pannello");

@@ -11,7 +11,13 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Video dal web non si blocca più sui sottotitoli, e in alto a destra torna la riga che dice cosa sta facendo Cedro.**
+**Cedro apre e converte i file d'ufficio, senza Office né LibreOffice.**
 
-- YouTube in questi giorni rifiuta spesso i sottotitoli («troppe richieste») e il download si fermava con «Il sito ha limitato le richieste». Ora, se i sottotitoli non arrivano, Cedro scarica comunque il video senza e lo scrive nel registro.
-- In alto a destra, accanto ai pulsanti della finestra, una riga dice cosa accelera il lavoro in corso (scheda video con la tecnica, oppure processore con istruzioni e thread) e quando Cedro scarica o aggiorna un componente: yt-dlp, ffmpeg, deno, motori e modelli di trascrizione e riassunto, con quanto manca e una barretta. A riposo mostra la scheda video pronta, o «Solo processore».
+- **Word in PDF come lo stampa Word**: .docx, .odt, .rtf e .doc (anche i vecchi Word 6 e Word 95) con stili, tabelle e celle unite, elenchi numerati, intestazioni e piè di pagina, note, immagini, caselle di testo e segnalibri. Si sceglie la carta: come nel file, A4, A3 o Lettera.
+- Dai documenti si esce anche in **Word, ODT, HTML, Markdown e testo**.
+- **Excel in PDF**: .xlsx, .ods e .xls stampati come li stampa il loro programma, con aree di stampa, adattamento alla pagina, orientamento, griglia e righe ripetute.
+- **Foto HEIC e HEIF dell'iPhone**: si aprono, si vedono e si convertono in JPEG, PNG o PDF con i colori giusti.
+- Al centro della finestra c'è sempre l'anteprima del file di partenza: pagine del documento, del foglio o la foto.
+- Un file con l'estensione sbagliata (un RTF salvato come .doc) si apre lo stesso; i file protetti da password o rovinati danno un messaggio chiaro.
+- Da riga di comando «jpg» e «tif» valgono come «jpeg» e «tiff».
+- Provato con circa 1.850 conversioni di file veri e di collaudo su Linux e Windows, confrontando le pagine con quelle di LibreOffice.

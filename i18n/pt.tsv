@@ -2414,6 +2414,32 @@ Scrive le foto WebP.	Grava fotos WebP.
 BSD-2-Clause o MIT	BSD-2-Clause ou MIT
 BSD-3-Clause o BSD-2-Clause	BSD-3-Clause ou BSD-2-Clause
 The OpenReadout Authors (da jxrlib di Microsoft), Moritz Borcherding	The OpenReadout Authors (do jxrlib da Microsoft), Moritz Borcherding
+Da Word, ODT, RTF e DOC a PDF, Word, ODT, HTML e testo.	De Word, ODT, RTF e DOC para PDF, Word, ODT, HTML e texto.
+tiene caratteri, tabelle e immagini	mantém fontes, tabelas e imagens
+per LibreOffice e OpenOffice	para LibreOffice e OpenOffice
+pagina web, immagini dentro	página web, imagens incluídas
+titoli, elenchi e tabelle	títulos, listas e tabelas
+Documento di Word	Documento do Word
+Documento di Writer (ODT)	Documento do Writer (ODT)
+Pagina web con le immagini dentro	Página web com as imagens incluídas
+Markdown con titoli, elenchi e tabelle	Markdown com títulos, listas e tabelas
+«{}» non è un documento letto da Cedro	“{}” não é um documento que o Cedro consegue ler
+la carta scelta nel file	o papel definido no arquivo
+1 PDF · 1 pagina	1 PDF · 1 página
+{#} PDF · 1 pagina	{} PDFs · 1 página
+documento di Word 1 o 2 per Windows: formato troppo vecchio	documento do Word 1 ou 2 para Windows: formato antigo demais
+documento di Word troppo vecchio	documento do Word antigo demais
+il documento è protetto da password	o documento está protegido por senha
+il file .doc è rovinato e non si può leggere	o arquivo .doc está danificado e não pode ser lido
+il file Excel è protetto da password: aprilo e salvalo senza	o arquivo do Excel está protegido por senha: abra e salve sem ela
+il file contiene una DTD, che Cedro non apre per sicurezza	o arquivo contém uma DTD, que o Cedro não abre por segurança
+il file non è un RTF	o arquivo não é um RTF
+il file non è un documento Word leggibile	o arquivo não é um documento do Word legível
+il file non è un documento di Writer leggibile	o arquivo não é um documento do Writer legível
+il file non è un foglio Excel leggibile	o arquivo não é uma planilha do Excel legível
+il foglio di calcolo è vuoto: non c'è niente da stampare	a planilha está vazia: não há nada para imprimir
+non è un documento di Word	não é um documento do Word
+documento senza testo	documento sem texto
 Solo processore	Só processador
 Accelera la scheda video	A placa de vídeo acelera
 Lavora il processore	O processador trabalha
