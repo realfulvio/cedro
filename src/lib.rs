@@ -1,4 +1,5 @@
 pub mod accel;
+pub mod componenti;
 mod audio;
 mod symph;
 pub mod portable;
