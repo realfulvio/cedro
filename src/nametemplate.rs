@@ -21,13 +21,15 @@ pub fn now() -> Stamp {
 pub fn local(unix: u64) -> Stamp {
     #[cfg(windows)]
     {
-        use windows::Win32::System::SystemInformation::GetLocalTime;
-        // Lo scarto del fuso di adesso (ore legali comprese) applicato all'istante: per i lavori di oggi basta.
-        let t = unsafe { GetLocalTime() };
-        let now_unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
-        let naive_now = days_from_civil(t.wYear as i64, t.wMonth as i64, t.wDay as i64) * 86_400 + t.wHour as i64 * 3600 + t.wMinute as i64 * 60 + t.wSecond as i64;
-        let shifted = (unix as i64 + (naive_now - now_unix)).max(0) as u64;
-        return Stamp { unix, ..utc(shifted) };
+        use windows::Win32::Foundation::SYSTEMTIME;
+        use windows::Win32::System::Time::SystemTimeToTzSpecificLocalTime;
+        // Dal fuso di Windows, con le ore legali di quella data (non quelle di adesso).
+        let u = utc(unix);
+        let from = SYSTEMTIME { wYear: u.year as u16, wMonth: u.month as u16, wDayOfWeek: 0, wDay: u.day as u16, wHour: u.hour as u16, wMinute: u.minute as u16, wSecond: u.second as u16, wMilliseconds: 0 };
+        let mut to = SYSTEMTIME::default();
+        if unsafe { SystemTimeToTzSpecificLocalTime(None, &from, &mut to) }.is_ok() {
+            return Stamp { year: to.wYear as i32, month: to.wMonth as u32, day: to.wDay as u32, hour: to.wHour as u32, minute: to.wMinute as u32, second: to.wSecond as u32, unix };
+        }
     }
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
@@ -47,17 +49,6 @@ pub fn local(unix: u64) -> Stamp {
     }
     #[allow(unreachable_code)]
     utc(unix)
-}
-
-/// Giorni dal 1970 a una data del calendario gregoriano (Howard Hinnant).
-#[cfg(windows)]
-fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
-    let y = if m <= 2 { y - 1 } else { y };
-    let era = y.div_euclid(400);
-    let yoe = y - era * 400;
-    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
 }
 
 /// Data e ora UTC di un istante Unix (calendario gregoriano, senza librerie).

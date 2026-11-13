@@ -2427,3 +2427,5 @@ Codice	Code
 Nota (per te, non entra nei nomi)	Note (pour toi, pas dans les noms)
 Togli il caso	Retirer le cas
 Metti	Mettre
+  cedro --caso V-2026-0457 convert vetrino.svs png    i file nuovi si chiamano data_caso_nome (senza --caso vale quello scelto nell'app; --senza-caso lo esclude)	  cedro --caso V-2026-0457 convert lame.svs png    les nouveaux fichiers s'appellent date_cas_nom (sans --caso, c'est le cas choisi dans l'app ; --senza-caso l'exclut)
+--caso vuole un codice, per esempio V-2026-0457	--caso demande un code, par exemple V-2026-0457

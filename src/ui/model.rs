@@ -1557,12 +1557,7 @@ impl App {
 
     fn exists_options(&self, mut opts: engine::Options) -> engine::Options {
         // Con un caso scelto i nomi dei file nuovi cominciano con la data e il caso (a meno di un modello proprio).
-        if let Some(caso) = &self.caso {
-            opts.caso = Some(caso.code.clone());
-            if opts.name_template.is_none() {
-                opts.name_template = Some(crate::caso::MODELLO.to_string());
-            }
-        }
+        opts = crate::caso::opzioni(self.caso.as_ref().map(|c| c.code.as_str()), opts);
         if opts.exists == Exists::Ask {
             let tx = self.tx.clone();
             let wake = self.wake.clone();
