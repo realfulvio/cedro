@@ -240,7 +240,7 @@ pub fn draw(lparam: LPARAM) -> bool {
             match row {
                 Row::Group(title) => {
                     let area = RECT { left: r.left + px(2, d), top: r.top, right: r.right, bottom: r.bottom - px(4, d) };
-                    text(hdc, &title.to_uppercase(), &area, st.bold, GREY, DT_LEFT | DT_BOTTOM | DT_SINGLELINE);
+                    text(hdc, &cedro::i18n::tr(title).to_uppercase(), &area, st.bold, GREY, DT_LEFT | DT_BOTTOM | DT_SINGLELINE);
                 }
                 Row::Item(item, version) => {
                     if selected {
