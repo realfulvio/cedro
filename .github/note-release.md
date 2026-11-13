@@ -11,9 +11,13 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro non si chiude più davanti a un file rovinato.**
+**Cedro apre e converte i file d'ufficio, senza Office né LibreOffice.**
 
-- Un video MOV o MP4 con un blocco danneggiato dentro non fa più girare Cedro all'infinito (neppure nell'anteprima): dice che il video non si legge.
-- Le foto (DDS, BMP e altre) con misure assurde nell'intestazione, i vetrini NDPI e SVS e i TIFF dei microscopi (OME-TIFF) con valori impossibili non fanno più chiudere Cedro per mancanza di memoria: danno un errore e il resto della coda va avanti.
-- Nel riconoscimento delle voci un risultato non valido del modello non ferma più la trascrizione.
-- Provato rovinando a caso 52 tipi di file (video, audio, foto, Office, PDF, ZIP, vetrini, firme digitali) circa 6.000 volte.
+- **Word in PDF come lo stampa Word**: .docx, .odt, .rtf e .doc (anche i vecchi Word 6 e Word 95) con stili, tabelle e celle unite, elenchi numerati, intestazioni e piè di pagina, note, immagini, caselle di testo e segnalibri. Si sceglie la carta: come nel file, A4, A3 o Lettera.
+- Dai documenti si esce anche in **Word, ODT, HTML, Markdown e testo**.
+- **Excel in PDF**: .xlsx, .ods e .xls stampati come li stampa il loro programma, con aree di stampa, adattamento alla pagina, orientamento, griglia e righe ripetute.
+- **Foto HEIC e HEIF dell'iPhone**: si aprono, si vedono e si convertono in JPEG, PNG o PDF con i colori giusti.
+- Al centro della finestra c'è sempre l'anteprima del file di partenza: pagine del documento, del foglio o la foto.
+- Un file con l'estensione sbagliata (un RTF salvato come .doc) si apre lo stesso; i file protetti da password o rovinati danno un messaggio chiaro.
+- Da riga di comando «jpg» e «tif» valgono come «jpeg» e «tiff».
+- Provato con circa 1.850 conversioni di file veri e di collaudo su Linux e Windows, confrontando le pagine con quelle di LibreOffice.
