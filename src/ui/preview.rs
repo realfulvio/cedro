@@ -105,13 +105,14 @@ fn layout(path: &Path) -> Option<Pages> {
     }
 }
 
-/// I fogli di calcolo si mostrano come li stampa il loro programma: le pagine del file, con le sue
-/// impostazioni di stampa (non il risultato delle opzioni scelte). Il PDF in memoria dell'ultimo file.
+/// I fogli di calcolo e i documenti di Word si mostrano come li stampa il loro programma: le pagine del
+/// file, con le sue impostazioni di stampa (non il risultato delle opzioni scelte). Il PDF in memoria
+/// dell'ultimo file.
 fn printed(path: &Path) -> Option<std::sync::Arc<Vec<u8>>> {
     type Last = Option<(std::path::PathBuf, Option<std::time::SystemTime>, std::sync::Arc<Vec<u8>>)>;
     static LAST_PRINTED: std::sync::Mutex<Last> = std::sync::Mutex::new(None);
     let ext = engine::extension(path);
-    if !crate::ufficio::is_foglio(&ext) {
+    if !is_printed(path) {
         return None;
     }
     let stamp = std::fs::metadata(path).and_then(|m| m.modified()).ok();
@@ -125,14 +126,20 @@ fn printed(path: &Path) -> Option<std::sync::Arc<Vec<u8>>> {
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     // Per guardare basta il PDF leggero: caratteri del sistema non incorporati.
     let scelte = crate::ufficio::Scelte { embed: false, bookmarks: false, ..Default::default() };
-    let pdf = std::sync::Arc::new(crate::ufficio::foglio_pdf(&ext, &bytes, &name, &engine::stem(path), &scelte).ok()?);
+    let made = if crate::ufficio::is_documento(&ext) {
+        crate::ufficio::documento_pdf(&ext, &bytes, &engine::stem(path), &scelte)
+    } else {
+        crate::ufficio::foglio_pdf(&ext, &bytes, &name, &engine::stem(path), &scelte)
+    };
+    let pdf = std::sync::Arc::new(made.ok()?);
     *last = Some((path.to_path_buf(), stamp, pdf.clone()));
     Some(pdf)
 }
 
-/// Vero se l'anteprima del file sono le sue pagine stampate (fogli di calcolo).
+/// Vero se l'anteprima del file sono le sue pagine stampate (fogli di calcolo, documenti di Word).
 pub fn is_printed(path: &Path) -> bool {
-    crate::ufficio::is_foglio(&engine::extension(path))
+    let ext = engine::extension(path);
+    crate::ufficio::is_foglio(&ext) || crate::ufficio::is_documento(&ext)
 }
 
 /// Quante pagine ha l'anteprima di un file di testo o di un documento.

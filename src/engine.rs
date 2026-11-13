@@ -464,7 +464,7 @@ fn write_text_pdf(path: &Path, out: PathBuf, blocks: &[crate::pdfdoc::DocBlock],
         return Err(err("il PDF/A non ammette la password: togline una delle due"));
     }
     let options = crate::pdfdoc::PdfOptions {
-        size: opts.page_size,
+        size: opts.ufficio.carta.unwrap_or(opts.page_size),
         embed: opts.embed_fonts,
         bookmarks: opts.bookmarks,
         pdfa: opts.pdfa,
@@ -489,7 +489,7 @@ fn write_text_pdf(path: &Path, out: PathBuf, blocks: &[crate::pdfdoc::DocBlock],
     Ok(Output { path: out, message })
 }
 
-/// Un foglio di calcolo in PDF, impaginato come lo stampa Excel o Calc.
+/// Un documento d'ufficio in PDF, impaginato come lo stampa il suo programma (Word, Writer, Excel, Calc).
 fn write_sheet_pdf(path: &Path, from: &str, dir: &Path, opts: &Options) -> CedroResult<Output> {
     let password = opts.password.as_deref().filter(|p| !p.is_empty());
     if opts.pdfa && password.is_some() {
@@ -501,7 +501,11 @@ fn write_sheet_pdf(path: &Path, from: &str, dir: &Path, opts: &Options) -> Cedro
     scelte.embed = opts.embed_fonts;
     scelte.bookmarks = opts.bookmarks;
     scelte.pdfa = opts.pdfa;
-    let mut pdf = crate::ufficio::foglio_pdf(from, &bytes, &name, &stem(path), &scelte).map_err(err)?;
+    let mut pdf = if crate::ufficio::is_documento(from) {
+        crate::ufficio::documento_pdf(from, &bytes, &stem(path), &scelte).map_err(err)?
+    } else {
+        crate::ufficio::foglio_pdf(from, &bytes, &name, &stem(path), &scelte).map_err(err)?
+    };
     let pages = crate::ocr::pdf_page_count(&pdf).unwrap_or(0);
     let mut message = format!("PDF di {pages} {}", if pages == 1 { "pagina" } else { "pagine" });
     if opts.pdfa {
@@ -1814,6 +1818,10 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
 
     if kind == Kind::Doc && action == "pdf" {
+        let from = extension(path);
+        if crate::ufficio::is_documento(&from) {
+            return write_sheet_pdf(path, &from, &dir, opts);
+        }
         let out = reserve(&dir, &stem(path), "pdf")?;
         let blocks = crate::doctext::document_blocks(path).map_err(err)?;
         return write_text_pdf(path, out, &blocks, opts);

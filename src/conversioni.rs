@@ -648,7 +648,7 @@ fn format_option_defs(kind: Kind, action: &str) -> Vec<&'static OptionDef> {
         (Kind::Image, "figure") => vec![&FIG_WIDTH, &FIG_DPI, &FIG_LETTERS, &FIG_SCALE, &FIG_OBJECTIVE, &FIG_CALIBRATION],
         (Kind::Image, "jpeg" | "compress" | "pdf" | "pnm") => vec![&IMAGE_SIZE, &STRAIGHTEN, &WHITE_BG],
         (Kind::Image, _) => vec![&IMAGE_SIZE, &STRAIGHTEN],
-        (Kind::Doc, "pdf") => vec![&PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
+        (Kind::Doc, "pdf") => vec![&OFFICE_PAGE, &EMBED_FONTS, &BOOKMARKS, &PDF_A, &PASSWORD],
         (Kind::Pdf, "jpg" | "png") => vec![&PDF_DPI, &PDF_PAGES, &ONE_PER_PAGE],
         (Kind::Pdf, "docx") => vec![&OCR, &TABLES, &COLUMNS, &PDF_PAGES],
         (Kind::Pdf, "xlsx") => vec![&SHEET_PER_TABLE, &CELL_VALUES, &MERGE_TABLES, &OUTSIDE_TEXT, &OCR, &PDF_PAGES],
