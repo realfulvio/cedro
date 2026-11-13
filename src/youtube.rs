@@ -865,7 +865,9 @@ pub fn first_error(stderr: &str) -> String {
     let line = stderr.lines().rev().find(|l| l.contains("ERROR")).unwrap_or(stderr.lines().last().unwrap_or("")).trim();
     let line = line.trim_start_matches("ERROR:").trim();
     let low = line.to_lowercase();
-    if low.contains("unsupported url") {
+    if low.contains("video subtitles") && (low.contains("http error 429") || low.contains("too many requests")) {
+        "YouTube non dà i sottotitoli adesso: riprova più tardi o togli i sottotitoli".into()
+    } else if low.contains("unsupported url") {
         "Questo sito non è supportato (o il link non porta a un video)".into()
     } else if low.contains("drm") {
         "Il video è protetto da DRM e non si può scaricare".into()
@@ -1152,8 +1154,39 @@ fn lossy_lines(reader: impl Read) -> impl Iterator<Item = String> {
     })
 }
 
+/// Segnale interno: yt-dlp si è fermato perché i sottotitoli non si scaricano (YouTube risponde 429
+/// alle richieste dei sottotitoli anche quando il video è scaricabile).
+const SUBTITLES_FAILED: &str = "\u{1}sottotitoli";
+
+/// Gli stessi argomenti senza sottotitoli.
+fn without_subtitles(args: &[String]) -> Vec<String> {
+    let mut out = Vec::with_capacity(args.len());
+    let mut skip = false;
+    for a in args {
+        if skip {
+            skip = false;
+        } else if a == "--sub-langs" {
+            skip = true;
+        } else if !matches!(a.as_str(), "--write-subs" | "--write-auto-subs" | "--embed-subs") {
+            out.push(a.clone());
+        }
+    }
+    out
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, total: usize, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<Vec<PathBuf>, String> {
+    match run_once(ytdlp, args, url, dest, index, total, emit, cancel) {
+        Err(e) if e == SUBTITLES_FAILED => {
+            emit(Event::Log("Il sito non dà i sottotitoli adesso (limite di richieste): scarico il video senza".into()));
+            run_once(ytdlp, &without_subtitles(args), url, dest, index, total, emit, cancel).map_err(|e| if e == SUBTITLES_FAILED { "Non riesco a scaricare il video".to_string() } else { e })
+        }
+        other => other,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_once(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, total: usize, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<Vec<PathBuf>, String> {
     let mut child = command(ytdlp)
         .args(args)
         .arg("--")
@@ -1225,6 +1258,9 @@ fn run_one(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize, 
     untrack(&child);
     let status = status.map_err(|e| e.to_string())?;
     if files.is_empty() && !status.success() {
+        if errors.contains("Unable to download video subtitles") && args.iter().any(|a| a == "--embed-subs") {
+            return Err(SUBTITLES_FAILED.into());
+        }
         return Err(first_error(&errors));
     }
     Ok(files)
@@ -1643,6 +1679,14 @@ mod tests {
         assert_eq!(sum_for(list, "yt-dlp").as_deref(), Some("aaa"));
         assert_eq!(sum_for(list, "ffmpeg-master-latest-win64-lgpl.zip").as_deref(), Some("ccc"));
         assert!(sum_for(list, "altro").is_none());
+    }
+
+    #[test]
+    fn subtitles_removed_for_retry() {
+        let a: Vec<String> = ["--x", "--write-subs", "--write-auto-subs", "--sub-langs", "it,it-orig", "--embed-subs", "--y"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(without_subtitles(&a), vec!["--x", "--y"]);
+        assert!(first_error("ERROR: Unable to download video subtitles for 'it': HTTP Error 429: Too Many Requests").contains("sottotitoli"));
+        assert!(first_error("ERROR: [x] HTTP Error 429: Too Many Requests").contains("limitato"));
     }
 
     #[test]
