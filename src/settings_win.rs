@@ -105,7 +105,6 @@ const DPI: [u32; 4] = [100, 144, 200, 300];
 const MAX_PAGES: [u32; 4] = [50, 100, 300, 0];
 const LANGS: [&str; 3] = ["auto", "it", "en"];
 /// Le scelte della lingua dell'interfaccia, nell'ordine dell'elenco.
-const UI_LANGS: [&str; 3] = ["auto", "it", "en"];
 
 const WIDTH: i32 = 780;
 const HEIGHT: i32 = 600;
@@ -449,7 +448,7 @@ unsafe fn build(hwnd: HWND, _instance: HINSTANCE, dpi: u32) {
     {
         // I nomi delle lingue restano nella loro lingua: non passano dalla traduzione.
         let c = child(hwnd, w!("COMBOBOX"), "", combo_style, ID_UILANG, (r.ctl_x, r.mid - 14, 190, 220), dpi, normal, Some(0));
-        for it in [cedro::i18n::tr("Automatica").into_owned(), "Italiano".to_string(), "English".to_string()] {
+        for it in std::iter::once(cedro::i18n::tr("Automatica").into_owned()).chain(cedro::i18n::setting_names().into_iter().map(String::from)) {
             let h = HSTRING::from(it);
             SendMessageW(c, CB_ADDSTRING, Some(WPARAM(0)), Some(LPARAM(h.as_ptr() as isize)));
         }
@@ -877,7 +876,7 @@ unsafe fn fill(hwnd: HWND, s: &Settings, autostart: bool) {
     set_sel(hwnd, ID_DPI, DPI.iter().position(|d| *d == s.pdf_dpi).unwrap_or(1));
     set_sel(hwnd, ID_COMPRESS, s.compress as usize);
     set_sel(hwnd, ID_LANG, LANGS.iter().position(|l| *l == s.ocr_lang).unwrap_or(0));
-    set_sel(hwnd, ID_UILANG, UI_LANGS.iter().position(|l| *l == s.language).unwrap_or(0));
+    set_sel(hwnd, ID_UILANG, cedro::i18n::setting_keys().iter().position(|l| *l == s.language).unwrap_or(0));
     set_sel(hwnd, ID_MAXPAGES, MAX_PAGES.iter().position(|m| *m == s.ocr_max).unwrap_or(1));
 }
 
@@ -939,7 +938,7 @@ unsafe fn collect(hwnd: HWND) -> Settings {
         pdf_dpi: *DPI.get(sel(hwnd, ID_DPI)).unwrap_or(&base.pdf_dpi),
         compress: sel(hwnd, ID_COMPRESS).min(2) as u8,
         ocr_lang: LANGS.get(sel(hwnd, ID_LANG)).unwrap_or(&"auto").to_string(),
-        language: UI_LANGS.get(sel(hwnd, ID_UILANG)).unwrap_or(&"auto").to_string(),
+        language: cedro::i18n::setting_keys().get(sel(hwnd, ID_UILANG)).unwrap_or(&"auto").to_string(),
         ocr_max: *MAX_PAGES.get(sel(hwnd, ID_MAXPAGES)).unwrap_or(&base.ocr_max),
         // Le scelte della «Firma digitale» si fanno nella sua pagina: restano quelle di prima.
         ..base

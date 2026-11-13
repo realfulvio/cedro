@@ -131,7 +131,6 @@ const DPI: [u32; 4] = [100, 144, 200, 300];
 const MAX_PAGES: [u32; 4] = [50, 100, 300, 0];
 const LANGS: [&str; 3] = ["auto", "it", "en"];
 /// Le scelte della lingua dell'interfaccia, nell'ordine dell'elenco.
-const UI_LANGS: [&str; 3] = ["auto", "it", "en"];
 const SECTIONS: [&str; 8] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni"];
 const MARK: &[u8] = cedro::edizione::ICONA;
 const POWERED_BY: &str = "Powered by Luca \"Realhcok\" A.";
@@ -363,7 +362,7 @@ fn credit_row(item: &cedro::credits::Component) -> gtk4::ListBoxRow {
         soon.add_css_class("cedro-soon");
         top.append(&soon);
     }
-    let by = Label::new(Some(&format!("{} · {}", item.author, item.license)));
+    let by = Label::new(Some(&format!("{} · {}", t(item.author), t(item.license))));
     by.set_xalign(0.0);
     by.add_css_class("cedro-muted");
     let what = Label::new(Some(&t(item.what)));
@@ -706,11 +705,12 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
     let progress_row = setting("Avanzamento mentre converte", "Una linea sottile nel pannello e, su KDE, tra le notifiche.", &progress);
     let log_row = setting("Registro attività", "Il file log.txt e config.txt stanno nella cartella di Cedro.", &log);
     // I nomi delle lingue restano nella loro lingua: non passano dalla traduzione.
+    let ui_langs = cedro::i18n::setting_keys();
     let ui_lang = {
-        let items = [t("Automatica"), "Italiano".to_string(), "English".to_string()];
+        let items: Vec<String> = std::iter::once(t("Automatica")).chain(cedro::i18n::setting_names().into_iter().map(String::from)).collect();
         let shown: Vec<&str> = items.iter().map(String::as_str).collect();
         let dd = gtk4::DropDown::from_strings(&shown);
-        dd.set_selected(UI_LANGS.iter().position(|l| *l == current.language).unwrap_or(0) as u32);
+        dd.set_selected(ui_langs.iter().position(|l| *l == current.language).unwrap_or(0) as u32);
         dd.set_size_request(190, -1);
         dd
     };
@@ -1000,7 +1000,7 @@ pub fn open_settings(app: &Application, on_saved: impl Fn(&Settings) + 'static) 
                 pdf_dpi: *DPI.get(dpi.selected() as usize).unwrap_or(&base.pdf_dpi),
                 compress: (compress.selected() as u8).min(2),
                 ocr_lang: LANGS.get(lang.selected() as usize).unwrap_or(&"auto").to_string(),
-                language: UI_LANGS.get(ui_lang.selected() as usize).unwrap_or(&"auto").to_string(),
+                language: ui_langs.get(ui_lang.selected() as usize).unwrap_or(&"auto").to_string(),
                 ocr_max: *MAX_PAGES.get(max_pages.selected() as usize).unwrap_or(&base.ocr_max),
                 // Dove il PC non ha l'accelerazione l'interruttore è bloccato: resta la scelta di prima.
                 gpu: if hw.gpu.is_some() { gpu_switch.is_active() } else { base.gpu },
