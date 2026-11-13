@@ -253,7 +253,7 @@ impl Settings {
                 "firma_keep_pin" => s.firma_keep_pin = flag(value).unwrap_or(s.firma_keep_pin),
                 "firma_remind" => s.firma_remind = flag(value).unwrap_or(s.firma_remind),
                 "ui_theme" => s.ui_theme = value.to_string(),
-                "language" if matches!(value, "auto" | "it" | "en") => s.language = value.to_string(),
+                "language" if crate::i18n::is_setting(value) => s.language = value.to_string(),
                 "ocr_lang" if matches!(value, "auto" | "it" | "en") => s.ocr_lang = value.to_string(),
                 "ocr_max" => {
                     if let Ok(n) = value.parse::<u32>() {
