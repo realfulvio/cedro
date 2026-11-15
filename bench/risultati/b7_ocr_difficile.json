@@ -1,0 +1,933 @@
+{
+ "cedro": {
+  "cer": 0.4679,
+  "s": 1.8895,
+  "wer": 0.662
+ },
+ "pagine": 60,
+ "per_corpo": {
+  "10": {
+   "cedro": 0.3871,
+   "tesseract": 0.3957
+  },
+  "11": {
+   "cedro": 0.4475,
+   "tesseract": 0.4414
+  },
+  "12": {
+   "cedro": 0.5347,
+   "tesseract": 0.589
+  },
+  "9": {
+   "cedro": 0.6565,
+   "tesseract": 0.6462
+  }
+ },
+ "righe": [
+  {
+   "cedro": {
+    "cer": 0.362,
+    "s": 1.683,
+    "wer": 0.4516
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 60,
+   "pagina": "p000.jpg",
+   "tesseract": {
+    "cer": 0.3652,
+    "s": 0.773,
+    "wer": 0.4607
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.7023,
+    "s": 0.827,
+    "wer": 0.7418
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 35,
+   "pagina": "p001.jpg",
+   "tesseract": {
+    "cer": 0.7033,
+    "s": 0.347,
+    "wer": 0.7437
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.9039,
+    "s": 0.54,
+    "wer": 0.9443
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 60,
+   "pagina": "p002.jpg",
+   "tesseract": {
+    "cer": 0.9006,
+    "s": 0.252,
+    "wer": 0.9463
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.4563,
+    "s": 2.484,
+    "wer": 0.7018
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 35,
+   "pagina": "p003.jpg",
+   "tesseract": {
+    "cer": 0.4414,
+    "s": 0.825,
+    "wer": 0.6877
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.9278,
+    "s": 0.682,
+    "wer": 0.9737
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 60,
+   "pagina": "p004.jpg",
+   "tesseract": {
+    "cer": 0.8943,
+    "s": 0.557,
+    "wer": 0.9684
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.2845,
+    "s": 4.8,
+    "wer": 0.3754
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 35,
+   "pagina": "p005.jpg",
+   "tesseract": {
+    "cer": 0.2874,
+    "s": 0.772,
+    "wer": 0.3861
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.8781,
+    "s": 1.273,
+    "wer": 0.9448
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 60,
+   "pagina": "p006.jpg",
+   "tesseract": {
+    "cer": 0.8577,
+    "s": 0.7,
+    "wer": 0.9351
+   }
+  },
+  {
+   "cedro": {
+    "cer": 1.0,
+    "s": 0.259,
+    "wer": 1.0
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 35,
+   "pagina": "p007.jpg",
+   "tesseract": {
+    "cer": 1.0,
+    "s": 0.136,
+    "wer": 1.0
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.2064,
+    "s": 1.797,
+    "wer": 0.2581
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 60,
+   "pagina": "p008.jpg",
+   "tesseract": {
+    "cer": 0.2074,
+    "s": 0.942,
+    "wer": 0.2715
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0386,
+    "s": 2.221,
+    "wer": 0.0864
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 35,
+   "pagina": "p009.jpg",
+   "tesseract": {
+    "cer": 0.0386,
+    "s": 1.084,
+    "wer": 0.0881
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0602,
+    "s": 2.587,
+    "wer": 0.1284
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 60,
+   "pagina": "p010.jpg",
+   "tesseract": {
+    "cer": 0.0615,
+    "s": 1.148,
+    "wer": 0.1331
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.5033,
+    "s": 2.763,
+    "wer": 0.7201
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 35,
+   "pagina": "p011.jpg",
+   "tesseract": {
+    "cer": 0.4907,
+    "s": 1.205,
+    "wer": 0.7267
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.3871,
+    "s": 2.37,
+    "wer": 0.5551
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 60,
+   "pagina": "p012.jpg",
+   "tesseract": {
+    "cer": 0.3957,
+    "s": 0.992,
+    "wer": 0.5794
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.8303,
+    "s": 1.561,
+    "wer": 0.9277
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 35,
+   "pagina": "p013.jpg",
+   "tesseract": {
+    "cer": 0.8269,
+    "s": 0.74,
+    "wer": 0.929
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.241,
+    "s": 1.859,
+    "wer": 0.282
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 60,
+   "pagina": "p014.jpg",
+   "tesseract": {
+    "cer": 0.2433,
+    "s": 0.979,
+    "wer": 0.2942
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.4351,
+    "s": 1.312,
+    "wer": 0.4794
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 35,
+   "pagina": "p015.jpg",
+   "tesseract": {
+    "cer": 0.5432,
+    "s": 0.584,
+    "wer": 0.57
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.7329,
+    "s": 2.604,
+    "wer": 0.8994
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 60,
+   "pagina": "p016.jpg",
+   "tesseract": {
+    "cer": 0.7346,
+    "s": 1.313,
+    "wer": 0.9023
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0193,
+    "s": 2.906,
+    "wer": 0.0985
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 35,
+   "pagina": "p017.jpg",
+   "tesseract": {
+    "cer": 0.0198,
+    "s": 1.545,
+    "wer": 0.0969
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.8368,
+    "s": 1.004,
+    "wer": 0.8986
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 60,
+   "pagina": "p018.jpg",
+   "tesseract": {
+    "cer": 0.8365,
+    "s": 0.459,
+    "wer": 0.9036
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0079,
+    "s": 2.379,
+    "wer": 0.0376
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 35,
+   "pagina": "p019.jpg",
+   "tesseract": {
+    "cer": 0.0104,
+    "s": 1.145,
+    "wer": 0.0509
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.9393,
+    "s": 0.62,
+    "wer": 0.9831
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 60,
+   "pagina": "p020.jpg",
+   "tesseract": {
+    "cer": 0.938,
+    "s": 0.373,
+    "wer": 0.9793
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.2398,
+    "s": 2.695,
+    "wer": 0.3856
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 35,
+   "pagina": "p021.jpg",
+   "tesseract": {
+    "cer": 0.2408,
+    "s": 1.235,
+    "wer": 0.3905
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.9245,
+    "s": 0.559,
+    "wer": 0.9442
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 60,
+   "pagina": "p022.jpg",
+   "tesseract": {
+    "cer": 0.9234,
+    "s": 0.265,
+    "wer": 0.9442
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0276,
+    "s": 1.962,
+    "wer": 0.0815
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 35,
+   "pagina": "p023.jpg",
+   "tesseract": {
+    "cer": 0.0287,
+    "s": 1.23,
+    "wer": 0.0923
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0139,
+    "s": 2.441,
+    "wer": 0.0337
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 60,
+   "pagina": "p024.jpg",
+   "tesseract": {
+    "cer": 0.0156,
+    "s": 1.207,
+    "wer": 0.0412
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.8489,
+    "s": 0.737,
+    "wer": 0.9197
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 35,
+   "pagina": "p025.jpg",
+   "tesseract": {
+    "cer": 0.8435,
+    "s": 0.356,
+    "wer": 0.9197
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.2181,
+    "s": 3.602,
+    "wer": 0.5351
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 60,
+   "pagina": "p026.jpg",
+   "tesseract": {
+    "cer": 0.2124,
+    "s": 1.482,
+    "wer": 0.5442
+   }
+  },
+  {
+   "cedro": {
+    "cer": 1.0,
+    "s": 0.238,
+    "wer": 1.0
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 35,
+   "pagina": "p027.jpg",
+   "tesseract": {
+    "cer": 1.0,
+    "s": 0.175,
+    "wer": 1.0
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.2662,
+    "s": 3.321,
+    "wer": 0.522
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 60,
+   "pagina": "p028.jpg",
+   "tesseract": {
+    "cer": 0.2648,
+    "s": 1.463,
+    "wer": 0.5306
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0304,
+    "s": 2.798,
+    "wer": 0.1243
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 35,
+   "pagina": "p029.jpg",
+   "tesseract": {
+    "cer": 0.0306,
+    "s": 1.265,
+    "wer": 0.1257
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0579,
+    "s": 3.095,
+    "wer": 0.2159
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 60,
+   "pagina": "p030.jpg",
+   "tesseract": {
+    "cer": 0.0581,
+    "s": 1.381,
+    "wer": 0.2298
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.5783,
+    "s": 1.297,
+    "wer": 0.6682
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 35,
+   "pagina": "p031.jpg",
+   "tesseract": {
+    "cer": 0.5771,
+    "s": 0.589,
+    "wer": 0.6682
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.7208,
+    "s": 1.982,
+    "wer": 0.8863
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 60,
+   "pagina": "p032.jpg",
+   "tesseract": {
+    "cer": 0.7122,
+    "s": 0.907,
+    "wer": 0.8863
+   }
+  },
+  {
+   "cedro": {
+    "cer": 1.0,
+    "s": 0.241,
+    "wer": 1.0
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 35,
+   "pagina": "p033.jpg",
+   "tesseract": {
+    "cer": 1.0,
+    "s": 0.182,
+    "wer": 1.0
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.9377,
+    "s": 0.511,
+    "wer": 0.9602
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 60,
+   "pagina": "p034.jpg",
+   "tesseract": {
+    "cer": 0.9359,
+    "s": 0.254,
+    "wer": 0.9618
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.8338,
+    "s": 1.152,
+    "wer": 0.9171
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 35,
+   "pagina": "p035.jpg",
+   "tesseract": {
+    "cer": 0.8355,
+    "s": 0.493,
+    "wer": 0.9132
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0087,
+    "s": 2.143,
+    "wer": 0.0428
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 60,
+   "pagina": "p036.jpg",
+   "tesseract": {
+    "cer": 0.0105,
+    "s": 1.108,
+    "wer": 0.052
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0029,
+    "s": 1.92,
+    "wer": 0.0148
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 35,
+   "pagina": "p037.jpg",
+   "tesseract": {
+    "cer": 0.0047,
+    "s": 1.1,
+    "wer": 0.0233
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0068,
+    "s": 1.581,
+    "wer": 0.0096
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 60,
+   "pagina": "p038.jpg",
+   "tesseract": {
+    "cer": 0.0075,
+    "s": 1.062,
+    "wer": 0.0144
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.9046,
+    "s": 0.6,
+    "wer": 0.9418
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 35,
+   "pagina": "p039.jpg",
+   "tesseract": {
+    "cer": 0.9061,
+    "s": 0.298,
+    "wer": 0.9464
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0169,
+    "s": 2.408,
+    "wer": 0.0821
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 60,
+   "pagina": "p040.jpg",
+   "tesseract": {
+    "cer": 0.0166,
+    "s": 1.122,
+    "wer": 0.0802
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.2668,
+    "s": 2.713,
+    "wer": 0.4075
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 35,
+   "pagina": "p041.jpg",
+   "tesseract": {
+    "cer": 0.2674,
+    "s": 1.203,
+    "wer": 0.4075
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.7713,
+    "s": 1.676,
+    "wer": 0.9045
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 60,
+   "pagina": "p042.jpg",
+   "tesseract": {
+    "cer": 0.7709,
+    "s": 0.698,
+    "wer": 0.907
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.9748,
+    "s": 0.453,
+    "wer": 0.989
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 35,
+   "pagina": "p043.jpg",
+   "tesseract": {
+    "cer": 0.9704,
+    "s": 0.273,
+    "wer": 0.9841
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.6902,
+    "s": 3.514,
+    "wer": 0.9188
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 60,
+   "pagina": "p044.jpg",
+   "tesseract": {
+    "cer": 0.673,
+    "s": 1.635,
+    "wer": 0.9167
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.1285,
+    "s": 2.675,
+    "wer": 0.2927
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 35,
+   "pagina": "p045.jpg",
+   "tesseract": {
+    "cer": 0.1293,
+    "s": 1.22,
+    "wer": 0.3024
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.6229,
+    "s": 3.194,
+    "wer": 0.8424
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 60,
+   "pagina": "p046.jpg",
+   "tesseract": {
+    "cer": 0.6193,
+    "s": 1.532,
+    "wer": 0.8364
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.2063,
+    "s": 3.144,
+    "wer": 0.5376
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 35,
+   "pagina": "p047.jpg",
+   "tesseract": {
+    "cer": 0.21,
+    "s": 1.252,
+    "wer": 0.5618
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.8385,
+    "s": 0.624,
+    "wer": 0.8457
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 60,
+   "pagina": "p048.jpg",
+   "tesseract": {
+    "cer": 0.8385,
+    "s": 0.3,
+    "wer": 0.85
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.8541,
+    "s": 0.88,
+    "wer": 0.92
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 35,
+   "pagina": "p049.jpg",
+   "tesseract": {
+    "cer": 0.7227,
+    "s": 0.501,
+    "wer": 0.82
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.1197,
+    "s": 2.393,
+    "wer": 0.3531
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 60,
+   "pagina": "p050.jpg",
+   "tesseract": {
+    "cer": 0.1197,
+    "s": 1.049,
+    "wer": 0.3734
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.6343,
+    "s": 0.983,
+    "wer": 0.694
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 35,
+   "pagina": "p051.jpg",
+   "tesseract": {
+    "cer": 0.6347,
+    "s": 0.505,
+    "wer": 0.7043
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.4795,
+    "s": 2.246,
+    "wer": 0.6557
+   },
+   "corpo_pt": 9,
+   "jpeg_q": 60,
+   "pagina": "p052.jpg",
+   "tesseract": {
+    "cer": 0.4695,
+    "s": 0.979,
+    "wer": 0.6557
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.7844,
+    "s": 0.634,
+    "wer": 0.7768
+   },
+   "corpo_pt": 12,
+   "jpeg_q": 35,
+   "pagina": "p053.jpg",
+   "tesseract": {
+    "cer": 0.7844,
+    "s": 0.414,
+    "wer": 0.779
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0244,
+    "s": 2.652,
+    "wer": 0.1005
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 60,
+   "pagina": "p054.jpg",
+   "tesseract": {
+    "cer": 0.0261,
+    "s": 30.061,
+    "wer": 0.1162
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.9835,
+    "s": 0.41,
+    "wer": 0.9964
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 35,
+   "pagina": "p055.jpg",
+   "tesseract": {
+    "cer": 0.9825,
+    "s": 0.215,
+    "wer": 0.9976
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.1242,
+    "s": 2.439,
+    "wer": 0.1717
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 60,
+   "pagina": "p056.jpg",
+   "tesseract": {
+    "cer": 0.1254,
+    "s": 1.077,
+    "wer": 0.1765
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.902,
+    "s": 0.458,
+    "wer": 0.9283
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 35,
+   "pagina": "p057.jpg",
+   "tesseract": {
+    "cer": 0.9029,
+    "s": 0.218,
+    "wer": 0.9355
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.0816,
+    "s": 2.763,
+    "wer": 0.2383
+   },
+   "corpo_pt": 10,
+   "jpeg_q": 60,
+   "pagina": "p058.jpg",
+   "tesseract": {
+    "cer": 0.0843,
+    "s": 32.235,
+    "wer": 0.2461
+   }
+  },
+  {
+   "cedro": {
+    "cer": 0.4475,
+    "s": 1.59,
+    "wer": 0.5656
+   },
+   "corpo_pt": 11,
+   "jpeg_q": 35,
+   "pagina": "p059.jpg",
+   "tesseract": {
+    "cer": 0.4547,
+    "s": 0.669,
+    "wer": 0.5743
+   }
+  }
+ ],
+ "tesseract": {
+  "cer": 0.4801,
+  "s": 0.9245,
+  "wer": 0.662
+ }
+}
