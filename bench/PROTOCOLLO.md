@@ -139,3 +139,7 @@ errori di scelta, fiducia nei risultati (blind A/B con un patologo), prove con c
 2. **C, firme CAdES senza `nonRepudiation`.** DSS e ETSI EN 319 122 non richiedono il bit nel certificato per una firma
    di base: un file firmato con un certificato senza `nonRepudiation` ma per il resto valido conta «ok», non «avviso».
 3. **A, ripetizioni.** Le misure di tempo e memoria della trascrizione si ripetono 5 volte (come da regola 3), non 3.
+4. **C, costruzione del corpus.** Il primo giro (corpus senza certificati qualificati, senza CRL raggiungibile) non poteva mai produrre ✓ né
+   provare la revoca, e il caso «certificato alterato» colpiva il primo certificato della busta, che a volte è la radice e non il firmatario
+   (verdetto «manomessa» sbagliato nella verità costruita, non in Cedro). Corretto: QcCompliance nei certificati, CRL servita in locale, alterazione
+   del certificato del firmatario. I risultati pubblicati sono quelli del corpus corretto; le soglie non sono cambiate.

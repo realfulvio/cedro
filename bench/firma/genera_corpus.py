@@ -6,6 +6,12 @@ Scrive: <uscita>/pki/*.pem|cer, <uscita>/file/*, <uscita>/attesi.json
 attesi.json: per ogni file {"classe": "integra"|"manomessa", "fiducia": "ok"|"non_ok", "nota": ...} deciso PER COSTRUZIONE,
 cioè senza chiedere a nessun validatore: è la verità con cui si misurano Cedro e DSS.
 Seme fisso: le chiavi cambiano a ogni giro (cryptography non ha seme), ma le classi no.
+
+Corpus usato per le misure (variabili d'ambiente): QC=1 mette QcCompliance nei certificati dei firmatari (senza, Cedro dà giustamente «!» perché
+la firma è avanzata e non qualificata, e il ✓ non si può mai provare); CDP_URL=http://127.0.0.1:8765/ca.crl mette il punto di distribuzione
+della CRL (si serve con `python3 -m http.server 8765 --directory <corpus>/pki --bind 127.0.0.1` mentre gira misura.py: così si prova la revoca vera);
+DSS_LIB/DSS_BIN per il terzo produttore. Il primo giro era senza QC e CDP e con un errore di costruzione (alterava il primo certificato della busta,
+a volte la radice invece del firmatario): vedi PROTOCOLLO.md §9.4.
 """
 import asyncio, datetime as dt, io, json, os, subprocess, sys
 from pathlib import Path
@@ -52,6 +58,10 @@ def cert(cn, k, issuer_name, issuer_key, ca=False, da=NOW - dt.timedelta(days=40
     else:
         b = b.add_extension(x509.KeyUsage(True, nonrep, False, False, False, False, False, False, False), critical=True)
     b = b.add_extension(x509.SubjectKeyIdentifier.from_public_key(k.public_key()), critical=False)
+    if not ca and not tsa and os.environ.get("QC"):   # QcStatements con QcCompliance (ETSI EN 319 412-5): il certificato si dichiara qualificato
+        b = b.add_extension(x509.UnrecognizedExtension(x509.ObjectIdentifier("1.3.6.1.5.5.7.1.3"), bytes.fromhex("300a3008060604008e460101")), critical=False)
+    if not ca and os.environ.get("CDP_URL"):   # punto di distribuzione della CRL: con un server locale si prova anche la revoca vera
+        b = b.add_extension(x509.CRLDistributionPoints([x509.DistributionPoint([x509.UniformResourceIdentifier(os.environ["CDP_URL"])], None, None, None)]), critical=False)
     return b.sign(issuer_key, h)
 
 
@@ -170,7 +180,10 @@ def mut(base, nuovo, cosa):
         d = t.contents
         i = cerca(d); raw[i + 1] = ord("1") if raw[i + 1] != ord("1") else ord("2")
     elif cosa == "certificato":    # un byte nel certificato del firmatario (la chiave pubblica cambia)
-        c = sd["certificates"][0].chosen.dump()
+        # il certificato DEL FIRMATARIO (riconosciuto dal numero di serie), non il primo della busta: potrebbe essere la radice,
+        # e alterare una copia irrilevante lascerebbe la firma buona (errore di costruzione trovato al secondo giro del corpus)
+        sn = si["sid"].chosen["serial_number"].native
+        c = next(x.chosen for x in sd["certificates"] if x.chosen.serial_number == sn).dump()
         i = cerca(c) + len(c) // 2; raw[i] ^= 0x01
     (FILE / nuovo).write_bytes(bytes(raw))
     reg(nuovo, "manomessa", "non_ok", cosa, "openssl", "CAdES-B-B")
