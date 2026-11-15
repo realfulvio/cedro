@@ -1,9 +1,12 @@
 {
- "C1_concordanza_con_DSS_3_valori": "15/38",
- "C1_concordanza_con_DSS_si_no": "34/38",
+ "C1_concordanza_con_DSS_3_valori": "31/38",
+ "C1_concordanza_con_DSS_si_no": "32/38",
  "C2_falsi_positivi_gravi": [],
  "falsi_rifiuti_su_file_buoni": [],
- "fiducia_ok_su_file_non_fidabili": [],
+ "fiducia_ok_su_file_non_fidabili": [
+  "agg_dopo_firma.pdf",
+  "ossl_rsa_sha1.p7m"
+ ],
  "file": 38,
  "manomessi": 11,
  "righe": [
@@ -17,16 +20,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.01,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 24.8,
+    "s": 0.021,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The document contains undefined object modifications after the signature revision!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The document contains undefined object modifications after the signature revision!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -45,16 +49,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.011,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario P256 il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 59.9,
+    "s": 0.021,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -73,16 +78,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 59.9,
+    "s": 0.021,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -101,16 +107,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 59.9,
+    "s": 0.021,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -129,16 +136,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 59.9,
+    "s": 0.021,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -157,22 +165,23 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! 2 firme valide, con un avviso — Da guardare: Firmatario Rsa e Firmatario P256.",
-    "s": 0.01,
-    "verdetto": "avviso"
+    "riga": "✓ 2 firme, tutte valide — Hanno firmato Firmatario Rsa e Firmatario P256. Il documento non è stato modificato.",
+    "rss_mb": 60.0,
+    "s": 0.021,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     },
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -192,7 +201,8 @@
    "cedro": {
     "rc": 0,
     "riga": "! Valida, con un avviso — Chi ha rilasciato il certificato non è nell'elenco europeo dei certificatori: la firma è corretta ma non ha il valore di una firma qua",
-    "s": 0.01,
+    "rss_mb": 65.2,
+    "s": 0.011,
     "verdetto": "avviso"
    },
    "dss": "avviso",
@@ -219,16 +229,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario P256 il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 65.3,
+    "s": 0.011,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -247,16 +258,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.01,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario P384 il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 65.5,
+    "s": 0.011,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -274,17 +286,18 @@
     "profilo": "PAdES-B-B"
    },
    "cedro": {
-    "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "rc": 1,
+    "riga": "✗ Non valida — Il suo certificato è stato revocato il 17 settembre 2026, prima della firma. Questa firma non ha valore legale: va chiesto di rifirmare con un ce",
+    "rss_mb": 65.7,
+    "s": 0.011,
+    "verdetto": "no"
    },
    "dss": "avviso",
    "dss_dettaglio": [
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "INDETERMINATE",
-     "messaggi": "E:The certificate validation is not conclusive!|E:The certificate is revoked!|E:The revocation time is not after best-signature-time!|E:No long term availability and integrity of validation material is present!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The certificate validation is not conclusive!|E:The certificate is revoked!|E:The revocation time is not after best-signature-time!|E:No long term availability and integrity of validation material is present!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "REVOKED_NO_POE"
     }
    ],
@@ -303,16 +316,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 65.7,
+    "s": 0.011,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -331,16 +345,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47, con marca temporale.",
+    "rss_mb": 65.7,
+    "s": 0.011,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "PAdES-BASELINE-T",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -359,8 +374,9 @@
    },
    "cedro": {
     "rc": 1,
-    "riga": "✗ Non valida — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato è scaduto il 20/01/2026 e non c'",
-    "s": 0.009,
+    "riga": "✗ Non valida — Il certificato è scaduto il 20/01/2026 e non c'è una marca temporale che provi che la firma è di prima: a questa data la firma non vale più.",
+    "rss_mb": 65.8,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "avviso",
@@ -368,7 +384,7 @@
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "INDETERMINATE",
-     "messaggi": "E:The certificate validation is not conclusive!|E:No acceptable revocation data for the certificate!|E:The revocation data is not known to contain information about the certificate!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The certificate validation is not conclusive!|E:No acceptable revocation data for the certificate!|E:The revocation data is not known to contain information about the certificate!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "CERTIFICATE_CHAIN_GENERAL_FAILURE"
     }
    ],
@@ -388,7 +404,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — La firma non torna con il certificato: il file è rovinato o è stato manomesso. Il certificato non risulta rilasciato dal certificatore che dichia",
-    "s": 0.009,
+    "rss_mb": 65.8,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "avviso",
@@ -415,8 +432,9 @@
    },
    "cedro": {
     "rc": 1,
-    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi. Il certificato non è qualificato: la",
-    "s": 0.008,
+    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi.",
+    "rss_mb": 65.8,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "no",
@@ -424,7 +442,7 @@
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_FAILED",
-     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "HASH_FAILURE"
     }
    ],
@@ -443,8 +461,9 @@
    },
    "cedro": {
     "rc": 1,
-    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi. Il certificato non è qualificato: la",
-    "s": 0.008,
+    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi.",
+    "rss_mb": 65.8,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "no",
@@ -452,7 +471,7 @@
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_FAILED",
-     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "HASH_FAILURE"
     }
    ],
@@ -471,8 +490,9 @@
    },
    "cedro": {
     "rc": 1,
-    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi. Il certificato non è qualificato: la",
-    "s": 0.009,
+    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi.",
+    "rss_mb": 65.8,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "no",
@@ -480,7 +500,7 @@
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "TOTAL_FAILED",
-     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "HASH_FAILURE"
     }
    ],
@@ -499,7 +519,8 @@
    },
    "cedro": {
     "rc": 1,
-    "riga": "✗ Non valida — La firma non torna con il certificato: il file è rovinato o è stato manomesso. Il certificato non è qualificato: la firma è avanzata, non ha il v",
+    "riga": "✗ Non valida — La firma non torna con il certificato: il file è rovinato o è stato manomesso.",
+    "rss_mb": 65.8,
     "s": 0.011,
     "verdetto": "no"
    },
@@ -508,7 +529,7 @@
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_FAILED",
-     "messaggi": "E:The signature is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The signature is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "SIG_CRYPTO_FAILURE"
     }
    ],
@@ -528,7 +549,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — La firma non copre tutto il file: una parte del PDF può essere stata cambiata dopo la firma senza che si veda. Dopo la firma qualcuno ha cambiato",
-    "s": 0.013,
+    "rss_mb": 65.8,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "no",
@@ -536,7 +558,7 @@
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "TOTAL_FAILED",
-     "messaggi": "E:The /ByteRange dictionary is not consistent!|E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The /ByteRange dictionary is not consistent!|E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "FORMAT_FAILURE"
     }
    ],
@@ -556,7 +578,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — Non riesco a leggere questa firma: struttura ASN.1 non valida (manca un identificatore).",
-    "s": 0.013,
+    "rss_mb": 66.0,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "no",
@@ -583,8 +606,9 @@
    },
    "cedro": {
     "rc": 1,
-    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi. Il certificato non è qualificato: la",
-    "s": 0.013,
+    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi.",
+    "rss_mb": 66.0,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "no",
@@ -592,7 +616,7 @@
     {
      "formato": "PAdES-BASELINE-B",
      "indicazione": "TOTAL_FAILED",
-     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "HASH_FAILURE"
     }
    ],
@@ -611,8 +635,9 @@
    },
    "cedro": {
     "rc": 1,
-    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi. Il certificato non è qualificato: la",
-    "s": 0.009,
+    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi.",
+    "rss_mb": 66.0,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "no",
@@ -620,7 +645,7 @@
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_FAILED",
-     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "HASH_FAILURE"
     }
    ],
@@ -639,8 +664,9 @@
    },
    "cedro": {
     "rc": 1,
-    "riga": "✗ Non valida — La firma non torna con il certificato: il file è rovinato o è stato manomesso. Il certificato non è qualificato: la firma è avanzata, non ha il v",
-    "s": 0.01,
+    "riga": "✗ Non valida — La firma non torna con il certificato: il file è rovinato o è stato manomesso.",
+    "rss_mb": 66.0,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "no",
@@ -648,7 +674,7 @@
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_FAILED",
-     "messaggi": "E:The signature is not intact!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The signature is not intact!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "SIG_CRYPTO_FAILURE"
     }
    ],
@@ -668,7 +694,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Nessuna firma da controllare — Questo file non è firmato digitalmente (o non riconosco il formato)",
-    "s": 0.009,
+    "rss_mb": 66.0,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "no",
@@ -695,22 +722,23 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! 2 firme valide, con un avviso — Da guardare: Firmatario P256 e Firmatario Rsa.",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ 2 firme, tutte valide — Hanno firmato Firmatario P256 e Firmatario Rsa. Il documento non è stato modificato.",
+    "rss_mb": 66.0,
+    "s": 0.031,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     },
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -730,7 +758,8 @@
    "cedro": {
     "rc": 0,
     "riga": "! Valida, con un avviso — Chi ha rilasciato il certificato non è nell'elenco europeo dei certificatori: la firma è corretta ma non ha il valore di una firma qua",
-    "s": 0.009,
+    "rss_mb": 66.0,
+    "s": 0.011,
     "verdetto": "avviso"
    },
    "dss": "avviso",
@@ -757,8 +786,9 @@
    },
    "cedro": {
     "rc": 1,
-    "riga": "✗ Non valida — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Alla data della verifica il certificato non era",
-    "s": 0.009,
+    "riga": "✗ Non valida — Alla data della verifica il certificato non era ancora valido (vale dal 12/09/2027).",
+    "rss_mb": 66.0,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "avviso",
@@ -766,7 +796,7 @@
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "INDETERMINATE",
-     "messaggi": "E:The certificate validation is not conclusive!|E:No acceptable revocation data for the certificate!|E:The revocation data has been issued before the certificate's issuance time!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The certificate validation is not conclusive!|E:No acceptable revocation data for the certificate!|E:The revocation data has been issued before the certificate's issuance time!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "CERTIFICATE_CHAIN_GENERAL_FAILURE"
     }
    ],
@@ -785,16 +815,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario P256 il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 66.0,
+    "s": 0.011,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -813,16 +844,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.01,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario P384 il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 66.0,
+    "s": 0.011,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -840,17 +872,18 @@
     "profilo": "CAdES-B-B"
    },
    "cedro": {
-    "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "rc": 1,
+    "riga": "✗ Non valida — Il suo certificato è stato revocato il 17 settembre 2026, prima della firma. Questa firma non ha valore legale: va chiesto di rifirmare con un ce",
+    "rss_mb": 66.0,
+    "s": 0.021,
+    "verdetto": "no"
    },
    "dss": "avviso",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "INDETERMINATE",
-     "messaggi": "E:The certificate validation is not conclusive!|E:The certificate is revoked!|E:The revocation time is not after best-signature-time!|E:No long term availability and integrity of validation material is present!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The certificate validation is not conclusive!|E:The certificate is revoked!|E:The revocation time is not after best-signature-time!|E:No long term availability and integrity of validation material is present!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "REVOKED_NO_POE"
     }
    ],
@@ -869,16 +902,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 66.0,
+    "s": 0.021,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -897,16 +931,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Sha1 il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 66.0,
+    "s": 0.021,
+    "verdetto": "ok"
    },
    "dss": "avviso",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "INDETERMINATE",
-     "messaggi": "E:The algorithm RSA with SHA1 with key size 2048 is no longer considered reliable for signature creation!|E:The algorithm SHA1 is no longer considered reliable for message digest!|E:No long term availability and integrity of validation material is present!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The algorithm RSA with SHA1 with key size 2048 is no longer considered reliable for signature creation!|E:The algorithm SHA1 is no longer considered reliable for message digest!|E:No long term availability and integrity of validation material is present!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "CRYPTO_CONSTRAINTS_FAILURE_NO_POE"
     }
    ],
@@ -925,16 +960,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.013,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 66.0,
+    "s": 0.021,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -953,16 +989,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.012,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 66.0,
+    "s": 0.011,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -981,16 +1018,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.013,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 66.0,
+    "s": 0.011,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -1009,8 +1047,9 @@
    },
    "cedro": {
     "rc": 1,
-    "riga": "✗ Non valida — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato è scaduto il 20/01/2026 e non c'",
-    "s": 0.012,
+    "riga": "✗ Non valida — Il certificato è scaduto il 20/01/2026 e non c'è una marca temporale che provi che la firma è di prima: a questa data la firma non vale più.",
+    "rss_mb": 66.0,
+    "s": 0.011,
     "verdetto": "no"
    },
    "dss": "avviso",
@@ -1018,7 +1057,7 @@
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "INDETERMINATE",
-     "messaggi": "E:The certificate validation is not conclusive!|E:No acceptable revocation data for the certificate!|E:The revocation data is not known to contain information about the certificate!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "E:The certificate validation is not conclusive!|E:No acceptable revocation data for the certificate!|E:The revocation data is not known to contain information about the certificate!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "CERTIFICATE_CHAIN_GENERAL_FAILURE"
     }
    ],
@@ -1037,16 +1076,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 66.0,
+    "s": 0.011,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CMS-NOT-ETSI",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|W:The signed attribute: 'signing-certificate' is absent!|",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The signed attribute: 'signing-certificate' is absent!|",
      "sotto": "-"
     }
    ],
@@ -1065,16 +1105,17 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
-    "s": 0.009,
-    "verdetto": "avviso"
+    "riga": "✓ Firma valida — Firmato da Firmatario Senzanonrep il 16 novembre 2026 alle 00:47.",
+    "rss_mb": 66.0,
+    "s": 0.011,
+    "verdetto": "ok"
    },
    "dss": "ok",
    "dss_dettaglio": [
     {
      "formato": "CAdES-BASELINE-B",
      "indicazione": "TOTAL_PASSED",
-     "messaggi": "W:The signing certificate does not have an expected key-usage!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "messaggi": "W:The signing certificate does not have an expected key-usage!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|",
      "sotto": "-"
     }
    ],
@@ -1084,5 +1125,6 @@
    "pyhanko_integro": null
   }
  ],
- "tempo_mediano_s": 0.009
+ "rss_max_mb": 66.0,
+ "tempo_mediano_s": 0.011
 }
