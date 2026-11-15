@@ -1,0 +1,1088 @@
+{
+ "C1_concordanza_con_DSS_3_valori": "15/38",
+ "C1_concordanza_con_DSS_si_no": "34/38",
+ "C2_falsi_positivi_gravi": [],
+ "falsi_rifiuti_su_file_buoni": [],
+ "fiducia_ok_su_file_non_fidabili": [],
+ "file": 38,
+ "manomessi": 11,
+ "righe": [
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "non_ok",
+    "nota": "modifica incrementale benigna dopo la firma: va segnalata",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.01,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The document contains undefined object modifications after the signature revision!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "agg_dopo_firma.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": true,
+   "pyhanko_integro": true
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "dss",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.011,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "dss_p256_cades_b.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "dss",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "dss_rsa_cades_b.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "dss",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "dss_rsa_cades_staccata.p7s",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "dss",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "dss_rsa_pades_b.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": true,
+   "pyhanko_integro": true
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "due firme successive",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! 2 firme valide, con un avviso — Da guardare: Firmatario Rsa e Firmatario P256.",
+    "s": 0.01,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    },
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "hanko_due_firme.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": true,
+   "pyhanko_integro": true
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "non_ok",
+    "nota": "",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Chi ha rilasciato il certificato non è nell'elenco europeo dei certificatori: la firma è corretta ma non ha il valore di una firma qua",
+    "s": 0.01,
+    "verdetto": "avviso"
+   },
+   "dss": "avviso",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "INDETERMINATE",
+     "messaggi": "E:The certificate chain for signature is not trusted, it does not contain a trust anchor.|E:The key size is unknown for signing certificate!|",
+     "sotto": "NO_CERTIFICATE_CHAIN_FOUND"
+    }
+   ],
+   "file": "hanko_estraneo_b.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": true,
+   "pyhanko_integro": true
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "hanko_p256_b.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": true,
+   "pyhanko_integro": true
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.01,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "hanko_p384_b.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": true,
+   "pyhanko_integro": true
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "non_ok",
+    "nota": "",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "avviso",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "INDETERMINATE",
+     "messaggi": "E:The certificate validation is not conclusive!|E:The certificate is revoked!|E:The revocation time is not after best-signature-time!|E:No long term availability and integrity of validation material is present!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "REVOKED_NO_POE"
+    }
+   ],
+   "file": "hanko_revocato_b.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": true,
+   "pyhanko_integro": true
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "hanko_rsa_b.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": true,
+   "pyhanko_integro": true
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-T"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-T",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "hanko_rsa_t.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": true,
+   "pyhanko_integro": true
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "non_ok",
+    "nota": "",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato è scaduto il 20/01/2026 e non c'",
+    "s": 0.009,
+    "verdetto": "no"
+   },
+   "dss": "avviso",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "INDETERMINATE",
+     "messaggi": "E:The certificate validation is not conclusive!|E:No acceptable revocation data for the certificate!|E:The revocation data is not known to contain information about the certificate!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "CERTIFICATE_CHAIN_GENERAL_FAILURE"
+    }
+   ],
+   "file": "hanko_scaduto_b.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": true,
+   "pyhanko_integro": true
+  },
+  {
+   "atteso": {
+    "classe": "manomessa",
+    "fiducia": "non_ok",
+    "nota": "certificato",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida — La firma non torna con il certificato: il file è rovinato o è stato manomesso. Il certificato non risulta rilasciato dal certificatore che dichia",
+    "s": 0.009,
+    "verdetto": "no"
+   },
+   "dss": "avviso",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BES",
+     "indicazione": "INDETERMINATE",
+     "messaggi": "E:There is no candidate for the signing certificate!|E:The signature is not intact!|E:The key size is unknown for signature creation!|",
+     "sotto": "NO_SIGNING_CERTIFICATE_FOUND"
+    }
+   ],
+   "file": "manom_certificato.p7m",
+   "openssl_integro": false,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "manomessa",
+    "fiducia": "non_ok",
+    "nota": "contenuto",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi. Il certificato non è qualificato: la",
+    "s": 0.008,
+    "verdetto": "no"
+   },
+   "dss": "no",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_FAILED",
+     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "HASH_FAILURE"
+    }
+   ],
+   "file": "manom_contenuto.p7m",
+   "openssl_integro": false,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "manomessa",
+    "fiducia": "non_ok",
+    "nota": "digest",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi. Il certificato non è qualificato: la",
+    "s": 0.008,
+    "verdetto": "no"
+   },
+   "dss": "no",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_FAILED",
+     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "HASH_FAILURE"
+    }
+   ],
+   "file": "manom_digest.p7m",
+   "openssl_integro": false,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "manomessa",
+    "fiducia": "non_ok",
+    "nota": "testo cambiato",
+    "produttore": "dss",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi. Il certificato non è qualificato: la",
+    "s": 0.009,
+    "verdetto": "no"
+   },
+   "dss": "no",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "TOTAL_FAILED",
+     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "HASH_FAILURE"
+    }
+   ],
+   "file": "manom_dss_pdf_testo.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": false,
+   "pyhanko_integro": false
+  },
+  {
+   "atteso": {
+    "classe": "manomessa",
+    "fiducia": "non_ok",
+    "nota": "firma",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida — La firma non torna con il certificato: il file è rovinato o è stato manomesso. Il certificato non è qualificato: la firma è avanzata, non ha il v",
+    "s": 0.011,
+    "verdetto": "no"
+   },
+   "dss": "no",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_FAILED",
+     "messaggi": "E:The signature is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "SIG_CRYPTO_FAILURE"
+    }
+   ],
+   "file": "manom_firma.p7m",
+   "openssl_integro": false,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "manomessa",
+    "fiducia": "non_ok",
+    "nota": "ByteRange alterato",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida — La firma non copre tutto il file: una parte del PDF può essere stata cambiata dopo la firma senza che si veda. Dopo la firma qualcuno ha cambiato",
+    "s": 0.013,
+    "verdetto": "no"
+   },
+   "dss": "no",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "TOTAL_FAILED",
+     "messaggi": "E:The /ByteRange dictionary is not consistent!|E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "FORMAT_FAILURE"
+    }
+   ],
+   "file": "manom_pdf_byterange.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": false,
+   "pyhanko_integro": false
+  },
+  {
+   "atteso": {
+    "classe": "manomessa",
+    "fiducia": "non_ok",
+    "nota": "byte della firma cambiato",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida — Non riesco a leggere questa firma: struttura ASN.1 non valida (manca un identificatore).",
+    "s": 0.013,
+    "verdetto": "no"
+   },
+   "dss": "no",
+   "dss_dettaglio": [
+    {
+     "formato": "-",
+     "indicazione": "NESSUNA_FIRMA",
+     "messaggi": "",
+     "sotto": "-"
+    }
+   ],
+   "file": "manom_pdf_firma.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": false,
+   "pyhanko_integro": false
+  },
+  {
+   "atteso": {
+    "classe": "manomessa",
+    "fiducia": "non_ok",
+    "nota": "testo cambiato nel contenuto firmato",
+    "produttore": "pyhanko",
+    "profilo": "PAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi. Il certificato non è qualificato: la",
+    "s": 0.013,
+    "verdetto": "no"
+   },
+   "dss": "no",
+   "dss_dettaglio": [
+    {
+     "formato": "PAdES-BASELINE-B",
+     "indicazione": "TOTAL_FAILED",
+     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "HASH_FAILURE"
+    }
+   ],
+   "file": "manom_pdf_testo.pdf",
+   "openssl_integro": null,
+   "pdfsig_integro": false,
+   "pyhanko_integro": false
+  },
+  {
+   "atteso": {
+    "classe": "manomessa",
+    "fiducia": "non_ok",
+    "nota": "documento staccato cambiato",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi. Il certificato non è qualificato: la",
+    "s": 0.009,
+    "verdetto": "no"
+   },
+   "dss": "no",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_FAILED",
+     "messaggi": "E:The reference data object is not intact!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "HASH_FAILURE"
+    }
+   ],
+   "file": "manom_staccata.p7s",
+   "openssl_integro": false,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "manomessa",
+    "fiducia": "non_ok",
+    "nota": "tempo",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida — La firma non torna con il certificato: il file è rovinato o è stato manomesso. Il certificato non è qualificato: la firma è avanzata, non ha il v",
+    "s": 0.01,
+    "verdetto": "no"
+   },
+   "dss": "no",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_FAILED",
+     "messaggi": "E:The signature is not intact!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "SIG_CRYPTO_FAILURE"
+    }
+   ],
+   "file": "manom_tempo.p7m",
+   "openssl_integro": false,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "manomessa",
+    "fiducia": "non_ok",
+    "nota": "busta troncata",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Nessuna firma da controllare — Questo file non è firmato digitalmente (o non riconosco il formato)",
+    "s": 0.009,
+    "verdetto": "no"
+   },
+   "dss": "no",
+   "dss_dettaglio": [
+    {
+     "formato": "-",
+     "indicazione": "ERRORE",
+     "messaggi": "",
+     "sotto": "IllegalInputException:A CMS file is expected : Not a valid CAdES file. Reason : IOException reading content."
+    }
+   ],
+   "file": "manom_troncata.p7m",
+   "openssl_integro": false,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! 2 firme valide, con un avviso — Da guardare: Firmatario P256 e Firmatario Rsa.",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    },
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "ossl_due_firme.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "non_ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Chi ha rilasciato il certificato non è nell'elenco europeo dei certificatori: la firma è corretta ma non ha il valore di una firma qua",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "avviso",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "INDETERMINATE",
+     "messaggi": "E:The certificate chain for signature is not trusted, it does not contain a trust anchor.|E:The key size is unknown for signing certificate!|",
+     "sotto": "NO_CERTIFICATE_CHAIN_FOUND"
+    }
+   ],
+   "file": "ossl_estraneo.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "non_ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Alla data della verifica il certificato non era",
+    "s": 0.009,
+    "verdetto": "no"
+   },
+   "dss": "avviso",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "INDETERMINATE",
+     "messaggi": "E:The certificate validation is not conclusive!|E:No acceptable revocation data for the certificate!|E:The revocation data has been issued before the certificate's issuance time!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "CERTIFICATE_CHAIN_GENERAL_FAILURE"
+    }
+   ],
+   "file": "ossl_futuro.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "ossl_p256_sha256.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.01,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "ossl_p384_sha384.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "non_ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "avviso",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "INDETERMINATE",
+     "messaggi": "E:The certificate validation is not conclusive!|E:The certificate is revoked!|E:The revocation time is not after best-signature-time!|E:No long term availability and integrity of validation material is present!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "REVOKED_NO_POE"
+    }
+   ],
+   "file": "ossl_revocato.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "ossl_rsa_pss.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "non_ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "avviso",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "INDETERMINATE",
+     "messaggi": "E:The algorithm RSA with SHA1 with key size 2048 is no longer considered reliable for signature creation!|E:The algorithm SHA1 is no longer considered reliable for message digest!|E:No long term availability and integrity of validation material is present!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "CRYPTO_CONSTRAINTS_FAILURE_NO_POE"
+    }
+   ],
+   "file": "ossl_rsa_sha1.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.013,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "ossl_rsa_sha256.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.012,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "ossl_rsa_sha256_staccata.p7s",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.013,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "ossl_rsa_sha512.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "non_ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 1,
+    "riga": "✗ Non valida — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato è scaduto il 20/01/2026 e non c'",
+    "s": 0.012,
+    "verdetto": "no"
+   },
+   "dss": "avviso",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "INDETERMINATE",
+     "messaggi": "E:The certificate validation is not conclusive!|E:No acceptable revocation data for the certificate!|E:The revocation data is not known to contain information about the certificate!|E:The signed qualifying property: 'signing-time' is not within the signing-certificate's validity range!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "CERTIFICATE_CHAIN_GENERAL_FAILURE"
+    }
+   ],
+   "file": "ossl_scaduto.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "senza signingCertificateV2",
+    "produttore": "openssl",
+    "profilo": "CMS"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CMS-NOT-ETSI",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|W:The signed attribute: 'signing-certificate' is absent!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "ossl_senza_cades.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  },
+  {
+   "atteso": {
+    "classe": "integra",
+    "fiducia": "ok",
+    "nota": "",
+    "produttore": "openssl",
+    "profilo": "CAdES-B-B"
+   },
+   "cedro": {
+    "rc": 0,
+    "riga": "! Valida, con un avviso — Il certificato non è qualificato: la firma è avanzata, non ha il valore di una firma qualificata. Il certificato non dice a chi chiede",
+    "s": 0.009,
+    "verdetto": "avviso"
+   },
+   "dss": "ok",
+   "dss_dettaglio": [
+    {
+     "formato": "CAdES-BASELINE-B",
+     "indicazione": "TOTAL_PASSED",
+     "messaggi": "W:The signing certificate does not have an expected key-usage!|W:The authority info access is not present!|W:The certificate does not contain the authority key identifier certificate extension!|W:The revocation info access is not present!|",
+     "sotto": "-"
+    }
+   ],
+   "file": "ossl_senza_nonrep.p7m",
+   "openssl_integro": true,
+   "pdfsig_integro": null,
+   "pyhanko_integro": null
+  }
+ ],
+ "tempo_mediano_s": 0.009
+}

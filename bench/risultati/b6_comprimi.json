@@ -1,0 +1,213 @@
+{
+ "esito_per_file": {
+  "foto0.pdf": false,
+  "foto1.pdf": false,
+  "foto2.pdf": false,
+  "scansione-scura0.pdf": true,
+  "scansione-scura1.pdf": true,
+  "scansione-scura2.pdf": true,
+  "scansione0.pdf": false,
+  "scansione1.pdf": false,
+  "scansione2.pdf": false
+ },
+ "righe": [
+  {
+   "cedro": {
+    "byte": 123817,
+    "pagine_ok": true,
+    "ssim": 0.9746
+   },
+   "err": "",
+   "file": "scansione0.pdf",
+   "gs_ebook": {
+    "byte": 8505362,
+    "s": 0.203,
+    "ssim": 1.0
+   },
+   "gs_screen": {
+    "byte": 685092,
+    "s": 0.441,
+    "ssim": 0.7078
+   },
+   "originale": 8503398,
+   "rc": 0,
+   "s": 0.346
+  },
+  {
+   "cedro": {
+    "byte": 1300891,
+    "pagine_ok": true,
+    "ssim": 0.9877
+   },
+   "err": "",
+   "file": "foto0.pdf",
+   "gs_ebook": {
+    "byte": 705775,
+    "s": 0.331,
+    "ssim": 0.9807
+   },
+   "gs_screen": {
+    "byte": 262283,
+    "s": 0.349,
+    "ssim": 0.9034
+   },
+   "originale": 12269887,
+   "rc": 0,
+   "s": 0.784
+  },
+  {
+   "cedro": {
+    "byte": 255152,
+    "pagine_ok": true,
+    "ssim": 0.9702
+   },
+   "err": "",
+   "file": "scansione-scura0.pdf",
+   "gs_ebook": {
+    "byte": 1195708,
+    "s": 0.355,
+    "ssim": 0.8606
+   },
+   "gs_screen": {
+    "byte": 434586,
+    "s": 0.472,
+    "ssim": 0.5165
+   },
+   "originale": 9021041,
+   "rc": 0,
+   "s": 0.441
+  },
+  {
+   "cedro": {
+    "byte": 125607,
+    "pagine_ok": true,
+    "ssim": 0.9747
+   },
+   "err": "",
+   "file": "scansione1.pdf",
+   "gs_ebook": {
+    "byte": 8559077,
+    "s": 0.207,
+    "ssim": 1.0
+   },
+   "gs_screen": {
+    "byte": 694859,
+    "s": 0.46,
+    "ssim": 0.7023
+   },
+   "originale": 8557115,
+   "rc": 0,
+   "s": 0.418
+  },
+  {
+   "cedro": {
+    "byte": 1301316,
+    "pagine_ok": true,
+    "ssim": 0.9875
+   },
+   "err": "",
+   "file": "foto1.pdf",
+   "gs_ebook": {
+    "byte": 705546,
+    "s": 0.368,
+    "ssim": 0.9805
+   },
+   "gs_screen": {
+    "byte": 262100,
+    "s": 0.356,
+    "ssim": 0.9022
+   },
+   "originale": 12270769,
+   "rc": 0,
+   "s": 0.777
+  },
+  {
+   "cedro": {
+    "byte": 259143,
+    "pagine_ok": true,
+    "ssim": 0.9706
+   },
+   "err": "",
+   "file": "scansione-scura1.pdf",
+   "gs_ebook": {
+    "byte": 1212103,
+    "s": 0.323,
+    "ssim": 0.8566
+   },
+   "gs_screen": {
+    "byte": 440289,
+    "s": 0.35,
+    "ssim": 0.5101
+   },
+   "originale": 9061147,
+   "rc": 0,
+   "s": 0.428
+  },
+  {
+   "cedro": {
+    "byte": 125000,
+    "pagine_ok": true,
+    "ssim": 0.9747
+   },
+   "err": "",
+   "file": "scansione2.pdf",
+   "gs_ebook": {
+    "byte": 8551288,
+    "s": 0.213,
+    "ssim": 1.0
+   },
+   "gs_screen": {
+    "byte": 694117,
+    "s": 0.449,
+    "ssim": 0.7035
+   },
+   "originale": 8549326,
+   "rc": 0,
+   "s": 0.333
+  },
+  {
+   "cedro": {
+    "byte": 1300196,
+    "pagine_ok": true,
+    "ssim": 0.9877
+   },
+   "err": "",
+   "file": "foto2.pdf",
+   "gs_ebook": {
+    "byte": 704509,
+    "s": 0.327,
+    "ssim": 0.9806
+   },
+   "gs_screen": {
+    "byte": 262130,
+    "s": 0.34,
+    "ssim": 0.9031
+   },
+   "originale": 12270013,
+   "rc": 0,
+   "s": 0.764
+  },
+  {
+   "cedro": {
+    "byte": 258857,
+    "pagine_ok": true,
+    "ssim": 0.9705
+   },
+   "err": "",
+   "file": "scansione-scura2.pdf",
+   "gs_ebook": {
+    "byte": 1206852,
+    "s": 0.337,
+    "ssim": 0.8577
+   },
+   "gs_screen": {
+    "byte": 439231,
+    "s": 0.357,
+    "ssim": 0.5113
+   },
+   "originale": 9048942,
+   "rc": 0,
+   "s": 0.444
+  }
+ ]
+}

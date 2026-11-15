@@ -1,0 +1,643 @@
+{
+ "file": 15,
+ "motori": {
+  "cedro": {
+   "f1_celle": 1.0,
+   "f1_testo": 0.86,
+   "falliti": 0,
+   "s_mediano": 0.015,
+   "ssim": 0.9653
+  },
+  "libreoffice": {
+   "f1_celle": 1.0,
+   "f1_testo": 0.0,
+   "falliti": 0,
+   "s_mediano": 0.906,
+   "ssim": 0.9254
+  },
+  "pdf2docx": {
+   "f1_celle": 1.0,
+   "f1_testo": 0.88,
+   "falliti": 0,
+   "s_mediano": 0.058,
+   "ssim": 0.9702
+  }
+ },
+ "righe": [
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": -6,
+    "f1_celle": 1.0,
+    "f1_testo": 1.0,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.017,
+    "ssim": 0.8804
+   },
+   "file": "61787.docx",
+   "libreoffice": {
+    "d_tabelle": 0,
+    "d_titoli": -10,
+    "f1_celle": 1.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.886,
+    "ssim": 0.6373
+   },
+   "pdf2docx": {
+    "d_tabelle": 0,
+    "d_titoli": -10,
+    "f1_celle": 1.0,
+    "f1_testo": 1.0,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.205,
+    "ssim": 0.9223
+   },
+   "tabelle_orig": 0,
+   "titoli_orig": 10
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 1.0,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.015,
+    "ssim": 0.9862
+   },
+   "file": "61991.docx",
+   "libreoffice": {
+    "d_tabelle": 0,
+    "d_titoli": -1,
+    "f1_celle": 1.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.906,
+    "ssim": 0.9003
+   },
+   "pdf2docx": {
+    "d_tabelle": 0,
+    "d_titoli": -1,
+    "f1_celle": 1.0,
+    "f1_testo": 0.9891,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.047,
+    "ssim": 0.9702
+   },
+   "tabelle_orig": 0,
+   "titoli_orig": 1
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 0.963,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.021,
+    "ssim": 0.9593
+   },
+   "file": "65099.docx",
+   "libreoffice": {
+    "d_tabelle": -1,
+    "d_titoli": 0,
+    "f1_celle": 0.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.913,
+    "ssim": 0.87
+   },
+   "pdf2docx": {
+    "d_tabelle": 1,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 0.963,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.058,
+    "ssim": 0.9158
+   },
+   "tabelle_orig": 1,
+   "titoli_orig": 0
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 0.7556,
+    "pagine": [
+     2,
+     3
+    ],
+    "s": 0.013,
+    "ssim": 0.9774
+   },
+   "file": "DiffFirstPageHeadFoot.docx",
+   "libreoffice": {
+    "d_tabelle": 0,
+    "d_titoli": -1,
+    "f1_celle": 1.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.906,
+    "ssim": 0.949
+   },
+   "pdf2docx": {
+    "d_tabelle": 2,
+    "d_titoli": -1,
+    "f1_celle": 0.0,
+    "f1_testo": 0.7556,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.043,
+    "ssim": 0.9938
+   },
+   "tabelle_orig": 0,
+   "titoli_orig": 1
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 0.7679,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.014,
+    "ssim": 0.9826
+   },
+   "file": "FancyFoot.docx",
+   "libreoffice": {
+    "d_tabelle": 0,
+    "d_titoli": -1,
+    "f1_celle": 1.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.861,
+    "ssim": 0.9367
+   },
+   "pdf2docx": {
+    "d_tabelle": 2,
+    "d_titoli": -1,
+    "f1_celle": 0.0,
+    "f1_testo": 0.7679,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.039,
+    "ssim": 0.9885
+   },
+   "tabelle_orig": 0,
+   "titoli_orig": 1
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 0.7957,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.019,
+    "ssim": 0.9561
+   },
+   "file": "HeaderFooterUnicode.docx",
+   "libreoffice": {
+    "d_tabelle": 0,
+    "d_titoli": -1,
+    "f1_celle": 1.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.818,
+    "ssim": 0.938
+   },
+   "pdf2docx": {
+    "d_tabelle": 0,
+    "d_titoli": -1,
+    "f1_celle": 1.0,
+    "f1_testo": 0.7957,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.042,
+    "ssim": 0.9792
+   },
+   "tabelle_orig": 0,
+   "titoli_orig": 1
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": -2,
+    "f1_celle": 1.0,
+    "f1_testo": 1.0,
+    "pagine": [
+     4,
+     4
+    ],
+    "s": 0.026,
+    "ssim": 0.7803
+   },
+   "file": "IllustrativeCases.docx",
+   "libreoffice": {
+    "d_tabelle": -8,
+    "d_titoli": -2,
+    "f1_celle": 0.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     4,
+     4
+    ],
+    "s": 1.106,
+    "ssim": 0.6225
+   },
+   "pdf2docx": {
+    "d_tabelle": 0,
+    "d_titoli": -2,
+    "f1_celle": 1.0,
+    "f1_testo": 1.0,
+    "pagine": [
+     4,
+     4
+    ],
+    "s": 0.591,
+    "ssim": 0.786
+   },
+   "tabelle_orig": 8,
+   "titoli_orig": 2
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 0.7244,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.019,
+    "ssim": 0.9773
+   },
+   "file": "PageSpecificHeadFoot.docx",
+   "libreoffice": {
+    "d_tabelle": 0,
+    "d_titoli": -1,
+    "f1_celle": 1.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.904,
+    "ssim": 0.9254
+   },
+   "pdf2docx": {
+    "d_tabelle": 3,
+    "d_titoli": -1,
+    "f1_celle": 0.0,
+    "f1_testo": 0.7244,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.062,
+    "ssim": 0.9702
+   },
+   "tabelle_orig": 0,
+   "titoli_orig": 1
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 0.7759,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.013,
+    "ssim": 0.9962
+   },
+   "file": "SimpleHeadThreeColFoot.docx",
+   "libreoffice": {
+    "d_tabelle": 0,
+    "d_titoli": -1,
+    "f1_celle": 1.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.894,
+    "ssim": 0.9542
+   },
+   "pdf2docx": {
+    "d_tabelle": 2,
+    "d_titoli": -1,
+    "f1_celle": 0.0,
+    "f1_testo": 0.7759,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.044,
+    "ssim": 0.9938
+   },
+   "tabelle_orig": 0,
+   "titoli_orig": 1
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 0.88,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.013,
+    "ssim": 0.9915
+   },
+   "file": "ThreeColFoot.docx",
+   "libreoffice": {
+    "d_tabelle": 0,
+    "d_titoli": -1,
+    "f1_celle": 1.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.988,
+    "ssim": 0.9638
+   },
+   "pdf2docx": {
+    "d_tabelle": 2,
+    "d_titoli": -1,
+    "f1_celle": 0.0,
+    "f1_testo": 0.88,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.033,
+    "ssim": 0.9928
+   },
+   "tabelle_orig": 0,
+   "titoli_orig": 1
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 0.86,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.014,
+    "ssim": 0.9719
+   },
+   "file": "ThreeColHead.docx",
+   "libreoffice": {
+    "d_tabelle": 0,
+    "d_titoli": -1,
+    "f1_celle": 1.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.969,
+    "ssim": 0.9628
+   },
+   "pdf2docx": {
+    "d_tabelle": 2,
+    "d_titoli": -1,
+    "f1_celle": 0.0,
+    "f1_testo": 0.86,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.034,
+    "ssim": 0.9927
+   },
+   "tabelle_orig": 0,
+   "titoli_orig": 1
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 0.7833,
+    "pagine": [
+     2,
+     4
+    ],
+    "s": 0.015,
+    "ssim": 0.9653
+   },
+   "file": "ThreeColHeadFoot.docx",
+   "libreoffice": {
+    "d_tabelle": 0,
+    "d_titoli": -1,
+    "f1_celle": 1.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.946,
+    "ssim": 0.9502
+   },
+   "pdf2docx": {
+    "d_tabelle": 4,
+    "d_titoli": -1,
+    "f1_celle": 0.0,
+    "f1_testo": 0.7833,
+    "pagine": [
+     2,
+     2
+    ],
+    "s": 0.059,
+    "ssim": 0.9886
+   },
+   "tabelle_orig": 0,
+   "titoli_orig": 1
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 1.0,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.015,
+    "ssim": 0.8852
+   },
+   "file": "heading123.docx",
+   "libreoffice": {
+    "d_tabelle": 0,
+    "d_titoli": -3,
+    "f1_celle": 1.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.887,
+    "ssim": 0.7266
+   },
+   "pdf2docx": {
+    "d_tabelle": 0,
+    "d_titoli": -3,
+    "f1_celle": 1.0,
+    "f1_testo": 1.0,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.059,
+    "ssim": 0.7625
+   },
+   "tabelle_orig": 0,
+   "titoli_orig": 3
+  },
+  {
+   "cedro": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 1.0,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.014,
+    "ssim": 0.7344
+   },
+   "file": "table-alignment.docx",
+   "libreoffice": {
+    "d_tabelle": -6,
+    "d_titoli": 0,
+    "f1_celle": 0.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.964,
+    "ssim": 0.7403
+   },
+   "pdf2docx": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 1.0,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.157,
+    "ssim": 0.8214
+   },
+   "tabelle_orig": 6,
+   "titoli_orig": 0
+  },
+  {
+   "cedro": {
+    "d_tabelle": -1,
+    "d_titoli": 0,
+    "f1_celle": 0.875,
+    "f1_testo": 0.8235,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.017,
+    "ssim": 0.6913
+   },
+   "file": "table-indent.docx",
+   "libreoffice": {
+    "d_tabelle": -7,
+    "d_titoli": 0,
+    "f1_celle": 0.0,
+    "f1_testo": 0.0,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.909,
+    "ssim": 0.5768
+   },
+   "pdf2docx": {
+    "d_tabelle": 0,
+    "d_titoli": 0,
+    "f1_celle": 1.0,
+    "f1_testo": 1.0,
+    "pagine": [
+     1,
+     1
+    ],
+    "s": 0.165,
+    "ssim": 0.8134
+   },
+   "tabelle_orig": 7,
+   "titoli_orig": 0
+  }
+ ]
+}

@@ -1,0 +1,200 @@
+{
+ "righe": [
+  {
+   "cedro_dim": [
+    480,
+    480
+   ],
+   "errore": "",
+   "file": "cmu1-pezzo.svs",
+   "mae": 0.0083,
+   "max": 1,
+   "rc": 0,
+   "rif": {
+    "dim": [
+     480,
+     480
+    ],
+    "ingrandimento": "20",
+    "lettore": "openslide 4.0.1",
+    "livelli": 1,
+    "mpp_x": "0.499",
+    "mpp_y": "0.499"
+   },
+   "s": 0.04
+  },
+  {
+   "cedro_dim": [
+    480,
+    480
+   ],
+   "errore": "",
+   "file": "j2k-ycbcr.svs",
+   "mae": 0.001,
+   "max": 3,
+   "rc": 0,
+   "rif": {
+    "dim": [
+     480,
+     480
+    ],
+    "ingrandimento": "40",
+    "lettore": "openslide 4.0.1",
+    "livelli": 1,
+    "mpp_x": "0.25",
+    "mpp_y": "0.25"
+   },
+   "s": 0.029
+  },
+  {
+   "cedro_dim": [
+    200,
+    96
+   ],
+   "errore": "",
+   "file": "jxr-grigio16.czi",
+   "pearson": 0.99997,
+   "rc": 0,
+   "rif": {
+    "dim": [
+     200,
+     96
+    ],
+    "lettore": "czifile+imagecodecs"
+   },
+   "s": 0.019
+  },
+  {
+   "cedro_dim": [
+    200,
+    96
+   ],
+   "errore": "",
+   "file": "jxr-rgb8.czi",
+   "mae": 0.0,
+   "max": 0,
+   "rc": 0,
+   "rif": {
+    "dim": [
+     200,
+     96
+    ],
+    "lettore": "czifile+imagecodecs"
+   },
+   "s": 0.018
+  },
+  {
+   "cedro_dim": [
+    8,
+    8
+   ],
+   "errore": "",
+   "file": "multi_t1.ome.tif",
+   "pearson": 1.0,
+   "rc": 0,
+   "rif": {
+    "dim": [
+     8,
+     8
+    ],
+    "lettore": "tifffile"
+   },
+   "s": 0.016
+  },
+  {
+   "cedro_dim": [
+    720,
+    480
+   ],
+   "errore": "",
+   "file": "piramide.svs",
+   "mae": 0.333,
+   "max": 4,
+   "rc": 0,
+   "rif": {
+    "dim": [
+     720,
+     480
+    ],
+    "ingrandimento": "40",
+    "lettore": "openslide 4.0.1",
+    "livelli": 3,
+    "mpp_x": "0.25",
+    "mpp_y": "0.25"
+   },
+   "s": 0.026
+  },
+  {
+   "cedro_dim": [
+    24,
+    16
+   ],
+   "errore": "",
+   "file": "planare-rgb16.ome.tif",
+   "pearson": 1.0,
+   "rc": 0,
+   "rif": {
+    "dim": [
+     24,
+     16
+    ],
+    "lettore": "tifffile"
+   },
+   "s": 0.019
+  },
+  {
+   "cedro_dim": [
+    64,
+    32
+   ],
+   "errore": "",
+   "file": "tempo.ome.tif",
+   "pearson": 0.77566,
+   "rc": 0,
+   "rif": {
+    "dim": [
+     64,
+     32
+    ],
+    "lettore": "tifffile"
+   },
+   "s": 0.019
+  },
+  {
+   "cedro_dim": [
+    24,
+    16
+   ],
+   "errore": "",
+   "file": "u32.ome.tif",
+   "pearson": 1.0,
+   "rc": 0,
+   "rif": {
+    "dim": [
+     24,
+     16
+    ],
+    "lettore": "tifffile"
+   },
+   "s": 0.019
+  },
+  {
+   "cedro_dim": [
+    16,
+    16
+   ],
+   "errore": "",
+   "file": "unita-pixel.ome.tif",
+   "pearson": 1.0,
+   "rc": 0,
+   "rif": {
+    "dim": [
+     16,
+     16
+    ],
+    "lettore": "tifffile"
+   },
+   "s": 0.01
+  }
+ ]
+}

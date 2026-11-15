@@ -1,0 +1,18 @@
+{
+ "difetti": 1,
+ "elenco_difetti": [
+  {
+   "cmd": "convert pdf",
+   "err": "",
+   "file": "0118",
+   "seme": "52117.doc",
+   "tipo": "memoria"
+  }
+ ],
+ "esiti": {
+  "errore_pulito": 640,
+  "ok": 359
+ },
+ "mutati": 1000,
+ "semi": 59
+}
