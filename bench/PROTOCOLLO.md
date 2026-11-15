@@ -129,3 +129,13 @@ italiana (CNS/Aruba Key/Dike), PEC e marca temporale, Word/Excel/PDF senza Offic
 
 Vedi il rapporto: test a tempo con compiti fissi, SUS (System Usability Scale), «tempo al primo risultato»,
 errori di scelta, fiducia nei risultati (blind A/B con un patologo), prove con chiavette e scanner veri.
+
+## 9. Emendamenti (fatti dopo il commit di preregistrazione, prima di leggere i risultati dell'area interessata)
+
+1. **B1, veraPDF.** Il testo originale diceva `veraPDF -f 0` («nessun errore di parsing»). Provandolo si è visto che `-f 0`
+   sceglie il profilo PDF/A-1b e boccia ogni file che non è PDF/A, quindi non misura il parsing. Lo script usa `-f 2b --format xml`
+   e conta come errore solo `failedToParse` e le clausole 6.1.x (struttura del file e dei flussi); le clausole di conformità
+   PDF/A vera (colore, font, metadati) non fanno fallire B1, perché Cedro non dichiara PDF/A. La soglia (0 errori) non cambia.
+2. **C, firme CAdES senza `nonRepudiation`.** DSS e ETSI EN 319 122 non richiedono il bit nel certificato per una firma
+   di base: un file firmato con un certificato senza `nonRepudiation` ma per il resto valido conta «ok», non «avviso».
+3. **A, ripetizioni.** Le misure di tempo e memoria della trascrizione si ripetono 5 volte (come da regola 3), non 3.
