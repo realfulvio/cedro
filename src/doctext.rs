@@ -1147,7 +1147,7 @@ mod block_tests {
     fn a_document_with_titles_gets_pdf_bookmarks() {
         let d = dir();
         let docx = d.join("delibera.docx");
-        let document = "<w:document><w:body>\
+        let document = "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>\
 <w:p><w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr><w:r><w:t>Oggetto</w:t></w:r></w:p>\
 <w:p><w:r><w:t>Testo della premessa.</w:t></w:r></w:p>\
 <w:p><w:pPr><w:pStyle w:val=\"Heading2\"/></w:pPr><w:r><w:t>Dispositivo</w:t></w:r></w:p>\

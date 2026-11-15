@@ -57,6 +57,9 @@ pub enum Field {
     FirmaLocation,
     FirmaSuffix,
     FirmaDlg(u8),
+    /// Cedro 4 Labs, finestrella del caso: il codice e la nota.
+    CasoCodice,
+    CasoNota,
 }
 
 /// Le parti che si aprono e si chiudono («Altre opzioni»…).
@@ -92,6 +95,8 @@ pub enum Scroll {
     FirmaPanel,
     /// «Firma documenti», «Chiavetta e certificati», «Opzioni della firma».
     FirmaSign,
+    /// Cedro 4 Labs: l'elenco dei lavori di oggi.
+    Lavori,
 }
 
 /// Cosa fa un clic.
@@ -137,6 +142,14 @@ pub enum Act {
     ResetRecommended,
     OpenGuide,
     OpenSettings,
+    /// Cedro 4 Labs: la finestrella del caso (si apre, si conferma, si toglie, si chiude) e l'elenco dei lavori.
+    CasoApri,
+    CasoOk,
+    CasoTogli,
+    CasoChiudi,
+    LavoriApri,
+    /// «Copia per il quaderno» di un lavoro (indice tra quelli di oggi, dal più nuovo).
+    Quaderno(usize),
     OpenPath(PathBuf),
     Minimize,
     Maximize,
@@ -910,7 +923,12 @@ impl<'a> Frame<'a> {
             None => {
                 self.p.rrect(r.0, r.1, r.2, r.3, radius, Some(pal.alt), None);
                 let s = r.3.min(r.2) * 0.6;
-                self.kind_icon(f.kind, r.0 + (r.2 - s) / 2.0, r.1 + (r.3 - s) / 2.0, s);
+                if crate::ufficio::is_foglio(&crate::engine::extension(&f.path)) {
+                    // I fogli di calcolo stanno fra i testi, ma si riconoscono dalla loro icona verde.
+                    self.excel_icon(r.0 + (r.2 - s) / 2.0, r.1 + (r.3 - s) / 2.0, s);
+                } else {
+                    self.kind_icon(f.kind, r.0 + (r.2 - s) / 2.0, r.1 + (r.3 - s) / 2.0, s);
+                }
             }
         }
     }

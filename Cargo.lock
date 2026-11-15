@@ -566,12 +566,14 @@ dependencies = [
  "cfb",
  "cpal",
  "cryptoki",
+ "encoding_rs",
  "fdk-aac",
  "flacenc",
  "flate2",
  "gtk4",
  "hayro",
  "hayro-jpeg2000",
+ "heifer",
  "hound",
  "image",
  "jpeg-decoder",
@@ -608,6 +610,7 @@ dependencies = [
  "sha1",
  "sha2",
  "skrifa 0.49.0",
+ "subsetter",
  "symphonia",
  "tiff",
  "tiny-skia 0.11.4",
@@ -1980,6 +1983,35 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "heifer"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b4095598410dc9dbc261344a9608eb20f3e7351de4ea4bf4828d49db8c5e07c"
+dependencies = [
+ "heifer-hevc-dec",
+ "heifer-isobmff",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "heifer-hevc-dec"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7356cb9a058f1a7af369b03a31a97ea84d2a4945432202935e2e225f72e0006e"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "heifer-isobmff"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d177fefdeb15025c42342f0212acd4fa769323cef852d269ce4269b10ce8eb15"
+dependencies = [
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "hermit-abi"
@@ -4466,6 +4498,15 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "subsetter"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38803281d1c23166c5ebcb455439a5d2afe711cc909cf88af72448c297756ad6"
+dependencies = [
+ "rustc-hash",
 ]
 
 [[package]]
