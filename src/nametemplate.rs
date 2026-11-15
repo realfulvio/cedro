@@ -14,12 +14,22 @@ pub struct Stamp {
 
 /// L'ora di adesso nel fuso del sistema.
 pub fn now() -> Stamp {
-    let unix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    local(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0))
+}
+
+/// Un istante Unix nel fuso del sistema.
+pub fn local(unix: u64) -> Stamp {
     #[cfg(windows)]
     {
-        use windows::Win32::System::SystemInformation::GetLocalTime;
-        let t = unsafe { GetLocalTime() };
-        return Stamp { year: t.wYear as i32, month: t.wMonth as u32, day: t.wDay as u32, hour: t.wHour as u32, minute: t.wMinute as u32, second: t.wSecond as u32, unix };
+        use windows::Win32::Foundation::SYSTEMTIME;
+        use windows::Win32::System::Time::SystemTimeToTzSpecificLocalTime;
+        // Dal fuso di Windows, con le ore legali di quella data (non quelle di adesso).
+        let u = utc(unix);
+        let from = SYSTEMTIME { wYear: u.year as u16, wMonth: u.month as u16, wDayOfWeek: 0, wDay: u.day as u16, wHour: u.hour as u16, wMinute: u.minute as u16, wSecond: u.second as u16, wMilliseconds: 0 };
+        let mut to = SYSTEMTIME::default();
+        if unsafe { SystemTimeToTzSpecificLocalTime(None, &from, &mut to) }.is_ok() {
+            return Stamp { year: to.wYear as i32, month: to.wMonth as u32, day: to.wDay as u32, hour: to.wHour as u32, minute: to.wMinute as u32, second: to.wSecond as u32, unix };
+        }
     }
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
@@ -70,13 +80,23 @@ fn clean(name: &str) -> String {
 /// `tail` è la parte che il motore aggiunge in fondo (per esempio «-compresso»). Se il modello è
 /// vuoto o dà un nome vuoto, ritorna `None` e vale il nome di sempre.
 pub fn expand(template: &str, source_stem: &str, source_ext: &str, tail: &str, when: Stamp) -> Option<String> {
+    expand_caso(template, source_stem, source_ext, tail, when, "")
+}
+
+/// Come `expand`, con il caso o campione di lavoro: `%caso%` (in inglese `%case%`) diventa il suo codice.
+/// Senza caso il segnaposto sparisce e con lui i trattini bassi che gli stavano attorno: «%data%_%caso%_%nome%»
+/// dà «2026-10-28_foto» e non «2026-10-28__foto».
+pub fn expand_caso(template: &str, source_stem: &str, source_ext: &str, tail: &str, when: Stamp, caso: &str) -> Option<String> {
     let template = template.trim();
     if template.is_empty() {
         return None;
     }
     let data = format!("{:04}-{:02}-{:02}", when.year, when.month, when.day);
     let ora = format!("{:02}-{:02}-{:02}", when.hour, when.minute, when.second);
-    let body = template
+    let caso = clean(caso);
+    let mut body = template
+        .replace("%caso%", &caso)
+        .replace("%case%", &caso)
         .replace("%nome%", source_stem)
         .replace("%name%", source_stem)
         .replace("%date%", &data)
@@ -85,6 +105,13 @@ pub fn expand(template: &str, source_stem: &str, source_ext: &str, tail: &str, w
         .replace("%data%", &data)
         .replace("%ora%", &ora)
         .replace("%unix%", &when.unix.to_string());
+    if caso.is_empty() && (template.contains("%caso%") || template.contains("%case%")) {
+        // Il segnaposto vuoto non lascia separatori doppi né in testa.
+        while body.contains("__") {
+            body = body.replace("__", "_");
+        }
+        body = body.trim_matches('_').to_string();
+    }
     let name = clean(&format!("{body}{tail}"));
     if name.is_empty() {
         None
@@ -118,6 +145,12 @@ mod tests {
         assert_eq!(expand("%name%-%date%", "foto", "png", "", when).unwrap(), "foto-2026-10-28");
         assert_eq!(expand("a/b:c", "x", "y", "", when).unwrap(), "a_b_c");
         assert!(expand("   ", "x", "y", "", when).is_none());
+        // Il caso entra nel nome; senza caso sparisce con i suoi separatori.
+        assert_eq!(expand_caso("%data%_%caso%_%nome%", "vetrino", "svs", "_anonimo", when, "V-2026-0457").unwrap(), "2026-10-28_V-2026-0457_vetrino_anonimo");
+        assert_eq!(expand_caso("%data%_%caso%_%nome%", "vetrino", "svs", "", when, "").unwrap(), "2026-10-28_vetrino");
+        assert_eq!(expand_caso("%caso%_%nome%", "vetrino", "svs", "", when, "  ").unwrap(), "vetrino");
+        assert_eq!(expand_caso("%case%-%name%", "a", "b", "", when, "X/1").unwrap(), "X_1-a");
+        assert_eq!(expand("%nome%_%caso%", "foto", "png", "", when).unwrap(), "foto");
         assert!(expand("...", "x", "y", "", when).is_none());
     }
 }

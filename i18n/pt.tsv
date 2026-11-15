@@ -2420,3 +2420,54 @@ già trascritto	já transcrito
 da trascrivere	ainda por transcrever
 Trascrizione in corso	Transcrição em andamento
 Vol.	Vol.
+Da Word, ODT, RTF e DOC a PDF, Word, ODT, HTML e testo.	De Word, ODT, RTF e DOC para PDF, Word, ODT, HTML e texto.
+tiene caratteri, tabelle e immagini	mantém fontes, tabelas e imagens
+per LibreOffice e OpenOffice	para LibreOffice e OpenOffice
+pagina web, immagini dentro	página web, imagens incluídas
+titoli, elenchi e tabelle	títulos, listas e tabelas
+Documento di Word	Documento do Word
+Documento di Writer (ODT)	Documento do Writer (ODT)
+Pagina web con le immagini dentro	Página web com as imagens incluídas
+Markdown con titoli, elenchi e tabelle	Markdown com títulos, listas e tabelas
+«{}» non è un documento letto da Cedro	“{}” não é um documento que o Cedro consegue ler
+la carta scelta nel file	o papel definido no arquivo
+1 PDF · 1 pagina	1 PDF · 1 página
+{#} PDF · 1 pagina	{} PDFs · 1 página
+documento di Word 1 o 2 per Windows: formato troppo vecchio	documento do Word 1 ou 2 para Windows: formato antigo demais
+documento di Word troppo vecchio	documento do Word antigo demais
+il documento è protetto da password	o documento está protegido por senha
+il file .doc è rovinato e non si può leggere	o arquivo .doc está danificado e não pode ser lido
+il file Excel è protetto da password: aprilo e salvalo senza	o arquivo do Excel está protegido por senha: abra e salve sem ela
+il file contiene una DTD, che Cedro non apre per sicurezza	o arquivo contém uma DTD, que o Cedro não abre por segurança
+il file non è un RTF	o arquivo não é um RTF
+il file non è un documento Word leggibile	o arquivo não é um documento do Word legível
+il file non è un documento di Writer leggibile	o arquivo não é um documento do Writer legível
+il file non è un foglio Excel leggibile	o arquivo não é uma planilha do Excel legível
+il foglio di calcolo è vuoto: non c'è niente da stampare	a planilha está vazia: não há nada para imprimir
+non è un documento di Word	não é um documento do Word
+documento senza testo	documento sem texto
+Solo processore	Só processador
+Accelera la scheda video	A placa de vídeo acelera
+Lavora il processore	O processador trabalha
+Aggiorno {}	Atualizando {}
+Non ho scaricato {}	Não consegui baixar {}
+ · riprovo al prossimo lavoro	 · tento de novo no próximo trabalho
+i modelli delle voci	os modelos de voz
+YouTube non dà i sottotitoli adesso: riprova più tardi o togli i sottotitoli	O YouTube não está liberando as legendas agora: tente mais tarde ou desative as legendas
+Il sito non dà i sottotitoli adesso (limite di richieste): scarico il video senza	O site não está liberando as legendas agora (limite de pedidos): baixo o vídeo sem elas
+Non riesco a scaricare il video	Não consigo baixar o vídeo
+Caso	Caso
++ Caso o campione	+ Caso ou amostra
+Lavori di oggi	Trabalhos de hoje
+Ancora nessuno. Ogni lavoro finisce qui, con i nomi dei file usciti.	Nenhum ainda. Cada trabalho termina aqui, com os nomes dos arquivos gerados.
+Gli originali non sono mai stati toccati.	Os originais nunca foram tocados.
+… e altri {#} file	… e mais {#} arquivos
+Copia per il quaderno	Copiar para o caderno
+Caso o campione	Caso ou amostra
+Se c'è, il codice entra nei nomi dei file che Cedro scrive, dopo la data. Resta finché non lo togli.	Se houver um, o código entra nos nomes dos arquivos que o Cedro grava, depois da data. Fica até você tirar.
+Codice	Código
+Nota (per te, non entra nei nomi)	Nota (para você, não entra nos nomes)
+Togli il caso	Tirar o caso
+Metti	Definir
+  cedro --caso V-2026-0457 convert vetrino.svs png    i file nuovi si chiamano data_caso_nome (senza --caso vale quello scelto nell'app; --senza-caso lo esclude)	  cedro --caso V-2026-0457 convert lamina.svs png    os arquivos novos se chamam data_caso_nome (sem --caso vale o escolhido no app; --senza-caso o exclui)
+--caso vuole un codice, per esempio V-2026-0457	--caso precisa de um código, por exemplo V-2026-0457

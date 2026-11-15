@@ -1011,6 +1011,30 @@ impl Screen {
                 st.glossario_vet = app.transcribe.glossario_vet;
                 let _ = crate::settings::write_settings(&st);
             }
+            Act::CasoApri => app.caso_apri(),
+            Act::CasoOk => {
+                app.caso_conferma();
+                self.ui.edit = None;
+            }
+            Act::CasoTogli => {
+                app.caso_togli();
+                self.ui.edit = None;
+            }
+            Act::CasoChiudi => {
+                app.caso_aperto = false;
+                self.ui.edit = None;
+            }
+            Act::LavoriApri => {
+                app.lavori_aperti = !app.lavori_aperti;
+                app.caso_aperto = false;
+                app.quaderno_copiato = None;
+            }
+            Act::Quaderno(i) => {
+                if let Some(l) = crate::caso::di_oggi(&app.lavori).get(i) {
+                    plat.copy_text(&l.per_quaderno());
+                    app.quaderno_copiato = Some(i);
+                }
+            }
             Act::VoicesGo => app.voices_go(),
             Act::VoicesCancel => app.transcribe.asking = false,
             Act::MediaPlay => app.media_toggle(),
@@ -1826,6 +1850,8 @@ impl Screen {
             Field::FilePages(i) => self.app.files.get(i).map(|f| f.pages.clone()).unwrap_or_default(),
             Field::Review(i) => self.app.review.as_ref().and_then(|r| r.rows.get(i)).map(|r| r.text.clone()).unwrap_or_default(),
             Field::VoiceName(v) => self.app.review.as_ref().and_then(|r| r.names.get(v as usize)).cloned().unwrap_or_default(),
+            Field::CasoCodice => self.app.caso_bozza.0.clone(),
+            Field::CasoNota => self.app.caso_bozza.1.clone(),
             Field::FirmaDate => self.app.firma.viewer.as_ref().map(|v| v.at_text.clone()).unwrap_or_default(),
             Field::FirmaPin => self.app.firma.sign.pin.clone(),
             Field::FirmaReason => self.app.firma.sign.s.firma_reason.clone(),
@@ -1872,6 +1898,8 @@ impl Screen {
                     *name = text;
                 }
             }
+            Field::CasoCodice => self.app.caso_bozza.0 = text,
+            Field::CasoNota => self.app.caso_bozza.1 = text,
             Field::FirmaDate => {
                 if let Some(v) = self.app.firma.viewer.as_mut() {
                     v.at_text = text;
@@ -2012,6 +2040,9 @@ impl Screen {
                     if matches!(field, Field::FirmaDlg(_)) {
                         self.act(Act::FirmaDlgGo, plat);
                     }
+                    if matches!(field, Field::CasoCodice | Field::CasoNota) {
+                        self.act(Act::CasoOk, plat);
+                    }
                     return true;
                 }
                 Key::Escape | Key::Tab | Key::ShiftTab => {
@@ -2037,6 +2068,9 @@ impl Screen {
                     return true;
                 }
                 if std::mem::take(&mut self.app.transcribe.asking) {
+                    return true;
+                }
+                if std::mem::take(&mut self.app.caso_aperto) {
                     return true;
                 }
                 if self.app.notice.take().is_some() {
@@ -2407,5 +2441,29 @@ mod tests {
         s.app.add_typed_links(false);
         assert!(s.app.youtube.items.is_empty());
         assert!(s.app.notice.as_ref().is_some_and(|n| n.error));
+    }
+
+    /// Prova a mano: `CEDRO_UI_FILES=a.docx:b.xlsx CEDRO_UI_SHOTS=cartella cargo test --lib foto_ufficio -- --ignored`
+    /// apre ogni file nella finestra come se fosse trascinato e salva la schermata con la sua anteprima.
+    #[test]
+    #[ignore]
+    fn foto_ufficio() {
+        let (Some(files), Some(dir)) = (std::env::var_os("CEDRO_UI_FILES"), std::env::var_os("CEDRO_UI_SHOTS")) else { return };
+        let dir = PathBuf::from(dir);
+        for f in std::env::split_paths(&files) {
+            let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+            s.drop_files(vec![f.clone()]);
+            for _ in 0..100 {
+                let _ = s.render(1440, 940, 1.0);
+                s.pump();
+                if s.app.previews.iter().any(|((p, _), i)| p == &f && i.is_some()) || s.app.previews_failed.iter().any(|(p, _)| p == &f) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            let _ = s.render(1440, 940, 1.0);
+            let name = f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            s.render(1440, 940, 1.0).save_png(&dir.join(format!("{name}.png"))).unwrap();
+        }
     }
 }
