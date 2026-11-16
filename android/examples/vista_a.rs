@@ -6,10 +6,13 @@ use cedro::{Kind, i18n::{self, Lang}};
 use cedro::ui::{gfx::{Fonts, GlyphCache, Painter}, theme::ThemeId};
 use cedro_android::ui::{App, Archivio, Lavoro, Recente, Scheda, Stato};
 
+mod dicom_fixture {include!("../tests/support/dicom.rs");}
+
 fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, scene: usize) {
     let mut app = App::new(tema);
     app.anim.calmo = true;
     app.vai_casa();
+    app.vista_completa(true);
     i18n::set(lang);
     app.lingua = lang.code();
     app.margini = (0.0, 27.0, 0.0, 14.0);
@@ -33,6 +36,30 @@ fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, sc
             app.scelta = cedro::conversioni::formats(Kind::Image).iter().position(|f| f.id == "pdf");
         }
         10 => { app.grandi = true; }
+        11..=15 => {
+            app.vista_nav(6);
+            let src=if scene==13 {
+                let path=out.join("fixture-sintetica.dcm");dicom_fixture::crea(&path);path
+            }else{PathBuf::from(if scene==12{"tests/fixtures/micro/jxr-rgb8.czi"}else{"tests/fixtures/svs/piramide.svs"})};
+            app.aggiungi_coda(vec![(src.clone(),src.file_name().unwrap().to_string_lossy().into_owned(),Kind::Image)]);
+            app.labs.caso=cedro::caso::Caso::new("V-2026-0457","Solo fixture del renderer");
+            app.labs.path=Some(src.clone());
+            app.labs.scelta=if scene==11{cedro_android::labs::Scelta{livello:Some(0),..Default::default()}}else{Default::default()};
+            let temp=out.join(format!(".preview-{scene}"));
+            match cedro_android::labs::anteprima(&src,&app.labs.scelta,&temp) {
+                Ok((png,meta))=>{
+                    app.labs.info=Some(serde_json::from_str(&meta).unwrap());
+                    app.labs.immagine=cedro::ui::media::thumb_of(&png,1024);
+                }
+                Err(e)=>app.labs.errore=e,
+            }
+            let _=std::fs::remove_dir_all(temp);
+            if scene==13 {app.scorri=260.0;let _=std::fs::remove_file(&src);}
+            if scene==14 {
+                app.labs.codice="V-2026-0457".into();app.labs.nota="Nota fixture, esclusa dai nomi".into();app.labs.caso_aperto=true;
+            }
+            if scene==15 {app.grandi=true;app.scorri=300.0;}
+        }
         _ => {}
     }
     let mut cache = GlyphCache::new();
@@ -48,8 +75,8 @@ fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, sc
 fn main() {
     let out = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "/tmp/vista-a".into()));
     std::fs::create_dir_all(&out).unwrap();
-    let scenes = ["inizio", "converti", "pdf", "trascrivi", "web", "firma", "labs", "lavori", "impostazioni", "condividi", "grandi"];
-    for lang in [Lang::It, Lang::De] {
+    let scenes = ["inizio", "converti", "pdf", "trascrivi", "web", "firma", "labs", "lavori", "impostazioni", "condividi", "grandi", "labs-livello", "labs-czi", "labs-dicom", "caso", "labs-grandi"];
+    for lang in [Lang::It, Lang::De, Lang::Pt] {
         for (w, h) in [(360.0, 800.0), (360.0, 640.0), (800.0, 400.0)] {
             for (scene, name) in scenes.iter().enumerate() {
                 disegna(&out, &format!("{}-{w}x{h}-{name}", lang.code()), w, h, ThemeId::Cedro, lang, scene);

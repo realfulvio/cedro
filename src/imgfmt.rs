@@ -179,7 +179,12 @@ pub fn system_fonts() -> std::sync::Arc<resvg::usvg::fontdb::Database> {
     FONTS
         .get_or_init(|| {
             let mut db = resvg::usvg::fontdb::Database::new();
+            #[cfg(not(target_os = "android"))]
             db.load_system_fonts();
+            #[cfg(target_os = "android")]
+            for dir in ["/system/fonts", "/product/fonts", "/system_ext/fonts"] {
+                db.load_fonts_dir(dir);
+            }
             std::sync::Arc::new(db)
         })
         .clone()

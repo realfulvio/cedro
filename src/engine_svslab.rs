@@ -25,9 +25,10 @@ pub fn perform(path: &Path, action: &str, dir: &Path, opts: &Options) -> Option<
             let ext = crate::svs_lab::estensione(path);
             let out = if ext == "mrxs" {
                 // Il MIRAX ha anche la cartella dei dati: un nome libero per tutti e due.
+                let base = super::templated_stem(&format!("{codice}-anonimo"));
                 let mut n = 1;
                 loop {
-                    let nome = if n == 1 { format!("{codice}-anonimo") } else { format!("{codice}-anonimo ({n})") };
+                    let nome = if n == 1 { base.clone() } else { format!("{base} ({n})") };
                     let f = dir.join(format!("{nome}.mrxs"));
                     if !f.exists() && !dir.join(&nome).exists() {
                         break f;
@@ -43,7 +44,7 @@ pub fn perform(path: &Path, action: &str, dir: &Path, opts: &Options) -> Option<
         }
         "tiles" => {
             // Anche le tessere e la cartella hanno il codice del caso, non il nome del file.
-            let base = crate::svs_lab::codice_caso(path);
+            let base = super::templated_stem(&crate::svs_lab::codice_caso(path));
             let mut cartella = dir.join(format!("{base}-tessere"));
             let mut n = 2;
             while cartella.exists() {
@@ -116,4 +117,41 @@ mod prove {
         assert!(perform_with(&png, "mitosi", 80, None, &Options::default()).err().is_some_and(|e| e.0.contains("vetrino")));
         let _ = std::fs::remove_dir_all(&d);
     }
+    #[test]
+    fn caso_nei_gruppi_mirax_e_tessere_con_collisioni() {
+        let dir=std::env::temp_dir().join(format!("cedro-caso-gruppi-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let src=crate::mrxs::prove::mirax_finto(&dir,2,2,64,64,0);
+        let prima=crate::mrxs::open(&src).unwrap().read_level(&src,0).unwrap();
+        let opts=crate::caso::opzioni(Some("V-2026-0457"),Options{
+            tessere:crate::svs_lab::Tessere{lato:32,ingrandimento:0,solo_tessuto:false,..Default::default()},
+            ..Default::default()
+        });
+        let outdir=dir.join("risultati");std::fs::create_dir_all(&outdir).unwrap();
+        let first=perform_with(&src,"strip",82,Some(&outdir),&opts).unwrap().path;
+        let second=perform_with(&src,"strip",82,Some(&outdir),&opts).unwrap().path;
+        assert_ne!(first,second);
+        for out in [&first,&second] {
+            let name=out.file_name().unwrap().to_string_lossy();
+            assert_eq!(name.matches("V-2026-0457").count(),1);
+            assert!(out.with_extension("").join("Slidedat.ini").is_file());
+            assert_eq!(crate::mrxs::open(out).unwrap().read_level(out,0).unwrap().as_raw(),prima.as_raw());
+        }
+        let first=perform_with(&src,"tiles",82,Some(&outdir),&opts).unwrap().path;
+        let second=perform_with(&src,"tiles",82,Some(&outdir),&opts).unwrap().path;
+        assert_ne!(first,second);
+        for out in [&first,&second] {
+            assert_eq!(out.file_name().unwrap().to_string_lossy().matches("V-2026-0457").count(),1);
+            let csv=std::fs::read_to_string(out.join("tessere.csv")).unwrap();
+            assert!(csv.lines().count()>1);
+            for row in csv.lines().skip(1) {
+                let name=row.split(';').next().unwrap();
+                assert_eq!(name.matches("V-2026-0457").count(),1);
+                let img=image::open(out.join(name)).unwrap();
+                assert_eq!((img.width(),img.height()),(32,32));
+            }
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
 }
