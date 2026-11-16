@@ -804,7 +804,6 @@ type Casella<T> = Arc<Mutex<Option<T>>>;
 #[derive(Clone, Default)]
 struct Consegne {
     labs: Arc<Mutex<Vec<(u32,Result<(crate::labs::Info,Image),String>)>>>,
-    labs_attivo: Arc<std::sync::atomic::AtomicU32>,
     caso_versione: Arc<std::sync::atomic::AtomicU32>,
     caso_lock: Arc<Mutex<()>>,
     caso_esito: Casella<Result<(),String>>,
@@ -2095,16 +2094,14 @@ fn android_main(app: AndroidApp) {
                 None => {}
             }
         }
-        if !ui.labs_visibile() {
-            if let Some(id)=ui.labs.richiesta.take() {
-                if let Some(cancel)=consegne.tokens.lock().unwrap_or_else(|e|e.into_inner()).get(&id){cancel.store(true,std::sync::atomic::Ordering::Release);}
-                ui.labs.aggiorna=true;
-            }
+        // Sincronizzare prima degli esiti invalida anche una sorgente appena rimossa.
+        let (annulla,richiesta)=ui.sincronizza_labs();
+        if let Some(id)=annulla {
+            if let Some(cancel)=consegne.tokens.lock().unwrap_or_else(|e|e.into_inner()).get(&id){cancel.store(true,std::sync::atomic::Ordering::Release);}
+            sporco=true;
         }
         // Anteprime isolate dal processo UI: i cambi di selezione cancellano il worker precedente.
-        if let Some((id,path,scelta))=ui.richiesta_labs() {
-            let old=consegne.labs_attivo.swap(id,std::sync::atomic::Ordering::AcqRel);
-            if let Some(cancel)=consegne.tokens.lock().unwrap_or_else(|e|e.into_inner()).get(&old){cancel.store(true,std::sync::atomic::Ordering::Release);}
+        if let Some((id,path,scelta))=richiesta {
             let (a,c)=(app.clone(),consegne.clone());
             let cancel=token(&c,id);
             let wake=app.create_waker();

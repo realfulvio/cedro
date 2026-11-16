@@ -37,9 +37,14 @@ impl App {
         let cta = !self.casa.inizio && self.casa.att != Att::Firma;
         let testo = self.testo_principale_a();
         let piede = if cta { misure_azione_a(p, w, &testo).1 } else { 0.0 };
-        let vista = (0.0, TOP, w, (h - TOP - NAVB - piede).max(1.0));
+        let famiglie_h=if !self.casa.inizio && !self.casa.laboratorio && self.casa.att==Att::Conv && self.casa.categoria==Kind::Image && !self.imp.simple {
+            self.barra_famiglie_a(p,w)
+        }else{0.0};
+        self.casa.famiglie_y.clear();
+        let cima=TOP+famiglie_h;
+        let vista = (0.0, cima, w, (h - cima - NAVB - piede).max(1.0));
         p.push_clip(vista.0, vista.1, vista.2, vista.3);
-        let y = TOP + 20.0 - self.scorri;
+        let y = cima + 20.0 - self.scorri;
         let fine = if self.casa.inizio {
             self.inizio_a(p, w, y, vista)
         } else if self.casa.att == Att::Firma {
@@ -296,6 +301,23 @@ impl App {
         y
     }
 
+    fn barra_famiglie_a(&mut self,p:&mut Painter,w:f32)->f32 {
+        let famiglie=famiglie_immagine_a();
+        let bw=(w-2.0*PAD-(famiglie.len()-1) as f32*GAP)/famiglie.len() as f32;
+        let bh=famiglie.iter().map(|(nome,_)|altezza_a(p,nome,12.0,Weight::Semibold,bw-8.0,17.0,0)+20.0).fold(48.0,f32::max);
+        let pal=self.pal();
+        p.fill(0.0,TOP,w,bh+12.0,pal.bg);
+        for (i,(nome,col)) in famiglie.into_iter().enumerate() {
+            let r=(PAD+i as f32*(bw+GAP),TOP+4.0,bw,bh);
+            let tinta=schiarisci(col,self.scuro());
+            p.rrect(r.0,r.1,r.2,r.3,8.0,Some(pal.surface),Some((tinta,1.5)));
+            p.fill(r.0+8.0,r.1+5.0,r.2-16.0,3.0,tinta);
+            testo_a(p,nome,r.0+4.0,r.1+12.0,r.2-8.0,12.0,Weight::Semibold,tinta,17.0,0);
+            self.colpi.push((Forma::R(r),Azione::Casa(CasaAz::Famiglia(nome))));
+        }
+        bh+12.0
+    }
+
     fn catalogo_a(&mut self, p: &mut Painter, x: f32, mut y: f32, w: f32, vista: R) -> f32 {
         let k = self.casa.categoria;
         let ops = self.operazioni();
@@ -310,7 +332,7 @@ impl App {
             }
             y+=60.0;
         }
-        let mut gruppi: Vec<(&str, Vec<usize>)> = Vec::new();
+        let mut gruppi: Vec<(&'static str, Vec<usize>)> = Vec::new();
         for (i, (id, _)) in ops.iter().enumerate() {
             if !self.casa.laboratorio && self.imp.simple && i<nf && !conversioni::simple_formats(k).iter().any(|f|f.id==*id) {continue;}
             let v = voci::voce(k, id);
@@ -320,6 +342,7 @@ impl App {
             if let Some(g) = gruppi.iter_mut().find(|g| g.0 == titolo) { g.1.push(i); } else { gruppi.push((titolo, vec![i])); }
         }
         for (titolo, mut idx) in gruppi {
+            self.casa.famiglie_y.insert(titolo,y+self.scorri-vista.1);
             if titolo == "Uso quotidiano" {
                 idx.sort_by_key(|i| ["jpeg", "png", "webp", "pdf"].iter().position(|id| *id == ops[*i].0).unwrap_or(99));
             }
@@ -487,6 +510,19 @@ pub(in crate::ui) fn testo_a(p: &mut Painter, s: &str, x: f32, y: f32, w: f32, s
     p.text_wrap(&righe_a(p, s, size, weight, w), x, y, w, size, weight, c, lh, max)
 }
 
+/// Ordine, nomi e colori provengono dal catalogo condiviso, come i gruppi sottostanti.
+fn famiglie_immagine_a()->Vec<(&'static str,Rgb)> {
+    let mut out=Vec::new();
+    for f in conversioni::formats(Kind::Image).iter().filter(|f|f.id!="none") {
+        let voce=voci::voce(Kind::Image,f.id);
+        if voci::is_lab(&voce){continue;}
+        if let Some(nome)=voci::family(Kind::Image,&voce) {
+            if !out.iter().any(|(n,_)|*n==nome){out.push((nome,voce.color));}
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -497,6 +533,33 @@ mod tests {
         let mut p = Painter::new(w as u32, h as u32, 1.0, Fonts::for_theme(a.tema), cache);
         p.larger = a.grandi;
         a.disegna(&mut p, w, h);
+    }
+
+    #[test]
+    fn cinque_famiglie_restano_visibili_e_saltano_ai_formati() {
+        let mut cache=GlyphCache::new();
+        for (w,h) in [(360.0,800.0),(360.0,640.0),(800.0,400.0)] {
+            for grandi in [false,true] {
+                let mut a=App::new(ThemeId::Cedro);a.anim.calmo=true;a.vai_casa();a.vista_nav(1);a.vista_completa(true);a.grandi=grandi;
+                frame(&mut a,w,h,&mut cache);
+                let famiglie=famiglie_immagine_a();assert_eq!(famiglie.len(),5);
+                for (nome,col) in famiglie {
+                    let r=a.colpi.iter().find_map(|(f,az)|if *az==Azione::Casa(CasaAz::Famiglia(nome)){if let Forma::R(r)=f{Some(*r)}else{None}}else{None}).unwrap();
+                    assert!(r.2>=48.0&&r.3>=48.0&&r.0>=0.0&&r.0+r.2<=w&&r.1+r.3<h-66.0);
+                    let target=a.casa.famiglie_y[nome];
+                    a.tocca_giu(r.0+r.2/2.0,r.1+r.3/2.0);a.tocca_su(r.0+r.2/2.0,r.1+r.3/2.0);
+                    assert!((a.scorri-target).abs()<0.001);
+                    frame(&mut a,w,h,&mut cache);
+                    let ops=a.operazioni();
+                    assert!(a.colpi.iter().any(|(f,az)|{
+                        let Azione::Casa(CasaAz::Formato(i))=az else{return false};
+                        let voce=voci::voce(Kind::Image,ops[*i].0);
+                        let Forma::R(r)=f else{return false};
+                        voci::family(Kind::Image,&voce)==Some(nome)&&voce.color==col&&r.2>=48.0&&r.3>=48.0
+                    }),"{nome}: {w}x{h}, grandi={grandi}");
+                }
+            }
+        }
     }
 
     #[test]
