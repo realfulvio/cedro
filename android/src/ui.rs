@@ -22,6 +22,7 @@ use cedro::{Kind, Mode};
 pub mod anim;
 pub mod tinte;
 mod casa;
+mod condivisione;
 pub mod firma;
 mod m3;
 
@@ -136,6 +137,8 @@ pub enum Azione {
     Altro,
     Esci,
     Fetta(usize),
+    /// Scelta esplicita nel catalogo del foglio A, senza passare dalla ruota.
+    FoglioFormato(u8, usize),
     Modo(u8),
     Vai,
     Cursore,
@@ -820,7 +823,13 @@ impl App {
     }
 
     fn fette(&self) -> Vec<cedro::Slice> {
-        let mut l = list(self.kind, if self.modo == 1 { Mode::Tools } else { Mode::Convert });
+        let mut l = if self.tema.is_cedro() {
+            if self.modo == 1 {
+                let mut tools = cedro::slices(self.kind, Mode::Tools).to_vec();
+                if self.kind == Kind::Pdf { tools.push(cedro::Slice { id: "pages", label: "Pagine" }); }
+                tools
+            } else { cedro::conversioni::formats(self.kind).to_vec() }
+        } else { list(self.kind, if self.modo == 1 { Mode::Tools } else { Mode::Convert }) };
         if l.first().is_some_and(|s| s.id == "none") {
             return Vec::new();
         }
@@ -1123,6 +1132,7 @@ impl App {
             }
             Azione::Tessera(i) => {
                 self.tessera = i;
+                if self.tema.is_cedro() { self.foglio = true; }
                 Effetto::Ridisegna
             }
             Azione::Altro => {
@@ -1132,6 +1142,13 @@ impl App {
                 Effetto::Ridisegna
             }
             Azione::Esci => Effetto::Esci,
+            Azione::FoglioFormato(m, i) => {
+                self.modo = m;
+                self.scelta = Some(i);
+                self.foglio = false;
+                self.dal_foglio = true;
+                Effetto::Ridisegna
+            }
             Azione::Fetta(i) => {
                 if self.file.is_some() {
                     self.scelta = Some(i);
@@ -1167,7 +1184,8 @@ impl App {
                         Some(f) if self.kind == Kind::Pdf && pdf::schermata(f.id).is_some() => self.apri_pagina(pdf::schermata(f.id).unwrap_or(pdf::Pagina::Excel)),
                         Some(f) => {
                             let conv = self.modo == 0;
-                            self.avvia(f.id, f.label, conv)
+                            let opts = self.opzioni_salvate.as_ref().map(|v| Box::new(cedro::conversioni::options_from(v)));
+                            self.avvia_con(f.id, f.label, conv, opts, Vec::new())
                         }
                         None => Effetto::Niente,
                     }
@@ -1265,7 +1283,7 @@ impl App {
             self.pagina_pdf(p, pg, w, h);
         } else if self.casa_aperta {
             // Il nuovo Cedro tiene la barra in basso anche su Lavori e Aspetto (senza voce scelta).
-            let hh = if self.tema.is_cedro() && self.sopra.is_some() && !self.casa.guida { h - NAV } else { h };
+            let hh = if self.tema.is_cedro() && self.sopra.is_some() && !self.casa.guida { h - 66.0 } else { h };
             match self.sopra {
                 Some(Scheda::Lavori) => self.pagina_lavori(p, w, hh),
                 Some(Scheda::Aspetto) => self.pagina_aspetto(p, w, hh),
@@ -1275,13 +1293,11 @@ impl App {
             if hh != h {
                 self.barra_cedro(p, w, h, None);
             }
+        } else if self.tema.is_cedro() && self.file.is_some() && self.scheda == Scheda::Ruota {
+            self.foglio_a(p, w, h);
         } else if self.foglio && self.file.is_some() {
-            // Il nuovo Cedro: dopo «Condividi» la ruota, scura, col file al centro.
-            if self.tema.is_cedro() {
-                self.ruota(p, w, h);
-            } else {
-                self.pagina_foglio(p, w, h);
-            }
+            // I temi precedenti conservano il loro foglio compatto.
+            self.pagina_foglio(p, w, h);
         } else {
             let corpo = h - NAV;
             match self.scheda {
@@ -1904,7 +1920,7 @@ impl App {
         } else {
             // Prima della prima percentuale (modello che si scarica o si carica) la barra scorre.
             p.push_clip(x, by, w, bh);
-            let t = (self.ora.duration_since(l.inizio).as_secs_f32() * 0.9).fract();
+            let t = if self.anim.calmo { 0.5 } else { (self.ora.duration_since(l.inizio).as_secs_f32() * 0.9).fract() };
             let sw = w * 0.3;
             p.rrect(x - sw + (w + sw) * t, by, sw, bh, bh / 2.0, Some(accento), None);
             p.pop_clip();
@@ -1958,7 +1974,7 @@ impl App {
                     p.text(&format!("{}%{resto}", m / 10), x + 14.0, y + 58.0, w - 28.0, 24.0, 13.0, Weight::Regular, pal.muted, Align::Left);
                 } else {
                     p.push_clip(bx, by, bw, 8.0);
-                    let t = (self.ora.duration_since(l.inizio).as_secs_f32() * 0.9).fract();
+                    let t = if self.anim.calmo { 0.5 } else { (self.ora.duration_since(l.inizio).as_secs_f32() * 0.9).fract() };
                     let sw = bw * 0.38;
                     p.rrect(bx - sw + (bw + sw) * t, by, sw, 8.0, 4.0, Some(pal.primary), None);
                     p.pop_clip();
@@ -2072,6 +2088,7 @@ impl App {
     // ----- Aspetto -----
 
     fn pagina_aspetto(&mut self, p: &mut Painter, w: f32, h: f32) {
+        if self.tema.is_cedro() { return self.impostazioni_a(p, w, h); }
         let pal = self.pal();
         self.titolo_barra(p, 16.0, w - 32.0, "Aspetto");
         let rh = if h < 420.0 { 60.0 } else { 80.0 };
