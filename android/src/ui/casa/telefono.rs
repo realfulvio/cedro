@@ -36,7 +36,7 @@ impl App {
         p.fill(0.0, TOP - 1.0, w, 1.0, pal.border);
         let cta = !self.casa.inizio && self.casa.att != Att::Firma;
         let testo = self.testo_principale_a();
-        let piede = if cta { altezza_a(p, &testo, 15.0, Weight::Bold, w - 52.0, 20.0, 0).max(32.0) + 44.0 } else { 0.0 };
+        let piede = if cta { misure_azione_a(p, w, &testo).1 } else { 0.0 };
         let vista = (0.0, TOP, w, (h - TOP - NAVB - piede).max(1.0));
         p.push_clip(vista.0, vista.1, vista.2, vista.3);
         let y = TOP + 20.0 - self.scorri;
@@ -162,10 +162,10 @@ impl App {
 
     pub(in crate::ui) fn azione_fissa_a(&mut self, p: &mut Painter, w: f32, bottom: f32, testo: &str, pronto: bool, az: Azione) {
         let pal = self.pal();
-        let th = altezza_a(p, testo, 15.0, Weight::Bold, w - 52.0, 20.0, 0);
-        let bh = th.max(32.0) + 20.0;
-        p.fill(0.0, bottom - bh - 24.0, w, bh + 24.0, pal.bg);
-        p.fill(0.0, bottom - bh - 24.0, w, 1.0, pal.border);
+        let (th, piede) = misure_azione_a(p, w, testo);
+        let bh = piede - 24.0;
+        p.fill(0.0, bottom - piede, w, piede, pal.bg);
+        p.fill(0.0, bottom - piede, w, 1.0, pal.border);
         let r = (14.0, bottom - bh - 13.0, w - 28.0, bh);
         let att = if self.casa_aperta { self.casa.att } else { Att::Conv };
         let kind = if self.casa_aperta { self.casa.categoria } else { self.kind };
@@ -422,6 +422,12 @@ fn testo_centrato_a(p: &mut Painter, testo: &str, r: R, size: f32, weight: Weigh
     }
 }
 
+/// Altezza del testo e dell'intero piede: identiche per layout, clip, scorrimento e disegno.
+pub(in crate::ui) fn misure_azione_a(p: &Painter, w: f32, testo: &str) -> (f32, f32) {
+    let th = altezza_a(p, testo, 15.0, Weight::Bold, w - 52.0, 20.0, 0);
+    (th, th.max(32.0) + 44.0)
+}
+
 fn famiglia_a(kind: Kind, id: &str) -> &'static str {
     if kind != Kind::Image { return "Formato"; }
     match id {
@@ -532,6 +538,52 @@ mod tests {
                 for id in words { assert!(seen.contains(id), "{kind:?} azione {id} non raggiungibile a {w}x{h}"); }
             }
         }
+    }
+
+    #[test]
+    fn foglio_con_azione_multilinea_non_copre_opzioni_o_tocchi() {
+        // Larghezza effettiva ridotta: esercita il wrapping come un ingrandimento del testo.
+        let (w, h) = (180.0, 640.0);
+        let mut a = App::new(ThemeId::Cedro);
+        a.grandi = true;
+        a.anim.calmo = true;
+        a.imposta_file(Archivio { path: "/tmp/campioni.zip".into(), nome: "campioni.zip".into(), dim: 100 }, Kind::Archive, true);
+        let i = a.fette().iter().position(|f| f.id == "z-pdf").unwrap();
+        a.attiva(Azione::FoglioFormato(0, i));
+        let mut cache = GlyphCache::new();
+        frame(&mut a, w, h, &mut cache);
+        assert!(a.scorri_max > 0.0);
+        a.scorri = a.scorri_max;
+        frame(&mut a, w, h, &mut cache);
+        let mut p = Painter::new(w as u32, h as u32, 1.0, Fonts::for_theme(a.tema), &mut cache);
+        p.larger = true;
+        let label = format!("Crea {}", cedro::i18n::tr("Documenti in PDF"));
+        let (testo_h, piede) = misure_azione_a(&p, w, &label);
+        assert!(testo_h > 32.0 && piede > 76.0, "il caso deve esercitare la CTA multilinea");
+        let limite = h - piede;
+        let mut opzioni_visibili = false;
+        let mut cta = None;
+        for (forma, az) in &a.colpi {
+            let Forma::R(r) = forma else { continue };
+            match az {
+                Azione::AltreOpzioni => {
+                    assert_eq!(r.3, 56.0, "l'ultima opzione deve essere interamente raggiungibile");
+                    assert!(r.1 + r.3 <= limite);
+                    opzioni_visibili = true;
+                }
+                Azione::FoglioFormato(_, _) => assert!(r.1 + r.3 <= limite),
+                Azione::Vai => {
+                    assert!(r.1 >= limite && r.1 + r.3 <= h && r.2 >= 48.0 && r.3 >= 48.0);
+                    cta = Some(*r);
+                }
+                _ => {}
+            }
+        }
+        assert!(opzioni_visibili);
+        let r = cta.expect("CTA raggiungibile dopo lo scorrimento");
+        let (tx, ty) = (r.0 + r.2 / 2.0, r.1 + r.3 / 2.0);
+        a.tocca_giu(tx, ty);
+        assert!(matches!(a.tocca_su(tx, ty), Effetto::Converti { azione: "z-pdf", .. }));
     }
 
     #[test]
