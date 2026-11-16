@@ -968,19 +968,32 @@ fn glyph_tile(f: &mut Frame, x: f32, y: f32, s: f32, v: &voci::Voce) {
     f.p.icon(v.glyph.stroke, x + pad, y + pad, isz, WHITE);
 }
 
-/// Gli strumenti a tessere, due per riga: icona colorata e nome (anche su due righe).
+/// Le righe di testo di ogni tessera e l'altezza di ogni riga di tessere (il nome va a capo fino a tre righe).
+fn tile_lines(f: &mut Frame, app: &App, tools: &[&Slice], cw: f32) -> (Vec<Vec<String>>, Vec<f32>) {
+    let lines: Vec<Vec<String>> = tools.iter().map(|s| f.p.wrap_lines(&crate::i18n::tr(app.voce(s.id).label), 13.5, SEMI, cw - 56.0, 3)).collect();
+    let heights = lines.chunks(2).map(|pair| pair.iter().map(|l| (l.len() as f32 * 17.0 + 14.0).max(48.0)).fold(48.0, f32::max)).collect();
+    (lines, heights)
+}
+
+/// Gli strumenti a tessere, due per riga: icona colorata e nome (anche su più righe).
 fn tool_tiles(f: &mut Frame, app: &App, tools: &[&Slice], x: f32, y: f32, w: f32) -> f32 {
     let pal = f.pal;
-    let (gap, h) = (7.0, 48.0);
+    let gap = 7.0;
     let cw = ((w - gap) / 2.0).floor();
-    let mut cy = y;
+    let (all_lines, heights) = tile_lines(f, app, tools, cw);
+    let mut tops = Vec::new();
+    let mut acc = y;
+    for h in &heights {
+        tops.push(acc);
+        acc += h + gap;
+    }
     for (k, s) in tools.iter().enumerate() {
         let (col, row) = (k % 2, k / 2);
+        let h = heights[row];
         let v = app.voce(s.id);
         let on = app.action == s.id;
         let c = f.lift(v.color);
-        let b = (x + col as f32 * (cw + gap), y + row as f32 * (h + gap), cw, h);
-        cy = b.1 + h;
+        let b = (x + col as f32 * (cw + gap), tops[row], cw, h);
         let act = Act::Action(s.id);
         let hot = f.hover_t(&act, !on);
         if on {
@@ -989,8 +1002,7 @@ fn tool_tiles(f: &mut Frame, app: &App, tools: &[&Slice], x: f32, y: f32, w: f32
             f.p.rrect(b.0, b.1, b.2, b.3, 12.0, Some(pal.surface), Some((mix(pal.border, c, 0.55 * hot), 1.5)));
         }
         glyph_tile(f, b.0 + 9.0, b.1 + (h - 30.0) / 2.0, 30.0, &v);
-        let name = crate::i18n::tr(v.label);
-        let lines = f.p.wrap_lines(&name, 13.5, SEMI, cw - 56.0, 2);
+        let lines = &all_lines[k];
         let top = b.1 + (h - lines.len() as f32 * 17.0) / 2.0;
         for (i, line) in lines.iter().enumerate() {
             f.p.text(line, b.0 + 47.0, top + i as f32 * 17.0, cw - 52.0, 17.0, 13.5, SEMI, pal.text, Align::Left);
@@ -998,15 +1010,16 @@ fn tool_tiles(f: &mut Frame, app: &App, tools: &[&Slice], x: f32, y: f32, w: f32
         f.focus_ring(b, 12.0, &act);
         f.hit(b, act);
     }
-    cy - y
+    acc - gap - y
 }
 
 /// Il riquadro rosa del laboratorio con i suoi strumenti.
 fn lab_box(f: &mut Frame, app: &App, tools: &[&Slice], x: f32, y: f32, w: f32) -> f32 {
     let pal = f.pal;
     let c = f.lift(voci::LAB);
-    let rows = tools.len().div_ceil(2) as f32;
-    let h = 12.0 + 22.0 + rows * 48.0 + (rows - 1.0) * 7.0 + 12.0;
+    let cw = (((w - 12.0) - 7.0) / 2.0).floor();
+    let (_, heights) = tile_lines(f, app, tools, cw);
+    let h = 12.0 + 26.0 + heights.iter().sum::<f32>() + 7.0 * (heights.len() as f32 - 1.0) + 12.0;
     f.p.rrect(x - 4.0, y, w + 8.0, h, 14.0, Some(mix(c, pal.surface, 0.93)), Some((mix(c, pal.surface, 0.78), 1.5)));
     f.text("Per il laboratorio", x + 6.0, y + 10.0, w - 12.0, 22.0, 14.0, BOLD, c);
     tool_tiles(f, app, tools, x + 6.0, y + 38.0, w - 12.0);
@@ -1570,7 +1583,7 @@ fn switch_group(f: &mut Frame, x: f32, y: f32, w: f32, title: &str, color: Rgb, 
     let pal = f.pal;
     let c = f.lift(color);
     let head = 30.0;
-    let body: f32 = rows.iter().map(|r| if r.1.is_empty() { 46.0 } else { 58.0 }).sum();
+    let body: f32 = rows.iter().map(|r| switch_h(f, r.0, r.1, w - 28.0)).sum();
     let h = head + body;
     f.p.rrect(x, y, w, h, 14.0, Some(pal.surface), Some((pal.border, 1.5)));
     f.p.push_clip(x, y, w, head);
@@ -1590,13 +1603,16 @@ fn switch_group(f: &mut Frame, x: f32, y: f32, w: f32, title: &str, color: Rgb, 
 #[allow(clippy::too_many_arguments)]
 fn switch_row_ex(f: &mut Frame, x: f32, y: f32, w: f32, title: &str, note: &str, on: bool, act: Act, line: bool) -> f32 {
     let pal = f.pal;
-    let h = if note.is_empty() { 46.0 } else { 58.0 };
     let tw = w - 68.0;
-    if note.is_empty() {
-        f.text(title, x, y, tw, h, 15.0, SEMI, pal.text);
-    } else {
-        f.text(title, x, y + 6.0, tw, 24.0, 15.0, SEMI, pal.text);
-        f.text(note, x, y + 30.0, tw, 20.0, 13.0, SANS, pal.muted);
+    let lines = f.p.wrap_lines(&crate::i18n::tr(title), 15.0, SEMI, tw, 2);
+    let h = switch_h(f, title, note, w);
+    let text_h = lines.len() as f32 * 20.0;
+    let top = if note.is_empty() { y + (h - text_h) / 2.0 } else { y + 6.0 };
+    for (i, l) in lines.iter().enumerate() {
+        f.p.text(l, x, top + i as f32 * 20.0, tw, 20.0, 15.0, SEMI, pal.text, Align::Left);
+    }
+    if !note.is_empty() {
+        f.text(note, x, top + text_h + 2.0, tw, 20.0, 13.0, SANS, pal.muted);
     }
     f.switch(x + w - 52.0, y + (h - 28.0) / 2.0, 52.0, 28.0, on, act.clone(), None);
     f.hit((x, y, w - 60.0, h), act);
@@ -1604,6 +1620,16 @@ fn switch_row_ex(f: &mut Frame, x: f32, y: f32, w: f32, title: &str, note: &str,
         f.p.fill_a(x, y + h, w, 1.0, pal.border, 1.0);
     }
     h + if line { 1.0 } else { 0.0 }
+}
+
+/// L'altezza di una riga con interruttore: il titolo può andare a capo su due righe.
+fn switch_h(f: &mut Frame, title: &str, note: &str, w: f32) -> f32 {
+    let n = f.p.wrap_lines(&crate::i18n::tr(title), 15.0, SEMI, w - 68.0, 2).len().max(1) as f32;
+    if note.is_empty() {
+        (n * 20.0 + 26.0).max(46.0)
+    } else {
+        n * 20.0 + 38.0
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
