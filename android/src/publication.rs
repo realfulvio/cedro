@@ -12,6 +12,8 @@ pub struct Identita {
     pub conv: bool,
     pub quando: u64,
     pub sorgente: Option<PathBuf>,
+    #[serde(default)]
+    pub caso: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -201,7 +203,7 @@ pub fn legacy_committed(d:&Destinazione)->bool{
 #[cfg(test)]
 mod tests{
     use super::*;
-    fn identity()->Identita{Identita{chiave:"durable-job".into(),origine:"vetrino.svs".into(),etichetta:"Tessere".into(),conv:false,quando:1,sorgente:None}}
+    fn identity()->Identita{Identita{chiave:"durable-job".into(),origine:"vetrino.svs".into(),etichetta:"Tessere".into(),conv:false,quando:1,sorgente:None,caso:String::new()}}
     // Un MIRAX minimo realmente riapribile dal motore, con un JPEG già in fixtures.
     fn mirax(root:&Path)->PathBuf{
         let dir=root.join("slide");std::fs::create_dir_all(&dir).unwrap();
