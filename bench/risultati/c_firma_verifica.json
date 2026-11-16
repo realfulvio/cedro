@@ -3,10 +3,7 @@
  "C1_concordanza_con_DSS_si_no": "32/38",
  "C2_falsi_positivi_gravi": [],
  "falsi_rifiuti_su_file_buoni": [],
- "fiducia_ok_su_file_non_fidabili": [
-  "agg_dopo_firma.pdf",
-  "ossl_rsa_sha1.p7m"
- ],
+ "fiducia_ok_su_file_non_fidabili": [],
  "file": 38,
  "manomessi": 11,
  "righe": [
@@ -20,10 +17,10 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 24.8,
+    "riga": "! Valida, con un avviso — Dopo la firma nel PDF sono state cambiate altre parti (impostazioni, metadati o script); il testo delle pagine è quello firmato. Il ce",
+    "rss_mb": 24.6,
     "s": 0.021,
-    "verdetto": "ok"
+    "verdetto": "avviso"
    },
    "dss": "ok",
    "dss_dettaglio": [
@@ -50,8 +47,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario P256 il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 59.9,
-    "s": 0.021,
+    "rss_mb": 23.8,
+    "s": 0.022,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -79,8 +76,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 59.9,
-    "s": 0.021,
+    "rss_mb": 23.2,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -108,8 +105,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 59.9,
-    "s": 0.021,
+    "rss_mb": 22.8,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -137,7 +134,7 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 59.9,
+    "rss_mb": 24.4,
     "s": 0.021,
     "verdetto": "ok"
    },
@@ -166,7 +163,7 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ 2 firme, tutte valide — Hanno firmato Firmatario Rsa e Firmatario P256. Il documento non è stato modificato.",
-    "rss_mb": 60.0,
+    "rss_mb": 25.0,
     "s": 0.021,
     "verdetto": "ok"
    },
@@ -201,8 +198,8 @@
    "cedro": {
     "rc": 0,
     "riga": "! Valida, con un avviso — Chi ha rilasciato il certificato non è nell'elenco europeo dei certificatori: la firma è corretta ma non ha il valore di una firma qua",
-    "rss_mb": 65.2,
-    "s": 0.011,
+    "rss_mb": 23.3,
+    "s": 0.017,
     "verdetto": "avviso"
    },
    "dss": "avviso",
@@ -230,8 +227,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario P256 il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 65.3,
-    "s": 0.011,
+    "rss_mb": 24.6,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -259,8 +256,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario P384 il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 65.5,
-    "s": 0.011,
+    "rss_mb": 24.6,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -288,8 +285,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — Il suo certificato è stato revocato il 17 settembre 2026, prima della firma. Questa firma non ha valore legale: va chiesto di rifirmare con un ce",
-    "rss_mb": 65.7,
-    "s": 0.011,
+    "rss_mb": 24.4,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "avviso",
@@ -317,8 +314,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 65.7,
-    "s": 0.011,
+    "rss_mb": 24.5,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -346,8 +343,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47, con marca temporale.",
-    "rss_mb": 65.7,
-    "s": 0.011,
+    "rss_mb": 24.3,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -375,8 +372,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — Il certificato è scaduto il 20/01/2026 e non c'è una marca temporale che provi che la firma è di prima: a questa data la firma non vale più.",
-    "rss_mb": 65.8,
-    "s": 0.011,
+    "rss_mb": 24.3,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "avviso",
@@ -404,8 +401,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — La firma non torna con il certificato: il file è rovinato o è stato manomesso. Il certificato non risulta rilasciato dal certificatore che dichia",
-    "rss_mb": 65.8,
-    "s": 0.011,
+    "rss_mb": 21.7,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "avviso",
@@ -433,8 +430,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi.",
-    "rss_mb": 65.8,
-    "s": 0.011,
+    "rss_mb": 23.3,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "no",
@@ -462,8 +459,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi.",
-    "rss_mb": 65.8,
-    "s": 0.011,
+    "rss_mb": 23.3,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "no",
@@ -491,8 +488,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi.",
-    "rss_mb": 65.8,
-    "s": 0.011,
+    "rss_mb": 24.4,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "no",
@@ -520,8 +517,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — La firma non torna con il certificato: il file è rovinato o è stato manomesso.",
-    "rss_mb": 65.8,
-    "s": 0.011,
+    "rss_mb": 23.5,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "no",
@@ -549,8 +546,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — La firma non copre tutto il file: una parte del PDF può essere stata cambiata dopo la firma senza che si veda. Dopo la firma qualcuno ha cambiato",
-    "rss_mb": 65.8,
-    "s": 0.011,
+    "rss_mb": 24.3,
+    "s": 0.027,
     "verdetto": "no"
    },
    "dss": "no",
@@ -578,7 +575,7 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — Non riesco a leggere questa firma: struttura ASN.1 non valida (manca un identificatore).",
-    "rss_mb": 66.0,
+    "rss_mb": 21.8,
     "s": 0.011,
     "verdetto": "no"
    },
@@ -607,8 +604,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi.",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 24.5,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "no",
@@ -636,8 +633,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida: documento cambiato — Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi.",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 23.2,
+    "s": 0.017,
     "verdetto": "no"
    },
    "dss": "no",
@@ -665,8 +662,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — La firma non torna con il certificato: il file è rovinato o è stato manomesso.",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 23.2,
+    "s": 0.021,
     "verdetto": "no"
    },
    "dss": "no",
@@ -694,8 +691,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Nessuna firma da controllare — Questo file non è firmato digitalmente (o non riconosco il formato)",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 20.5,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "no",
@@ -723,8 +720,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ 2 firme, tutte valide — Hanno firmato Firmatario P256 e Firmatario Rsa. Il documento non è stato modificato.",
-    "rss_mb": 66.0,
-    "s": 0.031,
+    "rss_mb": 23.9,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -758,8 +755,8 @@
    "cedro": {
     "rc": 0,
     "riga": "! Valida, con un avviso — Chi ha rilasciato il certificato non è nell'elenco europeo dei certificatori: la firma è corretta ma non ha il valore di una firma qua",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 21.8,
+    "s": 0.016,
     "verdetto": "avviso"
    },
    "dss": "avviso",
@@ -787,8 +784,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — Alla data della verifica il certificato non era ancora valido (vale dal 12/09/2027).",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 23.3,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "avviso",
@@ -816,8 +813,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario P256 il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 23.7,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -845,8 +842,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario P384 il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 23.8,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -874,8 +871,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — Il suo certificato è stato revocato il 17 settembre 2026, prima della firma. Questa firma non ha valore legale: va chiesto di rifirmare con un ce",
-    "rss_mb": 66.0,
-    "s": 0.021,
+    "rss_mb": 23.0,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "avviso",
@@ -903,8 +900,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 66.0,
-    "s": 0.021,
+    "rss_mb": 23.3,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -931,10 +928,10 @@
    },
    "cedro": {
     "rc": 0,
-    "riga": "✓ Firma valida — Firmato da Firmatario Sha1 il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 66.0,
-    "s": 0.021,
-    "verdetto": "ok"
+    "riga": "! Valida, con un avviso — La firma usa l'impronta SHA-1, oggi considerata debole: la legge (e il validatore europeo) non la considerano più sicura per firmare.",
+    "rss_mb": 23.2,
+    "s": 0.016,
+    "verdetto": "avviso"
    },
    "dss": "avviso",
    "dss_dettaglio": [
@@ -961,8 +958,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 66.0,
-    "s": 0.021,
+    "rss_mb": 23.4,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -990,8 +987,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 23.2,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -1019,8 +1016,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 22.8,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -1048,8 +1045,8 @@
    "cedro": {
     "rc": 1,
     "riga": "✗ Non valida — Il certificato è scaduto il 20/01/2026 e non c'è una marca temporale che provi che la firma è di prima: a questa data la firma non vale più.",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 23.3,
+    "s": 0.016,
     "verdetto": "no"
    },
    "dss": "avviso",
@@ -1077,8 +1074,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario Rsa il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 23.2,
+    "s": 0.026,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -1106,8 +1103,8 @@
    "cedro": {
     "rc": 0,
     "riga": "✓ Firma valida — Firmato da Firmatario Senzanonrep il 16 novembre 2026 alle 00:47.",
-    "rss_mb": 66.0,
-    "s": 0.011,
+    "rss_mb": 23.5,
+    "s": 0.016,
     "verdetto": "ok"
    },
    "dss": "ok",
@@ -1125,6 +1122,6 @@
    "pyhanko_integro": null
   }
  ],
- "rss_max_mb": 66.0,
- "tempo_mediano_s": 0.011
+ "rss_max_mb": 25.0,
+ "tempo_mediano_s": 0.016
 }
