@@ -143,3 +143,5 @@ errori di scelta, fiducia nei risultati (blind A/B con un patologo), prove con c
    provare la revoca, e il caso «certificato alterato» colpiva il primo certificato della busta, che a volte è la radice e non il firmatario
    (verdetto «manomessa» sbagliato nella verità costruita, non in Cedro). Corretto: QcCompliance nei certificati, CRL servita in locale, alterazione
    del certificato del firmatario. I risultati pubblicati sono quelli del corpus corretto; le soglie non sono cambiate.
+5. **A6, file senza parlato.** Tre dei 29 file difficili non contengono parlato (ronzio, tono, silenzio). Con la correzione del motore (niente parole inventate) l'esito
+   giusto su quei file è «nessun parlato»: conta come superato, non come fallito. La soglia non cambia; i file restano e se ne aggiungono con parlato vero come extra.
