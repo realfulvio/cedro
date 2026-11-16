@@ -2416,6 +2416,12 @@ Scrive le foto WebP.	Escribe fotos WebP.
 BSD-2-Clause o MIT	BSD-2-Clause o MIT
 BSD-3-Clause o BSD-2-Clause	BSD-3-Clause o BSD-2-Clause
 The OpenReadout Authors (da jxrlib di Microsoft), Moritz Borcherding	The OpenReadout Authors (de jxrlib de Microsoft), Moritz Borcherding
+Solo onda	Solo onda
+Onda e testo	Onda y texto
+già trascritto	ya transcrito
+da trascrivere	por transcribir
+Trascrizione in corso	Transcripción en curso
+Vol.	Vol.
 Da Word, ODT, RTF e DOC a PDF, Word, ODT, HTML e testo.	De Word, ODT, RTF y DOC a PDF, Word, ODT, HTML y texto.
 tiene caratteri, tabelle e immagini	conserva fuentes, tablas e imágenes
 per LibreOffice e OpenOffice	para LibreOffice y OpenOffice
@@ -2468,3 +2474,14 @@ Metti	Poner
   cedro --caso V-2026-0457 convert vetrino.svs png    i file nuovi si chiamano data_caso_nome (senza --caso vale quello scelto nell'app; --senza-caso lo esclude)	  cedro --caso V-2026-0457 convert lamina.svs png    los archivos nuevos se llaman fecha_caso_nombre (sin --caso vale el elegido en la app; --senza-caso lo excluye)
 --caso vuole un codice, per esempio V-2026-0457	--caso necesita un código, por ejemplo V-2026-0457
 ~. Attenzione: il testo da destra a sinistra (arabo, ebraico) non è ancora reso bene: ordine e forma delle lettere possono essere sbagliati	. Atención: el texto de derecha a izquierda (árabe, hebreo) aún no se muestra bien: el orden y la forma de las letras pueden ser incorrectos
+Per il laboratorio	Para el laboratorio
+Comuni	Comunes
+Moderni	Modernos
+Tecnici	Técnicos
+Professionali	Profesionales
+Dentro il file	Dentro del archivo
+Come lo salva	Cómo se guarda
+Playlist e raccolte	Listas y colecciones
+consigliata	recomendada
+file leggero	archivo ligero
+file piccolo	archivo pequeño

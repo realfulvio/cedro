@@ -11,11 +11,11 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro 4 Labs conosce il caso su cui lavori e tiene l'elenco di quello che hai fatto.**
+**Converti file e Video dal web più ordinati.**
 
-- In alto, accanto al nome, «+ Caso o campione»: scrivi il codice (per esempio V-2026-0457) e, se vuoi, una nota per te. Finché non lo togli, ogni file che Cedro scrive si chiama «data, caso, nome»: `2026-11-13_V-2026-0457_vetrino`. Senza caso i nomi restano quelli di sempre. La nota non entra mai nei nomi.
-- Il caso resta anche dopo aver chiuso Cedro, finché non lo togli.
-- «Lavori», in alto a destra, apre l'elenco di quello che è uscito oggi: ora, cosa hai fatto, caso e nomi dei file. «Copia per il quaderno» mette negli appunti il caso e i nomi, uno per riga, pronti da incollare. L'elenco sta solo su questo computer.
-- Nel modello dei nomi si può scrivere anche `%caso%`.
-- Anche da riga di comando: `cedro --caso V-2026-0457 convert vetrino.svs png`. Senza `--caso` vale il caso scelto nell'app, con `--senza-caso` i nomi restano quelli di sempre.
-- Nell'elenco dei lavori l'ora è giusta anche per i lavori fatti prima del cambio tra ora solare e legale (su Windows).
+- In «Converti file» (vista Completa) i formati delle immagini sono divisi per famiglia, ognuna col suo colore: Comuni, Moderni, Tecnici, Professionali, Documento.
+- Gli strumenti sono tessere con l'icona colorata, due per riga; quelli da laboratorio (figura, conta mitotica, consulto, radiografie, tessere per l'AI) stanno in un riquadro rosa a parte.
+- La scelta corrente compare in una scheda con l'icona e due parole che dicono a cosa serve.
+- In «Video dal web» la qualità è in tessere, con «consigliata» in evidenza, e gli interruttori sono in tre gruppi: «Dentro il file», «Come lo salva», «Playlist e raccolte».
+- Con il pannello stretto i nomi lunghi vanno a capo invece di essere tagliati.
+- Nessuna funzione è stata tolta o nascosta.
