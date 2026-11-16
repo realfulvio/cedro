@@ -315,6 +315,27 @@ pub struct Documento {
     pub titolo: String,
 }
 
+/// Una lettera di una scrittura da destra a sinistra (ebraico, arabo, siriaco, thaana, n'ko).
+fn lettera_da_destra(c: char) -> bool {
+    matches!(c as u32, 0x0590..=0x08FF | 0xFB1D..=0xFDFF | 0xFE70..=0xFEFF)
+}
+
+fn blocchi_da_destra(b: &[Blocco]) -> bool {
+    b.iter().any(|x| match x {
+        Blocco::Par(p) => p.testo().chars().any(lettera_da_destra),
+        Blocco::Tab(t) => t.righe.iter().any(|r| r.celle.iter().any(|c| blocchi_da_destra(&c.blocchi))),
+        Blocco::Mobile(_) => false,
+    })
+}
+
+impl Documento {
+    /// Nel testo c'è una scrittura da destra a sinistra: Cedro non ne rifà ancora l'ordine né le forme
+    /// delle lettere, e va detto.
+    pub fn ha_testo_da_destra(&self) -> bool {
+        self.sezioni.iter().any(|s| blocchi_da_destra(&s.blocchi))
+    }
+}
+
 impl Paragrafo {
     pub fn testo(&self) -> String {
         let mut s = String::new();
