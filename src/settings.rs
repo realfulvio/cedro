@@ -60,6 +60,8 @@ pub struct Settings {
     pub ocr_max: u32,
     /// Il tema della versione standard (`ui::theme::ThemeId::key`); vuoto o sconosciuto = Cedro (Melanzana).
     pub ui_theme: String,
+    /// Larghezza del pannello di destra (0 = quella di base).
+    pub side_w: u16,
     /// Lingua dell'interfaccia: `auto` (quella del sistema), `it` o `en`.
     pub language: String,
     /// Firma digitale: il doppio clic sui file firmati (.p7m, .p7s, .m7m, .tsd, .tsr, .p7e) apre il visualizzatore.
@@ -123,6 +125,7 @@ impl Default for Settings {
             ocr_lang: "auto".into(),
             ocr_max: 100,
             ui_theme: String::new(),
+            side_w: 0,
             language: "auto".into(),
             firma_assoc: true,
             firma_pdf: false,
@@ -253,6 +256,7 @@ impl Settings {
                 "firma_keep_pin" => s.firma_keep_pin = flag(value).unwrap_or(s.firma_keep_pin),
                 "firma_remind" => s.firma_remind = flag(value).unwrap_or(s.firma_remind),
                 "ui_theme" => s.ui_theme = value.to_string(),
+                "side_w" => s.side_w = value.parse::<u16>().unwrap_or(0).min(2000),
                 "language" if crate::i18n::is_setting(value) => s.language = value.to_string(),
                 "ocr_lang" if matches!(value, "auto" | "it" | "en") => s.ocr_lang = value.to_string(),
                 "ocr_max" => {
@@ -301,6 +305,7 @@ impl Settings {
             ("ocr_lang", self.ocr_lang.clone()),
             ("ocr_max", self.ocr_max.to_string()),
             ("ui_theme", self.ui_theme.clone()),
+            ("side_w", self.side_w.to_string()),
             ("language", self.language.clone()),
             ("firma_assoc", b(self.firma_assoc).into()),
             ("firma_pdf", b(self.firma_pdf).into()),
