@@ -512,8 +512,11 @@ fn write_sheet_pdf(path: &Path, from: &str, dir: &Path, opts: &Options) -> Cedro
     scelte.embed = opts.embed_fonts;
     scelte.bookmarks = opts.bookmarks;
     scelte.pdfa = opts.pdfa;
+    let mut da_destra = false;
     let mut pdf = if crate::ufficio::is_documento(from) {
-        crate::ufficio::documento_pdf(from, &bytes, &stem(path), &scelte).map_err(err)?
+        let (p, d) = crate::ufficio::documento_pdf_e_avviso(from, &bytes, &stem(path), &scelte).map_err(err)?;
+        da_destra = d;
+        p
     } else {
         crate::ufficio::foglio_pdf(from, &bytes, &name, &stem(path), &scelte).map_err(err)?
     };
@@ -531,6 +534,9 @@ fn write_sheet_pdf(path: &Path, from: &str, dir: &Path, opts: &Options) -> Cedro
     if let Some(password) = password {
         pdf = crate::pdf::protect(&pdf, password).map_err(err)?;
         message.push_str(", protetto con password");
+    }
+    if da_destra {
+        message.push_str(". Attenzione: il testo da destra a sinistra (arabo, ebraico) non è ancora reso bene: ordine e forma delle lettere possono essere sbagliati");
     }
     let out = reserve(dir, &stem(path), "pdf")?;
     write_bytes(&out, &pdf)?;
@@ -1405,7 +1411,7 @@ fn split_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
         let name = crate::pdfpages::safe_name(&name);
         outs.push(reserve(dir, if name.is_empty() { &base } else { &name }, "pdf")?);
     }
-    let settings = crate::pdfpages::Settings { file_bookmarks: false, ..pp.settings.clone() };
+    let settings = crate::pdfpages::Settings { file_bookmarks: false, keep_info: true, ..pp.settings.clone() };
     for (i, (g, out)) in groups.iter().zip(&outs).enumerate() {
         crate::progress::report(i as f32 / groups.len() as f32);
         let mut bytes = crate::pdfpages::build(&[crate::pdfpages::Part { doc: &doc, pages: g.pages.clone(), title: base.clone() }], &settings).map_err(err)?;
@@ -1420,6 +1426,12 @@ fn split_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
         format!("Tolte {} pagine, ne restano {kept}", total as usize - kept)
     } else {
         format!("Diviso in {} PDF", groups.len())
+    };
+    // Gli allegati incorporati non si copiano nelle parti: si dice, invece di perderli in silenzio.
+    let message = match (crate::pdfpages::attachment_count(&doc), remove) {
+        (0, _) => message,
+        (n, true) => format!("Tolte {} pagine, ne restano {}. Gli allegati ({n}) restano solo nel file originale: non sono stati copiati", total as usize - groups[0].pages.len(), groups[0].pages.len()),
+        (n, false) => format!("Diviso in {} PDF. Gli allegati ({n}) restano solo nel file originale: non sono stati copiati nelle parti", groups.len()),
     };
     Ok(Output { path: outs[0].clone(), message })
 }
@@ -1440,7 +1452,7 @@ fn edit_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
         return Err(err("nessuna pagina da salvare"));
     }
     crate::progress::report(0.2);
-    let settings = crate::pdfpages::Settings { file_bookmarks: false, duplex_blank: false, ..pp.settings.clone() };
+    let settings = crate::pdfpages::Settings { file_bookmarks: false, duplex_blank: false, keep_info: true, ..pp.settings.clone() };
     let built = crate::pdfpages::build(&[crate::pdfpages::Part { doc: &doc, pages: list.iter().map(|(p, _)| *p).collect(), title: stem(path) }], &settings).map_err(err)?;
     crate::progress::report(0.6);
     let rotations: Vec<i32> = list.iter().map(|(_, r)| *r).collect();

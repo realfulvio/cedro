@@ -10,6 +10,7 @@ Ogni versione pubblicata finora, dalla più recente alla prima. Le note complete
 
 | Versione | Data | Cosa porta |
 | --- | --- | --- |
+| [0.53.0](https://github.com/realfulvio/cedro/releases/tag/v0.53.0) | 16/11 | **Correzioni dal banco di prova**: anonimizzazione DICOM al profilo base, avvisi sulla firma (SHA-1, PDF cambiato dopo la firma), Dividi che tiene titolo e metadati, trascrizione senza parole inventate su silenzio e rumori, avviso per arabo ed ebraico in Word, .doc rovinati senza consumo di memoria |
 | [0.52.0](https://github.com/realfulvio/cedro/releases/tag/v0.52.0) | 16/11 | **Converti file** e **Video dal web** riordinati: formati delle immagini per famiglia, strumenti a tessere con il riquadro del laboratorio a parte, qualità del video in tessere e interruttori in gruppi |
 | [0.51.0](https://github.com/realfulvio/cedro/releases/tag/v0.51.0) | 13/11 | Trascrivi con la **traccia audio a tutto schermo** (comandi d'ascolto, frase che suona evidenziata), testo in frasi con barra di scorrimento, pannello di destra ridimensionabile |
 | [0.50.0](https://github.com/realfulvio/cedro/releases/tag/v0.50.0) | 13/11 | Cedro 4 Labs: **caso o campione** (il codice entra nei nomi dei file: data, caso, nome) e pagina **Lavori** con l'elenco di quello che è uscito oggi, da copiare nel quaderno di laboratorio |

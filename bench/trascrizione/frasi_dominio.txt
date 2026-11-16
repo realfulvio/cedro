@@ -1,0 +1,42 @@
+# A9: 40 frasi di laboratorio. I termini tecnici da misurare stanno tra [[ ]] (nella lettura si tolgono le parentesi).
+# Si fanno leggere da 2 persone reali e da una voce sintetica; WER sui soli termini, con e senza glossario (--glossario).
+Il vetrino mostra un [[carcinoma squamocellulare]] ben differenziato con [[cheratinizzazione]] focale.
+Si rileva un indice [[mitotico]] di dodici mitosi per dieci campi ad alto ingrandimento.
+La colorazione [[immunoistochimica]] per [[Ki-67]] è positiva nel trenta per cento dei nuclei.
+Il margine chirurgico è libero da [[neoplasia]] a due millimetri.
+Biopsia [[escissionale]] di nodulo cutaneo, fissata in [[formalina]] tamponata al dieci per cento.
+Si osserva [[infiltrato linfoplasmocitario]] nel derma superficiale.
+Il [[linfonodo sentinella]] non presenta metastasi.
+Colorazione [[ematossilina eosina]] e [[PAS]] per la ricerca di miceti.
+Il cane presenta un [[mastocitoma]] di grado secondo secondo [[Patnaik]].
+Il gatto è affetto da [[linfoma]] alimentare a piccole cellule.
+Prelievo di [[midollo osseo]] per [[citofluorimetria]] a flusso.
+L'ecografia mostra [[splenomegalia]] con noduli ipoecogeni.
+Emocromo con [[leucocitosi]] neutrofila e [[trombocitopenia]] moderata.
+Il cavallo è positivo alla [[sierologia]] per [[leptospira]].
+Il bovino ha una [[mastite]] sostenuta da [[Staphylococcus aureus]].
+Il test [[ELISA]] ha dato un valore di densità ottica di zero virgola otto.
+Estrazione dell'[[RNA]] con [[trizolo]] e quantificazione allo [[spettrofotometro]].
+La [[PCR]] in tempo reale ha amplificato il gene [[GAPDH]] a ciclo ventidue.
+Abbiamo eseguito un [[Western blot]] con anticorpo primario [[anti-actina]] diluito uno a mille.
+Il gel di [[agarosio]] all'uno per cento è stato corso a cento volt per quaranta minuti.
+Le cellule [[HEK duecentonovantatré]] sono state [[trasfettate]] con [[lipofectamina]].
+Il terreno [[DMEM]] è integrato con dieci per cento di [[siero fetale bovino]].
+La [[centrifugazione]] è a quindicimila giri per dieci minuti a quattro gradi.
+Il campione è stato [[sequenziato]] con [[Illumina]] con una copertura di trenta volte.
+L'allineamento con [[BWA]] ha prodotto un file [[BAM]] di dodici gigabyte.
+Si è usato il [[CRISPR]] [[Cas nove]] per l'[[omozigosi]] del gene.
+La [[citometria a flusso]] ha separato le popolazioni [[CD quattro]] e [[CD otto]].
+Il [[microtomo]] taglia sezioni di quattro micron dal blocco di [[paraffina]].
+Il preparato è stato [[disidratato]] in alcol a gradazione crescente e [[diafanizzato]] in xilolo.
+Il referto è stato firmato digitalmente dal [[patologo]] responsabile.
+Il vetrino numero V ventisei zero quattro cinquantasette è stato [[digitalizzato]] a quaranta [[ingrandimenti]].
+L'[[anatomia patologica]] ha ricevuto il campione [[autoptico]] dalla clinica veterinaria.
+Il [[cariotipo]] mostra una [[traslocazione]] tra i cromosomi nove e ventidue.
+Il paziente è in terapia con [[metotrexato]] e [[prednisolone]].
+La [[sensibilità]] e la [[specificità]] del test sono rispettivamente novantaquattro e novantasette per cento.
+Il [[CAPA]] chiuso richiede la verifica dell'[[audit trail]] prima della firma.
+Il [[protocollo]] approvato dall'[[organismo preposto al benessere animale]] prevede venti topi per gruppo.
+La [[tracciabilità]] del campione dal prelievo al referto è garantita dal codice a barre.
+La [[necrosi]] [[coagulativa]] interessa il [[miocardio]] con [[infiltrato]] neutrofilo.
+Il [[tumore]] [[mammario]] della cagna è [[estrogeno]]-dipendente e va [[stadiato]] con radiografia toracica.

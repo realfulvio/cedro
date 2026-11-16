@@ -668,22 +668,25 @@ fn rtf_text(bytes: &[u8]) -> String {
 
 fn doc_text(path: &Path) -> Result<String, String> {
     let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    // Nessun flusso può essere più grande del file: si legge al più quanto è lungo.
+    let tetto = file.metadata().map(|m| m.len()).unwrap_or(0);
     let mut compound = cfb::CompoundFile::open(file).map_err(|e| format!("DOC non letto: {e}"))?;
     let mut word = Vec::new();
     compound
         .open_stream("/WordDocument")
         .map_err(|e| format!("DOC senza testo: {e}"))?
+        .take(tetto)
         .read_to_end(&mut word)
         .map_err(|e| e.to_string())?;
     let (fc, lcb, table_one) = clx_place(&word).ok_or("DOC senza indice del testo")?;
     let table_name = if table_one { "/1Table" } else { "/0Table" };
     let mut table = Vec::new();
-    if compound.open_stream(table_name).and_then(|mut s| s.read_to_end(&mut table)).is_err() {
+    if compound.open_stream(table_name).and_then(|s| s.take(tetto).read_to_end(&mut table)).is_err() {
         let other = if table_one { "/0Table" } else { "/1Table" };
         table.clear();
         compound
             .open_stream(other)
-            .and_then(|mut s| s.read_to_end(&mut table))
+            .and_then(|s| s.take(tetto).read_to_end(&mut table))
             .map_err(|_| "DOC senza tabella del testo".to_string())?;
     }
     let start = fc as usize;

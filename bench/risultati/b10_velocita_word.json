@@ -1,0 +1,274 @@
+{
+ "righe": [
+  {
+   "n": 5,
+   "falliti": 0,
+   "s_freddo": 0.64,
+   "s_mediana_caldo": 0.166,
+   "s_min": 0.161,
+   "s_max": 0.64,
+   "rss_mediana_mb": 75.4,
+   "rss_min_mb": 75.0,
+   "rss_max_mb": 75.5,
+   "carico": 2.8,
+   "op": "docx_pdf",
+   "strumento": "cedro",
+   "pagine_circa": 1,
+   "file": "w1_0.docx"
+  },
+  {
+   "rc": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "err": "bwrap: execvp soffice: No such file or directory\n",
+   "op": "docx_pdf",
+   "strumento": "libreoffice",
+   "pagine_circa": 1,
+   "file": "w1_0.docx"
+  },
+  {
+   "n": 5,
+   "falliti": 0,
+   "s_freddo": 0.155,
+   "s_mediana_caldo": 0.165,
+   "s_min": 0.155,
+   "s_max": 0.17,
+   "rss_mediana_mb": 75.3,
+   "rss_min_mb": 75.1,
+   "rss_max_mb": 75.6,
+   "carico": 2.8,
+   "op": "docx_pdf",
+   "strumento": "cedro",
+   "pagine_circa": 1,
+   "file": "w1_1.docx"
+  },
+  {
+   "rc": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "err": "bwrap: execvp soffice: No such file or directory\n",
+   "op": "docx_pdf",
+   "strumento": "libreoffice",
+   "pagine_circa": 1,
+   "file": "w1_1.docx"
+  },
+  {
+   "n": 5,
+   "falliti": 0,
+   "s_freddo": 0.165,
+   "s_mediana_caldo": 0.168,
+   "s_min": 0.165,
+   "s_max": 0.17,
+   "rss_mediana_mb": 75.3,
+   "rss_min_mb": 75.2,
+   "rss_max_mb": 75.5,
+   "carico": 2.9,
+   "op": "docx_pdf",
+   "strumento": "cedro",
+   "pagine_circa": 1,
+   "file": "w1_2.docx"
+  },
+  {
+   "rc": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "err": "bwrap: execvp soffice: No such file or directory\n",
+   "op": "docx_pdf",
+   "strumento": "libreoffice",
+   "pagine_circa": 1,
+   "file": "w1_2.docx"
+  },
+  {
+   "n": 5,
+   "falliti": 0,
+   "s_freddo": 0.18,
+   "s_mediana_caldo": 0.175,
+   "s_min": 0.169,
+   "s_max": 0.18,
+   "rss_mediana_mb": 75.5,
+   "rss_min_mb": 75.2,
+   "rss_max_mb": 76.0,
+   "carico": 2.9,
+   "op": "docx_pdf",
+   "strumento": "cedro",
+   "pagine_circa": 10,
+   "file": "w10_0.docx"
+  },
+  {
+   "rc": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "err": "bwrap: execvp soffice: No such file or directory\n",
+   "op": "docx_pdf",
+   "strumento": "libreoffice",
+   "pagine_circa": 10,
+   "file": "w10_0.docx"
+  },
+  {
+   "n": 5,
+   "falliti": 0,
+   "s_freddo": 0.18,
+   "s_mediana_caldo": 0.18,
+   "s_min": 0.18,
+   "s_max": 0.18,
+   "rss_mediana_mb": 75.6,
+   "rss_min_mb": 75.0,
+   "rss_max_mb": 75.7,
+   "carico": 2.9,
+   "op": "docx_pdf",
+   "strumento": "cedro",
+   "pagine_circa": 10,
+   "file": "w10_1.docx"
+  },
+  {
+   "rc": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "err": "bwrap: execvp soffice: No such file or directory\n",
+   "op": "docx_pdf",
+   "strumento": "libreoffice",
+   "pagine_circa": 10,
+   "file": "w10_1.docx"
+  },
+  {
+   "n": 5,
+   "falliti": 0,
+   "s_freddo": 0.174,
+   "s_mediana_caldo": 0.18,
+   "s_min": 0.174,
+   "s_max": 0.181,
+   "rss_mediana_mb": 75.5,
+   "rss_min_mb": 75.2,
+   "rss_max_mb": 75.9,
+   "carico": 3.1,
+   "op": "docx_pdf",
+   "strumento": "cedro",
+   "pagine_circa": 10,
+   "file": "w10_2.docx"
+  },
+  {
+   "rc": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "err": "bwrap: execvp soffice: No such file or directory\n",
+   "op": "docx_pdf",
+   "strumento": "libreoffice",
+   "pagine_circa": 10,
+   "file": "w10_2.docx"
+  },
+  {
+   "n": 5,
+   "falliti": 0,
+   "s_freddo": 0.277,
+   "s_mediana_caldo": 0.278,
+   "s_min": 0.277,
+   "s_max": 0.282,
+   "rss_mediana_mb": 76.2,
+   "rss_min_mb": 76.0,
+   "rss_max_mb": 76.5,
+   "carico": 3.1,
+   "op": "docx_pdf",
+   "strumento": "cedro",
+   "pagine_circa": 100,
+   "file": "w100_0.docx"
+  },
+  {
+   "rc": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "err": "bwrap: execvp soffice: No such file or directory\n",
+   "op": "docx_pdf",
+   "strumento": "libreoffice",
+   "pagine_circa": 100,
+   "file": "w100_0.docx"
+  },
+  {
+   "n": 5,
+   "falliti": 0,
+   "s_freddo": 0.278,
+   "s_mediana_caldo": 0.279,
+   "s_min": 0.277,
+   "s_max": 0.288,
+   "rss_mediana_mb": 76.0,
+   "rss_min_mb": 75.9,
+   "rss_max_mb": 76.4,
+   "carico": 3.1,
+   "op": "docx_pdf",
+   "strumento": "cedro",
+   "pagine_circa": 100,
+   "file": "w100_1.docx"
+  },
+  {
+   "rc": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "err": "bwrap: execvp soffice: No such file or directory\n",
+   "op": "docx_pdf",
+   "strumento": "libreoffice",
+   "pagine_circa": 100,
+   "file": "w100_1.docx"
+  },
+  {
+   "n": 5,
+   "falliti": 0,
+   "s_freddo": 0.287,
+   "s_mediana_caldo": 0.279,
+   "s_min": 0.273,
+   "s_max": 0.288,
+   "rss_mediana_mb": 76.1,
+   "rss_min_mb": 76.0,
+   "rss_max_mb": 76.5,
+   "carico": 3.2,
+   "op": "docx_pdf",
+   "strumento": "cedro",
+   "pagine_circa": 100,
+   "file": "w100_2.docx"
+  },
+  {
+   "rc": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "err": "bwrap: execvp soffice: No such file or directory\n",
+   "op": "docx_pdf",
+   "strumento": "libreoffice",
+   "pagine_circa": 100,
+   "file": "w100_2.docx"
+  }
+ ]
+}

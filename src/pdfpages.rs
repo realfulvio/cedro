@@ -19,11 +19,13 @@ pub struct Settings {
     pub keep_forms: bool,
     /// Una pagina bianca dopo i file con le pagine dispari, per stampare fronte-retro.
     pub duplex_blank: bool,
+    /// Titolo, autore, parole chiave e metadati XMP del primo file (per dividere o riordinare un solo PDF).
+    pub keep_info: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { file_bookmarks: true, keep_bookmarks: true, keep_forms: true, duplex_blank: false }
+        Settings { file_bookmarks: true, keep_bookmarks: true, keep_forms: true, duplex_blank: false, keep_info: false }
     }
 }
 
@@ -43,6 +45,24 @@ pub fn open(bytes: &[u8], password: Option<&str>) -> Result<Document, String> {
         return Err("il PDF non ha pagine".into());
     }
     Ok(doc)
+}
+
+/// Quanti file incorporati (allegati) ha il PDF: voci /EF nell'albero dei nomi e allegati alle pagine.
+pub fn attachment_count(doc: &Document) -> usize {
+    fn walk(o: &Object, depth: u32) -> usize {
+        if depth > 12 {
+            return 0;
+        }
+        match o {
+            Object::Dictionary(d) => usize::from(d.has(b"EF")) + d.iter().filter(|(k, _)| k.as_slice() != b"EF").map(|(_, v)| walk(v, depth + 1)).sum::<usize>(),
+            Object::Array(a) => a.iter().map(|v| walk(v, depth + 1)).sum(),
+            _ => 0,
+        }
+    }
+    doc.objects.values().map(|o| match o {
+        Object::Dictionary(d) => walk(&Object::Dictionary(d.clone()), 0),
+        _ => 0,
+    }).sum()
 }
 
 pub fn page_count(doc: &Document) -> usize {
@@ -69,6 +89,8 @@ pub fn build(parts: &[Part], s: &Settings) -> Result<Vec<u8>, String> {
     let mut field_names: HashSet<Vec<u8>> = HashSet::new();
     let mut acro: Option<Dictionary> = None;
     let mut version = "1.4".to_string();
+    let mut info_keep: Vec<(Vec<u8>, Object)> = Vec::new();
+    let mut xmp_new: Option<ObjectId> = None;
     for (pi, part) in parts.iter().enumerate() {
         if part.pages.is_empty() {
             continue;
@@ -79,6 +101,18 @@ pub fn build(parts: &[Part], s: &Settings) -> Result<Vec<u8>, String> {
         }
         let all = doc.get_pages();
         let mut copier = Copier::new(doc);
+        if s.keep_info && pi == 0 {
+            if let Ok(info) = doc.trailer.get(b"Info").and_then(|i| deref(doc, i).as_dict()) {
+                for key in [b"Title".as_slice(), b"Author", b"Subject", b"Keywords", b"Creator"] {
+                    if let Ok(Object::String(v, f)) = info.get(key).map(|o| deref(doc, o)) {
+                        info_keep.push((key.to_vec(), Object::String(v.clone(), *f)));
+                    }
+                }
+            }
+            if let Some(id) = doc.catalog().ok().and_then(|c| c.get(b"Metadata").ok()).and_then(|m| m.as_reference().ok()) {
+                xmp_new = Some(copier.copy_ref(id, &mut b));
+            }
+        }
         // Le pagine scelte prendono subito il loro numero nuovo: chi le cita (link, campi) le ritrova.
         let mut chosen: Vec<(ObjectId, ObjectId)> = Vec::new();
         for n in &part.pages {
@@ -174,8 +208,14 @@ pub fn build(parts: &[Part], s: &Settings) -> Result<Vec<u8>, String> {
         let id = b.add(Object::Dictionary(a));
         catalog.set("AcroForm", Object::Reference(id));
     }
+    if let Some(id) = xmp_new {
+        catalog.set("Metadata", Object::Reference(id));
+    }
     let catalog_id = b.add(Object::Dictionary(catalog));
     let mut info = Dictionary::new();
+    for (k, v) in info_keep {
+        info.set(k, v);
+    }
     info.set("Producer", Object::String(b"Cedro".to_vec(), StringFormat::Literal));
     let info_id = b.add(Object::Dictionary(info));
 
@@ -922,5 +962,31 @@ mod tests {
         assert_eq!(page_count(&doc), 2);
         let out = build(&[Part { doc: &doc, pages: vec![1, 2], title: "A".into() }], &Settings::default()).unwrap();
         assert_eq!(texts(&out), vec!["A 1", "A 2"]);
+    }
+
+    #[test]
+    fn dividendo_si_tengono_titolo_e_xmp_e_si_contano_gli_allegati() {
+        let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/allegato-nei-nomi.pdf")).unwrap();
+        let doc = open(&bytes, None).unwrap();
+        assert_eq!(attachment_count(&doc), 1);
+        let part = || vec![Part { doc: &doc, pages: vec![1], title: "A".into() }];
+        let senza = build(&part(), &Settings { file_bookmarks: false, ..Settings::default() }).unwrap();
+        let con = build(&part(), &Settings { file_bookmarks: false, keep_info: true, ..Settings::default() }).unwrap();
+        let title = |b: &[u8]| {
+            let d = Document::load_mem(b).unwrap();
+            let info = d.trailer.get(b"Info").and_then(|i| d.dereference(i)).and_then(|(_, o)| o.as_dict()).ok().and_then(|i| i.get(b"Title").ok().cloned());
+            let xmp = d.catalog().is_ok_and(|c| c.has(b"Metadata"));
+            (title_text(info), xmp)
+        };
+        fn title_text(o: Option<Object>) -> Option<String> {
+            match o {
+                Some(Object::String(v, _)) => Some(String::from_utf8_lossy(&v).into_owned()),
+                _ => None,
+            }
+        }
+        assert_eq!(title(&senza), (None, false));
+        assert_eq!(title(&con), (Some("Titolo XMP".to_string()), true));
+        // Gli allegati non si copiano: l'uscita non ne ha.
+        assert_eq!(attachment_count(&Document::load_mem(&con).unwrap()), 0);
     }
 }

@@ -1,0 +1,52 @@
+{
+ "softhsm.pdf": {
+  "dss": [
+   [
+    "PAdES-BASELINE-T",
+    "INDETERMINATE",
+    "NO_CERTIFICATE_CHAIN_FOUND",
+    "E:The certificate chain for signature is not trusted, it does not contain a trust anchor.|W:Elements overlap on page(s) [1]|"
+   ],
+   [
+    "PAdES-BASELINE-B",
+    "TOTAL_PASSED",
+    "-",
+    "W:Elements overlap on page(s) [1]|"
+   ]
+  ],
+  "pdfsig": [
+   "- Signer Certificate Common Name: MARIO ROSSI",
+   "- Signer full Distinguished Name: CN=MARIO ROSSI,title=Dirigente,serialNumber=TINIT-RSSMRA71C12A965K,SN=ROSSI,givenName=MARIO,O=Comune di Bondeno,C=IT",
+   "- Signature Validation: Signature is Valid.",
+   "- Certificate Validation: Certificate issuer is unknown."
+  ],
+  "pyhanko": [
+   {
+    "intact": true,
+    "valid": true
+   },
+   {
+    "intact": true,
+    "valid": true
+   }
+  ]
+ },
+ "softhsm.txt.p7m": {
+  "dss": [
+   [
+    "CAdES-BASELINE-B",
+    "TOTAL_PASSED",
+    "-",
+    "-"
+   ],
+   [
+    "CAdES-BES",
+    "INDETERMINATE",
+    "SIG_CONSTRAINTS_FAILURE",
+    "E:The signed qualifying property: 'signing-time' is not present!|E:No long term availability and integrity of validation material is present!|"
+   ]
+  ],
+  "openssl": "CMS Verification successful",
+  "openssl_rc": 0
+ }
+}
