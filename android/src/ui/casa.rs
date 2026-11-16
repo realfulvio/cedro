@@ -1025,7 +1025,7 @@ impl App {
     /// Il testo del pulsante grande.
     fn testo_cta(&self) -> (String, &'static str) {
         match self.casa.att {
-            Att::Yt | Att::Web => ("Scarica".into(), ic::DOWNLOAD),
+            Att::Yt | Att::Web => (if !cfg!(feature="youtube")&&cedro::youtube::is_youtube_url(&self.casa.link){"Apri con un'altra app"}else{"Scarica"}.into(), ic::DOWNLOAD),
             Att::Firma => ("Scegli il file firmato".into(), ic::SHIELD),
             Att::Tras => {
                 let n = self.casa.scelti().len();
