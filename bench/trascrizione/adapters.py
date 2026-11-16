@@ -7,6 +7,7 @@ from pathlib import Path
 
 CEDRO = os.environ.get("CEDRO", "cedro")
 WHISPER_CLI = os.environ.get("WHISPER_CLI", "whisper-cli")                 # whisper.cpp compilato (Vulkan o CPU)
+BUZZ = os.environ.get("BUZZ", "buzz")
 MODELLI = Path(os.environ.get("MODELLI_GGML", str(Path.home() / "modelli-ggml")))
 
 
@@ -37,7 +38,7 @@ class FasterWhisper:
         self.modello, self.tipo = modello, tipo; self.nome = f"faster-whisper-{modello}-{tipo}"
     def comando(self, wav, outdir, gpu):
         sc = Path(__file__).with_name("fw_run.py")
-        return ["python3", str(sc), self.modello, self.tipo, "cuda" if gpu else "cpu", str(wav)]
+        return [os.environ.get("PYFW", "python3"), str(sc), self.modello, self.tipo, "cpu", str(wav)]   # AMD: niente CUDA, solo CPU
     def leggi(self, wav, outdir, stdout): return stdout
 
 
@@ -46,7 +47,9 @@ class Buzz:
     def __init__(self, tipo="Whisper.cpp", dim="large-v3-turbo"):
         self.tipo, self.dim = tipo, dim; self.nome = f"buzz-{tipo}-{dim}"
     def comando(self, wav, outdir, gpu):
-        return ["buzz", "add", "--task", "transcribe", "--model-type", self.tipo, "--model-size", self.dim, "--language", "it", "--txt", "--output-directory", str(outdir), str(wav)]
+        # Buzz 1.4.5: opzioni Qt -t/-m/-s/-l/-d; --model-type vale whisper|whispercpp|fasterwhisper (non «Whisper.cpp»); serve QT offscreen senza display
+        tipo = {"Whisper.cpp": "whispercpp", "Faster Whisper": "fasterwhisper"}.get(self.tipo, self.tipo)
+        return ["env", "QT_QPA_PLATFORM=offscreen", BUZZ, "add", "-t", "transcribe", "-m", tipo, "-s", self.dim, "-l", "it", "--txt", "--hide-gui", "-d", str(outdir), str(wav)]
     def leggi(self, wav, outdir, stdout):
         c = sorted(outdir.glob(Path(wav).stem + "*.txt")); return c[-1].read_text(errors="replace") if c else stdout
 
@@ -65,6 +68,6 @@ ELENCO = {
     "wcpp-small-q8": lambda: WhisperCpp("ggml-small-q8_0.bin"), "wcpp-medium-q5": lambda: WhisperCpp("ggml-medium-q5_0.bin"),
     "wcpp-turbo-q5": lambda: WhisperCpp("ggml-large-v3-turbo-q5_0.bin"), "wcpp-turbo-f16": lambda: WhisperCpp("ggml-large-v3-turbo.bin"),
     "wcpp-large-v3": lambda: WhisperCpp("ggml-large-v3.bin"),
-    "fw-large-v3": lambda: FasterWhisper("large-v3", "float16"), "fw-large-v3-int8": lambda: FasterWhisper("large-v3", "int8"),
+    "fw-large-v3": lambda: FasterWhisper("large-v3", "int8"), "fw-large-v3-int8": lambda: FasterWhisper("large-v3", "int8"),
     "buzz-wcpp": lambda: Buzz("Whisper.cpp", "large-v3-turbo"), "buzz-fw": lambda: Buzz("Faster Whisper", "large-v3"),
 }
