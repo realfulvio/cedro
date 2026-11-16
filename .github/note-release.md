@@ -11,11 +11,11 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Converti file e Video dal web più ordinati.**
+**Correzioni dal banco di prova contro i programmi del settore.**
 
-- In «Converti file» (vista Completa) i formati delle immagini sono divisi per famiglia, ognuna col suo colore: Comuni, Moderni, Tecnici, Professionali, Documento.
-- Gli strumenti sono tessere con l'icona colorata, due per riga; quelli da laboratorio (figura, conta mitotica, consulto, radiografie, tessere per l'AI) stanno in un riquadro rosa a parte.
-- La scelta corrente compare in una scheda con l'icona e due parole che dicono a cosa serve.
-- In «Video dal web» la qualità è in tessere, con «consigliata» in evidenza, e gli interruttori sono in tre gruppi: «Dentro il file», «Come lo salva», «Playlist e raccolte».
-- Con il pannello stretto i nomi lunghi vanno a capo invece di essere tagliati.
-- Nessuna funzione è stata tolta o nascosta.
+- **Anonimizzazione DICOM:** ora segue il profilo base dello standard anche per gli orari (spostati di un valore fisso per paziente, così l'ordine nel tempo resta), il fuso orario, il riempimento, il mezzo di contrasto e i dati della sperimentazione.
+- **Firma digitale:** una firma con SHA-1 dà un avviso e non più il via libera pieno; un PDF cambiato dopo la firma (impostazioni, metadati, script) viene segnalato.
+- **PDF:** «Dividi» e «Togli pagine» tengono titolo e metadati e dicono che gli allegati restano solo nel file originale; «Togli dati nascosti» vede anche gli allegati dentro i nomi.
+- **Trascrizione:** niente più parole inventate su silenzio, ronzii, soffi e toni: Cedro dice «nessun parlato riconosciuto».
+- **Word in PDF:** se il testo è in arabo o ebraico, Cedro avvisa che l'ordine e la forma delle lettere non sono ancora resi bene.
+- **File .doc rovinati:** un .doc con i conteggi sbagliati non riempie più la memoria (prima fino a 4,9 GB).
