@@ -804,6 +804,7 @@ type Casella<T> = Arc<Mutex<Option<T>>>;
 /// Quello che i thread di lavoro consegnano al ciclo principale.
 #[derive(Clone, Default)]
 struct Consegne {
+    azioni:Arc<Mutex<std::collections::HashMap<u32,String>>>,
     rete:Arc<(Mutex<u8>,std::sync::Condvar)>,
     download_attesa:Casella<crate::web::AttesaDownload>,
     componenti: Arc<Mutex<crate::web::Componenti>>,
@@ -967,6 +968,7 @@ fn processo(app: &AndroidApp, c: &Consegne, id: u32, file: &Path, azione: &str, 
     let cancel = token(c, id);
     c.passo_riassunto.lock().unwrap_or_else(|e|e.into_inner()).push((id,"Aspetto che finisca l’altro lavoro…".into()));
     let _permit=cedro::resources::acquire(Some(&cancel)).ok_or("Annullato")?;
+    c.azioni.lock().unwrap_or_else(|e|e.into_inner()).insert(id,azione.into());
     log::info!("lavoro avvio id={id} azione={azione}");
     let mut input_paths=vec![file.to_path_buf()];
     input_paths.extend(unisci.iter().map(|u|u.0.clone()));
@@ -995,14 +997,22 @@ fn pubblica_lavoro(app: &AndroidApp, c: &Consegne, id: u32, out: &Path, principa
             identity.sorgente=Some(source);
         }
         let mut r=Registro::prepara(out,&principale,identity,msg)?;
+        let mode=crate::web::Salvataggio::leggi(out).map(|s|s.mode).unwrap_or_else(||ESISTE.load(std::sync::atomic::Ordering::Relaxed));
+        let reused=crate::web::riusi(&uscite(app).ok_or("Cartella assente")?,out,&mut r,|d|{
+            if d.path.to_string_lossy().starts_with("content://"){media_committed(app,d).unwrap_or(false)}else{d.path.is_file()}
+        });
         r.salva(out)?;
         let cancel=token(c,id);
         for i in 0..r.elementi.len(){
+            if cancel.load(std::sync::atomic::Ordering::Acquire){r.elementi[i].errore=Some("Annullato".into());r.salva(out)?;continue;}
+            if let Some((_,d))=reused.iter().find(|(index,_)|*index==i){
+                r.prenota(out,i,d.clone())?;r.completato(out,i,d.clone())?;continue;
+            }
             let p=r.elementi[i].privato.clone();
             let relative=r.sottocartella(i);
             let base=r.pubblico.clone();
             let structured=r.gruppo.is_some();
-            let result=consegna(app,&p,&relative,base.as_deref(),structured,&cancel,&mut |d|r.prenota(out,i,d));
+            let result=consegna(app,&p,&relative,base.as_deref(),structured,mode,&cancel,&mut |d|r.prenota(out,i,d));
             match result {
                 Ok(d)=>if let Err(e)=r.completato(out,i,d){r.elementi[i].errore=Some(e);},
                 Err(e)=>r.elementi[i].errore=Some(e),
@@ -1022,6 +1032,8 @@ fn pubblica_lavoro(app: &AndroidApp, c: &Consegne, id: u32, out: &Path, principa
 }
 
 fn scrivi(app:&AndroidApp,c:&Consegne,id:u32,nome:String,dati:Vec<u8>,poi:u8) {
+    c.azioni.lock().unwrap_or_else(|e|e.into_inner()).insert(id,"esporta-revisione".into());
+    log::info!("lavoro avvio id={id} azione=esporta-revisione");
     let result=(||->Result<Completamento,String>{
         let base=uscite(app).ok_or("Cartella assente")?;
         let dir=crate::storage::nuova_cartella(&base).map_err(|e|e.to_string())?;
@@ -1065,6 +1077,8 @@ fn converti(web_scelte:Option<crate::web::Scelte>, app: AndroidApp, c: Consegne,
     let cancel = token(&c,id);
     if cancel.load(std::sync::atomic::Ordering::Acquire) { invia(Stato::Errore("Annullato".into())); return; }
     if azione == "web-altra-app" {
+        c.azioni.lock().unwrap_or_else(|e|e.into_inner()).insert(id,azione.into());
+        log::info!("lavoro avvio id={id} azione={azione}");
         // YouTube: il link va a un'app che lo scarica (il selettore di Android propone quelle installate).
         let url = file.to_string_lossy().into_owned();
         match apri_link(&app, &url) {
@@ -1101,21 +1115,21 @@ fn uscite(app: &AndroidApp) -> Option<PathBuf> {
 }
 
 /// La copia privata si elimina soltanto tramite Registro::completato, dopo il journal durevole.
-fn consegna(app:&AndroidApp,path:&Path,sotto:&Path,base:Option<&str>,structured:bool,cancel:&std::sync::atomic::AtomicBool,checkpoint:&mut dyn FnMut(Destinazione)->Result<(),String>)->Result<Destinazione,String>{
+fn consegna(app:&AndroidApp,path:&Path,sotto:&Path,base:Option<&str>,structured:bool,mode:u8,cancel:&std::sync::atomic::AtomicBool,checkpoint:&mut dyn FnMut(Destinazione)->Result<(),String>)->Result<Destinazione,String>{
     static PUBBLICAZIONE:Mutex<()>=Mutex::new(());
     let _lock=PUBBLICAZIONE.lock().unwrap_or_else(|e|e.into_inner());
     if cancel.load(std::sync::atomic::Ordering::Acquire){return Err("Annullato".into());}
     let api=con_attivita(app,|env,_|env.get_static_field("android/os/Build$VERSION","SDK_INT","I").and_then(|v|v.i()).map_err(|e|jerr(env,e)))?;
     if !crate::publication::mediastore_moderno(api){
         let dir=PathBuf::from(DOCUMENTI).join("Cedro").join(sotto);
-        let d=crate::publication::legacy(path,&dir,if structured{1}else{ESISTE.load(std::sync::atomic::Ordering::Relaxed)},cancel,checkpoint)?;
+        let d=crate::publication::legacy(path,&dir,if structured{1}else{mode},cancel,checkpoint)?;
         let _=con_attivita(app,|env,att|scansiona(env,att,&d.path,false));
         return Ok(d);
     }
-    con_attivita(app,|env,att|pubblica(env,att,path,sotto,base,structured,cancel,checkpoint))
+    con_attivita(app,|env,att|pubblica(env,att,path,sotto,base,structured,mode,cancel,checkpoint))
 }
 
-fn pubblica(env:&mut JNIEnv,att:&JObject,privato:&Path,sotto:&Path,base:Option<&str>,structured:bool,cancel:&std::sync::atomic::AtomicBool,checkpoint:&mut dyn FnMut(Destinazione)->Result<(),String>)->Result<Destinazione,String>{
+fn pubblica(env:&mut JNIEnv,att:&JObject,privato:&Path,sotto:&Path,base:Option<&str>,structured:bool,mode:u8,cancel:&std::sync::atomic::AtomicBool,checkpoint:&mut dyn FnMut(Destinazione)->Result<(),String>)->Result<Destinazione,String>{
     let nome=nome_di(privato);let mime=mime_da_percorso(privato);
     let resolver=env.call_method(att,"getContentResolver","()Landroid/content/ContentResolver;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
     let mut errors=Vec::new();
@@ -1125,7 +1139,7 @@ fn pubblica(env:&mut JNIEnv,att:&JObject,privato:&Path,sotto:&Path,base:Option<&
         if cancel.load(std::sync::atomic::Ordering::Acquire){return Err("Annullato".into());}
         let rel=Path::new(root).join(sotto).to_string_lossy().into_owned();
         let mut reserved=false;
-        let result=pubblica_in(env,&resolver,collection,&rel,privato,&nome,mime,structured,cancel,&mut |d|{reserved=true;checkpoint(d)});
+        let result=pubblica_in(env,&resolver,collection,&rel,privato,&nome,mime,structured,mode,cancel,&mut |d|{reserved=true;checkpoint(d)});
         match result{
             Ok(d)=>return Ok(d),
             // Dopo la prenotazione non sovrascrivere l’URI con un fallback: anche un errore
@@ -1137,7 +1151,7 @@ fn pubblica(env:&mut JNIEnv,att:&JObject,privato:&Path,sotto:&Path,base:Option<&
     Err(format!("il telefono non lascia salvare il file\n---\n{}",errors.join("\n")))
 }
 
-fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, privato: &Path, nome: &str, mime: &str, structured:bool, cancel:&std::sync::atomic::AtomicBool, checkpoint:&mut dyn FnMut(Destinazione)->Result<(),String>) -> Result<Destinazione, String> {
+fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, privato: &Path, nome: &str, mime: &str, structured:bool, mode:u8, cancel:&std::sync::atomic::AtomicBool, checkpoint:&mut dyn FnMut(Destinazione)->Result<(),String>) -> Result<Destinazione, String> {
     use std::os::fd::FromRawFd;
     let valori = |env: &mut JNIEnv, coppie: &[(&str, Result<&str, i32>)]| -> Result<JObject<'static>, String> {
         let cv = env.new_object("android/content/ContentValues", "()V", &[]).map_err(|e| jerr(env, e))?;
@@ -1163,7 +1177,7 @@ fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, 
     let mut scelto = nome.to_string();
     let mut sostituito = None;
     if let Some(uri) = cerca(env, resolver, &base, rel, nome) {
-        match if structured{1}else{ESISTE.load(std::sync::atomic::Ordering::Relaxed)} {
+        match if structured{1}else{mode} {
             2 => {
                 let testo = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
                 let testo = stringa(env, testo).ok_or("indirizzo vuoto")?;
@@ -1300,11 +1314,14 @@ fn youtube(app: &AndroidApp, c: &Consegne, id: u32, url: &str, out: &Path, azion
     // Una cartella per lavoro: due lavori insieme non si cancellano i file a vicenda.
     let lavoro = out.join(format!(".cedro-yt-{id}"));
     let _ = std::fs::remove_dir_all(&lavoro);
+    if let Err(e)=crate::web::Salvataggio::nuovo(url,&scelte,&opts).salva(out){return invia(Stato::Errore(e));}
     let r = scelte.richiesta(url,azione,lavoro.clone());
     // Per «Testo» lo scaricamento è la prima parte del lavoro, la trascrizione la seconda.
     let parte = if testo { 0.4 } else { 1.0 };
     let niente = token(c,id);
     let Some(_permit)=cedro::resources::acquire(Some(&niente)) else {return invia(Stato::Errore("Annullato".into()));};
+    c.azioni.lock().unwrap_or_else(|e|e.into_inner()).insert(id,azione.into());
+    log::info!("lavoro avvio id={id} azione={azione}");
     let (state,wake)=(c.componenti.clone(),app.create_waker());
     cedro::componenti::osserva(Some(Arc::new(move |s|{state.lock().unwrap_or_else(|e|e.into_inner()).ricevi(id,s.map(crate::web::Componente::da_core));wake.wake();})));
     struct Osserva;
@@ -1322,19 +1339,32 @@ fn youtube(app: &AndroidApp, c: &Consegne, id: u32, url: &str, out: &Path, azion
         },
         &niente,
     );
-    let files = match esito {
-        Ok(f) if !f.is_empty() => f,
+    match esito {
+        Ok(f) if !f.is_empty() => {},
         Ok(_) => { let _=std::fs::remove_dir_all(&lavoro); return invia(Stato::Errore("yt-dlp non ha scaricato niente".into())); }
         Err(e) => { let _=std::fs::remove_dir_all(&lavoro); return invia(Stato::Errore(e)); }
     };
+    let files=match crate::web::uscite_download(&lavoro){
+        Ok(all)=>if testo{
+            // Sottotitoli/copertine non sono sorgenti da trascrivere.
+            all.into_iter().filter(|p|cedro::trascrizione::transcribable(p)).collect::<Vec<_>>()
+        }else{all},
+        Err(e)=>return invia(Stato::Errore(e)),
+    };
+    if files.is_empty(){return invia(Stato::Errore("yt-dlp non ha scaricato niente".into()));}
     if testo {
         let identity=c.identita.lock().unwrap_or_else(|e|e.into_inner()).get(&id).cloned();
         let result=identity.ok_or_else(||"Identità del lavoro assente".to_string()).and_then(|identity|crate::web::Batch::prepara(out,&files,&identity,opts,scelte.voce));
         drop(_osserva);drop(_permit); // Nessun permit attraversa l'avvio dei figli.
         match result {
-            Ok(batch)=>{
+            Ok(mut batch)=>{
                 let _=std::fs::remove_dir_all(&lavoro);
-                c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(Completamento{batch:Some(batch),id,stato:Stato::Fatto{path:PathBuf::new(),nome:String::new(),msg:"Audio pronti: trascrizioni aggiunte ai lavori".into()},uscite:None,sorgente:None});
+                let stato=if niente.load(std::sync::atomic::Ordering::Acquire){
+                    for child in &mut batch.figli{child.fine=true;}
+                    if let Err(e)=batch.salva(){return invia(Stato::Errore(e));}
+                    Stato::Errore("Annullato".into())
+                }else{Stato::Fatto{path:PathBuf::new(),nome:String::new(),msg:"Audio pronti: trascrizioni aggiunte ai lavori".into()}};
+                c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(Completamento{batch:Some(batch),id,stato,uscite:None,sorgente:None});
             },
             Err(e)=>invia(Stato::Errore(e)),
         }
@@ -1376,6 +1406,8 @@ fn riassumi(app:&AndroidApp,c: &Consegne, id: u32, source: PathBuf, lines: Vec<S
         let out=crate::storage::nuova_cartella(&base).map_err(|e|e.to_string())?;
         let cancel=token(c,id);
         let _permit=cedro::resources::acquire(Some(&cancel)).ok_or("Annullato")?;
+        c.azioni.lock().unwrap_or_else(|e|e.into_inner()).insert(id,"riassumi".into());
+        log::info!("lavoro avvio id={id} azione=riassumi");
         let request=crate::worker::Richiesta {file:source.clone(),azione:"riassumi".into(),qualita:0,voce:Default::default(),out:out.clone(),opts:Default::default(),unisci:Vec::new(),sommario:Some((lines,names)),anteprima:None,web:None};
         let result=crate::worker::avvia(&libs,request,&cancel,Vec::new(),|nome,bytes|web::permesso(app,c,id,nome,bytes),|e|match e {
             crate::worker::Evento::Componente(s)=>{c.componenti.lock().unwrap_or_else(|e|e.into_inner()).ricevi(id,s);app.create_waker().wake();},
@@ -1747,12 +1779,23 @@ fn android_main(app: AndroidApp) {
             saf::pulisci(&dir,&protetti);
             saf::ripristina_tutti(&a,&dir);
             if let Some(base)=uscite(&a){
+                let mut batches=Vec::new();
                 if let Ok(entries)=std::fs::read_dir(&base){for entry in entries.flatten(){
                     if let Ok(batch)=crate::web::Batch::leggi(&entry.path()){
-                        if batch.materializza().is_ok(){c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(Completamento{batch:Some(batch),id:u32::MAX,stato:Stato::Fatto{path:PathBuf::new(),nome:String::new(),msg:String::new()},uscite:None,sorgente:None});}
+                        let _=batch.materializza();batches.push(batch);
                     }
                 }}
-                pulisci_incompleti(&base,&noti,prima);*c.recuperati.lock().unwrap_or_else(|e|e.into_inner())=Some(recupera_uscite(&a,&base,prima));}
+                pulisci_incompleti(&base,&noti,prima);
+                let mut recovered=recupera_uscite(&a,&base,prima);
+                for batch in &mut batches{
+                    let mut other=Vec::new();
+                    for r in recovered{if batch.figli.iter().any(|f|f.identita.chiave==r.lavoro.chiave){batch.ricevute.push(r);}else{other.push(r);}}
+                    recovered=other;
+                }
+                *c.recuperati.lock().unwrap_or_else(|e|e.into_inner())=Some(recovered);
+                // Ricevute e figli dello stesso batch arrivano nello stesso completamento.
+                c.esiti.lock().unwrap_or_else(|e|e.into_inner()).extend(batches.into_iter().map(|batch|Completamento{batch:Some(batch),id:u32::MAX,stato:Stato::Fatto{path:PathBuf::new(),nome:String::new(),msg:String::new()},uscite:None,sorgente:None}));
+            }
             ricarica_recenti(dir,&c);a.create_waker().wake();
         });
     }
@@ -1864,10 +1907,6 @@ fn android_main(app: AndroidApp) {
                         _ => stato = InputStatus::Unhandled,
                     }
                     match eff {
-                        Effetto::ConfermaDownload=>{
-                            if let Some(a)=consegne.download_attesa.lock().unwrap_or_else(|e|e.into_inner()).as_mut(){a.conferma_spazio=false;}
-                            consegne.rete.1.notify_all();sporco=true;
-                        }
                         Effetto::SalvaRete=>{
                             *consegne.rete.0.lock().unwrap_or_else(|e|e.into_inner())=ui.rete;
                             consegne.rete.1.notify_all();
@@ -2264,15 +2303,19 @@ fn android_main(app: AndroidApp) {
                         let mut batch=batch;
                         for (id,index,prog) in tasks {
                             let child=batch.figli[index].clone();
-                            if child.out.join(".pronti").is_file(){continue;}
+                            if child.out.join(".pronti").is_file(){
+                                c.tokens.lock().unwrap_or_else(|e|e.into_inner()).remove(&id);
+                                let _=batch.finisci(index);a.create_waker().wake();continue;
+                            }
                             protetto(&c,id,||trascrivi(&a,&c,id,&child.source,&child.out,&prog,batch.voce.modello|((batch.voce.voci as usize)<<4),batch.opts.clone()));
                             if let Err(_)=batch.finisci(index){log::warn!("batch: checkpoint finale non riuscito");}
                             a.create_waker().wake();
                         }
                     });
                 }
-                let esito=match &e.stato{Stato::Fatto{..}=>"completo",Stato::Errore(t) if t.contains("Annullato")=>"annullato",Stato::Errore(_)=>"errore",_=>"in-corso"};
-                log::info!("lavoro fine id={} esito={} uscite={}",e.id,esito,e.uscite.as_ref().map_or(0,Vec::len));
+                let esito=match &e.stato{Stato::Fatto{..} if e.uscite.as_ref().is_some_and(|v|v.iter().any(|u|u.2.is_some()))=>"parziale",Stato::Fatto{..}=>"completo",Stato::Errore(t) if t.contains("Annullato")=>"annullato",Stato::Errore(_)=>"errore",_=>"in-corso"};
+                let azione=consegne.azioni.lock().unwrap_or_else(|e|e.into_inner()).remove(&e.id).unwrap_or_else(||"recupero".into());
+                if e.id!=u32::MAX{log::info!("lavoro fine id={} azione={} esito={} uscite={}",e.id,azione,esito,e.uscite.as_ref().map_or(0,Vec::len));}
                 ui.completa(e);
             }
             registra(&consegne,&mut ui);
@@ -2290,7 +2333,11 @@ fn android_main(app: AndroidApp) {
             tentativi += 1;
             leggi_insets = m == (0.0, 0.0, 0.0, 0.0) && tentativi < 40;
         }
-        let attesa_download=consegne.download_attesa.lock().unwrap_or_else(|e|e.into_inner()).clone();
+        let attesa_download={
+            let mut a=consegne.download_attesa.lock().unwrap_or_else(|e|e.into_inner());
+            if a.as_ref().is_some_and(|a|a.da.elapsed()>Duration::from_secs(8)&&crate::web::rete_consentita(ui.rete,a.mobile)){*a=None;}
+            a.clone()
+        };
         if ui.download_attesa!=attesa_download{ui.download_attesa=attesa_download;sporco=true;}
         let componente=consegne.componenti.lock().unwrap_or_else(|e|e.into_inner()).attuale();
         if ui.componente!=componente {ui.componente=componente;sporco=true;}
@@ -2301,7 +2348,12 @@ fn android_main(app: AndroidApp) {
             let (n, medio, nome) = ui.in_corso();
             if n > 0 {
                 let testo = if n > 1 { cedro::i18n::tr_string(&format!("{n} lavori in corso")) } else { nome };
-                let (testo,percento)=ui.componente.as_ref().map(|c|(c.testo(),c.percento())).unwrap_or((testo,medio.map(|m|m as i32).unwrap_or(-1)));
+                let (mut testo,mut percento)=ui.componente.as_ref().map(|c|(c.testo(),c.percento())).unwrap_or((testo,medio.map(|m|m as i32).unwrap_or(-1)));
+                if let Some(a)=&ui.download_attesa{
+                    if !crate::web::rete_consentita(ui.rete,a.mobile){
+                        testo=format!("{} · {} · {}",cedro::i18n::tr("In attesa"),cedro::i18n::tr(&a.nome),cedro::i18n::tr(if ui.rete==1{"Solo Wi-Fi"}else{"Chiedi una volta su rete mobile"}));percento=-1;
+                    }else if a.bytes>=100_000_000{testo.push_str(&format!(" · {}: {}",cedro::i18n::tr("Spazio libero"),cedro::size_words(a.liberi)));}
+                }
                 let next=(testo,percento);
                 if ultima_notifica.as_ref()!=Some(&next){servizio(&app,Some((cedro::i18n::tr("Cedro sta lavorando").as_ref(),&next.0,next.1)));ultima_notifica=Some(next);}
                 servizio_attivo = true;
@@ -2368,7 +2420,7 @@ fn cerca<'a>(env: &mut JNIEnv<'a>, resolver: &JObject, base: &JObject, rel: &str
         let classe = env.find_class("java/lang/String")?;
         let id = env.new_string("_id")?;
         let proiez = env.new_object_array(1, &classe, &id)?;
-        let filtro = env.new_string("relative_path IN (?, ?) AND _display_name = ?")?;
+        let filtro = env.new_string("relative_path IN (?, ?) AND _display_name = ? AND is_pending = 0")?;
         let vuoto = env.new_string("")?;
         let argomenti = env.new_object_array(3, &classe, &vuoto)?;
         for (i, a) in [format!("{rel}/"), rel.to_string(), nome.to_string()].iter().enumerate() {

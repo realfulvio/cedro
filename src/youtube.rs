@@ -236,6 +236,19 @@ fn download(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut
     result
 }
 
+#[cfg(target_os="android")]
+fn download_inner(url:&str,dest:&Path,sha256:Option<&str>,what:&str,emit:&mut dyn FnMut(Event),cancel:&AtomicBool)->Result<(),String>{
+    // Riusa il downloader dei modelli: Range, retry e checksum, senza un secondo protocollo.
+    let part=dest.with_extension("part");let precedente=part.exists();
+    let sink=std::cell::RefCell::new(emit);
+    let result=crate::trascrizione::fetch(url,dest,sha256,0,what,&|event|{
+        if let crate::trascrizione::Event::Log(line)=event{(sink.borrow_mut())(Event::Log(line.text));}
+    },cancel).map(|_|());
+    if cancel.load(Ordering::Relaxed)&&!precedente{let _=std::fs::remove_file(part);}
+    result
+}
+
+#[cfg(not(target_os="android"))]
 fn download_inner(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<(), String> {
     let response = agent().get(url).call().map_err(|e| format!("Non riesco a scaricare {what}: {e}"))?;
     let total: u64 = response.header("Content-Length").and_then(|v| v.parse().ok()).unwrap_or(0);
@@ -1497,6 +1510,7 @@ pub mod android {
                         let mut reader=r.into_reader();let mut chunk=[0u8;65536];
                         while (buf.len() as u64)<end+1-self.pos {
                             if self.cancel.load(Ordering::Relaxed){return Err("Annullato".into());}
+                            crate::componenti::continua_download("Componenti")?;
                             let max=chunk.len().min((end+1-self.pos-buf.len() as u64) as usize);
                             let n=reader.read(&mut chunk[..max]).map_err(|e|e.to_string())?;
                             if n==0{return Err("Risposta incompleta".into());}
