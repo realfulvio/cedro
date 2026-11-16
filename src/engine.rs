@@ -512,8 +512,11 @@ fn write_sheet_pdf(path: &Path, from: &str, dir: &Path, opts: &Options) -> Cedro
     scelte.embed = opts.embed_fonts;
     scelte.bookmarks = opts.bookmarks;
     scelte.pdfa = opts.pdfa;
+    let mut da_destra = false;
     let mut pdf = if crate::ufficio::is_documento(from) {
-        crate::ufficio::documento_pdf(from, &bytes, &stem(path), &scelte).map_err(err)?
+        let (p, d) = crate::ufficio::documento_pdf_e_avviso(from, &bytes, &stem(path), &scelte).map_err(err)?;
+        da_destra = d;
+        p
     } else {
         crate::ufficio::foglio_pdf(from, &bytes, &name, &stem(path), &scelte).map_err(err)?
     };
@@ -531,6 +534,9 @@ fn write_sheet_pdf(path: &Path, from: &str, dir: &Path, opts: &Options) -> Cedro
     if let Some(password) = password {
         pdf = crate::pdf::protect(&pdf, password).map_err(err)?;
         message.push_str(", protetto con password");
+    }
+    if da_destra {
+        message.push_str(". Attenzione: il testo da destra a sinistra (arabo, ebraico) non è ancora reso bene: ordine e forma delle lettere possono essere sbagliati");
     }
     let out = reserve(dir, &stem(path), "pdf")?;
     write_bytes(&out, &pdf)?;

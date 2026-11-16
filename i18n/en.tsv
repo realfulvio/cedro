@@ -2479,3 +2479,4 @@ Togli il caso	Remove the case
 Metti	Set
   cedro --caso V-2026-0457 convert vetrino.svs png    i file nuovi si chiamano data_caso_nome (senza --caso vale quello scelto nell'app; --senza-caso lo esclude)	  cedro --caso V-2026-0457 convert slide.svs png    new files are named date_case_name (without --caso the case chosen in the app applies; --senza-caso leaves it out)
 --caso vuole un codice, per esempio V-2026-0457	--caso needs a code, for example V-2026-0457
+~. Attenzione: il testo da destra a sinistra (arabo, ebraico) non è ancora reso bene: ordine e forma delle lettere possono essere sbagliati	. Warning: right-to-left text (Arabic, Hebrew) is not rendered properly yet: the order and shape of the letters may be wrong
