@@ -144,7 +144,7 @@ fn main() {
         lavori(a);
         a.scheda = Scheda::Lavori;
     });
-    for (i, t) in cedro::ui::theme::THEMES.into_iter().enumerate() {
+    for (i, t) in cedro_android::ui::TEMI.into_iter().enumerate() {
         casa(&format!("casa-{i}"), t, pw, ph, &out, |_| {});
         casa(&format!("casa-{i}-lavori"), t, pw, ph, &out, |a| {
             lavori(a);
@@ -185,7 +185,7 @@ fn firma(out: &std::path::Path, w: f32, h: f32) {
         p.save_png(&out.join(format!("{nome}.png"))).unwrap();
     };
     let n = cedro_android::ui::attivita_n();
-    for (k, t) in cedro::ui::theme::THEMES.into_iter().enumerate() {
+    for (k, t) in cedro_android::ui::TEMI.into_iter().enumerate() {
         foto(&format!("firma-casa-{k}"), t, &mut |a| {
             a.firma.recent.clear();
             a.vista_attivita(n - 1);
