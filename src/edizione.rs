@@ -1,12 +1,11 @@
-//! Il tema «Comune di Bondeno»: uno dei temi di Impostazioni › Aspetto, con i colori e il carattere del Comune
-//! e lo stemma in più punti. Motore, funzioni e pacchetti sono gli stessi della versione standard.
+//! Compatibilità degli asset della vecchia edizione Bondeno, ritirata sul desktop.
+//! Le preferenze desktop risolvono sempre un tema del catalogo attuale.
 //! Lo stemma è l'originale del sito del Comune (assets/bondeno/FONTE.md): si mostra così com'è, mai ritoccato.
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::ui::theme::{ThemeId, THEMES};
 
-static BONDENO: AtomicBool = AtomicBool::new(false);
 static TEMA: AtomicUsize = AtomicUsize::new(0);
 
 /// Il tema scelto in Impostazioni › Aspetto, per il carattere e i disegni che non hanno la finestra a portata di mano.
@@ -14,10 +13,9 @@ pub fn tema() -> ThemeId {
     THEMES.get(TEMA.load(Ordering::Relaxed)).copied().unwrap_or(ThemeId::Cedro)
 }
 
-/// Vero quando è scelto il tema «Comune di Bondeno» (Impostazioni › Aspetto): stemma, colori e carattere del Comune.
-/// Lo accendono `read_settings` e `write_settings`, così segue sempre l'impostazione `ui_theme`.
+/// La vecchia veste non si può riattivare da una chiave ritirata nelle preferenze.
 pub fn bondeno() -> bool {
-    BONDENO.load(Ordering::Relaxed)
+    tema() == ThemeId::Bondeno
 }
 
 /// La chiave di `ui_theme` del tema Bondeno.
@@ -25,13 +23,8 @@ pub const CHIAVE_TEMA: &str = "bondeno";
 
 /// Chiamata da `settings` ogni volta che legge o scrive l'impostazione del tema.
 pub(crate) fn segui_tema(ui_theme: &str) {
-    BONDENO.store(e_bondeno(ui_theme), Ordering::Relaxed);
     let tema = ThemeId::from_key(ui_theme);
     TEMA.store(THEMES.iter().position(|t| *t == tema).unwrap_or(0), Ordering::Relaxed);
-}
-
-fn e_bondeno(ui_theme: &str) -> bool {
-    ui_theme.trim() == CHIAVE_TEMA
 }
 
 /// Il nome del tema da mostrare accanto alla versione; niente se non è quello di Bondeno.
@@ -130,9 +123,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn il_tema_si_riconosce_dalla_chiave() {
-        assert!(e_bondeno("bondeno") && e_bondeno(" bondeno\n"));
-        assert!(!e_bondeno("banco-di-lavoro") && !e_bondeno(""));
+    fn la_vecchia_chiave_non_riattiva_l_edizione() {
+        segui_tema(" bondeno\n");
+        assert!(!bondeno());
+        assert_ne!(tema(), ThemeId::Bondeno);
+        assert_eq!(nome(), None);
+        assert_eq!(titolo("1.2.3"), "Cedro 1.2.3");
         assert_eq!(titolo_con("1.2.3", Some(NOME)), "Cedro 1.2.3 · Comune di Bondeno");
         assert_eq!(titolo_con("1.2.3", None), "Cedro 1.2.3");
     }

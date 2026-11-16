@@ -1717,7 +1717,7 @@ fn android_main(app: AndroidApp) {
     }
     let file_tema = dati.join("tema.txt");
     let file_lavori = dati.join("lavori.txt");
-    let mut tema = std::fs::read_to_string(&file_tema).map(|t| ThemeId::from_key(&t)).unwrap_or(ThemeId::Cedro);
+    let mut tema = std::fs::read_to_string(&file_tema).map(|t| crate::ui::tema_da_chiave(&t)).unwrap_or(ThemeId::Cedro);
     // Con la 0.45 arriva il nuovo Cedro: chi aveva ancora il tema di partenza di prima lo vede una volta sola;
     // se poi sceglie di nuovo «Windows essenziale» resta.
     let marca_045 = dati.join("tema-045");
