@@ -1228,6 +1228,8 @@ Togli le pagine	Remover as páginas
 {#} PDF uniti, {#} pagine	{} PDFs mesclados, {} páginas
 {#} PDF uniti, {#} pagine, protetto con password	{} PDFs mesclados, {} páginas, protegidos por senha
 Diviso in {#} PDF	Dividido em {} PDFs
+Diviso in {#} PDF. Gli allegati ({#}) restano solo nel file originale: non sono stati copiati nelle parti	Dividido em {} PDFs. Os anexos ({}) ficam só no arquivo original: não foram copiados para as partes
+Tolte {#} pagine, ne restano {#}. Gli allegati ({#}) restano solo nel file originale: non sono stati copiati	{} páginas removidas, {} restantes. Os anexos ({}) ficam só no arquivo original: não foram copiados
 Tolte {#} pagine, ne restano {#}	Removidas {} páginas, restam {}
 Per unire servono almeno due PDF spuntati.	Para mesclar são necessários pelo menos dois PDFs marcados.
 per unire servono almeno due PDF	para mesclar são necessários pelo menos dois PDFs

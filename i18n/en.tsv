@@ -1232,6 +1232,8 @@ Togli le pagine	Remove the pages
 {#} PDF uniti, {#} pagine	{} PDFs merged, {} pages
 {#} PDF uniti, {#} pagine, protetto con password	{} PDFs merged, {} pages, password protected
 Diviso in {#} PDF	Split into {} PDFs
+Diviso in {#} PDF. Gli allegati ({#}) restano solo nel file originale: non sono stati copiati nelle parti	Split into {} PDFs. The attachments ({}) stay only in the original file: they were not copied into the parts
+Tolte {#} pagine, ne restano {#}. Gli allegati ({#}) restano solo nel file originale: non sono stati copiati	Removed {} pages, {} left. The attachments ({}) stay only in the original file: they were not copied
 Tolte {#} pagine, ne restano {#}	Removed {} pages, {} left
 Per unire servono almeno due PDF spuntati.	Merging needs at least two ticked PDFs.
 per unire servono almeno due PDF	merging needs at least two PDFs

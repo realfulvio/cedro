@@ -46,6 +46,23 @@ pub fn pulisci(ext: &str, bytes: &[u8]) -> Result<(Vec<u8>, Fatto), String> {
 
 // ---------------------------------------------------------------- PDF
 
+/// Vero se il PDF ha file allegati: voci con /EF (file incorporato) ovunque, anche dentro dizionari senza oggetto proprio.
+fn has_attachments(doc: &lopdf::Document) -> bool {
+    use lopdf::Object;
+    fn walk(o: &Object, depth: u32) -> bool {
+        if depth > 12 {
+            return false;
+        }
+        match o {
+            Object::Dictionary(d) => d.has(b"EF") || d.iter().any(|(_, v)| walk(v, depth + 1)),
+            Object::Stream(s) => s.dict.has(b"EF") || s.dict.iter().any(|(_, v)| walk(v, depth + 1)),
+            Object::Array(a) => a.iter().any(|v| walk(v, depth + 1)),
+            _ => false,
+        }
+    }
+    doc.objects.values().any(|o| walk(o, 0))
+}
+
 fn pdf(bytes: &[u8]) -> Result<(Vec<u8>, Fatto), String> {
     use lopdf::{Document, Object};
     let mut doc = Document::load_mem(bytes).map_err(|e| format!("PDF non letto: {e}"))?;
@@ -143,6 +160,13 @@ fn pdf(bytes: &[u8]) -> Result<(Vec<u8>, Fatto), String> {
     for id in xmp_streams {
         doc.objects.remove(&id);
         fatto.tolto("metadati XMP");
+    }
+    // Gli allegati restano, ma si dice: spesso stanno dentro l'albero dei nomi, senza oggetto proprio.
+    if has_attachments(&doc) {
+        let avviso = "Il PDF contiene allegati: non sono stati aperti, controllali.".to_string();
+        if !fatto.avvisi.contains(&avviso) {
+            fatto.avvisi.push(avviso);
+        }
     }
     // Il catalogo: niente azioni all'apertura né nomi di JavaScript.
     if let Ok(cat) = doc.catalog_mut() {
@@ -725,5 +749,14 @@ mod prove {
         assert!(!s.contains("Mario Rossi") && s.contains("Firma1"), "{s}");
         assert!(fatto.frase().contains("firma"), "{}", fatto.frase());
         lopdf::Document::load_mem(&out).unwrap();
+    }
+
+    #[test]
+    fn gli_allegati_dentro_i_nomi_si_segnalano() {
+        // L'allegato sta nell'albero dei nomi, senza oggetto proprio: prima non lo vedeva e non avvisava.
+        let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/allegato-nei-nomi.pdf")).unwrap();
+        let (out, fatto) = pulisci("pdf", &bytes).unwrap();
+        assert!(fatto.frase().contains("allegati"), "{}", fatto.frase());
+        assert!(!String::from_utf8_lossy(&out).contains("Titolo XMP"));
     }
 }
