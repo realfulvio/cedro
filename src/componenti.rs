@@ -4,7 +4,8 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature="android-worker",derive(serde::Serialize,serde::Deserialize))]
 pub enum Fase {
     /// Byte arrivati e totale (0 se non si sa).
     Scarica { fatti: u64, totale: u64 },
@@ -39,6 +40,28 @@ pub fn verifica_download(callback:Option<Permesso>){*PERMESSO.lock().unwrap_or_e
 pub fn prima_download(nome:&str,bytes:u64)->Result<(),String>{
     let callback=PERMESSO.lock().unwrap_or_else(|e|e.into_inner()).clone();
     if let Some(callback)=callback{callback(nome,bytes)}else{Ok(())}
+}
+type Parziale = std::sync::Arc<dyn Fn(&std::path::Path)->Result<(),String> + Send + Sync>;
+static PARZIALE:Mutex<Option<Parziale>>=Mutex::new(None);
+pub fn traccia_parziali(callback:Option<Parziale>){*PARZIALE.lock().unwrap_or_else(|e|e.into_inner())=callback;}
+/// Reclama soltanto un file nuovo; quelli preesistenti non appartengono al lavoro corrente.
+pub fn prepara_parziale(path:&std::path::Path)->Result<(),String>{
+    let callback=PARZIALE.lock().unwrap_or_else(|e|e.into_inner()).clone();
+    let Some(callback)=callback else{return Ok(())};
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(path){
+        Ok(file)=>{drop(file);let result=callback(path);if result.is_err(){let _=std::fs::remove_file(path);}result},
+        Err(e) if e.kind()==std::io::ErrorKind::AlreadyExists=>Ok(()),
+        Err(e)=>Err(e.to_string()),
+    }
+}
+/// Ricontrolla la policy durante i download lunghi; al massimo una volta al secondo.
+/// L'host può attendere il ritorno del Wi-Fi mentre il downloader conserva l'offset.
+pub fn continua_download(nome:&str)->Result<(),String>{
+    static ULTIMO:Mutex<Option<Instant>>=Mutex::new(None);
+    let mut last=ULTIMO.lock().unwrap_or_else(|e|e.into_inner());
+    if last.is_some_and(|t|t.elapsed()<Duration::from_secs(1)){return Ok(());}
+    *last=Some(Instant::now());drop(last);
+    prima_download(nome,0)
 }
 fn notifica() {
     let callback = OSSERVATORE.lock().unwrap_or_else(|e| e.into_inner()).clone();
