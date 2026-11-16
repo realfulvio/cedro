@@ -48,30 +48,14 @@ def durata(p):
 
 
 def misura(argv, timeout=3600, env=None):
-    """Lancia il comando misurando tempo vero e RSS di picco (wait4: include i discendenti già attesi, niente GNU time)."""
-    import threading
-    t0 = time.perf_counter()
-    p = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-    cattura = {}
-    def leggi(f, k): cattura[k] = f.read()
-    th = [threading.Thread(target=leggi, args=(p.stdout, "out")), threading.Thread(target=leggi, args=(p.stderr, "err"))]
-    for t in th: t.start()
+    """Lancia il comando misurando tempo vero e RSS di picco, tramite lib/rss_helper.py (python -I -S: pavimento di RSS trascurabile)."""
+    helper = str(AQUI.parents[0] / "lib" / "rss_helper.py")
+    r = subprocess.run([sys.executable, "-I", "-S", helper, json.dumps({"cmd": [str(c) for c in argv], "env": env, "timeout": timeout})], capture_output=True, text=True, errors="replace")
     try:
-        _, stato, ru = os.wait4(p.pid, 0) if timeout is None else _attendi(p, timeout)
-        rc = os.waitstatus_to_exitcode(stato)
-    except TimeoutError:
-        p.kill(); _, stato, ru = os.wait4(p.pid, 0); rc = 124; cattura["err"] = "TIMEOUT"
-    for t in th: t.join()
-    return {"rc": rc, "s": round(time.perf_counter() - t0, 2), "rss_mb": round(ru.ru_maxrss / 1024, 1), "out": cattura.get("out", ""), "err": (cattura.get("err") or "")[-600:]}
-
-
-def _attendi(p, timeout):
-    fine = time.time() + timeout
-    while time.time() < fine:
-        r = os.wait4(p.pid, os.WNOHANG)
-        if r[0]: return r
-        time.sleep(0.05)
-    raise TimeoutError
+        d = json.loads(r.stdout)
+    except ValueError:
+        return {"rc": 125, "s": 0.0, "rss_mb": 0.0, "out": "", "err": "lanciatore: " + r.stderr[-300:]}
+    return {"rc": d["rc"], "s": d["s"], "rss_mb": d["rss_mb"], "out": d["out"], "err": d["err"][-600:]}
 
 
 def lancia(sistema, wav, gpu=True, timeout=3600):

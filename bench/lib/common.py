@@ -8,26 +8,16 @@ CEDRO = os.environ.get("CEDRO", str(RADICE / "target/release/cedro"))
 
 
 def esegui(cmd, timeout=300, cwd=None, env=None):
-    """Lancia un comando misurando tempo e memoria di picco DI QUEL processo (e dei discendenti già attesi) con wait4.
-    (La versione precedente usava RUSAGE_CHILDREN, che è il massimo cumulativo di tutti i figli: valori di memoria sbagliati.)
+    """Lancia un comando misurando tempo e RSS di picco DI QUEL processo (e dei discendenti già attesi), tramite il lanciatore
+    piccolo `rss_helper.py` (ru_maxrss di un figlio parte dal picco del genitore: vedi il commento in quel file).
     Ritorna dict con rc, s, rss_mb, out, err."""
-    import threading
-    t0 = time.perf_counter()
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, env=env)
-    buf = {}
-    th = [threading.Thread(target=lambda f=f, k=k: buf.__setitem__(k, f.read())) for f, k in ((p.stdout, "out"), (p.stderr, "err"))]
-    for t in th: t.start()
-    fine, rc, ru = time.time() + timeout, None, None
-    while True:
-        r = os.wait4(p.pid, os.WNOHANG)
-        if r[0]:
-            rc, ru = os.waitstatus_to_exitcode(r[1]), r[2]; break
-        if time.time() > fine:
-            p.kill(); r = os.wait4(p.pid, 0); rc, ru = 124, r[2]; buf["err"] = b"TIMEOUT"; break
-        time.sleep(0.01)
-    for t in th: t.join()
-    d = lambda x: (x or b"").decode(errors="replace")
-    return {"rc": rc, "s": round(time.perf_counter() - t0, 3), "rss_mb": round(ru.ru_maxrss / 1024, 1), "out": d(buf.get("out")), "err": d(buf.get("err"))}
+    helper = str(Path(__file__).with_name("rss_helper.py"))
+    r = subprocess.run([sys.executable, "-I", "-S", helper, json.dumps({"cmd": [str(c) for c in cmd], "cwd": str(cwd) if cwd else None, "env": env, "timeout": timeout})],
+                       capture_output=True, text=True, errors="replace")
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return {"rc": 125, "s": 0.0, "rss_mb": 0.0, "out": "", "err": "lanciatore: " + r.stderr[-300:]}
 
 
 def cedro(*args, timeout=300, cwd=None):
