@@ -26,3 +26,9 @@ Minipc `dev`, Ryzen 7 5700U, copia isolata `/srv/dev/projects/cedro-android-fase
 Prima compilazione host del crate Android sulla base `0a3a64b`: **fallita E0004**, nuovi `Kind::Number`/`Meaning` non coperti in rivedi.rs. Log conservato nel minipc in `render.log`. L'APK della nuova base, le due varianti con/senza componenti YouTube e la suite motore vanno misurati dopo la correzione: nessun esito anticipato.
 
 Evidenze locali: `~/Documenti/cedro-android-anteprima/prove-mi9t`. Corpus e script di installazione sono in preparazione in `~/prove-cedro-android/`; i risultati successivi saranno separati da questi valori iniziali.
+
+## Ulteriori osservazioni durante il collaudo della base
+
+Su una foto sintetica 4000×3000, dopo SEND e selezione dello spicchio PDF la ruota evidenzia PDF, ma il pulsante resta «Converti in JPG» e il log conferma un JPEG pubblicato. Ripetuto con tap e pressione breve. Non si conta quindi come prova JPEG→PDF e non si confrontano quei tempi con la nuova conversione PDF. Il nuovo foglio deve verificare anche la corrispondenza fra selezione ed effetto inviato al motore.
+
+Corpus pronto in `~/prove-cedro-android/fixture`: 64 file, circa 103,6 MB, con manifest SHA-256 e script di aggiornamento che conserva i dati del Mi 9T. Include cinque DOCX di test Apache POI (origine nel manifest; archivio pubblico https://github.com/apache/poi/tree/trunk/test-data/document), documenti sintetici, i campioni del repository, foto 12 MP e video 1080p/60 s sintetici, toni/silenzio/ronzio e firme. Il vecchio `dialogo.wav` non è presente nei percorsi verificati: la prova tre-voci non è ancora eseguita. ND2/LIF sono ancora da procurare; campioni CMU NDPI/MRXS sono disponibili nel minipc.
