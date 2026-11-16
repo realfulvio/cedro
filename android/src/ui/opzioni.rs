@@ -238,15 +238,16 @@ impl App {
     fn gettoni(&mut self, p: &mut Painter, x: f32, y: f32, w: f32, voci: &[(String, bool)], scelta: Option<usize>, az: impl Fn(usize) -> Azione, vista: super::R) -> f32 {
         let pal = self.pal();
         let (mut cx, mut cy) = (x, y);
+        if voci.is_empty() { return 0.0; }
         for (i, (t, nuovo)) in voci.iter().enumerate() {
-            let tw = (p.measure(t, 15.0, Weight::Semibold) + 28.0 + if *nuovo { p.measure("NUOVO", 9.0, Weight::Semibold) + 6.0 } else { 0.0 }).min(w);
+            let tw = (p.measure(t, 15.0, Weight::Semibold) + 28.0 + if *nuovo { p.measure("NUOVO", 9.0, Weight::Semibold) + 6.0 } else { 0.0 }).max(TOCCO).min(w);
             if cx + tw > x + w && cx > x {
                 cx = x;
                 cy += 50.0;
             }
             let on = scelta == Some(i);
             let a = az(i);
-            let rc = (cx, cy, tw.min(w), 48.0);
+            let rc = (cx, cy, tw, TOCCO);
             p.rrect(rc.0, rc.1, rc.2, rc.3, 21.0, Some(if on { pal.alt } else if self.premuto == Some(a) { mix(pal.surface, pal.primary, 0.08) } else { pal.surface }), Some((if on { pal.primary } else { pal.border }, if on { 2.0 } else { 1.5 })));
             let lw = p.measure(t, 15.0, Weight::Semibold).min((rc.2 - 28.0).max(1.0));
             p.text(t, rc.0 + 14.0, rc.1, lw + 4.0, rc.3, 15.0, Weight::Semibold, if on { pal.primary } else { pal.text }, Align::Left);
@@ -256,7 +257,7 @@ impl App {
             self.colpo(rc, a, vista);
             cx += tw + 8.0;
         }
-        cy + 42.0 - y
+        cy + TOCCO - y
     }
 
     /// Una riga con meno, valore e più.
@@ -452,5 +453,40 @@ impl App {
         self.scorri_max = (y + 16.0 + self.scorri - h).max(0.0);
         self.scorri = self.scorri.min(self.scorri_max);
         self.tieni_campo(vista);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cedro::ui::gfx::{Fonts, GlyphCache};
+    use cedro::ui::theme::ThemeId;
+    use crate::ui::Forma;
+
+    #[test]
+    fn gettoni_brevi_rispettano_bersagli_righe_e_altezza() {
+        let mut cache = GlyphCache::new();
+        let mut app = App::new(ThemeId::Cedro);
+        let mut p = Painter::new(360, 640, 1.0, Fonts::for_theme(app.tema), &mut cache);
+        let voci = [("No".into(), false), ("1".into(), false), ("Sì".into(), false)];
+        for w in [48.0, 104.0, 328.0] {
+            app.colpi.clear();
+            let altezza = app.gettoni(&mut p, 16.0, 20.0, w, &voci, None, |i| Azione::Opz(OpzAz::Gettone(i as u8)), (0.0, 0.0, 360.0, 640.0));
+            assert_eq!(app.colpi.len(), voci.len());
+            let mut fondo = 20.0_f32;
+            let mut precedente: Option<crate::ui::R> = None;
+            for (forma, _) in &app.colpi {
+                let Forma::R(r) = forma else { panic!("gettone non rettangolare") };
+                assert!(r.2 >= TOCCO && r.3 >= TOCCO);
+                assert!(r.0 >= 16.0 && r.0 + r.2 <= 16.0 + w);
+                if let Some(prev) = precedente {
+                    assert!(r.1 >= prev.1 + prev.3 || r.0 >= prev.0 + prev.2);
+                }
+                fondo = fondo.max(r.1 + r.3);
+                precedente = Some(*r);
+            }
+            assert_eq!(altezza, fondo - 20.0);
+        }
+        assert_eq!(app.gettoni(&mut p, 16.0, 20.0, 328.0, &[], None, |_| Azione::Niente, (0.0, 0.0, 360.0, 640.0)), 0.0);
     }
 }
