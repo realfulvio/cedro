@@ -153,6 +153,8 @@ fn etichetta(kind: Kind, count: usize) -> String {
         Kind::Loop => "Giro di parole".into(),
         Kind::Typical => "Frase tipica".into(),
         Kind::Silence => "Nel silenzio".into(),
+        Kind::Number => "Numero da controllare".into(),
+        Kind::Meaning => "Significato da controllare".into(),
     }
 }
 
