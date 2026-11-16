@@ -2,11 +2,18 @@
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Voce {pub modello:usize,pub voci:u8}
+impl Voce {
+    pub fn da_codice(code:usize)->Self{Self{modello:code&0x0f,voci:(code>>4) as u8}}
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Richiesta {
     pub file: PathBuf,
     pub azione: String,
     pub qualita: u8,
+    pub voce: Voce,
     pub out: PathBuf,
     pub opts: cedro::Options,
     pub unisci: Vec<(PathBuf, Option<cedro::PageSel>)>,
@@ -54,7 +61,25 @@ pub extern "C" fn cedro_lavoro_main() -> i32 {
     code
 }
 
+/// Ha un lifetime indipendente dal journal dei risultati completi.
+struct Scratch(PathBuf);
+impl Drop for Scratch {fn drop(&mut self){let _=std::fs::remove_dir_all(&self.0);}}
+
+pub fn sposta_download(file:&std::path::Path,out:&std::path::Path,revisione:bool)->Result<PathBuf,String>{
+    let dir=if revisione{out.join(".revisione")}else{out.to_path_buf()};
+    std::fs::create_dir_all(&dir).map_err(|e|e.to_string())?;
+    let target=dir.join(file.file_name().ok_or("Nome del risultato assente")?);
+    std::fs::rename(file,&target).map_err(|e|e.to_string())?;
+    Ok(target)
+}
+
+fn converti_web(r:&mut Richiesta,testo:bool,audio:bool){
+    // Qualità media e selezione vocale sono campi separati; non alterare qualita.
+    r.azione=if testo{"trascrivi"}else if audio{"mp3"}else{"mp4"}.into();
+}
+
 fn esegui(mut r: Richiesta) -> Result<(PathBuf, String), String> {
+    let _scratch=Scratch(r.out.join(".scaricato"));
     if let Some((lines,names))=r.sommario.take() {
         use cedro::riassunto::{Failure, Options, Progress, Step};
         let done=std::sync::Mutex::new(None);
@@ -86,20 +111,25 @@ fn esegui(mut r: Richiesta) -> Result<(PathBuf, String), String> {
         let convert=!text&&((want==Want::Audio&&!media.audio)||(want==Want::Light&&media.size.is_none_or(|n|n>30_000_000)&&!media.url.contains("512kb")));
         let download_dir=r.out.join(".scaricato");
         let file=download(&media,&download_dir,&|f|emetti(Evento::Progresso((f*600.0) as u32)),&std::sync::atomic::AtomicBool::new(false))?;
-        if !text&&!convert{return Ok((file,media.title));}
-        r.file=file;
-        r.azione=if text{"trascrivi"}else if want==Want::Audio{"mp3"}else{"mp4"}.into();
+        if !text&&!convert{return sposta_download(&file,&r.out,false).map(|p|(p,media.title));}
+        r.file=if text{sposta_download(&file,&r.out,true)?}else{file};
+        converti_web(&mut r,text,want==Want::Audio);
     }
     if r.azione == "trascrivi" {
+        if r.file.starts_with(r.out.join(".revisione")){
+            let data=serde_json::to_vec(&r.file).map_err(|e|e.to_string())?;
+            crate::storage::atomico(&r.out.join(".revisione-source"),&data).map_err(|e|e.to_string())?;
+        }
         use cedro::trascrizione::{Event, Format, Request};
-        let req = Request { format: Format::Text, model: (r.qualita as usize & 0x0f).min(cedro::trascrizione::MODELS.len() - 1), gpu: false, avx512: false, speakers: r.qualita >> 4, glossario: None };
+        let req = Request { format: Format::Text, model: r.voce.modello.min(cedro::trascrizione::MODELS.len() - 1), gpu: false, avx512: false, speakers: r.voce.voci, glossario: None };
         let result = std::sync::Mutex::new(None);
-        cedro::trascrizione::run(&[r.file], &req, Some(&r.out), &r.opts, &|e| match e {
+        cedro::trascrizione::run(&[r.file.clone()], &req, Some(&r.out), &r.opts, &|e| match e {
             Event::Percent { percent, .. } => emetti(Evento::Progresso(percent as u32 * 10)),
             Event::Log(l) => emetti(Evento::Passo(l.key, l.text)),
             Event::Finished { result: r, .. } => *result.lock().unwrap_or_else(|e| e.into_inner()) = Some(r),
         });
-        return result.into_inner().unwrap_or_else(|e| e.into_inner()).unwrap_or_else(|| Err("La trascrizione non è partita".into()));
+        let result=result.into_inner().unwrap_or_else(|e| e.into_inner()).unwrap_or_else(|| Err("La trascrizione non è partita".into()));
+        return result;
     }
     cedro::progress::con(|f| emetti(Evento::Progresso((f * 1000.0) as u32)), || {
         if r.azione == "zip-tutti" {
@@ -180,6 +210,34 @@ pub fn avvia(libs: &std::path::Path, r: Richiesta, cancel: &std::sync::atomic::A
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    #[test]
+    fn qualita_web_indipendente_da_modello_e_voci(){
+        for code in [0,1,2,16,33,66]{
+            for (text,audio,action) in [(false,true,"mp3"),(false,false,"mp4"),(true,true,"trascrivi")]{
+                let mut r=Richiesta{file:"link".into(),azione:"web-audio".into(),qualita:82,voce:Voce::da_codice(code),out:"out".into(),opts:Default::default(),unisci:vec![],sommario:None};
+                converti_web(&mut r,text,audio);
+                let r:Richiesta=serde_json::from_slice(&serde_json::to_vec(&r).unwrap()).unwrap();
+                assert_eq!(r.qualita,82);assert_eq!(r.voce,Voce::da_codice(code));assert_eq!(r.azione,action);
+            }
+        }
+    }
+    #[test]
+    fn scratch_scompare_ma_audio_revisione_resta_riapribile(){
+        for revision in [false,true]{
+            let root=crate::storage::nuova_cartella(&std::env::temp_dir()).unwrap();
+            let downloaded=root.join(".scaricato");std::fs::create_dir(&downloaded).unwrap();
+            let source=downloaded.join("audio.wav");std::fs::write(&source,b"audio originale").unwrap();
+            let saved={let _guard=Scratch(downloaded.clone());if revision{Some(sposta_download(&source,&root,true).unwrap())}else{std::fs::write(root.join("converted.mp3"),b"converted").unwrap();None}};
+            assert!(!downloaded.exists());
+            if let Some(saved)=saved{
+                let encoded=serde_json::to_vec(&saved).unwrap();
+                let restarted:PathBuf=serde_json::from_slice(&encoded).unwrap();
+                assert_eq!(std::fs::read(restarted).unwrap(),b"audio originale");
+            }else{assert_eq!(std::fs::read_dir(&root).unwrap().count(),1);}
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
     #[test]
     fn opzioni_worker_senza_perdite() {
         let mut o = cedro::Options::default();

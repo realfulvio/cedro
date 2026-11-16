@@ -113,3 +113,48 @@ Sul Mi9T, dopo build e review e senza azzerare dati personali:
 ## File nel commit
 
 Cargo.toml/Cargo.lock; android/Cargo.toml, AndroidManifest.xml, build.sh; android/src/lib.rs, glue.rs, glue/saf.rs, storage.rs, worker.rs, bin/lavoro.rs, ui.rs; CedroActivity.java e ArchiviProvider.java; derive condizionali in src/engine.rs, figura.rs, svs_lab.rs, pdfedit.rs, pdfpages.rs, ufficio/mod.rs; cinque TSV; questo rapporto.
+
+
+## Correzioni review — round 1/5
+
+Base della review `8aacdb2`; ricevuta su HEAD `f19eb91`, durante le correzioni il controller ha aggiunto soltanto il rapporto baseline in `ad5877a`. Letti i sei Important di `task-2-review.md`; nessun file del controller modificato. Nessun fmt/rustfmt, cargo, adb o carico remoto. CI avviata dal controller: nessun risultato ricevuto durante questa correzione; non viene considerata PASS.
+
+### Risoluzione dei sei finding
+
+1. **«Le uscite strutturate vengono appiattite e le directory trattate come file»**. Nuovo modulo `android/src/publication.rs`, responsabilità unica di journal e pubblicazione. `Forma` distingue file, directory e insieme; `Elemento` conserva il percorso relativo e contiene solo file regolari. Directory/insiemi hanno un namespace comune univoco; MediaStore e legacy mantengono tutte le sottodirectory e i nomi accoppiati header/dati MRXS. La destinazione pubblica comune si fissa alla prenotazione del primo file: un gruppo non si divide fra Documents e Download. La UI elenca file apribili, mai una directory passata come file. Test sorgente: MIRAX minimo valido costruito con il JPEG reale `tests/fixtures/scan.jpg`, esportazione tramite il ramo legacy, riapertura con `cedro::mrxs::open`, decodifica `read_level` e confronto pixel prima/dopo; directory tiles annidata con confronto byte del JPEG esportato. Test NON ESEGUITO.
+
+2. **«Un'interruzione durante la pubblicazione perde l'attribuzione delle uscite già salvate»**. `.pronti` diventa un journal JSON version3 con identità stabile del lavoro (anche origine, etichetta, timestamp e fonte revisione), struttura e stato di ogni uscita: Privato → Preparato(destinazione) → Pubblicato(destinazione). L'URI del nuovo record MediaStore viene sincronizzato nel journal **prima** di scrivere/committare il provider. Dopo commit viene sincronizzato lo stato Pubblicato **prima** di rimuovere il privato. Il ripristino di Preparato interroga `IS_PENDING`: una destinazione già committata viene attribuita allo stesso lavoro anche se il processo è morto prima dello stato Pubblicato. Errori di query conservano URI e privato; non vengono interpretati come successo. Dopo una prenotazione non si cambia URI con un fallback ambiguo. API legacy distingue il vecchio Replace dal nuovo risultato attraverso il temporaneo creato prima del checkpoint e rimosso dal rename. Test sorgente per tutte le transizioni, due PDF, metà lotto, journal già Pubblicato con privato ancora presente; NON ESEGUITO.
+
+3. **«Esito e lista uscite su due code distinte hanno una race che perde il journal completo»**. Eliminata la coda separata delle uscite. `Completamento` contiene stato, tutte le uscite ed eventuale sorgente; `App::completa` applica l'evento, poi il loop persiste e ridisegna. Identità stabile anche nel journal UI, recupero idempotente senza duplicare il lavoro. Le identità rimosse/superate dal limite del cronologico sono persistite per non ricreare al riavvio lavori deliberatamente rimossi. Test sorgente con barrier fra drain UI e enqueue worker, successivo salvataggio immediato/riavvio, identità e due URI, recupero ripetuto e cronologico svuotato; NON ESEGUITO.
+
+4. **«Il download sorgente dei lavori web completati rimane per sempre nello staging»**. Guardia `Scratch` separata dal journal dei risultati: rimuove `.scaricato` al ritorno del worker. Il passthrough sposta il media nella radice delle uscite; la conversione elimina il download completo dopo l'uso. Solo web-testo sposta la fonte in `.revisione`, con riferimento `.revisione-source` e fonte nel journal/UI, incluso YouTube. La guardia del genitore elimina lo scratch anche se il processo è terminato forzatamente. Self-review aggiuntiva: una revisione può essere salvata da Whisper prima dell'esito finale; `sorgente_revisione` verifica il riferimento reale tramite `revisione::has`, preserva quell'audio su errore/cancellazione e lo recupera insieme all'identità `.lavoro` al riavvio. Le revisioni persistite non sono cache eliminabile. Test sorgente separa cancellazione dello scratch da riapertura audio con riferimento serializzato; NON ESEGUITO. Misure spazio prima/dopo lavoro reale e riavvio restano obbligatorie.
+
+5. **«La qualità della conversione web ora riceve l'indice del modello di trascrizione»**. Protocollo `Richiesta` con `qualita` indipendente da `Voce { modello, voci }`; il glue decodifica la precedente scelta vocale e mantiene qualità media 82. Il passaggio web→mp3/mp4/trascrivi modifica soltanto l'azione. Test sorgente con sei codici modello/voci e tre azioni, anche dopo roundtrip JSON; NON ESEGUITO.
+
+6. **«La pubblicazione ora usa API29 anche sui dispositivi API26–28 supportati»**. Branch esplicito SDK_INT: da29 MediaStore, API26–28 copia privata→temporaneo nella destinazione pubblica, sync, rename, sync directory e scansione media. Nessun accesso a colonne/Downloads API29 nel ramo precedente. Number/Replace/Skip e conservazione privato su errore restano presenti. Il temporaneo di un errore viene svuotato e resta come marker riconoscibile dal journal, senza trattenere byte parziali né scambiare il vecchio file finale per quello nuovo. Test sorgente cancel durante Replace con vecchio file intatto, successivo rename e selezione26/27/28 vs29/30/34; NON ESEGUITO.
+
+### Verifiche effettivamente eseguite in questo round
+
+- Parser tree-sitter-rust sui 18 sorgenti `android/src/**/*.rs`: nessun nodo errore; **non è type-check Rust/JNI**.
+- Parsing TOML Cargo.toml, Cargo.lock, android/Cargo.toml e XML manifest: validi.
+- Cinque TSV en/de/es/fr/pt: nessuna chiave duplicata/traduzione vuota; aggiunte le nuove stringhe utente (quelle già presenti riutilizzate).
+- `bash -n android/build.sh`: exit0, nessun output.
+- `git diff --check`: exit0, nessun output.
+
+Output:
+
+```
+Rust syntax: 18 files; errors: []
+TOML: 3 valid; XML: valid
+TSV: 5 languages, no duplicates or empty translations
+```
+
+Comandi di test/build elencati nella precedente sezione: **tutti NON ESEGUITI** in questo round. Nessun accesso a dev/win-test e nessun adb. I nuovi test sono in `publication::tests`, `worker::tests` e `ui::lavori_regressioni`; i test storage preesistenti restano richiesti. Non sono aggiunte dipendenze.
+
+### Limiti e gate invariati
+
+Restano obbligatori type-check Android/JNI, esecuzione dei test, build entrambe varianti, comportamento dei provider reali e MediaStore (inclusi crash dopo IS_PENDING0 e prima del journal, Replace/Number/Skip, batch e gruppi), API26–28, MIRAX reale e tiles riaperti dal filesystem pubblico, misure PSS complessive UI+worker, spazio effettivamente liberato e assenza di figli residui. Il fixture MIRAX del test non sostituisce una prova di vetrino clinico grande. La verifica delle transizioni pure non sostituisce crash injection Android. Il journal version3 recupera i lavori prodotti dalla versione corretta; il vecchio manifest sperimentale di `8aacdb2` non conteneva identità/URI, che non possono essere ricostruiti retroattivamente. La baseline del controller è una build precedente, non una prova di questa patch.
+
+Il cleanup conserva destinazioni preparate non risolte se il provider non permette di accertarne lo stato; la copia privata resta disponibile. Un fallimento legacy conserva un marker temporaneo vuoto identificato nel journal (mai spacciato per risultato pubblico completato); la prova API26–28 dovrà includere anche questo caso. Non dichiarata idoneità APK/release.
+
+File di questo round: android/src/{publication.rs,lib.rs,glue.rs,worker.rs,ui.rs}, cinque TSV e questo rapporto. I file del controller e i file estranei non entrano nel commit.
