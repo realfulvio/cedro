@@ -2565,3 +2565,38 @@ Risultato non regolare	Type de fichier résultat non pris en charge
 Il lavoro non ha prodotto file	Le travail n’a produit aucun fichier
 Registro dei risultati non valido	Journal des résultats invalide
 Nome del risultato assente	Nom du résultat absent
+Apri cartella MRXS	Ouvrir le dossier MRXS
+Annulla anteprima	Annuler l’aperçu
+Scena	Scène
+Canale	Canal
+Piano Z	Plan Z
+Istante	Instant
+Lavori del caso	Travaux du cas
+Tutti i lavori	Tous les travaux
+Un codice comune per i file del laboratorio.	Un code commun pour les fichiers du laboratoire.
+Nota · resta nel caso, non nel nome del file	Note · reste dans le cas, pas dans le nom du fichier
+Nome del risultato	Nom du résultat
+Usa questo caso	Utiliser ce cas
+Togli caso attivo	Retirer le cas actif
+Opzioni del risultato	Options du résultat
+Avviso	Avertissement
+Gli allegati restano solo nel file originale.	Les pièces jointes restent uniquement dans le fichier original.
+Caso non salvato	Cas non enregistré
+Livello non presente nel file	Niveau absent du fichier
+Piano non presente nel file	Plan absent du fichier
+Canale non presente nel file	Canal absent du fichier
+Il file non contiene un’anteprima di laboratorio	Le fichier ne contient pas d’aperçu de laboratoire
+Anteprima: area centrale del livello. L’esportazione usa le opzioni del risultato.	Aperçu : zone centrale du niveau. L’exportation utilise les options du résultat.
+Eventuali nomi impressi nei pixel richiedono una verifica visiva.	Les noms incrustés dans les pixels nécessitent une vérification visuelle.
+I selettori cambiano solo l’anteprima. L’esportazione usa le opzioni del risultato e include tutte le scene del file.	Les sélecteurs modifient uniquement l’aperçu. L’exportation utilise les options du résultat et inclut toutes les scènes du fichier.
+Tessere AI, zona mitotica e consulto richiedono SVS, NDPI o MRXS. La copia anonima di CZI, ND2 e LIF non è supportata dal motore.	Les tuiles IA, la zone de comptage mitotique et la consultation nécessitent SVS, NDPI ou MRXS. Le moteur ne prend pas en charge les copies anonymisées de CZI, ND2 ou LIF.
+La copia anonima di CZI, ND2 e LIF non è supportata dal motore. Puoi convertire il file in PNG; non è una copia anonima del formato originale.	Le moteur ne prend pas en charge les copies anonymisées de CZI, ND2 ou LIF. Vous pouvez convertir le fichier en PNG ; ce n’est pas une copie anonymisée du format original.
+Cartella privata non disponibile	Dossier privé indisponible
+Anteprima non leggibile	Aperçu illisible
+file di dati fuori dalla cartella MIRAX	fichier de données hors du dossier MIRAX
+percorso dei dati MIRAX non valido	chemin de données MIRAX non valide
+{}: file associato non regolare	{} : le fichier associé n’est pas un fichier ordinaire
+Pacchetto con impronte	Paquet avec empreintes
+Apri file	Ouvrir un fichier
+Vetrini	Lames
+Copia anonima	Copie anonymisée

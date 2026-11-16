@@ -2577,3 +2577,38 @@ Risultato non regolare	Unsupported result file type
 Il lavoro non ha prodotto file	The job produced no files
 Registro dei risultati non valido	Invalid results journal
 Nome del risultato assente	Missing result name
+Apri cartella MRXS	Open MRXS folder
+Annulla anteprima	Cancel preview
+Scena	Scene
+Canale	Channel
+Piano Z	Z plane
+Istante	Time point
+Lavori del caso	Case jobs
+Tutti i lavori	All jobs
+Un codice comune per i file del laboratorio.	A shared code for the laboratory files.
+Nota · resta nel caso, non nel nome del file	Note · stays in the case, not in the filename
+Nome del risultato	Output name
+Usa questo caso	Use this case
+Togli caso attivo	Remove active case
+Opzioni del risultato	Output options
+Avviso	Warning
+Gli allegati restano solo nel file originale.	Attachments remain only in the original file.
+Caso non salvato	Case not saved
+Livello non presente nel file	Level not found in the file
+Piano non presente nel file	Plane not found in the file
+Canale non presente nel file	Channel not found in the file
+Il file non contiene un’anteprima di laboratorio	The file does not contain a laboratory preview
+Anteprima: area centrale del livello. L’esportazione usa le opzioni del risultato.	Preview: central region of the level. Export uses the output options.
+Eventuali nomi impressi nei pixel richiedono una verifica visiva.	Names embedded in the pixels require visual inspection.
+I selettori cambiano solo l’anteprima. L’esportazione usa le opzioni del risultato e include tutte le scene del file.	The selectors only change the preview. Export uses the output options and includes all scenes in the file.
+Tessere AI, zona mitotica e consulto richiedono SVS, NDPI o MRXS. La copia anonima di CZI, ND2 e LIF non è supportata dal motore.	AI tiles, mitotic counting region and consultation require SVS, NDPI or MRXS. The engine does not support anonymized copies of CZI, ND2 or LIF.
+La copia anonima di CZI, ND2 e LIF non è supportata dal motore. Puoi convertire il file in PNG; non è una copia anonima del formato originale.	The engine does not support anonymized copies of CZI, ND2 or LIF. You can convert the file to PNG; this is not an anonymized copy of the original format.
+Cartella privata non disponibile	Private folder unavailable
+Anteprima non leggibile	Cannot read preview
+file di dati fuori dalla cartella MIRAX	data file outside the MIRAX folder
+percorso dei dati MIRAX non valido	invalid MIRAX data path
+{}: file associato non regolare	{}: associated file is not a regular file
+Pacchetto con impronte	Package with checksums
+Apri file	Open file
+Vetrini	Slides
+Copia anonima	Anonymized copy

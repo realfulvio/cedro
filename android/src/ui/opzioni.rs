@@ -49,7 +49,7 @@ pub fn formati(kind: Kind) -> Vec<Slice> {
     s.iter().chain(conversioni::tools(kind)).copied().filter(|s| s.id != "none").collect()
 }
 
-pub const MODELLI: [&str; 4] = ["%nome%", "%data%", "%ora%", "%ext%"];
+pub const MODELLI: [&str; 5] = ["%nome%", "%data%", "%ora%", "%ext%", "%caso%"];
 const DPI: [u32; 4] = [100, 144, 200, 300];
 const LINGUE_OCR: [(&str, &str); 3] = [("auto", "Automatica"), ("it", "Italiano"), ("en", "English")];
 
@@ -79,7 +79,7 @@ impl App {
         let f = formati(kind);
         let id = f.get(o.formato).map(|s| s.id).unwrap_or("none");
         // Il nome a modello sta nelle Impostazioni: qui non si ripete.
-        conversioni::option_defs(kind, id).into_iter().filter(|d| d.opt != conversioni::Opt::NameTemplate && conversioni::shown(d, &o.valori)).collect()
+        crate::labs::defs(kind, id, self.casa.coda.iter().filter(|v| v.scelto && v.kind == kind && o.da_casa.is_some()).map(|v| v.path.as_path()).chain(self.file.iter().filter(|_| o.da_casa.is_none()).map(|f| f.path.as_path()))).into_iter().filter(|d| d.opt != conversioni::Opt::NameTemplate && conversioni::shown(d, &o.valori)).collect()
     }
 
     /// Il testo di un campo di «Altre opzioni» o delle Impostazioni.
