@@ -48,3 +48,5 @@ Nel video480p il thread UI raggiunge100%CPU nel campione; i thread NDK MediaCode
 ## Silenzio: regressione da correggere
 
 `silenzio.wav` contiene30s mono16kHz di PCM interamente a zero (verificato leggendo tutti i campioni). Con Buona, Una persona sola e lingua automatica, la0.45 carica comunque Whisper, rileva inglese e pubblica il testo «you» dopo101,932s; PSS massimo campionato1.573.803KiB. Esito **KO**: questa prova non contiene voce. Log, TXT e schermata in `prove-mi9t/base-silenzio`. Il nuovo percorso deve dare «Nessun parlato riconosciuto» e non pubblicare un file vuoto o inventato.
+
+A lavoro finito, un controllo alle22:27 (oltre20min dopo la pubblicazione) trova ancora1.545.558KiB PSS, di cui1.518.384KiB heap nativo, nella stessa app0.45 con pagina Trascrivi inattiva. Il log aveva scritto «memoria liberata»; questo campione mostra invece memoria residente ancora elevata. Non dimostra da solo una perdita: può includere memoria trattenuta dall'allocatore. Il risultato differisce dal campione49.211KiB dopo dialogo; entrambi vanno conservati, senza generalizzare il primo a ogni percorso. Evidenze in `prove-mi9t/idle-dopo-silenzio`.
