@@ -149,13 +149,31 @@ mod tests {
     fn anteprima_dicom_cambia_frame_e_finestra() {
         let dir=crate::storage::nuova_cartella(&std::env::temp_dir()).unwrap();
         let path=dir.join("fixture.dcm");dicom_fixture::crea(&path);
+        use cedro::dicom::pixel as px;
+        let f=cedro::dicom::DicomFile::open(&path).unwrap();
+        let info=px::Info::of(&f).unwrap();
+        assert_eq!(info.modality,"CT");assert_eq!(info.intercept,-1024.0);
+        let frame=px::frame(&f,&info,0).unwrap();
+        let px::Frame::Gray(values)=&frame else{panic!("fixture non monocromatica")};
+        let hu:Vec<_>=values.iter().map(|v|*v as f64-1024.0).collect();
+        assert_eq!(px::effective_window(&info,&hu,px::Window::File),(40.0,400.0));
+        assert_eq!(px::effective_window(&info,&hu,px::BONE),(400.0,1800.0));
+        assert_eq!(px::effective_window(&info,&hu,px::Window::Auto),(992.0,4032.0));
         let (png,meta)=anteprima(&path,&Scelta::default(),&dir).unwrap();
         assert_eq!(serde_json::from_str::<Info>(&meta).unwrap().frames,2);
         let first=image::open(&png).unwrap().to_rgba8();
         anteprima(&path,&Scelta{frame:1,..Default::default()},&dir).unwrap();
-        let second=image::open(&png).unwrap().to_rgba8();assert_ne!(first,second);
+        let second=image::open(&png).unwrap().to_rgba8();
+        assert!(first.as_raw()!=second.as_raw(),"cambiare frame deve cambiare i pixel");
+        assert_eq!(first.get_pixel(512,128).0,[255,255,255,255]);
+        assert_eq!(second.get_pixel(512,128).0,[0,0,0,255]);
         anteprima(&path,&Scelta{finestra:2,..Default::default()},&dir).unwrap();
-        assert_ne!(first,image::open(&png).unwrap().to_rgba8());
+        let bone=image::open(&png).unwrap().to_rgba8();
+        let expected=px::render(&info,&frame,px::BONE).thumbnail(1024,1024).to_rgba8();
+        let auto=px::render(&info,&frame,px::Window::Auto).thumbnail(1024,1024).to_rgba8();
+        assert!(bone.as_raw()==expected.as_raw(),"la scelta Osso deve applicare il preset del core");
+        assert!(first.as_raw()!=bone.as_raw(),"file e Osso devono produrre pixel diversi");
+        assert!(first.as_raw()!=auto.as_raw()&&bone.as_raw()!=auto.as_raw(),"né file né Osso devono cadere sull'auto-window");
         assert!(anteprima(&path,&Scelta{frame:99,..Default::default()},&dir).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
