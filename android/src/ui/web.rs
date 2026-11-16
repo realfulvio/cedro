@@ -134,6 +134,43 @@ mod tests {
         assert_eq!(azione,if cfg!(feature="youtube"){"web-video"}else{"web-altra-app"});
     }
     #[test]
+    fn recupero_batch_con_mtime_riscritto_e_ricevuta_pronta(){
+        use crate::publication::{Identita,Registro};
+        let root=crate::storage::nuova_cartella(&std::env::temp_dir()).unwrap();
+        let files=[root.join("a.wav"),root.join("b.wav")];
+        for (i,file) in files.iter().enumerate(){std::fs::write(file,[i as u8;4]).unwrap();}
+        let identity=Identita{chiave:"batch-mtime".into(),origine:"raccolta".into(),etichetta:"Testo".into(),conv:false,quando:1,sorgente:None,caso:"C-1".into()};
+        let batch=crate::web::Batch::prepara(&root,&files,&identity,Default::default(),Default::default()).unwrap();
+        let mut app=App::new(ThemeId::Cedro);let tasks=app.ricevi_batch(&batch);
+        assert_eq!(tasks.len(),2);let before_completion=app.serializza();
+        let child=&batch.figli[0];let txt=child.out.join("a.txt");std::fs::write(&txt,b"testo completato").unwrap();
+        let mut receipt=Registro::prepara(&child.out,&txt,child.identita.clone(),"ok".into()).unwrap();
+        receipt.salva(&child.out).unwrap();
+        let published=crate::publication::legacy(&txt,&root.join("pubblici"),0,&std::sync::atomic::AtomicBool::new(false),&mut |d|receipt.prenota(&child.out,0,d)).unwrap();
+        receipt.completato(&child.out,0,published.clone()).unwrap();
+        // Crash dopo il commit della ricevuta, prima della consegna UI e di batch.finisci.
+        let prima=std::time::SystemTime::now();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        let mut recovered=crate::web::Batch::leggi(&root).unwrap();recovered.materializza().unwrap();
+        assert!(std::fs::metadata(&child.out).unwrap().modified().unwrap()>=prima);
+        // Il vecchio filtro mtime < prima escluderebbe proprio questo figlio.
+        recovered.recupera_ricevute(|dir|Registro::leggi(dir).ok());
+        assert_eq!(recovered.ricevute.len(),1);
+        let mut restarted=App::new(ThemeId::Cedro);restarted.carica_lavori(&before_completion);
+        let pending=restarted.ricevi_batch(&recovered);assert_eq!(pending.len(),1);assert_eq!(pending[0].1,1);
+        let id=*restarted.chiavi_lavori.iter().find(|(_,key)|*key==&child.identita.chiave).unwrap().0;
+        assert!(matches!(&restarted.lavori.iter().find(|l|l.id==id).unwrap().stato,Stato::Fatto{path,..} if path==&published.path));
+        assert_eq!(restarted.uscite[&id][0].0,published.path);
+        assert_eq!(restarted.lavori.iter().find(|l|l.id==id).unwrap().sorgente.as_ref(),Some(&child.source));
+        assert!(restarted.ricevi_batch(&recovered).is_empty());
+        // Anche una ricevuta arrivata fra la registrazione e l'avvio produce un completamento.
+        let mut late=App::new(ThemeId::Cedro);let late_tasks=late.ricevi_batch(&batch);
+        late.completa(Completamento::recuperato(late_tasks[0].0,Registro::leggi(&child.out).unwrap()));
+        assert!(matches!(late.lavori.iter().find(|l|l.id==late_tasks[0].0).unwrap().stato,Stato::Fatto{..}));
+        for (i,child) in recovered.figli.iter().enumerate(){assert_eq!(std::fs::read(&child.source).unwrap(),[i as u8;4]);}
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn consegna_batch_ripetuta_crash_e_tombstone(){
         let identity=crate::publication::Identita{chiave:"batch/audio-0".into(),origine:"a.wav".into(),etichetta:"Testo".into(),conv:false,quando:1,sorgente:Some("/privato/0/.revisione/a.wav".into()),caso:"C-1".into()};
         let child=crate::web::Figlio{identita:identity,origine:"/privato/a.wav".into(),out:"/privato/0".into(),source:"/privato/0/.revisione/a.wav".into(),fine:false};
