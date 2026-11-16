@@ -222,6 +222,8 @@ pub enum CasaAz {
     RecenteVai(usize),
     /// Semplice (falso) o Completa (vero).
     Vista(bool),
+    /// Salta al gruppo, mantenendo la barra delle famiglie visibile.
+    Famiglia(&'static str),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -266,11 +268,12 @@ pub struct Casa {
     pub inizio: bool,
     /// Catalogo delle azioni Labs reali; punto di ingresso per il workspace dei task successivi.
     pub laboratorio: bool,
+    famiglie_y: HashMap<&'static str,f32>,
 }
 
 impl Default for Casa {
     fn default() -> Self {
-        Casa { att: Att::Conv, categoria: Kind::Image, coda: Vec::new(), operazione: HashMap::new(), valori: HashMap::new(), elenco: None, passo: 0, mostrato: 0, link: String::new(), web: 0, guida: false, fx: [0.0; 2], fx_max: [0.0; 2], segui: None, tutti: false, elenco_scorri: 0.0, elenco_max: 0.0, inizio: true, laboratorio: false }
+        Casa { att: Att::Conv, categoria: Kind::Image, coda: Vec::new(), operazione: HashMap::new(), valori: HashMap::new(), elenco: None, passo: 0, mostrato: 0, link: String::new(), web: 0, guida: false, fx: [0.0; 2], fx_max: [0.0; 2], segui: None, tutti: false, elenco_scorri: 0.0, elenco_max: 0.0, inizio: true, laboratorio: false, famiglie_y: HashMap::new() }
     }
 }
 
@@ -607,6 +610,9 @@ impl App {
                 }
                 return self.azione_casa(CasaAz::Recente(i));
             }
+            CasaAz::Famiglia(nome) => {
+                if let Some(y)=self.casa.famiglie_y.get(nome) {self.scorri=(*y).clamp(0.0,self.scorri_max);}
+            }
             CasaAz::Vista(completa) => {
                 self.imp.simple = !completa;
                 return Effetto::SalvaImpostazioni;
@@ -730,6 +736,11 @@ impl App {
     /// Per le fotografie della `vista`: Semplice o Completa.
     pub fn vista_completa(&mut self, completa: bool) {
         self.imp.simple = !completa;
+    }
+
+    /// Posizione verticale iniziale per le fotografie della vista; il disegno la limita al contenuto.
+    pub fn vista_scorri(&mut self, posizione: f32) {
+        self.scorri = if posizione.is_finite() { posizione.max(0.0) } else { 0.0 };
     }
 
     /// Per le fotografie della `vista`: il foglio dei formati aperto.

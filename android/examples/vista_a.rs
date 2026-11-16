@@ -36,6 +36,7 @@ fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, sc
             app.scelta = cedro::conversioni::formats(Kind::Image).iter().position(|f| f.id == "pdf");
         }
         10 => { app.grandi = true; }
+        16 => { app.vista_nav(1);app.grandi=true;app.vista_scorri(750.0); }
         11..=15 => {
             app.vista_nav(6);
             let src=if scene==13 {
@@ -54,11 +55,11 @@ fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, sc
                 Err(e)=>app.labs.errore=e,
             }
             let _=std::fs::remove_dir_all(temp);
-            if scene==13 {app.scorri=260.0;let _=std::fs::remove_file(&src);}
+            if scene==13 {app.vista_scorri(260.0);let _=std::fs::remove_file(&src);}
             if scene==14 {
                 app.labs.codice="V-2026-0457".into();app.labs.nota="Nota fixture, esclusa dai nomi".into();app.labs.caso_aperto=true;
             }
-            if scene==15 {app.grandi=true;app.scorri=300.0;}
+            if scene==15 {app.grandi=true;app.vista_scorri(300.0);}
         }
         _ => {}
     }
@@ -75,7 +76,7 @@ fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, sc
 fn main() {
     let out = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "/tmp/vista-a".into()));
     std::fs::create_dir_all(&out).unwrap();
-    let scenes = ["inizio", "converti", "pdf", "trascrivi", "web", "firma", "labs", "lavori", "impostazioni", "condividi", "grandi", "labs-livello", "labs-czi", "labs-dicom", "caso", "labs-grandi"];
+    let scenes = ["inizio", "converti", "pdf", "trascrivi", "web", "firma", "labs", "lavori", "impostazioni", "condividi", "grandi", "labs-livello", "labs-czi", "labs-dicom", "caso", "labs-grandi", "famiglie-grandi"];
     for lang in [Lang::It, Lang::De, Lang::Pt] {
         for (w, h) in [(360.0, 800.0), (360.0, 640.0), (800.0, 400.0)] {
             for (scene, name) in scenes.iter().enumerate() {
