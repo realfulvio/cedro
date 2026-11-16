@@ -531,6 +531,7 @@ const FETCH_TRIES: u32 = 8;
 /// Ogni 10% scrive a che punto è. Ritorna lo SHA-256 del file scaricato.
 pub(crate) fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, what: &str, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<String, String> {
     // La riga di stato in alto mostra il componente che arriva.
+    crate::componenti::prima_download(what,megabytes as u64*1_000_000)?;
     let job = crate::componenti::Lavoro::scarica(what);
     let result = fetch_inner(url, dest, expected_sha, megabytes, what, sink, cancel);
     if let Err(e) = &result {

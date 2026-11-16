@@ -20,10 +20,14 @@ pub struct Richiesta {
     pub sommario: Option<(Vec<String>,Vec<String>)>,
     #[serde(default)]
     pub anteprima: Option<crate::labs::Scelta>,
+    #[serde(default)]
+    pub web:Option<crate::web::Scelte>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum Evento {
+    Scarica(String,u64),
+    Componente(Option<crate::web::Componente>),
     Progresso(u32),
     Passo(String, String),
     Fine(Result<(PathBuf, String), String>),
@@ -52,6 +56,21 @@ fn emetti(e: Evento) {
 #[cfg(target_os = "android")]
 #[no_mangle]
 pub extern "C" fn cedro_lavoro_main() -> i32 {
+    cedro::componenti::osserva(Some(std::sync::Arc::new(|s|emetti(Evento::Componente(s.map(crate::web::Componente::da_core))))));
+    cedro::componenti::verifica_download(Some(std::sync::Arc::new(|nome,bytes|{
+        use std::os::fd::FromRawFd;
+        use std::io::BufRead;
+        static PERMESSO:std::sync::Mutex<()>=std::sync::Mutex::new(());
+        let _lock=PERMESSO.lock().unwrap_or_else(|e|e.into_inner());
+        let fd:i32=std::env::var("CEDRO_JOB_FD").map_err(|e|e.to_string())?.parse::<i32>().map_err(|e|e.to_string())?;
+        let dup=unsafe{libc::dup(fd)};
+        if dup<0{return Err("Canale del motore non disponibile".into());}
+        let file=unsafe{std::fs::File::from_raw_fd(dup)};
+        emetti(Evento::Scarica(nome.into(),bytes));
+        let mut line=String::new();
+        std::io::BufReader::new(file).read_line(&mut line).map_err(|e|e.to_string())?;
+        serde_json::from_str::<Result<(),String>>(&line).map_err(|e|e.to_string())?
+    })));
     let r = std::panic::catch_unwind(|| {
         use std::io::Read;
         let request: Richiesta = serde_json::from_reader(std::io::stdin().take(4 * 1024 * 1024)).map_err(|e| e.to_string())?;
@@ -114,12 +133,18 @@ fn esegui(mut r: Richiesta) -> Result<(PathBuf, String), String> {
         let text=r.azione=="web-testo";
         let want=match r.azione.as_str(){"web-audio"|"web-testo"=>Want::Audio,"web-leggero"=>Want::Light,_=>Want::Video};
         let media=resolve(&r.file.to_string_lossy(),want)?;
-        let convert=!text&&((want==Want::Audio&&!media.audio)||(want==Want::Light&&media.size.is_none_or(|n|n>30_000_000)&&!media.url.contains("512kb")));
+        let scelte=r.web.clone().unwrap_or_default();
+        r.qualita=if want==Want::Audio {[95,82,55][scelte.audio_quality.min(2) as usize]}else{scelte.media_quality};
+        r.voce=scelte.voce;
+        r.opts.video_height=(scelte.altezza>0).then_some(scelte.altezza);
+        r.opts.normalize=scelte.normalize;
+        let convert=!text&&(want==Want::Audio||scelte.altezza>0);
         let download_dir=r.out.join(".scaricato");
         let file=download(&media,&download_dir,&|f|emetti(Evento::Progresso((f*600.0) as u32)),&std::sync::atomic::AtomicBool::new(false))?;
-        if !text&&!convert{return sposta_download(&file,&r.out,false).map(|p|(p,media.title));}
+        if !text&&!convert{return crate::web::nomina(&file,&r.out,&r.opts).map(|p|(p,media.title));}
         r.file=if text{sposta_download(&file,&r.out,true)?}else{file};
         converti_web(&mut r,text,want==Want::Audio);
+        if !text&&want==Want::Audio {r.azione=scelte.audio_format;}
     }
     if r.azione == "trascrivi" {
         if r.file.starts_with(r.out.join(".revisione")){
@@ -161,7 +186,7 @@ fn esegui(mut r: Richiesta) -> Result<(PathBuf, String), String> {
 }
 
 #[cfg(target_os = "android")]
-pub fn avvia(libs: &std::path::Path, r: Richiesta, cancel: &std::sync::atomic::AtomicBool, inputs: Vec<std::sync::Arc<std::fs::File>>, evento: impl Fn(Evento)) -> Result<(PathBuf, String), String> {
+pub fn avvia(libs: &std::path::Path, r: Richiesta, cancel: &std::sync::atomic::AtomicBool, inputs: Vec<std::sync::Arc<std::fs::File>>, permesso:impl Fn(&str,u64)->Result<(),String>, evento: impl Fn(Evento)) -> Result<(PathBuf, String), String> {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::process::CommandExt;
     use std::process::{Command, Stdio};
@@ -200,6 +225,7 @@ pub fn avvia(libs: &std::path::Path, r: Richiesta, cancel: &std::sync::atomic::A
     stdin.write_all(&data).map_err(|e| e.to_string())?;
     drop(stdin);
     drop(write_events);
+    let mut risposte=events.try_clone().map_err(|e|e.to_string())?;
     let stdout = events;
     let (tx, rx) = std::sync::mpsc::sync_channel(32);
     let reader = std::thread::spawn(move || {
@@ -213,6 +239,10 @@ pub fn avvia(libs: &std::path::Path, r: Richiesta, cancel: &std::sync::atomic::A
     let result = loop {
         if cancel.load(Ordering::Acquire) { break Err("Annullato".into()); }
         match rx.recv_timeout(std::time::Duration::from_millis(100)) {
+            Ok(Evento::Scarica(nome,bytes))=>{
+                let risposta=permesso(&nome,bytes);
+                if serde_json::to_writer(&mut risposte,&risposta).is_err()||writeln!(risposte).is_err(){break Err("Canale del motore non disponibile".into());}
+            },
             Ok(Evento::Fine(r)) => break r,
             Ok(e) => evento(e),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {},
@@ -232,13 +262,13 @@ mod tests {
     fn copia_anonima_micro_non_legge_il_file_e_pacchetto_contiene_i_dati() {
         let dir=crate::storage::nuova_cartella(&std::env::temp_dir()).unwrap();
         for ext in ["czi","nd2","lif"] {
-            let r=Richiesta{file:dir.join(format!("inesistente.{ext}")),azione:"strip".into(),qualita:82,voce:Default::default(),out:dir.clone(),opts:Default::default(),unisci:vec![],sommario:None,anteprima:None};
+            let r=Richiesta{file:dir.join(format!("inesistente.{ext}")),azione:"strip".into(),qualita:82,voce:Default::default(),out:dir.clone(),opts:Default::default(),unisci:vec![],sommario:None,anteprima:None,web:None};
             assert!(esegui(r).unwrap_err().contains("non è supportata"));
         }
         let a=dir.join("a.txt");let b=dir.join("b.txt");
         std::fs::write(&a,b"a").unwrap();std::fs::write(&b,b"b").unwrap();
         let out=dir.join("uscite");std::fs::create_dir_all(&out).unwrap();
-        let r=Richiesta{file:a.clone(),azione:"package".into(),qualita:82,voce:Default::default(),out,opts:cedro::caso::opzioni(Some("C-1"),Default::default()),unisci:vec![(a,None),(b,None)],sommario:None,anteprima:None};
+        let r=Richiesta{file:a.clone(),azione:"package".into(),qualita:82,voce:Default::default(),out,opts:cedro::caso::opzioni(Some("C-1"),Default::default()),unisci:vec![(a,None),(b,None)],sommario:None,anteprima:None,web:None};
         let (zip,_)=esegui(r).unwrap();
         assert!(zip.file_name().unwrap().to_string_lossy().contains("C-1"));
         let check=cedro::pacchetto::verifica(&zip,&|_|{}).unwrap();
@@ -251,7 +281,7 @@ mod tests {
     fn qualita_web_indipendente_da_modello_e_voci(){
         for code in [0,1,2,16,33,66]{
             for (text,audio,action) in [(false,true,"mp3"),(false,false,"mp4"),(true,true,"trascrivi")]{
-                let mut r=Richiesta{file:"link".into(),azione:"web-audio".into(),qualita:82,voce:Voce::da_codice(code),out:"out".into(),opts:Default::default(),unisci:vec![],sommario:None,anteprima:None};
+                let mut r=Richiesta{file:"link".into(),azione:"web-audio".into(),qualita:82,voce:Voce::da_codice(code),out:"out".into(),opts:Default::default(),unisci:vec![],sommario:None,anteprima:None,web:None};
                 converti_web(&mut r,text,audio);
                 let r:Richiesta=serde_json::from_slice(&serde_json::to_vec(&r).unwrap()).unwrap();
                 assert_eq!(r.qualita,82);assert_eq!(r.voce,Voce::da_codice(code));assert_eq!(r.azione,action);

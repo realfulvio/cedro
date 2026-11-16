@@ -257,7 +257,7 @@ mod tests {
         assert_eq!(opts.name_template.as_deref(),Some(cedro::caso::MODELLO));
         assert!(!serde_json::to_string(&opts).unwrap().contains("nota privata"));
         app.labs.caso=None;
-        app.completa(Completamento{id,stato:Stato::Fatto{path:"/tmp/a.png".into(),nome:"a.png".into(),msg:"ok".into()},uscite:Some(vec![("/tmp/a.png".into(),"a.png".into(),None),("/tmp/b.png".into(),"b.png".into(),None)]),sorgente:None});
+        app.completa(Completamento{batch:None,id,stato:Stato::Fatto{path:"/tmp/a.png".into(),nome:"a.png".into(),msg:"ok".into()},uscite:Some(vec![("/tmp/a.png".into(),"a.png".into(),None),("/tmp/b.png".into(),"b.png".into(),None)]),sorgente:None});
         let identity=app.identita(id).unwrap();assert_eq!(identity.caso,"V-2026-0457");
         let json=app.serializza();assert!(!json.contains("nota privata"));
         let mut back=App::new(ThemeId::Cedro);back.carica_lavori(&json);
