@@ -17,6 +17,7 @@ use serde_json::{json, Value};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 mod decode;
+mod parlato;
 mod rifinitura;
 mod voci;
 
@@ -24,6 +25,16 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--version") {
         println!("{}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+    // Per le prove: quante finestre di parlato trova il rilevatore in ogni file indicato.
+    if let Some(i) = args.iter().position(|a| a == "--parlato") {
+        for f in &args[i + 1..] {
+            match decode::to_16k_mono(Path::new(f)) {
+                Ok(s) => println!("{}\t{:.1}\t{}\t{}", parlato::moving_windows(&s), parlato::best_range(&s), s.len() as f64 / decode::RATE as f64, f),
+                Err(_) => println!("errore\t-\t{f}"),
+            }
+        }
         return;
     }
     let Some(model) = value(&args, "--model") else {
@@ -146,6 +157,12 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
         return Err(Failure::Other("l'audio è vuoto".into()));
     }
     emit(json!({"e": "audio", "secs": samples.len() as f64 / decode::RATE as f64, "ms": begin.elapsed().as_millis() as u64}));
+    // Silenzio, ronzii, soffi, toni: senza parlato whisper inventa frasi (e con la lingua automatica sceglie lingue
+    // a caso). Niente frasi: Cedro dice «nessun parlato riconosciuto».
+    if !parlato::has_speech(&samples) {
+        emit(json!({"e": "nospeech"}));
+        return Ok(if wanted == "auto" { "it".to_string() } else { wanted.to_string() });
+    }
     if let Some(wanted) = requested_speakers(request) {
         diarize(&samples, wanted, threads, voices);
     }

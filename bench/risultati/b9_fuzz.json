@@ -1,0 +1,10 @@
+{
+ "difetti": 0,
+ "elenco_difetti": [],
+ "esiti": {
+  "errore_pulito": 640,
+  "ok": 360
+ },
+ "mutati": 1000,
+ "semi": 59
+}
