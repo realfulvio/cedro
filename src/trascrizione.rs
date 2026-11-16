@@ -548,6 +548,7 @@ fn fetch_inner(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u3
         std::fs::create_dir_all(dir).map_err(|e| format!("cartella {} non creata: {e}", dir.display()))?;
     }
     let part = dest.with_extension("part");
+    crate::componenti::prepara_parziale(&part)?;
     // Quello che c'è già nel .part (download interrotto la volta prima) si tiene: si rilegge per lo SHA-256.
     let mut hasher = Sha256::new();
     let mut done = 0u64;
@@ -629,6 +630,8 @@ fn fetch_inner(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u3
         let mut reader = response.into_reader();
         let before = done;
         let outcome: Result<(), String> = loop {
+            #[cfg(target_os="android")]
+            crate::componenti::continua_download(what)?;
             if cancel.load(Ordering::Relaxed) {
                 return Err(CANCELLED.to_string());
             }
