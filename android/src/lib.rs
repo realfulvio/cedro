@@ -2,6 +2,8 @@
 //! provare anche sul computer, vedi `examples/vista.rs`); `glue` è la parte Android.
 
 pub mod ui;
+pub mod worker;
+pub mod storage;
 
 #[cfg(target_os = "android")]
 mod glue;

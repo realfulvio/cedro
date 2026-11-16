@@ -6,6 +6,9 @@ license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
 publish = false
 
+[features]
+android-worker = ["dep:serde"]
+
 [dependencies]
 # Le codifiche a 8 bit e a due byte dei vecchi formati (RTF, DOC).
 encoding_rs = "0.8"
@@ -31,6 +34,7 @@ oxideav-mpeg4video = "0.1"
 rten = "0.28"
 rten-simd = "0.28"
 serde_json = "1"
+serde = { version = "1", features = ["derive"], optional = true }
 sha2 = "0.11"
 symphonia = { version = "0.6", default-features = false, features = ["opt-simd", "id3v1", "id3v2", "ape", "mp3", "wav", "flac", "vorbis", "pcm", "aac", "isomp4", "ogg", "mkv", "aiff", "caf", "adpcm"] }
 ureq = "2"

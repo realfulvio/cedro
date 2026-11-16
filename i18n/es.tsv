@@ -2520,3 +2520,42 @@ Crea {}	Crear {}
 Uso quotidiano	Uso cotidiano
 Alta efficienza	Alta eficiencia
 Grafica e scambio	Gráficos e intercambio
+
+# Android: importazione, lavori e recupero dei risultati
+Importazione	Importación
+File importati	Archivos importados
+Importazione interrotta	Importación interrumpida
+Annullamento…	Cancelando…
+Da salvare	Pendiente de guardar
+Copia in Cedro	Copia en Cedro
+Salvataggio incompleto: copie disponibili in Cedro	Guardado incompleto: copias disponibles en Cedro
+Pubblicazione annullata: le copie complete restano in Cedro	Publicación cancelada: las copias completas quedan en Cedro
+Interrotto dalla chiusura di Cedro: avvia di nuovo il lavoro	Interrumpido al cerrar Cedro: inicia la tarea de nuevo
+Il motore si è interrotto	El motor se ha interrumpido
+Risultati recuperati: salvali o condividili	Resultados recuperados: guárdalos o compártelos
+Recuperato dopo un’interruzione	Recuperado tras una interrupción
+Riassunto pronto in Rivedi	Resumen listo en Revisar
+Riassunto non leggibile	No se puede leer el resumen
+Spazio insufficiente per importare il file	No hay espacio suficiente para importar el archivo
+File non disponibile: sceglilo di nuovo	Archivo no disponible: selecciónalo de nuevo
+Cartella troppo annidata	Carpeta demasiado anidada
+Impossibile aprire il file condiviso	No se puede abrir el archivo compartido
+Descriptor SAF non valido	Descriptor SAF no válido
+Indirizzo SAF assente	Falta la dirección SAF
+Cartella SAF senza identificatore	Carpeta SAF sin identificador
+Cartella assente	Falta la carpeta
+Nome duplicato nella cartella: {nome}	Nombre duplicado en la carpeta: {nome}
+Risultato fuori dalla cartella del lavoro	Resultado fuera de la carpeta de la tarea
+Il motore non è in questo APK	El motor no está incluido en este APK
+Il motore non parte: {e}	El motor no arranca: {e}
+Troppe opzioni per il lavoro	Demasiadas opciones para la tarea
+Canale del motore non disponibile	Canal del motor no disponible
+Risposta del motore non disponibile	Respuesta del motor no disponible
+MediaStore non ha completato il salvataggio	MediaStore no ha completado el guardado
+Nessun file scelto	Ningún archivo seleccionado
+File non leggibile	No se puede leer el archivo
+File troppo grande	Archivo demasiado grande
+Aspetto che finisca l’altro lavoro…	Esperando a que termine la otra tarea…
+Memoria insufficiente per verificare il file originale	Memoria insuficiente para verificar el archivo original
+Il provider richiede una copia · spazio disponibile: {spazio}	El proveedor requiere una copia · espacio disponible: {spazio}
+Copia privata · spazio disponibile: {spazio}	Copia privada · espacio disponible: {spazio}

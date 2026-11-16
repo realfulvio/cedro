@@ -606,6 +606,7 @@ dependencies = [
  "rten-tensor",
  "rust_xlsxwriter",
  "ruzstd",
+ "serde",
  "serde_json",
  "sha1",
  "sha2",
@@ -636,6 +637,9 @@ dependencies = [
  "cedro",
  "jni 0.21.1",
  "log",
+ "libc",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
