@@ -40,18 +40,13 @@ pub use rivedi::{da_controllare, FoglioRiv};
 
 pub type R = (f32, f32, f32, f32);
 
-/// I temi che si possono scegliere (quello del Comune è dell'edizione dell'ente, non del telefono).
-pub const TEMI: [ThemeId; 9] = [
-    ThemeId::Cedro,
-    ThemeId::CedroNotte,
-    ThemeId::CedroBosco,
-    ThemeId::CedroCarta,
-    ThemeId::WindowsEssenziale,
-    ThemeId::PercorsoGuidato,
-    ThemeId::CedroCompatto,
-    ThemeId::BancoDiLavoro,
-    ThemeId::DocumentoAlCentro,
-];
+/// Catalogo Android esplicito, indipendente dal sistema usato per compilare il renderer.
+pub const TEMI: [ThemeId; 9] = cedro::ui::theme::ANDROID_THEMES;
+
+/// La chiave salvata in tema.txt, valida anche nelle anteprime e nei test su host.
+pub fn tema_da_chiave(key: &str) -> ThemeId {
+    ThemeId::from_android_key(key)
+}
 /// Le prime quattro sono le tinte del Cedro di partenza; le altre i temi di prima.
 const TINTE: usize = 4;
 
@@ -2439,5 +2434,36 @@ mod lavori_regressioni {
         assert!(restored.lavori.iter().any(|l|matches!(&l.stato,Stato::Errore(e) if e=="errore\ncon dettagli\te tab")));
         assert_eq!(restored.uscite.values().next().unwrap().len(),2);
         assert!(app.lavori.iter().any(|l|l.id==attivo&&l.stato==Stato::InCorso));
+    }
+}
+
+#[cfg(test)]
+mod temi_regressioni {
+    use super::*;
+    use cedro::ui::gfx::{Fonts, GlyphCache};
+
+    #[test]
+    fn android_keeps_legacy_theme_selection_save_reload_and_host_rendering() {
+        assert_eq!(TEMI.map(ThemeId::key), ["cedro", "cedro-notte", "cedro-bosco", "cedro-carta", "windows-essenziale", "percorso-guidato", "cedro-compatto", "banco-di-lavoro", "documento-al-centro"]);
+        let mut cache = GlyphCache::new();
+        for (i, theme) in TEMI.into_iter().enumerate() {
+            let mut app = App::new(ThemeId::Cedro);
+            let saved_key = match app.attiva(Azione::Tema(i)) {
+                Effetto::SalvaTema(selected) => selected.key(),
+                _ => panic!("la scelta del tema deve richiedere il salvataggio"),
+            };
+            assert_eq!(saved_key, theme.key());
+            let mut restored = App::new(tema_da_chiave(&format!(" {saved_key}\n")));
+            assert_eq!(restored.tema, theme);
+            restored.anim.calmo = true;
+            restored.vai_casa();
+            let mut painter = Painter::new(360, 800, 1.0, Fonts::for_theme(restored.tema), &mut cache);
+            restored.disegna(&mut painter, 360.0, 800.0);
+            assert_eq!(restored.tema, theme);
+            assert!(!restored.colpi.is_empty(), "controlli del tema {saved_key}");
+        }
+        for key in ["bondeno", "cedro-labs", "sconosciuto", ""] {
+            assert_eq!(tema_da_chiave(key), ThemeId::Cedro);
+        }
     }
 }

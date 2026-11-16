@@ -12,7 +12,7 @@ fn main() {
     }
     let out = std::path::PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "foto".into()));
     std::fs::create_dir_all(&out).unwrap();
-    let mut a = Aspetto::new(ThemeId::PercorsoGuidato, false, Arc::new(|| {}));
+    let mut a = Aspetto::new(ThemeId::Cedro, false, Arc::new(|| {}));
     std::thread::sleep(Duration::from_secs(14));
     let mut cache = GlyphCache::new();
     for (name, w, h) in [("largo", 560u32, 520u32), ("stretto", 420, 520)] {

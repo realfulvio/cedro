@@ -26,7 +26,18 @@ pub enum ThemeId {
     CedroLabs,
 }
 
-pub const THEMES: [ThemeId; 11] = [
+/// I soli temi selezionabili sul desktop (Linux e Windows).
+pub const THEMES: [ThemeId; 5] = [
+    ThemeId::Cedro,
+    ThemeId::CedroNotte,
+    ThemeId::CedroBosco,
+    ThemeId::CedroCarta,
+    ThemeId::CedroLabs,
+];
+
+/// Catalogo Android, anche quando il renderer del telefono viene compilato su host desktop.
+/// I cinque aspetti precedenti restano disponibili sul telefono; Bondeno e Labs sono esclusi.
+pub const ANDROID_THEMES: [ThemeId; 9] = [
     ThemeId::Cedro,
     ThemeId::CedroNotte,
     ThemeId::CedroBosco,
@@ -36,8 +47,6 @@ pub const THEMES: [ThemeId; 11] = [
     ThemeId::CedroCompatto,
     ThemeId::BancoDiLavoro,
     ThemeId::DocumentoAlCentro,
-    ThemeId::Bondeno,
-    ThemeId::CedroLabs,
 ];
 
 impl ThemeId {
@@ -58,9 +67,14 @@ impl ThemeId {
         }
     }
 
-    /// Un valore sconosciuto (o vuoto) è il Cedro di partenza: l'avvio non si blocca mai.
+    /// Ingresso desktop: temi ritirati, valori sconosciuti e vuoti diventano Melanzana.
     pub fn from_key(key: &str) -> ThemeId {
         THEMES.into_iter().find(|t| t.key() == key.trim()).unwrap_or(ThemeId::Cedro)
+    }
+
+    /// Ingresso Android esplicito: conserva i temi del telefono anche nei test su Linux/Windows.
+    pub fn from_android_key(key: &str) -> ThemeId {
+        ANDROID_THEMES.into_iter().find(|t| t.key() == key.trim()).unwrap_or(ThemeId::Cedro)
     }
 
     /// Il Cedro di partenza, in una delle sue quattro tinte.
@@ -95,7 +109,7 @@ impl ThemeId {
             ThemeId::BancoDiLavoro => "Banco di lavoro",
             ThemeId::DocumentoAlCentro => "Documento al centro",
             ThemeId::Bondeno => "Comune di Bondeno",
-            ThemeId::CedroLabs => "Cedro 4 Labs",
+            ThemeId::CedroLabs => "Cedro for Labs",
         }
     }
 
@@ -511,6 +525,20 @@ mod tests {
         assert_eq!(ThemeId::from_key("ruota-e-dettagli"), ThemeId::Cedro);
         assert_eq!(ThemeId::from_key(""), ThemeId::Cedro);
         assert!(THEMES.iter().filter(|t| t.is_cedro()).count() == 4);
+    }
+
+    #[test]
+    fn desktop_retires_legacy_themes_without_changing_android_keys() {
+        assert_eq!(THEMES.map(ThemeId::key), ["cedro", "cedro-notte", "cedro-bosco", "cedro-carta", "cedro-labs"]);
+        for key in ["windows-essenziale", "percorso-guidato", "cedro-compatto", "banco-di-lavoro", "documento-al-centro", "bondeno"] {
+            assert_eq!(ThemeId::from_key(key), ThemeId::Cedro, "{key}");
+        }
+        for theme in ANDROID_THEMES {
+            assert_eq!(ThemeId::from_android_key(&format!(" {}\n", theme.key())), theme);
+        }
+        for key in ["", "sconosciuto", "bondeno", "cedro-labs"] {
+            assert_eq!(ThemeId::from_android_key(key), ThemeId::Cedro);
+        }
     }
 
     #[test]
