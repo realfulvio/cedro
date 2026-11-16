@@ -159,6 +159,10 @@ pub enum Azione {
     Sorgente(Sorgente),
     Recente(usize),
     Apri(u32),
+    Annulla(u32),
+    ApriUscita(u32, usize),
+    CondividiUscita(u32, usize),
+    ErroreUscita(u32, usize),
     Condividi(u32),
     Svuota,
     /// Le schermate dei PDF.
@@ -193,6 +197,7 @@ pub struct Compito {
 }
 
 pub enum Effetto {
+    Annulla(u32),
     Niente,
     /// Più lavori, uno dopo l'altro (il pulsante grande della finestra principale).
     Tanti(Vec<Compito>),
@@ -553,6 +558,8 @@ pub struct App {
     /// Quante persone parlano (trascrizione): 0 Automatico, 1 una sola (niente riconoscimento), 2..=8.
     pub voci: u8,
     pub lavori: Vec<Lavoro>,
+    pub uscite: std::collections::HashMap<u32, Vec<(PathBuf, String, Option<String>)>>,
+    annullamenti: std::collections::HashSet<u32>,
     /// L'ultimo errore copiato: la sua icona diventa una spunta.
     copiato: Option<u32>,
     pub recenti: Vec<Recente>,
@@ -646,6 +653,8 @@ impl App {
             modello: modello_iniziale(),
             voci: 0,
             lavori: Vec::new(),
+            uscite: Default::default(),
+            annullamenti: Default::default(),
             copiato: None,
             recenti: Vec::new(),
             dal_foglio: false,
@@ -711,6 +720,7 @@ impl App {
 
     /// Un lavoro è finito (o fallito).
     pub fn finisce(&mut self, id: u32, stato: Stato) -> Effetto {
+        self.annullamenti.remove(&id);
         self.salvata(id, &stato);
         if let Some(rv) = self.rivedi.as_mut().filter(|rv| rv.riassunto.as_ref().is_some_and(|r| r.0 == id)) {
             rv.riassunto = None;
@@ -745,32 +755,50 @@ impl App {
         (v.len(), medio, nome)
     }
 
-    /// Il cronologico da salvare su disco: i lavori finiti, uno per riga.
+    /// Include gli stati attivi: al riavvio diventano interrotti, mai lavori fantasma.
     pub fn serializza(&self) -> String {
-        let pulisci = |s: &str| s.replace(['\t', '\n'], " ");
-        self.lavori
-            .iter()
-            .filter_map(|l| match &l.stato {
-                Stato::Fatto { path, msg, nome } => Some(format!(
-                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                    l.quando,
-                    pulisci(&l.origine),
-                    pulisci(&l.etichetta),
-                    l.conv as u8,
-                    path.display(),
-                    pulisci(msg),
-                    pulisci(nome),
-                    l.sorgente.as_ref().map(|p| p.display().to_string()).unwrap_or_default(),
-                    l.controlli.map(|n| n.to_string()).unwrap_or_default()
-                )),
-                _ => None,
-            })
-            .take(30)
-            .collect::<Vec<_>>()
-            .join("\n")
+        let rows: Vec<_> = self.lavori.iter().enumerate().filter(|(i,l)|*i<100||l.stato==Stato::InCorso||self.uscite.get(&l.id).is_some_and(|v|v.iter().any(|o|o.2.is_some()))).map(|(_,l)| {
+            let (stato,path,nome,msg)=match &l.stato {
+                Stato::InCorso => ("attivo",PathBuf::new(),String::new(),String::new()),
+                Stato::Errore(e) => ("errore",PathBuf::new(),String::new(),e.clone()),
+                Stato::Fatto {path,nome,msg} => ("fatto",path.clone(),nome.clone(),msg.clone()),
+            };
+            serde_json::json!({"quando":l.quando,"origine":l.origine,"etichetta":l.etichetta,"conv":l.conv,"stato":stato,"path":path,"nome":nome,"msg":msg,"sorgente":l.sorgente,"controlli":l.controlli,"uscite":self.uscite.get(&l.id)})
+        }).collect();
+        serde_json::json!({"versione":2,"lavori":rows}).to_string()
+    }
+
+    pub fn nuova_importazione(&mut self) -> (u32, Arc<AtomicU32>) {
+        let id=self.prossimo; self.prossimo+=1;
+        let prog=Arc::new(AtomicU32::new(u32::MAX));
+        self.lavori.insert(0,Lavoro {id,origine:"Importazione".into(),etichetta:"File".into(),conv:false,inizio:Instant::now(),quando:adesso(),stato:Stato::InCorso,prog:prog.clone(),sorgente:None,controlli:None});
+        (id,prog)
+    }
+
+    pub fn errore_importazione(&mut self, e: String) {
+        let id=self.prossimo; self.prossimo+=1;
+        self.lavori.insert(0,Lavoro {id,origine:"Importazione".into(),etichetta:"File".into(),conv:false,inizio:Instant::now(),quando:adesso(),stato:Stato::Errore(e),prog:Arc::new(AtomicU32::new(1000)),sorgente:None,controlli:None});
+        self.scheda=Scheda::Lavori;
+        self.sopra=Some(Scheda::Lavori);
     }
 
     pub fn carica_lavori(&mut self, testo: &str) {
+        if let Ok(v)=serde_json::from_str::<serde_json::Value>(testo) {
+            if let Some(rows)=v["lavori"].as_array() {
+                for r in rows {
+                    let text=|k: &str|r[k].as_str().unwrap_or_default().to_string();
+                    let id=self.prossimo; self.prossimo+=1;
+                    let stato=match r["stato"].as_str() {
+                        Some("fatto")=>Stato::Fatto {path:PathBuf::from(text("path")),nome:text("nome"),msg:text("msg")},
+                        Some("attivo")=>Stato::Errore("Interrotto dalla chiusura di Cedro: avvia di nuovo il lavoro".into()),
+                        _=>Stato::Errore(text("msg")),
+                    };
+                    if let Ok(outputs)=serde_json::from_value::<Vec<(PathBuf,String,Option<String>)>>(r["uscite"].clone()) { self.uscite.insert(id,outputs); }
+                    self.lavori.push(Lavoro {id,origine:text("origine"),etichetta:text("etichetta"),conv:r["conv"].as_bool().unwrap_or(false),inizio:Instant::now(),quando:r["quando"].as_u64().unwrap_or(0),stato,prog:Arc::new(AtomicU32::new(1000)),sorgente:r["sorgente"].as_str().map(PathBuf::from),controlli:r["controlli"].as_u64().map(|n|n as usize)});
+                }
+            }
+            return;
+        }
         for riga in testo.lines() {
             let c: Vec<&str> = riga.split('\t').collect();
             if c.len() < 6 {
@@ -1227,6 +1255,20 @@ impl App {
                 Some(r) => Effetto::UsaFile(r.path.clone()),
                 None => Effetto::Niente,
             },
+            Azione::Annulla(id) => {
+                if self.lavori.iter().any(|l|l.id==id && l.stato==Stato::InCorso) {
+                    self.annullamenti.insert(id);
+                    Effetto::Annulla(id)
+                } else { Effetto::Niente }
+            }
+            Azione::ErroreUscita(id,i) => match self.uscite.get(&id).and_then(|v|v.get(i)).and_then(|v|v.2.clone()) {Some(e)=>Effetto::Copia(e),None=>Effetto::Niente},
+            Azione::ApriUscita(id,i) | Azione::CondividiUscita(id,i) => {
+                match self.uscite.get(&id).and_then(|v|v.get(i)) {
+                    Some((p,_,_)) if matches!(a,Azione::ApriUscita(..)) => Effetto::Apri(p.clone()),
+                    Some((p,_,_))=>Effetto::Condividi(p.clone()),
+                    None=>Effetto::Niente,
+                }
+            }
             Azione::Apri(id) | Azione::Condividi(id) => {
                 let path = self.lavori.iter().find(|l| l.id == id).and_then(|l| match &l.stato {
                     Stato::Fatto { path, .. } => Some(path.clone()),
@@ -1942,18 +1984,21 @@ impl App {
         let l = self.lavori[k].clone();
         let trascrive = l.sorgente.is_some();
         let alt = match &l.stato {
-            Stato::InCorso if trascrive => 168.0,
-            Stato::InCorso => 92.0,
+            Stato::InCorso if trascrive => 224.0,
+            Stato::InCorso => 148.0,
             // Un link passato a un'altra app: non c'è un file da aprire o condividere.
             Stato::Fatto { path, .. } if path.as_os_str().is_empty() => 70.0,
             Stato::Fatto { .. } if l.sorgente.is_some() && l.controlli.is_some_and(|n| n > 0) => 176.0,
             Stato::Fatto { .. } => 142.0,
             Stato::Errore(_) => 112.0,
         };
-        sollevato(p, pal, self.scuro(), x, y, w, alt, 16.0);
+        let outputs=self.uscite.get(&l.id).cloned().unwrap_or_default();
+        let extra=if outputs.len()>1 || outputs.iter().any(|o|o.2.is_some()) {outputs.len() as f32*82.0} else {0.0};
+        sollevato(p, pal, self.scuro(), x, y, w, alt+extra, 16.0);
         let titolo = if l.conv { format!("{} · {}", l.origine, l.etichetta) } else { format!("{}: {}", l.etichetta, l.origine) };
         let (stato_txt, stato_col) = match &l.stato {
-            Stato::InCorso => ("In corso".to_string(), pal.primary),
+            Stato::InCorso => (if self.annullamenti.contains(&l.id) {"Annullamento…"} else {"In corso"}.to_string(), pal.primary),
+            Stato::Fatto { .. } if outputs.iter().any(|o|o.2.is_some()) => ("Da salvare".to_string(), self.avviso()),
             Stato::Fatto { .. } => ("Fatto".to_string(), pal.ok),
             Stato::Errore(_) => ("Non riuscito".to_string(), pal.bad),
         };
@@ -1962,7 +2007,7 @@ impl App {
         p.text(&nome, x + 14.0, y + 8.0, w - sw - 40.0, 28.0, 16.0, Weight::Semibold, pal.text, Align::Left);
         p.text(&stato_txt, x + w - sw - 14.0, y + 8.0, sw, 28.0, 14.0, Weight::Semibold, stato_col, Align::Right);
         match &l.stato {
-            Stato::InCorso if trascrive => self.avanzamento_trascrizione(p, &l, (x + 12.0, y + 42.0, w - 24.0, alt - 54.0)),
+            Stato::InCorso if trascrive => self.avanzamento_trascrizione(p, &l, (x + 12.0, y + 42.0, w - 24.0, alt - 110.0)),
             Stato::InCorso => {
                 let (bx, by, bw) = (x + 14.0, y + 44.0, w - 28.0);
                 p.rrect(bx, by, bw, 8.0, 4.0, Some(pal.alt), None);
@@ -1978,7 +2023,7 @@ impl App {
                     let sw = bw * 0.38;
                     p.rrect(bx - sw + (bw + sw) * t, by, sw, 8.0, 4.0, Some(pal.primary), None);
                     p.pop_clip();
-                    p.text(&format!("Lavoro in corso da {s} s"), x + 14.0, y + 58.0, w - 28.0, 24.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                    p.text(&self.passi.get(&l.id).cloned().unwrap_or_else(||format!("Lavoro in corso da {s} s")), x + 14.0, y + 58.0, w - 28.0, 24.0, 13.0, Weight::Regular, pal.muted, Align::Left);
                 }
             }
             Stato::Fatto { nome, msg, path } => {
@@ -2028,7 +2073,29 @@ impl App {
                 }
             }
         }
-        alt
+        if l.stato==Stato::InCorso {
+            let rc=(x+14.0,y+alt-58.0,w-28.0,48.0);
+            p.rrect(rc.0,rc.1,rc.2,rc.3,24.0,Some(pal.alt),None);
+            p.text(if self.annullamenti.contains(&l.id) {"Annullamento…"} else {"Annulla"},rc.0,rc.1,rc.2,rc.3,16.0,Weight::Semibold,pal.primary,Align::Center);
+            if let Some(r)=intersezione(rc,vista) { self.colpi.push((Forma::R(r),Azione::Annulla(l.id))); }
+        }
+        if extra>0.0 {
+            for (i,(_,nome,errore)) in outputs.iter().enumerate() {
+                let yy=y+alt+i as f32*82.0;
+                let label=if errore.is_some() {format!("{} · {}",nome,cedro::i18n::tr("Copia in Cedro"))} else {nome.clone()};
+                p.text(&label,x+14.0,yy,w-28.0,24.0,13.0,Weight::Regular,if errore.is_some(){pal.bad}else{pal.muted},Align::Left);
+                let mut actions=vec![(0,"Apri",Azione::ApriUscita(l.id,i)),(1,"Condividi",Azione::CondividiUscita(l.id,i))];
+                if errore.is_some(){actions.push((2,"Copia errore",Azione::ErroreUscita(l.id,i)));}
+                let bw=(w-28.0-10.0*(actions.len() as f32-1.0))/actions.len() as f32;
+                for (k,et,az) in actions {
+                    let rc=(x+14.0+k as f32*(bw+10.0),yy+26.0,bw,48.0);
+                    p.rrect(rc.0,rc.1,rc.2,rc.3,24.0,Some(pal.alt),None);
+                    p.text(et,rc.0,rc.1,rc.2,rc.3,15.0,Weight::Semibold,pal.primary,Align::Center);
+                    if let Some(r)=intersezione(rc,vista) {self.colpi.push((Forma::R(r),az));}
+                }
+            }
+        }
+        alt+extra
     }
 
     // ----- Informazioni -----
@@ -2253,4 +2320,27 @@ fn modello_iniziale() -> usize {
 /// «Salvato in …», o com'è quando il file c'era già e non è stato scritto («Già presente: …»).
 pub(crate) fn salvato_in(nome: &str) -> String {
     if nome.starts_with("Già presente") { nome.to_string() } else { format!("Salvato in {nome}") }
+}
+
+#[cfg(test)]
+mod lavori_regressioni {
+    use super::*;
+    #[test]
+    fn riavvio_interrompe_attivi_e_conserva_errori_e_tutte_le_uscite() {
+        let mut app=App::new(ThemeId::Cedro);
+        let (attivo,_)=app.nuova_importazione();
+        let (fallito,_)=app.nuova_importazione();
+        app.finisce(fallito,Stato::Errore("errore\ncon dettagli\te tab".into()));
+        let (finito,_)=app.nuova_importazione();
+        app.uscite.insert(finito,vec![("content://media/1".into(),"pagina1.pdf".into(),None),("/privato/pagina2.pdf".into(),"pagina2.pdf".into(),Some("Disco pieno".into()))]);
+        app.finisce(finito,Stato::Fatto {path:"content://media/1".into(),nome:"pagina1.pdf".into(),msg:"Diviso".into()});
+        let mut restored=App::new(ThemeId::Cedro);
+        restored.carica_lavori(&app.serializza());
+        assert_eq!(restored.in_corso().0,0);
+        assert_eq!(restored.lavori.len(),3);
+        assert!(restored.lavori.iter().any(|l|matches!(&l.stato,Stato::Errore(e) if e.starts_with("Interrotto"))));
+        assert!(restored.lavori.iter().any(|l|matches!(&l.stato,Stato::Errore(e) if e=="errore\ncon dettagli\te tab")));
+        assert_eq!(restored.uscite.values().next().unwrap().len(),2);
+        assert!(app.lavori.iter().any(|l|l.id==attivo&&l.stato==Stato::InCorso));
+    }
 }
