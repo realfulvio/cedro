@@ -1,0 +1,8 @@
+# Catalogo Android: baseline 0a3a64b, più Pagine PDF esplicito. Nessuna azione può sparire.
+Image png jpeg webp avif jxl bmp gif tiff ico tga qoi pnm hdr exr pdf compress half gray rot90 strip ocr figure tiles mitosi consult rx
+Doc pdf docx odt html md txt strip
+Pdf jpg docx xlsx png txt ocr strip merge split compress pages
+Text txt html md csv xlsx json pdf upper lower
+Audio mp3 wav flac opus aiff
+Video mp4 mp3
+Archive z-webp z-jpeg z-png z-mp3 z-wav z-pdf verify-pack
