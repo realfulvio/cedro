@@ -870,8 +870,10 @@ impl<'a> Lettore<'a> {
         if self.w6 && (u16_at(self.word, 0x0A) & 0x0004 == 0 || self.fc(33).1 == 0) {
             // Word 6 non «complesso»: il testo è tutto di seguito, un byte per carattere.
             let fc_min = u32_at(self.word, 0x18);
-            let n: u32 = self.ccp.iter().sum::<u32>() + 1;
             let limite = self.word.len() as u32;
+            // Un byte per carattere: il testo non può essere più lungo del file (i conteggi del FIB
+            // rovinati arrivano a miliardi e riempirebbero gigabyte di spazi).
+            let n: u32 = self.ccp.iter().fold(0u32, |a, c| a.saturating_add(*c)).saturating_add(1).min(limite);
             for j in 0..n {
                 // Il byte resta com'è: la sua lettera dipende dal font del tratto (vedi `lettera_w6`).
                 let b = self.word.get((fc_min + j).min(limite) as usize).copied().unwrap_or(b' ');
@@ -2158,9 +2160,13 @@ pub fn leggi_doc(bytes: &[u8]) -> Result<Documento, String> {
         return Err("documento di Word 1 o 2 per Windows: formato troppo vecchio".into());
     }
     let mut cf = super::apri_ole(bytes).map_err(|_| "il file .doc è rovinato e non si può leggere".to_string())?;
+    // Un flusso vero non è mai più grande del file che lo contiene: la dimensione scritta
+    // nell'indice può mentire (e la catena di settori girare in tondo), quindi si legge al più
+    // quanto è lungo il file, senza chiedere gigabyte.
+    let tetto = bytes.len() as u64;
     let mut leggi = |nome: &str| -> Option<Vec<u8>> {
         let mut v = Vec::new();
-        cf.open_stream(nome).ok()?.read_to_end(&mut v).ok()?;
+        cf.open_stream(nome).ok()?.take(tetto).read_to_end(&mut v).ok()?;
         Some(v)
     };
     let word = leggi("/WordDocument").ok_or("DOC senza testo")?;
@@ -2427,5 +2433,16 @@ mod test {
         assert!(leggi_doc(b"non sono un doc").is_err());
         let e = leggi_doc(&[0xDB, 0xA5, 0x2D, 0, 0x31, 0x40, 9, 4]).err().unwrap();
         assert!(e.contains("Word 1 o 2"), "{e}");
+    }
+    #[test]
+    fn i_conteggi_enormi_del_fib_non_riempiono_la_memoria() {
+        // Word 6 con i caratteri dichiarati a miliardi: prima cresceva fino a 4,9 GB in 17 secondi.
+        let t = std::time::Instant::now();
+        let doc = leggi_doc(include_bytes!("../../tests/fixtures/doc-conteggi-enormi.doc"));
+        assert!(t.elapsed().as_secs() < 5, "troppo lento: {:?}", t.elapsed());
+        if let Ok(d) = doc {
+            let n: usize = d.sezioni.iter().map(|s| s.blocchi.len()).sum();
+            assert!(n < 100_000, "{n} blocchi");
+        }
     }
 }
