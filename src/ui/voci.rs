@@ -39,7 +39,7 @@ const ARANCIO: Rgb = hex(0xD4570E);
 const ROSSO: Rgb = hex(0xC8323C);
 const VIOLA: Rgb = hex(0x663FC0);
 /// Il colore del laboratorio (figure, tabelle dei dati, microscopia).
-const LAB: Rgb = hex(0xC2306B);
+pub const LAB: Rgb = hex(0xC2306B);
 
 const fn g(stroke: &'static str, fill: &'static str) -> Glyph {
     Glyph { stroke, fill }
@@ -283,6 +283,26 @@ pub fn suggerimento_esiste(e: crate::engine::Exists) -> &'static str {
     }
 }
 
+
+/// Vero per le voci del laboratorio (figure, vetrini, referti): stanno in un riquadro a parte.
+pub fn is_lab(v: &Voce) -> bool {
+    v.color == LAB
+}
+
+/// La famiglia di un formato nel pannello «Converti file», per le categorie con tanti formati
+/// (le immagini): il nome del gruppo e il suo colore. `None` se la categoria non si raggruppa.
+pub fn family(kind: Kind, v: &Voce) -> Option<&'static str> {
+    if kind != Kind::Image {
+        return None;
+    }
+    Some(match v.color {
+        WEB => "Comuni",
+        NUOVI => "Moderni",
+        PRO => "Professionali",
+        PDF => "Documento",
+        _ => "Tecnici",
+    })
+}
 
 /// Il titolo del gruppo degli strumenti di una categoria.
 pub fn tools_heading(kind: Kind) -> &'static str {
