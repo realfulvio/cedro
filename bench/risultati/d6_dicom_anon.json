@@ -1,0 +1,992 @@
+{
+ "anonimizzati": 51,
+ "categorie": {
+  "caratteristiche_paziente_dichiarate": 104
+ },
+ "falliti": [
+  {
+   "MR_truncated.dcm": "truncated file"
+  }
+ ],
+ "file": 52,
+ "file_con_perdite": [
+  "CT_small.dcm",
+  "J2K_pixelrep_mismatch.dcm",
+  "JPEG-lossy.dcm",
+  "JPEG2000-embedded-sequence-delimiter.dcm",
+  "JPEG2000.dcm",
+  "JPGExtended.dcm",
+  "MR_small.dcm",
+  "MR_small_RLE.dcm",
+  "MR_small_bigendian.dcm",
+  "MR_small_expb.dcm",
+  "MR_small_implicit.dcm",
+  "MR_small_jp2klossless.dcm",
+  "MR_small_jpeg_ls_lossless.dcm",
+  "MR_small_padded.dcm",
+  "SC_rgb_dcmtk_+eb+cr.dcm",
+  "SC_rgb_dcmtk_+eb+cy+n1.dcm",
+  "SC_rgb_dcmtk_+eb+cy+n2.dcm",
+  "SC_rgb_dcmtk_+eb+cy+np.dcm",
+  "SC_rgb_dcmtk_+eb+cy+s2.dcm",
+  "SC_rgb_dcmtk_+eb+cy+s4.dcm",
+  "SC_rgb_gdcm_KY.dcm",
+  "SC_rgb_jpeg_dcmtk.dcm",
+  "SC_rgb_jpeg_gdcm.dcm",
+  "SC_rgb_jpeg_lossy_gdcm.dcm",
+  "SC_rgb_rle.dcm",
+  "SC_rgb_rle_16bit.dcm",
+  "SC_rgb_rle_16bit_2frame.dcm",
+  "SC_rgb_rle_2frame.dcm",
+  "SC_rgb_rle_32bit.dcm",
+  "SC_rgb_rle_32bit_2frame.dcm",
+  "SC_rgb_small_odd.dcm",
+  "SC_rgb_small_odd_big_endian.dcm",
+  "SC_rgb_small_odd_jpeg.dcm",
+  "SC_ybr_full_422_uncompressed.dcm",
+  "badVR.dcm",
+  "examples_jpeg2k.dcm",
+  "examples_overlay.dcm",
+  "examples_rgb_color.dcm",
+  "liver_1frame.dcm",
+  "liver_expb_1frame.dcm",
+  "rtdose.dcm",
+  "rtdose_1frame.dcm",
+  "rtdose_expb.dcm",
+  "rtdose_expb_1frame.dcm",
+  "rtdose_rle.dcm",
+  "rtdose_rle_1frame.dcm"
+ ],
+ "perdite_totali": 104,
+ "righe": [
+  {
+   "file": "693_J2KI.dcm",
+   "perdite": [],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.171
+  },
+  {
+   "file": "CT_small.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "O"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "000Y"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "0.000000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "ExplVR_BigEnd.dcm",
+   "perdite": [],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "J2K_pixelrep_mismatch.dcm",
+   "perdite": [
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "076Y"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "None"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "None"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "JPEG-lossy.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "M"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "0.000000"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "0.000000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "JPEG2000-embedded-sequence-delimiter.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "M"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "0.000000"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "0.000000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "JPEG2000.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "M"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "0.000000"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "0.000000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "JPGExtended.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "M"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "0.000000"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "0.000000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.027
+  },
+  {
+   "file": "MR_small.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "None"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "80.0000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.026
+  },
+  {
+   "file": "MR_small_RLE.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "None"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "80.0000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "MR_small_bigendian.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "None"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "80.0000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "MR_small_expb.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "None"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "80.0000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "MR_small_implicit.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "None"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "80.0000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "MR_small_jp2klossless.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "None"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "80.0000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "MR_small_jpeg_ls_lossless.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "None"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "80.0000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "MR_small_padded.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "None"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "80.0000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "errore": "truncated file",
+   "file": "MR_truncated.dcm",
+   "rc": 1,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_dcmtk_+eb+cr.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "SC_rgb_dcmtk_+eb+cy+n1.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_dcmtk_+eb+cy+n2.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "SC_rgb_dcmtk_+eb+cy+np.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.026
+  },
+  {
+   "file": "SC_rgb_dcmtk_+eb+cy+s2.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_dcmtk_+eb+cy+s4.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_gdcm_KY.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_jpeg_dcmtk.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_jpeg_gdcm.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.022
+  },
+  {
+   "file": "SC_rgb_jpeg_lossy_gdcm.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "SC_rgb_rle.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_rle_16bit.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_rle_16bit_2frame.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_rle_2frame.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_rle_32bit.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "SC_rgb_rle_32bit_2frame.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "SC_rgb_small_odd.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_small_odd_big_endian.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_rgb_small_odd_jpeg.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "SC_ybr_full_422_uncompressed.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "F"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "024Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.022
+  },
+  {
+   "file": "badVR.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "O"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "examples_jpeg2k.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "M"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "0.000000"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "0.000000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "examples_overlay.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "M"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "058Y"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "1.73"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "0"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,21C0)",
+     "valore": "4"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "examples_palette.dcm",
+   "perdite": [],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "examples_rgb_color.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "M"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1020)",
+     "valore": "0.000000"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1030)",
+     "valore": "0.000000"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "examples_ybr_color.dcm",
+   "perdite": [],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "image_dfl.dcm",
+   "perdite": [],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "liver_1frame.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "M"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "060Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.017
+  },
+  {
+   "file": "liver_expb_1frame.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "M"
+    },
+    {
+     "azione": "X_TAGS",
+     "tag": "(0010,1010)",
+     "valore": "060Y"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "rtdose.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "O"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "rtdose_1frame.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "O"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.022
+  },
+  {
+   "file": "rtdose_expb.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "O"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  },
+  {
+   "file": "rtdose_expb_1frame.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "O"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.022
+  },
+  {
+   "file": "rtdose_rle.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "O"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.016
+  },
+  {
+   "file": "rtdose_rle_1frame.dcm",
+   "perdite": [
+    {
+     "azione": "Z_TAGS",
+     "tag": "(0010,0040)",
+     "valore": "O"
+    }
+   ],
+   "privati_rimasti": [],
+   "rc": 0,
+   "s": 0.021
+  }
+ ]
+}

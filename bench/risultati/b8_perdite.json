@@ -1,0 +1,96 @@
+{
+ "operazioni": {
+  "compress": {
+   "messaggio": "4 KB → 2 KB · 53% smaller",
+   "rc": 0,
+   "uscite": {
+    "ricco-xmp-compresso.pdf": {
+     "allegati": 1,
+     "autore": "",
+     "campi_modulo": 1,
+     "link": 1,
+     "pagine": 4,
+     "segnalibri": 4,
+     "titolo": "",
+     "xmp": false
+    }
+   }
+  },
+  "split": {
+   "messaggio": "Split into 4 PDFs. The attachments (1) stay only in the original file: they were not copied into the parts",
+   "rc": 0,
+   "uscite": {
+    "ricco-xmp-parte-1.pdf": {
+     "allegati": 0,
+     "autore": "",
+     "campi_modulo": 0,
+     "link": 0,
+     "pagine": 1,
+     "segnalibri": 1,
+     "titolo": "Titolo XMP",
+     "xmp": true
+    },
+    "ricco-xmp-parte-2.pdf": {
+     "allegati": 0,
+     "autore": "",
+     "campi_modulo": 1,
+     "link": 0,
+     "pagine": 1,
+     "segnalibri": 1,
+     "titolo": "Titolo XMP",
+     "xmp": true
+    },
+    "ricco-xmp-parte-3.pdf": {
+     "allegati": 0,
+     "autore": "",
+     "campi_modulo": 0,
+     "link": 1,
+     "pagine": 1,
+     "segnalibri": 1,
+     "titolo": "Titolo XMP",
+     "xmp": true
+    },
+    "ricco-xmp-parte-4.pdf": {
+     "allegati": 0,
+     "autore": "",
+     "campi_modulo": 0,
+     "link": 0,
+     "pagine": 1,
+     "segnalibri": 1,
+     "titolo": "Titolo XMP",
+     "xmp": true
+    }
+   }
+  },
+  "split_cifrato": {
+   "messaggio": "the PDF is protected: type the password in «Password to open»",
+   "rc": 1
+  },
+  "strip": {
+   "messaggio": "Removed: program, title, XMP metadata. The document text stays as it is: if the name is written there, remove it by hand. The PDF has attachments: they were not opened, check them.",
+   "rc": 0,
+   "uscite": {
+    "ricco-xmp-anonimo.pdf": {
+     "allegati": 1,
+     "autore": "",
+     "campi_modulo": 1,
+     "link": 1,
+     "pagine": 4,
+     "segnalibri": 4,
+     "titolo": "",
+     "xmp": false
+    }
+   }
+  }
+ },
+ "originale": {
+  "allegati": 1,
+  "autore": "",
+  "campi_modulo": 1,
+  "link": 1,
+  "pagine": 4,
+  "segnalibri": 4,
+  "titolo": "Titolo XMP",
+  "xmp": true
+ }
+}

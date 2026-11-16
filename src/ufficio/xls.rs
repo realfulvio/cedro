@@ -450,7 +450,7 @@ pub fn leggi_xls(bytes: &[u8], fonts_db: &mut super::font::Fonti) -> Result<Cart
     let mut comp = super::apri_ole(bytes).map_err(|_| "il file non è un foglio Excel leggibile".to_string())?;
     let mut s = Vec::new();
     let opened = comp.open_stream("/Workbook").or_else(|_| comp.open_stream("/Book"));
-    opened.map_err(|_| "nel file non c'è una cartella di Excel".to_string())?.read_to_end(&mut s).map_err(|e| e.to_string())?;
+    opened.map_err(|_| "nel file non c'è una cartella di Excel".to_string())?.take(bytes.len() as u64).read_to_end(&mut s).map_err(|e| e.to_string())?;
     if comp.open_stream("/EncryptionInfo").is_ok() || records(&s, 0).iter().any(|r| r.kind == 0x002F) {
         return Err("il file Excel è protetto da password: aprilo e salvalo senza".into());
     }

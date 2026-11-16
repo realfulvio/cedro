@@ -181,6 +181,18 @@ fn pdf_cambiato() {
 }
 
 #[test]
+fn pdf_con_il_catalogo_cambiato_dopo_la_firma_non_prende_il_via_libera() {
+    // Aggiornamento incrementale che cambia solo la lingua del documento: il testo delle pagine è quello
+    // firmato, ma «PDF non modificato» e ✓ sarebbero una bugia.
+    let r = check("determina_firmata_lingua.pdf");
+    assert_eq!(status(&r, "", "Documento"), (Level::Warn, "dopo la firma cambiato altro nel PDF".into()));
+    assert_eq!(r.level, Level::Warn);
+    assert!(r.signers[0].why.contains("altre parti"), "{}", r.signers[0].why);
+    // La stessa firma senza l'aggiornamento resta a posto.
+    assert_eq!(check("determina_firmata.pdf").level, Level::Ok);
+}
+
+#[test]
 fn pdf_oggetti_nascosti_nel_buco_della_firma() {
     // Nel buco di /Contents (fuori dall'impronta) si scrive altro dopo la busta: la firma torna
     // ancora, ma il PDF non è più quello firmato.

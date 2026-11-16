@@ -169,6 +169,11 @@ fn tipo_documento_ext(ext: &str) -> &'static str {
 
 /// Un documento di testo stampato in PDF come lo stampa Word.
 pub fn documento_pdf(ext: &str, bytes: &[u8], title: &str, s: &Scelte) -> Result<Vec<u8>, String> {
+    documento_pdf_e_avviso(ext, bytes, title, s).map(|r| r.0)
+}
+
+/// Come `documento_pdf`, e dice anche se nel testo c'è una scrittura da destra a sinistra.
+pub fn documento_pdf_e_avviso(ext: &str, bytes: &[u8], title: &str, s: &Scelte) -> Result<(Vec<u8>, bool), String> {
     let mut doc = leggi_documento(ext, bytes)?;
     if let Some(c) = s.carta {
         let (w, h) = carta_pt(c);
@@ -177,11 +182,26 @@ pub fn documento_pdf(ext: &str, bytes: &[u8], title: &str, s: &Scelte) -> Result
             (sez.w, sez.h) = if landscape { (h, w) } else { (w, h) };
         }
     }
+    let da_destra = doc.ha_testo_da_destra();
     let st = impagina_doc::impagina(&doc, font::Fonti::new(), title);
-    pdf::scrivi(&st, &pdf::Opzioni { embed: s.embed || s.pdfa, bookmarks: s.bookmarks, pdfa: s.pdfa, links: true })
+    pdf::scrivi(&st, &pdf::Opzioni { embed: s.embed || s.pdfa, bookmarks: s.bookmarks, pdfa: s.pdfa, links: true }).map(|p| (p, da_destra))
 }
 
 pub mod xls;
+
+#[cfg(test)]
+mod prove_da_destra {
+    #[test]
+    fn l_ebraico_e_l_arabo_si_segnalano_e_l_italiano_no() {
+        let ebraico = br"{\rtf1\ansi\uc1 Ciao \u1513?\u1500?\u1493?\u1501?\par}";
+        let arabo = br"{\rtf1\ansi\uc1 \u1605?\u1585?\u1581?\u1576?\u1575?\par}";
+        let italiano = br"{\rtf1\ansi Perch\'e s\'ec\par}";
+        let s = super::Scelte::default();
+        assert!(super::documento_pdf_e_avviso("rtf", ebraico, "e", &s).unwrap().1);
+        assert!(super::documento_pdf_e_avviso("rtf", arabo, "a", &s).unwrap().1);
+        assert!(!super::documento_pdf_e_avviso("rtf", italiano, "i", &s).unwrap().1);
+    }
+}
 
 #[cfg(test)]
 mod prove_vere {
