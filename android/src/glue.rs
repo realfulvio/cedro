@@ -876,33 +876,36 @@ fn pulisci_incompleti(base:&Path,noti:&std::collections::HashSet<PathBuf>,prima:
     }}
 }
 
+fn recupera_registro(app:&AndroidApp,dir:&Path)->Option<Registro>{
+    let mut r=Registro::leggi(dir).or_else(|_|crate::publication::recupera_revisione(dir)).ok()?;
+    for i in 0..r.elementi.len(){
+        match r.elementi[i].stato.clone(){
+            StatoUscita::Pubblicato(d)=>{let _=r.completato(dir,i,d);},
+            StatoUscita::Preparato(mut d)=>{
+                let committed=if d.path.to_string_lossy().starts_with("content://"){media_committed(app,&mut d)}else{Ok(crate::publication::legacy_committed(&d))};
+                match committed{
+                    Ok(true)=>{let _=r.completato(dir,i,d);},
+                    Ok(false)=>{
+                        // Il marker legacy resta, ma i byte parziali non occupano più spazio.
+                        if let Some(temp)=&d.temporaneo{crate::publication::svuota_temporaneo(temp);}
+                        r.elementi[i].errore=Some("Recuperato dopo un’interruzione".into());
+                        let _=r.salva(dir);
+                    }
+                    Err(e)=>{r.elementi[i].errore=Some(e);let _=r.salva(dir);},
+                }
+            }
+            StatoUscita::Privato=>{},
+        }
+    }
+    Some(r)
+}
+
 fn recupera_uscite(app:&AndroidApp,base:&Path,prima:std::time::SystemTime)->Vec<Registro> {
     let mut out=Vec::new();
     let Ok(entries)=std::fs::read_dir(base) else{return out;};
     for e in entries.flatten(){
         let dir=e.path();if !e.file_type().is_ok_and(|t|t.is_dir())||!e.metadata().and_then(|m|m.modified()).is_ok_and(|t|t<prima){continue;}
-        if let Ok(mut r)=Registro::leggi(&dir).or_else(|_|crate::publication::recupera_revisione(&dir)){
-            for i in 0..r.elementi.len(){
-                match r.elementi[i].stato.clone(){
-                    StatoUscita::Pubblicato(d)=>{let _=r.completato(&dir,i,d);},
-                    StatoUscita::Preparato(mut d)=>{
-                        let committed=if d.path.to_string_lossy().starts_with("content://"){media_committed(app,&mut d)}else{Ok(crate::publication::legacy_committed(&d))};
-                        match committed{
-                            Ok(true)=>{let _=r.completato(&dir,i,d);},
-                            Ok(false)=>{
-                                // Il marker legacy resta, ma i byte parziali non occupano più spazio.
-                                if let Some(temp)=&d.temporaneo{crate::publication::svuota_temporaneo(temp);}
-                                r.elementi[i].errore=Some("Recuperato dopo un’interruzione".into());
-                                let _=r.salva(&dir);
-                            }
-                            Err(e)=>{r.elementi[i].errore=Some(e);let _=r.salva(&dir);},
-                        }
-                    }
-                    StatoUscita::Privato=>{},
-                }
-            }
-            out.push(r);
-        }
+        if let Some(r)=recupera_registro(app,&dir){out.push(r);}
         out.extend(recupera_uscite(app,&dir,prima));
     }
     out
@@ -1788,9 +1791,10 @@ fn android_main(app: AndroidApp) {
                 pulisci_incompleti(&base,&noti,prima);
                 let mut recovered=recupera_uscite(&a,&base,prima);
                 for batch in &mut batches{
-                    let mut other=Vec::new();
-                    for r in recovered{if batch.figli.iter().any(|f|f.identita.chiave==r.lavoro.chiave){batch.ricevute.push(r);}else{other.push(r);}}
-                    recovered=other;
+                    // materializza può aggiornare i timestamp: le ricevute dei figli si leggono
+                    // esplicitamente dal manifest, anche se la scansione le ha saltate.
+                    batch.recupera_ricevute(|dir|recupera_registro(&a,dir));
+                    recovered.retain(|r|!batch.figli.iter().any(|f|f.identita.chiave==r.lavoro.chiave));
                 }
                 *c.recuperati.lock().unwrap_or_else(|e|e.into_inner())=Some(recovered);
                 // Ricevute e figli dello stesso batch arrivano nello stesso completamento.
@@ -2304,6 +2308,10 @@ fn android_main(app: AndroidApp) {
                         for (id,index,prog) in tasks {
                             let child=batch.figli[index].clone();
                             if child.out.join(".pronti").is_file(){
+                                let result=recupera_registro(&a,&child.out).filter(|r|r.lavoro.chiave==child.identita.chiave)
+                                    .map(|r|Completamento::recuperato(id,r))
+                                    .unwrap_or_else(||Completamento::semplice(id,Stato::Errore("Registro dei risultati non valido".into())));
+                                c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(result);
                                 c.tokens.lock().unwrap_or_else(|e|e.into_inner()).remove(&id);
                                 let _=batch.finisci(index);a.create_waker().wake();continue;
                             }

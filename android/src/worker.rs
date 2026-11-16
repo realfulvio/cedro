@@ -94,12 +94,17 @@ pub extern "C" fn cedro_lavoro_main() -> i32 {
 struct Scratch(PathBuf);
 impl Drop for Scratch {fn drop(&mut self){let _=std::fs::remove_dir_all(&self.0);}}
 
-pub fn sposta_download(file:&std::path::Path,out:&std::path::Path,revisione:bool)->Result<PathBuf,String>{
-    let dir=if revisione{out.join(".revisione")}else{out.to_path_buf()};
+/// Prepara l'audio effettivo per trascrizione e revisione, senza applicare due volte il nome del caso.
+fn prepara_audio_web(file:&std::path::Path,out:&std::path::Path,scelte:&crate::web::Scelte,opts:&cedro::Options)->Result<PathBuf,String>{
+    let dir=out.join(".revisione");
     std::fs::create_dir_all(&dir).map_err(|e|e.to_string())?;
-    let target=dir.join(file.file_name().ok_or("Nome del risultato assente")?);
-    std::fs::rename(file,&target).map_err(|e|e.to_string())?;
-    Ok(target)
+    let mut audio=opts.clone();audio.name_template=None;audio.caso=None;
+    audio.exists=cedro::Exists::Replace;audio.on_exists=None;
+    audio.normalize=scelte.normalize;audio.mp3_kbps=None;
+    let quality=[95,82,55][scelte.audio_quality.min(2) as usize];
+    let prepared=cedro::perform_with(file,&scelte.audio_format,quality,Some(&dir),&audio).map_err(|e|e.to_string())?.path;
+    crate::storage::atomico(&out.join(".revisione-source"),&serde_json::to_vec(&prepared).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
+    Ok(prepared)
 }
 
 fn converti_web(r:&mut Richiesta,testo:bool,audio:bool){
@@ -150,7 +155,7 @@ fn esegui(mut r: Richiesta) -> Result<(PathBuf, String), String> {
         let download_dir=r.out.join(".scaricato");
         let file=download(&media,&download_dir,&|f|emetti(Evento::Progresso((f*600.0) as u32)),&CANCEL)?;
         if !text&&!convert{return crate::web::nomina(&file,&r.out,&r.opts).map(|p|(p,media.title));}
-        r.file=if text{sposta_download(&file,&r.out,true)?}else{file};
+        r.file=if text{prepara_audio_web(&file,&r.out,&scelte,&r.opts)?}else{file};
         converti_web(&mut r,text,want==Want::Audio);
         if !text&&want==Want::Audio {r.azione=scelte.audio_format;}
     }
@@ -302,6 +307,48 @@ mod tests {
     }
 
     #[test]
+    fn audio_web_testo_preparato_rispetta_formato_qualita_volume(){
+        let root=crate::storage::nuova_cartella(&std::env::temp_dir()).unwrap();
+        let downloaded=root.join(".scaricato");std::fs::create_dir(&downloaded).unwrap();
+        let scratch=Scratch(downloaded.clone());let source=downloaded.join("originale.wav");
+        // Due secondi PCM mono a basso volume, senza codec o fixture esterni.
+        let data:Vec<u8>=(0..88200).flat_map(|i|(((i as f32*0.063).sin()*2000.0) as i16).to_le_bytes()).collect();
+        let mut wav=b"RIFF".to_vec();wav.extend_from_slice(&(36+data.len() as u32).to_le_bytes());wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes());wav.extend_from_slice(&1u16.to_le_bytes());wav.extend_from_slice(&1u16.to_le_bytes());
+        wav.extend_from_slice(&44100u32.to_le_bytes());wav.extend_from_slice(&88200u32.to_le_bytes());wav.extend_from_slice(&2u16.to_le_bytes());wav.extend_from_slice(&16u16.to_le_bytes());
+        wav.extend_from_slice(b"data");wav.extend_from_slice(&(data.len() as u32).to_le_bytes());wav.extend_from_slice(&data);std::fs::write(&source,wav).unwrap();
+        let opts=cedro::caso::opzioni(Some("C-42"),cedro::Options{name_template:Some("%caso%_%nome%".into()),..Default::default()});
+        let mut lengths=Vec::new();
+        for (i,format,quality,normalize) in [(0,"wav",0,false),(1,"wav",0,true),(2,"mp3",0,false),(3,"mp3",2,false)]{
+            let out=root.join(i.to_string());let choices=crate::web::Scelte{audio_format:format.into(),audio_quality:quality,normalize,..Default::default()};
+            let saved=prepara_audio_web(&source,&out,&choices,&opts).unwrap();
+            assert_eq!(saved,out.join(".revisione").join(format!("originale.{format}")));
+            let marker:PathBuf=serde_json::from_slice(&std::fs::read(out.join(".revisione-source")).unwrap()).unwrap();assert_eq!(marker,saved);
+            let bytes=std::fs::read(&saved).unwrap();
+            if format=="wav"{
+                assert_eq!(&bytes[..4],b"RIFF");assert_eq!(&bytes[8..12],b"WAVE");
+                let mut at=12;let mut peak=0i32;
+                while at+8<=bytes.len(){
+                    let len=u32::from_le_bytes(bytes[at+4..at+8].try_into().unwrap()) as usize;
+                    if &bytes[at..at+4]==b"data"{peak=bytes[at+8..at+8+len].chunks_exact(2).map(|v|(i16::from_le_bytes([v[0],v[1]]) as i32).abs()).max().unwrap();break;}
+                    at+=8+len+(len%2);
+                }
+                assert!((if normalize{31990..=32010}else{1990..=2010}).contains(&peak),"picco PCM: {peak}");
+            }else{
+                // Decodifica col core: l'estensione da sola non prova che sia un MP3 valido.
+                let decoded=cedro::perform_with(&saved,"wav",82,Some(&out.join("verifica")),&Default::default()).unwrap();
+                assert_eq!(&std::fs::read(decoded.path).unwrap()[..4],b"RIFF");lengths.push(bytes.len());
+            }
+            let transcript=out.join("originale.txt");std::fs::write(&transcript,b"testo").unwrap();
+            assert_eq!(crate::web::nomina(&transcript,&out,&opts).unwrap().file_name().unwrap(),"C-42_originale.txt");
+        }
+        assert!(lengths[0]>lengths[1],"qualità massima/leggera: {lengths:?}");
+        assert_eq!(opts.caso.as_deref(),Some("C-42"));
+        drop(scratch);assert!(!downloaded.exists());
+        for (i,format) in [(0,"wav"),(1,"wav"),(2,"mp3"),(3,"mp3")]{assert!(root.join(i.to_string()).join(".revisione").join(format!("originale.{format}")).is_file());}
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn qualita_web_indipendente_da_modello_e_voci(){
         for code in [0,1,2,16,33,66]{
             for (text,audio,action) in [(false,true,"mp3"),(false,false,"mp4"),(true,true,"trascrivi")]{
@@ -310,22 +357,6 @@ mod tests {
                 let r:Richiesta=serde_json::from_slice(&serde_json::to_vec(&r).unwrap()).unwrap();
                 assert_eq!(r.qualita,82);assert_eq!(r.voce,Voce::da_codice(code));assert_eq!(r.azione,action);
             }
-        }
-    }
-    #[test]
-    fn scratch_scompare_ma_audio_revisione_resta_riapribile(){
-        for revision in [false,true]{
-            let root=crate::storage::nuova_cartella(&std::env::temp_dir()).unwrap();
-            let downloaded=root.join(".scaricato");std::fs::create_dir(&downloaded).unwrap();
-            let source=downloaded.join("audio.wav");std::fs::write(&source,b"audio originale").unwrap();
-            let saved={let _guard=Scratch(downloaded.clone());if revision{Some(sposta_download(&source,&root,true).unwrap())}else{std::fs::write(root.join("converted.mp3"),b"converted").unwrap();None}};
-            assert!(!downloaded.exists());
-            if let Some(saved)=saved{
-                let encoded=serde_json::to_vec(&saved).unwrap();
-                let restarted:PathBuf=serde_json::from_slice(&encoded).unwrap();
-                assert_eq!(std::fs::read(restarted).unwrap(),b"audio originale");
-            }else{assert_eq!(std::fs::read_dir(&root).unwrap().count(),1);}
-            std::fs::remove_dir_all(root).unwrap();
         }
     }
     #[test]

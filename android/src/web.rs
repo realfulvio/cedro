@@ -154,6 +154,11 @@ impl Batch {
             crate::storage::atomico(&f.out.join(".revisione-source"),&serde_json::to_vec(&f.source).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
         }Ok(())
     }
+    /// I figli sono noti dal manifest: non dipendono dal mtime della scansione generale.
+    /// Il callback riconcilia anche i commit del provider interrotti; tutto avviene nel worker.
+    pub fn recupera_ricevute(&mut self,mut leggi:impl FnMut(&Path)->Option<crate::publication::Registro>){
+        self.ricevute=self.figli.iter().filter_map(|f|leggi(&f.out).filter(|r|r.lavoro.chiave==f.identita.chiave)).collect();
+    }
     pub fn finisci(&mut self,index:usize)->Result<(),String>{self.figli[index].fine=true;self.salva()}
 }
 
@@ -263,7 +268,8 @@ impl Salvataggio {
     pub fn nuovo(url:&str,scelte:&Scelte,opts:&cedro::Options)->Self{
         let mut content=scelte.clone();content.skip_existing=false;
         let chiave=serde_json::json!([url,content,opts.name_template,opts.caso]).to_string();
-        let mode=if scelte.skip_existing{2}else{match opts.exists{cedro::Exists::Replace=>1,cedro::Exists::Skip=>2,_=>0}};
+        // Il toggle riusa solo ricevute compatibili; le collisioni restano una scelta distinta.
+        let mode=match opts.exists{cedro::Exists::Replace=>1,cedro::Exists::Skip=>2,_=>0};
         Self{chiave,mode,salta:scelte.skip_existing}
     }
     pub fn salva(&self,root:&Path)->Result<(),String>{crate::storage::atomico(&root.join(".web-request"),&serde_json::to_vec(self).map_err(|e|e.to_string())?).map_err(|e|e.to_string())}
@@ -318,6 +324,33 @@ mod salvataggio_tests {
             };
             r.completato(&root,i,dest).unwrap();
         }r
+    }
+    #[test]
+    fn richieste_diverse_con_stesso_nome_pubblicano_i_propri_byte(){
+        let root=crate::storage::nuova_cartella(&std::env::temp_dir()).unwrap();
+        let base=root.join("privati");let public=root.join("pubblici");std::fs::create_dir(&base).unwrap();
+        let mut paths=Vec::new();
+        for (n,url,height,bytes) in [(0,"https://youtu.be/a",480,b"video a 480".as_slice()),(1,"https://youtu.be/a",1080,b"video a 1080".as_slice()),(2,"https://youtu.be/b",1080,b"video b 1080".as_slice())]{
+            let dir=base.join(n.to_string());std::fs::create_dir(&dir).unwrap();
+            let file=dir.join("stesso-titolo.mp4");std::fs::write(&file,bytes).unwrap();
+            let choices=Scelte{altezza:height,skip_existing:n>0,..Default::default()};
+            let saved=Salvataggio::nuovo(url,&choices,&Default::default());saved.salva(&dir).unwrap();
+            let identity=Identita{chiave:format!("file-{n}"),origine:"video".into(),etichetta:"Video".into(),conv:false,quando:n,sorgente:None,caso:String::new()};
+            let mut receipt=Registro::prepara(&dir,&file,identity,"ok".into()).unwrap();
+            assert!(riusi(&base,&dir,&mut receipt,|d|d.path.is_file()).is_empty());
+            receipt.salva(&dir).unwrap();
+            let dest=crate::publication::legacy(&file,&public,saved.mode,&std::sync::atomic::AtomicBool::new(false),&mut |d|receipt.prenota(&dir,0,d)).unwrap();
+            receipt.completato(&dir,0,dest.clone()).unwrap();
+            assert_eq!(std::fs::read(&dest.path).unwrap(),bytes);
+            assert!(!paths.contains(&dest.path));paths.push(dest.path);
+        }
+        assert_eq!(std::fs::read(&paths[0]).unwrap(),b"video a 480");
+        assert_eq!(std::fs::read(&paths[1]).unwrap(),b"video a 1080");
+        assert_eq!(uscite_download(&public).unwrap().len(),3);
+        for (exists,mode) in [(cedro::Exists::Replace,1),(cedro::Exists::Skip,2)]{
+            assert_eq!(Salvataggio::nuovo("link",&Default::default(),&cedro::Options{exists,..Default::default()}).mode,mode);
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn due_job_riusano_file_gruppo_sidecar_e_ricreano_quello_eliminato(){

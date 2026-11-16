@@ -1298,6 +1298,9 @@ fn run_once(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize,
 // ---------------------------------------------------------------------------
 // Android
 
+#[cfg(any(target_os="android",test))]
+mod range;
+
 /// Su Android i programmi non si possono eseguire dalla cartella dell'app: Python (che fa girare
 /// yt-dlp), QuickJS e ffmpeg partono dalla cartella delle librerie dell'APK, dove li mette
 /// `android/build.sh`. Le loro librerie (Python 14 MB, ffmpeg 35 MB) si scaricano al primo uso da
@@ -1305,7 +1308,7 @@ fn run_once(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize,
 #[cfg(target_os = "android")]
 pub mod android {
     use super::*;
-    use std::io::{Seek, SeekFrom};
+    use super::range::Remote;
     use std::sync::OnceLock;
 
     struct Dirs {
@@ -1467,91 +1470,6 @@ pub mod android {
             }
         }
         Ok(())
-    }
-
-    /// Un file remoto letto a pezzi con le richieste «Range»: dello zip si scarica solo quello che serve.
-    struct Remote<'a> {
-        cancel:&'a AtomicBool,
-        url: String,
-        len: u64,
-        pos: u64,
-        buf: Vec<u8>,
-        buf_at: u64,
-    }
-
-    const CHUNK: u64 = 4 * 1024 * 1024;
-
-    impl<'a> Remote<'a> {
-        fn open(url: &str,cancel:&'a AtomicBool) -> Result<Remote<'a>, String> {
-            let r = agent().head(url).call().map_err(|e| e.to_string())?;
-            let len = r.header("Content-Length").and_then(|v| v.parse().ok()).ok_or("dimensione sconosciuta")?;
-            Ok(Remote { cancel,url: url.to_string(), len, pos: 0, buf: Vec::new(), buf_at: 0 })
-        }
-    }
-
-    impl Read for Remote<'_> {
-        fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
-            if self.pos >= self.len || out.is_empty() {
-                return Ok(0);
-            }
-            let inside = self.pos >= self.buf_at && self.pos < self.buf_at + self.buf.len() as u64;
-            if !inside {
-                let end = (self.pos + CHUNK.max(out.len() as u64)).min(self.len) - 1;
-                let mut buf=Vec::with_capacity((end+1-self.pos) as usize);
-                let mut failures=0;
-                while (buf.len() as u64)<end+1-self.pos {
-                    if self.cancel.load(Ordering::Relaxed){return Err(std::io::Error::other("Annullato"));}
-                    let from=self.pos+buf.len() as u64;
-                    let range=format!("bytes={from}-{end}");
-                    let attempt=(||->Result<(),String>{
-                        let r=agent().get(&self.url).set("Range",&range).call().map_err(|e|e.to_string())?;
-                        let expected=format!("bytes {from}-{end}/{}",self.len);
-                        if r.status()!=206||r.header("Content-Range")!=Some(expected.as_str()){return Err("Intervallo del download non valido".into());}
-                        let mut reader=r.into_reader();let mut chunk=[0u8;65536];
-                        while (buf.len() as u64)<end+1-self.pos {
-                            if self.cancel.load(Ordering::Relaxed){return Err("Annullato".into());}
-                            crate::componenti::continua_download("Componenti")?;
-                            let max=chunk.len().min((end+1-self.pos-buf.len() as u64) as usize);
-                            let n=reader.read(&mut chunk[..max]).map_err(|e|e.to_string())?;
-                            if n==0{return Err("Risposta incompleta".into());}
-                            buf.extend_from_slice(&chunk[..n]);
-                        }
-                        Ok(())
-                    })();
-                    if let Err(e)=attempt {
-                        failures+=1;
-                        if failures>8||self.cancel.load(Ordering::Relaxed){return Err(std::io::Error::other(e));}
-                        // Riparte dal primo byte mancante, non dall'inizio dello ZIP.
-                        for _ in 0..(failures*10).min(100){
-                            if self.cancel.load(Ordering::Relaxed){return Err(std::io::Error::other("Annullato"));}
-                            std::thread::sleep(Duration::from_millis(100));
-                        }
-                    }
-                }
-                self.buf = buf;
-                self.buf_at = self.pos;
-            }
-            let from = (self.pos - self.buf_at) as usize;
-            let n = out.len().min(self.buf.len() - from);
-            out[..n].copy_from_slice(&self.buf[from..from + n]);
-            self.pos += n as u64;
-            Ok(n)
-        }
-    }
-
-    impl Seek for Remote<'_> {
-        fn seek(&mut self, to: SeekFrom) -> std::io::Result<u64> {
-            let next = match to {
-                SeekFrom::Start(n) => n as i64,
-                SeekFrom::End(n) => self.len as i64 + n,
-                SeekFrom::Current(n) => self.pos as i64 + n,
-            };
-            if next < 0 {
-                return Err(std::io::Error::other("posizione prima dell'inizio"));
-            }
-            self.pos = next as u64;
-            Ok(self.pos)
-        }
     }
 }
 

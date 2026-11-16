@@ -95,6 +95,15 @@ pub struct Completamento {
 }
 impl Completamento {
     pub fn semplice(id:u32,stato:Stato)->Self{Self{batch:None,id,stato,uscite:None,sorgente:None}}
+    pub fn recuperato(id:u32,r:crate::publication::Registro)->Self{
+        let outputs=r.righe();
+        if let Some((path,nome,_))=outputs.first().cloned(){
+            let msg=if outputs.iter().any(|u|u.2.is_some()){format!("{} · {}",r.messaggio,cedro::i18n::tr("Salvataggio incompleto: copie disponibili in Cedro"))}else{r.messaggio};
+            Self{batch:None,id,stato:Stato::Fatto{path,nome,msg},uscite:Some(outputs),sorgente:r.lavoro.sorgente}
+        }else{
+            Self{batch:None,id,stato:Stato::Errore(r.messaggio),uscite:None,sorgente:r.lavoro.sorgente}
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -737,13 +746,7 @@ impl App {
             }
         };
         if !r.lavoro.caso.is_empty(){self.labs.casi.insert(id,r.lavoro.caso.clone());}
-        let outputs=r.righe();
-        if let Some((path,nome,_))=outputs.first().cloned(){
-            let msg=if outputs.iter().any(|u|u.2.is_some()){format!("{} · {}",r.messaggio,cedro::i18n::tr("Salvataggio incompleto: copie disponibili in Cedro"))}else{r.messaggio};
-            self.completa(Completamento{batch:None,id,stato:Stato::Fatto{path,nome,msg},uscite:Some(outputs),sorgente:r.lavoro.sorgente});
-        }else{
-            self.completa(Completamento{batch:None,id,stato:Stato::Errore(r.messaggio),uscite:None,sorgente:r.lavoro.sorgente});
-        }
+        self.completa(Completamento::recuperato(id,r));
     }
 
     /// Un lavoro è finito (o fallito).
