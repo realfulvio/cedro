@@ -2571,3 +2571,9 @@ Aspetto che finisca l’altro lavoro…	Waiting for the other job to finish…
 Memoria insufficiente per verificare il file originale	Not enough memory to verify the original file
 Il provider richiede una copia · spazio disponibile: {spazio}	The provider requires a copy · available space: {spazio}
 Copia privata · spazio disponibile: {spazio}	Private copy · available space: {spazio}
+Identità del lavoro assente	Missing job identity
+Sorgente della revisione non disponibile	Review source unavailable
+Risultato non regolare	Unsupported result file type
+Il lavoro non ha prodotto file	The job produced no files
+Registro dei risultati non valido	Invalid results journal
+Nome del risultato assente	Missing result name
