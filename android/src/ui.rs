@@ -22,6 +22,7 @@ use cedro::{Kind, Mode};
 pub mod anim;
 pub mod tinte;
 mod casa;
+mod web;
 mod condivisione;
 pub mod firma;
 mod m3;
@@ -86,13 +87,14 @@ pub enum Stato {
 /// Stato e lista uscite viaggiano insieme: nessun interleaving fra code distinte.
 #[derive(Clone)]
 pub struct Completamento {
+    pub batch:Option<crate::web::Batch>,
     pub id: u32,
     pub stato: Stato,
     pub uscite: Option<Vec<crate::publication::Riga>>,
     pub sorgente: Option<PathBuf>,
 }
 impl Completamento {
-    pub fn semplice(id:u32,stato:Stato)->Self{Self{id,stato,uscite:None,sorgente:None}}
+    pub fn semplice(id:u32,stato:Stato)->Self{Self{batch:None,id,stato,uscite:None,sorgente:None}}
 }
 
 #[derive(Clone)]
@@ -144,6 +146,7 @@ pub enum Sorgente {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Azione {
+    Web(web::WebAz),
     Scheda(Scheda),
     Tessera(usize),
     /// «Altro»: la ruota con tutti i formati.
@@ -204,6 +207,7 @@ pub enum Azione {
 
 /// Un lavoro da far partire col motore.
 pub struct Compito {
+    pub web: Option<crate::web::Scelte>,
     pub id: u32,
     pub file: PathBuf,
     pub azione: &'static str,
@@ -214,6 +218,8 @@ pub struct Compito {
 }
 
 pub enum Effetto {
+    SalvaRete,
+    ConfermaDownload,
     Annulla(u32),
     Niente,
     /// Più lavori, uno dopo l'altro (il pulsante grande della finestra principale).
@@ -227,7 +233,7 @@ pub enum Effetto {
     Ridisegna,
     /// Da eseguire col motore.
     /// `opts`: le scelte delle schermate (None = quelle di sempre); `unisci`: i PDF da unire, in ordine, con le pagine.
-    Converti { id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)> },
+    Converti { web:Option<crate::web::Scelte>, id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)> },
     /// Prova la password del PDF: se va, se ne fa una copia senza.
     Sblocca(String),
     /// Legge l'onda dell'audio di una revisione (percorso, durata).
@@ -509,6 +515,10 @@ impl Info {
 }
 
 pub struct App {
+    pub rete:u8,
+    pub download_attesa:Option<crate::web::AttesaDownload>,
+    pub web:crate::web::Scelte,
+    pub componente:Option<crate::web::Componente>,
     pub info: Info,
     pub tema: ThemeId,
     /// Caratteri grandi (+2, come sul computer).
@@ -616,6 +626,7 @@ impl App {
 
     pub fn new(tema: ThemeId) -> App {
         App {
+            web:Default::default(),componente:None,rete:0,download_attesa:None,
             info: Info::default(),
             tema,
             grandi: false,
@@ -730,9 +741,9 @@ impl App {
         let outputs=r.righe();
         if let Some((path,nome,_))=outputs.first().cloned(){
             let msg=if outputs.iter().any(|u|u.2.is_some()){format!("{} · {}",r.messaggio,cedro::i18n::tr("Salvataggio incompleto: copie disponibili in Cedro"))}else{r.messaggio};
-            self.completa(Completamento{id,stato:Stato::Fatto{path,nome,msg},uscite:Some(outputs),sorgente:r.lavoro.sorgente});
+            self.completa(Completamento{batch:None,id,stato:Stato::Fatto{path,nome,msg},uscite:Some(outputs),sorgente:r.lavoro.sorgente});
         }else{
-            self.completa(Completamento{id,stato:Stato::Errore(r.messaggio),uscite:None,sorgente:r.lavoro.sorgente});
+            self.completa(Completamento{batch:None,id,stato:Stato::Errore(r.messaggio),uscite:None,sorgente:r.lavoro.sorgente});
         }
     }
 
@@ -758,10 +769,10 @@ impl App {
         if self.anim.in_moto() || self.firma.busy() || self.firma.viewer.is_some() && !self.fpag.finite {
             return true;
         }
-        if std::mem::take(&mut self.pdf.ridisegna) || self.rivedi.as_ref().is_some_and(|r| r.suona()) || (self.casa_aperta && self.sopra.is_none() && self.lavori.iter().any(|l| l.stato == Stato::InCorso)) {
+        if std::mem::take(&mut self.pdf.ridisegna) || self.rivedi.as_ref().is_some_and(|r| r.suona()) {
             return true;
         }
-        self.lavori.iter().any(|l| l.stato == Stato::InCorso) && !self.scelta_file && (self.scheda == Scheda::Lavori || self.scheda == Scheda::Ruota)
+        false
     }
 
     /// Lavori in corso e avanzamento medio in percentuale (None se ancora ignoto), per la notifica.
@@ -1143,7 +1154,8 @@ impl App {
         self.campo = None;
         // Per «trascrivi» il campo qualità porta il modello scelto (bit bassi) e quante persone parlano (bit alti).
         let qualita = if id == "trascrivi" || id == "web-testo" { self.modello as u8 | self.voci.min(8) << 4 } else { self.qualita };
-        Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita, prog, opts, unisci }
+        let web=id.starts_with("web-").then(||{let mut w=self.web.clone();w.media_quality=self.qualita;w.voce=crate::worker::Voce{modello:self.modello,voci:self.voci.min(8)};w});
+        Effetto::Converti { web, id: lavoro, file: file.path, azione: id, qualita, prog, opts, unisci }
     }
 
     fn attiva(&mut self, a: Azione) -> Effetto {
@@ -1155,6 +1167,7 @@ impl App {
             Azione::Pdf(az) => self.azione_pdf(az),
             Azione::Riv(az) => self.azione_rivedi(az),
             Azione::Opz(az) => self.azione_opzioni(az),
+            Azione::Web(az) => self.azione_web(az),
             Azione::Casa(az) => self.azione_casa(az),
             Azione::Firma(az) => self.azione_firma(az),
             Azione::AltreOpzioni => {
@@ -1921,10 +1934,12 @@ impl App {
             p.text("Svuota", rc.0, rc.1, rc.2, rc.3, 15.0, Weight::Semibold, pal.primary, Align::Center);
             self.colpi.push((Forma::R(rc), Azione::Svuota));
         }
-        let header=if self.labs.filtro.is_some(){64.0}else{0.0};
+        let download_h=self.pannello_download(p,16.0,BARRA,w-32.0,(0.0,BARRA,w,h-BARRA));
+        let componente_h=download_h+self.riga_componente(p,16.0,BARRA+download_h,w-32.0);
+        let header=componente_h+if self.labs.filtro.is_some(){64.0}else{0.0};
         if let Some(code)=self.labs.filtro.clone(){
-            p.text(&cedro::i18n::lit(&code),16.0,BARRA,w-190.0,48.0,14.0,Weight::Semibold,pal.primary,Align::Left);
-            self.bottone_a(p,(w-174.0,BARRA,158.0,48.0),"Tutti i lavori","",pal.surface,pal.primary,Azione::Labs(labs::LabAz::TuttiLavori),(0.0,BARRA,w,header));
+            p.text(&cedro::i18n::lit(&code),16.0,BARRA+componente_h,w-190.0,48.0,14.0,Weight::Semibold,pal.primary,Align::Left);
+            self.bottone_a(p,(w-174.0,BARRA+componente_h,158.0,48.0),"Tutti i lavori","",pal.surface,pal.primary,Azione::Labs(labs::LabAz::TuttiLavori),(0.0,BARRA,w,header));
         }
         let vista = (0.0, BARRA+header, w, h - BARRA-header);
         if self.lavori.is_empty() {
@@ -2387,7 +2402,7 @@ mod lavori_regressioni {
         let (q,b)=(queue.clone(),barrier.clone());
         let writer=std::thread::spawn(move||{
             b.wait();
-            q.lock().unwrap().push(Completamento{id,stato:Stato::Fatto{path:"content://media/1".into(),nome:"a.pdf".into(),msg:"Diviso".into()},uscite:Some(vec![("content://media/1".into(),"a.pdf".into(),None),("content://media/2".into(),"b.pdf".into(),None)]),sorgente:Some("/privato/audio.wav".into())});
+            q.lock().unwrap().push(Completamento{batch:None,id,stato:Stato::Fatto{path:"content://media/1".into(),nome:"a.pdf".into(),msg:"Diviso".into()},uscite:Some(vec![("content://media/1".into(),"a.pdf".into(),None),("content://media/2".into(),"b.pdf".into(),None)]),sorgente:Some("/privato/audio.wav".into())});
         });
         assert!(std::mem::take(&mut *queue.lock().unwrap()).is_empty());
         barrier.wait();writer.join().unwrap();
