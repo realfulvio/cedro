@@ -44,3 +44,7 @@ Durante il lavoro, il thread `android_main` occupava circa un core (90,6% nel ca
 Le misure brevi usano timestamp del dispositivo prima e dopo il comando ADB `input tap`, correlati al log MediaStore. Il vero tocco è compreso fra quei due istanti: la mediana è riportata come intervallo, senza precisione fittizia al millisecondo. Il campionamento PSS circa1s può perdere picchi più brevi. Gli output sono stati recuperati dal telefono e riaperti per controllare formato e proprietà.
 
 Nel video480p il thread UI raggiunge100%CPU nel campione; i thread NDK MediaCodec confermano il percorso hardware. Due snapshot dei processi dell’UID mostrano solo il processo principale. La PSS del servizio codec di sistema non è inclusa. Il nuovo worker andrà misurato sommando la PSS di UI e figli, per evitare un confronto ingannevole con la sola memoria della UI. Dopo la trascrizione la0.45 era tornata a49.211KiB PSS: il rilascio della memoria del modello esiste già nella base.
+
+## Silenzio: regressione da correggere
+
+`silenzio.wav` contiene30s mono16kHz di PCM interamente a zero (verificato leggendo tutti i campioni). Con Buona, Una persona sola e lingua automatica, la0.45 carica comunque Whisper, rileva inglese e pubblica il testo «you» dopo101,932s; PSS massimo campionato1.573.803KiB. Esito **KO**: questa prova non contiene voce. Log, TXT e schermata in `prove-mi9t/base-silenzio`. Il nuovo percorso deve dare «Nessun parlato riconosciuto» e non pubblicare un file vuoto o inventato.
