@@ -58,7 +58,7 @@ pub struct Settings {
     pub ocr_lang: String,
     /// Pagine al massimo per l'OCR di un PDF; 0 vuol dire tutte.
     pub ocr_max: u32,
-    /// Il tema della versione standard (`ui::theme::ThemeId::key`); vuoto o sconosciuto = Cedro (Melanzana).
+    /// Il tema desktop (`ui::theme::ThemeId::key`); ritirati, vuoti o sconosciuti = Melanzana.
     pub ui_theme: String,
     /// Larghezza del pannello di destra (0 = quella di base).
     pub side_w: u16,
@@ -108,7 +108,7 @@ impl Default for Settings {
             dialogs: true,
             reveal: false,
             progress: true,
-            // Dalla 0.44 si parte dalla vista Semplice; Bondeno e Cedro 4 Labs restano come prima (`passa_a_tema`).
+            // Si parte dalla vista Semplice; una nuova installazione Labs usa la Completa (`passa_a_tema`).
             simple: true,
             view_asked: false,
             gpu: true,
@@ -324,7 +324,7 @@ impl Settings {
             ("firma_remind", b(self.firma_remind).into()),
             ("ui_schema", UI_SCHEMA.to_string()),
         ];
-        let mut out: Vec<String> = old
+        let mut out: Vec<String> = old.strip_prefix('\u{feff}').unwrap_or(old)
             .lines()
             .filter(|line| !pairs.iter().any(|(k, _)| line.trim().split_once('=').is_some_and(|(key, _)| key.trim() == *k)))
             .map(str::to_string)
@@ -366,15 +366,15 @@ fn read_config(path: &Path) -> Option<String> {
 }
 
 /// Chi aveva la vecchia edizione Comune di Bondeno e passa a questa: l'installatore (o il pacchetto per Linux)
-/// lascia questo file nella cartella delle impostazioni, e al primo avvio il tema Bondeno si accende da solo.
+/// lascia questo file nella cartella delle impostazioni. Ora migra a Melanzana, mantenendo la vista.
 pub const DA_BONDENO: &str = "da-bondeno";
 
 /// Chi nell'installatore sceglie «Cedro 4 Labs» (o lo installa con `/TEMA=labs`, `./install.sh --labs`):
 /// stesso meccanismo, il tema Cedro 4 Labs si accende al primo avvio.
 pub const DA_LABS: &str = "da-labs";
 
-/// La versione delle impostazioni dell'aspetto scritta in `config.txt` (`ui_schema`). 2 = c'è il nuovo aspetto Cedro.
-const UI_SCHEMA: u32 = 2;
+/// La versione delle impostazioni dell'aspetto: 3 = catalogo desktop ridotto a cinque temi.
+const UI_SCHEMA: u32 = 3;
 
 /// Se c'è il file `marker` in `dir`: sceglie il tema `chiave` nelle impostazioni e toglie il file.
 fn passa_a_tema(dir: &Path, marker: &str, chiave: &str) {
@@ -386,8 +386,8 @@ fn passa_a_tema(dir: &Path, marker: &str, chiave: &str) {
     let nuove = !path.is_file();
     let mut s = Settings::load_from(&path);
     s.ui_theme = chiave.to_string();
-    // Bondeno e Cedro 4 Labs partono dalla vista Completa, come prima della 0.44.
-    if nuove {
+    // Solo una nuova installazione Labs parte dalla vista Completa.
+    if nuove && chiave == crate::ui::theme::ThemeId::CedroLabs.key() {
         s.simple = false;
     }
     // Il file si toglie solo se la scelta è stata scritta: altrimenti ci si riprova al prossimo avvio.
@@ -398,43 +398,45 @@ fn passa_a_tema(dir: &Path, marker: &str, chiave: &str) {
 
 /// I file lasciati dall'installatore: Bondeno, poi Cedro 4 Labs (se ci sono tutti e due vale l'ultimo).
 fn passa_a_bondeno(dir: &Path) {
-    passa_a_tema(dir, DA_BONDENO, crate::edizione::CHIAVE_TEMA);
+    passa_a_tema(dir, DA_BONDENO, crate::ui::theme::ThemeId::Cedro.key());
     passa_a_tema(dir, DA_LABS, crate::ui::theme::ThemeId::CedroLabs.key());
-    al_nuovo_aspetto(dir);
 }
 
-/// Una volta sola, aggiornando da prima della 0.44: chi aveva l'aspetto di partenza (Windows essenziale)
-/// passa al nuovo aspetto Cedro, con la vista Semplice se non aveva scelto la Completa. Gli altri temi restano.
-fn al_nuovo_aspetto(dir: &Path) {
+/// Normalizza soltanto il tema: qualità, vista e tutte le altre preferenze restano intatte.
+fn normalizza_tema_desktop(s: &mut Settings) -> bool {
+    let key = crate::ui::theme::ThemeId::from_key(&s.ui_theme).key();
+    if s.ui_theme == key {
+        return false;
+    }
+    s.ui_theme = key.to_string();
+    true
+}
+
+/// Percorso reale di avvio, con una directory esplicita per poterlo provare senza cambiare HOME.
+/// La migrazione è idempotente e intercetta anche una vecchia chiave riscritta da un'altra istanza.
+fn read_settings_in(dir: &Path) -> Settings {
+    if !cfg!(target_os = "android") {
+        passa_a_bondeno(dir);
+    }
     let path = dir.join("config.txt");
-    let Some(text) = read_config(&path) else { return };
-    let schema = text
-        .strip_prefix('\u{feff}')
-        .unwrap_or(&text)
-        .lines()
-        .filter_map(|line| line.trim().split_once('='))
-        .find(|(k, _)| k.trim() == "ui_schema")
-        .and_then(|(_, v)| v.trim().parse::<u32>().ok())
-        .unwrap_or(0);
-    if schema >= UI_SCHEMA {
-        return;
+    let mut s = Settings::load_from(&path);
+    if !cfg!(target_os = "android") && normalizza_tema_desktop(&mut s) {
+        // Anche se il disco non è scrivibile, l'app usa subito il tema valido; al prossimo avvio riprova.
+        let _ = s.save_to(&path);
     }
-    let mut s = Settings::parse(&text);
-    if !matches!(s.ui_theme.trim(), "" | "windows-essenziale") {
-        return;
+    s
+}
+
+fn write_settings_in(s: &Settings, dir: &Path) -> std::io::Result<()> {
+    let mut s = s.clone();
+    if !cfg!(target_os = "android") {
+        normalizza_tema_desktop(&mut s);
     }
-    s.ui_theme = crate::ui::theme::ThemeId::Cedro.key().to_string();
-    if !s.view_asked {
-        s.simple = true;
-    }
-    let _ = s.save_to(&path);
+    s.save_to(&dir.join("config.txt"))
 }
 
 pub fn read_settings() -> Settings {
-    static AL_PRIMO_AVVIO: std::sync::Once = std::sync::Once::new();
-    let dir = crate::config_dir();
-    AL_PRIMO_AVVIO.call_once(|| passa_a_bondeno(&dir));
-    let s = Settings::load_from(&dir.join("config.txt"));
+    let s = read_settings_in(&crate::config_dir());
     crate::edizione::segui_tema(&s.ui_theme);
     crate::i18n::segui(&s.language);
     s
@@ -443,7 +445,7 @@ pub fn read_settings() -> Settings {
 pub fn write_settings(s: &Settings) -> std::io::Result<()> {
     crate::edizione::segui_tema(&s.ui_theme);
     crate::i18n::segui(&s.language);
-    s.save_to(&crate::config_dir().join("config.txt"))
+    write_settings_in(s, &crate::config_dir())
 }
 
 #[cfg(test)]
@@ -555,98 +557,168 @@ mod theme_tests {
 
     #[test]
     fn ui_theme_round_trips_and_keeps_other_lines() {
-        let old = "\u{feff}simple=1\nmia_chiave=resta\nui_theme=banco-di-lavoro\n";
+        let old = "\u{feff}simple=1\nmia_chiave=resta\nui_theme=cedro-notte\n";
         let mut s = Settings::parse(old);
         assert!(s.simple);
-        assert_eq!(s.ui_theme, "banco-di-lavoro");
-        s.ui_theme = "percorso-guidato".into();
+        assert_eq!(s.ui_theme, "cedro-notte");
+        s.ui_theme = "cedro-bosco".into();
         let text = s.merge_into(old);
         assert!(text.contains("mia_chiave=resta"));
         assert_eq!(text.matches("ui_theme=").count(), 1);
-        assert!(text.contains("ui_schema=2"));
-        assert_eq!(Settings::parse(&text).ui_theme, "percorso-guidato");
+        assert!(text.contains("ui_schema=3"));
+        assert_eq!(Settings::parse(&text).ui_theme, "cedro-bosco");
         // Un file vecchio, senza le chiavi nuove, resta com'era.
         assert_eq!(Settings::parse("simple=0\n").ui_theme, "");
     }
 }
 
-#[cfg(test)]
-mod bondeno_tests {
+#[cfg(all(test, not(target_os = "android")))]
+mod desktop_theme_tests {
     use super::*;
+    use crate::ui::theme::THEMES;
 
-    #[test]
-    fn chi_arriva_dalla_vecchia_edizione_bondeno_trova_il_tema_acceso() {
-        let dir = std::env::temp_dir().join(format!("cedro-da-bondeno-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("config.txt"), "quality=70\nui_theme=banco-di-lavoro\n").unwrap();
-        // Senza il file, niente cambia.
-        passa_a_bondeno(&dir);
-        assert_eq!(Settings::load_from(&dir.join("config.txt")).ui_theme, "banco-di-lavoro");
-        // Con il file: il tema è Bondeno, il resto resta, e il file sparisce (una volta sola).
-        fs::write(dir.join(DA_BONDENO), "").unwrap();
-        passa_a_bondeno(&dir);
-        let s = Settings::load_from(&dir.join("config.txt"));
-        assert_eq!((s.ui_theme.as_str(), s.quality), ("bondeno", 70));
-        assert!(!dir.join(DA_BONDENO).exists());
-        // Senza impostazioni ancora scritte vale lo stesso.
-        let nuova = dir.join("nuova");
-        fs::create_dir_all(&nuova).unwrap();
-        fs::write(nuova.join(DA_BONDENO), "").unwrap();
-        passa_a_bondeno(&nuova);
-        assert_eq!(Settings::load_from(&nuova.join("config.txt")).ui_theme, "bondeno");
-        let _ = fs::remove_dir_all(&dir);
+    fn temporary_dir(name: &str) -> std::path::PathBuf {
+        crate::engine::private_temp_dir(name).unwrap()
+    }
+
+    fn assert_only_theme_changed(before: &Settings, after: &Settings, key: &str) {
+        let mut expected = before.clone();
+        expected.ui_theme = key.to_string();
+        assert_eq!(&expected, after);
     }
 
     #[test]
-    fn chi_sceglie_cedro_4_labs_nell_installatore_trova_il_tema_acceso() {
-        let dir = std::env::temp_dir().join(format!("cedro-da-labs-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("config.txt"), "quality=70\nui_theme=windows-essenziale\nui_schema=2\n").unwrap();
-        passa_a_bondeno(&dir);
-        assert_eq!(Settings::load_from(&dir.join("config.txt")).ui_theme, "windows-essenziale");
-        fs::write(dir.join(DA_LABS), "").unwrap();
-        passa_a_bondeno(&dir);
-        let s = Settings::load_from(&dir.join("config.txt"));
-        assert_eq!((s.ui_theme.as_str(), s.quality), ("cedro-labs", 70));
-        assert!(!dir.join(DA_LABS).exists());
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn chi_aveva_l_aspetto_di_partenza_passa_al_nuovo_una_volta_sola() {
-        let dir = std::env::temp_dir().join(format!("cedro-nuovo-aspetto-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
+    fn startup_migrates_retired_themes_and_preserves_every_other_preference() {
+        let dir = temporary_dir("cedro-temi-startup");
         let path = dir.join("config.txt");
-        // Prima della 0.44, aspetto di partenza e vista Completa mai scelta: nuovo aspetto e vista Semplice.
-        fs::write(&path, "quality=70\nsimple=0\nui_theme=windows-essenziale\nui_schema=1\n").unwrap();
-        passa_a_bondeno(&dir);
-        let s = Settings::load_from(&path);
-        assert_eq!((s.ui_theme.as_str(), s.simple, s.quality), ("cedro", true, 70));
-        // Chi poi rimette Windows essenziale lo ritrova.
-        let mut s = s;
-        s.ui_theme = "windows-essenziale".into();
-        s.save_to(&path).unwrap();
-        passa_a_bondeno(&dir);
-        assert_eq!(Settings::load_from(&path).ui_theme, "windows-essenziale");
-        // La Completa scelta apposta resta; un altro tema resta com'è.
-        fs::write(&path, "simple=0\nview_asked=1\n").unwrap();
-        passa_a_bondeno(&dir);
-        let s = Settings::load_from(&path);
-        assert_eq!((s.ui_theme.as_str(), s.simple), ("cedro", false));
-        fs::write(&path, "ui_theme=banco-di-lavoro\nsimple=0\n").unwrap();
-        passa_a_bondeno(&dir);
-        let s = Settings::load_from(&path);
-        assert_eq!((s.ui_theme.as_str(), s.simple), ("banco-di-lavoro", false));
-        // Installazione nuova di Cedro 4 Labs: vista Completa come prima.
-        let nuova = dir.join("labs");
-        fs::create_dir_all(&nuova).unwrap();
-        fs::write(nuova.join(DA_LABS), "").unwrap();
-        passa_a_bondeno(&nuova);
-        let s = Settings::load_from(&nuova.join("config.txt"));
-        assert_eq!((s.ui_theme.as_str(), s.simple), ("cedro-labs", false));
+        for key in ["windows-essenziale", "percorso-guidato", "cedro-compatto", "banco-di-lavoro", "documento-al-centro", "bondeno", "sconosciuto", ""] {
+            for schema in ["", "ui_schema=1\n", "ui_schema=2\n", "ui_schema=3\n"] {
+                for simple in [0, 1] {
+                    let old = format!("\u{feff}# preferenze personali\nquality=70\nsimple={simple}\nview_asked=0\nui_theme={key}\n{schema}wheel=1\nnotify=0\ndest=fixed\ndest_dir=C:\\Convertiti\npdf_dpi=300\nocr_lang=en\nlanguage=de\nfirma_suffix=_mio\ncaso=V-2026-0457\ncronologia=resta\nweb=resta\nmia_chiave=resta\n");
+                    fs::write(&path, &old).unwrap();
+                    let before = Settings::parse(&old);
+                    let loaded = read_settings_in(&dir);
+                    assert_only_theme_changed(&before, &loaded, "cedro");
+                    let migrated = fs::read_to_string(&path).unwrap();
+                    assert!(migrated.contains("ui_theme=cedro\n"), "{key}/{schema}");
+                    assert!(migrated.contains("ui_schema=3\n"));
+                    for line in ["# preferenze personali", "caso=V-2026-0457", "cronologia=resta", "web=resta", "mia_chiave=resta"] {
+                        assert!(migrated.contains(line), "{line}");
+                    }
+                    assert_eq!(migrated.matches("ui_theme=").count(), 1);
+                    assert_eq!(read_settings_in(&dir), loaded);
+                    assert_eq!(fs::read_to_string(&path).unwrap(), migrated, "migrazione idempotente");
+                }
+            }
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn startup_migrates_bom_and_utf16_configs_without_duplicate_theme_keys() {
+        let dir = temporary_dir("cedro-temi-codifiche");
+        let path = dir.join("config.txt");
+        let text = "ui_theme=bondeno\r\nquality=70\r\nsimple=0\r\nview_asked=1\r\nfuturo=conservato\r\n";
+        let mut utf16 = vec![0xFF, 0xFE];
+        utf16.extend(text.encode_utf16().flat_map(u16::to_le_bytes));
+        for bytes in [format!("\u{feff}{text}").into_bytes(), utf16] {
+            fs::write(&path, bytes).unwrap();
+            let before = Settings::load_from(&path);
+            assert_only_theme_changed(&before, &read_settings_in(&dir), "cedro");
+            let migrated = fs::read_to_string(&path).unwrap();
+            assert_eq!(migrated.matches("ui_theme=").count(), 1);
+            assert!(!migrated.contains("bondeno"));
+            assert!(migrated.contains("futuro=conservato"));
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn valid_desktop_themes_round_trip_on_startup_and_save() {
+        let dir = temporary_dir("cedro-temi-validi");
+        let path = dir.join("config.txt");
+        for theme in THEMES {
+            for simple in [false, true] {
+                fs::write(&path, format!("ui_theme={}\nsimple={}\nview_asked=1\nquality=65\nui_schema=1\nfuturo=resta\n", theme.key(), u8::from(simple))).unwrap();
+                let before = Settings::load_from(&path);
+                assert_eq!(read_settings_in(&dir), before);
+                write_settings_in(&before, &dir).unwrap();
+                assert_eq!(read_settings_in(&dir), before);
+                assert!(fs::read_to_string(&path).unwrap().contains("futuro=resta"));
+            }
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn saving_a_retired_theme_never_persists_it_or_loses_unknown_lines() {
+        let dir = temporary_dir("cedro-temi-salvataggio");
+        let path = dir.join("config.txt");
+        for key in ["windows-essenziale", "percorso-guidato", "cedro-compatto", "banco-di-lavoro", "documento-al-centro", "bondeno", "sconosciuto", ""] {
+            for simple in [false, true] {
+                fs::write(&path, "caso=caso-personale\ncronologia=conservata\nweb=conservato\n").unwrap();
+                let s = Settings { ui_theme: key.into(), quality: 75, simple, view_asked: true, ..Settings::default() };
+                write_settings_in(&s, &dir).unwrap();
+                assert_only_theme_changed(&s, &read_settings_in(&dir), "cedro");
+                assert_eq!(s.ui_theme, key, "il salvataggio non modifica l'oggetto del chiamante");
+                let saved = fs::read_to_string(&path).unwrap();
+                for line in ["caso=caso-personale", "cronologia=conservata", "web=conservato"] {
+                    assert!(saved.contains(line));
+                }
+            }
+        }
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn bondeno_installer_marker_migrates_to_melanzana_and_keeps_the_chosen_view() {
+        let dir = temporary_dir("cedro-marker-bondeno");
+        let path = dir.join("config.txt");
+        for simple in [0, 1] {
+            fs::write(&path, format!("quality=70\nsimple={simple}\nview_asked=1\nui_theme=bondeno\nui_schema=1\nfuturo=resta\n")).unwrap();
+            let before = Settings::load_from(&path);
+            fs::write(dir.join(DA_BONDENO), "").unwrap();
+            assert_only_theme_changed(&before, &read_settings_in(&dir), "cedro");
+            assert!(!dir.join(DA_BONDENO).exists());
+            assert!(fs::read_to_string(&path).unwrap().contains("futuro=resta"));
+        }
+        fs::remove_file(&path).unwrap();
+        fs::write(dir.join(DA_BONDENO), "").unwrap();
+        let new = read_settings_in(&dir);
+        assert_eq!(new.ui_theme, "cedro");
+        assert_eq!(new.simple, Settings::default().simple);
+        assert!(!dir.join(DA_BONDENO).exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn labs_installer_marker_still_works_and_preserves_existing_preferences() {
+        let dir = temporary_dir("cedro-marker-labs");
+        let path = dir.join("config.txt");
+        fs::write(&path, "quality=70\nsimple=1\nview_asked=1\nui_theme=bondeno\nfuturo=resta\n").unwrap();
+        let before = Settings::load_from(&path);
+        fs::write(dir.join(DA_BONDENO), "").unwrap();
+        fs::write(dir.join(DA_LABS), "").unwrap();
+        assert_only_theme_changed(&before, &read_settings_in(&dir), "cedro-labs");
+        assert!(!dir.join(DA_BONDENO).exists() && !dir.join(DA_LABS).exists());
+        assert!(fs::read_to_string(&path).unwrap().contains("futuro=resta"));
+        fs::remove_file(&path).unwrap();
+        fs::write(dir.join(DA_LABS), "").unwrap();
+        let new = read_settings_in(&dir);
+        assert_eq!((new.ui_theme.as_str(), new.simple), ("cedro-labs", false));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn failed_marker_save_keeps_the_marker_for_retry() {
+        let dir = temporary_dir("cedro-marker-retry");
+        fs::create_dir(dir.join("config.txt")).unwrap();
+        fs::write(dir.join(DA_BONDENO), "").unwrap();
+        read_settings_in(&dir);
+        assert!(dir.join(DA_BONDENO).is_file());
+        fs::remove_dir(dir.join("config.txt")).unwrap();
+        assert_eq!(read_settings_in(&dir).ui_theme, "cedro");
+        assert!(!dir.join(DA_BONDENO).exists());
         let _ = fs::remove_dir_all(&dir);
     }
 }
