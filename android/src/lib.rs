@@ -4,6 +4,7 @@
 pub mod ui;
 pub mod worker;
 pub mod storage;
+pub mod publication;
 
 #[cfg(target_os = "android")]
 mod glue;
