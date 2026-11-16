@@ -2024,8 +2024,10 @@ impl App {
         let pal = self.pal();
         let l = self.lavori[k].clone();
         let trascrive = l.sorgente.is_some();
+        let tempo=quando(l.quando);
+        let tempo_h=casa::telefono::altezza_a(p,&tempo,13.0,Weight::Regular,w-28.0,19.0,0)+6.0;
         let note_h=match &l.stato {
-            Stato::Fatto{msg,..}=>casa::telefono::altezza_a(p,msg,13.0,Weight::Regular,w-28.0,19.0,0)+6.0,
+            Stato::Fatto{msg,..}=>tempo_h+casa::telefono::altezza_a(p,msg,13.0,Weight::Regular,w-28.0,19.0,0)+6.0,
             _=>0.0,
         };
         let caso_h=if self.labs.casi.contains_key(&l.id){32.0}else{0.0};
@@ -2074,7 +2076,8 @@ impl App {
                 }
             }
             Stato::Fatto { nome, msg, path } => {
-                casa::telefono::testo_a(p,msg,x+14.0,y+38.0,w-28.0,13.0,Weight::Regular,if avviso_motore(msg){self.avviso()}else{pal.muted},19.0,0);
+                casa::telefono::testo_a(p,&tempo,x+14.0,y+38.0,w-28.0,13.0,Weight::Regular,pal.muted,19.0,0);
+                casa::telefono::testo_a(p,msg,x+14.0,y+38.0+tempo_h,w-28.0,13.0,Weight::Regular,if avviso_motore(msg){self.avviso()}else{pal.muted},19.0,0);
                 if let Some(code)=self.labs.casi.get(&l.id) {
                     p.text(&cedro::i18n::lit(&format!("{} · {}",cedro::i18n::tr("Caso o campione"),code)),x+14.0,y+38.0+note_h,w-28.0,28.0,13.0,Weight::Semibold,pal.primary,Align::Left);
                 }

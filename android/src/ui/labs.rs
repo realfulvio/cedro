@@ -101,12 +101,31 @@ impl App {
         !self.labs.caso_aperto && self.opzioni.is_none() && ((self.casa_aperta && self.casa.laboratorio && self.sopra.is_none()) || (!self.casa_aperta && self.scheda==Scheda::Ruota && self.file.as_ref().is_some_and(|f|crate::labs::laboratorio(&f.path))))
     }
 
+    /// Restituisce prima l'identità da cancellare, poi l'eventuale nuova richiesta.
+    /// Vale anche quando la pagina resta aperta ma non contiene più una sorgente.
+    pub fn sincronizza_labs(&mut self) -> (Option<u32>,Option<(u32,PathBuf,crate::labs::Scelta)>) {
+        let prima=self.labs.richiesta;
+        let nuova=self.richiesta_labs();
+        (prima.filter(|id|Some(*id)!=self.labs.richiesta),nuova)
+    }
+
+    fn svuota_anteprima_labs(&mut self) {
+        self.labs.path=None;
+        self.labs.focus=None;
+        self.labs.richiesta=None;
+        self.labs.scelta=Default::default();
+        self.labs.info=None;
+        self.labs.immagine=None;
+        self.labs.errore.clear();
+        self.labs.aggiorna=false;
+    }
+
     pub fn richiesta_labs(&mut self) -> Option<(u32,PathBuf,crate::labs::Scelta)> {
-        if !self.labs_visibile(){return None;}
+        if !self.labs_visibile(){self.svuota_anteprima_labs();return None;}
         let path=if self.casa_aperta && self.casa.laboratorio && self.sopra.is_none() {
             self.casa.coda.iter().filter(|v|v.scelto&&v.kind==self.casa.categoria&&crate::labs::laboratorio(&v.path)).min_by_key(|v|self.labs.focus.as_ref()!=Some(&v.path)).map(|v|v.path.clone())
         } else if !self.casa_aperta {self.file.as_ref().filter(|f|crate::labs::laboratorio(&f.path)).map(|f|f.path.clone())} else {None};
-        let path=path?;
+        let Some(path)=path else {self.svuota_anteprima_labs();return None;};
         if self.labs.path.as_ref()!=Some(&path) {
             self.labs.path=Some(path.clone());
             self.labs.scelta=Default::default();
@@ -266,6 +285,60 @@ mod tests {
         let Effetto::Converti{opts:Some(opts),..}=a.avvia("png","PNG",true) else{panic!()};
         assert_eq!(opts.micro_channels,cedro::Options::default().micro_channels);
         assert_eq!(opts.micro_z,cedro::Options::default().micro_z);
+    }
+
+    #[test]
+    fn sorgente_assente_cancella_preview_e_rifiuta_esiti_tardivi() {
+        for modo in 0..4 {
+            let mut a=App::new(ThemeId::Cedro);a.vai_casa();a.vista_nav(6);
+            a.aggiungi_coda(vec![("/tmp/a.czi".into(),"a.czi".into(),Kind::Image)]);
+            let (_,r)=a.sincronizza_labs();let (id,_,_)=r.unwrap();
+            let img=Image::from_rgba(1,1,&[255,0,0,255]).unwrap();
+            a.labs.info=Some(Default::default());a.labs.immagine=Some(img.clone());
+            a.labs.errore="precedente".into();a.labs.scelta.z=3;
+            match modo {
+                0=>{a.casa.coda.clear();},
+                1=>{a.casa.coda[0].scelto=false;},
+                2=>{a.casa.categoria=Kind::Text;},
+                _=>{a.sopra=Some(Scheda::Lavori);},
+            }
+            let (annulla,r)=a.sincronizza_labs();
+            assert_eq!(annulla,Some(id));assert!(r.is_none());
+            assert!(a.labs.path.is_none()&&a.labs.richiesta.is_none()&&a.labs.info.is_none()&&a.labs.immagine.is_none());
+            assert!(a.labs.errore.is_empty());assert_eq!(a.labs.scelta.z,0);
+            a.ricevi_labs(id,Ok((Default::default(),img)));
+            assert!(a.labs.info.is_none()&&a.labs.immagine.is_none());
+            a.ricevi_labs(id,Err("esito tardivo".into()));assert!(a.labs.errore.is_empty());
+            let (annulla,r)=a.sincronizza_labs();assert!(annulla.is_none()&&r.is_none());
+            a.sopra=None;a.casa.categoria=Kind::Image;
+            if a.casa.coda.is_empty(){a.aggiungi_coda(vec![("/tmp/a.czi".into(),"a.czi".into(),Kind::Image)]);}else{a.casa.coda[0].scelto=true;}
+            let (_,r)=a.sincronizza_labs();assert_ne!(r.unwrap().0,id);
+        }
+    }
+
+    #[test]
+    fn risultato_mostra_il_tempo_senza_coprire_avviso_e_azioni() {
+        let mut a=App::new(ThemeId::Cedro);a.anim.calmo=true;a.grandi=true;
+        a.lavori.push(Lavoro{id:1,origine:"campione".into(),etichetta:"PNG".into(),conv:true,inizio:Instant::now(),quando:adesso(),stato:Stato::Fatto{path:"/tmp/a.png".into(),nome:"a.png".into(),msg:"Attenzione: messaggio lungo su più righe per il risultato del campione".into()},prog:Default::default(),sorgente:None,controlli:None});
+        a.labs.casi.insert(1,"CASO".into());
+        let mut cache=GlyphCache::new();
+        let mut p=Painter::new(360,900,1.0,Fonts::for_theme(a.tema),&mut cache);p.larger=true;
+        let h=a.scheda_lavoro(&mut p,0,16.0,0.0,328.0,(0.0,0.0,360.0,900.0));
+        let prima=p.pixmap.data().to_vec();drop(p);
+        a.lavori[0].quando=adesso()-864000;
+        let mut p=Painter::new(360,900,1.0,Fonts::for_theme(a.tema),&mut cache);p.larger=true;
+        let dopo=a.scheda_lavoro(&mut p,0,16.0,0.0,328.0,(0.0,0.0,360.0,900.0));
+        assert_eq!(h,dopo);assert_ne!(prima,p.pixmap.data());
+        let msg=match &a.lavori[0].stato{Stato::Fatto{msg,..}=>msg,_=>unreachable!()};
+        let note=altezza_a(&p,&quando(a.lavori[0].quando),13.0,Weight::Regular,300.0,19.0,0)+6.0+altezza_a(&p,msg,13.0,Weight::Regular,300.0,19.0,0)+6.0;
+        let mut azioni=0;
+        for (forma,az) in &a.colpi {
+            if matches!(az,Azione::Apri(1)|Azione::Condividi(1)|Azione::CopiaRapporto(1)) {
+                azioni+=1;
+                let Forma::R(r)=forma else{panic!()};assert!(r.1>=54.0+note+32.0+22.0);assert!(r.3>=48.0&&r.1+r.3<=h);
+            }
+        }
+        assert_eq!(azioni,6); // tre azioni per ciascuno dei due disegni della scheda.
     }
 
     #[test]

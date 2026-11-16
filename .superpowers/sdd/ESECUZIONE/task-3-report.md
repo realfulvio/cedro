@@ -106,3 +106,30 @@ Sul Mi9T, esecuzione riservata al controller: Office5DOCX reali con confronto de
 ## File del task
 
 `android/src/{labs.rs,ui/labs.rs,lib.rs,glue.rs,worker.rs,publication.rs,ui.rs,ui/casa.rs,ui/casa/telefono.rs,ui/opzioni.rs,ui/pdf.rs}`; `android/examples/vista_a.rs`; `android/tests/support/dicom.rs`; `android/README.md`; `android/Cargo.toml`, Cargo.lock; `src/{lib.rs,imgfmt.rs,engine_svslab.rs,mrxs.rs,ufficio/font.rs}`; i18n cinque TSV; questo rapporto. Nessun file estraneo nello stage.
+
+## Correzioni review — round 1/5, base f49241e
+
+Letta integralmente `task-3-review.md` (I1, I2, M1), più I3 confermato dal controller dalla specifica07. Nessun carico remoto o Rust locale avviato; host `--lib` f49241e era ancora in esecuzione presso il controller durante le correzioni.
+
+- **I1:** renderer usa `App::vista_scorri`, interfaccia mirata alle fotografie, con normalizzazione dei valori negativi/non finiti; `scorri` rimane privato. Rimossi i due accessi causa E0616. Scena aggiunta `famiglie-grandi` nelle tre lingue e viewport già previsti.
+- **I2:** `sincronizza_labs` restituisce l'identità precedente da cancellare prima dell'eventuale richiesta nuova. Assenza di sorgente valida o uscita dalla pagina azzera path/focus/id/metadati/immagine/errore/selezione. Il glue segnala cancel anche senza nuova richiesta, prima di raccogliere gli esiti; rimosso l'AtomicU32 ridondante che ricordava l'ultimo worker. Esiti tardivi non possono ripopolare la preview. Riaprire o riselezionare genera un nuovo id.
+- **M1:** ripristinata `quando(l.quando)` in una riga distinta sopra il messaggio, con altezza misurata e compresa nel layout; caso, percorso e azioni si spostano di conseguenza. Conservato il messaggio integrale.
+- **I3:** Completa immagini ha una barra fissa con tutte le cinque famiglie visibili e i colori derivati dai formati/`voci::family` del core. Nomi multilinea misurati, cinque target di almeno48dp a360dp, salti agli offset effettivi dei gruppi. Nessun filtro del catalogo, nessun passaggio obbligatorio attraverso Altro. La barra rimane fuori dall'area scorrevole, che ne riserva l'altezza; i colori non sono duplicati in una tabella Android.
+
+Test aggiunti, **NON ESEGUITI** da questo agente:
+
+- `sorgente_assente_cancella_preview_e_rifiuta_esiti_tardivi`: richiesta attiva con immagine, rimozione/deselezione/cambio categoria/uscita; id da cancellare, pulizia completa, successo ed errore tardivi ignorati, riselezione con nuovo id.
+- `risultato_mostra_il_tempo_senza_coprire_avviso_e_azioni`: render a caratteri grandi di avviso multilinea/caso; cambiando solo il timestamp cambiano i pixel, altezza coerente e azioni dopo la nota/percorso.
+- `cinque_famiglie_restano_visibili_e_saltano_ai_formati`: cinque colori/famiglie, target≥48dp, salto ad ogni gruppo e almeno un suo formato raggiungibile, tre viewport360×800/360×640/800×400 con testo normale/grande. Test catalogo e tolleranza f32 preesistenti preservati.
+
+Controlli locali del round: parsing Tree-sitter dei27 sorgenti Rust senza ERROR/missing; `git diff --check` exit0. Non è una prova di compilazione. NDK f49241e aveva fallito sui due accessi privati del renderer; nessun PASS di quel gate è attribuito al fix.
+
+Comandi da rieseguire sul commit del round, esclusivamente dal controller:
+
+```
+cargo test --release -p cedro-android --lib -j2
+cargo ndk -t arm64-v8a -P 26 check -p cedro-android --all-targets -j2
+cargo run --release -p cedro-android --example vista_a -- /tmp/vista-a-task3-round1
+```
+
+Restano i gate runtime/build/APK/corpus già elencati, inclusa cancellazione reale del process group sul Mi9T. La review indipendente del delta e l'ispezione dei PNG IT/DE/PT devono ancora avvenire.
