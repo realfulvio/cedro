@@ -1,0 +1,62 @@
+//! Rendering della UI reale A; i dati di prova restano soltanto in questo eseguibile host.
+//! Eseguire sul mini-PC: cargo run -p cedro-android --release --example vista_a -- /tmp/vista-a
+use std::path::{Path, PathBuf};
+use std::time::Instant;
+use cedro::{Kind, i18n::{self, Lang}};
+use cedro::ui::{gfx::{Fonts, GlyphCache, Painter}, theme::ThemeId};
+use cedro_android::ui::{App, Archivio, Lavoro, Recente, Scheda, Stato};
+
+fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, scene: usize) {
+    let mut app = App::new(tema);
+    app.anim.calmo = true;
+    app.vai_casa();
+    i18n::set(lang);
+    app.lingua = lang.code();
+    app.margini = (0.0, 27.0, 0.0, 14.0);
+    let path = PathBuf::from("assets/cedro/immagini.jpg");
+    app.recenti.push(Recente { path: path.clone(), nome: "Riunione.m4a".into(), kind: Kind::Audio, thumb: None });
+    app.recenti.push(Recente { path: path.clone(), nome: "Relazione.pdf".into(), kind: Kind::Pdf, thumb: None });
+    match scene {
+        1..=6 => {
+            let k = [Kind::Image, Kind::Pdf, Kind::Audio, Kind::Video, Kind::Other, Kind::Image][scene - 1];
+            app.aggiungi_coda(vec![(path.clone(), if k == Kind::Image { "Sopralluogo.heic" } else { "Relazione.pdf" }.into(), k)]);
+            app.info_voce(&path, cedro::ui::media::thumb_of(&path, 300), Some((4032, 3024)));
+            app.vista_nav(scene);
+            if scene == 1 { app.casa.operazione.insert(0, "pdf"); }
+
+        }
+        7 => { app.sopra = Some(Scheda::Lavori); app.lavori.push(Lavoro { id: 1, origine: "Sopralluogo.heic".into(), etichetta: "PDF".into(), conv: true, inizio: Instant::now(), quando: cedro_android::ui::adesso(), stato: Stato::Fatto { path: path.clone(), nome: "Sopralluogo.pdf".into(), msg: "1,2 MB".into() }, prog: Default::default(), sorgente: None, controlli: None }); }
+        8 => app.sopra = Some(Scheda::Aspetto),
+        9 => { app.imposta_file(Archivio { path: path.clone(), nome: "Sopralluogo.heic".into(), dim: 1234567 }, Kind::Image, true); app.miniatura = cedro::ui::media::thumb_of(&path, 300);
+            app.foglio = false;
+            app.dal_foglio = true;
+            app.scelta = cedro::conversioni::formats(Kind::Image).iter().position(|f| f.id == "pdf");
+        }
+        10 => { app.grandi = true; }
+        _ => {}
+    }
+    let mut cache = GlyphCache::new();
+    let start = Instant::now();
+    let mut p = Painter::new(w as u32, h as u32, 1.0, Fonts::for_theme(tema), &mut cache);
+    p.larger = app.grandi;
+    app.disegna(&mut p, w, h);
+    let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+    p.save_png(&out.join(format!("{nome}.png"))).unwrap();
+    println!("{nome}\t{elapsed:.2} ms");
+}
+
+fn main() {
+    let out = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "/tmp/vista-a".into()));
+    std::fs::create_dir_all(&out).unwrap();
+    let scenes = ["inizio", "converti", "pdf", "trascrivi", "web", "firma", "labs", "lavori", "impostazioni", "condividi", "grandi"];
+    for lang in [Lang::It, Lang::De] {
+        for (w, h) in [(360.0, 800.0), (360.0, 640.0), (800.0, 400.0)] {
+            for (scene, name) in scenes.iter().enumerate() {
+                disegna(&out, &format!("{}-{w}x{h}-{name}", lang.code()), w, h, ThemeId::Cedro, lang, scene);
+            }
+        }
+    }
+    for (name, theme) in [("notte", ThemeId::CedroNotte), ("bosco", ThemeId::CedroBosco), ("carta", ThemeId::CedroCarta)] {
+        disegna(&out, name, 360.0, 800.0, theme, Lang::It, 0);
+    }
+}

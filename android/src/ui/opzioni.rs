@@ -46,7 +46,7 @@ pub struct Opzioni {
 /// I formati di un tipo di file: quelli del pannello Conversioni del computer.
 pub fn formati(kind: Kind) -> Vec<Slice> {
     let s = cedro::panel_slices(kind);
-    s.iter().copied().filter(|s| s.id != "none").collect()
+    s.iter().chain(conversioni::tools(kind)).copied().filter(|s| s.id != "none").collect()
 }
 
 pub const MODELLI: [&str; 4] = ["%nome%", "%data%", "%ora%", "%ext%"];
@@ -114,7 +114,17 @@ impl App {
                 } else if let Some(o) = self.opzioni.take() {
                     match o.da_casa {
                         Some(k) => self.da_opzioni(k, o.formato, o.valori),
-                        None => self.opzioni_salvate = Some(o.valori),
+                        None => {
+                            if self.tema.is_cedro() {
+                                if let Some(op) = formati(self.kind).get(o.formato) {
+                                    self.modo = u8::from(!conversioni::formats(self.kind).iter().any(|s| s.id == op.id));
+                                    self.scelta = self.fette().iter().position(|s| s.id == op.id);
+                                    self.foglio = false;
+                                    self.dal_foglio = true;
+                                }
+                            }
+                            self.opzioni_salvate = Some(o.valori);
+                        },
                     }
                 }
                 self.scorri = 0.0;
@@ -142,7 +152,8 @@ impl App {
                 let Some(s) = f.get(o.formato).copied() else { return Effetto::Niente };
                 let opts = conversioni::options_from(&o.valori);
                 self.opzioni_salvate = Some(o.valori);
-                return self.avvia_con(s.id, s.label, true, Some(Box::new(opts)), Vec::new());
+                let conv = cedro::conversioni::formats(kind).iter().any(|f| f.id == s.id);
+                return self.avvia_con(s.id, s.label, conv, Some(Box::new(opts)), Vec::new());
             }
             OpzAz::Formato(i) => {
                 if let Some(o) = self.opzioni.as_mut() {
@@ -228,16 +239,16 @@ impl App {
         let pal = self.pal();
         let (mut cx, mut cy) = (x, y);
         for (i, (t, nuovo)) in voci.iter().enumerate() {
-            let tw = p.measure(t, 15.0, Weight::Semibold) + 28.0 + if *nuovo { p.measure("NUOVO", 9.0, Weight::Semibold) + 6.0 } else { 0.0 };
+            let tw = (p.measure(t, 15.0, Weight::Semibold) + 28.0 + if *nuovo { p.measure("NUOVO", 9.0, Weight::Semibold) + 6.0 } else { 0.0 }).min(w);
             if cx + tw > x + w && cx > x {
                 cx = x;
                 cy += 50.0;
             }
             let on = scelta == Some(i);
             let a = az(i);
-            let rc = (cx, cy, tw, 42.0);
+            let rc = (cx, cy, tw.min(w), 48.0);
             p.rrect(rc.0, rc.1, rc.2, rc.3, 21.0, Some(if on { pal.alt } else if self.premuto == Some(a) { mix(pal.surface, pal.primary, 0.08) } else { pal.surface }), Some((if on { pal.primary } else { pal.border }, if on { 2.0 } else { 1.5 })));
-            let lw = p.measure(t, 15.0, Weight::Semibold);
+            let lw = p.measure(t, 15.0, Weight::Semibold).min((rc.2 - 28.0).max(1.0));
             p.text(t, rc.0 + 14.0, rc.1, lw + 4.0, rc.3, 15.0, Weight::Semibold, if on { pal.primary } else { pal.text }, Align::Left);
             if *nuovo {
                 p.text("NUOVO", rc.0 + 18.0 + lw, rc.1, rc.2 - lw - 20.0, rc.3, 9.0, Weight::Semibold, pal.ok, Align::Left);
