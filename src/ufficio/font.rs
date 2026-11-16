@@ -275,6 +275,18 @@ impl Fonti {
                 return Some(id);
             }
         }
+        #[cfg(target_os = "android")]
+        {
+            // Le stesse famiglie generiche, cercate nei caratteri realmente forniti da Android.
+            let android: &[&str] = match generic(family).first().copied() {
+                Some("Times New Roman") => &["Noto Serif", "Droid Serif"],
+                Some("Courier New") => &["Droid Sans Mono", "Noto Sans Mono"],
+                _ => &["Roboto", "Noto Sans", "Droid Sans"],
+            };
+            for name in android {
+                if let Some(id) = self.from_system(&name.to_lowercase(), bold, italic) { return Some(id); }
+            }
+        }
         None
     }
 

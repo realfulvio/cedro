@@ -635,6 +635,7 @@ dependencies = [
  "android-activity",
  "android_logger",
  "cedro",
+ "image",
  "jni 0.21.1",
  "log",
  "libc",

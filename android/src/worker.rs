@@ -18,6 +18,8 @@ pub struct Richiesta {
     pub opts: cedro::Options,
     pub unisci: Vec<(PathBuf, Option<cedro::PageSel>)>,
     pub sommario: Option<(Vec<String>,Vec<String>)>,
+    #[serde(default)]
+    pub anteprima: Option<crate::labs::Scelta>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -80,6 +82,10 @@ fn converti_web(r:&mut Richiesta,testo:bool,audio:bool){
 
 fn esegui(mut r: Richiesta) -> Result<(PathBuf, String), String> {
     let _scratch=Scratch(r.out.join(".scaricato"));
+    if r.azione=="strip" && crate::labs::micro(&r.file) {
+        return Err("La copia anonima di CZI, ND2 e LIF non è supportata dal motore. Puoi convertire il file in PNG; non è una copia anonima del formato originale.".into());
+    }
+    if let Some(scelta) = r.anteprima.take() { return crate::labs::anteprima(&r.file,&scelta,&r.out); }
     if let Some((lines,names))=r.sommario.take() {
         use cedro::riassunto::{Failure, Options, Progress, Step};
         let done=std::sync::Mutex::new(None);
@@ -135,6 +141,17 @@ fn esegui(mut r: Richiesta) -> Result<(PathBuf, String), String> {
         if r.azione == "zip-tutti" {
             let files: Vec<PathBuf> = r.unisci.iter().map(|u| u.0.clone()).collect();
             cedro::zip_paths(&files, &r.out, None, &r.opts)
+        } else if matches!(r.azione.as_str(),"figure"|"rx"|"package") {
+            let mut files:Vec<_>=if r.unisci.is_empty(){vec![r.file.clone()]}else{r.unisci.iter().map(|u|u.0.clone()).collect()};
+            if r.azione=="package" {
+                let cartelle:Vec<_>=files.iter().filter(|p|crate::labs::estensione(p)=="mrxs").map(|p|p.with_extension("")).collect();
+                for dir in cartelle {if !files.contains(&dir){files.push(dir);}}
+            }
+            match r.azione.as_str(){
+                "figure"=>cedro::figure_with(&files,Some(&r.out),&r.opts),
+                "rx"=>cedro::rx_with(&files,Some(&r.out),&r.opts),
+                _=>cedro::package_with(&files,Some(&r.out),&r.opts),
+            }
         } else if r.unisci.is_empty() {
             cedro::perform_with(&r.file, &r.azione, r.qualita, Some(&r.out), &r.opts)
         } else {
@@ -212,10 +229,29 @@ pub fn avvia(libs: &std::path::Path, r: Richiesta, cancel: &std::sync::atomic::A
 mod tests {
     use super::*;
     #[test]
+    fn copia_anonima_micro_non_legge_il_file_e_pacchetto_contiene_i_dati() {
+        let dir=crate::storage::nuova_cartella(&std::env::temp_dir()).unwrap();
+        for ext in ["czi","nd2","lif"] {
+            let r=Richiesta{file:dir.join(format!("inesistente.{ext}")),azione:"strip".into(),qualita:82,voce:Default::default(),out:dir.clone(),opts:Default::default(),unisci:vec![],sommario:None,anteprima:None};
+            assert!(esegui(r).unwrap_err().contains("non è supportata"));
+        }
+        let a=dir.join("a.txt");let b=dir.join("b.txt");
+        std::fs::write(&a,b"a").unwrap();std::fs::write(&b,b"b").unwrap();
+        let out=dir.join("uscite");std::fs::create_dir_all(&out).unwrap();
+        let r=Richiesta{file:a.clone(),azione:"package".into(),qualita:82,voce:Default::default(),out,opts:cedro::caso::opzioni(Some("C-1"),Default::default()),unisci:vec![(a,None),(b,None)],sommario:None,anteprima:None};
+        let (zip,_)=esegui(r).unwrap();
+        assert!(zip.file_name().unwrap().to_string_lossy().contains("C-1"));
+        let check=cedro::pacchetto::verifica(&zip,&|_|{}).unwrap();
+        assert!(check.tutto_bene());assert_eq!(check.integri,2);
+        assert!(zip.with_file_name(format!("{}.sha256",zip.file_name().unwrap().to_string_lossy())).is_file());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn qualita_web_indipendente_da_modello_e_voci(){
         for code in [0,1,2,16,33,66]{
             for (text,audio,action) in [(false,true,"mp3"),(false,false,"mp4"),(true,true,"trascrivi")]{
-                let mut r=Richiesta{file:"link".into(),azione:"web-audio".into(),qualita:82,voce:Voce::da_codice(code),out:"out".into(),opts:Default::default(),unisci:vec![],sommario:None};
+                let mut r=Richiesta{file:"link".into(),azione:"web-audio".into(),qualita:82,voce:Voce::da_codice(code),out:"out".into(),opts:Default::default(),unisci:vec![],sommario:None,anteprima:None};
                 converti_web(&mut r,text,audio);
                 let r:Richiesta=serde_json::from_slice(&serde_json::to_vec(&r).unwrap()).unwrap();
                 assert_eq!(r.qualita,82);assert_eq!(r.voce,Voce::da_codice(code));assert_eq!(r.azione,action);

@@ -25,6 +25,7 @@ mod casa;
 mod condivisione;
 pub mod firma;
 mod m3;
+pub mod labs;
 
 /// Quante attività ha questa build (la Firma digitale è l'ultima).
 pub fn attivita_n() -> usize {
@@ -165,6 +166,7 @@ pub enum Azione {
     CopiaInfo,
     /// L'icona sulla scheda di un lavoro non riuscito: copia l'errore con tutti i dettagli.
     CopiaErrore(u32),
+    CopiaRapporto(u32),
     IndietroFoglio,
     ApriScelta,
     ChiudiScelta,
@@ -193,7 +195,10 @@ pub enum Azione {
     Casa(casa::CasaAz),
     /// La firma digitale: la sezione e il visualizzatore.
     Firma(firma::FirmaAz),
-    /// Un'area che non fa niente ma ferma il tocco.
+    /// Laboratorio: anteprima e caso, senza I/O nel loop UI.
+    Labs(labs::LabAz),
+    Pacchetto,
+    /// Ferma il tocco senza compiere azioni.
     Niente,
 }
 
@@ -229,6 +234,7 @@ pub enum Effetto {
     OndaRevisione(PathBuf, f64),
     /// Le impostazioni sono cambiate: vanno ricordate (`imp` nel motore, modello e «se esiste già» qui).
     SalvaImpostazioni,
+    SalvaCaso,
     /// Scrive un file nuovo (la revisione salvata) e lo consegna come il risultato del lavoro `id`.
     Scrivi { id: u32, nome: String, dati: Vec<u8> },
     /// Chiude Cedro: si torna all'app di prima.
@@ -324,63 +330,24 @@ fn righe_link(path: &Path) -> Vec<&'static Riga> {
 
 /// Le azioni da mettere nelle tessere per un tipo di file: solo quelle che il motore sa fare.
 fn righe(kind: Kind) -> Vec<&'static Riga> {
-    static IMG: [Riga; 10] = [
-        r("jpeg", "JPG", "Più leggera", true),
-        r("png", "PNG", "Senza perdita", true),
-        r("webp", "WebP", "Per il web", true),
-        r("avif", "AVIF", "Ancora più leggera", true),
-        r("jxl", "JPEG XL", "Il JPEG nuovo", true),
-        r("pdf", "PDF", "Un foglio", true),
-        r("compress", "Comprimi", "Meno spazio", false),
-        r("ocr", "Testo", "Riconosci scritte", false),
-        r("half", "Dimezza", "Metà dimensioni", false),
-        rn("strip", "Togli GPS", "Luogo, data, fotocamera", false),
-    ];
-    static PDF: [Riga; 11] = [
-        r("docx", "Word", "Con testo", true),
-        r("xlsx", "Excel", "Le tabelle", true),
-        r("txt", "Testo", "Estrae le parole", true),
-        r("jpg", "JPG", "Una per pagina", true),
-        r("merge", "Unisci", "Con altri PDF", false),
-        r("split", "Dividi", "In più file", false),
-        r("pages", "Pagine", "Ruota, togli, numeri", false),
-        r("compress", "Comprimi", "Meno spazio", false),
-        r("ocr", "Leggi", "Riconosci scritte", false),
-        r("png", "PNG", "Una per pagina", true),
-        rn("firme", "Firme", "Verifica chi ha firmato", false),
-    ];
-    static ARC: [Riga; 6] = [
-        r("z-webp", "Foto in WebP", "Le immagini dello ZIP", false),
-        r("z-jpeg", "Foto in JPEG", "Le immagini dello ZIP", false),
-        r("z-png", "Foto in PNG", "Le immagini dello ZIP", false),
-        r("z-mp3", "Audio in MP3", "L'audio dello ZIP", false),
-        r("z-wav", "Audio in WAV", "L'audio dello ZIP", false),
-        r("z-pdf", "Documenti in PDF", "Word, testo, foto", false),
-    ];
-    static TXT: [Riga; 3] = [r("pdf", "PDF", "Da stampare", true), r("html", "HTML", "Per il web", true), r("md", "Markdown", "Testo con segni", true)];
-    static AUD: [Riga; 6] = [
-        r("mp3", "MP3", "Più leggero", true),
-        r("wav", "WAV", "Senza compressione", true),
-        r("flac", "FLAC", "Senza perdita, leggero", true),
-        r("opus", "Opus", "Il più leggero", true),
-        r("aiff", "AIFF", "Per Mac e studi", true),
-        r("trascrivi", "Testo", "Dalla voce, offline", false),
-    ];
-    static VID: [Riga; 3] = [r("mp4", "MP4", "Più leggero", true), r("mp3", "Solo audio", "MP3 dal video", false), r("trascrivi", "Testo", "Dalla voce, offline", false)];
-    static DOC: [Riga; 1] = [r("pdf", "PDF", "Da documento", true)];
-    let tutte: &'static [Riga] = match kind {
-        Kind::Image => &IMG,
-        Kind::Pdf => &PDF,
-        Kind::Text => &TXT,
-        Kind::Audio => &AUD,
-        Kind::Video => &VID,
-        Kind::Doc => &DOC,
-        Kind::Archive => &ARC,
-        Kind::Other => &[],
-    };
-    let ids: Vec<&'static str> = [Mode::Convert, Mode::Tools].into_iter().flat_map(|m| list(kind, m)).map(|s| s.id).chain(cedro::panel_slices(kind).iter().map(|s| s.id)).collect();
-    // «trascrivi» non è nel catalogo del motore di conversione: è whisper.cpp dentro l'APK; «pages» è la schermata Pagine.
-    tutte.iter().filter(|r| ids.contains(&r.id) || r.id == "trascrivi" || (kind == Kind::Pdf && matches!(r.id, "pages" | "firme"))).collect()
+    static CATALOGO: std::sync::OnceLock<Vec<(Kind,Vec<Riga>)>> = std::sync::OnceLock::new();
+    CATALOGO.get_or_init(||[Kind::Image,Kind::Pdf,Kind::Doc,Kind::Text,Kind::Audio,Kind::Video,Kind::Archive,Kind::Other].into_iter().map(|k|{
+        let mut rows=Vec::new();
+        for (conv,entries) in [(true,cedro::panel_slices(k)),(false,cedro::slices(k,Mode::Tools))] {
+            for entry in entries {
+                if entry.id=="none" || rows.iter().any(|r:&Riga|r.id==entry.id){continue;}
+                let v=cedro::ui::voci::voce(k,entry.id);
+                rows.push(r(entry.id,v.label,v.hint,conv));
+            }
+        }
+        if k==Kind::Pdf {rows.push(r("pages","Pagine","Ruota, togli, numeri",false));rows.push(r("firme","Firme","Verifica chi ha firmato",false));}
+        if matches!(k,Kind::Audio|Kind::Video){rows.push(r("trascrivi","Testo","Dalla voce, offline",false));}
+        (k,rows)
+    }).collect()).iter().find(|(k,_)|*k==kind).map(|(_,rows)|rows.iter().collect()).unwrap_or_default()
+}
+
+fn avviso_motore(msg:&str)->bool {
+    msg.contains("Attenzione:") || msg.contains("restano solo nel file originale") || msg.contains("non è una diagnosi") || msg.contains("non sono stati copiati")
 }
 
 fn sotto_altro(kind: Kind) -> &'static str {
@@ -570,6 +537,7 @@ pub struct App {
     /// Quante persone parlano (trascrizione): 0 Automatico, 1 una sola (niente riconoscimento), 2..=8.
     pub voci: u8,
     pub lavori: Vec<Lavoro>,
+    pub labs: labs::Laboratorio,
     pub uscite: std::collections::HashMap<u32, Vec<(PathBuf, String, Option<String>)>>,
     chiavi_lavori: std::collections::HashMap<u32,String>,
     lavori_rimossi: std::collections::HashSet<String>,
@@ -696,6 +664,7 @@ impl App {
             opzioni: None,
             opzioni_salvate: None,
             impostazioni: false,
+            labs: labs::Laboratorio::default(),
             imp: cedro::Settings::default(),
             modello_nome: String::new(),
             esiste: cedro::Exists::Number,
@@ -737,7 +706,7 @@ impl App {
     pub fn identita(&mut self,id:u32)->Option<crate::publication::Identita>{
         let l=self.lavori.iter().find(|l|l.id==id)?;
         let chiave=self.chiavi_lavori.entry(id).or_insert_with(||format!("{:x}-{id:x}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos())).clone();
-        Some(crate::publication::Identita{chiave,origine:l.origine.clone(),etichetta:l.etichetta.clone(),conv:l.conv,quando:l.quando,sorgente:l.sorgente.clone()})
+        Some(crate::publication::Identita{chiave,origine:l.origine.clone(),etichetta:l.etichetta.clone(),conv:l.conv,quando:l.quando,sorgente:l.sorgente.clone(),caso:self.labs.casi.get(&id).cloned().unwrap_or_default()})
     }
 
     pub fn completa(&mut self,e:Completamento){
@@ -757,6 +726,7 @@ impl App {
                 id
             }
         };
+        if !r.lavoro.caso.is_empty(){self.labs.casi.insert(id,r.lavoro.caso.clone());}
         let outputs=r.righe();
         if let Some((path,nome,_))=outputs.first().cloned(){
             let msg=if outputs.iter().any(|u|u.2.is_some()){format!("{} · {}",r.messaggio,cedro::i18n::tr("Salvataggio incompleto: copie disponibili in Cedro"))}else{r.messaggio};
@@ -811,7 +781,7 @@ impl App {
                 Stato::Errore(e) => ("errore",PathBuf::new(),String::new(),e.clone()),
                 Stato::Fatto {path,nome,msg} => ("fatto",path.clone(),nome.clone(),msg.clone()),
             };
-            serde_json::json!({"chiave":self.chiavi_lavori.get(&l.id),"quando":l.quando,"origine":l.origine,"etichetta":l.etichetta,"conv":l.conv,"stato":stato,"path":path,"nome":nome,"msg":msg,"sorgente":l.sorgente,"controlli":l.controlli,"uscite":self.uscite.get(&l.id)})
+            serde_json::json!({"chiave":self.chiavi_lavori.get(&l.id),"quando":l.quando,"origine":l.origine,"etichetta":l.etichetta,"conv":l.conv,"stato":stato,"path":path,"nome":nome,"msg":msg,"sorgente":l.sorgente,"controlli":l.controlli,"caso":self.labs.casi.get(&l.id),"uscite":self.uscite.get(&l.id)})
         }).collect();
         let kept:std::collections::HashSet<_>=rows.iter().filter_map(|r|r["chiave"].as_str().map(str::to_string)).collect();
         let mut rimossi=self.lavori_rimossi.clone();
@@ -840,6 +810,7 @@ impl App {
                 for r in rows {
                     let text=|k: &str|r[k].as_str().unwrap_or_default().to_string();
                     let id=self.prossimo; self.prossimo+=1;
+                    if let Some(c)=r["caso"].as_str(){self.labs.casi.insert(id,c.to_string());}
                     if let Some(k)=r["chiave"].as_str(){self.chiavi_lavori.insert(id,k.to_string());}
                     let stato=match r["stato"].as_str() {
                         Some("fatto")=>Stato::Fatto {path:PathBuf::from(text("path")),nome:text("nome"),msg:text("msg")},
@@ -1087,6 +1058,7 @@ impl App {
         if self.campo.take().is_some() {
             return true;
         }
+        if self.labs.caso_aperto {self.labs.caso_aperto=false;self.scorri=0.0;return true;}
         if self.firma.viewer.is_some() {
             self.azione_firma(firma::FirmaAz::Chiudi);
             return true;
@@ -1151,12 +1123,13 @@ impl App {
         if o.name_template.as_deref().is_none_or(|t| t.trim().is_empty()) && !self.modello_nome.trim().is_empty() {
             o.name_template = Some(self.modello_nome.clone());
         }
-        let opts = Some(o);
+        let opts = Some(Box::new(cedro::caso::opzioni(self.labs.caso.as_ref().map(|c|c.code.as_str()), *o)));
         self.opzioni = None;
         let Some(file) = self.file.clone() else { return Effetto::Niente };
         let lavoro = self.prossimo;
         self.prossimo += 1;
         let prog = Arc::new(AtomicU32::new(u32::MAX));
+        if let Some(c)=&self.labs.caso {self.labs.casi.insert(lavoro,c.code.clone());}
         let sorgente = (id == "trascrivi").then(|| file.path.clone());
         self.lavori.insert(0, Lavoro { id: lavoro, origine: file.nome.clone(), etichetta: etichetta.into(), conv, inizio: Instant::now(), quando: adesso(), stato: Stato::InCorso, prog: prog.clone(), sorgente, controlli: None });
         self.scorri = 0.0;
@@ -1347,6 +1320,12 @@ impl App {
                 self.scorri = 0.0;
                 Effetto::SalvaLavori
             }
+            Azione::CopiaRapporto(id) => {
+                let text=self.lavori.iter().find(|l|l.id==id).and_then(|l|if let Stato::Fatto{msg,..}=&l.stato{Some(msg.clone())}else{None}).unwrap_or_default();
+                Effetto::Copia(text)
+            }
+            Azione::Labs(az) => return self.azione_labs(az),
+            Azione::Pacchetto => return self.pacchetto_labs(),
             Azione::Niente => Effetto::Niente,
         }
     }
@@ -1365,7 +1344,9 @@ impl App {
         p.dx = ml;
         p.dy = mt;
         let (w, h) = (w - ml - mr, h - mt - mb);
-        if self.scelta_file {
+        if self.labs.caso_aperto {
+            self.pagina_caso(p,w,h);
+        } else if self.scelta_file {
             self.pagina_scelta(p, w, h);
         } else if self.firma.viewer.is_some() {
             self.pagina_firma(p, w, h);
@@ -1940,7 +1921,12 @@ impl App {
             p.text("Svuota", rc.0, rc.1, rc.2, rc.3, 15.0, Weight::Semibold, pal.primary, Align::Center);
             self.colpi.push((Forma::R(rc), Azione::Svuota));
         }
-        let vista = (0.0, BARRA, w, h - BARRA);
+        let header=if self.labs.filtro.is_some(){64.0}else{0.0};
+        if let Some(code)=self.labs.filtro.clone(){
+            p.text(&cedro::i18n::lit(&code),16.0,BARRA,w-190.0,48.0,14.0,Weight::Semibold,pal.primary,Align::Left);
+            self.bottone_a(p,(w-174.0,BARRA,158.0,48.0),"Tutti i lavori","",pal.surface,pal.primary,Azione::Labs(labs::LabAz::TuttiLavori),(0.0,BARRA,w,header));
+        }
+        let vista = (0.0, BARRA+header, w, h - BARRA-header);
         if self.lavori.is_empty() {
             p.icon(ic::CLOCK, w / 2.0 - 22.0, BARRA + (h - BARRA) / 2.0 - 70.0, 44.0, pal.muted);
             p.text("Ancora niente", 0.0, BARRA + (h - BARRA) / 2.0 - 16.0, w, 30.0, 20.0, Weight::Semibold, pal.text, Align::Center);
@@ -1952,9 +1938,10 @@ impl App {
         let cw = if ampio { (w - 32.0 - 12.0) / 2.0 } else { w - 24.0 };
         let colonne = if ampio { 2 } else { 1 };
         p.push_clip(vista.0, vista.1, vista.2, vista.3);
-        let mut ys = [BARRA + 6.0 - self.scorri; 2];
+        let mut ys = [BARRA + header + 6.0 - self.scorri; 2];
         let mut fine = 0.0f32;
         for k in 0..self.lavori.len() {
+            if self.labs.filtro.as_ref().is_some_and(|c|self.labs.casi.get(&self.lavori[k].id)!=Some(c)){continue;}
             let c = if colonne == 2 { if ys[0] <= ys[1] { 0 } else { 1 } } else { 0 };
             let x = if ampio { 16.0 + c as f32 * (cw + 12.0) } else { 12.0 };
             let alt = self.scheda_lavoro(p, k, x, ys[c], cw, vista);
@@ -2037,6 +2024,11 @@ impl App {
         let pal = self.pal();
         let l = self.lavori[k].clone();
         let trascrive = l.sorgente.is_some();
+        let note_h=match &l.stato {
+            Stato::Fatto{msg,..}=>casa::telefono::altezza_a(p,msg,13.0,Weight::Regular,w-28.0,19.0,0)+6.0,
+            _=>0.0,
+        };
+        let caso_h=if self.labs.casi.contains_key(&l.id){32.0}else{0.0};
         let alt = match &l.stato {
             Stato::InCorso if trascrive => 224.0,
             Stato::InCorso => 148.0,
@@ -2045,7 +2037,7 @@ impl App {
             Stato::Fatto { .. } if l.sorgente.is_some() && l.controlli.is_some_and(|n| n > 0) => 176.0,
             Stato::Fatto { .. } => 142.0,
             Stato::Errore(_) => 112.0,
-        };
+        } + note_h + caso_h + if matches!(&l.stato,Stato::Fatto{path,..} if !path.as_os_str().is_empty()){56.0}else{0.0};
         let outputs=self.uscite.get(&l.id).cloned().unwrap_or_default();
         let extra=if outputs.len()>1 || outputs.iter().any(|o|o.2.is_some()) {outputs.len() as f32*82.0} else {0.0};
         sollevato(p, pal, self.scuro(), x, y, w, alt+extra, 16.0);
@@ -2053,6 +2045,7 @@ impl App {
         let (stato_txt, stato_col) = match &l.stato {
             Stato::InCorso => (if self.annullamenti.contains(&l.id) {"Annullamento…"} else {"In corso"}.to_string(), pal.primary),
             Stato::Fatto { .. } if outputs.iter().any(|o|o.2.is_some()) => ("Da salvare".to_string(), self.avviso()),
+            Stato::Fatto { msg, .. } if avviso_motore(msg) => ("Avviso".to_string(), self.avviso()),
             Stato::Fatto { .. } => ("Fatto".to_string(), pal.ok),
             Stato::Errore(_) => ("Non riuscito".to_string(), pal.bad),
         };
@@ -2081,24 +2074,27 @@ impl App {
                 }
             }
             Stato::Fatto { nome, msg, path } => {
-                p.text(&format!("{} · {}", msg.replace(" → ", " a "), quando(l.quando)), x + 14.0, y + 34.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                casa::telefono::testo_a(p,msg,x+14.0,y+38.0,w-28.0,13.0,Weight::Regular,if avviso_motore(msg){self.avviso()}else{pal.muted},19.0,0);
+                if let Some(code)=self.labs.casi.get(&l.id) {
+                    p.text(&cedro::i18n::lit(&format!("{} · {}",cedro::i18n::tr("Caso o campione"),code)),x+14.0,y+38.0+note_h,w-28.0,28.0,13.0,Weight::Semibold,pal.primary,Align::Left);
+                }
                 if path.as_os_str().is_empty() {
                     return alt;
                 }
-                p.text(&salvato_in(nome), x + 14.0, y + 54.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                p.text(&salvato_in(nome), x + 14.0, y + 54.0 + note_h + caso_h, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
                 if let Some(n) = l.controlli.filter(|n| *n > 0 && l.sorgente.is_some()) {
                     let et = if n == 1 { "1 punto da controllare".to_string() } else { format!("{n} punti da controllare") };
                     let ew = p.measure(&et, 13.0, Weight::Semibold) + 22.0;
-                    p.rrect(x + 14.0, y + 80.0, ew, 28.0, 14.0, Some(pal.alt), None);
-                    p.text(&et, x + 14.0, y + 80.0, ew, 28.0, 13.0, Weight::Semibold, self.avviso(), Align::Center);
+                    p.rrect(x + 14.0, y + 80.0 + note_h + caso_h, ew, 28.0, 14.0, Some(pal.alt), None);
+                    p.text(&et, x + 14.0, y + 80.0 + note_h + caso_h, ew, 28.0, 13.0, Weight::Semibold, self.avviso(), Align::Center);
                 }
-                let mut voci = vec![("Apri", Azione::Apri(l.id)), ("Condividi", Azione::Condividi(l.id))];
+                let mut voci = vec![("Apri", Azione::Apri(l.id)), ("Condividi", Azione::Condividi(l.id)), ("Copia", Azione::CopiaRapporto(l.id))];
                 if l.sorgente.is_some() {
                     voci.insert(0, ("Rivedi", Azione::Rivedi(l.id)));
                 }
-                let bw = (w - 28.0 - 10.0 * (voci.len() as f32 - 1.0)) / voci.len() as f32;
+                let bw = (w - 38.0) / 2.0;
                 for (i, (et, az)) in voci.into_iter().enumerate() {
-                    let rc = (x + 14.0 + i as f32 * (bw + 10.0), y + alt - 14.0 - TOCCO, bw, TOCCO);
+                    let rc = (x + 14.0 + (i%2) as f32 * (bw + 10.0), y + alt - 14.0 - TOCCO - 56.0 + (i/2) as f32*56.0, bw, TOCCO);
                     let prem = self.premuto == Some(az);
                     let pieno = i == 0;
                     if pieno {

@@ -315,7 +315,7 @@ impl Casa {
     /// Le opzioni dell'operazione di ora, quelle che si vedono.
     fn defs(&self) -> Vec<&'static OptionDef> {
         let v = self.valori();
-        conversioni::option_defs(self.categoria, self.operazione()).into_iter().filter(|d| d.opt != conversioni::Opt::NameTemplate && conversioni::shown(d, &v)).collect()
+        crate::labs::defs(self.categoria, self.operazione(), self.scelti().iter().map(|i| self.coda[*i].path.as_path())).into_iter().filter(|d| d.opt != conversioni::Opt::NameTemplate && conversioni::shown(d, &v)).collect()
     }
 
     /// Il nome dell'operazione («PNG», «Comprimi»).
@@ -529,6 +529,7 @@ impl App {
             }
             CasaAz::Vai => return self.vai_casa_lavori(),
             CasaAz::Impostazioni => {
+                self.labs.caso_aperto=false;
                 self.casa.elenco = None;
                 self.sopra = Some(Scheda::Aspetto);
                 self.scorri = 0.0;
@@ -538,12 +539,15 @@ impl App {
                 self.scorri = 0.0;
             }
             CasaAz::Lavori => {
+                self.labs.caso_aperto=false;
+                self.labs.filtro=None;
                 self.casa.elenco = None;
                 self.sopra = Some(Scheda::Lavori);
                 self.scorri = 0.0;
             }
             CasaAz::Guida => { self.casa.guida = true; self.sopra = None; },
             CasaAz::Nav(i) => {
+                self.labs.caso_aperto=false;
                 self.sopra = None;
                 let c = &mut self.casa;
                 c.guida = false;
@@ -676,6 +680,14 @@ impl App {
             return Effetto::LeggiPdf(v.path, Vec::new());
         }
         let opts = if att == Att::Tras { cedro::Options::default() } else { conversioni::options_from(&self.casa.valori()) };
+        if matches!(id,"figure"|"rx") {
+            let v=self.casa.coda[scelti[0]].clone();
+            self.file=Some(Archivio{path:v.path,nome:v.nome,dim:v.dim});self.kind=v.kind;
+            let inputs=scelti.iter().map(|i|(self.casa.coda[*i].path.clone(),None)).collect();
+            let result=self.avvia_con(id,etichetta,false,Some(Box::new(opts)),inputs);
+            self.file=None;
+            return result;
+        }
         let mut compiti = Vec::new();
         for i in scelti {
             let v = self.casa.coda[i].clone();
@@ -690,6 +702,17 @@ impl App {
         // Il Banco di lavoro mostra lo stato nella tabella; gli altri temi passano ai Lavori.
         self.sopra = if self.tema == ThemeId::BancoDiLavoro { None } else { Some(Scheda::Lavori) };
         Effetto::Tanti(compiti)
+    }
+
+    pub(super) fn pacchetto_labs(&mut self)->Effetto {
+        let scelti:Vec<_>=self.casa.coda.iter().enumerate().filter(|(_,v)|v.scelto).map(|(i,_)|i).collect();
+        let Some(first)=scelti.first() else{return Effetto::Niente};
+        let v=self.casa.coda[*first].clone();
+        let files=scelti.iter().map(|i|(self.casa.coda[*i].path.clone(),None)).collect();
+        self.file=Some(Archivio{path:v.path,nome:v.nome,dim:v.dim});self.kind=v.kind;
+        let result=self.avvia_con("package","Pacchetto con impronte",false,None,files);
+        self.file=None;
+        result
     }
 
     // ================================================================ disegno

@@ -64,6 +64,8 @@ pub enum Campo {
     Link,
     /// Il nome di una voce in «Rivedi» › «Chi parla».
     Voce(u8),
+    CasoCodice,
+    CasoNota,
 }
 
 /// Quello che arriva dalla tastiera.
@@ -264,7 +266,7 @@ impl StatoPdf {
             Campo::ExcelPagine => &mut self.x_pagine,
             Campo::Filigrana => &mut self.testo_filigrana,
             Campo::PagineDi(i) => &mut self.unisci.get_mut(i)?.sel,
-            Campo::Opzione(_) | Campo::Modello | Campo::Link | Campo::Voce(_) => return None,
+            Campo::Opzione(_) | Campo::Modello | Campo::Link | Campo::Voce(_) | Campo::CasoCodice | Campo::CasoNota => return None,
         })
     }
 
@@ -424,6 +426,11 @@ impl App {
             }
             (_, Tasto::Invio) if c != Campo::Password => {
                 self.campo = None;
+                return Effetto::Ridisegna;
+            }
+            (Campo::CasoCodice | Campo::CasoNota, _) => {
+                let s=if c==Campo::CasoCodice {&mut self.labs.codice} else {&mut self.labs.nota};
+                match t {Tasto::Canc=>{s.pop();},Tasto::Car(ch) if !ch.is_control()=>s.push(ch),_=>{}}
                 return Effetto::Ridisegna;
             }
             (Campo::Link, _) => {
@@ -669,7 +676,10 @@ impl App {
         let x = if ampio { (w - cw) / 2.0 } else { 16.0 };
         p.push_clip(corpo.0, corpo.1, corpo.2, corpo.3);
         self.pdf.campo_vis = None;
-        let y0 = BARRA + 4.0 - self.scorri;
+        let mut y0 = BARRA + 4.0 - self.scorri;
+        if matches!(pg,Pagina::Dividi|Pagina::Pagine) {
+            y0+=super::casa::telefono::testo_a(p,"Gli allegati restano solo nel file originale.",x,y0,cw,13.0,Weight::Regular,self.avviso(),19.0,0)+12.0;
+        }
         let fine = match pg {
             Pagina::Unisci => self.corpo_unisci(p, x, y0, cw, corpo),
             Pagina::Dividi => self.corpo_dividi(p, x, y0, cw, corpo),

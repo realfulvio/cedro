@@ -2565,3 +2565,38 @@ Risultato non regolare	Tipo de archivo de resultado no compatible
 Il lavoro non ha prodotto file	El trabajo no ha producido archivos
 Registro dei risultati non valido	Registro de resultados no válido
 Nome del risultato assente	Falta el nombre del resultado
+Apri cartella MRXS	Abrir carpeta MRXS
+Annulla anteprima	Cancelar vista previa
+Scena	Escena
+Canale	Canal
+Piano Z	Plano Z
+Istante	Instante
+Lavori del caso	Trabajos del caso
+Tutti i lavori	Todos los trabajos
+Un codice comune per i file del laboratorio.	Un código común para los archivos del laboratorio.
+Nota · resta nel caso, non nel nome del file	Nota · queda en el caso, no en el nombre del archivo
+Nome del risultato	Nombre del resultado
+Usa questo caso	Usar este caso
+Togli caso attivo	Quitar caso activo
+Opzioni del risultato	Opciones del resultado
+Avviso	Aviso
+Gli allegati restano solo nel file originale.	Los adjuntos permanecen solo en el archivo original.
+Caso non salvato	Caso no guardado
+Livello non presente nel file	Nivel no presente en el archivo
+Piano non presente nel file	Plano no presente en el archivo
+Canale non presente nel file	Canal no presente en el archivo
+Il file non contiene un’anteprima di laboratorio	El archivo no contiene una vista previa de laboratorio
+Anteprima: area centrale del livello. L’esportazione usa le opzioni del risultato.	Vista previa: zona central del nivel. La exportación usa las opciones del resultado.
+Eventuali nomi impressi nei pixel richiedono una verifica visiva.	Los nombres grabados en los píxeles requieren una revisión visual.
+I selettori cambiano solo l’anteprima. L’esportazione usa le opzioni del risultato e include tutte le scene del file.	Los selectores solo cambian la vista previa. La exportación usa las opciones del resultado e incluye todas las escenas del archivo.
+Tessere AI, zona mitotica e consulto richiedono SVS, NDPI o MRXS. La copia anonima di CZI, ND2 e LIF non è supportata dal motore.	Las teselas de IA, la zona de recuento mitótico y la consulta requieren SVS, NDPI o MRXS. El motor no admite copias anónimas de CZI, ND2 o LIF.
+La copia anonima di CZI, ND2 e LIF non è supportata dal motore. Puoi convertire il file in PNG; non è una copia anonima del formato originale.	El motor no admite copias anónimas de CZI, ND2 o LIF. Puedes convertir el archivo a PNG; no es una copia anónima del formato original.
+Cartella privata non disponibile	Carpeta privada no disponible
+Anteprima non leggibile	No se puede leer la vista previa
+file di dati fuori dalla cartella MIRAX	archivo de datos fuera de la carpeta MIRAX
+percorso dei dati MIRAX non valido	ruta de datos MIRAX no válida
+{}: file associato non regolare	{}: el archivo asociado no es un archivo normal
+Pacchetto con impronte	Paquete con sumas de verificación
+Apri file	Abrir archivo
+Vetrini	Portaobjetos
+Copia anonima	Copia anónima

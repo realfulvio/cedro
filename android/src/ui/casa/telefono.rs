@@ -124,12 +124,12 @@ impl App {
     }
 
     /// Un componente condiviso per sezioni del catalogo, Labs e opzioni.
-    fn titolo_a(&self, p: &mut Painter, x: f32, y: f32, w: f32, titolo: &str) -> f32 {
+    pub(in crate::ui) fn titolo_a(&self, p: &mut Painter, x: f32, y: f32, w: f32, titolo: &str) -> f32 {
         testo_a(p, titolo, x, y, w, 17.0, Weight::Bold, self.pal().text, 23.0, 0) + 12.0
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn bottone_a(&mut self, p: &mut Painter, r: R, titolo: &str, ico: &str, bg: Rgb, fg: Rgb, az: Azione, vista: R) {
+    pub(in crate::ui) fn bottone_a(&mut self, p: &mut Painter, r: R, titolo: &str, ico: &str, bg: Rgb, fg: Rgb, az: Azione, vista: R) {
         p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(bg), None);
         if !ico.is_empty() { p.icon(ico, r.0 + 14.0, r.1 + (r.3 - 22.0) / 2.0, 22.0, fg); }
         if titolo == "Apri un file" {
@@ -193,6 +193,7 @@ impl App {
         let largo = w >= 600.0;
         let cw = if largo { (w - 3.0 * PAD) / 2.0 } else { w - 2.0 * PAD };
         let mut cy = y;
+        if self.casa.laboratorio { cy=self.pannello_labs(p,PAD,cy,cw,vista); }
         if matches!(self.casa.att, Att::Web | Att::Yt) {
             cy += self.web_a(p, PAD, cy, cw, vista);
         } else {
@@ -204,7 +205,13 @@ impl App {
             Att::Conv => {
                 fy = self.catalogo_a(p, x, fy, cw, vista);
                 fy += 12.0;
-                fy += self.titolo_a(p, x, fy, cw, "Opzioni");
+                let scelta=voci::voce(self.casa.categoria,self.casa.operazione());
+                fy+=testo_a(p,scelta.label,x,fy,cw,18.0,Weight::Bold,schiarisci(scelta.color,self.scuro()),24.0,0)+4.0;
+                fy+=testo_a(p,scelta.hint,x,fy,cw,14.0,Weight::Regular,pal.muted,20.0,0)+14.0;
+                if self.casa.laboratorio {
+                    fy+=testo_a(p,"Tessere AI, zona mitotica e consulto richiedono SVS, NDPI o MRXS. La copia anonima di CZI, ND2 e LIF non è supportata dal motore.",x,fy,cw,13.0,Weight::Regular,self.avviso(),19.0,0)+12.0;
+                }
+                fy += self.titolo_a(p, x, fy, cw, "Opzioni del risultato");
                 for (k, d) in self.casa.defs().into_iter().enumerate() {
                     match d.control {
                         Control::Choice(_) | Control::Segments(_) => {
@@ -273,6 +280,10 @@ impl App {
             }
             self.bottone_a(p, (x + 112.0, y, w - 112.0, 48.0), "Aggiungi file", ic::ADD, pal.surface, pal.primary, Azione::Casa(CasaAz::Aggiungi), vista);
             y += 56.0;
+            if self.casa.laboratorio && crate::labs::laboratorio(&v.path) {
+                self.bottone_a(p,(x,y,w,48.0),"Anteprima",ic::IMAGE,pal.surface,pal.primary,Azione::Labs(super::super::labs::LabAz::File(i)),vista);
+                y+=56.0;
+            }
             let _ = j;
         }
         if vis.is_empty() {
@@ -292,11 +303,19 @@ impl App {
         if !self.casa.laboratorio {
             y += testo_a(p, "Converti in", x, y, w, 28.0, Weight::Bold, self.pal().text, 32.0, 0) + 16.0;
         }
+        if !self.casa.laboratorio {
+            let bw=(w-8.0)/2.0;
+            for (i,titolo) in ["Semplice","Completa"].into_iter().enumerate(){
+                self.bottone_a(p,(x+i as f32*(bw+8.0),y,bw,48.0),titolo,"",if self.imp.simple==(i==0){self.pal().alt}else{self.pal().surface},self.pal().text,Azione::Casa(CasaAz::Vista(i==1)),vista);
+            }
+            y+=60.0;
+        }
         let mut gruppi: Vec<(&str, Vec<usize>)> = Vec::new();
         for (i, (id, _)) in ops.iter().enumerate() {
+            if !self.casa.laboratorio && self.imp.simple && i<nf && !conversioni::simple_formats(k).iter().any(|f|f.id==*id) {continue;}
             let v = voci::voce(k, id);
             let lab = voci::is_lab(&v);
-            if self.casa.laboratorio && !lab { continue; }
+            if self.casa.laboratorio && !lab && !matches!(*id,"png"|"jpeg"|"tiff"|"pdf"|"strip") { continue; }
             let titolo = if lab { "Laboratorio" } else if i < nf { famiglia_a(k, id) } else { voci::tools_heading(k) };
             if let Some(g) = gruppi.iter_mut().find(|g| g.0 == titolo) { g.1.push(i); } else { gruppi.push((titolo, vec![i])); }
         }
@@ -304,13 +323,15 @@ impl App {
             if titolo == "Uso quotidiano" {
                 idx.sort_by_key(|i| ["jpeg", "png", "webp", "pdf"].iter().position(|id| *id == ops[*i].0).unwrap_or(99));
             }
-            y += testo_a(p, titolo, x, y, w, 12.0, Weight::Bold, self.pal().primary, 17.0, 0) + 12.0;
-            let cols = if self.grandi { 2 } else { 3 };
+            let tinta=idx.first().map(|i|schiarisci(voci::voce(k,ops[*i].0).color,self.scuro())).unwrap_or(self.pal().primary);
+            y += testo_a(p, titolo, x, y, w, 12.0, Weight::Bold, tinta, 17.0, 0) + 12.0;
+            let cols = if self.grandi || titolo == "Laboratorio" || titolo == voci::tools_heading(k) { 2 } else { 3 };
             let tw = (w - (cols - 1) as f32 * GAP) / cols as f32;
             for row in idx.chunks(cols) {
-                let hh = row.iter().map(|i| altezza_a(p, ops[*i].1, 14.0, Weight::Semibold, tw - 12.0, 19.0, 0) + 46.0).fold(65.0_f32, f32::max);
+                let hh = row.iter().map(|i| altezza_a(p, if self.casa.laboratorio&&ops[*i].0=="strip"{"Copia anonima"}else{ops[*i].1}, 14.0, Weight::Semibold, tw - 12.0, 19.0, 0) + 46.0).fold(65.0_f32, f32::max);
                 for (j, i) in row.iter().copied().enumerate() {
-                    let (id, nome) = ops[i];
+                    let (id, mut nome) = ops[i];
+                    if self.casa.laboratorio && id=="strip" {nome="Copia anonima";}
                     let v = voci::voce(k, id);
                     let r = (x + j as f32 * (tw + GAP), y, tw, hh);
                     self.formato_a(p, r, nome, &v, id == self.casa.operazione());
@@ -429,12 +450,7 @@ pub(in crate::ui) fn misure_azione_a(p: &Painter, w: f32, testo: &str) -> (f32, 
 }
 
 fn famiglia_a(kind: Kind, id: &str) -> &'static str {
-    if kind != Kind::Image { return "Formato"; }
-    match id {
-        "jpeg" | "png" | "webp" | "pdf" => "Uso quotidiano",
-        "avif" | "jxl" => "Alta efficienza",
-        _ => "Grafica e scambio",
-    }
+    voci::family(kind,&voci::voce(kind,id)).unwrap_or("Formato")
 }
 
 /// Painter traduce già i testi. Qui si aggiunge il ritorno a capo dentro le parole lunghe,
@@ -490,6 +506,7 @@ mod tests {
             let mut a = App::new(ThemeId::Cedro);
             a.anim.calmo = true;
             a.vai_casa();
+            a.imp.simple=false;
             frame(&mut a, w, h, &mut cache);
             let nav: Vec<_> = a.colpi.iter().filter(|(f, _)| matches!(f, Forma::R(r) if r.1 >= h - NAVB)).collect();
             assert_eq!(nav.len(), 3);
@@ -567,7 +584,8 @@ mod tests {
             let Forma::R(r) = forma else { continue };
             match az {
                 Azione::AltreOpzioni => {
-                    assert_eq!(r.3, 56.0, "l'ultima opzione deve essere interamente raggiungibile");
+                    // L’intersezione usa f32: 56 dp può essere rappresentato come 55.99997 dopo le sottrazioni.
+                    assert!((r.3 - 56.0).abs() < 0.001, "l'ultima opzione deve essere interamente raggiungibile: {}", r.3);
                     assert!(r.1 + r.3 <= limite);
                     opzioni_visibili = true;
                 }
