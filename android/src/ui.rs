@@ -82,6 +82,18 @@ pub enum Stato {
     Errore(String),
 }
 
+/// Stato e lista uscite viaggiano insieme: nessun interleaving fra code distinte.
+#[derive(Clone)]
+pub struct Completamento {
+    pub id: u32,
+    pub stato: Stato,
+    pub uscite: Option<Vec<crate::publication::Riga>>,
+    pub sorgente: Option<PathBuf>,
+}
+impl Completamento {
+    pub fn semplice(id:u32,stato:Stato)->Self{Self{id,stato,uscite:None,sorgente:None}}
+}
+
 #[derive(Clone)]
 pub struct Lavoro {
     pub id: u32,
@@ -559,6 +571,8 @@ pub struct App {
     pub voci: u8,
     pub lavori: Vec<Lavoro>,
     pub uscite: std::collections::HashMap<u32, Vec<(PathBuf, String, Option<String>)>>,
+    chiavi_lavori: std::collections::HashMap<u32,String>,
+    lavori_rimossi: std::collections::HashSet<String>,
     annullamenti: std::collections::HashSet<u32>,
     /// L'ultimo errore copiato: la sua icona diventa una spunta.
     copiato: Option<u32>,
@@ -654,6 +668,8 @@ impl App {
             voci: 0,
             lavori: Vec::new(),
             uscite: Default::default(),
+            chiavi_lavori: Default::default(),
+            lavori_rimossi: Default::default(),
             annullamenti: Default::default(),
             copiato: None,
             recenti: Vec::new(),
@@ -718,6 +734,38 @@ impl App {
         self.altri.clear();
     }
 
+    pub fn identita(&mut self,id:u32)->Option<crate::publication::Identita>{
+        let l=self.lavori.iter().find(|l|l.id==id)?;
+        let chiave=self.chiavi_lavori.entry(id).or_insert_with(||format!("{:x}-{id:x}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos())).clone();
+        Some(crate::publication::Identita{chiave,origine:l.origine.clone(),etichetta:l.etichetta.clone(),conv:l.conv,quando:l.quando,sorgente:l.sorgente.clone()})
+    }
+
+    pub fn completa(&mut self,e:Completamento){
+        if let Some(outputs)=e.uscite{self.uscite.insert(e.id,outputs);}
+        if let Some(source)=e.sorgente{if let Some(l)=self.lavori.iter_mut().find(|l|l.id==e.id){l.sorgente=Some(source);}}
+        self.finisce(e.id,e.stato);
+    }
+
+    pub fn recupera(&mut self,r:crate::publication::Registro){
+        if self.lavori_rimossi.contains(&r.lavoro.chiave){return;}
+        let id=match self.chiavi_lavori.iter().find(|(_,k)|k.as_str()==r.lavoro.chiave.as_str()).map(|(id,_)|*id){
+            Some(id)=>id,
+            None=>{
+                let (id,_)=self.nuova_importazione();
+                self.chiavi_lavori.insert(id,r.lavoro.chiave.clone());
+                if let Some(l)=self.lavori.iter_mut().find(|l|l.id==id){l.origine=r.lavoro.origine.clone();l.etichetta=r.lavoro.etichetta.clone();l.conv=r.lavoro.conv;l.quando=r.lavoro.quando;}
+                id
+            }
+        };
+        let outputs=r.righe();
+        if let Some((path,nome,_))=outputs.first().cloned(){
+            let msg=if outputs.iter().any(|u|u.2.is_some()){format!("{} · {}",r.messaggio,cedro::i18n::tr("Salvataggio incompleto: copie disponibili in Cedro"))}else{r.messaggio};
+            self.completa(Completamento{id,stato:Stato::Fatto{path,nome,msg},uscite:Some(outputs),sorgente:r.lavoro.sorgente});
+        }else{
+            self.completa(Completamento{id,stato:Stato::Errore(r.messaggio),uscite:None,sorgente:r.lavoro.sorgente});
+        }
+    }
+
     /// Un lavoro è finito (o fallito).
     pub fn finisce(&mut self, id: u32, stato: Stato) -> Effetto {
         self.annullamenti.remove(&id);
@@ -763,9 +811,12 @@ impl App {
                 Stato::Errore(e) => ("errore",PathBuf::new(),String::new(),e.clone()),
                 Stato::Fatto {path,nome,msg} => ("fatto",path.clone(),nome.clone(),msg.clone()),
             };
-            serde_json::json!({"quando":l.quando,"origine":l.origine,"etichetta":l.etichetta,"conv":l.conv,"stato":stato,"path":path,"nome":nome,"msg":msg,"sorgente":l.sorgente,"controlli":l.controlli,"uscite":self.uscite.get(&l.id)})
+            serde_json::json!({"chiave":self.chiavi_lavori.get(&l.id),"quando":l.quando,"origine":l.origine,"etichetta":l.etichetta,"conv":l.conv,"stato":stato,"path":path,"nome":nome,"msg":msg,"sorgente":l.sorgente,"controlli":l.controlli,"uscite":self.uscite.get(&l.id)})
         }).collect();
-        serde_json::json!({"versione":2,"lavori":rows}).to_string()
+        let kept:std::collections::HashSet<_>=rows.iter().filter_map(|r|r["chiave"].as_str().map(str::to_string)).collect();
+        let mut rimossi=self.lavori_rimossi.clone();
+        for key in self.chiavi_lavori.values(){if !kept.contains(key.as_str()){rimossi.insert(key.clone());}}
+        serde_json::json!({"versione":2,"lavori":rows,"rimossi":rimossi}).to_string()
     }
 
     pub fn nuova_importazione(&mut self) -> (u32, Arc<AtomicU32>) {
@@ -784,10 +835,12 @@ impl App {
 
     pub fn carica_lavori(&mut self, testo: &str) {
         if let Ok(v)=serde_json::from_str::<serde_json::Value>(testo) {
+            if let Ok(removed)=serde_json::from_value(v["rimossi"].clone()){self.lavori_rimossi=removed;}
             if let Some(rows)=v["lavori"].as_array() {
                 for r in rows {
                     let text=|k: &str|r[k].as_str().unwrap_or_default().to_string();
                     let id=self.prossimo; self.prossimo+=1;
+                    if let Some(k)=r["chiave"].as_str(){self.chiavi_lavori.insert(id,k.to_string());}
                     let stato=match r["stato"].as_str() {
                         Some("fatto")=>Stato::Fatto {path:PathBuf::from(text("path")),nome:text("nome"),msg:text("msg")},
                         Some("attivo")=>Stato::Errore("Interrotto dalla chiusura di Cedro: avvia di nuovo il lavoro".into()),
@@ -1289,6 +1342,7 @@ impl App {
                 None => Effetto::Niente,
             },
             Azione::Svuota => {
+                for l in &self.lavori{if l.stato!=Stato::InCorso{if let Some(k)=self.chiavi_lavori.get(&l.id){self.lavori_rimossi.insert(k.clone());}}}
                 self.lavori.retain(|l| l.stato == Stato::InCorso);
                 self.scorri = 0.0;
                 Effetto::SalvaLavori
@@ -2325,6 +2379,33 @@ pub(crate) fn salvato_in(nome: &str) -> String {
 #[cfg(test)]
 mod lavori_regressioni {
     use super::*;
+    #[test]
+    fn evento_arrivato_dopo_drain_persiste_stato_e_uscite_insieme(){
+        let mut app=App::new(ThemeId::Cedro);let (id,_)=app.nuova_importazione();
+        let identity=app.identita(id).unwrap();
+        let queue=std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let barrier=std::sync::Arc::new(std::sync::Barrier::new(2));
+        let (q,b)=(queue.clone(),barrier.clone());
+        let writer=std::thread::spawn(move||{
+            b.wait();
+            q.lock().unwrap().push(Completamento{id,stato:Stato::Fatto{path:"content://media/1".into(),nome:"a.pdf".into(),msg:"Diviso".into()},uscite:Some(vec![("content://media/1".into(),"a.pdf".into(),None),("content://media/2".into(),"b.pdf".into(),None)]),sorgente:Some("/privato/audio.wav".into())});
+        });
+        assert!(std::mem::take(&mut *queue.lock().unwrap()).is_empty());
+        barrier.wait();writer.join().unwrap();
+        for e in std::mem::take(&mut *queue.lock().unwrap()){app.completa(e);}
+        let mut restarted=App::new(ThemeId::Cedro);restarted.carica_lavori(&app.serializza());
+        assert_eq!(restarted.lavori.len(),1);let saved_id=restarted.lavori[0].id;
+        assert_eq!(restarted.uscite[&saved_id].len(),2);
+        assert_eq!(restarted.identita(saved_id).unwrap().chiave,identity.chiave);
+        assert_eq!(restarted.lavori[0].sorgente,Some(PathBuf::from("/privato/audio.wav")));
+        assert!(matches!(&restarted.lavori[0].stato,Stato::Fatto{..}));
+        // Un journal durevole già rappresentato nella UI aggiorna lo stesso lavoro.
+        let r=crate::publication::Registro{versione:3,lavoro:identity,forma:crate::publication::Forma::File,gruppo:None,messaggio:"Diviso".into(),pubblico:None,elementi:vec![crate::publication::Elemento{privato:"/privato/a.pdf".into(),relativo:"a.pdf".into(),stato:crate::publication::StatoUscita::Pubblicato(crate::publication::Destinazione{path:"content://media/1".into(),nome:"a.pdf".into(),temporaneo:None}),errore:None}]};
+        restarted.recupera(r.clone());restarted.recupera(r.clone());assert_eq!(restarted.lavori.len(),1);
+        restarted.lavori_rimossi.insert(r.lavoro.chiave.clone());restarted.lavori.clear();
+        let mut cleared=App::new(ThemeId::Cedro);cleared.carica_lavori(&restarted.serializza());
+        cleared.recupera(r);assert!(cleared.lavori.is_empty());
+    }
     #[test]
     fn riavvio_interrompe_attivi_e_conserva_errori_e_tutte_le_uscite() {
         let mut app=App::new(ThemeId::Cedro);
