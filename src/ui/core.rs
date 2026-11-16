@@ -578,7 +578,7 @@ impl<'a> Frame<'a> {
         self.lift(super::theme::kind_color(k))
     }
 
-    fn lift(&self, c: Rgb) -> Rgb {
+    pub(super) fn lift(&self, c: Rgb) -> Rgb {
         if self.theme.dark() {
             mix(c, (255, 255, 255), 0.28)
         } else {
