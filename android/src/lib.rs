@@ -4,6 +4,7 @@
 pub mod ui;
 pub mod labs;
 pub mod worker;
+pub mod web;
 pub mod storage;
 pub mod publication;
 
