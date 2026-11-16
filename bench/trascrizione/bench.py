@@ -20,7 +20,7 @@ from pathlib import Path
 AQUI = Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI))
 import wer as W
-from adapters import ELENCO
+from adapters import ELENCO, ripulisci_cedro
 
 SEME = 42
 DATI = Path(os.environ.get("BENCH_DATI", str(Path.home() / "bench-dati")))
@@ -65,6 +65,7 @@ def lancia(sistema, wav, gpu=True, timeout=3600):
     try:
         m = misura(a.comando(Path(wav), out, gpu), timeout=timeout)
         testo = a.leggi(Path(wav), out, m["out"]) if m["rc"] == 0 else ""
+        m["grezzo"] = a.grezzo(Path(wav), out, m["out"]) if m["rc"] == 0 and hasattr(a, "grezzo") else testo
         return testo, m
     finally:
         shutil.rmtree(out, ignore_errors=True)
@@ -158,6 +159,16 @@ def cmd_wer(a):
     clip = carica_set(a.set)[: a.n] if a.n else carica_set(a.set)
     gia = {(r["sistema"], r["id"], r["gpu"]) for r in leggi_righe(f"a1_wer_{a.set}.jsonl")}
     for s in a.sistemi:
+        ad = ELENCO[s]()
+        if hasattr(ad, "batch"):      # modello caricato una volta sola (faster-whisper): il tempo è solo trascrizione, non avvio
+            da_fare = [c for c in clip if (s, c["id"], not a.cpu) not in gia]
+            for c, (testo, sec, errore) in zip(da_fare, ad.batch([c["wav"] for c in da_fare])):
+                import resource
+                e, n = W.errori(c["rif"], testo)
+                scrivi_riga(f"a1_wer_{a.set}.jsonl", {"sistema": s, "id": c["id"], "gpu": not a.cpu, "rc": 1 if errore else 0, "err": e, "parole": n,
+                                                      "cer": round(cer(c["rif"], testo), 4), "s": round(sec, 3), "rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
+                                                      "ipo": testo[:2000], "stderr": errore, "modo": "batch"})
+            print(f"{s}: fatto"); continue
         for c in clip:
             if (s, c["id"], not a.cpu) in gia: continue
             testo, m = lancia(s, c["wav"], gpu=not a.cpu)
@@ -170,7 +181,13 @@ def cmd_wer(a):
 def cmd_riassumi(a):
     righe = leggi_righe(f"a1_wer_{a.set}.jsonl")
     per = {}
+    rifs = {c["id"]: c["rif"] for c in carica_set(a.set)}
     for r in righe:
+        # riconteggio dai testi salvati: le righe scritte prima che l'adattatore di Cedro togliesse intestazione e marche di tempo (o con un
+        # vecchio faster-whisper fallito) si correggono qui, senza rilanciare. Per gli altri sistemi il riconteggio dà lo stesso numero.
+        if r["rc"] == 0 and r["id"] in rifs:
+            t = ripulisci_cedro(r["ipo"]) if r["sistema"].startswith("cedro") else r["ipo"]
+            r["err"], r["parole"] = W.errori(rifs[r["id"]], t); r["cer"] = round(cer(rifs[r["id"]], t), 4)
         per.setdefault(r["sistema"], {})[r["id"]] = r
     comuni = sorted(set.intersection(*[set(v) for v in per.values()])) if per else []
     print(f"set {a.set}: {len(comuni)} clip in comune tra {len(per)} sistemi")
@@ -301,7 +318,7 @@ def cmd_lungo(a):
     dur = durata(wav)
     for s in a.sistemi:
         testo, m = lancia(s, wav, timeout=6 * 3600)
-        righe = re.findall(r"^\[(\d+):(\d\d)(?::(\d\d))?\]\s*(?:Interlocutore \d+:\s*)?(.*)$", m["out"], re.M)
+        righe = re.findall(r"^\[(\d+):(\d\d)(?::(\d\d))?\]\s*(?:Interlocutore \d+:\s*)?(.*)$", m["grezzo"], re.M)
         seg = [((int(h) * 60 + int(mm)) if ss == "" else int(h) * 3600 + int(mm) * 60 + int(ss), t) for h, mm, ss, t in righe]
         # frasi identiche di fila (loop)
         frasi = [W.normalizza(x) for x in re.split(r"(?<=[.!?])\s+|\n", testo) if W.normalizza(x)]
@@ -374,7 +391,9 @@ def cmd_voci(a):
                 # per misurare le voci Cedro deve essere lanciato con --voci auto
                 cmd = [os.environ.get("CEDRO", "cedro"), "trascrivi", str(dirm / f"{nome}.wav"), "--testo", "--voci", "auto"]
                 mm = misura(cmd)
-                righe = re.findall(r"^\[(\d+):(\d\d)(?::(\d\d))?\]\s*Interlocutore (\d+):", mm["out"], re.M)
+                g = re.search(r"^OK .* -> (.+?) \(", mm["out"], re.M)      # il testo è nel file di uscita, non nello stdout
+                testo_v = Path(g.group(1)).read_text(errors="replace") if g else ""
+                righe = re.findall(r"^\[(\d+):(\d\d)(?::(\d\d))?\]\s*Interlocutore (\d+):", testo_v, re.M)
                 ipo = []
                 for i, (h, mi, se, v) in enumerate(righe):
                     t0 = (int(h) * 60 + int(mi)) if se == "" else int(h) * 3600 + int(mi) * 60 + int(se)
