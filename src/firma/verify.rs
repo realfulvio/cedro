@@ -684,6 +684,10 @@ fn pdf(cx: &mut Ctx, data: &[u8], layer: usize, outer: Option<Proof>) {
                         c.level = Level::Warn;
                         c.text = "dopo la firma aggiunte note o campi compilati".into();
                     }
+                    pades::After::Structure => {
+                        c.level = Level::Warn;
+                        c.text = "dopo la firma cambiato altro nel PDF".into();
+                    }
                     pades::After::Content(_) => {
                         c.level = Level::Bad;
                         c.text = "cambiato dopo la firma".into();
@@ -975,6 +979,13 @@ fn evaluate(cx: &mut Ctx, chk: &cms::SignerCheck, claimed: Option<i64>, proof: O
     };
     s.checks.push(dc);
 
+    // Impronta SHA-1: oggi si possono costruire due documenti con la stessa impronta; la firma torna valida
+    // ma non si può dire «tutto a posto».
+    if crypto::hash_name(digest_alg) == "SHA-1" {
+        why.push("La firma usa l'impronta SHA-1, oggi considerata debole: la legge (e il validatore europeo) non la considerano più sicura per firmare.".into());
+        s.checks.push(Check { level: Level::Warn, what: "Algoritmo", text: "impronta SHA-1 debole".into(), counts: true });
+    }
+
     // Dettagli tecnici
     let mut d: Vec<(String, String)> = Vec::new();
     if let Some(cf) = tax_code(&c) {
@@ -1037,6 +1048,12 @@ fn rejudge(s: &mut Signer, doc_changed: bool, pdf: bool) {
         s.why = format!("Dopo la firma qualcuno ha cambiato il PDF: la firma non copre più quello che vedi. Puoi vedere la versione firmata, com'era al momento della firma. {}", s.why.replace("Dopo la firma qualcuno ha cambiato il documento: la firma non copre più quello che vedi. ", "")).trim().to_string();
     }
     if s.level == Level::Warn {
+        if let Some(c) = s.checks.iter().find(|c| c.what == "Documento" && c.level == Level::Warn && c.text.contains("altro nel PDF")) {
+            let _ = c;
+            if !s.why.contains("impostazioni") {
+                s.why = format!("Dopo la firma nel PDF sono state cambiate altre parti (impostazioni, metadati o script); il testo delle pagine è quello firmato. {}", s.why).trim().to_string();
+            }
+        }
         if let Some(c) = s.checks.iter().find(|c| c.what == "Documento" && c.level == Level::Warn && c.text.contains("note")) {
             let _ = c;
             if !s.why.contains("note") {
