@@ -523,7 +523,7 @@ impl App {
                 }
             }
             CasaAz::Modello(m) => self.modello = m,
-            CasaAz::Web(k) => self.casa.web = k,
+            CasaAz::Web(k) => {self.casa.web=k;if k==2{self.web.altezza=480;}},
             CasaAz::Incolla => return Effetto::Incolla,
             CasaAz::Passo(d) => {
                 let p = (self.casa.passo as i8 + d).clamp(0, 2) as u8;
@@ -652,7 +652,8 @@ impl App {
             if cedro::webvideo::find_url(&link).is_none() {
                 return Effetto::Niente;
             }
-            let (id, nome, _) = WEB[self.casa.web.min(3)];
+            let (mut id, nome, _) = WEB[self.casa.web.min(3)];
+            if !cfg!(feature="youtube")&&cedro::youtube::is_youtube_url(&link){id="web-altra-app";}
             let host = link.split_once("://").map(|(_, r)| r).unwrap_or(&link).split('/').next().unwrap_or("").to_string();
             self.file = Some(Archivio { path: PathBuf::from(&link), nome: host, dim: 0 });
             self.kind = Kind::Video;
@@ -699,9 +700,9 @@ impl App {
             let v = self.casa.coda[i].clone();
             self.file = Some(Archivio { path: v.path.clone(), nome: v.nome.clone(), dim: v.dim });
             self.kind = v.kind;
-            if let Effetto::Converti { id: lavoro, file, azione, qualita, prog, opts, unisci } = self.avvia_con(id, etichetta, conv, Some(Box::new(opts.clone())), Vec::new()) {
+            if let Effetto::Converti { web, id: lavoro, file, azione, qualita, prog, opts, unisci } = self.avvia_con(id, etichetta, conv, Some(Box::new(opts.clone())), Vec::new()) {
                 self.casa.coda[i].lavoro = Some(lavoro);
-                compiti.push(super::Compito { id: lavoro, file, azione, qualita, prog, opts, unisci });
+                compiti.push(super::Compito { web, id: lavoro, file, azione, qualita, prog, opts, unisci });
             }
         }
         self.file = None;
