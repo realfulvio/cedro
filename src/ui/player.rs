@@ -25,6 +25,9 @@ struct Shared {
     audio_pos: AtomicU64,
     audio_len: AtomicU64,
     audio_rate: AtomicU32,
+    /// Velocità (percento: 100 = normale) e volume (percento).
+    speed: AtomicU32,
+    volume: AtomicU32,
     /// Cambia a ogni salto: il thread dei fotogrammi vecchio si ferma.
     generation: AtomicU64,
     /// Orologio senza audio: secondi già passati e da quando corre.
@@ -92,6 +95,8 @@ impl Player {
             audio_pos: AtomicU64::new(0),
             audio_len: AtomicU64::new(0),
             audio_rate: AtomicU32::new(44_100),
+            speed: AtomicU32::new(100),
+            volume: AtomicU32::new(100),
             generation: AtomicU64::new(0),
             clock: Mutex::new((0.0, None)),
             frame: Mutex::new(None),
@@ -113,6 +118,16 @@ impl Player {
     /// Vero mentre suona (anche quando sta ancora preparando l'audio).
     pub fn playing(&self) -> bool {
         !self.sh.paused.load(Ordering::Relaxed) && !self.sh.ended.load(Ordering::Relaxed)
+    }
+
+    /// Velocità di ascolto in percento (100 = normale; l'audio si ricampiona, quindi cambia anche il tono).
+    pub fn set_speed(&mut self, percent: u32) {
+        self.sh.speed.store(percent.clamp(25, 400), Ordering::Relaxed);
+    }
+
+    /// Volume in percento (0..100).
+    pub fn set_volume(&mut self, percent: u32) {
+        self.sh.volume.store(percent.min(100), Ordering::Relaxed);
     }
 
     pub fn loading(&self) -> bool {
@@ -276,6 +291,8 @@ where
                     return;
                 }
                 let mut pos = sh.audio_pos.load(Ordering::Relaxed);
+                let step = step * sh.speed.load(Ordering::Relaxed) as u64 / 100;
+                let gain = sh.volume.load(Ordering::Relaxed) as f32 / 100.0;
                 for frame in data.chunks_mut(out_ch) {
                     let i = (pos >> FRAC) as usize;
                     if i as u64 >= frames {
@@ -285,7 +302,7 @@ where
                     for (c, s) in frame.iter_mut().enumerate() {
                         // Mono su tutte le casse; più canali delle casse: si prendono i primi.
                         let v = pcm.samples[i * in_ch + c.min(in_ch - 1)];
-                        *s = T::from_sample(v as f32 / 32768.0);
+                        *s = T::from_sample(v as f32 / 32768.0 * gain);
                     }
                     pos += step;
                 }
