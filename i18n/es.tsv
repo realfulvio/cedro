@@ -1228,6 +1228,8 @@ Togli le pagine	Quitar las páginas
 {#} PDF uniti, {#} pagine	{} PDF unidos, {} páginas
 {#} PDF uniti, {#} pagine, protetto con password	{} PDF unidos, {} páginas, protegidos con contraseña
 Diviso in {#} PDF	Dividido en {} PDF
+Diviso in {#} PDF. Gli allegati ({#}) restano solo nel file originale: non sono stati copiati nelle parti	Dividido en {} PDF. Los adjuntos ({}) quedan solo en el archivo original: no se copiaron en las partes
+Tolte {#} pagine, ne restano {#}. Gli allegati ({#}) restano solo nel file originale: non sono stati copiati	{} páginas quitadas, {} restantes. Los adjuntos ({}) quedan solo en el archivo original: no se copiaron
 Tolte {#} pagine, ne restano {#}	Quitadas {} páginas, quedan {}
 Per unire servono almeno due PDF spuntati.	Para unir hacen falta al menos dos PDF marcados.
 per unire servono almeno due PDF	para unir hacen falta al menos dos PDF
@@ -2471,6 +2473,7 @@ Togli il caso	Quitar el caso
 Metti	Poner
   cedro --caso V-2026-0457 convert vetrino.svs png    i file nuovi si chiamano data_caso_nome (senza --caso vale quello scelto nell'app; --senza-caso lo esclude)	  cedro --caso V-2026-0457 convert lamina.svs png    los archivos nuevos se llaman fecha_caso_nombre (sin --caso vale el elegido en la app; --senza-caso lo excluye)
 --caso vuole un codice, per esempio V-2026-0457	--caso necesita un código, por ejemplo V-2026-0457
+~. Attenzione: il testo da destra a sinistra (arabo, ebraico) non è ancora reso bene: ordine e forma delle lettere possono essere sbagliati	. Atención: el texto de derecha a izquierda (árabe, hebreo) aún no se muestra bien: el orden y la forma de las letras pueden ser incorrectos
 Per il laboratorio	Para el laboratorio
 Comuni	Comunes
 Moderni	Modernos

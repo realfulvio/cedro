@@ -1,0 +1,24 @@
+{
+ "clip": 200,
+ "wer": {
+  "cedro-veloce": 0.20815793293656554,
+  "cedro-buona": 0.16141675134272027,
+  "wcpp-small-q8": 0.20177093917840036,
+  "wcpp-medium-q5": 0.14878792277543912,
+  "cedro-massima": 0.10422412541733198,
+  "wcpp-turbo-q5": 0.10436928436638118,
+  "buzz-wcpp": 0.11569168239221948,
+  "fw-large-v3": 0.10988532443025112
+ },
+ "cer": {
+  "cedro-veloce": 0.048949,
+  "cedro-buona": 0.046790000000000005,
+  "wcpp-small-q8": 0.046203,
+  "wcpp-medium-q5": 0.034756999999999996,
+  "cedro-massima": 0.024082499999999996,
+  "wcpp-turbo-q5": 0.025783999999999998,
+  "buzz-wcpp": 0.027872499999999998,
+  "fw-large-v3": 0.041612
+ },
+ "migliore_concorrente": "wcpp-turbo-q5"
+}

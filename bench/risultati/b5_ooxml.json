@@ -1,0 +1,938 @@
+{
+ "errori_xsd_totali": 0,
+ "file": 116,
+ "file_non_validi_xsd": [],
+ "libreoffice_campione": "24/24",
+ "libreoffice_falliti": [],
+ "riaperti_python": 116,
+ "righe": [
+  {
+   "errori_xsd": 0,
+   "file": "47304.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "47304.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "52117.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "52117.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "52288.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "52288.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "52420.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "52420.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 5,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "53379.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "53379.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 23,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "53446.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "53446.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 9,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "55733.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "55733.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "55966.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "55966.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "56392.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "56392.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "56880.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "56880.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "57312.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "57312.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "57603-seven_columns.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "57843.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "57843.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "58067.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "58067.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "58618.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "58618.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "58804.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "58804.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "59030.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "59030.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "59322.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "59322.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "59378.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "60279.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "60279.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 8,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "60293.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "60293.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "60316.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "60316.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61470.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61470.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61490.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61490.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61586.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61586.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61745.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61787.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61787.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61911.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61911.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61991.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "61991.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "64132.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "65099.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "65099.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug46220.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug46220.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug47742.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug47742.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug49820.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug49820.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug51170.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug51170.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug51604.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug51604.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug51686.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug51686.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 5,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug52311.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug52311.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug53182.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug53182.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug54849.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug54849.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 5,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug55142.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug55142.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug60337.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug60337.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug60936.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug60936.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug62859.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug64561.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug64561.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug66988.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Bug66988.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "ComplexNumberedLists.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "ComplexNumberedLists.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "DiffFirstPageHeadFoot.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "DiffFirstPageHeadFoot.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "FancyFoot.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "FancyFoot.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "FieldCodes.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "FieldCodes.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "FldSimple.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "FldSimple.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "FloatingPictures.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "FloatingPictures.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 5,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "HeaderFooterUnicode.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "HeaderFooterUnicode.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Headers.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Headers.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "IllustrativeCases.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "IllustrativeCases.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 11,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Lists.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Lists.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "NoHeadFoot.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "NoHeadFoot.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Numbering.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "Numbering.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "PageSpecificHeadFoot.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "PageSpecificHeadFoot.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "PngPicture.docx",
+   "parti_xsd": 3,
+   "primo_errore": "-",
+   "python_docx": true,
+   "tipo": "pdf->docx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "PngPicture.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "pdf->xlsx"
+  },
+  {
+   "errori_xsd": 0,
+   "file": "dati.xlsx",
+   "openpyxl": true,
+   "parti_xsd": 4,
+   "primo_errore": "-",
+   "tipo": "csv->xlsx"
+  }
+ ]
+}

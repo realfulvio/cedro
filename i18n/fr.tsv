@@ -1228,6 +1228,8 @@ Togli le pagine	Retirer les pages
 {#} PDF uniti, {#} pagine	{} PDF fusionnés, {} pages
 {#} PDF uniti, {#} pagine, protetto con password	{} PDF fusionnés, {} pages, protégés par mot de passe
 Diviso in {#} PDF	Divisé en {} PDF
+Diviso in {#} PDF. Gli allegati ({#}) restano solo nel file originale: non sono stati copiati nelle parti	Divisé en {} PDF. Les pièces jointes ({}) restent seulement dans le fichier d'origine : elles n'ont pas été copiées dans les parties
+Tolte {#} pagine, ne restano {#}. Gli allegati ({#}) restano solo nel file originale: non sono stati copiati	{} pages retirées, {} restantes. Les pièces jointes ({}) restent seulement dans le fichier d'origine : elles n'ont pas été copiées
 Tolte {#} pagine, ne restano {#}	{} pages retirées, {} restantes
 Per unire servono almeno due PDF spuntati.	La fusion exige au moins deux PDF cochés.
 per unire servono almeno due PDF	la fusion exige au moins deux PDF
@@ -2471,6 +2473,7 @@ Togli il caso	Retirer le cas
 Metti	Mettre
   cedro --caso V-2026-0457 convert vetrino.svs png    i file nuovi si chiamano data_caso_nome (senza --caso vale quello scelto nell'app; --senza-caso lo esclude)	  cedro --caso V-2026-0457 convert lame.svs png    les nouveaux fichiers s'appellent date_cas_nom (sans --caso, c'est le cas choisi dans l'app ; --senza-caso l'exclut)
 --caso vuole un codice, per esempio V-2026-0457	--caso demande un code, par exemple V-2026-0457
+~. Attenzione: il testo da destra a sinistra (arabo, ebraico) non è ancora reso bene: ordine e forma delle lettere possono essere sbagliati	. Attention : le texte de droite à gauche (arabe, hébreu) n'est pas encore bien rendu : l'ordre et la forme des lettres peuvent être faux
 Per il laboratorio	Pour le laboratoire
 Comuni	Courants
 Moderni	Modernes

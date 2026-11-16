@@ -329,6 +329,8 @@ pub enum After {
     OnlySignatures,
     /// Annotazioni o campi del modulo, ma il testo e il disegno delle pagine sono uguali.
     Annotations,
+    /// Altre parti del documento (impostazioni, script, metadati…), ma il testo e il disegno delle pagine sono uguali.
+    Structure,
     /// Il contenuto delle pagine è cambiato: quali (da 1).
     Content(Vec<u32>),
 }
@@ -369,8 +371,38 @@ pub fn changes_after(data: &[u8], end: usize) -> After {
     // Il resto: altre firme, marche, dati per la verifica nel tempo (DSS) o annotazioni.
     if annotation_changes(&old, &new) {
         After::Annotations
+    } else if catalog_changes(&old, &new) {
+        After::Structure
     } else {
         After::OnlySignatures
+    }
+}
+
+/// Voci del catalogo del documento cambiate dopo la firma, oltre a quelle che si aggiungono firmando
+/// (dati per la verifica nel tempo, modulo, estensioni): lingua, script, apertura automatica, metadati.
+fn catalog_changes(old: &lopdf::Document, new: &lopdf::Document) -> bool {
+    const ALLOWED: [&[u8]; 4] = [b"DSS", b"AcroForm", b"Extensions", b"Version"];
+    let cat = |d: &lopdf::Document| -> Option<Vec<(Vec<u8>, String)>> {
+        let root = d.trailer.get(b"Root").ok()?;
+        let (_, obj) = d.dereference(root).ok()?;
+        let dict = obj.as_dict().ok()?;
+        let mut v: Vec<(Vec<u8>, String)> = dict
+            .iter()
+            .filter(|(k, _)| !ALLOWED.contains(&k.as_slice()))
+            .map(|(k, val)| (k.clone(), format!("{val:?}")))
+            .collect();
+        v.sort();
+        Some(v)
+    };
+    match (cat(old), cat(new)) {
+        // I programmi che firmano aggiungono spesso i metadati XMP alla prima firma: nuovi, non cambiati.
+        (Some(a), Some(mut b)) => {
+            if !a.iter().any(|(k, _)| k == b"Metadata") {
+                b.retain(|(k, _)| k != b"Metadata");
+            }
+            a != b
+        }
+        _ => false,
     }
 }
 
