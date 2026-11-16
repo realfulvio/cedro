@@ -11,12 +11,11 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Trascrivi con la traccia audio a tutto schermo.**
+**Converti file e Video dal web più ordinati.**
 
-- Mentre Cedro trascrive, l'onda sonora occupa tutto il centro e la parte già trascritta si colora. Sotto ci sono i comandi per riascoltare: Play e Pausa, 10 secondi indietro e avanti, frase prima e dopo, un clic sull'onda per spostarti, velocità (0,75×, 1×, 1,5×, 2×) e volume.
-- Tre viste sempre a un clic: solo onda, onda e testo, solo testo. La frase che senti è evidenziata nel testo e il testo la segue.
-- Il testo che si trascrive ha una barra di scorrimento ben visibile e le parole arrivano raggruppate in frasi, una per riga.
-- «Rivedi» e «Riassunto AI» sono più grandi e colorati.
-- Il pannello di destra si allarga e si stringe trascinando il bordo (doppio clic per tornare alla misura di base) e Cedro ricorda la larghezza.
-- La scheda video si legge una volta sola, in alto; sotto il pulsante una riga dice cosa sta facendo Cedro («Trascrive · file 1 di 7»).
-- Provato su Windows con una trascrizione vera e sullo schermo di Linux.
+- In «Converti file» (vista Completa) i formati delle immagini sono divisi per famiglia, ognuna col suo colore: Comuni, Moderni, Tecnici, Professionali, Documento.
+- Gli strumenti sono tessere con l'icona colorata, due per riga; quelli da laboratorio (figura, conta mitotica, consulto, radiografie, tessere per l'AI) stanno in un riquadro rosa a parte.
+- La scelta corrente compare in una scheda con l'icona e due parole che dicono a cosa serve.
+- In «Video dal web» la qualità è in tessere, con «consigliata» in evidenza, e gli interruttori sono in tre gruppi: «Dentro il file», «Come lo salva», «Playlist e raccolte».
+- Con il pannello stretto i nomi lunghi vanno a capo invece di essere tagliati.
+- Nessuna funzione è stata tolta o nascosta.
