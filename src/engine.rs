@@ -1405,7 +1405,7 @@ fn split_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
         let name = crate::pdfpages::safe_name(&name);
         outs.push(reserve(dir, if name.is_empty() { &base } else { &name }, "pdf")?);
     }
-    let settings = crate::pdfpages::Settings { file_bookmarks: false, ..pp.settings.clone() };
+    let settings = crate::pdfpages::Settings { file_bookmarks: false, keep_info: true, ..pp.settings.clone() };
     for (i, (g, out)) in groups.iter().zip(&outs).enumerate() {
         crate::progress::report(i as f32 / groups.len() as f32);
         let mut bytes = crate::pdfpages::build(&[crate::pdfpages::Part { doc: &doc, pages: g.pages.clone(), title: base.clone() }], &settings).map_err(err)?;
@@ -1420,6 +1420,12 @@ fn split_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
         format!("Tolte {} pagine, ne restano {kept}", total as usize - kept)
     } else {
         format!("Diviso in {} PDF", groups.len())
+    };
+    // Gli allegati incorporati non si copiano nelle parti: si dice, invece di perderli in silenzio.
+    let message = match (crate::pdfpages::attachment_count(&doc), remove) {
+        (0, _) => message,
+        (n, true) => format!("Tolte {} pagine, ne restano {}. Gli allegati ({n}) restano solo nel file originale: non sono stati copiati", total as usize - groups[0].pages.len(), groups[0].pages.len()),
+        (n, false) => format!("Diviso in {} PDF. Gli allegati ({n}) restano solo nel file originale: non sono stati copiati nelle parti", groups.len()),
     };
     Ok(Output { path: outs[0].clone(), message })
 }
@@ -1440,7 +1446,7 @@ fn edit_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
         return Err(err("nessuna pagina da salvare"));
     }
     crate::progress::report(0.2);
-    let settings = crate::pdfpages::Settings { file_bookmarks: false, duplex_blank: false, ..pp.settings.clone() };
+    let settings = crate::pdfpages::Settings { file_bookmarks: false, duplex_blank: false, keep_info: true, ..pp.settings.clone() };
     let built = crate::pdfpages::build(&[crate::pdfpages::Part { doc: &doc, pages: list.iter().map(|(p, _)| *p).collect(), title: stem(path) }], &settings).map_err(err)?;
     crate::progress::report(0.6);
     let rotations: Vec<i32> = list.iter().map(|(_, r)| *r).collect();

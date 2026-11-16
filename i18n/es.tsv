@@ -1228,6 +1228,8 @@ Togli le pagine	Quitar las páginas
 {#} PDF uniti, {#} pagine	{} PDF unidos, {} páginas
 {#} PDF uniti, {#} pagine, protetto con password	{} PDF unidos, {} páginas, protegidos con contraseña
 Diviso in {#} PDF	Dividido en {} PDF
+Diviso in {#} PDF. Gli allegati ({#}) restano solo nel file originale: non sono stati copiati nelle parti	Dividido en {} PDF. Los adjuntos ({}) quedan solo en el archivo original: no se copiaron en las partes
+Tolte {#} pagine, ne restano {#}. Gli allegati ({#}) restano solo nel file originale: non sono stati copiati	{} páginas quitadas, {} restantes. Los adjuntos ({}) quedan solo en el archivo original: no se copiaron
 Tolte {#} pagine, ne restano {#}	Quitadas {} páginas, quedan {}
 Per unire servono almeno due PDF spuntati.	Para unir hacen falta al menos dos PDF marcados.
 per unire servono almeno due PDF	para unir hacen falta al menos dos PDF
