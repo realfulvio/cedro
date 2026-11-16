@@ -219,7 +219,6 @@ pub struct Compito {
 
 pub enum Effetto {
     SalvaRete,
-    ConfermaDownload,
     Annulla(u32),
     Niente,
     /// Più lavori, uno dopo l'altro (il pulsante grande della finestra principale).

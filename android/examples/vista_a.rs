@@ -20,7 +20,8 @@ fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, sc
     app.recenti.push(Recente { path: path.clone(), nome: "Riunione.m4a".into(), kind: Kind::Audio, thumb: None });
     app.recenti.push(Recente { path: path.clone(), nome: "Relazione.pdf".into(), kind: Kind::Pdf, thumb: None });
     match scene {
-        1..=6 => {
+        4 => {app.vista_nav(4);app.casa.link="https://archive.org/download/fixture/video.mp4".into();}
+        1..=3|5..=6 => {
             let k = [Kind::Image, Kind::Pdf, Kind::Audio, Kind::Video, Kind::Other, Kind::Image][scene - 1];
             app.aggiungi_coda(vec![(path.clone(), if k == Kind::Image { "Sopralluogo.heic" } else { "Relazione.pdf" }.into(), k)]);
             app.info_voce(&path, cedro::ui::media::thumb_of(&path, 300), Some((4032, 3024)));
@@ -61,6 +62,24 @@ fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, sc
             }
             if scene==15 {app.grandi=true;app.vista_scorri(300.0);}
         }
+        17..=25=>{
+            app.vista_nav(4);
+            app.casa.link=if scene<=20{"https://www.youtube.com/watch?v=fixture"}else{"https://example.org/video.mp4"}.into();
+            app.web.altezza=720;
+            app.web.subtitles=2;
+            match scene {
+                18|22=>app.vista_scorri(480.0),
+                19|23=>app.vista_scorri(1180.0),
+                20=>app.vista_scorri(1820.0),
+                24|25=>{
+                    app.sopra=Some(Scheda::Lavori);
+                    app.lavori.push(Lavoro{id:2,origine:"Video pubblico di prova".into(),etichetta:"Video".into(),conv:false,inizio:Instant::now(),quando:cedro_android::ui::adesso(),stato:Stato::InCorso,prog:Default::default(),sorgente:None,controlli:None});
+                    app.componente=Some(cedro_android::web::Componente{nome:"Python".into(),fase:if scene==24{cedro::componenti::Fase::Scarica{fatti:5_000_000,totale:14_000_000}}else{cedro::componenti::Fase::Errore}});
+                    if scene==25{app.download_attesa=Some(cedro_android::web::AttesaDownload{nome:"Modello".into(),bytes:264_000_000,liberi:2_000_000_000,mobile:true,da:Instant::now()});}
+                },
+                _=>{},
+            }
+        }
         _ => {}
     }
     let mut cache = GlyphCache::new();
@@ -76,7 +95,7 @@ fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, sc
 fn main() {
     let out = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "/tmp/vista-a".into()));
     std::fs::create_dir_all(&out).unwrap();
-    let scenes = ["inizio", "converti", "pdf", "trascrivi", "web", "firma", "labs", "lavori", "impostazioni", "condividi", "grandi", "labs-livello", "labs-czi", "labs-dicom", "caso", "labs-grandi", "famiglie-grandi"];
+    let scenes = ["inizio", "converti", "pdf", "trascrivi", "web", "firma", "labs", "lavori", "impostazioni", "condividi", "grandi", "labs-livello", "labs-czi", "labs-dicom", "caso", "labs-grandi", "famiglie-grandi", "web-youtube", "web-youtube-qualita", "web-youtube-opzioni", "web-youtube-raccolte", "web-generico", "web-generico-qualita", "web-generico-opzioni", "componente-progresso", "componente-errore-rete"];
     for lang in [Lang::It, Lang::De, Lang::Pt] {
         for (w, h) in [(360.0, 800.0), (360.0, 640.0), (800.0, 400.0)] {
             for (scene, name) in scenes.iter().enumerate() {
