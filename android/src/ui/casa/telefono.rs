@@ -428,6 +428,7 @@ impl App {
         y += testo_a(p, "Animazioni: segue il telefono", x, y, cw, 14.0, Weight::Regular, pal.muted, 20.0, 0) + 24.0;
         y += self.opzione_a(p, x, y, cw, "Temi precedenti", self.tema.name(), Azione::Casa(CasaAz::Apri(Elenco::Tema)), vista);
         y += 16.0;
+        y += self.impostazioni_rete(p,x,y,cw,vista)+16.0;
         for (nome, ico, az) in [("Nome dei file, qualità, OCR", ic::SETTINGS, Azione::Opz(OpzAz::ApriImpostazioni)), ("Informazioni", ic::INFO, Azione::Casa(CasaAz::Informazioni)), ("Guida", ic::HELP, Azione::Casa(CasaAz::Guida))] {
             let hh = altezza_a(p, nome, 15.0, Weight::Semibold, cw - 58.0, 21.0, 0).max(28.0) + 20.0;
             self.bottone_a(p, (x, y, cw, hh), nome, ico, pal.surface, pal.text, az, vista);
@@ -452,6 +453,7 @@ impl App {
             self.bottone_a(p, (x, y, w, hh), nome, super::super::icona_di(id), if i == self.casa.web { pal.alt } else { pal.surface }, pal.text, Azione::Casa(CasaAz::Web(i)), vista);
             y += hh + 8.0;
         }
+        y += self.pannello_web(p,x,y,w,vista);
         y - start
     }
 }
