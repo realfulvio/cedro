@@ -14,6 +14,7 @@ use std::sync::OnceLock;
 
 use super::*;
 use crate::engine::Slice;
+use crate::ui::voci;
 use crate::ui::core::{LinkFlag, LinkMenu, Scroll};
 use crate::ui::gfx::{Fit, Image, Rgb};
 use crate::ui::model::{FileState, Lab, PdfMode, AUDIO_QUALITY, SUBTITLES, VIDEO_QUALITY};
@@ -22,15 +23,19 @@ use crate::ui::theme::{kind_bright, kind_color, page_colors, Tint, STAGE};
 const TOP: f32 = 60.0;
 const RAIL: f32 = 252.0;
 const PAD: f32 = 12.0;
-const SIDE: f32 = 404.0;
+/// Larghezza di base del pannello di destra, e i limiti entro cui si trascina il suo bordo.
+const SIDE: f32 = 440.0;
+const SIDE_MIN: f32 = 340.0;
+/// Quanto resta almeno al centro (il file) quando il pannello si allarga.
+const STAGE_MIN: f32 = 560.0;
 const STRIP: f32 = 92.0;
 /// Barra dei comandi in cima alla zona del file.
 const BAR: f32 = 62.0;
 /// Il piede del pannello: cartella, «se esiste già», pulsante e riga di quello che esce.
 const FOOT: f32 = 214.0;
-const WHITE: Rgb = (255, 255, 255);
-const STAGE_INK: Rgb = (0xF4, 0xEF, 0xFA);
-const STAGE_MUTED: Rgb = (0xB9, 0xAD, 0xCA);
+pub(super) const WHITE: Rgb = (255, 255, 255);
+pub(super) const STAGE_INK: Rgb = (0xF4, 0xEF, 0xFA);
+pub(super) const STAGE_MUTED: Rgb = (0xB9, 0xAD, 0xCA);
 
 const OPT: OptStyle = OptStyle { label: 15.0, note: 14.0, control_h: 42.0, gap: 18.0, visible: 0, switch_w: 52.0, switch_h: 28.0 };
 
@@ -197,7 +202,7 @@ fn short_gpu(name: &str) -> String {
 }
 
 /// I colori della pagina aperta: quello pieno e quello acceso.
-fn colors(app: &App) -> (Rgb, Rgb) {
+pub(super) fn colors(app: &App) -> (Rgb, Rgb) {
     page_colors(app.lab)
 }
 
@@ -217,8 +222,12 @@ pub fn draw(f: &mut Frame, app: &App) {
         home(f, app, area);
         return;
     }
-    let stage = (area.0, area.1, area.2 - SIDE - PAD, area.3);
-    let side = (area.0 + area.2 - SIDE, area.1, SIDE, area.3);
+    let sw = side_w(f, area.2);
+    let stage = (area.0, area.1, area.2 - sw - PAD, area.3);
+    let side = (area.0 + area.2 - sw, area.1, sw, area.3);
+    if !matches!(app.lab, Lab::Firma) {
+        side_grip(f, (side.0 - PAD, area.1, PAD, area.3));
+    }
     match app.lab {
         Lab::Firma => firma(f, app, area),
         Lab::Trascrivi => {
@@ -234,6 +243,22 @@ pub fn draw(f: &mut Frame, app: &App) {
             convert_panel(f, app, side);
         }
     }
+}
+
+/// La larghezza del pannello di destra: quella scelta trascinando il bordo, tenuta entro i limiti.
+fn side_w(f: &Frame, area_w: f32) -> f32 {
+    let want = f.ui.side_w.unwrap_or(SIDE);
+    want.clamp(SIDE_MIN, (area_w - PAD - STAGE_MIN).max(SIDE_MIN))
+}
+
+/// Il bordo del pannello: una maniglia che si trascina per allargarlo o stringerlo (la larghezza resta salvata).
+fn side_grip(f: &mut Frame, r: R) {
+    let t = f.theme.tint();
+    let act = Act::SideGrip;
+    let hot = f.hovered(&act) || f.ui.drag.as_ref().is_some_and(|d| d.0 == Act::SideGrip);
+    let c = if hot { t.ink } else { mix(t.ink, t.frame, 0.7) };
+    f.p.rrect(r.0 + r.2 / 2.0 - 2.0, r.1 + r.3 / 2.0 - 30.0, 4.0, 60.0, 2.0, Some(c), None);
+    f.hit_kind((r.0 - 4.0, r.1, r.2 + 8.0, r.3), act, crate::ui::core::HitKind::Slider);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -865,6 +890,163 @@ fn format_chips(app: &App, list: &[Slice]) -> Vec<(String, Rgb, bool, Act)> {
         .collect()
 }
 
+/// Un chip senza pallino: la tinta leggera della sua famiglia, pieno quando è scelto.
+fn chips_plain(f: &mut Frame, x: f32, y: f32, w: f32, items: &[(String, Rgb, bool, Act)]) -> f32 {
+    let pal = f.pal;
+    let (h, gap) = (32.0, 6.0);
+    let (mut cx, mut cy) = (x, y);
+    for (label, c, on, act) in items {
+        let c = f.lift(*c);
+        let lw = f.measure(label, 13.5, SEMI);
+        let cw = lw + 24.0;
+        if cx + cw > x + w && cx > x {
+            cx = x;
+            cy += h + gap;
+        }
+        let b = (cx, cy, cw, h);
+        let hot = f.hover_t(act, !*on);
+        if *on {
+            f.p.shadow(b.0, b.1, b.2, b.3, 16.0, 5.0, 0.18, 2.0);
+            f.p.rrect(b.0, b.1, b.2, b.3, 16.0, Some(c), Some((c, 1.5)));
+        } else {
+            f.p.rrect(b.0, b.1, b.2, b.3, 16.0, Some(mix(c, pal.surface, 0.9)), Some((mix(mix(c, pal.surface, 0.78), c, 0.6 * hot), 1.5)));
+        }
+        let ink = if *on { WHITE } else { mix(c, pal.text, 0.35) };
+        f.p.text(label, b.0 + 12.0, b.1, lw + 4.0, h, 13.5, SEMI, ink, Align::Left);
+        f.focus_ring(b, 16.0, act);
+        f.hit(b, act.clone());
+        cx += cw + gap;
+    }
+    cy + h - y
+}
+
+/// I formati a gruppi: a sinistra il nome della famiglia nel suo colore, a destra i suoi chip.
+fn family_rows(f: &mut Frame, app: &App, formats: &[&Slice], x: f32, y: f32, w: f32) -> f32 {
+    let pal = f.pal;
+    let kind = app.kind();
+    let lw = 116.0;
+    let mut order: Vec<&'static str> = Vec::new();
+    for s in formats {
+        if let Some(n) = voci::family(kind, &app.voce(s.id)) {
+            if !order.contains(&n) {
+                order.push(n);
+            }
+        }
+    }
+    let order_rank = |n: &str| ["Comuni", "Moderni", "Tecnici", "Professionali", "Documento"].iter().position(|m| *m == n).unwrap_or(9);
+    order.sort_by_key(|n| order_rank(n));
+    let mut cy = y;
+    for (k, name) in order.iter().enumerate() {
+        let items: Vec<_> = formats
+            .iter()
+            .filter_map(|s| {
+                let v = app.voce(s.id);
+                (voci::family(kind, &v) == Some(*name)).then(|| (v.label.to_string(), v.color, app.action == s.id, Act::Action(s.id)))
+            })
+            .collect();
+        let c = f.lift(items.first().map(|i| i.1).unwrap_or(pal.muted));
+        if k > 0 {
+            f.hline(x, cy - 5.0, w);
+        }
+        f.p.circle(x + 4.0, cy + 16.0, 4.0, Some(c), None);
+        f.p.text(name, x + 16.0, cy, lw - 14.0, 32.0, 12.5, BOLD, c, Align::Left);
+        let h = chips_plain(f, x + lw + 6.0, cy, w - lw - 6.0, &items);
+        cy += h + 11.0;
+    }
+    cy - y - 11.0
+}
+
+/// La pastiglia con l'icona del colore dello strumento (come nel menu), piena e con un filo di luce.
+fn glyph_tile(f: &mut Frame, x: f32, y: f32, s: f32, v: &voci::Voce) {
+    let c = f.lift(v.color);
+    f.p.rrect_vgrad(x, y, s, s, (s * 0.3).round(), mix(c, WHITE, 0.3), c);
+    let isz = (s * 0.58).round();
+    let pad = (s - isz) / 2.0;
+    if !v.glyph.fill.is_empty() {
+        f.p.icon_fill(v.glyph.fill, x + pad, y + pad, isz, mix(WHITE, c, 0.35));
+    }
+    f.p.icon(v.glyph.stroke, x + pad, y + pad, isz, WHITE);
+}
+
+/// Le righe di testo di ogni tessera e l'altezza di ogni riga di tessere (il nome va a capo fino a tre righe).
+fn tile_lines(f: &mut Frame, app: &App, tools: &[&Slice], cw: f32) -> (Vec<Vec<String>>, Vec<f32>) {
+    let lines: Vec<Vec<String>> = tools.iter().map(|s| f.p.wrap_lines(&crate::i18n::tr(app.voce(s.id).label), 13.5, SEMI, cw - 56.0, 3)).collect();
+    let heights = lines.chunks(2).map(|pair| pair.iter().map(|l| (l.len() as f32 * 17.0 + 14.0).max(48.0)).fold(48.0, f32::max)).collect();
+    (lines, heights)
+}
+
+/// Gli strumenti a tessere, due per riga: icona colorata e nome (anche su più righe).
+fn tool_tiles(f: &mut Frame, app: &App, tools: &[&Slice], x: f32, y: f32, w: f32) -> f32 {
+    let pal = f.pal;
+    let gap = 7.0;
+    let cw = ((w - gap) / 2.0).floor();
+    let (all_lines, heights) = tile_lines(f, app, tools, cw);
+    let mut tops = Vec::new();
+    let mut acc = y;
+    for h in &heights {
+        tops.push(acc);
+        acc += h + gap;
+    }
+    for (k, s) in tools.iter().enumerate() {
+        let (col, row) = (k % 2, k / 2);
+        let h = heights[row];
+        let v = app.voce(s.id);
+        let on = app.action == s.id;
+        let c = f.lift(v.color);
+        let b = (x + col as f32 * (cw + gap), tops[row], cw, h);
+        let act = Act::Action(s.id);
+        let hot = f.hover_t(&act, !on);
+        if on {
+            f.p.rrect(b.0, b.1, b.2, b.3, 12.0, Some(mix(c, pal.surface, 0.89)), Some((c, 1.6)));
+        } else {
+            f.p.rrect(b.0, b.1, b.2, b.3, 12.0, Some(pal.surface), Some((mix(pal.border, c, 0.55 * hot), 1.5)));
+        }
+        glyph_tile(f, b.0 + 9.0, b.1 + (h - 30.0) / 2.0, 30.0, &v);
+        let lines = &all_lines[k];
+        let top = b.1 + (h - lines.len() as f32 * 17.0) / 2.0;
+        for (i, line) in lines.iter().enumerate() {
+            f.p.text(line, b.0 + 47.0, top + i as f32 * 17.0, cw - 52.0, 17.0, 13.5, SEMI, pal.text, Align::Left);
+        }
+        f.focus_ring(b, 12.0, &act);
+        f.hit(b, act);
+    }
+    acc - gap - y
+}
+
+/// Il riquadro rosa del laboratorio con i suoi strumenti.
+fn lab_box(f: &mut Frame, app: &App, tools: &[&Slice], x: f32, y: f32, w: f32) -> f32 {
+    let pal = f.pal;
+    let c = f.lift(voci::LAB);
+    let cw = (((w - 12.0) - 7.0) / 2.0).floor();
+    let (_, heights) = tile_lines(f, app, tools, cw);
+    let h = 12.0 + 26.0 + heights.iter().sum::<f32>() + 7.0 * (heights.len() as f32 - 1.0) + 12.0;
+    f.p.rrect(x - 4.0, y, w + 8.0, h, 14.0, Some(mix(c, pal.surface, 0.93)), Some((mix(c, pal.surface, 0.78), 1.5)));
+    f.text("Per il laboratorio", x + 6.0, y + 10.0, w - 12.0, 22.0, 14.0, BOLD, c);
+    tool_tiles(f, app, tools, x + 6.0, y + 38.0, w - 12.0);
+    h
+}
+
+/// La scelta corrente: una scheda con l'icona e le due parole che dicono a cosa serve.
+fn chosen_card(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32 {
+    let pal = f.pal;
+    let v = app.action_voce();
+    if v.label.is_empty() {
+        return 0.0;
+    }
+    let c = f.lift(v.color);
+    let h = 58.0;
+    f.p.rrect(x, y, w, h, 12.0, Some(mix(c, pal.surface, 0.89)), Some((mix(c, pal.surface, 0.55), 1.5)));
+    glyph_tile(f, x + 12.0, y + 10.0, 38.0, &v);
+    let label = crate::i18n::tr(v.label);
+    if v.hint.is_empty() {
+        f.p.text(&label, x + 62.0, y, w - 72.0, h, 15.5, BOLD, mix(c, pal.text, 0.4), Align::Left);
+    } else {
+        f.p.text(&label, x + 62.0, y + 8.0, w - 72.0, 24.0, 15.5, BOLD, mix(c, pal.text, 0.4), Align::Left);
+        f.p.text(&crate::i18n::tr(v.hint), x + 62.0, y + 31.0, w - 72.0, 20.0, 13.5, SANS, pal.muted, Align::Left);
+    }
+    h
+}
+
 /// Le scelte pronte di «Semplice»: righe grandi con l'icona colorata. Restituisce l'altezza.
 fn simple_rows(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, deep: Rgb) -> f32 {
     let pal = f.pal;
@@ -924,19 +1106,23 @@ fn convert_panel(f: &mut Frame, app: &App, r: R) {
             }
         }
         if !pdf || app.pdf_mode() == PdfMode::Convert {
-            let formats = format_chips(app, conversioni::formats(kind));
+            let formats: Vec<_> = conversioni::formats(kind).iter().filter(|s| !conversioni::is_page_action(kind, s.id)).collect();
             cy += label(f, &format!("{} · {} formati", if pdf { "Converti in" } else { "Formato" }, formats.len()), x, cy, w);
-            cy += chips(f, x, cy, w, &formats) + 16.0;
-            let tools = format_chips(app, conversioni::tools(kind));
-            if !tools.is_empty() {
+            if formats.len() > 6 && formats.iter().any(|s| voci::family(kind, &app.voce(s.id)).is_some()) {
+                cy += family_rows(f, app, &formats, x, cy, w) + 16.0;
+            } else {
+                cy += chips(f, x, cy, w, &format_chips(app, conversioni::formats(kind))) + 16.0;
+            }
+            // Gli strumenti: tessere con l'icona; quelli del laboratorio in un riquadro a parte.
+            let (lab, generic): (Vec<_>, Vec<_>) = conversioni::tools(kind).iter().partition(|s| voci::is_lab(&app.voce(s.id)));
+            if !generic.is_empty() {
                 cy += label(f, "Oppure uno strumento", x, cy, w);
-                cy += chips(f, x, cy, w, &tools) + 16.0;
+                cy += tool_tiles(f, app, &generic, x, cy, w) + 16.0;
             }
-            let v = app.action_voce();
-            if !v.hint.is_empty() {
-                let line = crate::i18n::lit(&format!("{} · {}", crate::i18n::tr(v.label), crate::i18n::tr(v.hint)));
-                cy += f.para(&line, x, cy, w, 14.0, SANS, pal.muted, 1.4, 3) + 14.0;
+            if !lab.is_empty() {
+                cy += lab_box(f, app, &lab, x, cy, w) + 16.0;
             }
+            cy += chosen_card(f, app, x, cy, w) + 16.0;
         }
         cy += super::options_panel(f, app, x, cy, w, OPT, false);
         cy - top + 18.0
@@ -1017,6 +1203,13 @@ fn transcribe_stage(f: &mut Frame, app: &App, r: R) {
         strip(f, app, (r.0, r.1 + r.3 - STRIP, r.2, STRIP), &vis, sel, false, &count_line(app, &vis));
         return;
     };
+    // Un audio con la sua onda: l'onda prende tutto il centro, con i comandi d'ascolto e il testo a scelta.
+    if super::onda::applies(app, i) {
+        super::onda::view_toggle(f, app, r.0 + r.2 - 14.0, r.1 + 12.0);
+        super::onda::stage(f, app, i, c);
+        strip(f, app, (r.0, r.1 + r.3 - STRIP, r.2, STRIP), &vis, sel, false, &count_line(app, &vis));
+        return;
+    }
     // In alto il file che si ascolta (con play e posizione), sotto il foglio dove compare il testo.
     let wave_h = (c.3 * 0.3).clamp(150.0, 260.0);
     super::documento::media_card(f, app, i, (c.0, c.1, c.2, wave_h));
@@ -1025,14 +1218,42 @@ fn transcribe_stage(f: &mut Frame, app: &App, r: R) {
     strip(f, app, (r.0, r.1 + r.3 - STRIP, r.2, STRIP), &vis, sel, false, &count_line(app, &vis));
 }
 
+/// Mette insieme le parole di una stessa voce in frasi lunghe al massimo `chars` caratteri (una riga): si spezza
+/// dove finisce una frase, quando cambia chi parla o dopo una pausa. La riga tiene l'orario della prima parola.
+fn group_phrases(said: &[super::activity::LogLine], chars: usize) -> Vec<super::activity::LogLine> {
+    let mut out: Vec<super::activity::LogLine> = Vec::new();
+    let mut last_t = f64::MIN;
+    for l in said {
+        let t = crate::trascrizione::parse_clock(&l.1);
+        let join = out.last().is_some_and(|g| {
+            g.0 == l.0
+                && g.3 == l.3
+                && !g.2.ends_with(['.', '?', '!', '…'])
+                && g.2.chars().count() + 1 + l.2.chars().count() <= chars
+                && t.zip(Some(last_t)).is_none_or(|(t, p)| t - p <= 4.0)
+        });
+        if join {
+            let g = out.last_mut().expect("riga");
+            g.2.push(' ');
+            g.2.push_str(&l.2);
+        } else {
+            out.push(l.clone());
+        }
+        if let Some(t) = t {
+            last_t = t;
+        }
+    }
+    out
+}
+
 /// Il foglio della trascrizione: le frasi con chi parla mentre arrivano; in fondo lo stato, Rivedi e
 /// Riassunto AI quando il testo è pronto.
-fn paper_box(f: &mut Frame, app: &App, r: R) {
+pub(super) fn paper_box(f: &mut Frame, app: &App, r: R) {
     let pal = f.pal;
     let (deep, _) = colors(app);
     f.p.shadow(r.0, r.1, r.2, r.3, 12.0, 18.0, 0.4, 8.0);
     f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(pal.surface), None);
-    let st_h = 48.0;
+    let st_h = 64.0;
     let text = (r.0, r.1, r.2, r.3 - st_h);
     let lines = super::activity::transcribe_lines(app);
     let said: Vec<_> = lines.iter().filter(|l| l.3.is_some() || l.0 == crate::trascrizione::Tone::Speech).cloned().collect();
@@ -1040,7 +1261,15 @@ fn paper_box(f: &mut Frame, app: &App, r: R) {
         let ph = "Il testo compare qui mentre Cedro trascrive, con chi parla. A lavoro finito lo rivedi riascoltando i punti dubbi.";
         f.para(ph, r.0 + 22.0, r.1 + 18.0, r.2 - 44.0, 16.0, SANS, pal.muted, 1.6, 4);
     } else {
-        super::activity::log_box(f, (text.0 + 6.0, text.1 + 6.0, text.2 - 12.0, text.3 - 6.0), &said);
+        // Le parole arrivano una alla volta: si leggono raggruppate in frasi, quante ne stanno in una riga.
+        let chars = (((text.2 - 12.0 - 300.0) / 7.2) as usize).max(30);
+        let said = group_phrases(&said, chars);
+        // Mentre si riascolta il file che sta trascrivendo, la frase che suona è evidenziata (e seguita se suona).
+        let hot = selected(app).filter(|&i| app.files[i].state == FileState::Running).and_then(|i| app.player.as_ref().filter(|p| p.path == app.files[i].path)).and_then(|p| {
+            let pos = p.position();
+            said.iter().rposition(|l| crate::trascrizione::parse_clock(&l.1).is_some_and(|t| t <= pos + 0.05)).map(|k| (k, p.playing()))
+        });
+        super::activity::log_box(f, (text.0 + 6.0, text.1 + 6.0, text.2 - 12.0, text.3 - 6.0), &said, hot);
     }
     f.hline(r.0, r.1 + r.3 - st_h, r.2);
     let sy = r.1 + r.3 - st_h;
@@ -1055,21 +1284,23 @@ fn paper_box(f: &mut Frame, app: &App, r: R) {
         f.text(&key, x, sy, 200.0, st_h, 13.5, BOLD, deep);
         x += f.measure(&key, 13.5, BOLD) + 8.0;
     }
-    let right_w = 250.0;
-    f.text(&rest, x, sy, r.0 + r.2 - right_w - x, st_h, 13.5, SANS, pal.muted);
-    // Rivedi e Riassunto AI per il file scelto, se ha una trascrizione.
+    // Rivedi e Riassunto AI per il file scelto, se ha una trascrizione: grandi e colorati, si notano subito.
+    let mut right_w = 24.0;
     if let Some(i) = selected(app) {
         let file = &app.files[i];
         if matches!(file.state, FileState::Done | FileState::Waiting) && crate::revisione::has(&file.path) {
-            let ai_w = if cfg!(target_os = "android") { 0.0 } else { f.measure("Riassunto AI", 13.5, SEMI) + 38.0 };
-            let bx = r.0 + r.2 - 12.0 - ai_w;
+            let ai_w = if cfg!(target_os = "android") { 0.0 } else { f.measure("Riassunto AI", 15.5, SEMI) + 60.0 };
+            let (bh, by) = (44.0, sy + (st_h - 44.0) / 2.0);
+            let bx = r.0 + r.2 - 14.0 - ai_w;
             if ai_w > 0.0 {
-                super::activity::ai_button(f, (bx, sy + 8.0, ai_w, 32.0), 13.5, Act::SummaryOpen(i));
+                super::activity::ai_button(f, (bx, by, ai_w, bh), 15.5, Act::SummaryOpen(i));
             }
-            f.button((bx - 8.0 - 84.0, sy + 8.0, 84.0, 32.0), "Rivedi", None, 13.5, Act::ReviewOpen(i));
+            let rw = 124.0;
+            f.primary((bx - 10.0 - if ai_w > 0.0 { 0.0 } else { -ai_w } - rw, by, rw, bh), "Rivedi", Some(ic::AUDIO), 15.5, Act::ReviewOpen(i), true);
+            right_w = ai_w + rw + 10.0 + 28.0;
         }
     }
-    f.tool(r.0 + r.2 - 12.0 - 90.0 - if selected(app).is_some_and(|i| crate::revisione::has(&app.files[i].path)) { 260.0 } else { 0.0 }, sy + 8.0, 32.0, "Copia", ic::COPY, 13.5, Act::CopyLog, !lines.is_empty());
+    f.text(&rest, x, sy, (r.0 + r.2 - right_w - x).max(40.0), st_h, 13.5, SANS, pal.muted);
 }
 
 fn transcribe_panel(f: &mut Frame, app: &App, r: R) {
@@ -1096,8 +1327,8 @@ fn transcribe_panel(f: &mut Frame, app: &App, r: R) {
         }
         cy += f.para("Il modello si scarica al primo uso e poi resta sul PC.", x, cy + 2.0, w, 14.0, SANS, pal.muted, 1.4, 2) + 14.0;
         if app.busy() && app.activity == Activity::Transcribe {
-            super::activity::transcribe_progress(f, app, (x, cy, w, super::activity::PROGRESS_H));
-            cy += super::activity::PROGRESS_H + 14.0;
+            super::activity::transcribe_progress(f, app, (x, cy, w, super::activity::PROGRESS_H_CEDRO));
+            cy += super::activity::PROGRESS_H_CEDRO + 14.0;
         }
         cy - top + 18.0
     });
@@ -1225,30 +1456,25 @@ fn video_panel(f: &mut Frame, app: &App, r: R) {
         }
         cy += label(f, "Salva come", x, cy, w);
         let formats: Vec<_> = l.formats().iter().enumerate().map(|(k, s)| (s.to_uppercase(), deep, k == l.format, Act::LinkPick(false, LinkMenu::Format, k))).collect();
-        cy += chips(f, x, cy, w, &formats) + 18.0;
+        cy += chips_plain(f, x, cy, w, &formats) + 18.0;
         cy += label(f, "Qualità", x, cy, w);
         let qualities = if l.audio { AUDIO_QUALITY } else { VIDEO_QUALITY };
-        let q: Vec<_> = qualities.iter().enumerate().map(|(k, s)| (s.0.to_string(), deep, k == l.quality, Act::LinkPick(false, LinkMenu::Quality, k))).collect();
-        cy += chips(f, x, cy, w, &q) + 18.0;
+        cy += quality_tiles(f, l, qualities, x, cy, w, deep) + 18.0;
         if !l.audio {
             f.text("Sottotitoli", x, cy, 120.0, 40.0, 15.0, SEMI, pal.text);
             f.select((x + 126.0, cy, w - 126.0, 40.0), SUBTITLES.get(l.subtitles).map(|s| s.0).unwrap_or(""), None, 14.5, Act::LinkMenu(false, LinkMenu::Subtitles));
-            cy += 40.0 + 16.0;
+            cy += 40.0 + 18.0;
         }
-        let mut flags: Vec<(&str, &str, bool, LinkFlag)> = vec![
-            ("Copertina nel file", "", l.thumbnail, LinkFlag::Thumbnail),
-            ("Capitoli e descrizione nel file", "", l.chapters, LinkFlag::Chapters),
-            ("Dividi per capitoli", "Un file per capitolo", l.split_chapters, LinkFlag::Split),
-            ("Salta le parti sponsorizzate", "Vale per i link di YouTube", l.skip_sponsors, LinkFlag::Sponsors),
-        ];
+        // Gli interruttori in tre gruppi, ognuno con il suo titolo.
+        let mut inside: Vec<(&str, &str, bool, LinkFlag)> = vec![("Copertina nel file", "", l.thumbnail, LinkFlag::Thumbnail), ("Capitoli e descrizione nel file", "", l.chapters, LinkFlag::Chapters)];
         if l.audio {
-            flags.push(("Livella il volume", "", l.normalize, LinkFlag::Normalize));
+            inside.push(("Livella il volume", "", l.normalize, LinkFlag::Normalize));
         }
-        flags.push(("Playlist e raccolte: scarica tutto", "", l.playlist, LinkFlag::Playlist));
-        flags.push(("Salta i già scaricati", "", l.skip_existing, LinkFlag::SkipExisting));
-        for (title, note, on, which) in flags {
-            cy += switch_row(f, x, cy, w, title, note, on, Act::LinkFlag(false, which));
-        }
+        let how = [("Dividi per capitoli", "Un file per capitolo", l.split_chapters, LinkFlag::Split), ("Salta le parti sponsorizzate", "Vale per i link di YouTube", l.skip_sponsors, LinkFlag::Sponsors)];
+        let lists = [("Playlist e raccolte: scarica tutto", "", l.playlist, LinkFlag::Playlist), ("Salta i già scaricati", "", l.skip_existing, LinkFlag::SkipExisting)];
+        cy += switch_group(f, x, cy, w, "Dentro il file", (30, 138, 85), &inside) + 12.0;
+        cy += switch_group(f, x, cy, w, "Come lo salva", (212, 87, 14), &how) + 12.0;
+        cy += switch_group(f, x, cy, w, "Playlist e raccolte", (122, 63, 200), &lists);
         cy - top + 18.0
     });
     // Il piede: la cartella dei download (non quella delle conversioni) e il pulsante.
@@ -1315,22 +1541,95 @@ fn link_go(f: &mut Frame, app: &App, r: R, deep: Rgb) {
     f.p.text(&label, x + 38.0, r.1, tw + 4.0, r.3, 19.0, BOLD, WHITE, Align::Left);
 }
 
-/// Un interruttore con il suo nome e una riga che spiega. Restituisce l'altezza.
-#[allow(clippy::too_many_arguments)]
-fn switch_row(f: &mut Frame, x: f32, y: f32, w: f32, title: &str, note: &str, on: bool, act: Act) -> f32 {
+/// La qualità in tessere due per riga: il nome grande e sotto la nota; «consigliata» in evidenza.
+fn quality_tiles(f: &mut Frame, l: &crate::ui::model::Links, list: &[(&str, u32)], x: f32, y: f32, w: f32, deep: Rgb) -> f32 {
     let pal = f.pal;
-    let h = if note.is_empty() { 46.0 } else { 58.0 };
+    let c = f.lift(deep);
+    let (gap, h) = (7.0, 54.0);
+    let cw = ((w - gap) / 2.0).floor();
+    let mut end = y;
+    for (k, (name, _)) in list.iter().enumerate() {
+        let (title, note) = name.split_once(" · ").unwrap_or((name, ""));
+        let rec = note.starts_with("consigliat");
+        let b = (x + (k % 2) as f32 * (cw + gap), y + (k / 2) as f32 * (h + gap), cw, h);
+        end = b.1 + h;
+        let on = k == l.quality;
+        let act = Act::LinkPick(false, LinkMenu::Quality, k);
+        let hot = f.hover_t(&act, !on);
+        if on {
+            f.p.rrect(b.0, b.1, b.2, b.3, 12.0, Some(mix(c, pal.surface, 0.9)), Some((c, 1.6)));
+        } else {
+            f.p.rrect(b.0, b.1, b.2, b.3, 12.0, Some(pal.surface), Some((mix(pal.border, c, 0.55 * hot), 1.5)));
+        }
+        let ink = if on { mix(c, pal.text, 0.35) } else { pal.text };
+        let two = !note.is_empty();
+        f.p.text(&crate::i18n::tr(title), b.0 + 12.0, b.1 + if two { 7.0 } else { 0.0 }, cw - 20.0, if two { 22.0 } else { h }, 14.5, BOLD, ink, Align::Left);
+        if rec {
+            let t = crate::i18n::tr("consigliata");
+            let tw = f.measure(&t, 11.5, BOLD);
+            f.p.rrect(b.0 + 12.0, b.1 + 30.0, tw + 14.0, 17.0, 6.0, Some(c), None);
+            f.p.text(&t, b.0 + 19.0, b.1 + 30.0, tw + 4.0, 17.0, 11.5, BOLD, WHITE, Align::Left);
+        } else if two {
+            f.p.text(&crate::i18n::tr(note), b.0 + 12.0, b.1 + 29.0, cw - 20.0, 18.0, 12.5, SANS, pal.muted, Align::Left);
+        }
+        f.focus_ring(b, 12.0, &act);
+        f.hit(b, act);
+    }
+    end - y
+}
+
+/// Un gruppo di interruttori con il suo titolo su una fascia e le righe dentro un riquadro.
+fn switch_group(f: &mut Frame, x: f32, y: f32, w: f32, title: &str, color: Rgb, rows: &[(&str, &str, bool, LinkFlag)]) -> f32 {
+    let pal = f.pal;
+    let c = f.lift(color);
+    let head = 30.0;
+    let body: f32 = rows.iter().map(|r| switch_h(f, r.0, r.1, w - 28.0)).sum();
+    let h = head + body;
+    f.p.rrect(x, y, w, h, 14.0, Some(pal.surface), Some((pal.border, 1.5)));
+    f.p.push_clip(x, y, w, head);
+    f.p.rrect(x, y, w, h, 14.0, Some(pal.alt), Some((pal.border, 1.5)));
+    f.p.pop_clip();
+    f.p.circle(x + 16.0, y + head / 2.0, 4.0, Some(c), None);
+    f.p.text(&crate::i18n::tr(title).to_uppercase(), x + 28.0, y, w - 40.0, head, 12.5, BOLD, pal.muted, Align::Left);
+    let mut cy = y + head;
+    for (t, n, on, which) in rows {
+        f.hline(x, cy, w);
+        cy += switch_row_ex(f, x + 14.0, cy, w - 28.0, t, n, *on, Act::LinkFlag(false, *which), false);
+    }
+    h
+}
+
+/// Un interruttore con il suo nome e una riga che spiega; `line` dice se sotto ci va il filo.
+#[allow(clippy::too_many_arguments)]
+fn switch_row_ex(f: &mut Frame, x: f32, y: f32, w: f32, title: &str, note: &str, on: bool, act: Act, line: bool) -> f32 {
+    let pal = f.pal;
     let tw = w - 68.0;
-    if note.is_empty() {
-        f.text(title, x, y, tw, h, 15.0, SEMI, pal.text);
-    } else {
-        f.text(title, x, y + 6.0, tw, 24.0, 15.0, SEMI, pal.text);
-        f.text(note, x, y + 30.0, tw, 20.0, 13.0, SANS, pal.muted);
+    let lines = f.p.wrap_lines(&crate::i18n::tr(title), 15.0, SEMI, tw, 2);
+    let h = switch_h(f, title, note, w);
+    let text_h = lines.len() as f32 * 20.0;
+    let top = if note.is_empty() { y + (h - text_h) / 2.0 } else { y + 6.0 };
+    for (i, l) in lines.iter().enumerate() {
+        f.p.text(l, x, top + i as f32 * 20.0, tw, 20.0, 15.0, SEMI, pal.text, Align::Left);
+    }
+    if !note.is_empty() {
+        f.text(note, x, top + text_h + 2.0, tw, 20.0, 13.0, SANS, pal.muted);
     }
     f.switch(x + w - 52.0, y + (h - 28.0) / 2.0, 52.0, 28.0, on, act.clone(), None);
     f.hit((x, y, w - 60.0, h), act);
-    f.p.fill_a(x, y + h, w, 1.0, pal.border, 1.0);
-    h + 1.0
+    if line {
+        f.p.fill_a(x, y + h, w, 1.0, pal.border, 1.0);
+    }
+    h + if line { 1.0 } else { 0.0 }
+}
+
+/// L'altezza di una riga con interruttore: il titolo può andare a capo su due righe.
+fn switch_h(f: &mut Frame, title: &str, note: &str, w: f32) -> f32 {
+    let n = f.p.wrap_lines(&crate::i18n::tr(title), 15.0, SEMI, w - 68.0, 2).len().max(1) as f32;
+    if note.is_empty() {
+        (n * 20.0 + 26.0).max(46.0)
+    } else {
+        n * 20.0 + 38.0
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
