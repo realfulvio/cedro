@@ -1,6 +1,6 @@
 //! Il foglio A usa le stesse azioni della ruota e conserva anche ZIP multipli, firme e link.
 use super::*;
-use super::casa::telefono::{altezza_a, testo_a};
+use super::casa::telefono::{altezza_a, misure_azione_a, testo_a};
 
 impl App {
     pub(super) fn foglio_a(&mut self, p: &mut Painter, w: f32, h: f32) {
@@ -14,8 +14,14 @@ impl App {
         let th = altezza_a(p, title, 23.0, Weight::Bold, w - 88.0, 27.0, 0).max(48.0);
         testo_a(p, title, 16.0, top + 26.0, w - 88.0, 23.0, Weight::Bold, pal.text, 27.0, 0);
         self.bottone_icona(p, (w - 64.0, top + 22.0, 48.0, 48.0), ic::CLOSE, Azione::Esci);
+        let testo = if self.foglio {
+            self.righe_ora().get(self.tessera).map(|r| if r.conv { format!("Crea {}", cedro::i18n::tr(r.titolo)) } else { cedro::i18n::tr(r.titolo).into_owned() })
+        } else {
+            self.scelta.and_then(|i| self.fette().get(i).copied()).map(|f| if self.modo == 0 && f.id != "trascrivi" { format!("Crea {}", cedro::i18n::tr(f.label)) } else { cedro::i18n::tr(f.label).into_owned() })
+        };
+        let piede = misure_azione_a(p, w, testo.as_deref().unwrap_or("Scegli uno strumento")).1;
         let vy = top + 32.0 + th;
-        let vista = (0.0, vy, w, (h - vy - 76.0).max(1.0));
+        let vista = (0.0, vy, w, (h - vy - piede).max(1.0));
         p.push_clip(vista.0, vista.1, vista.2, vista.3);
         let x = 16.0;
         let cw = w - 32.0;
@@ -85,11 +91,6 @@ impl App {
         self.scorri_max = (y + self.scorri - (vista.1 + vista.3)).max(0.0);
         self.scorri = self.scorri.min(self.scorri_max);
         // L'etichetta ed il dispatch restano quelli del lavoro realmente selezionato.
-        let testo = if self.foglio {
-            self.righe_ora().get(self.tessera).map(|r| if r.conv { format!("Crea {}", cedro::i18n::tr(r.titolo)) } else { cedro::i18n::tr(r.titolo).into_owned() })
-        } else {
-            self.scelta.and_then(|i| self.fette().get(i).copied()).map(|f| if self.modo == 0 && f.id != "trascrivi" { format!("Crea {}", cedro::i18n::tr(f.label)) } else { cedro::i18n::tr(f.label).into_owned() })
-        };
         self.azione_fissa_a(p, w, h, testo.as_deref().unwrap_or("Scegli uno strumento"), testo.is_some(), Azione::Vai);
     }
 }
