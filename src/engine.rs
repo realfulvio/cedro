@@ -790,6 +790,7 @@ pub fn perform_into(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
 
 /// Cosa fare quando il file di uscita esiste già.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub enum Exists {
     /// Aggiunge -2, -3… al nome.
     #[default]
@@ -834,6 +835,7 @@ impl std::fmt::Debug for ExistsAsk {
 
 /// Le pagine scelte di un PDF, come si scrivono: `1-3,5` o `4-` (dalla 4 alla fine).
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct PageSel(Vec<(usize, usize)>);
 
 impl PageSel {
@@ -877,6 +879,7 @@ fn pages_of(sel: &Option<PageSel>, total: usize) -> Vec<usize> {
 
 /// Formato della pagina per i documenti convertiti in PDF.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub enum PageSize {
     A4,
     A3,
@@ -885,6 +888,7 @@ pub enum PageSize {
 
 /// Codifica dei file di testo scritti.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub enum Encoding {
     Utf8,
     Windows1252,
@@ -893,6 +897,7 @@ pub enum Encoding {
 
 /// Opzioni extra del pannello Conversioni. `Default` = il comportamento di sempre.
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Options {
     /// PDF in immagini: risoluzione delle pagine in dpi (di norma 144).
     pub dpi: Option<u32>,
@@ -905,6 +910,7 @@ pub struct Options {
     /// Cosa fare se il nome di uscita esiste già.
     pub exists: Exists,
     /// Chi risponde con `Exists::Ask`.
+    #[cfg_attr(feature = "android-worker", serde(skip))]
     pub on_exists: Option<ExistsAsk>,
     /// Documenti in PDF: formato della pagina.
     pub page_size: PageSize,
@@ -1003,6 +1009,7 @@ pub struct Options {
 
 /// Le scelte per le pagine di un PDF e per comprimerlo.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct PdfEdit {
     /// Le pagine che restano (da 1), nell'ordine, con la rotazione in gradi; vuoto = tutte com'erano.
     pub pages: Vec<(u32, i32)>,
@@ -1016,6 +1023,7 @@ pub struct PdfEdit {
 
 /// Le scelte per unire e dividere i PDF.
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct PdfPages {
     pub settings: crate::pdfpages::Settings,
     /// La password per aprire i PDF protetti.
