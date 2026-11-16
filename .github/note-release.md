@@ -11,11 +11,12 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro 4 Labs conosce il caso su cui lavori e tiene l'elenco di quello che hai fatto.**
+**Trascrivi con la traccia audio a tutto schermo.**
 
-- In alto, accanto al nome, «+ Caso o campione»: scrivi il codice (per esempio V-2026-0457) e, se vuoi, una nota per te. Finché non lo togli, ogni file che Cedro scrive si chiama «data, caso, nome»: `2026-11-13_V-2026-0457_vetrino`. Senza caso i nomi restano quelli di sempre. La nota non entra mai nei nomi.
-- Il caso resta anche dopo aver chiuso Cedro, finché non lo togli.
-- «Lavori», in alto a destra, apre l'elenco di quello che è uscito oggi: ora, cosa hai fatto, caso e nomi dei file. «Copia per il quaderno» mette negli appunti il caso e i nomi, uno per riga, pronti da incollare. L'elenco sta solo su questo computer.
-- Nel modello dei nomi si può scrivere anche `%caso%`.
-- Anche da riga di comando: `cedro --caso V-2026-0457 convert vetrino.svs png`. Senza `--caso` vale il caso scelto nell'app, con `--senza-caso` i nomi restano quelli di sempre.
-- Nell'elenco dei lavori l'ora è giusta anche per i lavori fatti prima del cambio tra ora solare e legale (su Windows).
+- Mentre Cedro trascrive, l'onda sonora occupa tutto il centro e la parte già trascritta si colora. Sotto ci sono i comandi per riascoltare: Play e Pausa, 10 secondi indietro e avanti, frase prima e dopo, un clic sull'onda per spostarti, velocità (0,75×, 1×, 1,5×, 2×) e volume.
+- Tre viste sempre a un clic: solo onda, onda e testo, solo testo. La frase che senti è evidenziata nel testo e il testo la segue.
+- Il testo che si trascrive ha una barra di scorrimento ben visibile e le parole arrivano raggruppate in frasi, una per riga.
+- «Rivedi» e «Riassunto AI» sono più grandi e colorati.
+- Il pannello di destra si allarga e si stringe trascinando il bordo (doppio clic per tornare alla misura di base) e Cedro ricorda la larghezza.
+- La scheda video si legge una volta sola, in alto; sotto il pulsante una riga dice cosa sta facendo Cedro («Trascrive · file 1 di 7»).
+- Provato su Windows con una trascrizione vera e sullo schermo di Linux.
