@@ -285,6 +285,7 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
 
 /// Le scelte delle tessere.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tessere {
     /// Il lato di una tessera in pixel (256 o 512).
     pub lato: u32,

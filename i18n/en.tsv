@@ -2532,3 +2532,42 @@ Crea {}	Create {}
 Uso quotidiano	Everyday use
 Alta efficienza	High efficiency
 Grafica e scambio	Graphics and interchange
+
+# Android: importazione, lavori e recupero dei risultati
+Importazione	Import
+File importati	Files imported
+Importazione interrotta	Import interrupted
+Annullamento…	Cancelling…
+Da salvare	Needs saving
+Copia in Cedro	Copy in Cedro
+Salvataggio incompleto: copie disponibili in Cedro	Saving incomplete: copies available in Cedro
+Pubblicazione annullata: le copie complete restano in Cedro	Publishing cancelled: complete copies remain in Cedro
+Interrotto dalla chiusura di Cedro: avvia di nuovo il lavoro	Interrupted when Cedro closed: start the job again
+Il motore si è interrotto	The engine stopped unexpectedly
+Risultati recuperati: salvali o condividili	Recovered results: save or share them
+Recuperato dopo un’interruzione	Recovered after an interruption
+Riassunto pronto in Rivedi	Summary ready in Review
+Riassunto non leggibile	Summary cannot be read
+Spazio insufficiente per importare il file	Not enough space to import the file
+File non disponibile: sceglilo di nuovo	File unavailable: select it again
+Cartella troppo annidata	Folder nesting is too deep
+Impossibile aprire il file condiviso	Cannot open the shared file
+Descriptor SAF non valido	Invalid SAF descriptor
+Indirizzo SAF assente	Missing SAF address
+Cartella SAF senza identificatore	SAF folder has no identifier
+Cartella assente	Folder missing
+Nome duplicato nella cartella: {nome}	Duplicate name in folder: {nome}
+Risultato fuori dalla cartella del lavoro	Result outside the job folder
+Il motore non è in questo APK	The engine is not included in this APK
+Il motore non parte: {e}	The engine cannot start: {e}
+Troppe opzioni per il lavoro	Too many options for the job
+Canale del motore non disponibile	Engine channel unavailable
+Risposta del motore non disponibile	Engine response unavailable
+MediaStore non ha completato il salvataggio	MediaStore did not complete saving
+Nessun file scelto	No file selected
+File non leggibile	File cannot be read
+File troppo grande	File too large
+Aspetto che finisca l’altro lavoro…	Waiting for the other job to finish…
+Memoria insufficiente per verificare il file originale	Not enough memory to verify the original file
+Il provider richiede una copia · spazio disponibile: {spazio}	The provider requires a copy · available space: {spazio}
+Copia privata · spazio disponibile: {spazio}	Private copy · available space: {spazio}

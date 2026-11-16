@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 
 /// Come si costruisce il PDF nuovo.
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Settings {
     /// Un segnalibro per ogni file di partenza, con il suo nome.
     pub file_bookmarks: bool,
@@ -712,6 +713,7 @@ pub fn top_bookmarks(doc: &Document) -> Vec<(u32, String)> {
 
 /// Come dividere un PDF.
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub enum Plan {
     /// Un file per pagina.
     EveryPage,

@@ -21,6 +21,14 @@ public class ArchiviProvider extends ContentProvider {
     private static final String RADICE = "/storage/emulated/0/Documents/";
 
     private File file(Uri uri) throws FileNotFoundException {
+        if (uri.getPath() != null && uri.getPath().startsWith("/privati/")) {
+            try {
+                File root = new File(getContext().getFilesDir(), "uscite").getCanonicalFile();
+                File f = new File(root, uri.getPath().substring("/privati/".length())).getCanonicalFile();
+                if (!f.getPath().startsWith(root.getPath() + "/") || !f.isFile()) throw new FileNotFoundException();
+                return f;
+            } catch (java.io.IOException e) { throw new FileNotFoundException(uri.toString()); }
+        }
         // Niente getCanonicalFile(): /storage/emulated/0 è un collegamento e il percorso «vero» non comincia più per
         // RADICE (il file risultava non trovato e Telegram non inviava niente). Si normalizza e basta (toglie «..»).
         String voluto = "/storage/emulated/0" + uri.getPath();
@@ -54,6 +62,7 @@ public class ArchiviProvider extends ContentProvider {
     }
 
     @Override public ParcelFileDescriptor openFile(Uri uri, String modo) throws FileNotFoundException {
+        if (!"r".equals(modo)) throw new FileNotFoundException("Sola lettura");
         return ParcelFileDescriptor.open(file(uri), ParcelFileDescriptor.MODE_READ_ONLY);
     }
 
