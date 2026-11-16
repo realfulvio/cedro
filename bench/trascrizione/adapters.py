@@ -11,15 +11,28 @@ BUZZ = os.environ.get("BUZZ", "buzz")
 MODELLI = Path(os.environ.get("MODELLI_GGML", str(Path.home() / "modelli-ggml")))
 
 
+def ripulisci_cedro(t):
+    """Toglie da un file di Cedro (`--testo`) titolo, riga «Trascrizione del … di audio», marche di tempo e «Interlocutore N:»: resta il parlato.
+    Senza questo il WER di Cedro include parole che non sono trascrizione (intestazione) e le allucinazioni (A3) contano la riga di intestazione.
+    Idempotente: su testo già pulito non cambia nulla."""
+    righe = t.splitlines()
+    for i, r in enumerate(righe[:4]):
+        if re.match(r"^Trascrizione del .* di audio", r):
+            righe = righe[i + 1:]; break
+    return "\n".join(re.sub(r"^\[\d+:\d\d(?::\d\d)?\]\s*(?:Interlocutore \d+:\s*)?", "", r) for r in righe).strip()
+
+
 class Cedro:
     def __init__(self, livello="buona"):
         self.livello = livello; self.nome = f"cedro-{livello}"
     def comando(self, wav, outdir, gpu):
         return [CEDRO, "trascrivi", str(wav), "--testo", "--precisione", self.livello, "--voci", "1"] + ([] if gpu else ["--cpu"])
-    def leggi(self, wav, outdir, stdout):
-        # «OK <ingresso> -> <uscita> (messaggio)»: il testo è nel file di uscita
+    def grezzo(self, wav, outdir, stdout):
+        # «OK <ingresso> -> <uscita> (messaggio)»: il testo è nel file di uscita (con titolo, intestazione e marche di tempo)
         m = re.search(r"^OK .* -> (.+?) \(", stdout, re.M)
         return Path(m.group(1)).read_text(errors="replace") if m else ""
+    def leggi(self, wav, outdir, stdout):
+        return ripulisci_cedro(self.grezzo(wav, outdir, stdout))
 
 
 class WhisperCpp:
@@ -33,13 +46,28 @@ class WhisperCpp:
 
 
 class FasterWhisper:
-    """faster-whisper (CTranslate2): è anche il motore «Faster Whisper» di Buzz. Riferimento forte non quantizzato."""
+    """faster-whisper (CTranslate2): è anche il motore «Faster Whisper» di Buzz. Riferimento forte non quantizzato.
+    Decodifica l'audio con ffmpeg (il PyAV di faster-whisper 1.2.1 su Python 3.14 non parte: `open() got an unexpected keyword argument 'metadata_errors'`)."""
     def __init__(self, modello="large-v3", tipo="float16"):
         self.modello, self.tipo = modello, tipo; self.nome = f"faster-whisper-{modello}-{tipo}"
     def comando(self, wav, outdir, gpu):
         sc = Path(__file__).with_name("fw_run.py")
         return [os.environ.get("PYFW", "python3"), str(sc), self.modello, self.tipo, "cpu", str(wav)]   # AMD: niente CUDA, solo CPU
     def leggi(self, wav, outdir, stdout): return stdout
+    def batch(self, wavs):
+        """Per la sola misura di WER: il modello si carica una volta sola. Ritorna [(testo, secondi di decodifica+trascrizione, errore)]."""
+        import time, sys
+        sys.path.insert(0, str(Path(__file__).parent))
+        from fw_run import carica_audio
+        from faster_whisper import WhisperModel
+        m = WhisperModel(self.modello, device="cpu", compute_type=self.tipo)
+        for w in wavs:
+            t0 = time.time()
+            try:
+                seg, _ = m.transcribe(carica_audio(str(w)), language="it", vad_filter=False, beam_size=5)
+                yield " ".join(x.text.strip() for x in seg), time.time() - t0, ""
+            except Exception as e:   # un file che non si legge non deve fermare le altre 199 clip
+                yield "", time.time() - t0, repr(e)[:300]
 
 
 class Buzz:
