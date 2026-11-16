@@ -133,3 +133,13 @@ cargo run --release -p cedro-android --example vista_a -- /tmp/vista-a-task3-rou
 ```
 
 Restano i gate runtime/build/APK/corpus già elencati, inclusa cancellazione reale del process group sul Mi9T. La review indipendente del delta e l'ispezione dei PNG IT/DE/PT devono ancora avvenire.
+
+### Round1 — fixture DICOM dopo esecuzione host f49241e
+
+Il controller ha completato `cargo test --release -p cedro-android --lib -j2` su f49241e: **25/26 riusciti**, compilazione9m58s, test0,92s. Il test float del Task1 è riuscito. Unico fallimento `labs::tests::anteprima_dicom_cambia_frame_e_finestra` alla seconda comparazione (finestra): immagini identiche. Sintesi locale letta: `host-f49241e-test-sintesi.log`; il log remoto pieno non è stato letto perché il vecchio assert stampava i buffer interi. Questi risultati precedono tutti i fix del round1.
+
+Causa verificata sul sorgente: `src/dicom/pixel.rs::effective_window` applica i preset TC solo con Modality CT o intercept non nullo. La fixture originale era senza entrambi; il core manteneva correttamente la finestra del file, quindi il test chiedeva una differenza che il suo input non consentiva. Il cambio frame era già riuscito.
+
+Correzione limitata alla fixture: Modality CT, intercept−1024, slope1, valori memorizzati0..4032 (HU−1024..3008), finestra del file40/400. I due frame rimangono rampe orizzontale/verticale. Il test verifica le finestre effettive file(40,400), Osso(400,1800), auto(992,4032); frame distinguibili anche con due campioni nero/bianco; output Osso uguale al render condiviso del preset; sia file sia Osso diversi dall'auto-window. Nessuna modifica al motore o al comportamento clinico. Assert sui buffer ora booleani con messaggio breve; anche il nuovo test pixel del timestamp usa un assert compatto.
+
+Parsing statico dei27 sorgenti e `git diff --check`: riusciti. **Test corretto NON ESEGUITO** da questo agente. Il controller deve eseguire la suite intera sul nuovo HEAD; mirato: `cargo test --release -p cedro-android --lib anteprima_dicom_cambia_frame_e_finestra -j2`. La fixture modificata alimenta anche la scena DICOM del renderer.
