@@ -19,6 +19,7 @@ pub mod scrivi_doc;
 
 /// Le scelte del pannello per i documenti d'ufficio (i valori sono quelli del pannello).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Scelte {
     /// La carta: `None` quella del file.
     pub carta: Option<crate::engine::PageSize>,

@@ -2520,3 +2520,42 @@ Crea {}	{} erstellen
 Uso quotidiano	Für jeden Tag
 Alta efficienza	Hohe Effizienz
 Grafica e scambio	Grafik und Austausch
+
+# Android: importazione, lavori e recupero dei risultati
+Importazione	Importieren
+File importati	Dateien importiert
+Importazione interrotta	Import unterbrochen
+Annullamento…	Wird abgebrochen…
+Da salvare	Noch zu speichern
+Copia in Cedro	Kopie in Cedro
+Salvataggio incompleto: copie disponibili in Cedro	Speichern unvollständig: Kopien in Cedro verfügbar
+Pubblicazione annullata: le copie complete restano in Cedro	Veröffentlichung abgebrochen: vollständige Kopien bleiben in Cedro
+Interrotto dalla chiusura di Cedro: avvia di nuovo il lavoro	Durch Schließen von Cedro unterbrochen: Auftrag erneut starten
+Il motore si è interrotto	Die Verarbeitung wurde unterbrochen
+Risultati recuperati: salvali o condividili	Wiederhergestellte Ergebnisse: speichern oder teilen
+Recuperato dopo un’interruzione	Nach Unterbrechung wiederhergestellt
+Riassunto pronto in Rivedi	Zusammenfassung unter Prüfen bereit
+Riassunto non leggibile	Zusammenfassung nicht lesbar
+Spazio insufficiente per importare il file	Nicht genug Speicherplatz zum Importieren
+File non disponibile: sceglilo di nuovo	Datei nicht verfügbar: erneut auswählen
+Cartella troppo annidata	Ordnerstruktur zu tief verschachtelt
+Impossibile aprire il file condiviso	Geteilte Datei lässt sich nicht öffnen
+Descriptor SAF non valido	Ungültiger SAF-Deskriptor
+Indirizzo SAF assente	SAF-Adresse fehlt
+Cartella SAF senza identificatore	SAF-Ordner ohne Kennung
+Cartella assente	Ordner fehlt
+Nome duplicato nella cartella: {nome}	Doppelter Name im Ordner: {nome}
+Risultato fuori dalla cartella del lavoro	Ergebnis außerhalb des Auftragsordners
+Il motore non è in questo APK	Die Verarbeitungskomponente fehlt in diesem APK
+Il motore non parte: {e}	Die Verarbeitung startet nicht: {e}
+Troppe opzioni per il lavoro	Zu viele Optionen für den Auftrag
+Canale del motore non disponibile	Verarbeitungskanal nicht verfügbar
+Risposta del motore non disponibile	Antwort der Verarbeitung nicht verfügbar
+MediaStore non ha completato il salvataggio	MediaStore hat das Speichern nicht abgeschlossen
+Nessun file scelto	Keine Datei ausgewählt
+File non leggibile	Datei nicht lesbar
+File troppo grande	Datei zu groß
+Aspetto che finisca l’altro lavoro…	Warte auf den Abschluss des anderen Auftrags…
+Memoria insufficiente per verificare il file originale	Nicht genug Arbeitsspeicher zur Prüfung der Originaldatei
+Il provider richiede una copia · spazio disponibile: {spazio}	Der Anbieter erfordert eine Kopie · verfügbarer Speicher: {spazio}
+Copia privata · spazio disponibile: {spazio}	Private Kopie · verfügbarer Speicher: {spazio}
