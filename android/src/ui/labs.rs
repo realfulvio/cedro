@@ -328,7 +328,7 @@ mod tests {
         a.lavori[0].quando=adesso()-864000;
         let mut p=Painter::new(360,900,1.0,Fonts::for_theme(a.tema),&mut cache);p.larger=true;
         let dopo=a.scheda_lavoro(&mut p,0,16.0,0.0,328.0,(0.0,0.0,360.0,900.0));
-        assert_eq!(h,dopo);assert_ne!(prima,p.pixmap.data());
+        assert_eq!(h,dopo);assert!(prima.as_slice()!=p.pixmap.data(),"il riferimento temporale deve cambiare i pixel");
         let msg=match &a.lavori[0].stato{Stato::Fatto{msg,..}=>msg,_=>unreachable!()};
         let note=altezza_a(&p,&quando(a.lavori[0].quando),13.0,Weight::Regular,300.0,19.0,0)+6.0+altezza_a(&p,msg,13.0,Weight::Regular,300.0,19.0,0)+6.0;
         let mut azioni=0;
