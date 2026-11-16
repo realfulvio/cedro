@@ -49,7 +49,7 @@ Sei un laboratorio biotech, veterinario o di ricerca? C'è anche **[Cedro 4 Labs
   <img src="docs/v4/tinte.webp" width="49%" alt="Le quattro tinte di Cedro: Cedro, Notte, Bosco e Carta">
 </p>
 
-Dalla 0.44 l'aspetto predefinito è il nuovo **Cedro** a pagine, con quattro tinte (Cedro, Notte, Bosco, Carta) e la vista **Semplice** o **Completa** a un clic. I cinque aspetti precedenti, compreso quello del **Comune di Bondeno**, restano in *Impostazioni › Aspetto*.
+Sul **desktop Windows e Linux**, *Impostazioni › Aspetto* offre solo **Cedro Melanzana, Cedro Notte, Cedro Bosco, Cedro Carta e Cedro for Labs**, con la vista **Semplice** o **Completa** a un clic. Le preferenze dei temi ritirati, compreso **Comune di Bondeno** e la sua vecchia edizione, passano automaticamente a **Melanzana**, conservando qualità, vista e le altre impostazioni. **Android mantiene i suoi temi precedenti**: questa riduzione riguarda il desktop.
 
 ## Scarica e installa
 

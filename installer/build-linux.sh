@@ -3,7 +3,7 @@
 # Uso:  installer/build-linux.sh [-o dist] [-b]
 # Con -b crea anche la copia per chi ha ancora la vecchia edizione Comune di Bondeno (che cerca solo
 # dist/cedro-bondeno-<versione>-linux-x64.tar.gz per aggiornarsi): stesso programma, più il file «da-bondeno»,
-# che fa accendere il tema Bondeno al primo avvio. Il Comune ora è un tema di Cedro.
+# che migra a Melanzana al primo avvio, conservando vista e altre preferenze.
 # Il motore di trascrizione si compila a parte con trascrivi/build.sh: i suoi file vanno nella stessa
 # release, perché Cedro li scarica alla prima trascrizione.
 # Per provare lo script senza compilare in release: CEDRO_BIN=target/debug/cedro installer/build-linux.sh
@@ -29,7 +29,7 @@ licenses="$out/Licenze di terze parti.txt"
 cargo run --release --example licenze -- "$licenses"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
-# Crea dist/<prefisso>-<versione>-linux-x64.tar.gz; con "da-bondeno" il pacchetto lascia il file che accende il tema Bondeno.
+# Crea dist/<prefisso>-<versione>-linux-x64.tar.gz; "da-bondeno" richiede la migrazione a Melanzana.
 pack() {
   local prefix=$1 marker=$2
   local name="$prefix-$version-linux-x64"

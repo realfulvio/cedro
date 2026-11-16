@@ -45,6 +45,7 @@ pub struct Aspetto {
 impl Aspetto {
     /// `wake` chiede alla finestra di ridisegnarsi quando un'anteprima è pronta.
     pub fn new(theme: ThemeId, simple: bool, wake: Arc<dyn Fn() + Send + Sync>) -> Aspetto {
+        let theme = ThemeId::from_key(theme.key());
         let thumbs: Thumbs = Arc::new(Mutex::new(HashMap::new()));
         let t = thumbs.clone();
         std::thread::spawn(move || {

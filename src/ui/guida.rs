@@ -111,9 +111,9 @@ const PAGES: [Page; 8] = [
     Page {
         nav: "Aspetto",
         title: "La finestra come la vuoi tu",
-        intro: "In Impostazioni, Aspetto: le tinte di Cedro e i temi di prima, la vista Semplice (solo l'essenziale) o Completa (tutti i comandi) e i caratteri più grandi. Ogni tema ha il suo carattere. Questa Guida cambia insieme a loro.",
+        intro: "In Impostazioni, Aspetto: Cedro Melanzana, Notte, Bosco, Carta e Cedro for Labs, la vista Semplice (solo l'essenziale) o Completa (tutti i comandi) e i caratteri più grandi. Questa Guida cambia insieme a loro.",
         rows: &[
-            ("Tema", "Quattro tinte e sette temi", "Da Cedro · Melanzana al Comune di Bondeno"),
+            ("Tema", "Cinque temi desktop", "Melanzana, Notte, Bosco, Carta e Cedro for Labs"),
             ("Vista", "Semplice o Completa", "Si cambia anche in cima al pannello"),
             ("Testo", "Caratteri più grandi", "Più leggibili in tutta l'app"),
         ],
@@ -572,15 +572,8 @@ impl Stage<'_, '_> {
 
     fn aspetto(&mut self) {
         let pal = self.pal;
-        let names = [
-            ("Windows essenziale", (0, 94, 142)),
-            ("Percorso guidato", (237, 98, 12)),
-            ("Cedro compatto", (112, 237, 180)),
-            ("Banco di lavoro", (0, 184, 230)),
-            ("Documento al centro", (102, 48, 121)),
-            ("Comune di Bondeno", (0, 94, 142)),
-        ];
-        let at = ((self.t / 900.0) as usize) % 6;
+        let names = super::theme::THEMES.map(|theme| (theme.name(), theme.tint().frame));
+        let at = ((self.t / 900.0) as usize) % names.len();
         let (cw, ch, gap) = ((self.w - 36.0 - 20.0) / 3.0, 100.0, 10.0);
         for (i, (name, col)) in names.iter().enumerate() {
             let (cx, cy) = (self.x + 18.0 + (i % 3) as f32 * (cw + gap), self.y + 24.0 + (i / 3) as f32 * (ch + gap));

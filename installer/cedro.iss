@@ -1,9 +1,9 @@
 ; Installer di Cedro per Windows (x64 e, con /DArm64, ARM64). Compilazione: installer\build.ps1 [-Arm64]
 ; Pagina «Come lavori con Cedro?» (solo prima installazione a mano): Cedro standard o Cedro 4 Labs, con miniature che si muovono.
 ; Chi sceglie Labs, o installa con /TEMA=labs, lascia il file «da-labs»: al primo avvio Cedro accende il tema.
-; Il tema «Comune di Bondeno» è dentro Cedro (Impostazioni > Aspetto). Chi aveva la vecchia edizione Bondeno si
+; Il tema «Comune di Bondeno» è ritirato. Chi aveva la vecchia edizione Bondeno si
 ; aggiorna con la copia «Cedro-Bondeno-Setup-<versione>.exe» di questo stesso file: se l'installatore si chiama
-; così, lascia il file «da-bondeno» e Cedro, al primo avvio, accende il tema Bondeno.
+; così, lascia il file «da-bondeno» e Cedro, al primo avvio, migra a Melanzana conservando le altre preferenze.
 ; Installa per l'utente corrente: non servono i diritti di amministratore. Per tutti gli utenti solo da riga di comando
 ; (/ALLUSERS, per chi distribuisce Cedro in rete): mai la scelta nella procedura, che portava a due copie installate.
 #define AppName "Cedro"
@@ -307,7 +307,7 @@ begin
   end;
 end;
 
-// Cedro 4 Labs scelto nella pagina o da riga di comando: Cedro, al primo avvio, accende il tema (come per Bondeno).
+// Cedro 4 Labs scelto nella pagina o da riga di comando: Cedro, al primo avvio, accende il tema.
 procedure LeaveThemeNote;
 var
   labs: Boolean;
@@ -444,7 +444,7 @@ begin
 end;
 
 // Chi ha la vecchia edizione Comune di Bondeno si aggiorna con la copia «Cedro-Bondeno-…»: in quel caso
-// il tema Bondeno resta acceso (Cedro lo sceglie da solo al primo avvio, trovando questo file).
+// Cedro migra a Melanzana al primo avvio, conservando vista e altre preferenze.
 procedure LeaveBondenoNote;
 begin
   if Pos('cedro-bondeno', LowerCase(ExtractFileName(ExpandConstant('{srcexe}')))) = 1 then
