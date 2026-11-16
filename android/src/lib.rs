@@ -2,6 +2,7 @@
 //! provare anche sul computer, vedi `examples/vista.rs`); `glue` è la parte Android.
 
 pub mod ui;
+pub mod labs;
 pub mod worker;
 pub mod storage;
 pub mod publication;

@@ -81,3 +81,17 @@ YouTube chiede), `libffmpeg.so` e `libffprobe.so`. `android/youtube-libs.py` li 
 Al primo uso Cedro scarica da Maven Central solo le librerie di Python (14 MB) e di ffmpeg (35 MB), leggendo dall'archivio la parte
 per arm64; yt-dlp (la versione in Python) arriva da GitHub e si aggiorna da solo come sul computer.
 La build per il catalogo F-Droid (senza `CEDRO_YOUTUBE`) non contiene niente di tutto questo: lì YouTube passa il link a un'altra app.
+
+## Office e Laboratorio — ramo Android 0.53, verifiche in corso
+
+Il catalogo completo viene dal motore: Word/ODT/RTF/DOC, fogli Excel/Calc e immagini HEIC usano le stesse conversioni del desktop. Le opzioni di stampa Office, vetrino, DICOM e microscopia seguono il file selezionato. Android cerca i font di sistema anche in `/system/fonts`, `/product/fonts` e `/system_ext/fonts`; nessun font Office è incorporato. La fedeltà di impaginazione richiede il confronto sullo stesso corpus desktop/telefono.
+
+Il Laboratorio usa il worker Rust separato anche per le anteprime, cancellabili. Un vetrino SVS/NDPI/MRXS mostra la panoramica oppure un’area centrale di massimo 1024×1024 pixel del livello scelto, letta con `read_region`. CZI/ND2/LIF offrono scena, canale, piano Z e istante; DICOM immagine e finestra. Questi selettori cambiano **solo l’anteprima della sorgente**. Le opzioni del risultato controllano l’esportazione condivisa: il motore esporta tutte le scene di CZI/LIF, con canali e piani composti/separati secondo le scelte. Non esiste ancora nel motore un export della sola scena/canale/Z selezionata in anteprima.
+
+Copia anonima, tessere AI, zona per conta mitotica e consulto nativo di vetrino seguono il supporto del motore (SVS/NDPI/MRXS). La copia anonima **nel formato originale CZI/ND2/LIF non è supportata**: Android lo segnala prima di leggere il file intero; la normale conversione PNG resta disponibile e non viene presentata come copia anonima. DICOM usa l’anonimizzatore condiviso. Eventuali nomi impressi nei pixel richiedono verifica visiva. Cedro non esegue interpretazioni cliniche.
+
+Per MRXS scegliere la cartella contenente l’header `.mrxs` e la cartella dati omonima. Gli alias descriptor SAF e le sottocartelle sono mantenuti anche nella copia anonima e nei pacchetti BagIt; non vengono seguiti collegamenti a directory. Figura multipannello, PDF RX e pacchetto con impronte lavorano sull’insieme dei file selezionati.
+
+Il caso/campione viene salvato atomicamente nello stesso `lab/caso.txt` usato dal motore; il codice passa alle `Options`, la nota privata non entra nei nomi o nei lavori. I risultati conservano il caso di quando è partito il lavoro anche se il caso attivo cambia. «Copia per il quaderno» copia soltanto su richiesta i nomi dei risultati odierni del caso attivo (tutti se non c’è un caso). «Togli caso» ripristina i nomi ordinari. I nomi dei download web diretti sono materia del task web successivo: il percorso di conversione e quello della trascrizione ricevono già le opzioni con il caso.
+
+Stato delle prove di questa implementazione: parsing e controlli statici locali, **non ancora collaudo del candidato Android**. DICOM è ancora letto interamente dal motore comune; i piani di microscopia e gli originali di firme staccate possono richiedere molta RAM. Non è imposto un limite arbitrario al file. RAM/tempo sui campioni grandi, font, anteprime e provider SAF reali restano gate prima della pubblicazione. Comandi e risultati effettivi in `.superpowers/sdd/ESECUZIONE/task-3-report.md`.
