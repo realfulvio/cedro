@@ -58,6 +58,9 @@ const NUMBERS: &str = "numeri di accettazione e di studio";
 const DEVICE: &str = "numero di serie dell'apparecchio";
 const DESCR: &str = "descrizioni dell'esame e della serie";
 const ICON: &str = "miniatura dell'immagine";
+const TIMEZONE: &str = "fuso orario";
+const TRIAL: &str = "centro della sperimentazione clinica";
+const CONTRAST: &str = "mezzo di contrasto";
 const OVERLAY: &str = "sovrapposizioni (overlay) con possibili scritte";
 
 const RULES: &[(u32, Act, &str)] = &[
@@ -174,6 +177,9 @@ const RULES: &[(u32, Act, &str)] = &[
     (tag(0x0040, 0x3001), Act::Remove, NOTES),
     (tag(0x0040, 0xA027), Act::Remove, CLINIC),
     (tag(0x0040, 0xA160), Act::Remove, NOTES),
+    (tag(0x0008, 0x0201), Act::Remove, TIMEZONE),
+    (tag(0x0012, 0x0060), Act::Remove, TRIAL),
+    (tag(0x0018, 0x0010), Act::Remove, CONTRAST),
     (tag(0x0088, 0x0200), Act::Remove, ICON),
     (tag(0x4000, 0x4000), Act::Remove, NOTES),
 ];
@@ -294,6 +300,14 @@ pub fn shift_for(key: &[u8], who: &str) -> i64 {
     365 + (u32::from_be_bytes(h[..4].try_into().unwrap()) % 3287) as i64
 }
 
+/// I secondi di cui spostare gli orari di questo paziente (da 1 a 23 ore circa, sempre gli stessi):
+/// gli orari dello stesso giorno restano nello stesso ordine e alla stessa distanza, quasi sempre
+/// (se un intervallo passa la mezzanotte dopo lo spostamento, l'orario riparte da 0).
+pub fn time_shift_for(key: &[u8], who: &str) -> i64 {
+    let h = hmac(key, format!("time:{}", who.trim().to_uppercase()).as_bytes());
+    3600 + (u32::from_be_bytes(h[..4].try_into().unwrap()) % 79_200) as i64
+}
+
 /// Un UID nuovo nella radice 2.25 (UUID in decimale), lungo al massimo 44 caratteri.
 pub fn new_uid(key: &[u8], old: &str) -> String {
     let h = hmac(key, format!("uid:{}", old.trim()).as_bytes());
@@ -350,6 +364,11 @@ fn format_da(days: i64) -> String {
 /// Sposta indietro di `by` giorni ogni data del valore (anche le liste «a\b» e gli intervalli «a-b»).
 /// Una data che non si sa leggere (formati vecchi come «2024.03.15», testi) non resta vera: si svuota.
 pub fn shift_value(v: &str, by: i64, datetime: bool) -> String {
+    shift_value_t(v, by, datetime, 0)
+}
+
+/// Come `shift_value`; con `secs` diverso da 0 sposta anche l'orario dei DT.
+pub fn shift_value_t(v: &str, by: i64, datetime: bool, secs: i64) -> String {
     v.split('\\')
         .map(|one| {
             let mut found = false;
@@ -359,6 +378,16 @@ pub fn shift_value(v: &str, by: i64, datetime: bool) -> String {
                     if let Some(d) = part.get(..8).and_then(parse_da) {
                         found = true;
                         let rest = if datetime { &part[8..] } else { "" };
+                        let rest = if secs != 0 && !rest.is_empty() {
+                            // L'orario si sposta; il fuso (+hhmm) dopo l'orario resta.
+                            let (time, zone) = match rest.find('+') {
+                                Some(i) => rest.split_at(i),
+                                None => (rest, ""),
+                            };
+                            format!("{}{}", shift_time_token(time, secs).unwrap_or_default(), zone)
+                        } else {
+                            rest.to_string()
+                        };
                         return format!("{}{}", format_da(d - by), rest);
                     }
                     part.to_string()
@@ -369,6 +398,44 @@ pub fn shift_value(v: &str, by: i64, datetime: bool) -> String {
             } else {
                 String::new()
             }
+        })
+        .collect::<Vec<_>>()
+        .join("\\")
+}
+
+/// Sposta in avanti un orario DICOM («HH», «HHMM», «HHMMSS», con frazione) di `by` secondi, nelle 24 ore.
+/// Scritto male: `None`.
+fn shift_time_token(t: &str, by: i64) -> Option<String> {
+    let (digits, frac) = match t.find('.') {
+        Some(i) => (&t[..i], &t[i..]),
+        None => (t, ""),
+    };
+    if !matches!(digits.len(), 2 | 4 | 6) || !digits.bytes().all(|b| b.is_ascii_digit()) || !frac.bytes().skip(1).all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let part = |i: usize| digits.get(i..i + 2).and_then(|x| x.parse::<i64>().ok()).unwrap_or(0);
+    let (h, m, s) = (part(0), part(2), part(4));
+    if h > 23 || m > 59 || s > 60 {
+        return None;
+    }
+    let n = (h * 3600 + m * 60 + s.min(59) + by).rem_euclid(86_400);
+    let (nh, nm, ns) = (n / 3600, n % 3600 / 60, n % 60);
+    let mut out = format!("{nh:02}");
+    if digits.len() >= 4 {
+        out += &format!("{nm:02}");
+    }
+    if digits.len() == 6 {
+        out += &format!("{ns:02}");
+    }
+    out += frac;
+    Some(out)
+}
+
+/// Gli orari (VR TM): uno o più valori, o un intervallo con «-». Quelli scritti male si tolgono.
+pub fn shift_time(v: &str, by: i64) -> String {
+    v.split('\\')
+        .map(|one| {
+            one.split('-').map(|p| if p.is_empty() { Some(String::new()) } else { shift_time_token(p.trim(), by) }).collect::<Option<Vec<_>>>().map(|x| x.join("-")).unwrap_or_default()
         })
         .collect::<Vec<_>>()
         .join("\\")
@@ -414,6 +481,7 @@ struct Ctx<'a> {
     choices: Choices,
     code: String,
     shift: i64,
+    time_shift: i64,
     report: Report,
 }
 
@@ -446,6 +514,10 @@ fn clean(list: &mut Vec<Element>, cx: &mut Ctx, top: bool) {
         // Il vecchio gruppo dei referti (4008): autori, testi e destinatari.
         if t >> 16 == 0x4008 {
             cx.report.add(NOTES);
+            continue;
+        }
+        // Il riempimento in coda (FFFC,FFFC) può contenere resti del file originale.
+        if t == tag(0xFFFC, 0xFFFC) {
             continue;
         }
         // Le lunghezze di gruppo (gggg,0000) dopo le modifiche sarebbero sbagliate: non servono e vanno via.
@@ -504,11 +576,23 @@ fn clean(list: &mut Vec<Element>, cx: &mut Ctx, top: bool) {
                 }
                 e.value = Value::Bytes(Vec::new());
             }
+            b"TM" => {
+                let v = text(e.bytes());
+                if !v.is_empty() {
+                    if cx.choices.shift_dates {
+                        e.value = Value::Bytes(text_bytes(&shift_time(&v, cx.time_shift)));
+                        cx.report.add("date e orari (spostati tutti insieme)");
+                    } else {
+                        e.value = Value::Bytes(Vec::new());
+                        cx.report.add("orari");
+                    }
+                }
+            }
             b"DA" | b"DT" => {
                 let v = text(e.bytes());
                 if !v.is_empty() {
                     if cx.choices.shift_dates {
-                        e.value = Value::Bytes(text_bytes(&shift_value(&v, cx.shift, &vr == b"DT")));
+                        e.value = Value::Bytes(text_bytes(&shift_value_t(&v, cx.shift, &vr == b"DT", cx.time_shift)));
                         cx.report.add("date (spostate tutte insieme)");
                     } else {
                         e.value = Value::Bytes(Vec::new());
@@ -533,12 +617,13 @@ pub fn anonymize(f: &mut DicomFile, key: &[u8], choices: Choices) -> Report {
     let id = f.string(tag(0x0010, 0x0020)).or_else(|| f.string(tag(0x0010, 0x0010))).unwrap_or_default();
     let code = if id.is_empty() { String::new() } else { code_for(key, &id) };
     let shift = shift_for(key, &id);
+    let time_shift = time_shift_for(key, &id);
     // L'età prima di togliere la data di nascita: è un dato utile e non identifica.
     let birth = f.string(tag(0x0010, 0x0030)).and_then(|s| parse_da(&s));
     let when = [tag(0x0008, 0x0020), tag(0x0008, 0x0022), tag(0x0008, 0x0023), tag(0x0008, 0x0021)].iter().find_map(|t| f.string(*t).and_then(|s| parse_da(&s)));
     let needs_age = f.string(tag(0x0010, 0x1010)).is_none();
     let burned = super::pixel::burned_in(f);
-    let mut cx = Ctx { key, choices, code: code.clone(), shift, report: Report::default() };
+    let mut cx = Ctx { key, choices, code: code.clone(), shift, time_shift, report: Report::default() };
     clean(&mut f.body, &mut cx, true);
     if needs_age {
         if let (Some(b), Some(w)) = (birth, when) {
@@ -741,5 +826,59 @@ mod prove {
         anonymize(&mut f, KEY, Choices { shift_dates: false, code_names: false });
         assert_eq!(f.string(tag(0x0008, 0x0020)), None);
         assert_eq!(f.string(tag(0x0010, 0x0010)), None);
+    }
+    #[test]
+    fn gli_orari_si_spostano_tutti_dello_stesso_tempo_e_restano_le_distanze() {
+        assert_eq!(shift_time("101500", 3600), "111500");
+        assert_eq!(shift_time("1015", 3600), "1115");
+        assert_eq!(shift_time("10", 3600), "11");
+        assert_eq!(shift_time("101500.25", 60), "101600.25");
+        // Oltre la mezzanotte l'orario riparte da 0.
+        assert_eq!(shift_time("233000", 3600), "003000");
+        // Valori multipli e intervalli; scritti male si tolgono.
+        assert_eq!(shift_time("100000\\110000", 60), "100100\\110100");
+        assert_eq!(shift_time("100000-110000", 60), "100100-110100");
+        assert_eq!(shift_time("2500", 60), "");
+        assert_eq!(shift_time("10:15", 60), "");
+        // L'orario di un DT si sposta, il fuso resta.
+        assert_eq!(shift_value_t("20240101120000+0100", 1, true, 60), "20231231120100+0100");
+        assert_eq!(shift_value_t("20240101120000.5", 1, true, 60), "20231231120100.5");
+        let a = time_shift_for(KEY, "abc");
+        assert_eq!(a, time_shift_for(KEY, " ABC "));
+        assert!((3600..3600 + 79_200).contains(&a));
+    }
+
+    #[test]
+    fn orari_fuso_riempimento_e_dati_della_sperimentazione_non_restano() {
+        let body = vec![
+            el(tag(0x0008, 0x0018), b"UI", b"1.2.3"),
+            el(tag(0x0010, 0x0020), b"LO", b"P1"),
+            el(tag(0x0008, 0x0020), b"DA", b"20240315"),
+            el(tag(0x0008, 0x0030), b"TM", b"101500"),
+            el(tag(0x0008, 0x0031), b"TM", b"101600"),
+            el(tag(0x0008, 0x0201), b"SH", b"+0100"),
+            el(tag(0x0012, 0x0060), b"LO", b"Centro"),
+            el(tag(0x0018, 0x0010), b"LO", b"Gadolinio"),
+            el(tag(0xFFFC, 0xFFFC), b"OB", b"resto del file"),
+        ];
+        for shift_dates in [true, false] {
+            let mut f = DicomFile { meta: vec![], body: body.clone(), syntax: Syntax::ExplicitLE, ts: super::super::TS_EXPLICIT.into() };
+            anonymize(&mut f, KEY, Choices { shift_dates, code_names: true });
+            let again = DicomFile::read(&f.write()).unwrap();
+            assert!(again.get(tag(0x0008, 0x0201)).is_none(), "fuso");
+            assert!(again.get(tag(0x0012, 0x0060)).is_none(), "centro");
+            assert!(again.get(tag(0x0018, 0x0010)).is_none(), "contrasto");
+            assert!(again.get(tag(0xFFFC, 0xFFFC)).is_none(), "riempimento");
+            if shift_dates {
+                let (a, b) = (again.string(tag(0x0008, 0x0030)).unwrap(), again.string(tag(0x0008, 0x0031)).unwrap());
+                assert_ne!(a, "101500");
+                // La distanza di un minuto resta (a meno della mezzanotte, qui improbabile: lo spostamento è fisso).
+                let secs = |x: &str| x[..2].parse::<i64>().unwrap() * 3600 + x[2..4].parse::<i64>().unwrap() * 60 + x[4..6].parse::<i64>().unwrap();
+                assert_eq!((secs(&b) - secs(&a)).rem_euclid(86_400), 60);
+            } else {
+                assert_eq!(again.string(tag(0x0008, 0x0030)), None);
+                assert_eq!(again.string(tag(0x0008, 0x0031)), None);
+            }
+        }
     }
 }
