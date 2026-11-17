@@ -47,6 +47,13 @@ impl File {
         match &self.inner {Source::Regular(f)=>f.metadata(),#[cfg(unix)] Source::Granted{file,..}=>file.metadata()}
     }
 }
+// Solo per API native con offset/lunghezza espliciti (MediaExtractor), non un lettore sequenziale.
+#[cfg(unix)]
+impl std::os::fd::AsRawFd for File {
+    fn as_raw_fd(&self)->std::os::fd::RawFd {
+        match &self.inner {Source::Regular(f)=>f.as_raw_fd(),Source::Granted{file,..}=>file.as_raw_fd()}
+    }
+}
 impl Read for File {
     fn read(&mut self,buf:&mut [u8])->io::Result<usize> {
         match &mut self.inner {

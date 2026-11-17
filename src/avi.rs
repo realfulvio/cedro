@@ -264,7 +264,7 @@ pub(crate) fn parse_strl(data: &[u8]) -> Result<AviStream, String> {
 
 /// Legge il file: i flussi e i pacchetti nell'ordine in cui stanno.
 pub(crate) fn read(path: &Path) -> Result<(Vec<AviStream>, Vec<AviChunk>), String> {
-    let bytes = std::sync::Arc::new(std::fs::read(path).map_err(|err| format!("AVI non letto: {err}"))?);
+    let bytes = std::sync::Arc::new(crate::input_file::read(path).map_err(|err| format!("AVI non letto: {err}"))?);
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"AVI " {
         return Err("AVI non letto".into());
     }

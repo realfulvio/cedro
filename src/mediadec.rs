@@ -4,7 +4,7 @@
 //! formato, `open` dà un errore e chi chiama passa al decodificatore software.
 
 use std::ffi::CString;
-use std::fs::File;
+use crate::input_file::File;
 use std::os::fd::AsRawFd;
 use std::path::Path;
 use std::ptr::NonNull;
