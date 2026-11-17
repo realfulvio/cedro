@@ -225,10 +225,28 @@ fn lavori_page(f: &mut Frame, app: &App, area: R) {
     f.p.rrect(area.0, area.1, area.2, area.3, 16.0, Some(pal.work), None);
     let list = crate::caso::di_oggi(&app.lavori);
     let inner = (area.0 + 32.0, area.1 + 26.0, area.2 - 64.0, area.3 - 40.0);
-    f.text("Lavori di oggi", inner.0, inner.1, inner.2, 44.0, 32.0, BOLD, pal.text);
+    f.text("Lavori di oggi", inner.0, inner.1, inner.2 - 300.0, 44.0, 32.0, BOLD, pal.text);
+    // Il registro di tutti i lavori ricordati (non solo di oggi), in Excel con i filtri: per una pratica o un controllo.
+    let reg = (inner.0 + inner.2 - 280.0, inner.1 + 2.0, 280.0, 42.0);
+    f.primary(reg, "Registro in Excel", None, 15.5, Act::LavoriEsporta, !app.lavori.is_empty());
     let sub = if list.is_empty() { "Ancora nessuno. Ogni lavoro finisce qui, con i nomi dei file usciti." } else { "Gli originali non sono mai stati toccati." };
-    f.text(sub, inner.0, inner.1 + 46.0, inner.2, 26.0, 16.5, SANS, pal.muted);
-    let body = (inner.0, inner.1 + 88.0, inner.2, inner.3 - 88.0);
+    f.text(sub, inner.0, inner.1 + 46.0, inner.2 - 300.0, 26.0, 16.5, SANS, pal.muted);
+    let mut top = inner.1 + 88.0;
+    match &app.lavori_esportato {
+        Some(Ok(p)) => {
+            let nome = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let riga = format!("{} {} · {}", crate::i18n::tr("Registro salvato:"), nome, super::super::model::short_dir(p.parent().unwrap_or(p)));
+            f.text(&riga, inner.0, top - 10.0, inner.2 - 140.0, 26.0, 15.0, SEMI, pal.ok);
+            f.button((inner.0 + inner.2 - 120.0, top - 14.0, 120.0, 34.0), "Apri", None, 14.5, Act::OpenPath(p.clone()));
+            top += 30.0;
+        }
+        Some(Err(e)) => {
+            f.text(&format!("{} {e}", crate::i18n::tr("Registro non salvato:")), inner.0, top - 10.0, inner.2, 26.0, 15.0, SEMI, pal.bad);
+            top += 30.0;
+        }
+        None => {}
+    }
+    let body = (inner.0, top, inner.2, inner.3 - (top - inner.1));
     let list: Vec<(usize, &crate::caso::Lavoro)> = list.into_iter().enumerate().collect();
     crate::ui::views::scrolled(f, body, Scroll::Lavori, |f| {
         let mut y = body.1;
@@ -784,7 +802,9 @@ fn side_panel(f: &mut Frame, app: &App, r: R) {
     y += file_head(f, app, x, y, w) + 6.0;
     mode_switch(f, (x, y, w, 42.0));
     y += 42.0 + 14.0;
-    let foot_h = 142.0;
+    // A lavoro finito, sotto l'esito, il testo del lavoro da incollare nel quaderno di laboratorio.
+    let quaderno = app.lavoro_appena && app.finished() && !app.lavori.is_empty();
+    let foot_h = if quaderno { 142.0 + 52.0 } else { 142.0 };
     let foot_y = r.1 + r.3 - foot_h;
     let body = (r.0 + 1.0, y, r.2 - 2.0, foot_y - y);
     if f.simple {
@@ -838,6 +858,10 @@ fn side_panel(f: &mut Frame, app: &App, r: R) {
     go_button(f, app, go, deep);
     if !super::notice(f, app, (x - 6.0, go.1 + go.3 + 12.0, w + 12.0, 44.0), 14.0) {
         super::go_extras(f, app, (go.0, go.1, go.2, go.3 + 4.0), false);
+    }
+    if quaderno {
+        let label = if app.lavoro_appena_copiato { "Copiato" } else { "Copia per il quaderno" };
+        f.button((x, go.1 + go.3 + 64.0, w, 42.0), label, Some(if app.lavoro_appena_copiato { ic::CHECK } else { ic::COPY }), 15.0, Act::QuadernoUltimo);
     }
 }
 

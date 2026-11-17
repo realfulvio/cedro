@@ -1144,7 +1144,7 @@ pub fn clock(centis: i64) -> String {
 }
 
 /// Il tempo che manca, senza spazi (il riquadro del registro andrebbe a capo tra il numero e l'unità).
-fn minutes_text(secs: f64) -> String {
+pub(crate) fn minutes_text(secs: f64) -> String {
     let mins = (secs / 60.0).round() as u64;
     match mins {
         0 => format!("{} s", secs.round() as u64),
@@ -1187,7 +1187,7 @@ pub fn language_name(code: &str) -> String {
 }
 
 /// Lingua per il correttore di Word, dal codice di whisper.
-fn word_language(code: &str) -> String {
+pub(crate) fn word_language(code: &str) -> String {
     match code {
         "it" => "it-IT".into(),
         "en" => "en-GB".into(),
@@ -1266,7 +1266,7 @@ fn used_voices(segments: &[Segment], names: &[String]) -> Vec<usize> {
 }
 
 /// Testo per l'XML di Word: i caratteri speciali escapati, quelli vietati in XML 1.0 (controllo) tolti.
-fn xml_escape(s: &str) -> String {
+pub(crate) fn xml_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 8);
     for c in s.chars() {
         match c {
@@ -1283,7 +1283,7 @@ fn xml_escape(s: &str) -> String {
 }
 
 /// La data di oggi scritta per esteso («26 ottobre 2026»), dall'orologio del PC.
-fn today_text() -> String {
+pub(crate) fn today_text() -> String {
     let days = (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) / 86_400) as i64;
     // Da giorni dal 1970 a data civile (algoritmo di Howard Hinnant).
     let z = days + 719_468;
@@ -1984,9 +1984,12 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                     }
                     None => out.clone(),
                 };
-                let bytes = match request.format {
-                    Format::Word => docx_bytes_full(path, secs, &lang, &segments, &names, None, draft.as_deref()),
-                    Format::Text => text_bytes_full(path, secs, &lang, &segments, &names, None, draft.as_deref()),
+                // Il referto esce già impaginato: logo e clinica, campi, parti dettate.
+                let bytes = match (request.format, referto) {
+                    (Format::Word, true) => crate::referto::docx(path, secs, &lang, &segments, &crate::referto::Intestazione::attuale(), draft.as_deref()),
+                    (Format::Text, true) => crate::referto::testo(path, secs, &segments, &crate::referto::Intestazione::attuale(), draft.as_deref()),
+                    (Format::Word, false) => docx_bytes_full(path, secs, &lang, &segments, &names, None, draft.as_deref()),
+                    (Format::Text, false) => text_bytes_full(path, secs, &lang, &segments, &names, None, draft.as_deref()),
                 };
                 std::fs::create_dir_all(&dir)
                     .and_then(|_| {
