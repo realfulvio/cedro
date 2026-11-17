@@ -1948,7 +1948,8 @@ impl App {
         let pal = self.pal();
         self.titolo_barra(p, 16.0, w - 140.0, "Lavori");
         if self.lavori.iter().any(|l| l.stato != Stato::InCorso) {
-            let rc = (w - 108.0, 4.0, 100.0, TOCCO);
+            // Nel nuovo Cedro l'orologio dei Lavori sta in alto a destra: «Svuota» non deve finirgli sotto il dito.
+            let rc = if self.tema.is_cedro() { (150.0, 4.0, 100.0, TOCCO) } else { (w - 108.0, 4.0, 100.0, TOCCO) };
             let prem = self.premuto == Some(Azione::Svuota);
             if prem {
                 p.rrect_a(rc.0, rc.1, rc.2, rc.3, 24.0, pal.primary, 0.14);
