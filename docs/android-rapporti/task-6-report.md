@@ -137,3 +137,36 @@ Resta indispensabile prima della pubblicazione:
 - review finale, aggiornamento archivi report con prove controller, collisione versione/tag, release Android autorizzata.
 
 Limiti dichiarati: fallback arabo a glifi non significa shaping RTL completo; il provider semantico deve ancora essere verificato per copertura/ordine/azioni sul dispositivo; API native della stessa sorgente sono serializzate (le letture pread e gli altri file no); PDF/Office/DICOM mantengono eventuali letture in RAM già proprie del motore. Nessun falso PASS su Xiaomi13, esplicitamente escluso dal mandato. Nessun comando Rust/build/ADB o remoto eseguito dall'implementer.
+
+
+## Fix round 1 — base 3d1629b, rilievi I1–I5
+
+Letta integralmente la review `task-6-review.md`, incluse limitazioni Cannot verify. Controller ha inoltre comunicato core suite **592 PASS, 2 FAIL, 15 ignored** su 3d1629b: `engine::format_tests::photo_formats_roundtrip` (TGA non riconosciuto) e `mrxs::prove::copia_anonima_con_alias_fd_e_dati_annidati` (alias Unix non registrato). Le quattro verifiche di compilazione precedenti erano PASS; il job si è fermato sui test core, nessuna suite successiva viene contata come eseguita.
+
+### Correzioni
+
+- **I1, ponte accessibile:** rimosso dispatchTouchEvent Java sintetico. `CedroActivity` accoda `[kind,x,y,endY]` in una JSONArray sincronizzata; `takeAccessibilityActions` svuota la coda. Il thread UI Rust la legge nel ciclo eventi esistente, converte pixel/dp e chiama touch/hit-test reali. Gli Effetto prodotti percorrono lo stesso match dei tocchi fisici, spostato fuori dalla callback InputQueue senza alterarne i rami. Hover e altri MotionAction ignorati restituiscono Unhandled, così raggiungono il provider Java. Il poll idle già esistente resta 150 ms; nessun loop nuovo a 60 Hz. Nessun nuovo JNI export, permesso o libreria.
+- **I2, cancellazione player:** `prepare_audio` legge lo stop del singolo Player; la closure arriva a `audio::decode_cancellable`, al fallback nativo e a `AudioDecoder::open_cancellable`. L'acquisizione combina la cancellazione del consumatore con quella del worker e ricontrolla dopo il lock, prima di creare MediaExtractor. Lo stop viene controllato anche durante i chunk Symphonia/nativi e prima di avviare l'uscita audio. `Player::drop` rimane la sorgente del token. Il confine decoder nativo è iniettabile nel test host per provare il collegamento senza dispositivi audio; la produzione Android chiama sempre MediaExtractor reale.
+- **I3, ID duplicati:** ogni regione dello stesso Azione ha un ordinal stabile nel frame e un ID distinto. Gli ordinal sono contati prima dei filtri di visibilità; collisioni hash vengono risolte senza entrare nello spazio ID del testo statico. Timestamp e testo mantengono entrambi bounds/label/click; non vengono fusi in un rettangolo il cui centro potrebbe attivare un altro comando.
+- **I4, TGA:** `imgfmt::reader` ripristina il formato dedotto dall'estensione prima di with_guessed_format; magic riconosciuto mantiene precedenza. Lo stesso helper serve conversione, OCR upright e miniatura, sempre usando input_file. Non reintroduce File::open del provider.
+- **I5, alias Unix:** la policy obbligatoria path→grant rimane attiva per Android. Su Unix desktop gli alias non registrati conservano le normali semantiche std::fs; i grant esplicitamente registrati continuano a usare pread. Il test stale-alias verifica esplicitamente la stessa policy stretta selezionata da cfg Android e aggiunge una lettura con policy desktop. L'esistente test MIRAX con alias e dati annidati resta invariato: nessun adattamento della fixture per nascondere la regressione.
+
+### Copertura aggiunta/aggiornata, ancora da eseguire sul controller
+
+- `ui::accessibilita::tests::semantic_jobs_action_is_the_real_native_hit_target`: usa ora il JSON realmente prodotto dal ponte, con scala2 pixel/dp, e verifica route Lavori.
+- `ui::accessibilita::tests::review_regions_have_unique_ids_and_bridge_scroll_moves_content`: revisione reale con timestamp/testo, almeno due regioni Riga(0), unicità di tutti gli ID e comando scroll JSON che modifica l'offset.
+- `ui::player::tests::closing_player_cancels_native_wait_before_other_process_releases_lock` con helper child: un processo separato tiene lo stesso lock inode; la pipeline di preparazione del player entra nel fallback nativo e attende; drop(Player) deve terminarla prima del rilascio del processo holder, senza acquisizione né ripartenza successiva. Non apre dispositivi audio.
+- `imgfmt::tests::tga_extension_survives_grant_reader_and_magic_still_wins`: TGA ordinario e grant, conversione/upright/thumbnail, PNG con estensione TGA per verificare precedenza magic.
+- `input_file::tests::stale_alias_cannot_select_another_paths_reused_fd`: policy Android stretta contro alias estraneo, più semantica desktop ordinaria.
+- Rieseguire i due test esistenti falliti e le suite core/Android appropriate.
+
+### Verifiche effettivamente eseguite dall'implementer
+
+- `git diff --check`: PASS.
+- `python3 android/tools/check-i18n.py`: PASS 134 chiavi per ciascuna delle cinque lingue, zero mancanze. Nessuna nuova stringa visibile.
+- Confronto Python del match Effetto precedente e nuovo normalizzando solo whitespace: PASS, rami invariati.
+- Self-review dei callsite player→audio→mediadec, policy alias per target, precedenza immagine, coda sincronizzata Java, parser Rust, coordinate e ID.
+
+**Non eseguiti qui:** cargo check/test/clippy, rustc, fmt, build Java/APK, remoto, ADB, UIAutomator/TalkBack. Le prove host del protocollo non sono una prova del trasporto JNI fisico né dell'esplorazione TalkBack: restano obbligatori ACTION_CLICK Lavori, ACTION_SCROLL e hover sul candidato aggiornato. Il cold Play di 4c funziona nella prova controller; l'errore durante cattura scrcpy non è diagnosticato come bug applicativo e questo round non modifica quel comportamento per ipotesi.
+
+Stato round: **correzioni implementate, verifica controller e scoped review dei cinque rilievi pendenti**. Nessun FAIL trasformato in PASS prima dell'esecuzione.

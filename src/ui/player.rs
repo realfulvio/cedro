@@ -206,9 +206,16 @@ impl Drop for Player {
 #[cfg(any(windows, target_os = "linux", target_os = "android"))]
 const STALLED: Duration = Duration::from_millis(1500);
 
+fn prepare_audio(path:&Path,sh:&Arc<Shared>,decode:impl FnOnce(&Path,&dyn Fn()->bool)->Result<crate::audio::Pcm,String>)->Option<crate::audio::Pcm> {
+    let pcm=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||decode(path,&||sh.stop.load(Ordering::Relaxed)))).ok().and_then(Result::ok);
+    if sh.stop.load(Ordering::Relaxed){return None;}
+    pcm.filter(|p|!p.samples.is_empty()&&p.channels>0)
+}
+
 fn audio_thread(path: &Path, sh: Arc<Shared>) {
     // Un file che manda in crisi il decodificatore: si va avanti senza audio (se no «carico» per sempre).
-    let pcm = std::panic::catch_unwind(|| crate::audio::decode(path)).ok().and_then(|r| r.ok()).filter(|p| !p.samples.is_empty() && p.channels > 0);
+    let pcm=prepare_audio(path,&sh,crate::audio::decode_cancellable);
+    if sh.stop.load(Ordering::Relaxed){return;}
     #[cfg(any(windows, target_os = "linux", target_os = "android"))]
     if let Some(pcm) = pcm {
         let pcm = Arc::new(pcm);
@@ -399,6 +406,62 @@ fn video_thread(path: &Path, from: f64, generation: u64, sh: Arc<Shared>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(unix)]
+    fn player_lock_holder_child() {
+        use std::os::fd::AsRawFd;
+        let Some(dir)=std::env::var_os("CEDRO_PLAYER_LOCK_TEST").map(PathBuf::from) else{return};
+        let file=Arc::new(std::fs::File::open(dir.join("data")).unwrap());let fd=file.as_raw_fd();
+        let alias=dir.join("child-alias");std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&alias).unwrap();
+        crate::input_file::register(&alias,fd,file);
+        let source=crate::input_file::File::open(alias).unwrap();
+        let _guard=source.lock_native_in(&dir.join("locks"),||false).unwrap();
+        std::fs::write(dir.join("held"),b"held").unwrap();
+        let deadline=Instant::now()+Duration::from_secs(10);
+        while !dir.join("release").exists(){assert!(Instant::now()<deadline);std::thread::sleep(Duration::from_millis(20));}
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn closing_player_cancels_native_wait_before_other_process_releases_lock() {
+        use std::os::fd::AsRawFd;
+        let dir=std::env::temp_dir().join(format!("cedro-player-lock-{}",std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();std::fs::write(dir.join("data"),b"unsupported audio fixture").unwrap();
+        struct Child(std::process::Child);
+        impl Drop for Child {fn drop(&mut self){let _=self.0.kill();let _=self.0.wait();}}
+        let mut child=Child(std::process::Command::new(std::env::current_exe().unwrap()).args(["--exact","ui::player::tests::player_lock_holder_child","--nocapture"]).env("CEDRO_PLAYER_LOCK_TEST",&dir).spawn().unwrap());
+        let deadline=Instant::now()+Duration::from_secs(5);
+        while !dir.join("held").exists(){assert!(Instant::now()<deadline);std::thread::sleep(Duration::from_millis(20));}
+        let source=Arc::new(std::fs::File::open(dir.join("data")).unwrap());let fd=source.as_raw_fd();
+        let alias=dir.join("parent-alias");std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&alias).unwrap();crate::input_file::register(&alias,fd,source);
+        let sh=Arc::new(Shared {
+            stop:AtomicBool::new(false),paused:AtomicBool::new(false),ended:AtomicBool::new(false),
+            loading:AtomicBool::new(true),has_audio:AtomicBool::new(false),failed:AtomicBool::new(false),
+            audio_pos:AtomicU64::new(0),audio_len:AtomicU64::new(0),audio_rate:AtomicU32::new(16000),
+            speed:AtomicU32::new(100),volume:AtomicU32::new(100),generation:AtomicU64::new(0),
+            clock:Mutex::new((0.0,None)),frame:Mutex::new(None),wake:Arc::new(||{}),
+        });
+        let player=Player{path:alias.clone(),duration:None,video:false,sh:sh.clone()};
+        let (entered_tx,entered_rx)=std::sync::mpsc::channel();let (done_tx,done_rx)=std::sync::mpsc::channel();
+        let work=dir.clone();
+        let waiter=std::thread::spawn(move || {
+            let pcm=prepare_audio(&alias,&sh,|path,cancel|crate::audio::decode_with_native(path,cancel,|path,cancel| {
+                entered_tx.send(()).unwrap();
+                let file=crate::input_file::File::open(path).map_err(|e|e.to_string())?;
+                let _guard=file.lock_native_in(&work.join("locks"),||cancel()||crate::input_file::cancelled()).map_err(|e|e.to_string())?;
+                std::fs::write(work.join("waiter-acquired"),b"unexpected").unwrap();
+                Ok(crate::audio::Pcm::new(16000,1,vec![0]))
+            }));
+            done_tx.send(pcm.is_none()).unwrap();
+        });
+        entered_rx.recv_timeout(Duration::from_secs(2)).unwrap();drop(player);
+        assert!(done_rx.recv_timeout(Duration::from_secs(2)).unwrap(),"player chiuso ancora in attesa");
+        assert!(!dir.join("waiter-acquired").exists());assert!(!dir.join("release").exists());waiter.join().unwrap();
+        std::fs::write(dir.join("release"),b"release").unwrap();assert!(child.0.wait().unwrap().success());
+        assert!(!dir.join("waiter-acquired").exists(),"decodifica ripartita dopo chiusura");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn failed_audio_cannot_resume_or_seek_a_virtual_clock() {

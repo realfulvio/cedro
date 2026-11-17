@@ -1874,6 +1874,7 @@ fn android_main(app: AndroidApp) {
             }
         });
         let scala = app.config().density().map(|d| d as f32 / 160.0).unwrap_or(2.6).max(1.0);
+        let mut effetti=Vec::new();
         if let Ok(mut it) = app.input_events_iter() {
             loop {
                 let letto = it.next(|e| {
@@ -1891,7 +1892,7 @@ fn android_main(app: AndroidApp) {
                                     ui.tocca_annulla();
                                     eff = Effetto::Ridisegna;
                                 }
-                                _ => {}
+                                _ => stato=InputStatus::Unhandled,
                             }
                         }
                         InputEvent::KeyEvent(k) if ui.campo.is_some() && k.key_code() != Keycode::Back => {
@@ -1936,183 +1937,190 @@ fn android_main(app: AndroidApp) {
                         }
                         _ => stato = InputStatus::Unhandled,
                     }
-                    match eff {
-                        Effetto::SalvaRete=>{
-                            *consegne.rete.0.lock().unwrap_or_else(|e|e.into_inner())=ui.rete;
-                            consegne.rete.1.notify_all();
-                            let (path,value)=(file_rete.clone(),ui.rete.to_string());std::thread::spawn(move||{let _=crate::storage::atomico(&path,value.as_bytes());});
-                            sporco=true;
-                        }
-                        Effetto::Niente => {}
-                        Effetto::Annulla(id) => { token(&consegne,id).store(true,std::sync::atomic::Ordering::Release); saf::annulla(&app,id); sporco=true; }
-                        Effetto::Ridisegna => sporco = true,
-                        Effetto::Converti { voce, web, id, file, azione, qualita, prog, opts, unisci } => {
-                            registra(&consegne,&mut ui);
-                            persisti(&consegne,&file_lavori,ui.serializza());
-                            sporco = true;
-                            let (a, c) = (app.clone(), consegne.clone());
-                            token(&c,id);
-                            std::thread::spawn(move || protetto(&c,id,|| converti(voce,web,a, c.clone(), id, file, azione, qualita, prog, opts, unisci)));
-                        }
-                        Effetto::Tanti(compiti) => {
-                            registra(&consegne,&mut ui);
-                            persisti(&consegne,&file_lavori,ui.serializza());
-                            sporco = true;
-                            let (a, c) = (app.clone(), consegne.clone());
-                            for compito in &compiti { token(&c,compito.id); }
-                            // Uno dopo l'altro: il motore lavora meglio su un file alla volta.
-                            std::thread::spawn(move || {
-                                for Compito { voce, web, id, file, azione, qualita, prog, opts, unisci } in compiti {
-                                    protetto(&c,id,|| converti(voce,web,a.clone(), c.clone(), id, file, azione, qualita, prog, opts, unisci));
-                                }
-                            });
-                        }
-                        Effetto::Incolla => {
-                            ui.incolla(appunti(&app));
-                            sporco = true;
-                        }
-                        Effetto::LeggiVoci(v) => {
-                            leggi_voci(&consegne, v);
-                            sporco = true;
-                        }
-                        Effetto::LeggiPdf(path, altri) => {
-                            leggi_pdf(&consegne, path);
-                            if !altri.is_empty() {
-                                leggi_uniti(&consegne, altri, None);
-                            }
-                            sporco = true;
-                        }
-                        Effetto::OndaRevisione(path, _) => {
-                            prepara_onda(&consegne, path);
-                            sporco = true;
-                        }
-                        Effetto::ScriviPoi { id, nome, dati, poi } => {
-                            let nome=ui.nome_esportato(id,nome);
-                            registra(&consegne,&mut ui);
-                            persisti(&consegne,&file_lavori,ui.serializza());
-                            let (a,c)=(app.clone(),consegne.clone());
-                            token(&c,id);
-                            std::thread::spawn(move ||protetto(&c,id,||scrivi(&a,&c,id,nome,dati,poi)));
-                            sporco=true;
-                        }
-                        Effetto::Scrivi { id, nome, dati } => {
-                            let nome=ui.nome_esportato(id,nome);
-                            registra(&consegne,&mut ui);
-                            persisti(&consegne,&file_lavori,ui.serializza());
-                            let (a,c)=(app.clone(),consegne.clone());
-                            token(&c,id);
-                            std::thread::spawn(move ||protetto(&c,id,||scrivi(&a,&c,id,nome,dati,0)));
-                            sporco=true;
-                        }
-                        Effetto::Sblocca(pw) => {
-                            if let Some(f) = &ui.file {
-                                sblocca(&consegne, f.path.clone(), pw, &cartella);
-                            }
-                            sporco = true;
-                        }
-                        Effetto::Esci => chiudi(&app),
-                        Effetto::Riassumi { id, source, lines, names, prog } => {
-                            registra(&consegne,&mut ui);
-                            persisti(&consegne,&file_lavori,ui.serializza());
-                            let (a,c) = (app.clone(),consegne.clone());
-                            token(&c,id);
-                            std::thread::spawn(move || protetto(&c,id,|| riassumi(&a,&c, id, source, lines, names, &prog)));
-                            sporco = true;
-                        }
-                        Effetto::Copia(testo) => {
-                            copia_negli_appunti(&app, &testo);
-                            sporco = true;
-                        }
-                        Effetto::SalvaLingua(l) => {
-                            let _ = std::fs::write(&file_lingua, l);
-                            sporco = true;
-                        }
-                        Effetto::SalvaCaratteri(g) => {
-                            let _ = std::fs::write(&file_caratteri, if g { "grandi" } else { "normali" });
-                            sporco = true;
-                        }
-                        Effetto::SalvaCaso => {
-                            let c=consegne.clone();let caso=ui.labs.caso.clone();
-                            let generation=c.caso_versione.fetch_add(1,std::sync::atomic::Ordering::AcqRel)+1;
-                            std::thread::spawn(move||{
-                                let _guard=c.caso_lock.lock().unwrap_or_else(|e|e.into_inner());
-                                if c.caso_versione.load(std::sync::atomic::Ordering::Acquire)!=generation{return;}
-                                let path=cedro::config_dir().join("lab/caso.txt");
-                                let r=match caso {
-                                    Some(v)=>crate::storage::atomico(&path,format!("{}\n{}\n",v.code,v.note).as_bytes()),
-                                    None=>match std::fs::remove_file(&path){Err(e) if e.kind()!=std::io::ErrorKind::NotFound=>Err(e),_=>Ok(())},
-                                }.map_err(|e|e.to_string());
-                                *c.caso_esito.lock().unwrap_or_else(|e|e.into_inner())=Some(r);
-                            });
-                            sporco=true;
-                        }
-                        Effetto::SalvaImpostazioni => {
-                            let _ = cedro::write_settings(&ui.imp);
-                            let esiste = match ui.esiste {
-                                cedro::Exists::Replace => "sostituisci",
-                                cedro::Exists::Skip => "salta",
-                                _ => "numera",
-                            };
-                            let _ = std::fs::write(&file_impostazioni, format!("{esiste}\n{}", ui.modello_nome));
-                            ricorda_esiste(ui.esiste);
-                            sporco = true;
-                        }
-                        Effetto::SalvaTema(t) => {
-                            let _ = std::fs::write(&file_tema, t.key());
-                            icone_barre(&app, crate::ui::tinte::scuro(t));
-                            sporco = true;
-                        }
-                        Effetto::SalvaLavori => {
-                            registra(&consegne,&mut ui);
-                            persisti(&consegne,&file_lavori,ui.serializza());
-                            sporco = true;
-                        }
-                        Effetto::Scegli(Sorgente::Link) => {
-                            match cedro::webvideo::find_url(&appunti(&app)) {
-                                Some(url) => carica_file(&mut ui, &consegne, &cartella, PathBuf::from(&url), url, true),
-                                None => log::info!("negli appunti non c'è un link"),
-                            }
-                            sporco = true;
-                        }
-                        Effetto::Scegli(s) => {
-                            match scegli(&app, s) {
-                                Ok(()) => attesa_scelta = Some(s),
-                                Err(e) => log::error!("selettore: {e}"),
-                            }
-                            sporco = true;
-                        }
-                        Effetto::UsaFile(p) => {
-                            let (id,_)=ui.nuova_importazione();
-                            consegne.ultimo_import.store(id,std::sync::atomic::Ordering::Release);
-                            let (a,c)=(app.clone(),consegne.clone());
-                            std::thread::spawn(move || {
-                                let r=saf::ripristina(&a,&p).map(|_|vec![Condiviso {nome:nome_di(&p),path:p}]);
-                                c.importati.lock().unwrap_or_else(|e|e.into_inner()).push((id,Some(Sorgente::Altri),r));
-                                a.create_waker().wake();
-                            });
-                            sporco = true;
-                        }
-                        Effetto::Apri(p) => {
-                            let a = app.clone();
-                            std::thread::spawn(move || {
-                                if let Err(e) = apri_o_condividi(&a, &p, false) {
-                                    log::error!("apri: {e}");
-                                }
-                            });
-                        }
-                        Effetto::Condividi(p) => {
-                            let a = app.clone();
-                            std::thread::spawn(move || {
-                                if let Err(e) = apri_o_condividi(&a, &p, true) {
-                                    log::error!("condividi: {e}");
-                                }
-                            });
-                        }
-                    }
+                    effetti.push(eff);
                     stato
                 });
                 if !letto {
                     break;
+                }
+            }
+        }
+        if let Ok(commands)=con_attivita(&app,|env,att| {
+            let value=env.call_method(att,"takeAccessibilityActions","()Ljava/lang/String;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+            Ok(stringa(env,value).unwrap_or_default())
+        }) {effetti.extend(ui.azioni_accessibili(&commands,scala));}
+        for eff in effetti {
+            match eff {
+                Effetto::SalvaRete=>{
+                    *consegne.rete.0.lock().unwrap_or_else(|e|e.into_inner())=ui.rete;
+                    consegne.rete.1.notify_all();
+                    let (path,value)=(file_rete.clone(),ui.rete.to_string());std::thread::spawn(move||{let _=crate::storage::atomico(&path,value.as_bytes());});
+                    sporco=true;
+                }
+                Effetto::Niente => {}
+                Effetto::Annulla(id) => { token(&consegne,id).store(true,std::sync::atomic::Ordering::Release); saf::annulla(&app,id); sporco=true; }
+                Effetto::Ridisegna => sporco = true,
+                Effetto::Converti { voce, web, id, file, azione, qualita, prog, opts, unisci } => {
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    sporco = true;
+                    let (a, c) = (app.clone(), consegne.clone());
+                    token(&c,id);
+                    std::thread::spawn(move || protetto(&c,id,|| converti(voce,web,a, c.clone(), id, file, azione, qualita, prog, opts, unisci)));
+                }
+                Effetto::Tanti(compiti) => {
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    sporco = true;
+                    let (a, c) = (app.clone(), consegne.clone());
+                    for compito in &compiti { token(&c,compito.id); }
+                    // Uno dopo l'altro: il motore lavora meglio su un file alla volta.
+                    std::thread::spawn(move || {
+                        for Compito { voce, web, id, file, azione, qualita, prog, opts, unisci } in compiti {
+                            protetto(&c,id,|| converti(voce,web,a.clone(), c.clone(), id, file, azione, qualita, prog, opts, unisci));
+                        }
+                    });
+                }
+                Effetto::Incolla => {
+                    ui.incolla(appunti(&app));
+                    sporco = true;
+                }
+                Effetto::LeggiVoci(v) => {
+                    leggi_voci(&consegne, v);
+                    sporco = true;
+                }
+                Effetto::LeggiPdf(path, altri) => {
+                    leggi_pdf(&consegne, path);
+                    if !altri.is_empty() {
+                        leggi_uniti(&consegne, altri, None);
+                    }
+                    sporco = true;
+                }
+                Effetto::OndaRevisione(path, _) => {
+                    prepara_onda(&consegne, path);
+                    sporco = true;
+                }
+                Effetto::ScriviPoi { id, nome, dati, poi } => {
+                    let nome=ui.nome_esportato(id,nome);
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    let (a,c)=(app.clone(),consegne.clone());
+                    token(&c,id);
+                    std::thread::spawn(move ||protetto(&c,id,||scrivi(&a,&c,id,nome,dati,poi)));
+                    sporco=true;
+                }
+                Effetto::Scrivi { id, nome, dati } => {
+                    let nome=ui.nome_esportato(id,nome);
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    let (a,c)=(app.clone(),consegne.clone());
+                    token(&c,id);
+                    std::thread::spawn(move ||protetto(&c,id,||scrivi(&a,&c,id,nome,dati,0)));
+                    sporco=true;
+                }
+                Effetto::Sblocca(pw) => {
+                    if let Some(f) = &ui.file {
+                        sblocca(&consegne, f.path.clone(), pw, &cartella);
+                    }
+                    sporco = true;
+                }
+                Effetto::Esci => chiudi(&app),
+                Effetto::Riassumi { id, source, lines, names, prog } => {
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    let (a,c) = (app.clone(),consegne.clone());
+                    token(&c,id);
+                    std::thread::spawn(move || protetto(&c,id,|| riassumi(&a,&c, id, source, lines, names, &prog)));
+                    sporco = true;
+                }
+                Effetto::Copia(testo) => {
+                    copia_negli_appunti(&app, &testo);
+                    sporco = true;
+                }
+                Effetto::SalvaLingua(l) => {
+                    let _ = std::fs::write(&file_lingua, l);
+                    sporco = true;
+                }
+                Effetto::SalvaCaratteri(g) => {
+                    let _ = std::fs::write(&file_caratteri, if g { "grandi" } else { "normali" });
+                    sporco = true;
+                }
+                Effetto::SalvaCaso => {
+                    let c=consegne.clone();let caso=ui.labs.caso.clone();
+                    let generation=c.caso_versione.fetch_add(1,std::sync::atomic::Ordering::AcqRel)+1;
+                    std::thread::spawn(move||{
+                        let _guard=c.caso_lock.lock().unwrap_or_else(|e|e.into_inner());
+                        if c.caso_versione.load(std::sync::atomic::Ordering::Acquire)!=generation{return;}
+                        let path=cedro::config_dir().join("lab/caso.txt");
+                        let r=match caso {
+                            Some(v)=>crate::storage::atomico(&path,format!("{}\n{}\n",v.code,v.note).as_bytes()),
+                            None=>match std::fs::remove_file(&path){Err(e) if e.kind()!=std::io::ErrorKind::NotFound=>Err(e),_=>Ok(())},
+                        }.map_err(|e|e.to_string());
+                        *c.caso_esito.lock().unwrap_or_else(|e|e.into_inner())=Some(r);
+                    });
+                    sporco=true;
+                }
+                Effetto::SalvaImpostazioni => {
+                    let _ = cedro::write_settings(&ui.imp);
+                    let esiste = match ui.esiste {
+                        cedro::Exists::Replace => "sostituisci",
+                        cedro::Exists::Skip => "salta",
+                        _ => "numera",
+                    };
+                    let _ = std::fs::write(&file_impostazioni, format!("{esiste}\n{}", ui.modello_nome));
+                    ricorda_esiste(ui.esiste);
+                    sporco = true;
+                }
+                Effetto::SalvaTema(t) => {
+                    let _ = std::fs::write(&file_tema, t.key());
+                    icone_barre(&app, crate::ui::tinte::scuro(t));
+                    sporco = true;
+                }
+                Effetto::SalvaLavori => {
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    sporco = true;
+                }
+                Effetto::Scegli(Sorgente::Link) => {
+                    match cedro::webvideo::find_url(&appunti(&app)) {
+                        Some(url) => carica_file(&mut ui, &consegne, &cartella, PathBuf::from(&url), url, true),
+                        None => log::info!("negli appunti non c'è un link"),
+                    }
+                    sporco = true;
+                }
+                Effetto::Scegli(s) => {
+                    match scegli(&app, s) {
+                        Ok(()) => attesa_scelta = Some(s),
+                        Err(e) => log::error!("selettore: {e}"),
+                    }
+                    sporco = true;
+                }
+                Effetto::UsaFile(p) => {
+                    let (id,_)=ui.nuova_importazione();
+                    consegne.ultimo_import.store(id,std::sync::atomic::Ordering::Release);
+                    let (a,c)=(app.clone(),consegne.clone());
+                    std::thread::spawn(move || {
+                        let r=saf::ripristina(&a,&p).map(|_|vec![Condiviso {nome:nome_di(&p),path:p}]);
+                        c.importati.lock().unwrap_or_else(|e|e.into_inner()).push((id,Some(Sorgente::Altri),r));
+                        a.create_waker().wake();
+                    });
+                    sporco = true;
+                }
+                Effetto::Apri(p) => {
+                    let a = app.clone();
+                    std::thread::spawn(move || {
+                        if let Err(e) = apri_o_condividi(&a, &p, false) {
+                            log::error!("apri: {e}");
+                        }
+                    });
+                }
+                Effetto::Condividi(p) => {
+                    let a = app.clone();
+                    std::thread::spawn(move || {
+                        if let Err(e) = apri_o_condividi(&a, &p, true) {
+                            log::error!("condividi: {e}");
+                        }
+                    });
                 }
             }
         }

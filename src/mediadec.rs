@@ -297,9 +297,11 @@ pub(crate) struct AudioDecoder {
 }
 
 impl AudioDecoder {
-    pub(crate) fn open(path: &Path) -> Result<AudioDecoder, String> {
+    pub(crate) fn open(path: &Path) -> Result<AudioDecoder, String> {Self::open_cancellable(path,&||false)}
+    pub(crate) fn open_cancellable(path:&Path,cancel:&dyn Fn()->bool)->Result<AudioDecoder,String> {
         let file = File::open(path).map_err(|e| e.to_string())?;
-        let source_lock=file.lock_native(crate::input_file::cancelled).map_err(|e|e.to_string())?;
+        let source_lock=file.lock_native(||cancel()||crate::input_file::cancelled()).map_err(|e|e.to_string())?;
+        if cancel()||crate::input_file::cancelled(){return Err("Annullato".into());}
         let len = file.metadata().map_err(|e| e.to_string())?.len();
         let ex = unsafe { ndk_sys::AMediaExtractor_new() };
         if ex.is_null() {
