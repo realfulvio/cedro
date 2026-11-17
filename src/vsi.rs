@@ -394,7 +394,7 @@ fn nomi(vsi: &[u8]) -> Vec<(String, Option<f64>)> {
                 let senza_pixel = ["Sample Mask", "FocusMap", "FocusPoints", "Focus Map", "Focus Points"].iter().any(|s| nome.contains(s));
                 if !nome.is_empty() && !senza_pixel {
                     // I micron per pixel valgono se stanno poco prima del nome (nello stesso blocco).
-                    let um = ultimo_px.filter(|(p, _)| i - p < 4096).map(|(_, v)| v);
+                    let um = ultimo_px.filter(|(p, _)| i - p < 16384).map(|(_, v)| v);
                     out.push((nome, um));
                 }
                 ultimo_px = None;
@@ -619,7 +619,6 @@ pub fn pagine_private(path: &Path) -> Vec<usize> {
 /// La copia anonima: il .vsi con la foto del vetrino, l'etichetta e l'autore cancellati, e la cartella
 /// dei pixel con le tessere dell'etichetta e della panoramica sbiancate.
 pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, String> {
-    use std::io::Write;
     let v = Vsi::open(path)?;
     let (da, a) = (cartella(path), cartella(out));
     if a.exists() {
