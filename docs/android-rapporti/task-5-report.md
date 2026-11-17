@@ -187,3 +187,9 @@ La scoped re-review `task-5-fix1-review.md` approva `eb033a3..f5dcc48`: **2 find
 `cargo --config profile.dev.package.fdk-aac-sys.opt-level=3 run -j2 -p cedro-android --features youtube --example vista_a -- /srv/dev/scratch/cedro-ui-task5-f5dcc48`, DEVopt1/debug0/LTOoff/codegen16/incrementaltrue,nice10. Exit0,300PNG15507091B copiati `~/Documenti/cedro-android-anteprima/render-rust/task5-f5dcc48`. NonperformanceAPK. Ispezionati IT360x640referto,DE360x640onda-testo,PT800x400solo-testo,IT360x800onda-live,DE360x640nessun-parlato,PT360x640onda-prima.
 
 **Gap runtime-render da risolvere Task6:** in360x640Ondaetesto/referto il player+tabs+filtri lasciano zero frase leggibile prima del piede export. Controlli visibili e tradotti non bastano: serve area testo fruibile con48dpefont200. Assegnato implementerTask6, nonPASScomplessivolayout. LandscapePT/IT800livemostrano testo econtrolli, esitoneutroDEnessunparlatoleggibile. Nonprovasuono/touchtelefono.
+
+## Runtime Mi9T intermedio4c67b2c5299 — controller17novembre
+
+30s silenzioPCMzero, modelloBuona/Autoimpostato: job40trascrivi1.809s,0uscite, PSSUIDcampionato245421KiB, schedaneutraNessunparlatoriconosciuto30s. Vecchiosilenzio.txt95Bmtime1794863065del16nov22:04 invariato, nessunnuovofile. Old0.45stessosilenzio101.932s→“you”eraKO.
+
+FLEURSbreve7.74srealvoicefonteSHAbrief, Buona/Auto: job42trascrivi101.212s,1output175Blinguaitaliano, testo “Il che pare sensato perché non abbiamo la sensazione che la terra si muova, no?” corrispondealleparoledelriferimento, capitale/punteggiaturadiverse. PSSUIDsample1556738KiB,picchiintermedipossibilinoncatturati. Nonbenchmark4min, nessunaassertiondiarizzazione. Evidenze `~/Documenti/cedro-android-anteprima/prove-mi9t/anteprima-4c67b2c/silenzio` e `fleurs-breve`. Workerassentedopofine. UI3navrestaattivadoposharedimport/completion, bugTask6intermedio408risoltoinquestopercorso. Player/referti/focusancoradaprovare.

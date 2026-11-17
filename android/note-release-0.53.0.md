@@ -11,3 +11,4 @@ APK per Android (arm64, Android 8 o successivo).
 - Video dal web con opzioni per qualità, audio e raccolte, gestione della rete a consumo e ripresa dei download dei componenti.
 - Italiano, inglese, tedesco, spagnolo, francese e portoghese; testi adattati alla scala caratteri del telefono e controlli esposti ai servizi di accessibilità.
 - Corretti il ritorno ai Lavori dopo una condivisione, lo scroll conservato da un import precedente e i tocchi sotto la barra fissa di Aspetto.
+- Ripristino della scelta del file quando Android ricrea l’app, incluso l’originale delle firme staccate.
