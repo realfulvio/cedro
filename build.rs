@@ -1,6 +1,7 @@
 // Su Windows incorpora l'icona e i dati di versione nell'exe.
 // Su ogni piattaforma passa a Cedro le versioni delle librerie (da Cargo.lock) per la scheda Informazioni.
 fn main() {
+    android_translations();
     println!("cargo:rustc-env=CEDRO_CRATES={}", crate_versions());
     println!("cargo:rerun-if-changed=Cargo.lock");
     println!("cargo:rerun-if-changed=Cargo.toml");
@@ -91,4 +92,17 @@ fn declared(file: &str) -> Vec<(String, String)> {
         }
     }
     out
+}
+
+// La tabella condivisa resta intera sul desktop; l'APK non incorpora l'edizione ente ritirata.
+fn android_translations() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref()!=Ok("android"){return;}
+    let out=std::path::PathBuf::from(std::env::var_os("OUT_DIR").expect("Cargo OUT_DIR"));
+    for lang in ["en","de","es","fr","pt"] {
+        let path=format!("i18n/{lang}.tsv");
+        println!("cargo:rerun-if-changed={path}");
+        let text=std::fs::read_to_string(path).expect("tabella lingue");
+        let filtered=text.lines().filter(|line|!line.to_ascii_lowercase().contains("bondeno")).collect::<Vec<_>>().join("\n");
+        std::fs::write(out.join(format!("android-{lang}.tsv")),filtered).expect("tabella Android");
+    }
 }

@@ -1,11 +1,13 @@
-# Android 0.53 — note in preparazione
+APK per Android (arm64, Android 8 o successivo).
 
-Video dal web: qualità e formati nel pannello, opzioni raccolte/capitoli/sottotitoli collegate al motore, conversione dei link generici e nomi coerenti con caso o campione. Un errore dei sottotitoli non interrompe il video.
+## Novità della 0.53.0
 
-Download componenti visibili nell'app e nella notifica, con policy rete mobile/Wi-Fi, indicazione dello spazio libero e annullamento. Le raccolte da trascrivere generano lavori separati, ciascuno con il proprio audio di revisione recuperabile.
-
-Trascrizione: onda grande con tre viste, ascolto a velocità regolabile, salti di dieci secondi e zoom. Le frasi arrivano mentre il motore lavora e si possono riascoltare, correggere e riaprire dai Lavori. L'ascolto si ferma quando lasci l'app o perdi il focus audio; il lavoro continua in background.
-
-Referti con glossario veterinario, numeri e parole decisive da confermare. Esportazioni TXT, Word e sottotitoli marcate come bozza finché restano punti aperti. Silenzio e suoni stazionari passano dallo stesso controllo del desktop, senza creare un file vuoto.
-
-Le verifiche di questa versione sono ancora in corso. Queste note non attestano pubblicazione o collaudo completato.
+- Interfaccia rinnovata nelle quattro tinte Cedro: Inizio, Lavori e Impostazioni, attività colorate, catalogo dei formati per famiglie e azione principale sempre raggiungibile.
+- Word, OpenDocument, Excel e HEIC con le opzioni del motore condiviso; strumenti PDF e firma accessibili dalle rispettive attività.
+- Laboratorio con anteprime di vetrini e microscopia, selezione dei livelli, casi/campioni, figure, PDF RX e pacchetti con impronte.
+- File grandi aperti tramite i permessi del selettore Android: letture dirette dal descriptor autorizzato, con cursori separati per le anteprime e le conversioni.
+- Lavori in un processo separato, annullamento e recupero delle uscite; progressi e download dei componenti visibili anche nella notifica.
+- Ascolto con onda, velocità e salti di dieci secondi; revisione delle frasi e modalità Referti con numeri e parole da riascoltare. I risultati con controlli aperti si salvano come bozze.
+- Video dal web con opzioni per qualità, audio e raccolte, gestione della rete a consumo e ripresa dei download dei componenti.
+- Italiano, inglese, tedesco, spagnolo, francese e portoghese; testi adattati alla scala caratteri del telefono e controlli esposti ai servizi di accessibilità.
+- Corretti il ritorno ai Lavori dopo una condivisione, lo scroll conservato da un import precedente e i tocchi sotto la barra fissa di Aspetto.

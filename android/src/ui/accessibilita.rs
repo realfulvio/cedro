@@ -51,3 +51,29 @@ impl App {
         serde_json::json!({"nodes":nodes,"scroll":self.scorri_max>0.0||self.rivedi.is_some()}).to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cedro::ui::gfx::{Fonts,GlyphCache};
+    #[test]
+    fn semantic_jobs_action_is_the_real_native_hit_target() {
+        let mut app=App::new(ThemeId::Cedro);
+        let mut cache=GlyphCache::new();
+        let mut p=Painter::new(360,640,1.0,Fonts::for_theme(app.tema),&mut cache);
+        p.accessibility_text=Some(Vec::new());
+        app.disegna(&mut p,360.0,640.0);
+        let data:serde_json::Value=serde_json::from_str(&app.accessibilita(&p)).unwrap();
+        let job=data["nodes"].as_array().unwrap().iter().find(|n|n["text"]==cedro::i18n::tr("Lavori").as_ref()&&n["click"]==true).unwrap();
+        let b=&job["bounds"];let x=((b[0].as_f64().unwrap()+b[2].as_f64().unwrap())/2.0) as f32;let y=((b[1].as_f64().unwrap()+b[3].as_f64().unwrap())/2.0) as f32;
+        app.tocca_giu(x,y);app.tocca_su(x,y);
+        assert_eq!(app.sopra,Some(Scheda::Lavori));assert!(app.casa_aperta);
+    }
+    #[test]
+    fn system_text_scale_changes_measured_layout() {
+        let mut cache=GlyphCache::new();let mut p=Painter::new(360,640,1.0,Fonts::for_theme(ThemeId::Cedro),&mut cache);
+        p.larger=false;let small=p.wrap_height("Documenti professionali e immagini",16.0,Weight::Regular,200.0,22.0,0);
+        p.text_scale=2.0;let large=p.wrap_height("Documenti professionali e immagini",16.0,Weight::Regular,200.0,22.0,0);
+        assert!(large>=small*2.0);
+    }
+}
