@@ -88,3 +88,30 @@ Core: `src/whisper_android/mod.rs`, `trascrivi/src/parlato.rs`, `src/trascrizion
 Android: `worker.rs`, `glue.rs`, `ui.rs`, `ui/rivedi.rs`, `ui/pdf.rs`, `ui/casa.rs`, `ui/casa/telefono.rs`, fixture/test Voce in `web.rs` e `ui/web.rs`, ponte `CedroActivity.java`, example `prova.rs` e `vista_a.rs`, README e note release 0.53. Cinque TSV, nuovo test condiviso `tests/parlato_android.rs`.
 
 Non modificati: report Task3/Task4/Task8 del controller, `PROMPT-CODEX-tracciadoc.md`, `foto-riga/`, dipendenze/workflow release, tema desktop Task8, segreti, ambienti e telefono.
+
+## Fix round 1 — review `eb033a3`
+
+Lette integralmente le due finding Important in `task-5-review.md` e il riferimento `subagent-driven-development/references/fix-loop.md`. Entrambe accettate; nessuna modifica Task6 o fuori finding.
+
+1. **Avvio riassunto fuori viewport.** Il ramo iniziale del Riassunto non usa più una scheda fissa da 300 dp col comando in fondo al contenuto. Il bottone da 52 dp è ancorato al piede della viewport disponibile; titolo, descrizione completa del 4B e note/errori scorrono nella regione sopra, ritagliata al pannello. `scorri_max` deriva dall'altezza realmente impaginata, senza tagliare il testo a sette righe. Il bottone rimane fermo durante lo scorrimento.
+2. **Ripresa apparente dopo errore AAudio.** La transizione `Shared::fail_audio` è condivisa dal ramo Android e dalla regressione host. Lo stato fallito impedisce `Player::toggle` e `Player::seek`, `playing()` resta falso e anche `Shared::set_paused(false)` mantiene la pausa. Non viene riavviato un orologio senza thread audio. Nessun tentativo audio finto o nuova dipendenza; il comportamento desktop non fallito resta invariato.
+
+### Test di copertura aggiunti
+
+- `android/src/ui/rivedi.rs::tests::initial_summary_action_stays_visible_and_reachable_on_short_screens`: renderer reale della scheda Riassunto senza risultato in 360×640, 360×800, 800×360, 800×400, viste Onda e testo/Solo testo. Verifica rettangolo completo dentro schermo, minimo 48 dp, scorrimento reale della descrizione, bottone immobile e percorso tocco giù/su che restituisce `Effetto::Riassumi` e crea il lavoro.
+- `src/ui/player.rs::tests::failed_audio_cannot_resume_or_seek_a_virtual_clock`: stato di playback con clock precedentemente avviato, transizione di errore effettivamente usata su Android, ripetuti Play/seek e ripresa interna; verifica stato non in riproduzione, clock fermo e posizione invariata anche dopo un intervallo reale. Copre anche `ended=true` seguito da Play; nessun dispositivo audio richiesto.
+
+### Comandi/esiti dell'implementer
+
+- `git diff --check`: **PASS**, nessun output.
+- `uv run --no-project --with tree-sitter --with tree-sitter-rust python ...` sui due sorgenti: output `android/src/ui/rivedi.rs PASS`, `src/ui/player.rs PASS` (parsing sintattico).
+- Self-review del diff limitata alle due finding e ai relativi test: comando riassunto non sovrapposto alla clip del corpo; default view e orientamento invariati; nessun ramo Play può riattivare un player con `failed=true`.
+
+**Test Rust non eseguiti dall'implementer**, per istruzione esplicita source-only. Nessuna build remota/locale, adb o fmt. Prima della re-review il controller deve eseguire e allegare comando/output:
+
+```
+cargo test --lib ui::player::tests::failed_audio_cannot_resume_or_seek_a_virtual_clock -- --exact
+cargo test -p cedro-android --lib ui::rivedi::tests -- --test-threads=1
+```
+
+Restano aperti i gate fisici già elencati. Questa appendice certifica modifiche e controlli statici; non attribuisce un PASS runtime ai test nuovi.
