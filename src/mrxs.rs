@@ -9,7 +9,8 @@
 //! fondo del colore che dice lo scanner. È lo stesso schema che segue OpenSlide, rifatto in Rust.
 
 use std::collections::{HashMap, HashSet};
-use std::fs::{self, File};
+use std::fs;
+use crate::input_file::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -30,7 +31,7 @@ struct Ini(HashMap<String, HashMap<String, String>>);
 
 impl Ini {
     fn leggi(path: &Path) -> Result<Ini, String> {
-        let b = fs::read(path).map_err(|e| format!("Slidedat.ini non letto: {e}"))?;
+        let b = crate::input_file::read(path).map_err(|e| format!("Slidedat.ini non letto: {e}"))?;
         if b.len() > 4 << 20 {
             return Err("Slidedat.ini troppo grande".into());
         }
@@ -639,7 +640,7 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
                     copia(&e.path(), &a.join(e.file_name()))?;
                 } else if tipo.is_file() || (tipo.is_symlink() && e.path().is_file()) {
                     // I descriptor SAF sono alias a file: copiarli mantiene validi i riferimenti MIRAX.
-                    fs::copy(e.path(), a.join(e.file_name())).map_err(|e| e.to_string())?;
+                    crate::input_file::copy(e.path(), a.join(e.file_name())).map_err(|e| e.to_string())?;
                 } else {
                     return Err(format!("{}: file associato non regolare", e.path().display()));
                 }
@@ -647,7 +648,7 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
             Ok(())
         }
         copia(&da, &a)?;
-        fs::copy(path, out).map_err(|e| e.to_string())?;
+        crate::input_file::copy(path, out).map_err(|e| e.to_string())?;
         let mut tolti = Vec::new();
         // L'etichetta e la foto del vetrino: un JPEG bianco delle stesse misure al posto dei pixel, il resto a zero.
         for (idx, cosa) in [(s.label, "etichetta"), (s.macro_image, "foto del vetrino")] {
@@ -697,7 +698,7 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
                 f.write_all(nuovo_id.as_bytes()).map_err(|e| e.to_string())?;
             }
         }
-        let testo = fs::read(&ini).map_err(|e| e.to_string())?;
+        let testo = crate::input_file::read(&ini).map_err(|e| e.to_string())?;
         let mut cambiato = false;
         let mut nuovo = String::new();
         for riga in String::from_utf8_lossy(&testo).split_inclusive('\n') {

@@ -4,6 +4,7 @@ mod audio;
 mod symph;
 pub mod portable;
 pub mod progress;
+pub mod input_file;
 pub mod conversioni;
 pub mod credits;
 pub mod associa;
