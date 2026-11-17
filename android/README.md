@@ -125,7 +125,7 @@ Il testo usa anche `Configuration.fontScale` del telefono; il Painter misura e v
 
 ## Ingressi SAF e verifiche finali
 
-Gli input seekable grandi e i vetrini usano lease su descriptor autorizzati, senza copia preventiva. `input_file` legge questi descriptor con pread e cursori logici indipendenti; i decoder nativi con API fd ricevono direttamente il descriptor. Il nome privato conserva estensione e struttura dei sidecar. I provider non seekable richiedono una copia a flusso con controllo dello spazio e cancellazione. Le operazioni che producono esplicitamente una copia anonima continuano a produrla.
+Gli input seekable grandi e i vetrini usano lease su descriptor autorizzati, senza copia preventiva. `input_file` associa ogni percorso privato alla propria lease corrente e legge con pread e cursori logici indipendenti. Un vecchio alias non registrato dopo riavvio viene rifiutato, anche se il numero fd è stato riusato. I decoder nativi con API fd ricevono direttamente il descriptor; un lock interprocesso per la stessa sorgente protegge i loro cursori lseek/read, senza bloccare pread o altri file. Il decoder esterno usa il protocollo seekable fd soltanto se il binario concreto lo supporta. Il nome privato conserva estensione e struttura dei sidecar. I provider non seekable richiedono una copia a flusso con controllo dello spazio e cancellazione. Le operazioni che producono esplicitamente una copia anonima continuano a produrla.
 
 Le tabelle di traduzione dell'APK vengono filtrate in compilazione e le risorse dell'edizione ente ritirata sono escluse dal target Android. Le tabelle desktop non cambiano. Non sono state aggiunte dipendenze, licenze o font incorporati.
 
