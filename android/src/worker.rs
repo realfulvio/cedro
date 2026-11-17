@@ -297,6 +297,16 @@ pub fn avvia(libs: &std::path::Path, r: Richiesta, cancel: &std::sync::atomic::A
 mod tests {
     use super::*;
     #[test]
+    fn old_voice_requests_and_live_events_roundtrip() {
+        let old:Voce=serde_json::from_str(r#"{"modello":1,"voci":3}"#).unwrap();assert!(!old.referto);
+        let voice=Voce{modello:2,voci:8,referto:true};
+        let got:Voce=serde_json::from_slice(&serde_json::to_vec(&voice).unwrap()).unwrap();assert_eq!(got,voice);
+        let seg=cedro::trascrizione::Segment{t0:120,t1:340,text:"Tre mitosi".into(),speaker:Some(2)};
+        let event=Evento::Frase("/batch/.figli/2/.revisione/a.wav".into(),seg.clone());
+        match serde_json::from_slice::<Evento>(&serde_json::to_vec(&event).unwrap()).unwrap(){Evento::Frase(path,got)=>{assert_eq!(path,PathBuf::from("/batch/.figli/2/.revisione/a.wav"));assert_eq!(got,seg);},_=>panic!("evento cambiato")}
+    }
+
+    #[test]
     fn copia_anonima_micro_non_legge_il_file_e_pacchetto_contiene_i_dati() {
         let dir=crate::storage::nuova_cartella(&std::env::temp_dir()).unwrap();
         for ext in ["czi","nd2","lif"] {
