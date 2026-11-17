@@ -75,7 +75,7 @@ pub fn convert(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Option
 
 #[allow(clippy::too_many_arguments)]
 fn convert_in(
-    zip: &mut zip::ZipArchive<fs::File>,
+    zip: &mut zip::ZipArchive<crate::input_file::File>,
     source: &Path,
     action: &str,
     kinds: &[Kind],

@@ -90,7 +90,6 @@ impl File {
 #[cfg(unix)]
 impl std::os::fd::AsRawFd for File {
     fn as_raw_fd(&self)->std::os::fd::RawFd {
-        use std::os::fd::AsRawFd;
         match &self.inner {Source::Regular(f)=>f.as_raw_fd(),Source::Granted{file,..}=>file.as_raw_fd()}
     }
 }
