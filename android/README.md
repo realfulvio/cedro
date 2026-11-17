@@ -1,40 +1,20 @@
-# Cedro per Android (prototipo)
+# Cedro per Android
 
-NativeActivity in Rust puro (`android-activity`, niente Java/Kotlin). Disegna la ruota di `cedro::ui`
-(Semplificata, in verticale, palette «Windows essenziale») con tiny-skia; da «Condividi» riceve
-immagini e PDF (`content://` letto via JNI/ContentResolver) e, al tocco di una fetta, li converte
-col motore di Cedro salvando in `Documenti`.
+App arm64 per Android 8 o successivo (minSdk 26, targetSdk 34). Interfaccia e motore in Rust, disegno tiny-skia; il ponte Java gestisce le callback Android che NativeActivity non espone. Le conversioni lavorano sul telefono.
 
-Costruire: `android/build.sh` → `android/target/cedro-debug.apk` (serve rustup col target
-`aarch64-linux-android`, `cargo-ndk`, NDK r27, build-tools, platform android-30 e un JDK; vedi lo script).
-Installare: `adb install -r android/target/cedro-debug.apk`. Su Xiaomi/MIUI va prima attivato
-«Installa via USB» nelle Opzioni sviluppatore.
+Costruzione: `android/build.sh` produce `android/target/cedro-debug.apk`; con le variabili di firma documentate nello script produce l'APK di rilascio. Servono target Rust `aarch64-linux-android`, cargo-ndk, NDK r27, build-tools, platform android-30 e JDK. `CEDRO_YOUTUBE=1` include gli eseguibili per YouTube. La versione predefinita è letta dal Cargo.toml principale: 0.53.0 → versionCode 5300; non viene modificata la versione desktop. Installazione: `adb install -r android/target/cedro-debug.apk`; MIUI richiede «Installa via USB».
 
-Limiti noti: scrive in `/storage/emulated/0/Documents` (target SDK 29 + legacy storage); una nuova
-condivisione a app aperta non ricarica l'intento (chiudere e ripetere); solo arm64-v8a.
+## Interfaccia
 
-## Interfaccia (per il tocco)
+Le quattro tinte Cedro usano la variante A: **Inizio, Lavori, Impostazioni** restano le tre destinazioni. Inizio propone Converti, PDF, Trascrivi, Video dal web, Firma e Laboratorio. Il catalogo completo scorre per famiglie; le opzioni seguono il formato selezionato. I cinque temi precedenti rimangono selezionabili sul telefono.
 
-- **Barra in basso**: Ruota / Lavori / Aspetto.
-- **Ruota** a tutta larghezza: il centro è il posto del file (cerchio tratteggiato «+ Scegli un file» se vuoto; foto, prima pagina del PDF o onda audio con tipo e peso se pieno, toccabile per cambiarlo). Sotto: cursore Qualità dove il motore la usa, «Converti in X» e «Ultimi file». Orizzontale e tablet: ruota a sinistra, opzioni a destra.
-- **Cosa ne faccio?**: a tutto schermo dopo «Condividi»: il file in grande, griglia a due colonne con tutte le azioni adatte al tipo (per le immagini JPG, PNG, WebP, PDF, Comprimi, Testo/OCR, Dimezza e «Altro» che apre la ruota), Qualità e «Converti in X» sempre in basso.
-- **Scegli il file**: Foto, Documenti, Audio, Altri file (selettore di Android, `ACTION_OPEN_DOCUMENT`) e i file recenti.
-- **Lavori**: lavori in corso (barra che scorre: il motore non dà una percentuale), risultati con **Apri** e **Condividi**, cronologia (ricordata tra un avvio e l'altro, «Svuota»).
-- **Firma digitale** (attività della finestra principale, come sul computer 0.37): «Apri e verifica» sceglie un .p7m, .p7s, .m7m, .tsd, .tsr o un PDF firmato; anche gli allegati aperti dalla mail o da WhatsApp («Apri con», `ACTION_VIEW` e «Condividi») finiscono qui. Il visualizzatore (`src/ui/firma.rs`) usa lo stato del computer (`cedro::ui::firma::FirmaUi`): fascia col giudizio, una scheda per firma con i quattro controlli, poi il documento (pagine preparate da `glue` in un thread); in basso Salva, Apri, Condividi e Rapporto (scritti in Documenti/Cedro come un lavoro). Revoca online ed elenco UE dalla sezione; «Verifica una cartella» resta sul computer.
-- **Menu dei formati**: iconcina colorata e suggerimento per ogni voce (`cedro::ui::voci`), gruppi «Converti in» e strumenti; «Togli GPS e dati nascosti» tra gli strumenti delle immagini.
-- **Grafica Material 3 Expressive** nel tema base (`src/ui/m3.rs`): toni di superficie ricavati dalla tavolozza, pillole, chip, righe tonali, interruttori 52×32, barra di navigazione 64 dp con pastiglia 56×32, timbro smerlato per il giudizio delle firme. Gli altri temi tengono la loro impaginazione e prendono fogli, firma e navigazione.
-- **Animazioni** (`src/ui/anim.rs`): fogli che salgono, linea della categoria e attività che scivolano, interruttori; ferme con «Rimuovi animazioni» di Android.
-- **Aspetto**: i cinque temi di Cedro, ricordati; icone delle barre di sistema chiare o scure col tema.
-- Bersagli ≥ 48 dp, margini delle barre letti dalla finestra (JNI). Ogni controllo chiama il motore: niente controlli finti.
-- `cargo run -p cedro-android --example vista -- cartella` disegna le schermate in PNG sul computer.
+«Apri con» e «Condividi» aprono il foglio Ricevuto, con i formati e la CTA, poi riportano i risultati nella stessa pagina Lavori. Un nuovo import azzera lo scroll. Il file picker usa ACTION_OPEN_DOCUMENT e conserva il grant URI; le cartelle del Laboratorio usano OPEN_DOCUMENT_TREE. Risultati, errori e copie in attesa di pubblicazione hanno journal recuperabili. Su Android 11+ la pubblicazione usa MediaStore in Documents/Cedro; le copie private non pubblicate restano raggiungibili dai Lavori.
 
-## L'unica eccezione: una classe Java
+Il renderer usa i margini delle barre di sistema, la scala caratteri del telefono e «Rimuovi animazioni». Il normale avanzamento e l'onda non richiedono un loop continuo a 60 Hz. Gli esempi `vista_a` producono PNG dal renderer reale con fixture separate dall'app.
 
-Tutto è Rust tranne `java/it/cedro/android/CedroActivity.java` (una ventina di righe): `NativeActivity` non inoltra
-`onActivityResult`, e `onNewIntent`, quindi senza questa classe il selettore di file di Android non potrebbe restituire la scelta e una nuova condivisione a app aperta andrebbe persa.
-La classe fa solo da inoltro (`scelto()` restituisce l'ultimo `Uri`, `novita()` dice se è arrivato un nuovo intento); intento, lettura e copia del file sono in Rust (JNI).
-`build.sh` la compila con `javac` + `d8` e la mette nell'APK come `classes.dex`.
-«Apri» e «Condividi» non usano un FileProvider: il risultato si registra in MediaStore (`MediaScannerConnection`) e si usa il suo `content://`.
+## Ponte con Android
+
+`CedroActivity.java` inoltra picker/intent, mantiene i grant e l'audiofocus ed espone il provider di accessibilità descritto in fondo. `ServizioLavoro.java` mantiene la notifica dei lavori in background; `ArchiviProvider.java` pubblica in sola lettura le uscite private su richiesta. Sono adattatori OS: conversioni, player, catalogo e stato restano Rust. La pipeline è javac + d8, senza Gradle o nuove dipendenze. MediaStore e il provider privato conservano MIME/nome per Apri e Condividi.
 
 ## Icona
 
@@ -43,18 +23,17 @@ mdpi–xxxhdpi quadrata e tonda; `android:icon` e `android:roundIcon` nel manife
 
 ## Limiti noti
 
-- Scrive in `/storage/emulated/0/Documents` (target SDK 29 + legacy storage, permesso richiesto a runtime).
+- Android 8–10 usa la scrittura in Documents con il permesso legacy; Android 11+ usa MediaStore.
 - `singleTask`: una nuova condivisione a Cedro già aperto arriva da `onNewIntent` (inoltrato dalla classe Java) e sostituisce il file.
 - I lavori lunghi girano in un servizio in primo piano con notifica e percentuale.
 - «Ritaglia» non esiste nel motore, quindi non c'è. Solo arm64.
 
 ## Trascrizione (whisper.cpp nell'APK)
 
-Audio e video hanno «Testo, dalla voce, offline»: whisper.cpp è una libreria dentro l'APK (`src/whisper_android`, thread nel
-processo, niente eseguibile da scaricare); al primo uso si scarica solo il modello «Buona» (base q5_1, 60 MB; serve il permesso INTERNET).
+Audio e video hanno «Testo, dalla voce, offline»: whisper.cpp è una libreria dentro l'APK (`src/whisper_android`, processo worker separato, nessun motore da scaricare); al primo uso si scarica solo il modello «Buona» (base q5_1, 60 MB; serve il permesso INTERNET).
 Compilato con dotprod+fp16 (`WHISPER_ARCH`), con controllo HWCAP a runtime; l'APK porta `libc++_shared.so`.
 
-Misure sul Mi 9T (Snapdragon 730, 2 core grandi + 6 piccoli, 5,7 GB), voce italiana sintetica di 12 s:
+Misure storiche della base, non del candidato 0.53: Mi 9T (Snapdragon 730, 2 core grandi + 6 piccoli, 5,7 GB), voce italiana sintetica di 12 s:
 tiny 4,7 s (228 MB di RAM), base 8–9 s (370 MB), small circa 5× più lento del tempo reale (660 MB: sconsigliato).
 Thread: 2 sui core grandi 11,5 s, 7 thread 8,2–9,6 s (per questo ora si usano tutti i core meno uno).
 Dotprod+fp16 contro solo NEON: 9,6 s contro 12,5 s (−23 %).
@@ -94,7 +73,7 @@ Per MRXS scegliere la cartella contenente l’header `.mrxs` e la cartella dati 
 
 Il caso/campione viene salvato atomicamente nello stesso `lab/caso.txt` usato dal motore; il codice passa alle `Options`, la nota privata non entra nei nomi o nei lavori. I risultati conservano il caso di quando è partito il lavoro anche se il caso attivo cambia. «Copia per il quaderno» copia soltanto su richiesta i nomi dei risultati odierni del caso attivo (tutti se non c’è un caso). «Togli caso» ripristina i nomi ordinari. Il modello dei nomi e il caso si applicano anche ai download web diretti, alle raccolte e ai file dei capitoli, una sola volta per risultato.
 
-Stato delle prove di questa implementazione: parsing e controlli statici locali, **non ancora collaudo del candidato Android**. DICOM è ancora letto interamente dal motore comune; i piani di microscopia e gli originali di firme staccate possono richiedere molta RAM. Non è imposto un limite arbitrario al file. RAM/tempo sui campioni grandi, font, anteprime e provider SAF reali restano gate prima della pubblicazione. Comandi e risultati effettivi in `.superpowers/sdd/ESECUZIONE/task-3-report.md`.
+Stato delle prove di questa implementazione: parsing e controlli statici locali, **non ancora collaudo del candidato Android**. DICOM è ancora letto interamente dal motore comune; i piani di microscopia e gli originali di firme staccate possono richiedere molta RAM. Non è imposto un limite arbitrario al file. RAM/tempo sui campioni grandi, font, anteprime e provider SAF reali restano gate prima della pubblicazione. Comandi e risultati effettivi in [rapporto Task 3](../docs/android-rapporti/task-3-report.md).
 
 
 ## Video dal web — ramo Android 0.53, verifiche in corso
@@ -115,7 +94,7 @@ Gate di collaudo: build con/senza YouTube, test host, rendering IT/DE/PT e prove
 
 «Evita copie già salvate» è una policy del singolo lavoro: non cambia la preferenza globale. Il marker privato `.web-request` identifica link, opzioni e caso; il flag per evitare duplicati e la modalità Exists non fanno parte della firma di contenuto. Prima di pubblicare vengono consultati i journal `.pronti` compatibili, verificati i nomi relativi e l'esistenza effettiva degli URI (mai `is_pending=1`). Per insiemi identici si riusa il namespace della raccolta. Le copie già presenti passano comunque per prenotazione e commit del nuovo journal prima di rimuovere la copia privata. Un file eliminato viene pubblicato di nuovo. Questo evita copie duplicate, ma il download e l'eventuale trascrizione possono avvenire comunque. Non viene creato un archivio yt-dlp che dia per presenti file cancellati dall'utente.
 
-## Trascrizione e ascolto Android 0.53 (gate reali ancora da eseguire)
+## Trascrizione e ascolto Android 0.53
 
 Il player condiviso riproduce via cpal/AAudio in Rust. La velocità ricampiona il segnale
 (e cambia anche l'altezza della voce); volume con i tasti del telefono. Onda in thread,
@@ -142,3 +121,12 @@ gate del controller; questa sezione descrive l'implementazione, non un esito mis
 Il testo usa anche `Configuration.fontScale` del telefono; il Painter misura e va a capo con lo stesso fattore usato per disegnare. Le famiglie del catalogo si dispongono su più righe quando le etichette non entrano. Figtree resta il carattere dei temi Cedro; per nomi cirillici, arabi e CJK si carica un Noto/Roboto di sistema soltanto al primo glifo mancante. Non si aggiungono font all'APK. Il pittore a glifi conserva un limite: non è un motore completo di shaping bidirezionale per paragrafi arabi.
 
 `NativeActivity` non espone i controlli disegnati da Rust. Per questo `CedroActivity` ospita un `AccessibilityNodeProvider` sulla superficie trasparente: riceve testo completo, bounds visibili e bersagli reali dal frame Rust. Click e scorrimento vengono inoltrati allo stesso percorso di input nativo; non esiste una seconda implementazione dei comandi. Il provider gestisce focus ed esplorazione TalkBack, con stato selezionato delle scelte principali. È un'estensione motivata dell'eccezione Java già necessaria per SAF/audiofocus, senza nuova dipendenza o permesso. La verifica con UIAutomator/TalkBack sul candidato resta nel rapporto finale: l'implementazione da sola non certifica il collaudo.
+
+
+## Ingressi SAF e verifiche finali
+
+Gli input seekable grandi e i vetrini usano lease su descriptor autorizzati, senza copia preventiva. `input_file` legge questi descriptor con pread e cursori logici indipendenti; i decoder nativi con API fd ricevono direttamente il descriptor. Il nome privato conserva estensione e struttura dei sidecar. I provider non seekable richiedono una copia a flusso con controllo dello spazio e cancellazione. Le operazioni che producono esplicitamente una copia anonima continuano a produrla.
+
+Le tabelle di traduzione dell'APK vengono filtrate in compilazione e le risorse dell'edizione ente ritirata sono escluse dal target Android. Le tabelle desktop non cambiano. Non sono state aggiunte dipendenze, licenze o font incorporati.
+
+Il controllo statico `python3 android/tools/check-i18n.py` verifica le chiavi letterali delle chiamate di testo/traduzione e stampa le mancanze nelle cinque lingue. Non sostituisce il controllo delle stringhe costruite dinamicamente né il collaudo delle sei lingue sul telefono. Rapporti conservati in [docs/android-rapporti](../docs/android-rapporti/); distinguono prove host, APK intermedi e candidato finale. Il controller completa misure, collaudo e review prima della pubblicazione.

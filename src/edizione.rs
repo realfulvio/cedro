@@ -19,7 +19,10 @@ pub fn bondeno() -> bool {
 }
 
 /// La chiave di `ui_theme` del tema Bondeno.
+#[cfg(not(target_os="android"))]
 pub const CHIAVE_TEMA: &str = "bondeno";
+#[cfg(target_os="android")]
+pub const CHIAVE_TEMA: &str = "";
 
 /// Chiamata da `settings` ogni volta che legge o scrive l'impostazione del tema.
 pub(crate) fn segui_tema(ui_theme: &str) {
@@ -32,7 +35,10 @@ pub fn nome() -> Option<&'static str> {
     bondeno().then_some(NOME)
 }
 
+#[cfg(not(target_os="android"))]
 const NOME: &str = "Comune di Bondeno";
+#[cfg(target_os="android")]
+const NOME: &str = "";
 
 /// L'icona dell'app (menu, area di notifica, Informazioni su Linux): lo Spicchio, con ogni tema.
 /// Su Windows la icona sta nell'exe (build.rs la prende da `assets/cedro.ico`).
@@ -41,14 +47,23 @@ pub const ICONA: &[u8] = include_bytes!("../assets/icon-256.png");
 /// Gli stemmi stanno sempre nel programma e si disegnano solo con il tema Bondeno.
 ///
 /// Solo lo stemma, a colori, su fondo trasparente (PNG 300×300).
+#[cfg(not(target_os="android"))]
 pub const STEMMA: &[u8] = include_bytes!("../assets/bondeno/Stemma-Comune-di-Bondeno.png");
+#[cfg(target_os="android")]
+pub const STEMMA: &[u8] = &[];
 /// Lo stemma con la scritta «Città di Bondeno» dentro il cerchio, su fondo trasparente.
 /// Il PNG del sito ha 50 pixel di margine vuoto per lato: chi lo disegna ritaglia [`SCRITTA_RITAGLIO`].
+#[cfg(not(target_os="android"))]
 pub const SCRITTA: &[u8] = include_bytes!("../assets/bondeno/Stemma-del-Comune-di-Bondeno-1.png");
+#[cfg(target_os="android")]
+pub const SCRITTA: &[u8] = &[];
 /// Il quadrato utile di [`SCRITTA`]: x, y, lato (il resto è trasparente).
 pub const SCRITTA_RITAGLIO: (u32, u32, u32) = (50, 50, 200);
 /// Lo stemma con scritta in un cerchio bianco pieno: si legge sulla barra blu della guida.
+#[cfg(not(target_os="android"))]
 pub const CERCHIO: &[u8] = include_bytes!("../assets/bondeno/Stemma-del-Comune-di-Bondeno-3.png");
+#[cfg(target_os="android")]
+pub const CERCHIO: &[u8] = &[];
 
 /// Quale dei tre stemmi.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

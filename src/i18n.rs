@@ -265,6 +265,11 @@ fn parse_table(text: &str) -> Table {
     Table { exact, templates, fragments }
 }
 
+#[cfg(target_os="android")]
+macro_rules! translation_table {($lang:literal)=>{include_str!(concat!(env!("OUT_DIR"),"/android-",$lang,".tsv"))};}
+#[cfg(not(target_os="android"))]
+macro_rules! translation_table {($lang:literal)=>{include_str!(concat!("../i18n/",$lang,".tsv"))};}
+
 /// Le traduzioni di una lingua (`It` non ne ha: è il testo del codice). Le tabelle si leggono al primo uso.
 fn table_of(l: Lang) -> Option<&'static Table> {
     static EN: OnceLock<Table> = OnceLock::new();
@@ -274,11 +279,11 @@ fn table_of(l: Lang) -> Option<&'static Table> {
     static PT: OnceLock<Table> = OnceLock::new();
     Some(match l {
         Lang::It => return None,
-        Lang::En => EN.get_or_init(|| parse_table(include_str!("../i18n/en.tsv"))),
-        Lang::Es => ES.get_or_init(|| parse_table(include_str!("../i18n/es.tsv"))),
-        Lang::De => DE.get_or_init(|| parse_table(include_str!("../i18n/de.tsv"))),
-        Lang::Fr => FR.get_or_init(|| parse_table(include_str!("../i18n/fr.tsv"))),
-        Lang::Pt => PT.get_or_init(|| parse_table(include_str!("../i18n/pt.tsv"))),
+        Lang::En => EN.get_or_init(|| parse_table(translation_table!("en"))),
+        Lang::Es => ES.get_or_init(|| parse_table(translation_table!("es"))),
+        Lang::De => DE.get_or_init(|| parse_table(translation_table!("de"))),
+        Lang::Fr => FR.get_or_init(|| parse_table(translation_table!("fr"))),
+        Lang::Pt => PT.get_or_init(|| parse_table(translation_table!("pt"))),
     })
 }
 

@@ -398,6 +398,13 @@ fn passa_a_tema(dir: &Path, marker: &str, chiave: &str) {
 
 /// I file lasciati dall'installatore: Bondeno, poi Cedro 4 Labs (se ci sono tutti e due vale l'ultimo).
 fn passa_a_bondeno(dir: &Path) {
+    // Labs ha precedenza anche se entrambi i marker arrivano in una cartella nuova.
+    // Non creare prima una configurazione Simple dal marker della vecchia edizione.
+    if !dir.join("config.txt").exists() && dir.join(DA_LABS).is_file() {
+        passa_a_tema(dir, DA_LABS, crate::ui::theme::ThemeId::CedroLabs.key());
+        if !dir.join(DA_LABS).exists(){let _=fs::remove_file(dir.join(DA_BONDENO));}
+        return;
+    }
     passa_a_tema(dir, DA_BONDENO, crate::ui::theme::ThemeId::Cedro.key());
     passa_a_tema(dir, DA_LABS, crate::ui::theme::ThemeId::CedroLabs.key());
 }
@@ -704,6 +711,7 @@ mod desktop_theme_tests {
         assert!(fs::read_to_string(&path).unwrap().contains("futuro=resta"));
         fs::remove_file(&path).unwrap();
         fs::write(dir.join(DA_LABS), "").unwrap();
+        fs::write(dir.join(DA_BONDENO), "").unwrap();
         let new = read_settings_in(&dir);
         assert_eq!((new.ui_theme.as_str(), new.simple), ("cedro-labs", false));
         let _ = fs::remove_dir_all(&dir);
