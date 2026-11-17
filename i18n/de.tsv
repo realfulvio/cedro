@@ -1953,8 +1953,8 @@ PDF non scritto: {}	PDF nicht geschrieben: {}
 numeri veri, geni come testo	echte Zahlen, Gene als Text
 Excel con {#} righe.	Excel mit {} Zeilen.
 Numeri con la virgola letti come numeri.	Zahlen mit Dezimalkomma als Zahlen gelesen.
-Piastra da {#} pozzetti anche una riga per pozzetto (foglio Pozzetti).	{}-Well-Platte zusätzlich mit einer Zeile pro Well angelegt (Blatt Pozzetti).
-{#} piastre da {#} pozzetti, anche una riga per pozzetto (foglio Pozzetti).	{} Platten mit {} Wells, zusätzlich mit einer Zeile pro Well angelegt (Blatt Pozzetti).
+Piastra da {#} pozzetti anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).	{}-Well-Platte zusätzlich als Farbkarte (Blatt Mappa) und mit einer Zeile pro Well (Blatt Pozzetti).
+{#} piastre da {#} pozzetti, anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).	{} Platten mit {} Wells, zusätzlich als Farbkarte (Blatt Mappa) und mit einer Zeile pro Well (Blatt Pozzetti).
 Nomi di geni e codici lasciati come testo.	Gennamen und Codes als Text beibehalten.
 CSV dal foglio di calcolo	CSV aus der Tabelle
 {#} fogli: un CSV per foglio	{} Blätter: eine CSV pro Blatt
@@ -2703,6 +2703,35 @@ Vista di partenza	Startansicht
 pagine	Seiten
 Il decoder esterno non supporta la lettura diretta del file autorizzato	Der externe Decoder unterstützt das direkte Lesen der freigegebenen Datei nicht
 Il decoder esterno non ha letto il file autorizzato	Der externe Decoder konnte die freigegebene Datei nicht lesen
+Registro in Excel	Protokoll als Excel
+Registro salvato:	Protokoll gespeichert:
+Registro non salvato:	Protokoll nicht gespeichert:
+Registro lavori	Arbeitsprotokoll
+Data	Datum
+Ora	Uhrzeit
+Attività	Aktivität
+Nota del caso	Fallnotiz
+CD DICOM	DICOM-CD
+immagine	Bild
+paziente	Patient
+pazienti	Patienten
+mancanti	fehlen
+il DICOMDIR non elenca nessun file	das DICOMDIR listet keine Dateien auf
+REFERTO	BEFUND
+Dettato il {} · {} · {} di audio	Diktiert am {} · {} · {} Audio
+Specie	Tierart
+Campione	Probe
+Descrizione macroscopica	Makroskopische Beschreibung
+Descrizione microscopica	Mikroskopische Beschreibung
+Diagnosi	Diagnose
+Anamnesi	Anamnese
+Margini	Ränder
+Commento	Kommentar
+Conclusioni	Schlussfolgerungen
+Note	Anmerkungen
+Firma del refertante	Unterschrift des Befundenden
+BOZZA · da non firmare	ENTWURF · nicht unterschreiben
+Pagina {} di {}	Seite {} von {}
 Da che file parti?	Mit welcher Datei fängst du an?
 Tocca un tipo, oppure condividi un file a Cedro da un'altra app.	Tippe auf einen Typ oder teile eine Datei aus einer anderen App mit Cedro.
 Vetrini, DICOM, casi e campioni	Objektträger, DICOM, Fälle und Proben

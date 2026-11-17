@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "cedro"
-version = "0.53.0"
+version = "0.54.0"
 dependencies = [
  "avif-decode",
  "base64 0.22.1",
@@ -637,8 +637,8 @@ dependencies = [
  "cedro",
  "image",
  "jni 0.21.1",
- "log",
  "libc",
+ "log",
  "serde",
  "serde_json",
 ]

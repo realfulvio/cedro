@@ -256,10 +256,73 @@ pub fn anonimizza_sul_posto(path: &Path) -> Result<Vec<&'static str>, String> {
 }
 
 
+/// Le pagine `pagine` di un TIFF (le miniature di un Olympus .vsi) diventano bianche, senza toglierle
+/// dalla catena (i lettori VSI le contano); autore e data spariscono da tutte le pagine.
+pub(crate) fn sbianca_pagine(path: &Path, pagine: &[usize]) -> Result<Vec<&'static str>, String> {
+    let mut f = OpenOptions::new().read(true).write(true).open(path).map_err(|e| e.to_string())?;
+    let (t, pag) = self::pagine(&mut f)?;
+    let mut tolti = Vec::new();
+    for (i, p) in pag.iter().enumerate() {
+        if pagine.contains(&i) {
+            let valore = |tag: u16| p.voci.iter().find(|v| v.tag == tag);
+            let off = p.voci.iter().find(|v| v.tag == 273 || v.tag == 324);
+            let cnt = p.voci.iter().find(|v| v.tag == 279 || v.tag == 325);
+            let compressione = match valore(259) {
+                Some(v) => interi(&mut f, &t, v)?.first().copied().unwrap_or(1),
+                None => 1,
+            };
+            let misure = (valore(256).map(|v| interi(&mut f, &t, v)), valore(257).map(|v| interi(&mut f, &t, v)));
+            let (w, h) = match misure {
+                (Some(Ok(w)), Some(Ok(h))) => (w.first().copied().unwrap_or(64) as u32, h.first().copied().unwrap_or(64) as u32),
+                _ => (64, 64),
+            };
+            // Un JPEG bianco delle stesse misure, se ci sta al posto dei pixel; se no zeri. Senza compressione, bianco.
+            let mut bianco = Vec::new();
+            if compressione == 7 && w > 0 && h > 0 && w <= 16384 && h <= 16384 {
+                image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bianco, 50)
+                    .encode_image(&RgbImage::from_pixel(w, h, image::Rgb([255, 255, 255])))
+                    .map_err(|e| e.to_string())?;
+            }
+            if let (Some(o), Some(c)) = (off, cnt) {
+                let (o, c) = (interi(&mut f, &t, o)?, interi(&mut f, &t, c)?);
+                let una_striscia = o.len() == 1;
+                for (o, c) in o.iter().zip(&c) {
+                    let mut dati = if una_striscia && !bianco.is_empty() && bianco.len() as u64 <= *c { bianco.clone() } else { Vec::new() };
+                    let riempi = if compressione == 1 { 255 } else { 0 };
+                    dati.resize((*c).min(1 << 28) as usize, riempi);
+                    scrivi_a(&mut f, *o, &dati)?;
+                }
+            }
+            if i == 0 {
+                tolti.push("foto del vetrino");
+            } else if !tolti.contains(&"etichetta") {
+                tolti.push("etichetta");
+            }
+        }
+        for v in p.voci.iter().filter(|v| TAG_PERSONALI.contains(&v.tag) && matches!(v.tipo, 1 | 2 | 7) && v.n > 0 && v.n <= 1 << 24) {
+            let vecchio = leggi_a(&mut f, v.pos_valore, v.n as usize)?;
+            let nuovo: Vec<u8> = vecchio.iter().map(|b| if *b == 0 { 0 } else { b' ' }).collect();
+            if nuovo != vecchio {
+                scrivi_a(&mut f, v.pos_valore, &nuovo)?;
+                if !tolti.contains(&"autore, computer e XMP") {
+                    tolti.push("autore, computer e XMP");
+                }
+            }
+        }
+        if let Some(v) = p.voci.iter().find(|v| v.tag == 306 && v.tipo == 2 && v.n > 1) {
+            scrivi_a(&mut f, v.pos_valore, &vec![b' '; v.n as usize - 1])?;
+        }
+    }
+    f.flush().map_err(|e| e.to_string())?;
+    Ok(tolti)
+}
+
 /// L'estensione giusta per la copia del vetrino: quella del suo formato.
 pub fn estensione(path: &Path) -> &'static str {
     if crate::mrxs::is_mirax(path) {
         "mrxs"
+    } else if crate::engine::extension(path) == "vsi" {
+        "vsi"
     } else if crate::ndpi::is_ndpi(path) {
         "ndpi"
     } else {
@@ -272,6 +335,9 @@ pub fn estensione(path: &Path) -> &'static str {
 pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, String> {
     if crate::mrxs::is_mirax(path) {
         return crate::mrxs::copia_anonima(path, out);
+    }
+    if crate::engine::extension(path) == "vsi" {
+        return crate::vsi::copia_anonima(path, out);
     }
     fs::copy(path, out).map_err(|e| e.to_string())?;
     let fatto = if crate::ndpi::is_ndpi(path) { crate::ndpi::anonimizza_sul_posto(out) } else { anonimizza_sul_posto(out) };
@@ -896,6 +962,7 @@ pub fn consulto(path: &Path, out: &Path, codice: &str, avanzamento: &dyn Fn(f32)
             crate::svs::Vendor::Mirax => "Il vetrino (il file .mrxs con la sua cartella accanto) si apre con QuPath, CaseViewer o Cedro.",
             crate::svs::Vendor::Hamamatsu => "Il vetrino si apre con QuPath, NDP.view o Cedro.",
             crate::svs::Vendor::Aperio => "Il vetrino si apre con QuPath, ImageScope o Cedro.",
+            crate::svs::Vendor::Olympus => "Il vetrino (il file .vsi con la sua cartella _nome_ accanto) si apre con QuPath, OlyVIA o Cedro.",
         });
         scheda.push_str(" Le impronte SHA-256 di ogni file sono in manifest-sha256.txt.\n");
         let txt = tmp.join(format!("{codice}-scheda.txt"));
@@ -903,6 +970,9 @@ pub fn consulto(path: &Path, out: &Path, codice: &str, avanzamento: &dyn Fn(f32)
         let mut files = vec![svs.clone(), jpg, txt];
         if s.vendor == crate::svs::Vendor::Mirax {
             files.insert(1, svs.with_extension(""));
+        }
+        if s.vendor == crate::svs::Vendor::Olympus {
+            files.insert(1, crate::vsi::cartella(&svs));
         }
         let n = files.len();
         let nome = out.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| codice.to_string());
