@@ -62,6 +62,29 @@ fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, sc
             }
             if scene==15 {app.grandi=true;app.vista_scorri(300.0);}
         }
+        26..=32=>{
+            use cedro::trascrizione::Segment;
+            use cedro::ui::review::Review;
+            let src=PathBuf::from("/fixture/Referto.wav");
+            let rows=vec![
+                Segment{t0:0,t1:800,text:"Tre mitosi in due punto cinque centimetri.".into(),speaker:Some(0)},
+                Segment{t0:800,t1:1500,text:"Non si osserva atipia. La lesione è a sinistra.".into(),speaker:Some(1)},
+                Segment{t0:1500,t1:2200,text:"Il campione è pronto per la revisione.".into(),speaker:Some(2)},
+            ];
+            let bars:Vec<_>=(0..600).map(|i|0.08+0.8*((i as f32*0.137).sin()*(i as f32*0.031).cos()).abs()).collect();
+            if scene==31 {
+                app.vista_nav(3);app.aggiungi_coda(vec![(src.clone(),"Riunione.wav".into(),Kind::Audio)]);
+                app.onda_trascrizione(&src,Some(bars),243.3);app.referto=true;app.vista_scorri(190.0);
+            }else if scene==32 {
+                app.sopra=Some(Scheda::Lavori);
+                app.lavori.push(Lavoro{id:4,origine:"Silenzio.wav".into(),etichetta:"Testo".into(),conv:false,inizio:Instant::now(),quando:cedro_android::ui::adesso(),stato:Stato::Fatto{path:PathBuf::new(),nome:String::new(),msg:format!("{} · 30,0 s. {}",i18n::tr("Nessun parlato riconosciuto"),i18n::tr("Prova una registrazione con la voce più vicina al microfono."))},prog:Default::default(),sorgente:None,controlli:None});
+            }else{
+                let mut r=Review::new(&src,243.3,"it".into(),rows.clone(),vec!["Voce uno".into(),"Voce due".into(),"Voce tre".into()],None);
+                r.referto=scene==27;r.bars=Some(bars);r.detect();r.view=match scene{28=>2,29=>0,_=>1};
+                app.apri_rivedi_con(r,"Referto di prova".into(),0,None,None);
+                if scene==30 {app.frase_trascritta(7,src.clone(),None,243.3);for row in rows{app.frase_trascritta(7,src.clone(),Some(row),0.0);}}
+            }
+        }
         17..=25=>{
             app.vista_nav(4);
             app.casa.link=if scene<=20{"https://www.youtube.com/watch?v=fixture"}else{"https://example.org/video.mp4"}.into();
@@ -95,7 +118,7 @@ fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, sc
 fn main() {
     let out = PathBuf::from(std::env::args().nth(1).unwrap_or_else(|| "/tmp/vista-a".into()));
     std::fs::create_dir_all(&out).unwrap();
-    let scenes = ["inizio", "converti", "pdf", "trascrivi", "web", "firma", "labs", "lavori", "impostazioni", "condividi", "grandi", "labs-livello", "labs-czi", "labs-dicom", "caso", "labs-grandi", "famiglie-grandi", "web-youtube", "web-youtube-qualita", "web-youtube-opzioni", "web-youtube-raccolte", "web-generico", "web-generico-qualita", "web-generico-opzioni", "componente-progresso", "componente-errore-rete"];
+    let scenes = ["inizio", "converti", "pdf", "trascrivi", "web", "firma", "labs", "lavori", "impostazioni", "condividi", "grandi", "labs-livello", "labs-czi", "labs-dicom", "caso", "labs-grandi", "famiglie-grandi", "web-youtube", "web-youtube-qualita", "web-youtube-opzioni", "web-youtube-raccolte", "web-generico", "web-generico-qualita", "web-generico-opzioni", "componente-progresso", "componente-errore-rete", "onda-testo", "referto", "solo-testo", "solo-onda", "onda-live", "onda-prima", "nessun-parlato"];
     for lang in [Lang::It, Lang::De, Lang::Pt] {
         for (w, h) in [(360.0, 800.0), (360.0, 640.0), (800.0, 400.0)] {
             for (scene, name) in scenes.iter().enumerate() {

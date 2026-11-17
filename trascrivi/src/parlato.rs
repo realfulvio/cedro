@@ -92,13 +92,13 @@ mod tests {
 
     #[test]
     fn silence_hum_tone_and_noise_are_not_speech() {
-        assert!(!has_speech(&vec![0.0; secs(5)]));
-        let hum: Vec<f32> = (0..secs(5)).map(|i| 0.05 * (i as f32 * 2.0 * std::f32::consts::PI * 50.0 / RATE as f32).sin()).collect();
+        assert!(!has_speech(&vec![0.0; secs(30)]));
+        let hum: Vec<f32> = (0..secs(30)).map(|i| 0.05 * (i as f32 * 2.0 * std::f32::consts::PI * 50.0 / RATE as f32).sin()).collect();
         assert!(!has_speech(&hum));
-        let tone: Vec<f32> = (0..secs(5)).map(|i| 0.3 * (i as f32 * 2.0 * std::f32::consts::PI * 440.0 / RATE as f32).sin()).collect();
+        let tone: Vec<f32> = (0..secs(30)).map(|i| 0.3 * (i as f32 * 2.0 * std::f32::consts::PI * 440.0 / RATE as f32).sin()).collect();
         assert!(!has_speech(&tone));
         let mut seed = 7;
-        let noise: Vec<f32> = (0..secs(5)).map(|_| 0.1 * lcg(&mut seed)).collect();
+        let noise: Vec<f32> = (0..secs(30)).map(|_| 0.1 * lcg(&mut seed)).collect();
         assert!(!has_speech(&noise));
     }
 
@@ -133,4 +133,16 @@ mod tests {
     fn too_short_audio_is_not_speech() {
         assert!(!has_speech(&vec![0.5; 100]));
     }
+    #[test]
+    fn empty_probe_is_finite() { assert_eq!(best_range(&[]),0.0);assert!(!has_speech(&[])); }
+
+    /// Fixture esterna esplicita: non dipende dal filesystem privato in CI.
+    #[test]
+    #[ignore = "impostare CEDRO_SPEECH_FIXTURE a un WAV di voce reale, per esempio FLEURS it_it"]
+    fn real_voice_passes_shared_detector() {
+        let path=std::env::var("CEDRO_SPEECH_FIXTURE").expect("fixture vocale esplicita");
+        let samples=super::super::decode::to_16k_mono(std::path::Path::new(&path)).unwrap_or_else(|_|panic!("decodifica fixture"));
+        assert!(has_speech(&samples),"voce reale scartata, escursione {} dB",best_range(&samples));
+    }
+
 }
