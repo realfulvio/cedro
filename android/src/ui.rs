@@ -1611,10 +1611,16 @@ impl App {
         p.disc_a(cx, cy + 2.0, ro + 1.0, (0, 0, 0), 0.06);
         let (corner, gap) = (10.0, 3.0);
         let dimm = if attivo { 1.0 } else { 0.55 };
+        // Dopo «Condividi» il pulsante dice la riga preselezionata del foglio: lo spicchio acceso è lo stesso.
+        let dal_foglio_id = if self.foglio && self.tema.is_cedro() { self.righe_ora().get(self.tessera).map(|r| r.id) } else { None };
         for (i, f) in fette.iter().enumerate() {
             let a0 = -std::f32::consts::FRAC_PI_2 + i as f32 * sweep;
             let a1 = a0 + sweep;
-            let sel = attivo && self.scelta == Some(i);
+            let sel = attivo
+                && match dal_foglio_id {
+                    Some(id) => f.id == id || (id == "jpg" && f.id == "jpeg"),
+                    None => self.scelta == Some(i),
+                };
             let premuta = self.premuto == Some(Azione::Fetta(i));
             let fondo = if sel {
                 pal.primary
