@@ -16,6 +16,8 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
     private volatile Uri[] scelti;
     private volatile boolean novita;
 
+    public float fontScale() { return getResources().getConfiguration().fontScale; }
+
     private android.media.AudioManager audioManager;
     private android.media.AudioFocusRequest audioRequest;
     private boolean audioOwned;
@@ -69,6 +71,8 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
     @Override
     protected void onCreate(Bundle stato) {
         super.onCreate(stato);
+        accessibleSurface = new AccessibleSurface(this);
+        addContentView(accessibleSurface, new android.view.ViewGroup.LayoutParams(-1, -1));
         ricordaIntento(getIntent());
         registerReceiver(audioNoisy, new android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY));
     }
@@ -135,4 +139,126 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
         scelti = null;
         return u;
     }
+    // NativeActivity espone un'unica superficie: il provider riflette i controlli Rust reali.
+    private AccessibleSurface accessibleSurface;
+    public void accessibilitySnapshot(final String json) {
+        runOnUiThread(() -> { if (accessibleSurface != null) accessibleSurface.update(json); });
+    }
+    private final class AccessibleSurface extends android.view.View {
+        private final android.util.SparseArray<org.json.JSONObject> nodes = new android.util.SparseArray<>();
+        private final java.util.ArrayList<Integer> order = new java.util.ArrayList<>();
+        private int focused = -1, hovered = -1;
+        private boolean scrollable;
+        private String previous = "";
+        AccessibleSurface(android.content.Context context) {
+            super(context);
+            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
+            setFocusable(false);
+        }
+        void update(String json) {
+            if (previous.equals(json)) return;
+            try {
+                org.json.JSONObject data = new org.json.JSONObject(json);
+                org.json.JSONArray list = data.getJSONArray("nodes");
+                nodes.clear(); order.clear();
+                for (int i = 0; i < list.length(); i++) {
+                    org.json.JSONObject node = list.getJSONObject(i);
+                    int id = node.getInt("id");
+                    nodes.put(id, node); order.add(id);
+                }
+                scrollable = data.optBoolean("scroll");
+                previous = json;
+                if (nodes.get(focused) == null) focused = -1;
+                sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
+            } catch (org.json.JSONException e) { android.util.Log.w("Cedro", "Snapshot accessibilità non valido"); }
+        }
+        private android.graphics.Rect bounds(org.json.JSONObject node) {
+            org.json.JSONArray r = node.optJSONArray("bounds");
+            return r == null ? new android.graphics.Rect() : new android.graphics.Rect((int)r.optDouble(0),(int)r.optDouble(1),(int)r.optDouble(2),(int)r.optDouble(3));
+        }
+        private void event(int id, int type) {
+            android.view.accessibility.AccessibilityEvent e = android.view.accessibility.AccessibilityEvent.obtain(type);
+            e.setPackageName(getPackageName()); e.setClassName("android.view.View"); e.setSource(this, id);
+            org.json.JSONObject n = nodes.get(id);
+            if (n != null) e.getText().add(n.optString("text"));
+            getParent().requestSendAccessibilityEvent(this, e);
+        }
+        private void touch(int action, float x, float y, long down, long time) {
+            android.view.MotionEvent e = android.view.MotionEvent.obtain(down,time,action,x,y,0);
+            CedroActivity.this.dispatchTouchEvent(e); e.recycle();
+        }
+        @Override public boolean onTouchEvent(android.view.MotionEvent e) { return false; }
+        @Override public boolean onHoverEvent(android.view.MotionEvent e) {
+            android.view.accessibility.AccessibilityManager manager = (android.view.accessibility.AccessibilityManager)getSystemService(ACCESSIBILITY_SERVICE);
+            if (!manager.isTouchExplorationEnabled()) return false;
+            int id = -1;
+            if (e.getAction() != android.view.MotionEvent.ACTION_HOVER_EXIT) {
+                for (int k = order.size()-1; k >= 0; k--) {
+                    int candidate = order.get(k);
+                    if (bounds(nodes.get(candidate)).contains((int)e.getX(),(int)e.getY())) { id = candidate; break; }
+                }
+            }
+            if (id != hovered) {
+                if (hovered != -1) event(hovered,android.view.accessibility.AccessibilityEvent.TYPE_VIEW_HOVER_EXIT);
+                hovered = id;
+                if (id != -1) event(id,android.view.accessibility.AccessibilityEvent.TYPE_VIEW_HOVER_ENTER);
+            }
+            return true;
+        }
+        @Override public android.view.accessibility.AccessibilityNodeProvider getAccessibilityNodeProvider() { return provider; }
+        private final android.view.accessibility.AccessibilityNodeProvider provider = new android.view.accessibility.AccessibilityNodeProvider() {
+            @Override public android.view.accessibility.AccessibilityNodeInfo createAccessibilityNodeInfo(int id) {
+                if (id == HOST_VIEW_ID) {
+                    android.view.accessibility.AccessibilityNodeInfo info = android.view.accessibility.AccessibilityNodeInfo.obtain(AccessibleSurface.this);
+                    onInitializeAccessibilityNodeInfo(info);
+                    for (int child : order) info.addChild(AccessibleSurface.this,child);
+                    info.setScrollable(scrollable);
+                    if (scrollable) {info.addAction(4096);info.addAction(8192);}
+                    return info;
+                }
+                org.json.JSONObject node = nodes.get(id);
+                if (node == null) return null;
+                android.view.accessibility.AccessibilityNodeInfo info = android.view.accessibility.AccessibilityNodeInfo.obtain();
+                info.setSource(AccessibleSurface.this,id); info.setParent(AccessibleSurface.this);
+                info.setPackageName(getPackageName());
+                boolean click = node.optBoolean("click");
+                info.setClassName(click ? "android.widget.Button" : "android.widget.TextView");
+                info.setText(node.optString("text"));info.setEnabled(true);info.setVisibleToUser(true);info.setFocusable(true);
+                info.setClickable(click);if (click) info.addAction(16);
+                info.setSelected(node.optBoolean("selected"));info.setCheckable(node.optBoolean("checkable"));info.setChecked(node.optBoolean("checked"));
+                android.graphics.Rect rect = bounds(node);info.setBoundsInParent(rect);
+                int[] location = new int[2];getLocationOnScreen(location);rect.offset(location[0],location[1]);info.setBoundsInScreen(rect);
+                info.setAccessibilityFocused(focused == id);info.addAction(focused == id ? 128 : 64);
+                if (scrollable) {info.addAction(4096);info.addAction(8192);}
+                return info;
+            }
+            @Override public android.view.accessibility.AccessibilityNodeInfo findFocus(int focus) {
+                return focused == -1 ? null : createAccessibilityNodeInfo(focused);
+            }
+            @Override public boolean performAction(int id,int action,Bundle args) {
+                org.json.JSONObject node = nodes.get(id);
+                if (action == 64 && node != null) {
+                    if (focused != -1) event(focused,65536);
+                    focused = id; event(id,32768);return true;
+                }
+                if (action == 128 && focused == id) { focused=-1;event(id,65536);return true; }
+                long now=android.os.SystemClock.uptimeMillis();
+                if (action == 16 && node != null && node.optBoolean("click")) {
+                    android.graphics.Rect r=bounds(node);
+                    touch(0,r.exactCenterX(),r.exactCenterY(),now,now);
+                    postDelayed(() -> touch(1,r.exactCenterX(),r.exactCenterY(),now,android.os.SystemClock.uptimeMillis()),80);
+                    event(id,1);return true;
+                }
+                if ((action == 4096 || action == 8192) && scrollable) {
+                    float x=getWidth()*0.5f, start=getHeight()*(action==4096 ? 0.7f : 0.3f), end=getHeight()*(action==4096 ? 0.3f : 0.7f);
+                    touch(0,x,start,now,now);
+                    postDelayed(() -> touch(2,x,end,now,android.os.SystemClock.uptimeMillis()),80);
+                    postDelayed(() -> touch(1,x,end,now,android.os.SystemClock.uptimeMillis()),160);
+                    return true;
+                }
+                return false;
+            }
+        };
+    }
+
 }

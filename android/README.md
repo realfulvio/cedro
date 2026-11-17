@@ -136,3 +136,9 @@ usano l'esportatore condiviso col desktop: stesso nome bozza/rivisto e avviso di
 (nota VTT, primo sottotitolo SRT). Il risultato senza parlato è una scheda neutra senza
 un file pubblicato. Le prove ad orecchio, chiamata, cuffie, durata e RAM sul Mi 9T sono
 gate del controller; questa sezione descrive l'implementazione, non un esito misurato.
+
+## Font e accessibilità della superficie nativa
+
+Il testo usa anche `Configuration.fontScale` del telefono; il Painter misura e va a capo con lo stesso fattore usato per disegnare. Le famiglie del catalogo si dispongono su più righe quando le etichette non entrano. Figtree resta il carattere dei temi Cedro; per nomi cirillici, arabi e CJK si carica un Noto/Roboto di sistema soltanto al primo glifo mancante. Non si aggiungono font all'APK. Il pittore a glifi conserva un limite: non è un motore completo di shaping bidirezionale per paragrafi arabi.
+
+`NativeActivity` non espone i controlli disegnati da Rust. Per questo `CedroActivity` ospita un `AccessibilityNodeProvider` sulla superficie trasparente: riceve testo completo, bounds visibili e bersagli reali dal frame Rust. Click e scorrimento vengono inoltrati allo stesso percorso di input nativo; non esiste una seconda implementazione dei comandi. Il provider gestisce focus ed esplorazione TalkBack, con stato selezionato delle scelte principali. È un'estensione motivata dell'eccezione Java già necessaria per SAF/audiofocus, senza nuova dipendenza o permesso. La verifica con UIAutomator/TalkBack sul candidato resta nel rapporto finale: l'implementazione da sola non certifica il collaudo.
