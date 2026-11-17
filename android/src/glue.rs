@@ -839,7 +839,7 @@ struct Consegne {
     /// Il Riassunto AI: il passo in parole (lavoro, testo) e il risultato (lavoro, trascrizione, riassunto).
     passo_riassunto: Arc<Mutex<Vec<(u32, String)>>>,
     riassunti: Arc<Mutex<Vec<(u32, PathBuf, cedro::riassunto::Stored)>>>,
-/// Miniatura, misure e pagine dei file in coda nella finestra principale.
+    /// Miniatura, misure e pagine dei file in coda nella finestra principale.
     voci: Arc<Mutex<Vec<(PathBuf, Option<Image>, Option<(u32, u32)>, Option<u32>)>>>,
     /// Le pagine del documento firmato mostrato (`None`: finite).
     firma_pagine: Arc<Mutex<Vec<(PathBuf, Option<Image>)>>>,
@@ -1567,23 +1567,26 @@ fn carica_file(ui: &mut App, c: &Consegne, cartella: &Path, path: PathBuf, nome:
     ricarica_recenti(cartella.to_path_buf(), c);
 }
 
-/// Miniatura, misure e pagine dei file in coda, in un thread.
-    /// Cache a risoluzione telefonica, letta fuori dal thread grafico anche per file lunghi.
+/// Cache a risoluzione telefonica, letta fuori dal thread grafico anche per file lunghi.
 fn prepara_onda(c: &Consegne, path: PathBuf) {
-    let slot = c.onda_riv.clone();
-    std::thread::spawn(move || {
-        let secs = cedro::audio_duration(&path).unwrap_or(0.0);
-        let bars = cedro::waveform(&path, 600);
-        slot.lock().unwrap_or_else(|e|e.into_inner()).push((path,bars,secs));
-    });
+    let c=c.clone();
+    std::thread::spawn(move || leggi_onda(&c,path));
 }
 
+fn leggi_onda(c:&Consegne,path:PathBuf) {
+    let secs=cedro::audio_duration(&path).unwrap_or(0.0);
+    let bars=cedro::waveform(&path,600);
+    c.onda_riv.lock().unwrap_or_else(|e|e.into_inner()).push((path,bars,secs));
+}
+
+/// Le anteprime della coda si leggono in sequenza: molti audio non aprono molti decoder insieme.
 fn leggi_voci(c: &Consegne, files: Vec<PathBuf>) {
-    for path in &files { if matches!(tipo_di(path), cedro::Kind::Audio | cedro::Kind::Video) { prepara_onda(c,path.clone()); } }
+    let c=c.clone();
     let slot = c.voci.clone();
     std::thread::spawn(move || {
         for path in files {
             let kind = tipo_di(&path);
+            if matches!(kind,cedro::Kind::Audio|cedro::Kind::Video){leggi_onda(&c,path.clone());}
             let (thumb, misure) = if crate::labs::laboratorio(&path) {(None,None)} else {match kind {
                 cedro::Kind::Image => cedro::ui::media::image_thumb(&path, 240).map(|(i, s)| (Some(i), Some(s))).unwrap_or((None, None)),
                 _ => (cedro::ui::media::thumb_of(&path, 360), None),
