@@ -599,8 +599,12 @@ fn apri_o_condividi(app: &AndroidApp, path: &Path, condividi: bool) -> Result<()
         let azione = env.new_string(if condividi { "android.intent.action.SEND" } else { "android.intent.action.VIEW" }).map_err(|e| e.to_string())?;
         let intento = env.new_object("android/content/Intent", "(Ljava/lang/String;)V", &[JValue::Object(&azione)]).map_err(|e| jerr(env, e))?;
         if condividi {
-            if !testo.starts_with("content://") {
-                let nome_f = env.new_string(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).map_err(|e| e.to_string())?;
+            let nome = if testo.starts_with("content://") {
+                let resolver=env.call_method(attivita,"getContentResolver","()Landroid/content/ContentResolver;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+                nome_pubblico(env,&resolver,uri.as_obj())
+            } else {path.file_name().map(|n|n.to_string_lossy().into_owned())};
+            if let Some(nome)=nome.filter(|n|!n.is_empty()) {
+                let nome_f = env.new_string(nome).map_err(|e| e.to_string())?;
                 let k = env.new_string("android.intent.extra.TITLE").map_err(|e| e.to_string())?;
                 env.call_method(&intento, "putExtra", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;", &[JValue::Object(&k), JValue::Object(&nome_f)]).map_err(|e| jerr(env, e))?;
             }
