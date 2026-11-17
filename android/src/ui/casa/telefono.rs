@@ -114,12 +114,14 @@ impl App {
             self.cedro_inizio(p, w, vista)
         } else if self.casa.att == Att::Firma {
             let y0 = TOP + 4.0 - self.scorri;
-            y0 + self.corpo_firma(p, PAD + 6.0, y0, w - 2.0 * (PAD + 6.0), vista) + 8.0
+            y0 + self.corpo_firma(p, PAD + 6.0, y0, w - 2.0 * (PAD + 6.0), vista) + 8.0 + self.scorri
         } else {
             self.cedro_attivita(p, w, vista)
         };
         p.pop_clip();
-        self.scorri_max = (fine + self.scorri - (vista.1 + vista.3)).max(0.0);
+        // `fine` è la fine del contenuto dall'inizio della pagina; se non ci sta, resta un po' d'aria sotto l'ultima riga.
+        let oltre = fine - (vista.1 + vista.3);
+        self.scorri_max = if oltre > 0.0 { oltre + 18.0 } else { 0.0 };
         self.scorri = self.scorri.min(self.scorri_max);
         self.tieni_campo(vista);
         let scelta = self.indice_nav();
@@ -261,16 +263,19 @@ impl App {
         let cw = w - 2.0 * PAD;
         let ph = self.altezza_pannello(completa);
         let libero = vista.3 - 4.0 - GAP - 6.0;
-        let sh = (libero - ph).max(STAGE_MIN);
+        // Di traverso, il file sta a sinistra e il pannello a destra: in colonna avanzerebbe una riga sola.
+        let orizz = w > vista.3 * 1.2;
+        let sw = if orizz { (cw * 0.42).round() } else { cw };
+        let sh = if orizz { (vista.3 - 10.0).max(STAGE_MIN) } else { (libero - ph).max(STAGE_MIN) };
         let y0 = TOP + 4.0 - self.scorri;
         match self.casa.att {
-            Att::Tras => self.palco_tras(p, (x, y0, cw, sh), c, cb, vista),
-            Att::Yt | Att::Web => self.palco_web(p, (x, y0, cw, sh), c, cb),
-            _ => self.palco_file(p, (x, y0, cw, sh), c, cb, vista),
+            Att::Tras => self.palco_tras(p, (x, y0, sw, sh), c, cb, vista),
+            Att::Yt | Att::Web => self.palco_web(p, (x, y0, sw, sh), c, cb),
+            _ => self.palco_file(p, (x, y0, sw, sh), c, cb, vista),
         }
-        let py = y0 + sh + GAP;
-        self.pannello_cedro(p, (x, py, cw, ph), c, cb, completa, vista);
-        let mut fine = py + ph + 8.0;
+        let (px, py, pw) = if orizz { (x + sw + GAP, y0, cw - sw - GAP) } else { (x, y0 + sh + GAP, cw) };
+        self.pannello_cedro(p, (px, py, pw, ph), c, cb, completa, vista);
+        let mut fine = if orizz { y0 + sh.max(ph) + 8.0 } else { py + ph + 8.0 };
         // Sotto il pannello, sulla cornice scura: le parti nate dopo la 0.45, con la stessa palette della pagina.
         let (ex, ew) = (PAD + 6.0, w - 2.0 * (PAD + 6.0));
         let tinta = self.tema.tint();
@@ -278,7 +283,8 @@ impl App {
             fine += 10.0;
             p.text("Laboratorio", ex, fine, ew, 24.0, 16.5, Weight::Bold, tinta.ink, Align::Left);
             fine += 30.0;
-            fine += self.pannello_labs(p, ex, fine, ew, vista);
+            // Restituisce la y a cui è arrivato, non l'altezza.
+            fine = self.pannello_labs(p, ex, fine, ew, vista);
             fine += 4.0;
         } else if matches!(self.casa.att, Att::Yt | Att::Web) {
             fine += 10.0;
@@ -643,6 +649,8 @@ impl App {
                     let on = self.casa.web == k;
                     let colore = if *id == "web-testo" { page_colors(Lab::Trascrivi).0 } else if *id == "web-audio" { kind_color(Kind::Audio) } else { c };
                     let gx = ix + k as f32 * (cw + 6.0);
+                    // Quattro tessere strette: «Video leggero» diventa «Leggero».
+                    let nome = if *id == "web-leggero" { "Leggero" } else { nome };
                     self.tessera_formato(p, (gx, cy, cw, FMT_H), super::super::icona_di(id), "", colore, mix(colore, BIANCO, 0.35), nome, on, c, cb);
                     self.colpo((gx, cy, cw, FMT_H), Azione::Casa(CasaAz::Web(k)), vista);
                 }
@@ -698,17 +706,17 @@ impl App {
                     let n = self.altre_n();
                     if n > 0 {
                         cy += GAP;
-                        self.riga_scelta(p, ix, cy, iw, "Altre opzioni", &format!("{n}"), Azione::Casa(CasaAz::AltreOpzioni), vista);
+                        self.riga_scelta(p, ix, cy, iw, "Altre opzioni", &format!("{n} {}", cedro::i18n::tr("in più")), Azione::Casa(CasaAz::AltreOpzioni), vista);
                         cy += RIGA;
                     }
                 }
                 cy += GAP;
                 let e = match self.esiste {
-                    cedro::Exists::Replace => "sostituisco",
-                    cedro::Exists::Skip => "lo salto",
-                    _ => "aggiungo -2",
+                    cedro::Exists::Replace => "Sostituisci il file",
+                    cedro::Exists::Skip => "Salta il file",
+                    _ => "Aggiungi -2",
                 };
-                self.riga_scelta(p, ix, cy, iw, "Salva in", &format!("Documenti/Cedro · {e}"), Azione::Casa(CasaAz::Apri(Elenco::Esiste)), vista);
+                self.riga_scelta(p, ix, cy, iw, "Se esiste già", &cedro::i18n::tr_string(e), Azione::Casa(CasaAz::Apri(Elenco::Esiste)), vista);
                 cy += RIGA + GAP;
             }
         }
@@ -966,5 +974,30 @@ mod tests {
         a.attiva(Azione::Fetta(pdf));
         assert!(!a.foglio);
         assert!(matches!(a.attiva(Azione::Vai), Effetto::Converti { azione: "pdf", .. }));
+    }
+
+    /// Uscendo dal Laboratorio non resta lo strumento di laboratorio scelto nelle altre pagine.
+    #[test]
+    fn uscire_dal_laboratorio_libera_lo_strumento() {
+        let mut a = App::new(ThemeId::Cedro);
+        a.vai_casa();
+        a.vista_nav(6);
+        assert!(a.casa.laboratorio && voci::is_lab(&voci::voce(a.casa.categoria, a.casa.operazione())));
+        a.vista_nav(1);
+        assert!(!a.casa.laboratorio);
+        assert!(!voci::is_lab(&voci::voce(a.casa.categoria, a.casa.operazione())), "Converti riparte da un formato");
+    }
+
+    /// Dopo «Condividi» lo spicchio acceso è quello che dice il pulsante (la riga preselezionata).
+    #[test]
+    fn dopo_condividi_la_ruota_accende_la_riga_del_pulsante() {
+        let mut cache = GlyphCache::new();
+        let mut a = App::new(ThemeId::Cedro);
+        a.anim.calmo = true;
+        a.imposta_file(Archivio { path: "/tmp/foto.heic".into(), nome: "foto.heic".into(), dim: 100 }, Kind::Image, true);
+        let riga = a.righe_ora()[a.tessera].id;
+        frame(&mut a, 360.0, 800.0, &mut cache);
+        let acceso = a.fette().iter().position(|f| f.id == riga || (riga == "jpg" && f.id == "jpeg"));
+        assert!(acceso.is_some(), "la riga preselezionata ({riga}) ha uno spicchio");
     }
 }
