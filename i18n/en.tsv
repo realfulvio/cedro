@@ -1961,8 +1961,8 @@ PDF non scritto: {}	PDF not written: {}
 numeri veri, geni come testo	real numbers, genes kept as text
 Excel con {#} righe.	Excel with {} rows.
 Numeri con la virgola letti come numeri.	Decimal-comma numbers read as numbers.
-Piastra da {#} pozzetti anche una riga per pozzetto (foglio Pozzetti).	{}-well plate also laid out one row per well (Pozzetti sheet).
-{#} piastre da {#} pozzetti, anche una riga per pozzetto (foglio Pozzetti).	{} plates of {} wells, also laid out one row per well (Pozzetti sheet).
+Piastra da {#} pozzetti anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).	{}-well plate also as a colour map (Mappa sheet) and one row per well (Pozzetti sheet).
+{#} piastre da {#} pozzetti, anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).	{} plates of {} wells, also as a colour map (Mappa sheet) and one row per well (Pozzetti sheet).
 Nomi di geni e codici lasciati come testo.	Gene names and codes kept as text.
 CSV dal foglio di calcolo	CSV from the spreadsheet
 {#} fogli: un CSV per foglio	{} sheets: one CSV per sheet
@@ -2715,3 +2715,32 @@ Vista di partenza	Initial view
 pagine	pages
 Il decoder esterno non supporta la lettura diretta del file autorizzato	The external decoder does not support direct reading of the authorized file
 Il decoder esterno non ha letto il file autorizzato	The external decoder could not read the authorized file
+Registro in Excel	Log to Excel
+Registro salvato:	Log saved:
+Registro non salvato:	Log not saved:
+Registro lavori	Work log
+Data	Date
+Ora	Time
+Attività	Activity
+Nota del caso	Case note
+CD DICOM	DICOM CD
+immagine	image
+paziente	patient
+pazienti	patients
+mancanti	missing
+il DICOMDIR non elenca nessun file	the DICOMDIR lists no files
+REFERTO	REPORT
+Dettato il {} · {} · {} di audio	Dictated on {} · {} · {} of audio
+Specie	Species
+Campione	Sample
+Descrizione macroscopica	Gross description
+Descrizione microscopica	Microscopic description
+Diagnosi	Diagnosis
+Anamnesi	History
+Margini	Margins
+Commento	Comment
+Conclusioni	Conclusions
+Note	Notes
+Firma del refertante	Signature of the reporting pathologist
+BOZZA · da non firmare	DRAFT · do not sign
+Pagina {} di {}	Page {} of {}
