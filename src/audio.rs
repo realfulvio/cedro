@@ -313,7 +313,7 @@ impl Pcm {
 
 pub(crate) fn decode(path: &Path) -> Result<Pcm, String> {
     // Un AVI non è un WAV: l'audio si prende dai pacchetti del contenitore.
-    if let Ok(mut file) = File::open(path) {
+    if let Ok(mut file) = crate::input_file::File::open(path) {
         use std::io::Read;
         let mut head = [0u8; 12];
         if file.read_exact(&mut head).is_ok() && &head[0..4] == b"RIFF" && &head[8..12] == b"AVI " {
@@ -439,7 +439,7 @@ fn stream_symphonia_with(path: &Path, trim_priming: bool, each: &mut dyn FnMut(&
 /// intestazioni dei blocchi prima dei campioni.
 fn wav_info_tags(path: &Path) -> Option<Tags> {
     use std::io::{Read, Seek, SeekFrom};
-    let mut f = File::open(path).ok()?;
+    let mut f = crate::input_file::File::open(path).ok()?;
     let mut head = [0u8; 12];
     f.read_exact(&mut head).ok()?;
     if &head[0..4] != b"RIFF" || &head[8..12] != b"WAVE" {
