@@ -4,7 +4,8 @@
 
 use super::gfx::Rgb;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(not(target_os="android"), derive(Debug))]
 pub enum ThemeId {
     /// Il Cedro di partenza (2026): cornice scura melanzana, attività a sinistra con le icone a gradiente,
     /// il file grande al centro sopra un alone dei suoi colori e un pannello chiaro con tutti i comandi.
@@ -25,6 +26,11 @@ pub enum ThemeId {
     /// veterinaria) e il loro ufficio: colori da bancone, bersagli grandi, niente YouTube né video dal web.
     CedroLabs,
 }
+#[cfg(target_os="android")]
+impl std::fmt::Debug for ThemeId {
+    fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result {f.write_str(self.key())}
+}
+
 
 /// I soli temi selezionabili sul desktop (Linux e Windows).
 pub const THEMES: [ThemeId; 5] = [
@@ -108,7 +114,10 @@ impl ThemeId {
             ThemeId::CedroCompatto => "Cedro compatto",
             ThemeId::BancoDiLavoro => "Banco di lavoro",
             ThemeId::DocumentoAlCentro => "Documento al centro",
+            #[cfg(not(target_os="android"))]
             ThemeId::Bondeno => "Comune di Bondeno",
+            #[cfg(target_os="android")]
+            ThemeId::Bondeno => "",
             ThemeId::CedroLabs => "Cedro for Labs",
         }
     }
@@ -124,7 +133,10 @@ impl ThemeId {
             ThemeId::CedroCompatto => "Finestrella dall'icona vicino all'orologio.",
             ThemeId::BancoDiLavoro => "Tabella con stati, ispettore a destra.",
             ThemeId::DocumentoAlCentro => "L'originale al centro, opzioni accanto.",
+            #[cfg(not(target_os="android"))]
             ThemeId::Bondeno => "Colori e carattere del Comune, con lo stemma.",
+            #[cfg(target_os="android")]
+            ThemeId::Bondeno => "",
             ThemeId::CedroLabs => "Per laboratori e ricerca: solo gli strumenti utili.",
         }
     }
