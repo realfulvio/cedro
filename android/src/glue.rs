@@ -109,55 +109,7 @@ fn estensione_da_mime(mime: &str) -> &'static str {
     }
 }
 
-/// Il tipo MIME di un file dalla sua estensione (per «Apri» e «Condividi»).
-fn mime_da_percorso(path: &Path) -> &'static str {
-    match path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase().as_str() {
-        "jpg" | "jpeg" => "image/jpeg",
-        "png" => "image/png",
-        "webp" => "image/webp",
-        "gif" => "image/gif",
-        "bmp" => "image/bmp",
-        "tif" | "tiff" => "image/tiff",
-        "pdf" => "application/pdf",
-        "txt" => "text/plain",
-        "md" => "text/markdown",
-        "html" => "text/html",
-        "csv" => "text/csv",
-        "json" => "application/json",
-        "mp3" => "audio/mpeg",
-        "m4a" => "audio/mp4",
-        "wav" => "audio/x-wav",
-        "ogg" => "audio/ogg",
-        "flac" => "audio/flac",
-        "aac" => "audio/aac",
-        "mp4" => "video/mp4",
-        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "odt" => "application/vnd.oasis.opendocument.text",
-        "rtf" => "application/rtf",
-        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "xls" => "application/vnd.ms-excel",
-        "ods" => "application/vnd.oasis.opendocument.spreadsheet",
-        "doc" => "application/msword",
-        "dcm" => "application/dicom",
-        "heic" | "heif" => "image/heic",
-        "p7m" => "application/pkcs7-mime",
-        "p7s" => "application/pkcs7-signature",
-        "tsd" => "application/timestamped-data",
-        "tsr" => "application/timestamp-reply",
-        "zip" => "application/zip",
-        "opus" => "audio/ogg",
-        "aif" | "aiff" => "audio/aiff",
-        "avif" => "image/avif",
-        "jxl" => "image/jxl",
-        "ico" => "image/x-icon",
-        "tga" => "image/x-tga",
-        "pnm" | "ppm" | "pgm" | "pbm" => "image/x-portable-anymap",
-        "exr" => "image/x-exr",
-        "srt" => "application/x-subrip",
-        "vtt" => "text/vtt",
-        _ => "application/octet-stream",
-    }
-}
+use crate::storage::mime_da_percorso;
 
 /// Legge l'intento che ha avviato l'attività: se è un ACTION_SEND, copia il flusso in un file privato.
 fn importa_condivisione(app: &AndroidApp, cartella: &Path, c: &Consegne, ui: &mut App) {
@@ -476,19 +428,7 @@ fn importa_scelti(app: &AndroidApp, cartella: &Path, sorgente: Sorgente, c: &Con
             }
             if sorgente==Sorgente::Originale {
                 let result=out.first().ok_or_else(||"Nessun file scelto".to_string()).and_then(|f| {
-                    use std::io::Read;
-                    let mut file=std::fs::File::open(&f.path).map_err(|e|e.to_string())?;
-                    let mut bytes=Vec::new();
-                    let mut chunk=[0u8;64*1024];
-                    let stop=token(&c,id);
-                    loop {
-                        if stop.load(std::sync::atomic::Ordering::Acquire){return Err("Annullato".into());}
-                        let n=file.read(&mut chunk).map_err(|e|e.to_string())?;
-                        if n==0{break;}
-                        bytes.try_reserve(n).map_err(|_|"Memoria insufficiente per verificare il file originale".to_string())?;
-                        bytes.extend_from_slice(&chunk[..n]);
-                    }
-                    Ok(bytes)
+                    crate::storage::leggi_originale(&f.path, &token(&c,id))
                 });
                 *c.originale.lock().unwrap_or_else(|e|e.into_inner())=Some((id,result));
             }
