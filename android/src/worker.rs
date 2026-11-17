@@ -104,6 +104,7 @@ fn diagnostica_saf(path:&std::path::Path) {
     use std::os::fd::{BorrowedFd, AsFd};
     use std::os::unix::fs::FileExt;
     let Ok(list)=std::env::var("CEDRO_INPUT_FDS") else{return};
+    let aliases:Vec<(PathBuf,i32)>=std::env::var("CEDRO_INPUT_ALIASES").ok().and_then(|s|serde_json::from_str(&s).ok()).unwrap_or_default();
     for fd in list.split(',').filter_map(|s|s.parse::<i32>().ok()) {
         let flags=unsafe{libc::fcntl(fd,libc::F_GETFD)};
         if flags<0 {log::info!("SAF probe fd={fd} fcntl_errno={:?}",std::io::Error::last_os_error().raw_os_error());continue;}
@@ -115,7 +116,8 @@ fn diagnostica_saf(path:&std::path::Path) {
                 let stat=file.metadata().map(|m|m.len()).map_err(|e|e.raw_os_error());
                 let read=file.read_at(&mut [0u8;16],0).map_err(|e|e.raw_os_error());
                 log::info!("SAF probe fd={fd} flags={flags} fstat={stat:?} pread={read:?}");
-                cedro::input_file::register(fd,std::sync::Arc::new(file));
+                let file=std::sync::Arc::new(file);
+                for (path,number) in &aliases {if *number==fd {cedro::input_file::register(path,fd,file.clone());}}
             }
             Err(e)=>log::info!("SAF probe fd={fd} dup_errno={:?}",e.raw_os_error()),
         }
@@ -239,7 +241,7 @@ fn esegui(mut r: Richiesta) -> Result<(PathBuf, String), String> {
 }
 
 #[cfg(target_os = "android")]
-pub fn avvia(libs: &std::path::Path, r: Richiesta, cancel: &std::sync::atomic::AtomicBool, inputs: Vec<std::sync::Arc<std::fs::File>>, permesso:impl Fn(&str,u64)->Result<(),String>, evento: impl Fn(Evento)) -> Result<(PathBuf, String), String> {
+pub fn avvia(libs: &std::path::Path, r: Richiesta, cancel: &std::sync::atomic::AtomicBool, inputs: Vec<(PathBuf,std::sync::Arc<std::fs::File>)>, permesso:impl Fn(&str,u64)->Result<(),String>, evento: impl Fn(Evento)) -> Result<(PathBuf, String), String> {
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::process::CommandExt;
     use std::process::{Command, Stdio};
@@ -251,12 +253,13 @@ pub fn avvia(libs: &std::path::Path, r: Richiesta, cancel: &std::sync::atomic::A
     if cancel.load(Ordering::Acquire) { return Err("Annullato".into()); }
     use std::os::fd::AsRawFd;
     let (events,write_events)=std::os::unix::net::UnixStream::pair().map_err(|e|e.to_string())?;
+    let aliases=serde_json::to_string(&inputs.iter().map(|(p,f)|(p,f.as_raw_fd())).collect::<Vec<_>>()).map_err(|e|e.to_string())?;
     let job_fd=write_events.as_raw_fd();
-    let mut fds: Vec<i32> = inputs.iter().map(|f|f.as_raw_fd()).collect();
+    let mut fds: Vec<i32> = inputs.iter().map(|(_,f)|f.as_raw_fd()).collect();
     fds.push(job_fd);
     let mut command = Command::new(libs.join("libcedro_lavoro.so"));
     command
-        .arg(libs.join("libcedro_android.so")).env("LD_LIBRARY_PATH", libs).env("CEDRO_JOB_FD",job_fd.to_string()).env("CEDRO_LIB_DIR",libs).env("CEDRO_INPUT_FDS",inputs.iter().map(|f|f.as_raw_fd().to_string()).collect::<Vec<_>>().join(","))
+        .arg(libs.join("libcedro_android.so")).env("LD_LIBRARY_PATH", libs).env("CEDRO_JOB_FD",job_fd.to_string()).env("CEDRO_LIB_DIR",libs).env("CEDRO_INPUT_ALIASES",aliases).env("CEDRO_INPUT_FDS",inputs.iter().map(|(_,f)|f.as_raw_fd().to_string()).collect::<Vec<_>>().join(","))
         .process_group(0).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null());
     unsafe { command.pre_exec(move || {
         for fd in &fds {

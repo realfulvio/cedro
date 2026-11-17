@@ -45,9 +45,9 @@ fn aperti() -> &'static Mutex<HashMap<PathBuf, Arc<File>>> { APERTI.get_or_init(
 pub fn lease(path: &Path) -> Option<Arc<File>> { aperti().lock().unwrap_or_else(|e| e.into_inner()).get(path).cloned() }
 
 /// Il processo eredita anche i file associati al MRXS, sotto la stessa importazione isolata.
-pub fn leases(paths: &[PathBuf]) -> Vec<Arc<File>> {
+pub fn leases(paths: &[PathBuf]) -> Vec<(PathBuf,Arc<File>)> {
     let map=aperti().lock().unwrap_or_else(|e|e.into_inner());
-    map.iter().filter(|(p,_)| paths.iter().any(|src| *p==src || src.parent().is_some_and(|dir|p.starts_with(dir)))).map(|(_,f)|f.clone()).collect()
+    map.iter().filter(|(p,_)| paths.iter().any(|src| *p==src || src.parent().is_some_and(|dir|p.starts_with(dir)))).map(|(p,f)|(p.clone(),f.clone())).collect()
 }
 
 pub fn frame<T>(env:&mut JNIEnv,f:impl FnOnce(&mut JNIEnv)->Result<T,String>)->Result<T,String>{
@@ -95,7 +95,7 @@ fn collega(path: &Path, file: File) -> Result<(), String> {
     std::os::unix::fs::symlink(target,&tmp).map_err(|e|e.to_string())?;
     std::fs::rename(&tmp,path).map_err(|e|e.to_string())?;
     let file=Arc::new(file);
-    cedro::input_file::register(file.as_raw_fd(),file.clone());
+    cedro::input_file::register(path,file.as_raw_fd(),file.clone());
     map.insert(path.to_path_buf(),file);
     Ok(())
 }

@@ -1,7 +1,7 @@
 //! H.264 e AAC compilati nel programma. Nessun ffmpeg.
 //! OpenH264 (BSD-2, Cisco, dal sorgente) e FDK AAC (Fraunhofer).
 
-use std::fs::File;
+use crate::input_file::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
