@@ -1874,6 +1874,7 @@ impl App {
             let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 trascrizione::run_cancellable(&paths, &request, dest.as_deref(), &opts, &cancel, &|event| match event {
                     trascrizione::Event::Log(line) => send(Event::TranscribeLog(line)),
+                    trascrizione::Event::Audio { .. } | trascrizione::Event::Segment(_) => {},
                     trascrizione::Event::Percent { index, percent } => send(Event::TranscribePercent(index, percent)),
                     trascrizione::Event::Finished { path, result } => send(Event::Finished(path, result)),
                 })

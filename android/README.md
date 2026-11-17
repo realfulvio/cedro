@@ -114,3 +114,25 @@ I log diagnostici riportano soltanto ID, azione, esito e numero uscite: la fine 
 Gate di collaudo: build con/senza YouTube, test host, rendering IT/DE/PT e prove Mi9T affidati al controller. Non usare `pm clear`, disinstallazioni o cancellazioni dei componenti personali per simulare il primo uso. Gli esempi `vista_a` contengono solo fixture di rendering e non entrano nell'app.
 
 «Evita copie già salvate» è una policy del singolo lavoro: non cambia la preferenza globale. Il marker privato `.web-request` identifica link, opzioni e caso; il flag per evitare duplicati e la modalità Exists non fanno parte della firma di contenuto. Prima di pubblicare vengono consultati i journal `.pronti` compatibili, verificati i nomi relativi e l'esistenza effettiva degli URI (mai `is_pending=1`). Per insiemi identici si riusa il namespace della raccolta. Le copie già presenti passano comunque per prenotazione e commit del nuovo journal prima di rimuovere la copia privata. Un file eliminato viene pubblicato di nuovo. Questo evita copie duplicate, ma il download e l'eventuale trascrizione possono avvenire comunque. Non viene creato un archivio yt-dlp che dia per presenti file cancellati dall'utente.
+
+## Trascrizione e ascolto Android 0.53 (gate reali ancora da eseguire)
+
+Il player condiviso riproduce via cpal/AAudio in Rust. La velocità ricampiona il segnale
+(e cambia anche l'altezza della voce); volume con i tasti del telefono. Onda in thread,
+600 campioni memorizzati e disegno a risoluzione dello schermo. Il timer del player è 5 Hz;
+non tiene attivo il ciclo grafico a 60 Hz.
+
+`CedroActivity` inoltra ora anche perdita di focus audio, MEDIA_PAUSE/STOP e distacco
+cuffie: AudioManager richiede un listener Java e NativeActivity non espone queste
+callback a Rust. È un'estensione motivata del ponte esistente, senza nuovi file Java,
+librerie o motori audio. Il player si mette in pausa alla perdita del focus e quando
+l'attività va in pausa (anche schermo spento). La trascrizione e il riassunto continuano
+nel worker col servizio di lavoro esistente; quel servizio non dichiara riproduzione
+multimediale e non viene usato per tenere vivo l'ascolto. Ripresa audio sempre esplicita.
+
+Referti: la richiesta vocale include il flag e il glossario veterinario; le conferme
+sono salvate con la revisione e legate al contenuto della frase. TXT, Word, SRT e VTT
+usano l'esportatore condiviso col desktop: stesso nome bozza/rivisto e avviso di bozza
+(nota VTT, primo sottotitolo SRT). Il risultato senza parlato è una scheda neutra senza
+un file pubblicato. Le prove ad orecchio, chiamata, cuffie, durata e RAM sul Mi 9T sono
+gate del controller; questa sezione descrive l'implementazione, non un esito misurato.

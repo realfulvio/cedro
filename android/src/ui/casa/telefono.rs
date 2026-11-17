@@ -204,6 +204,7 @@ impl App {
         } else {
             cy = self.file_a(p, PAD, cy, cw, vista);
         }
+        if self.casa.att==Att::Tras {cy+=self.anteprima_trascrizione(p,(PAD,cy,cw,vista.3),vista);}
         let x = if largo { cw + 2.0 * PAD } else { PAD };
         let mut fy = if largo { y } else { cy + 14.0 };
         match self.casa.att {
@@ -287,6 +288,10 @@ impl App {
             y += 56.0;
             if self.casa.laboratorio && crate::labs::laboratorio(&v.path) {
                 self.bottone_a(p,(x,y,w,48.0),"Anteprima",ic::IMAGE,pal.surface,pal.primary,Azione::Labs(super::super::labs::LabAz::File(i)),vista);
+                y+=56.0;
+            }
+            if self.casa.att==Att::Tras {
+                self.bottone_a(p,(x,y,w,48.0),"Onda e testo",ic::AUDIO,pal.surface,pal.primary,Azione::Casa(CasaAz::Ascolta(i)),vista);
                 y+=56.0;
             }
             let _ = j;
@@ -388,6 +393,11 @@ impl App {
     fn trascrizione_a(&mut self, p: &mut Painter, x: f32, mut y: f32, w: f32, vista: R) -> f32 {
         let start = y;
         let pal = self.pal();
+        p.text("Referti",x,y,w-64.0,48.0,16.0,Weight::Semibold,pal.text,Align::Left);
+        self.interruttore_casa(p,x+w-46.0,y+24.0,self.referto);
+        self.colpo((x,y,w,48.0),Azione::Casa(CasaAz::Referto),vista);
+        y+=56.0;
+        y+=testo_a(p,"Numeri e parole decisive da riascoltare. Finché restano punti aperti, salvi una bozza.",x,y,w,13.0,Weight::Regular,pal.muted,19.0,0)+12.0;
         y += self.titolo_a(p, x, y, w, "Precisione");
         for (i, nome) in ["Veloce", "Buona", "Massima"].into_iter().enumerate() {
             self.bottone_a(p, (x, y, w, 52.0), nome, if self.modello == i { ic::CHECK } else { "" }, if self.modello == i { pal.alt } else { pal.surface }, pal.text, Azione::Casa(CasaAz::Modello(i)), vista);

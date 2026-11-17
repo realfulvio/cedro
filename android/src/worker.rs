@@ -4,9 +4,9 @@ use serde::{Deserialize, Serialize};
 static CANCEL:std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct Voce {pub modello:usize,pub voci:u8}
+pub struct Voce {pub modello:usize,pub voci:u8,#[serde(default)]pub referto:bool}
 impl Voce {
-    pub fn da_codice(code:usize)->Self{Self{modello:code&0x0f,voci:(code>>4) as u8}}
+    pub fn da_codice(code:usize)->Self{Self{modello:code&0x0f,voci:(code>>4) as u8,referto:false}}
 }
 
 #[derive(Serialize, Deserialize)]
@@ -27,6 +27,8 @@ pub struct Richiesta {
 
 #[derive(Serialize, Deserialize)]
 pub enum Evento {
+    Audio(PathBuf,f64),
+    Frase(PathBuf,cedro::trascrizione::Segment),
     Parziale(crate::web::Parziale),
     Scarica(String,u64),
     Componente(Option<crate::web::Componente>),
@@ -165,14 +167,21 @@ fn esegui(mut r: Richiesta) -> Result<(PathBuf, String), String> {
             crate::storage::atomico(&r.out.join(".revisione-source"),&data).map_err(|e|e.to_string())?;
         }
         use cedro::trascrizione::{Event, Format, Request};
-        let req = Request { format: Format::Text, model: r.voce.modello.min(cedro::trascrizione::MODELS.len() - 1), gpu: false, avx512: false, speakers: r.voce.voci, glossario: None };
+        let req = Request { format: Format::Text, model: r.voce.modello.min(cedro::trascrizione::MODELS.len() - 1), gpu: false, avx512: false, speakers: r.voce.voci, glossario: r.voce.referto.then(|| "veterinaria".into()) };
         let result = std::sync::Mutex::new(None);
+        let duration = std::cell::Cell::new(0.0);
         cedro::trascrizione::run_cancellable(&[r.file.clone()], &req, Some(&r.out), &r.opts, &CANCEL, &|e| match e {
+            Event::Audio { secs } => {duration.set(secs);emetti(Evento::Audio(r.file.clone(),secs));},
+            Event::Segment(s) => emetti(Evento::Frase(r.file.clone(),s)),
             Event::Percent { percent, .. } => emetti(Evento::Progresso(percent as u32 * 10)),
             Event::Log(l) => emetti(Evento::Passo(l.key, l.text)),
             Event::Finished { result: r, .. } => *result.lock().unwrap_or_else(|e| e.into_inner()) = Some(r),
         });
         let result=result.into_inner().unwrap_or_else(|e| e.into_inner()).unwrap_or_else(|| Err("La trascrizione non è partita".into()));
+        if matches!(&result,Err(e) if e=="nessun parlato riconosciuto nell'audio") {
+            let _=std::fs::remove_file(cedro::revisione::review_path(&r.file));
+            return Ok((PathBuf::new(),format!("{} · {:.1} s. {}",cedro::i18n::tr("Nessun parlato riconosciuto"),duration.get(),cedro::i18n::tr("Prova una registrazione con la voce più vicina al microfono."))));
+        }
         return result;
     }
     cedro::progress::con(|f| emetti(Evento::Progresso((f * 1000.0) as u32)), || {
