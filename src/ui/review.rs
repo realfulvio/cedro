@@ -153,6 +153,9 @@ impl Review {
         let summary = self.summary_sections().filter(|_| self.summary_on_top);
         let draft = self.draft_line();
         let bytes = match ext {
+            // Il referto rivisto esce impaginato come quello della prima trascrizione.
+            "docx" if self.referto => crate::referto::docx(&self.source, self.secs, &self.lang, &segments, &crate::referto::Intestazione::attuale(), draft.as_deref()),
+            "txt" if self.referto => crate::referto::testo(&self.source, self.secs, &segments, &crate::referto::Intestazione::attuale(), draft.as_deref()),
             "docx" => trascrizione::docx_bytes_full(&self.source, self.secs, &self.lang, &segments, names, summary.as_ref(), draft.as_deref()),
             "srt" => revisione::srt_bytes_full(&segments, names, draft.as_deref()),
             "vtt" => revisione::vtt_bytes_full(&segments, names, draft.as_deref()),

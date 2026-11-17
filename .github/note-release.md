@@ -11,11 +11,11 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Correzioni dal banco di prova contro i programmi del settore.**
+**Sei novità per Cedro 4 Labs.**
 
-- **Anonimizzazione DICOM:** ora segue il profilo base dello standard anche per gli orari (spostati di un valore fisso per paziente, così l'ordine nel tempo resta), il fuso orario, il riempimento, il mezzo di contrasto e i dati della sperimentazione.
-- **Firma digitale:** una firma con SHA-1 dà un avviso e non più il via libera pieno; un PDF cambiato dopo la firma (impostazioni, metadati, script) viene segnalato.
-- **PDF:** «Dividi» e «Togli pagine» tengono titolo e metadati e dicono che gli allegati restano solo nel file originale; «Togli dati nascosti» vede anche gli allegati dentro i nomi.
-- **Trascrizione:** niente più parole inventate su silenzio, ronzii, soffi e toni: Cedro dice «nessun parlato riconosciuto».
-- **Word in PDF:** se il testo è in arabo o ebraico, Cedro avvisa che l'ordine e la forma delle lettere non sono ancora resi bene.
-- **File .doc rovinati:** un .doc con i conteggi sbagliati non riempie più la memoria (prima fino a 4,9 GB).
+- **Vetrini Olympus VSI:** Cedro apre i file `.vsi` di cellSens con la loro cartella `_nome_`: campo chiaro come vetrino (livelli, ingrandimento, µm per pixel), fluorescenza come pila con i canali per nome (DAPI, FITC, Cy3…), piani Z e istanti. Anche in copia anonima (etichetta, foto del vetrino e nome dell'operatore tolti) e nel pacchetto per il consulto.
+- **CD e chiavette DICOM:** trascinando la cartella del CD Cedro legge il DICOMDIR, prende tutte le immagini nell'ordine paziente, studio, serie e lascia fuori il programma di visualizzazione del CD. Anonimizzi o converti tutto in un colpo.
+- **Referti dettati già impaginati:** con «Referti veterinari» la dettatura esce come un referto del laboratorio: logo e nome della clinica in testa, caso, specie, campione e data, le parti dette («Descrizione macroscopica», «Diagnosi», «Commento»…) con il loro titolo, «punto e a capo» rispettato. Finché i punti da riascoltare non sono confermati c'è «BOZZA · da non firmare» in testa a ogni pagina; il referto rivisto ha la riga della firma.
+- **Mappa delle piastre a colori:** l'Excel delle piastre ha il foglio «Mappa» con i valori colorati dal blu al rosso, minimo e massimo, pronto da stampare su una pagina.
+- **Registro dei lavori in Excel:** nella pagina Lavori il bottone «Registro in Excel» salva tutti i lavori ricordati, una riga per file uscito, con data, ora, attività, caso e nota, con i filtri già attivi.
+- **Copia per il quaderno subito:** a lavoro finito il pannello del risultato ha «Copia per il quaderno», senza passare dalla pagina Lavori.

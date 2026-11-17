@@ -23,7 +23,7 @@ use tiff::ColorType;
 /// Le compressioni delle tessere.
 pub(crate) const JPEG: u16 = 7;
 const JP2K_YCBCR: u16 = 33003;
-const JP2K_RGB: u16 = 33005;
+pub(crate) const JP2K_RGB: u16 = 33005;
 /// La fotometria YCbCr (6) del TIFF; RGB è 2.
 pub(crate) const PHOTOMETRIC_YCBCR: u16 = 6;
 
@@ -36,6 +36,8 @@ pub enum Vendor {
     Hamamatsu,
     /// 3DHistech MIRAX (.mrxs): le foto della fotocamera, ognuna al suo posto, in file di dati.
     Mirax,
+    /// Olympus / Evident cellSens (.vsi): le tessere nei file .ets della cartella accanto.
+    Olympus,
 }
 
 impl Vendor {
@@ -44,6 +46,7 @@ impl Vendor {
             Vendor::Aperio => "Aperio",
             Vendor::Hamamatsu => "Hamamatsu",
             Vendor::Mirax => "3DHistech MIRAX",
+            Vendor::Olympus => "Olympus VSI",
         }
     }
 }
@@ -57,6 +60,8 @@ pub(crate) enum Source {
     Ndpi(std::sync::Arc<crate::ndpi::Jpeg>),
     /// Le foto MIRAX con la loro posizione: si incollano sulla tela.
     Mirax(std::sync::Arc<crate::mrxs::Griglia>),
+    /// Tessere di un file .ets (Olympus VSI): stessi indirizzi e grandezze, ma in un altro file.
+    Vsi(std::sync::Arc<std::path::PathBuf>),
 }
 
 /// Un'immagine in più (etichetta, foto del vetrino, miniatura) che non è una pagina TIFF: un JPEG
@@ -198,6 +203,9 @@ pub fn is_slide(path: &Path) -> bool {
     if crate::mrxs::is_mirax(path) {
         return true;
     }
+    if crate::engine::extension(path) == "vsi" {
+        return crate::vsi::is_brightfield(path);
+    }
     if !tiff_head(&crate::imgfmt::head_of(path)) {
         return false;
     }
@@ -227,6 +235,9 @@ impl Slide {
     pub fn open(path: &Path) -> Result<Slide, String> {
         if crate::mrxs::is_mirax(path) {
             return crate::mrxs::open(path);
+        }
+        if crate::engine::extension(path) == "vsi" {
+            return crate::vsi::open_slide(path);
         }
         if path.extension().and_then(|e|e.to_str()).is_some_and(|e|e.eq_ignore_ascii_case("ndpi")) || crate::ndpi::is_ndpi(path) {
             return crate::ndpi::open(path).map_err(|e|format!("NDPI: {e}"));
@@ -501,6 +512,11 @@ impl Slide {
             win.2 as usize,
             win.3 as usize,
         );
+        // Nei VSI le tessere stanno nel file .ets, non nel .vsi.
+        let path: &Path = match &l.source {
+            Source::Vsi(p) => p.as_path(),
+            _ => path,
+        };
         let mut file = File::open(path).map_err(|e| e.to_string())?;
         let lunghezza_file = file.metadata().map_err(|e| e.to_string())?.len();
         let across = l.across() as usize;
@@ -601,7 +617,8 @@ impl Slide {
 
     /// Una delle immagini in più (miniatura, etichetta, macro), letta intera: sono piccole.
     pub fn read_extra(&self, path: &Path, ifd: usize) -> Result<RgbImage, String> {
-        if self.vendor != Vendor::Aperio {
+        // Gli Aperio e gli Olympus tengono le immagini in più come pagine TIFF del file.
+        if !matches!(self.vendor, Vendor::Aperio | Vendor::Olympus) {
             let b = self.blobs.get(ifd).ok_or("immagine non trovata")?;
             return read_blob(b);
         }

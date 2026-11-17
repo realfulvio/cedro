@@ -6,6 +6,7 @@
 //! quelle compresse (i fotogrammi restano nei loro frammenti e li decodifica `pixel`).
 
 pub mod anon;
+pub mod dicomdir;
 pub mod dizionario;
 pub mod jpeg12;
 pub mod jpegls;
@@ -293,7 +294,8 @@ impl<'a> Reader<'a> {
             if len == UNDEFINED {
                 items.push(self.elements(stop, depth + 1)?);
             } else {
-                let item_end = self.pos.checked_add(len as usize).filter(|e| *e <= self.b.len()).ok_or("voce troncata")?;
+                // Una voce che dice di essere più lunga della sequenza (file ritoccati a mano): si legge fin dove arriva.
+                let item_end = self.pos.saturating_add(len as usize).min(stop);
                 let els = self.elements(item_end, depth + 1)?;
                 self.pos = item_end;
                 items.push(els);
@@ -473,6 +475,60 @@ impl DicomFile {
     }
 }
 
+/// Le voci della sequenza `seq` al primo livello del corpo, ognuna con la sua posizione nel file (il byte
+/// del tag della voce, contato dall'inizio del file, preambolo compreso). Servono al DICOMDIR, dove i
+/// record si legano tra loro proprio con queste posizioni.
+pub(crate) fn items_with_offsets(bytes: &[u8], seq: u32) -> Result<Vec<(u64, Vec<Element>)>, String> {
+    let f = DicomFile::read(bytes)?;
+    if f.ts == TS_DEFLATED {
+        return Err("DICOMDIR compresso: non previsto dallo standard".into());
+    }
+    let mut r = Reader { b: bytes, pos: if bytes.get(128..132) == Some(b"DICM") { 132 } else { 0 }, syntax: Syntax::ExplicitLE };
+    while r.pos + 8 <= bytes.len() && r.peek_tag().is_some_and(|t| t >> 16 == 0x0002) {
+        if !matches!(r.one(bytes.len(), 0)?, Step::El(_)) {
+            break;
+        }
+    }
+    r.syntax = f.syntax;
+    while r.pos + 8 <= bytes.len() {
+        if r.peek_tag() != Some(seq) {
+            if let Step::ItemEnd = r.one(bytes.len(), 0)? {
+                break;
+            }
+            continue;
+        }
+        r.tag();
+        let len = if r.syntax.explicit() {
+            r.take(4).ok_or("sequenza troncata")?;
+            r.u32().ok_or("sequenza troncata")?
+        } else {
+            r.u32().ok_or("sequenza troncata")?
+        };
+        let stop = if len == UNDEFINED { bytes.len() } else { r.pos.checked_add(len as usize).filter(|e| *e <= bytes.len()).ok_or("sequenza troncata")? };
+        let mut out = Vec::new();
+        while r.pos + 8 <= stop {
+            let start = r.pos as u64;
+            let t = r.tag().ok_or("sequenza troncata")?;
+            let l = r.u32().ok_or("sequenza troncata")?;
+            if t == SEQ_END {
+                break;
+            }
+            if t != ITEM {
+                return Err("sequenza non valida".into());
+            }
+            if l == UNDEFINED {
+                out.push((start, r.elements(stop, 1)?));
+            } else {
+                let end = r.pos.saturating_add(l as usize).min(stop);
+                out.push((start, r.elements(end, 1)?));
+                r.pos = end;
+            }
+        }
+        return Ok(out);
+    }
+    Ok(Vec::new())
+}
+
 pub fn syntax_uid(s: Syntax) -> &'static str {
     match s {
         Syntax::ImplicitLE => TS_IMPLICIT,
@@ -523,7 +579,7 @@ fn put_tag(out: &mut Vec<u8>, t: u32, s: Syntax) {
     put16(out, t as u16, s);
 }
 
-fn write_element(out: &mut Vec<u8>, e: &Element, s: Syntax) {
+pub(crate) fn write_element(out: &mut Vec<u8>, e: &Element, s: Syntax) {
     put_tag(out, e.tag, s);
     match &e.value {
         Value::Bytes(b) => {
