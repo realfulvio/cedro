@@ -142,7 +142,7 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
     // NativeActivity espone un'unica superficie: il provider riflette i controlli Rust reali.
     private AccessibleSurface accessibleSurface;
     public void accessibilitySnapshot(final String json) {
-        runOnUiThread(() -> { if (accessibleSurface != null) accessibleSurface.update(json); });
+        runOnUiThread(new Runnable() { @Override public void run() { if (accessibleSurface != null) accessibleSurface.update(json); } });
     }
     private final class AccessibleSurface extends android.view.View {
         private final android.util.SparseArray<org.json.JSONObject> nodes = new android.util.SparseArray<>();
@@ -246,14 +246,14 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
                 if (action == 16 && node != null && node.optBoolean("click")) {
                     android.graphics.Rect r=bounds(node);
                     touch(0,r.exactCenterX(),r.exactCenterY(),now,now);
-                    postDelayed(() -> touch(1,r.exactCenterX(),r.exactCenterY(),now,android.os.SystemClock.uptimeMillis()),80);
+                    postDelayed(new Runnable() { @Override public void run() { touch(1,r.exactCenterX(),r.exactCenterY(),now,android.os.SystemClock.uptimeMillis()); } },80);
                     event(id,1);return true;
                 }
                 if ((action == 4096 || action == 8192) && scrollable) {
                     float x=getWidth()*0.5f, start=getHeight()*(action==4096 ? 0.7f : 0.3f), end=getHeight()*(action==4096 ? 0.3f : 0.7f);
                     touch(0,x,start,now,now);
-                    postDelayed(() -> touch(2,x,end,now,android.os.SystemClock.uptimeMillis()),80);
-                    postDelayed(() -> touch(1,x,end,now,android.os.SystemClock.uptimeMillis()),160);
+                    postDelayed(new Runnable() { @Override public void run() { touch(2,x,end,now,android.os.SystemClock.uptimeMillis()); } },80);
+                    postDelayed(new Runnable() { @Override public void run() { touch(1,x,end,now,android.os.SystemClock.uptimeMillis()); } },160);
                     return true;
                 }
                 return false;
