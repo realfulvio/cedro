@@ -1832,6 +1832,7 @@ fn android_main(app: AndroidApp) {
     let mut finestra: Option<android_activity::ndk::native_window::NativeWindow> = None;
     let mut sporco = true;
     let mut esci = false;
+    let mut font_scale=1.0f32;
     let mut animando = false;
     let mut ultimo_disegno = std::time::Instant::now();
     let mut attesa_scelta: Option<Sorgente> = None;
@@ -2352,6 +2353,8 @@ fn android_main(app: AndroidApp) {
             sporco=true;
         }
         if leggi_insets && finestra.is_some() {
+            font_scale=con_attivita(&app,|env,a|env.call_method(a,"fontScale","()F",&[]).and_then(|r|r.f()).map_err(|e|e.to_string())).ok().filter(|v|v.is_finite()&&*v>0.0).unwrap_or(1.0);
+            ui.anim.calmo=animazioni_spente(&app);
             let m = margini(&app);
             ui.margini = (m.0 / scala, m.1 / scala, m.2 / scala, m.3 / scala);
             if m != insets {
@@ -2420,8 +2423,15 @@ fn android_main(app: AndroidApp) {
                     ultimo_disegno = std::time::Instant::now();
                     let mut p = Painter::new_riusando(w, h, scala, Fonts::for_theme(ui.tema), &mut cache);
                     p.larger = ui.grandi;
+                    p.text_scale = font_scale;
+                    p.accessibility_text = Some(Vec::new());
                     ui.disegna(&mut p, w as f32 / scala, h as f32 / scala);
                     presenta(f, &p);
+                    let semantics=ui.accessibilita(&p);
+                    let _=con_attivita(&app,|env,a|{
+                        let text=env.new_string(semantics).map_err(|e|e.to_string())?;
+                        env.call_method(a,"accessibilitySnapshot","(Ljava/lang/String;)V",&[JValue::Object(&text)]).map(|_|()).map_err(|e|jerr(env,e))
+                    });
                     let foglio = p.in_foglio();
                     cache.ricicla(foglio);
                     sporco = false;

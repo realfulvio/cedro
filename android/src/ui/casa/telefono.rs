@@ -95,7 +95,7 @@ impl App {
         cy += bh + 20.0;
         let gx = if largo { 2.0 * PAD + cw } else { PAD };
         let mut gy = if largo { y } else { cy };
-        let colonne = if self.grandi { 1 } else { 2 };
+        let colonne = if self.grandi || p.text_scale > 1.25 { 1 } else { 2 };
         let tw = (cw - (colonne - 1) as f32 * 10.0) / colonne as f32;
         for row in ATTIVITA.chunks(colonne) {
             let th = row.iter().map(|(nome, sotto, _, _, _)| {
@@ -308,19 +308,25 @@ impl App {
 
     fn barra_famiglie_a(&mut self,p:&mut Painter,w:f32)->f32 {
         let famiglie=famiglie_immagine_a();
-        let bw=(w-2.0*PAD-(famiglie.len()-1) as f32*GAP)/famiglie.len() as f32;
+        // Le etichette tedesche e i font di sistema grandi determinano quante colonne entrano.
+        let disponibili=w-2.0*PAD;
+        let desiderata=famiglie.iter().map(|(nome,_)|p.measure(nome,12.0,Weight::Semibold)+16.0).fold(48.0,f32::max);
+        let colonne=(((disponibili+GAP)/(desiderata+GAP)).floor() as usize).clamp(1,famiglie.len());
+        let bw=(disponibili-(colonne-1) as f32*GAP)/colonne as f32;
         let bh=famiglie.iter().map(|(nome,_)|altezza_a(p,nome,12.0,Weight::Semibold,bw-8.0,17.0,0)+20.0).fold(48.0,f32::max);
+        let rows=famiglie.len().div_ceil(colonne);
+        let height=rows as f32*(bh+GAP)+4.0;
         let pal=self.pal();
-        p.fill(0.0,TOP,w,bh+12.0,pal.bg);
+        p.fill(0.0,TOP,w,height,pal.bg);
         for (i,(nome,col)) in famiglie.into_iter().enumerate() {
-            let r=(PAD+i as f32*(bw+GAP),TOP+4.0,bw,bh);
+            let r=(PAD+(i%colonne) as f32*(bw+GAP),TOP+4.0+(i/colonne) as f32*(bh+GAP),bw,bh);
             let tinta=schiarisci(col,self.scuro());
             p.rrect(r.0,r.1,r.2,r.3,8.0,Some(pal.surface),Some((tinta,1.5)));
             p.fill(r.0+8.0,r.1+5.0,r.2-16.0,3.0,tinta);
-            testo_a(p,nome,r.0+4.0,r.1+12.0,r.2-8.0,12.0,Weight::Semibold,tinta,17.0,0);
+            testo_a(p,nome,r.0+4.0,r.1+12.0,r.2-8.0,12.0,Weight::Semibold,pal.text,17.0,0);
             self.colpi.push((Forma::R(r),Azione::Casa(CasaAz::Famiglia(nome))));
         }
-        bh+12.0
+        height
     }
 
     fn catalogo_a(&mut self, p: &mut Painter, x: f32, mut y: f32, w: f32, vista: R) -> f32 {
