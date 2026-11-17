@@ -94,7 +94,9 @@ fn collega(path: &Path, file: File) -> Result<(), String> {
     let tmp = path.with_file_name(format!(".{}.link",nome_di(path)));
     std::os::unix::fs::symlink(target,&tmp).map_err(|e|e.to_string())?;
     std::fs::rename(&tmp,path).map_err(|e|e.to_string())?;
-    map.insert(path.to_path_buf(),Arc::new(file));
+    let file=Arc::new(file);
+    cedro::input_file::register(file.as_raw_fd(),file.clone());
+    map.insert(path.to_path_buf(),file);
     Ok(())
 }
 
