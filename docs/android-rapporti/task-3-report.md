@@ -159,7 +159,7 @@ Questi esiti validano test host e controlli NDK del codice `af4e692`; non dimost
 
 `cargo run --release -j2 -p cedro-android --example vista_a -- /srv/dev/scratch/cedro-ui-task3-round1`: **PASS, exit0**; step dalle23:04:18 alle23:14:04, prodotti156PNG per9.180.088byte. Esecuzione e ispezione effettuate dal controller, non da questo agente.
 
-Il controller ha ispezionato sette scene reali, copiate in `docs/android-rapporti/task-3-render` e `~/Documenti/cedro-android-anteprima/render-rust/task3`:
+Il controller ha ispezionato sette scene reali, copiate in `.superpowers/sdd/ESECUZIONE/task-3-render` e `~/Documenti/cedro-android-anteprima/render-rust/task3`:
 
 - IT inizio360×800;
 - DE famiglie-grandi, labs-grandi e labs-dicom360×640;
