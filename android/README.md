@@ -6,7 +6,7 @@ Costruzione: `android/build.sh` produce `android/target/cedro-debug.apk`; con le
 
 ## Interfaccia
 
-Le quattro tinte Cedro usano la variante A: **Inizio, Lavori, Impostazioni** restano le tre destinazioni. Inizio propone Converti, PDF, Trascrivi, Video dal web, Firma e Laboratorio. Il catalogo completo scorre per famiglie; le opzioni seguono il formato selezionato. I cinque temi precedenti rimangono selezionabili sul telefono.
+Le quattro tinte Cedro tornano all'aspetto della 0.45: **barra in basso con sei attività** (Inizio, Converti, PDF, Trascrivi, Video, Firma, ognuna col suo colore), Lavori e Impostazioni in alto a destra, il file in grande su un alone scuro con la striscia dei file in coda e un solo pannello chiaro con i formati a tessere, Semplice/Completa e il pulsante grande sempre in fondo. «Inizio» ha le sei tessere con la foto del tipo di file, una tessera «Laboratorio» a tutta larghezza, la riga del link e gli ultimi file. Le funzioni nate dopo la 0.45 stanno sotto il pannello, sulla stessa cornice scura: strumenti, anteprime e casi del Laboratorio, le opzioni del download web, l'onda con il testo e i referti. Il catalogo completo dei formati è nell'elenco «Altri». I cinque temi precedenti rimangono selezionabili.
 
 «Apri con» e «Condividi» aprono il foglio Ricevuto, con i formati e la CTA, poi riportano i risultati nella stessa pagina Lavori. Un nuovo import azzera lo scroll. Il file picker usa ACTION_OPEN_DOCUMENT e conserva il grant URI; le cartelle del Laboratorio usano OPEN_DOCUMENT_TREE. Risultati, errori e copie in attesa di pubblicazione hanno journal recuperabili. Su Android 11+ la pubblicazione usa MediaStore in Documents/Cedro; le copie private non pubblicate restano raggiungibili dai Lavori.
 
