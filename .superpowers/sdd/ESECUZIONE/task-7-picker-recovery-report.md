@@ -46,3 +46,24 @@ java -cp /srv/dev/scratch/cedro-picker-delivery it.cedro.android.ActivityDeliver
 ```
 
 Implementatore: `git diff --check` exit 0; nessuna esecuzione Rust/Java/adb/remota. Ancora pendenti sul nuovo checkpoint build/test, re-review mirata e retest fisico del controller.
+
+## Controller: covering tests reali fd3f38c
+
+NDKYT/noYT exit0 (20.67s/4.18s). Androidhostlibcon/senzaYT exit0:
+host-test: test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.82s
+host-test-youtube: test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.91s
+Comandi come precedente runner finale: cargo --config profile.test.package.fdk-aac-sys.opt-level=3 test -j2 -pcedro-android --lib [--features youtube], TESTopt1/debug0/LTOoff/codegen16/incrementaltrue,targetscratchcache,RUST_TEST_THREADS2. ClippyreleasealltargetsYTno-deps exit0, baselinewarningrestano.
+JavaSDKjavac -d /srv/dev/scratch/cedro-final-geometry AccessibilityCoordinates.java+Test.java e ActivityDelivery.java+Test.java exit0. java -cp ... it.cedro.android.AccessibilityCoordinatesTest: PASSexit0; ActivityDeliveryTest: PASSexit0. Testorphanvalidpending/secondrestore/newIntentprodhelper confermato. Logrunner/TSV e filecompleti in /home/accorsiluca/Documenti/cedro-android-anteprima/verifiche/fd3f38c.
+APKnativebuild inprogress, phonevalidationnonancorafatta, nessunPASSfisicoinferito.
+
+## Fix round 2 — identità della richiesta, solo Java
+
+Letta integralmente `task-7-picker-recovery-fix1-review.md`: I2 resta chiuso, questo delta affronta soltanto I1 residuo. I sorgenti Rust e quindi il binario nativo `fd3f38c` restano identici.
+
+`startActivityForResult(4242)` viene intercettato da CedroActivity e associato a un request code gestito distinto. Il contatore viene salvato con `SharedPreferences.commit()` prima dell'avvio; la callback e l'armamento sono serializzati sullo stesso lock Activity. Armare una richiesta azzera il risultato precedente; `onActivityResult` accetta esclusivamente il codice atteso e lo consuma una sola volta. Una callback precedente arrivata dopo l'armamento viene rifiutata senza chiudere la richiesta nuova. Un fallimento dell'avvio disarma il codice.
+
+Il codice atteso viene salvato nel Bundle. Prima di `super.onCreate`, il ripristino richiede anche la corrispondenza con `request_code` nel journal Rust corrente. Java aggiunge questo campo con `AtomicFile` prima di armare/avviare; serde Rust ignora il campo aggiuntivo senza cambiare il formato già consumato. Questo lega il codice alla sorgente del journal e chiude anche la fessura «Rust ha scritto la nuova sorgente, Bundle conserva ancora la vecchia richiesta»: un campo assente/diverso rifiuta l'identità vecchia. La lettura AtomicFile precedente all'avvio Rust recupera anche un binding interrotto.
+
+Il contatore usa l'intervallo app a 16 bit `0x4000..0xffff`, senza wrap: dopo 49.152 aperture esterne l'avvio viene rifiutato esplicitamente, anziché riutilizzare un codice e poter accettare una risposta arbitrariamente vecchia. Anche le aperture fallite consumano il codice riservato. Nessuna nuova permission o dipendenza.
+
+`ActivityDeliveryTest` ora esercita la callback vecchia dopo armamento/durante il nuovo avvio (sequenza della review), risultato vecchio già in buffer, callback duplicata, fallimento lancio, rifiuto senza journal valido, ripristino del codice corrente, mismatch Bundle/journal, cancel/success e nuovi intenti, contatore attraverso ricreazioni ed esaurimento senza wrap. I comandi Java del round 1 restano applicabili. Implementatore: `git diff --check` exit 0; nessuna compilazione né comando Rust/adb/remoto. Compilazione Java/d8, test, repack APK e review circoscritta I1 pendenti al controller.

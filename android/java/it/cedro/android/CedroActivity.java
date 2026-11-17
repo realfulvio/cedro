@@ -14,6 +14,7 @@ import android.os.Bundle;
 public class CedroActivity extends NativeActivity implements android.media.AudioManager.OnAudioFocusChangeListener {
     public static final int CODICE_SCELTA = 4242;
     private final ActivityDelivery<Uri[]> deliveries = new ActivityDelivery<>();
+    private static final String PICKER_REQUEST="cedro.picker.request";
 
     public float fontScale() { return getResources().getConfiguration().fontScale; }
 
@@ -70,12 +71,64 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
     @Override
     protected void onCreate(Bundle stato) {
         // NativeActivity can start Rust inside super.onCreate: publish this first.
-        deliveries.created(stato != null);
+        int savedRequest=stato==null?-1:stato.getInt(PICKER_REQUEST,-1);
+        deliveries.created(stato != null,ActivityDelivery.restoredRequest(savedRequest,pickerJournalRequest()));
         super.onCreate(stato);
         accessibleSurface = new AccessibleSurface(this);
         addContentView(accessibleSurface, new android.view.ViewGroup.LayoutParams(-1, -1));
         ricordaIntento(getIntent());
         registerReceiver(audioNoisy, new android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+    }
+
+    @Override protected void onSaveInstanceState(Bundle stato) {
+        stato.putInt(PICKER_REQUEST,deliveries.expectedRequest());
+        super.onSaveInstanceState(stato);
+    }
+
+    @Override public void startActivityForResult(Intent intent,int requestCode) {
+        startActivityForResult(intent,requestCode,null);
+    }
+
+    @Override public synchronized void startActivityForResult(Intent intent,int requestCode,Bundle options) {
+        if (requestCode != CODICE_SCELTA) {
+            super.startActivityForResult(intent,requestCode,options);
+            return;
+        }
+        // Persist before launch, including across process recreation. Never reuse a code:
+        // wrapping could associate an arbitrarily late result with another source.
+        android.content.SharedPreferences state=getSharedPreferences("picker-generation",MODE_PRIVATE);
+        int request=ActivityDelivery.nextRequest(state.getInt("last",ActivityDelivery.FIRST_REQUEST-1));
+        if (!state.edit().putInt("last",request).commit()) throw new IllegalStateException("Cannot persist picker request");
+        bindPickerRequest(request);
+        deliveries.arm(request);
+        try { super.startActivityForResult(intent,request,options); }
+        catch (RuntimeException e) { deliveries.failed(request);throw e; }
+    }
+
+    private android.util.AtomicFile pickerJournal() {
+        return new android.util.AtomicFile(new java.io.File(getFilesDir(),"scelta-in-attesa.json"));
+    }
+
+    private int pickerJournalRequest() {
+        try {
+            byte[] bytes=pickerJournal().readFully(); // also restores an interrupted atomic bind
+            return new org.json.JSONObject(new String(bytes,java.nio.charset.StandardCharsets.UTF_8)).optInt("request_code",-1);
+        } catch (java.io.IOException | org.json.JSONException e) { return -1; }
+    }
+
+    private void bindPickerRequest(int request) {
+        android.util.AtomicFile journal=pickerJournal();
+        java.io.FileOutputStream out=null;
+        try {
+            org.json.JSONObject context=new org.json.JSONObject(new String(journal.readFully(),java.nio.charset.StandardCharsets.UTF_8));
+            context.put("request_code",request);
+            out=journal.startWrite();
+            out.write(context.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            journal.finishWrite(out);
+        } catch (java.io.IOException | org.json.JSONException e) {
+            if (out!=null) journal.failWrite(out);
+            throw new IllegalStateException("Cannot bind picker request",e);
+        }
     }
 
     private void ricordaIntento(Intent intento) {
@@ -113,23 +166,23 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
 
     @Override
     protected synchronized void onActivityResult(int richiesta, int esito, Intent dati) {
-        if (richiesta == CODICE_SCELTA) {
-            // Empty means a completed cancellation; null means no callback yet.
-            deliveries.picker(new Uri[0]);
-            if (esito != RESULT_OK || dati == null) return;
-            // Con la scelta multipla i file arrivano nel ClipData; con uno solo, in getData().
-            ClipData c = dati.getClipData();
-            if (c != null && c.getItemCount() > 0) {
-                Uri[] u = new Uri[c.getItemCount()];
-                for (int i = 0; i < u.length; i++) u[i] = c.getItemAt(i).getUri();
-                for (Uri uri : u) ricordaPermesso(uri, dati.getFlags());
-                deliveries.picker(u);
-            } else if (dati.getData() != null) {
-                ricordaPermesso(dati.getData(), dati.getFlags());
-                deliveries.picker(new Uri[] { dati.getData() });
+        if (ActivityDelivery.managed(richiesta) || richiesta==CODICE_SCELTA) {
+            // Reject old callbacks even if they arrive after the next request has been armed.
+            if (!deliveries.expects(richiesta)) return;
+            Uri[] result=new Uri[0]; // completed cancellation, distinct from no callback
+            if (esito==RESULT_OK && dati!=null) {
+                ClipData c=dati.getClipData();
+                if (c!=null && c.getItemCount()>0) {
+                    result=new Uri[c.getItemCount()];
+                    for (int i=0;i<result.length;i++) result[i]=c.getItemAt(i).getUri();
+                } else if (dati.getData()!=null) {
+                    result=new Uri[]{dati.getData()};
+                }
+                for (Uri uri:result) ricordaPermesso(uri,dati.getFlags());
             }
+            deliveries.picker(richiesta,result);
         } else {
-            super.onActivityResult(richiesta, esito, dati);
+            super.onActivityResult(richiesta,esito,dati);
         }
     }
 
