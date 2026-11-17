@@ -1135,8 +1135,11 @@ mod tests {
 
     fn voices_sample(n:u8,view:u8)->Review {
         let rows=(0..n).map(|v|trascrizione::Segment{t0:v as i64*100,t1:(v as i64+1)*100,text:format!("Frase della voce {v}"),speaker:Some(v)}).collect();
-        let mut r=Review::new(Path::new("/tmp/cedro-voices-fixture.wav"),n as f64,"it".into(),rows,vec![],None);
-        r.names=trascrizione::default_names(n as usize);r.view=view;r
+        // Review::new validates each speaker against names at construction time.
+        let mut r=Review::new(Path::new("/tmp/cedro-voices-fixture.wav"),n as f64,"it".into(),rows,trascrizione::default_names(n as usize),None);
+        assert_eq!(r.live_voices(),(0..n).collect::<Vec<_>>(),"fixture senza voci attive");
+        assert!(r.rows.iter().enumerate().all(|(i,row)|row.speaker==Some(i as u8)));
+        r.view=view;r
     }
 
     fn draw_voices(a:&mut App,cache:&mut GlyphCache,w:u32,h:u32,scale:f32) {
