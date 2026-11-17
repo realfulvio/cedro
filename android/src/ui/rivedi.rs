@@ -100,6 +100,8 @@ pub struct Rivedi {
     /// Dove sta l'onda sullo schermo, per toccarla.
     onda: (f32, f32),
     pub foglio: Option<FoglioRiv>,
+    foglio_scorri: f32,
+    foglio_scorri_max: f32,
     /// Il Riassunto AI in corso: il lavoro e a che punto è (0..1000), e cosa sta facendo.
     pub riassunto: Option<(u32, Arc<AtomicU32>)>,
     pub riassunto_nota: String,
@@ -150,7 +152,7 @@ impl Rivedi {
     }
 
     fn new(r: Review, titolo: String, job: Option<u32>, live: bool) -> Self {
-        Self { r, titolo, job, live, speed: 100, zoom: 1.0, offset: 0.0, drag: None, player: None, salva: None, nota: String::new(), altezze: Vec::new(), largo: 0.0, scala_testo: 0.0, scorri: 0.0, scorri_max: 0.0, onda: (0.0, 0.0), foglio: None, riassunto: None, riassunto_nota: String::new() }
+        Self { r, titolo, job, live, speed: 100, zoom: 1.0, offset: 0.0, drag: None, player: None, salva: None, nota: String::new(), altezze: Vec::new(), largo: 0.0, scala_testo: 0.0, scorri: 0.0, scorri_max: 0.0, onda: (0.0, 0.0), foglio: None, foglio_scorri: 0.0, foglio_scorri_max: 0.0, riassunto: None, riassunto_nota: String::new() }
     }
 
     /// Un tasto sul nome di una voce («Chi parla»).
@@ -471,7 +473,7 @@ impl App {
                 rv.scorri = 0.0;
                 rv.foglio = None;
             }
-            RivAz::Chip(i) => rv.foglio = Some(FoglioRiv::Voce(i)),
+            RivAz::Chip(i) => { rv.foglio = Some(FoglioRiv::Voce(i)); rv.foglio_scorri = 0.0; },
             RivAz::Voce(v) => {
                 if let Some(FoglioRiv::Voce(i)) = rv.foglio.take() {
                     rv.r.push_undo();
@@ -485,7 +487,7 @@ impl App {
                     rv.suona_da(t0 as f64 / 100.0);
                 }
             }
-            RivAz::Unisci(v) => rv.foglio = Some(FoglioRiv::Unisci(v)),
+            RivAz::Unisci(v) => { rv.foglio = Some(FoglioRiv::Unisci(v)); rv.foglio_scorri = 0.0; },
             RivAz::UnisciIn(into) => {
                 if let Some(FoglioRiv::Unisci(from)) = rv.foglio.take() {
                     rv.r.push_undo();
@@ -531,20 +533,22 @@ impl App {
         p.icon(ic::ARROW_LEFT, 15.0, 15.0, 26.0, pal.text);
         colpi.push((Forma::R(indietro), Azione::Riv(RivAz::Chiudi)));
         p.text(&rv.titolo, 60.0, 0.0, w - 76.0, BARRA, 21.0, Weight::Semibold, pal.text, Align::Left);
-        let affiancati = w > h && w >= 600.0 && rv.r.view != 0;
+        // «Chi parla» scorre insieme ai controlli, anche con tastiera e in landscape.
+        let affiancati = w > h && w >= 600.0 && rv.r.view != 0 && rv.r.tab != 1;
         let mut cw = if affiancati {(w-36.0)/2.0}else{w-24.0};
         let mut x = 12.0;
         let ripetizioni=rv.ripetizioni();
-        let piede = if rv.live {64.0}else{84.0+if ripetizioni>0{56.0}else{0.0}+if rv.nota.is_empty(){0.0}else{26.0}};
+        let piede = if rv.r.tab==1 {0.0}else if rv.live {64.0}else{84.0+if ripetizioni>0{56.0}else{0.0}+if rv.nota.is_empty(){0.0}else{26.0}};
         // Con poco spazio/font grandi anche i controlli scorrono: nessun testo resta in una viewport di 1 dp.
-        let flusso=!affiancati && rv.r.view!=0 && rv.r.tab==0 && (h<620.0 || p.text_scale>1.3);
+        let flusso=!affiancati && rv.r.view!=0 && (rv.r.tab==1 || rv.r.tab==0 && (h<620.0 || p.text_scale>1.3));
         let inizio_corpo=colpi.len();
         let mut y = BARRA + 2.0;
         if flusso {p.push_clip(x,BARRA,cw,(h-BARRA-piede).max(48.0));y-=rv.scorri;}
 
         let pos=rv.posizione();
         let editing=matches!(self.campo,Some(super::pdf::Campo::Frase(_)));
-        let used=if editing {0.0}else{lettore(p,pal,rv,(x,y,cw,h-y),premuto,&mut colpi)};
+        let reader_height=h-y-if flusso && rv.r.tab==1 {rv.scorri}else{0.0};
+        let used=if editing {0.0}else{lettore(p,pal,rv,(x,y,cw,reader_height),premuto,&mut colpi)};
         if affiancati {x+=cw+12.0;cw=w-x-12.0;} else {y+=used+8.0;}
         if rv.r.view==0 {
             self.colpi.extend(colpi);
@@ -572,7 +576,13 @@ impl App {
             let tema = self.tema;
             let campo = self.campo;
             if rv.r.tab == 1 {
-                chi_parla(p, pal, tema, rv, (x, y, cw, h - y), campo, premuto, &mut colpi);
+                let content_h=chi_parla(p, pal, tema, rv, (x, y, cw, h - y), campo, premuto, &mut colpi);
+                rv.scorri_max=(y+rv.scorri+content_h-h).max(0.0);
+                rv.scorri=rv.scorri.clamp(0.0,rv.scorri_max);
+                if flusso {
+                    p.pop_clip();
+                    ritaglia_colpi(&mut colpi,inizio_corpo,(x,BARRA,cw,(h-BARRA).max(48.0)));
+                }
             } else {
                 riassunto(p, pal, tema, rv, (x, y, cw, h - y), premuto, &mut colpi);
             }
@@ -742,7 +752,7 @@ impl App {
         let pal = self.pal();
         let tema = self.tema;
         let (ml, mt, mr, mb) = self.margini;
-        let Some(rv) = self.rivedi.as_ref() else { return };
+        let Some(rv) = self.rivedi.as_mut() else { return };
         let Some(f) = rv.foglio else { return };
         let (titolo, voci): (String, Vec<(String, u8)>) = match f {
             FoglioRiv::Voce(_) => {
@@ -754,15 +764,22 @@ impl App {
         };
         p.rrect_a(-ml, -mt, w + ml + mr, h + mt + mb, 0.0, (10, 8, 16), 0.45);
         self.colpi.push((Forma::R((-ml, -mt, w + ml + mr, h + mt + mb)), Azione::Riv(RivAz::ChiudiFoglio)));
-        let rh = 54.0;
-        let fh = (70.0 + voci.len() as f32 * rh).min(h * 0.8);
+        let rh = (24.0+16.0*p.text_scale).max(54.0);
+        let title_h=p.wrap_height(&titolo,18.0,Weight::Bold,w-40.0,22.0,2);
+        let header=title_h+30.0;
+        let fh = (header + voci.len() as f32 * rh + 8.0).min(h * 0.8);
         let fy = h - fh;
         p.rrect(0.0, fy, w, fh + mb + 30.0, 24.0, Some(pal.surface), None);
         self.colpi.push((Forma::R((0.0, fy, w, fh)), Azione::Niente));
         p.rrect(w / 2.0 - 20.0, fy + 8.0, 40.0, 5.0, 3.0, Some(pal.border), None);
-        p.text(&titolo, 20.0, fy + 18.0, w - 40.0, 34.0, 18.0, Weight::Bold, pal.text, Align::Left);
+        p.text_wrap(&titolo, 20.0, fy + 18.0, w - 40.0, 18.0, Weight::Bold, pal.text, 22.0, 2);
+        let vista=(0.0,fy+header,w,(fh-header-8.0).max(1.0));
+        rv.foglio_scorri_max=(voci.len() as f32*rh-vista.3).max(0.0);
+        rv.foglio_scorri=rv.foglio_scorri.clamp(0.0,rv.foglio_scorri_max);
+        p.push_clip(vista.0,vista.1,vista.2,vista.3);
+        let inizio=self.colpi.len();
         for (k, (nome, v)) in voci.iter().enumerate() {
-            let ry = fy + 60.0 + k as f32 * rh;
+            let ry = vista.1 + k as f32 * rh-rv.foglio_scorri;
             let nuova = *v == cedro::ui::core::NEW_VOICE;
             let vc = if nuova { pal.muted } else { cedro::ui::theme::voice(tema, *v as usize) };
             super::piastrella(p, pal, super::tinte::scuro(tema), 20.0, ry + 9.0, 36.0, if nuova { ic::ADD } else { "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c0-4 4-6 8-6s8 2 8 6" }, vc, !nuova);
@@ -773,14 +790,20 @@ impl App {
             };
             self.colpi.push((Forma::R((0.0, ry, w, rh)), Azione::Riv(az)));
         }
+        p.pop_clip();
+        ritaglia_colpi(&mut self.colpi,inizio,vista);
     }
 
-    /// Lo scorrimento delle frasi col dito.
+    /// Lo scorrimento del foglio modale, oppure del contenuto della scheda.
     pub(super) fn scorri_rivedi(&mut self, dy: f32, da: f32) -> bool {
         match self.rivedi.as_mut() {
             Some(rv) => {
-                rv.r.follow=false;
-                rv.scorri = (da - dy).clamp(0.0, rv.scorri_max);
+                if rv.foglio.is_some() {
+                    rv.foglio_scorri=(da-dy).clamp(0.0,rv.foglio_scorri_max);
+                } else {
+                    rv.r.follow=false;
+                    rv.scorri = (da - dy).clamp(0.0, rv.scorri_max);
+                }
                 true
             }
             None => false,
@@ -788,7 +811,7 @@ impl App {
     }
 
     pub(super) fn scorri_rivedi_ora(&self) -> f32 {
-        self.rivedi.as_ref().map_or(0.0, |rv| rv.scorri)
+        self.rivedi.as_ref().map_or(0.0, |rv| if rv.foglio.is_some(){rv.foglio_scorri}else{rv.scorri})
     }
 }
 
@@ -796,18 +819,21 @@ impl App {
 /// La scheda «Chi parla»: una riga per voce con il nome da scrivere, quanto parla, ▶ e «Unisci a…»; sotto,
 /// «Scrivi chi parla nel file».
 #[allow(clippy::too_many_arguments)]
-fn chi_parla(p: &mut Painter, pal: &cedro::ui::theme::Palette, tema: cedro::ui::theme::ThemeId, rv: &mut Rivedi, r: super::R, campo: Option<super::pdf::Campo>, premuto: Option<Azione>, colpi: &mut Vec<(Forma, Azione)>) {
+fn chi_parla(p: &mut Painter, pal: &cedro::ui::theme::Palette, tema: cedro::ui::theme::ThemeId, rv: &mut Rivedi, r: super::R, campo: Option<super::pdf::Campo>, premuto: Option<Azione>, colpi: &mut Vec<(Forma, Azione)>) -> f32 {
     let (x, mut y, cw) = (r.0, r.1, r.2);
     let scuro = super::tinte::scuro(tema);
     let voci = rv.r.live_voices();
+    let name_h=(24.0+16.0*p.text_scale).max(48.0);
+    let action_h=(20.0+14.0*p.text_scale).max(48.0);
+    let stats_h=(18.0*p.text_scale).max(26.0);
+    let card_h=12.0+name_h+8.0+stats_h+8.0+action_h+12.0;
     for v in voci.iter().copied() {
         let vc = cedro::ui::theme::voice(tema, v as usize);
-        super::sollevato(p, pal, scuro, x, y, cw, 112.0, 16.0);
-        super::piastrella(p, pal, scuro, x + 14.0, y + 14.0, 40.0, "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c0-4 4-6 8-6s8 2 8 6", vc, true);
-        // Il nome si scrive qui (la tastiera del telefono).
+        super::sollevato(p, pal, scuro, x, y, cw, card_h, 16.0);
+        // Il campo nome conserva larghezza anche a font 200%; il colore identifica la voce.
         let c = super::pdf::Campo::Voce(v);
         let attivo = campo == Some(c);
-        let fr = (x + 64.0, y + 10.0, cw - 64.0 - 62.0, 46.0);
+        let fr = (x + 12.0, y + 12.0, cw - 84.0, name_h);
         p.rrect(fr.0, fr.1, fr.2, fr.3, 12.0, Some(pal.surface), Some((if attivo { vc } else { pal.border }, if attivo { 2.0 } else { 1.0 })));
         let nome = rv.r.names.get(v as usize).cloned().unwrap_or_default();
         let vis = if nome.is_empty() { trascrizione::speaker_name(v as usize) } else { nome.clone() };
@@ -817,37 +843,45 @@ fn chi_parla(p: &mut Painter, pal: &cedro::ui::theme::Palette, tema: cedro::ui::
             p.fill(cx.min(fr.0 + fr.2 - 10.0), fr.1 + 11.0, 2.0, fr.3 - 22.0, vc);
         }
         colpi.push((Forma::R(fr), Azione::Campo(c)));
-        // ▶: un pezzo della sua voce.
         let a = Azione::Riv(RivAz::Ascolta(v));
-        let pc = (x + cw - 34.0, y + 33.0);
+        let pc = (x + cw - 36.0, y + 12.0 + name_h/2.0);
         p.circle(pc.0, pc.1, 22.0, Some(if premuto == Some(a) { mix(vc, (0, 0, 0), 0.15) } else { vc }), None);
         p.icon("M9 6l9 6-9 6z", pc.0 - 10.0, pc.1 - 12.0, 24.0, (255, 255, 255));
-        colpi.push((Forma::Cerchio { cx: pc.0, cy: pc.1, r: 24.0 }, a));
+        colpi.push((Forma::R((pc.0-24.0,pc.1-24.0,48.0,48.0)), a));
         let (n, secs) = rv.r.voice_stats(v);
         let frasi = if n == 1 { "1 frase".to_string() } else { format!("{n} frasi") };
         let quanto = if secs >= 60.0 { format!("{frasi} · {} min", (secs / 60.0).round() as u64) } else { format!("{frasi} · {} s", secs.round() as u64) };
-        p.text(&quanto, x + 64.0, y + 64.0, cw - 200.0, 36.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+        p.text(&quanto, x + 12.0, y + 20.0 + name_h, cw - 24.0, stats_h, 13.0, Weight::Regular, pal.muted, Align::Left);
         if voci.len() > 1 {
             let t = "Unisci a…";
-            let bw = p.measure(t, 14.0, Weight::Semibold) + 28.0;
-            let b = (x + cw - 14.0 - bw, y + 66.0, bw, 36.0);
+            let b = (x + 12.0, y + 28.0 + name_h + stats_h, cw - 24.0, action_h);
             let a = Azione::Riv(RivAz::Unisci(v));
             p.rrect(b.0, b.1, b.2, b.3, 18.0, Some(if premuto == Some(a) { pal.alt } else { pal.surface }), Some((pal.border, 1.5)));
             p.text(t, b.0, b.1, b.2, b.3, 14.0, Weight::Semibold, pal.text, Align::Center);
-            colpi.push((Forma::R((b.0, b.1 - 6.0, b.2, b.3 + 12.0)), a));
+            colpi.push((Forma::R(b), a));
         }
-        y += 122.0;
+        y += card_h+10.0;
     }
-    // Scrivi chi parla nel file.
     let t = "Scrivi chi parla nel file";
-    p.text(t, x + 4.0, y + 4.0, cw - 70.0, 40.0, 15.0, Weight::Regular, pal.text, Align::Left);
+    let toggle_h=(p.wrap_height(t,15.0,Weight::Regular,cw-70.0,21.0,0)+16.0).max(48.0);
+    p.text_wrap(t, x + 4.0, y + 8.0, cw - 70.0, 15.0, Weight::Regular, pal.text, 21.0, 0);
     let on = rv.r.write_voices;
     let sx = x + cw - 54.0;
-    p.rrect(sx, y + 10.0, 48.0, 28.0, 14.0, Some(if on { pal.primary } else { pal.border }), None);
-    p.circle(if on { sx + 34.0 } else { sx + 14.0 }, y + 24.0, 10.0, Some((255, 255, 255)), None);
-    colpi.push((Forma::R((x, y, cw, 48.0)), Azione::Riv(RivAz::ScriviVoci)));
-    y += 52.0;
-    p.text_wrap("Tocca un nome per scriverlo: cambia in tutte le frasi, nel file e nel riassunto. Il nome colorato su una frase sceglie chi la dice.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 4);
+    p.rrect(sx, y + (toggle_h-28.0)/2.0, 48.0, 28.0, 14.0, Some(if on { pal.primary } else { pal.border }), None);
+    p.circle(if on { sx + 34.0 } else { sx + 14.0 }, y + toggle_h/2.0, 10.0, Some((255, 255, 255)), None);
+    colpi.push((Forma::R((x, y, cw, toggle_h)), Azione::Riv(RivAz::ScriviVoci)));
+    y += toggle_h+4.0;
+    y += p.text_wrap("Tocca un nome per scriverlo: cambia in tutte le frasi, nel file e nel riassunto. Il nome colorato su una frase sceglie chi la dice.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 0);
+    y-r.1+8.0
+}
+
+/// Stessa viewport per disegno, tocco e nodi accessibili; le righe tagliate non coprono l'header.
+fn ritaglia_colpi(colpi:&mut Vec<(Forma,Azione)>,inizio:usize,vista:super::R) {
+    let visible:Vec<_>=colpi.drain(inizio..).filter_map(|(f,a)|match f {
+        Forma::R(r)=>super::intersezione(r,vista).map(|r|(Forma::R(r),a)),
+        _=>Some((f,a)),
+    }).collect();
+    colpi.extend(visible);
 }
 
 /// La scheda «Riassunto»: il riassunto fatto (in breve, chi ha detto cosa, decisioni, cose da fare), oppure
@@ -1097,6 +1131,104 @@ mod tests {
     fn sample()->Review {
         let mut r=Review::new(Path::new("/tmp/cedro-fixture-referto.wav"),120.0,"it".into(),vec![trascrizione::Segment{t0:0,t1:1200,text:"Tre mitosi. Non si osserva atipia.".into(),speaker:None}],vec![],None);
         r.referto=true;r.detect();r.bars=Some(vec![0.5;600]);r
+    }
+
+    fn voices_sample(n:u8,view:u8)->Review {
+        let rows=(0..n).map(|v|trascrizione::Segment{t0:v as i64*100,t1:(v as i64+1)*100,text:format!("Frase della voce {v}"),speaker:Some(v)}).collect();
+        let mut r=Review::new(Path::new("/tmp/cedro-voices-fixture.wav"),n as f64,"it".into(),rows,vec![],None);
+        r.names=trascrizione::default_names(n as usize);r.view=view;r
+    }
+
+    fn draw_voices(a:&mut App,cache:&mut GlyphCache,w:u32,h:u32,scale:f32) {
+        let mut p=Painter::new(w,h,1.0,Fonts::for_theme(a.tema),cache);
+        p.text_scale=scale;
+        a.disegna(&mut p,w as f32,h as f32);
+    }
+
+    fn swipe_voices(a:&mut App,h:u32) {
+        // Starts outside the waveform; goes through the same native dispatcher as a finger.
+        let y=h as f32-24.0;
+        a.tocca_giu(5.0,y);a.tocca_muovi(5.0,y-48.0);a.tocca_su(5.0,y-48.0);
+    }
+
+    #[test]
+    fn all_voice_controls_are_reachable_by_scrolling_and_clipped_with_large_fonts() {
+        let mut cache=GlyphCache::new();
+        for (w,h) in [(360,640),(640,360),(360,320)] {for scale in [1.0,2.0] {for view in [1,2] {for n in [3,8] {
+            let mut a=App::new(ThemeId::Cedro);
+            a.apri_rivedi_con(voices_sample(n,view),"Voci".into(),1,None,None);
+            a.rivedi.as_mut().unwrap().live=true; // Nessuna persistenza delle fixture.
+            let mut wanted=Vec::new();
+            for v in 0..n {
+                wanted.extend([Azione::Campo(super::super::pdf::Campo::Voce(v)),Azione::Riv(RivAz::Ascolta(v)),Azione::Riv(RivAz::Unisci(v))]);
+            }
+            wanted.push(Azione::Riv(RivAz::ScriviVoci));
+            let mut renamed=false;let mut toggled=false;
+            for _ in 0..80 {
+                draw_voices(&mut a,&mut cache,w,h,scale);
+                let targets:Vec<_>=a.colpi.iter().filter_map(|(f,az)|match f {Forma::R(r) if wanted.contains(az)=>Some((*r,*az)),_=>None}).collect();
+                for (r,az) in targets {
+                    assert!(r.1>=BARRA && r.1+r.3<=h as f32+0.01,"hit fuori viewport {r:?}");
+                    if r.2<48.0 || r.3<48.0 {continue;}
+                    let (x,y)=(r.0+r.2/2.0,r.1+r.3/2.0);
+                    assert_eq!(a.trova(x,y),Some(az));
+                    wanted.retain(|v|*v!=az);
+                    if az==Azione::Campo(super::super::pdf::Campo::Voce(n-1)) {
+                        a.tocca_giu(x,y);a.tocca_su(x,y);
+                        assert_eq!(a.campo,Some(super::super::pdf::Campo::Voce(n-1)));
+                        let rv=a.rivedi.as_mut().unwrap();let before=rv.r.names[(n-1) as usize].clone();
+                        rv.tasto_nome(n-1,super::super::Tasto::Car('X'));
+                        assert_eq!(rv.r.names[(n-1) as usize],format!("{before}X"));renamed=true;
+                    }
+                    if az==Azione::Riv(RivAz::ScriviVoci) {
+                        let before=a.rivedi.as_ref().unwrap().r.write_voices;
+                        a.tocca_giu(x,y);a.tocca_su(x,y);
+                        assert_ne!(a.rivedi.as_ref().unwrap().r.write_voices,before);toggled=true;
+                    }
+                }
+                if a.scorri_rivedi_ora()>=a.rivedi.as_ref().unwrap().scorri_max {break;}
+                swipe_voices(&mut a,h);
+            }
+            assert!(wanted.is_empty(),"{w}x{h} font{scale} view{view} n{n}: {wanted:?}");
+            assert!(renamed&&toggled);
+        }}}}
+    }
+
+    #[test]
+    fn voice_sheets_scroll_to_new_voice_and_last_merge_destination_without_moving_page() {
+        let mut cache=GlyphCache::new();
+        for (w,h) in [(360,640),(640,360),(360,320)] {for scale in [1.0,2.0] {for n in [3,8] {for merge in [false,true] {
+            let mut a=App::new(ThemeId::Cedro);
+            let sheet=if merge {FoglioRiv::Unisci(0)}else{FoglioRiv::Voce(0)};
+            a.apri_rivedi_con(voices_sample(n,2),"Voci".into(),1,Some(sheet),None);
+            a.rivedi.as_mut().unwrap().live=true;
+            let mut wanted:Vec<_>=((if merge {1}else{0})..n).map(|v|if merge {RivAz::UnisciIn(v)}else{RivAz::Voce(v)}).collect();
+            if !merge {wanted.push(RivAz::Voce(cedro::ui::core::NEW_VOICE));}
+            let final_action=if merge {RivAz::UnisciIn(n-1)}else{RivAz::Voce(cedro::ui::core::NEW_VOICE)};
+            for _ in 0..30 {
+                draw_voices(&mut a,&mut cache,w,h,scale);
+                for (f,az) in &a.colpi {
+                    let (Forma::R(r),Azione::Riv(az))=(f,az) else {continue};
+                    if !wanted.contains(az) {continue;}
+                    assert!(r.1>=0.0&&r.1+r.3<=h as f32+0.01);
+                    if r.3>=48.0 {
+                        assert_eq!(a.trova(r.0+r.2/2.0,r.1+r.3/2.0),Some(Azione::Riv(*az)));
+                        wanted.retain(|v|v!=az);
+                    }
+                }
+                let rv=a.rivedi.as_ref().unwrap();assert_eq!(rv.scorri,0.0,"il foglio ha mosso la pagina");
+                if rv.foglio_scorri>=rv.foglio_scorri_max {break;}
+                swipe_voices(&mut a,h);
+            }
+            assert!(wanted.is_empty(),"destinatari irraggiungibili {w}x{h} font{scale} n{n}: {wanted:?}");
+            let r=a.colpi.iter().find_map(|(f,az)|if *az==Azione::Riv(final_action){if let Forma::R(r)=f{Some(*r)}else{None}}else{None}).unwrap();
+            assert!(r.3>=48.0);
+            let (x,y)=(r.0+r.2/2.0,r.1+r.3/2.0);a.tocca_giu(x,y);a.tocca_su(x,y);
+            let rv=a.rivedi.as_ref().unwrap();assert!(rv.foglio.is_none());
+            // Il motore mantiene il limite esistente di otto voci; il comando resta raggiungibile.
+            let expected=if merge {n-1}else if (n as usize)<trascrizione::MAX_VOICES {n}else{0};
+            assert_eq!(rv.r.rows[0].speaker,Some(expected));
+        }}}}
     }
 
     #[test]

@@ -185,9 +185,21 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
                 sendAccessibilityEvent(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
             } catch (org.json.JSONException e) { android.util.Log.w("Cedro", "Snapshot accessibilità non valido"); }
         }
-        private android.graphics.Rect bounds(org.json.JSONObject node) {
+        private android.graphics.Rect nativeBounds(org.json.JSONObject node) {
             org.json.JSONArray r = node.optJSONArray("bounds");
             return r == null ? new android.graphics.Rect() : new android.graphics.Rect((int)r.optDouble(0),(int)r.optDouble(1),(int)r.optDouble(2),(int)r.optDouble(3));
+        }
+        private AccessibilityCoordinates coordinates() {
+            int[] window = new int[2], screen = new int[2];
+            getLocationInWindow(window);
+            getLocationOnScreen(screen);
+            return new AccessibilityCoordinates(window[0],window[1],screen[0],screen[1]);
+        }
+        private android.graphics.Rect localBounds(org.json.JSONObject node) {
+            android.graphics.Rect r = nativeBounds(node);
+            AccessibilityCoordinates c = coordinates();
+            int[] local=c.localBounds(r.left,r.top,r.right,r.bottom);
+            return new android.graphics.Rect(local[0],local[1],local[2],local[3]);
         }
         private void event(int id, int type) {
             android.view.accessibility.AccessibilityEvent e = android.view.accessibility.AccessibilityEvent.obtain(type);
@@ -204,7 +216,7 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
             if (e.getAction() != android.view.MotionEvent.ACTION_HOVER_EXIT) {
                 for (int k = order.size()-1; k >= 0; k--) {
                     int candidate = order.get(k);
-                    if (bounds(nodes.get(candidate)).contains((int)e.getX(),(int)e.getY())) { id = candidate; break; }
+                    if (localBounds(nodes.get(candidate)).contains((int)e.getX(),(int)e.getY())) { id = candidate; break; }
                 }
             }
             if (id != hovered) {
@@ -235,8 +247,15 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
                 info.setText(node.optString("text"));info.setEnabled(true);info.setVisibleToUser(true);info.setFocusable(true);
                 info.setClickable(click);if (click) info.addAction(16);
                 info.setSelected(node.optBoolean("selected"));info.setCheckable(node.optBoolean("checkable"));info.setChecked(node.optBoolean("checked"));
-                android.graphics.Rect rect = bounds(node);info.setBoundsInParent(rect);
-                int[] location = new int[2];getLocationOnScreen(location);rect.offset(location[0],location[1]);info.setBoundsInScreen(rect);
+                // Rust bounds already include the system insets, in native window pixels.
+                // The overlay can start below/alongside a system bar: subtract its window
+                // origin for parent bounds, then add its screen origin exactly once.
+                AccessibilityCoordinates c = coordinates();
+                android.graphics.Rect rect = nativeBounds(node);
+                int[] parent=c.localBounds(rect.left,rect.top,rect.right,rect.bottom);
+                int[] screen=c.screenBounds(rect.left,rect.top,rect.right,rect.bottom);
+                info.setBoundsInParent(new android.graphics.Rect(parent[0],parent[1],parent[2],parent[3]));
+                info.setBoundsInScreen(new android.graphics.Rect(screen[0],screen[1],screen[2],screen[3]));
                 info.setAccessibilityFocused(focused == id);info.addAction(focused == id ? 128 : 64);
                 if (scrollable) {info.addAction(4096);info.addAction(8192);}
                 return info;
@@ -252,13 +271,15 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
                 }
                 if (action == 128 && focused == id) { focused=-1;event(id,65536);return true; }
                 if (action == 16 && node != null && node.optBoolean("click")) {
-                    android.graphics.Rect r=bounds(node);
+                    // Queue clicks stay in native window coordinates, as physical InputQueue events.
+                    android.graphics.Rect r=nativeBounds(node);
                     queueAccessibilityAction(0,r.exactCenterX(),r.exactCenterY(),r.exactCenterY());
                     event(id,1);return true;
                 }
                 if ((action == 4096 || action == 8192) && scrollable) {
                     float x=getWidth()*0.5f, start=getHeight()*(action==4096 ? 0.7f : 0.3f), end=getHeight()*(action==4096 ? 0.3f : 0.7f);
-                    queueAccessibilityAction(1,x,start,end);
+                    AccessibilityCoordinates c = coordinates();
+                    queueAccessibilityAction(1,c.toWindowX(x),c.toWindowY(start),c.toWindowY(end));
                     return true;
                 }
                 return false;
