@@ -64,6 +64,7 @@ pub enum Campo {
     Link,
     /// Il nome di una voce in «Rivedi» › «Chi parla».
     Voce(u8),
+    Frase(usize),
     CasoCodice,
     CasoNota,
 }
@@ -266,7 +267,7 @@ impl StatoPdf {
             Campo::ExcelPagine => &mut self.x_pagine,
             Campo::Filigrana => &mut self.testo_filigrana,
             Campo::PagineDi(i) => &mut self.unisci.get_mut(i)?.sel,
-            Campo::Opzione(_) | Campo::Modello | Campo::Link | Campo::Voce(_) | Campo::CasoCodice | Campo::CasoNota => return None,
+            Campo::Opzione(_) | Campo::Modello | Campo::Link | Campo::Voce(_) | Campo::Frase(_) | Campo::CasoCodice | Campo::CasoNota => return None,
         })
     }
 
@@ -411,11 +412,15 @@ impl App {
     pub fn tasto(&mut self, t: Tasto) -> Effetto {
         let Some(c) = self.campo else { return Effetto::Niente };
         match (c, t) {
-            (Campo::Voce(_), Tasto::Invio) => {
+            (Campo::Voce(_) | Campo::Frase(_), Tasto::Invio) => {
                 self.campo = None;
                 if let Some(rv) = self.rivedi.as_ref() {
                     rv.salva_revisione();
                 }
+                return Effetto::Ridisegna;
+            }
+            (Campo::Frase(i), _) => {
+                if let Some(rv)=self.rivedi.as_mut(){rv.tasto_frase(i,t);}
                 return Effetto::Ridisegna;
             }
             (Campo::Voce(v), _) => {

@@ -94,7 +94,7 @@ pub use engine::{
     append_log, config_dir, figure_paths, figure_with, package_paths, package_with, merge_paths, merge_with, perform_with, PdfEdit, PdfPages, saved_squeeze, size_words, squeeze_pdf, Exists, ExistsAsk, ExistsChoice, Options, PageSel, unique_output, extension, kind_of, mode_from_vk, perform, perform_into, read_quality, same_kind_paths, slices, Kind,
     Mode, Output, Slice,
 };
-pub use audio::waveform;
+pub use audio::{waveform, duration as audio_duration};
 pub use pdfedit::{Numbers, Squeeze, Stamp, Watermark};
 pub use pdfpages::{groups as pdf_groups, Plan};
 pub use engine::{choose_output, panel_slices, pdf_info, pdf_unlock, rx_with, zip_paths};
