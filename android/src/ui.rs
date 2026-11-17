@@ -20,6 +20,7 @@ use cedro::ui::wheel::list;
 use cedro::{Kind, Mode};
 
 pub mod anim;
+mod accessibilita;
 pub mod tinte;
 mod casa;
 mod web;
@@ -1363,6 +1364,15 @@ impl App {
 
     /// Disegna tutto in un'immagine di `w`×`h` dp (il pittore ha già la scala).
     pub fn disegna(&mut self, p: &mut Painter, w: f32, h: f32) {
+        let prima=self.scorri;
+        self.disegna_frame(p,w,h);
+        if self.scorri!=prima {
+            if let Some(text)=&mut p.accessibility_text{text.clear();}
+            self.disegna_frame(p,w,h);
+        }
+    }
+
+    fn disegna_frame(&mut self, p: &mut Painter, w: f32, h: f32) {
         self.ora = Instant::now();
         self.anim.inizio();
         self.colpi.clear();
@@ -2250,6 +2260,7 @@ impl App {
         let ampio = w > 700.0;
         let cw = if ampio { 520.0 } else { w - 24.0 };
         let x = if ampio { (w - cw) / 2.0 } else { 12.0 };
+        let prima=self.colpi.len();
         p.push_clip(0.0, BARRA, w, h - BARRA);
         let mut y = BARRA - self.scorri;
         // Le quattro tinte di Cedro: un quadrato per ciascuna, con i colori della sua cornice.
@@ -2322,6 +2333,8 @@ impl App {
         y += 76.0;
         let fine = y + p.text_wrap("Le copie vanno nella cartella Documenti. Il tema scelto resta tra un avvio e l'altro.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3);
         p.pop_clip();
+        let hits:Vec<_>=self.colpi.drain(prima..).filter_map(|(f,a)|match f{Forma::R(r)=>intersezione(r,(0.0,BARRA,w,h-BARRA)).map(|r|(Forma::R(r),a)),_=>Some((f,a))}).collect();
+        self.colpi.extend(hits);
         self.scorri_max = (fine + 16.0 + self.scorri - h).max(0.0);
         self.scorri = self.scorri.min(self.scorri_max);
     }

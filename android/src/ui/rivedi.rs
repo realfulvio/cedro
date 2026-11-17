@@ -533,7 +533,14 @@ impl App {
         let affiancati = w > h && w >= 600.0 && rv.r.view != 0;
         let mut cw = if affiancati {(w-36.0)/2.0}else{w-24.0};
         let mut x = 12.0;
+        let ripetizioni=rv.ripetizioni();
+        let piede = if rv.live {64.0}else{84.0+if ripetizioni>0{56.0}else{0.0}+if rv.nota.is_empty(){0.0}else{26.0}};
+        // Con poco spazio/font grandi anche i controlli scorrono: nessun testo resta in una viewport di 1 dp.
+        let flusso=!affiancati && rv.r.view!=0 && rv.r.tab==0 && (h<620.0 || p.text_scale>1.3);
+        let inizio_corpo=colpi.len();
         let mut y = BARRA + 2.0;
+        if flusso {p.push_clip(x,BARRA,cw,(h-BARRA-piede).max(48.0));y-=rv.scorri;}
+
         let pos=rv.posizione();
         let editing=matches!(self.campo,Some(super::pdf::Campo::Frase(_)));
         let used=if editing {0.0}else{lettore(p,pal,rv,(x,y,cw,h-y),premuto,&mut colpi)};
@@ -587,9 +594,8 @@ impl App {
         y += 52.0;
 
         // Le frasi.
-        let ripetizioni=rv.ripetizioni();
-        let piede = if rv.live {64.0}else{84.0+if ripetizioni>0{56.0}else{0.0}+if rv.nota.is_empty(){0.0}else{26.0}};
-        let vista = (x, y, cw, (h - y - piede).max(1.0));
+        let controlli=y+if flusso {rv.scorri}else{0.0}-BARRA;
+        let vista = if flusso {(x,BARRA,cw,(h-BARRA-piede).max(48.0))}else{(x, y, cw, (h - y - piede).max(1.0))};
         let visibili = rv.r.visible();
         let tw = cw - 76.0;
         if rv.largo != tw || rv.altezze.len() != visibili.len() {
@@ -598,9 +604,9 @@ impl App {
                 .iter()
                 .map(|i| {
                     let row = &rv.r.rows[*i];
-                    let righe = p.wrap_lines(&row.text, 15.0, Weight::Regular, tw, 0).len().max(1) as f32;
+                    let testo_h = p.wrap_height(&cedro::i18n::lit(&row.text), 15.0, Weight::Regular, tw, 22.0, 0);
                     let aperto = rv.r.flag_of(*i).is_some_and(|f| rv.r.is_open(f) && rv.r.flags[f].segs.first() == Some(i));
-                    16.0 + righe * 22.0 + if aperto { 132.0 } else { 50.0 } + if voci { 30.0 } else { 0.0 }
+                    16.0 + testo_h + if aperto { 132.0 } else { 50.0 } + if voci { 30.0 } else { 0.0 }
                 })
                 .collect();
         }
@@ -620,11 +626,11 @@ impl App {
             if let Some(at)=visibili.iter().position(|j|*j==i){rv.scorri=rv.altezze[..at].iter().map(|h|h+6.0).sum();}
         }
         let totale: f32 = rv.altezze.iter().map(|a| a + 6.0).sum();
-        rv.scorri_max = (totale - vista.3 + 8.0).max(0.0);
+        rv.scorri_max = (totale + if flusso {controlli}else{0.0} - vista.3 + 8.0).max(0.0);
         rv.scorri = rv.scorri.clamp(0.0, rv.scorri_max);
         p.push_clip(vista.0, vista.1, vista.2, vista.3);
         let corrente = if rv.player.is_some() { rv.r.row_at(pos) } else { rv.r.sel };
-        let mut ry = y - rv.scorri;
+        let mut ry = if flusso {BARRA+controlli-rv.scorri}else{y-rv.scorri};
         if visibili.is_empty() {
             let msg = if rv.r.only_flagged { "Niente da controllare: whisper qui non ha lasciato ripetizioni né frasi inventate." } else { "Nessuna frase da mostrare." };
             p.text_wrap(msg, x + 8.0, y + 12.0, cw - 16.0, 15.0, Weight::Regular, pal.muted, 22.0, 4);
@@ -700,6 +706,11 @@ impl App {
         // I bersagli delle righe rispettano la stessa clip del testo, senza coprire player e piede.
         let righe:Vec<_>=colpi.drain(colpi_frasi..).filter_map(|(f,a)|match f {Forma::R(r)=>super::intersezione(r,vista).map(|r|(Forma::R(r),a)),_=>Some((f,a))}).collect();
         colpi.extend(righe);
+        if flusso {
+            p.pop_clip();
+            let contenuto:Vec<_>=colpi.drain(inizio_corpo..).filter_map(|(f,a)|match f {Forma::R(r)=>super::intersezione(r,vista).map(|r|(Forma::R(r),a)),_=>Some((f,a))}).collect();
+            colpi.extend(contenuto);
+        }
         let mut fy=h-piede+6.0;
         if rv.live {
             if let Some(id)=rv.job.filter(|id|self.lavori.iter().any(|l|l.id==*id&&l.stato==Stato::InCorso)) {
@@ -994,7 +1005,7 @@ fn lettore(p:&mut Painter,pal:&cedro::ui::theme::Palette,rv:&mut Rivedi,r:super:
     let pos=rv.posizione();
     let secs=rv.r.secs.max(0.001);
     if rv.r.view!=2 {
-        let oh=if r.3<360.0 {48.0}else if rv.r.view==0 {180.0}else{104.0};
+        let oh=if r.3<360.0 || rv.r.view==1 && r.3<700.0 {48.0}else if rv.r.view==0 {180.0}else{104.0};
         let ow=w-16.0;
         let ox=x+8.0;
         rv.onda=(ox,ow);
