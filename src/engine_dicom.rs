@@ -302,6 +302,30 @@ mod prove {
         assert!(super::super::rx_in(&[dir.join("logo.png")], Some(&dir), &o, &salvato).is_err());
     }
 
+    /// Prova a mano su un CD vero: tutte le immagini del DICOMDIR anonimizzate e in PNG.
+    /// `CEDRO_CD=cartella-del-cd cargo test --lib cd_vero -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn cd_vero_a_mano() {
+        let cd = PathBuf::from(std::env::var("CEDRO_CD").unwrap());
+        let (file, ix) = crate::dicom::dicomdir::espandi(crate::cartelle::file_in_cartella(&cd, 20_000));
+        eprintln!("{}", ix.unwrap().frase());
+        let dir = scratch();
+        let (mut ok, mut ko) = (0, 0);
+        for f in &file {
+            for azione in ["strip", "png"] {
+                match perform_with(f, azione, 90, Some(&dir), &opts()) {
+                    Ok(_) => ok += 1,
+                    Err(e) => {
+                        ko += 1;
+                        eprintln!("{} {azione}: {e:?}", f.display());
+                    }
+                }
+            }
+        }
+        eprintln!("riusciti {ok}, falliti {ko}, uscita {}", dir.display());
+    }
+
     #[test]
     fn togli_dati_nascosti_fa_un_dicom_anonimo() {
         let dir = scratch();
