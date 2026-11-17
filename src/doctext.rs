@@ -444,7 +444,7 @@ fn zip_entry(path: &Path, name: &str) -> Result<String, String> {
 }
 
 fn zip_entry_at_most(path: &Path, name: &str, max: u64) -> Result<String, String> {
-    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let file = crate::input_file::File::open(path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("archivio non letto: {e}"))?;
     let entry = archive.by_name(name).map_err(|_| format!("manca {name}"))?;
     // Un documento vero ha pochi MB di XML: un archivio fatto apposta (una «zip bomb») che si
@@ -460,7 +460,7 @@ fn zip_entry_at_most(path: &Path, name: &str, max: u64) -> Result<String, String
 /// Un file binario dell'archivio (le immagini), al massimo 64 MB.
 fn zip_bytes(path: &Path, name: &str) -> Result<Vec<u8>, String> {
     const MAX: u64 = 64 * 1_000_000;
-    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let file = crate::input_file::File::open(path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("archivio non letto: {e}"))?;
     let entry = archive.by_name(name).map_err(|_| format!("manca {name}"))?;
     let mut out = Vec::new();
@@ -668,7 +668,7 @@ fn rtf_text(bytes: &[u8]) -> String {
 }
 
 fn doc_text(path: &Path) -> Result<String, String> {
-    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let file = crate::input_file::File::open(path).map_err(|e| e.to_string())?;
     // Nessun flusso può essere più grande del file: si legge al più quanto è lungo.
     let tetto = file.metadata().map(|m| m.len()).unwrap_or(0);
     let mut compound = cfb::CompoundFile::open(file).map_err(|e| format!("DOC non letto: {e}"))?;
