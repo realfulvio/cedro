@@ -1364,9 +1364,9 @@ impl App {
 
     /// Disegna tutto in un'immagine di `w`×`h` dp (il pittore ha già la scala).
     pub fn disegna(&mut self, p: &mut Painter, w: f32, h: f32) {
-        let prima=self.scorri;
+        let prima=(self.scorri,self.scorri_rivedi_ora());
         self.disegna_frame(p,w,h);
-        if self.scorri!=prima {
+        if (self.scorri,self.scorri_rivedi_ora())!=prima {
             if let Some(text)=&mut p.accessibility_text{text.clear();}
             self.disegna_frame(p,w,h);
         }
