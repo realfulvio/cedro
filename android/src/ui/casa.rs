@@ -539,16 +539,19 @@ impl App {
             }
             CasaAz::Vai => return self.vai_casa_lavori(),
             CasaAz::Impostazioni => {
+                self.casa_aperta = true;
                 self.labs.caso_aperto=false;
                 self.casa.elenco = None;
                 self.sopra = Some(Scheda::Aspetto);
                 self.scorri = 0.0;
             }
             CasaAz::Informazioni => {
+                self.casa_aperta = true;
                 self.sopra = Some(Scheda::Info);
                 self.scorri = 0.0;
             }
             CasaAz::Lavori => {
+                self.casa_aperta = true;
                 self.labs.caso_aperto=false;
                 self.labs.filtro=None;
                 self.casa.elenco = None;
@@ -557,6 +560,7 @@ impl App {
             }
             CasaAz::Guida => { self.casa.guida = true; self.sopra = None; },
             CasaAz::Nav(i) => {
+                self.casa_aperta = true;
                 self.labs.caso_aperto=false;
                 self.sopra = None;
                 let c = &mut self.casa;

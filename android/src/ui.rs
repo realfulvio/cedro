@@ -702,6 +702,8 @@ impl App {
 
     /// Imposta il file: da «Condividi» si parte da «Cosa ne faccio?», dal resto dalla ruota.
     pub fn imposta_file(&mut self, f: Archivio, kind: Kind, da_condivisione: bool) {
+        self.scorri = 0.0;
+        self.scorri_max = 0.0;
         self.file = Some(f);
         self.kind = kind;
         self.modo = 0;
@@ -1158,6 +1160,7 @@ impl App {
         self.lavori.insert(0, Lavoro { id: lavoro, origine: file.nome.clone(), etichetta: etichetta.into(), conv, inizio: Instant::now(), quando: adesso(), stato: Stato::InCorso, prog: prog.clone(), sorgente, controlli: None });
         self.scorri = 0.0;
         self.scheda = Scheda::Lavori;
+        if self.tema.is_cedro() { self.casa_aperta = true; }
         if self.casa_aperta {
             self.sopra = Some(Scheda::Lavori);
         }
@@ -2485,5 +2488,22 @@ mod temi_regressioni {
         for key in ["bondeno", "cedro-labs", "sconosciuto", ""] {
             assert_eq!(tema_da_chiave(key), ThemeId::Cedro);
         }
+    }
+}
+
+#[cfg(test)]
+mod import_route_regressioni {
+    use super::*;
+    #[test]
+    fn condiviso_azzera_scroll_e_converti_torna_ai_tre_destini() {
+        let mut app=App::new(ThemeId::Cedro);
+        app.scorri=1800.0;app.scorri_max=2000.0;
+        app.imposta_file(Archivio{path:"/privato/foto.jpg".into(),nome:"foto.jpg".into(),dim:123},Kind::Image,true);
+        assert_eq!(app.scorri,0.0);assert_eq!(app.scorri_max,0.0);assert!(app.foglio);
+        assert!(matches!(app.avvia("pdf","PDF",true),Effetto::Converti{..}));
+        assert!(app.casa_aperta);assert_eq!(app.sopra,Some(Scheda::Lavori));
+        app.azione_casa(casa::CasaAz::Impostazioni);
+        assert!(app.casa_aperta);assert_eq!(app.sopra,Some(Scheda::Aspetto));
+        app.azione_casa(casa::CasaAz::Nav(0));assert!(app.casa.inizio);
     }
 }

@@ -77,7 +77,8 @@ fn consenso(evento:Evento)->Result<(),String>{
 #[no_mangle]
 pub extern "C" fn cedro_lavoro_main() -> i32 {
     extern "C" fn annulla(_:i32){CANCEL.store(true,std::sync::atomic::Ordering::Release);}
-    unsafe{libc::signal(libc::SIGUSR1,annulla as libc::sighandler_t);}
+    unsafe{libc::signal(libc::SIGUSR1,annulla as *const () as libc::sighandler_t);}
+    android_logger::init_once(android_logger::Config::default().with_max_level(log::LevelFilter::Info).with_tag("CedroWorker"));
     cedro::componenti::osserva(Some(std::sync::Arc::new(|s|emetti(Evento::Componente(s.map(crate::web::Componente::da_core))))));
     cedro::componenti::verifica_download(Some(std::sync::Arc::new(|nome,bytes|consenso(Evento::Scarica(nome.into(),bytes)))));
     cedro::componenti::traccia_parziali(Some(std::sync::Arc::new(|path|consenso(Evento::Parziale(crate::web::Parziale::registra(path)?)))));
@@ -85,11 +86,36 @@ pub extern "C" fn cedro_lavoro_main() -> i32 {
         use std::io::Read;
         let request: Richiesta = serde_json::from_reader(std::io::stdin().take(4 * 1024 * 1024)).map_err(|e| e.to_string())?;
         if let Ok(libs)=std::env::var("CEDRO_LIB_DIR") {cedro::riassunto::android::set_libs(PathBuf::from(libs));}
+        diagnostica_saf(&request.file);
         esegui(request)
     }).unwrap_or_else(|_| Err("Il motore si è interrotto".into()));
     let code = if r.is_ok() { 0 } else { 1 };
     emetti(Evento::Fine(r));
     code
+}
+
+/// Probe discriminante: nessun nome, URI o byte del documento nei log.
+#[cfg(target_os="android")]
+fn diagnostica_saf(path:&std::path::Path) {
+    use std::os::fd::{BorrowedFd, AsFd};
+    use std::os::unix::fs::FileExt;
+    let Ok(list)=std::env::var("CEDRO_INPUT_FDS") else{return};
+    for fd in list.split(',').filter_map(|s|s.parse::<i32>().ok()) {
+        let flags=unsafe{libc::fcntl(fd,libc::F_GETFD)};
+        if flags<0 {log::info!("SAF probe fd={fd} fcntl_errno={:?}",std::io::Error::last_os_error().raw_os_error());continue;}
+        // Borrow only for this probe; the inherited lease remains owned by the launcher.
+        let owned=unsafe{BorrowedFd::borrow_raw(fd)}.as_fd().try_clone_to_owned();
+        match owned {
+            Ok(owned)=>{
+                let file=std::fs::File::from(owned);
+                let stat=file.metadata().map(|m|m.len()).map_err(|e|e.raw_os_error());
+                let read=file.read_at(&mut [0u8;16],0).map_err(|e|e.raw_os_error());
+                log::info!("SAF probe fd={fd} flags={flags} fstat={stat:?} pread={read:?}");
+            }
+            Err(e)=>log::info!("SAF probe fd={fd} dup_errno={:?}",e.raw_os_error()),
+        }
+    }
+    if !list.is_empty(){log::info!("SAF probe pathname_open={:?}",std::fs::File::open(path).map(|_|()).map_err(|e|e.raw_os_error()));}
 }
 
 /// Ha un lifetime indipendente dal journal dei risultati completi.
@@ -225,7 +251,7 @@ pub fn avvia(libs: &std::path::Path, r: Richiesta, cancel: &std::sync::atomic::A
     fds.push(job_fd);
     let mut command = Command::new(libs.join("libcedro_lavoro.so"));
     command
-        .arg(libs.join("libcedro_android.so")).env("LD_LIBRARY_PATH", libs).env("CEDRO_JOB_FD",job_fd.to_string()).env("CEDRO_LIB_DIR",libs)
+        .arg(libs.join("libcedro_android.so")).env("LD_LIBRARY_PATH", libs).env("CEDRO_JOB_FD",job_fd.to_string()).env("CEDRO_LIB_DIR",libs).env("CEDRO_INPUT_FDS",inputs.iter().map(|f|f.as_raw_fd().to_string()).collect::<Vec<_>>().join(","))
         .process_group(0).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null());
     unsafe { command.pre_exec(move || {
         for fd in &fds {
