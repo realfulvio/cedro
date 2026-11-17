@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature="android-worker",derive(serde::Serialize,serde::Deserialize))]
 pub enum Fase {
     /// Byte arrivati e totale (0 se non si sa).
     Scarica { fatti: u64, totale: u64 },
@@ -24,6 +25,48 @@ pub struct Stato {
 const ERRORE_PER: Duration = Duration::from_secs(12);
 
 static ORA: Mutex<Option<Stato>> = Mutex::new(None);
+type Osservatore = std::sync::Arc<dyn Fn(Option<Stato>) + Send + Sync>;
+static OSSERVATORE: Mutex<Option<Osservatore>> = Mutex::new(None);
+
+/// Trasporto facoltativo per l'host Android. Nessun thread di polling nel motore.
+/// La callback viene chiamata fuori dal lock dello stato e deve restare breve.
+pub fn osserva(callback: Option<Osservatore>) {
+    *OSSERVATORE.lock().unwrap_or_else(|e| e.into_inner()) = callback;
+}
+type Permesso = std::sync::Arc<dyn Fn(&str,u64)->Result<(),String> + Send + Sync>;
+static PERMESSO: Mutex<Option<Permesso>> = Mutex::new(None);
+/// L'host può verificare rete e spazio prima che inizi un download di componenti.
+pub fn verifica_download(callback:Option<Permesso>){*PERMESSO.lock().unwrap_or_else(|e|e.into_inner())=callback;}
+pub fn prima_download(nome:&str,bytes:u64)->Result<(),String>{
+    let callback=PERMESSO.lock().unwrap_or_else(|e|e.into_inner()).clone();
+    if let Some(callback)=callback{callback(nome,bytes)}else{Ok(())}
+}
+type Parziale = std::sync::Arc<dyn Fn(&std::path::Path)->Result<(),String> + Send + Sync>;
+static PARZIALE:Mutex<Option<Parziale>>=Mutex::new(None);
+pub fn traccia_parziali(callback:Option<Parziale>){*PARZIALE.lock().unwrap_or_else(|e|e.into_inner())=callback;}
+/// Reclama soltanto un file nuovo; quelli preesistenti non appartengono al lavoro corrente.
+pub fn prepara_parziale(path:&std::path::Path)->Result<(),String>{
+    let callback=PARZIALE.lock().unwrap_or_else(|e|e.into_inner()).clone();
+    let Some(callback)=callback else{return Ok(())};
+    match std::fs::OpenOptions::new().write(true).create_new(true).open(path){
+        Ok(file)=>{drop(file);let result=callback(path);if result.is_err(){let _=std::fs::remove_file(path);}result},
+        Err(e) if e.kind()==std::io::ErrorKind::AlreadyExists=>Ok(()),
+        Err(e)=>Err(e.to_string()),
+    }
+}
+/// Ricontrolla la policy durante i download lunghi; al massimo una volta al secondo.
+/// L'host può attendere il ritorno del Wi-Fi mentre il downloader conserva l'offset.
+pub fn continua_download(nome:&str)->Result<(),String>{
+    static ULTIMO:Mutex<Option<Instant>>=Mutex::new(None);
+    let mut last=ULTIMO.lock().unwrap_or_else(|e|e.into_inner());
+    if last.is_some_and(|t|t.elapsed()<Duration::from_secs(1)){return Ok(());}
+    *last=Some(Instant::now());drop(last);
+    prima_download(nome,0)
+}
+fn notifica() {
+    let callback = OSSERVATORE.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    if let Some(callback) = callback { callback(attuale()); }
+}
 
 fn metti(nome: &str, fase: Fase) {
     if let Ok(mut g) = ORA.lock() {
@@ -33,6 +76,7 @@ fn metti(nome: &str, fase: Fase) {
         };
         *g = Some(Stato { nome: nome.to_string(), fase, da });
     }
+    notifica();
 }
 
 pub fn scarica(nome: &str, fatti: u64, totale: u64) {
@@ -54,6 +98,7 @@ pub fn fine(nome: &str) {
             *g = None;
         }
     }
+    notifica();
 }
 
 /// Toglie qualunque stato (anche un errore): per le foto della finestra.
@@ -61,6 +106,7 @@ pub fn azzera() {
     if let Ok(mut g) = ORA.lock() {
         *g = None;
     }
+    notifica();
 }
 
 pub fn attuale() -> Option<Stato> {

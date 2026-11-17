@@ -9,7 +9,7 @@
 //! libreria `liffile`.
 
 use std::collections::HashMap;
-use std::fs::File;
+use crate::input_file::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 

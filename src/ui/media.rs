@@ -143,7 +143,7 @@ pub fn pdf_page_thumbs(path: &Path, pages: &[usize], side: f32, each: &mut dyn F
     use hayro::hayro_syntax::Pdf;
     use hayro::vello_cpu::color::palette::css::WHITE;
     use hayro::{render, PixmapSettings, RenderCache, RenderSettings};
-    let pdf = std::fs::read(path).ok().and_then(|b| Pdf::new(b).ok());
+    let pdf = crate::input_file::read(path).ok().and_then(|b| Pdf::new(b).ok());
     let Some(pdf) = pdf else {
         for &p in pages {
             if !each(p, None) {
@@ -186,7 +186,7 @@ pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
         let small = img.thumbnail(side, side).to_rgba8();
         return Some((Image::from_rgba(small.width(), small.height(), small.as_raw())?, size));
     }
-    let mut decoder = image::ImageReader::open(path).ok()?.with_guessed_format().ok()?.into_decoder().ok()?;
+    let mut decoder = crate::imgfmt::reader(path).ok()?.into_decoder().ok()?;
     let orientation = decoder.orientation().ok();
     let mut img = image::DynamicImage::from_decoder(decoder).ok()?;
     if let Some(o) = orientation {
@@ -198,7 +198,7 @@ pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
 }
 
 fn pdf_page(path: &Path, page: usize, side: f32) -> Option<Image> {
-    let bytes = std::fs::read(path).ok()?;
+    let bytes = crate::input_file::read(path).ok()?;
     let (w, h, rgba) = crate::ocr::render_page_rgba(&bytes, page, side).ok()?;
     Image::from_rgba(w, h, &rgba)
 }
@@ -221,7 +221,7 @@ fn info(path: &Path) -> Loaded {
             }
         }
         Kind::Pdf => {
-            if let Ok(bytes) = std::fs::read(path) {
+            if let Ok(bytes) = crate::input_file::read(path) {
                 out.pages = crate::ocr::pdf_page_count(&bytes).ok();
                 out.thumb = crate::ocr::render_page_rgba(&bytes, 0, THUMB as f32).ok().and_then(|(w, h, rgba)| Image::from_rgba(w, h, &rgba));
             }

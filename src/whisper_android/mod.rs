@@ -10,6 +10,9 @@ use serde_json::{json, Value};
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
 mod decode;
+#[path = "../../trascrivi/src/parlato.rs"]
+#[allow(dead_code)]
+mod parlato;
 // Prompt italiano e frase fantasma finale: le stesse regole del motore del computer (v0.34).
 #[path = "../../trascrivi/src/rifinitura.rs"]
 mod rifinitura;
@@ -123,6 +126,10 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, ev: &Sender
         return Err(Failure::Other("l'audio è vuoto".into()));
     }
     let _ = ev.send(json!({"e": "audio", "secs": samples.len() as f64 / decode::RATE as f64, "ms": begin.elapsed().as_millis() as u64}));
+    if !parlato::has_speech(&samples) {
+        let _ = ev.send(json!({"e": "nospeech"}));
+        return Ok(if wanted == "auto" { "it".into() } else { wanted.into() });
+    }
     if let Some(wanted) = requested_speakers(request) {
         diarize(&samples, wanted, threads, ev, voices);
     }
@@ -149,7 +156,8 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, ev: &Sender
     // Niente «[Musica]», «(applausi)» e simili al posto del parlato.
     params.set_suppress_nst(true);
     // Un esempio con la punteggiatura: senza, il parlato informale esce minuscolo e senza punti.
-    if let Some(prompt) = rifinitura::initial_prompt(&lang) {
+    let prompt = rifinitura::prompt(&lang, request["glossario"].as_str());
+    if let Some(prompt) = prompt.as_deref() {
         params.set_initial_prompt(prompt);
     }
     // Ogni frase parte quando arriva la successiva: l'ultima si guarda a parte, perché a fine audio whisper a volte

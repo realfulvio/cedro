@@ -17,14 +17,11 @@ const MAX_IMAGE_BYTES: u64 = 2 << 30;
 
 /// Apre un'immagine e la raddrizza secondo l'orientamento EXIF, come fanno le foto del telefono.
 pub fn open_upright(path: &Path) -> Result<DynamicImage, String> {
-    use image::{ImageDecoder, ImageReader};
+    use image::ImageDecoder;
     if crate::svs::is_slide(path) {
         return crate::svs::open_image(path, None);
     }
-    let mut decoder = ImageReader::open(path)
-        .map_err(|e| e.to_string())?
-        .with_guessed_format()
-        .map_err(|e| e.to_string())?
+    let mut decoder = crate::imgfmt::reader(path)?
         .into_decoder()
         .map_err(|e| format!("immagine non letta: {e}"))?;
     let orientation = decoder.orientation().ok();

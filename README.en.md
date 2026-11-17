@@ -49,7 +49,7 @@ Are you a biotech, veterinary or research lab? There is also **[Cedro 4 Labs](#c
   <img src="docs/v4/tinte-en.webp" width="49%" alt="Cedro's four tints: Cedro, Night, Forest and Paper">
 </p>
 
-Since 0.44 the default look is the new paged **Cedro** one, with four tints (Cedro, Night, Forest, Paper) and a **Simple** or **Full** view one click away. The five earlier looks, including the **Comune di Bondeno** one, are still in *Settings › Appearance*. Some labels in the screenshots are still shown in Italian.
+On **Windows and Linux desktop**, *Settings › Appearance* offers only **Cedro Melanzana, Cedro Notte, Cedro Bosco, Cedro Carta and Cedro for Labs**, with a **Simple** or **Full** view one click away. Preferences for retired themes, including **Comune di Bondeno** and its former edition, migrate automatically to **Melanzana**, preserving quality, view and other settings. **Android keeps its earlier themes**: this reduction applies to desktop. Some labels in the screenshots are still shown in Italian.
 
 ## Download and install
 

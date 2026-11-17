@@ -1,7 +1,7 @@
 //! symphonia 0.6: le parti comuni a audio, video e anteprima (aprire un file, trovare la traccia audio,
 //! creare il decodificatore, avere i campioni in i16 interleaved).
 
-use std::fs::File;
+use crate::input_file::File;
 use std::path::Path;
 
 use symphonia::core::audio::GenericAudioBufferRef;

@@ -14,7 +14,7 @@ use cedro::ui::theme::{mix, ThemeId};
 use cedro::ui::voci;
 use cedro::Kind;
 
-mod telefono;
+pub(super) mod telefono;
 
 use super::opzioni::OpzAz;
 use super::pdf::Campo;
@@ -203,9 +203,12 @@ pub enum CasaAz {
     Passo(i8),
     Formato(usize),
     Modello(usize),
+    Referto,
+    Ascolta(usize),
     Web(usize),
     Incolla,
     Impostazioni,
+    Informazioni,
     Lavori,
     Guida,
     Indietro,
@@ -221,11 +224,15 @@ pub enum CasaAz {
     RecenteVai(usize),
     /// Semplice (falso) o Completa (vero).
     Vista(bool),
+    /// Salta al gruppo, mantenendo la barra delle famiglie visibile.
+    Famiglia(&'static str),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Elenco {
     Formato,
+    Lingua,
+    Tema,
     /// L'opzione a scelta dell'ispettore (indice nelle definizioni).
     Opzione(usize),
     Esiste,
@@ -261,11 +268,14 @@ pub struct Casa {
     pub elenco_max: f32,
     /// Il nuovo Cedro mostra «Inizio» (le sei tessere) invece della pagina di un'attività.
     pub inizio: bool,
+    /// Catalogo delle azioni Labs reali; punto di ingresso per il workspace dei task successivi.
+    pub laboratorio: bool,
+    famiglie_y: HashMap<&'static str,f32>,
 }
 
 impl Default for Casa {
     fn default() -> Self {
-        Casa { att: Att::Conv, categoria: Kind::Image, coda: Vec::new(), operazione: HashMap::new(), valori: HashMap::new(), elenco: None, passo: 0, mostrato: 0, link: String::new(), web: 0, guida: false, fx: [0.0; 2], fx_max: [0.0; 2], segui: None, tutti: false, elenco_scorri: 0.0, elenco_max: 0.0, inizio: true }
+        Casa { att: Att::Conv, categoria: Kind::Image, coda: Vec::new(), operazione: HashMap::new(), valori: HashMap::new(), elenco: None, passo: 0, mostrato: 0, link: String::new(), web: 0, guida: false, fx: [0.0; 2], fx_max: [0.0; 2], segui: None, tutti: false, elenco_scorri: 0.0, elenco_max: 0.0, inizio: true, laboratorio: false, famiglie_y: HashMap::new() }
     }
 }
 
@@ -310,7 +320,7 @@ impl Casa {
     /// Le opzioni dell'operazione di ora, quelle che si vedono.
     fn defs(&self) -> Vec<&'static OptionDef> {
         let v = self.valori();
-        conversioni::option_defs(self.categoria, self.operazione()).into_iter().filter(|d| d.opt != conversioni::Opt::NameTemplate && conversioni::shown(d, &v)).collect()
+        crate::labs::defs(self.categoria, self.operazione(), self.scelti().iter().map(|i| self.coda[*i].path.as_path())).into_iter().filter(|d| d.opt != conversioni::Opt::NameTemplate && conversioni::shown(d, &v)).collect()
     }
 
     /// Il nome dell'operazione («PNG», «Comprimi»).
@@ -338,6 +348,8 @@ impl App {
         self.rivedi = None;
         self.scorri = 0.0;
         self.casa.inizio = true;
+        self.casa.att = Att::Conv;
+        self.casa.laboratorio = false;
     }
 
     /// File nuovi in coda (scelti con «Aggiungi file» o da una cartella).
@@ -360,6 +372,9 @@ impl App {
             if c.att == Att::Tras && !matches!(k, Kind::Audio | Kind::Video) {
                 c.att = Att::Conv;
                 c.categoria = k;
+            }
+            if c.laboratorio && !conversioni::tools(c.categoria).iter().any(|s| voci::is_lab(&voci::voce(c.categoria, s.id))) {
+                c.laboratorio = false;
             }
             // Nel nuovo Cedro, dei file arrivati da fuori si vede subito la pagina del loro tipo.
             if c.inizio && k != Kind::Other {
@@ -401,6 +416,11 @@ impl App {
     pub(super) fn azione_casa(&mut self, az: CasaAz) -> Effetto {
         let att = attivita();
         match az {
+            CasaAz::Referto => { self.referto = !self.referto; return Effetto::Ridisegna; }
+            CasaAz::Ascolta(i) => {
+                let Some(v) = self.casa.coda.get(i) else { return Effetto::Niente };
+                return self.apri_ascolto(v.path.clone(), v.nome.clone(), v.lavoro);
+            }
             CasaAz::Att(i) => {
                 if let Some(a) = att.get(i) {
                     self.casa.att = *a;
@@ -479,6 +499,8 @@ impl App {
                         self.esiste = [cedro::Exists::Number, cedro::Exists::Replace, cedro::Exists::Skip][k.min(2)];
                         return Effetto::SalvaImpostazioni;
                     }
+                    Some(Elenco::Lingua) => return self.attiva(Azione::Lingua(k)),
+                    Some(Elenco::Tema) => return self.attiva(Azione::Tema(k)),
                     Some(Elenco::Attivita) => return self.azione_casa(CasaAz::Att(k)),
                     Some(Elenco::Voci) => self.voci = (k as u8).min(8),
                     None => {}
@@ -508,7 +530,7 @@ impl App {
                 }
             }
             CasaAz::Modello(m) => self.modello = m,
-            CasaAz::Web(k) => self.casa.web = k,
+            CasaAz::Web(k) => {self.casa.web=k;if k==2{self.web.altezza=480;}},
             CasaAz::Incolla => return Effetto::Incolla,
             CasaAz::Passo(d) => {
                 let p = (self.casa.passo as i8 + d).clamp(0, 2) as u8;
@@ -517,22 +539,38 @@ impl App {
             }
             CasaAz::Vai => return self.vai_casa_lavori(),
             CasaAz::Impostazioni => {
+                self.casa_aperta = true;
+                self.labs.caso_aperto=false;
+                self.casa.elenco = None;
                 self.sopra = Some(Scheda::Aspetto);
                 self.scorri = 0.0;
             }
+            CasaAz::Informazioni => {
+                self.casa_aperta = true;
+                self.sopra = Some(Scheda::Info);
+                self.scorri = 0.0;
+            }
             CasaAz::Lavori => {
+                self.casa_aperta = true;
+                self.labs.caso_aperto=false;
+                self.labs.filtro=None;
+                self.casa.elenco = None;
                 self.sopra = Some(Scheda::Lavori);
                 self.scorri = 0.0;
             }
-            CasaAz::Guida => self.casa.guida = true,
+            CasaAz::Guida => { self.casa.guida = true; self.sopra = None; },
             CasaAz::Nav(i) => {
+                self.casa_aperta = true;
+                self.labs.caso_aperto=false;
                 self.sopra = None;
                 let c = &mut self.casa;
                 c.guida = false;
                 c.elenco = None;
                 c.passo = 0;
                 c.inizio = i == 0;
+                c.laboratorio = i == 6;
                 match i {
+                    0 => c.att = Att::Conv,
                     1 => {
                         c.att = Att::Conv;
                         if c.categoria == Kind::Pdf {
@@ -546,6 +584,15 @@ impl App {
                     3 => c.att = Att::Tras,
                     4 => c.att = Att::Web,
                     5 => c.att = Att::Firma,
+                    6 => {
+                        c.att = Att::Conv;
+                        c.categoria = Kind::Image;
+                        if !voci::is_lab(&voci::voce(c.categoria, c.operazione())) {
+                            if let Some(op) = conversioni::tools(c.categoria).iter().find(|s| voci::is_lab(&voci::voce(c.categoria, s.id))) {
+                                c.operazione.insert(ck(c.categoria), op.id);
+                            }
+                        }
+                    }
                     _ => {}
                 }
                 c.mostrato = 0;
@@ -555,6 +602,7 @@ impl App {
                 let k = [Kind::Image, Kind::Pdf, Kind::Doc, Kind::Audio, Kind::Video, Kind::Archive].get(i).copied().unwrap_or(Kind::Image);
                 let c = &mut self.casa;
                 c.inizio = false;
+                c.laboratorio = false;
                 c.att = Att::Conv;
                 c.categoria = k;
                 c.mostrato = 0;
@@ -565,12 +613,16 @@ impl App {
                 if let Some(k) = self.recenti.get(i).map(|r| r.kind) {
                     let c = &mut self.casa;
                     c.inizio = false;
+                    c.laboratorio = false;
                     c.att = Att::Conv;
                     c.categoria = k;
                     c.mostrato = 0;
                     self.scorri = 0.0;
                 }
                 return self.azione_casa(CasaAz::Recente(i));
+            }
+            CasaAz::Famiglia(nome) => {
+                if let Some(y)=self.casa.famiglie_y.get(nome) {self.scorri=(*y).clamp(0.0,self.scorri_max);}
             }
             CasaAz::Vista(completa) => {
                 self.imp.simple = !completa;
@@ -591,7 +643,13 @@ impl App {
     /// Le operazioni della categoria: i formati e gli strumenti (id, nome).
     fn operazioni(&self) -> Vec<(&'static str, &'static str)> {
         let k = self.casa.categoria;
-        conversioni::formats(k).iter().chain(conversioni::tools(k)).filter(|s| s.id != "none").map(|s| (s.id, s.label)).collect()
+        let mut v: Vec<_> = conversioni::formats(k).iter().chain(conversioni::tools(k)).filter(|s| s.id != "none").map(|s| (s.id, s.label)).collect();
+        if k == Kind::Pdf {
+            for (id, nome) in [("merge", "Unisci"), ("split", "Dividi"), ("pages", "Pagine"), ("compress", "Comprimi")] {
+                if !v.iter().any(|s| s.0 == id) { v.push((id, nome)); }
+            }
+        }
+        v
     }
 
     /// Il pulsante grande: un lavoro per ogni file scelto (o il link).
@@ -605,7 +663,8 @@ impl App {
             if cedro::webvideo::find_url(&link).is_none() {
                 return Effetto::Niente;
             }
-            let (id, nome, _) = WEB[self.casa.web.min(3)];
+            let (mut id, nome, _) = WEB[self.casa.web.min(3)];
+            if !cfg!(feature="youtube")&&cedro::youtube::is_youtube_url(&link){id="web-altra-app";}
             let host = link.split_once("://").map(|(_, r)| r).unwrap_or(&link).split('/').next().unwrap_or("").to_string();
             self.file = Some(Archivio { path: PathBuf::from(&link), nome: host, dim: 0 });
             self.kind = Kind::Video;
@@ -639,20 +698,39 @@ impl App {
             return Effetto::LeggiPdf(v.path, Vec::new());
         }
         let opts = if att == Att::Tras { cedro::Options::default() } else { conversioni::options_from(&self.casa.valori()) };
+        if matches!(id,"figure"|"rx") {
+            let v=self.casa.coda[scelti[0]].clone();
+            self.file=Some(Archivio{path:v.path,nome:v.nome,dim:v.dim});self.kind=v.kind;
+            let inputs=scelti.iter().map(|i|(self.casa.coda[*i].path.clone(),None)).collect();
+            let result=self.avvia_con(id,etichetta,false,Some(Box::new(opts)),inputs);
+            self.file=None;
+            return result;
+        }
         let mut compiti = Vec::new();
         for i in scelti {
             let v = self.casa.coda[i].clone();
             self.file = Some(Archivio { path: v.path.clone(), nome: v.nome.clone(), dim: v.dim });
             self.kind = v.kind;
-            if let Effetto::Converti { id: lavoro, file, azione, qualita, prog, opts, unisci } = self.avvia_con(id, etichetta, conv, Some(Box::new(opts.clone())), Vec::new()) {
+            if let Effetto::Converti { voce, web, id: lavoro, file, azione, qualita, prog, opts, unisci } = self.avvia_con(id, etichetta, conv, Some(Box::new(opts.clone())), Vec::new()) {
                 self.casa.coda[i].lavoro = Some(lavoro);
-                compiti.push(super::Compito { id: lavoro, file, azione, qualita, prog, opts, unisci });
+                compiti.push(super::Compito { voce, web, id: lavoro, file, azione, qualita, prog, opts, unisci });
             }
         }
         self.file = None;
         // Il Banco di lavoro mostra lo stato nella tabella; gli altri temi passano ai Lavori.
         self.sopra = if self.tema == ThemeId::BancoDiLavoro { None } else { Some(Scheda::Lavori) };
         Effetto::Tanti(compiti)
+    }
+
+    pub(super) fn pacchetto_labs(&mut self)->Effetto {
+        let scelti:Vec<_>=self.casa.coda.iter().enumerate().filter(|(_,v)|v.scelto).map(|(i,_)|i).collect();
+        let Some(first)=scelti.first() else{return Effetto::Niente};
+        let v=self.casa.coda[*first].clone();
+        let files=scelti.iter().map(|i|(self.casa.coda[*i].path.clone(),None)).collect();
+        self.file=Some(Archivio{path:v.path,nome:v.nome,dim:v.dim});self.kind=v.kind;
+        let result=self.avvia_con("package","Pacchetto con impronte",false,None,files);
+        self.file=None;
+        result
     }
 
     // ================================================================ disegno
@@ -670,6 +748,11 @@ impl App {
     /// Per le fotografie della `vista`: Semplice o Completa.
     pub fn vista_completa(&mut self, completa: bool) {
         self.imp.simple = !completa;
+    }
+
+    /// Posizione verticale iniziale per le fotografie della vista; il disegno la limita al contenuto.
+    pub fn vista_scorri(&mut self, posizione: f32) {
+        self.scorri = if posizione.is_finite() { posizione.max(0.0) } else { 0.0 };
     }
 
     /// Per le fotografie della `vista`: il foglio dei formati aperto.
@@ -953,7 +1036,7 @@ impl App {
     /// Il testo del pulsante grande.
     fn testo_cta(&self) -> (String, &'static str) {
         match self.casa.att {
-            Att::Yt | Att::Web => ("Scarica".into(), ic::DOWNLOAD),
+            Att::Yt | Att::Web => (if !cfg!(feature="youtube")&&cedro::youtube::is_youtube_url(&self.casa.link){"Apri con un'altra app"}else{"Scarica"}.into(), ic::DOWNLOAD),
             Att::Firma => ("Scegli il file firmato".into(), ic::SHIELD),
             Att::Tras => {
                 let n = self.casa.scelti().len();
@@ -2196,6 +2279,16 @@ impl App {
         let scuro = self.scuro();
         let mut gruppi: Vec<(usize, &'static str)> = Vec::new();
         let (titolo, voci, attuale): (String, Vec<RigaElenco>, Option<usize>) = match e {
+            Elenco::Lingua => (
+                "Lingua".into(),
+                super::LINGUE.iter().enumerate().map(|(i, (_, nome))| RigaElenco { nome: if i == 0 { nome.to_string() } else { cedro::i18n::lit(nome) }, icona: None, nota: "" }).collect(),
+                super::LINGUE.iter().position(|(key, _)| self.lingua == *key),
+            ),
+            Elenco::Tema => (
+                "Temi precedenti".into(),
+                super::TEMI.iter().map(|t| RigaElenco::semplice(t.name(), "")).collect(),
+                super::TEMI.iter().position(|t| *t == self.tema),
+            ),
             Elenco::Formato => {
                 let tutte = self.operazioni();
                 let cat = self.casa.categoria;

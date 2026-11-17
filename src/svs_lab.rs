@@ -285,6 +285,7 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
 
 /// Le scelte delle tessere.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tessere {
     /// Il lato di una tessera in pixel (256 o 512).
     pub lato: u32,
@@ -838,11 +839,11 @@ pub fn codice_caso(path: &Path) -> String {
         None => path,
     };
     let mut h = Sha256::new();
-    if let Some(ini) = mirax.as_ref().and_then(|d| fs::read(d.join("Slidedat.ini")).ok()) {
+    if let Some(ini) = mirax.as_ref().and_then(|d| crate::input_file::read(d.join("Slidedat.ini")).ok()) {
         h.update(&ini);
     }
     let letto = (|| -> std::io::Result<()> {
-        let mut f = File::open(path)?;
+        let mut f = crate::input_file::File::open(path)?;
         let n = f.metadata()?.len();
         h.update(n.to_le_bytes());
         let pezzo = 4u64 << 20;
