@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 /// Il tipo MIME di un file dalla sua estensione (per «Apri» e «Condividi»).
+#[cfg(any(target_os = "android", test))]
 pub(crate) fn mime_da_percorso(path: &Path) -> &'static str {
     match path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase().as_str() {
         "jpg" | "jpeg" => "image/jpeg",
@@ -57,6 +58,7 @@ pub(crate) fn mime_da_percorso(path: &Path) -> &'static str {
 }
 
 /// Originale delle firme staccate: conserva il grant SAF e un cursore indipendente.
+#[cfg(any(target_os = "android", test))]
 pub(crate) fn leggi_originale(path: &Path, cancel: &AtomicBool) -> Result<Vec<u8>, String> {
     if cancel.load(Ordering::Acquire) { return Err("Annullato".into()); }
     let mut file=cedro::input_file::File::open(path).map_err(|e|e.to_string())?;
