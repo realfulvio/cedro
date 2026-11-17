@@ -94,6 +94,7 @@ pub struct Rivedi {
     /// Altezze delle frasi alla larghezza `largo` (si rifanno quando cambia qualcosa).
     altezze: Vec<f32>,
     largo: f32,
+    scala_testo: f32,
     scorri: f32,
     scorri_max: f32,
     /// Dove sta l'onda sullo schermo, per toccarla.
@@ -149,7 +150,7 @@ impl Rivedi {
     }
 
     fn new(r: Review, titolo: String, job: Option<u32>, live: bool) -> Self {
-        Self { r, titolo, job, live, speed: 100, zoom: 1.0, offset: 0.0, drag: None, player: None, salva: None, nota: String::new(), altezze: Vec::new(), largo: 0.0, scorri: 0.0, scorri_max: 0.0, onda: (0.0, 0.0), foglio: None, riassunto: None, riassunto_nota: String::new() }
+        Self { r, titolo, job, live, speed: 100, zoom: 1.0, offset: 0.0, drag: None, player: None, salva: None, nota: String::new(), altezze: Vec::new(), largo: 0.0, scala_testo: 0.0, scorri: 0.0, scorri_max: 0.0, onda: (0.0, 0.0), foglio: None, riassunto: None, riassunto_nota: String::new() }
     }
 
     /// Un tasto sul nome di una voce («Chi parla»).
@@ -582,6 +583,7 @@ impl App {
 
         // Solo da controllare, Segui l'audio
         let mezza = cw / 2.0;
+        let filtri_h=["Solo da controllare","Segui l'audio"].iter().map(|t|p.wrap_height(t,12.0,Weight::Regular,mezza-66.0,17.0,2)+8.0).fold(48.0f32,f32::max);
         for (k, (t, on, az)) in [("Solo da controllare", rv.r.only_flagged, RivAz::SoloControllo), ("Segui l'audio", rv.r.follow, RivAz::Segui)].into_iter().enumerate() {
             let rx = x + k as f32 * mezza;
             let dim = if p.measure(t, 14.0, Weight::Regular) <= mezza - 70.0 { 14.0 } else { 12.0 };
@@ -589,17 +591,18 @@ impl App {
             let sx = rx + mezza - 62.0;
             p.rrect(sx, y + 6.0, 48.0, 28.0, 14.0, Some(if on { pal.primary } else { pal.border }), None);
             p.circle(if on { sx + 34.0 } else { sx + 14.0 }, y + 20.0, 10.0, Some((255, 255, 255)), None);
-            colpi.push((Forma::R((rx, y, mezza, 48.0)), Azione::Riv(az)));
+            colpi.push((Forma::R((rx, y, mezza, filtri_h)), Azione::Riv(az)));
         }
-        y += 52.0;
+        y += filtri_h+4.0;
 
         // Le frasi.
         let controlli=y+if flusso {rv.scorri}else{0.0}-BARRA;
         let vista = if flusso {(x,BARRA,cw,(h-BARRA-piede).max(48.0))}else{(x, y, cw, (h - y - piede).max(1.0))};
         let visibili = rv.r.visible();
         let tw = cw - 76.0;
-        if rv.largo != tw || rv.altezze.len() != visibili.len() {
+        if rv.largo != tw || rv.scala_testo != p.text_scale || rv.altezze.len() != visibili.len() {
             rv.largo = tw;
+            rv.scala_testo = p.text_scale;
             rv.altezze = visibili
                 .iter()
                 .map(|i| {
@@ -617,13 +620,13 @@ impl App {
                 if rv.r.followed != Some(row) {
                     rv.r.followed = Some(row);
                     if let Some(at) = visibili.iter().position(|i| *i == row) {
-                        rv.scorri = rv.altezze[..at].iter().map(|a| a + 6.0).sum::<f32>() - 60.0;
+                        rv.scorri = rv.altezze[..at].iter().map(|a| a + 6.0).sum::<f32>() + if flusso {controlli}else{0.0} - 60.0;
                     }
                 }
             }
         }
         if let Some(super::pdf::Campo::Frase(i))=self.campo {
-            if let Some(at)=visibili.iter().position(|j|*j==i){rv.scorri=rv.altezze[..at].iter().map(|h|h+6.0).sum();}
+            if let Some(at)=visibili.iter().position(|j|*j==i){rv.scorri=rv.altezze[..at].iter().map(|h|h+6.0).sum::<f32>()+if flusso {controlli}else{0.0};}
         }
         let totale: f32 = rv.altezze.iter().map(|a| a + 6.0).sum();
         rv.scorri_max = (totale + if flusso {controlli}else{0.0} - vista.3 + 8.0).max(0.0);
@@ -996,12 +999,13 @@ fn nomi(segments: &[trascrizione::Segment]) -> Vec<String> {
 fn lettore(p:&mut Painter,pal:&cedro::ui::theme::Palette,rv:&mut Rivedi,r:super::R,premuto:Option<Azione>,colpi:&mut Vec<(Forma,Azione)>)->f32 {
     let (x,y,w,_) = r;
     let mut cy=y;
+    let rh=if p.text_scale>1.3 {16.0+32.0*p.text_scale}else{48.0};
     let bw=(w-8.0)/3.0;
     for (i,label) in ["Solo onda","Onda e testo","Solo testo"].iter().enumerate() {
-        let b=(x+i as f32*(bw+4.0),cy,bw,48.0);
+        let b=(x+i as f32*(bw+4.0),cy,bw,rh);
         tasto_lettore(p,pal,b,label,RivAz::Vista(i as u8),rv.r.view==i as u8,colpi);
     }
-    cy+=52.0;
+    cy+=rh+4.0;
     let pos=rv.posizione();
     let secs=rv.r.secs.max(0.001);
     if rv.r.view!=2 {
@@ -1037,19 +1041,19 @@ fn lettore(p:&mut Painter,pal:&cedro::ui::theme::Palette,rv:&mut Rivedi,r:super:
         cy+=oh+4.0;
         let bw=(w-12.0)/4.0;
         for (i,(label,az)) in [("←",RivAz::Pan(-1)),("Zoom −",RivAz::Zoom(-1)),("Zoom +",RivAz::Zoom(1)),("→",RivAz::Pan(1))].into_iter().enumerate() {
-            tasto_lettore(p,pal,(x+i as f32*(bw+4.0),cy,bw,48.0),label,az,false,colpi);
+            tasto_lettore(p,pal,(x+i as f32*(bw+4.0),cy,bw,rh),label,az,false,colpi);
         }
-        cy+=52.0;
+        cy+=rh+4.0;
     }
     for (i,(label,az)) in [("−10 s",RivAz::Salta(-10)),(if rv.player.as_ref().is_some_and(|p|p.playing()){"Pausa"}else{"Ascolta"},RivAz::Play),("+10 s",RivAz::Salta(10))].into_iter().enumerate() {
-        tasto_lettore(p,pal,(x+i as f32*(bw+4.0),cy,bw,48.0),label,az,premuto==Some(Azione::Riv(az)),colpi);
+        tasto_lettore(p,pal,(x+i as f32*(bw+4.0),cy,bw,rh),label,az,premuto==Some(Azione::Riv(az)),colpi);
     }
-    cy+=52.0;
+    cy+=rh+4.0;
     let sw=(w-16.0)/5.0;
     for (i,(label,speed)) in [("0,75×",75),("1×",100),("1,25×",125),("1,5×",150),("2×",200)].into_iter().enumerate() {
-        tasto_lettore(p,pal,(x+i as f32*(sw+4.0),cy,sw,48.0),label,RivAz::Velocita(speed),rv.speed==speed,colpi);
+        tasto_lettore(p,pal,(x+i as f32*(sw+4.0),cy,sw,rh),label,RivAz::Velocita(speed),rv.speed==speed,colpi);
     }
-    cy+=50.0;
+    cy+=rh+2.0;
     p.text(&format!("{} / {}",orologio(pos),orologio(rv.r.secs)),x,cy,w/2.0,28.0,14.0,Weight::Semibold,pal.text,Align::Left);
     p.text(if rv.player.as_ref().is_some_and(|p|p.failed()){"Audio non disponibile"}else{"Volume del telefono"},x+w/2.0,cy,w/2.0,28.0,12.0,Weight::Regular,pal.muted,Align::Right);
     cy+28.0-y
@@ -1093,6 +1097,26 @@ mod tests {
     fn sample()->Review {
         let mut r=Review::new(Path::new("/tmp/cedro-fixture-referto.wav"),120.0,"it".into(),vec![trascrizione::Segment{t0:0,t1:1200,text:"Tre mitosi. Non si osserva atipia.".into(),speaker:None}],vec![],None);
         r.referto=true;r.detect();r.bars=Some(vec![0.5;600]);r
+    }
+
+    #[test]
+    fn large_system_fonts_remeasure_rows_and_allow_reaching_the_phrase() {
+        let mut a=App::new(ThemeId::Cedro);let mut r=sample();r.view=1;
+        a.apri_rivedi_con(r,"Referto".into(),0,None,None);
+        let mut cache=GlyphCache::new();
+        for scale in [1.0,2.0] {
+            let mut p=Painter::new(360,640,1.0,Fonts::for_theme(a.tema),&mut cache);
+            p.text_scale=scale;p.accessibility_text=Some(Vec::new());
+            a.disegna(&mut p,360.0,640.0);
+            assert_eq!(a.rivedi.as_ref().unwrap().scala_testo,scale);
+            if scale>1.0 {
+                let rv=a.rivedi.as_mut().unwrap();assert!(rv.scorri_max>0.0);rv.scorri=rv.scorri_max;
+                p.accessibility_text.as_mut().unwrap().clear();
+                a.disegna(&mut p,360.0,640.0);
+                assert!(p.accessibility_text.as_ref().unwrap().iter().any(|(t,b)|t.contains("Tre mitosi")&&b[3]>b[1]),"frase non raggiungibile a font 200%");
+                assert!(a.colpi.iter().any(|(_,az)|*az==Azione::Riv(RivAz::Salva(0))),"export assente");
+            }
+        }
     }
 
     #[test]
