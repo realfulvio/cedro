@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cedro: converti, trascrivi e firma i tuoi file</title>
+<meta name="description" content="Cedro cambia formato a foto, audio, video e documenti, lavora sui PDF, trascrive le riunioni e firma con la CNS. Tutto sul tuo computer. Gratis e open source per Windows e Linux.">
+<link rel="icon" type="image/svg+xml" href="img/icona.svg">
+<meta property="og:title" content="Cedro: converti, trascrivi e firma i tuoi file">
+<meta property="og:description" content="Gratis, open source, tutto sul tuo computer. Windows 10 e 11 e Linux.">
+<meta property="og:type" content="website">
+<style>
+@font-face{font-family:"Figtree";font-weight:400;font-style:normal;font-display:swap;src:url(fonts/Figtree-400.ttf) format("truetype")}
+@font-face{font-family:"Figtree";font-weight:600;font-style:normal;font-display:swap;src:url(fonts/Figtree-600.ttf) format("truetype")}
+@font-face{font-family:"Figtree";font-weight:700;font-style:normal;font-display:swap;src:url(fonts/Figtree-700.ttf) format("truetype")}
+@font-face{font-family:"Figtree";font-weight:800;font-style:normal;font-display:swap;src:url(fonts/Figtree-800.ttf) format("truetype")}
+@font-face{font-family:"Figtree";font-weight:900;font-style:normal;font-display:swap;src:url(fonts/Figtree-900.ttf) format("truetype")}
+/* Layout: pagina unica a scorrimento. Fascia notte con hero e schermata inclinata, poi sei tessere piene di colore (una per attività), ruota, video, fascia Labs ambra, download, domande. */
+:root{
+  --bg:#F7F4FB; --sf:#FFFFFF; --alt:#EFE8F8; --ink:#2A1C38; --mut:#625671; --line:#E1D9EC;
+  --brand:#793FCB; --brand-ink:#FFFFFF;
+  --night:#1B1325; --night2:#2E1C45; --nink:#F4EFFA; --nmut:#BFB2D1;
+  --conv:#2F6FDB; --pdf:#D8434B; --tras:#E86A1C; --web:#14845B; --firma:#7A4BD6; --ruota:#0E8FA3;
+  --labs:#F2B631; --labs-ink:#2B1D02; --labs-bg:#1F1708; --labs-bg2:#33260B;
+  --f:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#130F19; --sf:#1C1724; --alt:#241D2F; --ink:#EDE7F4; --mut:#A99EB8; --line:#352B44;
+  --brand:#A982EE; --brand-ink:#15101C; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#130F19; --sf:#1C1724; --alt:#241D2F; --ink:#EDE7F4; --mut:#A99EB8; --line:#352B44;--brand:#A982EE; --brand-ink:#15101C; color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--f);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--night)}
+.wrap{max-width:1140px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3,p{margin:0}
+h1,h2,h3{text-wrap:balance;letter-spacing:-.025em}
+a{color:inherit}
+img{display:block;max-width:100%;height:auto}
+:focus-visible{outline:3px solid var(--labs);outline-offset:3px;border-radius:6px}
+.note{background:var(--labs);color:var(--labs-ink);font-size:13px;font-weight:700;text-align:center;padding:6px 16px}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--night) 92%,transparent);backdrop-filter:blur(10px);color:var(--nink)}
+header.top .wrap{display:flex;align-items:center;gap:14px;padding-block:11px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:800;font-size:22px;letter-spacing:-.02em}
+.logo img{width:30px;height:30px}
+nav{display:flex;gap:2px;margin-left:auto;flex-wrap:wrap}
+nav a{text-decoration:none;font-weight:600;font-size:15px;padding:7px 12px;border-radius:999px;color:var(--nmut)}
+nav a:hover{color:var(--nink);background:rgba(255,255,255,.08)}
+nav a.cta{background:#F2EBFD;color:#2A1640}
+.lang{display:flex;background:rgba(255,255,255,.1);border-radius:999px;padding:3px}
+.lang button{font:800 13px var(--f);letter-spacing:.04em;border:0;background:transparent;color:var(--nmut);padding:5px 12px;border-radius:999px;cursor:pointer}
+.lang button[aria-pressed="true"]{background:#F2EBFD;color:#2A1640}
+nav a.nl{color:var(--labs)}
+
+.btn{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:16px;text-decoration:none;padding:14px 24px;border-radius:14px}
+.btn.p{background:#F2EBFD;color:#2A1640}.btn.p:hover{background:#fff}
+.btn.g{color:var(--nink);border:1.5px solid rgba(255,255,255,.28)}.btn.g:hover{background:rgba(255,255,255,.08)}
+.btn.s{background:var(--brand);color:var(--brand-ink)}
+.btn.y{background:var(--labs);color:var(--labs-ink)}.btn.y:hover{filter:brightness(1.07)}
+.btn svg{width:19px;height:19px}
+
+.hero{background:radial-gradient(900px 520px at 90% -10%,#6A33BE 0%,transparent 60%),radial-gradient(700px 480px at -5% 110%,#8A3F12 0%,transparent 55%),linear-gradient(180deg,var(--night),var(--night2));color:var(--nink);overflow:hidden}
+.hero .wrap{display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.25fr);gap:40px;align-items:center;padding-block:72px 0}
+.hero h1{font-size:clamp(44px,6.6vw,84px);line-height:.96;font-weight:900;letter-spacing:-.04em}
+.hero h1 em{font-style:normal;background:linear-gradient(90deg,#C9A8FF,#FFB37A);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .lead{margin-top:22px;font-size:20px;color:var(--nmut);max-width:29em}
+.hero .lead b{color:var(--nink)}
+.az{display:flex;gap:12px;flex-wrap:wrap;margin-top:30px}
+.meta{margin-top:18px;font:500 13.5px var(--mono);color:var(--nmut)}
+.shot img{border-radius:14px 14px 0 0;box-shadow:0 -12px 70px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;padding-block:26px 30px;border-top:1px solid rgba(255,255,255,.1);margin-top:0;grid-column:1/-1}
+.chip{font-size:13.5px;font-weight:700;padding:6px 13px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}
+
+section.b{padding-block:88px}
+section.b.alt{background:var(--alt)}
+.eye{font:500 12.5px var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--brand)}
+.tit{font-size:clamp(30px,4vw,48px);line-height:1.05;font-weight:900;margin-top:10px;max-width:20ch}
+.sub{color:var(--mut);margin-top:14px;max-width:60ch;font-size:18px}
+
+/* tessere piene di colore */
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:40px}
+.tile{border-radius:22px;padding:26px 24px 24px;color:#fff;display:flex;flex-direction:column;gap:10px;min-height:250px;position:relative;overflow:hidden}
+.tile::after{content:"";position:absolute;right:-40px;bottom:-40px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.12)}
+.tile .ic{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.2);display:grid;place-items:center}
+.tile svg{width:25px;height:25px}
+.tile h3{font-size:26px;font-weight:900}
+.tile p{font-size:16px;opacity:.95}
+.tile .f{margin-top:auto;font:500 12px var(--mono);opacity:.85;position:relative;z-index:1}
+.t1{background:var(--conv)}.t2{background:var(--pdf)}.t3{background:var(--tras)}.t4{background:var(--web)}.t5{background:var(--firma)}.t6{background:var(--ruota)}
+
+/* attività: tessere colorate che aprono la loro pagina */
+.tabs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-top:40px}
+.tabs button{border:0;cursor:pointer;border-radius:18px;padding:16px 14px;color:#fff;background:var(--c);font:900 19px var(--f);letter-spacing:-.02em;text-align:left;display:flex;flex-direction:column;gap:10px;opacity:.72;transition:opacity .15s,transform .15s}
+.tabs button:hover{opacity:.85}
+.tabs button[aria-selected="true"]{opacity:1;transform:translateY(-4px);box-shadow:0 14px 30px color-mix(in srgb,var(--c) 45%,transparent)}
+.tabs i{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.22);display:grid;place-items:center}
+.tabs svg{width:22px;height:22px}
+.pane{margin-top:18px;border-radius:26px;background:var(--c);color:#fff;padding:30px;display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.25fr);gap:32px;align-items:center}
+.pane h3{font-size:clamp(30px,3.6vw,44px);font-weight:900;line-height:1.02}
+.pane p{font-size:18px;margin-top:12px;opacity:.96}
+.pane ul{margin:18px 0 0;padding:0;list-style:none;display:grid;gap:9px}
+.pane li{display:flex;gap:10px;font-size:16px;font-weight:600}
+.pane li::before{content:"";flex:none;width:9px;height:9px;border-radius:50%;background:#fff;margin-top:8px}
+.pane .f{font:500 12.5px var(--mono);margin-top:18px;opacity:.9}
+.pane img{border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.35);width:100%}
+@media (max-width:900px){.tabs{grid-template-columns:repeat(3,minmax(0,1fr))}.pane{grid-template-columns:minmax(0,1fr);padding:22px}}
+@media (max-width:520px){.tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.tabs button{font-size:17px}}
+@media (prefers-reduced-motion:reduce){.tabs button{transition:none}}
+
+.gal{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px;margin-top:40px}
+.gal figure{margin:0;background:var(--sf);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.gal figcaption{padding:14px 18px 16px;color:var(--mut);font-size:15.5px}.gal figcaption b{color:var(--ink)}
+.duo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:44px;align-items:center}
+.duo img{border-radius:18px;border:1px solid var(--line)}
+.keys{display:grid;gap:10px;margin-top:24px}
+.key{display:flex;gap:14px;align-items:center;background:var(--sf);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+.key kbd{font:700 14px var(--mono);background:var(--ink);color:var(--bg);border-radius:8px;padding:4px 10px;min-width:62px;text-align:center}
+.key span{color:var(--mut);font-size:15.5px}
+
+/* video */
+.vid{margin-top:36px;border-radius:24px;overflow:hidden;aspect-ratio:16/9;max-width:100%;background:radial-gradient(600px 300px at 30% 20%,#6A33BE,transparent 70%),linear-gradient(135deg,#1B1325,#3A1E5C);display:grid;place-items:center;position:relative;color:#fff}
+.vid .play{width:92px;height:92px;border-radius:50%;background:#F2EBFD;display:grid;place-items:center;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.vid .play svg{width:38px;height:38px;color:#2A1640;margin-left:5px}
+.vid p{position:absolute;left:20px;bottom:16px;font:500 13px var(--mono);opacity:.85}
+
+.fermi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:40px}
+.fermo{background:var(--sf);border:1px solid var(--line);border-radius:18px;padding:22px}
+.fermo .n{font-size:44px;font-weight:900;letter-spacing:-.03em;color:var(--brand);line-height:1}
+.fermo h3{font-size:18px;font-weight:800;margin-top:10px}
+.fermo p{color:var(--mut);font-size:15.5px;margin-top:6px}
+
+/* Labs */
+.labs{background:radial-gradient(800px 420px at 85% 0%,var(--labs-bg2),transparent 65%),var(--labs-bg);color:#FBF3DE;padding-block:92px}
+.labs .eye{color:var(--labs)}
+.labs .tit{max-width:18ch}
+.labs .sub{color:#D9C9A0}
+.beta{display:inline-block;font:700 12px var(--mono);letter-spacing:.08em;background:var(--labs);color:var(--labs-ink);border-radius:6px;padding:3px 9px;margin-left:10px;vertical-align:middle}
+.labs .shotl img{border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.1);margin-top:40px}
+.chi{display:flex;gap:8px;flex-wrap:wrap;margin-top:22px}
+.chi span{font-weight:700;font-size:14px;padding:6px 13px;border-radius:999px;background:rgba(242,182,49,.15);border:1px solid rgba(242,182,49,.4);color:var(--labs)}
+.la{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:44px}
+.la article{background:rgba(255,255,255,.05);border:1px solid rgba(242,182,49,.22);border-radius:18px;padding:22px}
+.la h3{font-size:20px;font-weight:800;color:#FFE7A8}
+.la p{color:#D9C9A0;font-size:15.5px;margin-top:6px}
+.la .f{font:500 12px var(--mono);color:var(--labs);margin-top:12px}
+.tw{overflow-x:auto;margin-top:36px;border:1px solid rgba(242,182,49,.25);border-radius:16px}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:15.5px}
+th,td{text-align:left;padding:13px 16px;border-bottom:1px solid rgba(242,182,49,.15);vertical-align:top}
+th{font:700 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--labs)}
+td:first-child{font-weight:800;color:#FFE7A8;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.no{color:#BBA97C}
+code{font:500 .9em var(--mono)}
+
+/* download */
+.dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:40px}
+.d{background:var(--sf);border:1px solid var(--line);border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:10px}
+.d.main{border:2px solid var(--brand)}
+.d h3{font-size:22px;font-weight:900}
+.d p{color:var(--mut);font-size:15.5px}
+.d .file{font:500 12.5px var(--mono);color:var(--mut);word-break:break-all}
+.d .btn{margin-top:auto;justify-content:center}
+.pas{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:20px}
+.pas div{background:var(--alt);border-radius:16px;padding:18px 20px}
+.pas .k{font:500 12px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--brand)}
+.pas h3{font-size:17px;font-weight:800;margin-top:6px}.pas p{color:var(--mut);font-size:15px;margin-top:4px}
+.vt{margin-top:20px;background:var(--sf);border:1px solid var(--line);border-radius:16px;padding:18px 22px;color:var(--mut);font-size:15.5px}
+.vt b{color:var(--ink)}
+
+.faq{margin-top:36px;max-width:780px;display:grid;gap:10px}
+details{background:var(--sf);border:1px solid var(--line);border-radius:14px;padding:16px 20px}
+summary{cursor:pointer;font-weight:800;font-size:18px}
+details p{color:var(--mut);margin-top:10px}
+footer{background:var(--night);color:var(--nmut);padding-block:40px;font-size:15px}
+footer .wrap{display:flex;gap:20px;flex-wrap:wrap;justify-content:space-between;align-items:center}
+footer a{color:var(--nink)}
+
+@media (max-width:900px){
+ .hero .wrap,.duo{grid-template-columns:minmax(0,1fr)}
+ .tiles,.la,.dl,.pas{grid-template-columns:minmax(0,1fr)}
+ .fermi,.gal{grid-template-columns:repeat(2,minmax(0,1fr))}
+ section.b{padding-block:60px}
+}
+@media (max-width:520px){.fermi,.gal{grid-template-columns:minmax(0,1fr)} nav a{padding:6px 9px;font-size:14px}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<header class="top"><div class="wrap">
+  <a class="logo" href="#in-alto"><img src="img/icona.svg" alt="">Cedro</a>
+  <nav aria-label="Sezioni"><a href="#cosa-fa">Cosa fa</a><a class="nl" href="#labs">Cedro 4 Labs</a><a href="#domande">Domande</a><a class="cta" href="#scarica">Scarica</a></nav>
+  <div class="lang" role="group" aria-label="Lingua"><button type="button" data-l="it" aria-pressed="true">IT</button><button type="button" data-l="en" aria-pressed="false">EN</button></div>
+</div></header>
+
+<main id="in-alto">
+<section class="hero"><div class="wrap">
+  <div>
+    <h1>Ogni file, nel formato <em>che ti serve.</em></h1>
+    <p class="lead">Cambia formato a foto, audio, video e documenti. Lavora sui PDF, trascrivi le riunioni, firma con la CNS. <b>Tutto sul tuo computer:</b> i file non vanno da nessuna parte.</p>
+    <div class="az"><a class="btn p" href="#scarica"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg><span>Scarica gratis</span></a><a class="btn g" href="https://github.com/realfulvio/cedro">Codice su GitHub</a></div>
+    <p class="meta">v0.53.0 · Windows 10/11 · Linux · gratis · MIT</p>
+  </div>
+  <div class="shot"><img src="img/converti.webp" alt="La finestra di Cedro sulla pagina Converti: il file al centro e i formati a destra" width="2100" height="1290"></div>
+  <div class="chips"><span class="chip">Scritto in Rust</span><span class="chip">Italiano e inglese</span><span class="chip">Si aggiorna da solo</span><span class="chip">Nessun account</span><span class="chip">Nessuna pubblicità</span></div>
+</div></section>
+
+<section class="b" id="cosa-fa"><div class="wrap">
+  <p class="eye">Cosa fa</p>
+  <h2 class="tit">Una finestra, sei lavori di tutti i giorni.</h2>
+  <p class="sub">Trascini il file e Cedro apre l'attività giusta. La copia nuova compare accanto all'originale, che resta com'era. Scegli un'attività per vedere la sua pagina.</p>
+  <div data-dyn>
+    <div class="tabs" id="tabs" role="tablist" aria-label="Attività"></div>
+    <div class="pane" id="pane" role="tabpanel"></div>
+  </div>
+</div></section>
+
+
+<section class="b"><div class="wrap">
+  <p class="eye">Perché fidarsi</p>
+  <h2 class="tit">Leggero, locale, aperto.</h2>
+  <div class="fermi">
+    <div class="fermo"><p class="n">0</p><h3>File caricati online</h3><p>Conversioni, OCR, trascrizione e riassunto girano sul tuo PC. Internet serve solo per gli aggiornamenti.</p></div>
+    <div class="fermo"><p class="n">MIT</p><h3>Codice aperto</h3><p>Tutto il sorgente è su GitHub, scritto da zero in Rust.</p></div>
+    <div class="fermo"><p class="n">70+</p><h3>Antivirus a ogni uscita</h3><p>Ogni file di ogni versione passa su VirusTotal, con il rapporto pubblico nelle note.</p></div>
+    <div class="fermo"><p class="n">0 €</p><h3>Gratis</h3><p>Niente abbonamenti, niente account, niente pubblicità.</p></div>
+  </div>
+</div></section>
+
+<section class="labs" id="labs"><div class="wrap">
+  <p class="eye">Per i laboratori</p>
+  <h2 class="tit">Cedro 4 Labs <span class="beta">BETA</span></h2>
+  <p class="sub">Lo stesso Cedro, con le attività di un laboratorio al posto dei tipi di file. Apri un vetrino, togli i dati del paziente, prepara la figura per l'articolo. Le immagini non escono dal computer.</p>
+  <div class="chi"><span>Biotech</span><span>Ricerca</span><span>Veterinaria</span><span>Anatomia patologica</span><span>Microscopia</span></div>
+  <div class="az"><a class="btn y" href="#scarica">Scarica Cedro 4 Labs</a><a class="btn g" href="https://github.com/realfulvio/cedro/issues">Chiedi un formato</a></div>
+  <div class="shotl"><img src="img/labs.webp" alt="Cedro 4 Labs: la finestra con le attività di laboratorio" loading="lazy"></div>
+  <div class="la">
+    <article><h3>Salva immagini e vetrini</h3><p>Vetrini digitali e file del microscopio, con canali, piani Z e valori originali.</p><p class="f">SVS · NDPI · MRXS · CZI · ND2 · LIF · OME-TIFF</p></article>
+    <article><h3>Togli i nomi</h3><p>Anonimizza DICOM e toglie autori, GPS e dati nascosti da PDF, Office e foto.</p><p class="f">DICOM · PDF · DOCX · XLSX · JPEG</p></article>
+    <article><h3>Prepara una figura</h3><p>Pannelli pronti per l'articolo, con la barra di scala presa dalla misura scritta nel file.</p><p class="f">TIFF · PNG · PDF · barra in µm</p></article>
+    <article><h3>Converti dati e piastre</h3><p>CSV e TSV degli strumenti in Excel, e pacchetti dati con impronte SHA-256 per l'archivio.</p><p class="f">CSV · TSV · XLSX · BagIt</p></article>
+    <article><h3>Firma e manda referti</h3><p>Il referto in PDF, firmato con la smart card e pronto da spedire.</p><p class="f">PDF/A · .p7m · CNS</p></article>
+    <article><h3>Trascrivi e riassumi</h3><p>Detti il referto o registri la riunione di gruppo. Il referto resta bozza finché numeri e parole decisive non sono confermati.</p><p class="f">Word · TXT · glossario veterinario</p></article>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Area</th><th>Cosa c'è già</th><th>Cosa manca</th></tr></thead>
+    <tbody>
+      <tr><td>Immagini</td><td>Aperio SVS, Hamamatsu NDPI, 3DHistech MRXS, Zeiss CZI, ND2, LIF, OME-TIFF, DICOM</td><td class="no">Olympus VSI, DICOM da CD con DICOMDIR</td></tr>
+      <tr><td>Dati</td><td>CSV/TSV ↔ Excel, pacchetto BagIt con SHA-256</td><td class="no">Mappa delle piastre a colori</td></tr>
+      <tr><td>Privacy</td><td>Toglie nomi, autori, GPS e dati nascosti da PDF, Office, foto e DICOM</td><td class="no">Altri formati proprietari</td></tr>
+      <tr><td>Voce</td><td>Trascrizione con glossario veterinario, riassunto, referti dettati</td><td class="no">Referti già impaginati</td></tr>
+    </tbody></table></div>
+  <p class="sub" style="margin-top:18px">È una beta: se la usi in laboratorio controlla i risultati e dicci cosa non torna.</p>
+</div></section>
+
+<section class="b" id="scarica"><div class="wrap">
+  <p class="eye">Scarica</p>
+  <h2 class="tit">Gratis, senza account.</h2>
+  <p class="sub">Lo installi una volta e poi si aggiorna da solo. Ultima versione: 0.53.0, 16 novembre 2026.</p>
+  <div class="dl">
+    <div class="d main"><h3>Windows 10 e 11</h3><p>Per quasi tutti i PC. Si installa solo per il tuo utente, senza diritti di amministratore.</p><span class="file">Cedro-Setup-0.53.0.exe · 27 MB</span><a class="btn s" href="https://github.com/realfulvio/cedro/releases/download/v0.53.0/Cedro-Setup-0.53.0.exe">Scarica per Windows</a></div>
+    <div class="d"><h3>Windows portable</h3><p>Estrai lo ZIP e apri <code>cedro.exe</code>. Niente da installare, va bene anche su una chiavetta.</p><span class="file">Cedro-Portable-0.53.0-x64.zip · 31 MB</span><a class="btn s" href="https://github.com/realfulvio/cedro/releases/download/v0.53.0/Cedro-Portable-0.53.0-x64.zip">Scarica la portable</a></div>
+    <div class="d"><h3>Linux</h3><p>Wayland con KDE Plasma o GNOME. Estrai e lancia <code>./install.sh</code>, senza sudo.</p><span class="file">cedro-0.53.0-linux-x64.tar.gz · 33 MB</span><a class="btn s" href="https://github.com/realfulvio/cedro/releases/download/v0.53.0/cedro-0.53.0-linux-x64.tar.gz">Scarica per Linux</a></div>
+  </div>
+  <div class="pas">
+    <div><p class="k">Windows avvisa?</p><h3>«Windows ha protetto il PC»</h3><p>L'installatore non ha ancora la firma digitale. Clic su Ulteriori informazioni, poi Esegui comunque.</p></div>
+    <div><p class="k">Dopo l'installazione</p><h3>Cerca l'icona vicino all'orologio</h3><p>Cedro resta lì. Da lì apri la finestra, le conversioni e le impostazioni.</p></div>
+    <div><p class="k">Cedro 4 Labs</p><h3>Si sceglie nell'installatore</h3><p>Oppure dopo, in Impostazioni › Aspetto. È lo stesso programma.</p></div>
+  </div>
+  <p class="vt"><b>Controllato a ogni versione.</b> Ogni file passa su VirusTotal con più di 70 antivirus e il rapporto è nelle note della release. Su programmi non firmati può capitare una segnalazione isolata: il rapporto dice quale antivirus e puoi confrontare lo SHA-256 del file che hai scaricato.</p>
+</div></section>
+
+<section class="b alt" id="domande"><div class="wrap">
+  <p class="eye">Domande</p>
+  <h2 class="tit">Quello che chiedono tutti.</h2>
+  <div class="faq">
+    <details open><summary>Cedro cambia il file originale?</summary><p>No. Crea sempre una copia accanto all'originale, che resta com'era.</p></details>
+    <details><summary>I miei file vengono caricati da qualche parte?</summary><p>No. Conversioni, OCR, trascrizione e riassunto avvengono sul tuo computer. Internet serve per gli aggiornamenti, per scaricare i componenti la prima volta e per i video dal web.</p></details>
+    <details><summary>Quanto costa?</summary><p>Niente. Cedro è gratuito e il codice è aperto con licenza MIT.</p></details>
+    <details><summary>E su Mac?</summary><p>Per ora no: Windows 10 e 11 e Linux con Wayland (KDE Plasma o GNOME).</p></details>
+    <details><summary>Cedro 4 Labs è un altro programma?</summary><p>No, è lo stesso Cedro con un aspetto pensato per i laboratori. Si sceglie nell'installatore o in Impostazioni › Aspetto, e si torna indietro in un clic.</p></details>
+  </div>
+</div></section>
+</main>
+<footer><div class="wrap"><span>Cedro · gratis e open source, licenza MIT</span><span><a href="https://github.com/realfulvio/cedro">GitHub</a> · <a href="https://github.com/realfulvio/cedro/releases">Tutte le versioni</a> · <a href="https://github.com/realfulvio/cedro/issues">Segnala un problema</a></span></div></footer>
+<script>
+(function(){
+var IC={conv:'<path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/>',pdf:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',tras:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',web:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',firma:'<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',ruota:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/>'};
+var A=[
+{k:'conv',img:'converti',it:{t:'Converti',p:'Foto, audio, video e documenti nel formato che ti chiedono. Il file resta grande al centro, i formati sono tutti a destra.',l:['Tanti file insieme, anche di tipi diversi','Converte anche i file dentro uno ZIP e lo rifà','Riconosce il file dal contenuto, non dal nome','Le foto del telefono vengono raddrizzate da sole'],f:'PNG · JPEG · WebP · AVIF · JPEG XL · SVG · DOCX · ODT · MP3 · FLAC · MP4 · MKV'},
+ en:{t:'Convert',p:'Photos, audio, video and documents in the format you are asked for. The file stays big in the middle, every format sits on the right.',l:['Many files at once, even of different kinds','Converts the files inside a ZIP and rebuilds it','Recognises a file by its content, not its name','Phone photos are straightened automatically'],f:'PNG · JPEG · WebP · AVIF · JPEG XL · SVG · DOCX · ODT · MP3 · FLAC · MP4 · MKV'}},
+{k:'pdf',img:'pdf',it:{t:'PDF',p:'Anteprima delle pagine e tutto quello che puoi farci, senza cercare nei menu.',l:['Unisci, dividi, comprimi, togli pagine','PDF in Word con titoli, tabelle ed elenchi veri','PDF in Excel, anche dalle scansioni con l\'OCR','PDF/A per l\'archivio e protezione con password'],f:'PDF → Word · Excel · JPG · PDF/A-1b'},
+ en:{t:'PDF',p:'Page previews and everything you can do with them, without digging through menus.',l:['Merge, split, compress, remove pages','PDF to Word with real headings, tables and lists','PDF to Excel, scans included thanks to OCR','PDF/A for archiving and password protection'],f:'PDF → Word · Excel · JPG · PDF/A-1b'}},
+{k:'tras',img:'trascrivi',it:{t:'Trascrivi',p:'Dalla registrazione della riunione a un documento Word, tutto sul tuo computer.',l:['Tre livelli di precisione e il tempo che manca','Riconosce chi parla e colora ogni voce','Riassunto e «chi ha detto cosa» con un clic','Usa la scheda video quando c\'è'],f:'Word · testo · sottotitoli · whisper.cpp'},
+ en:{t:'Transcribe',p:'From the meeting recording to a Word document, all on your computer.',l:['Three accuracy levels and the time left','Tells who is speaking and colours each voice','Summary and “who said what” in one click','Uses the graphics card when there is one'],f:'Word · text · subtitles · whisper.cpp'}},
+{k:'web',img:'video',it:{t:'Video dal web',p:'Incolli il link e scegli cosa tenere.',l:['Video intero oppure solo l\'audio','YouTube e molti altri siti','Dopo lo scarico lo trascrivi con un clic','I componenti si aggiornano da soli'],f:'MP4 · MP3'},
+ en:{t:'Video from the web',p:'Paste the link and choose what to keep.',l:['The whole video or audio only','YouTube and many other sites','Transcribe it in one click after downloading','Components update themselves'],f:'MP4 · MP3'}},
+{k:'firma',img:'firma',it:{t:'Firma',p:'La firma digitale senza programmi a parte.',l:['Firmi con la chiavetta USB o la smart card (CNS)','Apri e verifichi i file firmati che ti arrivano','Avvisa se la firma è debole o il PDF è stato cambiato dopo','Funziona con .p7m e con i PDF firmati'],f:'.p7m · PDF firmato · CNS · token USB'},
+ en:{t:'Sign',p:'Digital signature without a separate program.',l:['Sign with a USB token or smart card (CNS)','Open and verify the signed files you receive','Warns if the signature is weak or the PDF changed afterwards','Works with .p7m and signed PDFs'],f:'.p7m · signed PDF · CNS · USB token'}},
+{k:'ruota',img:'ruote',it:{t:'La ruota',p:'Tieni premuto un tasto e fai clic destro su un file, ovunque: la conversione è a un clic, senza aprire niente.',l:['Shift: cambia formato a foto, documenti, audio e video','Ctrl: comprimi, scala, ruota, togli i metadati, leggi il testo','Alt: duplica, copia il percorso, crea uno ZIP','Funziona in Esplora file, sul desktop e nelle finestre Apri e Salva'],f:'Shift · Ctrl · Alt'},
+ en:{t:'The wheel',p:'Hold a key and right-click a file, anywhere: converting is one click away, no app to open.',l:['Shift: change the format of photos, documents, audio and video','Ctrl: compress, resize, rotate, strip metadata, read text','Alt: duplicate, copy the path, make a ZIP','Works in File Explorer, on the desktop and in Open and Save dialogs'],f:'Shift · Ctrl · Alt'}}
+];
+var cur=0,L='it';
+function draw(){
+  document.getElementById('tabs').innerHTML=A.map(function(a,i){return '<button type="button" role="tab" id="tab-'+a.k+'" data-i="'+i+'" aria-selected="'+(i===cur)+'" style="--c:var(--'+a.k+')"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'+IC[a.k]+'</svg></i>'+a[L].t+'</button>'}).join('');
+  var a=A[cur],t=a[L],pn=document.getElementById('pane');
+  pn.style.setProperty('--c','var(--'+a.k+')');
+  pn.innerHTML='<div><h3>'+t.t+'</h3><p>'+t.p+'</p><ul>'+t.l.map(function(x){return '<li>'+x+'</li>'}).join('')+'</ul><p class="f">'+t.f+'</p></div><img src="img/'+a.img+(L==='en'?'-en':'')+'.webp" alt="'+t.t+'">';
+}
+document.getElementById('tabs').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;cur=+b.dataset.i;draw();var n=document.getElementById('tab-'+A[cur].k);if(n)n.focus()});
+window.cedroAtt=function(l){L=l;draw()};
+draw();
+})();
+</script>
+<script>
+(function(){
+var EN={
+"Anteprima del sito di Cedro · non è online":"Preview of the Cedro website · not online",
+"Cosa fa":"Features","Video":"Video","Domande":"FAQ","Scarica":"Download",
+"Ogni file, nel formato <em>che ti serve.</em>":"Every file, in <em>the format you need.</em>",
+"Cambia formato a foto, audio, video e documenti. Lavora sui PDF, trascrivi le riunioni, firma con la CNS. <b>Tutto sul tuo computer:</b> i file non vanno da nessuna parte.":"Convert photos, audio, video and documents. Work on PDFs, transcribe meetings, sign with a smart card. <b>Everything on your computer:</b> your files never leave it.",
+"Scarica gratis":"Download for free","Codice su GitHub":"Code on GitHub",
+"v0.53.0 · Windows 10/11 · Linux · gratis · MIT":"v0.53.0 · Windows 10/11 · Linux · free · MIT",
+"Scritto in Rust":"Written in Rust","Italiano e inglese":"Italian and English","Si aggiorna da solo":"Updates itself","Nessun account":"No account","Nessuna pubblicità":"No ads",
+"Trascini il file e Cedro apre l'attività giusta. La copia nuova compare accanto all'originale, che resta com'era. Scegli un'attività per vedere la sua pagina.":"Drop a file and Cedro opens the right activity. The new copy appears next to the original, which stays untouched. Pick an activity to see its page.",
+"Una finestra, sei lavori di tutti i giorni.":"One window, six everyday jobs.",
+"Trascini il file e Cedro apre l'attività giusta. La copia nuova compare accanto all'originale, che resta com'era.":"Drop a file and Cedro opens the right activity. The new copy appears next to the original, which stays untouched.",
+"Converti":"Convert","Foto, audio, video e documenti nel formato che chiedono. Tanti file insieme, anche dentro uno ZIP.":"Photos, audio, video and documents in the format you need. Many files at once, even inside a ZIP.",
+"Unisci, dividi, comprimi. Porta un PDF in Word o in Excel con tabelle e titoli veri, anche le scansioni con l'OCR.":"Merge, split, compress. Turn a PDF into Word or Excel with real tables and headings, scans included thanks to OCR.",
+"Trascrivi":"Transcribe","Dalla registrazione al documento Word: riconosce chi parla e scrive il riassunto.":"From the recording to a Word document: it tells who is speaking and writes the summary.",
+"whisper.cpp · scheda video · riassunto AI":"whisper.cpp · graphics card · AI summary",
+"Video dal web":"Video from the web","Incolli il link, scegli video o solo audio. Poi, se vuoi, lo trascrivi con un clic.":"Paste the link, pick video or audio only. Then, if you want, transcribe it in one click.",
+"YouTube e altri siti · MP4 · MP3":"YouTube and other sites · MP4 · MP3",
+"Firma":"Sign","Firmi con la chiavetta o la smart card (CNS) e verifichi i file firmati che ti arrivano.":"Sign with a USB token or smart card (CNS) and verify the signed files you receive.",
+"La ruota":"The wheel","Tieni un tasto e fai clic destro su un file, ovunque: la conversione è a un clic, senza aprire niente.":"Hold a key and right-click a file, anywhere: converting is one click away, no app to open.",
+"Come appare":"What it looks like","Tutti i comandi in vista, niente menu nascosti.":"Every command in sight, no hidden menus.",
+"<b>PDF.</b> Anteprima delle pagine e tutto quello che puoi farci.":"<b>PDF.</b> Page previews and everything you can do with them.",
+"<b>Trascrivi.</b> Tre livelli di precisione e il tempo che manca.":"<b>Transcribe.</b> Three accuracy levels and the time left.",
+"<b>Video dal web.</b> Incolla il link e scegli.":"<b>Video from the web.</b> Paste the link and choose.",
+"<b>Quattro tinte.</b> Melanzana, Notte, Bosco e Carta.":"<b>Four tints.</b> Aubergine, Night, Forest and Paper.",
+"Un clic destro e il file è già convertito.":"One right-click and the file is converted.",
+"Funziona in Esplora file, sul desktop, nel file manager e nelle finestre Apri e Salva.":"Works in File Explorer, on the desktop, in your file manager and in Open and Save dialogs.",
+"Conversioni: cambia formato a foto, documenti, audio e video":"Conversions: change the format of photos, documents, audio and video",
+"Strumenti: comprimi, scala, ruota, togli i metadati, leggi il testo":"Tools: compress, resize, rotate, strip metadata, read text",
+"Azioni: duplica, copia il percorso, crea uno ZIP":"Actions: duplicate, copy the path, make a ZIP",
+"In due minuti":"In two minutes","Guarda Cedro al lavoro.":"Watch Cedro at work.",
+"Segnaposto: qui va il video promo (1:59)":"Placeholder: the promo video goes here (1:59)",
+"Perché fidarsi":"Why trust it","Leggero, locale, aperto.":"Light, local, open.",
+"File caricati online":"Files uploaded online","Conversioni, OCR, trascrizione e riassunto girano sul tuo PC. Internet serve solo per gli aggiornamenti.":"Conversion, OCR, transcription and summaries run on your PC. The internet is only used for updates.",
+"Codice aperto":"Open source","Tutto il sorgente è su GitHub, scritto da zero in Rust.":"All the source is on GitHub, written from scratch in Rust.",
+"Antivirus a ogni uscita":"Antivirus on every release","Ogni file di ogni versione passa su VirusTotal, con il rapporto pubblico nelle note.":"Every file of every version goes through VirusTotal, with the public report in the release notes.",
+"Gratis":"Free","Niente abbonamenti, niente account, niente pubblicità.":"No subscriptions, no accounts, no ads.",
+"Per i laboratori":"For laboratories",
+"Lo stesso Cedro, con le attività di un laboratorio al posto dei tipi di file. Apri un vetrino, togli i dati del paziente, prepara la figura per l'articolo. Le immagini non escono dal computer.":"The same Cedro, with lab activities in place of file types. Open a slide, remove patient data, prepare the figure for your paper. Images never leave your computer.",
+"Biotech":"Biotech","Ricerca":"Research","Veterinaria":"Veterinary","Anatomia patologica":"Pathology","Microscopia":"Microscopy",
+"Scarica Cedro 4 Labs":"Download Cedro 4 Labs","Chiedi un formato":"Request a format",
+"Salva immagini e vetrini":"Save images and slides","Vetrini digitali e file del microscopio, con canali, piani Z e valori originali.":"Digital slides and microscope files, with channels, Z planes and original values.",
+"Togli i nomi":"Remove the names","Anonimizza DICOM e toglie autori, GPS e dati nascosti da PDF, Office e foto.":"Anonymizes DICOM and strips authors, GPS and hidden data from PDF, Office and photos.",
+"Prepara una figura":"Prepare a figure","Pannelli pronti per l'articolo, con la barra di scala presa dalla misura scritta nel file.":"Panels ready for your paper, with the scale bar taken from the measurement stored in the file.",
+"TIFF · PNG · PDF · barra in µm":"TIFF · PNG · PDF · scale bar in µm",
+"Converti dati e piastre":"Convert data and plates","CSV e TSV degli strumenti in Excel, e pacchetti dati con impronte SHA-256 per l'archivio.":"Instrument CSV and TSV to Excel, and data packages with SHA-256 checksums for the archive.",
+"Firma e manda referti":"Sign and send reports","Il referto in PDF, firmato con la smart card e pronto da spedire.":"The report as a PDF, signed with the smart card and ready to send.",
+"Trascrivi e riassumi":"Transcribe and summarize","Detti il referto o registri la riunione di gruppo. Il referto resta bozza finché numeri e parole decisive non sono confermati.":"Dictate the report or record the lab meeting. A report stays a draft until numbers and key words are confirmed.",
+"Word · TXT · glossario veterinario":"Word · TXT · veterinary glossary",
+"Area":"Area","Cosa c'è già":"Available now","Cosa manca":"Still missing",
+"Immagini":"Images","Aperio SVS, Hamamatsu NDPI, 3DHistech MRXS, Zeiss CZI, ND2, LIF, OME-TIFF, DICOM":"Aperio SVS, Hamamatsu NDPI, 3DHistech MRXS, Zeiss CZI, ND2, LIF, OME-TIFF, DICOM",
+"Olympus VSI, DICOM da CD con DICOMDIR":"Olympus VSI, DICOM from CD with DICOMDIR",
+"Dati":"Data","CSV/TSV ↔ Excel, pacchetto BagIt con SHA-256":"CSV/TSV ↔ Excel, BagIt package with SHA-256","Mappa delle piastre a colori":"Colour plate map",
+"Privacy":"Privacy","Toglie nomi, autori, GPS e dati nascosti da PDF, Office, foto e DICOM":"Removes names, authors, GPS and hidden data from PDF, Office, photos and DICOM","Altri formati proprietari":"Other proprietary formats",
+"Voce":"Voice","Trascrizione con glossario veterinario, riassunto, referti dettati":"Transcription with veterinary glossary, summary, dictated reports","Referti già impaginati":"Ready-laid-out reports",
+"È una beta: se la usi in laboratorio controlla i risultati e dicci cosa non torna.":"This is a beta: if you use it in the lab, check the results and tell us what looks wrong.",
+"Windows 10 e 11":"Windows 10 and 11",
+"Gratis, senza account.":"Free, no account.",
+"Lo installi una volta e poi si aggiorna da solo. Ultima versione: 0.53.0, 16 novembre 2026.":"Install it once and it updates itself. Latest version: 0.53.0, 16 November 2026.",
+"Per quasi tutti i PC. Si installa solo per il tuo utente, senza diritti di amministratore.":"For almost every PC. Installs for your user only, no administrator rights needed.",
+"Scarica per Windows":"Download for Windows","Windows portable":"Windows portable",
+"Estrai lo ZIP e apri <code>cedro.exe</code>. Niente da installare, va bene anche su una chiavetta.":"Unzip and open <code>cedro.exe</code>. Nothing to install, works from a USB stick too.",
+"Scarica la portable":"Download the portable","Scarica per Linux":"Download for Linux",
+"Wayland con KDE Plasma o GNOME. Estrai e lancia <code>./install.sh</code>, senza sudo.":"Wayland with KDE Plasma or GNOME. Extract and run <code>./install.sh</code>, no sudo.",
+"Windows avvisa?":"Windows warns you?","«Windows ha protetto il PC»":"“Windows protected your PC”",
+"L'installatore non ha ancora la firma digitale. Clic su Ulteriori informazioni, poi Esegui comunque.":"The installer is not code-signed yet. Click More info, then Run anyway.",
+"Dopo l'installazione":"After installing","Cerca l'icona vicino all'orologio":"Look for the icon near the clock","Cedro resta lì. Da lì apri la finestra, le conversioni e le impostazioni.":"Cedro lives there. Open the window, conversions and settings from it.",
+"Si sceglie nell'installatore":"Chosen in the installer","Oppure dopo, in Impostazioni › Aspetto. È lo stesso programma.":"Or later, in Settings › Appearance. It is the same program.",
+"<b>Controllato a ogni versione.</b> Ogni file passa su VirusTotal con più di 70 antivirus e il rapporto è nelle note della release. Su programmi non firmati può capitare una segnalazione isolata: il rapporto dice quale antivirus e puoi confrontare lo SHA-256 del file che hai scaricato.":"<b>Checked on every release.</b> Each file goes through VirusTotal with more than 70 antivirus engines and the report is in the release notes. Unsigned programs can get an isolated flag: the report says which engine, and you can compare the SHA-256 of the file you downloaded.",
+"Quello che chiedono tutti.":"What everyone asks.",
+"Cedro cambia il file originale?":"Does Cedro change the original file?","No. Crea sempre una copia accanto all'originale, che resta com'era.":"No. It always creates a copy next to the original, which stays as it was.",
+"I miei file vengono caricati da qualche parte?":"Are my files uploaded anywhere?","No. Conversioni, OCR, trascrizione e riassunto avvengono sul tuo computer. Internet serve per gli aggiornamenti, per scaricare i componenti la prima volta e per i video dal web.":"No. Conversion, OCR, transcription and summaries happen on your computer. The internet is used for updates, for downloading components the first time, and for web videos.",
+"Quanto costa?":"How much does it cost?","Niente. Cedro è gratuito e il codice è aperto con licenza MIT.":"Nothing. Cedro is free and open source under the MIT licence.",
+"E su Mac?":"What about Mac?","Per ora no: Windows 10 e 11 e Linux con Wayland (KDE Plasma o GNOME).":"Not for now: Windows 10 and 11 and Linux with Wayland (KDE Plasma or GNOME).",
+"Cedro 4 Labs è un altro programma?":"Is Cedro 4 Labs a different program?","No, è lo stesso Cedro con un aspetto pensato per i laboratori. Si sceglie nell'installatore o in Impostazioni › Aspetto, e si torna indietro in un clic.":"No, it is the same Cedro with a look made for laboratories. Pick it in the installer or in Settings › Appearance, and switch back in one click.",
+"Cedro · gratis e open source, licenza MIT":"Cedro · free and open source, MIT licence",
+"Tutte le versioni":"All versions","Segnala un problema":"Report a problem"
+};
+var SEL='h1,h2,h3,p,span,a,summary,td,th,figcaption,.beta';
+var nodes=[].slice.call(document.querySelectorAll(SEL)).filter(function(e){return !e.closest('.lang')&&!e.closest('[data-dyn]')&&!e.querySelector(SEL)});
+var orig=nodes.map(function(e){return e.innerHTML});
+var imgs=[].slice.call(document.querySelectorAll('img[src$=".webp"]')).filter(function(i){return !i.closest('[data-dyn]')});
+var osrc=imgs.map(function(i){return i.getAttribute('src')});
+function norm(s){return s.replace(/\s+/g,' ').trim()}
+var map={};Object.keys(EN).forEach(function(k){map[norm(k)]=EN[k]});
+function set(l){
+  nodes.forEach(function(e,i){var o=orig[i];e.innerHTML=(l==='en'&&map[norm(o)])?map[norm(o)]:o});
+  imgs.forEach(function(im,i){var s=osrc[i];im.setAttribute('src',(l==='en'&&!/hero/.test(s))?s.replace('.webp','-en.webp'):s)});
+  document.documentElement.lang=l;window.cedroAtt(l);
+  [].forEach.call(document.querySelectorAll('.lang button'),function(b){b.setAttribute('aria-pressed',b.dataset.l===l)});
+  try{localStorage.setItem('cedro-lang',l)}catch(e){}
+}
+[].forEach.call(document.querySelectorAll('.lang button'),function(b){b.addEventListener('click',function(){set(b.dataset.l)})});
+var l0='it';try{l0=localStorage.getItem('cedro-lang')||((navigator.language||'it').slice(0,2)==='it'?'it':'en')}catch(e){}
+if(l0==='en')set('en');
+})();
+</script>
+</body>
+</html>
