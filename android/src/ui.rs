@@ -1354,8 +1354,8 @@ impl App {
                 let text=self.lavori.iter().find(|l|l.id==id).and_then(|l|if let Stato::Fatto{msg,..}=&l.stato{Some(msg.clone())}else{None}).unwrap_or_default();
                 Effetto::Copia(text)
             }
-            Azione::Labs(az) => return self.azione_labs(az),
-            Azione::Pacchetto => return self.pacchetto_labs(),
+            Azione::Labs(az) => self.azione_labs(az),
+            Azione::Pacchetto => self.pacchetto_labs(),
             Azione::Niente => Effetto::Niente,
         }
     }

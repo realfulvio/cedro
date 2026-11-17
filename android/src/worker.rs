@@ -1,6 +1,8 @@
 //! Protocollo del processo di conversione. Nessun JNI nel figlio; la pubblicazione resta al genitore.
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+// Gli item di esecuzione servono al launcher Android e alle regressioni host, non alla libreria host di rendering.
+#[cfg(any(target_os="android",test))]
 static CANCEL:std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -37,6 +39,7 @@ pub enum Evento {
     Fine(Result<(PathBuf, String), String>),
 }
 
+#[cfg(any(target_os="android",test))]
 fn emetti(e: Evento) {
     use std::io::Write;
     #[cfg(target_os="android")]
@@ -126,10 +129,13 @@ fn diagnostica_saf(path:&std::path::Path) {
 }
 
 /// Ha un lifetime indipendente dal journal dei risultati completi.
+#[cfg(any(target_os="android",test))]
 struct Scratch(PathBuf);
+#[cfg(any(target_os="android",test))]
 impl Drop for Scratch {fn drop(&mut self){let _=std::fs::remove_dir_all(&self.0);}}
 
 /// Prepara l'audio effettivo per trascrizione e revisione, senza applicare due volte il nome del caso.
+#[cfg(any(target_os="android",test))]
 fn prepara_audio_web(file:&std::path::Path,out:&std::path::Path,scelte:&crate::web::Scelte,opts:&cedro::Options)->Result<PathBuf,String>{
     let dir=out.join(".revisione");
     std::fs::create_dir_all(&dir).map_err(|e|e.to_string())?;
@@ -142,11 +148,13 @@ fn prepara_audio_web(file:&std::path::Path,out:&std::path::Path,scelte:&crate::w
     Ok(prepared)
 }
 
+#[cfg(any(target_os="android",test))]
 fn converti_web(r:&mut Richiesta,testo:bool,audio:bool){
     // Qualità media e selezione vocale sono campi separati; non alterare qualita.
     r.azione=if testo{"trascrivi"}else if audio{"mp3"}else{"mp4"}.into();
 }
 
+#[cfg(any(target_os="android",test))]
 fn esegui(mut r: Richiesta) -> Result<(PathBuf, String), String> {
     let _scratch=Scratch(r.out.join(".scaricato"));
     if r.azione=="strip" && crate::labs::micro(&r.file) {
@@ -383,7 +391,7 @@ mod tests {
                 let mut at=12;let mut peak=0i32;
                 while at+8<=bytes.len(){
                     let len=u32::from_le_bytes(bytes[at+4..at+8].try_into().unwrap()) as usize;
-                    if &bytes[at..at+4]==b"data"{peak=bytes[at+8..at+8+len].chunks_exact(2).map(|v|(i16::from_le_bytes([v[0],v[1]]) as i32).abs()).max().unwrap();break;}
+                    if &bytes[at..at+4]==b"data"{peak=bytes[at+8..at+8+len].as_chunks::<2>().0.iter().map(|v|(i16::from_le_bytes([v[0],v[1]]) as i32).abs()).max().unwrap();break;}
                     at+=8+len+(len%2);
                 }
                 assert!((if normalize{31990..=32010}else{1990..=2010}).contains(&peak),"picco PCM: {peak}");
@@ -414,10 +422,7 @@ mod tests {
     }
     #[test]
     fn opzioni_worker_senza_perdite() {
-        let mut o = cedro::Options::default();
-        o.password = Some("segreto\nprova".into());
-        o.slide_level = 2;
-        o.micro_all_t = true;
+        let mut o = cedro::Options { password: Some("segreto\nprova".into()), slide_level: 2, micro_all_t: true, ..Default::default() };
         o.pdf_pages.plan = cedro::Plan::EveryPage;
         o.ufficio.solo_attivo = true;
         o.tessere.lato = 512;
