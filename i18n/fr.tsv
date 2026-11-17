@@ -1953,8 +1953,8 @@ PDF non scritto: {}	PDF non écrit : {}
 numeri veri, geni come testo	vrais nombres, gènes conservés en texte
 Excel con {#} righe.	Excel avec {} lignes.
 Numeri con la virgola letti come numeri.	Nombres à virgule décimale lus comme des nombres.
-Piastra da {#} pozzetti anche una riga per pozzetto (foglio Pozzetti).	Plaque de {} puits aussi présentée avec une ligne par puits (feuille Pozzetti).
-{#} piastre da {#} pozzetti, anche una riga per pozzetto (foglio Pozzetti).	{} plaques de {} puits, aussi présentées avec une ligne par puits (feuille Pozzetti).
+Piastra da {#} pozzetti anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).	Plaque de {} puits aussi en carte de couleurs (feuille Mappa) et avec une ligne par puits (feuille Pozzetti).
+{#} piastre da {#} pozzetti, anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).	{} plaques de {} puits, aussi en carte de couleurs (feuille Mappa) et avec une ligne par puits (feuille Pozzetti).
 Nomi di geni e codici lasciati come testo.	Noms de gènes et codes conservés en texte.
 CSV dal foglio di calcolo	CSV à partir de la feuille de calcul
 {#} fogli: un CSV per foglio	{} feuilles : un CSV par feuille
@@ -2703,3 +2703,32 @@ Vista di partenza	Vue initiale
 pagine	pages
 Il decoder esterno non supporta la lettura diretta del file autorizzato	Le décodeur externe ne permet pas de lire directement le fichier autorisé
 Il decoder esterno non ha letto il file autorizzato	Le décodeur externe n’a pas pu lire le fichier autorisé
+Registro in Excel	Registre en Excel
+Registro salvato:	Registre enregistré :
+Registro non salvato:	Registre non enregistré :
+Registro lavori	Registre des travaux
+Data	Date
+Ora	Heure
+Attività	Activité
+Nota del caso	Note du cas
+CD DICOM	CD DICOM
+immagine	image
+paziente	patient
+pazienti	patients
+mancanti	manquantes
+il DICOMDIR non elenca nessun file	le DICOMDIR ne liste aucun fichier
+REFERTO	COMPTE RENDU
+Dettato il {} · {} · {} di audio	Dicté le {} · {} · {} d'audio
+Specie	Espèce
+Campione	Échantillon
+Descrizione macroscopica	Description macroscopique
+Descrizione microscopica	Description microscopique
+Diagnosi	Diagnostic
+Anamnesi	Anamnèse
+Margini	Marges
+Commento	Commentaire
+Conclusioni	Conclusions
+Note	Notes
+Firma del refertante	Signature du rédacteur
+BOZZA · da non firmare	BROUILLON · ne pas signer
+Pagina {} di {}	Page {} sur {}

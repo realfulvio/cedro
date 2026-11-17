@@ -73,7 +73,7 @@ fn main() {
     if std::env::var("LANG_FOTO").is_ok_and(|v| v == "en") {
         cedro::i18n::set(cedro::i18n::Lang::En);
         cedro::i18n::record_misses(true);
-    } else if matches!(std::env::args().nth(2).as_deref(), Some("cedro-labs") | Some("cedro-caso")) {
+    } else if matches!(std::env::args().nth(2).as_deref(), Some("cedro-labs") | Some("cedro-caso") | Some("cedro-labs-novita")) {
         cedro::i18n::set(cedro::i18n::Lang::It);
         cedro::i18n::fix();
     }
@@ -83,7 +83,7 @@ fn main() {
     let files = demo_files(&std::env::temp_dir().join("cedro-ui-demo"));
     let images: Vec<PathBuf> = files.iter().filter(|p| p.extension().is_some_and(|e| e == "jpg")).cloned().collect();
     // Il Cedro di partenza: una foto per pagina nelle due viste, Inizio, l'elenco e (TINTE=1) le quattro tinte.
-    if only.as_deref().is_some_and(|o| o.starts_with("cedro") && o != "cedro-labs" && o != "cedro-caso" && o != "cedro-compatto") {
+    if only.as_deref().is_some_and(|o| o.starts_with("cedro") && o != "cedro-labs" && o != "cedro-labs-novita" && o != "cedro-caso" && o != "cedro-compatto") {
         use cedro::ui::model::Lab;
         let size = std::env::var("SIZE").ok().and_then(|v| v.split_once('x').and_then(|(a, b)| Some((a.parse::<u32>().ok()?, b.parse::<u32>().ok()?)))).unwrap_or((1536, 1024));
         let wav = std::env::temp_dir().join("cedro-ui-demo").join("Consiglio-comunale-12-ottobre.wav");
@@ -210,6 +210,47 @@ fn main() {
                 s.render(1536, 1024, 1.0).save_png(&out.join(&file)).unwrap();
                 println!("{file}");
             }
+        }
+        return;
+    }
+    // Le novità di Labs: risultato con «Copia per il quaderno», Lavori con il registro in Excel e (con
+    // CEDRO_FOTO_CD=cartella di un CD DICOM) il CD aperto dal DICOMDIR.
+    if only.as_deref() == Some("cedro-labs-novita") {
+        use cedro::ui::model::Lab;
+        let dest = std::env::temp_dir().join("cedro-ui-demo-uscita");
+        let _ = std::fs::remove_dir_all(&dest);
+        std::fs::create_dir_all(&dest).unwrap();
+        let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+        s.request_appearance(ThemeId::CedroLabs, false);
+        s.drop_files(images.clone());
+        s.app.set_lab(Lab::Anonimizza, false);
+        s.app.dest = Some(dest.clone());
+        settle(&mut s);
+        s.app.start();
+        let t = Instant::now();
+        while (s.app.busy() || !s.app.finished()) && t.elapsed() < Duration::from_secs(60) {
+            s.pump();
+            std::thread::sleep(Duration::from_millis(30));
+        }
+        settle(&mut s);
+        s.render(1536, 1024, 1.0);
+        s.render(1536, 1024, 1.0).save_png(&out.join("novita-quaderno.png")).unwrap();
+        s.app.lavori_aperti = true;
+        s.render(1536, 1024, 1.0).save_png(&out.join("novita-lavori.png")).unwrap();
+        s.app.lavori_esporta();
+        s.render(1536, 1024, 1.0).save_png(&out.join("novita-registro.png")).unwrap();
+        if let Ok(cd) = std::env::var("CEDRO_FOTO_CD") {
+            let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+            s.request_appearance(ThemeId::CedroLabs, false);
+            s.drop_files(vec![PathBuf::from(cd)]);
+            s.app.set_lab(Lab::Anonimizza, false);
+            settle(&mut s);
+            s.render(1536, 1024, 1.0);
+            settle(&mut s);
+            s.render(1536, 1024, 1.0).save_png(&out.join("novita-cd-dicom.png")).unwrap();
+        }
+        for m in cedro::i18n::misses() {
+            println!("SENZA TRADUZIONE: {m:?}");
         }
         return;
     }
