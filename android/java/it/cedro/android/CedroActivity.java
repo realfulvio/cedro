@@ -144,6 +144,19 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
     public void accessibilitySnapshot(final String json) {
         runOnUiThread(new Runnable() { @Override public void run() { if (accessibleSurface != null) accessibleSurface.update(json); } });
     }
+    // NativeActivity's InputQueue is upstream of View dispatch: Java gestures cannot re-enter it.
+    // Rust drains this queue on its UI thread and uses the same touch/effect dispatcher.
+    private org.json.JSONArray accessibilityActions = new org.json.JSONArray();
+    private synchronized void queueAccessibilityAction(int kind,float x,float y,float endY) {
+        org.json.JSONArray item = new org.json.JSONArray();
+        item.put(kind); item.put(Float.valueOf(x)); item.put(Float.valueOf(y)); item.put(Float.valueOf(endY));
+        accessibilityActions.put(item);
+    }
+    public synchronized String takeAccessibilityActions() {
+        String result=accessibilityActions.toString();
+        accessibilityActions=new org.json.JSONArray();
+        return result;
+    }
     private final class AccessibleSurface extends android.view.View {
         private final android.util.SparseArray<org.json.JSONObject> nodes = new android.util.SparseArray<>();
         private final java.util.ArrayList<Integer> order = new java.util.ArrayList<>();
@@ -182,10 +195,6 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
             org.json.JSONObject n = nodes.get(id);
             if (n != null) e.getText().add(n.optString("text"));
             getParent().requestSendAccessibilityEvent(this, e);
-        }
-        private void touch(int action, float x, float y, long down, long time) {
-            android.view.MotionEvent e = android.view.MotionEvent.obtain(down,time,action,x,y,0);
-            CedroActivity.this.dispatchTouchEvent(e); e.recycle();
         }
         @Override public boolean onTouchEvent(android.view.MotionEvent e) { return false; }
         @Override public boolean onHoverEvent(android.view.MotionEvent e) {
@@ -242,18 +251,14 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
                     focused = id; event(id,32768);return true;
                 }
                 if (action == 128 && focused == id) { focused=-1;event(id,65536);return true; }
-                long now=android.os.SystemClock.uptimeMillis();
                 if (action == 16 && node != null && node.optBoolean("click")) {
                     android.graphics.Rect r=bounds(node);
-                    touch(0,r.exactCenterX(),r.exactCenterY(),now,now);
-                    postDelayed(new Runnable() { @Override public void run() { touch(1,r.exactCenterX(),r.exactCenterY(),now,android.os.SystemClock.uptimeMillis()); } },80);
+                    queueAccessibilityAction(0,r.exactCenterX(),r.exactCenterY(),r.exactCenterY());
                     event(id,1);return true;
                 }
                 if ((action == 4096 || action == 8192) && scrollable) {
                     float x=getWidth()*0.5f, start=getHeight()*(action==4096 ? 0.7f : 0.3f), end=getHeight()*(action==4096 ? 0.3f : 0.7f);
-                    touch(0,x,start,now,now);
-                    postDelayed(new Runnable() { @Override public void run() { touch(2,x,end,now,android.os.SystemClock.uptimeMillis()); } },80);
-                    postDelayed(new Runnable() { @Override public void run() { touch(1,x,end,now,android.os.SystemClock.uptimeMillis()); } },160);
+                    queueAccessibilityAction(1,x,start,end);
                     return true;
                 }
                 return false;
