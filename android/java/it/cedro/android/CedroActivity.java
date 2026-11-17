@@ -13,8 +13,7 @@ import android.os.Bundle;
  */
 public class CedroActivity extends NativeActivity implements android.media.AudioManager.OnAudioFocusChangeListener {
     public static final int CODICE_SCELTA = 4242;
-    private volatile Uri[] scelti;
-    private volatile boolean novita;
+    private final ActivityDelivery<Uri[]> deliveries = new ActivityDelivery<>();
 
     public float fontScale() { return getResources().getConfiguration().fontScale; }
 
@@ -70,6 +69,8 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
 
     @Override
     protected void onCreate(Bundle stato) {
+        // NativeActivity can start Rust inside super.onCreate: publish this first.
+        deliveries.created(stato != null);
         super.onCreate(stato);
         accessibleSurface = new AccessibleSurface(this);
         addContentView(accessibleSurface, new android.view.ViewGroup.LayoutParams(-1, -1));
@@ -96,21 +97,25 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
         super.onNewIntent(intento);
         ricordaIntento(intento);
         setIntent(intento);
-        novita = true;
+        deliveries.newIntent();
     }
 
     /** Vero, una volta sola, se è arrivato un nuovo intento da leggere con getIntent(). */
     public boolean novita() {
-        boolean n = novita;
-        novita = false;
-        return n;
+        return deliveries.takeNew();
     }
+
+    /** Restored Activities carry the old getIntent(); only a fresh launch consumes it. */
+    public boolean condivisioneIniziale() { return deliveries.takeInitial(); }
+
+    /** Called by Rust only with the currently valid journal context. */
+    public synchronized void contestoScelta(boolean pending) { deliveries.discardOrphan(pending); }
 
     @Override
     protected synchronized void onActivityResult(int richiesta, int esito, Intent dati) {
         if (richiesta == CODICE_SCELTA) {
             // Empty means a completed cancellation; null means no callback yet.
-            scelti = new Uri[0];
+            deliveries.picker(new Uri[0]);
             if (esito != RESULT_OK || dati == null) return;
             // Con la scelta multipla i file arrivano nel ClipData; con uno solo, in getData().
             ClipData c = dati.getClipData();
@@ -118,10 +123,10 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
                 Uri[] u = new Uri[c.getItemCount()];
                 for (int i = 0; i < u.length; i++) u[i] = c.getItemAt(i).getUri();
                 for (Uri uri : u) ricordaPermesso(uri, dati.getFlags());
-                scelti = u;
+                deliveries.picker(u);
             } else if (dati.getData() != null) {
                 ricordaPermesso(dati.getData(), dati.getFlags());
-                scelti = new Uri[] { dati.getData() };
+                deliveries.picker(new Uri[] { dati.getData() });
             }
         } else {
             super.onActivityResult(richiesta, esito, dati);
@@ -138,9 +143,7 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
 
     /** I file scelti nell'ultimo selettore, una volta sola (null se non c'è niente di nuovo). */
     public synchronized Uri[] scelti() {
-        Uri[] u = scelti;
-        scelti = null;
-        return u;
+        return deliveries.takePicker();
     }
     // NativeActivity espone un'unica superficie: il provider riflette i controlli Rust reali.
     private AccessibleSurface accessibleSurface;

@@ -399,6 +399,13 @@ fn scegli(app: &AndroidApp, sorgente: Sorgente) -> Result<(), String> {
     })
 }
 
+/// A result without a valid request must never be assigned to the next picker.
+fn scarta_scelta_orfana(app:&AndroidApp) {
+    if let Err(e)=con_attivita(app,|env,att| {
+        env.call_method(att,"contestoScelta","(Z)V",&[JValue::Bool(0)]).map(|_|()).map_err(|e|jerr(env,e))
+    }) {log::warn!("risultato selettore orfano: {e}");}
+}
+
 /// I file scelti nel selettore, se sono arrivati: li copia nella cartella dei file di Cedro.
 fn importa_scelti(app: &AndroidApp, cartella: &Path, sorgente: Sorgente, c: &Consegne, ui: &mut App) -> bool {
     let arr=con_attivita(app,|env,att| {
@@ -1783,7 +1790,10 @@ fn android_main(app: AndroidApp) {
             ricarica_recenti(dir,&c);a.create_waker().wake();
         });
     }
-    if pending.is_none() {importa_condivisione(&app,&cartella,&consegne,&mut ui);}
+    let fresh_launch=con_attivita(&app,|env,att| {
+        env.call_method(att,"condivisioneIniziale","()Z",&[]).and_then(|v|v.z()).map_err(|e|jerr(env,e))
+    }).unwrap_or(false);
+    if fresh_launch && pending.is_none() {importa_condivisione(&app,&cartella,&consegne,&mut ui);}
     registra(&consegne,&mut ui);
     persisti(&consegne,&file_lavori,ui.serializza());
 
@@ -2045,6 +2055,7 @@ fn android_main(app: AndroidApp) {
                     sporco = true;
                 }
                 Effetto::Scegli(s) => {
+                    if attesa_scelta.is_none() {scarta_scelta_orfana(&app);}
                     let context=crate::picker::Attesa::nuova(s,ui.firma.viewer.as_ref().map(|v|(v.path.as_path(),v.at)));
                     let result=context.and_then(|p|p.salva(&file_scelta)).map_err(|e|e.to_string()).and_then(|_|scegli(&app,s));
                     match result {
@@ -2107,6 +2118,9 @@ fn android_main(app: AndroidApp) {
                 if let Err(e)=crate::picker::Attesa::chiudi(&file_scelta) {log::error!("chiusura selettore: {e}");}
                 sporco=true;
             }
+        } else {
+            // Also drain a late callback delivered after startup without a valid journal.
+            scarta_scelta_orfana(&app);
         }
         if let Some((id,r))=consegne.originale.lock().unwrap_or_else(|e|e.into_inner()).take() {
             if id==consegne.ultimo_import.load(std::sync::atomic::Ordering::Acquire) {
