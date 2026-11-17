@@ -68,6 +68,7 @@ pub struct Review {
     /// È un referto (dettatura veterinaria): le frasi con numeri e parole decisive vanno riascoltate e
     /// confermate, e finché ne resta una il file esce come bozza.
     pub referto: bool,
+    pub view: u8,
 }
 
 impl Review {
@@ -101,6 +102,7 @@ impl Review {
             followed: None,
             sel: None,
             referto: false,
+            view: 1,
         };
         r.detect();
         // Con le voci si parte da «Chi parla» (i nomi da dare), a meno che ci sia qualcosa da controllare.
@@ -108,6 +110,45 @@ impl Review {
             r.tab = 1;
         }
         r
+    }
+
+    pub fn from_saved(source: &Path, saved: revisione::Saved) -> Self {
+        let mut r = Self::new(source, saved.secs, saved.lang, saved.segments, saved.names, saved.summary);
+        r.referto = saved.review.referto;
+        r.view = saved.review.view.min(2);
+        r.detect();
+        r.dismissed = (0..r.flags.len()).filter(|i| saved.review.checked.contains(&r.flag_key(*i))).collect();
+        if r.open_count() > 0 { r.tab = 0; }
+        r
+    }
+
+    fn flag_key(&self, i: usize) -> String {
+        let f = &self.flags[i];
+        let rows: Vec<_> = f.segs.iter().filter_map(|i| self.rows.get(*i)).map(|r| (r.t0, r.t1, r.text.as_str())).collect();
+        format!("{:?}:{}", f.kind, serde_json::to_string(&rows).unwrap_or_default())
+    }
+
+    pub fn persist(&self) -> std::io::Result<()> {
+        let state = revisione::ReviewState { referto: self.referto, view: self.view,
+            checked: (0..self.flags.len()).filter(|i| !self.is_open(*i)).map(|i| self.flag_key(i)).collect() };
+        revisione::save_review(&self.source, self.secs, &self.lang, &self.segments(), &self.names, self.summary.as_ref(), &state)
+    }
+
+    /// Un solo esportatore per telefono e computer, compresi nome e avviso dei sottotitoli.
+    pub fn export(&self, ext: &str) -> (String, Vec<u8>) {
+        let segments = self.segments();
+        let names: &[String] = if self.write_voices { &self.names } else { &[] };
+        let summary = self.summary_sections().filter(|_| self.summary_on_top);
+        let draft = self.draft_line();
+        let bytes = match ext {
+            "docx" => trascrizione::docx_bytes_full(&self.source, self.secs, &self.lang, &segments, names, summary.as_ref(), draft.as_deref()),
+            "srt" => revisione::srt_bytes_full(&segments, names, draft.as_deref()),
+            "vtt" => revisione::vtt_bytes_full(&segments, names, draft.as_deref()),
+            _ => trascrizione::text_bytes_full(&self.source, self.secs, &self.lang, &segments, names, summary.as_ref(), draft.as_deref()),
+        };
+        let stem = self.source.file_stem().and_then(|s| s.to_str()).unwrap_or("trascrizione");
+        let tag = if draft.is_some() { "bozza" } else { "rivisto" };
+        (format!("{stem} - {tag}.{ext}"), bytes)
     }
 
     /// Cerca i punti da controllare sul testo di whisper (le correzioni non li cambiano).
@@ -344,7 +385,7 @@ impl App {
         };
         let secs = saved.secs;
         self.notice = None;
-        let mut rv = Review::new(&path, secs, saved.lang, saved.segments, saved.names, saved.summary);
+        let mut rv = Review::from_saved(&path, saved);
         if self.transcribe.glossario_vet {
             rv.referto = true;
             rv.detect();
@@ -482,33 +523,21 @@ impl App {
     pub fn review_save(&mut self) {
         let dest = self.dest.clone();
         let Some(r) = self.review.as_mut() else { return };
-        let segments = r.segments();
         let ext = FORMATS[r.format.min(FORMATS.len() - 1)].1;
-        // Con l'interruttore spento il file esce senza chi parla (i nomi restano nella revisione).
-        let names: &[String] = if r.write_voices { &r.names } else { &[] };
-        // Il riassunto va solo nel Word e nel testo: i sottotitoli restano come sono.
-        let summary = r.summary_sections().filter(|_| r.summary_on_top);
-        // Un referto con punti ancora da riascoltare esce come bozza, con l'elenco dei punti in cima.
         let draft = r.draft_line();
-        let bytes = match ext {
-            "docx" => trascrizione::docx_bytes_full(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref(), draft.as_deref()),
-            "txt" => trascrizione::text_bytes_full(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref(), draft.as_deref()),
-            "srt" => revisione::srt_bytes(&segments, names),
-            _ => revisione::vtt_bytes(&segments, names),
-        };
+        let (name, bytes) = r.export(ext);
         let dir = dest.or_else(|| r.source.parent().filter(|p| !p.as_os_str().is_empty()).map(Path::to_path_buf)).unwrap_or_else(|| PathBuf::from("."));
-        let stem = r.source.file_stem().and_then(|s| s.to_str()).unwrap_or("trascrizione");
-        let tag = if draft.is_some() { "bozza" } else { "rivisto" };
-        let mut out = dir.join(format!("{stem} - {tag}.{ext}"));
+        let mut out = dir.join(&name);
+        let stem = Path::new(&name).file_stem().and_then(|s| s.to_str()).unwrap_or("trascrizione");
         let mut n = 2;
         while out.exists() {
-            out = dir.join(format!("{stem} - {tag} ({n}).{ext}"));
+            out = dir.join(format!("{stem} ({n}).{ext}"));
             n += 1;
         }
         match std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&out, bytes)) {
             Ok(()) => {
                 // Le frasi corrette restano: la prossima volta si riparte da qui.
-                let _ = revisione::save_with(&r.source, r.secs, &r.lang, &segments, &r.names, r.summary.as_ref());
+                let _ = r.persist();
                 let name = out.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 r.note = match r.open_count() {
                     n if draft.is_some() => format!("Salvato come bozza ({n} da riascoltare): {name}"),

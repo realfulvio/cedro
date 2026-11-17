@@ -233,6 +233,14 @@ fn append_mp3(
     Ok(())
 }
 
+/// Durata dal contenitore, senza tenere il PCM in memoria.
+pub fn duration(path: &Path) -> Option<f64> {
+    let format = crate::symph::open(path).ok()?;
+    let track = crate::symph::audio_track(format.as_ref())?;
+    let rate = crate::symph::audio_params(&track)?.sample_rate?;
+    track.num_frames.map(|n| n as f64 / rate.max(1) as f64)
+}
+
 /// L'onda di un file audio in `n` colonne (0..1), per l'anteprima: un colpo d'occhio su dove c'è suono.
 pub fn waveform(path: &Path, n: usize) -> Option<Vec<f32>> {
     waveform_stream(path, n).or_else(|| waveform_buffered(path, n))

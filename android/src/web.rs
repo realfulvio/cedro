@@ -71,7 +71,7 @@ mod tests {
     use super::*;
     #[test]
     fn scelte_nel_request_e_voce_separata(){
-        let s=Scelte{altezza:480,audio_quality:2,video_format:"mkv".into(),audio_format:"flac".into(),subtitles:3,thumbnail:false,chapters:false,metadata:false,split_chapters:true,skip_sponsors:true,normalize:true,playlist:true,skip_existing:false,media_quality:91,voce:crate::worker::Voce{modello:2,voci:4}};
+        let s=Scelte{altezza:480,audio_quality:2,video_format:"mkv".into(),audio_format:"flac".into(),subtitles:3,thumbnail:false,chapters:false,metadata:false,split_chapters:true,skip_sponsors:true,normalize:true,playlist:true,skip_existing:false,media_quality:91,voce:crate::worker::Voce{modello:2,voci:4,referto:true}};
         let s:Scelte=serde_json::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
         for action in ["web-video","web-audio","web-testo"] {
             let r=s.richiesta("https://youtu.be/test",action,"out".into());

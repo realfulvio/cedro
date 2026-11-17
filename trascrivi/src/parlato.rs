@@ -7,7 +7,7 @@
 //! parlato (o comunque qualcosa che vale la pena trascrivere), altrove no. Il controllo è volutamente largo:
 //! meglio passare del rumore a whisper (poi lo ripulisce `rifinitura`) che tagliare un parlato sommesso.
 
-use crate::decode::RATE;
+const RATE: u32 = 16_000;
 
 /// Durata di un frammento (20 ms).
 const FRAME: usize = (RATE as usize) / 50;
@@ -39,6 +39,7 @@ fn percentile(sorted: &[f32], p: f32) -> f32 {
 /// La finestra col movimento d'energia più grande, in decibel (per le prove).
 pub fn best_range(samples: &[f32]) -> f32 {
     let levels = frame_levels(samples);
+    if levels.is_empty() { return 0.0; }
     (0..levels.len().saturating_sub(WINDOW) + 1)
         .step_by(WINDOW / 2)
         .map(|s| {

@@ -3,7 +3,7 @@
 //! Lo stato e le correzioni sono quelli del computer (`cedro::ui::review::Review`); qui c'è il disegno per il tocco.
 //! Come sul computer (v0.30-v0.31) ci sono anche «Chi parla» (nomi, colori, unisci) e il Riassunto AI.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::Instant;
@@ -21,6 +21,10 @@ use super::{adesso, ic, App, Azione, Effetto, Forma, Lavoro, Stato, BARRA, TOCCO
 pub enum RivAz {
     Chiudi,
     Play,
+    Vista(u8),
+    Velocita(u32),
+    Zoom(i8),
+    Pan(i8),
     Salta(i32),
     /// Un punto dell'onda (in millesimi della durata).
     Onda(u32),
@@ -65,8 +69,22 @@ pub enum FoglioRiv {
     Unisci(u8),
 }
 
+#[derive(Default)]
+pub struct Traccia {
+    pub bars: Option<Vec<f32>>,
+    pub secs: f64,
+    pub segments: Vec<trascrizione::Segment>,
+    pub job: Option<u32>,
+    pub failed: bool,
+}
+
 pub struct Rivedi {
     pub r: Review,
+    pub job: Option<u32>,
+    pub live: bool,
+    speed: u32,
+    zoom: f64,
+    offset: f64,
     pub titolo: String,
     player: Option<Player>,
     /// Il lavoro che sta salvando, e cosa dire sotto.
@@ -96,7 +114,12 @@ impl Rivedi {
 
     fn lettore(&mut self) -> &mut Player {
         let (src, secs) = (self.r.source.clone(), self.r.secs);
-        self.player.get_or_insert_with(|| Player::start(&src, false, Some(secs).filter(|s| *s > 0.0), Arc::new(|| {})))
+        let speed = self.speed;
+        self.player.get_or_insert_with(|| {
+            let mut p = Player::start(&src, false, Some(secs).filter(|s| *s > 0.0), Arc::new(|| {}));
+            p.set_speed(speed);
+            p
+        })
     }
 
     fn suona_da(&mut self, secs: f64) {
@@ -114,8 +137,18 @@ impl Rivedi {
 
     /// Nomi, voci e riassunto restano nella revisione salvata: la prossima volta si riparte da qui.
     pub(super) fn salva_revisione(&self) {
-        let segs = self.r.segments();
-        let _ = revisione::save_with(&self.r.source, self.r.secs, &self.r.lang, &segs, &self.r.names, self.r.summary.as_ref());
+        if !self.live && !self.r.rows.is_empty() { let _ = self.r.persist(); }
+    }
+
+    pub(super) fn tasto_frase(&mut self, i: usize, t: super::Tasto) {
+        if self.live { return; }
+        let Some(row) = self.r.rows.get_mut(i) else { return };
+        match t { super::Tasto::Canc => { row.text.pop(); }, super::Tasto::Car(c) if !c.is_control() => row.text.push(c), _ => {} }
+        self.rifai();
+    }
+
+    fn new(r: Review, titolo: String, job: Option<u32>, live: bool) -> Self {
+        Self { r, titolo, job, live, speed: 100, zoom: 1.0, offset: 0.0, player: None, salva: None, nota: String::new(), altezze: Vec::new(), largo: 0.0, scorri: 0.0, scorri_max: 0.0, onda: (0.0, 0.0), foglio: None, riassunto: None, riassunto_nota: String::new() }
     }
 
     /// Un tasto sul nome di una voce («Chi parla»).
@@ -161,24 +194,76 @@ fn etichetta(kind: Kind, count: usize) -> String {
 /// Quanti punti da controllare ha la trascrizione salvata di `source` (senza l'onda: ripetizioni e frasi tipiche).
 pub fn da_controllare(source: &Path) -> Option<usize> {
     let s = revisione::load(source)?;
-    Some(Review::new(source, s.secs, s.lang, s.segments, s.names, s.summary).open_count())
+    Some(Review::from_saved(source, s).open_count())
 }
 
 impl App {
     /// Apre la revisione della trascrizione del lavoro `id`. L'onda la legge `glue` (Effetto::OndaRevisione).
     pub(super) fn apri_rivedi(&mut self, id: u32) -> Effetto {
         let Some(src) = self.lavori.iter().find(|l| l.id == id).and_then(|l| l.sorgente.clone()) else { return Effetto::Niente };
-        let Some(s) = revisione::load(&src) else { return Effetto::Niente };
         let titolo = self.lavori.iter().find(|l| l.id == id).map(|l| l.origine.clone()).unwrap_or_default();
-        let titolo = Path::new(&titolo).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or(titolo);
-        let secs = s.secs;
-        self.rivedi = Some(Rivedi { r: Review::new(&src, secs, s.lang, s.segments, s.names, s.summary), titolo, player: None, salva: None, nota: String::new(), altezze: Vec::new(), largo: 0.0, scorri: 0.0, scorri_max: 0.0, onda: (0.0, 0.0), foglio: None, riassunto: None, riassunto_nota: String::new() });
-        Effetto::OndaRevisione(src, secs)
+        self.apri_ascolto(src,titolo,Some(id))
+    }
+
+    pub(super) fn apri_ascolto(&mut self, src: PathBuf, titolo: String, job: Option<u32>) -> Effetto {
+        self.pausa_audio();
+        let live = job.is_some_and(|id| self.lavori.iter().any(|l| l.id == id && l.stato == Stato::InCorso));
+        let mut r = if !live { revisione::load(&src).map(|s|Review::from_saved(&src,s)) } else { None }
+            .unwrap_or_else(|| Review::new(&src,0.0,"it".into(),Vec::new(),Vec::new(),None));
+        if let Some(t) = self.tracce.get(&src) {
+            r.bars = t.bars.clone(); r.wave_failed = t.failed; r.secs = t.secs.max(r.secs);
+            if live { r.rows = t.segments.iter().cloned().map(riga).collect(); r.names = nomi(&t.segments); }
+        }
+        let secs = r.secs;
+        self.rivedi = Some(Rivedi::new(r,titolo,job,live));
+        if self.rivedi.as_ref().is_some_and(|r|r.r.bars.is_some()) { Effetto::Ridisegna } else { Effetto::OndaRevisione(src,secs) }
+    }
+
+    pub fn pausa_audio(&mut self) {
+        for rv in [&mut self.rivedi,&mut self.anteprima_tras].into_iter().flatten() {
+            if let Some(p) = rv.player.as_mut().filter(|p|p.playing()) { p.toggle(); }
+        }
+    }
+
+    pub fn suona_audio(&self) -> bool {
+        self.rivedi.as_ref().is_some_and(|r|r.suona()) || self.anteprima_tras.as_ref().is_some_and(|r|r.suona())
+    }
+
+    pub fn onda_trascrizione(&mut self, path: &Path, bars: Option<Vec<f32>>, secs: f64) {
+        let t = self.tracce.entry(path.into()).or_default();
+        t.failed = bars.is_none(); t.bars = bars.clone(); t.secs = t.secs.max(secs);
+        if let Some(rv) = self.anteprima_tras.as_mut().filter(|r|r.r.source == path) { rv.r.bars=bars.clone();rv.r.secs=t.secs;rv.r.wave_failed=t.failed; }
+        if let Some(rv) = self.rivedi.as_mut().filter(|r|r.r.source == path) { rv.r.secs=rv.r.secs.max(secs); }
+        self.onda_rivedi(path,bars);
+    }
+
+    pub fn frase_trascritta(&mut self, id:u32, path:PathBuf, segment:Option<trascrizione::Segment>, secs:f64) {
+        if let Some(l) = self.lavori.iter_mut().find(|l|l.id==id) { l.sorgente=Some(path.clone()); }
+        let t = self.tracce.entry(path.clone()).or_default();
+        if t.job != Some(id) { t.segments.clear(); t.job=Some(id); }
+        t.secs=t.secs.max(secs);
+        if let Some(seg) = &segment { t.segments.push(seg.clone()); }
+        for rv in [&mut self.rivedi,&mut self.anteprima_tras].into_iter().flatten().filter(|r|r.r.source==path) {
+            if rv.job!=Some(id) {rv.r.rows.clear();rv.r.names.clear();rv.job=Some(id);rv.live=true;}
+            rv.r.secs=t.secs;
+            if let Some(seg)=&segment { rv.r.rows.push(riga(seg.clone()));rv.r.names=nomi(&t.segments);rv.rifai(); }
+        }
+    }
+
+    pub(super) fn fine_trascrizione(&mut self,id:u32) {
+        for rv in [&mut self.rivedi,&mut self.anteprima_tras].into_iter().flatten().filter(|r|r.job==Some(id)) {
+            rv.live=false;
+            if let Some(s)=revisione::load(&rv.r.source) {
+                let mut r=Review::from_saved(&rv.r.source,s);r.bars=rv.r.bars.take();r.view=rv.r.view;
+                rv.r=r;rv.rifai();
+            }
+        }
     }
 
     /// Apre una revisione già pronta (per le fotografie dell'esempio `vista`).
     pub fn apri_rivedi_con(&mut self, r: Review, titolo: String, scheda: u8, foglio: Option<FoglioRiv>, riassunto: Option<(u32, u32, String)>) {
-        let mut rv = Rivedi { r, titolo, player: None, salva: None, nota: String::new(), altezze: Vec::new(), largo: 0.0, scorri: 0.0, scorri_max: 0.0, onda: (0.0, 0.0), foglio, riassunto: None, riassunto_nota: String::new() };
+        let mut rv = Rivedi::new(r,titolo,None,false);
+        rv.foglio=foglio;
         rv.r.tab = scheda;
         if let Some((id, m, nota)) = riassunto {
             rv.riassunto = Some((id, Arc::new(AtomicU32::new(m))));
@@ -191,6 +276,7 @@ impl App {
     pub fn onda_rivedi(&mut self, path: &Path, bars: Option<Vec<f32>>) {
         let Some(rv) = self.rivedi.as_mut().filter(|rv| rv.r.source == path) else { return };
         let r = &mut rv.r;
+        r.wave_failed = bars.is_none();
         r.bars = bars;
         if r.bars.is_some() {
             let prima: Vec<(Kind, Vec<usize>)> = r.dismissed.iter().filter_map(|i| r.flags.get(*i).map(|f| (f.kind, f.segs.clone()))).collect();
@@ -203,7 +289,7 @@ impl App {
     /// «Fai il riassunto»: parte come un lavoro (con la notifica), il risultato torna qui.
     pub(super) fn avvia_riassunto(&mut self) -> Effetto {
         let Some(rv) = self.rivedi.as_mut() else { return Effetto::Niente };
-        if rv.riassunto.is_some() {
+        if rv.live || rv.riassunto.is_some() {
             return Effetto::Niente;
         }
         let names = rv.r.current_names();
@@ -264,9 +350,14 @@ impl App {
     }
 
     pub(super) fn azione_rivedi(&mut self, az: RivAz) -> Effetto {
-        let Some(rv) = self.rivedi.as_mut() else { return Effetto::Niente };
+        let Some(rv) = self.rivedi.as_mut().or(self.anteprima_tras.as_mut()) else { return Effetto::Niente };
         match az {
+            RivAz::Vista(v) => { rv.r.view=v.min(2);rv.salva_revisione();let _=std::fs::write(cedro::config_dir().join("android-vista-onda"),v.to_string()); }
+            RivAz::Velocita(v) => {rv.speed=v;if let Some(p)=rv.player.as_mut(){p.set_speed(v);}}
+            RivAz::Zoom(d) => {rv.zoom=(rv.zoom*if d>0{2.0}else{0.5}).clamp(1.0,32.0);rv.offset=rv.offset.min((1.0-1.0/rv.zoom).max(0.0));}
+            RivAz::Pan(d) => {rv.offset=(rv.offset+d as f64*0.5/rv.zoom).clamp(0.0,(1.0-1.0/rv.zoom).max(0.0));}
             RivAz::Chiudi => {
+                rv.salva_revisione();
                 // La scheda della trascrizione dice quanti punti restano da controllare.
                 let (src, n) = (rv.r.source.clone(), rv.r.open_count());
                 self.rivedi = None;
@@ -301,7 +392,7 @@ impl App {
                 rv.scorri = 0.0;
                 rv.rifai();
             }
-            RivAz::Segui => rv.r.follow = !rv.r.follow,
+            RivAz::Segui => {rv.r.follow = !rv.r.follow;rv.r.followed=None;},
             RivAz::Riga(i) => {
                 if let Some(t0) = rv.r.rows.get(i).map(|x| x.t0) {
                     rv.r.sel = Some(i);
@@ -324,22 +415,12 @@ impl App {
                 rv.rifai();
             }
             RivAz::Salva(k) => {
-                if rv.salva.is_some() {
+                if rv.live || rv.r.rows.is_empty() || rv.salva.is_some() {
                     return Effetto::Niente;
                 }
-                let segs = rv.r.segments();
-                // Con l'interruttore spento il file esce senza chi parla (i nomi restano nella revisione).
-                let nomi: &[String] = if rv.r.write_voices { &rv.r.names } else { &[] };
-                // Il riassunto va solo nel testo: i sottotitoli restano come sono.
-                let riassunto = rv.r.summary_sections().filter(|_| rv.r.summary_on_top);
-                let (ext, dati) = match k {
-                    1 => ("srt", revisione::srt_bytes(&segs, nomi)),
-                    2 => ("vtt", revisione::vtt_bytes(&segs, nomi)),
-                    _ => ("txt", trascrizione::text_bytes_with(&rv.r.source, rv.r.secs, &rv.r.lang, &segs, nomi, riassunto.as_ref())),
-                };
-                // Le correzioni (e il riassunto) restano: la prossima volta si riparte da qui.
-                let _ = revisione::save_with(&rv.r.source, rv.r.secs, &rv.r.lang, &segs, &rv.r.names, rv.r.summary.as_ref());
-                let nome = format!("{} - rivisto.{ext}", rv.titolo);
+                let ext = match k {1=>"srt",2=>"vtt",3=>"docx",_=>"txt"};
+                let (nome,dati)=rv.r.export(ext);
+                rv.salva_revisione();
                 let id = self.prossimo;
                 self.prossimo += 1;
                 let rv = self.rivedi.as_mut().expect("aperta");
@@ -394,6 +475,7 @@ impl App {
             RivAz::Riassumi => return self.avvia_riassunto(),
             RivAz::ChiudiFoglio => rv.foglio = None,
         }
+        rv.salva_revisione();
         Effetto::Ridisegna
     }
 
@@ -414,64 +496,17 @@ impl App {
         p.icon(ic::ARROW_LEFT, 15.0, 15.0, 26.0, pal.text);
         colpi.push((Forma::R(indietro), Azione::Riv(RivAz::Chiudi)));
         p.text(&rv.titolo, 60.0, 0.0, w - 76.0, BARRA, 21.0, Weight::Semibold, pal.text, Align::Left);
-        let ampio = w > 700.0;
-        let cw = if ampio { 620.0 } else { w - 24.0 };
-        let x = if ampio { (w - cw) / 2.0 } else { 12.0 };
+        let affiancati = w > h && w >= 600.0 && rv.r.view == 1;
+        let mut cw = if affiancati {(w-36.0)/2.0}else{w-24.0};
+        let mut x = 12.0;
         let mut y = BARRA + 2.0;
-
-        // Il lettore: onda, salti, play e tempo.
-        let card_h = 126.0;
-        super::sollevato(p, pal, scuro_t, x, y, cw, card_h, 20.0);
-        let pos = rv.posizione();
-        let durata = rv.r.secs.max(0.001);
-        let (ox, ow, oy, oh) = (x + 14.0, cw - 28.0, y + 12.0, 46.0);
-        rv.onda = (ox, ow);
-        match &rv.r.bars {
-            Some(bars) if !bars.is_empty() => {
-                let n = ((ow / 6.0) as usize).max(10);
-                let fatto = (pos / durata) as f32;
-                for k in 0..n {
-                    let a = k * bars.len() / n;
-                    let b = ((k + 1) * bars.len() / n).max(a + 1).min(bars.len());
-                    let v = bars[a..b].iter().cloned().fold(0.0f32, f32::max).clamp(0.04, 1.0);
-                    let bh = v * oh;
-                    let bx = ox + k as f32 * ow / n as f32;
-                    let col = if (k as f32 + 0.5) / n as f32 <= fatto { pal.primary } else { pal.border };
-                    p.rrect(bx, oy + (oh - bh) / 2.0, (ow / n as f32 - 2.0).max(2.0), bh, 1.5, Some(col), None);
-                }
-            }
-            _ => p.text("Leggo l'onda dell'audio…", ox, oy, ow, oh, 14.0, Weight::Regular, pal.muted, Align::Center),
+        let pos=rv.posizione();
+        let used=lettore(p,pal,rv,(x,y,cw,h-y),premuto,&mut colpi);
+        if affiancati {x+=cw+12.0;cw=w-x-12.0;} else {y+=used+8.0;}
+        if rv.r.view==0 {
+            self.colpi.extend(colpi);
+            return;
         }
-        // Tocchi sull'onda: dieci zone per saltare (il punto preciso lo dà la zona).
-        for k in 0..40u32 {
-            colpi.push((Forma::R((ox + k as f32 * ow / 40.0, oy - 6.0, ow / 40.0, oh + 12.0)), Azione::Riv(RivAz::Onda(k * 25 + 12))));
-        }
-        let cy = y + 92.0;
-        let mut bx = x + 14.0;
-        for (t, az) in [("−10", RivAz::Salta(-10)), ("", RivAz::Play), ("+10", RivAz::Salta(10))] {
-            let a = Azione::Riv(az);
-            let r = if az == RivAz::Play { 24.0 } else { 21.0 };
-            let c = (bx + r, cy);
-            if az == RivAz::Play {
-                p.circle(c.0, c.1, r, Some(if premuto == Some(a) { mix(pal.primary, (0, 0, 0), 0.15) } else { pal.primary }), None);
-                let suona = rv.player.as_ref().is_some_and(|p| p.playing());
-                if suona {
-                    p.rrect(c.0 - 7.0, c.1 - 8.0, 5.0, 16.0, 1.0, Some(pal.on_primary), None);
-                    p.rrect(c.0 + 2.0, c.1 - 8.0, 5.0, 16.0, 1.0, Some(pal.on_primary), None);
-                } else {
-                    p.icon("M9 6l9 6-9 6z", c.0 - 11.0, c.1 - 12.0, 24.0, pal.on_primary);
-                }
-            } else {
-                p.circle(c.0, c.1, r, Some(if premuto == Some(a) { pal.alt } else { pal.surface }), Some((pal.border, 2.0)));
-                p.text(t, c.0 - r, c.1 - r, 2.0 * r, 2.0 * r, 13.0, Weight::Semibold, pal.text, Align::Center);
-            }
-            colpi.push((Forma::Cerchio { cx: c.0, cy: c.1, r: r.max(24.0) }, a));
-            bx += 2.0 * r + 12.0;
-        }
-        let tempo = format!("{} / {}", orologio(pos), orologio(rv.r.secs));
-        p.text(&tempo, bx, cy - 16.0, x + cw - 14.0 - bx, 32.0, 16.0, Weight::Semibold, pal.text, Align::Right);
-        y += card_h + 8.0;
-
         // Le schede: Frasi, Chi parla (se ci sono le voci), Riassunto.
         let voci = !rv.r.names.is_empty();
         let schede: Vec<(&str, u8)> = if voci { vec![("Frasi", 0), ("Chi parla", 1), ("Riassunto", 2)] } else { vec![("Frasi", 0), ("Riassunto", 2)] };
@@ -517,8 +552,8 @@ impl App {
         y += 46.0;
 
         // Le frasi.
-        let piede = 132.0 + if rv.nota.is_empty() { 0.0 } else { 26.0 };
-        let vista = (0.0, y, w, h - y - piede);
+        let piede = 184.0 + if rv.nota.is_empty() { 0.0 } else { 26.0 };
+        let vista = (x, y, cw, (h - y - piede).max(1.0));
         let visibili = rv.r.visible();
         let tw = cw - 76.0;
         if rv.largo != tw || rv.altezze.len() != visibili.len() {
@@ -529,7 +564,7 @@ impl App {
                     let row = &rv.r.rows[*i];
                     let righe = p.wrap_lines(&row.text, 15.0, Weight::Regular, tw, 0).len().max(1) as f32;
                     let aperto = rv.r.flag_of(*i).is_some_and(|f| rv.r.is_open(f) && rv.r.flags[f].segs.first() == Some(i));
-                    16.0 + righe * 22.0 + if aperto { 50.0 } else { 0.0 } + if voci { 30.0 } else { 0.0 }
+                    16.0 + righe * 22.0 + if aperto { 106.0 } else { 50.0 } + if voci { 30.0 } else { 0.0 }
                 })
                 .collect();
         }
@@ -590,32 +625,25 @@ impl App {
             } else {
                 ry + 8.0
             };
-            let usata = p.text_wrap(&row.text, x + 70.0, ty, tw, 15.0, Weight::Regular, col, 22.0, 0);
+            let usata = p.text_wrap(&cedro::i18n::lit(&row.text), x + 70.0, ty, tw, 15.0, Weight::Regular, col, 22.0, 0);
             if row.removed {
                 for l in 0..(usata / 22.0).round().max(1.0) as usize {
                     p.fill(x + 70.0, ty + l as f32 * (usata / (usata / 22.0).round().max(1.0)) + 12.0, tw.min(p.measure(&row.text, 15.0, Weight::Regular)), 1.5, pal.muted);
                 }
             }
-            if let (Some(f), true) = (flag, aperto && rv.r.flags.get(flag.unwrap_or(0)).and_then(|fl| fl.segs.first()) == Some(&i)) {
-                let fl = rv.r.flags[f].clone();
-                let by = ry + ah - 46.0;
-                let et = etichetta(fl.kind, fl.count);
-                let ew = p.measure(&et, 12.0, Weight::Semibold) + 20.0;
-                p.rrect(x + 70.0, by + 6.0, ew, 28.0, 14.0, Some(pal.alt), None);
-                p.text(&et, x + 70.0, by + 6.0, ew, 28.0, 12.0, Weight::Semibold, avviso, Align::Center);
-                let mut bx = x + 70.0 + ew + 8.0;
-                let verbo = if matches!(fl.kind, Kind::Repeat | Kind::Loop) { "Sistema" } else { "Togli" };
-                for (t, az, pieno) in [(verbo, RivAz::Sistema(f), true), ("Lascia così", RivAz::Lascia(f), false)] {
-                    let bw = p.measure(t, 13.0, Weight::Semibold) + 24.0;
-                    if bx + bw > x + cw {
-                        break;
-                    }
-                    let a = Azione::Riv(az);
-                    let b = (bx, by + 4.0, bw, 32.0);
-                    p.rrect(b.0, b.1, b.2, b.3, 16.0, Some(if pieno { pal.primary } else { pal.surface }), if pieno { None } else { Some((pal.border, 2.0)) });
-                    p.text(t, b.0, b.1, b.2, b.3, 13.0, Weight::Semibold, if pieno { pal.on_primary } else { pal.text }, Align::Center);
-                    colpi.push((Forma::R((b.0, b.1 - 6.0, b.2, b.3 + 12.0)), a));
-                    bx += bw + 8.0;
+            let edit_y=ry+ah-48.0;
+            if !rv.live {
+                let c=super::pdf::Campo::Frase(i);
+                let r=(x+70.0,edit_y,tw,48.0);
+                p.rrect(r.0,r.1,r.2,r.3,8.0,Some(pal.surface),Some((if self.campo==Some(c){pal.primary}else{pal.border},1.0)));
+                p.text("Correggi sul posto",r.0+8.0,r.1,r.2-16.0,r.3,13.0,Weight::Semibold,pal.primary,Align::Left);
+                colpi.push((Forma::R(r),Azione::Campo(c)));
+                if let Some(f)=flag.filter(|f|rv.r.is_open(*f)) {
+                    let r=(x+70.0,edit_y-54.0,tw,48.0);
+                    p.rrect(r.0,r.1,r.2,r.3,8.0,Some(pal.alt),None);
+                    let confirm=matches!(rv.r.flags[f].kind,Kind::Number|Kind::Meaning);
+                    p.text(if confirm{"Conferma dopo l'ascolto"}else{"Lascia così"},r.0+8.0,r.1,r.2-16.0,r.3,13.0,Weight::Semibold,pal.primary,Align::Left);
+                    colpi.push((Forma::R(r),Azione::Riv(RivAz::Lascia(f))));
                 }
             }
             ry += ah + 6.0;
@@ -642,13 +670,17 @@ impl App {
             colpi.push((Forma::R(bt), a));
         }
         fy += 60.0;
-        let sw = (cw - 16.0) / 3.0;
-        for (k, t) in ["Salva TXT", "SRT", "VTT"].into_iter().enumerate() {
-            let b = (x + k as f32 * (sw + 8.0), fy, sw, 48.0);
+        let sw = (cw - 8.0) / 2.0;
+        if rv.r.is_draft() {
+            p.text(&format!("{} · {}",cedro::i18n::tr("Salva come bozza"),cedro::i18n::tr_string(&format!("{} da riascoltare",rv.r.open_count()))),x,fy,cw,24.0,13.0,Weight::Semibold,avviso,Align::Left);
+        }
+        fy+=26.0;
+        for (k, t) in ["TXT", "SRT", "VTT", "Word"].into_iter().enumerate() {
+            let b = (x + (k%2) as f32 * (sw + 8.0), fy+(k/2) as f32*52.0, sw, 48.0);
             let a = Azione::Riv(RivAz::Salva(k as u8));
             p.rrect(b.0, b.1, b.2, b.3, 24.0, Some(if premuto == Some(a) { pal.alt } else { pal.surface }), Some((pal.primary, 2.0)));
             p.text(t, b.0, b.1, b.2, b.3, 15.0, Weight::Semibold, pal.primary, Align::Center);
-            colpi.push((Forma::R(b), a));
+            if !rv.live && !rv.r.rows.is_empty() {colpi.push((Forma::R(b), a));}
         }
         self.colpi.extend(colpi);
         self.foglio_rivedi(p, w, h);
@@ -696,6 +728,7 @@ impl App {
     pub(super) fn scorri_rivedi(&mut self, dy: f32, da: f32) -> bool {
         match self.rivedi.as_mut() {
             Some(rv) => {
+                rv.r.follow=false;
                 rv.scorri = (da - dy).clamp(0.0, rv.scorri_max);
                 true
             }
@@ -883,3 +916,105 @@ fn riassunto(p: &mut Painter, pal: &cedro::ui::theme::Palette, tema: cedro::ui::
 
 /// La scintilla del Riassunto AI.
 const SCINTILLA: &str = "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z";
+
+fn riga(s: trascrizione::Segment) -> cedro::ui::review::Row {
+    cedro::ui::review::Row {t0:s.t0,t1:s.t1,orig:s.text.clone(),text:s.text,removed:false,speaker:s.speaker}
+}
+
+fn nomi(segments: &[trascrizione::Segment]) -> Vec<String> {
+    trascrizione::default_names(segments.iter().filter_map(|s|s.speaker).max().map_or(0,|v|v as usize+1))
+}
+
+/// Comandi identici prima, durante e dopo la trascrizione. Una barra rappresenta una porzione
+/// del file: zoom e spostamento cambiano la finestra, senza decodificare di nuovo il PCM.
+fn lettore(p:&mut Painter,pal:&cedro::ui::theme::Palette,rv:&mut Rivedi,r:super::R,premuto:Option<Azione>,colpi:&mut Vec<(Forma,Azione)>)->f32 {
+    let (x,y,w,_) = r;
+    let mut cy=y;
+    let bw=(w-8.0)/3.0;
+    for (i,label) in ["Solo onda","Onda e testo","Solo testo"].iter().enumerate() {
+        let b=(x+i as f32*(bw+4.0),cy,bw,48.0);
+        tasto_lettore(p,pal,b,label,RivAz::Vista(i as u8),rv.r.view==i as u8,colpi);
+    }
+    cy+=52.0;
+    let pos=rv.posizione();
+    let secs=rv.r.secs.max(0.001);
+    if rv.r.view!=2 {
+        let oh=if rv.r.view==0 {180.0}else{104.0};
+        let ow=w-16.0;
+        let ox=x+8.0;
+        rv.onda=(ox,ow);
+        p.rrect(x,cy,w,oh,12.0,Some(pal.surface),Some((pal.border,1.0)));
+        match &rv.r.bars {
+            Some(bars) if !bars.is_empty() => {
+                let n=(ow/5.0).max(1.0) as usize;
+                let completed=rv.r.rows.last().map_or(0.0,|r|r.t1 as f64/100.0);
+                for i in 0..n {
+                    let frac=rv.offset+(i as f64+0.5)/n as f64/rv.zoom;
+                    let a=((rv.offset+i as f64/n as f64/rv.zoom)*bars.len() as f64) as usize;
+                    let b=((rv.offset+(i+1) as f64/n as f64/rv.zoom)*bars.len() as f64).ceil() as usize;
+                    let value=bars[a.min(bars.len())..b.min(bars.len())].iter().copied().fold(0.0f32,f32::max).clamp(0.025,1.0);
+                    let height=value*(oh-16.0);
+                    let color=if frac*secs<=completed {pal.primary}else{pal.border};
+                    p.rrect(ox+i as f32*ow/n as f32,cy+(oh-height)/2.0,(ow/n as f32-2.0).max(1.0),height,1.0,Some(color),None);
+                }
+                let at=((pos/secs-rv.offset)*rv.zoom) as f32;
+                if (0.0..=1.0).contains(&at) {p.fill(ox+at*ow,cy+6.0,2.0,oh-12.0,pal.text);}
+            }
+            _=>{p.text(if rv.r.wave_failed{"Onda non disponibile: puoi comunque ascoltare"}else{"Leggo l'onda dell'audio…"},x+10.0,cy,w-20.0,oh,13.0,Weight::Regular,pal.muted,Align::Center);}
+        }
+        // Il punto è calcolato in millesimi dell'intero audio, anche a onda ingrandita.
+        let zones=(ow/4.0).max(1.0) as u32;
+        for i in 0..zones {
+            let frac=rv.offset+(i as f64+0.5)/zones as f64/rv.zoom;
+            colpi.push((Forma::R((ox+i as f32*ow/zones as f32,cy,ow/zones as f32,oh)),Azione::Riv(RivAz::Onda((frac*1000.0).round() as u32))));
+        }
+        cy+=oh+4.0;
+        let bw=(w-12.0)/4.0;
+        for (i,(label,az)) in [("←",RivAz::Pan(-1)),("Zoom −",RivAz::Zoom(-1)),("Zoom +",RivAz::Zoom(1)),("→",RivAz::Pan(1))].into_iter().enumerate() {
+            tasto_lettore(p,pal,(x+i as f32*(bw+4.0),cy,bw,48.0),label,az,false,colpi);
+        }
+        cy+=52.0;
+    }
+    for (i,(label,az)) in [("−10 s",RivAz::Salta(-10)),(if rv.player.as_ref().is_some_and(|p|p.playing()){"Pausa"}else{"Ascolta"},RivAz::Play),("+10 s",RivAz::Salta(10))].into_iter().enumerate() {
+        tasto_lettore(p,pal,(x+i as f32*(bw+4.0),cy,bw,48.0),label,az,premuto==Some(Azione::Riv(az)),colpi);
+    }
+    cy+=52.0;
+    let sw=(w-16.0)/5.0;
+    for (i,(label,speed)) in [("0,75×",75),("1×",100),("1,25×",125),("1,5×",150),("2×",200)].into_iter().enumerate() {
+        tasto_lettore(p,pal,(x+i as f32*(sw+4.0),cy,sw,48.0),label,RivAz::Velocita(speed),rv.speed==speed,colpi);
+    }
+    cy+=50.0;
+    p.text(&format!("{} / {}",orologio(pos),orologio(rv.r.secs)),x,cy,w/2.0,28.0,14.0,Weight::Semibold,pal.text,Align::Left);
+    p.text("Volume del telefono",x+w/2.0,cy,w/2.0,28.0,12.0,Weight::Regular,pal.muted,Align::Right);
+    cy+28.0-y
+}
+
+fn tasto_lettore(p:&mut Painter,pal:&cedro::ui::theme::Palette,r:super::R,label:&str,az:RivAz,on:bool,colpi:&mut Vec<(Forma,Azione)>) {
+    p.rrect(r.0,r.1,r.2,r.3,9.0,Some(if on{pal.primary}else{pal.surface}),Some((pal.border,1.0)));
+    let text=cedro::i18n::tr(label);
+    let size=if p.measure(&text,13.0,Weight::Semibold)>r.2-10.0 {11.0}else{13.0};
+    p.text_wrap(&text,r.0+5.0,r.1+8.0,r.2-10.0,size,Weight::Semibold,if on{pal.on_primary}else{pal.text},16.0,2);
+    colpi.push((Forma::R(r),Azione::Riv(az)));
+}
+
+impl App {
+    pub(super) fn anteprima_trascrizione(&mut self,p:&mut Painter,r:super::R,vista:super::R)->f32 {
+        let Some(v)=self.casa.coda.iter().find(|v|v.scelto&&matches!(v.kind,cedro::Kind::Audio|cedro::Kind::Video)).cloned() else {self.anteprima_tras=None;return 0.0};
+        if self.anteprima_tras.as_ref().is_none_or(|r|r.r.source!=v.path) {
+            let mut review=Review::new(&v.path,0.0,"it".into(),Vec::new(),Vec::new(),None);
+            review.view=std::fs::read_to_string(cedro::config_dir().join("android-vista-onda")).ok().and_then(|s|s.parse::<u8>().ok()).unwrap_or(1).min(2);
+            if let Some(t)=self.tracce.get(&v.path){review.secs=t.secs;review.bars=t.bars.clone();review.wave_failed=t.failed;review.rows=t.segments.iter().cloned().map(riga).collect();review.names=nomi(&t.segments);}
+            self.anteprima_tras=Some(Rivedi::new(review,v.nome,v.lavoro,true));
+        }
+        let pal=self.pal();let mut colpi=Vec::new();
+        let rv=self.anteprima_tras.as_mut().expect("anteprima");
+        let mut h=lettore(p,pal,rv,r,self.premuto,&mut colpi);
+        if rv.r.view!=0 {
+            if let Some(row)=rv.r.rows.last(){h+=p.text_wrap(&cedro::i18n::lit(&row.text),r.0,r.1+h,r.2,14.0,Weight::Regular,pal.text,20.0,0)+8.0;}
+        }
+        for (forma,az) in colpi {
+            if let Forma::R(rect)=forma {if let Some(rect)=super::intersezione(rect,vista){self.colpi.push((Forma::R(rect),az));}}
+        }
+        h+12.0
+    }
+}

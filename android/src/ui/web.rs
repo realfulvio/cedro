@@ -128,7 +128,7 @@ mod tests {
         app.azione_web(WebAz::Altezza(480));
         let request=scelte.richiesta("https://youtu.be/test","web-video","out".into());
         assert_eq!(request.quality,720);assert!(request.playlist);assert_eq!(request.subtitles,2);
-        assert_eq!(scelte.media_quality,91);assert_eq!(scelte.voce,crate::worker::Voce{modello:2,voci:3});
+        assert_eq!(scelte.media_quality,91);assert_eq!(scelte.voce,crate::worker::Voce{modello:2,voci:3,referto:false});
         app.casa.link="https://youtu.be/test".into();
         let Effetto::Converti{azione,..}=app.azione_casa(super::super::casa::CasaAz::Vai) else{panic!()};
         assert_eq!(azione,if cfg!(feature="youtube"){"web-video"}else{"web-altra-app"});
