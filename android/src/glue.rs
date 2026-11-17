@@ -1141,7 +1141,7 @@ fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, 
             2 => {
                 let testo = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
                 let testo = stringa(env, testo).ok_or("indirizzo vuoto")?;
-                let d=Destinazione{path:testo.into(),nome:format!("Già presente: {rel}/{nome}"),temporaneo:None};
+                let d=Destinazione{path:testo.into(),nome:format!("Già presente: {}/{nome}", rel.trim_end_matches('/')),temporaneo:None};
                 checkpoint(d.clone())?;
                 return Ok(d);
             }
@@ -1164,7 +1164,7 @@ fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, 
     let nulla = JObject::null();
     let uri_text=env.call_method(&uri,"toString","()Ljava/lang/String;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
     let uri_text=stringa(env,uri_text).ok_or("indirizzo vuoto")?;
-    let d=Destinazione{path:uri_text.clone().into(),nome:format!("{rel}/{nome}"),temporaneo:None};
+    let d=Destinazione{path:uri_text.clone().into(),nome:format!("{}/{nome}", rel.trim_end_matches('/')),temporaneo:None};
     if let Err(e)=checkpoint(d){
         let _=env.call_method(resolver,"delete","(Landroid/net/Uri;Ljava/lang/String;[Ljava/lang/String;)I",&[JValue::Object(&uri),JValue::Object(&nulla),JValue::Object(&nulla)]);
         let _=env.exception_clear();return Err(e);
@@ -1212,7 +1212,7 @@ fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, 
     }
     // Nome effettivo letto al ripristino o alla consegna; URI già registrato prima della copia.
     let visto=nome_pubblico(env,resolver,&uri).unwrap_or_else(||nome.to_string());
-    Ok(Destinazione{path:uri_text.into(),nome:format!("{rel}/{visto}"),temporaneo:None})
+    Ok(Destinazione{path:uri_text.into(),nome:format!("{}/{visto}", rel.trim_end_matches('/')),temporaneo:None})
 }
 
 /// L'errore con quello che serve per capirlo: azione, file di partenza, cartella e se ci si può scrivere.
@@ -1827,7 +1827,10 @@ fn android_main(app: AndroidApp) {
                         sporco = true;
                         leggi_insets = true;
                         tentativi = 0;
+                        // Alla riapertura la finestra può rimettere le icone di stato del tema di sistema.
+                        icone_barre(&app, crate::ui::tinte::scuro(ui.tema));
                     }
+                    MainEvent::GainedFocus => icone_barre(&app, crate::ui::tinte::scuro(ui.tema)),
                     MainEvent::TerminateWindow { .. } => finestra = None,
                     MainEvent::WindowResized { .. } | MainEvent::RedrawNeeded { .. } | MainEvent::ContentRectChanged { .. } | MainEvent::ConfigChanged { .. } => {
                         sporco = true;
