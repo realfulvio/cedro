@@ -2578,13 +2578,13 @@ mod tests {
         let dir=scratch();
         let plain=dir.join("testo.pdf");fs::write(&plain,pdf_from_text("Documento di prova")).unwrap();
         let mut file=fs::File::open(&plain).unwrap();file.seek(SeekFrom::Start(9)).unwrap();
-        let file=std::sync::Arc::new(file);let fd=file.as_raw_fd();crate::input_file::register(fd,file.clone());
-        let alias=dir.join("saf.pdf");std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&alias).unwrap();
+        let file=std::sync::Arc::new(file);let fd=file.as_raw_fd();
+        let alias=dir.join("saf.pdf");crate::input_file::register(&alias,fd,file.clone());std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&alias).unwrap();
         assert_eq!(pdf_info(&alias,None).unwrap().0,1);
         assert!(crate::doctext::pdf_page_texts(&alias).is_ok());
         assert_eq!((&*file).stream_position().unwrap(),9);
         let doc=dir.join("saf.rtf");fs::write(&doc,b"{\\rtf1\\ansi Testo Office}").unwrap();
-        let file=std::sync::Arc::new(fs::File::open(&doc).unwrap());let fd=file.as_raw_fd();crate::input_file::register(fd,file.clone());
+        let file=std::sync::Arc::new(fs::File::open(&doc).unwrap());let fd=file.as_raw_fd();crate::input_file::register(&doc,fd,file.clone());
         fs::remove_file(&doc).unwrap();std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&doc).unwrap();
         assert!(crate::doctext::document_text(&doc).unwrap().contains("Testo Office"));
         assert_eq!((&*file).stream_position().unwrap(),0);

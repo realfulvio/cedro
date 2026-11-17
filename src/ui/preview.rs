@@ -84,7 +84,7 @@ fn layout(path: &Path) -> Option<Pages> {
     match engine::kind_of(path) {
         Kind::Text if matches!(engine::extension(path).as_str(), "xlsx" | "xlsm" | "ods" | "xls") => {
             // Il primo foglio non vuoto, come tabella (i numeri con la virgola, come in Excel).
-            let bytes = std::fs::read(path).ok()?;
+            let bytes = crate::input_file::read(path).ok()?;
             let fogli = crate::tabella::leggi(&engine::extension(path), &bytes).ok()?;
             let mut rows = fogli.iter().find(|f| !f.righe.is_empty())?.testo(true);
             rows.truncate(MAX_ROWS);
@@ -92,7 +92,7 @@ fn layout(path: &Path) -> Option<Pages> {
         }
         Kind::Text => {
             let mut bytes = Vec::new();
-            std::io::Read::read_to_end(&mut std::io::Read::take(std::fs::File::open(path).ok()?, MAX_TEXT as u64), &mut bytes).ok()?;
+            std::io::Read::read_to_end(&mut std::io::Read::take(crate::input_file::File::open(path).ok()?, MAX_TEXT as u64), &mut bytes).ok()?;
             let text = engine::decode_text(&bytes);
             match engine::extension(path).as_str() {
                 "csv" | "tsv" => Some(table_pages(&text)),
@@ -122,7 +122,7 @@ fn printed(path: &Path) -> Option<std::sync::Arc<Vec<u8>>> {
             return Some(pdf.clone());
         }
     }
-    let bytes = std::fs::read(path).ok()?;
+    let bytes = crate::input_file::read(path).ok()?;
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     // Per guardare basta il PDF leggero: caratteri del sistema non incorporati.
     let scelte = crate::ufficio::Scelte { embed: false, bookmarks: false, ..Default::default() };
@@ -406,7 +406,7 @@ struct Probe {
 }
 
 fn probe(path: &Path) -> Option<Probe> {
-    let file = std::fs::File::open(path).ok()?;
+    let file = crate::input_file::File::open(path).ok()?;
     let mss = symphonia::core::io::MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = symphonia::core::formats::probe::Hint::new();
     hint.with_extension(&engine::extension(path));
@@ -473,9 +473,9 @@ pub fn about_audio(path: &Path, bytes: u64) -> About {
 fn video_codec(path: &Path) -> Option<String> {
     use std::io::Read;
     let mut head = Vec::new();
-    std::fs::File::open(path).ok()?.take(256 * 1024).read_to_end(&mut head).ok()?;
+    crate::input_file::File::open(path).ok()?.take(256 * 1024).read_to_end(&mut head).ok()?;
     if head.len() >= 8 && &head[4..8] == b"ftyp" {
-        let file = std::fs::File::open(path).ok()?;
+        let file = crate::input_file::File::open(path).ok()?;
         let size = file.metadata().ok()?.len();
         if let Ok(reader) = crate::mp4fast::mp4_reader(file, size) {
             for t in reader.tracks().values() {
@@ -530,7 +530,7 @@ fn frames_at(path: &Path, at: &[f64]) -> (Vec<(u32, u32, Vec<u8>)>, Option<(u32,
 }
 
 fn mp4_info(path: &Path) -> Option<((u32, u32), f64, f64)> {
-    let file = std::fs::File::open(path).ok()?;
+    let file = crate::input_file::File::open(path).ok()?;
     let size = file.metadata().ok()?.len();
     let reader = crate::mp4fast::mp4_reader(file, size).ok()?;
     let t = reader.tracks().values().find(|t| matches!(t.track_type(), Ok(mp4::TrackType::Video)))?;

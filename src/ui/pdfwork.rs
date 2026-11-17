@@ -31,7 +31,7 @@ pub struct Worker {
 
 /// La pagina `page` (da 0) del PDF come uscirebbe da «Pagine»: le pagine scelte, girate e timbrate.
 pub fn stamped_page(path: &Path, pages: &[(u32, i32)], stamp: &Stamp, page: usize, password: Option<&str>, side: f32) -> Result<Image, String> {
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let bytes = crate::input_file::read(path).map_err(|e| e.to_string())?;
     let doc = crate::pdfpages::open(&bytes, password)?;
     let total = crate::pdfpages::page_count(&doc) as u32;
     let list: Vec<(u32, i32)> = if pages.is_empty() { (1..=total).map(|p| (p, 0)).collect() } else { pages.to_vec() };
