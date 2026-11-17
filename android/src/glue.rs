@@ -404,9 +404,11 @@ fn importa_scelti(app: &AndroidApp, cartella: &Path, sorgente: Sorgente, c: &Con
     let arr=con_attivita(app,|env,att| {
         let arr=env.call_method(att,"scelti","()[Landroid/net/Uri;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
         if arr.is_null() { return Ok(None); }
-        env.new_global_ref(arr).map(Some).map_err(|e|e.to_string())
+        let arr=jni::objects::JObjectArray::from(arr);
+        let n=env.get_array_length(&arr).map_err(|e|jerr(env,e))?;
+        env.new_global_ref(arr).map(|a|Some((n,a))).map_err(|e|e.to_string())
     });
-    let arr=match arr { Ok(Some(a))=>a, Ok(None)=>return false, Err(e)=> { ui.errore_importazione(e); return true; } };
+    let arr=match arr { Ok(Some((0,_)))=>return true, Ok(Some((_,a)))=>a, Ok(None)=>return false, Err(e)=> { ui.errore_importazione(e); return true; } };
     let (id,prog)=ui.nuova_importazione();
     c.ultimo_import.store(id,std::sync::atomic::Ordering::Release);
     if let Some(dir)=app.internal_data_path(){persisti(c,&dir.join("lavori.txt"),ui.serializza());}
@@ -1735,10 +1737,25 @@ fn android_main(app: AndroidApp) {
     let mut tentativi = 0;
 
     let cartella = dati.join("condivisi");
+    let file_scelta=dati.join("scelta-in-attesa.json");
+    let pending=match crate::picker::Attesa::leggi(&file_scelta) {
+        Ok(p)=>p,
+        Err(e)=>{log::warn!("contesto selettore: {e}");let _=crate::picker::Attesa::chiudi(&file_scelta);None}
+    };
+    let mut attesa_scelta=pending.as_ref().map(|p|p.sorgente);
+    // Restore the signature before consuming a callback already delivered to the new Activity.
+    if let Some(original)=pending.as_ref().and_then(|p|p.originale.as_ref()) {
+        if let Err(e)=saf::ripristina(&app,&original.path) {log::warn!("firma da ripristinare: {e}");}
+        ui.apri_firmato(original.path.clone());
+        if original.quando.at()!=cedro::firma::At::Now {
+            ui.firma.reverify(original.quando.at(),None,ui.sveglia.clone());
+        }
+    }
     let consegne = Consegne::default();
     {
         let (a,dir,c)=(app.clone(),cartella.clone(),consegne.clone());
-        let protetti:Vec<PathBuf>=ui.lavori.iter().filter_map(|l|l.sorgente.clone()).collect();
+        let mut protetti:Vec<PathBuf>=ui.lavori.iter().filter_map(|l|l.sorgente.clone()).collect();
+        if let Some(original)=pending.as_ref().and_then(|p|p.originale.as_ref()) {protetti.push(original.path.clone());}
         let noti:std::collections::HashSet<PathBuf>=ui.uscite.values().flatten().map(|u|u.0.clone()).collect();
         let prima=std::time::SystemTime::now();
         std::thread::spawn(move || {
@@ -1766,7 +1783,7 @@ fn android_main(app: AndroidApp) {
             ricarica_recenti(dir,&c);a.create_waker().wake();
         });
     }
-    importa_condivisione(&app,&cartella,&consegne,&mut ui);
+    if pending.is_none() {importa_condivisione(&app,&cartella,&consegne,&mut ui);}
     registra(&consegne,&mut ui);
     persisti(&consegne,&file_lavori,ui.serializza());
 
@@ -1779,7 +1796,6 @@ fn android_main(app: AndroidApp) {
     let mut font_scale=1.0f32;
     let mut animando = false;
     let mut ultimo_disegno = std::time::Instant::now();
-    let mut attesa_scelta: Option<Sorgente> = None;
     let mut tastiera = false;
     let mut accento: Option<char> = None;
     let mut chieste: std::collections::HashSet<(PathBuf, u32)> = std::collections::HashSet::new();
@@ -2029,9 +2045,15 @@ fn android_main(app: AndroidApp) {
                     sporco = true;
                 }
                 Effetto::Scegli(s) => {
-                    match scegli(&app, s) {
+                    let context=crate::picker::Attesa::nuova(s,ui.firma.viewer.as_ref().map(|v|(v.path.as_path(),v.at)));
+                    let result=context.and_then(|p|p.salva(&file_scelta)).map_err(|e|e.to_string()).and_then(|_|scegli(&app,s));
+                    match result {
                         Ok(()) => attesa_scelta = Some(s),
-                        Err(e) => log::error!("selettore: {e}"),
+                        Err(e) => {
+                            attesa_scelta=None;
+                            let _=crate::picker::Attesa::chiudi(&file_scelta);
+                            log::error!("selettore: {e}");
+                        }
                     }
                     sporco = true;
                 }
@@ -2080,7 +2102,11 @@ fn android_main(app: AndroidApp) {
             pagine_firmato(&consegne, doc);
         }
         if let Some(sorgente) = attesa_scelta {
-            if importa_scelti(&app,&cartella,sorgente,&consegne,&mut ui) { attesa_scelta=None; }
+            if importa_scelti(&app,&cartella,sorgente,&consegne,&mut ui) {
+                attesa_scelta=None;
+                if let Err(e)=crate::picker::Attesa::chiudi(&file_scelta) {log::error!("chiusura selettore: {e}");}
+                sporco=true;
+            }
         }
         if let Some((id,r))=consegne.originale.lock().unwrap_or_else(|e|e.into_inner()).take() {
             if id==consegne.ultimo_import.load(std::sync::atomic::Ordering::Acquire) {

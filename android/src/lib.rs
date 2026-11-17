@@ -6,6 +6,8 @@ pub mod labs;
 pub mod worker;
 pub mod web;
 pub mod storage;
+#[cfg(any(target_os = "android", test))]
+mod picker;
 pub mod publication;
 
 #[cfg(target_os = "android")]
