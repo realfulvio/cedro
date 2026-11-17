@@ -959,7 +959,8 @@ impl Drop for Running {
 }
 
 /// Un segmento di parlato: inizio e fine in centesimi di secondo.
-#[derive(Clone, Debug, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Default)]
+#[cfg_attr(feature="android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Segment {
     pub t0: i64,
     pub t1: i64,
