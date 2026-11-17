@@ -293,7 +293,7 @@ fn open_avif(path: &Path) -> Result<DynamicImage, String> {
 }
 
 fn open_jxl(path: &Path) -> Result<DynamicImage, String> {
-    let image = jxl_oxide::JxlImage::builder().open(path).map_err(|e| format!("JPEG XL non letto: {e}"))?;
+    let image = jxl_oxide::JxlImage::builder().read(crate::input_file::File::open(path).map_err(|e|e.to_string())?).map_err(|e| format!("JPEG XL non letto: {e}"))?;
     let (w, h) = (image.width(), image.height());
     if (w as u64) * (h as u64) > 150_000_000 {
         return Err("JPEG XL troppo grande".into());

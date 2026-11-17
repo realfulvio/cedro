@@ -1,4 +1,5 @@
 use crate::zipstore::zip_archive;
+#[cfg(test)]
 use std::fs;
 use std::io::Read;
 use std::path::Path;
@@ -12,7 +13,7 @@ pub fn document_text(path: &Path) -> Result<String, String> {
     let text = match ext.as_str() {
         "docx" => docx_text(path)?,
         "odt" => odt_text(path)?,
-        "rtf" => rtf_text(&fs::read(path).map_err(|e| e.to_string())?),
+        "rtf" => rtf_text(&crate::input_file::read(path).map_err(|e| e.to_string())?),
         "doc" => doc_text(path)?,
         _ => return Err("formato di documento non letto".into()),
     };
@@ -51,7 +52,7 @@ pub fn document_blocks(path: &Path) -> Result<Vec<crate::pdfdoc::DocBlock>, Stri
             let media = |href: &str, size: Option<(f32, f32)>, align: u8| crate::pdfdoc::DocImage::from_bytes(&zip_bytes(path, href.trim_start_matches("./")).ok()?, size, align);
             odt_blocks(&zip_entry(path, "content.xml")?, &media)
         }
-        "rtf" => rtf_blocks(&fs::read(path).map_err(|e| e.to_string())?),
+        "rtf" => rtf_blocks(&crate::input_file::read(path).map_err(|e| e.to_string())?),
         _ => Vec::new(),
     };
     if blocks.iter().all(|b| b.text.trim().is_empty() && b.image.is_none()) {
@@ -364,7 +365,7 @@ pub fn pdf_text(path: &Path) -> Result<String, String> {
 
 /// Il testo incorporato di ogni pagina, in ordine. Vuoto se la pagina non ne ha.
 pub fn pdf_page_texts(path: &Path) -> Result<Vec<String>, String> {
-    let doc = lopdf::Document::load(path).map_err(|e| format!("PDF non letto: {e}"))?;
+    let doc = lopdf::Document::load_mem(&crate::input_file::read(path).map_err(|e|e.to_string())?).map_err(|e| format!("PDF non letto: {e}"))?;
     // Da lopdf 0.46 un PDF con la password di apertura, letto senza, non ha pagine: lo si dice chiaro.
     if doc.is_encrypted() && doc.get_pages().is_empty() {
         return Err("il PDF è protetto da una password di apertura".into());
