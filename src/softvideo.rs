@@ -1,4 +1,3 @@
-use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
@@ -570,7 +569,7 @@ fn to_420(plane: &[u8], width: usize, height: usize, sub_x: bool, sub_y: bool) -
 }
 
 fn codec_of(path: &Path) -> Result<Codec, String> {
-    let mut file = File::open(path).map_err(|err| err.to_string())?;
+    let mut file = crate::input_file::File::open(path).map_err(|err| err.to_string())?;
     let mut buf = Vec::new();
     file.by_ref().take(8 * 1024 * 1024).read_to_end(&mut buf).map_err(|err| err.to_string())?;
     let vp8 = buf.windows(5).position(|window| window == b"V_VP8");

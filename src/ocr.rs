@@ -21,8 +21,7 @@ pub fn open_upright(path: &Path) -> Result<DynamicImage, String> {
     if crate::svs::is_slide(path) {
         return crate::svs::open_image(path, None);
     }
-    let mut decoder = ImageReader::open(path)
-        .map_err(|e| e.to_string())?
+    let mut decoder = ImageReader::new(std::io::BufReader::new(crate::input_file::File::open(path).map_err(|e|e.to_string())?))
         .with_guessed_format()
         .map_err(|e| e.to_string())?
         .into_decoder()
