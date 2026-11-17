@@ -43,3 +43,15 @@ Gate ancora **pendenti**, da registrare nel rapporto controller: compilazione Ru
 Il controller ha eseguito il checkpoint `5a86bf6`: NDK con/senza YouTube riuscito (16,45 s / 3,22 s, comunicazione controller); suite Android host 53 riusciti e 2 falliti. Log esaminato direttamente: `/home/accorsiluca/Documenti/cedro-android-anteprima/verifiche/5a86bf6/cedro-android-5a86bf6-task6-aac3-host-test.log`.
 
 I due fallimenti riguardavano la fixture `voices_sample`: passava nomi vuoti a `Review::new`, che per contratto elimina gli speaker non presenti nei nomi; impostare i nomi dopo il costruttore non ripristina gli speaker. Perciò la pagina conteneva solo il toggle e il foglio solo «Voce nuova». Corretto l'ingresso del costruttore, con nuove precondizioni che verificano esattamente tutte le voci attive e gli speaker delle righe. Le verifiche di raggiungibilità, gesti, clipping, 48 dp e azioni restano invariate. Nessuna modifica alla produzione in questo follow-up della stessa wave. `git diff --check` ripetuto: exit 0. Rilancio delle suite e tutti i gate fisici ancora pendenti al controller.
+
+## Controller: covering tests eseguiti e9b6a72, 17novembre03:23CET
+
+- host-test: exit0 TSV reale; test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.61s.
+- host-test-youtube: exit0 TSV reale; test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.59s.
+- ndk-youtube: exit0 TSV reale;     Finished `release` profile [optimized] target(s) in 2.82s.
+- ndk-senza-youtube: exit0 TSV reale;     Finished `release` profile [optimized] target(s) in 2.92s.
+- clippy: exit0 TSV reale;     Finished `release` profile [optimized] target(s) in 2.71s.
+
+Comandi reali dal runner verifica-task6.py: cargo --config profile.test.package.fdk-aac-sys.opt-level=3 test -j2 -p cedro-android --lib [--features youtube]; RUST_TEST_THREADS2, CARGO_TARGET_DIRscratchcedro-android-target-test, TESTopt1/debug0/LTOoff/codegen16/incrementaltrue. NDK bash /srv/dev/scratch/cedro-check-ndk.sh [--features youtube], cargo checkreleasealltargets; clippy cargo clippy --release -j2 -p cedro-android --all-targets --features youtube --no-deps. Vendor/baseline warning restano, nessunclaimoutputpristine. Testnuoviovering55suite includonovoci/sheet/font2/viewport320/640,originalegrant32MB,cancel,MIME,geometrianativecenters.
+
+Javahost: SDKjdk javac -d /srv/dev/scratch/cedro-final-geometry android/java/it/cedro/android/AccessibilityCoordinates.java android/tests/java/it/cedro/android/AccessibilityCoordinatesTest.java exit0; java -cp /srv/dev/scratch/cedro-final-geometry it.cedro.android.AccessibilityCoordinatesTest: AccessibilityCoordinatesTest: PASS,exit0. Logcedro-android-e9b6a72-final-runner.log in stessacartella locale. APKbuild inprogress, nonPASS fisico/Javaframework.
