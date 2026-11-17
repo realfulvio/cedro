@@ -87,7 +87,7 @@ fn main() {
     let images: Vec<PathBuf> = files.iter().filter(|p| p.extension().is_some_and(|e| e == "jpg")).cloned().collect();
     // Tre scene per aspetto: le attività che l'aspetto mostra davvero (Standard ha anche YouTube, Labs no).
     for (nome, theme, scene) in [
-        ("std", ThemeId::WindowsEssenziale, [Activity::Convert, Activity::Transcribe, Activity::YouTube]),
+        ("std", ThemeId::Cedro, [Activity::Convert, Activity::Transcribe, Activity::YouTube]),
         ("labs", ThemeId::CedroLabs, [Activity::Convert, Activity::Transcribe, Activity::Firma]),
     ] {
         for (i, act) in scene.into_iter().enumerate() {

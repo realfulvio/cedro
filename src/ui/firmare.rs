@@ -730,7 +730,7 @@ pub fn is_signed(p: &Path) -> bool {
     if std::fs::metadata(p).map(|m| m.len() > 200 << 20).unwrap_or(true) {
         return false;
     }
-    let data = std::fs::read(p).unwrap_or_default();
+    let data = crate::input_file::read(p).unwrap_or_default();
     if firma::pades::is_pdf(&data) {
         return !firmare::signer_names(&data).is_empty();
     }

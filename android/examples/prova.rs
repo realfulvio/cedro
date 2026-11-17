@@ -20,7 +20,8 @@ fn main() {
         let t = Instant::now();
         cedro::trascrizione::run(&[PathBuf::from(&a[2])], &req, Some(&out), &cedro::Options::default(), &|e| match e {
             cedro::trascrizione::Event::Log(l) => println!("{} {}", l.key, l.text),
-            cedro::trascrizione::Event::Percent { percent, .. } => println!("{percent}%"),
+            cedro::trascrizione::Event::Audio { .. } | cedro::trascrizione::Event::Segment(_) => {},
+                    cedro::trascrizione::Event::Percent { percent, .. } => println!("{percent}%"),
             cedro::trascrizione::Event::Finished { result, .. } => println!("FINE {:?}", result),
         });
         println!("totale {} ms", t.elapsed().as_millis());

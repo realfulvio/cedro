@@ -9,7 +9,8 @@
 //! fondo del colore che dice lo scanner. È lo stesso schema che segue OpenSlide, rifatto in Rust.
 
 use std::collections::{HashMap, HashSet};
-use std::fs::{self, File};
+use std::fs;
+use crate::input_file::File;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -30,7 +31,7 @@ struct Ini(HashMap<String, HashMap<String, String>>);
 
 impl Ini {
     fn leggi(path: &Path) -> Result<Ini, String> {
-        let b = fs::read(path).map_err(|e| format!("Slidedat.ini non letto: {e}"))?;
+        let b = crate::input_file::read(path).map_err(|e| format!("Slidedat.ini non letto: {e}"))?;
         if b.len() > 4 << 20 {
             return Err("Slidedat.ini troppo grande".into());
         }
@@ -630,13 +631,24 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
     }
     let fatto = (|| -> Result<Vec<&'static str>, String> {
         fs::create_dir_all(&a).map_err(|e| e.to_string())?;
-        for e in fs::read_dir(&da).map_err(|e| e.to_string())? {
-            let e = e.map_err(|e| e.to_string())?;
-            if e.file_type().map_err(|e| e.to_string())?.is_file() {
-                fs::copy(e.path(), a.join(e.file_name())).map_err(|e| e.to_string())?;
+        fn copia(da: &Path, a: &Path) -> Result<(), String> {
+            fs::create_dir_all(a).map_err(|e| e.to_string())?;
+            for e in fs::read_dir(da).map_err(|e| e.to_string())? {
+                let e = e.map_err(|e| e.to_string())?;
+                let tipo = e.file_type().map_err(|e| e.to_string())?;
+                if tipo.is_dir() {
+                    copia(&e.path(), &a.join(e.file_name()))?;
+                } else if tipo.is_file() || (tipo.is_symlink() && e.path().is_file()) {
+                    // I descriptor SAF sono alias a file: copiarli mantiene validi i riferimenti MIRAX.
+                    crate::input_file::copy(e.path(), a.join(e.file_name())).map_err(|e| e.to_string())?;
+                } else {
+                    return Err(format!("{}: file associato non regolare", e.path().display()));
+                }
             }
+            Ok(())
         }
-        fs::copy(path, out).map_err(|e| e.to_string())?;
+        copia(&da, &a)?;
+        crate::input_file::copy(path, out).map_err(|e| e.to_string())?;
         let mut tolti = Vec::new();
         // L'etichetta e la foto del vetrino: un JPEG bianco delle stesse misure al posto dei pixel, il resto a zero.
         for (idx, cosa) in [(s.label, "etichetta"), (s.macro_image, "foto del vetrino")] {
@@ -644,7 +656,11 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
             let (w, h) = crate::svs::read_blob_size(b).unwrap_or((64, 64));
             let mut bianco = Vec::new();
             image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bianco, 50).encode_image(&RgbImage::from_pixel(w, h, image::Rgb([255, 255, 255]))).map_err(|e| e.to_string())?;
-            let dest = a.join(b.path.file_name().ok_or("file di dati senza nome")?);
+            let relativo = b.path.strip_prefix(&da).map_err(|_| "file di dati fuori dalla cartella MIRAX")?;
+            if !relativo.components().all(|c| matches!(c, std::path::Component::Normal(_))) {
+                return Err("percorso dei dati MIRAX non valido".into());
+            }
+            let dest = a.join(relativo);
             let mut f = fs::OpenOptions::new().write(true).open(&dest).map_err(|e| e.to_string())?;
             f.seek(SeekFrom::Start(b.offset)).map_err(|e| e.to_string())?;
             if bianco.len() as u64 <= b.len {
@@ -682,7 +698,7 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
                 f.write_all(nuovo_id.as_bytes()).map_err(|e| e.to_string())?;
             }
         }
-        let testo = fs::read(&ini).map_err(|e| e.to_string())?;
+        let testo = crate::input_file::read(&ini).map_err(|e| e.to_string())?;
         let mut cambiato = false;
         let mut nuovo = String::new();
         for riga in String::from_utf8_lossy(&testo).split_inclusive('\n') {
@@ -713,7 +729,7 @@ pub fn copia_anonima(path: &Path, out: &Path) -> Result<Vec<&'static str>, Strin
 }
 
 #[cfg(test)]
-mod prove {
+pub(crate) mod prove {
     use super::*;
 
     /// Un MIRAX piccolo fatto qui: `nx` × `ny` immagini JPEG da `iw` × `ih`, due livelli, una foto
@@ -814,6 +830,34 @@ mod prove {
         let p = dir.join("finto.mrxs");
         fs::write(&p, b"").unwrap();
         p
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn copia_anonima_con_alias_fd_e_dati_annidati() {
+        use std::os::fd::AsRawFd;
+        let dir=std::env::temp_dir().join(format!("cedro-mrxs-fd-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        fs::create_dir_all(&dir).unwrap();
+        let src=mirax_finto(&dir,2,2,64,64,0);
+        let dati=dir.join("finto/Data0000.dat");
+        let file=fs::File::open(&dati).unwrap();
+        fs::create_dir_all(dir.join("finto/nested")).unwrap();
+        fs::remove_file(&dati).unwrap();
+        std::os::unix::fs::symlink(format!("/proc/self/fd/{}",file.as_raw_fd()),dir.join("finto/nested/Data0000.dat")).unwrap();
+        let ini=dir.join("finto/Slidedat.ini");
+        let text=fs::read_to_string(&ini).unwrap().replace("FILE_0 = Data0000.dat","FILE_0 = nested/Data0000.dat");
+        fs::write(ini,text).unwrap();
+        let before=open(&src).unwrap().read_level(&src,0).unwrap();
+        let out=dir.join("anonimo.mrxs");
+        copia_anonima(&src,&out).unwrap();
+        assert!(fs::symlink_metadata(dir.join("anonimo/nested/Data0000.dat")).unwrap().is_file());
+        assert_eq!(open(&out).unwrap().read_level(&out,0).unwrap().as_raw(),before.as_raw());
+        // Una directory collegata non si segue e non si omette silenziosamente.
+        std::os::unix::fs::symlink(dir.join("finto"),dir.join("finto/ciclo")).unwrap();
+        let failed=dir.join("rifiutato.mrxs");
+        assert!(copia_anonima(&src,&failed).is_err());
+        assert!(!failed.exists() && !failed.with_extension("").exists());
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

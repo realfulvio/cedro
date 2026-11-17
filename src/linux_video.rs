@@ -1,7 +1,7 @@
 //! H.264 e AAC compilati nel programma. Nessun ffmpeg.
 //! OpenH264 (BSD-2, Cisco, dal sorgente) e FDK AAC (Fraunhofer).
 
-use std::fs::File;
+use crate::input_file::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
@@ -63,7 +63,9 @@ fn hardware_to_mp4(input: &Path, output: &Path) -> Result<(), String> {
         return Err("il video non ha fotogrammi".into());
     }
     let mut sink = sink.ok_or_else(|| "il video non ha fotogrammi".to_string())?;
-    if decoder.has_audio {
+    let has_audio=decoder.has_audio;
+    drop(decoder); // libera anche la lease lseek prima di un eventuale extractor audio
+    if has_audio {
         // L'audio: prima i decodificatori di Cedro (AAC, MP3, FLAC, Vorbis…), poi quello del telefono (Opus, AMR…).
         if let Err(err) = write_symphonia_audio(input, &mut sink) {
             // Se una parte dell'audio è già nel file, quello del telefono si accoderebbe tutto dopo: audio doppio.

@@ -46,7 +46,7 @@ mv -f "$dest/cedro.nuovo.$$" "$dest/cedro"
 [ -f "$here/Licenze di terze parti.txt" ] && install -m 644 "$here/Licenze di terze parti.txt" "$dest/"
 [ -f "$here/LICENSE" ] && install -m 644 "$here/LICENSE" "$dest/"
 ln -sf "$dest/cedro" "$bindir/cedro"
-# La copia per chi aveva la vecchia edizione Comune di Bondeno: Cedro, al primo avvio, accende il tema Bondeno.
+# La copia della vecchia edizione Bondeno: Cedro migra a Melanzana mantenendo vista e altre preferenze.
 if [ -f "$here/da-bondeno" ]; then
   mkdir -p "$HOME/.config/cedro"
   : > "$HOME/.config/cedro/da-bondeno"

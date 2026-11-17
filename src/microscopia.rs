@@ -7,7 +7,7 @@
 //! Tutto in memoria per un piano alla volta: la proiezione massima legge i piani uno per uno e tiene
 //! solo il massimo; i canali vanno in parallelo, ognuno con il suo lettore.
 
-use std::fs::File;
+use crate::input_file::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::sync::Arc;

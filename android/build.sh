@@ -25,7 +25,7 @@ export CMAKE_POLICY_VERSION_MINIMUM=3.5
 export PATH="$PWD/android/tools:$PATH" WHISPER_ARCH="${WHISPER_ARCH:-armv8.2-a+dotprod+fp16}"
 # CEDRO_YOUTUBE=1: YouTube con yt-dlp, con gli eseguibili precompilati di youtubedl-android (vedi youtube-libs.py).
 # Spento per il catalogo F-Droid, che costruisce solo da sorgente.
-LIBS="libcedro_android.so libc++_shared.so"
+LIBS="libcedro_android.so libcedro_lavoro.so libc++_shared.so"
 FEATURES=""
 rm -f "$OUT/apk/lib/arm64-v8a/"lib{python,qjs,ffmpeg,ffprobe}.so
 if [ "${CEDRO_YOUTUBE:-0}" = 1 ]; then
@@ -34,6 +34,7 @@ if [ "${CEDRO_YOUTUBE:-0}" = 1 ]; then
   LIBS="$LIBS libpython.so libqjs.so libffmpeg.so libffprobe.so"
 fi
 cargo ndk -t arm64-v8a -P 26 build --release -p cedro-android $FEATURES
+cp target/aarch64-linux-android/release/lavoro "$OUT/apk/lib/arm64-v8a/libcedro_lavoro.so"
 cp target/aarch64-linux-android/release/libcedro_android.so "$OUT/apk/lib/arm64-v8a/"
 cp "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "$OUT/apk/lib/arm64-v8a/"
 # Il motore del Riassunto AI (riassumi/, llama.cpp in Rust) è un programma a parte come sul computer: nell'APK sta
