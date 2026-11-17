@@ -186,7 +186,7 @@ pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
         let small = img.thumbnail(side, side).to_rgba8();
         return Some((Image::from_rgba(small.width(), small.height(), small.as_raw())?, size));
     }
-    let mut decoder = image::ImageReader::new(std::io::BufReader::new(crate::input_file::File::open(path).ok()?)).with_guessed_format().ok()?.into_decoder().ok()?;
+    let mut decoder = crate::imgfmt::reader(path).ok()?.into_decoder().ok()?;
     let orientation = decoder.orientation().ok();
     let mut img = image::DynamicImage::from_decoder(decoder).ok()?;
     if let Some(o) = orientation {
