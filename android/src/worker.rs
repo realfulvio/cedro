@@ -111,6 +111,7 @@ fn diagnostica_saf(path:&std::path::Path) {
                 let stat=file.metadata().map(|m|m.len()).map_err(|e|e.raw_os_error());
                 let read=file.read_at(&mut [0u8;16],0).map_err(|e|e.raw_os_error());
                 log::info!("SAF probe fd={fd} flags={flags} fstat={stat:?} pread={read:?}");
+                cedro::input_file::register(fd,std::sync::Arc::new(file));
             }
             Err(e)=>log::info!("SAF probe fd={fd} dup_errno={:?}",e.raw_os_error()),
         }
