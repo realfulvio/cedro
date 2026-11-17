@@ -42,6 +42,7 @@ mod pdfpages;
 mod pdflayout;
 mod pdfxlsx;
 mod pulisci;
+pub mod referto;
 pub mod revisione;
 pub mod riassunto;
 pub mod settings;
