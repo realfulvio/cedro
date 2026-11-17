@@ -129,5 +129,8 @@ fn main() {
     }
     for (name, theme) in [("notte", ThemeId::CedroNotte), ("bosco", ThemeId::CedroBosco), ("carta", ThemeId::CedroCarta)] {
         disegna(&out, name, 360.0, 800.0, theme, Lang::It, 0);
+        // Impostazioni e Lavori anche nelle tinte, per vedere che la barra di stato resti leggibile.
+        disegna(&out, &format!("{name}-impostazioni"), 360.0, 800.0, theme, Lang::It, 8);
+        disegna(&out, &format!("{name}-lavori"), 360.0, 800.0, theme, Lang::It, 7);
     }
 }
