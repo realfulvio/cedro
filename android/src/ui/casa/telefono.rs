@@ -254,9 +254,7 @@ impl App {
 
             }
             Att::Tras => { fy += self.trascrizione_a(p, x, fy, cw, vista); }
-            Att::Web | Att::Yt => {
-                if self.casa.web == 3 { fy += self.trascrizione_a(p, x, fy, cw, vista); }
-            }
+            Att::Web | Att::Yt if self.casa.web == 3 => { fy += self.trascrizione_a(p, x, fy, cw, vista); }
             _ => {}
         }
         cy.max(fy)
