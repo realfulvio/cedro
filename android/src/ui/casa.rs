@@ -203,6 +203,8 @@ pub enum CasaAz {
     Passo(i8),
     Formato(usize),
     Modello(usize),
+    Referto,
+    Ascolta(usize),
     Web(usize),
     Incolla,
     Impostazioni,
@@ -414,6 +416,11 @@ impl App {
     pub(super) fn azione_casa(&mut self, az: CasaAz) -> Effetto {
         let att = attivita();
         match az {
+            CasaAz::Referto => { self.referto = !self.referto; return Effetto::Ridisegna; }
+            CasaAz::Ascolta(i) => {
+                let Some(v) = self.casa.coda.get(i) else { return Effetto::Niente };
+                return self.apri_ascolto(v.path.clone(), v.nome.clone(), v.lavoro);
+            }
             CasaAz::Att(i) => {
                 if let Some(a) = att.get(i) {
                     self.casa.att = *a;
@@ -700,9 +707,9 @@ impl App {
             let v = self.casa.coda[i].clone();
             self.file = Some(Archivio { path: v.path.clone(), nome: v.nome.clone(), dim: v.dim });
             self.kind = v.kind;
-            if let Effetto::Converti { web, id: lavoro, file, azione, qualita, prog, opts, unisci } = self.avvia_con(id, etichetta, conv, Some(Box::new(opts.clone())), Vec::new()) {
+            if let Effetto::Converti { voce, web, id: lavoro, file, azione, qualita, prog, opts, unisci } = self.avvia_con(id, etichetta, conv, Some(Box::new(opts.clone())), Vec::new()) {
                 self.casa.coda[i].lavoro = Some(lavoro);
-                compiti.push(super::Compito { web, id: lavoro, file, azione, qualita, prog, opts, unisci });
+                compiti.push(super::Compito { voce, web, id: lavoro, file, azione, qualita, prog, opts, unisci });
             }
         }
         self.file = None;

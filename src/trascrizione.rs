@@ -159,6 +159,8 @@ pub struct Line {
 #[derive(Debug)]
 pub enum Event {
     Log(Line),
+    Audio { secs: f64 },
+    Segment(Segment),
     /// Il file numero `index` della coda è a `percent`.
     Percent { index: usize, percent: u8 },
     /// Un file è finito: il file scritto e il messaggio per la coda, oppure l'errore.
@@ -957,7 +959,7 @@ impl Drop for Running {
 }
 
 /// Un segmento di parlato: inizio e fine in centesimi di secondo.
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Debug, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct Segment {
     pub t0: i64,
     pub t1: i64,
@@ -1612,6 +1614,7 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, gloss
         match event["e"].as_str().unwrap_or("") {
             "audio" => {
                 secs = event["secs"].as_f64().unwrap_or(0.0);
+                sink(Event::Audio { secs });
                 log(sink, Tone::Step, "Audio", format!("{} di parlato da trascrivere", minutes_text(secs)));
             }
             "lang" => log(sink, Tone::Step, "Lingua", format!("riconosciuta: {}", language_name(event["code"].as_str().unwrap_or("?")))),
@@ -1647,6 +1650,7 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, gloss
                 let speaker = if voices >= 2 { speaker_of(&turns, t0, t1) } else { None };
                 let seg = Segment { t0, t1, text: event["text"].as_str().unwrap_or("").to_string(), speaker };
                 sink(Event::Log(Line { tone: Tone::Speech, key: format!("[{}]", clock(seg.t0)), text: seg.text.clone(), speaker }));
+                sink(Event::Segment(seg.clone()));
                 segments.push(seg);
             }
             "progress" => {
@@ -1927,6 +1931,9 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                 // Con i referti veterinari le frasi con numeri e parole decisive vanno riascoltate in
                 // «Rivedi»: finché non lo sono il file è una bozza, col nome e la riga in cima che lo dicono.
                 let referto = request.glossario.as_deref().is_some_and(|g| g.split(',').any(|t| t.trim() == "veterinaria"));
+                if referto {
+                    let _ = crate::revisione::save_review(path, secs, &lang, &segments, &names, None, &crate::revisione::ReviewState { referto: true, view: 1, checked: Vec::new() });
+                }
                 let punti = if referto { crate::revisione::find_referto(&segments) } else { Vec::new() };
                 let draft = crate::revisione::riga_bozza(&segments, &punti.iter().collect::<Vec<_>>());
                 let out = match &draft {
@@ -2198,7 +2205,7 @@ mod tests {
         run(std::slice::from_ref(&wav), &request, Some(&work), &Options::default(), &|event| match event {
             Event::Log(line) => lines.lock().unwrap().push(format!("{} {}", line.key, line.text)),
             Event::Finished { result, .. } => *finished.lock().unwrap() = Some(result),
-            Event::Percent { .. } => {}
+            Event::Percent { .. } | Event::Audio { .. } | Event::Segment(_) => {}
         });
         for line in lines.lock().unwrap().iter() {
             eprintln!("{line}");

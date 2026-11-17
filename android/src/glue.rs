@@ -832,13 +832,14 @@ struct Consegne {
     /// Com'è andata la password: la copia senza, o l'errore.
     sblocco: Casella<Result<PathBuf, String>>,
     /// L'onda di una revisione aperta.
-    onda_riv: Casella<(PathBuf, Option<Vec<f32>>)>,
+    onda_riv: Arc<Mutex<Vec<(PathBuf, Option<Vec<f32>>, f64)>>>,
+    frasi: Arc<Mutex<Vec<(u32,PathBuf,Option<cedro::trascrizione::Segment>,f64)>>>,
     /// I punti da controllare di una trascrizione finita (lavoro, quanti).
     controlli: Arc<Mutex<Vec<(u32, usize)>>>,
     /// Il Riassunto AI: il passo in parole (lavoro, testo) e il risultato (lavoro, trascrizione, riassunto).
     passo_riassunto: Arc<Mutex<Vec<(u32, String)>>>,
     riassunti: Arc<Mutex<Vec<(u32, PathBuf, cedro::riassunto::Stored)>>>,
-    /// Miniatura, misure e pagine dei file in coda nella finestra principale.
+/// Miniatura, misure e pagine dei file in coda nella finestra principale.
     voci: Arc<Mutex<Vec<(PathBuf, Option<Image>, Option<(u32, u32)>, Option<u32>)>>>,
     /// Le pagine del documento firmato mostrato (`None`: finite).
     firma_pagine: Arc<Mutex<Vec<(PathBuf, Option<Image>)>>>,
@@ -981,6 +982,8 @@ fn processo(app: &AndroidApp, c: &Consegne, id: u32, file: &Path, azione: &str, 
         crate::storage::atomico(&out.join(".lavoro"),&bytes).map_err(|e|e.to_string())?;
     }
     crate::worker::avvia(&libs, crate::worker::Richiesta { file: file.into(), azione: azione.into(), qualita, voce, out: out.into(), opts, unisci, sommario:None,anteprima:None,web }, &cancel, leases, |nome,bytes|web::permesso(app,c,id,nome,bytes), |e| match e {
+        crate::worker::Evento::Audio(path,secs) => {c.frasi.lock().unwrap_or_else(|e|e.into_inner()).push((id,path,None,secs));},
+        crate::worker::Evento::Frase(path,seg) => {c.frasi.lock().unwrap_or_else(|e|e.into_inner()).push((id,path,Some(seg),0.0));},
         crate::worker::Evento::Componente(s) => {c.componenti.lock().unwrap_or_else(|e|e.into_inner()).ricevi(id,s);app.create_waker().wake();},
         crate::worker::Evento::Progresso(n) => {if prog.swap(n, std::sync::atomic::Ordering::Relaxed)!=n {app.create_waker().wake();}},
         crate::worker::Evento::Passo(k, t) => {
@@ -992,6 +995,7 @@ fn processo(app: &AndroidApp, c: &Consegne, id: u32, file: &Path, azione: &str, 
 
 /// Un solo completamento contiene stato, tutte le uscite e l'eventuale audio di revisione.
 fn pubblica_lavoro(app: &AndroidApp, c: &Consegne, id: u32, out: &Path, principale: PathBuf, msg: String) -> Completamento {
+    if principale.as_os_str().is_empty() { return Completamento::semplice(id,Stato::Fatto {path:principale,nome:String::new(),msg}); }
     let result=(||->Result<Completamento,String>{
         let mut identity=c.identita.lock().unwrap_or_else(|e|e.into_inner()).get(&id).cloned().ok_or("Identità del lavoro assente")?;
         if let Ok(file)=std::fs::File::open(out.join(".revisione-source")){
@@ -1063,7 +1067,7 @@ impl Drop for Scarto {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn converti(web_scelte:Option<crate::web::Scelte>, app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<std::sync::atomic::AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)>) {
+fn converti(voce:crate::worker::Voce, web_scelte:Option<crate::web::Scelte>, app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<std::sync::atomic::AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)>) {
     let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push(Completamento::semplice(id, s));
     if !assicura_scrittura(&app) {
         invia(Stato::Errore("Serve il permesso di scrivere in Documenti.".into()));
@@ -1095,7 +1099,7 @@ fn converti(web_scelte:Option<crate::web::Scelte>, app: AndroidApp, c: Consegne,
         return web(&app, &c, id, &file, &out, azione, &prog, web_scelte.unwrap_or_default(), o);
     }
     if azione == "trascrivi" {
-        return trascrivi(&app, &c, id, &file, &out, &prog, qualita as usize, o);
+        return trascrivi(&app, &c, id, &file, &out, &prog, voce, o);
     }
     let esito = processo(&app,&c,id,&file,azione,qualita,Default::default(),&out,o,unisci,&prog,None);
     if cancel.load(std::sync::atomic::Ordering::Acquire) {
@@ -1389,8 +1393,8 @@ fn youtube(app: &AndroidApp, c: &Consegne, id: u32, url: &str, out: &Path, azion
 }
 
 /// Voce in testo con whisper.cpp (nell'APK): il modello scelto (Veloce, Buona, Massima: gli stessi del computer) si scarica al primo uso. Salva un .txt in Documenti.
-fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, out: &std::path::Path, prog: &std::sync::atomic::AtomicU32, modello: usize, opts: cedro::Options) {
-    let result = processo(app,c,id,file,"trascrivi",82,crate::worker::Voce::da_codice(modello),out,opts,Vec::new(),prog,None);
+fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, out: &std::path::Path, prog: &std::sync::atomic::AtomicU32, voce: crate::worker::Voce, opts: cedro::Options) {
+    let result = processo(app,c,id,file,"trascrivi",82,voce,out,opts,Vec::new(),prog,None);
     let stato = match result {
         Ok((path,msg)) => {
             if let Some(n)=crate::ui::da_controllare(file) { c.controlli.lock().unwrap_or_else(|e|e.into_inner()).push((id,n)); }
@@ -1540,6 +1544,7 @@ fn carica_file(ui: &mut App, c: &Consegne, cartella: &Path, path: PathBuf, nome:
         return;
     }
     let kind = tipo_di(&path);
+    if matches!(kind,cedro::Kind::Audio|cedro::Kind::Video) { prepara_onda(c,path.clone()); }
     ui.imposta_file(file_di(&path, nome.clone()), kind, da_condivisione);
     if crate::labs::laboratorio(&path) && kind==cedro::Kind::Image {
         ui.vai_casa();ui.vista_nav(6);ui.aggiungi_coda(vec![(path,nome,kind)]);
@@ -1563,7 +1568,18 @@ fn carica_file(ui: &mut App, c: &Consegne, cartella: &Path, path: PathBuf, nome:
 }
 
 /// Miniatura, misure e pagine dei file in coda, in un thread.
+    /// Cache a risoluzione telefonica, letta fuori dal thread grafico anche per file lunghi.
+fn prepara_onda(c: &Consegne, path: PathBuf) {
+    let slot = c.onda_riv.clone();
+    std::thread::spawn(move || {
+        let secs = cedro::audio_duration(&path).unwrap_or(0.0);
+        let bars = cedro::waveform(&path, 600);
+        slot.lock().unwrap_or_else(|e|e.into_inner()).push((path,bars,secs));
+    });
+}
+
 fn leggi_voci(c: &Consegne, files: Vec<PathBuf>) {
+    for path in &files { if matches!(tipo_di(path), cedro::Kind::Audio | cedro::Kind::Video) { prepara_onda(c,path.clone()); } }
     let slot = c.voci.clone();
     std::thread::spawn(move || {
         for path in files {
@@ -1821,6 +1837,7 @@ fn android_main(app: AndroidApp) {
     let mut chieste: std::collections::HashSet<(PathBuf, u32)> = std::collections::HashSet::new();
     let mut servizio_attivo = false;
     let mut ultimo_servizio = std::time::Instant::now();
+    let mut ultimo_audio=std::time::Instant::now();
     let mut progressi=Vec::new();
     let mut ultima_notifica=None;
 
@@ -1842,6 +1859,7 @@ fn android_main(app: AndroidApp) {
                         sporco = true;
                         leggi_insets = true;
                     }
+                    MainEvent::Pause => {ui.pausa_audio();sporco=true;},
                     MainEvent::Destroy => esci = true,
                     _ => {}
                 }
@@ -1920,13 +1938,13 @@ fn android_main(app: AndroidApp) {
                         Effetto::Niente => {}
                         Effetto::Annulla(id) => { token(&consegne,id).store(true,std::sync::atomic::Ordering::Release); saf::annulla(&app,id); sporco=true; }
                         Effetto::Ridisegna => sporco = true,
-                        Effetto::Converti { web, id, file, azione, qualita, prog, opts, unisci } => {
+                        Effetto::Converti { voce, web, id, file, azione, qualita, prog, opts, unisci } => {
                             registra(&consegne,&mut ui);
                             persisti(&consegne,&file_lavori,ui.serializza());
                             sporco = true;
                             let (a, c) = (app.clone(), consegne.clone());
                             token(&c,id);
-                            std::thread::spawn(move || protetto(&c,id,|| converti(web,a, c.clone(), id, file, azione, qualita, prog, opts, unisci)));
+                            std::thread::spawn(move || protetto(&c,id,|| converti(voce,web,a, c.clone(), id, file, azione, qualita, prog, opts, unisci)));
                         }
                         Effetto::Tanti(compiti) => {
                             registra(&consegne,&mut ui);
@@ -1936,8 +1954,8 @@ fn android_main(app: AndroidApp) {
                             for compito in &compiti { token(&c,compito.id); }
                             // Uno dopo l'altro: il motore lavora meglio su un file alla volta.
                             std::thread::spawn(move || {
-                                for Compito { web, id, file, azione, qualita, prog, opts, unisci } in compiti {
-                                    protetto(&c,id,|| converti(web,a.clone(), c.clone(), id, file, azione, qualita, prog, opts, unisci));
+                                for Compito { voce, web, id, file, azione, qualita, prog, opts, unisci } in compiti {
+                                    protetto(&c,id,|| converti(voce,web,a.clone(), c.clone(), id, file, azione, qualita, prog, opts, unisci));
                                 }
                             });
                         }
@@ -1956,12 +1974,8 @@ fn android_main(app: AndroidApp) {
                             }
                             sporco = true;
                         }
-                        Effetto::OndaRevisione(path, secs) => {
-                            let slot = consegne.onda_riv.clone();
-                            std::thread::spawn(move || {
-                                let bars = cedro::waveform(&path, (secs as usize).clamp(300, 6000));
-                                *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some((path, bars));
-                            });
+                        Effetto::OndaRevisione(path, _) => {
+                            prepara_onda(&consegne, path);
                             sporco = true;
                         }
                         Effetto::ScriviPoi { id, nome, dati, poi } => {
@@ -2243,8 +2257,12 @@ fn android_main(app: AndroidApp) {
                 sporco = true;
             }
         }
-        if let Some((p, bars)) = consegne.onda_riv.lock().unwrap_or_else(|e| e.into_inner()).take() {
-            ui.onda_rivedi(&p, bars);
+        for (p,bars,secs) in std::mem::take(&mut *consegne.onda_riv.lock().unwrap_or_else(|e|e.into_inner())) {
+            ui.onda_trascrizione(&p,bars,secs);
+            sporco = true;
+        }
+        for (id,path,seg,secs) in std::mem::take(&mut *consegne.frasi.lock().unwrap_or_else(|e|e.into_inner())) {
+            ui.frase_trascritta(id,path,seg,secs);
             sporco = true;
         }
         for (id, nota) in std::mem::take(&mut *consegne.passo_riassunto.lock().unwrap_or_else(|e| e.into_inner())) {
@@ -2315,7 +2333,7 @@ fn android_main(app: AndroidApp) {
                                 c.tokens.lock().unwrap_or_else(|e|e.into_inner()).remove(&id);
                                 let _=batch.finisci(index);a.create_waker().wake();continue;
                             }
-                            protetto(&c,id,||trascrivi(&a,&c,id,&child.source,&child.out,&prog,batch.voce.modello|((batch.voce.voci as usize)<<4),batch.opts.clone()));
+                            protetto(&c,id,||trascrivi(&a,&c,id,&child.source,&child.out,&prog,batch.voce,batch.opts.clone()));
                             if let Err(_)=batch.finisci(index){log::warn!("batch: checkpoint finale non riuscito");}
                             a.create_waker().wake();
                         }
@@ -2386,6 +2404,12 @@ fn android_main(app: AndroidApp) {
             }
         }
         animando = ui.animando();
+        if ultimo_audio.elapsed()>=Duration::from_millis(200) {
+            let playing=ui.suona_audio();
+            let focus=con_attivita(&app,|env,a|env.call_method(a,"audioFocus","(Z)Z",&[JValue::Bool(playing as u8)]).and_then(|r|r.z()).map_err(|e|e.to_string())).unwrap_or(false);
+            if playing {if !focus {ui.pausa_audio();}sporco=true;}
+            ultimo_audio=std::time::Instant::now();
+        }
         if sporco || animando {
             if let Some(f) = &finestra {
                 let (w, h) = (f.width() as u32, f.height() as u32);
