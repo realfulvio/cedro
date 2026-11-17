@@ -23,7 +23,9 @@ for name in ('MELANZANA', 'NOTTE', 'BOSCO', 'CARTA'):
     for pair, value in results:
         print(f'{name} {pair}: {value:.2f}:1')
         failed |= value < 4.5
-activities = (root / 'android/src/ui/casa/telefono.rs').read_text().split('const ATTIVITA:')[1].split('];', 1)[0]
+telefono = (root / 'android/src/ui/casa/telefono.rs').read_text()
+# La grafica a barra di sei attività non ha tessere colorate con testo: il controllo vale solo se ci sono.
+activities = telefono.split('const ATTIVITA:')[1].split('];', 1)[0] if 'const ATTIVITA:' in telefono else ''
 for match in re.finditer(r'\("([^"]+)".*?\((\d+), (\d+), (\d+)\), \((\d+), (\d+), (\d+)\)\)', activities):
     name, *numbers = match.groups()
     values = list(map(int, numbers))
