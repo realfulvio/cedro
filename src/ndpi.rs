@@ -9,7 +9,8 @@
 //! tessere di una fila si decodificano in parallelo come per gli Aperio. Tutto da specifica (la
 //! stessa che seguono OpenSlide e tifffile), in Rust.
 
-use std::fs::{File, OpenOptions};
+use crate::input_file::File;
+use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
@@ -506,7 +507,7 @@ const TAG_PERSONALI: &[u16] = &[269, 270, 285, 306, 315, 316, 65427, 65442, 6546
 /// pixel ed esce dalla catena delle pagine; nome del vetrino, data, codici a barre e numero dello
 /// scanner diventano spazi. Dice cosa ha tolto.
 pub fn anonimizza_sul_posto(path: &Path) -> Result<Vec<&'static str>, String> {
-    let mut f = OpenOptions::new().read(true).write(true).open(path).map_err(|e| e.to_string())?;
+    let mut f = OpenOptions::new().read(true).write(true).open(path).map(File::from).map_err(|e| e.to_string())?;
     let pag = pagine(&mut f)?;
     let scrivi = |f: &mut File, pos: u64, b: &[u8]| -> Result<(), String> {
         f.seek(SeekFrom::Start(pos)).map_err(|e| e.to_string())?;
@@ -670,6 +671,29 @@ mod prove {
         let p = dir.join("finto.ndpi");
         std::fs::write(&p, f).unwrap();
         (p, img)
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn ndpi_grant_legge_anteprima_e_regioni_senza_spostare_fd() {
+        use std::os::fd::AsRawFd;
+        let d=std::env::temp_dir().join(format!("cedro-ndpi-grant-{}",std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let (path,_)=ndpi_finto(&d,128,72);
+        let expected=Slide::open(&path).unwrap().read_level(&path,0).unwrap();
+        let mut source=std::fs::File::open(&path).unwrap();source.seek(SeekFrom::Start(13)).unwrap();
+        let source=std::sync::Arc::new(source);let fd=source.as_raw_fd();
+        crate::input_file::register(&path,fd,source.clone());
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&path).unwrap();
+        assert!(is_ndpi(&path));assert!(crate::svs::is_slide(&path));
+        std::thread::scope(|scope|{for _ in 0..4 {let p=&path;let expected=&expected;scope.spawn(move || {
+            let slide=Slide::open(p).unwrap();
+            assert_eq!(slide.read_level(p,0).unwrap().as_raw(),expected.as_raw());
+            assert_eq!(slide.read_region(p,0,20,10,60,40).unwrap(),image::imageops::crop_imm(expected,20,10,60,40).to_image());
+        });}});
+        assert_eq!((&*source).stream_position().unwrap(),13);
+        std::fs::remove_dir_all(d).unwrap();
     }
 
     #[test]

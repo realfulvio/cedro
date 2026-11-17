@@ -13,7 +13,7 @@
 //! libreria aperta libCZI: i file di prova si confrontano pixel per pixel con libCZI (pylibCZIrw).
 
 use std::collections::BTreeMap;
-use std::fs::File;
+use crate::input_file::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 

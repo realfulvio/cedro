@@ -16,6 +16,7 @@ use crate::engine::PageSel;
 
 /// I numeri di pagina.
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Numbers {
     /// Dove, da 0 a 8: in alto a sinistra, in alto al centro… in basso a destra.
     pub pos: u8,
@@ -35,6 +36,7 @@ impl Default for Numbers {
 
 /// Un testo grande e chiaro sopra le pagine («BOZZA», «COPIA»).
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Watermark {
     pub text: String,
     /// Opacità in percento.
@@ -53,6 +55,7 @@ impl Default for Watermark {
 
 /// Cosa aggiungere alle pagine.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Stamp {
     pub numbers: Option<Numbers>,
     pub watermark: Option<Watermark>,
@@ -332,6 +335,7 @@ fn add_resources(doc: &mut Document, page: ObjectId, regular: ObjectId, bold: Ob
 
 /// Quanto comprimere.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Squeeze {
     /// 0 Leggera (solo flussi e pulizia), 1 Equilibrata (immagini a 150 dpi), 2 Forte (100 dpi).
     pub level: u8,

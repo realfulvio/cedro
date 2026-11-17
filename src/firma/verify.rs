@@ -194,7 +194,7 @@ impl Report {
 
 pub fn verify_path(path: &Path, mut opts: Opts) -> Report {
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let data = match std::fs::read(path) {
+    let data = match crate::input_file::read(path) {
         Ok(d) => d,
         Err(e) => return Report { name, error: Some(format!("non riesco a leggere il file: {e}")), ..Default::default() },
     };
@@ -203,7 +203,7 @@ pub fn verify_path(path: &Path, mut opts: Opts) -> Report {
     let lower = name.to_ascii_lowercase();
     if opts.detached.is_none() && (lower.ends_with(".p7s") || lower.ends_with(".tsr")) {
         let orig = path.with_file_name(&name[..name.len() - 4]);
-        if let Ok(d) = std::fs::read(orig) {
+        if let Ok(d) = crate::input_file::read(orig) {
             opts.detached = Some(d);
         }
     }

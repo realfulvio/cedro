@@ -2265,9 +2265,9 @@ Per esempio gli allegati di una PEC	Por exemplo os anexos de um e-mail certifica
 Se sono già firmati te li apro e ti dico se le firme valgono. Se non lo sono, li preparo per la firma.	Se já estiverem assinados, eu os abro e digo se as assinaturas são válidas. Se não, eu os preparo para assinatura.
 Tutti i comandi e le opzioni in vista.	Todos os comandos e opções à vista.
 Solo l'essenziale; il resto a un clic.	Só o essencial; o resto a um clique.
-In Impostazioni, Aspetto: le tinte di Cedro e i temi di prima, la vista Semplice (solo l'essenziale) o Completa (tutti i comandi) e i caratteri più grandi. Ogni tema ha il suo carattere. Questa Guida cambia insieme a loro.	Em Configurações, Aparência: os tons do Cedro e os temas anteriores, a visualização Simples (só o essencial) ou Completa (todos os comandos) e texto maior. Cada tema tem a sua própria tipografia. Este Guia muda junto com eles.
-Quattro tinte e sette temi	Quatro tons e sete temas
-Da Cedro · Melanzana al Comune di Bondeno	Do Cedro · Berinjela à prefeitura de Bondeno
+In Impostazioni, Aspetto: Cedro Melanzana, Notte, Bosco, Carta e Cedro for Labs, la vista Semplice (solo l'essenziale) o Completa (tutti i comandi) e i caratteri più grandi. Questa Guida cambia insieme a loro.	Em Configurações, Aparência: Cedro Berinjela, Noite, Floresta, Papel e Cedro for Labs, a visualização Simples (só o essencial) ou Completa (todos os comandos) e texto maior. Este Guia muda junto com eles.
+Cinque temi desktop	Cinco temas de desktop
+Melanzana, Notte, Bosco, Carta e Cedro for Labs	Berinjela, Noite, Floresta, Papel e Cedro for Labs
 Semplice o Completa	Simples ou Completa
 Si cambia anche in cima al pannello	Também pode ser mudado no alto do painel
 Vista	Visualização
@@ -2485,3 +2485,221 @@ Playlist e raccolte	Playlists e coleções
 consigliata	recomendada
 file leggero	arquivo leve
 file piccolo	arquivo pequeno
+
+# Interfaccia Android A
+I tuoi file.	Seus arquivos.
+Come ti servono.	Como você precisa.
+Conversioni, PDF, voce e laboratorio.\nTutto sul tuo telefono.	Conversões, PDF, voz e laboratório.\nTudo no seu telefone.
+Apri un file	Abrir um arquivo
+Foto, documenti, audio	Fotos, documentos, áudio
+Unisci, dividi, comprimi	Unir, dividir, comprimir
+Ascolta e rivedi	Ouvir e revisar
+Link in video o audio	Links para vídeo ou áudio
+Vetrini, DICOM, casi	Lâminas, DICOM, casos
+Riprendi da qui	Continue daqui
+FILE SELEZIONATO	ARQUIVO SELECIONADO
+Selezionato	Selecionado
+Seleziona	Selecionar
+Mostra	Mostrar
+Ricevuto. Scegli cosa farne.	Recebido. Escolha uma ação.
+Numero da controllare	Número a verificar
+Significato da controllare	Significado a verificar
+Aggiungi i file, o condividili a Cedro da un'altra app	Adicione arquivos ou compartilhe com o Cedro de outro aplicativo
+Altre opzioni	Mais opções
+Incolla il link	Cole o link
+Salva in	Salvar em
+Una persona sola	Uma pessoa
+{#} persone	{} pessoas
+A modo tuo.	Do seu jeito.
+Leggibilità	Legibilidade
+Temi precedenti	Temas anteriores
+Tipo di file	Tipo de arquivo
+Animazioni: segue il telefono	Animações: configuração do telefone
+
+Crea {}	Criar {}
+Uso quotidiano	Uso diário
+Alta efficienza	Alta eficiência
+Grafica e scambio	Gráficos e intercâmbio
+
+# Android: importazione, lavori e recupero dei risultati
+Importazione	Importação
+File importati	Ficheiros importados
+Importazione interrotta	Importação interrompida
+Annullamento…	A cancelar…
+Da salvare	Por guardar
+Copia in Cedro	Cópia no Cedro
+Salvataggio incompleto: copie disponibili in Cedro	Gravação incompleta: cópias disponíveis no Cedro
+Pubblicazione annullata: le copie complete restano in Cedro	Publicação cancelada: as cópias completas ficam no Cedro
+Interrotto dalla chiusura di Cedro: avvia di nuovo il lavoro	Interrompido ao fechar o Cedro: reinicie a tarefa
+Il motore si è interrotto	O motor foi interrompido
+Risultati recuperati: salvali o condividili	Resultados recuperados: guarde-os ou partilhe-os
+Recuperato dopo un’interruzione	Recuperado após uma interrupção
+Riassunto pronto in Rivedi	Resumo pronto em Rever
+Riassunto non leggibile	Não foi possível ler o resumo
+Spazio insufficiente per importare il file	Espaço insuficiente para importar o ficheiro
+File non disponibile: sceglilo di nuovo	Ficheiro indisponível: selecione-o novamente
+Cartella troppo annidata	Pasta demasiado aninhada
+Impossibile aprire il file condiviso	Não foi possível abrir o ficheiro partilhado
+Descriptor SAF non valido	Descritor SAF inválido
+Indirizzo SAF assente	Endereço SAF em falta
+Cartella SAF senza identificatore	Pasta SAF sem identificador
+Cartella assente	Pasta em falta
+Nome duplicato nella cartella: {nome}	Nome duplicado na pasta: {nome}
+Risultato fuori dalla cartella del lavoro	Resultado fora da pasta da tarefa
+Il motore non è in questo APK	O motor não está incluído neste APK
+Il motore non parte: {e}	O motor não inicia: {e}
+Troppe opzioni per il lavoro	Demasiadas opções para a tarefa
+Canale del motore non disponibile	Canal do motor indisponível
+Risposta del motore non disponibile	Resposta do motor indisponível
+MediaStore non ha completato il salvataggio	O MediaStore não concluiu a gravação
+Nessun file scelto	Nenhum ficheiro selecionado
+File non leggibile	Não foi possível ler o ficheiro
+File troppo grande	Ficheiro demasiado grande
+Aspetto che finisca l’altro lavoro…	A aguardar que a outra tarefa termine…
+Memoria insufficiente per verificare il file originale	Memória insuficiente para verificar o ficheiro original
+Il provider richiede una copia · spazio disponibile: {spazio}	O fornecedor requer uma cópia · espaço disponível: {spazio}
+Copia privata · spazio disponibile: {spazio}	Cópia privada · espaço disponível: {spazio}
+Identità del lavoro assente	Identidade da tarefa ausente
+Sorgente della revisione non disponibile	Fonte da revisão indisponível
+Risultato non regolare	Tipo de arquivo de resultado não suportado
+Il lavoro non ha prodotto file	A tarefa não produziu arquivos
+Registro dei risultati non valido	Registro de resultados inválido
+Nome del risultato assente	Nome do resultado ausente
+Apri cartella MRXS	Abrir pasta MRXS
+Annulla anteprima	Cancelar prévia
+Scena	Cena
+Canale	Canal
+Piano Z	Plano Z
+Istante	Instante
+Lavori del caso	Trabalhos do caso
+Tutti i lavori	Todos os trabalhos
+Un codice comune per i file del laboratorio.	Um código comum para os arquivos do laboratório.
+Nota · resta nel caso, non nel nome del file	Nota · fica no caso, não no nome do arquivo
+Nome del risultato	Nome do resultado
+Usa questo caso	Usar este caso
+Togli caso attivo	Remover caso ativo
+Opzioni del risultato	Opções do resultado
+Avviso	Aviso
+Gli allegati restano solo nel file originale.	Os anexos ficam apenas no arquivo original.
+Caso non salvato	Caso não salvo
+Livello non presente nel file	Nível não encontrado no arquivo
+Piano non presente nel file	Plano não encontrado no arquivo
+Canale non presente nel file	Canal não encontrado no arquivo
+Il file non contiene un’anteprima di laboratorio	O arquivo não contém uma prévia de laboratório
+Anteprima: area centrale del livello. L’esportazione usa le opzioni del risultato.	Prévia: área central do nível. A exportação usa as opções do resultado.
+Eventuali nomi impressi nei pixel richiedono una verifica visiva.	Nomes gravados nos pixels exigem uma verificação visual.
+I selettori cambiano solo l’anteprima. L’esportazione usa le opzioni del risultato e include tutte le scene del file.	Os seletores alteram apenas a prévia. A exportação usa as opções do resultado e inclui todas as cenas do arquivo.
+Tessere AI, zona mitotica e consulto richiedono SVS, NDPI o MRXS. La copia anonima di CZI, ND2 e LIF non è supportata dal motore.	Os blocos para IA, a área de contagem mitótica e a consulta exigem SVS, NDPI ou MRXS. O motor não suporta cópias anônimas de CZI, ND2 ou LIF.
+La copia anonima di CZI, ND2 e LIF non è supportata dal motore. Puoi convertire il file in PNG; non è una copia anonima del formato originale.	O motor não suporta cópias anônimas de CZI, ND2 ou LIF. Você pode converter o arquivo para PNG; isso não é uma cópia anônima do formato original.
+Cartella privata non disponibile	Pasta privada indisponível
+Anteprima non leggibile	Não foi possível ler a prévia
+file di dati fuori dalla cartella MIRAX	arquivo de dados fora da pasta MIRAX
+percorso dei dati MIRAX non valido	caminho dos dados MIRAX inválido
+{}: file associato non regolare	{}: o arquivo associado não é um arquivo regular
+Pacchetto con impronte	Pacote com somas de verificação
+Apri file	Abrir arquivo
+Vetrini	Lâminas
+Copia anonima	Cópia anônima
+Anteprima	Prévia
+1080p · consigliata	1080p · recomendada
+Audio disponibile: avvia di nuovo la trascrizione	Áudio disponível: inicie a transcrição novamente
+Capitoli	Capítulos
+Chiedi una volta su rete mobile	Perguntar uma vez com dados móveis
+Consenti anche rete mobile	Permitir também dados móveis
+Copertina	Capa
+Copertina, capitoli, metadati, sottotitoli e raccolte richiedono YouTube. Per questi link sono disponibili MP4 e i formati audio indicati.	Capa, capítulos, metadados, legendas e coleções exigem YouTube. Estes links permitem MP4 e os formatos de áudio indicados.
+Download dei componenti	Download dos componentes
+Originale	Original
+Qualità audio	Qualidade do áudio
+Qualità del video	Qualidade do vídeo
+Questa versione passa il link a un'altra app.	Esta versão envia o link para outro aplicativo.
+Salta gli sponsor	Pular patrocinadores
+Salta i file già presenti	Pular arquivos existentes
+Scarica il componente	Baixar componente
+Scarica l'originale, poi riduce o converte il file sul telefono.	Baixa o original e depois reduz ou converte o arquivo no telefone.
+Scarica la raccolta	Baixar coleção
+Solo Wi-Fi	Somente Wi-Fi
+Sottotitoli, quando disponibili	Legendas, quando disponíveis
+Spazio libero	Espaço livre
+Tutte le lingue	Todos os idiomas
+Un problema con i sottotitoli non interrompe il video.	Um problema com as legendas não interrompe o vídeo.
+Uniforma il volume	Normalizar o volume
+Aggiornamento	Atualização
+Download non riuscito. Riprova.	Falha no download. Tente novamente.
+Raccolta non valida	Coleção inválida
+Il file esiste già: saltato	O arquivo já existe: ignorado
+Spazio insufficiente per il componente. Libera spazio e riprova.	Sem espaço suficiente para o componente. Libere espaço e tente novamente.
+Audio pronti: trascrizioni aggiunte ai lavori	Áudios prontos: transcrições adicionadas aos trabalhos
+Intervallo del download non valido	Intervalo de download inválido
+Risposta incompleta	Resposta incompleta
+Percorso del componente non valido	Caminho do componente inválido
+Evita copie già salvate	Evitar cópias já salvas
+Evita copie duplicate al salvataggio. Il download può avvenire comunque.	Evita cópias duplicadas ao salvar. O download ainda pode ocorrer.
+Referti	Relatórios
+Numeri e parole decisive da riascoltare. Finché restano punti aperti, salvi una bozza.	Ouça novamente os números e as palavras decisivas. O ficheiro permanece um rascunho até verificar todos os pontos.
+Volume del telefono	Volume do telefone
+Correggi sul posto	Corrigir aqui
+Conferma dopo l'ascolto	Confirmar após ouvir
+Salva come bozza	Guardar como rascunho
+{} da riascoltare	{} para ouvir novamente
+Nessun parlato riconosciuto	Nenhuma fala reconhecida
+Prova una registrazione con la voce più vicina al microfono.	Experimente gravar com a voz mais perto do microfone.
+Onda non disponibile: puoi comunque ascoltare	Onda indisponível: pode continuar a ouvir
+Il riassunto sarà disponibile quando la trascrizione è completa.	O resumo estará disponível quando a transcrição estiver concluída.
+Concluso	Concluído
+Pausa	Pausa
+Ascolta	Ouvir
+Zoom −	Zoom −
+Zoom +	Zoom +
+Audio non disponibile	Áudio indisponível
+
+# Android: rifiniture finali
+Aggiungi PDF	Adicionar PDFs
+Aggiungi dei file o condividili con Cedro.	Adicione arquivos ou compartilhe com o Cedro.
+Aiuto	Ajuda
+Apri un file firmato	Abrir um arquivo assinado
+Caratteri	Tamanho do texto
+Come si usa Cedro	Como usar o Cedro
+Con 1 ogni pagina diventa un PDF.	Com 1, cada página vira um PDF.
+Controlli	Verificações
+Controllo la revoca online…	Verificando a revogação on-line…
+Cose da fare	Tarefas
+Così arriva in Excel: numeri veri, titoli in grassetto	Assim fica no Excel: números reais, títulos em negrito
+Da un'altra app, «Condividi» → Cedro apre la ruota con il file al centro: tocca uno spicchio e «Converti».	Em outro app, Compartilhar → Cedro abre o arquivo: escolha uma operação e Converta.
+Documenti/Cedro	Documents/Cedro
+Documenti/Cedro, sul telefono	Documents/Cedro, no telefone
+Dove salvare	Onde salvar
+Elenco europeo	Lista europeia
+Esce un file di testo con le frasi e i tempi; dai Lavori si apre «Rivedi» per ascoltarle e correggerle.	Cria um arquivo de texto com frases e tempos; abra Revisar em Trabalhos para ouvir e corrigir.
+Esempio: 	Exemplo:
+File ▴	Arquivo ▴
+Gli allegati firmati della mail o di WhatsApp: aprili e scegli Cedro.	Abra os anexos assinados do e-mail ou WhatsApp e escolha o Cedro.
+Il telefono può restare in tasca: a fine lavoro arriva una notifica.	Pode guardar o telefone: uma notificação avisa quando o trabalho terminar.
+Impostazioni della trascrizione	Configurações de transcrição
+Impostazioni trascrizione	Configurações de transcrição
+L'ordine qui sotto è l'ordine delle pagine nel file unito. Tieni premuta la maniglia per spostare un file.	Esta será a ordem das páginas no arquivo mesclado. Segure a alça para mover um arquivo.
+Le copie nuove vanno qui; l'originale non si tocca.	As novas cópias ficam aqui; o original não é alterado.
+Le stesse opzioni del pannello Conversioni del computer.	As mesmas opções do painel de conversões do computador.
+Nessuna.	Nenhuma.
+Nome dei file, qualità, OCR	Nomes dos arquivos, qualidade, OCR
+Ogni tema ha il suo carattere, come sul computer. «Grandi» ingrandisce tutto il testo di Cedro.	Cada tema tem sua fonte. Grande aumenta todo o texto do Cedro.
+Operaz.	Operação
+PDF in JPG e PNG	PDF para JPG e PNG
+Questo PDF ha una password	Este PDF tem uma senha
+Questo PDF non ha segnalibri: scegli un altro modo per dividerlo.	Este PDF não tem marcadores: escolha outra forma de dividir.
+Riassunto AI in corso	Resumo com IA em andamento
+Rifai il riassunto	Refazer o resumo
+Semplice mostra il formato e il pulsante; Completa anche qualità, dimensioni e le altre opzioni.	Simples mostra formato e ação; Completa também mostra qualidade, tamanho e outras opções.
+Serve per aprirlo. Cedro la usa solo per questo lavoro e non la ricorda.	É necessária para abrir o PDF. O Cedro usa apenas neste trabalho e não salva a senha.
+Sto leggendo le pagine…	Lendo páginas…
+Sul telefono, senza internet	No telefone, sem internet
+Temi di prima	Temas anteriores
+Testo chiaro in diagonale su ogni pagina	Texto claro na diagonal em cada página
+Tinta di Cedro	Cores do Cedro
+Tocca le forbici tra due pagine per tagliare lì.	Toque na tesoura entre duas páginas para dividir ali.
+Tocca un nome per scriverlo: cambia in tutte le frasi, nel file e nel riassunto. Il nome colorato su una frase sceglie chi la dice.	Toque em um nome para alterar nas frases, no arquivo e no resumo. O nome colorido de uma frase permite escolher quem fala.
+Un file per ogni segnalibro principale del PDF.	Um arquivo para cada marcador principal do PDF.
+Vista di partenza	Visualização inicial
+pagine	páginas
+Il decoder esterno non supporta la lettura diretta del file autorizzato	O decodificador externo não permite ler diretamente o arquivo autorizado
+Il decoder esterno non ha letto il file autorizzato	O decodificador externo não conseguiu ler o arquivo autorizado

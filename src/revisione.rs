@@ -13,6 +13,7 @@ use crate::trascrizione::{self, Segment};
 
 /// Quel che serve per riaprire la revisione di un file.
 pub struct Saved {
+    pub review: ReviewState,
     pub secs: f64,
     pub lang: String,
     pub segments: Vec<Segment>,
@@ -20,6 +21,18 @@ pub struct Saved {
     pub names: Vec<String>,
     /// Il Riassunto AI, se è stato fatto.
     pub summary: Option<crate::riassunto::Stored>,
+}
+
+/// Stato della revisione: le conferme sono legate al contenuto, mai agli indici mutevoli dei flag.
+#[derive(Clone, Debug)]
+pub struct ReviewState {
+    pub referto: bool,
+    pub checked: Vec<String>,
+    pub view: u8,
+}
+
+impl Default for ReviewState {
+    fn default() -> Self { Self { referto: false, checked: Vec::new(), view: 1 } }
 }
 
 fn folder() -> PathBuf {
@@ -40,11 +53,16 @@ pub fn has(source: &Path) -> bool {
 
 /// Salva le frasi di una trascrizione nuova: un riassunto di quella di prima non vale più.
 pub fn save(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String]) -> std::io::Result<()> {
-    save_with(source, secs, lang, segments, names, None)
+    save_review(source, secs, lang, segments, names, None, &ReviewState::default())
 }
 
 /// Salva la revisione, con il Riassunto AI se c'è.
 pub fn save_with(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Stored>) -> std::io::Result<()> {
+    let state = load(source).map(|s| s.review).unwrap_or_default();
+    save_review(source, secs, lang, segments, names, summary, &state)
+}
+
+pub fn save_review(source: &Path, secs: f64, lang: &str, segments: &[Segment], names: &[String], summary: Option<&crate::riassunto::Stored>, state: &ReviewState) -> std::io::Result<()> {
     let list: Vec<Value> = segments
         .iter()
         .map(|s| match s.speaker {
@@ -52,7 +70,7 @@ pub fn save_with(source: &Path, secs: f64, lang: &str, segments: &[Segment], nam
             None => json!([s.t0, s.t1, s.text]),
         })
         .collect();
-    let mut body = json!({"source": source.to_string_lossy(), "secs": secs, "lang": lang, "segments": list, "voices": names});
+    let mut body = json!({"source": source.to_string_lossy(), "secs": secs, "lang": lang, "segments": list, "voices": names, "review": {"referto":state.referto,"checked":state.checked,"view":state.view}});
     if let Some(s) = summary {
         body["summary"] = s.to_json();
     }
@@ -91,7 +109,7 @@ pub fn load(source: &Path) -> Option<Saved> {
         .collect();
     let names: Vec<String> = v["voices"].as_array().map(|a| a.iter().filter_map(|n| n.as_str().map(str::to_string)).take(trascrizione::MAX_VOICES).collect()).unwrap_or_default();
     let summary = crate::riassunto::Stored::from_json(&v["summary"]);
-    (!segments.is_empty()).then(|| Saved { secs: v["secs"].as_f64().unwrap_or(0.0), lang: v["lang"].as_str().unwrap_or("it").to_string(), segments, names, summary })
+    (!segments.is_empty()).then(|| Saved { review: ReviewState {referto:v["review"]["referto"].as_bool().unwrap_or(false),view:v["review"]["view"].as_u64().unwrap_or(1).min(2) as u8,checked:v["review"]["checked"].as_array().map(|a|a.iter().filter_map(|v|v.as_str().map(str::to_string)).collect()).unwrap_or_default()}, secs: v["secs"].as_f64().unwrap_or(0.0), lang: v["lang"].as_str().unwrap_or("it").to_string(), segments, names, summary })
 }
 
 // ---------------------------------------------------------------- rilevatore
@@ -470,6 +488,22 @@ fn cues(segments: &[Segment], names: &[String]) -> Vec<(i64, i64, Option<String>
 }
 
 /// `names` vuoto: sottotitoli senza chi parla.
+pub fn srt_bytes_full(segments: &[Segment], names: &[String], draft: Option<&str>) -> Vec<u8> {
+    if let Some(draft) = draft {
+        let mut rows = vec![Segment { t0: 0, t1: 1, text: draft.into(), speaker: None }];
+        rows.extend_from_slice(segments);
+        srt_bytes(&rows, names)
+    } else { srt_bytes(segments, names) }
+}
+
+pub fn vtt_bytes_full(segments: &[Segment], names: &[String], draft: Option<&str>) -> Vec<u8> {
+    let bytes = vtt_bytes(segments, names);
+    match draft {
+        Some(draft) => String::from_utf8_lossy(&bytes).replacen("WEBVTT\n", &format!("WEBVTT\n\nNOTE {}\n", draft.replace('\n', " ")), 1).into_bytes(),
+        None => bytes,
+    }
+}
+
 pub fn srt_bytes(segments: &[Segment], names: &[String]) -> Vec<u8> {
     let mut out = String::new();
     for (n, (a, b, who, text)) in cues(segments, names).iter().enumerate() {

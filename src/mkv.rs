@@ -1,6 +1,6 @@
 //! Lettore Matroska: tiene solo il video H.264. L'audio lo legge symphonia.
 
-use std::fs::File;
+use crate::input_file::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
 use cedro::ui::gfx::Rgb;
-use cedro::ui::theme::{mix, Palette, ThemeId, Tint};
+use cedro::ui::theme::{Palette, ThemeId, Tint};
 
 /// Le quattro tinte di Cedro, nell'ordine in cui si scelgono.
 pub const CEDRO: [ThemeId; 4] = [ThemeId::Cedro, ThemeId::CedroNotte, ThemeId::CedroBosco, ThemeId::CedroCarta];
@@ -52,11 +52,17 @@ pub fn pannello(t: ThemeId) -> Pannello {
 }
 
 fn da_tinta(t: &Tint) -> Palette {
-    let surf = if t.light { (255, 255, 255) } else { mix(t.frame, (255, 255, 255), 0.07) };
+    let surf = if t.light { (255, 255, 255) } else {
+        match t.frame {
+            (0x0E, 0x16, 0x22) => (0x19, 0x25, 0x36),
+            (0x0E, 0x1A, 0x15) => (0x19, 0x2C, 0x24),
+            _ => (0x28, 0x20, 0x32),
+        }
+    };
     Palette {
         bg: t.frame,
         surface: surf,
-        alt: if t.light { mix(t.frame, (255, 255, 255), 0.5) } else { mix(t.frame, (255, 255, 255), 0.11) },
+        alt: t.frame_hi,
         text: t.ink,
         muted: t.muted,
         primary: t.brand,

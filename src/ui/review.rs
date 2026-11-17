@@ -68,6 +68,8 @@ pub struct Review {
     /// È un referto (dettatura veterinaria): le frasi con numeri e parole decisive vanno riascoltate e
     /// confermate, e finché ne resta una il file esce come bozza.
     pub referto: bool,
+    pub view: u8,
+    restored_checked: HashSet<String>,
 }
 
 impl Review {
@@ -101,6 +103,8 @@ impl Review {
             followed: None,
             sel: None,
             referto: false,
+            view: 1,
+            restored_checked: HashSet::new(),
         };
         r.detect();
         // Con le voci si parte da «Chi parla» (i nomi da dare), a meno che ci sia qualcosa da controllare.
@@ -108,6 +112,55 @@ impl Review {
             r.tab = 1;
         }
         r
+    }
+
+    pub fn from_saved(source: &Path, saved: revisione::Saved) -> Self {
+        let mut r = Self::new(source, saved.secs, saved.lang, saved.segments, saved.names, saved.summary);
+        r.referto = saved.review.referto;
+        r.view = saved.review.view.min(2);
+        r.restored_checked = saved.review.checked.into_iter().collect();
+        r.detect();
+        if r.open_count() > 0 { r.tab = 0; }
+        r
+    }
+
+    fn flag_key(&self, i: usize) -> String {
+        let f = &self.flags[i];
+        let rows: Vec<_> = f.segs.iter().filter_map(|i| self.rows.get(*i)).map(|r| (r.t0, r.t1, r.text.as_str())).collect();
+        format!("{:?}:{}:{}", f.kind, f.snippet, serde_json::to_string(&rows).unwrap_or_default())
+    }
+
+    pub fn persist(&self) -> std::io::Result<()> {
+        let segments=self.segments();
+        let mut next=Self::new(&self.source,self.secs,self.lang.clone(),segments.clone(),self.names.clone(),self.summary.clone());
+        next.referto=self.referto;next.bars=self.bars.clone();next.detect();
+        let checked:HashSet<_>=(0..self.flags.len()).filter(|i|!self.is_open(*i)).map(|i|self.flag_key(i)).chain(self.restored_checked.iter().cloned()).collect();
+        let checked=(0..next.flags.len()).filter(|i| {
+            checked.contains(&next.flag_key(*i)) || next.flags[*i].segs.iter().all(|j| {
+                let row=&next.rows[*j];
+                self.rows.iter().enumerate().any(|(old_i,old)|old.t0==row.t0&&old.t1==row.t1&&old.text.trim()==row.text&&old.text!=old.orig &&
+                    !self.flags.iter().enumerate().any(|(k,f)| f.segs.contains(&old_i)&&f.snippet==next.flags[*i].snippet&&self.is_open(k)))
+            })
+        }).map(|i|next.flag_key(i)).collect();
+        let state=revisione::ReviewState{referto:self.referto,view:self.view,checked};
+        revisione::save_review(&self.source, self.secs, &self.lang, &self.segments(), &self.names, self.summary.as_ref(), &state)
+    }
+
+    /// Un solo esportatore per telefono e computer, compresi nome e avviso dei sottotitoli.
+    pub fn export(&self, ext: &str) -> (String, Vec<u8>) {
+        let segments = self.segments();
+        let names: &[String] = if self.write_voices { &self.names } else { &[] };
+        let summary = self.summary_sections().filter(|_| self.summary_on_top);
+        let draft = self.draft_line();
+        let bytes = match ext {
+            "docx" => trascrizione::docx_bytes_full(&self.source, self.secs, &self.lang, &segments, names, summary.as_ref(), draft.as_deref()),
+            "srt" => revisione::srt_bytes_full(&segments, names, draft.as_deref()),
+            "vtt" => revisione::vtt_bytes_full(&segments, names, draft.as_deref()),
+            _ => trascrizione::text_bytes_full(&self.source, self.secs, &self.lang, &segments, names, summary.as_ref(), draft.as_deref()),
+        };
+        let stem = self.source.file_stem().and_then(|s| s.to_str()).unwrap_or("trascrizione");
+        let tag = if draft.is_some() { "bozza" } else { "rivisto" };
+        (format!("{stem} - {tag}.{ext}"), bytes)
     }
 
     /// Cerca i punti da controllare sul testo di whisper (le correzioni non li cambiano).
@@ -121,7 +174,7 @@ impl Review {
             self.flags.extend(revisione::find_referto(&orig).into_iter().filter(|f| f.segs.iter().all(|s| !taken.contains(s))));
             self.flags.sort_by_key(|f| f.segs.first().copied().unwrap_or(0));
         }
-        self.dismissed.clear();
+        self.dismissed = (0..self.flags.len()).filter(|i|self.restored_checked.contains(&self.flag_key(*i))).collect();
         self.cur = 0;
     }
 
@@ -344,7 +397,7 @@ impl App {
         };
         let secs = saved.secs;
         self.notice = None;
-        let mut rv = Review::new(&path, secs, saved.lang, saved.segments, saved.names, saved.summary);
+        let mut rv = Review::from_saved(&path, saved);
         if self.transcribe.glossario_vet {
             rv.referto = true;
             rv.detect();
@@ -381,10 +434,10 @@ impl App {
             if r.bars.is_some() {
                 // Con l'onda si trovano anche le frasi nel silenzio; le scelte già fatte restano valide perché
                 // i punti già trovati non cambiano ordine (si aggiungono soltanto).
-                let before: Vec<(Kind, Vec<usize>)> = r.flags.iter().map(|f| (f.kind, f.segs.clone())).collect();
-                let dismissed: Vec<(Kind, Vec<usize>)> = r.dismissed.iter().filter_map(|i| before.get(*i).cloned()).collect();
+                let before: Vec<(Kind, Vec<usize>, String)> = r.flags.iter().map(|f| (f.kind, f.segs.clone(), f.snippet.clone())).collect();
+                let dismissed: Vec<(Kind, Vec<usize>, String)> = r.dismissed.iter().filter_map(|i| before.get(*i).cloned()).collect();
                 r.detect();
-                r.dismissed = r.flags.iter().enumerate().filter(|(_, f)| dismissed.iter().any(|(k, s)| *k == f.kind && *s == f.segs)).map(|(i, _)| i).collect();
+                r.dismissed.extend(r.flags.iter().enumerate().filter(|(_, f)| dismissed.iter().any(|(k, s, t)| *k == f.kind && *s == f.segs && *t == f.snippet)).map(|(i, _)| i));
             }
         }
     }
@@ -482,33 +535,21 @@ impl App {
     pub fn review_save(&mut self) {
         let dest = self.dest.clone();
         let Some(r) = self.review.as_mut() else { return };
-        let segments = r.segments();
         let ext = FORMATS[r.format.min(FORMATS.len() - 1)].1;
-        // Con l'interruttore spento il file esce senza chi parla (i nomi restano nella revisione).
-        let names: &[String] = if r.write_voices { &r.names } else { &[] };
-        // Il riassunto va solo nel Word e nel testo: i sottotitoli restano come sono.
-        let summary = r.summary_sections().filter(|_| r.summary_on_top);
-        // Un referto con punti ancora da riascoltare esce come bozza, con l'elenco dei punti in cima.
         let draft = r.draft_line();
-        let bytes = match ext {
-            "docx" => trascrizione::docx_bytes_full(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref(), draft.as_deref()),
-            "txt" => trascrizione::text_bytes_full(&r.source, r.secs, &r.lang, &segments, names, summary.as_ref(), draft.as_deref()),
-            "srt" => revisione::srt_bytes(&segments, names),
-            _ => revisione::vtt_bytes(&segments, names),
-        };
+        let (name, bytes) = r.export(ext);
         let dir = dest.or_else(|| r.source.parent().filter(|p| !p.as_os_str().is_empty()).map(Path::to_path_buf)).unwrap_or_else(|| PathBuf::from("."));
-        let stem = r.source.file_stem().and_then(|s| s.to_str()).unwrap_or("trascrizione");
-        let tag = if draft.is_some() { "bozza" } else { "rivisto" };
-        let mut out = dir.join(format!("{stem} - {tag}.{ext}"));
+        let mut out = dir.join(&name);
+        let stem = Path::new(&name).file_stem().and_then(|s| s.to_str()).unwrap_or("trascrizione");
         let mut n = 2;
         while out.exists() {
-            out = dir.join(format!("{stem} - {tag} ({n}).{ext}"));
+            out = dir.join(format!("{stem} ({n}).{ext}"));
             n += 1;
         }
         match std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&out, bytes)) {
             Ok(()) => {
                 // Le frasi corrette restano: la prossima volta si riparte da qui.
-                let _ = revisione::save_with(&r.source, r.secs, &r.lang, &segments, &r.names, r.summary.as_ref());
+                let _ = r.persist();
                 let name = out.file_name().and_then(|n| n.to_str()).unwrap_or("");
                 r.note = match r.open_count() {
                     n if draft.is_some() => format!("Salvato come bozza ({n} da riascoltare): {name}"),
@@ -638,6 +679,43 @@ mod tests {
         assert_eq!(r.draft_points(), [2]);
         r.dismissed.insert(2);
         assert!(!r.is_draft() && r.draft_line().is_none());
+    }
+
+    #[test]
+    fn report_confirmations_survive_reopen_without_confirming_other_sentences() {
+        let path=std::env::temp_dir().join(format!("cedro-referto-{}-{}.wav",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let mut r=Review::new(&path,20.0,"it".into(),vec![seg(0,"Cane di otto anni. Massa di 2.5 cm. La lesione non è capsulata.")],vec![],None);
+        r.referto=true;r.view=2;r.detect();assert_eq!(r.open_count(),3);
+        r.fix(0);r.persist().unwrap();
+        let mut r=Review::from_saved(&path,revisione::load(&path).unwrap());
+        assert!(r.referto);assert_eq!(r.view,2);assert_eq!(r.open_count(),2);
+        r.bars=Some(vec![0.5;600]);r.detect();assert_eq!(r.open_count(),2,"l'onda non perde le conferme");
+        r.rows[0].text="Cane di otto anni. Massa di 3.5 cm. La lesione non è capsulata.".into();
+        assert_eq!(r.open_count(),1);r.persist().unwrap();
+        let mut r=Review::from_saved(&path,revisione::load(&path).unwrap());
+        assert_eq!(r.open_count(),1,"una correzione non approva altre frasi nello stesso segmento");
+        let f=r.flag_of(0).unwrap();assert_eq!(r.flags[f].kind,Kind::Meaning);r.fix(f);r.persist().unwrap();
+        assert!(!Review::from_saved(&path,revisione::load(&path).unwrap()).is_draft());
+        revisione::store_summary(&path,&crate::riassunto::Stored::default()).unwrap();
+        assert!(!Review::from_saved(&path,revisione::load(&path).unwrap()).is_draft(),"il riassunto conserva le conferme");
+        std::fs::remove_file(revisione::review_path(&path)).unwrap();
+    }
+
+    #[test]
+    fn every_export_keeps_draft_name_and_warning_until_confirmed() {
+        use std::io::Read;
+        let mut r=Review::new(Path::new("referto.wav"),20.0,"it".into(),vec![seg(0,"Tre mitosi in due punto cinque centimetri, non si osserva atipia.")],vec![],None);
+        r.referto=true;r.detect();assert!(r.is_draft());
+        for ext in ["txt","docx","srt","vtt"] {
+            let (name,bytes)=r.export(ext);assert_eq!(name,format!("referto - bozza.{ext}"));
+            let text=if ext=="docx" {
+                let mut z=zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();let mut text=String::new();
+                z.by_name("word/document.xml").unwrap().read_to_string(&mut text).unwrap();text
+            }else{String::from_utf8(bytes).unwrap()};
+            assert!(text.contains("BOZZA"),"{ext}: {text}");assert!(text.contains("mitosi"));
+        }
+        for i in 0..r.flags.len(){r.fix(i);}
+        for ext in ["txt","docx","srt","vtt"]{assert_eq!(r.export(ext).0,format!("referto - rivisto.{ext}"));}
     }
 
     #[test]

@@ -22,6 +22,7 @@ struct Shared {
     /// L'audio si sta ancora decodificando: l'orologio è fermo.
     loading: AtomicBool,
     has_audio: AtomicBool,
+    failed: AtomicBool,
     audio_pos: AtomicU64,
     audio_len: AtomicU64,
     audio_rate: AtomicU32,
@@ -47,6 +48,7 @@ impl Shared {
     }
 
     fn set_paused(&self, paused: bool) {
+        let paused=paused||self.failed.load(Ordering::Acquire);
         self.paused.store(paused, Ordering::Relaxed);
         let mut c = self.clock.lock().unwrap_or_else(|e| e.into_inner());
         if paused {
@@ -66,6 +68,14 @@ impl Shared {
         if c.1.is_some() {
             c.1 = Some(Instant::now());
         }
+    }
+
+    #[cfg(any(target_os="android",test))]
+    fn fail_audio(&self) {
+        self.failed.store(true,Ordering::Release);
+        self.loading.store(false,Ordering::Relaxed);
+        self.set_paused(true);
+        (self.wake)();
     }
 
     fn finish(&self) {
@@ -92,6 +102,7 @@ impl Player {
             ended: AtomicBool::new(false),
             loading: AtomicBool::new(true),
             has_audio: AtomicBool::new(false),
+            failed: AtomicBool::new(false),
             audio_pos: AtomicU64::new(0),
             audio_len: AtomicU64::new(0),
             audio_rate: AtomicU32::new(44_100),
@@ -117,7 +128,7 @@ impl Player {
 
     /// Vero mentre suona (anche quando sta ancora preparando l'audio).
     pub fn playing(&self) -> bool {
-        !self.sh.paused.load(Ordering::Relaxed) && !self.sh.ended.load(Ordering::Relaxed)
+        !self.failed() && !self.sh.paused.load(Ordering::Relaxed) && !self.sh.ended.load(Ordering::Relaxed)
     }
 
     /// Velocità di ascolto in percento (100 = normale; l'audio si ricampiona, quindi cambia anche il tono).
@@ -130,6 +141,8 @@ impl Player {
         self.sh.volume.store(percent.min(100), Ordering::Relaxed);
     }
 
+    pub fn failed(&self) -> bool { self.sh.failed.load(Ordering::Acquire) }
+
     pub fn loading(&self) -> bool {
         self.sh.loading.load(Ordering::Relaxed)
     }
@@ -141,6 +154,7 @@ impl Player {
 
     /// Play o pausa; finito il file, ricomincia dall'inizio.
     pub fn toggle(&mut self) {
+        if self.failed() { return; }
         if self.sh.ended.swap(false, Ordering::Relaxed) {
             self.seek(0.0);
             self.sh.set_paused(false);
@@ -152,6 +166,7 @@ impl Player {
 
     /// Salta al secondo `secs`.
     pub fn seek(&mut self, secs: f64) {
+        if self.failed() { return; }
         let secs = self.duration.map_or(secs, |d| secs.min((d - 0.05).max(0.0))).max(0.0);
         self.sh.ended.store(false, Ordering::Relaxed);
         self.sh.jump(secs);
@@ -191,9 +206,16 @@ impl Drop for Player {
 #[cfg(any(windows, target_os = "linux", target_os = "android"))]
 const STALLED: Duration = Duration::from_millis(1500);
 
+fn prepare_audio(path:&Path,sh:&Arc<Shared>,decode:impl FnOnce(&Path,&dyn Fn()->bool)->Result<crate::audio::Pcm,String>)->Option<crate::audio::Pcm> {
+    let pcm=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||decode(path,&||sh.stop.load(Ordering::Relaxed)))).ok().and_then(Result::ok);
+    if sh.stop.load(Ordering::Relaxed){return None;}
+    pcm.filter(|p|!p.samples.is_empty()&&p.channels>0)
+}
+
 fn audio_thread(path: &Path, sh: Arc<Shared>) {
     // Un file che manda in crisi il decodificatore: si va avanti senza audio (se no «carico» per sempre).
-    let pcm = std::panic::catch_unwind(|| crate::audio::decode(path)).ok().and_then(|r| r.ok()).filter(|p| !p.samples.is_empty() && p.channels > 0);
+    let pcm=prepare_audio(path,&sh,crate::audio::decode_cancellable);
+    if sh.stop.load(Ordering::Relaxed){return;}
     #[cfg(any(windows, target_os = "linux", target_os = "android"))]
     if let Some(pcm) = pcm {
         let pcm = Arc::new(pcm);
@@ -241,6 +263,12 @@ fn audio_thread(path: &Path, sh: Arc<Shared>) {
     }
     #[cfg(not(any(windows, target_os = "linux", target_os = "android")))]
     let _ = pcm;
+    #[cfg(target_os="android")]
+    {
+        // Un orologio virtuale non è prova che AAudio stia suonando: sul telefono si ferma e si dice.
+        sh.fail_audio();
+        return;
+    }
     // Niente audio (o niente casse): corre l'orologio, così il video si vede lo stesso.
     sh.loading.store(false, Ordering::Relaxed);
     if !sh.paused.load(Ordering::Relaxed) {
@@ -290,7 +318,8 @@ where
                     data.iter_mut().for_each(|s| *s = silent);
                     return;
                 }
-                let mut pos = sh.audio_pos.load(Ordering::Relaxed);
+                let start = sh.audio_pos.load(Ordering::Relaxed);
+                let mut pos = start;
                 let step = step * sh.speed.load(Ordering::Relaxed) as u64 / 100;
                 let gain = sh.volume.load(Ordering::Relaxed) as f32 / 100.0;
                 for frame in data.chunks_mut(out_ch) {
@@ -306,7 +335,7 @@ where
                     }
                     pos += step;
                 }
-                sh.audio_pos.store(pos, Ordering::Relaxed);
+                let _ = sh.audio_pos.compare_exchange(start,pos,Ordering::Relaxed,Ordering::Relaxed);
             },
             |err| eprintln!("audio dell'anteprima: {err}"),
             None,
@@ -370,5 +399,94 @@ fn video_thread(path: &Path, from: f64, generation: u64, sh: Arc<Shared>) {
     // Senza audio la fine del video è la fine del file.
     if alive(&sh, generation) && !sh.has_audio.load(Ordering::Relaxed) && !sh.loading.load(Ordering::Relaxed) {
         sh.finish();
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(unix)]
+    fn player_lock_holder_child() {
+        use std::os::fd::AsRawFd;
+        let Some(dir)=std::env::var_os("CEDRO_PLAYER_LOCK_TEST").map(PathBuf::from) else{return};
+        let file=Arc::new(std::fs::File::open(dir.join("data")).unwrap());let fd=file.as_raw_fd();
+        let alias=dir.join("child-alias");std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&alias).unwrap();
+        crate::input_file::register(&alias,fd,file);
+        let source=crate::input_file::File::open(alias).unwrap();
+        let _guard=source.lock_native_in(&dir.join("locks"),||false).unwrap();
+        std::fs::write(dir.join("held"),b"held").unwrap();
+        let deadline=Instant::now()+Duration::from_secs(10);
+        while !dir.join("release").exists(){assert!(Instant::now()<deadline);std::thread::sleep(Duration::from_millis(20));}
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn closing_player_cancels_native_wait_before_other_process_releases_lock() {
+        use std::os::fd::AsRawFd;
+        let dir=std::env::temp_dir().join(format!("cedro-player-lock-{}",std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();std::fs::write(dir.join("data"),b"unsupported audio fixture").unwrap();
+        struct Child(std::process::Child);
+        impl Drop for Child {fn drop(&mut self){let _=self.0.kill();let _=self.0.wait();}}
+        let mut child=Child(std::process::Command::new(std::env::current_exe().unwrap()).args(["--exact","ui::player::tests::player_lock_holder_child","--nocapture"]).env("CEDRO_PLAYER_LOCK_TEST",&dir).spawn().unwrap());
+        let deadline=Instant::now()+Duration::from_secs(5);
+        while !dir.join("held").exists(){assert!(Instant::now()<deadline);std::thread::sleep(Duration::from_millis(20));}
+        let source=Arc::new(std::fs::File::open(dir.join("data")).unwrap());let fd=source.as_raw_fd();
+        let alias=dir.join("parent-alias");std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&alias).unwrap();crate::input_file::register(&alias,fd,source);
+        let sh=Arc::new(Shared {
+            stop:AtomicBool::new(false),paused:AtomicBool::new(false),ended:AtomicBool::new(false),
+            loading:AtomicBool::new(true),has_audio:AtomicBool::new(false),failed:AtomicBool::new(false),
+            audio_pos:AtomicU64::new(0),audio_len:AtomicU64::new(0),audio_rate:AtomicU32::new(16000),
+            speed:AtomicU32::new(100),volume:AtomicU32::new(100),generation:AtomicU64::new(0),
+            clock:Mutex::new((0.0,None)),frame:Mutex::new(None),wake:Arc::new(||{}),
+        });
+        let player=Player{path:alias.clone(),duration:None,video:false,sh:sh.clone()};
+        let (entered_tx,entered_rx)=std::sync::mpsc::channel();let (done_tx,done_rx)=std::sync::mpsc::channel();
+        let work=dir.clone();
+        let waiter=std::thread::spawn(move || {
+            let pcm=prepare_audio(&alias,&sh,|path,cancel|crate::audio::decode_with_native(path,cancel,|path,cancel| {
+                entered_tx.send(()).unwrap();
+                let file=crate::input_file::File::open(path).map_err(|e|e.to_string())?;
+                let _guard=file.lock_native_in(&work.join("locks"),||cancel()||crate::input_file::cancelled()).map_err(|e|e.to_string())?;
+                std::fs::write(work.join("waiter-acquired"),b"unexpected").unwrap();
+                Ok(crate::audio::Pcm::new(16000,1,vec![0]))
+            }));
+            done_tx.send(pcm.is_none()).unwrap();
+        });
+        entered_rx.recv_timeout(Duration::from_secs(2)).unwrap();drop(player);
+        assert!(done_rx.recv_timeout(Duration::from_secs(2)).unwrap(),"player chiuso ancora in attesa");
+        assert!(!dir.join("waiter-acquired").exists());assert!(!dir.join("release").exists());waiter.join().unwrap();
+        std::fs::write(dir.join("release"),b"release").unwrap();assert!(child.0.wait().unwrap().success());
+        assert!(!dir.join("waiter-acquired").exists(),"decodifica ripartita dopo chiusura");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn failed_audio_cannot_resume_or_seek_a_virtual_clock() {
+        // Stato di un player già decodificato: nessun dispositivo/thread audio nel test.
+        // fail_audio è la stessa transizione usata dal ramo AAudio su errore.
+        let sh=Arc::new(Shared {
+            stop:AtomicBool::new(false),paused:AtomicBool::new(false),ended:AtomicBool::new(false),
+            loading:AtomicBool::new(false),has_audio:AtomicBool::new(false),failed:AtomicBool::new(false),
+            audio_pos:AtomicU64::new(0),audio_len:AtomicU64::new(0),audio_rate:AtomicU32::new(16000),
+            speed:AtomicU32::new(100),volume:AtomicU32::new(100),generation:AtomicU64::new(0),
+            clock:Mutex::new((7.0,Some(Instant::now()-Duration::from_secs(1)))),frame:Mutex::new(None),wake:Arc::new(||{}),
+        });
+        let mut p=Player{path:PathBuf::from("audio-fallito.wav"),duration:Some(60.0),video:false,sh};
+        p.sh.fail_audio();
+        let at=p.position();assert!(at>=8.0);assert!(p.failed());assert!(!p.playing());assert!(!p.loading());
+        for target in [18.0,0.0,45.0] {
+            p.toggle();p.seek(target);p.toggle();
+            // Anche una ripresa interna concorrente non deve riaccendere il clock.
+            p.sh.set_paused(false);
+            assert!(!p.playing());assert_eq!(p.position(),at);
+            assert!(p.sh.clock.lock().unwrap().1.is_none());
+        }
+        p.sh.ended.store(true,Ordering::Relaxed);p.toggle();
+        assert!(!p.playing());assert_eq!(p.position(),at);
+        std::thread::sleep(Duration::from_millis(20));
+        assert_eq!(p.position(),at,"avanzamento apparente dopo failure → Play/seek");
     }
 }

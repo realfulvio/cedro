@@ -323,7 +323,8 @@ fn transcribe(files: &[OsString], args: &[OsString], opts: &cedro::Options) -> i
             Some(v) => println!("{} {}: {}", line.key, trascrizione::speaker_name(v as usize), line.text),
             None => println!("{} {}", line.key, cedro::i18n::tr(&line.text)),
         },
-        Event::Percent { .. } => {}
+        Event::Audio { .. } | Event::Segment(_) => {},
+                    Event::Percent { .. } => {}
         Event::Finished { path, result } => match result {
             Ok((out, msg)) => println!("OK {} -> {} ({})", path.display(), out.display(), cedro::i18n::tr(&msg)),
             Err(e) => {

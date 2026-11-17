@@ -58,7 +58,7 @@ fn entry_name(rel: &Path) -> String {
 /// Converte lo ZIP `path` secondo `action` (`z-webp`, `z-mp3`…) e scrive il nuovo ZIP in `dir`.
 pub fn convert(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Result<(PathBuf, String), String> {
     let (kinds, format) = target(action).ok_or_else(|| format!("azione sconosciuta: {action}"))?;
-    let mut zip = zip::ZipArchive::new(fs::File::open(path).map_err(|e| e.to_string())?).map_err(|e| format!("archivio non letto: {e}"))?;
+    let mut zip = zip::ZipArchive::new(crate::input_file::File::open(path).map_err(|e| e.to_string())?).map_err(|e| format!("archivio non letto: {e}"))?;
     if zip.len() > MAX_FILES {
         return Err(format!("l'archivio ha troppi file ({}): il limite è {MAX_FILES}", zip.len()));
     }
@@ -75,7 +75,7 @@ pub fn convert(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Option
 
 #[allow(clippy::too_many_arguments)]
 fn convert_in(
-    zip: &mut zip::ZipArchive<fs::File>,
+    zip: &mut zip::ZipArchive<crate::input_file::File>,
     source: &Path,
     action: &str,
     kinds: &[Kind],

@@ -46,10 +46,10 @@ pub struct Opzioni {
 /// I formati di un tipo di file: quelli del pannello Conversioni del computer.
 pub fn formati(kind: Kind) -> Vec<Slice> {
     let s = cedro::panel_slices(kind);
-    s.iter().copied().filter(|s| s.id != "none").collect()
+    s.iter().chain(conversioni::tools(kind)).copied().filter(|s| s.id != "none").collect()
 }
 
-pub const MODELLI: [&str; 4] = ["%nome%", "%data%", "%ora%", "%ext%"];
+pub const MODELLI: [&str; 5] = ["%nome%", "%data%", "%ora%", "%ext%", "%caso%"];
 const DPI: [u32; 4] = [100, 144, 200, 300];
 const LINGUE_OCR: [(&str, &str); 3] = [("auto", "Automatica"), ("it", "Italiano"), ("en", "English")];
 
@@ -79,7 +79,7 @@ impl App {
         let f = formati(kind);
         let id = f.get(o.formato).map(|s| s.id).unwrap_or("none");
         // Il nome a modello sta nelle Impostazioni: qui non si ripete.
-        conversioni::option_defs(kind, id).into_iter().filter(|d| d.opt != conversioni::Opt::NameTemplate && conversioni::shown(d, &o.valori)).collect()
+        crate::labs::defs(kind, id, self.casa.coda.iter().filter(|v| v.scelto && v.kind == kind && o.da_casa.is_some()).map(|v| v.path.as_path()).chain(self.file.iter().filter(|_| o.da_casa.is_none()).map(|f| f.path.as_path()))).into_iter().filter(|d| d.opt != conversioni::Opt::NameTemplate && conversioni::shown(d, &o.valori)).collect()
     }
 
     /// Il testo di un campo di «Altre opzioni» o delle Impostazioni.
@@ -114,7 +114,17 @@ impl App {
                 } else if let Some(o) = self.opzioni.take() {
                     match o.da_casa {
                         Some(k) => self.da_opzioni(k, o.formato, o.valori),
-                        None => self.opzioni_salvate = Some(o.valori),
+                        None => {
+                            if self.tema.is_cedro() {
+                                if let Some(op) = formati(self.kind).get(o.formato) {
+                                    self.modo = u8::from(!conversioni::formats(self.kind).iter().any(|s| s.id == op.id));
+                                    self.scelta = self.fette().iter().position(|s| s.id == op.id);
+                                    self.foglio = false;
+                                    self.dal_foglio = true;
+                                }
+                            }
+                            self.opzioni_salvate = Some(o.valori);
+                        },
                     }
                 }
                 self.scorri = 0.0;
@@ -142,7 +152,8 @@ impl App {
                 let Some(s) = f.get(o.formato).copied() else { return Effetto::Niente };
                 let opts = conversioni::options_from(&o.valori);
                 self.opzioni_salvate = Some(o.valori);
-                return self.avvia_con(s.id, s.label, true, Some(Box::new(opts)), Vec::new());
+                let conv = cedro::conversioni::formats(kind).iter().any(|f| f.id == s.id);
+                return self.avvia_con(s.id, s.label, conv, Some(Box::new(opts)), Vec::new());
             }
             OpzAz::Formato(i) => {
                 if let Some(o) = self.opzioni.as_mut() {
@@ -227,17 +238,18 @@ impl App {
     fn gettoni(&mut self, p: &mut Painter, x: f32, y: f32, w: f32, voci: &[(String, bool)], scelta: Option<usize>, az: impl Fn(usize) -> Azione, vista: super::R) -> f32 {
         let pal = self.pal();
         let (mut cx, mut cy) = (x, y);
+        if voci.is_empty() { return 0.0; }
         for (i, (t, nuovo)) in voci.iter().enumerate() {
-            let tw = p.measure(t, 15.0, Weight::Semibold) + 28.0 + if *nuovo { p.measure("NUOVO", 9.0, Weight::Semibold) + 6.0 } else { 0.0 };
+            let tw = (p.measure(t, 15.0, Weight::Semibold) + 28.0 + if *nuovo { p.measure("NUOVO", 9.0, Weight::Semibold) + 6.0 } else { 0.0 }).max(TOCCO).min(w);
             if cx + tw > x + w && cx > x {
                 cx = x;
                 cy += 50.0;
             }
             let on = scelta == Some(i);
             let a = az(i);
-            let rc = (cx, cy, tw, 42.0);
+            let rc = (cx, cy, tw, TOCCO);
             p.rrect(rc.0, rc.1, rc.2, rc.3, 21.0, Some(if on { pal.alt } else if self.premuto == Some(a) { mix(pal.surface, pal.primary, 0.08) } else { pal.surface }), Some((if on { pal.primary } else { pal.border }, if on { 2.0 } else { 1.5 })));
-            let lw = p.measure(t, 15.0, Weight::Semibold);
+            let lw = p.measure(t, 15.0, Weight::Semibold).min((rc.2 - 28.0).max(1.0));
             p.text(t, rc.0 + 14.0, rc.1, lw + 4.0, rc.3, 15.0, Weight::Semibold, if on { pal.primary } else { pal.text }, Align::Left);
             if *nuovo {
                 p.text("NUOVO", rc.0 + 18.0 + lw, rc.1, rc.2 - lw - 20.0, rc.3, 9.0, Weight::Semibold, pal.ok, Align::Left);
@@ -245,7 +257,7 @@ impl App {
             self.colpo(rc, a, vista);
             cx += tw + 8.0;
         }
-        cy + 42.0 - y
+        cy + TOCCO - y
     }
 
     /// Una riga con meno, valore e più.
@@ -441,5 +453,40 @@ impl App {
         self.scorri_max = (y + 16.0 + self.scorri - h).max(0.0);
         self.scorri = self.scorri.min(self.scorri_max);
         self.tieni_campo(vista);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cedro::ui::gfx::{Fonts, GlyphCache};
+    use cedro::ui::theme::ThemeId;
+    use crate::ui::Forma;
+
+    #[test]
+    fn gettoni_brevi_rispettano_bersagli_righe_e_altezza() {
+        let mut cache = GlyphCache::new();
+        let mut app = App::new(ThemeId::Cedro);
+        let mut p = Painter::new(360, 640, 1.0, Fonts::for_theme(app.tema), &mut cache);
+        let voci = [("No".into(), false), ("1".into(), false), ("Sì".into(), false)];
+        for w in [48.0, 104.0, 328.0] {
+            app.colpi.clear();
+            let altezza = app.gettoni(&mut p, 16.0, 20.0, w, &voci, None, |i| Azione::Opz(OpzAz::Gettone(i as u8)), (0.0, 0.0, 360.0, 640.0));
+            assert_eq!(app.colpi.len(), voci.len());
+            let mut fondo = 20.0_f32;
+            let mut precedente: Option<crate::ui::R> = None;
+            for (forma, _) in &app.colpi {
+                let Forma::R(r) = forma else { panic!("gettone non rettangolare") };
+                assert!(r.2 >= TOCCO && r.3 >= TOCCO);
+                assert!(r.0 >= 16.0 && r.0 + r.2 <= 16.0 + w);
+                if let Some(prev) = precedente {
+                    assert!(r.1 >= prev.1 + prev.3 || r.0 >= prev.0 + prev.2);
+                }
+                fondo = fondo.max(r.1 + r.3);
+                precedente = Some(*r);
+            }
+            assert_eq!(altezza, fondo - 20.0);
+        }
+        assert_eq!(app.gettoni(&mut p, 16.0, 20.0, 328.0, &[], None, |_| Azione::Niente, (0.0, 0.0, 360.0, 640.0)), 0.0);
     }
 }

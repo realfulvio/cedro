@@ -20,10 +20,14 @@ use cedro::ui::wheel::list;
 use cedro::{Kind, Mode};
 
 pub mod anim;
+mod accessibilita;
 pub mod tinte;
 mod casa;
+mod web;
+mod condivisione;
 pub mod firma;
 mod m3;
+pub mod labs;
 
 /// Quante attività ha questa build (la Firma digitale è l'ultima).
 pub fn attivita_n() -> usize {
@@ -37,18 +41,13 @@ pub use rivedi::{da_controllare, FoglioRiv};
 
 pub type R = (f32, f32, f32, f32);
 
-/// I temi che si possono scegliere (quello del Comune è dell'edizione dell'ente, non del telefono).
-pub const TEMI: [ThemeId; 9] = [
-    ThemeId::Cedro,
-    ThemeId::CedroNotte,
-    ThemeId::CedroBosco,
-    ThemeId::CedroCarta,
-    ThemeId::WindowsEssenziale,
-    ThemeId::PercorsoGuidato,
-    ThemeId::CedroCompatto,
-    ThemeId::BancoDiLavoro,
-    ThemeId::DocumentoAlCentro,
-];
+/// Catalogo Android esplicito, indipendente dal sistema usato per compilare il renderer.
+pub const TEMI: [ThemeId; 9] = cedro::ui::theme::ANDROID_THEMES;
+
+/// La chiave salvata in tema.txt, valida anche nelle anteprime e nei test su host.
+pub fn tema_da_chiave(key: &str) -> ThemeId {
+    ThemeId::from_android_key(key)
+}
 /// Le prime quattro sono le tinte del Cedro di partenza; le altre i temi di prima.
 const TINTE: usize = 4;
 
@@ -81,6 +80,28 @@ pub enum Stato {
     Errore(String),
 }
 
+/// Stato e lista uscite viaggiano insieme: nessun interleaving fra code distinte.
+#[derive(Clone)]
+pub struct Completamento {
+    pub batch:Option<crate::web::Batch>,
+    pub id: u32,
+    pub stato: Stato,
+    pub uscite: Option<Vec<crate::publication::Riga>>,
+    pub sorgente: Option<PathBuf>,
+}
+impl Completamento {
+    pub fn semplice(id:u32,stato:Stato)->Self{Self{batch:None,id,stato,uscite:None,sorgente:None}}
+    pub fn recuperato(id:u32,r:crate::publication::Registro)->Self{
+        let outputs=r.righe();
+        if let Some((path,nome,_))=outputs.first().cloned(){
+            let msg=if outputs.iter().any(|u|u.2.is_some()){format!("{} · {}",r.messaggio,cedro::i18n::tr("Salvataggio incompleto: copie disponibili in Cedro"))}else{r.messaggio};
+            Self{batch:None,id,stato:Stato::Fatto{path,nome,msg},uscite:Some(outputs),sorgente:r.lavoro.sorgente}
+        }else{
+            Self{batch:None,id,stato:Stato::Errore(r.messaggio),uscite:None,sorgente:r.lavoro.sorgente}
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Lavoro {
     pub id: u32,
@@ -108,7 +129,7 @@ pub enum Scheda {
 }
 
 /// Cosa far cercare al selettore di file di Android.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Sorgente {
     Foto,
     Documenti,
@@ -130,12 +151,15 @@ pub enum Sorgente {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Azione {
+    Web(web::WebAz),
     Scheda(Scheda),
     Tessera(usize),
     /// «Altro»: la ruota con tutti i formati.
     Altro,
     Esci,
     Fetta(usize),
+    /// Scelta esplicita nel catalogo del foglio A, senza passare dalla ruota.
+    FoglioFormato(u8, usize),
     Modo(u8),
     Vai,
     Cursore,
@@ -150,12 +174,17 @@ pub enum Azione {
     CopiaInfo,
     /// L'icona sulla scheda di un lavoro non riuscito: copia l'errore con tutti i dettagli.
     CopiaErrore(u32),
+    CopiaRapporto(u32),
     IndietroFoglio,
     ApriScelta,
     ChiudiScelta,
     Sorgente(Sorgente),
     Recente(usize),
     Apri(u32),
+    Annulla(u32),
+    ApriUscita(u32, usize),
+    CondividiUscita(u32, usize),
+    ErroreUscita(u32, usize),
     Condividi(u32),
     Svuota,
     /// Le schermate dei PDF.
@@ -174,12 +203,17 @@ pub enum Azione {
     Casa(casa::CasaAz),
     /// La firma digitale: la sezione e il visualizzatore.
     Firma(firma::FirmaAz),
-    /// Un'area che non fa niente ma ferma il tocco.
+    /// Laboratorio: anteprima e caso, senza I/O nel loop UI.
+    Labs(labs::LabAz),
+    Pacchetto,
+    /// Ferma il tocco senza compiere azioni.
     Niente,
 }
 
 /// Un lavoro da far partire col motore.
 pub struct Compito {
+    pub voce: crate::worker::Voce,
+    pub web: Option<crate::web::Scelte>,
     pub id: u32,
     pub file: PathBuf,
     pub azione: &'static str,
@@ -190,6 +224,8 @@ pub struct Compito {
 }
 
 pub enum Effetto {
+    SalvaRete,
+    Annulla(u32),
     Niente,
     /// Più lavori, uno dopo l'altro (il pulsante grande della finestra principale).
     Tanti(Vec<Compito>),
@@ -202,13 +238,14 @@ pub enum Effetto {
     Ridisegna,
     /// Da eseguire col motore.
     /// `opts`: le scelte delle schermate (None = quelle di sempre); `unisci`: i PDF da unire, in ordine, con le pagine.
-    Converti { id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)> },
+    Converti { voce:crate::worker::Voce, web:Option<crate::web::Scelte>, id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)> },
     /// Prova la password del PDF: se va, se ne fa una copia senza.
     Sblocca(String),
     /// Legge l'onda dell'audio di una revisione (percorso, durata).
     OndaRevisione(PathBuf, f64),
     /// Le impostazioni sono cambiate: vanno ricordate (`imp` nel motore, modello e «se esiste già» qui).
     SalvaImpostazioni,
+    SalvaCaso,
     /// Scrive un file nuovo (la revisione salvata) e lo consegna come il risultato del lavoro `id`.
     Scrivi { id: u32, nome: String, dati: Vec<u8> },
     /// Chiude Cedro: si torna all'app di prima.
@@ -304,63 +341,24 @@ fn righe_link(path: &Path) -> Vec<&'static Riga> {
 
 /// Le azioni da mettere nelle tessere per un tipo di file: solo quelle che il motore sa fare.
 fn righe(kind: Kind) -> Vec<&'static Riga> {
-    static IMG: [Riga; 10] = [
-        r("jpeg", "JPG", "Più leggera", true),
-        r("png", "PNG", "Senza perdita", true),
-        r("webp", "WebP", "Per il web", true),
-        r("avif", "AVIF", "Ancora più leggera", true),
-        r("jxl", "JPEG XL", "Il JPEG nuovo", true),
-        r("pdf", "PDF", "Un foglio", true),
-        r("compress", "Comprimi", "Meno spazio", false),
-        r("ocr", "Testo", "Riconosci scritte", false),
-        r("half", "Dimezza", "Metà dimensioni", false),
-        rn("strip", "Togli GPS", "Luogo, data, fotocamera", false),
-    ];
-    static PDF: [Riga; 11] = [
-        r("docx", "Word", "Con testo", true),
-        r("xlsx", "Excel", "Le tabelle", true),
-        r("txt", "Testo", "Estrae le parole", true),
-        r("jpg", "JPG", "Una per pagina", true),
-        r("merge", "Unisci", "Con altri PDF", false),
-        r("split", "Dividi", "In più file", false),
-        r("pages", "Pagine", "Ruota, togli, numeri", false),
-        r("compress", "Comprimi", "Meno spazio", false),
-        r("ocr", "Leggi", "Riconosci scritte", false),
-        r("png", "PNG", "Una per pagina", true),
-        rn("firme", "Firme", "Verifica chi ha firmato", false),
-    ];
-    static ARC: [Riga; 6] = [
-        r("z-webp", "Foto in WebP", "Le immagini dello ZIP", false),
-        r("z-jpeg", "Foto in JPEG", "Le immagini dello ZIP", false),
-        r("z-png", "Foto in PNG", "Le immagini dello ZIP", false),
-        r("z-mp3", "Audio in MP3", "L'audio dello ZIP", false),
-        r("z-wav", "Audio in WAV", "L'audio dello ZIP", false),
-        r("z-pdf", "Documenti in PDF", "Word, testo, foto", false),
-    ];
-    static TXT: [Riga; 3] = [r("pdf", "PDF", "Da stampare", true), r("html", "HTML", "Per il web", true), r("md", "Markdown", "Testo con segni", true)];
-    static AUD: [Riga; 6] = [
-        r("mp3", "MP3", "Più leggero", true),
-        r("wav", "WAV", "Senza compressione", true),
-        r("flac", "FLAC", "Senza perdita, leggero", true),
-        r("opus", "Opus", "Il più leggero", true),
-        r("aiff", "AIFF", "Per Mac e studi", true),
-        r("trascrivi", "Testo", "Dalla voce, offline", false),
-    ];
-    static VID: [Riga; 3] = [r("mp4", "MP4", "Più leggero", true), r("mp3", "Solo audio", "MP3 dal video", false), r("trascrivi", "Testo", "Dalla voce, offline", false)];
-    static DOC: [Riga; 1] = [r("pdf", "PDF", "Da documento", true)];
-    let tutte: &'static [Riga] = match kind {
-        Kind::Image => &IMG,
-        Kind::Pdf => &PDF,
-        Kind::Text => &TXT,
-        Kind::Audio => &AUD,
-        Kind::Video => &VID,
-        Kind::Doc => &DOC,
-        Kind::Archive => &ARC,
-        Kind::Other => &[],
-    };
-    let ids: Vec<&'static str> = [Mode::Convert, Mode::Tools].into_iter().flat_map(|m| list(kind, m)).map(|s| s.id).chain(cedro::panel_slices(kind).iter().map(|s| s.id)).collect();
-    // «trascrivi» non è nel catalogo del motore di conversione: è whisper.cpp dentro l'APK; «pages» è la schermata Pagine.
-    tutte.iter().filter(|r| ids.contains(&r.id) || r.id == "trascrivi" || (kind == Kind::Pdf && matches!(r.id, "pages" | "firme"))).collect()
+    static CATALOGO: std::sync::OnceLock<Vec<(Kind,Vec<Riga>)>> = std::sync::OnceLock::new();
+    CATALOGO.get_or_init(||[Kind::Image,Kind::Pdf,Kind::Doc,Kind::Text,Kind::Audio,Kind::Video,Kind::Archive,Kind::Other].into_iter().map(|k|{
+        let mut rows=Vec::new();
+        for (conv,entries) in [(true,cedro::panel_slices(k)),(false,cedro::slices(k,Mode::Tools))] {
+            for entry in entries {
+                if entry.id=="none" || rows.iter().any(|r:&Riga|r.id==entry.id){continue;}
+                let v=cedro::ui::voci::voce(k,entry.id);
+                rows.push(r(entry.id,v.label,v.hint,conv));
+            }
+        }
+        if k==Kind::Pdf {rows.push(r("pages","Pagine","Ruota, togli, numeri",false));rows.push(r("firme","Firme","Verifica chi ha firmato",false));}
+        if matches!(k,Kind::Audio|Kind::Video){rows.push(r("trascrivi","Testo","Dalla voce, offline",false));}
+        (k,rows)
+    }).collect()).iter().find(|(k,_)|*k==kind).map(|(_,rows)|rows.iter().collect()).unwrap_or_default()
+}
+
+fn avviso_motore(msg:&str)->bool {
+    msg.contains("Attenzione:") || msg.contains("restano solo nel file originale") || msg.contains("non è una diagnosi") || msg.contains("non sono stati copiati")
 }
 
 fn sotto_altro(kind: Kind) -> &'static str {
@@ -522,6 +520,10 @@ impl Info {
 }
 
 pub struct App {
+    pub rete:u8,
+    pub download_attesa:Option<crate::web::AttesaDownload>,
+    pub web:crate::web::Scelte,
+    pub componente:Option<crate::web::Componente>,
     pub info: Info,
     pub tema: ThemeId,
     /// Caratteri grandi (+2, come sul computer).
@@ -549,7 +551,14 @@ pub struct App {
     pub modello: usize,
     /// Quante persone parlano (trascrizione): 0 Automatico, 1 una sola (niente riconoscimento), 2..=8.
     pub voci: u8,
+    pub referto: bool,
+    pub tracce: std::collections::HashMap<PathBuf, rivedi::Traccia>,
     pub lavori: Vec<Lavoro>,
+    pub labs: labs::Laboratorio,
+    pub uscite: std::collections::HashMap<u32, Vec<(PathBuf, String, Option<String>)>>,
+    chiavi_lavori: std::collections::HashMap<u32,String>,
+    lavori_rimossi: std::collections::HashSet<String>,
+    annullamenti: std::collections::HashSet<u32>,
     /// L'ultimo errore copiato: la sua icona diventa una spunta.
     copiato: Option<u32>,
     pub recenti: Vec<Recente>,
@@ -586,6 +595,7 @@ pub struct App {
     pub mostra_tastiera: bool,
     /// «Rivedi trascrizione», a tutto schermo.
     pub rivedi: Option<rivedi::Rivedi>,
+    pub anteprima_tras: Option<rivedi::Rivedi>,
     /// «Altre opzioni», e le scelte dell'ultima volta.
     pub opzioni: Option<opzioni::Opzioni>,
     opzioni_salvate: Option<cedro::conversioni::Values>,
@@ -624,6 +634,7 @@ impl App {
 
     pub fn new(tema: ThemeId) -> App {
         App {
+            web:Default::default(),componente:None,rete:0,download_attesa:None,
             info: Info::default(),
             tema,
             grandi: false,
@@ -642,7 +653,13 @@ impl App {
             qualita: 82,
             modello: modello_iniziale(),
             voci: 0,
+            referto: false,
+            tracce: Default::default(),
             lavori: Vec::new(),
+            uscite: Default::default(),
+            chiavi_lavori: Default::default(),
+            lavori_rimossi: Default::default(),
+            annullamenti: Default::default(),
             copiato: None,
             recenti: Vec::new(),
             dal_foglio: false,
@@ -665,9 +682,11 @@ impl App {
             campo: None,
             mostra_tastiera: false,
             rivedi: None,
+            anteprima_tras: None,
             opzioni: None,
             opzioni_salvate: None,
             impostazioni: false,
+            labs: labs::Laboratorio::default(),
             imp: cedro::Settings::default(),
             modello_nome: String::new(),
             esiste: cedro::Exists::Number,
@@ -684,6 +703,8 @@ impl App {
 
     /// Imposta il file: da «Condividi» si parte da «Cosa ne faccio?», dal resto dalla ruota.
     pub fn imposta_file(&mut self, f: Archivio, kind: Kind, da_condivisione: bool) {
+        self.scorri = 0.0;
+        self.scorri_max = 0.0;
         self.file = Some(f);
         self.kind = kind;
         self.modo = 0;
@@ -706,8 +727,41 @@ impl App {
         self.altri.clear();
     }
 
+    pub fn identita(&mut self,id:u32)->Option<crate::publication::Identita>{
+        let l=self.lavori.iter().find(|l|l.id==id)?;
+        let chiave=self.chiavi_lavori.entry(id).or_insert_with(||format!("{:x}-{id:x}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos())).clone();
+        Some(crate::publication::Identita{chiave,origine:l.origine.clone(),etichetta:l.etichetta.clone(),conv:l.conv,quando:l.quando,sorgente:l.sorgente.clone(),caso:self.labs.casi.get(&id).cloned().unwrap_or_default()})
+    }
+
+    pub fn completa(&mut self,e:Completamento){
+        if let Some(outputs)=e.uscite{self.uscite.insert(e.id,outputs);}
+        if let Some(source)=e.sorgente{if let Some(l)=self.lavori.iter_mut().find(|l|l.id==e.id){l.sorgente=Some(source);}}
+        self.finisce(e.id,e.stato);
+    }
+
+    pub fn recupera(&mut self,r:crate::publication::Registro){
+        if self.lavori_rimossi.contains(&r.lavoro.chiave){return;}
+        let id=match self.chiavi_lavori.iter().find(|(_,k)|k.as_str()==r.lavoro.chiave.as_str()).map(|(id,_)|*id){
+            Some(id)=>id,
+            None=>{
+                let (id,_)=self.nuova_importazione();
+                self.chiavi_lavori.insert(id,r.lavoro.chiave.clone());
+                if let Some(l)=self.lavori.iter_mut().find(|l|l.id==id){l.origine=r.lavoro.origine.clone();l.etichetta=r.lavoro.etichetta.clone();l.conv=r.lavoro.conv;l.quando=r.lavoro.quando;}
+                id
+            }
+        };
+        if !r.lavoro.caso.is_empty(){self.labs.casi.insert(id,r.lavoro.caso.clone());}
+        self.completa(Completamento::recuperato(id,r));
+    }
+
     /// Un lavoro è finito (o fallito).
     pub fn finisce(&mut self, id: u32, stato: Stato) -> Effetto {
+        let stato = if matches!(&stato,Stato::Errore(e) if e=="nessun parlato riconosciuto nell'audio") {
+            let secs=self.lavori.iter().find(|l|l.id==id).and_then(|l|l.sorgente.as_ref()).and_then(|p|self.tracce.get(p)).map_or(0.0,|t|t.secs);
+            Stato::Fatto {path:PathBuf::new(),nome:String::new(),msg:format!("{} · {:.1} s. {}",cedro::i18n::tr("Nessun parlato riconosciuto"),secs,cedro::i18n::tr("Prova una registrazione con la voce più vicina al microfono."))}
+        } else {stato};
+        self.fine_trascrizione(id,&stato);
+        self.annullamenti.remove(&id);
         self.salvata(id, &stato);
         if let Some(rv) = self.rivedi.as_mut().filter(|rv| rv.riassunto.as_ref().is_some_and(|r| r.0 == id)) {
             rv.riassunto = None;
@@ -727,10 +781,10 @@ impl App {
         if self.anim.in_moto() || self.firma.busy() || self.firma.viewer.is_some() && !self.fpag.finite {
             return true;
         }
-        if std::mem::take(&mut self.pdf.ridisegna) || self.rivedi.as_ref().is_some_and(|r| r.suona()) || (self.casa_aperta && self.sopra.is_none() && self.lavori.iter().any(|l| l.stato == Stato::InCorso)) {
+        if std::mem::take(&mut self.pdf.ridisegna) {
             return true;
         }
-        self.lavori.iter().any(|l| l.stato == Stato::InCorso) && !self.scelta_file && (self.scheda == Scheda::Lavori || self.scheda == Scheda::Ruota)
+        false
     }
 
     /// Lavori in corso e avanzamento medio in percentuale (None se ancora ignoto), per la notifica.
@@ -742,32 +796,56 @@ impl App {
         (v.len(), medio, nome)
     }
 
-    /// Il cronologico da salvare su disco: i lavori finiti, uno per riga.
+    /// Include gli stati attivi: al riavvio diventano interrotti, mai lavori fantasma.
     pub fn serializza(&self) -> String {
-        let pulisci = |s: &str| s.replace(['\t', '\n'], " ");
-        self.lavori
-            .iter()
-            .filter_map(|l| match &l.stato {
-                Stato::Fatto { path, msg, nome } => Some(format!(
-                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                    l.quando,
-                    pulisci(&l.origine),
-                    pulisci(&l.etichetta),
-                    l.conv as u8,
-                    path.display(),
-                    pulisci(msg),
-                    pulisci(nome),
-                    l.sorgente.as_ref().map(|p| p.display().to_string()).unwrap_or_default(),
-                    l.controlli.map(|n| n.to_string()).unwrap_or_default()
-                )),
-                _ => None,
-            })
-            .take(30)
-            .collect::<Vec<_>>()
-            .join("\n")
+        let rows: Vec<_> = self.lavori.iter().enumerate().filter(|(i,l)|*i<100||l.stato==Stato::InCorso||self.uscite.get(&l.id).is_some_and(|v|v.iter().any(|o|o.2.is_some()))).map(|(_,l)| {
+            let (stato,path,nome,msg)=match &l.stato {
+                Stato::InCorso => ("attivo",PathBuf::new(),String::new(),String::new()),
+                Stato::Errore(e) => ("errore",PathBuf::new(),String::new(),e.clone()),
+                Stato::Fatto {path,nome,msg} => ("fatto",path.clone(),nome.clone(),msg.clone()),
+            };
+            serde_json::json!({"chiave":self.chiavi_lavori.get(&l.id),"quando":l.quando,"origine":l.origine,"etichetta":l.etichetta,"conv":l.conv,"stato":stato,"path":path,"nome":nome,"msg":msg,"sorgente":l.sorgente,"controlli":l.controlli,"caso":self.labs.casi.get(&l.id),"uscite":self.uscite.get(&l.id)})
+        }).collect();
+        let kept:std::collections::HashSet<_>=rows.iter().filter_map(|r|r["chiave"].as_str().map(str::to_string)).collect();
+        let mut rimossi=self.lavori_rimossi.clone();
+        for key in self.chiavi_lavori.values(){if !kept.contains(key.as_str()){rimossi.insert(key.clone());}}
+        serde_json::json!({"versione":2,"lavori":rows,"rimossi":rimossi}).to_string()
+    }
+
+    pub fn nuova_importazione(&mut self) -> (u32, Arc<AtomicU32>) {
+        let id=self.prossimo; self.prossimo+=1;
+        let prog=Arc::new(AtomicU32::new(u32::MAX));
+        self.lavori.insert(0,Lavoro {id,origine:"Importazione".into(),etichetta:"File".into(),conv:false,inizio:Instant::now(),quando:adesso(),stato:Stato::InCorso,prog:prog.clone(),sorgente:None,controlli:None});
+        (id,prog)
+    }
+
+    pub fn errore_importazione(&mut self, e: String) {
+        let id=self.prossimo; self.prossimo+=1;
+        self.lavori.insert(0,Lavoro {id,origine:"Importazione".into(),etichetta:"File".into(),conv:false,inizio:Instant::now(),quando:adesso(),stato:Stato::Errore(e),prog:Arc::new(AtomicU32::new(1000)),sorgente:None,controlli:None});
+        self.scheda=Scheda::Lavori;
+        self.sopra=Some(Scheda::Lavori);
     }
 
     pub fn carica_lavori(&mut self, testo: &str) {
+        if let Ok(v)=serde_json::from_str::<serde_json::Value>(testo) {
+            if let Ok(removed)=serde_json::from_value(v["rimossi"].clone()){self.lavori_rimossi=removed;}
+            if let Some(rows)=v["lavori"].as_array() {
+                for r in rows {
+                    let text=|k: &str|r[k].as_str().unwrap_or_default().to_string();
+                    let id=self.prossimo; self.prossimo+=1;
+                    if let Some(c)=r["caso"].as_str(){self.labs.casi.insert(id,c.to_string());}
+                    if let Some(k)=r["chiave"].as_str(){self.chiavi_lavori.insert(id,k.to_string());}
+                    let stato=match r["stato"].as_str() {
+                        Some("fatto")=>Stato::Fatto {path:PathBuf::from(text("path")),nome:text("nome"),msg:text("msg")},
+                        Some("attivo")=>Stato::Errore("Interrotto dalla chiusura di Cedro: avvia di nuovo il lavoro".into()),
+                        _=>Stato::Errore(text("msg")),
+                    };
+                    if let Ok(outputs)=serde_json::from_value::<Vec<(PathBuf,String,Option<String>)>>(r["uscite"].clone()) { self.uscite.insert(id,outputs); }
+                    self.lavori.push(Lavoro {id,origine:text("origine"),etichetta:text("etichetta"),conv:r["conv"].as_bool().unwrap_or(false),inizio:Instant::now(),quando:r["quando"].as_u64().unwrap_or(0),stato,prog:Arc::new(AtomicU32::new(1000)),sorgente:r["sorgente"].as_str().map(PathBuf::from),controlli:r["controlli"].as_u64().map(|n|n as usize)});
+                }
+            }
+            return;
+        }
         for riga in testo.lines() {
             let c: Vec<&str> = riga.split('\t').collect();
             if c.len() < 6 {
@@ -820,7 +898,13 @@ impl App {
     }
 
     fn fette(&self) -> Vec<cedro::Slice> {
-        let mut l = list(self.kind, if self.modo == 1 { Mode::Tools } else { Mode::Convert });
+        let mut l = if self.tema.is_cedro() {
+            if self.modo == 1 {
+                let mut tools = cedro::slices(self.kind, Mode::Tools).to_vec();
+                if self.kind == Kind::Pdf { tools.push(cedro::Slice { id: "pages", label: "Pagine" }); }
+                tools
+            } else { cedro::conversioni::formats(self.kind).to_vec() }
+        } else { list(self.kind, if self.modo == 1 { Mode::Tools } else { Mode::Convert }) };
         if l.first().is_some_and(|s| s.id == "none") {
             return Vec::new();
         }
@@ -873,6 +957,7 @@ impl App {
     pub fn tocca_giu(&mut self, x: f32, y: f32) -> Effetto {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
         self.premuto = self.trova(x, y);
+        if matches!(self.premuto,Some(Azione::Riv(rivedi::RivAz::Onda(_)))) {self.inizia_onda(x);}
         if self.rivedi.is_some() {
             self.trascina = Some((y, self.scorri_rivedi_ora(), false));
             return Effetto::Ridisegna;
@@ -900,6 +985,7 @@ impl App {
 
     pub fn tocca_muovi(&mut self, x: f32, y: f32) -> Effetto {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
+        if self.muovi_onda(x) {return Effetto::Ridisegna;}
         if self.premuto == Some(Azione::Cursore) {
             self.imposta_cursore(x);
             return Effetto::Ridisegna;
@@ -954,6 +1040,7 @@ impl App {
 
     pub fn tocca_su(&mut self, x: f32, y: f32) -> Effetto {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
+        if let Some(e)=self.fine_onda(x){self.premuto=None;self.trascina=None;self.trascina_x=None;return e;}
         let giu = self.premuto.take();
         if let Some((f, x0, _, s0, true)) = self.trascina_x {
             // L'ultimo tratto arriva con il sollevamento (gli spostamenti veloci vengono raggruppati).
@@ -972,6 +1059,7 @@ impl App {
     }
 
     pub fn tocca_annulla(&mut self) {
+        self.annulla_onda();
         self.premuto = None;
         self.trascina = None;
         self.trascina_x = None;
@@ -997,6 +1085,7 @@ impl App {
         if self.campo.take().is_some() {
             return true;
         }
+        if self.labs.caso_aperto {self.labs.caso_aperto=false;self.scorri=0.0;return true;}
         if self.firma.viewer.is_some() {
             self.azione_firma(firma::FirmaAz::Chiudi);
             return true;
@@ -1061,16 +1150,18 @@ impl App {
         if o.name_template.as_deref().is_none_or(|t| t.trim().is_empty()) && !self.modello_nome.trim().is_empty() {
             o.name_template = Some(self.modello_nome.clone());
         }
-        let opts = Some(o);
+        let opts = Some(Box::new(cedro::caso::opzioni(self.labs.caso.as_ref().map(|c|c.code.as_str()), *o)));
         self.opzioni = None;
         let Some(file) = self.file.clone() else { return Effetto::Niente };
         let lavoro = self.prossimo;
         self.prossimo += 1;
         let prog = Arc::new(AtomicU32::new(u32::MAX));
+        if let Some(c)=&self.labs.caso {self.labs.casi.insert(lavoro,c.code.clone());}
         let sorgente = (id == "trascrivi").then(|| file.path.clone());
         self.lavori.insert(0, Lavoro { id: lavoro, origine: file.nome.clone(), etichetta: etichetta.into(), conv, inizio: Instant::now(), quando: adesso(), stato: Stato::InCorso, prog: prog.clone(), sorgente, controlli: None });
         self.scorri = 0.0;
         self.scheda = Scheda::Lavori;
+        if self.tema.is_cedro() { self.casa_aperta = true; }
         if self.casa_aperta {
             self.sopra = Some(Scheda::Lavori);
         }
@@ -1078,9 +1169,10 @@ impl App {
         self.dal_foglio = false;
         self.pdf.pagina = None;
         self.campo = None;
-        // Per «trascrivi» il campo qualità porta il modello scelto (bit bassi) e quante persone parlano (bit alti).
-        let qualita = if id == "trascrivi" || id == "web-testo" { self.modello as u8 | self.voci.min(8) << 4 } else { self.qualita };
-        Effetto::Converti { id: lavoro, file: file.path, azione: id, qualita, prog, opts, unisci }
+        let qualita = self.qualita;
+        let voce = crate::worker::Voce { modello: self.modello, voci: self.voci.min(8), referto: self.referto };
+        let web=id.starts_with("web-").then(||{let mut w=self.web.clone();w.media_quality=self.qualita;w.voce=voce;w});
+        Effetto::Converti { voce, web, id: lavoro, file: file.path, azione: id, qualita, prog, opts, unisci }
     }
 
     fn attiva(&mut self, a: Azione) -> Effetto {
@@ -1092,6 +1184,7 @@ impl App {
             Azione::Pdf(az) => self.azione_pdf(az),
             Azione::Riv(az) => self.azione_rivedi(az),
             Azione::Opz(az) => self.azione_opzioni(az),
+            Azione::Web(az) => self.azione_web(az),
             Azione::Casa(az) => self.azione_casa(az),
             Azione::Firma(az) => self.azione_firma(az),
             Azione::AltreOpzioni => {
@@ -1123,6 +1216,7 @@ impl App {
             }
             Azione::Tessera(i) => {
                 self.tessera = i;
+                if self.tema.is_cedro() { self.foglio = true; }
                 Effetto::Ridisegna
             }
             Azione::Altro => {
@@ -1132,6 +1226,13 @@ impl App {
                 Effetto::Ridisegna
             }
             Azione::Esci => Effetto::Esci,
+            Azione::FoglioFormato(m, i) => {
+                self.modo = m;
+                self.scelta = Some(i);
+                self.foglio = false;
+                self.dal_foglio = true;
+                Effetto::Ridisegna
+            }
             Azione::Fetta(i) => {
                 if self.file.is_some() {
                     self.scelta = Some(i);
@@ -1167,7 +1268,8 @@ impl App {
                         Some(f) if self.kind == Kind::Pdf && pdf::schermata(f.id).is_some() => self.apri_pagina(pdf::schermata(f.id).unwrap_or(pdf::Pagina::Excel)),
                         Some(f) => {
                             let conv = self.modo == 0;
-                            self.avvia(f.id, f.label, conv)
+                            let opts = self.opzioni_salvate.as_ref().map(|v| Box::new(cedro::conversioni::options_from(v)));
+                            self.avvia_con(f.id, f.label, conv, opts, Vec::new())
                         }
                         None => Effetto::Niente,
                     }
@@ -1209,6 +1311,20 @@ impl App {
                 Some(r) => Effetto::UsaFile(r.path.clone()),
                 None => Effetto::Niente,
             },
+            Azione::Annulla(id) => {
+                if self.lavori.iter().any(|l|l.id==id && l.stato==Stato::InCorso) {
+                    self.annullamenti.insert(id);
+                    Effetto::Annulla(id)
+                } else { Effetto::Niente }
+            }
+            Azione::ErroreUscita(id,i) => match self.uscite.get(&id).and_then(|v|v.get(i)).and_then(|v|v.2.clone()) {Some(e)=>Effetto::Copia(e),None=>Effetto::Niente},
+            Azione::ApriUscita(id,i) | Azione::CondividiUscita(id,i) => {
+                match self.uscite.get(&id).and_then(|v|v.get(i)) {
+                    Some((p,_,_)) if matches!(a,Azione::ApriUscita(..)) => Effetto::Apri(p.clone()),
+                    Some((p,_,_))=>Effetto::Condividi(p.clone()),
+                    None=>Effetto::Niente,
+                }
+            }
             Azione::Apri(id) | Azione::Condividi(id) => {
                 let path = self.lavori.iter().find(|l| l.id == id).and_then(|l| match &l.stato {
                     Stato::Fatto { path, .. } => Some(path.clone()),
@@ -1229,10 +1345,17 @@ impl App {
                 None => Effetto::Niente,
             },
             Azione::Svuota => {
+                for l in &self.lavori{if l.stato!=Stato::InCorso{if let Some(k)=self.chiavi_lavori.get(&l.id){self.lavori_rimossi.insert(k.clone());}}}
                 self.lavori.retain(|l| l.stato == Stato::InCorso);
                 self.scorri = 0.0;
                 Effetto::SalvaLavori
             }
+            Azione::CopiaRapporto(id) => {
+                let text=self.lavori.iter().find(|l|l.id==id).and_then(|l|if let Stato::Fatto{msg,..}=&l.stato{Some(msg.clone())}else{None}).unwrap_or_default();
+                Effetto::Copia(text)
+            }
+            Azione::Labs(az) => self.azione_labs(az),
+            Azione::Pacchetto => self.pacchetto_labs(),
             Azione::Niente => Effetto::Niente,
         }
     }
@@ -1241,6 +1364,15 @@ impl App {
 
     /// Disegna tutto in un'immagine di `w`×`h` dp (il pittore ha già la scala).
     pub fn disegna(&mut self, p: &mut Painter, w: f32, h: f32) {
+        let prima=(self.scorri,self.scorri_rivedi_ora());
+        self.disegna_frame(p,w,h);
+        if (self.scorri,self.scorri_rivedi_ora())!=prima {
+            if let Some(text)=&mut p.accessibility_text{text.clear();}
+            self.disegna_frame(p,w,h);
+        }
+    }
+
+    fn disegna_frame(&mut self, p: &mut Painter, w: f32, h: f32) {
         self.ora = Instant::now();
         self.anim.inizio();
         self.colpi.clear();
@@ -1251,7 +1383,9 @@ impl App {
         p.dx = ml;
         p.dy = mt;
         let (w, h) = (w - ml - mr, h - mt - mb);
-        if self.scelta_file {
+        if self.labs.caso_aperto {
+            self.pagina_caso(p,w,h);
+        } else if self.scelta_file {
             self.pagina_scelta(p, w, h);
         } else if self.firma.viewer.is_some() {
             self.pagina_firma(p, w, h);
@@ -1265,7 +1399,7 @@ impl App {
             self.pagina_pdf(p, pg, w, h);
         } else if self.casa_aperta {
             // Il nuovo Cedro tiene la barra in basso anche su Lavori e Aspetto (senza voce scelta).
-            let hh = if self.tema.is_cedro() && self.sopra.is_some() && !self.casa.guida { h - NAV } else { h };
+            let hh = if self.tema.is_cedro() && self.sopra.is_some() && !self.casa.guida { h - 66.0 } else { h };
             match self.sopra {
                 Some(Scheda::Lavori) => self.pagina_lavori(p, w, hh),
                 Some(Scheda::Aspetto) => self.pagina_aspetto(p, w, hh),
@@ -1275,13 +1409,11 @@ impl App {
             if hh != h {
                 self.barra_cedro(p, w, h, None);
             }
+        } else if self.tema.is_cedro() && self.file.is_some() && self.scheda == Scheda::Ruota {
+            self.foglio_a(p, w, h);
         } else if self.foglio && self.file.is_some() {
-            // Il nuovo Cedro: dopo «Condividi» la ruota, scura, col file al centro.
-            if self.tema.is_cedro() {
-                self.ruota(p, w, h);
-            } else {
-                self.pagina_foglio(p, w, h);
-            }
+            // I temi precedenti conservano il loro foglio compatto.
+            self.pagina_foglio(p, w, h);
         } else {
             let corpo = h - NAV;
             match self.scheda {
@@ -1828,7 +1960,14 @@ impl App {
             p.text("Svuota", rc.0, rc.1, rc.2, rc.3, 15.0, Weight::Semibold, pal.primary, Align::Center);
             self.colpi.push((Forma::R(rc), Azione::Svuota));
         }
-        let vista = (0.0, BARRA, w, h - BARRA);
+        let download_h=self.pannello_download(p,16.0,BARRA,w-32.0,(0.0,BARRA,w,h-BARRA));
+        let componente_h=download_h+self.riga_componente(p,16.0,BARRA+download_h,w-32.0);
+        let header=componente_h+if self.labs.filtro.is_some(){64.0}else{0.0};
+        if let Some(code)=self.labs.filtro.clone(){
+            p.text(&cedro::i18n::lit(&code),16.0,BARRA+componente_h,w-190.0,48.0,14.0,Weight::Semibold,pal.primary,Align::Left);
+            self.bottone_a(p,(w-174.0,BARRA+componente_h,158.0,48.0),"Tutti i lavori","",pal.surface,pal.primary,Azione::Labs(labs::LabAz::TuttiLavori),(0.0,BARRA,w,header));
+        }
+        let vista = (0.0, BARRA+header, w, h - BARRA-header);
         if self.lavori.is_empty() {
             p.icon(ic::CLOCK, w / 2.0 - 22.0, BARRA + (h - BARRA) / 2.0 - 70.0, 44.0, pal.muted);
             p.text("Ancora niente", 0.0, BARRA + (h - BARRA) / 2.0 - 16.0, w, 30.0, 20.0, Weight::Semibold, pal.text, Align::Center);
@@ -1840,9 +1979,10 @@ impl App {
         let cw = if ampio { (w - 32.0 - 12.0) / 2.0 } else { w - 24.0 };
         let colonne = if ampio { 2 } else { 1 };
         p.push_clip(vista.0, vista.1, vista.2, vista.3);
-        let mut ys = [BARRA + 6.0 - self.scorri; 2];
+        let mut ys = [BARRA + header + 6.0 - self.scorri; 2];
         let mut fine = 0.0f32;
         for k in 0..self.lavori.len() {
+            if self.labs.filtro.as_ref().is_some_and(|c|self.labs.casi.get(&self.lavori[k].id)!=Some(c)){continue;}
             let c = if colonne == 2 { if ys[0] <= ys[1] { 0 } else { 1 } } else { 0 };
             let x = if ampio { 16.0 + c as f32 * (cw + 12.0) } else { 12.0 };
             let alt = self.scheda_lavoro(p, k, x, ys[c], cw, vista);
@@ -1904,7 +2044,7 @@ impl App {
         } else {
             // Prima della prima percentuale (modello che si scarica o si carica) la barra scorre.
             p.push_clip(x, by, w, bh);
-            let t = (self.ora.duration_since(l.inizio).as_secs_f32() * 0.9).fract();
+            let t = if self.anim.calmo { 0.5 } else { (self.ora.duration_since(l.inizio).as_secs_f32() * 0.9).fract() };
             let sw = w * 0.3;
             p.rrect(x - sw + (w + sw) * t, by, sw, bh, bh / 2.0, Some(accento), None);
             p.pop_clip();
@@ -1925,19 +2065,31 @@ impl App {
         let pal = self.pal();
         let l = self.lavori[k].clone();
         let trascrive = l.sorgente.is_some();
+        let tempo=quando(l.quando);
+        let tempo_h=casa::telefono::altezza_a(p,&tempo,13.0,Weight::Regular,w-28.0,19.0,0)+6.0;
+        let note_h=match &l.stato {
+            Stato::Fatto{msg,..}=>tempo_h+casa::telefono::altezza_a(p,msg,13.0,Weight::Regular,w-28.0,19.0,0)+6.0,
+            _=>0.0,
+        };
+        let caso_h=if self.labs.casi.contains_key(&l.id){32.0}else{0.0};
         let alt = match &l.stato {
-            Stato::InCorso if trascrive => 168.0,
-            Stato::InCorso => 92.0,
+            Stato::InCorso if trascrive => 224.0,
+            Stato::InCorso => 148.0,
             // Un link passato a un'altra app: non c'è un file da aprire o condividere.
             Stato::Fatto { path, .. } if path.as_os_str().is_empty() => 70.0,
             Stato::Fatto { .. } if l.sorgente.is_some() && l.controlli.is_some_and(|n| n > 0) => 176.0,
             Stato::Fatto { .. } => 142.0,
             Stato::Errore(_) => 112.0,
-        };
-        sollevato(p, pal, self.scuro(), x, y, w, alt, 16.0);
+        } + note_h + caso_h + if matches!(&l.stato,Stato::Fatto{path,..} if !path.as_os_str().is_empty()){56.0}else{0.0};
+        let outputs=self.uscite.get(&l.id).cloned().unwrap_or_default();
+        let extra=if outputs.len()>1 || outputs.iter().any(|o|o.2.is_some()) {outputs.len() as f32*82.0} else {0.0};
+        sollevato(p, pal, self.scuro(), x, y, w, alt+extra, 16.0);
         let titolo = if l.conv { format!("{} · {}", l.origine, l.etichetta) } else { format!("{}: {}", l.etichetta, l.origine) };
         let (stato_txt, stato_col) = match &l.stato {
-            Stato::InCorso => ("In corso".to_string(), pal.primary),
+            Stato::InCorso => (if self.annullamenti.contains(&l.id) {"Annullamento…"} else {"In corso"}.to_string(), pal.primary),
+            Stato::Fatto { .. } if outputs.iter().any(|o|o.2.is_some()) => ("Da salvare".to_string(), self.avviso()),
+            Stato::Fatto { msg, .. } if avviso_motore(msg) => ("Avviso".to_string(), self.avviso()),
+            Stato::Fatto { path, .. } if path.as_os_str().is_empty() => ("Concluso".into(),pal.muted),
             Stato::Fatto { .. } => ("Fatto".to_string(), pal.ok),
             Stato::Errore(_) => ("Non riuscito".to_string(), pal.bad),
         };
@@ -1946,7 +2098,10 @@ impl App {
         p.text(&nome, x + 14.0, y + 8.0, w - sw - 40.0, 28.0, 16.0, Weight::Semibold, pal.text, Align::Left);
         p.text(&stato_txt, x + w - sw - 14.0, y + 8.0, sw, 28.0, 14.0, Weight::Semibold, stato_col, Align::Right);
         match &l.stato {
-            Stato::InCorso if trascrive => self.avanzamento_trascrizione(p, &l, (x + 12.0, y + 42.0, w - 24.0, alt - 54.0)),
+            Stato::InCorso if trascrive => {
+                self.avanzamento_trascrizione(p, &l, (x+12.0,y+42.0,w-24.0,alt-110.0));
+                self.bottone_a(p,(x+12.0,y+alt-108.0,w-24.0,48.0),"Onda e testo",ic::AUDIO,pal.surface,pal.primary,Azione::Rivedi(l.id),vista);
+            },
             Stato::InCorso => {
                 let (bx, by, bw) = (x + 14.0, y + 44.0, w - 28.0);
                 p.rrect(bx, by, bw, 8.0, 4.0, Some(pal.alt), None);
@@ -1958,32 +2113,36 @@ impl App {
                     p.text(&format!("{}%{resto}", m / 10), x + 14.0, y + 58.0, w - 28.0, 24.0, 13.0, Weight::Regular, pal.muted, Align::Left);
                 } else {
                     p.push_clip(bx, by, bw, 8.0);
-                    let t = (self.ora.duration_since(l.inizio).as_secs_f32() * 0.9).fract();
+                    let t = if self.anim.calmo { 0.5 } else { (self.ora.duration_since(l.inizio).as_secs_f32() * 0.9).fract() };
                     let sw = bw * 0.38;
                     p.rrect(bx - sw + (bw + sw) * t, by, sw, 8.0, 4.0, Some(pal.primary), None);
                     p.pop_clip();
-                    p.text(&format!("Lavoro in corso da {s} s"), x + 14.0, y + 58.0, w - 28.0, 24.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                    p.text(&self.passi.get(&l.id).cloned().unwrap_or_else(||format!("Lavoro in corso da {s} s")), x + 14.0, y + 58.0, w - 28.0, 24.0, 13.0, Weight::Regular, pal.muted, Align::Left);
                 }
             }
             Stato::Fatto { nome, msg, path } => {
-                p.text(&format!("{} · {}", msg.replace(" → ", " a "), quando(l.quando)), x + 14.0, y + 34.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                casa::telefono::testo_a(p,&tempo,x+14.0,y+38.0,w-28.0,13.0,Weight::Regular,pal.muted,19.0,0);
+                casa::telefono::testo_a(p,msg,x+14.0,y+38.0+tempo_h,w-28.0,13.0,Weight::Regular,if avviso_motore(msg){self.avviso()}else{pal.muted},19.0,0);
+                if let Some(code)=self.labs.casi.get(&l.id) {
+                    p.text(&cedro::i18n::lit(&format!("{} · {}",cedro::i18n::tr("Caso o campione"),code)),x+14.0,y+38.0+note_h,w-28.0,28.0,13.0,Weight::Semibold,pal.primary,Align::Left);
+                }
                 if path.as_os_str().is_empty() {
                     return alt;
                 }
-                p.text(&salvato_in(nome), x + 14.0, y + 54.0, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
+                p.text(&salvato_in(nome), x + 14.0, y + 54.0 + note_h + caso_h, w - 28.0, 22.0, 13.0, Weight::Regular, pal.muted, Align::Left);
                 if let Some(n) = l.controlli.filter(|n| *n > 0 && l.sorgente.is_some()) {
                     let et = if n == 1 { "1 punto da controllare".to_string() } else { format!("{n} punti da controllare") };
                     let ew = p.measure(&et, 13.0, Weight::Semibold) + 22.0;
-                    p.rrect(x + 14.0, y + 80.0, ew, 28.0, 14.0, Some(pal.alt), None);
-                    p.text(&et, x + 14.0, y + 80.0, ew, 28.0, 13.0, Weight::Semibold, self.avviso(), Align::Center);
+                    p.rrect(x + 14.0, y + 80.0 + note_h + caso_h, ew, 28.0, 14.0, Some(pal.alt), None);
+                    p.text(&et, x + 14.0, y + 80.0 + note_h + caso_h, ew, 28.0, 13.0, Weight::Semibold, self.avviso(), Align::Center);
                 }
-                let mut voci = vec![("Apri", Azione::Apri(l.id)), ("Condividi", Azione::Condividi(l.id))];
+                let mut voci = vec![("Apri", Azione::Apri(l.id)), ("Condividi", Azione::Condividi(l.id)), ("Copia", Azione::CopiaRapporto(l.id))];
                 if l.sorgente.is_some() {
                     voci.insert(0, ("Rivedi", Azione::Rivedi(l.id)));
                 }
-                let bw = (w - 28.0 - 10.0 * (voci.len() as f32 - 1.0)) / voci.len() as f32;
+                let bw = (w - 38.0) / 2.0;
                 for (i, (et, az)) in voci.into_iter().enumerate() {
-                    let rc = (x + 14.0 + i as f32 * (bw + 10.0), y + alt - 14.0 - TOCCO, bw, TOCCO);
+                    let rc = (x + 14.0 + (i%2) as f32 * (bw + 10.0), y + alt - 14.0 - TOCCO - 56.0 + (i/2) as f32*56.0, bw, TOCCO);
                     let prem = self.premuto == Some(az);
                     let pieno = i == 0;
                     if pieno {
@@ -2012,7 +2171,29 @@ impl App {
                 }
             }
         }
-        alt
+        if l.stato==Stato::InCorso {
+            let rc=(x+14.0,y+alt-58.0,w-28.0,48.0);
+            p.rrect(rc.0,rc.1,rc.2,rc.3,24.0,Some(pal.alt),None);
+            p.text(if self.annullamenti.contains(&l.id) {"Annullamento…"} else {"Annulla"},rc.0,rc.1,rc.2,rc.3,16.0,Weight::Semibold,pal.primary,Align::Center);
+            if let Some(r)=intersezione(rc,vista) { self.colpi.push((Forma::R(r),Azione::Annulla(l.id))); }
+        }
+        if extra>0.0 {
+            for (i,(_,nome,errore)) in outputs.iter().enumerate() {
+                let yy=y+alt+i as f32*82.0;
+                let label=if errore.is_some() {format!("{} · {}",nome,cedro::i18n::tr("Copia in Cedro"))} else {nome.clone()};
+                p.text(&label,x+14.0,yy,w-28.0,24.0,13.0,Weight::Regular,if errore.is_some(){pal.bad}else{pal.muted},Align::Left);
+                let mut actions=vec![(0,"Apri",Azione::ApriUscita(l.id,i)),(1,"Condividi",Azione::CondividiUscita(l.id,i))];
+                if errore.is_some(){actions.push((2,"Copia errore",Azione::ErroreUscita(l.id,i)));}
+                let bw=(w-28.0-10.0*(actions.len() as f32-1.0))/actions.len() as f32;
+                for (k,et,az) in actions {
+                    let rc=(x+14.0+k as f32*(bw+10.0),yy+26.0,bw,48.0);
+                    p.rrect(rc.0,rc.1,rc.2,rc.3,24.0,Some(pal.alt),None);
+                    p.text(et,rc.0,rc.1,rc.2,rc.3,15.0,Weight::Semibold,pal.primary,Align::Center);
+                    if let Some(r)=intersezione(rc,vista) {self.colpi.push((Forma::R(r),az));}
+                }
+            }
+        }
+        alt+extra
     }
 
     // ----- Informazioni -----
@@ -2072,12 +2253,14 @@ impl App {
     // ----- Aspetto -----
 
     fn pagina_aspetto(&mut self, p: &mut Painter, w: f32, h: f32) {
+        if self.tema.is_cedro() { return self.impostazioni_a(p, w, h); }
         let pal = self.pal();
         self.titolo_barra(p, 16.0, w - 32.0, "Aspetto");
         let rh = if h < 420.0 { 60.0 } else { 80.0 };
         let ampio = w > 700.0;
         let cw = if ampio { 520.0 } else { w - 24.0 };
         let x = if ampio { (w - cw) / 2.0 } else { 12.0 };
+        let prima=self.colpi.len();
         p.push_clip(0.0, BARRA, w, h - BARRA);
         let mut y = BARRA - self.scorri;
         // Le quattro tinte di Cedro: un quadrato per ciascuna, con i colori della sua cornice.
@@ -2150,6 +2333,8 @@ impl App {
         y += 76.0;
         let fine = y + p.text_wrap("Le copie vanno nella cartella Documenti. Il tema scelto resta tra un avvio e l'altro.", x + 4.0, y, cw - 8.0, 13.0, Weight::Regular, pal.muted, 19.0, 3);
         p.pop_clip();
+        let hits:Vec<_>=self.colpi.drain(prima..).filter_map(|(f,a)|match f{Forma::R(r)=>intersezione(r,(0.0,BARRA,w,h-BARRA)).map(|r|(Forma::R(r),a)),_=>Some((f,a))}).collect();
+        self.colpi.extend(hits);
         self.scorri_max = (fine + 16.0 + self.scorri - h).max(0.0);
         self.scorri = self.scorri.min(self.scorri_max);
     }
@@ -2236,4 +2421,102 @@ fn modello_iniziale() -> usize {
 /// «Salvato in …», o com'è quando il file c'era già e non è stato scritto («Già presente: …»).
 pub(crate) fn salvato_in(nome: &str) -> String {
     if nome.starts_with("Già presente") { nome.to_string() } else { format!("Salvato in {nome}") }
+}
+
+#[cfg(test)]
+mod lavori_regressioni {
+    use super::*;
+    #[test]
+    fn evento_arrivato_dopo_drain_persiste_stato_e_uscite_insieme(){
+        let mut app=App::new(ThemeId::Cedro);let (id,_)=app.nuova_importazione();
+        let identity=app.identita(id).unwrap();
+        let queue=std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let barrier=std::sync::Arc::new(std::sync::Barrier::new(2));
+        let (q,b)=(queue.clone(),barrier.clone());
+        let writer=std::thread::spawn(move||{
+            b.wait();
+            q.lock().unwrap().push(Completamento{batch:None,id,stato:Stato::Fatto{path:"content://media/1".into(),nome:"a.pdf".into(),msg:"Diviso".into()},uscite:Some(vec![("content://media/1".into(),"a.pdf".into(),None),("content://media/2".into(),"b.pdf".into(),None)]),sorgente:Some("/privato/audio.wav".into())});
+        });
+        assert!(std::mem::take(&mut *queue.lock().unwrap()).is_empty());
+        barrier.wait();writer.join().unwrap();
+        for e in std::mem::take(&mut *queue.lock().unwrap()){app.completa(e);}
+        let mut restarted=App::new(ThemeId::Cedro);restarted.carica_lavori(&app.serializza());
+        assert_eq!(restarted.lavori.len(),1);let saved_id=restarted.lavori[0].id;
+        assert_eq!(restarted.uscite[&saved_id].len(),2);
+        assert_eq!(restarted.identita(saved_id).unwrap().chiave,identity.chiave);
+        assert_eq!(restarted.lavori[0].sorgente,Some(PathBuf::from("/privato/audio.wav")));
+        assert!(matches!(&restarted.lavori[0].stato,Stato::Fatto{..}));
+        // Un journal durevole già rappresentato nella UI aggiorna lo stesso lavoro.
+        let r=crate::publication::Registro{versione:3,lavoro:identity,forma:crate::publication::Forma::File,gruppo:None,messaggio:"Diviso".into(),pubblico:None,elementi:vec![crate::publication::Elemento{privato:"/privato/a.pdf".into(),relativo:"a.pdf".into(),stato:crate::publication::StatoUscita::Pubblicato(crate::publication::Destinazione{path:"content://media/1".into(),nome:"a.pdf".into(),temporaneo:None}),errore:None}]};
+        restarted.recupera(r.clone());restarted.recupera(r.clone());assert_eq!(restarted.lavori.len(),1);
+        restarted.lavori_rimossi.insert(r.lavoro.chiave.clone());restarted.lavori.clear();
+        let mut cleared=App::new(ThemeId::Cedro);cleared.carica_lavori(&restarted.serializza());
+        cleared.recupera(r);assert!(cleared.lavori.is_empty());
+    }
+    #[test]
+    fn riavvio_interrompe_attivi_e_conserva_errori_e_tutte_le_uscite() {
+        let mut app=App::new(ThemeId::Cedro);
+        let (attivo,_)=app.nuova_importazione();
+        let (fallito,_)=app.nuova_importazione();
+        app.finisce(fallito,Stato::Errore("errore\ncon dettagli\te tab".into()));
+        let (finito,_)=app.nuova_importazione();
+        app.uscite.insert(finito,vec![("content://media/1".into(),"pagina1.pdf".into(),None),("/privato/pagina2.pdf".into(),"pagina2.pdf".into(),Some("Disco pieno".into()))]);
+        app.finisce(finito,Stato::Fatto {path:"content://media/1".into(),nome:"pagina1.pdf".into(),msg:"Diviso".into()});
+        let mut restored=App::new(ThemeId::Cedro);
+        restored.carica_lavori(&app.serializza());
+        assert_eq!(restored.in_corso().0,0);
+        assert_eq!(restored.lavori.len(),3);
+        assert!(restored.lavori.iter().any(|l|matches!(&l.stato,Stato::Errore(e) if e.starts_with("Interrotto"))));
+        assert!(restored.lavori.iter().any(|l|matches!(&l.stato,Stato::Errore(e) if e=="errore\ncon dettagli\te tab")));
+        assert_eq!(restored.uscite.values().next().unwrap().len(),2);
+        assert!(app.lavori.iter().any(|l|l.id==attivo&&l.stato==Stato::InCorso));
+    }
+}
+
+#[cfg(test)]
+mod temi_regressioni {
+    use super::*;
+    use cedro::ui::gfx::{Fonts, GlyphCache};
+
+    #[test]
+    fn android_keeps_legacy_theme_selection_save_reload_and_host_rendering() {
+        assert_eq!(TEMI.map(ThemeId::key), ["cedro", "cedro-notte", "cedro-bosco", "cedro-carta", "windows-essenziale", "percorso-guidato", "cedro-compatto", "banco-di-lavoro", "documento-al-centro"]);
+        let mut cache = GlyphCache::new();
+        for (i, theme) in TEMI.into_iter().enumerate() {
+            let mut app = App::new(ThemeId::Cedro);
+            let saved_key = match app.attiva(Azione::Tema(i)) {
+                Effetto::SalvaTema(selected) => selected.key(),
+                _ => panic!("la scelta del tema deve richiedere il salvataggio"),
+            };
+            assert_eq!(saved_key, theme.key());
+            let mut restored = App::new(tema_da_chiave(&format!(" {saved_key}\n")));
+            assert_eq!(restored.tema, theme);
+            restored.anim.calmo = true;
+            restored.vai_casa();
+            let mut painter = Painter::new(360, 800, 1.0, Fonts::for_theme(restored.tema), &mut cache);
+            restored.disegna(&mut painter, 360.0, 800.0);
+            assert_eq!(restored.tema, theme);
+            assert!(!restored.colpi.is_empty(), "controlli del tema {saved_key}");
+        }
+        for key in ["bondeno", "cedro-labs", "sconosciuto", ""] {
+            assert_eq!(tema_da_chiave(key), ThemeId::Cedro);
+        }
+    }
+}
+
+#[cfg(test)]
+mod import_route_regressioni {
+    use super::*;
+    #[test]
+    fn condiviso_azzera_scroll_e_converti_torna_ai_tre_destini() {
+        let mut app=App::new(ThemeId::Cedro);
+        app.scorri=1800.0;app.scorri_max=2000.0;
+        app.imposta_file(Archivio{path:"/privato/foto.jpg".into(),nome:"foto.jpg".into(),dim:123},Kind::Image,true);
+        assert_eq!(app.scorri,0.0);assert_eq!(app.scorri_max,0.0);assert!(app.foglio);
+        assert!(matches!(app.avvia("pdf","PDF",true),Effetto::Converti{..}));
+        assert!(app.casa_aperta);assert_eq!(app.sopra,Some(Scheda::Lavori));
+        app.azione_casa(casa::CasaAz::Impostazioni);
+        assert!(app.casa_aperta);assert_eq!(app.sopra,Some(Scheda::Aspetto));
+        app.azione_casa(casa::CasaAz::Nav(0));assert!(app.casa.inizio);
+    }
 }
