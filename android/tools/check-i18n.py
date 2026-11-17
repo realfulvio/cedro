@@ -7,12 +7,13 @@ import sys
 root = pathlib.Path(__file__).resolve().parents[2]
 # lit() marca dati dell'utente/formati: non è una chiamata di traduzione.
 call = re.compile(r'(?:\b(?:tr|tr_string)|\.(?:text|text_wrap))\s*\(\s*(?:&\s*)?"((?:[^"\\]|\\.)*)"')
+helper = re.compile(r'\b(?:testo_a|testo_centrato_a)\s*\(\s*p\s*,\s*"((?:[^"\\]|\\.)*)"')
 keys = {}
 for path in (root / 'android/src').rglob('*.rs'):
     source = path.read_text()
     # Test unitari e fixture non entrano nell'APK.
     source = source.split('#[cfg(test)]')[0]
-    for match in call.finditer(source):
+    for match in (*call.finditer(source), *helper.finditer(source)):
         key = match[1].replace(r'\n', '\n').replace(r'\"', '"').replace(r'\\', '\\')
         if key.strip() and re.search(r'[A-Za-zÀ-ÿ]', key):
             keys.setdefault(key, set()).add(str(path.relative_to(root)))

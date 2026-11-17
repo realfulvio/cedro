@@ -87,7 +87,7 @@ impl File {
         match &self.inner {Source::Regular(f)=>f.metadata(),#[cfg(unix)] Source::Granted{file,..}=>file.metadata()}
     }
 }
-// Solo per API native con offset/lunghezza espliciti (MediaExtractor), non un lettore sequenziale.
+// Per API native/codec esterni: ogni consumatore lseek/read deve conservare lock_native.
 #[cfg(unix)]
 impl std::os::fd::AsRawFd for File {
     fn as_raw_fd(&self)->std::os::fd::RawFd {
