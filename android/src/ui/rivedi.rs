@@ -215,6 +215,7 @@ impl App {
             r.bars = t.bars.clone(); r.wave_failed = t.failed; r.secs = t.secs.max(r.secs);
             if live { r.rows = t.segments.iter().cloned().map(riga).collect(); r.names = nomi(&t.segments); }
         }
+        if !live && r.bars.is_some(){r.detect();}
         if r.rows.is_empty(){r.view=std::fs::read_to_string(cedro::config_dir().join("android-vista-onda")).ok().and_then(|s|s.parse::<u8>().ok()).unwrap_or(1).min(2);}
         let secs = r.secs;
         self.rivedi = Some(Rivedi::new(r,titolo,job,live));
@@ -269,7 +270,7 @@ impl App {
     }
 
     pub fn frase_trascritta(&mut self, id:u32, path:PathBuf, segment:Option<trascrizione::Segment>, secs:f64) {
-        if let Some(l) = self.lavori.iter_mut().find(|l|l.id==id) { l.sorgente=Some(path.clone()); }
+        if let Some(l) = self.lavori.iter_mut().find(|l|l.id==id) { if l.stato!=Stato::InCorso{return;} l.sorgente=Some(path.clone()); }
         let t = self.tracce.entry(path.clone()).or_default();
         if t.job != Some(id) { t.segments.clear(); t.job=Some(id); }
         t.secs=t.secs.max(secs);
@@ -281,11 +282,13 @@ impl App {
         }
     }
 
-    pub(super) fn fine_trascrizione(&mut self,id:u32,success:bool) {
+    pub(super) fn fine_trascrizione(&mut self,id:u32,stato:&Stato) {
+        let success=matches!(stato,Stato::Fatto{path,..} if !path.as_os_str().is_empty());
         for rv in [&mut self.rivedi,&mut self.anteprima_tras].into_iter().flatten().filter(|r|r.job==Some(id)) {
-            rv.live=false;
+            rv.live=!success;
+            if !success {rv.nota=match stato {Stato::Errore(e)=>e.clone(),Stato::Fatto{msg,..}=>msg.clone(),_=>String::new()};}
             if let Some(s)=success.then(||revisione::load(&rv.r.source)).flatten() {
-                let mut r=Review::from_saved(&rv.r.source,s);r.bars=rv.r.bars.take();r.view=rv.r.view;
+                let mut r=Review::from_saved(&rv.r.source,s);r.bars=rv.r.bars.take();r.view=rv.r.view;r.tab=rv.r.tab;r.detect();
                 rv.r=r;rv.rifai();
             }
         }
@@ -575,7 +578,7 @@ impl App {
         for (k, (t, on, az)) in [("Solo da controllare", rv.r.only_flagged, RivAz::SoloControllo), ("Segui l'audio", rv.r.follow, RivAz::Segui)].into_iter().enumerate() {
             let rx = x + k as f32 * mezza;
             let dim = if p.measure(t, 14.0, Weight::Regular) <= mezza - 70.0 { 14.0 } else { 12.0 };
-            p.text(t, rx + 4.0, y, mezza - 66.0, 40.0, dim, Weight::Regular, pal.text, Align::Left);
+            p.text_wrap(t, rx + 4.0, y+4.0, mezza - 66.0, dim, Weight::Regular, pal.text, 17.0, 2);
             let sx = rx + mezza - 62.0;
             p.rrect(sx, y + 6.0, 48.0, 28.0, 14.0, Some(if on { pal.primary } else { pal.border }), None);
             p.circle(if on { sx + 34.0 } else { sx + 14.0 }, y + 20.0, 10.0, Some((255, 255, 255)), None);
@@ -655,7 +658,7 @@ impl App {
                 let nw = p.measure(&nome, 13.0, Weight::Semibold).min(tw - 40.0) + 34.0;
                 p.rrect(x + 70.0, ry + 6.0, nw, 26.0, 13.0, Some(mix(vc, pal.surface, if scuro_t { 0.78 } else { 0.86 })), None);
                 p.circle(x + 82.0, ry + 19.0, 4.5, Some(vc), None);
-                p.text(&nome, x + 92.0, ry + 6.0, nw - 30.0, 26.0, 13.0, Weight::Semibold, vc, Align::Left);
+                p.text(&cedro::i18n::lit(&nome), x + 92.0, ry + 6.0, nw - 30.0, 26.0, 13.0, Weight::Semibold, vc, Align::Left);
                 p.icon("M6 9l6 6 6-6", x + 70.0 + nw - 18.0, ry + 12.0, 13.0, vc);
                 colpi.push((Forma::R((x + 66.0, ry, nw + 8.0, 38.0)), Azione::Riv(RivAz::Chip(i))));
                 ry + 38.0
@@ -699,11 +702,11 @@ impl App {
         colpi.extend(righe);
         let mut fy=h-piede+6.0;
         if rv.live {
-            if let Some(id)=rv.job {
+            if let Some(id)=rv.job.filter(|id|self.lavori.iter().any(|l|l.id==*id&&l.stato==Stato::InCorso)) {
                 p.rrect(x,fy,cw,48.0,12.0,Some(pal.surface),Some((pal.border,1.0)));
                 p.text("Annulla",x,fy,cw,48.0,15.0,Weight::Semibold,pal.primary,Align::Center);
                 colpi.push((Forma::R((x,fy,cw,48.0)),Azione::Annulla(id)));
-            }
+            } else {p.text_wrap(&rv.nota,x,fy,cw,13.0,Weight::Regular,pal.muted,19.0,3);}
         } else {
             if !rv.nota.is_empty(){p.text(&rv.nota,x,fy,cw,24.0,13.0,Weight::Regular,pal.muted,Align::Left);fy+=26.0;}
             if ripetizioni>0 {
@@ -794,7 +797,7 @@ fn chi_parla(p: &mut Painter, pal: &cedro::ui::theme::Palette, tema: cedro::ui::
         p.rrect(fr.0, fr.1, fr.2, fr.3, 12.0, Some(pal.surface), Some((if attivo { vc } else { pal.border }, if attivo { 2.0 } else { 1.0 })));
         let nome = rv.r.names.get(v as usize).cloned().unwrap_or_default();
         let vis = if nome.is_empty() { trascrizione::speaker_name(v as usize) } else { nome.clone() };
-        p.text(&vis, fr.0 + 12.0, fr.1, fr.2 - 24.0, fr.3, 16.0, Weight::Semibold, if nome.is_empty() { pal.muted } else { pal.text }, Align::Left);
+        p.text(&cedro::i18n::lit(&vis), fr.0 + 12.0, fr.1, fr.2 - 24.0, fr.3, 16.0, Weight::Semibold, if nome.is_empty() { pal.muted } else { pal.text }, Align::Left);
         if attivo {
             let cx = fr.0 + 12.0 + if nome.is_empty() { 0.0 } else { p.measure(&nome, 16.0, Weight::Semibold) } + 1.0;
             p.fill(cx.min(fr.0 + fr.2 - 10.0), fr.1 + 11.0, 2.0, fr.3 - 22.0, vc);
@@ -1084,6 +1087,11 @@ mod tests {
         a.scorri_rivedi(20.0,0.0);assert!(!a.rivedi.as_ref().unwrap().r.follow);
         a.azione_rivedi(RivAz::Segui);assert!(a.rivedi.as_ref().unwrap().r.follow);
         assert!(matches!(a.azione_rivedi(RivAz::Salva(0)),Effetto::Niente),"nessun export di segmenti incompleti");
+        a.lavori.push(Lavoro{id:1,origine:"a.wav".into(),etichetta:"Testo".into(),conv:false,inizio:Instant::now(),quando:adesso(),stato:Stato::Errore("Annullato".into()),prog:Default::default(),sorgente:Some(first.clone()),controlli:None});
+        a.frase_trascritta(1,first,Some(trascrizione::Segment{t0:400,t1:500,text:"Evento tardivo".into(),speaker:None}),0.0);
+        assert_eq!(a.rivedi.as_ref().unwrap().r.rows.len(),1,"un evento dopo il completamento non duplica frasi");
+        a.fine_trascrizione(1,&Stato::Errore("Annullato".into()));
+        assert!(matches!(a.azione_rivedi(RivAz::Salva(0)),Effetto::Niente),"annullare non rende completo il testo parziale");
         a.azione_rivedi(RivAz::Velocita(150));assert_eq!(a.rivedi.as_ref().unwrap().speed,150);
     }
 

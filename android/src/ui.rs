@@ -757,7 +757,7 @@ impl App {
             let secs=self.lavori.iter().find(|l|l.id==id).and_then(|l|l.sorgente.as_ref()).and_then(|p|self.tracce.get(p)).map_or(0.0,|t|t.secs);
             Stato::Fatto {path:PathBuf::new(),nome:String::new(),msg:format!("{} · {:.1} s. {}",cedro::i18n::tr("Nessun parlato riconosciuto"),secs,cedro::i18n::tr("Prova una registrazione con la voce più vicina al microfono."))}
         } else {stato};
-        self.fine_trascrizione(id,matches!(&stato,Stato::Fatto{path,..} if !path.as_os_str().is_empty()));
+        self.fine_trascrizione(id,&stato);
         self.annullamenti.remove(&id);
         self.salvata(id, &stato);
         if let Some(rv) = self.rivedi.as_mut().filter(|rv| rv.riassunto.as_ref().is_some_and(|r| r.0 == id)) {
