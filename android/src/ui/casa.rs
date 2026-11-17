@@ -309,6 +309,14 @@ impl Casa {
     }
 
     /// L'operazione scelta per la categoria di ora (di partenza: il primo formato del pannello).
+    /// Si esce dal Laboratorio: se l'operazione scelta è uno strumento di laboratorio, si torna al primo formato.
+    fn lascia_lab(&mut self) {
+        let k = ck(self.categoria);
+        if self.operazione.get(&k).is_some_and(|id| voci::is_lab(&voci::voce(self.categoria, id))) {
+            self.operazione.remove(&k);
+        }
+    }
+
     fn operazione(&self) -> &'static str {
         self.operazione.get(&ck(self.categoria)).copied().unwrap_or_else(|| conversioni::formats(self.categoria).first().map(|s| s.id).unwrap_or("none"))
     }
@@ -568,6 +576,10 @@ impl App {
                 c.elenco = None;
                 c.passo = 0;
                 c.inizio = i == 0;
+                // Uscendo dal Laboratorio non resta scelto lo strumento di laboratorio nelle altre pagine.
+                if c.laboratorio && i != 6 {
+                    c.lascia_lab();
+                }
                 c.laboratorio = i == 6;
                 match i {
                     0 => c.att = Att::Conv,
@@ -602,6 +614,9 @@ impl App {
                 let k = [Kind::Image, Kind::Pdf, Kind::Doc, Kind::Audio, Kind::Video, Kind::Archive].get(i).copied().unwrap_or(Kind::Image);
                 let c = &mut self.casa;
                 c.inizio = false;
+                if c.laboratorio {
+                    c.lascia_lab();
+                }
                 c.laboratorio = false;
                 c.att = Att::Conv;
                 c.categoria = k;
@@ -613,6 +628,9 @@ impl App {
                 if let Some(k) = self.recenti.get(i).map(|r| r.kind) {
                     let c = &mut self.casa;
                     c.inizio = false;
+                    if c.laboratorio {
+                        c.lascia_lab();
+                    }
                     c.laboratorio = false;
                     c.att = Att::Conv;
                     c.categoria = k;
@@ -825,7 +843,8 @@ impl App {
             x -= TOCCO;
             self.bottone_icona(p, (x, y + (h - TOCCO) / 2.0, TOCCO, TOCCO), ic::HELP, Azione::Casa(CasaAz::Guida));
         }
-        if !self.lavori.is_empty() {
+        // Nel nuovo Cedro i Lavori sono sempre raggiungibili, anche a elenco vuoto.
+        if !self.lavori.is_empty() || self.tema.is_cedro() {
             x -= TOCCO;
             self.bottone_icona(p, (x, y + (h - TOCCO) / 2.0, TOCCO, TOCCO), ic::CLOCK, Azione::Casa(CasaAz::Lavori));
             let attivi = self.lavori.iter().filter(|l| l.stato == Stato::InCorso).count();
