@@ -3,7 +3,7 @@
 ## Spec Compliance
 
 - ❌ Issues found: due problemi Important impediscono l'approvazione: accesso al riassunto nella vista predefinita su schermi bassi (`android/src/ui/rivedi.rs:539`) e ripresa del clock virtuale dopo un errore audio Android (`src/ui/player.rs:251`).
-- ⚠️ Cannot verify from diff: benchmark dialogo Mi 9T rispetto a 1000,002 s (+5%), PSS aggregato rispetto a 1.724.202 KiB (+10%), onda entro 1,5 s, frequenza effettiva di rendering, voce reale/FLEURS, ascolto e salti a orecchio, focus/chiamata/cuffie, continuità background, riassunto 4B e confronto col referto desktop. Il rapporto li lascia correttamente aperti (`docs/android-rapporti/task-5-report.md:76`). Il controller deve chiudere questi gate e attestare le suite sull'head finale; i check precedenti non certificano `eb033a3`.
+- ⚠️ Cannot verify from diff: benchmark dialogo Mi 9T rispetto a 1000,002 s (+5%), PSS aggregato rispetto a 1.724.202 KiB (+10%), onda entro 1,5 s, frequenza effettiva di rendering, voce reale/FLEURS, ascolto e salti a orecchio, focus/chiamata/cuffie, continuità background, riassunto 4B e confronto col referto desktop. Il rapporto li lascia correttamente aperti (`.superpowers/sdd/ESECUZIONE/task-5-report.md:76`). Il controller deve chiudere questi gate e attestare le suite sull'head finale; i check precedenti non certificano `eb033a3`.
 
 ## Strengths
 

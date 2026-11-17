@@ -144,7 +144,7 @@ nice -n 10 bash /srv/dev/scratch/cedro-check-ndk.sh
 nice -n 10 cargo check --release -j2 -p cedro-android --all-targets --features youtube
 ```
 
-Il wrapper NDK remoto corrisponde a `~/prove-cedro-android/check-ndk.sh` secondo il controller; le impostazioni NDK e l'ulteriore nice interno sono lasciati al wrapper effettivamente eseguito, senza ricostruire variabili non osservate. Controllo locale del solo rapporto: `git diff --check -- docs/android-rapporti/task-4-report.md`, exit 0, nessun output.
+Il wrapper NDK remoto corrisponde a `~/prove-cedro-android/check-ndk.sh` secondo il controller; le impostazioni NDK e l'ulteriore nice interno sono lasciati al wrapper effettivamente eseguito, senza ricostruire variabili non osservate. Controllo locale del solo rapporto: `git diff --check -- .superpowers/sdd/ESECUZIONE/task-4-report.md`, exit 0, nessun output.
 
 ### Esiti core del fix db3a1a5 — aggiornamento del controller
 
