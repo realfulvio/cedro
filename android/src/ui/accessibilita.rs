@@ -79,6 +79,22 @@ mod tests {
     use super::*;
     use cedro::ui::gfx::{Fonts,GlyphCache};
     #[test]
+    fn native_semantic_centers_dispatch_with_density_and_system_insets() {
+        let mut cache=GlyphCache::new();
+        for (w,h,margins) in [(360,640,(0.0,95.0/3.0,0.0,16.0)),(640,360,(83.0/3.0,0.0,16.0,0.0))] {
+            let mut app=App::new(ThemeId::Cedro);app.margini=margins;
+            let mut p=Painter::new(w*3,h*3,3.0,Fonts::for_theme(app.tema),&mut cache);
+            p.accessibility_text=Some(Vec::new());app.disegna(&mut p,w as f32,h as f32);
+            let data:serde_json::Value=serde_json::from_str(&app.accessibilita(&p)).unwrap();
+            let job=data["nodes"].as_array().unwrap().iter().find(|n|n["text"]==cedro::i18n::tr("Lavori").as_ref()&&n["click"]==true).unwrap();
+            let b=&job["bounds"];let x=(b[0].as_f64().unwrap()+b[2].as_f64().unwrap())/2.0;let y=(b[1].as_f64().unwrap()+b[3].as_f64().unwrap())/2.0;
+            let command=serde_json::json!([[0,x,y,y]]).to_string();
+            app.azioni_accessibili(&command,3.0);
+            assert_eq!(app.sopra,Some(Scheda::Lavori),"inset sottratto due volte");
+        }
+    }
+
+    #[test]
     fn semantic_jobs_action_is_the_real_native_hit_target() {
         let mut app=App::new(ThemeId::Cedro);
         let mut cache=GlyphCache::new();
