@@ -6,3 +6,4 @@ Pagina unica (IT/EN) pubblicata su GitHub Pages: https://realfulvio.github.io/ce
 - Il deploy lo fa `.github/workflows/android-fdroid.yml`, che mette nello stesso artefatto di Pages il sito e il repository F-Droid (`/fdroid/repo`). Un deploy sostituisce l'altro, quindi non creare un workflow Pages separato.
 - Da aggiornare a ogni release: numero di versione, nomi e dimensioni dei file nella sezione «Scarica», tabella «Cosa c'è già / Cosa manca» di Cedro 4 Labs.
 - Il video promo non c'è ancora: serve una versione leggera (il promo v5 pesa 57 MB).
+- `formati.html`: pagina dei formati (cosa legge Cedro e in cosa lo converte), con i dati dentro la pagina. Da aggiornare quando cambiano i formati in `src/engine.rs` e `src/conversioni.rs`.
