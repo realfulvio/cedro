@@ -1,4 +1,4 @@
-//! Rendering della UI reale A; i dati di prova restano soltanto in questo eseguibile host.
+//! Rendering della UI reale; i dati di prova restano soltanto in questo eseguibile host.
 //! Eseguire sul mini-PC: cargo run -p cedro-android --release --example vista_a -- /tmp/vista-a
 use std::path::{Path, PathBuf};
 use std::time::Instant;

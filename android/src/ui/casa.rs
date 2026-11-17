@@ -825,7 +825,8 @@ impl App {
             x -= TOCCO;
             self.bottone_icona(p, (x, y + (h - TOCCO) / 2.0, TOCCO, TOCCO), ic::HELP, Azione::Casa(CasaAz::Guida));
         }
-        if !self.lavori.is_empty() {
+        // Nel nuovo Cedro i Lavori sono sempre raggiungibili, anche a elenco vuoto.
+        if !self.lavori.is_empty() || self.tema.is_cedro() {
             x -= TOCCO;
             self.bottone_icona(p, (x, y + (h - TOCCO) / 2.0, TOCCO, TOCCO), ic::CLOCK, Azione::Casa(CasaAz::Lavori));
             let attivi = self.lavori.iter().filter(|l| l.stato == Stato::InCorso).count();
