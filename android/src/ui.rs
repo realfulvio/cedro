@@ -129,7 +129,7 @@ pub enum Scheda {
 }
 
 /// Cosa far cercare al selettore di file di Android.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Sorgente {
     Foto,
     Documenti,
