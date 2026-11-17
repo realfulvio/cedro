@@ -37,3 +37,9 @@ Nuove regressioni nelle suite Android:
 - `AccessibilityCoordinatesTest`: geometria del caso Mi9T, landscape, finestra spostata, hover al centro e conversione scroll/click.
 
 Gate ancora **pendenti**, da registrare nel rapporto controller: compilazione Rust host/NDK con e senza YouTube; Java/d8/APK; re-review del delta; installazione candidata e tap fisico al centro del nodo, performAction, hover e rotazione; raggiungibilità reale delle voci/fogli con font grandi e tastiera; originale SAF ≥32 MiB con firma staccata; MIME pubblicato e Intent per WebM/MKV. Il checkpoint non costituisce approvazione automatica della release.
+
+## Correzione fixture dopo il primo gate compilato
+
+Il controller ha eseguito il checkpoint `5a86bf6`: NDK con/senza YouTube riuscito (16,45 s / 3,22 s, comunicazione controller); suite Android host 53 riusciti e 2 falliti. Log esaminato direttamente: `~/Documenti/cedro-android-anteprima/verifiche/5a86bf6/cedro-android-5a86bf6-task6-aac3-host-test.log`.
+
+I due fallimenti riguardavano la fixture `voices_sample`: passava nomi vuoti a `Review::new`, che per contratto elimina gli speaker non presenti nei nomi; impostare i nomi dopo il costruttore non ripristina gli speaker. Perciò la pagina conteneva solo il toggle e il foglio solo «Voce nuova». Corretto l'ingresso del costruttore, con nuove precondizioni che verificano esattamente tutte le voci attive e gli speaker delle righe. Le verifiche di raggiungibilità, gesti, clipping, 48 dp e azioni restano invariate. Nessuna modifica alla produzione in questo follow-up della stessa wave. `git diff --check` ripetuto: exit 0. Rilancio delle suite e tutti i gate fisici ancora pendenti al controller.
