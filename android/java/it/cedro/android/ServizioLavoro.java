@@ -28,6 +28,9 @@ public class ServizioLavoro extends Service {
         NotificationChannel c = new NotificationChannel(CANALE, "Lavori", NotificationManager.IMPORTANCE_LOW);
         c.setDescription("Avanzamento delle conversioni");
         nm.createNotificationChannel(c);
+        // Il lavoro può finire prima di onStartCommand: soddisfa subito l'avvio
+        // in primo piano, anche quando stopService è già in coda.
+        aggiornaNotifica("Cedro", "", -1);
         PowerManager pm = getSystemService(PowerManager.class);
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "cedro:lavori");
         wake.setReferenceCounted(false);
@@ -35,15 +38,20 @@ public class ServizioLavoro extends Service {
 
     @Override
     public int onStartCommand(Intent intento, int flags, int id) {
-        if (intento != null && intento.getBooleanExtra("ferma", false)) {
-            if (wake.isHeld()) wake.release();
-            stopForeground(true);
-            stopSelf();
+        if (intento == null || intento.getBooleanExtra("ferma", false)) {
+            liberaRisorse();
+            stopSelf(id);
             return START_NOT_STICKY;
         }
-        String titolo = intento != null ? intento.getStringExtra("titolo") : null;
-        String testo = intento != null ? intento.getStringExtra("testo") : null;
-        int percento = intento != null ? intento.getIntExtra("percento", -1) : -1;
+        String titolo = intento.getStringExtra("titolo");
+        String testo = intento.getStringExtra("testo");
+        int percento = intento.getIntExtra("percento", -1);
+        aggiornaNotifica(titolo, testo, percento);
+        if (!wake.isHeld()) wake.acquire(60 * 60 * 1000L);
+        return START_NOT_STICKY;
+    }
+
+    private void aggiornaNotifica(String titolo, String testo, int percento) {
         Intent apri = new Intent(this, CedroActivity.class);
         apri.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pi = PendingIntent.getActivity(this, 0, apri, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -55,16 +63,19 @@ public class ServizioLavoro extends Service {
                 .setOnlyAlertOnce(true)
                 .setContentIntent(pi)
                 .setProgress(100, Math.max(percento, 0), percento < 0);
-        if (!wake.isHeld()) wake.acquire(60 * 60 * 1000L);
         // Da Android 14 il servizio in primo piano deve dire che tipo di lavoro fa.
         if (Build.VERSION.SDK_INT >= 29) startForeground(ID, b.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         else startForeground(ID, b.build());
-        return START_NOT_STICKY;
+    }
+
+    private void liberaRisorse() {
+        if (wake != null && wake.isHeld()) wake.release();
+        stopForeground(true);
     }
 
     @Override
     public void onDestroy() {
-        if (wake != null && wake.isHeld()) wake.release();
+        liberaRisorse();
         super.onDestroy();
     }
 
