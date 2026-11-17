@@ -1547,7 +1547,7 @@ fn system_decode(input: &Path, cancel: &AtomicBool) -> Result<PathBuf, String> {
             let fd=source.as_raw_fd();
             // Un precedente extractor può aver lasciato il cursore nativo a fine file.
             // Il guard protegge il reset; i lettori pread conservano il proprio offset logico.
-            if unsafe{libc::lseek(fd,0,libc::SEEK_SET)}<0 {let _=std::fs::remove_dir_all(&dir);return Err(std::io::Error::last_os_error().to_string());}
+            if unsafe{libc::lseek(fd,0,libc::SEEK_SET)}<0 {let error=std::io::Error::last_os_error();let _=std::fs::remove_dir_all(&dir);return Err(error.to_string());}
             cmd.args(["-fd",&fd.to_string(),"-i","fd:"]);
             unsafe {cmd.pre_exec(move || {
                 let flags=libc::fcntl(fd,libc::F_GETFD);
