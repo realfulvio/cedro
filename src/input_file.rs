@@ -15,6 +15,19 @@ pub fn register(alias_fd:i32,file:Arc<StdFile>) {
     GRANTS.get_or_init(Default::default).lock().unwrap_or_else(|e|e.into_inner()).insert(alias_fd,file);
 }
 
+#[cfg(unix)]
+static CANCELLED:OnceLock<fn()->bool>=OnceLock::new();
+#[cfg(unix)]
+pub fn cancellation(check:fn()->bool){let _=CANCELLED.set(check);}
+#[cfg(unix)]
+pub fn cancelled()->bool {CANCELLED.get().is_some_and(|check|check())}
+
+/// Una open file description separata per il lock, mai il descriptor dati condiviso.
+#[cfg(unix)]
+pub struct NativeGuard(StdFile);
+#[cfg(unix)]
+impl Drop for NativeGuard {fn drop(&mut self){use std::os::fd::AsRawFd;unsafe{libc::flock(self.0.as_raw_fd(),libc::LOCK_UN);}}}
+
 pub struct File {
     inner: Source,
 }
@@ -42,6 +55,32 @@ impl File {
         }
         StdFile::open(path).map(Self::from)
     }
+    #[cfg(unix)]
+    pub fn is_grant(&self)->bool {matches!(self.inner,Source::Granted{..})}
+
+    /// Serializza soltanto consumatori nativi che usano lseek/read sullo stesso grant.
+    #[cfg(unix)]
+    pub fn lock_native(&self,cancel:impl Fn()->bool)->io::Result<Option<NativeGuard>> {
+        self.lock_native_in(&crate::config_dir().join("saf-locks"),cancel)
+    }
+    #[cfg(unix)]
+    fn lock_native_in(&self,dir:&Path,cancel:impl Fn()->bool)->io::Result<Option<NativeGuard>> {
+        use std::os::unix::fs::{MetadataExt,OpenOptionsExt};
+        use std::os::fd::AsRawFd;
+        let Source::Granted{file,..}=&self.inner else{return Ok(None)};
+        let stat=file.metadata()?;
+        std::fs::create_dir_all(dir)?;
+        let lock=std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).mode(0o600)
+            .open(dir.join(format!("{:x}-{:x}",stat.dev(),stat.ino())))?;
+        loop {
+            if cancel(){return Err(io::Error::new(io::ErrorKind::Interrupted,"Annullato"));}
+            if unsafe{libc::flock(lock.as_raw_fd(),libc::LOCK_EX|libc::LOCK_NB)}==0 {return Ok(Some(NativeGuard(lock)));}
+            let error=io::Error::last_os_error();
+            if !matches!(error.raw_os_error(),Some(libc::EWOULDBLOCK)|Some(libc::EINTR)){return Err(error);}
+            std::thread::sleep(std::time::Duration::from_millis(40));
+        }
+    }
+
     pub fn create(path:impl AsRef<Path>)->io::Result<Self> {StdFile::create(path).map(Self::from)}
     pub fn metadata(&self)->io::Result<Metadata> {
         match &self.inner {Source::Regular(f)=>f.metadata(),#[cfg(unix)] Source::Granted{file,..}=>file.metadata()}
@@ -51,6 +90,7 @@ impl File {
 #[cfg(unix)]
 impl std::os::fd::AsRawFd for File {
     fn as_raw_fd(&self)->std::os::fd::RawFd {
+        use std::os::fd::AsRawFd;
         match &self.inner {Source::Regular(f)=>f.as_raw_fd(),Source::Granted{file,..}=>file.as_raw_fd()}
     }
 }
@@ -116,6 +156,38 @@ impl symphonia::core::io::MediaSource for File {
 mod tests {
     use super::*;
     use std::os::fd::AsRawFd;
+    #[test]
+    fn native_lock_child_entry() {
+        let Some(dir)=std::env::var_os("CEDRO_LOCK_TEST_DIR").map(std::path::PathBuf::from) else{return};
+        let source=File{inner:Source::Granted{file:Arc::new(StdFile::open(dir.join("data")).unwrap()),cursor:0}};
+        std::fs::write(dir.join("child-started"),b"ready").unwrap();
+        let _guard=source.lock_native_in(&dir.join("locks"),||false).unwrap();
+        std::fs::write(dir.join("child-acquired"),b"locked").unwrap();
+    }
+    #[test]
+    fn native_lock_is_interprocess_cancellable_and_leaves_pread_free() {
+        let dir=std::env::temp_dir().join(format!("cedro-native-lock-{}",std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();std::fs::write(dir.join("data"),b"abcdef").unwrap();
+        let mut source=File{inner:Source::Granted{file:Arc::new(StdFile::open(dir.join("data")).unwrap()),cursor:0}};
+        let guard=source.lock_native_in(&dir.join("locks"),||false).unwrap();
+        let mut child=std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact","input_file::tests::native_lock_child_entry","--nocapture"])
+            .env("CEDRO_LOCK_TEST_DIR",&dir).spawn().unwrap();
+        let deadline=std::time::Instant::now()+std::time::Duration::from_secs(5);
+        while !dir.join("child-started").exists() {
+            assert!(std::time::Instant::now()<deadline);std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(80));
+        assert!(!dir.join("child-acquired").exists());
+        let start=std::time::Instant::now();
+        let error=source.lock_native_in(&dir.join("locks"),||start.elapsed()>std::time::Duration::from_millis(80)).err().unwrap();
+        assert_eq!(error.kind(),io::ErrorKind::Interrupted);
+        let mut bytes=[0;3];source.read_exact(&mut bytes).unwrap();assert_eq!(&bytes,b"abc");
+        drop(guard);
+        assert!(child.wait().unwrap().success());assert!(dir.join("child-acquired").exists());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn grant_readers_have_independent_positions_in_parallel() {
         let dir=std::env::temp_dir().join(format!("cedro-grant-{}",std::process::id()));
