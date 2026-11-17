@@ -211,6 +211,7 @@ pub enum Azione {
 
 /// Un lavoro da far partire col motore.
 pub struct Compito {
+    pub voce: crate::worker::Voce,
     pub web: Option<crate::web::Scelte>,
     pub id: u32,
     pub file: PathBuf,
@@ -236,7 +237,7 @@ pub enum Effetto {
     Ridisegna,
     /// Da eseguire col motore.
     /// `opts`: le scelte delle schermate (None = quelle di sempre); `unisci`: i PDF da unire, in ordine, con le pagine.
-    Converti { web:Option<crate::web::Scelte>, id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)> },
+    Converti { voce:crate::worker::Voce, web:Option<crate::web::Scelte>, id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)> },
     /// Prova la password del PDF: se va, se ne fa una copia senza.
     Sblocca(String),
     /// Legge l'onda dell'audio di una revisione (percorso, durata).
@@ -549,6 +550,8 @@ pub struct App {
     pub modello: usize,
     /// Quante persone parlano (trascrizione): 0 Automatico, 1 una sola (niente riconoscimento), 2..=8.
     pub voci: u8,
+    pub referto: bool,
+    pub tracce: std::collections::HashMap<PathBuf, rivedi::Traccia>,
     pub lavori: Vec<Lavoro>,
     pub labs: labs::Laboratorio,
     pub uscite: std::collections::HashMap<u32, Vec<(PathBuf, String, Option<String>)>>,
@@ -591,6 +594,7 @@ pub struct App {
     pub mostra_tastiera: bool,
     /// «Rivedi trascrizione», a tutto schermo.
     pub rivedi: Option<rivedi::Rivedi>,
+    pub anteprima_tras: Option<rivedi::Rivedi>,
     /// «Altre opzioni», e le scelte dell'ultima volta.
     pub opzioni: Option<opzioni::Opzioni>,
     opzioni_salvate: Option<cedro::conversioni::Values>,
@@ -648,6 +652,8 @@ impl App {
             qualita: 82,
             modello: modello_iniziale(),
             voci: 0,
+            referto: false,
+            tracce: Default::default(),
             lavori: Vec::new(),
             uscite: Default::default(),
             chiavi_lavori: Default::default(),
@@ -675,6 +681,7 @@ impl App {
             campo: None,
             mostra_tastiera: false,
             rivedi: None,
+            anteprima_tras: None,
             opzioni: None,
             opzioni_salvate: None,
             impostazioni: false,
@@ -746,6 +753,11 @@ impl App {
 
     /// Un lavoro è finito (o fallito).
     pub fn finisce(&mut self, id: u32, stato: Stato) -> Effetto {
+        let stato = if matches!(&stato,Stato::Errore(e) if e=="nessun parlato riconosciuto nell'audio") {
+            let secs=self.lavori.iter().find(|l|l.id==id).and_then(|l|l.sorgente.as_ref()).and_then(|p|self.tracce.get(p)).map_or(0.0,|t|t.secs);
+            Stato::Fatto {path:PathBuf::new(),nome:String::new(),msg:format!("{} · {:.1} s. {}",cedro::i18n::tr("Nessun parlato riconosciuto"),secs,cedro::i18n::tr("Prova una registrazione con la voce più vicina al microfono."))}
+        } else {stato};
+        self.fine_trascrizione(id);
         self.annullamenti.remove(&id);
         self.salvata(id, &stato);
         if let Some(rv) = self.rivedi.as_mut().filter(|rv| rv.riassunto.as_ref().is_some_and(|r| r.0 == id)) {
@@ -766,7 +778,7 @@ impl App {
         if self.anim.in_moto() || self.firma.busy() || self.firma.viewer.is_some() && !self.fpag.finite {
             return true;
         }
-        if std::mem::take(&mut self.pdf.ridisegna) || self.rivedi.as_ref().is_some_and(|r| r.suona()) {
+        if std::mem::take(&mut self.pdf.ridisegna) {
             return true;
         }
         false
@@ -1149,10 +1161,10 @@ impl App {
         self.dal_foglio = false;
         self.pdf.pagina = None;
         self.campo = None;
-        // Per «trascrivi» il campo qualità porta il modello scelto (bit bassi) e quante persone parlano (bit alti).
-        let qualita = if id == "trascrivi" || id == "web-testo" { self.modello as u8 | self.voci.min(8) << 4 } else { self.qualita };
-        let web=id.starts_with("web-").then(||{let mut w=self.web.clone();w.media_quality=self.qualita;w.voce=crate::worker::Voce{modello:self.modello,voci:self.voci.min(8)};w});
-        Effetto::Converti { web, id: lavoro, file: file.path, azione: id, qualita, prog, opts, unisci }
+        let qualita = self.qualita;
+        let voce = crate::worker::Voce { modello: self.modello, voci: self.voci.min(8), referto: self.referto };
+        let web=id.starts_with("web-").then(||{let mut w=self.web.clone();w.media_quality=self.qualita;w.voce=voce;w});
+        Effetto::Converti { voce, web, id: lavoro, file: file.path, azione: id, qualita, prog, opts, unisci }
     }
 
     fn attiva(&mut self, a: Azione) -> Effetto {
@@ -2060,6 +2072,7 @@ impl App {
             Stato::InCorso => (if self.annullamenti.contains(&l.id) {"Annullamento…"} else {"In corso"}.to_string(), pal.primary),
             Stato::Fatto { .. } if outputs.iter().any(|o|o.2.is_some()) => ("Da salvare".to_string(), self.avviso()),
             Stato::Fatto { msg, .. } if avviso_motore(msg) => ("Avviso".to_string(), self.avviso()),
+            Stato::Fatto { path, .. } if path.as_os_str().is_empty() => ("Concluso".into(),pal.muted),
             Stato::Fatto { .. } => ("Fatto".to_string(), pal.ok),
             Stato::Errore(_) => ("Non riuscito".to_string(), pal.bad),
         };
@@ -2068,7 +2081,10 @@ impl App {
         p.text(&nome, x + 14.0, y + 8.0, w - sw - 40.0, 28.0, 16.0, Weight::Semibold, pal.text, Align::Left);
         p.text(&stato_txt, x + w - sw - 14.0, y + 8.0, sw, 28.0, 14.0, Weight::Semibold, stato_col, Align::Right);
         match &l.stato {
-            Stato::InCorso if trascrive => self.avanzamento_trascrizione(p, &l, (x + 12.0, y + 42.0, w - 24.0, alt - 110.0)),
+            Stato::InCorso if trascrive => {
+                self.avanzamento_trascrizione(p, &l, (x+12.0,y+42.0,w-24.0,alt-110.0));
+                self.bottone_a(p,(x+12.0,y+alt-108.0,w-24.0,48.0),"Onda e testo",ic::AUDIO,pal.surface,pal.primary,Azione::Rivedi(l.id),vista);
+            },
             Stato::InCorso => {
                 let (bx, by, bw) = (x + 14.0, y + 44.0, w - 28.0);
                 p.rrect(bx, by, bw, 8.0, 4.0, Some(pal.alt), None);

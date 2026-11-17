@@ -11,15 +11,66 @@ import android.os.Bundle;
  * senza, il selettore di file non può restituire la scelta e una nuova condivisione a app aperta si perde.
  * Rust legge tutto con scelto() e novita().
  */
-public class CedroActivity extends NativeActivity {
+public class CedroActivity extends NativeActivity implements android.media.AudioManager.OnAudioFocusChangeListener {
     public static final int CODICE_SCELTA = 4242;
     private volatile Uri[] scelti;
     private volatile boolean novita;
+
+    private android.media.AudioManager audioManager;
+    private android.media.AudioFocusRequest audioRequest;
+    private boolean audioOwned;
+    private volatile boolean audioStop;
+    private final android.content.BroadcastReceiver audioNoisy = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context context, Intent intent) { audioStop = true; }
+    };
+
+    // NativeActivity/AAudio non consegnano a Rust la callback Java di AudioManager.
+    // Questo ponte non riproduce audio: Rust continua a gestire player, PCM e posizione.
+    @Override public void onAudioFocusChange(int focus) {
+        if (focus <= 0) audioStop = true; // anche duck: il parlato si mette in pausa
+    }
+
+    public synchronized boolean audioFocus(boolean playing) {
+        if (audioManager == null) {
+            audioManager = (android.media.AudioManager)getSystemService(AUDIO_SERVICE);
+            audioRequest = new android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(new android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                .setOnAudioFocusChangeListener(this, new android.os.Handler(getMainLooper())).build();
+        }
+        boolean stop = audioStop;
+        audioStop = false;
+        if ((!playing || stop) && audioOwned) {
+            audioManager.abandonAudioFocusRequest(audioRequest);
+            audioOwned = false;
+        }
+        if (playing && !stop && !audioOwned) {
+            audioOwned = audioManager.requestAudioFocus(audioRequest) == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        }
+        return !playing || (!stop && audioOwned);
+    }
+
+    @Override public boolean dispatchKeyEvent(android.view.KeyEvent event) {
+        int key = event.getKeyCode();
+        if (key == android.view.KeyEvent.KEYCODE_MEDIA_PAUSE || key == android.view.KeyEvent.KEYCODE_MEDIA_STOP) {
+            if (event.getAction() == android.view.KeyEvent.ACTION_DOWN) audioStop = true;
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override protected void onDestroy() {
+        unregisterReceiver(audioNoisy);
+        audioFocus(false);
+        super.onDestroy();
+    }
 
     @Override
     protected void onCreate(Bundle stato) {
         super.onCreate(stato);
         ricordaIntento(getIntent());
+        registerReceiver(audioNoisy, new android.content.IntentFilter(android.media.AudioManager.ACTION_AUDIO_BECOMING_NOISY));
     }
 
     private void ricordaIntento(Intent intento) {
