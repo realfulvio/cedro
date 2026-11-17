@@ -4,7 +4,7 @@ name: Android F-Droid
 # aggiorna l'indice e lo mette su GitHub Pages. Gli APK sono quelli firmati dalla CI «Android» (la chiave dell'app),
 # l'indice è firmato con una chiave a parte (quella del repository).
 # Secret: FDROID_KEYSTORE_B64 (keystore del repository in base64), FDROID_KS_PASS. Pages va attivato: Settings → Pages → «GitHub Actions».
-# Parte a mano, quando si pubblica una release Android o quando cambia la cartella site/ su main.
+# Parte a mano, quando si pubblica una release, quando cambia la cartella site/ su main e ogni 6 ore (per il sito).
 
 on:
   release:
@@ -13,7 +13,11 @@ on:
   # F-Droid va rifatto insieme al sito, altrimenti /fdroid/repo sparirebbe.
   push:
     branches: [main]
-    paths: ["site/**"]
+    paths: ["site/**", "tools/aggiorna-sito.py"]
+  # Le release desktop le crea la CI e non fanno partire altri workflow: il sito controlla da solo, ogni 6 ore,
+  # se c'è una versione nuova da mettere nella pagina «Scarica».
+  schedule:
+    - cron: "17 */6 * * *"
   workflow_dispatch:
     inputs:
       ref:
@@ -31,7 +35,7 @@ concurrency:
 
 jobs:
   repo:
-    if: ${{ github.event_name != 'release' || startsWith(github.event.release.tag_name, 'android-v') }}
+    if: ${{ github.event_name != 'release' || startsWith(github.event.release.tag_name, 'android-v') || startsWith(github.event.release.tag_name, 'v') }}
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
@@ -88,10 +92,15 @@ jobs:
         with:
           ref: main
           path: _main
-      - run: |
+      - name: Pubblica sito e repository F-Droid
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           mkdir -p _site/fdroid && cp -r fdroid/repo _site/fdroid/
           cp -r _main/site/. _site/
           touch _site/.nojekyll
+          # Versione, file, dimensioni e data dell'ultima release desktop (se non si legge, resta la pagina com'è).
+          python3 _main/tools/aggiorna-sito.py _site/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
