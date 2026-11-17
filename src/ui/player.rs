@@ -48,6 +48,7 @@ impl Shared {
     }
 
     fn set_paused(&self, paused: bool) {
+        let paused=paused||self.failed.load(Ordering::Acquire);
         self.paused.store(paused, Ordering::Relaxed);
         let mut c = self.clock.lock().unwrap_or_else(|e| e.into_inner());
         if paused {
@@ -67,6 +68,14 @@ impl Shared {
         if c.1.is_some() {
             c.1 = Some(Instant::now());
         }
+    }
+
+    #[cfg(any(target_os="android",test))]
+    fn fail_audio(&self) {
+        self.failed.store(true,Ordering::Release);
+        self.loading.store(false,Ordering::Relaxed);
+        self.set_paused(true);
+        (self.wake)();
     }
 
     fn finish(&self) {
@@ -119,7 +128,7 @@ impl Player {
 
     /// Vero mentre suona (anche quando sta ancora preparando l'audio).
     pub fn playing(&self) -> bool {
-        !self.sh.paused.load(Ordering::Relaxed) && !self.sh.ended.load(Ordering::Relaxed)
+        !self.failed() && !self.sh.paused.load(Ordering::Relaxed) && !self.sh.ended.load(Ordering::Relaxed)
     }
 
     /// Velocità di ascolto in percento (100 = normale; l'audio si ricampiona, quindi cambia anche il tono).
@@ -132,7 +141,7 @@ impl Player {
         self.sh.volume.store(percent.min(100), Ordering::Relaxed);
     }
 
-    pub fn failed(&self) -> bool { self.sh.failed.load(Ordering::Relaxed) }
+    pub fn failed(&self) -> bool { self.sh.failed.load(Ordering::Acquire) }
 
     pub fn loading(&self) -> bool {
         self.sh.loading.load(Ordering::Relaxed)
@@ -145,6 +154,7 @@ impl Player {
 
     /// Play o pausa; finito il file, ricomincia dall'inizio.
     pub fn toggle(&mut self) {
+        if self.failed() { return; }
         if self.sh.ended.swap(false, Ordering::Relaxed) {
             self.seek(0.0);
             self.sh.set_paused(false);
@@ -156,6 +166,7 @@ impl Player {
 
     /// Salta al secondo `secs`.
     pub fn seek(&mut self, secs: f64) {
+        if self.failed() { return; }
         let secs = self.duration.map_or(secs, |d| secs.min((d - 0.05).max(0.0))).max(0.0);
         self.sh.ended.store(false, Ordering::Relaxed);
         self.sh.jump(secs);
@@ -248,10 +259,7 @@ fn audio_thread(path: &Path, sh: Arc<Shared>) {
     #[cfg(target_os="android")]
     {
         // Un orologio virtuale non è prova che AAudio stia suonando: sul telefono si ferma e si dice.
-        sh.failed.store(true,Ordering::Relaxed);
-        sh.loading.store(false,Ordering::Relaxed);
-        sh.set_paused(true);
-        (sh.wake)();
+        sh.fail_audio();
         return;
     }
     // Niente audio (o niente casse): corre l'orologio, così il video si vede lo stesso.
@@ -384,5 +392,38 @@ fn video_thread(path: &Path, from: f64, generation: u64, sh: Arc<Shared>) {
     // Senza audio la fine del video è la fine del file.
     if alive(&sh, generation) && !sh.has_audio.load(Ordering::Relaxed) && !sh.loading.load(Ordering::Relaxed) {
         sh.finish();
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failed_audio_cannot_resume_or_seek_a_virtual_clock() {
+        // Stato di un player già decodificato: nessun dispositivo/thread audio nel test.
+        // fail_audio è la stessa transizione usata dal ramo AAudio su errore.
+        let sh=Arc::new(Shared {
+            stop:AtomicBool::new(false),paused:AtomicBool::new(false),ended:AtomicBool::new(false),
+            loading:AtomicBool::new(false),has_audio:AtomicBool::new(false),failed:AtomicBool::new(false),
+            audio_pos:AtomicU64::new(0),audio_len:AtomicU64::new(0),audio_rate:AtomicU32::new(16000),
+            speed:AtomicU32::new(100),volume:AtomicU32::new(100),generation:AtomicU64::new(0),
+            clock:Mutex::new((7.0,Some(Instant::now()-Duration::from_secs(1)))),frame:Mutex::new(None),wake:Arc::new(||{}),
+        });
+        let mut p=Player{path:PathBuf::from("audio-fallito.wav"),duration:Some(60.0),video:false,sh};
+        p.sh.fail_audio();
+        let at=p.position();assert!(at>=8.0);assert!(p.failed());assert!(!p.playing());assert!(!p.loading());
+        for target in [18.0,0.0,45.0] {
+            p.toggle();p.seek(target);p.toggle();
+            // Anche una ripresa interna concorrente non deve riaccendere il clock.
+            p.sh.set_paused(false);
+            assert!(!p.playing());assert_eq!(p.position(),at);
+            assert!(p.sh.clock.lock().unwrap().1.is_none());
+        }
+        p.sh.ended.store(true,Ordering::Relaxed);p.toggle();
+        assert!(!p.playing());assert_eq!(p.position(),at);
+        std::thread::sleep(Duration::from_millis(20));
+        assert_eq!(p.position(),at,"avanzamento apparente dopo failure → Play/seek");
     }
 }
