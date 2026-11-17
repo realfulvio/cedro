@@ -7,12 +7,12 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
 #[cfg(unix)]
-static GRANTS: OnceLock<Mutex<std::collections::HashMap<i32,Arc<StdFile>>>> = OnceLock::new();
+static GRANTS: OnceLock<Mutex<std::collections::HashMap<std::path::PathBuf,(i32,Arc<StdFile>)>>> = OnceLock::new();
 
 /// Il chiamante conserva una lease autorizzata; `alias_fd` è il numero nel symlink privato.
 #[cfg(unix)]
-pub fn register(alias_fd:i32,file:Arc<StdFile>) {
-    GRANTS.get_or_init(Default::default).lock().unwrap_or_else(|e|e.into_inner()).insert(alias_fd,file);
+pub fn register(path:&Path,alias_fd:i32,file:Arc<StdFile>) {
+    GRANTS.get_or_init(Default::default).lock().unwrap_or_else(|e|e.into_inner()).insert(path.to_path_buf(),(alias_fd,file));
 }
 
 #[cfg(unix)]
@@ -43,14 +43,15 @@ impl File {
     pub fn open(path:impl AsRef<Path>)->io::Result<Self> {
         let path=path.as_ref();
         #[cfg(unix)]
-        if let Some(grants)=GRANTS.get() {
-            // Read only the explicit private alias, never canonicalize the provider pathname.
-            if let Ok(target)=std::fs::read_link(path) {
-                if let Some(fd)=target.to_str().and_then(|s|s.strip_prefix("/proc/self/fd/")).and_then(|s|s.parse::<i32>().ok()) {
-                    if let Some(file)=grants.lock().unwrap_or_else(|e|e.into_inner()).get(&fd).cloned() {
-                        return Ok(Self{inner:Source::Granted{file,cursor:0}});
-                    }
+        if let Ok(target)=std::fs::read_link(path) {
+            if target.to_str().is_some_and(|s|s.starts_with("/proc/self/fd/")) {
+                // The pathname is part of the grant identity. A persisted alias from an earlier
+                // process must never select a new grant merely because the fd number was reused.
+                let fd=target.to_str().and_then(|s|s.strip_prefix("/proc/self/fd/")).and_then(|s|s.parse::<i32>().ok());
+                if let Some((registered,file))=GRANTS.get().and_then(|g|g.lock().unwrap_or_else(|e|e.into_inner()).get(path).cloned()) {
+                    if Some(registered)==fd {return Ok(Self{inner:Source::Granted{file,cursor:0}});}
                 }
+                return Err(io::Error::new(io::ErrorKind::PermissionDenied,"SAF alias has no current grant"));
             }
         }
         StdFile::open(path).map(Self::from)
@@ -188,13 +189,28 @@ mod tests {
     }
 
     #[test]
+    fn stale_alias_cannot_select_another_paths_reused_fd() {
+        let dir=std::env::temp_dir().join(format!("cedro-stale-grant-{}",std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let data=dir.join("data");std::fs::write(&data,b"new grant").unwrap();
+        let file=Arc::new(StdFile::open(&data).unwrap());let fd=file.as_raw_fd();
+        let current=dir.join("current");let stale=dir.join("stale");
+        for path in [&current,&stale]{std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),path).unwrap();}
+        register(&current,fd,file);
+        assert_eq!(read(&current).unwrap(),b"new grant");
+        assert_eq!(File::open(&stale).err().unwrap().kind(),io::ErrorKind::PermissionDenied);
+        GRANTS.get().unwrap().lock().unwrap().remove(&current);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn grant_readers_have_independent_positions_in_parallel() {
         let dir=std::env::temp_dir().join(format!("cedro-grant-{}",std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let data=dir.join("data");std::fs::write(&data,b"0123456789abcdef").unwrap();
         let mut original=StdFile::open(&data).unwrap();original.seek(SeekFrom::Start(7)).unwrap();
-        let original=Arc::new(original);let fd=original.as_raw_fd();register(fd,original.clone());
-        let alias=dir.join("slide.ndpi");std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&alias).unwrap();
+        let original=Arc::new(original);let fd=original.as_raw_fd();
+        let alias=dir.join("slide.ndpi");register(&alias,fd,original.clone());std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&alias).unwrap();
         std::thread::scope(|scope| {
             for offset in 0..12u64 {let path=&alias;scope.spawn(move || {
                 let mut f=File::open(path).unwrap();
@@ -208,7 +224,7 @@ mod tests {
             });}
         });
         assert_eq!((&*original).stream_position().unwrap(),7);
-        GRANTS.get().unwrap().lock().unwrap().remove(&fd);
+        GRANTS.get().unwrap().lock().unwrap().remove(&alias);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }
