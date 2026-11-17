@@ -41,7 +41,11 @@ impl From<StdFile> for File {
 }
 impl File {
     pub fn open(path:impl AsRef<Path>)->io::Result<Self> {
-        let path=path.as_ref();
+        Self::open_with_policy(path.as_ref(),cfg!(target_os="android"))
+    }
+    fn open_with_policy(path:&Path,require_registered_alias:bool)->io::Result<Self> {
+        #[cfg(not(unix))]
+        let _=require_registered_alias;
         #[cfg(unix)]
         if let Ok(target)=std::fs::read_link(path) {
             if target.to_str().is_some_and(|s|s.starts_with("/proc/self/fd/")) {
@@ -51,7 +55,7 @@ impl File {
                 if let Some((registered,file))=GRANTS.get().and_then(|g|g.lock().unwrap_or_else(|e|e.into_inner()).get(path).cloned()) {
                     if Some(registered)==fd {return Ok(Self{inner:Source::Granted{file,cursor:0}});}
                 }
-                return Err(io::Error::new(io::ErrorKind::PermissionDenied,"SAF alias has no current grant"));
+                if require_registered_alias {return Err(io::Error::new(io::ErrorKind::PermissionDenied,"SAF alias has no current grant"));}
             }
         }
         StdFile::open(path).map(Self::from)
@@ -65,7 +69,7 @@ impl File {
         self.lock_native_in(&crate::config_dir().join("saf-locks"),cancel)
     }
     #[cfg(unix)]
-    fn lock_native_in(&self,dir:&Path,cancel:impl Fn()->bool)->io::Result<Option<NativeGuard>> {
+    pub(crate) fn lock_native_in(&self,dir:&Path,cancel:impl Fn()->bool)->io::Result<Option<NativeGuard>> {
         use std::os::unix::fs::{MetadataExt,OpenOptionsExt};
         use std::os::fd::AsRawFd;
         let Source::Granted{file,..}=&self.inner else{return Ok(None)};
@@ -198,7 +202,10 @@ mod tests {
         for path in [&current,&stale]{std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),path).unwrap();}
         register(&current,fd,file);
         assert_eq!(read(&current).unwrap(),b"new grant");
-        assert_eq!(File::open(&stale).err().unwrap().kind(),io::ErrorKind::PermissionDenied);
+        assert_eq!(File::open_with_policy(&stale,true).err().unwrap().kind(),io::ErrorKind::PermissionDenied);
+        // Desktop Unix has no SAF lifecycle: legitimate /proc fd aliases keep std::fs semantics.
+        #[cfg(not(target_os="android"))]
+        assert_eq!(read(&stale).unwrap(),b"new grant");
         GRANTS.get().unwrap().lock().unwrap().remove(&current);
         std::fs::remove_dir_all(dir).unwrap();
     }

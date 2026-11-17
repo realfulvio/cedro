@@ -164,12 +164,18 @@ pub fn open(path: &Path, straighten: bool, target_side: Option<u32>) -> Result<D
         // La rotazione delle foto HEIC è nel file (irot/imir) e heifer la applica: l'EXIF non conta.
         "heic" | "heif" | "hif" => open_heic(path, target_side),
         _ if straighten => crate::ocr::open_upright(path),
-        _ => image::ImageReader::new(std::io::BufReader::new(crate::input_file::File::open(path).map_err(|e|e.to_string())?))
-            .with_guessed_format()
-            .map_err(|e| e.to_string())?
+        _ => reader(path)?
             .decode()
             .map_err(|e| format!("immagine non letta: {e}")),
     }
+}
+
+/// Stessa precedenza di ImageReader::open: estensione come fallback, magic bytes se riconosciuti.
+/// Serve anche a TGA, che non ha una firma sufficiente per with_guessed_format da solo.
+pub(crate) fn reader(path:&Path)->Result<image::ImageReader<std::io::BufReader<crate::input_file::File>>,String> {
+    let mut reader=image::ImageReader::new(std::io::BufReader::new(crate::input_file::File::open(path).map_err(|e|e.to_string())?));
+    if let Ok(format)=image::ImageFormat::from_path(path){reader.set_format(format);}
+    reader.with_guessed_format().map_err(|e|e.to_string())
 }
 
 /// I caratteri del sistema, cercati una volta sola: leggerli tutti a ogni SVG costava decimi di secondo
@@ -358,6 +364,27 @@ pub fn ico_ready(img: &DynamicImage) -> DynamicImage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(unix)]
+    fn tga_extension_survives_grant_reader_and_magic_still_wins() {
+        use std::os::fd::AsRawFd;
+        let dir=std::env::temp_dir().join(format!("cedro-tga-grant-{}",std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let plain=dir.join("source.tga");
+        let expected=image::RgbImage::from_pixel(3,2,image::Rgb([17,83,201]));
+        expected.save_with_format(&plain,image::ImageFormat::Tga).unwrap();
+        let file=std::sync::Arc::new(fs::File::open(&plain).unwrap());let fd=file.as_raw_fd();
+        let alias=dir.join("granted.tga");std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&alias).unwrap();crate::input_file::register(&alias,fd,file);
+        for path in [&plain,&alias] {
+            assert_eq!(open(path,false,None).unwrap().to_rgb8(),expected);
+            assert_eq!(crate::ocr::open_upright(path).unwrap().to_rgb8(),expected);
+            assert_eq!(crate::ui::media::image_thumb(path,64).unwrap().1,(3,2));
+        }
+        let wrong=dir.join("png-named-tga.tga");expected.save_with_format(&wrong,image::ImageFormat::Png).unwrap();
+        assert_eq!(open(&wrong,false,None).unwrap().to_rgb8(),expected);
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     fn ftyp(major: &[u8; 4], compatible: &[&[u8; 4]]) -> Vec<u8> {
         let size = 16 + 4 * compatible.len();
