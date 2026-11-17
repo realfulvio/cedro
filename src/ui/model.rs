@@ -476,6 +476,12 @@ pub struct App {
     pub lavori_aperti: bool,
     /// L'ultimo «Copia per il quaderno» (il lavoro, da 0 tra quelli di oggi): per dire «Copiato».
     pub quaderno_copiato: Option<usize>,
+    /// Dove è stato salvato il registro dei lavori (o perché no), per dirlo nella pagina «Lavori».
+    pub lavori_esportato: Option<Result<PathBuf, String>>,
+    /// Il lavoro appena finito è entrato nell'elenco: il pannello del risultato offre «Copia per il quaderno».
+    pub lavoro_appena: bool,
+    /// «Copia per il quaderno» del lavoro appena finito già premuto: per dire «Copiato».
+    pub lavoro_appena_copiato: bool,
     pub notice: Option<Notice>,
     pub ask: Option<Ask>,
     /// Miniature, misure e numero di pagine dei file già letti.
@@ -581,6 +587,9 @@ impl App {
             caso_bozza: (String::new(), String::new()),
             lavori_aperti: false,
             quaderno_copiato: None,
+            lavoro_appena: false,
+            lavori_esportato: None,
+            lavoro_appena_copiato: false,
             notice: None,
             ask: None,
             media: HashMap::new(),
@@ -1451,6 +1460,8 @@ impl App {
 
     /// «Ricomincia»: svuota la lista.
     pub fn restart(&mut self) {
+        self.lavoro_appena = false;
+        self.lavoro_appena_copiato = false;
         if self.busy() {
             return;
         }
@@ -1616,6 +1627,15 @@ impl App {
         let when = crate::nametemplate::now().unix;
         crate::caso::registra(&mut self.lavori, crate::caso::Lavoro { when, what: crate::i18n::tr(what).to_string(), caso: self.caso.as_ref().map(|c| c.code.clone()).unwrap_or_default(), outputs });
         self.quaderno_copiato = None;
+        self.lavoro_appena = true;
+        self.lavoro_appena_copiato = false;
+    }
+
+    /// Salva il registro di tutti i lavori ricordati in Excel, nella cartella scelta per i risultati
+    /// (o in Download, se i risultati vanno accanto agli originali).
+    pub fn lavori_esporta(&mut self) {
+        let dir = self.dest.clone().filter(|d| d.is_dir()).unwrap_or_else(downloads_dir);
+        self.lavori_esportato = Some(crate::caso::salva_registro(&dir, &self.lavori, self.caso.as_ref()));
     }
 
     /// Mette il caso scritto nella finestrella (o lo toglie, se il codice è vuoto) e ricorda la scelta.
@@ -1667,6 +1687,8 @@ impl App {
             f.done_key = None;
         }
         let cancel = Arc::new(AtomicBool::new(false));
+        self.lavoro_appena = false;
+        self.lavoro_appena_copiato = false;
         self.job = Some(Job { kind, total: files.len(), done: 0, failed: 0, cancel: cancel.clone(), key: self.settings_key(), targets: files.to_vec(), part: 0.0, file_started: None });
         self.notice = None;
         cancel
