@@ -286,7 +286,7 @@ impl App {
     pub(super) fn fine_trascrizione(&mut self,id:u32,stato:&Stato) {
         let success=matches!(stato,Stato::Fatto{path,..} if !path.as_os_str().is_empty());
         for rv in [&mut self.rivedi,&mut self.anteprima_tras].into_iter().flatten().filter(|r|r.job==Some(id)) {
-            rv.live=!success;
+            rv.live = !success;
             if !success {rv.nota=match stato {Stato::Errore(e)=>e.clone(),Stato::Fatto{msg,..}=>msg.clone(),_=>String::new()};}
             if let Some(s)=success.then(||revisione::load(&rv.r.source)).flatten() {
                 let mut r=Review::from_saved(&rv.r.source,s);r.bars=rv.r.bars.take();r.view=rv.r.view;r.tab=rv.r.tab;r.detect();
