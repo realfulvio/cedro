@@ -78,6 +78,7 @@ fn consenso(evento:Evento)->Result<(),String>{
 pub extern "C" fn cedro_lavoro_main() -> i32 {
     extern "C" fn annulla(_:i32){CANCEL.store(true,std::sync::atomic::Ordering::Release);}
     unsafe{libc::signal(libc::SIGUSR1,annulla as *const () as libc::sighandler_t);}
+    cedro::input_file::cancellation(||CANCEL.load(std::sync::atomic::Ordering::Acquire));
     android_logger::init_once(android_logger::Config::default().with_max_level(log::LevelFilter::Info).with_tag("CedroWorker"));
     cedro::componenti::osserva(Some(std::sync::Arc::new(|s|emetti(Evento::Componente(s.map(crate::web::Componente::da_core))))));
     cedro::componenti::verifica_download(Some(std::sync::Arc::new(|nome,bytes|consenso(Evento::Scarica(nome.into(),bytes)))));
@@ -85,7 +86,10 @@ pub extern "C" fn cedro_lavoro_main() -> i32 {
     let r = std::panic::catch_unwind(|| {
         use std::io::Read;
         let request: Richiesta = serde_json::from_reader(std::io::stdin().take(4 * 1024 * 1024)).map_err(|e| e.to_string())?;
-        if let Ok(libs)=std::env::var("CEDRO_LIB_DIR") {cedro::riassunto::android::set_libs(PathBuf::from(libs));}
+        if let Ok(libs)=std::env::var("CEDRO_LIB_DIR") {
+            cedro::riassunto::android::set_libs(PathBuf::from(&libs));
+            if let Some(home)=std::env::var_os("HOME"){cedro::youtube::android::set_dirs(PathBuf::from(libs),PathBuf::from(home));}
+        }
         diagnostica_saf(&request.file);
         esegui(request)
     }).unwrap_or_else(|_| Err("Il motore si è interrotto".into()));
