@@ -148,11 +148,11 @@ pub fn open(path: &Path, straighten: bool, target_side: Option<u32>) -> Result<D
     let ext = crate::engine::extension(path);
     let kind: &str = sniff(&head).unwrap_or(ext.as_str());
     // Un vetrino digitale non si apre intero: si prende un livello che sta in memoria.
-    if (kind == "tiff" || ext == "mrxs") && crate::svs::is_slide(path) {
+    if (kind == "tiff" || ext == "mrxs" || ext == "vsi") && crate::svs::is_slide(path) {
         return crate::svs::open_image(path, target_side);
     }
     // Microscopia (OME-TIFF, ImageJ, 16 bit): canali a colori e contrasto, non i 16 bit schiacciati.
-    if matches!(kind, "tiff" | "nd2" | "lif" | "czi") && crate::microscopia::is_stack(path) {
+    if (matches!(kind, "tiff" | "nd2" | "lif" | "czi") || ext == "vsi") && crate::microscopia::is_stack(path) {
         return crate::microscopia::apri(path);
     }
     match kind {

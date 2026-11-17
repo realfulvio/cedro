@@ -15,7 +15,7 @@ pub fn perform(path: &Path, action: &str, dir: &Path, opts: &Options) -> Option<
         return None;
     }
     if !vetrino {
-        return Some(Err(err("serve un vetrino digitale (.svs, .ndpi o .mrxs)")));
+        return Some(Err(err("serve un vetrino digitale (.svs, .ndpi, .mrxs o .vsi)")));
     }
     let report = |p: f32| crate::progress::report(p);
     Some((|| match action {
@@ -23,14 +23,15 @@ pub fn perform(path: &Path, action: &str, dir: &Path, opts: &Options) -> Option<
             // Il nome del file spesso è quello del paziente o del proprietario: la copia prende il codice del caso.
             let codice = crate::svs_lab::codice_caso(path);
             let ext = crate::svs_lab::estensione(path);
-            let out = if ext == "mrxs" {
-                // Il MIRAX ha anche la cartella dei dati: un nome libero per tutti e due.
+            let out = if ext == "mrxs" || ext == "vsi" {
+                // MIRAX e VSI hanno anche la cartella dei dati: un nome libero per tutti e due.
                 let base = super::templated_stem(&format!("{codice}-anonimo"));
                 let mut n = 1;
                 loop {
                     let nome = if n == 1 { base.clone() } else { format!("{base} ({n})") };
-                    let f = dir.join(format!("{nome}.mrxs"));
-                    if !f.exists() && !dir.join(&nome).exists() {
+                    let f = dir.join(format!("{nome}.{ext}"));
+                    let cartella = if ext == "vsi" { crate::vsi::cartella(&f) } else { dir.join(&nome) };
+                    if !f.exists() && !cartella.exists() {
                         break f;
                     }
                     n += 1;

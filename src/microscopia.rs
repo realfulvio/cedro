@@ -37,6 +37,8 @@ pub enum Origine {
     Leica,
     /// Un CZI di Zeiss (ZEN): una o più scene, anche a mosaico.
     Zeiss,
+    /// Un VSI di Olympus / Evident (cellSens): una o più aree scansionate in fluorescenza.
+    Olympus,
 }
 
 /// Da dove vengono i pixel.
@@ -46,6 +48,7 @@ enum Sorgente {
     Nd2(Arc<crate::nd2::Nd2>),
     Lif(Arc<crate::lif::Immagine>),
     Czi(Arc<crate::czi::Scena>),
+    Vsi(Arc<crate::vsi::Scena>),
 }
 
 impl std::fmt::Debug for Sorgente {
@@ -55,6 +58,7 @@ impl std::fmt::Debug for Sorgente {
             Sorgente::Nd2(_) => "Nd2",
             Sorgente::Lif(_) => "Lif",
             Sorgente::Czi(_) => "Czi",
+            Sorgente::Vsi(_) => "Vsi",
         })
     }
 }
@@ -153,6 +157,9 @@ pub fn is_stack(path: &Path) -> bool {
     if crate::nd2::riconosci(&head) || crate::lif::riconosci(&head) || crate::czi::riconosci(&head) {
         return true;
     }
+    if crate::engine::extension(path) == "vsi" {
+        return crate::vsi::is_fluorescenza(path);
+    }
     // Un ND2 dei primi NIS-Elements (JPEG 2000): lo si prende per dire che non si legge.
     if crate::engine::extension(path) == "nd2" && head.get(4..8) == Some(b"jP  ") {
         return true;
@@ -194,6 +201,11 @@ impl Pila {
 
     /// Tutte le immagini del file: una sola, tranne nei LIF e nei CZI con più scene (letti una volta sola).
     pub fn open_tutte(path: &Path) -> Result<Vec<Pila>, String> {
+        if crate::engine::extension(path) == "vsi" {
+            let scene = crate::vsi::scene(path)?;
+            let nomi: Vec<String> = if scene.len() > 1 { scene.iter().map(|s| s.nome.clone()).collect() } else { Vec::new() };
+            return Ok(scene.into_iter().enumerate().map(|(k, s)| Pila::da_vsi(s, nomi.clone(), k)).collect());
+        }
         if crate::czi::riconosci(&crate::imgfmt::head_of(path)) {
             let czi = crate::czi::Czi::open(path)?;
             let nomi = nomi_scene(&czi);
@@ -220,6 +232,12 @@ impl Pila {
 
     /// L'immagine numero `serie` del file (conta solo per i LIF e i CZI).
     pub fn open_serie(path: &Path, serie: usize) -> Result<Pila, String> {
+        if crate::engine::extension(path) == "vsi" {
+            let scene = crate::vsi::scene(path)?;
+            let nomi: Vec<String> = if scene.len() > 1 { scene.iter().map(|s| s.nome.clone()).collect() } else { Vec::new() };
+            let s = scene.into_iter().nth(serie).ok_or("area non trovata nel file VSI")?;
+            return Ok(Pila::da_vsi(s, nomi, serie));
+        }
         let head = crate::imgfmt::head_of(path);
         if crate::czi::riconosci(&head) {
             let czi = crate::czi::Czi::open(path)?;
@@ -336,6 +354,27 @@ impl Pila {
         p.serie = serie;
         p.numero_serie = numero;
         p.sorgente = Sorgente::Lif(Arc::new(i));
+        p
+    }
+
+    fn da_vsi(s: crate::vsi::Scena, serie: Vec<String>, numero: usize) -> Pila {
+        let mut p = Pila::vuota(Origine::Olympus, s.larghezza, s.altezza, Sorgente::Tiff);
+        let nomi: Vec<NomeColore> = s.nomi_canali.iter().map(|n| (n.clone(), None)).collect();
+        p.canali = if s.ets.campioni == 3 && s.canali == 3 {
+            vec![Canale { nome: "R".into(), colore: (255, 0, 0) }, Canale { nome: "G".into(), colore: (0, 255, 0) }, Canale { nome: "B".into(), colore: (0, 0, 255) }]
+        } else {
+            canali_standard(s.canali, &nomi)
+        };
+        p.z = s.z;
+        p.t = s.t;
+        p.um_per_px = s.um_per_px;
+        p.bit = s.bit;
+        if let Some((f, w, h)) = s.ridotta {
+            p.avviso = Some(format!("immagine grande ({w}×{h} pixel): letta ridotta 1:{f}, {}×{} pixel", s.larghezza, s.altezza));
+        }
+        p.serie = serie;
+        p.numero_serie = numero;
+        p.sorgente = Sorgente::Vsi(Arc::new(s));
         p
     }
 
@@ -749,6 +788,8 @@ impl Pila {
                     Origine::Leica => "LIF di Leica",
                     Origine::Zeiss if en => "Zeiss CZI",
                     Origine::Zeiss => "CZI di Zeiss",
+                    Origine::Olympus if en => "Olympus VSI",
+                    Origine::Olympus => "VSI di Olympus",
                 }
                 .into(),
             );
@@ -917,6 +958,7 @@ impl Pila {
             Sorgente::Nd2(n) => n.fotogramma(path, n.indice(z, t))?.into_iter().nth(c).ok_or_else(|| "canale non trovato".to_string()),
             Sorgente::Lif(i) => i.piano(path, c, z, t),
             Sorgente::Czi(s) => s.piano(path, c, z, t),
+            Sorgente::Vsi(s) => s.piano(c, z, t),
         }
     }
 
