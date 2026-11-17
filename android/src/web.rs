@@ -47,7 +47,7 @@ impl Componente {
         use cedro::componenti::Fase;
         let nome=cedro::i18n::tr(&self.nome);
         match self.fase {
-            Fase::Scarica{fatti,totale}=>if totale>0 {format!("{nome} · {}% · {} / {}",fatti.saturating_mul(100)/totale,cedro::size_words(fatti),cedro::size_words(totale))}else{format!("{nome} · {}",cedro::size_words(fatti))},
+            Fase::Scarica{fatti,totale}=>if let Some(percento)=fatti.saturating_mul(100).checked_div(totale) {format!("{nome} · {percento}% · {} / {}",cedro::size_words(fatti),cedro::size_words(totale))}else{format!("{nome} · {}",cedro::size_words(fatti))},
             Fase::Aggiorna=>format!("{} · {nome}",cedro::i18n::tr("Aggiornamento")),
             Fase::Errore=>format!("{nome} · {}",cedro::i18n::tr("Download non riuscito. Riprova.")),
         }

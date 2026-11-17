@@ -170,3 +170,95 @@ Letta integralmente la review `task-6-review.md`, incluse limitazioni Cannot ver
 **Non eseguiti qui:** cargo check/test/clippy, rustc, fmt, build Java/APK, remoto, ADB, UIAutomator/TalkBack. Le prove host del protocollo non sono una prova del trasporto JNI fisico né dell'esplorazione TalkBack: restano obbligatori ACTION_CLICK Lavori, ACTION_SCROLL e hover sul candidato aggiornato. Il cold Play di 4c funziona nella prova controller; l'errore durante cattura scrcpy non è diagnosticato come bug applicativo e questo round non modifica quel comportamento per ipotesi.
 
 Stato round: **correzioni implementate, verifica controller e scoped review dei cinque rilievi pendenti**. Nessun FAIL trasformato in PASS prima dell'esecuzione.
+
+## Controller — copertura fix1 eseguita su8e98780
+
+MiniPC,profilotestopt1/debug0/LTOoff/codegen16/incrementaltrue,targetdircedro-android-target-test,overridefdk-aac-sysO3,nice10,j2,testthreads2. Comandi esatti ~/prove-cedro-android/verifica-task6.py o /srv/dev/scratch/cedro-verifica-task6.py. Logarchiviati ~/Documenti/cedro-android-anteprima/verifiche/8e98780. NonAndroidfisico/nonprofilorelease.
+
+### fix-player
+```text
+running 1 test
+running 1 test
+test ui::player::tests::player_lock_holder_child ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.02s
+test ui::player::tests::closing_player_cancels_native_wait_before_other_process_releases_lock ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.03s
+```
+
+### fix-img
+```text
+running 1 test
+test imgfmt::tests::tga_extension_survives_grant_reader_and_magic_still_wins ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.00s
+```
+
+### fix-photo
+```text
+running 1 test
+test engine::format_tests::photo_formats_roundtrip ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.02s
+```
+
+### fix-mrxs
+```text
+running 1 test
+test mrxs::prove::copia_anonima_con_alias_fd_e_dati_annidati ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.01s
+```
+
+### fix-a11y
+```text
+running 3 tests
+test ui::accessibilita::tests::semantic_jobs_action_is_the_real_native_hit_target ... ok
+test ui::accessibilita::tests::system_text_scale_changes_measured_layout ... ok
+test ui::accessibilita::tests::review_regions_have_unique_ids_and_bridge_scroll_moves_content ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 47 filtered out; finished in 0.22s
+```
+
+### input-io
+```text
+running 4 tests
+test input_file::tests::native_lock_child_entry ... ok
+test input_file::tests::grant_readers_have_independent_positions_in_parallel ... ok
+test input_file::tests::stale_alias_cannot_select_another_paths_reused_fd ... ok
+running 1 test
+test input_file::tests::native_lock_child_entry ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 611 filtered out; finished in 0.20s
+test input_file::tests::native_lock_is_interprocess_cancellable_and_leaves_pread_free ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 608 filtered out; finished in 0.22s
+```
+
+Tutti6stepEXIT0. Callbacknativecancel, TGA/MRXSactualregressions, JSON+IDs+scrollUIhostPASS. Java→Rusttransport/UIAutomation/TalkBackfisiciancoraPENDINGsucandidatoaggiornato, non PASS daquestihosttest.
+
+
+## Triage clippy finale — log 8e98780 rispetto a baseline 0a3a64b
+
+Log effettivo letto dal notebook: `Documenti/cedro-android-anteprima/verifiche/8e98780/cedro-android-8e98780-task6-aac3-clippy.log`, prodotto dal controller, exit0. Il controller comunica completata PASS la pipeline 8e98780 (core, Android, NDK, i18n, renderer scala1/200, clippy con warning). Questo non equivale a clippy senza nuovi warning. Nessun comando Rust è stato eseguito dall'implementer per il triage.
+
+**Conteggio:** le 33 righe `warning:` riferite al package Android comprendono **29 diagnostiche + 4 riepiloghi** lib/lib-test/esempi. Fra le diagnostiche: **12 preesistenti**, **9 nuove meccaniche**, **8 nuove legate a target/firme intenzionali**. I warning vendor rav1d restano esclusi da questa classificazione, senza sopprimerli. Il confronto è sul sorgente effettivo `git show 0a3a64b:<file>` / diff fino a8e98780, non su una presunta esecuzione clippy della baseline.
+
+| Diagnostica nel log 8e98780 | Stato rispetto a 0a3a64b | Intervento |
+| --- | --- | --- |
+| ui/web.rs:32 suspicious_assignment_formatting | Nuova, file nuovo | `*v = !*v`, significato invariato |
+| ui/rivedi.rs:289 suspicious_assignment_formatting | Nuova, fine_trascrizione nuova | `rv.live = !success` |
+| ui/casa/telefono.rs:258 collapsible_match | Nuova nel layout A | Guardia sul ramo Att::Web/Att::Yt |
+| ui/web.rs:70 manual_div_ceil | Nuova | `formats.len().div_ceil(2)` |
+| ui.rs:1357 e1358 needless_return | Nuove azioni Labs/Pacchetto | Espressioni del match senza return |
+| web.rs:50 manual_checked_ops | Nuova, modulo nuovo | checked_div conserva caso totale0 e saturating_mul |
+| worker.rs:386 chunks_exact_to_as_chunks | Nuova, test nuovo | as_chunks::<2>().0.iter(), stessa esclusione resto |
+| worker.rs:418 field_reassign_with_default | Nuova, test nuovo | Inizializza password/slide_level/micro_all_t nella struct; opzioni identiche |
+| worker.rs:4/40/129/133/145/150 dead_code (6) | Nuovi item worker, intenzionalmente usati solo Android/test | cfg(any(target_os="android",test)) sui singoli item e impl Drop; host test conservati, niente allow(dead_code) globale |
+| ui/web.rs:36 scelta_web too_many_arguments | Nuova firma helper UI intenzionale | allow locale esclusivamente sulla funzione, commento geometria/stato/hit-test espliciti; nessun refactoring |
+| ui/labs.rs:152 lab_bottone too_many_arguments | Nuova firma helper UI intenzionale | allow locale esclusivamente sulla funzione, commento coordinate/etichetta/hit-test; nessun refactoring |
+| ui/casa.rs:906 info_voce_riga too_many_arguments | Preesistente identica a baseline:823 | Nessuna modifica/soppressione |
+| ui/casa.rs:937 principali type_complexity | Preesistente identica a baseline:854 | Nessuna modifica/soppressione |
+| ui/casa.rs:966 riga_interruttore too_many_arguments | Preesistente identica a baseline:883 | Nessuna modifica/soppressione |
+| ui/casa.rs:1326 pillola_piccola too_many_arguments | Preesistente identica a baseline:1243 | Nessuna modifica/soppressione |
+| ui/m3.rs:86 pillola e:110 tonale too_many_arguments (2) | File integralmente invariato nel diff baseline→8e98780 | Nessuna modifica/soppressione |
+| ui.rs:1596 if_same_then_else | Identico già a baseline:1464 | Nessuna modifica/soppressione |
+| examples/vista.rs:44/61/92 ptr_arg (3) | Stesse firme &PathBuf alla baseline, stesse righe | Nessuna modifica/soppressione |
+| examples/vista_cedro.rs:10 ptr_arg e:16 unused m (2) | Già presenti alla baseline, stesse righe | Nessuna modifica/soppressione |
+
+Il mandato iniziale report-only è stato esteso esplicitamente dal controller dopo la copia del log: unica patch contenuta sui nuovi avvisi, nessun refactoring firme, nessuna modifica Java/servicefix4b2f686. Patch produzione: sette file Android, 21 righe aggiunte/14 rimosse, oltre al rapporto. Nessuna modifica di logica formati/SAF/player.
+
+Verifiche locali dopo patch: `git diff --check` PASS; `python3 android/tools/check-i18n.py` PASS134×5, zero mancanze. Self-review dei cfg: CANCEL/emetti/Scratch e Drop/prepara_audio_web/converti_web/esegui restano compilati su Android e nelle regressioni host, esclusi solo dalla libreria host di rendering dove risultavano inutilizzati. **Clippy/check/test non rieseguiti localmente**; il controller deve verificare il nuovo checkpoint. Non si dichiara rimosso un warning prima della nuova esecuzione. Nessun blanket ignore, nessuna soppressione dei warning della baseline/vendor.

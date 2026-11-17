@@ -149,6 +149,8 @@ impl App {
         }
     }
 
+    // Helper di disegno: coordinate, etichetta e hit-test seguono la stessa firma dei controlli Labs.
+    #[allow(clippy::too_many_arguments)]
     fn lab_bottone(&mut self,p:&mut Painter,x:f32,y:f32,w:f32,titolo:&str,ico:&str,az:Azione,vista:R)->f32 {
         let pal=self.pal();
         let h=(altezza_a(p,titolo,15.0,Weight::Semibold,w-60.0,20.0,0)+24.0).max(48.0);

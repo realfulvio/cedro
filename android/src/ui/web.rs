@@ -29,10 +29,12 @@ impl App {
             WebAz::Formato(s)=>if matches!(self.casa.web,1|3){self.web.audio_format=s.into()}else{self.web.video_format=s.into()},
             WebAz::Sottotitoli(n)=>self.web.subtitles=n,
             WebAz::Svuota=>self.casa.link.clear(),
-            WebAz::Opzione(n)=>{let w=&mut self.web;let v=match n{0=>&mut w.thumbnail,1=>&mut w.chapters,2=>&mut w.metadata,3=>&mut w.split_chapters,4=>&mut w.skip_sponsors,5=>&mut w.normalize,6=>&mut w.playlist,_=>&mut w.skip_existing};*v=!*v;},
+            WebAz::Opzione(n)=>{let w=&mut self.web;let v=match n{0=>&mut w.thumbnail,1=>&mut w.chapters,2=>&mut w.metadata,3=>&mut w.split_chapters,4=>&mut w.skip_sponsors,5=>&mut w.normalize,6=>&mut w.playlist,_=>&mut w.skip_existing};*v = !*v;},
         }
         Effetto::Ridisegna
     }
+    // Helper di disegno: geometria, stato e bersaglio restano espliciti come negli altri controlli UI.
+    #[allow(clippy::too_many_arguments)]
     fn scelta_web(&mut self,p:&mut Painter,r:R,label:&str,selected:bool,enabled:bool,az:WebAz,vista:R){
         let pal=self.pal();
         self.bottone_a(p,r,label,if selected{ic::CHECK}else{""},if selected&&enabled{pal.alt}else{pal.surface},if enabled{pal.text}else{pal.muted},if enabled{Azione::Web(az)}else{Azione::Niente},vista);
@@ -67,7 +69,7 @@ impl App {
             let supported=enabled||if audio{f!="m4a"}else{f=="mp4"&&self.web.altezza>0};
             self.scelta_web(p,(x+(i%2) as f32*(tw+8.0),y+(i/2) as f32*60.0,tw,52.0),f,selected,supported,WebAz::Formato(f),vista);
         }
-        y+=((formats.len()+1)/2) as f32*60.0+16.0;
+        y+=formats.len().div_ceil(2) as f32*60.0+16.0;
         if !youtube {y+=p.text_wrap("Copertina, capitoli, metadati, sottotitoli e raccolte richiedono YouTube. Per questi link sono disponibili MP4 e i formati audio indicati.",x,y,w,14.0,Weight::Regular,pal.muted,21.0,0)+16.0;}
         for (title,rows) in [
             ("Dentro il file",vec![(0,"Copertina",self.web.thumbnail,enabled),(1,"Capitoli",self.web.chapters,enabled),(2,"Metadati",self.web.metadata,enabled)]),
