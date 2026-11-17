@@ -1294,6 +1294,8 @@ impl App {
                 expanded.push(p);
             }
         }
+        // I CD e le chiavette della radiologia: al posto del DICOMDIR le sue immagini, in ordine.
+        let (expanded, cd) = crate::dicom::dicomdir::espandi(expanded);
         let mut first: Option<(Kind, bool)> = None;
         let mut added = 0;
         let transcribing = self.activity == Activity::Transcribe;
@@ -1330,6 +1332,8 @@ impl App {
         }
         if added == 0 && first.is_none() {
             self.notice = Some(Notice { text: "Nessun file che Cedro sappia convertire.".into(), error: false });
+        } else if let Some(cd) = cd.filter(|c| !c.immagini.is_empty()) {
+            self.notice = Some(Notice { text: cd.frase(), error: false });
         } else {
             self.notice = None;
         }
