@@ -1953,8 +1953,8 @@ PDF non scritto: {}	PDF não gravado: {}
 numeri veri, geni come testo	números reais, genes como texto
 Excel con {#} righe.	Excel com {} linhas.
 Numeri con la virgola letti come numeri.	Números com vírgula decimal lidos como números.
-Piastra da {#} pozzetti anche una riga per pozzetto (foglio Pozzetti).	Placa de {} poços também organizada com uma linha por poço (planilha Pozzetti).
-{#} piastre da {#} pozzetti, anche una riga per pozzetto (foglio Pozzetti).	{} placas de {} poços, também organizadas com uma linha por poço (planilha Pozzetti).
+Piastra da {#} pozzetti anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).	Placa de {} poços também em mapa de cores (planilha Mappa) e com uma linha por poço (planilha Pozzetti).
+{#} piastre da {#} pozzetti, anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).	{} placas de {} poços, também em mapa de cores (planilha Mappa) e com uma linha por poço (planilha Pozzetti).
 Nomi di geni e codici lasciati come testo.	Nomes de genes e códigos mantidos como texto.
 CSV dal foglio di calcolo	CSV da planilha
 {#} fogli: un CSV per foglio	{} planilhas: um CSV por planilha
@@ -2703,3 +2703,32 @@ Vista di partenza	Visualização inicial
 pagine	páginas
 Il decoder esterno non supporta la lettura diretta del file autorizzato	O decodificador externo não permite ler diretamente o arquivo autorizado
 Il decoder esterno non ha letto il file autorizzato	O decodificador externo não conseguiu ler o arquivo autorizado
+Registro in Excel	Registo em Excel
+Registro salvato:	Registo guardado:
+Registro non salvato:	Registo não guardado:
+Registro lavori	Registo de trabalhos
+Data	Data
+Ora	Hora
+Attività	Atividade
+Nota del caso	Nota do caso
+CD DICOM	CD DICOM
+immagine	imagem
+paziente	paciente
+pazienti	pacientes
+mancanti	em falta
+il DICOMDIR non elenca nessun file	o DICOMDIR não lista nenhum ficheiro
+REFERTO	RELATÓRIO
+Dettato il {} · {} · {} di audio	Ditado em {} · {} · {} de áudio
+Specie	Espécie
+Campione	Amostra
+Descrizione macroscopica	Descrição macroscópica
+Descrizione microscopica	Descrição microscópica
+Diagnosi	Diagnóstico
+Anamnesi	Anamnese
+Margini	Margens
+Commento	Comentário
+Conclusioni	Conclusões
+Note	Notas
+Firma del refertante	Assinatura do responsável
+BOZZA · da non firmare	RASCUNHO · não assinar
+Pagina {} di {}	Página {} de {}

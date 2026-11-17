@@ -136,16 +136,16 @@ Componenti esterni come yt-dlp, deno, ffmpeg e il motore di trascrizione si scar
 
 | | Cosa c'è già | Cosa manca |
 | --- | --- | --- |
-| Immagini | Vetrini digitali Aperio `.svs`, Hamamatsu `.ndpi` e 3DHistech `.mrxs` in immagine e in copia anonima, DICOM (anche anonimizzato), Zeiss CZI, ND2 e LIF, OME-TIFF, figura per articolo con barra di scala | Olympus VSI; DICOM da CD con DICOMDIR |
-| Dati | CSV/TSV ↔ Excel, pacchetto dati con impronte SHA-256 (BagIt) | Mappa delle piastre a colori |
+| Immagini | Vetrini digitali Aperio `.svs`, Hamamatsu `.ndpi`, 3DHistech `.mrxs` e Olympus `.vsi` in immagine e in copia anonima, DICOM (anche anonimizzato, anche da CD o chiavetta con DICOMDIR), Zeiss CZI, ND2 e LIF, OME-TIFF, figura per articolo con barra di scala | Altri formati di vetrino (Leica, Philips) |
+| Dati | CSV/TSV ↔ Excel con la mappa delle piastre a colori, pacchetto dati con impronte SHA-256 (BagIt), registro dei lavori in Excel | — |
 | Privacy | Toglie nomi, autori, GPS e dati nascosti da PDF, Office, foto e DICOM | Altri formati proprietari |
-| Voce | Trascrizione con glossario veterinario, riassunto, referti dettati che restano «bozza» finché numeri e parole decisive non sono confermati | Referti già impaginati |
+| Voce | Trascrizione con glossario veterinario, riassunto, referti dettati già impaginati (logo, caso, specie, campione) che restano «bozza» finché numeri e parole decisive non sono confermati | — |
 
 Tutto resta sul computer, come in Cedro standard. Un laboratorio che manca di un formato o di una funzione può [aprire una segnalazione](https://github.com/realfulvio/cedro/issues).
 
 ## Tutti i rilasci
 
-Dal 21 ottobre 2026 sono uscite **91 versioni** per Windows e Linux. Le ultime:
+Dal 21 ottobre 2026 sono uscite **92 versioni** per Windows e Linux. Le ultime:
 
 | Versione | Data | Novità |
 | --- | --- | --- |

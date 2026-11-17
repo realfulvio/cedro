@@ -4,12 +4,13 @@
 
 Ogni versione pubblicata finora, dalla più recente alla prima. Le note complete di ciascuna, con i file da scaricare e il controllo antivirus, sono nella pagina [Releases](https://github.com/realfulvio/cedro/releases).
 
-> In tre settimane, dal 21 ottobre al 13 novembre 2026: **94 versioni** per Windows e Linux.
+> In tre settimane, dal 21 ottobre al 13 novembre 2026: **95 versioni** per Windows e Linux.
 
 ## Novembre 2026: Cedro 4 Labs e il nuovo aspetto
 
 | Versione | Data | Cosa porta |
 | --- | --- | --- |
+| [0.54.0](https://github.com/realfulvio/cedro/releases/tag/v0.54.0) | 17/11 | Cedro 4 Labs: vetrini **Olympus VSI**, **CD DICOM** aperti dal DICOMDIR, **referti dettati già impaginati** (logo, caso, specie, campione, bozza fino alla conferma), **mappa delle piastre a colori**, **registro dei lavori in Excel**, «Copia per il quaderno» nel risultato |
 | [0.53.0](https://github.com/realfulvio/cedro/releases/tag/v0.53.0) | 16/11 | **Correzioni dal banco di prova**: anonimizzazione DICOM al profilo base, avvisi sulla firma (SHA-1, PDF cambiato dopo la firma), Dividi che tiene titolo e metadati, trascrizione senza parole inventate su silenzio e rumori, avviso per arabo ed ebraico in Word, .doc rovinati senza consumo di memoria |
 | [0.52.0](https://github.com/realfulvio/cedro/releases/tag/v0.52.0) | 16/11 | **Converti file** e **Video dal web** riordinati: formati delle immagini per famiglia, strumenti a tessere con il riquadro del laboratorio a parte, qualità del video in tessere e interruttori in gruppi |
 | [0.51.0](https://github.com/realfulvio/cedro/releases/tag/v0.51.0) | 13/11 | Trascrivi con la **traccia audio a tutto schermo** (comandi d'ascolto, frase che suona evidenziata), testo in frasi con barra di scorrimento, pannello di destra ridimensionabile |
