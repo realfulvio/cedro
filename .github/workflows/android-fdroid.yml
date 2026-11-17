@@ -4,11 +4,16 @@ name: Android F-Droid
 # aggiorna l'indice e lo mette su GitHub Pages. Gli APK sono quelli firmati dalla CI «Android» (la chiave dell'app),
 # l'indice è firmato con una chiave a parte (quella del repository).
 # Secret: FDROID_KEYSTORE_B64 (keystore del repository in base64), FDROID_KS_PASS. Pages va attivato: Settings → Pages → «GitHub Actions».
-# Parte a mano o quando si pubblica una release Android; non pubblica nulla di suo.
+# Parte a mano, quando si pubblica una release Android o quando cambia la cartella site/ su main.
 
 on:
   release:
     types: [published]
+  # Il sito (cartella site/) esce nello stesso deploy di Pages: ogni deploy sostituisce tutto, quindi il repository
+  # F-Droid va rifatto insieme al sito, altrimenti /fdroid/repo sparirebbe.
+  push:
+    branches: [main]
+    paths: ["site/**"]
   workflow_dispatch:
     inputs:
       ref:
@@ -26,7 +31,7 @@ concurrency:
 
 jobs:
   repo:
-    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'android-v') }}
+    if: ${{ github.event_name != 'release' || startsWith(github.event.release.tag_name, 'android-v') }}
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
@@ -78,7 +83,15 @@ jobs:
           chmod 600 config.yml
           fdroid update
           rm -f keystore.p12 config.yml
-      - run: mkdir -p _site/fdroid && cp -r fdroid/repo _site/fdroid/
+      - name: Sito (sempre l'ultimo di main)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: _main
+      - run: |
+          mkdir -p _site/fdroid && cp -r fdroid/repo _site/fdroid/
+          cp -r _main/site/. _site/
+          touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
