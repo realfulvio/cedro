@@ -109,6 +109,7 @@ fn disegna(out: &Path, nome: &str, w: f32, h: f32, tema: ThemeId, lang: Lang, sc
     let start = Instant::now();
     let mut p = Painter::new(w as u32, h as u32, 1.0, Fonts::for_theme(tema), &mut cache);
     p.larger = app.grandi;
+    p.text_scale=std::env::var("CEDRO_RENDER_FONT_SCALE").ok().and_then(|s|s.parse::<f32>().ok()).filter(|s|s.is_finite()&&*s>0.0).unwrap_or(1.0);
     app.disegna(&mut p, w, h);
     let elapsed = start.elapsed().as_secs_f64() * 1000.0;
     p.save_png(&out.join(format!("{nome}.png"))).unwrap();
