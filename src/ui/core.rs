@@ -150,6 +150,10 @@ pub enum Act {
     LavoriApri,
     /// «Copia per il quaderno» di un lavoro (indice tra quelli di oggi, dal più nuovo).
     Quaderno(usize),
+    /// «Copia per il quaderno» del lavoro appena finito, dal pannello del risultato.
+    QuadernoUltimo,
+    /// Il registro dei lavori (tutti quelli ricordati) salvato in un file CSV da aprire con Excel.
+    LavoriEsporta,
     OpenPath(PathBuf),
     Minimize,
     Maximize,

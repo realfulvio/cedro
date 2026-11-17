@@ -637,8 +637,8 @@ dependencies = [
  "cedro",
  "image",
  "jni 0.21.1",
- "log",
  "libc",
+ "log",
  "serde",
  "serde_json",
 ]
