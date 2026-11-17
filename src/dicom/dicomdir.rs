@@ -33,19 +33,12 @@ pub struct Indice {
 }
 
 impl Indice {
-    /// La frase per chi ha aperto il CD.
+    /// La frase per chi ha aperto il CD (corta: sta nella riga degli avvisi).
     pub fn frase(&self) -> String {
         let n = |v: usize, uno: &str, tanti: &str| format!("{v} {}", crate::i18n::tr(if v == 1 { uno } else { tanti }));
-        let mut s = format!(
-            "{}: {}, {}, {}, {}",
-            crate::i18n::tr("CD DICOM"),
-            n(self.immagini.len(), "immagine", "immagini"),
-            n(self.pazienti, "paziente", "pazienti"),
-            n(self.studi, "studio", "studi"),
-            n(self.serie, "serie", "serie"),
-        );
+        let mut s = format!("{}: {} · {}", crate::i18n::tr("CD DICOM"), n(self.immagini.len(), "immagine", "immagini"), n(self.pazienti, "paziente", "pazienti"));
         if self.mancanti > 0 {
-            s.push_str(&format!("; {} {}", self.mancanti, crate::i18n::tr("file dell'indice non trovati")));
+            s.push_str(&format!(" · {} {}", self.mancanti, crate::i18n::tr("mancanti")));
         }
         s
     }
