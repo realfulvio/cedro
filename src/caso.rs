@@ -147,8 +147,8 @@ fn leggi_riga(line: &str) -> Option<Lavoro> {
     Some(Lavoro { when: f[0].parse().ok()?, what: f[1].to_string(), caso: f[2].to_string(), outputs: f[3].split(SEP).filter(|s| !s.is_empty()).map(str::to_string).collect() })
 }
 
-/// Quanti lavori si ricordano al più: più vecchi di così non servono a un quaderno di tutti i giorni.
-const MAX: usize = 400;
+/// Quanti lavori si ricordano al più: abbastanza per il registro di un anno di un laboratorio.
+const MAX: usize = 5000;
 
 /// I lavori ricordati, dal più vecchio al più nuovo.
 pub fn lavori() -> Vec<Lavoro> {
@@ -165,6 +165,61 @@ pub fn registra(elenco: &mut Vec<Lavoro>, lavoro: Lavoro) {
     }
     let text: String = elenco.iter().map(|l| riga(l) + "\n").collect();
     scrivi(&lavori_file(), &text);
+}
+
+/// Il registro dei lavori in Excel: una riga per file uscito (data, ora, attività, caso, nota del caso
+/// se è quello attivo, file), con i filtri accesi e la prima riga ferma, da allegare a una pratica o a
+/// un controllo di qualità. Il caso si filtra dal menu della colonna.
+pub fn registro_excel(elenco: &[Lavoro], caso_attivo: Option<&Caso>) -> Result<Vec<u8>, String> {
+    use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook};
+    let err = |e: rust_xlsxwriter::XlsxError| e.to_string();
+    let mut book = Workbook::new();
+    let ws = book.add_worksheet();
+    ws.set_name("Registro").map_err(err)?;
+    let titoli = Format::new().set_bold().set_background_color(Color::RGB(0xE3F1E6)).set_border_bottom(FormatBorder::Thin);
+    let testa = ["Data", "Ora", "Attività", "Caso", "Nota del caso", "File"];
+    for (c, t) in testa.iter().enumerate() {
+        ws.write_string_with_format(0, c as u16, crate::i18n::tr(t), &titoli).map_err(err)?;
+    }
+    let mut r = 1u32;
+    for l in elenco {
+        let nota = caso_attivo.filter(|c| c.code == l.caso).map(|c| c.note.as_str()).unwrap_or("");
+        let files: Vec<&str> = if l.outputs.is_empty() { vec![""] } else { l.outputs.iter().map(String::as_str).collect() };
+        for f in files {
+            ws.write_string(r, 0, l.giorno()).map_err(err)?;
+            ws.write_string(r, 1, l.ora()).map_err(err)?;
+            ws.write_string(r, 2, &l.what).map_err(err)?;
+            ws.write_string(r, 3, &l.caso).map_err(err)?;
+            ws.write_string(r, 4, nota).map_err(err)?;
+            ws.write_string(r, 5, f).map_err(err)?;
+            r += 1;
+        }
+    }
+    for (c, w) in [12.0, 7.0, 26.0, 18.0, 24.0, 60.0].iter().enumerate() {
+        ws.set_column_width(c as u16, *w).map_err(err)?;
+    }
+    ws.set_freeze_panes(1, 0).map_err(err)?;
+    ws.autofilter(0, 0, r.saturating_sub(1).max(1), 5).map_err(err)?;
+    ws.set_landscape();
+    ws.set_print_fit_to_pages(1, 0);
+    ws.set_header("&L&\"Calibri,Bold\"Cedro 4 Labs&C&A&R&D");
+    ws.set_footer("&C&P / &N");
+    book.save_to_buffer().map_err(err)
+}
+
+/// Salva il registro in `dir` come «Registro lavori AAAA-MM-GG.xlsx» (con un numero se esiste già).
+pub fn salva_registro(dir: &std::path::Path, elenco: &[Lavoro], caso_attivo: Option<&Caso>) -> Result<PathBuf, String> {
+    let bytes = registro_excel(elenco, caso_attivo)?;
+    let s = crate::nametemplate::now();
+    let base = format!("{} {:04}-{:02}-{:02}", crate::i18n::tr("Registro lavori"), s.year, s.month, s.day);
+    let mut out = dir.join(format!("{base}.xlsx"));
+    let mut n = 2;
+    while out.exists() {
+        out = dir.join(format!("{base} ({n}).xlsx"));
+        n += 1;
+    }
+    std::fs::write(&out, bytes).map_err(|e| e.to_string())?;
+    Ok(out)
 }
 
 /// I lavori di oggi (nel fuso del computer), dal più nuovo al più vecchio.
@@ -200,6 +255,31 @@ mod tests {
         assert!(Caso::new("  /// ", "nota").is_none());
         assert!(Caso::new("", "").is_none());
         assert_eq!(pulisci(&"x".repeat(100)).chars().count(), 48);
+    }
+
+    #[test]
+    fn il_registro_ha_una_riga_per_file_con_i_filtri() {
+        let elenco = vec![
+            Lavoro { when: 1_793_196_309, what: "Togli i nomi".into(), caso: "V-1".into(), outputs: vec!["a.svs".into(), "b.svs".into()] },
+            Lavoro { when: 1_793_199_909, what: "Prepara una figura".into(), caso: String::new(), outputs: vec!["fig.tif".into()] },
+        ];
+        let caso = Caso::new("V-1", "Luna, labrador").unwrap();
+        let x = registro_excel(&elenco, Some(&caso)).unwrap();
+        let fogli = crate::tabella::leggi("xlsx", &x).unwrap();
+        let r = &fogli[0].righe;
+        assert_eq!(r.len(), 4);
+        assert_eq!(r[1][3], crate::tabella::Cella::Testo("V-1".into()));
+        assert_eq!(r[1][4], crate::tabella::Cella::Testo("Luna, labrador".into()));
+        assert_eq!(r[2][5], crate::tabella::Cella::Testo("b.svs".into()));
+        assert_eq!(r[3][2], crate::tabella::Cella::Testo("Prepara una figura".into()));
+        assert_eq!(r[3][4], crate::tabella::Cella::Vuota);
+        let dir = std::env::temp_dir().join(format!("cedro-registro-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let a = salva_registro(&dir, &elenco, None).unwrap();
+        let b = salva_registro(&dir, &elenco, None).unwrap();
+        assert_ne!(a, b);
+        assert!(b.to_string_lossy().ends_with("(2).xlsx"));
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
