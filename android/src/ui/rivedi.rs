@@ -876,18 +876,28 @@ fn riassunto(p: &mut Painter, pal: &cedro::ui::theme::Palette, tema: cedro::ui::
         return;
     }
     let Some(sez) = rv.r.summary_sections() else {
-        let ch = 300.0;
+        // Il testo può scorrere, ma il comando rimane nel piede della viewport anche
+        // quando il lettore sopra occupa quasi tutto lo schermo.
+        let testo = "In breve, chi ha detto cosa, le decisioni e le cose da fare, scritti da Qwen3.5-4B come sul computer. \
+                     La prima volta scarica il modello (2,7 GB, meglio col Wi-Fi); poi lavora anche senza rete.";
+        let testo_h=p.wrap_lines(testo,14.0,Weight::Regular,cw-28.0,0).len().max(1) as f32*20.0;
+        let nota_h=if rv.riassunto_nota.is_empty(){0.0}else{p.wrap_lines(&rv.riassunto_nota,13.0,Weight::Regular,cw-28.0,0).len().max(1) as f32*18.0+6.0};
+        let body_h=(alto-68.0).max(1.0);
+        let ch=(84.0+testo_h+nota_h).max(body_h);
+        rv.scorri_max=(ch-body_h).max(0.0);
+        rv.scorri=rv.scorri.clamp(0.0,rv.scorri_max);
+        y=y0-rv.scorri;
+        p.push_clip(x,y0,cw,body_h);
         super::sollevato(p, pal, scuro, x, y, cw, ch, 16.0);
         super::piastrella(p, pal, scuro, x + 14.0, y + 14.0, 40.0, SCINTILLA, ai, true);
         p.text("Riassunto AI", x + 64.0, y + 12.0, cw - 78.0, 26.0, 17.0, Weight::Semibold, pal.text, Align::Left);
         p.text("Sul telefono, senza internet", x + 64.0, y + 36.0, cw - 78.0, 20.0, 13.0, Weight::Regular, pal.muted, Align::Left);
-        let testo = "In breve, chi ha detto cosa, le decisioni e le cose da fare, scritti da Qwen3.5-4B come sul computer. \
-                     La prima volta scarica il modello (2,7 GB, meglio col Wi-Fi); poi lavora anche senza rete.";
-        let usata = p.text_wrap(testo, x + 14.0, y + 70.0, cw - 28.0, 14.0, Weight::Regular, pal.text, 20.0, 7);
+        let usata = p.text_wrap(testo, x + 14.0, y + 70.0, cw - 28.0, 14.0, Weight::Regular, pal.text, 20.0, 0);
         if !rv.riassunto_nota.is_empty() {
-            p.text_wrap(&rv.riassunto_nota, x + 14.0, y + 76.0 + usata, cw - 28.0, 13.0, Weight::Regular, pal.bad, 18.0, 2);
+            p.text_wrap(&rv.riassunto_nota, x + 14.0, y + 76.0 + usata, cw - 28.0, 13.0, Weight::Regular, pal.bad, 18.0, 0);
         }
-        let b = (x + 14.0, y + ch - 14.0 - 52.0, cw - 28.0, 52.0);
+        p.pop_clip();
+        let b = (x + 14.0, h - 60.0, cw - 28.0, 52.0);
         let a = Azione::Riv(RivAz::Riassumi);
         super::lucido(p, scuro, b.0, b.1, b.2, b.3, 26.0, ai, premuto == Some(a));
         p.icon(SCINTILLA, b.0 + (b.2 - 190.0) / 2.0, b.1 + 14.0, 24.0, (255, 255, 255));
@@ -1093,6 +1103,35 @@ mod tests {
         a.fine_trascrizione(1,&Stato::Errore("Annullato".into()));
         assert!(matches!(a.azione_rivedi(RivAz::Salva(0)),Effetto::Niente),"annullare non rende completo il testo parziale");
         a.azione_rivedi(RivAz::Velocita(150));assert_eq!(a.rivedi.as_ref().unwrap().speed,150);
+    }
+
+    #[test]
+    fn initial_summary_action_stays_visible_and_reachable_on_short_screens() {
+        let mut cache=GlyphCache::new();
+        for (w,h) in [(360,640),(360,800),(800,360),(800,400)] {
+            for view in [1,2] {
+                let mut a=App::new(ThemeId::Cedro);let mut r=sample();r.view=view;
+                a.apri_rivedi_con(r,"Referto".into(),2,None,None);
+                let draw=|a:&mut App,cache:&mut GlyphCache| {
+                    a.colpi.clear();
+                    let mut p=Painter::new(w,h,1.0,Fonts::for_theme(a.tema),cache);
+                    a.pagina_rivedi(&mut p,w as f32,h as f32);
+                    a.colpi.iter().find_map(|(f,az)|match (f,az){(Forma::R(r),Azione::Riv(RivAz::Riassumi))=>Some(*r),_=>None}).expect("avvio riassunto assente")
+                };
+                let button=draw(&mut a,&mut cache);
+                assert!(button.0>=0.0&&button.1>=0.0&&button.0+button.2<=w as f32&&button.1+button.3<=h as f32,"{w}x{h} view{view}: {button:?}");
+                assert!(button.2>=48.0&&button.3>=48.0);
+                if a.rivedi.as_ref().unwrap().scorri_max>0.0 {
+                    a.scorri_rivedi(-10000.0,0.0);
+                    assert!(a.rivedi.as_ref().unwrap().scorri>0.0,"descrizione non scorre");
+                    assert_eq!(draw(&mut a,&mut cache),button,"il comando si sposta con la descrizione");
+                }
+                let (x,y)=(button.0+button.2/2.0,button.1+button.3/2.0);
+                a.tocca_giu(x,y);
+                assert!(matches!(a.tocca_su(x,y),Effetto::Riassumi{..}),"il bersaglio non avvia il lavoro {w}x{h} view{view}");
+                assert!(a.rivedi.as_ref().unwrap().riassunto.is_some());
+            }
+        }
     }
 
     #[test]
