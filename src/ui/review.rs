@@ -69,6 +69,7 @@ pub struct Review {
     /// confermate, e finché ne resta una il file esce come bozza.
     pub referto: bool,
     pub view: u8,
+    restored_checked: HashSet<String>,
 }
 
 impl Review {
@@ -103,6 +104,7 @@ impl Review {
             sel: None,
             referto: false,
             view: 1,
+            restored_checked: HashSet::new(),
         };
         r.detect();
         // Con le voci si parte da «Chi parla» (i nomi da dare), a meno che ci sia qualcosa da controllare.
@@ -116,8 +118,8 @@ impl Review {
         let mut r = Self::new(source, saved.secs, saved.lang, saved.segments, saved.names, saved.summary);
         r.referto = saved.review.referto;
         r.view = saved.review.view.min(2);
+        r.restored_checked = saved.review.checked.into_iter().collect();
         r.detect();
-        r.dismissed = (0..r.flags.len()).filter(|i| saved.review.checked.contains(&r.flag_key(*i))).collect();
         if r.open_count() > 0 { r.tab = 0; }
         r
     }
@@ -125,12 +127,22 @@ impl Review {
     fn flag_key(&self, i: usize) -> String {
         let f = &self.flags[i];
         let rows: Vec<_> = f.segs.iter().filter_map(|i| self.rows.get(*i)).map(|r| (r.t0, r.t1, r.text.as_str())).collect();
-        format!("{:?}:{}", f.kind, serde_json::to_string(&rows).unwrap_or_default())
+        format!("{:?}:{}:{}", f.kind, f.snippet, serde_json::to_string(&rows).unwrap_or_default())
     }
 
     pub fn persist(&self) -> std::io::Result<()> {
-        let state = revisione::ReviewState { referto: self.referto, view: self.view,
-            checked: (0..self.flags.len()).filter(|i| !self.is_open(*i)).map(|i| self.flag_key(i)).collect() };
+        let segments=self.segments();
+        let mut next=Self::new(&self.source,self.secs,self.lang.clone(),segments.clone(),self.names.clone(),self.summary.clone());
+        next.referto=self.referto;next.bars=self.bars.clone();next.detect();
+        let checked:HashSet<_>=(0..self.flags.len()).filter(|i|!self.is_open(*i)).map(|i|self.flag_key(i)).chain(self.restored_checked.iter().cloned()).collect();
+        let checked=(0..next.flags.len()).filter(|i| {
+            checked.contains(&next.flag_key(*i)) || next.flags[*i].segs.iter().all(|j| {
+                let row=&next.rows[*j];
+                self.rows.iter().enumerate().any(|(old_i,old)|old.t0==row.t0&&old.t1==row.t1&&old.text.trim()==row.text&&old.text!=old.orig &&
+                    !self.flags.iter().enumerate().any(|(k,f)| f.segs.contains(&old_i)&&f.snippet==next.flags[*i].snippet&&self.is_open(k)))
+            })
+        }).map(|i|next.flag_key(i)).collect();
+        let state=revisione::ReviewState{referto:self.referto,view:self.view,checked};
         revisione::save_review(&self.source, self.secs, &self.lang, &self.segments(), &self.names, self.summary.as_ref(), &state)
     }
 
@@ -162,7 +174,7 @@ impl Review {
             self.flags.extend(revisione::find_referto(&orig).into_iter().filter(|f| f.segs.iter().all(|s| !taken.contains(s))));
             self.flags.sort_by_key(|f| f.segs.first().copied().unwrap_or(0));
         }
-        self.dismissed.clear();
+        self.dismissed = (0..self.flags.len()).filter(|i|self.restored_checked.contains(&self.flag_key(*i))).collect();
         self.cur = 0;
     }
 
@@ -422,10 +434,10 @@ impl App {
             if r.bars.is_some() {
                 // Con l'onda si trovano anche le frasi nel silenzio; le scelte già fatte restano valide perché
                 // i punti già trovati non cambiano ordine (si aggiungono soltanto).
-                let before: Vec<(Kind, Vec<usize>)> = r.flags.iter().map(|f| (f.kind, f.segs.clone())).collect();
-                let dismissed: Vec<(Kind, Vec<usize>)> = r.dismissed.iter().filter_map(|i| before.get(*i).cloned()).collect();
+                let before: Vec<(Kind, Vec<usize>, String)> = r.flags.iter().map(|f| (f.kind, f.segs.clone(), f.snippet.clone())).collect();
+                let dismissed: Vec<(Kind, Vec<usize>, String)> = r.dismissed.iter().filter_map(|i| before.get(*i).cloned()).collect();
                 r.detect();
-                r.dismissed = r.flags.iter().enumerate().filter(|(_, f)| dismissed.iter().any(|(k, s)| *k == f.kind && *s == f.segs)).map(|(i, _)| i).collect();
+                r.dismissed.extend(r.flags.iter().enumerate().filter(|(_, f)| dismissed.iter().any(|(k, s, t)| *k == f.kind && *s == f.segs && *t == f.snippet)).map(|(i, _)| i));
             }
         }
     }
