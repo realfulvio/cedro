@@ -139,6 +139,21 @@ fn fc_match(pattern: &str) -> Option<Face> {
     read_face(std::path::Path::new(file), index)
 }
 
+// I font del telefono si caricano solo quando il nome di un file ne richiede i glifi.
+#[cfg(target_os="android")]
+fn android_fallback(ch:char)->Option<&'static Face> {
+    static CYRILLIC:OnceLock<Option<Face>>=OnceLock::new();
+    static ARABIC:OnceLock<Option<Face>>=OnceLock::new();
+    static CJK:OnceLock<Option<Face>>=OnceLock::new();
+    let (cell,names):(&OnceLock<Option<Face>>,&[&str])=match ch as u32 {
+        0x0400..=0x052f=>(&CYRILLIC,&["Roboto-Regular.ttf","NotoSans-Regular.ttf"]),
+        0x0600..=0x08ff|0xfb50..=0xfdff|0xfe70..=0xfeff=>(&ARABIC,&["NotoNaskhArabic-Regular.ttf","NotoSansArabic-Regular.ttf"]),
+        0x2e80..=0x9fff|0xac00..=0xd7af|0xf900..=0xfaff|0xff00..=0xffef|0x20000..=0x3134f=>(&CJK,&["NotoSansCJK-Regular.ttc","NotoSansCJKsc-Regular.otf","NotoSansSC-Regular.otf","DroidSansFallback.ttf"]),
+        _=>return None,
+    };
+    cell.get_or_init(||names.iter().find_map(|name|read_face(&std::path::Path::new("/system/fonts").join(name),0))).as_ref()
+}
+
 impl Fonts {
     /// Cerca i caratteri del sistema. `CEDRO_UI_FONTS` (cartella con regular.ttf, semibold.ttf,
     /// bold.ttf, serif.ttf) li impone, per le prove e le fotografie.
@@ -270,6 +285,10 @@ impl Fonts {
         let face = &self.faces[&weight];
         if let Some(g) = face.font().charmap().map(ch) {
             return (face, g);
+        }
+        #[cfg(target_os="android")]
+        if let Some(face)=android_fallback(ch) {
+            if let Some(g)=face.font().charmap().map(ch){return (face,g);}
         }
         let g = self.fallback.font().charmap().map(ch).unwrap_or(GlyphId::new(0));
         (&self.fallback, g)
@@ -489,6 +508,10 @@ pub struct Painter<'a> {
     pub dy: f32,
     /// Testi più grandi della misura di progetto (`text_size`): sì sul computer; su Android è la scelta «Caratteri».
     pub larger: bool,
+    /// Fattore dei caratteri del sistema Android; resta 1 sul desktop.
+    pub text_scale: f32,
+    /// Snapshot semantico opzionale: testo intero e bounds visibili in pixel.
+    pub accessibility_text: Option<Vec<(String,[f32;4])>>,
 }
 
 /// La maschera del ritaglio solo se serve: se il tracciato (allargato di `margine` pixel) sta tutto dentro
@@ -607,7 +630,7 @@ impl<'a> Painter<'a> {
         match cache.tela.take() {
             Some(pm) if pm.width() == w.max(1) && pm.height() == h.max(1) => {
                 cache.nuovo_fotogramma();
-                Painter { pixmap: pm, scale, fonts, cache, clips: Vec::new(), dx: 0.0, dy: 0.0, larger: true }
+                Painter { pixmap: pm, scale, fonts, cache, clips: Vec::new(), dx: 0.0, dy: 0.0, larger: true, text_scale: 1.0, accessibility_text: None }
             }
             _ => Painter::new(w, h, scale, fonts, cache),
         }
@@ -621,7 +644,7 @@ impl<'a> Painter<'a> {
     /// Un'immagine nuova di `w`×`h` pixel, con `scale` pixel per unità logica.
     pub fn new(w: u32, h: u32, scale: f32, fonts: &'a Fonts, cache: &'a mut GlyphCache) -> Painter<'a> {
         cache.nuovo_fotogramma();
-        Painter { pixmap: Pixmap::new(w.max(1), h.max(1)).expect("dimensioni valide"), scale, fonts, cache, clips: Vec::new(), dx: 0.0, dy: 0.0, larger: true }
+        Painter { pixmap: Pixmap::new(w.max(1), h.max(1)).expect("dimensioni valide"), scale, fonts, cache, clips: Vec::new(), dx: 0.0, dy: 0.0, larger: true, text_scale: 1.0, accessibility_text: None }
     }
 
     pub fn fonts(&self) -> &Fonts {
@@ -1270,7 +1293,7 @@ impl<'a> Painter<'a> {
 
     /// La misura vera di un testo di progetto `size`.
     fn ts(&self, size: f32) -> f32 {
-        if self.larger { text_size(size) } else { size }
+        (if self.larger { text_size(size) } else { size }) * self.text_scale
     }
 
     fn measure_raw(&self, s: &str, size: f32, weight: Weight) -> f32 {
@@ -1317,8 +1340,19 @@ impl<'a> Painter<'a> {
         size * 0.76
     }
 
+    fn accessible_text(&mut self,s:&str,x:f32,y:f32,w:f32,h:f32) {
+        if self.accessibility_text.is_none(){return;}
+        let (cl,ct,cr,cb)=self.clip_rect();
+        let r=[((x+self.dx)*self.scale).max(cl as f32),((y+self.dy)*self.scale).max(ct as f32),((x+w+self.dx)*self.scale).min(cr as f32),((y+h+self.dy)*self.scale).min(cb as f32)];
+        if r[2]>r[0]&&r[3]>r[1]&&!s.trim().is_empty(){
+            let text=crate::i18n::tr(s).into_owned();
+            if let Some(nodes)=&mut self.accessibility_text {nodes.push((text,r));}
+        }
+    }
+
     /// Una riga di testo centrata in verticale nel riquadro; troppo lunga, finisce con «…».
     pub fn text(&mut self, s: &str, x: f32, y: f32, w: f32, h: f32, size: f32, weight: Weight, c: Rgb, align: Align) {
+        self.accessible_text(s,x,y,w,h);
         let size = self.fit_size(s, size, weight, w.max(1.0));
         let s = self.ellipsize_raw(&crate::i18n::tr(s), size, weight, w.max(1.0));
         let tw = self.measure_raw(&s, size, weight);
@@ -1336,6 +1370,7 @@ impl<'a> Painter<'a> {
     /// Con `max_lines` > 0 l'ultima riga finisce con «…».
     pub fn text_wrap(&mut self, s: &str, x: f32, y: f32, w: f32, size: f32, weight: Weight, c: Rgb, line_h: f32, max_lines: usize) -> f32 {
         let lines = self.wrap_lines(s, size, weight, w, max_lines);
+        self.accessible_text(s,x,y,w,lines.len() as f32 * line_h * self.ts(size) / size);
         let (asc, _) = self.fonts.extents(self.ts(size), weight);
         let line_h = line_h * self.ts(size) / size;
         for (i, line) in lines.iter().enumerate() {
