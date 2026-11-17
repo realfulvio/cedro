@@ -24,8 +24,7 @@ pub struct Saved {
 }
 
 /// Stato della revisione: le conferme sono legate al contenuto, mai agli indici mutevoli dei flag.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-#[serde(default)]
+#[derive(Clone, Debug)]
 pub struct ReviewState {
     pub referto: bool,
     pub checked: Vec<String>,
@@ -71,7 +70,7 @@ pub fn save_review(source: &Path, secs: f64, lang: &str, segments: &[Segment], n
             None => json!([s.t0, s.t1, s.text]),
         })
         .collect();
-    let mut body = json!({"source": source.to_string_lossy(), "secs": secs, "lang": lang, "segments": list, "voices": names, "review": state});
+    let mut body = json!({"source": source.to_string_lossy(), "secs": secs, "lang": lang, "segments": list, "voices": names, "review": {"referto":state.referto,"checked":state.checked,"view":state.view}});
     if let Some(s) = summary {
         body["summary"] = s.to_json();
     }
@@ -110,7 +109,7 @@ pub fn load(source: &Path) -> Option<Saved> {
         .collect();
     let names: Vec<String> = v["voices"].as_array().map(|a| a.iter().filter_map(|n| n.as_str().map(str::to_string)).take(trascrizione::MAX_VOICES).collect()).unwrap_or_default();
     let summary = crate::riassunto::Stored::from_json(&v["summary"]);
-    (!segments.is_empty()).then(|| Saved { review: serde_json::from_value(v["review"].clone()).unwrap_or_default(), secs: v["secs"].as_f64().unwrap_or(0.0), lang: v["lang"].as_str().unwrap_or("it").to_string(), segments, names, summary })
+    (!segments.is_empty()).then(|| Saved { review: ReviewState {referto:v["review"]["referto"].as_bool().unwrap_or(false),view:v["review"]["view"].as_u64().unwrap_or(1).min(2) as u8,checked:v["review"]["checked"].as_array().map(|a|a.iter().filter_map(|v|v.as_str().map(str::to_string)).collect()).unwrap_or_default()}, secs: v["secs"].as_f64().unwrap_or(0.0), lang: v["lang"].as_str().unwrap_or("it").to_string(), segments, names, summary })
 }
 
 // ---------------------------------------------------------------- rilevatore
