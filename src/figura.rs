@@ -12,6 +12,7 @@ use crate::microscopia::{self, Piani, Pila};
 
 /// Le scelte della figura.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Opzioni {
     /// La larghezza in millimetri: 85 una colonna, 175 la pagina intera.
     pub larghezza_mm: u32,

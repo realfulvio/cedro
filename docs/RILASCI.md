@@ -115,4 +115,13 @@ Ogni versione pubblicata finora, dalla più recente alla prima. Le note complete
 | [0.2.0](https://github.com/realfulvio/cedro/releases/tag/v0.2.0) | 21/10 | La ruota si apre in qualsiasi cartella |
 | [0.1.0](https://github.com/realfulvio/cedro/releases/tag/v0.1.0) | 21/10 | **Prima versione**: la ruota al clic destro |
 
-Accanto alle versioni del programma escono anche i «Motori di trascrizione» (li scarica Cedro da solo, non servono a mano) e, fino alla 0.28.0, la versione per Android.
+Accanto alle versioni del programma escono anche i «Motori di trascrizione» (li scarica Cedro da solo, non servono a mano) e le versioni per Android, con tag separati `android-v…`.
+
+
+## Android
+
+| Versione | Stato | Cosa porta |
+| --- | --- | --- |
+| 0.53.0 (5300) | Candidato, collaudo finale in corso | Variante A con tre destinazioni, Office e Laboratorio, worker separato, ingressi SAF diretti, ascolto e revisione delle trascrizioni, sei lingue e accessibilità della superficie nativa |
+
+Le [note Android](../android/note-release-0.53.0.md) descrivono questa versione; i [rapporti](android-rapporti/) distinguono i risultati delle prove. La pubblicazione usa il tag Android, senza una release desktop implicita.

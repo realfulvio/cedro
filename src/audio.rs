@@ -233,6 +233,14 @@ fn append_mp3(
     Ok(())
 }
 
+/// Durata dal contenitore, senza tenere il PCM in memoria.
+pub fn duration(path: &Path) -> Option<f64> {
+    let format = crate::symph::open(path).ok()?;
+    let track = crate::symph::audio_track(format.as_ref())?;
+    let rate = crate::symph::audio_params(&track)?.sample_rate?;
+    track.num_frames.map(|n| n as f64 / rate.max(1) as f64)
+}
+
 /// L'onda di un file audio in `n` colonne (0..1), per l'anteprima: un colpo d'occhio su dove c'è suono.
 pub fn waveform(path: &Path, n: usize) -> Option<Vec<f32>> {
     waveform_stream(path, n).or_else(|| waveform_buffered(path, n))
@@ -304,31 +312,46 @@ impl Pcm {
 }
 
 pub(crate) fn decode(path: &Path) -> Result<Pcm, String> {
+    decode_cancellable(path,&||false)
+}
+
+pub(crate) fn decode_cancellable(path:&Path,cancel:&dyn Fn()->bool)->Result<Pcm,String> {
+    decode_with_native(path,cancel,|path,cancel| {
+        #[cfg(target_os="android")]
+        {decode_telefono(path,cancel)}
+        #[cfg(not(target_os="android"))]
+        {let _=(path,cancel);Err(String::new())}
+    })
+}
+
+// Il confine nativo è iniettato anche nel test host: stessa propagazione del token del player.
+pub(crate) fn decode_with_native(path:&Path,cancel:&dyn Fn()->bool,native:impl FnOnce(&Path,&dyn Fn()->bool)->Result<Pcm,String>)->Result<Pcm,String> {
+    if cancel(){return Err("Annullato".into());}
     // Un AVI non è un WAV: l'audio si prende dai pacchetti del contenitore.
-    if let Ok(mut file) = File::open(path) {
+    if let Ok(mut file) = crate::input_file::File::open(path) {
         use std::io::Read;
         let mut head = [0u8; 12];
         if file.read_exact(&mut head).is_ok() && &head[0..4] == b"RIFF" && &head[8..12] == b"AVI " {
             return crate::avi::avi_audio(path);
         }
     }
-    let first = decode_symphonia(path);
+    let first = decode_symphonia_cancellable(path,cancel);
+    if cancel(){return Err("Annullato".into());}
     // Android: i formati che Cedro non sa leggere (Opus, AMR…) li decodifica il telefono.
-    #[cfg(target_os = "android")]
     if first.is_err() {
-        if let Ok(pcm) = decode_telefono(path) {
-            return Ok(pcm);
-        }
+        if let Ok(pcm)=native(path,cancel){return Ok(pcm);}
     }
+    if cancel(){return Err("Annullato".into());}
     first
 }
 
 #[cfg(target_os = "android")]
-fn decode_telefono(path: &Path) -> Result<Pcm, String> {
-    let mut decoder = crate::mediadec::AudioDecoder::open(path)?;
+fn decode_telefono(path: &Path,cancel:&dyn Fn()->bool) -> Result<Pcm, String> {
+    let mut decoder = crate::mediadec::AudioDecoder::open_cancellable(path,cancel)?;
     let (mut channels, mut rate) = (2u16, 44_100u32);
     let mut samples = Vec::new();
     while let Some((chunk, c, r)) = decoder.next()? {
+        if cancel(){return Err("Annullato".into());}
         (channels, rate) = (c, r);
         samples.extend(chunk);
     }
@@ -338,9 +361,9 @@ fn decode_telefono(path: &Path) -> Result<Pcm, String> {
     Ok(Pcm { rate, channels, samples, tags: Tags::default() })
 }
 
-fn decode_symphonia(path: &Path) -> Result<Pcm, String> {
+fn decode_symphonia_cancellable(path:&Path,cancel:&dyn Fn()->bool)->Result<Pcm,String> {
     let mut samples = Vec::new();
-    let mut pcm = stream_symphonia_with(path, true, &mut |s, _, _| { samples.extend_from_slice(s); Ok(()) })?;
+    let mut pcm = stream_symphonia_with(path, true, &mut |s, _, _| { if cancel(){return Err("Annullato".into());} samples.extend_from_slice(s); Ok(()) })?;
     pcm.samples = samples;
     Ok(pcm)
 }
@@ -431,7 +454,7 @@ fn stream_symphonia_with(path: &Path, trim_priming: bool, each: &mut dyn FnMut(&
 /// intestazioni dei blocchi prima dei campioni.
 fn wav_info_tags(path: &Path) -> Option<Tags> {
     use std::io::{Read, Seek, SeekFrom};
-    let mut f = File::open(path).ok()?;
+    let mut f = crate::input_file::File::open(path).ok()?;
     let mut head = [0u8; 12];
     f.read_exact(&mut head).ok()?;
     if &head[0..4] != b"RIFF" || &head[8..12] != b"WAVE" {

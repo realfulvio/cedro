@@ -2278,9 +2278,9 @@ Per esempio gli allegati di una PEC	For example the attachments of a certified e
 Se sono già firmati te li apro e ti dico se le firme valgono. Se non lo sono, li preparo per la firma.	If they're already signed I open them and tell you whether the signatures are valid. If not, I get them ready for signing.
 Tutti i comandi e le opzioni in vista.	All commands and options in view.
 Solo l'essenziale; il resto a un clic.	Only the essentials; the rest one click away.
-In Impostazioni, Aspetto: le tinte di Cedro e i temi di prima, la vista Semplice (solo l'essenziale) o Completa (tutti i comandi) e i caratteri più grandi. Ogni tema ha il suo carattere. Questa Guida cambia insieme a loro.	In Settings, Appearance: Cedro's tints and the earlier themes, the Simple view (essentials only) or Full view (all commands) and larger text. Each theme has its own typeface. This Guide changes along with them.
-Quattro tinte e sette temi	Four tints and seven themes
-Da Cedro · Melanzana al Comune di Bondeno	From Cedro · Aubergine to the Comune di Bondeno
+In Impostazioni, Aspetto: Cedro Melanzana, Notte, Bosco, Carta e Cedro for Labs, la vista Semplice (solo l'essenziale) o Completa (tutti i comandi) e i caratteri più grandi. Questa Guida cambia insieme a loro.	In Settings, Appearance: Cedro Aubergine, Night, Forest, Paper and Cedro for Labs, the Simple view (essentials only) or Full view (all commands) and larger text. This Guide changes along with them.
+Cinque temi desktop	Five desktop themes
+Melanzana, Notte, Bosco, Carta e Cedro for Labs	Aubergine, Night, Forest, Paper and Cedro for Labs
 Semplice o Completa	Simple or Full
 Si cambia anche in cima al pannello	Can also be changed at the top of the panel
 Vista	View
@@ -2497,3 +2497,221 @@ Playlist e raccolte	Playlists and collections
 consigliata	recommended
 file leggero	light file
 file piccolo	small file
+
+# Interfaccia Android A
+I tuoi file.	Your files.
+Come ti servono.	Just as you need them.
+Conversioni, PDF, voce e laboratorio.\nTutto sul tuo telefono.	Conversions, PDF, speech and laboratory.\nAll on your phone.
+Apri un file	Open a file
+Foto, documenti, audio	Photos, documents, audio
+Unisci, dividi, comprimi	Merge, split, compress
+Ascolta e rivedi	Listen and review
+Link in video o audio	Links to video or audio
+Vetrini, DICOM, casi	Slides, DICOM, cases
+Riprendi da qui	Pick up here
+FILE SELEZIONATO	SELECTED FILE
+Selezionato	Selected
+Seleziona	Select
+Mostra	Show
+Ricevuto. Scegli cosa farne.	Received. Choose an action.
+Numero da controllare	Number to check
+Significato da controllare	Meaning to check
+Aggiungi i file, o condividili a Cedro da un'altra app	Add files or share them to Cedro from another app
+Altre opzioni	More options
+Incolla il link	Paste the link
+Salva in	Save in
+Una persona sola	One person
+{#} persone	{} people
+A modo tuo.	Your way.
+Leggibilità	Readability
+Temi precedenti	Previous themes
+Tipo di file	File type
+Animazioni: segue il telefono	Animations: follows the phone setting
+
+Crea {}	Create {}
+Uso quotidiano	Everyday use
+Alta efficienza	High efficiency
+Grafica e scambio	Graphics and interchange
+
+# Android: importazione, lavori e recupero dei risultati
+Importazione	Import
+File importati	Files imported
+Importazione interrotta	Import interrupted
+Annullamento…	Cancelling…
+Da salvare	Needs saving
+Copia in Cedro	Copy in Cedro
+Salvataggio incompleto: copie disponibili in Cedro	Saving incomplete: copies available in Cedro
+Pubblicazione annullata: le copie complete restano in Cedro	Publishing cancelled: complete copies remain in Cedro
+Interrotto dalla chiusura di Cedro: avvia di nuovo il lavoro	Interrupted when Cedro closed: start the job again
+Il motore si è interrotto	The engine stopped unexpectedly
+Risultati recuperati: salvali o condividili	Recovered results: save or share them
+Recuperato dopo un’interruzione	Recovered after an interruption
+Riassunto pronto in Rivedi	Summary ready in Review
+Riassunto non leggibile	Summary cannot be read
+Spazio insufficiente per importare il file	Not enough space to import the file
+File non disponibile: sceglilo di nuovo	File unavailable: select it again
+Cartella troppo annidata	Folder nesting is too deep
+Impossibile aprire il file condiviso	Cannot open the shared file
+Descriptor SAF non valido	Invalid SAF descriptor
+Indirizzo SAF assente	Missing SAF address
+Cartella SAF senza identificatore	SAF folder has no identifier
+Cartella assente	Folder missing
+Nome duplicato nella cartella: {nome}	Duplicate name in folder: {nome}
+Risultato fuori dalla cartella del lavoro	Result outside the job folder
+Il motore non è in questo APK	The engine is not included in this APK
+Il motore non parte: {e}	The engine cannot start: {e}
+Troppe opzioni per il lavoro	Too many options for the job
+Canale del motore non disponibile	Engine channel unavailable
+Risposta del motore non disponibile	Engine response unavailable
+MediaStore non ha completato il salvataggio	MediaStore did not complete saving
+Nessun file scelto	No file selected
+File non leggibile	File cannot be read
+File troppo grande	File too large
+Aspetto che finisca l’altro lavoro…	Waiting for the other job to finish…
+Memoria insufficiente per verificare il file originale	Not enough memory to verify the original file
+Il provider richiede una copia · spazio disponibile: {spazio}	The provider requires a copy · available space: {spazio}
+Copia privata · spazio disponibile: {spazio}	Private copy · available space: {spazio}
+Identità del lavoro assente	Missing job identity
+Sorgente della revisione non disponibile	Review source unavailable
+Risultato non regolare	Unsupported result file type
+Il lavoro non ha prodotto file	The job produced no files
+Registro dei risultati non valido	Invalid results journal
+Nome del risultato assente	Missing result name
+Apri cartella MRXS	Open MRXS folder
+Annulla anteprima	Cancel preview
+Scena	Scene
+Canale	Channel
+Piano Z	Z plane
+Istante	Time point
+Lavori del caso	Case jobs
+Tutti i lavori	All jobs
+Un codice comune per i file del laboratorio.	A shared code for the laboratory files.
+Nota · resta nel caso, non nel nome del file	Note · stays in the case, not in the filename
+Nome del risultato	Output name
+Usa questo caso	Use this case
+Togli caso attivo	Remove active case
+Opzioni del risultato	Output options
+Avviso	Warning
+Gli allegati restano solo nel file originale.	Attachments remain only in the original file.
+Caso non salvato	Case not saved
+Livello non presente nel file	Level not found in the file
+Piano non presente nel file	Plane not found in the file
+Canale non presente nel file	Channel not found in the file
+Il file non contiene un’anteprima di laboratorio	The file does not contain a laboratory preview
+Anteprima: area centrale del livello. L’esportazione usa le opzioni del risultato.	Preview: central region of the level. Export uses the output options.
+Eventuali nomi impressi nei pixel richiedono una verifica visiva.	Names embedded in the pixels require visual inspection.
+I selettori cambiano solo l’anteprima. L’esportazione usa le opzioni del risultato e include tutte le scene del file.	The selectors only change the preview. Export uses the output options and includes all scenes in the file.
+Tessere AI, zona mitotica e consulto richiedono SVS, NDPI o MRXS. La copia anonima di CZI, ND2 e LIF non è supportata dal motore.	AI tiles, mitotic counting region and consultation require SVS, NDPI or MRXS. The engine does not support anonymized copies of CZI, ND2 or LIF.
+La copia anonima di CZI, ND2 e LIF non è supportata dal motore. Puoi convertire il file in PNG; non è una copia anonima del formato originale.	The engine does not support anonymized copies of CZI, ND2 or LIF. You can convert the file to PNG; this is not an anonymized copy of the original format.
+Cartella privata non disponibile	Private folder unavailable
+Anteprima non leggibile	Cannot read preview
+file di dati fuori dalla cartella MIRAX	data file outside the MIRAX folder
+percorso dei dati MIRAX non valido	invalid MIRAX data path
+{}: file associato non regolare	{}: associated file is not a regular file
+Pacchetto con impronte	Package with checksums
+Apri file	Open file
+Vetrini	Slides
+Copia anonima	Anonymized copy
+Anteprima	Preview
+1080p · consigliata	1080p · recommended
+Audio disponibile: avvia di nuovo la trascrizione	Audio available: start transcription again
+Capitoli	Chapters
+Chiedi una volta su rete mobile	Ask once on mobile data
+Consenti anche rete mobile	Allow mobile data too
+Copertina	Cover
+Copertina, capitoli, metadati, sottotitoli e raccolte richiedono YouTube. Per questi link sono disponibili MP4 e i formati audio indicati.	Cover, chapters, metadata, subtitles and collections require YouTube. These links support MP4 and the indicated audio formats.
+Download dei componenti	Component downloads
+Originale	Original
+Qualità audio	Audio quality
+Qualità del video	Video quality
+Questa versione passa il link a un'altra app.	This version sends the link to another app.
+Salta gli sponsor	Skip sponsors
+Salta i file già presenti	Skip existing files
+Scarica il componente	Download component
+Scarica l'originale, poi riduce o converte il file sul telefono.	Downloads the original, then reduces or converts the file on your phone.
+Scarica la raccolta	Download collection
+Solo Wi-Fi	Wi-Fi only
+Sottotitoli, quando disponibili	Subtitles, when available
+Spazio libero	Free space
+Tutte le lingue	All languages
+Un problema con i sottotitoli non interrompe il video.	A subtitle problem does not stop the video.
+Uniforma il volume	Normalize volume
+Aggiornamento	Updating
+Download non riuscito. Riprova.	Download failed. Try again.
+Raccolta non valida	Invalid collection
+Il file esiste già: saltato	File already exists: skipped
+Spazio insufficiente per il componente. Libera spazio e riprova.	Not enough space for the component. Free up space and try again.
+Audio pronti: trascrizioni aggiunte ai lavori	Audio ready: transcriptions added to jobs
+Intervallo del download non valido	Invalid download range
+Risposta incompleta	Incomplete response
+Percorso del componente non valido	Invalid component path
+Evita copie già salvate	Avoid copies already saved
+Evita copie duplicate al salvataggio. Il download può avvenire comunque.	Avoids duplicate saved copies. Downloading may still occur.
+Referti	Reports
+Numeri e parole decisive da riascoltare. Finché restano punti aperti, salvi una bozza.	Listen again to numbers and decisive words. Save as a draft until all points are checked.
+Volume del telefono	Phone volume
+Correggi sul posto	Edit here
+Conferma dopo l'ascolto	Confirm after listening
+Salva come bozza	Save as draft
+{} da riascoltare	{} to listen again
+Nessun parlato riconosciuto	No speech recognized
+Prova una registrazione con la voce più vicina al microfono.	Try recording with the voice closer to the microphone.
+Onda non disponibile: puoi comunque ascoltare	Waveform unavailable: you can still listen
+Il riassunto sarà disponibile quando la trascrizione è completa.	The summary will be available once transcription is complete.
+Concluso	Completed
+Pausa	Pause
+Ascolta	Listen
+Zoom −	Zoom −
+Zoom +	Zoom +
+Audio non disponibile	Audio unavailable
+
+# Android: rifiniture finali
+Aggiungi PDF	Add PDFs
+Aggiungi dei file o condividili con Cedro.	Add files or share them with Cedro.
+Aiuto	Help
+Apri un file firmato	Open a signed file
+Caratteri	Text size
+Come si usa Cedro	Using Cedro
+Con 1 ogni pagina diventa un PDF.	With 1, each page becomes a PDF.
+Controlli	Checks
+Controllo la revoca online…	Checking revocation online…
+Cose da fare	To do
+Così arriva in Excel: numeri veri, titoli in grassetto	How it looks in Excel: real numbers, bold headings
+Da un'altra app, «Condividi» → Cedro apre la ruota con il file al centro: tocca uno spicchio e «Converti».	From another app, Share → Cedro opens the file: choose an operation and Convert.
+Documenti/Cedro	Documents/Cedro
+Documenti/Cedro, sul telefono	Documents/Cedro, on your phone
+Dove salvare	Save location
+Elenco europeo	European list
+Esce un file di testo con le frasi e i tempi; dai Lavori si apre «Rivedi» per ascoltarle e correggerle.	Creates a text file with sentences and times; open Review from Jobs to listen and correct them.
+Esempio: 	Example:
+File ▴	File ▴
+Gli allegati firmati della mail o di WhatsApp: aprili e scegli Cedro.	Open signed email or WhatsApp attachments and choose Cedro.
+Il telefono può restare in tasca: a fine lavoro arriva una notifica.	You can keep your phone in your pocket: a notification arrives when the job finishes.
+Impostazioni della trascrizione	Transcription settings
+Impostazioni trascrizione	Transcription settings
+L'ordine qui sotto è l'ordine delle pagine nel file unito. Tieni premuta la maniglia per spostare un file.	The order below is the page order in the merged file. Hold the handle to move a file.
+Le copie nuove vanno qui; l'originale non si tocca.	New copies go here; the original stays unchanged.
+Le stesse opzioni del pannello Conversioni del computer.	The same options as the desktop conversion panel.
+Nessuna.	None.
+Nome dei file, qualità, OCR	File names, quality, OCR
+Ogni tema ha il suo carattere, come sul computer. «Grandi» ingrandisce tutto il testo di Cedro.	Each theme has its own font. Large increases all text in Cedro.
+Operaz.	Operation
+PDF in JPG e PNG	PDF to JPG and PNG
+Questo PDF ha una password	This PDF has a password
+Questo PDF non ha segnalibri: scegli un altro modo per dividerlo.	This PDF has no bookmarks: choose another split method.
+Riassunto AI in corso	AI summary in progress
+Rifai il riassunto	Redo summary
+Semplice mostra il formato e il pulsante; Completa anche qualità, dimensioni e le altre opzioni.	Simple shows the format and action; Full also shows quality, size and other options.
+Serve per aprirlo. Cedro la usa solo per questo lavoro e non la ricorda.	It is needed to open the PDF. Cedro uses it only for this job and does not save it.
+Sto leggendo le pagine…	Reading pages…
+Sul telefono, senza internet	On your phone, offline
+Temi di prima	Previous themes
+Testo chiaro in diagonale su ogni pagina	Light diagonal text on every page
+Tinta di Cedro	Cedro colors
+Tocca le forbici tra due pagine per tagliare lì.	Tap the scissors between two pages to split there.
+Tocca un nome per scriverlo: cambia in tutte le frasi, nel file e nel riassunto. Il nome colorato su una frase sceglie chi la dice.	Tap a name to edit it throughout the sentences, file and summary. Tap a colored name on a sentence to choose its speaker.
+Un file per ogni segnalibro principale del PDF.	One file per main PDF bookmark.
+Vista di partenza	Initial view
+pagine	pages
+Il decoder esterno non supporta la lettura diretta del file autorizzato	The external decoder does not support direct reading of the authorized file
+Il decoder esterno non ha letto il file autorizzato	The external decoder could not read the authorized file

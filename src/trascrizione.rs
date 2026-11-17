@@ -159,6 +159,8 @@ pub struct Line {
 #[derive(Debug)]
 pub enum Event {
     Log(Line),
+    Audio { secs: f64 },
+    Segment(Segment),
     /// Il file numero `index` della coda è a `percent`.
     Percent { index: usize, percent: u8 },
     /// Un file è finito: il file scritto e il messaggio per la coda, oppure l'errore.
@@ -531,6 +533,7 @@ const FETCH_TRIES: u32 = 8;
 /// Ogni 10% scrive a che punto è. Ritorna lo SHA-256 del file scaricato.
 pub(crate) fn fetch(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u32, what: &str, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<String, String> {
     // La riga di stato in alto mostra il componente che arriva.
+    crate::componenti::prima_download(what,megabytes as u64*1_000_000)?;
     let job = crate::componenti::Lavoro::scarica(what);
     let result = fetch_inner(url, dest, expected_sha, megabytes, what, sink, cancel);
     if let Err(e) = &result {
@@ -547,6 +550,7 @@ fn fetch_inner(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u3
         std::fs::create_dir_all(dir).map_err(|e| format!("cartella {} non creata: {e}", dir.display()))?;
     }
     let part = dest.with_extension("part");
+    crate::componenti::prepara_parziale(&part)?;
     // Quello che c'è già nel .part (download interrotto la volta prima) si tiene: si rilegge per lo SHA-256.
     let mut hasher = Sha256::new();
     let mut done = 0u64;
@@ -628,6 +632,8 @@ fn fetch_inner(url: &str, dest: &Path, expected_sha: Option<&str>, megabytes: u3
         let mut reader = response.into_reader();
         let before = done;
         let outcome: Result<(), String> = loop {
+            #[cfg(target_os="android")]
+            crate::componenti::continua_download(what)?;
             if cancel.load(Ordering::Relaxed) {
                 return Err(CANCELLED.to_string());
             }
@@ -954,6 +960,7 @@ impl Drop for Running {
 
 /// Un segmento di parlato: inizio e fine in centesimi di secondo.
 #[derive(Clone, Debug, PartialEq, Default)]
+#[cfg_attr(feature="android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Segment {
     pub t0: i64,
     pub t1: i64,
@@ -1512,11 +1519,43 @@ fn system_decode(input: &Path, cancel: &AtomicBool) -> Result<PathBuf, String> {
     #[cfg(not(windows))]
     {
         // Anche l'ffmpeg che Cedro ha scaricato per YouTube, se sul sistema non c'è.
+        #[cfg(target_os="android")]
+        let ffmpeg_bin=crate::youtube::android::decoder_ffmpeg(cancel)?;
+        #[cfg(not(target_os="android"))]
         let ffmpeg_bin = crate::youtube::ffmpeg_path().unwrap_or_else(|| PathBuf::from("ffmpeg"));
-        let ffmpeg = wait_or_cancel(
-            Command::new(ffmpeg_bin).args(["-nostdin", "-loglevel", "error", "-y", "-i"]).arg(input).args(["-vn", "-ac", "1", "-ar", "16000"]).arg(&temp),
-            cancel,
-        );
+        let source=crate::input_file::File::open(input).map_err(|e|e.to_string())?;
+        let direct=source.is_grant();
+        let _source_lock=source.lock_native(||cancel.load(Ordering::Relaxed)).map_err(|e|e.to_string())?;
+        let mut cmd=crate::youtube::command(&ffmpeg_bin);
+        #[cfg(target_os="android")]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(unsafe{libc::getpgrp()});
+            unsafe {cmd.pre_exec(|| {
+                if libc::prctl(libc::PR_SET_PDEATHSIG,libc::SIGKILL)<0{return Err(std::io::Error::last_os_error());}
+                Ok(())
+            });}
+        }
+        cmd.args(["-nostdin","-loglevel","error","-y"]);
+        if direct {
+            // Il build concreto deve supportare fd:; pipe: perderebbe il seek dei contenitori.
+            let (protocols,_,ok)=crate::youtube::capture_until(crate::youtube::command(&ffmpeg_bin).args(["-hide_banner","-protocols"]),cancel,Duration::from_secs(10))?;
+            let supported=ok&&protocols.lines().any(|line|line.trim()=="fd");
+            if !supported {let _=std::fs::remove_dir_all(&dir);return Err("Il decoder esterno non supporta la lettura diretta del file autorizzato".into());}
+            use std::os::fd::AsRawFd;
+            use std::os::unix::process::CommandExt;
+            let fd=source.as_raw_fd();
+            // Un precedente extractor può aver lasciato il cursore nativo a fine file.
+            // Il guard protegge il reset; i lettori pread conservano il proprio offset logico.
+            if unsafe{libc::lseek(fd,0,libc::SEEK_SET)}<0 {let error=std::io::Error::last_os_error();let _=std::fs::remove_dir_all(&dir);return Err(error.to_string());}
+            cmd.args(["-fd",&fd.to_string(),"-i","fd:"]);
+            unsafe {cmd.pre_exec(move || {
+                let flags=libc::fcntl(fd,libc::F_GETFD);
+                if flags<0 || libc::fcntl(fd,libc::F_SETFD,flags & !libc::FD_CLOEXEC)<0 {return Err(std::io::Error::last_os_error());}
+                Ok(())
+            });}
+        }else{cmd.arg("-i").arg(input);}
+        let ffmpeg=wait_or_cancel(cmd.args(["-vn","-ac","1","-ar","16000"]).arg(&temp),cancel);
         if cancel.load(Ordering::Relaxed) {
             let _ = std::fs::remove_dir_all(&dir);
             return Err(CANCELLED.into());
@@ -1524,6 +1563,7 @@ fn system_decode(input: &Path, cancel: &AtomicBool) -> Result<PathBuf, String> {
         if ffmpeg && temp.is_file() {
             return Ok(temp);
         }
+        if direct {let _=std::fs::remove_dir_all(&dir);return Err("Il decoder esterno non ha letto il file autorizzato".into());}
         let location = format!("location={}", input.display());
         let out = format!("location={}", temp.display());
         let gst = wait_or_cancel(
@@ -1608,6 +1648,7 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, gloss
         match event["e"].as_str().unwrap_or("") {
             "audio" => {
                 secs = event["secs"].as_f64().unwrap_or(0.0);
+                sink(Event::Audio { secs });
                 log(sink, Tone::Step, "Audio", format!("{} di parlato da trascrivere", minutes_text(secs)));
             }
             "lang" => log(sink, Tone::Step, "Lingua", format!("riconosciuta: {}", language_name(event["code"].as_str().unwrap_or("?")))),
@@ -1643,6 +1684,7 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, gloss
                 let speaker = if voices >= 2 { speaker_of(&turns, t0, t1) } else { None };
                 let seg = Segment { t0, t1, text: event["text"].as_str().unwrap_or("").to_string(), speaker };
                 sink(Event::Log(Line { tone: Tone::Speech, key: format!("[{}]", clock(seg.t0)), text: seg.text.clone(), speaker }));
+                sink(Event::Segment(seg.clone()));
                 segments.push(seg);
             }
             "progress" => {
@@ -1923,6 +1965,9 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                 // Con i referti veterinari le frasi con numeri e parole decisive vanno riascoltate in
                 // «Rivedi»: finché non lo sono il file è una bozza, col nome e la riga in cima che lo dicono.
                 let referto = request.glossario.as_deref().is_some_and(|g| g.split(',').any(|t| t.trim() == "veterinaria"));
+                if referto {
+                    let _ = crate::revisione::save_review(path, secs, &lang, &segments, &names, None, &crate::revisione::ReviewState { referto: true, view: 1, checked: Vec::new() });
+                }
                 let punti = if referto { crate::revisione::find_referto(&segments) } else { Vec::new() };
                 let draft = crate::revisione::riga_bozza(&segments, &punti.iter().collect::<Vec<_>>());
                 let out = match &draft {
@@ -2194,7 +2239,7 @@ mod tests {
         run(std::slice::from_ref(&wav), &request, Some(&work), &Options::default(), &|event| match event {
             Event::Log(line) => lines.lock().unwrap().push(format!("{} {}", line.key, line.text)),
             Event::Finished { result, .. } => *finished.lock().unwrap() = Some(result),
-            Event::Percent { .. } => {}
+            Event::Percent { .. } | Event::Audio { .. } | Event::Segment(_) => {}
         });
         for line in lines.lock().unwrap().iter() {
             eprintln!("{line}");

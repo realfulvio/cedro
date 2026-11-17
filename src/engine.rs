@@ -195,7 +195,7 @@ fn pdf_text_with_ocr(path: &Path, opts: &Options) -> Result<(String, usize, usiz
     let mut skipped = 0;
     let mut ocr_error = None;
     if opts.ocr && wanted.iter().any(|b| *b) {
-        let bytes = fs::read(path).map_err(|e| e.to_string())?;
+        let bytes = crate::input_file::read(path).map_err(|e| e.to_string())?;
         match crate::ocr::pdf_pages_where(&bytes, |i| wanted.get(i).copied().unwrap_or(false)) {
             Ok(read) => {
                 for (slot, i) in selected.iter().enumerate() {
@@ -506,7 +506,7 @@ fn write_sheet_pdf(path: &Path, from: &str, dir: &Path, opts: &Options) -> Cedro
     if opts.pdfa && password.is_some() {
         return Err(err("il PDF/A non ammette la password: togline una delle due"));
     }
-    let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+    let bytes = crate::input_file::read(path).map_err(|e| err(e.to_string()))?;
     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let mut scelte = opts.ufficio;
     scelte.embed = opts.embed_fonts;
@@ -694,7 +694,7 @@ fn zip_file(path: &Path, out: &Path, size: u64) -> CedroResult<()> {
             .compression_method(zip::CompressionMethod::Stored)
             .large_file(size >= u32::MAX as u64);
         zw.start_file(name, options)?;
-        std::io::copy(&mut fs::File::open(path)?, &mut zw)?;
+        std::io::copy(&mut crate::input_file::File::open(path)?, &mut zw)?;
         let mut inner = zw.finish()?;
         std::io::Write::flush(&mut inner)?;
         Ok(())
@@ -734,7 +734,7 @@ pub fn zip_paths(paths: &[PathBuf], out_dir: &Path, name: Option<&str>, opts: &O
                     n += 1;
                 }
                 zw.start_file(entry, options)?;
-                std::io::copy(&mut fs::File::open(p)?, &mut zw)?;
+                std::io::copy(&mut crate::input_file::File::open(p)?, &mut zw)?;
             }
             let mut inner = zw.finish()?;
             std::io::Write::flush(&mut inner)?;
@@ -790,6 +790,7 @@ pub fn perform_into(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
 
 /// Cosa fare quando il file di uscita esiste già.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub enum Exists {
     /// Aggiunge -2, -3… al nome.
     #[default]
@@ -834,6 +835,7 @@ impl std::fmt::Debug for ExistsAsk {
 
 /// Le pagine scelte di un PDF, come si scrivono: `1-3,5` o `4-` (dalla 4 alla fine).
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct PageSel(Vec<(usize, usize)>);
 
 impl PageSel {
@@ -877,6 +879,7 @@ fn pages_of(sel: &Option<PageSel>, total: usize) -> Vec<usize> {
 
 /// Formato della pagina per i documenti convertiti in PDF.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub enum PageSize {
     A4,
     A3,
@@ -885,6 +888,7 @@ pub enum PageSize {
 
 /// Codifica dei file di testo scritti.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub enum Encoding {
     Utf8,
     Windows1252,
@@ -893,6 +897,7 @@ pub enum Encoding {
 
 /// Opzioni extra del pannello Conversioni. `Default` = il comportamento di sempre.
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct Options {
     /// PDF in immagini: risoluzione delle pagine in dpi (di norma 144).
     pub dpi: Option<u32>,
@@ -905,6 +910,7 @@ pub struct Options {
     /// Cosa fare se il nome di uscita esiste già.
     pub exists: Exists,
     /// Chi risponde con `Exists::Ask`.
+    #[cfg_attr(feature = "android-worker", serde(skip))]
     pub on_exists: Option<ExistsAsk>,
     /// Documenti in PDF: formato della pagina.
     pub page_size: PageSize,
@@ -1003,6 +1009,7 @@ pub struct Options {
 
 /// Le scelte per le pagine di un PDF e per comprimerlo.
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct PdfEdit {
     /// Le pagine che restano (da 1), nell'ordine, con la rotazione in gradi; vuoto = tutte com'erano.
     pub pages: Vec<(u32, i32)>,
@@ -1016,6 +1023,7 @@ pub struct PdfEdit {
 
 /// Le scelte per unire e dividere i PDF.
 #[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "android-worker", derive(serde::Serialize, serde::Deserialize))]
 pub struct PdfPages {
     pub settings: crate::pdfpages::Settings,
     /// La password per aprire i PDF protetti.
@@ -1195,7 +1203,7 @@ fn merge_inner(sources: &[(PathBuf, Option<PageSel>)], out_dir: Option<&Path>, o
     let mut docs = Vec::new();
     for (i, (path, _)) in sources.iter().enumerate() {
         crate::progress::report(i as f32 / sources.len() as f32 * 0.7);
-        let bytes = fs::read(path).map_err(|e| err(format!("{} non letto: {e}", file_label(path))))?;
+        let bytes = crate::input_file::read(path).map_err(|e| err(format!("{} non letto: {e}", file_label(path))))?;
         let doc = crate::pdfpages::open(&bytes, pp.open_password.as_deref()).map_err(|e| err(format!("{}: {e}", file_label(path))))?;
         docs.push(doc);
     }
@@ -1387,7 +1395,7 @@ fn file_label(path: &Path) -> String {
 /// Divide un PDF in più file secondo il piano scelto. Il primo file scritto è quello che si apre.
 fn split_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
     let pp = &opts.pdf_pages;
-    let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+    let bytes = crate::input_file::read(path).map_err(|e| err(e.to_string()))?;
     let doc = crate::pdfpages::open(&bytes, pp.open_password.as_deref()).map_err(err)?;
     let total = crate::pdfpages::page_count(&doc) as u32;
     let groups = crate::pdfpages::groups(&pp.plan, total, Some(&doc)).map_err(err)?;
@@ -1441,7 +1449,7 @@ fn edit_pdf(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Output> {
     let pe = &opts.pdf_edit;
     let pp = &opts.pdf_pages;
     let out = reserve(dir, &format!("{}{}", stem(path), pe.suffix), "pdf")?;
-    let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+    let bytes = crate::input_file::read(path).map_err(|e| err(e.to_string()))?;
     let doc = crate::pdfpages::open(&bytes, pp.open_password.as_deref()).map_err(err)?;
     let total = crate::pdfpages::page_count(&doc) as u32;
     let list: Vec<(u32, i32)> = if pe.pages.is_empty() { (1..=total).map(|p| (p, 0)).collect() } else { pe.pages.clone() };
@@ -1501,7 +1509,7 @@ pub fn saved_squeeze() -> crate::pdfedit::Squeeze {
 
 /// Il PDF compresso in memoria con le scelte date: (byte, peso di prima). Per le stime del pannello e per comprimere.
 pub fn squeeze_pdf(path: &Path, s: &crate::pdfedit::Squeeze, password: Option<&str>) -> Result<(Vec<u8>, u64), String> {
-    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let bytes = crate::input_file::read(path).map_err(|e| e.to_string())?;
     let doc = crate::pdfpages::open(&bytes, password)?;
     let out = crate::pdfedit::compress(doc, s)?;
     Ok((out, bytes.len() as u64))
@@ -1509,14 +1517,14 @@ pub fn squeeze_pdf(path: &Path, s: &crate::pdfedit::Squeeze, password: Option<&s
 
 /// Pagine e segnalibri di primo livello (pagina da 1, titolo) di un PDF, con la password se è protetto.
 pub fn pdf_info(path: &Path, password: Option<&str>) -> Result<(u32, Vec<(u32, String)>), String> {
-    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let bytes = crate::input_file::read(path).map_err(|e| e.to_string())?;
     let doc = crate::pdfpages::open(&bytes, password)?;
     Ok((crate::pdfpages::page_count(&doc) as u32, crate::pdfpages::top_bookmarks(&doc)))
 }
 
 /// Una copia senza password di un PDF protetto, in `out` (per lavorarlo come gli altri).
 pub fn pdf_unlock(path: &Path, password: &str, out: &Path) -> Result<(), String> {
-    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let bytes = crate::input_file::read(path).map_err(|e| e.to_string())?;
     let mut doc = crate::pdfpages::open(&bytes, Some(password))?;
     doc.trailer.remove(b"Encrypt");
     fs::write(out, crate::pdfedit::save_packed(&doc)).map_err(|e| e.to_string())
@@ -1682,7 +1690,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     if action == "dup" {
         // Senza estensione la copia non ne prende una (prima diventava «nome-copia.copia»).
         let out = reserve(&dir, &format!("{}-copia", stem(path)), &extension(path))?;
-        fs::copy(path, &out).map_err(|e| err(e.to_string()))?;
+        crate::input_file::copy(path, &out).map_err(|e| err(e.to_string()))?;
         return Ok(Output { path: out, message: "Copia creata".into() });
     }
     if action == "pack" {
@@ -1755,7 +1763,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         let from = extension(path);
         // Excel e Calc: si leggono i fogli e da lì vale tutto come per un CSV.
         let fogli = if matches!(from.as_str(), "xlsx" | "xlsm" | "ods" | "xls") {
-            let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+            let bytes = crate::input_file::read(path).map_err(|e| err(e.to_string()))?;
             let mut fogli = crate::tabella::leggi(&from, &bytes).map_err(err)?;
             fogli.retain(|f| !f.righe.is_empty());
             if fogli.is_empty() {
@@ -1873,7 +1881,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         if !crate::ufficio::is_documento(&from) {
             return Err(err(format!("«{from}» non è un documento letto da Cedro")));
         }
-        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let bytes = crate::input_file::read(path).map_err(|e| err(e.to_string()))?;
         let mut doc = crate::ufficio::leggi_documento(&from, &bytes).map_err(err)?;
         if doc.titolo.trim().is_empty() {
             doc.titolo = stem(path);
@@ -1891,7 +1899,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         return Ok(Output { path: out, message: message.to_string() });
     }
     if kind == Kind::Pdf && matches!(action, "jpg" | "png") {
-        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let bytes = crate::input_file::read(path).map_err(|e| err(e.to_string()))?;
         let all = crate::ocr::pdf_page_count(&bytes).map_err(err)?;
         let selected = pages_of(&opts.pages, all);
         let total = selected.len();
@@ -1968,7 +1976,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
     if kind == Kind::Pdf && action == "docx" {
         let out = reserve(&dir, &stem(path), "docx")?;
-        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let bytes = crate::input_file::read(path).map_err(|e| err(e.to_string()))?;
         let want = |i: usize| opts.pages.as_ref().is_none_or(|s| s.contains(i));
         let read = crate::pdflayout::ReadOptions { tables: opts.tables, columns: opts.columns, merge: true };
         let every = crate::pdflayout::read_pages(&bytes, &read, want).map_err(err)?;
@@ -2007,7 +2015,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     }
     if kind == Kind::Pdf && action == "xlsx" {
         let out = reserve(&dir, &stem(path), "xlsx")?;
-        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let bytes = crate::input_file::read(path).map_err(|e| err(e.to_string()))?;
         let want = |i: usize| opts.pages.as_ref().is_none_or(|s| s.contains(i));
         let read = crate::pdflayout::ReadOptions { tables: true, columns: true, merge: opts.merge_tables };
         let every = crate::pdflayout::read_pages(&bytes, &read, want).map_err(err)?;
@@ -2094,7 +2102,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             Ok(text) => text,
             Err(_) => {
                 // Il PDF intero si legge solo quando serve l'OCR.
-                let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+                let bytes = crate::input_file::read(path).map_err(|e| err(e.to_string()))?;
                 let text = crate::ocr::pdf_pages_text(&bytes).map_err(err)?;
                 let total = crate::ocr::pdf_page_count(&bytes).unwrap_or(0);
                 if total > settings.ocr_pages() {
@@ -2113,7 +2121,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         if !crate::anonimizza::gestito(&ext) {
             return Err(err("i .doc e .rtf vecchi non si ripuliscono: salvali prima in .docx o .odt"));
         }
-        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let bytes = crate::input_file::read(path).map_err(|e| err(e.to_string()))?;
         let (clean, fatto) = crate::anonimizza::pulisci(&ext, &bytes).map_err(err)?;
         let out = reserve(&dir, &format!("{}-anonimo", stem(path)), &ext)?;
         write_bytes(&out, &clean)?;
@@ -2154,7 +2162,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
     // (Un vetrino non si legge intero: si riscrive in PNG dal livello scelto, senza etichetta.)
     if action == "strip" && slide.is_none() {
         let ext = extension(path);
-        let bytes = fs::read(path).map_err(|e| err(e.to_string()))?;
+        let bytes = crate::input_file::read(path).map_err(|e| err(e.to_string()))?;
         if let Some(done) = crate::pulisci::pulisci(&ext, &bytes) {
             let (clean, tolto) = done.map_err(err)?;
             let out = reserve(&dir, &format!("{}-pulito", stem(path)), &ext)?;
@@ -2465,7 +2473,7 @@ fn fogli_in_csv(path: &Path, dir: &Path, fogli: &[crate::tabella::Foglio], opts:
 }
 
 fn read_text(path: &Path) -> CedroResult<String> {
-    let bytes = fs::read(path).map_err(|e| err(format!("testo non letto: {e}")))?;
+    let bytes = crate::input_file::read(path).map_err(|e| err(format!("testo non letto: {e}")))?;
     // Un UTF-8 senza BOM diventa testo senza copiarlo (un .log di centinaia di MB).
     if !bytes.starts_with(&[0xEF, 0xBB, 0xBF]) && !bytes.starts_with(&[0xFF, 0xFE]) && !bytes.starts_with(&[0xFE, 0xFF]) {
         return Ok(match String::from_utf8(bytes) {
@@ -2561,6 +2569,27 @@ mod tests {
     use image::{Rgb, RgbImage};
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    #[cfg(unix)]
+    fn pdf_e_office_da_grant_saf_non_spostano_il_cursore() {
+        use std::io::{Seek,SeekFrom};
+        use std::os::fd::AsRawFd;
+        let dir=scratch();
+        let plain=dir.join("testo.pdf");fs::write(&plain,pdf_from_text("Documento di prova")).unwrap();
+        let mut file=fs::File::open(&plain).unwrap();file.seek(SeekFrom::Start(9)).unwrap();
+        let file=std::sync::Arc::new(file);let fd=file.as_raw_fd();
+        let alias=dir.join("saf.pdf");crate::input_file::register(&alias,fd,file.clone());std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&alias).unwrap();
+        assert_eq!(pdf_info(&alias,None).unwrap().0,1);
+        assert!(crate::doctext::pdf_page_texts(&alias).is_ok());
+        assert_eq!((&*file).stream_position().unwrap(),9);
+        let doc=dir.join("saf.rtf");fs::write(&doc,b"{\\rtf1\\ansi Testo Office}").unwrap();
+        let file=std::sync::Arc::new(fs::File::open(&doc).unwrap());let fd=file.as_raw_fd();crate::input_file::register(&doc,fd,file.clone());
+        fs::remove_file(&doc).unwrap();std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&doc).unwrap();
+        assert!(crate::doctext::document_text(&doc).unwrap().contains("Testo Office"));
+        assert_eq!((&*file).stream_position().unwrap(),0);
+        let _=fs::remove_dir_all(dir);
+    }
 
     fn scratch() -> PathBuf {
         let n = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();

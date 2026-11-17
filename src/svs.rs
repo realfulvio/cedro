@@ -11,7 +11,7 @@
 //! Oltre agli Aperio si leggono gli Hamamatsu (.ndpi, in `ndpi`) e i 3DHistech MIRAX (.mrxs, in
 //! `mrxs`): stessa struttura a livelli, solo le tessere si prendono in un altro modo.
 
-use std::fs::File;
+use crate::input_file::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
@@ -228,8 +228,8 @@ impl Slide {
         if crate::mrxs::is_mirax(path) {
             return crate::mrxs::open(path);
         }
-        if crate::ndpi::is_ndpi(path) {
-            return crate::ndpi::open(path);
+        if path.extension().and_then(|e|e.to_str()).is_some_and(|e|e.eq_ignore_ascii_case("ndpi")) || crate::ndpi::is_ndpi(path) {
+            return crate::ndpi::open(path).map_err(|e|format!("NDPI: {e}"));
         }
         let mut d = decoder(path)?;
         let first = d
