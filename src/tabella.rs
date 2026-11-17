@@ -402,6 +402,7 @@ pub fn in_excel(rows: &[Vec<String>], intestazione: bool) -> Result<(Vec<u8>, St
         frase.push_str(" Numeri con la virgola letti come numeri.");
     }
     if !piastre.is_empty() {
+        mappa(&mut book, &piastre, virgola, &mut testo_protetto).map_err(err)?;
         let pozzetti = per_pozzetto(&piastre);
         let ws = book.add_worksheet();
         ws.set_name("Pozzetti").map_err(err)?;
@@ -414,9 +415,9 @@ pub fn in_excel(rows: &[Vec<String>], intestazione: bool) -> Result<(Vec<u8>, St
         let p = &piastre[0];
         let n = piastre.iter().filter(|q| (q.righe, q.colonne) == (p.righe, p.colonne)).count();
         if n == 1 {
-            frase.push_str(&format!(" Piastra da {} pozzetti anche una riga per pozzetto (foglio Pozzetti).", p.righe * p.colonne));
+            frase.push_str(&format!(" Piastra da {} pozzetti anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).", p.righe * p.colonne));
         } else {
-            frase.push_str(&format!(" {n} piastre da {} pozzetti, anche una riga per pozzetto (foglio Pozzetti).", p.righe * p.colonne));
+            frase.push_str(&format!(" {n} piastre da {} pozzetti, anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).", p.righe * p.colonne));
         }
     }
     if testo_protetto.protetti > 0 {
@@ -426,6 +427,107 @@ pub fn in_excel(rows: &[Vec<String>], intestazione: bool) -> Result<(Vec<u8>, St
         frase.push_str(&format!(" {} celle troppo lunghe per Excel tagliate a {MAX_CELLA} caratteri.", testo_protetto.tagliate));
     }
     Ok((book.save_to_buffer().map_err(err)?, frase))
+}
+
+/// I colori della mappa: dal blu (valori bassi) al giallo chiaro (a metà) al rosso (alti). È la scala
+/// RdYlBu di ColorBrewer, leggibile anche da chi non distingue il rosso dal verde.
+pub const MAPPA_BASSO: u32 = 0x2C7BB6;
+pub const MAPPA_MEZZO: u32 = 0xFFFFBF;
+pub const MAPPA_ALTO: u32 = 0xD7191C;
+
+/// La riga (da 0) dove comincia la piastra `i` nel foglio Mappa: titolo, intestazione, righe, legenda, spazio.
+fn riga_mappa(piastre: &[Piastra], i: usize) -> u32 {
+    piastre[..i].iter().map(|p| p.righe as u32 + 4).sum()
+}
+
+/// Il foglio «Mappa»: ogni piastra disegnata come sul bancone (righe A, B…, colonne 1, 2…), i pozzetti
+/// colorati dal valore più basso al più alto della piastra, con il minimo e il massimo sotto. Si stampa
+/// in orizzontale su una pagina di larghezza.
+fn mappa(book: &mut rust_xlsxwriter::Workbook, piastre: &[Piastra], virgola: bool, conta: &mut Conta) -> Result<(), rust_xlsxwriter::XlsxError> {
+    use rust_xlsxwriter::{Color, ConditionalFormat3ColorScale, Format, FormatAlign, FormatBorder};
+    let ws = book.add_worksheet();
+    ws.set_name("Mappa")?;
+    let titolo = Format::new().set_bold().set_font_size(13);
+    let testa = Format::new().set_bold().set_align(FormatAlign::Center).set_background_color(Color::RGB(0xE3F1E6)).set_border(FormatBorder::Thin);
+    let cella = Format::new().set_align(FormatAlign::Center).set_align(FormatAlign::VerticalCenter).set_border(FormatBorder::Thin).set_border_color(Color::RGB(0xBFBFBF));
+    let nota = Format::new().set_italic().set_font_color(Color::RGB(0x595959));
+    let colonne_max = piastre.iter().map(|p| p.colonne).max().unwrap_or(12);
+    // Pozzetti quasi quadrati: più stretti nelle piastre grandi, così una 384 sta su un foglio.
+    let larghezza = if colonne_max > 24 { 5.0 } else if colonne_max > 12 { 6.5 } else { 9.0 };
+    ws.set_column_width(0, 4.5)?;
+    for c in 1..=colonne_max as u16 {
+        ws.set_column_width(c, larghezza)?;
+    }
+    for (i, p) in piastre.iter().enumerate() {
+        let r0 = riga_mappa(piastre, i);
+        ws.write_string_with_format(r0, 0, &p.nome, &titolo)?;
+        ws.write_blank(r0 + 1, 0, &testa)?;
+        for c in 0..p.colonne {
+            ws.write_number_with_format(r0 + 1, c as u16 + 1, (c + 1) as f64, &testa)?;
+        }
+        for r in 0..p.righe {
+            let riga = r0 + 2 + r as u32;
+            ws.write_string_with_format(riga, 0, lettera(r), &testa)?;
+            if colonne_max <= 24 {
+                ws.set_row_height(riga, 22)?;
+            }
+            for c in 0..p.colonne {
+                let col = c as u16 + 1;
+                match &p.valori[r][c] {
+                    Cella::Vuota => {
+                        ws.write_blank(riga, col, &cella)?;
+                    }
+                    Cella::Numero(v) => {
+                        ws.write_number_with_format(riga, col, *v, &cella)?;
+                    }
+                    Cella::Percento(v, dec) => {
+                        let code = if *dec == 0 { "0%".to_string() } else { format!("0.{}%", "0".repeat(*dec)) };
+                        ws.write_number_with_format(riga, col, *v, &cella.clone().set_num_format(code))?;
+                    }
+                    Cella::Testo(t) => {
+                        if sembra_numero_o_data(t) {
+                            conta.protetti += 1;
+                        }
+                        // «OVER», «<0,001», nomi dei campioni: restano scritti, senza colore.
+                        ws.write_string_with_format(riga, col, Cella::Testo(t.clone()).testo(virgola), &cella)?;
+                    }
+                }
+            }
+        }
+        let (prima, ultima) = (r0 + 2, r0 + 1 + p.righe as u32);
+        let scala = ConditionalFormat3ColorScale::new()
+            .set_minimum_color(Color::RGB(MAPPA_BASSO))
+            .set_midpoint_color(Color::RGB(MAPPA_MEZZO))
+            .set_maximum_color(Color::RGB(MAPPA_ALTO));
+        ws.add_conditional_format(prima, 1, ultima, p.colonne as u16, &scala)?;
+        // La legenda: il minimo (blu) e il massimo (rosso) della piastra, calcolati da Excel.
+        let area = format!("{}{}:{}{}", "B", prima + 1, colonna_lettere(p.colonne as u16), ultima + 1);
+        let legenda = ultima + 1;
+        ws.write_string_with_format(legenda, 1, "Min", &nota)?;
+        ws.write_formula_with_format(legenda, 2, format!("=MIN({area})").as_str(), &Format::new().set_background_color(Color::RGB(MAPPA_BASSO)).set_font_color(Color::White))?;
+        ws.write_string_with_format(legenda, 3, "Max", &nota)?;
+        ws.write_formula_with_format(legenda, 4, format!("=MAX({area})").as_str(), &Format::new().set_background_color(Color::RGB(MAPPA_ALTO)).set_font_color(Color::White))?;
+        if p.colonne > 6 {
+            ws.write_string_with_format(legenda, 5, "dal blu (più basso) al rosso (più alto)", &nota)?;
+        }
+    }
+    ws.set_landscape();
+    ws.set_print_fit_to_pages(1, 0);
+    ws.set_print_gridlines(false);
+    ws.set_header("&L&\"Calibri,Bold\"Mappa delle piastre&R&D");
+    Ok(())
+}
+
+/// Il nome di una colonna di Excel da 0: 0 → A, 26 → AA.
+fn colonna_lettere(c: u16) -> String {
+    let mut n = c as u32 + 1;
+    let mut s = Vec::new();
+    while n > 0 {
+        let r = (n - 1) % 26;
+        s.push((b'A' + r as u8) as char);
+        n = (n - 1) / 26;
+    }
+    s.into_iter().rev().collect()
 }
 
 /// Vero per un testo che Excel, aprendo il CSV, avrebbe cambiato: geni come date, codici come numeri.
@@ -955,9 +1057,20 @@ mod prove {
         let (xlsx, frase) = in_excel(&rows, true).unwrap();
         assert!(frase.contains("96 pozzetti"), "{frase}");
         let fogli = leggi("xlsx", &xlsx).unwrap();
-        assert_eq!(fogli.len(), 2);
-        assert_eq!(fogli[1].nome, "Pozzetti");
-        assert_eq!(fogli[1].righe[96][3], Cella::Numero(7.11));
+        assert_eq!(fogli.len(), 3);
+        // La mappa a colori: la piastra come sul bancone, con la scala dal blu al rosso.
+        assert_eq!(fogli[1].nome, "Mappa");
+        assert_eq!(fogli[1].righe[2][0], Cella::Testo("A".into()));
+        assert_eq!(fogli[1].righe[9][0], Cella::Testo("H".into()));
+        assert_eq!(fogli[1].righe[9][12], Cella::Numero(7.11));
+        let mut zip = zip::ZipArchive::new(Cursor::new(&xlsx)).unwrap();
+        let mut foglio = String::new();
+        zip.by_name("xl/worksheets/sheet2.xml").unwrap().read_to_string(&mut foglio).unwrap();
+        assert!(foglio.contains("colorScale") && foglio.contains("FF2C7BB6") && foglio.contains("FFD7191C"), "{foglio}");
+        assert!(foglio.contains("orientation=\"landscape\""));
+        assert!(foglio.contains("MIN(B3:M10)") && foglio.contains("MAX(B3:M10)"), "{foglio}");
+        assert_eq!(fogli[2].nome, "Pozzetti");
+        assert_eq!(fogli[2].righe[96][3], Cella::Numero(7.11));
         assert_eq!(fogli[0].righe[3][0], Cella::Testo("A".into()));
         assert_eq!(fogli[0].righe[3][1], Cella::Numero(0.0));
     }

@@ -52,6 +52,7 @@ pub mod mrxs;
 pub mod ndpi;
 pub mod svs;
 pub mod svs_lab;
+pub mod vsi;
 pub mod rx;
 mod sink;
 mod textconv;
