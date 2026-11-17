@@ -954,6 +954,7 @@ impl App {
     pub fn tocca_giu(&mut self, x: f32, y: f32) -> Effetto {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
         self.premuto = self.trova(x, y);
+        if matches!(self.premuto,Some(Azione::Riv(rivedi::RivAz::Onda(_)))) {self.inizia_onda(x);}
         if self.rivedi.is_some() {
             self.trascina = Some((y, self.scorri_rivedi_ora(), false));
             return Effetto::Ridisegna;
@@ -981,6 +982,7 @@ impl App {
 
     pub fn tocca_muovi(&mut self, x: f32, y: f32) -> Effetto {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
+        if self.muovi_onda(x) {return Effetto::Ridisegna;}
         if self.premuto == Some(Azione::Cursore) {
             self.imposta_cursore(x);
             return Effetto::Ridisegna;
@@ -1035,6 +1037,7 @@ impl App {
 
     pub fn tocca_su(&mut self, x: f32, y: f32) -> Effetto {
         let (x, y) = (x - self.margini.0, y - self.margini.1);
+        if let Some(e)=self.fine_onda(x){self.premuto=None;self.trascina=None;self.trascina_x=None;return e;}
         let giu = self.premuto.take();
         if let Some((f, x0, _, s0, true)) = self.trascina_x {
             // L'ultimo tratto arriva con il sollevamento (gli spostamenti veloci vengono raggruppati).
@@ -1053,6 +1056,7 @@ impl App {
     }
 
     pub fn tocca_annulla(&mut self) {
+        self.annulla_onda();
         self.premuto = None;
         self.trascina = None;
         self.trascina_x = None;

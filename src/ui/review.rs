@@ -682,6 +682,43 @@ mod tests {
     }
 
     #[test]
+    fn report_confirmations_survive_reopen_without_confirming_other_sentences() {
+        let path=std::env::temp_dir().join(format!("cedro-referto-{}-{}.wav",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let mut r=Review::new(&path,20.0,"it".into(),vec![seg(0,"Cane di otto anni. Massa di 2.5 cm. La lesione non è capsulata.")],vec![],None);
+        r.referto=true;r.view=2;r.detect();assert_eq!(r.open_count(),3);
+        r.fix(0);r.persist().unwrap();
+        let mut r=Review::from_saved(&path,revisione::load(&path).unwrap());
+        assert!(r.referto);assert_eq!(r.view,2);assert_eq!(r.open_count(),2);
+        r.bars=Some(vec![0.5;600]);r.detect();assert_eq!(r.open_count(),2,"l'onda non perde le conferme");
+        r.rows[0].text="Cane di otto anni. Massa di 3.5 cm. La lesione non è capsulata.".into();
+        assert_eq!(r.open_count(),1);r.persist().unwrap();
+        let mut r=Review::from_saved(&path,revisione::load(&path).unwrap());
+        assert_eq!(r.open_count(),1,"una correzione non approva altre frasi nello stesso segmento");
+        let f=r.flag_of(0).unwrap();assert_eq!(r.flags[f].kind,Kind::Meaning);r.fix(f);r.persist().unwrap();
+        assert!(!Review::from_saved(&path,revisione::load(&path).unwrap()).is_draft());
+        revisione::store_summary(&path,&crate::riassunto::Stored::default()).unwrap();
+        assert!(!Review::from_saved(&path,revisione::load(&path).unwrap()).is_draft(),"il riassunto conserva le conferme");
+        std::fs::remove_file(revisione::review_path(&path)).unwrap();
+    }
+
+    #[test]
+    fn every_export_keeps_draft_name_and_warning_until_confirmed() {
+        use std::io::Read;
+        let mut r=Review::new(Path::new("referto.wav"),20.0,"it".into(),vec![seg(0,"Tre mitosi in due punto cinque centimetri, non si osserva atipia.")],vec![],None);
+        r.referto=true;r.detect();assert!(r.is_draft());
+        for ext in ["txt","docx","srt","vtt"] {
+            let (name,bytes)=r.export(ext);assert_eq!(name,format!("referto - bozza.{ext}"));
+            let text=if ext=="docx" {
+                let mut z=zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();let mut text=String::new();
+                z.by_name("word/document.xml").unwrap().read_to_string(&mut text).unwrap();text
+            }else{String::from_utf8(bytes).unwrap()};
+            assert!(text.contains("BOZZA"),"{ext}: {text}");assert!(text.contains("mitosi"));
+        }
+        for i in 0..r.flags.len(){r.fix(i);}
+        for ext in ["txt","docx","srt","vtt"]{assert_eq!(r.export(ext).0,format!("referto - rivisto.{ext}"));}
+    }
+
+    #[test]
     fn a_wave_that_cannot_be_read_stops_waiting() {
         let mut app = App::new(std::sync::Arc::new(|| {}));
         app.review = Some(sample());
