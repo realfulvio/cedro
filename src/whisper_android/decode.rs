@@ -2,7 +2,7 @@
 //! Symphonia legge MP3, AAC/M4A, FLAC, Ogg Vorbis, WAV, AIFF, ALAC, MKV e MP4; l'Opus (i messaggi vocali
 //! di WhatsApp e Telegram) passa per libopus.
 
-use std::fs::File;
+use crate::input_file::File;
 use std::path::Path;
 
 use symphonia::core::codecs::audio::well_known::CODEC_ID_OPUS;
