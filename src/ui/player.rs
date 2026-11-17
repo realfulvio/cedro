@@ -22,6 +22,7 @@ struct Shared {
     /// L'audio si sta ancora decodificando: l'orologio è fermo.
     loading: AtomicBool,
     has_audio: AtomicBool,
+    failed: AtomicBool,
     audio_pos: AtomicU64,
     audio_len: AtomicU64,
     audio_rate: AtomicU32,
@@ -92,6 +93,7 @@ impl Player {
             ended: AtomicBool::new(false),
             loading: AtomicBool::new(true),
             has_audio: AtomicBool::new(false),
+            failed: AtomicBool::new(false),
             audio_pos: AtomicU64::new(0),
             audio_len: AtomicU64::new(0),
             audio_rate: AtomicU32::new(44_100),
@@ -129,6 +131,8 @@ impl Player {
     pub fn set_volume(&mut self, percent: u32) {
         self.sh.volume.store(percent.min(100), Ordering::Relaxed);
     }
+
+    pub fn failed(&self) -> bool { self.sh.failed.load(Ordering::Relaxed) }
 
     pub fn loading(&self) -> bool {
         self.sh.loading.load(Ordering::Relaxed)
@@ -241,6 +245,15 @@ fn audio_thread(path: &Path, sh: Arc<Shared>) {
     }
     #[cfg(not(any(windows, target_os = "linux", target_os = "android")))]
     let _ = pcm;
+    #[cfg(target_os="android")]
+    {
+        // Un orologio virtuale non è prova che AAudio stia suonando: sul telefono si ferma e si dice.
+        sh.failed.store(true,Ordering::Relaxed);
+        sh.loading.store(false,Ordering::Relaxed);
+        sh.set_paused(true);
+        (sh.wake)();
+        return;
+    }
     // Niente audio (o niente casse): corre l'orologio, così il video si vede lo stesso.
     sh.loading.store(false, Ordering::Relaxed);
     if !sh.paused.load(Ordering::Relaxed) {
@@ -290,7 +303,8 @@ where
                     data.iter_mut().for_each(|s| *s = silent);
                     return;
                 }
-                let mut pos = sh.audio_pos.load(Ordering::Relaxed);
+                let start = sh.audio_pos.load(Ordering::Relaxed);
+                let mut pos = start;
                 let step = step * sh.speed.load(Ordering::Relaxed) as u64 / 100;
                 let gain = sh.volume.load(Ordering::Relaxed) as f32 / 100.0;
                 for frame in data.chunks_mut(out_ch) {
@@ -306,7 +320,7 @@ where
                     }
                     pos += step;
                 }
-                sh.audio_pos.store(pos, Ordering::Relaxed);
+                let _ = sh.audio_pos.compare_exchange(start,pos,Ordering::Relaxed,Ordering::Relaxed);
             },
             |err| eprintln!("audio dell'anteprima: {err}"),
             None,

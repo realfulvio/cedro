@@ -85,6 +85,7 @@ pub struct Rivedi {
     speed: u32,
     zoom: f64,
     offset: f64,
+    drag: Option<(f32,f64,bool)>,
     pub titolo: String,
     player: Option<Player>,
     /// Il lavoro che sta salvando, e cosa dire sotto.
@@ -148,7 +149,7 @@ impl Rivedi {
     }
 
     fn new(r: Review, titolo: String, job: Option<u32>, live: bool) -> Self {
-        Self { r, titolo, job, live, speed: 100, zoom: 1.0, offset: 0.0, player: None, salva: None, nota: String::new(), altezze: Vec::new(), largo: 0.0, scorri: 0.0, scorri_max: 0.0, onda: (0.0, 0.0), foglio: None, riassunto: None, riassunto_nota: String::new() }
+        Self { r, titolo, job, live, speed: 100, zoom: 1.0, offset: 0.0, drag: None, player: None, salva: None, nota: String::new(), altezze: Vec::new(), largo: 0.0, scorri: 0.0, scorri_max: 0.0, onda: (0.0, 0.0), foglio: None, riassunto: None, riassunto_nota: String::new() }
     }
 
     /// Un tasto sul nome di una voce («Chi parla»).
@@ -214,13 +215,43 @@ impl App {
             r.bars = t.bars.clone(); r.wave_failed = t.failed; r.secs = t.secs.max(r.secs);
             if live { r.rows = t.segments.iter().cloned().map(riga).collect(); r.names = nomi(&t.segments); }
         }
+        if r.rows.is_empty(){r.view=std::fs::read_to_string(cedro::config_dir().join("android-vista-onda")).ok().and_then(|s|s.parse::<u8>().ok()).unwrap_or(1).min(2);}
         let secs = r.secs;
         self.rivedi = Some(Rivedi::new(r,titolo,job,live));
         if self.rivedi.as_ref().is_some_and(|r|r.r.bars.is_some()) { Effetto::Ridisegna } else { Effetto::OndaRevisione(src,secs) }
     }
 
+    pub(super) fn inizia_onda(&mut self,x:f32) {
+        if let Some(rv)=self.rivedi.as_mut().or(self.anteprima_tras.as_mut()){rv.drag=Some((x,rv.offset,false));}
+    }
+
+    pub(super) fn muovi_onda(&mut self,x:f32)->bool {
+        let Some(rv)=self.rivedi.as_mut().or(self.anteprima_tras.as_mut()) else{return false};
+        let Some((start,offset,moved))=rv.drag else{return false};
+        if moved||(x-start).abs()>10.0 {
+            rv.offset=(offset-(x-start) as f64/rv.onda.1.max(1.0) as f64/rv.zoom).clamp(0.0,(1.0-1.0/rv.zoom).max(0.0));
+            rv.drag=Some((start,offset,true));
+        }
+        true
+    }
+
+    pub(super) fn annulla_onda(&mut self) {
+        for rv in [&mut self.rivedi,&mut self.anteprima_tras].into_iter().flatten(){rv.drag=None;}
+    }
+
+    pub(super) fn fine_onda(&mut self,x:f32)->Option<Effetto> {
+        let rv=self.rivedi.as_mut().or(self.anteprima_tras.as_mut())?;
+        let (_,_,moved)=rv.drag.take()?;
+        if !moved {
+            let f=rv.offset+((x-rv.onda.0)/rv.onda.1.max(1.0)).clamp(0.0,1.0) as f64/rv.zoom;
+            rv.suona_da(f*rv.r.secs);
+        }
+        Some(Effetto::Ridisegna)
+    }
+
     pub fn pausa_audio(&mut self) {
         for rv in [&mut self.rivedi,&mut self.anteprima_tras].into_iter().flatten() {
+            rv.salva_revisione();
             if let Some(p) = rv.player.as_mut().filter(|p|p.playing()) { p.toggle(); }
         }
     }
@@ -475,7 +506,7 @@ impl App {
             RivAz::Riassumi => return self.avvia_riassunto(),
             RivAz::ChiudiFoglio => rv.foglio = None,
         }
-        rv.salva_revisione();
+        if matches!(az,RivAz::Sistema(_)|RivAz::Lascia(_)|RivAz::SistemaTutte|RivAz::ScriviVoci|RivAz::RiassuntoInCima) {rv.salva_revisione();}
         Effetto::Ridisegna
     }
 
@@ -496,7 +527,7 @@ impl App {
         p.icon(ic::ARROW_LEFT, 15.0, 15.0, 26.0, pal.text);
         colpi.push((Forma::R(indietro), Azione::Riv(RivAz::Chiudi)));
         p.text(&rv.titolo, 60.0, 0.0, w - 76.0, BARRA, 21.0, Weight::Semibold, pal.text, Align::Left);
-        let affiancati = w > h && w >= 600.0 && rv.r.view == 1;
+        let affiancati = w > h && w >= 600.0 && rv.r.view != 0;
         let mut cw = if affiancati {(w-36.0)/2.0}else{w-24.0};
         let mut x = 12.0;
         let mut y = BARRA + 2.0;
@@ -581,6 +612,9 @@ impl App {
                     }
                 }
             }
+        }
+        if let Some(super::pdf::Campo::Frase(i))=self.campo {
+            if let Some(at)=visibili.iter().position(|j|*j==i){rv.scorri=rv.altezze[..at].iter().map(|h|h+6.0).sum();}
         }
         let totale: f32 = rv.altezze.iter().map(|a| a + 6.0).sum();
         rv.scorri_max = (totale - vista.3 + 8.0).max(0.0);
@@ -993,7 +1027,7 @@ fn lettore(p:&mut Painter,pal:&cedro::ui::theme::Palette,rv:&mut Rivedi,r:super:
     }
     cy+=50.0;
     p.text(&format!("{} / {}",orologio(pos),orologio(rv.r.secs)),x,cy,w/2.0,28.0,14.0,Weight::Semibold,pal.text,Align::Left);
-    p.text("Volume del telefono",x+w/2.0,cy,w/2.0,28.0,12.0,Weight::Regular,pal.muted,Align::Right);
+    p.text(if rv.player.as_ref().is_some_and(|p|p.failed()){"Audio non disponibile"}else{"Volume del telefono"},x+w/2.0,cy,w/2.0,28.0,12.0,Weight::Regular,pal.muted,Align::Right);
     cy+28.0-y
 }
 
@@ -1024,5 +1058,50 @@ impl App {
             if let Forma::R(rect)=forma {if let Some(rect)=super::intersezione(rect,vista){self.colpi.push((Forma::R(rect),az));}}
         }
         h+12.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cedro::ui::{gfx::{Fonts,GlyphCache},theme::ThemeId};
+
+    fn sample()->Review {
+        let mut r=Review::new(Path::new("/tmp/cedro-fixture-referto.wav"),120.0,"it".into(),vec![trascrizione::Segment{t0:0,t1:1200,text:"Tre mitosi. Non si osserva atipia.".into(),speaker:None}],vec![],None);
+        r.referto=true;r.detect();r.bars=Some(vec![0.5;600]);r
+    }
+
+    #[test]
+    fn live_segments_keep_sources_separate_and_manual_scroll_stops_following() {
+        let mut a=App::new(ThemeId::Cedro);
+        a.apri_rivedi_con(sample(),"Referto".into(),0,None,None);
+        let first=a.rivedi.as_ref().unwrap().r.source.clone();
+        a.frase_trascritta(1,first.clone(),None,120.0);
+        a.frase_trascritta(2,"/tmp/altro.wav".into(),Some(trascrizione::Segment{t0:0,t1:100,text:"Altro audio".into(),speaker:None}),8.0);
+        a.frase_trascritta(1,first.clone(),Some(trascrizione::Segment{t0:0,t1:400,text:"Frase reale".into(),speaker:Some(2)}),0.0);
+        let rv=a.rivedi.as_ref().unwrap();assert!(rv.live);assert_eq!(rv.r.rows.len(),1);assert_eq!(rv.r.rows[0].text,"Frase reale");assert_eq!(rv.r.names.len(),3);
+        assert_eq!(a.tracce[&first].segments.len(),1);
+        a.scorri_rivedi(20.0,0.0);assert!(!a.rivedi.as_ref().unwrap().r.follow);
+        a.azione_rivedi(RivAz::Segui);assert!(a.rivedi.as_ref().unwrap().r.follow);
+        assert!(matches!(a.azione_rivedi(RivAz::Salva(0)),Effetto::Niente),"nessun export di segmenti incompleti");
+        a.azione_rivedi(RivAz::Velocita(150));assert_eq!(a.rivedi.as_ref().unwrap().speed,150);
+    }
+
+    #[test]
+    fn player_and_exports_remain_visible_in_both_orientations() {
+        let mut cache=GlyphCache::new();
+        for (w,h) in [(360,800),(360,640),(800,400),(800,360)] {
+            for view in 0..3 {
+                let mut a=App::new(ThemeId::Cedro);let mut r=sample();r.view=view;
+                a.apri_rivedi_con(r,"Referto".into(),0,None,None);
+                let mut p=Painter::new(w,h,1.0,Fonts::for_theme(a.tema),&mut cache);
+                a.pagina_rivedi(&mut p,w as f32,h as f32);
+                for az in [RivAz::Vista(0),RivAz::Vista(1),RivAz::Vista(2),RivAz::Play,RivAz::Salta(-10),RivAz::Salta(10),RivAz::Velocita(75),RivAz::Velocita(200)] {
+                    let r=a.colpi.iter().find_map(|(f,action)|if *action==Azione::Riv(az){if let Forma::R(r)=f{Some(*r)}else{None}}else{None}).expect("controllo assente");
+                    assert!(r.2>=48.0&&r.3>=48.0&&r.1>=0.0&&r.1+r.3<=h as f32,"{w}x{h} view{view} {az:?} {r:?}");
+                }
+                if view!=0 {for k in 0..4 {assert!(a.colpi.iter().any(|(f,action)|*action==Azione::Riv(RivAz::Salva(k))&&matches!(f,Forma::R(r) if r.1+r.3<=h as f32)),"export fuori schermo");}}
+            }
+        }
     }
 }
