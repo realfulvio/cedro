@@ -4,6 +4,7 @@
 //! (heifer per leggere, con i colori portati a sRGB). Qui c'è anche il riconoscimento
 //! del tipo di file dal contenuto.
 
+#[cfg(test)]
 use std::fs;
 use std::io::Read;
 use std::path::Path;
@@ -131,7 +132,7 @@ pub fn sniff(head: &[u8]) -> Option<&'static str> {
 /// I primi byte di un file (fino a 132: il DICOM ha la firma dopo 128 byte di preambolo).
 pub fn head_of(path: &Path) -> Vec<u8> {
     let mut buf = Vec::with_capacity(132);
-    let _ = fs::File::open(path).and_then(|f| f.take(132).read_to_end(&mut buf));
+    let _ = crate::input_file::File::open(path).and_then(|f| f.take(132).read_to_end(&mut buf));
     buf
 }
 
@@ -163,8 +164,7 @@ pub fn open(path: &Path, straighten: bool, target_side: Option<u32>) -> Result<D
         // La rotazione delle foto HEIC è nel file (irot/imir) e heifer la applica: l'EXIF non conta.
         "heic" | "heif" | "hif" => open_heic(path, target_side),
         _ if straighten => crate::ocr::open_upright(path),
-        _ => image::ImageReader::open(path)
-            .map_err(|e| e.to_string())?
+        _ => image::ImageReader::new(std::io::BufReader::new(crate::input_file::File::open(path).map_err(|e|e.to_string())?))
             .with_guessed_format()
             .map_err(|e| e.to_string())?
             .decode()
@@ -193,7 +193,7 @@ pub fn system_fonts() -> std::sync::Arc<resvg::usvg::fontdb::Database> {
 /// Un SVG disegnato su una tela trasparente: il lato lungo è `target_side`, o la misura del disegno
 /// portata ad almeno 1024 px, perché un logo da 24 px sia utile.
 fn open_svg(path: &Path, target_side: Option<u32>) -> Result<DynamicImage, String> {
-    let data = fs::read(path).map_err(|e| e.to_string())?;
+    let data = crate::input_file::read(path).map_err(|e| e.to_string())?;
     let mut opt = resvg::usvg::Options::default();
     opt.fontdb = system_fonts();
     // Il testo dell'SVG usa i caratteri del sistema; se non c'è quello chiesto, vale il primo che si trova.
@@ -221,7 +221,7 @@ fn open_svg(path: &Path, target_side: Option<u32>) -> Result<DynamicImage, Strin
 /// Una foto HEIC/HEIF: l'immagine principale, girata come dice il file e con i colori in sRGB (le foto
 /// dell'iPhone sono in Display P3). Per una miniatura piccola basta quella che il file porta con sé.
 fn open_heic(path: &Path, target_side: Option<u32>) -> Result<DynamicImage, String> {
-    let data = fs::read(path).map_err(|e| e.to_string())?;
+    let data = crate::input_file::read(path).map_err(|e| e.to_string())?;
     if let Some(side) = target_side.filter(|s| *s <= 400) {
         if let Ok(Some(t)) = heifer::decode_thumbnail(&data) {
             if t.width.max(t.height) * 4 >= side * 3 {
@@ -254,7 +254,7 @@ fn heic_opaque(img: RgbaImage, alpha: bool) -> DynamicImage {
 
 fn open_avif(path: &Path) -> Result<DynamicImage, String> {
     use avif_decode::Image as A;
-    let data = fs::read(path).map_err(|e| e.to_string())?;
+    let data = crate::input_file::read(path).map_err(|e| e.to_string())?;
     let image = avif_decode::Decoder::from_avif(&data).and_then(|d| d.to_image()).map_err(|e| format!("AVIF non letto: {e}"))?;
     let to8 = |v: u16| (v >> 8) as u8;
     let out = match image {

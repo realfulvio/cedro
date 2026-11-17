@@ -404,7 +404,7 @@ impl DicomFile {
     }
 
     pub fn open(path: &std::path::Path) -> Result<DicomFile, String> {
-        let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+        let bytes = crate::input_file::read(path).map_err(|e| e.to_string())?;
         DicomFile::read(&bytes)
     }
 
