@@ -108,7 +108,10 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
 
     @Override
     protected synchronized void onActivityResult(int richiesta, int esito, Intent dati) {
-        if (richiesta == CODICE_SCELTA && esito == RESULT_OK && dati != null) {
+        if (richiesta == CODICE_SCELTA) {
+            // Empty means a completed cancellation; null means no callback yet.
+            scelti = new Uri[0];
+            if (esito != RESULT_OK || dati == null) return;
             // Con la scelta multipla i file arrivano nel ClipData; con uno solo, in getData().
             ClipData c = dati.getClipData();
             if (c != null && c.getItemCount() > 0) {
