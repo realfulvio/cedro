@@ -1953,8 +1953,8 @@ PDF non scritto: {}	PDF no escrito: {}
 numeri veri, geni come testo	números reales, genes como texto
 Excel con {#} righe.	Excel con {} filas.
 Numeri con la virgola letti come numeri.	Números con coma decimal leídos como números.
-Piastra da {#} pozzetti anche una riga per pozzetto (foglio Pozzetti).	Placa de {} pocillos también dispuesta con una fila por pocillo (hoja Pozzetti).
-{#} piastre da {#} pozzetti, anche una riga per pozzetto (foglio Pozzetti).	{} placas de {} pocillos, también dispuestas con una fila por pocillo (hoja Pozzetti).
+Piastra da {#} pozzetti anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).	Placa de {} pocillos también en mapa de colores (hoja Mappa) y con una fila por pocillo (hoja Pozzetti).
+{#} piastre da {#} pozzetti, anche a colori (foglio Mappa) e una riga per pozzetto (foglio Pozzetti).	{} placas de {} pocillos, también en mapa de colores (hoja Mappa) y con una fila por pocillo (hoja Pozzetti).
 Nomi di geni e codici lasciati come testo.	Nombres de genes y códigos conservados como texto.
 CSV dal foglio di calcolo	CSV de la hoja de cálculo
 {#} fogli: un CSV per foglio	{} hojas: un CSV por hoja
@@ -2703,6 +2703,35 @@ Vista di partenza	Vista inicial
 pagine	páginas
 Il decoder esterno non supporta la lettura diretta del file autorizzato	El decodificador externo no admite la lectura directa del archivo autorizado
 Il decoder esterno non ha letto il file autorizzato	El decodificador externo no pudo leer el archivo autorizado
+Registro in Excel	Registro en Excel
+Registro salvato:	Registro guardado:
+Registro non salvato:	Registro no guardado:
+Registro lavori	Registro de trabajos
+Data	Fecha
+Ora	Hora
+Attività	Actividad
+Nota del caso	Nota del caso
+CD DICOM	CD DICOM
+immagine	imagen
+paziente	paciente
+pazienti	pacientes
+mancanti	faltan
+il DICOMDIR non elenca nessun file	el DICOMDIR no enumera ningún archivo
+REFERTO	INFORME
+Dettato il {} · {} · {} di audio	Dictado el {} · {} · {} de audio
+Specie	Especie
+Campione	Muestra
+Descrizione macroscopica	Descripción macroscópica
+Descrizione microscopica	Descripción microscópica
+Diagnosi	Diagnóstico
+Anamnesi	Anamnesis
+Margini	Márgenes
+Commento	Comentario
+Conclusioni	Conclusiones
+Note	Notas
+Firma del refertante	Firma del responsable del informe
+BOZZA · da non firmare	BORRADOR · no firmar
+Pagina {} di {}	Página {} de {}
 Da che file parti?	¿Con qué archivo empiezas?
 Tocca un tipo, oppure condividi un file a Cedro da un'altra app.	Toca un tipo o comparte un archivo con Cedro desde otra app.
 Vetrini, DICOM, casi e campioni	Preparaciones, DICOM, casos y muestras

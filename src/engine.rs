@@ -234,7 +234,7 @@ fn kind_by_extension(ext: &str) -> Kind {
     match ext {
         "pdf" => Kind::Pdf,
         "doc" | "docx" | "odt" | "rtf" => Kind::Doc,
-        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "ndpi" | "mrxs" | "dcm" | "dicom" | "nd2" | "lif" | "czi" | "ico"
+        "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "svs" | "ndpi" | "mrxs" | "vsi" | "dcm" | "dicom" | "nd2" | "lif" | "czi" | "ico"
         | "svg" | "svgz" | "avif" | "jxl" | "heic" | "heif" | "hif" | "tga" | "qoi" | "pnm" | "ppm" | "pgm" | "pbm"
         | "hdr" | "exr" | "dds" => Kind::Image,
         "txt" | "md" | "csv" | "tsv" | "json" | "log" | "xml" | "html" | "xlsx" | "xlsm" | "ods" | "xls" => Kind::Text,

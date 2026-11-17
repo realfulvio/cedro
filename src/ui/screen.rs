@@ -1026,9 +1026,17 @@ impl Screen {
             }
             Act::LavoriApri => {
                 app.lavori_aperti = !app.lavori_aperti;
+                app.lavori_esportato = None;
                 app.caso_aperto = false;
                 app.quaderno_copiato = None;
             }
+            Act::QuadernoUltimo => {
+                if let Some(l) = app.lavori.last() {
+                    plat.copy_text(&l.per_quaderno());
+                    app.lavoro_appena_copiato = true;
+                }
+            }
+            Act::LavoriEsporta => app.lavori_esporta(),
             Act::Quaderno(i) => {
                 if let Some(l) = crate::caso::di_oggi(&app.lavori).get(i) {
                     plat.copy_text(&l.per_quaderno());
