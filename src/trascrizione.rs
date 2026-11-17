@@ -1519,11 +1519,40 @@ fn system_decode(input: &Path, cancel: &AtomicBool) -> Result<PathBuf, String> {
     #[cfg(not(windows))]
     {
         // Anche l'ffmpeg che Cedro ha scaricato per YouTube, se sul sistema non c'è.
+        #[cfg(target_os="android")]
+        let ffmpeg_bin=crate::youtube::android::decoder_ffmpeg(cancel)?;
+        #[cfg(not(target_os="android"))]
         let ffmpeg_bin = crate::youtube::ffmpeg_path().unwrap_or_else(|| PathBuf::from("ffmpeg"));
-        let ffmpeg = wait_or_cancel(
-            Command::new(ffmpeg_bin).args(["-nostdin", "-loglevel", "error", "-y", "-i"]).arg(input).args(["-vn", "-ac", "1", "-ar", "16000"]).arg(&temp),
-            cancel,
-        );
+        let source=crate::input_file::File::open(input).map_err(|e|e.to_string())?;
+        let direct=source.is_grant();
+        let _source_lock=source.lock_native(||cancel.load(Ordering::Relaxed)).map_err(|e|e.to_string())?;
+        let mut cmd=crate::youtube::command(&ffmpeg_bin);
+        #[cfg(target_os="android")]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(unsafe{libc::getpgrp()});
+            unsafe {cmd.pre_exec(|| {
+                if libc::prctl(libc::PR_SET_PDEATHSIG,libc::SIGKILL)<0{return Err(std::io::Error::last_os_error());}
+                Ok(())
+            });}
+        }
+        cmd.args(["-nostdin","-loglevel","error","-y"]);
+        if direct {
+            // Il build concreto deve supportare fd:; pipe: perderebbe il seek dei contenitori.
+            let (protocols,_,ok)=crate::youtube::capture_until(crate::youtube::command(&ffmpeg_bin).args(["-hide_banner","-protocols"]),cancel,Duration::from_secs(10))?;
+            let supported=ok&&protocols.lines().any(|line|line.trim()=="fd");
+            if !supported {let _=std::fs::remove_dir_all(&dir);return Err("Il decoder esterno non supporta la lettura diretta del file autorizzato".into());}
+            use std::os::fd::AsRawFd;
+            use std::os::unix::process::CommandExt;
+            let fd=source.as_raw_fd();
+            cmd.args(["-fd",&fd.to_string(),"-i","fd:"]);
+            unsafe {cmd.pre_exec(move || {
+                let flags=libc::fcntl(fd,libc::F_GETFD);
+                if flags<0 || libc::fcntl(fd,libc::F_SETFD,flags & !libc::FD_CLOEXEC)<0 {return Err(std::io::Error::last_os_error());}
+                Ok(())
+            });}
+        }else{cmd.arg("-i").arg(input);}
+        let ffmpeg=wait_or_cancel(cmd.args(["-vn","-ac","1","-ar","16000"]).arg(&temp),cancel);
         if cancel.load(Ordering::Relaxed) {
             let _ = std::fs::remove_dir_all(&dir);
             return Err(CANCELLED.into());
@@ -1531,6 +1560,7 @@ fn system_decode(input: &Path, cancel: &AtomicBool) -> Result<PathBuf, String> {
         if ffmpeg && temp.is_file() {
             return Ok(temp);
         }
+        if direct {let _=std::fs::remove_dir_all(&dir);return Err("Il decoder esterno non ha letto il file autorizzato".into());}
         let location = format!("location={}", input.display());
         let out = format!("location={}", temp.display());
         let gst = wait_or_cancel(

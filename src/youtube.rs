@@ -371,7 +371,7 @@ fn make_executable(path: &Path) {
     let _ = path;
 }
 
-fn command(program: &Path) -> Command {
+pub(crate) fn command(program: &Path) -> Command {
     #[cfg(target_os = "android")]
     #[allow(unused_mut)]
     let mut c = android::command(program);
@@ -815,7 +815,7 @@ fn capture(cmd: &mut Command, cancel: &AtomicBool) -> Result<(String, String, bo
 }
 
 /// Come `capture`, ma lo ferma anche dopo `limit`.
-fn capture_until(cmd: &mut Command, cancel: &AtomicBool, limit: Duration) -> Result<(String, String, bool), String> {
+pub(crate) fn capture_until(cmd: &mut Command, cancel: &AtomicBool, limit: Duration) -> Result<(String, String, bool), String> {
     let deadline = std::time::Instant::now() + limit;
     let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())?;
     track(&child);
@@ -1360,6 +1360,14 @@ pub mod android {
             .env("HOME", home())
             .env("TMPDIR", tools_dir().join("tmp"));
         c
+    }
+
+    /// Fallback locale: stesso ambiente/librerie dell'estrattore web, solo se l'APK porta il binario.
+    pub(crate) fn decoder_ffmpeg(cancel:&AtomicBool)->Result<PathBuf,String> {
+        let binary=ffmpeg();
+        if !binary.is_file(){return Err("formato audio non supportato: installa ffmpeg per leggerlo".into());}
+        ensure_packages(&mut |_|{},cancel)?;
+        Ok(binary)
     }
 
     pub(super) fn ffmpeg() -> PathBuf {

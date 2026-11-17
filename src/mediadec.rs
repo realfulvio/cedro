@@ -44,6 +44,7 @@ pub(crate) struct Decoder {
     extractor: Extractor,
     codec: MediaCodec,
     _file: File,
+    _source_lock: Option<crate::input_file::NativeGuard>,
     rotation: i32,
     pub has_audio: bool,
     /// Fotogrammi al secondo dichiarati dal file (0 se non lo dice).
@@ -82,6 +83,7 @@ impl Decoder {
     /// Apre il file e il decodificatore del primo video. `Err` se il telefono non sa leggerlo.
     pub(crate) fn open(path: &Path) -> Result<Decoder, String> {
         let file = File::open(path).map_err(|e| e.to_string())?;
+        let source_lock=file.lock_native(crate::input_file::cancelled).map_err(|e|e.to_string())?;
         let len = file.metadata().map_err(|e| e.to_string())?.len();
         let ex = unsafe { ndk_sys::AMediaExtractor_new() };
         if ex.is_null() {
@@ -115,7 +117,7 @@ impl Decoder {
         if unsafe { ndk_sys::AMediaExtractor_selectTrack(ex, indice) } != ndk_sys::media_status_t::AMEDIA_OK {
             return Err("traccia video non scelta".into());
         }
-        Ok(Decoder { extractor, codec, _file: file, rotation, has_audio, fps, duration_us, input_done: false, ended: false, format: None, ultimo: std::time::Instant::now(), usciti: 0 })
+        Ok(Decoder { extractor, codec, _file: file, _source_lock: source_lock, rotation, has_audio, fps, duration_us, input_done: false, ended: false, format: None, ultimo: std::time::Instant::now(), usciti: 0 })
     }
 }
 
@@ -287,6 +289,7 @@ pub(crate) struct AudioDecoder {
     extractor: Extractor,
     codec: MediaCodec,
     _file: File,
+    _source_lock: Option<crate::input_file::NativeGuard>,
     input_done: bool,
     ended: bool,
     ultimo: std::time::Instant,
@@ -296,6 +299,7 @@ pub(crate) struct AudioDecoder {
 impl AudioDecoder {
     pub(crate) fn open(path: &Path) -> Result<AudioDecoder, String> {
         let file = File::open(path).map_err(|e| e.to_string())?;
+        let source_lock=file.lock_native(crate::input_file::cancelled).map_err(|e|e.to_string())?;
         let len = file.metadata().map_err(|e| e.to_string())?.len();
         let ex = unsafe { ndk_sys::AMediaExtractor_new() };
         if ex.is_null() {
@@ -321,7 +325,7 @@ impl AudioDecoder {
         if unsafe { ndk_sys::AMediaExtractor_selectTrack(ex, indice) } != ndk_sys::media_status_t::AMEDIA_OK {
             return Err("traccia audio non scelta".into());
         }
-        Ok(AudioDecoder { extractor, codec, _file: file, input_done: false, ended: false, ultimo: std::time::Instant::now(), usciti: 0 })
+        Ok(AudioDecoder { extractor, codec, _file: file, _source_lock: source_lock, input_done: false, ended: false, ultimo: std::time::Instant::now(), usciti: 0 })
     }
 
     /// Il prossimo pezzo di audio: campioni a 16 bit intercalati, canali e frequenza.
