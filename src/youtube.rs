@@ -31,6 +31,7 @@ pub struct Request {
     /// 0 nessuno, 1 italiano, 2 italiano e inglese, 3 tutti.
     pub subtitles: u32,
     pub thumbnail: bool,
+    pub metadata: bool,
     pub chapters: bool,
     pub split_chapters: bool,
     pub skip_sponsors: bool,
@@ -49,6 +50,7 @@ impl Request {
             format: if audio { "mp3" } else { "mp4" }.into(),
             subtitles: 0,
             thumbnail: true,
+            metadata: true,
             chapters: true,
             split_chapters: false,
             skip_sponsors: false,
@@ -225,6 +227,7 @@ fn get_text(url: &str) -> Result<String, String> {
 /// Scarica `url` in `dest` (via un file `.part`), controllando lo SHA-256 se lo si conosce.
 fn download(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<(), String> {
     // La riga di stato in alto mostra il componente che arriva.
+    crate::componenti::prima_download(what,0)?;
     let job = crate::componenti::Lavoro::scarica(what);
     let result = download_inner(url, dest, sha256, what, emit, cancel);
     if let Err(e) = &result {
@@ -233,6 +236,19 @@ fn download(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut
     result
 }
 
+#[cfg(target_os="android")]
+fn download_inner(url:&str,dest:&Path,sha256:Option<&str>,what:&str,emit:&mut dyn FnMut(Event),cancel:&AtomicBool)->Result<(),String>{
+    // Riusa il downloader dei modelli: Range, retry e checksum, senza un secondo protocollo.
+    let part=dest.with_extension("part");let precedente=part.exists();
+    let sink=std::cell::RefCell::new(emit);
+    let result=crate::trascrizione::fetch(url,dest,sha256,0,what,&|event|{
+        if let crate::trascrizione::Event::Log(line)=event{(sink.borrow_mut())(Event::Log(line.text));}
+    },cancel).map(|_|());
+    if cancel.load(Ordering::Relaxed)&&!precedente{let _=std::fs::remove_file(part);}
+    result
+}
+
+#[cfg(not(target_os="android"))]
 fn download_inner(url: &str, dest: &Path, sha256: Option<&str>, what: &str, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<(), String> {
     let response = agent().get(url).call().map_err(|e| format!("Non riesco a scaricare {what}: {e}"))?;
     let total: u64 = response.header("Content-Length").and_then(|v| v.parse().ok()).unwrap_or(0);
@@ -355,7 +371,7 @@ fn make_executable(path: &Path) {
     let _ = path;
 }
 
-fn command(program: &Path) -> Command {
+pub(crate) fn command(program: &Path) -> Command {
     #[cfg(target_os = "android")]
     #[allow(unused_mut)]
     let mut c = android::command(program);
@@ -799,7 +815,7 @@ fn capture(cmd: &mut Command, cancel: &AtomicBool) -> Result<(String, String, bo
 }
 
 /// Come `capture`, ma lo ferma anche dopo `limit`.
-fn capture_until(cmd: &mut Command, cancel: &AtomicBool, limit: Duration) -> Result<(String, String, bool), String> {
+pub(crate) fn capture_until(cmd: &mut Command, cancel: &AtomicBool, limit: Duration) -> Result<(String, String, bool), String> {
     let deadline = std::time::Instant::now() + limit;
     let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e| e.to_string())?;
     track(&child);
@@ -928,10 +944,11 @@ fn quality_audio(q: u32) -> &'static str {
 pub fn build_args(r: &Request, ffmpeg: Option<&Path>, deno: Option<&Path>, in_playlist: bool) -> Vec<String> {
     let mut a: Vec<String> = Vec::new();
     let mut push = |items: &[&str]| a.extend(items.iter().map(|s| s.to_string()));
-    push(&["--newline", "--no-quiet", "--no-colors", "--ignore-config", "--no-mtime", "--embed-metadata"]);
+    push(&["--newline", "--no-quiet", "--no-colors", "--ignore-config", "--no-mtime"]);
     // In una pipe yt-dlp scrive con la codifica del sistema (su Windows cp1252): i nomi accentati non sarebbero UTF-8.
     push(&["--encoding", "utf-8"]);
     push(&["--plugin-dirs", "default", "--plugin-dirs", &web_adapters_dir().to_string_lossy()]);
+    push(&[if r.metadata {"--embed-metadata"}else{"--no-embed-metadata"}]);
     push(&["--progress-template", "download:CEDRO|%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s"]);
     push(&["--print", "after_move:CEDROFILE|%(filepath)s"]);
     if cfg!(windows) {
@@ -1281,6 +1298,9 @@ fn run_once(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize,
 // ---------------------------------------------------------------------------
 // Android
 
+#[cfg(any(target_os="android",test))]
+mod range;
+
 /// Su Android i programmi non si possono eseguire dalla cartella dell'app: Python (che fa girare
 /// yt-dlp), QuickJS e ffmpeg partono dalla cartella delle librerie dell'APK, dove li mette
 /// `android/build.sh`. Le loro librerie (Python 14 MB, ffmpeg 35 MB) si scaricano al primo uso da
@@ -1288,7 +1308,7 @@ fn run_once(ytdlp: &Path, args: &[String], url: &str, dest: &Path, index: usize,
 #[cfg(target_os = "android")]
 pub mod android {
     use super::*;
-    use std::io::{Seek, SeekFrom};
+    use super::range::Remote;
     use std::sync::OnceLock;
 
     struct Dirs {
@@ -1342,6 +1362,14 @@ pub mod android {
         c
     }
 
+    /// Fallback locale: stesso ambiente/librerie dell'estrattore web, solo se l'APK porta il binario.
+    pub(crate) fn decoder_ffmpeg(cancel:&AtomicBool)->Result<PathBuf,String> {
+        let binary=ffmpeg();
+        if !binary.is_file(){return Err("formato audio non supportato: installa ffmpeg per leggerlo".into());}
+        ensure_packages(&mut |_|{},cancel)?;
+        Ok(binary)
+    }
+
     pub(super) fn ffmpeg() -> PathBuf {
         libs().join("libffmpeg.so")
     }
@@ -1362,11 +1390,14 @@ pub mod android {
                 continue;
             }
             emit(Event::Log(format!("{dir} non c'è ancora: lo scarico (una volta sola, circa {mb} MB)")));
+            crate::componenti::prima_download(dir,mb as u64*1_000_000)?;
+            let job=crate::componenti::Lavoro::scarica(if dir=="python"{"Python"}else{dir});
             let archive = tools_dir().join(format!("{dir}.zip"));
             let url = format!("{MAVEN}/{aar}/{VERSION}/{aar}-{VERSION}.aar");
             let fetched = fetch_entry(&url, entry, &archive, sum, dir, emit, cancel);
             let result = fetched.and_then(|_| unpack(&archive, &tools_dir().join(dir)));
             let _ = std::fs::remove_file(&archive);
+            if let Err(e)=&result{job.fallito(e);}
             result?;
             std::fs::write(tools_dir().join(dir).join(".pronto"), sum).map_err(|e| e.to_string())?;
             emit(Event::Log(format!("{dir} pronto")));
@@ -1376,7 +1407,7 @@ pub mod android {
 
     /// Copia una voce di uno zip remoto in `dest`, controllando lo SHA-256.
     fn fetch_entry(url: &str, entry: &str, dest: &Path, sum: &str, what: &str, emit: &mut dyn FnMut(Event), cancel: &AtomicBool) -> Result<(), String> {
-        let remote = Remote::open(url).map_err(|e| format!("Non riesco a scaricare {what}: {e}"))?;
+        let remote = Remote::open(url,cancel).map_err(|e| format!("Non riesco a scaricare {what}: {e}"))?;
         let mut zip = zip::ZipArchive::new(remote).map_err(|e| format!("Non riesco a leggere l'archivio di {what}: {e}"))?;
         let mut file = zip.by_name(entry).map_err(|e| format!("{entry} non è nell'archivio: {e}"))?;
         let total = file.size().max(1);
@@ -1403,6 +1434,7 @@ pub mod android {
             }
             hasher.update(&buf[..n]);
             done += n as u64;
+            crate::componenti::scarica(if what=="python"{"Python"}else{what},done,total);
             let pct = (done * 100 / total) as i32;
             if pct != last_pct {
                 last_pct = pct;
@@ -1446,79 +1478,6 @@ pub mod android {
             }
         }
         Ok(())
-    }
-
-    /// Un file remoto letto a pezzi con le richieste «Range»: dello zip si scarica solo quello che serve.
-    struct Remote {
-        url: String,
-        len: u64,
-        pos: u64,
-        buf: Vec<u8>,
-        buf_at: u64,
-    }
-
-    const CHUNK: u64 = 4 * 1024 * 1024;
-
-    impl Remote {
-        fn open(url: &str) -> Result<Remote, String> {
-            let r = agent().head(url).call().map_err(|e| e.to_string())?;
-            let len = r.header("Content-Length").and_then(|v| v.parse().ok()).ok_or("dimensione sconosciuta")?;
-            Ok(Remote { url: url.to_string(), len, pos: 0, buf: Vec::new(), buf_at: 0 })
-        }
-    }
-
-    impl Read for Remote {
-        fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
-            if self.pos >= self.len || out.is_empty() {
-                return Ok(0);
-            }
-            let inside = self.pos >= self.buf_at && self.pos < self.buf_at + self.buf.len() as u64;
-            if !inside {
-                let end = (self.pos + CHUNK.max(out.len() as u64)).min(self.len) - 1;
-                let range = format!("bytes={}-{end}", self.pos);
-                let mut attempt = 0;
-                let r = loop {
-                    match agent().get(&self.url).set("Range", &range).call() {
-                        // Maven Central a volte risponde «troppe richieste»: si riprova con calma.
-                        Err(ureq::Error::Status(429, _)) if attempt < 4 => {
-                            attempt += 1;
-                            std::thread::sleep(Duration::from_secs(5 * attempt));
-                        }
-                        other => break other.map_err(|e| std::io::Error::other(e.to_string()))?,
-                    }
-                };
-                if r.status() != 206 {
-                    return Err(std::io::Error::other("il server non manda pezzi del file"));
-                }
-                let mut buf = Vec::with_capacity((end + 1 - self.pos) as usize);
-                r.into_reader().read_to_end(&mut buf)?;
-                if buf.is_empty() {
-                    return Err(std::io::Error::other("risposta vuota"));
-                }
-                self.buf = buf;
-                self.buf_at = self.pos;
-            }
-            let from = (self.pos - self.buf_at) as usize;
-            let n = out.len().min(self.buf.len() - from);
-            out[..n].copy_from_slice(&self.buf[from..from + n]);
-            self.pos += n as u64;
-            Ok(n)
-        }
-    }
-
-    impl Seek for Remote {
-        fn seek(&mut self, to: SeekFrom) -> std::io::Result<u64> {
-            let next = match to {
-                SeekFrom::Start(n) => n as i64,
-                SeekFrom::End(n) => self.len as i64 + n,
-                SeekFrom::Current(n) => self.pos as i64 + n,
-            };
-            if next < 0 {
-                return Err(std::io::Error::other("posizione prima dell'inizio"));
-            }
-            self.pos = next as u64;
-            Ok(self.pos)
-        }
     }
 }
 
@@ -1805,6 +1764,15 @@ mod tests {
         assert!(events.iter().any(|e| matches!(e, Event::Log(l) if l.starts_with("[download] Destination: Perch"))), "{events:?}");
         let err = run_one(&fake, &args, "bad", &dir, 0, 1, &mut |_| {}, &cancel).unwrap_err();
         assert_eq!(err, "Il video è privato");
+        std::fs::write(&fake,"#!/bin/sh\nfor a in \"$@\"; do if [ \"$a\" = --write-subs ]; then echo \"ERROR: Unable to download video subtitles for 'it': HTTP Error 429: Too Many Requests\" >&2; exit 1; fi; done\ntouch recovered.mp4\necho CEDROFILE\\|recovered.mp4\n").unwrap();
+        let mut with_subs=req(false);with_subs.subtitles=1;
+        let args_sub=build_args(&with_subs,None,None,false);
+        let mut logs=Vec::new();
+        let recovered=run_one(&fake,&args_sub,"subtitles",&dir,0,1,&mut|e|logs.push(e),&cancel).unwrap();
+        assert_eq!(recovered,vec![dir.join("recovered.mp4")]);
+        assert!(logs.iter().any(|e|matches!(e,Event::Log(s) if s.contains("scarico il video senza"))));
+        with_subs.metadata=false;
+        assert!(build_args(&with_subs,None,None,false).contains(&"--no-embed-metadata".to_string()));
         cancel.store(true, Ordering::Relaxed);
         assert_eq!(run_one(&fake, &args, "good", &dir, 0, 1, &mut |_| {}, &cancel).unwrap_err(), "Annullato");
         let _ = std::fs::remove_dir_all(&dir);

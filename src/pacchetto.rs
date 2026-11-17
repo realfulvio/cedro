@@ -116,7 +116,7 @@ pub fn crea(paths: &[PathBuf], out: &Path, nome: &str, avanzamento: &dyn Fn(f32)
             let livello = (metodo == zip::CompressionMethod::Deflated).then_some(1);
             let opz = zip::write::SimpleFileOptions::default().compression_method(metodo).compression_level(livello).large_file(dim >= u32::MAX as u64);
             zw.start_file(format!("{nome}/data/{rel}"), opz).map_err(|e| e.to_string())?;
-            let mut f = fs::File::open(path).map_err(|e| format!("{rel}: {e}"))?;
+            let mut f = crate::input_file::File::open(path).map_err(|e| format!("{rel}: {e}"))?;
             let mut h = Sha256::new();
             loop {
                 let n = f.read(&mut buf).map_err(|e| format!("{rel}: {e}"))?;

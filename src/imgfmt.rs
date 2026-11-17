@@ -4,6 +4,7 @@
 //! (heifer per leggere, con i colori portati a sRGB). Qui c'è anche il riconoscimento
 //! del tipo di file dal contenuto.
 
+#[cfg(test)]
 use std::fs;
 use std::io::Read;
 use std::path::Path;
@@ -131,7 +132,7 @@ pub fn sniff(head: &[u8]) -> Option<&'static str> {
 /// I primi byte di un file (fino a 132: il DICOM ha la firma dopo 128 byte di preambolo).
 pub fn head_of(path: &Path) -> Vec<u8> {
     let mut buf = Vec::with_capacity(132);
-    let _ = fs::File::open(path).and_then(|f| f.take(132).read_to_end(&mut buf));
+    let _ = crate::input_file::File::open(path).and_then(|f| f.take(132).read_to_end(&mut buf));
     buf
 }
 
@@ -163,13 +164,18 @@ pub fn open(path: &Path, straighten: bool, target_side: Option<u32>) -> Result<D
         // La rotazione delle foto HEIC è nel file (irot/imir) e heifer la applica: l'EXIF non conta.
         "heic" | "heif" | "hif" => open_heic(path, target_side),
         _ if straighten => crate::ocr::open_upright(path),
-        _ => image::ImageReader::open(path)
-            .map_err(|e| e.to_string())?
-            .with_guessed_format()
-            .map_err(|e| e.to_string())?
+        _ => reader(path)?
             .decode()
             .map_err(|e| format!("immagine non letta: {e}")),
     }
+}
+
+/// Stessa precedenza di ImageReader::open: estensione come fallback, magic bytes se riconosciuti.
+/// Serve anche a TGA, che non ha una firma sufficiente per with_guessed_format da solo.
+pub(crate) fn reader(path:&Path)->Result<image::ImageReader<std::io::BufReader<crate::input_file::File>>,String> {
+    let mut reader=image::ImageReader::new(std::io::BufReader::new(crate::input_file::File::open(path).map_err(|e|e.to_string())?));
+    if let Ok(format)=image::ImageFormat::from_path(path){reader.set_format(format);}
+    reader.with_guessed_format().map_err(|e|e.to_string())
 }
 
 /// I caratteri del sistema, cercati una volta sola: leggerli tutti a ogni SVG costava decimi di secondo
@@ -179,7 +185,12 @@ pub fn system_fonts() -> std::sync::Arc<resvg::usvg::fontdb::Database> {
     FONTS
         .get_or_init(|| {
             let mut db = resvg::usvg::fontdb::Database::new();
+            #[cfg(not(target_os = "android"))]
             db.load_system_fonts();
+            #[cfg(target_os = "android")]
+            for dir in ["/system/fonts", "/product/fonts", "/system_ext/fonts"] {
+                db.load_fonts_dir(dir);
+            }
             std::sync::Arc::new(db)
         })
         .clone()
@@ -188,7 +199,7 @@ pub fn system_fonts() -> std::sync::Arc<resvg::usvg::fontdb::Database> {
 /// Un SVG disegnato su una tela trasparente: il lato lungo è `target_side`, o la misura del disegno
 /// portata ad almeno 1024 px, perché un logo da 24 px sia utile.
 fn open_svg(path: &Path, target_side: Option<u32>) -> Result<DynamicImage, String> {
-    let data = fs::read(path).map_err(|e| e.to_string())?;
+    let data = crate::input_file::read(path).map_err(|e| e.to_string())?;
     let mut opt = resvg::usvg::Options::default();
     opt.fontdb = system_fonts();
     // Il testo dell'SVG usa i caratteri del sistema; se non c'è quello chiesto, vale il primo che si trova.
@@ -216,7 +227,7 @@ fn open_svg(path: &Path, target_side: Option<u32>) -> Result<DynamicImage, Strin
 /// Una foto HEIC/HEIF: l'immagine principale, girata come dice il file e con i colori in sRGB (le foto
 /// dell'iPhone sono in Display P3). Per una miniatura piccola basta quella che il file porta con sé.
 fn open_heic(path: &Path, target_side: Option<u32>) -> Result<DynamicImage, String> {
-    let data = fs::read(path).map_err(|e| e.to_string())?;
+    let data = crate::input_file::read(path).map_err(|e| e.to_string())?;
     if let Some(side) = target_side.filter(|s| *s <= 400) {
         if let Ok(Some(t)) = heifer::decode_thumbnail(&data) {
             if t.width.max(t.height) * 4 >= side * 3 {
@@ -249,7 +260,7 @@ fn heic_opaque(img: RgbaImage, alpha: bool) -> DynamicImage {
 
 fn open_avif(path: &Path) -> Result<DynamicImage, String> {
     use avif_decode::Image as A;
-    let data = fs::read(path).map_err(|e| e.to_string())?;
+    let data = crate::input_file::read(path).map_err(|e| e.to_string())?;
     let image = avif_decode::Decoder::from_avif(&data).and_then(|d| d.to_image()).map_err(|e| format!("AVIF non letto: {e}"))?;
     let to8 = |v: u16| (v >> 8) as u8;
     let out = match image {
@@ -288,7 +299,7 @@ fn open_avif(path: &Path) -> Result<DynamicImage, String> {
 }
 
 fn open_jxl(path: &Path) -> Result<DynamicImage, String> {
-    let image = jxl_oxide::JxlImage::builder().open(path).map_err(|e| format!("JPEG XL non letto: {e}"))?;
+    let image = jxl_oxide::JxlImage::builder().read(crate::input_file::File::open(path).map_err(|e|e.to_string())?).map_err(|e| format!("JPEG XL non letto: {e}"))?;
     let (w, h) = (image.width(), image.height());
     if (w as u64) * (h as u64) > 150_000_000 {
         return Err("JPEG XL troppo grande".into());
@@ -353,6 +364,27 @@ pub fn ico_ready(img: &DynamicImage) -> DynamicImage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(unix)]
+    fn tga_extension_survives_grant_reader_and_magic_still_wins() {
+        use std::os::fd::AsRawFd;
+        let dir=std::env::temp_dir().join(format!("cedro-tga-grant-{}",std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let plain=dir.join("source.tga");
+        let expected=image::RgbImage::from_pixel(3,2,image::Rgb([17,83,201]));
+        expected.save_with_format(&plain,image::ImageFormat::Tga).unwrap();
+        let file=std::sync::Arc::new(fs::File::open(&plain).unwrap());let fd=file.as_raw_fd();
+        let alias=dir.join("granted.tga");std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&alias).unwrap();crate::input_file::register(&alias,fd,file);
+        for path in [&plain,&alias] {
+            assert_eq!(open(path,false,None).unwrap().to_rgb8(),expected);
+            assert_eq!(crate::ocr::open_upright(path).unwrap().to_rgb8(),expected);
+            assert_eq!(crate::ui::media::image_thumb(path,64).unwrap().1,(3,2));
+        }
+        let wrong=dir.join("png-named-tga.tga");expected.save_with_format(&wrong,image::ImageFormat::Png).unwrap();
+        assert_eq!(open(&wrong,false,None).unwrap().to_rgb8(),expected);
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     fn ftyp(major: &[u8; 4], compatible: &[&[u8; 4]]) -> Vec<u8> {
         let size = 16 + 4 * compatible.len();

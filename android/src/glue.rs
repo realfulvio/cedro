@@ -8,10 +8,14 @@ use android_activity::input::{InputEvent, KeyAction, KeyMapChar, Keycode, Motion
 use android_activity::{AndroidApp, InputStatus, MainEvent, PollEvent};
 use cedro::ui::gfx::{Fonts, GlyphCache, Image, Painter};
 use cedro::ui::theme::ThemeId;
-use jni::objects::{JByteArray, JObject, JString, JValue};
+use jni::objects::{JObject, JString, JValue};
+mod saf;
+mod web;
+use saf::{copia_uri, figli};
 use jni::{JNIEnv, JavaVM};
 
-use crate::ui::{App, Archivio, Compito, Effetto, Info, Recente, Sorgente, Stato, Tasto};
+use crate::publication::{Destinazione, Registro, StatoUscita};
+use crate::ui::{App, Archivio, Compito, Completamento, Effetto, Info, Recente, Sorgente, Stato, Tasto};
 
 /// Dove finiscono le copie.
 const DOCUMENTI: &str = "/storage/emulated/0/Documents";
@@ -66,6 +70,13 @@ fn estensione_da_mime(mime: &str) -> &'static str {
         "image/gif" => "gif",
         "image/bmp" => "bmp",
         "image/tiff" => "tiff",
+        "image/heic" | "image/heif" => "heic",
+        "image/avif" => "avif",
+        "image/jxl" => "jxl",
+        "application/dicom" => "dcm",
+        "application/vnd.ms-excel" => "xls",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => "xlsx",
+        "application/vnd.oasis.opendocument.spreadsheet" => "ods",
         "application/pdf" => "pdf",
         "application/pkcs7-mime" | "application/x-pkcs7-mime" => "p7m",
         "application/pkcs7-signature" | "application/x-pkcs7-signature" => "p7s",
@@ -94,64 +105,37 @@ fn estensione_da_mime(mime: &str) -> &'static str {
         "audio/aac" => "aac",
         m if m.starts_with("audio/") => "m4a",
         m if m.starts_with("text/") => "txt",
-        _ => "jpg",
+        _ => "bin",
     }
 }
 
-/// Il tipo MIME di un file dalla sua estensione (per «Apri» e «Condividi»).
-fn mime_da_percorso(path: &Path) -> &'static str {
-    match path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase().as_str() {
-        "jpg" | "jpeg" => "image/jpeg",
-        "png" => "image/png",
-        "webp" => "image/webp",
-        "gif" => "image/gif",
-        "bmp" => "image/bmp",
-        "tif" | "tiff" => "image/tiff",
-        "pdf" => "application/pdf",
-        "txt" => "text/plain",
-        "md" => "text/markdown",
-        "html" => "text/html",
-        "csv" => "text/csv",
-        "json" => "application/json",
-        "mp3" => "audio/mpeg",
-        "m4a" => "audio/mp4",
-        "wav" => "audio/x-wav",
-        "ogg" => "audio/ogg",
-        "flac" => "audio/flac",
-        "aac" => "audio/aac",
-        "mp4" => "video/mp4",
-        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "odt" => "application/vnd.oasis.opendocument.text",
-        "rtf" => "application/rtf",
-        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "zip" => "application/zip",
-        "opus" => "audio/ogg",
-        "aif" | "aiff" => "audio/aiff",
-        "avif" => "image/avif",
-        "jxl" => "image/jxl",
-        "ico" => "image/x-icon",
-        "tga" => "image/x-tga",
-        "pnm" | "ppm" | "pgm" | "pbm" => "image/x-portable-anymap",
-        "exr" => "image/x-exr",
-        "srt" => "application/x-subrip",
-        "vtt" => "text/vtt",
-        _ => "application/octet-stream",
-    }
-}
+use crate::storage::mime_da_percorso;
 
 /// Legge l'intento che ha avviato l'attività: se è un ACTION_SEND, copia il flusso in un file privato.
-fn leggi_condivisione(app: &AndroidApp, cartella: &Path) -> Result<Vec<Condiviso>, String> {
-    let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr() as *mut _) }.map_err(|e| e.to_string())?;
-    let mut env = vm.attach_current_thread().map_err(|e| e.to_string())?;
-    let attivita = unsafe { JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject) };
-    let r = leggi_condivisione_in(&mut env, &attivita, cartella);
-    if env.exception_check().unwrap_or(false) {
-        let _ = env.exception_clear();
-    }
-    r
+fn importa_condivisione(app: &AndroidApp, cartella: &Path, c: &Consegne, ui: &mut App) {
+    // Capture the exact intent on the UI thread; a subsequent onNewIntent cannot replace it.
+    let intent = con_attivita(app, |env,att| {
+        let i=env.call_method(att,"getIntent","()Landroid/content/Intent;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+        let action=env.call_method(&i,"getAction","()Ljava/lang/String;",&[]).and_then(|v|v.l()).ok().and_then(|v|stringa(env,v)).unwrap_or_default();
+        if !matches!(action.as_str(),"android.intent.action.SEND"|"android.intent.action.SEND_MULTIPLE"|"android.intent.action.VIEW") { return Ok(None); }
+        env.new_global_ref(i).map(Some).map_err(|e|e.to_string())
+    });
+    let intent=match intent { Ok(Some(i))=>i, Ok(None)=>{ricarica_recenti(cartella.to_path_buf(),c); return;}, Err(e)=>{ui.errore_importazione(e); return;} };
+    let (id,prog)=ui.nuova_importazione();
+    c.ultimo_import.store(id,std::sync::atomic::Ordering::Release);
+    if let Some(dir)=app.internal_data_path(){persisti(c,&dir.join("lavori.txt"),ui.serializza());}
+    let cancel=token(c,id);
+    let (a,dir,c)=(app.clone(),cartella.to_path_buf(),c.clone());
+    std::thread::spawn(move || {
+        let r=std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            saf::contesto(id,cancel,prog,{let sink=c.passo_riassunto.clone();move|text|sink.lock().unwrap_or_else(|e|e.into_inner()).push((id,text))},||con_attivita(&a,|env,att|leggi_condivisione_in(env,att,intent.as_obj(),&dir)))
+        })).unwrap_or_else(|_|Err("Importazione interrotta".into()));
+        c.importati.lock().unwrap_or_else(|e|e.into_inner()).push((id,None,r));
+        a.create_waker().wake();
+    });
 }
 
-fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) -> Result<Vec<Condiviso>, String> {
+fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, intento: &JObject, cartella: &Path) -> Result<Vec<Condiviso>, String> {
     macro_rules! j {
         ($e:expr) => {
             match $e {
@@ -160,7 +144,6 @@ fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) 
             }
         };
     }
-    let intento = j!(j!(env.call_method(attivita, "getIntent", "()Landroid/content/Intent;", &[])).l());
     if intento.is_null() {
         return Ok(Vec::new());
     }
@@ -176,14 +159,14 @@ fn leggi_condivisione_in(env: &mut JNIEnv, attivita: &JObject, cartella: &Path) 
         let n = j!(j!(env.call_method(&lista, "size", "()I", &[])).i());
         let mut out = Vec::new();
         for i in 0..n {
-            let mut uri = j!(j!(env.call_method(&lista, "get", "(I)Ljava/lang/Object;", &[JValue::Int(i)])).l());
-            // Qualche app (e `am --esal`) manda i percorsi come testo invece che come Uri.
-            if !uri.is_null() && j!(env.is_instance_of(&uri, "java/lang/String")) {
-                uri = j!(j!(env.call_static_method("android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&uri)])).l());
-            }
-            if !uri.is_null() {
-                out.push(copia_uri(env, attivita, &uri, "", cartella)?);
-            }
+            let item=saf::frame(env,|env|{
+                let mut uri=env.call_method(&lista,"get","(I)Ljava/lang/Object;",&[JValue::Int(i)]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+                if !uri.is_null()&&env.is_instance_of(&uri,"java/lang/String").map_err(|e|jerr(env,e))? {
+                    uri=env.call_static_method("android/net/Uri","parse","(Ljava/lang/String;)Landroid/net/Uri;",&[JValue::Object(&uri)]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+                }
+                if uri.is_null(){Ok(None)}else{copia_uri(env,attivita,&uri,"",cartella).map(Some)}
+            })?;
+            if let Some(c)=item{out.push(c);}
         }
         return Ok(out);
     }
@@ -221,97 +204,6 @@ fn tipo_di(path: &Path) -> cedro::Kind {
     } else {
         cedro::kind_of(path)
     }
-}
-
-/// Copia il contenuto di un `content://` in un file privato di Cedro e ne dà nome e percorso.
-fn copia_uri(env: &mut JNIEnv, attivita: &JObject, uri: &JObject, mime: &str, cartella: &Path) -> Result<Condiviso, String> {
-    macro_rules! j {
-        ($e:expr) => {
-            match $e {
-                Ok(v) => v,
-                Err(e) => return Err(jerr(env, e)),
-            }
-        };
-    }
-    let resolver = j!(j!(env.call_method(attivita, "getContentResolver", "()Landroid/content/ContentResolver;", &[])).l());
-    let mime_letto;
-    let mime = if mime.is_empty() {
-        mime_letto = env.call_method(&resolver, "getType", "(Landroid/net/Uri;)Ljava/lang/String;", &[JValue::Object(uri)]).ok().and_then(|v| v.l().ok()).and_then(|o| stringa(env, o)).unwrap_or_default();
-        if env.exception_check().unwrap_or(false) {
-            let _ = env.exception_clear();
-        }
-        mime_letto.as_str()
-    } else {
-        mime
-    };
-
-    // Il nome: OpenableColumns.DISPLAY_NAME.
-    let mut nome = String::new();
-    let nulla = JObject::null();
-    if let Ok(cur) = env.call_method(
-        &resolver,
-        "query",
-        "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;",
-        &[JValue::Object(uri), JValue::Object(&nulla), JValue::Object(&nulla), JValue::Object(&nulla), JValue::Object(&nulla)],
-    ) {
-        if let Ok(cur) = cur.l() {
-            if !cur.is_null() {
-                if j!(j!(env.call_method(&cur, "moveToFirst", "()Z", &[])).z()) {
-                    let col = j!(env.new_string("_display_name"));
-                    let idx = j!(j!(env.call_method(&cur, "getColumnIndex", "(Ljava/lang/String;)I", &[JValue::Object(&col)])).i());
-                    if idx >= 0 {
-                        if let Ok(s) = env.call_method(&cur, "getString", "(I)Ljava/lang/String;", &[JValue::Int(idx)]) {
-                            nome = s.l().ok().and_then(|o| stringa(env, o)).unwrap_or_default();
-                        }
-                    }
-                }
-                let _ = env.call_method(&cur, "close", "()V", &[]);
-            }
-        }
-    }
-    if env.exception_check().unwrap_or(false) {
-        let _ = env.exception_clear();
-    }
-
-    // Un file:// non ha colonne: il nome è l'ultimo pezzo del percorso.
-    if nome.is_empty() {
-        if let Ok(v) = env.call_method(uri, "getLastPathSegment", "()Ljava/lang/String;", &[]) {
-            nome = v.l().ok().and_then(|o| stringa(env, o)).unwrap_or_default();
-        }
-        if env.exception_check().unwrap_or(false) {
-            let _ = env.exception_clear();
-        }
-    }
-
-    // Il contenuto: openInputStream + read(byte[]).
-    let flusso = j!(j!(env.call_method(&resolver, "openInputStream", "(Landroid/net/Uri;)Ljava/io/InputStream;", &[JValue::Object(uri)])).l());
-    if flusso.is_null() {
-        return Err("impossibile aprire il file condiviso".into());
-    }
-    let buf: JByteArray = j!(env.new_byte_array(64 * 1024));
-    let mut dati: Vec<u8> = Vec::new();
-    let mut pezzo = vec![0i8; 64 * 1024];
-    loop {
-        let n = j!(j!(env.call_method(&flusso, "read", "([B)I", &[JValue::Object(&buf)])).i());
-        if n < 0 {
-            break;
-        }
-        if n == 0 {
-            continue;
-        }
-        j!(env.get_byte_array_region(&buf, 0, &mut pezzo[..n as usize]));
-        dati.extend(pezzo[..n as usize].iter().map(|b| *b as u8));
-    }
-    let _ = env.call_method(&flusso, "close", "()V", &[]);
-
-    let ext_mime = estensione_da_mime(mime);
-    let base = if nome.is_empty() { "condiviso".to_string() } else { nome.clone() };
-    let nome_file = if Path::new(&base).extension().is_some() { base } else { format!("{base}.{ext_mime}") };
-    let sicuro: String = nome_file.chars().map(|c| if c == '/' || c == '\\' { '_' } else { c }).collect();
-    std::fs::create_dir_all(cartella).map_err(|e| e.to_string())?;
-    let path = cartella.join(&sicuro);
-    std::fs::write(&path, &dati).map_err(|e| e.to_string())?;
-    Ok(Condiviso { path, nome: sicuro })
 }
 
 /// Chiede il permesso di scrivere in Documenti (se manca) e aspetta la risposta. Da Android 11 non serve: i file che
@@ -454,6 +346,7 @@ fn scegli(app: &AndroidApp, sorgente: Sorgente) -> Result<(), String> {
             // Una cartella: il selettore dà l'albero, i file si leggono dopo (`figli`).
             let azione = env.new_string("android.intent.action.OPEN_DOCUMENT_TREE").map_err(|e| e.to_string())?;
             let intento = env.new_object("android/content/Intent", "(Ljava/lang/String;)V", &[JValue::Object(&azione)]).map_err(|e| jerr(env, e))?;
+            env.call_method(&intento,"addFlags","(I)Landroid/content/Intent;",&[JValue::Int(1 | 64)]).map_err(|e|jerr(env,e))?;
             env.call_method(attivita, "startActivityForResult", "(Landroid/content/Intent;I)V", &[JValue::Object(&intento), JValue::Int(4242)]).map_err(|e| jerr(env, e))?;
             return Ok(());
         }
@@ -474,6 +367,9 @@ fn scegli(app: &AndroidApp, sorgente: Sorgente) -> Result<(), String> {
                     "text/*",
                     "application/json",
                     "application/msword",
+                    "application/vnd.ms-excel",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "application/vnd.oasis.opendocument.spreadsheet",
                     "application/rtf",
                     "application/vnd.oasis.opendocument.text",
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -497,81 +393,60 @@ fn scegli(app: &AndroidApp, sorgente: Sorgente) -> Result<(), String> {
             let k = env.new_string("android.intent.extra.ALLOW_MULTIPLE").map_err(|e| e.to_string())?;
             env.call_method(&intento, "putExtra", "(Ljava/lang/String;Z)Landroid/content/Intent;", &[JValue::Object(&k), JValue::Bool(1)]).map_err(|e| jerr(env, e))?;
         }
+        env.call_method(&intento,"addFlags","(I)Landroid/content/Intent;",&[JValue::Int(1 | 64)]).map_err(|e|jerr(env,e))?;
         env.call_method(attivita, "startActivityForResult", "(Landroid/content/Intent;I)V", &[JValue::Object(&intento), JValue::Int(4242)]).map_err(|e| jerr(env, e))?;
         Ok(())
     })
 }
 
-/// I file scelti nel selettore, se sono arrivati: li copia nella cartella dei file di Cedro.
-fn scelti(app: &AndroidApp, cartella: &Path, albero: bool) -> Option<Result<Vec<Condiviso>, String>> {
-    let r = con_attivita(app, |env, attivita| {
-        let arr = env.call_method(attivita, "scelti", "()[Landroid/net/Uri;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
-        if arr.is_null() {
-            return Ok(None);
-        }
-        let arr = jni::objects::JObjectArray::from(arr);
-        let n = env.get_array_length(&arr).map_err(|e| jerr(env, e))?;
-        let mut out = Vec::new();
-        for i in 0..n {
-            let uri = env.get_object_array_element(&arr, i).map_err(|e| jerr(env, e))?;
-            if albero {
-                out.extend(figli(env, attivita, &uri, cartella)?);
-            } else {
-                out.push(copia_uri(env, attivita, &uri, "", cartella)?);
-            }
-        }
-        Ok(Some(out))
-    });
-    match r {
-        Ok(Some(c)) => Some(Ok(c)),
-        Ok(None) => None,
-        Err(e) => Some(Err(e)),
-    }
+/// A result without a valid request must never be assigned to the next picker.
+fn scarta_scelta_orfana(app:&AndroidApp) {
+    if let Err(e)=con_attivita(app,|env,att| {
+        env.call_method(att,"contestoScelta","(Z)V",&[JValue::Bool(0)]).map(|_|()).map_err(|e|jerr(env,e))
+    }) {log::warn!("risultato selettore orfano: {e}");}
 }
 
-/// I file (non le sottocartelle) di una cartella scelta con OPEN_DOCUMENT_TREE, copiati nella cartella di Cedro.
-fn figli(env: &mut JNIEnv, attivita: &JObject, albero: &JObject, cartella: &Path) -> Result<Vec<Condiviso>, String> {
-    let dc = "android/provider/DocumentsContract";
-    let id = env.call_static_method(dc, "getTreeDocumentId", "(Landroid/net/Uri;)Ljava/lang/String;", &[JValue::Object(albero)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
-    let lista = env
-        .call_static_method(dc, "buildChildDocumentsUriUsingTree", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(albero), JValue::Object(&id)])
-        .and_then(|v| v.l())
-        .map_err(|e| jerr(env, e))?;
-    let resolver = env.call_method(attivita, "getContentResolver", "()Landroid/content/ContentResolver;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
-    let classe = env.find_class("java/lang/String").map_err(|e| jerr(env, e))?;
-    let c0 = env.new_string("document_id").map_err(|e| e.to_string())?;
-    let proiez = env.new_object_array(2, &classe, &c0).map_err(|e| jerr(env, e))?;
-    let c1 = env.new_string("mime_type").map_err(|e| e.to_string())?;
-    env.set_object_array_element(&proiez, 1, c1).map_err(|e| jerr(env, e))?;
-    let nulla = JObject::null();
-    let cur = env
-        .call_method(&resolver, "query", "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;", &[JValue::Object(&lista), JValue::Object(&proiez), JValue::Object(&nulla), JValue::Object(&nulla), JValue::Object(&nulla)])
-        .and_then(|v| v.l())
-        .map_err(|e| jerr(env, e))?;
-    let mut voci = Vec::new();
-    if !cur.is_null() {
-        while env.call_method(&cur, "moveToNext", "()Z", &[]).and_then(|v| v.z()).unwrap_or(false) {
-            let doc = env.call_method(&cur, "getString", "(I)Ljava/lang/String;", &[JValue::Int(0)]).and_then(|v| v.l()).ok().and_then(|o| stringa(env, o));
-            let mime = env.call_method(&cur, "getString", "(I)Ljava/lang/String;", &[JValue::Int(1)]).and_then(|v| v.l()).ok().and_then(|o| stringa(env, o)).unwrap_or_default();
-            if let Some(doc) = doc.filter(|_| mime != "vnd.android.document/directory") {
-                voci.push(doc);
+/// I file scelti nel selettore, se sono arrivati: li copia nella cartella dei file di Cedro.
+fn importa_scelti(app: &AndroidApp, cartella: &Path, sorgente: Sorgente, c: &Consegne, ui: &mut App) -> bool {
+    let arr=con_attivita(app,|env,att| {
+        let arr=env.call_method(att,"scelti","()[Landroid/net/Uri;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+        if arr.is_null() { return Ok(None); }
+        let arr=jni::objects::JObjectArray::from(arr);
+        let n=env.get_array_length(&arr).map_err(|e|jerr(env,e))?;
+        env.new_global_ref(arr).map(|a|Some((n,a))).map_err(|e|e.to_string())
+    });
+    let arr=match arr { Ok(Some((0,_)))=>return true, Ok(Some((_,a)))=>a, Ok(None)=>return false, Err(e)=> { ui.errore_importazione(e); return true; } };
+    let (id,prog)=ui.nuova_importazione();
+    c.ultimo_import.store(id,std::sync::atomic::Ordering::Release);
+    if let Some(dir)=app.internal_data_path(){persisti(c,&dir.join("lavori.txt"),ui.serializza());}
+    let cancel=token(c,id);
+    let (a,dir,c)=(app.clone(),cartella.to_path_buf(),c.clone());
+    std::thread::spawn(move || {
+        let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| saf::contesto(id,cancel,prog,{let sink=c.passo_riassunto.clone();move|text|sink.lock().unwrap_or_else(|e|e.into_inner()).push((id,text))},||con_attivita(&a,|env,att| {
+            let local=env.new_local_ref(arr.as_obj()).map_err(|e|e.to_string())?;
+            let arr=jni::objects::JObjectArray::from(local);
+            let n=env.get_array_length(&arr).map_err(|e|jerr(env,e))?;
+            let mut out=Vec::new();
+            for i in 0..n {
+                let v=saf::frame(env,|env|{
+                    let uri=env.get_object_array_element(&arr,i).map_err(|e|jerr(env,e))?;
+                    if sorgente==Sorgente::Cartella {figli(env,att,&uri,&dir)}
+                    else {copia_uri(env,att,&uri,"",&dir).map(|c|vec![c])}
+                })?;
+                out.extend(v);
             }
-        }
-        let _ = env.call_method(&cur, "close", "()V", &[]);
-    }
-    let mut out = Vec::new();
-    for doc in voci.into_iter().take(200) {
-        let d = env.new_string(&doc).map_err(|e| e.to_string())?;
-        let uri = env
-            .call_static_method(dc, "buildDocumentUriUsingTree", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(albero), JValue::Object(&d)])
-            .and_then(|v| v.l())
-            .map_err(|e| jerr(env, e))?;
-        match copia_uri(env, attivita, &uri, "", cartella) {
-            Ok(c) => out.push(c),
-            Err(e) => log::warn!("cartella: {doc}: {e}"),
-        }
-    }
-    Ok(out)
+            if sorgente==Sorgente::Originale {
+                let result=out.first().ok_or_else(||"Nessun file scelto".to_string()).and_then(|f| {
+                    crate::storage::leggi_originale(&f.path, &token(&c,id))
+                });
+                *c.originale.lock().unwrap_or_else(|e|e.into_inner())=Some((id,result));
+            }
+            Ok(out)
+        })))).unwrap_or_else(|_|Err("Importazione interrotta".into()));
+        c.importati.lock().unwrap_or_else(|e|e.into_inner()).push((id,Some(sorgente),result));
+        a.create_waker().wake();
+    });
+    true
 }
 
 /// Dice a Android che c'è un file nuovo in Documenti (così compare in Galleria e in File) e ne cerca il `content://`.
@@ -647,7 +522,11 @@ fn apri_o_condividi(app: &AndroidApp, path: &Path, condividi: bool) -> Result<()
         let indirizzo = if testo.starts_with("content://") {
             testo.clone()
         } else {
-            let rel = path.strip_prefix("/storage/emulated/0").map_err(|_| "il file non è nella memoria del telefono")?;
+            let privato = app.internal_data_path().map(|p|p.join("uscite"));
+            let relativo;
+            let rel = if let Some(p) = privato.as_ref().and_then(|p|path.strip_prefix(p).ok()) {
+                relativo = PathBuf::from("/privati").join(p); &relativo
+            } else { path.strip_prefix("/storage/emulated/0").map_err(|_| "il file non è nella memoria del telefono")? };
             // Gli spazi e i segni nel nome (es. «Movie Trailers ( Coming Soon ).mp4») vanno codificati: Telegram e altre app non li reggono.
             let codificato: String = rel.to_string_lossy().bytes().map(|b| if b.is_ascii_alphanumeric() || b"-_.~/".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
             format!("content://it.cedro.android.files{codificato}")
@@ -669,8 +548,12 @@ fn apri_o_condividi(app: &AndroidApp, path: &Path, condividi: bool) -> Result<()
         let azione = env.new_string(if condividi { "android.intent.action.SEND" } else { "android.intent.action.VIEW" }).map_err(|e| e.to_string())?;
         let intento = env.new_object("android/content/Intent", "(Ljava/lang/String;)V", &[JValue::Object(&azione)]).map_err(|e| jerr(env, e))?;
         if condividi {
-            if !testo.starts_with("content://") {
-                let nome_f = env.new_string(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).map_err(|e| e.to_string())?;
+            let nome = if testo.starts_with("content://") {
+                let resolver=env.call_method(attivita,"getContentResolver","()Landroid/content/ContentResolver;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+                nome_pubblico(env,&resolver,uri.as_obj())
+            } else {path.file_name().map(|n|n.to_string_lossy().into_owned())};
+            if let Some(nome)=nome.filter(|n|!n.is_empty()) {
+                let nome_f = env.new_string(nome).map_err(|e| e.to_string())?;
                 let k = env.new_string("android.intent.extra.TITLE").map_err(|e| e.to_string())?;
                 env.call_method(&intento, "putExtra", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;", &[JValue::Object(&k), JValue::Object(&nome_f)]).map_err(|e| jerr(env, e))?;
             }
@@ -874,10 +757,25 @@ type Casella<T> = Arc<Mutex<Option<T>>>;
 /// Quello che i thread di lavoro consegnano al ciclo principale.
 #[derive(Clone, Default)]
 struct Consegne {
+    azioni:Arc<Mutex<std::collections::HashMap<u32,String>>>,
+    rete:Arc<(Mutex<u8>,std::sync::Condvar)>,
+    download_attesa:Casella<crate::web::AttesaDownload>,
+    componenti: Arc<Mutex<crate::web::Componenti>>,
+    labs: Arc<Mutex<Vec<(u32,Result<(crate::labs::Info,Image),String>)>>>,
+    caso_versione: Arc<std::sync::atomic::AtomicU32>,
+    caso_lock: Arc<Mutex<()>>,
+    caso_esito: Casella<Result<(),String>>,
     miniatura: Casella<(PathBuf, Image)>,
     onda: Casella<(PathBuf, Vec<f32>)>,
     recenti: Casella<Vec<Recente>>,
-    esiti: Arc<Mutex<Vec<(u32, Stato)>>>,
+    esiti: Arc<Mutex<Vec<Completamento>>>,
+    tokens: Arc<Mutex<std::collections::HashMap<u32, Arc<std::sync::atomic::AtomicBool>>>>,
+    identita: Arc<Mutex<std::collections::HashMap<u32,crate::publication::Identita>>>,
+    importati: Arc<Mutex<Vec<(u32, Option<Sorgente>, Result<Vec<Condiviso>, String>)>>>,
+    originale: Casella<(u32,Result<Vec<u8>,String>)>,
+    ultimo_import: Arc<std::sync::atomic::AtomicU32>,
+    journal: Arc<Mutex<(bool,Option<(PathBuf,String)>)>>,
+    recuperati: Casella<Vec<crate::publication::Registro>>,
     /// Pagine e segnalibri del PDF aperto, o l'errore (protetto da password).
     info_pdf: Casella<(PathBuf, Result<(u32, Vec<(u32, String)>), String>)>,
     /// Pagine e miniatura dei PDF da unire.
@@ -887,7 +785,8 @@ struct Consegne {
     /// Com'è andata la password: la copia senza, o l'errore.
     sblocco: Casella<Result<PathBuf, String>>,
     /// L'onda di una revisione aperta.
-    onda_riv: Casella<(PathBuf, Option<Vec<f32>>)>,
+    onda_riv: Arc<Mutex<Vec<(PathBuf, Option<Vec<f32>>, f64)>>>,
+    frasi: Arc<Mutex<Vec<(u32,PathBuf,Option<cedro::trascrizione::Segment>,f64)>>>,
     /// I punti da controllare di una trascrizione finita (lavoro, quanti).
     controlli: Arc<Mutex<Vec<(u32, usize)>>>,
     /// Il Riassunto AI: il passo in parole (lavoro, testo) e il risultato (lavoro, trascrizione, riassunto).
@@ -899,143 +798,320 @@ struct Consegne {
     firma_pagine: Arc<Mutex<Vec<(PathBuf, Option<Image>)>>>,
 }
 
+fn registra(c:&Consegne,ui:&mut App){
+    let ids:Vec<u32>=ui.lavori.iter().map(|l|l.id).collect();
+    let mut map=c.identita.lock().unwrap_or_else(|e|e.into_inner());
+    for id in ids{if let Some(v)=ui.identita(id){map.insert(id,v);}}
+}
+
+/// Uno scrittore transitorio: coalesca gli stati senza I/O nel loop degli eventi.
+fn persisti(c:&Consegne,path:&Path,testo:String) {
+    let mut state=c.journal.lock().unwrap_or_else(|e|e.into_inner());
+    state.1=Some((path.to_path_buf(),testo));
+    if state.0 {return;}
+    state.0=true;
+    let journal=c.journal.clone();
+    drop(state);
+    std::thread::spawn(move || loop {
+        let next={
+            let mut state=journal.lock().unwrap_or_else(|e|e.into_inner());
+            match state.1.take(){Some(v)=>v,None=>{state.0=false;return;}}
+        };
+        if let Err(e)=crate::storage::atomico(&next.0,next.1.as_bytes()){log::error!("cronologico: {e}");}
+    });
+}
+
+fn pulisci_incompleti(base:&Path,noti:&std::collections::HashSet<PathBuf>,prima:std::time::SystemTime){
+    fn pronto(p:&Path)->bool {p.join(".batch-child").is_file()||p.join(".batch").is_file()||p.join(".pronti").is_file()||crate::publication::sorgente_revisione(p).is_some()||std::fs::read_dir(p).into_iter().flatten().filter_map(Result::ok).any(|e|e.file_type().is_ok_and(|t|t.is_dir())&&pronto(&e.path()))}
+    if let Ok(entries)=std::fs::read_dir(base){for e in entries.flatten(){
+        let p=e.path();let name=nome_di(&p);
+        let generato=name.split_once('-').is_some_and(|(a,b)|!a.is_empty()&&!b.is_empty()&&a.chars().all(|c|c.is_ascii_hexdigit())&&b.chars().all(|c|c.is_ascii_hexdigit()));
+        if generato&&e.file_type().is_ok_and(|t|t.is_dir())&&e.metadata().and_then(|m|m.modified()).is_ok_and(|t|t<prima)&&!noti.iter().any(|n|n.starts_with(&p))&&!pronto(&p){let _=std::fs::remove_dir_all(p);}
+    }}
+}
+
+fn recupera_registro(app:&AndroidApp,dir:&Path)->Option<Registro>{
+    let mut r=Registro::leggi(dir).or_else(|_|crate::publication::recupera_revisione(dir)).ok()?;
+    for i in 0..r.elementi.len(){
+        match r.elementi[i].stato.clone(){
+            StatoUscita::Pubblicato(d)=>{let _=r.completato(dir,i,d);},
+            StatoUscita::Preparato(mut d)=>{
+                let committed=if d.path.to_string_lossy().starts_with("content://"){media_committed(app,&mut d)}else{Ok(crate::publication::legacy_committed(&d))};
+                match committed{
+                    Ok(true)=>{let _=r.completato(dir,i,d);},
+                    Ok(false)=>{
+                        // Il marker legacy resta, ma i byte parziali non occupano più spazio.
+                        if let Some(temp)=&d.temporaneo{crate::publication::svuota_temporaneo(temp);}
+                        r.elementi[i].errore=Some("Recuperato dopo un’interruzione".into());
+                        let _=r.salva(dir);
+                    }
+                    Err(e)=>{r.elementi[i].errore=Some(e);let _=r.salva(dir);},
+                }
+            }
+            StatoUscita::Privato=>{},
+        }
+    }
+    Some(r)
+}
+
+fn recupera_uscite(app:&AndroidApp,base:&Path,prima:std::time::SystemTime)->Vec<Registro> {
+    let mut out=Vec::new();
+    let Ok(entries)=std::fs::read_dir(base) else{return out;};
+    for e in entries.flatten(){
+        let dir=e.path();if !e.file_type().is_ok_and(|t|t.is_dir())||!e.metadata().and_then(|m|m.modified()).is_ok_and(|t|t<prima){continue;}
+        if let Some(r)=recupera_registro(app,&dir){out.push(r);}
+        out.extend(recupera_uscite(app,&dir,prima));
+    }
+    out
+}
+
+fn nome_pubblico(env:&mut JNIEnv,resolver:&JObject,uri:&JObject)->Option<String>{
+    let read=(||->Result<Option<String>,jni::errors::Error>{
+        let col=env.new_string("_display_name")?;
+        let columns=env.new_object_array(1,"java/lang/String",&col)?;
+        let null=JObject::null();
+        let cur=env.call_method(resolver,"query","(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;",&[JValue::Object(uri),JValue::Object(&columns),JValue::Object(&null),JValue::Object(&null),JValue::Object(&null)])?.l()?;
+        if cur.is_null(){return Ok(None);}
+        let result=(||{
+            if !env.call_method(&cur,"moveToFirst","()Z",&[])?.z()?{return Ok(None);}
+            let value=env.call_method(&cur,"getString","(I)Ljava/lang/String;",&[JValue::Int(0)])?.l()?;
+            Ok(stringa(env,value))
+        })();
+        let _=env.call_method(&cur,"close","()V",&[]);result
+    })();
+    let _=env.exception_clear();read.ok().flatten()
+}
+
+fn media_committed(app:&AndroidApp,d:&mut Destinazione)->Result<bool,String>{
+    con_attivita(app,|env,att|{
+        let value=env.new_string(d.path.to_string_lossy()).map_err(|e|e.to_string())?;
+        let uri=env.call_static_method("android/net/Uri","parse","(Ljava/lang/String;)Landroid/net/Uri;",&[JValue::Object(&value)]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+        let resolver=env.call_method(att,"getContentResolver","()Landroid/content/ContentResolver;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+        let col=env.new_string("is_pending").map_err(|e|e.to_string())?;
+        let columns=env.new_object_array(1,"java/lang/String",&col).map_err(|e|jerr(env,e))?;
+        let null=JObject::null();
+        let cur=env.call_method(&resolver,"query","(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;",&[JValue::Object(&uri),JValue::Object(&columns),JValue::Object(&null),JValue::Object(&null),JValue::Object(&null)]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+        if cur.is_null(){return Ok(false);}
+        let result=(||->Result<bool,String>{
+            if !env.call_method(&cur,"moveToFirst","()Z",&[]).and_then(|v|v.z()).map_err(|e|jerr(env,e))?{return Ok(false);}
+            let pending=env.call_method(&cur,"getInt","(I)I",&[JValue::Int(0)]).and_then(|v|v.i()).map_err(|e|jerr(env,e))?;
+            Ok(pending==0)
+        })();
+        let _=env.call_method(&cur,"close","()V",&[]);
+        if result.as_ref().is_ok_and(|v|*v){
+            if let Some(name)=nome_pubblico(env,&resolver,&uri){
+                if let Some((parent,_))=d.nome.rsplit_once('/'){d.nome=format!("{parent}/{name}");}
+            }
+        }
+        result
+    })
+}
+
+fn token(c: &Consegne, id: u32) -> Arc<std::sync::atomic::AtomicBool> {
+    c.tokens.lock().unwrap_or_else(|e| e.into_inner()).entry(id).or_default().clone()
+}
+
+fn protetto(c: &Consegne, id: u32, f: impl FnOnce()) {
+    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).is_err() {
+        c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push(Completamento::semplice(id, Stato::Errore("Il motore si è interrotto".into())));
+    }
+    let annullato=c.tokens.lock().unwrap_or_else(|e|e.into_inner()).get(&id).is_some_and(|t|t.load(std::sync::atomic::Ordering::Acquire));
+    c.componenti.lock().unwrap_or_else(|e|e.into_inner()).finisci(id,annullato);
+    c.tokens.lock().unwrap_or_else(|e| e.into_inner()).remove(&id);
+}
+
+fn processo(app: &AndroidApp, c: &Consegne, id: u32, file: &Path, azione: &str, qualita: u8, voce:crate::worker::Voce, out: &Path, opts: cedro::Options, unisci: Vec<(PathBuf, Option<cedro::PageSel>)>, prog: &std::sync::atomic::AtomicU32, web:Option<crate::web::Scelte>) -> Result<(PathBuf, String), String> {
+    let libs = cartella_librerie(app).ok_or("Il motore non è in questo APK")?;
+    let cancel = token(c, id);
+    c.passo_riassunto.lock().unwrap_or_else(|e|e.into_inner()).push((id,"Aspetto che finisca l’altro lavoro…".into()));
+    let _permit=cedro::resources::acquire(Some(&cancel)).ok_or("Annullato")?;
+    c.azioni.lock().unwrap_or_else(|e|e.into_inner()).insert(id,azione.into());
+    log::info!("lavoro avvio id={id} azione={azione}");
+    let mut input_paths=vec![file.to_path_buf()];
+    input_paths.extend(unisci.iter().map(|u|u.0.clone()));
+    let leases=saf::leases(&input_paths);
+    if let Some(identity)=c.identita.lock().unwrap_or_else(|e|e.into_inner()).get(&id){
+        let bytes=serde_json::to_vec(identity).map_err(|e|e.to_string())?;
+        crate::storage::atomico(&out.join(".lavoro"),&bytes).map_err(|e|e.to_string())?;
+    }
+    crate::worker::avvia(&libs, crate::worker::Richiesta { file: file.into(), azione: azione.into(), qualita, voce, out: out.into(), opts, unisci, sommario:None,anteprima:None,web }, &cancel, leases, |nome,bytes|web::permesso(app,c,id,nome,bytes), |e| match e {
+        crate::worker::Evento::Audio(path,secs) => {c.frasi.lock().unwrap_or_else(|e|e.into_inner()).push((id,path,None,secs));},
+        crate::worker::Evento::Frase(path,seg) => {c.frasi.lock().unwrap_or_else(|e|e.into_inner()).push((id,path,Some(seg),0.0));},
+        crate::worker::Evento::Componente(s) => {c.componenti.lock().unwrap_or_else(|e|e.into_inner()).ricevi(id,s);app.create_waker().wake();},
+        crate::worker::Evento::Progresso(n) => {if prog.swap(n, std::sync::atomic::Ordering::Relaxed)!=n {app.create_waker().wake();}},
+        crate::worker::Evento::Passo(k, t) => {
+            if let Some(t) = passo_trascrizione(&k, &t) { c.passo_riassunto.lock().unwrap_or_else(|e|e.into_inner()).push((id,t)); }
+        }
+        _ => {},
+    })
+}
+
+/// Un solo completamento contiene stato, tutte le uscite e l'eventuale audio di revisione.
+fn pubblica_lavoro(app: &AndroidApp, c: &Consegne, id: u32, out: &Path, principale: PathBuf, msg: String) -> Completamento {
+    if principale.as_os_str().is_empty() { return Completamento::semplice(id,Stato::Fatto {path:principale,nome:String::new(),msg}); }
+    let result=(||->Result<Completamento,String>{
+        let mut identity=c.identita.lock().unwrap_or_else(|e|e.into_inner()).get(&id).cloned().ok_or("Identità del lavoro assente")?;
+        if let Ok(file)=std::fs::File::open(out.join(".revisione-source")){
+            let source:PathBuf=serde_json::from_reader(file).map_err(|e|e.to_string())?;
+            if !source.starts_with(out)||!source.is_file(){return Err("Sorgente della revisione non disponibile".into());}
+            identity.sorgente=Some(source);
+        }
+        let mut r=Registro::prepara(out,&principale,identity,msg)?;
+        let mode=crate::web::Salvataggio::leggi(out).map(|s|s.mode).unwrap_or_else(||ESISTE.load(std::sync::atomic::Ordering::Relaxed));
+        let reused=crate::web::riusi(&uscite(app).ok_or("Cartella assente")?,out,&mut r,|d|{
+            if d.path.to_string_lossy().starts_with("content://"){media_committed(app,d).unwrap_or(false)}else{d.path.is_file()}
+        });
+        r.salva(out)?;
+        let cancel=token(c,id);
+        for i in 0..r.elementi.len(){
+            if cancel.load(std::sync::atomic::Ordering::Acquire){r.elementi[i].errore=Some("Annullato".into());r.salva(out)?;continue;}
+            if let Some((_,d))=reused.iter().find(|(index,_)|*index==i){
+                r.prenota(out,i,d.clone())?;r.completato(out,i,d.clone())?;continue;
+            }
+            let p=r.elementi[i].privato.clone();
+            let relative=r.sottocartella(i);
+            let base=r.pubblico.clone();
+            let structured=r.gruppo.is_some();
+            let result=consegna(app,&p,&relative,base.as_deref(),structured,mode,&cancel,&mut |d|r.prenota(out,i,d));
+            match result {
+                Ok(d)=>if let Err(e)=r.completato(out,i,d){r.elementi[i].errore=Some(e);},
+                Err(e)=>r.elementi[i].errore=Some(e),
+            }
+            // In particolare non si cancella il privato se il journal non è sincronizzato.
+            r.salva(out)?;
+        }
+        let outputs=r.righe();
+        let (path,nome,_)=outputs.first().cloned().ok_or("Il lavoro non ha prodotto file")?;
+        let failed=outputs.iter().any(|u|u.2.is_some());
+        let msg=if cancel.load(std::sync::atomic::Ordering::Acquire){cedro::i18n::tr("Pubblicazione annullata: le copie complete restano in Cedro").into_owned()}
+            else if failed{format!("{} · {}",r.messaggio,cedro::i18n::tr("Salvataggio incompleto: copie disponibili in Cedro"))}
+            else{col_nome_vero(&r.messaggio,&principale,&nome)};
+        Ok(Completamento{batch:None,id,stato:Stato::Fatto{path,nome,msg},uscite:Some(outputs),sorgente:r.lavoro.sorgente})
+    })();
+    result.unwrap_or_else(|e|Completamento::semplice(id,Stato::Errore(e)))
+}
+
+fn scrivi(app:&AndroidApp,c:&Consegne,id:u32,nome:String,dati:Vec<u8>,poi:u8) {
+    c.azioni.lock().unwrap_or_else(|e|e.into_inner()).insert(id,"esporta-revisione".into());
+    log::info!("lavoro avvio id={id} azione=esporta-revisione");
+    let result=(||->Result<Completamento,String>{
+        let base=uscite(app).ok_or("Cartella assente")?;
+        let dir=crate::storage::nuova_cartella(&base).map_err(|e|e.to_string())?;
+        let _scarto=Scarto(dir.clone());
+        let file=dir.join(crate::storage::nome_sicuro(&nome));
+        let cancel=token(c,id);
+        crate::storage::copia(dati.as_slice(),&file,dati.len() as u64,&cancel,|_|{}).map_err(|e|e.to_string())?;
+        let result=pubblica_lavoro(app,c,id,&dir,file,cedro::size_words(dati.len() as u64));
+        if poi>0 {if let Stato::Fatto{path,..}=&result.stato{if let Err(e)=apri_o_condividi(app,path,poi==2){log::warn!("condivisione: {e}");}}}
+        Ok(result)
+    })();
+    c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(result.unwrap_or_else(|e|Completamento::semplice(id,Stato::Errore(e))));
+}
+
+struct Scarto(PathBuf);
+impl Drop for Scarto {
+    fn drop(&mut self){
+        fn pronto(dir:&Path)->bool {
+            dir.join(".batch-child").is_file() || dir.join(".batch").is_file() || dir.join(".pronti").is_file() || crate::publication::sorgente_revisione(dir).is_some() || std::fs::read_dir(dir).into_iter().flatten().filter_map(Result::ok).any(|e|e.file_type().is_ok_and(|t|t.is_dir())&&pronto(&e.path()))
+        }
+        let _=std::fs::remove_dir_all(self.0.join(".scaricato"));
+        if !pronto(&self.0){let _=std::fs::remove_dir_all(&self.0);}
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
-fn converti(app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<std::sync::atomic::AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)>) {
-    let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
+fn converti(voce:crate::worker::Voce, web_scelte:Option<crate::web::Scelte>, app: AndroidApp, c: Consegne, id: u32, file: PathBuf, azione: &'static str, qualita: u8, prog: Arc<std::sync::atomic::AtomicU32>, opts: Option<Box<cedro::Options>>, unisci: Vec<(PathBuf, Option<cedro::PageSel>)>) {
+    let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push(Completamento::semplice(id, s));
     if !assicura_scrittura(&app) {
         invia(Stato::Errore("Serve il permesso di scrivere in Documenti.".into()));
         return;
     }
     // Da Android 11 il motore scrive in una cartella di Cedro e il risultato passa a Documenti/Cedro con MediaStore:
     // alcuni telefoni (Xiaomi 13, Android 16) non lasciano creare file in Documenti col percorso.
-    let out = match uscite(&app) {
-        Some(p) => p,
-        None => PathBuf::from(DOCUMENTI),
+    let base = app.internal_data_path().unwrap_or_else(|| PathBuf::from("/data/local/tmp")).join("uscite");
+    let out = match crate::storage::nuova_cartella(&base) {
+        Ok(p) => p,
+        Err(e) => { invia(Stato::Errore(e.to_string())); return; }
     };
-    if let Err(e) = std::fs::create_dir_all(&out) {
-        invia(Stato::Errore(format!("{} non è scrivibile: {e}", out.display())));
-        return;
-    }
+    let _scarto=Scarto(out.clone());
+    let cancel = token(&c,id);
+    if cancel.load(std::sync::atomic::Ordering::Acquire) { invia(Stato::Errore("Annullato".into())); return; }
     if azione == "web-altra-app" {
+        c.azioni.lock().unwrap_or_else(|e|e.into_inner()).insert(id,azione.into());
+        log::info!("lavoro avvio id={id} azione={azione}");
         // YouTube: il link va a un'app che lo scarica (il selettore di Android propone quelle installate).
         let url = file.to_string_lossy().into_owned();
         match apri_link(&app, &url) {
-            Ok(()) => c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, Stato::Fatto { path: PathBuf::new(), nome: String::new(), msg: "Link passato a un'altra app".into() })),
-            Err(e) => c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, Stato::Errore(e))),
+            Ok(()) => c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push(Completamento::semplice(id, Stato::Fatto { path: PathBuf::new(), nome: String::new(), msg: "Link passato a un'altra app".into() })),
+            Err(e) => c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push(Completamento::semplice(id, Stato::Errore(e))),
         }
         return;
     }
+    let o = opts.map(|b| *b).unwrap_or_default();
     if azione.starts_with("web-") {
-        return web(&app, &c, id, &file, &out, azione, &prog, qualita as usize);
+        return web(&app, &c, id, &file, &out, azione, &prog, web_scelte.unwrap_or_default(), o);
     }
     if azione == "trascrivi" {
-        return trascrivi(&app, &c, id, &file, &out, &prog, qualita as usize);
+        return trascrivi(&app, &c, id, &file, &out, &prog, voce, o);
     }
-    // Le scelte della schermata, con «se esiste già» e il nome a modello delle Impostazioni (le mette `ui`).
-    let o = opts.map(|b| *b).unwrap_or_default();
-    let esegui = |dove: &Path| {
-        let p2 = prog.clone();
-        cedro::progress::con(
-            move |f| p2.store((f * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed),
-            || {
-                if azione == "zip-tutti" {
-                    let tutti: Vec<PathBuf> = unisci.iter().map(|u| u.0.clone()).collect();
-                    cedro::zip_paths(&tutti, dove, None, &o)
-                } else if unisci.is_empty() {
-                    cedro::perform_with(&file, azione, qualita, Some(dove), &o)
-                } else {
-                    cedro::merge_with(&unisci, Some(dove), &o)
-                }
-            },
-        )
-        .map_err(|e| e.to_string())
-    };
-    // I file che c'erano prima: quelli nuovi oltre al primo (pezzi di «Dividi», pagine in JPG) vanno consegnati tutti.
-    let elenco = |d: &Path| -> std::collections::HashSet<PathBuf> { std::fs::read_dir(d).into_iter().flatten().filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_file()).collect() };
-    let prima: std::collections::HashSet<PathBuf> = elenco(&out).into_iter().chain(elenco(&out.join("Cedro"))).collect();
-    let mut esito = esegui(&out);
-    if let Err(e) = &esito {
-        if negato(e) {
-            // Android rifiuta il file in Documenti (per esempio c'è già un file con quel nome che Cedro non può vedere):
-            // si riprova nella sottocartella «Cedro».
-            let sotto = out.join("Cedro");
-            log::warn!("{azione}: {e} in {}, riprovo in {}", out.display(), sotto.display());
-            let primo = e.clone();
-            esito = match std::fs::create_dir_all(&sotto) {
-                Ok(()) => esegui(&sotto).map_err(|e2| format!("{primo}\n---\nAnche in Documenti/Cedro: {e2}")),
-                Err(e2) => Err(format!("{primo}\n---\nDocumenti/Cedro non si crea: {e2}")),
-            };
-        }
-    }
-    let esito = esito.map_err(|e| con_dettagli(&e, azione, &file, &out));
-    match esito {
-        Ok(o) => {
-            log::info!("{azione}: salvato {} ({})", o.path.display(), o.message);
-            if let Some(dir) = o.path.parent() {
-                let mut altri: Vec<PathBuf> = elenco(dir).into_iter().filter(|p| *p != o.path && !prima.contains(p) && !nome_di(p).starts_with('.')).collect();
-                altri.sort();
-                for a in altri {
-                    if let Err(e) = consegna(&app, a.clone()) {
-                        log::warn!("{}: {e}", a.display());
-                    }
-                }
-            }
-            let privato = o.path.clone();
-            match consegna(&app, o.path) {
-                Ok((path, nome)) => invia(Stato::Fatto { msg: col_nome_vero(&o.message, &privato, &nome), path, nome }),
-                Err(e) => invia(Stato::Errore(con_dettagli(&e, azione, &file, &out))),
-            }
-        }
-        Err(e) => {
-            log::error!("{azione}: conversione fallita: {e}");
-            invia(Stato::Errore(e));
-        }
-    }
-}
-
-/// La cartella dove il motore scrive da Android 11 in poi (`None` prima: lì si scrive in Documenti col percorso).
-fn uscite(app: &AndroidApp) -> Option<PathBuf> {
-    let api = con_attivita(app, |env, _att| env.get_static_field("android/os/Build$VERSION", "SDK_INT", "I").and_then(|v| v.i()).map_err(|e| jerr(env, e))).unwrap_or(0);
-    (api >= 30).then(|| app.internal_data_path().unwrap_or_else(|| PathBuf::from("/data/local/tmp")).join("uscite"))
-}
-
-/// Mette il risultato dove l'utente lo trova. Un file nella cartella privata passa a Documenti/Cedro (o, se il telefono
-/// non vuole, a Download/Cedro) con MediaStore e se ne restituisce l'indirizzo `content://`; uno già in Documenti si
-/// fa solo vedere a Galleria e File. Insieme al percorso, il nome da mostrare («Documents/Cedro/x.mp3»).
-fn consegna(app: &AndroidApp, path: PathBuf) -> Result<(PathBuf, String), String> {
-    let privata = uscite(app);
-    if privata.as_ref().is_some_and(|p| path.starts_with(p)) {
-        let r = con_attivita(app, |env, att| pubblica(env, att, &path));
-        let _ = std::fs::remove_file(&path);
-        return r.map(|(uri, nome)| (PathBuf::from(uri), nome));
-    }
-    let _ = con_attivita(app, |env, att| scansiona(env, att, &path, false));
-    let nome = path.strip_prefix("/storage/emulated/0").map(|r| r.to_string_lossy().into_owned()).unwrap_or_else(|_| nome_di(&path));
-    Ok((path, nome))
-}
-
-/// Copia un file privato in MediaStore (prima Documents/Cedro, poi Download/Cedro). Dà l'indirizzo e il nome visibile.
-fn pubblica(env: &mut JNIEnv, att: &JObject, privato: &Path) -> Result<(String, String), String> {
-    let nome = nome_di(privato);
-    let mime = mime_da_percorso(privato);
-    let resolver = env.call_method(att, "getContentResolver", "()Landroid/content/ContentResolver;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
-    let mut errori = Vec::new();
-    for (raccolta, rel) in [("android/provider/MediaStore$Files", "Documents/Cedro"), ("android/provider/MediaStore$Downloads", "Download/Cedro")] {
-        match pubblica_in(env, &resolver, raccolta, rel, privato, &nome, mime) {
-            Ok((uri, visto)) => {
-                log::info!("pubblicato {} in {rel}/{visto} ({uri})", privato.display());
-                return Ok((uri, if visto.starts_with("Già presente") { visto } else { format!("{rel}/{visto}") }));
-            }
+    let esito = processo(&app,&c,id,&file,azione,qualita,Default::default(),&out,o,unisci,&prog,None);
+    if cancel.load(std::sync::atomic::Ordering::Acquire) {
+        let _ = std::fs::remove_dir_all(&out);
+        invia(Stato::Errore("Annullato".into()));
+    } else {
+        match esito {
+            Ok((path,msg)) => {let done=pubblica_lavoro(&app,&c,id,&out,path,msg);c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(done);},
             Err(e) => {
-                log::warn!("MediaStore {rel}: {e}");
-                errori.push(format!("{rel}: {e}"));
+                let _ = std::fs::remove_dir_all(&out);
+                invia(Stato::Errore(e));
             }
         }
     }
-    Err(format!("il telefono non lascia salvare il file\n---\n{}", errori.join("\n")))
 }
 
-fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, privato: &Path, nome: &str, mime: &str) -> Result<(String, String), String> {
+/// Staging privato su tutte le API; la consegna sceglie MediaStore o rename legacy.
+fn uscite(app: &AndroidApp) -> Option<PathBuf> {
+    app.internal_data_path().map(|p|p.join("uscite"))
+}
+
+/// La copia privata si elimina soltanto tramite Registro::completato, dopo il journal durevole.
+fn consegna(app:&AndroidApp,path:&Path,sotto:&Path,base:Option<&str>,structured:bool,mode:u8,cancel:&std::sync::atomic::AtomicBool,checkpoint:&mut dyn FnMut(Destinazione)->Result<(),String>)->Result<Destinazione,String>{
+    static PUBBLICAZIONE:Mutex<()>=Mutex::new(());
+    let _lock=PUBBLICAZIONE.lock().unwrap_or_else(|e|e.into_inner());
+    if cancel.load(std::sync::atomic::Ordering::Acquire){return Err("Annullato".into());}
+    let api=con_attivita(app,|env,_|env.get_static_field("android/os/Build$VERSION","SDK_INT","I").and_then(|v|v.i()).map_err(|e|jerr(env,e)))?;
+    if !crate::publication::mediastore_moderno(api){
+        let dir=PathBuf::from(DOCUMENTI).join("Cedro").join(sotto);
+        let d=crate::publication::legacy(path,&dir,if structured{1}else{mode},cancel,checkpoint)?;
+        let _=con_attivita(app,|env,att|scansiona(env,att,&d.path,false));
+        return Ok(d);
+    }
+    con_attivita(app,|env,att|pubblica(env,att,path,sotto,base,structured,mode,cancel,checkpoint))
+}
+
+fn pubblica(env:&mut JNIEnv,att:&JObject,privato:&Path,sotto:&Path,base:Option<&str>,structured:bool,mode:u8,cancel:&std::sync::atomic::AtomicBool,checkpoint:&mut dyn FnMut(Destinazione)->Result<(),String>)->Result<Destinazione,String>{
+    let nome=nome_di(privato);let mime=mime_da_percorso(privato);
+    let resolver=env.call_method(att,"getContentResolver","()Landroid/content/ContentResolver;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+    let mut errors=Vec::new();
+    for (collection,root) in [("android/provider/MediaStore$Files","Documents/Cedro"),("android/provider/MediaStore$Downloads","Download/Cedro")]{
+        // Un insieme non viene diviso fra Documents e Downloads dopo il primo file completato.
+        if base.is_some_and(|b|b!=root){continue;}
+        if cancel.load(std::sync::atomic::Ordering::Acquire){return Err("Annullato".into());}
+        let rel=Path::new(root).join(sotto).to_string_lossy().into_owned();
+        let mut reserved=false;
+        let result=pubblica_in(env,&resolver,collection,&rel,privato,&nome,mime,structured,mode,cancel,&mut |d|{reserved=true;checkpoint(d)});
+        match result{
+            Ok(d)=>return Ok(d),
+            // Dopo la prenotazione non sovrascrivere l’URI con un fallback: anche un errore
+            // JNI può arrivare dopo il commit del provider. Il ripristino verifica quell’URI.
+            Err(e) if reserved=>return Err(e),
+            Err(e)=>errors.push(format!("{rel}: {e}")),
+        }
+    }
+    Err(format!("il telefono non lascia salvare il file\n---\n{}",errors.join("\n")))
+}
+
+fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, privato: &Path, nome: &str, mime: &str, structured:bool, mode:u8, cancel:&std::sync::atomic::AtomicBool, checkpoint:&mut dyn FnMut(Destinazione)->Result<(),String>) -> Result<Destinazione, String> {
     use std::os::fd::FromRawFd;
     let valori = |env: &mut JNIEnv, coppie: &[(&str, Result<&str, i32>)]| -> Result<JObject<'static>, String> {
         let cv = env.new_object("android/content/ContentValues", "()V", &[]).map_err(|e| jerr(env, e))?;
@@ -1059,21 +1135,19 @@ fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, 
     let base = env.call_static_method(raccolta, "getContentUri", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::Object(&esterno)]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
     // Se il nome c'è già vale la scelta delle Impostazioni, come sul computer: MediaStore da solo farebbe «x (2)».
     let mut scelto = nome.to_string();
+    let mut sostituito = None;
     if let Some(uri) = cerca(env, resolver, &base, rel, nome) {
-        match ESISTE.load(std::sync::atomic::Ordering::Relaxed) {
+        match if structured{1}else{mode} {
             2 => {
                 let testo = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
                 let testo = stringa(env, testo).ok_or("indirizzo vuoto")?;
-                return Ok((testo, format!("Già presente: {rel}/{nome}")));
+                let d=Destinazione{path:testo.into(),nome:format!("Già presente: {rel}/{nome}"),temporaneo:None};
+                checkpoint(d.clone())?;
+                return Ok(d);
             }
             1 => {
-                let nulla = JObject::null();
-                let tolto = env.call_method(resolver, "delete", "(Landroid/net/Uri;Ljava/lang/String;[Ljava/lang/String;)I", &[JValue::Object(&uri), JValue::Object(&nulla), JValue::Object(&nulla)]);
-                if tolto.is_err() || env.exception_check().unwrap_or(false) {
-                    // Un file di un'altra app non si può togliere: si numera.
-                    let _ = env.exception_clear();
-                    scelto = libero_in(env, resolver, &base, rel, nome);
-                }
+                // L'originale resta finché la nuova copia non è stata sincronizzata e pubblicata.
+                sostituito = Some(env.new_global_ref(&uri).map_err(|e|e.to_string())?);
             }
             _ => scelto = libero_in(env, resolver, &base, rel, nome),
         }
@@ -1088,6 +1162,13 @@ fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, 
         return Err("MediaStore non ha creato il file".into());
     }
     let nulla = JObject::null();
+    let uri_text=env.call_method(&uri,"toString","()Ljava/lang/String;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+    let uri_text=stringa(env,uri_text).ok_or("indirizzo vuoto")?;
+    let d=Destinazione{path:uri_text.clone().into(),nome:format!("{rel}/{nome}"),temporaneo:None};
+    if let Err(e)=checkpoint(d){
+        let _=env.call_method(resolver,"delete","(Landroid/net/Uri;Ljava/lang/String;[Ljava/lang/String;)I",&[JValue::Object(&uri),JValue::Object(&nulla),JValue::Object(&nulla)]);
+        let _=env.exception_clear();return Err(e);
+    }
     let scrivi = |env: &mut JNIEnv| -> Result<(), String> {
         let w = env.new_string("w").map_err(|e| e.to_string())?;
         let pfd = env
@@ -1097,11 +1178,19 @@ fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, 
         let fd = env.call_method(&pfd, "detachFd", "()I", &[]).and_then(|v| v.i()).map_err(|e| jerr(env, e))?;
         let mut dest = unsafe { std::fs::File::from_raw_fd(fd) };
         let mut src = std::fs::File::open(privato).map_err(|e| e.to_string())?;
-        std::io::copy(&mut src, &mut dest).map_err(|e| e.to_string())?;
+        use std::io::{Read,Write};
+        let mut buffer=[0u8;64*1024];
+        loop {
+            if cancel.load(std::sync::atomic::Ordering::Acquire){return Err("Annullato".into());}
+            let n=src.read(&mut buffer).map_err(|e|e.to_string())?;
+            if n==0{break;}
+            dest.write_all(&buffer[..n]).map_err(|e|e.to_string())?;
+        }
         dest.sync_all().map_err(|e| e.to_string())?;
         let cv = valori(env, &[("is_pending", Err(0))])?;
-        env.call_method(resolver, "update", "(Landroid/net/Uri;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I", &[JValue::Object(&uri), JValue::Object(&cv), JValue::Object(&nulla), JValue::Object(&nulla)])
-            .map_err(|e| jerr(env, e))?;
+        let aggiornati=env.call_method(resolver, "update", "(Landroid/net/Uri;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I", &[JValue::Object(&uri), JValue::Object(&cv), JValue::Object(&nulla), JValue::Object(&nulla)])
+            .and_then(|v|v.i()).map_err(|e| jerr(env, e))?;
+        if aggiornati!=1 { return Err("MediaStore non ha completato il salvataggio".into()); }
         Ok(())
     };
     if let Err(e) = scrivi(env) {
@@ -1111,35 +1200,19 @@ fn pubblica_in(env: &mut JNIEnv, resolver: &JObject, raccolta: &str, rel: &str, 
         }
         return Err(e);
     }
-    // MediaStore può aver cambiato il nome («x (1).mp3») se esisteva già.
-    let classe = env.find_class("java/lang/String").map_err(|e| jerr(env, e))?;
-    let col = env.new_string("_display_name").map_err(|e| e.to_string())?;
-    let proiez = env.new_object_array(1, &classe, &col).map_err(|e| jerr(env, e))?;
-    let mut visto = nome.to_string();
-    if let Ok(cur) = env
-        .call_method(resolver, "query", "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;", &[JValue::Object(&uri), JValue::Object(&proiez), JValue::Object(&nulla), JValue::Object(&nulla), JValue::Object(&nulla)])
-        .and_then(|v| v.l())
-    {
-        if !cur.is_null() {
-            if env.call_method(&cur, "moveToFirst", "()Z", &[]).and_then(|v| v.z()).unwrap_or(false) {
-                if let Some(s) = env.call_method(&cur, "getString", "(I)Ljava/lang/String;", &[JValue::Int(0)]).and_then(|v| v.l()).ok().and_then(|o| stringa(env, o)) {
-                    visto = s;
-                }
+    if let Some(old)=sostituito {
+        let deleted=env.call_method(resolver,"delete","(Landroid/net/Uri;Ljava/lang/String;[Ljava/lang/String;)I",&[JValue::Object(old.as_obj()),JValue::Object(&nulla),JValue::Object(&nulla)]).and_then(|v|v.i()).unwrap_or(0);
+        let _=env.exception_clear();
+        if deleted>0 {
+            if let Ok(cv)=valori(env,&[("_display_name",Ok(nome))]) {
+            let _=env.call_method(resolver,"update","(Landroid/net/Uri;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I",&[JValue::Object(&uri),JValue::Object(&cv),JValue::Object(&nulla),JValue::Object(&nulla)]);
+            let _=env.exception_clear();
             }
-            let _ = env.call_method(&cur, "close", "()V", &[]);
         }
     }
-    if env.exception_check().unwrap_or(false) {
-        let _ = env.exception_clear();
-    }
-    let testo = env.call_method(&uri, "toString", "()Ljava/lang/String;", &[]).and_then(|v| v.l()).map_err(|e| jerr(env, e))?;
-    let testo = stringa(env, testo).ok_or("indirizzo vuoto")?;
-    Ok((testo, visto))
-}
-
-/// Android ha negato l'accesso (EPERM o EACCES).
-fn negato(e: &str) -> bool {
-    e.contains("os error 1)") || e.contains("os error 13)")
+    // Nome effettivo letto al ripristino o alla consegna; URI già registrato prima della copia.
+    let visto=nome_pubblico(env,resolver,&uri).unwrap_or_else(||nome.to_string());
+    Ok(Destinazione{path:uri_text.into(),nome:format!("{rel}/{visto}"),temporaneo:None})
 }
 
 /// L'errore con quello che serve per capirlo: azione, file di partenza, cartella e se ci si può scrivere.
@@ -1178,207 +1251,144 @@ fn apri_link(app: &AndroidApp, url: &str) -> Result<(), String> {
 /// «Video dal web»: capisce il link, scarica il file in Documenti e, per «Solo audio» o «Video leggero», lo converte col motore.
 /// «Testo» scarica l'audio e lo trascrive. YouTube passa da yt-dlp, se l'APK lo contiene.
 #[allow(clippy::too_many_arguments)]
-fn web(app: &AndroidApp, c: &Consegne, id: u32, link: &Path, out: &Path, azione: &str, prog: &Arc<std::sync::atomic::AtomicU32>, modello: usize) {
-    use cedro::webvideo::{download, resolve, Want};
-    let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
-    let url = link.to_string_lossy().into_owned();
-    let testo = azione == "web-testo";
-    let want = match azione {
-        "web-audio" | "web-testo" => Want::Audio,
-        "web-leggero" => Want::Light,
-        _ => Want::Video,
-    };
+fn web(app: &AndroidApp, c: &Consegne, id: u32, link: &Path, out: &Path, azione: &str, prog: &Arc<std::sync::atomic::AtomicU32>, scelte: crate::web::Scelte, opts: cedro::Options) {
     #[cfg(feature = "youtube")]
-    if cedro::youtube::is_youtube_url(&url) {
-        return youtube(app, c, id, &url, out, azione, prog, modello);
+    if cedro::youtube::is_youtube_url(&link.to_string_lossy()) {
+        return youtube(app,c,id,&link.to_string_lossy(),out,azione,prog,scelte,opts);
     }
-    let finito = |path: PathBuf, msg: String| match consegna(app, path) {
-        Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg }),
-        Err(e) => invia(Stato::Errore(e)),
+    let result=processo(app,c,id,link,azione,scelte.media_quality,scelte.voce,out,opts,Vec::new(),prog,Some(scelte));
+    let stato=match result {
+        Ok((path,msg))=>pubblica_lavoro(app,c,id,out,path,msg),
+        Err(e)=>{let mut done=Completamento::semplice(id,Stato::Errore(e));done.sorgente=crate::publication::sorgente_revisione(out);drop(Scarto(out.into()));done},
     };
-    let media = match resolve(&url, want) {
-        Ok(m) => m,
-        Err(e) => return invia(Stato::Errore(e)),
-    };
-    log::info!("web: {} → {} ({:?} byte)", url, media.url, media.size);
-    // Il file scaricato va subito al suo posto se è quello che serve; altrimenti passa da una cartella di lavoro.
-    // Per «Testo» la trascrizione legge anche il video: niente conversione.
-    let serve_conversione = !testo && ((want == Want::Audio && !media.audio) || (want == Want::Light && media.size.is_none_or(|s| s > 30_000_000) && !media.url.contains("512kb")));
-    // Una cartella per lavoro: due lavori insieme non si cancellano i file a vicenda.
-    let dest = if serve_conversione || testo { out.join(format!(".cedro-web-{id}")) } else { out.to_path_buf() };
-    let parte = if serve_conversione || testo { 0.6 } else { 1.0 };
-    let niente = std::sync::atomic::AtomicBool::new(false);
-    let scaricato = match download(&media, &dest, &|f| prog.store((f * parte * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed), &niente) {
-        Ok(p) => p,
-        Err(e) => return invia(Stato::Errore(e)),
-    };
-    if testo {
-        trascrivi(app, c, id, &scaricato, out, prog, modello);
-        let _ = std::fs::remove_dir_all(&dest);
-        return;
-    }
-    if !serve_conversione {
-        let dim = std::fs::metadata(&scaricato).map(|m| m.len()).unwrap_or(0);
-        return finito(scaricato, format!("{} · {:.1} MB", media.title, dim as f64 / 1e6).replace('.', ","));
-    }
-    let formato = if want == Want::Audio { "mp3" } else { "mp4" };
-    let p2 = prog.clone();
-    let esito = cedro::progress::con(
-        move |f| p2.store(((0.6 + f * 0.4) * 1000.0) as u32, std::sync::atomic::Ordering::Relaxed),
-        || cedro::perform_into(&scaricato, formato, 82, Some(out)),
-    );
-    let _ = std::fs::remove_dir_all(&dest);
-    match esito {
-        Ok(o) => finito(o.path, o.message),
-        Err(e) => invia(Stato::Errore(e.to_string())),
-    }
+    c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(stato);
 }
 
 /// YouTube con yt-dlp (Python, QuickJS e ffmpeg dall'APK; le librerie si scaricano al primo uso).
 #[cfg(feature = "youtube")]
 #[allow(clippy::too_many_arguments)]
-fn youtube(app: &AndroidApp, c: &Consegne, id: u32, url: &str, out: &Path, azione: &str, prog: &Arc<std::sync::atomic::AtomicU32>, modello: usize) {
-    use cedro::youtube::{run, Event, Request};
-    let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
+fn youtube(app: &AndroidApp, c: &Consegne, id: u32, url: &str, out: &Path, azione: &str, prog: &Arc<std::sync::atomic::AtomicU32>, scelte: crate::web::Scelte, opts: cedro::Options) {
+    use cedro::youtube::{run, Event};
+    let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push(Completamento::semplice(id, s));
     let testo = azione == "web-testo";
     // Una cartella per lavoro: due lavori insieme non si cancellano i file a vicenda.
     let lavoro = out.join(format!(".cedro-yt-{id}"));
     let _ = std::fs::remove_dir_all(&lavoro);
-    let mut r = Request::new(vec![url.to_string()], matches!(azione, "web-audio" | "web-testo"), lavoro.clone());
-    r.playlist = false;
-    if azione == "web-leggero" {
-        r.quality = 480;
-    }
-    if testo {
-        r.thumbnail = false;
-        r.chapters = false;
-    }
+    if let Err(e)=crate::web::Salvataggio::nuovo(url,&scelte,&opts).salva(out){return invia(Stato::Errore(e));}
+    let r = scelte.richiesta(url,azione,lavoro.clone());
     // Per «Testo» lo scaricamento è la prima parte del lavoro, la trascrizione la seconda.
     let parte = if testo { 0.4 } else { 1.0 };
-    let niente = std::sync::atomic::AtomicBool::new(false);
+    let niente = token(c,id);
+    let Some(_permit)=cedro::resources::acquire(Some(&niente)) else {return invia(Stato::Errore("Annullato".into()));};
+    c.azioni.lock().unwrap_or_else(|e|e.into_inner()).insert(id,azione.into());
+    log::info!("lavoro avvio id={id} azione={azione}");
+    let (state,wake)=(c.componenti.clone(),app.create_waker());
+    cedro::componenti::osserva(Some(Arc::new(move |s|{state.lock().unwrap_or_else(|e|e.into_inner()).ricevi(id,s.map(crate::web::Componente::da_core));wake.wake();})));
+    struct Osserva;
+    impl Drop for Osserva{fn drop(&mut self){cedro::componenti::verifica_download(None);cedro::componenti::osserva(None);cedro::componenti::azzera();}}
+    let _osserva=Osserva;
+    let (pa,pc)=(app.clone(),c.clone());
+    cedro::componenti::verifica_download(Some(Arc::new(move|nome,bytes|web::permesso(&pa,&pc,id,nome,bytes))));
+    let mut nota=String::new();
     let esito = run(
         &r,
         &mut |e| match e {
             Event::Progress { percent, .. } => prog.store((percent * 10.0 * parte) as u32, std::sync::atomic::Ordering::Relaxed),
-            Event::Log(l) => log::info!("youtube: {l}"),
+            Event::Log(l) => {if l.contains("scarico il video senza"){nota=l.clone();}c.passo_riassunto.lock().unwrap_or_else(|e|e.into_inner()).push((id,l));},
             _ => {}
         },
         &niente,
     );
-    let file = match esito.map(|f| f.into_iter().next()) {
-        Ok(Some(f)) => f,
-        Ok(None) => {
-            let _ = std::fs::remove_dir_all(&lavoro);
-            return invia(Stato::Errore("yt-dlp non ha scaricato niente".into()));
-        }
-        Err(e) => {
-            let _ = std::fs::remove_dir_all(&lavoro);
-            return invia(Stato::Errore(con_dettagli(&e, azione, Path::new(url), out)));
-        }
+    match esito {
+        Ok(f) if !f.is_empty() => {},
+        Ok(_) => { let _=std::fs::remove_dir_all(&lavoro); return invia(Stato::Errore("yt-dlp non ha scaricato niente".into())); }
+        Err(e) => { let _=std::fs::remove_dir_all(&lavoro); return invia(Stato::Errore(e)); }
     };
+    let files=match crate::web::uscite_download(&lavoro){
+        Ok(all)=>if testo{
+            // Sottotitoli/copertine non sono sorgenti da trascrivere.
+            all.into_iter().filter(|p|cedro::trascrizione::transcribable(p)).collect::<Vec<_>>()
+        }else{all},
+        Err(e)=>return invia(Stato::Errore(e)),
+    };
+    if files.is_empty(){return invia(Stato::Errore("yt-dlp non ha scaricato niente".into()));}
     if testo {
-        trascrivi(app, c, id, &file, out, prog, modello);
-    } else {
-        // Fuori dalla cartella di lavoro, che si cancella: poi in Documenti come gli altri risultati.
-        let posto = libero(out, &file);
-        let posto = if std::fs::rename(&file, &posto).is_ok() { posto } else { file.clone() };
-        let dim = std::fs::metadata(&posto).map(|m| m.len()).unwrap_or(0);
-        let titolo = posto.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-        match consegna(app, posto) {
-            Ok((path, nome)) => invia(Stato::Fatto { path, nome, msg: format!("{titolo} · {:.1} MB", dim as f64 / 1e6).replace('.', ",") }),
-            Err(e) => invia(Stato::Errore(e)),
+        let identity=c.identita.lock().unwrap_or_else(|e|e.into_inner()).get(&id).cloned();
+        let result=identity.ok_or_else(||"Identità del lavoro assente".to_string()).and_then(|identity|crate::web::Batch::prepara(out,&files,&identity,opts,scelte.voce));
+        drop(_osserva);drop(_permit); // Nessun permit attraversa l'avvio dei figli.
+        match result {
+            Ok(mut batch)=>{
+                let _=std::fs::remove_dir_all(&lavoro);
+                let stato=if niente.load(std::sync::atomic::Ordering::Acquire){
+                    for child in &mut batch.figli{child.fine=true;}
+                    if let Err(e)=batch.salva(){return invia(Stato::Errore(e));}
+                    Stato::Errore("Annullato".into())
+                }else{Stato::Fatto{path:PathBuf::new(),nome:String::new(),msg:"Audio pronti: trascrizioni aggiunte ai lavori".into()}};
+                c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(Completamento{batch:Some(batch),id,stato,uscite:None,sorgente:None});
+            },
+            Err(e)=>invia(Stato::Errore(e)),
         }
+    } else {
+        // Sposta tutte le uscite, incluse le sottocartelle, fuori dal download provvisorio.
+        let mut renamed=Vec::new();
+        for file in &files {
+            let rel=match file.strip_prefix(&lavoro){Ok(p)=>p,Err(_)=>return invia(Stato::Errore("Risultato fuori dalla cartella del lavoro".into()))};
+            let dest=out.join(rel.parent().unwrap_or(Path::new("")));
+            match crate::web::nomina(file,&dest,&opts){Ok(p)=>renamed.push(p),Err(e)=>return invia(Stato::Errore(e))}
+        }
+        let file=renamed[0].clone();
+        let titolo=if nota.is_empty(){nome_di(&file)}else{nota};
+        let _=std::fs::remove_dir_all(&lavoro);
+        let done=pubblica_lavoro(app,c,id,out,file,titolo);
+        c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(done);
+        // Non eliminare la cartella: contiene le copie recuperabili se MediaStore fallisce.
     }
-    let _ = std::fs::remove_dir_all(&lavoro);
-}
-
-/// Un nome libero in `dir` per `file` («titolo (2).mp4» se «titolo.mp4» c'è già): non si sovrascrive niente.
-#[cfg(feature = "youtube")]
-fn libero(dir: &Path, file: &Path) -> PathBuf {
-    let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let ext = file.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
-    let mut posto = dir.join(format!("{stem}{ext}"));
-    let mut n = 2;
-    while posto.exists() {
-        posto = dir.join(format!("{stem} ({n}){ext}"));
-        n += 1;
-    }
-    posto
 }
 
 /// Voce in testo con whisper.cpp (nell'APK): il modello scelto (Veloce, Buona, Massima: gli stessi del computer) si scarica al primo uso. Salva un .txt in Documenti.
-fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, out: &std::path::Path, prog: &std::sync::atomic::AtomicU32, modello: usize) {
-    use cedro::trascrizione::{run, Event, Format, Request};
-    let invia = |s: Stato| c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, s));
-    // `modello` porta anche quante persone parlano (bit alti): 0 Automatico, 1 una sola, 2..=8.
-    let req = Request { format: Format::Text, model: (modello & 0x0f).min(cedro::trascrizione::MODELS.len() - 1), gpu: false, avx512: false, speakers: (modello >> 4) as u8, glossario: None };
-    // «Salta» delle Impostazioni: se la trascrizione c'è già in Documenti/Cedro non si rifà (sul computer lo fa il motore).
-    let uscita = format!("{}.txt", file.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default());
-    if let Some((uri, visto)) = gia_salvato(app, &uscita) {
-        return invia(Stato::Fatto { path: PathBuf::from(uri), nome: format!("Già presente: {visto}"), msg: "Saltato: la trascrizione c'era già".into() });
-    }
-    let esito: std::sync::Mutex<Option<Result<(PathBuf, String), String>>> = std::sync::Mutex::new(None);
-    run(&[file.to_path_buf()], &req, Some(out), &cedro::Options::default(), &|e| match e {
-        Event::Percent { percent, .. } => prog.store(percent as u32 * 10, std::sync::atomic::Ordering::Relaxed),
-        Event::Log(l) => {
-            log::info!("trascrivi: {} {}", l.key, l.text);
-            // Prima della prima percentuale Lavori dice cosa succede: modello che si scarica, rete interrotta, attesa.
-            if let Some(t) = passo_trascrizione(&l.key, &l.text) {
-                c.passo_riassunto.lock().unwrap_or_else(|e| e.into_inner()).push((id, t));
-            }
+fn trascrivi(app: &AndroidApp, c: &Consegne, id: u32, file: &std::path::Path, out: &std::path::Path, prog: &std::sync::atomic::AtomicU32, voce: crate::worker::Voce, opts: cedro::Options) {
+    let result = processo(app,c,id,file,"trascrivi",82,voce,out,opts,Vec::new(),prog,None);
+    let stato = match result {
+        Ok((path,msg)) => {
+            if let Some(n)=crate::ui::da_controllare(file) { c.controlli.lock().unwrap_or_else(|e|e.into_inner()).push((id,n)); }
+            pubblica_lavoro(app,c,id,out,path,msg)
         }
-        Event::Finished { result, .. } => *esito.lock().unwrap_or_else(|e| e.into_inner()) = Some(result),
-    });
-    match esito.into_inner().unwrap_or_else(|e| e.into_inner()) {
-        Some(Ok((privato, msg))) => match consegna(app, privato.clone()) {
-            Ok((path, nome)) => {
-                let msg = col_nome_vero(&msg, &privato, &nome);
-                if let Some(n) = crate::ui::da_controllare(file) {
-                    c.controlli.lock().unwrap_or_else(|e| e.into_inner()).push((id, n));
-                }
-                invia(Stato::Fatto { path, nome, msg })
-            }
-            Err(e) => invia(Stato::Errore(con_dettagli(&e, "trascrivi", file, out))),
-        },
-        Some(Err(e)) => invia(Stato::Errore(con_dettagli(&e, "trascrivi", file, out))),
-        None => invia(Stato::Errore("la trascrizione non è partita".into())),
-    }
+        Err(e) => {let mut done=Completamento::semplice(id,Stato::Errore(e));done.sorgente=crate::publication::sorgente_revisione(out);drop(Scarto(out.into()));done},
+    };
+    c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(stato);
 }
 
 /// Il Riassunto AI sul telefono: lo stesso `cedro::riassunto` del computer, col motore `cedro-riassumi` dentro l'APK.
-fn riassumi(c: &Consegne, id: u32, source: PathBuf, lines: Vec<String>, names: Vec<String>, prog: &std::sync::atomic::AtomicU32) {
-    use cedro::riassunto::{Failure, Options, Progress, Step};
-    use std::sync::atomic::Ordering;
-    let passo = |t: String| c.passo_riassunto.lock().unwrap_or_else(|e| e.into_inner()).push((id, t));
-    let mai = std::sync::atomic::AtomicBool::new(false);
-    let fine: Mutex<Option<Result<cedro::riassunto::Stored, Failure>>> = Mutex::new(None);
-    cedro::riassunto::run(lines, names, Options { gpu: false, avx512: false }, &mai, &|p| match p {
-        Progress::Step(s) => passo(match s {
-            Step::Waiting => "Aspetto che finisca l'altro lavoro…".into(),
-            Step::Download(t) => format!("Modello: {t}"),
-            Step::Loading => "Carico il modello in memoria…".into(),
-            Step::Reading(_, 1) => "Legge la riunione…".into(),
-            Step::Reading(i, n) => format!("Legge la riunione: parte {} di {n}", i + 1),
-            Step::Merging => "Mette insieme gli appunti…".into(),
-            Step::Writing => "Scrive il riassunto…".into(),
-        }),
-        Progress::Ready { .. } => passo(format!("Processore · {} thread", cedro::trascrizione::engine_threads())),
-        Progress::Percent(v) => prog.store(v as u32 * 10, Ordering::Relaxed),
-        Progress::Done(r) => *fine.lock().unwrap_or_else(|e| e.into_inner()) = Some(r),
-    });
-    let stato = match fine.into_inner().unwrap_or_else(|e| e.into_inner()) {
-        Some(Ok(s)) => {
-            let secs = s.ms / 1000;
-            c.riassunti.lock().unwrap_or_else(|e| e.into_inner()).push((id, source, s));
-            Stato::Fatto { path: PathBuf::new(), nome: String::new(), msg: format!("Pronto in «Rivedi» in {} min {:02} s", secs / 60, secs % 60) }
-        }
-        Some(Err(Failure::LowMemory(free))) => Stato::Errore(format!("Poca memoria libera ({}): chiudi qualche app e riprova", cedro::riassunto::gb(free))),
-        Some(Err(Failure::Cancelled)) => Stato::Errore("Riassunto annullato".into()),
-        Some(Err(Failure::Other(e))) => Stato::Errore(format!("Il riassunto non è riuscito: {e}")),
-        None => Stato::Errore("Il riassunto non è partito".into()),
+fn riassumi(app:&AndroidApp,c: &Consegne, id: u32, source: PathBuf, lines: Vec<String>, names: Vec<String>, prog: &std::sync::atomic::AtomicU32) {
+    let result=(||->Result<cedro::riassunto::Stored,String>{
+        let libs=cartella_librerie(app).ok_or("Il motore non è in questo APK")?;
+        let base=app.internal_data_path().ok_or("Cartella assente")?.join("riassunti-lavori");
+        let out=crate::storage::nuova_cartella(&base).map_err(|e|e.to_string())?;
+        let cancel=token(c,id);
+        let _permit=cedro::resources::acquire(Some(&cancel)).ok_or("Annullato")?;
+        c.azioni.lock().unwrap_or_else(|e|e.into_inner()).insert(id,"riassumi".into());
+        log::info!("lavoro avvio id={id} azione=riassumi");
+        let request=crate::worker::Richiesta {file:source.clone(),azione:"riassumi".into(),qualita:0,voce:Default::default(),out:out.clone(),opts:Default::default(),unisci:Vec::new(),sommario:Some((lines,names)),anteprima:None,web:None};
+        let result=crate::worker::avvia(&libs,request,&cancel,Vec::new(),|nome,bytes|web::permesso(app,c,id,nome,bytes),|e|match e {
+            crate::worker::Evento::Componente(s)=>{c.componenti.lock().unwrap_or_else(|e|e.into_inner()).ricevi(id,s);app.create_waker().wake();},
+            crate::worker::Evento::Progresso(n)=>prog.store(n,std::sync::atomic::Ordering::Relaxed),
+            crate::worker::Evento::Passo(_,t)=>c.passo_riassunto.lock().unwrap_or_else(|e|e.into_inner()).push((id,t)),
+            _=>{},
+        }).and_then(|(path,_)|{
+            let value=std::fs::read_to_string(path).map_err(|e|e.to_string())?;
+            let value=serde_json::from_str(&value).map_err(|e|e.to_string())?;
+            cedro::riassunto::Stored::from_json(&value).ok_or("Riassunto non leggibile".into())
+        });
+        let _=std::fs::remove_dir_all(out);
+        result
+    })();
+    let stato=match result {
+        Ok(s)=>{c.riassunti.lock().unwrap_or_else(|e|e.into_inner()).push((id,source,s));Stato::Fatto{path:PathBuf::new(),nome:String::new(),msg:"Riassunto pronto in Rivedi".into()}},
+        Err(e)=>Stato::Errore(e),
     };
-    c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, stato));
+    c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(Completamento::semplice(id,stato));
 }
+
 
 fn presenta(finestra: &android_activity::ndk::native_window::NativeWindow, p: &Painter) {
     use android_activity::ndk::hardware_buffer_format::HardwareBufferFormat;
@@ -1424,18 +1434,22 @@ fn nome_di(p: &Path) -> String {
 fn ricarica_recenti(cartella: PathBuf, c: &Consegne) {
     let slot = c.recenti.clone();
     std::thread::spawn(move || {
-        let mut v: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(&cartella)
-            .into_iter()
-            .flatten()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_file())
-            .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
-            .collect();
+        fn scan(dir: &Path,v: &mut Vec<(std::time::SystemTime,PathBuf)>) {
+            if let Ok(entries)=std::fs::read_dir(dir) {
+                for e in entries.flatten() {
+                    let p=e.path();
+                    if nome_di(&p).starts_with('.') { continue; }
+                    if e.file_type().is_ok_and(|t|t.is_dir()) { scan(&p,v); }
+                    else if let Ok(m)=e.metadata() { v.push((m.modified().unwrap_or(std::time::UNIX_EPOCH),p)); }
+                }
+            }
+        }
+        let mut v=Vec::new(); scan(&cartella,&mut v);
         v.sort_by(|a, b| b.0.cmp(&a.0));
         let recenti: Vec<Recente> = v
             .into_iter()
             .take(12)
-            .map(|(_, path)| Recente { nome: nome_di(&path), kind: tipo_di(&path), thumb: cedro::ui::media::thumb_of(&path, 160), path })
+            .map(|(_, path)| Recente { nome: nome_di(&path), kind: tipo_di(&path), thumb: if crate::labs::laboratorio(&path){None}else{cedro::ui::media::thumb_of(&path, 160)}, path })
             .collect();
         *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(recenti);
     });
@@ -1483,7 +1497,13 @@ fn carica_file(ui: &mut App, c: &Consegne, cartella: &Path, path: PathBuf, nome:
         return;
     }
     let kind = tipo_di(&path);
-    ui.imposta_file(file_di(&path, nome), kind, da_condivisione);
+    if matches!(kind,cedro::Kind::Audio|cedro::Kind::Video) { prepara_onda(c,path.clone()); }
+    ui.imposta_file(file_di(&path, nome.clone()), kind, da_condivisione);
+    if crate::labs::laboratorio(&path) && kind==cedro::Kind::Image {
+        ui.vai_casa();ui.vista_nav(6);ui.aggiungi_coda(vec![(path,nome,kind)]);
+        ricarica_recenti(cartella.to_path_buf(),c);
+        return;
+    }
     if kind == cedro::Kind::Pdf {
         leggi_pdf(c, path.clone());
     }
@@ -1500,16 +1520,30 @@ fn carica_file(ui: &mut App, c: &Consegne, cartella: &Path, path: PathBuf, nome:
     ricarica_recenti(cartella.to_path_buf(), c);
 }
 
-/// Miniatura, misure e pagine dei file in coda, in un thread.
+/// Cache a risoluzione telefonica, letta fuori dal thread grafico anche per file lunghi.
+fn prepara_onda(c: &Consegne, path: PathBuf) {
+    let c=c.clone();
+    std::thread::spawn(move || leggi_onda(&c,path));
+}
+
+fn leggi_onda(c:&Consegne,path:PathBuf) {
+    let secs=cedro::audio_duration(&path).unwrap_or(0.0);
+    let bars=cedro::waveform(&path,600);
+    c.onda_riv.lock().unwrap_or_else(|e|e.into_inner()).push((path,bars,secs));
+}
+
+/// Le anteprime della coda si leggono in sequenza: molti audio non aprono molti decoder insieme.
 fn leggi_voci(c: &Consegne, files: Vec<PathBuf>) {
+    let c=c.clone();
     let slot = c.voci.clone();
     std::thread::spawn(move || {
         for path in files {
             let kind = tipo_di(&path);
-            let (thumb, misure) = match kind {
+            if matches!(kind,cedro::Kind::Audio|cedro::Kind::Video){leggi_onda(&c,path.clone());}
+            let (thumb, misure) = if crate::labs::laboratorio(&path) {(None,None)} else {match kind {
                 cedro::Kind::Image => cedro::ui::media::image_thumb(&path, 240).map(|(i, s)| (Some(i), Some(s))).unwrap_or((None, None)),
                 _ => (cedro::ui::media::thumb_of(&path, 360), None),
-            };
+            }};
             let pagine = (kind == cedro::Kind::Pdf).then(|| cedro::pdf_info(&path, None).ok().map(|(n, _)| n)).flatten();
             slot.lock().unwrap_or_else(|e| e.into_inner()).push((path, thumb, misure, pagine));
         }
@@ -1655,7 +1689,7 @@ fn android_main(app: AndroidApp) {
     }
     let file_tema = dati.join("tema.txt");
     let file_lavori = dati.join("lavori.txt");
-    let mut tema = std::fs::read_to_string(&file_tema).map(|t| ThemeId::from_key(&t)).unwrap_or(ThemeId::Cedro);
+    let mut tema = std::fs::read_to_string(&file_tema).map(|t| crate::ui::tema_da_chiave(&t)).unwrap_or(ThemeId::Cedro);
     // Con la 0.45 arriva il nuovo Cedro: chi aveva ancora il tema di partenza di prima lo vede una volta sola;
     // se poi sceglie di nuovo «Windows essenziale» resta.
     let marca_045 = dati.join("tema-045");
@@ -1676,7 +1710,10 @@ fn android_main(app: AndroidApp) {
     let file_caratteri = dati.join("caratteri.txt");
     // Le impostazioni del motore (qualità, DPI, OCR) stanno nel suo config.txt; il resto qui.
     ui.imp = cedro::read_settings();
+    ui.labs.caso = cedro::caso::carica();
     ui.qualita = ui.imp.quality.clamp(40, 95);
+    let file_rete=dati.join("rete-download.txt");
+    ui.rete=std::fs::read_to_string(&file_rete).ok().and_then(|s|s.trim().parse::<u8>().ok()).filter(|n|*n<=2).unwrap_or(0);
     let file_impostazioni = dati.join("impostazioni.txt");
     if let Ok(t) = std::fs::read_to_string(&file_impostazioni) {
         let mut righe = t.lines();
@@ -1707,29 +1744,76 @@ fn android_main(app: AndroidApp) {
     let mut tentativi = 0;
 
     let cartella = dati.join("condivisi");
-    let consegne = Consegne::default();
-    match leggi_condivisione(&app, &cartella) {
-        Ok(v) if !v.is_empty() => ricevuti(&mut ui, &consegne, &cartella, v),
-        Ok(_) => ricarica_recenti(cartella.clone(), &consegne),
-        Err(e) => {
-            log::error!("condivisione: {e}");
-            ui.lavori.insert(0, crate::ui::Lavoro { id: 9999, origine: "Condivisione".into(), etichetta: "File".into(), conv: false, inizio: std::time::Instant::now(), quando: crate::ui::adesso(), stato: Stato::Errore(e), prog: Arc::new(std::sync::atomic::AtomicU32::new(1000)), sorgente: None, controlli: None });
-            ricarica_recenti(cartella.clone(), &consegne);
+    let file_scelta=dati.join("scelta-in-attesa.json");
+    let pending=match crate::picker::Attesa::leggi(&file_scelta) {
+        Ok(p)=>p,
+        Err(e)=>{log::warn!("contesto selettore: {e}");let _=crate::picker::Attesa::chiudi(&file_scelta);None}
+    };
+    let mut attesa_scelta=pending.as_ref().map(|p|p.sorgente);
+    // Restore the signature before consuming a callback already delivered to the new Activity.
+    if let Some(original)=pending.as_ref().and_then(|p|p.originale.as_ref()) {
+        if let Err(e)=saf::ripristina(&app,&original.path) {log::warn!("firma da ripristinare: {e}");}
+        ui.apri_firmato(original.path.clone());
+        if original.quando.at()!=cedro::firma::At::Now {
+            ui.firma.reverify(original.quando.at(),None,ui.sveglia.clone());
         }
     }
+    let consegne = Consegne::default();
+    {
+        let (a,dir,c)=(app.clone(),cartella.clone(),consegne.clone());
+        let mut protetti:Vec<PathBuf>=ui.lavori.iter().filter_map(|l|l.sorgente.clone()).collect();
+        if let Some(original)=pending.as_ref().and_then(|p|p.originale.as_ref()) {protetti.push(original.path.clone());}
+        let noti:std::collections::HashSet<PathBuf>=ui.uscite.values().flatten().map(|u|u.0.clone()).collect();
+        let prima=std::time::SystemTime::now();
+        std::thread::spawn(move || {
+            saf::pulisci(&dir,&protetti);
+            saf::ripristina_tutti(&a,&dir);
+            if let Some(base)=uscite(&a){
+                let mut batches=Vec::new();
+                if let Ok(entries)=std::fs::read_dir(&base){for entry in entries.flatten(){
+                    if let Ok(batch)=crate::web::Batch::leggi(&entry.path()){
+                        let _=batch.materializza();batches.push(batch);
+                    }
+                }}
+                pulisci_incompleti(&base,&noti,prima);
+                let mut recovered=recupera_uscite(&a,&base,prima);
+                for batch in &mut batches{
+                    // materializza può aggiornare i timestamp: le ricevute dei figli si leggono
+                    // esplicitamente dal manifest, anche se la scansione le ha saltate.
+                    batch.recupera_ricevute(|dir|recupera_registro(&a,dir));
+                    recovered.retain(|r|!batch.figli.iter().any(|f|f.identita.chiave==r.lavoro.chiave));
+                }
+                *c.recuperati.lock().unwrap_or_else(|e|e.into_inner())=Some(recovered);
+                // Ricevute e figli dello stesso batch arrivano nello stesso completamento.
+                c.esiti.lock().unwrap_or_else(|e|e.into_inner()).extend(batches.into_iter().map(|batch|Completamento{batch:Some(batch),id:u32::MAX,stato:Stato::Fatto{path:PathBuf::new(),nome:String::new(),msg:String::new()},uscite:None,sorgente:None}));
+            }
+            ricarica_recenti(dir,&c);a.create_waker().wake();
+        });
+    }
+    let fresh_launch=con_attivita(&app,|env,att| {
+        env.call_method(att,"condivisioneIniziale","()Z",&[]).and_then(|v|v.z()).map_err(|e|jerr(env,e))
+    }).unwrap_or(false);
+    if fresh_launch && pending.is_none() {importa_condivisione(&app,&cartella,&consegne,&mut ui);}
+    registra(&consegne,&mut ui);
+    persisti(&consegne,&file_lavori,ui.serializza());
 
+
+    *consegne.rete.0.lock().unwrap_or_else(|e|e.into_inner())=ui.rete;
     let mut cache = GlyphCache::new();
     let mut finestra: Option<android_activity::ndk::native_window::NativeWindow> = None;
     let mut sporco = true;
     let mut esci = false;
+    let mut font_scale=1.0f32;
     let mut animando = false;
     let mut ultimo_disegno = std::time::Instant::now();
-    let mut attesa_scelta: Option<Sorgente> = None;
     let mut tastiera = false;
     let mut accento: Option<char> = None;
     let mut chieste: std::collections::HashSet<(PathBuf, u32)> = std::collections::HashSet::new();
     let mut servizio_attivo = false;
     let mut ultimo_servizio = std::time::Instant::now();
+    let mut ultimo_audio=std::time::Instant::now();
+    let mut progressi=Vec::new();
+    let mut ultima_notifica=None;
 
     while !esci {
         // Mentre qualcosa si muove si disegna al ritmo dello schermo (~60 al secondo): si aspetta solo
@@ -1749,12 +1833,14 @@ fn android_main(app: AndroidApp) {
                         sporco = true;
                         leggi_insets = true;
                     }
+                    MainEvent::Pause => {ui.pausa_audio();sporco=true;},
                     MainEvent::Destroy => esci = true,
                     _ => {}
                 }
             }
         });
         let scala = app.config().density().map(|d| d as f32 / 160.0).unwrap_or(2.6).max(1.0);
+        let mut effetti=Vec::new();
         if let Ok(mut it) = app.input_events_iter() {
             loop {
                 let letto = it.next(|e| {
@@ -1772,7 +1858,7 @@ fn android_main(app: AndroidApp) {
                                     ui.tocca_annulla();
                                     eff = Effetto::Ridisegna;
                                 }
-                                _ => {}
+                                _ => stato=InputStatus::Unhandled,
                             }
                         }
                         InputEvent::KeyEvent(k) if ui.campo.is_some() && k.key_code() != Keycode::Back => {
@@ -1817,162 +1903,7 @@ fn android_main(app: AndroidApp) {
                         }
                         _ => stato = InputStatus::Unhandled,
                     }
-                    match eff {
-                        Effetto::Niente => {}
-                        Effetto::Ridisegna => sporco = true,
-                        Effetto::Converti { id, file, azione, qualita, prog, opts, unisci } => {
-                            sporco = true;
-                            let (a, c) = (app.clone(), consegne.clone());
-                            std::thread::spawn(move || converti(a, c, id, file, azione, qualita, prog, opts, unisci));
-                        }
-                        Effetto::Tanti(compiti) => {
-                            sporco = true;
-                            let (a, c) = (app.clone(), consegne.clone());
-                            // Uno dopo l'altro: il motore lavora meglio su un file alla volta.
-                            std::thread::spawn(move || {
-                                for Compito { id, file, azione, qualita, prog, opts, unisci } in compiti {
-                                    converti(a.clone(), c.clone(), id, file, azione, qualita, prog, opts, unisci);
-                                }
-                            });
-                        }
-                        Effetto::Incolla => {
-                            ui.incolla(appunti(&app));
-                            sporco = true;
-                        }
-                        Effetto::LeggiVoci(v) => {
-                            leggi_voci(&consegne, v);
-                            sporco = true;
-                        }
-                        Effetto::LeggiPdf(path, altri) => {
-                            leggi_pdf(&consegne, path);
-                            if !altri.is_empty() {
-                                leggi_uniti(&consegne, altri, None);
-                            }
-                            sporco = true;
-                        }
-                        Effetto::OndaRevisione(path, secs) => {
-                            let slot = consegne.onda_riv.clone();
-                            std::thread::spawn(move || {
-                                let bars = cedro::waveform(&path, (secs as usize).clamp(300, 6000));
-                                *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some((path, bars));
-                            });
-                            sporco = true;
-                        }
-                        Effetto::ScriviPoi { id, nome, dati, poi } => {
-                            let (a, c) = (app.clone(), consegne.clone());
-                            std::thread::spawn(move || {
-                                let dir = uscite(&a).unwrap_or_else(|| PathBuf::from(DOCUMENTI).join("Cedro"));
-                                let file = dir.join(&nome);
-                                let esito = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&file, &dati)).map_err(|e| e.to_string()).and_then(|_| consegna(&a, file));
-                                let stato = match esito {
-                                    Ok((path, visto)) => {
-                                        if poi > 0 {
-                                            if let Err(e) = apri_o_condividi(&a, &path, poi == 2) {
-                                                log::error!("apri: {e}");
-                                            }
-                                        }
-                                        Stato::Fatto { path, msg: format!("{} · {}", nome_di(Path::new(&visto)), cedro::size_words(dati.len() as u64)), nome: visto }
-                                    }
-                                    Err(e) => Stato::Errore(e),
-                                };
-                                c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, stato));
-                            });
-                            sporco = true;
-                        }
-                        Effetto::Scrivi { id, nome, dati } => {
-                            let (a, c) = (app.clone(), consegne.clone());
-                            std::thread::spawn(move || {
-                                let dir = uscite(&a).unwrap_or_else(|| PathBuf::from(DOCUMENTI).join("Cedro"));
-                                let file = dir.join(&nome);
-                                let esito = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&file, &dati)).map_err(|e| e.to_string()).and_then(|_| consegna(&a, file));
-                                let stato = match esito {
-                                    Ok((path, visto)) => Stato::Fatto { path, msg: format!("{} · {}", nome_di(Path::new(&visto)), cedro::size_words(dati.len() as u64)), nome: visto },
-                                    Err(e) => Stato::Errore(e),
-                                };
-                                c.esiti.lock().unwrap_or_else(|e| e.into_inner()).push((id, stato));
-                            });
-                            sporco = true;
-                        }
-                        Effetto::Sblocca(pw) => {
-                            if let Some(f) = &ui.file {
-                                sblocca(&consegne, f.path.clone(), pw, &cartella);
-                            }
-                            sporco = true;
-                        }
-                        Effetto::Esci => chiudi(&app),
-                        Effetto::Riassumi { id, source, lines, names, prog } => {
-                            let c = consegne.clone();
-                            std::thread::spawn(move || riassumi(&c, id, source, lines, names, &prog));
-                            sporco = true;
-                        }
-                        Effetto::Copia(testo) => {
-                            copia_negli_appunti(&app, &testo);
-                            sporco = true;
-                        }
-                        Effetto::SalvaLingua(l) => {
-                            let _ = std::fs::write(&file_lingua, l);
-                            sporco = true;
-                        }
-                        Effetto::SalvaCaratteri(g) => {
-                            let _ = std::fs::write(&file_caratteri, if g { "grandi" } else { "normali" });
-                            sporco = true;
-                        }
-                        Effetto::SalvaImpostazioni => {
-                            let _ = cedro::write_settings(&ui.imp);
-                            let esiste = match ui.esiste {
-                                cedro::Exists::Replace => "sostituisci",
-                                cedro::Exists::Skip => "salta",
-                                _ => "numera",
-                            };
-                            let _ = std::fs::write(&file_impostazioni, format!("{esiste}\n{}", ui.modello_nome));
-                            ricorda_esiste(ui.esiste);
-                            sporco = true;
-                        }
-                        Effetto::SalvaTema(t) => {
-                            let _ = std::fs::write(&file_tema, t.key());
-                            icone_barre(&app, crate::ui::tinte::scuro(t));
-                            sporco = true;
-                        }
-                        Effetto::SalvaLavori => {
-                            let _ = std::fs::write(&file_lavori, ui.serializza());
-                            sporco = true;
-                        }
-                        Effetto::Scegli(Sorgente::Link) => {
-                            match cedro::webvideo::find_url(&appunti(&app)) {
-                                Some(url) => carica_file(&mut ui, &consegne, &cartella, PathBuf::from(&url), url, true),
-                                None => log::info!("negli appunti non c'è un link"),
-                            }
-                            sporco = true;
-                        }
-                        Effetto::Scegli(s) => {
-                            match scegli(&app, s) {
-                                Ok(()) => attesa_scelta = Some(s),
-                                Err(e) => log::error!("selettore: {e}"),
-                            }
-                            sporco = true;
-                        }
-                        Effetto::UsaFile(p) => {
-                            let nome = nome_di(&p);
-                            carica_file(&mut ui, &consegne, &cartella, p, nome, false);
-                            sporco = true;
-                        }
-                        Effetto::Apri(p) => {
-                            let a = app.clone();
-                            std::thread::spawn(move || {
-                                if let Err(e) = apri_o_condividi(&a, &p, false) {
-                                    log::error!("apri: {e}");
-                                }
-                            });
-                        }
-                        Effetto::Condividi(p) => {
-                            let a = app.clone();
-                            std::thread::spawn(move || {
-                                if let Err(e) = apri_o_condividi(&a, &p, true) {
-                                    log::error!("condividi: {e}");
-                                }
-                            });
-                        }
-                    }
+                    effetti.push(eff);
                     stato
                 });
                 if !letto {
@@ -1980,14 +1911,195 @@ fn android_main(app: AndroidApp) {
                 }
             }
         }
+        if let Ok(commands)=con_attivita(&app,|env,att| {
+            let value=env.call_method(att,"takeAccessibilityActions","()Ljava/lang/String;",&[]).and_then(|v|v.l()).map_err(|e|jerr(env,e))?;
+            Ok(stringa(env,value).unwrap_or_default())
+        }) {effetti.extend(ui.azioni_accessibili(&commands,scala));}
+        for eff in effetti {
+            match eff {
+                Effetto::SalvaRete=>{
+                    *consegne.rete.0.lock().unwrap_or_else(|e|e.into_inner())=ui.rete;
+                    consegne.rete.1.notify_all();
+                    let (path,value)=(file_rete.clone(),ui.rete.to_string());std::thread::spawn(move||{let _=crate::storage::atomico(&path,value.as_bytes());});
+                    sporco=true;
+                }
+                Effetto::Niente => {}
+                Effetto::Annulla(id) => { token(&consegne,id).store(true,std::sync::atomic::Ordering::Release); saf::annulla(&app,id); sporco=true; }
+                Effetto::Ridisegna => sporco = true,
+                Effetto::Converti { voce, web, id, file, azione, qualita, prog, opts, unisci } => {
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    sporco = true;
+                    let (a, c) = (app.clone(), consegne.clone());
+                    token(&c,id);
+                    std::thread::spawn(move || protetto(&c,id,|| converti(voce,web,a, c.clone(), id, file, azione, qualita, prog, opts, unisci)));
+                }
+                Effetto::Tanti(compiti) => {
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    sporco = true;
+                    let (a, c) = (app.clone(), consegne.clone());
+                    for compito in &compiti { token(&c,compito.id); }
+                    // Uno dopo l'altro: il motore lavora meglio su un file alla volta.
+                    std::thread::spawn(move || {
+                        for Compito { voce, web, id, file, azione, qualita, prog, opts, unisci } in compiti {
+                            protetto(&c,id,|| converti(voce,web,a.clone(), c.clone(), id, file, azione, qualita, prog, opts, unisci));
+                        }
+                    });
+                }
+                Effetto::Incolla => {
+                    ui.incolla(appunti(&app));
+                    sporco = true;
+                }
+                Effetto::LeggiVoci(v) => {
+                    leggi_voci(&consegne, v);
+                    sporco = true;
+                }
+                Effetto::LeggiPdf(path, altri) => {
+                    leggi_pdf(&consegne, path);
+                    if !altri.is_empty() {
+                        leggi_uniti(&consegne, altri, None);
+                    }
+                    sporco = true;
+                }
+                Effetto::OndaRevisione(path, _) => {
+                    prepara_onda(&consegne, path);
+                    sporco = true;
+                }
+                Effetto::ScriviPoi { id, nome, dati, poi } => {
+                    let nome=ui.nome_esportato(id,nome);
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    let (a,c)=(app.clone(),consegne.clone());
+                    token(&c,id);
+                    std::thread::spawn(move ||protetto(&c,id,||scrivi(&a,&c,id,nome,dati,poi)));
+                    sporco=true;
+                }
+                Effetto::Scrivi { id, nome, dati } => {
+                    let nome=ui.nome_esportato(id,nome);
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    let (a,c)=(app.clone(),consegne.clone());
+                    token(&c,id);
+                    std::thread::spawn(move ||protetto(&c,id,||scrivi(&a,&c,id,nome,dati,0)));
+                    sporco=true;
+                }
+                Effetto::Sblocca(pw) => {
+                    if let Some(f) = &ui.file {
+                        sblocca(&consegne, f.path.clone(), pw, &cartella);
+                    }
+                    sporco = true;
+                }
+                Effetto::Esci => chiudi(&app),
+                Effetto::Riassumi { id, source, lines, names, prog } => {
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    let (a,c) = (app.clone(),consegne.clone());
+                    token(&c,id);
+                    std::thread::spawn(move || protetto(&c,id,|| riassumi(&a,&c, id, source, lines, names, &prog)));
+                    sporco = true;
+                }
+                Effetto::Copia(testo) => {
+                    copia_negli_appunti(&app, &testo);
+                    sporco = true;
+                }
+                Effetto::SalvaLingua(l) => {
+                    let _ = std::fs::write(&file_lingua, l);
+                    sporco = true;
+                }
+                Effetto::SalvaCaratteri(g) => {
+                    let _ = std::fs::write(&file_caratteri, if g { "grandi" } else { "normali" });
+                    sporco = true;
+                }
+                Effetto::SalvaCaso => {
+                    let c=consegne.clone();let caso=ui.labs.caso.clone();
+                    let generation=c.caso_versione.fetch_add(1,std::sync::atomic::Ordering::AcqRel)+1;
+                    std::thread::spawn(move||{
+                        let _guard=c.caso_lock.lock().unwrap_or_else(|e|e.into_inner());
+                        if c.caso_versione.load(std::sync::atomic::Ordering::Acquire)!=generation{return;}
+                        let path=cedro::config_dir().join("lab/caso.txt");
+                        let r=match caso {
+                            Some(v)=>crate::storage::atomico(&path,format!("{}\n{}\n",v.code,v.note).as_bytes()),
+                            None=>match std::fs::remove_file(&path){Err(e) if e.kind()!=std::io::ErrorKind::NotFound=>Err(e),_=>Ok(())},
+                        }.map_err(|e|e.to_string());
+                        *c.caso_esito.lock().unwrap_or_else(|e|e.into_inner())=Some(r);
+                    });
+                    sporco=true;
+                }
+                Effetto::SalvaImpostazioni => {
+                    let _ = cedro::write_settings(&ui.imp);
+                    let esiste = match ui.esiste {
+                        cedro::Exists::Replace => "sostituisci",
+                        cedro::Exists::Skip => "salta",
+                        _ => "numera",
+                    };
+                    let _ = std::fs::write(&file_impostazioni, format!("{esiste}\n{}", ui.modello_nome));
+                    ricorda_esiste(ui.esiste);
+                    sporco = true;
+                }
+                Effetto::SalvaTema(t) => {
+                    let _ = std::fs::write(&file_tema, t.key());
+                    icone_barre(&app, crate::ui::tinte::scuro(t));
+                    sporco = true;
+                }
+                Effetto::SalvaLavori => {
+                    registra(&consegne,&mut ui);
+                    persisti(&consegne,&file_lavori,ui.serializza());
+                    sporco = true;
+                }
+                Effetto::Scegli(Sorgente::Link) => {
+                    match cedro::webvideo::find_url(&appunti(&app)) {
+                        Some(url) => carica_file(&mut ui, &consegne, &cartella, PathBuf::from(&url), url, true),
+                        None => log::info!("negli appunti non c'è un link"),
+                    }
+                    sporco = true;
+                }
+                Effetto::Scegli(s) => {
+                    if attesa_scelta.is_none() {scarta_scelta_orfana(&app);}
+                    let context=crate::picker::Attesa::nuova(s,ui.firma.viewer.as_ref().map(|v|(v.path.as_path(),v.at)));
+                    let result=context.and_then(|p|p.salva(&file_scelta)).map_err(|e|e.to_string()).and_then(|_|scegli(&app,s));
+                    match result {
+                        Ok(()) => attesa_scelta = Some(s),
+                        Err(e) => {
+                            attesa_scelta=None;
+                            let _=crate::picker::Attesa::chiudi(&file_scelta);
+                            log::error!("selettore: {e}");
+                        }
+                    }
+                    sporco = true;
+                }
+                Effetto::UsaFile(p) => {
+                    let (id,_)=ui.nuova_importazione();
+                    consegne.ultimo_import.store(id,std::sync::atomic::Ordering::Release);
+                    let (a,c)=(app.clone(),consegne.clone());
+                    std::thread::spawn(move || {
+                        let r=saf::ripristina(&a,&p).map(|_|vec![Condiviso {nome:nome_di(&p),path:p}]);
+                        c.importati.lock().unwrap_or_else(|e|e.into_inner()).push((id,Some(Sorgente::Altri),r));
+                        a.create_waker().wake();
+                    });
+                    sporco = true;
+                }
+                Effetto::Apri(p) => {
+                    let a = app.clone();
+                    std::thread::spawn(move || {
+                        if let Err(e) = apri_o_condividi(&a, &p, false) {
+                            log::error!("apri: {e}");
+                        }
+                    });
+                }
+                Effetto::Condividi(p) => {
+                    let a = app.clone();
+                    std::thread::spawn(move || {
+                        if let Err(e) = apri_o_condividi(&a, &p, true) {
+                            log::error!("condividi: {e}");
+                        }
+                    });
+                }
+            }
+        }
         // Una nuova condivisione mentre Cedro è già aperto.
         if con_attivita(&app, |env, att| env.call_method(att, "novita", "()Z", &[]).and_then(|v| v.z()).map_err(|e| jerr(env, e))).unwrap_or(false) {
-            match leggi_condivisione(&app, &cartella) {
-                Ok(v) if !v.is_empty() => ricevuti(&mut ui, &consegne, &cartella, v),
-                // Riaperto dall'icona: la finestra principale.
-                Ok(_) => ui.vai_casa(),
-                Err(e) => log::error!("condivisione: {e}"),
-            }
+            importa_condivisione(&app,&cartella,&consegne,&mut ui);
             sporco = true;
         }
         if ui.firma_arrivi() {
@@ -2001,15 +2113,51 @@ fn android_main(app: AndroidApp) {
             pagine_firmato(&consegne, doc);
         }
         if let Some(sorgente) = attesa_scelta {
-            match scelti(&app, &cartella, sorgente == Sorgente::Cartella) {
+            if importa_scelti(&app,&cartella,sorgente,&consegne,&mut ui) {
+                attesa_scelta=None;
+                if let Err(e)=crate::picker::Attesa::chiudi(&file_scelta) {log::error!("chiusura selettore: {e}");}
+                sporco=true;
+            }
+        } else {
+            // Also drain a late callback delivered after startup without a valid journal.
+            scarta_scelta_orfana(&app);
+        }
+        if let Some((id,r))=consegne.originale.lock().unwrap_or_else(|e|e.into_inner()).take() {
+            if id==consegne.ultimo_import.load(std::sync::atomic::Ordering::Acquire) {
+                match r {Ok(data)=>ui.originale_firmato(data),Err(e)=>ui.errore_importazione(e)}
+                sporco=true;
+            }
+        }
+        if let Some(groups)=consegne.recuperati.lock().unwrap_or_else(|e|e.into_inner()).take(){
+            for r in groups{ui.recupera(r);}
+            registra(&consegne,&mut ui);
+            persisti(&consegne,&file_lavori,ui.serializza());
+            sporco=true;
+        }
+        let imports=std::mem::take(&mut *consegne.importati.lock().unwrap_or_else(|e|e.into_inner()));
+        for (id,sorgente,result) in imports {
+            consegne.tokens.lock().unwrap_or_else(|e|e.into_inner()).remove(&id);
+            ui.finisce(id,match &result {Ok(_)=>Stato::Fatto {path:PathBuf::new(),nome:String::new(),msg:"File importati".into()},Err(e)=>Stato::Errore(e.clone())});
+            registra(&consegne,&mut ui);
+            persisti(&consegne,&file_lavori,ui.serializza());
+            if result.is_err(){ui.scheda=crate::ui::Scheda::Lavori;ui.sopra=Some(crate::ui::Scheda::Lavori);}
+            if id!=consegne.ultimo_import.load(std::sync::atomic::Ordering::Acquire)&&!matches!(sorgente,Some(Sorgente::Coda|Sorgente::Cartella|Sorgente::PdfAltri)){sporco=true;continue;}
+            let Some(sorgente)=sorgente else {
+                match result {
+                    Ok(v) if !v.is_empty()=>ricevuti(&mut ui,&consegne,&cartella,v),
+                    Ok(_)=>ricarica_recenti(cartella.clone(),&consegne),
+                    Err(_)=>{},
+                }
+                sporco=true;
+                continue;
+            };
+            match Some(result) {
                 Some(Ok(v)) if matches!(sorgente, Sorgente::Coda | Sorgente::Cartella) => {
-                    attesa_scelta = None;
                     leggi_voci(&consegne, v.iter().map(|c| c.path.clone()).collect());
                     ui.aggiungi_coda(v.into_iter().map(|c| { let k = tipo_di(&c.path); (c.path, c.nome, k) }).collect());
                     sporco = true;
                 }
                 Some(Ok(v)) if sorgente == Sorgente::Firmati => {
-                    attesa_scelta = None;
                     if let Some(c) = v.into_iter().next() {
                         log::info!("firmato scelto {} ({})", c.nome, c.path.display());
                         ui.apri_firmato(c.path);
@@ -2017,21 +2165,16 @@ fn android_main(app: AndroidApp) {
                     sporco = true;
                 }
                 Some(Ok(v)) if sorgente == Sorgente::Originale => {
-                    attesa_scelta = None;
-                    if let Some(dati) = v.into_iter().next().and_then(|c| std::fs::read(&c.path).ok()) {
-                        ui.originale_firmato(dati);
-                    }
+                    let _=v;
                     sporco = true;
                 }
                 Some(Ok(v)) if sorgente == Sorgente::PdfAltri => {
-                    attesa_scelta = None;
                     let pdf: Vec<(PathBuf, String)> = v.into_iter().filter(|c| tipo_di(&c.path) == cedro::Kind::Pdf).map(|c| (c.path, c.nome)).collect();
                     leggi_uniti(&consegne, pdf.iter().map(|p| p.0.clone()).collect(), ui.pdf.usata.clone());
                     ui.aggiungi_pdf(pdf);
                     sporco = true;
                 }
                 Some(Ok(v)) => {
-                    attesa_scelta = None;
                     if let Some(c) = v.into_iter().next() {
                         log::info!("scelto {} ({})", c.nome, c.path.display());
                         carica_file(&mut ui, &consegne, &cartella, c.path, c.nome, false);
@@ -2039,11 +2182,49 @@ fn android_main(app: AndroidApp) {
                     sporco = true;
                 }
                 Some(Err(e)) => {
-                    attesa_scelta = None;
-                    log::error!("selettore: {e}");
+                    let _=e;
+                    sporco=true;
                 }
                 None => {}
             }
+        }
+        // Sincronizzare prima degli esiti invalida anche una sorgente appena rimossa.
+        let (annulla,richiesta)=ui.sincronizza_labs();
+        if let Some(id)=annulla {
+            if let Some(cancel)=consegne.tokens.lock().unwrap_or_else(|e|e.into_inner()).get(&id){cancel.store(true,std::sync::atomic::Ordering::Release);}
+            sporco=true;
+        }
+        // Anteprime isolate dal processo UI: i cambi di selezione cancellano il worker precedente.
+        if let Some((id,path,scelta))=richiesta {
+            let (a,c)=(app.clone(),consegne.clone());
+            let cancel=token(&c,id);
+            let wake=app.create_waker();
+            std::thread::spawn(move||{
+                let result=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||{
+                    let _permit=cedro::resources::acquire(Some(&cancel)).ok_or("Annullato")?;
+                    let base=a.internal_data_path().ok_or("Cartella privata non disponibile")?.join("anteprime");
+                    let out=crate::storage::nuova_cartella(&base).map_err(|e|e.to_string())?;
+                    let _scarto=Scarto(out.clone());
+                    let libs=cartella_librerie(&a).ok_or("Il motore non è in questo APK")?;
+                    let leases=saf::leases(&[path.clone()]);
+                    let r=crate::worker::Richiesta{file:path,azione:"anteprima".into(),qualita:82,voce:Default::default(),out,opts:Default::default(),unisci:vec![],sommario:None,anteprima:Some(scelta),web:None};
+                    let (png,meta)=crate::worker::avvia(&libs,r,&cancel,leases,|nome,bytes|web::permesso(&a,&c,id,nome,bytes),|_|{})?;
+                    let info=serde_json::from_str(&meta).map_err(|e|format!("Anteprima: {e}"))?;
+                    let image=cedro::ui::media::thumb_of(&png,1024).ok_or("Anteprima non leggibile")?;
+                    Ok((info,image))
+                })).unwrap_or_else(|_|Err("Il motore si è interrotto".into()));
+                c.tokens.lock().unwrap_or_else(|e|e.into_inner()).remove(&id);
+                c.labs.lock().unwrap_or_else(|e|e.into_inner()).push((id,result));
+                wake.wake();
+            });
+            sporco=true;
+        }
+        for (id,result) in std::mem::take(&mut *consegne.labs.lock().unwrap_or_else(|e|e.into_inner())) {
+            ui.ricevi_labs(id,result);sporco=true;
+        }
+        if let Some(result)=consegne.caso_esito.lock().unwrap_or_else(|e|e.into_inner()).take(){
+            if let Err(e)=result {ui.errore_importazione(format!("{}: {e}",cedro::i18n::tr("Caso non salvato"))); if let Some(l)=ui.lavori.first_mut(){l.origine="Caso o campione".into();}}
+            sporco=true;
         }
         if let Some((p, r)) = consegne.info_pdf.lock().unwrap_or_else(|e| e.into_inner()).take() {
             if ui.file.as_ref().is_some_and(|f| f.path == p) {
@@ -2072,8 +2253,12 @@ fn android_main(app: AndroidApp) {
                 sporco = true;
             }
         }
-        if let Some((p, bars)) = consegne.onda_riv.lock().unwrap_or_else(|e| e.into_inner()).take() {
-            ui.onda_rivedi(&p, bars);
+        for (p,bars,secs) in std::mem::take(&mut *consegne.onda_riv.lock().unwrap_or_else(|e|e.into_inner())) {
+            ui.onda_trascrizione(&p,bars,secs);
+            sporco = true;
+        }
+        for (id,path,seg,secs) in std::mem::take(&mut *consegne.frasi.lock().unwrap_or_else(|e|e.into_inner())) {
+            ui.frase_trascritta(id,path,seg,secs);
             sporco = true;
         }
         for (id, nota) in std::mem::take(&mut *consegne.passo_riassunto.lock().unwrap_or_else(|e| e.into_inner())) {
@@ -2124,15 +2309,44 @@ fn android_main(app: AndroidApp) {
             ui.recenti = r;
             sporco = true;
         }
-        let esiti: Vec<(u32, Stato)> = std::mem::take(&mut *consegne.esiti.lock().unwrap_or_else(|e| e.into_inner()));
-        if !esiti.is_empty() {
-            for (id, s) in esiti {
-                ui.finisce(id, s);
+        let esiti=std::mem::take(&mut *consegne.esiti.lock().unwrap_or_else(|e|e.into_inner()));
+        if !esiti.is_empty(){
+            for mut e in esiti{
+                if let Some(batch)=e.batch.take(){
+                    let tasks=ui.ricevi_batch(&batch);
+                    registra(&consegne,&mut ui);
+                    let (a,c)=(app.clone(),consegne.clone());
+                    for (id,_,_) in &tasks{token(&c,*id);}
+                    std::thread::spawn(move||{
+                        let mut batch=batch;
+                        for (id,index,prog) in tasks {
+                            let child=batch.figli[index].clone();
+                            if child.out.join(".pronti").is_file(){
+                                let result=recupera_registro(&a,&child.out).filter(|r|r.lavoro.chiave==child.identita.chiave)
+                                    .map(|r|Completamento::recuperato(id,r))
+                                    .unwrap_or_else(||Completamento::semplice(id,Stato::Errore("Registro dei risultati non valido".into())));
+                                c.esiti.lock().unwrap_or_else(|e|e.into_inner()).push(result);
+                                c.tokens.lock().unwrap_or_else(|e|e.into_inner()).remove(&id);
+                                let _=batch.finisci(index);a.create_waker().wake();continue;
+                            }
+                            protetto(&c,id,||trascrivi(&a,&c,id,&child.source,&child.out,&prog,batch.voce,batch.opts.clone()));
+                            if let Err(_)=batch.finisci(index){log::warn!("batch: checkpoint finale non riuscito");}
+                            a.create_waker().wake();
+                        }
+                    });
+                }
+                let esito=match &e.stato{Stato::Fatto{..} if e.uscite.as_ref().is_some_and(|v|v.iter().any(|u|u.2.is_some()))=>"parziale",Stato::Fatto{..}=>"completo",Stato::Errore(t) if t.contains("Annullato")=>"annullato",Stato::Errore(_)=>"errore",_=>"in-corso"};
+                let azione=consegne.azioni.lock().unwrap_or_else(|e|e.into_inner()).remove(&e.id).unwrap_or_else(||"recupero".into());
+                if e.id!=u32::MAX{log::info!("lavoro fine id={} azione={} esito={} uscite={}",e.id,azione,esito,e.uscite.as_ref().map_or(0,Vec::len));}
+                ui.completa(e);
             }
-            let _ = std::fs::write(&file_lavori, ui.serializza());
-            sporco = true;
+            registra(&consegne,&mut ui);
+            persisti(&consegne,&file_lavori,ui.serializza());
+            sporco=true;
         }
         if leggi_insets && finestra.is_some() {
+            font_scale=con_attivita(&app,|env,a|env.call_method(a,"fontScale","()F",&[]).and_then(|r|r.f()).map_err(|e|e.to_string())).ok().filter(|v|v.is_finite()&&*v>0.0).unwrap_or(1.0);
+            ui.anim.calmo=animazioni_spente(&app);
             let m = margini(&app);
             ui.margini = (m.0 / scala, m.1 / scala, m.2 / scala, m.3 / scala);
             if m != insets {
@@ -2143,17 +2357,35 @@ fn android_main(app: AndroidApp) {
             tentativi += 1;
             leggi_insets = m == (0.0, 0.0, 0.0, 0.0) && tentativi < 40;
         }
+        let attesa_download={
+            let mut a=consegne.download_attesa.lock().unwrap_or_else(|e|e.into_inner());
+            if a.as_ref().is_some_and(|a|a.da.elapsed()>Duration::from_secs(8)&&crate::web::rete_consentita(ui.rete,a.mobile)){*a=None;}
+            a.clone()
+        };
+        if ui.download_attesa!=attesa_download{ui.download_attesa=attesa_download;sporco=true;}
+        let componente=consegne.componenti.lock().unwrap_or_else(|e|e.into_inner()).attuale();
+        if ui.componente!=componente {ui.componente=componente;sporco=true;}
+        let nuovi:Vec<_>=ui.lavori.iter().filter(|l|l.stato==Stato::InCorso).map(|l|(l.id,l.prog.load(std::sync::atomic::Ordering::Relaxed))).collect();
+        if nuovi!=progressi {progressi=nuovi;sporco=true;}
         // Il servizio in primo piano vive finché c'è un lavoro in corso; la notifica segue l'avanzamento.
         if ultimo_servizio.elapsed() > Duration::from_millis(700) || (servizio_attivo && ui.in_corso().0 == 0) {
             let (n, medio, nome) = ui.in_corso();
             if n > 0 {
                 let testo = if n > 1 { cedro::i18n::tr_string(&format!("{n} lavori in corso")) } else { nome };
-                servizio(&app, Some((cedro::i18n::tr("Cedro sta lavorando").as_ref(), &testo, medio.map(|m| m as i32).unwrap_or(-1))));
+                let (mut testo,mut percento)=ui.componente.as_ref().map(|c|(c.testo(),c.percento())).unwrap_or((testo,medio.map(|m|m as i32).unwrap_or(-1)));
+                if let Some(a)=&ui.download_attesa{
+                    if !crate::web::rete_consentita(ui.rete,a.mobile){
+                        testo=format!("{} · {} · {}",cedro::i18n::tr("In attesa"),cedro::i18n::tr(&a.nome),cedro::i18n::tr(if ui.rete==1{"Solo Wi-Fi"}else{"Chiedi una volta su rete mobile"}));percento=-1;
+                    }else if a.bytes>=100_000_000{testo.push_str(&format!(" · {}: {}",cedro::i18n::tr("Spazio libero"),cedro::size_words(a.liberi)));}
+                }
+                let next=(testo,percento);
+                if ultima_notifica.as_ref()!=Some(&next){servizio(&app,Some((cedro::i18n::tr("Cedro sta lavorando").as_ref(),&next.0,next.1)));ultima_notifica=Some(next);}
                 servizio_attivo = true;
                 ultimo_servizio = std::time::Instant::now();
             } else if servizio_attivo {
                 servizio(&app, None);
                 servizio_attivo = false;
+                ultima_notifica=None;
             }
         }
         // La tastiera segue il campo attivo.
@@ -2170,6 +2402,12 @@ fn android_main(app: AndroidApp) {
             }
         }
         animando = ui.animando();
+        if ultimo_audio.elapsed()>=Duration::from_millis(200) {
+            let playing=ui.suona_audio();
+            let focus=con_attivita(&app,|env,a|env.call_method(a,"audioFocus","(Z)Z",&[JValue::Bool(playing as u8)]).and_then(|r|r.z()).map_err(|e|e.to_string())).unwrap_or(false);
+            if playing {if !focus {ui.pausa_audio();}sporco=true;}
+            ultimo_audio=std::time::Instant::now();
+        }
         if sporco || animando {
             if let Some(f) = &finestra {
                 let (w, h) = (f.width() as u32, f.height() as u32);
@@ -2177,8 +2415,15 @@ fn android_main(app: AndroidApp) {
                     ultimo_disegno = std::time::Instant::now();
                     let mut p = Painter::new_riusando(w, h, scala, Fonts::for_theme(ui.tema), &mut cache);
                     p.larger = ui.grandi;
+                    p.text_scale = font_scale;
+                    p.accessibility_text = Some(Vec::new());
                     ui.disegna(&mut p, w as f32 / scala, h as f32 / scala);
                     presenta(f, &p);
+                    let semantics=ui.accessibilita(&p);
+                    let _=con_attivita(&app,|env,a|{
+                        let text=env.new_string(semantics).map_err(|e|e.to_string())?;
+                        env.call_method(a,"accessibilitySnapshot","(Ljava/lang/String;)V",&[JValue::Object(&text)]).map(|_|()).map_err(|e|jerr(env,e))
+                    });
                     let foglio = p.in_foglio();
                     cache.ricicla(foglio);
                     sporco = false;
@@ -2212,7 +2457,7 @@ fn cerca<'a>(env: &mut JNIEnv<'a>, resolver: &JObject, base: &JObject, rel: &str
         let classe = env.find_class("java/lang/String")?;
         let id = env.new_string("_id")?;
         let proiez = env.new_object_array(1, &classe, &id)?;
-        let filtro = env.new_string("relative_path IN (?, ?) AND _display_name = ?")?;
+        let filtro = env.new_string("relative_path IN (?, ?) AND _display_name = ? AND is_pending = 0")?;
         let vuoto = env.new_string("")?;
         let argomenti = env.new_object_array(3, &classe, &vuoto)?;
         for (i, a) in [format!("{rel}/"), rel.to_string(), nome.to_string()].iter().enumerate() {

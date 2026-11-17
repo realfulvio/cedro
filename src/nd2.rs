@@ -9,7 +9,7 @@
 //! Bio-Formats; qui è scritto da capo, con i file di prova confrontati con `nd2`.
 
 use std::collections::HashMap;
-use std::fs::File;
+use crate::input_file::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
