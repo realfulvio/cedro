@@ -78,16 +78,19 @@ fn ul(el: &[Element], t: u32, big: bool) -> u32 {
 
 /// Il file indicato da `DIR1\DIR2\FILE`, cercato senza badare a maiuscole e minuscole: un CD letto su
 /// Linux mostra spesso i nomi in minuscolo, o con il «;1» in fondo.
-fn trova(base: &Path, parti: &[&str]) -> Option<PathBuf> {
+/// Il nome vero sul disco viene dall'elenco della cartella (ricordato in `cartelle`): su Windows, dove i
+/// nomi non badano alle maiuscole, il percorso resta uguale a quello di «Aggiungi cartella».
+fn trova(base: &Path, parti: &[&str], cartelle: &mut HashMap<PathBuf, Vec<(String, PathBuf)>>) -> Option<PathBuf> {
     let mut p = base.to_path_buf();
     for parte in parti {
-        let diretto = p.join(parte);
-        if diretto.exists() {
-            p = diretto;
-            continue;
-        }
-        let voce = std::fs::read_dir(&p).ok()?.flatten().find(|e| nome_cd(&e.file_name().to_string_lossy()).eq_ignore_ascii_case(parte))?;
-        p = voce.path();
+        let voci = cartelle.entry(p.clone()).or_insert_with(|| {
+            std::fs::read_dir(&p).map(|rd| rd.flatten().map(|e| (nome_cd(&e.file_name().to_string_lossy()).to_ascii_uppercase(), e.path())).collect()).unwrap_or_default()
+        });
+        let cerca = parte.to_ascii_uppercase();
+        p = match voci.iter().find(|(n, _)| *n == cerca) {
+            Some((_, v)) => v.clone(),
+            None => p.join(parte),
+        };
     }
     p.is_file().then_some(p)
 }
@@ -128,6 +131,7 @@ pub fn leggi(path: &Path) -> Result<Indice, String> {
     let base = path.parent().unwrap_or(Path::new("."));
     let mut out = Indice::default();
     let mut gia = HashSet::new();
+    let mut cartelle = HashMap::new();
     for i in ordine {
         let el = &records[i].1;
         // Un record cancellato (flag 0) resta nel file ma non conta.
@@ -147,7 +151,7 @@ pub fn leggi(path: &Path) -> Result<Indice, String> {
             continue;
         }
         let parti: Vec<&str> = id.split(['\\', '/']).map(str::trim).filter(|s| !s.is_empty() && *s != "." && *s != "..").collect();
-        match trova(base, &parti) {
+        match trova(base, &parti, &mut cartelle) {
             Some(p) if gia.insert(p.clone()) => out.immagini.push(p),
             Some(_) => {}
             None => out.mancanti += 1,
