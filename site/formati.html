@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Formati di Cedro: cosa legge e in cosa lo converte</title>
+<meta name="description" content="Tutti i formati che Cedro legge e in cui li trasforma: immagini, documenti, PDF, audio, video, DICOM e vetrini digitali. Tutto sul tuo computer.">
+<link rel="icon" type="image/svg+xml" href="img/icona.svg">
+<meta property="og:title" content="Formati di Cedro: cosa legge e in cosa lo converte">
+<meta property="og:description" content="Cerca il tuo file e vedi in cosa lo trasforma Cedro. Gratis, open source, tutto sul tuo computer.">
+<meta property="og:type" content="website">
+<style>
+@font-face{font-family:"Figtree";font-weight:400;font-style:normal;font-display:swap;src:url(fonts/Figtree-400.ttf) format("truetype")}
+@font-face{font-family:"Figtree";font-weight:600;font-style:normal;font-display:swap;src:url(fonts/Figtree-600.ttf) format("truetype")}
+@font-face{font-family:"Figtree";font-weight:700;font-style:normal;font-display:swap;src:url(fonts/Figtree-700.ttf) format("truetype")}
+@font-face{font-family:"Figtree";font-weight:800;font-style:normal;font-display:swap;src:url(fonts/Figtree-800.ttf) format("truetype")}
+@font-face{font-family:"Figtree";font-weight:900;font-style:normal;font-display:swap;src:url(fonts/Figtree-900.ttf) format("truetype")}
+:root{
+  --bg:#F7F4FB; --sf:#FFFFFF; --alt:#EFE8F8; --ink:#2A1C38; --mut:#625671; --line:#E1D9EC;
+  --brand:#793FCB; --brand-ink:#FFFFFF;
+  --night:#1B1325; --night2:#2E1C45; --nink:#F4EFFA; --nmut:#BFB2D1;
+  --conv:#2F6FDB; --pdf:#D8434B; --tras:#E86A1C; --web:#14845B; --firma:#7A4BD6; --ruota:#0E8FA3;
+  --labs:#F2B631; --labs-ink:#2B1D02; --labs-bg:#1F1708; --labs-bg2:#33260B;
+  --f:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#130F19; --sf:#1C1724; --alt:#241D2F; --ink:#EDE7F4; --mut:#A99EB8; --line:#352B44;
+  --brand:#A982EE; --brand-ink:#15101C; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#130F19; --sf:#1C1724; --alt:#241D2F; --ink:#EDE7F4; --mut:#A99EB8; --line:#352B44;--brand:#A982EE; --brand-ink:#15101C; color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font-family:var(--f);font-size:17px;line-height:1.55;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--night)}
+.wrap{max-width:1140px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3,p{margin:0}
+h1,h2,h3{text-wrap:balance;letter-spacing:-.025em}
+a{color:inherit}
+img{display:block;max-width:100%;height:auto}
+:focus-visible{outline:3px solid var(--labs);outline-offset:3px;border-radius:6px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--night) 92%,transparent);backdrop-filter:blur(10px);color:var(--nink)}
+header.top .wrap{display:flex;align-items:center;gap:14px;padding-block:11px;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:800;font-size:22px;letter-spacing:-.02em}
+.logo img{width:30px;height:30px}
+nav{display:flex;gap:2px;margin-left:auto;flex-wrap:wrap}
+nav a{text-decoration:none;font-weight:600;font-size:15px;padding:7px 12px;border-radius:999px;color:var(--nmut)}
+nav a:hover{color:var(--nink);background:rgba(255,255,255,.08)}
+nav a[aria-current=page]{color:var(--nink);background:rgba(255,255,255,.1)}
+nav a.cta{background:#F2EBFD;color:#2A1640}
+.lang{display:flex;background:rgba(255,255,255,.1);border-radius:999px;padding:3px}
+.lang button{font:800 13px var(--f);letter-spacing:.04em;border:0;background:transparent;color:var(--nmut);padding:5px 12px;border-radius:999px;cursor:pointer}
+.lang button[aria-pressed="true"]{background:#F2EBFD;color:#2A1640}
+nav a.nl{color:var(--labs)}
+footer{background:var(--night);color:var(--nmut);padding-block:40px;font-size:15px}
+footer .wrap{display:flex;gap:20px;flex-wrap:wrap;justify-content:space-between;align-items:center}
+footer a{color:var(--nink)}
+/* Layout: fascia notte con titolo, ricerca e filtri; sotto, a sinistra tutti i formati a pulsanti colorati per famiglia, a destra il pannello del formato scelto. */
+.fh{background:radial-gradient(900px 520px at 90% -10%,#6A33BE 0%,transparent 60%),radial-gradient(700px 480px at -5% 110%,#8A3F12 0%,transparent 55%),linear-gradient(180deg,var(--night),var(--night2));color:var(--nink)}
+.fh .wrap{padding-block:54px 34px}
+.eye{font:500 12.5px var(--mono);letter-spacing:.09em;text-transform:uppercase;color:#C9A8FF}
+.fh h1{font-size:clamp(38px,6vw,68px);line-height:.98;font-weight:900;letter-spacing:-.04em;margin-top:10px;max-width:15ch}
+.fh h1 em{font-style:normal;background:linear-gradient(90deg,#C9A8FF,#FFB37A);-webkit-background-clip:text;background-clip:text;color:transparent}
+.fh .lead{margin-top:16px;font-size:19px;color:var(--nmut);max-width:42em}
+.q{margin-top:26px}
+.q input{width:100%;max-width:560px;font:700 20px var(--f);padding:14px 18px;border-radius:16px;border:2px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:var(--nink)}
+.q input::placeholder{color:var(--nmut);font-weight:600}
+.q input:focus{outline:none;border-color:#C9A8FF;background:rgba(255,255,255,.16)}
+.fchips{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.fchips button{--c:#793FCB;--k:#fff;border:2px solid transparent;border-radius:999px;background:var(--c);color:var(--k);font:800 14px var(--f);padding:6px 13px;opacity:.6;cursor:pointer}
+.fchips button:hover{opacity:.85}
+.fchips button[aria-pressed="true"]{opacity:1;border-color:#fff}
+.fchips button b{font:500 12px var(--mono);margin-left:6px;opacity:.85}
+.main{padding-block:36px 72px}
+.cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:34px;align-items:start}
+.grp{margin-bottom:24px}
+.grp h2{font-size:19px;font-weight:900;display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.grp h2 i{width:14px;height:14px;border-radius:5px;background:var(--c)}
+.grp h2 small{font:500 12.5px var(--mono);color:var(--mut)}
+.fm{display:flex;flex-wrap:wrap;gap:8px}
+.fm button{--c:#793FCB;--k:#fff;border:3px solid transparent;background:var(--c);color:var(--k);font:800 16px var(--f);padding:9px 16px;border-radius:14px;transition:transform .12s;cursor:pointer}
+.fm button:hover{transform:translateY(-2px)}
+.fm button[aria-pressed="true"]{border-color:var(--ink);box-shadow:0 8px 20px color-mix(in srgb,var(--c) 45%,transparent)}
+.panel{position:sticky;top:calc(env(safe-area-inset-top,0px) + 76px);border-radius:26px;padding:26px;background:var(--c);color:var(--k)}
+.panel .tag{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+.panel h3{font-size:clamp(40px,5vw,60px);font-weight:900;line-height:1;margin-top:6px;letter-spacing:-.04em}
+.panel .nt{margin-top:8px;font-size:16.5px;opacity:.95;min-height:1.5em}
+.panel h4{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;margin:22px 0 10px;opacity:.85}
+.dest{display:flex;flex-wrap:wrap;gap:8px}
+.dest span{background:rgba(255,255,255,.22);border-radius:12px;padding:7px 13px;font-weight:800;font-size:16px}
+.dest span small{font-weight:600;opacity:.85;margin-left:5px;font-size:12.5px}
+.panel.ly .dest span{background:rgba(43,29,2,.14)}
+.tl{margin:0;padding:0;list-style:none;display:grid;gap:7px}
+.tl li{display:flex;gap:10px;font-weight:600;font-size:15.5px}
+.tl li::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:currentColor;margin-top:9px}
+.none{color:var(--mut);padding:20px 0}
+.beta{display:inline-block;font:800 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;background:var(--labs);color:var(--labs-ink);border-radius:6px;padding:2px 7px;margin-left:8px}
+footer{margin-top:0}
+@media (max-width:860px){.cols{grid-template-columns:minmax(0,1fr)}.panel{position:static;order:-1}}
+@media (max-width:520px){nav a{padding:6px 9px;font-size:14px}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <a class="logo" href="index.html"><img src="img/icona.svg" alt="">Cedro</a>
+  <nav aria-label="Sezioni"><a href="index.html#cosa-fa" data-it="Cosa fa" data-en="Features">Cosa fa</a><a href="formati.html" aria-current="page" data-it="Formati" data-en="Formats">Formati</a><a class="nl" href="index.html#labs">Cedro 4 Labs</a><a href="index.html#domande" data-it="Domande" data-en="FAQ">Domande</a><a class="cta" href="index.html#scarica" data-it="Scarica" data-en="Download">Scarica</a></nav>
+  <div class="lang" role="group" aria-label="Lingua"><button type="button" data-l="it" aria-pressed="true">IT</button><button type="button" data-l="en" aria-pressed="false">EN</button></div>
+</div></header>
+<main>
+<section class="fh"><div class="wrap">
+  <div class="eye"><span data-it="Formati · <b class='cnt'></b> letti" data-en="Formats · <b class='cnt'></b> read">Formati</span></div>
+  <h1 data-it="Che file hai? <em>Cedro sa cosa farne.</em>" data-en="Got a file? <em>Cedro knows what to do.</em>">Che file hai?</h1>
+  <p class="lead" data-it="Scrivi l'estensione o toccane una: vedi in che cosa Cedro la trasforma e quali strumenti ha per quel tipo di file. Tutto sul tuo computer." data-en="Type the extension or tap one: see what Cedro turns it into and which tools it has for that kind of file. All on your computer.">Scrivi l'estensione.</p>
+  <div class="q"><input id="q" type="search" autocomplete="off"></div>
+  <div class="fchips" id="fch" role="group" aria-label="Tipo di file"></div>
+</div></section>
+<div class="wrap main"><div class="cols"><div id="list"></div><aside class="panel" id="panel" aria-live="polite"></aside></div></div>
+</main>
+<footer><div class="wrap"><span data-it="Cedro · gratis e open source, licenza MIT" data-en="Cedro · free and open source, MIT licence">Cedro · gratis e open source, licenza MIT</span><span><a href="https://github.com/realfulvio/cedro">GitHub</a> · <a href="https://github.com/realfulvio/cedro/releases" data-it="Tutte le versioni" data-en="All releases">Tutte le versioni</a> · <a href="https://github.com/realfulvio/cedro/issues" data-it="Segnala un problema" data-en="Report a problem">Segnala un problema</a></span></div></footer>
+<script>
+const FAM=[
+{id:'img',name:'Immagini',c:'#2F6FDB',ink:'#fff',blurb:'Foto, grafica e scatti dal telefono',tools:['Comprimi','Dimezza','Bianco e nero','Ruota','Togli i metadati','Leggi il testo (OCR)','Raddrizza le foto']},
+{id:'doc',name:'Documenti',c:'#7A4BD6',ink:'#fff',blurb:'Word, ODT e RTF senza Office',tools:['Anonimo (togli autore e dati nascosti)','PDF/A, password, caratteri incorporati']},
+{id:'txt',name:'Testo e fogli',c:'#14845B',ink:'#fff',blurb:'Excel, CSV, Markdown, JSON, HTML',tools:['Maiuscolo / minuscolo','Separatore e codifica a scelta']},
+{id:'pdf',name:'PDF',c:'#D8434B',ink:'#fff',blurb:'Da PDF a Word, Excel, immagini',tools:['OCR sulle scansioni','Unisci','Dividi','Ruota, togli pagine, numeri, filigrana','Comprimi','Anonimo']},
+{id:'aud',name:'Audio',c:'#E86A1C',ink:'#fff',blurb:'Cambia formato e trascrivi',tools:['Volume, tagli, silenzi','Canali e kbps','Tag dei brani']},
+{id:'vid',name:'Video',c:'#0E8FA3',ink:'#fff',blurb:'Da qualsiasi video a MP4 o solo audio',tools:['Risoluzione e fps','Senza audio','Ottimizzato per il web','Scarica dal web (YouTube e altri)']},
+{id:'zip',name:'Archivi',c:'#8A5A2B',ink:'#fff',blurb:'Converte quello che sta dentro lo ZIP',tools:['Pacchetto dati con SHA-256 (BagIt)','Verifica il pacchetto']},
+{id:'lab',name:'Laboratorio',c:'#F2B631',ink:'#2B1D02',blurb:'DICOM, vetrini digitali, microscopia',tools:['Copia anonima','Figura per articolo con barra di scala','Tessere per AI','Livello: panoramica, medio, pieno']}
+];
+const OUT={png:'PNG',jpeg:'JPEG',webp:'WebP',avif:'AVIF',jxl:'JPEG XL',bmp:'BMP',gif:'GIF',tiff:'TIFF',ico:'ICO',tga:'TGA',qoi:'QOI',pnm:'PNM',hdr:'HDR',exr:'OpenEXR',pdf:'PDF',docx:'Word',odt:'ODT',html:'HTML',md:'Markdown',txt:'Testo',csv:'CSV',xlsx:'Excel',json:'JSON',mp3:'MP3',wav:'WAV',flac:'FLAC',opus:'Opus',aiff:'AIFF',mp4:'MP4',srt:'SRT',vtt:'VTT',zip:'ZIP'};
+const IMG=['png','jpeg','webp','avif','jxl','bmp','gif','tiff','ico','tga','qoi','pnm','hdr','exr','pdf'];
+const TXT=['txt','html','md','csv','xlsx','json','pdf'];
+const TR=['docx','txt','srt','vtt'];
+const LAB=['png','jpeg','tiff','webp','pdf'];
+// [etichetta, famiglia, uscite, nota, extra]
+const IN=[
+['PNG','img',IMG,'Nitida, senza perdite'],['JPEG','img',IMG,'Foto di ogni genere'],['HEIC','img',IMG,'Le foto dell’iPhone, anche .heif'],['WebP','img',IMG,'Per il web'],['AVIF','img',IMG,'Compressa moderna'],['JPEG XL','img',IMG,'Anche senza perdita'],['SVG','img',IMG,'Grafica vettoriale'],['BMP','img',IMG,''],['GIF','img',IMG,''],['TIFF','img',IMG,'Anche multipagina'],['ICO','img',IMG,'Icone'],['TGA','img',IMG,''],['QOI','img',IMG,''],['PNM','img',IMG,'PPM, PGM, PBM'],['HDR','img',IMG,'Radiance'],['OpenEXR','img',IMG,'.exr'],['DDS','img',IMG,'Texture dei giochi'],
+['DOCX','doc',['pdf','docx','odt','html','md','txt'],'Word, fedele a come lo stampa Word'],['DOC','doc',['pdf','docx','odt','html','md','txt'],'Anche Word 6 e 95'],['ODT','doc',['pdf','docx','odt','html','md','txt'],'LibreOffice'],['RTF','doc',['pdf','docx','odt','html','md','txt'],''],
+['TXT','txt',TXT,''],['Markdown','txt',TXT,'.md'],['CSV','txt',TXT,'Con il separatore che vuoi'],['TSV','txt',TXT,''],['JSON','txt',TXT,'Anche rientrato'],['HTML','txt',TXT,''],['XML','txt',TXT,''],['Excel XLSX','txt',TXT,'Anche .xlsm; Excel in PDF come lo stampa Excel'],['Excel XLS','txt',TXT,'Il vecchio Excel'],['ODS','txt',TXT,'LibreOffice Calc'],
+['PDF','pdf',['png','jpeg','docx','xlsx','txt'],'Word con tabelle vere; l’OCR legge le scansioni'],
+['WAV','aud',['mp3','wav','flac','opus','aiff'].concat(TR),''],['MP3','aud',['mp3','wav','flac','opus','aiff'].concat(TR),''],['OGG','aud',['mp3','wav','flac','opus','aiff'].concat(TR),''],['Opus','aud',['mp3','wav','flac','opus','aiff'].concat(TR),''],['M4A','aud',['mp3','wav','flac','opus','aiff'].concat(TR),'Anche i vocali'],['AAC','aud',['mp3','wav','flac','opus','aiff'].concat(TR),''],['FLAC','aud',['mp3','wav','flac','opus','aiff'].concat(TR),''],['AIFF','aud',['mp3','wav','flac','opus','aiff'].concat(TR),''],['CAF','aud',['mp3','wav','flac','opus','aiff'].concat(TR),''],
+['MP4','vid',['mp4','mp3'].concat(TR),''],['WebM','vid',['mp4','mp3'].concat(TR),''],['MOV','vid',['mp4','mp3'].concat(TR),''],['MKV','vid',['mp4','mp3'].concat(TR),''],['AVI','vid',['mp4','mp3'].concat(TR),''],
+['ZIP','zip',['webp','jpeg','png','mp3','wav','pdf'],'Converte i file dentro e rifà lo ZIP'],
+['DICOM','lab',LAB,'TC, RX, ecografie; finestra Polmone, Osso, Tessuti molli; anche anonimizzato'],['SVS','lab',LAB,'Vetrini Aperio'],['NDPI','lab',LAB,'Vetrini Hamamatsu'],['MRXS','lab',LAB,'Vetrini 3DHistech'],['CZI','lab',LAB,'Zeiss'],['ND2','lab',LAB,'Nikon'],['LIF','lab',LAB,'Leica'],['OME-TIFF','lab',LAB,'Anche TIFF di ImageJ e a 16 bit']
+];
+const PLUS={lab:['Copia anonima','Figura per articolo con barra di scala'],aud:['Riassunto con l’AI'],vid:['Riassunto con l’AI','Dal web: incolli il link']};
+const PLUSF={SVS:['Tessere per AI'],NDPI:['Tessere per AI'],MRXS:['Tessere per AI'],PDF:['Unisci','Dividi','Comprimi','OCR']};
+function fam(id){return FAM.find(f=>f.id===id)}
+const OUTFAM={}; 
+for(const k of ['png','jpeg','webp','avif','jxl','bmp','gif','tiff','ico','tga','qoi','pnm','hdr','exr'])OUTFAM[k]='img';
+Object.assign(OUTFAM,{pdf:'pdf',docx:'doc',odt:'doc',html:'txt',md:'txt',txt:'txt',csv:'txt',xlsx:'txt',json:'txt',mp3:'aud',wav:'aud',flac:'aud',opus:'aud',aiff:'aud',mp4:'vid',srt:'vid',vtt:'vid',zip:'zip'});
+
+const EN={'Immagini':'Images','Documenti':'Documents','Testo e fogli':'Text and sheets','Archivi':'Archives','Laboratorio':'Laboratory',
+'Foto, grafica e scatti dal telefono':'Photos, graphics and phone shots','Word, ODT e RTF senza Office':'Word, ODT and RTF without Office','Excel, CSV, Markdown, JSON, HTML':'Excel, CSV, Markdown, JSON, HTML','Da PDF a Word, Excel, immagini':'From PDF to Word, Excel, images','Cambia formato e trascrivi':'Convert and transcribe','Da qualsiasi video a MP4 o solo audio':'Any video to MP4 or audio only','Converte quello che sta dentro lo ZIP':'Converts what is inside the ZIP','DICOM, vetrini digitali, microscopia':'DICOM, digital slides, microscopy',
+'Comprimi':'Compress','Dimezza':'Halve the size','Bianco e nero':'Black and white','Ruota':'Rotate','Togli i metadati':'Strip metadata','Leggi il testo (OCR)':'Read the text (OCR)','Raddrizza le foto':'Straighten photos',
+'Anonimo (togli autore e dati nascosti)':'Anonymous (remove author and hidden data)','PDF/A, password, caratteri incorporati':'PDF/A, password, embedded fonts','Maiuscolo / minuscolo':'Upper / lower case','Separatore e codifica a scelta':'Separator and encoding of your choice',
+'OCR sulle scansioni':'OCR on scans','Unisci':'Merge','Dividi':'Split','Ruota, togli pagine, numeri, filigrana':'Rotate, remove pages, page numbers, watermark','Anonimo':'Anonymous',
+'Volume, tagli, silenzi':'Volume, trims, silences','Canali e kbps':'Channels and kbps','Tag dei brani':'Track tags','Risoluzione e fps':'Resolution and fps','Senza audio':'No audio','Ottimizzato per il web':'Web-optimised','Scarica dal web (YouTube e altri)':'Download from the web (YouTube and others)',
+'Pacchetto dati con SHA-256 (BagIt)':'Data package with SHA-256 (BagIt)','Verifica il pacchetto':'Verify the package','Copia anonima':'Anonymous copy','Figura per articolo con barra di scala':'Paper figure with scale bar','Tessere per AI':'Tiles for AI','Livello: panoramica, medio, pieno':'Level: overview, medium, full',
+'Riassunto con l\u2019AI':'AI summary','Dal web: incolli il link':'From the web: paste the link',
+'Nitida, senza perdite':'Sharp, lossless','Foto di ogni genere':'Photos of every kind','Le foto dell\u2019iPhone, anche .heif':'iPhone photos, .heif too','Per il web':'For the web','Compressa moderna':'Modern compression','Anche senza perdita':'Lossless too','Grafica vettoriale':'Vector graphics','Anche multipagina':'Multipage too','Icone':'Icons','Texture dei giochi':'Game textures',
+'Word, fedele a come lo stampa Word':'Word, faithful to how Word prints it','Anche Word 6 e 95':'Word 6 and 95 too','Con il separatore che vuoi':'With the separator you choose','Anche rientrato':'Indented too','Anche .xlsm; Excel in PDF come lo stampa Excel':'.xlsm too; Excel to PDF as Excel prints it','Il vecchio Excel':'The old Excel',
+'Word con tabelle vere; l\u2019OCR legge le scansioni':'Word with real tables; OCR reads scans','Anche i vocali':'Voice messages too','Converte i file dentro e rifà lo ZIP':'Converts the files inside and rebuilds the ZIP',
+'TC, RX, ecografie; finestra Polmone, Osso, Tessuti molli; anche anonimizzato':'CT, X-ray, ultrasound; Lung, Bone, Soft tissue windows; anonymised too','Vetrini Aperio':'Aperio slides','Vetrini Hamamatsu':'Hamamatsu slides','Vetrini 3DHistech':'3DHistech slides','Anche TIFF di ImageJ e a 16 bit':'ImageJ and 16-bit TIFF too',
+'Foto in WebP':'Photos to WebP','Foto in JPEG':'Photos to JPEG','Foto in PNG':'Photos to PNG','Audio in MP3':'Audio to MP3','Audio in WAV':'Audio to WAV','Documenti in PDF':'Documents to PDF',
+'documento':'document','testo semplice':'plain text','sottotitoli':'subtitles','sottotitoli web':'web subtitles','Testo':'Text','Diventa':'Becomes','Trascrizione, in locale':'Transcription, on your computer','Strumenti per questo file':'Tools for this file',
+'Tutti':'All','Cerca un formato':'Search a format','Per esempio heic, docx, svs…':'For example heic, docx, svs…','Nessun formato con questo nome. Se manca qualcosa che ti serve, puoi segnalarlo su GitHub.':'No format with this name. If something you need is missing, you can report it on GitHub.'};
+let L='it';
+const t=s=>L==='en'&&EN[s]||s;
+const ZIPL={webp:'Foto in WebP',jpeg:'Foto in JPEG',png:'Foto in PNG',mp3:'Audio in MP3',wav:'Audio in WAV',pdf:'Documenti in PDF'};
+const TRL={docx:'documento',txt:'testo semplice',srt:'sottotitoli',vtt:'sottotitoli web'};
+let sel='HEIC',q='',ff='all';
+const $=s=>document.querySelector(s);
+const fch=$('#fch'),isLab=f=>f.id==='lab';
+function chips(){fch.innerHTML='';
+ const all=document.createElement('button');all.textContent=t('Tutti');all.style.setProperty('--c','#6B4A9E');all.setAttribute('aria-pressed',ff==='all');all.onclick=()=>{ff='all';draw()};fch.append(all);
+ FAM.forEach(f=>{const b=document.createElement('button');b.style.setProperty('--c',f.c);b.style.setProperty('--k',f.ink);b.setAttribute('aria-pressed',ff===f.id);b.innerHTML=t(f.name)+'<b>'+IN.filter(x=>x[1]===f.id).length+'</b>';b.onclick=()=>{ff=ff===f.id?'all':f.id;draw()};fch.append(b)});}
+function draw(){chips();const List=$('#list');List.innerHTML='';let first=null;
+ FAM.forEach(f=>{if(ff!=='all'&&ff!==f.id)return;const items=IN.filter(x=>x[1]===f.id&&(!q||x[0].toLowerCase().includes(q)));if(!items.length)return;
+  const g=document.createElement('section');g.className='grp';g.style.setProperty('--c',f.c);
+  g.innerHTML='<h2><i></i>'+t(f.name)+(isLab(f)?'<span class="beta">Cedro 4 Labs beta</span>':'')+' <small>'+t(f.blurb)+'</small></h2>';
+  const w=document.createElement('div');w.className='fm';
+  items.forEach(x=>{if(!first)first=x[0];const b=document.createElement('button');b.type='button';b.textContent=x[0];b.style.setProperty('--c',f.c);b.style.setProperty('--k',f.ink);b.setAttribute('aria-pressed',x[0]===sel);b.onclick=()=>{sel=x[0];draw()};w.append(b)});
+  g.append(w);List.append(g)});
+ if(!first)List.innerHTML='<p class="none">'+t('Nessun formato con questo nome. Se manca qualcosa che ti serve, puoi segnalarlo su GitHub.')+'</p>';
+ panel(IN.find(x=>x[0]===sel)||IN[0]);
+ $('#q').placeholder=t('Per esempio heic, docx, svs…');$('#q').setAttribute('aria-label',t('Cerca un formato'));}
+function panel(it){const f=fam(it[1]),p=$('#panel');p.style.setProperty('--c',f.c);p.style.setProperty('--k',f.ink);p.classList.toggle('ly',isLab(f));
+ const av=it[1]==='aud'||it[1]==='vid';
+ const tr=av?it[2].filter(k=>TR.includes(k)):[],rest=av?it[2].filter(k=>!TR.includes(k)):it[2];
+ let h='<div class="tag">'+t(f.name)+'</div><h3>'+it[0]+'</h3><p class="nt">'+t(it[3]||f.blurb)+'</p>';
+ h+='<h4>'+t('Diventa')+'</h4><div class="dest">'+rest.map(k=>'<span>'+t(it[1]==='zip'?ZIPL[k]:OUT[k])+'</span>').join('')+'</div>';
+ if(tr.length)h+='<h4>'+t('Trascrizione, in locale')+'</h4><div class="dest">'+tr.map(k=>'<span>'+t(OUT[k])+'<small>'+t(TRL[k])+'</small></span>').join('')+'</div>';
+ const tools=[...new Set(f.tools.concat(PLUS[it[1]]||[],PLUSF[it[0]]||[]))];
+ h+='<h4>'+t('Strumenti per questo file')+'</h4><ul class="tl">'+tools.map(x=>'<li>'+t(x)+'</li>').join('')+'</ul>';
+ p.innerHTML=h;}
+$('#q').addEventListener('input',e=>{q=e.target.value.trim().toLowerCase().replace(/^\./,'');const m=IN.filter(x=>x[0].toLowerCase().includes(q));if(q&&m.length)sel=m[0][0];draw()});
+function setL(l){L=l;document.documentElement.lang=l;
+ document.querySelectorAll('[data-it]').forEach(e=>{e.innerHTML=l==='en'?e.dataset.en:e.dataset.it});document.querySelectorAll('.cnt').forEach(e=>e.textContent=IN.length);
+ [].forEach.call(document.querySelectorAll('.lang button'),b=>b.setAttribute('aria-pressed',b.dataset.l===l));
+ try{localStorage.setItem('cedro-lang',l)}catch(e){}draw();}
+[].forEach.call(document.querySelectorAll('.lang button'),b=>b.addEventListener('click',()=>setL(b.dataset.l)));
+let l0='it';try{l0=localStorage.getItem('cedro-lang')||((navigator.language||'it').slice(0,2)==='it'?'it':'en')}catch(e){}
+setL(l0);
+</script>
+</body>
+</html>
