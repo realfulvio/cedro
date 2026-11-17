@@ -42,7 +42,7 @@ impl<R: Seek> Seek for NoLoop<R> {
 }
 
 /// `Mp4Reader::read_header` che non può restare in un giro senza fine su un file rovinato.
-pub(crate) fn mp4_reader(file: File, size: u64) -> mp4::Result<mp4::Mp4Reader<std::io::BufReader<NoLoop<File>>>> {
+pub(crate) fn mp4_reader<R:Read+Seek>(file: R, size: u64) -> mp4::Result<mp4::Mp4Reader<std::io::BufReader<NoLoop<R>>>> {
     mp4::Mp4Reader::read_header(std::io::BufReader::new(NoLoop { inner: file, last: u64::MAX, same: 0, read: false }), size)
 }
 

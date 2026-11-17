@@ -683,7 +683,7 @@ mod prove {
         let expected=Slide::open(&path).unwrap().read_level(&path,0).unwrap();
         let mut source=std::fs::File::open(&path).unwrap();source.seek(SeekFrom::Start(13)).unwrap();
         let source=std::sync::Arc::new(source);let fd=source.as_raw_fd();
-        crate::input_file::register(fd,source.clone());
+        crate::input_file::register(&path,fd,source.clone());
         std::fs::remove_file(&path).unwrap();
         std::os::unix::fs::symlink(format!("/proc/self/fd/{fd}"),&path).unwrap();
         assert!(is_ndpi(&path));assert!(crate::svs::is_slide(&path));
