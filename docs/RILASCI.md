@@ -10,6 +10,7 @@ Ogni versione pubblicata finora, dalla più recente alla prima. Le note complete
 
 | Versione | Data | Cosa porta |
 | --- | --- | --- |
+| [0.54.1](https://github.com/realfulvio/cedro/releases/tag/v0.54.1) | 18/11 | **Correzioni da file rovinati**: vetrini VSI con misure impossibili e miniature di BMP/DDS rovinati non chiudono più Cedro; Dividi e Unisci PDF con nomi riservati di Windows (Con, Aux, Nul, Com1…) salvano senza errori |
 | [0.54.0](https://github.com/realfulvio/cedro/releases/tag/v0.54.0) | 17/11 | Cedro 4 Labs: vetrini **Olympus VSI**, **CD DICOM** aperti dal DICOMDIR, **referti dettati già impaginati** (logo, caso, specie, campione, bozza fino alla conferma), **mappa delle piastre a colori**, **registro dei lavori in Excel**, «Copia per il quaderno» nel risultato |
 | [0.53.0](https://github.com/realfulvio/cedro/releases/tag/v0.53.0) | 16/11 | **Correzioni dal banco di prova**: anonimizzazione DICOM al profilo base, avvisi sulla firma (SHA-1, PDF cambiato dopo la firma), Dividi che tiene titolo e metadati, trascrizione senza parole inventate su silenzio e rumori, avviso per arabo ed ebraico in Word, .doc rovinati senza consumo di memoria |
 | [0.52.0](https://github.com/realfulvio/cedro/releases/tag/v0.52.0) | 16/11 | **Converti file** e **Video dal web** riordinati: formati delle immagini per famiglia, strumenti a tessere con il riquadro del laboratorio a parte, qualità del video in tessere e interruttori in gruppi |

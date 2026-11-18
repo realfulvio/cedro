@@ -823,7 +823,13 @@ pub fn cuts_text(cuts: &[u32], total: u32) -> String {
 pub fn safe_name(title: &str) -> String {
     let s: String = title.chars().map(|c| if matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') || c.is_control() { '-' } else { c }).collect();
     let s = s.trim().trim_end_matches('.').trim();
-    s.chars().take(80).collect()
+    let s: String = s.chars().take(80).collect();
+    // «Con», «Aux», «Nul», «Com1»…: su Windows sono dispositivi, anche con l'estensione («Con.pdf»): un segnalibro
+    // con questo titolo non si può salvare come file.
+    let base = s.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+    let riservato = matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (base.len() == 4 && (base.starts_with("COM") || base.starts_with("LPT")) && base.as_bytes()[3].is_ascii_digit() && base.as_bytes()[3] != b'0');
+    if riservato { format!("_{s}") } else { s }
 }
 
 #[cfg(test)]
@@ -831,6 +837,36 @@ mod tests {
     use super::*;
     use lopdf::content::{Content, Operation};
     use lopdf::dictionary;
+
+    #[test]
+    fn un_titolo_che_su_windows_e_un_dispositivo_non_diventa_un_nome_di_file_impossibile() {
+        for t in ["Con", "aux", "NUL", "com1", "LPT9", "Con.1", "prn "] {
+            assert!(safe_name(t).starts_with('_'), "{t}");
+        }
+        for t in ["Console", "Com0", "COM10", "Capitolo 1", "auxiliary", "Nul e poi"] {
+            assert_eq!(safe_name(t), t.trim(), "{t}");
+        }
+        assert_eq!(safe_name("a:b/c?"), "a-b-c-");
+    }
+
+    /// Sul file system vero (su Windows «Con.pdf» sarebbe il dispositivo, non un file): i file escono e si rileggono.
+    #[test]
+    fn i_nomi_riservati_diventano_file_veri_nella_cartella() {
+        let dir = std::env::temp_dir().join(format!("cedro-nomi-riservati-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let titoli = ["Con", "Aux", "Nul", "Com1", "Lpt9"];
+        for t in titoli {
+            std::fs::write(dir.join(format!("{}.pdf", safe_name(t))), t.as_bytes()).unwrap();
+        }
+        let mut trovati: Vec<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        trovati.sort();
+        assert_eq!(trovati, ["_Aux.pdf", "_Com1.pdf", "_Con.pdf", "_Lpt9.pdf", "_Nul.pdf"]);
+        for t in titoli {
+            assert_eq!(std::fs::read(dir.join(format!("_{t}.pdf"))).unwrap(), t.as_bytes());
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// Un PDF di prova con `n` pagine e un carattere uguale per tutti; `marks` aggiunge segnalibri.
     pub(crate) fn sample(n: u32, label: &str, marks: bool) -> Vec<u8> {
