@@ -133,7 +133,7 @@ const LANGS: [&str; 3] = ["auto", "it", "en"];
 /// Le scelte della lingua dell'interfaccia, nell'ordine dell'elenco.
 const SECTIONS: [&str; 8] = ["Generale", "Ruota", "Salvataggio", "Qualità", "OCR", "Aggiornamenti", "Sistema", "Informazioni"];
 const MARK: &[u8] = cedro::edizione::ICONA;
-const POWERED_BY: &str = "Powered by realhcok";
+const POWERED_BY: &str = "Powered by real>hcok_";
 
 /// Una riga di impostazione: titolo e descrizione a sinistra, il controllo a destra.
 fn setting(title: &str, desc: &str, control: &impl IsA<gtk4::Widget>) -> HBox {
