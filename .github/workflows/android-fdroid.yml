@@ -101,6 +101,7 @@ jobs:
           touch _site/.nojekyll
           # Versione, file, dimensioni e data dell'ultima release desktop (se non si legge, resta la pagina com'è).
           python3 _main/tools/aggiorna-sito.py _site/index.html
+          python3 _main/tools/aggiorna-sito.py _site/en/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
