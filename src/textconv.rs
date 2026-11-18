@@ -317,7 +317,7 @@ Rossi; realhcok,\"dice \"\"ciao\"\"\"
 
     #[test]
     fn csv_becomes_json_objects_or_arrays() {
-        let rows = parse_csv("nome;eta\nLuca;40\n", ';');
+        let rows = parse_csv("nome;eta\nrealhcok;40\n", ';');
         assert_eq!(csv_to_json(&rows, true, false), "[{\"nome\":\"realhcok\",\"eta\":\"40\"}]");
         assert_eq!(csv_to_json(&rows, false, false), "[[\"nome\",\"eta\"],[\"realhcok\",\"40\"]]");
     }
