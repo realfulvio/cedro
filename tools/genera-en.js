@@ -6,7 +6,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
 const SITO = path.resolve(__dirname, '..', 'site');
-const B = 'https://realfulvio.github.io/cedro/';
+const B = 'https://cedrolabs.app/';
 const META = {
   'index.html': {
     title: 'Cedro: free file converter, PDF tools and transcription',

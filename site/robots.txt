@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://realfulvio.github.io/cedro/sitemap.xml
+Sitemap: https://cedrolabs.app/sitemap.xml

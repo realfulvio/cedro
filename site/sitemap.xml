@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://realfulvio.github.io/cedro/</loc>
-    <xhtml:link rel="alternate" hreflang="it" href="https://realfulvio.github.io/cedro/"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://realfulvio.github.io/cedro/en/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://realfulvio.github.io/cedro/"/>
+    <loc>https://cedrolabs.app/</loc>
+    <xhtml:link rel="alternate" hreflang="it" href="https://cedrolabs.app/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cedrolabs.app/en/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cedrolabs.app/"/>
   </url>
   <url>
-    <loc>https://realfulvio.github.io/cedro/en/</loc>
-    <xhtml:link rel="alternate" hreflang="it" href="https://realfulvio.github.io/cedro/"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://realfulvio.github.io/cedro/en/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://realfulvio.github.io/cedro/"/>
+    <loc>https://cedrolabs.app/en/</loc>
+    <xhtml:link rel="alternate" hreflang="it" href="https://cedrolabs.app/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cedrolabs.app/en/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cedrolabs.app/"/>
   </url>
   <url>
-    <loc>https://realfulvio.github.io/cedro/formati.html</loc>
-    <xhtml:link rel="alternate" hreflang="it" href="https://realfulvio.github.io/cedro/formati.html"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://realfulvio.github.io/cedro/en/formati.html"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://realfulvio.github.io/cedro/formati.html"/>
+    <loc>https://cedrolabs.app/formati.html</loc>
+    <xhtml:link rel="alternate" hreflang="it" href="https://cedrolabs.app/formati.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cedrolabs.app/en/formati.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cedrolabs.app/formati.html"/>
   </url>
   <url>
-    <loc>https://realfulvio.github.io/cedro/en/formati.html</loc>
-    <xhtml:link rel="alternate" hreflang="it" href="https://realfulvio.github.io/cedro/formati.html"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://realfulvio.github.io/cedro/en/formati.html"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://realfulvio.github.io/cedro/formati.html"/>
+    <loc>https://cedrolabs.app/en/formati.html</loc>
+    <xhtml:link rel="alternate" hreflang="it" href="https://cedrolabs.app/formati.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://cedrolabs.app/en/formati.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://cedrolabs.app/formati.html"/>
   </url>
 </urlset>
