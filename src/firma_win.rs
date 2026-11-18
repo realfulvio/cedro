@@ -63,12 +63,11 @@ pub unsafe fn draw(di: &DRAWITEMSTRUCT, bg: COLORREF, fg: COLORREF, primary: COL
         text("Comune di Bondeno", primary, &mut x);
         text("  ·  ", fg, &mut x);
     }
-    text("Powered by realhcok", fg, &mut x);
+    text("Powered by", fg, &mut x);
     x += gap;
     let width = cedro::logo::width(true) * scale;
     crate::wingfx::draw_logo(hdc, x as f32, baseline, scale, true, primary, LEMON, REAL_GREY);
     x += width.ceil() as i32 + gap;
-    text("A.", fg, &mut x);
     if !suffix.is_empty() {
         text(suffix, fg, &mut x);
     }

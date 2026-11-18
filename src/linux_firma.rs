@@ -73,11 +73,11 @@ pub fn firma(version: bool, suffix: &str, ente: bool) -> gtk4::Box {
         row.append(&stemma);
     }
     let head = match (version, ente) {
-        (true, _) => format!("Cedro {}  ·  Powered by realhcok ", cedro::update::CURRENT),
-        (false, true) => "Comune di Bondeno  ·  Powered by realhcok ".to_string(),
-        (false, false) => "Powered by realhcok ".to_string(),
+        (true, _) => format!("Cedro {}  ·  Powered by ", cedro::update::CURRENT),
+        (false, true) => "Comune di Bondeno  ·  Powered by ".to_string(),
+        (false, false) => "Powered by ".to_string(),
     };
-    for part in [Some(head), None, Some(format!(" A.{suffix}"))] {
+    for part in [Some(head), None, Some(suffix.to_string())] {
         match part {
             Some(text) => {
                 let label = Label::new(Some(&text));
