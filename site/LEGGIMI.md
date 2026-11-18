@@ -1,6 +1,8 @@
 # Sito di Cedro
 
-Pagina unica (IT/EN) pubblicata su GitHub Pages: https://realfulvio.github.io/cedro/
+Pagina unica (IT/EN) pubblicata su GitHub Pages: https://cedrolabs.app/
+
+Dominio: https://cedrolabs.app/ (DNS su Cloudflare, solo DNS senza proxy: 4 record A verso GitHub Pages + CNAME www verso realfulvio.github.io; dominio impostato in Settings → Pages). Il vecchio indirizzo realfulvio.github.io/cedro/ reindirizza qui. Il repository F-Droid resta con URL …/cedro/fdroid/repo (GitHub reindirizza).
 
 - Niente dipendenze né servizi esterni: HTML, CSS e JS in `index.html`, font Figtree in `fonts/` (licenza OFL), screenshot in `img/` (da `docs/v4`).
 - Il deploy lo fa `.github/workflows/android-fdroid.yml`, che mette nello stesso artefatto di Pages il sito e il repository F-Droid (`/fdroid/repo`). Un deploy sostituisce l'altro, quindi non creare un workflow Pages separato.
