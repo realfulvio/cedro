@@ -3237,9 +3237,9 @@ checksum = "6c449a84e4f468bb88e40868383e297605c6ab4b591ca600b5f78345e40f281e"
 
 [[package]]
 name = "oxideav-vp9"
-version = "0.0.14"
+version = "0.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8393dcba264eff599aab26a41d1a296eeeed556f0b34d06df52b0d1889fa7732"
+checksum = "5e612718ad22703e536b92053ec5762430a69aa80bc1fc72a23b824cac50aab0"
 dependencies = [
  "oxideav-core",
 ]
