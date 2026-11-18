@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://realfulvio.github.io/cedro/</loc>
+    <xhtml:link rel="alternate" hreflang="it" href="https://realfulvio.github.io/cedro/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://realfulvio.github.io/cedro/en/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://realfulvio.github.io/cedro/"/>
+  </url>
+  <url>
+    <loc>https://realfulvio.github.io/cedro/en/</loc>
+    <xhtml:link rel="alternate" hreflang="it" href="https://realfulvio.github.io/cedro/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://realfulvio.github.io/cedro/en/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://realfulvio.github.io/cedro/"/>
+  </url>
+  <url>
+    <loc>https://realfulvio.github.io/cedro/formati.html</loc>
+    <xhtml:link rel="alternate" hreflang="it" href="https://realfulvio.github.io/cedro/formati.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://realfulvio.github.io/cedro/en/formati.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://realfulvio.github.io/cedro/formati.html"/>
+  </url>
+  <url>
+    <loc>https://realfulvio.github.io/cedro/en/formati.html</loc>
+    <xhtml:link rel="alternate" hreflang="it" href="https://realfulvio.github.io/cedro/formati.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://realfulvio.github.io/cedro/en/formati.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://realfulvio.github.io/cedro/formati.html"/>
+  </url>
+</urlset>

@@ -5,10 +5,27 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Formati di Cedro: cosa legge e in cosa lo converte</title>
 <meta name="description" content="Tutti i formati che Cedro legge e in cui li trasforma: immagini, documenti, PDF, audio, video, DICOM e vetrini digitali. Tutto sul tuo computer.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#1B1325">
+<link rel="canonical" href="https://realfulvio.github.io/cedro/formati.html">
+<link rel="alternate" hreflang="it" href="https://realfulvio.github.io/cedro/formati.html">
+<link rel="alternate" hreflang="en" href="https://realfulvio.github.io/cedro/en/formati.html">
+<link rel="alternate" hreflang="x-default" href="https://realfulvio.github.io/cedro/formati.html">
 <link rel="icon" type="image/svg+xml" href="img/icona.svg">
+<link rel="icon" type="image/png" sizes="48x48" href="img/favicon-48.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta property="og:site_name" content="Cedro">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="it_IT">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:url" content="https://realfulvio.github.io/cedro/formati.html">
 <meta property="og:title" content="Formati di Cedro: cosa legge e in cosa lo converte">
 <meta property="og:description" content="Cerca il tuo file e vedi in cosa lo trasforma Cedro. Gratis, open source, tutto sul tuo computer.">
-<meta property="og:type" content="website">
+<meta property="og:image" content="https://realfulvio.github.io/cedro/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebPage", "@id": "https://realfulvio.github.io/cedro/formati.html", "url": "https://realfulvio.github.io/cedro/formati.html", "name": "Formati di Cedro", "isPartOf": {"@id": "https://realfulvio.github.io/cedro/#sito"}, "inLanguage": "it", "about": {"@id": "https://realfulvio.github.io/cedro/#app"}}, {"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "Cedro", "item": "https://realfulvio.github.io/cedro/"}, {"@type": "ListItem", "position": 2, "name": "Formati", "item": "https://realfulvio.github.io/cedro/formati.html"}]}]}</script>
 <style>
 @font-face{font-family:"Figtree";font-weight:400;font-style:normal;font-display:swap;src:url(fonts/Figtree-400.ttf) format("truetype")}
 @font-face{font-family:"Figtree";font-weight:600;font-style:normal;font-display:swap;src:url(fonts/Figtree-600.ttf) format("truetype")}
@@ -47,8 +64,8 @@ nav a:hover{color:var(--nink);background:rgba(255,255,255,.08)}
 nav a[aria-current=page]{color:var(--nink);background:rgba(255,255,255,.1)}
 nav a.cta{background:#F2EBFD;color:#2A1640}
 .lang{display:flex;background:rgba(255,255,255,.1);border-radius:999px;padding:3px}
-.lang button{font:800 13px var(--f);letter-spacing:.04em;border:0;background:transparent;color:var(--nmut);padding:5px 12px;border-radius:999px;cursor:pointer}
-.lang button[aria-pressed="true"]{background:#F2EBFD;color:#2A1640}
+.lang a{font:800 13px var(--f);letter-spacing:.04em;text-decoration:none;color:var(--nmut);padding:5px 12px;border-radius:999px}
+.lang a[aria-current="true"]{background:#F2EBFD;color:#2A1640}
 nav a.nl{color:var(--labs)}
 footer{background:var(--night);color:var(--nmut);padding-block:40px;font-size:15px}
 footer .wrap{display:flex;gap:20px;flex-wrap:wrap;justify-content:space-between;align-items:center}
@@ -100,9 +117,9 @@ footer{margin-top:0}
 </head>
 <body>
 <header class="top"><div class="wrap">
-  <a class="logo" href="index.html"><img src="img/icona.svg" alt="">Cedro</a>
+  <a class="logo" href="index.html"><img src="img/icona-96.png" alt="" width="32" height="32">Cedro</a>
   <nav aria-label="Sezioni"><a href="index.html#cosa-fa" data-it="Cosa fa" data-en="Features">Cosa fa</a><a href="formati.html" aria-current="page" data-it="Formati" data-en="Formats">Formati</a><a class="nl" href="index.html#labs">Cedro 4 Labs</a><a href="index.html#domande" data-it="Domande" data-en="FAQ">Domande</a><a class="cta" href="index.html#scarica" data-it="Scarica" data-en="Download">Scarica</a></nav>
-  <div class="lang" role="group" aria-label="Lingua"><button type="button" data-l="it" aria-pressed="true">IT</button><button type="button" data-l="en" aria-pressed="false">EN</button></div>
+  <div class="lang" role="group" aria-label="Lingua"><a data-l="it" href="formati.html" hreflang="it" lang="it" aria-current="true">IT</a><a data-l="en" href="en/formati.html" hreflang="en" lang="en">EN</a></div>
 </div></header>
 <main>
 <section class="fh"><div class="wrap">
@@ -196,11 +213,9 @@ function panel(it){const f=fam(it[1]),p=$('#panel');p.style.setProperty('--c',f.
 $('#q').addEventListener('input',e=>{q=e.target.value.trim().toLowerCase().replace(/^\./,'');const m=IN.filter(x=>x[0].toLowerCase().includes(q));if(q&&m.length)sel=m[0][0];draw()});
 function setL(l){L=l;document.documentElement.lang=l;
  document.querySelectorAll('[data-it]').forEach(e=>{e.innerHTML=l==='en'?e.dataset.en:e.dataset.it});document.querySelectorAll('.cnt').forEach(e=>e.textContent=IN.length);
- [].forEach.call(document.querySelectorAll('.lang button'),b=>b.setAttribute('aria-pressed',b.dataset.l===l));
- try{localStorage.setItem('cedro-lang',l)}catch(e){}draw();}
-[].forEach.call(document.querySelectorAll('.lang button'),b=>b.addEventListener('click',()=>setL(b.dataset.l)));
-let l0='it';try{l0=localStorage.getItem('cedro-lang')||((navigator.language||'it').slice(0,2)==='it'?'it':'en')}catch(e){}
-setL(l0);
+ draw();}
+window.cedroSet=setL;
+setL(document.documentElement.getAttribute('data-static')==='en'?'en':'it');
 </script>
 </body>
 </html>
