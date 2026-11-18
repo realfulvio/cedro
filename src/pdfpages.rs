@@ -849,6 +849,25 @@ mod tests {
         assert_eq!(safe_name("a:b/c?"), "a-b-c-");
     }
 
+    /// Sul file system vero (su Windows «Con.pdf» sarebbe il dispositivo, non un file): i file escono e si rileggono.
+    #[test]
+    fn i_nomi_riservati_diventano_file_veri_nella_cartella() {
+        let dir = std::env::temp_dir().join(format!("cedro-nomi-riservati-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let titoli = ["Con", "Aux", "Nul", "Com1", "Lpt9"];
+        for t in titoli {
+            std::fs::write(dir.join(format!("{}.pdf", safe_name(t))), t.as_bytes()).unwrap();
+        }
+        let mut trovati: Vec<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        trovati.sort();
+        assert_eq!(trovati, ["_Aux.pdf", "_Com1.pdf", "_Con.pdf", "_Lpt9.pdf", "_Nul.pdf"]);
+        for t in titoli {
+            assert_eq!(std::fs::read(dir.join(format!("_{t}.pdf"))).unwrap(), t.as_bytes());
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// Un PDF di prova con `n` pagine e un carattere uguale per tutti; `marks` aggiunge segnalibri.
     pub(crate) fn sample(n: u32, label: &str, marks: bool) -> Vec<u8> {
         let mut doc = Document::with_version("1.5");
