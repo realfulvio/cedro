@@ -13,7 +13,7 @@ pub fn image_text(path: &Path) -> Result<String, String> {
 }
 
 /// La memoria massima per i pixel di un'immagine che si apre intera.
-const MAX_IMAGE_BYTES: u64 = 2 << 30;
+pub(crate) const MAX_IMAGE_BYTES: u64 = 2 << 30;
 
 /// Apre un'immagine e la raddrizza secondo l'orientamento EXIF, come fanno le foto del telefono.
 pub fn open_upright(path: &Path) -> Result<DynamicImage, String> {
@@ -602,5 +602,7 @@ mod tests {
         // Un DDS rovinato che dichiara decine di GB di pixel: prima Cedro si chiudeva senza dire niente.
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/dds-misure-assurde.dds");
         assert!(open_upright(&path).is_err());
+        // Anche la miniatura nell'elenco dei file: prima abortiva allocando decine di GB.
+        assert!(crate::ui::media::image_thumb(&path, 64).is_none());
     }
 }
