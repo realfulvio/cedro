@@ -3,12 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Cedro: converti, trascrivi e firma i tuoi file</title>
-<meta name="description" content="Cedro cambia formato a foto, audio, video e documenti, lavora sui PDF, trascrive le riunioni e firma con la CNS. Tutto sul tuo computer. Gratis e open source per Windows e Linux.">
+<title>Cedro: convertitore di file, PDF, trascrizione e firma CNS</title>
+<meta name="description" content="Cedro converte foto, audio, video e PDF, trascrive le riunioni in Word e firma con la CNS. Gratis, open source, tutto offline su Windows e Linux.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#1B1325">
+<link rel="canonical" href="https://realfulvio.github.io/cedro/">
+<link rel="alternate" hreflang="it" href="https://realfulvio.github.io/cedro/">
+<link rel="alternate" hreflang="en" href="https://realfulvio.github.io/cedro/en/">
+<link rel="alternate" hreflang="x-default" href="https://realfulvio.github.io/cedro/">
 <link rel="icon" type="image/svg+xml" href="img/icona.svg">
+<link rel="icon" type="image/png" sizes="48x48" href="img/favicon-48.png">
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<meta property="og:site_name" content="Cedro">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="it_IT">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:url" content="https://realfulvio.github.io/cedro/">
 <meta property="og:title" content="Cedro: converti, trascrivi e firma i tuoi file">
 <meta property="og:description" content="Gratis, open source, tutto sul tuo computer. Windows 10 e 11 e Linux.">
-<meta property="og:type" content="website">
+<meta property="og:image" content="https://realfulvio.github.io/cedro/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="La finestra di Cedro sulla pagina Converti">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context": "https://schema.org", "@graph": [{"@type": "WebSite", "@id": "https://realfulvio.github.io/cedro/#sito", "url": "https://realfulvio.github.io/cedro/", "name": "Cedro", "inLanguage": "it"}, {"@type": "SoftwareApplication", "@id": "https://realfulvio.github.io/cedro/#app", "name": "Cedro", "url": "https://realfulvio.github.io/cedro/", "description": "Cedro converte foto, audio, video e documenti, lavora sui PDF, trascrive riunioni e firma con la CNS. Gratis, open source, tutto sul tuo computer.", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Windows 10, Windows 11, Linux", "softwareVersion": "0.53.0", "inLanguage": ["it", "en"], "isAccessibleForFree": true, "license": "https://opensource.org/licenses/MIT", "downloadUrl": "https://github.com/realfulvio/cedro/releases/latest", "codeRepository": "https://github.com/realfulvio/cedro", "image": "https://realfulvio.github.io/cedro/img/og.png", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}}, {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Cedro cambia il file originale?", "acceptedAnswer": {"@type": "Answer", "text": "No. Crea sempre una copia accanto all'originale, che resta com'era."}}, {"@type": "Question", "name": "Posso trascrivere un audio o una riunione senza internet?", "acceptedAnswer": {"@type": "Answer", "text": "Sì. La trascrizione gira sul tuo computer, anche con la scheda grafica se c'è, e il testo esce in Word, testo o sottotitoli. Internet serve solo la prima volta per scaricare il modello."}}, {"@type": "Question", "name": "Cedro trasforma un PDF in Word o in Excel?", "acceptedAnswer": {"@type": "Answer", "text": "Sì, con titoli, tabelle ed elenchi veri. Funziona anche sulle scansioni, grazie all'OCR."}}, {"@type": "Question", "name": "Posso firmare un PDF con la CNS?", "acceptedAnswer": {"@type": "Answer", "text": "Sì. Firmi con la smart card (CNS) o con la chiavetta USB, e verifichi i file .p7m e i PDF firmati che ricevi."}}, {"@type": "Question", "name": "Cedro apre i vetrini digitali e le immagini da microscopio?", "acceptedAnswer": {"@type": "Answer", "text": "Con Cedro 4 Labs sì: Aperio SVS, Hamamatsu NDPI, 3DHistech MRXS, Zeiss CZI, ND2, LIF, OME-TIFF e DICOM, anche con anonimizzazione."}}]}]}</script>
 <style>
 @font-face{font-family:"Figtree";font-weight:400;font-style:normal;font-display:swap;src:url(fonts/Figtree-400.ttf) format("truetype")}
 @font-face{font-family:"Figtree";font-weight:600;font-style:normal;font-display:swap;src:url(fonts/Figtree-600.ttf) format("truetype")}
@@ -49,8 +67,8 @@ nav a{text-decoration:none;font-weight:600;font-size:15px;padding:7px 12px;borde
 nav a:hover{color:var(--nink);background:rgba(255,255,255,.08)}
 nav a.cta{background:#F2EBFD;color:#2A1640}
 .lang{display:flex;background:rgba(255,255,255,.1);border-radius:999px;padding:3px}
-.lang button{font:800 13px var(--f);letter-spacing:.04em;border:0;background:transparent;color:var(--nmut);padding:5px 12px;border-radius:999px;cursor:pointer}
-.lang button[aria-pressed="true"]{background:#F2EBFD;color:#2A1640}
+.lang a{font:800 13px var(--f);letter-spacing:.04em;text-decoration:none;color:var(--nmut);padding:5px 12px;border-radius:999px}
+.lang a[aria-current="true"]{background:#F2EBFD;color:#2A1640}
 nav a.nl{color:var(--labs)}
 
 .btn{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:16px;text-decoration:none;padding:14px 24px;border-radius:14px}
@@ -189,9 +207,9 @@ footer a{color:var(--nink)}
 <body>
 
 <header class="top"><div class="wrap">
-  <a class="logo" href="#in-alto"><img src="img/icona.svg" alt="">Cedro</a>
+  <a class="logo" href="#in-alto"><img src="img/icona-96.png" alt="" width="32" height="32">Cedro</a>
   <nav aria-label="Sezioni"><a href="#cosa-fa">Cosa fa</a><a href="formati.html">Formati</a><a class="nl" href="#labs">Cedro 4 Labs</a><a href="#domande">Domande</a><a class="cta" href="#scarica">Scarica</a></nav>
-  <div class="lang" role="group" aria-label="Lingua"><button type="button" data-l="it" aria-pressed="true">IT</button><button type="button" data-l="en" aria-pressed="false">EN</button></div>
+  <div class="lang" role="group" aria-label="Lingua"><a data-l="it" href="./" hreflang="it" lang="it" aria-current="true">IT</a><a data-l="en" href="en/" hreflang="en" lang="en">EN</a></div>
 </div></header>
 
 <main id="in-alto">
@@ -202,7 +220,7 @@ footer a{color:var(--nink)}
     <div class="az"><a class="btn p" href="#scarica"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg><span>Scarica gratis</span></a><a class="btn g" href="https://github.com/realfulvio/cedro">Codice su GitHub</a></div>
     <p class="meta">v0.53.0 · Windows 10/11 · Linux · gratis · MIT</p>
   </div>
-  <div class="shot"><img src="img/converti.webp" alt="La finestra di Cedro sulla pagina Converti: il file al centro e i formati a destra" width="2100" height="1290"></div>
+  <div class="shot"><img src="img/converti.webp" alt="La finestra di Cedro sulla pagina Converti: il file al centro e i formati a destra" width="2100" height="1290" fetchpriority="high"></div>
   <div class="chips"><span class="chip">Scritto in Rust</span><span class="chip">Italiano e inglese</span><span class="chip">Si aggiorna da solo</span><span class="chip">Nessun account</span><span class="chip">Nessuna pubblicità</span></div>
 </div></section>
 
@@ -234,7 +252,7 @@ footer a{color:var(--nink)}
   <p class="sub">Lo stesso Cedro, con le attività di un laboratorio al posto dei tipi di file. Apri un vetrino, togli i dati del paziente, prepara la figura per l'articolo. Le immagini non escono dal computer.</p>
   <div class="chi"><span>Biotech</span><span>Ricerca</span><span>Veterinaria</span><span>Anatomia patologica</span><span>Microscopia</span></div>
   <div class="az"><a class="btn y" href="#scarica">Scarica Cedro 4 Labs</a><a class="btn g" href="https://github.com/realfulvio/cedro/issues">Chiedi un formato</a></div>
-  <div class="shotl"><img src="img/labs.webp" alt="Cedro 4 Labs: la finestra con le attività di laboratorio" loading="lazy"></div>
+  <div class="shotl"><img src="img/labs.webp" alt="Cedro 4 Labs: la finestra con le attività di laboratorio" loading="lazy" decoding="async" width="2400" height="1350"></div>
   <div class="la">
     <article><h3>Salva immagini e vetrini</h3><p>Vetrini digitali e file del microscopio, con canali, piani Z e valori originali.</p><p class="f">SVS · NDPI · MRXS · CZI · ND2 · LIF · OME-TIFF</p></article>
     <article><h3>Togli i nomi</h3><p>Anonimizza DICOM e toglie autori, GPS e dati nascosti da PDF, Office e foto.</p><p class="f">DICOM · PDF · DOCX · XLSX · JPEG</p></article>
@@ -277,13 +295,17 @@ footer a{color:var(--nink)}
   <div class="faq">
     <details open><summary>Cedro cambia il file originale?</summary><p>No. Crea sempre una copia accanto all'originale, che resta com'era.</p></details>
     <details><summary>I miei file vengono caricati da qualche parte?</summary><p>No. Conversioni, OCR, trascrizione e riassunto avvengono sul tuo computer. Internet serve per gli aggiornamenti, per scaricare i componenti la prima volta e per i video dal web.</p></details>
+    <details><summary>Posso trascrivere un audio o una riunione senza internet?</summary><p>Sì. La trascrizione gira sul tuo computer, anche con la scheda grafica se c'è, e il testo esce in Word, testo o sottotitoli. Internet serve solo la prima volta per scaricare il modello.</p></details>
+    <details><summary>Cedro trasforma un PDF in Word o in Excel?</summary><p>Sì, con titoli, tabelle ed elenchi veri. Funziona anche sulle scansioni, grazie all'OCR.</p></details>
+    <details><summary>Posso firmare un PDF con la CNS?</summary><p>Sì. Firmi con la smart card (CNS) o con la chiavetta USB, e verifichi i file .p7m e i PDF firmati che ricevi.</p></details>
+    <details><summary>Cedro apre i vetrini digitali e le immagini da microscopio?</summary><p>Con Cedro 4 Labs sì: Aperio SVS, Hamamatsu NDPI, 3DHistech MRXS, Zeiss CZI, ND2, LIF, OME-TIFF e DICOM, anche con anonimizzazione.</p></details>
     <details><summary>Quanto costa?</summary><p>Niente. Cedro è gratuito e il codice è aperto con licenza MIT.</p></details>
     <details><summary>E su Mac?</summary><p>Per ora no: Windows 10 e 11 e Linux con Wayland (KDE Plasma o GNOME).</p></details>
     <details><summary>Cedro 4 Labs è un altro programma?</summary><p>No, è lo stesso Cedro con un aspetto pensato per i laboratori. Si sceglie nell'installatore o in Impostazioni › Aspetto, e si torna indietro in un clic.</p></details>
   </div>
 </div></section>
 </main>
-<footer><div class="wrap"><span>Cedro · gratis e open source, licenza MIT</span><span><a href="https://github.com/realfulvio/cedro">GitHub</a> · <a href="https://github.com/realfulvio/cedro/releases">Tutte le versioni</a> · <a href="https://github.com/realfulvio/cedro/issues">Segnala un problema</a></span></div></footer>
+<footer><div class="wrap"><span>Cedro · gratis e open source, licenza MIT</span><span><a href="formati.html">Formati</a> · <a href="https://github.com/realfulvio/cedro">GitHub</a> · <a href="https://github.com/realfulvio/cedro/releases">Tutte le versioni</a> · <a href="https://github.com/realfulvio/cedro/issues">Segnala un problema</a></span></div></footer>
 <script>
 (function(){
 var IC={conv:'<path d="M4 8h13l-3.5-3.5M20 16H7l3.5 3.5"/>',pdf:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',tras:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',web:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',firma:'<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',ruota:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/>'};
@@ -301,12 +323,12 @@ var A=[
 {k:'ruota',img:'ruote',it:{t:'La ruota',p:'Tieni premuto un tasto e fai clic destro su un file, ovunque: la conversione è a un clic, senza aprire niente.',l:['Shift: cambia formato a foto, documenti, audio e video','Ctrl: comprimi, scala, ruota, togli i metadati, leggi il testo','Alt: duplica, copia il percorso, crea uno ZIP','Funziona in Esplora file, sul desktop e nelle finestre Apri e Salva'],f:'Shift · Ctrl · Alt'},
  en:{t:'The wheel',p:'Hold a key and right-click a file, anywhere: converting is one click away, no app to open.',l:['Shift: change the format of photos, documents, audio and video','Ctrl: compress, resize, rotate, strip metadata, read text','Alt: duplicate, copy the path, make a ZIP','Works in File Explorer, on the desktop and in Open and Save dialogs'],f:'Shift · Ctrl · Alt'}}
 ];
-var cur=0,L='it';
+var cur=0,L=document.documentElement.getAttribute('data-static')==='en'?'en':'it';
 function draw(){
   document.getElementById('tabs').innerHTML=A.map(function(a,i){return '<button type="button" role="tab" id="tab-'+a.k+'" data-i="'+i+'" aria-selected="'+(i===cur)+'" style="--c:var(--'+a.k+')"><i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'+IC[a.k]+'</svg></i>'+a[L].t+'</button>'}).join('');
   var a=A[cur],t=a[L],pn=document.getElementById('pane');
   pn.style.setProperty('--c','var(--'+a.k+')');
-  pn.innerHTML='<div><h3>'+t.t+'</h3><p>'+t.p+'</p><ul>'+t.l.map(function(x){return '<li>'+x+'</li>'}).join('')+'</ul><p class="f">'+t.f+'</p></div><img src="img/'+a.img+(L==='en'?'-en':'')+'.webp" alt="'+t.t+'">';
+  pn.innerHTML='<div><h3>'+t.t+'</h3><p>'+t.p+'</p><ul>'+t.l.map(function(x){return '<li>'+x+'</li>'}).join('')+'</ul><p class="f">'+t.f+'</p></div><img src="img/'+a.img+(L==='en'?'-en':'')+'.webp" alt="'+(L==='en'?'Cedro, the “'+t.t+'” page':'Cedro, la pagina «'+t.t+'»')+'" width="'+(a.img==='ruote'?(L==='en'?1552:1628):2100)+'" height="'+(a.img==='ruote'?506:1290)+'" decoding="async">';
 }
 document.getElementById('tabs').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;cur=+b.dataset.i;draw();var n=document.getElementById('tab-'+A[cur].k);if(n)n.focus()});
 window.cedroAtt=function(l){L=l;draw()};
@@ -386,6 +408,14 @@ var EN={
 "Quello che chiedono tutti.":"What everyone asks.",
 "Cedro cambia il file originale?":"Does Cedro change the original file?","No. Crea sempre una copia accanto all'originale, che resta com'era.":"No. It always creates a copy next to the original, which stays as it was.",
 "I miei file vengono caricati da qualche parte?":"Are my files uploaded anywhere?","No. Conversioni, OCR, trascrizione e riassunto avvengono sul tuo computer. Internet serve per gli aggiornamenti, per scaricare i componenti la prima volta e per i video dal web.":"No. Conversion, OCR, transcription and summaries happen on your computer. The internet is used for updates, for downloading components the first time, and for web videos.",
+"Posso trascrivere un audio o una riunione senza internet?":"Can I transcribe audio or a meeting without internet?",
+"Sì. La trascrizione gira sul tuo computer, anche con la scheda grafica se c'è, e il testo esce in Word, testo o sottotitoli. Internet serve solo la prima volta per scaricare il modello.":"Yes. Transcription runs on your computer, using the graphics card when there is one, and the text comes out as Word, plain text or subtitles. Internet is only needed the first time, to download the model.",
+"Cedro trasforma un PDF in Word o in Excel?":"Can Cedro turn a PDF into Word or Excel?",
+"Sì, con titoli, tabelle ed elenchi veri. Funziona anche sulle scansioni, grazie all'OCR.":"Yes, with real headings, tables and lists. It works on scans too, thanks to OCR.",
+"Posso firmare un PDF con la CNS?":"Can I sign a PDF with a CNS smart card?",
+"Sì. Firmi con la smart card (CNS) o con la chiavetta USB, e verifichi i file .p7m e i PDF firmati che ricevi.":"Yes. You sign with the smart card (CNS) or the USB token, and verify the .p7m files and signed PDFs you receive.",
+"Cedro apre i vetrini digitali e le immagini da microscopio?":"Does Cedro open digital slides and microscope images?",
+"Con Cedro 4 Labs sì: Aperio SVS, Hamamatsu NDPI, 3DHistech MRXS, Zeiss CZI, ND2, LIF, OME-TIFF e DICOM, anche con anonimizzazione.":"With Cedro 4 Labs, yes: Aperio SVS, Hamamatsu NDPI, 3DHistech MRXS, Zeiss CZI, ND2, LIF, OME-TIFF and DICOM, with anonymisation too.",
 "Quanto costa?":"How much does it cost?","Niente. Cedro è gratuito e il codice è aperto con licenza MIT.":"Nothing. Cedro is free and open source under the MIT licence.",
 "E su Mac?":"What about Mac?","Per ora no: Windows 10 e 11 e Linux con Wayland (KDE Plasma o GNOME).":"Not for now: Windows 10 and 11 and Linux with Wayland (KDE Plasma or GNOME).",
 "Cedro 4 Labs è un altro programma?":"Is Cedro 4 Labs a different program?","No, è lo stesso Cedro con un aspetto pensato per i laboratori. Si sceglie nell'installatore o in Impostazioni › Aspetto, e si torna indietro in un clic.":"No, it is the same Cedro with a look made for laboratories. Pick it in the installer or in Settings › Appearance, and switch back in one click.",
@@ -403,12 +433,9 @@ function set(l){
   nodes.forEach(function(e,i){var o=orig[i];e.innerHTML=(l==='en'&&map[norm(o)])?map[norm(o)]:o});
   imgs.forEach(function(im,i){var s=osrc[i];im.setAttribute('src',(l==='en'&&!/hero/.test(s))?s.replace('.webp','-en.webp'):s)});
   document.documentElement.lang=l;window.cedroAtt(l);
-  [].forEach.call(document.querySelectorAll('.lang button'),function(b){b.setAttribute('aria-pressed',b.dataset.l===l)});
-  try{localStorage.setItem('cedro-lang',l)}catch(e){}
 }
-[].forEach.call(document.querySelectorAll('.lang button'),function(b){b.addEventListener('click',function(){set(b.dataset.l)})});
-var l0='it';try{l0=localStorage.getItem('cedro-lang')||((navigator.language||'it').slice(0,2)==='it'?'it':'en')}catch(e){}
-if(l0==='en')set('en');
+// L'inglese sta in en/ (generato da tools/genera-en.py, che chiama set('en')): la lingua non cambia mai da sola.
+window.cedroSet=set;
 })();
 </script>
 </body>
