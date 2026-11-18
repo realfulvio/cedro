@@ -22,7 +22,7 @@
 ## Misure fatte sul PC di collaudo (2026-11-16), CachyOS, kernel 7.3.4-1-cachyos-deckify
 
 Hardware: AMD Ryzen 7 5700U (8 core/16 thread), 30 GB RAM, Radeon Renoir integrata (UMA, Vulkan RADV). **Carico**: il PC di collaudo ospita anche i runner CI,
-la VM Windows `win11-test` (qemu, 14 GB) e altri lavori; ogni riga di tempo dei file `b10_*` e `a4_*` riporta il loadavg al momento della misura.
+la VM Windows `VM-TEST` (qemu, 14 GB) e altri lavori; ogni riga di tempo dei file `b10_*` e `a4_*` riporta il loadavg al momento della misura.
 
 | Cosa | Versione |
 | --- | --- |
