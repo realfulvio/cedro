@@ -187,6 +187,10 @@ pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
         return Some((Image::from_rgba(small.width(), small.height(), small.as_raw())?, size));
     }
     let mut decoder = crate::imgfmt::reader(path).ok()?.into_decoder().ok()?;
+    // Un BMP o un DDS rovinato può dichiarare decine di GB di pixel: la miniatura salta, Cedro non si chiude.
+    if decoder.total_bytes() > crate::ocr::MAX_IMAGE_BYTES {
+        return None;
+    }
     let orientation = decoder.orientation().ok();
     let mut img = image::DynamicImage::from_decoder(decoder).ok()?;
     if let Some(o) = orientation {

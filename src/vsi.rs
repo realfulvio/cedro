@@ -117,6 +117,10 @@ impl Ets {
         if assi.len() + 3 > ndim || assi.contains(&0) {
             assi.clear();
         }
+        // Più di un milione di piani (tempo × Z × canali) non è una scansione: è un file rovinato.
+        if assi.iter().try_fold(1u64, |t, &a| t.checked_mul(u64::from(a)).filter(|p| *p <= 1_000_000)).is_none() {
+            return Err(err("troppi piani nell'immagine"));
+        }
         let mut grezzo = vec![0u8; (ntiles * voce) as usize];
         f.seek(SeekFrom::Start(tiles_off)).map_err(err)?;
         f.read_exact(&mut grezzo).map_err(err)?;
@@ -142,8 +146,8 @@ impl Ets {
                 continue;
             }
             if livello == 0 {
-                max_x = max_x.max(tx + 1);
-                max_y = max_y.max(ty + 1);
+                max_x = max_x.max(tx.saturating_add(1));
+                max_y = max_y.max(ty.saturating_add(1));
             }
             livelli = livelli.max(livello + 1);
             tessere.insert((livello, piano, tx, ty), (off, n));
@@ -153,8 +157,14 @@ impl Ets {
         }
         let (larghezza, altezza) = match (misure.first(), misure.get(1)) {
             (Some(&w), Some(&h)) if w > 0 && h > 0 => (w, h),
-            _ => (max_x * tile_w, max_y * tile_h),
+            _ => (max_x.saturating_mul(tile_w), max_y.saturating_mul(tile_h)),
         };
+        // Misure scritte male (un file rovinato) farebbero chiedere terabyte di memoria: la griglia di tessere
+        // dichiarata non può essere molto più grande di quella dell'elenco.
+        let griglia = u64::from(larghezza.div_ceil(tile_w)) * u64::from(altezza.div_ceil(tile_h));
+        if larghezza == 0 || altezza == 0 || griglia > 16_000_000 {
+            return Err(err("misure dell'immagine non valide"));
+        }
         Ok(Ets { path: path.to_path_buf(), tipo, campioni, compressione, tile_w, tile_h, larghezza, altezza, assi, livelli, fondo, tessere })
     }
 
@@ -271,7 +281,16 @@ impl Ets {
         let (w, h) = self.misure(livello);
         let (tw, th, k) = (self.tile_w as usize, self.tile_h as usize, self.campioni as usize);
         let (across, rows) = (w.div_ceil(self.tile_w), h.div_ceil(self.tile_h));
-        let mut out: Vec<Vec<u16>> = (0..k).map(|_| vec![0u16; w as usize * h as usize]).collect();
+        if w as u64 * h as u64 * k as u64 > 1 << 31 {
+            return Err(err("immagine troppo grande per la memoria"));
+        }
+        let mut out: Vec<Vec<u16>> = Vec::with_capacity(k);
+        for _ in 0..k {
+            let mut v: Vec<u16> = Vec::new();
+            v.try_reserve_exact(w as usize * h as usize).map_err(|_| err("memoria insufficiente per il piano"))?;
+            v.resize(w as usize * h as usize, 0);
+            out.push(v);
+        }
         let coords: Vec<(u32, u32)> = (0..rows).flat_map(|ty| (0..across).map(move |tx| (tx, ty))).collect();
         let fili = std::thread::available_parallelism().map_or(4, |n| n.get()).clamp(1, 16).min(coords.len().max(1));
         let per = coords.len().div_ceil(fili);
@@ -971,6 +990,32 @@ mod tests {
         b[16] = 64;
         b[24] = 0xff;
         b[25] = 0xff;
+        std::fs::write(&p, &b).unwrap();
+        assert!(Ets::open(&p).is_err());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// Misure dichiarate assurde da un file rovinato: un errore, non decine di GB di memoria chiesti.
+    #[test]
+    fn misure_assurde_sono_un_errore_non_un_crash() {
+        let dir = std::env::temp_dir().join(format!("cedro-vsi-assurdo-{}", std::process::id()));
+        let p = dir.join("_x_/stack1/frame_t_0.ets");
+        ets_finto(&p, 70, 50, 32, &[1], |_, x, y, _| (y * 70 + x) as u16);
+        let mut b = std::fs::read(&p).unwrap();
+        let metti = |b: &mut Vec<u8>, o: usize, v: u32| b[64 + o..64 + o + 4].copy_from_slice(&v.to_le_bytes());
+        // Larghezza e altezza da 4 miliardi di pixel: la griglia delle tessere non ha senso.
+        metti(&mut b, 188, 0xFFFF_FFF0);
+        metti(&mut b, 192, 0xFFFF_FFF0);
+        std::fs::write(&p, &b).unwrap();
+        assert!(Ets::open(&p).is_err());
+        // 60.000 × 60.000 pixel in un solo livello: la griglia c'è, ma il piano non sta in memoria.
+        metti(&mut b, 188, 60_000);
+        metti(&mut b, 192, 60_000);
+        std::fs::write(&p, &b).unwrap();
+        let e = Ets::open(&p).unwrap();
+        assert!(e.leggi_piano(0, 0).is_err());
+        // Un asse da un miliardo di piani.
+        metti(&mut b, 196, 0x4000_0000);
         std::fs::write(&p, &b).unwrap();
         assert!(Ets::open(&p).is_err());
         let _ = std::fs::remove_dir_all(dir);
