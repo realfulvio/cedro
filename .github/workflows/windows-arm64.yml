@@ -49,7 +49,7 @@ jobs:
     outputs:
       locale: ${{ steps.sonda.outputs.locale }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: sonda
         env:
           GH_TOKEN: ${{ github.token }}
@@ -62,7 +62,7 @@ jobs:
     if: ${{ !inputs.solo_pulizia && (inputs.arm || inputs.solo_arm) }}
     runs-on: windows-11-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Rust
         shell: pwsh
@@ -116,7 +116,7 @@ jobs:
         shell: pwsh
         run: powershell -File installer\build.ps1 -Arm64
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installatore-arm64
           path: |
@@ -128,7 +128,7 @@ jobs:
     if: ${{ !inputs.solo_pulizia && (inputs.arm || inputs.solo_arm) }}
     runs-on: windows-11-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Rust
         shell: pwsh
@@ -171,7 +171,7 @@ jobs:
         shell: pwsh
         run: powershell -File riassumi\build.ps1 -SoloCpu -Out ${{ github.workspace }}\dist-riassumi
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}\qwen
           key: qwen3.5-4b-q4km-unsloth
@@ -191,7 +191,7 @@ jobs:
           powershell -File riassumi\prova.ps1 -Dir prova-riassumi -Model $model
           if ($LASTEXITCODE -ne 0) { throw 'prova del riassunto fallita' }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: motori-arm64
           path: |
@@ -205,7 +205,7 @@ jobs:
     runs-on: windows-11-arm
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Rust
         shell: pwsh
@@ -260,7 +260,7 @@ jobs:
         shell: pwsh
         run: powershell -File riassumi\build.ps1 -SoloVulkan -Out ${{ github.workspace }}\dist-riassumi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: motore-vulkan-arm64
           path: |
@@ -274,7 +274,7 @@ jobs:
     runs-on: ${{ needs.scegli.outputs.locale == 'true' && fromJSON('["self-hosted", "cedro-windows"]') || 'windows-latest' }}
     steps:
       # Sulla VM di casa la cartella target resta tra un giro e l'altro (si toglie tutto il resto).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           clean: ${{ needs.scegli.outputs.locale != 'true' }}
 
@@ -366,7 +366,7 @@ jobs:
           powershell -File trascrivi\prova.ps1 -Dir "${{ github.workspace }}\motori-prova"
           if ($LASTEXITCODE -ne 0) { throw 'prova motori x64 fallita' }
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         if: ${{ needs.scegli.outputs.locale != 'true' }}
         with:
           path: ${{ runner.temp }}\qwen
@@ -389,7 +389,7 @@ jobs:
           powershell -File riassumi\prova.ps1 -Dir prova-riassumi -Model $model
           if ($LASTEXITCODE -ne 0) { throw 'prova del riassunto x64 fallita' }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: x64
           path: |
@@ -405,9 +405,9 @@ jobs:
     # utenti, in Programmi): su un PC che resta non si fanno.
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: x64
 
@@ -542,9 +542,9 @@ jobs:
     needs: [app, motori, vulkan, x64, x64-installa]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: file
           merge-multiple: true

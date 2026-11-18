@@ -19,7 +19,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 100
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Installatore x64 del branch (aspetta il «Windows ARM64» in corso)
         shell: pwsh
@@ -55,7 +55,7 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File prova-tray\collegamento.ps1 -Exe "$env:LOCALAPPDATA\Programs\Cedro\cedro.exe" -Out "$PWD\prova"
           if ($LASTEXITCODE -ne 0) { throw 'prova del collegamento non riuscita' }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: prova-tray
