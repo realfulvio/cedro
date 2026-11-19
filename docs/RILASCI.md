@@ -125,6 +125,8 @@ Accanto alle versioni del programma escono anche i «Motori di trascrizione» (l
 
 | Versione | Stato | Cosa porta |
 | --- | --- | --- |
-| 0.53.0 (5300) | Candidato, collaudo finale in corso | Variante A con tre destinazioni, Office e Laboratorio, worker separato, ingressi SAF diretti, ascolto e revisione delle trascrizioni, sei lingue e accessibilità della superficie nativa |
+| 0.55.0 (5500) | Bozza | Solo stabilità e velocità, interfaccia identica al pixel: niente più chiusure dopo giorni in background, meno risvegli e niente core occupato dietro, servizio dei lavori brevi, fotogrammi dal 37 al 49 % più veloci, cache dei caratteri con un limite |
+| 0.54.0 (5400) | Pubblicata | Torna l'interfaccia della 0.45 con tutte le funzioni della 0.53 |
+| 0.53.0 (5300) | Pubblicata | Variante A con tre destinazioni, Office e Laboratorio, worker separato, ingressi SAF diretti, ascolto e revisione delle trascrizioni, sei lingue e accessibilità della superficie nativa |
 
-Le [note Android](../android/note-release-0.53.0.md) descrivono questa versione; i [rapporti](android-rapporti/) distinguono i risultati delle prove. La pubblicazione usa il tag Android, senza una release desktop implicita.
+Le [note Android](../android/note-release-0.55.0.md) descrivono l'ultima versione; i [rapporti](android-rapporti/) distinguono i risultati delle prove. La pubblicazione usa il tag Android, senza una release desktop implicita.
