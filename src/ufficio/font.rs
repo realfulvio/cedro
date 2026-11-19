@@ -172,6 +172,14 @@ fn families() -> &'static HashMap<String, Vec<fontdb::ID>> {
     })
 }
 
+/// Vero se una faccia della famiglia (nome in minuscolo) ha il simbolo `c`: si legge solo la tabella dei
+/// simboli dal file mappato in memoria, senza copiare il font.
+fn system_family_has(family: &str, c: char) -> bool {
+    let Some(ids) = families().get(family) else { return false };
+    let db = system();
+    ids.iter().any(|id| db.with_face_data(*id, |data, index| FontRef::from_index(data, index).is_ok_and(|f| f.charmap().map(c).is_some())).unwrap_or(false))
+}
+
 /// I sostituti con le stesse misure (o quasi) dei caratteri di Office, nell'ordine in cui si cercano.
 fn substitutes(family: &str) -> &'static [&'static str] {
     match family {
@@ -221,8 +229,10 @@ pub struct Fonti {
     by_key: HashMap<Key, FontId>,
     /// Le facce già aperte, per file e indice: lo stesso Calibri non si legge due volte.
     loaded: HashMap<(fontdb::ID, bool, bool), FontId>,
-    fallback: Vec<FontId>,
-    fallback_ready: bool,
+    /// Per ogni simbolo che il carattere del testo non ha: il font di riserva che lo disegna (`None`: nessuno).
+    /// Si aprono solo i font di riserva che servono davvero, non tutti alla prima lettera che manca
+    /// (su Windows erano decine di MB di caratteri cinesi, giapponesi e coreani copiati in memoria).
+    fallback: HashMap<char, Option<FontId>>,
     /// Solo il Titillium di Cedro, niente caratteri del sistema (per le prove: risultati uguali ovunque).
     builtin_only: bool,
 }
@@ -235,7 +245,7 @@ impl Default for Fonti {
 
 impl Fonti {
     pub fn new() -> Fonti {
-        Fonti { faces: Vec::new(), by_key: HashMap::new(), loaded: HashMap::new(), fallback: Vec::new(), fallback_ready: false, builtin_only: false }
+        Fonti { faces: Vec::new(), by_key: HashMap::new(), loaded: HashMap::new(), fallback: HashMap::new(), builtin_only: false }
     }
 
     /// Solo i caratteri di Cedro: le prove danno lo stesso risultato su ogni PC.
@@ -338,20 +348,24 @@ impl Fonti {
         id
     }
 
-    fn prepare_fallback(&mut self) {
-        if self.fallback_ready {
-            return;
-        }
-        self.fallback_ready = true;
+    /// Il primo font di riserva (nell'ordine di `FALLBACK`, poi il Titillium) che ha il simbolo `c`.
+    /// Prima di aprire un font del sistema si guarda la sua tabella dei simboli dal file mappato in memoria.
+    fn fallback_for(&mut self, c: char) -> Option<FontId> {
         if !self.builtin_only {
             for name in FALLBACK {
-                if let Some(id) = self.from_system(&name.to_lowercase(), false, false) {
-                    self.fallback.push(id);
+                let family = name.to_lowercase();
+                if !system_family_has(&family, c) {
+                    continue;
+                }
+                if let Some(id) = self.from_system(&family, false, false) {
+                    if self.faces[id].has(c) {
+                        return Some(id);
+                    }
                 }
             }
         }
         let t = self.builtin_face(false, false);
-        self.fallback.push(t);
+        self.faces[t].has(c).then_some(t)
     }
 
     /// Spezza un testo nei pezzi che ogni carattere sa disegnare: i simboli che `id` non ha passano a un
@@ -369,21 +383,27 @@ impl Fonti {
     }
 
     fn cover(&mut self, id: FontId, c: char) -> FontId {
-        self.prepare_fallback();
-        let (bold, italic) = (self.faces[id].bold, self.faces[id].italic);
-        for i in 0..self.fallback.len() {
-            let f = self.fallback[i];
-            if self.faces[f].has(c) {
-                if !bold && !italic {
-                    return f;
-                }
-                // Lo stesso font di riserva, con lo stile del testo intorno.
-                let family = self.faces[f].family.to_lowercase();
-                let styled = self.get(&family, bold, italic);
-                return if self.faces[styled].has(c) { styled } else { f };
+        let found = match self.fallback.get(&c) {
+            Some(f) => *f,
+            None => {
+                let f = self.fallback_for(c);
+                self.fallback.insert(c, f);
+                f
             }
+        };
+        let Some(f) = found else { return id };
+        let (bold, italic) = (self.faces[id].bold, self.faces[id].italic);
+        if !bold && !italic {
+            return f;
         }
-        id
+        // Lo stesso font di riserva, con lo stile del testo intorno.
+        let family = self.faces[f].family.to_lowercase();
+        let styled = self.get(&family, bold, italic);
+        if self.faces[styled].has(c) {
+            styled
+        } else {
+            f
+        }
     }
 
     /// Larghezza in punti di un testo, con i simboli presi dai font di riserva.

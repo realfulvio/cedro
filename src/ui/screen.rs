@@ -89,8 +89,18 @@ pub struct Screen {
     started: Instant,
     animating: bool,
     gliding: bool,
+    /// Si muove qualcosa che va seguito da vicino (animazioni brevi, audio o video che suona): fotogrammi al
+    /// ritmo del timer. Altrimenti (rotelline, percentuali di un lavoro) bastano `CALMO` millisecondi.
+    vivace: bool,
+    /// Quando è finito l'ultimo fotogramma.
+    disegnato: Instant,
     focusables: Vec<Act>,
 }
+
+/// Il passo dei ridisegni «lenti» (lavori in corso, rotelline): circa 15 al secondo invece di 30. Ogni
+/// fotogramma a schermo intero è qualche decina di millisecondi di processore, e durante un lavoro lungo il
+/// processore serve al lavoro.
+const CALMO: std::time::Duration = std::time::Duration::from_millis(62);
 
 /// Le voci del menu «Formato», con iconcine e suggerimenti, e i titoli dei gruppi.
 pub type FormatItems = (Vec<(String, Act)>, Vec<Option<super::voci::Voce>>, Vec<(usize, &'static str)>);
@@ -117,6 +127,8 @@ impl Screen {
             started: Instant::now(),
             animating: false,
             gliding: false,
+            vivace: false,
+            disegnato: Instant::now(),
             focusables: Vec::new(),
         }
     }
@@ -194,6 +206,8 @@ impl Screen {
         self.ui.anim.borrow_mut().end_frame();
         self.animating = f.animating || self.app.busy();
         self.gliding = f.gliding;
+        self.vivace = f.gliding || self.app.player.as_ref().is_some_and(|p| p.playing()) || self.app.review_playing();
+        self.disegnato = Instant::now();
         self.hits = std::mem::take(&mut f.hits);
         self.captions = std::mem::take(&mut f.captions);
         self.scrolls = std::mem::take(&mut f.scrolls);
@@ -203,6 +217,7 @@ impl Screen {
         // lo fa il prossimo fotogramma, che si chiede subito.
         if self.scrolls.iter().any(|(_, which, max)| self.ui.scroll(*which) > *max) {
             self.animating = true;
+            self.vivace = true;
         }
         f.p
     }
@@ -317,6 +332,12 @@ impl Screen {
     /// Vero se la finestra va ridisegnata spesso (rotelline, cursore che lampeggia).
     pub fn animating(&self) -> bool {
         self.animating
+    }
+
+    /// Vero se al giro del timer va disegnato un fotogramma nuovo: subito per le animazioni vive, al passo
+    /// `CALMO` per le rotelline e i lavori in corso.
+    pub fn wants_frame(&self) -> bool {
+        self.animating && (self.vivace || self.disegnato.elapsed() >= CALMO)
     }
 
     /// Vero mentre si muove un'animazione breve (mouse sopra, pressione, schede): va ridisegnata
@@ -2473,5 +2494,23 @@ mod tests {
             let name = f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
             s.render(1440, 940, 1.0).save_png(&dir.join(format!("{name}.png"))).unwrap();
         }
+    }
+
+    #[test]
+    fn durante_un_lavoro_i_fotogrammi_vanno_al_passo_lento() {
+        use super::super::model::{Job, JobKind};
+        let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+        s.app.job = Some(Job { kind: JobKind::Convert, total: 1, done: 0, failed: 0, cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)), key: String::new(), targets: vec![], part: 0.3, file_started: None });
+        let _ = s.render(900, 600, 1.0);
+        assert!(s.animating());
+        // Appena disegnato: il prossimo aspetta il passo lento, non il timer da 33 ms.
+        assert!(!s.wants_frame());
+        std::thread::sleep(CALMO + std::time::Duration::from_millis(5));
+        assert!(s.wants_frame());
+        // Finito il lavoro e ridisegnato, se niente si muove non si ridisegna più.
+        s.app.job = None;
+        let _ = s.render(900, 600, 1.0);
+        std::thread::sleep(CALMO + std::time::Duration::from_millis(5));
+        assert_eq!(s.wants_frame(), s.animating());
     }
 }

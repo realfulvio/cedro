@@ -558,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "cedro"
-version = "0.54.1"
+version = "0.55.0"
 dependencies = [
  "avif-decode",
  "base64 0.22.1",
@@ -570,6 +570,7 @@ dependencies = [
  "fdk-aac",
  "flacenc",
  "flate2",
+ "fontdb",
  "gtk4",
  "hayro",
  "hayro-jpeg2000",
@@ -577,6 +578,7 @@ dependencies = [
  "hound",
  "image",
  "jpeg-decoder",
+ "jpeg-encoder",
  "jxl-oxide",
  "kaldi-native-fbank",
  "ksni",
@@ -596,6 +598,7 @@ dependencies = [
  "oxideav-webp",
  "p256",
  "p384",
+ "pic-scale",
  "png",
  "ravif",
  "resvg",
@@ -809,6 +812,17 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
+name = "core_affinity"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a034b3a7b624016c6e13f5df875747cc25f884156aad2abd12b6c46797971342"
+dependencies = [
+ "libc",
+ "num_cpus",
+ "winapi",
+]
 
 [[package]]
 name = "core_detect"
@@ -1398,6 +1412,7 @@ checksum = "2660c5e9157bf76d2db1294e4a9feba604ef610819a3b591088d0d8392a3290f"
 dependencies = [
  "fontconfig-parser",
  "log",
+ "memmap2",
  "slotmap",
  "tinyvec",
 ]
@@ -2376,6 +2391,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
 
 [[package]]
+name = "jpeg-encoder"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0370574b86f7eca156b9f298392b5e69a23f8c86f3f865add60bbc2e79467a6"
+
+[[package]]
 name = "js-sys"
 version = "0.3.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2773,6 +2794,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "memmap2"
+version = "0.9.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b0ca1155a9ecc25aa12e8313a119f32edf0255fea2f44839c4ac0a12b2ac157"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "memoffset"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2968,6 +2998,15 @@ name = "noop_proc_macro"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
+
+[[package]]
+name = "novtb"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75c0ea7569466bbce2394c0e5654b1e283c28ef7c70799e6f07b32029cca6d74"
+dependencies = [
+ "core_affinity",
+]
 
 [[package]]
 name = "num-bigint"
@@ -3415,6 +3454,7 @@ version = "0.7.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d76fd225dc3b8f089eaac369a74f57f557faffbd5da109ddd4e011010ab3ca10"
 dependencies = [
+ "novtb",
  "num-traits",
  "pxfm",
 ]

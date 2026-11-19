@@ -183,7 +183,7 @@ pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
     if micro || matches!(crate::imgfmt::sniff_file(path), Some("svg" | "avif" | "heic" | "jxl" | "dcm")) || matches!(engine::extension(path).as_str(), "svg" | "svgz" | "dcm" | "dicom") {
         let img = crate::imgfmt::open(path, false, Some(side)).ok()?;
         let size = (img.width(), img.height());
-        let small = img.thumbnail(side, side).to_rgba8();
+        let small = crate::imgfmt::miniatura(&img, side, side).to_rgba8();
         return Some((Image::from_rgba(small.width(), small.height(), small.as_raw())?, size));
     }
     let mut decoder = crate::imgfmt::reader(path).ok()?.into_decoder().ok()?;
@@ -197,7 +197,7 @@ pub fn image_thumb(path: &Path, side: u32) -> Option<(Image, (u32, u32))> {
         img.apply_orientation(o);
     }
     let size = (img.width(), img.height());
-    let small = img.thumbnail(side, side).to_rgba8();
+    let small = crate::imgfmt::miniatura(&img, side, side).to_rgba8();
     Some((Image::from_rgba(small.width(), small.height(), small.as_raw())?, size))
 }
 

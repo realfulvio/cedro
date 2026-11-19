@@ -11,9 +11,13 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro non si chiude più davanti a un file rovinato, e Dividi e Unisci PDF non creano più nomi impossibili su Windows.**
+**Cedro più veloce e più leggero: foto, PDF e video in meno tempo, la finestra che consuma meno mentre lavora.**
 
-- I vetrini Olympus `.vsi` con misure impossibili nel file non fanno più chiudere Cedro per mancanza di memoria: dà un errore e il resto della coda va avanti.
-- Una foto BMP o DDS rovinata nell'elenco dei file non fa più chiudere Cedro quando prepara la miniatura: la miniatura manca e basta.
-- Dividi con il nome del segnalibro («%titolo%») e Unisci con il nome scelto per il file unito: se il nome è Con, Aux, Nul, Com1 o Lpt9 (nomi riservati di Windows) ora il file si chiama `_Con.pdf` e non fallisce più il salvataggio.
-- Provato rovinando a caso più di 5.000 volte file di ogni tipo (video, audio, foto, Office, PDF, ZIP, vetrini, CD DICOM, referti e impostazioni).
+- **Foto a metà misura o a un lato massimo** circa 3 volte più veloci e con metà memoria (una foto da 12 MP: da 0,6 a 0,2 secondi). Più veloci anche miniature, figure, vetrini e lettura del testo, che rimpiccioliscono le immagini allo stesso modo.
+- **Foto → PDF** più del doppio più veloce: la foto e la lettura del testo si preparano insieme.
+- **PDF → JPG** una immagine per pagina 2,5 volte più veloce; tutti i JPEG in uscita si scrivono in circa metà tempo, con la stessa qualità. «Comprimi» resta quello di prima.
+- **WebM → MP4** 2,5 volte più veloce e con un terzo di memoria in meno (VP9 nuovo); un file Zeiss CZI rovinato non può più far chiudere Cedro.
+- **Windows, video → MP4**: video e audio ora si scrivono alternati, come stanno nel file. Prima si scriveva tutto il video e poi l'audio, e intanto i fotogrammi restavano in memoria: un Full HD di 20 secondi arrivava a 2 GB e uno di un minuto a 5,5 GB, con il rischio di esaurire la memoria sui video lunghi. Ora resta sotto i 500 MB qualunque sia la durata, con lo stesso file in uscita.
+- **La finestra** si disegna in metà tempo e, mentre un lavoro va avanti, si aggiorna 15 volte al secondo invece di 30: il processore resta al lavoro, non alla rotellina.
+- I **caratteri** del sistema si leggono solo per la parte che serve: Word → PDF e i PDF con testo partono prima e occupano meno memoria.
+- **Linux**: chiusa la finestra, la memoria torna al sistema; il menu delle applicazioni non si ricostruisce più a ogni avvio; l'elenco europeo dei certificatori si scarica a piccoli gruppi, con meno memoria.

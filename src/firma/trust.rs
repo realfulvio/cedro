@@ -186,6 +186,7 @@ pub fn daily() {
                     }
                     Err(e) => crate::append_log(&format!("firma: elenco dei certificatori non scaricato: {e}")),
                 }
+                crate::resources::restituisci_memoria();
             }
             std::thread::sleep(std::time::Duration::from_secs(3 * 3600));
         }
@@ -219,18 +220,32 @@ fn get(url: &str) -> Result<String, String> {
 pub fn download() -> Result<Store, String> {
     let lotl = get(LOTL_URL)?;
     let pointers = lotl_pointers(&lotl)?;
-    let results: Vec<_> = std::thread::scope(|s| {
-        let handles: Vec<_> = pointers.iter().map(|(country, url)| s.spawn(move || (country.clone(), get(url)))).collect();
-        handles.into_iter().filter_map(|h| h.join().ok()).collect()
-    });
-    let mut entries = Vec::new();
+    drop(lotl);
+    // Poche liste per volta (non una connessione per Paese, trenta insieme) e lette qui una alla volta, appena
+    // arrivano: in memoria resta solo quello che si sta leggendo, non tutti i 30 MB di XML insieme.
+    let coda = std::sync::Mutex::new(pointers.iter().enumerate());
+    let mut per_paese: Vec<Vec<Entry>> = (0..pointers.len()).map(|_| Vec::new()).collect();
     let mut failed = Vec::new();
-    for (country, body) in results {
-        match body.and_then(|b| parse_tl(&b, &country)) {
-            Ok(mut e) => entries.append(&mut e),
-            Err(e) => failed.push(format!("{country}: {e}")),
+    std::thread::scope(|s| {
+        let (tx, rx) = std::sync::mpsc::sync_channel(2);
+        for _ in 0..4 {
+            let (coda, tx) = (&coda, tx.clone());
+            s.spawn(move || loop {
+                let Some((i, (country, url))) = coda.lock().unwrap_or_else(|e| e.into_inner()).next() else { break };
+                if tx.send((i, country, get(url))).is_err() {
+                    break;
+                }
+            });
         }
-    }
+        drop(tx);
+        for (i, country, body) in rx {
+            match body.and_then(|b| parse_tl(&b, country)) {
+                Ok(e) => per_paese[i] = e,
+                Err(e) => failed.push(format!("{country}: {e}")),
+            }
+        }
+    });
+    let entries: Vec<Entry> = per_paese.into_iter().flatten().collect();
     if entries.is_empty() {
         return Err(format!("nessuna lista letta ({})", failed.join("; ")));
     }

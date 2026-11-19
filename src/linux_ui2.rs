@@ -224,6 +224,16 @@ fn open_surface(app: &Application, surface: Surface) {
                 gtk4::AlertDialog::builder().message(cedro::i18n::tr_string("Una conversione è ancora in corso: aspetta che finisca.")).modal(true).build().show(Some(w));
                 glib::Propagation::Stop
             } else {
+                // Chiusa l'ultima finestra, la tray resta da sola: via le cache delle anteprime e la memoria
+                // liberata torna al sistema (come su Windows), poco dopo, quando la finestra non c'è più.
+                if let Some(app) = w.application() {
+                    glib::timeout_add_local_once(std::time::Duration::from_secs(3), move || {
+                        if app.windows().is_empty() && !cedro::resources::busy_elsewhere() {
+                            cedro::ui::preview::release_caches();
+                            cedro::resources::restituisci_memoria();
+                        }
+                    });
+                }
                 glib::Propagation::Proceed
             }
         });
@@ -510,13 +520,14 @@ fn open_surface(app: &Application, surface: Surface) {
             if let Ok(mut sc) = host.screen.try_borrow_mut() {
                 if woke.swap(false, Ordering::Relaxed) {
                     sc.pump();
-                    redraw = true;
+                    // Durante un lavoro le notizie arrivano di continuo: al passo dei fotogrammi lenti (sotto).
+                    redraw |= !sc.animating() || sc.wants_frame();
                 }
                 if active && !was_active.get() {
                     sc.reload_appearance();
                     redraw = true;
                 }
-                if sc.animating() {
+                if sc.wants_frame() {
                     redraw = true;
                 }
             }

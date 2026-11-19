@@ -264,7 +264,8 @@ fn ocrs_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
     let factor = (1000.0 / image.width().max(1) as f32).min(1.0);
     let small;
     let image = if factor < 1.0 {
-        small = image.resize(
+        small = crate::imgfmt::ridimensiona_entro(
+            image,
             (image.width() as f32 * factor) as u32,
             (image.height() as f32 * factor) as u32,
             image::imageops::FilterType::Lanczos3,
@@ -433,7 +434,8 @@ fn windows_lines(image: &DynamicImage) -> Result<Vec<Line>, String> {
     let factor = (max / image.width().max(image.height()).max(1) as f32).min(1.0);
     let small;
     let image = if factor < 1.0 {
-        small = image.resize(
+        small = crate::imgfmt::ridimensiona_entro(
+            image,
             (image.width() as f32 * factor) as u32,
             (image.height() as f32 * factor) as u32,
             image::imageops::FilterType::Lanczos3,
@@ -498,6 +500,11 @@ const OCR_SCALE: f32 = 300.0 / 72.0;
 /// Tutte le pagine del PDF disegnate in PNG, una alla volta, con la scala scelta (1.0 = 72 dpi, 2.0 = 144 dpi).
 pub fn pdf_page_pngs_scaled(bytes: &[u8], scale: f32, wanted: impl Fn(usize) -> bool, each: impl FnMut(usize, Vec<u8>) -> Result<(), String>) -> Result<usize, String> {
     render_pdf(bytes, wanted, scale, usize::MAX, each)
+}
+
+/// Come `pdf_page_pngs_scaled`, ma con i pixel della pagina: per scriverla in JPEG non serve un PNG da rileggere.
+pub fn pdf_page_images_scaled(bytes: &[u8], scale: f32, wanted: impl Fn(usize) -> bool, each: impl FnMut(usize, DynamicImage) -> Result<(), String>) -> Result<usize, String> {
+    render_pdf_images(bytes, wanted, scale, usize::MAX, each)
 }
 
 /// Disegna le pagine volute, una alla volta, e le passa a `each` come PNG:

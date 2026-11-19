@@ -55,7 +55,7 @@ const LINE_DARK: u8 = 195;
 /// si cerca dove il profilo delle righe di testo è più «a picchi».
 fn skew_angle(gray: &GrayImage) -> f32 {
     let width = 900u32.min(gray.width());
-    let small = image::imageops::resize(gray, width, (gray.height() as f32 * width as f32 / gray.width().max(1) as f32).max(1.0) as u32, image::imageops::FilterType::Triangle);
+    let small = crate::imgfmt::ridimensiona_grigio(gray, width, (gray.height() as f32 * width as f32 / gray.width().max(1) as f32).max(1.0) as u32, image::imageops::FilterType::Triangle);
     let dark: Vec<(f32, f32)> = small.enumerate_pixels().filter(|(_, _, p)| p.0[0] < DARK).map(|(x, y, _)| (x as f32, y as f32)).collect();
     if dark.len() < 200 {
         return 0.0;

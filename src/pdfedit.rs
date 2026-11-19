@@ -551,7 +551,7 @@ fn squeeze_image(doc: &Document, st: &Stream, s: &Squeeze, side_pt: f32, is_mask
         if (nw, nh) == (w, h) {
             img.clone()
         } else {
-            img.resize_exact(nw, nh, image::imageops::FilterType::Triangle)
+            crate::imgfmt::ridimensiona(img, nw, nh, image::imageops::FilterType::Triangle)
         }
     };
     let mut dict = d.clone();
@@ -585,11 +585,14 @@ fn squeeze_image(doc: &Document, st: &Stream, s: &Squeeze, side_pt: f32, is_mask
             encoded = deflate(small.to_luma8().as_raw());
             dict.set("Filter", "FlateDecode");
         } else {
-            let mut out = Vec::new();
-            let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality);
-            let ok = if n == 1 { enc.encode_image(&image::DynamicImage::ImageLuma8(small.to_luma8())) } else { enc.encode_image(&image::DynamicImage::ImageRgb8(small.to_rgb8())) };
-            ok.ok()?;
-            encoded = out;
+            // Tabelle di Huffman su misura: qui conta il peso.
+            encoded = if n == 1 {
+                let g = small.to_luma8();
+                crate::imgfmt::jpeg(g.as_raw(), sw, sh, true, quality, true).ok()?
+            } else {
+                let c = small.to_rgb8();
+                crate::imgfmt::jpeg(c.as_raw(), sw, sh, false, quality, true).ok()?
+            };
             dict.set("Filter", "DCTDecode");
         }
         dict.set("Width", sw as i64);

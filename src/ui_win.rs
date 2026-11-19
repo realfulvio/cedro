@@ -631,21 +631,29 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 host.late_drop.set(false);
                 let _ = PostMessageW(Some(hwnd), WM_DROPPED, WPARAM(0), LPARAM(0));
             }
-            let animating = host.screen.try_borrow().map(|s| s.animating()).unwrap_or(false);
+            let animating = host.screen.try_borrow().map(|s| s.wants_frame()).unwrap_or(false);
             if animating {
                 redraw(hwnd);
             }
             LRESULT(0)
         }
         WM_WAKE => {
-            match host.screen.try_borrow_mut() {
+            let subito = match host.screen.try_borrow_mut() {
+                // Durante un lavoro le notizie (percentuali, file finiti) arrivano di continuo: si mostrano al
+                // passo dei fotogrammi lenti, ci pensa il timer (la finestra in quel caso si sta già animando).
                 Ok(mut s) => {
                     s.pump();
+                    !s.animating() || s.wants_frame()
                 }
                 // Un selettore di file è aperto: si riprende appena finisce (vedi il timer).
-                Err(_) => host.late_wake.set(true),
+                Err(_) => {
+                    host.late_wake.set(true);
+                    true
+                }
+            };
+            if subito {
+                redraw(hwnd);
             }
-            redraw(hwnd);
             LRESULT(0)
         }
         WM_DRAG => {

@@ -1291,13 +1291,19 @@ fn data_home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share"))
 }
 
+/// Scrive solo se il contenuto cambia: a ogni avvio (anche dal menu del file) riscrivere le voci di Dolphin
+/// e Nautilus faceva ricostruire a KDE la sua cache dei servizi (kbuildsycoca), con il disco e il processore
+/// occupati proprio mentre Cedro si apriva.
 fn write_text(path: &std::path::Path, body: &str, executable: bool) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+    use std::os::unix::fs::PermissionsExt;
+    let same = std::fs::read(path).is_ok_and(|old| old == body.as_bytes());
+    if !same {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, body)?;
     }
-    std::fs::write(path, body)?;
-    if executable {
-        use std::os::unix::fs::PermissionsExt;
+    if executable && std::fs::metadata(path)?.permissions().mode() & 0o777 != 0o755 {
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))?;
     }
     Ok(())
