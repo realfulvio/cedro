@@ -80,17 +80,27 @@ struct Freno {
     attivo: bool,
     /// Campioni al massimo in coda: per il video uno per fotogramma; l'audio va solo a tempo.
     max_coda: u64,
+    /// Quante volte ha fatto aspettare chi legge (con `CEDRO_FRENO_LOG` si scrive alla fine).
+    attese: u64,
+}
+
+impl Drop for Freno {
+    fn drop(&mut self) {
+        if std::env::var_os("CEDRO_FRENO_LOG").is_some() {
+            eprintln!("freno: {} attese, {}", self.attese, if self.attivo { "attivo fino alla fine" } else { "tolto" });
+        }
+    }
 }
 
 impl Freno {
     const ANTICIPO: i64 = 5_000_000;
 
     fn video() -> Self {
-        Freno { attivo: true, max_coda: 16 }
+        Freno { attivo: true, max_coda: 16, attese: 0 }
     }
 
     fn audio() -> Self {
-        Freno { attivo: true, max_coda: u64::MAX }
+        Freno { attivo: true, max_coda: u64::MAX, attese: 0 }
     }
 
     fn aspetta(&mut self, writer: &windows::Win32::Media::MediaFoundation::IMFSinkWriter, stream: u32) {
@@ -112,6 +122,9 @@ impl Freno {
             };
             if !avanti {
                 return;
+            }
+            if visto.is_none() {
+                self.attese += 1;
             }
             let ora = (fatti, st.llLastTimestampEncoded);
             if visto != Some(ora) {
@@ -368,6 +381,10 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
             }
         }
 
+        if audio_index.is_none() {
+            // Una traccia audio scelta ma mai letta il lettore se la terrebbe da parte fino alla fine.
+            let _ = reader.SetStreamSelection(audio_stream, false);
+        }
         writer.BeginWriting().map_err(|e| format!("scrittura MP4 non partita: {e}"))?;
         note_hardware(&writer, video_index);
         let num = rate >> 32;
@@ -375,12 +392,20 @@ fn to_mp4_mf(input: &Path, output: &Path) -> Result<(), String> {
         let frame_ticks = 10_000_000u64.saturating_mul(den) / num.max(1);
         let mut gate = crate::sink::FrameGate::new();
         let packed = opened.convert.is_none().then_some(packed_size);
-        let frames = pump(&reader, &writer, video_stream, video_index, Some(frame_ticks), opened.convert.as_ref(), packed, Some(&mut gate))?;
-        if frames == 0 {
-            return Err("il video non ha fotogrammi".into());
+        // Video e audio alternati in ordine di tempo, come stanno nel file. Scrivendo prima tutto il video,
+        // il file MP4 di Windows aspettava l'audio per intercalarlo e intanto teneva in memoria tutti i
+        // fotogrammi non ancora codificati: 2 GB per 20 s di 1080p, 5,5 GB per un minuto.
+        let mut video = Pompa::new(video_stream, video_index, Some(frame_ticks), opened.convert.as_ref(), packed, Some(&mut gate));
+        let mut audio = audio_index.map(|index| Pompa::new(audio_stream, index, None, None, None, None));
+        loop {
+            match audio.as_mut() {
+                Some(a) if !a.finita && (video.finita || a.tempo <= video.tempo) => a.passo(&reader, &writer)?,
+                _ if !video.finita => video.passo(&reader, &writer)?,
+                _ => break,
+            }
         }
-        if let Some(index) = audio_index {
-            pump(&reader, &writer, audio_stream, index, None, None, None, None)?;
+        if video.written == 0 {
+            return Err("il video non ha fotogrammi".into());
         }
         writer.Finalize().map_err(|e| format!("MP4 non chiuso: {e}"))?;
     }
@@ -591,80 +616,97 @@ fn nv12_type(frame: u64, rate: u64) -> Result<windows::Win32::Media::MediaFounda
     }
 }
 
-fn pump(
-    reader: &windows::Win32::Media::MediaFoundation::IMFSourceReader,
-    writer: &windows::Win32::Media::MediaFoundation::IMFSinkWriter,
+/// Una traccia da copiare dal lettore all'encoder, un campione alla volta: `to_mp4_mf` alterna video
+/// e audio in ordine di tempo, come stanno nel file.
+struct Pompa<'a> {
     source: u32,
     dest: u32,
     frame_ticks: Option<u64>,
-    convert: Option<&FrameInfo>,
+    convert: Option<&'a FrameInfo>,
     packed: Option<(u32, u32)>,
-    mut gate: Option<&mut crate::sink::FrameGate>,
-) -> Result<u32, String> {
-    let mut written = 0u32;
-    let mut ticks = 0u64;
-    let mut freno = if frame_ticks.is_some() { Freno::video() } else { Freno::audio() };
-    unsafe {
-        loop {
+    gate: Option<&'a mut crate::sink::FrameGate>,
+    ticks: u64,
+    written: u32,
+    freno: Freno,
+    /// Fine del campione più avanti letto finora (100 ns): dice quale traccia leggere dopo.
+    tempo: i64,
+    finita: bool,
+}
+
+impl<'a> Pompa<'a> {
+    fn new(
+        source: u32,
+        dest: u32,
+        frame_ticks: Option<u64>,
+        convert: Option<&'a FrameInfo>,
+        packed: Option<(u32, u32)>,
+        gate: Option<&'a mut crate::sink::FrameGate>,
+    ) -> Self {
+        let freno = if frame_ticks.is_some() { Freno::video() } else { Freno::audio() };
+        Pompa { source, dest, frame_ticks, convert, packed, gate, ticks: 0, written: 0, freno, tempo: 0, finita: false }
+    }
+
+    /// Legge un campione e lo passa all'encoder (o lo salta, se il limite dei fotogrammi al secondo lo scarta).
+    fn passo(
+        &mut self,
+        reader: &windows::Win32::Media::MediaFoundation::IMFSourceReader,
+        writer: &windows::Win32::Media::MediaFoundation::IMFSinkWriter,
+    ) -> Result<(), String> {
+        unsafe {
             let mut flags: u32 = 0;
             let mut sample = None;
             reader
-                .ReadSample(source, 0, None, Some(&mut flags), None, Some(&mut sample))
+                .ReadSample(self.source, 0, None, Some(&mut flags), None, Some(&mut sample))
                 .map_err(|e| format!("lettura video: {e}"))?;
-            let eos = flags & (MF_SOURCE_READERF_ENDOFSTREAM.0 as u32) != 0;
-            if let Some(sample) = sample {
-                if sample.GetSampleTime().is_err() {
-                    if let Some(step) = frame_ticks {
-                        sample.SetSampleTime(ticks as i64).map_err(|e| format!("tempo del fotogramma: {e}"))?;
-                        sample
-                            .SetSampleDuration(step as i64)
-                            .map_err(|e| format!("tempo del fotogramma: {e}"))?;
-                        ticks = ticks.saturating_add(step);
-                    }
+            if flags & (MF_SOURCE_READERF_ENDOFSTREAM.0 as u32) != 0 {
+                self.finita = true;
+            }
+            let Some(sample) = sample else {
+                if self.finita
+                    || flags & ((MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED.0 as u32) | (MF_SOURCE_READERF_STREAMTICK.0 as u32)) != 0
+                {
+                    return Ok(());
                 }
+                return Err("lettura video interrotta".into());
+            };
+            if sample.GetSampleTime().is_err() {
+                if let Some(step) = self.frame_ticks {
+                    sample.SetSampleTime(self.ticks as i64).map_err(|e| format!("tempo del fotogramma: {e}"))?;
+                    sample
+                        .SetSampleDuration(step as i64)
+                        .map_err(|e| format!("tempo del fotogramma: {e}"))?;
+                    self.ticks = self.ticks.saturating_add(step);
+                }
+            }
+            if let Ok(time) = sample.GetSampleTime() {
+                crate::sink::frame_progress(time);
+                self.tempo = self.tempo.max(time.saturating_add(sample.GetSampleDuration().unwrap_or(0).max(0)));
+            }
+            if let Some(g) = self.gate.as_deref_mut() {
                 if let Ok(time) = sample.GetSampleTime() {
-                    crate::sink::frame_progress(time);
-                }
-                if let Some(g) = gate.as_deref_mut() {
-                    if let Ok(time) = sample.GetSampleTime() {
-                        if !g.pass(time) {
-                            if eos {
-                                break;
-                            }
-                            continue;
-                        }
-                        if g.gap() > 0 {
-                            let kept = sample.GetSampleDuration().unwrap_or(0);
-                            let _ = sample.SetSampleDuration(kept.max(g.gap()));
-                        }
+                    if !g.pass(time) {
+                        return Ok(());
+                    }
+                    if g.gap() > 0 {
+                        let kept = sample.GetSampleDuration().unwrap_or(0);
+                        let _ = sample.SetSampleDuration(kept.max(g.gap()));
                     }
                 }
-                if let Some(info) = convert {
-                    let packed = repack(&sample, info)?;
-                    writer.WriteSample(dest, &packed).map_err(|e| format!("scrittura video: {e}"))?;
-                } else if let Some(fixed) = packed.and_then(|(w, h)| crop_padded(&sample, w, h).transpose()) {
-                    writer.WriteSample(dest, &fixed?).map_err(|e| format!("scrittura video: {e}"))?;
-                } else {
-                    writer.WriteSample(dest, &sample).map_err(|e| format!("scrittura video: {e}"))?;
-                }
-                freno.aspetta(writer, dest);
-                written += 1;
-                if eos {
-                    break;
-                }
-                continue;
             }
-            if eos {
-                break;
+            let dest = self.dest;
+            if let Some(info) = self.convert {
+                let packed = repack(&sample, info)?;
+                writer.WriteSample(dest, &packed).map_err(|e| format!("scrittura video: {e}"))?;
+            } else if let Some(fixed) = self.packed.and_then(|(w, h)| crop_padded(&sample, w, h).transpose()) {
+                writer.WriteSample(dest, &fixed?).map_err(|e| format!("scrittura video: {e}"))?;
+            } else {
+                writer.WriteSample(dest, &sample).map_err(|e| format!("scrittura video: {e}"))?;
             }
-            if flags & ((MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED.0 as u32) | (MF_SOURCE_READERF_STREAMTICK.0 as u32)) != 0
-            {
-                continue;
-            }
-            return Err("lettura video interrotta".into());
+            self.freno.aspetta(writer, dest);
+            self.written += 1;
         }
+        Ok(())
     }
-    Ok(written)
 }
 
 /// Il decodificatore H.264 di Windows dà i 1080p alti 1088 righe (multipli di 16): il colore (UV)
