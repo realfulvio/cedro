@@ -29,7 +29,7 @@ ocrs = "0.14"
 png = "0.18"
 oxideav-vp8 = { version = "0.2.7", default-features = false }
 oxideav-webp = { version = "0.3.2", default-features = false }
-oxideav-vp9 = "0.0.14"
+oxideav-vp9 = "0.0.15"
 oxideav-mpeg4video = "0.1"
 rten = "0.28"
 rten-simd = "0.28"
@@ -54,7 +54,7 @@ tiff = "0.11"
 zune-jpeg = "0.5"
 hayro-jpeg2000 = { version = "0.5", default-features = false, features = ["simd"] }
 # Zeiss CZI (microscopia): tessere zstd (ruzstd), JPEG XR (openreadout-jpegxr, decoder di jxrlib in Rust senza unsafe, versione fissata) e LZW (weezl, già dentro per tiff).
-ruzstd = "0.8"
+ruzstd = "0.9"
 openreadout-jpegxr = "=0.4.0"
 weezl = "0.1"
 flacenc = { version = "0.5", default-features = false }
