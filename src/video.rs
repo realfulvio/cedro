@@ -70,6 +70,62 @@ fn create_writer(wide_out: &[u16]) -> Result<windows::Win32::Media::MediaFoundat
     }
 }
 
+/// Freno tra chi legge e l'encoder. La regolazione di Windows è spenta (`MF_SINK_WRITER_DISABLE_THROTTLING`:
+/// il video si scrive tutto prima dell'audio e con la regolazione `WriteSample` si fermerebbe ad aspettarlo),
+/// così il lettore correva avanti e i fotogrammi non ancora codificati restavano tutti in memoria: 2 GB per
+/// 20 s di 1080p col codificatore software, e un video lungo poteva finire la memoria. Qui dopo ogni campione
+/// si aspetta che in coda all'encoder resti al massimo mezzo secondo. Se l'encoder per mezzo secondo non ne
+/// prende nessuno (aspetta altro), il freno si toglie per il resto del lavoro: si torna a come era prima.
+struct Freno {
+    attivo: bool,
+    /// Campioni al massimo in coda: per il video uno per fotogramma; l'audio va solo a tempo.
+    max_coda: u64,
+}
+
+impl Freno {
+    const ANTICIPO: i64 = 5_000_000;
+
+    fn video() -> Self {
+        Freno { attivo: true, max_coda: 16 }
+    }
+
+    fn audio() -> Self {
+        Freno { attivo: true, max_coda: u64::MAX }
+    }
+
+    fn aspetta(&mut self, writer: &windows::Win32::Media::MediaFoundation::IMFSinkWriter, stream: u32) {
+        use windows::Win32::Media::MediaFoundation::MF_SINK_WRITER_STATISTICS;
+        let mut visto = None;
+        let mut da = std::time::Instant::now();
+        while self.attivo {
+            let mut st = MF_SINK_WRITER_STATISTICS { cb: std::mem::size_of::<MF_SINK_WRITER_STATISTICS>() as u32, ..Default::default() };
+            if unsafe { writer.GetStatistics(stream, &mut st) }.is_err() {
+                self.attivo = false;
+                return;
+            }
+            let (ricevuti, fatti) = (st.qwNumSamplesReceived, st.qwNumSamplesEncoded);
+            let avanti = if fatti == 0 {
+                ricevuti > 16
+            } else {
+                ricevuti.saturating_sub(fatti) > self.max_coda
+                    || st.llLastTimestampReceived.saturating_sub(st.llLastTimestampEncoded) > Self::ANTICIPO
+            };
+            if !avanti {
+                return;
+            }
+            let ora = (fatti, st.llLastTimestampEncoded);
+            if visto != Some(ora) {
+                visto = Some(ora);
+                da = std::time::Instant::now();
+            } else if da.elapsed() > std::time::Duration::from_millis(500) {
+                self.attivo = false;
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    }
+}
+
 /// Dopo `BeginWriting`: se il codificatore del video è quello della scheda, lo segna.
 fn note_hardware(writer: &windows::Win32::Media::MediaFoundation::IMFSinkWriter, stream: u32) {
     use windows::core::Interface;
@@ -547,6 +603,7 @@ fn pump(
 ) -> Result<u32, String> {
     let mut written = 0u32;
     let mut ticks = 0u64;
+    let mut freno = if frame_ticks.is_some() { Freno::video() } else { Freno::audio() };
     unsafe {
         loop {
             let mut flags: u32 = 0;
@@ -590,6 +647,7 @@ fn pump(
                 } else {
                     writer.WriteSample(dest, &sample).map_err(|e| format!("scrittura video: {e}"))?;
                 }
+                freno.aspetta(writer, dest);
                 written += 1;
                 if eos {
                     break;
@@ -906,6 +964,8 @@ pub(super) struct EncodedVideo {
     last_time: i64,
     gate: crate::sink::FrameGate,
     muted: bool,
+    freno_video: Freno,
+    freno_audio: Freno,
 }
 
 impl EncodedVideo {
@@ -970,6 +1030,8 @@ impl EncodedVideo {
                 last_time: -1,
                 gate,
                 muted,
+                freno_video: Freno::video(),
+                freno_audio: Freno::audio(),
             };
             if let Some((rate, channels)) = audio {
                 encoded.attach_audio(rate, channels)?;
@@ -1021,6 +1083,7 @@ impl EncodedVideo {
                 .WriteSample(self.video_index, &sample)
                 .map_err(|e| format!("scrittura video: {e}"))?;
         }
+        self.freno_video.aspetta(&self.writer, self.video_index);
         Ok(())
     }
 
@@ -1066,6 +1129,7 @@ impl EncodedVideo {
                 .WriteSample(index, &sample)
                 .map_err(|e| format!("scrittura audio: {e}"))?;
         }
+        self.freno_audio.aspetta(&self.writer, index);
         self.audio_frames += frames as u64;
         Ok(())
     }
