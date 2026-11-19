@@ -1,6 +1,6 @@
 [package]
 name = "cedro"
-version = "0.54.1"
+version = "0.55.0"
 edition = "2021"
 license = "MIT"
 description = "Converti e modifica file in locale, con una ruota al cursore. Windows e Linux."
@@ -60,6 +60,13 @@ weezl = "0.1"
 flacenc = { version = "0.5", default-features = false }
 zip = { version = "9", default-features = false, features = ["deflate"] }
 tiny-skia = { version = "0.11", default-features = false, features = ["std", "simd"] }
+# Ridimensionare le foto: pic-scale (SIMD e più thread), già dentro Cedro con hayro: 10-20 volte più veloce di `image`.
+pic-scale = { version = "0.7.12", default-features = false, features = ["sse", "avx", "neon", "threading"] }
+# I JPEG in uscita: jpeg-encoder con AVX2, circa il doppio più veloce, stessa qualità e stesso 4:4:4 di prima.
+jpeg-encoder = { version = "0.7", features = ["simd"] }
+# I caratteri del sistema si leggono con mmap (solo le tabelle che servono), non file interi: con molti
+# caratteri installati (Windows, Linux con i Noto) il primo Word→PDF o SVG parte molto prima.
+fontdb = { version = "0.24", default-features = false, features = ["std", "fs", "memmap", "fontconfig"] }
 # Firma digitale (sezione «Firma digitale» e visualizzatore): le buste .p7m, i certificati, le marche e la revoca
 # si leggono con un lettore ASN.1 nostro (tollera il BER dei .p7m vecchi); la matematica delle firme è RustCrypto.
 rsa = { version = "0.10", default-features = false, features = ["std", "encoding", "pkcs1v15"] }

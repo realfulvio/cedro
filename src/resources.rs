@@ -29,6 +29,17 @@ pub fn try_acquire() -> Option<JobGuard> {
     Some(JobGuard(std::marker::PhantomData))
 }
 
+/// Restituisce al sistema la memoria già liberata: su Linux glibc la tiene per sé (divisa fra i thread che
+/// l'hanno usata) anche quando non serve più. Dopo i lavori grandi fatti in sottofondo e alla chiusura delle
+/// finestre, quando nella tray non resta niente da fare.
+pub fn restituisci_memoria() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    // SAFETY: malloc_trim non tocca la memoria in uso, solo quella libera dell'allocatore.
+    unsafe {
+        libc::malloc_trim(0);
+    }
+}
+
 /// Un altro lavoro pesante tiene il turno (non questo thread): chi arriva dovrà aspettare.
 pub fn busy_elsewhere() -> bool {
     DEPTH.with(|d| d.get() == 0) && *BUSY.lock().unwrap_or_else(|e| e.into_inner())

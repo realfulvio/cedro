@@ -1,5 +1,4 @@
 use crate::pdf::pdf_from_jpeg;
-use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, ExtendedColorType, ImageFormat};
 use std::fs;
 use std::io::Cursor;
@@ -604,13 +603,9 @@ fn save_image(img: &DynamicImage, path: &Path, format: ImageFormat, quality: u8,
     }
     if format == ImageFormat::Jpeg {
         let rgb = flatten(img, white);
-        // Con buffer: il codificatore scrive a pezzetti, e su un file senza buffer ogni pezzetto è una chiamata al sistema (23 volte più lento).
-        let mut file = std::io::BufWriter::with_capacity(1 << 20, fs::File::create(path).map_err(|e| err(e.to_string()))?);
-        let mut enc = JpegEncoder::new_with_quality(&mut file, quality);
-        enc.encode(rgb.as_raw(), rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
-            .map_err(|e| err(e.to_string()))?;
-        std::io::Write::flush(&mut file).map_err(|e| err(e.to_string()))?;
-        return Ok(());
+        // In memoria e poi un solo scrivere: il codificatore lavora a pezzetti.
+        let bytes = crate::imgfmt::jpeg(rgb.as_raw(), rgb.width(), rgb.height(), false, quality, false).map_err(err)?;
+        return write_bytes(path, &bytes);
     }
     if format == ImageFormat::WebP {
         return write_bytes(path, &webp_bytes(img, quality)?);
@@ -676,11 +671,8 @@ fn png_size(png: &[u8]) -> Option<(u32, u32)> {
 
 fn jpeg_bytes(img: &DynamicImage, quality: u8, white: bool) -> CedroResult<(Vec<u8>, u32, u32)> {
     let rgb = flatten(img, white);
-    let mut buf = Cursor::new(Vec::new());
-    let mut enc = JpegEncoder::new_with_quality(&mut buf, quality);
-    enc.encode(rgb.as_raw(), rgb.width(), rgb.height(), ExtendedColorType::Rgb8)
-        .map_err(|e| err(e.to_string()))?;
-    Ok((buf.into_inner(), rgb.width(), rgb.height()))
+    let bytes = crate::imgfmt::jpeg(rgb.as_raw(), rgb.width(), rgb.height(), false, quality, false).map_err(err)?;
+    Ok((bytes, rgb.width(), rgb.height()))
 }
 
 /// L'archivio ZIP di un file, scritto a pezzi: anche un video di molti GB non passa tutto dalla memoria,
@@ -1908,12 +1900,11 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         }
         let scale = opts.dpi.map_or(settings.pdf_scale(), |d| d.clamp(36, 600) as f32 / 72.0);
         let encode = |rgb: &image::RgbImage| -> Result<Vec<u8>, String> {
-            let mut out = Vec::new();
             if action == "jpg" {
-                JpegEncoder::new_with_quality(&mut out, quality).encode_image(rgb).map_err(|e| e.to_string())?;
-            } else {
-                rgb.write_to(&mut Cursor::new(&mut out), ImageFormat::Png).map_err(|e| e.to_string())?;
+                return crate::imgfmt::jpeg(rgb.as_raw(), rgb.width(), rgb.height(), false, quality, false);
             }
+            let mut out = Vec::new();
+            rgb.write_to(&mut Cursor::new(&mut out), ImageFormat::Png).map_err(|e| e.to_string())?;
             Ok(out)
         };
         let page_name = |i: usize| if total == 1 { stem(path) } else { format!("{}-{}", stem(path), i + 1) };
@@ -1935,6 +1926,16 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         let mut strip: Vec<Vec<u8>> = Vec::new();
         let mut strip_height = 0u32;
         let mut strip_width = 1u32;
+        if opts.one_image_per_page && action == "jpg" {
+            // Una pagina per JPEG: dai pixel della pagina, senza passare da un PNG da scrivere e rileggere.
+            crate::ocr::pdf_page_images_scaled(&bytes, scale, |i| selected.contains(&i), |i, page| {
+                let out = unique_output(&dir, &page_name(i), action);
+                write_bytes(&out, &encode(&page.into_rgb8())?).map_err(|e| e.to_string())?;
+                first.get_or_insert(out);
+                Ok(())
+            })
+            .map_err(err)?;
+        } else {
         crate::ocr::pdf_page_pngs_scaled(&bytes, scale, |i| selected.contains(&i), |i, png| {
             if !opts.one_image_per_page {
                 let (w, h) = png_size(&png).ok_or("pagina non disegnata")?;
@@ -1958,6 +1959,7 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             Ok(())
         })
         .map_err(err)?;
+        }
         let label = action.to_uppercase();
         if let Some(out) = long_out {
             let mut long = image::RgbImage::from_pixel(strip_width, strip_height.max(1), image::Rgb([255, 255, 255]));
@@ -2228,13 +2230,13 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
         .max_side
         .filter(|s| *s > 0 && img.width().max(img.height()) > *s)
     {
-        img = img.resize(side, side, image::imageops::FilterType::Lanczos3);
+        img = crate::imgfmt::ridimensiona_entro(&img, side, side, image::imageops::FilterType::Lanczos3);
     }
     match action {
         "half" => {
             let w = (img.width() / 2).max(1);
             let h = (img.height() / 2).max(1);
-            img = img.resize(w, h, image::imageops::FilterType::Lanczos3);
+            img = crate::imgfmt::ridimensiona_entro(&img, w, h, image::imageops::FilterType::Lanczos3);
         }
         "gray" => img = img.grayscale(),
         "rot90" => img = img.rotate90(),
@@ -2243,8 +2245,13 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
 
     let mut done = 'write: {
         if action == "pdf" {
-            let (jpeg, w, h) = jpeg_bytes(&img, 90, opts.white_background)?;
-            let lines = crate::ocr::image_lines(&img).unwrap_or_default();
+            // Il JPEG e la lettura del testo (OCR) non dipendono l'uno dall'altra: vanno insieme.
+            let (jpeg, lines) = std::thread::scope(|s| {
+                let ocr = s.spawn(|| crate::ocr::image_lines(&img).unwrap_or_default());
+                let jpeg = jpeg_bytes(&img, 90, opts.white_background);
+                (jpeg, ocr.join().unwrap_or_default())
+            });
+            let (jpeg, w, h) = jpeg?;
             let bytes = pdf_from_jpeg(&jpeg, w, h, &lines);
             write_bytes(&out, &bytes)?;
             let message = if lines.is_empty() {
@@ -2274,7 +2281,13 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             break 'write Output { path: out, message };
         }
 
-        save_image(&img, &out, format, q, opts.white_background)?;
+        if action == "compress" && format == ImageFormat::Jpeg {
+            // «Comprimi»: conta il peso, il codificatore più leggero (vedi `imgfmt::jpeg`).
+            let rgb = flatten(&img, opts.white_background);
+            write_bytes(&out, &crate::imgfmt::jpeg(rgb.as_raw(), rgb.width(), rgb.height(), false, q, true).map_err(err)?)?;
+        } else {
+            save_image(&img, &out, format, q, opts.white_background)?;
+        }
         let after = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
         let message = match action {
             "strip" if slide.is_some() => "Riscritto in PNG dal vetrino, senza etichetta né dati dello scanner".into(),

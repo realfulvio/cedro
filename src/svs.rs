@@ -647,8 +647,7 @@ impl Slide {
             _ => self.read_level(path, self.for_side(smallest, side))?,
         };
         Ok(if img.width().max(img.height()) > side {
-            image::DynamicImage::ImageRgb8(img)
-                .thumbnail(side, side)
+            crate::imgfmt::miniatura(&image::DynamicImage::ImageRgb8(img), side, side)
                 .to_rgb8()
         } else {
             img

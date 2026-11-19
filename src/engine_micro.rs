@@ -190,10 +190,10 @@ fn run(path: &Path, action: &str, quality: u8, dir: &Path, opts: &Options) -> Ce
     // Un'immagine pronta: i ritocchi della voce (misure, bianco e nero, rotazione) dopo la barra.
     let ritocca = |mut img: DynamicImage| -> DynamicImage {
         if let Some(side) = opts.max_side.filter(|s| *s > 0 && img.width().max(img.height()) > *s) {
-            img = img.resize(side, side, image::imageops::FilterType::Lanczos3);
+            img = crate::imgfmt::ridimensiona_entro(&img, side, side, image::imageops::FilterType::Lanczos3);
         }
         match action {
-            "half" => img.resize_exact((img.width() / 2).max(1), (img.height() / 2).max(1), image::imageops::FilterType::Lanczos3),
+            "half" => crate::imgfmt::ridimensiona(&img, (img.width() / 2).max(1), (img.height() / 2).max(1), image::imageops::FilterType::Lanczos3),
             "gray" => DynamicImage::ImageLuma8(img.to_luma8()),
             "rot90" => img.rotate90(),
             _ => img,

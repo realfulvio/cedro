@@ -106,7 +106,7 @@ pub fn pannello(path: &Path) -> Result<Pannello, String> {
         let livello = s.for_side(s.pick(crate::svs::Pick::Medium), 6000);
         let mut img = s.read_level(path, livello).map_err(|e| format!("{nome}: {e}"))?;
         if img.width().max(img.height()) > 6000 {
-            img = DynamicImage::ImageRgb8(img).thumbnail(6000, 6000).to_rgb8();
+            img = crate::imgfmt::miniatura(&DynamicImage::ImageRgb8(img), 6000, 6000).to_rgb8();
         }
         let um = s.mpp.map(|m| f64::from(m) * f64::from(s.full().width) / f64::from(img.width().max(1)));
         return Ok(Pannello { img, um_per_px: um, nome, note: Vec::new(), foto: false });
@@ -159,7 +159,7 @@ fn alla_larghezza(img: &RgbImage, larghezza: u32) -> RgbImage {
         return img.clone();
     }
     let filtro = if larghezza >= w * 2 { FilterType::Nearest } else { FilterType::Lanczos3 };
-    image::imageops::resize(img, larghezza, altezza, filtro)
+    crate::imgfmt::ridimensiona_rgb(img, larghezza, altezza, filtro)
 }
 
 const FIGTREE_BOLD: &[u8] = include_bytes!("../assets/fonts/Figtree-Bold.ttf");

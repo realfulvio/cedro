@@ -507,7 +507,7 @@ pub fn tessere(path: &Path, dir: &Path, base: &str, o: &Tessere, avanzamento: &d
                                     }
                                     let mut img = RgbImage::from_raw(sorgente, sorgente, px).expect("misure");
                                     if sorgente != o.lato {
-                                        img = image::imageops::resize(&img, o.lato, o.lato, image::imageops::FilterType::Triangle);
+                                        img = crate::imgfmt::ridimensiona_rgb(&img, o.lato, o.lato, image::imageops::FilterType::Triangle);
                                     }
                                     let (xp, yp) = ((x0 as f64 * giu).round() as u64, (y0 as f64 * giu).round() as u64);
                                     let nome = format!("{base}_x{xp}_y{yp}.{ext}");
@@ -813,7 +813,7 @@ pub fn conta_mitotica(path: &Path, out: &Path, dove: &Path) -> Result<Conta, Str
     let mut um = mpp;
     if mpp < 0.24 {
         let f = 0.25 / mpp;
-        img = image::imageops::resize(&img, (w as f64 / f) as u32, (h as f64 / f) as u32, image::imageops::FilterType::Triangle);
+        img = crate::imgfmt::ridimensiona_rgb(&img, (w as f64 / f) as u32, (h as f64 / f) as u32, image::imageops::FilterType::Triangle);
         um = 0.25;
     }
     // I dieci campi: righe sottili gialle e il numero in alto a sinistra di ognuno.

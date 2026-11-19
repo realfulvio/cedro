@@ -540,6 +540,9 @@ pub struct GlyphCache {
     immagini: HashMap<ChiaveImg, (Arc<Pixmap>, Arc<Pixmap>, u64)>,
     /// Le maschere dei ritagli rettangolari (una per rettangolo e misura della finestra), riusate fra i fotogrammi.
     maschere: HashMap<(i32, i32, i32, i32, u32, u32), (std::rc::Rc<Mask>, u64)>,
+    /// I bagliori tondi già disegnati (raggio in pixel, colore, opacità): la sfumatura radiale a 9 tappe su
+    /// mezzo schermo era da sola un terzo di ogni fotogramma, anche durante i lavori.
+    bagliori: HashMap<(u32, Rgb, u32), (std::rc::Rc<Pixmap>, u64)>,
     fotogramma: u64,
     /// La scala dei glifi tenuti.
     scale: f32,
@@ -589,6 +592,23 @@ impl GlyphCache {
                 self.maschere.retain(|_, (_, u)| f - *u <= 1);
             }
         }
+        // Un bagliore per misura della zona del file: ridimensionando la finestra ne nascono tanti.
+        if self.bagliori.len() > 4 {
+            self.bagliori.retain(|_, (_, u)| f - *u <= 1);
+        }
+    }
+}
+
+/// Il bagliore tondo (sfumatura radiale a 9 tappe) su `pm`, con la trasformazione `tf`.
+fn bagliore(pm: &mut Pixmap, cx: f32, cy: f32, r: f32, c: Rgb, a: f32, tf: Transform, m: Option<&Mask>) {
+    let stop = |t: f32, k: f32| tiny_skia::GradientStop::new(t, tiny_skia::Color::from_rgba(c.0 as f32 / 255.0, c.1 as f32 / 255.0, c.2 as f32 / 255.0, (a * k).clamp(0.0, 1.0)).unwrap_or(tiny_skia::Color::TRANSPARENT));
+    // Una curva morbida (più tappe): senza, si vedrebbe il cerchio dove il colore finisce.
+    let stops = (0..=8).map(|i| { let t = i as f32 / 8.0; let k = 1.0 - t * t * (3.0 - 2.0 * t); stop(t, k * k) }).collect();
+    let centre = tiny_skia::Point::from_xy(cx, cy);
+    let Some(shader) = tiny_skia::RadialGradient::new(centre, centre, r.max(0.1), stops, tiny_skia::SpreadMode::Pad, Transform::identity()) else { return };
+    if let Some(p) = PathBuilder::from_circle(cx, cy, r.max(0.1)) {
+        let paint = Paint { shader, anti_alias: true, ..Default::default() };
+        pm.fill_path(&p, &paint, FillRule::Winding, tf, m);
     }
 }
 
@@ -1003,6 +1023,23 @@ impl<'a> Painter<'a> {
 
     /// Riquadro arrotondato con una sfumatura verticale (da `top` in alto a `bottom` in basso).
     pub fn rrect_vgrad(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, top: Rgb, bottom: Rgb) {
+        // Senza angoli e grande (il fondo della finestra): riga per riga dello schermo, ogni riga di un colore
+        // pieno, invece della sfumatura di tiny-skia punto per punto. Stessi colori (±1), molte volte più veloce.
+        let s = self.scale;
+        if r * s < 0.5 && w > 0.0 && h > 0.0 && w * h * s * s >= 40_000.0 {
+            let (x0, y0) = ((x + self.dx) * s, (y + self.dy) * s);
+            let (x1, y1) = (x0 + w * s, y0 + h * s);
+            let (_, cy0, _, cy1) = self.clip_rect();
+            let first = (y0.floor() as i32).max(cy0);
+            let last = (y1.ceil() as i32).min(cy1);
+            for py in first..last {
+                let t = (((py as f32 + 0.5) - y0) / (y1 - y0)).clamp(0.0, 1.0);
+                let ch = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round().clamp(0.0, 255.0) as u8;
+                let c = (ch(top.0, bottom.0), ch(top.1, bottom.1), ch(top.2, bottom.2));
+                self.rett_pixel(x0, y0.max(py as f32), x1, y1.min(py as f32 + 1.0), c, 1.0);
+            }
+            return;
+        }
         let stops = vec![
             tiny_skia::GradientStop::new(0.0, tiny_skia::Color::from_rgba8(top.0, top.1, top.2, 255)),
             tiny_skia::GradientStop::new(1.0, tiny_skia::Color::from_rgba8(bottom.0, bottom.1, bottom.2, 255)),
@@ -1081,20 +1118,41 @@ impl<'a> Painter<'a> {
         }
     }
 
-    /// Un cerchio pieno con trasparenza.
     /// Un bagliore tondo: il colore `c` pieno (opacità `a`) al centro, che sfuma fino a sparire sul bordo `r`.
     pub fn glow(&mut self, cx: f32, cy: f32, r: f32, c: Rgb, a: f32) {
-        let stop = |t: f32, k: f32| tiny_skia::GradientStop::new(t, tiny_skia::Color::from_rgba(c.0 as f32 / 255.0, c.1 as f32 / 255.0, c.2 as f32 / 255.0, (a * k).clamp(0.0, 1.0)).unwrap_or(tiny_skia::Color::TRANSPARENT));
-        // Una curva morbida (più tappe): senza, si vedrebbe il cerchio dove il colore finisce.
-        let stops = (0..=8).map(|i| { let t = i as f32 / 8.0; let k = 1.0 - t * t * (3.0 - 2.0 * t); stop(t, k * k) }).collect();
-        let centre = tiny_skia::Point::from_xy(cx, cy);
-        let Some(shader) = tiny_skia::RadialGradient::new(centre, centre, r.max(0.1), stops, tiny_skia::SpreadMode::Pad, Transform::identity()) else { return };
-        if let Some(p) = PathBuilder::from_circle(cx, cy, r.max(0.1)) {
-            let paint = Paint { shader, anti_alias: true, ..Default::default() };
-            let tf = self.tf();
-            let m = maschera_per(&self.clips, p.bounds(), tf, 1.0);
-            self.pixmap.fill_path(&p, &paint, FillRule::Winding, tf, m);
+        // Grande: disegnato una volta in un foglio a parte e poi solo copiato (vedi `bagliori`).
+        let s = self.scale;
+        let rp = (r * s).round();
+        if (64.0..=4096.0).contains(&rp) {
+            let chiave = (rp as u32, c, a.to_bits());
+            let f = self.cache.fotogramma;
+            let foglio = match self.cache.bagliori.get_mut(&chiave) {
+                Some((pm, u)) => {
+                    *u = f;
+                    Some(pm.clone())
+                }
+                None => {
+                    let lato = rp as u32 * 2 + 2;
+                    Pixmap::new(lato, lato).map(|mut pm| {
+                        bagliore(&mut pm, rp + 1.0, rp + 1.0, rp, c, a, Transform::identity(), None);
+                        let pm = std::rc::Rc::new(pm);
+                        self.cache.bagliori.insert(chiave, (pm.clone(), f));
+                        pm
+                    })
+                }
+            };
+            if let Some(pm) = foglio {
+                let (px, py) = (((cx + self.dx) * s - rp - 1.0).round(), ((cy + self.dy) * s - rp - 1.0).round());
+                let b = Rect::from_xywh(px, py, pm.width() as f32, pm.height() as f32);
+                let m = b.and_then(|b| maschera_per(&self.clips, b, Transform::identity(), 1.0));
+                self.pixmap.draw_pixmap(px as i32, py as i32, pm.as_ref().as_ref(), &tiny_skia::PixmapPaint::default(), Transform::identity(), m);
+                return;
+            }
         }
+        let tf = self.tf();
+        let b = Rect::from_xywh(cx - r, cy - r, 2.0 * r, 2.0 * r);
+        let m = b.and_then(|b| maschera_per(&self.clips, b, tf, 1.0));
+        bagliore(&mut self.pixmap, cx, cy, r, c, a, tf, m);
     }
 
     pub fn disc_a(&mut self, cx: f32, cy: f32, r: f32, c: Rgb, a: f32) {
@@ -1651,6 +1709,43 @@ mod tests {
         p.dy -= 70.0;
         assert!(p.shows_y(100.0, 10.0));
         assert!(!p.shows_y(30.0, 10.0));
+    }
+
+    #[test]
+    fn bagliore_copiato_uguale_a_quello_disegnato() {
+        let fonts = Fonts::system();
+        let mut cache = GlyphCache::new();
+        let c = (90, 160, 240);
+        let mut p = Painter::new(300, 300, 1.0, &fonts, &mut cache);
+        p.clear((20, 20, 30));
+        p.glow(150.0, 140.0, 100.0, c, 0.6);
+        p.glow(150.0, 140.0, 100.0, c, 0.6);
+        let mut q = Pixmap::new(300, 300).unwrap();
+        q.fill(tiny_skia::Color::from_rgba8(20, 20, 30, 255));
+        bagliore(&mut q, 150.0, 140.0, 100.0, c, 0.6, Transform::identity(), None);
+        bagliore(&mut q, 150.0, 140.0, 100.0, c, 0.6, Transform::identity(), None);
+        let max = p.pixmap.data().iter().zip(q.data()).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+        assert!(max <= 3, "differenza {max}");
+        assert_eq!(p.cache.bagliori.len(), 1);
+    }
+
+    #[test]
+    fn fondo_sfumato_veloce_uguale_a_tiny_skia() {
+        let fonts = Fonts::system();
+        let mut cache = GlyphCache::new();
+        let (top, bottom) = ((10, 40, 90), (200, 120, 30));
+        let mut p = Painter::new(320, 240, 1.0, &fonts, &mut cache);
+        p.clear((0, 0, 0));
+        p.rrect_vgrad(0.0, 0.0, 320.0, 240.0, 0.0, top, bottom);
+        let stops = vec![
+            tiny_skia::GradientStop::new(0.0, tiny_skia::Color::from_rgba8(top.0, top.1, top.2, 255)),
+            tiny_skia::GradientStop::new(1.0, tiny_skia::Color::from_rgba8(bottom.0, bottom.1, bottom.2, 255)),
+        ];
+        let shader = tiny_skia::LinearGradient::new(tiny_skia::Point::from_xy(0.0, 0.0), tiny_skia::Point::from_xy(0.0, 240.0), stops, tiny_skia::SpreadMode::Pad, Transform::identity()).unwrap();
+        let mut q = Pixmap::new(320, 240).unwrap();
+        q.fill_rect(Rect::from_xywh(0.0, 0.0, 320.0, 240.0).unwrap(), &Paint { shader, ..Default::default() }, Transform::identity(), None);
+        let max = p.pixmap.data().iter().zip(q.data()).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+        assert!(max <= 2, "differenza {max}");
     }
 }
 

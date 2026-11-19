@@ -216,7 +216,7 @@ fn adatta(img: &RgbImage, w: u32, h: u32) -> RgbImage {
         ((img.width() as f32 * s) as u32).max(1),
         ((img.height() as f32 * s) as u32).max(1),
     );
-    image::imageops::resize(img, nw, nh, FilterType::Lanczos3)
+    crate::imgfmt::ridimensiona_rgb(img, nw, nh, FilterType::Lanczos3)
 }
 
 /// Una pagina: intestazione della clinica, scheda dell'animale, la radiografia e la nota in fondo.
