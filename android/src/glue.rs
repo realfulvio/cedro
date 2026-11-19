@@ -20,6 +20,9 @@ use crate::ui::{App, Archivio, Compito, Completamento, Effetto, Info, Recente, S
 /// Dove finiscono le copie.
 const DOCUMENTI: &str = "/storage/emulated/0/Documents";
 
+/// Ogni quanto, al massimo, l'avanzamento dei lavori da solo fa ridisegnare la finestra.
+const RITMO_PROGRESSO: Duration = Duration::from_millis(250);
+
 /// «Se il file esiste già» delle Impostazioni, per i file pubblicati in MediaStore (0 numera, 1 sostituisci, 2 salta).
 static ESISTE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 
@@ -209,43 +212,36 @@ fn tipo_di(path: &Path) -> cedro::Kind {
 /// Chiede il permesso di scrivere in Documenti (se manca) e aspetta la risposta. Da Android 11 non serve: i file che
 /// Cedro crea in Documenti sono suoi. Da Android 13 chiede anche il permesso per la notifica di avanzamento (senza aspettare).
 fn assicura_scrittura(app: &AndroidApp) -> bool {
-    let Ok(vm) = (unsafe { JavaVM::from_raw(app.vm_as_ptr() as *mut _) }) else { return false };
-    let Ok(mut env) = vm.attach_current_thread() else { return false };
-    let attivita = unsafe { JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject) };
-    let api = env.get_static_field("android/os/Build$VERSION", "SDK_INT", "I").and_then(|v| v.i()).unwrap_or(0);
-    if env.exception_check().unwrap_or(false) {
-        let _ = env.exception_clear();
-    }
+    let api = con_attivita(app, |env, _| env.get_static_field("android/os/Build$VERSION", "SDK_INT", "I").and_then(|v| v.i()).map_err(|e| jerr(env, e))).unwrap_or(0);
     let perm = match api {
         30.. => "android.permission.POST_NOTIFICATIONS",
         _ => "android.permission.WRITE_EXTERNAL_STORAGE",
     };
-    let controlla = |env: &mut JNIEnv| -> bool {
-        let Ok(p) = env.new_string(perm) else { return false };
-        let r = env.call_method(&attivita, "checkSelfPermission", "(Ljava/lang/String;)I", &[JValue::Object(&p)]).and_then(|v| v.i());
-        if env.exception_check().unwrap_or(false) {
-            let _ = env.exception_clear();
-        }
-        r.map(|v| v == 0).unwrap_or(false)
+    let controlla = || {
+        con_attivita(app, |env, att| {
+            let p = env.new_string(perm).map_err(|e| e.to_string())?;
+            env.call_method(att, "checkSelfPermission", "(Ljava/lang/String;)I", &[JValue::Object(&p)]).and_then(|v| v.i()).map(|v| v == 0).map_err(|e| jerr(env, e))
+        })
+        .unwrap_or(false)
     };
-    if controlla(&mut env) || (30..33).contains(&api) {
+    if controlla() || (30..33).contains(&api) {
         return true;
     }
-    let ok = (|| -> Result<(), jni::errors::Error> {
-        let classe = env.find_class("java/lang/String")?;
-        let p = env.new_string(perm)?;
-        let arr = env.new_object_array(1, classe, &p)?;
-        env.call_method(&attivita, "requestPermissions", "([Ljava/lang/String;I)V", &[JValue::Object(&arr), JValue::Int(7)])?;
-        Ok(())
-    })();
-    if ok.is_err() && env.exception_check().unwrap_or(false) {
-        let _ = env.exception_clear();
-    }
+    let _ = con_attivita(app, |env, att| {
+        let r = (|| -> Result<(), jni::errors::Error> {
+            let classe = env.find_class("java/lang/String")?;
+            let p = env.new_string(perm)?;
+            let arr = env.new_object_array(1, classe, &p)?;
+            env.call_method(att, "requestPermissions", "([Ljava/lang/String;I)V", &[JValue::Object(&arr), JValue::Int(7)])?;
+            Ok(())
+        })();
+        r.map_err(|e| jerr(env, e))
+    });
     if api >= 33 {
         return true;
     }
     for _ in 0..240 {
-        if controlla(&mut env) {
+        if controlla() {
             return true;
         }
         std::thread::sleep(Duration::from_millis(250));
@@ -255,55 +251,43 @@ fn assicura_scrittura(app: &AndroidApp) -> bool {
 
 /// Dall'attività di Cedro: chiude e si torna all'app di prima.
 fn chiudi(app: &AndroidApp) {
-    let Ok(vm) = (unsafe { JavaVM::from_raw(app.vm_as_ptr() as *mut _) }) else { return };
-    let Ok(mut env) = vm.attach_current_thread() else { return };
-    let attivita = unsafe { JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject) };
-    let _ = env.call_method(&attivita, "finish", "()V", &[]);
-    if env.exception_check().unwrap_or(false) {
-        let _ = env.exception_clear();
-    }
+    let _ = con_attivita(app, |env, att| env.call_method(att, "finish", "()V", &[]).map(|_| ()).map_err(|e| jerr(env, e)));
 }
 
 /// Le barre di sistema e dei gesti, in pixel: sinistra, alto, destra, basso.
 fn margini(app: &AndroidApp) -> (f32, f32, f32, f32) {
-    let Ok(vm) = (unsafe { JavaVM::from_raw(app.vm_as_ptr() as *mut _) }) else { return (0.0, 0.0, 0.0, 0.0) };
-    let Ok(mut env) = vm.attach_current_thread() else { return (0.0, 0.0, 0.0, 0.0) };
-    let attivita = unsafe { JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject) };
-    let r = (|| -> Result<(f32, f32, f32, f32), jni::errors::Error> {
-        let finestra = env.call_method(&attivita, "getWindow", "()Landroid/view/Window;", &[])?.l()?;
-        let decor = env.call_method(&finestra, "getDecorView", "()Landroid/view/View;", &[])?.l()?;
-        let ins = env.call_method(&decor, "getRootWindowInsets", "()Landroid/view/WindowInsets;", &[])?.l()?;
-        if ins.is_null() {
-            return Ok((0.0, 0.0, 0.0, 0.0));
-        }
-        let mut v = [0f32; 4];
-        for (i, nome) in ["getSystemWindowInsetLeft", "getSystemWindowInsetTop", "getSystemWindowInsetRight", "getSystemWindowInsetBottom"].into_iter().enumerate() {
-            v[i] = env.call_method(&ins, nome, "()I", &[])?.i()? as f32;
-        }
-        Ok((v[0], v[1], v[2], v[3]))
-    })();
-    if env.exception_check().unwrap_or(false) {
-        let _ = env.exception_clear();
-    }
-    r.unwrap_or((0.0, 0.0, 0.0, 0.0))
+    con_attivita(app, |env, att| {
+        let r = (|| -> Result<(f32, f32, f32, f32), jni::errors::Error> {
+            let finestra = env.call_method(att, "getWindow", "()Landroid/view/Window;", &[])?.l()?;
+            let decor = env.call_method(&finestra, "getDecorView", "()Landroid/view/View;", &[])?.l()?;
+            let ins = env.call_method(&decor, "getRootWindowInsets", "()Landroid/view/WindowInsets;", &[])?.l()?;
+            if ins.is_null() {
+                return Ok((0.0, 0.0, 0.0, 0.0));
+            }
+            let mut v = [0f32; 4];
+            for (i, nome) in ["getSystemWindowInsetLeft", "getSystemWindowInsetTop", "getSystemWindowInsetRight", "getSystemWindowInsetBottom"].into_iter().enumerate() {
+                v[i] = env.call_method(&ins, nome, "()I", &[])?.i()? as f32;
+            }
+            Ok((v[0], v[1], v[2], v[3]))
+        })();
+        r.map_err(|e| jerr(env, e))
+    })
+    .unwrap_or((0.0, 0.0, 0.0, 0.0))
 }
 
 /// Icone della barra di stato scure (tema chiaro) o chiare (tema scuro).
 fn icone_barre(app: &AndroidApp, scuro: bool) {
-    let Ok(vm) = (unsafe { JavaVM::from_raw(app.vm_as_ptr() as *mut _) }) else { return };
-    let Ok(mut env) = vm.attach_current_thread() else { return };
-    let attivita = unsafe { JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject) };
-    let _ = (|| -> Result<(), jni::errors::Error> {
-        let finestra = env.call_method(&attivita, "getWindow", "()Landroid/view/Window;", &[])?.l()?;
-        let decor = env.call_method(&finestra, "getDecorView", "()Landroid/view/View;", &[])?.l()?;
-        // SYSTEM_UI_FLAG_LIGHT_STATUS_BAR (0x2000) e LIGHT_NAVIGATION_BAR (0x10): icone scure.
-        let flag = if scuro { 0 } else { 0x2000 | 0x10 };
-        env.call_method(&decor, "setSystemUiVisibility", "(I)V", &[JValue::Int(flag)])?;
-        Ok(())
-    })();
-    if env.exception_check().unwrap_or(false) {
-        let _ = env.exception_clear();
-    }
+    let _ = con_attivita(app, |env, att| {
+        let r = (|| -> Result<(), jni::errors::Error> {
+            let finestra = env.call_method(att, "getWindow", "()Landroid/view/Window;", &[])?.l()?;
+            let decor = env.call_method(&finestra, "getDecorView", "()Landroid/view/View;", &[])?.l()?;
+            // SYSTEM_UI_FLAG_LIGHT_STATUS_BAR (0x2000) e LIGHT_NAVIGATION_BAR (0x10): icone scure.
+            let flag = if scuro { 0 } else { 0x2000 | 0x10 };
+            env.call_method(&decor, "setSystemUiVisibility", "(I)V", &[JValue::Int(flag)])?;
+            Ok(())
+        })();
+        r.map_err(|e| jerr(env, e))
+    });
 }
 
 
@@ -312,10 +296,20 @@ fn con_attivita<T>(app: &AndroidApp, f: impl FnOnce(&mut JNIEnv, &JObject) -> Re
     let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr() as *mut _) }.map_err(|e| e.to_string())?;
     let mut env = vm.attach_current_thread().map_err(|e| e.to_string())?;
     let attivita = unsafe { JObject::from_raw(app.activity_as_ptr() as jni::sys::jobject) };
+    if env.exception_check().unwrap_or(false) {
+        let _ = env.exception_clear();
+    }
+    // Il thread principale resta attaccato alla JVM per tutta la vita dell'app e non torna mai in Java: senza un frame
+    // i riferimenti locali di ogni chiamata (anche solo «takeAccessibilityActions», più volte al secondo) restavano
+    // nella tabella fino a riempirla (8 milioni) e Android chiudeva l'app con un abort.
+    env.push_local_frame(32).map_err(|e| e.to_string())?;
     let r = f(&mut env, &attivita);
     if env.exception_check().unwrap_or(false) {
         let _ = env.exception_clear();
     }
+    // SAFETY: `T` non può contenere riferimenti locali (la firma di `f` lega l'env a una durata sua), quindi nessun
+    // oggetto creato nel frame viene usato dopo averlo chiuso.
+    let _ = unsafe { env.pop_local_frame(&JObject::null()) };
     r
 }
 
@@ -750,6 +744,11 @@ fn servizio(app: &AndroidApp, stato: Option<(&str, &str, i32)>) {
     if let Err(e) = r {
         log::error!("servizio: {e}");
     }
+}
+
+/// Il servizio dei lavori ha già chiamato startForeground (vedi `ServizioLavoro.inPrimoPiano`).
+fn servizio_pronto(app: &AndroidApp) -> bool {
+    con_attivita(app, |env, att| env.call_method(att, "servizioPronto", "()Z", &[]).and_then(|v| v.z()).map_err(|e| jerr(env, e))).unwrap_or(true)
 }
 
 type Casella<T> = Arc<Mutex<Option<T>>>;
@@ -1619,7 +1618,9 @@ fn pagine_firmato(c: &Consegne, path: PathBuf) {
         let manda = |img: Option<Image>| slot.lock().unwrap_or_else(|e| e.into_inner()).push((path.clone(), img));
         const LATO: f32 = 1200.0;
         const MASSIMO: usize = 40;
-        match tipo_di(&path) {
+        // Un documento rovinato che fa andare in panic il lettore non deve lasciare la rotella a girare (e lo schermo
+        // a ridisegnarsi a 60 fotogrammi al secondo) per sempre: la fine si manda comunque.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match tipo_di(&path) {
             cedro::Kind::Pdf => {
                 let n = cedro::pdf_info(&path, None).map(|(n, _)| n as usize).unwrap_or(0).min(MASSIMO);
                 let pagine: Vec<usize> = (0..n).collect();
@@ -1645,7 +1646,7 @@ fn pagine_firmato(c: &Consegne, path: PathBuf) {
                 }
             }
             _ => {}
-        }
+        }));
         manda(None);
     });
 }
@@ -1670,6 +1671,12 @@ fn core_grandi() -> Option<usize> {
 #[no_mangle]
 fn android_main(app: AndroidApp) {
     android_logger::init_once(android_logger::Config::default().with_max_level(log::LevelFilter::Info).with_tag("Cedro"));
+    // Android butta via stderr: senza questo un panic finiva in un abort senza nessuna traccia nel logcat.
+    let predefinito = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        log::error!("{info}");
+        predefinito(info);
+    }));
     let dati = app.internal_data_path().unwrap_or_else(|| PathBuf::from("/data/local/tmp"));
     // Il motore cerca le sue impostazioni in $HOME/.config/cedro.
     std::env::set_var("HOME", &dati);
@@ -1813,12 +1820,25 @@ fn android_main(app: AndroidApp) {
     let mut ultimo_servizio = std::time::Instant::now();
     let mut ultimo_audio=std::time::Instant::now();
     let mut progressi=Vec::new();
+    let mut progresso_sporco=false;
+    let mut ultima_semantica=String::new();
     let mut ultima_notifica=None;
 
     while !esci {
         // Mentre qualcosa si muove si disegna al ritmo dello schermo (~60 al secondo): si aspetta solo
         // quanto manca ai 16 ms dall'ultimo fotogramma. Da fermo si aspettano gli eventi.
-        let attesa = if animando { Duration::from_millis(16).saturating_sub(ultimo_disegno.elapsed()) } else { Duration::from_millis(150) };
+        // Senza finestra (app dietro, selettore aperto) non si disegna: le animazioni avanzano solo coi fotogrammi
+        // disegnati, quindi «animando» resterebbe vero e l'attesa zero faceva girare il ciclo a vuoto su un core intero.
+        // Dietro basta svegliarsi per la notifica e per i lavori che finiscono.
+        let attesa = if finestra.is_none() {
+            Duration::from_millis(if servizio_attivo { 500 } else { 1000 })
+        } else if animando {
+            Duration::from_millis(16).saturating_sub(ultimo_disegno.elapsed())
+        } else if progresso_sporco {
+            RITMO_PROGRESSO.saturating_sub(ultimo_disegno.elapsed()).min(Duration::from_millis(150))
+        } else {
+            Duration::from_millis(150)
+        };
         app.poll_events(Some(attesa), |ev| {
             if let PollEvent::Main(m) = ev {
                 match m {
@@ -1827,6 +1847,7 @@ fn android_main(app: AndroidApp) {
                         sporco = true;
                         leggi_insets = true;
                         tentativi = 0;
+                        ultima_semantica.clear();
                         // Alla riapertura la finestra può rimettere le icone di stato del tema di sistema.
                         icone_barre(&app, crate::ui::tinte::scuro(ui.tema));
                     }
@@ -2369,7 +2390,10 @@ fn android_main(app: AndroidApp) {
         let componente=consegne.componenti.lock().unwrap_or_else(|e|e.into_inner()).attuale();
         if ui.componente!=componente {ui.componente=componente;sporco=true;}
         let nuovi:Vec<_>=ui.lavori.iter().filter(|l|l.stato==Stato::InCorso).map(|l|(l.id,l.prog.load(std::sync::atomic::Ordering::Relaxed))).collect();
-        if nuovi!=progressi {progressi=nuovi;sporco=true;}
+        // L'avanzamento da solo ridisegna al massimo 4 volte al secondo: ogni disegno costa ~100 ms sui telefoni
+        // lenti e toglieva un core alla conversione che si sta guardando.
+        if nuovi!=progressi {progressi=nuovi;progresso_sporco=true;}
+        if progresso_sporco && ultimo_disegno.elapsed()>=RITMO_PROGRESSO {sporco=true;}
         // Il servizio in primo piano vive finché c'è un lavoro in corso; la notifica segue l'avanzamento.
         if ultimo_servizio.elapsed() > Duration::from_millis(700) || (servizio_attivo && ui.in_corso().0 == 0) {
             let (n, medio, nome) = ui.in_corso();
@@ -2385,7 +2409,9 @@ fn android_main(app: AndroidApp) {
                 if ultima_notifica.as_ref()!=Some(&next){servizio(&app,Some((cedro::i18n::tr("Cedro sta lavorando").as_ref(),&next.0,next.1)));ultima_notifica=Some(next);}
                 servizio_attivo = true;
                 ultimo_servizio = std::time::Instant::now();
-            } else if servizio_attivo {
+            } else if servizio_attivo && (servizio_pronto(&app) || ultimo_servizio.elapsed() > Duration::from_secs(10)) {
+                // Fermarlo prima che sia in primo piano fa chiudere l'app (Android 9+): si riprova al giro dopo.
+                // Dopo 10 s si ferma comunque (l'avvio può essere fallito, e allora stopService non fa danni).
                 servizio(&app, None);
                 servizio_attivo = false;
                 ultima_notifica=None;
@@ -2416,6 +2442,9 @@ fn android_main(app: AndroidApp) {
                 let (w, h) = (f.width() as u32, f.height() as u32);
                 if w > 0 && h > 0 {
                     ultimo_disegno = std::time::Instant::now();
+                    // Come sul computer: a ogni cambio di densità e oltre 20 000 glifi si ricomincia. Senza, la cache
+                    // cresceva per tutta la vita dell'app (ogni misura di testo adattata alla larghezza è una serie nuova).
+                    cache.trim(scala);
                     let mut p = Painter::new_riusando(w, h, scala, Fonts::for_theme(ui.tema), &mut cache);
                     p.larger = ui.grandi;
                     p.text_scale = font_scale;
@@ -2423,13 +2452,18 @@ fn android_main(app: AndroidApp) {
                     ui.disegna(&mut p, w as f32 / scala, h as f32 / scala);
                     presenta(f, &p);
                     let semantics=ui.accessibilita(&p);
-                    let _=con_attivita(&app,|env,a|{
-                        let text=env.new_string(semantics).map_err(|e|e.to_string())?;
-                        env.call_method(a,"accessibilitySnapshot","(Ljava/lang/String;)V",&[JValue::Object(&text)]).map(|_|()).map_err(|e|jerr(env,e))
-                    });
+                    // Uguale al fotogramma prima (animazioni, avanzamento): niente copia JNI né giro sul thread Java.
+                    if semantics!=ultima_semantica {
+                        let _=con_attivita(&app,|env,a|{
+                            let text=env.new_string(&semantics).map_err(|e|e.to_string())?;
+                            env.call_method(a,"accessibilitySnapshot","(Ljava/lang/String;)V",&[JValue::Object(&text)]).map(|_|()).map_err(|e|jerr(env,e))
+                        });
+                        ultima_semantica=semantics;
+                    }
                     let foglio = p.in_foglio();
                     cache.ricicla(foglio);
                     sporco = false;
+                    progresso_sporco = false;
                     // Le pagine che il disegno voleva e non c'erano.
                     if let Some(path) = ui.file.as_ref().map(|f| f.path.clone()) {
                         let nuove: Vec<u32> = std::mem::take(&mut ui.pdf.chiedi).into_iter().filter(|n| chieste.insert((path.clone(), *n))).collect();

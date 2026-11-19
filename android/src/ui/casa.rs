@@ -2003,7 +2003,7 @@ impl App {
         // Il foglio dal basso con l'ispettore.
         let fy = h - piede - foglio_h;
         if foglio_h > 0.0 {
-            p.shadow(0.0, fy, w, foglio_h + 20.0, 20.0, 12.0, 0.25, -4.0);
+            p.shadow_pieno(0.0, fy, w, foglio_h + 20.0, 20.0, 12.0, 0.25, -4.0);
             p.rrect(0.0, fy, w, foglio_h + 30.0, 20.0, Some(pal.surface), None);
             p.rrect(w / 2.0 - 20.0, fy + 8.0, 40.0, 5.0, 3.0, Some(pal.border), None);
             let sx = 16.0;

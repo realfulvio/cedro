@@ -447,7 +447,7 @@ fn dividi_errore(m: &str) -> (&str, &str) {
 /// Un riquadro sollevato, come `Frame::card` del computer: ombra morbida, fondo della superficie, filo leggero.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn sollevato(p: &mut Painter, pal: &Palette, scuro: bool, x: f32, y: f32, w: f32, h: f32, r: f32) {
-    p.shadow(x, y, w, h, r, 10.0, if scuro { 0.28 } else { 0.10 }, 3.0);
+    p.shadow_pieno(x, y, w, h, r, 10.0, if scuro { 0.28 } else { 0.10 }, 3.0);
     let bordo = if scuro { pal.border } else { mix(pal.border, pal.surface, 0.25) };
     p.rrect(x, y, w, h, r, Some(pal.surface), Some((bordo, 1.0)));
 }
@@ -457,7 +457,7 @@ pub(crate) fn sollevato(p: &mut Painter, pal: &Palette, scuro: bool, x: f32, y: 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn lucido(p: &mut Painter, scuro: bool, x: f32, y: f32, w: f32, h: f32, r: f32, c: (u8, u8, u8), premuto: bool) {
     let spread = (h * 0.14).clamp(4.0, 10.0);
-    p.shadow(x, y, w, h, r, spread, if scuro { 0.35 } else { 0.2 }, spread * 0.4);
+    p.shadow_pieno(x, y, w, h, r, spread, if scuro { 0.35 } else { 0.2 }, spread * 0.4);
     let (su, giu) = if premuto { (mix(c, (255, 255, 255), 0.04), mix(c, (0, 0, 0), 0.2)) } else { (mix(c, (255, 255, 255), 0.16), mix(c, (0, 0, 0), 0.06)) };
     p.rrect_vgrad(x, y, w, h, r, su, giu);
     p.rrect_line(x, y, w, h, r, (255, 255, 255), 1.0, 0.12, None);
@@ -471,7 +471,7 @@ pub(crate) fn piastrella(p: &mut Painter, pal: &Palette, scuro: bool, x: f32, y:
     let is = (s * 0.62).round();
     let pad = (s - is) / 2.0;
     if on {
-        p.shadow(x, y, s, s, r, 5.0, if scuro { 0.3 } else { 0.12 }, 2.0);
+        p.shadow_pieno(x, y, s, s, r, 5.0, if scuro { 0.3 } else { 0.12 }, 2.0);
         p.rrect_vgrad(x, y, s, s, r, mix(c, (255, 255, 255), 0.12), mix(c, (0, 0, 0), 0.06));
         p.icon(icona, x + pad, y + pad, is, (255, 255, 255));
     } else {

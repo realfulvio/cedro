@@ -471,7 +471,7 @@ impl App {
         let iw = 68.0;
         let tw = 8.0 + sw + if salva.is_some() { 4.0 } else { 0.0 } + altre.len() as f32 * iw + 8.0;
         let (tx, ty, th) = ((w - tw) / 2.0, h - 16.0 - 64.0, 64.0);
-        p.shadow(tx, ty, tw, th, 32.0, 14.0, if scuro { 0.45 } else { 0.2 }, 5.0);
+        p.shadow_pieno(tx, ty, tw, th, 32.0, 14.0, if scuro { 0.45 } else { 0.2 }, 5.0);
         p.rrect(tx, ty, tw, th, 32.0, Some(t.alto), None);
         let mut bx = tx + 8.0;
         if let Some(s) = salva {
@@ -548,7 +548,7 @@ impl App {
                 for l in &righe {
                     alto += p.wrap_height(if l.is_empty() { " " } else { l }, 14.0, Weight::Regular, w - 32.0, 20.0, 40).max(20.0);
                 }
-                p.shadow(x, y, w, alto, 4.0, 10.0, 0.14, 3.0);
+                p.shadow_pieno(x, y, w, alto, 4.0, 10.0, 0.14, 3.0);
                 p.rrect(x, y, w, alto, 4.0, Some((255, 255, 255)), None);
                 let mut ty = y + 14.0;
                 for l in &righe {
@@ -567,7 +567,7 @@ impl App {
                 return y + riquadro(p, ic::FILE, "Non riesco a mostrare il documento", &t, y) + 16.0;
             }
             let ph = w * 1.414;
-            p.shadow(x, y, w, ph, 2.0, 10.0, 0.16, 3.0);
+            p.shadow_pieno(x, y, w, ph, 2.0, 10.0, 0.16, 3.0);
             p.fill(x, y, w, ph, (255, 255, 255));
             rotella(p, self, x + w / 2.0, y + 80.0, pal.primary);
             p.text("Preparo l'anteprima…", x, y + 100.0, w, 24.0, 14.0, Weight::Regular, (90, 96, 104), Align::Center);
@@ -578,7 +578,7 @@ impl App {
             let (iw, ih) = (self.fpag.img[n].w as f32, self.fpag.img[n].h as f32);
             let ph = w * ih / iw.max(1.0);
             if y + ph > vista.1 && y < vista.1 + vista.3 {
-                p.shadow(x, y, w, ph, 2.0, 10.0, 0.16, 3.0);
+                p.shadow_pieno(x, y, w, ph, 2.0, 10.0, 0.16, 3.0);
                 p.fill(x, y, w, ph, (255, 255, 255));
                 let img = &self.fpag.img[n];
                 p.image(img, x, y, w, ph, 0.0, Fit::Contain);

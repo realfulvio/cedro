@@ -65,7 +65,7 @@ fn gradiente(p: &mut Painter, x: f32, y: f32, w: f32, h: f32, r: f32, c: Rgb, cb
 /// L'icona a gradiente (`.ic`): piastrella con l'icona bianca.
 fn piastrella_grad(p: &mut Painter, x: f32, y: f32, s: f32, c: Rgb, cb: Rgb, icona: &str) {
     let r = (s * 0.3).round();
-    p.shadow(x, y, s, s, r, s * 0.18, 0.28, s * 0.14);
+    p.shadow_pieno(x, y, s, s, r, s * 0.18, 0.28, s * 0.14);
     p.rrect_vgrad(x, y, s, s, r, cb, c);
     p.rrect_line(x, y, s, s, r, BIANCO, 1.0, 0.22, None);
     let k = (s * 0.6).round();
@@ -168,7 +168,7 @@ impl App {
             let tx = x + (i % 2) as f32 * (tw + GAP);
             let ty = y + (i / 2) as f32 * (th + GAP);
             let (c, cb) = (kind_color(*kind), kind_bright(*kind));
-            p.shadow(tx, ty, tw, th, 15.0, 8.0, 0.3, 6.0);
+            p.shadow_pieno(tx, ty, tw, th, 15.0, 8.0, 0.3, 6.0);
             p.rrect(tx, ty, tw, th, 15.0, Some((12, 10, 16)), None);
             if let Some(img) = tile_image(i) {
                 p.image(&img, tx, ty, tw, th, 15.0, Fit::Cover);
@@ -198,7 +198,7 @@ impl App {
         // Laboratorio: vetrini, DICOM, casi e campioni, a tutta larghezza sotto le sei tessere.
         {
             let lh = 64.0;
-            p.shadow(x, y, cw, lh, 15.0, 8.0, 0.3, 6.0);
+            p.shadow_pieno(x, y, cw, lh, 15.0, 8.0, 0.3, 6.0);
             gradiente(p, x, y, cw, lh, 15.0, LAB_C, LAB_CB);
             p.rrect_line(x, y, cw, lh, 15.0, BIANCO, 1.0, 0.22, None);
             p.icon(ICO_LAB, x + 14.0, y + (lh - 28.0) / 2.0, 28.0, BIANCO);
@@ -417,7 +417,7 @@ impl App {
             if fy + fh > area.1 + area.3 + 4.0 {
                 break;
             }
-            p.shadow(fx, fy, fw, fh, 4.0, 6.0, 0.5, 5.0);
+            p.shadow_pieno(fx, fy, fw, fh, 4.0, 6.0, 0.5, 5.0);
             p.rrect(fx, fy, fw, fh, 4.0, Some(BIANCO), None);
             p.rrect(fx + 6.0, fy + 8.0, fw * 0.5, 5.0, 1.0, Some(cb), None);
             for l in 0..((fh - 26.0) / 6.5) as usize {
@@ -521,7 +521,7 @@ impl App {
         let vw = area.2.min(area.3 * 16.0 / 9.0);
         let vh = vw * 9.0 / 16.0;
         let (vx, vy) = (area.0 + (area.2 - vw) / 2.0, area.1 + (area.3 - vh) / 2.0);
-        p.shadow(vx, vy, vw, vh, 10.0, 12.0, 0.6, 10.0);
+        p.shadow_pieno(vx, vy, vw, vh, 10.0, 12.0, 0.6, 10.0);
         p.rrect(vx, vy, vw, vh, 10.0, Some(mix((0x12, 0x0F, 0x16), cb, 0.22)), None);
         p.disc_a(vx + vw / 2.0, vy + vh / 2.0, 23.0, (0, 0, 0), 0.55);
         p.icon(ICO_PLAY, vx + vw / 2.0 - 11.0, vy + vh / 2.0 - 11.0, 22.0, BIANCO);
@@ -597,7 +597,7 @@ impl App {
     fn pannello_cedro(&mut self, p: &mut Painter, rc: R, c: Rgb, cb: Rgb, completa: bool, vista: R) {
         let q = tinte::pannello(self.tema);
         let (x, y, w, h) = rc;
-        p.shadow(x, y, w, h, 17.0, 14.0, 0.32, -3.0);
+        p.shadow_pieno(x, y, w, h, 17.0, 14.0, 0.32, -3.0);
         p.rrect(x, y, w, h, 17.0, Some(q.sf), None);
         // Si disegna con la palette chiara e il colore della pagina (la prende `pal()`).
         self.pannello = Some(c);
@@ -726,7 +726,7 @@ impl App {
         let b = (ix, cy, iw, CTA_H);
         let a = Azione::Casa(CasaAz::Vai);
         if pronto {
-            p.shadow(b.0, b.1, b.2, b.3, 14.0, 10.0, 0.3, 6.0);
+            p.shadow_pieno(b.0, b.1, b.2, b.3, 14.0, 10.0, 0.3, 6.0);
             let prem = self.premuto == Some(a);
             gradiente(p, b.0, b.1, b.2, b.3, 14.0, if prem { mix(c, (0, 0, 0), 0.2) } else { c }, if prem { c } else { mix(c, BIANCO, 0.18) });
             p.rrect_line(b.0, b.1, b.2, b.3, 14.0, BIANCO, 1.0, 0.2, None);
@@ -756,7 +756,7 @@ impl App {
         for (i, v) in voci.iter().enumerate() {
             let on = (i == 1) == completa;
             if on {
-                p.shadow(x, y + 4.0, larghe[i], 22.0, 7.0, 3.0, 0.2, 1.0);
+                p.shadow_pieno(x, y + 4.0, larghe[i], 22.0, 7.0, 3.0, 0.2, 1.0);
                 p.rrect(x, y + 4.0, larghe[i], 22.0, 7.0, Some(q.sf), None);
             }
             p.text(v, x, y + 4.0, larghe[i], 22.0, 12.0, Weight::Bold, if on { q.ink } else { q.mut_ }, Align::Center);

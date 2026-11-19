@@ -20,6 +20,12 @@ public class ServizioLavoro extends Service {
     private static final String CANALE = "lavori";
     private static final int ID = 1;
     private PowerManager.WakeLock wake;
+    /**
+     * Vero dopo startForeground. Rust ferma il servizio solo quando è vero: un stopService arrivato prima di onCreate
+     * (lavoro brevissimo, thread principale occupato) fa chiudere l'app ad Android 9+ con
+     * «Context.startForegroundService() did not then call Service.startForeground()».
+     */
+    static volatile boolean inPrimoPiano;
 
     @Override
     public void onCreate() {
@@ -66,9 +72,11 @@ public class ServizioLavoro extends Service {
         // Da Android 14 il servizio in primo piano deve dire che tipo di lavoro fa.
         if (Build.VERSION.SDK_INT >= 29) startForeground(ID, b.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         else startForeground(ID, b.build());
+        inPrimoPiano = true;
     }
 
     private void liberaRisorse() {
+        inPrimoPiano = false;
         if (wake != null && wake.isHeld()) wake.release();
         stopForeground(true);
     }

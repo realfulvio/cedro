@@ -18,6 +18,9 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
 
     public float fontScale() { return getResources().getConfiguration().fontScale; }
 
+    /** Il servizio dei lavori ha già chiamato startForeground: si può fermare senza far chiudere l'app. */
+    public boolean servizioPronto() { return ServizioLavoro.inPrimoPiano; }
+
     private android.media.AudioManager audioManager;
     private android.media.AudioFocusRequest audioRequest;
     private boolean audioOwned;
@@ -212,6 +215,8 @@ public class CedroActivity extends NativeActivity implements android.media.Audio
         accessibilityActions.put(item);
     }
     public synchronized String takeAccessibilityActions() {
+        // Rust chiede più volte al secondo: senza azioni non si crea niente.
+        if (accessibilityActions.length()==0) return null;
         String result=accessibilityActions.toString();
         accessibilityActions=new org.json.JSONArray();
         return result;

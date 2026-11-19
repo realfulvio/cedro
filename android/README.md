@@ -12,6 +12,13 @@ Le quattro tinte Cedro tornano all'aspetto della 0.45: **barra in basso con sei 
 
 Il renderer usa i margini delle barre di sistema, la scala caratteri del telefono e «Rimuovi animazioni». Il normale avanzamento e l'onda non richiedono un loop continuo a 60 Hz. Gli esempi `vista_a` producono PNG dal renderer reale con fixture separate dall'app.
 
+## Prestazioni e stabilità (0.55)
+
+- Ogni chiamata JNI dal thread principale (attaccato alla JVM per tutta la vita dell'app) sta in un frame locale (`con_attivita`): prima i riferimenti locali si accumulavano e dopo circa quattro giorni in background Android chiudeva l'app per tabella piena.
+- Senza finestra il ciclo aspetta 1 s (0,5 s con un lavoro in corso) e ignora le animazioni, che avanzano solo con i fotogrammi disegnati: prima l'attesa zero lo faceva girare a vuoto. L'avanzamento da solo ridisegna al massimo ogni 250 ms; lo snapshot di accessibilità va a Java solo quando cambia.
+- Il servizio dei lavori si ferma solo dopo `startForeground` (`ServizioLavoro.inPrimoPiano`), altrimenti Android 9+ chiude l'app.
+- Disegno: l'alone (`Painter::glow`) rifà a mano i conti della pipeline lowp di tiny-skia solo dove il colore non è zero, tiene in cache quello fermo e calcola su più core quello che scorre; le immagini preparate si copiano a righe intere; `shadow_pieno` salta l'ombra sotto gli oggetti pieni. Il risultato è identico al bit: `cargo run -p cedro-android --release --example banco_disegno -- 30 /cartella` misura i fotogrammi a 1080×2340 e salva i PNG da confrontare con quelli di prima.
+
 ## Ponte con Android
 
 `CedroActivity.java` inoltra picker/intent, mantiene i grant e l'audiofocus ed espone il provider di accessibilità descritto in fondo. `ServizioLavoro.java` mantiene la notifica dei lavori in background; `ArchiviProvider.java` pubblica in sola lettura le uscite private su richiesta. Sono adattatori OS: conversioni, player, catalogo e stato restano Rust. La pipeline è javac + d8, senza Gradle o nuove dipendenze. MediaStore e il provider privato conservano MIME/nome per Apri e Condividi.

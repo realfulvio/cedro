@@ -1,0 +1,5 @@
+- Più stabile: aperto per giorni, anche in secondo piano, non si chiude più da solo.
+- Meno batteria in secondo piano: si sveglia una volta al secondo invece di sette, niente più processore occupato dopo un'animazione interrotta.
+- I lavori brevissimi non fanno più chiudere l'app.
+- Schermate disegnate dal 37 al 49 % più in fretta, con lo stesso aspetto: scorrimento da 14 a 22 fotogrammi al secondo sul Mi 9T.
+- Nelle sessioni lunghe la memoria non cresce più senza limite; meno ridisegni durante le conversioni.
