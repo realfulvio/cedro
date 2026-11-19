@@ -2495,4 +2495,22 @@ mod tests {
             s.render(1440, 940, 1.0).save_png(&dir.join(format!("{name}.png"))).unwrap();
         }
     }
+
+    #[test]
+    fn durante_un_lavoro_i_fotogrammi_vanno_al_passo_lento() {
+        use super::super::model::{Job, JobKind};
+        let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+        s.app.job = Some(Job { kind: JobKind::Convert, total: 1, done: 0, failed: 0, cancel: Arc::new(std::sync::atomic::AtomicBool::new(false)), key: String::new(), targets: vec![], part: 0.3, file_started: None });
+        let _ = s.render(900, 600, 1.0);
+        assert!(s.animating());
+        // Appena disegnato: il prossimo aspetta il passo lento, non il timer da 33 ms.
+        assert!(!s.wants_frame());
+        std::thread::sleep(CALMO + std::time::Duration::from_millis(5));
+        assert!(s.wants_frame());
+        // Finito il lavoro e ridisegnato, se niente si muove non si ridisegna più.
+        s.app.job = None;
+        let _ = s.render(900, 600, 1.0);
+        std::thread::sleep(CALMO + std::time::Duration::from_millis(5));
+        assert_eq!(s.wants_frame(), s.animating());
+    }
 }

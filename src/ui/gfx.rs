@@ -593,7 +593,7 @@ impl GlyphCache {
             }
         }
         // Un bagliore per misura della zona del file: ridimensionando la finestra ne nascono tanti.
-        if self.bagliori.len() > 4 {
+        if self.bagliori.len() > 2 {
             self.bagliori.retain(|_, (_, u)| f - *u <= 1);
         }
     }
@@ -1120,10 +1120,11 @@ impl<'a> Painter<'a> {
 
     /// Un bagliore tondo: il colore `c` pieno (opacità `a`) al centro, che sfuma fino a sparire sul bordo `r`.
     pub fn glow(&mut self, cx: f32, cy: f32, r: f32, c: Rgb, a: f32) {
-        // Grande: disegnato una volta in un foglio a parte e poi solo copiato (vedi `bagliori`).
+        // Grande: disegnato una volta in un foglio a parte e poi solo copiato (vedi `bagliori`). Non oltre i
+        // 1024 punti di raggio (un foglio di 16 MB): più grande (schermi 4K) si disegna ogni volta come prima.
         let s = self.scale;
         let rp = (r * s).round();
-        if (64.0..=4096.0).contains(&rp) {
+        if (64.0..=1024.0).contains(&rp) {
             let chiave = (rp as u32, c, a.to_bits());
             let f = self.cache.fotogramma;
             let foglio = match self.cache.bagliori.get_mut(&chiave) {
