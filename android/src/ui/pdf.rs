@@ -854,7 +854,7 @@ impl App {
                 let k = (rc.2 / img.w as f32).min(rc.3 / img.h as f32);
                 let (iw, ih) = (img.w as f32 * k, img.h as f32 * k);
                 let (ix, iy) = (rc.0 + (rc.2 - iw) / 2.0, rc.1 + (rc.3 - ih) / 2.0);
-                p.shadow(ix, iy, iw, ih, 3.0, 3.0, 0.10, 1.0);
+                p.shadow_pieno(ix, iy, iw, ih, 3.0, 3.0, 0.10, 1.0);
                 p.rrect(ix, iy, iw, ih, 3.0, Some(BIANCO), Some((pal.border, 1.0)));
                 p.image(&img, ix, iy, iw, ih, 3.0, Fit::Contain);
             }
@@ -921,7 +921,7 @@ impl App {
     fn riga_unito(&mut self, p: &mut Painter, i: usize, d: &DocUnito, rc: R, preso: bool, vista: R) {
         let pal = self.pal();
         if preso {
-            p.shadow(rc.0, rc.1, rc.2, rc.3, 16.0, 10.0, 0.16, 6.0);
+            p.shadow_pieno(rc.0, rc.1, rc.2, rc.3, 16.0, 10.0, 0.16, 6.0);
         }
         p.rrect(rc.0, rc.1, rc.2, rc.3, 16.0, Some(pal.surface), Some((if preso { pal.primary } else { pal.border }, if preso { 2.0 } else { 1.0 })));
         // Maniglia
