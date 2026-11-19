@@ -17,7 +17,7 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 - **Foto → PDF** più del doppio più veloce: la foto e la lettura del testo si preparano insieme.
 - **PDF → JPG** una immagine per pagina 2,5 volte più veloce; tutti i JPEG in uscita si scrivono in circa metà tempo, con la stessa qualità. «Comprimi» resta quello di prima.
 - **WebM → MP4** 2,5 volte più veloce e con un terzo di memoria in meno (VP9 nuovo); un file Zeiss CZI rovinato non può più far chiudere Cedro.
-- **Windows, video → MP4**: i fotogrammi in attesa del codificatore non restano più tutti in memoria. Sui PC senza codificatore nella scheda video un video Full HD di 20 secondi arrivava a 2 GB e uno lungo poteva esaurire la memoria; ora la memoria resta bassa per tutta la durata.
+- **Windows, video → MP4**: video e audio ora si scrivono alternati, come stanno nel file. Prima si scriveva tutto il video e poi l'audio, e intanto i fotogrammi restavano in memoria: un Full HD di 20 secondi arrivava a 2 GB e uno di un minuto a 5,5 GB, con il rischio di esaurire la memoria sui video lunghi. Ora resta sotto i 500 MB qualunque sia la durata, con lo stesso file in uscita.
 - **La finestra** si disegna in metà tempo e, mentre un lavoro va avanti, si aggiorna 15 volte al secondo invece di 30: il processore resta al lavoro, non alla rotellina.
 - I **caratteri** del sistema si leggono solo per la parte che serve: Word → PDF e i PDF con testo partono prima e occupano meno memoria.
 - **Linux**: chiusa la finestra, la memoria torna al sistema; il menu delle applicazioni non si ricostruisce più a ogni avvio; l'elenco europeo dei certificatori si scarica a piccoli gruppi, con meno memoria.
