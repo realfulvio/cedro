@@ -23,34 +23,46 @@ pub struct Model {
     file: &'static str,
     /// Il peso, per dirlo prima di scaricare.
     pub megabytes: u32,
+    /// Quante ipotesi tiene la ricerca a fascio del motore (5 di solito; di più = più lenta, a volte più precisa).
+    beam: u8,
 }
 
-/// Su Android gli stessi modelli del computer (0.34): small, medium e large-v3-turbo quantizzati, misurati sul Mi 9T.
+/// Su Android small, medium e large-v3-turbo quantizzati (quelli del computer fino alla 0.55), misurati sul Mi 9T.
 #[cfg(target_os = "android")]
 pub const MODELS: &[Model] = &[
-    Model { name: "Veloce", note: "Per appunti e messaggi vocali", file: "ggml-small-q8_0.bin", megabytes: 264 },
-    Model { name: "Buona", note: "Per riunioni e interviste", file: "ggml-medium-q5_0.bin", megabytes: 539 },
-    Model { name: "Massima", note: "Per audio difficili, la più precisa", file: "ggml-large-v3-turbo-q5_0.bin", megabytes: 574 },
+    Model { name: "Veloce", note: "Per appunti e messaggi vocali", file: "ggml-small-q8_0.bin", megabytes: 264, beam: 5 },
+    Model { name: "Buona", note: "Per riunioni e interviste", file: "ggml-medium-q5_0.bin", megabytes: 539, beam: 5 },
+    Model { name: "Massima", note: "Per audio difficili, la più precisa", file: "ggml-large-v3-turbo-q5_0.bin", megabytes: 574, beam: 5 },
 ];
 
 #[cfg(not(target_os = "android"))]
 pub const MODELS: &[Model] = &[
-    // Scelti con la misura su 200 frasi italiane di FLEURS (errori sulle parole, in parlato pulito e in «messaggio vocale»
-    // disturbato): small q8 7,5 % e 17 %, medium q5 4,1 % e 9 %, large-v3-turbo q5 2,6 % e 5,7 %. Il vecchio «Veloce»
-    // (base) sbagliava 1 parola su 6.
-    Model { name: "Veloce", note: "Per appunti e messaggi vocali", file: "ggml-small-q8_0.bin", megabytes: 264 },
-    Model { name: "Buona", note: "Per riunioni e interviste", file: "ggml-medium-q5_0.bin", megabytes: 539 },
-    // Provato anche large-v3 completo (0.34, mai uscito): sul vocale breve sbaglia qualche parola in meno, ma su 14 minuti
-    // di frasi FLEURS entra in un giro e ripete la stessa frase per minuti (errori sulle parole 42-90 % contro 2,6 % del
-    // turbo). Resta il turbo, che col prompt e la ricerca a fascio mette punteggiatura e non si incanta.
-    Model { name: "Massima", note: "Per audio difficili, la più precisa", file: "ggml-large-v3-turbo-q5_0.bin", megabytes: 574 },
+    // Dalla 0.56 ogni livello sale di un gradino: la trascrizione deve essere buona anche a costo di tempo. Misure con il
+    // rilevatore di parlato, su 15 minuti di frasi italiane FLEURS con rumore (errori sulle parole): small q8 8,2 %,
+    // medium q5 5,6 %, large-v3-turbo q5 2,8 %, large-v3 q5 2,7 %; sui referti veterinari dettati: turbo 15,5 %,
+    // large-v3 12,9 %. Con la scheda video il turbo va veloce come small; sul processore ci mette circa 3 volte tanto.
+    Model { name: "Veloce", note: "Per appunti e messaggi vocali", file: "ggml-large-v3-turbo-q5_0.bin", megabytes: 574, beam: 5 },
+    // large-v3 completo (q5_0, 1,08 GB). Nella 0.34 era stato scartato perché su audio lungo entrava in un giro e ripeteva
+    // la stessa frase per minuti (errori sulle parole 42-90 % contro 2,6 % del turbo): il colpevole era il testo passato
+    // da una finestra di 30 s alla successiva, non il modello. Ora il motore spezza l'audio nei tratti di parlato (VAD) e
+    // li trascrive uno per uno senza contesto: sulle stesse frasi large-v3 passa da 68 % a 2,7-2,9 %. Circa il doppio
+    // del tempo del turbo.
+    Model { name: "Buona", note: "Per riunioni e interviste", file: "ggml-large-v3-q5_0.bin", megabytes: 1081, beam: 5 },
+    // Lo stesso large-v3 con una ricerca più larga (8 ipotesi invece di 5): circa il 10 % di tempo in più per qualche
+    // parola sbagliata in meno (FLEURS 2,9 → 2,8 %, referti dettati 9,4 → 9,0 %). Con 1 ipotesi sola gli errori
+    // salgono al 4,5-7,9 %: meno di 5 non conviene mai.
+    Model { name: "Massima", note: "Per audio difficili, la più precisa", file: "ggml-large-v3-q5_0.bin", megabytes: 1081, beam: 8 },
 ];
 
+/// Il modello di partenza senza scheda video: «Veloce», cioè il turbo, che sul processore regge ancora i tempi.
+#[cfg(not(target_os = "android"))]
+pub const DEFAULT_MODEL: usize = 0;
 /// Il modello di partenza senza scheda video: «Buona».
+#[cfg(target_os = "android")]
 pub const DEFAULT_MODEL: usize = 1;
 
-/// Il livello preselezionato: «Massima» se il motore può usare la scheda video (un'ora di audio in circa due minuti),
-/// altrimenti «Buona».
+/// Il livello preselezionato: «Massima» se il motore può usare la scheda video (un'ora di audio in pochi minuti),
+/// altrimenti quello di partenza.
 pub fn default_model() -> usize {
     if crate::settings::read_settings().gpu && real_gpu_present() {
         MODELS.len() - 1
@@ -60,13 +72,49 @@ pub fn default_model() -> usize {
 }
 
 /// I modelli delle versioni precedenti (non più usati): si tolgono dal PC appena arriva quello nuovo.
+#[cfg(target_os = "android")]
 const OLD_MODELS: &[&str] = &["ggml-base-q8_0.bin", "ggml-large-v3-turbo-q8_0.bin", "ggml-large-v3-q5_0.bin"];
+/// Sul computer, dalla 0.56, small e medium non si usano più: «Veloce» è il turbo, «Buona» e «Massima» large-v3.
+#[cfg(not(target_os = "android"))]
+const OLD_MODELS: &[&str] = &["ggml-base-q8_0.bin", "ggml-small-q8_0.bin", "ggml-medium-q5_0.bin", "ggml-large-v3-turbo-q8_0.bin"];
 
 fn forget_old_models() {
     let dir = data_dir();
     for file in OLD_MODELS {
         let _ = std::fs::remove_file(dir.join(file));
         let _ = std::fs::remove_file(dir.join(format!("{file}.sha256")));
+    }
+}
+
+/// Il rilevatore di parlato (Silero v5.1.2 in formato ggml, 0,9 MB), da whisper.cpp: il motore lo usa per spezzare l'audio
+/// nei tratti dove si parla e trascriverli a pezzi, senza passare il testo da un pezzo all'altro. Il motore, senza, su un
+/// audio lungo e disturbato entra in un giro e ripete la stessa frase decine di volte. SHA-256 fissato qui.
+#[cfg(not(target_os = "android"))]
+const VAD_FILE: &str = "ggml-silero-v5.1.2.bin";
+#[cfg(not(target_os = "android"))]
+const VAD_URL: &str = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin";
+#[cfg(not(target_os = "android"))]
+const VAD_SHA: &str = "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf";
+
+/// Il rilevatore di parlato pronto sul PC, scaricato la prima volta (meno di 1 MB). Se non si può avere (niente internet
+/// la prima volta) si trascrive lo stesso, tutto l'audio in una volta come prima: `Ok(None)`.
+#[cfg(not(target_os = "android"))]
+fn ensure_vad(sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Option<PathBuf>, String> {
+    let path = data_dir().join(VAD_FILE);
+    let sidecar = data_dir().join(format!("{VAD_FILE}.sha256"));
+    if path.is_file() && std::fs::read_to_string(&sidecar).is_ok_and(|s| s.trim().eq_ignore_ascii_case(VAD_SHA)) {
+        return Ok(Some(path));
+    }
+    match fetch(VAD_URL, &path, Some(VAD_SHA), 1, "il rilevatore del parlato", sink, cancel) {
+        Ok(sha) => {
+            std::fs::write(&sidecar, sha).map_err(|e| format!("{} non scritto: {e}", sidecar.display()))?;
+            Ok(Some(path))
+        }
+        Err(e) if e == CANCELLED => Err(e),
+        Err(e) => {
+            log(sink, Tone::Note, "Parlato", format!("rilevatore non scaricato ({e}): trascrivo tutto l'audio in una volta"));
+            Ok(None)
+        }
     }
 }
 
@@ -206,9 +254,16 @@ pub fn model_names(index: usize) -> String {
     }
 }
 
-/// I modelli già sul PC, per nome («base q8_0», «small q8_0»).
+/// I modelli già sul PC, per nome («base q8_0», «small q8_0»), ognuno una volta sola (due livelli possono usare lo
+/// stesso file).
 pub fn installed_models() -> Vec<String> {
-    (0..MODELS.len()).filter(|i| model_ready(*i)).map(model_names).collect()
+    let mut names: Vec<String> = Vec::new();
+    for name in (0..MODELS.len()).filter(|i| model_ready(*i)).map(model_names) {
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names
 }
 
 /// Vero se il motore (cedro-trascrivi) è già sul PC.
@@ -836,7 +891,7 @@ pub(crate) struct Running {
 }
 
 impl Running {
-    fn start(exe: &Path, model: &Path, cpu: bool, voices: Option<&VoicePaths>) -> Result<Running, String> {
+    fn start(exe: &Path, model: &Path, cpu: bool, voices: Option<&VoicePaths>, vad: Option<&Path>) -> Result<Running, String> {
         let mut command = Command::new(exe);
         command.arg("--model").arg(model).arg("--threads").arg(engine_threads().to_string());
         if cpu {
@@ -844,6 +899,9 @@ impl Running {
         }
         if let Some((seg, emb)) = voices {
             command.arg("--voci-seg").arg(seg).arg("--voci-emb").arg(emb);
+        }
+        if let Some(vad) = vad {
+            command.arg("--vad").arg(vad);
         }
         Running::spawn(command)
     }
@@ -1616,7 +1674,7 @@ enum Outcome {
 }
 
 /// Trascrive un file con il motore già acceso, raccontando i passi.
-fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, glossario: Option<&str>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Outcome {
+fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, glossario: Option<&str>, beam: u8, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Outcome {
     // Il percorso va al motore in JSON, cioè in UTF-8: un nome con byte non validi (Linux) arriverebbe storpiato
     // e il file «non si apre». Lo si fa leggere al sistema, che riceve il percorso com'è, in un WAV dal nome semplice.
     if path.to_str().is_none() {
@@ -1628,6 +1686,9 @@ fn one_file(engine: &mut Running, path: &Path, index: usize, speakers: u8, gloss
     }
     if let Some(g) = glossario.map(str::trim).filter(|g| !g.is_empty()) {
         request["glossario"] = g.into();
+    }
+    if beam != 5 {
+        request["beam"] = beam.into();
     }
     if let Err(e) = engine.send(request) {
         return Outcome::EngineDied(e);
@@ -1721,10 +1782,10 @@ fn event_secs(turns: &[Turn]) -> f64 {
 /// I due modelli delle voci sul PC (segmentazione, impronte).
 type VoicePaths = (PathBuf, PathBuf);
 
-fn power_on(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
+fn power_on(request: &Request, model: &Path, voices: Option<&VoicePaths>, vad: Option<&Path>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
     #[cfg(target_os = "android")]
     {
-        let _ = cancel;
+        let _ = (cancel, vad);
         // whisper.cpp è compilato con le istruzioni dotprod+fp16 (ARMv8.2): tutti i telefoni dal 2018 le hanno, ma si controlla
         // a runtime (HWCAP) invece di lasciar partire un'istruzione illegale.
         const HWCAP_FPHP: u64 = 1 << 9;
@@ -1761,11 +1822,11 @@ fn power_on(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: 
         };
     }
     #[cfg(not(target_os = "android"))]
-    power_on_process(request, model, voices, sink, cancel)
+    power_on_process(request, model, voices, vad, sink, cancel)
 }
 
 #[cfg(not(target_os = "android"))]
-fn power_on_process(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
+fn power_on_process(request: &Request, model: &Path, voices: Option<&VoicePaths>, vad: Option<&Path>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
     let cpu = cpu_variant(request.avx512);
     let mut tries: Vec<Variant> = Vec::new();
     let model_bytes = std::fs::metadata(model).map(|m| m.len()).unwrap_or(0);
@@ -1797,7 +1858,7 @@ fn power_on_process(request: &Request, model: &Path, voices: Option<&VoicePaths>
         if !std::mem::replace(&mut told, true) {
             log(sink, Tone::Step, "Motore", "lo accendo e carico il modello in memoria…");
         }
-        let running = match Running::start(&exe, model, false, voices) {
+        let running = match Running::start(&exe, model, false, voices, vad) {
             Ok(running) => running,
             // Un motore che non parte (antivirus, file rovinato) non ferma tutto: c'è quello per processore.
             Err(e) if fallback_left => {
@@ -1876,6 +1937,10 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
     // internet la prima volta) si trascrive lo stesso, senza nomi.
     let mut speakers = request.speakers;
     let mut voices: Option<VoicePaths> = None;
+    // Il rilevatore di parlato: si prepara insieme al motore (meno di 1 MB); senza, si trascrive come prima.
+    #[allow(unused_mut)]
+    let mut vad: Option<PathBuf> = None;
+    let beam = MODELS.get(request.model).map_or(5, |m| m.beam);
     for (index, path) in files.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
             // break, non return: il motore acceso si spegne qui sotto.
@@ -1903,10 +1968,17 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                     }
                 }
             }
+            #[cfg(not(target_os = "android"))]
+            if vad.is_none() {
+                match ensure_vad(sink, cancel) {
+                    Ok(v) => vad = v,
+                    Err(e) => return fail_all(&e, index),
+                }
+            }
             let started = match &model {
-                Some(m) => power_on(request, m, voices.as_ref(), sink, cancel),
+                Some(m) => power_on(request, m, voices.as_ref(), vad.as_deref(), sink, cancel),
                 None => ensure_model(request.model, sink, cancel).and_then(|m| {
-                    let r = power_on(request, &m, voices.as_ref(), sink, cancel);
+                    let r = power_on(request, &m, voices.as_ref(), vad.as_deref(), sink, cancel);
                     model = Some(m);
                     r
                 }),
@@ -1921,15 +1993,15 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
             }
         }
         let running = engine.as_mut().expect("motore acceso");
-        let mut outcome = one_file(running, path, index, speakers, request.glossario.as_deref(), sink, cancel);
+        let mut outcome = one_file(running, path, index, speakers, request.glossario.as_deref(), beam, sink, cancel);
         // A driver can run out of shared memory after loading successfully.
         // Retry this file once on CPU, retaining the exact model and precision.
         if matches!(outcome, Outcome::EngineDied(_)) && crate::accel::in_use().is_some_and(|a| a.gpu) && !cancel.load(Ordering::Relaxed) {
             if let Some(dead) = engine.take() { dead.stop(); }
             log(sink, Tone::Note, "Scheda video", "motore interrotto: riprovo sul processore, con la stessa precisione");
             let cpu_request = Request { gpu: false, ..request.clone() };
-            match power_on(&cpu_request, model.as_ref().expect("modello caricato"), voices.as_ref(), sink, cancel) {
-                Ok(mut cpu) => { outcome = one_file(&mut cpu, path, index, speakers, request.glossario.as_deref(), sink, cancel); engine = Some(cpu); }
+            match power_on(&cpu_request, model.as_ref().expect("modello caricato"), voices.as_ref(), vad.as_deref(), sink, cancel) {
+                Ok(mut cpu) => { outcome = one_file(&mut cpu, path, index, speakers, request.glossario.as_deref(), beam, sink, cancel); engine = Some(cpu); }
                 Err(e) => outcome = Outcome::Failed(e),
             }
         }
@@ -1938,7 +2010,7 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
             log(sink, Tone::Muted, "", format!("Il motore non legge questo formato ({why}): lo apro con il sistema"));
             match system_decode(path, cancel) {
                 Ok(wav) => {
-                    outcome = one_file(engine.as_mut().expect("motore acceso"), &wav, index, speakers, request.glossario.as_deref(), sink, cancel);
+                    outcome = one_file(engine.as_mut().expect("motore acceso"), &wav, index, speakers, request.glossario.as_deref(), beam, sink, cancel);
                     temp = Some(wav);
                 }
                 Err(e) if e == CANCELLED => outcome = Outcome::Cancelled,
@@ -2019,7 +2091,7 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                 dead.stop();
             }
             if let Some(m) = &model {
-                match power_on(request, m, voices.as_ref(), sink, cancel) {
+                match power_on(request, m, voices.as_ref(), vad.as_deref(), sink, cancel) {
                     Ok(r) => engine = Some(r),
                     Err(e) if e == CANCELLED => return fail_all(&e, index + 1),
                     Err(e) => {
@@ -2057,6 +2129,14 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(unsafe { libc::kill(pid, 0) }, -1);
         assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(libc::ESRCH));
+    }
+
+    /// Un modello in uso non è mai tra quelli da togliere: lo si cancellerebbe appena scaricato.
+    #[test]
+    fn old_models_are_not_in_use() {
+        for model in MODELS {
+            assert!(!OLD_MODELS.contains(&model.file), "{} è sia in uso sia da togliere", model.file);
+        }
     }
 
     fn seg(t0: i64, t1: i64, text: &str) -> Segment {

@@ -42,6 +42,67 @@ pub fn prompt(lang: &str, glossario_chiesto: Option<&str>) -> Option<String> {
     }
 }
 
+/// Se whisper, dentro un pezzo, ripete la stessa frase di fila (un «giro»: «Fai solo barra, SREVU NAS.» per 37 volte), ne
+/// tiene una sola. Conta come giro una frase di 2-8 parole ripetuta almeno 4 volte, o una parola ripetuta almeno 6 volte:
+/// «sì, sì, sì, sì» e «non posso, non posso» sono parlato vero e restano.
+pub fn collapse_loops(text: &str) -> String {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let key: Vec<String> = words.iter().map(|w| w.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()).collect();
+    let mut out: Vec<&str> = Vec::with_capacity(words.len());
+    let (mut i, mut changed) = (0, false);
+    'words: while i < words.len() {
+        for n in 1..=8usize {
+            let need = if n == 1 { 6 } else { 4 };
+            if i + n * need > words.len() || key[i..i + n].iter().all(|k| k.is_empty()) {
+                continue;
+            }
+            let mut times = 1;
+            while i + (times + 1) * n <= words.len() && key[i + times * n..i + (times + 1) * n] == key[i..i + n] {
+                times += 1;
+            }
+            if times >= need {
+                // La frase una volta sola, con la punteggiatura finale dell'ultima ripetizione.
+                out.extend(&words[i..i + n - 1]);
+                out.push(words[i + (times - 1) * n + n - 1]);
+                i += times * n;
+                changed = true;
+                continue 'words;
+            }
+        }
+        out.push(words[i]);
+        i += 1;
+    }
+    if changed {
+        out.join(" ")
+    } else {
+        text.to_string()
+    }
+}
+
+/// Il giro tra frasi diverse: whisper, con un modello piccolo, a volte dà la stessa frase di 3 parole o più come tante frasi di
+/// fila (ognuna con i suoi 2 secondi: «Non è molto facile, ma così si è seguito.» per 10 volte). Si tengono le prime due
+/// uguali, dalla terza in poi sono un giro e si scartano. Le frasi di 1-2 parole («No.», «Sì, sì.») non contano mai: sono
+/// parlato vero.
+#[derive(Default)]
+pub struct Echo {
+    last: String,
+    run: usize,
+}
+
+impl Echo {
+    /// `true` se la frase è la terza (o più) uguale di fila e va scartata.
+    pub fn is_loop(&mut self, text: &str) -> bool {
+        let key: String = text.chars().filter(|c| c.is_alphanumeric() || c.is_whitespace()).flat_map(char::to_lowercase).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ");
+        if key.split(' ').count() < 3 || key != self.last {
+            self.last = key;
+            self.run = 1;
+            return false;
+        }
+        self.run += 1;
+        self.run > 2
+    }
+}
+
 /// Le frasi che whisper inventa sul silenzio o a fine audio (le ha imparate dai sottotitoli dei video).
 const PHANTOMS: &[&str] = &[
     "grazie",
@@ -119,10 +180,38 @@ mod tests {
     }
 
     #[test]
+    fn a_phrase_repeated_in_a_loop_is_kept_once() {
+        let looped = "Fai solo barra, SREVU NAS. Fai solo barra, SREVU NAS. Fai solo barra, SREVU NAS. Fai solo barra, SREVU NAS.";
+        assert_eq!(collapse_loops(looped), "Fai solo barra, SREVU NAS.");
+        assert_eq!(collapse_loops("Allora no no no no no no, basta."), "Allora no, basta.");
+        assert_eq!(collapse_loops("Prima. Non posso farci coppia, non posso farci coppia, non posso farci coppia, non posso farci coppia, non posso farci coppia. Dopo."), "Prima. Non posso farci coppia. Dopo.");
+    }
+
+    #[test]
+    fn real_repetitions_stay() {
+        for ok in ["Sì, sì, sì, sì.", "Non posso, non posso.", "Va bene, va bene, va bene.", "Vai, vai, vai, vai, vai.", "Nulla di ripetuto qui.", ""] {
+            assert_eq!(collapse_loops(ok), ok);
+        }
+    }
+
+    #[test]
     fn real_speech_stays() {
         assert!(!phantom_tail("Grazie.", 5000, 5150, 6000));
         assert!(!phantom_tail("Vedi te se riesci.", 5490, 5560, 5565));
         assert!(!phantom_tail("Grazie Marco, ci sentiamo.", 5600, 5650, 5665));
         assert!(!phantom_tail("", 5600, 5650, 5665));
+    }
+
+    #[test]
+    fn the_same_sentence_again_and_again_is_dropped_from_the_third() {
+        let mut e = Echo::default();
+        let f = "Non è molto facile, ma così si è seguito.";
+        assert!(!e.is_loop(f) && !e.is_loop(f) && e.is_loop(f) && e.is_loop("non è molto facile ma così si è seguito"));
+        assert!(!e.is_loop("Un'altra frase diversa qui."));
+        // Le frasi di una o due parole e le ripetizioni spezzate da altro restano.
+        let mut e = Echo::default();
+        assert!((0..6).all(|_| !e.is_loop("No.")));
+        assert!(!e.is_loop(f) && !e.is_loop("Intanto altro."));
+        assert!(!e.is_loop(f) && !e.is_loop(f) && e.is_loop(f));
     }
 }

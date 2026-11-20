@@ -8,6 +8,13 @@
 //! Con `--voci-seg` e `--voci-emb` (i due modelli delle voci) e `"speakers"` nella richiesta (0 =
 //! automatico, 2..8 = quante persone), prima di trascrivere riconosce chi parla e quando: manda
 //! `{"e":"voices","n":3,"turns":[[t0,t1,voce],…]}` (tempi in centesimi), poi le frasi come sempre.
+//!
+//! Con `--vad <file>` (il rilevatore di parlato Silero in formato ggml) l'audio non si dà a whisper tutto insieme:
+//! si trovano i tratti di parlato e si trascrivono a pezzi da ~25 s, ciascuno per conto suo. Senza questo, su un audio
+//! lungo whisper passa il testo di una finestra alla successiva e, sul parlato disturbato, entra in un giro che ripete
+//! la stessa frase decine di volte (o la inventa sul silenzio).
+//!
+//! `"beam"` nella richiesta (1..16, di solito 5) dice quante ipotesi tiene la ricerca a fascio.
 
 use std::io::{BufRead, Write};
 use std::path::Path;
@@ -56,6 +63,7 @@ fn main() {
     };
     let gpu = if cfg!(feature = "vulkan") && !cpu_only { video_card() } else { None };
     let mut voices = Voices { seg: value(&args, "--voci-seg"), emb: value(&args, "--voci-emb"), loaded: None };
+    let vad = value(&args, "--vad");
     emit(json!({"e": "ready", "ms": start.elapsed().as_millis() as u64, "threads": threads, "gpu": gpu}));
     for line in std::io::stdin().lock().lines() {
         let Ok(line) = line else { break };
@@ -71,7 +79,7 @@ fn main() {
                 continue;
             }
         };
-        match transcribe(&ctx, &request, threads, &mut voices) {
+        match transcribe(&ctx, &request, threads, &mut voices, vad.as_deref()) {
             Ok(lang) => emit(json!({"e": "end", "lang": lang})),
             Err(Failure::Unsupported(msg)) => emit(json!({"e": "error", "msg": msg, "unsupported": true})),
             Err(Failure::Other(msg)) => emit(json!({"e": "error", "msg": msg})),
@@ -92,6 +100,11 @@ fn requested_language(request: &Value) -> Result<&str, Failure> {
         return Err(Failure::Other("lingua non valida: contiene un byte nullo".into()));
     }
     Ok(lang)
+}
+
+/// Quante ipotesi tiene la ricerca a fascio: `"beam"` nella richiesta (1..=16), altrimenti 5.
+fn beam_size(request: &Value) -> i32 {
+    request["beam"].as_u64().map_or(5, |b| b.clamp(1, 16) as i32)
 }
 
 /// I modelli delle voci: si caricano alla prima richiesta che li vuole e restano per la coda.
@@ -148,7 +161,7 @@ fn diarize(samples: &[f32], wanted: voci::Speakers, threads: usize, voices: &mut
     }
 }
 
-fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mut Voices) -> Result<String, Failure> {
+fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mut Voices, vad: Option<&str>) -> Result<String, Failure> {
     let file = request["file"].as_str().ok_or_else(|| Failure::Other("manca il file".into()))?;
     let wanted = requested_language(request)?;
     let begin = Instant::now();
@@ -178,41 +191,64 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
     };
     emit(json!({"e": "lang", "code": lang}));
 
-    // Ricerca a fascio: whisper tiene 5 ipotesi e sceglie la frase più probabile, non la prima parola per volta.
-    // Su un messaggio vocale vero toglie parole storpiate per circa il 15 % di tempo in più.
-    let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 });
-    params.set_n_threads(threads as i32);
-    params.set_language(Some(&lang));
-    params.set_print_special(false);
-    params.set_print_progress(false);
-    params.set_print_realtime(false);
-    params.set_print_timestamps(false);
-    // Niente «[Musica]», «(applausi)» e simili al posto del parlato.
-    params.set_suppress_nst(true);
     let prompt = rifinitura::prompt(&lang, request["glossario"].as_str());
-    if let Some(prompt) = &prompt {
-        params.set_initial_prompt(prompt);
-    }
+    let beam = beam_size(request);
     // Ogni frase parte quando arriva la successiva: l'ultima si guarda a parte, perché a fine audio whisper a volte
     // inventa un «Grazie.» che nessuno ha detto.
     let pending: std::rc::Rc<std::cell::RefCell<Option<(i64, i64, String)>>> = Default::default();
-    let held = pending.clone();
-    params.set_segment_callback_safe_lossy(move |seg: whisper_rs::SegmentCallbackData| {
-        let text = seg.text.trim();
-        if !text.is_empty() {
-            if let Some((t0, t1, text)) = held.borrow_mut().replace((seg.start_timestamp, seg.end_timestamp, text.to_string())) {
-                emit(json!({"e": "seg", "t0": t0, "t1": t1, "text": text}));
+    // La stessa frase data di fila come tante frasi (un giro tra segmenti) si ferma alla seconda volta.
+    let echo: std::rc::Rc<std::cell::RefCell<rifinitura::Echo>> = Default::default();
+    // Dove comincia il pezzo in corso, in centesimi di secondo: whisper conta i tempi dall'inizio del pezzo.
+    let offset: std::rc::Rc<std::cell::Cell<i64>> = Default::default();
+    // Quanto del lavoro è già fatto prima di questo pezzo e quanto pesa il pezzo (0..1), per la barra.
+    let share: std::rc::Rc<std::cell::Cell<(f64, f64)>> = std::rc::Rc::new(std::cell::Cell::new((0.0, 1.0)));
+    let last_progress: std::rc::Rc<std::cell::Cell<i32>> = std::rc::Rc::new(std::cell::Cell::new(-1));
+
+    // I pezzi da trascrivere: i tratti di parlato trovati dal VAD; se il VAD non c'è o non trova nulla, tutto l'audio
+    // in una volta, come prima.
+    let total = samples.len();
+    let chunks = vad.and_then(|v| speech_chunks(v, &samples, threads, chunk_secs(ctx.model_n_text_layer()))).unwrap_or_else(|| vec![(0, total)]);
+    let n = chunks.len();
+    for (ci, (c0, c1)) in chunks.iter().copied().enumerate() {
+        offset.set((c0 as u64 * 100 / decode::RATE as u64) as i64);
+        share.set((ci as f64 / n as f64, 1.0 / n as f64));
+        // Ricerca a fascio: whisper tiene 5 ipotesi (o quante ne chiede Cedro con `"beam"`) e sceglie la frase più
+        // probabile, non la prima parola per volta. Su un messaggio vocale vero toglie parole storpiate per circa il
+        // 15 % di tempo in più.
+        let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: beam, patience: -1.0 });
+        params.set_n_threads(threads as i32);
+        params.set_language(Some(&lang));
+        params.set_print_special(false);
+        params.set_print_progress(false);
+        params.set_print_realtime(false);
+        params.set_print_timestamps(false);
+        // Niente «[Musica]», «(applausi)» e simili al posto del parlato.
+        params.set_suppress_nst(true);
+        if let Some(prompt) = &prompt {
+            params.set_initial_prompt(prompt);
+        }
+        let (held, off, echo) = (pending.clone(), offset.clone(), echo.clone());
+        params.set_segment_callback_safe_lossy(move |seg: whisper_rs::SegmentCallbackData| {
+            // Un giro di frasi uguali dentro un pezzo si riduce a una frase sola.
+            let text = rifinitura::collapse_loops(seg.text.trim());
+            if !text.is_empty() && !echo.borrow_mut().is_loop(&text) {
+                let (t0, t1) = (seg.start_timestamp + off.get(), seg.end_timestamp + off.get());
+                if let Some((t0, t1, text)) = held.borrow_mut().replace((t0, t1, text)) {
+                    emit(json!({"e": "seg", "t0": t0, "t1": t1, "text": text}));
+                }
             }
-        }
-    });
-    let mut last = -1;
-    params.set_progress_callback_safe(move |p: i32| {
-        if p != last {
-            last = p;
-            emit(json!({"e": "progress", "p": p}));
-        }
-    });
-    state.full(params, &samples).map_err(|e| Failure::Other(format!("trascrizione interrotta: {e}")))?;
+        });
+        let (share, last) = (share.clone(), last_progress.clone());
+        params.set_progress_callback_safe(move |p: i32| {
+            let (base, span) = share.get();
+            let overall = ((base + span * p as f64 / 100.0) * 100.0) as i32;
+            if overall != last.get() {
+                last.set(overall);
+                emit(json!({"e": "progress", "p": overall}));
+            }
+        });
+        state.full(params, &samples[c0..c1]).map_err(|e| Failure::Other(format!("trascrizione interrotta: {e}")))?;
+    }
     let audio_end = (samples.len() as u64 * 100 / decode::RATE as u64) as i64;
     if let Some((t0, t1, text)) = pending.borrow_mut().take() {
         if !rifinitura::phantom_tail(&text, t0, t1, audio_end) {
@@ -220,6 +256,56 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
         }
     }
     Ok(lang)
+}
+
+/// Il parlato più lungo che whisper riceve in un pezzo (una finestra intera è 30 s). Small, medium e turbo vanno bene con
+/// pezzi da 29 s: è la misura fatta a lungo, senza frasi saltate di rilievo.
+const CHUNK_SECS: f32 = 29.0;
+/// Il decoder completo di large-v3 (32 strati) con pezzi da 29 s a volte salta una frase intera quando il pezzo ne
+/// contiene due o tre (32 minuti di frasi FLEURS: 126 parole su 3015 perse, 6,0 % di errori); a 20 s ne perde 19 e
+/// scende al 2,9 %. Small, medium e turbo a 20 s non migliorano (medium 5,6 % → 6,0 %, turbo 2,8 % e 3,3 % → 3,7 % e 2,9 %).
+const CHUNK_SECS_LARGE: f32 = 20.0;
+
+/// La lunghezza dei pezzi per il modello caricato: large-v3 ha 32 strati nel decoder, turbo 4, medium 24, small 12.
+fn chunk_secs(text_layers: i32) -> f32 {
+    if text_layers >= 32 { CHUNK_SECS_LARGE } else { CHUNK_SECS }
+}
+
+/// I tratti di parlato dell'audio, in campioni (inizio, fine), uniti in pezzi lunghi al massimo `max_secs`.
+/// Il rilevatore è Silero (ggml, quello di whisper.cpp): soglia 0,5, parlato di almeno 0,25 s, pausa di almeno 0,5 s,
+/// ogni tratto al massimo 25 s con 0,2 s di margine. `None` se non parte o non trova parlato: si trascrive tutto.
+fn speech_chunks(vad: &str, samples: &[f32], threads: usize, max_secs: f32) -> Option<Vec<(usize, usize)>> {
+    let mut context = whisper_rs::WhisperVadContextParams::new();
+    context.set_n_threads(threads as i32);
+    context.set_use_gpu(false);
+    let mut vad = whisper_rs::WhisperVadContext::new(vad, context).ok()?;
+    let mut params = whisper_rs::WhisperVadParams::new();
+    params.set_threshold(0.5);
+    params.set_min_speech_duration(250);
+    params.set_min_silence_duration(500);
+    params.set_max_speech_duration(25.0);
+    params.set_speech_pad(200);
+    let found: Vec<(f32, f32)> = vad.segments_from_samples(params, samples).ok()?.map(|s| (s.start, s.end)).collect();
+    let chunks = merge_speech(&found, samples.len(), max_secs);
+    (!chunks.is_empty()).then_some(chunks)
+}
+
+/// Unisce i tratti di parlato (inizio e fine in centesimi di secondo) in pezzi che durano al massimo `max_secs`,
+/// dall'inizio del primo tratto alla fine dell'ultimo; i silenzi tra un pezzo e l'altro restano fuori.
+fn merge_speech(found: &[(f32, f32)], total: usize, max_secs: f32) -> Vec<(usize, usize)> {
+    let per_cs = decode::RATE as f32 / 100.0;
+    let mut merged: Vec<(usize, usize)> = Vec::new();
+    for &(from, to) in found {
+        let (from, to) = (((from * per_cs) as usize).min(total), ((to * per_cs) as usize).min(total));
+        if to <= from {
+            continue;
+        }
+        match merged.last_mut() {
+            Some(last) if (to - last.0) as f32 / decode::RATE as f32 <= max_secs => last.1 = to,
+            _ => merged.push((from, to)),
+        }
+    }
+    merged
 }
 
 /// Il nome della scheda video che whisper.cpp ha acceso (Vulkan), se ce n'è una. Lo chiede a ggml, che
@@ -275,6 +361,40 @@ mod tests {
         assert!(requested_language(&request).is_err());
         assert_eq!(requested_language(&json!({})).ok(), Some("auto"));
         assert_eq!(requested_language(&json!({"lang": "it"})).ok(), Some("it"));
+    }
+
+    #[test]
+    fn only_the_full_large_decoder_gets_shorter_chunks() {
+        // small 12 strati, medium 24, turbo 4, large-v3 32.
+        for layers in [4, 12, 24] {
+            assert_eq!(chunk_secs(layers), 29.0);
+        }
+        assert_eq!(chunk_secs(32), 20.0);
+    }
+
+    #[test]
+    fn the_beam_comes_from_the_request_within_bounds() {
+        assert_eq!(beam_size(&json!({"file": "a.wav"})), 5);
+        assert_eq!(beam_size(&json!({"beam": 8})), 8);
+        assert_eq!(beam_size(&json!({"beam": 0})), 1);
+        assert_eq!(beam_size(&json!({"beam": 99})), 16);
+        assert_eq!(beam_size(&json!({"beam": "tanti"})), 5);
+    }
+
+    #[test]
+    fn speech_is_merged_in_chunks_under_the_limit() {
+        let rate = decode::RATE as usize;
+        // Tratti in centesimi di secondo: 0-10 s, 12-20 s, 21-30 s, 31-35 s, 60-70 s.
+        let found = [(0.0, 1000.0), (1200.0, 2000.0), (2100.0, 3000.0), (3100.0, 3500.0), (6000.0, 7000.0)];
+        let chunks = merge_speech(&found, 80 * rate, 29.0);
+        // 0-20 s (il tratto 21-30 s farebbe 30 s), poi 21-35 s, poi 60-70 s: i silenzi tra i pezzi restano fuori.
+        assert_eq!(chunks, vec![(0, 20 * rate), (21 * rate, 35 * rate), (60 * rate, 70 * rate)]);
+        for (from, to) in &chunks {
+            assert!((*to - *from) as f32 / rate as f32 <= 29.0);
+        }
+        assert!(merge_speech(&[], 10 * rate, 29.0).is_empty());
+        // Un tratto oltre la fine dell'audio si ferma alla fine; uno vuoto sparisce.
+        assert_eq!(merge_speech(&[(0.0, 5000.0), (900.0, 900.0)], 10 * rate, 29.0), vec![(0, 10 * rate)]);
     }
 
     #[test]

@@ -11,13 +11,12 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro più veloce e più leggero: foto, PDF e video in meno tempo, la finestra che consuma meno mentre lavora.**
+**Trascrizione italiana molto più precisa in tutti e tre i livelli: niente più frasi ripetute o inventate, e modelli più grandi.**
 
-- **Foto a metà misura o a un lato massimo** circa 3 volte più veloci e con metà memoria (una foto da 12 MP: da 0,6 a 0,2 secondi). Più veloci anche miniature, figure, vetrini e lettura del testo, che rimpiccioliscono le immagini allo stesso modo.
-- **Foto → PDF** più del doppio più veloce: la foto e la lettura del testo si preparano insieme.
-- **PDF → JPG** una immagine per pagina 2,5 volte più veloce; tutti i JPEG in uscita si scrivono in circa metà tempo, con la stessa qualità. «Comprimi» resta quello di prima.
-- **WebM → MP4** 2,5 volte più veloce e con un terzo di memoria in meno (VP9 nuovo); un file Zeiss CZI rovinato non può più far chiudere Cedro.
-- **Windows, video → MP4**: video e audio ora si scrivono alternati, come stanno nel file. Prima si scriveva tutto il video e poi l'audio, e intanto i fotogrammi restavano in memoria: un Full HD di 20 secondi arrivava a 2 GB e uno di un minuto a 5,5 GB, con il rischio di esaurire la memoria sui video lunghi. Ora resta sotto i 500 MB qualunque sia la durata, con lo stesso file in uscita.
-- **La finestra** si disegna in metà tempo e, mentre un lavoro va avanti, si aggiorna 15 volte al secondo invece di 30: il processore resta al lavoro, non alla rotellina.
-- I **caratteri** del sistema si leggono solo per la parte che serve: Word → PDF e i PDF con testo partono prima e occupano meno memoria.
-- **Linux**: chiusa la finestra, la memoria torna al sistema; il menu delle applicazioni non si ricostruisce più a ogni avvio; l'elenco europeo dei certificatori si scarica a piccoli gruppi, con meno memoria.
+- **Niente più giri di frasi.** Prima whisper si portava il testo da una finestra di 30 secondi alla successiva e, su registrazioni lunghe o disturbate, poteva entrare in un giro (in una registrazione d'ufficio rumorosa: 37 frasi uguali di fila) o inventare parole sui silenzi. Ora Cedro trova i tratti in cui si parla (rilevatore di parlato Silero, 0,9 MB, scaricato la prima volta), trascrive ogni pezzo da solo, senza passare il testo dall'uno all'altro, e scarta le frasi identiche date di fila.
+- **Ogni livello sale di un gradino.** Su 15 minuti di frasi italiane con rumore (errori sulle parole, contro il testo vero):
+  - **Veloce**: da small a **large-v3-turbo** (574 MB), errori dall'8,7 % al 2,8 %;
+  - **Buona**: da medium a **large-v3** (1,08 GB), dal 4,6 % al 2,7 %;
+  - **Massima**: da large-v3-turbo a **large-v3 con una ricerca più ampia** (8 ipotesi invece di 5), dal 4,8 % al 2,7 %.
+- **Referti dettati (Cedro 4 Labs) più giusti.** Su quattro referti veterinari dettati, con il glossario veterinario, «Massima» sbaglia il 12,2 % delle parole invece del 17,3 % e scrive giusti il 75 % dei termini tecnici invece del 68 %.
+- **Costa più tempo, come previsto.** Con una scheda video (prova su Quadro RTX 4000) un'ora di audio richiede circa 3-4 minuti con «Veloce» e 7-8 minuti con «Buona» e «Massima». Senza scheda video Cedro parte da «Veloce», che sul processore (prova su Ryzen 7 5750G) richiede circa mezz'ora per un'ora di audio (con small ne bastavano circa 10); «Buona» e «Massima» sul processore ci mettono più o meno quanto dura l'audio. I modelli di prima (small e medium) si tolgono da soli quando arriva quello nuovo.
