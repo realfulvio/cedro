@@ -10,6 +10,7 @@ Ogni versione pubblicata finora, dalla più recente alla prima. Le note complete
 
 | Versione | Data | Cosa porta |
 | --- | --- | --- |
+| [0.56.0](https://github.com/realfulvio/cedro/releases/tag/v0.56.0) | 20/11 | **Trascrizione più affidabile**: rilevatore di parlato e pezzi senza contesto (niente più giri di frasi ripetute né parole inventate sui silenzi), **«Massima» diventa large-v3** (1,08 GB, errori sulle parole 2,7-2,9 % su frasi disturbate) |
 | [0.55.0](https://github.com/realfulvio/cedro/releases/tag/v0.55.0) | 19/11 | **Più veloce e più leggero**: foto a metà misura 3× più veloci, foto → PDF e PDF → JPG più del doppio, WebM → MP4 2,5× (VP9 nuovo), video → MP4 su Windows senza picchi di memoria, finestra che si disegna in metà tempo e consuma meno durante i lavori, caratteri letti solo per la parte che serve, memoria restituita su Linux |
 | [0.54.1](https://github.com/realfulvio/cedro/releases/tag/v0.54.1) | 18/11 | **Correzioni da file rovinati**: vetrini VSI con misure impossibili e miniature di BMP/DDS rovinati non chiudono più Cedro; Dividi e Unisci PDF con nomi riservati di Windows (Con, Aux, Nul, Com1…) salvano senza errori |
 | [0.54.0](https://github.com/realfulvio/cedro/releases/tag/v0.54.0) | 17/11 | Cedro 4 Labs: vetrini **Olympus VSI**, **CD DICOM** aperti dal DICOMDIR, **referti dettati già impaginati** (logo, caso, specie, campione, bozza fino alla conferma), **mappa delle piastre a colori**, **registro dei lavori in Excel**, «Copia per il quaderno» nel risultato |
