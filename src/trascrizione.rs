@@ -70,6 +70,38 @@ fn forget_old_models() {
     }
 }
 
+/// Il rilevatore di parlato (Silero v5.1.2 in formato ggml, 0,9 MB), da whisper.cpp: il motore lo usa per spezzare l'audio
+/// nei tratti dove si parla e trascriverli a pezzi, senza passare il testo da un pezzo all'altro. Il motore, senza, su un
+/// audio lungo e disturbato entra in un giro e ripete la stessa frase decine di volte. SHA-256 fissato qui.
+#[cfg(not(target_os = "android"))]
+const VAD_FILE: &str = "ggml-silero-v5.1.2.bin";
+#[cfg(not(target_os = "android"))]
+const VAD_URL: &str = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin";
+#[cfg(not(target_os = "android"))]
+const VAD_SHA: &str = "29940d98d42b91fbd05ce489f3ecf7c72f0a42f027e4875919a28fb4c04ea2cf";
+
+/// Il rilevatore di parlato pronto sul PC, scaricato la prima volta (meno di 1 MB). Se non si può avere (niente internet
+/// la prima volta) si trascrive lo stesso, tutto l'audio in una volta come prima: `Ok(None)`.
+#[cfg(not(target_os = "android"))]
+fn ensure_vad(sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Option<PathBuf>, String> {
+    let path = data_dir().join(VAD_FILE);
+    let sidecar = data_dir().join(format!("{VAD_FILE}.sha256"));
+    if path.is_file() && std::fs::read_to_string(&sidecar).is_ok_and(|s| s.trim().eq_ignore_ascii_case(VAD_SHA)) {
+        return Ok(Some(path));
+    }
+    match fetch(VAD_URL, &path, Some(VAD_SHA), 1, "il rilevatore del parlato", sink, cancel) {
+        Ok(sha) => {
+            std::fs::write(&sidecar, sha).map_err(|e| format!("{} non scritto: {e}", sidecar.display()))?;
+            Ok(Some(path))
+        }
+        Err(e) if e == CANCELLED => Err(e),
+        Err(e) => {
+            log(sink, Tone::Note, "Parlato", format!("rilevatore non scaricato ({e}): trascrivo tutto l'audio in una volta"));
+            Ok(None)
+        }
+    }
+}
+
 const MODEL_BASE_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/";
 const RELEASE_TAG_URL: &str = "https://api.github.com/repos/realfulvio/cedro/releases/tags/";
 /// Dalla 0.18.1 i motori stanno in una pre-release a parte («motori-v<versione>»), così la release
@@ -836,7 +868,7 @@ pub(crate) struct Running {
 }
 
 impl Running {
-    fn start(exe: &Path, model: &Path, cpu: bool, voices: Option<&VoicePaths>) -> Result<Running, String> {
+    fn start(exe: &Path, model: &Path, cpu: bool, voices: Option<&VoicePaths>, vad: Option<&Path>) -> Result<Running, String> {
         let mut command = Command::new(exe);
         command.arg("--model").arg(model).arg("--threads").arg(engine_threads().to_string());
         if cpu {
@@ -844,6 +876,9 @@ impl Running {
         }
         if let Some((seg, emb)) = voices {
             command.arg("--voci-seg").arg(seg).arg("--voci-emb").arg(emb);
+        }
+        if let Some(vad) = vad {
+            command.arg("--vad").arg(vad);
         }
         Running::spawn(command)
     }
@@ -1721,10 +1756,10 @@ fn event_secs(turns: &[Turn]) -> f64 {
 /// I due modelli delle voci sul PC (segmentazione, impronte).
 type VoicePaths = (PathBuf, PathBuf);
 
-fn power_on(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
+fn power_on(request: &Request, model: &Path, voices: Option<&VoicePaths>, vad: Option<&Path>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
     #[cfg(target_os = "android")]
     {
-        let _ = cancel;
+        let _ = (cancel, vad);
         // whisper.cpp è compilato con le istruzioni dotprod+fp16 (ARMv8.2): tutti i telefoni dal 2018 le hanno, ma si controlla
         // a runtime (HWCAP) invece di lasciar partire un'istruzione illegale.
         const HWCAP_FPHP: u64 = 1 << 9;
@@ -1761,11 +1796,11 @@ fn power_on(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: 
         };
     }
     #[cfg(not(target_os = "android"))]
-    power_on_process(request, model, voices, sink, cancel)
+    power_on_process(request, model, voices, vad, sink, cancel)
 }
 
 #[cfg(not(target_os = "android"))]
-fn power_on_process(request: &Request, model: &Path, voices: Option<&VoicePaths>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
+fn power_on_process(request: &Request, model: &Path, voices: Option<&VoicePaths>, vad: Option<&Path>, sink: &dyn Fn(Event), cancel: &AtomicBool) -> Result<Running, String> {
     let cpu = cpu_variant(request.avx512);
     let mut tries: Vec<Variant> = Vec::new();
     let model_bytes = std::fs::metadata(model).map(|m| m.len()).unwrap_or(0);
@@ -1797,7 +1832,7 @@ fn power_on_process(request: &Request, model: &Path, voices: Option<&VoicePaths>
         if !std::mem::replace(&mut told, true) {
             log(sink, Tone::Step, "Motore", "lo accendo e carico il modello in memoria…");
         }
-        let running = match Running::start(&exe, model, false, voices) {
+        let running = match Running::start(&exe, model, false, voices, vad) {
             Ok(running) => running,
             // Un motore che non parte (antivirus, file rovinato) non ferma tutto: c'è quello per processore.
             Err(e) if fallback_left => {
@@ -1876,6 +1911,9 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
     // internet la prima volta) si trascrive lo stesso, senza nomi.
     let mut speakers = request.speakers;
     let mut voices: Option<VoicePaths> = None;
+    // Il rilevatore di parlato: si prepara insieme al motore (meno di 1 MB); senza, si trascrive come prima.
+    #[allow(unused_mut)]
+    let mut vad: Option<PathBuf> = None;
     for (index, path) in files.iter().enumerate() {
         if cancel.load(Ordering::Relaxed) {
             // break, non return: il motore acceso si spegne qui sotto.
@@ -1903,10 +1941,17 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                     }
                 }
             }
+            #[cfg(not(target_os = "android"))]
+            if vad.is_none() {
+                match ensure_vad(sink, cancel) {
+                    Ok(v) => vad = v,
+                    Err(e) => return fail_all(&e, index),
+                }
+            }
             let started = match &model {
-                Some(m) => power_on(request, m, voices.as_ref(), sink, cancel),
+                Some(m) => power_on(request, m, voices.as_ref(), vad.as_deref(), sink, cancel),
                 None => ensure_model(request.model, sink, cancel).and_then(|m| {
-                    let r = power_on(request, &m, voices.as_ref(), sink, cancel);
+                    let r = power_on(request, &m, voices.as_ref(), vad.as_deref(), sink, cancel);
                     model = Some(m);
                     r
                 }),
@@ -1928,7 +1973,7 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
             if let Some(dead) = engine.take() { dead.stop(); }
             log(sink, Tone::Note, "Scheda video", "motore interrotto: riprovo sul processore, con la stessa precisione");
             let cpu_request = Request { gpu: false, ..request.clone() };
-            match power_on(&cpu_request, model.as_ref().expect("modello caricato"), voices.as_ref(), sink, cancel) {
+            match power_on(&cpu_request, model.as_ref().expect("modello caricato"), voices.as_ref(), vad.as_deref(), sink, cancel) {
                 Ok(mut cpu) => { outcome = one_file(&mut cpu, path, index, speakers, request.glossario.as_deref(), sink, cancel); engine = Some(cpu); }
                 Err(e) => outcome = Outcome::Failed(e),
             }
@@ -2019,7 +2064,7 @@ pub fn run_cancellable(files: &[PathBuf], request: &Request, dest: Option<&Path>
                 dead.stop();
             }
             if let Some(m) = &model {
-                match power_on(request, m, voices.as_ref(), sink, cancel) {
+                match power_on(request, m, voices.as_ref(), vad.as_deref(), sink, cancel) {
                     Ok(r) => engine = Some(r),
                     Err(e) if e == CANCELLED => return fail_all(&e, index + 1),
                     Err(e) => {

@@ -42,6 +42,43 @@ pub fn prompt(lang: &str, glossario_chiesto: Option<&str>) -> Option<String> {
     }
 }
 
+/// Se whisper, dentro un pezzo, ripete la stessa frase di fila (un «giro»: «Fai solo barra, SREVU NAS.» per 37 volte), ne
+/// tiene una sola. Conta come giro una frase di 2-8 parole ripetuta almeno 4 volte, o una parola ripetuta almeno 6 volte:
+/// «sì, sì, sì, sì» e «non posso, non posso» sono parlato vero e restano.
+pub fn collapse_loops(text: &str) -> String {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let key: Vec<String> = words.iter().map(|w| w.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()).collect();
+    let mut out: Vec<&str> = Vec::with_capacity(words.len());
+    let (mut i, mut changed) = (0, false);
+    'words: while i < words.len() {
+        for n in 1..=8usize {
+            let need = if n == 1 { 6 } else { 4 };
+            if i + n * need > words.len() || key[i..i + n].iter().all(|k| k.is_empty()) {
+                continue;
+            }
+            let mut times = 1;
+            while i + (times + 1) * n <= words.len() && key[i + times * n..i + (times + 1) * n] == key[i..i + n] {
+                times += 1;
+            }
+            if times >= need {
+                // La frase una volta sola, con la punteggiatura finale dell'ultima ripetizione.
+                out.extend(&words[i..i + n - 1]);
+                out.push(words[i + (times - 1) * n + n - 1]);
+                i += times * n;
+                changed = true;
+                continue 'words;
+            }
+        }
+        out.push(words[i]);
+        i += 1;
+    }
+    if changed {
+        out.join(" ")
+    } else {
+        text.to_string()
+    }
+}
+
 /// Le frasi che whisper inventa sul silenzio o a fine audio (le ha imparate dai sottotitoli dei video).
 const PHANTOMS: &[&str] = &[
     "grazie",
@@ -116,6 +153,21 @@ mod tests {
         assert!(phantom_tail("Grazie.", 5660, 5660, 5665));
         assert!(phantom_tail("Grazie, grazie, grazie.", 5650, 5700, 5665));
         assert!(phantom_tail("Sottotitoli creati dalla comunità Amara.org", 5000, 5400, 5400));
+    }
+
+    #[test]
+    fn a_phrase_repeated_in_a_loop_is_kept_once() {
+        let looped = "Fai solo barra, SREVU NAS. Fai solo barra, SREVU NAS. Fai solo barra, SREVU NAS. Fai solo barra, SREVU NAS.";
+        assert_eq!(collapse_loops(looped), "Fai solo barra, SREVU NAS.");
+        assert_eq!(collapse_loops("Allora no no no no no no, basta."), "Allora no, basta.");
+        assert_eq!(collapse_loops("Prima. Non posso farci coppia, non posso farci coppia, non posso farci coppia, non posso farci coppia, non posso farci coppia. Dopo."), "Prima. Non posso farci coppia. Dopo.");
+    }
+
+    #[test]
+    fn real_repetitions_stay() {
+        for ok in ["Sì, sì, sì, sì.", "Non posso, non posso.", "Va bene, va bene, va bene.", "Vai, vai, vai, vai, vai.", "Nulla di ripetuto qui.", ""] {
+            assert_eq!(collapse_loops(ok), ok);
+        }
     }
 
     #[test]
