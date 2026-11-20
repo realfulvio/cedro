@@ -1,7 +1,10 @@
 # Termini di veterinaria, anatomia patologica, laboratorio e biologia molecolare scritti giusti.
 # Servono alla correzione dopo la trascrizione (termini.rs): una parola detta male («mastocitooma»,
-# «emangio sarcoma») diventa quella scritta qui. Contano solo le parole di almeno 6 lettere; le sigle
-# e le parole con cifre si ignorano. Una voce per riga, anche di più parole; le righe con # sono note.
+# «emangio sarcoma») diventa quella scritta qui. Le parole di almeno 6 lettere si correggono da sole; quelle
+# di 4 e 5 lettere («otite», «cisti») solo quando l'articolo se ne è presa la prima lettera («una tita»); i nomi
+# con la maiuscola anche dopo «test di» e «secondo» («COMS» → «Coombs»). Le sigle e le parole con cifre si
+# ignorano. Una voce per riga, anche di più parole (dette attaccate si staccano: «toxocaracati»); le righe con #
+# sono note.
 
 # --- Neoplasie ---
 adenocarcinoma
@@ -216,6 +219,7 @@ atrofia
 ipertrofia
 iperplasia
 iperplastico
+ipertrofico
 ipoplasia
 aplasia
 displasia
@@ -295,6 +299,7 @@ ereditario
 autoimmune
 immunomediato
 cistico
+mucocele
 policistico
 nodulare
 diffuso
@@ -670,6 +675,7 @@ fegato
 epatocita
 epatociti
 cistifellea
+peripancreatico
 colecisti
 vie biliari
 coledoco
@@ -1283,6 +1289,8 @@ Angiostrongylus
 vasorum
 Aelurostrongylus
 Toxocara
+Toxocara cati
+Toxocara canis
 Toxascaris
 Ancylostoma
 Uncinaria
@@ -2146,6 +2154,8 @@ allele
 alleli
 eterozigote
 omozigote
+omozigosi
+eterozigosi
 polimorfismo
 polimorfismi
 gene
