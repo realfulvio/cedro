@@ -79,6 +79,30 @@ pub fn collapse_loops(text: &str) -> String {
     }
 }
 
+/// Il giro tra frasi diverse: whisper, con un modello piccolo, a volte dà la stessa frase di 3 parole o più come tante frasi di
+/// fila (ognuna con i suoi 2 secondi: «Non è molto facile, ma così si è seguito.» per 10 volte). Si tengono le prime due
+/// uguali, dalla terza in poi sono un giro e si scartano. Le frasi di 1-2 parole («No.», «Sì, sì.») non contano mai: sono
+/// parlato vero.
+#[derive(Default)]
+pub struct Echo {
+    last: String,
+    run: usize,
+}
+
+impl Echo {
+    /// `true` se la frase è la terza (o più) uguale di fila e va scartata.
+    pub fn is_loop(&mut self, text: &str) -> bool {
+        let key: String = text.chars().filter(|c| c.is_alphanumeric() || c.is_whitespace()).flat_map(char::to_lowercase).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ");
+        if key.split(' ').count() < 3 || key != self.last {
+            self.last = key;
+            self.run = 1;
+            return false;
+        }
+        self.run += 1;
+        self.run > 2
+    }
+}
+
 /// Le frasi che whisper inventa sul silenzio o a fine audio (le ha imparate dai sottotitoli dei video).
 const PHANTOMS: &[&str] = &[
     "grazie",
@@ -176,5 +200,18 @@ mod tests {
         assert!(!phantom_tail("Vedi te se riesci.", 5490, 5560, 5565));
         assert!(!phantom_tail("Grazie Marco, ci sentiamo.", 5600, 5650, 5665));
         assert!(!phantom_tail("", 5600, 5650, 5665));
+    }
+
+    #[test]
+    fn the_same_sentence_again_and_again_is_dropped_from_the_third() {
+        let mut e = Echo::default();
+        let f = "Non è molto facile, ma così si è seguito.";
+        assert!(!e.is_loop(f) && !e.is_loop(f) && e.is_loop(f) && e.is_loop("non è molto facile ma così si è seguito"));
+        assert!(!e.is_loop("Un'altra frase diversa qui."));
+        // Le frasi di una o due parole e le ripetizioni spezzate da altro restano.
+        let mut e = Echo::default();
+        assert!((0..6).all(|_| !e.is_loop("No.")));
+        assert!(!e.is_loop(f) && !e.is_loop("Intanto altro."));
+        assert!(!e.is_loop(f) && !e.is_loop(f) && e.is_loop(f));
     }
 }

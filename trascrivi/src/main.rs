@@ -188,6 +188,8 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
     // Ogni frase parte quando arriva la successiva: l'ultima si guarda a parte, perché a fine audio whisper a volte
     // inventa un «Grazie.» che nessuno ha detto.
     let pending: std::rc::Rc<std::cell::RefCell<Option<(i64, i64, String)>>> = Default::default();
+    // La stessa frase data di fila come tante frasi (un giro tra segmenti) si ferma alla seconda volta.
+    let echo: std::rc::Rc<std::cell::RefCell<rifinitura::Echo>> = Default::default();
     // Dove comincia il pezzo in corso, in centesimi di secondo: whisper conta i tempi dall'inizio del pezzo.
     let offset: std::rc::Rc<std::cell::Cell<i64>> = Default::default();
     // Quanto del lavoro è già fatto prima di questo pezzo e quanto pesa il pezzo (0..1), per la barra.
@@ -216,11 +218,11 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
         if let Some(prompt) = &prompt {
             params.set_initial_prompt(prompt);
         }
-        let (held, off) = (pending.clone(), offset.clone());
+        let (held, off, echo) = (pending.clone(), offset.clone(), echo.clone());
         params.set_segment_callback_safe_lossy(move |seg: whisper_rs::SegmentCallbackData| {
             // Un giro di frasi uguali dentro un pezzo si riduce a una frase sola.
             let text = rifinitura::collapse_loops(seg.text.trim());
-            if !text.is_empty() {
+            if !text.is_empty() && !echo.borrow_mut().is_loop(&text) {
                 let (t0, t1) = (seg.start_timestamp + off.get(), seg.end_timestamp + off.get());
                 if let Some((t0, t1, text)) = held.borrow_mut().replace((t0, t1, text)) {
                     emit(json!({"e": "seg", "t0": t0, "t1": t1, "text": text}));
