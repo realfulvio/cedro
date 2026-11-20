@@ -40,16 +40,18 @@ pub const MODELS: &[Model] = &[
     // (base) sbagliava 1 parola su 6.
     Model { name: "Veloce", note: "Per appunti e messaggi vocali", file: "ggml-small-q8_0.bin", megabytes: 264 },
     Model { name: "Buona", note: "Per riunioni e interviste", file: "ggml-medium-q5_0.bin", megabytes: 539 },
-    // Provato anche large-v3 completo (0.34, mai uscito): sul vocale breve sbaglia qualche parola in meno, ma su 14 minuti
-    // di frasi FLEURS entra in un giro e ripete la stessa frase per minuti (errori sulle parole 42-90 % contro 2,6 % del
-    // turbo). Resta il turbo, che col prompt e la ricerca a fascio mette punteggiatura e non si incanta.
-    Model { name: "Massima", note: "Per audio difficili, la più precisa", file: "ggml-large-v3-turbo-q5_0.bin", megabytes: 574 },
+    // «Massima» è large-v3 completo (q5_0, 1,08 GB). Nella 0.34 era stato scartato perché su audio lungo entrava in un giro e
+    // ripeteva la stessa frase per minuti (errori sulle parole 42-90 % contro 2,6 % del turbo): il colpevole era il testo
+    // passato da una finestra di 30 s alla successiva, non il modello. Ora il motore spezza l'audio nei tratti di parlato
+    // (VAD) e li trascrive uno per uno senza contesto: sulle stesse frasi FLEURS di 15 minuti large-v3 passa da 68 % a 2,9 %,
+    // pari al turbo (2,7 %), e su una registrazione vera, disturbata, sbaglia 3 volte meno parole certe del turbo.
+    Model { name: "Massima", note: "Per audio difficili, la più precisa", file: "ggml-large-v3-q5_0.bin", megabytes: 1081 },
 ];
 
 /// Il modello di partenza senza scheda video: «Buona».
 pub const DEFAULT_MODEL: usize = 1;
 
-/// Il livello preselezionato: «Massima» se il motore può usare la scheda video (un'ora di audio in circa due minuti),
+/// Il livello preselezionato: «Massima» se il motore può usare la scheda video (un'ora di audio in pochi minuti),
 /// altrimenti «Buona».
 pub fn default_model() -> usize {
     if crate::settings::read_settings().gpu && real_gpu_present() {
@@ -60,7 +62,11 @@ pub fn default_model() -> usize {
 }
 
 /// I modelli delle versioni precedenti (non più usati): si tolgono dal PC appena arriva quello nuovo.
+#[cfg(target_os = "android")]
 const OLD_MODELS: &[&str] = &["ggml-base-q8_0.bin", "ggml-large-v3-turbo-q8_0.bin", "ggml-large-v3-q5_0.bin"];
+/// Sul computer «Massima» non è più il turbo ma large-v3 (Android resta sul turbo).
+#[cfg(not(target_os = "android"))]
+const OLD_MODELS: &[&str] = &["ggml-base-q8_0.bin", "ggml-large-v3-turbo-q8_0.bin", "ggml-large-v3-turbo-q5_0.bin"];
 
 fn forget_old_models() {
     let dir = data_dir();
