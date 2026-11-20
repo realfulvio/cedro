@@ -15,6 +15,9 @@
 //! la stessa frase decine di volte (o la inventa sul silenzio).
 //!
 //! `"beam"` nella richiesta (1..16, di solito 5) dice quante ipotesi tiene la ricerca a fascio.
+//!
+//! Con `"glossario"` (e audio italiano) le frasi passano dalla correzione dei termini (`termini.rs`): le parole tecniche
+//! dette male tornano come nel dizionario.
 
 use std::io::{BufRead, Write};
 use std::path::Path;
@@ -26,6 +29,7 @@ use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextPar
 mod decode;
 mod parlato;
 mod rifinitura;
+mod termini;
 mod voci;
 
 fn main() {
@@ -192,6 +196,8 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
     emit(json!({"e": "lang", "code": lang}));
 
     let prompt = rifinitura::prompt(&lang, request["glossario"].as_str());
+    // Con un glossario i termini detti male tornano giusti («mastocitooma» → «mastocitoma»): il dizionario è italiano.
+    let termini = std::rc::Rc::new(if lang == "it" { termini::Termini::per_glossario(request["glossario"].as_str()) } else { None });
     let beam = beam_size(request);
     // Ogni frase parte quando arriva la successiva: l'ultima si guarda a parte, perché a fine audio whisper a volte
     // inventa un «Grazie.» che nessuno ha detto.
@@ -227,10 +233,14 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
         if let Some(prompt) = &prompt {
             params.set_initial_prompt(prompt);
         }
-        let (held, off, echo) = (pending.clone(), offset.clone(), echo.clone());
+        let (held, off, echo, termini) = (pending.clone(), offset.clone(), echo.clone(), termini.clone());
         params.set_segment_callback_safe_lossy(move |seg: whisper_rs::SegmentCallbackData| {
             // Un giro di frasi uguali dentro un pezzo si riduce a una frase sola.
             let text = rifinitura::collapse_loops(seg.text.trim());
+            let text = match termini.as_ref() {
+                Some(t) => t.correggi(&text),
+                None => text,
+            };
             if !text.is_empty() && !echo.borrow_mut().is_loop(&text) {
                 let (t0, t1) = (seg.start_timestamp + off.get(), seg.end_timestamp + off.get());
                 if let Some((t0, t1, text)) = held.borrow_mut().replace((t0, t1, text)) {
