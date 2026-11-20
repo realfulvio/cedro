@@ -1,0 +1,2322 @@
+# Termini di veterinaria, anatomia patologica, laboratorio e biologia molecolare scritti giusti.
+# Servono alla correzione dopo la trascrizione (termini.rs): una parola detta male («mastocitooma»,
+# «emangio sarcoma») diventa quella scritta qui. Contano solo le parole di almeno 6 lettere; le sigle
+# e le parole con cifre si ignorano. Una voce per riga, anche di più parole; le righe con # sono note.
+
+# --- Neoplasie ---
+adenocarcinoma
+adenoma
+adenomioma
+ameloblastoma
+amartoma
+angiolipoma
+angiosarcoma
+astrocitoma
+basalioma
+carcinoide
+carcinoma
+carcinosarcoma
+cementoma
+cheratoacantoma
+chemodectoma
+colangiocarcinoma
+colangioma
+condroma
+condrosarcoma
+cordoma
+craniofaringioma
+cistoadenoma
+cistoadenocarcinoma
+dermatofibroma
+ependimoma
+emangioma
+emangiopericitoma
+emangiosarcoma
+epatoblastoma
+epatocarcinoma
+epatoma
+epitelioma
+feocromocitoma
+fibroadenoma
+fibroma
+fibropapilloma
+fibrosarcoma
+fibroistiocitoma
+ganglioneuroma
+gastrinoma
+germinoma
+glioblastoma
+glioma
+granuloma
+insulinoma
+istiocitoma
+istiocitosi
+leiomioma
+leiomiosarcoma
+leucemia
+leucosi
+linfangioma
+linfangiosarcoma
+linfoma
+linfosarcoma
+lipoma
+liposarcoma
+mastocitoma
+mastocitosi
+medulloblastoma
+melanocitoma
+melanoma
+meningioma
+mesotelioma
+mielolipoma
+mieloma
+mixoma
+mixosarcoma
+nefroblastoma
+neuroblastoma
+neurofibroma
+neurofibrosarcoma
+odontoma
+oligodendroglioma
+osteocondroma
+osteoma
+osteosarcoma
+papilloma
+paraganglioma
+plasmocitoma
+rabdomioma
+rabdomiosarcoma
+schwannoma
+seminoma
+sertolioma
+sarcoma
+sarcoide
+seminoma
+teratoma
+timoma
+tricoblastoma
+tricoepitelioma
+tricolemmoma
+fibropapillomatosi
+xantoma
+neoplasia
+neoplastico
+neoformazione
+metastasi
+metastatico
+paraneoplastico
+carcinomatosi
+sarcomatosi
+blastoma
+tubulopapillare
+papillare
+tubulare
+cribriforme
+solido
+squamocellulare
+spinocellulare
+basocellulare
+transizionale
+uroteliale
+anaplastico
+pleomorfo
+indifferenziato
+scarsamente differenziato
+ben differenziato
+infiltrante
+invasivo
+microinvasivo
+intraepiteliale
+intraduttale
+multicentrico
+multifocale
+mediastinico
+alimentare
+cutaneo
+sottocutaneo
+splenico
+epatico
+renale
+nasale
+orale
+digitale
+perianale
+apocrino
+sebaceo
+ghiandolare
+mammario
+ovarico
+testicolare
+prostatico
+tiroideo
+surrenalico
+pancreatico
+gastrico
+intestinale
+vescicale
+polmonare
+cardiaco
+osseo
+cerebrale
+spinale
+oculare
+uveale
+congiuntivale
+palpebrale
+auricolare
+
+# --- Gradi e classificazioni ---
+Patnaik
+Kiupel
+Elston
+Ellis
+Nottingham
+Goldschmidt
+stadiazione
+classificazione
+gradazione
+basso grado
+alto grado
+grado intermedio
+indice mitotico
+conta mitotica
+campi ad alto ingrandimento
+ingrandimento
+margini chirurgici
+margine chirurgico
+margini indenni
+indenni
+indenne
+infiltrati
+infiltrato
+invasione linfovascolare
+invasione vascolare
+emboli neoplastici
+embolo
+linfonodo sentinella
+recidiva
+recidivante
+prognosi
+prognostico
+sopravvivenza
+remissione
+progressione
+
+# --- Patologia generale ---
+infiammazione
+infiammatorio
+flogosi
+flogistico
+necrosi
+necrotico
+necrotizzante
+apoptosi
+apoptotico
+atrofia
+ipertrofia
+iperplasia
+iperplastico
+ipoplasia
+aplasia
+displasia
+displastico
+metaplasia
+metaplastico
+anaplasia
+fibrosi
+fibrotico
+sclerosi
+calcificazione
+calcinosi
+mineralizzazione
+amiloidosi
+amiloide
+degenerazione
+degenerativo
+vacuolizzazione
+steatosi
+lipidosi
+glicogenosi
+emosiderosi
+emosiderina
+emosiderofagi
+ematoma
+emorragia
+emorragico
+trombosi
+trombo
+tromboembolismo
+embolia
+infarto
+ischemia
+ischemico
+edema
+edematoso
+congestione
+iperemia
+essudato
+essudativo
+trasudato
+transudato
+versamento
+ascesso
+ascessuale
+flemmone
+fistola
+ulcera
+ulcerazione
+ulcerato
+erosione
+granulomatoso
+piogranulomatoso
+piogranuloma
+suppurativo
+purulento
+fibrinoso
+fibrinopurulento
+sieroso
+sierofibrinoso
+catarrale
+eosinofilico
+neutrofilico
+linfocitario
+linfoplasmocitario
+plasmocitario
+istiocitario
+mastocitario
+granulocitario
+cronico
+subacuto
+iperacuto
+ricorrente
+idiopatico
+congenito
+ereditario
+autoimmune
+immunomediato
+cistico
+policistico
+nodulare
+diffuso
+focale
+multifocale
+segmentale
+circoscritto
+capsulato
+incapsulato
+pseudocapsula
+ectasia
+dilatazione
+stenosi
+ostruzione
+torsione
+volvolo
+invaginazione
+intussuscezione
+prolasso
+ernia
+erniazione
+eventrazione
+lacerazione
+contusione
+frattura
+lussazione
+sublussazione
+artrosi
+osteoartrosi
+osteoartrite
+artrite
+poliartrite
+osteomielite
+osteolisi
+osteolitico
+osteoproliferativo
+periostite
+spondilosi
+discospondilite
+dermatite
+piodermite
+foruncolosi
+follicolite
+pannicolite
+cellulite
+otite
+congiuntivite
+cheratite
+cheratocongiuntivite
+uveite
+blefarite
+glaucoma
+cataratta
+rinite
+sinusite
+faringite
+laringite
+tracheite
+bronchite
+bronchiolite
+broncopolmonite
+polmonite
+pleurite
+pericardite
+miocardite
+endocardite
+endocardiosi
+cardiomiopatia
+cardiomegalia
+gastrite
+enterite
+gastroenterite
+colite
+proctite
+esofagite
+stomatite
+gengivite
+parodontite
+epatite
+colangite
+colangioepatite
+colecistite
+pancreatite
+peritonite
+nefrite
+glomerulonefrite
+pielonefrite
+nefrosi
+nefropatia
+cistite
+uretrite
+prostatite
+orchite
+epididimite
+metrite
+endometrite
+piometra
+vaginite
+mastite
+linfoadenite
+linfadenite
+linfoadenomegalia
+linfadenopatia
+splenite
+splenomegalia
+epatomegalia
+epatosplenomegalia
+meningite
+encefalite
+meningoencefalite
+mielite
+neurite
+poliradicoloneurite
+miosite
+polimiosite
+vasculite
+tromboflebite
+flebite
+sepsi
+setticemia
+batteriemia
+viremia
+tossiemia
+uremia
+ipercalcemia
+ipocalcemia
+iperglicemia
+ipoglicemia
+iperkaliemia
+ipokaliemia
+ipernatriemia
+iponatriemia
+iperfosfatemia
+iperproteinemia
+ipoproteinemia
+ipoalbuminemia
+iperbilirubinemia
+ittero
+cachessia
+disidratazione
+acidosi
+alcalosi
+chetoacidosi
+anemia
+anemico
+policitemia
+eritrocitosi
+leucocitosi
+leucopenia
+neutrofilia
+neutropenia
+linfocitosi
+linfopenia
+eosinofilia
+eosinopenia
+monocitosi
+basofilia
+trombocitosi
+trombocitopenia
+piastrinopenia
+pancitopenia
+coagulopatia
+emofilia
+proteinuria
+ematuria
+glicosuria
+bilirubinuria
+emoglobinuria
+mioglobinuria
+cristalluria
+piuria
+batteriuria
+poliuria
+polidipsia
+oliguria
+anuria
+stranguria
+pollachiuria
+disuria
+incontinenza
+diarrea
+melena
+ematochezia
+ematemesi
+vomito
+rigurgito
+disfagia
+anoressia
+disoressia
+dispnea
+tachipnea
+tachicardia
+bradicardia
+aritmia
+fibrillazione
+cianosi
+ipertermia
+ipotermia
+convulsioni
+atassia
+paresi
+paraparesi
+tetraparesi
+paralisi
+plegia
+nistagmo
+alopecia
+prurito
+eritema
+seborrea
+ipercheratosi
+paracheratosi
+acantosi
+spongiosi
+acantolisi
+diabete
+ipotiroidismo
+ipertiroidismo
+iperadrenocorticismo
+ipoadrenocorticismo
+iperparatiroidismo
+ipoparatiroidismo
+acromegalia
+insufficienza renale
+insufficienza epatica
+insufficienza cardiaca
+shunt portosistemico
+cardiopatia
+valvulopatia
+dirofilariosi
+leishmaniosi
+ehrlichiosi
+anaplasmosi
+babesiosi
+toxoplasmosi
+neosporosi
+giardiasi
+coccidiosi
+isosporosi
+criptosporidiosi
+ancilostomiasi
+toxocariasi
+filariosi
+rogna
+demodicosi
+dermatofitosi
+malassezia
+candidosi
+aspergillosi
+criptococcosi
+leptospirosi
+salmonellosi
+campilobatteriosi
+brucellosi
+tubercolosi
+micobatteriosi
+parvovirosi
+cimurro
+epatite infettiva
+calicivirosi
+rinotracheite
+panleucopenia
+peritonite infettiva felina
+immunodeficienza felina
+leucemia felina
+rabbia
+mixomatosi
+coronavirus
+herpesvirus
+calicivirus
+parvovirus
+retrovirus
+
+# --- Anatomia ---
+cute
+derma
+epidermide
+ipoderma
+sottocute
+pannicolo adiposo
+follicolo pilifero
+ghiandola sebacea
+ghiandole apocrine
+ghiandola mammaria
+capezzolo
+cuscinetto plantare
+unghia
+artiglio
+muscolo
+muscolatura
+tendine
+legamento
+aponeurosi
+fascia
+cartilagine
+osso
+periostio
+midollo osseo
+midollare
+corticale
+epifisi
+metafisi
+diafisi
+femore
+tibia
+fibula
+omero
+radio
+ulna
+scapola
+bacino
+pelvi
+vertebra
+vertebrale
+cervicale
+toracico
+lombare
+sacrale
+coccigea
+costola
+costale
+sterno
+cranio
+mandibola
+mascella
+mandibolare
+mascellare
+sottomandibolare
+retrofaringeo
+prescapolare
+ascellare
+inguinale
+popliteo
+mesenterico
+tracheobronchiale
+mediastino
+diaframma
+torace
+toracica
+addome
+addominale
+peritoneo
+omento
+mesentere
+cavità
+pleura
+pleurico
+pericardio
+cuore
+miocardio
+endocardio
+epicardio
+atrio
+ventricolo
+valvola mitrale
+valvola tricuspide
+aorta
+aortico
+arteria
+arterioso
+vena
+venoso
+capillare
+linfatico
+linfonodo
+linfonodi
+linfonodale
+milza
+splenico
+timo
+tonsilla
+fegato
+epatocita
+epatociti
+cistifellea
+colecisti
+vie biliari
+coledoco
+pancreas
+stomaco
+piloro
+duodeno
+digiuno
+ileo
+cieco
+colon
+retto
+ano
+esofago
+faringe
+laringe
+trachea
+bronco
+bronchi
+bronchiolo
+alveolo
+alveolare
+polmone
+polmoni
+lobo
+rene
+reni
+corticale renale
+midollare renale
+glomerulo
+glomerulare
+tubulo
+tubulare
+pelvi renale
+uretere
+vescica
+uretra
+prostata
+testicolo
+epididimo
+scroto
+pene
+prepuzio
+ovaio
+ovaie
+utero
+uterino
+cervice
+vagina
+vulva
+placenta
+tiroide
+paratiroide
+surrene
+surrenale
+ipofisi
+ipotalamo
+encefalo
+cervello
+cervelletto
+midollo spinale
+meninge
+meningi
+nervo
+nervoso
+ganglio
+occhio
+cornea
+congiuntiva
+palpebra
+cristallino
+retina
+uvea
+iride
+sclera
+orbita
+orecchio
+padiglione auricolare
+condotto uditivo
+timpano
+cavità nasale
+seno frontale
+cavo orale
+lingua
+gengiva
+dente
+denti
+palato
+ghiandola salivare
+parotide
+sottomandibolare
+coscia
+gomito
+ginocchio
+garretto
+carpo
+tarso
+falange
+coda
+collo
+spalla
+fianco
+regione
+
+# --- Citologia e istologia ---
+citologia
+citologico
+istologia
+istologico
+istopatologia
+istopatologico
+istochimica
+immunoistochimica
+immunoistochimico
+immunocitochimica
+immunofluorescenza
+immunofenotipizzazione
+immunofenotipo
+citometria
+citometria a flusso
+citofluorimetria
+citofluorimetrico
+agoaspirato
+agoaspirazione
+agobiopsia
+biopsia
+bioptico
+escissionale
+incisionale
+escissione
+asportato
+asportata
+asportati
+asportate
+melanotico
+amelanotico
+resezione
+exeresi
+asportazione
+nodulectomia
+punch
+tru-cut
+prelievo
+campione
+vetrino
+vetrini
+striscio
+apposizione
+sedimento
+centrifugato
+citocentrifuga
+cellularità
+cellulato
+ematico
+emodiluito
+emodiluizione
+cellule
+cellula
+cellulare
+epiteliale
+epiteliali
+mesenchimale
+mesenchimali
+fusate
+fusato
+rotonde
+poligonali
+cuboidali
+cilindriche
+squamose
+basaloidi
+neoplastiche
+atipie
+atipia
+atipico
+anisocitosi
+anisocariosi
+anisonucleosi
+pleomorfismo
+pleomorfismo nucleare
+macrocariosi
+multinucleazione
+multinucleate
+binucleate
+nucleolo
+nucleoli
+nucleolare
+cromatina
+ipercromatico
+ipercromasia
+vescicolare
+citoplasma
+citoplasmatico
+basofilo
+basofilia
+eosinofilo
+acidofilo
+vacuolato
+vacuoli
+granulazioni
+granuli
+mitosi
+mitotico
+mitosi atipiche
+figure mitotiche
+rapporto nucleo citoplasma
+linfociti
+linfocita
+linfoblasti
+prolinfociti
+plasmacellule
+plasmacellula
+neutrofili
+neutrofilo
+granulociti
+eosinofili
+basofili
+monociti
+macrofagi
+macrofago
+istiociti
+istiocita
+mastcellule
+mastociti
+mastocita
+fibroblasti
+fibrociti
+fibrocita
+cheratinociti
+melanociti
+melanofagi
+melanina
+pigmento
+cheratina
+cheratinizzazione
+condrociti
+osteoblasti
+osteoclasti
+osteociti
+adipociti
+eritrociti
+eritrocita
+emazie
+reticolociti
+reticolocitosi
+piastrine
+trombociti
+megacariociti
+megacariocita
+mielociti
+metamielociti
+mieloblasti
+blasti
+colloide
+mucina
+mucinoso
+mucoide
+mixoide
+stroma
+stromale
+desmoplasia
+desmoplastico
+parenchima
+parenchimale
+capsula
+sinusoidi
+follicoli
+follicolare
+centri germinativi
+paracorticale
+iperplasia linfoide
+linfoide
+mieloide
+eritroide
+emopoiesi
+emopoietico
+ematopoiesi
+extramidollare
+colorazione
+ematossilina
+eosina
+ematossilina eosina
+Giemsa
+May-Grunwald
+Diff-Quik
+blu di toluidina
+tricromica
+tricromica di Masson
+Masson
+Grocott
+Ziehl-Neelsen
+Gram
+Perls
+blu di Prussia
+rosso Congo
+Van Gieson
+reticolina
+Romanowsky
+fissazione
+fissato
+formalina
+formalina tamponata
+paraffina
+inclusione
+microtomo
+sezioni
+sezione
+decalcificazione
+criostato
+congelamento
+marcatore
+marcatori
+positività
+negatività
+immunoreattività
+immunoreattivo
+citocheratina
+citocheratine
+vimentina
+desmina
+actina
+miosina
+calretinina
+sinaptofisina
+cromogranina
+melan-A
+melanina
+lisozima
+mieloperossidasi
+proliferazione
+proliferativo
+indice di proliferazione
+clonalità
+clonale
+policlonale
+monoclonale
+riarrangiamento
+recettore
+recettori
+recettori ormonali
+estrogeni
+progesterone
+tirosin-chinasi
+mutazione
+mutazioni
+
+# --- Ematologia, biochimica, urine ---
+emocromo
+emocromocitometrico
+ematocrito
+emoglobina
+emoglobinemia
+volume corpuscolare medio
+concentrazione emoglobinica
+formula leucocitaria
+leucociti
+leucocita
+globuli bianchi
+globuli rossi
+conta piastrinica
+striscio di sangue
+morfologia eritrocitaria
+policromasia
+policromatofilia
+sferociti
+sferocitosi
+schistociti
+acantociti
+echinociti
+cheratociti
+codociti
+corpi di Heinz
+corpi di Howell-Jolly
+eritroblasti
+normoblasti
+agglutinazione
+autoagglutinazione
+emolisi
+emolitico
+coagulazione
+coagulativo
+tempo di protrombina
+tempo di tromboplastina
+fibrinogeno
+antitrombina
+dimeri
+tromboelastografia
+biochimico
+biochimica
+profilo biochimico
+glicemia
+azotemia
+creatinina
+creatininemia
+cistatina
+proteine totali
+albumina
+albuminemia
+globuline
+globulinemia
+gammaglobuline
+elettroforesi
+elettroforesi sieroproteica
+bilirubina
+bilirubina totale
+transaminasi
+alanina aminotransferasi
+aspartato aminotransferasi
+fosfatasi alcalina
+gammaglutamiltransferasi
+gammaglutamil
+lattato
+lattato deidrogenasi
+creatinchinasi
+amilasi
+lipasi
+colesterolo
+colesterolemia
+trigliceridi
+trigliceridemia
+fruttosamina
+emoglobina glicata
+calcio
+calcemia
+calcio ionizzato
+fosforo
+fosforemia
+magnesio
+sodio
+potassio
+cloro
+elettroliti
+bicarbonati
+emogasanalisi
+osmolalità
+acidi biliari
+ammoniemia
+ammoniaca
+ferritina
+sideremia
+cortisolo
+cortisolemia
+stimolazione con ACTH
+soppressione con desametasone
+tiroxina
+tireotropina
+tireoglobulina
+progesteronemia
+testosterone
+insulinemia
+proteina C reattiva
+amiloide sierica
+siero
+plasma
+sierico
+plasmatico
+eparina
+eparinizzato
+citrato
+anticoagulante
+emolizzato
+lipemico
+itterico
+esame delle urine
+urinalisi
+peso specifico
+sedimento urinario
+cilindri
+cilindruria
+cristalli
+struvite
+ossalato
+ossalato di calcio
+urati
+cistina
+proteinuria
+rapporto proteine creatinina
+urinocoltura
+cistocentesi
+cateterismo
+campione urinario
+glucosio
+chetoni
+corpi chetonici
+nitriti
+esterasi
+urobilinogeno
+esame coprologico
+coprologico
+flottazione
+sedimentazione
+coprocoltura
+tampone
+tamponi
+esame colturale
+colturale
+coltura
+antibiogramma
+antimicogramma
+microbiologico
+batteriologico
+micologico
+sierologia
+serologia
+sierologico
+sierotipo
+anticorpi
+anticorpale
+antigene
+antigenico
+titolo anticorpale
+immunofluorescenza indiretta
+ELISA
+immunocromatografico
+immunoenzimatico
+reazione a catena della polimerasi
+PCR
+real-time
+carica virale
+sierodiagnosi
+Coombs
+test di Coombs
+test di Knott
+test rapido
+
+# --- Microbiologia e parassitologia ---
+batterio
+batteri
+batterico
+gram positivo
+gram negativo
+cocchi
+bacilli
+bacillo
+aerobio
+anaerobio
+anaerobi
+Staphylococcus
+pseudintermedius
+Streptococcus
+Enterococcus
+Escherichia
+Escherichia coli
+Klebsiella
+Proteus
+Pseudomonas
+aeruginosa
+Pasteurella
+multocida
+Bordetella
+bronchiseptica
+Mycoplasma
+Mycobacterium
+Nocardia
+Actinomyces
+Clostridium
+perfringens
+difficile
+Salmonella
+Campylobacter
+Helicobacter
+Leptospira
+Borrelia
+Bartonella
+Brucella
+Chlamydia
+Chlamydophila
+Rickettsia
+Ehrlichia
+Anaplasma
+Coxiella
+Listeria
+Yersinia
+Corynebacterium
+Rhodococcus
+Fusobacterium
+Bacteroides
+Malassezia
+Candida
+Aspergillus
+Cryptococcus
+Microsporum
+Trichophyton
+dermatofiti
+lieviti
+lievito
+ife
+miceti
+micotico
+virus
+virale
+Leishmania
+infantum
+amastigoti
+Toxoplasma
+Neospora
+Giardia
+Cryptosporidium
+Cystoisospora
+Isospora
+Eimeria
+Babesia
+Hepatozoon
+Cytauxzoon
+Trypanosoma
+Tritrichomonas
+Dirofilaria
+immitis
+repens
+Angiostrongylus
+vasorum
+Aelurostrongylus
+Toxocara
+Toxascaris
+Ancylostoma
+Uncinaria
+Trichuris
+vulpis
+Capillaria
+Dipylidium
+caninum
+Taenia
+Echinococcus
+granulosus
+Mesocestoides
+Spirocerca
+Thelazia
+Sarcoptes
+scabiei
+Demodex
+Otodectes
+Cheyletiella
+Notoedres
+Ctenocephalides
+Ixodes
+Rhipicephalus
+Dermacentor
+zecche
+zecca
+pulci
+pulce
+pidocchi
+acari
+acaro
+flebotomi
+flebotomo
+zanzare
+microfilarie
+microfilaria
+oocisti
+cisti
+uova
+larve
+elminti
+nematodi
+cestodi
+trematodi
+protozoi
+ectoparassiti
+endoparassiti
+parassitario
+parassitosi
+antiparassitario
+
+# --- Farmaci (principi attivi) ---
+prednisolone
+prednisone
+metilprednisolone
+desametasone
+betametasone
+idrocortisone
+triamcinolone
+budesonide
+fludrocortisone
+ciclosporina
+oclacitinib
+lokivetmab
+azatioprina
+clorambucile
+ciclofosfamide
+vincristina
+vinblastina
+doxorubicina
+epirubicina
+mitoxantrone
+carboplatino
+cisplatino
+lomustina
+melfalan
+idrossiurea
+citarabina
+gemcitabina
+actinomicina
+asparaginasi
+toceranib
+masitinib
+imatinib
+metronomica
+chemioterapia
+chemioterapico
+antineoplastico
+elettrochemioterapia
+radioterapia
+immunoterapia
+meloxicam
+carprofen
+robenacoxib
+firocoxib
+grapiprant
+cimicoxib
+mavacoxib
+ketoprofene
+acido tolfenamico
+metamizolo
+paracetamolo
+tramadolo
+buprenorfina
+metadone
+morfina
+fentanil
+butorfanolo
+gabapentin
+gabapentina
+pregabalin
+amantadina
+ketamina
+lidocaina
+bupivacaina
+mepivacaina
+ropivacaina
+propofol
+alfaxalone
+isoflurano
+sevoflurano
+medetomidina
+dexmedetomidina
+acepromazina
+diazepam
+midazolam
+atipamezolo
+naloxone
+tiletamina
+zolazepam
+atropina
+glicopirrolato
+amoxicillina
+amoxicillina clavulanato
+acido clavulanico
+ampicillina
+penicillina
+benzilpenicillina
+cefalexina
+cefazolina
+cefovecin
+ceftiofur
+cefpodoxima
+enrofloxacina
+marbofloxacina
+pradofloxacina
+ciprofloxacina
+orbifloxacina
+doxiciclina
+ossitetraciclina
+tetraciclina
+minociclina
+clindamicina
+lincomicina
+eritromicina
+azitromicina
+claritromicina
+spiramicina
+metronidazolo
+ronidazolo
+trimetoprim
+sulfametossazolo
+sulfadiazina
+gentamicina
+amikacina
+neomicina
+streptomicina
+cloramfenicolo
+florfenicolo
+rifampicina
+fusidico
+acido fusidico
+mupirocina
+polimixina
+colistina
+vancomicina
+imipenem
+ketoconazolo
+itraconazolo
+fluconazolo
+terbinafina
+miconazolo
+clotrimazolo
+nistatina
+griseofulvina
+amfotericina
+enilconazolo
+antimoniato
+antimoniato di meglumina
+miltefosina
+allopurinolo
+domperidone
+ivermectina
+milbemicina
+milbemicina ossima
+moxidectina
+selamectina
+doramectina
+fenbendazolo
+febantel
+mebendazolo
+albendazolo
+pirantel
+praziquantel
+emodepside
+toltrazuril
+ponazuril
+imidocarb
+fipronil
+imidacloprid
+permetrina
+flumetrina
+deltametrina
+fluralaner
+afoxolaner
+sarolaner
+lotilaner
+spinosad
+selamectina
+melarsomina
+maropitant
+metoclopramide
+ondansetron
+omeprazolo
+pantoprazolo
+esomeprazolo
+famotidina
+ranitidina
+sucralfato
+misoprostolo
+lattulosio
+loperamide
+sulfasalazina
+ursodesossicolico
+acido ursodesossicolico
+silimarina
+adenosilmetionina
+pimobendan
+benazepril
+enalapril
+ramipril
+imidapril
+telmisartan
+amlodipina
+spironolattone
+furosemide
+torasemide
+idroclorotiazide
+digossina
+diltiazem
+atenololo
+propranololo
+sotalolo
+amiodarone
+clopidogrel
+acido acetilsalicilico
+eparina
+dalteparina
+enoxaparina
+levotiroxina
+metimazolo
+tiamazolo
+carbimazolo
+trilostano
+mitotano
+insulina
+glargine
+detemir
+lente
+caninsulin
+cabergolina
+aglepristone
+deslorelina
+osaterone
+finasteride
+dietilstilbestrolo
+estriolo
+fenilpropanolamina
+fenobarbital
+bromuro di potassio
+levetiracetam
+imepitoina
+zonisamide
+topiramato
+fluoxetina
+clomipramina
+trazodone
+selegilina
+cetirizina
+loratadina
+difenidramina
+clorfeniramina
+idrossizina
+maleato
+teofillina
+terbutalina
+salbutamolo
+fluticasone
+acetilcisteina
+bromexina
+ambroxolo
+eritropoietina
+darbepoetina
+filgrastim
+vitamina
+cianocobalamina
+tiamina
+fitomenadione
+vitamina K
+calcitriolo
+chelante
+desferrossamina
+fluidoterapia
+ringer lattato
+soluzione fisiologica
+glucosata
+emotrasfusione
+trasfusione
+emoderivati
+plasma fresco congelato
+somministrazione
+posologia
+dosaggio
+compresse
+compressa
+sospensione orale
+iniezione
+sottocute
+intramuscolo
+endovena
+endovenoso
+intramuscolare
+sottocutaneo
+infusione
+collirio
+pomata
+unguento
+spot-on
+
+# --- Chirurgia, procedure, diagnostica per immagini ---
+anestesia
+anestesiologico
+sedazione
+intubazione
+premedicazione
+analgesia
+laparotomia
+toracotomia
+celiotomia
+splenectomia
+nefrectomia
+cistotomia
+gastrotomia
+enterotomia
+enterectomia
+anastomosi
+gastropessi
+colectomia
+lobectomia
+tiroidectomia
+surrenalectomia
+mastectomia
+mastectomia radicale
+ovariectomia
+ovarioisterectomia
+isterectomia
+orchiectomia
+castrazione
+sterilizzazione
+amputazione
+osteotomia
+osteosintesi
+artrodesi
+artroscopia
+artrotomia
+emilaminectomia
+laminectomia
+craniotomia
+enucleazione
+cheratectomia
+blefaroplastica
+estrazione dentaria
+detartrasi
+ablazione del tartaro
+toilette chirurgica
+drenaggio
+sutura
+suture
+ferita
+cicatrizzazione
+deiscenza
+lembo
+innesto
+ricostruttiva
+chirurgia ricostruttiva
+endoscopia
+gastroscopia
+colonscopia
+broncoscopia
+rinoscopia
+cistoscopia
+laparoscopia
+toracoscopia
+ecografia
+ecografico
+ecocardiografia
+ecocardiografico
+ecodoppler
+radiografia
+radiografie
+radiografico
+radiologico
+proiezione
+proiezioni
+laterolaterale
+ventrodorsale
+dorsoventrale
+tomografia
+tomografia computerizzata
+risonanza magnetica
+scintigrafia
+fluoroscopia
+mielografia
+contrasto
+mezzo di contrasto
+elettrocardiogramma
+elettrocardiografico
+holter
+pressione arteriosa
+ossimetria
+capnografia
+toracocentesi
+pericardiocentesi
+addominocentesi
+artrocentesi
+rachicentesi
+liquor
+liquido cefalorachidiano
+liquido sinoviale
+lavaggio broncoalveolare
+broncoalveolare
+ipoecogeno
+iperecogeno
+anecogeno
+isoecogeno
+ecogenicità
+ecostruttura
+disomogeneo
+omogeneo
+radiopaco
+radiotrasparente
+radiopacità
+opacità
+interstiziale
+alveolare
+bronchiale
+pattern
+consolidamento
+atelettasia
+pneumotorace
+emotorace
+piotorace
+chilotorace
+idrotorace
+versamento pleurico
+versamento pericardico
+versamento addominale
+ascite
+emoaddome
+emoperitoneo
+uroaddome
+pneumoperitoneo
+megaesofago
+dilatazione gastrica
+corpo estraneo
+urolitiasi
+nefrolitiasi
+cistolitiasi
+colelitiasi
+uroliti
+calcoli
+ernia perineale
+ernia diaframmatica
+ernia ombelicale
+displasia dell'anca
+displasia del gomito
+rottura del crociato
+legamento crociato
+lussazione rotulea
+osteotomia livellante
+necropsia
+necroscopico
+autopsia
+esame necroscopico
+cadavere
+reperto
+reperti
+referto
+referti
+descrizione macroscopica
+descrizione microscopica
+macroscopico
+microscopico
+diagnosi
+diagnosi morfologica
+diagnosi differenziale
+diagnostico
+compatibile
+suggestivo
+indicativo
+quadro
+quadro citologico
+quadro istologico
+commento
+conclusioni
+conclusione
+consigliato
+si consiglia
+follow-up
+monitoraggio
+controllo
+rivalutazione
+anamnesi
+anamnestico
+segnalamento
+esame obiettivo
+esame clinico
+sintomatologia
+sintomo
+sintomi
+clinico
+clinicamente
+terapia
+terapeutico
+trattamento
+profilassi
+vaccinazione
+vaccino
+richiamo
+eutanasia
+
+# --- Specie, sesso, razze ---
+canino
+canina
+felino
+felina
+equino
+bovino
+suino
+ovino
+caprino
+cunicolo
+coniglio
+furetto
+criceto
+porcellino d'India
+cavia
+cincillà
+pappagallo
+tartaruga
+rettile
+rettili
+iguana
+pitone
+meticcio
+meticcia
+maschio
+femmina
+castrato
+castrata
+sterilizzata
+intero
+intera
+europeo
+europea
+labrador
+labrador retriever
+golden retriever
+pastore tedesco
+pastore maremmano
+pastore belga
+pastore australiano
+border collie
+bovaro del bernese
+boxer
+bulldog
+bulldog francese
+carlino
+barboncino
+barbone
+chihuahua
+yorkshire
+yorkshire terrier
+jack russell
+jack russell terrier
+west highland
+cocker spaniel
+setter
+setter inglese
+segugio
+bassotto
+beagle
+dobermann
+rottweiler
+alano
+schnauzer
+shih tzu
+maltese
+volpino
+cavalier king charles
+siberian husky
+husky
+akita
+corso
+cane corso
+dogue de bordeaux
+amstaffordshire
+american staffordshire
+pitbull
+persiano
+siamese
+maine coon
+certosino
+ragdoll
+british shorthair
+sphynx
+norvegese delle foreste
+
+# --- Biologia molecolare, biotecnologie, laboratorio ---
+estrazione
+estratto
+purificazione
+purificato
+centrifugazione
+centrifuga
+ultracentrifuga
+microcentrifuga
+pipetta
+pipette
+micropipetta
+puntali
+provetta
+provette
+eppendorf
+falcon
+piastra
+piastre
+pozzetti
+pozzetto
+multipozzetto
+capsula di Petri
+beuta
+cilindro graduato
+becher
+agitatore
+vortex
+termoblocco
+termociclatore
+incubatore
+incubazione
+incubato
+stufa
+autoclave
+autoclavato
+sterilizzazione
+cappa
+cappa a flusso laminare
+cappa chimica
+bagnetto termostatato
+spettrofotometro
+spettrofotometria
+fluorimetro
+nanodrop
+assorbanza
+densità ottica
+lunghezza d'onda
+citofluorimetro
+microscopio
+microscopio confocale
+microscopia
+microscopia elettronica
+microscopio a fluorescenza
+obiettivo
+oculare
+immersione
+olio a immersione
+reagente
+reagenti
+tampone fosfato
+soluzione tampone
+fosfato
+salina
+Tris
+glicina
+glicerolo
+etanolo
+metanolo
+isopropanolo
+cloroformio
+fenolo
+fenolo cloroformio
+TRIzol
+guanidina
+tiocianato
+beta-mercaptoetanolo
+mercaptoetanolo
+ditiotreitolo
+dodecilsolfato
+sodio dodecilsolfato
+Triton
+Tween
+detergente
+EDTA
+EGTA
+saccarosio
+destrano
+paraformaldeide
+glutaraldeide
+formaldeide
+acetone
+xilolo
+xilene
+acido cloridrico
+idrossido di sodio
+bromuro di etidio
+agarosio
+gel di agarosio
+poliacrilammide
+acrilammide
+bisacrilammide
+elettroforesi su gel
+corsa elettroforetica
+marcatore di peso molecolare
+ladder
+bande
+banda
+transilluminatore
+western blot
+western blotting
+immunoblotting
+membrana
+nitrocellulosa
+polivinilidene
+trasferimento
+blocking
+anticorpo primario
+anticorpo secondario
+coniugato
+perossidasi
+chemiluminescenza
+chemiluminescente
+sviluppo
+densitometria
+densitometrico
+immunoprecipitazione
+coimmunoprecipitazione
+cromatografia
+cromatografico
+spettrometria di massa
+spettrometria
+proteomica
+genomica
+trascrittomica
+metabolomica
+bioinformatica
+sequenziamento
+sequenziamento di nuova generazione
+sequenza
+sequenze
+nucleotidi
+nucleotide
+oligonucleotidi
+oligonucleotide
+primer
+primers
+sonda
+sonde
+amplificazione
+amplificato
+amplicone
+ampliconi
+retrotrascrizione
+retrotrascrittasi
+trascrittasi inversa
+trascrizione inversa
+DNA
+RNA
+cDNA
+mRNA
+microRNA
+plasmide
+plasmidi
+vettore
+vettori
+vettore lentivirale
+lentivirus
+lentivirale
+adenovirus
+adenovirale
+trasfezione
+trasfettate
+trasfettato
+trasduzione
+trasdotte
+lipofectamina
+elettroporazione
+clonaggio
+clonaggio molecolare
+ligasi
+ligazione
+enzima di restrizione
+enzimi di restrizione
+digestione
+polimerasi
+Taq polimerasi
+trascrittasi
+endonucleasi
+esonucleasi
+nucleasi
+DNasi
+RNasi
+proteinasi
+proteinasi K
+tripsina
+tripsinizzazione
+collagenasi
+dispasi
+inibitore
+inibitori
+inibitori delle proteasi
+proteasi
+fosfatasi
+chinasi
+fosforilazione
+fosforilato
+defosforilazione
+ubiquitinazione
+acetilazione
+metilazione
+glicosilazione
+espressione
+espressione genica
+sovraespressione
+silenziamento
+knockdown
+knockout
+CRISPR
+Cas9
+RNA guida
+editing
+editing genomico
+mutagenesi
+mutante
+mutanti
+transgenico
+transgenica
+genotipo
+genotipizzazione
+fenotipo
+allele
+alleli
+eterozigote
+omozigote
+polimorfismo
+polimorfismi
+gene
+geni
+genoma
+cromosoma
+cromosomi
+cariotipo
+coltura cellulare
+colture cellulari
+linea cellulare
+linee cellulari
+cellule staminali
+staminali
+pluripotenti
+differenziamento
+differenziazione
+passaggio
+passaggi
+confluenza
+subconfluenza
+semina
+seminato
+seminate
+terreno
+terreno di coltura
+mezzo di coltura
+DMEM
+RPMI
+siero fetale bovino
+siero fetale
+penicillina streptomicina
+glutammina
+antibiotico
+antibiotici
+crioconservazione
+criovial
+criovials
+scongelamento
+congelate
+DMSO
+dimetilsolfossido
+vitalità
+vitalità cellulare
+proliferazione cellulare
+saggio
+saggi
+saggio di vitalità
+MTT
+citotossicità
+citotossico
+apoptosi
+annessina
+ioduro di propidio
+caspasi
+ciclo cellulare
+senescenza
+migrazione
+invasione
+wound healing
+transwell
+sferoidi
+organoidi
+cocoltura
+fibroblasti
+cheratinociti
+epatociti
+neuroni
+astrociti
+cardiomiociti
+macrofagi
+linfociti T
+linfociti B
+cellule dendritiche
+HEK
+HeLa
+GAPDH
+actina
+beta-actina
+tubulina
+gene housekeeping
+normalizzazione
+normalizzato
+quantificazione
+quantitativa
+semiquantitativa
+curva standard
+curva di calibrazione
+replicati
+replicato
+triplicato
+duplicato
+controllo negativo
+controllo positivo
+bianco
+diluizione
+diluizioni
+diluizione seriale
+concentrazione
+molarità
+millimolare
+micromolare
+nanomolare
+microgrammi
+nanogrammi
+microlitri
+millilitri
+rotazioni al minuto
+statistica
+statisticamente significativo
+significatività
+deviazione standard
+errore standard
+media
+mediana
+ANOVA
+t di Student
+esperimento
+sperimentale
+protocollo
+procedura operativa
+quaderno di laboratorio
+stabulario
+topi
+topo
+ratti
+ratto
+murino
+xenotrapianto
+immunodeficienti
+anticorpo
+anticorpi monoclonali
+isotipo
+fluorocromo
+fluorocromi
+fluoresceina
+rodamina
+DAPI
+Hoechst
+GFP
+proteina fluorescente verde
+luciferasi
+gene reporter
+cromogeno
+diaminobenzidina
+smascheramento antigenico
+recupero antigenico
+citrato di sodio
+microarray
+biobanca
+tissue microarray
+microdissezione
+ibridazione
+ibridazione in situ
+FISH
+northern blot
+southern blot
+ELISA sandwich
+standard
+calibratore
+batteriologia
+inoculo
+inoculato
+piastramento
+colonie
+colonia
+unità formanti colonia
+antibiotico resistenza
+resistenza
+sensibilità
+sensibile
+resistente
+intermedio
+concentrazione minima inibente

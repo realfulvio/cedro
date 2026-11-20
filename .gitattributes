@@ -1,2 +1,4 @@
 # I file di prova della firma vanno presi byte per byte (niente CRLF su Windows).
 tests/data/firma/** -text
+# Il filtro delle parole italiane della trascrizione è binario: mai convertire gli a capo.
+trascrivi/src/parole.bloom binary
