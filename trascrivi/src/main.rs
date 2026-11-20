@@ -13,6 +13,8 @@
 //! si trovano i tratti di parlato e si trascrivono a pezzi da ~25 s, ciascuno per conto suo. Senza questo, su un audio
 //! lungo whisper passa il testo di una finestra alla successiva e, sul parlato disturbato, entra in un giro che ripete
 //! la stessa frase decine di volte (o la inventa sul silenzio).
+//!
+//! `"beam"` nella richiesta (1..16, di solito 5) dice quante ipotesi tiene la ricerca a fascio.
 
 use std::io::{BufRead, Write};
 use std::path::Path;
@@ -100,6 +102,11 @@ fn requested_language(request: &Value) -> Result<&str, Failure> {
     Ok(lang)
 }
 
+/// Quante ipotesi tiene la ricerca a fascio: `"beam"` nella richiesta (1..=16), altrimenti 5.
+fn beam_size(request: &Value) -> i32 {
+    request["beam"].as_u64().map_or(5, |b| b.clamp(1, 16) as i32)
+}
+
 /// I modelli delle voci: si caricano alla prima richiesta che li vuole e restano per la coda.
 struct Voices {
     seg: Option<String>,
@@ -185,6 +192,7 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
     emit(json!({"e": "lang", "code": lang}));
 
     let prompt = rifinitura::prompt(&lang, request["glossario"].as_str());
+    let beam = beam_size(request);
     // Ogni frase parte quando arriva la successiva: l'ultima si guarda a parte, perché a fine audio whisper a volte
     // inventa un «Grazie.» che nessuno ha detto.
     let pending: std::rc::Rc<std::cell::RefCell<Option<(i64, i64, String)>>> = Default::default();
@@ -204,9 +212,10 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
     for (ci, (c0, c1)) in chunks.iter().copied().enumerate() {
         offset.set((c0 as u64 * 100 / decode::RATE as u64) as i64);
         share.set((ci as f64 / n as f64, 1.0 / n as f64));
-        // Ricerca a fascio: whisper tiene 5 ipotesi e sceglie la frase più probabile, non la prima parola per volta.
-        // Su un messaggio vocale vero toglie parole storpiate per circa il 15 % di tempo in più.
-        let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: 5, patience: -1.0 });
+        // Ricerca a fascio: whisper tiene 5 ipotesi (o quante ne chiede Cedro con `"beam"`) e sceglie la frase più
+        // probabile, non la prima parola per volta. Su un messaggio vocale vero toglie parole storpiate per circa il
+        // 15 % di tempo in più.
+        let mut params = FullParams::new(SamplingStrategy::BeamSearch { beam_size: beam, patience: -1.0 });
         params.set_n_threads(threads as i32);
         params.set_language(Some(&lang));
         params.set_print_special(false);
@@ -361,6 +370,15 @@ mod tests {
             assert_eq!(chunk_secs(layers), 29.0);
         }
         assert_eq!(chunk_secs(32), 20.0);
+    }
+
+    #[test]
+    fn the_beam_comes_from_the_request_within_bounds() {
+        assert_eq!(beam_size(&json!({"file": "a.wav"})), 5);
+        assert_eq!(beam_size(&json!({"beam": 8})), 8);
+        assert_eq!(beam_size(&json!({"beam": 0})), 1);
+        assert_eq!(beam_size(&json!({"beam": 99})), 16);
+        assert_eq!(beam_size(&json!({"beam": "tanti"})), 5);
     }
 
     #[test]
