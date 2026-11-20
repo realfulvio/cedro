@@ -199,7 +199,7 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
     // I pezzi da trascrivere: i tratti di parlato trovati dal VAD; se il VAD non c'è o non trova nulla, tutto l'audio
     // in una volta, come prima.
     let total = samples.len();
-    let chunks = vad.and_then(|v| speech_chunks(v, &samples, threads)).unwrap_or_else(|| vec![(0, total)]);
+    let chunks = vad.and_then(|v| speech_chunks(v, &samples, threads, chunk_secs(ctx.model_n_text_layer()))).unwrap_or_else(|| vec![(0, total)]);
     let n = chunks.len();
     for (ci, (c0, c1)) in chunks.iter().copied().enumerate() {
         offset.set((c0 as u64 * 100 / decode::RATE as u64) as i64);
@@ -249,13 +249,23 @@ fn transcribe(ctx: &WhisperContext, request: &Value, threads: usize, voices: &mu
     Ok(lang)
 }
 
-/// Il parlato più lungo che whisper riceve in un pezzo: una finestra intera è 30 s, e i pezzi restano sotto.
+/// Il parlato più lungo che whisper riceve in un pezzo (una finestra intera è 30 s). Small, medium e turbo vanno bene con
+/// pezzi da 29 s: è la misura fatta a lungo, senza frasi saltate di rilievo.
 const CHUNK_SECS: f32 = 29.0;
+/// Il decoder completo di large-v3 (32 strati) con pezzi da 29 s a volte salta una frase intera quando il pezzo ne
+/// contiene due o tre (32 minuti di frasi FLEURS: 126 parole su 3015 perse, 6,0 % di errori); a 20 s ne perde 19 e
+/// scende al 2,9 %. Small, medium e turbo a 20 s non migliorano (medium 5,6 % → 6,0 %, turbo 2,8 % e 3,3 % → 3,7 % e 2,9 %).
+const CHUNK_SECS_LARGE: f32 = 20.0;
 
-/// I tratti di parlato dell'audio, in campioni (inizio, fine), uniti in pezzi lunghi al massimo `CHUNK_SECS`.
+/// La lunghezza dei pezzi per il modello caricato: large-v3 ha 32 strati nel decoder, turbo 4, medium 24, small 12.
+fn chunk_secs(text_layers: i32) -> f32 {
+    if text_layers >= 32 { CHUNK_SECS_LARGE } else { CHUNK_SECS }
+}
+
+/// I tratti di parlato dell'audio, in campioni (inizio, fine), uniti in pezzi lunghi al massimo `max_secs`.
 /// Il rilevatore è Silero (ggml, quello di whisper.cpp): soglia 0,5, parlato di almeno 0,25 s, pausa di almeno 0,5 s,
 /// ogni tratto al massimo 25 s con 0,2 s di margine. `None` se non parte o non trova parlato: si trascrive tutto.
-fn speech_chunks(vad: &str, samples: &[f32], threads: usize) -> Option<Vec<(usize, usize)>> {
+fn speech_chunks(vad: &str, samples: &[f32], threads: usize, max_secs: f32) -> Option<Vec<(usize, usize)>> {
     let mut context = whisper_rs::WhisperVadContextParams::new();
     context.set_n_threads(threads as i32);
     context.set_use_gpu(false);
@@ -267,7 +277,7 @@ fn speech_chunks(vad: &str, samples: &[f32], threads: usize) -> Option<Vec<(usiz
     params.set_max_speech_duration(25.0);
     params.set_speech_pad(200);
     let found: Vec<(f32, f32)> = vad.segments_from_samples(params, samples).ok()?.map(|s| (s.start, s.end)).collect();
-    let chunks = merge_speech(&found, samples.len(), CHUNK_SECS);
+    let chunks = merge_speech(&found, samples.len(), max_secs);
     (!chunks.is_empty()).then_some(chunks)
 }
 
@@ -342,6 +352,15 @@ mod tests {
         assert!(requested_language(&request).is_err());
         assert_eq!(requested_language(&json!({})).ok(), Some("auto"));
         assert_eq!(requested_language(&json!({"lang": "it"})).ok(), Some("it"));
+    }
+
+    #[test]
+    fn only_the_full_large_decoder_gets_shorter_chunks() {
+        // small 12 strati, medium 24, turbo 4, large-v3 32.
+        for layers in [4, 12, 24] {
+            assert_eq!(chunk_secs(layers), 29.0);
+        }
+        assert_eq!(chunk_secs(32), 20.0);
     }
 
     #[test]
