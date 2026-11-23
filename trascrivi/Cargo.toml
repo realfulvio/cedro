@@ -21,7 +21,7 @@ whisper-rs-sys = "0.15"
 whisper-rs = { version = "0.16" }
 # Chi parla (diarizzazione): i modelli ONNX delle voci girano in Rust con rten, le fbank con kaldi-native-fbank.
 rten = "0.27"
-rten-tensor = "0.27"
+rten-tensor = "0.28"
 kaldi-native-fbank = "0.1"
 
 [target.'cfg(unix)'.dependencies]
