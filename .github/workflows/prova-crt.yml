@@ -38,10 +38,10 @@ jobs:
           python -m pip install libclang
           if ($LASTEXITCODE -ne 0) { throw 'libclang non installato' }
           $env:LIBCLANG_PATH = python -c "import pathlib, clang; print(pathlib.Path(clang.__file__).parent / 'native')"
-          powershell -File trascrivi\build.ps1 -Out motori -Solo base
+          powershell -File trascrivi\build.ps1 -Out "${{ github.workspace }}\motori" -Solo base
           if ($LASTEXITCODE -ne 0) { throw 'compilazione fallita' }
           rustc -O --edition 2021 -C target-feature=+crt-static tools\dipendenze-pe.rs -o dipendenze.exe
-          .\dipendenze.exe @(Get-ChildItem motori\*.exe | ForEach-Object FullName)
+          .\dipendenze.exe @(Get-ChildItem "${{ github.workspace }}\motori\*.exe" | ForEach-Object FullName)
           if ($LASTEXITCODE -ne 0) { throw 'il motore dipende dalle DLL di Visual C++' }
 
   riassumi:
@@ -51,11 +51,14 @@ jobs:
       - uses: actions/checkout@v4
       - shell: pwsh
         run: |
+          # L'immagine ha Visual Studio 18, la cui libreria standard vuole clang 22 o più, e LLVM 20.
+          choco upgrade llvm -y --no-progress
+          clang-cl --version
           python -m pip install libclang
           if ($LASTEXITCODE -ne 0) { throw 'libclang non installato' }
           $env:LIBCLANG_PATH = python -c "import pathlib, clang; print(pathlib.Path(clang.__file__).parent / 'native')"
-          powershell -File riassumi\build.ps1 -Out motori -Solo base
+          powershell -File riassumi\build.ps1 -Out "${{ github.workspace }}\motori" -Solo base
           if ($LASTEXITCODE -ne 0) { throw 'compilazione fallita' }
           rustc -O --edition 2021 -C target-feature=+crt-static tools\dipendenze-pe.rs -o dipendenze.exe
-          .\dipendenze.exe @(Get-ChildItem motori\*.exe | ForEach-Object FullName)
+          .\dipendenze.exe @(Get-ChildItem "${{ github.workspace }}\motori\*.exe" | ForEach-Object FullName)
           if ($LASTEXITCODE -ne 0) { throw 'il motore dipende dalle DLL di Visual C++' }
