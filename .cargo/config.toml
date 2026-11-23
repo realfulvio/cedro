@@ -1,0 +1,9 @@
+# Windows (MSVC): il runtime C/C++ di Visual Studio va DENTRO i programmi, non nelle DLL vcruntime140.dll,
+# msvcp140.dll e simili. Su un Windows appena installato quelle DLL non ci sono (le porta il «Visual C++
+# Redistributable») e cedro.exe, i motori di trascrizione e del riassunto non partirebbero: «VCRUNTIME140.dll
+# non è stato trovato». Vale anche per i motori (trascrivi/ e riassumi/ stanno sotto questa cartella) e per le
+# librerie in C/C++ (opus, mp3lame, whisper.cpp, llama.cpp): trascrivi/build.ps1 e riassumi/build.ps1 dicono a
+# CMake di usare lo stesso runtime statico. La prova che non resti nessuna dipendenza è in
+# .github/workflows/windows-arm64.yml (tools/dipendenze-pe.rs e un giro con le DLL del runtime nascoste).
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

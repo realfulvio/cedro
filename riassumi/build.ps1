@@ -1,5 +1,5 @@
 # Compila il motore del Riassunto AI in tutte le varianti per Windows (x64, oppure ARM64 se lo lanci su un PC ARM).
-# Uso:  powershell -File riassumi\build.ps1 [-Out dist] [-SoloCpu | -SoloVulkan] [-Target C:\crv]
+# Uso:  powershell -File riassumi\build.ps1 [-Out dist] [-SoloCpu | -SoloVulkan | -Solo base,avx2] [-Target C:\crv]
 #
 # Servono:
 #  - Rust e Visual Studio Build Tools (con CMake e Ninja, già inclusi);
@@ -9,7 +9,7 @@
 #  - per la variante "vulkan" il Vulkan SDK (VULKAN_SDK), da installare come amministratore.
 # La cartella di compilazione deve essere CORTA (-Target): i sotto-progetti di CMake superano
 # i 260 caratteri di Windows se stanno dentro cartelle lunghe.
-param([string]$Out = "dist", [switch]$SoloCpu, [switch]$SoloVulkan, [string]$Target = "C:\crv")
+param([string]$Out = "dist", [switch]$SoloCpu, [switch]$SoloVulkan, [string]$Target = "C:\crv", [string]$Solo = "")
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 if (-not $env:LIBCLANG_PATH) { throw "LIBCLANG_PATH non impostata: vedi l'intestazione dello script." }
@@ -26,6 +26,13 @@ $arch = if ($arm) { "arm64" } else { "x64" }
 $vcvars = Join-Path $vs ("VC\Auxiliary\Build\" + $(if ($arm) { "vcvarsarm64.bat" } else { "vcvars64.bat" }))
 cmd /c "`"$vcvars`" >nul && set" | ForEach-Object { if ($_ -match '^([^=]+)=(.*)$') { Set-Item "Env:$($Matches[1])" $Matches[2] } }
 $env:CMAKE_GENERATOR = "Ninja"
+# Il runtime di Visual C++ dentro il motore (/MT), non nelle DLL vcruntime140/msvcp140: su un Windows appena installato
+# non ci sono e il motore non partirebbe. Rust lo fa già con +crt-static (.cargo/config.toml); llama.cpp e ggml
+# (CMake) hanno bisogno di LLAMA_STATIC_CRT (altrimenti llama-cpp-sys-2 forza /MD), di CMAKE_MSVC_RUNTIME_LIBRARY
+# e della regola CMP0091 a NEW perché il loro CMake «minimo» è vecchio.
+$env:LLAMA_STATIC_CRT = "1"
+$env:CMAKE_MSVC_RUNTIME_LIBRARY = "MultiThreaded"
+$env:CMAKE_POLICY_DEFAULT_CMP0091 = "NEW"
 
 # Ogni variante usa istruzioni diverse; GGML_NATIVE=OFF evita che il PC di build decida al posto di chi lo usa.
 $cpu = [ordered]@{
@@ -61,6 +68,13 @@ if (-not $SoloCpu -and $env:VULKAN_SDK) { $variants += "vulkan" }
 if ($SoloVulkan) {
   if (-not $env:VULKAN_SDK) { throw "VULKAN_SDK non impostata." }
   $variants = @("vulkan")
+}
+# -Solo base,avx2: solo queste varianti (per provare una modifica senza compilarle tutte).
+$scelte = @($Solo -split "," | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if ($scelte.Count) {
+  foreach ($n in $scelte) { if ($n -ne "vulkan" -and -not $cpu.Contains($n)) { throw "variante sconosciuta: $n" } }
+  if (($scelte -contains "vulkan") -and -not $env:VULKAN_SDK) { throw "VULKAN_SDK non impostata." }
+  $variants = $scelte
 }
 
 foreach ($name in $variants) {
