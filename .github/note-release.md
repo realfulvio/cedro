@@ -11,11 +11,7 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**I termini dei referti dettati escono giusti ancora più spesso, anche quando whisper li spezza, li attacca o ne regala una lettera all'articolo.**
+**Cedro parte anche su un computer con Windows appena installato.**
 
-- **Termini spezzati e attaccati.** Tornano giusti anche quando whisper attacca all'inizio del termine una parolina o divide due termini nel punto sbagliato: «con angiocarcinoma» → «colangiocarcinoma», «di fenidamina» → «difenidramina», «per ecogeno» → «iperecogeno», «tubulo papillare» e «tubulo-papillare» → «tubulopapillare», «emangio sarcomasplenico» → «emangiosarcoma splenico», «toxocaracati» → «Toxocara cati».
-- **Articoli che si prendono una lettera del termine.** «una denoma» → «un adenoma», «una tita» → «un'otite», «dell'alipasi» → «della lipasi», «l'acitometria» → «la citometria», «dell'infonodo» → «del linfonodo».
-- **Nomi propri e intestazioni.** Dopo «test di», «colorazione di», «secondo» i nomi tornano giusti anche se detti corti o scritti come sigla: «test di COMS» → «test di Coombs», «secondo Patnek» → «secondo Patnaik». In testa a un referto «Effetto citologico», «Perfetto ematologico», «Per effetto istologico» diventano «Referto …»; «esame culturale» diventa «esame colturale».
-- **Desinenze che un termine non ha.** «prednisolona» → «prednisolone», «coleciste» → «colecisti».
-- **Meno correzioni perse.** Il controllo delle parole italiane vere scambia per vera una parola storpiata una volta su duemila invece che una su cento, e ora conosce anche le parole comuni di 4 e 5 lettere («una mina» resta «una mina»).
-- **Quanto migliora.** Su tre referti nuovi, scritti prima di queste modifiche e mai usati per tararle: con «Massima» gli errori sulle parole scendono dall'11,0 % al 9,8 % (erano il 14,4 % senza correzione) e i termini giusti salgono dal 79 % all'81 %; con «Buona» dall'11,6 % al 10,1 % e dal 79 % all'82 %; con «Veloce» dal 14,1 % al 12,3 % e dal 76 % all'80 %. Su 15 minuti di frasi italiane comuni nessuna parola cambia. Le prove sono fatte con voci sintetiche: su dettati veri il guadagno può essere diverso.
+- **Niente più «VCRUNTIME140.dll non è stato trovato».** Su un PC pulito, senza il «Visual C++ Redistributable» di Microsoft, la 0.58.0 e le versioni prima non partivano. Ora il runtime di Visual C++ sta dentro cedro.exe e dentro i motori della trascrizione e del riassunto: l'installatore e la versione portable funzionano ovunque, senza installare altro.
+- **Controllato prima di ogni pubblicazione.** Un controllo automatico guarda che nessun file di Cedro importi più `vcruntime140.dll`, `msvcp140.dll` e simili; un altro toglie quelle DLL da un Windows di prova e verifica che l'installatore, la finestra di Cedro, la versione portable e i motori partano lo stesso.
