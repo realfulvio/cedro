@@ -666,7 +666,7 @@ jobs:
             }
             foreach ($exe in @($mine, $portable)) {
               if (-not (Test-Path $exe)) { continue }
-              "== $exe: converte una foto"
+              "== ${exe}: converte una foto"
               Remove-Item "$work\in\*.png" -ErrorAction SilentlyContinue
               $r = Esegui $exe @('--quality', '80', 'convert', "$work\in\scan.jpg", 'png')
               "   codice $($r.Codice): $($r.Testo)"
