@@ -338,6 +338,12 @@ jobs:
       - name: Compila i motori x64 dai sorgenti correnti
         shell: pwsh
         run: |
+          if ('${{ needs.scegli.outputs.locale }}' -ne 'true') {
+            # L'immagine di GitHub ha Visual Studio 18, la cui libreria standard vuole clang 22 o più, e LLVM 20:
+            # senza questo aggiornamento il motore del riassunto non compila («STL1000: expected Clang 22 or newer»).
+            choco upgrade llvm -y --no-progress
+            clang-cl --version
+          }
           python -m pip install libclang
           if ($LASTEXITCODE -ne 0) { throw 'libclang non installato' }
           $env:LIBCLANG_PATH = python -c "import pathlib, clang; print(pathlib.Path(clang.__file__).parent / 'native')"
