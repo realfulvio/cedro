@@ -26,4 +26,10 @@ jobs:
     runs-on: ["self-hosted", "${{ inputs.etichetta || 'cedro-linux' }}"]
     timeout-minutes: 5
     steps:
+      # I job Linux girano in un contenitore: se docker sul PC di collaudo non risponde (servizio fermo dopo un
+      # riavvio) la sonda fallisce e la build va sui runner di GitHub, invece di cadere sul «Cannot connect to the
+      # Docker daemon» (successo il 2026-11-23).
+      - name: Su cedro-linux docker deve rispondere
+        if: ${{ (inputs.etichetta || 'cedro-linux') == 'cedro-linux' }}
+        run: docker info > /dev/null
       - run: echo "Pronto"
