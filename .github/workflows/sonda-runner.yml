@@ -26,4 +26,27 @@ jobs:
     runs-on: ["self-hosted", "${{ inputs.etichetta || 'cedro-linux' }}"]
     timeout-minutes: 5
     steps:
+      # I job Linux girano in un contenitore: se docker sul PC di collaudo non risponde (servizio fermo dopo un
+      # riavvio) la sonda fallisce e la build va sui runner di GitHub, invece di cadere sul «Cannot connect to the
+      # Docker daemon» (successo il 2026-11-23).
+      - name: Su cedro-linux docker deve rispondere
+        if: ${{ (inputs.etichetta || 'cedro-linux') == 'cedro-linux' }}
+        run: docker info > /dev/null
+      # La VM Windows di casa ha dischi piccoli: una build completa (cedro, motori, installatori) ne vuole una ventina
+      # di libera su W: e una decina su C:. Se non ci sono la build va sui runner di GitHub, invece di cadere a metà
+      # con «Spazio su disco insufficiente» (successo il 2026-11-23).
+      - name: Su cedro-windows i dischi devono avere spazio libero
+        if: ${{ inputs.etichetta == 'cedro-windows' }}
+        shell: pwsh
+        run: |
+          $minimi = [ordered]@{ C = 10; W = 20 }
+          $poco = @()
+          foreach ($d in $minimi.Keys) {
+            $v = Get-PSDrive -Name $d -ErrorAction SilentlyContinue
+            if (-not $v) { continue }
+            $libero = [math]::Round($v.Free / 1GB, 1)
+            "${d}: $libero GB liberi (ne servono almeno $($minimi[$d]))"
+            if ($libero -lt $minimi[$d]) { $poco += "${d}: $libero GB" }
+          }
+          if ($poco) { throw "Poco spazio libero ($($poco -join ', ')): la build va su GitHub" }
       - run: echo "Pronto"
