@@ -11,7 +11,13 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro parte anche su un computer con Windows appena installato.**
+**Nuovo «Modifica» nella scheda PDF: scrivi, evidenzia, compila e oscura un PDF senza uscire da Cedro.**
 
-- **Niente più «VCRUNTIME140.dll non è stato trovato».** Su un PC pulito, senza il «Visual C++ Redistributable» di Microsoft, la 0.58.0 e le versioni prima non partivano. Ora il runtime di Visual C++ sta dentro cedro.exe e dentro i motori della trascrizione e del riassunto: l'installatore e la versione portable funzionano ovunque, senza installare altro.
-- **Controllato prima di ogni pubblicazione.** Un controllo automatico guarda che nessun file di Cedro importi più `vcruntime140.dll`, `msvcp140.dll` e simili; un altro toglie quelle DLL da un Windows di prova e verifica che l'installatore, la finestra di Cedro, la versione portable e i motori partano lo stesso.
+- **Dove.** Nella scheda PDF c'è un sesto pulsante, «Modifica» (in Semplice: «Modifica il PDF»). Si apre una schermata intera, con le pagine e i commenti a sinistra, la pagina vera al centro e le proprietà dello strumento a destra; in alto cinque schede: Testo, Commenti, Immagini e forme, Moduli, Oscura.
+- **Testo.** Clic su un paragrafo e lo riscrivi dentro il file, senza spostare il resto; oppure aggiungi un testo nuovo dove vuoi, con carattere, dimensione, colore, allineamento, grassetto e corsivo. Se il carattere del file non ha una lettera, Cedro lo dice e scrive con un altro. C'è anche «Trova e sostituisci».
+- **Commenti.** Evidenzia (segue le parole, un pezzo per riga), sottolinea, barra, note, matita e otto timbri pronti («APPROVATO», «BOZZA», «PROTOCOLLATO»…), più un elenco di tutti i commenti, anche quelli che il file aveva già, da filtrare per pagina.
+- **Immagini e forme.** Metti un'immagine (PNG o JPEG, resta con le sue proporzioni), un rettangolo, un'ellisse, una linea o una freccia.
+- **Moduli.** Compili i campi del PDF (testo, spunta, scelta, elenco) e ne crei di nuovi: sono campi veri, che si compilano anche con altri programmi.
+- **Oscura sul serio.** Segni le aree, oppure cerchi una parola, un codice fiscale, un IBAN, un'e-mail o un telefono: finché non premi «Applica» le aree sono solo tratteggiate; dopo, il testo sparisce dal file (non è coperto da un riquadro nero) e lo stesso vale per i pezzi di immagine sotto.
+- **Mai sopra l'originale.** «Salva il PDF» scrive una copia accanto al file, «nome-modificato.pdf» (le volte dopo «-modificato-2» e così via); il PDF di partenza non si tocca. Le opzioni di salvataggio permettono di appiattire commenti e campi, di togliere autore, programma e dati nascosti, di scegliere la cartella e cosa fare se il file esiste già.
+- **Come in ogni programma.** Annulla e ripeti, ricerca nel PDF, zoom, una o due pagine, miniature; se chiudi la finestra con modifiche non salvate Cedro chiede prima se salvare, buttare o restare. Tutto è tradotto nelle cinque lingue di Cedro.
