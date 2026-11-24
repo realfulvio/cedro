@@ -9,6 +9,7 @@ use std::time::Instant;
 use super::core::{inside, Act, Field, Fold, Frame, HitKind, LinkFlag, LinkMenu, Menu, Scroll, Swatch, UiState, NEW_VOICE, R};
 use super::gfx::{Fonts, GlyphCache, Painter};
 use super::model::{Activity, App, Notice, AUDIO_FORMATS, SUBTITLES, VIDEO_FORMATS};
+use super::pdfedact::EdField;
 use super::theme::ThemeId;
 use super::views;
 use crate::conversioni::{self, Control, CATEGORIES, EXISTS_CHOICES};
@@ -72,6 +73,8 @@ pub enum Key {
     Paste,
     Copy,
     SelectAll,
+    Undo,
+    Redo,
 }
 
 pub struct Screen {
@@ -166,6 +169,13 @@ impl Screen {
         }
         self.want_preview();
         self.want_page_thumbs();
+        if self.app.ed.is_some() {
+            self.ed_sync();
+        }
+        // Pagina avanti/indietro, miniature, riga dei commenti: `PdfEd::goto` lascia dove scorrere, qui si va.
+        if let Some(to) = self.app.ed.as_ref().and_then(|e| e.scroll_to.take()) {
+            self.ui.scroll.insert(Scroll::EdPage, to);
+        }
         if let Some(to) = self.app.review_follow() {
             self.ui.scroll.insert(Scroll::Review, to);
         }
@@ -192,6 +202,8 @@ impl Screen {
         };
         views::draw(&mut f, &self.app, self.surface);
         views::overlays(&mut f, &self.app);
+        // L'editor dei PDF chiede al suo thread le pagine, le miniature e il testo che ha visto servire.
+        self.app.ed_flush();
         // Il menu a comparsa appare in dissolvenza: si tiene il fotogramma senza menu e lo si
         // rimette sopra, sempre più trasparente (solo nei pochi fotogrammi dell'apertura).
         let menu_key = Act::Nothing;
@@ -325,7 +337,7 @@ impl Screen {
                 app.want_stamp_preview(i);
             }
             super::model::PdfMode::Compress => app.want_estimates(),
-            super::model::PdfMode::Convert => {}
+            super::model::PdfMode::Convert | super::model::PdfMode::Edit => {}
         }
     }
 
@@ -388,15 +400,27 @@ impl Screen {
                 self.log_drag(r, y);
                 return true;
             }
+            if let Act::Ed(a) = &act {
+                self.ed_drag(a, r, x, y, super::pdfedact::Phase::Move);
+                return true;
+            }
             self.slide(&act, r, x);
             return true;
         }
         let hover = self.hit_at(x, y).map(|h| h.act.clone()).filter(|a| *a != Act::Nothing);
+        let mut moved = false;
+        if self.app.ed.is_some() {
+            let over = match &hover {
+                Some(Act::Ed(super::pdfedact::EdAct::Page(i))) => Some(*i),
+                _ => None,
+            };
+            moved = self.ed_hover(over, x, y);
+        }
         if hover != self.ui.hover {
             self.ui.hover = hover;
             return true;
         }
-        false
+        moved
     }
 
     pub fn pointer_leave(&mut self) -> bool {
@@ -429,6 +453,8 @@ impl Screen {
                 self.box_drag(r, x, y);
             } else if act == Act::LogScroll {
                 self.log_drag(r, y);
+            } else if let Act::Ed(a) = &act {
+                self.ed_drag(a, r, x, y, super::pdfedact::Phase::Down);
             } else {
                 self.slide(&act, r, x);
             }
@@ -436,7 +462,12 @@ impl Screen {
     }
 
     pub fn pointer_up(&mut self, x: f32, y: f32, plat: &mut dyn Platform) {
-        if let Some((act, _)) = self.ui.drag.take() {
+        if let Some((act, drag_r)) = self.ui.drag.take() {
+            if let Act::Ed(a) = &act {
+                self.ed_drag(a, drag_r, x, y, super::pdfedact::Phase::Up);
+                self.ui.pressed = None;
+                return;
+            }
             if let Act::RowDrag(i, row_h) = act {
                 // Lasciata la riga: va al posto più vicino a dove è arrivata (un clic fermo non sposta niente).
                 let rows = ((self.ui.drag_y.1 - self.ui.drag_y.0) / row_h.max(1) as f32).round() as i32;
@@ -552,6 +583,10 @@ impl Screen {
 
     pub fn drop_files(&mut self, paths: Vec<PathBuf>) {
         self.ui.dropping = false;
+        if self.app.ed.is_some() {
+            self.app.notice = Some(Notice { text: "Finisci qui o torna alla scheda PDF prima di aggiungere altri file.".into(), error: false });
+            return;
+        }
         if self.surface == Surface::Viewer {
             // Sul visualizzatore: il file lasciato si apre in un'altra finestra.
             for p in paths.iter().filter(|p| p.is_file()) {
@@ -594,6 +629,30 @@ impl Screen {
             }
         }
         changed
+    }
+
+    /// La finestra sta per chiudersi (X, Alt-F4). Vero se va fermata: l'editor dei PDF ha modifiche non salvate
+    /// (chiede prima: salva, butta o resta) o sta ancora salvando (si chiude appena ha finito).
+    pub fn close_guard(&mut self) -> bool {
+        self.ed_sync();
+        let Some(ed) = self.app.ed.as_mut() else { return false };
+        if ed.saving {
+            ed.leave_after_save = Some(None);
+            ed.leave_close = true;
+            return true;
+        }
+        if ed.unsaved() == 0 {
+            return false;
+        }
+        ed.leave_lab = None;
+        ed.leave = Some(None);
+        ed.leave_close = true;
+        true
+    }
+
+    /// Finito il giro dell'editor aperto dalla X della finestra: la piattaforma deve chiudere adesso.
+    pub fn take_close(&mut self) -> bool {
+        std::mem::take(&mut self.app.close_wanted)
     }
 
     /// Tema e modalità nuovi (dalle Impostazioni). Durante un lavoro si aspetta che finisca.
@@ -676,13 +735,13 @@ impl Screen {
         }
     }
 
-    fn open_menu(&mut self, items: Vec<(String, Act)>, selected: Option<usize>, anchor_act: &Act) {
+    pub(super) fn open_menu(&mut self, items: Vec<(String, Act)>, selected: Option<usize>, anchor_act: &Act) {
         let anchor = self.hits.iter().rev().find(|h| &h.act == anchor_act).map(|h| h.r).unwrap_or((0.0, 0.0, 200.0, 40.0));
         self.ui.menu = Some(Menu { anchor, items, selected, title: None, swatches: Vec::new(), voci: Vec::new(), groups: Vec::new(), plain: false });
     }
 
     /// Un menu con un titolo e un pallino colorato per voce (chi dice una frase, a chi unire una voce).
-    fn open_swatch_menu(&mut self, title: &str, items: Vec<(String, Act, Swatch)>, selected: Option<usize>, anchor_act: &Act) {
+    pub(super) fn open_swatch_menu(&mut self, title: &str, items: Vec<(String, Act, Swatch)>, selected: Option<usize>, anchor_act: &Act) {
         let anchor = self.hits.iter().rev().find(|h| &h.act == anchor_act).map(|h| h.r).unwrap_or((0.0, 0.0, 200.0, 40.0));
         let swatches = items.iter().map(|i| i.2).collect();
         let items = items.into_iter().map(|(l, a, _)| (l, a)).collect();
@@ -729,6 +788,19 @@ impl Screen {
 
     /// Esegue l'azione di un clic.
     pub fn act(&mut self, act: Act, plat: &mut dyn Platform) {
+        if self.app.ed.is_some() {
+            if let Act::Ed(a) = act {
+                self.ed_act(a, plat);
+                return;
+            }
+            if self.ed_guard(&act) {
+                return;
+            }
+        }
+        if act == Act::PdfMode(super::model::PdfMode::Edit) {
+            self.ed_start(plat);
+            return;
+        }
         let simple = self.simple;
         let app = &mut self.app;
         match act {
@@ -1326,6 +1398,7 @@ impl Screen {
             | Act::VwRevision(_)
             | Act::VwRevisionOff
             | Act::VwOriginal) => self.viewer_act(a, plat),
+            Act::Ed(a) => self.ed_act(a, plat),
         }
     }
 
@@ -1881,6 +1954,7 @@ impl Screen {
             Field::VoiceName(v) => self.app.review.as_ref().and_then(|r| r.names.get(v as usize)).cloned().unwrap_or_default(),
             Field::CasoCodice => self.app.caso_bozza.0.clone(),
             Field::CasoNota => self.app.caso_bozza.1.clone(),
+            Field::Ed(f) => self.app.ed.as_ref().map(|e| e.field_text(f)).unwrap_or_default(),
             Field::FirmaDate => self.app.firma.viewer.as_ref().map(|v| v.at_text.clone()).unwrap_or_default(),
             Field::FirmaPin => self.app.firma.sign.pin.clone(),
             Field::FirmaReason => self.app.firma.sign.s.firma_reason.clone(),
@@ -1929,6 +2003,11 @@ impl Screen {
             }
             Field::CasoCodice => self.app.caso_bozza.0 = text,
             Field::CasoNota => self.app.caso_bozza.1 = text,
+            Field::Ed(f) => {
+                if let Some(ed) = self.app.ed.as_mut() {
+                    ed.set_field_text(f, text);
+                }
+            }
             Field::FirmaDate => {
                 if let Some(v) = self.app.firma.viewer.as_mut() {
                     v.at_text = text;
@@ -1974,7 +2053,9 @@ impl Screen {
         }
         let mut chars: Vec<char> = self.field_text(field).chars().collect();
         let at = self.ui.caret.min(chars.len());
-        let ins: Vec<char> = s.chars().filter(|c| !c.is_control()).collect();
+        // Nel testo che si scrive dentro la pagina (e nei campi a più righe) l'a capo resta.
+        let lines = matches!(field, Field::Ed(EdField::Text)) || (matches!(field, Field::Ed(EdField::FieldText)) && self.app.ed.as_ref().and_then(|e| e.field.as_ref()).is_some_and(|f| f.multiline));
+        let ins: Vec<char> = s.chars().filter(|c| !c.is_control() || (lines && *c == '\n')).collect();
         let n = ins.len();
         chars.splice(at..at, ins);
         self.ui.caret = at + n;
@@ -2001,6 +2082,9 @@ impl Screen {
                 }
                 _ => {}
             }
+        }
+        if self.app.ed.is_some() && self.ed_key(key) {
+            return true;
         }
         if let Some(field) = self.ui.edit {
             if self.ui.sel_all {
@@ -2039,7 +2123,7 @@ impl Screen {
                 Key::End => self.ui.caret = chars.len(),
                 Key::Paste => {
                     if let Some(t) = plat.paste_text() {
-                        let one_line = t.replace(['\r', '\n'], " ");
+                        let one_line = if matches!(field, Field::Ed(EdField::Text)) { t.replace("\r\n", "\n").replace('\r', "\n") } else { t.replace(['\r', '\n'], " ") };
                         self.text_input(&one_line);
                     }
                     return true;

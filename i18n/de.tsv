@@ -2738,3 +2738,252 @@ Vetrini, DICOM, casi e campioni	Objektträger, DICOM, Fälle und Proben
 Opzioni del download	Download-Optionen
 in più	weitere
 Leggero	Leicht
+# Editor dei PDF (scheda PDF → Modifica)
+Immagini e forme	Bilder und Formen
+Moduli	Formulare
+Oscura	Schwärzen
+Commenti	Kommentare
+Modifica testo	Text bearbeiten
+Aggiungi testo	Text hinzufügen
+Trova e sostituisci	Suchen und ersetzen
+Evidenzia	Hervorheben
+Evidenziatore	Textmarker
+Sottolinea	Unterstreichen
+Sottolineato	Unterstrichen
+Barra	Durchstreichen
+Barrato	Durchgestrichen
+Nota	Notiz
+Matita	Stift
+Disegno a mano	Freihandzeichnung
+Timbro	Stempel
+Rettangolo	Rechteck
+Ellisse	Ellipse
+Linea	Linie
+Freccia	Pfeil
+Compila	Ausfüllen
+Campo di testo	Textfeld
+Spunta	Kontrollkästchen
+Scelta	Auswahl
+Elenco	Liste
+Oscura un'area	Bereich schwärzen
+Cerca e oscura	Suchen und schwärzen
+Dati nascosti	Versteckte Daten
+Cerca nel PDF	Im PDF suchen
+Torna alla scheda PDF	Zurück zur PDF-Karte
+Proprietà	Eigenschaften
+Clic su una cosa aggiunta per spostarla, cambiarla o toglierla.	Klicke auf etwas Hinzugefügtes, um es zu verschieben, zu ändern oder zu entfernen.
+Clic su un paragrafo e scrivi: il testo cambia dentro il file.	Klicke auf einen Absatz und schreibe: Der Text ändert sich direkt in der Datei.
+Clic sulla pagina (o trascina un riquadro) e scrivi un testo nuovo.	Klicke auf die Seite (oder ziehe einen Rahmen) und schreibe einen neuen Text.
+Cerca una parola o una frase in tutto il file e sostituiscila.	Suche ein Wort oder einen Satz in der ganzen Datei und ersetze es.
+Trascina sul testo per evidenziarlo.	Ziehe über den Text, um ihn hervorzuheben.
+Trascina sul testo per sottolinearlo.	Ziehe über den Text, um ihn zu unterstreichen.
+Trascina sul testo per barrarlo.	Ziehe über den Text, um ihn durchzustreichen.
+Clic sulla pagina e scrivi la nota: resta un fumetto giallo.	Klicke auf die Seite und schreibe die Notiz: Sie bleibt als gelbe Sprechblase.
+Disegna a mano libera sulla pagina.	Zeichne frei Hand auf der Seite.
+Scegli il timbro e mettilo sulla pagina.	Wähle den Stempel und setze ihn auf die Seite.
+Scegli un'immagine e mettila sulla pagina.	Wähle ein Bild und setze es auf die Seite.
+Trascina sulla pagina per disegnare la forma.	Ziehe auf der Seite, um die Form zu zeichnen.
+Trascina da un punto all'altro.	Ziehe von einem Punkt zum anderen.
+Clic su un campo del modulo per compilarlo.	Klicke auf ein Formularfeld, um es auszufüllen.
+Trascina sulla pagina per mettere il campo.	Ziehe auf der Seite, um das Feld zu platzieren.
+Trascina un rettangolo: testo e immagini sotto spariscono davvero.	Ziehe ein Rechteck: Text und Bilder darunter verschwinden wirklich.
+Scegli cosa cercare nel pannello: le parole trovate si segnano da sole.	Wähle im Bereich, wonach gesucht wird: Die gefundenen Wörter werden automatisch markiert.
+Quello che il file porta con sé e non si vede.	Was die Datei mit sich führt und man nicht sieht.
+APPROVATO	GENEHMIGT
+RESPINTO	ABGELEHNT
+COPIA CONFORME	BEGLAUBIGTE KOPIE
+PROTOCOLLATO	REGISTRIERT
+RISERVATO	VERTRAULICH
+URGENTE	DRINGEND
+ANNULLATO	STORNIERT
+Invio va a capo. Clic fuori dal riquadro per finire; Esc annulla.	Die Eingabetaste beginnt eine neue Zeile. Zum Beenden außerhalb des Rahmens klicken; Esc bricht ab.
+Colore	Farbe
+L'evidenziatore segue le parole: su più righe diventa un pezzo per riga, come in Word.	Der Textmarker folgt den Wörtern: Über mehrere Zeilen wird er pro Zeile ein Stück, wie in Word.
+Colore della nota	Notizfarbe
+Clic sulla pagina e scrivi. L'elenco a sinistra raccoglie tutte le note.	Klicke auf die Seite und schreibe. Die Liste links sammelt alle Notizen.
+Spessore	Stärke
+Colore della linea	Linienfarbe
+Riempimento	Füllung
+Testo aggiunto	Hinzugefügter Text
+Testo modificato	Bearbeiteter Text
+Campo compilato	Ausgefülltes Feld
+Campo nuovo	Neues Feld
+Area da oscurare	Zu schwärzender Bereich
+Commento tolto	Kommentar entfernt
+Testo del timbro	Stempeltext
+scrivi qui	hier schreiben
+Togli questa modifica	Diese Änderung entfernen
+Trascinala per spostarla. Tasto Canc per toglierla.	Zum Verschieben ziehen. Entf-Taste zum Entfernen.
+Scritto da {}	Geschrieben von {}
+Togli questo commento	Diesen Kommentar entfernen
+Era già nel file: si toglie dalla copia che salvi, l'originale resta com'è.	Es war schon in der Datei: Es wird aus der gespeicherten Kopie entfernt, das Original bleibt unverändert.
+Non hai ancora aggiunto niente. Scegli uno strumento in alto e lavora sulla pagina.	Du hast noch nichts hinzugefügt. Wähle oben ein Werkzeug und arbeite auf der Seite.
+Hai fatto 1 modifica. Clic su una cosa aggiunta per sceglierla.	Du hast 1 Änderung gemacht. Klicke auf etwas Hinzugefügtes, um es auszuwählen.
+Hai fatto {#} modifiche. Clic su una cosa aggiunta per sceglierla.	Du hast {} Änderungen gemacht. Klicke auf etwas Hinzugefügtes, um es auszuwählen.
+Carattere del testo	Textschrift
+Il carattere del documento ha tutte le lettere che servono.	Die Schrift des Dokuments enthält alle benötigten Buchstaben.
+Nel carattere del file mancano: {}. Quelle le scrivo con un altro carattere.	In der Schrift der Datei fehlen: {}. Diese schreibe ich mit einer anderen Schrift.
+Clic su un paragrafo della pagina: si scrive lì, il resto non si muove. Invio va a capo, clic fuori per finire; Esc annulla.	Klicke auf einen Absatz der Seite: Du schreibst direkt dort, der Rest bewegt sich nicht. Die Eingabetaste beginnt eine neue Zeile, zum Beenden außerhalb klicken; Esc bricht ab.
+Se il paragrafo è tratteggiato di giallo il suo carattere non si può riscrivere: lo cancelli con «Oscura» e lo rifai con «Aggiungi testo».	Ist der Absatz gelb gestrichelt, lässt sich seine Schrift nicht neu schreiben: Lösche ihn mit „Schwärzen“ und schreibe ihn mit „Text hinzufügen“ neu.
+Colore del testo	Textfarbe
+Quello del file	Die der Datei
+Cerca	Suchen
+cerca	suchen
+una parola, per esempio «importo»	ein Wort, zum Beispiel „Betrag“
+Sostituisci con	Ersetzen durch
+il testo nuovo	der neue Text
+Cerco…	Suche läuft…
+Sostituisci tutte	Alle ersetzen
+Sostituisci tutte ({#})	Alle ersetzen ({})
+Cerco in tutte le pagine…	Alle Seiten werden durchsucht…
+Vale per tutte le pagine. Ogni parola sostituita si può annullare.	Gilt für alle Seiten. Jedes ersetzte Wort lässt sich rückgängig machen.
+Non ho trovato niente.	Ich habe nichts gefunden.
+1 trovata	1 Treffer
+{#} trovate	{} Treffer
+pag. {#}	S. {}
+{} · pag. {#}	{} · S. {}
+…e altre {#}.	…und {} weitere.
+Quale timbro	Welcher Stempel
+Oppure scrivi il testo	Oder Text eingeben
+per esempio «PAGATO»	zum Beispiel „BEZAHLT“
+Clic sulla pagina per metterlo grande com'è, oppure trascina per scegliere la misura.	Klicke auf die Seite, um es in normaler Größe zu setzen, oder ziehe, um die Größe zu wählen.
+Quale immagine	Welches Bild
+Immagine pronta	Bild bereit
+{#} × {#} pixel. Clic sulla pagina per metterla, o trascina per scegliere dove.	{} × {} Pixel. Klicke auf die Seite, um es zu setzen, oder ziehe, um die Stelle zu wählen.
+Nessuna immagine scelta	Kein Bild gewählt
+Scegli un PNG o un JPEG: gli altri formati diventano PNG da soli.	Wähle ein PNG oder JPEG: Andere Formate werden automatisch zu PNG.
+Scegli un'altra immagine…	Anderes Bild wählen…
+Scegli dal PC…	Vom PC auswählen…
+L'immagine resta com'è, senza stirarsi: si ridimensiona dopo, tenendo le proporzioni.	Das Bild bleibt, wie es ist, ohne verzerrt zu werden: Die Größe änderst du danach unter Beibehaltung der Proportionen.
+Questo PDF non ha campi da compilare. Nella scheda «Moduli» puoi crearne di nuovi: casella di testo, spunta, scelta, elenco.	Dieses PDF hat keine Felder zum Ausfüllen. In der Karte „Formulare“ kannst du neue anlegen: Textfeld, Kontrollkästchen, Auswahl, Liste.
+Campi del modulo	Formularfelder
+{#} di {#} compilati	{} von {} ausgefüllt
+fatto	fertig
+vuoto	leer
+Prossimo vuoto	Nächstes leeres
+Svuota tutti	Alle leeren
+Clic su un campo della pagina per compilarlo. Sono campi veri del PDF: si compilano anche con altri programmi.	Klicke auf ein Feld der Seite, um es auszufüllen. Es sind echte PDF-Felder: Sie lassen sich auch mit anderen Programmen ausfüllen.
+Qui si mette il riquadro della firma. Firmare è un'attività a parte («Firma digitale»): il file salvato ci arriva già pronto.	Hier kommt das Signaturfeld hin. Das Signieren ist eine eigene Aufgabe („Digitale Signatur“): Die gespeicherte Datei kommt dort schon fertig an.
+Trascina sulla pagina per scegliere dove sta e quanto è grande; un clic solo lo mette della misura normale.	Ziehe auf der Seite, um Platz und Größe zu wählen; ein einzelner Klick setzt es in Normalgröße.
+Sono campi veri del PDF (AcroForm): chi apre il file li compila anche con altri programmi. Il nome si dà da solo: «Testo1», «Spunta1»…	Es sind echte PDF-Felder (AcroForm): Wer die Datei öffnet, kann sie auch mit anderen Programmen ausfüllen. Der Name wird automatisch vergeben: „Testo1“, „Spunta1“…
+Campi che hai messo	Felder, die du platziert hast
+casella	Textfeld
+spunta	Kontrollkästchen
+scelta	Auswahl
+elenco	Liste
+firma	Signatur
+1 area da oscurare	1 Bereich zu schwärzen
+{#} aree da oscurare	{} Bereiche zu schwärzen
+1 area oscurata	1 Bereich geschwärzt
+{#} aree oscurate	{} Bereiche geschwärzt
+Nessuna area scelta	Kein Bereich gewählt
+Finché non premi «Applica» il testo c'è ancora: le aree sono tratteggiate sulla pagina.	Bis du „Anwenden“ drückst, ist der Text noch da: Die Bereiche sind auf der Seite gestrichelt.
+Applica l'oscuramento	Schwärzung anwenden
+Applica l'oscuramento ({#})	Schwärzung anwenden ({})
+Togli le aree segnate	Markierte Bereiche entfernen
+Cancella davvero: toglie dal file il testo e le immagini sotto il riquadro, così non si recuperano né copiando né cercando.	Löscht wirklich: Entfernt Text und Bilder unter dem Rahmen aus der Datei, sodass sie weder durch Kopieren noch durch Suchen wiederherstellbar sind.
+Cosa cerco	Wonach suchen
+cerco…	suche…
+nessuno	keine
+{#} segnati	{} markiert
+Codici fiscali	Steuernummern
+Indirizzi e-mail	E-Mail-Adressen
+Telefoni	Telefonnummern
+Oppure una parola	Oder ein Wort
+per esempio «Rossi»	zum Beispiel „Müller“
+Segna	Markieren
+Non l'ho trovata.	Nicht gefunden.
+Segnata 1 area.	1 Bereich markiert.
+Segnate {#} aree.	{} Bereiche markiert.
+Le parole trovate si segnano da sole sulla pagina. Controlla, poi applica: dopo non si torna indietro nel file salvato.	Die gefundenen Wörter werden auf der Seite automatisch markiert. Prüfe sie und wende die Schwärzung an: Danach gibt es in der gespeicherten Datei kein Zurück.
+Cosa porta con sé questo file	Was diese Datei mit sich führt
+Letto dal PDF, prima di salvare.	Aus dem PDF gelesen, vor dem Speichern.
+presenti	vorhanden
+Autore	Autor
+Titolo	Titel
+Creato con	Erstellt mit
+Programma PDF	PDF-Programm
+Dati XMP	XMP-Daten
+Allegati	Anhänge
+Script	Skripte
+Toglili quando salvo	Beim Speichern entfernen
+autore, programma e dati nascosti	Autor, Programm und versteckte Daten
+PDF salvato	PDF gespeichert
+Salvato come {}.	Gespeichert als {}.
+Salvato come {}: {}.	Gespeichert als {}: {}.
+~caratteri tolti dal testo	Zeichen aus dem Text entfernt
+~immagini oscurate	Bilder geschwärzt
+~commenti o campi tolti	Kommentare oder Felder entfernt
+Apri il PDF	PDF öffnen
+Continua a modificare	Weiter bearbeiten
+Opzioni di salvataggio	Speicheroptionen
+Appiattisci commenti e campi	Kommentare und Felder reduzieren
+diventano parte della pagina	werden Teil der Seite
+programma, XMP, allegati	Programm, XMP, Anhänge
+1 area è solo segnata: il testo sotto resta leggibile finché non applichi l'oscuramento.	1 Bereich ist nur markiert: Der Text darunter bleibt lesbar, bis du die Schwärzung anwendest.
+{#} aree sono solo segnate: il testo sotto resta leggibile finché non applichi l'oscuramento.	{} Bereiche sind nur markiert: Der Text darunter bleibt lesbar, bis du die Schwärzung anwendest.
+Salvo il PDF…	PDF wird gespeichert…
+Salva il PDF	PDF speichern
+Salva il PDF ({#})	PDF speichern ({})
+Ci sono modifiche non salvate	Es gibt nicht gespeicherte Änderungen
+C'è 1 modifica non salvata nel file. La salvo in «{}» prima di uscire? L'originale non si tocca.	Die Datei enthält 1 nicht gespeicherte Änderung. Soll ich sie vor dem Verlassen in „{}“ speichern? Das Original wird nicht angetastet.
+Ci sono {#} modifiche non salvate nel file. Le salvo in «{}» prima di uscire? L'originale non si tocca.	Die Datei enthält {} nicht gespeicherte Änderungen. Soll ich sie vor dem Verlassen in „{}“ speichern? Das Original wird nicht angetastet.
+Resta qui	Hier bleiben
+Esci senza salvare	Ohne Speichern verlassen
+Salva ed esci	Speichern und verlassen
+Nessun commento su questa pagina.	Keine Kommentare auf dieser Seite.
+Nessun commento. Evidenzia, scrivi una nota o metti un timbro dalla scheda «Commenti».	Keine Kommentare. Hebe hervor, schreibe eine Notiz oder setze einen Stempel über die Karte „Kommentare“.
+Apro il file…	Datei wird geöffnet…
+Scrivi la nota…	Notiz schreiben…
+nessuna modifica	keine Änderungen
+1 modifica non salvata	1 nicht gespeicherte Änderung
+{#} modifiche non salvate	{} nicht gespeicherte Änderungen
+Scrivi la nota. Invio va a capo, clic fuori per finire, Esc per annullare.	Schreibe die Notiz. Die Eingabetaste beginnt eine neue Zeile, zum Beenden außerhalb klicken, Esc zum Abbrechen.
+Stai scrivendo dentro il file. Invio va a capo, clic fuori per finire, Esc per annullare.	Du schreibst direkt in der Datei. Die Eingabetaste beginnt eine neue Zeile, zum Beenden außerhalb klicken, Esc zum Abbrechen.
+Scrivi nel campo. Invio o clic fuori per finire, Esc per annullare.	Schreibe in das Feld. Zum Beenden Eingabetaste oder Klick außerhalb, Esc zum Abbrechen.
+Oscurato: niente di leggibile restava sotto le aree.	Geschwärzt: Unter den Bereichen war nichts Lesbares mehr.
+1 parola cancellata dal file: non si recupera né copiando né cercando.	1 Wort aus der Datei gelöscht: Es lässt sich weder durch Kopieren noch durch Suchen wiederherstellen.
+{#} parole cancellate dal file: non si recuperano né copiando né cercando.	{} Wörter aus der Datei gelöscht: Sie lassen sich weder durch Kopieren noch durch Suchen wiederherstellen.
+1 immagine oscurata dal file.	1 Bild aus der Datei geschwärzt.
+{#} immagini oscurate dal file.	{} Bilder aus der Datei geschwärzt.
+{} e {} tolte dal file.	{1} und {2} aus der Datei entfernt.
+1 parola	1 Wort
+{#} parole	{} Wörter
+Aspetta che finisca il lavoro in corso.	Warte, bis die laufende Arbeit beendet ist.
+Finisci qui o torna alla scheda PDF prima di aggiungere altri file.	Beende hier oder gehe zur PDF-Karte zurück, bevor du weitere Dateien hinzufügst.
+Non riesco a fare questa modifica: {}	Diese Änderung ist nicht möglich: {}
+Non trovo più il paragrafo da modificare in questa pagina.	Ich finde den zu bearbeitenden Absatz auf dieser Seite nicht mehr.
+Sostituite {#} occorrenze.	{} Vorkommen ersetzt.
+Non ho trovato niente da sostituire.	Ich habe nichts zum Ersetzen gefunden.
+Non riesco a leggere l'immagine.	Ich kann das Bild nicht lesen.
+L'immagine non si apre: scegli un PNG o un JPEG.	Das Bild lässt sich nicht öffnen: Wähle ein PNG oder JPEG.
+Questo paragrafo non si può riscrivere: il suo carattere non dice che lettera è ogni segno.	Dieser Absatz lässt sich nicht neu schreiben: Seine Schrift verrät nicht, welcher Buchstabe zu welchem Zeichen gehört.
+Hai compilato tutti i campi.	Du hast alle Felder ausgefüllt.
+Scegli un PDF da modificare.	Wähle ein PDF zum Bearbeiten.
+Questa pagina è una scansione: il testo si cerca e si evidenzia, ma non si riscrive.	Diese Seite ist ein Scan: Der Text lässt sich suchen und hervorheben, aber nicht neu schreiben.
+Il testo girato non si modifica ancora: si può cancellare con «Oscura».	Gedrehter Text lässt sich noch nicht bearbeiten: Er kann mit „Schwärzen“ gelöscht werden.
+Il carattere di questo testo non dice che lettera è ogni segno: non lo posso riscrivere senza rovinarlo.	Die Schrift dieses Textes verrät nicht, welcher Buchstabe zu welchem Zeichen gehört: Ich kann ihn nicht neu schreiben, ohne ihn zu verderben.
+Questo campo è di sola lettura.	Dieses Feld ist schreibgeschützt.
+Il campo firma si firma poi in «Firma digitale».	Das Signaturfeld wird anschließend unter „Digitale Signatur“ signiert.
+Trascina sopra il testo da segnare.	Ziehe über den zu markierenden Text.
+Scegli prima l'immagine con il pulsante «Immagine».	Wähle zuerst das Bild mit der Schaltfläche „Bild“.
+{} esiste già: non l'ho salvato	{} existiert bereits: nicht gespeichert
+non riesco a scrivere il file: {}	ich kann die Datei nicht schreiben: {}
+troppi file con lo stesso nome	zu viele Dateien mit demselben Namen
+nessun file aperto	keine Datei geöffnet
+finestra chiusa	Fenster geschlossen
+Allineamento	Ausrichtung
+Sinistra	Links
+Centro	Zentriert
+Destra	Rechts
+Grassetto	Fett
+Corsivo	Kursiv
+Maiuscole e minuscole	Groß-/Kleinschreibung
+«Rossi» non trova «rossi»	„Müller“ findet nicht „müller“
+Solo parole intere	Nur ganze Wörter
+«casa» non trova «casale»	„Haus“ findet nicht „Hausarzt“
+Da oscurare	Zu schwärzen
+Unisci, dividi, riordina, comprimi e modifica i PDF	PDFs zusammenfügen, teilen, neu anordnen, komprimieren und bearbeiten
+Nella scheda PDF ci sono cinque strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.	Der Reiter PDF hat neben der Konvertierung fünf Werkzeuge. Die Originale werden nie angetastet: Das Ergebnis ist immer eine neue Kopie.
+Scrivi, evidenzia, compila	Schreiben, markieren, ausfüllen
+Anche oscura davvero il testo: esce «…-modificato.pdf»	Schwärzt Text auch wirklich: Ergebnis «…-modificato.pdf»

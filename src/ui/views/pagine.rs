@@ -20,6 +20,8 @@ pub const PAGES: &str = "M4 3h6v8H4z M14 3h6v8h-6z M4 13h6v8H4z M14 13h6v8h-6z";
 pub const PAGES_FILL: &str = "M14 13h6v8h-6z";
 pub const SHRINK: &str = "M5 9.5h14v5H5z M12 2v5 M9.5 4.5 12 7l2.5-2.5 M12 22v-5 M9.5 19.5 12 17l2.5 2.5";
 pub const SHRINK_FILL: &str = "M5 9.5h14v5H5z";
+pub const EDIT: &str = "M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3zM14 7l3 3";
+pub const EDIT_FILL: &str = "M5 17L16.5 5.5l3 3L8 20H5z";
 /// Le forbici della striscia di «Dividi» (tra una pagina e l'altra).
 pub const SCISSORS: &str = "M4 6a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0zM4 18a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0zM8.2 7.6 20 18M8.2 16.4 20 6";
 pub const GRIP: &str = "M9 6v.1M15 6v.1M9 12v.1M15 12v.1M9 18v.1M15 18v.1";
@@ -50,17 +52,19 @@ pub fn go_icon(app: &App) -> &'static str {
         PdfMode::Split => SPLIT,
         PdfMode::Pages => PAGES,
         PdfMode::Compress => SHRINK,
+        PdfMode::Edit => EDIT,
         PdfMode::Convert => ic::CONVERT,
     }
 }
 
 /// Icona (tratto e parte piena), colore e nome di ogni attività del PDF, nell'ordine dei pulsanti.
-pub const MODES: [(PdfMode, &str, &str, Rgb, &str); 5] = [
+pub const MODES: [(PdfMode, &str, &str, Rgb, &str); 6] = [
     (PdfMode::Convert, CONVERT, CONVERT_FILL, (0x25, 0x63, 0xB8), "Converti"),
     (PdfMode::Merge, MERGE, MERGE_FILL, (0x1E, 0x8A, 0x55), "Unisci"),
     (PdfMode::Split, SPLIT, SPLIT_FILL, (0xD4, 0x57, 0x0E), "Dividi"),
     (PdfMode::Pages, PAGES, PAGES_FILL, (0x66, 0x3F, 0xC0), "Pagine"),
     (PdfMode::Compress, SHRINK, SHRINK_FILL, (0x0E, 0x7C, 0x86), "Comprimi"),
+    (PdfMode::Edit, EDIT, EDIT_FILL, (0xA8, 0x69, 0x0A), "Modifica"),
 ];
 
 /// Il colore del file `n` della coda (il segno sulle sue pagine nel file unito).
@@ -118,7 +122,7 @@ pub fn paper(f: &mut Frame, app: &App, path: &Path, page: usize, r: R, mark: Opt
     }
 }
 
-/// I cinque pulsanti grandi, tre sopra e due sotto: Converti, Unisci, Dividi, Pagine, Comprimi.
+/// I sei pulsanti grandi, tre sopra e tre sotto: Converti, Unisci, Dividi, Pagine, Comprimi, Modifica.
 /// Ognuno ha la sua piastrella colorata; quello scelto prende il colore della sua attività.
 /// `h` è l'altezza di riferimento di un pulsante; restituisce l'altezza usata.
 pub fn modes(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, h: f32) -> f32 {
@@ -163,6 +167,12 @@ pub fn modes(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, h: f32) -> f32 {
             mix(c, (0, 0, 0), 0.15)
         };
         f.text_c(label, (r.0, top + ts + 3.0, bw, lh), 12.0, if on { SEMI } else { SANS }, tc);
+        if m == PdfMode::Edit {
+            // «NUOVO» sul bordo in alto a destra.
+            let (bw2, bh2) = (f.measure("NUOVO", 9.5, BOLD) + 12.0, 15.0);
+            f.p.rrect(r.0 + r.2 - bw2 - 4.0, r.1 - 6.0, bw2, bh2, 7.5, Some((0xE8, 0xA3, 0x1C)), Some((pal.surface, 1.5)));
+            f.p.text("NUOVO", r.0 + r.2 - bw2 - 4.0, r.1 - 6.0, bw2, bh2, 9.5, BOLD, (0x2A, 0x1A, 0x00), Align::Center);
+        }
         f.focus_ring(r, 8.0, &act);
         f.hit(r, act);
     }
@@ -360,7 +370,7 @@ pub fn drop_line(f: &mut Frame, n: usize, i: usize, rows: usize, top: f32, rh: f
 pub fn panel_extras(f: &mut Frame, app: &App, x: f32, y: f32, w: f32, st: OptStyle) -> f32 {
     let pal = f.pal;
     match app.pdf_mode() {
-        PdfMode::Convert => 0.0,
+        PdfMode::Convert | PdfMode::Edit => 0.0,
         PdfMode::Merge => {
             let targets = app.targets();
             let vis = app.visible();
@@ -470,7 +480,7 @@ pub fn go_label(app: &App) -> Option<String> {
     let targets = app.targets();
     let n = targets.len();
     match app.pdf_mode() {
-        PdfMode::Convert => None,
+        PdfMode::Convert | PdfMode::Edit => None,
         PdfMode::Merge => Some(if n < 2 { "Unisci".into() } else { format!("Unisci {n} PDF") }),
         PdfMode::Compress if app.simple_view => Some("Riduci il peso".into()),
         PdfMode::Compress => Some(if n == 0 { "Comprimi".into() } else { format!("Comprimi {n} PDF") }),

@@ -15,6 +15,9 @@ mod guidato;
 mod labs;
 mod onda;
 mod pagine;
+mod pdfeditor;
+mod pdfedpage;
+mod pdfedprops;
 mod revisione;
 mod riassunto;
 
@@ -57,6 +60,11 @@ pub fn min_size(theme: ThemeId, surface: Surface) -> (f32, f32) {
 pub fn draw(f: &mut Frame, app: &App, surface: Surface) {
     if surface == Surface::Viewer {
         draw_viewer(f, app);
+        return;
+    }
+    // L'editor dei PDF prende tutta la finestra.
+    if surface == Surface::Main && app.ed.is_some() {
+        pdfeditor::draw(f, app);
         return;
     }
     if app.review.is_some() {

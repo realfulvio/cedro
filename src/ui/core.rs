@@ -60,6 +60,8 @@ pub enum Field {
     /// Cedro 4 Labs, finestrella del caso: il codice e la nota.
     CasoCodice,
     CasoNota,
+    /// L'editor dei PDF: i campi in cui si scrive.
+    Ed(super::pdfedact::EdField),
 }
 
 /// Le parti che si aprono e si chiudono («Altre opzioni»…).
@@ -97,6 +99,13 @@ pub enum Scroll {
     FirmaSign,
     /// Cedro 4 Labs: l'elenco dei lavori di oggi.
     Lavori,
+    /// L'editor dei PDF: le pagine, le miniature, i commenti e il pannello delle proprietà.
+    EdPage,
+    /// Lo scorrimento in orizzontale della pagina ingrandita.
+    EdPageX,
+    EdThumbs,
+    EdComments,
+    EdProps,
 }
 
 /// Cosa fa un clic.
@@ -355,6 +364,8 @@ pub enum Act {
     VwRevisionOff,
     /// Firma staccata: scegli il file originale.
     VwOriginal,
+    /// L'editor dei PDF.
+    Ed(super::pdfedact::EdAct),
     /// Solo per bloccare i clic sotto un riquadro (per esempio dentro un menu aperto).
     Nothing,
 }

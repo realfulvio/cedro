@@ -2738,3 +2738,252 @@ Vetrini, DICOM, casi e campioni	Lames, DICOM, cas et échantillons
 Opzioni del download	Options de téléchargement
 in più	de plus
 Leggero	Léger
+# Editor dei PDF (scheda PDF → Modifica)
+Immagini e forme	Images et formes
+Moduli	Formulaires
+Oscura	Caviarder
+Commenti	Commentaires
+Modifica testo	Modifier le texte
+Aggiungi testo	Ajouter du texte
+Trova e sostituisci	Rechercher et remplacer
+Evidenzia	Surligner
+Evidenziatore	Surligneur
+Sottolinea	Souligner
+Sottolineato	Souligné
+Barra	Barrer
+Barrato	Barré
+Nota	Note
+Matita	Crayon
+Disegno a mano	Dessin à main levée
+Timbro	Tampon
+Rettangolo	Rectangle
+Ellisse	Ellipse
+Linea	Ligne
+Freccia	Flèche
+Compila	Remplir
+Campo di testo	Champ de texte
+Spunta	Case à cocher
+Scelta	Choix
+Elenco	Liste
+Oscura un'area	Caviarder une zone
+Cerca e oscura	Rechercher et caviarder
+Dati nascosti	Données masquées
+Cerca nel PDF	Rechercher dans le PDF
+Torna alla scheda PDF	Retour à l'onglet PDF
+Proprietà	Propriétés
+Clic su una cosa aggiunta per spostarla, cambiarla o toglierla.	Cliquez sur un élément ajouté pour le déplacer, le modifier ou le retirer.
+Clic su un paragrafo e scrivi: il testo cambia dentro il file.	Cliquez sur un paragraphe et écrivez : le texte change dans le fichier.
+Clic sulla pagina (o trascina un riquadro) e scrivi un testo nuovo.	Cliquez sur la page (ou tracez un cadre) et écrivez un nouveau texte.
+Cerca una parola o una frase in tutto il file e sostituiscila.	Recherchez un mot ou une phrase dans tout le fichier et remplacez-le.
+Trascina sul testo per evidenziarlo.	Faites glisser sur le texte pour le surligner.
+Trascina sul testo per sottolinearlo.	Faites glisser sur le texte pour le souligner.
+Trascina sul testo per barrarlo.	Faites glisser sur le texte pour le barrer.
+Clic sulla pagina e scrivi la nota: resta un fumetto giallo.	Cliquez sur la page et écrivez la note : elle reste une bulle jaune.
+Disegna a mano libera sulla pagina.	Dessinez à main levée sur la page.
+Scegli il timbro e mettilo sulla pagina.	Choisissez le tampon et placez-le sur la page.
+Scegli un'immagine e mettila sulla pagina.	Choisissez une image et placez-la sur la page.
+Trascina sulla pagina per disegnare la forma.	Faites glisser sur la page pour dessiner la forme.
+Trascina da un punto all'altro.	Faites glisser d'un point à l'autre.
+Clic su un campo del modulo per compilarlo.	Cliquez sur un champ du formulaire pour le remplir.
+Trascina sulla pagina per mettere il campo.	Faites glisser sur la page pour placer le champ.
+Trascina un rettangolo: testo e immagini sotto spariscono davvero.	Tracez un rectangle : le texte et les images en dessous disparaissent vraiment.
+Scegli cosa cercare nel pannello: le parole trovate si segnano da sole.	Choisissez dans le panneau ce qu'il faut chercher : les mots trouvés se marquent tout seuls.
+Quello che il file porta con sé e non si vede.	Ce que le fichier contient sans que cela se voie.
+APPROVATO	APPROUVÉ
+RESPINTO	REFUSÉ
+COPIA CONFORME	COPIE CONFORME
+PROTOCOLLATO	ENREGISTRÉ
+RISERVATO	CONFIDENTIEL
+URGENTE	URGENT
+ANNULLATO	ANNULÉ
+Invio va a capo. Clic fuori dal riquadro per finire; Esc annulla.	Entrée passe à la ligne. Cliquez en dehors du cadre pour terminer ; Échap annule.
+Colore	Couleur
+L'evidenziatore segue le parole: su più righe diventa un pezzo per riga, come in Word.	Le surligneur suit les mots : sur plusieurs lignes il devient un morceau par ligne, comme dans Word.
+Colore della nota	Couleur de la note
+Clic sulla pagina e scrivi. L'elenco a sinistra raccoglie tutte le note.	Cliquez sur la page et écrivez. La liste à gauche rassemble toutes les notes.
+Spessore	Épaisseur
+Colore della linea	Couleur du trait
+Riempimento	Remplissage
+Testo aggiunto	Texte ajouté
+Testo modificato	Texte modifié
+Campo compilato	Champ rempli
+Campo nuovo	Nouveau champ
+Area da oscurare	Zone à caviarder
+Commento tolto	Commentaire supprimé
+Testo del timbro	Texte du tampon
+scrivi qui	écrivez ici
+Togli questa modifica	Retirer cette modification
+Trascinala per spostarla. Tasto Canc per toglierla.	Faites-la glisser pour la déplacer. Touche Suppr pour la retirer.
+Scritto da {}	Écrit par {}
+Togli questo commento	Retirer ce commentaire
+Era già nel file: si toglie dalla copia che salvi, l'originale resta com'è.	Il était déjà dans le fichier : il est retiré de la copie enregistrée, l'original reste tel quel.
+Non hai ancora aggiunto niente. Scegli uno strumento in alto e lavora sulla pagina.	Vous n'avez encore rien ajouté. Choisissez un outil en haut et travaillez sur la page.
+Hai fatto 1 modifica. Clic su una cosa aggiunta per sceglierla.	Vous avez fait 1 modification. Cliquez sur un élément ajouté pour le sélectionner.
+Hai fatto {#} modifiche. Clic su una cosa aggiunta per sceglierla.	Vous avez fait {} modifications. Cliquez sur un élément ajouté pour le sélectionner.
+Carattere del testo	Police du texte
+Il carattere del documento ha tutte le lettere che servono.	La police du document contient toutes les lettres nécessaires.
+Nel carattere del file mancano: {}. Quelle le scrivo con un altro carattere.	Il manque dans la police du fichier : {}. Je les écris avec une autre police.
+Clic su un paragrafo della pagina: si scrive lì, il resto non si muove. Invio va a capo, clic fuori per finire; Esc annulla.	Cliquez sur un paragraphe de la page : on écrit là, le reste ne bouge pas. Entrée passe à la ligne, cliquez en dehors pour terminer ; Échap annule.
+Se il paragrafo è tratteggiato di giallo il suo carattere non si può riscrivere: lo cancelli con «Oscura» e lo rifai con «Aggiungi testo».	Si le paragraphe est entouré de tirets jaunes, sa police ne peut pas être réécrite : effacez-le avec « Caviarder » et refaites-le avec « Ajouter du texte ».
+Colore del testo	Couleur du texte
+Quello del file	Celle du fichier
+Cerca	Rechercher
+cerca	rechercher
+una parola, per esempio «importo»	un mot, par exemple « montant »
+Sostituisci con	Remplacer par
+il testo nuovo	le nouveau texte
+Cerco…	Recherche…
+Sostituisci tutte	Tout remplacer
+Sostituisci tutte ({#})	Tout remplacer ({})
+Cerco in tutte le pagine…	Recherche dans toutes les pages…
+Vale per tutte le pagine. Ogni parola sostituita si può annullare.	Cela vaut pour toutes les pages. Chaque mot remplacé peut être annulé.
+Non ho trovato niente.	Je n'ai rien trouvé.
+1 trovata	1 résultat
+{#} trovate	{} résultats
+pag. {#}	p. {}
+{} · pag. {#}	{} · p. {}
+…e altre {#}.	…et {} autres.
+Quale timbro	Quel tampon
+Oppure scrivi il testo	Ou saisissez le texte
+per esempio «PAGATO»	par exemple « PAYÉ »
+Clic sulla pagina per metterlo grande com'è, oppure trascina per scegliere la misura.	Cliquez sur la page pour le placer à sa taille normale, ou faites glisser pour choisir la taille.
+Quale immagine	Quelle image
+Immagine pronta	Image prête
+{#} × {#} pixel. Clic sulla pagina per metterla, o trascina per scegliere dove.	{} × {} pixels. Cliquez sur la page pour la placer, ou faites glisser pour choisir où.
+Nessuna immagine scelta	Aucune image choisie
+Scegli un PNG o un JPEG: gli altri formati diventano PNG da soli.	Choisissez un PNG ou un JPEG : les autres formats deviennent PNG tout seuls.
+Scegli un'altra immagine…	Choisir une autre image…
+Scegli dal PC…	Choisir depuis le PC…
+L'immagine resta com'è, senza stirarsi: si ridimensiona dopo, tenendo le proporzioni.	L'image reste telle quelle, sans être étirée : on la redimensionne ensuite en gardant les proportions.
+Questo PDF non ha campi da compilare. Nella scheda «Moduli» puoi crearne di nuovi: casella di testo, spunta, scelta, elenco.	Ce PDF n'a aucun champ à remplir. Dans l'onglet « Formulaires » vous pouvez en créer de nouveaux : zone de texte, case à cocher, choix, liste.
+Campi del modulo	Champs du formulaire
+{#} di {#} compilati	{} sur {} remplis
+fatto	fait
+vuoto	vide
+Prossimo vuoto	Prochain vide
+Svuota tutti	Tout vider
+Clic su un campo della pagina per compilarlo. Sono campi veri del PDF: si compilano anche con altri programmi.	Cliquez sur un champ de la page pour le remplir. Ce sont de vrais champs PDF : ils se remplissent aussi avec d'autres programmes.
+Qui si mette il riquadro della firma. Firmare è un'attività a parte («Firma digitale»): il file salvato ci arriva già pronto.	C'est ici que se place le cadre de la signature. Signer est une activité à part (« Signature numérique ») : le fichier enregistré y arrive déjà prêt.
+Trascina sulla pagina per scegliere dove sta e quanto è grande; un clic solo lo mette della misura normale.	Faites glisser sur la page pour choisir son emplacement et sa taille ; un simple clic le place à la taille normale.
+Sono campi veri del PDF (AcroForm): chi apre il file li compila anche con altri programmi. Il nome si dà da solo: «Testo1», «Spunta1»…	Ce sont de vrais champs PDF (AcroForm) : quiconque ouvre le fichier peut aussi les remplir avec d'autres programmes. Le nom est attribué automatiquement : « Testo1 », « Spunta1 »…
+Campi che hai messo	Champs que vous avez placés
+casella	zone de texte
+spunta	case à cocher
+scelta	choix
+elenco	liste
+firma	signature
+1 area da oscurare	1 zone à caviarder
+{#} aree da oscurare	{} zones à caviarder
+1 area oscurata	1 zone caviardée
+{#} aree oscurate	{} zones caviardées
+Nessuna area scelta	Aucune zone choisie
+Finché non premi «Applica» il testo c'è ancora: le aree sono tratteggiate sulla pagina.	Tant que vous n'appuyez pas sur « Appliquer », le texte est toujours là : les zones sont en pointillés sur la page.
+Applica l'oscuramento	Appliquer le caviardage
+Applica l'oscuramento ({#})	Appliquer le caviardage ({})
+Togli le aree segnate	Retirer les zones marquées
+Cancella davvero: toglie dal file il testo e le immagini sotto il riquadro, così non si recuperano né copiando né cercando.	Efface vraiment : retire du fichier le texte et les images sous le cadre, qui ne sont donc récupérables ni en copiant ni en cherchant.
+Cosa cerco	Que chercher
+cerco…	recherche…
+nessuno	aucun
+{#} segnati	{} marqués
+Codici fiscali	Codes fiscaux
+Indirizzi e-mail	Adresses e-mail
+Telefoni	Numéros de téléphone
+Oppure una parola	Ou un mot
+per esempio «Rossi»	par exemple « Martin »
+Segna	Marquer
+Non l'ho trovata.	Je ne l'ai pas trouvée.
+Segnata 1 area.	1 zone marquée.
+Segnate {#} aree.	{} zones marquées.
+Le parole trovate si segnano da sole sulla pagina. Controlla, poi applica: dopo non si torna indietro nel file salvato.	Les mots trouvés se marquent tout seuls sur la page. Vérifiez, puis appliquez : ensuite, on ne revient plus en arrière dans le fichier enregistré.
+Cosa porta con sé questo file	Ce que contient ce fichier
+Letto dal PDF, prima di salvare.	Lu dans le PDF, avant l'enregistrement.
+presenti	présents
+Autore	Auteur
+Titolo	Titre
+Creato con	Créé avec
+Programma PDF	Logiciel PDF
+Dati XMP	Données XMP
+Allegati	Pièces jointes
+Script	Scripts
+Toglili quando salvo	Les retirer à l'enregistrement
+autore, programma e dati nascosti	auteur, logiciel et données masquées
+PDF salvato	PDF enregistré
+Salvato come {}.	Enregistré sous {}.
+Salvato come {}: {}.	Enregistré sous {} : {}.
+~caratteri tolti dal testo	caractères retirés du texte
+~immagini oscurate	images caviardées
+~commenti o campi tolti	commentaires ou champs retirés
+Apri il PDF	Ouvrir le PDF
+Continua a modificare	Continuer à modifier
+Opzioni di salvataggio	Options d'enregistrement
+Appiattisci commenti e campi	Aplatir les commentaires et les champs
+diventano parte della pagina	ils font partie de la page
+programma, XMP, allegati	logiciel, XMP, pièces jointes
+1 area è solo segnata: il testo sotto resta leggibile finché non applichi l'oscuramento.	1 zone est seulement marquée : le texte en dessous reste lisible tant que vous n'appliquez pas le caviardage.
+{#} aree sono solo segnate: il testo sotto resta leggibile finché non applichi l'oscuramento.	{} zones sont seulement marquées : le texte en dessous reste lisible tant que vous n'appliquez pas le caviardage.
+Salvo il PDF…	Enregistrement du PDF…
+Salva il PDF	Enregistrer le PDF
+Salva il PDF ({#})	Enregistrer le PDF ({})
+Ci sono modifiche non salvate	Il y a des modifications non enregistrées
+C'è 1 modifica non salvata nel file. La salvo in «{}» prima di uscire? L'originale non si tocca.	Le fichier contient 1 modification non enregistrée. L'enregistrer dans « {} » avant de quitter ? L'original n'est pas touché.
+Ci sono {#} modifiche non salvate nel file. Le salvo in «{}» prima di uscire? L'originale non si tocca.	Le fichier contient {} modifications non enregistrées. Les enregistrer dans « {} » avant de quitter ? L'original n'est pas touché.
+Resta qui	Rester ici
+Esci senza salvare	Quitter sans enregistrer
+Salva ed esci	Enregistrer et quitter
+Nessun commento su questa pagina.	Aucun commentaire sur cette page.
+Nessun commento. Evidenzia, scrivi una nota o metti un timbro dalla scheda «Commenti».	Aucun commentaire. Surlignez, écrivez une note ou placez un tampon depuis l'onglet « Commentaires ».
+Apro il file…	Ouverture du fichier…
+Scrivi la nota…	Écrivez la note…
+nessuna modifica	aucune modification
+1 modifica non salvata	1 modification non enregistrée
+{#} modifiche non salvate	{} modifications non enregistrées
+Scrivi la nota. Invio va a capo, clic fuori per finire, Esc per annullare.	Écrivez la note. Entrée passe à la ligne, cliquez en dehors pour terminer, Échap pour annuler.
+Stai scrivendo dentro il file. Invio va a capo, clic fuori per finire, Esc per annullare.	Vous écrivez dans le fichier. Entrée passe à la ligne, cliquez en dehors pour terminer, Échap pour annuler.
+Scrivi nel campo. Invio o clic fuori per finire, Esc per annullare.	Écrivez dans le champ. Entrée ou un clic en dehors pour terminer, Échap pour annuler.
+Oscurato: niente di leggibile restava sotto le aree.	Caviardé : plus rien de lisible sous les zones.
+1 parola cancellata dal file: non si recupera né copiando né cercando.	1 mot effacé du fichier : il n'est récupérable ni en copiant ni en cherchant.
+{#} parole cancellate dal file: non si recuperano né copiando né cercando.	{} mots effacés du fichier : ils ne sont récupérables ni en copiant ni en cherchant.
+1 immagine oscurata dal file.	1 image caviardée dans le fichier.
+{#} immagini oscurate dal file.	{} images caviardées dans le fichier.
+{} e {} tolte dal file.	{1} et {2} retirées du fichier.
+1 parola	1 mot
+{#} parole	{} mots
+Aspetta che finisca il lavoro in corso.	Attendez que le travail en cours se termine.
+Finisci qui o torna alla scheda PDF prima di aggiungere altri file.	Terminez ici ou revenez à l'onglet PDF avant d'ajouter d'autres fichiers.
+Non riesco a fare questa modifica: {}	Je ne peux pas faire cette modification : {}
+Non trovo più il paragrafo da modificare in questa pagina.	Je ne retrouve plus le paragraphe à modifier sur cette page.
+Sostituite {#} occorrenze.	{} occurrences remplacées.
+Non ho trovato niente da sostituire.	Je n'ai rien trouvé à remplacer.
+Non riesco a leggere l'immagine.	Je ne peux pas lire l'image.
+L'immagine non si apre: scegli un PNG o un JPEG.	L'image ne s'ouvre pas : choisissez un PNG ou un JPEG.
+Questo paragrafo non si può riscrivere: il suo carattere non dice che lettera è ogni segno.	Ce paragraphe ne peut pas être réécrit : sa police n'indique pas quelle lettre correspond à chaque signe.
+Hai compilato tutti i campi.	Vous avez rempli tous les champs.
+Scegli un PDF da modificare.	Choisissez un PDF à modifier.
+Questa pagina è una scansione: il testo si cerca e si evidenzia, ma non si riscrive.	Cette page est un scan : le texte se recherche et se surligne, mais ne se réécrit pas.
+Il testo girato non si modifica ancora: si può cancellare con «Oscura».	Le texte pivoté ne peut pas encore être modifié : on peut l'effacer avec « Caviarder ».
+Il carattere di questo testo non dice che lettera è ogni segno: non lo posso riscrivere senza rovinarlo.	La police de ce texte n'indique pas quelle lettre correspond à chaque signe : je ne peux pas le réécrire sans l'abîmer.
+Questo campo è di sola lettura.	Ce champ est en lecture seule.
+Il campo firma si firma poi in «Firma digitale».	Le champ de signature se signe ensuite dans « Signature numérique ».
+Trascina sopra il testo da segnare.	Faites glisser sur le texte à marquer.
+Scegli prima l'immagine con il pulsante «Immagine».	Choisissez d'abord l'image avec le bouton « Image ».
+{} esiste già: non l'ho salvato	{} existe déjà : je ne l'ai pas enregistré
+non riesco a scrivere il file: {}	je ne peux pas écrire le fichier : {}
+troppi file con lo stesso nome	trop de fichiers portant le même nom
+nessun file aperto	aucun fichier ouvert
+finestra chiusa	fenêtre fermée
+Allineamento	Alignement
+Sinistra	Gauche
+Centro	Centre
+Destra	Droite
+Grassetto	Gras
+Corsivo	Italique
+Maiuscole e minuscole	Respecter la casse
+«Rossi» non trova «rossi»	« Martin » ne trouve pas « martin »
+Solo parole intere	Mots entiers uniquement
+«casa» non trova «casale»	« chat » ne trouve pas « château »
+Da oscurare	À caviarder
+Unisci, dividi, riordina, comprimi e modifica i PDF	Fusionnez, divisez, réordonnez, compressez et modifiez des PDF
+Nella scheda PDF ci sono cinque strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.	L'onglet PDF a cinq outils en plus de la conversion. Les originaux ne sont jamais touchés : le résultat est toujours une nouvelle copie.
+Scrivi, evidenzia, compila	Écrivez, surlignez, remplissez
+Anche oscura davvero il testo: esce «…-modificato.pdf»	Caviarde aussi vraiment le texte : sort «…-modificato.pdf»

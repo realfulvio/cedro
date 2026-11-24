@@ -69,13 +69,14 @@ const PAGES: [Page; 8] = [
     },
     Page {
         nav: "Strumenti PDF",
-        title: "Unisci, dividi, riordina e comprimi i PDF",
-        intro: "Nella scheda PDF ci sono quattro strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.",
+        title: "Unisci, dividi, riordina, comprimi e modifica i PDF",
+        intro: "Nella scheda PDF ci sono cinque strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.",
         rows: &[
             ("Unisci", "Più PDF in uno", "Trascina per l'ordine, scegli le pagine di ogni file"),
             ("Dividi", "Un PDF in più", "Per pagine o intervalli, con le miniature"),
             ("Pagine", "Ruota, togli, copia", "Clic sulle miniature, poi i pulsanti in alto"),
             ("Comprimi", "Peso ridotto", "Stima prima; mai più pesante dell'originale"),
+            ("Modifica", "Scrivi, evidenzia, compila", "Anche oscura davvero il testo: esce «…-modificato.pdf»"),
         ],
     },
     Page {

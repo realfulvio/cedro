@@ -398,6 +398,8 @@ pub enum Event {
     Wave(PathBuf, Option<Vec<f32>>),
     /// «Riassunto AI»: cosa arriva dal motore per questo file.
     Summary(PathBuf, crate::riassunto::Progress),
+    /// L'editor dei PDF: cosa arriva dal thread di fondo (pagine disegnate, testo, ricerche, salvataggio).
+    PdEd(super::pdfedwork::Msg),
 }
 
 /// Cosa fa la scheda PDF: converte, unisce, divide, cambia le pagine o comprime.
@@ -408,6 +410,8 @@ pub enum PdfMode {
     Split,
     Pages,
     Compress,
+    /// L'editor: non è un'azione della coda, apre una schermata sua (`App::ed`).
+    Edit,
 }
 
 /// «Pagine»: le pagine di un PDF come diventeranno, nell'ordine nuovo.
@@ -449,6 +453,8 @@ pub struct Notice {
 }
 
 pub struct App {
+    /// L'editor dei PDF ha finito con le modifiche non salvate dopo la X della finestra: la piattaforma chiude.
+    pub close_wanted: bool,
     pub activity: Activity,
     /// Cedro 4 Labs: la pagina scelta nella barra di sinistra.
     pub lab: Lab,
@@ -534,6 +540,9 @@ pub struct App {
     pub(super) wake: Arc<dyn Fn() + Send + Sync>,
     loader: media::Loader,
     pdfwork: super::pdfwork::Worker,
+    /// L'editor dei PDF, quando è aperto, e il suo thread di fondo.
+    pub ed: Option<Box<super::pdfeditor::PdfEd>>,
+    pub(super) edw: super::pdfedwork::Worker,
 }
 
 /// «C:\Users\Mario\Documenti\Cedro» → «Cedro»; vuoto se non c'è un nome.
@@ -559,6 +568,7 @@ impl App {
         let (tx, rx) = channel();
         let loader = media::Loader::new(tx.clone(), wake.clone());
         let pdfwork = super::pdfwork::Worker::new(tx.clone(), wake.clone());
+        let edw = super::pdfedwork::Worker::new(tx.clone(), wake.clone());
         let mut values = Values::new();
         let st = crate::read_settings();
         if st.replace {
@@ -590,6 +600,7 @@ impl App {
             lavoro_appena: false,
             lavori_esportato: None,
             lavoro_appena_copiato: false,
+            close_wanted: false,
             notice: None,
             ask: None,
             media: HashMap::new(),
@@ -621,6 +632,8 @@ impl App {
             wake,
             loader,
             pdfwork,
+            ed: None,
+            edw,
         };
         app.action = app.default_action(false);
         app
@@ -874,7 +887,7 @@ impl App {
                     self.action = conversioni::formats(self.kind()).first().map(|s| s.id.to_string()).unwrap_or_default();
                 }
             }
-            PdfMode::Convert => {}
+            PdfMode::Convert | PdfMode::Edit => {}
         }
     }
 
@@ -2218,6 +2231,7 @@ impl App {
                 }
                 Event::Wave(path, bars) => self.review_wave(&path, bars),
                 Event::Summary(path, p) => self.summary_event(&path, p),
+                Event::PdEd(m) => self.ed_msg(m),
             }
         }
         changed
