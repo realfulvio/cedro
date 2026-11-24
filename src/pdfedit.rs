@@ -102,7 +102,7 @@ pub fn finish(bytes: &[u8], rotations: &[i32], stamp: &Stamp) -> Result<Vec<u8>,
 }
 
 /// La cornice di una pagina come la si vede: (x0, y0, larghezza, altezza) e rotazione in gradi.
-fn page_frame(doc: &Document, id: ObjectId) -> ((f32, f32, f32, f32), i32) {
+pub(crate) fn page_frame(doc: &Document, id: ObjectId) -> ((f32, f32, f32, f32), i32) {
     let Ok(page) = doc.get_dictionary(id) else { return ((0.0, 0.0, 595.0, 842.0), 0) };
     let lookup = |key: &[u8]| -> Option<Object> {
         if let Ok(v) = page.get(key) {
@@ -137,7 +137,7 @@ fn page_frame(doc: &Document, id: ObjectId) -> ((f32, f32, f32, f32), i32) {
 }
 
 /// La matrice che porta lo spazio della pagina come la si vede (origine in basso a sinistra) in quello del PDF.
-fn display_matrix(r: (f32, f32, f32, f32), rot: i32) -> ([f32; 6], f32, f32) {
+pub(crate) fn display_matrix(r: (f32, f32, f32, f32), rot: i32) -> ([f32; 6], f32, f32) {
     let (x0, y0, w, h) = r;
     match rot {
         90 => ([0.0, 1.0, -1.0, 0.0, x0 + w, y0], h, w),
@@ -193,7 +193,7 @@ pub fn text_width(text: &str, bold: bool) -> f32 {
     }
 }
 
-fn pdf_string(text: &str) -> String {
+pub(crate) fn pdf_string(text: &str) -> String {
     let mut s = String::from("(");
     for b in crate::pdf::win_ansi(text) {
         match b {
@@ -209,7 +209,7 @@ fn pdf_string(text: &str) -> String {
     s
 }
 
-fn num(v: f32) -> String {
+pub(crate) fn num(v: f32) -> String {
     let s = format!("{v:.3}");
     let s = s.trim_end_matches('0').trim_end_matches('.');
     if s == "-0" {

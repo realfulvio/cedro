@@ -38,6 +38,7 @@ mod pdf;
 mod pdfdoc;
 mod ufficio;
 mod pdfedit;
+pub mod pdfmod;
 mod pdfpages;
 mod pdflayout;
 mod pdfxlsx;
