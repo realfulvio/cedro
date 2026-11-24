@@ -329,12 +329,16 @@ impl Screen {
             EdAct::LeaveDiscard => {
                 if let Some(mode) = self.app.ed.as_mut().and_then(|e| e.leave.take()) {
                     self.app.ed_leave(mode);
+                    if std::mem::take(&mut self.app.close_wanted) {
+                        plat.close();
+                    }
                 }
             }
             EdAct::LeaveStay => {
                 if let Some(ed) = self.app.ed.as_mut() {
                     ed.leave = None;
                     ed.leave_lab = None;
+                    ed.leave_close = false;
                 }
             }
             EdAct::Tab(t) => {
@@ -381,10 +385,12 @@ impl Screen {
                     t.color = c;
                     t.ovr.color = Some(c);
                     if !matches!(t.target, Target::Existing(_)) {
-                        ed.ink = c;
+                        ed.text_ink = c;
                     }
                 } else if ed.sel.is_some() {
                     ed.recolor(c);
+                } else if matches!(ed.tool, Tool::AddText | Tool::EditText) {
+                    ed.text_ink = c;
                 } else {
                     ed.ink = c;
                 }
@@ -1047,7 +1053,7 @@ impl Screen {
                 let w = if small { (pw - from.0 - 12.0).clamp(60.0, 240.0) } else { drawn.w.max(40.0) };
                 let (x, y) = if small { from } else { (drawn.x, drawn.y) };
                 let rect = Rect::new(x, y, w, ed.size * 1.2);
-                let te = TextEdit { page, target: Target::New, rect, orig: String::new(), text: String::new(), size: ed.size, color: ed.ink, bold: ed.bold, italic: ed.italic, align: ed.align, font: ed.font.clone(), font_name: String::new(), ovr: Ovr::default(), has: None };
+                let te = TextEdit { page, target: Target::New, rect, orig: String::new(), text: String::new(), size: ed.size, color: ed.text_ink, bold: ed.bold, italic: ed.italic, align: ed.align, font: ed.font.clone(), font_name: String::new(), ovr: Ovr::default(), has: None };
                 self.ed_begin_text(te);
             }
             t => {

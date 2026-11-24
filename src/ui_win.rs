@@ -622,6 +622,9 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 if let Ok(mut s) = host.screen.try_borrow_mut() {
                     host.late_wake.set(false);
                     s.pump();
+                    if s.take_close() {
+                        let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
+                    }
                     drop(s);
                     redraw(hwnd);
                 }
@@ -643,6 +646,9 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 // passo dei fotogrammi lenti, ci pensa il timer (la finestra in quel caso si sta già animando).
                 Ok(mut s) => {
                     s.pump();
+                    if s.take_close() {
+                        let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
+                    }
                     !s.animating() || s.wants_frame()
                 }
                 // Un selettore di file è aperto: si riprende appena finisce (vedi il timer).
@@ -818,7 +824,11 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
         }
         WM_CLOSE => {
             let busy = host.screen.try_borrow().map(|s| s.app.busy()).unwrap_or(false);
-            if busy {
+            // Un PDF aperto nell'editor con modifiche non salvate: prima la domanda (salva, butta o resta).
+            let ask = !busy && host.screen.try_borrow_mut().map(|mut s| s.close_guard()).unwrap_or(false);
+            if ask {
+                redraw(hwnd);
+            } else if busy {
                 MessageBoxW(Some(hwnd), &HSTRING::from(&*cedro::i18n::tr("Una conversione è ancora in corso: aspetta che finisca.")), w!("Cedro"), MB_OK | MB_ICONINFORMATION);
             } else {
                 let _ = DestroyWindow(hwnd);

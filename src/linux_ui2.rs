@@ -218,9 +218,15 @@ fn open_surface(app: &Application, surface: Surface) {
     {
         // Non si chiude mentre lavora: il file in scrittura resterebbe a metà.
         let host = host.clone();
+        let area = area.clone();
         window.connect_close_request(move |w| {
             let busy = host.screen.try_borrow().map(|s| s.app.busy()).unwrap_or(false);
-            if busy {
+            // Un PDF aperto nell'editor con modifiche non salvate: prima la domanda (salva, butta o resta).
+            let ask = !busy && host.screen.try_borrow_mut().map(|mut s| s.close_guard()).unwrap_or(false);
+            if ask {
+                area.queue_draw();
+                glib::Propagation::Stop
+            } else if busy {
                 gtk4::AlertDialog::builder().message(cedro::i18n::tr_string("Una conversione è ancora in corso: aspetta che finisca.")).modal(true).build().show(Some(w));
                 glib::Propagation::Stop
             } else {
@@ -522,6 +528,10 @@ fn open_surface(app: &Application, surface: Surface) {
             if let Ok(mut sc) = host.screen.try_borrow_mut() {
                 if woke.swap(false, Ordering::Relaxed) {
                     sc.pump();
+                    if sc.take_close() {
+                        let w = win.clone();
+                        glib::idle_add_local_once(move || w.close());
+                    }
                     // Durante un lavoro le notizie arrivano di continuo: al passo dei fotogrammi lenti (sotto).
                     redraw |= !sc.animating() || sc.wants_frame();
                 }

@@ -16,6 +16,8 @@ use cedro::ui::theme::ThemeId;
 
 struct Finta {
     aperti: Vec<PathBuf>,
+    /// La finestra è stata chiusa dalla piattaforma.
+    chiusa: bool,
 }
 
 impl Platform for Finta {
@@ -36,7 +38,9 @@ impl Platform for Finta {
     fn open_settings(&mut self) {}
     fn minimize(&mut self) {}
     fn toggle_maximize(&mut self) {}
-    fn close(&mut self) {}
+    fn close(&mut self) {
+        self.chiusa = true;
+    }
     fn open_full(&mut self) {}
 }
 
@@ -132,7 +136,7 @@ fn every_tab_and_tool_draws_in_every_tint() {
     let dir = cartella("disegno");
     let path = dir.join("Circolare.pdf");
     std::fs::write(&path, fixture("circolare.pdf")).unwrap();
-    let mut plat = Finta { aperti: Vec::new() };
+    let mut plat = Finta { aperti: Vec::new(), chiusa: false };
     let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
     apri_editor(&mut s, &mut plat, &path);
     // Ogni strumento di ogni scheda, nella tinta di partenza: pannello Completo e Semplice, a sinistra pagine e commenti.
@@ -176,7 +180,7 @@ fn edit_save_copy_and_leave() {
     let path = dir.join("Richiesta.pdf");
     let originale = fixture("circolare.pdf");
     std::fs::write(&path, &originale).unwrap();
-    let mut plat = Finta { aperti: Vec::new() };
+    let mut plat = Finta { aperti: Vec::new(), chiusa: false };
     let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
     apri_editor(&mut s, &mut plat, &path);
 
@@ -238,7 +242,7 @@ fn form_fields_are_filled_and_saved_for_real() {
     ];
     let path = dir.join("Modulo.pdf");
     std::fs::write(&path, apply(&base, &campi, &SaveOpts::default()).unwrap()).unwrap();
-    let mut plat = Finta { aperti: Vec::new() };
+    let mut plat = Finta { aperti: Vec::new(), chiusa: false };
     let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
     apri_editor(&mut s, &mut plat, &path);
     assert_eq!(s.app.ed.as_ref().unwrap().opened.as_ref().unwrap().fields.len(), 2);
@@ -265,7 +269,7 @@ fn applied_redaction_removes_the_text_for_real() {
     let path = dir.join("Circolare.pdf");
     let base = fixture("circolare.pdf");
     std::fs::write(&path, &base).unwrap();
-    let mut plat = Finta { aperti: Vec::new() };
+    let mut plat = Finta { aperti: Vec::new(), chiusa: false };
     let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
     apri_editor(&mut s, &mut plat, &path);
     // Il testo di pagina 1 e il rettangolo della prima parola da oscurare.
@@ -300,7 +304,7 @@ fn page_buttons_and_thumbnails_scroll_the_page() {
     let dir = cartella("scorri");
     let path = dir.join("Colonne.pdf");
     std::fs::write(&path, fixture("colonne.pdf")).unwrap();
-    let mut plat = Finta { aperti: Vec::new() };
+    let mut plat = Finta { aperti: Vec::new(), chiusa: false };
     let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
     apri_editor(&mut s, &mut plat, &path);
     let _ = s.render(1536, 1024, 1.0);
@@ -330,5 +334,75 @@ fn page_buttons_and_thumbnails_scroll_the_page() {
     let _ = s.render(1536, 1024, 1.0);
     assert!(s.ui.scroll(Scroll::EdPage) < uno);
     assert_eq!(s.app.ed.as_ref().unwrap().lay.borrow().cur, 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn closing_the_window_with_unsaved_edits_asks_first() {
+    italiano();
+    let dir = cartella("chiusura");
+    let path = dir.join("Chiudi.pdf");
+    let originale = fixture("circolare.pdf");
+    std::fs::write(&path, &originale).unwrap();
+    let mut plat = Finta { aperti: Vec::new(), chiusa: false };
+    let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+    apri_editor(&mut s, &mut plat, &path);
+    let _ = s.render(1536, 1024, 1.0);
+
+    // Senza modifiche la X chiude subito.
+    assert!(!s.close_guard(), "senza modifiche non serve chiedere");
+
+    // Con una modifica la X ferma la finestra e chiede (salva, butta o resta).
+    let nota = |s: &mut Screen| s.app.ed.as_mut().unwrap().push(Edit::Note { page: 0, x: 40.0, y: 40.0, text: "da non perdere".into(), color: [250, 210, 60] });
+    nota(&mut s);
+    assert!(s.close_guard(), "con modifiche non salvate doveva chiedere");
+    assert!(s.app.ed.as_ref().unwrap().leave.is_some());
+    let _ = s.render(1536, 1024, 1.0);
+
+    // «Resta qui»: la finestra resta aperta e le modifiche pure.
+    s.act(Act::Ed(EdAct::LeaveStay), &mut plat);
+    assert!(!plat.chiusa && !s.take_close());
+    assert!(s.app.ed.as_ref().is_some_and(|e| e.leave.is_none() && e.unsaved() == 1));
+
+    // «Esci senza salvare»: l'editor si chiude e con lui la finestra; il file non è stato toccato.
+    assert!(s.close_guard());
+    s.act(Act::Ed(EdAct::LeaveDiscard), &mut plat);
+    assert!(s.app.ed.is_none() && plat.chiusa, "doveva chiudere la finestra");
+    assert_eq!(std::fs::read(&path).unwrap(), originale);
+    assert!(!dir.join("Chiudi-modificato.pdf").exists());
+
+    // «Salva ed esci»: scrive la copia e, a salvataggio finito, chiede di chiudere la finestra.
+    let mut plat = Finta { aperti: Vec::new(), chiusa: false };
+    let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+    apri_editor(&mut s, &mut plat, &path);
+    nota(&mut s);
+    assert!(s.close_guard());
+    s.act(Act::Ed(EdAct::LeaveSave), &mut plat);
+    assert!(aspetta(&mut s, 60, |s| s.app.ed.is_none() || s.app.close_wanted), "il salvataggio non è finito");
+    assert!(s.take_close(), "a salvataggio finito doveva chiedere di chiudere");
+    assert!(dir.join("Chiudi-modificato.pdf").exists(), "la copia doveva essere scritta");
+    assert_eq!(std::fs::read(&path).unwrap(), originale);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn new_text_starts_black_and_the_ink_stays_red_for_marks() {
+    italiano();
+    let dir = cartella("colori");
+    let path = dir.join("Colori.pdf");
+    std::fs::write(&path, fixture("circolare.pdf")).unwrap();
+    let mut plat = Finta { aperti: Vec::new(), chiusa: false };
+    let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+    apri_editor(&mut s, &mut plat, &path);
+    let ed = s.app.ed.as_ref().unwrap();
+    assert_eq!(ed.text_ink, cedro::ui::pdfeditor::INK_COLORS[0], "il testo nuovo parte nero");
+    assert_eq!(ed.ink, cedro::ui::pdfeditor::INK_COLORS[2], "segni e disegni partono rossi");
+    // Scegliere un colore con «Aggiungi testo» in mano cambia solo il colore del testo.
+    s.act(Act::Ed(EdAct::Tab(EdTab::Text)), &mut plat);
+    s.app.ed.as_mut().unwrap().tool = cedro::ui::pdfeditor::Tool::AddText;
+    s.act(Act::Ed(EdAct::Ink(cedro::ui::pdfeditor::INK_COLORS[1])), &mut plat);
+    let ed = s.app.ed.as_ref().unwrap();
+    assert_eq!(ed.text_ink, cedro::ui::pdfeditor::INK_COLORS[1]);
+    assert_eq!(ed.ink, cedro::ui::pdfeditor::INK_COLORS[2]);
     let _ = std::fs::remove_dir_all(&dir);
 }

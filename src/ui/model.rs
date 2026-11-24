@@ -453,6 +453,8 @@ pub struct Notice {
 }
 
 pub struct App {
+    /// L'editor dei PDF ha finito con le modifiche non salvate dopo la X della finestra: la piattaforma chiude.
+    pub close_wanted: bool,
     pub activity: Activity,
     /// Cedro 4 Labs: la pagina scelta nella barra di sinistra.
     pub lab: Lab,
@@ -598,6 +600,7 @@ impl App {
             lavoro_appena: false,
             lavori_esportato: None,
             lavoro_appena_copiato: false,
+            close_wanted: false,
             notice: None,
             ask: None,
             media: HashMap::new(),

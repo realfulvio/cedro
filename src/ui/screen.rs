@@ -631,6 +631,30 @@ impl Screen {
         changed
     }
 
+    /// La finestra sta per chiudersi (X, Alt-F4). Vero se va fermata: l'editor dei PDF ha modifiche non salvate
+    /// (chiede prima: salva, butta o resta) o sta ancora salvando (si chiude appena ha finito).
+    pub fn close_guard(&mut self) -> bool {
+        self.ed_sync();
+        let Some(ed) = self.app.ed.as_mut() else { return false };
+        if ed.saving {
+            ed.leave_after_save = Some(None);
+            ed.leave_close = true;
+            return true;
+        }
+        if ed.unsaved() == 0 {
+            return false;
+        }
+        ed.leave_lab = None;
+        ed.leave = Some(None);
+        ed.leave_close = true;
+        true
+    }
+
+    /// Finito il giro dell'editor aperto dalla X della finestra: la piattaforma deve chiudere adesso.
+    pub fn take_close(&mut self) -> bool {
+        std::mem::take(&mut self.app.close_wanted)
+    }
+
     /// Tema e modalità nuovi (dalle Impostazioni). Durante un lavoro si aspetta che finisca.
     pub fn request_appearance(&mut self, theme: ThemeId, simple: bool) {
         if self.app.busy() {

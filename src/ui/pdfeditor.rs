@@ -330,6 +330,8 @@ pub struct PdfEd {
     pub asked_text: HashSet<(u64, usize)>,
     // Com'è la mano: colori, grandezze, scelte.
     pub ink: Color,
+    /// Il colore del testo nuovo (nero di partenza, come in Word: il rosso è per segni e disegni).
+    pub text_ink: Color,
     pub mark: Color,
     pub fill: Option<Color>,
     pub width: f32,
@@ -379,6 +381,8 @@ pub struct PdfEd {
     /// Si vuole uscire (verso la scheda PDF o un'altra attività) ma ci sono modifiche non salvate.
     pub leave: Option<Option<super::model::PdfMode>>,
     pub leave_after_save: Option<Option<super::model::PdfMode>>,
+    /// L'uscita è la chiusura della finestra (X, Alt-F4): finito il salvataggio o lo scarto, si chiude Cedro.
+    pub leave_close: bool,
     /// Si esce verso un'altra pagina di Cedro (la barra di sinistra): quale.
     pub leave_lab: Option<super::model::Lab>,
     pub lay: RefCell<Layout>,
@@ -414,6 +418,7 @@ impl PdfEd {
             asked_thumb: HashSet::new(),
             asked_text: HashSet::new(),
             ink: INK_COLORS[2],
+            text_ink: INK_COLORS[0],
             mark: MARK_COLORS[0],
             fill: None,
             width: 2.0,
@@ -455,6 +460,7 @@ impl PdfEd {
             save_msg: String::new(),
             leave: None,
             leave_after_save: None,
+            leave_close: false,
             leave_lab: None,
             lay: RefCell::new(Layout::default()),
             scroll_to: Cell::new(None),
@@ -1026,6 +1032,7 @@ impl App {
                     }
                     Err(e) => {
                         ed.leave_after_save = None;
+                        ed.leave_close = false;
                         self.notice = Some(Notice { text: e, error: true });
                     }
                 }
@@ -1036,7 +1043,12 @@ impl App {
     /// Esce dall'editor verso la scheda PDF (o un altro modo del PDF).
     pub fn ed_leave(&mut self, mode: Option<super::model::PdfMode>) {
         let lab = self.ed.as_ref().and_then(|e| e.leave_lab);
+        let quit = self.ed.as_ref().is_some_and(|e| e.leave_close);
         self.ed_close();
+        if quit {
+            self.close_wanted = true;
+            return;
+        }
         let simple = self.simple_view;
         if let Some(l) = lab {
             self.go_lab(l, simple);

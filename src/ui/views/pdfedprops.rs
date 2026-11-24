@@ -382,7 +382,7 @@ fn edit_text_panel(f: &mut Frame, ed: &PdfEd, e: E, fl: &Flow, mut y: f32) -> f3
 fn text_controls(f: &mut Frame, ed: &PdfEd, e: E, fl: &Flow, mut y: f32) -> f32 {
     let t = ed.text.as_ref();
     let size = t.map_or(ed.size, |t| t.size);
-    let color = t.map_or(ed.ink, |t| t.color);
+    let color = t.map_or(ed.text_ink, |t| t.color);
     let (bold, italic) = t.map_or((ed.bold, ed.italic), |t| (t.bold, t.italic));
     let align = t.map_or(ed.align, |t| t.align);
     let font = t.map_or(&ed.font, |t| &t.font);
