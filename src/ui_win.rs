@@ -779,6 +779,8 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
                 VK_V if ctrl() && !alt() => Some(Key::Paste),
                 VK_C if ctrl() && !alt() => Some(Key::Copy),
                 VK_A if ctrl() && !alt() => Some(Key::SelectAll),
+                VK_Z if ctrl() && !alt() => Some(if shift() { Key::Redo } else { Key::Undo }),
+                VK_Y if ctrl() && !alt() => Some(Key::Redo),
                 _ => None,
             };
             if let Some(k) = key {

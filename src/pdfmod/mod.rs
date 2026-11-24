@@ -22,7 +22,7 @@ pub mod text;
 
 use std::sync::Arc;
 
-pub use apply::{apply, apply_with_report, open, read_text, Opened, SaveOpts};
+pub use apply::{apply, apply_with_report, open, read_all_texts, read_text, read_texts, Opened, SaveOpts};
 pub use text::{Align, TextBlock, TextPage, Word};
 
 /// Un rettangolo in punti, origine in alto a sinistra della pagina vista.

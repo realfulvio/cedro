@@ -438,6 +438,8 @@ fn open_surface(app: &Application, surface: Surface) {
                 gdk::Key::v | gdk::Key::V if ctrl => Some(Key::Paste),
                 gdk::Key::c | gdk::Key::C if ctrl => Some(Key::Copy),
                 gdk::Key::a | gdk::Key::A if ctrl => Some(Key::SelectAll),
+                gdk::Key::z | gdk::Key::Z if ctrl => Some(if shift { Key::Redo } else { Key::Undo }),
+                gdk::Key::y | gdk::Key::Y if ctrl => Some(Key::Redo),
                 _ => None,
             };
             let Some(k) = k else { return glib::Propagation::Proceed };

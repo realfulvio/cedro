@@ -20,9 +20,9 @@ use crate::ui::gfx::{Fit, Image, Rgb};
 use crate::ui::model::{FileState, Lab, PdfMode, AUDIO_QUALITY, SUBTITLES, VIDEO_QUALITY};
 use crate::ui::theme::{kind_bright, kind_color, page_colors, Tint, STAGE};
 
-const TOP: f32 = 60.0;
-const RAIL: f32 = 252.0;
-const PAD: f32 = 12.0;
+pub(super) const TOP: f32 = 60.0;
+pub(super) const RAIL: f32 = 252.0;
+pub(super) const PAD: f32 = 12.0;
 /// Larghezza di base del pannello di destra, e i limiti entro cui si trascina il suo bordo.
 const SIDE: f32 = 440.0;
 const SIDE_MIN: f32 = 340.0;
@@ -264,7 +264,7 @@ fn side_grip(f: &mut Frame, r: R) {
 // ---------------------------------------------------------------------------------------------
 // La cornice
 
-fn frame(f: &mut Frame, app: &App) {
+pub(super) fn frame(f: &mut Frame, app: &App) {
     let t = f.theme.tint();
     f.p.clear(t.frame);
     f.p.rrect_vgrad(0.0, 0.0, f.w, (f.h * 0.55).round(), 0.0, t.frame_hi, t.frame);

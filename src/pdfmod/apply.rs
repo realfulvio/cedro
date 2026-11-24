@@ -79,6 +79,19 @@ pub fn read_text(bytes: &[u8], page: usize) -> Result<TextPage, String> {
     Ok(TextPage::read(&doc, id))
 }
 
+/// Il testo di più pagine (da 0) con un solo caricamento del file; una pagina che non c'è dà `None`.
+pub fn read_texts(bytes: &[u8], wanted: &[usize]) -> Result<Vec<Option<TextPage>>, String> {
+    let doc = load(bytes)?;
+    let pages = pages_of(&doc);
+    Ok(wanted.iter().map(|p| pages.get(*p).map(|id| TextPage::read(&doc, *id))).collect())
+}
+
+/// Il testo di tutte le pagine, con un solo caricamento: per sostituire un testo in tutto il file.
+pub fn read_all_texts(bytes: &[u8]) -> Result<Vec<TextPage>, String> {
+    let doc = load(bytes)?;
+    Ok(pages_of(&doc).into_iter().map(|id| TextPage::read(&doc, id)).collect())
+}
+
 fn comments(doc: &Document, pages: &[ObjectId]) -> Vec<Comment> {
     let mut out = Vec::new();
     for (pi, p) in pages.iter().enumerate() {
