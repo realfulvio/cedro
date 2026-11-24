@@ -28,7 +28,7 @@
 
 **Cedro è un programma a sé: un progetto unico nel suo genere e indipendente.** Non è la copia di un convertitore e non dipende da servizi online né da altri programmi: è scritto da zero, interamente in **Rust**, con un motore suo per immagini, PDF, documenti, audio e video. Il codice è aperto, l'interfaccia è in italiano e in inglese (segue la lingua del sistema).
 
-Un'unica finestra, tante attività: **cambia formato** a foto, audio, video e documenti; **lavora sui PDF** (unisci, dividi, comprimi, porta in Word o Excel, anche le scansioni con l'OCR); **trascrive le riunioni**, riconosce **chi parla** e scrive il **riassunto**; **scarica video e audio** dal web; **firma** con chiavetta o smart card (CNS) e verifica i file firmati. Il file resta al centro, i comandi sono tutti in vista, e la copia nuova compare accanto all'originale, che non si tocca.
+Un'unica finestra, tante attività: **cambia formato** a foto, audio, video e documenti; **lavora sui PDF** (unisci, dividi, comprimi, porta in Word o Excel, anche le scansioni con l'OCR; **modifica** scrivendo, evidenziando, compilando i moduli e oscurando davvero); **trascrive le riunioni**, riconosce **chi parla** e scrive il **riassunto**; **scarica video e audio** dal web; **firma** con chiavetta o smart card (CNS) e verifica i file firmati. Il file resta al centro, i comandi sono tutti in vista, e la copia nuova compare accanto all'originale, che non si tocca.
 
 Tutto avviene **sul tuo computer**: i file non vengono caricati da nessuna parte.
 
