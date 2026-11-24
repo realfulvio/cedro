@@ -172,6 +172,10 @@ impl Screen {
         if self.app.ed.is_some() {
             self.ed_sync();
         }
+        // Pagina avanti/indietro, miniature, riga dei commenti: `PdfEd::goto` lascia dove scorrere, qui si va.
+        if let Some(to) = self.app.ed.as_ref().and_then(|e| e.scroll_to.take()) {
+            self.ui.scroll.insert(Scroll::EdPage, to);
+        }
         if let Some(to) = self.app.review_follow() {
             self.ui.scroll.insert(Scroll::Review, to);
         }

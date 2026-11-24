@@ -197,7 +197,7 @@ pub fn redact_mark(doc: &mut Document, page: ObjectId, geom: &Geom, rect: Rect) 
     let _ = writeln!(c, "{} 1.2 w [4 3] 0 d 0.6 0.6 {} {} re S", stroke_op(red), num(w - 1.2), num(h - 1.2));
     let (ap, file) = view_ap(doc, geom, view, c, res);
     let mut d = base_dict("Redact", file, red);
-    d.set("Contents", text_obj("Da oscurare"));
+    d.set("Contents", text_obj(&crate::i18n::tr_string("Da oscurare")));
     d.set("AP", ap_dict(ap));
     add_annot(doc, page, d)
 }

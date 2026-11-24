@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use cedro::pdfmod::{self, apply, Edit, FieldKind, MarkKind, Rect, SaveOpts};
-use cedro::ui::core::Act;
+use cedro::ui::core::{Act, Scroll};
 use cedro::ui::model::PdfMode;
 use cedro::ui::pdfedact::EdAct;
 use cedro::ui::pdfeditor::{EdTab, PdfEd};
@@ -291,5 +291,44 @@ fn applied_redaction_removes_the_text_for_real() {
     let fuori = s.app.ed.as_ref().unwrap().saved.clone().unwrap();
     let dopo = pdfmod::read_texts(&std::fs::read(&fuori).unwrap(), &[0]).ok().and_then(|v| v.into_iter().next().flatten()).expect("testo dopo");
     assert!(!dopo.words.iter().any(|w| w.text == parola.text && w.rect.intersects(&r)), "la parola {:?} doveva sparire dal file", parola.text);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn page_buttons_and_thumbnails_scroll_the_page() {
+    italiano();
+    let dir = cartella("scorri");
+    let path = dir.join("Colonne.pdf");
+    std::fs::write(&path, fixture("colonne.pdf")).unwrap();
+    let mut plat = Finta { aperti: Vec::new() };
+    let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+    apri_editor(&mut s, &mut plat, &path);
+    let _ = s.render(1536, 1024, 1.0);
+    let n = s.app.ed.as_ref().unwrap().page_count();
+    assert!(n >= 3, "serve un PDF di più pagine: {n}");
+    assert_eq!(s.ui.scroll(Scroll::EdPage), 0.0);
+
+    // «Pagina avanti» porta la lettura alla pagina dopo, e la pagina di adesso la segue.
+    s.act(Act::Ed(EdAct::Next), &mut plat);
+    let _ = s.render(1536, 1024, 1.0);
+    let uno = s.ui.scroll(Scroll::EdPage);
+    assert!(uno > 100.0, "«Pagina avanti» doveva scorrere la pagina: {uno}");
+    assert_eq!(s.app.ed.as_ref().unwrap().lay.borrow().cur, 1);
+
+    // Una miniatura porta alla sua pagina, anche più in là.
+    s.act(Act::Ed(EdAct::Thumb(2)), &mut plat);
+    let _ = s.render(1536, 1024, 1.0);
+    let tre = s.ui.scroll(Scroll::EdPage);
+    assert!(tre > uno, "la miniatura 3 doveva stare più in giù: {tre} contro {uno}");
+    assert_eq!(s.app.ed.as_ref().unwrap().lay.borrow().cur, 2);
+
+    // «Pagina indietro» e poi la prima miniatura tornano su.
+    s.act(Act::Ed(EdAct::Prev), &mut plat);
+    let _ = s.render(1536, 1024, 1.0);
+    assert!(s.ui.scroll(Scroll::EdPage) < tre);
+    s.act(Act::Ed(EdAct::Thumb(0)), &mut plat);
+    let _ = s.render(1536, 1024, 1.0);
+    assert!(s.ui.scroll(Scroll::EdPage) < uno);
+    assert_eq!(s.app.ed.as_ref().unwrap().lay.borrow().cur, 0);
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -637,8 +637,12 @@ fn comment_list(f: &mut Frame, ed: &PdfEd, e: E, r: R, rows: &[CommentRow]) {
                 f.p.circle(ib.0 + ib.2 - 1.0, ib.1 + ib.3 - 1.0, 5.5, Some(rgb(c)), Some((e.e1, 2.0)));
             }
             let tw = w - 8.0 - 28.0 - 10.0 - if hot { 26.0 } else { 6.0 };
-            let title = format!("{} · pag. {}", row.kind, row.page + 1);
-            f.p.text(&title, x + 46.0, y + 6.0, tw, 18.0, 13.0, BOLD, WHITE, TA::Left);
+            // Il tipo a sinistra (non si taglia), la pagina a destra: sotto il cestino si nasconde.
+            let pw = 46.0;
+            f.p.text(&row.kind, x + 46.0, y + 6.0, tw - pw, 18.0, 13.0, BOLD, WHITE, TA::Left);
+            if !hot {
+                f.p.text(&format!("pag. {}", row.page + 1), x + w - 6.0 - pw, y + 7.0, pw, 18.0, 11.5, SEMI, e.muted, TA::Right);
+            }
             let sub = if row.text.trim().is_empty() { String::new() } else { crate::i18n::lit(row.text.replace('\n', " ").trim()) };
             f.p.text(&sub, x + 46.0, y + 24.0, tw, 17.0, 12.0, SANS, e.muted, TA::Left);
             if hot {
