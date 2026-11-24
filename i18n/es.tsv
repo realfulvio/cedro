@@ -2738,3 +2738,247 @@ Vetrini, DICOM, casi e campioni	Preparaciones, DICOM, casos y muestras
 Opzioni del download	Opciones de descarga
 in più	más
 Leggero	Ligero
+# Editor dei PDF (scheda PDF → Modifica)
+Immagini e forme	Imágenes y formas
+Moduli	Formularios
+Oscura	Ocultar
+Commenti	Comentarios
+Modifica testo	Editar texto
+Aggiungi testo	Añadir texto
+Trova e sostituisci	Buscar y reemplazar
+Evidenzia	Resaltar
+Evidenziatore	Resaltador
+Sottolinea	Subrayar
+Sottolineato	Subrayado
+Barra	Tachar
+Barrato	Tachado
+Nota	Nota
+Matita	Lápiz
+Disegno a mano	Dibujo a mano
+Timbro	Sello
+Rettangolo	Rectángulo
+Ellisse	Elipse
+Linea	Línea
+Freccia	Flecha
+Compila	Rellenar
+Campo di testo	Campo de texto
+Spunta	Casilla
+Scelta	Opción
+Elenco	Lista
+Oscura un'area	Ocultar un área
+Cerca e oscura	Buscar y ocultar
+Dati nascosti	Datos ocultos
+Cerca nel PDF	Buscar en el PDF
+Torna alla scheda PDF	Volver a la pestaña PDF
+Proprietà	Propiedades
+Clic su una cosa aggiunta per spostarla, cambiarla o toglierla.	Haz clic en algo que hayas añadido para moverlo, cambiarlo o quitarlo.
+Clic su un paragrafo e scrivi: il testo cambia dentro il file.	Haz clic en un párrafo y escribe: el texto cambia dentro del archivo.
+Clic sulla pagina (o trascina un riquadro) e scrivi un testo nuovo.	Haz clic en la página (o arrastra un recuadro) y escribe un texto nuevo.
+Cerca una parola o una frase in tutto il file e sostituiscila.	Busca una palabra o una frase en todo el archivo y sustitúyela.
+Trascina sul testo per evidenziarlo.	Arrastra sobre el texto para resaltarlo.
+Trascina sul testo per sottolinearlo.	Arrastra sobre el texto para subrayarlo.
+Trascina sul testo per barrarlo.	Arrastra sobre el texto para tacharlo.
+Clic sulla pagina e scrivi la nota: resta un fumetto giallo.	Haz clic en la página y escribe la nota: queda como un globo amarillo.
+Disegna a mano libera sulla pagina.	Dibuja a mano alzada sobre la página.
+Scegli il timbro e mettilo sulla pagina.	Elige el sello y colócalo en la página.
+Scegli un'immagine e mettila sulla pagina.	Elige una imagen y colócala en la página.
+Trascina sulla pagina per disegnare la forma.	Arrastra sobre la página para dibujar la forma.
+Trascina da un punto all'altro.	Arrastra de un punto a otro.
+Clic su un campo del modulo per compilarlo.	Haz clic en un campo del formulario para rellenarlo.
+Trascina sulla pagina per mettere il campo.	Arrastra sobre la página para colocar el campo.
+Trascina un rettangolo: testo e immagini sotto spariscono davvero.	Arrastra un rectángulo: el texto y las imágenes de debajo desaparecen de verdad.
+Scegli cosa cercare nel pannello: le parole trovate si segnano da sole.	Elige qué buscar en el panel: las palabras encontradas se marcan solas.
+Quello che il file porta con sé e non si vede.	Lo que el archivo lleva consigo y no se ve.
+APPROVATO	APROBADO
+RESPINTO	RECHAZADO
+COPIA CONFORME	COPIA CONFORME
+PROTOCOLLATO	REGISTRADO
+RISERVATO	CONFIDENCIAL
+URGENTE	URGENTE
+ANNULLATO	ANULADO
+Invio va a capo. Clic fuori dal riquadro per finire; Esc annulla.	Intro hace un salto de línea. Haz clic fuera del recuadro para terminar; Esc cancela.
+Colore	Color
+L'evidenziatore segue le parole: su più righe diventa un pezzo per riga, come in Word.	El resaltador sigue las palabras: en varias líneas se divide en un trozo por línea, como en Word.
+Colore della nota	Color de la nota
+Clic sulla pagina e scrivi. L'elenco a sinistra raccoglie tutte le note.	Haz clic en la página y escribe. La lista de la izquierda reúne todas las notas.
+Spessore	Grosor
+Colore della linea	Color de la línea
+Riempimento	Relleno
+Testo aggiunto	Texto añadido
+Testo modificato	Texto editado
+Campo compilato	Campo rellenado
+Campo nuovo	Campo nuevo
+Area da oscurare	Área por ocultar
+Commento tolto	Comentario eliminado
+Testo del timbro	Texto del sello
+scrivi qui	escribe aquí
+Togli questa modifica	Quitar este cambio
+Trascinala per spostarla. Tasto Canc per toglierla.	Arrástrala para moverla. Tecla Supr para quitarla.
+Scritto da {}	Escrito por {}
+Togli questo commento	Quitar este comentario
+Era già nel file: si toglie dalla copia che salvi, l'originale resta com'è.	Ya estaba en el archivo: se quita de la copia que guardas, el original se queda como está.
+Non hai ancora aggiunto niente. Scegli uno strumento in alto e lavora sulla pagina.	Todavía no has añadido nada. Elige una herramienta arriba y trabaja sobre la página.
+Hai fatto 1 modifica. Clic su una cosa aggiunta per sceglierla.	Has hecho 1 cambio. Haz clic en algo que hayas añadido para elegirlo.
+Hai fatto {#} modifiche. Clic su una cosa aggiunta per sceglierla.	Has hecho {} cambios. Haz clic en algo que hayas añadido para elegirlo.
+Carattere del testo	Fuente del texto
+Il carattere del documento ha tutte le lettere che servono.	La fuente del documento tiene todas las letras necesarias.
+Nel carattere del file mancano: {}. Quelle le scrivo con un altro carattere.	A la fuente del archivo le faltan: {}. Esas las escribo con otra fuente.
+Clic su un paragrafo della pagina: si scrive lì, il resto non si muove. Invio va a capo, clic fuori per finire; Esc annulla.	Haz clic en un párrafo de la página: se escribe ahí, lo demás no se mueve. Intro salta de línea, haz clic fuera para terminar; Esc cancela.
+Se il paragrafo è tratteggiato di giallo il suo carattere non si può riscrivere: lo cancelli con «Oscura» e lo rifai con «Aggiungi testo».	Si el párrafo tiene un trazo amarillo discontinuo, su fuente no se puede reescribir: bórralo con «Ocultar» y rehazlo con «Añadir texto».
+Colore del testo	Color del texto
+Quello del file	El del archivo
+Cerca	Buscar
+cerca	buscar
+una parola, per esempio «importo»	una palabra, por ejemplo «importe»
+Sostituisci con	Reemplazar con
+il testo nuovo	el texto nuevo
+Cerco…	Buscando…
+Sostituisci tutte	Reemplazar todo
+Sostituisci tutte ({#})	Reemplazar todo ({})
+Cerco in tutte le pagine…	Buscando en todas las páginas…
+Vale per tutte le pagine. Ogni parola sostituita si può annullare.	Vale para todas las páginas. Cada palabra sustituida se puede deshacer.
+Non ho trovato niente.	No he encontrado nada.
+1 trovata	1 coincidencia
+{#} trovate	{} coincidencias
+pag. {#}	pág. {}
+{} · pag. {#}	{} · pág. {}
+…e altre {#}.	…y {} más.
+Quale timbro	Qué sello
+Oppure scrivi il testo	O escribe el texto
+per esempio «PAGATO»	por ejemplo «PAGADO»
+Clic sulla pagina per metterlo grande com'è, oppure trascina per scegliere la misura.	Haz clic en la página para ponerlo de su tamaño normal, o arrastra para elegir la medida.
+Quale immagine	Qué imagen
+Immagine pronta	Imagen lista
+{#} × {#} pixel. Clic sulla pagina per metterla, o trascina per scegliere dove.	{} × {} píxeles. Haz clic en la página para colocarla, o arrastra para elegir dónde.
+Nessuna immagine scelta	Ninguna imagen elegida
+Scegli un PNG o un JPEG: gli altri formati diventano PNG da soli.	Elige un PNG o un JPEG: los demás formatos se convierten solos en PNG.
+Scegli un'altra immagine…	Elegir otra imagen…
+Scegli dal PC…	Elegir desde el PC…
+L'immagine resta com'è, senza stirarsi: si ridimensiona dopo, tenendo le proporzioni.	La imagen se queda como está, sin deformarse: se redimensiona después, manteniendo las proporciones.
+Questo PDF non ha campi da compilare. Nella scheda «Moduli» puoi crearne di nuovi: casella di testo, spunta, scelta, elenco.	Este PDF no tiene campos que rellenar. En la pestaña «Formularios» puedes crear otros nuevos: cuadro de texto, casilla, opción, lista.
+Campi del modulo	Campos del formulario
+{#} di {#} compilati	{} de {} rellenados
+fatto	hecho
+vuoto	vacío
+Prossimo vuoto	Siguiente vacío
+Svuota tutti	Vaciar todos
+Clic su un campo della pagina per compilarlo. Sono campi veri del PDF: si compilano anche con altri programmi.	Haz clic en un campo de la página para rellenarlo. Son campos reales del PDF: también se rellenan con otros programas.
+Qui si mette il riquadro della firma. Firmare è un'attività a parte («Firma digitale»): il file salvato ci arriva già pronto.	Aquí se coloca el recuadro de la firma. Firmar es una actividad aparte («Firma digital»): el archivo guardado llega ya listo.
+Trascina sulla pagina per scegliere dove sta e quanto è grande; un clic solo lo mette della misura normale.	Arrastra sobre la página para elegir dónde va y de qué tamaño; un solo clic lo coloca con la medida normal.
+Sono campi veri del PDF (AcroForm): chi apre il file li compila anche con altri programmi. Il nome si dà da solo: «Testo1», «Spunta1»…	Son campos reales del PDF (AcroForm): quien abra el archivo los rellena también con otros programas. El nombre se asigna solo: «Testo1», «Spunta1»…
+Campi che hai messo	Campos que has puesto
+casella	cuadro de texto
+spunta	casilla
+scelta	opción
+elenco	lista
+firma	firma
+1 area da oscurare	1 área por ocultar
+{#} aree da oscurare	{} áreas por ocultar
+1 area oscurata	1 área ocultada
+{#} aree oscurate	{} áreas ocultadas
+Nessuna area scelta	Ninguna área elegida
+Finché non premi «Applica» il testo c'è ancora: le aree sono tratteggiate sulla pagina.	Hasta que pulses «Aplicar» el texto sigue ahí: las áreas aparecen punteadas en la página.
+Applica l'oscuramento	Aplicar la ocultación
+Applica l'oscuramento ({#})	Aplicar la ocultación ({})
+Togli le aree segnate	Quitar las áreas marcadas
+Cancella davvero: toglie dal file il testo e le immagini sotto il riquadro, così non si recuperano né copiando né cercando.	Borra de verdad: quita del archivo el texto y las imágenes bajo el recuadro, así que no se recuperan ni copiando ni buscando.
+Cosa cerco	Qué busco
+cerco…	buscando…
+nessuno	ninguno
+{#} segnati	{} marcados
+Codici fiscali	Códigos fiscales
+Indirizzi e-mail	Direcciones de correo
+Telefoni	Teléfonos
+Oppure una parola	O una palabra
+per esempio «Rossi»	por ejemplo «García»
+Segna	Marcar
+Non l'ho trovata.	No la he encontrado.
+Segnata 1 area.	Marcada 1 área.
+Segnate {#} aree.	Marcadas {} áreas.
+Le parole trovate si segnano da sole sulla pagina. Controlla, poi applica: dopo non si torna indietro nel file salvato.	Las palabras encontradas se marcan solas en la página. Comprueba y aplica: después no hay vuelta atrás en el archivo guardado.
+Cosa porta con sé questo file	Qué lleva consigo este archivo
+Letto dal PDF, prima di salvare.	Leído del PDF, antes de guardar.
+presenti	presentes
+Autore	Autor
+Titolo	Título
+Creato con	Creado con
+Programma PDF	Programa PDF
+Dati XMP	Datos XMP
+Allegati	Adjuntos
+Script	Scripts
+Toglili quando salvo	Quitarlos al guardar
+autore, programma e dati nascosti	autor, programa y datos ocultos
+PDF salvato	PDF guardado
+Salvato come {}.	Guardado como {}.
+Salvato come {}: {}.	Guardado como {}: {}.
+~caratteri tolti dal testo	caracteres quitados del texto
+~immagini oscurate	imágenes ocultadas
+~commenti o campi tolti	comentarios o campos quitados
+Apri il PDF	Abrir el PDF
+Continua a modificare	Seguir editando
+Opzioni di salvataggio	Opciones de guardado
+Appiattisci commenti e campi	Aplanar comentarios y campos
+diventano parte della pagina	pasan a formar parte de la página
+programma, XMP, allegati	programa, XMP, adjuntos
+1 area è solo segnata: il testo sotto resta leggibile finché non applichi l'oscuramento.	1 área solo está marcada: el texto de debajo sigue legible hasta que apliques la ocultación.
+{#} aree sono solo segnate: il testo sotto resta leggibile finché non applichi l'oscuramento.	{} áreas solo están marcadas: el texto de debajo sigue legible hasta que apliques la ocultación.
+Salvo il PDF…	Guardando el PDF…
+Salva il PDF	Guardar el PDF
+Salva il PDF ({#})	Guardar el PDF ({})
+Ci sono modifiche non salvate	Hay cambios sin guardar
+C'è 1 modifica non salvata nel file. La salvo in «{}» prima di uscire? L'originale non si tocca.	Hay 1 cambio sin guardar en el archivo. ¿Lo guardo en «{}» antes de salir? El original no se toca.
+Ci sono {#} modifiche non salvate nel file. Le salvo in «{}» prima di uscire? L'originale non si tocca.	Hay {} cambios sin guardar en el archivo. ¿Los guardo en «{}» antes de salir? El original no se toca.
+Resta qui	Quedarme aquí
+Esci senza salvare	Salir sin guardar
+Salva ed esci	Guardar y salir
+Nessun commento su questa pagina.	Ningún comentario en esta página.
+Nessun commento. Evidenzia, scrivi una nota o metti un timbro dalla scheda «Commenti».	Ningún comentario. Resalta, escribe una nota o pon un sello desde la pestaña «Comentarios».
+Apro il file…	Abriendo el archivo…
+Scrivi la nota…	Escribe la nota…
+nessuna modifica	ningún cambio
+1 modifica non salvata	1 cambio sin guardar
+{#} modifiche non salvate	{} cambios sin guardar
+Scrivi la nota. Invio va a capo, clic fuori per finire, Esc per annullare.	Escribe la nota. Intro salta de línea, haz clic fuera para terminar, Esc para cancelar.
+Stai scrivendo dentro il file. Invio va a capo, clic fuori per finire, Esc per annullare.	Estás escribiendo dentro del archivo. Intro salta de línea, haz clic fuera para terminar, Esc para cancelar.
+Scrivi nel campo. Invio o clic fuori per finire, Esc per annullare.	Escribe en el campo. Intro o un clic fuera para terminar, Esc para cancelar.
+Oscurato: niente di leggibile restava sotto le aree.	Ocultado: no quedaba nada legible bajo las áreas.
+1 parola cancellata dal file: non si recupera né copiando né cercando.	1 palabra borrada del archivo: no se recupera ni copiando ni buscando.
+{#} parole cancellate dal file: non si recuperano né copiando né cercando.	{} palabras borradas del archivo: no se recuperan ni copiando ni buscando.
+1 immagine oscurata dal file.	1 imagen ocultada del archivo.
+{#} immagini oscurate dal file.	{} imágenes ocultadas del archivo.
+{} e {} tolte dal file.	{1} y {2} quitadas del archivo.
+1 parola	1 palabra
+{#} parole	{} palabras
+Aspetta che finisca il lavoro in corso.	Espera a que termine el trabajo en curso.
+Finisci qui o torna alla scheda PDF prima di aggiungere altri file.	Termina aquí o vuelve a la pestaña PDF antes de añadir más archivos.
+Non riesco a fare questa modifica: {}	No puedo hacer este cambio: {}
+Non trovo più il paragrafo da modificare in questa pagina.	Ya no encuentro el párrafo que editar en esta página.
+Sostituite {#} occorrenze.	Se han reemplazado {} apariciones.
+Non ho trovato niente da sostituire.	No he encontrado nada que reemplazar.
+Non riesco a leggere l'immagine.	No puedo leer la imagen.
+L'immagine non si apre: scegli un PNG o un JPEG.	La imagen no se abre: elige un PNG o un JPEG.
+Questo paragrafo non si può riscrivere: il suo carattere non dice che lettera è ogni segno.	Este párrafo no se puede reescribir: su fuente no dice qué letra es cada signo.
+Hai compilato tutti i campi.	Has rellenado todos los campos.
+Scegli un PDF da modificare.	Elige un PDF que editar.
+Questa pagina è una scansione: il testo si cerca e si evidenzia, ma non si riscrive.	Esta página es un escaneo: el texto se busca y se resalta, pero no se reescribe.
+Il testo girato non si modifica ancora: si può cancellare con «Oscura».	El texto girado todavía no se puede editar: se puede borrar con «Ocultar».
+Il carattere di questo testo non dice che lettera è ogni segno: non lo posso riscrivere senza rovinarlo.	La fuente de este texto no dice qué letra es cada signo: no puedo reescribirlo sin estropearlo.
+Questo campo è di sola lettura.	Este campo es de solo lectura.
+Il campo firma si firma poi in «Firma digitale».	El campo de firma se firma después en «Firma digital».
+Trascina sopra il testo da segnare.	Arrastra sobre el texto que marcar.
+Scegli prima l'immagine con il pulsante «Immagine».	Primero elige la imagen con el botón «Imagen».
+{} esiste già: non l'ho salvato	{} ya existe: no lo he guardado
+non riesco a scrivere il file: {}	no puedo escribir el archivo: {}
+troppi file con lo stesso nome	demasiados archivos con el mismo nombre
+nessun file aperto	ningún archivo abierto
+finestra chiusa	ventana cerrada
+Allineamento	Alineación
+Sinistra	Izquierda
+Centro	Centro
+Destra	Derecha
+Grassetto	Negrita
+Corsivo	Cursiva
+Maiuscole e minuscole	Mayúsculas y minúsculas
+«Rossi» non trova «rossi»	«García» no encuentra «garcía»
+Solo parole intere	Solo palabras completas
+«casa» non trova «casale»	«casa» no encuentra «casaca»

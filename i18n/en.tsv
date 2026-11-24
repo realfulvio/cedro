@@ -2750,3 +2750,247 @@ Vetrini, DICOM, casi e campioni	Slides, DICOM, cases and samples
 Opzioni del download	Download options
 in più	more
 Leggero	Light
+# Editor dei PDF (scheda PDF → Modifica)
+Immagini e forme	Images and shapes
+Moduli	Forms
+Oscura	Redact
+Commenti	Comments
+Modifica testo	Edit text
+Aggiungi testo	Add text
+Trova e sostituisci	Find and replace
+Evidenzia	Highlight
+Evidenziatore	Highlighter
+Sottolinea	Underline
+Sottolineato	Underlined
+Barra	Strike out
+Barrato	Struck out
+Nota	Note
+Matita	Pencil
+Disegno a mano	Freehand drawing
+Timbro	Stamp
+Rettangolo	Rectangle
+Ellisse	Ellipse
+Linea	Line
+Freccia	Arrow
+Compila	Fill in
+Campo di testo	Text field
+Spunta	Checkbox
+Scelta	Choice
+Elenco	List
+Oscura un'area	Redact an area
+Cerca e oscura	Search and redact
+Dati nascosti	Hidden data
+Cerca nel PDF	Search the PDF
+Torna alla scheda PDF	Back to the PDF tab
+Proprietà	Properties
+Clic su una cosa aggiunta per spostarla, cambiarla o toglierla.	Click something you added to move, change or remove it.
+Clic su un paragrafo e scrivi: il testo cambia dentro il file.	Click a paragraph and type: the text changes inside the file.
+Clic sulla pagina (o trascina un riquadro) e scrivi un testo nuovo.	Click the page (or drag a box) and type new text.
+Cerca una parola o una frase in tutto il file e sostituiscila.	Search for a word or a phrase in the whole file and replace it.
+Trascina sul testo per evidenziarlo.	Drag over the text to highlight it.
+Trascina sul testo per sottolinearlo.	Drag over the text to underline it.
+Trascina sul testo per barrarlo.	Drag over the text to strike it out.
+Clic sulla pagina e scrivi la nota: resta un fumetto giallo.	Click the page and write the note: it stays as a yellow speech bubble.
+Disegna a mano libera sulla pagina.	Draw freehand on the page.
+Scegli il timbro e mettilo sulla pagina.	Choose the stamp and put it on the page.
+Scegli un'immagine e mettila sulla pagina.	Choose an image and put it on the page.
+Trascina sulla pagina per disegnare la forma.	Drag on the page to draw the shape.
+Trascina da un punto all'altro.	Drag from one point to the other.
+Clic su un campo del modulo per compilarlo.	Click a form field to fill it in.
+Trascina sulla pagina per mettere il campo.	Drag on the page to place the field.
+Trascina un rettangolo: testo e immagini sotto spariscono davvero.	Drag a rectangle: the text and images underneath really disappear.
+Scegli cosa cercare nel pannello: le parole trovate si segnano da sole.	Choose what to look for in the panel: the words found are marked automatically.
+Quello che il file porta con sé e non si vede.	What the file carries with it and you can't see.
+APPROVATO	APPROVED
+RESPINTO	REJECTED
+COPIA CONFORME	CERTIFIED COPY
+PROTOCOLLATO	REGISTERED
+RISERVATO	CONFIDENTIAL
+URGENTE	URGENT
+ANNULLATO	CANCELLED
+Invio va a capo. Clic fuori dal riquadro per finire; Esc annulla.	Enter starts a new line. Click outside the box to finish; Esc cancels.
+Colore	Color
+L'evidenziatore segue le parole: su più righe diventa un pezzo per riga, come in Word.	The highlighter follows the words: across several lines it becomes one piece per line, like in Word.
+Colore della nota	Note color
+Clic sulla pagina e scrivi. L'elenco a sinistra raccoglie tutte le note.	Click the page and write. The list on the left gathers all the notes.
+Spessore	Thickness
+Colore della linea	Line color
+Riempimento	Fill
+Testo aggiunto	Added text
+Testo modificato	Edited text
+Campo compilato	Filled-in field
+Campo nuovo	New field
+Area da oscurare	Area to redact
+Commento tolto	Comment removed
+Testo del timbro	Stamp text
+scrivi qui	type here
+Togli questa modifica	Remove this change
+Trascinala per spostarla. Tasto Canc per toglierla.	Drag it to move it. Delete key to remove it.
+Scritto da {}	Written by {}
+Togli questo commento	Remove this comment
+Era già nel file: si toglie dalla copia che salvi, l'originale resta com'è.	It was already in the file: it is removed from the copy you save, the original stays as it is.
+Non hai ancora aggiunto niente. Scegli uno strumento in alto e lavora sulla pagina.	You haven't added anything yet. Pick a tool at the top and work on the page.
+Hai fatto 1 modifica. Clic su una cosa aggiunta per sceglierla.	You made 1 change. Click something you added to select it.
+Hai fatto {#} modifiche. Clic su una cosa aggiunta per sceglierla.	You made {} changes. Click something you added to select it.
+Carattere del testo	Text font
+Il carattere del documento ha tutte le lettere che servono.	The document's font has all the letters needed.
+Nel carattere del file mancano: {}. Quelle le scrivo con un altro carattere.	The file's font is missing: {}. I write those with another font.
+Clic su un paragrafo della pagina: si scrive lì, il resto non si muove. Invio va a capo, clic fuori per finire; Esc annulla.	Click a paragraph on the page: you write right there, the rest doesn't move. Enter starts a new line, click outside to finish; Esc cancels.
+Se il paragrafo è tratteggiato di giallo il suo carattere non si può riscrivere: lo cancelli con «Oscura» e lo rifai con «Aggiungi testo».	If the paragraph is dashed in yellow, its font can't be rewritten: erase it with "Redact" and redo it with "Add text".
+Colore del testo	Text color
+Quello del file	The file's font
+Cerca	Search
+cerca	search
+una parola, per esempio «importo»	a word, for example "amount"
+Sostituisci con	Replace with
+il testo nuovo	the new text
+Cerco…	Searching…
+Sostituisci tutte	Replace all
+Sostituisci tutte ({#})	Replace all ({})
+Cerco in tutte le pagine…	Searching all pages…
+Vale per tutte le pagine. Ogni parola sostituita si può annullare.	It applies to all pages. Every replaced word can be undone.
+Non ho trovato niente.	I found nothing.
+1 trovata	1 match
+{#} trovate	{} matches
+pag. {#}	p. {}
+{} · pag. {#}	{} · p. {}
+…e altre {#}.	…and {} more.
+Quale timbro	Which stamp
+Oppure scrivi il testo	Or type the text
+per esempio «PAGATO»	for example "PAID"
+Clic sulla pagina per metterlo grande com'è, oppure trascina per scegliere la misura.	Click the page to place it at its normal size, or drag to choose the size.
+Quale immagine	Which image
+Immagine pronta	Image ready
+{#} × {#} pixel. Clic sulla pagina per metterla, o trascina per scegliere dove.	{} × {} pixels. Click the page to place it, or drag to choose where.
+Nessuna immagine scelta	No image chosen
+Scegli un PNG o un JPEG: gli altri formati diventano PNG da soli.	Choose a PNG or a JPEG: other formats become PNG on their own.
+Scegli un'altra immagine…	Choose another image…
+Scegli dal PC…	Choose from the PC…
+L'immagine resta com'è, senza stirarsi: si ridimensiona dopo, tenendo le proporzioni.	The image stays as it is, without stretching: you resize it afterwards, keeping the proportions.
+Questo PDF non ha campi da compilare. Nella scheda «Moduli» puoi crearne di nuovi: casella di testo, spunta, scelta, elenco.	This PDF has no fields to fill in. In the "Forms" tab you can create new ones: text box, checkbox, choice, list.
+Campi del modulo	Form fields
+{#} di {#} compilati	{} of {} filled in
+fatto	done
+vuoto	empty
+Prossimo vuoto	Next empty
+Svuota tutti	Clear all
+Clic su un campo della pagina per compilarlo. Sono campi veri del PDF: si compilano anche con altri programmi.	Click a field on the page to fill it in. They are real PDF fields: they can be filled in with other programs too.
+Qui si mette il riquadro della firma. Firmare è un'attività a parte («Firma digitale»): il file salvato ci arriva già pronto.	This is where the signature box goes. Signing is a separate activity ("Digital signature"): the saved file gets there ready.
+Trascina sulla pagina per scegliere dove sta e quanto è grande; un clic solo lo mette della misura normale.	Drag on the page to choose where it goes and how big it is; a single click places it at the normal size.
+Sono campi veri del PDF (AcroForm): chi apre il file li compila anche con altri programmi. Il nome si dà da solo: «Testo1», «Spunta1»…	They are real PDF fields (AcroForm): whoever opens the file can fill them in with other programs too. The name is given automatically: "Testo1", "Spunta1"…
+Campi che hai messo	Fields you placed
+casella	text box
+spunta	checkbox
+scelta	choice
+elenco	list
+firma	signature
+1 area da oscurare	1 area to redact
+{#} aree da oscurare	{} areas to redact
+1 area oscurata	1 area redacted
+{#} aree oscurate	{} areas redacted
+Nessuna area scelta	No area chosen
+Finché non premi «Applica» il testo c'è ancora: le aree sono tratteggiate sulla pagina.	Until you press "Apply" the text is still there: the areas are dashed on the page.
+Applica l'oscuramento	Apply the redaction
+Applica l'oscuramento ({#})	Apply the redaction ({})
+Togli le aree segnate	Remove the marked areas
+Cancella davvero: toglie dal file il testo e le immagini sotto il riquadro, così non si recuperano né copiando né cercando.	It really erases: it removes the text and images under the box from the file, so they can't be recovered by copying or searching.
+Cosa cerco	What to look for
+cerco…	searching…
+nessuno	none
+{#} segnati	{} marked
+Codici fiscali	Tax codes
+Indirizzi e-mail	Email addresses
+Telefoni	Phone numbers
+Oppure una parola	Or a word
+per esempio «Rossi»	for example "Smith"
+Segna	Mark
+Non l'ho trovata.	I didn't find it.
+Segnata 1 area.	Marked 1 area.
+Segnate {#} aree.	Marked {} areas.
+Le parole trovate si segnano da sole sulla pagina. Controlla, poi applica: dopo non si torna indietro nel file salvato.	The words found are marked on the page automatically. Check, then apply: afterwards there's no going back in the saved file.
+Cosa porta con sé questo file	What this file carries with it
+Letto dal PDF, prima di salvare.	Read from the PDF, before saving.
+presenti	present
+Autore	Author
+Titolo	Title
+Creato con	Created with
+Programma PDF	PDF program
+Dati XMP	XMP data
+Allegati	Attachments
+Script	Scripts
+Toglili quando salvo	Remove them when I save
+autore, programma e dati nascosti	author, program and hidden data
+PDF salvato	PDF saved
+Salvato come {}.	Saved as {}.
+Salvato come {}: {}.	Saved as {}: {}.
+~caratteri tolti dal testo	characters removed from the text
+~immagini oscurate	images redacted
+~commenti o campi tolti	comments or fields removed
+Apri il PDF	Open the PDF
+Continua a modificare	Keep editing
+Opzioni di salvataggio	Save options
+Appiattisci commenti e campi	Flatten comments and fields
+diventano parte della pagina	they become part of the page
+programma, XMP, allegati	program, XMP, attachments
+1 area è solo segnata: il testo sotto resta leggibile finché non applichi l'oscuramento.	1 area is only marked: the text underneath stays readable until you apply the redaction.
+{#} aree sono solo segnate: il testo sotto resta leggibile finché non applichi l'oscuramento.	{} areas are only marked: the text underneath stays readable until you apply the redaction.
+Salvo il PDF…	Saving the PDF…
+Salva il PDF	Save the PDF
+Salva il PDF ({#})	Save the PDF ({})
+Ci sono modifiche non salvate	There are unsaved changes
+C'è 1 modifica non salvata nel file. La salvo in «{}» prima di uscire? L'originale non si tocca.	There is 1 unsaved change in the file. Shall I save it to "{}" before leaving? The original is not touched.
+Ci sono {#} modifiche non salvate nel file. Le salvo in «{}» prima di uscire? L'originale non si tocca.	There are {} unsaved changes in the file. Shall I save them to "{}" before leaving? The original is not touched.
+Resta qui	Stay here
+Esci senza salvare	Leave without saving
+Salva ed esci	Save and leave
+Nessun commento su questa pagina.	No comments on this page.
+Nessun commento. Evidenzia, scrivi una nota o metti un timbro dalla scheda «Commenti».	No comments. Highlight, write a note or put a stamp from the "Comments" tab.
+Apro il file…	Opening the file…
+Scrivi la nota…	Write the note…
+nessuna modifica	no changes
+1 modifica non salvata	1 unsaved change
+{#} modifiche non salvate	{} unsaved changes
+Scrivi la nota. Invio va a capo, clic fuori per finire, Esc per annullare.	Write the note. Enter starts a new line, click outside to finish, Esc to cancel.
+Stai scrivendo dentro il file. Invio va a capo, clic fuori per finire, Esc per annullare.	You're writing inside the file. Enter starts a new line, click outside to finish, Esc to cancel.
+Scrivi nel campo. Invio o clic fuori per finire, Esc per annullare.	Type in the field. Enter or a click outside to finish, Esc to cancel.
+Oscurato: niente di leggibile restava sotto le aree.	Redacted: nothing readable was left under the areas.
+1 parola cancellata dal file: non si recupera né copiando né cercando.	1 word erased from the file: it can't be recovered by copying or searching.
+{#} parole cancellate dal file: non si recuperano né copiando né cercando.	{} words erased from the file: they can't be recovered by copying or searching.
+1 immagine oscurata dal file.	1 image redacted from the file.
+{#} immagini oscurate dal file.	{} images redacted from the file.
+{} e {} tolte dal file.	{1} and {2} removed from the file.
+1 parola	1 word
+{#} parole	{} words
+Aspetta che finisca il lavoro in corso.	Wait for the current job to finish.
+Finisci qui o torna alla scheda PDF prima di aggiungere altri file.	Finish here or go back to the PDF tab before adding more files.
+Non riesco a fare questa modifica: {}	I can't make this change: {}
+Non trovo più il paragrafo da modificare in questa pagina.	I can't find the paragraph to edit on this page any more.
+Sostituite {#} occorrenze.	Replaced {} occurrences.
+Non ho trovato niente da sostituire.	I found nothing to replace.
+Non riesco a leggere l'immagine.	I can't read the image.
+L'immagine non si apre: scegli un PNG o un JPEG.	The image won't open: choose a PNG or a JPEG.
+Questo paragrafo non si può riscrivere: il suo carattere non dice che lettera è ogni segno.	This paragraph can't be rewritten: its font doesn't say which letter each sign is.
+Hai compilato tutti i campi.	You've filled in all the fields.
+Scegli un PDF da modificare.	Choose a PDF to edit.
+Questa pagina è una scansione: il testo si cerca e si evidenzia, ma non si riscrive.	This page is a scan: you can search and highlight the text, but not rewrite it.
+Il testo girato non si modifica ancora: si può cancellare con «Oscura».	Rotated text can't be edited yet: you can erase it with "Redact".
+Il carattere di questo testo non dice che lettera è ogni segno: non lo posso riscrivere senza rovinarlo.	This text's font doesn't say which letter each sign is: I can't rewrite it without ruining it.
+Questo campo è di sola lettura.	This field is read-only.
+Il campo firma si firma poi in «Firma digitale».	The signature field is signed afterwards in "Digital signature".
+Trascina sopra il testo da segnare.	Drag over the text to mark.
+Scegli prima l'immagine con il pulsante «Immagine».	First choose the image with the "Picture" button.
+{} esiste già: non l'ho salvato	{} already exists: I did not save it
+non riesco a scrivere il file: {}	I can't write the file: {}
+troppi file con lo stesso nome	too many files with the same name
+nessun file aperto	no file open
+finestra chiusa	window closed
+Allineamento	Alignment
+Sinistra	Left
+Centro	Center
+Destra	Right
+Grassetto	Bold
+Corsivo	Italic
+Maiuscole e minuscole	Match case
+«Rossi» non trova «rossi»	"Smith" doesn't find "smith"
+Solo parole intere	Whole words only
+«casa» non trova «casale»	"cat" doesn't find "catalog"
