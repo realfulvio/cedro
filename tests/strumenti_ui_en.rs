@@ -82,6 +82,14 @@ fn nessun_testo_resta_in_italiano() {
         std::fs::copy(fx.join(file), &path).unwrap();
         s.drop_files(vec![path.clone()]);
         assert!(aspetta(&mut s, 30, |s| s.app.strum_corrente().is_some()), "{nome}");
+        // Ruoli segnati su qualche pozzetto: così si disegnano anche il riassunto dei ruoli, la scelta «meno il bianco»
+        // e le colonne dei ruoli, che senza bianchi non compaiono.
+        for (da, a, ruolo) in [((0, 0), (0, 1), 'B'), ((1, 0), (1, 1), 'S'), ((2, 0), (2, 1), 'C'), ((3, 0), (3, 1), 'R')] {
+            s.app.strum_premi(da);
+            s.app.strum_muovi(a);
+            s.app.strum_rilascia();
+            s.act(Act::Strum(StrumAct::Ruolo(ruolo)), &mut plat);
+        }
         for semplice in [false, true] {
             s.act(Act::SetSimple(semplice), &mut plat);
             for v in [Vista::Piastra, Vista::Elenco, Vista::Strumento] {

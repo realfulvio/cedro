@@ -2463,7 +2463,7 @@ Caso	Caso
 Lavori di oggi	Trabajos de hoy
 Ancora nessuno. Ogni lavoro finisce qui, con i nomi dei file usciti.	Todavía ninguno. Cada trabajo termina aquí, con los nombres de los archivos que ha escrito.
 Gli originali non sono mai stati toccati.	Los originales nunca se han tocado.
-… e altri {#} file	… y {#} archivos más
+… e altri {#} file	… y {} archivos más
 Copia per il quaderno	Copiar para el cuaderno
 Caso o campione	Caso o muestra
 Se c'è, il codice entra nei nomi dei file che Cedro scrive, dopo la data. Resta finché non lo togli.	Si hay uno, su código entra en los nombres de los archivos que escribe Cedro, después de la fecha. Se queda hasta que lo quites.
@@ -3347,3 +3347,12 @@ non ho letto queste tabelle del file: {}	no he leído estas tablas del archivo: 
 Ruolo senza pozzetto.	Rol sin pocillo.
 Il pozzetto {} non c'è nella piastra: il ruolo segnato è stato ignorato.	El pocillo {} no está en la placa: se ha ignorado el rol marcado.
 I pozzetti {} non ci sono nella piastra: i ruoli segnati sono stati ignorati.	Los pocillos {} no están en la placa: se han ignorado los roles marcados.
+
+# Ruoli e valori «meno il bianco» della finestra dei dati degli strumenti
+Valori	Valores
+Grezzi	Brutos
+Meno il bianco	Menos el blanco
+bianco	blanco
+controllo	control
+riferimento	referencia
+meno il bianco (calcolato da Cedro)	menos el blanco (calculado por Cedro)

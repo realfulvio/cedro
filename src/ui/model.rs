@@ -490,6 +490,8 @@ pub struct App {
     pub strum: super::strumenti::Stato,
     /// Cosa è uscito dai file di strumento già convertiti: i file in più, lo strumento, l'impronta, le note.
     pub strum_esiti: HashMap<PathBuf, engine::EsitoStrumento>,
+    /// Le scelte di ogni file di strumento nel momento in cui è partito il lavoro (per sapere con che scelte è stato fatto).
+    strum_chiavi_partenza: HashMap<PathBuf, String>,
     /// Il lavoro appena finito è entrato nell'elenco: il pannello del risultato offre «Copia per il quaderno».
     pub lavoro_appena: bool,
     /// «Copia per il quaderno» del lavoro appena finito già premuto: per dire «Copiato».
@@ -604,6 +606,7 @@ impl App {
             lavori_aperti: false,
             strum: Default::default(),
             strum_esiti: HashMap::new(),
+            strum_chiavi_partenza: HashMap::new(),
             quaderno_copiato: None,
             lavoro_appena: false,
             lavori_esportato: None,
@@ -1446,13 +1449,18 @@ impl App {
             self.quality,
             self.dest,
             self.values,
-            format!("{:?}{}{}", self.transcribe.format, self.transcribe.model, self.strum_chiave())
+            format!("{:?}{}", self.transcribe.format, self.transcribe.model)
         )
     }
 
     /// Il file è già fatto con le scelte di adesso.
-    fn is_fresh_done(&self, i: usize) -> bool {
-        matches!(self.files[i].state, FileState::Done | FileState::Skipped) && self.files[i].done_key.as_deref() == Some(self.settings_key().as_str())
+    pub fn is_fresh_done(&self, i: usize) -> bool {
+        matches!(self.files[i].state, FileState::Done | FileState::Skipped) && self.files[i].done_key.as_deref() == Some(self.done_key_for(&self.files[i].path).as_str())
+    }
+
+    /// La chiave di un file fatto: le scelte comuni e, per i dati di uno strumento, quelle del file stesso.
+    fn done_key_for(&self, path: &Path) -> String {
+        format!("{}|{}", self.settings_key(), self.strum_chiave_file(path))
     }
 
     /// I file che il pulsante lavorerebbe adesso, senza quelli già fatti con le stesse scelte.
@@ -1786,6 +1794,7 @@ impl App {
             if self.action == "pages" { self.boards.iter().filter(|(_, b)| !b.untouched()).map(|(p, b)| (p.clone(), b.kept())).collect() } else { HashMap::new() };
         // I file che sono l'export di uno strumento escono come dati dello strumento (Excel, CSV, Allotrope); gli altri come da scelta.
         let strum: HashMap<PathBuf, crate::strumenti::Scelte> = paths.iter().filter(|p| self.strum_lettura(p).is_some()).map(|p| (p.clone(), self.strum_scelte_per(p))).collect();
+        self.strum_chiavi_partenza = strum.iter().map(|(p, sc)| (p.clone(), format!("{sc:?}"))).collect();
         for p in strum.keys() {
             self.strum_esiti.remove(p);
         }
@@ -2089,7 +2098,8 @@ impl App {
                 }
                 Event::Finished(path, result) => {
                     let mut failed = false;
-                    let key = self.job.as_ref().map(|j| j.key.clone());
+                    // Le scelte comuni di quando il lavoro è partito, più quelle del file (ruoli, strumento).
+                    let key = self.job.as_ref().map(|j| format!("{}|{}", j.key, self.strum_chiavi_partenza.get(&path).cloned().unwrap_or_default()));
                     if let Some(f) = self.files.iter_mut().find(|f| f.path == path) {
                         f.percent = None;
                         match result {

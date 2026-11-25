@@ -94,7 +94,7 @@ pub(super) fn halo(app: &App, i: usize) -> Option<Image> {
 }
 
 /// La pagina su cui si sta lavorando (per i colori): a «Inizio» con un file quella del marchio.
-fn colors(app: &App) -> (Rgb, Rgb) {
+pub(super) fn colors(app: &App) -> (Rgb, Rgb) {
     lab_colors(app.lab)
 }
 
@@ -608,32 +608,67 @@ pub(super) fn viewer(f: &mut Frame, app: &App, i: usize, area: R) {
 }
 
 /// La striscia dei file in coda: miniature, «Aggiungi», quanti sono.
+/// Le miniature si stringono fin dove restano leggibili; se ancora non ci stanno
+/// tutte compaiono le frecce per passare al file prima e dopo.
 fn strip(f: &mut Frame, app: &App, r: R, vis: &[usize], sel: usize) {
     let (_, bright) = colors(app);
-    let (tw, th, gap) = (88.0, 60.0, 10.0);
+    let (tw_max, th_max, gap) = (88.0f32, 60.0f32, 10.0f32);
+    let th = th_max;
     let y = r.1 + (r.3 - th) / 2.0;
     let count = if vis.len() == 1 { "1 file".to_string() } else { format!("{} file", vis.len()) };
     let cw = f.measure(&count, 14.5, SEMI);
     let add_w = f.measure("Aggiungi", 15.0, SEMI) + 58.0;
     let room = r.2 - 36.0 - add_w - gap - cw - 24.0;
-    let fit = ((room / (tw + gap)).floor() as usize).max(1);
+    let n = vis.len();
+    // Larghezza della miniatura: piena se ci stanno tutte, altrimenti più stretta (minimo 52).
+    let tw_min = 52.0f32;
+    let tw_all = (room - (n as f32 - 1.0) * gap) / n as f32;
+    let (tw, arrows) = if tw_all >= tw_max {
+        (tw_max, false)
+    } else if tw_all >= tw_min {
+        (tw_all.floor(), false)
+    } else {
+        (tw_min, n > 1)
+    };
+    let tt = (tw * th_max / tw_max).round(); // altezza della miniatura, in proporzione
+    let ty0 = y + (th - tt) / 2.0;
+    let arrows_w = if arrows { 64.0 } else { 0.0 };
+    let fit = (((room - arrows_w + gap) / (tw + gap)).floor() as usize).clamp(1, n);
     // Se non ci stanno tutte, la striscia parte in modo che quella scelta si veda.
     let pos = vis.iter().position(|&v| v == sel).unwrap_or(0);
-    let start = if vis.len() > fit { (pos + 1).saturating_sub(fit).min(vis.len() - fit) } else { 0 };
+    let start = if n > fit { (pos + 1).saturating_sub(fit).min(n - fit) } else { 0 };
     let mut x = r.0 + 18.0;
+    if arrows {
+        for (k, (icon, target)) in [(ic::ARROW_LEFT, pos.checked_sub(1)), (ic::ARROW_RIGHT, (pos + 1 < n).then_some(pos + 1))].into_iter().enumerate() {
+            let ax = x + k as f32 * 30.0;
+            let ay = y + (th - 28.0) / 2.0;
+            match target {
+                Some(t) => {
+                    let act = Act::Select(vis[t]);
+                    if f.hovered(&act) {
+                        f.p.disc_a(ax + 14.0, ay + 14.0, 15.0, WHITE, 0.16);
+                    }
+                    f.icon(icon, ax + 2.0, ay + 2.0, 24.0, LABS_INK);
+                    f.hit((ax, ay, 28.0, 28.0), act);
+                }
+                None => f.icon(icon, ax + 2.0, ay + 2.0, 24.0, mix(LABS_INK, LABS_STAGE, 0.6)),
+            }
+        }
+        x += arrows_w;
+    }
     for &i in vis.iter().skip(start).take(fit) {
         let file = &app.files[i];
         let on = i == sel;
         let act = Act::Select(i);
         let t = f.hover_t(&act, !on);
-        let ty = y - if on { 2.0 } else { 0.0 };
-        f.thumb(app, i, (x, ty, tw, th), 9.0);
+        let ty = ty0 - if on { 2.0 } else { 0.0 };
+        f.thumb(app, i, (x, ty, tw, tt), 9.0);
         if on {
-            f.p.rrect_line(x - 3.0, ty - 3.0, tw + 6.0, th + 6.0, 12.0, bright, 2.5, 1.0, None);
+            f.p.rrect_line(x - 3.0, ty - 3.0, tw + 6.0, tt + 6.0, 12.0, bright, 2.5, 1.0, None);
         } else {
-            f.p.rrect_a(x, ty, tw, th, 9.0, LABS_STAGE, 0.42 * (1.0 - t));
+            f.p.rrect_a(x, ty, tw, tt, 9.0, LABS_STAGE, 0.42 * (1.0 - t));
         }
-        f.hit((x, ty, tw, th), act);
+        f.hit((x, ty, tw, tt), act);
         if file.state == FileState::Waiting {
             // La crocetta per togliere il file: su quello scelto, o sotto il mouse.
             let rm = Act::Remove(i);
@@ -650,8 +685,8 @@ fn strip(f: &mut Frame, app: &App, r: R, vis: &[usize], sel: usize) {
             }
         }
         if let Some(p) = file.percent.filter(|_| file.state == FileState::Running) {
-            f.p.rrect_a(x + 6.0, ty + th - 10.0, tw - 12.0, 4.0, 2.0, WHITE, 0.3);
-            f.p.rrect(x + 6.0, ty + th - 10.0, (tw - 12.0) * p.clamp(0.0, 1.0), 4.0, 2.0, Some(bright), None);
+            f.p.rrect_a(x + 6.0, ty + tt - 10.0, tw - 12.0, 4.0, 2.0, WHITE, 0.3);
+            f.p.rrect(x + 6.0, ty + tt - 10.0, (tw - 12.0) * p.clamp(0.0, 1.0), 4.0, 2.0, Some(bright), None);
         }
         x += tw + gap;
     }

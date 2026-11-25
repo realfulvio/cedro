@@ -173,6 +173,16 @@ fn pronto(f: &Frame, app: &App, path: &Path, l: &Arc<Lettura>, vista: Vista) -> 
 pub fn stage(f: &mut Frame, app: &App, i: usize, l: &Arc<Lettura>, area: R) {
     let path = app.files[i].path.clone();
     let pf = app.strum_file(&path);
+    // Con uno strumento scelto a mano, finché il file non si legge (o non si legge affatto) non si mostra
+    // la lettura di prima: sarebbe di un altro strumento.
+    if pf.rileggendo || matches!(pf.riletto, Some(Err(_))) {
+        let (_, bright) = super::labs::colors(app);
+        f.p.rrect_a(area.0, area.1, area.2, area.3, 14.0, WHITE, 0.03);
+        f.p.rrect_line(area.0, area.1, area.2, area.3, 14.0, mix(bright, WHITE, 0.3), 2.0, 0.4, Some((9.0, 6.0)));
+        let msg = if pf.rileggendo { "Rileggo il file…" } else { "Con questo strumento il file non si legge." };
+        f.text_c(msg, (area.0, area.1, area.2, area.3), 18.0, SEMI, LABS_MUTED);
+        return;
+    }
     let g = app.strum_gruppo(&path, l);
     let tab = schede(app, l);
     let vista = if tab.contains(&pf.vista) { pf.vista } else { tab[0] };
@@ -287,7 +297,7 @@ fn piastra(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, g: usize, bo
     let avail_h = (body.3 - 64.0 - testa_h - sbox_h - riga_h - 14.0).max(40.0);
     let gap = if colonne > 24 { 1.0 } else if colonne > 12 { 2.0 } else { 3.0 };
     let cw = ((avail_w - gap * (colonne as f32 - 1.0)) / colonne as f32).floor().clamp(3.0, 84.0);
-    let ch = ((avail_h - gap * (righe as f32 - 1.0)) / righe as f32).floor().clamp(3.0, 58.0);
+    let ch = ((avail_h - gap * (righe as f32 - 1.0)) / righe as f32).floor().clamp(3.0, 64.0);
     let (gw, gh) = (cw * colonne as f32 + gap * (colonne as f32 - 1.0), ch * righe as f32 + gap * (righe as f32 - 1.0));
     let gx = body.0 + testa_w + 2.0 + ((avail_w - 2.0 - gw) / 2.0).max(0.0);
     let gy = top + testa_h;
@@ -320,16 +330,18 @@ fn piastra(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, g: usize, bo
         }
         f.hit(rect, act);
     }
-    // I pozzetti.
-    let grande = cw >= 44.0 && ch >= 24.0;
-    let size = if cw >= 60.0 { 15.0 } else { 13.0 };
+    // I pozzetti: tondi, come nell'anteprima approvata (al massimo 44 px), al centro della loro casella.
+    // (al massimo 44 px; con pochi pozzetti fino a 60, perché non restino un puntino in uno spazio vuoto).
+    let dm = cw.min(ch).min(if righe * colonne <= 24 { 60.0 } else { 44.0 });
+    let grande = dm >= 32.0;
+    let max_size = if dm >= 40.0 { 13.0 } else { 11.0 };
     let sopra = app.strum.sopra;
     for r in 0..righe {
         for c in 0..colonne {
             let (x, y) = (gx + c as f32 * (cw + gap), gy + r as f32 * (ch + gap));
-            let rad = if cw > 16.0 { 8.0 } else { 2.0 };
+            let (cx, cy) = (x + cw / 2.0, y + ch / 2.0);
             let Some(m) = pozzetto_di(l, g, r, c) else {
-                f.p.rrect_line(x, y, cw, ch, rad, LABS_LINE, 1.0, 0.8, None);
+                f.p.circle(cx, cy, dm / 2.0, None, Some((LABS_LINE, 1.0)));
                 continue;
             };
             let v = valore_eff(l, m, bianco);
@@ -340,22 +352,32 @@ fn piastra(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, g: usize, bo
                 }
                 None => ((70, 62, 84), l.testo(m).map(|t| if t.eq_ignore_ascii_case("undetermined") { "n.d.".to_string() } else { d(&t) }).unwrap_or_default()),
             };
-            f.p.rrect(x, y, cw, ch, rad, Some(fondo), None);
+            f.p.circle(cx, cy, dm / 2.0, Some(fondo), Some(((0, 0, 0), 1.0)));
             let scuro = luma(fondo) > 0.58;
             if grande && !testo.is_empty() {
-                f.p.text(&testo, x, y, cw, ch, size, SEMI, if scuro { (27, 19, 37) } else { WHITE }, Align::Center);
+                // Il numero va nel cerchio: si prova un carattere più piccolo, poi meno decimali (il valore esatto sta nella riga sotto).
+                let mut cand = vec![testo.clone()];
+                if let Some(v) = v {
+                    cand.extend((0..dec).rev().map(|k| num(v, k)));
+                }
+                let (testo, size) = cand
+                    .iter()
+                    .find_map(|t| [max_size, max_size - 1.0, 10.5].into_iter().find(|&sz| sz >= 10.5 && f.measure(t, sz, BOLD) <= dm - 6.0).map(|sz| (t.clone(), sz)))
+                    .unwrap_or_else(|| (cand.last().cloned().unwrap_or_default(), 10.5));
+                f.p.text(&testo, cx - dm / 2.0 - 3.0, cy - dm / 2.0, dm + 6.0, dm, size, BOLD, if scuro { (27, 19, 37) } else { WHITE }, Align::Center);
             }
             let ruolo = strumenti::ruolo_di(m, &ruoli);
-            if ruolo != Ruolo::Campione && cw >= 26.0 && ch >= 20.0 {
-                let (bx, by) = (x + cw - 9.0, y + 9.0);
+            if ruolo != Ruolo::Campione && dm >= 14.0 {
+                // La lettera del ruolo sta in basso a destra, appena fuori dal pozzetto.
+                let (bx, by) = (cx + dm / 2.0 - 2.0, cy + dm / 2.0 - 2.0);
                 f.p.circle(bx, by, 8.0, Some(colore_ruolo(ruolo)), Some((WHITE, 1.2)));
                 f.p.text(ruolo.lettera(), bx - 8.0, by - 8.0, 16.0, 16.0, 10.5, BOLD, WHITE, Align::Center);
             }
             let (sel, hot) = (pf.sel.contains(&(r, c)), sopra == Some((r, c)));
             if sel {
-                f.p.rrect_line(x - 1.5, y - 1.5, cw + 3.0, ch + 3.0, rad + 1.5, WHITE, 3.0, 1.0, None);
+                f.p.circle(cx, cy, dm / 2.0 + 2.0, None, Some((WHITE, 3.0)));
             } else if hot {
-                f.p.rrect_line(x - 0.5, y - 0.5, cw + 1.0, ch + 1.0, rad + 0.5, WHITE, 1.5, 0.75, None);
+                f.p.circle(cx, cy, dm / 2.0 + 1.0, None, Some((WHITE, 1.5)));
             }
         }
     }
@@ -376,10 +398,10 @@ fn piastra(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, g: usize, bo
                 p.push(d(b));
             }
             p.push(valore);
-            f.p.text(&p.join(" · "), gx, hy, gw, riga_h, 14.5, SEMI, LABS_INK, Align::Left);
+            f.p.text(&p.join(" · "), body.0, hy, body.2, riga_h, 14.5, SEMI, LABS_INK, Align::Left);
         }
     } else {
-        f.p.text("Passa sopra un pozzetto per vederne il valore.", gx, hy, gw, riga_h, 14.0, SANS, LABS_MUTED, Align::Left);
+        f.p.text("Passa sopra un pozzetto per vederne il valore.", body.0, hy, body.2, riga_h, 14.0, SANS, LABS_MUTED, Align::Left);
     }
     scelta(f, l, &sc, &pf.sel, g, bianco, (body.0, hy + riga_h + 6.0, body.2, sbox_h));
 }
@@ -426,17 +448,22 @@ fn scelta(f: &mut Frame, l: &Lettura, sc: &Scelte, sel: &std::collections::BTree
     if vs.len() > 1 {
         let m = vs.iter().sum::<f64>() / vs.len() as f64;
         let sd = (vs.iter().map(|v| (v - m) * (v - m)).sum::<f64>() / (vs.len() - 1) as f64).sqrt();
-        let cv = if m != 0.0 { sd / m.abs() * 100.0 } else { 0.0 };
-        riga = format!("{riga} · {} {} · {} {} · CV {} %", tradotto("media"), num(m, dec), tradotto("DS"), num(sd, dec), num(cv, 1));
+        // Con la media vicina a zero (un bianco) il CV non vuol dire niente: non si scrive.
+        let cv = (m.abs() > 1e-9 && sd / m.abs() * 100.0 < 10_000.0).then(|| sd / m.abs() * 100.0);
+        riga = format!("{riga} · {} {} · {} {}", tradotto("media"), num(m, dec), tradotto("DS"), num(sd, dec));
+        if let Some(cv) = cv {
+            riga = format!("{riga} · CV {} %", num(cv, 1));
+        }
     } else if let Some(v) = vs.first() {
         riga = format!("{riga} · {}", num(*v, dec));
     }
     // Numeri e parole sono già nella lingua scelta: il disegno non li traduce una seconda volta.
     let riga = d(&riga);
     let w = (rx - r.0 - 14.0).max(100.0);
-    f.p.text(&riga, r.0 + 14.0, r.1 + 6.0, w, 24.0, 14.5, SEMI, LABS_INK, Align::Left);
+    let size = [14.5f32, 13.5, 12.5].into_iter().find(|&sz| f.measure(&riga, sz, SEMI) <= w).unwrap_or(12.5);
+    f.p.text(&riga, r.0 + 14.0, r.1 + 6.0, w, 24.0, size, SEMI, LABS_INK, Align::Left);
     if vs.len() > 1 {
-        let rw = f.measure(&riga, 14.5, SEMI);
+        let rw = f.measure(&riga, size, SEMI);
         let nota = "calcolato da Cedro".to_string();
         let nw = f.measure(&nota, 13.0, SANS);
         if r.0 + 14.0 + rw + 10.0 + nw <= rx - 8.0 {
@@ -731,10 +758,12 @@ fn riconosciuto(f: &mut Frame, app: &App, path: &Path, l: &Lettura, x: f32, y: f
     };
     let manuale = !pf.profilo.is_empty();
     let inner_w = w - 28.0;
-    // L'altezza dipende dal testo: si misura prima.
-    let lines = if riga.is_empty() { 0 } else { f.p.wrap_lines(&riga, 14.0, SANS, inner_w, 3).len() };
+    // L'altezza dipende dal testo: si misura prima (anche il titolo, che per un errore è lungo, va a capo).
+    let titolo_righe = f.p.wrap_lines(&titolo, 16.5, BOLD, w - 56.0, 2).len().max(1);
+    let titolo_h = 6.0 + titolo_righe as f32 * 22.0;
+    let lines = if riga.is_empty() { 0 } else { f.p.wrap_lines(&riga, 14.0, SANS, inner_w, 4).len() };
     let link_h = 24.0;
-    let h = 14.0 + 26.0 + lines as f32 * 19.0 + 6.0 + link_h * if manuale { 2.0 } else { 1.0 } + 10.0;
+    let h = 12.0 + titolo_h + lines as f32 * 19.0 + 6.0 + link_h * if manuale { 2.0 } else { 1.0 } + 10.0;
     f.p.rrect(x, y, w, h, 12.0, Some(mix(colore, pal.surface, 0.9)), Some((mix(colore, pal.surface, 0.5), 1.5)));
     let mut cy = y + 12.0;
     if pf.rileggendo {
@@ -744,10 +773,10 @@ fn riconosciuto(f: &mut Frame, app: &App, path: &Path, l: &Lettura, x: f32, y: f
         f.p.disc_a(x + 24.0, cy + 13.0, 11.0, colore, 0.18);
         f.icon(if colore == pal.ok { ic::CHECK } else { ic::CLOSE }, x + 15.0, cy + 4.0, 18.0, colore);
     }
-    f.p.text(&titolo, x + 44.0, cy, w - 56.0, 26.0, 16.5, BOLD, pal.text, Align::Left);
-    cy += 28.0;
+    f.para(&titolo, x + 44.0, cy + 2.0, w - 56.0, 16.5, BOLD, pal.text, 1.3, 2);
+    cy += titolo_h;
     if !riga.is_empty() {
-        cy += f.para(&riga, x + 14.0, cy, inner_w, 14.0, SANS, pal.muted, 1.35, 3) + 6.0;
+        cy += f.para(&riga, x + 14.0, cy, inner_w, 14.0, SANS, pal.muted, 1.35, 4) + 6.0;
     }
     let link = |f: &mut Frame, t: &str, act: Act, cy: f32| {
         let t = t.to_string();
@@ -770,18 +799,19 @@ fn riconosciuto(f: &mut Frame, app: &App, path: &Path, l: &Lettura, x: f32, y: f
 fn esito(f: &mut Frame, app: &App, i: usize, x: f32, y: f32, w: f32) -> f32 {
     let pal = f.pal;
     let path = &app.files[i].path;
-    if app.files[i].state != FileState::Done {
+    // Le note valgono per l'ultimo «Converti»: se dopo si è cambiato qualcosa, non si mostrano più.
+    if app.files[i].state != FileState::Done || !app.is_fresh_done(i) {
         return 0.0;
     }
     let Some(e) = app.strum_esiti.get(path) else { return 0.0 };
     let mut cy = y;
     for n in &e.note {
         let c = if n.attenzione { AMBRA } else { pal.ok };
-        let lines = f.p.wrap_lines(&n.testo, 14.0, SANS, w - 28.0, 5).len();
+        let lines = f.p.wrap_lines(&n.testo, 14.0, SANS, w - 28.0, 9).len();
         let h = 12.0 + 24.0 + lines as f32 * 19.0 + 10.0;
         f.p.rrect(x, cy, w, h, 12.0, Some(mix(c, pal.surface, 0.9)), Some((mix(c, pal.surface, 0.55), 1.2)));
         f.text(&n.titolo, x + 14.0, cy + 10.0, w - 28.0, 24.0, 15.0, BOLD, pal.text);
-        f.para(&n.testo, x + 14.0, cy + 34.0, w - 28.0, 14.0, SANS, pal.muted, 1.35, 5);
+        f.para(&n.testo, x + 14.0, cy + 34.0, w - 28.0, 14.0, SANS, pal.muted, 1.35, 9);
         cy += h + 10.0;
     }
     cy - y
@@ -789,11 +819,13 @@ fn esito(f: &mut Frame, app: &App, i: usize, x: f32, y: f32, w: f32) -> f32 {
 
 fn riga_spunta(f: &mut Frame, x: f32, y: f32, w: f32, label: &str, hint: &str, on: bool, act: Act) -> f32 {
     let pal = f.pal;
-    let h = if hint.is_empty() { 30.0 } else { 50.0 };
+    // Il commento può andare a capo (al massimo due righe) invece di tagliarsi.
+    let righe = if hint.is_empty() { 0 } else { f.p.wrap_lines(hint, 14.0, SANS, w - 34.0, 2).len().max(1) };
+    let h = if righe == 0 { 30.0 } else { 30.0 + 20.0 * righe as f32 };
     f.checkbox(x, y + 3.0, 22.0, on, None);
     f.text(label, x + 34.0, y, w - 34.0, 28.0, 15.5, SEMI, pal.text);
-    if !hint.is_empty() {
-        f.text(hint, x + 34.0, y + 25.0, w - 34.0, 22.0, 14.0, SANS, pal.muted);
+    if righe > 0 {
+        f.para(hint, x + 34.0, y + 27.0, w - 34.0, 14.0, SANS, pal.muted, 1.4, 2);
     }
     let r = (x - 4.0, y - 2.0, w + 8.0, h + 2.0);
     f.focus_ring(r, 8.0, &act);
@@ -813,7 +845,9 @@ fn segmento(f: &mut Frame, r: R, voci: &[(&str, bool, Act)]) {
             f.p.rrect(b.0, b.1, b.2, b.3, 8.0, Some(pal.surface), None);
         }
         let hot = !*on && f.hovered(act);
-        f.text_c(label, b, 14.5, SEMI, if *on || hot { pal.text } else { pal.muted });
+        // Se la scritta non ci sta, si stringe un po' invece di toccare il bordo.
+        let size = [14.5f32, 13.5, 12.5].into_iter().find(|&sz| f.measure(label, sz, SEMI) <= b.2 - 14.0).unwrap_or(12.0);
+        f.text_c(label, b, size, SEMI, if *on || hot { pal.text } else { pal.muted });
         f.focus_ring(b, 8.0, act);
         f.hit(b, act.clone());
     }
@@ -824,12 +858,19 @@ pub fn side_body(f: &mut Frame, app: &App, i: usize, l: &Lettura, body: R, x: f3
     let pal = f.pal;
     let path = app.files[i].path.clone();
     let sc = app.strum_scelte_per(&path);
+    // La colonna delle etichette («Scala colori», «Valori»…) è larga quanto serve, così i comandi accanto hanno più posto.
+    let col = ["Scala colori", "Valori", "Schema", "Percorso"].iter().map(|t| f.measure(t, 15.0, SEMI)).fold(0.0f32, f32::max) + 16.0;
     super::scrolled(f, body, Scroll::Inspector, |f| {
         let mut cy = body.1 + 2.0;
         cy += riconosciuto(f, app, &path, l, x, cy, w) + 12.0;
         let nota = esito(f, app, i, x, cy, w);
         if nota > 0.0 {
             cy += nota + 4.0;
+        }
+        // Se con lo strumento scelto il file non si legge (o si sta rileggendo), niente scelte di uscita: il resto è del pannello vecchio.
+        let pf = app.strum_file(&path);
+        if pf.rileggendo || matches!(pf.riletto, Some(Err(_))) {
+            return cy - body.1 + 18.0;
         }
         if app.simple_view {
             let scelte_pronte: [(Pronta, &str, &str, &str); 3] = [
@@ -860,13 +901,13 @@ pub fn side_body(f: &mut Frame, app: &App, i: usize, l: &Lettura, body: R, x: f3
             if l.a_piastra() {
                 f.text("Piastra", x, cy, w, 24.0, 15.0, SEMI, pal.muted);
                 cy += 30.0;
-                f.text("Scala colori", x, cy, 120.0, 38.0, 15.0, SEMI, pal.text);
-                segmento(f, (x + 124.0, cy, w - 124.0, 38.0), &[("Blu → rosso", !sc.daltonici, a(StrumAct::Daltonici(false))), ("Daltonici", sc.daltonici, a(StrumAct::Daltonici(true)))]);
+                f.text("Scala colori", x, cy, col, 38.0, 15.0, SEMI, pal.text);
+                segmento(f, (x + col, cy, w - col, 38.0), &[("Blu → rosso", !sc.daltonici, a(StrumAct::Daltonici(false))), ("Daltonici", sc.daltonici, a(StrumAct::Daltonici(true)))]);
                 cy += 48.0;
                 let ci_sono_bianchi = l.gruppi.iter().enumerate().any(|(g, _)| excel::media_bianchi(l, g, &sc.ruoli_veri()).is_some());
                 if ci_sono_bianchi {
-                    f.text("Valori", x, cy, 120.0, 38.0, 15.0, SEMI, pal.text);
-                    segmento(f, (x + 124.0, cy, w - 124.0, 38.0), &[("Grezzi", !sc.meno_bianco, a(StrumAct::MenoBianco(false))), ("Meno il bianco", sc.meno_bianco, a(StrumAct::MenoBianco(true)))]);
+                    f.text("Valori", x, cy, col, 38.0, 15.0, SEMI, pal.text);
+                    segmento(f, (x + col, cy, w - col, 38.0), &[("Grezzi", !sc.meno_bianco, a(StrumAct::MenoBianco(false))), ("Meno il bianco", sc.meno_bianco, a(StrumAct::MenoBianco(true)))]);
                     cy += 48.0;
                 }
                 cy += riassunto_ruoli(f, l, &sc, x, cy, w) + 10.0;
@@ -874,11 +915,11 @@ pub fn side_body(f: &mut Frame, app: &App, i: usize, l: &Lettura, body: R, x: f3
             if sc.asm {
                 f.text("Allotrope", x, cy, w, 24.0, 15.0, SEMI, pal.muted);
                 cy += 30.0;
-                f.text("Schema", x, cy, 120.0, 30.0, 15.0, SEMI, pal.text);
-                f.text(&d(&asm::schema_breve(l.tecnica)), x + 124.0, cy, w - 124.0, 30.0, 14.5, SANS, pal.muted);
+                f.text("Schema", x, cy, col, 30.0, 15.0, SEMI, pal.text);
+                f.text(&d(&asm::schema_breve(l.tecnica)), x + col, cy, w - col, 30.0, 14.5, SANS, pal.muted);
                 cy += 38.0;
-                f.text("Percorso", x, cy, 120.0, 38.0, 15.0, SEMI, pal.text);
-                segmento(f, (x + 124.0, cy, w - 124.0, 38.0), &[("Solo il nome", !sc.asm_percorso, a(StrumAct::Percorso(false))), ("Completo", sc.asm_percorso, a(StrumAct::Percorso(true)))]);
+                f.text("Percorso", x, cy, col, 38.0, 15.0, SEMI, pal.text);
+                segmento(f, (x + col, cy, w - col, 38.0), &[("Solo il nome", !sc.asm_percorso, a(StrumAct::Percorso(false))), ("Completo", sc.asm_percorso, a(StrumAct::Percorso(true)))]);
                 cy += 48.0;
                 cy += riga_spunta(f, x, cy, w, "Aggiungi i calcoli di Cedro", "separati dai dati grezzi", sc.asm_calcoli, a(StrumAct::Calcoli));
                 cy += riga_spunta(f, x, cy, w, "Controlla il file prima di salvarlo", "", sc.asm_controlla, a(StrumAct::Controlla));

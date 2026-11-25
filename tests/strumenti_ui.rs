@@ -206,6 +206,46 @@ fn convertire_scrive_i_file_e_registra_il_lavoro() {
 }
 
 #[test]
+fn aggiungere_un_file_non_rifa_quelli_gia_fatti() {
+    ambiente();
+    let dir = cartella("gia-fatti");
+    let mut plat = Finta;
+    let mut s = schermo();
+    s.act(Act::Lab(Lab::Dati), &mut plat);
+    let a = apri(&mut s, &mut plat, &dir, "Magellan_Pro_7_5_compact_metadata.xlsx", "Piastra A.xlsx");
+    s.act(Act::Start, &mut plat);
+    assert!(aspetta(&mut s, 60, |s| s.app.files.iter().all(|f| f.state == FileState::Done || f.state == FileState::Failed) && !s.app.busy()), "il lavoro non è finito");
+    assert!(s.app.todo().is_empty(), "dopo «Converti» non resta niente da fare");
+    let uscite = |d: &Path| -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(d).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        v.sort();
+        v
+    };
+    let prima = uscite(&dir);
+
+    // Arriva un altro file: il lavoro è solo per lui, quello già fatto non si rifà (e non nascono copie «-2»).
+    let b = apri(&mut s, &mut plat, &dir, "thermo_fisher_qubit4_example_1.csv", "Qubit B.csv");
+    assert!(aspetta(&mut s, 30, |s| s.app.strum_lettura(&b).is_some()), "il secondo file non è stato riconosciuto");
+    let da_fare: Vec<PathBuf> = s.app.todo().into_iter().map(|i| s.app.files[i].path.clone()).collect();
+    assert_eq!(da_fare, vec![b.clone()], "da fare: {da_fare:?}");
+    s.act(Act::Start, &mut plat);
+    assert!(aspetta(&mut s, 60, |s| s.app.files.iter().all(|f| f.state == FileState::Done || f.state == FileState::Failed) && !s.app.busy()), "il secondo lavoro non è finito");
+    let dopo = uscite(&dir);
+    assert!(!dopo.iter().any(|n| n.contains("-2")), "copie doppie: {dopo:?}");
+    assert!(prima.iter().all(|n| dopo.contains(n)), "{prima:?} / {dopo:?}");
+
+    // Cambiato il ruolo di un pozzetto di A, si rifà A e solo A.
+    s.app.selected = s.app.files.iter().position(|f| f.path == a);
+    disegna(&mut s);
+    s.app.strum_premi((0, 0));
+    s.app.strum_rilascia();
+    s.act(Act::Strum(StrumAct::Ruolo('B')), &mut plat);
+    let da_fare: Vec<PathBuf> = s.app.todo().into_iter().map(|i| s.app.files[i].path.clone()).collect();
+    assert_eq!(da_fare, vec![a], "da fare: {da_fare:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn i_profili_piccoli_si_leggono_e_si_disegnano() {
     ambiente();
     let dir = cartella("piccoli");
@@ -295,5 +335,69 @@ fn foto_della_finestra() {
         }
         s.render(w as u32, h as u32, 1.0).save_png(&out.join(format!("{nome}-allotrope.png"))).unwrap();
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Come `foto_della_finestra`, ma alla misura minima della finestra e con sei file in coda, uno rotto:
+/// serve a vedere a occhio che nessun testo esce dal suo riquadro.
+#[test]
+fn foto_della_finestra_minima() {
+    let Some(out) = std::env::var_os("CEDRO_PNG_OUT").map(PathBuf::from) else { return };
+    ambiente();
+    std::fs::create_dir_all(&out).unwrap();
+    let dir = cartella("minima");
+    let mut plat = Finta;
+    let mut s = schermo();
+    s.act(Act::Lab(Lab::Dati), &mut plat);
+    let (w, h) = s.min_size();
+    let (w, h) = (w as u32, h as u32);
+    let foto = |s: &mut Screen, nome: &str| {
+        for _ in 0..3 {
+            let _ = s.render(w, h, 1.0);
+        }
+        s.render(w, h, 1.0).save_png(&out.join(format!("minima-{nome}.png"))).unwrap();
+    };
+    let mut percorsi = Vec::new();
+    for (file, nome) in [
+        ("Magellan_Pro_7_5_compact_metadata.xlsx", "Piastra ELISA.xlsx"),
+        ("thermo_fisher_qubit4_example_1.csv", "Qubit.csv"),
+        ("Beckman_Vi-Cell-BLU_different_mu_character.csv", "Contacellule.csv"),
+        ("appbio_quantstudio_multiple_cal_doc_wells.txt", "qPCR.txt"),
+        ("cfx-maestro-esempio.csv", "CFX.csv"),
+    ] {
+        percorsi.push(apri(&mut s, &mut plat, &dir, file, nome));
+    }
+    let rotto = dir.join("Rotto.xlsx");
+    std::fs::write(&rotto, "questo non è un foglio di calcolo, ma un testo qualunque").unwrap();
+    s.drop_files(vec![rotto.clone()]);
+    assert!(aspetta(&mut s, 30, |s| s.app.files.iter().any(|f| f.path == rotto)));
+    // La piastra con i ruoli, e tutte le uscite accese: il pannello più pieno.
+    s.app.selected = s.app.files.iter().position(|f| f.path == percorsi[0]);
+    disegna(&mut s);
+    s.app.strum_premi((0, 0));
+    s.app.strum_muovi((0, 1));
+    s.app.strum_rilascia();
+    s.act(Act::Strum(StrumAct::Ruolo('B')), &mut plat);
+    s.act(Act::SetSimple(false), &mut plat);
+    for u in [Uscita::Csv, Uscita::Allotrope, Uscita::Piatto] {
+        s.act(Act::Strum(StrumAct::Esce(u)), &mut plat);
+    }
+    s.act(Act::Strum(StrumAct::MenoBianco(true)), &mut plat);
+    foto(&mut s, "1-piastra");
+    s.act(Act::Strum(StrumAct::Vista(Vista::Elenco)), &mut plat);
+    foto(&mut s, "2-elenco");
+    s.act(Act::Strum(StrumAct::Vista(Vista::Strumento)), &mut plat);
+    foto(&mut s, "3-strumento");
+    s.act(Act::Strum(StrumAct::Vista(Vista::Piastra)), &mut plat);
+    s.act(Act::SetSimple(true), &mut plat);
+    foto(&mut s, "4-semplice");
+    // Si converte tutto: cinque riescono, uno no.
+    s.act(Act::Start, &mut plat);
+    assert!(aspetta(&mut s, 120, |s| s.app.files.iter().all(|f| f.state == FileState::Done || f.state == FileState::Failed) && !s.app.busy()), "il lavoro non è finito");
+    foto(&mut s, "5-finito-scelto-buono");
+    s.app.selected = s.app.files.iter().position(|f| f.path == rotto);
+    foto(&mut s, "6-finito-scelto-rotto");
+    s.act(Act::SetSimple(false), &mut plat);
+    foto(&mut s, "7-finito-scelto-rotto-completa");
     let _ = std::fs::remove_dir_all(&dir);
 }

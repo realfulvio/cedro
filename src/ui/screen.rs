@@ -406,9 +406,12 @@ impl Screen {
                 return true;
             }
             if act == Act::Strum(super::strumenti::StrumAct::Piastra) {
-                if let Some(p) = self.strum_pozzetto(r, x, y) {
+                let p = self.strum_pozzetto(r, x, y);
+                if let Some(p) = p {
                     self.app.strum_muovi(p);
                 }
+                // La riga sotto la piastra segue il mouse anche mentre si trascina.
+                self.app.strum.sopra = p;
                 return true;
             }
             self.slide(&act, r, x);

@@ -2463,7 +2463,7 @@ Caso	Fall
 Lavori di oggi	Aufträge von heute
 Ancora nessuno. Ogni lavoro finisce qui, con i nomi dei file usciti.	Noch keiner. Jeder Auftrag landet hier, mit den Namen der erzeugten Dateien.
 Gli originali non sono mai stati toccati.	Die Originale wurden nie angefasst.
-… e altri {#} file	… und {#} weitere Dateien
+… e altri {#} file	… und {} weitere Dateien
 Copia per il quaderno	Fürs Laborbuch kopieren
 Caso o campione	Fall oder Probe
 Se c'è, il codice entra nei nomi dei file che Cedro scrive, dopo la data. Resta finché non lo togli.	Wenn es einen gibt, steht sein Code in den Namen der Dateien, die Cedro schreibt, nach dem Datum. Er bleibt, bis du ihn entfernst.
@@ -3350,3 +3350,12 @@ non ho letto queste tabelle del file: {}	diese Tabellen der Datei habe ich nicht
 Ruolo senza pozzetto.	Rolle ohne Well.
 Il pozzetto {} non c'è nella piastra: il ruolo segnato è stato ignorato.	Das Well {} gibt es auf der Platte nicht: die eingetragene Rolle wurde ignoriert.
 I pozzetti {} non ci sono nella piastra: i ruoli segnati sono stati ignorati.	Die Wells {} gibt es auf der Platte nicht: die eingetragenen Rollen wurden ignoriert.
+
+# Ruoli e valori «meno il bianco» della finestra dei dati degli strumenti
+Valori	Werte
+Grezzi	Rohwerte
+Meno il bianco	Abzüglich Blank
+bianco	Blank
+controllo	Kontrolle
+riferimento	Referenz
+meno il bianco (calcolato da Cedro)	abzüglich Blank (von Cedro berechnet)

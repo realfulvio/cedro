@@ -170,14 +170,13 @@ impl App {
         s
     }
 
-    /// Una chiave che cambia quando cambia quello che esce: serve a rifare i file già fatti.
-    pub fn strum_chiave(&self) -> String {
-        if self.lab != Lab::Dati {
+    /// Una chiave che cambia quando cambia quello che esce da QUESTO file (le uscite comuni, i suoi ruoli, il suo
+    /// strumento): serve a rifare un file già fatto solo se per lui è cambiato qualcosa, non perché ne è arrivato un altro.
+    pub fn strum_chiave_file(&self, path: &Path) -> String {
+        if self.lab != Lab::Dati || self.strum_lettura(path).is_none() {
             return String::new();
         }
-        let mut v: Vec<String> = self.files.iter().filter(|f| self.strum_lettura(&f.path).is_some()).map(|f| format!("{}:{:?}", f.path.display(), self.strum_scelte_per(&f.path))).collect();
-        v.sort();
-        v.join("|")
+        format!("{:?}", self.strum_scelte_per(path))
     }
 
     /// Il gruppo mostrato (limitato a quelli che ci sono).
@@ -187,6 +186,8 @@ impl App {
 
     /// Chiede di rileggere il file con un altro profilo, in fondo.
     pub fn strum_rileggi(&mut self, path: &Path, profilo: &str) {
+        // Le note dell'ultimo «Converti» erano di un'altra lettura.
+        self.strum_esiti.remove(path);
         let f = self.strum_file_mut(path);
         f.profilo = profilo.to_string();
         f.sel.clear();
