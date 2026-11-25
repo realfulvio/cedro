@@ -94,6 +94,27 @@ pub fn salva(caso: Option<&Caso>) {
     }
 }
 
+fn casi_file() -> PathBuf {
+    dir().join("casi.txt")
+}
+
+/// I casi conosciuti (quelli già usati su questo computer), nell'ordine in cui sono stati messi.
+pub fn casi() -> Vec<Caso> {
+    let Ok(text) = std::fs::read_to_string(casi_file()) else { return Vec::new() };
+    text.lines()
+        .filter_map(|l| {
+            let (code, note) = l.split_once('\t').unwrap_or((l, ""));
+            Caso::new(code, note)
+        })
+        .collect()
+}
+
+/// Si ricordano i casi conosciuti.
+pub fn salva_casi(casi: &[Caso]) {
+    let text: String = casi.iter().map(|c| format!("{}\t{}\n", c.code, c.note.replace(['\t', '\n', '\r'], " "))).collect();
+    scrivi(&casi_file(), &text);
+}
+
 /// Un lavoro fatto: cosa, quando, per quale caso, e i file usciti.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Lavoro {
@@ -105,6 +126,8 @@ pub struct Lavoro {
     pub caso: String,
     /// I nomi dei file scritti.
     pub outputs: Vec<String>,
+    /// La cartella dove sono finiti (vuota nei lavori ricordati dalle versioni precedenti).
+    pub dir: String,
 }
 
 impl Lavoro {
@@ -136,15 +159,15 @@ const SEP: char = '\u{1f}';
 fn riga(l: &Lavoro) -> String {
     let pulito = |s: &str| s.replace(['\t', '\n', '\r', SEP], " ");
     let outs: Vec<String> = l.outputs.iter().map(|o| pulito(o)).collect();
-    format!("{}\t{}\t{}\t{}", l.when, pulito(&l.what), pulito(&l.caso), outs.join(&SEP.to_string()))
+    format!("{}\t{}\t{}\t{}\t{}", l.when, pulito(&l.what), pulito(&l.caso), outs.join(&SEP.to_string()), pulito(&l.dir))
 }
 
 fn leggi_riga(line: &str) -> Option<Lavoro> {
-    let f: Vec<&str> = line.splitn(4, '\t').collect();
-    if f.len() != 4 {
+    let f: Vec<&str> = line.splitn(5, '\t').collect();
+    if f.len() < 4 {
         return None;
     }
-    Some(Lavoro { when: f[0].parse().ok()?, what: f[1].to_string(), caso: f[2].to_string(), outputs: f[3].split(SEP).filter(|s| !s.is_empty()).map(str::to_string).collect() })
+    Some(Lavoro { when: f[0].parse().ok()?, what: f[1].to_string(), caso: f[2].to_string(), outputs: f[3].split(SEP).filter(|s| !s.is_empty()).map(str::to_string).collect(), dir: f.get(4).map(|d| d.to_string()).unwrap_or_default() })
 }
 
 /// Quanti lavori si ricordano al più: abbastanza per il registro di un anno di un laboratorio.
@@ -231,6 +254,128 @@ pub fn di_oggi(elenco: &[Lavoro]) -> Vec<&Lavoro> {
     v
 }
 
+// ------------------------------------------------------------------ tappe e procedure
+
+/// Le tappe di un caso, nell'ordine: da «Accettato» a «Consegnato».
+pub const TAPPE: [&str; 6] = ["Accettato", "Acquisito", "Elaborato", "Refertato", "Firmato", "Consegnato"];
+
+fn tappe_file() -> PathBuf {
+    dir().join("tappe.txt")
+}
+
+/// Quante tappe sono fatte, per ogni caso (da 0 a 6).
+pub fn tappe() -> std::collections::HashMap<String, u8> {
+    let Ok(text) = std::fs::read_to_string(tappe_file()) else { return Default::default() };
+    text.lines().filter_map(|l| l.split_once('\t')).filter_map(|(c, n)| Some((c.to_string(), n.trim().parse::<u8>().ok()?.min(TAPPE.len() as u8)))).collect()
+}
+
+pub fn salva_tappe(t: &std::collections::HashMap<String, u8>) {
+    let mut v: Vec<_> = t.iter().collect();
+    v.sort();
+    let text: String = v.into_iter().map(|(c, n)| format!("{}\t{n}\n", c.replace(['\t', '\n', '\r'], " "))).collect();
+    scrivi(&tappe_file(), &text);
+}
+
+/// Un passo di una procedura: un comando del laboratorio, la voce scelta e i valori delle sue opzioni.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Passo {
+    pub lab: String,
+    pub azione: String,
+    pub nums: Vec<(String, u32)>,
+    pub testi: Vec<(String, String)>,
+}
+
+/// Un lavoro salvato: sempre uguale, da rifare su altri file.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Procedura {
+    pub nome: String,
+    pub passi: Vec<Passo>,
+}
+
+fn esc(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('\t', "\\t").replace('\n', "\\n").replace('\r', "")
+}
+
+fn unesc(s: &str) -> String {
+    let mut out = String::new();
+    let mut it = s.chars();
+    while let Some(c) = it.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match it.next() {
+            Some('t') => out.push('\t'),
+            Some('n') => out.push('\n'),
+            Some(o) => out.push(o),
+            None => {}
+        }
+    }
+    out
+}
+
+fn procedure_file() -> PathBuf {
+    dir().join("procedure.txt")
+}
+
+pub fn procedure_da_testo(text: &str) -> Vec<Procedura> {
+    let mut out: Vec<Procedura> = Vec::new();
+    for line in text.lines() {
+        let f: Vec<&str> = line.split('\t').collect();
+        match f.first().copied() {
+            Some("P") if f.len() >= 2 => out.push(Procedura { nome: unesc(f[1]), passi: Vec::new() }),
+            Some("S") if f.len() >= 3 => {
+                let Some(p) = out.last_mut() else { continue };
+                let mut passo = Passo { lab: f[1].to_string(), azione: f[2].to_string(), ..Default::default() };
+                for kv in &f[3..] {
+                    if let Some(r) = kv.strip_prefix("n:") {
+                        if let Some((k, v)) = r.split_once('=') {
+                            if let Ok(v) = v.parse() {
+                                passo.nums.push((k.to_string(), v));
+                            }
+                        }
+                    } else if let Some(r) = kv.strip_prefix("t:") {
+                        if let Some((k, v)) = r.split_once('=') {
+                            passo.testi.push((k.to_string(), unesc(v)));
+                        }
+                    }
+                }
+                p.passi.push(passo);
+            }
+            _ => {}
+        }
+    }
+    out.retain(|p| !p.nome.trim().is_empty() && !p.passi.is_empty());
+    out
+}
+
+pub fn procedure_a_testo(v: &[Procedura]) -> String {
+    let mut t = String::new();
+    for p in v {
+        t.push_str(&format!("P\t{}\n", esc(&p.nome)));
+        for s in &p.passi {
+            t.push_str(&format!("S\t{}\t{}", s.lab, s.azione));
+            for (k, n) in &s.nums {
+                t.push_str(&format!("\tn:{k}={n}"));
+            }
+            for (k, x) in &s.testi {
+                t.push_str(&format!("\tt:{k}={}", esc(x)));
+            }
+            t.push('\n');
+        }
+    }
+    t
+}
+
+/// Le procedure salvate.
+pub fn procedure() -> Vec<Procedura> {
+    std::fs::read_to_string(procedure_file()).map(|t| procedure_da_testo(&t)).unwrap_or_default()
+}
+
+pub fn salva_procedure(v: &[Procedura]) {
+    scrivi(&procedure_file(), &procedure_a_testo(v));
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -260,8 +405,8 @@ mod tests {
     #[test]
     fn il_registro_ha_una_riga_per_file_con_i_filtri() {
         let elenco = vec![
-            Lavoro { when: 1_793_196_309, what: "Togli i nomi".into(), caso: "V-1".into(), outputs: vec!["a.svs".into(), "b.svs".into()] },
-            Lavoro { when: 1_793_199_909, what: "Prepara una figura".into(), caso: String::new(), outputs: vec!["fig.tif".into()] },
+            Lavoro { when: 1_793_196_309, what: "Togli i nomi".into(), caso: "V-1".into(), outputs: vec!["a.svs".into(), "b.svs".into()], dir: String::new() },
+            Lavoro { when: 1_793_199_909, what: "Prepara una figura".into(), caso: String::new(), outputs: vec!["fig.tif".into()], dir: String::new() },
         ];
         let caso = Caso::new("V-1", "Luna, labrador").unwrap();
         let x = registro_excel(&elenco, Some(&caso)).unwrap();
@@ -283,8 +428,22 @@ mod tests {
     }
 
     #[test]
+    fn le_procedure_vanno_e_vengono_dal_testo() {
+        let p = Procedura {
+            nome: "Vetrino\tper consulto".into(),
+            passi: vec![
+                Passo { lab: "Anonimizza".into(), azione: "strip".into(), nums: vec![("StripMeta".into(), 1)], testi: vec![("Watermark".into(), "a\\b\nc".into())] },
+                Passo { lab: "Immagini".into(), azione: "jpeg".into(), ..Default::default() },
+            ],
+        };
+        let back = procedure_da_testo(&procedure_a_testo(std::slice::from_ref(&p)));
+        assert_eq!(back, vec![p]);
+        assert!(procedure_da_testo("S\tImmagini\tjpeg\nP\t\n").is_empty());
+    }
+
+    #[test]
     fn jobs_round_trip_through_a_line() {
-        let l = Lavoro { when: 1_793_196_309, what: "Togli i nomi".into(), caso: "V-1".into(), outputs: vec!["a b.svs".into(), "c\td.svs".into()] };
+        let l = Lavoro { when: 1_793_196_309, what: "Togli i nomi".into(), caso: "V-1".into(), outputs: vec!["a b.svs".into(), "c\td.svs".into()], dir: "D:\\Lab".into() };
         let back = leggi_riga(&riga(&l)).unwrap();
         assert_eq!(back.what, "Togli i nomi");
         assert_eq!(back.outputs, vec!["a b.svs".to_string(), "c d.svs".to_string()]);

@@ -2987,3 +2987,151 @@ Unisci, dividi, riordina, comprimi e modifica i PDF	PDFs zusammenfügen, teilen,
 Nella scheda PDF ci sono cinque strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.	Der Reiter PDF hat neben der Konvertierung fünf Werkzeuge. Die Originale werden nie angetastet: Das Ergebnis ist immer eine neue Kopie.
 Scrivi, evidenzia, compila	Schreiben, markieren, ausfüllen
 Anche oscura davvero il testo: esce «…-modificato.pdf»	Schwärzt Text auch wirklich: Ergebnis «…-modificato.pdf»
+Accettato	Angenommen
+Acquisito	Erfasst
+Elaborato	Verarbeitet
+Refertato	Befundet
+Firmato	Signiert
+Consegnato	Übergeben
+Registro	Protokoll
+Immagini e vetrini	Bilder und Objektträger
+Dati e piastre	Daten und Platten
+Firma e referti	Signieren und Befunde
+Procedure	Abläufe
+Casi	Fälle
+Come	Wie
+Cosa puoi farci	Was du damit machen kannst
+Dettagli	Details
+Tappe	Etappen
+Tipo	Typ
+Nome	Name
+Contenuto	Inhalt
+Dati personali	Personenbezogene Daten
+Già fatto	Schon erledigt
+Fatti	Erledigt
+Con errori	Mit Fehlern
+Senza caso	Ohne Fall
+Nuovo	Neu
+Copia pulita	Saubere Kopie
+Scheda del caso	Fallblatt
+Cartella di uscita	Ausgabeordner
+accanto all'originale	neben dem Original
+Righe compatte	Kompakte Zeilen
+Righe comode	Großzügige Zeilen
+Tutte le opzioni	Alle Optionen
+Solo le scelte pronte	Nur die fertigen Einstellungen
+Pacchetto per consulto	Paket für die Konsultation
+Vetrino per consulto	Objektträger für die Konsultation
+Per il quaderno	Fürs Laborbuch
+Registro di oggi	Protokoll von heute
+Tutto il registro	Ganzes Protokoll
+Lavori fatti	Erledigte Aufträge
+Lavori salvati, sempre uguali	Gespeicherte Aufträge, immer gleich
+Salva come procedura	Als Ablauf speichern
+Procedura salvata:	Ablauf gespeichert:
+Procedura fatta	Ablauf erledigt
+Procedura finita con errori	Ablauf mit Fehlern beendet
+file non riusciti	Dateien fehlgeschlagen
+Togli questa procedura	Diesen Ablauf entfernen
+I passi di	Schritte von
+Questa procedura non lavora nessuno dei file scelti.	Dieser Ablauf bearbeitet keine der gewählten Dateien.
+Nessuna procedura ancora. Scegli un comando, regola le scelte e premi «Salva come procedura»: la ritrovi qui, sempre uguale.	Noch kein Ablauf. Wähle einen Befehl, stelle die Optionen ein und drücke „Als Ablauf speichern“: Du findest ihn hier, immer gleich.
+con tutte le scelte di adesso	mit allen aktuellen Einstellungen
+nessun file scelto adatto	keine passende Datei gewählt
+lavora	bearbeitet
+dei file scelti	der gewählten Dateien
+passo	Schritt
+passi	Schritte
+1 · Metti i file	1 · Dateien hinzufügen
+2 · Scegli il comando	2 · Befehl wählen
+3 · Esegui	3 · Ausführen
+Trascinali, oppure «Aggiungi file».	Zieh sie hierher oder nutze „Dateien hinzufügen“.
+In alto, con il suo colore e il suo tasto.	Oben, mit seiner Farbe und seiner Taste.
+A destra, con poche scelte pronte.	Rechts, mit wenigen fertigen Einstellungen.
+Trascinali qui dentro, oppure scegli il tipo. Tutto resta su questo computer.	Zieh sie hierher oder wähle den Typ. Alles bleibt auf diesem Computer.
+CSV, Excel, piastre	CSV, Excel, Platten
+DICOM, anche da CD	DICOM, auch von CD
+PDF, Word	PDF, Word
+Word/Office	Word/Office
+Archivio	Archiv
+Genere	Art
+Descrizione	Beschreibung
+Storia	Verlauf
+Dati	Daten
+Dati che identificano	Identifizierende Daten
+Nessun dato personale trovato.	Keine personenbezogenen Daten gefunden.
+Da controllare:	Zu prüfen:
+«Togli i nomi» li toglie dalla copia, non dall'originale.	„Namen entfernen“ entfernt sie aus der Kopie, nicht aus dem Original.
+Cosa c'è dentro	Was drin ist
+Impronta SHA-256	SHA-256-Fingerabdruck
+Non si è potuta calcolare.	Sie konnte nicht berechnet werden.
+Calcolo…	Berechne…
+Al lavoro…	In Arbeit…
+In coda dalle	In der Warteschlange seit
+Elaborato in	Verarbeitet in
+Mai elaborato. L'originale non viene mai modificato.	Noch nie verarbeitet. Das Original wird nie verändert.
+Non ho ancora letto questo file.	Ich habe diese Datei noch nicht gelesen.
+Nessuna nota. «Modifica» per scriverla.	Keine Notiz. „Bearbeiten“, um eine zu schreiben.
+In questo caso non ci sono immagini né vetrini da mettere nel pacchetto.	In diesem Fall gibt es keine Bilder oder Objektträger für das Paket.
+Apri l'anteprima grande	Große Vorschau öffnen
+Scegli uno o più file. Poi un comando in alto: qui compaiono le sue scelte e «Esegui».	Wähle eine oder mehrere Dateien. Dann oben einen Befehl: Hier erscheinen seine Einstellungen und „Ausführen“.
+Nessun comando lavora questi file.	Kein Befehl bearbeitet diese Dateien.
+Nessun file con questi filtri.	Keine Datei mit diesen Filtern.
+Nessun file adatto	Keine passende Datei
+Nessun caso ancora. «Nuovo» ne crea uno: i file che aggiungi ci entrano.	Noch kein Fall. „Neu“ legt einen an: Die Dateien, die du hinzufügst, kommen dort hinein.
+Ancora nessuno: ogni lavoro di questo caso finisce qui.	Noch keiner: Jeder Auftrag dieses Falls landet hier.
+Il motore non ha dato un motivo.	Die Engine hat keinen Grund genannt.
+Errore: perché?	Fehler: warum?
+Perché non è riuscito	Warum es nicht geklappt hat
+file	Dateien
+file scelti	Dateien gewählt
+1 file scelto	1 Datei gewählt
+scelto	gewählt
+scelti	gewählt
+file in coda	Dateien in der Warteschlange
+lavoro	Auftrag
+lavori	Aufträge
+lavoro fatto	Auftrag erledigt
+lavori fatti	Aufträge erledigt
+ancora nessun lavoro	noch kein Auftrag
+gli originali non sono mai stati toccati	die Originale wurden nie angefasst
+altri	weitere
+campi	Felder
+1 campo	1 Feld
+con dati personali	mit personenbezogenen Daten
+su	von
+Su	Auf
+Su 1 file	Auf 1 Datei
+Esegui su	Ausführen für
+Esegui su 1 file	Für 1 Datei ausführen
+resta fuori:	bleibt außen vor:
+restano fuori:	bleiben außen vor:
+Questo comando non lo lavora.	Dieser Befehl bearbeitet sie nicht.
+Questo comando non li lavora.	Dieser Befehl bearbeitet sie nicht.
+Cerca  ( / )	Suchen  ( / )
+Cerca nell'elenco	In der Liste suchen
+Scorciatoie da tastiera	Tastenkürzel
+I comandi, nell'ordine della barra (9 = Procedure)	Die Befehle in der Reihenfolge der Leiste (9 = Abläufe)
+Sposta la selezione (con Maiusc la allarga)	Verschiebt die Auswahl (mit Umschalt erweitert sie)
+Aggiunge o toglie il file dalla selezione	Fügt die Datei zur Auswahl hinzu oder entfernt sie
+Aggiunge o toglie un file dalla selezione	Fügt eine Datei zur Auswahl hinzu oder entfernt sie
+Sceglie tutto l'elenco	Wählt die ganze Liste
+Sceglie tutti i file da dove eri partito	Wählt alle Dateien ab dem Ausgangspunkt
+Esegue il comando aperto	Führt den geöffneten Befehl aus
+Assegna un caso ai file scelti	Weist den gewählten Dateien einen Fall zu
+Anteprima grande del file	Große Vorschau der Datei
+Toglie dalla coda (il file resta sul disco)	Entfernt aus der Warteschlange (die Datei bleibt auf der Platte)
+Torna indietro di un passo	Geht einen Schritt zurück
+Passa da un comando al successivo	Wechselt zum nächsten Befehl
+Questo foglio	Dieses Blatt
+Le lettere e i numeri funzionano quando non stai scrivendo in un campo.	Buchstaben und Ziffern funktionieren, wenn du nicht in ein Feld schreibst.
+Premi	Drücke
+per le scorciatoie	für die Tastenkürzel
+Invio	Eingabe
+Maiusc + clic	Umschalt + Klick
+Ctrl + clic	Strg + Klick
+Ctrl + A	Strg + A
+Spazio	Leertaste
+Canc	Entf
+Torna all'elenco	Zurück zur Liste
+Nuovo caso…	Neuer Fall…

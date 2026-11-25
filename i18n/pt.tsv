@@ -2987,3 +2987,151 @@ Unisci, dividi, riordina, comprimi e modifica i PDF	Mescle, divida, reordene, co
 Nella scheda PDF ci sono cinque strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.	A aba PDF tem cinco ferramentas além da conversão. Os originais nunca são tocados: o resultado é sempre uma cópia nova.
 Scrivi, evidenzia, compila	Escreva, destaque, preencha
 Anche oscura davvero il testo: esce «…-modificato.pdf»	Também oculta o texto de verdade: sai «…-modificato.pdf»
+Accettato	Aceito
+Acquisito	Adquirido
+Elaborato	Processado
+Refertato	Laudado
+Firmato	Assinado
+Consegnato	Entregue
+Registro	Registro
+Immagini e vetrini	Imagens e lâminas
+Dati e piastre	Dados e placas
+Firma e referti	Assinar e laudos
+Procedure	Procedimentos
+Casi	Casos
+Come	Como
+Cosa puoi farci	O que você pode fazer com eles
+Dettagli	Detalhes
+Tappe	Etapas
+Tipo	Tipo
+Nome	Nome
+Contenuto	Conteúdo
+Dati personali	Dados pessoais
+Già fatto	Já feito
+Fatti	Feitos
+Con errori	Com erros
+Senza caso	Sem caso
+Nuovo	Novo
+Copia pulita	Cópia limpa
+Scheda del caso	Ficha do caso
+Cartella di uscita	Pasta de saída
+accanto all'originale	ao lado do original
+Righe compatte	Linhas compactas
+Righe comode	Linhas confortáveis
+Tutte le opzioni	Todas as opções
+Solo le scelte pronte	Somente as opções prontas
+Pacchetto per consulto	Pacote para consulta
+Vetrino per consulto	Lâmina para consulta
+Per il quaderno	Para o caderno
+Registro di oggi	Registro de hoje
+Tutto il registro	Registro completo
+Lavori fatti	Trabalhos feitos
+Lavori salvati, sempre uguali	Trabalhos salvos, sempre iguais
+Salva come procedura	Salvar como procedimento
+Procedura salvata:	Procedimento salvo:
+Procedura fatta	Procedimento feito
+Procedura finita con errori	Procedimento terminado com erros
+file non riusciti	arquivos com falha
+Togli questa procedura	Remover este procedimento
+I passi di	Passos de
+Questa procedura non lavora nessuno dei file scelti.	Este procedimento não processa nenhum dos arquivos escolhidos.
+Nessuna procedura ancora. Scegli un comando, regola le scelte e premi «Salva come procedura»: la ritrovi qui, sempre uguale.	Nenhum procedimento ainda. Escolha um comando, ajuste as opções e pressione «Salvar como procedimento»: você o encontrará aqui, sempre igual.
+con tutte le scelte di adesso	com todas as opções atuais
+nessun file scelto adatto	nenhum arquivo escolhido adequado
+lavora	processa
+dei file scelti	dos arquivos escolhidos
+passo	passo
+passi	passos
+1 · Metti i file	1 · Coloque os arquivos
+2 · Scegli il comando	2 · Escolha o comando
+3 · Esegui	3 · Execute
+Trascinali, oppure «Aggiungi file».	Arraste-os ou use «Adicionar arquivos».
+In alto, con il suo colore e il suo tasto.	Em cima, com a sua cor e a sua tecla.
+A destra, con poche scelte pronte.	À direita, com poucas opções prontas.
+Trascinali qui dentro, oppure scegli il tipo. Tutto resta su questo computer.	Arraste-os para cá ou escolha o tipo. Tudo fica neste computador.
+CSV, Excel, piastre	CSV, Excel, placas
+DICOM, anche da CD	DICOM, também de CD
+PDF, Word	PDF, Word
+Word/Office	Word/Office
+Archivio	Arquivo compactado
+Genere	Gênero
+Descrizione	Descrição
+Storia	Histórico
+Dati	Dados
+Dati che identificano	Dados que identificam
+Nessun dato personale trovato.	Nenhum dado pessoal encontrado.
+Da controllare:	A conferir:
+«Togli i nomi» li toglie dalla copia, non dall'originale.	«Remover nomes» os remove da cópia, não do original.
+Cosa c'è dentro	O que há dentro
+Impronta SHA-256	Impressão SHA-256
+Non si è potuta calcolare.	Não foi possível calculá-la.
+Calcolo…	Calculando…
+Al lavoro…	Trabalhando…
+In coda dalle	Na fila desde as
+Elaborato in	Processado em
+Mai elaborato. L'originale non viene mai modificato.	Nunca processado. O original nunca é modificado.
+Non ho ancora letto questo file.	Ainda não li este arquivo.
+Nessuna nota. «Modifica» per scriverla.	Sem nota. «Editar» para escrevê-la.
+In questo caso non ci sono immagini né vetrini da mettere nel pacchetto.	Neste caso não há imagens nem lâminas para colocar no pacote.
+Apri l'anteprima grande	Abrir a pré-visualização grande
+Scegli uno o più file. Poi un comando in alto: qui compaiono le sue scelte e «Esegui».	Escolha um ou mais arquivos. Depois um comando em cima: aqui aparecem as suas opções e «Executar».
+Nessun comando lavora questi file.	Nenhum comando processa estes arquivos.
+Nessun file con questi filtri.	Nenhum arquivo com estes filtros.
+Nessun file adatto	Nenhum arquivo adequado
+Nessun caso ancora. «Nuovo» ne crea uno: i file che aggiungi ci entrano.	Nenhum caso ainda. «Novo» cria um: os arquivos que você adicionar entram nele.
+Ancora nessuno: ogni lavoro di questo caso finisce qui.	Ainda nenhum: cada trabalho deste caso termina aqui.
+Il motore non ha dato un motivo.	O motor não deu nenhum motivo.
+Errore: perché?	Erro: por quê?
+Perché non è riuscito	Por que não deu certo
+file	arquivos
+file scelti	arquivos escolhidos
+1 file scelto	1 arquivo escolhido
+scelto	escolhido
+scelti	escolhidos
+file in coda	arquivos na fila
+lavoro	trabalho
+lavori	trabalhos
+lavoro fatto	trabalho feito
+lavori fatti	trabalhos feitos
+ancora nessun lavoro	nenhum trabalho ainda
+gli originali non sono mai stati toccati	os originais nunca foram tocados
+altri	outros
+campi	campos
+1 campo	1 campo
+con dati personali	com dados pessoais
+su	de
+Su	Em
+Su 1 file	Em 1 arquivo
+Esegui su	Executar em
+Esegui su 1 file	Executar em 1 arquivo
+resta fuori:	fica de fora:
+restano fuori:	ficam de fora:
+Questo comando non lo lavora.	Este comando não o processa.
+Questo comando non li lavora.	Este comando não os processa.
+Cerca  ( / )	Pesquisar  ( / )
+Cerca nell'elenco	Pesquisar na lista
+Scorciatoie da tastiera	Atalhos de teclado
+I comandi, nell'ordine della barra (9 = Procedure)	Os comandos, na ordem da barra (9 = Procedimentos)
+Sposta la selezione (con Maiusc la allarga)	Move a seleção (com Shift a amplia)
+Aggiunge o toglie il file dalla selezione	Adiciona ou remove o arquivo da seleção
+Aggiunge o toglie un file dalla selezione	Adiciona ou remove um arquivo da seleção
+Sceglie tutto l'elenco	Escolhe a lista inteira
+Sceglie tutti i file da dove eri partito	Escolhe todos os arquivos desde onde você começou
+Esegue il comando aperto	Executa o comando aberto
+Assegna un caso ai file scelti	Atribui um caso aos arquivos escolhidos
+Anteprima grande del file	Pré-visualização grande do arquivo
+Toglie dalla coda (il file resta sul disco)	Remove da fila (o arquivo permanece no disco)
+Torna indietro di un passo	Volta um passo
+Passa da un comando al successivo	Passa de um comando para o seguinte
+Questo foglio	Esta folha
+Le lettere e i numeri funzionano quando non stai scrivendo in un campo.	As letras e os números funcionam quando você não está digitando em um campo.
+Premi	Pressione
+per le scorciatoie	para os atalhos
+Invio	Enter
+Maiusc + clic	Shift + clique
+Ctrl + clic	Ctrl + clique
+Ctrl + A	Ctrl + A
+Spazio	Espaço
+Canc	Del
+Torna all'elenco	Voltar à lista
+Nuovo caso…	Novo caso…

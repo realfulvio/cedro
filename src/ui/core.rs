@@ -60,6 +60,10 @@ pub enum Field {
     /// Cedro 4 Labs, finestrella del caso: il codice e la nota.
     CasoCodice,
     CasoNota,
+    /// Cedro 4 Labs, finestra unica: il campo «Cerca nell'elenco».
+    LxCerca,
+    /// Il nome della procedura che si sta salvando.
+    LxProcNome,
     /// L'editor dei PDF: i campi in cui si scrive.
     Ed(super::pdfedact::EdField),
 }
@@ -99,6 +103,11 @@ pub enum Scroll {
     FirmaSign,
     /// Cedro 4 Labs: l'elenco dei lavori di oggi.
     Lavori,
+    /// Cedro 4 Labs, finestra unica: la tabella dei file, i filtri a sinistra, il pannello a destra e il registro.
+    LxTabella,
+    LxSide,
+    LxPanel,
+    LxRegistro,
     /// L'editor dei PDF: le pagine, le miniature, i commenti e il pannello delle proprietà.
     EdPage,
     /// Lo scorrimento in orizzontale della pagina ingrandita.
@@ -157,6 +166,45 @@ pub enum Act {
     CasoTogli,
     CasoChiudi,
     LavoriApri,
+    /// Cedro 4 Labs, finestra unica: la scheda del pannello di destra.
+    LxPannello(super::labsx::Pannello),
+    /// I filtri della barra di sinistra: tipo, caso (`Some("")` = senza caso), stato; `None` toglie il filtro.
+    LxTipo(Option<super::labsx::Tipo>),
+    LxFiltroCaso(Option<String>),
+    LxStato(Option<super::labsx::StatoFil>),
+    /// «Assegna caso»: apre l'elenco dei casi; la scelta (`usize::MAX` = nessun caso); «Nuovo caso…».
+    LxAssegna,
+    LxCasoA(usize),
+    LxCasoNuovo,
+    /// Il registro di oggi in fondo si apre o si chiude; il foglio delle scorciatoie; l'anteprima grande.
+    LxRegistro,
+    LxAiuto,
+    LxAnteprima,
+    /// Righe compatte o comode.
+    LxComode,
+    /// Una riga della tabella (il clic dice Maiusc e Ctrl) e la sua casella; tutti i file / nessuno; «Tutti» tra i filtri.
+    LxRiga(usize),
+    LxCasella(usize),
+    LxSceglitutti,
+    LxTutti,
+    /// Il comando «Procedure» (tasto 9); il pannello di destra si chiude e si riapre.
+    LxProcedure,
+    LxPannelloToggle,
+    /// «Errore: perché?» di un file, e «Apri» il risultato di un file.
+    LxErrore(usize),
+    LxApri(usize),
+    /// Un caso nuovo da sinistra; la tappa cliccata; la scheda del caso; «Pacchetto per consulto».
+    LxNuovoCaso,
+    LxTappa(u8),
+    LxScheda,
+    LxPacchetto,
+    /// Le procedure: salvare quella di adesso (si apre il nome, si conferma, si chiude), sceglierne una, farla partire, toglierla.
+    LxProcSalva,
+    LxProcNomeOk,
+    LxProcNomeChiudi,
+    LxProcScegli(usize),
+    LxProcVia,
+    LxProcTogli(usize),
     /// «Copia per il quaderno» di un lavoro (indice tra quelli di oggi, dal più nuovo).
     Quaderno(usize),
     /// «Copia per il quaderno» del lavoro appena finito, dal pannello del risultato.

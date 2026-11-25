@@ -23,6 +23,8 @@ pub mod review;
 pub mod summary;
 pub mod model;
 pub mod core;
+pub mod datipers;
+pub mod labsx;
 pub mod screen;
 pub mod sezioni;
 pub mod views;

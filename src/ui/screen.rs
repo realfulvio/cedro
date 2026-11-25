@@ -77,6 +77,30 @@ pub enum Key {
     Redo,
 }
 
+/// Per le scorciatoie da tastiera, che non hanno la finestra di sistema sotto mano: niente file da scegliere,
+/// niente cartelle da aprire.
+struct SenzaPiattaforma;
+
+impl Platform for SenzaPiattaforma {
+    fn pick_files(&mut self) -> Vec<PathBuf> {
+        Vec::new()
+    }
+    fn pick_folder(&mut self, _: &str) -> Option<PathBuf> {
+        None
+    }
+    fn open_path(&mut self, _: &Path) {}
+    fn copy_text(&mut self, _: &str) {}
+    fn paste_text(&mut self) -> Option<String> {
+        None
+    }
+    fn open_guide(&mut self) {}
+    fn open_settings(&mut self) {}
+    fn minimize(&mut self) {}
+    fn toggle_maximize(&mut self) {}
+    fn close(&mut self) {}
+    fn open_full(&mut self) {}
+}
+
 pub struct Screen {
     pub app: App,
     pub ui: UiState,
@@ -98,6 +122,8 @@ pub struct Screen {
     /// Quando è finito l'ultimo fotogramma.
     disegnato: Instant,
     focusables: Vec<Act>,
+    /// Maiusc e Ctrl al momento del clic (li dà la finestra di sistema): servono alla tabella di Cedro 4 Labs.
+    pub mods: (bool, bool),
 }
 
 /// Il passo dei ridisegni «lenti» (lavori in corso, rotelline): circa 15 al secondo invece di 30. Ogni
@@ -133,6 +159,7 @@ impl Screen {
             vivace: false,
             disegnato: Instant::now(),
             focusables: Vec::new(),
+            mods: (false, false),
         }
     }
 
@@ -820,7 +847,17 @@ impl Screen {
                 if self.theme.is_cedro() && lab != app.lab {
                     app.notice = None;
                 }
+                if self.theme == ThemeId::CedroLabs && app.lx.pannello == crate::ui::labsx::Pannello::Azione && app.lab == lab && !app.lavori_aperti {
+                    // Il comando già aperto, premuto un'altra volta: si torna ai dettagli dei file.
+                    app.lx.pannello = crate::ui::labsx::Pannello::Dettagli;
+                    return;
+                }
                 app.set_lab(lab, simple);
+                if self.theme == ThemeId::CedroLabs {
+                    // Scelto un comando, a destra si vede il pannello con le sue opzioni.
+                    app.lx.pannello = crate::ui::labsx::Pannello::Azione;
+                    app.lx.panel_chiuso = false;
+                }
                 // Il Cedro di partenza ha i PDF in una pagina loro: «Converti» parte dagli altri file.
                 if self.theme.is_cedro() && lab == super::model::Lab::Converti && app.kind() == crate::engine::Kind::Pdf {
                     app.cedro_leave_pdf(simple);
@@ -847,6 +884,10 @@ impl Screen {
             }
             Act::LabGo(lab, id) => {
                 app.set_lab(lab, simple);
+                if self.theme == ThemeId::CedroLabs {
+                    app.lx.pannello = crate::ui::labsx::Pannello::Azione;
+                    app.lx.panel_chiuso = false;
+                }
                 if lab == super::model::Lab::Pdf && conversioni::is_page_action(app.kind(), id) {
                     let mode = match id {
                         "merge" => super::model::PdfMode::Merge,
@@ -1115,8 +1156,113 @@ impl Screen {
             }
             Act::CasoChiudi => {
                 app.caso_aperto = false;
+                app.lx.assegna_dopo = false;
                 self.ui.edit = None;
             }
+            Act::LxPannello(p) => {
+                app.lx.pannello = p;
+                app.lavori_aperti = false;
+            }
+            Act::LxTipo(t) => {
+                app.lx.tipo = t;
+                app.lx_pota();
+            }
+            Act::LxFiltroCaso(c) => app.lx_scegli_caso(c),
+            Act::LxStato(st) => {
+                app.lx.stato = st;
+                app.lx_pota();
+            }
+            Act::LxTutti => {
+                app.lx.tipo = None;
+                app.lx.stato = None;
+                app.lx_pota();
+            }
+            Act::LxRiga(i) => {
+                let (shift, ctrl) = self.mods;
+                app.lx_clic_riga(i, shift, ctrl);
+            }
+            Act::LxCasella(i) => app.lx_clic_riga(i, false, true),
+            Act::LxSceglitutti => app.lx_scegli_tutti(),
+            Act::LxProcedure => {
+                app.lavori_aperti = false;
+                app.lx.panel_chiuso = false;
+                app.lx.pannello = if app.lx.pannello == crate::ui::labsx::Pannello::Procedure { crate::ui::labsx::Pannello::Dettagli } else { crate::ui::labsx::Pannello::Procedure };
+            }
+            Act::LxPannelloToggle => app.lx.panel_chiuso = !app.lx.panel_chiuso,
+            Act::LxErrore(i) => app.lx.errore = if app.lx.errore == Some(i) { None } else { Some(i) },
+            Act::LxApri(i) => {
+                let out = app.files.get(i).and_then(|f| app.lx.fatto.get(&f.path)).and_then(|v| v.iter().filter(|x| x.out.is_some()).max_by_key(|x| x.when)).and_then(|x| x.out.clone());
+                if let Some(o) = out {
+                    plat.open_path(&o);
+                }
+            }
+            Act::LxNuovoCaso => {
+                app.caso_apri();
+                app.caso_bozza = (String::new(), String::new());
+                app.lx.assegna_dopo = false;
+            }
+            Act::LxTappa(k) => {
+                if let Some(c) = app.lx.caso.clone().filter(|c| !c.is_empty()) {
+                    app.lx_tappa_clic(&c, k);
+                }
+            }
+            Act::LxScheda => app.lx.scheda = !app.lx.scheda && app.lx.caso.as_deref().is_some_and(|c| !c.is_empty()),
+            Act::LxPacchetto => app.lx_pacchetto(simple),
+            Act::LxProcSalva => {
+                if let Some(p) = app.lx_passo_attuale() {
+                    let (c, v) = app.lx_passo_titolo(&p);
+                    let nome = format!("{c} · {v}");
+                    self.ui.caret = nome.chars().count();
+                    self.ui.sel_all = true;
+                    app.lx.proc_nome = Some(nome);
+                    self.ui.edit = Some(Field::LxProcNome);
+                }
+            }
+            Act::LxProcNomeOk => {
+                if let Some(nome) = app.lx.proc_nome.take() {
+                    if app.lx_salva_procedura(&nome) {
+                        app.notice = Some(crate::ui::model::Notice { text: format!("{} «{}».", crate::i18n::tr_string("Procedura salvata:"), nome.trim()), error: false });
+                    }
+                }
+                self.ui.edit = None;
+            }
+            Act::LxProcNomeChiudi => {
+                app.lx.proc_nome = None;
+                self.ui.edit = None;
+            }
+            Act::LxProcScegli(k) => app.lx.proc_scelta = k,
+            Act::LxProcVia => app.lx_procedura_via(),
+            Act::LxProcTogli(k) => app.lx_togli_procedura(k),
+            Act::LxAssegna => {
+                let mut items: Vec<(String, Act)> = self
+                    .app
+                    .lx
+                    .casi
+                    .iter()
+                    .enumerate()
+                    .map(|(k, c)| (if c.note.is_empty() { c.code.clone() } else { format!("{}  ·  {}", c.code, c.note) }, Act::LxCasoA(k)))
+                    .collect();
+                items.push((crate::i18n::tr_string("Nuovo caso…"), Act::LxCasoNuovo));
+                items.push((crate::i18n::tr_string("Nessun caso"), Act::LxCasoA(usize::MAX)));
+                let sel = self.app.selected.and_then(|i| self.app.files.get(i)).and_then(|f| {
+                    let c = self.app.lx_caso_di(&f.path);
+                    self.app.lx.casi.iter().position(|k| k.code == c)
+                });
+                self.open_menu(items, sel, &Act::LxAssegna);
+            }
+            Act::LxCasoA(k) => {
+                let code = app.lx.casi.get(k).map(|c| c.code.clone());
+                app.lx_assegna(code.as_deref());
+            }
+            Act::LxCasoNuovo => {
+                app.caso_apri();
+                app.caso_bozza = (String::new(), String::new());
+                app.lx.assegna_dopo = true;
+            }
+            Act::LxRegistro => app.lx.registro_aperto = !app.lx.registro_aperto,
+            Act::LxAiuto => app.lx.aiuto = !app.lx.aiuto,
+            Act::LxAnteprima => app.lx.anteprima = !app.lx.anteprima && app.selected.is_some(),
+            Act::LxComode => app.lx.comode = !app.lx.comode,
             Act::LavoriApri => {
                 app.lavori_aperti = !app.lavori_aperti;
                 app.lavori_esportato = None;
@@ -1952,6 +2098,8 @@ impl Screen {
             Field::FilePages(i) => self.app.files.get(i).map(|f| f.pages.clone()).unwrap_or_default(),
             Field::Review(i) => self.app.review.as_ref().and_then(|r| r.rows.get(i)).map(|r| r.text.clone()).unwrap_or_default(),
             Field::VoiceName(v) => self.app.review.as_ref().and_then(|r| r.names.get(v as usize)).cloned().unwrap_or_default(),
+            Field::LxCerca => self.app.lx.ricerca.clone(),
+            Field::LxProcNome => self.app.lx.proc_nome.clone().unwrap_or_default(),
             Field::CasoCodice => self.app.caso_bozza.0.clone(),
             Field::CasoNota => self.app.caso_bozza.1.clone(),
             Field::Ed(f) => self.app.ed.as_ref().map(|e| e.field_text(f)).unwrap_or_default(),
@@ -2001,6 +2149,11 @@ impl Screen {
                     *name = text;
                 }
             }
+            Field::LxCerca => {
+                self.app.lx.ricerca = text;
+                self.app.lx_pota();
+            }
+            Field::LxProcNome => self.app.lx.proc_nome = Some(text),
             Field::CasoCodice => self.app.caso_bozza.0 = text,
             Field::CasoNota => self.app.caso_bozza.1 = text,
             Field::Ed(f) => {
@@ -2044,7 +2197,13 @@ impl Screen {
 
     /// Un testo scritto (o incollato) nel campo con il cursore.
     pub fn text_input(&mut self, s: &str) {
-        let Some(field) = self.ui.edit else { return };
+        let Some(field) = self.ui.edit else {
+            // Cedro 4 Labs: senza un campo in uso le lettere sono scorciatoie (1 comandi, C caso, / cerca, ? aiuto).
+            if self.theme == ThemeId::CedroLabs && self.surface == Surface::Main && self.app.ed.is_none() {
+                self.lx_scorciatoia(s);
+            }
+            return;
+        };
         // Scrivere chiude il menu del tasto destro, come nei campi del sistema.
         self.ui.menu = None;
         if std::mem::take(&mut self.ui.sel_all) {
@@ -2156,6 +2315,9 @@ impl Screen {
                     if matches!(field, Field::CasoCodice | Field::CasoNota) {
                         self.act(Act::CasoOk, plat);
                     }
+                    if field == Field::LxProcNome {
+                        self.act(Act::LxProcNomeOk, plat);
+                    }
                     return true;
                 }
                 Key::Escape | Key::Tab | Key::ShiftTab => {
@@ -2170,6 +2332,9 @@ impl Screen {
                 self.set_field_text(field, chars.into_iter().collect());
                 return true;
             }
+        }
+        if self.theme == ThemeId::CedroLabs && self.surface == Surface::Main && self.app.ed.is_none() && self.ui.menu.is_none() && self.lx_tasto(key, plat) {
+            return true;
         }
         match key {
             Key::Escape => {
@@ -2247,6 +2412,73 @@ impl Screen {
             }
             _ => false,
         }
+    }
+
+    /// Cedro 4 Labs: i tasti della finestra unica (frecce sulla tabella, Spazio spunta, Canc toglie, Esc torna indietro).
+    fn lx_tasto(&mut self, key: Key, plat: &mut dyn Platform) -> bool {
+        use crate::ui::labsx::Pannello;
+        let a = &self.app;
+        let popup = a.lx.aiuto || a.lx.anteprima || a.lx.scheda || a.lx.errore.is_some() || a.lx.proc_nome.is_some();
+        let tabella = !a.files.is_empty() && !a.lx_pagina() && !a.lavori_aperti && !a.caso_aperto && a.ask.is_none() && !popup;
+        match key {
+            Key::Escape if a.lx.aiuto => self.app.lx.aiuto = false,
+            Key::Escape if a.lx.anteprima => self.app.lx.anteprima = false,
+            Key::Escape if a.lx.scheda => self.app.lx.scheda = false,
+            Key::Escape if a.lx.errore.is_some() => self.app.lx.errore = None,
+            Key::Escape if a.lx.proc_nome.is_some() => self.app.lx.proc_nome = None,
+            Key::Escape if a.caso_aperto || a.ask.is_some() => return false,
+            Key::Escape if a.lavori_aperti => self.app.lavori_aperti = false,
+            Key::Escape if a.lx.pannello != Pannello::Dettagli => self.app.lx.pannello = Pannello::Dettagli,
+            Key::Escape if !a.lx_scelti().is_empty() => {
+                for f in self.app.files.iter_mut() {
+                    f.checked = false;
+                }
+            }
+            Key::Up | Key::Down if tabella => {
+                let shift = self.mods.0;
+                self.app.lx_muovi(if key == Key::Down { 1 } else { -1 }, shift);
+            }
+            Key::Space if tabella && self.ui.focus_act.is_none() => self.app.lx_spunta_evidenziato(),
+            Key::Delete if tabella => self.act(Act::RemoveChecked, plat),
+            Key::SelectAll if tabella => self.app.lx_scegli_tutti(),
+            Key::Enter if tabella && self.app.lx.pannello == Pannello::Azione && self.ui.focus_act.is_none() => self.act(Act::Start, plat),
+            _ => return false,
+        }
+        true
+    }
+
+    /// Cedro 4 Labs: le lettere senza un campo in uso. 1-6 i comandi del laboratorio, 7 Converti, 8 PDF,
+    /// C assegna un caso, A aggiunge file (dal sistema non si può senza finestra: ci pensa il pulsante),
+    /// / cerca, ? le scorciatoie.
+    fn lx_scorciatoia(&mut self, s: &str) {
+        use crate::ui::model::Lab;
+        let Some(c) = s.chars().next() else { return };
+        if self.app.lx.aiuto || self.app.lx.anteprima || self.app.lx.scheda || self.app.lx.errore.is_some() || self.app.lx.proc_nome.is_some() || self.app.caso_aperto || self.app.ask.is_some() || self.app.busy_modal() {
+            return;
+        }
+        let mut plat = SenzaPiattaforma;
+        let act = match c {
+            '1' => Act::Lab(Lab::LAB[0]),
+            '2' => Act::Lab(Lab::LAB[1]),
+            '3' => Act::Lab(Lab::LAB[2]),
+            '4' => Act::Lab(Lab::LAB[3]),
+            '5' => Act::Lab(Lab::LAB[4]),
+            '6' => Act::Lab(Lab::LAB[5]),
+            '7' => Act::Lab(Lab::Converti),
+            '8' => Act::Lab(Lab::Pdf),
+            '9' => Act::LxProcedure,
+            'c' | 'C' => Act::LxAssegna,
+            'p' | 'P' => Act::LxAnteprima,
+            '?' => Act::LxAiuto,
+            '/' => {
+                self.ui.edit = Some(Field::LxCerca);
+                self.ui.caret = self.app.lx.ricerca.chars().count();
+                self.ui.sel_all = false;
+                return;
+            }
+            _ => return,
+        };
+        self.act(act, &mut plat);
     }
 
     /// Un menu aperto da tastiera: Invio sceglie la voce evidenziata.

@@ -359,6 +359,8 @@ fn open_surface(app: &Application, surface: Surface) {
                 return;
             }
             if let Ok(mut sc) = host.screen.try_borrow_mut() {
+                let st = g.current_event_state();
+                sc.mods = (st.contains(ModifierType::SHIFT_MASK), st.contains(ModifierType::CONTROL_MASK));
                 sc.pointer_down(lx, ly);
             }
             area2.queue_draw();
@@ -452,6 +454,7 @@ fn open_surface(app: &Application, surface: Surface) {
             // Gli appunti si leggono in un ciclo annidato (`wait`): un tasto ripetuto lì non deve rientrare.
             let Ok(mut pl) = p.try_borrow_mut() else { return glib::Propagation::Proceed };
             let Ok(mut sc) = host.screen.try_borrow_mut() else { return glib::Propagation::Proceed };
+            sc.mods = (shift, ctrl);
             let used = if k == Key::Enter && sc.ui.menu.is_some() { sc.menu_enter(&mut *pl) } else { sc.key(k, &mut *pl) };
             drop(sc);
             area2.queue_draw();

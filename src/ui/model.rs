@@ -400,6 +400,8 @@ pub enum Event {
     Summary(PathBuf, crate::riassunto::Progress),
     /// L'editor dei PDF: cosa arriva dal thread di fondo (pagine disegnate, testo, ricerche, salvataggio).
     PdEd(super::pdfedwork::Msg),
+    /// L'impronta SHA-256 di un file (Cedro 4 Labs, scheda «Dettagli»).
+    Sha(PathBuf, Option<String>),
 }
 
 /// Cosa fa la scheda PDF: converte, unisce, divide, cambia le pagine o comprime.
@@ -534,6 +536,8 @@ pub struct App {
     pub estimates: HashMap<(PathBuf, String), Option<Result<(u64, u64), String>>>,
     /// «Firma digitale»: i file da verificare, gli ultimi aperti e il visualizzatore.
     pub firma: super::firma::FirmaUi,
+    /// Cedro 4 Labs, la finestra unica: filtri, caso di ogni file, impronte.
+    pub lx: super::labsx::LabsX,
     media_asked: std::collections::HashSet<PathBuf>,
     pub(super) tx: Sender<Event>,
     rx: Receiver<Event>,
@@ -626,6 +630,7 @@ impl App {
             summary_job: None,
             summary_failure: None,
             firma: Default::default(),
+            lx: super::labsx::LabsX::nuovo(),
             media_asked: Default::default(),
             tx,
             rx,
@@ -732,6 +737,7 @@ impl App {
         if self.lab == Lab::Home && self.activity == Activity::Convert {
             return;
         }
+        let prima = self.lab;
         self.lab = match self.activity {
             Activity::Firma => Lab::Referti,
             Activity::Transcribe => Lab::Trascrivi,
@@ -747,6 +753,10 @@ impl App {
                 _ => Lab::Converti,
             },
         };
+        // Si arriva su una pagina intera (firma, trascrizione) da qualunque strada: la si vede subito.
+        if self.lab != prima && crate::ui::labsx::lab_a_pagina(self.lab) {
+            self.lx.pannello = crate::ui::labsx::Pannello::Azione;
+        }
     }
 
     /// Il Cedro di partenza, «Converti» con un PDF in vista: si passa al primo tipo in coda che non è un
@@ -791,6 +801,11 @@ impl App {
         self.job.is_some()
     }
 
+    /// Una finestrella di domanda è aperta (le scorciatoie da tastiera aspettano).
+    pub fn busy_modal(&self) -> bool {
+        self.transcribe.asking || self.review.is_some()
+    }
+
     /// Il primo formato della categoria (in Semplificata quello consigliato).
     pub fn default_action(&self, simple: bool) -> String {
         let kind = self.kind();
@@ -817,6 +832,8 @@ impl App {
                 let f = &self.files[i];
                 match self.activity {
                     Activity::Transcribe => trascrizione::transcribable(&f.path),
+                    // «Togli i nomi» prende insieme foto, vetrini, DICOM, PDF e documenti: il motore li distingue da solo.
+                    Activity::Convert if self.lab == Lab::Anonimizza && self.action == "strip" => !f.voice_only && matches!(f.kind, Kind::Image | Kind::Pdf | Kind::Doc),
                     _ => !f.voice_only && f.kind == kind,
                 }
             })
@@ -1323,6 +1340,7 @@ impl App {
             known.insert(path.clone());
             first.get_or_insert((kind, voice_only || (transcribing && trascrizione::transcribable(&path))));
             self.loader.request(&path);
+            self.lx_nuovo_file(&path);
             self.files.push(FileItem { path, kind, voice_only, state: FileState::Waiting, message: "In attesa".into(), output: None, checked: true, done_key: None, percent: None, pages: String::new() });
             added += 1;
         }
@@ -1625,24 +1643,39 @@ impl App {
     }
 
     /// Un lavoro finito entra nell'elenco dei lavori, con i nomi dei file usciti (niente se non è uscito nulla).
+    /// Se i file sono di casi diversi, ogni caso ha il suo lavoro.
     fn registra_lavoro(&mut self, job: &Job) {
         if !matches!(job.kind, JobKind::Convert | JobKind::Transcribe) {
             return;
         }
-        let mut outputs: Vec<String> = Vec::new();
+        // (caso, cartella, nomi)
+        let mut gruppi: Vec<(String, String, Vec<String>)> = Vec::new();
         for &i in &job.targets {
-            let Some(out) = self.files.get(i).filter(|f| f.state == FileState::Done).and_then(|f| f.output.as_ref()) else { continue };
+            let Some(f) = self.files.get(i) else { continue };
+            let Some(out) = Some(f).filter(|f| f.state == FileState::Done).and_then(|f| f.output.as_ref()) else { continue };
             let name = out.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
-            if !name.is_empty() && !outputs.contains(&name) {
-                outputs.push(name);
+            if name.is_empty() {
+                continue;
+            }
+            let caso = self.lx_caso_di(&f.path);
+            let dir = out.parent().map(|d| d.display().to_string()).unwrap_or_default();
+            match gruppi.iter_mut().find(|g| g.0 == caso) {
+                Some(g) => {
+                    if !g.2.contains(&name) {
+                        g.2.push(name);
+                    }
+                }
+                None => gruppi.push((caso, dir, vec![name])),
             }
         }
-        if outputs.is_empty() {
+        if gruppi.is_empty() {
             return;
         }
         let what = if self.lab == Lab::Home { Lab::Converti.name() } else { self.lab.name() };
         let when = crate::nametemplate::now().unix;
-        crate::caso::registra(&mut self.lavori, crate::caso::Lavoro { when, what: crate::i18n::tr(what).to_string(), caso: self.caso.as_ref().map(|c| c.code.clone()).unwrap_or_default(), outputs });
+        for (caso, dir, outputs) in gruppi {
+            crate::caso::registra(&mut self.lavori, crate::caso::Lavoro { when, what: crate::i18n::tr(what).to_string(), caso, outputs, dir });
+        }
         self.quaderno_copiato = None;
         self.lavoro_appena = true;
         self.lavoro_appena_copiato = false;
@@ -1660,6 +1693,18 @@ impl App {
         self.caso = crate::caso::Caso::new(&self.caso_bozza.0, &self.caso_bozza.1);
         crate::caso::salva(self.caso.as_ref());
         self.caso_aperto = false;
+        // Il caso entra tra quelli conosciuti; se la finestrella l'ha aperta «Assegna caso», va anche ai file scelti.
+        if let Some(c) = self.caso.clone() {
+            self.lx_ricorda_caso(&c.code, &c.note);
+            self.lx_tappa_almeno(&c.code, 1);
+            if std::mem::take(&mut self.lx.assegna_dopo) {
+                self.lx_assegna(Some(&c.code));
+            } else {
+                // Un caso scritto da «+ Nuovo»: si lavora su quello.
+                self.lx.caso = Some(c.code.clone());
+            }
+        }
+        self.lx.assegna_dopo = false;
     }
 
     /// Toglie il caso: i file nuovi tornano ai nomi di sempre.
@@ -1768,6 +1813,8 @@ impl App {
         if self.simple_view && action == "split" {
             opts.pdf_pages.plan = crate::pdfpages::Plan::EveryPage;
         }
+        // Il caso di ogni file: i nomi nuovi prendono quello del file, non per forza quello di adesso.
+        let casi: HashMap<PathBuf, String> = paths.iter().map(|p| (p.clone(), self.lx_caso_di(p))).collect();
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
         std::thread::spawn(move || {
             for path in paths {
@@ -1793,6 +1840,16 @@ impl App {
                             },
                             || {
                                 let mut opts = opts.clone();
+                                if let Some(code) = casi.get(&path) {
+                                    // Il caso del file vince su quello di adesso; senza caso, i nomi di sempre.
+                                    opts.caso = None;
+                                    if opts.name_template.as_deref() == Some(crate::caso::MODELLO) {
+                                        opts.name_template = None;
+                                    }
+                                    if !code.is_empty() {
+                                        opts = crate::caso::opzioni(Some(code), opts);
+                                    }
+                                }
                                 if let Some(c) = cuts.get(&path) {
                                     opts.pdf_pages.plan = crate::pdfpages::Plan::Cuts(c.clone());
                                 }
@@ -2078,6 +2135,11 @@ impl App {
                             }
                         }
                     }
+                    if !failed {
+                        // Cedro 4 Labs: nella tabella lo stato dice cosa si è fatto e a che ora.
+                        let out = self.files.iter().find(|f| f.path == path).and_then(|f| f.output.clone());
+                        self.lx_segna_fatto(&path, out);
+                    }
                     if let Some(job) = self.job.as_mut() {
                         job.part = 0.0;
                         job.done += 1;
@@ -2190,8 +2252,10 @@ impl App {
                 }
                 Event::JobDone => {
                     crate::accel::clear_in_use();
+                    let mut falliti = None;
                     if let Some(job) = self.job.take() {
                         self.registra_lavoro(&job);
+                        falliti = Some(job.failed);
                         if matches!(job.kind, JobKind::Convert | JobKind::Transcribe) {
                             let text = if job.failed > 0 {
                                 format!("{} di {} file non riusciti: il motivo è accanto a ciascuno.", job.failed, job.total)
@@ -2201,9 +2265,16 @@ impl App {
                             self.notice = Some(Notice { text, error: job.failed > 0 });
                         }
                     }
+                    // Una procedura in corso passa al passo dopo.
+                    if let Some(n) = falliti {
+                        self.lx_procedura_avanti(n);
+                    }
                 }
                 Event::Media(path, loaded) => {
                     self.media.insert(path, loaded);
+                }
+                Event::Sha(path, h) => {
+                    self.lx.sha.insert(path, h.map(super::labsx::Sha::Pronta).unwrap_or(super::labsx::Sha::Non));
                 }
                 Event::Preview(path, page, img) => {
                     let key = (path, page);

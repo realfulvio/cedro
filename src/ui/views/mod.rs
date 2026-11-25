@@ -13,6 +13,7 @@ mod firma;
 mod firmare;
 mod guidato;
 mod labs;
+mod labsx;
 mod onda;
 mod pagine;
 mod pdfeditor;
