@@ -248,6 +248,9 @@ pub struct Misura {
     /// Che cosa sono i punti di `spettro` quando non sono uno spettro di assorbanza dei spettrofotometri
     /// (la cinetica di un pozzetto, lo spettro di fluorescenza…). Un punto senza valore è NaN.
     pub curva: Option<Curva>,
+    /// I picchi che lo strumento ha trovato (diffusione dinamica della luce): per ogni picco le sue grandezze
+    /// (diametro medio, intensità, massa…) come valori «Altro» con la loro unità.
+    pub picchi: Vec<Vec<Valore>>,
 }
 
 impl Misura {

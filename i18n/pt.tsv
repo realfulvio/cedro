@@ -3172,3 +3172,15 @@ nel file non ci sono risultati per pozzetto	o ficheiro não tem resultados por p
 nel foglio RQ Replicate Group Result mancano le colonne Rq, Sample e Target	na folha RQ Replicate Group Result faltam as colunas Rq, Sample e Target
 non si capisce qual è il campione di riferimento: nel foglio RQ Replicate Group Result una sola riga deve avere Rq uguale a 1	não se percebe qual é a amostra de referência: na folha RQ Replicate Group Result só uma linha deve ter Rq igual a 1
 non si capisce qual è il bersaglio di riferimento: nel foglio RQ Replicate Group Result deve essercene uno solo senza Rq	não se percebe qual é o alvo de referência: na folha RQ Replicate Group Result só um deve ficar sem Rq
+
+# Cedro 4 Labs: Unchained Labs Lunatic e Stunner
+Applicazione	Aplicação
+non trovo la riga con «Sample name» che apre la tabella	não encontro a linha com «Sample name» que abre a tabela
+nell'intestazione del file ci sono i nomi ma non i valori	o cabeçalho do ficheiro tem os nomes mas não os valores
+nel file non ci sono righe di risultati	o ficheiro não tem linhas de resultados
+nel file ci deve essere una colonna di assorbanza (per esempio A280)	o ficheiro deve ter uma coluna de absorvância (por exemplo A280)
+non trovo l'identificativo dello strumento: ci vuole la colonna «Instrument ID» o «Instrument» nell'intestazione	não encontro o identificador do instrumento: é preciso a coluna «Instrument ID» ou «Instrument» no cabeçalho
+non trovo la data e l'ora: ci vogliono le colonne «Date» e «Time» oppure la «Date» nell'intestazione	não encontro a data e a hora: são precisas as colunas «Date» e «Time» ou «Date» no cabeçalho
+non capisco la data «{}»	não percebo a data «{}»
+manca la posizione del pozzetto (colonna «Plate position»)	falta a posição do poço (coluna «Plate position»)
+due colonne danno valori diversi per la stessa lunghezza d'onda ({#} nm): {} e {}	duas colunas dão valores diferentes para o mesmo comprimento de onda ({} nm): {} e {}

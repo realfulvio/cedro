@@ -238,7 +238,7 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
     let impost: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::Elaborazione).collect();
     let elab_altro: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::ElaboratoAltro).collect();
     let impost_altro: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::ElaborazioneAltro).collect();
-    if !elab.is_empty() || !impost.is_empty() || !elab_altro.is_empty() || !impost_altro.is_empty() {
+    if !elab.is_empty() || !impost.is_empty() || !elab_altro.is_empty() || !impost_altro.is_empty() || !m.picchi.is_empty() {
         let mut p = Map::new();
         if !impost.is_empty() || !impost_altro.is_empty() {
             let mut dp = Map::new();
@@ -252,6 +252,21 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
             metti(&mut p, v, &mut errori);
         }
         altro(&mut p, &elab_altro);
+        if t == Tecnica::LettorePiastre {
+            p.insert("processed data identifier".into(), json!(format!("{}_PD", m.id)));
+        }
+        if !m.picchi.is_empty() {
+            let picchi: Vec<Value> = m
+                .picchi
+                .iter()
+                .map(|pk| {
+                    let mut c = Map::new();
+                    altro(&mut c, &pk.iter().collect::<Vec<_>>());
+                    Value::Object(c)
+                })
+                .collect();
+            p.insert("peak list".into(), json!({ "peak": picchi }));
+        }
         d.insert("processed data aggregate document".into(), json!({ "processed data document": [Value::Object(p)] }));
     }
     // Le immagini (contacellule): il file dei dati e le note.
@@ -434,7 +449,10 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
         calc.push(c);
     };
     for c in &l.calcolati {
-        push(&c.nome, c.valore, &c.unita, &c.sorgenti, &c.da, &c.descrizione, &c.da_calcoli);
+        // Un calcolo che lo strumento scrive «N/A» è -0 (dato mancante); l'assorbanza va in mAU.
+        let assorbanza = matches!(c.unita.trim(), "OD" | "AU" | "Abs");
+        let v = if c.valore.is_nan() { -0.0 } else if assorbanza { c.valore * 1000.0 } else { c.valore };
+        push(&c.nome, v, &c.unita, &c.sorgenti, &c.da, &c.descrizione, &c.da_calcoli);
     }
     if o.calcoli {
         for (nome, v, u, src) in calcoli_cedro(l, o) {

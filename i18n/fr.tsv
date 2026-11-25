@@ -3172,3 +3172,15 @@ nel file non ci sono risultati per pozzetto	le fichier ne contient aucun résult
 nel foglio RQ Replicate Group Result mancano le colonne Rq, Sample e Target	les colonnes Rq, Sample et Target manquent dans la feuille RQ Replicate Group Result
 non si capisce qual è il campione di riferimento: nel foglio RQ Replicate Group Result una sola riga deve avere Rq uguale a 1	l'échantillon de référence est introuvable : dans la feuille RQ Replicate Group Result une seule ligne doit avoir Rq égal à 1
 non si capisce qual è il bersaglio di riferimento: nel foglio RQ Replicate Group Result deve essercene uno solo senza Rq	la cible de référence est introuvable : dans la feuille RQ Replicate Group Result une seule cible doit être sans Rq
+
+# Cedro 4 Labs: Unchained Labs Lunatic e Stunner
+Applicazione	Application
+non trovo la riga con «Sample name» che apre la tabella	la ligne «Sample name» qui ouvre le tableau est introuvable
+nell'intestazione del file ci sono i nomi ma non i valori	l'en-tête du fichier a les noms mais pas les valeurs
+nel file non ci sono righe di risultati	le fichier ne contient aucune ligne de résultats
+nel file ci deve essere una colonna di assorbanza (per esempio A280)	le fichier doit avoir une colonne d'absorbance (par exemple A280)
+non trovo l'identificativo dello strumento: ci vuole la colonna «Instrument ID» o «Instrument» nell'intestazione	l'identifiant de l'instrument est introuvable : il faut la colonne «Instrument ID» ou «Instrument» dans l'en-tête
+non trovo la data e l'ora: ci vogliono le colonne «Date» e «Time» oppure la «Date» nell'intestazione	la date et l'heure sont introuvables : il faut les colonnes «Date» et «Time» ou «Date» dans l'en-tête
+non capisco la data «{}»	la date «{}» est illisible
+manca la posizione del pozzetto (colonna «Plate position»)	la position du puits manque (colonne «Plate position»)
+due colonne danno valori diversi per la stessa lunghezza d'onda ({#} nm): {} e {}	deux colonnes donnent des valeurs différentes pour la même longueur d'onde ({} nm) : {} et {}

@@ -84,8 +84,70 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Result<Vec<u8>, String> {
     if !l.calcolati.is_empty() && !a_colonne(l) {
         calcolati(&mut book, l, &titoli).map_err(err)?;
     }
+    if l.misure().any(|m| !m.picchi.is_empty()) {
+        picchi(&mut book, l, &titoli).map_err(err)?;
+    }
     strumento(&mut book, l, &titoli).map_err(err)?;
     book.save_to_buffer().map_err(err)
+}
+
+/// I picchi che lo strumento ha trovato (diffusione dinamica della luce): una riga per picco di ogni misura.
+fn picchi(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), XlsxError> {
+    let ws = book.add_worksheet();
+    ws.set_name("Picchi")?;
+    let piastra = l.a_piastra();
+    let mut colonne: Vec<(String, String)> = Vec::new();
+    for m in l.misure() {
+        for p in &m.picchi {
+            for v in p.iter().filter(|v| v.chiave != "peak index") {
+                if !colonne.iter().any(|(k, _)| *k == v.chiave) {
+                    colonne.push((v.chiave.clone(), v.unita.clone()));
+                }
+            }
+        }
+    }
+    let mut intest: Vec<String> = Vec::new();
+    if piastra {
+        intest.push("Pozzetto".into());
+    }
+    intest.extend(["Campione".to_string(), "Picco".to_string()]);
+    intest.extend(colonne.iter().map(|(k, u)| intestazione_valore(k, u)));
+    for (c, x) in intest.iter().enumerate() {
+        ws.write_string_with_format(0, c as u16, x, titoli)?;
+    }
+    let mut r = 1u32;
+    for m in l.misure() {
+        for p in &m.picchi {
+            let mut c = 0u16;
+            if piastra {
+                ws.write_string(r, c, m.pozzetto.as_deref().unwrap_or(""))?;
+                c += 1;
+            }
+            ws.write_string(r, c, &m.campione)?;
+            let indice = p.iter().find(|v| v.chiave == "peak index").map(|v| match &v.dato {
+                Dato::Testo(t) => t.clone(),
+                _ => String::new(),
+            });
+            match indice.as_deref().and_then(|t| t.parse::<f64>().ok()) {
+                Some(n) => ws.write_number(r, c + 1, n)?,
+                None => ws.write_string(r, c + 1, indice.as_deref().unwrap_or(""))?,
+            };
+            for (i, (k, _)) in colonne.iter().enumerate() {
+                if let Some(x) = p.iter().find(|v| v.chiave == *k).and_then(Valore::numero) {
+                    ws.write_number(r, c + 2 + i as u16, x)?;
+                }
+            }
+            r += 1;
+        }
+    }
+    ws.set_freeze_panes(1, 0)?;
+    if r > 1 {
+        ws.autofilter(0, 0, r - 1, (intest.len() - 1) as u16)?;
+    }
+    for c in 0..intest.len() as u16 {
+        ws.set_column_width(c, 18.0)?;
+    }
+    Ok(())
 }
 
 fn mappa(book: &mut Workbook, l: &Lettura, o: &Opzioni) -> Result<(), XlsxError> {
@@ -459,7 +521,7 @@ pub fn tab_campioni(l: &Lettura) -> Tab {
         }
         for nome in &nomi_calcolati {
             let v = l.calcolati.iter().find(|x| x.nome == *nome && x.sorgenti.first().and_then(|s| di_misura.get(s.as_str())) == Some(&i));
-            r.push(v.map(|v| Cella::Numero(v.valore)));
+            r.push(v.filter(|v| !v.valore.is_nan()).map(|v| Cella::Numero(v.valore)));
         }
         tab_righe.push(r);
     }
@@ -573,7 +635,11 @@ fn calcolati(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xl
         }
         ws.write_string(r, col, prima.map(|(_, m)| m.campione.as_str()).unwrap_or(""))?;
         ws.write_string(r, col + 1, &c.nome)?;
-        ws.write_number(r, col + 2, c.valore)?;
+        if c.valore.is_nan() {
+            ws.write_string(r, col + 2, "N/A")?;
+        } else {
+            ws.write_number(r, col + 2, c.valore)?;
+        }
         let mut origine: Vec<String> = c.sorgenti.iter().filter_map(|s| di_misura.get(s.as_str())).map(|(g, m)| if g.is_empty() { m.id.clone() } else { format!("{g}") }).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
         // I calcoli da cui viene, per nome.
         let altri: std::collections::BTreeSet<&str> = c.da_calcoli.iter().filter_map(|&a| l.calcolati.get(a)).map(|x| x.nome.as_str()).collect();

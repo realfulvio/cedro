@@ -3184,3 +3184,15 @@ nel file non ci sono risultati per pozzetto	the file has no per-well results
 nel foglio RQ Replicate Group Result mancano le colonne Rq, Sample e Target	the RQ Replicate Group Result sheet has no Rq, Sample and Target columns
 non si capisce qual è il campione di riferimento: nel foglio RQ Replicate Group Result una sola riga deve avere Rq uguale a 1	the reference sample can't be identified: in the RQ Replicate Group Result sheet exactly one row must have Rq equal to 1
 non si capisce qual è il bersaglio di riferimento: nel foglio RQ Replicate Group Result deve essercene uno solo senza Rq	the reference target can't be identified: in the RQ Replicate Group Result sheet exactly one target must have no Rq
+
+# Cedro 4 Labs: Unchained Labs Lunatic e Stunner
+Applicazione	Application
+non trovo la riga con «Sample name» che apre la tabella	can't find the row with «Sample name» that starts the table
+nell'intestazione del file ci sono i nomi ma non i valori	the file header has the names but not the values
+nel file non ci sono righe di risultati	the file has no result rows
+nel file ci deve essere una colonna di assorbanza (per esempio A280)	the file must have an absorbance column (for example A280)
+non trovo l'identificativo dello strumento: ci vuole la colonna «Instrument ID» o «Instrument» nell'intestazione	can't find the instrument identifier: the «Instrument ID» column or «Instrument» in the header is needed
+non trovo la data e l'ora: ci vogliono le colonne «Date» e «Time» oppure la «Date» nell'intestazione	can't find the date and time: the «Date» and «Time» columns or «Date» in the header are needed
+non capisco la data «{}»	can't read the date «{}»
+manca la posizione del pozzetto (colonna «Plate position»)	the well position is missing («Plate position» column)
+due colonne danno valori diversi per la stessa lunghezza d'onda ({#} nm): {} e {}	two columns give different values for the same wavelength ({} nm): {} and {}
