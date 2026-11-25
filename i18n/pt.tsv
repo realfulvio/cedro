@@ -3214,3 +3214,7 @@ non riesco a leggere l'intestazione: nessuna riga «Chiave: valore»	não consig
 non capisco il tipo di lettura dall'intestazione: serve una sola tra assorbanza, fluorescenza e luminescenza	não consigo saber o tipo de leitura pelo cabeçalho: é preciso exatamente uma entre absorvância, fluorescência e luminescência
 manca la tabella dei valori dopo «Raw Data»	falta a tabela de valores depois de «Raw Data»
 nel file non ci sono valori	o ficheiro não tem valores
+
+# Thermo Fisher Diomni
+manca il foglio «Target_Call» o «Target Call»	falta a folha «Target_Call» ou «Target Call»
+non trovo la tabella dei risultati (la riga che comincia con «Well»)	não encontro a tabela de resultados (a linha que começa por «Well»)

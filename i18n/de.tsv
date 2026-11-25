@@ -3215,3 +3215,7 @@ non riesco a leggere l'intestazione: nessuna riga «Chiave: valore»	der Kopf l�
 non capisco il tipo di lettura dall'intestazione: serve una sola tra assorbanza, fluorescenza e luminescenza	die Messart lässt sich aus dem Kopf nicht erkennen: genau eine von Absorption, Fluoreszenz und Lumineszenz ist nötig
 manca la tabella dei valori dopo «Raw Data»	die Wertetabelle nach «Raw Data» fehlt
 nel file non ci sono valori	die Datei enthält keine Werte
+
+# Thermo Fisher Diomni
+manca il foglio «Target_Call» o «Target Call»	das Blatt «Target_Call» oder «Target Call» fehlt
+non trovo la tabella dei risultati (la riga che comincia con «Well»)	die Ergebnistabelle (die Zeile, die mit «Well» beginnt) wurde nicht gefunden

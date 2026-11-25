@@ -3226,3 +3226,7 @@ non riesco a leggere l'intestazione: nessuna riga «Chiave: valore»	can't read 
 non capisco il tipo di lettura dall'intestazione: serve una sola tra assorbanza, fluorescenza e luminescenza	can't tell the read type from the header: exactly one of absorbance, fluorescence and luminescence is needed
 manca la tabella dei valori dopo «Raw Data»	the table of values after «Raw Data» is missing
 nel file non ci sono valori	the file has no values
+
+# Thermo Fisher Diomni
+manca il foglio «Target_Call» o «Target Call»	the «Target_Call» or «Target Call» sheet is missing
+non trovo la tabella dei risultati (la riga che comincia con «Well»)	can't find the results table (the row starting with «Well»)
