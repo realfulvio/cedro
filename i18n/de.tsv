@@ -3233,3 +3233,14 @@ nel foglio «Table End point» manca la riga «{}»	im Blatt «Table End point»
 nel file manca il contenuto del pozzetto {}	in der Datei fehlt der Inhalt von Well {}
 il pozzetto {} ha un valore che non è un numero: «{}»	Well {} hat einen Wert, der keine Zahl ist: «{}»
 nel file non ci sono pozzetti con un valore	die Datei enthält keine Wells mit einem Wert
+
+# MSD Workbench
+manca il foglio «Workbench data»	das Blatt «Workbench data» fehlt
+nella prima riga non trovo il codice della piastra: deve essere come «Plate_2BO40AW287»	in der ersten Zeile fehlt der Plattencode: er muss wie «Plate_2BO40AW287» aussehen
+manca la riga con i nomi delle colonne	die Zeile mit den Spaltennamen fehlt
+nella tabella manca la colonna «{}»	in der Tabelle fehlt die Spalte «{}»
+una riga non ha il campione	eine Zeile hat keine Probe
+il campione {} non ha il pozzetto	die Probe {} hat kein Well
+il pozzetto {} non ha il punto	Well {} hat keinen Spot
+il pozzetto {} ha un segnale che non è un numero: «{}»	Well {} hat ein Signal, das keine Zahl ist: «{}»
+nel file non ci sono righe con un segnale	die Datei enthält keine Zeilen mit einem Signal

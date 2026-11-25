@@ -901,7 +901,7 @@ impl Lavoro<'_> {
 // Le misure
 // ---------------------------------------------------------------------------------------------
 
-fn arrotonda_pozzetti(n: usize) -> u32 {
+pub(super) fn arrotonda_pozzetti(n: usize) -> u32 {
     for p in [1usize, 2, 4, 6, 8, 12, 24, 48, 72, 96, 384, 1536, 3456] {
         if n <= p {
             return p as u32;

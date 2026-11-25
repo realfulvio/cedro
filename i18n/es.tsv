@@ -3230,3 +3230,14 @@ nel foglio «Table End point» manca la riga «{}»	en la hoja «Table End point
 nel file manca il contenuto del pozzetto {}	en el archivo falta el contenido del pocillo {}
 il pozzetto {} ha un valore che non è un numero: «{}»	el pocillo {} tiene un valor que no es un número: «{}»
 nel file non ci sono pozzetti con un valore	el archivo no tiene pocillos con valor
+
+# MSD Workbench
+manca il foglio «Workbench data»	falta la hoja «Workbench data»
+nella prima riga non trovo il codice della piastra: deve essere come «Plate_2BO40AW287»	no encuentro el código de la placa en la primera fila: debe ser como «Plate_2BO40AW287»
+manca la riga con i nomi delle colonne	falta la fila con los nombres de las columnas
+nella tabella manca la colonna «{}»	en la tabla falta la columna «{}»
+una riga non ha il campione	una fila no tiene muestra
+il campione {} non ha il pozzetto	la muestra {} no tiene pocillo
+il pozzetto {} non ha il punto	el pocillo {} no tiene punto
+il pozzetto {} ha un segnale che non è un numero: «{}»	el pocillo {} tiene una señal que no es un número: «{}»
+nel file non ci sono righe con un segnale	el archivo no tiene filas con señal

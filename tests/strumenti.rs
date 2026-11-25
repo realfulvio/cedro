@@ -138,7 +138,9 @@ fn riassunti(profilo: &str) -> Vec<(PathBuf, Value)> {
 
 fn ingresso(root: &Path, profilo: &str, g: &Value) -> PathBuf {
     let rel = g["file"].as_str().unwrap_or_default().replace("__", "/");
-    root.join("tests/parsers").join(profilo).join("testdata").join(rel)
+    // Un file d'esempio può stare nella cartella di un altro lettore di allotropy («origine»).
+    let origine = g["origine"].as_str().unwrap_or(profilo);
+    root.join("tests/parsers").join(origine).join("testdata").join(rel)
 }
 
 /// Tutti i profili pronti leggono giusti i loro file d'esempio.
