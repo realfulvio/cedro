@@ -30,6 +30,9 @@ const MAX: u64 = 256 << 20;
 
 impl Fonte {
     pub fn apri(path: &Path) -> Result<Fonte, String> {
+        if path.is_dir() {
+            return Err("è una cartella, non il file di uno strumento".into());
+        }
         let len = std::fs::metadata(path).map_err(|e| e.to_string())?.len();
         if len > MAX {
             return Err("file troppo grande per l'export di uno strumento".into());

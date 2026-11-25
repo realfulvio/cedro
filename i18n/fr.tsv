@@ -3343,3 +3343,9 @@ la data «{}» della calibrazione «{}» non la capisco: non l'ho scritta	je ne 
 il pozzetto «{}» non ha una posizione che capisco (mi aspettavo qualcosa come «1(1,A1)»)	le puits «{}» a une position que je ne comprends pas (j'attendais quelque chose comme «1(1,A1)»)
 nella tabella «Dilution Factor» manca il pozzetto «{}»	le puits «{}» manque dans le tableau «Dilution Factor»
 non ho letto queste tabelle del file: {}	je n'ai pas lu ces tableaux du fichier : {}
+
+# Ruoli su pozzetti che non ci sono e cartelle al posto dei file
+è una cartella, non il file di uno strumento	c'est un dossier, pas le fichier d'un appareil
+Ruolo senza pozzetto.	Rôle sans puits.
+Il pozzetto {} non c'è nella piastra: il ruolo segnato è stato ignorato.	Le puits {} n'est pas sur la plaque : le rôle indiqué a été ignoré.
+I pozzetti {} non ci sono nella piastra: i ruoli segnati sono stati ignorati.	Les puits {} ne sont pas sur la plaque : les rôles indiqués ont été ignorés.

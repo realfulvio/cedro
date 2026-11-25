@@ -3343,3 +3343,9 @@ la data «{}» della calibrazione «{}» non la capisco: non l'ho scritta	não e
 il pozzetto «{}» non ha una posizione che capisco (mi aspettavo qualcosa come «1(1,A1)»)	o poço «{}» tem uma posição que não entendo (esperava algo como «1(1,A1)»)
 nella tabella «Dilution Factor» manca il pozzetto «{}»	falta na tabela «Dilution Factor» o poço «{}»
 non ho letto queste tabelle del file: {}	não li estas tabelas do ficheiro: {}
+
+# Ruoli su pozzetti che non ci sono e cartelle al posto dei file
+è una cartella, non il file di uno strumento	é uma pasta, não o ficheiro de um instrumento
+Ruolo senza pozzetto.	Papel sem poço.
+Il pozzetto {} non c'è nella piastra: il ruolo segnato è stato ignorato.	O poço {} não está na placa: o papel marcado foi ignorado.
+I pozzetti {} non ci sono nella piastra: i ruoli segnati sono stati ignorati.	Os poços {} não estão na placa: os papéis marcados foram ignorados.

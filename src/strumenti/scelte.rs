@@ -200,7 +200,7 @@ pub struct Nota {
 }
 
 /// Le note per chi ha convertito: i pozzetti senza numero, gli avvisi del profilo, il controllo di Allotrope.
-pub fn note(l: &Lettura, u: &Uscite) -> Vec<Nota> {
+pub fn note(l: &Lettura, u: &Uscite, s: &Scelte) -> Vec<Nota> {
     let mut v: Vec<Nota> = Vec::new();
     // Misure il cui valore principale non è un numero («Undetermined», «OVER»).
     let mut senza: Vec<(String, usize)> = Vec::new();
@@ -224,6 +224,25 @@ pub fn note(l: &Lettura, u: &Uscite) -> Vec<Nota> {
     }
     for a in &l.avvisi {
         v.push(Nota { titolo: "Da sapere.".into(), testo: a.clone(), attenzione: true });
+    }
+    // I ruoli segnati su pozzetti che nella piastra non ci sono (da riga di comando si può scrivere «Z99»).
+    if l.a_piastra() {
+        let presenti: Vec<(usize, usize)> = l.misure().filter_map(|m| m.pozzetto.as_deref().and_then(super::pozzetto_rc)).collect();
+        let mut mancano: Vec<String> = Vec::new();
+        for (w, _) in &s.ruoli {
+            let presente = super::pozzetto_rc(w).is_some_and(|rc| presenti.contains(&rc));
+            if !presente && !mancano.contains(w) {
+                mancano.push(w.clone());
+            }
+        }
+        if !mancano.is_empty() {
+            let testo = if mancano.len() == 1 {
+                format!("Il pozzetto {} non c'è nella piastra: il ruolo segnato è stato ignorato.", mancano[0])
+            } else {
+                format!("I pozzetti {} non ci sono nella piastra: i ruoli segnati sono stati ignorati.", mancano.join(", "))
+            };
+            v.push(Nota { titolo: "Ruolo senza pozzetto.".into(), testo, attenzione: true });
+        }
     }
     match &u.controllo {
         Some(Ok(())) if u.asm.is_some() => v.push(Nota { titolo: "File Allotrope controllato.".into(), testo: "Chiavi, unità e identificativi passano il controllo.".into(), attenzione: false }),

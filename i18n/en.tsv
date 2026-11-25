@@ -3355,3 +3355,9 @@ la data «{}» della calibrazione «{}» non la capisco: non l'ho scritta	I don'
 il pozzetto «{}» non ha una posizione che capisco (mi aspettavo qualcosa come «1(1,A1)»)	the well «{}» has a position I don't understand (I expected something like «1(1,A1)»)
 nella tabella «Dilution Factor» manca il pozzetto «{}»	the «Dilution Factor» table is missing the well «{}»
 non ho letto queste tabelle del file: {}	I did not read these tables of the file: {}
+
+# Ruoli su pozzetti che non ci sono e cartelle al posto dei file
+è una cartella, non il file di uno strumento	it's a folder, not an instrument file
+Ruolo senza pozzetto.	Role without a well.
+Il pozzetto {} non c'è nella piastra: il ruolo segnato è stato ignorato.	Well {} is not on the plate: the role you set was ignored.
+I pozzetti {} non ci sono nella piastra: i ruoli segnati sono stati ignorati.	Wells {} are not on the plate: the roles you set were ignored.

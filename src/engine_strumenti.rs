@@ -114,7 +114,7 @@ pub(super) fn scrivi(path: &Path, dir: &Path, opts: &Options) -> CedroResult<Out
     let n = l.conta();
     let strumento = [scelte::nome_strumento(&l), scelte::riga_lettura(&l)].join(" · ");
     ULTIMO.with(|x| {
-        *x.borrow_mut() = Some(Esito { strumento, origine: (l.file.clone(), l.sha256.clone()), altri: scritti[1..].to_vec(), note: scelte::note(&l, &u) });
+        *x.borrow_mut() = Some(Esito { strumento, origine: (l.file.clone(), l.sha256.clone()), altri: scritti[1..].to_vec(), note: scelte::note(&l, &u, s) });
     });
     let message = format!("{} · {} {} → {}", l.nome, n, if n == 1 { "misura" } else { "misure" }, parti.join(" + "));
     Ok(Output { path: primo, message })

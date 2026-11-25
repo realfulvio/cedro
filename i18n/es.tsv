@@ -3341,3 +3341,9 @@ la data «{}» della calibrazione «{}» non la capisco: non l'ho scritta	no ent
 il pozzetto «{}» non ha una posizione che capisco (mi aspettavo qualcosa come «1(1,A1)»)	el pocillo «{}» tiene una posición que no entiendo (esperaba algo como «1(1,A1)»)
 nella tabella «Dilution Factor» manca il pozzetto «{}»	a la tabla «Dilution Factor» le falta el pocillo «{}»
 non ho letto queste tabelle del file: {}	no he leído estas tablas del archivo: {}
+
+# Ruoli su pozzetti che non ci sono e cartelle al posto dei file
+è una cartella, non il file di uno strumento	es una carpeta, no el archivo de un instrumento
+Ruolo senza pozzetto.	Rol sin pocillo.
+Il pozzetto {} non c'è nella piastra: il ruolo segnato è stato ignorato.	El pocillo {} no está en la placa: se ha ignorado el rol marcado.
+I pozzetti {} non ci sono nella piastra: i ruoli segnati sono stati ignorati.	Los pocillos {} no están en la placa: se han ignorado los roles marcados.

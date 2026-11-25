@@ -3344,3 +3344,9 @@ la data «{}» della calibrazione «{}» non la capisco: non l'ho scritta	das Da
 il pozzetto «{}» non ha una posizione che capisco (mi aspettavo qualcosa come «1(1,A1)»)	das Well «{}» hat eine Position, die ich nicht verstehe (erwartet wurde etwas wie «1(1,A1)»)
 nella tabella «Dilution Factor» manca il pozzetto «{}»	in der Tabelle «Dilution Factor» fehlt das Well «{}»
 non ho letto queste tabelle del file: {}	diese Tabellen der Datei habe ich nicht gelesen: {}
+
+# Ruoli su pozzetti che non ci sono e cartelle al posto dei file
+è una cartella, non il file di uno strumento	das ist ein Ordner, keine Gerätedatei
+Ruolo senza pozzetto.	Rolle ohne Well.
+Il pozzetto {} non c'è nella piastra: il ruolo segnato è stato ignorato.	Das Well {} gibt es auf der Platte nicht: die eingetragene Rolle wurde ignoriert.
+I pozzetti {} non ci sono nella piastra: i ruoli segnati sono stati ignorati.	Die Wells {} gibt es auf der Platte nicht: die eingetragenen Rollen wurden ignoriert.

@@ -357,7 +357,7 @@ fn strumento(cmd: &str, args: &[OsString], opts: &cedro::Options) -> i32 {
                     }
                     println!("{}  SHA-256 {}", e.origine.0, e.origine.1);
                     for n in &e.note {
-                        println!("{}{} {}", if n.attenzione { "! " } else { "- " }, cedro::i18n::tr(&n.titolo), cedro::i18n::tr(&n.testo));
+                        println!("{}{} {}", if n.attenzione { "! " } else { "- " }, cedro::i18n::tr(&n.titolo), maiuscola(&cedro::i18n::tr(&n.testo)));
                     }
                 }
             }
@@ -433,4 +433,13 @@ fn transcribe(files: &[OsString], args: &[OsString], opts: &cedro::Options) -> i
         },
     });
     i32::from(failed.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+/// La prima lettera maiuscola: dopo «Da sapere.» il testo comincia una frase.
+fn maiuscola(t: &str) -> String {
+    let mut c = t.chars();
+    match c.next() {
+        Some(p) => p.to_uppercase().collect::<String>() + c.as_str(),
+        None => String::new(),
+    }
 }
