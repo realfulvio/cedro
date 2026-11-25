@@ -133,6 +133,8 @@ pub enum Posto {
     CampioneAltro,
     /// Note sulle impostazioni (custom information del documento di controllo dello strumento).
     ImpostazioneAltro,
+    /// Note sui dati elaborati (custom information del documento dei dati elaborati).
+    ElaboratoAltro,
 }
 
 /// Un valore: numero con unità, testo, o assente (lo schema lo vuole ma il file non lo ha).
@@ -194,9 +196,17 @@ pub struct Misura {
     pub valori: Vec<Valore>,
     /// Le note dello strumento sulla misura (errori, «Undetermined», valori fuori scala).
     pub note: Vec<(String, String)>,
+    /// Lo spettro di assorbanza (lunghezza d'onda in nm, assorbanza in unità di assorbanza), per gli
+    /// spettrofotometri che lo scrivono. Una misura con lo spettro e nessun valore è lo spettro e basta.
+    pub spettro: Vec<(f64, f64)>,
 }
 
 impl Misura {
+    /// È solo uno spettro: non va nell'elenco dei campioni, ha il suo foglio.
+    pub fn e_spettro(&self) -> bool {
+        self.valori.is_empty() && !self.spettro.is_empty()
+    }
+
     /// Il valore di una chiave.
     pub fn valore(&self, chiave: &str) -> Option<&Valore> {
         self.valori.iter().find(|v| v.chiave == chiave)
@@ -295,9 +305,9 @@ impl Lettura {
         self.gruppi.iter().flat_map(|g| g.misure.iter())
     }
 
-    /// Quante misure.
+    /// Quante misure (gli spettri non contano: sono dati di una misura).
     pub fn conta(&self) -> usize {
-        self.gruppi.iter().map(|g| g.misure.len()).sum()
+        self.misure().filter(|m| !m.e_spettro()).count()
     }
 
     /// Le misure hanno pozzetti: si mostra la piastra.

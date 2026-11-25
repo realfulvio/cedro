@@ -76,7 +76,11 @@ fn unita(u: &str) -> String {
         "" => "(unitless)".into(),
         "OD" | "AU" | "Abs" | "A" => "mAU".into(),
         "uL" | "ul" | "µL" => "μL".into(),
-        "ng/uL" | "ng/ul" | "ng/μL" => "ng/µL".into(),
+        "ng/uL" | "ng/ul" | "ng/μL" | "ng/µl" | "ng/μl" => "ng/µL".into(),
+        "ug/uL" | "ug/ul" | "μg/μL" | "µg/µL" | "μg/µL" => "µg/µL".into(),
+        "mg/ml" | "mg/mL" => "mg/mL".into(),
+        "ug/ml" | "μg/mL" | "µg/mL" | "μg/ml" | "µg/ml" => "µg/mL".into(),
+        "ng/ml" | "ng/mL" => "ng/mL".into(),
         "deg C" | "°C" | "C" => "degC".into(),
         "copies/uL" | "copies/µL" | "cp/µL" | "cp/uL" => "#/μL".into(),
         "10^6 cells/ml" => "10^6 cells/mL".into(),
@@ -89,7 +93,7 @@ fn unita(u: &str) -> String {
 fn valore_numero(v: &Valore) -> (f64, String) {
     let u = unita(&v.unita);
     match (v.chiave.as_str(), v.dato.clone()) {
-        (k, Dato::Numero(x)) if u == "mAU" && matches!(v.unita.trim(), "OD" | "AU" | "Abs" | "A" | "") && k.contains("absorbance") => (x * 1000.0, u),
+        (k, Dato::Numero(x)) if u == "mAU" && (matches!(v.unita.trim(), "OD" | "AU" | "Abs") || (v.unita.trim() == "A" && k.contains("absorbance"))) => (x * 1000.0, u),
         (_, Dato::Numero(x)) => (x, u),
         _ => (-0.0, u),
     }
@@ -181,7 +185,9 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
     // Il campione.
     let mut s = Map::new();
     s.insert("sample identifier".into(), json!(if m.campione.is_empty() { m.pozzetto.clone().unwrap_or_else(|| m.id.clone()) } else { m.campione.clone() }));
-    if let Some(p) = &m.pozzetto {
+    // Gli strumenti senza piastra (NanoDrop) dicono comunque il posto: A1 del braccio, la posizione.
+    let posto = m.pozzetto.clone().or_else(|| if matches!(t, Tecnica::Qpcr | Tecnica::Dpcr) { None } else { m.luogo.clone() });
+    if let Some(p) = &posto {
         let p = p.clone();
         match t {
             Tecnica::Dpcr => {
@@ -230,7 +236,8 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
     // I dati elaborati dallo strumento.
     let elab: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::Elaborato).collect();
     let impost: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::Elaborazione).collect();
-    if !elab.is_empty() || !impost.is_empty() {
+    let elab_altro: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::ElaboratoAltro).collect();
+    if !elab.is_empty() || !impost.is_empty() || !elab_altro.is_empty() {
         let mut p = Map::new();
         if !impost.is_empty() {
             let mut dp = Map::new();
@@ -242,7 +249,24 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
         for v in &elab {
             metti(&mut p, v, &mut errori);
         }
+        altro(&mut p, &elab_altro);
         d.insert("processed data aggregate document".into(), json!({ "processed data document": [Value::Object(p)] }));
+    }
+    if !m.spettro.is_empty() {
+        // Lo spettro: lunghezze d'onda e assorbanze in mAU, come le altre assorbanze del file.
+        let onde: Vec<Value> = m.spettro.iter().map(|(w, _)| num(*w)).collect();
+        let ass: Vec<Value> = m.spettro.iter().map(|(_, a)| num(a * 1000.0)).collect();
+        d.insert(
+            "absorption spectrum data cube".into(),
+            json!({
+                "label": "absorption spectrum",
+                "cube-structure": {
+                    "dimensions": [{"@componentDatatype": "double", "concept": "wavelength", "unit": "nm"}],
+                    "measures": [{"@componentDatatype": "double", "concept": "absorbance", "unit": "mAU"}],
+                },
+                "data": {"dimensions": [onde], "measures": [ass]},
+            }),
+        );
     }
     let extra: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::Altro).collect();
     altro(&mut d, &extra);
@@ -439,7 +463,7 @@ pub fn piatto(l: &Lettura, o: &Opzioni) -> String {
     }));
     let mut righe = vec![testa];
     for g in &l.gruppi {
-        for m in &g.misure {
+        for m in g.misure.iter().filter(|m| !m.e_spettro()) {
             let mut r = vec![
                 l.file.clone(),
                 l.nome.to_string(),

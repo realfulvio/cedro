@@ -43,7 +43,8 @@ fn confronta(l: &Lettura, g: &Value) -> Vec<String> {
     if let Some(s) = g["strumento"].as_object() {
         let prova = |k: &str, letto: &str, diff: &mut Vec<String>| {
             if let Some(a) = s.get(k).and_then(Value::as_str).filter(|a| *a != "N/A" && !a.is_empty()) {
-                if a != letto {
+                // allotropy scrive «Nanodrop 8000»: Cedro il nome giusto («NanoDrop 8000»).
+                if !a.eq_ignore_ascii_case(letto) {
                     diff.push(format!("{k}: atteso «{a}», letto «{letto}»"));
                 }
             }
@@ -54,17 +55,20 @@ fn confronta(l: &Lettura, g: &Value) -> Vec<String> {
         prova("device identifier", id, &mut diff);
         prova("model number", &l.strumento.modello, &mut diff);
     }
-    let attese = g["misure"].as_array().cloned().unwrap_or_default();
-    if l.conta() != attese.len() {
-        diff.push(format!("misure: attese {}, lette {}", attese.len(), l.conta()));
+    // Le misure di allotropy senza valori (lo spettro intero, che Cedro tiene a parte) non si confrontano;
+    // le altre devono esserci tutte. Cedro può averne di più (le assorbanze a zero, che allotropy scarta).
+    let attese: Vec<Value> = g["misure"].as_array().cloned().unwrap_or_default().into_iter().filter(|a| a["vals"].as_object().is_some_and(|v| !v.is_empty())).collect();
+    if l.conta() < attese.len() {
+        diff.push(format!("misure: attese almeno {}, lette {}", attese.len(), l.conta()));
     }
     // Ogni misura attesa deve trovare una misura letta con lo stesso pozzetto, campione e valori.
     let lette: Vec<&Misura> = l.misure().collect();
     let mut usate: HashSet<usize> = HashSet::new();
     let mut errori = 0;
     for a in &attese {
-        let loc = a["loc"].as_str();
-        let campione = a["sample"].as_str();
+        // «nan» è il posto mancante di allotropy (pandas).
+        let loc = a["loc"].as_str().filter(|s| *s != "nan");
+        let campione = a["sample"].as_str().filter(|s| *s != "nan");
         let vals = a["vals"].as_object().cloned().unwrap_or_default();
         let mut ultimo: Option<String> = None;
         let trovata = lette.iter().enumerate().find(|(i, m)| {
@@ -181,8 +185,15 @@ fn le_uscite_si_scrivono() {
             let Ok(fonte) = Fonte::apri(&file) else { continue };
             let Ok(l) = strumenti::leggi_con(p, &fonte) else { continue };
             let nome = g["file"].as_str().unwrap_or_default();
-            if let Err(e) = excel::scrivi(&l, &excel::Opzioni::default()) {
-                falliti.push(format!("{} · {nome}: Excel: {e}", p.id));
+            match excel::scrivi(&l, &excel::Opzioni::default()) {
+                Ok(b) => {
+                    if let Some(dir) = std::env::var_os("CEDRO_XLSX_OUT") {
+                        let dir = PathBuf::from(dir);
+                        let _ = std::fs::create_dir_all(&dir);
+                        let _ = std::fs::write(dir.join(format!("{}__{}.xlsx", p.id, nome.replace('/', "_"))), b);
+                    }
+                }
+                Err(e) => falliti.push(format!("{} · {nome}: Excel: {e}", p.id)),
             }
             let o = asm::Opzioni { calcoli: true, ..Default::default() };
             let v = asm::scrivi(&l, &o);

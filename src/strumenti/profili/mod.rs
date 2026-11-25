@@ -4,9 +4,10 @@
 use super::Profilo;
 
 mod cfx;
+mod nanodrop_8;
 mod nanodrop_one;
 mod quantstudio;
 mod qubit;
 mod tecan;
 
-pub const TUTTI: &[Profilo] = &[tecan::PROFILO, cfx::PROFILO, qubit::PROFILO, nanodrop_one::PROFILO, quantstudio::PROFILO];
+pub const TUTTI: &[Profilo] = &[tecan::PROFILO, cfx::PROFILO, qubit::PROFILO, nanodrop_one::PROFILO, quantstudio::PROFILO, nanodrop_8::OTTO_MILA, nanodrop_8::EIGHT];
