@@ -115,6 +115,8 @@ pub enum Scroll {
     EdThumbs,
     EdComments,
     EdProps,
+    /// Cedro 4 Labs, dati degli strumenti: l'elenco, i dati dello strumento e il file Allotrope.
+    Strum,
 }
 
 /// Cosa fa un clic.
@@ -414,6 +416,8 @@ pub enum Act {
     VwOriginal,
     /// L'editor dei PDF.
     Ed(super::pdfedact::EdAct),
+    /// «Converti dati e piastre»: i comandi della finestra dei dati degli strumenti.
+    Strum(super::strumenti::StrumAct),
     /// Solo per bloccare i clic sotto un riquadro (per esempio dentro un menu aperto).
     Nothing,
 }

@@ -2463,7 +2463,7 @@ Caso	Caso
 Lavori di oggi	Trabajos de hoy
 Ancora nessuno. Ogni lavoro finisce qui, con i nomi dei file usciti.	Todavía ninguno. Cada trabajo termina aquí, con los nombres de los archivos que ha escrito.
 Gli originali non sono mai stati toccati.	Los originales nunca se han tocado.
-… e altri {#} file	… y {#} archivos más
+… e altri {#} file	… y {} archivos más
 Copia per il quaderno	Copiar para el cuaderno
 Caso o campione	Caso o muestra
 Se c'è, il codice entra nei nomi dei file che Cedro scrive, dopo la data. Resta finché non lo togli.	Si hay uno, su código entra en los nombres de los archivos que escribe Cedro, después de la fecha. Se queda hasta que lo quites.
@@ -2987,6 +2987,381 @@ Unisci, dividi, riordina, comprimi e modifica i PDF	Une, divide, reordena, compr
 Nella scheda PDF ci sono cinque strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.	La pestaña PDF tiene cinco herramientas además de la conversión. Los originales nunca se tocan: el resultado es siempre una copia nueva.
 Scrivi, evidenzia, compila	Escribe, resalta, rellena
 Anche oscura davvero il testo: esce «…-modificato.pdf»	También oculta el texto de verdad: sale «…-modificato.pdf»
+
+# Cedro 4 Labs: i dati degli strumenti
+Piastra	Placa
+Strumento	Instrumento
+Gruppo	Grupo
+Pozzetto	Pocillo
+Bersaglio	Diana
+Ruolo	Rol
+Bianco	Blanco
+Controllo	Control
+campione	muestra
+standard	estándar
+DS	DE
+1 pozzetto	1 pocillo
+{#} pozzetti	{} pocillos
+1 campione	1 muestra
+{#} campioni	{} muestras
+1 bianco	1 blanco
+{#} bianchi	{} blancos
+{#} standard	{} estándares
+1 controllo	1 control
+{#} controlli	{} controles
+1 riferimento	1 referencia
+{#} riferimenti	{} referencias
+1 misura	1 medición
+{#} misure	{} mediciones
+{#} gruppi	{} grupos
+Esce in	Salida
+una riga per pozzetto	una fila por pocillo
+una riga per misura	una fila por medición
+elenco e foglio Strumento	lista y hoja Strumento
+la tabella dei campioni	la tabla de muestras
+mappa a colori e riga per pozzetto	mapa de colores y una fila por pocillo
+numeri veri, una scheda per strumento	números reales, una hoja por instrumento
+per LIMS e archivi dati	para LIMS y archivos de datos
+Aggiungi i calcoli di Cedro	Añadir los cálculos de Cedro
+separati dai dati grezzi	separados de los datos en bruto
+Controlla il file prima di salvarlo	Comprobar el archivo antes de guardarlo
+Solo il nome	Solo el nombre
+Schema	Esquema
+Scala colori	Escala de colores
+Blu → rosso	Azul → rojo
+Daltonici	Daltónicos
+Non è questo? Cambia strumento	¿No es este? Cambiar instrumento
+Torna a quello che Cedro riconosce	Volver a lo que Cedro reconoce
+Quello che Cedro riconosce	Lo que Cedro reconoce
+Rileggo il file…	Releyendo el archivo…
+Con questo strumento il file non si legge.	El archivo no se puede leer con este instrumento.
+Passa sopra un pozzetto per vederne il valore.	Pasa sobre un pocillo para ver su valor.
+Tutta la piastra	Toda la placa
+Clicca un pozzetto o trascina per sceglierne più d'uno. Poi segna il ruolo: finisce nel foglio «Pozzetti» dell'Excel.	Haz clic en un pocillo o arrastra para elegir varios. Luego marca el rol: acaba en la hoja «Pozzetti» del Excel.
+calcolato da Cedro	calculado por Cedro
+controllato	comprobado
+non passa il controllo	no pasa la comprobación
+con i calcoli di Cedro	con los cálculos de Cedro
+estratto: il file intero ha tutte le misure	extracto: el archivo completo tiene todas las mediciones
+Le copie stanno accanto agli originali, con le impostazioni consigliate.	Las copias se guardan junto a los originales, con los ajustes recomendados.
+È il foglio «Pozzetti» di Excel: una riga per pozzetto.	Es la hoja «Pozzetti» del Excel: una fila por pocillo.
+È il foglio dei campioni di Excel: una riga per campione.	Es la hoja de muestras del Excel: una fila por muestra.
+Qui le prime {#} colonne di {#}: nell'Excel ci sono tutte.	Aquí van las primeras {} columnas de {}: el Excel las tiene todas.
+I ruoli si cambiano sulla piastra.	Los roles se cambian en la placa.
+{#} pozzetto «{}».	{} pocillo «{}».
+{#} pozzetti «{}».	{} pocillos «{}».
+{#} misura «{}».	{} medición «{}».
+{#} misure «{}».	{} mediciones «{}».
+Nell'Excel restano «{}», non diventano zero.	En el Excel se quedan «{}»; no se convierten en cero.
+Da sapere.	Conviene saber.
+File Allotrope controllato.	Archivo Allotrope comprobado.
+Chiavi, unità e identificativi passano il controllo.	Las claves, las unidades y los identificadores pasan la comprobación.
+Il file Allotrope non passa il controllo.	El archivo Allotrope no pasa la comprobación.
+File Allotrope scritto.	Archivo Allotrope escrito.
+Non controllato: la spunta è tolta.	Sin comprobar: la casilla está desmarcada.
+Le curve ciclo per ciclo (amplificazione, multicomponente, fusione) non vengono copiate: restano nel file dello strumento.	Las curvas ciclo a ciclo (amplificación, multicomponente, fusión) no se copian: se quedan en el archivo del instrumento.
+Lettore di piastre	Lector de placas
+PCR digitale	PCR digital
+Spettrofotometria	Espectrofotometría
+Conta cellule	Recuento de células
+SHA-256 del file originale	SHA-256 del archivo original
+Strumento letto come	Instrumento leído como
+Produttore	Fabricante
+Identificativo	Identificador
+Numero di serie	Número de serie
+Versione del programma	Versión del programa
+Sistema dati	Sistema de datos
+Descrizione	Descripción
+Marchio	Marca
+Convertito da	Convertido por
+Altri dati dell'intestazione	Otros datos de la cabecera
+Area di lavoro	Área de trabajo
+Data della misura	Fecha de la medición
+File della scansione	Archivo del escaneo
+Fine della corsa	Fin de la corrida
+Metodo	Método
+Tipo di esperimento	Tipo de experimento
+Esperimento	Experimento
+Chimica	Química
+Blocco	Bloque
+Riferimento passivo	Referencia pasiva
+Metodo di quantificazione	Método de cuantificación
+Originale:	Original:
+scegli almeno un'uscita	elige al menos una salida
+{} · {#} misure → {}	{} · {} mediciones → {}
+{} · 1 misura → {}	{} · 1 medición → {}
+~CSV piatto	CSV plano
+CSV piatto	CSV plano
+strumento non riconosciuto	instrumento no reconocido
+profilo «{}» sconosciuto	instrumento «{}» desconocido
+nel file non ci sono misure	el archivo no tiene mediciones
+nel file non ci sono campioni	el archivo no tiene muestras
+nel file non ci sono pozzetti	el archivo no tiene pocillos
+file vuoto	archivo vacío
+il file non ha fogli	el archivo no tiene hojas
+il file non ha la forma che questo strumento si aspetta	el archivo no tiene la forma que espera este instrumento
+il file Allotrope non passa il controllo: {}	el archivo Allotrope no pasa la comprobación: {}
+ultimo punto della cinetica	último punto de la cinética
+massimo dello spettro	máximo del espectro
+nel file non ci sono dati di una piastra	el archivo no tiene datos de una placa
+il file ha più piastre: Cedro ne legge una per file (da Gen5 si esporta una piastra alla volta)	el archivo tiene varias placas: Cedro lee una por archivo (en Gen5 se exporta una placa a la vez)
+manca la sezione «Procedure Details»	falta la sección «Procedure Details»
+Cedro legge le letture in punto finale, le cinetiche e gli spettri; le scansioni dell'area (Area Scan) no	Cedro lee lecturas de punto final, cinéticas y espectros; los escaneos de área (Area Scan) no
+nello stesso file ci sono AlphaLISA e fluorescenza: Cedro non li legge insieme	el mismo archivo tiene AlphaLISA y fluorescencia: Cedro no los lee juntos
+nel file mancano le tabelle dei risultati	al archivo le faltan las tablas de resultados
+i dati non contengono misure valide	los datos no contienen mediciones válidas
+il passo della scansione in lunghezza d'onda è zero	el paso del barrido de longitud de onda es cero
+nel file ci sono più righe di misure per la stessa lunghezza d'onda	el archivo tiene varias filas de medidas para la misma longitud de onda
+nel file mancano i dati delle misure di una lunghezza d'onda	en el archivo faltan las medidas de una longitud de onda
+nell'intestazione della piastra manca il modo di lettura	en el encabezado de la placa falta el modo de lectura
+nella cinetica manca il tempo di una lettura	en la cinética falta el tiempo de una lectura
+la piastra non ha il nome	la placa no tiene nombre
+la tabella delle misure è vuota	la tabla de medidas está vacía
+manca il nome del gruppo	falta el nombre del grupo
+manca l'intestazione della piastra	falta el encabezado de la placa
+manca la colonna Sample	falta la columna Sample
+mancano i dati ridotti	faltan los datos reducidos
+mancano le colonne dei dati della piastra	faltan las columnas de datos de la placa
+mancano le colonne dei dati ridotti	faltan las columnas de los datos reducidos
+mancano le lunghezze d'onda di eccitazione	faltan las longitudes de onda de excitación
+non riesco a capire le dimensioni della piastra	no puedo determinar el tamaño de la placa
+il modo di lettura «{}» non è supportato: Cedro legge assorbanza, fluorescenza e luminescenza	el modo de lectura «{}» no es compatible: Cedro lee absorbancia, fluorescencia y luminiscencia
+la versione dell'esportazione «{}» non è supportata: serve la {}	la versión de exportación «{}» no es compatible: se necesita la {}
+Cedro legge le piastre in punto finale, in cinetica e in spettro: «{}» no	Cedro lee placas de punto final, cinética y espectro: «{}» no
+il tipo di dati «{}» non è supportato: servono Raw, Reduced o Both	el tipo de datos «{}» no es compatible: se necesita Raw, Reduced o Both
+gli spettri di {} non sono supportati: Cedro legge solo quelli di assorbanza	los espectros de {} no son compatibles: Cedro lee solo los de absorbancia
+il formato di esportazione «{}» non è supportato: servono TimeFormat o PlateFormat	el formato de exportación «{}» no es compatible: se necesita TimeFormat o PlateFormat
+nella tabella delle misure mancano righe: attese {}, trovate {}	en la tabla de medidas faltan filas: esperadas {}, encontradas {}
+l'intestazione della piastra è troppo corta ({} campi, ne servono {})	el encabezado de la placa es demasiado corto ({} campos, hacen falta {})
+le piastre del file devono avere nomi diversi: «{}» è ripetuto	las placas del archivo deben tener nombres distintos: «{}» está repetido
+un blocco del file comincia con «{}»: dovrebbe cominciare con Group, Plate o Note	un bloque del archivo empieza por «{}»: debería empezar por Group, Plate o Note
+il gruppo «{}» cita la piastra «{}» che nel file non c'è	el grupo «{}» cita la placa «{}», que no está en el archivo
+la prima riga dovrebbe dire quanti blocchi ci sono («##BLOCKS= N»): «{}»	la primera línea debería indicar cuántos bloques hay («##BLOCKS= N»): «{}»
+numero di pozzetti sconosciuto: {} (sono ammessi 6, 12, 24, 48, 96, 384, 1536)	número de pocillos desconocido: {} (se admiten 6, 12, 24, 48, 96, 384, 1536)
+
+# Cedro 4 Labs: QuantStudio Design & Analysis
+Analisi	Análisis
+Operatore	Operador
+Codice a barre	Código de barras
+Inizio della corsa	Inicio de la corrida
+Analisi eseguita	Análisis realizado
+Esportato il	Exportado el
+Curva standard	Curva estándar
+Quantificazione relativa	Cuantificación relativa
+Genotipizzazione	Genotipado
+Curva di fusione	Curva de fusión
+Presenza/assenza	Presencia/ausencia
+Analisi primaria	Análisis primario
+nel foglio «{}» manca la riga vuota tra l'intestazione e la tabella	en la hoja «{}» falta la fila vacía entre el encabezado y la tabla
+il foglio «{}» non ha la tabella	la hoja «{}» no tiene la tabla
+blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	bloque «{}» no compatible: Cedro lee placas de 96 y 384 pocillos
+nel file manca il foglio «{}»	al archivo le falta la hoja «{}»
+il foglio «{}» è vuoto	la hoja «{}» está vacía
+nei risultati mancano le colonne Sample e Target	en los resultados faltan las columnas Sample y Target
+nel foglio dei gruppi mancano le colonne Sample e Target	en la hoja de grupos faltan las columnas Sample y Target
+nel foglio Genotyping Result manca la colonna SNP Assay	en la hoja Genotyping Result falta la columna SNP Assay
+nel foglio Genotyping Result manca lo SNP alla riga {}	en la hoja Genotyping Result falta el SNP en la fila {}
+nei risultati mancano le colonne Well e Well Position	en los resultados faltan las columnas Well y Well Position
+nei risultati manca la colonna Well	en los resultados falta la columna Well
+nel pozzetto {} manca il bersaglio (Target)	en el pocillo {} falta la diana (Target)
+nel pozzetto {} manca la posizione (Well Position)	en el pocillo {} falta la posición (Well Position)
+non si riesce a capire il tipo di esperimento dai fogli del file	no se puede deducir el tipo de experimento a partir de las hojas del archivo
+nel file non ci sono risultati per pozzetto	el archivo no tiene resultados por pocillo
+nel foglio RQ Replicate Group Result mancano le colonne Rq, Sample e Target	en la hoja RQ Replicate Group Result faltan las columnas Rq, Sample y Target
+non si capisce qual è il campione di riferimento: nel foglio RQ Replicate Group Result una sola riga deve avere Rq uguale a 1	no se puede identificar la muestra de referencia: en la hoja RQ Replicate Group Result solo una fila debe tener Rq igual a 1
+non si capisce qual è il bersaglio di riferimento: nel foglio RQ Replicate Group Result deve essercene uno solo senza Rq	no se puede identificar la diana de referencia: en la hoja RQ Replicate Group Result solo una debe quedar sin Rq
+
+# Cedro 4 Labs: Unchained Labs Lunatic e Stunner
+Applicazione	Aplicación
+non trovo la riga con «Sample name» che apre la tabella	no encuentro la fila con «Sample name» que abre la tabla
+nell'intestazione del file ci sono i nomi ma non i valori	el encabezado del archivo tiene los nombres pero no los valores
+nel file non ci sono righe di risultati	el archivo no tiene filas de resultados
+nel file ci deve essere una colonna di assorbanza (per esempio A280)	el archivo debe tener una columna de absorbancia (por ejemplo A280)
+non trovo l'identificativo dello strumento: ci vuole la colonna «Instrument ID» o «Instrument» nell'intestazione	no encuentro el identificador del instrumento: hace falta la columna «Instrument ID» o «Instrument» en el encabezado
+non trovo la data e l'ora: ci vogliono le colonne «Date» e «Time» oppure la «Date» nell'intestazione	no encuentro la fecha y la hora: hacen falta las columnas «Date» y «Time» o «Date» en el encabezado
+non capisco la data «{}»	no entiendo la fecha «{}»
+manca la posizione del pozzetto (colonna «Plate position»)	falta la posición del pocillo (columna «Plate position»)
+due colonne danno valori diversi per la stessa lunghezza d'onda ({#} nm): {} e {}	dos columnas dan valores distintos para la misma longitud de onda ({} nm): {} y {}
+
+# Cedro 4 Labs: QuantStudio Absolute Q
+nello ZIP ci sono più file «summary»: ne serve uno solo	el ZIP tiene más de un archivo «summary»: hace falta uno solo
+nello ZIP non c'è nessun file «summary»	el ZIP no tiene ningún archivo «summary»
+non riesco a capire i blocchi dei coloranti (da «Target» a «Threshold»)	no consigo entender los bloques de colorantes (de «Target» a «Threshold»)
+i blocchi dei coloranti devono avere tutti {#} colonne	todos los bloques de colorantes deben tener {} columnas
+nel file manca la colonna «Sample» (o «Name»)	al archivo le falta la columna «Sample» (o «Name»)
+nel file manca il valore della colonna «{}»	al archivo le falta el valor de la columna «{}»
+non riesco a ricavare il pozzetto dal campione «{}»	no consigo sacar el pocillo de la muestra «{}»
+ci deve essere un solo colorante di riferimento (senza «_target»), nel file ce ne sono {#}	debe haber un solo colorante de referencia (sin «_target»), el archivo tiene {}
+manca la colonna «{}»	falta la columna «{}»
+la colonna «Index» ha un valore che non è un numero	la columna «Index» tiene un valor que no es un número
+nel file non ci sono righe di partizioni	el archivo no tiene filas de particiones
+il gruppo «{}» ha due valori diversi per «{}»: {#} e {#}	el grupo «{}» tiene dos valores distintos para «{}»: {} y {}
+{} · {}: positive {#} e negative {#} su {#} partizioni: la colonna «{}_pos» ha valori diversi da True e False	{} · {}: {} positivas y {} negativas de {} particiones: la columna «{}_pos» tiene valores distintos de True y False
+
+# MSD Methodical Mind
+manca la tabella dei dati della piastra	falta la tabla de datos de la placa
+nell'intestazione del file manca «{}»	en el encabezado del archivo falta «{}»
+la cella {} non è un numero: «{}»	la celda {} no es un número: «{}»
+la legenda degli spot ne dice {#} ma nel file ci sono {#} tabelle di dati	la leyenda de los spots indica {} pero el archivo tiene {} tablas de datos
+nel file non ci sono valori di luminescenza	el archivo no tiene valores de luminiscencia
+
+# BMG Labtech MARS
+nel file non c'è la riga «Raw Data»	al archivo le falta la línea «Raw Data»
+la riga «{}» non è in un formato che Cedro conosce	la línea «{}» no tiene un formato que Cedro conozca
+non riesco a leggere l'intestazione: nessuna riga «Chiave: valore»	no consigo leer el encabezado: no hay ninguna línea «Clave: valor»
+non capisco il tipo di lettura dall'intestazione: serve una sola tra assorbanza, fluorescenza e luminescenza	no consigo saber el tipo de lectura por el encabezado: hace falta exactamente una entre absorbancia, fluorescencia y luminiscencia
+manca la tabella dei valori dopo «Raw Data»	falta la tabla de valores después de «Raw Data»
+nel file non ci sono valori	el archivo no tiene valores
+
+# Thermo Fisher Diomni
+manca il foglio «Target_Call» o «Target Call»	falta la hoja «Target_Call» o «Target Call»
+non trovo la tabella dei risultati (la riga che comincia con «Well»)	no encuentro la tabla de resultados (la fila que empieza por «Well»)
+
+# BMG Labtech SMART Control
+manca il foglio «Protocol Information»	falta la hoja «Protocol Information»
+manca il foglio «Microplate End point»	falta la hoja «Microplate End point»
+manca il foglio «Table End point»	falta la hoja «Table End point»
+nel foglio «Protocol Information» manca «Basic settings»	en la hoja «Protocol Information» falta «Basic settings»
+il tipo di lettura «{}» non è supportato: Cedro legge la fluorescenza di SMART Control	el tipo de lectura «{}» no es compatible: Cedro lee la fluorescencia de SMART Control
+il filtro «{}» («{}») non si legge: serve «lunghezza-banda», come 480-14	el filtro «{}» («{}») no se puede leer: debe ser «longitud de onda-ancho de banda», como 480-14
+dal nome della piastra «{}» non ricavo il numero di pozzetti	del nombre de la placa «{}» no consigo sacar el número de pocillos
+nel foglio «Table End point» manca la riga «Well»	en la hoja «Table End point» falta la fila «Well»
+nel foglio «Table End point» manca la riga «{}»	en la hoja «Table End point» falta la fila «{}»
+nel file manca il contenuto del pozzetto {}	en el archivo falta el contenido del pocillo {}
+il pozzetto {} ha un valore che non è un numero: «{}»	el pocillo {} tiene un valor que no es un número: «{}»
+nel file non ci sono pozzetti con un valore	el archivo no tiene pocillos con valor
+
+# MSD Workbench
+manca il foglio «Workbench data»	falta la hoja «Workbench data»
+nella prima riga non trovo il codice della piastra: deve essere come «Plate_2BO40AW287»	no encuentro el código de la placa en la primera fila: debe ser como «Plate_2BO40AW287»
+manca la riga con i nomi delle colonne	falta la fila con los nombres de las columnas
+nella tabella manca la colonna «{}»	en la tabla falta la columna «{}»
+una riga non ha il campione	una fila no tiene muestra
+il campione {} non ha il pozzetto	la muestra {} no tiene pocillo
+il pozzetto {} non ha il punto	el pocillo {} no tiene punto
+il pozzetto {} ha un segnale che non è un numero: «{}»	el pocillo {} tiene una señal que no es un número: «{}»
+nel file non ci sono righe con un segnale	el archivo no tiene filas con señal
+
+# Bio-Rad Bio-Plex Manager
+nel pozzetto {} manca «{}»	en el pocillo {} falta «{}»
+nella regione {} del pozzetto {} manca «{}»	en la región {} del pocillo {} falta «{}»
+nella regione {} del pozzetto {} il valore di «{}» non è un numero: «{}»	en la región {} del pocillo {} el valor de «{}» no es un número: «{}»
+nel pozzetto {} il valore di «{}» non è un numero: «{}»	en el pocillo {} el valor de «{}» no es un número: «{}»
+un pozzetto non ha il numero di riga	un pocillo no tiene número de fila
+un pozzetto non ha il numero di colonna	un pocillo no tiene número de columna
+il tipo di campione «{}» non è fra quelli che Cedro conosce	el tipo de muestra «{}» no es de los que Cedro conoce
+un campione non ha l'etichetta	una muestra no tiene etiqueta
+un analita non ha il numero di regione	un analito no tiene número de región
+l'analita della regione {} non ha il nome	el analito de la región {} no tiene nombre
+l'analita {} non ha il codice di lettura	el analito {} no tiene código de lectura
+il codice di errore «{}» dell'analita {} non è fra quelli che Cedro conosce	el código de error «{}» del analito {} no es de los que Cedro conoce
+il file XML non si legge: {}	el archivo XML no se puede leer: {}
+nel file mancano gli elementi: {}	en el archivo faltan estos elementos: {}
+nel file non ci sono pozzetti letti	el archivo no tiene pocillos leídos
+le dimensioni della piastra non dicono quanti pozzetti ha	las dimensiones de la placa no dicen cuántos pocillos tiene
+nel primo pozzetto manca «{}»	en el primer pocillo falta «{}»
+il pozzetto {} non ha un campione	el pocillo {} no tiene muestra
+la regione {} del pozzetto {} non ha un analita nel campione	la región {} del pocillo {} no tiene analito en la muestra
+
+# Thermo Fisher SkanIt
+Sessione	Sesión
+Note della sessione	Notas de la sesión
+Eseguita con	Ejecutada con
+Moduli dello strumento	Módulos del instrumento
+Filtri ottici	Filtros ópticos
+Dotazione	Equipamiento
+il passo «{}» non ha tabelle di piastra e non è stato letto	el paso «{}» no tiene tablas de placa y no se ha leído
+il passo di calcolo «{}» non ha valori per piastra e non è stato letto	el paso de cálculo «{}» no tiene valores por placa y no se ha leído
+manca il foglio della lettura: cerco «Absorbance», «Fluorescence» o «Luminescence»	falta la hoja de la lectura: busco «Absorbance», «Fluorescence» o «Luminescence»
+manca il foglio della lettura	falta la hoja de la lectura
+
+# Revvity Kaleido
+Protocollo	Protocolo
+Proprietario del protocollo	Propietario del protocolo
+Tipo di misura	Tipo de medición
+Misura finita	Medición terminada
+Tipo di piastra	Tipo de placa
+la versione di Kaleido «{}» non è fra quelle che Cedro legge: la 2 e la 3	la versión de Kaleido «{}» no es de las que Cedro lee: la 2 y la 3
+non trovo la riga «Results for…» con il tipo di misura	no encuentro la línea «Results for…» con el tipo de medición
+il tipo di misura «{}» non si riconosce: cerco fluorescenza, assorbanza, luminescenza o immagini	el tipo de medición «{}» no se reconoce: busco fluorescencia, absorbancia, luminiscencia o imágenes
+non trovo il codice a barre della piastra	no encuentro el código de barras de la placa
+il codice a barre della piastra è vuoto	el código de barras de la placa está vacío
+non trovo la piastra dei risultati	no encuentro la placa de resultados
+non trovo la sezione «{}»	no encuentro la sección «{}»
+nella sezione «{}» manca «{}»	en la sección «{}» falta «{}»
+non trovo la mappa della piastra	no encuentro el mapa de la placa
+per le immagini non trovo nessun canale nelle impostazioni della lettura	para las imágenes no encuentro ningún canal en los ajustes de lectura
+«{}» non è una posizione di scansione valida: serve TOP o BOTTOM	«{}» no es una posición de escaneo válida: debe ser TOP o BOTTOM
+nella piastra dei risultati non ci sono pozzetti con un valore	la placa de resultados no tiene pocillos con valor
+
+# PerkinElmer EnVision
+Assay	Ensayo
+Avvio e fine dell'assay	Inicio y fin del ensayo
+Modo di misura	Modo de medición
+Note del protocollo	Notas del protocolo
+Etichette di misura	Etiquetas de medición
+Specchi	Espejos
+Diaframmi	Diafragmas
+Unità dello strumento	Unidades del instrumento
+non trovo nessuna piastra: manca «Plate information»	no encuentro ninguna placa: falta «Plate information»
+alla riga {} mi aspettavo «Plate information» (la piastra successiva) o «Basic assay information», c'è «{}»: il titolo «Plate information» manca o il file è incompleto	en la línea {} esperaba «Plate information» (la placa siguiente) o «Basic assay information», pero hay «{}»: falta el título «Plate information» o el archivo está incompleto
+nel file non ci sono letture con pozzetti: ci sono solo piastre di calcolo o vuote	el archivo no tiene lecturas con pocillos: solo placas de cálculo o vacías
+il calcolo «{}» della piastra {} non ha le letture da cui viene: non l'ho scritto	el cálculo «{}» de la placa {} no tiene las lecturas de las que viene: no lo he escrito
+{} valori del calcolo «{}» non hanno una lettura nello stesso pozzetto e non sono stati scritti	{} valores del cálculo «{}» no tienen una lectura en el mismo pocillo y no se han escrito
+l'etichetta «{}» non è descritta nella sezione «Labels»: non ho le sue impostazioni di misura	la etiqueta «{}» no está descrita en la sección «Labels»: no tengo sus ajustes de medición
+la piastra {} ({}) non ha pozzetti con un valore	la placa {} ({}) no tiene pocillos con valor
+
+# Luminex xPONENT e INTELLIFLEX
+Pannello	Panel
+Tipo di sfere	Tipo de microesferas
+Inizio della lettura	Inicio de la lectura
+Fine della lettura	Fin de la lectura
+Guadagno del rivelatore	Ganancia del detector
+Eventi minimi per sfera	Eventos mínimos por microesfera
+il file non ha la forma di un export di xPONENT o INTELLIFLEX	el archivo no tiene la forma de una exportación de xPONENT o INTELLIFLEX
+nel file manca la sezione «Most Recent Calibration and Control Results»	al archivo le falta la sección «Most Recent Calibration and Control Results»
+alla riga delle calibrazioni «{}» mi aspettavo almeno due colonne	en la línea de calibraciones «{}» esperaba al menos dos columnas
+la calibrazione «{}» ha un risultato che non capisco («{}»): non l'ho scritta	la calibración «{}» tiene un resultado que no entiendo («{}»): no la he escrito
+nel file manca la riga «Samples» con gli eventi minimi	al archivo le falta la línea «Samples» con los eventos mínimos
+nella riga «{}» non trovo gli eventi minimi	en la línea «{}» no encuentro los eventos mínimos
+nel file manca la sezione «Results»	al archivo le falta la sección «Results»
+alla riga {} mi aspettavo il titolo di una tabella («DataType:»), c'è «{}»	en la línea {} esperaba el título de una tabla («DataType:»), pero hay «{}»
+nel file Excel manca il foglio «Results»	al archivo Excel le falta la hoja «Results»
+il file è vuoto	el archivo está vacío
+nel file manca la colonna «{}»	al archivo le falta la columna «{}»
+nel file non trovo nessun analita: mi aspettavo colonne come «R25: RP1 COUNT»	no encuentro ningún analito en el archivo: esperaba columnas como «R25: RP1 COUNT»
+nel file mancano le tabelle: {}	al archivo le faltan las tablas: {}
+nel file non c'è nessuna tabella di statistiche (Median, Mean, %CV…)	el archivo no tiene ninguna tabla de estadísticas (Median, Mean, %CV…)
+nella tabella «Units» manca la riga «BeadID:»	a la tabla «Units» le falta la fila «BeadID:»
+nella tabella «Count» manca la colonna «Sample»	a la tabla «Count» le falta la columna «Sample»
+nella tabella «Count» manca la colonna «Total Events»	a la tabla «Count» le falta la columna «Total Events»
+l'intestazione non dice quanti pozzetti ha la piastra («ProtocolPlate»)	el encabezado no dice cuántos pocillos tiene la placa («ProtocolPlate»)
+nell'intestazione manca «BatchStartTime»	al encabezado le falta «BatchStartTime»
+la data «{}» della calibrazione «{}» non la capisco: non l'ho scritta	no entiendo la fecha «{}» de la calibración «{}»: no la he escrito
+il pozzetto «{}» non ha una posizione che capisco (mi aspettavo qualcosa come «1(1,A1)»)	el pocillo «{}» tiene una posición que no entiendo (esperaba algo como «1(1,A1)»)
+nella tabella «Dilution Factor» manca il pozzetto «{}»	a la tabla «Dilution Factor» le falta el pocillo «{}»
+non ho letto queste tabelle del file: {}	no he leído estas tablas del archivo: {}
+
+# Ruoli su pozzetti che non ci sono e cartelle al posto dei file
+è una cartella, non il file di uno strumento	es una carpeta, no el archivo de un instrumento
+Ruolo senza pozzetto.	Rol sin pocillo.
+Il pozzetto {} non c'è nella piastra: il ruolo segnato è stato ignorato.	El pocillo {} no está en la placa: se ha ignorado el rol marcado.
+I pozzetti {} non ci sono nella piastra: i ruoli segnati sono stati ignorati.	Los pocillos {} no están en la placa: se han ignorado los roles marcados.
+
+# Ruoli e valori «meno il bianco» della finestra dei dati degli strumenti
+Valori	Valores
+Grezzi	Brutos
+Meno il bianco	Menos el blanco
+bianco	blanco
+controllo	control
+riferimento	referencia
+meno il bianco (calcolato da Cedro)	menos el blanco (calculado por Cedro)
+
+# Lettura strumenti: seconda prova sulla finestra
+meno il bianco	menos el blanco
+1 standard	1 estándar
+Anteprima non disponibile: il file sembra danneggiato o incompleto.	Vista previa no disponible: el archivo parece dañado o incompleto.
+Fatto con altre scelte: «Converti» lo rifà con quelle di adesso.	Hecho con otras opciones: «Convertir» lo rehace con las actuales.
 Accettato	Aceptado
 Acquisito	Adquirido
 Elaborato	Procesado
@@ -3055,7 +3430,6 @@ PDF, Word	PDF, Word
 Word/Office	Word/Office
 Archivio	Archivo comprimido
 Genere	Clase
-Descrizione	Descripción
 Storia	Historial
 Dati	Datos
 Dati che identificano	Datos que identifican
@@ -3135,3 +3509,5 @@ Spazio	Espacio
 Canc	Supr
 Torna all'elenco	Volver a la lista
 Nuovo caso…	Nuevo caso…
+PDF	PDF
+TXT	TXT

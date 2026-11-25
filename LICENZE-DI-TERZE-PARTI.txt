@@ -56,3 +56,19 @@ Qwen3.5-4B (Q4_K_M, in formato GGUF di Unsloth)
 
   Il motore e il modello (circa 2,7 GB) si scaricano la prima volta che si fa un riassunto,
   nella cartella "trascrizione" dei dati di Cedro, e vengono controllati con SHA-256.
+
+Strumenti di laboratorio (Labs)
+-------------------------------
+
+allotropy (Benchling)
+  Libreria Python che converte i file degli strumenti in Allotrope Simple Model. Cedro non la
+  usa né la include: i lettori dei file di Cedro sono scritti in Rust e seguono, per ogni
+  strumento, quello che allotropy ricava dai suoi file d'esempio pubblici. In tests/strumenti/golden
+  stanno i riassunti (strumento, pozzetti, campioni, valori) di quei file, ricavati dall'uscita di
+  allotropy; i file d'esempio veri non stanno nel repository.
+  Autore: Benchling, Inc. Licenza: MIT (Copyright (c) 2023 Benchling, Inc.).
+  Sito e codice: https://github.com/Benchling-Open-Source/allotropy
+
+Allotrope Simple Model (ASM)
+  Formato dei file Allotrope che Cedro scrive come uscita facoltativa dei dati degli strumenti.
+  Autore: Allotrope Foundation. Schemi pubblici: https://gitlab.com/allotrope-public/asm

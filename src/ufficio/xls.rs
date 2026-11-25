@@ -903,7 +903,12 @@ fn error_text(code: u8) -> String {
 /// Excel, le percentuali come percentuali.
 pub fn tabella(bytes: &[u8]) -> Result<Vec<crate::tabella::Foglio>, String> {
     use crate::tabella::Cella as C;
-    let book = leggi_xls(bytes, &mut super::font::Fonti::builtin())?;
+    let book = match leggi_xls(bytes, &mut super::font::Fonti::builtin()) {
+        Ok(b) => b,
+        // Excel 5 e 95 (BIFF5): gli strumenti più vecchi esportano ancora così. Si leggono solo i valori.
+        Err(e) if e.contains("prima di Excel 97") => return tabella_biff5(bytes),
+        Err(e) => return Err(e),
+    };
     let l = super::numfmt::locale();
     let mut out = Vec::new();
     for f in &book.fogli {
@@ -927,6 +932,122 @@ pub fn tabella(bytes: &[u8]) -> Result<Vec<crate::tabella::Foglio>, String> {
             row[*c as usize] = v;
         }
         out.push(crate::tabella::Foglio { nome: f.nome.clone(), righe });
+    }
+    Ok(out)
+}
+
+/// Un testo a 8 bit di un .xls di Excel 5 o 95 (Windows-1252).
+fn testo8(b: &[u8]) -> String {
+    encoding_rs::WINDOWS_1252.decode(b).0.into_owned()
+}
+
+/// I fogli di un .xls di Excel 5 o 95 (BIFF5): valori e date, senza stili. Le stringhe sono a 8 bit e
+/// stanno dentro le celle, senza tabella delle stringhe.
+fn tabella_biff5(bytes: &[u8]) -> Result<Vec<crate::tabella::Foglio>, String> {
+    use crate::tabella::Cella as C;
+    let mut comp = super::apri_ole(bytes).map_err(|_| "il file non è un foglio Excel leggibile".to_string())?;
+    let mut s = Vec::new();
+    let opened = comp.open_stream("/Workbook").or_else(|_| comp.open_stream("/Book"));
+    opened.map_err(|_| "nel file non c'è una cartella di Excel".to_string())?.take(bytes.len() as u64).read_to_end(&mut s).map_err(|e| e.to_string())?;
+    let globals = records(&s, 0);
+    let l = super::numfmt::locale();
+    let mut formats: HashMap<u16, String> = HashMap::new();
+    let mut xf_fmt: Vec<u16> = Vec::new();
+    let mut sheets: Vec<(u32, u8, String)> = Vec::new();
+    let mut date1904 = false;
+    for r in &globals {
+        let d = r.data();
+        match r.kind {
+            0x0022 => date1904 = u16_at(&d, 0) == 1,
+            0x041E => {
+                let n = d.get(2).copied().unwrap_or(0) as usize;
+                formats.insert(u16_at(&d, 0), testo8(d.get(3..(3 + n).min(d.len())).unwrap_or(&[])));
+            }
+            0x00E0 => xf_fmt.push(u16_at(&d, 2)),
+            0x0085 => {
+                let n = d.get(6).copied().unwrap_or(0) as usize;
+                sheets.push((u32_at(&d, 0), d.get(5).copied().unwrap_or(0), testo8(d.get(7..(7 + n).min(d.len())).unwrap_or(&[]))));
+            }
+            _ => {}
+        }
+    }
+    if sheets.is_empty() {
+        return Err("nel file non ci sono fogli leggibili".into());
+    }
+    let numero = |x: u16, v: f64| -> C {
+        let fmt = xf_fmt.get(x as usize).copied().unwrap_or(0);
+        let codice = formats.get(&fmt).cloned().unwrap_or_else(|| super::numfmt::builtin(fmt as u32, l));
+        if super::numfmt::is_date(&codice) {
+            C::Testo(super::numfmt::format(v, &codice, date1904, l).0)
+        } else if codice.contains('%') {
+            C::Percento(v, codice.split('.').nth(1).map_or(0, |d| d.chars().take_while(|c| *c == '0').count()))
+        } else {
+            C::Numero(v)
+        }
+    };
+    let mut out = Vec::new();
+    for (pos, tipo, nome) in &sheets {
+        if *tipo != 0 {
+            continue;
+        }
+        let mut righe: Vec<Vec<C>> = Vec::new();
+        let mut put = |r: u32, c: u32, v: C| {
+            if r >= MAX_ROWS || c >= MAX_COLS {
+                return;
+            }
+            if righe.len() <= r as usize {
+                righe.resize(r as usize + 1, Vec::new());
+            }
+            let row = &mut righe[r as usize];
+            if row.len() <= c as usize {
+                row.resize(c as usize + 1, C::Vuota);
+            }
+            row[c as usize] = v;
+        };
+        let mut formula: Option<(u32, u32)> = None;
+        for rec in records(&s, *pos as usize) {
+            let d = rec.data();
+            let (r, c, x) = (u16_at(&d, 0) as u32, u16_at(&d, 2) as u32, u16_at(&d, 4));
+            match rec.kind {
+                // LABEL e RSTRING: lunghezza a 16 bit e caratteri a 8.
+                0x0204 | 0x00D6 => {
+                    let n = u16_at(&d, 6) as usize;
+                    put(r, c, C::Testo(testo8(d.get(8..(8 + n).min(d.len())).unwrap_or(&[]))));
+                }
+                0x0203 => put(r, c, numero(x, f64_at(&d, 6))),
+                0x027E => put(r, c, numero(x, rk(u32_at(&d, 6)))),
+                0x00BD => {
+                    let n = d.len().saturating_sub(6) / 6;
+                    for k in 0..n {
+                        put(r, c + k as u32, numero(u16_at(&d, 4 + k * 6), rk(u32_at(&d, 6 + k * 6))));
+                    }
+                }
+                0x0205 => {
+                    let v = d.get(6).copied().unwrap_or(0);
+                    put(r, c, C::Testo(if d.get(7) == Some(&1) { error_text(v) } else if v != 0 { "TRUE".into() } else { "FALSE".into() }));
+                }
+                0x0006 => {
+                    if u16_at(&d, 12) == 0xFFFF {
+                        if d.get(6) == Some(&0) {
+                            formula = Some((r, c));
+                        }
+                    } else {
+                        put(r, c, numero(x, f64_at(&d, 6)));
+                    }
+                }
+                0x0207 => {
+                    if let Some((r, c)) = formula.take() {
+                        let n = u16_at(&d, 0) as usize;
+                        put(r, c, C::Testo(testo8(d.get(2..(2 + n).min(d.len())).unwrap_or(&[]))));
+                    }
+                }
+                _ => {}
+            }
+        }
+        out.push(crate::tabella::Foglio { nome: nome.clone(), righe });
+    }
+    if out.is_empty() {
+        return Err("nel file non ci sono fogli di lavoro".into());
     }
     Ok(out)
 }

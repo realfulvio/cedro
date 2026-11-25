@@ -63,6 +63,11 @@ pub(super) fn halo(app: &App, i: usize) -> Option<Image> {
     })
 }
 
+/// La pagina su cui si sta lavorando (per i colori).
+pub(super) fn colors(app: &App) -> (Rgb, Rgb) {
+    crate::ui::theme::lab_colors(app.lab)
+}
+
 /// La barra del titolo: marchio, caso, «Lavori», dove sta il lavoro e i comandi della finestra.
 pub(super) fn title_bar(f: &mut Frame, app: &App) {
     f.p.clear(LABS_FRAME);
@@ -128,17 +133,17 @@ pub(super) fn lavori_page(f: &mut Frame, app: &App, area: R) {
             let rows = shown + usize::from(l.outputs.len() > shown);
             let h = 46.0 + rows as f32 * 22.0 + 16.0;
             f.p.rrect_a(body.0, y + h - 1.0, body.2, 1.0, 0.0, pal.border, 1.0);
-            let head = format!("{}  ·  {}", l.ora(), crate::i18n::tr_string(&l.what));
+            let head = format!("{}  ·  {}", l.ora(), crate::i18n::lit(&crate::i18n::tr_string(&l.what)));
             f.p.text(&head, body.0, y + 8.0, body.2 - 260.0, 28.0, 17.0, BOLD, pal.text, Align::Left);
             if !l.caso.is_empty() {
                 let hw = f.measure(&head, 17.0, BOLD);
-                f.p.text(&format!("{} {}", crate::i18n::tr_string("Caso"), l.caso), body.0 + hw + 16.0, y + 8.0, (body.2 - 250.0 - hw - 16.0 - 12.0).clamp(20.0, 260.0), 28.0, 15.0, SEMI, pal.muted, Align::Left);
+                f.p.text(&format!("{} {}", crate::i18n::lit(&crate::i18n::tr_string("Caso")), l.caso), body.0 + hw + 16.0, y + 8.0, (body.2 - 250.0 - hw - 16.0 - 12.0).clamp(20.0, 260.0), 28.0, 15.0, SEMI, pal.muted, Align::Left);
             }
             for (k, name) in l.outputs.iter().take(shown).enumerate() {
                 f.p.text(name, body.0 + 4.0, y + 44.0 + k as f32 * 22.0, body.2 - 280.0, 22.0, 15.0, SANS, pal.text, Align::Left);
             }
             if l.outputs.len() > shown {
-                let more = crate::i18n::tr_string(&format!("… e altri {} file", l.outputs.len() - shown));
+                let more = crate::i18n::lit(&crate::i18n::tr_string(&format!("… e altri {} file", l.outputs.len() - shown)));
                 f.p.text(&more, body.0 + 4.0, y + 44.0 + shown as f32 * 22.0, body.2 - 280.0, 22.0, 15.0, SANS, pal.muted, Align::Left);
             }
             let copied = app.quaderno_copiato == Some(*i);
@@ -286,7 +291,11 @@ pub(super) fn file_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32
         Some(i) => {
             super::file_name(f, app, i, x, y, w, 28.0, 19.0, BOLD, pal.text);
             let file = &app.files[i];
-            let line = if file.state != FileState::Waiting {
+            // Fatto, ma con scelte diverse da quelle di adesso (un ruolo, lo strumento): «Converti» lo rifà.
+            let superato = file.state == FileState::Done && !app.is_fresh_done(i);
+            let line = if superato {
+                "Fatto con altre scelte: «Converti» lo rifà con quelle di adesso.".to_string()
+            } else if file.state != FileState::Waiting {
                 file.message.clone()
             } else {
                 let media = app.media_of(&file.path);
@@ -298,11 +307,12 @@ pub(super) fn file_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32
                 }
             };
             let c = match file.state {
+                _ if superato => pal.muted,
                 FileState::Failed => pal.bad,
                 FileState::Done => pal.ok,
                 _ => pal.muted,
             };
-            28.0 + f.para(&line, x, y + 30.0, w, 14.5, SANS, c, 1.35, 2) + 8.0
+            28.0 + f.para(&line, x, y + 30.0, w, 14.5, SANS, c, 1.35, 3) + 8.0
         }
         None => {
             f.text(app.lab.name(), x, y, w, 28.0, 19.0, BOLD, pal.text);
@@ -375,9 +385,9 @@ pub(super) fn go_button(f: &mut Frame, app: &App, r: R, deep: Rgb) {
     // In Cedro 4 Labs il pulsante dice «Esegui su N file» per ogni comando (come nell'anteprima approvata).
     let label = if f.theme == crate::ui::theme::ThemeId::CedroLabs && app.job.is_none() && !app.finished() && matches!(app.activity, crate::ui::model::Activity::Convert) {
         match app.todo().len() {
-            0 => crate::i18n::tr_string("Esegui"),
-            1 => crate::i18n::tr_string("Esegui su 1 file"),
-            n => format!("{} {n} {}", crate::i18n::tr_string("Esegui su"), crate::i18n::tr_string("file")),
+            0 => crate::i18n::lit(&crate::i18n::tr_string("Esegui")),
+            1 => crate::i18n::lit(&crate::i18n::tr_string("Esegui su 1 file")),
+            n => format!("{} {n} {}", crate::i18n::lit(&crate::i18n::tr_string("Esegui su")), crate::i18n::lit(&crate::i18n::tr_string("file"))),
         }
     } else {
         super::go_label(app)

@@ -28,6 +28,11 @@ const BLU: Rgb = (0x1F, 0x5F, 0xA8);
 /// Il comando «Procedure» usa il colore di «Firma»: l'indaco, che nessun altro comando del laboratorio ha.
 const PROCEDURE: Lab = Lab::Firma;
 
+/// Un testo già tradotto qui, segnato perché chi lo disegna non lo traduca una seconda volta.
+fn tt(s: &str) -> String {
+    crate::i18n::lit(&crate::i18n::tr_string(s))
+}
+
 pub fn draw(f: &mut Frame, app: &App) {
     super::labs::title_bar(f, app);
     comandi(f, app, (0.0, TOP, f.w, CMD));
@@ -61,7 +66,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 // ------------------------------------------------------------------ i comandi
 
 fn nome_comando(lab: Lab) -> String {
-    crate::i18n::tr_string(match lab {
+    tt(match lab {
         Lab::Immagini => "Immagini e vetrini",
         Lab::Anonimizza => "Togli i nomi",
         Lab::Figura => "Figura",
@@ -99,6 +104,12 @@ fn lettera(lab: Lab) -> &'static str {
 
 /// Un nome lungo su due righe, spezzato allo spazio più vicino al mezzo («Imágenes y / preparaciones»).
 fn due_righe(nome: &str) -> (String, String) {
+    // Il nome arriva già tradotto e segnato: si spezza il testo vero e i due pezzi si segnano di nuovo.
+    let (a, b) = due_righe_vere(&crate::i18n::tr(nome));
+    (crate::i18n::lit(&a), if b.is_empty() { b } else { crate::i18n::lit(&b) })
+}
+
+fn due_righe_vere(nome: &str) -> (String, String) {
     let n = nome.chars().count();
     let meta = n / 2;
     let spazi: Vec<usize> = nome.char_indices().filter(|(_, c)| *c == ' ').map(|(i, _)| i).collect();
@@ -130,7 +141,7 @@ fn comandi(f: &mut Frame, app: &App, r: R) {
     voci.push(Cmd::Procedure);
     let nome = |c: Cmd| match c {
         Cmd::Lab(l) => nome_comando(l),
-        Cmd::Procedure => crate::i18n::tr_string("Procedure"),
+        Cmd::Procedure => tt("Procedure"),
         Cmd::Sep => String::new(),
     };
     let scelti = app.lx_scelti();
@@ -249,13 +260,34 @@ fn corpo(f: &mut Frame, app: &App, r: R) {
         return;
     }
     let pw = if app.lx.panel_chiuso { CHIUSO } else { PANEL };
-    centro(f, app, (area.0, area.1, area.2 - pw, area.3));
+    let c = (area.0, area.1, area.2 - pw, area.3);
+    match app.strum_corrente().filter(|_| app.lx.pannello == Pannello::Azione) {
+        // L'export di uno strumento: sopra l'elenco, sotto la sua piastra (o la tabella dei campioni) da segnare.
+        Some((i, l)) => {
+            let th = (c.3 * 0.34).clamp(150.0, 300.0).floor();
+            centro(f, app, (c.0, c.1, c.2, th));
+            piastra(f, app, i, &l, (c.0, c.1 + th, c.2, c.3 - th));
+        }
+        None => centro(f, app, c),
+    }
     pannello(f, app, (area.0 + area.2 - pw, area.1, pw, area.3));
+}
+
+/// La piastra del file di uno strumento, nello spazio scuro con la tinta del comando.
+fn piastra(f: &mut Frame, app: &App, i: usize, l: &std::sync::Arc<crate::strumenti::Lettura>, r: R) {
+    let pal = f.pal;
+    f.p.fill(r.0, r.1, r.2, r.3, pal.surface);
+    f.p.fill(r.0, r.1, r.2, 1.0, pal.border);
+    let s = (r.0 + 12.0, r.1 + 12.0, r.2 - 24.0, r.3 - 24.0);
+    let (_, bright) = lab_colors(app.lab);
+    f.p.rrect(s.0, s.1, s.2, s.3, 14.0, Some(LABS_STAGE), None);
+    f.p.rrect_vgrad(s.0, s.1, s.2, s.3, 14.0, mix(bright, LABS_STAGE, 0.84), mix(bright, LABS_STAGE, 0.95));
+    super::strumenti::stage(f, app, i, l, (s.0 + 16.0, s.1 + 14.0, s.2 - 32.0, s.3 - 28.0));
 }
 
 /// «Torna all'elenco», con Esc.
 fn torna(f: &mut Frame, p: (f32, f32), act: Act) {
-    let label = crate::i18n::tr_string("Torna all'elenco");
+    let label = tt("Torna all'elenco");
     let w = 16.0 + 24.0 + f.measure(&label, 14.5, SEMI) + 10.0 + 38.0 + 14.0;
     pulsante_tasto(f, p.0, p.1, "Torna all'elenco", "Esc", Some(ic::ARROW_LEFT), act, true);
     let _ = w;
@@ -266,8 +298,8 @@ fn vuoto(f: &mut Frame, app: &App, r: R) {
     let pal = f.pal;
     f.p.fill(r.0, r.1, r.2, r.3, pal.surface);
     let (x, w) = (r.0 + 30.0, r.2 - 60.0);
-    f.p.text(&crate::i18n::tr_string("Che file hai?"), x, r.1 + 24.0, w, 40.0, 28.0, BOLD, pal.text, Align::Left);
-    f.p.text(&crate::i18n::tr_string("Trascinali qui dentro, oppure scegli il tipo. Tutto resta su questo computer."), x, r.1 + 64.0, w, 26.0, 15.5, SANS, pal.muted, Align::Left);
+    f.p.text(&tt("Che file hai?"), x, r.1 + 24.0, w, 40.0, 28.0, BOLD, pal.text, Align::Left);
+    f.p.text(&tt("Trascinali qui dentro, oppure scegli il tipo. Tutto resta su questo computer."), x, r.1 + 64.0, w, 26.0, 15.5, SANS, pal.muted, Align::Left);
     let tessere: [(&str, &str, Lab); 6] = [
         ("Vetrino", "SVS · NDPI · MRXS", Lab::Immagini),
         ("Radiografia", "DICOM, anche da CD", Lab::Immagini),
@@ -286,8 +318,8 @@ fn vuoto(f: &mut Frame, app: &App, r: R) {
         let act = Act::LabGo(Lab::Home, sub);
         let t = f.hover_t(&act, true);
         f.p.rrect(tx, ty, tw, th, 12.0, Some(mix(pal.surface, deep, 0.04 + 0.06 * t)), Some((mix(pal.border, deep, 0.5), 1.5)));
-        f.p.text(&crate::i18n::tr_string(nome), tx + 18.0, ty + 10.0, tw - 36.0, 28.0, 18.0, BOLD, deep, Align::Left);
-        f.p.text(&crate::i18n::tr_string(sub), tx + 18.0, ty + 38.0, tw - 36.0, 22.0, 13.5, SANS, pal.muted, Align::Left);
+        f.p.text(&tt(nome), tx + 18.0, ty + 10.0, tw - 36.0, 28.0, 18.0, BOLD, deep, Align::Left);
+        f.p.text(&tt(sub), tx + 18.0, ty + 38.0, tw - 36.0, 22.0, 13.5, SANS, pal.muted, Align::Left);
         f.focus_ring((tx, ty, tw, th), 12.0, &act);
         f.hit((tx, ty, tw, th), act);
     }
@@ -297,8 +329,8 @@ fn vuoto(f: &mut Frame, app: &App, r: R) {
     for (k, (t, s)) in passi.into_iter().enumerate() {
         let px = x + k as f32 * (pw + gap);
         f.p.rrect(px, sy, pw, 76.0, 10.0, Some(pal.alt), None);
-        f.p.text(&crate::i18n::tr_string(t), px + 16.0, sy + 10.0, pw - 32.0, 24.0, 15.0, BOLD, pal.text, Align::Left);
-        f.para(&crate::i18n::tr_string(s), px + 16.0, sy + 38.0, pw - 32.0, 14.0, SANS, pal.muted, 1.35, 2);
+        f.p.text(&tt(t), px + 16.0, sy + 10.0, pw - 32.0, 24.0, 15.0, BOLD, pal.text, Align::Left);
+        f.para(&tt(s), px + 16.0, sy + 38.0, pw - 32.0, 14.0, SANS, pal.muted, 1.35, 2);
     }
     let _ = app;
 }
@@ -343,16 +375,16 @@ fn lato(f: &mut Frame, app: &App, r: R) {
         let mut y = body.1 + 14.0;
         titolo_sezione(f, x, y, w, "File");
         y += 24.0;
-        riga_lato(f, (x, y, w, 34.0), &crate::i18n::tr_string("Tutti i file"), "", app.files.len(), app.lx.caso.is_none(), Act::LxFiltroCaso(None), false);
+        riga_lato(f, (x, y, w, 34.0), &tt("Tutti i file"), "", app.files.len(), app.lx.caso.is_none(), Act::LxFiltroCaso(None), false);
         y += 38.0;
         if !app.files.is_empty() {
             let on = app.lx.caso.as_deref() == Some("");
-            riga_lato(f, (x, y, w, 34.0), &crate::i18n::tr_string("Senza caso"), "", senza, on, Act::LxFiltroCaso(if on { None } else { Some(String::new()) }), false);
+            riga_lato(f, (x, y, w, 34.0), &tt("Senza caso"), "", senza, on, Act::LxFiltroCaso(if on { None } else { Some(String::new()) }), false);
             y += 38.0;
         }
         y += 8.0;
         titolo_sezione(f, x, y, w - 90.0, "Casi");
-        let nuovo = crate::i18n::tr_string("Nuovo");
+        let nuovo = tt("Nuovo");
         let nw = f.measure(&nuovo, 14.0, SEMI) + 26.0;
         let b = (x + w - nw, y - 6.0, nw, 28.0);
         let act = Act::LxNuovoCaso;
@@ -364,7 +396,7 @@ fn lato(f: &mut Frame, app: &App, r: R) {
         f.hit(b, act);
         y += 28.0;
         if casi.is_empty() {
-            y += f.para(&crate::i18n::tr_string("Nessun caso ancora. «Nuovo» ne crea uno: i file che aggiungi ci entrano."), x + 4.0, y, w - 8.0, 13.0, SANS, pal.muted, 1.35, 4) + 6.0;
+            y += f.para(&tt("Nessun caso ancora. «Nuovo» ne crea uno: i file che aggiungi ci entrano."), x + 4.0, y, w - 8.0, 13.0, SANS, pal.muted, 1.35, 4) + 6.0;
         }
         for (code, nota, n) in &casi {
             let on = app.lx.caso.as_deref() == Some(code.as_str());
@@ -382,7 +414,7 @@ fn lato(f: &mut Frame, app: &App, r: R) {
 
 /// La larghezza di un pulsante della barra della tabella (nome e tasto).
 fn larghezza_pulsante(f: &Frame, label: &str, tasto: &str, icon: bool) -> f32 {
-    let label = crate::i18n::tr_string(label);
+    let label = tt(label);
     let lw = f.measure(&label, 14.5, SEMI);
     let kw = if tasto.is_empty() { 0.0 } else { f.measure(tasto, 12.0, SEMI).max(10.0) + 14.0 };
     14.0 + if icon { 26.0 } else { 0.0 } + lw + if kw > 0.0 { 10.0 + kw } else { 0.0 } + 14.0
@@ -392,7 +424,7 @@ fn larghezza_pulsante(f: &Frame, label: &str, tasto: &str, icon: bool) -> f32 {
 fn pulsante_tasto(f: &mut Frame, x: f32, y: f32, label: &str, tasto: &str, icon: Option<&str>, act: Act, on: bool) -> f32 {
     let pal = f.pal;
     let w = larghezza_pulsante(f, label, tasto, icon.is_some());
-    let label = crate::i18n::tr_string(label);
+    let label = tt(label);
     let lw = f.measure(&label, 14.5, SEMI);
     let kw = if tasto.is_empty() { 0.0 } else { f.measure(tasto, 12.0, SEMI).max(10.0) + 14.0 };
     let iw = if icon.is_some() { 26.0 } else { 0.0 };
@@ -421,7 +453,7 @@ fn pulsante_tasto(f: &mut Frame, x: f32, y: f32, label: &str, tasto: &str, icon:
 /// Una pillola di filtro.
 fn pillola(f: &mut Frame, x: f32, y: f32, label: &str, on: bool, act: Act, colore: Option<Rgb>) -> f32 {
     let pal = f.pal;
-    let label = crate::i18n::tr_string(label);
+    let label = tt(label);
     let tw = f.measure(&label, 13.5, SEMI);
     let dot = if colore.is_some() { 16.0 } else { 0.0 };
     let w = tw + 24.0 + dot;
@@ -452,7 +484,7 @@ fn barra(f: &mut Frame, app: &App, r: R) -> f32 {
     let q = (x, y, 236.0, 30.0);
     f.p.rrect(q.0, q.1, q.2, q.3, 8.0, Some(pal.surface), Some((pal.border, 1.0)));
     f.icon(ic::SEARCH, q.0 + 9.0, q.1 + 6.0, 18.0, pal.muted);
-    f.field((q.0 + 28.0, q.1, q.2 - 28.0, q.3), Field::LxCerca, &app.lx.ricerca, &crate::i18n::tr_string("Cerca  ( / )"), 14.0, false);
+    f.field((q.0 + 28.0, q.1, q.2 - 28.0, q.3), Field::LxCerca, &app.lx.ricerca, &tt("Cerca  ( / )"), 14.0, false);
     x += q.2 + 10.0;
     let nessuno = app.lx.stato.is_none() && app.lx.tipo.is_none();
     let (da_fare, fatti, errori) = app.lx_conta_stati();
@@ -469,7 +501,7 @@ fn barra(f: &mut Frame, app: &App, r: R) -> f32 {
         voci.push((t.nome().to_string(), on, Act::LxTipo(if on { None } else { Some(t) }), Some(t.colore())));
     }
     for (label, on, act, c) in voci {
-        let w1 = f.measure(&crate::i18n::tr_string(&label), 13.5, SEMI) + 24.0 + if c.is_some() { 16.0 } else { 0.0 };
+        let w1 = f.measure(&tt(&label), 13.5, SEMI) + 24.0 + if c.is_some() { 16.0 } else { 0.0 };
         if x + w1 > x0 + w && x > x0 {
             x = x0;
             y += 38.0;
@@ -479,9 +511,9 @@ fn barra(f: &mut Frame, app: &App, r: R) -> f32 {
     // A destra, sull'ultima riga: quanti file sono scelti e cosa se ne fa.
     let scelti = app.lx_scelti();
     let nota = if scelti.is_empty() {
-        format!("{} {}", app.lx_righe().len(), crate::i18n::tr_string("file"))
+        format!("{} {}", app.lx_righe().len(), tt("file"))
     } else {
-        app.lx_scelti_frase().replace(" selezionati", "").replace(" selezionato", "") + " " + &crate::i18n::tr_string(if scelti.len() == 1 { "scelto" } else { "scelti" })
+        crate::i18n::lit(&app.lx_scelti_frase().replace(" selezionati", "").replace(" selezionato", "")) + " " + &tt(if scelti.len() == 1 { "scelto" } else { "scelti" })
     };
     let nota = if scelti.is_empty() { nota } else { nota.replace(" · ", " · ") };
     let nw = f.measure(&nota, 14.0, SEMI);
@@ -547,13 +579,13 @@ fn centro(f: &mut Frame, app: &App, r: R) {
     let intest: [(&str, Option<(f32, f32)>); 6] = [("Tipo", Some(col.tipo)), ("Nome", Some(col.nome)), ("Caso", col.caso), ("Contenuto", Some(col.cont)), ("Dati personali", Some(col.dati)), ("Già fatto", Some(col.fatto))];
     for (nome, c) in intest {
         if let Some(c) = c {
-            f.p.text(&crate::i18n::tr_string(nome), r.0 + c.0, hy, c.1 - 6.0, 34.0, 13.0, SEMI, pal.muted, Align::Left);
+            f.p.text(&tt(nome), r.0 + c.0, hy, c.1 - 6.0, 34.0, 13.0, SEMI, pal.muted, Align::Left);
         }
     }
     let rh = if app.lx.comode { 46.0 } else { 36.0 };
     let area = (r.0, hy + 34.0, r.2, r.1 + r.3 - hy - 34.0);
     if righe.is_empty() {
-        f.text_c(&crate::i18n::tr_string("Nessun file con questi filtri."), (area.0, area.1 + 30.0, area.2, 30.0), 15.5, SANS, pal.muted);
+        f.text_c(&tt("Nessun file con questi filtri."), (area.0, area.1 + 30.0, area.2, 30.0), 15.5, SANS, pal.muted);
         return;
     }
     let off = f.ui.scroll(Scroll::LxTabella);
@@ -599,7 +631,7 @@ fn fascia(f: &mut Frame, app: &App, r: R, code: &str) -> f32 {
         };
         let t = f.hover_t(&act, true);
         f.p.rrect(b.0, b.1, b.2, b.3, 8.0, Some(mix(bg, pal.text, 0.06 * t)), None);
-        let label = crate::i18n::tr_string(nome);
+        let label = tt(nome);
         let lw = f.measure(&label, 13.0, SEMI);
         let total = lw + if k < fatte { 20.0 } else { 0.0 };
         let sx = b.0 + (b.2 - total) / 2.0;
@@ -655,7 +687,7 @@ fn gia_fatto(f: &mut Frame, app: &App, i: usize, r: R) {
     let file = &app.files[i];
     match file.state {
         FileState::Running => {
-            let testo = file.percent.map(|p| format!("{} {}%", crate::i18n::tr_string("In corso"), (p * 100.0).round() as i32)).unwrap_or_else(|| crate::i18n::tr_string("In corso"));
+            let testo = file.percent.map(|p| format!("{} {}%", tt("In corso"), (p * 100.0).round() as i32)).unwrap_or_else(|| tt("In corso"));
             f.p.circle(r.0 + 5.0, r.1 + r.3 / 2.0, 4.5, Some(BLU), None);
             f.p.text(&testo, r.0 + 16.0, r.1, r.2 - 16.0, r.3, 13.5, SEMI, BLU, Align::Left);
             if let Some(p) = file.percent {
@@ -666,7 +698,7 @@ fn gia_fatto(f: &mut Frame, app: &App, i: usize, r: R) {
             return;
         }
         FileState::Failed => {
-            let testo = crate::i18n::tr_string("Errore: perché?");
+            let testo = tt("Errore: perché?");
             let tw = f.measure(&testo, 13.5, SEMI);
             f.p.text(&testo, r.0, r.1, tw + 4.0, r.3, 13.5, SEMI, pal.bad, Align::Left);
             f.p.fill(r.0, r.1 + r.3 / 2.0 + 9.0, tw, 1.0, pal.bad);
@@ -680,9 +712,9 @@ fn gia_fatto(f: &mut Frame, app: &App, i: usize, r: R) {
         let (c, t) = if file.state == FileState::Skipped { (pal.muted, "Saltato") } else { (pal.muted, "Da fare") };
         f.p.circle(r.0 + 5.0, r.1 + r.3 / 2.0, 4.0, Some(c), None);
         // Se la traduzione di «Da fare» non sta nella colonna, si usa la più corta «In attesa».
-        let mut testo = crate::i18n::tr_string(t);
+        let mut testo = tt(t);
         if f.measure(&testo, 13.5, SANS) > r.2 - 18.0 {
-            testo = crate::i18n::tr_string("In attesa");
+            testo = tt("In attesa");
         }
         f.p.text(&testo, r.0 + 16.0, r.1, r.2 - 16.0, r.3, 13.5, SANS, pal.text, Align::Left);
         return;
@@ -695,7 +727,7 @@ fn gia_fatto(f: &mut Frame, app: &App, i: usize, r: R) {
         x += 24.0;
     }
     if fatti.iter().any(|x| x.out.is_some()) {
-        let apri = crate::i18n::tr_string("Apri");
+        let apri = tt("Apri");
         let aw = f.measure(&apri, 13.5, SEMI);
         f.p.text(&apri, x + 4.0, r.1, aw + 4.0, r.3, 13.5, SEMI, pal.primary, Align::Left);
         f.hit((x, r.1 + 2.0, aw + 12.0, r.3 - 4.0), Act::LxApri(i));
@@ -764,10 +796,10 @@ fn pannello(f: &mut Frame, app: &App, r: R) {
         Pannello::Dettagli => {
             let n = app.lx_scelti().len();
             let (t, s) = if n == 0 {
-                (crate::i18n::tr_string("Dettagli"), String::new())
+                (tt("Dettagli"), String::new())
             } else {
                 let bytes: u64 = app.lx_scelti().iter().filter_map(|&i| app.media_of(&app.files[i].path)).map(|m| m.bytes).sum();
-                (if n == 1 { crate::i18n::tr_string("1 file scelto") } else { format!("{n} {}", crate::i18n::tr_string("file scelti")) }, if bytes > 0 { super::super::model::human_size(bytes) } else { String::new() })
+                (if n == 1 { tt("1 file scelto") } else { format!("{n} {}", tt("file scelti")) }, if bytes > 0 { super::super::model::human_size(bytes) } else { String::new() })
             };
             testata(f, testa, false, None, &t, &s);
             dettagli(f, app, corpo);
@@ -775,17 +807,17 @@ fn pannello(f: &mut Frame, app: &App, r: R) {
         Pannello::Azione => {
             let su = app.targets().len();
             let sub = if su == 0 {
-                crate::i18n::tr_string("Nessun file adatto")
+                tt("Nessun file adatto")
             } else if su == 1 {
-                crate::i18n::tr_string("Su 1 file")
+                tt("Su 1 file")
             } else {
-                format!("{} {su} {}", crate::i18n::tr_string("Su"), crate::i18n::tr_string("file"))
+                format!("{} {su} {}", tt("Su"), tt("file"))
             };
             testata(f, testa, true, Some((app.lab, lab_icon(app.lab))), &nome_comando(app.lab), &sub);
             azione(f, app, corpo);
         }
         Pannello::Procedure => {
-            testata(f, testa, true, Some((PROCEDURE, ic::MENU)), &crate::i18n::tr_string("Procedure"), &crate::i18n::tr_string("Lavori salvati, sempre uguali"));
+            testata(f, testa, true, Some((PROCEDURE, ic::MENU)), &tt("Procedure"), &tt("Lavori salvati, sempre uguali"));
             procedure(f, app, corpo);
         }
     }
@@ -820,7 +852,7 @@ fn riga_comando(f: &mut Frame, r: R, lab: Option<Lab>, nome: &str, tasto: &str, 
     f.p.text(tasto, r.0 + 10.0, r.1 + (r.3 - 22.0) / 2.0, 22.0, 22.0, 12.0, BOLD, WHITE, Align::Center);
     f.p.text(nome, r.0 + 42.0, r.1, r.2 - 120.0, r.3, 14.5, SEMI, pal.text, Align::Left);
     if let Some((n, tot)) = parte {
-        let s = format!("{n} {} {tot}", crate::i18n::tr_string("su"));
+        let s = format!("{n} {} {tot}", tt("su"));
         f.p.text(&s, r.0 + r.2 - 90.0, r.1, 78.0, r.3, 12.5, SANS, pal.muted, Align::Right);
     }
     f.focus_ring(r, 9.0, &act);
@@ -833,7 +865,7 @@ fn dettagli(f: &mut Frame, app: &App, r: R) {
     let scelti = app.lx_scelti();
     if scelti.is_empty() {
         f.p.rrect(x, r.1 + 16.0, w, 74.0, 10.0, Some(pal.alt), None);
-        f.para(&crate::i18n::tr_string("Scegli uno o più file. Poi un comando in alto: qui compaiono le sue scelte e «Esegui»."), x + 14.0, r.1 + 28.0, w - 28.0, 14.0, SANS, pal.muted, 1.4, 4);
+        f.para(&tt("Scegli uno o più file. Poi un comando in alto: qui compaiono le sue scelte e «Esegui»."), x + 14.0, r.1 + 28.0, w - 28.0, 14.0, SANS, pal.muted, 1.4, 4);
         return;
     }
     super::scrolled(f, r, Scroll::LxPanel, |f| {
@@ -847,7 +879,7 @@ fn dettagli(f: &mut Frame, app: &App, r: R) {
                 None => per_tipo.push((t, 1)),
             }
         }
-        let voci: Vec<(usize, String)> = per_tipo.iter().map(|(t, n)| (*n, crate::i18n::tr_string(t.nome()))).collect();
+        let voci: Vec<(usize, String)> = per_tipo.iter().map(|(t, n)| (*n, tt(t.nome()))).collect();
         f.p.rrect(x, y, w, 40.0, 10.0, Some(pal.alt), None);
         conti(f, x + 14.0, y + 9.0, &voci, pal.text);
         y += 50.0;
@@ -856,10 +888,10 @@ fn dettagli(f: &mut Frame, app: &App, r: R) {
         if con_dati + da_ctrl > 0 {
             let mut v = Vec::new();
             if con_dati > 0 {
-                v.push((con_dati, crate::i18n::tr_string("con dati personali")));
+                v.push((con_dati, tt("con dati personali")));
             }
             if da_ctrl > 0 {
-                v.push((da_ctrl, crate::i18n::tr_string("da controllare")));
+                v.push((da_ctrl, tt("da controllare")));
             }
             f.p.rrect(x, y, w, 40.0, 10.0, Some(mix(ARANCIO, pal.surface, 0.88)), None);
             conti(f, x + 14.0, y + 9.0, &v, ARANCIO);
@@ -880,9 +912,9 @@ fn dettagli(f: &mut Frame, app: &App, r: R) {
             y += 44.0;
         }
         if !qualcuno {
-            y += f.para(&crate::i18n::tr_string("Nessun comando lavora questi file."), x, y, w, 14.0, SANS, pal.muted, 1.4, 2) + 6.0;
+            y += f.para(&tt("Nessun comando lavora questi file."), x, y, w, 14.0, SANS, pal.muted, 1.4, 2) + 6.0;
         }
-        riga_comando(f, (x, y, w, 38.0), None, &crate::i18n::tr_string("Procedure"), "9", None, Act::LxProcedure);
+        riga_comando(f, (x, y, w, 38.0), None, &tt("Procedure"), "9", None, Act::LxProcedure);
         y += 54.0;
         if scelti.len() == 1 {
             y += file_dettagli(f, app, scelti[0], x, y, w);
@@ -900,11 +932,11 @@ fn azione(f: &mut Frame, app: &App, r: R) {
     // Quello che il comando non prende resta fuori, e lo si dice.
     let (fuori, tipi) = app.lx_restano_fuori(app.lab);
     if fuori > 0 {
-        let nomi = tipi.iter().map(|t| crate::i18n::tr_string(t.nome())).collect::<Vec<_>>().join(", ");
+        let nomi = tipi.iter().map(|t| tt(t.nome())).collect::<Vec<_>>().join(", ");
         let testo = if fuori == 1 {
-            format!("1 {} {nomi}. {}", crate::i18n::tr_string("resta fuori:"), crate::i18n::tr_string("Questo comando non lo lavora."))
+            format!("1 {} {nomi}. {}", tt("resta fuori:"), tt("Questo comando non lo lavora."))
         } else {
-            format!("{fuori} {} {nomi}. {}", crate::i18n::tr_string("restano fuori:"), crate::i18n::tr_string("Questo comando non li lavora."))
+            format!("{fuori} {} {nomi}. {}", tt("restano fuori:"), tt("Questo comando non li lavora."))
         };
         let nr = f.p.wrap_lines(&testo, 14.0, SANS, w - 28.0, 4).len().max(1);
         let h = 22.0 + nr as f32 * 19.0;
@@ -917,11 +949,21 @@ fn azione(f: &mut Frame, app: &App, r: R) {
     let foot_h = 142.0 + if quaderno { 52.0 } else { 0.0 } + if passo { 52.0 } else { 0.0 };
     let foot_y = r.1 + r.3 - foot_h;
     let body = (r.0 + 1.0, y, r.2 - 2.0, foot_y - y);
-    if f.simple {
+    if let Some((j, l)) = app.strum_corrente() {
+        // L'export di uno strumento: lo strumento riconosciuto, cosa esce e i ruoli della piastra.
+        let (altre, act) = if app.simple_view { ("Tutte le opzioni", Act::SetSimple(false)) } else { ("Solo le scelte pronte", Act::SetSimple(true)) };
+        let altre = tt(altre);
+        let aw = f.measure(&altre, 14.0, SEMI);
+        f.p.text(&altre, x + 2.0, y, aw + 4.0, 24.0, 14.0, SEMI, pal.primary, Align::Left);
+        f.p.fill(x + 2.0, y + 21.0, aw, 1.0, pal.primary);
+        f.hit((x, y, aw + 8.0, 26.0), act);
+        let body = (body.0, y + 34.0, body.2, (body.3 - 34.0).max(0.0));
+        super::strumenti::side_body(f, app, j, &l, body, x, w, deep);
+    } else if f.simple {
         let ids = choices(app);
         super::scrolled(f, body, Scroll::Inspector, |f| {
             let mut cy = body.1 + 2.0;
-            let titolo = crate::i18n::tr_string("Come").to_uppercase();
+            let titolo = tt("Come").to_uppercase();
             f.p.text(&titolo, x + 2.0, cy, w, 20.0, 11.5, SEMI, pal.muted, Align::Left);
             cy += 24.0;
             for id in &ids {
@@ -933,7 +975,7 @@ fn azione(f: &mut Frame, app: &App, r: R) {
                 let line = format!("Stai usando una voce scelta in «Completa»: {}.", super::action_title(app, false));
                 cy += f.para(&line, x, cy + 4.0, w, 14.5, SANS, pal.muted, 1.4, 3) + 12.0;
             }
-            let altre = crate::i18n::tr_string("Tutte le opzioni");
+            let altre = tt("Tutte le opzioni");
             let aw = f.measure(&altre, 14.0, SEMI);
             f.p.text(&altre, x + 2.0, cy, aw + 4.0, 24.0, 14.0, SEMI, pal.primary, Align::Left);
             f.p.fill(x + 2.0, cy + 21.0, aw, 1.0, pal.primary);
@@ -945,7 +987,7 @@ fn azione(f: &mut Frame, app: &App, r: R) {
     } else {
         super::scrolled(f, body, Scroll::Inspector, |f| {
             let mut cy = body.1 + 4.0;
-            let altre = crate::i18n::tr_string("Solo le scelte pronte");
+            let altre = tt("Solo le scelte pronte");
             let aw = f.measure(&altre, 14.0, SEMI);
             f.p.text(&altre, x + 2.0, cy, aw + 4.0, 24.0, 14.0, SEMI, pal.primary, Align::Left);
             f.p.fill(x + 2.0, cy + 21.0, aw, 1.0, pal.primary);
@@ -1001,7 +1043,7 @@ fn procedure(f: &mut Frame, app: &App, r: R) {
     let lista = &app.lx.procedure;
     if lista.is_empty() {
         f.p.rrect(x, r.1 + 16.0, w, 110.0, 10.0, Some(pal.alt), None);
-        f.para(&crate::i18n::tr_string("Nessuna procedura ancora. Scegli un comando, regola le scelte e premi «Salva come procedura»: la ritrovi qui, sempre uguale."), x + 14.0, r.1 + 28.0, w - 28.0, 14.0, SANS, pal.muted, 1.4, 6);
+        f.para(&tt("Nessuna procedura ancora. Scegli un comando, regola le scelte e premi «Salva come procedura»: la ritrovi qui, sempre uguale."), x + 14.0, r.1 + 28.0, w - 28.0, 14.0, SANS, pal.muted, 1.4, 6);
         return;
     }
     let foot_h = 142.0;
@@ -1027,7 +1069,7 @@ fn procedure(f: &mut Frame, app: &App, r: R) {
             f.p.text(&p.nome, rr.0 + 42.0, rr.1 + 8.0, rr.2 - 54.0, 22.0, 15.0, BOLD, pal.text, Align::Left);
             let n = p.passi.len();
             let su = app.lx_procedura_su(k);
-            let sotto = format!("{n} {} · {}", crate::i18n::tr_string(if n == 1 { "passo" } else { "passi" }), if su == 0 { crate::i18n::tr_string("nessun file scelto adatto") } else { format!("{} {su} {}", crate::i18n::tr_string("lavora"), crate::i18n::tr_string("dei file scelti")) });
+            let sotto = format!("{n} {} · {}", tt(if n == 1 { "passo" } else { "passi" }), if su == 0 { tt("nessun file scelto adatto") } else { format!("{} {su} {}", tt("lavora"), tt("dei file scelti")) });
             f.p.text(&sotto, rr.0 + 42.0, rr.1 + 31.0, rr.2 - 54.0, 20.0, 13.0, SANS, pal.muted, Align::Left);
             f.focus_ring(rr, 11.0, &act);
             f.hit(rr, act);
@@ -1035,10 +1077,11 @@ fn procedure(f: &mut Frame, app: &App, r: R) {
         }
         y += 8.0;
         let nome = lista[scelta].nome.clone();
-        titolo_sezione(f, x - 4.0, y, w, &format!("{} «{nome}»", crate::i18n::tr_string("I passi di")));
+        titolo_sezione(f, x - 4.0, y, w, &format!("{} «{}»", tt("I passi di"), crate::i18n::lit(&nome)));
         y += 28.0;
         for (k, p) in lista[scelta].passi.iter().enumerate() {
             let (comando, voce) = app.lx_passo_titolo(p);
+            let (comando, voce) = (crate::i18n::lit(&comando), crate::i18n::lit(&voce));
             let lab = crate::ui::labsx::lab_da_id(&p.lab).unwrap_or(Lab::Converti);
             let (d, _) = lab_colors(lab);
             f.p.rrect(x, y, w, 38.0, 9.0, Some(pal.alt), None);
@@ -1054,7 +1097,7 @@ fn procedure(f: &mut Frame, app: &App, r: R) {
     f.hline(r.0 + 1.0, foot_y, r.2 - 2.0);
     let su = app.lx_procedura_su(scelta);
     let abilitata = su > 0 && !app.busy() && app.lx.proc_corso.is_none();
-    let label = if su == 1 { crate::i18n::tr_string("Esegui su 1 file") } else { format!("{} {su} {}", crate::i18n::tr_string("Esegui su"), crate::i18n::tr_string("file")) };
+    let label = if su == 1 { tt("Esegui su 1 file") } else { format!("{} {su} {}", tt("Esegui su"), tt("file")) };
     f.primary((x, foot_y + 18.0, w, 54.0), &label, Some(ic::ARROW_RIGHT), 17.0, Act::LxProcVia, abilitata);
     f.button((x, foot_y + 82.0, w, 40.0), "Togli questa procedura", Some(ic::TRASH), 14.0, Act::LxProcTogli(scelta));
     if let Some(n) = app.notice.as_ref() {
@@ -1097,18 +1140,18 @@ fn dati_chip(f: &mut Frame, app: &App, i: usize, r: R) {
     // Un file di cui «Togli i nomi» ha già fatto la copia.
     let pulita = file.state == FileState::Done && file.done_key.as_deref().is_some_and(|k| k.contains("|strip|"));
     if pulita {
-        chip(f, r, &crate::i18n::tr_string("Copia pulita"), pal.ok, mix(pal.ok, pal.surface, 0.88));
+        chip(f, r, &tt("Copia pulita"), pal.ok, mix(pal.ok, pal.surface, 0.88));
         return;
     }
     match d.stato {
         Stato::Campi => {
-            let t = if d.n() == 1 { crate::i18n::tr_string("1 campo") } else { format!("{} {}", d.n(), crate::i18n::tr_string("campi")) };
+            let t = if d.n() == 1 { tt("1 campo") } else { format!("{} {}", d.n(), tt("campi")) };
             chip(f, r, &t, ARANCIO, mix(ARANCIO, pal.surface, 0.88));
         }
-        Stato::DaControllare => chip(f, r, &crate::i18n::tr_string("Da controllare"), BLU, mix(BLU, pal.surface, 0.9)),
+        Stato::DaControllare => chip(f, r, &tt("Da controllare"), BLU, mix(BLU, pal.surface, 0.9)),
         Stato::Nessuno => {
             f.icon(ic::CHECK, r.0 + 2.0, r.1 + (r.3 - 16.0) / 2.0, 16.0, pal.muted);
-            f.p.text(&crate::i18n::tr_string("Nessuno"), r.0 + 24.0, r.1, r.2 - 24.0, r.3, 13.5, SANS, pal.muted, Align::Left);
+            f.p.text(&tt("Nessuno"), r.0 + 24.0, r.1, r.2 - 24.0, r.3, 13.5, SANS, pal.muted, Align::Left);
         }
         Stato::NonLetto => f.p.text("…", r.0 + 2.0, r.1, 30.0, r.3, 14.0, SANS, pal.muted, Align::Left),
     }
@@ -1116,7 +1159,7 @@ fn dati_chip(f: &mut Frame, app: &App, i: usize, r: R) {
 
 fn chiave_valore(f: &mut Frame, x: f32, y: f32, w: f32, k: &str, v: &str) -> f32 {
     let pal = f.pal;
-    f.p.text(&crate::i18n::tr_string(k), x, y, 110.0, 24.0, 14.0, SANS, pal.muted, Align::Left);
+    f.p.text(&tt(k), x, y, 110.0, 24.0, 14.0, SANS, pal.muted, Align::Left);
     let h = f.para(v, x + 118.0, y + 3.0, w - 118.0, 14.0, SANS, pal.text, 1.3, 3);
     h.max(24.0) + 2.0
 }
@@ -1134,7 +1177,7 @@ fn file_dettagli(f: &mut Frame, app: &App, i: usize, x: f32, y0: f32, w: f32) ->
     let h = f.para(&file.name(), tx, y - 2.0, tw, 16.5, BOLD, pal.text, 1.25, 2);
     let (tipo, sigla) = app.lx_tipo(i);
     let (size, _) = super::file_meta(app, i);
-    let sub = [crate::i18n::tr_string(tipo.nome()), sigla.clone(), size].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>();
+    let sub = [tt(tipo.nome()), sigla.clone(), size].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>();
     let sub = if sub.len() > 1 && sub[0] == sub[1] { sub[1..].join(" · ") } else { sub.join(" · ") };
     f.p.text(&sub, tx, y - 2.0 + h + 2.0, tw, 20.0, 13.5, SANS, pal.muted, Align::Left);
     let caso = app.lx_caso_di(&file.path);
@@ -1145,7 +1188,7 @@ fn file_dettagli(f: &mut Frame, app: &App, i: usize, x: f32, y0: f32, w: f32) ->
     }
     if let Some(t) = app.lx.dalle.get(&file.path) {
         let s = crate::nametemplate::local(*t);
-        f.p.text(&format!("{} {:02}:{:02}", crate::i18n::tr_string("In coda dalle"), s.hour, s.minute), tx, ly, tw, 20.0, 13.0, SANS, pal.muted, Align::Left);
+        f.p.text(&format!("{} {:02}:{:02}", tt("In coda dalle"), s.hour, s.minute), tx, ly, tw, 20.0, 13.0, SANS, pal.muted, Align::Left);
     }
     y += th.1.max(ly - y + 20.0) + 6.0;
     // L'anteprima grande, dal bottone.
@@ -1155,7 +1198,7 @@ fn file_dettagli(f: &mut Frame, app: &App, i: usize, x: f32, y0: f32, w: f32) ->
     titolo_sezione(f, x - 4.0, y, w, "Cosa c'è dentro");
     y += 26.0;
     let m = app.media_of(&file.path);
-    y += chiave_valore(f, x, y, w, "Tipo", &format!("{} · {}", crate::i18n::tr_string(tipo.nome()), sigla));
+    y += chiave_valore(f, x, y, w, "Tipo", &format!("{} · {}", tt(tipo.nome()), sigla));
     if let Some(m) = m {
         if m.bytes > 0 {
             y += chiave_valore(f, x, y, w, "Peso", &super::super::model::human_size(m.bytes));
@@ -1188,7 +1231,7 @@ fn file_dettagli(f: &mut Frame, app: &App, i: usize, x: f32, y0: f32, w: f32) ->
     titolo_sezione(f, x - 4.0, y, w, "Dati che identificano");
     if d.n() > 0 {
         let s = d.n().to_string();
-        let tw = f.measure(&crate::i18n::tr_string("Dati che identificano").to_uppercase(), 11.5, SEMI);
+        let tw = f.measure(&tt("Dati che identificano").to_uppercase(), 11.5, SEMI);
         f.p.circle(x + 4.0 + tw + 14.0, y + 11.0, 9.0, Some(ARANCIO), None);
         f.p.text(&s, x + 4.0 + tw + 5.0, y + 2.0, 18.0, 18.0, 11.5, BOLD, WHITE, Align::Center);
     }
@@ -1197,19 +1240,19 @@ fn file_dettagli(f: &mut Frame, app: &App, i: usize, x: f32, y0: f32, w: f32) ->
         Stato::Campi => {
             for c in &d.campi {
                 f.p.circle(x + 5.0, y + 11.0, 3.5, Some(ARANCIO), None);
-                y += f.para(&crate::i18n::tr_string(c), x + 18.0, y + 3.0, w - 18.0, 14.0, SANS, pal.text, 1.3, 2).max(20.0) + 3.0;
+                y += f.para(&tt(c), x + 18.0, y + 3.0, w - 18.0, 14.0, SANS, pal.text, 1.3, 2).max(20.0) + 3.0;
             }
             y += 4.0;
-            y += f.para(&crate::i18n::tr_string("«Togli i nomi» li toglie dalla copia, non dall'originale."), x, y, w, 13.5, SANS, pal.muted, 1.35, 3) + 8.0;
+            y += f.para(&tt("«Togli i nomi» li toglie dalla copia, non dall'originale."), x, y, w, 13.5, SANS, pal.muted, 1.35, 3) + 8.0;
         }
         Stato::DaControllare => {
-            y += f.para(&format!("{} {}.", crate::i18n::tr_string("Da controllare:"), crate::i18n::tr_string(&d.nota)), x, y, w, 14.0, SANS, pal.text, 1.35, 3) + 8.0;
+            y += f.para(&format!("{} {}.", tt("Da controllare:"), tt(&d.nota)), x, y, w, 14.0, SANS, pal.text, 1.35, 3) + 8.0;
         }
         Stato::Nessuno => {
-            y += f.para(&crate::i18n::tr_string("Nessun dato personale trovato."), x, y, w, 14.0, SANS, pal.muted, 1.35, 2) + 8.0;
+            y += f.para(&tt("Nessun dato personale trovato."), x, y, w, 14.0, SANS, pal.muted, 1.35, 2) + 8.0;
         }
         Stato::NonLetto => {
-            y += f.para(&crate::i18n::tr_string("Non ho ancora letto questo file."), x, y, w, 14.0, SANS, pal.muted, 1.35, 2) + 8.0;
+            y += f.para(&tt("Non ho ancora letto questo file."), x, y, w, 14.0, SANS, pal.muted, 1.35, 2) + 8.0;
         }
     }
     y += 10.0;
@@ -1219,10 +1262,10 @@ fn file_dettagli(f: &mut Frame, app: &App, i: usize, x: f32, y0: f32, w: f32) ->
     let storia = match (&file.state, &file.output) {
         (FileState::Done, Some(o)) => {
             let nome = o.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-            format!("{} {}", crate::i18n::tr_string("Elaborato in"), nome)
+            format!("{} {}", tt("Elaborato in"), nome)
         }
         (FileState::Failed, _) => file.message.clone(),
-        _ => crate::i18n::tr_string("Mai elaborato. L'originale non viene mai modificato."),
+        _ => tt("Mai elaborato. L'originale non viene mai modificato."),
     };
     y += f.para(&storia, x, y, w, 14.0, SANS, pal.text, 1.35, 4) + 14.0;
     // L'impronta.
@@ -1236,12 +1279,12 @@ fn file_dettagli(f: &mut Frame, app: &App, i: usize, x: f32, y0: f32, w: f32) ->
             y += 40.0;
         }
         Some(Sha::Non) => {
-            f.p.text(&crate::i18n::tr_string("Non si è potuta calcolare."), x, y, w, 20.0, 13.5, SANS, pal.muted, Align::Left);
+            f.p.text(&tt("Non si è potuta calcolare."), x, y, w, 20.0, 13.5, SANS, pal.muted, Align::Left);
             y += 24.0;
         }
         _ => {
             f.spinner(x + 8.0, y + 10.0, 7.0, pal.muted);
-            f.p.text(&crate::i18n::tr_string("Calcolo…"), x + 24.0, y, w, 20.0, 13.5, SANS, pal.muted, Align::Left);
+            f.p.text(&tt("Calcolo…"), x + 24.0, y, w, 20.0, 13.5, SANS, pal.muted, Align::Left);
             f.animating = true;
             y += 24.0;
         }
@@ -1262,7 +1305,7 @@ fn anteprima(f: &mut Frame, app: &App) {
     f.p.text(&app.files[i].name(), x + 22.0, y + 8.0, w - 150.0, 44.0, 16.5, BOLD, LABS_INK, Align::Left);
     let cb = (x + w - 112.0, y + 9.0, 96.0, 34.0);
     f.p.rrect_a(cb.0, cb.1, cb.2, cb.3, 8.0, WHITE, if f.hovered(&Act::LxAnteprima) { 0.2 } else { 0.1 });
-    f.p.text(&crate::i18n::tr_string("Chiudi"), cb.0, cb.1, cb.2, cb.3, 14.5, SEMI, LABS_INK, Align::Center);
+    f.p.text(&tt("Chiudi"), cb.0, cb.1, cb.2, cb.3, 14.5, SEMI, LABS_INK, Align::Center);
     f.hit(cb, Act::LxAnteprima);
     let _ = pal;
     super::labs::viewer(f, app, i, (x + 18.0, y + 56.0, w - 36.0, h - 74.0));
@@ -1270,7 +1313,7 @@ fn anteprima(f: &mut Frame, app: &App) {
 
 fn titolo_sezione(f: &mut Frame, x: f32, y: f32, w: f32, s: &str) {
     let pal = f.pal;
-    let s = crate::i18n::tr_string(s).to_uppercase();
+    let s = tt(s).to_uppercase();
     f.p.text(&s, x + 4.0, y, w, 22.0, 11.5, SEMI, pal.muted, Align::Left);
 }
 
@@ -1292,14 +1335,14 @@ fn registro(f: &mut Frame, app: &App, r: R) {
     let t = f.hover_t(&act, true);
     f.hover_fill((r.0, r.1 + 1.0, r.2, LOG_HEAD - 1.0), 0.0, pal.alt, t);
     f.icon(if app.lx.registro_aperto { ic::CHEVRON_DOWN } else { ic::ARROW_RIGHT }, r.0 + 16.0, r.1 + 13.0, 16.0, pal.text);
-    f.p.text(&crate::i18n::tr_string("Registro di oggi"), r.0 + 42.0, r.1, 200.0, LOG_HEAD, 14.5, BOLD, pal.text, Align::Left);
-    let hw = f.measure(&crate::i18n::tr_string("Registro di oggi"), 14.5, BOLD);
-    let sub = if oggi.is_empty() { crate::i18n::tr_string("ancora nessun lavoro") } else { format!("{} {} · {}", oggi.len(), crate::i18n::tr_string(if oggi.len() == 1 { "lavoro" } else { "lavori" }), crate::i18n::tr_string("gli originali non sono mai stati toccati")) };
+    f.p.text(&tt("Registro di oggi"), r.0 + 42.0, r.1, 200.0, LOG_HEAD, 14.5, BOLD, pal.text, Align::Left);
+    let hw = f.measure(&tt("Registro di oggi"), 14.5, BOLD);
+    let sub = if oggi.is_empty() { tt("ancora nessun lavoro") } else { format!("{} {} · {}", oggi.len(), tt(if oggi.len() == 1 { "lavoro" } else { "lavori" }), tt("gli originali non sono mai stati toccati")) };
     f.p.text(&sub, r.0 + 54.0 + hw, r.1, r.2 - hw - 70.0, LOG_HEAD, 13.5, SANS, pal.muted, Align::Left);
     f.focus_ring((r.0, r.1, r.2, LOG_HEAD), 0.0, &act);
     f.hit((r.0, r.1, r.2, LOG_HEAD), act);
     // Il registro completo (tutti i giorni) è una pagina a parte: il collegamento sta nell'intestazione.
-    let tutto = crate::i18n::tr_string("Tutto il registro");
+    let tutto = tt("Tutto il registro");
     let tw = f.measure(&tutto, 13.5, SEMI) + 28.0;
     f.button((r.0 + r.2 - 16.0 - tw, r.1 + 5.0, tw, LOG_HEAD - 10.0), "Tutto il registro", None, 13.5, Act::LavoriApri);
     if !app.lx.registro_aperto {
@@ -1309,12 +1352,12 @@ fn registro(f: &mut Frame, app: &App, r: R) {
         let y = r.1 + LOG_HEAD + k as f32 * LOG_ROW;
         f.p.fill(r.0 + 16.0, y, r.2 - 32.0, 1.0, mix(pal.border, pal.surface, 0.4));
         f.p.text(&l.ora(), r.0 + 16.0, y, 60.0, LOG_ROW, 14.0, SANS, pal.muted, Align::Left);
-        let what = crate::i18n::tr_string(&l.what);
+        let what = tt(&l.what);
         f.p.text(&what, r.0 + 82.0, y, 200.0, LOG_ROW, 14.5, BOLD, pal.text, Align::Left);
         let nome = match l.outputs.as_slice() {
             [] => String::new(),
             [uno] => uno.clone(),
-            [uno, resto @ ..] => format!("{uno} + {} {}", resto.len(), crate::i18n::tr_string("altri")),
+            [uno, resto @ ..] => format!("{uno} + {} {}", resto.len(), tt("altri")),
         };
         let caso = if l.caso.is_empty() { String::new() } else { format!("{}  ", l.caso) };
         f.p.text(&format!("{caso}{nome}"), r.0 + 290.0, y, r.2 - 290.0 - 460.0, LOG_ROW, 14.0, SANS, pal.text, Align::Left);
@@ -1337,24 +1380,24 @@ fn stato(f: &mut Frame, app: &App, r: R) {
     f.p.fill(r.0, r.1, r.2, 1.0, LABS_LINE);
     let dove = match &app.dest {
         Some(d) => super::super::model::short_dir(d),
-        None => crate::i18n::tr_string("accanto all'originale"),
+        None => tt("accanto all'originale"),
     };
     let x = r.0 + 16.0;
-    let t = crate::i18n::tr_string("Cartella di uscita");
+    let t = tt("Cartella di uscita");
     let tw = f.measure(&t, 13.5, SANS);
     f.p.text(&t, x, r.1, tw + 4.0, r.3, 13.5, SANS, LABS_MUTED, Align::Left);
     f.p.text(&dove, x + tw + 10.0, r.1, 420.0, r.3, 13.5, SEMI, LABS_INK, Align::Left);
     // A destra: la riga dei componenti, le righe comode e le scorciatoie.
     let mut rx = r.0 + r.2 - 16.0;
     let (nota, c) = match app.job.as_ref() {
-        Some(_) => (crate::i18n::tr_string("Al lavoro…"), crate::ui::theme::LABS_LEAF),
-        None => (crate::i18n::tr_string("Pronto"), crate::ui::theme::LABS_LEAF),
+        Some(_) => (tt("Al lavoro…"), crate::ui::theme::LABS_LEAF),
+        None => (tt("Pronto"), crate::ui::theme::LABS_LEAF),
     };
     let nw = f.measure(&nota, 13.5, SEMI);
     f.p.text(&nota, rx - nw, r.1, nw + 2.0, r.3, 13.5, SEMI, c, Align::Left);
     f.p.circle(rx - nw - 14.0, r.1 + r.3 / 2.0, 4.0, Some(c), None);
     rx -= nw + 38.0;
-    let righe = crate::i18n::tr_string(if app.lx.comode { "Righe comode" } else { "Righe compatte" });
+    let righe = tt(if app.lx.comode { "Righe comode" } else { "Righe compatte" });
     let rw = f.measure(&righe, 13.5, SEMI);
     let act = Act::LxComode;
     let t = f.hover_t(&act, true);
@@ -1362,12 +1405,12 @@ fn stato(f: &mut Frame, app: &App, r: R) {
     f.p.text(&righe, rx - rw - 10.0, r.1, rw + 4.0, r.3, 13.5, SEMI, LABS_INK, Align::Left);
     f.hit((rx - rw - 20.0, r.1 + 5.0, rw + 20.0, r.3 - 10.0), act);
     rx -= rw + 34.0;
-    let hint = crate::i18n::tr_string("per le scorciatoie");
+    let hint = tt("per le scorciatoie");
     let hw = f.measure(&hint, 13.5, SANS);
     f.p.text(&hint, rx - hw, r.1, hw + 2.0, r.3, 13.5, SANS, LABS_MUTED, Align::Left);
-    let pw = f.measure(&crate::i18n::tr_string("Premi"), 13.5, SANS);
+    let pw = f.measure(&tt("Premi"), 13.5, SANS);
     f.p.text("?", rx - hw - 16.0, r.1, 14.0, r.3, 13.5, BOLD, LABS_INK, Align::Center);
-    f.p.text(&crate::i18n::tr_string("Premi"), rx - hw - 22.0 - pw, r.1, pw + 4.0, r.3, 13.5, SANS, LABS_MUTED, Align::Left);
+    f.p.text(&tt("Premi"), rx - hw - 22.0 - pw, r.1, pw + 4.0, r.3, 13.5, SANS, LABS_MUTED, Align::Left);
     f.hit((rx - hw - 30.0 - pw, r.1 + 4.0, hw + pw + 40.0, r.3 - 8.0), Act::LxAiuto);
 }
 
@@ -1398,13 +1441,13 @@ fn scheda(f: &mut Frame, app: &App) {
     f.p.text(&code, cx, y + 20.0, cw - 130.0, 36.0, 24.0, BOLD, pal.text, Align::Left);
     f.button((x + w - 28.0 - 110.0, y + 20.0, 110.0, 38.0), "Chiudi", None, 15.0, Act::LxScheda);
     let nota = app.lx_nota_caso(&code);
-    let nota = if nota.is_empty() { crate::i18n::tr_string("Nessuna nota. «Modifica» per scriverla.") } else { nota };
+    let nota = if nota.is_empty() { tt("Nessuna nota. «Modifica» per scriverla.") } else { nota };
     f.para(&nota, cx, y + 64.0, cw - 130.0, 15.0, SANS, pal.muted, 1.4, 2);
     f.button((x + w - 28.0 - 110.0, y + 64.0, 110.0, 38.0), "Modifica", None, 15.0, Act::CasoApri);
     let (in_coda, _) = app.lx_conta_casi();
     let n_coda = in_coda.iter().find(|(c, _)| *c == code).map(|c| c.1).unwrap_or(0);
     let mut yy = y + 118.0;
-    let riga = format!("{n_coda} {} · {} {}", crate::i18n::tr_string(if n_coda == 1 { "file in coda" } else { "file in coda" }), lavori.len(), crate::i18n::tr_string(if lavori.len() == 1 { "lavoro fatto" } else { "lavori fatti" }));
+    let riga = format!("{n_coda} {} · {} {}", tt(if n_coda == 1 { "file in coda" } else { "file in coda" }), lavori.len(), tt(if lavori.len() == 1 { "lavoro fatto" } else { "lavori fatti" }));
     f.p.text(&riga, cx, yy, cw, 24.0, 14.5, SEMI, pal.text, Align::Left);
     yy += 34.0;
     titolo_sezione(f, cx - 4.0, yy, cw, "Tappe");
@@ -1416,23 +1459,23 @@ fn scheda(f: &mut Frame, app: &App) {
         let b = (cx + k as f32 * (sw + 6.0), yy, sw, 28.0);
         let (bg, fg) = if k < fatte { (mix(pal.ok, pal.surface, 0.86), pal.ok) } else if k == fatte { (pal.primary, pal.surface) } else { (pal.alt, pal.muted) };
         f.p.rrect(b.0, b.1, b.2, b.3, 8.0, Some(bg), None);
-        f.text_c(&crate::i18n::tr_string(nome), b, 12.5, SEMI, fg);
+        f.text_c(&tt(nome), b, 12.5, SEMI, fg);
         f.hit(b, Act::LxTappa(k as u8));
     }
     yy += 44.0;
     titolo_sezione(f, cx - 4.0, yy, cw, "Lavori fatti");
     yy += 26.0;
     if lavori.is_empty() {
-        f.p.text(&crate::i18n::tr_string("Ancora nessuno: ogni lavoro di questo caso finisce qui."), cx, yy, cw, 24.0, 14.0, SANS, pal.muted, Align::Left);
+        f.p.text(&tt("Ancora nessuno: ogni lavoro di questo caso finisce qui."), cx, yy, cw, 24.0, 14.0, SANS, pal.muted, Align::Left);
     }
     for l in lavori.iter().take(6) {
         let giorno = l.giorno();
         f.p.text(&format!("{giorno} {}", l.ora()), cx, yy, 150.0, 36.0, 13.0, SANS, pal.muted, Align::Left);
-        f.p.text(&crate::i18n::tr_string(&l.what), cx + 156.0, yy, 190.0, 36.0, 14.0, BOLD, pal.text, Align::Left);
+        f.p.text(&tt(&l.what), cx + 156.0, yy, 190.0, 36.0, 14.0, BOLD, pal.text, Align::Left);
         let nome = match l.outputs.as_slice() {
             [] => String::new(),
             [uno] => uno.clone(),
-            [uno, resto @ ..] => format!("{uno} + {} {}", resto.len(), crate::i18n::tr_string("altri")),
+            [uno, resto @ ..] => format!("{uno} + {} {}", resto.len(), tt("altri")),
         };
         f.p.text(&nome, cx + 352.0, yy, cw - 352.0, 36.0, 13.5, SANS, pal.text, Align::Left);
         yy += 40.0;
@@ -1447,9 +1490,9 @@ fn errore(f: &mut Frame, app: &App) {
     let file = &app.files[i];
     let (x, y, w, h) = finestrella(f, 560.0, 250.0, Act::LxErrore(i));
     let (cx, cw) = (x + 28.0, w - 56.0);
-    f.p.text(&crate::i18n::tr_string("Perché non è riuscito"), cx, y + 20.0, cw, 34.0, 21.0, BOLD, pal.text, Align::Left);
+    f.p.text(&tt("Perché non è riuscito"), cx, y + 20.0, cw, 34.0, 21.0, BOLD, pal.text, Align::Left);
     f.p.text(&file.name(), cx, y + 58.0, cw, 24.0, 14.5, SEMI, pal.muted, Align::Left);
-    let msg = if file.message.is_empty() { crate::i18n::tr_string("Il motore non ha dato un motivo.") } else { file.message.clone() };
+    let msg = if file.message.is_empty() { tt("Il motore non ha dato un motivo.") } else { file.message.clone() };
     f.p.rrect(cx, y + 92.0, cw, 84.0, 10.0, Some(mix(pal.bad, pal.surface, 0.92)), None);
     f.para(&msg, cx + 14.0, y + 104.0, cw - 28.0, 14.5, SANS, pal.text, 1.4, 3);
     f.button((x + w - 28.0 - 120.0, y + h - 62.0, 120.0, 42.0), "Chiudi", None, 15.0, Act::LxErrore(i));
@@ -1461,10 +1504,10 @@ fn proc_nome(f: &mut Frame, app: &App) {
     let Some(nome) = app.lx.proc_nome.as_ref() else { return };
     let (x, y, w, h) = finestrella(f, 540.0, 262.0, Act::LxProcNomeChiudi);
     let (cx, cw) = (x + 28.0, w - 56.0);
-    f.p.text(&crate::i18n::tr_string("Salva come procedura"), cx, y + 20.0, cw, 34.0, 22.0, BOLD, pal.text, Align::Left);
+    f.p.text(&tt("Salva come procedura"), cx, y + 20.0, cw, 34.0, 22.0, BOLD, pal.text, Align::Left);
     let passo = app.lx_passo_attuale();
-    let cosa = passo.as_ref().map(|p| app.lx_passo_titolo(p)).map(|(c, v)| format!("{c} · {v}")).unwrap_or_default();
-    f.para(&format!("{cosa} — {}", crate::i18n::tr_string("con tutte le scelte di adesso")), cx, y + 58.0, cw, 14.5, SANS, pal.muted, 1.4, 3);
+    let cosa = passo.as_ref().map(|p| app.lx_passo_titolo(p)).map(|(c, v)| crate::i18n::lit(&format!("{c} · {v}"))).unwrap_or_default();
+    f.para(&format!("{cosa} — {}", tt("con tutte le scelte di adesso")), cx, y + 58.0, cw, 14.5, SANS, pal.muted, 1.4, 3);
     f.text("Nome", cx, y + 112.0, cw, 22.0, 14.0, SEMI, pal.muted);
     f.field((cx, y + 138.0, cw, 42.0), Field::LxProcNome, nome, "Vetrino per consulto", 16.0, false);
     let bw = 130.0;
@@ -1481,7 +1524,7 @@ fn aiuto(f: &mut Frame) {
     f.p.shadow(x, y, w, h, 14.0, 20.0, 0.4, 8.0);
     f.p.rrect(x, y, w, h, 14.0, Some(pal.surface), None);
     f.hit((x, y, w, h), Act::Nothing);
-    f.p.text(&crate::i18n::tr_string("Scorciatoie da tastiera"), x + 28.0, y + 18.0, w - 220.0, 40.0, 22.0, BOLD, pal.text, Align::Left);
+    f.p.text(&tt("Scorciatoie da tastiera"), x + 28.0, y + 18.0, w - 220.0, 40.0, 22.0, BOLD, pal.text, Align::Left);
     f.button((x + w - 28.0 - 120.0, y + 20.0, 120.0, 38.0), "Chiudi", None, 15.0, Act::LxAiuto);
     let voci: [(&str, &str); 15] = [
         ("1 … 9", "I comandi, nell'ordine della barra (9 = Procedure)"),
@@ -1505,8 +1548,8 @@ fn aiuto(f: &mut Frame) {
         let kw = (f.measure(k, 14.0, SEMI) + 20.0).max(54.0);
         f.p.rrect(x + 28.0, yy, kw, 28.0, 6.0, Some(pal.alt), Some((pal.border, 1.0)));
         f.p.text(k, x + 28.0, yy, kw, 28.0, 14.0, SEMI, pal.text, Align::Center);
-        f.p.text(&crate::i18n::tr_string(d), x + 28.0 + 130.0, yy, w - 28.0 - 130.0 - 28.0, 28.0, 15.0, SANS, pal.text, Align::Left);
+        f.p.text(&tt(d), x + 28.0 + 130.0, yy, w - 28.0 - 130.0 - 28.0, 28.0, 15.0, SANS, pal.text, Align::Left);
         yy += 31.0;
     }
-    f.p.text(&crate::i18n::tr_string("Le lettere e i numeri funzionano quando non stai scrivendo in un campo."), x + 28.0, y + h - 40.0, w - 56.0, 28.0, 13.5, SANS, pal.muted, Align::Left);
+    f.p.text(&tt("Le lettere e i numeri funzionano quando non stai scrivendo in un campo."), x + 28.0, y + h - 40.0, w - 56.0, 28.0, 13.5, SANS, pal.muted, Align::Left);
 }

@@ -126,16 +126,27 @@ pub struct Lavoro {
     pub caso: String,
     /// I nomi dei file scritti.
     pub outputs: Vec<String>,
+    /// Lo strumento da cui vengono i dati («Tecan Magellan · Sunrise · Assorbanza · 24/11/2026 14:05»); vuoto se non è un lavoro sui dati di uno strumento.
+    pub strumento: String,
+    /// I file originali letti: nome e impronta SHA-256, per sapere da dove viene il dato.
+    pub origini: Vec<(String, String)>,
     /// La cartella dove sono finiti (vuota nei lavori ricordati dalle versioni precedenti).
     pub dir: String,
 }
 
 impl Lavoro {
-    /// Il testo da incollare nel quaderno: il caso, poi un nome di file per riga.
+    /// Il testo da incollare nel quaderno: il caso, lo strumento e l'originale con la sua impronta, poi un nome di file per riga.
     pub fn per_quaderno(&self) -> String {
         let mut t = String::new();
         if !self.caso.is_empty() {
             t.push_str(&format!("Caso {}\n", self.caso));
+        }
+        if !self.strumento.is_empty() {
+            t.push_str(&self.strumento);
+            t.push('\n');
+        }
+        for (nome, sha) in &self.origini {
+            t.push_str(&format!("{} {nome} (SHA-256 {sha})\n", crate::i18n::tr("Originale:")));
         }
         t.push_str(&self.outputs.join("\n"));
         t
@@ -155,19 +166,24 @@ impl Lavoro {
 }
 
 const SEP: char = '\u{1f}';
+/// Separa le coppie nome-impronta dei file originali.
+const SEP2: char = '\u{1e}';
 
 fn riga(l: &Lavoro) -> String {
-    let pulito = |s: &str| s.replace(['\t', '\n', '\r', SEP], " ");
+    let pulito = |s: &str| s.replace(['\t', '\n', '\r', SEP, SEP2], " ");
     let outs: Vec<String> = l.outputs.iter().map(|o| pulito(o)).collect();
-    format!("{}\t{}\t{}\t{}\t{}", l.when, pulito(&l.what), pulito(&l.caso), outs.join(&SEP.to_string()), pulito(&l.dir))
+    let orig: Vec<String> = l.origini.iter().map(|(n, h)| format!("{}{SEP}{}", pulito(n), pulito(h))).collect();
+    // I campi dopo i file sono venuti dopo: una riga di prima ne ha quattro (o sei) e si legge lo stesso.
+    format!("{}\t{}\t{}\t{}\t{}\t{}\t{}", l.when, pulito(&l.what), pulito(&l.caso), outs.join(&SEP.to_string()), pulito(&l.strumento), orig.join(&SEP2.to_string()), pulito(&l.dir))
 }
 
 fn leggi_riga(line: &str) -> Option<Lavoro> {
-    let f: Vec<&str> = line.splitn(5, '\t').collect();
+    let f: Vec<&str> = line.splitn(7, '\t').collect();
     if f.len() < 4 {
         return None;
     }
-    Some(Lavoro { when: f[0].parse().ok()?, what: f[1].to_string(), caso: f[2].to_string(), outputs: f[3].split(SEP).filter(|s| !s.is_empty()).map(str::to_string).collect(), dir: f.get(4).map(|d| d.to_string()).unwrap_or_default() })
+    let origini = f.get(5).map(|o| o.split(SEP2).filter_map(|c| c.split_once(SEP)).map(|(n, h)| (n.to_string(), h.to_string())).collect()).unwrap_or_default();
+    Some(Lavoro { when: f[0].parse().ok()?, what: f[1].to_string(), caso: f[2].to_string(), outputs: f[3].split(SEP).filter(|s| !s.is_empty()).map(str::to_string).collect(), strumento: f.get(4).copied().unwrap_or("").to_string(), origini, dir: f.get(6).map(|d| d.to_string()).unwrap_or_default() })
 }
 
 /// Quanti lavori si ricordano al più: abbastanza per il registro di un anno di un laboratorio.
@@ -200,7 +216,7 @@ pub fn registro_excel(elenco: &[Lavoro], caso_attivo: Option<&Caso>) -> Result<V
     let ws = book.add_worksheet();
     ws.set_name("Registro").map_err(err)?;
     let titoli = Format::new().set_bold().set_background_color(Color::RGB(0xE3F1E6)).set_border_bottom(FormatBorder::Thin);
-    let testa = ["Data", "Ora", "Attività", "Caso", "Nota del caso", "File"];
+    let testa = ["Data", "Ora", "Attività", "Caso", "Nota del caso", "File", "Strumento", "File originale (SHA-256)"];
     for (c, t) in testa.iter().enumerate() {
         ws.write_string_with_format(0, c as u16, crate::i18n::tr(t), &titoli).map_err(err)?;
     }
@@ -215,14 +231,17 @@ pub fn registro_excel(elenco: &[Lavoro], caso_attivo: Option<&Caso>) -> Result<V
             ws.write_string(r, 3, &l.caso).map_err(err)?;
             ws.write_string(r, 4, nota).map_err(err)?;
             ws.write_string(r, 5, f).map_err(err)?;
+            ws.write_string(r, 6, &l.strumento).map_err(err)?;
+            let orig: Vec<String> = l.origini.iter().map(|(n, h)| format!("{n} · {h}")).collect();
+            ws.write_string(r, 7, orig.join(" | ")).map_err(err)?;
             r += 1;
         }
     }
-    for (c, w) in [12.0, 7.0, 26.0, 18.0, 24.0, 60.0].iter().enumerate() {
+    for (c, w) in [12.0, 7.0, 26.0, 18.0, 24.0, 60.0, 44.0, 70.0].iter().enumerate() {
         ws.set_column_width(c as u16, *w).map_err(err)?;
     }
     ws.set_freeze_panes(1, 0).map_err(err)?;
-    ws.autofilter(0, 0, r.saturating_sub(1).max(1), 5).map_err(err)?;
+    ws.autofilter(0, 0, r.saturating_sub(1).max(1), 7).map_err(err)?;
     ws.set_landscape();
     ws.set_print_fit_to_pages(1, 0);
     ws.set_header("&L&\"Calibri,Bold\"Cedro 4 Labs&C&A&R&D");
@@ -405,8 +424,8 @@ mod tests {
     #[test]
     fn il_registro_ha_una_riga_per_file_con_i_filtri() {
         let elenco = vec![
-            Lavoro { when: 1_793_196_309, what: "Togli i nomi".into(), caso: "V-1".into(), outputs: vec!["a.svs".into(), "b.svs".into()], dir: String::new() },
-            Lavoro { when: 1_793_199_909, what: "Prepara una figura".into(), caso: String::new(), outputs: vec!["fig.tif".into()], dir: String::new() },
+            Lavoro { when: 1_793_196_309, what: "Togli i nomi".into(), caso: "V-1".into(), outputs: vec!["a.svs".into(), "b.svs".into()], strumento: String::new(), origini: Vec::new(), dir: String::new() },
+            Lavoro { when: 1_793_199_909, what: "Prepara una figura".into(), caso: String::new(), outputs: vec!["fig.tif".into()], strumento: String::new(), origini: Vec::new(), dir: String::new() },
         ];
         let caso = Caso::new("V-1", "Luna, labrador").unwrap();
         let x = registro_excel(&elenco, Some(&caso)).unwrap();
@@ -443,7 +462,7 @@ mod tests {
 
     #[test]
     fn jobs_round_trip_through_a_line() {
-        let l = Lavoro { when: 1_793_196_309, what: "Togli i nomi".into(), caso: "V-1".into(), outputs: vec!["a b.svs".into(), "c\td.svs".into()], dir: "D:\\Lab".into() };
+        let l = Lavoro { when: 1_793_196_309, what: "Togli i nomi".into(), caso: "V-1".into(), outputs: vec!["a b.svs".into(), "c\td.svs".into()], strumento: String::new(), origini: Vec::new(), dir: "D:\\Lab".into() };
         let back = leggi_riga(&riga(&l)).unwrap();
         assert_eq!(back.what, "Togli i nomi");
         assert_eq!(back.outputs, vec!["a b.svs".to_string(), "c d.svs".to_string()]);

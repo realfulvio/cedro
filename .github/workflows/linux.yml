@@ -11,7 +11,7 @@ name: Linux
 on:
   push:
     branches: ["claude/**"]
-    paths: ["Cargo.*", "src/**", "resources/**", "vendor/**", "trascrivi/**", "riassumi/**", "installer/**", "examples/**", "build.rs", ".github/workflows/linux.yml"]
+    paths: ["Cargo.*", "src/**", "tests/**", "resources/**", "vendor/**", "trascrivi/**", "riassumi/**", "installer/**", "examples/**", "build.rs", ".github/workflows/linux.yml"]
   workflow_dispatch:
     inputs:
       tag:
@@ -88,6 +88,16 @@ jobs:
 
       - name: Prove
         run: cargo test --release --lib
+
+      # I lettori degli strumenti di Labs (src/strumenti) si provano contro i file d'esempio e i risultati attesi
+      # del progetto pubblico allotropy (licenza MIT), fermo a un commit preciso: ogni profilo deve leggere
+      # tutti i suoi file come li legge allotropy. I risultati attesi di Cedro sono in tests/strumenti/golden.
+      - name: Prove dei lettori degli strumenti (file d'esempio di allotropy)
+        run: |
+          git clone --quiet --filter=blob:none --no-checkout https://github.com/Benchling-Open-Source/allotropy.git "$RUNNER_TEMP/allotropy"
+          git -C "$RUNNER_TEMP/allotropy" sparse-checkout set tests/parsers
+          git -C "$RUNNER_TEMP/allotropy" checkout --quiet 5bcc4c92b5eba5b2b1febe6efbc98bab6a3b5685
+          CEDRO_ALLOTROPY="$RUNNER_TEMP/allotropy" cargo test --release --test strumenti
 
       - name: Firma con una chiavetta finta (SoftHSM2, PKCS#11)
         run: |

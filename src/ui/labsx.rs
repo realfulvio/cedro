@@ -447,7 +447,7 @@ impl App {
         let Some(code) = self.lx.caso.clone().filter(|c| !c.is_empty()) else { return };
         let idx: Vec<usize> = (0..self.files.len()).filter(|&i| self.lx_caso_di(&self.files[i].path) == code && self.lx_prende(Lab::Immagini, i)).collect();
         if idx.is_empty() {
-            self.notice = Some(super::model::Notice { text: crate::i18n::tr_string("In questo caso non ci sono immagini né vetrini da mettere nel pacchetto."), error: true });
+            self.notice = Some(super::model::Notice { text: crate::i18n::lit(&crate::i18n::tr_string("In questo caso non ci sono immagini né vetrini da mettere nel pacchetto.")), error: true });
             return;
         }
         for (k, f) in self.files.iter_mut().enumerate() {
@@ -728,7 +728,7 @@ impl App {
         let scelti = self.lx_scelti();
         let Some(proc) = self.lx.procedure.get(k) else { return };
         if !proc.passi.iter().any(|p| self.lx_passo_prende(p, &scelti)) {
-            self.notice = Some(super::model::Notice { text: crate::i18n::tr_string("Questa procedura non lavora nessuno dei file scelti."), error: true });
+            self.notice = Some(super::model::Notice { text: crate::i18n::lit(&crate::i18n::tr_string("Questa procedura non lavora nessuno dei file scelti.")), error: true });
             return;
         }
         let files = scelti.iter().map(|&i| self.files[i].path.clone()).collect();
@@ -756,7 +756,7 @@ impl App {
                 } else {
                     format!("{} «{nome}»: {n} {}.", crate::i18n::tr_string("Procedura fatta"), crate::i18n::tr_string(if n == 1 { "passo" } else { "passi" }))
                 };
-                self.notice = Some(super::model::Notice { text, error: pc.falliti > 0 });
+                self.notice = Some(super::model::Notice { text: crate::i18n::lit(&text), error: pc.falliti > 0 });
                 return;
             };
             let Some(lab) = lab_da_id(&passo.lab) else {

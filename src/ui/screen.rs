@@ -10,6 +10,7 @@ use super::core::{inside, Act, Field, Fold, Frame, HitKind, LinkFlag, LinkMenu, 
 use super::gfx::{Fonts, GlyphCache, Painter};
 use super::model::{Activity, App, Notice, AUDIO_FORMATS, SUBTITLES, VIDEO_FORMATS};
 use super::pdfedact::EdField;
+use super::strumenti::StrumAct;
 use super::theme::ThemeId;
 use super::views;
 use crate::conversioni::{self, Control, CATEGORIES, EXISTS_CHOICES};
@@ -431,10 +432,29 @@ impl Screen {
                 self.ed_drag(a, r, x, y, super::pdfedact::Phase::Move);
                 return true;
             }
+            if act == Act::Strum(super::strumenti::StrumAct::Piastra) {
+                let p = self.strum_pozzetto(r, x, y);
+                if let Some(p) = p {
+                    self.app.strum_muovi(p);
+                }
+                // La riga sotto la piastra segue il mouse anche mentre si trascina.
+                self.app.strum.sopra = p;
+                return true;
+            }
             self.slide(&act, r, x);
             return true;
         }
         let hover = self.hit_at(x, y).map(|h| h.act.clone()).filter(|a| *a != Act::Nothing);
+        // Il pozzetto sotto il mouse, per la riga sotto la piastra.
+        let sopra = match (&hover, self.hit_at(x, y)) {
+            (Some(Act::Strum(super::strumenti::StrumAct::Piastra)), Some(h)) => self.strum_pozzetto(h.r, x, y),
+            _ => None,
+        };
+        let mut sopra_cambiato = false;
+        if sopra != self.app.strum.sopra {
+            self.app.strum.sopra = sopra;
+            sopra_cambiato = true;
+        }
         let mut moved = false;
         if self.app.ed.is_some() {
             let over = match &hover {
@@ -447,7 +467,20 @@ impl Screen {
             self.ui.hover = hover;
             return true;
         }
-        moved
+        moved || sopra_cambiato
+    }
+
+    /// Il pozzetto (riga, colonna) sotto il punto, dentro il riquadro dei pozzetti della piastra mostrata.
+    fn strum_pozzetto(&self, r: R, x: f32, y: f32) -> Option<(usize, usize)> {
+        let (i, l) = self.app.strum_corrente()?;
+        let g = self.app.strum_gruppo(&self.app.files[i].path, &l);
+        let (righe, colonne) = l.formato(g);
+        if r.2 <= 0.0 || r.3 <= 0.0 {
+            return None;
+        }
+        let c = (((x - r.0) / r.2) * colonne as f32).floor().clamp(0.0, colonne as f32 - 1.0) as usize;
+        let rr = (((y - r.1) / r.3) * righe as f32).floor().clamp(0.0, righe as f32 - 1.0) as usize;
+        Some((rr, c))
     }
 
     pub fn pointer_leave(&mut self) -> bool {
@@ -482,6 +515,10 @@ impl Screen {
                 self.log_drag(r, y);
             } else if let Act::Ed(a) = &act {
                 self.ed_drag(a, r, x, y, super::pdfedact::Phase::Down);
+            } else if act == Act::Strum(super::strumenti::StrumAct::Piastra) {
+                if let Some(p) = self.strum_pozzetto(r, x, y) {
+                    self.app.strum_premi(p);
+                }
             } else {
                 self.slide(&act, r, x);
             }
@@ -492,6 +529,11 @@ impl Screen {
         if let Some((act, drag_r)) = self.ui.drag.take() {
             if let Act::Ed(a) = &act {
                 self.ed_drag(a, drag_r, x, y, super::pdfedact::Phase::Up);
+                self.ui.pressed = None;
+                return;
+            }
+            if act == Act::Strum(super::strumenti::StrumAct::Piastra) {
+                self.app.strum_rilascia();
                 self.ui.pressed = None;
                 return;
             }
@@ -880,7 +922,10 @@ impl Screen {
                 }
                 // Le tessere di Inizio: si sceglie il file, poi la scheda dice che cosa ci si può fare.
                 let files = plat.pick_files();
-                self.add_files(files);
+                // Annullato il dialogo: niente da dire.
+                if !files.is_empty() {
+                    self.add_files(files);
+                }
             }
             Act::LabGo(lab, id) => {
                 app.set_lab(lab, simple);
@@ -910,6 +955,11 @@ impl Screen {
                 app.set_category(i, simple);
             }
             Act::Action(id) => app.set_action(id),
+            Act::Strum(StrumAct::CambiaStrumento) => {
+                let (items, sel) = super::views::strumenti_profili(&self.app);
+                self.open_menu(items, sel, &Act::Strum(StrumAct::CambiaStrumento));
+            }
+            Act::Strum(a) => app.strum_act(a),
             Act::PdfMode(mode) => app.set_pdf_mode(mode, simple),
             Act::MoveFile(i, d) => app.move_file(i, d),
             Act::RowDrag(..) | Act::PageDrag(..) => {}

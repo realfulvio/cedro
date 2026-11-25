@@ -2475,7 +2475,7 @@ Caso	Case
 Lavori di oggi	Today's jobs
 Ancora nessuno. Ogni lavoro finisce qui, con i nomi dei file usciti.	None yet. Every job ends up here, with the names of the files it wrote.
 Gli originali non sono mai stati toccati.	Your originals were never touched.
-… e altri {#} file	… and {#} more files
+… e altri {#} file	… and {} more files
 Copia per il quaderno	Copy for the lab notebook
 Caso o campione	Case or sample
 Se c'è, il codice entra nei nomi dei file che Cedro scrive, dopo la data. Resta finché non lo togli.	If there is one, its code goes into the names of the files Cedro writes, after the date. It stays until you remove it.
@@ -2999,6 +2999,383 @@ Unisci, dividi, riordina, comprimi e modifica i PDF	Merge, split, reorder, compr
 Nella scheda PDF ci sono cinque strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.	The PDF tab has five tools besides conversion. Originals are never touched: the result is always a new copy.
 Scrivi, evidenzia, compila	Write, highlight, fill in
 Anche oscura davvero il testo: esce «…-modificato.pdf»	It also really blacks out text: it saves «…-modificato.pdf»
+
+# Cedro 4 Labs: i dati degli strumenti
+Piastra	Plate
+Strumento	Instrument
+Gruppo	Group
+Pozzetto	Well
+Bersaglio	Target
+Ruolo	Role
+Bianco	Blank
+Controllo	Control
+campione	sample
+media	mean
+DS	SD
+1 pozzetto	1 well
+{#} pozzetti	{} wells
+1 campione	1 sample
+{#} campioni	{} samples
+1 bianco	1 blank
+{#} bianchi	{} blanks
+{#} standard	{} standards
+1 controllo	1 control
+{#} controlli	{} controls
+1 riferimento	1 reference
+{#} riferimenti	{} references
+1 misura	1 measurement
+{#} misure	{} measurements
+{#} gruppi	{} groups
+Esce in	Output
+una riga per pozzetto	one row per well
+una riga per misura	one row per measurement
+elenco e foglio Strumento	list and Strumento sheet
+la tabella dei campioni	the samples table
+mappa a colori e riga per pozzetto	colour map and one row per well
+numeri veri, una scheda per strumento	real numbers, one tab per instrument
+per LIMS e archivi dati	for LIMS and data archives
+Aggiungi i calcoli di Cedro	Add Cedro's calculations
+separati dai dati grezzi	kept apart from the raw data
+Controlla il file prima di salvarlo	Check the file before saving it
+Solo il nome	File name only
+Completo	Full
+Scala colori	Colour scale
+Blu → rosso	Blue → red
+Daltonici	Colour-blind
+Non è questo? Cambia strumento	Not this one? Change instrument
+Torna a quello che Cedro riconosce	Back to what Cedro recognises
+Quello che Cedro riconosce	What Cedro recognises
+Rileggo il file…	Reading the file again…
+Con questo strumento il file non si legge.	The file can't be read with this instrument.
+Passa sopra un pozzetto per vederne il valore.	Hover over a well to see its value.
+Tutta la piastra	Whole plate
+Clicca un pozzetto o trascina per sceglierne più d'uno. Poi segna il ruolo: finisce nel foglio «Pozzetti» dell'Excel.	Click a well, or drag to pick several. Then mark the role: it goes into the Pozzetti sheet of the Excel.
+calcolato da Cedro	calculated by Cedro
+controllato	checked
+non passa il controllo	fails the check
+con i calcoli di Cedro	with Cedro's calculations
+estratto: il file intero ha tutte le misure	excerpt: the full file has all the measurements
+Le copie stanno accanto agli originali, con le impostazioni consigliate.	Copies are saved next to the originals, with the recommended settings.
+È il foglio «Pozzetti» di Excel: una riga per pozzetto.	It's the Pozzetti sheet of the Excel: one row per well.
+È il foglio dei campioni di Excel: una riga per campione.	It's the samples sheet of the Excel: one row per sample.
+Qui le prime {#} colonne di {#}: nell'Excel ci sono tutte.	Here are the first {} columns of {}: the Excel has them all.
+I ruoli si cambiano sulla piastra.	Roles are changed on the plate.
+{#} pozzetto «{}».	{} well «{}».
+{#} pozzetti «{}».	{} wells «{}».
+{#} misura «{}».	{} measurement «{}».
+{#} misure «{}».	{} measurements «{}».
+Nell'Excel restano «{}», non diventano zero.	In the Excel they stay «{}»; they don't become zero.
+Da sapere.	Good to know.
+File Allotrope controllato.	Allotrope file checked.
+Chiavi, unità e identificativi passano il controllo.	Keys, units and identifiers pass the check.
+Il file Allotrope non passa il controllo.	The Allotrope file fails the check.
+File Allotrope scritto.	Allotrope file written.
+Non controllato: la spunta è tolta.	Not checked: the tick is off.
+Le curve ciclo per ciclo (amplificazione, multicomponente, fusione) non vengono copiate: restano nel file dello strumento.	Cycle-by-cycle curves (amplification, multicomponent, melt) are not copied: they stay in the instrument's file.
+Lettore di piastre	Plate reader
+PCR digitale	Digital PCR
+Spettrofotometria	Spectrophotometry
+Conta cellule	Cell counting
+SHA-256 del file originale	SHA-256 of the original file
+Strumento letto come	Instrument read as
+Produttore	Manufacturer
+Identificativo	Identifier
+Numero di serie	Serial number
+Versione del programma	Software version
+Sistema dati	Data system
+Inventario	Asset number
+Descrizione	Description
+Marchio	Brand
+Convertito da	Converted by
+Altri dati dell'intestazione	Other header data
+Analista	Analyst
+Area di lavoro	Workspace
+Data della misura	Measurement date
+File della scansione	Scan file
+Fine della corsa	Run end
+Metodo	Method
+Tipo di esperimento	Experiment type
+Esperimento	Experiment
+Chimica	Chemistry
+Blocco	Block
+Riferimento passivo	Passive reference
+Metodo di quantificazione	Quantification method
+Originale:	Original:
+scegli almeno un'uscita	choose at least one output
+{} · {#} misure → {}	{} · {} measurements → {}
+{} · 1 misura → {}	{} · 1 measurement → {}
+~CSV piatto	flat CSV
+CSV piatto	Flat CSV
+strumento non riconosciuto	instrument not recognised
+profilo «{}» sconosciuto	unknown instrument «{}»
+nel file non ci sono misure	the file has no measurements
+nel file non ci sono campioni	the file has no samples
+nel file non ci sono pozzetti	the file has no wells
+file vuoto	empty file
+il file non ha fogli	the file has no sheets
+il file non ha la forma che questo strumento si aspetta	the file doesn't have the layout this instrument expects
+il file Allotrope non passa il controllo: {}	the Allotrope file fails the check: {}
+ultimo punto della cinetica	last point of the kinetic run
+massimo dello spettro	maximum of the spectrum
+nel file non ci sono dati di una piastra	the file has no plate data
+il file ha più piastre: Cedro ne legge una per file (da Gen5 si esporta una piastra alla volta)	the file has several plates: Cedro reads one per file (export one plate at a time from Gen5)
+manca la sezione «Procedure Details»	the «Procedure Details» section is missing
+Cedro legge le letture in punto finale, le cinetiche e gli spettri; le scansioni dell'area (Area Scan) no	Cedro reads endpoint reads, kinetic runs and spectra; area scans are not supported
+nello stesso file ci sono AlphaLISA e fluorescenza: Cedro non li legge insieme	the same file has AlphaLISA and fluorescence reads: Cedro does not read them together
+nel file mancano le tabelle dei risultati	the file has no results tables
+i dati non contengono misure valide	the data has no valid measurements
+il passo della scansione in lunghezza d'onda è zero	the wavelength step of the scan is zero
+nel file ci sono più righe di misure per la stessa lunghezza d'onda	the file has several rows of readings for the same wavelength
+nel file mancano i dati delle misure di una lunghezza d'onda	the file lacks the readings of one wavelength
+nell'intestazione della piastra manca il modo di lettura	the plate header has no read mode
+nella cinetica manca il tempo di una lettura	the kinetic run lacks the time of one read
+la piastra non ha il nome	the plate has no name
+la tabella delle misure è vuota	the readings table is empty
+manca il nome del gruppo	the group name is missing
+manca l'intestazione della piastra	the plate header is missing
+manca la colonna Sample	the Sample column is missing
+mancano i dati ridotti	the reduced data is missing
+mancano le colonne dei dati della piastra	the plate data columns are missing
+mancano le colonne dei dati ridotti	the reduced data columns are missing
+mancano le lunghezze d'onda di eccitazione	the excitation wavelengths are missing
+non riesco a capire le dimensioni della piastra	I can't work out the size of the plate
+il modo di lettura «{}» non è supportato: Cedro legge assorbanza, fluorescenza e luminescenza	the read mode «{}» is not supported: Cedro reads absorbance, fluorescence and luminescence
+la versione dell'esportazione «{}» non è supportata: serve la {}	export version «{}» is not supported: version {} is required
+Cedro legge le piastre in punto finale, in cinetica e in spettro: «{}» no	Cedro reads endpoint, kinetic and spectrum plates: «{}» is not supported
+il tipo di dati «{}» non è supportato: servono Raw, Reduced o Both	the data type «{}» is not supported: Raw, Reduced or Both are needed
+gli spettri di {} non sono supportati: Cedro legge solo quelli di assorbanza	spectra of {} are not supported: Cedro reads absorbance spectra only
+il formato di esportazione «{}» non è supportato: servono TimeFormat o PlateFormat	the export format «{}» is not supported: TimeFormat or PlateFormat is needed
+nella tabella delle misure mancano righe: attese {}, trovate {}	the readings table is missing rows: expected {}, found {}
+l'intestazione della piastra è troppo corta ({} campi, ne servono {})	the plate header is too short ({} fields, {} needed)
+le piastre del file devono avere nomi diversi: «{}» è ripetuto	the plates in the file must have different names: «{}» is repeated
+un blocco del file comincia con «{}»: dovrebbe cominciare con Group, Plate o Note	a block in the file starts with «{}»: it should start with Group, Plate or Note
+il gruppo «{}» cita la piastra «{}» che nel file non c'è	the group «{}» refers to the plate «{}», which is not in the file
+la prima riga dovrebbe dire quanti blocchi ci sono («##BLOCKS= N»): «{}»	the first line should say how many blocks there are («##BLOCKS= N»): «{}»
+numero di pozzetti sconosciuto: {} (sono ammessi 6, 12, 24, 48, 96, 384, 1536)	unknown number of wells: {} (6, 12, 24, 48, 96, 384 and 1536 are allowed)
+
+# Cedro 4 Labs: QuantStudio Design & Analysis
+Analisi	Analysis
+Operatore	Operator
+Codice a barre	Barcode
+Inizio della corsa	Run start
+Analisi eseguita	Analysis performed
+Esportato il	Exported on
+Curva standard	Standard curve
+Quantificazione relativa	Relative quantification
+Genotipizzazione	Genotyping
+Curva di fusione	Melt curve
+Presenza/assenza	Presence/absence
+Analisi primaria	Primary analysis
+nel foglio «{}» manca la riga vuota tra l'intestazione e la tabella	the «{}» sheet has no blank row between the header and the table
+il foglio «{}» non ha la tabella	the «{}» sheet has no table
+blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	block «{}» not supported: Cedro reads 96- and 384-well plates
+nel file manca il foglio «{}»	the file has no «{}» sheet
+il foglio «{}» è vuoto	the «{}» sheet is empty
+nei risultati mancano le colonne Sample e Target	the results have no Sample and Target columns
+nel foglio dei gruppi mancano le colonne Sample e Target	the groups sheet has no Sample and Target columns
+nel foglio Genotyping Result manca la colonna SNP Assay	the Genotyping Result sheet has no SNP Assay column
+nel foglio Genotyping Result manca lo SNP alla riga {}	the Genotyping Result sheet has no SNP at row {}
+nei risultati mancano le colonne Well e Well Position	the results have no Well and Well Position columns
+nei risultati manca la colonna Well	the results have no Well column
+nel pozzetto {} manca il bersaglio (Target)	well {} has no target (Target)
+nel pozzetto {} manca la posizione (Well Position)	well {} has no position (Well Position)
+non si riesce a capire il tipo di esperimento dai fogli del file	the experiment type can't be worked out from the file's sheets
+nel file non ci sono risultati per pozzetto	the file has no per-well results
+nel foglio RQ Replicate Group Result mancano le colonne Rq, Sample e Target	the RQ Replicate Group Result sheet has no Rq, Sample and Target columns
+non si capisce qual è il campione di riferimento: nel foglio RQ Replicate Group Result una sola riga deve avere Rq uguale a 1	the reference sample can't be identified: in the RQ Replicate Group Result sheet exactly one row must have Rq equal to 1
+non si capisce qual è il bersaglio di riferimento: nel foglio RQ Replicate Group Result deve essercene uno solo senza Rq	the reference target can't be identified: in the RQ Replicate Group Result sheet exactly one target must have no Rq
+
+# Cedro 4 Labs: Unchained Labs Lunatic e Stunner
+Applicazione	Application
+non trovo la riga con «Sample name» che apre la tabella	can't find the row with «Sample name» that starts the table
+nell'intestazione del file ci sono i nomi ma non i valori	the file header has the names but not the values
+nel file non ci sono righe di risultati	the file has no result rows
+nel file ci deve essere una colonna di assorbanza (per esempio A280)	the file must have an absorbance column (for example A280)
+non trovo l'identificativo dello strumento: ci vuole la colonna «Instrument ID» o «Instrument» nell'intestazione	can't find the instrument identifier: the «Instrument ID» column or «Instrument» in the header is needed
+non trovo la data e l'ora: ci vogliono le colonne «Date» e «Time» oppure la «Date» nell'intestazione	can't find the date and time: the «Date» and «Time» columns or «Date» in the header are needed
+non capisco la data «{}»	can't read the date «{}»
+manca la posizione del pozzetto (colonna «Plate position»)	the well position is missing («Plate position» column)
+due colonne danno valori diversi per la stessa lunghezza d'onda ({#} nm): {} e {}	two columns give different values for the same wavelength ({} nm): {} and {}
+
+# Cedro 4 Labs: QuantStudio Absolute Q
+nello ZIP ci sono più file «summary»: ne serve uno solo	the ZIP has more than one «summary» file: exactly one is needed
+nello ZIP non c'è nessun file «summary»	the ZIP has no «summary» file
+non riesco a capire i blocchi dei coloranti (da «Target» a «Threshold»)	can't work out the dye blocks (from «Target» to «Threshold»)
+i blocchi dei coloranti devono avere tutti {#} colonne	all the dye blocks must have {} columns
+nel file manca la colonna «Sample» (o «Name»)	the file has no «Sample» (or «Name») column
+nel file manca il valore della colonna «{}»	the file has no value in the «{}» column
+non riesco a ricavare il pozzetto dal campione «{}»	can't work out the well from the sample «{}»
+ci deve essere un solo colorante di riferimento (senza «_target»), nel file ce ne sono {#}	there must be exactly one reference dye (without «_target»), the file has {}
+manca la colonna «{}»	the «{}» column is missing
+la colonna «Index» ha un valore che non è un numero	the «Index» column has a value that isn't a number
+nel file non ci sono righe di partizioni	the file has no partition rows
+il gruppo «{}» ha due valori diversi per «{}»: {#} e {#}	group «{}» has two different values for «{}»: {} and {}
+{} · {}: positive {#} e negative {#} su {#} partizioni: la colonna «{}_pos» ha valori diversi da True e False	{} · {}: {} positive and {} negative out of {} partitions: the «{}_pos» column has values other than True and False
+
+# MSD Methodical Mind
+manca la tabella dei dati della piastra	the plate's data table is missing
+nell'intestazione del file manca «{}»	the file header has no «{}»
+la cella {} non è un numero: «{}»	cell {} isn't a number: «{}»
+la legenda degli spot ne dice {#} ma nel file ci sono {#} tabelle di dati	the spot legend says {} but the file has {} data tables
+nel file non ci sono valori di luminescenza	the file has no luminescence values
+
+# BMG Labtech MARS
+nel file non c'è la riga «Raw Data»	the file has no «Raw Data» line
+la riga «{}» non è in un formato che Cedro conosce	the line «{}» isn't in a format Cedro knows
+non riesco a leggere l'intestazione: nessuna riga «Chiave: valore»	can't read the header: there is no «Key: value» line
+non capisco il tipo di lettura dall'intestazione: serve una sola tra assorbanza, fluorescenza e luminescenza	can't tell the read type from the header: exactly one of absorbance, fluorescence and luminescence is needed
+manca la tabella dei valori dopo «Raw Data»	the table of values after «Raw Data» is missing
+nel file non ci sono valori	the file has no values
+
+# Thermo Fisher Diomni
+manca il foglio «Target_Call» o «Target Call»	the «Target_Call» or «Target Call» sheet is missing
+non trovo la tabella dei risultati (la riga che comincia con «Well»)	can't find the results table (the row starting with «Well»)
+
+# BMG Labtech SMART Control
+manca il foglio «Protocol Information»	the «Protocol Information» sheet is missing
+manca il foglio «Microplate End point»	the «Microplate End point» sheet is missing
+manca il foglio «Table End point»	the «Table End point» sheet is missing
+nel foglio «Protocol Information» manca «Basic settings»	the «Protocol Information» sheet has no «Basic settings»
+il tipo di lettura «{}» non è supportato: Cedro legge la fluorescenza di SMART Control	the reading type «{}» isn't supported: Cedro reads SMART Control fluorescence
+il filtro «{}» («{}») non si legge: serve «lunghezza-banda», come 480-14	the filter «{}» («{}») can't be read: it should be «wavelength-bandwidth», like 480-14
+dal nome della piastra «{}» non ricavo il numero di pozzetti	can't work out the number of wells from the plate name «{}»
+nel foglio «Table End point» manca la riga «Well»	the «Table End point» sheet has no «Well» row
+nel foglio «Table End point» manca la riga «{}»	the «Table End point» sheet has no «{}» row
+nel file manca il contenuto del pozzetto {}	the file has no content for well {}
+il pozzetto {} ha un valore che non è un numero: «{}»	well {} has a value that isn't a number: «{}»
+nel file non ci sono pozzetti con un valore	the file has no wells with a value
+
+# MSD Workbench
+manca il foglio «Workbench data»	the «Workbench data» sheet is missing
+nella prima riga non trovo il codice della piastra: deve essere come «Plate_2BO40AW287»	can't find the plate code in the first row: it should look like «Plate_2BO40AW287»
+manca la riga con i nomi delle colonne	the row with the column names is missing
+nella tabella manca la colonna «{}»	the table has no «{}» column
+una riga non ha il campione	a row has no sample
+il campione {} non ha il pozzetto	sample {} has no well
+il pozzetto {} non ha il punto	well {} has no spot
+il pozzetto {} ha un segnale che non è un numero: «{}»	well {} has a signal that isn't a number: «{}»
+nel file non ci sono righe con un segnale	the file has no rows with a signal
+
+# Bio-Rad Bio-Plex Manager
+nel pozzetto {} manca «{}»	well {} is missing «{}»
+nella regione {} del pozzetto {} manca «{}»	region {} of well {} is missing «{}»
+nella regione {} del pozzetto {} il valore di «{}» non è un numero: «{}»	in region {} of well {} the value of «{}» isn't a number: «{}»
+nel pozzetto {} il valore di «{}» non è un numero: «{}»	in well {} the value of «{}» isn't a number: «{}»
+un pozzetto non ha il numero di riga	a well has no row number
+un pozzetto non ha il numero di colonna	a well has no column number
+il tipo di campione «{}» non è fra quelli che Cedro conosce	the sample type «{}» isn't one Cedro knows
+un campione non ha l'etichetta	a sample has no label
+un analita non ha il numero di regione	an analyte has no region number
+l'analita della regione {} non ha il nome	the analyte of region {} has no name
+l'analita {} non ha il codice di lettura	analyte {} has no reading code
+il codice di errore «{}» dell'analita {} non è fra quelli che Cedro conosce	the error code «{}» of analyte {} isn't one Cedro knows
+il file XML non si legge: {}	the XML file can't be read: {}
+nel file mancano gli elementi: {}	the file is missing these elements: {}
+nel file non ci sono pozzetti letti	the file has no wells that were read
+le dimensioni della piastra non dicono quanti pozzetti ha	the plate dimensions don't say how many wells it has
+nel primo pozzetto manca «{}»	the first well is missing «{}»
+il pozzetto {} non ha un campione	well {} has no sample
+la regione {} del pozzetto {} non ha un analita nel campione	region {} of well {} has no analyte in the sample
+
+# Thermo Fisher SkanIt
+Sessione	Session
+Note della sessione	Session notes
+Eseguita con	Run with
+Moduli dello strumento	Instrument modules
+Filtri ottici	Optical filters
+Dotazione	Equipment
+il passo «{}» non ha tabelle di piastra e non è stato letto	the step «{}» has no plate tables and wasn't read
+il passo di calcolo «{}» non ha valori per piastra e non è stato letto	the calculation step «{}» has no plate values and wasn't read
+manca il foglio della lettura: cerco «Absorbance», «Fluorescence» o «Luminescence»	the reading sheet is missing: looking for «Absorbance», «Fluorescence» or «Luminescence»
+manca il foglio della lettura	the reading sheet is missing
+
+# Revvity Kaleido
+Protocollo	Protocol
+Proprietario del protocollo	Protocol owner
+Tipo di misura	Measurement type
+Misura finita	Measurement finished
+Tipo di piastra	Plate type
+la versione di Kaleido «{}» non è fra quelle che Cedro legge: la 2 e la 3	Kaleido version «{}» isn't one Cedro reads: 2 and 3 are
+non trovo la riga «Results for…» con il tipo di misura	I can't find the «Results for…» line with the measurement type
+il tipo di misura «{}» non si riconosce: cerco fluorescenza, assorbanza, luminescenza o immagini	the measurement type «{}» isn't recognised: I look for fluorescence, absorbance, luminescence or images
+non trovo il codice a barre della piastra	I can't find the plate barcode
+il codice a barre della piastra è vuoto	the plate barcode is empty
+non trovo la piastra dei risultati	I can't find the results plate
+non trovo la sezione «{}»	I can't find the «{}» section
+nella sezione «{}» manca «{}»	the «{}» section is missing «{}»
+non trovo la mappa della piastra	I can't find the plate map
+per le immagini non trovo nessun canale nelle impostazioni della lettura	for the images I can't find any channel in the reading settings
+«{}» non è una posizione di scansione valida: serve TOP o BOTTOM	«{}» isn't a valid scan position: it must be TOP or BOTTOM
+nella piastra dei risultati non ci sono pozzetti con un valore	the results plate has no wells with a value
+
+# PerkinElmer EnVision
+Assay	Assay
+Avvio e fine dell'assay	Assay start and end
+Modo di misura	Measurement mode
+Note del protocollo	Protocol notes
+Etichette di misura	Measurement labels
+Specchi	Mirrors
+Diaframmi	Apertures
+Unità dello strumento	Instrument units
+non trovo nessuna piastra: manca «Plate information»	I can't find any plate: «Plate information» is missing
+alla riga {} mi aspettavo «Plate information» (la piastra successiva) o «Basic assay information», c'è «{}»: il titolo «Plate information» manca o il file è incompleto	at line {} I expected «Plate information» (the next plate) or «Basic assay information», but found «{}»: the «Plate information» title is missing or the file is incomplete
+nel file non ci sono letture con pozzetti: ci sono solo piastre di calcolo o vuote	the file has no readings with wells: only calculation plates or empty plates
+il calcolo «{}» della piastra {} non ha le letture da cui viene: non l'ho scritto	the calculation «{}» of plate {} has no readings it comes from: I did not write it
+{} valori del calcolo «{}» non hanno una lettura nello stesso pozzetto e non sono stati scritti	{} values of the calculation «{}» have no reading in the same well and were not written
+l'etichetta «{}» non è descritta nella sezione «Labels»: non ho le sue impostazioni di misura	the label «{}» isn't described in the «Labels» section: I don't have its measurement settings
+la piastra {} ({}) non ha pozzetti con un valore	plate {} ({}) has no wells with a value
+
+# Luminex xPONENT e INTELLIFLEX
+Pannello	Panel
+Tipo di sfere	Bead type
+Inizio della lettura	Read start
+Fine della lettura	Read end
+Guadagno del rivelatore	Detector gain
+Eventi minimi per sfera	Minimum events per bead
+il file non ha la forma di un export di xPONENT o INTELLIFLEX	the file doesn't have the shape of an xPONENT or INTELLIFLEX export
+nel file manca la sezione «Most Recent Calibration and Control Results»	the file is missing the «Most Recent Calibration and Control Results» section
+alla riga delle calibrazioni «{}» mi aspettavo almeno due colonne	on the calibration line «{}» I expected at least two columns
+la calibrazione «{}» ha un risultato che non capisco («{}»): non l'ho scritta	the calibration «{}» has a result I don't understand («{}»): I did not write it
+nel file manca la riga «Samples» con gli eventi minimi	the file is missing the «Samples» line with the minimum events
+nella riga «{}» non trovo gli eventi minimi	I can't find the minimum events in the line «{}»
+nel file manca la sezione «Results»	the file is missing the «Results» section
+alla riga {} mi aspettavo il titolo di una tabella («DataType:»), c'è «{}»	at line {} I expected a table title («DataType:»), but found «{}»
+nel file Excel manca il foglio «Results»	the Excel file is missing the «Results» sheet
+il file è vuoto	the file is empty
+nel file manca la colonna «{}»	the file is missing the «{}» column
+nel file non trovo nessun analita: mi aspettavo colonne come «R25: RP1 COUNT»	I can't find any analyte in the file: I expected columns like «R25: RP1 COUNT»
+nel file mancano le tabelle: {}	the file is missing the tables: {}
+nel file non c'è nessuna tabella di statistiche (Median, Mean, %CV…)	the file has no statistics table (Median, Mean, %CV…)
+nella tabella «Units» manca la riga «BeadID:»	the «Units» table is missing the «BeadID:» row
+nella tabella «Count» manca la colonna «Sample»	the «Count» table is missing the «Sample» column
+nella tabella «Count» manca la colonna «Total Events»	the «Count» table is missing the «Total Events» column
+l'intestazione non dice quanti pozzetti ha la piastra («ProtocolPlate»)	the header doesn't say how many wells the plate has («ProtocolPlate»)
+nell'intestazione manca «BatchStartTime»	the header is missing «BatchStartTime»
+la data «{}» della calibrazione «{}» non la capisco: non l'ho scritta	I don't understand the date «{}» of the calibration «{}»: I did not write it
+il pozzetto «{}» non ha una posizione che capisco (mi aspettavo qualcosa come «1(1,A1)»)	the well «{}» has a position I don't understand (I expected something like «1(1,A1)»)
+nella tabella «Dilution Factor» manca il pozzetto «{}»	the «Dilution Factor» table is missing the well «{}»
+non ho letto queste tabelle del file: {}	I did not read these tables of the file: {}
+
+# Ruoli su pozzetti che non ci sono e cartelle al posto dei file
+è una cartella, non il file di uno strumento	it's a folder, not an instrument file
+Ruolo senza pozzetto.	Role without a well.
+Il pozzetto {} non c'è nella piastra: il ruolo segnato è stato ignorato.	Well {} is not on the plate: the role you set was ignored.
+I pozzetti {} non ci sono nella piastra: i ruoli segnati sono stati ignorati.	Wells {} are not on the plate: the roles you set were ignored.
+
+# Ruoli e valori «meno il bianco» della finestra dei dati degli strumenti
+Valori	Values
+Grezzi	Raw
+Meno il bianco	Minus blank
+bianco	blank
+controllo	control
+riferimento	reference
+meno il bianco (calcolato da Cedro)	minus blank (calculated by Cedro)
+
+# Lettura strumenti: seconda prova sulla finestra
+meno il bianco	minus blank
+1 standard	1 standard
+Anteprima non disponibile: il file sembra danneggiato o incompleto.	Preview not available: the file seems damaged or incomplete.
+Fatto con altre scelte: «Converti» lo rifà con quelle di adesso.	Done with other choices: «Convert» redoes it with the current ones.
 Accettato	Accepted
 Acquisito	Acquired
 Elaborato	Processed
@@ -3067,7 +3444,6 @@ PDF, Word	PDF, Word
 Word/Office	Word/Office
 Archivio	Archive
 Genere	Kind
-Descrizione	Description
 Storia	History
 Dati	Data
 Dati che identificano	Identifying data
@@ -3147,3 +3523,5 @@ Spazio	Space
 Canc	Del
 Torna all'elenco	Back to the list
 Nuovo caso…	New case…
+PDF	PDF
+TXT	TXT

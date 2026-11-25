@@ -30,6 +30,8 @@ pub struct Loaded {
     pub about: Option<super::preview::About>,
     /// Cosa il file dice di chi è (Cedro 4 Labs, colonna «Dati personali»).
     pub dati: Option<super::datipers::Dati>,
+    /// L'export di uno strumento di laboratorio (lettore di piastre, qPCR, spettrofotometro…), già letto.
+    pub strumento: Option<Arc<crate::strumenti::Lettura>>,
 }
 
 /// Quello che il pannello mostra di un vetrino: la riga della coda e le misure dei livelli.
@@ -120,6 +122,8 @@ enum Job {
     Preview(PathBuf, usize),
     /// Le miniature di alcune pagine di un PDF, lette con una sola apertura del file.
     Thumbs(PathBuf, Vec<usize>),
+    /// Un export di strumento riletto con un profilo scelto a mano.
+    Strumento(PathBuf, String),
 }
 
 struct Queue {
@@ -211,7 +215,8 @@ fn pdf_page(path: &Path, page: usize, side: f32) -> Option<Image> {
 
 fn info(path: &Path) -> Loaded {
     let mut out = Loaded { bytes: std::fs::metadata(path).map(|m| m.len()).unwrap_or(0), ..Default::default() };
-    match engine::kind_of(path) {
+    let kind = engine::kind_of(path);
+    match kind {
         Kind::Image => {
             if let Some((thumb, size)) = image_thumb(path, THUMB) {
                 out.thumb = Some(thumb);
@@ -247,6 +252,9 @@ fn info(path: &Path) -> Loaded {
         Kind::Text | Kind::Doc => {
             out.pages = super::preview::page_count(path);
             out.dati = super::datipers::file_letto(path, Kind::Doc);
+            if kind == Kind::Text {
+                out.strumento = super::strumenti::leggi(path, out.bytes);
+            }
         }
         Kind::Audio => {
             out.about = Some(super::preview::about_audio(path, out.bytes));
@@ -257,7 +265,13 @@ fn info(path: &Path) -> Loaded {
             out.thumb = about.frames.first().cloned();
             out.about = Some(about);
         }
-        Kind::Other | Kind::Archive => out.about = Some(super::preview::about_other(path)),
+        Kind::Other | Kind::Archive => {
+            out.about = Some(super::preview::about_other(path));
+            // Lo ZIP di un export (QuantStudio Absolute Q) è un file di strumento.
+            if engine::extension(path) == "zip" {
+                out.strumento = super::strumenti::leggi(path, out.bytes);
+            }
+        }
     }
     out
 }
@@ -301,6 +315,10 @@ impl Loader {
                     });
                     tx.send(Event::Preview(path, page, img))
                 }
+                Some(Job::Strumento(path, profilo)) => {
+                    let ev = std::panic::catch_unwind(|| super::strumenti::rileggi_evento(&path, &profilo)).unwrap_or_else(|p| Event::Strumento(path.clone(), profilo.clone(), Err(super::model::panic_text(&*p))));
+                    tx.send(ev)
+                }
                 Some(Job::Thumbs(path, pages)) => {
                     let mut ok = Ok(());
                     let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -328,6 +346,13 @@ impl Loader {
     pub fn request(&self, path: &Path) {
         let (lock, cv) = &*self.queue;
         lock.lock().unwrap_or_else(|e| e.into_inner()).jobs.push_back(Job::Info(path.to_path_buf()));
+        cv.notify_one();
+    }
+
+    /// Rilegge un export di strumento con il profilo scelto.
+    pub fn strumento(&self, path: &Path, profilo: &str) {
+        let (lock, cv) = &*self.queue;
+        lock.lock().unwrap_or_else(|e| e.into_inner()).jobs.push_front(Job::Strumento(path.to_path_buf(), profilo.to_string()));
         cv.notify_one();
     }
 

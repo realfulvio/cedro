@@ -27,6 +27,7 @@ pub mod datipers;
 pub mod labsx;
 pub mod screen;
 pub mod sezioni;
+pub mod strumenti;
 pub mod views;
 pub mod voci;
 pub mod wheel;

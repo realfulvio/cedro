@@ -172,7 +172,7 @@ fn main() {
                 if passo == 3 {
                     let when = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
                     for (i, (w, outs)) in [("Salva immagini e vetrini", vec!["2026-11-13_V-2026-0457_vetrino.png", "2026-11-13_V-2026-0457_vetrino_2.png"]), ("Togli i nomi", vec!["2026-11-13_V-2026-0457_referto.pdf"])].into_iter().enumerate() {
-                        cedro::caso::registra(&mut s.app.lavori, cedro::caso::Lavoro { when: when - 600 * i as u64, what: w.into(), caso: "V-2026-0457".into(), outputs: outs.into_iter().map(String::from).collect(), dir: String::new() });
+                        cedro::caso::registra(&mut s.app.lavori, cedro::caso::Lavoro { when: when - 600 * i as u64, what: w.into(), caso: "V-2026-0457".into(), outputs: outs.into_iter().map(String::from).collect(), strumento: String::new(), origini: Vec::new(), dir: String::new() });
                     }
                     s.app.lavori_aperti = true;
                 }

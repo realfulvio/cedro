@@ -640,6 +640,15 @@ fn larghezze<'a>(ws: &mut rust_xlsxwriter::Worksheet, rows: impl Iterator<Item =
 
 /// I fogli di un .xlsx/.xlsm o di un .ods.
 pub fn leggi(ext: &str, bytes: &[u8]) -> Result<Vec<Foglio>, String> {
+    // Il contenuto conta più dell'estensione: l'export automatico di alcuni strumenti si chiama «.xls»
+    // ma dentro è un .xlsx (e il contrario).
+    let e_zip = bytes.starts_with(b"PK\x03\x04");
+    let e_xls = bytes.starts_with(&[0xD0, 0xCF, 0x11, 0xE0]);
+    let ext = match ext {
+        "xls" if e_zip => "xlsx",
+        "xlsx" | "xlsm" if e_xls => "xls",
+        e => e,
+    };
     if ext == "xls" {
         let mut fogli = crate::ufficio::xls::tabella(bytes)?;
         for f in &mut fogli {
