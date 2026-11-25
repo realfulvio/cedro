@@ -3243,3 +3243,24 @@ il campione {} non ha il pozzetto	a amostra {} não tem poço
 il pozzetto {} non ha il punto	o poço {} não tem ponto
 il pozzetto {} ha un segnale che non è un numero: «{}»	o poço {} tem um sinal que não é um número: «{}»
 nel file non ci sono righe con un segnale	o ficheiro não tem linhas com sinal
+
+# Bio-Rad Bio-Plex Manager
+nel pozzetto {} manca «{}»	no poço {} falta «{}»
+nella regione {} del pozzetto {} manca «{}»	na região {} do poço {} falta «{}»
+nella regione {} del pozzetto {} il valore di «{}» non è un numero: «{}»	na região {} do poço {} o valor de «{}» não é um número: «{}»
+nel pozzetto {} il valore di «{}» non è un numero: «{}»	no poço {} o valor de «{}» não é um número: «{}»
+un pozzetto non ha il numero di riga	um poço não tem número de linha
+un pozzetto non ha il numero di colonna	um poço não tem número de coluna
+il tipo di campione «{}» non è fra quelli che Cedro conosce	o tipo de amostra «{}» não é dos que o Cedro conhece
+un campione non ha l'etichetta	uma amostra não tem etiqueta
+un analita non ha il numero di regione	um analito não tem número de região
+l'analita della regione {} non ha il nome	o analito da região {} não tem nome
+l'analita {} non ha il codice di lettura	o analito {} não tem código de leitura
+il codice di errore «{}» dell'analita {} non è fra quelli che Cedro conosce	o código de erro «{}» do analito {} não é dos que o Cedro conhece
+il file XML non si legge: {}	o ficheiro XML não se consegue ler: {}
+nel file mancano gli elementi: {}	no ficheiro faltam estes elementos: {}
+nel file non ci sono pozzetti letti	o ficheiro não tem poços lidos
+le dimensioni della piastra non dicono quanti pozzetti ha	as dimensões da placa não dizem quantos poços tem
+nel primo pozzetto manca «{}»	no primeiro poço falta «{}»
+il pozzetto {} non ha un campione	o poço {} não tem amostra
+la regione {} del pozzetto {} non ha un analita nel campione	a região {} do poço {} não tem analito na amostra

@@ -155,6 +155,35 @@ fn altro(o: &mut Map<String, Value>, vals: &[&Valore]) {
     o.insert("custom information document".into(), Value::Object(c));
 }
 
+/// Un analita di un multiplex: nome, sfera, conteggio e statistiche (un valore che manca è -0).
+fn analita(a: &super::Analita) -> Value {
+    let mut o = Map::new();
+    o.insert("analyte identifier".into(), json!(a.id));
+    o.insert("analyte name".into(), json!(a.nome));
+    if let Some(s) = &a.sfera {
+        o.insert("assay bead identifier".into(), json!(s));
+    }
+    if let Some(n) = a.conteggio {
+        o.insert("assay bead count".into(), qv(n, "#"));
+    }
+    if !a.statistiche.is_empty() {
+        let dimensioni: Vec<Value> = a
+            .statistiche
+            .iter()
+            .map(|s| {
+                let v = if s.valore.is_finite() { s.valore } else { -0.0 };
+                json!({"statistical value": {"value": num(v), "unit": unita(&s.unita), "has statistic datum role": format!("{} role", s.ruolo)}})
+            })
+            .collect();
+        o.insert(
+            "statistics aggregate document".into(),
+            json!({"statistics document": [{"statistical feature": "fluorescence", "statistic dimension aggregate document": {"statistic dimension document": dimensioni}}]}),
+        );
+    }
+    altro(&mut o, &a.altro.iter().collect::<Vec<_>>());
+    Value::Object(o)
+}
+
 fn errori_doc(o: &mut Map<String, Value>, errori: &[(String, String)]) {
     if errori.is_empty() {
         return;
@@ -178,7 +207,7 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
     let mut d = Map::new();
     let mut errori: Vec<(String, String)> = m.note.iter().map(|(e, f)| (e.clone(), f.clone())).collect();
     d.insert("measurement identifier".into(), json!(m.id));
-    if !matches!(t, Tecnica::LettorePiastre | Tecnica::Spettrofotometria | Tecnica::Multiplex) {
+    if !matches!(t, Tecnica::LettorePiastre | Tecnica::Spettrofotometria) {
         let quando = m.quando.clone().unwrap_or_else(|| "1970-01-01T00:00:00+00:00".into());
         d.insert("measurement time".into(), json!(quando));
     }
@@ -241,6 +270,11 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
     }
     for v in m.valori.iter().filter(|v| v.posto == Posto::Misura) {
         metti(&mut d, v, &mut errori);
+    }
+    // Gli analiti dei multiplex: per ognuno le statistiche della fluorescenza.
+    if !m.analiti.is_empty() {
+        let analiti: Vec<Value> = m.analiti.iter().map(analita).collect();
+        d.insert("analyte aggregate document".into(), json!({ "analyte document": analiti }));
     }
     // I dati elaborati dallo strumento.
     let elab: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::Elaborato).collect();
@@ -360,6 +394,9 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
     if !s.produttore.is_empty() {
         dv.insert("product manufacturer".into(), json!(s.produttore));
     }
+    if !s.firmware.is_empty() {
+        dv.insert("firmware version".into(), json!(s.firmware));
+    }
     for (k, v) in [("asset management identifier", &s.inventario), ("description", &s.descrizione), ("brand name", &s.marchio)] {
         if !v.is_empty() {
             dv.insert(k.into(), json!(v));
@@ -370,7 +407,7 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
 
     let mut docs = Vec::new();
     // Dove lo schema vuole l'ora della misura: nel documento di insieme (una per ora diversa) o in ogni misura.
-    let ora_di_insieme = matches!(t, Tecnica::LettorePiastre | Tecnica::Spettrofotometria | Tecnica::Multiplex);
+    let ora_di_insieme = matches!(t, Tecnica::LettorePiastre | Tecnica::Spettrofotometria);
     for (gi, g) in l.gruppi.iter().enumerate() {
         let mut parti: Vec<(Option<String>, Vec<&Misura>)> = Vec::new();
         if ora_di_insieme {

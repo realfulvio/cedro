@@ -3255,3 +3255,24 @@ il campione {} non ha il pozzetto	sample {} has no well
 il pozzetto {} non ha il punto	well {} has no spot
 il pozzetto {} ha un segnale che non è un numero: «{}»	well {} has a signal that isn't a number: «{}»
 nel file non ci sono righe con un segnale	the file has no rows with a signal
+
+# Bio-Rad Bio-Plex Manager
+nel pozzetto {} manca «{}»	well {} is missing «{}»
+nella regione {} del pozzetto {} manca «{}»	region {} of well {} is missing «{}»
+nella regione {} del pozzetto {} il valore di «{}» non è un numero: «{}»	in region {} of well {} the value of «{}» isn't a number: «{}»
+nel pozzetto {} il valore di «{}» non è un numero: «{}»	in well {} the value of «{}» isn't a number: «{}»
+un pozzetto non ha il numero di riga	a well has no row number
+un pozzetto non ha il numero di colonna	a well has no column number
+il tipo di campione «{}» non è fra quelli che Cedro conosce	the sample type «{}» isn't one Cedro knows
+un campione non ha l'etichetta	a sample has no label
+un analita non ha il numero di regione	an analyte has no region number
+l'analita della regione {} non ha il nome	the analyte of region {} has no name
+l'analita {} non ha il codice di lettura	analyte {} has no reading code
+il codice di errore «{}» dell'analita {} non è fra quelli che Cedro conosce	the error code «{}» of analyte {} isn't one Cedro knows
+il file XML non si legge: {}	the XML file can't be read: {}
+nel file mancano gli elementi: {}	the file is missing these elements: {}
+nel file non ci sono pozzetti letti	the file has no wells that were read
+le dimensioni della piastra non dicono quanti pozzetti ha	the plate dimensions don't say how many wells it has
+nel primo pozzetto manca «{}»	the first well is missing «{}»
+il pozzetto {} non ha un campione	well {} has no sample
+la regione {} del pozzetto {} non ha un analita nel campione	region {} of well {} has no analyte in the sample

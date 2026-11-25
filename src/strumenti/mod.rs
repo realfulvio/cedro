@@ -253,6 +253,33 @@ pub struct Misura {
     pub picchi: Vec<Vec<Valore>>,
     /// I cubi di dati della misura (la fluorescenza di ogni partizione della PCR digitale): per Allotrope.
     pub cubi: Vec<Cubo>,
+    /// Gli analiti della misura (multiplex a sfere: Bio-Plex, xPONENT, IntelliFlex): il pozzetto è letto una
+    /// volta e dà una riga di statistiche per ogni analita.
+    pub analiti: Vec<Analita>,
+}
+
+/// Un analita di un pozzetto multiplex: la sfera, quante ne ha contate lo strumento e le statistiche della fluorescenza.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Analita {
+    /// L'identificativo per Allotrope (anche fonte dei calcoli dello strumento).
+    pub id: String,
+    pub nome: String,
+    /// L'identificativo della sfera (la regione, il codice della microsfera).
+    pub sfera: Option<String>,
+    pub conteggio: Option<f64>,
+    pub statistiche: Vec<Statistica>,
+    /// Le altre informazioni dello strumento sull'analita (commenti, concentrazione attesa…).
+    pub altro: Vec<Valore>,
+}
+
+/// Una statistica della fluorescenza di un analita.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Statistica {
+    /// Il ruolo come lo scrive Allotrope senza «role»: «median», «arithmetic mean», «coefficient of variation».
+    pub ruolo: String,
+    /// Non un numero quando lo strumento non lo ha dato: in Allotrope è -0 con l'errore.
+    pub valore: f64,
+    pub unita: String,
 }
 
 /// Un cubo di dati di una misura: una grandezza in funzione di una dimensione (l'indice della partizione).
@@ -328,6 +355,8 @@ pub struct Strumento {
     pub inventario: String,
     pub descrizione: String,
     pub marchio: String,
+    /// La versione del firmware dello strumento.
+    pub firmware: String,
 }
 
 /// Il file letto.

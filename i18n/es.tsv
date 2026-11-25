@@ -3241,3 +3241,24 @@ il campione {} non ha il pozzetto	la muestra {} no tiene pocillo
 il pozzetto {} non ha il punto	el pocillo {} no tiene punto
 il pozzetto {} ha un segnale che non è un numero: «{}»	el pocillo {} tiene una señal que no es un número: «{}»
 nel file non ci sono righe con un segnale	el archivo no tiene filas con señal
+
+# Bio-Rad Bio-Plex Manager
+nel pozzetto {} manca «{}»	en el pocillo {} falta «{}»
+nella regione {} del pozzetto {} manca «{}»	en la región {} del pocillo {} falta «{}»
+nella regione {} del pozzetto {} il valore di «{}» non è un numero: «{}»	en la región {} del pocillo {} el valor de «{}» no es un número: «{}»
+nel pozzetto {} il valore di «{}» non è un numero: «{}»	en el pocillo {} el valor de «{}» no es un número: «{}»
+un pozzetto non ha il numero di riga	un pocillo no tiene número de fila
+un pozzetto non ha il numero di colonna	un pocillo no tiene número de columna
+il tipo di campione «{}» non è fra quelli che Cedro conosce	el tipo de muestra «{}» no es de los que Cedro conoce
+un campione non ha l'etichetta	una muestra no tiene etiqueta
+un analita non ha il numero di regione	un analito no tiene número de región
+l'analita della regione {} non ha il nome	el analito de la región {} no tiene nombre
+l'analita {} non ha il codice di lettura	el analito {} no tiene código de lectura
+il codice di errore «{}» dell'analita {} non è fra quelli che Cedro conosce	el código de error «{}» del analito {} no es de los que Cedro conoce
+il file XML non si legge: {}	el archivo XML no se puede leer: {}
+nel file mancano gli elementi: {}	en el archivo faltan estos elementos: {}
+nel file non ci sono pozzetti letti	el archivo no tiene pocillos leídos
+le dimensioni della piastra non dicono quanti pozzetti ha	las dimensiones de la placa no dicen cuántos pocillos tiene
+nel primo pozzetto manca «{}»	en el primer pocillo falta «{}»
+il pozzetto {} non ha un campione	el pocillo {} no tiene muestra
+la regione {} del pozzetto {} non ha un analita nel campione	la región {} del pocillo {} no tiene analito en la muestra

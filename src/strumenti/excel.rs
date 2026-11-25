@@ -87,8 +87,104 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Result<Vec<u8>, String> {
     if l.misure().any(|m| !m.picchi.is_empty()) {
         picchi(&mut book, l, &titoli).map_err(err)?;
     }
+    if l.misure().any(|m| !m.analiti.is_empty()) {
+        analiti(&mut book, l, &titoli).map_err(err)?;
+    }
     strumento(&mut book, l, &titoli).map_err(err)?;
     book.save_to_buffer().map_err(err)
+}
+
+/// Gli analiti dei multiplex: una riga per analita di ogni pozzetto, con il conteggio e le statistiche.
+fn analiti(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), XlsxError> {
+    let ws = book.add_worksheet();
+    ws.set_name("Analiti")?;
+    let piastra = l.a_piastra();
+    let molti = l.gruppi.len() > 1;
+    let mut statistiche: Vec<(String, String)> = Vec::new();
+    let mut altre: Vec<String> = Vec::new();
+    for m in l.misure() {
+        for a in &m.analiti {
+            for s in &a.statistiche {
+                if !statistiche.iter().any(|(k, _)| *k == s.ruolo) {
+                    statistiche.push((s.ruolo.clone(), s.unita.clone()));
+                }
+            }
+            for v in &a.altro {
+                if !altre.contains(&v.chiave) {
+                    altre.push(v.chiave.clone());
+                }
+            }
+        }
+    }
+    let mut intest: Vec<String> = Vec::new();
+    if molti {
+        intest.push("Gruppo".into());
+    }
+    if piastra {
+        intest.push("Pozzetto".into());
+    }
+    intest.extend(["Campione".to_string(), "Analita".to_string(), "Sfera".to_string(), "Sfere contate".to_string()]);
+    intest.extend(statistiche.iter().map(|(k, u)| intestazione_valore(k, u)));
+    intest.extend(altre.iter().cloned());
+    for (c, x) in intest.iter().enumerate() {
+        ws.write_string_with_format(0, c as u16, x, titoli)?;
+    }
+    let mut r = 1u32;
+    for g in &l.gruppi {
+        for m in &g.misure {
+            for a in &m.analiti {
+                let mut c = 0u16;
+                if molti {
+                    ws.write_string(r, c, &g.titolo)?;
+                    c += 1;
+                }
+                if piastra {
+                    ws.write_string(r, c, m.pozzetto.as_deref().unwrap_or(""))?;
+                    c += 1;
+                }
+                ws.write_string(r, c, &m.campione)?;
+                ws.write_string(r, c + 1, &a.nome)?;
+                if let Some(s) = &a.sfera {
+                    match s.parse::<f64>() {
+                        Ok(n) => ws.write_number(r, c + 2, n)?,
+                        Err(_) => ws.write_string(r, c + 2, s)?,
+                    };
+                }
+                if let Some(n) = a.conteggio {
+                    ws.write_number(r, c + 3, n)?;
+                }
+                c += 4;
+                for (i, (k, _)) in statistiche.iter().enumerate() {
+                    if let Some(s) = a.statistiche.iter().find(|s| s.ruolo == *k).filter(|s| s.valore.is_finite()) {
+                        ws.write_number(r, c + i as u16, s.valore)?;
+                    }
+                }
+                c += statistiche.len() as u16;
+                for (i, k) in altre.iter().enumerate() {
+                    if let Some(v) = a.altro.iter().find(|v| v.chiave == *k) {
+                        match dato_cella(&v.dato) {
+                            Some(Cella::Numero(x)) => ws.write_number(r, c + i as u16, x)?,
+                            // Le statistiche in più dello strumento arrivano come testo («5.36E+001»): in Excel sono numeri.
+                            Some(Cella::Testo(t)) => match super::fonte::numero(&t) {
+                                Some(x) => ws.write_number(r, c + i as u16, x)?,
+                                None => ws.write_string(r, c + i as u16, &t)?,
+                            },
+                            None => &mut *ws,
+                        };
+                    }
+                }
+                r += 1;
+            }
+        }
+    }
+    ws.set_freeze_panes(1, 0)?;
+    if r > 1 {
+        ws.autofilter(0, 0, r - 1, (intest.len() - 1) as u16)?;
+    }
+    for c in 0..intest.len() as u16 {
+        ws.set_column_width(c, 18.0)?;
+    }
+    Ok(())
 }
 
 /// I picchi che lo strumento ha trovato (diffusione dinamica della luce): una riga per picco di ogni misura.
@@ -667,7 +763,7 @@ pub fn righe_strumento(l: &Lettura) -> Vec<(String, String)> {
         ("Strumento letto come".into(), format!("{} ({})", l.nome, l.tecnica.nome())),
     ];
     let s = &l.strumento;
-    for (k, v) in [("Produttore", &s.produttore), ("Modello", &s.modello), ("Identificativo", &s.identificativo), ("Numero di serie", &s.seriale), ("Programma", &s.software), ("Versione del programma", &s.versione), ("Sistema dati", &s.istanza), ("Inventario", &s.inventario), ("Descrizione", &s.descrizione), ("Marchio", &s.marchio)] {
+    for (k, v) in [("Produttore", &s.produttore), ("Modello", &s.modello), ("Identificativo", &s.identificativo), ("Numero di serie", &s.seriale), ("Programma", &s.software), ("Versione del programma", &s.versione), ("Sistema dati", &s.istanza), ("Inventario", &s.inventario), ("Descrizione", &s.descrizione), ("Marchio", &s.marchio), ("Firmware", &s.firmware)] {
         if !v.is_empty() {
             righe.push((k.into(), v.clone()));
         }

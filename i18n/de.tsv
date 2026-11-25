@@ -3244,3 +3244,24 @@ il campione {} non ha il pozzetto	die Probe {} hat kein Well
 il pozzetto {} non ha il punto	Well {} hat keinen Spot
 il pozzetto {} ha un segnale che non è un numero: «{}»	Well {} hat ein Signal, das keine Zahl ist: «{}»
 nel file non ci sono righe con un segnale	die Datei enthält keine Zeilen mit einem Signal
+
+# Bio-Rad Bio-Plex Manager
+nel pozzetto {} manca «{}»	bei Well {} fehlt «{}»
+nella regione {} del pozzetto {} manca «{}»	in Region {} von Well {} fehlt «{}»
+nella regione {} del pozzetto {} il valore di «{}» non è un numero: «{}»	in Region {} von Well {} ist der Wert von «{}» keine Zahl: «{}»
+nel pozzetto {} il valore di «{}» non è un numero: «{}»	bei Well {} ist der Wert von «{}» keine Zahl: «{}»
+un pozzetto non ha il numero di riga	ein Well hat keine Zeilennummer
+un pozzetto non ha il numero di colonna	ein Well hat keine Spaltennummer
+il tipo di campione «{}» non è fra quelli che Cedro conosce	der Probentyp «{}» ist Cedro nicht bekannt
+un campione non ha l'etichetta	eine Probe hat keine Bezeichnung
+un analita non ha il numero di regione	ein Analyt hat keine Regionsnummer
+l'analita della regione {} non ha il nome	der Analyt der Region {} hat keinen Namen
+l'analita {} non ha il codice di lettura	der Analyt {} hat keinen Lesecode
+il codice di errore «{}» dell'analita {} non è fra quelli che Cedro conosce	der Fehlercode «{}» des Analyten {} ist Cedro nicht bekannt
+il file XML non si legge: {}	die XML-Datei lässt sich nicht lesen: {}
+nel file mancano gli elementi: {}	in der Datei fehlen diese Elemente: {}
+nel file non ci sono pozzetti letti	die Datei enthält keine gelesenen Wells
+le dimensioni della piastra non dicono quanti pozzetti ha	die Plattenabmessungen sagen nicht, wie viele Wells sie hat
+nel primo pozzetto manca «{}»	beim ersten Well fehlt «{}»
+il pozzetto {} non ha un campione	Well {} hat keine Probe
+la regione {} del pozzetto {} non ha un analita nel campione	Region {} von Well {} hat keinen Analyten in der Probe

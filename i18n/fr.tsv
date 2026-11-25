@@ -3243,3 +3243,24 @@ il campione {} non ha il pozzetto	l'échantillon {} n'a pas de puits
 il pozzetto {} non ha il punto	le puits {} n'a pas de spot
 il pozzetto {} ha un segnale che non è un numero: «{}»	le puits {} a un signal qui n'est pas un nombre : «{}»
 nel file non ci sono righe con un segnale	le fichier ne contient aucune ligne avec un signal
+
+# Bio-Rad Bio-Plex Manager
+nel pozzetto {} manca «{}»	dans le puits {}, «{}» manque
+nella regione {} del pozzetto {} manca «{}»	dans la région {} du puits {}, «{}» manque
+nella regione {} del pozzetto {} il valore di «{}» non è un numero: «{}»	dans la région {} du puits {}, la valeur de «{}» n'est pas un nombre : «{}»
+nel pozzetto {} il valore di «{}» non è un numero: «{}»	dans le puits {}, la valeur de «{}» n'est pas un nombre : «{}»
+un pozzetto non ha il numero di riga	un puits n'a pas de numéro de ligne
+un pozzetto non ha il numero di colonna	un puits n'a pas de numéro de colonne
+il tipo di campione «{}» non è fra quelli che Cedro conosce	le type d'échantillon «{}» n'est pas connu de Cedro
+un campione non ha l'etichetta	un échantillon n'a pas d'étiquette
+un analita non ha il numero di regione	un analyte n'a pas de numéro de région
+l'analita della regione {} non ha il nome	l'analyte de la région {} n'a pas de nom
+l'analita {} non ha il codice di lettura	l'analyte {} n'a pas de code de lecture
+il codice di errore «{}» dell'analita {} non è fra quelli che Cedro conosce	le code d'erreur «{}» de l'analyte {} n'est pas connu de Cedro
+il file XML non si legge: {}	le fichier XML est illisible : {}
+nel file mancano gli elementi: {}	il manque ces éléments dans le fichier : {}
+nel file non ci sono pozzetti letti	le fichier ne contient aucun puits lu
+le dimensioni della piastra non dicono quanti pozzetti ha	les dimensions de la plaque n'indiquent pas son nombre de puits
+nel primo pozzetto manca «{}»	dans le premier puits, «{}» manque
+il pozzetto {} non ha un campione	le puits {} n'a pas d'échantillon
+la regione {} del pozzetto {} non ha un analita nel campione	la région {} du puits {} n'a pas d'analyte dans l'échantillon
