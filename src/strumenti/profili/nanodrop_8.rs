@@ -72,7 +72,7 @@ fn calcolati(t: &Tabella, r: &[String], misure: &[(f64, String)], l: &mut Lettur
         let (na, nb) = (a as u32, b as u32);
         let v = t.num(r, &[&format!("{na}/{nb}"), &format!("a{na}/a{nb}")]);
         if let Some(v) = v.filter(|v| *v != 0.0) {
-            l.calcolati.push(Calcolato { nome: format!("A{na}/{nb}"), valore: v, unita: String::new(), sorgenti: [a, b].into_iter().filter_map(sorgente).collect(), da: "absorbance".into(), descrizione: String::new() });
+            l.calcolati.push(Calcolato { nome: format!("A{na}/{nb}"), valore: v, unita: String::new(), sorgenti: [a, b].into_iter().filter_map(sorgente).collect(), da: "absorbance".into(), descrizione: String::new(), da_calcoli: Vec::new() });
         }
     }
     for i in 1..=t.testa.len() {
@@ -80,7 +80,7 @@ fn calcolati(t: &Tabella, r: &[String], misure: &[(f64, String)], l: &mut Lettur
         let nome = t.cella(r, &[&format!("formula name {i}")]).map(str::to_string).unwrap_or_else(|| format!("Formula {i}"));
         let formula = t.cella(r, &[&format!("formula {i}")]).unwrap_or_default().to_string();
         let sorgenti: Vec<String> = misure.iter().filter(|(w, _)| formula.contains(&format!("{w}"))).map(|(_, id)| id.clone()).collect();
-        l.calcolati.push(Calcolato { nome, valore: v, unita: String::new(), sorgenti, da: "absorbance".into(), descrizione: String::new() });
+        l.calcolati.push(Calcolato { nome, valore: v, unita: String::new(), sorgenti, da: "absorbance".into(), descrizione: String::new(), da_calcoli: Vec::new() });
     }
 }
 

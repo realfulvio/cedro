@@ -9,6 +9,7 @@
 //! Allotrope, e si provano sui suoi file d'esempio pubblici: vedi `tests/strumenti.rs`.
 
 pub mod asm;
+mod calcdocs;
 pub mod excel;
 pub mod fonte;
 mod profili;
@@ -286,6 +287,8 @@ pub struct Calcolato {
     pub da: String,
     /// Come l'ha calcolato lo strumento, se lo dice (la formula della colonna: «Average(OD)»).
     pub descrizione: String,
+    /// Altri calcoli da cui viene (indici in `Lettura::calcolati`): la media del Ct da cui viene il Δ-Ct.
+    pub da_calcoli: Vec<usize>,
 }
 
 /// Lo strumento e il programma che hanno scritto il file.

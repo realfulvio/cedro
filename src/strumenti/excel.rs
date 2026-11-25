@@ -533,6 +533,18 @@ fn curve(book: &mut Workbook, l: &Lettura, titoli: &Format, cinetica: bool) -> R
 }
 
 /// I valori che lo strumento ha calcolato: una riga per valore, con il pozzetto e le misure da cui viene.
+
+/// La prima misura da cui viene un calcolo, anche passando dai calcoli da cui dipende.
+fn prima_misura<'a>(l: &Lettura, c: &super::Calcolato, di_misura: &HashMap<&str, (&'a str, &'a super::Misura)>, livello: usize) -> Option<(&'a str, &'a super::Misura)> {
+    if let Some(x) = c.sorgenti.first().and_then(|s| di_misura.get(s.as_str())) {
+        return Some(*x);
+    }
+    if livello > 12 {
+        return None;
+    }
+    c.da_calcoli.iter().filter_map(|&a| l.calcolati.get(a)).find_map(|x| prima_misura(l, x, di_misura, livello + 1))
+}
+
 fn calcolati(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), XlsxError> {
     let ws = book.add_worksheet();
     ws.set_name("Calcolati")?;
@@ -553,7 +565,7 @@ fn calcolati(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xl
     }
     for (i, c) in l.calcolati.iter().enumerate() {
         let r = i as u32 + 1;
-        let prima = c.sorgenti.first().and_then(|s| di_misura.get(s.as_str()));
+        let prima = prima_misura(l, c, &di_misura, 0);
         let mut col = 0u16;
         if piastra {
             ws.write_string(r, col, prima.and_then(|(_, m)| m.pozzetto.as_deref()).unwrap_or(""))?;
@@ -562,7 +574,10 @@ fn calcolati(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xl
         ws.write_string(r, col, prima.map(|(_, m)| m.campione.as_str()).unwrap_or(""))?;
         ws.write_string(r, col + 1, &c.nome)?;
         ws.write_number(r, col + 2, c.valore)?;
-        let origine: Vec<String> = c.sorgenti.iter().filter_map(|s| di_misura.get(s.as_str())).map(|(g, m)| if g.is_empty() { m.id.clone() } else { format!("{g}") }).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
+        let mut origine: Vec<String> = c.sorgenti.iter().filter_map(|s| di_misura.get(s.as_str())).map(|(g, m)| if g.is_empty() { m.id.clone() } else { format!("{g}") }).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
+        // I calcoli da cui viene, per nome.
+        let altri: std::collections::BTreeSet<&str> = c.da_calcoli.iter().filter_map(|&a| l.calcolati.get(a)).map(|x| x.nome.as_str()).collect();
+        origine.extend(altri.into_iter().map(str::to_string));
         ws.write_string(r, col + 3, &origine.join(", "))?;
         if con_formula {
             ws.write_string(r, col + 4, &c.descrizione)?;

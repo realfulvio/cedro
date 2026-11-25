@@ -1112,7 +1112,7 @@ fn leggi(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
             if s.is_empty() {
                 continue;
             }
-            l.calcolati.push(Calcolato { nome: "Reduced".into(), valore: *v, unita: String::new(), sorgenti: s, da: p.testa.lettura.to_lowercase(), descrizione: String::new() });
+            l.calcolati.push(Calcolato { nome: "Reduced".into(), valore: *v, unita: String::new(), sorgenti: s, da: p.testa.lettura.to_lowercase(), descrizione: String::new(), da_calcoli: Vec::new() });
         }
     }
     for g in &gruppi {
@@ -1124,7 +1124,7 @@ fn leggi(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
                 src.extend(sorgenti(pi, pos));
             }
             for (nome, v) in &e.voci {
-                l.calcolati.push(Calcolato { nome: nome.clone(), valore: *v, unita: String::new(), sorgenti: src.clone(), da: piastre[pi].testa.lettura.to_lowercase(), descrizione: g.formule.get(nome).cloned().unwrap_or_default() });
+                l.calcolati.push(Calcolato { nome: nome.clone(), valore: *v, unita: String::new(), sorgenti: src.clone(), da: piastre[pi].testa.lettura.to_lowercase(), descrizione: g.formule.get(nome).cloned().unwrap_or_default(), da_calcoli: Vec::new() });
             }
         }
         if !g.riassunti.is_empty() {
@@ -1145,7 +1145,7 @@ fn leggi(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
                 }
             }
             for (nome, v, formula) in &g.riassunti {
-                l.calcolati.push(Calcolato { nome: nome.clone(), valore: *v, unita: String::new(), sorgenti: src.clone(), da: da.clone(), descrizione: formula.clone() });
+                l.calcolati.push(Calcolato { nome: nome.clone(), valore: *v, unita: String::new(), sorgenti: src.clone(), da: da.clone(), descrizione: formula.clone(), da_calcoli: Vec::new() });
             }
         }
     }

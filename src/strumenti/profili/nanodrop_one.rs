@@ -104,7 +104,7 @@ fn leggi(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
         for (col, nome_rapporto) in &rapporti {
             let Some(v) = numero(&cella(r, *col)) else { continue };
             let sorgenti: Vec<String> = nome_rapporto.split('/').filter_map(lunghezza_onda).filter_map(|w| ids.iter().find(|(x, _)| *x == w).map(|(_, id)| id.clone())).collect();
-            l.calcolati.push(Calcolato { nome: nome_rapporto.clone(), valore: v, unita: String::new(), sorgenti, da: "absorbance".into(), descrizione: String::new() });
+            l.calcolati.push(Calcolato { nome: nome_rapporto.clone(), valore: v, unita: String::new(), sorgenti, da: "absorbance".into(), descrizione: String::new(), da_calcoli: Vec::new() });
         }
     }
     l.gruppi.push(g);

@@ -131,6 +131,40 @@ fn cella(c: &crate::tabella::Cella) -> String {
     }
 }
 
+/// Un numero come lo scrive Python («3000.0», «1e-05»): i calcoli degli strumenti confrontano e
+/// descrivono i valori con quel testo.
+pub fn py_float_str(x: f64) -> String {
+    if x.is_nan() {
+        return "nan".into();
+    }
+    if x.is_infinite() {
+        return if x > 0.0 { "inf".into() } else { "-inf".into() };
+    }
+    if x == 0.0 {
+        return if x.is_sign_negative() { "-0.0".into() } else { "0.0".into() };
+    }
+    let e = format!("{x:e}");
+    let (mant, exp) = e.split_once('e').unwrap_or((&e, "0"));
+    let exp: i32 = exp.parse().unwrap_or(0);
+    let neg = mant.starts_with('-');
+    let cifre: String = mant.chars().filter(char::is_ascii_digit).collect();
+    let segno = if neg { "-" } else { "" };
+    if !(-4..16).contains(&exp) {
+        let m = if cifre.len() == 1 { cifre.clone() } else { format!("{}.{}", &cifre[..1], &cifre[1..]) };
+        return format!("{segno}{m}e{}{:02}", if exp < 0 { '-' } else { '+' }, exp.abs());
+    }
+    if exp >= 0 {
+        let n = exp as usize + 1;
+        if cifre.len() <= n {
+            format!("{segno}{cifre}{}.0", "0".repeat(n - cifre.len()))
+        } else {
+            format!("{segno}{}.{}", &cifre[..n], &cifre[n..])
+        }
+    } else {
+        format!("{segno}0.{}{cifre}", "0".repeat((-exp - 1) as usize))
+    }
+}
+
 /// Un numero scritto da uno strumento: punto o virgola decimale, spazi, segno meno tipografico,
 /// percentuale. `None` per testi come «Undetermined», «OVER», «N/A».
 pub fn numero(s: &str) -> Option<f64> {
@@ -219,6 +253,13 @@ mod prove {
         assert_eq!(numero("1.2E-05"), Some(1.2e-5));
         for t in ["Undetermined", "OVER", "N/A", "", "-"] {
             assert_eq!(numero(t), None, "{t}");
+        }
+    }
+
+    #[test]
+    fn i_numeri_come_python() {
+        for (x, t) in [(3000.0, "3000.0"), (0.5, "0.5"), (-12.25, "-12.25"), (1e16, "1e+16"), (1e-5, "1e-05"), (0.0001, "0.0001"), (123456789.0, "123456789.0"), (1.5e-7, "1.5e-07"), (0.0, "0.0")] {
+            assert_eq!(py_float_str(x), t);
         }
     }
 }

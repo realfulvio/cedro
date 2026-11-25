@@ -3138,3 +3138,35 @@ un blocco del file comincia con «{}»: dovrebbe cominciare con Group, Plate o N
 il gruppo «{}» cita la piastra «{}» che nel file non c'è	el grupo «{}» cita la placa «{}», que no está en el archivo
 la prima riga dovrebbe dire quanti blocchi ci sono («##BLOCKS= N»): «{}»	la primera línea debería indicar cuántos bloques hay («##BLOCKS= N»): «{}»
 numero di pozzetti sconosciuto: {} (sono ammessi 6, 12, 24, 48, 96, 384, 1536)	número de pocillos desconocido: {} (se admiten 6, 12, 24, 48, 96, 384, 1536)
+
+# Cedro 4 Labs: QuantStudio Design & Analysis
+Analisi	Análisis
+Operatore	Operador
+Codice a barre	Código de barras
+Inizio della corsa	Inicio de la corrida
+Analisi eseguita	Análisis realizado
+Esportato il	Exportado el
+Curva standard	Curva estándar
+Quantificazione relativa	Cuantificación relativa
+Genotipizzazione	Genotipado
+Curva di fusione	Curva de fusión
+Presenza/assenza	Presencia/ausencia
+Analisi primaria	Análisis primario
+nel foglio «{}» manca la riga vuota tra l'intestazione e la tabella	en la hoja «{}» falta la fila vacía entre el encabezado y la tabla
+il foglio «{}» non ha la tabella	la hoja «{}» no tiene la tabla
+blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	bloque «{}» no compatible: Cedro lee placas de 96 y 384 pocillos
+nel file manca il foglio «{}»	al archivo le falta la hoja «{}»
+il foglio «{}» è vuoto	la hoja «{}» está vacía
+nei risultati mancano le colonne Sample e Target	en los resultados faltan las columnas Sample y Target
+nel foglio dei gruppi mancano le colonne Sample e Target	en la hoja de grupos faltan las columnas Sample y Target
+nel foglio Genotyping Result manca la colonna SNP Assay	en la hoja Genotyping Result falta la columna SNP Assay
+nel foglio Genotyping Result manca lo SNP alla riga {}	en la hoja Genotyping Result falta el SNP en la fila {}
+nei risultati mancano le colonne Well e Well Position	en los resultados faltan las columnas Well y Well Position
+nei risultati manca la colonna Well	en los resultados falta la columna Well
+nel pozzetto {} manca il bersaglio (Target)	en el pocillo {} falta la diana (Target)
+nel pozzetto {} manca la posizione (Well Position)	en el pocillo {} falta la posición (Well Position)
+non si riesce a capire il tipo di esperimento dai fogli del file	no se puede deducir el tipo de experimento a partir de las hojas del archivo
+nel file non ci sono risultati per pozzetto	el archivo no tiene resultados por pocillo
+nel foglio RQ Replicate Group Result mancano le colonne Rq, Sample e Target	en la hoja RQ Replicate Group Result faltan las columnas Rq, Sample y Target
+non si capisce qual è il campione di riferimento: nel foglio RQ Replicate Group Result una sola riga deve avere Rq uguale a 1	no se puede identificar la muestra de referencia: en la hoja RQ Replicate Group Result solo una fila debe tener Rq igual a 1
+non si capisce qual è il bersaglio di riferimento: nel foglio RQ Replicate Group Result deve essercene uno solo senza Rq	no se puede identificar la diana de referencia: en la hoja RQ Replicate Group Result solo una debe quedar sin Rq

@@ -3152,3 +3152,35 @@ un blocco del file comincia con «{}»: dovrebbe cominciare con Group, Plate o N
 il gruppo «{}» cita la piastra «{}» che nel file non c'è	the group «{}» refers to the plate «{}», which is not in the file
 la prima riga dovrebbe dire quanti blocchi ci sono («##BLOCKS= N»): «{}»	the first line should say how many blocks there are («##BLOCKS= N»): «{}»
 numero di pozzetti sconosciuto: {} (sono ammessi 6, 12, 24, 48, 96, 384, 1536)	unknown number of wells: {} (6, 12, 24, 48, 96, 384 and 1536 are allowed)
+
+# Cedro 4 Labs: QuantStudio Design & Analysis
+Analisi	Analysis
+Operatore	Operator
+Codice a barre	Barcode
+Inizio della corsa	Run start
+Analisi eseguita	Analysis performed
+Esportato il	Exported on
+Curva standard	Standard curve
+Quantificazione relativa	Relative quantification
+Genotipizzazione	Genotyping
+Curva di fusione	Melt curve
+Presenza/assenza	Presence/absence
+Analisi primaria	Primary analysis
+nel foglio «{}» manca la riga vuota tra l'intestazione e la tabella	the «{}» sheet has no blank row between the header and the table
+il foglio «{}» non ha la tabella	the «{}» sheet has no table
+blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	block «{}» not supported: Cedro reads 96- and 384-well plates
+nel file manca il foglio «{}»	the file has no «{}» sheet
+il foglio «{}» è vuoto	the «{}» sheet is empty
+nei risultati mancano le colonne Sample e Target	the results have no Sample and Target columns
+nel foglio dei gruppi mancano le colonne Sample e Target	the groups sheet has no Sample and Target columns
+nel foglio Genotyping Result manca la colonna SNP Assay	the Genotyping Result sheet has no SNP Assay column
+nel foglio Genotyping Result manca lo SNP alla riga {}	the Genotyping Result sheet has no SNP at row {}
+nei risultati mancano le colonne Well e Well Position	the results have no Well and Well Position columns
+nei risultati manca la colonna Well	the results have no Well column
+nel pozzetto {} manca il bersaglio (Target)	well {} has no target (Target)
+nel pozzetto {} manca la posizione (Well Position)	well {} has no position (Well Position)
+non si riesce a capire il tipo di esperimento dai fogli del file	the experiment type can't be worked out from the file's sheets
+nel file non ci sono risultati per pozzetto	the file has no per-well results
+nel foglio RQ Replicate Group Result mancano le colonne Rq, Sample e Target	the RQ Replicate Group Result sheet has no Rq, Sample and Target columns
+non si capisce qual è il campione di riferimento: nel foglio RQ Replicate Group Result una sola riga deve avere Rq uguale a 1	the reference sample can't be identified: in the RQ Replicate Group Result sheet exactly one row must have Rq equal to 1
+non si capisce qual è il bersaglio di riferimento: nel foglio RQ Replicate Group Result deve essercene uno solo senza Rq	the reference target can't be identified: in the RQ Replicate Group Result sheet exactly one target must have no Rq

@@ -20,9 +20,12 @@ pub const PROFILO: Profilo = Profilo {
 };
 
 fn riconosci(f: &Fonte) -> u8 {
+    if super::quantstudio_da::riconosci(f) > 0 {
+        return 0;
+    }
     if f.foglio() {
         let nomi: Vec<String> = f.fogli.iter().map(|s| s.nome.trim().trim_matches(['[', ']']).to_string()).collect();
-        let ok = nomi.iter().any(|n| n == "Results") && f.fogli.iter().take(1).any(|s| s.righe.iter().take(60).any(|r| r.first().is_some_and(|k| k.trim() == "Instrument Type") && r.get(1).is_some_and(|v| v.contains("QuantStudio"))));
+        let ok = nomi.iter().any(|n| n == "Results") && nomi.iter().any(|n| n == "Sample Setup") && f.fogli.iter().take(1).any(|s| s.righe.iter().take(60).any(|r| r.first().is_some_and(|k| k.trim() == "Instrument Type") && r.get(1).is_some_and(|v| v.contains("QuantStudio"))));
         return if ok { 95 } else { 0 };
     }
     let testa: Vec<&str> = f.testo.lines().take(80).collect();
@@ -150,7 +153,7 @@ fn carica_xlsx(f: &Fonte) -> Result<Esperimento, String> {
     Ok(e)
 }
 
-fn volume_pozzetto(blocco: &str) -> Option<f64> {
+pub(super) fn volume_pozzetto(blocco: &str) -> Option<f64> {
     // «0.2mL» o «0.1-mL» nel nome del blocco: da mL a μL.
     let b = blocco.as_bytes();
     for i in 0..b.len() {
@@ -166,6 +169,15 @@ fn volume_pozzetto(blocco: &str) -> Option<f64> {
         Some(40.0)
     } else if blocco.contains("Taqman Array Card") {
         Some(1.5)
+    } else {
+        None
+    }
+}
+
+/// Come `ruolo_da_task`, ma il testo deve combaciare esattamente (maiuscole e spazi compresi).
+pub(super) fn ruolo_da_task_esatto(t: &str) -> Option<Ruolo> {
+    if t.trim() == t {
+        ruolo_da_task(t)
     } else {
         None
     }
@@ -209,7 +221,7 @@ fn pieno(m: &HashMap<&str, &str>, k: &str) -> Option<String> {
     m.get(k).map(|v| v.trim()).filter(|v| !v.is_empty()).map(str::to_string)
 }
 
-fn leggi(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
+pub(super) fn leggi(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
     let e = if f.foglio() { carica_xlsx(f)? } else { carica_txt(&f.testo)? };
     let risultati = e.sezione("Results").ok_or("manca la sezione Results")?;
     let tipo = e.chiave(&["Experiment Type"]).map(|s| s.trim().to_string()).ok_or("manca il tipo di esperimento")?;
@@ -477,7 +489,7 @@ fn leggi(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
             return;
         }
         fatti.push(k);
-        calcolati.push(Calcolato { nome: nome.to_string(), valore, unita: String::new(), sorgenti, da: da.to_string(), descrizione: String::new() });
+        calcolati.push(Calcolato { nome: nome.to_string(), valore, unita: String::new(), sorgenti, da: da.to_string(), descrizione: String::new(), da_calcoli: Vec::new() });
     };
     let ct_nome = "cycle threshold result";
     let rn_nome = "normalized reporter result";
@@ -492,7 +504,8 @@ fn leggi(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
         };
         let per_bersaglio: Vec<String> = righe_risultato.iter().filter(|x| x.2 == *bersaglio && x.3 == *task).map(|x| id_di(x.0 .0, x.0 .1)).collect();
         for (nome, col, da) in [("quantity", "Quantity", ct_nome), ("amplification score", "Amp Score", ct_nome), ("cq confidence", "Cq Conf", ct_nome)] {
-            if let Some(x) = val(col) {
+            // Un calcolo di pozzetto viene dal Ct di quel pozzetto: senza Ct (Undetermined) non c'è.
+            if let (Some(x), Some(_)) = (val(col), val(&ct_key)) {
                 aggiungi(nome, col, da, proprio.clone(), x, &mut calcolati, &mut fatti, &id_di(pos.0, pos.1), "");
             }
         }

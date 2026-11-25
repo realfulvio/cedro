@@ -52,7 +52,9 @@ fn confronta(l: &Lettura, g: &Value) -> Vec<String> {
                     let t = if t.get(..3).is_some_and(|p| p.eq_ignore_ascii_case("s/n")) { &t[3..] } else { t };
                     t.trim_start_matches([':', ' ']).to_string()
                 };
-                if !a.eq_ignore_ascii_case(letto) && !(k == "equipment serial number" && senza(a).eq_ignore_ascii_case(&senza(letto))) {
+                // «ThermoFisher Scientific» e «Thermo Fisher Scientific» sono lo stesso produttore.
+                let senza_spazi = |x: &str| x.split_whitespace().collect::<String>();
+                if !a.eq_ignore_ascii_case(letto) && !(k == "equipment serial number" && senza(a).eq_ignore_ascii_case(&senza(letto))) && !(k == "product manufacturer" && senza_spazi(a).eq_ignore_ascii_case(&senza_spazi(letto))) {
                     diff.push(format!("{k}: atteso «{a}», letto «{letto}»"));
                 }
             }
@@ -88,7 +90,9 @@ fn confronta(l: &Lettura, g: &Value) -> Vec<String> {
             if loc.is_some() && !stesso(m.pozzetto.as_deref(), loc) && !stesso(m.luogo.as_deref(), loc) {
                 return false;
             }
-            if campione.is_some() && !m.campione.is_empty() && Some(m.campione.as_str()) != campione {
+            // Un campione che è un numero («800») per pandas diventa «800.0»: lo stesso campione.
+            let stesso_campione = |a: &str, b: &str| a == b || a.parse::<f64>().ok().is_some_and(|x| b.parse::<f64>().ok() == Some(x));
+            if campione.is_some_and(|c| !m.campione.is_empty() && !stesso_campione(&m.campione, c)) {
                 return false;
             }
             // Lo spettro di assorbanza: i punti devono essere tutti.

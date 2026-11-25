@@ -290,7 +290,8 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
             }),
         );
     }
-    let extra: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::Altro).collect();
+    // Il testo al posto del valore principale («Undetermined») in Allotrope è già l'errore del dato mancante.
+    let extra: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::Altro && !(v.chiave == l.principale && matches!(v.dato, Dato::Testo(_)))).collect();
     altro(&mut d, &extra);
     errori_doc(&mut d, &errori);
     Value::Object(d)
@@ -376,8 +377,14 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
                 let note: Vec<Valore> = g.dati.iter().filter(|(k, _)| k != "analyst").map(|(k, v)| Valore::testo(k, v, Posto::Altro)).collect();
                 altro(&mut ma, &note.iter().collect::<Vec<_>>());
             }
+            // Le voci del gruppo che iniziano con «~» sono informazioni libere sulla corsa.
+            let libere: Vec<Valore> = g.dati.iter().filter_map(|(k, v)| k.strip_prefix('~').map(|k| match super::fonte::numero(v) {
+                Some(x) => Valore::num(k, x, "", Posto::Altro),
+                _ => Valore::testo(k, v, Posto::Altro),
+            })).collect();
+            altro(&mut ma, &libere.iter().collect::<Vec<_>>());
             for (k, v) in &g.dati {
-                if t == Tecnica::Contacellule || k == "analyst" || (t == Tecnica::Qpcr && matches!(k.as_str(), "experimental data identifier" | "experiment type")) {
+                if t == Tecnica::Contacellule || k == "analyst" || k.starts_with('~') || (t == Tecnica::Qpcr && matches!(k.as_str(), "experimental data identifier" | "experiment type")) {
                     continue;
                 }
                 match super::fonte::numero(v) {
@@ -403,10 +410,17 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
     // I calcoli: quelli dello strumento e, se chiesti, quelli di Cedro (bianco).
     let mut calc: Vec<Value> = Vec::new();
     let mut n = 0usize;
-    let mut push = |nome: &str, v: f64, u: &str, sorgenti: &[String], da: &str, descrizione: &str| {
-        let id = format!("{}_CALC_{n}", stem(&l.file).to_uppercase().replace(|c: char| !c.is_ascii_alphanumeric(), "_"));
+    let id_calcolo = |i: usize| format!("{}_CALC_{i}", stem(&l.file).to_uppercase().replace(|c: char| !c.is_ascii_alphanumeric(), "_"));
+    let mut push = |nome: &str, v: f64, u: &str, sorgenti: &[String], da: &str, descrizione: &str, altri: &[usize]| {
+        let id = id_calcolo(n);
         n += 1;
-        let src: Vec<Value> = sorgenti.iter().map(|s| json!({"data source identifier": s, "data source feature": da})).collect();
+        let mut src: Vec<Value> = sorgenti.iter().map(|s| json!({"data source identifier": s, "data source feature": da})).collect();
+        // Un calcolo che viene da altri calcoli: la fonte è il calcolo e la «feature» il suo nome.
+        for &a in altri {
+            if let Some(c) = l.calcolati.get(a) {
+                src.push(json!({"data source identifier": id_calcolo(a), "data source feature": c.nome}));
+            }
+        }
         let chiave = if t == Tecnica::Dpcr { "calculated datum" } else { "calculated result" };
         let mut c = json!({
             "calculated data identifier": id,
@@ -420,11 +434,11 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
         calc.push(c);
     };
     for c in &l.calcolati {
-        push(&c.nome, c.valore, &c.unita, &c.sorgenti, &c.da, &c.descrizione);
+        push(&c.nome, c.valore, &c.unita, &c.sorgenti, &c.da, &c.descrizione, &c.da_calcoli);
     }
     if o.calcoli {
         for (nome, v, u, src) in calcoli_cedro(l, o) {
-            push(&nome, v, &u, &src, &l.principale, "");
+            push(&nome, v, &u, &src, &l.principale, "", &[]);
         }
     }
     if !calc.is_empty() {

@@ -188,7 +188,7 @@ fn leggi_tabella(r: &[Vec<String>], l: &mut Lettura) -> Result<(), String> {
             misure.push(m);
         }
         if let Some(v) = risultato.filter(|v| *v != 0.0) {
-            l.calcolati.push(Calcolato { nome: "Result".into(), valore: v, unita: String::new(), sorgenti: misure.iter().map(|m| m.id.clone()).collect(), da: "absorbance".into(), descrizione: String::new() });
+            l.calcolati.push(Calcolato { nome: "Result".into(), valore: v, unita: String::new(), sorgenti: misure.iter().map(|m| m.id.clone()).collect(), da: "absorbance".into(), descrizione: String::new(), da_calcoli: Vec::new() });
         }
         g.misure.extend(misure);
     }

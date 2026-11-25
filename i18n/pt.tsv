@@ -3140,3 +3140,35 @@ un blocco del file comincia con «{}»: dovrebbe cominciare con Group, Plate o N
 il gruppo «{}» cita la piastra «{}» che nel file non c'è	o grupo «{}» cita a placa «{}», que não está no arquivo
 la prima riga dovrebbe dire quanti blocchi ci sono («##BLOCKS= N»): «{}»	a primeira linha deveria dizer quantos blocos há («##BLOCKS= N»): «{}»
 numero di pozzetti sconosciuto: {} (sono ammessi 6, 12, 24, 48, 96, 384, 1536)	número de poços desconhecido: {} (são aceitos 6, 12, 24, 48, 96, 384, 1536)
+
+# Cedro 4 Labs: QuantStudio Design & Analysis
+Analisi	Análise
+Operatore	Operador
+Codice a barre	Código de barras
+Inizio della corsa	Início da corrida
+Analisi eseguita	Análise realizada
+Esportato il	Exportado em
+Curva standard	Curva padrão
+Quantificazione relativa	Quantificação relativa
+Genotipizzazione	Genotipagem
+Curva di fusione	Curva de fusão
+Presenza/assenza	Presença/ausência
+Analisi primaria	Análise primária
+nel foglio «{}» manca la riga vuota tra l'intestazione e la tabella	na folha «{}» falta a linha vazia entre o cabeçalho e a tabela
+il foglio «{}» non ha la tabella	a folha «{}» não tem a tabela
+blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	bloco «{}» não suportado: o Cedro lê placas de 96 e 384 poços
+nel file manca il foglio «{}»	ao ficheiro falta a folha «{}»
+il foglio «{}» è vuoto	a folha «{}» está vazia
+nei risultati mancano le colonne Sample e Target	nos resultados faltam as colunas Sample e Target
+nel foglio dei gruppi mancano le colonne Sample e Target	na folha dos grupos faltam as colunas Sample e Target
+nel foglio Genotyping Result manca la colonna SNP Assay	na folha Genotyping Result falta a coluna SNP Assay
+nel foglio Genotyping Result manca lo SNP alla riga {}	na folha Genotyping Result falta o SNP na linha {}
+nei risultati mancano le colonne Well e Well Position	nos resultados faltam as colunas Well e Well Position
+nei risultati manca la colonna Well	nos resultados falta a coluna Well
+nel pozzetto {} manca il bersaglio (Target)	no poço {} falta o alvo (Target)
+nel pozzetto {} manca la posizione (Well Position)	no poço {} falta a posição (Well Position)
+non si riesce a capire il tipo di esperimento dai fogli del file	não se consegue perceber o tipo de experiência pelas folhas do ficheiro
+nel file non ci sono risultati per pozzetto	o ficheiro não tem resultados por poço
+nel foglio RQ Replicate Group Result mancano le colonne Rq, Sample e Target	na folha RQ Replicate Group Result faltam as colunas Rq, Sample e Target
+non si capisce qual è il campione di riferimento: nel foglio RQ Replicate Group Result una sola riga deve avere Rq uguale a 1	não se percebe qual é a amostra de referência: na folha RQ Replicate Group Result só uma linha deve ter Rq igual a 1
+non si capisce qual è il bersaglio di riferimento: nel foglio RQ Replicate Group Result deve essercene uno solo senza Rq	não se percebe qual é o alvo de referência: na folha RQ Replicate Group Result só um deve ficar sem Rq

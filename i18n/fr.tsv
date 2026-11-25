@@ -3140,3 +3140,35 @@ un blocco del file comincia con «{}»: dovrebbe cominciare con Group, Plate o N
 il gruppo «{}» cita la piastra «{}» che nel file non c'è	le groupe «{}» cite la plaque «{}», qui n'est pas dans le fichier
 la prima riga dovrebbe dire quanti blocchi ci sono («##BLOCKS= N»): «{}»	la première ligne devrait indiquer le nombre de blocs («##BLOCKS= N») : «{}»
 numero di pozzetti sconosciuto: {} (sono ammessi 6, 12, 24, 48, 96, 384, 1536)	nombre de puits inconnu : {} (sont admis 6, 12, 24, 48, 96, 384, 1536)
+
+# Cedro 4 Labs: QuantStudio Design & Analysis
+Analisi	Analyse
+Operatore	Opérateur
+Codice a barre	Code-barres
+Inizio della corsa	Début de la série
+Analisi eseguita	Analyse effectuée
+Esportato il	Exporté le
+Curva standard	Courbe standard
+Quantificazione relativa	Quantification relative
+Genotipizzazione	Génotypage
+Curva di fusione	Courbe de fusion
+Presenza/assenza	Présence/absence
+Analisi primaria	Analyse primaire
+nel foglio «{}» manca la riga vuota tra l'intestazione e la tabella	dans la feuille «{}» il manque la ligne vide entre l'en-tête et le tableau
+il foglio «{}» non ha la tabella	la feuille «{}» n'a pas de tableau
+blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	bloc «{}» non pris en charge : Cedro lit les plaques de 96 et 384 puits
+nel file manca il foglio «{}»	il manque la feuille «{}» dans le fichier
+il foglio «{}» è vuoto	la feuille «{}» est vide
+nei risultati mancano le colonne Sample e Target	les colonnes Sample et Target manquent dans les résultats
+nel foglio dei gruppi mancano le colonne Sample e Target	dans la feuille des groupes les colonnes Sample et Target manquent
+nel foglio Genotyping Result manca la colonna SNP Assay	la colonne SNP Assay manque dans la feuille Genotyping Result
+nel foglio Genotyping Result manca lo SNP alla riga {}	il manque le SNP à la ligne {} de la feuille Genotyping Result
+nei risultati mancano le colonne Well e Well Position	les colonnes Well et Well Position manquent dans les résultats
+nei risultati manca la colonna Well	la colonne Well manque dans les résultats
+nel pozzetto {} manca il bersaglio (Target)	le puits {} n'a pas de cible (Target)
+nel pozzetto {} manca la posizione (Well Position)	le puits {} n'a pas de position (Well Position)
+non si riesce a capire il tipo di esperimento dai fogli del file	le type d'expérience ne peut pas se déduire des feuilles du fichier
+nel file non ci sono risultati per pozzetto	le fichier ne contient aucun résultat par puits
+nel foglio RQ Replicate Group Result mancano le colonne Rq, Sample e Target	les colonnes Rq, Sample et Target manquent dans la feuille RQ Replicate Group Result
+non si capisce qual è il campione di riferimento: nel foglio RQ Replicate Group Result una sola riga deve avere Rq uguale a 1	l'échantillon de référence est introuvable : dans la feuille RQ Replicate Group Result une seule ligne doit avoir Rq égal à 1
+non si capisce qual è il bersaglio di riferimento: nel foglio RQ Replicate Group Result deve essercene uno solo senza Rq	la cible de référence est introuvable : dans la feuille RQ Replicate Group Result une seule cible doit être sans Rq

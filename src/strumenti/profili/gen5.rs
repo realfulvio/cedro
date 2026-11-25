@@ -1120,7 +1120,7 @@ fn scrivi_calcoli(st: &mut Stato, calcoli: Vec<(String, Vec<Calcolo>)>, fonte_fi
                 }
             }
             let da = fonte_fissa.map(str::to_string).unwrap_or_else(|| origine[0].2.minuscolo().to_string());
-            st.calcolati.push(Calcolato { nome: c.nome, valore: c.valore, unita: String::new(), sorgenti, da, descrizione: String::new() });
+            st.calcolati.push(Calcolato { nome: c.nome, valore: c.valore, unita: String::new(), sorgenti, da, descrizione: String::new(), da_calcoli: Vec::new() });
         }
     }
 }

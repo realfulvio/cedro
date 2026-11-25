@@ -3141,3 +3141,35 @@ un blocco del file comincia con «{}»: dovrebbe cominciare con Group, Plate o N
 il gruppo «{}» cita la piastra «{}» che nel file non c'è	die Gruppe «{}» verweist auf die Platte «{}», die in der Datei nicht vorkommt
 la prima riga dovrebbe dire quanti blocchi ci sono («##BLOCKS= N»): «{}»	die erste Zeile sollte angeben, wie viele Blöcke es gibt («##BLOCKS= N»): «{}»
 numero di pozzetti sconosciuto: {} (sono ammessi 6, 12, 24, 48, 96, 384, 1536)	unbekannte Anzahl Vertiefungen: {} (zulässig sind 6, 12, 24, 48, 96, 384, 1536)
+
+# Cedro 4 Labs: QuantStudio Design & Analysis
+Analisi	Analyse
+Operatore	Bediener
+Codice a barre	Barcode
+Inizio della corsa	Start des Laufs
+Analisi eseguita	Analyse durchgeführt
+Esportato il	Exportiert am
+Curva standard	Standardkurve
+Quantificazione relativa	Relative Quantifizierung
+Genotipizzazione	Genotypisierung
+Curva di fusione	Schmelzkurve
+Presenza/assenza	Anwesenheit/Abwesenheit
+Analisi primaria	Primäranalyse
+nel foglio «{}» manca la riga vuota tra l'intestazione e la tabella	im Blatt «{}» fehlt die Leerzeile zwischen Kopfzeile und Tabelle
+il foglio «{}» non ha la tabella	das Blatt «{}» hat keine Tabelle
+blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	Block «{}» wird nicht unterstützt: Cedro liest Platten mit 96 und 384 Wells
+nel file manca il foglio «{}»	in der Datei fehlt das Blatt «{}»
+il foglio «{}» è vuoto	das Blatt «{}» ist leer
+nei risultati mancano le colonne Sample e Target	in den Ergebnissen fehlen die Spalten Sample und Target
+nel foglio dei gruppi mancano le colonne Sample e Target	im Gruppenblatt fehlen die Spalten Sample und Target
+nel foglio Genotyping Result manca la colonna SNP Assay	im Blatt Genotyping Result fehlt die Spalte SNP Assay
+nel foglio Genotyping Result manca lo SNP alla riga {}	im Blatt Genotyping Result fehlt der SNP in Zeile {}
+nei risultati mancano le colonne Well e Well Position	in den Ergebnissen fehlen die Spalten Well und Well Position
+nei risultati manca la colonna Well	in den Ergebnissen fehlt die Spalte Well
+nel pozzetto {} manca il bersaglio (Target)	im Well {} fehlt das Target
+nel pozzetto {} manca la posizione (Well Position)	im Well {} fehlt die Position (Well Position)
+non si riesce a capire il tipo di esperimento dai fogli del file	der Experimenttyp lässt sich aus den Blättern der Datei nicht bestimmen
+nel file non ci sono risultati per pozzetto	die Datei enthält keine Ergebnisse pro Well
+nel foglio RQ Replicate Group Result mancano le colonne Rq, Sample e Target	im Blatt RQ Replicate Group Result fehlen die Spalten Rq, Sample und Target
+non si capisce qual è il campione di riferimento: nel foglio RQ Replicate Group Result una sola riga deve avere Rq uguale a 1	die Referenzprobe lässt sich nicht bestimmen: im Blatt RQ Replicate Group Result muss genau eine Zeile Rq gleich 1 haben
+non si capisce qual è il bersaglio di riferimento: nel foglio RQ Replicate Group Result deve essercene uno solo senza Rq	das Referenz-Target lässt sich nicht bestimmen: im Blatt RQ Replicate Group Result darf genau ein Target kein Rq haben
