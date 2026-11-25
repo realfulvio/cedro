@@ -3295,3 +3295,20 @@ non trovo la mappa della piastra	je ne trouve pas la carte de la plaque
 per le immagini non trovo nessun canale nelle impostazioni della lettura	pour les images, je ne trouve aucun canal dans les réglages de lecture
 «{}» non è una posizione di scansione valida: serve TOP o BOTTOM	«{}» n'est pas une position de balayage valide : TOP ou BOTTOM
 nella piastra dei risultati non ci sono pozzetti con un valore	la plaque des résultats n'a aucun puits avec une valeur
+
+# PerkinElmer EnVision
+Assay	Essai
+Avvio e fine dell'assay	Début et fin de l'essai
+Modo di misura	Mode de mesure
+Note del protocollo	Notes du protocole
+Etichette di misura	Étiquettes de mesure
+Specchi	Miroirs
+Diaframmi	Diaphragmes
+Unità dello strumento	Unités de l'appareil
+non trovo nessuna piastra: manca «Plate information»	je ne trouve aucune plaque : «Plate information» manque
+alla riga {} mi aspettavo «Plate information» (la piastra successiva) o «Basic assay information», c'è «{}»: il titolo «Plate information» manca o il file è incompleto	à la ligne {} j'attendais «Plate information» (la plaque suivante) ou «Basic assay information», mais il y a «{}» : le titre «Plate information» manque ou le fichier est incomplet
+nel file non ci sono letture con pozzetti: ci sono solo piastre di calcolo o vuote	le fichier n'a aucune lecture avec des puits : seulement des plaques de calcul ou vides
+il calcolo «{}» della piastra {} non ha le letture da cui viene: non l'ho scritto	le calcul «{}» de la plaque {} n'a pas les lectures dont il provient : je ne l'ai pas écrit
+{} valori del calcolo «{}» non hanno una lettura nello stesso pozzetto e non sono stati scritti	{} valeurs du calcul «{}» n'ont pas de lecture dans le même puits et n'ont pas été écrites
+l'etichetta «{}» non è descritta nella sezione «Labels»: non ho le sue impostazioni di misura	l'étiquette «{}» n'est pas décrite dans la section «Labels» : je n'ai pas ses réglages de mesure
+la piastra {} ({}) non ha pozzetti con un valore	la plaque {} ({}) n'a aucun puits avec une valeur

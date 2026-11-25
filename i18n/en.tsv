@@ -3307,3 +3307,20 @@ non trovo la mappa della piastra	I can't find the plate map
 per le immagini non trovo nessun canale nelle impostazioni della lettura	for the images I can't find any channel in the reading settings
 «{}» non è una posizione di scansione valida: serve TOP o BOTTOM	«{}» isn't a valid scan position: it must be TOP or BOTTOM
 nella piastra dei risultati non ci sono pozzetti con un valore	the results plate has no wells with a value
+
+# PerkinElmer EnVision
+Assay	Assay
+Avvio e fine dell'assay	Assay start and end
+Modo di misura	Measurement mode
+Note del protocollo	Protocol notes
+Etichette di misura	Measurement labels
+Specchi	Mirrors
+Diaframmi	Apertures
+Unità dello strumento	Instrument units
+non trovo nessuna piastra: manca «Plate information»	I can't find any plate: «Plate information» is missing
+alla riga {} mi aspettavo «Plate information» (la piastra successiva) o «Basic assay information», c'è «{}»: il titolo «Plate information» manca o il file è incompleto	at line {} I expected «Plate information» (the next plate) or «Basic assay information», but found «{}»: the «Plate information» title is missing or the file is incomplete
+nel file non ci sono letture con pozzetti: ci sono solo piastre di calcolo o vuote	the file has no readings with wells: only calculation plates or empty plates
+il calcolo «{}» della piastra {} non ha le letture da cui viene: non l'ho scritto	the calculation «{}» of plate {} has no readings it comes from: I did not write it
+{} valori del calcolo «{}» non hanno una lettura nello stesso pozzetto e non sono stati scritti	{} values of the calculation «{}» have no reading in the same well and were not written
+l'etichetta «{}» non è descritta nella sezione «Labels»: non ho le sue impostazioni di misura	the label «{}» isn't described in the «Labels» section: I don't have its measurement settings
+la piastra {} ({}) non ha pozzetti con un valore	plate {} ({}) has no wells with a value

@@ -3296,3 +3296,20 @@ non trovo la mappa della piastra	die Plattenbelegung fehlt
 per le immagini non trovo nessun canale nelle impostazioni della lettura	für die Bilder fehlt in den Leseeinstellungen jeder Kanal
 «{}» non è una posizione di scansione valida: serve TOP o BOTTOM	«{}» ist keine gültige Scanposition: erlaubt sind TOP oder BOTTOM
 nella piastra dei risultati non ci sono pozzetti con un valore	die Ergebnisplatte enthält keine Wells mit einem Wert
+
+# PerkinElmer EnVision
+Assay	Assay
+Avvio e fine dell'assay	Beginn und Ende des Assays
+Modo di misura	Messmodus
+Note del protocollo	Protokollnotizen
+Etichette di misura	Messetiketten
+Specchi	Spiegel
+Diaframmi	Blenden
+Unità dello strumento	Einheiten des Geräts
+non trovo nessuna piastra: manca «Plate information»	keine Platte gefunden: «Plate information» fehlt
+alla riga {} mi aspettavo «Plate information» (la piastra successiva) o «Basic assay information», c'è «{}»: il titolo «Plate information» manca o il file è incompleto	in Zeile {} wurde «Plate information» (die nächste Platte) oder «Basic assay information» erwartet, gefunden wurde «{}»: der Titel «Plate information» fehlt oder die Datei ist unvollständig
+nel file non ci sono letture con pozzetti: ci sono solo piastre di calcolo o vuote	die Datei enthält keine Messungen mit Wells: nur Berechnungs- oder leere Platten
+il calcolo «{}» della piastra {} non ha le letture da cui viene: non l'ho scritto	die Berechnung «{}» der Platte {} hat keine Messungen, aus denen sie stammt: nicht geschrieben
+{} valori del calcolo «{}» non hanno una lettura nello stesso pozzetto e non sono stati scritti	{} Werte der Berechnung «{}» haben keine Messung im selben Well und wurden nicht geschrieben
+l'etichetta «{}» non è descritta nella sezione «Labels»: non ho le sue impostazioni di misura	die Etikette «{}» ist im Abschnitt «Labels» nicht beschrieben: ihre Messeinstellungen fehlen
+la piastra {} ({}) non ha pozzetti con un valore	Platte {} ({}) hat keine Wells mit einem Wert

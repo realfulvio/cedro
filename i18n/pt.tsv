@@ -3295,3 +3295,20 @@ non trovo la mappa della piastra	não encontro o mapa da placa
 per le immagini non trovo nessun canale nelle impostazioni della lettura	para as imagens não encontro nenhum canal nas definições de leitura
 «{}» non è una posizione di scansione valida: serve TOP o BOTTOM	«{}» não é uma posição de varrimento válida: tem de ser TOP ou BOTTOM
 nella piastra dei risultati non ci sono pozzetti con un valore	a placa dos resultados não tem poços com valor
+
+# PerkinElmer EnVision
+Assay	Ensaio
+Avvio e fine dell'assay	Início e fim do ensaio
+Modo di misura	Modo de medição
+Note del protocollo	Notas do protocolo
+Etichette di misura	Etiquetas de medição
+Specchi	Espelhos
+Diaframmi	Diafragmas
+Unità dello strumento	Unidades do instrumento
+non trovo nessuna piastra: manca «Plate information»	não encontro nenhuma placa: falta «Plate information»
+alla riga {} mi aspettavo «Plate information» (la piastra successiva) o «Basic assay information», c'è «{}»: il titolo «Plate information» manca o il file è incompleto	na linha {} esperava «Plate information» (a placa seguinte) ou «Basic assay information», mas está «{}»: falta o título «Plate information» ou o ficheiro está incompleto
+nel file non ci sono letture con pozzetti: ci sono solo piastre di calcolo o vuote	o ficheiro não tem leituras com poços: só placas de cálculo ou vazias
+il calcolo «{}» della piastra {} non ha le letture da cui viene: non l'ho scritto	o cálculo «{}» da placa {} não tem as leituras de onde vem: não o escrevi
+{} valori del calcolo «{}» non hanno una lettura nello stesso pozzetto e non sono stati scritti	{} valores do cálculo «{}» não têm uma leitura no mesmo poço e não foram escritos
+l'etichetta «{}» non è descritta nella sezione «Labels»: non ho le sue impostazioni di misura	a etiqueta «{}» não está descrita na secção «Labels»: não tenho as suas definições de medição
+la piastra {} ({}) non ha pozzetti con un valore	a placa {} ({}) não tem poços com valor
