@@ -184,7 +184,7 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
     }
     // Il campione.
     let mut s = Map::new();
-    s.insert("sample identifier".into(), json!(if m.campione.is_empty() { m.pozzetto.clone().unwrap_or_else(|| m.id.clone()) } else { m.campione.clone() }));
+    s.insert("sample identifier".into(), json!(if m.campione.is_empty() { m.pozzetto.clone().or_else(|| m.luogo.clone()).unwrap_or_else(|| NON_DATO.to_string()) } else { m.campione.clone() }));
     // Gli strumenti senza piastra (NanoDrop) dicono comunque il posto: A1 del braccio, la posizione.
     let posto = m.pozzetto.clone().or_else(|| if matches!(t, Tecnica::Qpcr | Tecnica::Dpcr) { None } else { m.luogo.clone() });
     if let Some(p) = &posto {

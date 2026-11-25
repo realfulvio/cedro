@@ -57,9 +57,9 @@ fn confronta(l: &Lettura, g: &Value) -> Vec<String> {
     }
     // Le misure di allotropy senza valori (lo spettro intero, che Cedro tiene a parte) non si confrontano;
     // le altre devono esserci tutte. Cedro può averne di più (le assorbanze a zero, che allotropy scarta).
-    let attese: Vec<Value> = g["misure"].as_array().cloned().unwrap_or_default().into_iter().filter(|a| a["vals"].as_object().is_some_and(|v| !v.is_empty())).collect();
-    if l.conta() < attese.len() {
-        diff.push(format!("misure: attese almeno {}, lette {}", attese.len(), l.conta()));
+    let attese: Vec<Value> = g["misure"].as_array().cloned().unwrap_or_default().into_iter().filter(|a| a["vals"].as_object().is_some_and(|v| !v.is_empty()) || a["spettro"].as_u64().is_some()).collect();
+    if l.misure().count() < attese.len() {
+        diff.push(format!("misure: attese almeno {}, lette {}", attese.len(), l.misure().count()));
     }
     // Ogni misura attesa deve trovare una misura letta con lo stesso pozzetto, campione e valori.
     let lette: Vec<&Misura> = l.misure().collect();
@@ -82,6 +82,13 @@ fn confronta(l: &Lettura, g: &Value) -> Vec<String> {
             }
             if campione.is_some() && !m.campione.is_empty() && Some(m.campione.as_str()) != campione {
                 return false;
+            }
+            // Lo spettro di assorbanza: i punti devono essere tutti.
+            if let Some(n) = a["spettro"].as_u64() {
+                if m.spettro.len() as u64 != n {
+                    ultimo = Some(format!("spettro: attesi {n} punti, letti {}", m.spettro.len()));
+                    return false;
+                }
             }
             match tenta(m, &vals) {
                 Ok(()) => true,

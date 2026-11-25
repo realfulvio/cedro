@@ -78,7 +78,7 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Result<Vec<u8>, String> {
     } else {
         pozzetti(&mut book, l, o, &titoli).map_err(err)?;
     }
-    if l.misure().any(|m| m.e_spettro()) {
+    if l.misure().any(|m| !m.spettro.is_empty()) {
         spettri(&mut book, l, &titoli).map_err(err)?;
     }
     strumento(&mut book, l, &titoli).map_err(err)?;
@@ -430,7 +430,7 @@ fn campioni(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xls
 fn spettri(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), XlsxError> {
     let ws = book.add_worksheet();
     ws.set_name("Spettri")?;
-    let spettri: Vec<&super::Misura> = l.misure().filter(|m| m.e_spettro()).collect();
+    let spettri: Vec<&super::Misura> = l.misure().filter(|m| !m.spettro.is_empty()).collect();
     // Le lunghezze d'onda di tutti gli spettri, in ordine (di solito sono le stesse).
     let mut onde: Vec<f64> = spettri.iter().flat_map(|m| m.spettro.iter().map(|(w, _)| *w)).collect();
     onde.sort_by(|a, b| a.total_cmp(b));

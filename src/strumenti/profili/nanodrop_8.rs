@@ -4,9 +4,7 @@
 //! Le assorbanze sono una misura per lunghezza d'onda; la concentrazione sta sulla misura della
 //! lunghezza d'onda con cui lo strumento l'ha calcolata (260 per il DNA e l'RNA, 280 per le proteine).
 
-use std::cell::RefCell;
-use std::collections::HashSet;
-
+use super::tabella::{norma, Tabella};
 use crate::strumenti::fonte::{coppie, numero, Fonte};
 use crate::strumenti::{tempo, Calcolato, Dato, Gruppo, Lettura, Misura, Posto, Profilo, Tecnica, Valore};
 
@@ -29,58 +27,6 @@ pub const EIGHT: Profilo = Profilo {
     riconosci: riconosci_eight,
     leggi: leggi_eight,
 };
-
-fn norma(s: &str) -> String {
-    s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
-}
-
-/// La tabella di un file: le colonne per nome, e quali sono state lette (le altre diventano note).
-struct Tabella {
-    testa: Vec<String>,
-    nomi: Vec<String>,
-    usate: RefCell<HashSet<usize>>,
-}
-
-impl Tabella {
-    fn nuova(testa: &[String]) -> Tabella {
-        Tabella { testa: testa.iter().map(|s| s.trim().to_string()).collect(), nomi: testa.iter().map(|s| norma(s)).collect(), usate: RefCell::new(HashSet::new()) }
-    }
-
-    fn indice(&self, nome: &str) -> Option<usize> {
-        let n = norma(nome);
-        self.nomi.iter().position(|c| *c == n)
-    }
-
-    fn ha(&self, nome: &str) -> bool {
-        self.indice(nome).is_some()
-    }
-
-    /// Il testo della cella della prima colonna che c'è tra questi nomi (vuoto = nessuno).
-    fn cella<'a>(&self, r: &'a [String], nomi: &[&str]) -> Option<&'a str> {
-        let i = nomi.iter().find_map(|n| self.indice(n))?;
-        self.usate.borrow_mut().insert(i);
-        r.get(i).map(|s| s.trim()).filter(|s| !s.is_empty())
-    }
-
-    fn num(&self, r: &[String], nomi: &[&str]) -> Option<f64> {
-        self.cella(r, nomi).and_then(numero)
-    }
-
-    /// Segna delle colonne come già lette.
-    fn leggi(&self, nomi: &[&str]) {
-        for n in nomi {
-            if let Some(i) = self.indice(n) {
-                self.usate.borrow_mut().insert(i);
-            }
-        }
-    }
-
-    /// Le colonne piene che nessuno ha letto, con il loro nome.
-    fn avanzi(&self, r: &[String]) -> Vec<(String, String)> {
-        let usate = self.usate.borrow();
-        self.testa.iter().enumerate().filter(|(i, h)| !usate.contains(i) && !h.is_empty()).filter_map(|(i, h)| r.get(i).map(|c| c.trim()).filter(|c| !c.is_empty()).map(|c| (h.clone(), c.to_string()))).collect()
-    }
-}
 
 /// Le assorbanze di una riga: le coppie «nm i / abs i» e le colonne A230, A260, A280.
 fn assorbanze(t: &Tabella, r: &[String]) -> Vec<(f64, f64)> {
