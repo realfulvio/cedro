@@ -3207,3 +3207,11 @@ nell'intestazione del file manca «{}»	im Kopf der Datei fehlt «{}»
 la cella {} non è un numero: «{}»	die Zelle {} ist keine Zahl: «{}»
 la legenda degli spot ne dice {#} ma nel file ci sono {#} tabelle di dati	die Spot-Legende nennt {}, aber die Datei enthält {} Datentabellen
 nel file non ci sono valori di luminescenza	die Datei enthält keine Lumineszenzwerte
+
+# BMG Labtech MARS
+nel file non c'è la riga «Raw Data»	in der Datei fehlt die Zeile «Raw Data»
+la riga «{}» non è in un formato che Cedro conosce	die Zeile «{}» hat kein Format, das Cedro kennt
+non riesco a leggere l'intestazione: nessuna riga «Chiave: valore»	der Kopf lässt sich nicht lesen: es gibt keine Zeile «Schlüssel: Wert»
+non capisco il tipo di lettura dall'intestazione: serve una sola tra assorbanza, fluorescenza e luminescenza	die Messart lässt sich aus dem Kopf nicht erkennen: genau eine von Absorption, Fluoreszenz und Lumineszenz ist nötig
+manca la tabella dei valori dopo «Raw Data»	die Wertetabelle nach «Raw Data» fehlt
+nel file non ci sono valori	die Datei enthält keine Werte

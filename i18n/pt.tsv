@@ -3206,3 +3206,11 @@ nell'intestazione del file manca «{}»	falta «{}» no cabeçalho do ficheiro
 la cella {} non è un numero: «{}»	a célula {} não é um número: «{}»
 la legenda degli spot ne dice {#} ma nel file ci sono {#} tabelle di dati	a legenda dos spots indica {} mas o ficheiro tem {} tabelas de dados
 nel file non ci sono valori di luminescenza	o ficheiro não tem valores de luminescência
+
+# BMG Labtech MARS
+nel file non c'è la riga «Raw Data»	falta a linha «Raw Data» no ficheiro
+la riga «{}» non è in un formato che Cedro conosce	a linha «{}» não está num formato que o Cedro conheça
+non riesco a leggere l'intestazione: nessuna riga «Chiave: valore»	não consigo ler o cabeçalho: não há nenhuma linha «Chave: valor»
+non capisco il tipo di lettura dall'intestazione: serve una sola tra assorbanza, fluorescenza e luminescenza	não consigo saber o tipo de leitura pelo cabeçalho: é preciso exatamente uma entre absorvância, fluorescência e luminescência
+manca la tabella dei valori dopo «Raw Data»	falta a tabela de valores depois de «Raw Data»
+nel file non ci sono valori	o ficheiro não tem valores

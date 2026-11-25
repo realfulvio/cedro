@@ -3218,3 +3218,11 @@ nell'intestazione del file manca «{}»	the file header has no «{}»
 la cella {} non è un numero: «{}»	cell {} isn't a number: «{}»
 la legenda degli spot ne dice {#} ma nel file ci sono {#} tabelle di dati	the spot legend says {} but the file has {} data tables
 nel file non ci sono valori di luminescenza	the file has no luminescence values
+
+# BMG Labtech MARS
+nel file non c'è la riga «Raw Data»	the file has no «Raw Data» line
+la riga «{}» non è in un formato che Cedro conosce	the line «{}» isn't in a format Cedro knows
+non riesco a leggere l'intestazione: nessuna riga «Chiave: valore»	can't read the header: there is no «Key: value» line
+non capisco il tipo di lettura dall'intestazione: serve una sola tra assorbanza, fluorescenza e luminescenza	can't tell the read type from the header: exactly one of absorbance, fluorescence and luminescence is needed
+manca la tabella dei valori dopo «Raw Data»	the table of values after «Raw Data» is missing
+nel file non ci sono valori	the file has no values
