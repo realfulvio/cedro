@@ -372,7 +372,16 @@ pub(super) fn choice_row(f: &mut Frame, r: R, voce: &voci::Voce, label: &str, hi
 /// Il pulsante grande, del colore della pagina.
 pub(super) fn go_button(f: &mut Frame, app: &App, r: R, deep: Rgb) {
     let pal = f.pal;
-    let label = super::go_label(app);
+    // In Cedro 4 Labs il pulsante dice «Esegui su N file» per ogni comando (come nell'anteprima approvata).
+    let label = if f.theme == crate::ui::theme::ThemeId::CedroLabs && app.job.is_none() && !app.finished() && matches!(app.activity, crate::ui::model::Activity::Convert) {
+        match app.todo().len() {
+            0 => crate::i18n::tr_string("Esegui"),
+            1 => crate::i18n::tr_string("Esegui su 1 file"),
+            n => format!("{} {n} {}", crate::i18n::tr_string("Esegui su"), crate::i18n::tr_string("file")),
+        }
+    } else {
+        super::go_label(app)
+    };
     let enabled = !app.busy() && !app.targets().is_empty();
     let act = Act::Start;
     if enabled {

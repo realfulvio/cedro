@@ -1392,6 +1392,11 @@ impl App {
         self.cuts.retain(|p, _| live.contains(p.as_path()));
     }
 
+    /// Come `prune_media`, per chi toglie file dalla coda fuori da qui (la tabella di Labs).
+    pub fn prune_media_pub(&mut self) {
+        self.prune_media();
+    }
+
     /// Toglie dalla coda i file spuntati della vista (o tutti quelli della vista se nessuno è spuntato).
     pub fn remove_checked(&mut self) {
         if self.busy() {

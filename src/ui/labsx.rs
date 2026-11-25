@@ -574,6 +574,27 @@ impl App {
         }
     }
 
+    /// «Togli» e Canc: toglie dalla coda (non dal disco) solo i file scelti nella tabella; senza scelti niente.
+    pub fn lx_togli_scelti(&mut self) {
+        if self.busy() {
+            return;
+        }
+        let scelti = self.lx_scelti();
+        if scelti.is_empty() {
+            return;
+        }
+        let mut k = 0;
+        self.files.retain(|_| {
+            let tieni = !scelti.contains(&k);
+            k += 1;
+            tieni
+        });
+        self.selected = None;
+        self.lx.ancora = None;
+        self.lx.errore = None;
+        self.prune_media_pub();
+    }
+
     /// Quello che i filtri nascondono non resta scelto: il pannello e i comandi contano e lavorano solo le righe che si vedono.
     pub fn lx_pota(&mut self) {
         let righe = self.lx_righe();
@@ -862,6 +883,23 @@ mod tests {
         app.lx_pota();
         assert!(scelti(&app).is_empty());
         assert_eq!(app.selected, None);
+    }
+
+    #[test]
+    fn togli_toglie_solo_i_file_scelti() {
+        let mut app = coda(4);
+        for f in app.files.iter_mut() {
+            f.checked = false;
+        }
+        // Senza scelti non si toglie niente, qualunque sia il comando aperto.
+        app.set_lab(Lab::Anonimizza, false);
+        app.lx_togli_scelti();
+        assert_eq!(app.files.len(), 4);
+        // Scelto solo il terzo: se ne va solo lui.
+        app.lx_clic_riga(2, false, false);
+        app.lx_togli_scelti();
+        let nomi: Vec<String> = app.files.iter().map(|f| f.path.file_name().unwrap().to_string_lossy().into_owned()).collect();
+        assert_eq!(nomi, vec!["riga0.csv", "riga1.csv", "riga3.csv"]);
     }
 
     #[test]

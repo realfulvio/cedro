@@ -961,6 +961,8 @@ impl Screen {
                 self.open_menu(items, None, &Act::AddMenu);
             }
             Act::Remove(i) => app.remove(i),
+            // In Labs si toglie quello che è scelto nella tabella, e niente se non è scelto niente.
+            Act::RemoveChecked if self.theme == ThemeId::CedroLabs => app.lx_togli_scelti(),
             Act::RemoveChecked => app.remove_checked(),
             Act::Check(i) => app.toggle_checked(i),
             Act::CheckAll => app.toggle_all(),
@@ -2323,6 +2325,10 @@ impl Screen {
                 Key::Escape | Key::Tab | Key::ShiftTab => {
                     self.ui.edit = None;
                     if key == Key::Escape {
+                        // Il nome della procedura vive solo nella sua finestrella: Esc la chiude subito.
+                        if field == Field::LxProcNome {
+                            self.act(Act::LxProcNomeChiudi, plat);
+                        }
                         return true;
                     }
                 }
