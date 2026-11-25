@@ -885,7 +885,10 @@ impl Screen {
                 }
                 // Le tessere di Inizio: si sceglie il file, poi la scheda dice che cosa ci si può fare.
                 let files = plat.pick_files();
-                self.add_files(files);
+                // Annullato il dialogo: niente da dire.
+                if !files.is_empty() {
+                    self.add_files(files);
+                }
             }
             Act::LabGo(lab, id) => {
                 app.set_lab(lab, simple);

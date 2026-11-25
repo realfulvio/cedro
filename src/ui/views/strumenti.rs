@@ -33,7 +33,11 @@ fn d(s: &str) -> String {
 
 /// Un numero come lo scrive chi legge: con la virgola, tranne in inglese.
 fn num(v: f64, dec: usize) -> String {
-    let s = format!("{v:.dec$}");
+    let mut s = format!("{v:.dec$}");
+    // «-0,000»: un numero che arrotondato è zero non ha segno.
+    if s.starts_with('-') && s[1..].chars().all(|c| c == '0' || c == '.') {
+        s.remove(0);
+    }
     if crate::i18n::english() {
         s
     } else {
@@ -429,7 +433,9 @@ fn scelta(f: &mut Frame, l: &Lettura, sc: &Scelte, sel: &std::collections::BTree
     if n == 0 {
         let hint = "Clicca un pozzetto o trascina per sceglierne più d'uno. Poi segna il ruolo: finisce nel foglio «Pozzetti» dell'Excel.".to_string();
         let w = (rx - r.0 - 14.0).max(100.0);
-        f.para(&hint, r.0 + 14.0, r.1 + 12.0, w, 14.0, SANS, LABS_MUTED, 1.35, 3);
+        // Nel riquadro ci stanno due righe: se ne servono tre, il carattere si stringe.
+        let size = [14.0f32, 13.0, 12.0].into_iter().find(|&sz| f.p.wrap_lines(&hint, sz, SANS, w, 3).len() <= 2).unwrap_or(12.0);
+        f.para(&hint, r.0 + 14.0, r.1 + 10.0, w, size, SANS, LABS_MUTED, 1.3, 2);
         return;
     }
     // Media, DS e CV dei pozzetti scelti: calcolati da Cedro, e lo dice.

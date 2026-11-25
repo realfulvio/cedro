@@ -380,7 +380,7 @@ fn translate_with(t: &Table, s: &str, depth: u8) -> String {
             return done.join(" ");
         }
     }
-    if depth <= 1 && !t.fragments.is_empty() {
+    if depth <= 2 && !t.fragments.is_empty() {
         let mut out = s.to_string();
         for (it, en) in &t.fragments {
             if out.contains(it.as_str()) {

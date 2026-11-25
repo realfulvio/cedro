@@ -90,11 +90,13 @@ pub struct PerFile {
     pub profilo: String,
     /// Si sta rileggendo il file.
     pub rileggendo: bool,
+    /// I ruoli segnati con lo strumento riconosciuto, per ritrovarli tornando a quello.
+    pub ruoli_riconosciuto: Option<Vec<(String, char)>>,
 }
 
 impl Default for PerFile {
     fn default() -> PerFile {
-        PerFile { riletto: None, vista: Vista::Piastra, gruppo: 0, sel: BTreeSet::new(), ruoli: Vec::new(), profilo: String::new(), rileggendo: false }
+        PerFile { riletto: None, vista: Vista::Piastra, gruppo: 0, sel: BTreeSet::new(), ruoli: Vec::new(), profilo: String::new(), rileggendo: false, ruoli_riconosciuto: None }
     }
 }
 
@@ -189,9 +191,16 @@ impl App {
         // Le note dell'ultimo «Converti» erano di un'altra lettura.
         self.strum_esiti.remove(path);
         let f = self.strum_file_mut(path);
+        // Si lascia lo strumento riconosciuto: i suoi ruoli si mettono da parte; tornandoci, si ritrovano.
+        if f.profilo.is_empty() && !profilo.is_empty() {
+            f.ruoli_riconosciuto = Some(std::mem::take(&mut f.ruoli));
+        }
         f.profilo = profilo.to_string();
         f.sel.clear();
         f.ruoli.clear();
+        if profilo.is_empty() {
+            f.ruoli = f.ruoli_riconosciuto.take().unwrap_or_default();
+        }
         f.gruppo = 0;
         if profilo.is_empty() {
             f.riletto = None;

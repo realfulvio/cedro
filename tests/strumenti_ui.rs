@@ -139,6 +139,15 @@ fn la_piastra_si_legge_si_disegna_e_si_segnano_i_ruoli() {
     s.act(Act::Strum(StrumAct::MenoBianco(true)), &mut plat);
     disegna(&mut s);
 
+    // Scelto a mano un altro strumento e poi tornati a quello riconosciuto, i ruoli segnati si ritrovano.
+    let ruoli = s.app.strum_file(&path).ruoli.clone();
+    s.act(Act::Strum(StrumAct::Profilo("nessuno-strumento-con-questo-nome".into())), &mut plat);
+    assert!(s.app.strum_file(&path).ruoli.is_empty());
+    disegna(&mut s);
+    s.act(Act::Strum(StrumAct::Profilo(String::new())), &mut plat);
+    assert_eq!(s.app.strum_file(&path).ruoli, ruoli, "i ruoli dello strumento riconosciuto");
+    disegna(&mut s);
+
     // Allotrope acceso: compare la scheda e si disegna.
     s.act(Act::Strum(StrumAct::Esce(Uscita::Allotrope)), &mut plat);
     s.act(Act::Strum(StrumAct::Vista(Vista::Allotrope)), &mut plat);

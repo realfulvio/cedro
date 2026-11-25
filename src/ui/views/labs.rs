@@ -658,6 +658,8 @@ fn strip(f: &mut Frame, app: &App, r: R, vis: &[usize], sel: usize) {
     }
     for &i in vis.iter().skip(start).take(fit) {
         let file = &app.files[i];
+        // Un file fatto con scelte diverse da quelle di adesso non ha più la spunta: si rifà.
+        let stato = if file.state == FileState::Done && !app.is_fresh_done(i) { FileState::Waiting } else { file.state };
         let on = i == sel;
         let act = Act::Select(i);
         let t = f.hover_t(&act, !on);
@@ -669,7 +671,7 @@ fn strip(f: &mut Frame, app: &App, r: R, vis: &[usize], sel: usize) {
             f.p.rrect_a(x, ty, tw, tt, 9.0, LABS_STAGE, 0.42 * (1.0 - t));
         }
         f.hit((x, ty, tw, tt), act);
-        if file.state == FileState::Waiting {
+        if stato == FileState::Waiting {
             // La crocetta per togliere il file: su quello scelto, o sotto il mouse.
             let rm = Act::Remove(i);
             if on || t > 0.5 || f.hovered(&rm) {
@@ -679,7 +681,7 @@ fn strip(f: &mut Frame, app: &App, r: R, vis: &[usize], sel: usize) {
                 f.hit((cx - 12.0, cy - 12.0, 24.0, 24.0), rm);
             }
         } else {
-            f.state_icon(file.state, x + tw - 13.0, ty + 13.0, 9.0);
+            f.state_icon(stato, x + tw - 13.0, ty + 13.0, 9.0);
             if let Some(out) = &file.output {
                 f.hit((x + tw - 26.0, ty, 26.0, 26.0), Act::OpenPath(out.clone()));
             }
@@ -715,7 +717,11 @@ pub(super) fn file_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32
         Some(i) => {
             super::file_name(f, app, i, x, y, w, 28.0, 19.0, BOLD, pal.text);
             let file = &app.files[i];
-            let line = if file.state != FileState::Waiting {
+            // Fatto, ma con scelte diverse da quelle di adesso (un ruolo, lo strumento): «Converti» lo rifà.
+            let superato = file.state == FileState::Done && !app.is_fresh_done(i);
+            let line = if superato {
+                "Fatto con altre scelte: «Converti» lo rifà con quelle di adesso.".to_string()
+            } else if file.state != FileState::Waiting {
                 file.message.clone()
             } else {
                 let media = app.media_of(&file.path);
@@ -727,11 +733,12 @@ pub(super) fn file_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32
                 }
             };
             let c = match file.state {
+                _ if superato => pal.muted,
                 FileState::Failed => pal.bad,
                 FileState::Done => pal.ok,
                 _ => pal.muted,
             };
-            28.0 + f.para(&line, x, y + 30.0, w, 14.5, SANS, c, 1.35, 2) + 8.0
+            28.0 + f.para(&line, x, y + 30.0, w, 14.5, SANS, c, 1.35, 3) + 8.0
         }
         None => {
             f.text(app.lab.name(), x, y, w, 28.0, 19.0, BOLD, pal.text);

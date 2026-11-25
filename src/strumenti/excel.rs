@@ -4,7 +4,7 @@
 //! sono quelli dello strumento; il «meno il bianco» è un calcolo di Cedro e sta in una colonna a
 //! parte che lo dice.
 
-use rust_xlsxwriter::{Chart, ChartType, Color, ConditionalFormat3ColorScale, Format, FormatAlign, FormatBorder, Workbook, XlsxError};
+use rust_xlsxwriter::{Chart, ChartType, Color, ConditionalFormat3ColorScale, Format, FormatAlign, Formula, FormatBorder, Workbook, XlsxError};
 
 use std::collections::HashMap;
 
@@ -298,6 +298,7 @@ fn mappa(book: &mut Workbook, l: &Lettura, o: &Opzioni) -> Result<(), XlsxError>
                 ws.write_blank(r0 + 2 + r as u32, c as u16 + 1, &cella)?;
             }
         }
+        let mut valori: Vec<f64> = Vec::new();
         for m in &gr.misure {
             let Some((r, c)) = m.pozzetto.as_deref().and_then(super::pozzetto_rc) else { continue };
             if r >= righe || c >= colonne {
@@ -313,6 +314,7 @@ fn mappa(book: &mut Workbook, l: &Lettura, o: &Opzioni) -> Result<(), XlsxError>
             }
             match l.valore(m) {
                 Some(v) => {
+                    valori.push(v - bianco.unwrap_or(0.0));
                     ws.write_number_with_format(riga, col, v - bianco.unwrap_or(0.0), &f)?;
                 }
                 None => {
@@ -331,9 +333,12 @@ fn mappa(book: &mut Workbook, l: &Lettura, o: &Opzioni) -> Result<(), XlsxError>
         let area = format!("B{}:{}{}", prima + 1, colonna_nome(colonne as u16), ultima + 1);
         let legenda = ultima + 1;
         ws.write_string_with_format(legenda, 1, "Min", &nota)?;
-        ws.write_formula_with_format(legenda, 2, format!("=MIN({area})").as_str(), &Format::new().set_background_color(Color::RGB(basso)).set_font_color(Color::White))?;
+        // Con il risultato già scritto: LibreOffice non ricalcola all'apertura e mostrerebbe 0.
+        let (vmin, vmax) = valori.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), v| (a.min(*v), b.max(*v)));
+        let risultato = |x: f64| if x.is_finite() { format!("{x}") } else { String::new() };
+        ws.write_formula_with_format(legenda, 2, Formula::new(format!("=MIN({area})")).set_result(risultato(vmin)), &Format::new().set_background_color(Color::RGB(basso)).set_font_color(Color::White))?;
         ws.write_string_with_format(legenda, 3, "Max", &nota)?;
-        ws.write_formula_with_format(legenda, 4, format!("=MAX({area})").as_str(), &Format::new().set_background_color(Color::RGB(alto)).set_font_color(Color::White))?;
+        ws.write_formula_with_format(legenda, 4, Formula::new(format!("=MAX({area})")).set_result(risultato(vmax)), &Format::new().set_background_color(Color::RGB(alto)).set_font_color(Color::White))?;
         ws.write_string_with_format(legenda, 5, if o.daltonici { "dal blu (più basso) all'arancio (più alto)" } else { "dal blu (più basso) al rosso (più alto)" }, &nota)?;
         r0 += righe as u32 + 4;
     }
