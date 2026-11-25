@@ -437,7 +437,12 @@ pub fn riconosci(fonte: &Fonte) -> Option<(&'static Profilo, u8)> {
 /// Il file letto con un profilo preciso.
 pub fn leggi_con(p: &Profilo, fonte: &Fonte) -> Result<Lettura, String> {
     let mut l = Lettura::nuova(p, fonte);
-    (p.leggi)(fonte, &mut l)?;
+    // Chi sceglie lo strumento a mano può scegliere quello sbagliato: un file che non ha la forma attesa
+    // dà un errore da mostrare, mai una chiusura del programma.
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (p.leggi)(fonte, &mut l))) {
+        Ok(r) => r?,
+        Err(_) => return Err("il file non ha la forma che questo strumento si aspetta".into()),
+    }
     if l.conta() == 0 {
         return Err("nel file non ci sono misure".into());
     }

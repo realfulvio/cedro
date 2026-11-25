@@ -2987,3 +2987,120 @@ Unisci, dividi, riordina, comprimi e modifica i PDF	PDFs zusammenfügen, teilen,
 Nella scheda PDF ci sono cinque strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.	Der Reiter PDF hat neben der Konvertierung fünf Werkzeuge. Die Originale werden nie angetastet: Das Ergebnis ist immer eine neue Kopie.
 Scrivi, evidenzia, compila	Schreiben, markieren, ausfüllen
 Anche oscura davvero il testo: esce «…-modificato.pdf»	Schwärzt Text auch wirklich: Ergebnis «…-modificato.pdf»
+
+# Cedro 4 Labs: i dati degli strumenti
+Piastra	Platte
+Strumento	Gerät
+Gruppo	Gruppe
+Pozzetto	Well
+Bersaglio	Target
+Ruolo	Rolle
+Bianco	Blank
+Controllo	Kontrolle
+campione	Probe
+standard	Standard
+media	Mittelwert
+DS	SD
+1 pozzetto	1 Well
+{#} pozzetti	{} Wells
+1 campione	1 Probe
+{#} campioni	{} Proben
+1 bianco	1 Blank
+{#} bianchi	{} Blanks
+{#} standard	{} Standards
+1 controllo	1 Kontrolle
+{#} controlli	{} Kontrollen
+1 riferimento	1 Referenz
+{#} riferimenti	{} Referenzen
+1 misura	1 Messung
+{#} misure	{} Messungen
+{#} gruppi	{} Gruppen
+Esce in	Ausgabe
+una riga per pozzetto	eine Zeile pro Well
+una riga per misura	eine Zeile pro Messung
+elenco e foglio Strumento	Liste und Blatt Strumento
+la tabella dei campioni	die Probentabelle
+mappa a colori e riga per pozzetto	Farbkarte und eine Zeile pro Well
+numeri veri, una scheda per strumento	echte Zahlen, ein Blatt pro Gerät
+per LIMS e archivi dati	für LIMS und Datenarchive
+Aggiungi i calcoli di Cedro	Berechnungen von Cedro hinzufügen
+separati dai dati grezzi	getrennt von den Rohdaten
+Controlla il file prima di salvarlo	Datei vor dem Speichern prüfen
+Solo il nome	Nur der Dateiname
+Completo	Vollständig
+Scala colori	Farbskala
+Blu → rosso	Blau → Rot
+Daltonici	Farbenblind
+Non è questo? Cambia strumento	Nicht dieses? Gerät wechseln
+Torna a quello che Cedro riconosce	Zurück zu dem, was Cedro erkennt
+Quello che Cedro riconosce	Was Cedro erkennt
+Rileggo il file…	Datei wird neu gelesen…
+Con questo strumento il file non si legge.	Mit diesem Gerät lässt sich die Datei nicht lesen.
+Passa sopra un pozzetto per vederne il valore.	Fahre über ein Well, um seinen Wert zu sehen.
+Tutta la piastra	Ganze Platte
+Clicca un pozzetto o trascina per sceglierne più d'uno. Poi segna il ruolo: finisce nel foglio «Pozzetti» dell'Excel.	Klicke auf ein Well oder ziehe, um mehrere zu wählen. Dann die Rolle festlegen: Sie landet im Blatt «Pozzetti» der Excel-Datei.
+calcolato da Cedro	von Cedro berechnet
+controllato	geprüft
+non passa il controllo	besteht die Prüfung nicht
+con i calcoli di Cedro	mit den Berechnungen von Cedro
+estratto: il file intero ha tutte le misure	Auszug: die ganze Datei enthält alle Messungen
+Le copie stanno accanto agli originali, con le impostazioni consigliate.	Die Kopien liegen neben den Originalen, mit den empfohlenen Einstellungen.
+È il foglio «Pozzetti» di Excel: una riga per pozzetto.	Es ist das Blatt «Pozzetti» der Excel-Datei: eine Zeile pro Well.
+È il foglio dei campioni di Excel: una riga per campione.	Es ist das Probenblatt der Excel-Datei: eine Zeile pro Probe.
+Qui le prime {#} colonne di {#}: nell'Excel ci sono tutte.	Hier die ersten {} von {} Spalten: die Excel-Datei hat alle.
+I ruoli si cambiano sulla piastra.	Die Rollen werden auf der Platte geändert.
+{#} pozzetto «{}».	{} Well «{}».
+{#} pozzetti «{}».	{} Wells «{}».
+{#} misura «{}».	{} Messung «{}».
+{#} misure «{}».	{} Messungen «{}».
+Nell'Excel restano «{}», non diventano zero.	In der Excel-Datei bleibt «{}» stehen, es wird nicht zu null.
+Da sapere.	Gut zu wissen.
+File Allotrope controllato.	Allotrope-Datei geprüft.
+Chiavi, unità e identificativi passano il controllo.	Schlüssel, Einheiten und Kennungen bestehen die Prüfung.
+Il file Allotrope non passa il controllo.	Die Allotrope-Datei besteht die Prüfung nicht.
+File Allotrope scritto.	Allotrope-Datei geschrieben.
+Non controllato: la spunta è tolta.	Nicht geprüft: das Häkchen ist entfernt.
+Le curve ciclo per ciclo (amplificazione, multicomponente, fusione) non vengono copiate: restano nel file dello strumento.	Die Zyklus-für-Zyklus-Kurven (Amplifikation, Multikomponenten, Schmelzkurve) werden nicht kopiert: Sie bleiben in der Datei des Geräts.
+Lettore di piastre	Plattenleser
+PCR digitale	Digitale PCR
+Spettrofotometria	Spektrophotometrie
+Conta cellule	Zellzählung
+SHA-256 del file originale	SHA-256 der Originaldatei
+Strumento letto come	Gerät erkannt als
+Produttore	Hersteller
+Identificativo	Kennung
+Numero di serie	Seriennummer
+Versione del programma	Softwareversion
+Sistema dati	Datensystem
+Inventario	Inventarnummer
+Descrizione	Beschreibung
+Marchio	Marke
+Convertito da	Konvertiert von
+Altri dati dell'intestazione	Weitere Kopfdaten
+Analista	Analyst
+Area di lavoro	Arbeitsbereich
+Data della misura	Messdatum
+File della scansione	Scandatei
+Fine della corsa	Ende des Laufs
+Metodo	Methode
+Tipo di esperimento	Experimenttyp
+Esperimento	Experiment
+Chimica	Chemie
+Blocco	Block
+Riferimento passivo	Passive Referenz
+Metodo di quantificazione	Quantifizierungsmethode
+Originale:	Original:
+scegli almeno un'uscita	wähle mindestens eine Ausgabe
+{} · {#} misure → {}	{} · {} Messungen → {}
+{} · 1 misura → {}	{} · 1 Messung → {}
+~CSV piatto	flaches CSV
+CSV piatto	Flaches CSV
+strumento non riconosciuto	Gerät nicht erkannt
+profilo «{}» sconosciuto	unbekanntes Gerät «{}»
+nel file non ci sono misure	die Datei enthält keine Messungen
+nel file non ci sono campioni	die Datei enthält keine Proben
+nel file non ci sono pozzetti	die Datei enthält keine Wells
+file vuoto	leere Datei
+il file non ha fogli	die Datei hat keine Blätter
+il file non ha la forma che questo strumento si aspetta	die Datei hat nicht den Aufbau, den dieses Gerät erwartet
+il file Allotrope non passa il controllo: {}	die Allotrope-Datei besteht die Prüfung nicht: {}

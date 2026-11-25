@@ -26,8 +26,9 @@ fn a(x: StrumAct) -> Act {
     Act::Strum(x)
 }
 
-fn tr(s: &str) -> String {
-    crate::i18n::tr_string(s)
+/// Un testo che viene dal file (o dallo strumento): non si traduce, è quello che c'è scritto.
+fn d(s: &str) -> String {
+    crate::i18n::lit(s)
 }
 
 /// Un numero come lo scrive chi legge: con la virgola, tranne in inglese.
@@ -66,6 +67,22 @@ fn colore(t: f32, s: &[Rgb; 3]) -> Rgb {
 
 fn luma(c: Rgb) -> f32 {
     (0.299 * c.0 as f32 + 0.587 * c.1 as f32 + 0.114 * c.2 as f32) / 255.0
+}
+
+/// Un testo di Cedro tradotto adesso, per metterlo dentro una frase che poi si segna tutta come «già fatta».
+fn tradotto(s: &str) -> String {
+    crate::i18n::tr_string(s)
+}
+
+/// I titoli che scrive Cedro (si traducono); gli altri sono i nomi dello strumento e restano com'erano.
+const TITOLI_DI_CEDRO: [&str; 8] = ["Gruppo", "Pozzetto", "Campione", "Bersaglio", "Ruolo", "Posizione", "Data e ora", "meno il bianco (calcolato da Cedro)"];
+
+fn titolo_colonna(t: &str) -> String {
+    if TITOLI_DI_CEDRO.contains(&t) {
+        t.to_string()
+    } else {
+        d(t)
+    }
 }
 
 fn asm_acceso(app: &App) -> bool {
@@ -122,10 +139,10 @@ fn pronto(f: &Frame, app: &App, path: &Path, l: &Arc<Lettura>, vista: Vista) -> 
     let tab = excel::tabella(l, &sc.excel_opz());
     let mut larghezze: Vec<f32> = Vec::new();
     for (c, t) in tab.intest.iter().enumerate() {
-        let mut w = f.measure(&tr(t), 14.0, SEMI);
+        let mut w = f.measure(&titolo_colonna(t), 14.0, SEMI);
         for r in tab.righe.iter().take(80) {
             let s = match r.get(c).and_then(|x| x.as_ref()) {
-                Some(excel::Cella::Testo(t)) => t.clone(),
+                Some(excel::Cella::Testo(t)) => d(t),
                 Some(excel::Cella::Numero(v)) => format!("{v}"),
                 None => String::new(),
             };
@@ -161,7 +178,7 @@ pub fn stage(f: &mut Frame, app: &App, i: usize, l: &Arc<Lettura>, area: R) {
     let vista = if tab.contains(&pf.vista) { pf.vista } else { tab[0] };
     // Le schede.
     let bar_h = 40.0;
-    let labels: Vec<String> = tab.iter().map(|v| tr(v.nome())).collect();
+    let labels: Vec<String> = tab.iter().map(|v| v.nome().to_string()).collect();
     let widths: Vec<f32> = labels.iter().map(|t| f.measure(t, 15.0, SEMI) + 32.0).collect();
     let total: f32 = widths.iter().sum::<f32>() + 8.0;
     f.p.rrect_a(area.0, area.1, total, bar_h, 20.0, WHITE, 0.08);
@@ -181,7 +198,7 @@ pub fn stage(f: &mut Frame, app: &App, i: usize, l: &Arc<Lettura>, area: R) {
         bx += widths[k];
     }
     // Lo strumento, a destra.
-    let chip = format!("{} · {}", scelte::nome_strumento(&l), tr(l.tecnica.nome()));
+    let chip = d(&format!("{} · {}", scelte::nome_strumento(l), tradotto(l.tecnica.nome())));
     let cw = f.measure(&chip, 14.5, SEMI) + 28.0;
     if area.0 + total + 16.0 + cw <= area.0 + area.2 {
         let r = (area.0 + area.2 - cw, area.1 + 4.0, cw, bar_h - 8.0);
@@ -192,7 +209,7 @@ pub fn stage(f: &mut Frame, app: &App, i: usize, l: &Arc<Lettura>, area: R) {
     // Più piastre nello stesso file: si sfogliano.
     if vista == Vista::Piastra && l.gruppi.len() > 1 {
         let n = l.gruppi.len();
-        let titolo = format!("{} · {}/{}", l.gruppi[g].titolo, g + 1, n);
+        let titolo = format!("{} · {}/{}", d(&l.gruppi[g].titolo), g + 1, n);
         for (k, (icon, to)) in [(ic::ARROW_LEFT, g.checked_sub(1)), (ic::ARROW_RIGHT, (g + 1 < n).then_some(g + 1))].into_iter().enumerate() {
             let bx = if k == 0 { area.0 } else { area.0 + 44.0 + f.measure(&titolo, 15.0, SEMI) + 16.0 };
             let r = (bx, top, 36.0, 32.0);
@@ -238,10 +255,10 @@ fn piastra(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, g: usize, bo
     let (lo, hi) = if vals.is_empty() { (0.0, 1.0) } else { (lo, hi) };
     let dec = decimali(lo, hi);
     // Titolo e scala dei colori.
-    let titolo = if gr.titolo.is_empty() { l.nome.to_string() } else { gr.titolo.clone() };
+    let titolo = d(if gr.titolo.is_empty() { l.nome } else { &gr.titolo });
     f.p.text(&titolo, body.0, body.1, body.2 * 0.6, 30.0, 21.0, BOLD, LABS_INK, Align::Left);
     let unita = if l.unita.is_empty() { String::new() } else { format!(" ({})", l.unita) };
-    let sotto = format!("{}{}", l.principale, unita);
+    let sotto = d(&format!("{}{}", l.principale, unita));
     f.p.text(&sotto, body.0, body.1 + 28.0, body.2 * 0.6, 22.0, 14.5, SANS, LABS_MUTED, Align::Left);
     if !vals.is_empty() {
         let (lt, ht) = (num(lo, dec), num(hi, dec));
@@ -257,7 +274,7 @@ fn piastra(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, g: usize, bo
         f.p.text(&lt, bx - 8.0 - lw, by - 6.0, lw + 4.0, 22.0, 13.5, SANS, LABS_MUTED, Align::Left);
         f.p.text(&ht, hx, by - 6.0, hw + 4.0, 22.0, 13.5, SANS, LABS_MUTED, Align::Left);
         if bianco.is_some() {
-            f.p.text(&tr("meno il bianco"), bx - 8.0 - lw - 160.0, by + 14.0, 160.0 + lw, 20.0, 13.0, SANS, LABS_LEAF, Align::Right);
+            f.p.text("meno il bianco", bx - 8.0 - lw - 160.0, by + 14.0, 160.0 + lw, 20.0, 13.0, SANS, LABS_LEAF, Align::Right);
         }
     }
     // La griglia.
@@ -318,7 +335,7 @@ fn piastra(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, g: usize, bo
                     let col = colore(((v - lo) / (hi - lo).max(1e-12)) as f32, &scala);
                     (col, num(v, dec))
                 }
-                None => ((70, 62, 84), l.testo(m).map(|t| if t.eq_ignore_ascii_case("undetermined") { "n.d.".to_string() } else { t }).unwrap_or_default()),
+                None => ((70, 62, 84), l.testo(m).map(|t| if t.eq_ignore_ascii_case("undetermined") { "n.d.".to_string() } else { d(&t) }).unwrap_or_default()),
             };
             f.p.rrect(x, y, cw, ch, rad, Some(fondo), None);
             let scuro = luma(fondo) > 0.58;
@@ -346,20 +363,20 @@ fn piastra(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, g: usize, bo
         if let Some(m) = pozzetto_di(l, g, r, c) {
             let valore = match valore_eff(l, m, bianco) {
                 Some(v) => num(v, dec + 1),
-                None => l.testo(m).unwrap_or_default(),
+                None => d(&l.testo(m).unwrap_or_default()),
             };
             let mut p: Vec<String> = vec![strumenti::pozzetto_nome(r, c)];
             if !m.campione.is_empty() {
-                p.push(m.campione.clone());
+                p.push(d(&m.campione));
             }
             if let Some(b) = &m.bersaglio {
-                p.push(b.clone());
+                p.push(d(b));
             }
             p.push(valore);
             f.p.text(&p.join(" · "), gx, hy, gw, riga_h, 14.5, SEMI, LABS_INK, Align::Left);
         }
     } else {
-        f.p.text(&tr("Passa sopra un pozzetto per vederne il valore."), gx, hy, gw, riga_h, 14.0, SANS, LABS_MUTED, Align::Left);
+        f.p.text("Passa sopra un pozzetto per vederne il valore.", gx, hy, gw, riga_h, 14.0, SANS, LABS_MUTED, Align::Left);
     }
     scelta(f, l, &sc, &pf.sel, g, bianco, (body.0, hy + riga_h + 6.0, body.2, sbox_h));
 }
@@ -374,7 +391,7 @@ fn scelta(f: &mut Frame, l: &Lettura, sc: &Scelte, sel: &std::collections::BTree
     let tutti = a(StrumAct::Tutti);
     // «Tutta la piastra» e «Nessuno», piccoli, a destra in alto.
     let mut rx = r.0 + r.2 - 14.0;
-    for (label, act, attivo) in [(tr("Nessuno"), nessuno, n > 0), (tr("Tutta la piastra"), tutti, true)] {
+    for (label, act, attivo) in [("Nessuno".to_string(), nessuno, n > 0), ("Tutta la piastra".to_string(), tutti, true)] {
         let w = f.measure(&label, 13.5, SEMI);
         rx -= w;
         if attivo {
@@ -385,7 +402,7 @@ fn scelta(f: &mut Frame, l: &Lettura, sc: &Scelte, sel: &std::collections::BTree
         rx -= 18.0;
     }
     if n == 0 {
-        let hint = tr("Clicca un pozzetto o trascina per sceglierne più d'uno. Poi segna il ruolo: finisce nel foglio «Pozzetti» dell'Excel.");
+        let hint = "Clicca un pozzetto o trascina per sceglierne più d'uno. Poi segna il ruolo: finisce nel foglio «Pozzetti» dell'Excel.".to_string();
         let w = (rx - r.0 - 14.0).max(100.0);
         f.para(&hint, r.0 + 14.0, r.1 + 12.0, w, 14.0, SANS, LABS_MUTED, 1.35, 3);
         return;
@@ -402,23 +419,22 @@ fn scelta(f: &mut Frame, l: &Lettura, sc: &Scelte, sel: &std::collections::BTree
         }
     }
     let dec = decimali(vs.iter().cloned().fold(0.0, f64::min), vs.iter().cloned().fold(0.0, f64::max)) + 1;
-    let mut riga = tr(&format!("{n} pozzetti")).to_string();
-    if n == 1 {
-        riga = tr("1 pozzetto");
-    }
+    let mut riga = tradotto(&if n == 1 { "1 pozzetto".to_string() } else { format!("{n} pozzetti") });
     if vs.len() > 1 {
         let m = vs.iter().sum::<f64>() / vs.len() as f64;
         let sd = (vs.iter().map(|v| (v - m) * (v - m)).sum::<f64>() / (vs.len() - 1) as f64).sqrt();
         let cv = if m != 0.0 { sd / m.abs() * 100.0 } else { 0.0 };
-        riga = format!("{riga} · {} {} · {} {} · CV {} %", tr("media"), num(m, dec), tr("DS"), num(sd, dec), num(cv, 1));
+        riga = format!("{riga} · {} {} · {} {} · CV {} %", tradotto("media"), num(m, dec), tradotto("DS"), num(sd, dec), num(cv, 1));
     } else if let Some(v) = vs.first() {
         riga = format!("{riga} · {}", num(*v, dec));
     }
+    // Numeri e parole sono già nella lingua scelta: il disegno non li traduce una seconda volta.
+    let riga = d(&riga);
     let w = (rx - r.0 - 14.0).max(100.0);
     f.p.text(&riga, r.0 + 14.0, r.1 + 6.0, w, 24.0, 14.5, SEMI, LABS_INK, Align::Left);
     if vs.len() > 1 {
         let rw = f.measure(&riga, 14.5, SEMI);
-        let nota = tr("calcolato da Cedro");
+        let nota = "calcolato da Cedro".to_string();
         let nw = f.measure(&nota, 13.0, SANS);
         if r.0 + 14.0 + rw + 10.0 + nw <= rx - 8.0 {
             f.p.text(&nota, r.0 + 14.0 + rw + 10.0, r.1 + 6.0, nw + 4.0, 24.0, 13.0, SANS, LABS_MUTED, Align::Left);
@@ -435,7 +451,7 @@ fn scelta(f: &mut Frame, l: &Lettura, sc: &Scelte, sel: &std::collections::BTree
     let mut x = r.0 + 14.0;
     let y = r.1 + 34.0;
     for (c, nome) in voci {
-        let label = tr(nome);
+        let label = nome.to_string();
         let w = f.measure(&label, 14.0, SEMI) + 26.0;
         let act = a(StrumAct::Ruolo(c));
         let on = unico == Some(c);
@@ -490,7 +506,7 @@ fn elenco(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, body: R) {
     f.p.rrect_a(body.0, body.1, body.2, head_h, 10.0, WHITE, 0.1);
     let mut x = body.0 + 4.0;
     for (c, t) in p.tab.intest.iter().take(cols).enumerate() {
-        f.p.text(&tr(t), x + 10.0, body.1, larg[c] - 12.0, head_h, 14.0, SEMI, LABS_INK, Align::Left);
+        f.p.text(&titolo_colonna(t), x + 10.0, body.1, larg[c] - 12.0, head_h, 14.0, SEMI, LABS_INK, Align::Left);
         x += larg[c];
     }
     let area = (body.0, body.1 + head_h + 4.0, body.2, (body.3 - head_h - 4.0 - 28.0).max(60.0));
@@ -509,6 +525,8 @@ fn elenco(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, body: R) {
                 let (t, numero) = cella_testo(cella);
                 if !t.is_empty() {
                     let w = larg[c];
+                    // I nomi dei ruoli sono di Cedro e si traducono; il resto viene dal file.
+                    let t = if numero || tab.intest[c] == "Ruolo" { t } else { d(&t) };
                     if numero {
                         f.p.text(&t, x, y, w - 14.0, ROW_H, 14.0, SANS, LABS_INK, Align::Right);
                     } else {
@@ -520,11 +538,11 @@ fn elenco(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, body: R) {
         }
         n as f32 * ROW_H + 8.0
     });
-    let mut nota = if l.a_piastra() { tr("È il foglio «Pozzetti» di Excel: una riga per pozzetto.") } else { tr("È il foglio dei campioni di Excel: una riga per campione.") };
+    let mut nota = tradotto(if l.a_piastra() { "È il foglio «Pozzetti» di Excel: una riga per pozzetto." } else { "È il foglio dei campioni di Excel: una riga per campione." });
     if cols < p.tab.intest.len() {
-        nota = format!("{nota} {}", tr_string_n("Qui le prime {} colonne di {}: nell'Excel ci sono tutte.", &[cols, p.tab.intest.len()]));
+        nota = format!("{nota} {}", tradotto(&format!("Qui le prime {cols} colonne di {}: nell'Excel ci sono tutte.", p.tab.intest.len())));
     }
-    f.p.text(&nota, body.0, body.1 + body.3 - 24.0, body.2, 22.0, 13.5, SANS, LABS_MUTED, Align::Left);
+    f.p.text(&d(&nota), body.0, body.1 + body.3 - 24.0, body.2, 22.0, 13.5, SANS, LABS_MUTED, Align::Left);
 }
 
 /// Una sola riga (una lettura sola): colonna per colonna, con il nome a sinistra.
@@ -535,26 +553,18 @@ fn elenco_verticale(f: &mut Frame, p: &Pronto, body: R) {
     super::scrolled(f, body, Scroll::Strum, |f| {
         let mut y = body.1 + 4.0;
         for (c, t) in tab.intest.iter().enumerate() {
-            let (v, _) = cella_testo(&tab.righe[0][c]);
+            let (v, numero) = cella_testo(&tab.righe[0][c]);
             if v.is_empty() {
                 continue;
             }
-            f.p.text(&tr(t), body.0 + 8.0, y, kw - 8.0, 26.0, 14.5, SEMI, LABS_MUTED, Align::Left);
+            let v = if numero || t == "Ruolo" { v } else { d(&v) };
+            f.p.text(&titolo_colonna(t), body.0 + 8.0, y, kw - 8.0, 26.0, 14.5, SEMI, LABS_MUTED, Align::Left);
             f.p.text(&v, body.0 + kw + 8.0, y, vw, 26.0, 14.5, SANS, LABS_INK, Align::Left);
             y += 30.0;
             f.p.fill_a(body.0, y - 3.0, body.2 - 12.0, 1.0, LABS_LINE, 0.7);
         }
         y - body.1 + 8.0
     });
-}
-
-/// Una scritta con dei numeri dentro («Qui le prime {} colonne di {}»): si traduce con i segnaposto e poi si riempie.
-fn tr_string_n(modello: &str, n: &[usize]) -> String {
-    let mut t = crate::i18n::tr_string(modello);
-    for k in n {
-        t = t.replacen("{}", &k.to_string(), 1);
-    }
-    t
 }
 
 /// «Strumento»: produttore, modello, software, e l'impronta del file originale.
@@ -566,13 +576,19 @@ fn dati_strumento(f: &mut Frame, l: &Lettura, body: R) {
     super::scrolled(f, area, Scroll::Strum, |f| {
         let mut y = body.1 + 4.0;
         for (k, v) in &righe {
+            // «Strumento letto come» ha il tipo di strumento (di Cedro) accanto al nome (dello strumento); gli avvisi sono di Cedro.
+            let v = match k.as_str() {
+                "Strumento letto come" => d(&format!("{} ({})", l.nome, tradotto(l.tecnica.nome()))),
+                "Avviso" => v.clone(),
+                _ => d(v),
+            };
             let h = if !v.contains(' ') && v.chars().count() > 30 {
-                f.p.text(v, body.0 + kw + 8.0, y, vw, 24.0, 13.5, Weight::Mono, LABS_INK, Align::Left);
+                f.p.text(&v, body.0 + kw + 8.0, y, vw, 24.0, 13.5, Weight::Mono, LABS_INK, Align::Left);
                 24.0
             } else {
-                f.para(v, body.0 + kw + 8.0, y + 2.0, vw, 15.0, SANS, LABS_INK, 1.35, 6).max(24.0)
+                f.para(&v, body.0 + kw + 8.0, y + 2.0, vw, 15.0, SANS, LABS_INK, 1.35, 6).max(24.0)
             };
-            f.p.text(&tr(k), body.0 + 8.0, y, kw - 8.0, 24.0, 14.5, SEMI, LABS_MUTED, Align::Left);
+            f.p.text(k, body.0 + 8.0, y, kw - 8.0, 24.0, 14.5, SEMI, LABS_MUTED, Align::Left);
             y += h + 10.0;
             f.p.fill_a(body.0, y - 5.0, body.2 - 12.0, 1.0, LABS_LINE, 0.7);
         }
@@ -591,18 +607,18 @@ fn json(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, body: R) {
         f.text_c(t, (x, body.1, w, 26.0), 13.5, SEMI, c);
         x += w + 8.0;
     };
-    pillola(f, &asm::schema_breve(l.tecnica), LABS_INK);
+    pillola(f, &d(&asm::schema_breve(l.tecnica)), LABS_INK);
     if sc.asm_controlla {
         match asm::controlla(&asm::scrivi(l, &sc.asm_opz(&path.display().to_string(), &format!("{}.asm.json", crate::engine::stem(path))))) {
-            Ok(()) => pillola(f, &tr("controllato"), LABS_LEAF),
-            Err(_) => pillola(f, &tr("non passa il controllo"), (240, 160, 80)),
+            Ok(()) => pillola(f, "controllato", LABS_LEAF),
+            Err(_) => pillola(f, "non passa il controllo", (240, 160, 80)),
         }
     }
     if sc.asm_calcoli {
-        pillola(f, &tr("con i calcoli di Cedro"), LABS_MUTED);
+        pillola(f, "con i calcoli di Cedro", LABS_MUTED);
     }
     if p.asm_tagliato {
-        pillola(f, &tr("estratto: il file intero ha tutte le misure"), LABS_MUTED);
+        pillola(f, "estratto: il file intero ha tutte le misure", LABS_MUTED);
     }
     let area = (body.0, body.1 + 36.0, body.2, body.3 - 36.0);
     f.p.rrect_a(area.0, area.1, area.2, area.3, 12.0, (255, 255, 255), 0.05);
@@ -672,11 +688,11 @@ fn riga_json(f: &mut Frame, riga: &str, x: f32, y: f32, w: f32) {
         parti.push((buf, LABS_MUTED));
     }
     for (t, c) in parti {
-        let tw = f.measure(&t, sz, Weight::Mono);
+        let tw = f.measure(&d(&t), sz, Weight::Mono);
         if px > x + w {
             break;
         }
-        f.p.text(&t, px, y, tw + 4.0, MONO_H, sz, Weight::Mono, c, Align::Left);
+        f.p.text(&d(&t), px, y, tw + 4.0, MONO_H, sz, Weight::Mono, c, Align::Left);
         px += tw;
     }
 }
@@ -688,13 +704,13 @@ pub fn strumenti_profili(app: &App) -> (Vec<(String, Act)>, Option<usize>) {
     let file = app.strum_corrente().map(|(i, _)| &app.files[i]);
     let ext = file.map(|f| crate::engine::extension(&f.path)).unwrap_or_default();
     let attuale = file.map(|f| app.strum_file(&f.path).profilo).unwrap_or_default();
-    let mut items: Vec<(String, Act)> = vec![(tr("Quello che Cedro riconosce"), a(StrumAct::Profilo(String::new())))];
+    let mut items: Vec<(String, Act)> = vec![("Quello che Cedro riconosce".to_string(), a(StrumAct::Profilo(String::new())))];
     let mut sel = if attuale.is_empty() { Some(0) } else { None };
     for p in strumenti::profili().iter().filter(|p| ext.is_empty() || p.estensioni.contains(&ext.as_str())) {
         if p.id == attuale {
             sel = Some(items.len());
         }
-        items.push((p.nome.to_string(), a(StrumAct::Profilo(p.id.to_string()))));
+        items.push((d(p.nome), a(StrumAct::Profilo(p.id.to_string()))));
     }
     (items, sel)
 }
@@ -704,11 +720,11 @@ fn riconosciuto(f: &mut Frame, app: &App, path: &Path, l: &Lettura, x: f32, y: f
     let pal = f.pal;
     let pf = app.strum_file(path);
     let (colore, titolo, riga): (Rgb, String, String) = if pf.rileggendo {
-        (pal.muted, tr("Rileggo il file…"), String::new())
+        (pal.muted, "Rileggo il file…".to_string(), String::new())
     } else if let Some(Err(e)) = &pf.riletto {
-        (pal.bad, tr("Con questo strumento il file non si legge."), e.clone())
+        (pal.bad, "Con questo strumento il file non si legge.".to_string(), e.clone())
     } else {
-        (pal.ok, scelte::nome_strumento(l), scelte::riga_lettura(l))
+        (pal.ok, d(&scelte::nome_strumento(l)), d(&scelte::riga_lettura_ui(l)))
     };
     let manuale = !pf.profilo.is_empty();
     let inner_w = w - 28.0;
@@ -731,7 +747,7 @@ fn riconosciuto(f: &mut Frame, app: &App, path: &Path, l: &Lettura, x: f32, y: f
         cy += f.para(&riga, x + 14.0, cy, inner_w, 14.0, SANS, pal.muted, 1.35, 3) + 6.0;
     }
     let link = |f: &mut Frame, t: &str, act: Act, cy: f32| {
-        let t = tr(t);
+        let t = t.to_string();
         let lw = f.measure(&t, 14.5, SEMI);
         let hot = f.hovered(&act);
         f.p.text(&t, x + 14.0, cy, lw + 4.0, link_h, 14.5, SEMI, if hot { pal.text } else { pal.primary }, Align::Left);
@@ -758,11 +774,11 @@ fn esito(f: &mut Frame, app: &App, i: usize, x: f32, y: f32, w: f32) -> f32 {
     let mut cy = y;
     for n in &e.note {
         let c = if n.attenzione { AMBRA } else { pal.ok };
-        let lines = f.p.wrap_lines(&tr(&n.testo), 14.0, SANS, w - 28.0, 5).len();
+        let lines = f.p.wrap_lines(&n.testo, 14.0, SANS, w - 28.0, 5).len();
         let h = 12.0 + 24.0 + lines as f32 * 19.0 + 10.0;
         f.p.rrect(x, cy, w, h, 12.0, Some(mix(c, pal.surface, 0.9)), Some((mix(c, pal.surface, 0.55), 1.2)));
-        f.text(&tr(&n.titolo), x + 14.0, cy + 10.0, w - 28.0, 24.0, 15.0, BOLD, pal.text);
-        f.para(&tr(&n.testo), x + 14.0, cy + 34.0, w - 28.0, 14.0, SANS, pal.muted, 1.35, 5);
+        f.text(&n.titolo, x + 14.0, cy + 10.0, w - 28.0, 24.0, 15.0, BOLD, pal.text);
+        f.para(&n.testo, x + 14.0, cy + 34.0, w - 28.0, 14.0, SANS, pal.muted, 1.35, 5);
         cy += h + 10.0;
     }
     cy - y
@@ -772,9 +788,9 @@ fn riga_spunta(f: &mut Frame, x: f32, y: f32, w: f32, label: &str, hint: &str, o
     let pal = f.pal;
     let h = if hint.is_empty() { 30.0 } else { 50.0 };
     f.checkbox(x, y + 3.0, 22.0, on, None);
-    f.text(&tr(label), x + 34.0, y, w - 34.0, 28.0, 15.5, SEMI, pal.text);
+    f.text(label, x + 34.0, y, w - 34.0, 28.0, 15.5, SEMI, pal.text);
     if !hint.is_empty() {
-        f.text(&tr(hint), x + 34.0, y + 25.0, w - 34.0, 22.0, 14.0, SANS, pal.muted);
+        f.text(hint, x + 34.0, y + 25.0, w - 34.0, 22.0, 14.0, SANS, pal.muted);
     }
     let r = (x - 4.0, y - 2.0, w + 8.0, h + 2.0);
     f.focus_ring(r, 8.0, &act);
@@ -794,7 +810,7 @@ fn segmento(f: &mut Frame, r: R, voci: &[(&str, bool, Act)]) {
             f.p.rrect(b.0, b.1, b.2, b.3, 8.0, Some(pal.surface), None);
         }
         let hot = !*on && f.hovered(act);
-        f.text_c(&tr(label), b, 14.5, SEMI, if *on || hot { pal.text } else { pal.muted });
+        f.text_c(label, b, 14.5, SEMI, if *on || hot { pal.text } else { pal.muted });
         f.focus_ring(b, 8.0, act);
         f.hit(b, act.clone());
     }
@@ -821,10 +837,10 @@ pub fn side_body(f: &mut Frame, app: &App, i: usize, l: &Lettura, body: R, x: f3
             for (p, id, label, hint) in scelte_pronte {
                 let v = app.voce(id);
                 let v = crate::ui::voci::Voce { label: v.label, hint: v.hint, glyph: v.glyph, color: v.color };
-                super::labs::choice_row(f, (x, cy, w, 62.0), &v, &tr(label), &tr(hint), app.strum.pronta == p, a(StrumAct::Pronta(p)), deep);
+                super::labs::choice_row(f, (x, cy, w, 62.0), &v, label, hint, app.strum.pronta == p, a(StrumAct::Pronta(p)), deep);
                 cy += 70.0;
             }
-            cy += f.para(&tr("Le copie stanno accanto agli originali, con le impostazioni consigliate."), x, cy + 4.0, w, 14.5, SANS, pal.muted, 1.4, 3) + 12.0;
+            cy += f.para("Le copie stanno accanto agli originali, con le impostazioni consigliate.", x, cy + 4.0, w, 14.5, SANS, pal.muted, 1.4, 3) + 12.0;
         } else {
             f.text("Esce in", x, cy, w, 24.0, 15.0, SEMI, pal.muted);
             cy += 30.0;
@@ -856,7 +872,7 @@ pub fn side_body(f: &mut Frame, app: &App, i: usize, l: &Lettura, body: R, x: f3
                 f.text("Allotrope", x, cy, w, 24.0, 15.0, SEMI, pal.muted);
                 cy += 30.0;
                 f.text("Schema", x, cy, 120.0, 30.0, 15.0, SEMI, pal.text);
-                f.text(&asm::schema_breve(l.tecnica), x + 124.0, cy, w - 124.0, 30.0, 14.5, SANS, pal.muted);
+                f.text(&d(&asm::schema_breve(l.tecnica)), x + 124.0, cy, w - 124.0, 30.0, 14.5, SANS, pal.muted);
                 cy += 38.0;
                 f.text("Percorso", x, cy, 120.0, 38.0, 15.0, SEMI, pal.text);
                 segmento(f, (x + 124.0, cy, w - 124.0, 38.0), &[("Solo il nome", !sc.asm_percorso, a(StrumAct::Percorso(false))), ("Completo", sc.asm_percorso, a(StrumAct::Percorso(true)))]);
@@ -881,7 +897,7 @@ pub fn side_body(f: &mut Frame, app: &App, i: usize, l: &Lettura, body: R, x: f3
     });
 }
 
-/// «3 bianco · 6 standard · 87 campioni. I ruoli si cambiano sulla piastra.»
+/// «2 bianchi · 6 standard · 87 campioni. I ruoli si cambiano sulla piastra.»
 fn riassunto_ruoli(f: &mut Frame, l: &Lettura, sc: &Scelte, x: f32, y: f32, w: f32) -> f32 {
     let pal = f.pal;
     let ruoli = sc.ruoli_veri();
@@ -898,14 +914,14 @@ fn riassunto_ruoli(f: &mut Frame, l: &Lettura, sc: &Scelte, x: f32, y: f32, w: f
         }
     }
     let mut p: Vec<String> = Vec::new();
-    for (n, nome) in conta.iter().zip(["bianco", "standard", "controllo", "riferimento"]) {
+    for (n, (uno, molti)) in conta.iter().zip([("bianco", "bianchi"), ("standard", "standard"), ("controllo", "controlli"), ("riferimento", "riferimenti")]) {
         if *n > 0 {
-            p.push(format!("{n} {}", tr(nome)));
+            p.push(tradotto(&format!("{n} {}", if *n == 1 { uno } else { molti })));
         }
     }
     let campioni = totale - conta.iter().sum::<usize>();
-    p.push(format!("{campioni} {}", tr(if campioni == 1 { "campione" } else { "campioni" })));
-    let riga = format!("{}. {}", p.join(" · "), tr("I ruoli si cambiano sulla piastra."));
+    p.push(tradotto(&if campioni == 1 { "1 campione".to_string() } else { format!("{campioni} campioni") }));
+    let riga = d(&format!("{}. {}", p.join(" · "), tradotto("I ruoli si cambiano sulla piastra.")));
     f.para(&riga, x, y, w, 14.0, SANS, pal.muted, 1.4, 4)
 }
 

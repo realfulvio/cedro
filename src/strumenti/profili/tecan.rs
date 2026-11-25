@@ -56,7 +56,7 @@ fn prefisso<'a>(righe: &'a [String], chiave: &str) -> Option<&'a str> {
 }
 
 fn leggi(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
-    let righe = &f.fogli[0].righe;
+    let righe = &f.fogli.first().ok_or("il file non ha fogli")?.righe;
     let taglio = righe.iter().position(|r| r.first().is_some_and(|c| c.starts_with("Date of measurement"))).ok_or("mancano le righe di metadati (Date of measurement)")?;
     let testa = &righe[0];
     let col_pozzetti = testa.iter().position(|c| c.trim() == "Well positions").ok_or("manca la colonna «Well positions»")?;

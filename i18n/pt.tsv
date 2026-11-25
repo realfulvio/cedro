@@ -2987,3 +2987,119 @@ Unisci, dividi, riordina, comprimi e modifica i PDF	Mescle, divida, reordene, co
 Nella scheda PDF ci sono cinque strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.	A aba PDF tem cinco ferramentas além da conversão. Os originais nunca são tocados: o resultado é sempre uma cópia nova.
 Scrivi, evidenzia, compila	Escreva, destaque, preencha
 Anche oscura davvero il testo: esce «…-modificato.pdf»	Também oculta o texto de verdade: sai «…-modificato.pdf»
+
+# Cedro 4 Labs: i dati degli strumenti
+Piastra	Placa
+Strumento	Instrumento
+Gruppo	Grupo
+Pozzetto	Poço
+Bersaglio	Alvo
+Ruolo	Função
+Bianco	Branco
+Controllo	Controle
+campione	amostra
+standard	padrão
+media	média
+DS	DP
+1 pozzetto	1 poço
+{#} pozzetti	{} poços
+1 campione	1 amostra
+{#} campioni	{} amostras
+1 bianco	1 branco
+{#} bianchi	{} brancos
+{#} standard	{} padrões
+1 controllo	1 controle
+{#} controlli	{} controles
+1 riferimento	1 referência
+{#} riferimenti	{} referências
+1 misura	1 medição
+{#} misure	{} medições
+{#} gruppi	{} grupos
+Esce in	Saída
+una riga per pozzetto	uma linha por poço
+una riga per misura	uma linha por medição
+elenco e foglio Strumento	lista e planilha Strumento
+la tabella dei campioni	a tabela das amostras
+mappa a colori e riga per pozzetto	mapa em cores e uma linha por poço
+numeri veri, una scheda per strumento	números reais, uma planilha por instrumento
+per LIMS e archivi dati	para LIMS e arquivos de dados
+Aggiungi i calcoli di Cedro	Adicionar os cálculos do Cedro
+separati dai dati grezzi	separados dos dados brutos
+Controlla il file prima di salvarlo	Verificar o arquivo antes de salvar
+Solo il nome	Só o nome
+Schema	Esquema
+Scala colori	Escala de cores
+Blu → rosso	Azul → vermelho
+Daltonici	Daltónicos
+Non è questo? Cambia strumento	Não é este? Trocar de instrumento
+Torna a quello che Cedro riconosce	Voltar ao que o Cedro reconhece
+Quello che Cedro riconosce	O que o Cedro reconhece
+Rileggo il file…	Relendo o arquivo…
+Con questo strumento il file non si legge.	O arquivo não se lê com este instrumento.
+Passa sopra un pozzetto per vederne il valore.	Passe um poço para ver o seu valor.
+Tutta la piastra	Toda a placa
+Clicca un pozzetto o trascina per sceglierne più d'uno. Poi segna il ruolo: finisce nel foglio «Pozzetti» dell'Excel.	Clique em um poço ou arraste para escolher vários. Depois marque a função: ela vai para a planilha «Pozzetti» do Excel.
+calcolato da Cedro	calculado pelo Cedro
+controllato	verificado
+non passa il controllo	não passa a verificação
+con i calcoli di Cedro	com os cálculos do Cedro
+estratto: il file intero ha tutte le misure	excerto: o arquivo inteiro tem todas as medições
+Le copie stanno accanto agli originali, con le impostazioni consigliate.	As cópias ficam ao lado dos originais, com os ajustes recomendados.
+È il foglio «Pozzetti» di Excel: una riga per pozzetto.	É a planilha «Pozzetti» do Excel: uma linha por poço.
+È il foglio dei campioni di Excel: una riga per campione.	É a planilha das amostras do Excel: uma linha por amostra.
+Qui le prime {#} colonne di {#}: nell'Excel ci sono tutte.	Aqui estão as primeiras {} colunas de {}: o Excel tem todas.
+I ruoli si cambiano sulla piastra.	As funções mudam-se na placa.
+{#} pozzetto «{}».	{} poço «{}».
+{#} pozzetti «{}».	{} poços «{}».
+{#} misura «{}».	{} medição «{}».
+{#} misure «{}».	{} medições «{}».
+Nell'Excel restano «{}», non diventano zero.	No Excel ficam «{}»; não se tornam zero.
+Da sapere.	Bom saber.
+File Allotrope controllato.	Arquivo Allotrope verificado.
+Chiavi, unità e identificativi passano il controllo.	As chaves, as unidades e os identificadores passam a verificação.
+Il file Allotrope non passa il controllo.	O arquivo Allotrope não passa a verificação.
+File Allotrope scritto.	Arquivo Allotrope escrito.
+Non controllato: la spunta è tolta.	Não verificado: a caixa está desmarcada.
+Le curve ciclo per ciclo (amplificazione, multicomponente, fusione) non vengono copiate: restano nel file dello strumento.	As curvas ciclo a ciclo (amplificação, multicomponente, fusão) não são copiadas: ficam no arquivo do instrumento.
+Lettore di piastre	Leitor de placas
+PCR digitale	PCR digital
+Spettrofotometria	Espectrofotometria
+Conta cellule	Contagem de células
+SHA-256 del file originale	SHA-256 do arquivo original
+Strumento letto come	Instrumento lido como
+Produttore	Fabricante
+Identificativo	Identificador
+Numero di serie	Número de série
+Versione del programma	Versão do programa
+Sistema dati	Sistema de dados
+Inventario	Inventário
+Descrizione	Descrição
+Marchio	Marca
+Convertito da	Convertido por
+Altri dati dell'intestazione	Outros dados do cabeçalho
+Area di lavoro	Área de trabalho
+Data della misura	Data da medição
+File della scansione	Arquivo da leitura
+Fine della corsa	Fim da corrida
+Metodo	Método
+Tipo di esperimento	Tipo de experiência
+Esperimento	Experiência
+Chimica	Química
+Blocco	Bloco
+Riferimento passivo	Referência passiva
+Metodo di quantificazione	Método de quantificação
+Originale:	Original:
+scegli almeno un'uscita	escolha pelo menos uma saída
+{} · {#} misure → {}	{} · {} medições → {}
+{} · 1 misura → {}	{} · 1 medição → {}
+~CSV piatto	CSV plano
+CSV piatto	CSV plano
+strumento non riconosciuto	instrumento não reconhecido
+profilo «{}» sconosciuto	instrumento «{}» desconhecido
+nel file non ci sono misure	o arquivo não tem medições
+nel file non ci sono campioni	o arquivo não tem amostras
+nel file non ci sono pozzetti	o arquivo não tem poços
+file vuoto	arquivo vazio
+il file non ha fogli	o arquivo não tem planilhas
+il file non ha la forma che questo strumento si aspetta	o arquivo não tem a forma que este instrumento espera
+il file Allotrope non passa il controllo: {}	o arquivo Allotrope não passa a verificação: {}

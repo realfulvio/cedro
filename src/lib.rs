@@ -102,7 +102,7 @@ pub use engine::{
 pub use audio::{waveform, duration as audio_duration};
 pub use pdfedit::{Numbers, Squeeze, Stamp, Watermark};
 pub use pdfpages::{groups as pdf_groups, Plan};
-pub use engine::{choose_output, panel_slices, pdf_info, pdf_unlock, rx_with, zip_paths};
+pub use engine::{choose_output, esito_strumento, panel_slices, pdf_info, pdf_unlock, rx_with, zip_paths, EsitoStrumento};
 
 /// Il nome che darebbe il modello `template` a un file `stem`.`ext` adesso (l'esempio delle impostazioni).
 pub fn name_example(template: &str, stem: &str, ext: &str) -> Option<String> {

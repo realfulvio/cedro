@@ -2999,3 +2999,119 @@ Unisci, dividi, riordina, comprimi e modifica i PDF	Merge, split, reorder, compr
 Nella scheda PDF ci sono cinque strumenti, oltre alla conversione. Gli originali non si toccano: il risultato è sempre una copia nuova.	The PDF tab has five tools besides conversion. Originals are never touched: the result is always a new copy.
 Scrivi, evidenzia, compila	Write, highlight, fill in
 Anche oscura davvero il testo: esce «…-modificato.pdf»	It also really blacks out text: it saves «…-modificato.pdf»
+
+# Cedro 4 Labs: i dati degli strumenti
+Piastra	Plate
+Strumento	Instrument
+Gruppo	Group
+Pozzetto	Well
+Bersaglio	Target
+Ruolo	Role
+Bianco	Blank
+Controllo	Control
+campione	sample
+media	mean
+DS	SD
+1 pozzetto	1 well
+{#} pozzetti	{} wells
+1 campione	1 sample
+{#} campioni	{} samples
+1 bianco	1 blank
+{#} bianchi	{} blanks
+{#} standard	{} standards
+1 controllo	1 control
+{#} controlli	{} controls
+1 riferimento	1 reference
+{#} riferimenti	{} references
+1 misura	1 measurement
+{#} misure	{} measurements
+{#} gruppi	{} groups
+Esce in	Output
+una riga per pozzetto	one row per well
+una riga per misura	one row per measurement
+elenco e foglio Strumento	list and Strumento sheet
+la tabella dei campioni	the samples table
+mappa a colori e riga per pozzetto	colour map and one row per well
+numeri veri, una scheda per strumento	real numbers, one tab per instrument
+per LIMS e archivi dati	for LIMS and data archives
+Aggiungi i calcoli di Cedro	Add Cedro's calculations
+separati dai dati grezzi	kept apart from the raw data
+Controlla il file prima di salvarlo	Check the file before saving it
+Solo il nome	File name only
+Completo	Full
+Scala colori	Colour scale
+Blu → rosso	Blue → red
+Daltonici	Colour-blind
+Non è questo? Cambia strumento	Not this one? Change instrument
+Torna a quello che Cedro riconosce	Back to what Cedro recognises
+Quello che Cedro riconosce	What Cedro recognises
+Rileggo il file…	Reading the file again…
+Con questo strumento il file non si legge.	The file can't be read with this instrument.
+Passa sopra un pozzetto per vederne il valore.	Hover over a well to see its value.
+Tutta la piastra	Whole plate
+Clicca un pozzetto o trascina per sceglierne più d'uno. Poi segna il ruolo: finisce nel foglio «Pozzetti» dell'Excel.	Click a well, or drag to pick several. Then mark the role: it goes into the Pozzetti sheet of the Excel.
+calcolato da Cedro	calculated by Cedro
+controllato	checked
+non passa il controllo	fails the check
+con i calcoli di Cedro	with Cedro's calculations
+estratto: il file intero ha tutte le misure	excerpt: the full file has all the measurements
+Le copie stanno accanto agli originali, con le impostazioni consigliate.	Copies are saved next to the originals, with the recommended settings.
+È il foglio «Pozzetti» di Excel: una riga per pozzetto.	It's the Pozzetti sheet of the Excel: one row per well.
+È il foglio dei campioni di Excel: una riga per campione.	It's the samples sheet of the Excel: one row per sample.
+Qui le prime {#} colonne di {#}: nell'Excel ci sono tutte.	Here are the first {} columns of {}: the Excel has them all.
+I ruoli si cambiano sulla piastra.	Roles are changed on the plate.
+{#} pozzetto «{}».	{} well «{}».
+{#} pozzetti «{}».	{} wells «{}».
+{#} misura «{}».	{} measurement «{}».
+{#} misure «{}».	{} measurements «{}».
+Nell'Excel restano «{}», non diventano zero.	In the Excel they stay «{}»; they don't become zero.
+Da sapere.	Good to know.
+File Allotrope controllato.	Allotrope file checked.
+Chiavi, unità e identificativi passano il controllo.	Keys, units and identifiers pass the check.
+Il file Allotrope non passa il controllo.	The Allotrope file fails the check.
+File Allotrope scritto.	Allotrope file written.
+Non controllato: la spunta è tolta.	Not checked: the tick is off.
+Le curve ciclo per ciclo (amplificazione, multicomponente, fusione) non vengono copiate: restano nel file dello strumento.	Cycle-by-cycle curves (amplification, multicomponent, melt) are not copied: they stay in the instrument's file.
+Lettore di piastre	Plate reader
+PCR digitale	Digital PCR
+Spettrofotometria	Spectrophotometry
+Conta cellule	Cell counting
+SHA-256 del file originale	SHA-256 of the original file
+Strumento letto come	Instrument read as
+Produttore	Manufacturer
+Identificativo	Identifier
+Numero di serie	Serial number
+Versione del programma	Software version
+Sistema dati	Data system
+Inventario	Asset number
+Descrizione	Description
+Marchio	Brand
+Convertito da	Converted by
+Altri dati dell'intestazione	Other header data
+Analista	Analyst
+Area di lavoro	Workspace
+Data della misura	Measurement date
+File della scansione	Scan file
+Fine della corsa	Run end
+Metodo	Method
+Tipo di esperimento	Experiment type
+Esperimento	Experiment
+Chimica	Chemistry
+Blocco	Block
+Riferimento passivo	Passive reference
+Metodo di quantificazione	Quantification method
+Originale:	Original:
+scegli almeno un'uscita	choose at least one output
+{} · {#} misure → {}	{} · {} measurements → {}
+{} · 1 misura → {}	{} · 1 measurement → {}
+~CSV piatto	flat CSV
+CSV piatto	Flat CSV
+strumento non riconosciuto	instrument not recognised
+profilo «{}» sconosciuto	unknown instrument «{}»
+nel file non ci sono misure	the file has no measurements
+nel file non ci sono campioni	the file has no samples
+nel file non ci sono pozzetti	the file has no wells
+file vuoto	empty file
+il file non ha fogli	the file has no sheets
+il file non ha la forma che questo strumento si aspetta	the file doesn't have the layout this instrument expects
+il file Allotrope non passa il controllo: {}	the Allotrope file fails the check: {}

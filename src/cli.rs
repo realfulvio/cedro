@@ -53,6 +53,14 @@ pub fn run() -> i32 {
             cedro::perform_with(std::path::Path::new(&positional[1]), &positional[2].to_string_lossy(), quality, None, &opts)
         }
         "update" => return update(),
+        // I dati di uno strumento di laboratorio: Excel, CSV, Allotrope (`asm` è solo Allotrope).
+        "strumento" | "asm" if positional.len() >= 2 => return strumento(&cmd, &positional[1..], &opts),
+        "strumenti" => {
+            for p in cedro::strumenti::profili() {
+                println!("{}\t{}\t{}", p.id, p.nome, p.estensioni.join(","));
+            }
+            return 0;
+        }
         // Dal disinstallatore: Cedro toglie le sue associazioni dei file firmati.
         "associa-no" => {
             return match cedro::associa::apply(false, false) {
@@ -249,6 +257,10 @@ Cedro — conversione locale, senza upload.
                    --voci dice quante persone parlano (auto le conta da solo, 1 non le riconosce)
   cedro figura <immagine>… [--colonna] [--600] [--senza-lettere] [--senza-barra] [--obiettivo=40x]
                    la figura per un articolo: pannelli A, B, C in un TIFF a 300 dpi largo 17,5 cm
+  cedro strumento <file>… [--csv] [--allotrope] [--piatto] [--senza-excel] [--calcoli] [--percorso] [--profilo ID] [--meno-bianco] [--daltonici] [--bianco A1,B1] [--standard C1,C2] [--controllo D1]
+                   i dati di uno strumento di laboratorio (lettore di piastre, qPCR, spettrofotometro, contacellule…):
+                   Excel con i numeri veri; a richiesta CSV, Allotrope (ASM) e CSV piatto; l'originale non si tocca
+  cedro asm <file>…   solo il file Allotrope (.asm.json); cedro strumenti elenca gli strumenti che Cedro legge
   cedro pacchetto <file o cartella>…   pacchetto di dati (ZIP BagIt con l'impronta SHA-256 di ogni file)
   cedro tool <pacchetto.zip> verify-pack   controlla che nessun file del pacchetto sia cambiato
   cedro firma <file>…   verifica le firme digitali (.p7m, .p7s, .m7m, .tsd, .tsr, PDF firmati)
@@ -269,6 +281,93 @@ L'MP3 usa LAME, compilato dentro l'eseguibile.
 L'originale non viene mai sovrascritto.";
     let help: Vec<String> = help.lines().map(cedro::i18n::tr_string).collect();
     eprintln!("{}", help.join("\n"));
+}
+
+/// `cedro strumento <file>… [--csv] [--allotrope] [--piatto] [--senza-excel] [--calcoli] [--percorso] [--profilo ID] [--daltonici] [--meno-bianco] [--bianco A1,B1] [--standard C1] [--controllo D1]`.
+/// L'azione «strumento» del motore: i file nuovi stanno accanto all'originale, con i nomi di sempre.
+fn strumento(cmd: &str, args: &[OsString], opts: &cedro::Options) -> i32 {
+    use cedro::strumenti::Scelte;
+    let mut s = Scelte::default();
+    // `asm` è solo Allotrope; `strumento` è Excel, e il resto a richiesta.
+    if cmd == "asm" {
+        s.excel = false;
+        s.asm = true;
+    }
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    let mut i = 0;
+    let mut ruoli: Vec<(String, char)> = Vec::new();
+    while i < args.len() {
+        let a = args[i].to_string_lossy().into_owned();
+        let valore = |i: usize| args.get(i + 1).map(|v| v.to_string_lossy().into_owned());
+        match a.as_str() {
+            "--csv" => s.csv = true,
+            "--allotrope" | "--asm" => s.asm = true,
+            "--piatto" => {
+                s.asm = s.asm || !s.excel;
+                s.piatto = true;
+            }
+            "--senza-excel" => s.excel = false,
+            "--calcoli" => s.asm_calcoli = true,
+            "--percorso" => s.asm_percorso = true,
+            "--senza-controllo" => s.asm_controlla = false,
+            "--daltonici" => s.daltonici = true,
+            "--meno-bianco" => s.meno_bianco = true,
+            "--profilo" | "--bianco" | "--standard" | "--controllo" | "--riferimento" => {
+                let Some(v) = valore(i) else {
+                    eprintln!("{}", cedro::i18n::tr(&format!("{a} vuole un valore")));
+                    return 2;
+                };
+                i += 1;
+                match a.as_str() {
+                    "--profilo" => s.profilo = v,
+                    _ => {
+                        let lettera = match a.as_str() {
+                            "--bianco" => 'B',
+                            "--standard" => 'S',
+                            "--controllo" => 'C',
+                            _ => 'R',
+                        };
+                        ruoli.extend(v.split(',').map(str::trim).filter(|w| !w.is_empty()).map(|w| (w.to_uppercase(), lettera)));
+                    }
+                }
+            }
+            _ => files.push(std::path::PathBuf::from(&args[i])),
+        }
+        i += 1;
+    }
+    for (w, c) in ruoli {
+        if let Some(r) = cedro::strumenti::scelte::ruolo_da_lettera(c) {
+            s.segna(&w, r);
+        }
+    }
+    if files.is_empty() {
+        eprintln!("{}", cedro::i18n::tr("manca il file dello strumento"));
+        return 2;
+    }
+    let opts = cedro::Options { strumento: s, ..opts.clone() };
+    let mut rc = 0;
+    for f in &files {
+        match cedro::perform_with(f, "strumento", cedro::read_quality(), None, &opts) {
+            Ok(out) => {
+                println!("{}", cedro::i18n::tr(&out.message));
+                println!("{}", out.path.display());
+                if let Some(e) = cedro::esito_strumento(&out.path) {
+                    for p in &e.altri {
+                        println!("{}", p.display());
+                    }
+                    println!("{}  SHA-256 {}", e.origine.0, e.origine.1);
+                    for n in &e.note {
+                        println!("{}{} {}", if n.attenzione { "! " } else { "- " }, cedro::i18n::tr(&n.titolo), cedro::i18n::tr(&n.testo));
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("{}: {}", f.display(), cedro::i18n::tr(&e.to_string()));
+                rc = 1;
+            }
+        }
+    }
+    rc
 }
 
 /// `cedro trascrivi`: la stessa trascrizione della scheda, con i passi stampati man mano.

@@ -165,14 +165,25 @@ pub fn nome_strumento(l: &Lettura) -> String {
 
 /// La riga che dice cosa si è letto: «Lettore di piastre · Piastra 1 · 24/11/2026 14:05».
 pub fn riga_lettura(l: &Lettura) -> String {
-    let mut p: Vec<String> = vec![l.tecnica.nome().to_string()];
+    riga_lettura_con(l, &|s| s.to_string())
+}
+
+/// La stessa riga per la finestra, nella lingua scelta: i pezzi di Cedro si traducono uno per uno, quelli che
+/// vengono dal file (il titolo della piastra, la data) restano com'erano. Chi la disegna la segna tutta come
+/// testo dell'utente, perché non si traduca una seconda volta.
+pub fn riga_lettura_ui(l: &Lettura) -> String {
+    riga_lettura_con(l, &|s| crate::i18n::tr_string(s))
+}
+
+fn riga_lettura_con(l: &Lettura, di_cedro: &dyn Fn(&str) -> String) -> String {
+    let mut p: Vec<String> = vec![di_cedro(l.tecnica.nome())];
     if l.gruppi.len() == 1 && !l.gruppi[0].titolo.is_empty() {
         p.push(l.gruppi[0].titolo.clone());
     } else if l.gruppi.len() > 1 {
-        p.push(format!("{} gruppi", l.gruppi.len()));
+        p.push(di_cedro(&format!("{} gruppi", l.gruppi.len())));
     }
     let n = l.conta();
-    p.push(if n == 1 { "1 misura".into() } else { format!("{n} misure") });
+    p.push(di_cedro(&if n == 1 { "1 misura".to_string() } else { format!("{n} misure") }));
     if let Some(q) = quando(l) {
         p.push(q);
     }
@@ -206,8 +217,10 @@ pub fn note(l: &Lettura, u: &Uscite) -> Vec<Nota> {
         }
     }
     for (t, n) in senza {
-        let titolo = if l.a_piastra() { format!("{n} {} «{t}».", if n == 1 { "pozzetto" } else { "pozzetti" }) } else { format!("{n} {} «{t}».", if n == 1 { "misura" } else { "misure" }) };
-        v.push(Nota { titolo, testo: format!("Nell'Excel restano «{t}», non diventano zero."), attenzione: false });
+        // Il testo del file (per esempio «Undetermined») è dell'utente: la traduzione non lo tocca.
+        let dato = crate::i18n::lit(&t);
+        let titolo = if l.a_piastra() { format!("{n} {} «{dato}».", if n == 1 { "pozzetto" } else { "pozzetti" }) } else { format!("{n} {} «{dato}».", if n == 1 { "misura" } else { "misure" }) };
+        v.push(Nota { titolo, testo: format!("Nell'Excel restano «{dato}», non diventano zero."), attenzione: false });
     }
     for a in &l.avvisi {
         v.push(Nota { titolo: "Da sapere.".into(), testo: a.clone(), attenzione: true });

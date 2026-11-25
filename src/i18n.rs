@@ -230,6 +230,11 @@ fn split_slots(it: &str) -> (Vec<String>, Vec<bool>) {
     (parts, numeric)
 }
 
+/// Un numero scritto com'è (anche negativo, con la virgola o il punto, o una percentuale): non c'è niente da tradurre.
+fn is_plain_number(s: &str) -> bool {
+    s.bytes().any(|b| b.is_ascii_digit()) && s.bytes().all(|b| b.is_ascii_digit() || matches!(b, b'.' | b',' | b'%' | b'-' | b'+'))
+}
+
 fn is_number(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_ascii_digit() || matches!(c, '.' | ',' | '%'))
 }
@@ -438,6 +443,10 @@ pub fn tr(s: &str) -> Cow<'_, str> {
         rest = after.get(end + LIT_CLOSE.len_utf8()..).unwrap_or("");
     }
     shell.push_str(rest);
+    // Un testo tutto dell'utente (il caso più comune: una cella, un nome) non ha niente da tradurre.
+    if kept.len() == 1 && shell.chars().count() == 3 {
+        return Cow::Owned(kept[0].to_string());
+    }
     let mut out = tr_plain(&shell).into_owned();
     for (i, k) in kept.iter().enumerate() {
         out = out.replace(&format!("{LIT_HOLD}{i}{LIT_HOLD}"), k);
@@ -446,7 +455,7 @@ pub fn tr(s: &str) -> Cow<'_, str> {
 }
 
 fn tr_plain(s: &str) -> Cow<'_, str> {
-    if lang() == Lang::It || s.is_empty() {
+    if lang() == Lang::It || s.is_empty() || is_plain_number(s) {
         return Cow::Borrowed(s);
     }
     let t = table_of(lang()).unwrap_or_else(table);
