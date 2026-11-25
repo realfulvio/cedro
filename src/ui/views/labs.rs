@@ -466,7 +466,9 @@ pub(super) fn stage_draw(f: &mut Frame, app: &App, r: R) {
     let vis = app.visible();
     let sel = app.selected.filter(|i| vis.contains(i)).or(vis.first().copied());
     f.p.rrect(r.0, r.1, r.2, r.3, 16.0, Some(LABS_STAGE), None);
-    if let Some(img) = sel.and_then(|i| halo(app, i)) {
+    // Il file di uno strumento (lettore di piastre, qPCR…) non ha un'immagine: si vede la sua piastra.
+    let strum = app.strum_corrente().filter(|(j, _)| Some(*j) == sel);
+    if let Some(img) = sel.filter(|_| strum.is_none()).and_then(|i| halo(app, i)) {
         f.p.image(&img, r.0, r.1, r.2, r.3, 16.0, Fit::Cover);
         // Una pagina bianca abbaglierebbe: più il file è chiaro, più l'alone si spegne.
         f.p.rrect_a(r.0, r.1, r.2, r.3, 16.0, LABS_STAGE, 0.34 + 0.5 * img.luma().powf(1.5));
@@ -478,7 +480,15 @@ pub(super) fn stage_draw(f: &mut Frame, app: &App, r: R) {
         empty(f, app, (r.0 + 28.0, r.1 + 28.0, r.2 - 56.0, r.3 - 56.0));
         return;
     };
-    viewer(f, app, i, (r.0 + 18.0, r.1 + 18.0, r.2 - 36.0, r.3 - 18.0 - STRIP));
+    let area = (r.0 + 18.0, r.1 + 18.0, r.2 - 36.0, r.3 - 18.0 - STRIP);
+    match &strum {
+        Some((_, l)) => {
+            let (_, bright) = colors(app);
+            f.p.rrect_vgrad(r.0, r.1, r.2, r.3, 16.0, mix(bright, LABS_STAGE, 0.84), mix(bright, LABS_STAGE, 0.95));
+            super::strumenti::stage(f, app, i, l, area);
+        }
+        None => viewer(f, app, i, area),
+    }
     strip(f, app, (r.0, r.1 + r.3 - STRIP, r.2, STRIP), &vis, i);
 }
 
@@ -807,7 +817,9 @@ fn side_panel(f: &mut Frame, app: &App, r: R) {
     let foot_h = if quaderno { 142.0 + 52.0 } else { 142.0 };
     let foot_y = r.1 + r.3 - foot_h;
     let body = (r.0 + 1.0, y, r.2 - 2.0, foot_y - y);
-    if f.simple {
+    if let Some((j, l)) = app.strum_corrente() {
+        super::strumenti::side_body(f, app, j, &l, body, x, w, deep);
+    } else if f.simple {
         let ids = choices(app);
         super::scrolled(f, body, Scroll::Inspector, |f| {
             let mut cy = body.1 + 2.0;

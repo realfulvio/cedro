@@ -4,7 +4,7 @@
 //! sono quelli dello strumento; il «meno il bianco» è un calcolo di Cedro e sta in una colonna a
 //! parte che lo dice.
 
-use rust_xlsxwriter::{Chart, ChartType, Color, ConditionalFormat3ColorScale, Format, FormatAlign, FormatBorder, Workbook, Worksheet, XlsxError};
+use rust_xlsxwriter::{Chart, ChartType, Color, ConditionalFormat3ColorScale, Format, FormatAlign, FormatBorder, Workbook, XlsxError};
 
 use std::collections::HashMap;
 
@@ -73,11 +73,7 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Result<Vec<u8>, String> {
     if l.a_piastra() {
         mappa(&mut book, l, o).map_err(err)?;
     }
-    if a_colonne(l) {
-        campioni(&mut book, l, &titoli).map_err(err)?;
-    } else {
-        pozzetti(&mut book, l, o, &titoli).map_err(err)?;
-    }
+    foglio(&mut book, &tabella(l, o), &titoli).map_err(err)?;
     if l.misure().any(|m| !m.spettro.is_empty()) {
         spettri(&mut book, l, &titoli).map_err(err)?;
     }
@@ -190,9 +186,37 @@ fn colonne_valori(l: &Lettura) -> Vec<(String, String)> {
     cols
 }
 
-fn pozzetti(book: &mut Workbook, l: &Lettura, o: &Opzioni, titoli: &Format) -> Result<(), XlsxError> {
-    let ws = book.add_worksheet();
-    ws.set_name(if l.a_piastra() { "Pozzetti" } else { "Misure" })?;
+/// Una cella della tabella dei valori: testo o numero (le vuote sono `None`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Cella {
+    Testo(String),
+    Numero(f64),
+}
+
+/// La tabella che sta nel foglio «Pozzetti» (o «Campioni»): titoli e righe, per Excel e per il CSV.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Tab {
+    pub nome: &'static str,
+    pub intest: Vec<String>,
+    pub righe: Vec<Vec<Option<Cella>>>,
+    /// Quante colonne restano ferme quando si scorre.
+    pub ferme: u16,
+}
+
+fn testo_cella(t: &str) -> Option<Cella> {
+    (!t.is_empty()).then(|| Cella::Testo(t.to_string()))
+}
+
+fn dato_cella(dato: &Dato) -> Option<Cella> {
+    match dato {
+        Dato::Numero(v) => Some(Cella::Numero(*v)),
+        Dato::Bool(b) => Some(Cella::Testo(if *b { "sì" } else { "no" }.into())),
+        Dato::Testo(t) | Dato::Assente(t) => testo_cella(t),
+    }
+}
+
+/// La tabella di tutte le misure: una riga per pozzetto (o per misura), con i ruoli segnati da chi converte.
+pub fn tab_pozzetti(l: &Lettura, o: &Opzioni) -> Tab {
     let piastra = l.a_piastra();
     let molti = l.gruppi.len() > 1;
     let bersagli = l.misure().any(|m| m.bersaglio.is_some());
@@ -215,67 +239,106 @@ fn pozzetti(book: &mut Workbook, l: &Lettura, o: &Opzioni, titoli: &Format) -> R
     for (k, u) in &cols {
         intest.push(intestazione_valore(k, u));
     }
+    // «Meno il bianco» sta subito dopo il valore principale: è quello che si guarda per primo.
+    let pos_bianco = if cols.is_empty() { intest.len() } else { primo_valore + 1 };
     if con_bianco {
-        intest.push("meno il bianco (calcolato da Cedro)".into());
+        intest.insert(pos_bianco, "meno il bianco (calcolato da Cedro)".into());
     }
-    for (c, t) in intest.iter().enumerate() {
-        ws.write_string_with_format(0, c as u16, t, titoli)?;
-    }
-    let mut riga = 1u32;
+    let mut righe: Vec<Vec<Option<Cella>>> = Vec::new();
     for (g, gr) in l.gruppi.iter().enumerate() {
         for m in gr.misure.iter().filter(|m| !m.e_spettro()) {
-            let mut c = 0u16;
-            let testo = |ws: &mut Worksheet, t: &str, c: &mut u16| -> Result<(), XlsxError> {
-                if !t.is_empty() {
-                    ws.write_string(riga, *c, t)?;
-                }
-                *c += 1;
-                Ok(())
-            };
+            let mut r: Vec<Option<Cella>> = Vec::new();
             if molti {
-                testo(ws, &gr.titolo, &mut c)?;
+                r.push(testo_cella(&gr.titolo));
             }
             if piastra {
-                testo(ws, m.pozzetto.as_deref().unwrap_or(""), &mut c)?;
+                r.push(testo_cella(m.pozzetto.as_deref().unwrap_or("")));
             }
-            testo(ws, &m.campione, &mut c)?;
+            r.push(testo_cella(&m.campione));
             if bersagli {
-                testo(ws, m.bersaglio.as_deref().unwrap_or(""), &mut c)?;
+                r.push(testo_cella(m.bersaglio.as_deref().unwrap_or("")));
             }
             let ruolo = ruolo_di(m, &o.ruoli);
-            testo(ws, if ruolo == Ruolo::Campione && !m.ruolo_dal_file { "" } else { ruolo.nome() }, &mut c)?;
-            debug_assert_eq!(c as usize, primo_valore);
+            r.push(testo_cella(if ruolo == Ruolo::Campione && !m.ruolo_dal_file { "" } else { ruolo.nome() }));
+            debug_assert_eq!(r.len(), primo_valore);
             for (k, _) in &cols {
-                match m.valore(k).map(|v| &v.dato) {
-                    Some(Dato::Numero(v)) => {
-                        ws.write_number(riga, c, *v)?;
-                    }
-                    Some(Dato::Bool(b)) => {
-                        ws.write_string(riga, c, if *b { "sì" } else { "no" })?;
-                    }
-                    Some(Dato::Testo(t)) | Some(Dato::Assente(t)) if !t.is_empty() => {
-                        ws.write_string(riga, c, t)?;
-                    }
-                    _ => {}
-                }
-                c += 1;
+                r.push(m.valore(k).and_then(|v| dato_cella(&v.dato)));
             }
             if con_bianco {
-                if let (Some(b), Some(v)) = (bianchi[g], l.valore(m)) {
-                    ws.write_number(riga, c, v - b)?;
-                }
+                r.insert(
+                    pos_bianco,
+                    match (bianchi[g], l.valore(m)) {
+                        (Some(b), Some(v)) => Some(Cella::Numero(v - b)),
+                        _ => None,
+                    },
+                );
             }
-            riga += 1;
+            righe.push(r);
         }
     }
-    ws.set_freeze_panes(1, 0)?;
-    if riga > 1 {
-        ws.autofilter(0, 0, riga - 1, (intest.len() - 1) as u16)?;
+    Tab { nome: if piastra { "Pozzetti" } else { "Misure" }, intest, righe, ferme: 0 }
+}
+
+/// Scrive una tabella in un foglio: titoli in grassetto, prima riga ferma, filtri e larghezze.
+fn foglio(book: &mut Workbook, t: &Tab, titoli: &Format) -> Result<(), XlsxError> {
+    let ws = book.add_worksheet();
+    ws.set_name(t.nome)?;
+    for (c, x) in t.intest.iter().enumerate() {
+        ws.write_string_with_format(0, c as u16, x, titoli)?;
     }
-    for (c, t) in intest.iter().enumerate() {
-        ws.set_column_width(c as u16, (t.chars().count() as f64 + 3.0).clamp(10.0, 40.0))?;
+    for (i, r) in t.righe.iter().enumerate() {
+        for (c, cella) in r.iter().enumerate() {
+            match cella {
+                Some(Cella::Testo(x)) => {
+                    ws.write_string(i as u32 + 1, c as u16, x)?;
+                }
+                Some(Cella::Numero(v)) => {
+                    ws.write_number(i as u32 + 1, c as u16, *v)?;
+                }
+                None => {}
+            }
+        }
+    }
+    ws.set_freeze_panes(1, t.ferme)?;
+    if !t.righe.is_empty() && !t.intest.is_empty() {
+        ws.autofilter(0, 0, t.righe.len() as u32, (t.intest.len() - 1) as u16)?;
+    }
+    for (c, x) in t.intest.iter().enumerate() {
+        ws.set_column_width(c as u16, (x.chars().count() as f64 + 3.0).clamp(10.0, 40.0))?;
     }
     Ok(())
+}
+
+/// La tabella dei valori come la scrive l'Excel: una riga per campione (spettrofotometri) o per pozzetto.
+pub fn tabella(l: &Lettura, o: &Opzioni) -> Tab {
+    if a_colonne(l) {
+        tab_campioni(l)
+    } else {
+        tab_pozzetti(l, o)
+    }
+}
+
+/// Il CSV della tabella dei valori. Con il punto e virgola i decimali hanno la virgola (l'Excel italiano
+/// lo apre giusto); con la virgola o la tabulazione, il punto.
+pub fn csv(l: &Lettura, o: &Opzioni, sep: char) -> String {
+    let t = tabella(l, o);
+    let num = |v: f64| {
+        let s = format!("{v}");
+        if sep == ';' {
+            s.replace('.', ",")
+        } else {
+            s
+        }
+    };
+    let mut righe: Vec<Vec<String>> = vec![t.intest.clone()];
+    for r in &t.righe {
+        righe.push(r.iter().map(|c| match c {
+            Some(Cella::Testo(x)) => x.clone(),
+            Some(Cella::Numero(v)) => num(*v),
+            None => String::new(),
+        }).collect());
+    }
+    crate::textconv::write_csv(&righe, sep)
 }
 
 /// Gli spettrofotometri senza piastra leggono ogni campione a più lunghezze d'onda (A260, A280):
@@ -294,27 +357,9 @@ fn ora_leggibile(iso: &str) -> String {
     }
 }
 
-fn scrivi_dato(ws: &mut Worksheet, riga: u32, c: u16, dato: &Dato) -> Result<(), XlsxError> {
-    match dato {
-        Dato::Numero(v) => {
-            ws.write_number(riga, c, *v)?;
-        }
-        Dato::Bool(b) => {
-            ws.write_string(riga, c, if *b { "sì" } else { "no" })?;
-        }
-        Dato::Testo(t) | Dato::Assente(t) if !t.is_empty() => {
-            ws.write_string(riga, c, t)?;
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
 /// Il foglio «Campioni»: una riga per campione (e posizione e ora), le assorbanze una colonna per
 /// lunghezza d'onda, la concentrazione e i rapporti che lo strumento ha calcolato.
-fn campioni(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), XlsxError> {
-    let ws = book.add_worksheet();
-    ws.set_name("Campioni")?;
+pub fn tab_campioni(l: &Lettura) -> Tab {
     type Chiave = (usize, String, String, String);
     let molti = l.gruppi.len() > 1;
     let mut righe: Vec<(Chiave, Vec<&Misura>)> = Vec::new();
@@ -380,50 +425,31 @@ fn campioni(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xls
     let prima = intest.len();
     intest.extend(cols.iter().map(|c| c.0.clone()));
     intest.extend(nomi_calcolati.iter().cloned());
-    for (c, t) in intest.iter().enumerate() {
-        ws.write_string_with_format(0, c as u16, t, titoli)?;
-    }
+    let mut tab_righe: Vec<Vec<Option<Cella>>> = Vec::new();
     for (i, ((g, campione, luogo, quando), misure)) in righe.iter().enumerate() {
-        let r = i as u32 + 1;
-        let mut c = 0u16;
+        let mut r: Vec<Option<Cella>> = Vec::new();
         if molti {
-            ws.write_string(r, c, &l.gruppi[*g].titolo)?;
-            c += 1;
+            r.push(testo_cella(&l.gruppi[*g].titolo));
         }
-        ws.write_string(r, c, campione)?;
-        c += 1;
+        r.push(testo_cella(campione));
         if con_luogo {
-            ws.write_string(r, c, luogo)?;
-            c += 1;
+            r.push(testo_cella(luogo));
         }
         if con_ora {
-            ws.write_string(r, c, ora_leggibile(quando))?;
-            c += 1;
+            r.push(testo_cella(&ora_leggibile(quando)));
         }
         for (_, k, w) in &cols {
             let v = misure.iter().filter(|m| w.is_none() || onda(m) == *w).find_map(|m| m.valore(k));
-            if let Some(v) = v {
-                scrivi_dato(ws, r, c, &v.dato)?;
-            }
-            c += 1;
+            r.push(v.and_then(|v| dato_cella(&v.dato)));
         }
         for nome in &nomi_calcolati {
             let v = l.calcolati.iter().find(|x| x.nome == *nome && x.sorgenti.first().and_then(|s| di_misura.get(s.as_str())) == Some(&i));
-            if let Some(v) = v {
-                ws.write_number(r, c, v.valore)?;
-            }
-            c += 1;
+            r.push(v.map(|v| Cella::Numero(v.valore)));
         }
+        tab_righe.push(r);
     }
     debug_assert!(intest.len() >= prima);
-    ws.set_freeze_panes(1, if molti { 2 } else { 1 })?;
-    if !righe.is_empty() {
-        ws.autofilter(0, 0, righe.len() as u32, (intest.len() - 1) as u16)?;
-    }
-    for (c, t) in intest.iter().enumerate() {
-        ws.set_column_width(c as u16, (t.chars().count() as f64 + 3.0).clamp(10.0, 40.0))?;
-    }
-    Ok(())
+    Tab { nome: "Campioni", intest, righe: tab_righe, ferme: if molti { 2 } else { 1 } }
 }
 
 /// Gli spettri: una colonna di lunghezze d'onda e una colonna per campione, con il grafico.
@@ -474,9 +500,8 @@ fn spettri(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xlsx
     Ok(())
 }
 
-fn strumento(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), XlsxError> {
-    let ws = book.add_worksheet();
-    ws.set_name(&nome_foglio("Strumento"))?;
+/// Le righe del foglio «Strumento»: che cosa e il suo valore.
+pub fn righe_strumento(l: &Lettura) -> Vec<(String, String)> {
     let mut righe: Vec<(String, String)> = vec![
         ("File".into(), l.file.clone()),
         ("SHA-256 del file originale".into(), l.sha256.clone()),
@@ -493,6 +518,13 @@ fn strumento(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xl
         righe.push(("Avviso".into(), a.clone()));
     }
     righe.push(("Convertito da".into(), format!("Cedro {}", env!("CARGO_PKG_VERSION"))));
+    righe
+}
+
+fn strumento(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), XlsxError> {
+    let ws = book.add_worksheet();
+    ws.set_name(&nome_foglio("Strumento"))?;
+    let righe = righe_strumento(l);
     ws.write_string_with_format(0, 0, "Che cosa", titoli)?;
     ws.write_string_with_format(0, 1, "Valore", titoli)?;
     for (i, (k, v)) in righe.iter().enumerate() {

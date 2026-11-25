@@ -20,9 +20,11 @@ mod pdfedpage;
 mod pdfedprops;
 mod revisione;
 mod riassunto;
+mod strumenti;
 
 pub use activity::{links_page, transcribe_page};
 pub use firma::{draw_viewer, firma_page, viewer_size};
+pub use strumenti::strumenti_profili;
 pub use pagine::{merged_pages, page_drop, split_file, BOARD_MAX, MERGE as ICON_MERGE, MERGED_MAX, SPLIT as ICON_SPLIT, SHRINK as ICON_SHRINK, STRIP_MAX};
 
 /// Margine a destra della finestra, fino al pannello (serve a trascinarne il bordo).

@@ -400,6 +400,8 @@ pub enum Event {
     Summary(PathBuf, crate::riassunto::Progress),
     /// L'editor dei PDF: cosa arriva dal thread di fondo (pagine disegnate, testo, ricerche, salvataggio).
     PdEd(super::pdfedwork::Msg),
+    /// Un export di strumento riletto con il profilo scelto a mano.
+    Strumento(PathBuf, String, Result<Arc<crate::strumenti::Lettura>, String>),
 }
 
 /// Cosa fa la scheda PDF: converte, unisce, divide, cambia le pagine o comprime.
@@ -484,6 +486,10 @@ pub struct App {
     pub quaderno_copiato: Option<usize>,
     /// Dove è stato salvato il registro dei lavori (o perché no), per dirlo nella pagina «Lavori».
     pub lavori_esportato: Option<Result<PathBuf, String>>,
+    /// «Converti dati e piastre»: la finestra dei dati degli strumenti (scelte comuni e di ogni file).
+    pub strum: super::strumenti::Stato,
+    /// Cosa è uscito dai file di strumento già convertiti: i file in più, lo strumento, l'impronta, le note.
+    pub strum_esiti: HashMap<PathBuf, engine::EsitoStrumento>,
     /// Il lavoro appena finito è entrato nell'elenco: il pannello del risultato offre «Copia per il quaderno».
     pub lavoro_appena: bool,
     /// «Copia per il quaderno» del lavoro appena finito già premuto: per dire «Copiato».
@@ -538,7 +544,7 @@ pub struct App {
     pub(super) tx: Sender<Event>,
     rx: Receiver<Event>,
     pub(super) wake: Arc<dyn Fn() + Send + Sync>,
-    loader: media::Loader,
+    pub(in crate::ui) loader: media::Loader,
     pdfwork: super::pdfwork::Worker,
     /// L'editor dei PDF, quando è aperto, e il suo thread di fondo.
     pub ed: Option<Box<super::pdfeditor::PdfEd>>,
@@ -596,6 +602,8 @@ impl App {
             caso_aperto: false,
             caso_bozza: (String::new(), String::new()),
             lavori_aperti: false,
+            strum: Default::default(),
+            strum_esiti: HashMap::new(),
             quaderno_copiato: None,
             lavoro_appena: false,
             lavori_esportato: None,
@@ -1438,7 +1446,7 @@ impl App {
             self.quality,
             self.dest,
             self.values,
-            format!("{:?}{}", self.transcribe.format, self.transcribe.model)
+            format!("{:?}{}{}", self.transcribe.format, self.transcribe.model, self.strum_chiave())
         )
     }
 
@@ -1630,19 +1638,35 @@ impl App {
             return;
         }
         let mut outputs: Vec<String> = Vec::new();
+        let mut strumenti: Vec<String> = Vec::new();
+        let mut origini: Vec<(String, String)> = Vec::new();
         for &i in &job.targets {
             let Some(out) = self.files.get(i).filter(|f| f.state == FileState::Done).and_then(|f| f.output.as_ref()) else { continue };
-            let name = out.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
-            if !name.is_empty() && !outputs.contains(&name) {
-                outputs.push(name);
+            let mut scritti: Vec<PathBuf> = vec![out.clone()];
+            // I dati di uno strumento: oltre all'Excel escono i file in più, e il lavoro ricorda lo strumento e l'impronta dell'originale.
+            if let Some(e) = self.strum_esiti.get(&self.files[i].path) {
+                scritti.extend(e.altri.iter().cloned());
+                if !e.strumento.is_empty() && !strumenti.contains(&e.strumento) {
+                    strumenti.push(e.strumento.clone());
+                }
+                if !origini.contains(&e.origine) {
+                    origini.push(e.origine.clone());
+                }
+            }
+            for p in scritti {
+                let name = p.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+                if !name.is_empty() && !outputs.contains(&name) {
+                    outputs.push(name);
+                }
             }
         }
         if outputs.is_empty() {
             return;
         }
+        let strumento = strumenti.join(" | ");
         let what = if self.lab == Lab::Home { Lab::Converti.name() } else { self.lab.name() };
         let when = crate::nametemplate::now().unix;
-        crate::caso::registra(&mut self.lavori, crate::caso::Lavoro { when, what: crate::i18n::tr(what).to_string(), caso: self.caso.as_ref().map(|c| c.code.clone()).unwrap_or_default(), outputs });
+        crate::caso::registra(&mut self.lavori, crate::caso::Lavoro { when, what: crate::i18n::tr(what).to_string(), caso: self.caso.as_ref().map(|c| c.code.clone()).unwrap_or_default(), outputs, strumento, origini });
         self.quaderno_copiato = None;
         self.lavoro_appena = true;
         self.lavoro_appena_copiato = false;
@@ -1760,6 +1784,11 @@ impl App {
         // «Pagine»: chi ha le pagine sistemate sul banco le salva così, gli altri tutte.
         let boards: HashMap<PathBuf, Vec<(u32, i32)>> =
             if self.action == "pages" { self.boards.iter().filter(|(_, b)| !b.untouched()).map(|(p, b)| (p.clone(), b.kept())).collect() } else { HashMap::new() };
+        // I file che sono l'export di uno strumento escono come dati dello strumento (Excel, CSV, Allotrope); gli altri come da scelta.
+        let strum: HashMap<PathBuf, crate::strumenti::Scelte> = paths.iter().filter(|p| self.strum_lettura(p).is_some()).map(|p| (p.clone(), self.strum_scelte_per(p))).collect();
+        for p in strum.keys() {
+            self.strum_esiti.remove(p);
+        }
         let cancel = self.begin(&targets, JobKind::Convert);
         let action = self.action.clone();
         let quality = self.quality;
@@ -1793,6 +1822,11 @@ impl App {
                             },
                             || {
                                 let mut opts = opts.clone();
+                                let mut action = action.clone();
+                                if let Some(sc) = strum.get(&path) {
+                                    action = "strumento".into();
+                                    opts.strumento = sc.clone();
+                                }
                                 if let Some(c) = cuts.get(&path) {
                                     opts.pdf_pages.plan = crate::pdfpages::Plan::Cuts(c.clone());
                                 }
@@ -2063,6 +2097,14 @@ impl App {
                                 f.state = FileState::Done;
                                 f.done_key = key;
                                 f.message = format!("Fatto · {msg}");
+                                match engine::esito_strumento(&out) {
+                                    Some(e) => {
+                                        self.strum_esiti.insert(path.clone(), e);
+                                    }
+                                    None => {
+                                        self.strum_esiti.remove(&path);
+                                    }
+                                }
                                 f.output = Some(out);
                             }
                             // Un file saltato perché esiste già è una scelta, non un errore.
@@ -2205,6 +2247,7 @@ impl App {
                 Event::Media(path, loaded) => {
                     self.media.insert(path, loaded);
                 }
+                Event::Strumento(path, profilo, esito) => self.strum_riletto(&path, &profilo, esito),
                 Event::Preview(path, page, img) => {
                     let key = (path, page);
                     if let Some(slot) = self.previews.get_mut(&key) {

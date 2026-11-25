@@ -12,11 +12,13 @@ pub mod asm;
 pub mod excel;
 pub mod fonte;
 mod profili;
+pub mod scelte;
 mod tempo;
 
 use std::path::Path;
 
 pub use fonte::Fonte;
+pub use scelte::Scelte;
 
 /// La tecnica, cioè quale schema di Allotrope.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

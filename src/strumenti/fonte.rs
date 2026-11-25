@@ -21,6 +21,8 @@ pub struct Fonte {
     pub testo: String,
     /// I fogli, per Excel e Calc.
     pub fogli: Vec<Foglio>,
+    /// Le righe già divise (ogni profilo che prova a riconoscere il file le chiede).
+    righe_pronte: std::sync::OnceLock<Vec<Vec<String>>>,
 }
 
 /// Quanto si legge al più: gli export degli strumenti sono di qualche MB.
@@ -39,7 +41,7 @@ impl Fonte {
 
     pub fn da_bytes(nome: &str, bytes: Vec<u8>) -> Fonte {
         let ext = Path::new(nome).extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-        let mut f = Fonte { nome: nome.to_string(), ext: ext.clone(), bytes, testo: String::new(), fogli: Vec::new() };
+        let mut f = Fonte { nome: nome.to_string(), ext: ext.clone(), bytes, testo: String::new(), fogli: Vec::new(), righe_pronte: std::sync::OnceLock::new() };
         if matches!(ext.as_str(), "xlsx" | "xlsm" | "xls" | "ods") {
             if let Ok(fogli) = crate::tabella::leggi(&ext, &f.bytes) {
                 f.fogli = fogli.into_iter().map(|s| Foglio { nome: s.nome, righe: s.righe.iter().map(|r| r.iter().map(cella).collect()).collect() }).collect();
@@ -71,8 +73,12 @@ impl Fonte {
         if let Some(f) = self.fogli.first() {
             return f.righe.clone();
         }
-        let sep = crate::tabella::separatore(&self.testo, &self.ext);
-        crate::textconv::parse_csv(&self.testo, sep)
+        self.righe_pronte
+            .get_or_init(|| {
+                let sep = crate::tabella::separatore(&self.testo, &self.ext);
+                crate::textconv::parse_csv(&self.testo, sep)
+            })
+            .clone()
     }
 
     /// Le righe del testo divise con un separatore preciso.
