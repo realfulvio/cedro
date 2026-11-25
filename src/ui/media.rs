@@ -247,7 +247,13 @@ fn info(path: &Path) -> Loaded {
             out.thumb = about.frames.first().cloned();
             out.about = Some(about);
         }
-        Kind::Other | Kind::Archive => out.about = Some(super::preview::about_other(path)),
+        Kind::Other | Kind::Archive => {
+            out.about = Some(super::preview::about_other(path));
+            // Lo ZIP di un export (QuantStudio Absolute Q) è un file di strumento.
+            if engine::extension(path) == "zip" {
+                out.strumento = super::strumenti::leggi(path, out.bytes);
+            }
+        }
     }
     out
 }

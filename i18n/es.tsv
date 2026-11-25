@@ -3182,3 +3182,18 @@ non trovo la data e l'ora: ci vogliono le colonne «Date» e «Time» oppure la 
 non capisco la data «{}»	no entiendo la fecha «{}»
 manca la posizione del pozzetto (colonna «Plate position»)	falta la posición del pocillo (columna «Plate position»)
 due colonne danno valori diversi per la stessa lunghezza d'onda ({#} nm): {} e {}	dos columnas dan valores distintos para la misma longitud de onda ({} nm): {} y {}
+
+# Cedro 4 Labs: QuantStudio Absolute Q
+nello ZIP ci sono più file «summary»: ne serve uno solo	el ZIP tiene más de un archivo «summary»: hace falta uno solo
+nello ZIP non c'è nessun file «summary»	el ZIP no tiene ningún archivo «summary»
+non riesco a capire i blocchi dei coloranti (da «Target» a «Threshold»)	no consigo entender los bloques de colorantes (de «Target» a «Threshold»)
+i blocchi dei coloranti devono avere tutti {#} colonne	todos los bloques de colorantes deben tener {} columnas
+nel file manca la colonna «Sample» (o «Name»)	al archivo le falta la columna «Sample» (o «Name»)
+nel file manca il valore della colonna «{}»	al archivo le falta el valor de la columna «{}»
+non riesco a ricavare il pozzetto dal campione «{}»	no consigo sacar el pocillo de la muestra «{}»
+ci deve essere un solo colorante di riferimento (senza «_target»), nel file ce ne sono {#}	debe haber un solo colorante de referencia (sin «_target»), el archivo tiene {}
+manca la colonna «{}»	falta la columna «{}»
+la colonna «Index» ha un valore che non è un numero	la columna «Index» tiene un valor que no es un número
+nel file non ci sono righe di partizioni	el archivo no tiene filas de particiones
+il gruppo «{}» ha due valori diversi per «{}»: {#} e {#}	el grupo «{}» tiene dos valores distintos para «{}»: {} y {}
+{} · {}: positive {#} e negative {#} su {#} partizioni: la colonna «{}_pos» ha valori diversi da True e False	{} · {}: {} positivas y {} negativas de {} particiones: la columna «{}_pos» tiene valores distintos de True y False

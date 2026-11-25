@@ -251,6 +251,25 @@ pub struct Misura {
     /// I picchi che lo strumento ha trovato (diffusione dinamica della luce): per ogni picco le sue grandezze
     /// (diametro medio, intensità, massa…) come valori «Altro» con la loro unità.
     pub picchi: Vec<Vec<Valore>>,
+    /// I cubi di dati della misura (la fluorescenza di ogni partizione della PCR digitale): per Allotrope.
+    pub cubi: Vec<Cubo>,
+}
+
+/// Un cubo di dati di una misura: una grandezza in funzione di una dimensione (l'indice della partizione).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Cubo {
+    /// La chiave del cubo nello schema («reporter dye data cube»).
+    pub chiave: String,
+    pub etichetta: String,
+    /// La dimensione («cycle count») e la sua unità; `intero` se lo schema la vuole intera.
+    pub dimensione: String,
+    pub unita_dimensione: String,
+    pub intero: bool,
+    /// La grandezza («reporter dye fluorescence») e la sua unità.
+    pub concetto: String,
+    pub unita: String,
+    pub x: Vec<f64>,
+    pub y: Vec<f64>,
 }
 
 impl Misura {
@@ -387,7 +406,7 @@ impl Lettura {
     pub fn formato(&self, g: usize) -> (usize, usize) {
         let Some(gr) = self.gruppi.get(g) else { return (8, 12) };
         let dai_pozzetti = gr.misure.iter().filter_map(|m| m.pozzetto.as_deref().and_then(pozzetto_rc)).fold((0, 0), |a, (r, c)| (a.0.max(r + 1), a.1.max(c + 1)));
-        let formati = [(2, 3), (3, 4), (4, 6), (6, 8), (8, 12), (16, 24), (32, 48)];
+        let formati = [(2, 3), (3, 4), (2, 8), (4, 6), (6, 8), (8, 12), (16, 24), (32, 48)];
         if let Some(n) = gr.pozzetti {
             if let Some(&f) = formati.iter().find(|(r, c)| (r * c) as u32 == n) {
                 if f.0 >= dai_pozzetti.0 && f.1 >= dai_pozzetti.1 {

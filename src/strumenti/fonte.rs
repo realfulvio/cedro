@@ -46,7 +46,7 @@ impl Fonte {
             if let Ok(fogli) = crate::tabella::leggi(&ext, &f.bytes) {
                 f.fogli = fogli.into_iter().map(|s| Foglio { nome: s.nome, righe: s.righe.iter().map(|r| r.iter().map(cella).collect()).collect() }).collect();
             }
-        } else {
+        } else if ext != "zip" {
             f.testo = crate::engine::decode_text(&f.bytes).replace("\r\n", "\n").replace('\r', "\n");
         }
         f

@@ -218,6 +218,9 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
     // Le impostazioni della lettura.
     let mut dc = Map::new();
     dc.insert("device type".into(), json!(tipo_strumento(t)));
+    if t == Tecnica::Dpcr && !m.valori.iter().any(|v| v.chiave == "device identifier") {
+        dc.insert("device identifier".into(), json!(if l.strumento.identificativo.is_empty() { NON_DATO } else { l.strumento.identificativo.as_str() }));
+    }
     if t == Tecnica::Qpcr && !m.valori.iter().any(|v| v.chiave == "measurement method identifier") {
         dc.insert("measurement method identifier".into(), json!(NON_DATO));
     }
@@ -302,6 +305,19 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
                     "measures": [{"@componentDatatype": "double", "concept": concetto, "unit": unita_y}],
                 },
                 "data": {"dimensions": [onde], "measures": [ass]},
+            }),
+        );
+    }
+    for c in &m.cubi {
+        let dim = json!({"@componentDatatype": if c.intero { "integer" } else { "double" }, "concept": c.dimensione, "unit": unita(&c.unita_dimensione)});
+        let mis = json!({"@componentDatatype": "double", "concept": c.concetto, "unit": unita(&c.unita)});
+        let y: Vec<Value> = c.y.iter().map(|v| if v.is_finite() { num(*v) } else { num(-0.0) }).collect();
+        d.insert(
+            c.chiave.clone(),
+            json!({
+                "label": c.etichetta,
+                "cube-structure": {"dimensions": [dim], "measures": [mis]},
+                "data": {"dimensions": [c.x.iter().map(|v| num(*v)).collect::<Vec<_>>()], "measures": [y]},
             }),
         );
     }
@@ -429,7 +445,8 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
     let mut push = |nome: &str, v: f64, u: &str, sorgenti: &[String], da: &str, descrizione: &str, altri: &[usize]| {
         let id = id_calcolo(n);
         n += 1;
-        let mut src: Vec<Value> = sorgenti.iter().map(|s| json!({"data source identifier": s, "data source feature": da})).collect();
+        // Più grandezze della stessa fonte sono scritte separate da una virgola («total partition count,positive partition count»).
+        let mut src: Vec<Value> = sorgenti.iter().flat_map(|s| da.split(',').map(move |f| json!({"data source identifier": s, "data source feature": f.trim()}))).collect();
         // Un calcolo che viene da altri calcoli: la fonte è il calcolo e la «feature» il suo nome.
         for &a in altri {
             if let Some(c) = l.calcolati.get(a) {
@@ -479,6 +496,10 @@ fn stem(f: &str) -> String {
 /// I calcoli di Cedro sui pozzetti segnati come bianco: la media dei bianchi e ogni valore meno quella.
 pub fn calcoli_cedro(l: &Lettura, o: &Opzioni) -> Vec<(String, f64, String, Vec<String>)> {
     let mut out = Vec::new();
+    // Il controllo senza templato della PCR digitale non è un bianco da sottrarre: la concentrazione resta quella dello strumento.
+    if l.tecnica == Tecnica::Dpcr {
+        return out;
+    }
     for g in &l.gruppi {
         let bianchi: Vec<&Misura> = g.misure.iter().filter(|m| ruolo(l, m, o) == Some(Ruolo::Bianco) && l.valore(m).is_some()).collect();
         if bianchi.is_empty() {

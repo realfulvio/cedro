@@ -350,7 +350,7 @@ pub fn leggi(path: &Path, bytes: u64) -> Option<Arc<Lettura>> {
         return None;
     }
     let ext = crate::engine::extension(path);
-    if !matches!(ext.as_str(), "csv" | "tsv" | "txt" | "xlsx" | "xlsm" | "xls") {
+    if !matches!(ext.as_str(), "csv" | "tsv" | "txt" | "xlsx" | "xlsm" | "xls" | "zip") {
         return None;
     }
     strumenti::leggi_file(path).ok().map(Arc::new)
