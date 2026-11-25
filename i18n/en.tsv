@@ -3230,3 +3230,17 @@ nel file non ci sono valori	the file has no values
 # Thermo Fisher Diomni
 manca il foglio «Target_Call» o «Target Call»	the «Target_Call» or «Target Call» sheet is missing
 non trovo la tabella dei risultati (la riga che comincia con «Well»)	can't find the results table (the row starting with «Well»)
+
+# BMG Labtech SMART Control
+manca il foglio «Protocol Information»	the «Protocol Information» sheet is missing
+manca il foglio «Microplate End point»	the «Microplate End point» sheet is missing
+manca il foglio «Table End point»	the «Table End point» sheet is missing
+nel foglio «Protocol Information» manca «Basic settings»	the «Protocol Information» sheet has no «Basic settings»
+il tipo di lettura «{}» non è supportato: Cedro legge la fluorescenza di SMART Control	the reading type «{}» isn't supported: Cedro reads SMART Control fluorescence
+il filtro «{}» («{}») non si legge: serve «lunghezza-banda», come 480-14	the filter «{}» («{}») can't be read: it should be «wavelength-bandwidth», like 480-14
+dal nome della piastra «{}» non ricavo il numero di pozzetti	can't work out the number of wells from the plate name «{}»
+nel foglio «Table End point» manca la riga «Well»	the «Table End point» sheet has no «Well» row
+nel foglio «Table End point» manca la riga «{}»	the «Table End point» sheet has no «{}» row
+nel file manca il contenuto del pozzetto {}	the file has no content for well {}
+il pozzetto {} ha un valore che non è un numero: «{}»	well {} has a value that isn't a number: «{}»
+nel file non ci sono pozzetti con un valore	the file has no wells with a value

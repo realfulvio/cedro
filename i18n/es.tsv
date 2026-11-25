@@ -3216,3 +3216,17 @@ nel file non ci sono valori	el archivo no tiene valores
 # Thermo Fisher Diomni
 manca il foglio «Target_Call» o «Target Call»	falta la hoja «Target_Call» o «Target Call»
 non trovo la tabella dei risultati (la riga che comincia con «Well»)	no encuentro la tabla de resultados (la fila que empieza por «Well»)
+
+# BMG Labtech SMART Control
+manca il foglio «Protocol Information»	falta la hoja «Protocol Information»
+manca il foglio «Microplate End point»	falta la hoja «Microplate End point»
+manca il foglio «Table End point»	falta la hoja «Table End point»
+nel foglio «Protocol Information» manca «Basic settings»	en la hoja «Protocol Information» falta «Basic settings»
+il tipo di lettura «{}» non è supportato: Cedro legge la fluorescenza di SMART Control	el tipo de lectura «{}» no es compatible: Cedro lee la fluorescencia de SMART Control
+il filtro «{}» («{}») non si legge: serve «lunghezza-banda», come 480-14	el filtro «{}» («{}») no se puede leer: debe ser «longitud de onda-ancho de banda», como 480-14
+dal nome della piastra «{}» non ricavo il numero di pozzetti	del nombre de la placa «{}» no consigo sacar el número de pocillos
+nel foglio «Table End point» manca la riga «Well»	en la hoja «Table End point» falta la fila «Well»
+nel foglio «Table End point» manca la riga «{}»	en la hoja «Table End point» falta la fila «{}»
+nel file manca il contenuto del pozzetto {}	en el archivo falta el contenido del pocillo {}
+il pozzetto {} ha un valore che non è un numero: «{}»	el pocillo {} tiene un valor que no es un número: «{}»
+nel file non ci sono pozzetti con un valore	el archivo no tiene pocillos con valor

@@ -3219,3 +3219,17 @@ nel file non ci sono valori	die Datei enthält keine Werte
 # Thermo Fisher Diomni
 manca il foglio «Target_Call» o «Target Call»	das Blatt «Target_Call» oder «Target Call» fehlt
 non trovo la tabella dei risultati (la riga che comincia con «Well»)	die Ergebnistabelle (die Zeile, die mit «Well» beginnt) wurde nicht gefunden
+
+# BMG Labtech SMART Control
+manca il foglio «Protocol Information»	das Blatt «Protocol Information» fehlt
+manca il foglio «Microplate End point»	das Blatt «Microplate End point» fehlt
+manca il foglio «Table End point»	das Blatt «Table End point» fehlt
+nel foglio «Protocol Information» manca «Basic settings»	im Blatt «Protocol Information» fehlt «Basic settings»
+il tipo di lettura «{}» non è supportato: Cedro legge la fluorescenza di SMART Control	der Messtyp «{}» wird nicht unterstützt: Cedro liest die Fluoreszenz von SMART Control
+il filtro «{}» («{}») non si legge: serve «lunghezza-banda», come 480-14	der Filter «{}» («{}») ist nicht lesbar: erwartet wird «Wellenlänge-Bandbreite», z. B. 480-14
+dal nome della piastra «{}» non ricavo il numero di pozzetti	aus dem Plattennamen «{}» lässt sich die Anzahl der Wells nicht ableiten
+nel foglio «Table End point» manca la riga «Well»	im Blatt «Table End point» fehlt die Zeile «Well»
+nel foglio «Table End point» manca la riga «{}»	im Blatt «Table End point» fehlt die Zeile «{}»
+nel file manca il contenuto del pozzetto {}	in der Datei fehlt der Inhalt von Well {}
+il pozzetto {} ha un valore che non è un numero: «{}»	Well {} hat einen Wert, der keine Zahl ist: «{}»
+nel file non ci sono pozzetti con un valore	die Datei enthält keine Wells mit einem Wert
