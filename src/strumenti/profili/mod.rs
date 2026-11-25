@@ -4,6 +4,7 @@
 use super::Profilo;
 
 mod cfx;
+mod conta;
 mod genesys;
 mod nanodrop_8;
 mod nanodrop_one;
@@ -12,6 +13,7 @@ mod tabella;
 mod qubit;
 mod qubit_flex;
 mod tecan;
+mod vi_cell;
 mod visionlite;
 
-pub const TUTTI: &[Profilo] = &[tecan::PROFILO, cfx::PROFILO, qubit::PROFILO, nanodrop_one::PROFILO, quantstudio::PROFILO, nanodrop_8::OTTO_MILA, nanodrop_8::EIGHT, qubit_flex::PROFILO, genesys::PROFILO, visionlite::VISIONLITE, visionlite::GENESYS_ON_BOARD];
+pub const TUTTI: &[Profilo] = &[tecan::PROFILO, cfx::PROFILO, qubit::PROFILO, nanodrop_one::PROFILO, quantstudio::PROFILO, nanodrop_8::OTTO_MILA, nanodrop_8::EIGHT, qubit_flex::PROFILO, genesys::PROFILO, visionlite::VISIONLITE, visionlite::GENESYS_ON_BOARD, vi_cell::BLU, vi_cell::XR];

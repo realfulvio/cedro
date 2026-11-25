@@ -13,8 +13,15 @@ pub fn iso(s: &str, giorno_prima: bool) -> Option<String> {
     let corpo = corpo.replace('T', " ");
     let mut parti = corpo.split_whitespace();
     let data = parti.next()?;
-    let resto: Vec<&str> = parti.collect();
-    let (y, m, d) = data_parti(data, giorno_prima)?;
+    let mut resto: Vec<&str> = parti.collect();
+    // «31 Aug 2021  4:31:23 PM»: giorno, mese a lettere, anno.
+    let (y, m, d) = match data.parse::<u32>().ok().zip(resto.first().and_then(|m| mese(m))).zip(resto.get(1).and_then(|a| a.parse::<u32>().ok())) {
+        Some(((g, m), a)) if g <= 31 && a > 31 => {
+            resto.drain(..2);
+            (a, m, g)
+        }
+        _ => data_parti(data, giorno_prima)?,
+    };
     let (mut h, mi, se) = match resto.first() {
         Some(o) if o.contains(':') => ora_parti(o)?,
         _ => (0, 0, 0),
@@ -95,6 +102,17 @@ fn fuso(s: &str) -> (String, Option<String>) {
     (s.to_string(), None)
 }
 
+/// Il numero del mese da «Aug», «agosto», «Sept».
+fn mese(m: &str) -> Option<u32> {
+    let m = m.trim_end_matches('.').to_ascii_lowercase();
+    let nomi = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    let it = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"];
+    if m.len() < 3 || !m.bytes().all(|b| b.is_ascii_alphabetic()) {
+        return None;
+    }
+    nomi.iter().chain(it.iter()).position(|x| m.starts_with(x)).map(|i| (i % 12) as u32 + 1)
+}
+
 fn data_parti(d: &str, giorno_prima: bool) -> Option<(u32, u32, u32)> {
     let sep = if d.contains('-') { '-' } else if d.contains('/') { '/' } else if d.contains('.') { '.' } else { return None };
     let n: Vec<u32> = d.split(sep).map(|x| x.trim().parse().ok()).collect::<Option<Vec<_>>>()?;
@@ -139,6 +157,8 @@ mod prove {
         assert_eq!(iso("03/04/2026", false).unwrap(), "2026-03-04T00:00:00+00:00");
         assert_eq!(iso("2026-11-24T14:05:00+01:00", true).unwrap(), "2026-11-24T14:05:00+01:00");
         assert_eq!(iso("2026-11-24 12:00:00 AM", false).unwrap(), "2026-11-24T00:00:00+00:00");
+        assert_eq!(iso("31 Aug 2021  4:31:23 PM", true).unwrap(), "2021-08-31T16:31:23+00:00");
+        assert_eq!(iso("2 Mar 2023  8:31:38 AM", true).unwrap(), "2023-03-02T08:31:38+00:00");
         assert!(iso("ieri", true).is_none());
     }
 }

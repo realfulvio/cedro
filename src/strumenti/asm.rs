@@ -237,13 +237,15 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
     let elab: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::Elaborato).collect();
     let impost: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::Elaborazione).collect();
     let elab_altro: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::ElaboratoAltro).collect();
-    if !elab.is_empty() || !impost.is_empty() || !elab_altro.is_empty() {
+    let impost_altro: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::ElaborazioneAltro).collect();
+    if !elab.is_empty() || !impost.is_empty() || !elab_altro.is_empty() || !impost_altro.is_empty() {
         let mut p = Map::new();
-        if !impost.is_empty() {
+        if !impost.is_empty() || !impost_altro.is_empty() {
             let mut dp = Map::new();
             for v in &impost {
                 metti(&mut dp, v, &mut errori);
             }
+            altro(&mut dp, &impost_altro);
             p.insert("data processing document".into(), Value::Object(dp));
         }
         for v in &elab {
@@ -251,6 +253,17 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
         }
         altro(&mut p, &elab_altro);
         d.insert("processed data aggregate document".into(), json!({ "processed data document": [Value::Object(p)] }));
+    }
+    // Le immagini (contacellule): il file dei dati e le note.
+    let immagine: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::Immagine).collect();
+    let immagine_altro: Vec<&Valore> = m.valori.iter().filter(|v| v.posto == Posto::ImmagineAltro).collect();
+    if !immagine.is_empty() || !immagine_altro.is_empty() {
+        let mut im = Map::new();
+        for v in &immagine {
+            metti(&mut im, v, &mut errori);
+        }
+        altro(&mut im, &immagine_altro);
+        d.insert("image aggregate document".into(), json!({ "image document": [Value::Object(im)] }));
     }
     if !m.spettro.is_empty() {
         // Lo spettro: lunghezze d'onda e assorbanze in mAU, come le altre assorbanze del file.

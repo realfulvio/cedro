@@ -135,6 +135,12 @@ pub enum Posto {
     ImpostazioneAltro,
     /// Note sui dati elaborati (custom information del documento dei dati elaborati).
     ElaboratoAltro,
+    /// Note sulle impostazioni dell'elaborazione (custom information del documento «data processing»).
+    ElaborazioneAltro,
+    /// Nel documento dell'immagine (contacellule): per esempio il nome del file dei dati.
+    Immagine,
+    /// Note sulle immagini (custom information del documento dell'immagine).
+    ImmagineAltro,
 }
 
 /// Un valore: numero con unità, testo, o assente (lo schema lo vuole ma il file non lo ha).

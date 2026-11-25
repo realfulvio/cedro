@@ -182,7 +182,7 @@ fn colonne_valori(l: &Lettura) -> Vec<(String, String)> {
         }
     };
     vedi(&[Posto::Misura, Posto::Elaborato], l);
-    vedi(&[Posto::Campione, Posto::Impostazione, Posto::Elaborazione, Posto::CampioneAltro, Posto::ImpostazioneAltro, Posto::ElaboratoAltro], l);
+    vedi(&[Posto::Campione, Posto::Impostazione, Posto::Elaborazione, Posto::CampioneAltro, Posto::ImpostazioneAltro, Posto::ElaboratoAltro, Posto::ElaborazioneAltro, Posto::Immagine, Posto::ImmagineAltro], l);
     if let Some(i) = cols.iter().position(|(k, _)| *k == l.principale) {
         let c = cols.remove(i);
         cols.insert(0, c);
