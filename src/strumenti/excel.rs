@@ -74,8 +74,15 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Result<Vec<u8>, String> {
         mappa(&mut book, l, o).map_err(err)?;
     }
     foglio(&mut book, &tabella(l, o), &titoli).map_err(err)?;
-    if l.misure().any(|m| !m.spettro.is_empty()) {
-        spettri(&mut book, l, &titoli).map_err(err)?;
+    let e_cinetica = |m: &&super::Misura| m.curva.as_ref().is_some_and(|c| c.cinetica);
+    if l.misure().any(|m| !m.spettro.is_empty() && !e_cinetica(&m)) {
+        curve(&mut book, l, &titoli, false).map_err(err)?;
+    }
+    if l.misure().any(|m| !m.spettro.is_empty() && e_cinetica(&m)) {
+        curve(&mut book, l, &titoli, true).map_err(err)?;
+    }
+    if !l.calcolati.is_empty() && !a_colonne(l) {
+        calcolati(&mut book, l, &titoli).map_err(err)?;
     }
     strumento(&mut book, l, &titoli).map_err(err)?;
     book.save_to_buffer().map_err(err)
@@ -236,11 +243,16 @@ pub fn tab_pozzetti(l: &Lettura, o: &Opzioni) -> Tab {
     }
     intest.push("Ruolo".into());
     let primo_valore = intest.len();
+    // Le letture fatte di curve non hanno un valore solo per pozzetto: la prima colonna è l'ultimo punto o il massimo.
+    let con_curva = l.principale == super::PRINCIPALE_CURVA && l.curva().is_some();
+    if let (true, Some(c)) = (con_curva, l.curva()) {
+        intest.push(format!("{} · {} ({}) (calcolato da Cedro)", c.nome_riassunto(), c.concetto, c.unita));
+    }
     for (k, u) in &cols {
         intest.push(intestazione_valore(k, u));
     }
     // «Meno il bianco» sta subito dopo il valore principale: è quello che si guarda per primo.
-    let pos_bianco = if cols.is_empty() { intest.len() } else { primo_valore + 1 };
+    let pos_bianco = if cols.is_empty() && !con_curva { intest.len() } else { primo_valore + 1 };
     if con_bianco {
         intest.insert(pos_bianco, "meno il bianco (calcolato da Cedro)".into());
     }
@@ -261,6 +273,9 @@ pub fn tab_pozzetti(l: &Lettura, o: &Opzioni) -> Tab {
             let ruolo = ruolo_di(m, &o.ruoli);
             r.push(testo_cella(if ruolo == Ruolo::Campione && !m.ruolo_dal_file { "" } else { ruolo.nome() }));
             debug_assert_eq!(r.len(), primo_valore);
+            if con_curva {
+                r.push(l.valore(m).map(Cella::Numero));
+            }
             for (k, _) in &cols {
                 r.push(m.valore(k).and_then(|v| dato_cella(&v.dato)));
             }
@@ -452,27 +467,37 @@ pub fn tab_campioni(l: &Lettura) -> Tab {
     Tab { nome: "Campioni", intest, righe: tab_righe, ferme: if molti { 2 } else { 1 } }
 }
 
-/// Gli spettri: una colonna di lunghezze d'onda e una colonna per campione, con il grafico.
-fn spettri(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), XlsxError> {
+/// Le curve dei pozzetti e degli spettri: una colonna con l'asse (nm o secondi) e una colonna per curva, con il grafico.
+/// `cinetica`: le cinetiche (il tempo sull'asse); altrimenti gli spettri.
+fn curve(book: &mut Workbook, l: &Lettura, titoli: &Format, cinetica: bool) -> Result<(), XlsxError> {
     let ws = book.add_worksheet();
-    ws.set_name("Spettri")?;
-    let spettri: Vec<&super::Misura> = l.misure().filter(|m| !m.spettro.is_empty()).collect();
-    // Le lunghezze d'onda di tutti gli spettri, in ordine (di solito sono le stesse).
-    let mut onde: Vec<f64> = spettri.iter().flat_map(|m| m.spettro.iter().map(|(w, _)| *w)).collect();
+    let nome_foglio = if cinetica { "Cinetica" } else { "Spettri" };
+    ws.set_name(nome_foglio)?;
+    let e_questa = |m: &super::Misura| !m.spettro.is_empty() && m.curva.as_ref().is_some_and(|c| c.cinetica) == cinetica;
+    let con_gruppi = l.gruppi.iter().filter(|g| g.misure.iter().any(|m| e_questa(m))).count() > 1;
+    let spettri: Vec<(&str, &super::Misura)> = l.gruppi.iter().flat_map(|g| g.misure.iter().filter(|m| e_questa(m)).map(move |m| (g.titolo.as_str(), m))).collect();
+    // I punti di tutte le curve, in ordine (di solito sono gli stessi).
+    let mut onde: Vec<f64> = spettri.iter().flat_map(|(_, m)| m.spettro.iter().map(|(w, _)| *w)).collect();
     onde.sort_by(|a, b| a.total_cmp(b));
     onde.dedup();
-    ws.write_string_with_format(0, 0, "nm", titoli)?;
+    ws.write_string_with_format(0, 0, if cinetica { "s" } else { "nm" }, titoli)?;
     for (i, w) in onde.iter().enumerate() {
         ws.write_number(i as u32 + 1, 0, *w)?;
     }
     let mut nomi: Vec<String> = Vec::new();
-    for (c, m) in spettri.iter().enumerate() {
-        let base = if m.campione.is_empty() { m.id.clone() } else { m.campione.clone() };
+    for (c, (gruppo, m)) in spettri.iter().enumerate() {
+        let mut base = if m.campione.is_empty() { m.id.clone() } else { m.campione.clone() };
+        if con_gruppi && !gruppo.is_empty() {
+            base = format!("{base} · {gruppo}");
+        }
         let n = nomi.iter().filter(|x| **x == base || x.starts_with(&format!("{base} ("))).count();
         let nome = if n == 0 { base } else { format!("{base} ({})", n + 1) };
         let col = c as u16 + 1;
         ws.write_string_with_format(0, col, &nome, titoli)?;
         for (w, a) in &m.spettro {
+            if !a.is_finite() {
+                continue;
+            }
             if let Ok(i) = onde.binary_search_by(|x| x.total_cmp(w)) {
                 ws.write_number(i as u32 + 1, col, *a)?;
             }
@@ -484,18 +509,63 @@ fn spettri(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xlsx
     for c in 1..=spettri.len() as u16 {
         ws.set_column_width(c, 16)?;
     }
-    // Il grafico degli spettri (fino a 24: oltre le linee non si leggono più).
+    // Il grafico (fino a 24 curve: oltre le linee non si leggono più).
     if spettri.len() <= 24 && !onde.is_empty() {
         let ultima = onde.len() as u32;
         let mut grafico = Chart::new(ChartType::ScatterSmooth);
         for c in 1..=spettri.len() as u16 {
-            grafico.add_series().set_categories(("Spettri", 1, 0, ultima, 0)).set_values(("Spettri", 1, c, ultima, c)).set_name(("Spettri", 0, c));
+            grafico.add_series().set_categories((nome_foglio, 1, 0, ultima, 0)).set_values((nome_foglio, 1, c, ultima, c)).set_name((nome_foglio, 0, c));
         }
-        grafico.x_axis().set_name("Lunghezza d'onda (nm)");
-        grafico.y_axis().set_name("Assorbanza (AU)");
-        grafico.title().set_name("Spettri di assorbanza");
+        let curva = spettri.first().and_then(|(_, m)| m.curva.as_ref());
+        let (concetto, unita) = curva.map(|c| (c.concetto.as_str(), c.unita.as_str())).unwrap_or(("absorbance", "AU"));
+        let nome_y = match concetto {
+            "fluorescence" => "Fluorescenza",
+            "luminescence" => "Luminescenza",
+            _ => "Assorbanza",
+        };
+        grafico.x_axis().set_name(if cinetica { "Tempo (s)" } else { "Lunghezza d'onda (nm)" });
+        grafico.y_axis().set_name(&format!("{nome_y} ({})", if unita.is_empty() { "AU" } else { unita }));
+        grafico.title().set_name(&format!("{} di {}", if cinetica { "Cinetiche" } else { "Spettri" }, nome_y.to_lowercase()));
         grafico.set_width(760).set_height(380);
         ws.insert_chart(1, spettri.len() as u16 + 2, &grafico)?;
+    }
+    Ok(())
+}
+
+/// I valori che lo strumento ha calcolato: una riga per valore, con il pozzetto e le misure da cui viene.
+fn calcolati(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), XlsxError> {
+    let ws = book.add_worksheet();
+    ws.set_name("Calcolati")?;
+    let di_misura: HashMap<&str, (&str, &super::Misura)> = l.gruppi.iter().flat_map(|g| g.misure.iter().map(move |m| (m.id.as_str(), (g.titolo.as_str(), m)))).collect();
+    let piastra = l.a_piastra();
+    let mut intest: Vec<&str> = Vec::new();
+    if piastra {
+        intest.push("Pozzetto");
+    }
+    intest.extend(["Campione", "Nome", "Valore", "Misure da cui viene"]);
+    for (c, x) in intest.iter().enumerate() {
+        ws.write_string_with_format(0, c as u16, *x, titoli)?;
+    }
+    for (i, c) in l.calcolati.iter().enumerate() {
+        let r = i as u32 + 1;
+        let prima = c.sorgenti.first().and_then(|s| di_misura.get(s.as_str()));
+        let mut col = 0u16;
+        if piastra {
+            ws.write_string(r, col, prima.and_then(|(_, m)| m.pozzetto.as_deref()).unwrap_or(""))?;
+            col += 1;
+        }
+        ws.write_string(r, col, prima.map(|(_, m)| m.campione.as_str()).unwrap_or(""))?;
+        ws.write_string(r, col + 1, &c.nome)?;
+        ws.write_number(r, col + 2, c.valore)?;
+        let origine: Vec<String> = c.sorgenti.iter().filter_map(|s| di_misura.get(s.as_str())).map(|(g, m)| if g.is_empty() { m.id.clone() } else { format!("{g}") }).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
+        ws.write_string(r, col + 3, &origine.join(", "))?;
+    }
+    ws.set_freeze_panes(1, 0)?;
+    if !l.calcolati.is_empty() {
+        ws.autofilter(0, 0, l.calcolati.len() as u32, (intest.len() - 1) as u16)?;
+    }
+    for (c, x) in intest.iter().enumerate() {
+        ws.set_column_width(c as u16, if *x == "Nome" || *x == "Misure da cui viene" { 36.0 } else { 14.0 })?;
     }
     Ok(())
 }

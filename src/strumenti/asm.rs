@@ -266,16 +266,25 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
         d.insert("image aggregate document".into(), json!({ "image document": [Value::Object(im)] }));
     }
     if !m.spettro.is_empty() {
-        // Lo spettro: lunghezze d'onda e assorbanze in mAU, come le altre assorbanze del file.
+        // La curva: lunghezze d'onda (o secondi) e valori; l'assorbanza va in mAU come le altre assorbanze del file.
+        let (chiave, etichetta, asse, concetto, unita_y, fattore) = match &m.curva {
+            Some(c) => {
+                let (u, f) = if matches!(c.unita.trim(), "OD" | "AU" | "Abs") { ("mAU".to_string(), 1000.0) } else { (unita(&c.unita), 1.0) };
+                let asse = if c.cinetica { ("elapsed time", "s") } else { ("wavelength", "nm") };
+                (c.chiave.clone(), c.etichetta.clone(), asse, c.concetto.clone(), u, f)
+            }
+            None => ("absorption spectrum data cube".to_string(), "absorption spectrum".to_string(), ("wavelength", "nm"), "absorbance".to_string(), "mAU".to_string(), 1000.0),
+        };
         let onde: Vec<Value> = m.spettro.iter().map(|(w, _)| num(*w)).collect();
-        let ass: Vec<Value> = m.spettro.iter().map(|(_, a)| num(a * 1000.0)).collect();
+        // Un punto che lo strumento non ha dato (NaN) è -0, come ogni dato mancante.
+        let ass: Vec<Value> = m.spettro.iter().map(|(_, a)| if a.is_finite() { num(a * fattore) } else { num(-0.0) }).collect();
         d.insert(
-            "absorption spectrum data cube".into(),
+            chiave,
             json!({
-                "label": "absorption spectrum",
+                "label": etichetta,
                 "cube-structure": {
-                    "dimensions": [{"@componentDatatype": "double", "concept": "wavelength", "unit": "nm"}],
-                    "measures": [{"@componentDatatype": "double", "concept": "absorbance", "unit": "mAU"}],
+                    "dimensions": [{"@componentDatatype": "double", "concept": asse.0, "unit": asse.1}],
+                    "measures": [{"@componentDatatype": "double", "concept": concetto, "unit": unita_y}],
                 },
                 "data": {"dimensions": [onde], "measures": [ass]},
             }),

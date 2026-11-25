@@ -258,7 +258,10 @@ fn piastra(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, g: usize, bo
     let titolo = d(if gr.titolo.is_empty() { l.nome } else { &gr.titolo });
     f.p.text(&titolo, body.0, body.1, body.2 * 0.6, 30.0, 21.0, BOLD, LABS_INK, Align::Left);
     let unita = if l.unita.is_empty() { String::new() } else { format!(" ({})", l.unita) };
-    let sotto = d(&format!("{}{}", l.principale, unita));
+    let sotto = match l.curva().filter(|_| l.principale == crate::strumenti::PRINCIPALE_CURVA) {
+        Some(c) => format!("{} · {}{}", tradotto(c.nome_riassunto()), d(&c.concetto), d(&unita)),
+        None => d(&format!("{}{}", l.principale, unita)),
+    };
     f.p.text(&sotto, body.0, body.1 + 28.0, body.2 * 0.6, 22.0, 14.5, SANS, LABS_MUTED, Align::Left);
     if !vals.is_empty() {
         let (lt, ht) = (num(lo, dec), num(hi, dec));

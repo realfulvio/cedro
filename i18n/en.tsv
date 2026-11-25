@@ -3115,3 +3115,12 @@ file vuoto	empty file
 il file non ha fogli	the file has no sheets
 il file non ha la forma che questo strumento si aspetta	the file doesn't have the layout this instrument expects
 il file Allotrope non passa il controllo: {}	the Allotrope file fails the check: {}
+ultimo punto della cinetica	last point of the kinetic run
+massimo dello spettro	maximum of the spectrum
+nel file non ci sono dati di una piastra	the file has no plate data
+il file ha più piastre: Cedro ne legge una per file (da Gen5 si esporta una piastra alla volta)	the file has several plates: Cedro reads one per file (export one plate at a time from Gen5)
+manca la sezione «Procedure Details»	the «Procedure Details» section is missing
+Cedro legge le letture in punto finale, le cinetiche e gli spettri; le scansioni dell'area (Area Scan) no	Cedro reads endpoint reads, kinetic runs and spectra; area scans are not supported
+nello stesso file ci sono AlphaLISA e fluorescenza: Cedro non li legge insieme	the same file has AlphaLISA and fluorescence reads: Cedro does not read them together
+nel file mancano le tabelle dei risultati	the file has no results tables
+i dati non contengono misure valide	the data has no valid measurements

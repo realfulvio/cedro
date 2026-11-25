@@ -3103,3 +3103,12 @@ file vuoto	arquivo vazio
 il file non ha fogli	o arquivo não tem planilhas
 il file non ha la forma che questo strumento si aspetta	o arquivo não tem a forma que este instrumento espera
 il file Allotrope non passa il controllo: {}	o arquivo Allotrope não passa a verificação: {}
+ultimo punto della cinetica	último ponto da cinética
+massimo dello spettro	máximo do espectro
+nel file non ci sono dati di una piastra	o arquivo não tem dados de uma placa
+il file ha più piastre: Cedro ne legge una per file (da Gen5 si esporta una piastra alla volta)	o arquivo tem várias placas: o Cedro lê uma por arquivo (no Gen5 exporte uma placa de cada vez)
+manca la sezione «Procedure Details»	falta a seção «Procedure Details»
+Cedro legge le letture in punto finale, le cinetiche e gli spettri; le scansioni dell'area (Area Scan) no	o Cedro lê leituras de ponto final, cinéticas e espectros; as varreduras de área (Area Scan) não
+nello stesso file ci sono AlphaLISA e fluorescenza: Cedro non li legge insieme	o mesmo arquivo tem AlphaLISA e fluorescência: o Cedro não os lê juntos
+nel file mancano le tabelle dei risultati	faltam as tabelas de resultados no arquivo
+i dati non contengono misure valide	os dados não contêm medições válidas

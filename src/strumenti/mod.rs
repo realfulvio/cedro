@@ -183,6 +183,43 @@ impl Valore {
     }
 }
 
+/// Che cosa sono i punti di una curva di un pozzetto: la cinetica (un valore ogni tanti secondi) o
+/// uno spettro (un valore per lunghezza d'onda). Per Allotrope è un cubo di dati.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Curva {
+    /// La chiave del cubo nello schema («absorption profile data cube»).
+    pub chiave: String,
+    /// L'etichetta del cubo («600.0», «absorbance-spectrum»).
+    pub etichetta: String,
+    /// Cinetica (il tempo in secondi sull'asse) o spettro (le lunghezze d'onda in nm).
+    pub cinetica: bool,
+    /// Il concetto del valore («absorbance», «fluorescence», «luminescence»).
+    pub concetto: String,
+    /// L'unità come la scrive lo strumento («OD», «RFU», «RLU»).
+    pub unita: String,
+}
+
+impl Curva {
+    /// Il valore della curva che si mostra sulla piastra: l'ultimo punto della cinetica, il massimo dello spettro.
+    pub fn riassunto(&self, punti: &[(f64, f64)]) -> Option<f64> {
+        let validi = punti.iter().map(|(_, y)| *y).filter(|y| y.is_finite());
+        if self.cinetica {
+            punti.iter().rev().map(|(_, y)| *y).find(|y| y.is_finite())
+        } else {
+            validi.fold(None, |m: Option<f64>, y| Some(m.map_or(y, |m| m.max(y))))
+        }
+    }
+
+    /// Il nome di quel valore per chi legge.
+    pub fn nome_riassunto(&self) -> &'static str {
+        if self.cinetica {
+            "ultimo punto della cinetica"
+        } else {
+            "massimo dello spettro"
+        }
+    }
+}
+
 /// Una misura: un pozzetto letto una volta, oppure un campione.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Misura {
@@ -207,12 +244,15 @@ pub struct Misura {
     /// Lo spettro di assorbanza (lunghezza d'onda in nm, assorbanza in unità di assorbanza), per gli
     /// spettrofotometri che lo scrivono. Una misura con lo spettro e nessun valore è lo spettro e basta.
     pub spettro: Vec<(f64, f64)>,
+    /// Che cosa sono i punti di `spettro` quando non sono uno spettro di assorbanza dei spettrofotometri
+    /// (la cinetica di un pozzetto, lo spettro di fluorescenza…). Un punto senza valore è NaN.
+    pub curva: Option<Curva>,
 }
 
 impl Misura {
     /// È solo uno spettro: non va nell'elenco dei campioni, ha il suo foglio.
     pub fn e_spettro(&self) -> bool {
-        self.valori.is_empty() && !self.spettro.is_empty()
+        self.valori.is_empty() && !self.spettro.is_empty() && self.curva.is_none()
     }
 
     /// Il valore di una chiave.
@@ -350,9 +390,18 @@ impl Lettura {
         formati.iter().copied().find(|(r, c)| *r >= dai_pozzetti.0 && *c >= dai_pozzetti.1).unwrap_or((dai_pozzetti.0.max(1), dai_pozzetti.1.max(1)))
     }
 
-    /// Il valore principale di una misura, se è un numero.
+    /// Il valore principale di una misura, se è un numero. Per le curve (cinetiche e spettri dei pozzetti)
+    /// è l'ultimo punto o il massimo, calcolato da Cedro e detto tale.
     pub fn valore(&self, m: &Misura) -> Option<f64> {
-        m.valore(&self.principale).and_then(Valore::numero)
+        if self.principale == PRINCIPALE_CURVA {
+            return m.curva.as_ref().and_then(|c| c.riassunto(&m.spettro));
+        }
+        m.valore(&self.principale).and_then(Valore::numero).or_else(|| m.curva.as_ref().filter(|_| m.valore(&self.principale).is_none()).and_then(|c| c.riassunto(&m.spettro)))
+    }
+
+    /// La prima curva della lettura (cinetica o spettro dei pozzetti), se ce n'è.
+    pub fn curva(&self) -> Option<&Curva> {
+        self.misure().find_map(|m| m.curva.as_ref())
     }
 
     /// Il testo del valore principale quando non è un numero («Undetermined», «OVER»).
@@ -363,6 +412,10 @@ impl Lettura {
         }
     }
 }
+
+/// Il «valore principale» delle letture fatte di curve: non c'è un valore solo per pozzetto, si mostra
+/// l'ultimo punto della cinetica o il massimo dello spettro.
+pub const PRINCIPALE_CURVA: &str = "@curva";
 
 /// Riga e colonna (da 0) di un pozzetto scritto «A1», «a01», «AA12».
 pub fn pozzetto_rc(p: &str) -> Option<(usize, usize)> {
