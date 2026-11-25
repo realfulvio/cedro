@@ -268,7 +268,33 @@ pub struct Analita {
     pub sfera: Option<String>,
     pub conteggio: Option<f64>,
     pub statistiche: Vec<Statistica>,
+    /// I valori che lo strumento ha calcolato per l'analita (Net MFI, concentrazione…): in Allotrope sono dati calcolati
+    /// con l'analita come fonte.
+    pub calcolati: Vec<CalcoloAnalita>,
     /// Le altre informazioni dello strumento sull'analita (commenti, concentrazione attesa…).
+    pub altro: Vec<Valore>,
+}
+
+/// Un valore calcolato dallo strumento per un analita.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CalcoloAnalita {
+    pub nome: String,
+    /// Non un numero quando lo strumento non lo ha dato: in Allotrope è -0 con l'errore.
+    pub valore: f64,
+    pub unita: String,
+}
+
+/// Una calibrazione o una verifica dello strumento, con l'esito e quando è stata fatta.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Calibrazione {
+    pub nome: String,
+    /// Data e ora ISO.
+    pub quando: String,
+    /// Passata, fallita, calibrato, verificato…
+    pub esito: Option<String>,
+    /// Quando scade il lotto di calibratori (ISO).
+    pub scadenza: Option<String>,
+    /// Il resto (lotto, lotto scaduto…).
     pub altro: Vec<Valore>,
 }
 
@@ -376,6 +402,8 @@ pub struct Lettura {
     pub sistema: Vec<Valore>,
     /// Le altre informazioni dello strumento, per Allotrope.
     pub dispositivo: Vec<Valore>,
+    /// Le calibrazioni e le verifiche dello strumento.
+    pub calibrazioni: Vec<Calibrazione>,
     pub gruppi: Vec<Gruppo>,
     pub calcolati: Vec<Calcolato>,
     /// La chiave del valore da mostrare sulla piastra e la sua unità come la scrive lo strumento.
@@ -399,6 +427,7 @@ impl Lettura {
             info: Vec::new(),
             sistema: Vec::new(),
             dispositivo: Vec::new(),
+            calibrazioni: Vec::new(),
             gruppi: Vec::new(),
             calcolati: Vec::new(),
             principale: String::new(),

@@ -263,3 +263,33 @@ mod prove {
         }
     }
 }
+
+/// Una riga di CSV divisa in celle, con le virgolette («"1(1,A1)"») e le virgolette doppie dentro.
+pub fn dividi_riga(riga: &str, sep: char) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut campo = String::new();
+    let mut tra_virgolette = false;
+    let mut it = riga.chars().peekable();
+    while let Some(c) = it.next() {
+        if tra_virgolette {
+            if c == '"' {
+                if it.peek() == Some(&'"') {
+                    campo.push('"');
+                    it.next();
+                } else {
+                    tra_virgolette = false;
+                }
+            } else {
+                campo.push(c);
+            }
+        } else if c == '"' && campo.is_empty() {
+            tra_virgolette = true;
+        } else if c == sep {
+            out.push(std::mem::take(&mut campo));
+        } else {
+            campo.push(c);
+        }
+    }
+    out.push(campo);
+    out
+}

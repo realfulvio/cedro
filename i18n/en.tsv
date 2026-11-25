@@ -3324,3 +3324,34 @@ il calcolo «{}» della piastra {} non ha le letture da cui viene: non l'ho scri
 {} valori del calcolo «{}» non hanno una lettura nello stesso pozzetto e non sono stati scritti	{} values of the calculation «{}» have no reading in the same well and were not written
 l'etichetta «{}» non è descritta nella sezione «Labels»: non ho le sue impostazioni di misura	the label «{}» isn't described in the «Labels» section: I don't have its measurement settings
 la piastra {} ({}) non ha pozzetti con un valore	plate {} ({}) has no wells with a value
+
+# Luminex xPONENT e INTELLIFLEX
+Pannello	Panel
+Tipo di sfere	Bead type
+Inizio della lettura	Read start
+Fine della lettura	Read end
+Guadagno del rivelatore	Detector gain
+Eventi minimi per sfera	Minimum events per bead
+il file non ha la forma di un export di xPONENT o INTELLIFLEX	the file doesn't have the shape of an xPONENT or INTELLIFLEX export
+nel file manca la sezione «Most Recent Calibration and Control Results»	the file is missing the «Most Recent Calibration and Control Results» section
+alla riga delle calibrazioni «{}» mi aspettavo almeno due colonne	on the calibration line «{}» I expected at least two columns
+la calibrazione «{}» ha un risultato che non capisco («{}»): non l'ho scritta	the calibration «{}» has a result I don't understand («{}»): I did not write it
+nel file manca la riga «Samples» con gli eventi minimi	the file is missing the «Samples» line with the minimum events
+nella riga «{}» non trovo gli eventi minimi	I can't find the minimum events in the line «{}»
+nel file manca la sezione «Results»	the file is missing the «Results» section
+alla riga {} mi aspettavo il titolo di una tabella («DataType:»), c'è «{}»	at line {} I expected a table title («DataType:»), but found «{}»
+nel file Excel manca il foglio «Results»	the Excel file is missing the «Results» sheet
+il file è vuoto	the file is empty
+nel file manca la colonna «{}»	the file is missing the «{}» column
+nel file non trovo nessun analita: mi aspettavo colonne come «R25: RP1 COUNT»	I can't find any analyte in the file: I expected columns like «R25: RP1 COUNT»
+nel file mancano le tabelle: {}	the file is missing the tables: {}
+nel file non c'è nessuna tabella di statistiche (Median, Mean, %CV…)	the file has no statistics table (Median, Mean, %CV…)
+nella tabella «Units» manca la riga «BeadID:»	the «Units» table is missing the «BeadID:» row
+nella tabella «Count» manca la colonna «Sample»	the «Count» table is missing the «Sample» column
+nella tabella «Count» manca la colonna «Total Events»	the «Count» table is missing the «Total Events» column
+l'intestazione non dice quanti pozzetti ha la piastra («ProtocolPlate»)	the header doesn't say how many wells the plate has («ProtocolPlate»)
+nell'intestazione manca «BatchStartTime»	the header is missing «BatchStartTime»
+la data «{}» della calibrazione «{}» non la capisco: non l'ho scritta	I don't understand the date «{}» of the calibration «{}»: I did not write it
+il pozzetto «{}» non ha una posizione che capisco (mi aspettavo qualcosa come «1(1,A1)»)	the well «{}» has a position I don't understand (I expected something like «1(1,A1)»)
+nella tabella «Dilution Factor» manca il pozzetto «{}»	the «Dilution Factor» table is missing the well «{}»
+non ho letto queste tabelle del file: {}	I did not read these tables of the file: {}

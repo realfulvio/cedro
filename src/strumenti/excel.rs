@@ -101,12 +101,18 @@ fn analiti(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xlsx
     let piastra = l.a_piastra();
     let molti = l.gruppi.len() > 1;
     let mut statistiche: Vec<(String, String)> = Vec::new();
+    let mut calcolati: Vec<(String, String)> = Vec::new();
     let mut altre: Vec<String> = Vec::new();
     for m in l.misure() {
         for a in &m.analiti {
             for s in &a.statistiche {
                 if !statistiche.iter().any(|(k, _)| *k == s.ruolo) {
                     statistiche.push((s.ruolo.clone(), s.unita.clone()));
+                }
+            }
+            for c in &a.calcolati {
+                if !calcolati.iter().any(|(k, _)| *k == c.nome) {
+                    calcolati.push((c.nome.clone(), c.unita.clone()));
                 }
             }
             for v in &a.altro {
@@ -125,6 +131,7 @@ fn analiti(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xlsx
     }
     intest.extend(["Campione".to_string(), "Analita".to_string(), "Sfera".to_string(), "Sfere contate".to_string()]);
     intest.extend(statistiche.iter().map(|(k, u)| intestazione_valore(k, u)));
+    intest.extend(calcolati.iter().map(|(k, u)| intestazione_valore(k, u)));
     intest.extend(altre.iter().cloned());
     for (c, x) in intest.iter().enumerate() {
         ws.write_string_with_format(0, c as u16, x, titoli)?;
@@ -150,7 +157,7 @@ fn analiti(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xlsx
                         Err(_) => ws.write_string(r, c + 2, s)?,
                     };
                 }
-                if let Some(n) = a.conteggio {
+                if let Some(n) = a.conteggio.filter(|n| n.is_finite()) {
                     ws.write_number(r, c + 3, n)?;
                 }
                 c += 4;
@@ -160,6 +167,12 @@ fn analiti(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xlsx
                     }
                 }
                 c += statistiche.len() as u16;
+                for (i, (k, _)) in calcolati.iter().enumerate() {
+                    if let Some(v) = a.calcolati.iter().find(|v| v.nome == *k).filter(|v| v.valore.is_finite()) {
+                        ws.write_number(r, c + i as u16, v.valore)?;
+                    }
+                }
+                c += calcolati.len() as u16;
                 for (i, k) in altre.iter().enumerate() {
                     if let Some(v) = a.altro.iter().find(|v| v.chiave == *k) {
                         match dato_cella(&v.dato) {
@@ -348,6 +361,10 @@ fn colonne_valori(l: &Lettura) -> Vec<(String, String)> {
     };
     vedi(&[Posto::Misura, Posto::Elaborato], l);
     vedi(&[Posto::Campione, Posto::Impostazione, Posto::Elaborazione, Posto::CampioneAltro, Posto::ImpostazioneAltro, Posto::ElaboratoAltro, Posto::ElaborazioneAltro, Posto::Immagine, Posto::ImmagineAltro], l);
+    // I multiplex hanno per pozzetto note che contano (stato del pozzetto, eventi contati): in Excel si vedono.
+    if l.tecnica == Tecnica::Multiplex {
+        vedi(&[Posto::Altro], l);
+    }
     if let Some(i) = cols.iter().position(|(k, _)| *k == l.principale) {
         let c = cols.remove(i);
         cols.insert(0, c);
@@ -773,6 +790,19 @@ pub fn righe_strumento(l: &Lettura) -> Vec<(String, String)> {
         }
     }
     righe.extend(l.info.iter().cloned());
+    for c in &l.calibrazioni {
+        let mut t = c.esito.clone().unwrap_or_default();
+        if !c.quando.is_empty() {
+            if !t.is_empty() {
+                t.push_str(" · ");
+            }
+            t.push_str(&ora_leggibile(&c.quando));
+        }
+        if let Some(e) = &c.scadenza {
+            t.push_str(&format!(" · scade il {}", ora_leggibile(e)));
+        }
+        righe.push((c.nome.clone(), t));
+    }
     for a in &l.avvisi {
         righe.push(("Avviso".into(), a.clone()));
     }

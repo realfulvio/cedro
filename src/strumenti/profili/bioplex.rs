@@ -267,7 +267,7 @@ fn leggi(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
                     .filter(|c| c.is_element() && !letti.contains(&c.tag_name().name()))
                     .filter_map(|c| Some(testo(c)).filter(|t| !t.is_empty()).map(|t| Valore::testo(c.tag_name().name(), &t, Posto::Altro)))
                     .collect();
-                m.analiti.push(Analita { id: l.id(), nome: nome_analita, sfera: Some(numero_regione), conteggio: Some(conteggio), statistiche, altro });
+                m.analiti.push(Analita { id: l.id(), nome: nome_analita, sfera: Some(numero_regione), conteggio: Some(conteggio), statistiche, calcolati: Vec::new(), altro });
             }
         }
         gruppi[gi].misure.push(m);

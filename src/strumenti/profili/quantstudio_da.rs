@@ -85,9 +85,6 @@ impl Tab {
     fn e_vuota(&self) -> bool {
         self.righe.is_empty()
     }
-    fn testo<'a>(&self, r: &'a [C], nome: &str) -> Option<&'a str> {
-        self.idx(nome).and_then(|i| r.get(i)).and_then(|c| c.as_deref())
-    }
     /// Mette a mancante la colonna (la crea se non c'è).
     fn azzera(&mut self, nome: &str) -> usize {
         let i = match self.idx(nome) {
@@ -375,12 +372,6 @@ struct Voce {
     numeri: Vec<(&'static str, f64)>,
     /// Tutto quello che il file dice del campione e non ha un posto suo (note del campione in Allotrope).
     custom: Vec<(String, Dato)>,
-}
-
-impl Voce {
-    fn num(&self, k: &str) -> Option<f64> {
-        self.numeri.iter().find(|(n, _)| *n == k).map(|(_, v)| *v)
-    }
 }
 
 fn ruolo_asm(r: Option<Ruolo>) -> Option<&'static str> {

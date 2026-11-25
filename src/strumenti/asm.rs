@@ -164,7 +164,7 @@ fn analita(a: &super::Analita) -> Value {
         o.insert("assay bead identifier".into(), json!(s));
     }
     if let Some(n) = a.conteggio {
-        o.insert("assay bead count".into(), qv(n, "#"));
+        o.insert("assay bead count".into(), qv(if n.is_finite() { n } else { -0.0 }, "#"));
     }
     if !a.statistiche.is_empty() {
         let dimensioni: Vec<Value> = a
@@ -188,7 +188,7 @@ fn errori_doc(o: &mut Map<String, Value>, errori: &[(String, String)]) {
     if errori.is_empty() {
         return;
     }
-    let docs: Vec<Value> = errori.iter().map(|(e, f)| json!({"error": e, "error feature": f})).collect();
+    let docs: Vec<Value> = errori.iter().map(|(e, f)| if f.is_empty() { json!({"error": e}) } else { json!({"error": e, "error feature": f}) }).collect();
     o.insert("error aggregate document".into(), json!({ "error document": docs }));
 }
 
@@ -402,6 +402,27 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
             dv.insert(k.into(), json!(v));
         }
     }
+    // Le calibrazioni e le verifiche dello strumento.
+    if !l.calibrazioni.is_empty() {
+        let docs: Vec<Value> = l
+            .calibrazioni
+            .iter()
+            .map(|c| {
+                let mut o = Map::new();
+                o.insert("calibration name".into(), json!(c.nome));
+                o.insert("calibration time".into(), json!(c.quando));
+                if let Some(e) = &c.scadenza {
+                    o.insert("expiry time prescription".into(), json!(e));
+                }
+                if let Some(r) = &c.esito {
+                    o.insert("calibration report".into(), json!(r));
+                }
+                altro(&mut o, &c.altro.iter().collect::<Vec<_>>());
+                Value::Object(o)
+            })
+            .collect();
+        dv.insert("calibration aggregate document".into(), json!({ "calibration document": docs }));
+    }
     altro(&mut dv, &l.dispositivo.iter().collect::<Vec<_>>());
     root.insert("device system document".into(), Value::Object(dv));
 
@@ -513,6 +534,15 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
         let assorbanza = matches!(c.unita.trim(), "OD" | "AU" | "Abs");
         let v = if c.valore.is_nan() { -0.0 } else if assorbanza { c.valore * 1000.0 } else { c.valore };
         push(&c.nome, v, &c.unita, &c.sorgenti, &c.da, &c.descrizione, &c.da_calcoli);
+    }
+    // I calcoli per analita dei multiplex (Net MFI, concentrazione…): la fonte è l'analita.
+    for m in l.misure() {
+        for a in &m.analiti {
+            for c in &a.calcolati {
+                let v = if c.valore.is_finite() { c.valore } else { -0.0 };
+                push(&c.nome, v, &c.unita, std::slice::from_ref(&a.id), "fluorescence", "", &[]);
+            }
+        }
     }
     if o.calcoli {
         for (nome, v, u, src) in calcoli_cedro(l, o) {

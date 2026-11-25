@@ -243,14 +243,17 @@ impl Config {
         self.opzionale = true;
         self
     }
+    #[allow(dead_code)] // per i profili che danno un'unità o una descrizione al valore calcolato
     pub fn unita(mut self, u: &str) -> Config {
         self.unita = Some(u.to_string());
         self
     }
+    #[allow(dead_code)] // per i profili che danno un'unità o una descrizione al valore calcolato
     pub fn descrizione(mut self, d: &str) -> Config {
         self.descrizione = Some(d.to_string());
         self
     }
+    #[allow(dead_code)] // per i profili che danno un'unità o una descrizione al valore calcolato
     pub fn descrizione_da(mut self, k: &str) -> Config {
         self.descrizione_da = Some(k.to_string());
         self
@@ -272,7 +275,9 @@ pub struct Doc {
     pub nome: String,
     pub valore: f64,
     pub fonti: Vec<Fonte>,
+    #[allow(dead_code)]
     pub unita: Option<String>,
+    #[allow(dead_code)]
     pub descrizione: Option<String>,
 }
 

@@ -3312,3 +3312,34 @@ il calcolo «{}» della piastra {} non ha le letture da cui viene: non l'ho scri
 {} valori del calcolo «{}» non hanno una lettura nello stesso pozzetto e non sono stati scritti	{} valeurs du calcul «{}» n'ont pas de lecture dans le même puits et n'ont pas été écrites
 l'etichetta «{}» non è descritta nella sezione «Labels»: non ho le sue impostazioni di misura	l'étiquette «{}» n'est pas décrite dans la section «Labels» : je n'ai pas ses réglages de mesure
 la piastra {} ({}) non ha pozzetti con un valore	la plaque {} ({}) n'a aucun puits avec une valeur
+
+# Luminex xPONENT e INTELLIFLEX
+Pannello	Panneau
+Tipo di sfere	Type de billes
+Inizio della lettura	Début de la lecture
+Fine della lettura	Fin de la lecture
+Guadagno del rivelatore	Gain du détecteur
+Eventi minimi per sfera	Événements minimum par bille
+il file non ha la forma di un export di xPONENT o INTELLIFLEX	le fichier n'a pas la forme d'un export xPONENT ou INTELLIFLEX
+nel file manca la sezione «Most Recent Calibration and Control Results»	la section «Most Recent Calibration and Control Results» manque dans le fichier
+alla riga delle calibrazioni «{}» mi aspettavo almeno due colonne	à la ligne de calibration «{}» j'attendais au moins deux colonnes
+la calibrazione «{}» ha un risultato che non capisco («{}»): non l'ho scritta	la calibration «{}» a un résultat que je ne comprends pas («{}») : je ne l'ai pas écrite
+nel file manca la riga «Samples» con gli eventi minimi	la ligne «Samples» avec les événements minimum manque dans le fichier
+nella riga «{}» non trovo gli eventi minimi	dans la ligne «{}» je ne trouve pas les événements minimum
+nel file manca la sezione «Results»	la section «Results» manque dans le fichier
+alla riga {} mi aspettavo il titolo di una tabella («DataType:»), c'è «{}»	à la ligne {} j'attendais le titre d'un tableau («DataType:»), mais il y a «{}»
+nel file Excel manca il foglio «Results»	la feuille «Results» manque dans le fichier Excel
+il file è vuoto	le fichier est vide
+nel file manca la colonna «{}»	la colonne «{}» manque dans le fichier
+nel file non trovo nessun analita: mi aspettavo colonne come «R25: RP1 COUNT»	je ne trouve aucun analyte dans le fichier : j'attendais des colonnes comme «R25: RP1 COUNT»
+nel file mancano le tabelle: {}	il manque les tableaux dans le fichier : {}
+nel file non c'è nessuna tabella di statistiche (Median, Mean, %CV…)	le fichier n'a aucun tableau de statistiques (Median, Mean, %CV…)
+nella tabella «Units» manca la riga «BeadID:»	la ligne «BeadID:» manque dans le tableau «Units»
+nella tabella «Count» manca la colonna «Sample»	la colonne «Sample» manque dans le tableau «Count»
+nella tabella «Count» manca la colonna «Total Events»	la colonne «Total Events» manque dans le tableau «Count»
+l'intestazione non dice quanti pozzetti ha la piastra («ProtocolPlate»)	l'en-tête ne dit pas combien de puits a la plaque («ProtocolPlate»)
+nell'intestazione manca «BatchStartTime»	«BatchStartTime» manque dans l'en-tête
+la data «{}» della calibrazione «{}» non la capisco: non l'ho scritta	je ne comprends pas la date «{}» de la calibration «{}» : je ne l'ai pas écrite
+il pozzetto «{}» non ha una posizione che capisco (mi aspettavo qualcosa come «1(1,A1)»)	le puits «{}» a une position que je ne comprends pas (j'attendais quelque chose comme «1(1,A1)»)
+nella tabella «Dilution Factor» manca il pozzetto «{}»	le puits «{}» manque dans le tableau «Dilution Factor»
+non ho letto queste tabelle del file: {}	je n'ai pas lu ces tableaux du fichier : {}

@@ -144,6 +144,9 @@ fn ingresso(root: &Path, profilo: &str, g: &Value) -> PathBuf {
 }
 
 /// Tutti i profili pronti leggono giusti i loro file d'esempio.
+/// File che allotropy conserva identici (stesso MD5) in due cartelle di strumenti diverse.
+const IDENTICI_IN_DUE_PROFILI: &[&str] = &["luminex_xPONENT_missing_optional_fields.csv"];
+
 #[test]
 fn i_profili_leggono_i_file_di_allotropy() {
     let Some(root) = allotropy() else {
@@ -176,6 +179,9 @@ fn i_profili_leggono_i_file_di_allotropy() {
             // Il profilo giusto deve essere quello che vince.
             match strumenti::riconosci(&fonte) {
                 Some((q, _)) if q.id == p.id => {}
+                // Allotropy ha lo stesso file, byte per byte, nelle cartelle di due strumenti:
+                // il profilo che vince è quello giusto per il contenuto, qui si controlla solo la lettura.
+                Some(_) if IDENTICI_IN_DUE_PROFILI.contains(&nome.as_str()) => {}
                 Some((q, s)) => falliti.push(format!("{} · {}: riconosciuto come {} ({s})", p.id, nome, q.id)),
                 None => falliti.push(format!("{} · {}: non riconosciuto", p.id, nome)),
             }
