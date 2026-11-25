@@ -3113,3 +3113,31 @@ Cedro legge le letture in punto finale, le cinetiche e gli spettri; le scansioni
 nello stesso file ci sono AlphaLISA e fluorescenza: Cedro non li legge insieme	dieselbe Datei enthält AlphaLISA und Fluoreszenz: Cedro liest sie nicht zusammen
 nel file mancano le tabelle dei risultati	in der Datei fehlen die Ergebnistabellen
 i dati non contengono misure valide	die Daten enthalten keine gültigen Messwerte
+il passo della scansione in lunghezza d'onda è zero	die Wellenlängenschrittweite des Scans ist null
+nel file ci sono più righe di misure per la stessa lunghezza d'onda	die Datei enthält mehrere Messzeilen für dieselbe Wellenlänge
+nel file mancano i dati delle misure di una lunghezza d'onda	in der Datei fehlen die Messwerte einer Wellenlänge
+nell'intestazione della piastra manca il modo di lettura	im Plattenkopf fehlt der Lesemodus
+nella cinetica manca il tempo di una lettura	in der Kinetik fehlt die Zeit einer Messung
+la piastra non ha il nome	die Platte hat keinen Namen
+la tabella delle misure è vuota	die Messwerttabelle ist leer
+manca il nome del gruppo	der Gruppenname fehlt
+manca l'intestazione della piastra	der Plattenkopf fehlt
+manca la colonna Sample	die Spalte Sample fehlt
+mancano i dati ridotti	die reduzierten Daten fehlen
+mancano le colonne dei dati della piastra	die Datenspalten der Platte fehlen
+mancano le colonne dei dati ridotti	die Spalten der reduzierten Daten fehlen
+mancano le lunghezze d'onda di eccitazione	die Anregungswellenlängen fehlen
+non riesco a capire le dimensioni della piastra	ich kann die Größe der Platte nicht bestimmen
+il modo di lettura «{}» non è supportato: Cedro legge assorbanza, fluorescenza e luminescenza	der Lesemodus «{}» wird nicht unterstützt: Cedro liest Absorption, Fluoreszenz und Lumineszenz
+la versione dell'esportazione «{}» non è supportata: serve la {}	die Exportversion «{}» wird nicht unterstützt: benötigt wird Version {}
+Cedro legge le piastre in punto finale, in cinetica e in spettro: «{}» no	Cedro liest Endpunkt-, Kinetik- und Spektrum-Platten: «{}» nicht
+il tipo di dati «{}» non è supportato: servono Raw, Reduced o Both	der Datentyp «{}» wird nicht unterstützt: erforderlich sind Raw, Reduced oder Both
+gli spettri di {} non sono supportati: Cedro legge solo quelli di assorbanza	Spektren von {} werden nicht unterstützt: Cedro liest nur Absorptionsspektren
+il formato di esportazione «{}» non è supportato: servono TimeFormat o PlateFormat	das Exportformat «{}» wird nicht unterstützt: erforderlich ist TimeFormat oder PlateFormat
+nella tabella delle misure mancano righe: attese {}, trovate {}	in der Messwerttabelle fehlen Zeilen: erwartet {}, gefunden {}
+l'intestazione della piastra è troppo corta ({} campi, ne servono {})	der Plattenkopf ist zu kurz ({} Felder, benötigt werden {})
+le piastre del file devono avere nomi diversi: «{}» è ripetuto	die Platten in der Datei müssen unterschiedliche Namen haben: «{}» kommt mehrfach vor
+un blocco del file comincia con «{}»: dovrebbe cominciare con Group, Plate o Note	ein Block der Datei beginnt mit «{}»: er sollte mit Group, Plate oder Note beginnen
+il gruppo «{}» cita la piastra «{}» che nel file non c'è	die Gruppe «{}» verweist auf die Platte «{}», die in der Datei nicht vorkommt
+la prima riga dovrebbe dire quanti blocchi ci sono («##BLOCKS= N»): «{}»	die erste Zeile sollte angeben, wie viele Blöcke es gibt («##BLOCKS= N»): «{}»
+numero di pozzetti sconosciuto: {} (sono ammessi 6, 12, 24, 48, 96, 384, 1536)	unbekannte Anzahl Vertiefungen: {} (zulässig sind 6, 12, 24, 48, 96, 384, 1536)

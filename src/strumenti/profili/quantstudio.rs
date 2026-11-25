@@ -477,7 +477,7 @@ fn leggi(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
             return;
         }
         fatti.push(k);
-        calcolati.push(Calcolato { nome: nome.to_string(), valore, unita: String::new(), sorgenti, da: da.to_string() });
+        calcolati.push(Calcolato { nome: nome.to_string(), valore, unita: String::new(), sorgenti, da: da.to_string(), descrizione: String::new() });
     };
     let ct_nome = "cycle threshold result";
     let rn_nome = "normalized reporter result";

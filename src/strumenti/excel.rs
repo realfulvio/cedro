@@ -543,6 +543,11 @@ fn calcolati(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xl
         intest.push("Pozzetto");
     }
     intest.extend(["Campione", "Nome", "Valore", "Misure da cui viene"]);
+    // Come l'ha calcolato lo strumento (la formula), solo se almeno un calcolo lo dice.
+    let con_formula = l.calcolati.iter().any(|c| !c.descrizione.is_empty());
+    if con_formula {
+        intest.push("Come è calcolato");
+    }
     for (c, x) in intest.iter().enumerate() {
         ws.write_string_with_format(0, c as u16, *x, titoli)?;
     }
@@ -559,13 +564,16 @@ fn calcolati(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xl
         ws.write_number(r, col + 2, c.valore)?;
         let origine: Vec<String> = c.sorgenti.iter().filter_map(|s| di_misura.get(s.as_str())).map(|(g, m)| if g.is_empty() { m.id.clone() } else { format!("{g}") }).collect::<std::collections::BTreeSet<_>>().into_iter().collect();
         ws.write_string(r, col + 3, &origine.join(", "))?;
+        if con_formula {
+            ws.write_string(r, col + 4, &c.descrizione)?;
+        }
     }
     ws.set_freeze_panes(1, 0)?;
     if !l.calcolati.is_empty() {
         ws.autofilter(0, 0, l.calcolati.len() as u32, (intest.len() - 1) as u16)?;
     }
     for (c, x) in intest.iter().enumerate() {
-        ws.set_column_width(c as u16, if *x == "Nome" || *x == "Misure da cui viene" { 36.0 } else { 14.0 })?;
+        ws.set_column_width(c as u16, if *x == "Nome" || *x == "Misure da cui viene" || *x == "Come è calcolato" { 36.0 } else { 14.0 })?;
     }
     Ok(())
 }

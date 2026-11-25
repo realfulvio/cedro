@@ -260,7 +260,7 @@ fn leggi_nucleoview(f: &Fonte, l: &mut Lettura) -> Result<(), String> {
     }
     for (nome, chiave, unita, da) in [("cell diameter standard deviation (um)", "Cell diameter standard deviation (um)", "µm", "Average Total Cell Diameter"), ("(%) of cells in aggregates with five or more cells", "Percentage of cells with five or more", "%", "Cell count")] {
         if let Some(x) = t.num(&r, &[nome]).filter(|x| *x != 0.0) {
-            l.calcolati.push(Calcolato { nome: chiave.into(), valore: x, unita: unita.into(), sorgenti: vec![m.id.clone()], da: da.into() });
+            l.calcolati.push(Calcolato { nome: chiave.into(), valore: x, unita: unita.into(), sorgenti: vec![m.id.clone()], da: da.into(), descrizione: String::new() });
         } else {
             t.leggi(&[nome]);
         }

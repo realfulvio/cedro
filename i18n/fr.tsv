@@ -3112,3 +3112,31 @@ Cedro legge le letture in punto finale, le cinetiche e gli spettri; le scansioni
 nello stesso file ci sono AlphaLISA e fluorescenza: Cedro non li legge insieme	le même fichier contient de l'AlphaLISA et de la fluorescence : Cedro ne les lit pas ensemble
 nel file mancano le tabelle dei risultati	il manque les tableaux de résultats dans le fichier
 i dati non contengono misure valide	les données ne contiennent aucune mesure valide
+il passo della scansione in lunghezza d'onda è zero	le pas du balayage en longueur d'onde est nul
+nel file ci sono più righe di misure per la stessa lunghezza d'onda	le fichier contient plusieurs lignes de mesures pour la même longueur d'onde
+nel file mancano i dati delle misure di una lunghezza d'onda	il manque dans le fichier les mesures d'une longueur d'onde
+nell'intestazione della piastra manca il modo di lettura	l'en-tête de la plaque n'indique pas le mode de lecture
+nella cinetica manca il tempo di una lettura	dans la cinétique il manque le temps d'une lecture
+la piastra non ha il nome	la plaque n'a pas de nom
+la tabella delle misure è vuota	le tableau des mesures est vide
+manca il nome del gruppo	le nom du groupe manque
+manca l'intestazione della piastra	l'en-tête de la plaque manque
+manca la colonna Sample	la colonne Sample manque
+mancano i dati ridotti	les données réduites manquent
+mancano le colonne dei dati della piastra	les colonnes de données de la plaque manquent
+mancano le colonne dei dati ridotti	les colonnes des données réduites manquent
+mancano le lunghezze d'onda di eccitazione	les longueurs d'onde d'excitation manquent
+non riesco a capire le dimensioni della piastra	je n'arrive pas à déterminer la taille de la plaque
+il modo di lettura «{}» non è supportato: Cedro legge assorbanza, fluorescenza e luminescenza	le mode de lecture «{}» n'est pas pris en charge : Cedro lit l'absorbance, la fluorescence et la luminescence
+la versione dell'esportazione «{}» non è supportata: serve la {}	la version d'exportation «{}» n'est pas prise en charge : il faut la {}
+Cedro legge le piastre in punto finale, in cinetica e in spettro: «{}» no	Cedro lit les plaques en point final, en cinétique et en spectre : «{}» non
+il tipo di dati «{}» non è supportato: servono Raw, Reduced o Both	le type de données «{}» n'est pas pris en charge : il faut Raw, Reduced ou Both
+gli spettri di {} non sono supportati: Cedro legge solo quelli di assorbanza	les spectres de {} ne sont pas pris en charge : Cedro ne lit que ceux d'absorbance
+il formato di esportazione «{}» non è supportato: servono TimeFormat o PlateFormat	le format d'exportation «{}» n'est pas pris en charge : il faut TimeFormat ou PlateFormat
+nella tabella delle misure mancano righe: attese {}, trovate {}	il manque des lignes dans le tableau des mesures : attendues {}, trouvées {}
+l'intestazione della piastra è troppo corta ({} campi, ne servono {})	l'en-tête de la plaque est trop court ({} champs, il en faut {})
+le piastre del file devono avere nomi diversi: «{}» è ripetuto	les plaques du fichier doivent avoir des noms différents : «{}» est répété
+un blocco del file comincia con «{}»: dovrebbe cominciare con Group, Plate o Note	un bloc du fichier commence par «{}» : il devrait commencer par Group, Plate ou Note
+il gruppo «{}» cita la piastra «{}» che nel file non c'è	le groupe «{}» cite la plaque «{}», qui n'est pas dans le fichier
+la prima riga dovrebbe dire quanti blocchi ci sono («##BLOCKS= N»): «{}»	la première ligne devrait indiquer le nombre de blocs («##BLOCKS= N») : «{}»
+numero di pozzetti sconosciuto: {} (sono ammessi 6, 12, 24, 48, 96, 384, 1536)	nombre de puits inconnu : {} (sont admis 6, 12, 24, 48, 96, 384, 1536)

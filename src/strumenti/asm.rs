@@ -403,24 +403,28 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
     // I calcoli: quelli dello strumento e, se chiesti, quelli di Cedro (bianco).
     let mut calc: Vec<Value> = Vec::new();
     let mut n = 0usize;
-    let mut push = |nome: &str, v: f64, u: &str, sorgenti: &[String], da: &str| {
+    let mut push = |nome: &str, v: f64, u: &str, sorgenti: &[String], da: &str, descrizione: &str| {
         let id = format!("{}_CALC_{n}", stem(&l.file).to_uppercase().replace(|c: char| !c.is_ascii_alphanumeric(), "_"));
         n += 1;
         let src: Vec<Value> = sorgenti.iter().map(|s| json!({"data source identifier": s, "data source feature": da})).collect();
         let chiave = if t == Tecnica::Dpcr { "calculated datum" } else { "calculated result" };
-        calc.push(json!({
+        let mut c = json!({
             "calculated data identifier": id,
             "calculated data name": nome,
             chiave: qv(v, &unita(u)),
             "data source aggregate document": {"data source document": src},
-        }));
+        });
+        if !descrizione.is_empty() {
+            c["calculation description"] = json!(descrizione);
+        }
+        calc.push(c);
     };
     for c in &l.calcolati {
-        push(&c.nome, c.valore, &c.unita, &c.sorgenti, &c.da);
+        push(&c.nome, c.valore, &c.unita, &c.sorgenti, &c.da, &c.descrizione);
     }
     if o.calcoli {
         for (nome, v, u, src) in calcoli_cedro(l, o) {
-            push(&nome, v, &u, &src, &l.principale);
+            push(&nome, v, &u, &src, &l.principale, "");
         }
     }
     if !calc.is_empty() {

@@ -3124,3 +3124,31 @@ Cedro legge le letture in punto finale, le cinetiche e gli spettri; le scansioni
 nello stesso file ci sono AlphaLISA e fluorescenza: Cedro non li legge insieme	the same file has AlphaLISA and fluorescence reads: Cedro does not read them together
 nel file mancano le tabelle dei risultati	the file has no results tables
 i dati non contengono misure valide	the data has no valid measurements
+il passo della scansione in lunghezza d'onda è zero	the wavelength step of the scan is zero
+nel file ci sono più righe di misure per la stessa lunghezza d'onda	the file has several rows of readings for the same wavelength
+nel file mancano i dati delle misure di una lunghezza d'onda	the file lacks the readings of one wavelength
+nell'intestazione della piastra manca il modo di lettura	the plate header has no read mode
+nella cinetica manca il tempo di una lettura	the kinetic run lacks the time of one read
+la piastra non ha il nome	the plate has no name
+la tabella delle misure è vuota	the readings table is empty
+manca il nome del gruppo	the group name is missing
+manca l'intestazione della piastra	the plate header is missing
+manca la colonna Sample	the Sample column is missing
+mancano i dati ridotti	the reduced data is missing
+mancano le colonne dei dati della piastra	the plate data columns are missing
+mancano le colonne dei dati ridotti	the reduced data columns are missing
+mancano le lunghezze d'onda di eccitazione	the excitation wavelengths are missing
+non riesco a capire le dimensioni della piastra	I can't work out the size of the plate
+il modo di lettura «{}» non è supportato: Cedro legge assorbanza, fluorescenza e luminescenza	the read mode «{}» is not supported: Cedro reads absorbance, fluorescence and luminescence
+la versione dell'esportazione «{}» non è supportata: serve la {}	export version «{}» is not supported: version {} is required
+Cedro legge le piastre in punto finale, in cinetica e in spettro: «{}» no	Cedro reads endpoint, kinetic and spectrum plates: «{}» is not supported
+il tipo di dati «{}» non è supportato: servono Raw, Reduced o Both	the data type «{}» is not supported: Raw, Reduced or Both are needed
+gli spettri di {} non sono supportati: Cedro legge solo quelli di assorbanza	spectra of {} are not supported: Cedro reads absorbance spectra only
+il formato di esportazione «{}» non è supportato: servono TimeFormat o PlateFormat	the export format «{}» is not supported: TimeFormat or PlateFormat is needed
+nella tabella delle misure mancano righe: attese {}, trovate {}	the readings table is missing rows: expected {}, found {}
+l'intestazione della piastra è troppo corta ({} campi, ne servono {})	the plate header is too short ({} fields, {} needed)
+le piastre del file devono avere nomi diversi: «{}» è ripetuto	the plates in the file must have different names: «{}» is repeated
+un blocco del file comincia con «{}»: dovrebbe cominciare con Group, Plate o Note	a block in the file starts with «{}»: it should start with Group, Plate or Note
+il gruppo «{}» cita la piastra «{}» che nel file non c'è	the group «{}» refers to the plate «{}», which is not in the file
+la prima riga dovrebbe dire quanti blocchi ci sono («##BLOCKS= N»): «{}»	the first line should say how many blocks there are («##BLOCKS= N»): «{}»
+numero di pozzetti sconosciuto: {} (sono ammessi 6, 12, 24, 48, 96, 384, 1536)	unknown number of wells: {} (6, 12, 24, 48, 96, 384 and 1536 are allowed)

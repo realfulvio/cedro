@@ -162,3 +162,38 @@ mod prove {
         assert!(iso("ieri", true).is_none());
     }
 }
+
+/// Giorni dal 1970-01-01 di una data del calendario (anni bisestili compresi).
+fn giorni_da_civile(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}
+
+fn civile_da_giorni(z: i64) -> (i64, i64, i64) {
+    let z = z + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (yoe + era * 400 + if m <= 2 { 1 } else { 0 }, m, d)
+}
+
+/// Una data ISO («2024-01-01T12:00:15+00:00») più dei secondi, con lo stesso fuso.
+pub fn piu_secondi(iso: &str, secondi: f64) -> Option<String> {
+    if iso.len() < 19 || !secondi.is_finite() {
+        return None;
+    }
+    let n = |a: usize, b: usize| iso.get(a..b).and_then(|t| t.parse::<i64>().ok());
+    let (y, m, d, h, mi, se) = (n(0, 4)?, n(5, 7)?, n(8, 10)?, n(11, 13)?, n(14, 16)?, n(17, 19)?);
+    let totale = giorni_da_civile(y, m, d) * 86400 + h * 3600 + mi * 60 + se + secondi.round() as i64;
+    let (g, resto) = (totale.div_euclid(86400), totale.rem_euclid(86400));
+    let (y, m, d) = civile_da_giorni(g);
+    Some(format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}{}", resto / 3600, resto % 3600 / 60, resto % 60, &iso[19..]))
+}

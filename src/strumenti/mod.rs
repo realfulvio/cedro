@@ -284,6 +284,8 @@ pub struct Calcolato {
     pub sorgenti: Vec<String>,
     /// Che cosa delle misure è servito («absorbance», «cycle threshold result»).
     pub da: String,
+    /// Come l'ha calcolato lo strumento, se lo dice (la formula della colonna: «Average(OD)»).
+    pub descrizione: String,
 }
 
 /// Lo strumento e il programma che hanno scritto il file.
@@ -396,7 +398,16 @@ impl Lettura {
         if self.principale == PRINCIPALE_CURVA {
             return m.curva.as_ref().and_then(|c| c.riassunto(&m.spettro));
         }
-        m.valore(&self.principale).and_then(Valore::numero).or_else(|| m.curva.as_ref().filter(|_| m.valore(&self.principale).is_none()).and_then(|c| c.riassunto(&m.spettro)))
+        if m.valore(&self.principale).is_none() {
+            // Una misura senza il valore principale: la curva, o (piastre lette in modi diversi nello stesso
+            // file, assorbanza e luminescenza) il primo valore misurato che ha.
+            return m
+                .curva
+                .as_ref()
+                .and_then(|c| c.riassunto(&m.spettro))
+                .or_else(|| m.valori.iter().find(|v| v.posto == Posto::Misura && v.chiave != "compartment temperature" && v.numero().is_some()).and_then(Valore::numero));
+        }
+        m.valore(&self.principale).and_then(Valore::numero)
     }
 
     /// La prima curva della lettura (cinetica o spettro dei pozzetti), se ce n'è.
