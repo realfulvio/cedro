@@ -20,9 +20,11 @@ mod pdfedpage;
 mod pdfedprops;
 mod revisione;
 mod riassunto;
+mod strumenti;
 
 pub use activity::{links_page, transcribe_page};
 pub use firma::{draw_viewer, firma_page, viewer_size};
+pub use strumenti::strumenti_profili;
 pub use pagine::{merged_pages, page_drop, split_file, BOARD_MAX, MERGE as ICON_MERGE, MERGED_MAX, SPLIT as ICON_SPLIT, SHRINK as ICON_SHRINK, STRIP_MAX};
 
 /// Margine a destra della finestra, fino al pannello (serve a trascinarne il bordo).
@@ -234,7 +236,15 @@ pub fn notice(f: &mut Frame, app: &App, r: R, size: f32) -> bool {
     f.p.rrect(r.0, r.1, r.2, r.3, 8.0, Some(mix(c, pal.surface, 0.88)), Some((mix(c, pal.surface, 0.5), 1.0)));
     let isz = (size * 1.3).round();
     f.icon(if n.error { ic::WARNING } else { ic::CHECK }, r.0 + 14.0, r.1 + (r.3 - isz) / 2.0, isz, c);
-    f.text(&n.text, r.0 + 24.0 + isz, r.1, r.2 - 80.0 - isz, r.3, size, SANS, pal.text);
+    let (tx, tw) = (r.0 + 24.0 + isz, r.2 - 80.0 - isz);
+    if f.measure(&n.text, size, SANS) <= tw {
+        f.text(&n.text, tx, r.1, tw, r.3, size, SANS, pal.text);
+    } else {
+        // Troppo lunga per una riga: va a capo su due, al centro della barra.
+        let lines = f.p.wrap_lines(&n.text, size, SANS, tw, 2).len().max(1);
+        let lh = size * 1.22;
+        f.para(&n.text, tx, r.1 + (r.3 - lines as f32 * lh) / 2.0, tw, size, SANS, pal.text, 1.22, 2);
+    }
     let cr = (r.0 + r.2 - 40.0, r.1 + (r.3 - 32.0) / 2.0, 32.0, 32.0);
     f.icon(ic::CLOSE, cr.0 + 6.0, cr.1 + 6.0, 20.0, pal.muted);
     f.hit(cr, Act::DismissNotice);

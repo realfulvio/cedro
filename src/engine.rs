@@ -997,6 +997,8 @@ pub struct Options {
     pub pdf_edit: PdfEdit,
     /// Documenti e fogli d'ufficio in PDF: carta, fogli, adattamento, orientamento, griglia.
     pub ufficio: crate::ufficio::Scelte,
+    /// I dati di uno strumento di laboratorio (azione «strumento»): lo strumento, i ruoli dei pozzetti e le uscite.
+    pub strumento: crate::strumenti::Scelte,
 }
 
 /// Le scelte per le pagine di un PDF e per comprimerlo.
@@ -1093,6 +1095,7 @@ impl Default for Options {
             pdf_pages: PdfPages::default(),
             pdf_edit: PdfEdit::default(),
             ufficio: Default::default(),
+            strumento: Default::default(),
         }
     }
 }
@@ -1114,7 +1117,13 @@ pub fn perform_with(path: &Path, action: &str, quality: u8, out_dir: Option<&Pat
     let mut restore = RestoreNaming(Some(before));
     let result = perform_inner(path, action, quality, out_dir, opts);
     let used = NAMING.with(|n| n.replace(restore.0.take().unwrap_or_default()));
-    finish_outputs(result, used)
+    let pending = used.pending.clone();
+    let result = finish_outputs(result, used);
+    match &result {
+        Ok(out) => strumenti_out::registra_esito(out, &pending),
+        Err(_) => strumenti_out::scarta_esito(),
+    }
+    result
 }
 
 /// La ruota: unisce i PDF in un file solo, nell'ordine dei nomi (2 prima di 10), con le scelte delle impostazioni.
@@ -1607,6 +1616,9 @@ mod dicom_out;
 mod micro_out;
 #[path = "engine_svslab.rs"]
 mod svslab_out;
+#[path = "engine_strumenti.rs"]
+mod strumenti_out;
+pub use strumenti_out::{esito_strumento, Esito as EsitoStrumento};
 pub use svslab_out::SOLO_VETRINI;
 
 /// Il formato del crate `image`, l'estensione e il pezzo di nome in più di ogni voce delle immagini.
@@ -1749,6 +1761,11 @@ fn perform_inner(path: &Path, action: &str, quality: u8, out_dir: Option<&Path>,
             message.push_str(" · con la scheda video");
         }
         return Ok(Output { path: out, message });
+    }
+
+    // I dati di uno strumento di laboratorio: Excel, CSV, Allotrope.
+    if action == "strumento" {
+        return strumenti_out::scrivi(path, &dir, opts);
     }
 
     if kind == Kind::Text && matches!(action, "txt" | "md" | "csv" | "xlsx" | "html" | "json" | "pdf" | "upper" | "lower") {
