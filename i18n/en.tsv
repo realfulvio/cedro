@@ -3276,3 +3276,15 @@ le dimensioni della piastra non dicono quanti pozzetti ha	the plate dimensions d
 nel primo pozzetto manca «{}»	the first well is missing «{}»
 il pozzetto {} non ha un campione	well {} has no sample
 la regione {} del pozzetto {} non ha un analita nel campione	region {} of well {} has no analyte in the sample
+
+# Thermo Fisher SkanIt
+Sessione	Session
+Note della sessione	Session notes
+Eseguita con	Run with
+Moduli dello strumento	Instrument modules
+Filtri ottici	Optical filters
+Dotazione	Equipment
+il passo «{}» non ha tabelle di piastra e non è stato letto	the step «{}» has no plate tables and wasn't read
+il passo di calcolo «{}» non ha valori per piastra e non è stato letto	the calculation step «{}» has no plate values and wasn't read
+manca il foglio della lettura: cerco «Absorbance», «Fluorescence» o «Luminescence»	the reading sheet is missing: looking for «Absorbance», «Fluorescence» or «Luminescence»
+manca il foglio della lettura	the reading sheet is missing

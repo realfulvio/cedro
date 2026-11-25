@@ -3264,3 +3264,15 @@ le dimensioni della piastra non dicono quanti pozzetti ha	as dimensões da placa
 nel primo pozzetto manca «{}»	no primeiro poço falta «{}»
 il pozzetto {} non ha un campione	o poço {} não tem amostra
 la regione {} del pozzetto {} non ha un analita nel campione	a região {} do poço {} não tem analito na amostra
+
+# Thermo Fisher SkanIt
+Sessione	Sessão
+Note della sessione	Notas da sessão
+Eseguita con	Executada com
+Moduli dello strumento	Módulos do instrumento
+Filtri ottici	Filtros ópticos
+Dotazione	Equipamento
+il passo «{}» non ha tabelle di piastra e non è stato letto	o passo «{}» não tem tabelas de placa e não foi lido
+il passo di calcolo «{}» non ha valori per piastra e non è stato letto	o passo de cálculo «{}» não tem valores por placa e não foi lido
+manca il foglio della lettura: cerco «Absorbance», «Fluorescence» o «Luminescence»	falta a folha da leitura: procuro «Absorbance», «Fluorescence» ou «Luminescence»
+manca il foglio della lettura	falta a folha da leitura
