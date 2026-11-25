@@ -55,7 +55,28 @@ pub fn giorno_prima<'a>(date: impl IntoIterator<Item = &'a str>) -> bool {
     !pm
 }
 
+/// Le sigle dei fusi che scrivono gli strumenti americani («… 03:14:51 AM EDT»).
+fn sigla(s: &str) -> Option<(String, &'static str)> {
+    let t = s.trim_end();
+    let (corpo, ultima) = t.rsplit_once(' ')?;
+    let off = match ultima {
+        "UTC" | "GMT" | "UT" => "+00:00",
+        "EDT" => "-04:00",
+        "EST" | "CDT" => "-05:00",
+        "CST" | "MDT" => "-06:00",
+        "MST" | "PDT" => "-07:00",
+        "PST" => "-08:00",
+        "CET" => "+01:00",
+        "CEST" => "+02:00",
+        _ => return None,
+    };
+    Some((corpo.trim_end().to_string(), off))
+}
+
 fn fuso(s: &str) -> (String, Option<String>) {
+    if let Some((c, off)) = sigla(s) {
+        return (c, Some(off.to_string()));
+    }
     if let Some(c) = s.strip_suffix('Z') {
         if c.contains(':') {
             return (c.to_string(), Some("+00:00".into()));

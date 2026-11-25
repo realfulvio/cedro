@@ -71,7 +71,9 @@ fn confronta(l: &Lettura, g: &Value) -> Vec<String> {
             if usate.contains(i) {
                 return false;
             }
-            if loc.is_some() && m.pozzetto.as_deref() != loc {
+            // «1.0» di allotropy e «1» del file sono lo stesso posto.
+            let stesso = |a: Option<&str>, b: Option<&str>| a == b || a.and_then(|x| x.parse::<f64>().ok()).is_some_and(|x| b.and_then(|y| y.parse::<f64>().ok()) == Some(x));
+            if loc.is_some() && !stesso(m.pozzetto.as_deref(), loc) && !stesso(m.luogo.as_deref(), loc) {
                 return false;
             }
             if campione.is_some() && !m.campione.is_empty() && Some(m.campione.as_str()) != campione {

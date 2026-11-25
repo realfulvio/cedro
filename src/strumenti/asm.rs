@@ -120,6 +120,9 @@ fn metti(o: &mut Map<String, Value>, v: &Valore, errori: &mut Vec<(String, Strin
         Dato::Testo(t) => {
             o.insert(v.chiave.clone(), json!(t));
         }
+        Dato::Bool(b) => {
+            o.insert(v.chiave.clone(), json!(b));
+        }
         Dato::Assente(t) => {
             let (_, u) = valore_numero(v);
             o.insert(v.chiave.clone(), qv(-0.0, &u));
@@ -140,6 +143,7 @@ fn altro(o: &mut Map<String, Value>, vals: &[&Valore]) {
                 qv(x, &u)
             }
             Dato::Numero(x) => num(*x),
+            Dato::Bool(b) => json!(b),
             Dato::Testo(t) | Dato::Assente(t) => json!(t),
         };
         c.insert(v.chiave.clone(), val);
@@ -184,7 +188,7 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
                 s.insert("well location identifier".into(), json!(p));
             }
             Tecnica::Qpcr => {
-                s.insert("location identifier".into(), json!(p));
+                s.insert("location identifier".into(), json!(m.luogo.clone().unwrap_or_else(|| p.clone())));
                 s.insert("well location identifier".into(), json!(p));
             }
             _ => {
@@ -453,6 +457,7 @@ pub fn piatto(l: &Lettura, o: &Opzioni) -> String {
             for k in &chiavi {
                 r.push(match m.valore(k).map(|v| &v.dato) {
                     Some(Dato::Numero(x)) => format!("{x}"),
+                    Some(Dato::Bool(b)) => if *b { "true".into() } else { "false".into() },
                     Some(Dato::Testo(t)) | Some(Dato::Assente(t)) => t.clone(),
                     None => String::new(),
                 });

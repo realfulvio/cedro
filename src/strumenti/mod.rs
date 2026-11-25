@@ -140,6 +140,8 @@ pub enum Posto {
 pub enum Dato {
     Numero(f64),
     Testo(String),
+    /// Sì o no (impostazioni come «soglia automatica»).
+    Bool(bool),
     /// Manca nel file: in Allotrope -0 con la nota, in Excel la cella vuota o la parola dello strumento.
     Assente(String),
 }
@@ -159,6 +161,9 @@ impl Valore {
     }
     pub fn testo(chiave: &str, t: &str, posto: Posto) -> Valore {
         Valore { chiave: chiave.into(), dato: Dato::Testo(t.into()), unita: String::new(), posto }
+    }
+    pub fn bool(chiave: &str, v: bool, posto: Posto) -> Valore {
+        Valore { chiave: chiave.into(), dato: Dato::Bool(v), unita: String::new(), posto }
     }
     pub fn numero(&self) -> Option<f64> {
         match self.dato {
@@ -181,6 +186,9 @@ pub struct Misura {
     pub ruolo_dal_file: bool,
     /// Bersaglio (qPCR, PCR digitale) o analita.
     pub bersaglio: Option<String>,
+    /// L'identificativo del posto come lo scrive lo strumento quando non è il nome del pozzetto
+    /// (QuantStudio numera i pozzetti: «1» è A1).
+    pub luogo: Option<String>,
     /// Data e ora ISO della misura, se il file la dice.
     pub quando: Option<String>,
     pub valori: Vec<Valore>,

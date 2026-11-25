@@ -240,6 +240,9 @@ fn pozzetti(book: &mut Workbook, l: &Lettura, o: &Opzioni, titoli: &Format) -> R
                     Some(Dato::Numero(v)) => {
                         ws.write_number(riga, c, *v)?;
                     }
+                    Some(Dato::Bool(b)) => {
+                        ws.write_string(riga, c, if *b { "sì" } else { "no" })?;
+                    }
                     Some(Dato::Testo(t)) | Some(Dato::Assente(t)) if !t.is_empty() => {
                         ws.write_string(riga, c, t)?;
                     }
