@@ -3200,3 +3200,10 @@ la colonna «Index» ha un valore che non è un numero	die Spalte «Index» enth
 nel file non ci sono righe di partizioni	die Datei enthält keine Partitionszeilen
 il gruppo «{}» ha due valori diversi per «{}»: {#} e {#}	die Gruppe «{}» hat zwei verschiedene Werte für «{}»: {} und {}
 {} · {}: positive {#} e negative {#} su {#} partizioni: la colonna «{}_pos» ha valori diversi da True e False	{} · {}: {} positive und {} negative von {} Partitionen: die Spalte «{}_pos» enthält andere Werte als True und False
+
+# MSD Methodical Mind
+manca la tabella dei dati della piastra	die Datentabelle der Platte fehlt
+nell'intestazione del file manca «{}»	im Kopf der Datei fehlt «{}»
+la cella {} non è un numero: «{}»	die Zelle {} ist keine Zahl: «{}»
+la legenda degli spot ne dice {#} ma nel file ci sono {#} tabelle di dati	die Spot-Legende nennt {}, aber die Datei enthält {} Datentabellen
+nel file non ci sono valori di luminescenza	die Datei enthält keine Lumineszenzwerte

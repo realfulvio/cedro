@@ -3197,3 +3197,10 @@ la colonna «Index» ha un valore che non è un numero	la columna «Index» tien
 nel file non ci sono righe di partizioni	el archivo no tiene filas de particiones
 il gruppo «{}» ha due valori diversi per «{}»: {#} e {#}	el grupo «{}» tiene dos valores distintos para «{}»: {} y {}
 {} · {}: positive {#} e negative {#} su {#} partizioni: la colonna «{}_pos» ha valori diversi da True e False	{} · {}: {} positivas y {} negativas de {} particiones: la columna «{}_pos» tiene valores distintos de True y False
+
+# MSD Methodical Mind
+manca la tabella dei dati della piastra	falta la tabla de datos de la placa
+nell'intestazione del file manca «{}»	en el encabezado del archivo falta «{}»
+la cella {} non è un numero: «{}»	la celda {} no es un número: «{}»
+la legenda degli spot ne dice {#} ma nel file ci sono {#} tabelle di dati	la leyenda de los spots indica {} pero el archivo tiene {} tablas de datos
+nel file non ci sono valori di luminescenza	el archivo no tiene valores de luminiscencia

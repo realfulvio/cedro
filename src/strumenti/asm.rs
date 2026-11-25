@@ -193,8 +193,14 @@ fn misura(l: &Lettura, m: &Misura, o: &Opzioni) -> Value {
             Tecnica::Dpcr => {
                 s.insert("well location identifier".into(), json!(p));
             }
+            // I qPCR numerano i pozzetti, i lettori di piastre multi-punto numerano i punti: il posto è il numero,
+            // il pozzetto la sua sigla.
             Tecnica::Qpcr => {
                 s.insert("location identifier".into(), json!(m.luogo.clone().unwrap_or_else(|| p.clone())));
+                s.insert("well location identifier".into(), json!(p));
+            }
+            Tecnica::LettorePiastre if m.luogo.is_some() && m.pozzetto.is_some() => {
+                s.insert("location identifier".into(), json!(m.luogo.clone().unwrap_or_default()));
                 s.insert("well location identifier".into(), json!(p));
             }
             _ => {
