@@ -304,6 +304,10 @@ fn mappa(book: &mut Workbook, l: &Lettura, o: &Opzioni) -> Result<(), XlsxError>
                 }
                 None => {
                     let t = l.testo(m).unwrap_or_default();
+                    // Un pozzetto con più misure (i canali di un'immagine): quella senza valore non cancella le altre.
+                    if t.is_empty() && lettera.is_empty() {
+                        continue;
+                    }
                     ws.write_string_with_format(riga, col, if lettera.is_empty() { t } else { format!("{t} {lettera}") }, &f)?;
                 }
             }

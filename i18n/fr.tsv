@@ -3276,3 +3276,22 @@ il passo «{}» non ha tabelle di piastra e non è stato letto	l'étape «{}» n
 il passo di calcolo «{}» non ha valori per piastra e non è stato letto	l'étape de calcul «{}» n'a pas de valeurs par plaque et n'a pas été lue
 manca il foglio della lettura: cerco «Absorbance», «Fluorescence» o «Luminescence»	la feuille de lecture manque : je cherche «Absorbance», «Fluorescence» ou «Luminescence»
 manca il foglio della lettura	la feuille de lecture manque
+
+# Revvity Kaleido
+Protocollo	Protocole
+Proprietario del protocollo	Propriétaire du protocole
+Tipo di misura	Type de mesure
+Misura finita	Mesure terminée
+Tipo di piastra	Type de plaque
+la versione di Kaleido «{}» non è fra quelle che Cedro legge: la 2 e la 3	la version de Kaleido «{}» n'est pas lue par Cedro : la 2 et la 3 le sont
+non trovo la riga «Results for…» con il tipo di misura	je ne trouve pas la ligne «Results for…» avec le type de mesure
+il tipo di misura «{}» non si riconosce: cerco fluorescenza, assorbanza, luminescenza o immagini	le type de mesure «{}» n'est pas reconnu : je cherche fluorescence, absorbance, luminescence ou images
+non trovo il codice a barre della piastra	je ne trouve pas le code-barres de la plaque
+il codice a barre della piastra è vuoto	le code-barres de la plaque est vide
+non trovo la piastra dei risultati	je ne trouve pas la plaque des résultats
+non trovo la sezione «{}»	je ne trouve pas la section «{}»
+nella sezione «{}» manca «{}»	dans la section «{}», «{}» manque
+non trovo la mappa della piastra	je ne trouve pas la carte de la plaque
+per le immagini non trovo nessun canale nelle impostazioni della lettura	pour les images, je ne trouve aucun canal dans les réglages de lecture
+«{}» non è una posizione di scansione valida: serve TOP o BOTTOM	«{}» n'est pas une position de balayage valide : TOP ou BOTTOM
+nella piastra dei risultati non ci sono pozzetti con un valore	la plaque des résultats n'a aucun puits avec une valeur

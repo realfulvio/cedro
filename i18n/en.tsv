@@ -3288,3 +3288,22 @@ il passo «{}» non ha tabelle di piastra e non è stato letto	the step «{}» h
 il passo di calcolo «{}» non ha valori per piastra e non è stato letto	the calculation step «{}» has no plate values and wasn't read
 manca il foglio della lettura: cerco «Absorbance», «Fluorescence» o «Luminescence»	the reading sheet is missing: looking for «Absorbance», «Fluorescence» or «Luminescence»
 manca il foglio della lettura	the reading sheet is missing
+
+# Revvity Kaleido
+Protocollo	Protocol
+Proprietario del protocollo	Protocol owner
+Tipo di misura	Measurement type
+Misura finita	Measurement finished
+Tipo di piastra	Plate type
+la versione di Kaleido «{}» non è fra quelle che Cedro legge: la 2 e la 3	Kaleido version «{}» isn't one Cedro reads: 2 and 3 are
+non trovo la riga «Results for…» con il tipo di misura	I can't find the «Results for…» line with the measurement type
+il tipo di misura «{}» non si riconosce: cerco fluorescenza, assorbanza, luminescenza o immagini	the measurement type «{}» isn't recognised: I look for fluorescence, absorbance, luminescence or images
+non trovo il codice a barre della piastra	I can't find the plate barcode
+il codice a barre della piastra è vuoto	the plate barcode is empty
+non trovo la piastra dei risultati	I can't find the results plate
+non trovo la sezione «{}»	I can't find the «{}» section
+nella sezione «{}» manca «{}»	the «{}» section is missing «{}»
+non trovo la mappa della piastra	I can't find the plate map
+per le immagini non trovo nessun canale nelle impostazioni della lettura	for the images I can't find any channel in the reading settings
+«{}» non è una posizione di scansione valida: serve TOP o BOTTOM	«{}» isn't a valid scan position: it must be TOP or BOTTOM
+nella piastra dei risultati non ci sono pozzetti con un valore	the results plate has no wells with a value

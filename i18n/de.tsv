@@ -3277,3 +3277,22 @@ il passo «{}» non ha tabelle di piastra e non è stato letto	der Schritt «{}�
 il passo di calcolo «{}» non ha valori per piastra e non è stato letto	der Berechnungsschritt «{}» hat keine Plattenwerte und wurde nicht gelesen
 manca il foglio della lettura: cerco «Absorbance», «Fluorescence» o «Luminescence»	das Messblatt fehlt: gesucht werden «Absorbance», «Fluorescence» oder «Luminescence»
 manca il foglio della lettura	das Messblatt fehlt
+
+# Revvity Kaleido
+Protocollo	Protokoll
+Proprietario del protocollo	Protokollinhaber
+Tipo di misura	Messart
+Misura finita	Messung beendet
+Tipo di piastra	Plattentyp
+la versione di Kaleido «{}» non è fra quelle che Cedro legge: la 2 e la 3	die Kaleido-Version «{}» liest Cedro nicht: unterstützt sind 2 und 3
+non trovo la riga «Results for…» con il tipo di misura	die Zeile «Results for…» mit der Messart fehlt
+il tipo di misura «{}» non si riconosce: cerco fluorescenza, assorbanza, luminescenza o immagini	die Messart «{}» wird nicht erkannt: gesucht werden Fluoreszenz, Absorption, Lumineszenz oder Bilder
+non trovo il codice a barre della piastra	der Barcode der Platte fehlt
+il codice a barre della piastra è vuoto	der Barcode der Platte ist leer
+non trovo la piastra dei risultati	die Ergebnisplatte fehlt
+non trovo la sezione «{}»	der Abschnitt «{}» fehlt
+nella sezione «{}» manca «{}»	im Abschnitt «{}» fehlt «{}»
+non trovo la mappa della piastra	die Plattenbelegung fehlt
+per le immagini non trovo nessun canale nelle impostazioni della lettura	für die Bilder fehlt in den Leseeinstellungen jeder Kanal
+«{}» non è una posizione di scansione valida: serve TOP o BOTTOM	«{}» ist keine gültige Scanposition: erlaubt sind TOP oder BOTTOM
+nella piastra dei risultati non ci sono pozzetti con un valore	die Ergebnisplatte enthält keine Wells mit einem Wert
