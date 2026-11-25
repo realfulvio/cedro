@@ -294,7 +294,7 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
     let mut root = Map::new();
     let mut ds = Map::new();
     ds.insert("ASM file identifier".into(), json!(if o.nome_asm.is_empty() { format!("{}.json", stem(&l.file)) } else { o.nome_asm.clone() }));
-    ds.insert("data system instance identifier".into(), json!(NON_DATO));
+    ds.insert("data system instance identifier".into(), json!(if l.strumento.istanza.is_empty() { NON_DATO } else { &l.strumento.istanza }));
     ds.insert("ASM converter name".into(), json!(CONVERTITORE));
     ds.insert("ASM converter version".into(), json!(env!("CARGO_PKG_VERSION")));
     ds.insert("file name".into(), json!(l.file));
@@ -303,6 +303,7 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
     if !l.strumento.versione.is_empty() {
         ds.insert("software version".into(), json!(l.strumento.versione));
     }
+    altro(&mut ds, &l.sistema.iter().collect::<Vec<_>>());
     root.insert("data system document".into(), Value::Object(ds));
     let mut dv = Map::new();
     let s = &l.strumento;
@@ -312,6 +313,12 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
     if !s.produttore.is_empty() {
         dv.insert("product manufacturer".into(), json!(s.produttore));
     }
+    for (k, v) in [("asset management identifier", &s.inventario), ("description", &s.descrizione), ("brand name", &s.marchio)] {
+        if !v.is_empty() {
+            dv.insert(k.into(), json!(v));
+        }
+    }
+    altro(&mut dv, &l.dispositivo.iter().collect::<Vec<_>>());
     root.insert("device system document".into(), Value::Object(dv));
 
     let mut docs = Vec::new();
@@ -355,8 +362,13 @@ pub fn scrivi(l: &Lettura, o: &Opzioni) -> Value {
                     errori.push((MANCA.into(), "well volume".into()));
                 }
             }
+            // I contacellule tengono le note del gruppo nel loro documento di informazioni.
+            if t == Tecnica::Contacellule {
+                let note: Vec<Valore> = g.dati.iter().filter(|(k, _)| k != "analyst").map(|(k, v)| Valore::testo(k, v, Posto::Altro)).collect();
+                altro(&mut ma, &note.iter().collect::<Vec<_>>());
+            }
             for (k, v) in &g.dati {
-                if k == "analyst" || (t == Tecnica::Qpcr && matches!(k.as_str(), "experimental data identifier" | "experiment type")) {
+                if t == Tecnica::Contacellule || k == "analyst" || (t == Tecnica::Qpcr && matches!(k.as_str(), "experimental data identifier" | "experiment type")) {
                     continue;
                 }
                 match super::fonte::numero(v) {

@@ -2,7 +2,7 @@
 //! («Scan», «Mode», «Lower», «Upper», «Length») e poi la tabella lunghezza d'onda, assorbanza, %T.
 
 use crate::strumenti::fonte::{coppie, numero, Fonte};
-use crate::strumenti::{tempo, Gruppo, Lettura, Misura, Posto, Profilo, Tecnica, Valore};
+use crate::strumenti::{Gruppo, Lettura, Misura, Posto, Profilo, Tecnica, Valore};
 
 pub const PROFILO: Profilo = Profilo {
     id: "thermo_fisher_genesys30",

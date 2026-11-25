@@ -120,7 +120,8 @@ fn cella(c: &crate::tabella::Cella) -> String {
                 format!("{v}")
             }
         }
-        Cella::Percento(v, _) => format!("{}", v * 100.0),
+        // 0,57 · 100 = 56,99999999999999: si arrotonda ai decimali che un numero di Excel porta davvero.
+        Cella::Percento(v, _) => format!("{}", (v * 100.0 * 1e10).round() / 1e10),
     }
 }
 

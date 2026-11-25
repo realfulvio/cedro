@@ -253,6 +253,12 @@ pub struct Strumento {
     pub seriale: String,
     pub software: String,
     pub versione: String,
+    /// Il nome del computer o del sistema dati («DESKTOP-A678B9H»).
+    pub istanza: String,
+    /// Il numero d'inventario dello strumento (nome del sistema, «G037DE019»).
+    pub inventario: String,
+    pub descrizione: String,
+    pub marchio: String,
 }
 
 /// Il file letto.
@@ -268,6 +274,10 @@ pub struct Lettura {
     pub sha256: String,
     /// Le informazioni della lettura per il foglio «Strumento»: etichetta e testo.
     pub info: Vec<(String, String)>,
+    /// Le altre informazioni del programma che ha scritto il file, per Allotrope (versione del CSV, 21 CFR Part 11…).
+    pub sistema: Vec<Valore>,
+    /// Le altre informazioni dello strumento, per Allotrope.
+    pub dispositivo: Vec<Valore>,
     pub gruppi: Vec<Gruppo>,
     pub calcolati: Vec<Calcolato>,
     /// La chiave del valore da mostrare sulla piastra e la sua unità come la scrive lo strumento.
@@ -289,6 +299,8 @@ impl Lettura {
             file: fonte.nome.clone(),
             sha256: fonte.sha256(),
             info: Vec::new(),
+            sistema: Vec::new(),
+            dispositivo: Vec::new(),
             gruppi: Vec::new(),
             calcolati: Vec::new(),
             principale: String::new(),

@@ -9,7 +9,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use cedro::strumenti::{self, asm, excel, Fonte, Lettura, Misura};
+use cedro::strumenti::{self, asm, excel, Dato, Fonte, Lettura, Misura};
 use serde_json::Value;
 
 fn golden_dir() -> PathBuf {
@@ -27,7 +27,9 @@ fn uguali(a: f64, b: f64) -> bool {
 fn tenta(m: &Misura, vals: &serde_json::Map<String, Value>) -> Result<(), String> {
     for (k, v) in vals {
         let Some(x) = v.as_f64() else { continue };
-        let ok = m.valori.iter().any(|c| c.chiave == *k && c.numero().is_some_and(|y| uguali(x, y)));
+        // «-0» è il posto del dato che il file non ha: Cedro lo tiene come assente.
+        let manca = x == 0.0 && x.is_sign_negative();
+        let ok = m.valori.iter().any(|c| c.chiave == *k && (c.numero().is_some_and(|y| uguali(x, y)) || (manca && matches!(c.dato, Dato::Assente(_)))));
         if !ok {
             let visto: Vec<String> = m.valori.iter().filter(|c| c.chiave == *k).map(|c| format!("{:?}", c.dato)).collect();
             return Err(format!("{k}: atteso {x}, letto {}", if visto.is_empty() { "niente".into() } else { visto.join(" / ") }));
@@ -44,7 +46,13 @@ fn confronta(l: &Lettura, g: &Value) -> Vec<String> {
         let prova = |k: &str, letto: &str, diff: &mut Vec<String>| {
             if let Some(a) = s.get(k).and_then(Value::as_str).filter(|a| *a != "N/A" && !a.is_empty()) {
                 // allotropy scrive «Nanodrop 8000»: Cedro il nome giusto («NanoDrop 8000»).
-                if !a.eq_ignore_ascii_case(letto) {
+                // «s/n 9000…» e «9000…» sono lo stesso numero di serie.
+                let senza = |x: &str| -> String {
+                    let t = x.trim();
+                    let t = if t.get(..3).is_some_and(|p| p.eq_ignore_ascii_case("s/n")) { &t[3..] } else { t };
+                    t.trim_start_matches([':', ' ']).to_string()
+                };
+                if !a.eq_ignore_ascii_case(letto) && !(k == "equipment serial number" && senza(a).eq_ignore_ascii_case(&senza(letto))) {
                     diff.push(format!("{k}: atteso «{a}», letto «{letto}»"));
                 }
             }

@@ -5,6 +5,10 @@ use crate::strumenti::{Dato, Misura, Posto, Valore};
 
 #[derive(Default)]
 pub(super) struct Conta {
+    /// Come conta lo strumento («brightfield», «fluorescence», «dark field»); vuoto è «brightfield».
+    pub rivelatore: &'static str,
+    /// Il tipo di dispositivo nello schema, se non è il predefinito dei contacellule.
+    pub dispositivo: Option<&'static str>,
     pub tipo_cellula: Option<String>,
     pub diam_min: Option<f64>,
     pub diam_max: Option<f64>,
@@ -31,7 +35,10 @@ impl Conta {
     /// Mette i valori nella misura: il rivelatore e il volume fra le impostazioni, il tipo di cellula,
     /// i diametri e la diluizione fra quelle del conteggio, i numeri fra i dati elaborati.
     pub fn applica(&self, m: &mut Misura) {
-        m.valori.push(Valore::testo("detection type", "brightfield", Posto::Impostazione));
+        if let Some(d) = self.dispositivo {
+            m.valori.push(Valore::testo("device type", d, Posto::Impostazione));
+        }
+        m.valori.push(Valore::testo("detection type", if self.rivelatore.is_empty() { "brightfield" } else { self.rivelatore }, Posto::Impostazione));
         if let Some(v) = self.volume {
             m.valori.push(Valore::num("sample volume setting", v, "μL", Posto::Impostazione));
         }
@@ -84,4 +91,42 @@ pub(super) fn custom(t: &super::tabella::Tabella, r: &[String], nomi: &[&str], p
             m.valori.push(nota(&t.testa[i], c, posto));
         }
     }
+}
+
+/// Un numero con la nota che lo strumento gli scrive accanto: «3.58E3 (Out of optimal range)» è 3580 con
+/// la nota «Out of optimal range». Un testo senza numero («<8», «Not determined») è solo la nota.
+pub(super) fn numero_con_nota(s: &str) -> (Option<f64>, Option<String>) {
+    let t = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if t.is_empty() {
+        return (None, None);
+    }
+    if let Some(v) = crate::strumenti::fonte::numero(&t) {
+        return (Some(v), None);
+    }
+    if let Some((a, resto)) = t.split_once(' ') {
+        if let Some(v) = crate::strumenti::fonte::numero(a) {
+            let nota = resto.trim().trim_start_matches('(').trim_end_matches(')').trim().to_string();
+            return (Some(v), (!nota.is_empty()).then_some(nota));
+        }
+    }
+    (None, Some(t))
+}
+
+/// Il micro del nome di una colonna: ci sono due caratteri (µ e μ), si usa quello solo.
+pub(super) fn micro(s: &str) -> String {
+    s.replace('\u{3bc}', "\u{b5}")
+}
+
+/// Mette la misura nel gruppo che ha le stesse note (analista e informazioni del gruppo), o ne apre uno.
+pub(super) fn in_gruppo(gruppi: &mut Vec<crate::strumenti::Gruppo>, titolo: &str, dati: Vec<(String, String)>, m: Misura) {
+    match gruppi.iter_mut().find(|g| g.dati == dati) {
+        Some(g) => g.misure.push(m),
+        None => gruppi.push(crate::strumenti::Gruppo { titolo: titolo.into(), dati, misure: vec![m], ..Default::default() }),
+    }
+}
+
+/// Da cellule/mL a milioni di cellule/mL senza il rumore della divisione in virgola mobile
+/// (223733,2344 / 1e6 non deve diventare 0,22373323439999998).
+pub(super) fn milioni(x: f64) -> f64 {
+    format!("{:.14e}", x / 1e6).parse().unwrap_or(x / 1e6)
 }

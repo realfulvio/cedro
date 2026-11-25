@@ -2,9 +2,9 @@
 //! Vi-CELL XR (Excel o Excel 97 con due righe di intestazione, il testo «chiave : valore» di un
 //! campione, o il rapporto di un solo campione).
 
-use super::conta::{custom, nota, Conta};
+use super::conta::{custom, micro, nota, Conta};
 use super::tabella::Tabella;
-use crate::strumenti::fonte::{numero, Fonte};
+use crate::strumenti::fonte::Fonte;
 use crate::strumenti::{tempo, Gruppo, Lettura, Misura, Posto, Profilo, Tecnica, Valore};
 
 pub const BLU: Profilo = Profilo {
@@ -29,11 +29,6 @@ pub const XR: Profilo = Profilo {
 
 /// Un campione letto: i nomi delle colonne e i valori.
 type Record = (Vec<String>, Vec<String>);
-
-/// Il micro del nome di una colonna: ci sono due caratteri (µ e μ), si usa quello solo.
-fn micro(s: &str) -> String {
-    s.replace('\u{3bc}', "\u{b5}")
-}
 
 // ---------------------------------------------------------------- Vi-CELL BLU
 

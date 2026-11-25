@@ -483,7 +483,7 @@ fn strumento(book: &mut Workbook, l: &Lettura, titoli: &Format) -> Result<(), Xl
         ("Strumento letto come".into(), format!("{} ({})", l.nome, l.tecnica.nome())),
     ];
     let s = &l.strumento;
-    for (k, v) in [("Produttore", &s.produttore), ("Modello", &s.modello), ("Identificativo", &s.identificativo), ("Numero di serie", &s.seriale), ("Programma", &s.software), ("Versione del programma", &s.versione)] {
+    for (k, v) in [("Produttore", &s.produttore), ("Modello", &s.modello), ("Identificativo", &s.identificativo), ("Numero di serie", &s.seriale), ("Programma", &s.software), ("Versione del programma", &s.versione), ("Sistema dati", &s.istanza), ("Inventario", &s.inventario), ("Descrizione", &s.descrizione), ("Marchio", &s.marchio)] {
         if !v.is_empty() {
             righe.push((k.into(), v.clone()));
         }
