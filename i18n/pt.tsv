@@ -3159,6 +3159,7 @@ il foglio «{}» non ha la tabella	a folha «{}» não tem a tabela
 blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	bloco «{}» não suportado: o Cedro lê placas de 96 e 384 poços
 nel file manca il foglio «{}»	ao ficheiro falta a folha «{}»
 il foglio «{}» è vuoto	a folha «{}» está vazia
+nella prova Fixed non ci sono colonne di assorbanza (A260, «500 nm [A]», Absorbance)	no teste Fixed não há colunas de absorvância (A260, «500 nm [A]», Absorbance)
 manca la colonna {}	falta a coluna {}
 manca il manifest	falta o manifesto
 manifest non valido	manifesto inválido

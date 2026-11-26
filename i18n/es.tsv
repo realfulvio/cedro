@@ -3157,6 +3157,7 @@ il foglio «{}» non ha la tabella	la hoja «{}» no tiene la tabla
 blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	bloque «{}» no compatible: Cedro lee placas de 96 y 384 pocillos
 nel file manca il foglio «{}»	al archivo le falta la hoja «{}»
 il foglio «{}» è vuoto	la hoja «{}» está vacía
+nella prova Fixed non ci sono colonne di assorbanza (A260, «500 nm [A]», Absorbance)	en la prueba Fixed no hay columnas de absorbancia (A260, «500 nm [A]», Absorbance)
 manca la colonna {}	falta la columna {}
 manca il manifest	falta el manifiesto
 manifest non valido	manifiesto no válido

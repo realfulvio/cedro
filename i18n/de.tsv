@@ -3160,6 +3160,7 @@ il foglio «{}» non ha la tabella	das Blatt «{}» hat keine Tabelle
 blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	Block «{}» wird nicht unterstützt: Cedro liest Platten mit 96 und 384 Wells
 nel file manca il foglio «{}»	in der Datei fehlt das Blatt «{}»
 il foglio «{}» è vuoto	das Blatt «{}» ist leer
+nella prova Fixed non ci sono colonne di assorbanza (A260, «500 nm [A]», Absorbance)	im Fixed-Test gibt es keine Absorptionsspalten (A260, «500 nm [A]», Absorbance)
 manca la colonna {}	die Spalte {} fehlt
 manca il manifest	das Manifest fehlt
 manifest non valido	ungültiges Manifest

@@ -90,6 +90,7 @@ pub fn lang() -> Lang {
 pub fn set(l: Lang) {
     if CURRENT.swap(l.id(), Ordering::Relaxed) != l.id() {
         cache().lock().unwrap_or_else(|e| e.into_inner()).clear();
+        num_cache().lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 }
 
@@ -392,6 +393,11 @@ fn translate_with(t: &Table, s: &str, depth: u8) -> String {
     s.to_string()
 }
 
+fn num_cache() -> &'static Mutex<HashMap<String, String>> {
+    static C: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+    C.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 fn cache() -> &'static Mutex<HashMap<String, String>> {
     static C: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
     C.get_or_init(|| Mutex::new(HashMap::new()))
@@ -403,6 +409,8 @@ static MISSES: Mutex<std::collections::BTreeSet<String>> = Mutex::new(std::colle
 /// Per i controlli: ricorda i testi mostrati in inglese che non hanno traduzione (vedi `misses`).
 pub fn record_misses(on: bool) {
     RECORD.store(on, Ordering::Relaxed);
+    // Un testo già ricordato non ripasserebbe dal controllo.
+    num_cache().lock().unwrap_or_else(|e| e.into_inner()).clear();
 }
 
 /// I testi senza traduzione visti da quando è acceso `record_misses`.
@@ -463,11 +471,20 @@ fn tr_plain(s: &str) -> Cow<'_, str> {
         // La tabella vive quanto il programma: nessuna copia.
         return Cow::Borrowed(en.as_str());
     }
-    // Un testo con numeri (percentuali, pesi, tempi) cambia a ogni avanzamento: ricordarlo riempirebbe
-    // la memoria e farebbe dimenticare i testi fissi.
+    // Un testo con numeri (percentuali, pesi, tempi) cambia a ogni avanzamento: va in una memoria sua,
+    // piccola, per non far dimenticare i testi fissi. Quelli che restano uguali («12 file», «3 pagine»,
+    // ridisegnati a ogni fotogramma) non rifanno ogni volta il giro dei modelli.
     if s.bytes().any(|b| b.is_ascii_digit()) {
+        let mut c = num_cache().lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(v) = c.get(s) {
+            return Cow::Owned(v.clone());
+        }
         let v = translate(s, 0);
         note_miss(s, &v);
+        if c.len() >= 512 {
+            c.clear();
+        }
+        c.insert(s.to_string(), v.clone());
         return Cow::Owned(v);
     }
     // I modelli costano di più: il risultato (anche «nessuna traduzione») si ricorda.

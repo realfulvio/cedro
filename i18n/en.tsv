@@ -3171,6 +3171,7 @@ il foglio «{}» non ha la tabella	the «{}» sheet has no table
 blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	block «{}» not supported: Cedro reads 96- and 384-well plates
 nel file manca il foglio «{}»	the file has no «{}» sheet
 il foglio «{}» è vuoto	the «{}» sheet is empty
+nella prova Fixed non ci sono colonne di assorbanza (A260, «500 nm [A]», Absorbance)	the Fixed test has no absorbance columns (A260, «500 nm [A]», Absorbance)
 manca la colonna {}	the {} column is missing
 manca il manifest	the manifest is missing
 manifest non valido	invalid manifest
