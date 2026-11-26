@@ -135,8 +135,12 @@ fn nessun_testo_resta_in_italiano() {
     const UGUALI: [&str; 12] = ["Allotrope", "Allotrope (.asm.json)", "CSV", "Cedro", "Schema", "standard", "qPCR", "Mappa, Pozzetti, Strumento", "4 Labs", "Home", "Jobs", "Transcribe and"];
     let mancano: Vec<String> = misses()
         .into_iter()
-        .filter(|m| m.chars().count() > 1 && !UGUALI.contains(&m.as_str()) && !m.contains(" pagin") && !m.starts_with("Example: ") && !m.starts_with("+ Case") && !m.starts_with("Convert ") && !m.starts_with("Prepare ") && !m.starts_with("Remove ") && !m.starts_with("Save ") && !m.starts_with("Sign ") && !m.starts_with("Transcribe") && !m.starts_with("Work on") && m != "summarise")
+        .filter(|m| m.chars().count() > 1 && !UGUALI.contains(&m.as_str()) && !m.contains(" pagin") && !m.starts_with("Example: ") && !m.starts_with("+ Case") && !m.starts_with("Convert ") && !m.starts_with("Prepare ") && !m.starts_with("Remove ") && !m.starts_with("Save ") && !m.starts_with("Sign ") && !m.starts_with("Transcribe") && !m.starts_with("Work on") && m != "summarise" && !e_misura(m))
         .collect();
+    // Le misure dei file («2 KB») sono uguali in tutte le lingue: senza il numero di pagine restano da sole.
+    fn e_misura(m: &str) -> bool {
+        m.split_once(' ').is_some_and(|(n, u)| n.chars().all(|c| c.is_ascii_digit() || c == ',' || c == '.') && matches!(u, "B" | "KB" | "MB" | "GB"))
+    }
     assert!(mancano.is_empty(), "testi rimasti in italiano:\n{}", mancano.join("\n"));
     // E le frasi con i numeri e i pezzi di file si traducono come devono.
     let t = |s: &str| cedro::i18n::tr_string(s);
