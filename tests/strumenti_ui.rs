@@ -84,7 +84,12 @@ fn apri(s: &mut Screen, plat: &mut Finta, dir: &Path, fixture_nome: &str, come: 
     std::fs::copy(fixture(fixture_nome), &path).unwrap();
     s.drop_files(vec![path.clone()]);
     assert!(aspetta(s, 30, |s| s.app.files.iter().any(|f| f.path == path)), "il file non è stato preso");
-    assert!(aspetta(s, 30, |s| s.app.strum_corrente().is_some()), "{come}: non è stato riconosciuto come file di uno strumento");
+    // Si aspetta la lettura di questo file, non di uno qualsiasi: con più file in coda il primo è già letto
+    // e su una macchina lenta questo può non esserlo ancora.
+    assert!(
+        aspetta(s, 30, |s| s.app.strum_lettura(&path).is_some()),
+        "{come}: non è stato riconosciuto come file di uno strumento"
+    );
     disegna(s);
     let _ = plat;
     path
