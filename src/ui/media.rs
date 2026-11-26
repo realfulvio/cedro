@@ -236,9 +236,12 @@ fn info(path: &Path) -> Loaded {
             }
         }
         Kind::Text | Kind::Doc => {
-            out.pages = super::preview::page_count(path);
             if kind == Kind::Text {
                 out.strumento = super::strumenti::leggi(path, out.bytes);
+            }
+            // L'export di uno strumento è una tabella di misure, non un documento da sfogliare: niente «2 pagine».
+            if out.strumento.is_none() {
+                out.pages = super::preview::page_count(path);
             }
         }
         Kind::Audio => out.about = Some(super::preview::about_audio(path, out.bytes)),
