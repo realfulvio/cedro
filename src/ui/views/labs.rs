@@ -177,7 +177,7 @@ fn campione_field(f: &mut Frame, app: &App, x: f32, room: f32) {
         None => (tt("nessuno"), false),
     };
     let (lw, cw) = (f.measure(&label, 14.5, SEMI), f.measure(&code, 14.5, if set { BOLD } else { SANS }));
-    let mut w = 12.0 + lw + 10.0 + cw + 10.0 + 16.0 + 10.0;
+    let mut w = 12.0 + lw + 10.0 + cw + 6.0 + 10.0 + 16.0 + 10.0;
     let note = app.caso.as_ref().filter(|c| !c.note.is_empty()).map(|c| crate::i18n::lit(&c.note));
     let nw = note.as_ref().map(|n| f.measure(n, 14.0, SANS)).unwrap_or(0.0);
     let show_note = note.is_some() && w + 10.0 + nw <= room;
@@ -329,7 +329,7 @@ pub fn caso_dialog(f: &mut Frame, app: &App) {
     f.p.fill_a(0.0, 0.0, f.w, f.h, (0, 0, 0), 0.35);
     f.hit((0.0, 0.0, f.w, f.h), Act::CasoChiudi);
     let w = 560.0f32.min(f.w - 32.0);
-    let h = 330.0;
+    let h = 348.0;
     let (x, y) = ((f.w - w) / 2.0, ((f.h - h) / 2.0).max(8.0));
     f.p.shadow(x, y, w, h, 12.0, 18.0, 0.35, 8.0);
     f.card((x, y, w, h), 12.0);
@@ -339,7 +339,7 @@ pub fn caso_dialog(f: &mut Frame, app: &App) {
     f.text("Caso o campione", cx, cy, cw, 34.0, 24.0, SEMI, pal.text);
     cy += 40.0;
     f.para("Se c'è, il codice entra nei nomi dei file che Cedro scrive, dopo la data. Resta finché non lo togli.", cx, cy, cw, 15.0, SANS, pal.muted, 1.4, 3);
-    cy += 52.0;
+    cy += 66.0;
     f.text("Codice", cx, cy, cw, 22.0, 14.0, SEMI, pal.muted);
     cy += 24.0;
     f.field((cx, cy, cw, 42.0), Field::CasoCodice, &app.caso_bozza.0, "V-2026-0457", 16.0, false);
@@ -528,7 +528,7 @@ pub(super) fn stage_draw(f: &mut Frame, app: &App, r: R) {
         return;
     };
     // Sotto l'anteprima i file: elenco a tabella (come in Esplora file) o la striscia di miniature.
-    let low = if app.lab_miniature { STRIP } else { list_h(vis.len()) };
+    let low = if app.lab_miniature { STRIP } else { list_h(vis.len(), r.3) };
     let area = (r.0 + 18.0, r.1 + 18.0, r.2 - 36.0, r.3 - 18.0 - low);
     match &strum {
         Some((_, l)) => {
@@ -579,8 +579,10 @@ fn kind_label(app: &App, i: usize) -> &'static str {
 }
 
 /// L'altezza dell'elenco dei file: l'intestazione e fino a `LIST_ROWS` righe, poi scorre.
-fn list_h(n: usize) -> f32 {
-    LIST_HEAD + LIST_ROW * n.clamp(1, LIST_ROWS) as f32 + 10.0
+/// Con la finestra alta (o massimizzata) l'elenco si allunga fino a un terzo dello spazio.
+fn list_h(n: usize, avail: f32) -> f32 {
+    let fit = ((avail * 0.36 - LIST_HEAD - 10.0) / LIST_ROW).floor().max(0.0) as usize;
+    LIST_HEAD + LIST_ROW * n.clamp(1, LIST_ROWS.max(fit)) as f32 + 10.0
 }
 
 /// «Elenco | Miniature»: come vedere i file in coda. Restituisce la x a sinistra del selettore.
@@ -651,7 +653,9 @@ fn file_table(f: &mut Frame, app: &App, r: R, vis: &[usize], sel: usize) {
     // Le colonne: la misura che conta per il tipo (risoluzione, pagine, durata…), dimensione, stato.
     // Con la finestra stretta la colonna «Misure» lascia il posto al nome.
     let misure = w >= 760.0;
-    let col_stato = x0 + w - 124.0;
+    // La colonna «Stato» larga quanto la sua parola più lunga nella lingua scelta («Tareas pendientes»…).
+    let stato_w = ["Da fare", "Escluso", "In corso", "Fatto", "Errore", "Stato"].iter().map(|l| f.measure(&tt(l), 13.5, SEMI)).fold(70.0f32, f32::max) + 34.0;
+    let col_stato = x0 + w - stato_w;
     let col_size = col_stato - 96.0;
     let col_extra = if misure { col_size - 116.0 } else { col_size };
     let col_tipo = col_extra - 104.0;
@@ -703,7 +707,7 @@ fn file_table(f: &mut Frame, app: &App, r: R, vis: &[usize], sel: usize) {
                 FileState::Done | FileState::Skipped => ("Fatto", LABS_LEAF),
                 FileState::Failed => ("Errore", (0xFF, 0x8A, 0x8F)),
             };
-            f.p.text(label, col_stato, y, 96.0, LIST_ROW, 13.5, SEMI, c, Align::Left);
+            f.p.text(label, col_stato, y, stato_w - 26.0, LIST_ROW, 13.5, SEMI, c, Align::Left);
             if let Some(p) = file.percent.filter(|_| file.state == FileState::Running) {
                 f.p.rrect_a(col_stato, y + LIST_ROW - 7.0, 90.0, 3.0, 1.5, WHITE, 0.25);
                 f.p.rrect(col_stato, y + LIST_ROW - 7.0, 90.0 * p.clamp(0.0, 1.0), 3.0, 1.5, Some(bright), None);
@@ -1005,15 +1009,12 @@ fn panel_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32 {
     let mut h = 56.0;
     if let Some(i) = app.selected.filter(|i| vis.contains(i)) {
         let file = &app.files[i];
-        let superato = file.state == FileState::Done && !app.is_fresh_done(i);
-        let (line, c) = if superato {
-            ("Fatto con altre scelte: il pulsante lo rifà con quelle di adesso.".to_string(), pal.muted)
-        } else {
-            match file.state {
-                FileState::Failed => (file.message.clone(), pal.bad),
-                FileState::Done => (file.message.clone(), pal.ok),
-                _ => (String::new(), pal.muted),
-            }
+        // Fatto con scelte diverse da quelle di adesso: nell'elenco è di nuovo «Da fare», qui non si dice altro.
+        let fresco = app.is_fresh_done(i);
+        let (line, c) = match file.state {
+            FileState::Failed => (file.message.clone(), pal.bad),
+            FileState::Done if fresco => (file.message.clone(), pal.ok),
+            _ => (String::new(), pal.muted),
         };
         if !line.is_empty() {
             let name = file.name();
@@ -1027,11 +1028,14 @@ fn panel_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32 {
 /// Il testo del pulsante grande con il verbo del comando: «Salva 3 file», «Togli i nomi da 1 file»…
 pub(crate) fn go_label_labs(app: &App) -> String {
     let base = super::go_label(app);
-    if app.job.is_some() || app.finished() || app.activity != Activity::Convert || super::pagine::go_label(app).is_some() {
+    let comprimi = app.lab == Lab::Pdf && app.pdf_mode() == crate::ui::model::PdfMode::Compress;
+    if app.job.is_some() || app.finished() || app.activity != Activity::Convert || (super::pagine::go_label(app).is_some() && !comprimi) {
         return base;
     }
     let n = app.todo().len();
     match (app.lab, n) {
+        (Lab::Pdf, 0) if app.pdf_mode() == crate::ui::model::PdfMode::Compress => "Comprimi".into(),
+        (Lab::Pdf, n) if app.pdf_mode() == crate::ui::model::PdfMode::Compress => format!("Comprimi {n} PDF"),
         (Lab::Immagini, 0) => "Salva".into(),
         (Lab::Immagini, 1) => "Salva 1 file".into(),
         (Lab::Immagini, n) => format!("Salva {n} file"),
