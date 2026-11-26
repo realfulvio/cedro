@@ -583,9 +583,11 @@ fn elenco(f: &mut Frame, app: &App, path: &Path, l: &Arc<Lettura>, body: R) {
 
 /// Una sola riga (una lettura sola): colonna per colonna, con il nome a sinistra.
 fn elenco_verticale(f: &mut Frame, p: &Pronto, body: R) {
-    let kw = 280.0f32.min(body.2 * 0.5);
-    let vw = body.2 - kw - 24.0;
     let tab = p.tab.clone();
+    // La colonna dei nomi è larga quanto il nome più lungo (fino a metà e oltre): i nomi lunghi non si rimpiccioliscono.
+    let piu_lungo = tab.intest.iter().map(|t| f.measure(&titolo_colonna(t), 14.5, SEMI)).fold(0.0f32, f32::max) + 20.0;
+    let kw = piu_lungo.clamp(200.0, body.2 * 0.62);
+    let vw = body.2 - kw - 24.0;
     super::scrolled(f, body, Scroll::Strum, |f| {
         let mut y = body.1 + 4.0;
         for (c, t) in tab.intest.iter().enumerate() {
@@ -594,7 +596,8 @@ fn elenco_verticale(f: &mut Frame, p: &Pronto, body: R) {
                 continue;
             }
             let v = if numero || t == "Ruolo" { v } else { d(&v) };
-            f.p.text(&titolo_colonna(t), body.0 + 8.0, y, kw - 8.0, 26.0, 14.5, SEMI, LABS_MUTED, Align::Left);
+            let nome = crate::i18n::lit(&f.p.ellipsize(&titolo_colonna(t), 14.5, SEMI, kw - 12.0));
+            f.p.text(&nome, body.0 + 8.0, y, kw - 8.0, 26.0, 14.5, SEMI, LABS_MUTED, Align::Left);
             f.p.text(&v, body.0 + kw + 8.0, y, vw, 26.0, 14.5, SANS, LABS_INK, Align::Left);
             y += 30.0;
             f.p.fill_a(body.0, y - 3.0, body.2 - 12.0, 1.0, LABS_LINE, 0.7);

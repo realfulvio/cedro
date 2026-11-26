@@ -43,6 +43,18 @@ impl Tipo {
         }
     }
 
+    /// Il nome al plurale, per contare («3 Immagini · 1 PDF»).
+    pub fn plurale(self) -> &'static str {
+        match self {
+            Tipo::Vetrino => "Vetrini",
+            Tipo::Immagine => "Immagini",
+            Tipo::Microscopia => "Microscopie",
+            Tipo::Tabella => "Tabelle",
+            Tipo::Archivio => "Archivi",
+            other => other.nome(),
+        }
+    }
+
     pub fn colore(self) -> Rgb {
         match self {
             Tipo::Vetrino => (0xA8, 0x3C, 0x78),
@@ -160,6 +172,8 @@ pub struct LabsX {
     pub anteprima: bool,
     /// Righe alte (guanti, schermo a sfioramento) invece che compatte.
     pub comode: bool,
+    /// Per quanti fotogrammi ancora la tabella deve scorrere fino alla riga evidenziata (cambio di comando, frecce).
+    pub in_vista: u8,
     /// Il caso di ogni file; la stringa vuota è «nessun caso» deciso apposta.
     pub caso_di: HashMap<PathBuf, String>,
     /// I casi conosciuti su questo computer.
@@ -424,6 +438,7 @@ impl App {
             self.lx.ancora = self.selected;
         }
         self.lx_clic_riga(rows[next], shift, false);
+        self.lx.in_vista = 2;
         if shift {
             self.selected = Some(rows[next]);
         }
@@ -551,6 +566,10 @@ impl App {
                 f.checked = k == i;
             }
             self.lx.ancora = Some(i);
+        }
+        // Un clic su un'altra riga: l'avviso del lavoro finito («Fatto: 1 file.») ha detto quello che doveva.
+        if self.job.is_none() && self.notice.as_ref().is_some_and(|n| !n.error) {
+            self.notice = None;
         }
         if self.files[i].checked {
             self.selected = Some(i);
@@ -688,11 +707,11 @@ impl App {
         Some(p)
     }
 
-    /// Che cosa dice un passo, in parole: «Togli i nomi · consulto» o «Salva immagini e vetrini · JPEG».
+    /// Che cosa dice un passo, in parole: «Togli i nomi · consulto» o «Immagini e vetrini · JPEG».
     pub fn lx_passo_titolo(&self, p: &crate::caso::Passo) -> (String, String) {
         let lab = lab_da_id(&p.lab).unwrap_or(Lab::Converti);
         let voce = self.voce(&p.azione);
-        (crate::i18n::tr_string(lab.cedro_name()), crate::i18n::tr_string(voce.label))
+        (crate::i18n::tr_string(lab.comando()), crate::i18n::tr_string(voce.label))
     }
 
     /// Si ricorda quello che si vede adesso come procedura nuova (con quel nome).
@@ -768,6 +787,8 @@ impl App {
                     format!("{} «{nome}»: {n} {}.", crate::i18n::tr_string("Procedura fatta"), crate::i18n::tr_string(if n == 1 { "passo" } else { "passi" }))
                 };
                 self.notice = Some(super::model::Notice { text: crate::i18n::lit(&text), error: pc.falliti > 0 });
+                // Si torna dove la procedura è partita, con l'avviso di com'è andata.
+                self.lx.pannello = Pannello::Procedure;
                 return;
             };
             let Some(lab) = lab_da_id(&passo.lab) else {

@@ -94,6 +94,21 @@ impl Lab {
         }
     }
 
+    /// Il nome del comando nella barra di Cedro 4 Labs, lo stesso ovunque (procedure, registro, scheda del caso).
+    pub fn comando(self) -> &'static str {
+        match self {
+            Lab::Immagini => "Immagini e vetrini",
+            Lab::Anonimizza => "Togli i nomi",
+            Lab::Figura => "Figura",
+            Lab::Dati => "Dati e piastre",
+            Lab::Referti => "Firma e referti",
+            Lab::Trascrivi => "Trascrivi",
+            Lab::Converti | Lab::Home => "Converti",
+            Lab::Pdf => "PDF",
+            other => other.name(),
+        }
+    }
+
     /// Il nome nella barra del Cedro di partenza.
     pub fn cedro_name(self) -> &'static str {
         match self {
@@ -1702,7 +1717,7 @@ impl App {
         if gruppi.is_empty() {
             return;
         }
-        let what = if self.lab == Lab::Home { Lab::Converti.name() } else { self.lab.name() };
+        let what = self.lab.comando();
         let when = crate::nametemplate::now().unix;
         for (caso, dir, outputs, strumenti, origini) in gruppi {
             crate::caso::registra(&mut self.lavori, crate::caso::Lavoro { when, what: crate::i18n::tr(what).to_string(), caso, outputs, strumento: strumenti.join(" | "), origini, dir });
@@ -1731,8 +1746,9 @@ impl App {
             if std::mem::take(&mut self.lx.assegna_dopo) {
                 self.lx_assegna(Some(&c.code));
             } else {
-                // Un caso scritto da «+ Nuovo»: si lavora su quello.
+                // Un caso scritto da «+ Nuovo»: si lavora su quello, e come aprendo un caso la scelta resta solo sui file che si vedono.
                 self.lx.caso = Some(c.code.clone());
+                self.lx_pota();
             }
         }
         self.lx.assegna_dopo = false;

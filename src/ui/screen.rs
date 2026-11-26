@@ -207,6 +207,9 @@ impl Screen {
         if let Some(to) = self.app.review_follow() {
             self.ui.scroll.insert(Scroll::Review, to);
         }
+        if self.theme == ThemeId::CedroLabs && self.app.lx.in_vista > 0 {
+            self.lx_in_vista();
+        }
         self.clamp_scrolls();
         let fonts = Fonts::for_theme(self.theme);
         self.cache.trim(scale);
@@ -260,6 +263,21 @@ impl Screen {
             self.vivace = true;
         }
         f.p
+    }
+
+    /// Cedro 4 Labs: la tabella scorre quanto basta perché la riga evidenziata si veda. Si usa la misura della
+    /// tabella del fotogramma di prima; dato che cambiando comando la tabella cambia altezza, si ripete per due fotogrammi.
+    fn lx_in_vista(&mut self) {
+        self.app.lx.in_vista -= 1;
+        self.animating = true;
+        let Some(sel) = self.app.selected else { return };
+        let Some(pos) = self.app.lx_righe().iter().position(|&r| r == sel) else { return };
+        let Some((r, _, _)) = self.scrolls.iter().find(|(_, w, _)| *w == Scroll::LxTabella) else { return };
+        let rh = if self.app.lx.comode { 46.0 } else { 36.0 };
+        let (top, bottom) = (pos as f32 * rh, (pos + 1) as f32 * rh);
+        let off = self.ui.scroll(Scroll::LxTabella);
+        let to = if top < off { top } else if bottom > off + r.3 { bottom - r.3 } else { return };
+        self.ui.scroll.insert(Scroll::LxTabella, to.max(0.0));
     }
 
     /// Riporta nei limiti le zone scorse oltre la fine nel fotogramma di prima.
@@ -885,6 +903,8 @@ impl Screen {
                 }
             }
             Act::Lab(lab) => {
+                // Cedro 4 Labs: cambiando comando la tabella può accorciarsi (piastra sotto): la riga scelta resta in vista.
+                app.lx.in_vista = 2;
                 // Il Cedro di partenza: l'avviso («Fatto: 3 file.») resta sulla pagina che ha fatto il lavoro.
                 if (self.theme.is_cedro() || self.theme == ThemeId::CedroLabs) && lab != app.lab && app.job.is_none() {
                     app.notice = None;
@@ -2378,6 +2398,10 @@ impl Screen {
                         // Il nome della procedura vive solo nella sua finestrella: Esc la chiude subito.
                         if field == Field::LxProcNome {
                             self.act(Act::LxProcNomeChiudi, plat);
+                        }
+                        // Esc nella ricerca la svuota: tornano tutte le righe.
+                        if field == Field::LxCerca {
+                            self.set_field_text(field, String::new());
                         }
                         return true;
                     }

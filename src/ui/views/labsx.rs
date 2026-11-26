@@ -66,17 +66,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 // ------------------------------------------------------------------ i comandi
 
 fn nome_comando(lab: Lab) -> String {
-    tt(match lab {
-        Lab::Immagini => "Immagini e vetrini",
-        Lab::Anonimizza => "Togli i nomi",
-        Lab::Figura => "Figura",
-        Lab::Dati => "Dati e piastre",
-        Lab::Referti => "Firma e referti",
-        Lab::Trascrivi => "Trascrivi",
-        Lab::Converti => "Converti",
-        Lab::Pdf => "PDF",
-        other => other.name(),
-    })
+    tt(lab.comando())
 }
 
 fn tasto_di(lab: Lab) -> &'static str {
@@ -826,22 +816,43 @@ fn pannello(f: &mut Frame, app: &App, r: R) {
 }
 
 /// Una riga di conti con i numeri in grassetto: «2 Vetrino · 1 DICOM». Torna l'altezza.
-fn conti(f: &mut Frame, x: f32, y: f32, voci: &[(usize, String)], colore: Rgb) -> f32 {
-    let mut cx = x;
+/// Dove va ogni voce di «3 Immagini · 1 PDF»: quando la riga è piena si va a capo. Torna (riga, x) per voce.
+fn conti_posti(f: &Frame, voci: &[(usize, String)], w: f32) -> Vec<(usize, f32)> {
+    let mut out = Vec::new();
+    let (mut riga, mut cx) = (0usize, 0.0f32);
     for (k, (n, nome)) in voci.iter().enumerate() {
-        if k > 0 {
-            f.p.text("·", cx, y, 12.0, 22.0, 14.0, SANS, colore, Align::Left);
-            cx += 14.0;
+        let largo = f.measure(&n.to_string(), 14.0, BOLD) + 5.0 + f.measure(nome, 14.0, SANS);
+        let sep = if k > 0 { 14.0 } else { 0.0 };
+        if k > 0 && cx + sep + largo > w {
+            riga += 1;
+            cx = 0.0;
+        } else {
+            cx += sep;
+        }
+        out.push((riga, cx));
+        cx += largo + 7.0;
+    }
+    out
+}
+
+/// Un riquadro con i conti, alto quanto le righe che servono. Torna l'altezza.
+fn riquadro_conti(f: &mut Frame, x: f32, y: f32, w: f32, voci: &[(usize, String)], fondo: Rgb, colore: Rgb) -> f32 {
+    let posti = conti_posti(f, voci, w - 28.0);
+    let righe = posti.last().map_or(1, |p| p.0 + 1);
+    let h = 18.0 + righe as f32 * 22.0;
+    f.p.rrect(x, y, w, h, 10.0, Some(fondo), None);
+    for (k, ((n, nome), (riga, dx))) in voci.iter().zip(posti).enumerate() {
+        let (cx, cy) = (x + 14.0 + dx, y + 9.0 + riga as f32 * 22.0);
+        if k > 0 && dx > 0.0 {
+            f.p.text("·", cx - 14.0, cy, 12.0, 22.0, 14.0, SANS, colore, Align::Left);
         }
         let ns = n.to_string();
         let nw = f.measure(&ns, 14.0, BOLD);
-        f.p.text(&ns, cx, y, nw + 2.0, 22.0, 14.0, BOLD, colore, Align::Left);
-        cx += nw + 5.0;
+        f.p.text(&ns, cx, cy, nw + 2.0, 22.0, 14.0, BOLD, colore, Align::Left);
         let tw = f.measure(nome, 14.0, SANS);
-        f.p.text(nome, cx, y, tw + 2.0, 22.0, 14.0, SANS, colore, Align::Left);
-        cx += tw + 7.0;
+        f.p.text(nome, cx + nw + 5.0, cy, tw + 2.0, 22.0, 14.0, SANS, colore, Align::Left);
     }
-    22.0
+    h
 }
 
 /// Una riga di «Cosa puoi farci»: il tasto, il nome e, se prende solo una parte dei file, «2 su 3».
@@ -881,10 +892,8 @@ fn dettagli(f: &mut Frame, app: &App, r: R) {
                 None => per_tipo.push((t, 1)),
             }
         }
-        let voci: Vec<(usize, String)> = per_tipo.iter().map(|(t, n)| (*n, tt(t.nome()))).collect();
-        f.p.rrect(x, y, w, 40.0, 10.0, Some(pal.alt), None);
-        conti(f, x + 14.0, y + 9.0, &voci, pal.text);
-        y += 50.0;
+        let voci: Vec<(usize, String)> = per_tipo.iter().map(|(t, n)| (*n, tt(if *n == 1 { t.nome() } else { t.plurale() }))).collect();
+        y += riquadro_conti(f, x, y, w, &voci, pal.alt, pal.text) + 10.0;
         let con_dati = scelti.iter().filter(|&&i| app.lx_dati(i).stato == Stato::Campi).count();
         let da_ctrl = scelti.iter().filter(|&&i| app.lx_dati(i).stato == Stato::DaControllare).count();
         if con_dati + da_ctrl > 0 {
@@ -895,9 +904,7 @@ fn dettagli(f: &mut Frame, app: &App, r: R) {
             if da_ctrl > 0 {
                 v.push((da_ctrl, tt("da controllare")));
             }
-            f.p.rrect(x, y, w, 40.0, 10.0, Some(mix(ARANCIO, pal.surface, 0.88)), None);
-            conti(f, x + 14.0, y + 9.0, &v, ARANCIO);
-            y += 50.0;
+            y += riquadro_conti(f, x, y, w, &v, mix(ARANCIO, pal.surface, 0.88), ARANCIO) + 10.0;
         }
         y += 8.0;
         titolo_sezione(f, x - 4.0, y, w, "Cosa puoi farci");
