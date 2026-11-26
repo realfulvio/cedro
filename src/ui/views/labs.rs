@@ -161,7 +161,8 @@ pub fn caso_dialog(f: &mut Frame, app: &App) {
     f.p.fill_a(0.0, 0.0, f.w, f.h, (0, 0, 0), 0.35);
     f.hit((0.0, 0.0, f.w, f.h), Act::CasoChiudi);
     let w = 560.0f32.min(f.w - 32.0);
-    let h = 330.0;
+    // La descrizione può andare su tre righe (spagnolo, tedesco…): se ne tiene lo spazio.
+    let h = 348.0;
     let (x, y) = ((f.w - w) / 2.0, ((f.h - h) / 2.0).max(8.0));
     f.p.shadow(x, y, w, h, 12.0, 18.0, 0.35, 8.0);
     f.card((x, y, w, h), 12.0);
@@ -171,7 +172,7 @@ pub fn caso_dialog(f: &mut Frame, app: &App) {
     f.text("Caso o campione", cx, cy, cw, 34.0, 24.0, SEMI, pal.text);
     cy += 40.0;
     f.para("Se c'è, il codice entra nei nomi dei file che Cedro scrive, dopo la data. Resta finché non lo togli.", cx, cy, cw, 15.0, SANS, pal.muted, 1.4, 3);
-    cy += 52.0;
+    cy += 66.0;
     f.text("Codice", cx, cy, cw, 22.0, 14.0, SEMI, pal.muted);
     cy += 24.0;
     f.field((cx, cy, cw, 42.0), Field::CasoCodice, &app.caso_bozza.0, "V-2026-0457", 16.0, false);

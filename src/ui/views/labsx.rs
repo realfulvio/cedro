@@ -663,7 +663,9 @@ fn riga(f: &mut Frame, app: &App, i: usize, r: R, col: &Colonne) {
     let sw = (f.measure(&sigla, 12.0, BOLD) + 16.0).clamp(46.0, col.tipo.1 - 8.0);
     f.p.rrect(r.0 + col.tipo.0, r.1 + (r.3 - 22.0) / 2.0, sw, 22.0, 5.0, Some(tipo.colore()), None);
     f.p.text(&sigla, r.0 + col.tipo.0, r.1 + (r.3 - 22.0) / 2.0, sw, 22.0, 12.0, BOLD, WHITE, Align::Center);
-    f.p.text(&file.name(), r.0 + col.nome.0, r.1, col.nome.1 - 10.0, r.3, 14.5, SEMI, pal.text, Align::Left);
+    // I nomi lunghi si tagliano con «…» alla stessa misura degli altri, invece di rimpicciolirsi.
+    let nome = crate::i18n::lit(&f.p.ellipsize(&crate::i18n::lit(&file.name()), 14.5, SEMI, col.nome.1 - 10.0));
+    f.p.text(&nome, r.0 + col.nome.0, r.1, col.nome.1 - 10.0, r.3, 14.5, SEMI, pal.text, Align::Left);
     if let Some(c) = col.caso {
         let caso = app.lx_caso_di(&file.path);
         if caso.is_empty() {

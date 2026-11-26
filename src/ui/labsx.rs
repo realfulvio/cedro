@@ -431,8 +431,10 @@ impl App {
 
     /// Spazio: aggiunge o toglie il file evidenziato dalla selezione.
     pub fn lx_spunta_evidenziato(&mut self) {
-        if let Some(i) = self.selected {
-            self.lx_clic_riga(i, false, true);
+        // Come in Esplora file: la riga evidenziata resta quella, così un secondo Spazio la rimette.
+        if let Some(i) = self.selected.filter(|&i| i < self.files.len()) {
+            self.files[i].checked = !self.files[i].checked;
+            self.lx.ancora = Some(i);
         }
     }
 
@@ -572,6 +574,15 @@ impl App {
             }
             self.selected = righe.first().copied();
         }
+    }
+
+    /// Ctrl+A, come in Esplora file: sceglie tutte le righe che si vedono (non toglie mai la scelta).
+    pub fn lx_scegli_tutte(&mut self) {
+        let righe = self.lx_righe();
+        if !righe.is_empty() && righe.iter().all(|&i| self.files[i].checked) {
+            return;
+        }
+        self.lx_scegli_tutti();
     }
 
     /// «Togli» e Canc: toglie dalla coda (non dal disco) solo i file scelti nella tabella; senza scelti niente.
@@ -883,6 +894,24 @@ mod tests {
         app.lx_pota();
         assert!(scelti(&app).is_empty());
         assert_eq!(app.selected, None);
+    }
+
+    #[test]
+    fn spazio_e_ctrl_a_come_in_esplora_file() {
+        let mut app = coda(4);
+        app.lx_clic_riga(0, false, false);
+        app.lx_clic_riga(2, true, false);
+        // Spazio toglie la riga evidenziata e la lascia evidenziata: un secondo Spazio la rimette.
+        app.lx_spunta_evidenziato();
+        assert_eq!(app.lx_scelti(), vec![0, 1]);
+        assert_eq!(app.selected, Some(2));
+        app.lx_spunta_evidenziato();
+        assert_eq!(app.lx_scelti(), vec![0, 1, 2]);
+        // Ctrl+A sceglie tutto e, ripetuto, non toglie niente.
+        app.lx_scegli_tutte();
+        assert_eq!(app.lx_scelti().len(), 4);
+        app.lx_scegli_tutte();
+        assert_eq!(app.lx_scelti().len(), 4);
     }
 
     #[test]

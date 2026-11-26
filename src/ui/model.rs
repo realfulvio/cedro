@@ -2308,7 +2308,9 @@ impl App {
                         self.registra_lavoro(&job);
                         falliti = Some(job.failed);
                         if matches!(job.kind, JobKind::Convert | JobKind::Transcribe) {
-                            let text = if job.failed > 0 {
+                            let text = if job.failed == 1 && job.total == 1 {
+                                "Il file non è riuscito: il motivo è accanto.".to_string()
+                            } else if job.failed > 0 {
                                 format!("{} di {} file non riusciti: il motivo è accanto a ciascuno.", job.failed, job.total)
                             } else {
                                 format!("Fatto: {} file.", job.total)

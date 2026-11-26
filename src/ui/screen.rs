@@ -886,7 +886,7 @@ impl Screen {
             }
             Act::Lab(lab) => {
                 // Il Cedro di partenza: l'avviso («Fatto: 3 file.») resta sulla pagina che ha fatto il lavoro.
-                if self.theme.is_cedro() && lab != app.lab {
+                if (self.theme.is_cedro() || self.theme == ThemeId::CedroLabs) && lab != app.lab && app.job.is_none() {
                     app.notice = None;
                 }
                 if self.theme == ThemeId::CedroLabs && app.lx.pannello == crate::ui::labsx::Pannello::Azione && app.lab == lab && !app.lavori_aperti {
@@ -2496,7 +2496,7 @@ impl Screen {
             }
             Key::Space if tabella && self.ui.focus_act.is_none() => self.app.lx_spunta_evidenziato(),
             Key::Delete if tabella => self.act(Act::RemoveChecked, plat),
-            Key::SelectAll if tabella => self.app.lx_scegli_tutti(),
+            Key::SelectAll if tabella => self.app.lx_scegli_tutte(),
             Key::Enter if tabella && self.app.lx.pannello == Pannello::Azione && self.ui.focus_act.is_none() => self.act(Act::Start, plat),
             _ => return false,
         }
@@ -2526,6 +2526,14 @@ impl Screen {
             'c' | 'C' => Act::LxAssegna,
             'p' | 'P' => Act::LxAnteprima,
             '?' => Act::LxAiuto,
+            // Con il metodo di scrittura di GTK lo spazio arriva come testo, non come tasto: stessa cosa di `Key::Space`.
+            ' ' => {
+                let a = &self.app;
+                if !a.files.is_empty() && !a.lx_pagina() && !a.lavori_aperti && self.ui.focus_act.is_none() {
+                    self.app.lx_spunta_evidenziato();
+                }
+                return;
+            }
             '/' => {
                 self.ui.edit = Some(Field::LxCerca);
                 self.ui.caret = self.app.lx.ricerca.chars().count();
