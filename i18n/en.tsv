@@ -3481,3 +3481,25 @@ meno il bianco	minus blank
 1 standard	1 standard
 Anteprima non disponibile: il file sembra danneggiato o incompleto.	Preview not available: the file seems damaged or incomplete.
 Fatto con altre scelte: «Converti» lo rifà con quelle di adesso.	Done with other choices: «Convert» redoes it with the current ones.
+Nessun campione	No sample
+Ultimo lavoro:	Last job:
+1 file scelto	1 file selected
+{#} file scelti	{} files selected
+{#} scelto su 1	{} of 1 selected
+{#} scelti su {#}	{} of {} selected
+Miniature	Thumbnails
+Nome	Name
+Tipo	Type
+Misure	Dimensions
+Escluso	Left out
+PDF	PDF
+Archivio	Archive
+Nessun file scelto: spunta i file nell'elenco	No file selected: tick the files in the list
+Fatto con altre scelte: il pulsante lo rifà con quelle di adesso.	Done with other settings: the button redoes it with the current ones.
+Salva 1 file	Save 1 file
+Salva {#} file	Save {} files
+Togli i nomi da 1 file	Remove names from 1 file
+Togli i nomi da {#} file	Remove names from {} files
+Prepara la figura	Prepare the figure
+Prepara la figura con 1 file	Prepare the figure from 1 file
+Prepara la figura con {#} file	Prepare the figure from {} files

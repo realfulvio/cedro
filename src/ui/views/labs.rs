@@ -20,6 +20,12 @@ const RAIL: f32 = 300.0;
 const PAD: f32 = 12.0;
 const SIDE: f32 = 412.0;
 const STRIP: f32 = 96.0;
+/// La riga di stato in fondo alla finestra.
+const STATUS: f32 = 32.0;
+/// L'elenco dei file sotto l'anteprima: intestazione, righe, quante righe al massimo prima di scorrere.
+const LIST_HEAD: f32 = 68.0;
+pub const LIST_ROW: f32 = 34.0;
+const LIST_ROWS: usize = 5;
 const WHITE: Rgb = (255, 255, 255);
 
 const OPT_LABS: OptStyle = OptStyle { label: 15.0, note: 14.0, control_h: 42.0, gap: 20.0, visible: 0, switch_w: 52.0, switch_h: 28.0 };
@@ -124,7 +130,7 @@ fn frame(f: &mut Frame, app: &App) {
     // Il caso su cui si lavora e l'elenco dei lavori di oggi.
     let jobs_w = lavori_button(f, app, left - 14.0);
     let cx = 64.0 + cw + 8.0 + f.measure("4 Labs", 22.0, BOLD) + 22.0;
-    caso_button(f, app, cx, left - 14.0 - jobs_w - 12.0 - cx);
+    campione_field(f, app, cx, left - 14.0 - jobs_w - 12.0 - cx);
 
     let mut y = TOP + 4.0;
     rail_item(f, y, Lab::Home, Lab::Home.name(), app.lab == Lab::Home, Act::Lab(Lab::Home));
@@ -142,7 +148,7 @@ fn frame(f: &mut Frame, app: &App) {
         y += 54.0;
     }
     for (k, (label, icon, act)) in [("Impostazioni", ic::SETTINGS, Act::OpenSettings), ("Guida", ic::HELP, Act::OpenGuide)].into_iter().enumerate() {
-        let r = (12.0, f.h - PAD - 88.0 + k as f32 * 44.0, RAIL - 24.0, 40.0);
+        let r = (12.0, f.h - PAD - STATUS - 88.0 + k as f32 * 44.0, RAIL - 24.0, 40.0);
         let t = f.hover_t(&act, true);
         if t > 0.01 {
             f.p.rrect_a(r.0, r.1, r.2, r.3, 10.0, WHITE, 0.07 * t);
@@ -154,41 +160,81 @@ fn frame(f: &mut Frame, app: &App) {
     }
 }
 
-/// Il pulsante del caso in alto: «Caso V-2026-0457 · Luna, labrador», o «+ Caso o campione» se non c'è.
+/// Un testo già tradotto, segnato perché il disegno non lo traduca una seconda volta.
+fn tt(s: &str) -> String {
+    crate::i18n::lit(&crate::i18n::tr_string(s))
+}
+
+/// Il campo «Campione» in alto, sempre allo stesso posto: il codice in uso, o «nessuno».
 /// Sta accanto al nome, non occupa una fascia. Un clic apre la finestrella con codice e nota.
-fn caso_button(f: &mut Frame, app: &App, x: f32, room: f32) {
+fn campione_field(f: &mut Frame, app: &App, x: f32, room: f32) {
     let act = Act::CasoApri;
     let (h, y) = (36.0, 14.0);
     let hover = f.hover_t(&act, true);
-    if let Some(c) = &app.caso {
-        let (label, code) = (crate::i18n::tr_string("Caso"), c.code.as_str());
-        let (lw, cw) = (f.measure(&label, 14.5, SEMI), f.measure(code, 14.5, BOLD));
-        let mut w = 12.0 + lw + 6.0 + cw + 12.0;
-        let note = if c.note.is_empty() { None } else { Some(c.note.clone()) };
-        let nw = note.as_ref().map(|n| f.measure(n, 14.0, SANS)).unwrap_or(0.0);
-        let show_note = note.is_some() && w + 8.0 + nw <= room;
-        if show_note {
-            w += 8.0 + nw;
-        }
-        let w = w.min(room.max(80.0));
-        f.p.rrect_a(x, y, w, h, 10.0, WHITE, 0.08 + 0.06 * hover);
-        let mut tx = x + 12.0;
-        f.p.text(&label, tx, y, lw + 2.0, h, 14.5, SEMI, LABS_INK, Align::Left);
-        tx += lw + 6.0;
-        f.p.text(code, tx, y, (w - (tx - x) - 8.0).max(10.0), h, 14.5, BOLD, LABS_INK, Align::Left);
-        if show_note {
-            f.p.text(note.as_deref().unwrap_or(""), tx + cw + 8.0, y, nw + 4.0, h, 14.0, SANS, LABS_MUTED, Align::Left);
-        }
-        f.focus_ring((x, y, w, h), 10.0, &act);
-        f.hit((x, y, w, h), act);
-    } else {
-        let label = crate::i18n::tr_string("+ Caso o campione");
-        let w = (f.measure(&label, 14.5, SEMI) + 28.0).min(room.max(80.0));
-        f.p.rrect_a(x, y, w, h, 10.0, WHITE, 0.06 * hover);
-        f.p.rrect_line(x, y, w, h, 10.0, LABS_LINE, 1.5, 1.0, Some((6.0, 4.0)));
-        f.p.text(&label, x + 14.0, y, w - 20.0, h, 14.5, SEMI, LABS_MUTED, Align::Left);
-        f.focus_ring((x, y, w, h), 10.0, &act);
-        f.hit((x, y, w, h), act);
+    let label = tt("Campione");
+    let (code, set) = match &app.caso {
+        Some(c) => (crate::i18n::lit(&c.code), true),
+        None => (tt("nessuno"), false),
+    };
+    let (lw, cw) = (f.measure(&label, 14.5, SEMI), f.measure(&code, 14.5, if set { BOLD } else { SANS }));
+    let mut w = 12.0 + lw + 10.0 + cw + 10.0 + 16.0 + 10.0;
+    let note = app.caso.as_ref().filter(|c| !c.note.is_empty()).map(|c| crate::i18n::lit(&c.note));
+    let nw = note.as_ref().map(|n| f.measure(n, 14.0, SANS)).unwrap_or(0.0);
+    let show_note = note.is_some() && w + 10.0 + nw <= room;
+    if show_note {
+        w += 10.0 + nw;
+    }
+    let w = w.min(room.max(80.0));
+    f.p.rrect_a(x, y, w, h, 8.0, WHITE, 0.07 + 0.06 * hover);
+    f.p.rrect_line(x, y, w, h, 8.0, LABS_LINE, 1.5, 1.0, None);
+    let mut tx = x + 12.0;
+    f.p.text(&label, tx, y, lw + 2.0, h, 14.5, SEMI, LABS_MUTED, Align::Left);
+    tx += lw + 10.0;
+    let room_code = (x + w - 36.0 - tx).max(10.0);
+    let shown = crate::i18n::lit(&f.p.ellipsize(&code, 14.5, if set { BOLD } else { SANS }, room_code));
+    f.p.text(&shown, tx, y, room_code + 2.0, h, 14.5, if set { BOLD } else { SANS }, if set { LABS_INK } else { LABS_MUTED }, Align::Left);
+    if show_note {
+        f.p.text(note.as_deref().unwrap_or(""), tx + cw + 10.0, y, nw + 4.0, h, 14.0, SANS, LABS_MUTED, Align::Left);
+    }
+    f.icon(ic::CHEVRON_DOWN, x + w - 28.0, y + 9.0, 18.0, LABS_MUTED);
+    f.focus_ring((x, y, w, h), 8.0, &act);
+    f.hit((x, y, w, h), act);
+}
+
+/// La riga di stato in fondo: quanti file sono scelti, il campione, dove si salva, l'ultimo lavoro.
+fn status_bar(f: &mut Frame, app: &App) {
+    let y = f.h - STATUS;
+    f.p.fill(0.0, y, f.w, 1.0, LABS_LINE);
+    let mut x = 22.0;
+    let mut item = |f: &mut Frame, text: &str, strong: bool| {
+        let font = if strong { SEMI } else { SANS };
+        let w = f.measure(text, 13.5, font);
+        f.p.text(text, x, y, w + 4.0, STATUS, 13.5, font, if strong { LABS_INK } else { LABS_MUTED }, Align::Left);
+        x += w + 26.0;
+    };
+    if !app.files.is_empty() && app.lab != Lab::Home {
+        let vis = app.visible();
+        let n = vis.iter().filter(|&&i| app.files[i].checked).count();
+        let t = if n == 1 { tt("1 file scelto") } else { tt(&format!("{n} file scelti")) };
+        item(f, &t, true);
+    }
+    let camp = match &app.caso {
+        Some(c) => format!("{} {}", crate::i18n::tr_string("Campione"), c.code),
+        None => tt("Nessun campione"),
+    };
+    item(f, &crate::i18n::lit(&camp), false);
+    let dest = match &app.dest {
+        None => tt("Salva accanto all'originale"),
+        Some(p) => crate::i18n::lit(&format!("{} {}", crate::i18n::tr_string("Salva in"), crate::ui::model::short_dir(p))),
+    };
+    item(f, &dest, false);
+    if let Some(l) = crate::caso::di_oggi(&app.lavori).first() {
+        let n = l.outputs.len();
+        let fatti = if n == 1 { crate::i18n::tr_string("1 file") } else { crate::i18n::tr_string(&format!("{n} file")) };
+        let line = crate::i18n::lit(&format!("{} {} · {} · {}", crate::i18n::tr_string("Ultimo lavoro:"), l.ora(), crate::i18n::tr_string(&l.what), fatti));
+        let w = f.measure(&line, 13.5, SANS);
+        let lx = (f.w - 22.0 - w).max(x);
+        f.p.text(&line, lx, y, f.w - 22.0 - lx, STATUS, 13.5, SANS, LABS_MUTED, Align::Left);
     }
 }
 
@@ -350,7 +396,8 @@ fn rail_item(f: &mut Frame, y: f32, lab: Lab, label: &str, on: bool, act: Act) {
 
 pub fn draw(f: &mut Frame, app: &App) {
     frame(f, app);
-    let area = (RAIL, TOP, f.w - RAIL - PAD, f.h - TOP - PAD);
+    status_bar(f, app);
+    let area = (RAIL, TOP, f.w - RAIL - PAD, f.h - TOP - PAD - STATUS);
     if app.lavori_aperti {
         lavori_page(f, app, area);
         return;
@@ -480,7 +527,9 @@ pub(super) fn stage_draw(f: &mut Frame, app: &App, r: R) {
         empty(f, app, (r.0 + 28.0, r.1 + 28.0, r.2 - 56.0, r.3 - 56.0));
         return;
     };
-    let area = (r.0 + 18.0, r.1 + 18.0, r.2 - 36.0, r.3 - 18.0 - STRIP);
+    // Sotto l'anteprima i file: elenco a tabella (come in Esplora file) o la striscia di miniature.
+    let low = if app.lab_miniature { STRIP } else { list_h(vis.len()) };
+    let area = (r.0 + 18.0, r.1 + 18.0, r.2 - 36.0, r.3 - 18.0 - low);
     match &strum {
         Some((_, l)) => {
             let (_, bright) = colors(app);
@@ -489,7 +538,195 @@ pub(super) fn stage_draw(f: &mut Frame, app: &App, r: R) {
         }
         None => viewer(f, app, i, area),
     }
-    strip(f, app, (r.0, r.1 + r.3 - STRIP, r.2, STRIP), &vis, i);
+    if app.lab_miniature {
+        strip(f, app, (r.0, r.1 + r.3 - STRIP, r.2, STRIP), &vis, i);
+    } else {
+        file_table(f, app, (r.0, r.1 + r.3 - low, r.2, low), &vis, i);
+    }
+}
+
+/// Il tipo del file nella colonna «Tipo»: per il laboratorio prima di tutto (vetrino, DICOM, strumento).
+fn kind_label(app: &App, i: usize) -> &'static str {
+    let file = &app.files[i];
+    if let Some(m) = app.media_of(&file.path) {
+        if m.slide.is_some() {
+            return "Vetrino";
+        }
+        if m.dicom.is_some() {
+            return "DICOM";
+        }
+        if m.micro.is_some() {
+            return "Microscopia";
+        }
+        if m.strumento.is_some() {
+            return "Strumento";
+        }
+    }
+    let ext = file.path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    if matches!(ext.as_str(), "csv" | "tsv" | "xls" | "xlsx" | "ods" | "json") {
+        return "Tabella";
+    }
+    match file.kind {
+        Kind::Image => "Immagine",
+        Kind::Pdf => "PDF",
+        Kind::Doc => "Documento",
+        Kind::Text => "Testo",
+        Kind::Audio => "Audio",
+        Kind::Video => "Video",
+        Kind::Archive => "Archivio",
+        Kind::Other => "Altro",
+    }
+}
+
+/// L'altezza dell'elenco dei file: l'intestazione e fino a `LIST_ROWS` righe, poi scorre.
+fn list_h(n: usize) -> f32 {
+    LIST_HEAD + LIST_ROW * n.clamp(1, LIST_ROWS) as f32 + 10.0
+}
+
+/// «Elenco | Miniature»: come vedere i file in coda. Restituisce la x a sinistra del selettore.
+fn view_switch(f: &mut Frame, app: &App, right: f32, y: f32) -> f32 {
+    let items = [("Elenco", false), ("Miniature", true)];
+    let ws: Vec<f32> = items.iter().map(|(l, _)| f.measure(l, 13.5, SEMI) + 22.0).collect();
+    let total: f32 = ws.iter().sum::<f32>() + 4.0;
+    let x0 = right - total;
+    f.p.rrect_line(x0, y, total, 30.0, 8.0, LABS_LINE, 1.2, 1.0, None);
+    let mut x = x0 + 2.0;
+    for ((label, mini), w) in items.into_iter().zip(ws) {
+        let on = app.lab_miniature == mini;
+        let act = Act::LabMiniature(mini);
+        let t = f.hover_t(&act, !on);
+        if on {
+            f.p.rrect_a(x, y + 2.0, w, 26.0, 6.0, WHITE, 0.16);
+        } else if t > 0.01 {
+            f.p.rrect_a(x, y + 2.0, w, 26.0, 6.0, WHITE, 0.07 * t);
+        }
+        f.p.text(label, x, y + 2.0, w, 26.0, 13.5, SEMI, if on { LABS_INK } else { LABS_MUTED }, Align::Center);
+        f.focus_ring((x, y + 2.0, w, 26.0), 6.0, &act);
+        f.hit((x, y + 2.0, w, 26.0), act);
+        x += w;
+    }
+    x0
+}
+
+/// L'elenco dei file in coda, a tabella: spunta, nome, tipo, misure, dimensione, stato, togli.
+/// Clic sulla riga = la guardi nell'anteprima; la casella = entra nel lavoro. Spazio e Ctrl+A come in Esplora file.
+fn file_table(f: &mut Frame, app: &App, r: R, vis: &[usize], sel: usize) {
+    let (deep, bright) = colors(app);
+    f.p.rrect_a(r.0, r.1, r.2, r.3, 16.0, LABS_FRAME_HI, 1.0);
+    f.p.fill(r.0 + 16.0, r.1, r.2 - 32.0, 1.0, LABS_LINE);
+    let (x0, w) = (r.0 + 14.0, r.2 - 28.0);
+    // Intestazione: «File · 2 scelti su 3», gli altri tipi in coda, «Aggiungi», Elenco | Miniature.
+    let hy = r.1 + 8.0;
+    let n_on = vis.iter().filter(|&&i| app.files[i].checked).count();
+    let all = !vis.is_empty() && n_on == vis.len();
+    let cb = |f: &mut Frame, x: f32, y: f32, on: bool, act: Act| {
+        if on {
+            f.p.rrect(x, y, 18.0, 18.0, 4.0, Some(deep), None);
+            f.icon(ic::CHECK, x + 2.0, y + 2.0, 14.0, WHITE);
+        } else {
+            f.p.rrect(x, y, 18.0, 18.0, 4.0, None, Some((LABS_MUTED, 1.6)));
+        }
+        f.hit((x - 7.0, y - 7.0, 32.0, 32.0), act);
+    };
+    cb(f, x0 + 2.0, hy + 6.0, all, Act::CheckAll);
+    let head = if vis.len() == 1 { tt(&format!("{n_on} scelto su 1")) } else { tt(&format!("{n_on} scelti su {}", vis.len())) };
+    f.p.text("File", x0 + 32.0, hy, 60.0, 30.0, 15.0, BOLD, LABS_INK, Align::Left);
+    let fw = f.measure("File", 15.0, BOLD);
+    f.p.text(&head, x0 + 32.0 + fw + 10.0, hy, 160.0, 30.0, 13.5, SANS, LABS_MUTED, Align::Left);
+    let sw_x = view_switch(f, app, x0 + w, hy);
+    let add_label = "Aggiungi";
+    let aw = f.measure(add_label, 13.5, SEMI) + 34.0;
+    let add = (sw_x - 10.0 - aw, hy, aw, 30.0);
+    let act = Act::AddFiles;
+    let t = f.hover_t(&act, true);
+    f.p.rrect_a(add.0, add.1, add.2, add.3, 8.0, WHITE, 0.06 + 0.08 * t);
+    f.icon(ic::ADD, add.0 + 8.0, add.1 + 6.0, 18.0, LABS_INK);
+    f.p.text(add_label, add.0 + 28.0, add.1, add.2 - 30.0, add.3, 13.5, SEMI, LABS_INK, Align::Left);
+    f.focus_ring(add, 8.0, &act);
+    f.hit(add, act);
+    let ox = x0 + 32.0 + fw + 10.0 + f.measure(&head, 13.5, SANS) + 24.0;
+    if add.0 - 16.0 - ox > 180.0 {
+        others(f, app, ox, hy + 2.0, add.0 - 16.0 - ox);
+    }
+    // Le colonne: la misura che conta per il tipo (risoluzione, pagine, durata…), dimensione, stato.
+    // Con la finestra stretta la colonna «Misure» lascia il posto al nome.
+    let misure = w >= 760.0;
+    let col_stato = x0 + w - 124.0;
+    let col_size = col_stato - 96.0;
+    let col_extra = if misure { col_size - 116.0 } else { col_size };
+    let col_tipo = col_extra - 104.0;
+    let name_x = x0 + 32.0;
+    let cy = r.1 + LIST_HEAD;
+    let mut cols = vec![("Nome", name_x), ("Tipo", col_tipo)];
+    if misure {
+        cols.push(("Misure", col_extra));
+    }
+    cols.extend([("Dimensione", col_size), ("Stato", col_stato)]);
+    for (label, x) in cols {
+        f.p.text(label, x, cy - 22.0, 110.0, 18.0, 12.5, SEMI, LABS_MUTED, Align::Left);
+    }
+    let body = (r.0 + 1.0, cy, r.2 - 2.0, r.1 + r.3 - cy - 6.0);
+    let rows = vis.to_vec();
+    super::scrolled(f, body, Scroll::Queue, |f| {
+        for (n, &i) in rows.iter().enumerate() {
+            let y = body.1 + n as f32 * LIST_ROW;
+            if !f.p.shows_y(y, LIST_ROW) {
+                continue;
+            }
+            let file = &app.files[i];
+            f.p.fill_a(x0, y, w, 1.0, WHITE, 0.07);
+            let on = i == sel;
+            let act = Act::Select(i);
+            let t = f.hover_t(&act, !on);
+            if on {
+                f.p.rrect_a(x0 - 6.0, y + 1.0, w + 12.0, LIST_ROW - 2.0, 6.0, bright, 0.2);
+            } else if t > 0.01 {
+                f.p.rrect_a(x0 - 6.0, y + 1.0, w + 12.0, LIST_ROW - 2.0, 6.0, WHITE, 0.05 * t);
+            }
+            f.hit((x0 - 6.0, y, w + 12.0, LIST_ROW), act);
+            cb(f, x0 + 2.0, y + (LIST_ROW - 18.0) / 2.0, file.checked, Act::Check(i));
+            let name = crate::i18n::lit(&f.p.ellipsize(&file.name(), 14.5, SEMI, col_tipo - name_x - 14.0));
+            f.p.text(&name, name_x, y, col_tipo - name_x - 10.0, LIST_ROW, 14.5, if on { SEMI } else { SANS }, LABS_INK, Align::Left);
+            let tipo = tt(kind_label(app, i));
+            f.p.text(&tipo, col_tipo, y, 98.0, LIST_ROW, 13.5, SANS, LABS_MUTED, Align::Left);
+            let (size, extra) = super::file_meta(app, i);
+            if misure {
+                f.p.text(&extra, col_extra, y, 110.0, LIST_ROW, 13.5, SANS, LABS_MUTED, Align::Left);
+            }
+            f.p.text(&size, col_size, y, 80.0, LIST_ROW, 13.5, SANS, LABS_MUTED, Align::Left);
+            // Fatto con scelte diverse da quelle di adesso: torna «Da fare».
+            let stato = if file.state == FileState::Done && !app.is_fresh_done(i) { FileState::Waiting } else { file.state };
+            let (label, c) = match stato {
+                FileState::Waiting if file.checked => ("Da fare", LABS_INK),
+                FileState::Waiting => ("Escluso", LABS_MUTED),
+                FileState::Running => ("In corso", bright),
+                FileState::Done | FileState::Skipped => ("Fatto", LABS_LEAF),
+                FileState::Failed => ("Errore", (0xFF, 0x8A, 0x8F)),
+            };
+            f.p.text(label, col_stato, y, 96.0, LIST_ROW, 13.5, SEMI, c, Align::Left);
+            if let Some(p) = file.percent.filter(|_| file.state == FileState::Running) {
+                f.p.rrect_a(col_stato, y + LIST_ROW - 7.0, 90.0, 3.0, 1.5, WHITE, 0.25);
+                f.p.rrect(col_stato, y + LIST_ROW - 7.0, 90.0 * p.clamp(0.0, 1.0), 3.0, 1.5, Some(bright), None);
+            }
+            let cx = x0 + w - 14.0;
+            if stato == FileState::Waiting {
+                let rm = Act::Remove(i);
+                if on || t > 0.5 || f.hovered(&rm) {
+                    if f.hovered(&rm) {
+                        f.p.disc_a(cx, y + LIST_ROW / 2.0, 13.0, WHITE, 0.12);
+                    }
+                    f.icon(ic::CLOSE, cx - 8.0, y + LIST_ROW / 2.0 - 8.0, 16.0, LABS_MUTED);
+                    f.hit((cx - 14.0, y + 3.0, 28.0, LIST_ROW - 6.0), rm);
+                }
+            } else {
+                f.state_icon(stato, cx, y + LIST_ROW / 2.0, 8.0);
+                if let Some(out) = &file.output {
+                    f.hit((cx - 14.0, y + 3.0, 28.0, LIST_ROW - 6.0), Act::OpenPath(out.clone()));
+                }
+            }
+        }
+        rows.len() as f32 * LIST_ROW + 1.0
+    });
 }
 
 /// Niente file: la zona dove lasciarli, con le scritte chiare sulla cornice scura.
@@ -618,7 +855,7 @@ fn strip(f: &mut Frame, app: &App, r: R, vis: &[usize], sel: usize) {
     let count = if vis.len() == 1 { "1 file".to_string() } else { format!("{} file", vis.len()) };
     let cw = f.measure(&count, 14.5, SEMI);
     let add_w = f.measure("Aggiungi", 15.0, SEMI) + 58.0;
-    let room = r.2 - 36.0 - add_w - gap - cw - 24.0;
+    let room = r.2 - 36.0 - add_w - gap - cw - 24.0 - 190.0;
     let n = vis.len();
     // Larghezza della miniatura: piena se ci stanno tutte, altrimenti più stretta (minimo 52).
     let tw_min = 52.0f32;
@@ -701,9 +938,10 @@ fn strip(f: &mut Frame, app: &App, r: R, vis: &[usize], sel: usize) {
     f.p.text("Aggiungi", add.0 + 44.0, add.1, add.2 - 50.0, th, 15.0, SEMI, LABS_INK, Align::Left);
     f.focus_ring(add, 9.0, &act);
     f.hit(add, act);
-    f.p.text(&count, r.0 + r.2 - 18.0 - cw - 4.0, y, cw + 4.0, th, 14.5, SEMI, LABS_MUTED, Align::Right);
+    let sw_x = view_switch(f, app, r.0 + r.2 - 18.0, y + (th - 30.0) / 2.0);
+    f.p.text(&count, sw_x - 14.0 - cw - 4.0, y, cw + 4.0, th, 14.5, SEMI, LABS_MUTED, Align::Right);
     let ox = add.0 + add.2 + 18.0;
-    let ow = r.0 + r.2 - 18.0 - cw - 20.0 - ox;
+    let ow = sw_x - 14.0 - cw - 20.0 - ox;
     if ow > 160.0 {
         others(f, app, ox, y + (th - 26.0) / 2.0, ow);
     }
@@ -745,6 +983,65 @@ pub(super) fn file_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32
             f.text("Nessun file in coda", x, y + 30.0, w, 22.0, 14.5, SANS, pal.muted);
             60.0
         }
+    }
+}
+
+/// In cima al pannello dei comandi: il nome del comando (lo stesso della barra a sinistra) e quanti file
+/// prende; sotto, se il file in evidenza è fatto o non è riuscito, che cosa è successo. Restituisce l'altezza.
+fn panel_head(f: &mut Frame, app: &App, x: f32, y: f32, w: f32) -> f32 {
+    let pal = f.pal;
+    f.text(app.lab.name(), x, y, w, 28.0, 20.0, BOLD, pal.text);
+    let vis = app.visible();
+    let targets = app.targets();
+    let bytes: u64 = targets.iter().filter_map(|&i| app.media_of(&app.files[i].path).map(|m| m.bytes)).sum();
+    let size = crate::ui::model::human_size(bytes);
+    let sub = match targets.len() {
+        _ if vis.is_empty() => tt("Nessun file in coda"),
+        0 => tt("Nessun file scelto: spunta i file nell'elenco"),
+        1 => crate::i18n::lit(&format!("{} · {size}", crate::i18n::tr_string("1 file scelto"))),
+        n => crate::i18n::lit(&format!("{} · {size}", crate::i18n::tr_string(&format!("{n} file scelti")))),
+    };
+    f.text(&sub, x, y + 30.0, w, 22.0, 14.5, SANS, pal.muted);
+    let mut h = 56.0;
+    if let Some(i) = app.selected.filter(|i| vis.contains(i)) {
+        let file = &app.files[i];
+        let superato = file.state == FileState::Done && !app.is_fresh_done(i);
+        let (line, c) = if superato {
+            ("Fatto con altre scelte: il pulsante lo rifà con quelle di adesso.".to_string(), pal.muted)
+        } else {
+            match file.state {
+                FileState::Failed => (file.message.clone(), pal.bad),
+                FileState::Done => (file.message.clone(), pal.ok),
+                _ => (String::new(), pal.muted),
+            }
+        };
+        if !line.is_empty() {
+            let name = file.name();
+            let line = crate::i18n::lit(&format!("{}: {}", name, crate::i18n::tr_string(&line)));
+            h += f.para(&line, x, y + h, w, 14.0, SANS, c, 1.35, 3) + 4.0;
+        }
+    }
+    h + 4.0
+}
+
+/// Il testo del pulsante grande con il verbo del comando: «Salva 3 file», «Togli i nomi da 1 file»…
+pub(crate) fn go_label_labs(app: &App) -> String {
+    let base = super::go_label(app);
+    if app.job.is_some() || app.finished() || app.activity != Activity::Convert || super::pagine::go_label(app).is_some() {
+        return base;
+    }
+    let n = app.todo().len();
+    match (app.lab, n) {
+        (Lab::Immagini, 0) => "Salva".into(),
+        (Lab::Immagini, 1) => "Salva 1 file".into(),
+        (Lab::Immagini, n) => format!("Salva {n} file"),
+        (Lab::Anonimizza, 0) => "Togli i nomi".into(),
+        (Lab::Anonimizza, 1) => "Togli i nomi da 1 file".into(),
+        (Lab::Anonimizza, n) => format!("Togli i nomi da {n} file"),
+        (Lab::Figura, 0) => "Prepara la figura".into(),
+        (Lab::Figura, 1) => "Prepara la figura con 1 file".into(),
+        (Lab::Figura, n) => format!("Prepara la figura con {n} file"),
+        _ => base,
     }
 }
 
@@ -808,7 +1105,7 @@ pub(super) fn choice_row(f: &mut Frame, r: R, voce: &voci::Voce, label: &str, hi
 /// Il pulsante grande, del colore della pagina.
 pub(super) fn go_button(f: &mut Frame, app: &App, r: R, deep: Rgb) {
     let pal = f.pal;
-    let label = super::go_label(app);
+    let label = go_label_labs(app);
     let enabled = !app.busy() && !app.targets().is_empty();
     let act = Act::Start;
     if enabled {
@@ -851,7 +1148,7 @@ fn side_panel(f: &mut Frame, app: &App, r: R) {
     f.p.rrect(r.0, r.1, r.2, r.3, 16.0, Some(pal.surface), None);
     let (x, w) = (r.0 + 24.0, r.2 - 48.0);
     let mut y = r.1 + 20.0;
-    y += file_head(f, app, x, y, w) + 6.0;
+    y += panel_head(f, app, x, y, w) + 6.0;
     mode_switch(f, (x, y, w, 42.0));
     y += 42.0 + 14.0;
     // A lavoro finito, sotto l'esito, il testo del lavoro da incollare nel quaderno di laboratorio.

@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use super::core::{inside, Act, Field, Fold, Frame, HitKind, LinkFlag, LinkMenu, Menu, Scroll, Swatch, UiState, NEW_VOICE, R};
 use super::gfx::{Fonts, GlyphCache, Painter};
-use super::model::{Activity, App, Notice, AUDIO_FORMATS, SUBTITLES, VIDEO_FORMATS};
+use super::model::{Activity, App, Lab, Notice, AUDIO_FORMATS, SUBTITLES, VIDEO_FORMATS};
 use super::pdfedact::EdField;
 use super::strumenti::StrumAct;
 use super::theme::ThemeId;
@@ -859,7 +859,8 @@ impl Screen {
             }
             Act::Lab(lab) => {
                 // Il Cedro di partenza: l'avviso («Fatto: 3 file.») resta sulla pagina che ha fatto il lavoro.
-                if self.theme.is_cedro() && lab != app.lab {
+                // Anche in Cedro 4 Labs: l'avviso di un lavoro finito non resta sul comando dopo.
+                if (self.theme.is_cedro() || self.theme == ThemeId::CedroLabs) && lab != app.lab && app.job.is_none() {
                     app.notice = None;
                 }
                 app.set_lab(lab, simple);
@@ -1155,6 +1156,7 @@ impl Screen {
                 let _ = crate::settings::write_settings(&st);
             }
             Act::CasoApri => app.caso_apri(),
+            Act::LabMiniature(on) => app.lab_miniature = on,
             Act::CasoOk => {
                 app.caso_conferma();
                 self.ui.edit = None;
@@ -2092,8 +2094,62 @@ impl Screen {
         }
     }
 
+    /// Cedro 4 Labs, i file sotto l'anteprima: Spazio spunta la riga, Ctrl+A le sceglie tutte, le frecce
+    /// passano alla riga prima o dopo (e l'elenco scorre fin lì). Come in Esplora file.
+    fn lab_list_key(&mut self, key: Key) -> bool {
+        if self.theme != ThemeId::CedroLabs || self.app.caso_aperto || self.app.lavori_aperti || self.app.ed.is_some() {
+            return false;
+        }
+        if matches!(self.app.lab, Lab::Home | Lab::Referti | Lab::Trascrivi) || self.app.activity != Activity::Convert {
+            return false;
+        }
+        // Con il fuoco su un pulsante (Tab), lo Spazio preme il pulsante.
+        if key == Key::Space && self.ui.focus_act.as_ref().is_some_and(|a| !matches!(a, Act::Select(_) | Act::Check(_))) {
+            return false;
+        }
+        let vis = self.app.visible();
+        let Some(&first) = vis.first() else { return false };
+        let cur = self.app.selected.filter(|i| vis.contains(i)).unwrap_or(first);
+        let pos = vis.iter().position(|&v| v == cur).unwrap_or(0);
+        match key {
+            Key::Space => self.app.files[cur].checked = !self.app.files[cur].checked,
+            Key::SelectAll => {
+                for &i in &vis {
+                    self.app.files[i].checked = true;
+                }
+            }
+            Key::Up | Key::Down => {
+                let to = if key == Key::Down { (pos + 1).min(vis.len() - 1) } else { pos.saturating_sub(1) };
+                if self.app.selected != Some(vis[to]) {
+                    self.app.selected = Some(vis[to]);
+                    self.app.preview_page = 0;
+                    self.app.stamp_page = 0;
+                }
+                self.lab_list_in_vista(to);
+            }
+            _ => return false,
+        }
+        self.animating = true;
+        true
+    }
+
+    /// Fa scorrere l'elenco dei file di Labs fin dove si vede la riga `pos` (misure del fotogramma di prima).
+    fn lab_list_in_vista(&mut self, pos: usize) {
+        let Some((r, _, _)) = self.scrolls.iter().find(|(_, w, _)| *w == Scroll::Queue).copied() else { return };
+        let rh = crate::ui::views::labs::LIST_ROW;
+        let (top, bottom) = (pos as f32 * rh, (pos + 1) as f32 * rh);
+        let off = self.ui.scroll(Scroll::Queue);
+        let to = if top < off { top } else if bottom > off + r.3 { bottom - r.3 } else { return };
+        self.ui.scroll.insert(Scroll::Queue, to.max(0.0));
+    }
+
     /// Un testo scritto (o incollato) nel campo con il cursore.
     pub fn text_input(&mut self, s: &str) {
+        // Su Linux lo Spazio arriva come testo: senza un campo aperto, in Labs spunta la riga dell'elenco.
+        if self.ui.edit.is_none() && s == " " {
+            self.lab_list_key(Key::Space);
+            return;
+        }
         let Some(field) = self.ui.edit else { return };
         // Scrivere chiude il menu del tasto destro, come nei campi del sistema.
         self.ui.menu = None;
@@ -2220,6 +2276,9 @@ impl Screen {
                 self.set_field_text(field, chars.into_iter().collect());
                 return true;
             }
+        }
+        if self.lab_list_key(key) {
+            return true;
         }
         match key {
             Key::Escape => {
@@ -2358,6 +2417,52 @@ mod tests {
         fn toggle_maximize(&mut self) {}
         fn close(&mut self) {}
         fn open_full(&mut self) {}
+    }
+
+    /// Cedro 4 Labs, l'elenco dei file sotto l'anteprima: Spazio spunta la riga in evidenza, Ctrl+A le
+    /// sceglie tutte (senza mai toglierle), le frecce passano di riga; il pulsante dice il verbo del comando.
+    #[test]
+    fn labs_elenco_come_esplora_file() {
+        let dir = crate::engine::private_temp_dir("cedro-prova-labs-elenco").unwrap();
+        let files: Vec<PathBuf> = (1..=3).map(|k| dir.join(format!("vetrino_{k}.png"))).collect();
+        for p in &files {
+            image::RgbImage::new(8, 8).save(p).unwrap();
+        }
+        let mut plat = Fake { clip: String::new() };
+        let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+        s.request_appearance(ThemeId::CedroLabs, false);
+        s.drop_files(files.clone());
+        s.act(Act::Lab(Lab::Immagini), &mut plat);
+        let _ = s.render(1400, 900, 1.0);
+        let vis = s.app.visible();
+        assert_eq!(vis.len(), 3);
+        assert!(vis.iter().all(|&i| s.app.files[i].checked));
+        s.app.selected = Some(vis[0]);
+        // La freccia giù porta alla seconda riga, lo Spazio la toglie dal lavoro.
+        assert!(s.key(Key::Down, &mut plat));
+        assert_eq!(s.app.selected, Some(vis[1]));
+        assert!(s.key(Key::Space, &mut plat));
+        assert!(!s.app.files[vis[1]].checked);
+        assert_eq!(s.app.targets().len(), 2);
+        // Su Linux lo Spazio arriva come testo: fa lo stesso.
+        s.text_input(" ");
+        assert!(s.app.files[vis[1]].checked);
+        s.text_input(" ");
+        assert_eq!(crate::ui::views::labs::go_label_labs(&s.app), "Salva 2 file");
+        // Ctrl+A le sceglie tutte, anche se sono già tutte scelte.
+        assert!(s.key(Key::SelectAll, &mut plat));
+        assert!(s.key(Key::SelectAll, &mut plat));
+        assert!(vis.iter().all(|&i| s.app.files[i].checked));
+        assert!(s.key(Key::Up, &mut plat));
+        assert_eq!(s.app.selected, Some(vis[0]));
+        s.act(Act::Lab(Lab::Anonimizza), &mut plat);
+        let _ = s.render(1400, 900, 1.0);
+        assert!(crate::ui::views::labs::go_label_labs(&s.app).starts_with("Togli i nomi da"));
+        // «Miniature» torna alla striscia, «Elenco» alla tabella.
+        s.act(Act::LabMiniature(true), &mut plat);
+        let _ = s.render(1400, 900, 1.0);
+        assert!(s.hits.iter().any(|h| h.act == Act::LabMiniature(false)));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// «Firma documenti», «Chiavetta e certificati» e «Opzioni»: si disegnano in tutti i temi, i passi

@@ -11,9 +11,10 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Correzioni della lettura degli strumenti di laboratorio (Cedro 4 Labs) e finestra più leggera nelle altre lingue.**
+**Cedro 4 Labs: la finestra di sempre, più ordinata per il laboratorio.**
 
-- **Messaggi d'errore degli strumenti tradotti.** Quando un export non si legge, il motivo (colonna mancante, tempo non leggibile, versione non supportata…) ora si vede in inglese, spagnolo, tedesco, francese e portoghese, non più in italiano: un centinaio di messaggi dei 34 formati.
-- **CSV piatto giusto per l'Excel italiano.** Con il punto e virgola come separatore anche il CSV piatto di Allotrope scrive i decimali con la virgola, come il CSV della tabella: Excel lo apre con i numeri al posto giusto.
-- **Niente «2 pagine» sui file di dati.** Nella coda l'export di uno strumento non mostra più un numero di pagine che non ha senso per una tabella di misure.
-- **Finestra più leggera in inglese, spagnolo, tedesco, francese e portoghese.** I testi con numeri («12 file», «3 pagine», «2 file su 5»), ridisegnati a ogni fotogramma, ora si traducono una volta sola e poi si ricordano: da 9,7 a 0,12 microsecondi per testo, 80 volte meno lavoro.
+- **Campo «Campione» sempre in vista.** In alto, accanto al nome, c'è il campione su cui lavori (o «nessuno»): un clic per cambiarlo. Il codice entra nei nomi dei file e nell'elenco dei lavori.
+- **I file in coda in un elenco, come in Esplora file.** Sotto l'anteprima c'è una tabella con nome, tipo (vetrino, DICOM, microscopia, strumento, tabella…), misure, dimensione e stato. Con le caselle scegli quali file entrano nel lavoro senza toglierli dalla coda; Spazio spunta la riga, Ctrl+A le sceglie tutte, le frecce passano di riga. «Miniature» torna alla striscia di prima.
+- **Stesso nome dappertutto.** Il pannello a destra si chiama come il comando scelto a sinistra e il pulsante usa lo stesso verbo: «Salva 3 file», «Togli i nomi da 1 file», «Prepara la figura con 2 file».
+- **Riga di stato in fondo.** Quanti file sono scelti, il campione, dove si salva e l'ultimo lavoro fatto, sempre nello stesso posto.
+- **Niente avviso vecchio.** Cambiando comando, il «Fatto» del lavoro precedente non resta più sul pannello.

@@ -159,6 +159,8 @@ pub enum Act {
     CasoTogli,
     CasoChiudi,
     LavoriApri,
+    /// Cedro 4 Labs: i file sotto l'anteprima come miniature (vero) o come elenco (falso).
+    LabMiniature(bool),
     /// «Copia per il quaderno» di un lavoro (indice tra quelli di oggi, dal più nuovo).
     Quaderno(usize),
     /// «Copia per il quaderno» del lavoro appena finito, dal pannello del risultato.

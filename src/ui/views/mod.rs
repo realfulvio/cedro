@@ -12,7 +12,7 @@ mod essenziale;
 mod firma;
 mod firmare;
 mod guidato;
-mod labs;
+pub(crate) mod labs;
 mod onda;
 mod pagine;
 mod pdfeditor;
