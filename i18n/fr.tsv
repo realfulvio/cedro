@@ -3159,6 +3159,110 @@ il foglio «{}» non ha la tabella	la feuille «{}» n'a pas de tableau
 blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	bloc «{}» non pris en charge : Cedro lit les plaques de 96 et 384 puits
 nel file manca il foglio «{}»	il manque la feuille «{}» dans le fichier
 il foglio «{}» è vuoto	la feuille «{}» est vide
+manca la colonna {}	la colonne {} est manquante
+manca il manifest	le manifeste est manquant
+manifest non valido	manifeste non valide
+manca il documento principale	le document principal est manquant
+manca «{}»	«{}» est manquant
+identificatore ripetuto: {}	identifiant répété : {}
+valore senza numero o unità: {}	valeur sans nombre ou unité : {}
+file troppo grande per l'export di uno strumento	fichier trop volumineux pour un export d'instrument
+i blocchi dei coloranti devono avere tutti {} colonne	les blocs de colorants doivent tous avoir {} colonnes
+ci deve essere un solo colorante di riferimento (senza «_target»), nel file ce ne sono {}	il ne doit y avoir qu'un seul colorant de référence (sans «_target»), le fichier en a {}
+pozzetto perso	puits perdu
+il gruppo «{}» ha due valori diversi per «{}»: {} e {}	le groupe «{}» a deux valeurs différentes pour «{}» : {} et {}
+nel file non c'è la vitalità	le fichier ne contient pas la viabilité
+la griglia dei valori è vuota	la grille des valeurs est vide
+alla riga {} dopo «Plate information» manca l'intestazione «Plate,Repeat,Barcode…»	à la ligne {} après «Plate information», l'en-tête «Plate,Repeat,Barcode…» est manquant
+alla riga {} manca la riga con i dati della piastra	à la ligne {}, la ligne des données de la plaque est manquante
+una piastra non ha il numero	une plaque n'a pas de numéro
+la piastra {} non ha né «Label» né «Formula»: non so se è una lettura o un calcolo	la plaque {} n'a ni «Label» ni «Formula» : impossible de savoir si c'est une lecture ou un calcul
+mancano le intestazioni delle informazioni di fondo	les en-têtes des informations de fond sont manquants
+piastra {}: {}	plaque {} : {}
+tempo non leggibile: «{}»	temps illisible : «{}»
+larghezza di banda dell'eccitazione non leggibile: «{}»	largeur de bande d'excitation illisible : «{}»
+filtro dello specchio non leggibile: «{}»	filtre du miroir illisible : «{}»
+la riga «Read» della lettura non è come Gen5 la scrive	la ligne «Read» de la lecture n'est pas écrite comme Gen5 l'écrit
+righe «Wavelengths» non leggibili	lignes «Wavelengths» illisibles
+nella riga della cinetica manca «{}»	dans la ligne de la cinétique, «{}» est manquant
+numero di letture della cinetica non leggibile	nombre de lectures de la cinétique illisible
+il tipo di lettura non c'è: servono Endpoint o Spectrum	le type de lecture est absent : il faut Endpoint ou Spectrum
+il modo di lettura non c'è: servono assorbanza, fluorescenza, luminescenza o AlphaLISA	le mode de lecture est absent : il faut absorbance, fluorescence, luminescence ou AlphaLISA
+il numero delle letture non torna con i modi di lettura trovati	le nombre de lectures ne correspond pas aux modes de lecture trouvés
+correzione del cammino ottico non leggibile	correction du trajet optique illisible
+le eccitazioni e le emissioni non sono lo stesso numero	les excitations et les émissions ne sont pas en même nombre
+la polarizzazione di fluorescenza vuole due serie di filtri	la polarisation de fluorescence demande deux séries de filtres
+il numero delle misure ({}) non è quello dei guadagni ({})	le nombre de mesures ({}) ne correspond pas à celui des gains ({})
+la temperatura dovrebbe stare su una riga sola	la température devrait tenir sur une seule ligne
+temperatura non leggibile: «{}»	température illisible : «{}»
+per la misura «{}» non c'è la lettura	il n'y a pas de lecture pour la mesure «{}»
+per «{}» non ci sono i filtri	il n'y a pas de filtres pour «{}»
+la cinetica non ha i dati dei tempi	la cinétique n'a pas les données des temps
+nel file ci sono i dati della cinetica ma non le misure	le fichier contient les données de cinétique mais pas les mesures
+la cinetica non ha etichette	la cinétique n'a pas d'étiquettes
+manca la sezione «Wavelength»	la section «Wavelength» est manquante
+manca la lettura	la lecture est manquante
+la tabella degli spettri non comincia con «Wavelength»	le tableau des spectres ne commence pas par «Wavelength»
+le lunghezze d'onda degli spettri non sono numeri	les longueurs d'onde des spectres ne sont pas des nombres
+manca la tabella con «wavelength(nm)»	le tableau avec «wavelength(nm)» est manquant
+nello spettro non ci sono punti	le spectre n'a pas de points
+non trovo la sezione «Platemap»	je ne trouve pas la section «Platemap»
+due colonne danno valori diversi per la stessa lunghezza d'onda ({} nm): {} e {}	deux colonnes donnent des valeurs différentes pour la même longueur d'onde ({} nm) : {} et {}
+la legenda degli spot ne dice {} ma nel file ci sono {} tabelle di dati	la légende des spots en indique {} mais le fichier contient {} tableaux de données
+manca la riga di intestazione con «Plate ID»	la ligne d'en-tête avec «Plate ID» est manquante
+nel file non ci sono assorbanze (A260, A280…)	le fichier ne contient pas d'absorbances (A260, A280…)
+nel file non c'è la tabella delle misure	le fichier ne contient pas le tableau des mesures
+manca la colonna Nucleic Acid(…)	la colonne Nucleic Acid(…) est manquante
+manca l'unità degli acidi nucleici	l'unité des acides nucléiques est manquante
+manca la sezione Results	la section Results est manquante
+manca il tipo di esperimento	le type d'expérience est manquant
+tipo di esperimento non riconosciuto: «{}»	type d'expérience non reconnu : «{}»
+manca l'ora della corsa	l'heure du run est manquante
+manca il nome dell'SNP nel pozzetto {}	le nom du SNP est manquant dans le puits {}
+manca il nome dell'allele nel pozzetto {}	le nom de l'allèle est manquant dans le puits {}
+nei risultati non si trova la colonna del Ct	la colonne du Ct est introuvable dans les résultats
+nel file manca il tipo di blocco (Block Type)	le type de bloc (Block Type) est absent du fichier
+nel file manca la data e ora della fine della corsa	la date et l'heure de fin du run sont absentes du fichier
+nel file manca il metodo di quantificazione (Quantification Cycle Method)	la méthode de quantification (Quantification Cycle Method) est absente du fichier
+nel file manca il nome dell'esperimento (File Name)	le nom de l'expérience (File Name) est absent du fichier
+nel file manca il foglio Results	la feuille Results est absente du fichier
+emissione non riconosciuta: «{}»	émission non reconnue : «{}»
+manca la riga con «Test Date»	la ligne avec «Test Date» est manquante
+nel file non ci sono pozzetti con un nome	le fichier ne contient pas de puits nommés
+manca «{}» nell'intestazione della piastra	«{}» est manquant dans l'en-tête de la plaque
+«{}» non è un numero intero: «{}»	«{}» n'est pas un nombre entier : «{}»
+«{}» non è un numero: «{}»	«{}» n'est pas un nombre : «{}»
+il tempo «{}» non è nel formato ore:minuti:secondi	le temps «{}» n'est pas au format heures:minutes:secondes
+il tempo «{}» non è nel formato minuti:secondi	le temps «{}» n'est pas au format minutes:secondes
+le lunghezze d'onda non sono quante dovrebbero: attese {}, trovate {}	le nombre de longueurs d'onde est incorrect : {} attendues, {} trouvées
+«{}» non è una posizione di lettura valida: servono TRUE o FALSE	«{}» n'est pas une position de lecture valide : il faut TRUE ou FALSE
+le lunghezze d'onda di eccitazione non sono quante dovrebbero: attese {}, trovate {}	le nombre de longueurs d'onde d'excitation est incorrect : {} attendues, {} trouvées
+i filtri di taglio non sono quanti dovrebbero: attesi {}, trovati {}	le nombre de filtres de coupure est incorrect : {} attendus, {} trouvés
+nella cinetica manca la misura del pozzetto {} a {} s	dans la cinétique, la mesure du puits {} à {} s est manquante
+formato non valido: i dati hanno {} colonne e le intestazioni {}	format non valide : les données ont {} colonnes et les en-têtes {}
+i dati ridotti hanno {} colonne e le intestazioni {}	les données réduites ont {} colonnes et les en-têtes {}
+nel gruppo «{}» una riga non ha il pozzetto	dans le groupe «{}», une ligne n'a pas de puits
+mancano le righe di metadati (Date of measurement)	les lignes de métadonnées (Date of measurement) sont manquantes
+manca la data della misura	la date de la mesure est manquante
+data della misura non leggibile	date de la mesure illisible
+manca l'analista	l'analyste est manquant
+manca il nome dello strumento	le nom de l'instrument est manquant
+manca il numero di serie	le numéro de série est manquant
+modo di misura non supportato (solo assorbanza)	mode de mesure non pris en charge (absorbance uniquement)
+manca la lunghezza d'onda	la longueur d'onde est manquante
+manca l'etichetta della misura	l'étiquette de la mesure est manquante
+manca la descrizione della piastra	la description de la plaque est manquante
+temperatura non leggibile	température illisible
+il numero di temperature non è quello delle misure	le nombre de températures ne correspond pas à celui des mesures
+manca il modo di misura	le mode de mesure est manquant
+modo di misura non supportato: {} (solo assorbanza)	mode de mesure non pris en charge : {} (absorbance uniquement)
+manca il file della piastra	le fichier de la plaque est manquant
+in un campione non trovo la tabella «Image#»	je ne trouve pas le tableau «Image#» dans un échantillon
+in un campione non trovo la riga «Total»	je ne trouve pas la ligne «Total» dans un échantillon
+nel file non ci sono campioni con una data leggibile	le fichier ne contient pas d'échantillons avec une date lisible
+il file non è una prova «Fixed», «Quant» o «Scan»	le fichier n'est pas un test «Fixed», «Quant» ou «Scan»
+manca il nome del campione nell'intestazione	le nom de l'échantillon est manquant dans l'en-tête
+nella prova Quant manca la colonna «Ordinate [A]»	dans le test Quant, la colonne «Ordinate [A]» est manquante
 nei risultati mancano le colonne Sample e Target	les colonnes Sample et Target manquent dans les résultats
 nel foglio dei gruppi mancano le colonne Sample e Target	dans la feuille des groupes les colonnes Sample et Target manquent
 nel foglio Genotyping Result manca la colonna SNP Assay	la colonne SNP Assay manque dans la feuille Genotyping Result

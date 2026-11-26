@@ -232,7 +232,7 @@ fn le_uscite_si_scrivono() {
             if let Err(e) = asm::controlla(&v) {
                 falliti.push(format!("{} · {nome}: Allotrope: {e}", p.id));
             }
-            if asm::piatto(&l, &o).lines().count() != l.conta() + 1 {
+            if asm::piatto(&l, &o, ',').lines().count() != l.conta() + 1 {
                 falliti.push(format!("{} · {nome}: il CSV piatto non ha una riga per misura", p.id));
             }
         }

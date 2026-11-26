@@ -3159,6 +3159,110 @@ il foglio «{}» non ha la tabella	a folha «{}» não tem a tabela
 blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	bloco «{}» não suportado: o Cedro lê placas de 96 e 384 poços
 nel file manca il foglio «{}»	ao ficheiro falta a folha «{}»
 il foglio «{}» è vuoto	a folha «{}» está vazia
+manca la colonna {}	falta a coluna {}
+manca il manifest	falta o manifesto
+manifest non valido	manifesto inválido
+manca il documento principale	falta o documento principal
+manca «{}»	falta «{}»
+identificatore ripetuto: {}	identificador repetido: {}
+valore senza numero o unità: {}	valor sem número ou unidade: {}
+file troppo grande per l'export di uno strumento	ficheiro demasiado grande para uma exportação de instrumento
+i blocchi dei coloranti devono avere tutti {} colonne	todos os blocos de corantes devem ter {} colunas
+ci deve essere un solo colorante di riferimento (senza «_target»), nel file ce ne sono {}	deve haver um só corante de referência (sem «_target»), o ficheiro tem {}
+pozzetto perso	poço perdido
+il gruppo «{}» ha due valori diversi per «{}»: {} e {}	o grupo «{}» tem dois valores diferentes para «{}»: {} e {}
+nel file non c'è la vitalità	o ficheiro não tem a viabilidade
+la griglia dei valori è vuota	a grelha de valores está vazia
+alla riga {} dopo «Plate information» manca l'intestazione «Plate,Repeat,Barcode…»	na linha {} depois de «Plate information» falta o cabeçalho «Plate,Repeat,Barcode…»
+alla riga {} manca la riga con i dati della piastra	na linha {} falta a linha com os dados da placa
+una piastra non ha il numero	uma placa não tem número
+la piastra {} non ha né «Label» né «Formula»: non so se è una lettura o un calcolo	a placa {} não tem «Label» nem «Formula»: não sei se é uma leitura ou um cálculo
+mancano le intestazioni delle informazioni di fondo	faltam os cabeçalhos das informações de fundo
+piastra {}: {}	placa {}: {}
+tempo non leggibile: «{}»	tempo ilegível: «{}»
+larghezza di banda dell'eccitazione non leggibile: «{}»	largura de banda de excitação ilegível: «{}»
+filtro dello specchio non leggibile: «{}»	filtro do espelho ilegível: «{}»
+la riga «Read» della lettura non è come Gen5 la scrive	a linha «Read» da leitura não está como o Gen5 a escreve
+righe «Wavelengths» non leggibili	linhas «Wavelengths» ilegíveis
+nella riga della cinetica manca «{}»	na linha da cinética falta «{}»
+numero di letture della cinetica non leggibile	número de leituras da cinética ilegível
+il tipo di lettura non c'è: servono Endpoint o Spectrum	falta o tipo de leitura: é preciso Endpoint ou Spectrum
+il modo di lettura non c'è: servono assorbanza, fluorescenza, luminescenza o AlphaLISA	falta o modo de leitura: é preciso absorvância, fluorescência, luminescência ou AlphaLISA
+il numero delle letture non torna con i modi di lettura trovati	o número de leituras não bate com os modos de leitura encontrados
+correzione del cammino ottico non leggibile	correção do percurso ótico ilegível
+le eccitazioni e le emissioni non sono lo stesso numero	as excitações e as emissões não são o mesmo número
+la polarizzazione di fluorescenza vuole due serie di filtri	a polarização de fluorescência exige duas séries de filtros
+il numero delle misure ({}) non è quello dei guadagni ({})	o número de medições ({}) não é o dos ganhos ({})
+la temperatura dovrebbe stare su una riga sola	a temperatura deveria estar numa só linha
+temperatura non leggibile: «{}»	temperatura ilegível: «{}»
+per la misura «{}» non c'è la lettura	para a medição «{}» não há leitura
+per «{}» non ci sono i filtri	para «{}» não há filtros
+la cinetica non ha i dati dei tempi	a cinética não tem os dados dos tempos
+nel file ci sono i dati della cinetica ma non le misure	o ficheiro tem os dados da cinética mas não as medições
+la cinetica non ha etichette	a cinética não tem etiquetas
+manca la sezione «Wavelength»	falta a secção «Wavelength»
+manca la lettura	falta a leitura
+la tabella degli spettri non comincia con «Wavelength»	a tabela dos espetros não começa com «Wavelength»
+le lunghezze d'onda degli spettri non sono numeri	os comprimentos de onda dos espetros não são números
+manca la tabella con «wavelength(nm)»	falta a tabela com «wavelength(nm)»
+nello spettro non ci sono punti	o espetro não tem pontos
+non trovo la sezione «Platemap»	não encontro a secção «Platemap»
+due colonne danno valori diversi per la stessa lunghezza d'onda ({} nm): {} e {}	duas colunas dão valores diferentes para o mesmo comprimento de onda ({} nm): {} e {}
+la legenda degli spot ne dice {} ma nel file ci sono {} tabelle di dati	a legenda dos spots indica {} mas o ficheiro tem {} tabelas de dados
+manca la riga di intestazione con «Plate ID»	falta a linha de cabeçalho com «Plate ID»
+nel file non ci sono assorbanze (A260, A280…)	o ficheiro não tem absorvâncias (A260, A280…)
+nel file non c'è la tabella delle misure	o ficheiro não tem a tabela das medições
+manca la colonna Nucleic Acid(…)	falta a coluna Nucleic Acid(…)
+manca l'unità degli acidi nucleici	falta a unidade dos ácidos nucleicos
+manca la sezione Results	falta a secção Results
+manca il tipo di esperimento	falta o tipo de experiência
+tipo di esperimento non riconosciuto: «{}»	tipo de experiência não reconhecido: «{}»
+manca l'ora della corsa	falta a hora da corrida
+manca il nome dell'SNP nel pozzetto {}	falta o nome do SNP no poço {}
+manca il nome dell'allele nel pozzetto {}	falta o nome do alelo no poço {}
+nei risultati non si trova la colonna del Ct	nos resultados não se encontra a coluna do Ct
+nel file manca il tipo di blocco (Block Type)	o ficheiro não tem o tipo de bloco (Block Type)
+nel file manca la data e ora della fine della corsa	o ficheiro não tem a data e hora do fim da corrida
+nel file manca il metodo di quantificazione (Quantification Cycle Method)	o ficheiro não tem o método de quantificação (Quantification Cycle Method)
+nel file manca il nome dell'esperimento (File Name)	o ficheiro não tem o nome da experiência (File Name)
+nel file manca il foglio Results	o ficheiro não tem a folha Results
+emissione non riconosciuta: «{}»	emissão não reconhecida: «{}»
+manca la riga con «Test Date»	falta a linha com «Test Date»
+nel file non ci sono pozzetti con un nome	o ficheiro não tem poços com nome
+manca «{}» nell'intestazione della piastra	falta «{}» no cabeçalho da placa
+«{}» non è un numero intero: «{}»	«{}» não é um número inteiro: «{}»
+«{}» non è un numero: «{}»	«{}» não é um número: «{}»
+il tempo «{}» non è nel formato ore:minuti:secondi	o tempo «{}» não está no formato horas:minutos:segundos
+il tempo «{}» non è nel formato minuti:secondi	o tempo «{}» não está no formato minutos:segundos
+le lunghezze d'onda non sono quante dovrebbero: attese {}, trovate {}	o número de comprimentos de onda não é o esperado: esperados {}, encontrados {}
+«{}» non è una posizione di lettura valida: servono TRUE o FALSE	«{}» não é uma posição de leitura válida: é preciso TRUE ou FALSE
+le lunghezze d'onda di eccitazione non sono quante dovrebbero: attese {}, trovate {}	o número de comprimentos de onda de excitação não é o esperado: esperados {}, encontrados {}
+i filtri di taglio non sono quanti dovrebbero: attesi {}, trovati {}	o número de filtros de corte não é o esperado: esperados {}, encontrados {}
+nella cinetica manca la misura del pozzetto {} a {} s	na cinética falta a medição do poço {} aos {} s
+formato non valido: i dati hanno {} colonne e le intestazioni {}	formato inválido: os dados têm {} colunas e os cabeçalhos {}
+i dati ridotti hanno {} colonne e le intestazioni {}	os dados reduzidos têm {} colunas e os cabeçalhos {}
+nel gruppo «{}» una riga non ha il pozzetto	no grupo «{}» uma linha não tem poço
+mancano le righe di metadati (Date of measurement)	faltam as linhas de metadados (Date of measurement)
+manca la data della misura	falta a data da medição
+data della misura non leggibile	data da medição ilegível
+manca l'analista	falta o analista
+manca il nome dello strumento	falta o nome do instrumento
+manca il numero di serie	falta o número de série
+modo di misura non supportato (solo assorbanza)	modo de medição não suportado (só absorvância)
+manca la lunghezza d'onda	falta o comprimento de onda
+manca l'etichetta della misura	falta a etiqueta da medição
+manca la descrizione della piastra	falta a descrição da placa
+temperatura non leggibile	temperatura ilegível
+il numero di temperature non è quello delle misure	o número de temperaturas não é o das medições
+manca il modo di misura	falta o modo de medição
+modo di misura non supportato: {} (solo assorbanza)	modo de medição não suportado: {} (só absorvância)
+manca il file della piastra	falta o ficheiro da placa
+in un campione non trovo la tabella «Image#»	numa amostra não encontro a tabela «Image#»
+in un campione non trovo la riga «Total»	numa amostra não encontro a linha «Total»
+nel file non ci sono campioni con una data leggibile	o ficheiro não tem amostras com uma data legível
+il file non è una prova «Fixed», «Quant» o «Scan»	o ficheiro não é um teste «Fixed», «Quant» ou «Scan»
+manca il nome del campione nell'intestazione	falta o nome da amostra no cabeçalho
+nella prova Quant manca la colonna «Ordinate [A]»	no teste Quant falta a coluna «Ordinate [A]»
 nei risultati mancano le colonne Sample e Target	nos resultados faltam as colunas Sample e Target
 nel foglio dei gruppi mancano le colonne Sample e Target	na folha dos grupos faltam as colunas Sample e Target
 nel foglio Genotyping Result manca la colonna SNP Assay	na folha Genotyping Result falta a coluna SNP Assay

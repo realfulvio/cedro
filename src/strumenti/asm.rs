@@ -607,7 +607,8 @@ fn unita_calcolo(l: &Lettura) -> String {
 }
 
 /// Il CSV piatto: una riga per misura, con lo strumento e le impostazioni ripetuti. Per chi non legge il JSON.
-pub fn piatto(l: &Lettura, o: &Opzioni) -> String {
+/// Come l'altro CSV: con il punto e virgola i decimali hanno la virgola (l'Excel italiano lo apre giusto).
+pub fn piatto(l: &Lettura, o: &Opzioni, sep: char) -> String {
     let mut chiavi: Vec<String> = Vec::new();
     for m in l.misure() {
         for v in &m.valori {
@@ -644,6 +645,7 @@ pub fn piatto(l: &Lettura, o: &Opzioni) -> String {
             ];
             for k in &chiavi {
                 r.push(match m.valore(k).map(|v| &v.dato) {
+                    Some(Dato::Numero(x)) if sep == ';' => format!("{x}").replace('.', ","),
                     Some(Dato::Numero(x)) => format!("{x}"),
                     Some(Dato::Bool(b)) => if *b { "true".into() } else { "false".into() },
                     Some(Dato::Testo(t)) | Some(Dato::Assente(t)) => t.clone(),
@@ -653,7 +655,7 @@ pub fn piatto(l: &Lettura, o: &Opzioni) -> String {
             righe.push(r);
         }
     }
-    crate::textconv::write_csv(&righe, ',')
+    crate::textconv::write_csv(&righe, sep)
 }
 
 /// Il controllo leggero del file scritto: le chiavi che lo schema vuole sempre ci sono, le misure

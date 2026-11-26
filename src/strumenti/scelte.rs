@@ -124,7 +124,7 @@ pub fn prepara(l: &Lettura, s: &Scelte, origine: &str, nome_asm: &str, sep: char
             u.asm = Some(serde_json::to_vec_pretty(&v).map_err(|e| e.to_string())?);
         }
         if s.piatto {
-            u.piatto = Some(asm::piatto(l, &o));
+            u.piatto = Some(asm::piatto(l, &o, sep));
         }
     }
     Ok(u)
