@@ -482,6 +482,8 @@ pub struct App {
     pub caso_bozza: (String, String),
     /// Si guarda l'elenco dei lavori invece della pagina scelta.
     pub lavori_aperti: bool,
+    /// Cedro 4 Labs: i file in coda come striscia di miniature invece dell'elenco a tabella.
+    pub lab_miniature: bool,
     /// L'ultimo «Copia per il quaderno» (il lavoro, da 0 tra quelli di oggi): per dire «Copiato».
     pub quaderno_copiato: Option<usize>,
     /// Dove è stato salvato il registro dei lavori (o perché no), per dirlo nella pagina «Lavori».
@@ -604,6 +606,7 @@ impl App {
             caso_aperto: false,
             caso_bozza: (String::new(), String::new()),
             lavori_aperti: false,
+            lab_miniature: false,
             strum: Default::default(),
             strum_esiti: HashMap::new(),
             strum_chiavi_partenza: HashMap::new(),
