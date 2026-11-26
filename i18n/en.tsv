@@ -3481,155 +3481,25 @@ meno il bianco	minus blank
 1 standard	1 standard
 Anteprima non disponibile: il file sembra danneggiato o incompleto.	Preview not available: the file seems damaged or incomplete.
 Fatto con altre scelte: «Converti» lo rifà con quelle di adesso.	Done with other choices: «Convert» redoes it with the current ones.
-Accettato	Accepted
-Acquisito	Acquired
-Elaborato	Processed
-Refertato	Reported
-Firmato	Signed
-Consegnato	Delivered
-Registro	Log
-Immagini e vetrini	Images and slides
-Dati e piastre	Data and plates
-Firma e referti	Sign and report
-Procedure	Procedures
-Casi	Cases
-Come	How
-Cosa puoi farci	What you can do with them
-Dettagli	Details
-Tappe	Stages
-Tipo	Type
-Nome	Name
-Contenuto	Content
-Dati personali	Personal data
-Già fatto	Already done
-Fatti	Done
-Con errori	With errors
-Senza caso	No case
-Nuovo	New
-Copia pulita	Clean copy
-Scheda del caso	Case sheet
-Cartella di uscita	Output folder
-accanto all'originale	next to the original
-Righe compatte	Compact rows
-Righe comode	Comfortable rows
-Tutte le opzioni	All options
-Solo le scelte pronte	Only the ready choices
-Pacchetto per consulto	Package for consultation
-Vetrino per consulto	Slide for consultation
-Per il quaderno	For the notebook
-Registro di oggi	Today's log
-Tutto il registro	Whole log
-Lavori fatti	Jobs done
-Lavori salvati, sempre uguali	Saved jobs, always the same
-Salva come procedura	Save as procedure
-Procedura salvata:	Procedure saved:
-Procedura fatta	Procedure done
-Procedura finita con errori	Procedure finished with errors
-file non riusciti	files failed
-Togli questa procedura	Remove this procedure
-I passi di	Steps of
-Questa procedura non lavora nessuno dei file scelti.	This procedure does not work on any of the selected files.
-Nessuna procedura ancora. Scegli un comando, regola le scelte e premi «Salva come procedura»: la ritrovi qui, sempre uguale.	No procedures yet. Choose a command, adjust the choices and press “Save as procedure”: you will find it here, always the same.
-con tutte le scelte di adesso	with all the current choices
-nessun file scelto adatto	no suitable file selected
-lavora	works on
-dei file scelti	of the selected files
-passo	step
-passi	steps
-1 · Metti i file	1 · Add your files
-2 · Scegli il comando	2 · Choose the command
-3 · Esegui	3 · Run
-Trascinali, oppure «Aggiungi file».	Drag them here, or “Add files”.
-In alto, con il suo colore e il suo tasto.	At the top, with its colour and its key.
-A destra, con poche scelte pronte.	On the right, with a few choices ready.
-Trascinali qui dentro, oppure scegli il tipo. Tutto resta su questo computer.	Drag them in here, or choose the type. Everything stays on this computer.
-CSV, Excel, piastre	CSV, Excel, plates
-DICOM, anche da CD	DICOM, even from CD
-PDF, Word	PDF, Word
-Word/Office	Word/Office
-Archivio	Archive
-Genere	Kind
-Storia	History
-Dati	Data
-Dati che identificano	Identifying data
-Nessun dato personale trovato.	No personal data found.
-Da controllare:	To check:
-«Togli i nomi» li toglie dalla copia, non dall'originale.	“Remove names” removes them from the copy, not from the original.
-Cosa c'è dentro	What is inside
-Impronta SHA-256	SHA-256 fingerprint
-Non si è potuta calcolare.	It could not be calculated.
-Calcolo…	Calculating…
-Al lavoro…	Working…
-In coda dalle	Queued since
-Elaborato in	Processed in
-Mai elaborato. L'originale non viene mai modificato.	Never processed. The original is never modified.
-Non ho ancora letto questo file.	I have not read this file yet.
-Nessuna nota. «Modifica» per scriverla.	No note. “Edit” to write one.
-In questo caso non ci sono immagini né vetrini da mettere nel pacchetto.	In this case there are no images or slides to put in the package.
-Apri l'anteprima grande	Open the large preview
-Scegli uno o più file. Poi un comando in alto: qui compaiono le sue scelte e «Esegui».	Choose one or more files. Then a command at the top: its choices and “Run” appear here.
-Nessun comando lavora questi file.	No command works on these files.
-Nessun file con questi filtri.	No file with these filters.
-Nessun file adatto	No suitable file
-Nessun caso ancora. «Nuovo» ne crea uno: i file che aggiungi ci entrano.	No cases yet. “New” creates one: the files you add go into it.
-Ancora nessuno: ogni lavoro di questo caso finisce qui.	None yet: every job of this case ends up here.
-Il motore non ha dato un motivo.	The engine gave no reason.
-Errore: perché?	Error: why?
-Perché non è riuscito	Why it failed
-file	files
-file scelti	files selected
+Nessun campione	No sample
+Ultimo lavoro:	Last job:
 1 file scelto	1 file selected
-scelto	selected
-scelti	selected
-file in coda	files in the queue
-lavoro	job
-lavori	jobs
-lavoro fatto	job done
-lavori fatti	jobs done
-ancora nessun lavoro	no jobs yet
-gli originali non sono mai stati toccati	the originals have never been touched
-altri	others
-campi	fields
-1 campo	1 field
-con dati personali	with personal data
-su	of
-Su	On
-Su 1 file	On 1 file
-Esegui su	Run on
-Esegui su 1 file	Run on 1 file
-resta fuori:	is left out:
-restano fuori:	are left out:
-Questo comando non lo lavora.	This command does not work on it.
-Questo comando non li lavora.	This command does not work on them.
-Cerca  ( / )	Search  ( / )
-Cerca nell'elenco	Search the list
-Scorciatoie da tastiera	Keyboard shortcuts
-I comandi, nell'ordine della barra (9 = Procedure)	The commands, in the order of the bar (9 = Procedures)
-Sposta la selezione (con Maiusc la allarga)	Moves the selection (Shift extends it)
-Aggiunge o toglie il file dalla selezione	Adds or removes the file from the selection
-Aggiunge o toglie un file dalla selezione	Adds or removes a file from the selection
-Sceglie tutto l'elenco	Selects the whole list
-Sceglie tutti i file da dove eri partito	Selects all files from where you started
-Esegue il comando aperto	Runs the open command
-Assegna un caso ai file scelti	Assigns a case to the selected files
-Anteprima grande del file	Large preview of the file
-Toglie dalla coda (il file resta sul disco)	Removes from the queue (the file stays on disk)
-Torna indietro di un passo	Goes back one step
-Passa da un comando al successivo	Moves from one command to the next
-Questo foglio	This sheet
-Le lettere e i numeri funzionano quando non stai scrivendo in un campo.	Letters and numbers work when you are not typing in a field.
-Premi	Press
-per le scorciatoie	for the shortcuts
-Invio	Enter
-Maiusc + clic	Shift + click
-Ctrl + clic	Ctrl + click
-Ctrl + A	Ctrl + A
-Spazio	Space
-Canc	Del
-Torna all'elenco	Back to the list
-Nuovo caso…	New case…
+{#} file scelti	{} files selected
+{#} scelto su 1	{} of 1 selected
+{#} scelti su {#}	{} of {} selected
+Miniature	Thumbnails
+Nome	Name
+Tipo	Type
+Misure	Dimensions
+Escluso	Left out
 PDF	PDF
-TXT	TXT
-Nessun caso	No case
-Il file non è riuscito: il motivo è accanto.	The file failed: the reason is shown next to it.
-Microscopie	Microscopy images
+Archivio	Archive
+Nessun file scelto: spunta i file nell'elenco	No file selected: tick the files in the list
+Fatto con altre scelte: il pulsante lo rifà con quelle di adesso.	Done with other settings: the button redoes it with the current ones.
+Salva 1 file	Save 1 file
+Salva {#} file	Save {} files
+Togli i nomi da 1 file	Remove names from 1 file
+Togli i nomi da {#} file	Remove names from {} files
+Prepara la figura	Prepare the figure
+Prepara la figura con 1 file	Prepare the figure from 1 file
+Prepara la figura con {#} file	Prepare the figure from {} files

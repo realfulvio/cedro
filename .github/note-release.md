@@ -11,13 +11,10 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro 4 Labs ha una finestra nuova, più pratica: tutti i file in una tabella, i comandi in alto, a destra solo quello che serve.**
+**Cedro 4 Labs: la finestra di sempre, più ordinata per il laboratorio.**
 
-- **Una tabella per tutti i file.** Tipo, nome, caso, contenuto, dati personali trovati e «Già fatto», con la lettera del comando già usato e «Apri» sul risultato. Si sceglie come in Esplora file: clic, Maiusc, Ctrl, Ctrl+A, Spazio e frecce; Canc o «Togli» toglie dalla coda solo i file scelti.
-- **I comandi in alto, ognuno col suo colore e il suo tasto** (da 1 a 9): Immagini e vetrini, Togli i nomi, Figura, Dati e piastre, Firma e referti, Trascrivi, Converti, PDF, Procedure. Su ogni comando un numero dice quanti dei file scelti prende; il pulsante grande dice «Esegui su N file».
-- **Filtri e ricerca.** Per tipo, Da fare, Fatti, Con errori, Senza caso e la ricerca per nome (tasto /): le righe nascoste escono anche dalla scelta, così non si lavora mai un file che non si vede.
-- **Casi con le tappe.** A sinistra i casi (codice e nota): «Nuovo», «Caso» (tasto C) per assegnarli ai file scelti, e le tappe da Accettato a Consegnato, con la scheda del caso e il pacchetto per il consulto.
-- **Procedure.** «Salva come procedura» ricorda un comando con tutte le scelte di adesso; da «Procedure» lo si rifà su altri file con un clic.
-- **Registro di oggi** in basso, con «Tutto il registro» e l'Excel del registro.
-- **Gli export degli strumenti** restano dove erano: in «Dati e piastre» la piastra compare sotto l'elenco, con i ruoli dei pozzetti e le uscite a destra.
-- **Tradotta in tutte le lingue**, provata alla misura minima della finestra in italiano, inglese e spagnolo.
+- **Campo «Campione» sempre in vista.** In alto, accanto al nome, c'è il campione su cui lavori (o «nessuno»): un clic per cambiarlo. Il codice entra nei nomi dei file e nell'elenco dei lavori.
+- **I file in coda in un elenco, come in Esplora file.** Sotto l'anteprima c'è una tabella con nome, tipo (vetrino, DICOM, microscopia, strumento, tabella…), misure, dimensione e stato. Con le caselle scegli quali file entrano nel lavoro senza toglierli dalla coda; Spazio spunta la riga, Ctrl+A le sceglie tutte, le frecce passano di riga. «Miniature» torna alla striscia di prima.
+- **Stesso nome dappertutto.** Il pannello a destra si chiama come il comando scelto a sinistra e il pulsante usa lo stesso verbo: «Salva 3 file», «Togli i nomi da 1 file», «Prepara la figura con 2 file».
+- **Riga di stato in fondo.** Quanti file sono scelti, il campione, dove si salva e l'ultimo lavoro fatto, sempre nello stesso posto.
+- **Niente avviso vecchio.** Cambiando comando, il «Fatto» del lavoro precedente non resta più sul pannello.

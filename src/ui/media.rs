@@ -28,8 +28,6 @@ pub struct Loaded {
     pub micro: Option<MicroInfo>,
     /// La scheda di audio, video e altri file.
     pub about: Option<super::preview::About>,
-    /// Cosa il file dice di chi è (Cedro 4 Labs, colonna «Dati personali»).
-    pub dati: Option<super::datipers::Dati>,
     /// L'export di uno strumento di laboratorio (lettore di piastre, qPCR, spettrofotometro…), già letto.
     pub strumento: Option<Arc<crate::strumenti::Lettura>>,
 }
@@ -223,23 +221,12 @@ fn info(path: &Path) -> Loaded {
                 out.size = Some(size);
             }
             if crate::svs::is_slide(path) {
-                if let Ok(s) = crate::svs::Slide::open(path) {
-                    let info = SlideInfo::of(&s);
-                    out.dati = Some(super::datipers::vetrino(&info, s.vendor == crate::svs::Vendor::Aperio));
-                    out.slide = Some(info);
-                }
+                out.slide = crate::svs::Slide::open(path).ok().map(|s| SlideInfo::of(&s));
             }
             if crate::imgfmt::sniff_file(path) == Some("dcm") || matches!(engine::extension(path).as_str(), "dcm" | "dicom") {
-                if let Ok(f) = crate::dicom::DicomFile::open(path) {
-                    let info = DicomInfo::of(&f);
-                    out.dati = Some(super::datipers::dicom(&f, info.burned_in));
-                    out.dicom = Some(info);
-                }
+                out.dicom = crate::dicom::DicomFile::open(path).ok().map(|f| DicomInfo::of(&f));
             } else if crate::microscopia::is_stack(path) {
                 out.micro = crate::microscopia::Pila::open(path).ok().map(|p| MicroInfo::of(&p));
-            }
-            if out.dati.is_none() {
-                out.dati = super::datipers::file_letto(path, Kind::Image);
             }
         }
         Kind::Pdf => {
@@ -247,10 +234,8 @@ fn info(path: &Path) -> Loaded {
                 out.pages = crate::ocr::pdf_page_count(&bytes).ok();
                 out.thumb = crate::ocr::render_page_rgba(&bytes, 0, THUMB as f32).ok().and_then(|(w, h, rgba)| Image::from_rgba(w, h, &rgba));
             }
-            out.dati = super::datipers::file_letto(path, Kind::Pdf);
         }
         Kind::Text | Kind::Doc => {
-            out.dati = super::datipers::file_letto(path, Kind::Doc);
             if kind == Kind::Text {
                 out.strumento = super::strumenti::leggi(path, out.bytes);
             }
@@ -259,10 +244,7 @@ fn info(path: &Path) -> Loaded {
                 out.pages = super::preview::page_count(path);
             }
         }
-        Kind::Audio => {
-            out.about = Some(super::preview::about_audio(path, out.bytes));
-            out.dati = Some(super::datipers::audio());
-        }
+        Kind::Audio => out.about = Some(super::preview::about_audio(path, out.bytes)),
         Kind::Video => {
             let about = super::preview::about_video(path, out.bytes);
             out.thumb = about.frames.first().cloned();

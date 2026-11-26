@@ -8,7 +8,7 @@ use std::time::Instant;
 
 use super::core::{inside, Act, Field, Fold, Frame, HitKind, LinkFlag, LinkMenu, Menu, Scroll, Swatch, UiState, NEW_VOICE, R};
 use super::gfx::{Fonts, GlyphCache, Painter};
-use super::model::{Activity, App, Notice, AUDIO_FORMATS, SUBTITLES, VIDEO_FORMATS};
+use super::model::{Activity, App, Lab, Notice, AUDIO_FORMATS, SUBTITLES, VIDEO_FORMATS};
 use super::pdfedact::EdField;
 use super::strumenti::StrumAct;
 use super::theme::ThemeId;
@@ -78,30 +78,6 @@ pub enum Key {
     Redo,
 }
 
-/// Per le scorciatoie da tastiera, che non hanno la finestra di sistema sotto mano: niente file da scegliere,
-/// niente cartelle da aprire.
-struct SenzaPiattaforma;
-
-impl Platform for SenzaPiattaforma {
-    fn pick_files(&mut self) -> Vec<PathBuf> {
-        Vec::new()
-    }
-    fn pick_folder(&mut self, _: &str) -> Option<PathBuf> {
-        None
-    }
-    fn open_path(&mut self, _: &Path) {}
-    fn copy_text(&mut self, _: &str) {}
-    fn paste_text(&mut self) -> Option<String> {
-        None
-    }
-    fn open_guide(&mut self) {}
-    fn open_settings(&mut self) {}
-    fn minimize(&mut self) {}
-    fn toggle_maximize(&mut self) {}
-    fn close(&mut self) {}
-    fn open_full(&mut self) {}
-}
-
 pub struct Screen {
     pub app: App,
     pub ui: UiState,
@@ -123,8 +99,6 @@ pub struct Screen {
     /// Quando è finito l'ultimo fotogramma.
     disegnato: Instant,
     focusables: Vec<Act>,
-    /// Maiusc e Ctrl al momento del clic (li dà la finestra di sistema): servono alla tabella di Cedro 4 Labs.
-    pub mods: (bool, bool),
 }
 
 /// Il passo dei ridisegni «lenti» (lavori in corso, rotelline): circa 15 al secondo invece di 30. Ogni
@@ -160,7 +134,6 @@ impl Screen {
             vivace: false,
             disegnato: Instant::now(),
             focusables: Vec::new(),
-            mods: (false, false),
         }
     }
 
@@ -206,9 +179,6 @@ impl Screen {
         }
         if let Some(to) = self.app.review_follow() {
             self.ui.scroll.insert(Scroll::Review, to);
-        }
-        if self.theme == ThemeId::CedroLabs && self.app.lx.in_vista > 0 {
-            self.lx_in_vista();
         }
         self.clamp_scrolls();
         let fonts = Fonts::for_theme(self.theme);
@@ -263,21 +233,6 @@ impl Screen {
             self.vivace = true;
         }
         f.p
-    }
-
-    /// Cedro 4 Labs: la tabella scorre quanto basta perché la riga evidenziata si veda. Si usa la misura della
-    /// tabella del fotogramma di prima; dato che cambiando comando la tabella cambia altezza, si ripete per due fotogrammi.
-    fn lx_in_vista(&mut self) {
-        self.app.lx.in_vista -= 1;
-        self.animating = true;
-        let Some(sel) = self.app.selected else { return };
-        let Some(pos) = self.app.lx_righe().iter().position(|&r| r == sel) else { return };
-        let Some((r, _, _)) = self.scrolls.iter().find(|(_, w, _)| *w == Scroll::LxTabella) else { return };
-        let rh = if self.app.lx.comode { 46.0 } else { 36.0 };
-        let (top, bottom) = (pos as f32 * rh, (pos + 1) as f32 * rh);
-        let off = self.ui.scroll(Scroll::LxTabella);
-        let to = if top < off { top } else if bottom > off + r.3 { bottom - r.3 } else { return };
-        self.ui.scroll.insert(Scroll::LxTabella, to.max(0.0));
     }
 
     /// Riporta nei limiti le zone scorse oltre la fine nel fotogramma di prima.
@@ -903,23 +858,12 @@ impl Screen {
                 }
             }
             Act::Lab(lab) => {
-                // Cedro 4 Labs: cambiando comando la tabella può accorciarsi (piastra sotto): la riga scelta resta in vista.
-                app.lx.in_vista = 2;
                 // Il Cedro di partenza: l'avviso («Fatto: 3 file.») resta sulla pagina che ha fatto il lavoro.
+                // Anche in Cedro 4 Labs: l'avviso di un lavoro finito non resta sul comando dopo.
                 if (self.theme.is_cedro() || self.theme == ThemeId::CedroLabs) && lab != app.lab && app.job.is_none() {
                     app.notice = None;
                 }
-                if self.theme == ThemeId::CedroLabs && app.lx.pannello == crate::ui::labsx::Pannello::Azione && app.lab == lab && !app.lavori_aperti {
-                    // Il comando già aperto, premuto un'altra volta: si torna ai dettagli dei file.
-                    app.lx.pannello = crate::ui::labsx::Pannello::Dettagli;
-                    return;
-                }
                 app.set_lab(lab, simple);
-                if self.theme == ThemeId::CedroLabs {
-                    // Scelto un comando, a destra si vede il pannello con le sue opzioni.
-                    app.lx.pannello = crate::ui::labsx::Pannello::Azione;
-                    app.lx.panel_chiuso = false;
-                }
                 // Il Cedro di partenza ha i PDF in una pagina loro: «Converti» parte dagli altri file.
                 if self.theme.is_cedro() && lab == super::model::Lab::Converti && app.kind() == crate::engine::Kind::Pdf {
                     app.cedro_leave_pdf(simple);
@@ -949,10 +893,6 @@ impl Screen {
             }
             Act::LabGo(lab, id) => {
                 app.set_lab(lab, simple);
-                if self.theme == ThemeId::CedroLabs {
-                    app.lx.pannello = crate::ui::labsx::Pannello::Azione;
-                    app.lx.panel_chiuso = false;
-                }
                 if lab == super::model::Lab::Pdf && conversioni::is_page_action(app.kind(), id) {
                     let mode = match id {
                         "merge" => super::model::PdfMode::Merge,
@@ -1031,8 +971,6 @@ impl Screen {
                 self.open_menu(items, None, &Act::AddMenu);
             }
             Act::Remove(i) => app.remove(i),
-            // In Labs si toglie quello che è scelto nella tabella, e niente se non è scelto niente.
-            Act::RemoveChecked if self.theme == ThemeId::CedroLabs => app.lx_togli_scelti(),
             Act::RemoveChecked => app.remove_checked(),
             Act::Check(i) => app.toggle_checked(i),
             Act::CheckAll => app.toggle_all(),
@@ -1218,6 +1156,7 @@ impl Screen {
                 let _ = crate::settings::write_settings(&st);
             }
             Act::CasoApri => app.caso_apri(),
+            Act::LabMiniature(on) => app.lab_miniature = on,
             Act::CasoOk => {
                 app.caso_conferma();
                 self.ui.edit = None;
@@ -1228,113 +1167,8 @@ impl Screen {
             }
             Act::CasoChiudi => {
                 app.caso_aperto = false;
-                app.lx.assegna_dopo = false;
                 self.ui.edit = None;
             }
-            Act::LxPannello(p) => {
-                app.lx.pannello = p;
-                app.lavori_aperti = false;
-            }
-            Act::LxTipo(t) => {
-                app.lx.tipo = t;
-                app.lx_pota();
-            }
-            Act::LxFiltroCaso(c) => app.lx_scegli_caso(c),
-            Act::LxStato(st) => {
-                app.lx.stato = st;
-                app.lx_pota();
-            }
-            Act::LxTutti => {
-                app.lx.tipo = None;
-                app.lx.stato = None;
-                app.lx_pota();
-            }
-            Act::LxRiga(i) => {
-                let (shift, ctrl) = self.mods;
-                app.lx_clic_riga(i, shift, ctrl);
-            }
-            Act::LxCasella(i) => app.lx_clic_riga(i, false, true),
-            Act::LxSceglitutti => app.lx_scegli_tutti(),
-            Act::LxProcedure => {
-                app.lavori_aperti = false;
-                app.lx.panel_chiuso = false;
-                app.lx.pannello = if app.lx.pannello == crate::ui::labsx::Pannello::Procedure { crate::ui::labsx::Pannello::Dettagli } else { crate::ui::labsx::Pannello::Procedure };
-            }
-            Act::LxPannelloToggle => app.lx.panel_chiuso = !app.lx.panel_chiuso,
-            Act::LxErrore(i) => app.lx.errore = if app.lx.errore == Some(i) { None } else { Some(i) },
-            Act::LxApri(i) => {
-                let out = app.files.get(i).and_then(|f| app.lx.fatto.get(&f.path)).and_then(|v| v.iter().filter(|x| x.out.is_some()).max_by_key(|x| x.when)).and_then(|x| x.out.clone());
-                if let Some(o) = out {
-                    plat.open_path(&o);
-                }
-            }
-            Act::LxNuovoCaso => {
-                app.caso_apri();
-                app.caso_bozza = (String::new(), String::new());
-                app.lx.assegna_dopo = false;
-            }
-            Act::LxTappa(k) => {
-                if let Some(c) = app.lx.caso.clone().filter(|c| !c.is_empty()) {
-                    app.lx_tappa_clic(&c, k);
-                }
-            }
-            Act::LxScheda => app.lx.scheda = !app.lx.scheda && app.lx.caso.as_deref().is_some_and(|c| !c.is_empty()),
-            Act::LxPacchetto => app.lx_pacchetto(simple),
-            Act::LxProcSalva => {
-                if let Some(p) = app.lx_passo_attuale() {
-                    let (c, v) = app.lx_passo_titolo(&p);
-                    let nome = format!("{c} · {v}");
-                    self.ui.caret = nome.chars().count();
-                    self.ui.sel_all = true;
-                    app.lx.proc_nome = Some(nome);
-                    self.ui.edit = Some(Field::LxProcNome);
-                }
-            }
-            Act::LxProcNomeOk => {
-                if let Some(nome) = app.lx.proc_nome.take() {
-                    if app.lx_salva_procedura(&nome) {
-                        app.notice = Some(crate::ui::model::Notice { text: format!("{} «{}».", crate::i18n::tr_string("Procedura salvata:"), nome.trim()), error: false });
-                    }
-                }
-                self.ui.edit = None;
-            }
-            Act::LxProcNomeChiudi => {
-                app.lx.proc_nome = None;
-                self.ui.edit = None;
-            }
-            Act::LxProcScegli(k) => app.lx.proc_scelta = k,
-            Act::LxProcVia => app.lx_procedura_via(),
-            Act::LxProcTogli(k) => app.lx_togli_procedura(k),
-            Act::LxAssegna => {
-                let mut items: Vec<(String, Act)> = self
-                    .app
-                    .lx
-                    .casi
-                    .iter()
-                    .enumerate()
-                    .map(|(k, c)| (if c.note.is_empty() { c.code.clone() } else { format!("{}  ·  {}", c.code, c.note) }, Act::LxCasoA(k)))
-                    .collect();
-                items.push((crate::i18n::tr_string("Nuovo caso…"), Act::LxCasoNuovo));
-                items.push((crate::i18n::tr_string("Nessun caso"), Act::LxCasoA(usize::MAX)));
-                let sel = self.app.selected.and_then(|i| self.app.files.get(i)).and_then(|f| {
-                    let c = self.app.lx_caso_di(&f.path);
-                    self.app.lx.casi.iter().position(|k| k.code == c)
-                });
-                self.open_menu(items, sel, &Act::LxAssegna);
-            }
-            Act::LxCasoA(k) => {
-                let code = app.lx.casi.get(k).map(|c| c.code.clone());
-                app.lx_assegna(code.as_deref());
-            }
-            Act::LxCasoNuovo => {
-                app.caso_apri();
-                app.caso_bozza = (String::new(), String::new());
-                app.lx.assegna_dopo = true;
-            }
-            Act::LxRegistro => app.lx.registro_aperto = !app.lx.registro_aperto,
-            Act::LxAiuto => app.lx.aiuto = !app.lx.aiuto,
-            Act::LxAnteprima => app.lx.anteprima = !app.lx.anteprima && app.selected.is_some(),
-            Act::LxComode => app.lx.comode = !app.lx.comode,
             Act::LavoriApri => {
                 app.lavori_aperti = !app.lavori_aperti;
                 app.lavori_esportato = None;
@@ -2170,8 +2004,6 @@ impl Screen {
             Field::FilePages(i) => self.app.files.get(i).map(|f| f.pages.clone()).unwrap_or_default(),
             Field::Review(i) => self.app.review.as_ref().and_then(|r| r.rows.get(i)).map(|r| r.text.clone()).unwrap_or_default(),
             Field::VoiceName(v) => self.app.review.as_ref().and_then(|r| r.names.get(v as usize)).cloned().unwrap_or_default(),
-            Field::LxCerca => self.app.lx.ricerca.clone(),
-            Field::LxProcNome => self.app.lx.proc_nome.clone().unwrap_or_default(),
             Field::CasoCodice => self.app.caso_bozza.0.clone(),
             Field::CasoNota => self.app.caso_bozza.1.clone(),
             Field::Ed(f) => self.app.ed.as_ref().map(|e| e.field_text(f)).unwrap_or_default(),
@@ -2221,11 +2053,6 @@ impl Screen {
                     *name = text;
                 }
             }
-            Field::LxCerca => {
-                self.app.lx.ricerca = text;
-                self.app.lx_pota();
-            }
-            Field::LxProcNome => self.app.lx.proc_nome = Some(text),
             Field::CasoCodice => self.app.caso_bozza.0 = text,
             Field::CasoNota => self.app.caso_bozza.1 = text,
             Field::Ed(f) => {
@@ -2267,15 +2094,63 @@ impl Screen {
         }
     }
 
+    /// Cedro 4 Labs, i file sotto l'anteprima: Spazio spunta la riga, Ctrl+A le sceglie tutte, le frecce
+    /// passano alla riga prima o dopo (e l'elenco scorre fin lì). Come in Esplora file.
+    fn lab_list_key(&mut self, key: Key) -> bool {
+        if self.theme != ThemeId::CedroLabs || self.app.caso_aperto || self.app.lavori_aperti || self.app.ed.is_some() {
+            return false;
+        }
+        if matches!(self.app.lab, Lab::Home | Lab::Referti | Lab::Trascrivi) || self.app.activity != Activity::Convert {
+            return false;
+        }
+        // Con il fuoco su un pulsante (Tab), lo Spazio preme il pulsante.
+        if key == Key::Space && self.ui.focus_act.as_ref().is_some_and(|a| !matches!(a, Act::Select(_) | Act::Check(_))) {
+            return false;
+        }
+        let vis = self.app.visible();
+        let Some(&first) = vis.first() else { return false };
+        let cur = self.app.selected.filter(|i| vis.contains(i)).unwrap_or(first);
+        let pos = vis.iter().position(|&v| v == cur).unwrap_or(0);
+        match key {
+            Key::Space => self.app.files[cur].checked = !self.app.files[cur].checked,
+            Key::SelectAll => {
+                for &i in &vis {
+                    self.app.files[i].checked = true;
+                }
+            }
+            Key::Up | Key::Down => {
+                let to = if key == Key::Down { (pos + 1).min(vis.len() - 1) } else { pos.saturating_sub(1) };
+                if self.app.selected != Some(vis[to]) {
+                    self.app.selected = Some(vis[to]);
+                    self.app.preview_page = 0;
+                    self.app.stamp_page = 0;
+                }
+                self.lab_list_in_vista(to);
+            }
+            _ => return false,
+        }
+        self.animating = true;
+        true
+    }
+
+    /// Fa scorrere l'elenco dei file di Labs fin dove si vede la riga `pos` (misure del fotogramma di prima).
+    fn lab_list_in_vista(&mut self, pos: usize) {
+        let Some((r, _, _)) = self.scrolls.iter().find(|(_, w, _)| *w == Scroll::Queue).copied() else { return };
+        let rh = crate::ui::views::labs::LIST_ROW;
+        let (top, bottom) = (pos as f32 * rh, (pos + 1) as f32 * rh);
+        let off = self.ui.scroll(Scroll::Queue);
+        let to = if top < off { top } else if bottom > off + r.3 { bottom - r.3 } else { return };
+        self.ui.scroll.insert(Scroll::Queue, to.max(0.0));
+    }
+
     /// Un testo scritto (o incollato) nel campo con il cursore.
     pub fn text_input(&mut self, s: &str) {
-        let Some(field) = self.ui.edit else {
-            // Cedro 4 Labs: senza un campo in uso le lettere sono scorciatoie (1 comandi, C caso, / cerca, ? aiuto).
-            if self.theme == ThemeId::CedroLabs && self.surface == Surface::Main && self.app.ed.is_none() {
-                self.lx_scorciatoia(s);
-            }
+        // Su Linux lo Spazio arriva come testo: senza un campo aperto, in Labs spunta la riga dell'elenco.
+        if self.ui.edit.is_none() && s == " " {
+            self.lab_list_key(Key::Space);
             return;
-        };
+        }
+        let Some(field) = self.ui.edit else { return };
         // Scrivere chiude il menu del tasto destro, come nei campi del sistema.
         self.ui.menu = None;
         if std::mem::take(&mut self.ui.sel_all) {
@@ -2387,22 +2262,11 @@ impl Screen {
                     if matches!(field, Field::CasoCodice | Field::CasoNota) {
                         self.act(Act::CasoOk, plat);
                     }
-                    if field == Field::LxProcNome {
-                        self.act(Act::LxProcNomeOk, plat);
-                    }
                     return true;
                 }
                 Key::Escape | Key::Tab | Key::ShiftTab => {
                     self.ui.edit = None;
                     if key == Key::Escape {
-                        // Il nome della procedura vive solo nella sua finestrella: Esc la chiude subito.
-                        if field == Field::LxProcNome {
-                            self.act(Act::LxProcNomeChiudi, plat);
-                        }
-                        // Esc nella ricerca la svuota: tornano tutte le righe.
-                        if field == Field::LxCerca {
-                            self.set_field_text(field, String::new());
-                        }
                         return true;
                     }
                 }
@@ -2413,7 +2277,7 @@ impl Screen {
                 return true;
             }
         }
-        if self.theme == ThemeId::CedroLabs && self.surface == Surface::Main && self.app.ed.is_none() && self.ui.menu.is_none() && self.lx_tasto(key, plat) {
+        if self.lab_list_key(key) {
             return true;
         }
         match key {
@@ -2494,81 +2358,6 @@ impl Screen {
         }
     }
 
-    /// Cedro 4 Labs: i tasti della finestra unica (frecce sulla tabella, Spazio spunta, Canc toglie, Esc torna indietro).
-    fn lx_tasto(&mut self, key: Key, plat: &mut dyn Platform) -> bool {
-        use crate::ui::labsx::Pannello;
-        let a = &self.app;
-        let popup = a.lx.aiuto || a.lx.anteprima || a.lx.scheda || a.lx.errore.is_some() || a.lx.proc_nome.is_some();
-        let tabella = !a.files.is_empty() && !a.lx_pagina() && !a.lavori_aperti && !a.caso_aperto && a.ask.is_none() && !popup;
-        match key {
-            Key::Escape if a.lx.aiuto => self.app.lx.aiuto = false,
-            Key::Escape if a.lx.anteprima => self.app.lx.anteprima = false,
-            Key::Escape if a.lx.scheda => self.app.lx.scheda = false,
-            Key::Escape if a.lx.errore.is_some() => self.app.lx.errore = None,
-            Key::Escape if a.lx.proc_nome.is_some() => self.app.lx.proc_nome = None,
-            Key::Escape if a.caso_aperto || a.ask.is_some() => return false,
-            Key::Escape if a.lavori_aperti => self.app.lavori_aperti = false,
-            Key::Escape if a.lx.pannello != Pannello::Dettagli => self.app.lx.pannello = Pannello::Dettagli,
-            Key::Escape if !a.lx_scelti().is_empty() => {
-                for f in self.app.files.iter_mut() {
-                    f.checked = false;
-                }
-            }
-            Key::Up | Key::Down if tabella => {
-                let shift = self.mods.0;
-                self.app.lx_muovi(if key == Key::Down { 1 } else { -1 }, shift);
-            }
-            Key::Space if tabella && self.ui.focus_act.is_none() => self.app.lx_spunta_evidenziato(),
-            Key::Delete if tabella => self.act(Act::RemoveChecked, plat),
-            Key::SelectAll if tabella => self.app.lx_scegli_tutte(),
-            Key::Enter if tabella && self.app.lx.pannello == Pannello::Azione && self.ui.focus_act.is_none() => self.act(Act::Start, plat),
-            _ => return false,
-        }
-        true
-    }
-
-    /// Cedro 4 Labs: le lettere senza un campo in uso. 1-6 i comandi del laboratorio, 7 Converti, 8 PDF,
-    /// C assegna un caso, A aggiunge file (dal sistema non si può senza finestra: ci pensa il pulsante),
-    /// / cerca, ? le scorciatoie.
-    fn lx_scorciatoia(&mut self, s: &str) {
-        use crate::ui::model::Lab;
-        let Some(c) = s.chars().next() else { return };
-        if self.app.lx.aiuto || self.app.lx.anteprima || self.app.lx.scheda || self.app.lx.errore.is_some() || self.app.lx.proc_nome.is_some() || self.app.caso_aperto || self.app.ask.is_some() || self.app.busy_modal() {
-            return;
-        }
-        let mut plat = SenzaPiattaforma;
-        let act = match c {
-            '1' => Act::Lab(Lab::LAB[0]),
-            '2' => Act::Lab(Lab::LAB[1]),
-            '3' => Act::Lab(Lab::LAB[2]),
-            '4' => Act::Lab(Lab::LAB[3]),
-            '5' => Act::Lab(Lab::LAB[4]),
-            '6' => Act::Lab(Lab::LAB[5]),
-            '7' => Act::Lab(Lab::Converti),
-            '8' => Act::Lab(Lab::Pdf),
-            '9' => Act::LxProcedure,
-            'c' | 'C' => Act::LxAssegna,
-            'p' | 'P' => Act::LxAnteprima,
-            '?' => Act::LxAiuto,
-            // Con il metodo di scrittura di GTK lo spazio arriva come testo, non come tasto: stessa cosa di `Key::Space`.
-            ' ' => {
-                let a = &self.app;
-                if !a.files.is_empty() && !a.lx_pagina() && !a.lavori_aperti && self.ui.focus_act.is_none() {
-                    self.app.lx_spunta_evidenziato();
-                }
-                return;
-            }
-            '/' => {
-                self.ui.edit = Some(Field::LxCerca);
-                self.ui.caret = self.app.lx.ricerca.chars().count();
-                self.ui.sel_all = false;
-                return;
-            }
-            _ => return,
-        };
-        self.act(act, &mut plat);
-    }
-
     /// Un menu aperto da tastiera: Invio sceglie la voce evidenziata.
     pub fn menu_enter(&mut self, plat: &mut dyn Platform) -> bool {
         if let Some(m) = self.ui.menu.take() {
@@ -2628,6 +2417,52 @@ mod tests {
         fn toggle_maximize(&mut self) {}
         fn close(&mut self) {}
         fn open_full(&mut self) {}
+    }
+
+    /// Cedro 4 Labs, l'elenco dei file sotto l'anteprima: Spazio spunta la riga in evidenza, Ctrl+A le
+    /// sceglie tutte (senza mai toglierle), le frecce passano di riga; il pulsante dice il verbo del comando.
+    #[test]
+    fn labs_elenco_come_esplora_file() {
+        let dir = crate::engine::private_temp_dir("cedro-prova-labs-elenco").unwrap();
+        let files: Vec<PathBuf> = (1..=3).map(|k| dir.join(format!("vetrino_{k}.png"))).collect();
+        for p in &files {
+            image::RgbImage::new(8, 8).save(p).unwrap();
+        }
+        let mut plat = Fake { clip: String::new() };
+        let mut s = Screen::new(Surface::Main, Arc::new(|| {}));
+        s.request_appearance(ThemeId::CedroLabs, false);
+        s.drop_files(files.clone());
+        s.act(Act::Lab(Lab::Immagini), &mut plat);
+        let _ = s.render(1400, 900, 1.0);
+        let vis = s.app.visible();
+        assert_eq!(vis.len(), 3);
+        assert!(vis.iter().all(|&i| s.app.files[i].checked));
+        s.app.selected = Some(vis[0]);
+        // La freccia giù porta alla seconda riga, lo Spazio la toglie dal lavoro.
+        assert!(s.key(Key::Down, &mut plat));
+        assert_eq!(s.app.selected, Some(vis[1]));
+        assert!(s.key(Key::Space, &mut plat));
+        assert!(!s.app.files[vis[1]].checked);
+        assert_eq!(s.app.targets().len(), 2);
+        // Su Linux lo Spazio arriva come testo: fa lo stesso.
+        s.text_input(" ");
+        assert!(s.app.files[vis[1]].checked);
+        s.text_input(" ");
+        assert_eq!(crate::ui::views::labs::go_label_labs(&s.app), "Salva 2 file");
+        // Ctrl+A le sceglie tutte, anche se sono già tutte scelte.
+        assert!(s.key(Key::SelectAll, &mut plat));
+        assert!(s.key(Key::SelectAll, &mut plat));
+        assert!(vis.iter().all(|&i| s.app.files[i].checked));
+        assert!(s.key(Key::Up, &mut plat));
+        assert_eq!(s.app.selected, Some(vis[0]));
+        s.act(Act::Lab(Lab::Anonimizza), &mut plat);
+        let _ = s.render(1400, 900, 1.0);
+        assert!(crate::ui::views::labs::go_label_labs(&s.app).starts_with("Togli i nomi da"));
+        // «Miniature» torna alla striscia, «Elenco» alla tabella.
+        s.act(Act::LabMiniature(true), &mut plat);
+        let _ = s.render(1400, 900, 1.0);
+        assert!(s.hits.iter().any(|h| h.act == Act::LabMiniature(false)));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// «Firma documenti», «Chiavetta e certificati» e «Opzioni»: si disegnano in tutti i temi, i passi

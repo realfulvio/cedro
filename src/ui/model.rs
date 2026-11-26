@@ -94,21 +94,6 @@ impl Lab {
         }
     }
 
-    /// Il nome del comando nella barra di Cedro 4 Labs, lo stesso ovunque (procedure, registro, scheda del caso).
-    pub fn comando(self) -> &'static str {
-        match self {
-            Lab::Immagini => "Immagini e vetrini",
-            Lab::Anonimizza => "Togli i nomi",
-            Lab::Figura => "Figura",
-            Lab::Dati => "Dati e piastre",
-            Lab::Referti => "Firma e referti",
-            Lab::Trascrivi => "Trascrivi",
-            Lab::Converti | Lab::Home => "Converti",
-            Lab::Pdf => "PDF",
-            other => other.name(),
-        }
-    }
-
     /// Il nome nella barra del Cedro di partenza.
     pub fn cedro_name(self) -> &'static str {
         match self {
@@ -415,8 +400,6 @@ pub enum Event {
     Summary(PathBuf, crate::riassunto::Progress),
     /// L'editor dei PDF: cosa arriva dal thread di fondo (pagine disegnate, testo, ricerche, salvataggio).
     PdEd(super::pdfedwork::Msg),
-    /// L'impronta SHA-256 di un file (Cedro 4 Labs, scheda «Dettagli»).
-    Sha(PathBuf, Option<String>),
     /// Un export di strumento riletto con il profilo scelto a mano.
     Strumento(PathBuf, String, Result<Arc<crate::strumenti::Lettura>, String>),
 }
@@ -499,6 +482,8 @@ pub struct App {
     pub caso_bozza: (String, String),
     /// Si guarda l'elenco dei lavori invece della pagina scelta.
     pub lavori_aperti: bool,
+    /// Cedro 4 Labs: i file in coda come striscia di miniature invece dell'elenco a tabella.
+    pub lab_miniature: bool,
     /// L'ultimo «Copia per il quaderno» (il lavoro, da 0 tra quelli di oggi): per dire «Copiato».
     pub quaderno_copiato: Option<usize>,
     /// Dove è stato salvato il registro dei lavori (o perché no), per dirlo nella pagina «Lavori».
@@ -559,8 +544,6 @@ pub struct App {
     pub estimates: HashMap<(PathBuf, String), Option<Result<(u64, u64), String>>>,
     /// «Firma digitale»: i file da verificare, gli ultimi aperti e il visualizzatore.
     pub firma: super::firma::FirmaUi,
-    /// Cedro 4 Labs, la finestra unica: filtri, caso di ogni file, impronte.
-    pub lx: super::labsx::LabsX,
     media_asked: std::collections::HashSet<PathBuf>,
     pub(super) tx: Sender<Event>,
     rx: Receiver<Event>,
@@ -623,6 +606,7 @@ impl App {
             caso_aperto: false,
             caso_bozza: (String::new(), String::new()),
             lavori_aperti: false,
+            lab_miniature: false,
             strum: Default::default(),
             strum_esiti: HashMap::new(),
             strum_chiavi_partenza: HashMap::new(),
@@ -656,7 +640,6 @@ impl App {
             summary_job: None,
             summary_failure: None,
             firma: Default::default(),
-            lx: super::labsx::LabsX::nuovo(),
             media_asked: Default::default(),
             tx,
             rx,
@@ -763,7 +746,6 @@ impl App {
         if self.lab == Lab::Home && self.activity == Activity::Convert {
             return;
         }
-        let prima = self.lab;
         self.lab = match self.activity {
             Activity::Firma => Lab::Referti,
             Activity::Transcribe => Lab::Trascrivi,
@@ -779,10 +761,6 @@ impl App {
                 _ => Lab::Converti,
             },
         };
-        // Si arriva su una pagina intera (firma, trascrizione) da qualunque strada: la si vede subito.
-        if self.lab != prima && crate::ui::labsx::lab_a_pagina(self.lab) {
-            self.lx.pannello = crate::ui::labsx::Pannello::Azione;
-        }
     }
 
     /// Il Cedro di partenza, «Converti» con un PDF in vista: si passa al primo tipo in coda che non è un
@@ -827,11 +805,6 @@ impl App {
         self.job.is_some()
     }
 
-    /// Una finestrella di domanda è aperta (le scorciatoie da tastiera aspettano).
-    pub fn busy_modal(&self) -> bool {
-        self.transcribe.asking || self.review.is_some()
-    }
-
     /// Il primo formato della categoria (in Semplificata quello consigliato).
     pub fn default_action(&self, simple: bool) -> String {
         let kind = self.kind();
@@ -858,8 +831,6 @@ impl App {
                 let f = &self.files[i];
                 match self.activity {
                     Activity::Transcribe => trascrizione::transcribable(&f.path),
-                    // «Togli i nomi» prende insieme foto, vetrini, DICOM, PDF e documenti: il motore li distingue da solo.
-                    Activity::Convert if self.lab == Lab::Anonimizza && self.action == "strip" => !f.voice_only && matches!(f.kind, Kind::Image | Kind::Pdf | Kind::Doc),
                     _ => !f.voice_only && f.kind == kind,
                 }
             })
@@ -1366,7 +1337,6 @@ impl App {
             known.insert(path.clone());
             first.get_or_insert((kind, voice_only || (transcribing && trascrizione::transcribable(&path))));
             self.loader.request(&path);
-            self.lx_nuovo_file(&path);
             self.files.push(FileItem { path, kind, voice_only, state: FileState::Waiting, message: "In attesa".into(), output: None, checked: true, done_key: None, percent: None, pages: String::new() });
             added += 1;
         }
@@ -1416,11 +1386,6 @@ impl App {
         self.previews.retain(|(p, _), _| live.contains(p.as_path()));
         self.page_thumbs.retain(|(p, _), _| live.contains(p.as_path()));
         self.cuts.retain(|p, _| live.contains(p.as_path()));
-    }
-
-    /// Come `prune_media`, per chi toglie file dalla coda fuori da qui (la tabella di Labs).
-    pub fn prune_media_pub(&mut self) {
-        self.prune_media();
     }
 
     /// Toglie dalla coda i file spuntati della vista (o tutti quelli della vista se nessuno è spuntato).
@@ -1679,49 +1644,40 @@ impl App {
     }
 
     /// Un lavoro finito entra nell'elenco dei lavori, con i nomi dei file usciti (niente se non è uscito nulla).
-    /// Se i file sono di casi diversi, ogni caso ha il suo lavoro.
     fn registra_lavoro(&mut self, job: &Job) {
         if !matches!(job.kind, JobKind::Convert | JobKind::Transcribe) {
             return;
         }
-        // (caso, cartella, nomi, strumenti, origini)
-        type Gruppo = (String, String, Vec<String>, Vec<String>, Vec<(String, String)>);
-        let mut gruppi: Vec<Gruppo> = Vec::new();
+        let mut outputs: Vec<String> = Vec::new();
+        let mut strumenti: Vec<String> = Vec::new();
+        let mut origini: Vec<(String, String)> = Vec::new();
         for &i in &job.targets {
-            let Some(f) = self.files.get(i) else { continue };
-            let Some(out) = Some(f).filter(|f| f.state == FileState::Done).and_then(|f| f.output.as_ref()) else { continue };
-            let caso = self.lx_caso_di(&f.path);
-            let dir = out.parent().map(|d| d.display().to_string()).unwrap_or_default();
-            if !gruppi.iter().any(|g| g.0 == caso) {
-                gruppi.push((caso.clone(), dir, Vec::new(), Vec::new(), Vec::new()));
-            }
-            let Some(g) = gruppi.iter_mut().find(|g| g.0 == caso) else { continue };
+            let Some(out) = self.files.get(i).filter(|f| f.state == FileState::Done).and_then(|f| f.output.as_ref()) else { continue };
             let mut scritti: Vec<PathBuf> = vec![out.clone()];
             // I dati di uno strumento: oltre all'Excel escono i file in più, e il lavoro ricorda lo strumento e l'impronta dell'originale.
-            if let Some(e) = self.strum_esiti.get(&f.path) {
+            if let Some(e) = self.strum_esiti.get(&self.files[i].path) {
                 scritti.extend(e.altri.iter().cloned());
-                if !e.strumento.is_empty() && !g.3.contains(&e.strumento) {
-                    g.3.push(e.strumento.clone());
+                if !e.strumento.is_empty() && !strumenti.contains(&e.strumento) {
+                    strumenti.push(e.strumento.clone());
                 }
-                if !g.4.contains(&e.origine) {
-                    g.4.push(e.origine.clone());
+                if !origini.contains(&e.origine) {
+                    origini.push(e.origine.clone());
                 }
             }
             for p in scritti {
                 let name = p.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
-                if !name.is_empty() && !g.2.contains(&name) {
-                    g.2.push(name);
+                if !name.is_empty() && !outputs.contains(&name) {
+                    outputs.push(name);
                 }
             }
         }
-        if gruppi.is_empty() {
+        if outputs.is_empty() {
             return;
         }
-        let what = self.lab.comando();
+        let strumento = strumenti.join(" | ");
+        let what = if self.lab == Lab::Home { Lab::Converti.name() } else { self.lab.name() };
         let when = crate::nametemplate::now().unix;
-        for (caso, dir, outputs, strumenti, origini) in gruppi {
-            crate::caso::registra(&mut self.lavori, crate::caso::Lavoro { when, what: crate::i18n::tr(what).to_string(), caso, outputs, strumento: strumenti.join(" | "), origini, dir });
-        }
+        crate::caso::registra(&mut self.lavori, crate::caso::Lavoro { when, what: crate::i18n::tr(what).to_string(), caso: self.caso.as_ref().map(|c| c.code.clone()).unwrap_or_default(), outputs, strumento, origini });
         self.quaderno_copiato = None;
         self.lavoro_appena = true;
         self.lavoro_appena_copiato = false;
@@ -1739,19 +1695,6 @@ impl App {
         self.caso = crate::caso::Caso::new(&self.caso_bozza.0, &self.caso_bozza.1);
         crate::caso::salva(self.caso.as_ref());
         self.caso_aperto = false;
-        // Il caso entra tra quelli conosciuti; se la finestrella l'ha aperta «Assegna caso», va anche ai file scelti.
-        if let Some(c) = self.caso.clone() {
-            self.lx_ricorda_caso(&c.code, &c.note);
-            self.lx_tappa_almeno(&c.code, 1);
-            if std::mem::take(&mut self.lx.assegna_dopo) {
-                self.lx_assegna(Some(&c.code));
-            } else {
-                // Un caso scritto da «+ Nuovo»: si lavora su quello, e come aprendo un caso la scelta resta solo sui file che si vedono.
-                self.lx.caso = Some(c.code.clone());
-                self.lx_pota();
-            }
-        }
-        self.lx.assegna_dopo = false;
     }
 
     /// Toglie il caso: i file nuovi tornano ai nomi di sempre.
@@ -1866,8 +1809,6 @@ impl App {
         if self.simple_view && action == "split" {
             opts.pdf_pages.plan = crate::pdfpages::Plan::EveryPage;
         }
-        // Il caso di ogni file: i nomi nuovi prendono quello del file, non per forza quello di adesso.
-        let casi: HashMap<PathBuf, String> = paths.iter().map(|p| (p.clone(), self.lx_caso_di(p))).collect();
         let (tx, wake) = (self.tx.clone(), self.wake.clone());
         std::thread::spawn(move || {
             for path in paths {
@@ -1897,16 +1838,6 @@ impl App {
                                 if let Some(sc) = strum.get(&path) {
                                     action = "strumento".into();
                                     opts.strumento = sc.clone();
-                                }
-                                if let Some(code) = casi.get(&path) {
-                                    // Il caso del file vince su quello di adesso; senza caso, i nomi di sempre.
-                                    opts.caso = None;
-                                    if opts.name_template.as_deref() == Some(crate::caso::MODELLO) {
-                                        opts.name_template = None;
-                                    }
-                                    if !code.is_empty() {
-                                        opts = crate::caso::opzioni(Some(code), opts);
-                                    }
                                 }
                                 if let Some(c) = cuts.get(&path) {
                                     opts.pdf_pages.plan = crate::pdfpages::Plan::Cuts(c.clone());
@@ -2202,11 +2133,6 @@ impl App {
                             }
                         }
                     }
-                    if !failed {
-                        // Cedro 4 Labs: nella tabella lo stato dice cosa si è fatto e a che ora.
-                        let out = self.files.iter().find(|f| f.path == path).and_then(|f| f.output.clone());
-                        self.lx_segna_fatto(&path, out);
-                    }
                     if let Some(job) = self.job.as_mut() {
                         job.part = 0.0;
                         job.done += 1;
@@ -2319,14 +2245,10 @@ impl App {
                 }
                 Event::JobDone => {
                     crate::accel::clear_in_use();
-                    let mut falliti = None;
                     if let Some(job) = self.job.take() {
                         self.registra_lavoro(&job);
-                        falliti = Some(job.failed);
                         if matches!(job.kind, JobKind::Convert | JobKind::Transcribe) {
-                            let text = if job.failed == 1 && job.total == 1 {
-                                "Il file non è riuscito: il motivo è accanto.".to_string()
-                            } else if job.failed > 0 {
+                            let text = if job.failed > 0 {
                                 format!("{} di {} file non riusciti: il motivo è accanto a ciascuno.", job.failed, job.total)
                             } else {
                                 format!("Fatto: {} file.", job.total)
@@ -2334,16 +2256,9 @@ impl App {
                             self.notice = Some(Notice { text, error: job.failed > 0 });
                         }
                     }
-                    // Una procedura in corso passa al passo dopo.
-                    if let Some(n) = falliti {
-                        self.lx_procedura_avanti(n);
-                    }
                 }
                 Event::Media(path, loaded) => {
                     self.media.insert(path, loaded);
-                }
-                Event::Sha(path, h) => {
-                    self.lx.sha.insert(path, h.map(super::labsx::Sha::Pronta).unwrap_or(super::labsx::Sha::Non));
                 }
                 Event::Strumento(path, profilo, esito) => self.strum_riletto(&path, &profilo, esito),
                 Event::Preview(path, page, img) => {

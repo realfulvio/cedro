@@ -732,7 +732,6 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             SetCapture(hwnd);
             let (x, y) = xy(lparam, hwnd);
             if let Ok(mut s) = host.screen.try_borrow_mut() {
-                s.mods = (shift(), ctrl());
                 s.pointer_down(x, y);
             }
             redraw(hwnd);
@@ -792,7 +791,6 @@ unsafe extern "system" fn proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPA
             };
             if let Some(k) = key {
                 if let Ok(mut s) = host.screen.try_borrow_mut() {
-                    s.mods = (shift(), ctrl());
                     let used = if k == Key::Enter && s.ui.menu.is_some() { s.menu_enter(&mut plat) } else { s.key(k, &mut plat) };
                     if used {
                         redraw(hwnd);
