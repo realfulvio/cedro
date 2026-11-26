@@ -3160,6 +3160,111 @@ il foglio «{}» non ha la tabella	das Blatt «{}» hat keine Tabelle
 blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	Block «{}» wird nicht unterstützt: Cedro liest Platten mit 96 und 384 Wells
 nel file manca il foglio «{}»	in der Datei fehlt das Blatt «{}»
 il foglio «{}» è vuoto	das Blatt «{}» ist leer
+nella prova Fixed non ci sono colonne di assorbanza (A260, «500 nm [A]», Absorbance)	im Fixed-Test gibt es keine Absorptionsspalten (A260, «500 nm [A]», Absorbance)
+manca la colonna {}	die Spalte {} fehlt
+manca il manifest	das Manifest fehlt
+manifest non valido	ungültiges Manifest
+manca il documento principale	das Hauptdokument fehlt
+manca «{}»	«{}» fehlt
+identificatore ripetuto: {}	doppelte Kennung: {}
+valore senza numero o unità: {}	Wert ohne Zahl oder Einheit: {}
+file troppo grande per l'export di uno strumento	Datei zu groß für einen Geräteexport
+i blocchi dei coloranti devono avere tutti {} colonne	alle Farbstoffblöcke müssen {} Spalten haben
+ci deve essere un solo colorante di riferimento (senza «_target»), nel file ce ne sono {}	es darf nur einen Referenzfarbstoff geben (ohne «_target»), die Datei hat {}
+pozzetto perso	Well verloren
+il gruppo «{}» ha due valori diversi per «{}»: {} e {}	die Gruppe «{}» hat zwei verschiedene Werte für «{}»: {} und {}
+nel file non c'è la vitalità	die Datei enthält keine Viabilität
+la griglia dei valori è vuota	das Werteraster ist leer
+alla riga {} dopo «Plate information» manca l'intestazione «Plate,Repeat,Barcode…»	in Zeile {} nach «Plate information» fehlt die Kopfzeile «Plate,Repeat,Barcode…»
+alla riga {} manca la riga con i dati della piastra	in Zeile {} fehlt die Zeile mit den Plattendaten
+una piastra non ha il numero	eine Platte hat keine Nummer
+la piastra {} non ha né «Label» né «Formula»: non so se è una lettura o un calcolo	Platte {} hat weder «Label» noch «Formula»: ich weiß nicht, ob es eine Messung oder eine Berechnung ist
+mancano le intestazioni delle informazioni di fondo	die Kopfzeilen der Hintergrundinformationen fehlen
+piastra {}: {}	Platte {}: {}
+tempo non leggibile: «{}»	Zeit nicht lesbar: «{}»
+larghezza di banda dell'eccitazione non leggibile: «{}»	Anregungsbandbreite nicht lesbar: «{}»
+filtro dello specchio non leggibile: «{}»	Spiegelfilter nicht lesbar: «{}»
+la riga «Read» della lettura non è come Gen5 la scrive	die «Read»-Zeile der Messung ist nicht so, wie Gen5 sie schreibt
+righe «Wavelengths» non leggibili	«Wavelengths»-Zeilen nicht lesbar
+nella riga della cinetica manca «{}»	in der Kinetikzeile fehlt «{}»
+numero di letture della cinetica non leggibile	Anzahl der Kinetikmessungen nicht lesbar
+il tipo di lettura non c'è: servono Endpoint o Spectrum	der Messtyp fehlt: Endpoint oder Spectrum wird benötigt
+il modo di lettura non c'è: servono assorbanza, fluorescenza, luminescenza o AlphaLISA	der Messmodus fehlt: Absorption, Fluoreszenz, Lumineszenz oder AlphaLISA wird benötigt
+il numero delle letture non torna con i modi di lettura trovati	die Anzahl der Messungen passt nicht zu den gefundenen Messmodi
+correzione del cammino ottico non leggibile	Schichtdickenkorrektur nicht lesbar
+le eccitazioni e le emissioni non sono lo stesso numero	Anregungen und Emissionen sind nicht gleich viele
+la polarizzazione di fluorescenza vuole due serie di filtri	die Fluoreszenzpolarisation braucht zwei Filtersätze
+il numero delle misure ({}) non è quello dei guadagni ({})	die Anzahl der Messungen ({}) entspricht nicht der der Verstärkungen ({})
+la temperatura dovrebbe stare su una riga sola	die Temperatur sollte in einer einzigen Zeile stehen
+temperatura non leggibile: «{}»	Temperatur nicht lesbar: «{}»
+per la misura «{}» non c'è la lettura	für die Messung «{}» gibt es keinen Messwert
+per «{}» non ci sono i filtri	für «{}» gibt es keine Filter
+la cinetica non ha i dati dei tempi	die Kinetik hat keine Zeitdaten
+nel file ci sono i dati della cinetica ma non le misure	die Datei enthält Kinetikdaten, aber keine Messungen
+la cinetica non ha etichette	die Kinetik hat keine Beschriftungen
+manca la sezione «Wavelength»	der Abschnitt «Wavelength» fehlt
+manca la lettura	die Messung fehlt
+la tabella degli spettri non comincia con «Wavelength»	die Spektrentabelle beginnt nicht mit «Wavelength»
+le lunghezze d'onda degli spettri non sono numeri	die Wellenlängen der Spektren sind keine Zahlen
+manca la tabella con «wavelength(nm)»	die Tabelle mit «wavelength(nm)» fehlt
+nello spettro non ci sono punti	das Spektrum hat keine Punkte
+non trovo la sezione «Platemap»	ich finde den Abschnitt «Platemap» nicht
+due colonne danno valori diversi per la stessa lunghezza d'onda ({} nm): {} e {}	zwei Spalten liefern verschiedene Werte für dieselbe Wellenlänge ({} nm): {} und {}
+la legenda degli spot ne dice {} ma nel file ci sono {} tabelle di dati	die Spot-Legende nennt {}, aber die Datei hat {} Datentabellen
+manca la riga di intestazione con «Plate ID»	die Kopfzeile mit «Plate ID» fehlt
+nel file non ci sono assorbanze (A260, A280…)	die Datei enthält keine Absorptionswerte (A260, A280…)
+nel file non c'è la tabella delle misure	die Datei enthält keine Messwerttabelle
+manca la colonna Nucleic Acid(…)	die Spalte Nucleic Acid(…) fehlt
+manca l'unità degli acidi nucleici	die Einheit der Nukleinsäuren fehlt
+manca la sezione Results	der Abschnitt Results fehlt
+manca il tipo di esperimento	der Experimenttyp fehlt
+tipo di esperimento non riconosciuto: «{}»	Experimenttyp nicht erkannt: «{}»
+manca l'ora della corsa	die Laufzeit fehlt
+manca il nome dell'SNP nel pozzetto {}	im Well {} fehlt der SNP-Name
+manca il nome dell'allele nel pozzetto {}	im Well {} fehlt der Allelname
+nei risultati non si trova la colonna del Ct	in den Ergebnissen fehlt die Ct-Spalte
+nel file manca il tipo di blocco (Block Type)	in der Datei fehlt der Blocktyp (Block Type)
+nel file manca la data e ora della fine della corsa	in der Datei fehlen Datum und Uhrzeit des Laufendes
+nel file manca il metodo di quantificazione (Quantification Cycle Method)	in der Datei fehlt die Quantifizierungsmethode (Quantification Cycle Method)
+nel file manca il nome dell'esperimento (File Name)	in der Datei fehlt der Experimentname (File Name)
+nel file manca il foglio Results	in der Datei fehlt das Blatt Results
+emissione non riconosciuta: «{}»	Emission nicht erkannt: «{}»
+manca la riga con «Test Date»	die Zeile mit «Test Date» fehlt
+nel file non ci sono pozzetti con un nome	die Datei enthält keine benannten Wells
+manca «{}» nell'intestazione della piastra	im Plattenkopf fehlt «{}»
+«{}» non è un numero intero: «{}»	«{}» ist keine ganze Zahl: «{}»
+«{}» non è un numero: «{}»	«{}» ist keine Zahl: «{}»
+il tempo «{}» non è nel formato ore:minuti:secondi	die Zeit «{}» ist nicht im Format Stunden:Minuten:Sekunden
+il tempo «{}» non è nel formato minuti:secondi	die Zeit «{}» ist nicht im Format Minuten:Sekunden
+le lunghezze d'onda non sono quante dovrebbero: attese {}, trovate {}	die Anzahl der Wellenlängen stimmt nicht: erwartet {}, gefunden {}
+«{}» non è una posizione di lettura valida: servono TRUE o FALSE	«{}» ist keine gültige Leseposition: TRUE oder FALSE wird benötigt
+le lunghezze d'onda di eccitazione non sono quante dovrebbero: attese {}, trovate {}	die Anzahl der Anregungswellenlängen stimmt nicht: erwartet {}, gefunden {}
+i filtri di taglio non sono quanti dovrebbero: attesi {}, trovati {}	die Anzahl der Kantenfilter stimmt nicht: erwartet {}, gefunden {}
+nella cinetica manca la misura del pozzetto {} a {} s	in der Kinetik fehlt die Messung von Well {} bei {} s
+formato non valido: i dati hanno {} colonne e le intestazioni {}	ungültiges Format: die Daten haben {} Spalten und die Kopfzeilen {}
+i dati ridotti hanno {} colonne e le intestazioni {}	die reduzierten Daten haben {} Spalten und die Kopfzeilen {}
+nel gruppo «{}» una riga non ha il pozzetto	in der Gruppe «{}» hat eine Zeile kein Well
+mancano le righe di metadati (Date of measurement)	die Metadatenzeilen (Date of measurement) fehlen
+manca la data della misura	das Messdatum fehlt
+data della misura non leggibile	Messdatum nicht lesbar
+manca l'analista	der Analytiker fehlt
+manca il nome dello strumento	der Gerätename fehlt
+manca il numero di serie	die Seriennummer fehlt
+modo di misura non supportato (solo assorbanza)	Messmodus nicht unterstützt (nur Absorption)
+manca la lunghezza d'onda	die Wellenlänge fehlt
+manca l'etichetta della misura	die Messbeschriftung fehlt
+manca la descrizione della piastra	die Plattenbeschreibung fehlt
+temperatura non leggibile	Temperatur nicht lesbar
+il numero di temperature non è quello delle misure	die Anzahl der Temperaturen entspricht nicht der der Messungen
+manca il modo di misura	der Messmodus fehlt
+modo di misura non supportato: {} (solo assorbanza)	Messmodus nicht unterstützt: {} (nur Absorption)
+manca il file della piastra	die Plattendatei fehlt
+in un campione non trovo la tabella «Image#»	in einer Probe finde ich die Tabelle «Image#» nicht
+in un campione non trovo la riga «Total»	in einer Probe finde ich die Zeile «Total» nicht
+nel file non ci sono campioni con una data leggibile	die Datei enthält keine Proben mit lesbarem Datum
+il file non è una prova «Fixed», «Quant» o «Scan»	die Datei ist kein «Fixed»-, «Quant»- oder «Scan»-Test
+manca il nome del campione nell'intestazione	im Kopf fehlt der Probenname
+nella prova Quant manca la colonna «Ordinate [A]»	im Quant-Test fehlt die Spalte «Ordinate [A]»
 nei risultati mancano le colonne Sample e Target	in den Ergebnissen fehlen die Spalten Sample und Target
 nel foglio dei gruppi mancano le colonne Sample e Target	im Gruppenblatt fehlen die Spalten Sample und Target
 nel foglio Genotyping Result manca la colonna SNP Assay	im Blatt Genotyping Result fehlt die Spalte SNP Assay

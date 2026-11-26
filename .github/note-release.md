@@ -11,12 +11,9 @@ I motori della trascrizione non vanno scaricati a mano: Cedro li prende da solo 
 
 ## Novità della {versione}
 
-**Cedro 4 Labs legge i file esportati dagli strumenti di laboratorio: trascini l'export e vedi la piastra con i valori veri.**
+**Correzioni della lettura degli strumenti di laboratorio (Cedro 4 Labs) e finestra più leggera nelle altre lingue.**
 
-- **Dove.** In «Converti dati e piastre» trascini il file esportato dallo strumento (CSV, TXT, Excel, XML, JSON): Cedro riconosce da solo lo strumento e al centro mostra la piastra colorata con i valori, oppure l'elenco delle misure e i dati dello strumento. Se sbaglia, «Non è questo? Cambia strumento».
-- **34 formati di 5 famiglie di strumenti.** Lettori di piastre (Tecan Magellan, Molecular Devices SoftMax Pro, Agilent BioTek Gen5, BMG Labtech MARS e SMART Control, PerkinElmer EnVision, Revvity Kaleido, Thermo Fisher SkanIt), qPCR e PCR digitale (Applied Biosystems QuantStudio e Design & Analysis, Bio-Rad CFX Maestro, Qiagen QIAcuity, Thermo Fisher QuantStudio Absolute Q, Diomni), spettrofotometri e fluorimetri (NanoDrop One, Eight e 8000, Qubit 4 e Flex, Genesys 30 e On-Board, VISIONlite, Unchained Labs Lunatic & Stunner), contacellule (Beckman Coulter Vi-CELL BLU e XR, ChemoMetec NucleoView e NC-View, Roche Cedex HiRes, Revvity Matrix), multiplex (Bio-Rad Bio-Plex Manager, MSD Discovery Workbench e Methodical Mind, Luminex xPONENT e INTELLIFLEX). Ogni formato legge correttamente tutti i file d'esempio della libreria pubblica allotropy.
-- **I ruoli dei pozzetti.** Clicchi o trascini sui pozzetti e li segni come bianco, standard, controllo o campione; Cedro mostra media, DS e CV della scelta e, se vuoi, i valori meno il bianco.
-- **Esce un Excel pulito.** Mappa a colori della piastra, un foglio con una riga per pozzetto (o per campione), spettri e cinetiche, valori calcolati, analiti e i dati dello strumento. A richiesta anche CSV, **Allotrope (.asm.json)** per LIMS e archivi dati, con i calcoli di Cedro separati dai dati grezzi, e CSV piatto.
-- **Si sa da dove vengono i dati.** Nei «Lavori» e nel testo per il quaderno di laboratorio restano lo strumento e l'impronta SHA-256 del file originale, che non viene mai toccato.
-- **Anche dalla riga di comando**, per chi vuole convertire tanti export in automatico.
-- **Da sapere.** Alcuni messaggi d'errore specifici dei singoli strumenti e i nomi dei fogli Excel restano in italiano anche con Cedro in un'altra lingua; i citofluorimetri (FCS) non sono ancora letti.
+- **Messaggi d'errore degli strumenti tradotti.** Quando un export non si legge, il motivo (colonna mancante, tempo non leggibile, versione non supportata…) ora si vede in inglese, spagnolo, tedesco, francese e portoghese, non più in italiano: un centinaio di messaggi dei 34 formati.
+- **CSV piatto giusto per l'Excel italiano.** Con il punto e virgola come separatore anche il CSV piatto di Allotrope scrive i decimali con la virgola, come il CSV della tabella: Excel lo apre con i numeri al posto giusto.
+- **Niente «2 pagine» sui file di dati.** Nella coda l'export di uno strumento non mostra più un numero di pagine che non ha senso per una tabella di misure.
+- **Finestra più leggera in inglese, spagnolo, tedesco, francese e portoghese.** I testi con numeri («12 file», «3 pagine», «2 file su 5»), ridisegnati a ogni fotogramma, ora si traducono una volta sola e poi si ricordano: da 9,7 a 0,12 microsecondi per testo, 80 volte meno lavoro.

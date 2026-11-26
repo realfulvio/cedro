@@ -3171,6 +3171,111 @@ il foglio «{}» non ha la tabella	the «{}» sheet has no table
 blocco «{}» non supportato: Cedro legge le piastre da 96 e 384 pozzetti	block «{}» not supported: Cedro reads 96- and 384-well plates
 nel file manca il foglio «{}»	the file has no «{}» sheet
 il foglio «{}» è vuoto	the «{}» sheet is empty
+nella prova Fixed non ci sono colonne di assorbanza (A260, «500 nm [A]», Absorbance)	the Fixed test has no absorbance columns (A260, «500 nm [A]», Absorbance)
+manca la colonna {}	the {} column is missing
+manca il manifest	the manifest is missing
+manifest non valido	invalid manifest
+manca il documento principale	the main document is missing
+manca «{}»	«{}» is missing
+identificatore ripetuto: {}	repeated identifier: {}
+valore senza numero o unità: {}	value without number or unit: {}
+file troppo grande per l'export di uno strumento	file too large for an instrument export
+i blocchi dei coloranti devono avere tutti {} colonne	the dye blocks must all have {} columns
+ci deve essere un solo colorante di riferimento (senza «_target»), nel file ce ne sono {}	there must be only one reference dye (without «_target»), the file has {}
+pozzetto perso	well lost
+il gruppo «{}» ha due valori diversi per «{}»: {} e {}	group «{}» has two different values for «{}»: {} and {}
+nel file non c'è la vitalità	the file has no viability
+la griglia dei valori è vuota	the value grid is empty
+alla riga {} dopo «Plate information» manca l'intestazione «Plate,Repeat,Barcode…»	at line {} after «Plate information» the «Plate,Repeat,Barcode…» header is missing
+alla riga {} manca la riga con i dati della piastra	at line {} the plate data line is missing
+una piastra non ha il numero	a plate has no number
+la piastra {} non ha né «Label» né «Formula»: non so se è una lettura o un calcolo	plate {} has neither «Label» nor «Formula»: I can't tell if it is a reading or a calculation
+mancano le intestazioni delle informazioni di fondo	the background information headers are missing
+piastra {}: {}	plate {}: {}
+tempo non leggibile: «{}»	unreadable time: «{}»
+larghezza di banda dell'eccitazione non leggibile: «{}»	unreadable excitation bandwidth: «{}»
+filtro dello specchio non leggibile: «{}»	unreadable mirror filter: «{}»
+la riga «Read» della lettura non è come Gen5 la scrive	the reading's «Read» line is not the way Gen5 writes it
+righe «Wavelengths» non leggibili	unreadable «Wavelengths» lines
+nella riga della cinetica manca «{}»	the kinetics line has no «{}»
+numero di letture della cinetica non leggibile	unreadable number of kinetic reads
+il tipo di lettura non c'è: servono Endpoint o Spectrum	the read type is missing: Endpoint or Spectrum is needed
+il modo di lettura non c'è: servono assorbanza, fluorescenza, luminescenza o AlphaLISA	the read mode is missing: absorbance, fluorescence, luminescence or AlphaLISA is needed
+il numero delle letture non torna con i modi di lettura trovati	the number of reads doesn't match the read modes found
+correzione del cammino ottico non leggibile	unreadable pathlength correction
+le eccitazioni e le emissioni non sono lo stesso numero	excitations and emissions are not the same number
+la polarizzazione di fluorescenza vuole due serie di filtri	fluorescence polarization needs two sets of filters
+il numero delle misure ({}) non è quello dei guadagni ({})	the number of measurements ({}) doesn't match the number of gains ({})
+la temperatura dovrebbe stare su una riga sola	the temperature should be on a single line
+temperatura non leggibile: «{}»	unreadable temperature: «{}»
+per la misura «{}» non c'è la lettura	there is no reading for the measurement «{}»
+per «{}» non ci sono i filtri	there are no filters for «{}»
+la cinetica non ha i dati dei tempi	the kinetics has no time data
+nel file ci sono i dati della cinetica ma non le misure	the file has kinetic data but no measurements
+la cinetica non ha etichette	the kinetics has no labels
+manca la sezione «Wavelength»	the «Wavelength» section is missing
+manca la lettura	the reading is missing
+la tabella degli spettri non comincia con «Wavelength»	the spectra table doesn't start with «Wavelength»
+le lunghezze d'onda degli spettri non sono numeri	the spectra wavelengths are not numbers
+manca la tabella con «wavelength(nm)»	the table with «wavelength(nm)» is missing
+nello spettro non ci sono punti	the spectrum has no points
+non trovo la sezione «Platemap»	I can't find the «Platemap» section
+due colonne danno valori diversi per la stessa lunghezza d'onda ({} nm): {} e {}	two columns give different values for the same wavelength ({} nm): {} and {}
+la legenda degli spot ne dice {} ma nel file ci sono {} tabelle di dati	the spot legend says {} but the file has {} data tables
+manca la riga di intestazione con «Plate ID»	the header line with «Plate ID» is missing
+nel file non ci sono assorbanze (A260, A280…)	the file has no absorbances (A260, A280…)
+nel file non c'è la tabella delle misure	the file has no measurements table
+manca la colonna Nucleic Acid(…)	the Nucleic Acid(…) column is missing
+manca l'unità degli acidi nucleici	the nucleic acid unit is missing
+manca la sezione Results	the Results section is missing
+manca il tipo di esperimento	the experiment type is missing
+tipo di esperimento non riconosciuto: «{}»	experiment type not recognised: «{}»
+manca l'ora della corsa	the run time is missing
+manca il nome dell'SNP nel pozzetto {}	the SNP name is missing in well {}
+manca il nome dell'allele nel pozzetto {}	the allele name is missing in well {}
+nei risultati non si trova la colonna del Ct	the Ct column can't be found in the results
+nel file manca il tipo di blocco (Block Type)	the file has no block type (Block Type)
+nel file manca la data e ora della fine della corsa	the file has no run end date and time
+nel file manca il metodo di quantificazione (Quantification Cycle Method)	the file has no quantification method (Quantification Cycle Method)
+nel file manca il nome dell'esperimento (File Name)	the file has no experiment name (File Name)
+nel file manca il foglio Results	the file has no Results sheet
+emissione non riconosciuta: «{}»	emission not recognised: «{}»
+manca la riga con «Test Date»	the line with «Test Date» is missing
+nel file non ci sono pozzetti con un nome	the file has no named wells
+manca «{}» nell'intestazione della piastra	«{}» is missing in the plate header
+«{}» non è un numero intero: «{}»	«{}» is not an integer: «{}»
+«{}» non è un numero: «{}»	«{}» is not a number: «{}»
+il tempo «{}» non è nel formato ore:minuti:secondi	the time «{}» is not in hours:minutes:seconds format
+il tempo «{}» non è nel formato minuti:secondi	the time «{}» is not in minutes:seconds format
+le lunghezze d'onda non sono quante dovrebbero: attese {}, trovate {}	the number of wavelengths is wrong: expected {}, found {}
+«{}» non è una posizione di lettura valida: servono TRUE o FALSE	«{}» is not a valid read position: TRUE or FALSE is needed
+le lunghezze d'onda di eccitazione non sono quante dovrebbero: attese {}, trovate {}	the number of excitation wavelengths is wrong: expected {}, found {}
+i filtri di taglio non sono quanti dovrebbero: attesi {}, trovati {}	the number of cutoff filters is wrong: expected {}, found {}
+nella cinetica manca la misura del pozzetto {} a {} s	the kinetics has no measurement for well {} at {} s
+formato non valido: i dati hanno {} colonne e le intestazioni {}	invalid format: the data has {} columns and the headers {}
+i dati ridotti hanno {} colonne e le intestazioni {}	the reduced data has {} columns and the headers {}
+nel gruppo «{}» una riga non ha il pozzetto	in group «{}» a line has no well
+mancano le righe di metadati (Date of measurement)	the metadata lines (Date of measurement) are missing
+manca la data della misura	the measurement date is missing
+data della misura non leggibile	unreadable measurement date
+manca l'analista	the analyst is missing
+manca il nome dello strumento	the instrument name is missing
+manca il numero di serie	the serial number is missing
+modo di misura non supportato (solo assorbanza)	measurement mode not supported (absorbance only)
+manca la lunghezza d'onda	the wavelength is missing
+manca l'etichetta della misura	the measurement label is missing
+manca la descrizione della piastra	the plate description is missing
+temperatura non leggibile	unreadable temperature
+il numero di temperature non è quello delle misure	the number of temperatures doesn't match the measurements
+manca il modo di misura	the measurement mode is missing
+modo di misura non supportato: {} (solo assorbanza)	measurement mode not supported: {} (absorbance only)
+manca il file della piastra	the plate file is missing
+in un campione non trovo la tabella «Image#»	I can't find the «Image#» table in a sample
+in un campione non trovo la riga «Total»	I can't find the «Total» line in a sample
+nel file non ci sono campioni con una data leggibile	the file has no samples with a readable date
+il file non è una prova «Fixed», «Quant» o «Scan»	the file is not a «Fixed», «Quant» or «Scan» test
+manca il nome del campione nell'intestazione	the sample name is missing in the header
+nella prova Quant manca la colonna «Ordinate [A]»	the Quant test has no «Ordinate [A]» column
 nei risultati mancano le colonne Sample e Target	the results have no Sample and Target columns
 nel foglio dei gruppi mancano le colonne Sample e Target	the groups sheet has no Sample and Target columns
 nel foglio Genotyping Result manca la colonna SNP Assay	the Genotyping Result sheet has no SNP Assay column
