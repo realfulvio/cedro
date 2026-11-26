@@ -106,7 +106,6 @@ pub(super) fn colors(app: &App) -> (Rgb, Rgb) {
 
 fn frame(f: &mut Frame, app: &App) {
     f.p.clear(LABS_FRAME);
-    f.p.rrect_vgrad(0.0, 0.0, f.w, (f.h * 0.5).round(), 0.0, LABS_FRAME_HI, LABS_FRAME);
     f.caption((0.0, 0.0, f.w, TOP));
     f.p.symbol(24.0, 17.0, 30.0);
     f.p.text("Cedro", 64.0, 17.0, 120.0, 30.0, 22.0, BOLD, LABS_INK, Align::Left);
@@ -370,9 +369,7 @@ fn rail_item(f: &mut Frame, y: f32, lab: Lab, label: &str, on: bool, act: Act) {
         }
     }
     let (tx, ty, ts) = (r.0 + 8.0, y + 8.0, 34.0);
-    f.p.shadow(tx, ty, ts, ts, 10.0, 5.0, 0.3, 2.0);
-    f.p.rrect_vgrad(tx, ty, ts, ts, 10.0, bright, deep);
-    f.p.rrect_line(tx, ty, ts, ts, 10.0, WHITE, 1.0, 0.22, None);
+    f.p.rrect(tx, ty, ts, ts, 9.0, Some(mix(bright, deep, 0.55)), None);
     f.icon(lab_icon(lab), tx + 7.0, ty + 7.0, 20.0, WHITE);
     let c = if on { WHITE } else { LABS_INK };
     // Si traduce prima di andare a capo: le righe spezzate non si ritroverebbero nella tabella.
@@ -469,28 +466,20 @@ fn home(f: &mut Frame, app: &App, area: R) {
         let act = Act::LabGo(Lab::Home, kinds);
         let t = f.hover_t(&act, true);
         let tx = x + (i % 3) as f32 * (tw + gap);
-        let ty = top + (i / 3) as f32 * (th + gap) - 4.0 * t;
-        f.p.shadow(tx, ty, tw, th, 16.0, 12.0 + 6.0 * t, 0.45, 8.0);
-        f.p.rrect(tx, ty, tw, th, 16.0, Some(LABS_STAGE), None);
+        let ty = top + (i / 3) as f32 * (th + gap);
+        f.p.rrect(tx, ty, tw, th, 12.0, Some(LABS_STAGE), None);
         if let Some(img) = tile_image(i) {
-            f.p.image(&img, tx, ty, tw, th, 16.0, Fit::Cover);
+            f.p.image(&img, tx, ty, tw, th, 12.0, Fit::Cover);
         }
-        // La didascalia sfuma nel colore del tipo di file: fasce sempre più piene, poi il fondo arrotondato.
+        // La didascalia su una fascia piena del colore della pagina, senza sfumature.
         let c = mix(deep, (0, 0, 0), 0.06);
-        let (g0, g1) = (ty + th * 0.42, ty + th - 16.0);
-        let bands = 28;
-        let bh = (g1 - g0) / bands as f32;
-        for k in 0..bands {
-            let a = ((k + 1) as f32 / bands as f32).powf(1.5) * 0.96;
-            f.p.fill_a(tx, g0 + k as f32 * bh, tw, bh + 0.6, c, a);
-        }
-        f.p.push_clip(tx, ty + th - 16.0, tw, 16.0);
-        f.p.rrect_a(tx, ty + th - 48.0, tw, 48.0, 16.0, c, 0.96);
+        f.p.push_clip(tx, ty + th - 84.0, tw, 84.0);
+        f.p.rrect(tx, ty, tw, th, 12.0, Some(c), None);
         f.p.pop_clip();
-        f.p.rrect_line(tx, ty, tw, th, 16.0, WHITE, 1.0, 0.14, None);
+        f.p.rrect_line(tx, ty, tw, th, 12.0, WHITE, if t > 0.01 { 2.0 } else { 1.0 }, 0.14 + 0.5 * t, None);
         f.p.text(name, tx + 20.0, ty + th - 66.0, tw - 40.0, 32.0, 25.0, BOLD, WHITE, Align::Left);
         f.p.text(kinds, tx + 20.0, ty + th - 36.0, tw - 40.0, 22.0, 15.0, SEMI, WHITE, Align::Left);
-        f.focus_ring((tx, ty, tw, th), 16.0, &act);
+        f.focus_ring((tx, ty, tw, th), 12.0, &act);
         f.hit((tx, ty, tw, th), act);
     }
     let by = top + 2.0 * th + gap + 16.0;
@@ -515,15 +504,10 @@ pub(super) fn stage_draw(f: &mut Frame, app: &App, r: R) {
     f.p.rrect(r.0, r.1, r.2, r.3, 16.0, Some(LABS_STAGE), None);
     // Il file di uno strumento (lettore di piastre, qPCR…) non ha un'immagine: si vede la sua piastra.
     let strum = app.strum_corrente().filter(|(j, _)| Some(*j) == sel);
-    if let Some(img) = sel.filter(|_| strum.is_none()).and_then(|i| halo(app, i)) {
-        f.p.image(&img, r.0, r.1, r.2, r.3, 16.0, Fit::Cover);
-        // Una pagina bianca abbaglierebbe: più il file è chiaro, più l'alone si spegne.
-        f.p.rrect_a(r.0, r.1, r.2, r.3, 16.0, LABS_STAGE, 0.34 + 0.5 * img.luma().powf(1.5));
-    }
     let Some(i) = sel else {
         // Senza file il fondo prende appena il colore della pagina, invece di restare un buco nero.
         let (_, bright) = colors(app);
-        f.p.rrect_vgrad(r.0, r.1, r.2, r.3, 16.0, mix(bright, LABS_STAGE, 0.84), mix(bright, LABS_STAGE, 0.95));
+        f.p.rrect(r.0, r.1, r.2, r.3, 16.0, Some(mix(bright, LABS_STAGE, 0.9)), None);
         empty(f, app, (r.0 + 28.0, r.1 + 28.0, r.2 - 56.0, r.3 - 56.0));
         return;
     };
@@ -533,7 +517,7 @@ pub(super) fn stage_draw(f: &mut Frame, app: &App, r: R) {
     match &strum {
         Some((_, l)) => {
             let (_, bright) = colors(app);
-            f.p.rrect_vgrad(r.0, r.1, r.2, r.3, 16.0, mix(bright, LABS_STAGE, 0.84), mix(bright, LABS_STAGE, 0.95));
+            f.p.rrect(r.0, r.1, r.2, r.3, 16.0, Some(mix(bright, LABS_STAGE, 0.9)), None);
             super::strumenti::stage(f, app, i, l, area);
         }
         None => viewer(f, app, i, area),
@@ -813,7 +797,7 @@ pub(super) fn viewer(f: &mut Frame, app: &App, i: usize, area: R) {
         let k = (area.2 / iw).min(area.3 / ih);
         let (pw, ph) = ((iw * k).floor(), (ih * k).floor());
         let (px, py) = (area.0 + (area.2 - pw) / 2.0, area.1 + (area.3 - ph) / 2.0);
-        f.p.shadow(px, py, pw, ph, 12.0, 22.0, 0.55, 10.0);
+        f.p.shadow(px, py, pw, ph, 12.0, 6.0, 0.3, 2.0);
         f.p.image(&img, px, py, pw, ph, 12.0, Fit::Cover);
         f.p.rrect_line(px, py, pw, ph, 12.0, WHITE, 1.0, 0.12, None);
         return;
@@ -824,7 +808,7 @@ pub(super) fn viewer(f: &mut Frame, app: &App, i: usize, area: R) {
     let px = area.0 + (area.2 - pw) / 2.0;
     super::scrolled(f, area, Scroll::Page, |f| {
         let py = area.1 + 6.0;
-        f.p.shadow(px, py, pw, ph, 4.0, 18.0, 0.5, 8.0);
+        f.p.shadow(px, py, pw, ph, 4.0, 6.0, 0.3, 2.0);
         f.p.rrect(px, py, pw, ph, 4.0, Some(WHITE), None);
         f.p.image(&img, px, py, pw, ph, 4.0, Fit::Contain);
         ph + 30.0
@@ -1059,7 +1043,6 @@ pub(super) fn mode_switch(f: &mut Frame, r: R) {
         let on = f.simple == simple;
         let act = Act::SetSimple(simple);
         if on {
-            f.p.shadow(b.0, b.1, b.2, b.3, 8.0, 4.0, 0.14, 1.0);
             f.p.rrect(b.0, b.1, b.2, b.3, 8.0, Some(pal.surface), None);
         }
         let hot = !on && f.hovered(&act);
@@ -1089,7 +1072,6 @@ pub(super) fn choice_row(f: &mut Frame, r: R, voce: &voci::Voce, label: &str, hi
     let pal = f.pal;
     let t = f.hover_t(&act, !on);
     if on {
-        f.p.shadow(r.0, r.1, r.2, r.3, 12.0, 6.0, 0.12, 3.0);
         f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(mix(deep, pal.surface, 0.91)), Some((deep, 1.5)));
     } else {
         f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(pal.surface), Some((mix(pal.border, deep, 0.55 * t), 1.5)));
@@ -1116,9 +1098,7 @@ pub(super) fn go_button(f: &mut Frame, app: &App, r: R, deep: Rgb) {
         let t = f.hover_t(&act, true);
         let press = f.press_t(&act, true);
         let b = Frame::pressed_rect(r, press);
-        f.p.shadow(b.0, b.1, b.2, b.3, 13.0, 9.0 * (1.0 + 0.3 * t - 0.6 * press), 0.26, 5.0);
-        f.p.rrect_vgrad(b.0, b.1, b.2, b.3, 13.0, mix(deep, WHITE, 0.16 + 0.06 * t), mix(deep, (0, 0, 0), 0.04));
-        f.p.rrect_line(b.0, b.1, b.2, b.3, 13.0, WHITE, 1.0, 0.2, None);
+        f.p.rrect(b.0, b.1, b.2, b.3, 10.0, Some(mix(deep, (0, 0, 0), 0.12 * t + 0.1 * press)), None);
     } else {
         f.p.rrect(r.0, r.1, r.2, r.3, 13.0, Some(mix(deep, pal.surface, 0.6)), None);
     }
@@ -1272,7 +1252,7 @@ pub(super) fn file_card(f: &mut Frame, app: &App, r: R) {
             let row = (x - 8.0, cy, w + 16.0, 62.0);
             let t = f.hover_t(&act, true);
             f.hover_fill(row, 12.0, pal.alt, t);
-            f.p.rrect_vgrad(x, cy + 13.0, 36.0, 36.0, 10.0, bright, deep);
+            f.p.rrect(x, cy + 13.0, 36.0, 36.0, 9.0, Some(mix(bright, deep, 0.55)), None);
             f.icon(lab_icon(lab), x + 8.0, cy + 21.0, 20.0, WHITE);
             let label = if name.is_empty() { app.voce(id).label } else { name };
             f.text(label, x + 50.0, cy + 9.0, w - 54.0, 24.0, 16.5, SEMI, pal.text);

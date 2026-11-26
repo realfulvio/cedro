@@ -581,12 +581,7 @@ impl<'a> Frame<'a> {
     /// pressione (`press`: il pulsante si stringe un poco e l'ombra si accorcia).
     pub fn glossy_fill_t(&mut self, r: R, radius: f32, c: Rgb, t: f32, press: f32) {
         let r = Self::pressed_rect(r, press);
-        let spread = (r.3 * 0.14).clamp(4.0, 10.0) * (1.0 + 0.25 * t - 0.6 * press);
-        let a = if self.theme.dark() { 0.35 } else { 0.2 };
-        self.p.shadow(r.0, r.1, r.2, r.3, radius, spread, a, spread * 0.4);
-        let (top, bottom) = self.glossy_t(c, t);
-        self.p.rrect_vgrad(r.0, r.1, r.2, r.3, radius, top, bottom);
-        self.p.rrect_line(r.0, r.1, r.2, r.3, radius, (255, 255, 255), 1.0, 0.12, None);
+        self.p.rrect(r.0, r.1, r.2, r.3, radius, Some(mix(c, (0, 0, 0), 0.12 * t + 0.1 * press)), None);
     }
 
     /// Il colore di un'attività (piastrelle, schede, icone): nei temi scuri un po' più chiaro.

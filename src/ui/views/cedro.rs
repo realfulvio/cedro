@@ -267,7 +267,6 @@ fn side_grip(f: &mut Frame, r: R) {
 pub(super) fn frame(f: &mut Frame, app: &App) {
     let t = f.theme.tint();
     f.p.clear(t.frame);
-    f.p.rrect_vgrad(0.0, 0.0, f.w, (f.h * 0.55).round(), 0.0, t.frame_hi, t.frame);
     f.caption((0.0, 0.0, f.w, TOP));
     f.p.symbol(22.0, 16.0, 28.0);
     f.p.text("Cedro", 58.0, 14.0, 140.0, 32.0, 21.0, BOLD, t.ink, Align::Left);
@@ -321,9 +320,7 @@ fn rail_item(f: &mut Frame, app: &App, t: &Tint, y: f32, lab: Lab) {
         }
     }
     let (tx, ty, ts) = (r.0 + 8.0, y + 8.0, 34.0);
-    f.p.shadow(tx, ty, ts, ts, 10.0, 5.0, 0.3, 2.0);
-    f.p.rrect_vgrad(tx, ty, ts, ts, 10.0, bright, deep);
-    f.p.rrect_line(tx, ty, ts, ts, 10.0, WHITE, 1.0, 0.22, None);
+    f.p.rrect(tx, ty, ts, ts, 9.0, Some(mix(bright, deep, 0.55)), None);
     f.icon(page_icon(lab), tx + 7.0, ty + 7.0, 20.0, WHITE);
     let c = if on { t.sel } else { t.ink };
     let mut lw = r.2 - 62.0;
@@ -373,29 +370,21 @@ fn home(f: &mut Frame, app: &App, area: R) {
         let act = Act::LabGo(Lab::Home, kind_key(kind));
         let h = f.hover_t(&act, true);
         let tx = x + (i % 3) as f32 * (tw + gap);
-        let ty = top + (i / 3) as f32 * (th + gap) - 4.0 * h;
-        f.p.shadow(tx, ty + 10.0, tw, th - 10.0, 16.0, 14.0 + 6.0 * h, 0.35 + 0.1 * h, 10.0);
-        f.p.rrect(tx, ty, tw, th, 16.0, Some((12, 10, 16)), None);
+        let ty = top + (i / 3) as f32 * (th + gap);
+        f.p.rrect(tx, ty, tw, th, 12.0, Some((12, 10, 16)), None);
         if let Some(img) = tile_image(i) {
-            f.p.image(&img, tx, ty, tw, th, 16.0, Fit::Cover);
+            f.p.image(&img, tx, ty, tw, th, 12.0, Fit::Cover);
         }
-        // La didascalia sfuma nel colore del tipo di file: fasce sempre più piene, poi il fondo arrotondato.
+        // La didascalia su una fascia piena del colore del tipo di file, senza sfumature.
         let c = mix(deep, (0, 0, 0), 0.08);
-        let (g0, g1) = (ty + th * 0.36, ty + th - 16.0);
-        let bands = 30;
-        let bh = (g1 - g0) / bands as f32;
-        for k in 0..bands {
-            let a = ((k + 1) as f32 / bands as f32).powf(1.4) * 0.96;
-            f.p.fill_a(tx, g0 + k as f32 * bh, tw, bh + 0.6, c, a);
-        }
-        f.p.push_clip(tx, ty + th - 16.0, tw, 16.0);
-        f.p.rrect_a(tx, ty + th - 48.0, tw, 48.0, 16.0, c, 0.96);
+        f.p.push_clip(tx, ty + th - 100.0, tw, 100.0);
+        f.p.rrect(tx, ty, tw, th, 12.0, Some(c), None);
         f.p.pop_clip();
-        f.p.rrect_line(tx, ty, tw, th, 16.0, mix(bright, WHITE, 0.4), 1.0, 0.18 + 0.2 * h, None);
+        f.p.rrect_line(tx, ty, tw, th, 12.0, mix(bright, WHITE, 0.5), if h > 0.01 { 2.0 } else { 1.0 }, 0.15 + 0.6 * h, None);
         f.p.text(name, tx + 18.0, ty + th - 84.0, tw - 36.0, 30.0, 23.0, BOLD, WHITE, Align::Left);
         f.p.text(formats, tx + 18.0, ty + th - 54.0, tw - 36.0, 20.0, 14.0, SEMI, WHITE, Align::Left);
         f.p.text(does, tx + 18.0, ty + th - 33.0, tw - 36.0, 20.0, 14.0, SANS, mix(WHITE, c, 0.18), Align::Left);
-        f.focus_ring((tx, ty, tw, th), 16.0, &act);
+        f.focus_ring((tx, ty, tw, th), 12.0, &act);
         f.hit((tx, ty, tw, th), act);
     }
     // Sotto: il link da scaricare e la firma, le due cose che non partono da un file da convertire.
@@ -408,7 +397,7 @@ fn home(f: &mut Frame, app: &App, area: R) {
     let lr = (x, by, lw, bottom_h);
     box_bg(f, lr, 0.0);
     let (vdeep, vbright) = page_colors(Lab::Video);
-    f.p.rrect_vgrad(lr.0 + 12.0, lr.1 + 15.0, 34.0, 34.0, 10.0, vbright, vdeep);
+    f.p.rrect(lr.0 + 12.0, lr.1 + 15.0, 34.0, 34.0, 9.0, Some(mix(vbright, vdeep, 0.55)), None);
     f.icon(ic::LINK, lr.0 + 19.0, lr.1 + 22.0, 20.0, WHITE);
     let go_w = f.measure("Scarica", 15.0, BOLD) + 30.0;
     let field = (lr.0 + 58.0, lr.1 + 11.0, lr.2 - 58.0 - go_w - 22.0, 42.0);
@@ -425,7 +414,7 @@ fn home(f: &mut Frame, app: &App, area: R) {
     let hot = f.hover_t(&act, true);
     box_bg(f, fr, hot);
     let (fdeep, fbright) = page_colors(Lab::Firma);
-    f.p.rrect_vgrad(fr.0 + 12.0, fr.1 + 15.0, 34.0, 34.0, 10.0, fbright, fdeep);
+    f.p.rrect(fr.0 + 12.0, fr.1 + 15.0, 34.0, 34.0, 9.0, Some(mix(fbright, fdeep, 0.55)), None);
     f.icon(ICON_FIRMA, fr.0 + 19.0, fr.1 + 22.0, 20.0, WHITE);
     f.p.text("Firma o verifica un documento", fr.0 + 58.0, fr.1 + 10.0, fr.2 - 70.0, 24.0, 16.0, SEMI, t.ink, Align::Left);
     f.p.text("PDF firmati, .p7m, chiavetta o smart card", fr.0 + 58.0, fr.1 + 33.0, fr.2 - 70.0, 20.0, 13.5, SANS, t.muted, Align::Left);
@@ -448,8 +437,7 @@ fn kind_key(kind: Kind) -> &'static str {
 fn small_go(f: &mut Frame, r: R, label: &str, c: Rgb, act: Act, enabled: bool) {
     if enabled {
         let h = f.hover_t(&act, true);
-        f.p.shadow(r.0, r.1, r.2, r.3, 10.0, 6.0, 0.25, 3.0);
-        f.p.rrect_vgrad(r.0, r.1, r.2, r.3, 10.0, mix(c, WHITE, 0.18 + 0.08 * h), c);
+        f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(mix(c, (0, 0, 0), 0.12 * h)), None);
         f.focus_ring(r, 10.0, &act);
         f.hit(r, act);
     } else {
@@ -464,19 +452,8 @@ fn small_go(f: &mut Frame, r: R, label: &str, c: Rgb, act: Act, enabled: bool) {
 /// Il fondo della zona del file: l'alone dell'immagine scelta, o un bagliore del colore della pagina.
 fn stage_bg(f: &mut Frame, app: &App, r: R, halo_of: Option<usize>) {
     let t = f.theme.tint();
+    let _ = (app, halo_of);
     f.p.rrect(r.0, r.1, r.2, r.3, 14.0, Some(t.stage), None);
-    if let Some(img) = halo_of.and_then(|i| super::labs::halo(app, i)) {
-        f.p.image(&img, r.0, r.1, r.2, r.3, 14.0, Fit::Cover);
-        // Una pagina bianca abbaglierebbe: più il file è chiaro, più l'alone si spegne.
-        f.p.rrect_a(r.0, r.1, r.2, r.3, 14.0, t.stage, 0.36 + 0.5 * img.luma().powf(1.5));
-        return;
-    }
-    let (_, bright) = colors(app);
-    let (cx, cy) = (r.0 + r.2 * 0.5, r.1 + r.3 * 0.4);
-    let big = r.3.min(r.2) * 0.62;
-    f.p.push_clip(r.0, r.1, r.2, r.3);
-    f.p.glow(cx, cy, big, bright, 0.3);
-    f.p.pop_clip();
 }
 
 /// Un pulsante della barra sulla zona scura: vetro chiaro, oppure pieno del colore della pagina.
@@ -486,8 +463,7 @@ fn bar_button(f: &mut Frame, x: f32, y: f32, label: &str, icon: &str, act: Act, 
     let h = if enabled { f.hover_t(&act, true) } else { 0.0 };
     match primary {
         Some(c) if enabled => {
-            f.p.shadow(r.0, r.1, r.2, r.3, 10.0, 6.0, 0.3, 3.0);
-            f.p.rrect_vgrad(r.0, r.1, r.2, r.3, 10.0, mix(c, WHITE, 0.2 + 0.08 * h), c);
+            f.p.rrect(r.0, r.1, r.2, r.3, 10.0, Some(mix(c, (0, 0, 0), 0.12 * h)), None);
         }
         _ => f.p.rrect_a(r.0, r.1, r.2, r.3, 10.0, WHITE, 0.1 + 0.08 * h),
     }
@@ -906,7 +882,6 @@ fn chips_plain(f: &mut Frame, x: f32, y: f32, w: f32, items: &[(String, Rgb, boo
         let b = (cx, cy, cw, h);
         let hot = f.hover_t(act, !*on);
         if *on {
-            f.p.shadow(b.0, b.1, b.2, b.3, 16.0, 5.0, 0.18, 2.0);
             f.p.rrect(b.0, b.1, b.2, b.3, 16.0, Some(c), Some((c, 1.5)));
         } else {
             f.p.rrect(b.0, b.1, b.2, b.3, 16.0, Some(mix(c, pal.surface, 0.9)), Some((mix(mix(c, pal.surface, 0.78), c, 0.6 * hot), 1.5)));
@@ -959,7 +934,7 @@ fn family_rows(f: &mut Frame, app: &App, formats: &[&Slice], x: f32, y: f32, w: 
 /// La pastiglia con l'icona del colore dello strumento (come nel menu), piena e con un filo di luce.
 fn glyph_tile(f: &mut Frame, x: f32, y: f32, s: f32, v: &voci::Voce) {
     let c = f.lift(v.color);
-    f.p.rrect_vgrad(x, y, s, s, (s * 0.3).round(), mix(c, WHITE, 0.3), c);
+    f.p.rrect(x, y, s, s, (s * 0.25).round(), Some(c), None);
     let isz = (s * 0.58).round();
     let pad = (s - isz) / 2.0;
     if !v.glyph.fill.is_empty() {
@@ -1251,7 +1226,6 @@ fn group_phrases(said: &[super::activity::LogLine], chars: usize) -> Vec<super::
 pub(super) fn paper_box(f: &mut Frame, app: &App, r: R) {
     let pal = f.pal;
     let (deep, _) = colors(app);
-    f.p.shadow(r.0, r.1, r.2, r.3, 12.0, 18.0, 0.4, 8.0);
     f.p.rrect(r.0, r.1, r.2, r.3, 12.0, Some(pal.surface), None);
     let st_h = 64.0;
     let text = (r.0, r.1, r.2, r.3 - st_h);
@@ -1344,7 +1318,6 @@ fn segmented(f: &mut Frame, r: R, items: &[(&str, bool, Act)]) {
     for (k, (label, on, act)) in items.iter().enumerate() {
         let b = (r.0 + 3.0 + k as f32 * wv, r.1 + 3.0, wv, r.3 - 6.0);
         if *on {
-            f.p.shadow(b.0, b.1, b.2, b.3, 8.0, 4.0, 0.14, 1.0);
             f.p.rrect(b.0, b.1, b.2, b.3, 8.0, Some(pal.surface), None);
         }
         let hot = !*on && f.hovered(act);
@@ -1400,8 +1373,7 @@ fn video_stage(f: &mut Frame, app: &App, r: R) {
     let b = (r.0 + r.2 - 14.0 - add_w, y, add_w, 46.0);
     if enabled {
         let h = f.hover_t(&Act::LinkAdd(false), true);
-        f.p.shadow(b.0, b.1, b.2, b.3, 10.0, 6.0, 0.3, 3.0);
-        f.p.rrect_vgrad(b.0, b.1, b.2, b.3, 10.0, mix(deep, WHITE, 0.2 + 0.08 * h), deep);
+        f.p.rrect(b.0, b.1, b.2, b.3, 10.0, Some(mix(deep, (0, 0, 0), 0.12 * h)), None);
         f.hit(b, Act::LinkAdd(false));
     } else {
         f.p.rrect_a(b.0, b.1, b.2, b.3, 10.0, WHITE, 0.1);
@@ -1527,8 +1499,7 @@ fn link_go(f: &mut Frame, app: &App, r: R, deep: Rgb) {
         let h = f.hover_t(&act, true);
         let press = f.press_t(&act, true);
         let b = Frame::pressed_rect(r, press);
-        f.p.shadow(b.0, b.1, b.2, b.3, 13.0, 9.0 * (1.0 + 0.3 * h - 0.6 * press), 0.26, 5.0);
-        f.p.rrect_vgrad(b.0, b.1, b.2, b.3, 13.0, mix(deep, WHITE, 0.16 + 0.06 * h), mix(deep, (0, 0, 0), 0.04));
+        f.p.rrect(b.0, b.1, b.2, b.3, 10.0, Some(mix(deep, (0, 0, 0), 0.12 * h + 0.1 * press)), None);
         f.focus_ring(r, 13.0, &act);
         f.hit(r, act);
     } else {
@@ -1643,7 +1614,7 @@ fn firma(f: &mut Frame, app: &App, area: R) {
     let (deep, bright) = colors(app);
     // Una fascia del colore della pagina in alto, perché si veda dove si è.
     f.p.push_clip(area.0, area.1, area.2, 6.0);
-    f.p.rrect_vgrad(area.0, area.1, area.2, 20.0, 14.0, bright, deep);
+    f.p.rrect(area.0, area.1, area.2, 20.0, 14.0, Some(mix(bright, deep, 0.55)), None);
     f.p.pop_clip();
     let r = (area.0 + 28.0, area.1 + 22.0, area.2 - 56.0, area.3 - 40.0);
     let _ = ICON_KEY;
